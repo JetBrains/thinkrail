@@ -22,11 +22,12 @@ export type ThinkRailRpcPayloads =
   | AnalyticsStatus;
 export type Value = string;
 export type Label = string;
+export type Description = string;
 export type Key = string;
 export type Label1 = string;
 export type Type = "boolean";
 export type Default = boolean;
-export type Description = string;
+export type Description1 = string;
 export type Runtimetype = "claude";
 export type Displayname = string;
 export type Permissionmodes = LabeledOption[];
@@ -71,14 +72,14 @@ export type State = "pending" | "applied";
 export type Type2 = "start_session";
 export type Id1 = string;
 export type Title1 = string;
-export type Description1 = string | null;
+export type Description2 = string | null;
 export type Skillid = string;
 export type Prompt = string | null;
 export type Primary = boolean;
 export type Type3 = "navigate";
 export type Id2 = string;
 export type Title2 = string;
-export type Description2 = string | null;
+export type Description3 = string | null;
 export type Target = "board" | "specs" | "graph" | "files";
 export type Actions = (CreateTicketAction | StartSessionAction | NavigateAction)[];
 export type Id3 = string;
@@ -132,10 +133,13 @@ export type Enabled = boolean;
  *
  * Used uniformly for permission modes, effort levels, and models on
  * ``RuntimeCapabilities``. ``extra="forbid"`` surfaces typos at parse time.
+ * ``description`` is optional one-line prose for a hover tooltip; empty when
+ * the option needs no explanation (effort levels, models).
  */
 export interface LabeledOption {
   value: Value;
   label: Label;
+  description?: Description;
 }
 /**
  * A runtime-declared option toggle, surfaced as a control in settings.
@@ -150,7 +154,7 @@ export interface RuntimeFlag {
   label: Label1;
   type: Type;
   default: Default;
-  description?: Description;
+  description?: Description1;
 }
 /**
  * Lightweight ``{runtimeType, displayName}`` pair for ``runtimes/list``.
@@ -263,7 +267,7 @@ export interface StartSessionAction {
   type?: Type2;
   id: Id1;
   title: Title1;
-  description?: Description1;
+  description?: Description2;
   skillId: Skillid;
   prompt?: Prompt;
   primary?: Primary;
@@ -275,7 +279,7 @@ export interface NavigateAction {
   type?: Type3;
   id: Id2;
   title: Title2;
-  description?: Description2;
+  description?: Description3;
   target: Target;
 }
 export interface TicketState {

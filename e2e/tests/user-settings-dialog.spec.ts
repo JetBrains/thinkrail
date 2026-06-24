@@ -64,7 +64,7 @@ test("settings modal Session Defaults tab saves new defaults and they flow into 
 
   // Flip all three.
   await pickSetting(page, "Model", "Sonnet 4.6");
-  await pickSetting(page, "Permission mode", "acceptEdits");
+  await pickSetting(page, "Permission mode", "Accept edits");
   await pickSetting(page, "Effort", "low");
   await expect(saveButton).toBeEnabled();
   await expect(saveButton).toHaveAttribute("title", "Save settings");
@@ -91,6 +91,6 @@ test("settings modal Session Defaults tab saves new defaults and they flow into 
   // A fresh draft inherits the new defaults.
   await page.locator(newSession.newButton).click();
   await expect(selectedLabel(page, "model")).toHaveText("Sonnet 4.6", { timeout: 15_000 });
-  await expect(selectedLabel(page, "perms")).toHaveText("acceptEdits", { timeout: 15_000 });
+  await expect(selectedLabel(page, "perms")).toHaveText("Accept edits", { timeout: 15_000 });
   await expect(selectedLabel(page, "effort")).toHaveText("low", { timeout: 15_000 });
 });

@@ -4,7 +4,7 @@
   "$defs": {
     "LabeledOption": {
       "additionalProperties": false,
-      "description": "A value the backend accepts, plus a display label for the UI.\n\nUsed uniformly for permission modes, effort levels, and models on\n``RuntimeCapabilities``. ``extra=\"forbid\"`` surfaces typos at parse time.",
+      "description": "A value the backend accepts, plus a display label for the UI.\n\nUsed uniformly for permission modes, effort levels, and models on\n``RuntimeCapabilities``. ``extra=\"forbid\"`` surfaces typos at parse time.\n``description`` is optional one-line prose for a hover tooltip; empty when\nthe option needs no explanation (effort levels, models).",
       "properties": {
         "value": {
           "title": "Value",
@@ -12,6 +12,11 @@
         },
         "label": {
           "title": "Label",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
           "type": "string"
         }
       },

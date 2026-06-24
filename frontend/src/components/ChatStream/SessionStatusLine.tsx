@@ -3,6 +3,7 @@ import type { ReactNode, RefObject } from "react";
 import { createPortal } from "react-dom";
 import type { SessionMetrics, SessionStatus } from "@/types/session.ts";
 import { useRuntimeCapsStore } from "@/store/runtimeCapsStore.ts";
+import { permissionModeTooltip } from "@/utils/permissionMode.ts";
 import { useUiStore } from "@/store/uiStore.ts";
 import type { EventCategory } from "./renderers/categories.ts";
 
@@ -299,7 +300,7 @@ export function SessionStatusLine({
           className={`ssl-selector-btn${disabled ? " ssl-selector-disabled" : ""}`}
           onClick={() => !disabled && permDd.toggle()}
           disabled={disabled}
-          title="Permission mode"
+          title={activePermission ? permissionModeTooltip(activePermission) : "Permission mode"}
         >
           {activePermission?.label ?? permissionMode}
           <ChevronDown />
@@ -309,6 +310,7 @@ export function SessionStatusLine({
             {permissionModes.map((m) => (
               <button
                 key={m.value}
+                title={permissionModeTooltip(m)}
                 className={`ssl-dropdown-item${m.value === permissionMode ? " ssl-dropdown-active" : ""}`}
                 onClick={() => {
                   if (m.value !== permissionMode) onChangePermissionMode?.(m.value);

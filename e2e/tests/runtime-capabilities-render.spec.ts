@@ -31,9 +31,10 @@ test("draft pickers render the runtime's declared capabilities in order", async 
   await expect(selectedLabel(page, "model")).toBeVisible({ timeout: 15_000 });
   expect(await optionLabels(page, "model")).toEqual(["Fable 5", "Opus 4.8", "Sonnet 4.6", "Haiku 4.5"]);
 
-  // ── Permission modes: the SDK's accepted set, default-first (value == label) ──
+  // ── Permission modes: friendly labels, default-first, with dontAsk hidden
+  //    from the interactive picker (headless-only; see ClaudeRuntime). ──
   expect(await optionLabels(page, "perms")).toEqual([
-    "default", "acceptEdits", "plan", "bypassPermissions", "dontAsk", "auto",
+    "Ask first", "Accept edits", "Plan only", "Yolo", "Autopilot",
   ]);
 
   // ── Effort levels: the SDK's set with "auto" (= SDK effort=None) leading ──

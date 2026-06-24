@@ -21,6 +21,8 @@ class LabeledOption(BaseModel):
 
     Used uniformly for permission modes, effort levels, and models on
     ``RuntimeCapabilities``. ``extra="forbid"`` surfaces typos at parse time.
+    ``description`` is optional one-line prose for a hover tooltip; empty when
+    the option needs no explanation (effort levels, models).
     """
 
     model_config = ConfigDict(
@@ -32,6 +34,7 @@ class LabeledOption(BaseModel):
 
     value: str
     label: str
+    description: str = ""
 
 
 class RuntimeFlag(BaseModel):

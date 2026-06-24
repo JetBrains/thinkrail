@@ -100,13 +100,36 @@ def _serialize_tool_content(content: Any) -> str:
 
 
 # Permission modes and effort levels are sourced from the SDK's own value sets,
-# so the picker can't drift from what the runtime actually accepts; the value
-# doubles as the display label. Position 0 is the default; the SDK lists
-# ``default`` first. The SDK has no name for "no explicit effort" (its default
-# ``effort=None``), so ThinkRail prepends ``"auto"`` for it and translates back at
-# the call boundary.
+# so the picker can't list a value the runtime would reject. Each mode gets a
+# friendlier label + one-line tooltip; an unmapped/future SDK mode falls back to
+# its raw value as the label (so the anti-drift property survives a label gap).
+# Position 0 is the runtime default (cold-start picks it); the SDK lists
+# ``default`` first and the filter preserves order. The SDK has no name for "no
+# explicit effort" (its default ``effort=None``), so ThinkRail prepends
+# ``"auto"`` for it and translates back at the call boundary.
+#
+# ``dontAsk`` is intentionally excluded: it denies any tool not pre-approved by
+# allow rules without prompting, and ThinkRail's interactive runtime sets no
+# such rules — so a ``dontAsk`` session would hard-deny every tool and stall.
+# It remains a valid SDK value used directly by the headless voice-revise path
+# (``agent/revise.py``); it just isn't offered as an interactive session mode.
+_PERMISSION_MODE_LABELS: dict[str, tuple[str, str]] = {
+    "default": ("Ask first", "Prompts before edits, commands & other risky tools."),
+    "acceptEdits": ("Accept edits", "Auto-approves file edits; still asks for commands."),
+    "plan": ("Plan only", "Reads & reasons only — no edits or commands run."),
+    "bypassPermissions": ("Yolo", "Runs every tool without asking. Use with care."),
+    "auto": ("Autopilot", "An AI classifier approves or denies each tool call."),
+}
+_HIDDEN_PERMISSION_MODES: frozenset[str] = frozenset({"dontAsk"})
+
 _CLAUDE_PERMISSION_MODES: tuple[LabeledOption, ...] = tuple(
-    LabeledOption(value=v, label=v) for v in get_args(PermissionMode)
+    LabeledOption(
+        value=v,
+        label=_PERMISSION_MODE_LABELS.get(v, (v, ""))[0],
+        description=_PERMISSION_MODE_LABELS.get(v, (v, ""))[1],
+    )
+    for v in get_args(PermissionMode)
+    if v not in _HIDDEN_PERMISSION_MODES
 )
 
 _CLAUDE_EFFORT_LEVELS: tuple[LabeledOption, ...] = (

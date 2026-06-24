@@ -38,6 +38,6 @@ test("new-session draft reflects user-scoped session defaults", async ({
   // Each dropdown's active label reflects the seeded default. The model
   // catalog uses a dated id but a friendly label ("Haiku 4.5").
   await expect(selectedLabel(page, "model")).toHaveText("Haiku 4.5", { timeout: 15_000 });
-  await expect(selectedLabel(page, "perms")).toHaveText("acceptEdits", { timeout: 15_000 });
+  await expect(selectedLabel(page, "perms")).toHaveText("Accept edits", { timeout: 15_000 });
   await expect(selectedLabel(page, "effort")).toHaveText("low", { timeout: 15_000 });
 });

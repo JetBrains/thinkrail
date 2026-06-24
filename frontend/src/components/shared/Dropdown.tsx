@@ -7,6 +7,8 @@ export interface DropdownOption<T> {
   /** Optional group label. Consecutive options with the same group render
    *  under one header; sections without a group are rendered ungrouped. */
   group?: string;
+  /** Optional native-hover tooltip for the menu item. */
+  title?: string;
 }
 
 interface DropdownProps<T> {
@@ -113,6 +115,7 @@ export function Dropdown<T extends string | number | null>({
                   type="button"
                   role="option"
                   aria-selected={o.value === value}
+                  title={o.title}
                   className={`dd-item${o.value === value ? " dd-item-active" : ""}`}
                   onClick={() => {
                     if (o.value !== value) onChange(o.value);

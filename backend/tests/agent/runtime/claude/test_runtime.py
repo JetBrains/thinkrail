@@ -1242,9 +1242,12 @@ class TestClaudeRuntimeCapabilities:
         from claude_agent_sdk import EffortLevel, PermissionMode
 
         caps = ClaudeRuntime(app_config=_test_config()).capabilities()
-        # Permission modes are exactly the SDK's accepted set, in SDK order
+        # Permission modes are the SDK's accepted set minus the modes ThinkRail
+        # hides from the interactive picker (``dontAsk``), preserving SDK order
         # (``default`` first — the runtime default).
-        assert [p.value for p in caps.permission_modes] == list(get_args(PermissionMode))
+        sdk_modes = [m for m in get_args(PermissionMode) if m != "dontAsk"]
+        assert [p.value for p in caps.permission_modes] == sdk_modes
+        assert "dontAsk" not in {p.value for p in caps.permission_modes}
         assert caps.permission_modes[0].value == "default"
         # Effort levels are the SDK's set with ThinkRail's ``"auto"`` (= SDK
         # ``effort=None``) leading.
@@ -1252,14 +1255,19 @@ class TestClaudeRuntimeCapabilities:
         assert caps.effort_levels[0].value == "auto"
         assert caps.models[0].value == "claude-fable-5"
 
-    def test_permission_labels_are_the_sdk_values(self) -> None:
-        # No custom labels — the SDK value doubles as the display label.
+    def test_permission_modes_have_friendly_labels_and_tooltips(self) -> None:
         caps = ClaudeRuntime(app_config=_test_config()).capabilities()
-        assert all(p.label == p.value for p in caps.permission_modes)
+        by_value = {p.value: p for p in caps.permission_modes}
+        assert by_value["default"].label == "Ask first"
+        assert by_value["bypassPermissions"].label == "Yolo"
+        assert by_value["auto"].label == "Autopilot"
+        # Every offered mode carries a one-line tooltip.
+        assert all(p.description for p in caps.permission_modes)
 
-    def test_models_are_value_label_only(self) -> None:
+    def test_models_carry_no_tooltip(self) -> None:
         caps = ClaudeRuntime(app_config=_test_config()).capabilities()
-        assert set(caps.models[0].model_dump().keys()) == {"value", "label"}
+        assert set(caps.models[0].model_dump().keys()) == {"value", "label", "description"}
+        assert caps.models[0].description == ""
 
 
 @patch("app.agent.runtime.claude.runtime.ClaudeSDKClient")

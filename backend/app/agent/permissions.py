@@ -144,6 +144,16 @@ def categorize(
 # (mode, category) → decision. ``None`` means "no definitive answer —
 # fall through to interceptors / interactive prompt". Mirrors the
 # reference's ``permissionPolicyEngine.ts:192-246`` table.
+#
+# Only the four modes the SDK resolves to an *interactive* prompt appear here.
+# ``dontAsk`` and ``auto`` are intentionally absent: the SDK invokes
+# ``can_use_tool`` (where this table is consulted) only when its own rules
+# evaluate to "ask". ``dontAsk`` denies anything not pre-approved without ever
+# asking, so the callback is never reached — a row here would be dead code.
+# ``auto`` lets a model classifier decide each call; only the calls it escalates
+# reach the callback, where a missing row (``None``) correctly falls through to
+# the normal interactive prompt. Adding rows for either would only let us
+# override the SDK's own behavior, which defeats the point of those modes.
 _MODE_TABLE: dict[str, dict[ToolCategory, str | None]] = {
     "bypassPermissions": {
         "read": "allow", "net": "allow", "edit": "allow",

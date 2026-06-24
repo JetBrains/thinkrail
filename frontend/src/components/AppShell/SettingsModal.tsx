@@ -8,6 +8,7 @@ import { getErrorMessage } from "@/utils/errors.ts";
 import { useRuntimeCapsStore } from "@/store/runtimeCapsStore.ts";
 import { RuntimeFlags } from "@/components/shared/RuntimeFlags.tsx";
 import { Dropdown } from "@/components/shared/Dropdown.tsx";
+import { permissionModeTooltip } from "@/utils/permissionMode.ts";
 import type { SessionDefaults } from "@/api/methods/appSettings.ts";
 import "./SettingsModal.css";
 
@@ -242,7 +243,11 @@ function SessionDefaultsSection({ visible }: { visible: boolean }) {
             ...(permissionModes.some((m) => m.value === value.permissionMode)
               ? []
               : [{ value: value.permissionMode, label: value.permissionMode }]),
-            ...permissionModes.map((m) => ({ value: m.value, label: m.label })),
+            ...permissionModes.map((m) => ({
+              value: m.value,
+              label: m.label,
+              title: permissionModeTooltip(m),
+            })),
           ]}
           onChange={(v) => setDraftValue({ ...value, permissionMode: v })}
         />
