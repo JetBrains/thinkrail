@@ -33,9 +33,9 @@ that imports from `claude_agent_sdk`.
 | File | Responsibility |
 |------|----------------|
 | `__init__.py` | Re-exports `ClaudeRuntime` |
-| `runtime.py` | `class ClaudeRuntime` — IAgentRuntime impl. Owns SDK lifecycle, conversation loop, tool-result serialization, cost-iteration tracking, mode-change tracking. `capabilities()` projects the permission/effort/flag module constants plus `self._models.list_options()` (the `context1m` flag gates the 1M-context beta); delegates `list_skills()` to `ClaudeSkillRegistry` |
-| `models.py` | `class ClaudeModelRegistry` — loads `models.json` shipped with the package via `importlib.resources` and serves `list_options()`. No fetch, no cache, no refresh |
-| `models.json` | Curated catalog of Claude models (`[{id, label}]`) exposed to the picker. Edit-and-ship to add or change a model |
+| `runtime.py` | `class ClaudeRuntime` — IAgentRuntime impl. Owns SDK lifecycle, conversation loop, tool-result serialization, cost-iteration tracking, mode-change tracking. `capabilities()` projects the permission/effort/flag module constants plus `self._models.list_options()` and a per-model `model_capabilities` allowlist; clamps effort + the 1M beta to what the model supports at the SDK boundary (`_effective_effort` / `_wants_1m_beta`); delegates `list_skills()` to `ClaudeSkillRegistry` |
+| `models.py` | `class ClaudeModelRegistry` — loads `models.json` shipped with the package via `importlib.resources` and serves `list_options()` (hidden entries excluded), `rates_for()`, `supported_efforts()`, `supports_1m()`. No fetch, no cache, no refresh |
+| `models.json` | Curated catalog of Claude models (`[{id, label, efforts, context1m, hidden?, pricing}]`) exposed to the picker. Edit-and-ship to add or change a model |
 | `skills.py` | `class ClaudeSkillRegistry` — multi-source skill discovery (user / project / plugin / command / builtin) with first-wins dedup and a process-lifetime mtime cache. See [Skill catalog](#skill-catalog--multi-source-scan) |
 | `hooks.py` | `class SubagentHooks` — per-session subagent / PreCompact correlation (Task-tool ↔ SubagentStart) |
 | `adapter.py` | Pure event-shape builders — `agent/toolCallStart` / `agent/toolCallEnd` param construction. Locks the payload shape as the wire contract any runtime adapter must mirror |
@@ -129,14 +129,19 @@ events for everything still in `_active_subagent_ids`.
 - Constructor reads `models.json` from the package via
   `importlib.resources.files(__package__).joinpath("models.json")` —
   path-stable across source checkout, wheel install, and zipapp.
-- Each entry is an `{id, label}` pair, projected to
-  `LabeledOption(value=id, label=label)` at load time and kept in a
-  frozen tuple.
+- Each entry carries `{id, label, efforts, context1m, pricing}` plus an
+  optional `hidden` flag. `efforts` is the list of effort values the model
+  accepts (excluding the always-available `auto`); `context1m` is whether it
+  supports the 1M window.
 - No fetch, no cache, no refresh, no fallback. Adding or changing a
   model is an edit to `models.json` shipped in a normal release.
-- `list_options()` returns the projected `LabeledOption` list, in
-  declared order; `ClaudeRuntime.capabilities()` surfaces it as the
-  `models` capability.
+- `list_options()` returns the projected `LabeledOption` list, in declared
+  order, **excluding `hidden` entries** (kept in the catalog for
+  `rates_for()` / capability lookups but dropped from the picker — e.g. Fable
+  5). `ClaudeRuntime.capabilities()` surfaces it as the `models` capability.
+- `supported_efforts(model)` / `supports_1m(model)` resolve a model's
+  capability facts by exact id, then by tier keyword, then the sonnet default
+  (same resolution as `rates_for()`).
 
 ## Capabilities
 
@@ -150,6 +155,12 @@ these sources:
 - `models` ← `self._models.list_options()`.
 - `flags` ← module constant `_CLAUDE_FLAGS` — runtime-declared option toggles
   surfaced in settings (currently the `context1m` boolean, default on).
+- `model_capabilities` ← one `ModelCapability {model, effort_levels, flags}` per
+  visible model: the runtime-wide effort/flag menus narrowed to what *that*
+  model accepts (`auto` always leads `effort_levels`; `flags` holds `context1m`
+  only for 1M-capable models). The frontend filters its pickers against this so
+  it never offers an unsound combination; a model with no entry is treated as
+  unconstrained.
 
 Sourcing the permission/effort values from the SDK's own literals keeps the
 picker from drifting out of what the runtime accepts — the offered sets follow
@@ -158,17 +169,22 @@ is the runtime default (`default` / `auto`). The SDK has no token for "no
 explicit effort" (its default `effort=None`), so `auto` represents it and is
 translated back to `effort=None` at the runtime boundary.
 
-The model's context-window size is not in the catalog — it is read from
-the live SDK via `ClaudeSDKClient.get_context_usage().rawMaxTokens`
-(cached per model, fetched at turn-start) and streamed as `contextMax`
-on turn-end events.
+**Model/effort/context combinations are clamped at the SDK boundary.** Not every
+model accepts every effort level or the 1M window — e.g. Haiku 4.5 rejects all
+effort levels and tops out at 200K; Sonnet 4.6 has no `xhigh`. The picker is
+constrained by `model_capabilities`, but `run_session` also clamps regardless of
+how the config was produced (stale draft, hand-edited file): `_effective_effort`
+drops an unsupported effort back to `None` (auto), and `_wants_1m_beta` requests
+the `context-1m-2025-08-07` beta only when the flag is on **and** the model
+supports it. This is the guard that stops an unsound pairing (the issue #62
+crash: Haiku + `xhigh` → API 400) from ever reaching the SDK.
 
-The `context1m` flag (on by default) gates the `context-1m-2025-08-07` beta:
-when set, the runtime requests the 1M window, so models that support it (Fable
-5, Opus 4.8, Sonnet 4.6) report 1M and models that don't (Haiku) ignore the
-beta and report their default 200K. Turning the flag off caps the session at 200K.
-Because `contextMax` comes from `get_context_usage()`, the bar reflects
-whichever window the model actually granted — no per-model `supports1M` table.
+The model's context-window size is not in the catalog as a number — it is read
+from the live SDK via `ClaudeSDKClient.get_context_usage().rawMaxTokens` (cached
+per model, fetched at turn-start) and streamed as `contextMax` on turn-end
+events. `models.json` carries only the boolean `context1m` (which feeds the flag
+gating + `model_capabilities`); the actual window the model granted still comes
+from `get_context_usage()`.
 
 ## Skill catalog — multi-source scan
 
@@ -305,7 +321,8 @@ No `cancel_event`, no polling.
 |------|----------------|
 | `backend/tests/agent/runtime/claude/test_runtime.py` | Full `run_session` lifecycle — turn complete, interrupt, multi-turn, tool approval round-trip, cost tracking, plan-mode toggle, all six preserved special-case behaviours |
 | `backend/tests/agent/runtime/claude/test_skills.py` | `TestListSkills` — fixture-tree scan per source kind (user/project/plugin/command/builtin), first-wins dedup ordering, mtime cache hit + invalidation, missing-root silent skip, malformed-SKILL.md logs + skips without raising |
-| `backend/tests/agent/runtime/claude/test_models.py` | `ClaudeModelRegistry` — constructor loads `models.json`, `list_options()` returns the shipped entries as `LabeledOption`s in declared order |
+| `backend/tests/agent/runtime/claude/test_models.py` | `ClaudeModelRegistry` — constructor loads `models.json`, `list_options()` excludes hidden entries in declared order, `rates_for()`, and per-model `supported_efforts()` / `supports_1m()` (incl. tier fallback) |
+| `backend/tests/agent/runtime/claude/test_model_capabilities.py` | Per-model `capabilities().model_capabilities` payload and the SDK-boundary clamp (`_effective_effort` / `_wants_1m_beta`) — Haiku + xhigh / 1M can't reach the SDK |
 | `backend/tests/agent/runtime/claude/test_hooks.py` | `SubagentHooks` correlation — Task-tool / SubagentStart ordering, orphan close on interrupt, `parent_to_agent` mapping |
 | `backend/tests/agent/runtime/claude/test_adapter.py` | Event-shape builder unit tests; locks the `agent/toolCallStart` / `agent/toolCallEnd` payload shape so any runtime adapter can mirror it |
 

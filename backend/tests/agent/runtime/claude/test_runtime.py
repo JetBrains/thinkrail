@@ -1253,7 +1253,8 @@ class TestClaudeRuntimeCapabilities:
         # ``effort=None``) leading.
         assert [e.value for e in caps.effort_levels] == ["auto", *get_args(EffortLevel)]
         assert caps.effort_levels[0].value == "auto"
-        assert caps.models[0].value == "claude-fable-5"
+        # Fable 5 is hidden from the picker; the leading (default) model is Opus.
+        assert caps.models[0].value == "claude-opus-4-8"
 
     def test_permission_modes_have_friendly_labels_and_tooltips(self) -> None:
         caps = ClaudeRuntime(app_config=_test_config()).capabilities()
