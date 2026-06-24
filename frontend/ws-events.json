@@ -408,13 +408,8 @@
           "title": "Body"
         },
         "state": {
-          "default": "pending",
-          "enum": [
-            "pending",
-            "applied"
-          ],
-          "title": "State",
-          "type": "string"
+          "$ref": "#/$defs/TicketActionState",
+          "default": "pending"
         }
       },
       "required": [
@@ -1736,6 +1731,14 @@
       ],
       "title": "TextDeltaPayload",
       "type": "object"
+    },
+    "TicketActionState": {
+      "enum": [
+        "pending",
+        "applied"
+      ],
+      "title": "TicketActionState",
+      "type": "string"
     },
     "ToolCallEndEvent": {
       "properties": {

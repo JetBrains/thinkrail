@@ -12,7 +12,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.board.models import _CAMEL_CONFIG
+from app.board.models import TicketLifecycle, _CAMEL_CONFIG
 
 
 class NodeStatus(StrEnum):
@@ -27,6 +27,20 @@ class RunStatus(StrEnum):
     DONE = "done"
     FAILED = "failed"
     CANCELLED = "cancelled"
+
+
+_NODE_TERMINAL = frozenset({NodeStatus.DONE, NodeStatus.FAILED})
+_NODE_STARTED = frozenset({NodeStatus.RUNNING, NodeStatus.DONE})
+
+
+def is_terminal(status: NodeStatus) -> bool:
+    """Stage/node reached a final state (done or failed)."""
+    return status in _NODE_TERMINAL
+
+
+def has_started(status: NodeStatus) -> bool:
+    """Stage/node is running or already done."""
+    return status in _NODE_STARTED
 
 
 class NodeRun(BaseModel):
@@ -111,22 +125,19 @@ def validate_dag(nodes: list[WorkNode]) -> None:
             visit(n.id)
 
 
-Lifecycle = Literal["created", "design", "implementation", "done"]
-
-
-def derive_lifecycle(stages: list[WorkNode]) -> Lifecycle:
+def derive_lifecycle(stages: list[WorkNode]) -> TicketLifecycle:
     """Coarse 4-value lifecycle for the board, pivoting on the implementing node."""
     if not stages:
-        return "created"
+        return TicketLifecycle.CREATED
     impl = next((n for n in stages if n.executes_plan), None)
     terminal = stages[-1]
     if terminal.status == NodeStatus.DONE or (
         impl is not None and impl.status == NodeStatus.DONE
-        and all(n.status in (NodeStatus.DONE, NodeStatus.FAILED) for n in stages)
+        and all(is_terminal(n.status) for n in stages)
     ):
-        return "done"
-    if impl is not None and impl.status in (NodeStatus.RUNNING, NodeStatus.DONE):
-        return "implementation"
-    if any(n.status in (NodeStatus.RUNNING, NodeStatus.DONE) for n in stages):
-        return "design"
-    return "created"
+        return TicketLifecycle.DONE
+    if impl is not None and has_started(impl.status):
+        return TicketLifecycle.IMPLEMENTATION
+    if any(has_started(n.status) for n in stages):
+        return TicketLifecycle.DESIGN
+    return TicketLifecycle.CREATED

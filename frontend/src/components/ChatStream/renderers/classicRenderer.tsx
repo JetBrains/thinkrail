@@ -1,5 +1,6 @@
 import { lazy, Suspense, useState } from "react";
 import { useSessionStore } from "@/store/sessionStore.ts";
+import { CardState } from "@/constants/status.ts";
 import { isWizardSkill } from "@/components/Wizard/registry.ts";
 import { SystemMessage } from "../SystemMessage.tsx";
 import { AssistantMessage, ThinkRailMessage } from "../AssistantMessage.tsx";
@@ -130,7 +131,7 @@ export const classicRenderers: ViewRenderers = {
     const toolName = p.toolName;
     const toolUseId = p.toolUseId;
     const end = ctx.toolStates.get(toolUseId);
-    const state = end?.finished ? (end.isError ? "error" as const : "success" as const) : "running" as const;
+    const state = end?.finished ? (end.isError ? CardState.Error : CardState.Success) : CardState.Running;
 
     if (TASK_TOOLS.has(toolName)) {
       const isTaskFamily = toolName === "TaskCreate" || toolName === "TaskUpdate";

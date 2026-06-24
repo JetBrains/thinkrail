@@ -9,7 +9,7 @@ from typing import Any
 from app import analytics
 from app.agent.context import build_context
 from app.agent.exceptions import InvalidCapabilityValueError
-from app.agent.models import AgentConfig, AgentTask, SubagentMode, SubsessionType, TaskStatus
+from app.agent.models import AgentConfig, AgentTask, SessionReturnStatus, SubagentMode, SubsessionType, TaskStatus, is_quiescent, is_settled, is_streaming, is_terminal
 from app.agent.persistence import append_event, save_session, load_session, list_sessions as list_sessions_from_disk, delete_session as delete_session_from_disk, update_session_metadata, load_events
 from app.agent.runtime import (
     IAgentRuntime,
@@ -131,7 +131,7 @@ class AgentService:
         """Restore draft sessions from disk into the tracker on startup."""
         disk_sessions = list_sessions_from_disk(self._config.project_root)
         for entry in disk_sessions:
-            if entry.get("status") != "draft":
+            if entry.get("status") != TaskStatus.DRAFT:
                 continue
             sid = entry.get("thinkrailSid", "")
             if not sid or self._tracker.has_task(sid):
@@ -338,7 +338,7 @@ class AgentService:
                 f"Cannot send message: session '{thinkrail_sid}' is not in the live tracker "
                 "(session may need to be resumed first)"
             )
-        if task.status not in (TaskStatus.INITIALIZING, TaskStatus.IDLE):
+        if not is_quiescent(task.status):
             raise ValueError(
                 f"Cannot send message: session is '{task.status}', expected 'initializing' or 'idle'"
             )
@@ -359,7 +359,7 @@ class AgentService:
         needed.
         """
         task = self._tracker.get_task(thinkrail_sid)
-        if task.status not in (TaskStatus.RUNNING, TaskStatus.WAITING):
+        if not is_streaming(task.status):
             # Already idle/done — nothing to interrupt
             return
 
@@ -392,7 +392,7 @@ class AgentService:
         """Gracefully close the session."""
         try:
             task = self._tracker.get_task(thinkrail_sid)
-            if task.status in (TaskStatus.DONE, TaskStatus.ERROR):
+            if is_terminal(task.status):
                 return  # already finished
             if task.status == TaskStatus.DRAFT:
                 # Draft sessions have no runner — just clean up directly
@@ -409,8 +409,8 @@ class AgentService:
         except Exception:
             # Task not in memory (e.g. backend restarted) — update on disk only
             existing = load_session(self._config.project_root, thinkrail_sid)
-            if existing and existing.get("status") not in ("done", "error"):
-                existing["status"] = "done"
+            if existing and not is_terminal(existing.get("status")):
+                existing["status"] = TaskStatus.DONE
                 save_session(self._config.project_root, existing)
 
     def get_task(self, thinkrail_sid: str) -> AgentTask:
@@ -615,7 +615,7 @@ class AgentService:
                 "ticketId": task.ticket_id,
                 "createdAt": task.created,
                 "updatedAt": task.updated,
-                "active": task.status not in (TaskStatus.DONE, TaskStatus.ERROR),
+                "active": not is_terminal(task.status),
                 "inTracker": True,
                 "metrics": disk_entry.get("metrics", {}),
                 "outcome": (
@@ -656,9 +656,9 @@ class AgentService:
             data["stepGate"] = task.step_gate
         else:
             # Not in tracker — correct stale status (no live runner)
-            status = data.get("status", "done")
-            if status not in ("done", "error", "draft"):
-                data["status"] = "done"
+            status = data.get("status", TaskStatus.DONE)
+            if not is_settled(status):
+                data["status"] = TaskStatus.DONE
         return data
 
     def patch_outcome_action(
@@ -729,8 +729,8 @@ class AgentService:
             data = load_session(self._config.project_root, thinkrail_sid)
             if data is None:
                 raise ValueError(f"Session {thinkrail_sid!r} not found")
-            if data.get("status") not in ("initializing", "idle", "running", "waiting", "done", "error", "draft"):
-                data = {**data, "status": "idle"}
+            if data.get("status") not in set(TaskStatus):
+                data = {**data, "status": TaskStatus.IDLE}
             task = AgentTask.model_validate(data)
         if task.ticket_id:
             raise ValueError(f"Session {thinkrail_sid!r} already belongs to a ticket")
@@ -836,7 +836,7 @@ class AgentService:
             "skillId": skill_id,
             "specIds": old_spec_ids,
             "config": old_config.model_dump(by_alias=True),
-            "status": "initializing",
+            "status": TaskStatus.INITIALIZING,
             "sessionId": old_session_id,
             "ticketId": task.ticket_id,
             "createdAt": old.get("createdAt", task.created),
@@ -1122,7 +1122,7 @@ class AgentService:
                 )
                 return
             logger.exception("Agent session %s failed", task.thinkrail_sid)
-            if task.status not in (TaskStatus.DONE, TaskStatus.ERROR):
+            if not is_terminal(task.status):
                 self._tracker.set_status(task.thinkrail_sid, TaskStatus.ERROR)
             self._save_task(task)
             self._tracker.remove_task(task.thinkrail_sid)
@@ -1278,7 +1278,7 @@ class AgentService:
             try:
                 self.board_service.apply(ticket_id, {
                     "op": "recordRunStart", "id": node_id,
-                    "run": {"kind": "session", "status": "running"},
+                    "run": {"kind": "session", "status": RunStatus.RUNNING},
                 })
             except Exception:
                 logger.debug("complete_node recordRunStart failed for %s", node_id, exc_info=True)
@@ -1524,10 +1524,10 @@ class AgentService:
     def request_summary(self, thinkrail_sid: str) -> None:
         """Ask the subsession agent to propose a return summary."""
         task = self._tracker.get_task(thinkrail_sid)
-        task.return_status = "pending"
+        task.return_status = SessionReturnStatus.PENDING
         task.updated = datetime.now(UTC).isoformat()
         self._save_task(task)
-        if task.status in (TaskStatus.INITIALIZING, TaskStatus.IDLE):
+        if is_quiescent(task.status):
             summary_prompt = (
                 "Please summarize the key conclusions from our discussion. "
                 "Write a concise summary that captures the decision, rationale, "
@@ -1538,7 +1538,7 @@ class AgentService:
     def approve_summary(self, thinkrail_sid: str, text: str) -> None:
         """Approve a return summary for the subsession."""
         task = self._tracker.get_task(thinkrail_sid)
-        task.return_status = "approved"
+        task.return_status = SessionReturnStatus.APPROVED
         task.return_summary = text
         task.updated = datetime.now(UTC).isoformat()
         self._save_task(task)
@@ -1546,7 +1546,7 @@ class AgentService:
     def dismiss_summary(self, thinkrail_sid: str) -> None:
         """Dismiss the return flow without returning anything."""
         task = self._tracker.get_task(thinkrail_sid)
-        task.return_status = "dismissed"
+        task.return_status = SessionReturnStatus.DISMISSED
         task.return_summary = None
         task.updated = datetime.now(UTC).isoformat()
         self._save_task(task)
@@ -1554,9 +1554,9 @@ class AgentService:
     def revise_summary(self, thinkrail_sid: str, feedback: str) -> None:
         """Ask the subsession agent to rewrite the summary with feedback."""
         task = self._tracker.get_task(thinkrail_sid)
-        task.return_status = "pending"
+        task.return_status = SessionReturnStatus.PENDING
         task.updated = datetime.now(UTC).isoformat()
         self._save_task(task)
-        if task.status in (TaskStatus.INITIALIZING, TaskStatus.IDLE):
+        if is_quiescent(task.status):
             revision_prompt = f"Please revise the summary based on this feedback:\n\n{feedback}"
             self._tracker.enqueue_message(thinkrail_sid, revision_prompt)

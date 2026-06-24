@@ -4,6 +4,7 @@ import { ToolInputDetail } from "./ToolInputDetail.tsx";
 import { ToolOutputBody } from "./ToolOutputBody.tsx";
 import { useExpandCollapse } from "./useExpandCollapse.ts";
 import type { ApprovalInfo } from "./renderers/types.ts";
+import { CardState } from "@/constants/status.ts";
 
 const TOOL_ICONS: Record<string, string> = {
   Read: "\u{1F4D6}",
@@ -24,8 +25,6 @@ const TOOL_ICONS: Record<string, string> = {
 function getToolIcon(name: string): string {
   return TOOL_ICONS[name] ?? "\u{1F527}";
 }
-
-type CardState = "running" | "success" | "error";
 
 interface CompactToolLineProps {
   toolName: string;
@@ -48,11 +47,11 @@ export function CompactToolLine({
 }: CompactToolLineProps) {
   const [expanded, setExpanded] = useState(false);
   const expandRef = useExpandCollapse(useCallback((v: boolean) => {
-    if (state !== "running") setExpanded(v);
+    if (state !== CardState.Running) setExpanded(v);
   }, [state]));
 
   useEffect(() => {
-    if (isError && state === "error") setExpanded(true);
+    if (isError && state === CardState.Error) setExpanded(true);
   }, [isError, state]);
 
   const displayName = cleanToolName(toolName);
@@ -62,13 +61,13 @@ export function CompactToolLine({
   const summaryText = header?.summary ?? "";
 
   const borderColor =
-    state === "running"
+    state === CardState.Running
       ? "var(--blue)"
       : isError
         ? "var(--red)"
         : "var(--green)";
 
-  const statusIcon = state === "running" ? "\u25CF" : isError ? "\u2715" : "\u2713";
+  const statusIcon = state === CardState.Running ? "\u25CF" : isError ? "\u2715" : "\u2713";
 
   // Pending approval: show inline approve/deny buttons
   const showPendingApproval = approval && !approval.answered && !approval.interrupted;
@@ -78,7 +77,7 @@ export function CompactToolLine({
       <div
         className="compact-log"
         style={{ borderLeftColor: borderColor }}
-        onClick={() => state !== "running" && setExpanded(!expanded)}
+        onClick={() => state !== CardState.Running && setExpanded(!expanded)}
       >
         <span className="compact-log-icon">{getToolIcon(toolName)}</span>
         <span className="compact-log-name">{displayName}</span>

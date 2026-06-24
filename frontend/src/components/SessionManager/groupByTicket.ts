@@ -1,4 +1,5 @@
 import type { SessionSummary } from "@/api/methods/sessions.ts";
+import { SessionStatus } from "@/constants/status.ts";
 
 export interface TicketGroup {
   kind: "ticket";
@@ -25,6 +26,10 @@ function ts(s: SessionSummary): string {
   return s.updatedAt || s.createdAt || "";
 }
 
+/** A session needs user attention when it's waiting for input or errored. */
+const needsAttention = (s: SessionSummary["status"]): boolean =>
+  s === SessionStatus.Waiting || s === SessionStatus.Error;
+
 /** Aggregate sessions into ticket groups + standalone entries, ordered by
  *  recency descending. Input is expected to already be sorted by recency
  *  (we still re-sort to be defensive). */
@@ -42,17 +47,17 @@ export function groupByTicket(sessions: SessionSummary[]): GroupedEntry[] {
       const existing = groupMap.get(s.ticketId);
       if (existing) {
         existing.sessions.push(s);
-        if (s.status === "running") existing.runningCount += 1;
-        if (s.status === "waiting" || s.status === "error") existing.attentionCount += 1;
+        if (s.status === SessionStatus.Running) existing.runningCount += 1;
+        if (needsAttention(s.status)) existing.attentionCount += 1;
       } else {
         groupMap.set(s.ticketId, {
           kind: "ticket",
           ticketId: s.ticketId,
           sessions: [s],
           latestActivity: ts(s),
-          runningCount: s.status === "running" ? 1 : 0,
+          runningCount: s.status === SessionStatus.Running ? 1 : 0,
           attentionCount:
-            s.status === "waiting" || s.status === "error" ? 1 : 0,
+            needsAttention(s.status) ? 1 : 0,
         });
       }
     } else {
@@ -77,10 +82,10 @@ export function pickFocusSession(group: TicketGroup): SessionSummary {
     (a, b) => (Date.parse(ts(b)) || 0) - (Date.parse(ts(a)) || 0),
   );
   const attention = byRecency.find(
-    (s) => s.status === "waiting" || s.status === "error",
+    (s) => needsAttention(s.status),
   );
   if (attention) return attention;
-  const running = byRecency.find((s) => s.status === "running");
+  const running = byRecency.find((s) => s.status === SessionStatus.Running);
   if (running) return running;
   return byRecency[0];
 }

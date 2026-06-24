@@ -1,10 +1,10 @@
 import { Component, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { VisStatus } from "@/constants/status.ts";
 import { useExpandCollapse } from "./useExpandCollapse.ts";
 import type { ErrorInfo, ReactNode } from "react";
 import type {
   VisData,
-  VisStatus,
   ProgressTrackerData,
   SummaryBoxData,
   ComparisonData,
@@ -19,25 +19,25 @@ import { ZoomBar } from "@/utils/ZoomBar.tsx";
 /* ── Status rendering ── */
 
 const STATUS_ICONS: Record<VisStatus, string> = {
-  done: "\u2713",
-  current: "\u25B6",
-  pending: "\u25CB",
-  error: "\u2715",
-  skipped: "\u2298",
-  stale: "~",
-  fresh: "\u2713",
-  in_progress: "\u25D0",
+  [VisStatus.Done]: "\u2713",
+  [VisStatus.Current]: "\u25B6",
+  [VisStatus.Pending]: "\u25CB",
+  [VisStatus.Error]: "\u2715",
+  [VisStatus.Skipped]: "\u2298",
+  [VisStatus.Stale]: "~",
+  [VisStatus.Fresh]: "\u2713",
+  [VisStatus.InProgress]: "\u25D0",
 };
 
 const STATUS_COLORS: Record<VisStatus, string> = {
-  done: "var(--green)",
-  current: "var(--blue)",
-  pending: "var(--hint)",
-  error: "var(--red)",
-  skipped: "var(--hint)",
-  stale: "var(--gold)",
-  fresh: "var(--green)",
-  in_progress: "var(--blue)",
+  [VisStatus.Done]: "var(--green)",
+  [VisStatus.Current]: "var(--blue)",
+  [VisStatus.Pending]: "var(--hint)",
+  [VisStatus.Error]: "var(--red)",
+  [VisStatus.Skipped]: "var(--hint)",
+  [VisStatus.Stale]: "var(--gold)",
+  [VisStatus.Fresh]: "var(--green)",
+  [VisStatus.InProgress]: "var(--blue)",
 };
 
 function StatusIcon({ status }: { status: VisStatus }) {
@@ -63,8 +63,8 @@ function ProgressTracker({ data }: { data: ProgressTrackerData }) {
             <span
               className="vis-progress-label"
               style={{
-                fontWeight: step.status === "current" ? 600 : 400,
-                color: step.status === "pending" ? "var(--hint)" : "var(--text)",
+                fontWeight: step.status === VisStatus.Current ? 600 : 400,
+                color: step.status === VisStatus.Pending ? "var(--hint)" : "var(--text)",
               }}
             >
               {step.label}
@@ -78,7 +78,7 @@ function ProgressTracker({ data }: { data: ProgressTrackerData }) {
               {step.substeps.map((sub, j) => (
                 <div key={j} className="vis-progress-substep">
                   <StatusIcon status={sub.status} />
-                  <span style={{ color: sub.status === "pending" ? "var(--hint)" : "var(--muted)" }}>
+                  <span style={{ color: sub.status === VisStatus.Pending ? "var(--hint)" : "var(--muted)" }}>
                     {sub.label}
                   </span>
                 </div>
@@ -185,7 +185,7 @@ function DataTable({ data }: { data: DataTableData }) {
                   key={j}
                   style={
                     data.statusColumn === j
-                      ? { color: cell === "fresh" || cell === "done" ? "var(--green)" : cell === "stale" ? "var(--gold)" : "var(--muted)" }
+                      ? { color: cell === VisStatus.Fresh || cell === VisStatus.Done ? "var(--green)" : cell === VisStatus.Stale ? "var(--gold)" : "var(--muted)" }
                       : undefined
                   }
                 >

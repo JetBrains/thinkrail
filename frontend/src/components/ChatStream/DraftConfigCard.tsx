@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { DND_FILE_MIME } from "@/constants/branding.ts";
+import { SessionStatus } from "@/constants/status.ts";
 import { browseFiles } from "@/services/files.ts";
 import { useSpecStore } from "@/store/specStore.ts";
 import { useSettingsStore } from "@/store/settingsStore.ts";
@@ -137,7 +138,7 @@ export function DraftConfigCard({ thinkrailSid, readOnly, hideDiscard, onVisibil
   }, [thinkrailSid, deleteSession]);
 
   if (!session) return null;
-  if (!readOnly && session.status !== "draft") return null;
+  if (!readOnly && session.status !== SessionStatus.Draft) return null;
 
   const skill = session.skillId ? skills.find((s) => s.id === session.skillId) : null;
   const staleRefs = getStaleSessionRefs(thinkrailSid);

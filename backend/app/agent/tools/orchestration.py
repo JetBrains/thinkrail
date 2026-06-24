@@ -20,8 +20,9 @@ from app.agent.tracker import Tracker
 from app.core.config import AppConfig, MCP_PREFIX
 from app.board.ops import find_node
 from app.board.service import BoardService, TicketNotFoundError
+from app.board.work_node import RunStatus
 from app.board.ticket_state import publish_ticket_state
-from app.board.work_node import DagError, NodeStatus
+from app.board.work_node import DagError, NodeStatus, has_started
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +130,7 @@ async def _start_node(args: dict) -> dict:
         return _error(f"unknown node {args['id']!r}")
 
     # Idempotency: if the node already has a running session, return it.
-    if node.status in (NodeStatus.RUNNING, NodeStatus.DONE) and node.runs:
+    if has_started(node.status) and node.runs:
         last_sid = node.runs[-1].session_id
         return _ok(
             f"node {node.id!r} is already {node.status}"
@@ -181,7 +182,7 @@ async def _start_node(args: dict) -> dict:
         )
     child = await agent_service.run_task(**run_task_kwargs)
     board.apply(ticket_id, {"op": "recordRunStart", "id": node.id, "run": {
-        "kind": "session", "sessionId": child.thinkrail_sid, "status": "running",
+        "kind": "session", "sessionId": child.thinkrail_sid, "status": RunStatus.RUNNING,
     }})
     await publish_ticket_state(board, str(ctx.config.project_root), ticket_id)
     impl_hint = (

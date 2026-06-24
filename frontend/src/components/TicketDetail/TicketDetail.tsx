@@ -8,12 +8,13 @@ import { useTicketStateStore } from "@/store/ticketStateStore.ts";
 import { useTicketRouteStore } from "@/store/ticketRouteStore.ts";
 import { SessionPanel } from "@/components/SessionPanel/SessionPanel.tsx";
 import type { WorkNode } from "@/types/rpc-methods.ts";
+import { NodeStatus } from "@/constants/status.ts";
 import "./TicketDetail.css";
 
 export function collectRunningStageSessions(stages: WorkNode[]): Set<string> {
   const result = new Set<string>();
   for (const node of stages) {
-    if (node.status === "running" && node.runs && node.runs.length > 0) {
+    if (node.status === NodeStatus.Running && node.runs && node.runs.length > 0) {
       const latest = node.runs[node.runs.length - 1];
       if (latest.kind === "session" && latest.sessionId) {
         result.add(latest.sessionId);

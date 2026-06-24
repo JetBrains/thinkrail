@@ -1,14 +1,8 @@
 /** Visualization data types for the thinkrail_visualize MCP tool. */
 
-export type VisStatus =
-  | "done"
-  | "current"
-  | "pending"
-  | "error"
-  | "skipped"
-  | "stale"
-  | "fresh"
-  | "in_progress";
+import type { VisStatus } from "@/constants/status.ts";
+
+export type { VisStatus };
 
 export type VisType =
   | "progress-tracker"

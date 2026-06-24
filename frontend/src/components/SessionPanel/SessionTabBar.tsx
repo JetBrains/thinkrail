@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Pencil, MessageCircle, File, X, Folder, Plus } from "lucide-react";
 import type { Session } from "@/types/session.ts";
+import { SessionStatus, isTerminal } from "@/constants/status.ts";
 import type { OpenFile } from "@/store/fileStore.ts";
 import { useBoardStore } from "@/store/boardStore.ts";
 import { useFileStore } from "@/store/fileStore.ts";
@@ -76,13 +77,13 @@ function nestingDepth(session: Session, allSessions: Session[]): number {
 
 function statusDotColor(status: Session["status"]): string {
   switch (status) {
-    case "draft":
+    case SessionStatus.Draft:
       return "var(--gold)";
-    case "running":
+    case SessionStatus.Running:
       return "var(--blue)";
-    case "done":
+    case SessionStatus.Done:
       return "var(--green)";
-    case "error":
+    case SessionStatus.Error:
       return "var(--red)";
     default:
       return "var(--hint)";
@@ -167,7 +168,7 @@ export function SessionTabBar({
         const prefix = "\u21B3".repeat(depth);
         const hasActiveChild = sessions.some(
           (child) => child.parentThinkrailSid === s.thinkrailSid &&
-          child.status !== "done" && child.status !== "error"
+          !isTerminal(child.status)
         );
         const isActive = s.thinkrailSid === activeSessionId && kind === "session";
         return (

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 import { createPortal } from "react-dom";
-import type { SessionMetrics, SessionStatus } from "@/types/session.ts";
+import type { SessionMetrics } from "@/types/session.ts";
+import { SessionStatus, isEnded, isStreaming } from "@/constants/status.ts";
 import { useRuntimeCapsStore } from "@/store/runtimeCapsStore.ts";
 import { permissionModeTooltip } from "@/utils/permissionMode.ts";
 import { useUiStore } from "@/store/uiStore.ts";
@@ -33,15 +34,15 @@ const IconHourglass = () => (
 
 function statusInfo(status: SessionStatus): StatusInfo {
   switch (status) {
-    case "draft":
-    case "initializing": return { icon: "✏",              label: status, cssClass: "idle" };
-    case "running":      return { icon: "",                label: "running", cssClass: "running" };
-    case "waiting":      return { icon: <IconHourglass />, label: "waiting", cssClass: "waiting" };
-    case "idle":         return { icon: "💤",              label: "idle", cssClass: "idle" };
-    case "interrupted":  return { icon: "⚡",              label: "interrupted", cssClass: "idle" };
-    case "done":
-    case "error":        return { icon: "⏹",              label: status === "error" ? "error" : "done", cssClass: "ended" };
-    default:             return { icon: "?",               label: status as string, cssClass: "idle" };
+    case SessionStatus.Draft:
+    case SessionStatus.Initializing: return { icon: "✏", label: status, cssClass: "idle" };
+    case SessionStatus.Running: return { icon: "", label: "running", cssClass: "running" };
+    case SessionStatus.Waiting: return { icon: <IconHourglass />, label: "waiting", cssClass: "waiting" };
+    case SessionStatus.Idle: return { icon: "💤", label: "idle", cssClass: "idle" };
+    case SessionStatus.Interrupted: return { icon: "⚡", label: "interrupted", cssClass: "idle" };
+    case SessionStatus.Done:
+    case SessionStatus.Error: return { icon: "⏹", label: status === SessionStatus.Error ? "error" : "done", cssClass: "ended" };
+    default: return { icon: "?", label: status as string, cssClass: "idle" };
   }
 }
 
@@ -228,9 +229,9 @@ export function SessionStatusLine({
   const toggleCategory = useUiStore((s) => s.toggleChatCategory);
 
   // ── Derived flags ──
-  const isStreaming = status === "running" || status === "waiting";
-  const isTerminal = status === "done" || status === "error" || status === "interrupted";
-  const canInterrupt = isStreaming;
+  const streaming = isStreaming(status);
+  const ended = isEnded(status);
+  const canInterrupt = streaming;
   const { icon: statusIcon, label: statusLabel, cssClass: statusClass } = statusInfo(status);
 
   const activeOption = modelOptions.find((o) => o.value === model);
@@ -387,7 +388,7 @@ export function SessionStatusLine({
               <InfoBlock
                 label="Cost"
                 stats={[
-                  ...(isStreaming && metrics.contextUsage.liveTurn
+                  ...(streaming && metrics.contextUsage.liveTurn
                     ? [{
                         value: (
                           <span className="ssl-cost-active">
@@ -399,8 +400,8 @@ export function SessionStatusLine({
                     : []),
                   {
                     value: (
-                      <span className={isStreaming ? "ssl-cost-active" : undefined}>
-                        {isStreaming ? `~$${metrics.costUsd.toFixed(2)}` : `$${metrics.costUsd.toFixed(2)}`}
+                      <span className={streaming ? "ssl-cost-active" : undefined}>
+                        {streaming ? `~$${metrics.costUsd.toFixed(2)}` : `$${metrics.costUsd.toFixed(2)}`}
                       </span>
                     ),
                     sub: "session total",
@@ -412,11 +413,11 @@ export function SessionStatusLine({
                 stats={[{
                   value: (
                     <>
-                      {isStreaming && <span className="ssl-pulse" />}
+                      {streaming && <span className="ssl-pulse" />}
                       {metrics.toolCalls}
                     </>
                   ),
-                  sub: isStreaming ? "in progress" : "completed",
+                  sub: streaming ? "in progress" : "completed",
                 }]}
               />
               {metrics.contextMax > 0 && (
@@ -438,12 +439,12 @@ export function SessionStatusLine({
       <div className="ssl-selector ssl-status-wrap" ref={statusDd.ref}>
         <button
           className={`ssl-selector-btn ssl-status ssl-status-${statusClass}`}
-          onClick={() => !isTerminal && statusDd.toggle()}
-          disabled={isTerminal}
+          onClick={() => !ended && statusDd.toggle()}
+          disabled={ended}
         >
-          {status === "running" && <span className="ssl-status-spinner" />}
+          {status === SessionStatus.Running && <span className="ssl-status-spinner" />}
           {statusIcon} {statusLabel}
-          {!isTerminal && <ChevronDown />}
+          {!ended && <ChevronDown />}
         </button>
         {statusDd.open && (
           <div className="ssl-dropdown ssl-dropdown-right">

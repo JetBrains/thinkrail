@@ -90,8 +90,9 @@ export type {
   ClearPreviewFilePayload,
   QuestionOption,
 } from "./ws-events.ts";
+import type { TaskStatus } from "@/constants/status.ts";
 
-export type TaskStatus = "draft" | "initializing" | "running" | "waiting" | "idle" | "done" | "error" | "interrupted";
+export type { TaskStatus };
 
 // ─── Semantic event type groups ───────────────────────────────────────────────
 // Derived from the generated event interfaces — strings live only in ws-events.ts.

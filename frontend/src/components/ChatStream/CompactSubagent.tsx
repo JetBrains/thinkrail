@@ -3,6 +3,8 @@ import type { AgentEvent } from "@/types/agent.ts";
 import { ChatMarkdown } from "./ChatMarkdown.tsx";
 import { CompactToolLine } from "./CompactToolLine.tsx";
 import type { ToolState } from "./ChatStream.tsx";
+import { CardState } from "@/constants/status.ts";
+import { EventType } from "@/constants/eventTypes.ts";
 
 interface CompactSubagentProps {
   agentType?: string;
@@ -12,7 +14,7 @@ interface CompactSubagentProps {
 }
 
 function countTools(childEvents: AgentEvent[]): number {
-  return childEvents.filter((ev) => ev.eventType === "toolCallStart").length;
+  return childEvents.filter((ev) => ev.eventType === EventType.ToolCallStart).length;
 }
 
 export function CompactSubagent({
@@ -45,15 +47,15 @@ export function CompactSubagent({
       {expanded && (
         <div className="compact-subagent-body">
           {childEvents.map((ev, ci) => {
-            if (ev.eventType === "toolCallStart") {
+            if (ev.eventType === EventType.ToolCallStart) {
               const toolName = (ev.payload.toolName as string) ?? "tool";
               if (toolName === "AskUserQuestion") return null;
               if (toolName.endsWith("thinkrail_visualize")) return null;
               const toolUseId = (ev.payload.toolUseId as string) ?? "";
               const end = toolStates.get(toolUseId);
               const state = end?.finished
-                ? (end.isError ? "error" as const : "success" as const)
-                : "running" as const;
+                ? (end.isError ? CardState.Error : CardState.Success)
+                : CardState.Running;
               return (
                 <CompactToolLine
                   key={`csub-tool-${ci}`}
@@ -65,7 +67,7 @@ export function CompactSubagent({
                 />
               );
             }
-            if (ev.eventType === "textDelta") {
+            if (ev.eventType === EventType.TextDelta) {
               return (
                 <div key={`csub-text-${ci}`} className="compact-subagent-text">
                   <ChatMarkdown content={(ev.payload.text as string) ?? ""} />

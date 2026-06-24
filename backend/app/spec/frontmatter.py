@@ -306,13 +306,13 @@ def validate_frontmatter(meta: dict[str, Any]) -> list[str]:
                 errors.append("Missing or empty required field 'id'")
             elif field_label == "type" and "missing" in err_type:
                 errors.append("Missing or empty required field 'type'")
-            elif field_label == "type" and "literal" in err_type:
+            elif field_label == "type" and ("literal" in err_type or "enum" in err_type):
                 spec_type = meta.get("type", "")
                 errors.append(
                     f"Unrecognized spec type '{spec_type}'. "
                     f"Expected one of: {', '.join(sorted(RECOGNIZED_TYPES))}"
                 )
-            elif field_label == "status" and "literal" in err_type:
+            elif field_label == "status" and ("literal" in err_type or "enum" in err_type):
                 status = meta.get("status", "")
                 errors.append(
                     f"Invalid status '{status}'. "
