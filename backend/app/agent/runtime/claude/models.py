@@ -1,28 +1,33 @@
-"""Claude model registry — loads the curated catalog shipped with the package."""
+"""Claude model registry — reads the active catalog from ``catalog_holder``.
+
+Stateless over the holder: every method consults ``catalog_holder.current`` at
+call time, so a background catalog swap is reflected immediately.
+"""
 
 from __future__ import annotations
 
-import json
-from importlib.resources import files
-
 from app.agent.pricing import ModelRates
+from app.agent.runtime.claude.catalog import CatalogModel, CatalogPricing, catalog_holder
 from app.agent.runtime.types import LabeledOption
 
-# Tier keywords used to resolve rates for a model id that isn't an exact catalog
-# entry (out-of-caps selections, dated snapshots, subagent models). "sonnet" is
-# the catch-all default.
+# Tier keywords resolve rates / capability facts for an id that isn't an exact
+# catalog entry (out-of-caps selections, dated snapshots, subagent models).
+# "sonnet" is the catch-all default.
 _TIERS = ("fable", "opus", "haiku", "sonnet")
 _DEFAULT_TIER = "sonnet"
 
+# Irreducible fallback if the catalog somehow has no models at all.
+_FALLBACK_MODEL = "claude-opus-4-8"
 
-def _rates_from_json(pricing: dict[str, float]) -> ModelRates:
-    """Per-million-token USD in JSON → per-token ``ModelRates``."""
+
+def _rates(pricing: CatalogPricing) -> ModelRates:
+    """Per-million-token USD → per-token ``ModelRates``."""
     return ModelRates(
-        input=pricing["input"] / 1_000_000,
-        output=pricing["output"] / 1_000_000,
-        cache_write_5m=pricing["cacheWrite5m"] / 1_000_000,
-        cache_write_1h=pricing["cacheWrite1h"] / 1_000_000,
-        cache_read=pricing["cacheRead"] / 1_000_000,
+        input=pricing.input / 1_000_000,
+        output=pricing.output / 1_000_000,
+        cache_write_5m=pricing.cache_write_5m / 1_000_000,
+        cache_write_1h=pricing.cache_write_1h / 1_000_000,
+        cache_read=pricing.cache_read / 1_000_000,
     )
 
 
@@ -35,65 +40,56 @@ def _tier_of(model: str) -> str:
 
 
 class ClaudeModelRegistry:
-    def __init__(self) -> None:
-        raw = json.loads(
-            files(__package__).joinpath("models.json").read_text(encoding="utf-8")
-        )["models"]
-        # ``hidden`` entries stay in the catalog (so rates_for / capability
-        # lookups still resolve them for legacy sessions) but are excluded from
-        # the picker the UI renders.
-        self._options: tuple[LabeledOption, ...] = tuple(
-            LabeledOption(value=row["id"], label=row["label"])
-            for row in raw
-            if not row.get("hidden", False)
-        )
-        self._rates_by_id: dict[str, ModelRates] = {
-            row["id"]: _rates_from_json(row["pricing"]) for row in raw
-        }
-        self._rates_by_tier: dict[str, ModelRates] = {
-            _tier_of(rid): rates for rid, rates in self._rates_by_id.items()
-        }
-        # Per-model capability facts (effort levels and 1M-context support).
-        # ``auto`` is never listed here — it is the runtime's neutral "let the
-        # SDK decide" value and is always available regardless of model.
-        self._efforts_by_id: dict[str, tuple[str, ...]] = {
-            row["id"]: tuple(row.get("efforts", [])) for row in raw
-        }
-        self._context1m_by_id: dict[str, bool] = {
-            row["id"]: bool(row.get("context1m", False)) for row in raw
-        }
-        self._efforts_by_tier: dict[str, tuple[str, ...]] = {
-            _tier_of(rid): efforts for rid, efforts in self._efforts_by_id.items()
-        }
-        self._context1m_by_tier: dict[str, bool] = {
-            _tier_of(rid): supported for rid, supported in self._context1m_by_id.items()
-        }
+    """Reader over the active catalog. Construction is cheap; it holds no copy."""
+
+    def default_model(self) -> str:
+        """The default model id: the catalog ``defaultModel`` when it is present
+        and visible, else the first visible model, else ``_FALLBACK_MODEL``."""
+        doc = catalog_holder.current
+        visible = [m for m in doc.models if not m.hidden]
+        ids = {m.id for m in visible}
+        if doc.default_model in ids:
+            return doc.default_model
+        if visible:
+            return visible[0].id
+        return _FALLBACK_MODEL
 
     def list_options(self) -> list[LabeledOption]:
-        return list(self._options)
+        """Visible models, default first, the rest in declared order. Hidden
+        entries stay in the catalog (rates / capability lookups) but are dropped
+        from the picker."""
+        doc = catalog_holder.current
+        default = self.default_model()
+        visible = [m for m in doc.models if not m.hidden]
+        ordered = sorted(visible, key=lambda m: 0 if m.id == default else 1)
+        return [LabeledOption(value=m.id, label=m.label) for m in ordered]
+
+    def _resolve(self, model: str) -> CatalogModel | None:
+        """The catalog entry for ``model``: exact id, else by tier keyword, else
+        the sonnet default. ``None`` only if the catalog has no models at all."""
+        models = catalog_holder.current.models
+        for m in models:
+            if m.id == model:
+                return m
+        by_tier: dict[str, CatalogModel] = {}
+        for m in models:
+            by_tier.setdefault(_tier_of(m.id), m)
+        return by_tier.get(_tier_of(model)) or by_tier.get(_DEFAULT_TIER)
 
     def rates_for(self, model: str) -> ModelRates:
-        """Resolve rates for ``model``: exact id, else by tier keyword, else sonnet."""
-        if model in self._rates_by_id:
-            return self._rates_by_id[model]
-        return self._rates_by_tier.get(_tier_of(model)) or self._rates_by_tier[_DEFAULT_TIER]
+        """Resolve rates for ``model`` (exact id → tier → sonnet)."""
+        m = self._resolve(model)
+        # Zero rates rather than crash if the catalog is somehow empty.
+        return _rates(m.pricing) if m else ModelRates(0.0, 0.0, 0.0, 0.0, 0.0)
 
     def supported_efforts(self, model: str) -> tuple[str, ...]:
         """Effort levels ``model`` accepts (excluding the always-available
-        ``auto``). Resolves by exact id, else by tier keyword, else sonnet."""
-        if model in self._efforts_by_id:
-            return self._efforts_by_id[model]
-        tier = _tier_of(model)
-        if tier in self._efforts_by_tier:
-            return self._efforts_by_tier[tier]
-        return self._efforts_by_tier[_DEFAULT_TIER]
+        ``auto``), resolved exact id → tier → sonnet."""
+        m = self._resolve(model)
+        return tuple(m.efforts) if m else ()
 
     def supports_1m(self, model: str) -> bool:
-        """Whether ``model`` supports the 1M-token context window. Resolves by
-        exact id, else by tier keyword, else sonnet."""
-        if model in self._context1m_by_id:
-            return self._context1m_by_id[model]
-        tier = _tier_of(model)
-        if tier in self._context1m_by_tier:
-            return self._context1m_by_tier[tier]
-        return self._context1m_by_tier[_DEFAULT_TIER]
+        """Whether ``model`` supports the 1M-token context window, resolved
+        exact id → tier → sonnet."""
+        m = self._resolve(model)
+        return bool(m.context1m) if m else False
