@@ -23,6 +23,11 @@ export const WS_METHODS = {
 	terminalResize: "terminal.resize",
 	terminalClose: "terminal.close",
 	dialogSelectDirectory: "dialog.selectDirectory",
+	// session.* — the pi engine (M10). Model/thinking selection joins at M12 (the Composer).
+	sessionCreate: "session.create",
+	sessionPrompt: "session.prompt",
+	sessionAbort: "session.abort",
+	sessionDispose: "session.dispose",
 } as const;
 
 /** Server→client push channels. */
@@ -59,6 +64,10 @@ export interface WsMethodMap {
 	"terminal.resize": { params: { id: string; cols: number; rows: number }; result: Ack };
 	"terminal.close": { params: { id: string }; result: Ack };
 	"dialog.selectDirectory": { params: Record<string, never>; result: { path: string | null } };
+	"session.create": { params: { workspaceId: string }; result: { sessionId: string } };
+	"session.prompt": { params: { sessionId: string; text: string }; result: Ack };
+	"session.abort": { params: { sessionId: string }; result: Ack };
+	"session.dispose": { params: { sessionId: string }; result: Ack };
 }
 
 export type WsMethodName = keyof WsMethodMap;

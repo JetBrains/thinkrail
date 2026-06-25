@@ -17,9 +17,12 @@ editor tabs + terminals (switching workspaces swaps both).
 
 - **Owns:** `appStore.ts` — connection/projects/workspaces state + setters; `tabsByWorkspace` /
   `activeTabByWorkspace` (`openTab`/`closeTab`/`setActiveTab`/`clearWorkspaceTabs`); `terminalsByWorkspace`
-  / `activeTerminalByWorkspace` (`addTerminal`/`closeTerminalTab`/`setActiveTerminalTab`); the `EditorTab`
-  + `TerminalTab` types.
-- **Public surface (barrel):** `useAppStore`, `EditorTab`, `TerminalTab`.
-- **Allowed deps:** `contracts` (`Project`/`Workspace`); `transport` (`ConnectionStatus`, **type-only**);
-  `zustand`.
+  / `activeTerminalByWorkspace` (`addTerminal`/`closeTerminalTab`/`setActiveTerminalTab`); the
+  **single-session chat state** (`chatSessionId`/`messages`/`currentAssistantMessageId`/`isStreaming`,
+  with `openChatSession`/`appendUserMessage` + the `handlePiEvent` event→store dispatcher — Appendix B);
+  the `EditorTab` (`FileTab` | `ChatTab`) + `ChatMessage` + `TerminalTab` types.
+- **Public surface (barrel):** `useAppStore`, `EditorTab` (`FileTab`/`ChatTab`), `ChatMessage`,
+  `ChatRole`, `TerminalTab`.
+- **Allowed deps:** `contracts` (`Project`/`Workspace`; `PiEvent`, **type-only**); `transport`
+  (`ConnectionStatus`, **type-only**); `zustand`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `panels`/`shell` or transport runtime.

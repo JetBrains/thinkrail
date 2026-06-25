@@ -6,7 +6,7 @@ runs `pi` and bridges it to a rich UI; `pi` owns models, skills, compaction, cos
 Canonical specs (read these first):
 - `goal-and-requirements.md` — product goal + V1/V2 scope
 - `architecture.md` — top-level architecture, decisions, invariants
-- `docs/V1-TUTORIAL.md` — the buildable V1 milestone ladder (M0–M14), gotchas, dependency pins, type map
+- `docs/V1-TUTORIAL.md` — the buildable V1 milestone ladder (M0–M15), gotchas, dependency pins, type map
 - `docs/V2-ROADMAP.md` — the destination V1 is designed to reach
 
 ## Module structure & boundaries (top-priority requirement)
@@ -117,6 +117,14 @@ Every change that touches the app is verified by the **e2e suite** before it's c
 `globalSetup`), runs the suite headless against the real web UI, then tears the host down and cleans up
 (`globalTeardown`). Tests live in `e2e/` and assert via `data-testid` / `data-status` hooks. When
 Electrobun lands, the same suite runs against the desktop app too.
+
+**Agent tests are tagged, not faked.** Specs that drive a real `pi` agent are tagged `@agent` (Playwright
+`{ tag: "@agent" }`) and use pi's **default auth** (`AuthStorage` resolves provider env vars or
+`~/.pi/agent/auth.json`) — no `ANTHROPIC_API_KEY`-specific gating. Select suites by marker: `bun run e2e`
+runs the **no-agent** suite (`--grep-invert @agent`) — projects/workspaces/files/editor/changes/terminals,
+fast, no auth, run anytime; `bun run e2e:full` runs everything; `bun run e2e:agent` runs only the
+`@agent` specs (which need `pi` authenticated + more time). There is **no fake agent** — agent coverage
+runs against a real provider.
 
 Fast gates (also the husky pre-commit): `bun run lint` (biome) + `bun run typecheck`. Unit tests:
 `bun run test` (bun test, per package). One-time setup for a fresh machine: `bunx playwright install chromium`.

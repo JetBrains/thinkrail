@@ -1,3 +1,4 @@
+import { abortSession, createSession, promptSession, removeSession } from "../agent";
 import { selectDirectory } from "../dialog";
 import { readDir, readFile } from "../fs";
 import { gitDiff, gitStatus } from "../git";
@@ -5,6 +6,7 @@ import { closeProject, listProjects, openProject } from "../projects";
 import { closeTerminal, createTerminal, resizeTerminal, writeTerminal } from "../terminal";
 import {
 	createWorkspace,
+	getWorkspace,
 	listWorkspaces,
 	removeWorkspace,
 	workspaceDiffStats,
@@ -53,7 +55,25 @@ const handlers: Record<string, Handler> = {
 		closeTerminal((params as { id: string }).id);
 		return { ok: true } as const;
 	},
-	// session.* lands in M10.
+	// session.* — the pi engine. A thrown/failed call returns a `{ ok:false, error }` WS response;
+	// streaming faults arrive as `pi.event`s (the error/agent_end variants), not here.
+	"session.create": async (params) => {
+		const ws = getWorkspace((params as { workspaceId: string }).workspaceId);
+		return createSession({ cwd: ws.worktreePath });
+	},
+	"session.prompt": async (params) => {
+		const p = params as { sessionId: string; text: string };
+		await promptSession(p.sessionId, p.text);
+		return { ok: true } as const;
+	},
+	"session.abort": async (params) => {
+		await abortSession((params as { sessionId: string }).sessionId);
+		return { ok: true } as const;
+	},
+	"session.dispose": (params) => {
+		removeSession((params as { sessionId: string }).sessionId);
+		return { ok: true } as const;
+	},
 };
 
 /** Route a WS request to its handler. Throws on unknown method (→ a `{ ok:false }` WS response). */

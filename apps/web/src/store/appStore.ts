@@ -1,14 +1,56 @@
-import type { Project, Workspace } from "@thinkrail-pi/contracts";
+import type { PiEvent, Project, Workspace } from "@thinkrail-pi/contracts";
 import { create } from "zustand";
 import type { ConnectionStatus } from "../transport";
 
-/** An open center tab. V1 has file tabs; chat tabs (M11) join the same strip with a `kind` discriminant. */
-export interface EditorTab {
+/** A center tab. File tabs (Monaco) and chat tabs share the strip, discriminated by `kind`. */
+export interface FileTab {
+	kind: "file";
 	id: string; // `${workspaceId}:${path}` — stable, so re-opening a file focuses its tab
 	workspaceId: string;
-	path: string;
 	name: string;
+	path: string;
 	content: string;
+}
+export interface ChatTab {
+	kind: "chat";
+	id: string; // `${workspaceId}:${sessionId}` — the AgentSession id is the one id model
+	workspaceId: string;
+	name: string;
+	sessionId: string;
+}
+export type EditorTab = FileTab | ChatTab;
+
+/** A rendered chat message — a web-local view model, distinct from pi's `Message` union. */
+export type ChatRole = "user" | "assistant" | "system" | "tool_call" | "tool_result";
+export interface ChatMessage {
+	id: string; // user/assistant generated; tool_call = toolCallId; tool_result = `result-${toolCallId}`
+	role: ChatRole;
+	text: string;
+	streaming: boolean;
+	thinking?: string;
+	toolName?: string;
+	args?: unknown;
+	output?: string;
+	isError?: boolean;
+}
+
+function patchMsg(
+	msgs: ChatMessage[],
+	id: string,
+	fn: (m: ChatMessage) => Partial<ChatMessage>,
+): ChatMessage[] {
+	return msgs.map((m) => (m.id === id ? { ...m, ...fn(m) } : m));
+}
+
+/** Tool results are typed `any` on the wire (cumulative → REPLACE). Render defensively. */
+function renderToolResult(result: unknown): string {
+	if (typeof result === "string") return result;
+	if (result == null) return "";
+	try {
+		return JSON.stringify(result, null, 2);
+	} catch {
+		return String(result);
+	}
 }
 
 /** A terminal tab. `clientId` is the stable UI key; the server PTY id is owned by its `TerminalInstance`. */
@@ -31,6 +73,11 @@ interface AppState {
 	/** Terminals are workspace-scoped too; their instances stay mounted (hidden) to preserve buffers. */
 	terminalsByWorkspace: Record<string, TerminalTab[]>;
 	activeTerminalByWorkspace: Record<string, string | null>;
+	/** Chat is a single active session in M11 (global state); it moves into per-session runtimes at M13. */
+	chatSessionId: string | null;
+	messages: ChatMessage[];
+	currentAssistantMessageId: string | null;
+	isStreaming: boolean;
 	setStatus: (status: ConnectionStatus) => void;
 	setWelcome: (protocolVersion: number) => void;
 	setProjects: (projects: Project[]) => void;
@@ -44,6 +91,9 @@ interface AppState {
 	addTerminal: (workspaceId: string) => void;
 	closeTerminalTab: (workspaceId: string, clientId: string) => void;
 	setActiveTerminalTab: (workspaceId: string, clientId: string) => void;
+	openChatSession: (workspaceId: string, sessionId: string) => void;
+	appendUserMessage: (text: string) => void;
+	handlePiEvent: (event: PiEvent, sessionId: string) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -57,6 +107,10 @@ export const useAppStore = create<AppState>((set) => ({
 	activeTabByWorkspace: {},
 	terminalsByWorkspace: {},
 	activeTerminalByWorkspace: {},
+	chatSessionId: null,
+	messages: [],
+	currentAssistantMessageId: null,
+	isStreaming: false,
 	setStatus: (status) => set({ status }),
 	setWelcome: (protocolVersion) => set({ protocolVersion }),
 	setProjects: (projects) => set({ projects }),
@@ -139,4 +193,138 @@ export const useAppStore = create<AppState>((set) => ({
 		set((s) => ({
 			activeTerminalByWorkspace: { ...s.activeTerminalByWorkspace, [workspaceId]: clientId },
 		})),
+	openChatSession: (workspaceId, sessionId) =>
+		set((s) => {
+			const id = `${workspaceId}:${sessionId}`;
+			const tab: ChatTab = { kind: "chat", id, workspaceId, name: "Chat", sessionId };
+			const tabs = s.tabsByWorkspace[workspaceId] ?? [];
+			return {
+				tabsByWorkspace: tabs.some((t) => t.id === id)
+					? s.tabsByWorkspace
+					: { ...s.tabsByWorkspace, [workspaceId]: [...tabs, tab] },
+				activeTabByWorkspace: { ...s.activeTabByWorkspace, [workspaceId]: id },
+				chatSessionId: sessionId,
+				messages: [],
+				currentAssistantMessageId: null,
+				isStreaming: false,
+			};
+		}),
+	appendUserMessage: (text) =>
+		set(
+			(s): Partial<AppState> => ({
+				messages: [
+					...s.messages,
+					{ id: crypto.randomUUID(), role: "user", text, streaming: false },
+				],
+			}),
+		),
+	// The single-session event→store dispatcher (Appendix B). Per-session at M13.
+	handlePiEvent: (event, sessionId) =>
+		set((s): Partial<AppState> => {
+			if (s.chatSessionId !== sessionId) return {}; // M11: only the one active chat
+			switch (event.type) {
+				case "agent_start":
+					return { isStreaming: true };
+				case "message_start": {
+					// User turns are shown optimistically on send; only the assistant opens a node here.
+					if (event.message.role !== "assistant") return {};
+					const id = crypto.randomUUID();
+					return {
+						messages: [...s.messages, { id, role: "assistant", text: "", streaming: true }],
+						currentAssistantMessageId: id,
+					};
+				}
+				case "message_update": {
+					const ame = event.assistantMessageEvent;
+					const id = s.currentAssistantMessageId;
+					if (ame.type === "text_delta") {
+						if (id)
+							return { messages: patchMsg(s.messages, id, (m) => ({ text: m.text + ame.delta })) };
+						// Defensive: a delta before message_start — open the assistant node now.
+						const newId = crypto.randomUUID();
+						return {
+							messages: [
+								...s.messages,
+								{ id: newId, role: "assistant", text: ame.delta, streaming: true },
+							],
+							currentAssistantMessageId: newId,
+						};
+					}
+					if (ame.type === "thinking_delta" && id)
+						return {
+							messages: patchMsg(s.messages, id, (m) => ({
+								thinking: (m.thinking ?? "") + ame.delta,
+							})),
+						};
+					if ((ame.type === "done" || ame.type === "error") && id)
+						return { messages: patchMsg(s.messages, id, () => ({ streaming: false })) };
+					return {};
+				}
+				case "tool_execution_start":
+					return {
+						messages: [
+							...s.messages,
+							{
+								id: event.toolCallId,
+								role: "tool_call",
+								text: "",
+								streaming: true,
+								toolName: event.toolName,
+								args: event.args,
+							},
+							{
+								id: `result-${event.toolCallId}`,
+								role: "tool_result",
+								text: "",
+								streaming: true,
+								output: "",
+							},
+						],
+					};
+				case "tool_execution_update":
+					return {
+						messages: patchMsg(s.messages, `result-${event.toolCallId}`, () => ({
+							output: renderToolResult(event.partialResult),
+						})),
+					};
+				case "tool_execution_end":
+					return {
+						messages: s.messages.map((m) => {
+							if (m.id === event.toolCallId) return { ...m, streaming: false };
+							if (m.id === `result-${event.toolCallId}`)
+								return {
+									...m,
+									streaming: false,
+									output: renderToolResult(event.result),
+									isError: event.isError,
+								};
+							return m;
+						}),
+					};
+				case "agent_end":
+					if (event.willRetry) return {}; // auto-retry / compaction follows — stay streaming
+					return {
+						messages: [
+							...s.messages,
+							{ id: crypto.randomUUID(), role: "system", text: "✓ Done", streaming: false },
+						],
+						isStreaming: false,
+						currentAssistantMessageId: null,
+					};
+				case "auto_retry_start":
+					return {
+						messages: [
+							...s.messages,
+							{
+								id: crypto.randomUUID(),
+								role: "system",
+								text: `Retrying (${event.attempt}/${event.maxAttempts})…`,
+								streaming: false,
+							},
+						],
+					};
+				default:
+					return {};
+			}
+		}),
 }));

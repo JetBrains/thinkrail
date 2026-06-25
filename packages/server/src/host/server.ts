@@ -1,5 +1,6 @@
 import { join, normalize } from "node:path";
 import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail-pi/contracts";
+import { setSessionPublisher } from "../agent";
 import { listProjects } from "../projects";
 import { closeAllTerminals, setTerminalPublisher } from "../terminal";
 import { handleRequest } from "./handlers";
@@ -39,6 +40,7 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		websocket: {
 			open(ws) {
 				ws.subscribe(WS_CHANNELS.terminalData);
+				ws.subscribe(WS_CHANNELS.piEvent);
 				ws.send(
 					JSON.stringify({
 						channel: WS_CHANNELS.serverWelcome,
@@ -69,6 +71,14 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 	// Stream PTY output to every subscribed client over the terminal.data channel.
 	setTerminalPublisher((channel, data) => {
 		server.publish(channel, JSON.stringify({ channel, data }));
+	});
+
+	// Stream each in-process AgentSession's events to subscribed clients over the pi.event channel.
+	setSessionPublisher((payload) => {
+		server.publish(
+			WS_CHANNELS.piEvent,
+			JSON.stringify({ channel: WS_CHANNELS.piEvent, data: payload }),
+		);
 	});
 
 	return {

@@ -18,7 +18,11 @@
 		"lint": "biome check .",
 		"format": "biome check --write .",
 		"prepare": "husky",
-		"e2e": "playwright test",
+		"e2e": "playwright test --grep-invert @agent",
+		"e2e:full": "playwright test",
+		"e2e:full:headed": "playwright test --headed",
+		"e2e:agent": "playwright test --grep @agent",
+		"e2e:agent:headed": "playwright test --grep @agent --headed",
 		"e2e:headed": "playwright test --headed",
 		"e2e:ui": "playwright test --ui"
 	},
