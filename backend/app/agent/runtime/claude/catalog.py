@@ -15,7 +15,7 @@ import logging
 from importlib.resources import files
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.agent.models import to_camel
 
@@ -71,7 +71,7 @@ class CatalogDocument(BaseModel):
     default_model: str
     models: tuple[CatalogModel, ...]
     flags: tuple[CatalogFlag, ...] = ()
-    permission_modes: dict[str, PermissionModeOverlay] = {}
+    permission_modes: dict[str, PermissionModeOverlay] = Field(default_factory=dict)
 
 
 def parse_catalog(text: str) -> CatalogDocument:
