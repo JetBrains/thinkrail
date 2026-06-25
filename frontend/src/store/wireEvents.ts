@@ -8,6 +8,7 @@ import { useUiStore } from "./uiStore.ts";
 import { useFileStore } from "./fileStore.ts";
 import { useBoardStore } from "./boardStore.ts";
 import { useSettingsStore } from "./settingsStore.ts";
+import { useRuntimeCapsStore } from "./runtimeCapsStore.ts";
 import type { Unsubscribe } from "@/api/types.ts";
 
 /**
@@ -402,6 +403,14 @@ export function wireEvents(client: RpcClient): Unsubscribe {
     client.on("board/didDelete", (p) => {
       const { id } = p as { id: string };
       useBoardStore.getState().handleDidDelete(id);
+    }),
+  );
+
+  // ── Runtime catalog updates ──
+  unsubs.push(
+    client.on("runtimes/capabilitiesChanged", (p) => {
+      const runtime = (p as { runtimeType?: string } | null)?.runtimeType;
+      if (runtime) useRuntimeCapsStore.getState().fetchCapabilities(runtime as never);
     }),
   );
 
