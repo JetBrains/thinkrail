@@ -9,6 +9,7 @@ from jsonrpcserver import JsonRpcError, Result, Success
 from pydantic import ValidationError
 
 from app import analytics
+from app.agent.models import DEFAULT_RUNTIME
 from app.agent.runtime import (
     RuntimeCapabilities,
     RuntimeIdentity,
@@ -106,13 +107,15 @@ async def ensure_settings(config: AppConfig, **_params: Any) -> dict:
 async def get_session_defaults(
     app_store: AppStore, registry: RuntimeRegistry, **_params: Any,
 ) -> dict:
-    """Return the user's session-creation defaults.
-
-    On cold start the record is seeded once — including each runtime flag
-    at its declared default — so the client mirrors a complete record
-    without computing defaults itself.
-    """
-    cfg = await load_session_defaults(app_store, _declared_flags(registry))
+    """Return the user's session-creation defaults, seeding the cold-start
+    record once — flags at their declared defaults and the model from the
+    default runtime's live catalog default."""
+    default_model: str | None = None
+    try:
+        default_model = registry.get(DEFAULT_RUNTIME).capabilities().models[0].value
+    except Exception:
+        logger.debug("Could not resolve default model for cold start", exc_info=True)
+    cfg = await load_session_defaults(app_store, _declared_flags(registry), default_model)
     return cfg.model_dump(by_alias=True)
 
 

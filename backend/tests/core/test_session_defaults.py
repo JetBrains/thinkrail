@@ -14,6 +14,7 @@ from app.core.session_defaults import (
     COLD_START_PERMISSION_MODE,
     SESSION_DEFAULTS_KEY,
     SessionDefaults,
+    _cold_start_defaults,
     load_session_defaults,
     save_session_defaults,
 )
@@ -163,3 +164,17 @@ class TestSaveStoresVerbatim:
         )
         raw = await app_store.get_setting(SESSION_DEFAULTS_KEY)
         assert raw["flags"] == {"context1m": False}
+
+
+class TestDefaultModelOverride:
+    def test_cold_start_uses_supplied_default_model(self) -> None:
+        d = _cold_start_defaults((), default_model="claude-sonnet-4-6")
+        assert d.model == "claude-sonnet-4-6"
+
+    def test_cold_start_falls_back_to_constant_when_none(self) -> None:
+        assert _cold_start_defaults(()).model == COLD_START_MODEL
+
+    @pytest.mark.asyncio
+    async def test_load_seeds_supplied_default_model(self, app_store: AppStore) -> None:
+        cfg = await load_session_defaults(app_store, (), default_model="claude-sonnet-4-6")
+        assert cfg.model == "claude-sonnet-4-6"
