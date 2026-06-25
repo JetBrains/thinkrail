@@ -2043,7 +2043,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const cu = session.metrics.contextUsage;
       next.set(thinkrailSid, {
         ...session,
-        status: SessionStatus.Initializing,
+        // A turn already in flight keeps running on the old model until it
+        // completes (the relaunch applies the new model afterward). Don't paint
+        // "initializing" over a live turn — no event re-asserts "running"
+        // mid-turn, so it would show "initializing" for the whole turn. Only a
+        // quiescent session shows the transient relaunch state.
+        status: isQuiescent(session.status) ? SessionStatus.Initializing : session.status,
         restarting: true,
         pendingRelaunch: false,
         pendingRequests: [],
