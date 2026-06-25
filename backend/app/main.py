@@ -83,7 +83,7 @@ def create_app() -> FastAPI:
             refresh_task.cancel()
             try:
                 await refresh_task
-            except (asyncio.CancelledError, Exception):
+            except asyncio.CancelledError:
                 pass
             await app_store.close()
 
