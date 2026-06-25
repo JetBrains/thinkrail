@@ -141,16 +141,25 @@ class TestCapabilitiesFromCatalog:
         caps = claude_runtime.capabilities()
         flag = next(f for f in caps.flags if f.key == "context1m")
         assert flag.label == "Custom 1M label"
+        from app.agent.runtime.claude.runtime import _context_1m_beta_for
+        reg = models_mod.ClaudeModelRegistry()
+        assert _context_1m_beta_for(reg, "claude-opus-4-8", {}) == "context-1m-2025-08-07"
 
-    def test_clamp_rejects_sdk_unsupported_effort_regardless_of_catalog(self):
-        # Even if the catalog grants Haiku "xhigh", the SDK clamp drops it.
+    def test_clamp_drops_effort_the_catalog_says_model_lacks(self):
+        """Issue-#62 guard: a config carrying an effort the catalog says the
+        model lacks is clamped to None before reaching the SDK — even though
+        the value is a real SDK effort. An effort the catalog grants survives."""
         from app.agent.runtime.claude.runtime import _effective_effort
         _swap_catalog(models=[
-            {"id": "claude-haiku-4-5-20251001", "label": "Haiku", "efforts": ["xhigh"],
+            {"id": "claude-haiku-4-5-20251001", "label": "Haiku", "efforts": [],
              "context1m": False, "pricing": {"input": 1, "output": 5, "cacheWrite5m": 1.25,
                                              "cacheWrite1h": 2, "cacheRead": 0.1}},
-        ], defaultModel="claude-haiku-4-5-20251001")
+            {"id": "claude-opus-4-8", "label": "Opus", "efforts": ["xhigh"],
+             "context1m": True, "pricing": {"input": 5, "output": 25, "cacheWrite5m": 6.25,
+                                            "cacheWrite1h": 10, "cacheRead": 0.5}},
+        ])
         reg = models_mod.ClaudeModelRegistry()
-        # "xhigh" is a real SDK effort, so the catalog grant survives the clamp here;
-        # use a value the SDK does not know to prove the clamp floor:
-        assert _effective_effort(reg, "claude-haiku-4-5-20251001", "totally-bogus") is None
+        # "xhigh" is a real SDK effort, but the catalog grants Haiku none → clamped.
+        assert _effective_effort(reg, "claude-haiku-4-5-20251001", "xhigh") is None
+        # The same effort, granted by the catalog for Opus, survives the clamp.
+        assert _effective_effort(reg, "claude-opus-4-8", "xhigh") == "xhigh"

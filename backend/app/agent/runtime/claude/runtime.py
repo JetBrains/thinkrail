@@ -170,12 +170,13 @@ def _wants_1m_beta(
 def _context_1m_beta_for(
     models: ClaudeModelRegistry, model: str, flags: dict[str, bool]
 ) -> str | None:
-    """The 1M beta header to send, or None. Combines ``_wants_1m_beta`` with the
-    catalog-declared beta string so the header value is data, not a constant."""
+    """The 1M beta header to send, or None. The flag's key, default, and beta
+    string are all catalog-driven; the model must actually support 1M."""
     flag = _context_1m_flag()
     if flag is None or flag.beta is None:
         return None
-    return flag.beta if _wants_1m_beta(models, model, flags) else None
+    enabled = bool(flags.get(flag.key, flag.default))
+    return flag.beta if (enabled and models.supports_1m(model)) else None
 
 
 class ClaudeRuntime:
