@@ -1,16 +1,49 @@
+/* Same shell as TwoPanelLayout (the running-session screen): a centered,
+   rounded, blurred dark container holding the content on the left and the
+   doc panel — a lighter grey rounded card — on the right. */
 .wiz-done {
+  position: relative;
   flex: 1;
   display: flex;
   flex-direction: column;
+  align-items: center;
   min-height: 0;
+  overflow: hidden;
   background: var(--bg);
 }
+.wiz-done::before {
+  content: "";
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 1200px;
+  height: 600px;
+  background-image: url('../../assets/sphere-bg.svg');
+  background-repeat: no-repeat;
+  background-position: center bottom;
+  background-size: contain;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.8;
+}
 
-/* Two-column layout: scrollable content on the left (header, tickets,
-   next-step CTAs), a persistent document preview on the right. Without an
-   artifact the right column is dropped and the left fills the width. */
-.wiz-done--cols {
-  flex-direction: row;
+.wiz-done-container {
+  position: relative;
+  z-index: 0;
+  flex: 1;
+  width: calc(100% - 48px);
+  margin: 0 24px 24px;
+  padding: 16px;
+  background: rgba(22, 22, 24, 0.8);
+  backdrop-filter: blur(50px);
+  -webkit-backdrop-filter: blur(50px);
+  border-radius: 8px;
+  display: flex;
+  gap: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .wiz-done-left {
@@ -20,17 +53,30 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 28px;
-  padding: 28px 32px 32px;
+  gap: 24px;
+  padding: 8px;
+  /* Breathing room sits to the LEFT of the resize handle so the handle
+     hugs the doc panel's edge instead of floating in a gutter. */
+  margin-right: 16px;
+}
+/* The tickets list is capped to ~a third of the height and scrolls on its
+   own, so the next-step buttons sit right under it instead of being pushed
+   down the page when there are many tickets. */
+.wiz-done-section--scroll .wiz-done-rows {
+  max-height: 30vh;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .wiz-done-right {
-  flex: 0 0 35%;
-  min-width: 320px;
+  /* width is set inline (drag-resizable via ResizeHandle) */
+  min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  border-left: 1px solid var(--border);
+  background: var(--bg);
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 /* ── Header ────────────────────────────────────────────────────── */
@@ -39,12 +85,15 @@
   flex-direction: column;
   gap: 8px;
 }
+/* Same treatment as the picker's "Welcome to ThinkRail" heading. */
 .wiz-done-title {
   margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--text);
-  line-height: 1.25;
+  font-family: var(--font-accent);
+  font-size: var(--font-xxl);
+  font-weight: 800;
+  color: var(--primary);
+  letter-spacing: 0.16px;
+  line-height: 40px;
 }
 .wiz-done-subtitle {
   margin: 0;
@@ -105,77 +154,80 @@
   font-weight: 700;
 }
 
-/* ── Suggested tickets list ────────────────────────────────────── */
-.wiz-done-tickets-list {
+/* ── Selectable rows (tickets) — same visual as the file/folder rows
+   on the project-detect page, for a consistent onboarding style. ─── */
+.wiz-done-rows {
   list-style: none;
   padding: 0;
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
+  max-width: 520px;
 }
-.wiz-done-tickets-li {
-  display: flex;
-  flex-direction: column;
-  padding: 6px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--panel);
-  transition: border-color 120ms;
-}
-.wiz-done-tickets-li:hover {
-  border-color: var(--primary);
-}
-.wiz-done-tickets-row {
+.wiz-done-row {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--input-bg);
+  border: 1px solid transparent;
+  transition: background 150ms ease, border-color 150ms ease;
 }
-.wiz-done-tickets-check {
-  flex-shrink: 0;
-  width: 16px;
-  height: 16px;
-  accent-color: var(--primary);
+.wiz-done-row--clickable {
   cursor: pointer;
 }
-.wiz-done-tickets-check:disabled {
-  cursor: default;
+.wiz-done-row--clickable:hover {
+  background: var(--white-10);
 }
-.wiz-done-tickets-text {
+.wiz-done-row-info {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.wiz-done-row-name {
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--text);
-  line-height: 1.4;
   overflow-wrap: anywhere;
 }
-.wiz-done-tickets-toggle {
-  flex-shrink: 0;
-  width: 18px;
-  height: 18px;
-  display: inline-flex;
+/* Collapsed by default; the block expands to reveal the description when
+   the row is hovered or keyboard-focused. */
+.wiz-done-row-desc {
+  max-height: 0;
+  margin-top: 0;
+  opacity: 0;
+  overflow: hidden;
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  transition: max-height 160ms ease, opacity 160ms ease, margin-top 160ms ease;
+}
+.wiz-done-row:hover .wiz-done-row-desc,
+.wiz-done-row:focus-visible .wiz-done-row-desc {
+  max-height: 8em;
+  margin-top: 3px;
+  opacity: 1;
+}
+.wiz-done-check {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  display: flex;
   align-items: center;
   justify-content: center;
-  background: transparent;
-  border: none;
-  padding: 0;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1;
-  cursor: pointer;
-  transition: transform 120ms ease, color 120ms;
+  flex-shrink: 0;
+  color: #fff;
+  transition: background 150ms ease, border-color 150ms ease;
 }
-.wiz-done-tickets-toggle:hover { color: var(--text); }
-.wiz-done-tickets-toggle--open { transform: rotate(90deg); color: var(--text); }
-.wiz-done-tickets-body-expanded {
-  margin: 6px 0 2px 28px;
-  font-size: 12.5px;
-  color: var(--muted);
-  line-height: 1.55;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+.wiz-done-check--on {
+  background: var(--primary);
+  border-color: var(--primary);
 }
 
 /* ── Next-step CTA cards ───────────────────────────────────────── */
@@ -186,120 +238,105 @@
   flex-wrap: wrap;
 }
 
+/* Match the project-picker CTA style (ActionCard / .picker-cta): solid
+   primary or secondary fill, centered, icon inline with the title. */
 .wiz-done-cta {
-  flex: 1;
-  min-width: 240px;
+  flex: 0 1 300px;
   display: flex;
-  gap: 14px;
-  align-items: flex-start;
-  padding: 16px 18px;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  background: var(--panel);
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 14px 22px;
+  border-radius: 8px;
+  border: none;
+  background: var(--secondary);
   color: var(--text);
   font: inherit;
   font-family: var(--font);
-  text-align: left;
+  text-align: center;
   cursor: pointer;
-  transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+  transition: filter 150ms ease;
 }
-.wiz-done-cta:hover:not(:disabled) {
-  transform: translateY(-1px);
-  border-color: var(--primary);
-}
+.wiz-done-cta:hover:not(:disabled) { filter: brightness(1.12); }
 .wiz-done-cta:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .wiz-done-cta--primary {
-  background: linear-gradient(135deg, rgba(107, 87, 255, 0.16) 0%, rgba(107, 87, 255, 0.06) 100%);
-  border-color: rgba(107, 87, 255, 0.5);
-}
-.wiz-done-cta--primary:hover:not(:disabled) {
-  box-shadow: 0 4px 14px rgba(107, 87, 255, 0.25);
+  background: var(--primary);
+  color: #fff;
 }
 
-.wiz-done-cta-icon {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: var(--elevated);
-  color: var(--muted);
-}
-.wiz-done-cta--primary .wiz-done-cta-icon {
-  background: rgba(107, 87, 255, 0.2);
-  color: var(--primary);
-}
-
-.wiz-done-cta-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .wiz-done-cta-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font);
+  font-size: var(--font-md);
+  font-weight: 500;
+  letter-spacing: 0.08px;
 }
 .wiz-done-cta-desc {
-  font-size: 12px;
-  color: var(--muted);
+  font-size: var(--font-sm);
+  font-weight: 400;
+  color: var(--white-60);
   line-height: 1.45;
+}
+.wiz-done-cta--primary .wiz-done-cta-desc {
+  color: var(--white-80);
 }
 
 /* ── Document preview (right column) ───────────────────────────── */
-.wiz-done-right .wiz-done-doc-tabs {
+/* Same shell as the live session doc panel (WizardDocPanel) so the
+   artifact view is identical whether the session is running or done:
+   a header bar (filename / tab strip) over a scrolling markdown body. */
+.wiz-done-doc-header {
   display: flex;
+  align-items: stretch;
+  gap: var(--space-sm);
+  padding: 0 var(--space-md);
+  min-height: calc(var(--font-base) * 2.4);
+  flex-shrink: 0;
+}
+.wiz-done-doc-header-title {
+  align-self: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  font-family: var(--font-mono, ui-monospace, Menlo, monospace);
+}
+
+.wiz-done-doc-tabs {
+  display: flex;
+  align-items: stretch;
   gap: 2px;
   flex-shrink: 0;
 }
-
 .wiz-done-doc-tab {
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
-  padding: 7px 14px;
-  font-family: ui-monospace, Menlo, monospace;
+  padding: 0 12px;
+  font-family: var(--font-mono, ui-monospace, Menlo, monospace);
   font-size: 12px;
   color: var(--hint);
   cursor: pointer;
-  transition: color 120ms ease, border-color 120ms ease;
+  /* No border-color transition: a fading underline on the just-deselected
+     tab reads as a leftover strip while switching. */
+  transition: color 120ms ease;
 }
 .wiz-done-doc-tab:hover {
   color: var(--muted);
 }
 .wiz-done-doc-tab--active {
   color: var(--text);
-  border-bottom-color: var(--green);
+  border-bottom-color: var(--primary);
 }
 
 .wiz-done-doc {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  background: var(--panel);
+  background: transparent;
   padding: 20px 24px 32px;
-}
-
-.wiz-done-doc-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 14px;
-  flex-wrap: wrap;
-}
-.wiz-done-doc-pill {
-  display: inline-flex;
-  align-items: center;
-  font-size: 11px;
-  padding: 3px 9px;
-  border-radius: 999px;
-  background: var(--elevated);
-  border: 1px solid var(--border);
-  color: var(--muted);
-  font-family: ui-monospace, Menlo, monospace;
-}
-.wiz-done-doc-label {
-  font-size: 12px;
-  color: var(--muted);
 }
 
 .wiz-done-doc-body {

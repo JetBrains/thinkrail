@@ -300,10 +300,10 @@ const WIZARD_FLOW: SessionStep[] = [
     outcomeActions: [
       {
         id: "investigate-project.to-clarify",
-        label: "Continue → Clarify the G&R draft",
-        description: "Refine the inferred draft into a final GOAL&REQUIREMENTS.md by answering what the code couldn't.",
+        label: "Discuss",
+        description: "Refine the goals together and research what's still open.",
         target: "new-project",
-        icon: "diamond-plus",
+        icon: "messages-square",
         primary: true,
         buildPrompt: buildClarifyPrompt,
       },
