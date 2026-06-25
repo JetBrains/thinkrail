@@ -38,7 +38,7 @@ class ClaudeModelRegistry:
     def __init__(self) -> None:
         raw = json.loads(
             files(__package__).joinpath("models.json").read_text(encoding="utf-8")
-        )
+        )["models"]
         # ``hidden`` entries stay in the catalog (so rates_for / capability
         # lookups still resolve them for legacy sessions) but are excluded from
         # the picker the UI renders.
