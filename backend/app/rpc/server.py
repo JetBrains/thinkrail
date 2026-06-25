@@ -200,6 +200,20 @@ def _startup_lock_for(key: str) -> threading.Lock:
         return lock
 
 
+async def broadcast_capabilities_changed(runtime_type: str = "claude") -> None:
+    """Tell every connected client that a runtime's capabilities changed (e.g.
+    the model catalog was refreshed) so its pickers re-fetch."""
+    with _projects_lock:
+        keys = list(_projects.keys())
+    for key in keys:
+        try:
+            await bus.publish_to_project(
+                key, "runtimes/capabilitiesChanged", {"runtimeType": runtime_type}
+            )
+        except Exception:
+            logger.debug("capabilitiesChanged publish failed for %s", key, exc_info=True)
+
+
 def _bind_methods(
     config: AppConfig,
     spec_service: SpecService,

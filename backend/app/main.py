@@ -30,7 +30,8 @@ from app import analytics
 from app.api import setup as setup_api
 from app.core.config import PRODUCT_NAME, get_data_dir
 from app.core.app_store import AppStore
-from app.rpc.server import register_routes
+from app.rpc.server import register_routes, broadcast_capabilities_changed
+from app.agent.runtime.claude.catalog import catalog_holder, read_cache, refresh_catalog
 
 
 def _export_openapi_schema(app: FastAPI) -> None:
@@ -63,10 +64,27 @@ def create_app() -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await app_store.open()
+
+        async def _on_catalog_change() -> None:
+            await broadcast_capabilities_changed("claude")
+
+        # Boot from the last-good cache (instant); then refresh in the background.
+        cached = read_cache()
+        if cached is not None:
+            catalog_holder.swap(cached)
+
+        refresh_task = asyncio.create_task(
+            refresh_catalog(catalog_holder, _on_catalog_change)
+        )
         try:
             await analytics.initialize(app_store)
             yield
         finally:
+            refresh_task.cancel()
+            try:
+                await refresh_task
+            except (asyncio.CancelledError, Exception):
+                pass
             await app_store.close()
 
     app = FastAPI(title=PRODUCT_NAME, lifespan=lifespan)
