@@ -56,6 +56,7 @@ from app.agent.runtime.claude.adapter import (
     build_tool_call_end_params,
     build_tool_call_start_params,
 )
+from app.agent.runtime.claude.catalog import CatalogFlag, catalog_holder
 from app.agent.runtime.claude.change_log_hook import ChangeLogHook
 from app.agent.runtime.claude.hooks import SubagentHooks
 from app.agent.runtime.claude.models import ClaudeModelRegistry
@@ -100,78 +101,54 @@ def _serialize_tool_content(content: Any) -> str:
     return str(content) if content is not None else ""
 
 
-# Permission modes and effort levels are sourced from the SDK's own value sets,
-# so the picker can't list a value the runtime would reject. Each mode gets a
-# friendlier label + one-line tooltip; an unmapped/future SDK mode falls back to
-# its raw value as the label (so the anti-drift property survives a label gap).
-# Position 0 is the runtime default (cold-start picks it); the SDK lists
-# ``default`` first and the filter preserves order. The SDK has no name for "no
-# explicit effort" (its default ``effort=None``), so ThinkRail prepends
-# ``"auto"`` for it and translates back at the call boundary.
-#
-# ``dontAsk`` is intentionally excluded: it denies any tool not pre-approved by
-# allow rules without prompting, and ThinkRail's interactive runtime sets no
-# such rules — so a ``dontAsk`` session would hard-deny every tool and stall.
-# It remains a valid SDK value used directly by the headless voice-revise path
-# (``agent/revise.py``); it just isn't offered as an interactive session mode.
-_PERMISSION_MODE_LABELS: dict[str, tuple[str, str]] = {
-    "default": ("Ask first", "Prompts before edits, commands & other risky tools."),
-    "acceptEdits": ("Accept edits", "Auto-approves file edits; still asks for commands."),
-    "plan": ("Plan only", "Reads & reasons only — no edits or commands run."),
-    "bypassPermissions": ("Yolo", "Runs every tool without asking. Use with care."),
-    "auto": ("Autopilot", "An AI classifier approves or denies each tool call."),
-}
-_HIDDEN_PERMISSION_MODES: frozenset[str] = frozenset({"dontAsk"})
-
-_CLAUDE_PERMISSION_MODES: tuple[LabeledOption, ...] = tuple(
-    LabeledOption(
-        value=v,
-        label=_PERMISSION_MODE_LABELS.get(v, (v, ""))[0],
-        description=_PERMISSION_MODE_LABELS.get(v, (v, ""))[1],
-    )
-    for v in get_args(PermissionMode)
-    if v not in _HIDDEN_PERMISSION_MODES
-)
-
+# Effort levels stay SDK-sourced — the picker can't list a value the runtime
+# would reject. ``auto`` is ThinkRail's neutral "no explicit effort".
 _CLAUDE_EFFORT_LEVELS: tuple[LabeledOption, ...] = (
     LabeledOption(value="auto", label="auto"),
     *(LabeledOption(value=v, label=v) for v in get_args(EffortLevel)),
 )
-
-# The effort values the SDK accepts at all. ``auto`` is the runtime's neutral
-# "no explicit effort" value (translated to ``effort=None`` at the SDK boundary)
-# and is always available regardless of model.
 _SDK_EFFORTS: frozenset[str] = frozenset(get_args(EffortLevel))
 
-# The 1M-token context window is opt-out (on by default). Models that support
-# it (Fable 5, Opus 4.8, Sonnet 4.6) extend to 1M; models that don't (Haiku)
-# ignore the beta and stay at their default — the real window is read back from
-# the live client via get_context_usage(). Disabling the flag caps a session at
-# 200k.
-_CONTEXT_1M_FLAG = "context1m"
-_CONTEXT_1M_BETA: SdkBeta = "context-1m-2025-08-07"
 
-_CLAUDE_FLAGS: tuple[RuntimeFlag, ...] = (
-    RuntimeFlag(
-        key=_CONTEXT_1M_FLAG,
-        label="1M context window",
-        type="boolean",
-        default=True,
-        description="Request the 1M-token context window on models that support it (Opus 4.8, Sonnet 4.6). Off caps the session at 200K.",
-    ),
-)
+def _permission_mode_options() -> tuple[LabeledOption, ...]:
+    """Permission modes: the SDK's own value set (anti-drift), minus modes the
+    catalog marks hidden, labelled/described from the catalog overlay. An
+    unmapped SDK mode falls back to its raw value as the label."""
+    overlay = catalog_holder.current.permission_modes
+    out: list[LabeledOption] = []
+    for value in get_args(PermissionMode):
+        entry = overlay.get(value)
+        if entry is not None and entry.hidden:
+            continue
+        label = entry.label if (entry and entry.label) else value
+        description = entry.description if entry else ""
+        out.append(LabeledOption(value=value, label=label, description=description))
+    return tuple(out)
+
+
+def _claude_flags() -> tuple[RuntimeFlag, ...]:
+    """Runtime option toggles, from the catalog (currently just ``context1m``)."""
+    return tuple(
+        RuntimeFlag(key=f.key, label=f.label, type=f.type, default=f.default,
+                    description=f.description)
+        for f in catalog_holder.current.flags
+    )
+
+
+def _context_1m_flag() -> CatalogFlag | None:
+    """The 1M-context flag definition from the catalog, if present."""
+    for f in catalog_holder.current.flags:
+        if f.beta is not None:
+            return f
+    return None
 
 
 def _effective_effort(
     models: ClaudeModelRegistry, model: str, effort: str | None
 ) -> str | None:
-    """The effort value to hand the SDK for ``model``.
-
-    Translates the neutral ``"auto"`` to ``None`` (the SDK's "decide for me")
-    and clamps any effort the model doesn't accept back to ``None`` — so an
-    unsound combination (e.g. Haiku + ``xhigh``, which the API rejects) can
-    never reach the SDK, regardless of how it got onto the config.
-    """
+    """Effort to hand the SDK for ``model``. Translates ``"auto"`` to ``None``
+    and clamps any effort the model doesn't accept back to ``None`` — an unsound
+    combination (e.g. Haiku + ``xhigh``) can never reach the SDK."""
     if not effort or effort == "auto":
         return None
     if effort in models.supported_efforts(model):
@@ -182,10 +159,23 @@ def _effective_effort(
 def _wants_1m_beta(
     models: ClaudeModelRegistry, model: str, flags: dict[str, bool]
 ) -> bool:
-    """Whether to request the 1M-context beta: the flag is on (default) *and*
-    the model actually supports it. Models without 1M ignore the beta anyway;
-    gating here keeps the request honest."""
-    return bool(flags.get(_CONTEXT_1M_FLAG, True)) and models.supports_1m(model)
+    """Request the 1M beta when the flag is on (default) and the model supports
+    1M. Returns False if the catalog declares no 1M flag."""
+    flag = _context_1m_flag()
+    if flag is None:
+        return False
+    return bool(flags.get(flag.key, flag.default)) and models.supports_1m(model)
+
+
+def _context_1m_beta_for(
+    models: ClaudeModelRegistry, model: str, flags: dict[str, bool]
+) -> str | None:
+    """The 1M beta header to send, or None. Combines ``_wants_1m_beta`` with the
+    catalog-declared beta string so the header value is data, not a constant."""
+    flag = _context_1m_flag()
+    if flag is None or flag.beta is None:
+        return None
+    return flag.beta if _wants_1m_beta(models, model, flags) else None
 
 
 class ClaudeRuntime:
@@ -261,10 +251,10 @@ class ClaudeRuntime:
     def capabilities(self) -> RuntimeCapabilities:
         models = self._models.list_options()
         return RuntimeCapabilities(
-            permission_modes=list(_CLAUDE_PERMISSION_MODES),
+            permission_modes=list(_permission_mode_options()),
             effort_levels=list(_CLAUDE_EFFORT_LEVELS),
             models=models,
-            flags=list(_CLAUDE_FLAGS),
+            flags=list(_claude_flags()),
             model_capabilities=[self._model_capability(o.value) for o in models],
         )
 
@@ -272,11 +262,9 @@ class ClaudeRuntime:
         """Per-model allowlist of effort values (``auto`` always first) and
         flag keys, for the picker to filter against."""
         efforts = [e for e in self._models.supported_efforts(model) if e in _SDK_EFFORTS]
-        return ModelCapability(
-            model=model,
-            effort_levels=["auto", *efforts],
-            flags=[_CONTEXT_1M_FLAG] if self._models.supports_1m(model) else [],
-        )
+        flag = _context_1m_flag()
+        flags = [flag.key] if (flag is not None and self._models.supports_1m(model)) else []
+        return ModelCapability(model=model, effort_levels=["auto", *efforts], flags=flags)
 
     # ── IAgentRuntime: skill surface ─────────────────────────────────────
 
@@ -374,7 +362,10 @@ class ClaudeRuntime:
             # 1M beta and effort are both clamped to what the model supports —
             # an unsound combination (e.g. Haiku + xhigh / 1M) never reaches the
             # SDK even if a stale or hand-edited config carries one.
-            betas=([_CONTEXT_1M_BETA] if _wants_1m_beta(self._models, task.config.model, task.config.flags) else []),
+            betas=(
+                [beta] if (beta := _context_1m_beta_for(self._models, task.config.model, task.config.flags))
+                else []
+            ),
             effort=_effective_effort(self._models, task.config.model, task.config.effort),
             max_buffer_size=10 * 1024 * 1024,  # 10MB — default 1MB is too small for large tool results
             extra_args={"allow-dangerously-skip-permissions": None},  # enable mid-session mode switching to bypassPermissions
