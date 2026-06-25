@@ -25,7 +25,6 @@ from claude_agent_sdk import (
     PermissionResultAllow,
     PermissionResultDeny,
     ResultMessage,
-    SdkBeta,
     SystemMessage,
     TextBlock,
     ToolPermissionContext,
