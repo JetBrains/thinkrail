@@ -136,8 +136,26 @@ export function WizardDonePanel({ session, outcome }: WizardDonePanelProps) {
   const startWizardStep = useStartWizardStep();
   const dismissWizardOutcome = useUiStore((s) => s.dismissWizardOutcome);
   const patchOutcomeAction = useSessionStore((s) => s.patchOutcomeAction);
+  const deleteSession = useSessionStore((s) => s.deleteSession);
+  const refreshSessionList = useSessionStore((s) => s.refreshSessionList);
+  const clearWizardJourney = useUiStore((s) => s.clearWizardJourney);
   const createTicket = useBoardStore((s) => s.createTicket);
   const openFile = useFileStore((s) => s.openFile);
+
+  // Onboarding sessions are throwaway: once a step is finished and the user
+  // moves on, delete it for good (store + disk) so it doesn't linger in the
+  // sidebar and re-open a wizard step when clicked. Fire-and-forget — a
+  // failed delete must never block the transition the user asked for.
+  const deleteFinishedStep = useCallback(
+    (sid: string) => {
+      void deleteSession(sid)
+        .then(() => refreshSessionList())
+        .catch((e) =>
+          console.error("[WizardDonePanel] failed to delete finished onboarding session", e),
+        );
+    },
+    [deleteSession, refreshSessionList],
+  );
 
   const { navigate, tickets } = useMemo(
     () => partitionActions(outcome.actions),
@@ -294,11 +312,16 @@ export function WizardDonePanel({ session, outcome }: WizardDonePanelProps) {
           prompt: sessionPrompt,
           kick: "Begin.",
         });
+        // The next step is now the active session — drop the finished one
+        // so it can't linger in the sidebar or be clicked back into. Its
+        // journey cell stays (stepperFromJourney resolves by skillId), so
+        // the cumulative stepper still shows the completed step.
+        deleteFinishedStep(session.thinkrailSid);
       } finally {
         setBusyActionId(null);
       }
     },
-    [busyActionId, applySelectedTickets, startWizardStep, currentChain, projectName, docContents, session.skillId],
+    [busyActionId, applySelectedTickets, startWizardStep, currentChain, projectName, docContents, session.skillId, session.thinkrailSid, deleteFinishedStep],
   );
 
   const handleNavigate = useCallback(
@@ -311,11 +334,8 @@ export function WizardDonePanel({ session, outcome }: WizardDonePanelProps) {
       } finally {
         setBusyActionId(null);
       }
-      // The user is opting out of the wizard for this session — they've
-      // seen the done-screen and chose a different destination. Mark the
-      // outcome as dismissed so re-activating this session (clicking it
-      // in the tab bar, or after a page reload) drops them into the
-      // regular session UX instead of the done-screen.
+      // The user is leaving the wizard for good. Dismiss first (so any
+      // in-flight re-render falls back to regular UX), then navigate.
       dismissWizardOutcome(session.thinkrailSid);
       if (action.target === "board") {
         useBoardStore.setState({ activeTicketId: null });
@@ -329,8 +349,12 @@ export function WizardDonePanel({ session, outcome }: WizardDonePanelProps) {
         // For now route everything else to sessions view.
         setCenterView("sessions");
       }
+      // Onboarding is over: clear the cumulative stepper journey and delete
+      // the finished session so nothing onboarding-related is left behind.
+      clearWizardJourney();
+      deleteFinishedStep(session.thinkrailSid);
     },
-    [busyActionId, applySelectedTickets, setCenterView, dismissWizardOutcome, session.thinkrailSid, session.skillId, openFile, firstArtifact, projectPath],
+    [busyActionId, applySelectedTickets, setCenterView, dismissWizardOutcome, clearWizardJourney, deleteFinishedStep, session.thinkrailSid, session.skillId, openFile, firstArtifact, projectPath],
   );
 
   const copy = useMemo(() => outcomeCopy(firstArtifact?.path ?? null), [firstArtifact]);
