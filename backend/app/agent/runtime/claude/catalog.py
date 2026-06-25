@@ -12,8 +12,15 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+from collections.abc import Awaitable, Callable
 from importlib.resources import files
+from pathlib import Path
 from typing import Literal
+
+import httpx
+
+from app.core.config import ENV_PREFIX, get_data_dir
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -115,3 +122,79 @@ class CatalogHolder:
 
 
 catalog_holder = CatalogHolder(load_bundled())
+
+
+# ── Remote fetch, cache, refresh ───────────────────────────────────────────
+
+DEFAULT_CATALOG_URL = (
+    "https://raw.githubusercontent.com/JetBrains/thinkrail/main/"
+    "backend/app/agent/runtime/claude/models.json"
+)
+_URL_ENV = f"{ENV_PREFIX}MODEL_CATALOG_URL"
+
+
+def catalog_url() -> str | None:
+    """The catalog source URL. ``THINKRAIL_MODEL_CATALOG_URL`` overrides the
+    default; an explicitly empty value disables fetching."""
+    override = os.environ.get(_URL_ENV)
+    if override is None:
+        return DEFAULT_CATALOG_URL
+    return override or None
+
+
+def cache_path() -> Path:
+    return get_data_dir() / "model-catalog.json"
+
+
+def read_cache() -> CatalogDocument | None:
+    try:
+        return parse_catalog(cache_path().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        logger.debug("No usable model-catalog cache", exc_info=True)
+        return None
+
+
+def write_cache(doc: CatalogDocument) -> None:
+    try:
+        path = cache_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(doc.model_dump_json(by_alias=True), encoding="utf-8")
+    except OSError:
+        logger.debug("Failed to write model-catalog cache", exc_info=True)
+
+
+async def fetch_catalog(url: str, timeout: float = 3.0) -> CatalogDocument:
+    """GET and validate the catalog. Raises on network or validation failure."""
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        resp = await client.get(url)
+        resp.raise_for_status()
+        return parse_catalog(resp.text)
+
+
+async def refresh_catalog(
+    holder: CatalogHolder,
+    on_change: Callable[[], Awaitable[None]] | None = None,
+) -> bool:
+    """Fetch the catalog and, if it differs from the current one, cache + swap +
+    notify. Returns True if a swap happened. Never raises — every failure is
+    logged at debug and leaves the current catalog in place."""
+    url = catalog_url()
+    if not url:
+        logger.debug("Model-catalog fetch disabled (empty %s)", _URL_ENV)
+        return False
+    try:
+        fetched = await fetch_catalog(url)
+    except Exception:
+        logger.debug("Model-catalog fetch failed; keeping current", exc_info=True)
+        return False
+    if fetched == holder.current:
+        return False
+    write_cache(fetched)
+    holder.swap(fetched)
+    logger.info("Model catalog updated from %s", url)
+    if on_change is not None:
+        try:
+            await on_change()
+        except Exception:
+            logger.debug("Model-catalog on_change callback failed", exc_info=True)
+    return True
