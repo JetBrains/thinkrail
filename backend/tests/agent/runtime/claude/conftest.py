@@ -12,3 +12,10 @@ def _restore_catalog_holder():
     original = models_mod.catalog_holder.current
     yield
     models_mod.catalog_holder.swap(original)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_data_dir(tmp_path, monkeypatch):
+    """Point THINKRAIL_DATA_DIR at a per-test tmp dir so catalog cache writes
+    (write_cache / refresh_catalog) never touch the developer's real ~/.tr."""
+    monkeypatch.setenv("THINKRAIL_DATA_DIR", str(tmp_path / "tr-data"))
