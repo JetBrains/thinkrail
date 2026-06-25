@@ -63,3 +63,16 @@ async def test_refresh_disabled_when_url_empty(monkeypatch):
         swapped = await cat.refresh_catalog(holder, None)
     assert swapped is False
     fetch.assert_not_awaited()
+
+
+def test_cache_path_isolated_to_tmp_data_dir(tmp_path):
+    """Guard: tests must never resolve the cache to the real ~/.tr. With the
+    autouse data-dir isolation fixture active, cache_path() lives under the tmp
+    THINKRAIL_DATA_DIR, not the user's home."""
+    import os
+    from pathlib import Path
+    cp = cat.cache_path()
+    assert cp.name == "model-catalog.json"
+    # Must be under the isolated tmp dir, never the real ~/.tr.
+    assert str(cp).startswith(os.environ["THINKRAIL_DATA_DIR"])
+    assert Path.home() / ".tr" not in cp.parents
