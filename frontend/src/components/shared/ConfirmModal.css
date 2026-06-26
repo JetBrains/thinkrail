@@ -30,6 +30,17 @@
   margin: 2px 0;
 }
 
+.confirm-modal__note {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  font-size: var(--font-xs);
+  line-height: 1.45;
+  color: var(--text);
+  background: var(--sunken);
+  border-left: 2px solid var(--gold);
+  border-radius: var(--radius-sm);
+}
+
 .confirm-modal__actions {
   display: flex;
   justify-content: flex-end;
