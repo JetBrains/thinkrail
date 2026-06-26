@@ -62,6 +62,10 @@ function renderLine(status: SessionStatus) {
 
 const modelBtn = () => screen.getByRole("button", { name: /Opus 4\.8/ }) as HTMLButtonElement;
 const permBtn = () => screen.getByRole("button", { name: /^default$/ }) as HTMLButtonElement;
+// The model picker's hover tooltip lives on the wrapper, not the button — a
+// disabled <button> swallows its own `title`, so the reason must sit on the
+// (hoverable) wrapper. First .ssl-selector is the model picker.
+const modelWrapper = () => document.querySelectorAll(".ssl-selector")[0] as HTMLElement;
 
 beforeEach(() => {
   useRuntimeCapsStore.setState({ capsByRuntime: { claude: CAPS } } as never);
@@ -91,5 +95,15 @@ describe("SessionStatusLine — model picker gating during a turn", () => {
   it("keeps the permission picker usable while Running (lock is model-only)", () => {
     renderLine(SessionStatus.Running);
     expect(permBtn().disabled).toBe(false);
+  });
+
+  it("exposes the lock reason as a hover tooltip on the picker wrapper while Running", () => {
+    renderLine(SessionStatus.Running);
+    expect(modelWrapper().getAttribute("title") ?? "").toMatch(/turn is running/i);
+  });
+
+  it("has no lock tooltip when idle", () => {
+    renderLine(SessionStatus.Idle);
+    expect(modelWrapper().getAttribute("title")).toBeNull();
   });
 });

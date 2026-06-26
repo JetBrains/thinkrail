@@ -297,12 +297,18 @@ export function SessionStatusLine({
   return (
     <div className="session-status-line">
       {/* ── Model selector ── */}
-      <div className="ssl-selector" ref={modelDd.ref}>
+      {/* Tooltip sits on the wrapper, not the button: a disabled <button>
+          swallows its own `title`, so the hover reason must live on the
+          (non-disabled) wrapper, with the button made pointer-transparent. */}
+      <div
+        className={`ssl-selector${streaming && !disabled ? " ssl-selector-locked" : ""}`}
+        ref={modelDd.ref}
+        title={streaming && !disabled ? "Model is locked while a turn is running — finish or stop it to switch." : undefined}
+      >
         <button
           className={`ssl-selector-btn${modelLocked ? " ssl-selector-disabled" : ""}`}
           onClick={() => !modelLocked && modelDd.toggle()}
           disabled={modelLocked}
-          title={streaming && !disabled ? "Switch models when the current turn finishes" : undefined}
         >
           {activeOption?.label ?? model}
           <ChevronDown />
