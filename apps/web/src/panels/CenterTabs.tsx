@@ -5,7 +5,7 @@ import { getTransport } from "../transport";
 
 // Monaco + the chat view are heavy — load each only when its tab is first shown (protects first paint).
 const MonacoEditor = lazy(() => import("./MonacoEditor"));
-const ChatView = lazy(() => import("./ChatView"));
+const ChatView = lazy(() => import("../chat/ChatView"));
 
 // Stable empty reference so the selector doesn't re-render the component on unrelated state changes.
 const NO_TABS: EditorTab[] = [];

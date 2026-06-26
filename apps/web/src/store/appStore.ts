@@ -1,5 +1,6 @@
 import type { PiEvent, Project, Workspace } from "@thinkrail-pi/contracts";
 import { create } from "zustand";
+import type { ChatTurn, ToolResultState } from "../chat/types";
 import type { ConnectionStatus } from "../transport";
 
 /** A center tab. File tabs (Monaco) and chat tabs share the strip, discriminated by `kind`. */
@@ -19,39 +20,6 @@ export interface ChatTab {
 	sessionId: string;
 }
 export type EditorTab = FileTab | ChatTab;
-
-/** A rendered chat message — a web-local view model, distinct from pi's `Message` union. */
-export type ChatRole = "user" | "assistant" | "system" | "tool_call" | "tool_result";
-export interface ChatMessage {
-	id: string; // user/assistant generated; tool_call = toolCallId; tool_result = `result-${toolCallId}`
-	role: ChatRole;
-	text: string;
-	streaming: boolean;
-	thinking?: string;
-	toolName?: string;
-	args?: unknown;
-	output?: string;
-	isError?: boolean;
-}
-
-function patchMsg(
-	msgs: ChatMessage[],
-	id: string,
-	fn: (m: ChatMessage) => Partial<ChatMessage>,
-): ChatMessage[] {
-	return msgs.map((m) => (m.id === id ? { ...m, ...fn(m) } : m));
-}
-
-/** Tool results are typed `any` on the wire (cumulative → REPLACE). Render defensively. */
-function renderToolResult(result: unknown): string {
-	if (typeof result === "string") return result;
-	if (result == null) return "";
-	try {
-		return JSON.stringify(result, null, 2);
-	} catch {
-		return String(result);
-	}
-}
 
 /** A terminal tab. `clientId` is the stable UI key; the server PTY id is owned by its `TerminalInstance`. */
 export interface TerminalTab {
@@ -75,8 +43,11 @@ interface AppState {
 	activeTerminalByWorkspace: Record<string, string | null>;
 	/** Chat is a single active session in M11 (global state); it moves into per-session runtimes at M13. */
 	chatSessionId: string | null;
-	messages: ChatMessage[];
-	currentAssistantMessageId: string | null;
+	/** Conversation as pi-canonical turns (user/assistant messages + web-local system notices). */
+	turns: ChatTurn[];
+	/** Live tool state keyed by toolCallId; paired with the toolCall block inside an assistant turn. */
+	toolResults: Record<string, ToolResultState>;
+	currentAssistantId: string | null;
 	isStreaming: boolean;
 	setStatus: (status: ConnectionStatus) => void;
 	setWelcome: (protocolVersion: number) => void;
@@ -108,8 +79,9 @@ export const useAppStore = create<AppState>((set) => ({
 	terminalsByWorkspace: {},
 	activeTerminalByWorkspace: {},
 	chatSessionId: null,
-	messages: [],
-	currentAssistantMessageId: null,
+	turns: [],
+	toolResults: {},
+	currentAssistantId: null,
 	isStreaming: false,
 	setStatus: (status) => set({ status }),
 	setWelcome: (protocolVersion) => set({ protocolVersion }),
@@ -204,122 +176,96 @@ export const useAppStore = create<AppState>((set) => ({
 					: { ...s.tabsByWorkspace, [workspaceId]: [...tabs, tab] },
 				activeTabByWorkspace: { ...s.activeTabByWorkspace, [workspaceId]: id },
 				chatSessionId: sessionId,
-				messages: [],
-				currentAssistantMessageId: null,
+				turns: [],
+				toolResults: {},
+				currentAssistantId: null,
 				isStreaming: false,
 			};
 		}),
 	appendUserMessage: (text) =>
 		set(
 			(s): Partial<AppState> => ({
-				messages: [
-					...s.messages,
-					{ id: crypto.randomUUID(), role: "user", text, streaming: false },
+				turns: [
+					...s.turns,
+					{
+						kind: "user",
+						id: crypto.randomUUID(),
+						message: { role: "user", content: text, timestamp: Date.now() },
+					},
 				],
 			}),
 		),
-	// The single-session event→store dispatcher (Appendix B). Per-session at M13.
+	// The event→store dispatcher: pi events become pi-canonical turns + a tool-result map. Per-session at M13.
 	handlePiEvent: (event, sessionId) =>
 		set((s): Partial<AppState> => {
 			if (s.chatSessionId !== sessionId) return {}; // M11: only the one active chat
 			switch (event.type) {
 				case "agent_start":
 					return { isStreaming: true };
-				case "message_start": {
-					// User turns are shown optimistically on send; only the assistant opens a node here.
-					if (event.message.role !== "assistant") return {};
-					const id = crypto.randomUUID();
-					return {
-						messages: [...s.messages, { id, role: "assistant", text: "", streaming: true }],
-						currentAssistantMessageId: id,
-					};
-				}
+				case "message_start":
+					// User turns are shown optimistically on send; the assistant turn is created lazily on the
+					// first message_update (from its `partial` snapshot) — here we just reserve its id.
+					return event.message.role === "assistant"
+						? { currentAssistantId: crypto.randomUUID() }
+						: {};
 				case "message_update": {
+					const id = s.currentAssistantId;
+					if (!id) return {};
 					const ame = event.assistantMessageEvent;
-					const id = s.currentAssistantMessageId;
-					if (ame.type === "text_delta") {
-						if (id)
-							return { messages: patchMsg(s.messages, id, (m) => ({ text: m.text + ame.delta })) };
-						// Defensive: a delta before message_start — open the assistant node now.
-						const newId = crypto.randomUUID();
-						return {
-							messages: [
-								...s.messages,
-								{ id: newId, role: "assistant", text: ame.delta, streaming: true },
-							],
-							currentAssistantMessageId: newId,
-						};
-					}
-					if (ame.type === "thinking_delta" && id)
-						return {
-							messages: patchMsg(s.messages, id, (m) => ({
-								thinking: (m.thinking ?? "") + ame.delta,
-							})),
-						};
-					if ((ame.type === "done" || ame.type === "error") && id)
-						return { messages: patchMsg(s.messages, id, () => ({ streaming: false })) };
-					return {};
+					// Streaming variants carry `partial`; the terminals carry `message` (done) / `error`.
+					const snapshot =
+						"partial" in ame
+							? ame.partial
+							: ame.type === "done"
+								? ame.message
+								: ame.type === "error"
+									? ame.error
+									: null;
+					if (!snapshot) return {};
+					const streaming = !(ame.type === "done" || ame.type === "error");
+					const turn: ChatTurn = { kind: "assistant", id, message: snapshot, streaming };
+					return {
+						turns: s.turns.some((t) => t.id === id)
+							? s.turns.map((t) => (t.id === id ? turn : t))
+							: [...s.turns, turn],
+					};
 				}
 				case "tool_execution_start":
 					return {
-						messages: [
-							...s.messages,
-							{
-								id: event.toolCallId,
-								role: "tool_call",
-								text: "",
-								streaming: true,
-								toolName: event.toolName,
-								args: event.args,
-							},
-							{
-								id: `result-${event.toolCallId}`,
-								role: "tool_result",
-								text: "",
-								streaming: true,
-								output: "",
-							},
-						],
+						toolResults: {
+							...s.toolResults,
+							[event.toolCallId]: { status: "running", raw: undefined },
+						},
 					};
 				case "tool_execution_update":
 					return {
-						messages: patchMsg(s.messages, `result-${event.toolCallId}`, () => ({
-							output: renderToolResult(event.partialResult),
-						})),
+						toolResults: {
+							...s.toolResults,
+							[event.toolCallId]: { status: "running", raw: event.partialResult },
+						},
 					};
 				case "tool_execution_end":
 					return {
-						messages: s.messages.map((m) => {
-							if (m.id === event.toolCallId) return { ...m, streaming: false };
-							if (m.id === `result-${event.toolCallId}`)
-								return {
-									...m,
-									streaming: false,
-									output: renderToolResult(event.result),
-									isError: event.isError,
-								};
-							return m;
-						}),
+						toolResults: {
+							...s.toolResults,
+							[event.toolCallId]: { status: event.isError ? "error" : "done", raw: event.result },
+						},
 					};
 				case "agent_end":
 					if (event.willRetry) return {}; // auto-retry / compaction follows — stay streaming
 					return {
-						messages: [
-							...s.messages,
-							{ id: crypto.randomUUID(), role: "system", text: "✓ Done", streaming: false },
-						],
+						turns: [...s.turns, { kind: "system", id: crypto.randomUUID(), text: "✓ Done" }],
 						isStreaming: false,
-						currentAssistantMessageId: null,
+						currentAssistantId: null,
 					};
 				case "auto_retry_start":
 					return {
-						messages: [
-							...s.messages,
+						turns: [
+							...s.turns,
 							{
+								kind: "system",
 								id: crypto.randomUUID(),
-								role: "system",
 								text: `Retrying (${event.attempt}/${event.maxAttempts})…`,
-								streaming: false,
 							},
 						],
 					};

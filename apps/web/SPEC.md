@@ -24,8 +24,8 @@ event stream as a chat-centric, multi-session IDE shell.
 ## Internal modules
 
 Each is a bounded sub-module; `transport`/`store`/`lib` expose an `index.ts` **barrel** (their only public
-surface). `panels`/`components/ui` are imported **per-file by design** — barreling them would pull the
-lazily-loaded Monaco/shiki/xterm chunks into the eager bundle and break the shadcn per-primitive
+surface). `panels`/`components/ui`/`chat` are imported **per-file by design** — barreling them would pull
+the lazily-loaded Monaco/shiki/xterm chunks into the eager bundle and break the shadcn per-primitive
 convention; their boundary is held by convention + spec. Sibling edges live here, not in the leaves.
 
 | module | owns | barrel | spec |
@@ -33,6 +33,7 @@ convention; their boundary is held by convention + spec. Sibling edges live here
 | `transport` | the WS client + its singleton/store wiring | yes | [transport/SPEC.md](src/transport/SPEC.md) |
 | `store` | Zustand: connection, projects/workspaces, workspace-scoped tabs + terminals | yes | [store/SPEC.md](src/store/SPEC.md) |
 | `panels` | layout-agnostic, store-driven feature views | no | [panels/SPEC.md](src/panels/SPEC.md) |
+| `chat` | pi conversation UI primitives: content-block renderers + the tool-renderer registry | no | [chat/SPEC.md](src/chat/SPEC.md) |
 | `shell` | the responsive frame + composition of panels | no | [shell/SPEC.md](src/shell/SPEC.md) |
 | `components/ui` | shadcn primitives, themed with our tokens | no | [components/ui/SPEC.md](src/components/ui/SPEC.md) |
 | `lib` | `cn()` (clsx + tailwind-merge) | yes | [lib/SPEC.md](src/lib/SPEC.md) |
@@ -43,8 +44,9 @@ CSS token theme contract — see Styling & theming). `main.tsx` is the entry/com
 ### Dependency graph
 
 - `shell` → `panels`, `store`, `transport`, `components/ui`, `constants`
-- `panels` → `store`, `transport`, `components/ui`, `lib`, `contracts`
-- `store` → `transport` (**type-only** — `ConnectionStatus`), `contracts`
+- `panels` → `store`, `transport`, `components/ui`, `lib`, `contracts`, `chat` (`CenterTabs` lazy-mounts `chat/ChatView`)
+- `chat` → `contracts` (pi message types, **type-only**), `components/ui`, `lib`; `store` + `transport` (**`ChatView` only** — the renderers are store-free)
+- `store` → `transport` (**type-only** — `ConnectionStatus`), `chat` (**type-only** — `ChatTurn`/`ToolResultState`), `contracts`
 - `transport` → `contracts`, `store` (welcome routing; the `store → transport` back-edge is type-only, so
   the runtime graph is acyclic)
 - `components/ui` → `lib`
@@ -54,7 +56,9 @@ Rules: a panel never imports another panel sideways; nothing imports `shell` (it
 
 Built through M9: `transport` / `store` / branded `shell` (M3); `ProjectTree` (M4–M5); `FileTree` +
 `RightPanel` (M6); `CenterTabs` + lazy `MonacoEditor` (M7); `ChangesPanel` + lazy `DiffViewer` (M8);
-`TerminalsPanel` + lazy `TerminalInstance` (M9). `ChatView` / `Composer` land M11–M13.
+`TerminalsPanel` + lazy `TerminalInstance` (M9). The `chat` module — `ChatView` + content-block
+renderers + the tool-renderer registry — lands at **M11**; the full `Composer` (model/effort/@-mentions)
+is M12.
 
 ## Styling & theming
 

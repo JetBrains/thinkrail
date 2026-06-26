@@ -3,14 +3,16 @@ import { Virtuoso } from "react-virtuoso";
 import { Button } from "@/components/ui/button";
 import { useAppStore } from "@/store";
 import { getTransport } from "@/transport";
-import { ChatMessageView } from "./ChatMessageView";
+import { ChatTurnView } from "./turns";
 
 /**
- * One chat session as a center tab: a virtualized message list (sticks to the bottom while streaming)
- * over a minimal send box. The full Composer (steer/followUp/@-mentions/images) arrives at M12.
+ * One chat session as a center tab: a virtualized turn list (sticks to the bottom while streaming) over a
+ * minimal composer. This is the app-integration layer — it wires the store + transport to the
+ * presentational renderers (`ChatTurnView`). The full Composer (steer/followUp/@-mentions) arrives at M12.
  */
 export default function ChatView({ sessionId }: { sessionId: string }) {
-	const messages = useAppStore((s) => s.messages);
+	const turns = useAppStore((s) => s.turns);
+	const toolResults = useAppStore((s) => s.toolResults);
 	const isStreaming = useAppStore((s) => s.isStreaming);
 	const [draft, setDraft] = useState("");
 
@@ -30,16 +32,12 @@ export default function ChatView({ sessionId }: { sessionId: string }) {
 	return (
 		<div className="flex h-full min-h-0 flex-col bg-bg">
 			<Virtuoso
-				data={messages}
+				data={turns}
 				className="min-h-0 flex-1"
 				followOutput="smooth"
-				itemContent={(_index, message) => (
-					<div
-						className="mx-auto max-w-3xl px-md py-xs"
-						data-testid="chat-message"
-						data-role={message.role}
-					>
-						<ChatMessageView message={message} />
+				itemContent={(_index, turn) => (
+					<div className="mx-auto max-w-3xl px-md py-xs">
+						<ChatTurnView turn={turn} toolResults={toolResults} />
 					</div>
 				)}
 			/>

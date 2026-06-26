@@ -109,6 +109,22 @@ Architecture decisions live as spec-graph nodes, dogfooding the spec layer the p
 - The transport's **host endpoint is a parameter** (default same-origin); `server.welcome` carries a
   protocol version so an independently-shipped UI can detect host drift.
 
+## Chat UI (the conversation renderers)
+
+The agent conversation is rendered by **hand-rolled React primitives** in `apps/web/src/chat/` — pi ships
+no web UI, and the official `@earendil-works/pi-web-ui` (MIT) is **Lit + runs the agent in-browser**, so
+it's a *reference* for the event→render mapping, not a dependency. The primitives render **pi's canonical
+message / content-block model** (`AssistantMessage.content`: `text` / `thinking` / `toolCall`), so they're
+reusable by any pi UI (extraction-ready as a future `packages/chat-ui`).
+- **Presentational renderers are props-driven** (no store/transport) so they stay reusable; `ChatView` is
+  the only app-integration piece (wires store + transport). Theme **only via token utilities** so the
+  primitives wear any theme.
+- **Adding a tool = two decoupled sides, joined by tool name:** the **capability** is a pi **custom tool /
+  extension/skill** (server-side, passed to `createAgentSession`); the **presentation** is a UI renderer
+  registered via **`registerToolRenderer("<name>", …)`** (`chat/toolRegistry`) — unregistered tools fall
+  back to `DefaultToolRenderer`. Interactive tools route through the `pi.extensionUi` bridge (M12).
+- Full module spec: `apps/web/src/chat/SPEC.md`.
+
 ## Verification (run for every app-affecting change)
 
 Every change that touches the app is verified by the **e2e suite** before it's considered done.
