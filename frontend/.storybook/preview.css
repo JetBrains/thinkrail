@@ -6,13 +6,11 @@
  * that lock the app to a fixed full-height shell and, when loaded into
  * Storybook's iframe, break docs-page scrolling.
  *
- * Instead we load only the design system — tokens + theme layers — plus the
- * one harmless reset (box-sizing) that the token-based examples rely on.
+ * Instead we load only the design system — tokens (which define the theme
+ * variables) — plus the one harmless reset (box-sizing) that the token-based
+ * examples rely on.
  */
 @import "../src/styles/tokens.css";
-@import "../src/styles/theme-dark.css";
-@import "../src/styles/theme-light.css";
-@import "../src/styles/themes.css";
 
 *,
 *::before,

@@ -199,6 +199,9 @@ interface SessionStatusLineProps {
   onEndSession?: () => void;
   onBackground?: () => void;
   onPromoteToTicket?: () => void;
+  /** Onboarding (wizard) sessions use a separate dialog-only View default
+   *  and toggle it independently of regular sessions. */
+  isOnboarding?: boolean;
   /** Ref-callback for the right-aligned slot where InputArea portals
    *  its session-action buttons (Continue / Start / Stop). */
   actionSlotRef?: (el: HTMLSpanElement | null) => void;
@@ -218,6 +221,7 @@ export function SessionStatusLine({
   onEndSession,
   onBackground,
   onPromoteToTicket,
+  isOnboarding = false,
   actionSlotRef,
 }: SessionStatusLineProps) {
   // ── Runtime capabilities (drives the pickers) ──
@@ -225,8 +229,10 @@ export function SessionStatusLine({
   const modelOptions = caps?.models ?? [];
   const permissionModes = caps?.permissionModes ?? [];
   const effortLevels = caps?.effortLevels ?? [];
-  const categoryVisibility = useUiStore((s) => s.chatCategoryVisibility);
-  const toggleCategory = useUiStore((s) => s.toggleChatCategory);
+  const categoryVisibility = useUiStore((s) =>
+    isOnboarding ? s.onboardingChatCategoryVisibility : s.chatCategoryVisibility,
+  );
+  const toggleChatCategory = useUiStore((s) => s.toggleChatCategory);
 
   // ── Derived flags ──
   const streaming = isStreaming(status);
@@ -378,7 +384,7 @@ export function SessionStatusLine({
                 label="View"
                 items={(Object.keys(CATEGORY_LABELS) as EventCategory[]).map((c) => ({ value: c, label: CATEGORY_LABELS[c] }))}
                 isActive={(v) => categoryVisibility[v]}
-                onSelect={toggleCategory}
+                onSelect={(v) => toggleChatCategory(v, isOnboarding)}
                 strikeOff
               />
             </section>

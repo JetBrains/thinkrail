@@ -78,7 +78,11 @@ interface UiStore {
   fileTreeVersion: number;
 
   chatCategoryVisibility: ChatCategoryVisibility;
-  toggleChatCategory: (category: EventCategory) => void;
+  /** Separate visibility for onboarding (wizard) sessions, which default
+   *  to dialog-only — tool calls and system chrome are noise during the
+   *  guided flow. Toggled independently of the regular-session setting. */
+  onboardingChatCategoryVisibility: ChatCategoryVisibility;
+  toggleChatCategory: (category: EventCategory, onboarding?: boolean) => void;
 
   centerView: CenterView;
   setCenterView: (view: CenterView) => void;
@@ -151,13 +155,16 @@ export const useUiStore = create<UiStore>()(
       fileTreeVersion: 0,
 
       chatCategoryVisibility: { dialog: true, tools: true, system: true },
-      toggleChatCategory: (category) =>
-        set((s) => ({
-          chatCategoryVisibility: {
-            ...s.chatCategoryVisibility,
-            [category]: !s.chatCategoryVisibility[category],
-          },
-        })),
+      onboardingChatCategoryVisibility: { dialog: true, tools: false, system: false },
+      toggleChatCategory: (category, onboarding = false) =>
+        set((s) => {
+          const key = onboarding
+            ? "onboardingChatCategoryVisibility"
+            : "chatCategoryVisibility";
+          return {
+            [key]: { ...s[key], [category]: !s[key][category] },
+          };
+        }),
 
       centerView: "sessions" as CenterView,
       setCenterView: (view) => set({ centerView: view }),
@@ -199,6 +206,7 @@ export const useUiStore = create<UiStore>()(
         leftPanelCollapsed: state.leftPanelCollapsed,
         leftActiveTab: state.leftActiveTab,
         chatCategoryVisibility: state.chatCategoryVisibility,
+        onboardingChatCategoryVisibility: state.onboardingChatCategoryVisibility,
         centerView: state.centerView,
         lastActiveSessions: state.lastActiveSessions,
         dismissedWizardOutcomes: state.dismissedWizardOutcomes,
