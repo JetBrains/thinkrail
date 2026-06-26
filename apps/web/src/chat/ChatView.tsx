@@ -1,7 +1,7 @@
 import type { ImageContent, Model, ThinkingLevel } from "@thinkrail-pi/contracts";
 import { useCallback, useEffect, useState } from "react";
 import { Virtuoso } from "react-virtuoso";
-import { useAppStore } from "@/store";
+import { EMPTY_RUNTIME, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 import { ChatHeader } from "./ChatHeader";
 import { Composer, type MentionCandidate, type SubmitBehavior } from "./Composer";
@@ -14,19 +14,24 @@ import { ChatTurnView } from "./turns";
  * stay store-free so they're reusable; this is the only file in `chat/` that touches store/transport.
  */
 export default function ChatView({ sessionId }: { sessionId: string }) {
-	const turns = useAppStore((s) => s.turns);
-	const toolResults = useAppStore((s) => s.toolResults);
-	const isStreaming = useAppStore((s) => s.isStreaming);
+	// This tab's runtime — zustand only re-renders when *this* session's slice ref changes, so a background
+	// chat streaming into its own runtime never re-renders the foreground one.
+	const runtime = useAppStore((s) => s.sessions[sessionId]) ?? EMPTY_RUNTIME;
 	const models = useAppStore((s) => s.models);
-	const currentModel = useAppStore((s) => s.currentModel);
-	const thinkingLevel = useAppStore((s) => s.thinkingLevel);
-	const stats = useAppStore((s) => s.stats);
-	const commands = useAppStore((s) => s.commands);
-	const pendingExtUi = useAppStore((s) => s.pendingExtUi);
-	const extUiStatus = useAppStore((s) => s.extUiStatus);
-	const extUiWidget = useAppStore((s) => s.extUiWidget);
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
-	const draft = useAppStore((s) => s.chatDrafts[sessionId] ?? "");
+	const {
+		turns,
+		toolResults,
+		isStreaming,
+		stats,
+		commands,
+		draft,
+		pendingExtUi,
+		extUiStatus,
+		extUiWidget,
+		model: currentModel,
+		thinkingLevel,
+	} = runtime;
 
 	const [mentionQuery, setMentionQuery] = useState<string | null>(null);
 	const [mentionCandidates, setMentionCandidates] = useState<MentionCandidate[]>([]);
@@ -44,7 +49,7 @@ export default function ChatView({ sessionId }: { sessionId: string }) {
 	useEffect(() => {
 		getTransport()
 			.request("session.getCommands", { sessionId })
-			.then((c) => useAppStore.getState().setCommands(c))
+			.then((c) => useAppStore.getState().setCommands(sessionId, c))
 			.catch(() => {});
 	}, [sessionId]);
 
@@ -53,7 +58,7 @@ export default function ChatView({ sessionId }: { sessionId: string }) {
 	useEffect(() => {
 		getTransport()
 			.request("session.getStats", { sessionId })
-			.then((s) => useAppStore.getState().setStats(s))
+			.then((st) => useAppStore.getState().setStats(sessionId, st))
 			.catch(() => {});
 	}, [sessionId, isStreaming]);
 
@@ -92,21 +97,21 @@ export default function ChatView({ sessionId }: { sessionId: string }) {
 	const onMentionQuery = useCallback((q: string | null) => setMentionQuery(q), []);
 
 	const onSelectModel = (model: Model<string>) => {
-		useAppStore.getState().setCurrentModel(model);
+		useAppStore.getState().setCurrentModel(sessionId, model);
 		getTransport()
 			.request("session.setModel", { sessionId, model })
 			.catch(() => {});
 	};
 
 	const onSelectThinking = (level: ThinkingLevel) => {
-		useAppStore.getState().setThinkingLevel(level);
+		useAppStore.getState().setThinkingLevel(sessionId, level);
 		getTransport()
 			.request("session.setThinkingLevel", { sessionId, level })
 			.catch(() => {});
 	};
 
 	const onSubmit = (text: string, images: ImageContent[], behavior: SubmitBehavior) => {
-		if (text) useAppStore.getState().appendUserMessage(text);
+		if (text) useAppStore.getState().appendUserMessage(sessionId, text);
 		const params = { sessionId, text, ...(images.length > 0 ? { images } : {}) };
 		const method =
 			behavior === "steer"
@@ -128,7 +133,7 @@ export default function ChatView({ sessionId }: { sessionId: string }) {
 	const onExtUiReply = (value: string | boolean | null) => {
 		if (!pendingExtUi) return;
 		const id = pendingExtUi.id;
-		useAppStore.getState().clearPendingExtUi(id);
+		useAppStore.getState().clearPendingExtUi(sessionId, id);
 		getTransport()
 			.request("session.extUiReply", { response: { id, value } })
 			.catch(() => {});

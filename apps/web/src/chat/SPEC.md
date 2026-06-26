@@ -36,8 +36,10 @@ a future `packages/chat-ui`).
     `system` is a web-local notice) + `ToolResultState` + `ExtUiDialogRequest` (the reply-needing
     `ExtUiRequest` subset the store's `pendingExtUi` is typed by).
   - **App integration** — `ChatView` (react-virtuoso list + `ChatHeader` + `Composer` + `ExtUiDialog`,
-    wiring store + transport: model list / stats / commands / mentions / dialog replies); the **only**
-    file here that touches `store`/`transport`.
+    wiring store + transport: model list / stats / commands / mentions / dialog replies). Reads **its own
+    session's runtime** via `store.sessions[sessionId]` (falling back to `EMPTY_RUNTIME`) and addresses every
+    mutator/command with that `sessionId`, so multiple chats coexist. The **only** file here that touches
+    `store`/`transport`.
 - **Public surface:** the registry API (`toolRegistry`), the renderers, the view types, and `ChatView`
   (lazy-mounted by `panels/CenterTabs`). **No `index.ts` barrel** — chat pulls **shiki**, so per the
   code-splitting exception (as with `panels` / `components/ui`) imports stay **per-file**: `CenterTabs`
@@ -61,10 +63,11 @@ A tool has two **decoupled** sides, joined by the **tool name**:
 
 ## Streaming model
 
-The `store` folds pi events into pi-canonical turns: the in-flight assistant turn **is** the latest
+The `store` folds pi events into pi-canonical turns **per session** (`store.sessions[sessionId]`, routed by
+the event's id so chats stream concurrently): the in-flight assistant turn **is** the latest
 `assistantMessageEvent.partial` snapshot (replaced each update — not hand-accumulated; on `done`/`error`
-the snapshot is `message`/`error`). Tool results are indexed by `toolCallId` in `store.toolResults` and
-paired with their `toolCall` block inside the assistant turn.
+the snapshot is `message`/`error`). Tool results are indexed by `toolCallId` in the runtime's `toolResults`
+and paired with their `toolCall` block inside the assistant turn.
 
 ## Get right
 

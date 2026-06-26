@@ -37,6 +37,189 @@ export interface TerminalTab {
 	title: string;
 }
 
+/**
+ * The live state of one chat session, keyed by its `sessionId` in `store.sessions`. The host already runs
+ * N independent `AgentSession`s, so each gets its own runtime here — events route to it by id, letting
+ * several chats stream concurrently while switching tabs is an instant in-memory swap.
+ */
+export interface SessionRuntime {
+	/** Conversation as pi-canonical turns (user/assistant messages + web-local system notices). */
+	turns: ChatTurn[];
+	/** Live tool state keyed by toolCallId; paired with the toolCall block inside an assistant turn. */
+	toolResults: Record<string, ToolResultState>;
+	currentAssistantId: string | null;
+	isStreaming: boolean;
+	/** This chat's model + thinking level (display only; `pi` owns them). */
+	model: Model<string> | null;
+	thinkingLevel: ThinkingLevel;
+	/** Token/cost stats (cheap win #3), refreshed after each turn. */
+	stats: SessionStats | null;
+	/** Slash commands / skills (cheap win #2). */
+	commands: SlashCommandInfo[];
+	/** Composer draft, so switching tabs preserves unsent text. */
+	draft: string;
+	/** The extension-UI dialog awaiting a reply (one shown at a time; overlapping dialogs queue behind it). */
+	pendingExtUi: ExtUiDialogRequest | null;
+	/** Dialogs that arrived while one was already open — shown FIFO so none orphans its server promise. */
+	extUiQueue: ExtUiDialogRequest[];
+	/** Extension status-bar entries / widgets (the fire-and-forget `setStatus`/`setWidget` calls). */
+	extUiStatus: Record<string, string>;
+	extUiWidget: Record<string, string[]>;
+}
+
+function newRuntime(model: Model<string> | null, thinkingLevel: ThinkingLevel): SessionRuntime {
+	return {
+		turns: [],
+		toolResults: {},
+		currentAssistantId: null,
+		isStreaming: false,
+		model,
+		thinkingLevel,
+		stats: null,
+		commands: [],
+		draft: "",
+		pendingExtUi: null,
+		extUiQueue: [],
+		extUiStatus: {},
+		extUiWidget: {},
+	};
+}
+
+/** A stable empty runtime for the brief window before a session's runtime exists (read-only fallback). */
+export const EMPTY_RUNTIME: SessionRuntime = newRuntime(null, "medium");
+
+/** Fold one pi event into a session's runtime (Appendix B). Pure — returns the same ref when nothing changes. */
+export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionRuntime {
+	switch (event.type) {
+		case "agent_start":
+			return { ...rt, isStreaming: true };
+		case "message_start":
+			// User turns are shown optimistically on send; the assistant turn is created lazily on the first
+			// message_update (from its `partial` snapshot) — here we just reserve its id.
+			return event.message.role === "assistant"
+				? { ...rt, currentAssistantId: crypto.randomUUID() }
+				: rt;
+		case "message_update": {
+			const id = rt.currentAssistantId;
+			if (!id) return rt;
+			const ame = event.assistantMessageEvent;
+			// Streaming variants carry `partial`; the terminals carry `message` (done) / `error`.
+			const snapshot =
+				"partial" in ame
+					? ame.partial
+					: ame.type === "done"
+						? ame.message
+						: ame.type === "error"
+							? ame.error
+							: null;
+			if (!snapshot) return rt;
+			const streaming = !(ame.type === "done" || ame.type === "error");
+			const turn: ChatTurn = { kind: "assistant", id, message: snapshot, streaming };
+			return {
+				...rt,
+				turns: rt.turns.some((t) => t.id === id)
+					? rt.turns.map((t) => (t.id === id ? turn : t))
+					: [...rt.turns, turn],
+			};
+		}
+		case "tool_execution_start":
+			return {
+				...rt,
+				toolResults: {
+					...rt.toolResults,
+					[event.toolCallId]: { status: "running", raw: undefined },
+				},
+			};
+		case "tool_execution_update":
+			return {
+				...rt,
+				toolResults: {
+					...rt.toolResults,
+					[event.toolCallId]: { status: "running", raw: event.partialResult },
+				},
+			};
+		case "tool_execution_end":
+			return {
+				...rt,
+				toolResults: {
+					...rt.toolResults,
+					[event.toolCallId]: { status: event.isError ? "error" : "done", raw: event.result },
+				},
+			};
+		case "agent_end":
+			if (event.willRetry) return rt; // auto-retry / compaction follows — stay streaming
+			return {
+				...rt,
+				turns: [...rt.turns, { kind: "system", id: crypto.randomUUID(), text: "✓ Done" }],
+				isStreaming: false,
+				currentAssistantId: null,
+			};
+		case "auto_retry_start":
+			return {
+				...rt,
+				turns: [
+					...rt.turns,
+					{
+						kind: "system",
+						id: crypto.randomUUID(),
+						text: `Retrying (${event.attempt}/${event.maxAttempts})…`,
+					},
+				],
+			};
+		case "thinking_level_changed":
+			return { ...rt, thinkingLevel: event.level };
+		default:
+			return rt;
+	}
+}
+
+/** Fold an inbound `pi.extensionUi` frame (everything but `setTitle`, which renames a tab) into a runtime. */
+function reduceExtUi(
+	rt: SessionRuntime,
+	request: Exclude<ExtUiRequest, { kind: "setTitle" }>,
+): SessionRuntime {
+	switch (request.kind) {
+		case "dismiss":
+			// Server-initiated close — drop the matching dialog from the head (promoting the queue) or the queue.
+			if (rt.pendingExtUi?.id === request.id) {
+				const [next, ...rest] = rt.extUiQueue;
+				return { ...rt, pendingExtUi: next ?? null, extUiQueue: rest };
+			}
+			if (rt.extUiQueue.some((q) => q.id === request.id))
+				return { ...rt, extUiQueue: rt.extUiQueue.filter((q) => q.id !== request.id) };
+			return rt;
+		case "select":
+		case "confirm":
+		case "input":
+		case "editor":
+			// Show it now, or queue behind the open one so its server promise still gets answered.
+			return rt.pendingExtUi
+				? { ...rt, extUiQueue: [...rt.extUiQueue, request] }
+				: { ...rt, pendingExtUi: request };
+		case "notify":
+			return {
+				...rt,
+				turns: [...rt.turns, { kind: "system", id: crypto.randomUUID(), text: request.message }],
+			};
+		case "setStatus": {
+			if (request.text === null) {
+				const { [request.key]: _drop, ...extUiStatus } = rt.extUiStatus;
+				return { ...rt, extUiStatus };
+			}
+			return { ...rt, extUiStatus: { ...rt.extUiStatus, [request.key]: request.text } };
+		}
+		case "setWidget": {
+			if (request.content === null) {
+				const { [request.key]: _drop, ...extUiWidget } = rt.extUiWidget;
+				return { ...rt, extUiWidget };
+			}
+			return { ...rt, extUiWidget: { ...rt.extUiWidget, [request.key]: request.content } };
+		}
+		default:
+			return rt;
+	}
+}
+
 interface AppState {
 	status: ConnectionStatus;
 	protocolVersion: number | null;
@@ -50,32 +233,10 @@ interface AppState {
 	/** Terminals are workspace-scoped too; their instances stay mounted (hidden) to preserve buffers. */
 	terminalsByWorkspace: Record<string, TerminalTab[]>;
 	activeTerminalByWorkspace: Record<string, string | null>;
-	/** Chat is a single active session in M11/M12 (global state); it moves into per-session runtimes at M13. */
-	chatSessionId: string | null;
-	/** Conversation as pi-canonical turns (user/assistant messages + web-local system notices). */
-	turns: ChatTurn[];
-	/** Live tool state keyed by toolCallId; paired with the toolCall block inside an assistant turn. */
-	toolResults: Record<string, ToolResultState>;
-	currentAssistantId: string | null;
-	isStreaming: boolean;
+	/** One runtime per live chat (keyed by `sessionId`) — many can stream at once; switching is a swap. */
+	sessions: Record<string, SessionRuntime>;
 	/** Models with configured auth (cheap win #1) — fetched once, shared by every chat's picker. */
 	models: Model<string>[];
-	/** The active chat's model + thinking level (display only; `pi` owns them). */
-	currentModel: Model<string> | null;
-	thinkingLevel: ThinkingLevel;
-	/** The active chat's token/cost stats (cheap win #3), refreshed after each turn. */
-	stats: SessionStats | null;
-	/** The active chat's slash commands / skills (cheap win #2). */
-	commands: SlashCommandInfo[];
-	/** Per-session composer draft, so switching tabs (M13) preserves unsent text. */
-	chatDrafts: Record<string, string>;
-	/** The extension-UI dialog awaiting a reply (one shown at a time; overlapping dialogs queue behind it). */
-	pendingExtUi: ExtUiDialogRequest | null;
-	/** Dialogs that arrived while one was already open — shown FIFO so none orphans its server promise. */
-	extUiQueue: ExtUiDialogRequest[];
-	/** Extension status-bar entries / widgets (the fire-and-forget `setStatus`/`setWidget` calls). */
-	extUiStatus: Record<string, string>;
-	extUiWidget: Record<string, string[]>;
 	setStatus: (status: ConnectionStatus) => void;
 	setWelcome: (protocolVersion: number) => void;
 	setProjects: (projects: Project[]) => void;
@@ -95,18 +256,32 @@ interface AppState {
 		model: Model<string> | null,
 		thinkingLevel: ThinkingLevel,
 	) => void;
-	appendUserMessage: (text: string) => void;
+	/** Drop a chat's runtime on tab close (the `AgentSession` is disposed over the wire by the caller). */
+	closeChatRuntime: (sessionId: string) => void;
+	appendUserMessage: (sessionId: string, text: string) => void;
 	handlePiEvent: (event: PiEvent, sessionId: string) => void;
 	setModels: (models: Model<string>[]) => void;
-	setCurrentModel: (model: Model<string>) => void;
-	setThinkingLevel: (level: ThinkingLevel) => void;
-	setStats: (stats: SessionStats) => void;
-	setCommands: (commands: SlashCommandInfo[]) => void;
+	setCurrentModel: (sessionId: string, model: Model<string>) => void;
+	setThinkingLevel: (sessionId: string, level: ThinkingLevel) => void;
+	setStats: (sessionId: string, stats: SessionStats) => void;
+	setCommands: (sessionId: string, commands: SlashCommandInfo[]) => void;
 	setChatDraft: (sessionId: string, text: string) => void;
-	/** Reply to the active extension-UI dialog (clears it; the transport send is `ChatView`'s job). */
-	clearPendingExtUi: (id: string) => void;
-	/** Fold an inbound `pi.extensionUi` frame into the store (dialogs, notices, status/widget, title). */
+	/** Reply to a chat's active dialog (clears it, promoting the queue; the transport send is `ChatView`'s job). */
+	clearPendingExtUi: (sessionId: string, id: string) => void;
+	/** Route an inbound `pi.extensionUi` frame to its session's runtime (dialogs/notices/status/widget/title). */
 	applyExtUi: (request: ExtUiRequest) => void;
+}
+
+/** Apply an immutable update to one session's runtime; a no-op (and no new `sessions` object) if it's gone. */
+function withRuntime(
+	s: AppState,
+	sessionId: string,
+	update: (rt: SessionRuntime) => SessionRuntime,
+): Partial<AppState> {
+	const rt = s.sessions[sessionId];
+	if (!rt) return {};
+	const next = update(rt);
+	return next === rt ? {} : { sessions: { ...s.sessions, [sessionId]: next } };
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -120,21 +295,8 @@ export const useAppStore = create<AppState>((set) => ({
 	activeTabByWorkspace: {},
 	terminalsByWorkspace: {},
 	activeTerminalByWorkspace: {},
-	chatSessionId: null,
-	turns: [],
-	toolResults: {},
-	currentAssistantId: null,
-	isStreaming: false,
+	sessions: {},
 	models: [],
-	currentModel: null,
-	thinkingLevel: "medium",
-	stats: null,
-	commands: [],
-	chatDrafts: {},
-	pendingExtUi: null,
-	extUiQueue: [],
-	extUiStatus: {},
-	extUiWidget: {},
 	setStatus: (status) => set({ status }),
 	setWelcome: (protocolVersion) => set({ protocolVersion }),
 	setProjects: (projects) => set({ projects }),
@@ -174,6 +336,11 @@ export const useAppStore = create<AppState>((set) => ({
 		),
 	clearWorkspaceTabs: (workspaceId) =>
 		set((s) => {
+			// Drop the runtimes of this workspace's chats too (their AgentSessions are freed on host shutdown).
+			const sessions = { ...s.sessions };
+			for (const tab of s.tabsByWorkspace[workspaceId] ?? []) {
+				if (tab.kind === "chat") delete sessions[tab.sessionId];
+			}
 			const { [workspaceId]: _tabs, ...tabsByWorkspace } = s.tabsByWorkspace;
 			const { [workspaceId]: _activeTab, ...activeTabByWorkspace } = s.activeTabByWorkspace;
 			// Dropping the terminals unmounts their instances, which close the PTYs server-side.
@@ -185,6 +352,7 @@ export const useAppStore = create<AppState>((set) => ({
 				activeTabByWorkspace,
 				terminalsByWorkspace,
 				activeTerminalByWorkspace,
+				sessions,
 			};
 		}),
 	addTerminal: (workspaceId) =>
@@ -227,181 +395,73 @@ export const useAppStore = create<AppState>((set) => ({
 					? s.tabsByWorkspace
 					: { ...s.tabsByWorkspace, [workspaceId]: [...tabs, tab] },
 				activeTabByWorkspace: { ...s.activeTabByWorkspace, [workspaceId]: id },
-				chatSessionId: sessionId,
-				turns: [],
-				toolResults: {},
-				currentAssistantId: null,
-				isStreaming: false,
-				currentModel: model,
-				thinkingLevel,
-				stats: null,
-				commands: [],
-				pendingExtUi: null,
-				extUiQueue: [],
-				extUiStatus: {},
-				extUiWidget: {},
+				// Keep any existing runtime (idempotent); otherwise start a fresh one.
+				sessions: s.sessions[sessionId]
+					? s.sessions
+					: { ...s.sessions, [sessionId]: newRuntime(model, thinkingLevel) },
 			};
 		}),
-	appendUserMessage: (text) =>
-		set(
-			(s): Partial<AppState> => ({
+	closeChatRuntime: (sessionId) =>
+		set((s) => {
+			if (!s.sessions[sessionId]) return {};
+			const { [sessionId]: _drop, ...sessions } = s.sessions;
+			return { sessions };
+		}),
+	appendUserMessage: (sessionId, text) =>
+		set((s) =>
+			withRuntime(s, sessionId, (rt) => ({
+				...rt,
 				turns: [
-					...s.turns,
+					...rt.turns,
 					{
 						kind: "user",
 						id: crypto.randomUUID(),
 						message: { role: "user", content: text, timestamp: Date.now() },
 					},
 				],
+			})),
+		),
+	// The event→store dispatcher: route each pi event to its session's runtime, so chats stream independently.
+	handlePiEvent: (event, sessionId) =>
+		set((s) => withRuntime(s, sessionId, (rt) => reduceSessionEvent(rt, event))),
+	setModels: (models) => set({ models }),
+	setCurrentModel: (sessionId, model) =>
+		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, model }))),
+	setThinkingLevel: (sessionId, level) =>
+		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, thinkingLevel: level }))),
+	setStats: (sessionId, stats) => set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, stats }))),
+	setCommands: (sessionId, commands) =>
+		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, commands }))),
+	setChatDraft: (sessionId, draft) =>
+		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, draft }))),
+	clearPendingExtUi: (sessionId, id) =>
+		set((s) =>
+			withRuntime(s, sessionId, (rt) => {
+				if (rt.pendingExtUi?.id !== id) return rt;
+				const [next, ...rest] = rt.extUiQueue;
+				return { ...rt, pendingExtUi: next ?? null, extUiQueue: rest };
 			}),
 		),
-	// The event→store dispatcher: pi events become pi-canonical turns + a tool-result map. Per-session at M13.
-	handlePiEvent: (event, sessionId) =>
-		set((s): Partial<AppState> => {
-			if (s.chatSessionId !== sessionId) return {}; // M11: only the one active chat
-			switch (event.type) {
-				case "agent_start":
-					return { isStreaming: true };
-				case "message_start":
-					// User turns are shown optimistically on send; the assistant turn is created lazily on the
-					// first message_update (from its `partial` snapshot) — here we just reserve its id.
-					return event.message.role === "assistant"
-						? { currentAssistantId: crypto.randomUUID() }
-						: {};
-				case "message_update": {
-					const id = s.currentAssistantId;
-					if (!id) return {};
-					const ame = event.assistantMessageEvent;
-					// Streaming variants carry `partial`; the terminals carry `message` (done) / `error`.
-					const snapshot =
-						"partial" in ame
-							? ame.partial
-							: ame.type === "done"
-								? ame.message
-								: ame.type === "error"
-									? ame.error
-									: null;
-					if (!snapshot) return {};
-					const streaming = !(ame.type === "done" || ame.type === "error");
-					const turn: ChatTurn = { kind: "assistant", id, message: snapshot, streaming };
-					return {
-						turns: s.turns.some((t) => t.id === id)
-							? s.turns.map((t) => (t.id === id ? turn : t))
-							: [...s.turns, turn],
-					};
-				}
-				case "tool_execution_start":
-					return {
-						toolResults: {
-							...s.toolResults,
-							[event.toolCallId]: { status: "running", raw: undefined },
-						},
-					};
-				case "tool_execution_update":
-					return {
-						toolResults: {
-							...s.toolResults,
-							[event.toolCallId]: { status: "running", raw: event.partialResult },
-						},
-					};
-				case "tool_execution_end":
-					return {
-						toolResults: {
-							...s.toolResults,
-							[event.toolCallId]: { status: event.isError ? "error" : "done", raw: event.result },
-						},
-					};
-				case "agent_end":
-					if (event.willRetry) return {}; // auto-retry / compaction follows — stay streaming
-					return {
-						turns: [...s.turns, { kind: "system", id: crypto.randomUUID(), text: "✓ Done" }],
-						isStreaming: false,
-						currentAssistantId: null,
-					};
-				case "auto_retry_start":
-					return {
-						turns: [
-							...s.turns,
-							{
-								kind: "system",
-								id: crypto.randomUUID(),
-								text: `Retrying (${event.attempt}/${event.maxAttempts})…`,
-							},
-						],
-					};
-				case "thinking_level_changed":
-					return { thinkingLevel: event.level };
-				default:
-					return {};
-			}
-		}),
-	setModels: (models) => set({ models }),
-	setCurrentModel: (currentModel) => set({ currentModel }),
-	setThinkingLevel: (thinkingLevel) => set({ thinkingLevel }),
-	setStats: (stats) => set({ stats }),
-	setCommands: (commands) => set({ commands }),
-	setChatDraft: (sessionId, text) =>
-		set((s) => ({ chatDrafts: { ...s.chatDrafts, [sessionId]: text } })),
-	clearPendingExtUi: (id) =>
-		set((s) => {
-			if (s.pendingExtUi?.id !== id) return {};
-			const [next, ...rest] = s.extUiQueue;
-			return { pendingExtUi: next ?? null, extUiQueue: rest };
-		}),
-	// Inbound pi.extensionUi frames. M11/M12 render only the active chat, so dialogs/notices/status/widget
-	// apply to `chatSessionId`; per-session routing arrives at M13.
 	applyExtUi: (request) =>
 		set((s): Partial<AppState> => {
-			// `dismiss` (server-initiated close) drops the matching dialog from the head or the queue.
-			if (request.kind === "dismiss") {
-				if (s.pendingExtUi?.id === request.id) {
-					const [next, ...rest] = s.extUiQueue;
-					return { pendingExtUi: next ?? null, extUiQueue: rest };
+			// `setTitle` renames the session's chat tab (it lives in exactly one workspace), not the runtime.
+			if (request.kind === "setTitle") {
+				for (const [wsId, tabs] of Object.entries(s.tabsByWorkspace)) {
+					if (tabs.some((t) => t.kind === "chat" && t.sessionId === request.sessionId)) {
+						return {
+							tabsByWorkspace: {
+								...s.tabsByWorkspace,
+								[wsId]: tabs.map((t) =>
+									t.kind === "chat" && t.sessionId === request.sessionId
+										? { ...t, name: request.title }
+										: t,
+								),
+							},
+						};
+					}
 				}
-				if (s.extUiQueue.some((q) => q.id === request.id))
-					return { extUiQueue: s.extUiQueue.filter((q) => q.id !== request.id) };
 				return {};
 			}
-			if (request.sessionId !== s.chatSessionId) return {};
-			switch (request.kind) {
-				case "select":
-				case "confirm":
-				case "input":
-				case "editor":
-					// Show it now, or queue behind the open one so its server promise still gets answered.
-					return s.pendingExtUi
-						? { extUiQueue: [...s.extUiQueue, request] }
-						: { pendingExtUi: request };
-				case "notify":
-					return {
-						turns: [...s.turns, { kind: "system", id: crypto.randomUUID(), text: request.message }],
-					};
-				case "setStatus": {
-					if (request.text === null) {
-						const { [request.key]: _drop, ...extUiStatus } = s.extUiStatus;
-						return { extUiStatus };
-					}
-					return { extUiStatus: { ...s.extUiStatus, [request.key]: request.text } };
-				}
-				case "setWidget": {
-					if (request.content === null) {
-						const { [request.key]: _drop, ...extUiWidget } = s.extUiWidget;
-						return { extUiWidget };
-					}
-					return { extUiWidget: { ...s.extUiWidget, [request.key]: request.content } };
-				}
-				case "setTitle": {
-					const wsId = s.activeWorkspaceId;
-					if (!wsId) return {};
-					const tabs = (s.tabsByWorkspace[wsId] ?? []).map((t) =>
-						t.kind === "chat" && t.sessionId === request.sessionId
-							? { ...t, name: request.title }
-							: t,
-					);
-					return { tabsByWorkspace: { ...s.tabsByWorkspace, [wsId]: tabs } };
-				}
-				default:
-					return {};
-			}
+			return withRuntime(s, request.sessionId, (rt) => reduceExtUi(rt, request));
 		}),
 }));

@@ -33,12 +33,13 @@ export function CenterTabs() {
 		}
 	};
 
-	// Closing a chat tab disposes its in-process AgentSession; file tabs just close.
+	// Closing a chat tab disposes its in-process AgentSession and drops its runtime; file tabs just close.
 	const onCloseTab = (tab: EditorTab) => {
 		if (tab.kind === "chat") {
 			void getTransport()
 				.request("session.dispose", { sessionId: tab.sessionId })
 				.catch(() => {});
+			useAppStore.getState().closeChatRuntime(tab.sessionId);
 		}
 		closeTab(tab.id);
 	};

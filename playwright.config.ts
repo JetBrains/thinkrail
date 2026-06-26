@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig, devices } from "@playwright/test";
-import { E2E_DATA_DIR, E2E_FIXTURE_REPO } from "./e2e/fixtures/paths";
+import { E2E_DATA_DIR, E2E_FIXTURE_REPO, E2E_PI_AGENT_DIR } from "./e2e/fixtures/paths";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
 const staticDir = fileURLToPath(new URL("./apps/web/dist", import.meta.url));
@@ -36,8 +36,10 @@ export default defineConfig({
 			THINKRAIL_PI_DATA_DIR: E2E_DATA_DIR,
 			// Stub the host's native directory picker so "Open project" is drivable headlessly.
 			THINKRAIL_PI_PICK_DIR: E2E_FIXTURE_REPO,
-			// The host inherits the parent env (Playwright merges `process.env`), so the @agent suite uses
-			// pi's default auth (provider env vars + `~/.pi/agent/auth.json`) with no key special-casing.
+			// Point pi at an ISOLATED agent dir (seeded with a copy of the user's auth in globalSetup), so the
+			// @agent suite uses a real provider yet `setModel`/`setThinkingLevel` persist here — never the
+			// user's real `~/.pi/agent`. (Provider env vars in the inherited env still resolve auth too.)
+			PI_CODING_AGENT_DIR: E2E_PI_AGENT_DIR,
 		},
 	},
 });

@@ -10,23 +10,29 @@ tags: [v1]
 
 ## Responsibility
 
-The single Zustand store: connection status, welcome, projects/workspaces, and the **workspace-scoped**
-editor tabs + terminals (switching workspaces swaps both).
+The single Zustand store: connection status, welcome, projects/workspaces, the **workspace-scoped**
+editor tabs + terminals (switching workspaces swaps both), and a **per-session chat runtime** for each live
+`AgentSession` (so several chats stream concurrently).
 
 ## Boundary
 
 - **Owns:** `appStore.ts` — connection/projects/workspaces state + setters; `tabsByWorkspace` /
   `activeTabByWorkspace` (`openTab`/`closeTab`/`setActiveTab`/`clearWorkspaceTabs`); `terminalsByWorkspace`
   / `activeTerminalByWorkspace` (`addTerminal`/`closeTerminalTab`/`setActiveTerminalTab`); the
-  **single-session chat state** (`chatSessionId` / `turns` (pi-canonical) / `toolResults` /
-  `currentAssistantId` / `isStreaming`, with `openChatSession` / `appendUserMessage` + the `handlePiEvent`
-  dispatcher that folds pi events into `ChatTurn`s — Appendix B); the **M12 cheap-win + composer state**
-  (`models` / `currentModel` / `thinkingLevel` / `stats` / `commands` / `chatDrafts`) and the
-  **extension-UI state** (`pendingExtUi` dialog (typed by `chat`'s `ExtUiDialogRequest`) + `extUiQueue`
-  (overlapping dialogs shown FIFO so none orphans its server promise) + `extUiStatus` / `extUiWidget`, fed
-  by the `applyExtUi` dispatcher; `clearPendingExtUi` promotes the queue on reply); the `EditorTab`
-  (`FileTab` | `ChatTab`) + `TerminalTab` types. (Chat *render* types + renderers live in the `chat` module.)
-- **Public surface (barrel):** `useAppStore`, `EditorTab` (`FileTab`/`ChatTab`), `TerminalTab`.
+  **per-session chat state** — `sessions: Record<sessionId, SessionRuntime>`, where a `SessionRuntime` holds
+  one chat's `turns` (pi-canonical) / `toolResults` / `currentAssistantId` / `isStreaming` / `model` /
+  `thinkingLevel` / `stats` / `commands` / `draft` and its **extension-UI state** (`pendingExtUi` (typed by
+  `chat`'s `ExtUiDialogRequest`) + `extUiQueue` (overlapping dialogs FIFO so none orphans its server
+  promise) + `extUiStatus` / `extUiWidget`). `openChatSession` creates a runtime; `closeChatRuntime` /
+  `clearWorkspaceTabs` drop it; per-session mutators (`appendUserMessage` / `setStats` / `setCommands` /
+  `setCurrentModel` / `setThinkingLevel` / `setChatDraft` / `clearPendingExtUi`) take a `sessionId`. The
+  pure **`reduceSessionEvent`** folds a `PiEvent` into a runtime (Appendix B); **`handlePiEvent(event,
+  sessionId)`** and **`applyExtUi(request)`** route by id via the `withRuntime` helper (a no-op for an
+  unknown session). The host-wide **`models`** list stays global (not per session). The `EditorTab`
+  (`FileTab` | `ChatTab`) + `TerminalTab` + `SessionRuntime` types. (Chat *render* types + renderers live in
+  the `chat` module.)
+- **Public surface (barrel):** `useAppStore`, `EditorTab` (`FileTab`/`ChatTab`), `TerminalTab`,
+  `SessionRuntime` + `EMPTY_RUNTIME` (ChatView's pre-creation fallback), `reduceSessionEvent`.
 - **Allowed deps:** `contracts` (`Project`/`Workspace`/`Model`/`ThinkingLevel`/`SessionStats`/
   `SlashCommandInfo`/`ExtUiRequest`; `PiEvent`, **type-only**); `chat` (`ChatTurn`/`ToolResultState`,
   **type-only**); `transport` (`ConnectionStatus`, **type-only**); `zustand`.

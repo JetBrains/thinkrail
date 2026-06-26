@@ -135,8 +135,13 @@ Every change that touches the app is verified by the **e2e suite** before it's c
 Electrobun lands, the same suite runs against the desktop app too.
 
 **Agent tests are tagged, not faked.** Specs that drive a real `pi` agent are tagged `@agent` (Playwright
-`{ tag: "@agent" }`) and use pi's **default auth** (`AuthStorage` resolves provider env vars or
-`~/.pi/agent/auth.json`) — no `ANTHROPIC_API_KEY`-specific gating. Select suites by marker: `bun run e2e`
+`{ tag: "@agent" }`). The host runs against an **isolated pi agent dir** (`PI_CODING_AGENT_DIR` → a
+throwaway dir under the e2e data dir; `globalSetup` copies the user's pi auth config (`auth.json` **+
+`models.json`** — auth lives in both: OAuth providers in `auth.json`, apiKey providers in `models.json`) so a
+real provider works, and seeds a `settings.json` pinning a **deterministic default model** — override with
+`THINKRAIL_PI_E2E_MODEL=<provider>/<modelId>`) — so a test's `setModel`/`setThinkingLevel` persists *there*,
+**never the user's real `~/.pi/agent`**. (Corollary: don't let an `@agent` test *select* a model — it would
+pin a default mid-run.) Select suites by marker: `bun run e2e`
 runs the **no-agent** suite (`--grep-invert @agent`) — projects/workspaces/files/editor/changes/terminals,
 fast, no auth, run anytime; `bun run e2e:full` runs everything; `bun run e2e:agent` runs only the
 `@agent` specs (which need `pi` authenticated + more time). There is **no fake agent** — agent coverage

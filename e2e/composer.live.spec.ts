@@ -25,10 +25,11 @@ test("model picker lists models and @-mention completes a worktree file", {
 	await expect(modelSelector).toBeEnabled();
 	await modelSelector.click();
 	await expect(page.getByTestId("model-option").first()).toBeVisible();
-	await page.getByTestId("model-option").first().click();
-	// The menu closes on pick and the trigger still shows a chosen model.
+	expect(await page.getByTestId("model-option").count()).toBeGreaterThan(0);
+	// Close WITHOUT selecting: a real pick calls `session.setModel`, which pi persists as the *default*
+	// model — pinning the first-listed (possibly deprecated) model would break later turns this run.
+	await page.keyboard.press("Escape");
 	await expect(page.getByTestId("model-option")).toHaveCount(0);
-	await expect(modelSelector).toBeVisible();
 
 	// The thinking-level picker is the honest effort knob.
 	await expect(page.getByTestId("thinking-selector")).toBeVisible();
