@@ -130,3 +130,47 @@ export function planModelSwitch(
     hasConflict: effortReset,
   };
 }
+
+/** Content for the model-switch confirm dialog, derived from a {@link ModelSwitchPlan}.
+ *
+ *  Both a live switch and a restart discard the *model-scoped* prompt cache, so
+ *  every switch carries a one-time cost warning — the next turn reprocesses the
+ *  conversation so far at the new model's rate. The restart path (effort/1M
+ *  conflict) is the heavier one. */
+export interface ModelSwitchPrompt {
+  /** Confirming restarts the session (effort/1M conflict) instead of switching live. */
+  needsRestart: boolean;
+  /** Confirm-button label. */
+  confirmLabel: string;
+  /** Consequence bullets to list (effort reset, 1M→200K cap); may be empty. */
+  consequences: string[];
+  /** One-line prompt-cache cost warning, tailored to the live vs restart path. */
+  costNote: string;
+}
+
+export function describeModelSwitch(
+  plan: ModelSwitchPlan,
+  modelName: string,
+): ModelSwitchPrompt {
+  const consequences: string[] = [];
+  if (plan.effortReset) {
+    consequences.push(
+      "Effort resets to auto — the new model doesn't support the current level.",
+    );
+  }
+  if (plan.contextCapped) {
+    consequences.push(
+      "Context window falls back to 200K (the new model has no 1M window).",
+    );
+  }
+  const tail = `the next turn reprocesses the conversation so far at ${modelName}'s rate — a one-time cost.`;
+  const costNote = plan.hasConflict
+    ? `Restarting clears the prompt cache, so ${tail}`
+    : `The switch is instant, but it clears the prompt cache: ${tail}`;
+  return {
+    needsRestart: plan.hasConflict,
+    confirmLabel: plan.hasConflict ? "Switch & restart" : "Switch",
+    consequences,
+    costNote,
+  };
+}

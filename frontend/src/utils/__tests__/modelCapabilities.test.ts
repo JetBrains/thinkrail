@@ -5,6 +5,7 @@ import {
   modelSupportsEffort,
   modelLabel,
   planModelSwitch,
+  describeModelSwitch,
   CONTEXT_1M_FLAG,
 } from "../modelCapabilities.ts";
 import type { RuntimeCapabilities } from "@/types/rpc-methods.ts";
@@ -149,5 +150,43 @@ describe("modelLabel", () => {
 
   it("falls back to the raw id for unknown models", () => {
     expect(modelLabel(CAPS, "legacy-model")).toBe("legacy-model");
+  });
+});
+
+describe("describeModelSwitch", () => {
+  it("live switch (Sonnet→Opus): no restart, instant cost note, no consequences", () => {
+    const plan = planModelSwitch(CAPS, OPUS, "high", { [CONTEXT_1M_FLAG]: true });
+    const d = describeModelSwitch(plan, modelLabel(CAPS, OPUS));
+    expect(d.needsRestart).toBe(false);
+    expect(d.confirmLabel).toBe("Switch");
+    expect(d.consequences).toEqual([]);
+    // every switch warns about the model-scoped cache miss; the live one is "instant"
+    expect(d.costNote).toMatch(/instant/i);
+    expect(d.costNote).toMatch(/cache/i);
+    expect(d.costNote).toContain("Opus 4.8");
+  });
+
+  it("restart switch (Opus xhigh,1M → Haiku): restart label + both consequences + restart-flavored cost note", () => {
+    const plan = planModelSwitch(CAPS, HAIKU, "xhigh", { [CONTEXT_1M_FLAG]: true });
+    const d = describeModelSwitch(plan, modelLabel(CAPS, HAIKU));
+    expect(d.needsRestart).toBe(true);
+    expect(d.confirmLabel).toBe("Switch & restart");
+    expect(d.consequences).toHaveLength(2);
+    expect(d.consequences.some((c) => /effort/i.test(c))).toBe(true);
+    expect(d.consequences.some((c) => /200K/i.test(c))).toBe(true);
+    expect(d.costNote).toMatch(/restart/i);
+    expect(d.costNote).toMatch(/cache/i);
+    expect(d.costNote).toContain("Haiku 4.5");
+  });
+
+  it("live switch with context cap (Haiku, effort auto, 1M on): no restart but lists the 200K cap", () => {
+    const plan = planModelSwitch(CAPS, HAIKU, "auto", { [CONTEXT_1M_FLAG]: true });
+    const d = describeModelSwitch(plan, modelLabel(CAPS, HAIKU));
+    expect(d.needsRestart).toBe(false);
+    expect(d.confirmLabel).toBe("Switch");
+    expect(d.consequences).toEqual([
+      "Context window falls back to 200K (the new model has no 1M window).",
+    ]);
+    expect(d.costNote).toMatch(/instant/i);
   });
 });
