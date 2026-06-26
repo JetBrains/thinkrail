@@ -247,6 +247,12 @@ export function SessionStatusLine({
   const canInterrupt = streaming;
   const { icon: statusIcon, label: statusLabel, cssClass: statusClass } = statusInfo(status);
 
+  // Lock the model picker while a turn is in flight (Running/Waiting). A switch
+  // that needs a restart can't proceed until the turn drains, which would block
+  // — and time out — `session/restart`. Restricting switches to idle keeps the
+  // restart instant. Permission mode (live) and effort (staged) stay usable.
+  const modelLocked = disabled || streaming;
+
   const activeOption = modelOptions.find((o) => o.value === model);
 
   // ── Dropdowns (model, permission, status) ──
@@ -293,9 +299,10 @@ export function SessionStatusLine({
       {/* ── Model selector ── */}
       <div className="ssl-selector" ref={modelDd.ref}>
         <button
-          className={`ssl-selector-btn${disabled ? " ssl-selector-disabled" : ""}`}
-          onClick={() => !disabled && modelDd.toggle()}
-          disabled={disabled}
+          className={`ssl-selector-btn${modelLocked ? " ssl-selector-disabled" : ""}`}
+          onClick={() => !modelLocked && modelDd.toggle()}
+          disabled={modelLocked}
+          title={streaming && !disabled ? "Switch models when the current turn finishes" : undefined}
         >
           {activeOption?.label ?? model}
           <ChevronDown />
