@@ -65,6 +65,11 @@ interface SessionStore {
   archivedSessions: ArchivedSession[];
   /** IDs of sessions explicitly ended by the user — ignore late-arriving events */
   closedIds: Set<string>;
+  /** IDs of sessions deleted by the user. Unlike `closedIds` (which also
+   *  holds terminal sessions whose tab was merely closed but still exist on
+   *  disk), these are gone for good — `refreshSessionList` filters them out
+   *  so a slower, stale list response can't resurrect a just-deleted session. */
+  deletedIds: Set<string>;
   /** Which sessions have a visible tab in the tab bar */
   openTabs: Set<string>;
   /** Last-fetched session/list response — shared between SessionManager and StatusBar */
@@ -697,13 +702,16 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   activeSessionId: null,
   archivedSessions: [],
   closedIds: new Set(),
+  deletedIds: new Set(),
   openTabs: new Set(),
   sessionList: [],
 
   refreshSessionList: async () => {
     const { createSessionApi } = await import("@/api/methods/sessions.ts");
     const list = await createSessionApi(getClient()).list();
-    set({ sessionList: list });
+    // Drop entries the user already deleted: a stale, slower list response
+    // (e.g. one kicked off before the delete landed) must not re-add them.
+    set((s) => ({ sessionList: list.filter((e) => !s.deletedIds.has(e.thinkrailSid)) }));
   },
 
   patchSessionInList: (thinkrailSid, patch) => {
@@ -1445,6 +1453,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       activeSessionId: null,
       archivedSessions: [],
       closedIds: new Set(),
+      deletedIds: new Set(),
       openTabs: new Set(),
       sessionList: [],
     });
@@ -1762,7 +1771,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         sessions.delete(thinkrailSid);
         const closedIds = new Set(s.closedIds);
         closedIds.add(thinkrailSid);
-        return { sessions, closedIds };
+        const deletedIds = new Set(s.deletedIds);
+        deletedIds.add(thinkrailSid);
+        const sessionList = s.sessionList.filter((e) => e.thinkrailSid !== thinkrailSid);
+        return { sessions, closedIds, deletedIds, sessionList };
       });
     };
 
@@ -1806,15 +1818,17 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const sessions = new Map(s.sessions);
       const openTabs = new Set(s.openTabs);
       const closedIds = new Set(s.closedIds);
+      const deletedIds = new Set(s.deletedIds);
       for (const sid of ids) {
         sessions.delete(sid);
         openTabs.delete(sid);
         closedIds.add(sid);
+        deletedIds.add(sid);
       }
       const sessionList = s.sessionList.filter((e) => !ids.has(e.thinkrailSid));
       const activeSessionId =
         s.activeSessionId && ids.has(s.activeSessionId) ? null : s.activeSessionId;
-      return { sessions, openTabs, closedIds, sessionList, activeSessionId };
+      return { sessions, openTabs, closedIds, deletedIds, sessionList, activeSessionId };
     });
   },
 

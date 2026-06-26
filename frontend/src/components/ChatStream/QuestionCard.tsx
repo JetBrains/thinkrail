@@ -17,6 +17,9 @@ interface QuestionCardProps {
   onSubmit: (response: Record<string, unknown>) => void;
   compact?: boolean;
   requestId?: string;
+  /** Hide the "Discuss first" action (it spawns a discussion subsession,
+   *  which doesn't fit the guided onboarding layout). */
+  hideDiscuss?: boolean;
 }
 
 export function QuestionCard({
@@ -28,6 +31,7 @@ export function QuestionCard({
   onSubmit,
   compact = false,
   requestId,
+  hideDiscuss = false,
 }: QuestionCardProps) {
   const [activeTab, setActiveTab] = useState(0);
   const [highlighted, setHighlighted] = useState<Record<number, number>>(() =>
@@ -296,7 +300,7 @@ export function QuestionCard({
         {questions.map((q) => (
           <div key={q.question} className="chat-qa-pair">
             <div className="chat-assistant">
-              <div className="msg-avatar msg-avatar-assistant" aria-hidden="true">T</div>
+              <div className="msg-avatar msg-avatar-assistant" aria-hidden="true">{PRODUCT_NAME.charAt(0)}</div>
               <div className="msg-content">
                 <div className="msg-who">{PRODUCT_NAME}</div>
                 <div className="msg-bubble msg-bubble-assistant">
@@ -405,27 +409,29 @@ export function QuestionCard({
             )}
           </div>
 
-          <div className="question-discuss-row">
-            <Button
-              onClick={() => {
-                const questionText = questions.map((qq) => qq.question).join("\n");
-                import("@/store/sessionStore.ts").then(({ useSessionStore }) => {
-                  const store = useSessionStore.getState();
-                  const activeId = store.activeSessionId;
-                  if (activeId) {
-                    store.createSubsession(
-                      activeId,
-                      "discussion",
-                      questionText,
-                      "Discuss: " + (questions[0]?.question ?? "").slice(0, 40)
-                    );
-                  }
-                }).catch(console.error);
-              }}
-            >
-              Discuss first
-            </Button>
-          </div>
+          {!hideDiscuss && (
+            <div className="question-discuss-row">
+              <Button
+                onClick={() => {
+                  const questionText = questions.map((qq) => qq.question).join("\n");
+                  import("@/store/sessionStore.ts").then(({ useSessionStore }) => {
+                    const store = useSessionStore.getState();
+                    const activeId = store.activeSessionId;
+                    if (activeId) {
+                      store.createSubsession(
+                        activeId,
+                        "discussion",
+                        questionText,
+                        "Discuss: " + (questions[0]?.question ?? "").slice(0, 40)
+                      );
+                    }
+                  }).catch(console.error);
+                }}
+              >
+                Discuss first
+              </Button>
+            </div>
+          )}
         </>
       )}
     </div>

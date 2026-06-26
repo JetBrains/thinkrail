@@ -9,6 +9,7 @@ import { EventType } from "@/constants/eventTypes.ts";
 import { ChatStream } from "@/components/ChatStream/ChatStream.tsx";
 import type { ChatStreamHandle } from "@/components/ChatStream/ChatStream.tsx";
 import { SessionStatusLine } from "@/components/ChatStream/SessionStatusLine.tsx";
+import { isWizardSkill } from "@/components/Wizard/registry.ts";
 import { InputArea } from "@/components/ChatStream/InputArea.tsx";
 import { FileViewer } from "@/components/FileViewer/FileViewer.tsx";
 import { Card } from "@/components/ui/index.ts";
@@ -310,6 +311,7 @@ export function SessionPanel({
               metrics={activeSession.metrics}
               status={status ?? SessionStatus.Idle}
               disabled={activeSession.restored || isDone}
+              isOnboarding={isWizardSkill(activeSession.skillId)}
               actionSlotRef={setActionSlot}
               onChangeModel={(m) => updateConfig(activeSession.thinkrailSid, { model: m })}
               onChangePermissionMode={(m) => updateConfig(activeSession.thinkrailSid, { permissionMode: m })}

@@ -10,6 +10,7 @@ import { useSessionStore } from "@/store/sessionStore.ts";
 import { renderEvent } from "./renderers/registry.ts";
 import { getEventCategory } from "./renderers/categories.ts";
 import { useUiStore } from "@/store/uiStore.ts";
+import { isWizardSkill } from "@/components/Wizard/registry.ts";
 import { SessionContextMenu } from "./SessionContextMenu.tsx";
 import { SubsessionContextMenu } from "./SubsessionContextMenu.tsx";
 import { ReturnFlowCard } from "./ReturnFlowCard.tsx";
@@ -95,7 +96,10 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
   const scrollRef = useRef<HTMLDivElement>(null);
   const autoScroll = useRef(true);
   const viewMode = useViewMode();
-  const categoryVisibility = useUiStore((s) => s.chatCategoryVisibility);
+  const isOnboarding = isWizardSkill(session?.skillId);
+  const categoryVisibility = useUiStore((s) =>
+    isOnboarding ? s.onboardingChatCategoryVisibility : s.chatCategoryVisibility,
+  );
 
   // ── Context menu state ──
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; questionRequestId?: string } | null>(null);

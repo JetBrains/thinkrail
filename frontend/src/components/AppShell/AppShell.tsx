@@ -151,7 +151,7 @@ export function AppShell({ onSwitchProject }: { onSwitchProject: () => void }) {
                 <SessionPanel hideTabBar hideStickyBar hideContextCard />
               </ViewModeProvider>
             }
-            rightPanel={<WizardDocPanel filePath={wizardConfig.artifactPath} />}
+            rightPanel={<WizardDocPanel key={wizardConfig.artifactPath} filePath={wizardConfig.artifactPath} />}
             rightPanelTitle={wizardConfig.artifactPath.replace(/^\.tr\//, "")}
           />
         </Shell>
