@@ -36,13 +36,15 @@ runtime exports being the WS method/channel constants and the protocol version. 
   - `@earendil-works/pi-agent-core`: `AgentEvent`, `AgentMessage`, `ThinkingLevel` (the
     `off`-inclusive one);
   - the local render union **`PiEvent`** — the real superset `AgentSessionEvent` lives in the Node-only
-    `pi-coding-agent`, so it's mirrored here. Finalized when chat lands (M10/M11); until then `= AgentEvent`.
+    `pi-coding-agent`, so it's **mirrored** here (the `agent_end.willRetry` + `queue_update` /
+    `compaction_*` / `auto_retry_*` / `session_info_changed` / `thinking_level_changed` members);
+  - **`SessionEventPayload`** (`{ sessionId, event: PiEvent }`) — the `pi.event` push frame.
 - **domain.ts** — app entities: `Project` (git repo + unique `slug`), `Workspace` (git worktree), `Session` (chat tab),
   `FileNode` (file-tree node), `TabStatus`, `Git*`/diff types.
-- **wsProtocol.ts** — `WS_METHODS` (`project.*` / `workspace.*` / `fs.*` / `git.*` / `terminal.*`;
-  `session.*` added at M10), `WS_CHANNELS` (`server.welcome` / `pi.event` / `pi.extensionUi` /
-  `terminal.data`), the `WsMethodMap` typed request/result map + `WsParams`/`WsResult` helpers, and
-  `PROTOCOL_VERSION`.
+- **wsProtocol.ts** — `WS_METHODS` (`project.*` / `workspace.*` / `fs.*` / `git.*` / `terminal.*` /
+  `session.*` — `create`/`prompt`/`abort`/`dispose`), `WS_CHANNELS` (`server.welcome` / `pi.event` /
+  `pi.extensionUi` / `terminal.data`), the `WsMethodMap` typed request/result map + `WsParams`/`WsResult`
+  helpers, and `PROTOCOL_VERSION`.
 
 ## Get right
 

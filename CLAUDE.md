@@ -6,7 +6,7 @@ runs `pi` and bridges it to a rich UI; `pi` owns models, skills, compaction, cos
 Canonical specs (read these first):
 - `goal-and-requirements.md` — product goal + V1/V2 scope
 - `architecture.md` — top-level architecture, decisions, invariants
-- `docs/V1-TUTORIAL.md` — the buildable V1 milestone ladder (M0–M14), gotchas, dependency pins, type map
+- `docs/V1-TUTORIAL.md` — the buildable V1 milestone ladder (M0–M15), gotchas, dependency pins, type map
 - `docs/V2-ROADMAP.md` — the destination V1 is designed to reach
 
 ## Module structure & boundaries (top-priority requirement)
@@ -109,6 +109,22 @@ Architecture decisions live as spec-graph nodes, dogfooding the spec layer the p
 - The transport's **host endpoint is a parameter** (default same-origin); `server.welcome` carries a
   protocol version so an independently-shipped UI can detect host drift.
 
+## Chat UI (the conversation renderers)
+
+The agent conversation is rendered by **hand-rolled React primitives** in `apps/web/src/chat/` — pi ships
+no web UI, and the official `@earendil-works/pi-web-ui` (MIT) is **Lit + runs the agent in-browser**, so
+it's a *reference* for the event→render mapping, not a dependency. The primitives render **pi's canonical
+message / content-block model** (`AssistantMessage.content`: `text` / `thinking` / `toolCall`), so they're
+reusable by any pi UI (extraction-ready as a future `packages/chat-ui`).
+- **Presentational renderers are props-driven** (no store/transport) so they stay reusable; `ChatView` is
+  the only app-integration piece (wires store + transport). Theme **only via token utilities** so the
+  primitives wear any theme.
+- **Adding a tool = two decoupled sides, joined by tool name:** the **capability** is a pi **custom tool /
+  extension/skill** (server-side, passed to `createAgentSession`); the **presentation** is a UI renderer
+  registered via **`registerToolRenderer("<name>", …)`** (`chat/toolRegistry`) — unregistered tools fall
+  back to `DefaultToolRenderer`. Interactive tools route through the `pi.extensionUi` bridge (M12).
+- Full module spec: `apps/web/src/chat/SPEC.md`.
+
 ## Verification (run for every app-affecting change)
 
 Every change that touches the app is verified by the **e2e suite** before it's considered done.
@@ -117,6 +133,14 @@ Every change that touches the app is verified by the **e2e suite** before it's c
 `globalSetup`), runs the suite headless against the real web UI, then tears the host down and cleans up
 (`globalTeardown`). Tests live in `e2e/` and assert via `data-testid` / `data-status` hooks. When
 Electrobun lands, the same suite runs against the desktop app too.
+
+**Agent tests are tagged, not faked.** Specs that drive a real `pi` agent are tagged `@agent` (Playwright
+`{ tag: "@agent" }`) and use pi's **default auth** (`AuthStorage` resolves provider env vars or
+`~/.pi/agent/auth.json`) — no `ANTHROPIC_API_KEY`-specific gating. Select suites by marker: `bun run e2e`
+runs the **no-agent** suite (`--grep-invert @agent`) — projects/workspaces/files/editor/changes/terminals,
+fast, no auth, run anytime; `bun run e2e:full` runs everything; `bun run e2e:agent` runs only the
+`@agent` specs (which need `pi` authenticated + more time). There is **no fake agent** — agent coverage
+runs against a real provider.
 
 Fast gates (also the husky pre-commit): `bun run lint` (biome) + `bun run typecheck`. Unit tests:
 `bun run test` (bun test, per package). One-time setup for a fresh machine: `bunx playwright install chromium`.

@@ -102,7 +102,12 @@ export function removeWorkspace(id: string): void {
 }
 
 export function workspaceDiffStats(id: string): DiffStats {
+	return diffStats(getWorkspace(id).worktreePath, getWorkspace(id).baseBranch);
+}
+
+/** Look up a workspace by id (throws if unknown) — the worktree path anchors a chat session's cwd. */
+export function getWorkspace(id: string): Workspace {
 	const ws = loadWorkspaces().find((w) => w.id === id);
 	if (!ws) throw new Error(`Unknown workspace: ${id}`);
-	return diffStats(ws.worktreePath, ws.baseBranch);
+	return ws;
 }

@@ -4,7 +4,7 @@ import {
 	SessionManager,
 	type SessionStats,
 } from "@earendil-works/pi-coding-agent";
-import type { Model, PiEvent, ThinkingLevel } from "@thinkrail-pi/contracts";
+import type { Model, PiEvent, SessionEventPayload, ThinkingLevel } from "@thinkrail-pi/contracts";
 import { getPiRuntime } from "./piRuntime";
 
 interface Entry {
@@ -14,11 +14,9 @@ interface Entry {
 
 const sessions = new Map<string, Entry>();
 
-/** Each session's events, tagged with its id, for the WS `pi.event` channel (wired at M11). */
-export interface SessionEventPayload {
-	sessionId: string;
-	event: PiEvent;
-}
+// `SessionEventPayload` is a wire type — it lives in `@thinkrail-pi/contracts`; re-exported so the
+// `../agent` barrel keeps exposing it.
+export type { SessionEventPayload };
 
 let publish: (payload: SessionEventPayload) => void = () => {};
 export function setSessionPublisher(fn: (payload: SessionEventPayload) => void): void {

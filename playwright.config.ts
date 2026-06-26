@@ -36,6 +36,8 @@ export default defineConfig({
 			THINKRAIL_PI_DATA_DIR: E2E_DATA_DIR,
 			// Stub the host's native directory picker so "Open project" is drivable headlessly.
 			THINKRAIL_PI_PICK_DIR: E2E_FIXTURE_REPO,
+			// The host inherits the parent env (Playwright merges `process.env`), so the @agent suite uses
+			// pi's default auth (provider env vars + `~/.pi/agent/auth.json`) with no key special-casing.
 		},
 	},
 });

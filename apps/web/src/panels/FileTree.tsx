@@ -67,7 +67,7 @@ function FileNodeRow({ node, workspaceId }: { node: FileNode; workspaceId: strin
 			});
 			useAppStore
 				.getState()
-				.openTab({ id, workspaceId, path: node.path, name: node.name, content });
+				.openTab({ kind: "file", id, workspaceId, path: node.path, name: node.name, content });
 		} catch {
 			// a read failure leaves the tree unchanged
 		}

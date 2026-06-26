@@ -1,4 +1,4 @@
-import type { Project } from "@thinkrail-pi/contracts";
+import type { Project, SessionEventPayload } from "@thinkrail-pi/contracts";
 import { WS_CHANNELS } from "@thinkrail-pi/contracts";
 import { useAppStore } from "../store";
 import { WsTransport } from "./transport";
@@ -21,6 +21,11 @@ export function initTransport(): WsTransport {
 		if (Array.isArray(welcome.projects)) {
 			useAppStore.getState().setProjects(welcome.projects);
 		}
+	});
+
+	transport.subscribe(WS_CHANNELS.piEvent, (data) => {
+		const { sessionId, event } = data as SessionEventPayload;
+		useAppStore.getState().handlePiEvent(event, sessionId);
 	});
 
 	transport.connect();
