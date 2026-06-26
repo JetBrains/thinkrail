@@ -63,6 +63,36 @@
       "title": "RuntimeFlag",
       "type": "object"
     },
+    "ModelCapability": {
+      "additionalProperties": false,
+      "description": "Per-model subset of the runtime's tunable options.\n\n``effort_levels`` and ``flags`` are *value*/\u200b*key* allowlists scoped to one\nmodel \u2014 subsets of the runtime-wide ``RuntimeCapabilities.effort_levels`` /\n``flags`` (which carry the display labels). The UI uses these to show only\nthe efforts and flags the selected model actually accepts; the backend\nclamps unsound combinations at the runtime boundary regardless.",
+      "properties": {
+        "model": {
+          "title": "Model",
+          "type": "string"
+        },
+        "effortLevels": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Effortlevels",
+          "type": "array"
+        },
+        "flags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Flags",
+          "type": "array"
+        }
+      },
+      "required": [
+        "model",
+        "effortLevels"
+      ],
+      "title": "ModelCapability",
+      "type": "object"
+    },
     "RuntimeIdentity": {
       "additionalProperties": false,
       "description": "Lightweight ``{runtimeType, displayName}`` pair for ``runtimes/list``.",
@@ -86,7 +116,7 @@
     },
     "RuntimeCapabilities": {
       "additionalProperties": false,
-      "description": "What a runtime accepts for the user-tunable fields.\n\nOrder is contract: position 0 of ``permission_modes`` / ``effort_levels`` /\n``models`` is the runtime's default (cold-start picks ``[0].value``).",
+      "description": "What a runtime accepts for the user-tunable fields.\n\nOrder is contract: position 0 of ``permission_modes`` / ``effort_levels`` /\n``models`` is the runtime's default (cold-start picks ``[0].value``).\n\n``effort_levels``/``models``/``flags`` are the runtime-wide menus (with\nlabels). ``model_capabilities`` narrows them per model \u2014 a model with no\nentry is unconstrained (the UI shows every option). This lets the picker\nreflect that, say, Haiku accepts no effort level and no 1M context window.",
       "properties": {
         "permissionModes": {
           "items": {
@@ -114,6 +144,13 @@
             "$ref": "#/$defs/RuntimeFlag"
           },
           "title": "Flags",
+          "type": "array"
+        },
+        "modelCapabilities": {
+          "items": {
+            "$ref": "#/$defs/ModelCapability"
+          },
+          "title": "Modelcapabilities",
           "type": "array"
         }
       },
@@ -1038,6 +1075,9 @@
     },
     {
       "$ref": "#/$defs/RuntimeFlag"
+    },
+    {
+      "$ref": "#/$defs/ModelCapability"
     },
     {
       "$ref": "#/$defs/RuntimeIdentity"

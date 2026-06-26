@@ -60,11 +60,38 @@ class RuntimeFlag(BaseModel):
     description: str = ""
 
 
+class ModelCapability(BaseModel):
+    """Per-model subset of the runtime's tunable options.
+
+    ``effort_levels`` and ``flags`` are *value*/​*key* allowlists scoped to one
+    model — subsets of the runtime-wide ``RuntimeCapabilities.effort_levels`` /
+    ``flags`` (which carry the display labels). The UI uses these to show only
+    the efforts and flags the selected model actually accepts; the backend
+    clamps unsound combinations at the runtime boundary regardless.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+        alias_generator=to_camel,
+        populate_by_name=True,
+        frozen=True,
+    )
+
+    model: str
+    effort_levels: list[str]
+    flags: list[str] = Field(default_factory=list)
+
+
 class RuntimeCapabilities(BaseModel):
     """What a runtime accepts for the user-tunable fields.
 
     Order is contract: position 0 of ``permission_modes`` / ``effort_levels`` /
     ``models`` is the runtime's default (cold-start picks ``[0].value``).
+
+    ``effort_levels``/``models``/``flags`` are the runtime-wide menus (with
+    labels). ``model_capabilities`` narrows them per model — a model with no
+    entry is unconstrained (the UI shows every option). This lets the picker
+    reflect that, say, Haiku accepts no effort level and no 1M context window.
     """
 
     model_config = ConfigDict(
@@ -78,6 +105,7 @@ class RuntimeCapabilities(BaseModel):
     effort_levels: list[LabeledOption]
     models: list[LabeledOption]
     flags: list[RuntimeFlag] = Field(default_factory=list)
+    model_capabilities: list[ModelCapability] = Field(default_factory=list)
 
     @field_validator("permission_modes", "effort_levels", "models")
     @classmethod

@@ -12,6 +12,9 @@ import { SessionStatusLine } from "@/components/ChatStream/SessionStatusLine.tsx
 import { isWizardSkill } from "@/components/Wizard/registry.ts";
 import { InputArea } from "@/components/ChatStream/InputArea.tsx";
 import { FileViewer } from "@/components/FileViewer/FileViewer.tsx";
+import { ConfirmModal } from "@/components/shared/ConfirmModal.tsx";
+import { useRuntimeCapsStore } from "@/store/runtimeCapsStore.ts";
+import { modelLabel, planModelSwitch, type ModelSwitchPlan } from "@/utils/modelCapabilities.ts";
 import { Card } from "@/components/ui/index.ts";
 import { useMessageHistoryStore } from "@/store/messageHistoryStore";
 import { ContextPanel, TicketRouteContextPanel } from "@/components/ContextPanel/ContextPanel.tsx";
@@ -60,8 +63,16 @@ export function SessionPanel({
   const interruptSession = useSessionStore((s) => s.interruptSession);
   const endSession = useSessionStore((s) => s.endSession);
   const updateConfig = useSessionStore((s) => s.updateConfig);
+  const changeEffort = useSessionStore((s) => s.changeEffort);
   const restartSession = useSessionStore((s) => s.restartSession);
   const restoreSession = useSessionStore((s) => s.restoreSession);
+  const caps = useRuntimeCapsStore((s) => s.capsByRuntime["claude"]);
+
+  // A model switch that would silently degrade the current effort/context is
+  // held here until the user confirms (see handleModelChange).
+  const [pendingSwitch, setPendingSwitch] = useState<
+    { sid: string; model: string; plan: ModelSwitchPlan } | null
+  >(null);
 
   const openFiles = useFileStore((s) => s.openFiles);
   const activeFilePath = useFileStore((s) => s.activeFilePath);
@@ -161,6 +172,41 @@ export function SessionPanel({
     },
     [switchSession],
   );
+
+  // Switching a live session's model is an instant set_model — including the
+  // harmless 1M→200K fallback (the model just ignores the beta). The one case
+  // that can't be done live is an effort the new model rejects: there's no
+  // set_effort, and an unsupported effort would crash the next turn. So only
+  // then do we ask, clamp effort, and restart.
+  const handleModelChange = useCallback(
+    (model: string) => {
+      if (!activeSession || model === activeSession.model) return;
+      const plan = planModelSwitch(caps, model, activeSession.effort, activeSession.flags);
+      if (plan.hasConflict) {
+        setPendingSwitch({ sid: activeSession.thinkrailSid, model, plan });
+      } else {
+        updateConfig(activeSession.thinkrailSid, { model });
+      }
+    },
+    [activeSession, caps, updateConfig],
+  );
+
+  const confirmModelSwitch = useCallback(async () => {
+    if (!pendingSwitch) return;
+    const { sid, model, plan } = pendingSwitch;
+    setPendingSwitch(null);
+    try {
+      await updateConfig(sid, { model, effort: plan.clampedEffort });
+      await restartSession(sid);
+    } catch (err) {
+      useNotificationStore.getState().addToast({
+        eventType: "error",
+        message: `Couldn't switch model: ${getErrorMessage(err)}`,
+        persistent: true,
+        thinkrailSid: sid,
+      });
+    }
+  }, [pendingSwitch, updateConfig, restartSession]);
 
   const handleSwitchFile = useCallback(
     (path: string) => {
@@ -313,15 +359,13 @@ export function SessionPanel({
               disabled={activeSession.restored || isDone}
               isOnboarding={isWizardSkill(activeSession.skillId)}
               actionSlotRef={setActionSlot}
-              onChangeModel={(m) => updateConfig(activeSession.thinkrailSid, { model: m })}
+              onChangeModel={handleModelChange}
               onChangePermissionMode={(m) => updateConfig(activeSession.thinkrailSid, { permissionMode: m })}
               onInterrupt={() => interruptSession(activeSession.thinkrailSid)}
               onEndSession={() => endSession(activeSession.thinkrailSid)}
               onBackground={() => closeSession(activeSession.thinkrailSid)}
-              onChangeEffort={async (e) => {
-                await updateConfig(activeSession.thinkrailSid, { effort: e });
-                await restartSession(activeSession.thinkrailSid);
-              }}
+              effortPending={activeSession.pendingRelaunch}
+              onChangeEffort={(e) => changeEffort(activeSession.thinkrailSid, e)}
             />
             {activeSession.restored || isDone ? (
               <RestoredBar thinkrailSid={activeSession.thinkrailSid} ended={isDone && !activeSession.restored} />
@@ -356,6 +400,30 @@ export function SessionPanel({
           </div>
         </div>
       )}
+      <ConfirmModal
+        open={pendingSwitch !== null}
+        title="Switch model?"
+        message={
+          pendingSwitch && (
+            <>
+              <b>{modelLabel(caps, pendingSwitch.model)}</b> doesn't support the
+              current session settings:
+              <ul className="confirm-modal__list">
+                {pendingSwitch.plan.effortReset && (
+                  <li>effort will reset to <b>auto</b></li>
+                )}
+                {pendingSwitch.plan.contextCapped && (
+                  <li>context window will be capped at <b>200K</b> (no 1M)</li>
+                )}
+              </ul>
+              Switching restarts the session with the new settings. Proceed?
+            </>
+          )
+        }
+        confirmLabel="Switch & restart"
+        onConfirm={confirmModelSwitch}
+        onCancel={() => setPendingSwitch(null)}
+      />
     </>
   );
 

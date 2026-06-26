@@ -25,6 +25,7 @@ from app.agent.models import (
 )
 from app.agent.runtime.types import (
     LabeledOption,
+    ModelCapability,
     RuntimeCapabilities,
     RuntimeFlag,
     RuntimeIdentity,
@@ -79,6 +80,7 @@ class InvalidCapabilityValueData(BaseModel):
 RPC_PAYLOAD_MODELS: tuple[type[BaseModel], ...] = (
     LabeledOption,
     RuntimeFlag,
+    ModelCapability,
     RuntimeIdentity,
     RuntimeCapabilities,
     RuntimesListResponse,

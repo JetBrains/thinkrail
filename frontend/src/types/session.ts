@@ -166,6 +166,14 @@ export interface Session {
   createdBy?: string;
   /** True if this session was loaded from disk (read-only, no live backend runner) */
   restored?: boolean;
+  /** A config change that can't apply to the live SDK client (effort — there's
+   *  no live set_effort) is staged here and applied by a seamless relaunch on
+   *  the next message, so a routine tweak doesn't visibly end the session. */
+  pendingRelaunch?: boolean;
+  /** A frontend-initiated relaunch (config-change restart) is in flight. The
+   *  `agent/done` it produces is transient, not a real completion — used to
+   *  suppress the "Session complete" card + done-status flash. */
+  restarting?: boolean;
   /** The system prompt sent to the agent at session start */
   systemPrompt?: string;
   /** Structured prompt sections for the preview UI */

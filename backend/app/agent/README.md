@@ -190,7 +190,7 @@ sequenceDiagram
     Svc->>Disk: load_session(thinkrailSid)
     Disk-->>Svc: metadata (incl. sessionId)
 
-    Note over Svc: Validate: sessionId must exist
+    Note over Svc: Resume with stored sessionId,<br/>or relaunch fresh if absent
 
     Svc->>Svc: create AgentTask (same thinkrail_sid)
     Svc->>Svc: build spec_context (fresh)
@@ -214,7 +214,7 @@ sequenceDiagram
 | **System prompt** | Fresh spec context is built from current specs/skills (passed via `system_prompt`). |
 | **Event persistence** | New events from the resumed session append to the same `.events.jsonl` file. |
 | **Metadata update** | Metadata `.json` is updated with new status and `sessionId`. |
-| **Missing sessionId** | If the stored session has no `sessionId` (pre-resume era), `continue_session` raises a `ValueError`. |
+| **Missing sessionId** | If the stored session has no `sessionId` (pre-resume era, or a session restarted while still idle before its first turn), `continue_session` relaunches **fresh** (`resume_session_id=None`) instead of raising — there is no CLI conversation to resume. This is what makes "restart to apply a model/effort change" work on a not-yet-messaged session. |
 
 ### What Changed (vs. Previous Design)
 
@@ -301,7 +301,7 @@ graph TD
 | `respond` | `(thinkrail_sid: str, request_id: str, response: dict) -> None` | Resolve a pending `asyncio.Future` with the client's answer (for mid-turn interactions) |
 | `list_all_sessions` | `() -> list[dict]` | List all sessions: in-memory active + on-disk archived (metadata only) |
 | `get_session_data` | `(thinkrail_sid: str) -> dict \| None` | Get full session data including events from disk |
-| `continue_session` | `async (thinkrail_sid: str) -> AgentTask` | **Resume a session using SDK native `--resume`.** Loads stored `sessionId` from disk, validates it exists, builds fresh spec context, then launches `_run_background` with `resume_session_id=old_session_id`. Runner publishes via EventBus. Raises `ValueError` if session not found or has no stored `sessionId`. |
+| `continue_session` | `async (thinkrail_sid: str) -> AgentTask` | **Resume a session using SDK native `--resume`.** Loads the stored `sessionId` from disk, builds fresh spec context, then launches `_run_background` with `resume_session_id=old_session_id` — or `None` (fresh relaunch) when there's no stored `sessionId` (nothing to resume). Runner publishes via EventBus. Raises `ValueError` only if the session isn't found on disk or is already running. |
 | `restart_session` | `async (thinkrail_sid: str) -> AgentTask` | End current session and resume with current (updated) config. |
 | `trash_session` | `(thinkrail_sid: str) -> None` | Soft-delete: detach from all tickets via `BoardService.detach_session_from_all`, move files to `.tr/trash/` via `TrashService`, clean up in-memory tracker state. Falls back to hard-delete if no TrashService is available. |
 
@@ -594,7 +594,7 @@ Conversation-history management and compaction are owned by the Claude Code subp
 | Persistent session model | SDK client stays open across multiple turns; user sends messages via `agent/send` | Matches Claude Code chat experience; enables multi-turn conversation with accumulated context |
 | **Native resume for continue** | `continue_session` passes stored `sessionId` to `ClaudeAgentOptions(resume=...)` | Full conversation context restored by CLI natively. Eliminates lossy text replay (old approach truncated tool outputs to 500 chars, lost structured data, cost extra input tokens). |
 | **resume_session_id as runner param** | `ClaudeRuntime.run_session()` accepts optional `resume_session_id: str \| None`; service decides when to pass it | Runner stays SDK-focused (just maps param to options). Service owns the "should we resume?" decision. Clean separation. |
-| **No text replay fallback** | If stored session has no `sessionId`, raise `ValueError` instead of falling back to text replay | Simplicity. Text replay was lossy anyway. Old sessions without `sessionId` are rare and can be started fresh. |
+| **No text replay fallback** | If a stored session has no `sessionId`, relaunch fresh (`resume_session_id=None`) instead of replaying text | Simplicity. Text replay was lossy anyway, and a session with no `sessionId` has no conversation to restore — starting fresh is the correct, non-crashing fallback (also what makes an idle restart-to-apply-config work). |
 | Message queue for user input | `asyncio.Queue` per session in `tracker.py` | Clean producer-consumer pattern; `agent/send` pushes, runner pulls. Decouples RPC layer from runner timing. |
 | **Non-destructive interrupt** | `interrupt` calls `client.interrupt()` on the live SDK client; `end` pushes END_SIGNAL to close the session | Uses the SDK's built-in control protocol (`{"subtype": "interrupt"}`) to stop the current turn without destroying the client or conversation context. Previous approach (`bg.cancel()` + re-launch) was destructive — killed the runner, destroyed the SDK client, and lost all accumulated context. |
 | **Interrupt flag on tracker** | Tracker holds a per-session interrupt flag; runner checks it on ResultMessage | Cleanly routes `ResultMessage` to either `agent/interrupted` or `agent/turnComplete` notification without race conditions. Service sets the flag before calling `client.interrupt()`; runner clears it after emitting the notification. |

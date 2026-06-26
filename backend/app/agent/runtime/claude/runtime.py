@@ -63,6 +63,7 @@ from app.agent.runtime.claude.skills import ClaudeSkillRegistry
 from app.agent.runtime.events import RuntimeEvent
 from app.agent.runtime.types import (
     LabeledOption,
+    ModelCapability,
     RuntimeCapabilities,
     RuntimeFlag,
     RuntimeSkillInfo,
@@ -137,6 +138,11 @@ _CLAUDE_EFFORT_LEVELS: tuple[LabeledOption, ...] = (
     *(LabeledOption(value=v, label=v) for v in get_args(EffortLevel)),
 )
 
+# The effort values the SDK accepts at all. ``auto`` is the runtime's neutral
+# "no explicit effort" value (translated to ``effort=None`` at the SDK boundary)
+# and is always available regardless of model.
+_SDK_EFFORTS: frozenset[str] = frozenset(get_args(EffortLevel))
+
 # The 1M-token context window is opt-out (on by default). Models that support
 # it (Fable 5, Opus 4.8, Sonnet 4.6) extend to 1M; models that don't (Haiku)
 # ignore the beta and stay at their default — the real window is read back from
@@ -151,9 +157,35 @@ _CLAUDE_FLAGS: tuple[RuntimeFlag, ...] = (
         label="1M context window",
         type="boolean",
         default=True,
-        description="Request the 1M-token context window on models that support it (Fable 5, Opus 4.8, Sonnet 4.6). Off caps the session at 200K.",
+        description="Request the 1M-token context window on models that support it (Opus 4.8, Sonnet 4.6). Off caps the session at 200K.",
     ),
 )
+
+
+def _effective_effort(
+    models: ClaudeModelRegistry, model: str, effort: str | None
+) -> str | None:
+    """The effort value to hand the SDK for ``model``.
+
+    Translates the neutral ``"auto"`` to ``None`` (the SDK's "decide for me")
+    and clamps any effort the model doesn't accept back to ``None`` — so an
+    unsound combination (e.g. Haiku + ``xhigh``, which the API rejects) can
+    never reach the SDK, regardless of how it got onto the config.
+    """
+    if not effort or effort == "auto":
+        return None
+    if effort in models.supported_efforts(model):
+        return effort
+    return None
+
+
+def _wants_1m_beta(
+    models: ClaudeModelRegistry, model: str, flags: dict[str, bool]
+) -> bool:
+    """Whether to request the 1M-context beta: the flag is on (default) *and*
+    the model actually supports it. Models without 1M ignore the beta anyway;
+    gating here keeps the request honest."""
+    return bool(flags.get(_CONTEXT_1M_FLAG, True)) and models.supports_1m(model)
 
 
 class ClaudeRuntime:
@@ -227,11 +259,23 @@ class ClaudeRuntime:
     # ── IAgentRuntime: capability surface ────────────────────────────────
 
     def capabilities(self) -> RuntimeCapabilities:
+        models = self._models.list_options()
         return RuntimeCapabilities(
             permission_modes=list(_CLAUDE_PERMISSION_MODES),
             effort_levels=list(_CLAUDE_EFFORT_LEVELS),
-            models=self._models.list_options(),
+            models=models,
             flags=list(_CLAUDE_FLAGS),
+            model_capabilities=[self._model_capability(o.value) for o in models],
+        )
+
+    def _model_capability(self, model: str) -> ModelCapability:
+        """Per-model allowlist of effort values (``auto`` always first) and
+        flag keys, for the picker to filter against."""
+        efforts = [e for e in self._models.supported_efforts(model) if e in _SDK_EFFORTS]
+        return ModelCapability(
+            model=model,
+            effort_levels=["auto", *efforts],
+            flags=[_CONTEXT_1M_FLAG] if self._models.supports_1m(model) else [],
         )
 
     # ── IAgentRuntime: skill surface ─────────────────────────────────────
@@ -327,10 +371,11 @@ class ClaudeRuntime:
             mcp_servers=MCP_SERVERS,
             resume=resume_session_id,
             stderr=_on_cli_stderr,
-            betas=([_CONTEXT_1M_BETA] if task.config.flags.get(_CONTEXT_1M_FLAG, True) else []),
-            # The SDK uses ``effort=None`` for its automatic setting; the
-            # neutral config value for that is the string ``"auto"``.
-            effort=(None if task.config.effort == "auto" else task.config.effort),
+            # 1M beta and effort are both clamped to what the model supports —
+            # an unsound combination (e.g. Haiku + xhigh / 1M) never reaches the
+            # SDK even if a stale or hand-edited config carries one.
+            betas=([_CONTEXT_1M_BETA] if _wants_1m_beta(self._models, task.config.model, task.config.flags) else []),
+            effort=_effective_effort(self._models, task.config.model, task.config.effort),
             max_buffer_size=10 * 1024 * 1024,  # 10MB — default 1MB is too small for large tool results
             extra_args={"allow-dangerously-skip-permissions": None},  # enable mid-session mode switching to bypassPermissions
             hooks={

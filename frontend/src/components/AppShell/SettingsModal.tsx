@@ -9,6 +9,11 @@ import { useRuntimeCapsStore } from "@/store/runtimeCapsStore.ts";
 import { RuntimeFlags } from "@/components/shared/RuntimeFlags.tsx";
 import { Dropdown } from "@/components/shared/Dropdown.tsx";
 import { permissionModeTooltip } from "@/utils/permissionMode.ts";
+import {
+  effortOptionsForModel,
+  flagsForModel,
+  planModelSwitch,
+} from "@/utils/modelCapabilities.ts";
 import type { SessionDefaults } from "@/api/methods/appSettings.ts";
 import "./SettingsModal.css";
 
@@ -140,8 +145,6 @@ function SessionDefaultsSection({ visible }: { visible: boolean }) {
   const caps = useRuntimeCapsStore((s) => s.capsByRuntime["claude"]);
   const models = caps?.models ?? [];
   const permissionModes = caps?.permissionModes ?? [];
-  const effortLevels = caps?.effortLevels ?? [];
-  const flags = caps?.flags ?? [];
 
   const [draft, setDraft] = useState<SessionDefaults | null>(sessionDefaults);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -182,6 +185,9 @@ function SessionDefaultsSection({ visible }: { visible: boolean }) {
   }
 
   const value = draft ?? sessionDefaults!;
+  // Effort levels and flags are scoped to the chosen default model.
+  const effortLevels = effortOptionsForModel(caps, value.model);
+  const flags = flagsForModel(caps, value.model);
   const flagValue = (key: string, dflt: boolean): boolean => value.flags?.[key] ?? dflt;
   const dirty =
     sessionDefaults !== null &&
@@ -230,7 +236,12 @@ function SessionDefaultsSection({ visible }: { visible: boolean }) {
             ...(selectedModel ? [] : [{ value: value.model, label: value.model }]),
             ...models.map((m) => ({ value: m.value, label: m.label })),
           ]}
-          onChange={(v) => setDraftValue({ ...value, model: v })}
+          onChange={(v) => {
+            // Clamp the default effort to what the new model accepts (the flag
+            // list re-filters on its own).
+            const plan = planModelSwitch(caps, v, value.effort, value.flags);
+            setDraftValue({ ...value, model: v, effort: plan.clampedEffort });
+          }}
         />
       </div>
 
