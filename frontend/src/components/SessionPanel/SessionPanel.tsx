@@ -14,7 +14,7 @@ import { InputArea } from "@/components/ChatStream/InputArea.tsx";
 import { FileViewer } from "@/components/FileViewer/FileViewer.tsx";
 import { ConfirmModal } from "@/components/shared/ConfirmModal.tsx";
 import { useRuntimeCapsStore } from "@/store/runtimeCapsStore.ts";
-import { modelLabel, planModelSwitch, type ModelSwitchPlan } from "@/utils/modelCapabilities.ts";
+import { modelLabel, planModelSwitch, describeModelSwitch, type ModelSwitchPlan } from "@/utils/modelCapabilities.ts";
 import { Card } from "@/components/ui/index.ts";
 import { useMessageHistoryStore } from "@/store/messageHistoryStore";
 import { ContextPanel, TicketRouteContextPanel } from "@/components/ContextPanel/ContextPanel.tsx";
@@ -173,22 +173,18 @@ export function SessionPanel({
     [switchSession],
   );
 
-  // Switching a live session's model is an instant set_model — including the
-  // harmless 1M→200K fallback (the model just ignores the beta). The one case
-  // that can't be done live is an effort the new model rejects: there's no
-  // set_effort, and an unsupported effort would crash the next turn. So only
-  // then do we ask, clamp effort, and restart.
+  // Every model switch goes through a confirm dialog: switching discards the
+  // model-scoped prompt cache, so the next turn reprocesses the conversation at
+  // the new model's rate (a one-time cost the user should opt into). The plan
+  // also decides how it lands — a compatible switch is a live `set_model`; one
+  // that resets effort (there's no live `set_effort`) needs a restart.
   const handleModelChange = useCallback(
     (model: string) => {
       if (!activeSession || model === activeSession.model) return;
       const plan = planModelSwitch(caps, model, activeSession.effort, activeSession.flags);
-      if (plan.hasConflict) {
-        setPendingSwitch({ sid: activeSession.thinkrailSid, model, plan });
-      } else {
-        updateConfig(activeSession.thinkrailSid, { model });
-      }
+      setPendingSwitch({ sid: activeSession.thinkrailSid, model, plan });
     },
-    [activeSession, caps, updateConfig],
+    [activeSession, caps],
   );
 
   const confirmModelSwitch = useCallback(async () => {
@@ -196,8 +192,14 @@ export function SessionPanel({
     const { sid, model, plan } = pendingSwitch;
     setPendingSwitch(null);
     try {
-      await updateConfig(sid, { model, effort: plan.clampedEffort });
-      await restartSession(sid);
+      if (plan.hasConflict) {
+        // Effort/1M conflict: relaunch the SDK client with the clamped settings.
+        await updateConfig(sid, { model, effort: plan.clampedEffort });
+        await restartSession(sid);
+      } else {
+        // Compatible: live `set_model`, no restart — effort is left untouched.
+        await updateConfig(sid, { model });
+      }
     } catch (err) {
       useNotificationStore.getState().addToast({
         eventType: "error",
@@ -207,6 +209,10 @@ export function SessionPanel({
       });
     }
   }, [pendingSwitch, updateConfig, restartSession]);
+
+  const switchPrompt = pendingSwitch
+    ? describeModelSwitch(pendingSwitch.plan, modelLabel(caps, pendingSwitch.model))
+    : null;
 
   const handleSwitchFile = useCallback(
     (path: string) => {
@@ -404,23 +410,21 @@ export function SessionPanel({
         open={pendingSwitch !== null}
         title="Switch model?"
         message={
-          pendingSwitch && (
+          pendingSwitch && switchPrompt && (
             <>
-              <b>{modelLabel(caps, pendingSwitch.model)}</b> doesn't support the
-              current session settings:
-              <ul className="confirm-modal__list">
-                {pendingSwitch.plan.effortReset && (
-                  <li>effort will reset to <b>auto</b></li>
-                )}
-                {pendingSwitch.plan.contextCapped && (
-                  <li>context window will be capped at <b>200K</b> (no 1M)</li>
-                )}
-              </ul>
-              Switching restarts the session with the new settings. Proceed?
+              Switch to <b>{modelLabel(caps, pendingSwitch.model)}</b>?
+              {switchPrompt.consequences.length > 0 && (
+                <ul className="confirm-modal__list">
+                  {switchPrompt.consequences.map((c) => (
+                    <li key={c}>{c}</li>
+                  ))}
+                </ul>
+              )}
+              <p className="confirm-modal__note">{switchPrompt.costNote}</p>
             </>
           )
         }
-        confirmLabel="Switch & restart"
+        confirmLabel={switchPrompt?.confirmLabel ?? "Switch"}
         onConfirm={confirmModelSwitch}
         onCancel={() => setPendingSwitch(null)}
       />

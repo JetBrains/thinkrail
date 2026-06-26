@@ -247,6 +247,12 @@ export function SessionStatusLine({
   const canInterrupt = streaming;
   const { icon: statusIcon, label: statusLabel, cssClass: statusClass } = statusInfo(status);
 
+  // Lock the model picker while a turn is in flight (Running/Waiting). A switch
+  // that needs a restart can't proceed until the turn drains, which would block
+  // — and time out — `session/restart`. Restricting switches to idle keeps the
+  // restart instant. Permission mode (live) and effort (staged) stay usable.
+  const modelLocked = disabled || streaming;
+
   const activeOption = modelOptions.find((o) => o.value === model);
 
   // ── Dropdowns (model, permission, status) ──
@@ -291,11 +297,18 @@ export function SessionStatusLine({
   return (
     <div className="session-status-line">
       {/* ── Model selector ── */}
-      <div className="ssl-selector" ref={modelDd.ref}>
+      {/* Tooltip sits on the wrapper, not the button: a disabled <button>
+          swallows its own `title`, so the hover reason must live on the
+          (non-disabled) wrapper, with the button made pointer-transparent. */}
+      <div
+        className={`ssl-selector${streaming && !disabled ? " ssl-selector-locked" : ""}`}
+        ref={modelDd.ref}
+        title={streaming && !disabled ? "Model is locked while a turn is running — finish or stop it to switch." : undefined}
+      >
         <button
-          className={`ssl-selector-btn${disabled ? " ssl-selector-disabled" : ""}`}
-          onClick={() => !disabled && modelDd.toggle()}
-          disabled={disabled}
+          className={`ssl-selector-btn${modelLocked ? " ssl-selector-disabled" : ""}`}
+          onClick={() => !modelLocked && modelDd.toggle()}
+          disabled={modelLocked}
         >
           {activeOption?.label ?? model}
           <ChevronDown />

@@ -77,10 +77,16 @@ class SessionDefaults(BaseModel):
 # ── Persistence helpers ────────────────────────────────────────────────
 
 
-def _cold_start_defaults(declared_flags: Sequence[RuntimeFlag]) -> SessionDefaults:
+def _cold_start_defaults(
+    declared_flags: Sequence[RuntimeFlag], default_model: str | None = None
+) -> SessionDefaults:
     """The record written on first access: field defaults, plus each
-    runtime-declared flag at its declared default."""
-    return SessionDefaults(flags={f.key: f.default for f in declared_flags})
+    runtime-declared flag at its declared default. ``default_model`` overrides
+    the static model default when supplied (sourced from the live catalog)."""
+    kwargs: dict[str, Any] = {"flags": {f.key: f.default for f in declared_flags}}
+    if default_model:
+        kwargs["model"] = default_model
+    return SessionDefaults(**kwargs)
 
 
 async def save_session_defaults(
@@ -92,7 +98,9 @@ async def save_session_defaults(
 
 
 async def load_session_defaults(
-    app_store: AppStore, declared_flags: Sequence[RuntimeFlag] = ()
+    app_store: AppStore,
+    declared_flags: Sequence[RuntimeFlag] = (),
+    default_model: str | None = None,
 ) -> SessionDefaults:
     """Return the stored record, seeding it once on cold start.
 
@@ -111,4 +119,6 @@ async def load_session_defaults(
                 SESSION_DEFAULTS_KEY,
                 exc_info=True,
             )
-    return await save_session_defaults(app_store, _cold_start_defaults(declared_flags))
+    return await save_session_defaults(
+        app_store, _cold_start_defaults(declared_flags, default_model)
+    )

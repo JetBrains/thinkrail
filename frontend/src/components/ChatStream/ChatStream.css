@@ -1014,6 +1014,10 @@
 .ssl-selector-btn:hover .ssl-chevron { opacity: 0.85; }
 .ssl-status-icon { vertical-align: -2px; margin-right: 2px; opacity: 0.85; }
 .ssl-selector-disabled { opacity: 0.5; cursor: not-allowed; }
+/* Locked-during-turn model picker: the disabled button is made pointer-transparent
+   so hover lands on the wrapper, which carries the explanatory `title` tooltip. */
+.ssl-selector-locked { cursor: not-allowed; }
+.ssl-selector-locked .ssl-selector-btn { pointer-events: none; }
 .ssl-chip {
   background: transparent; border: 1px solid var(--border);
   color: var(--muted); font-family: var(--font); font-size: var(--font-md);
