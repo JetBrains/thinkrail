@@ -1,4 +1,19 @@
-import { abortSession, createSession, promptSession, removeSession } from "../agent";
+import type { ExtUiResponse, ImageContent, Model, ThinkingLevel } from "@thinkrail-pi/contracts";
+import {
+	abortSession,
+	compactSession,
+	createSession,
+	followUpSession,
+	getSessionCommands,
+	getSessionStats,
+	listAvailableModels,
+	promptSession,
+	removeSession,
+	resolveExtUi,
+	setSessionModel,
+	setSessionThinkingLevel,
+	steerSession,
+} from "../agent";
 import { selectDirectory } from "../dialog";
 import { readDir, readFile } from "../fs";
 import { gitDiff, gitStatus } from "../git";
@@ -62,8 +77,18 @@ const handlers: Record<string, Handler> = {
 		return createSession({ cwd: ws.worktreePath });
 	},
 	"session.prompt": async (params) => {
-		const p = params as { sessionId: string; text: string };
-		await promptSession(p.sessionId, p.text);
+		const p = params as { sessionId: string; text: string; images?: ImageContent[] };
+		await promptSession(p.sessionId, p.text, p.images);
+		return { ok: true } as const;
+	},
+	"session.steer": async (params) => {
+		const p = params as { sessionId: string; text: string; images?: ImageContent[] };
+		await steerSession(p.sessionId, p.text, p.images);
+		return { ok: true } as const;
+	},
+	"session.followUp": async (params) => {
+		const p = params as { sessionId: string; text: string; images?: ImageContent[] };
+		await followUpSession(p.sessionId, p.text, p.images);
 		return { ok: true } as const;
 	},
 	"session.abort": async (params) => {
@@ -74,6 +99,29 @@ const handlers: Record<string, Handler> = {
 		removeSession((params as { sessionId: string }).sessionId);
 		return { ok: true } as const;
 	},
+	"session.setModel": async (params) => {
+		const p = params as { sessionId: string; model: Model<string> };
+		await setSessionModel(p.sessionId, p.model);
+		return { ok: true } as const;
+	},
+	"session.setThinkingLevel": (params) => {
+		const p = params as { sessionId: string; level: ThinkingLevel };
+		setSessionThinkingLevel(p.sessionId, p.level);
+		return { ok: true } as const;
+	},
+	"session.compact": (params) => {
+		const p = params as { sessionId: string; instructions?: string };
+		compactSession(p.sessionId, p.instructions);
+		return { ok: true } as const;
+	},
+	"session.getStats": (params) => getSessionStats((params as { sessionId: string }).sessionId),
+	"session.getCommands": (params) =>
+		getSessionCommands((params as { sessionId: string }).sessionId),
+	"session.extUiReply": (params) => {
+		resolveExtUi((params as { response: ExtUiResponse }).response);
+		return { ok: true } as const;
+	},
+	"model.list": () => listAvailableModels(),
 };
 
 /** Route a WS request to its handler. Throws on unknown method (→ a `{ ok:false }` WS response). */

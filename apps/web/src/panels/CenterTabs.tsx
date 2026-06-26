@@ -24,10 +24,10 @@ export function CenterTabs() {
 	const startChat = async () => {
 		if (!activeWorkspaceId) return;
 		try {
-			const { sessionId } = await getTransport().request("session.create", {
+			const { sessionId, model, thinkingLevel } = await getTransport().request("session.create", {
 				workspaceId: activeWorkspaceId,
 			});
-			useAppStore.getState().openChatSession(activeWorkspaceId, sessionId);
+			useAppStore.getState().openChatSession(activeWorkspaceId, sessionId, model, thinkingLevel);
 		} catch {
 			// Ignored until the error-handling pass.
 		}

@@ -39,12 +39,19 @@ runtime exports being the WS method/channel constants and the protocol version. 
     `pi-coding-agent`, so it's **mirrored** here (the `agent_end.willRetry` + `queue_update` /
     `compaction_*` / `auto_retry_*` / `session_info_changed` / `thinking_level_changed` members);
   - **`SessionEventPayload`** (`{ sessionId, event: PiEvent }`) — the `pi.event` push frame.
+  - the cheap-win mirrors (declared in the Node-only `pi-coding-agent`): **`SessionStats`** + **`ContextUsage`**
+    (tokens/cost/context bar — display only) and **`SlashCommandInfo`** + **`SlashCommandSourceInfo`** (the
+    skill catalog).
+  - the **extension-UI frames** **`ExtUiRequest`** / **`ExtUiResponse`** — our wire shape for pi's in-process
+    `uiContext` calls (`select`/`confirm`/`input`/`editor` round-trip; `notify`/`setStatus`/`setWidget`/
+    `setTitle`/`dismiss` are fire-and-forget), carried on the `pi.extensionUi` channel.
 - **domain.ts** — app entities: `Project` (git repo + unique `slug`), `Workspace` (git worktree), `Session` (chat tab),
   `FileNode` (file-tree node), `TabStatus`, `Git*`/diff types.
 - **wsProtocol.ts** — `WS_METHODS` (`project.*` / `workspace.*` / `fs.*` / `git.*` / `terminal.*` /
-  `session.*` — `create`/`prompt`/`abort`/`dispose`), `WS_CHANNELS` (`server.welcome` / `pi.event` /
-  `pi.extensionUi` / `terminal.data`), the `WsMethodMap` typed request/result map + `WsParams`/`WsResult`
-  helpers, and `PROTOCOL_VERSION`.
+  `model.list` / `session.*` — `create`/`prompt`/`steer`/`followUp`/`abort`/`dispose`/`setModel`/
+  `setThinkingLevel`/`compact`/`getStats`/`getCommands`/`extUiReply`), `WS_CHANNELS` (`server.welcome` /
+  `pi.event` / `pi.extensionUi` / `terminal.data`), the `WsMethodMap` typed request/result map +
+  `WsParams`/`WsResult` helpers, and `PROTOCOL_VERSION`.
 
 ## Get right
 

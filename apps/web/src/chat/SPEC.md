@@ -25,12 +25,19 @@ a future `packages/chat-ui`).
     (dispatch by turn kind); `AssistantTurn` (walks an `AssistantMessage`'s `content` blocks **in order** —
     `text`→`Markdown`, `thinking`→thinking block, `toolCall`→`ToolCard` paired with its result);
     `UserTurn`; `SystemTurn`; `Markdown` (react-markdown + remark-gfm + shiki code blocks); `ToolCard`.
+  - **Composer + cheap-win primitives** (M12, also props-driven, **no store/transport**): `Composer`
+    (send/steer/followUp/abort, `@`-mention completion, `/` slash-command menu, image paste/drop);
+    `ModelSelector` + `ThinkingSelector` (cheap win #1); `SessionStatsBar` (cheap win #3); `ChatHeader`
+    (arranges them); `ExtUiDialog` (renders pi's `select`/`confirm`/`input`/`editor` from the
+    `pi.extensionUi` bridge).
   - **Tool-renderer registry** (`toolRegistry.tsx`) — `registerToolRenderer` / `getToolRenderer` /
     `DefaultToolRenderer` + `ToolRenderer` / `ToolRenderProps` / `toText`. **THE extension point.**
   - **View types** (`types.ts`) — `ChatTurn` (user/assistant are pi `UserMessage`/`AssistantMessage`;
-    `system` is a web-local notice) + `ToolResultState`.
-  - **App integration** — `ChatView` (react-virtuoso list + minimal composer); the **only** file here
-    that touches `store`/`transport`.
+    `system` is a web-local notice) + `ToolResultState` + `ExtUiDialogRequest` (the reply-needing
+    `ExtUiRequest` subset the store's `pendingExtUi` is typed by).
+  - **App integration** — `ChatView` (react-virtuoso list + `ChatHeader` + `Composer` + `ExtUiDialog`,
+    wiring store + transport: model list / stats / commands / mentions / dialog replies); the **only**
+    file here that touches `store`/`transport`.
 - **Public surface:** the registry API (`toolRegistry`), the renderers, the view types, and `ChatView`
   (lazy-mounted by `panels/CenterTabs`). **No `index.ts` barrel** — chat pulls **shiki**, so per the
   code-splitting exception (as with `panels` / `components/ui`) imports stay **per-file**: `CenterTabs`

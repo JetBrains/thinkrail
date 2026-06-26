@@ -4,15 +4,25 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import { AuthStorage, ModelRegistry, SessionManager } from "@earendil-works/pi-coding-agent";
+import type { ExtUiRequest } from "@thinkrail-pi/contracts";
 import {
 	createSession,
 	disposeAllSessions,
+	getSessionCommands,
+	getSessionStats,
+	listAvailableModels,
 	promptSession,
 	removeSession,
 	setSessionManagerFactory,
 	setSessionPublisher,
 } from "./agentSessionManager";
 import { configurePiRuntime } from "./piRuntime";
+import {
+	cancelExtUiForSession,
+	createWebUiContext,
+	resolveExtUi,
+	setExtUiPublisher,
+} from "./webUiContext";
 
 /** A complete model definition for `registerProvider` (faux defaults are looser). */
 function modelDef(id: string) {
@@ -107,4 +117,60 @@ test("two sessions in two worktrees stream independently; disposing one leaves t
 
 	expect(seen(b.sessionId)).toContain("BRAVO_AGAIN");
 	expect((events.get(a.sessionId) ?? []).length).toBe(aEventsBefore);
+});
+
+test("listAvailableModels returns the configured (faux) models", () => {
+	const ids = listAvailableModels().map((m) => m.id);
+	expect(ids).toContain("fauxa");
+	expect(ids).toContain("fauxb");
+});
+
+test("getSessionStats + getSessionCommands read live session info (cheap wins #3, #2)", async () => {
+	fauxA.setResponses([fauxAssistantMessage("STATS_REPLY")]);
+	// biome-ignore lint/suspicious/noExplicitAny: faux Model<string> satisfies the SDK's Model<any>
+	const s = await createSession({ cwd: tmpCwd("trpi-stats-"), model: fauxA.getModel() as any });
+	await promptSession(s.sessionId, "count me");
+
+	const stats = getSessionStats(s.sessionId);
+	expect(stats.sessionId).toBe(s.sessionId);
+	expect(stats.totalMessages).toBeGreaterThan(0);
+	expect(typeof stats.cost).toBe("number");
+	expect(typeof stats.tokens.total).toBe("number");
+
+	// No extensions/skills in an in-memory faux session, but the catalog read must still succeed.
+	expect(Array.isArray(getSessionCommands(s.sessionId))).toBe(true);
+	removeSession(s.sessionId);
+});
+
+test("extension-UI bridge: confirm round-trips, a cancel resolves undefined, dispose dismisses", async () => {
+	const frames: ExtUiRequest[] = [];
+	setExtUiPublisher((f) => frames.push(f));
+	const lastFrame = (): ExtUiRequest => {
+		const f = frames.at(-1);
+		if (!f) throw new Error("expected an ext-ui frame to have been pushed");
+		return f;
+	};
+	const ui = createWebUiContext("sess-extui");
+
+	// confirm → the browser's `true` reply resolves the awaiting promise.
+	const confirmP = ui.confirm("Proceed?", "Apply the change?");
+	const confirmFrame = lastFrame();
+	expect(confirmFrame.kind).toBe("confirm");
+	expect(confirmFrame.sessionId).toBe("sess-extui");
+	resolveExtUi({ id: confirmFrame.id, value: true });
+	expect(await confirmP).toBe(true);
+
+	// select → a null reply (cancelled) maps back to undefined.
+	const selectP = ui.select("Pick one", ["a", "b"]);
+	resolveExtUi({ id: lastFrame().id, value: null });
+	expect(await selectP).toBeUndefined();
+
+	// A dialog still awaiting when its session is disposed is settled (undefined) and dismissed in the UI.
+	const inputP = ui.input("Name?");
+	const inputFrame = lastFrame();
+	cancelExtUiForSession("sess-extui");
+	expect(await inputP).toBeUndefined();
+	expect(frames.some((f) => f.kind === "dismiss" && f.id === inputFrame.id)).toBe(true);
+
+	setExtUiPublisher(() => {});
 });

@@ -1,4 +1,10 @@
-import type { AssistantMessage, UserMessage } from "@thinkrail-pi/contracts";
+import type { AssistantMessage, ExtUiRequest, UserMessage } from "@thinkrail-pi/contracts";
+
+/** The extension-UI frames that await a browser reply (the ones `ExtUiDialog` renders). */
+export type ExtUiDialogRequest = Extract<
+	ExtUiRequest,
+	{ kind: "select" | "confirm" | "input" | "editor" }
+>;
 
 /**
  * A rendered chat turn. User/assistant turns are pi's **canonical** message objects (so these renderers

@@ -55,3 +55,69 @@ export interface SessionEventPayload {
 	sessionId: string;
 	event: PiEvent;
 }
+
+// The shapes below are declared in the Node-only `pi-coding-agent` (it pulls node:fs), so they're
+// MIRRORED here type-only for the wire. Keep in sync with @earendil-works/pi-coding-agent@0.80.2.
+
+/** Context-window usage for the active model. `tokens`/`percent` are null when unknown (post-compaction). */
+export interface ContextUsage {
+	tokens: number | null;
+	contextWindow: number;
+	percent: number | null;
+}
+
+/** Per-session token/cost stats — display only; `pi` owns the numbers, the host never recomputes them. */
+export interface SessionStats {
+	sessionId: string;
+	totalMessages: number;
+	tokens: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number };
+	cost: number;
+	contextUsage?: ContextUsage;
+}
+
+export type SlashCommandSource = "extension" | "prompt" | "skill";
+
+/** Where a slash command/skill came from (mirrors pi's `SourceInfo`). */
+export interface SlashCommandSourceInfo {
+	path: string;
+	source: string;
+	scope: "user" | "project" | "temporary";
+	origin: "package" | "top-level";
+	baseDir?: string;
+}
+
+/** A registered slash command / skill the agent can invoke (the skill catalog, cheap win #2). */
+export interface SlashCommandInfo {
+	name: string;
+	description?: string;
+	source: SlashCommandSource;
+	sourceInfo: SlashCommandSourceInfo;
+}
+
+// Extension-UI bridge frames — OUR wire shape for pi's in-process `uiContext` calls. The server pushes an
+// `ExtUiRequest` on `pi.extensionUi`; for dialog kinds the browser replies with `ExtUiResponse`
+// (correlated by `id`), which resolves the awaiting `uiContext` promise. The fire-and-forget kinds
+// (`notify`/`setStatus`/`setWidget`/`setTitle`/`dismiss`) expect no reply.
+export type ExtUiRequest =
+	| { id: string; sessionId: string; kind: "select"; title: string; options: string[] }
+	| { id: string; sessionId: string; kind: "confirm"; title: string; message: string }
+	| { id: string; sessionId: string; kind: "input"; title: string; placeholder?: string }
+	| { id: string; sessionId: string; kind: "editor"; title: string; prefill?: string }
+	| {
+			id: string;
+			sessionId: string;
+			kind: "notify";
+			message: string;
+			level: "info" | "warning" | "error";
+	  }
+	| { id: string; sessionId: string; kind: "setStatus"; key: string; text: string | null }
+	| { id: string; sessionId: string; kind: "setWidget"; key: string; content: string[] | null }
+	| { id: string; sessionId: string; kind: "setTitle"; title: string }
+	/** Server-initiated: close an in-flight dialog (the agent aborted / the dialog timed out). */
+	| { id: string; sessionId: string; kind: "dismiss" };
+
+/** A dialog reply. `select`/`input`/`editor` → string (null = cancelled); `confirm` → boolean. */
+export interface ExtUiResponse {
+	id: string;
+	value: string | boolean | null;
+}

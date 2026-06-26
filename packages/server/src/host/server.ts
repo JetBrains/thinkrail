@@ -1,6 +1,6 @@
 import { join, normalize } from "node:path";
 import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail-pi/contracts";
-import { setSessionPublisher } from "../agent";
+import { setExtUiPublisher, setSessionPublisher } from "../agent";
 import { listProjects } from "../projects";
 import { closeAllTerminals, setTerminalPublisher } from "../terminal";
 import { handleRequest } from "./handlers";
@@ -41,6 +41,7 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 			open(ws) {
 				ws.subscribe(WS_CHANNELS.terminalData);
 				ws.subscribe(WS_CHANNELS.piEvent);
+				ws.subscribe(WS_CHANNELS.piExtensionUi);
 				ws.send(
 					JSON.stringify({
 						channel: WS_CHANNELS.serverWelcome,
@@ -78,6 +79,14 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		server.publish(
 			WS_CHANNELS.piEvent,
 			JSON.stringify({ channel: WS_CHANNELS.piEvent, data: payload }),
+		);
+	});
+
+	// Push extension-UI dialog requests (the in-process `uiContext` bridge) over the pi.extensionUi channel.
+	setExtUiPublisher((request) => {
+		server.publish(
+			WS_CHANNELS.piExtensionUi,
+			JSON.stringify({ channel: WS_CHANNELS.piExtensionUi, data: request }),
 		);
 	});
 

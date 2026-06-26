@@ -1,6 +1,14 @@
 // The browser↔host API — ours, not pi's. Methods are request/response; channels are server→client push.
 
 import type { DiffStats, FileNode, GitStatus, Project, Workspace } from "./domain";
+import type {
+	ExtUiResponse,
+	ImageContent,
+	Model,
+	SessionStats,
+	SlashCommandInfo,
+	ThinkingLevel,
+} from "./piProtocol";
 
 /** Bumped on any breaking wire change; sent in `server.welcome` so a stale UI can detect host drift. */
 export const PROTOCOL_VERSION = 1;
@@ -23,11 +31,20 @@ export const WS_METHODS = {
 	terminalResize: "terminal.resize",
 	terminalClose: "terminal.close",
 	dialogSelectDirectory: "dialog.selectDirectory",
-	// session.* — the pi engine (M10). Model/thinking selection joins at M12 (the Composer).
+	// session.* — the pi engine (M10); the Composer + cheap wins (model/thinking/stats/skills) join at M12.
 	sessionCreate: "session.create",
 	sessionPrompt: "session.prompt",
+	sessionSteer: "session.steer",
+	sessionFollowUp: "session.followUp",
 	sessionAbort: "session.abort",
 	sessionDispose: "session.dispose",
+	sessionSetModel: "session.setModel",
+	sessionSetThinkingLevel: "session.setThinkingLevel",
+	sessionCompact: "session.compact",
+	sessionGetStats: "session.getStats",
+	sessionGetCommands: "session.getCommands",
+	sessionExtUiReply: "session.extUiReply",
+	modelList: "model.list",
 } as const;
 
 /** Server→client push channels. */
@@ -64,10 +81,32 @@ export interface WsMethodMap {
 	"terminal.resize": { params: { id: string; cols: number; rows: number }; result: Ack };
 	"terminal.close": { params: { id: string }; result: Ack };
 	"dialog.selectDirectory": { params: Record<string, never>; result: { path: string | null } };
-	"session.create": { params: { workspaceId: string }; result: { sessionId: string } };
-	"session.prompt": { params: { sessionId: string; text: string }; result: Ack };
+	"session.create": {
+		params: { workspaceId: string };
+		// The resolved model/thinking the new session starts with (pi picks defaults from auth + settings).
+		result: { sessionId: string; model: Model<string> | null; thinkingLevel: ThinkingLevel };
+	};
+	"session.prompt": {
+		params: { sessionId: string; text: string; images?: ImageContent[] };
+		result: Ack;
+	};
+	"session.steer": {
+		params: { sessionId: string; text: string; images?: ImageContent[] };
+		result: Ack;
+	};
+	"session.followUp": {
+		params: { sessionId: string; text: string; images?: ImageContent[] };
+		result: Ack;
+	};
 	"session.abort": { params: { sessionId: string }; result: Ack };
 	"session.dispose": { params: { sessionId: string }; result: Ack };
+	"session.setModel": { params: { sessionId: string; model: Model<string> }; result: Ack };
+	"session.setThinkingLevel": { params: { sessionId: string; level: ThinkingLevel }; result: Ack };
+	"session.compact": { params: { sessionId: string; instructions?: string }; result: Ack };
+	"session.getStats": { params: { sessionId: string }; result: SessionStats };
+	"session.getCommands": { params: { sessionId: string }; result: SlashCommandInfo[] };
+	"session.extUiReply": { params: { response: ExtUiResponse }; result: Ack };
+	"model.list": { params: Record<string, never>; result: Model<string>[] };
 }
 
 export type WsMethodName = keyof WsMethodMap;

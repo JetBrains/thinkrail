@@ -1,6 +1,15 @@
-import type { PiEvent, Project, Workspace } from "@thinkrail-pi/contracts";
+import type {
+	ExtUiRequest,
+	Model,
+	PiEvent,
+	Project,
+	SessionStats,
+	SlashCommandInfo,
+	ThinkingLevel,
+	Workspace,
+} from "@thinkrail-pi/contracts";
 import { create } from "zustand";
-import type { ChatTurn, ToolResultState } from "../chat/types";
+import type { ChatTurn, ExtUiDialogRequest, ToolResultState } from "../chat/types";
 import type { ConnectionStatus } from "../transport";
 
 /** A center tab. File tabs (Monaco) and chat tabs share the strip, discriminated by `kind`. */
@@ -41,7 +50,7 @@ interface AppState {
 	/** Terminals are workspace-scoped too; their instances stay mounted (hidden) to preserve buffers. */
 	terminalsByWorkspace: Record<string, TerminalTab[]>;
 	activeTerminalByWorkspace: Record<string, string | null>;
-	/** Chat is a single active session in M11 (global state); it moves into per-session runtimes at M13. */
+	/** Chat is a single active session in M11/M12 (global state); it moves into per-session runtimes at M13. */
 	chatSessionId: string | null;
 	/** Conversation as pi-canonical turns (user/assistant messages + web-local system notices). */
 	turns: ChatTurn[];
@@ -49,6 +58,24 @@ interface AppState {
 	toolResults: Record<string, ToolResultState>;
 	currentAssistantId: string | null;
 	isStreaming: boolean;
+	/** Models with configured auth (cheap win #1) — fetched once, shared by every chat's picker. */
+	models: Model<string>[];
+	/** The active chat's model + thinking level (display only; `pi` owns them). */
+	currentModel: Model<string> | null;
+	thinkingLevel: ThinkingLevel;
+	/** The active chat's token/cost stats (cheap win #3), refreshed after each turn. */
+	stats: SessionStats | null;
+	/** The active chat's slash commands / skills (cheap win #2). */
+	commands: SlashCommandInfo[];
+	/** Per-session composer draft, so switching tabs (M13) preserves unsent text. */
+	chatDrafts: Record<string, string>;
+	/** The extension-UI dialog awaiting a reply (one shown at a time; overlapping dialogs queue behind it). */
+	pendingExtUi: ExtUiDialogRequest | null;
+	/** Dialogs that arrived while one was already open — shown FIFO so none orphans its server promise. */
+	extUiQueue: ExtUiDialogRequest[];
+	/** Extension status-bar entries / widgets (the fire-and-forget `setStatus`/`setWidget` calls). */
+	extUiStatus: Record<string, string>;
+	extUiWidget: Record<string, string[]>;
 	setStatus: (status: ConnectionStatus) => void;
 	setWelcome: (protocolVersion: number) => void;
 	setProjects: (projects: Project[]) => void;
@@ -62,9 +89,24 @@ interface AppState {
 	addTerminal: (workspaceId: string) => void;
 	closeTerminalTab: (workspaceId: string, clientId: string) => void;
 	setActiveTerminalTab: (workspaceId: string, clientId: string) => void;
-	openChatSession: (workspaceId: string, sessionId: string) => void;
+	openChatSession: (
+		workspaceId: string,
+		sessionId: string,
+		model: Model<string> | null,
+		thinkingLevel: ThinkingLevel,
+	) => void;
 	appendUserMessage: (text: string) => void;
 	handlePiEvent: (event: PiEvent, sessionId: string) => void;
+	setModels: (models: Model<string>[]) => void;
+	setCurrentModel: (model: Model<string>) => void;
+	setThinkingLevel: (level: ThinkingLevel) => void;
+	setStats: (stats: SessionStats) => void;
+	setCommands: (commands: SlashCommandInfo[]) => void;
+	setChatDraft: (sessionId: string, text: string) => void;
+	/** Reply to the active extension-UI dialog (clears it; the transport send is `ChatView`'s job). */
+	clearPendingExtUi: (id: string) => void;
+	/** Fold an inbound `pi.extensionUi` frame into the store (dialogs, notices, status/widget, title). */
+	applyExtUi: (request: ExtUiRequest) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -83,6 +125,16 @@ export const useAppStore = create<AppState>((set) => ({
 	toolResults: {},
 	currentAssistantId: null,
 	isStreaming: false,
+	models: [],
+	currentModel: null,
+	thinkingLevel: "medium",
+	stats: null,
+	commands: [],
+	chatDrafts: {},
+	pendingExtUi: null,
+	extUiQueue: [],
+	extUiStatus: {},
+	extUiWidget: {},
 	setStatus: (status) => set({ status }),
 	setWelcome: (protocolVersion) => set({ protocolVersion }),
 	setProjects: (projects) => set({ projects }),
@@ -165,7 +217,7 @@ export const useAppStore = create<AppState>((set) => ({
 		set((s) => ({
 			activeTerminalByWorkspace: { ...s.activeTerminalByWorkspace, [workspaceId]: clientId },
 		})),
-	openChatSession: (workspaceId, sessionId) =>
+	openChatSession: (workspaceId, sessionId, model, thinkingLevel) =>
 		set((s) => {
 			const id = `${workspaceId}:${sessionId}`;
 			const tab: ChatTab = { kind: "chat", id, workspaceId, name: "Chat", sessionId };
@@ -180,6 +232,14 @@ export const useAppStore = create<AppState>((set) => ({
 				toolResults: {},
 				currentAssistantId: null,
 				isStreaming: false,
+				currentModel: model,
+				thinkingLevel,
+				stats: null,
+				commands: [],
+				pendingExtUi: null,
+				extUiQueue: [],
+				extUiStatus: {},
+				extUiWidget: {},
 			};
 		}),
 	appendUserMessage: (text) =>
@@ -269,6 +329,77 @@ export const useAppStore = create<AppState>((set) => ({
 							},
 						],
 					};
+				case "thinking_level_changed":
+					return { thinkingLevel: event.level };
+				default:
+					return {};
+			}
+		}),
+	setModels: (models) => set({ models }),
+	setCurrentModel: (currentModel) => set({ currentModel }),
+	setThinkingLevel: (thinkingLevel) => set({ thinkingLevel }),
+	setStats: (stats) => set({ stats }),
+	setCommands: (commands) => set({ commands }),
+	setChatDraft: (sessionId, text) =>
+		set((s) => ({ chatDrafts: { ...s.chatDrafts, [sessionId]: text } })),
+	clearPendingExtUi: (id) =>
+		set((s) => {
+			if (s.pendingExtUi?.id !== id) return {};
+			const [next, ...rest] = s.extUiQueue;
+			return { pendingExtUi: next ?? null, extUiQueue: rest };
+		}),
+	// Inbound pi.extensionUi frames. M11/M12 render only the active chat, so dialogs/notices/status/widget
+	// apply to `chatSessionId`; per-session routing arrives at M13.
+	applyExtUi: (request) =>
+		set((s): Partial<AppState> => {
+			// `dismiss` (server-initiated close) drops the matching dialog from the head or the queue.
+			if (request.kind === "dismiss") {
+				if (s.pendingExtUi?.id === request.id) {
+					const [next, ...rest] = s.extUiQueue;
+					return { pendingExtUi: next ?? null, extUiQueue: rest };
+				}
+				if (s.extUiQueue.some((q) => q.id === request.id))
+					return { extUiQueue: s.extUiQueue.filter((q) => q.id !== request.id) };
+				return {};
+			}
+			if (request.sessionId !== s.chatSessionId) return {};
+			switch (request.kind) {
+				case "select":
+				case "confirm":
+				case "input":
+				case "editor":
+					// Show it now, or queue behind the open one so its server promise still gets answered.
+					return s.pendingExtUi
+						? { extUiQueue: [...s.extUiQueue, request] }
+						: { pendingExtUi: request };
+				case "notify":
+					return {
+						turns: [...s.turns, { kind: "system", id: crypto.randomUUID(), text: request.message }],
+					};
+				case "setStatus": {
+					if (request.text === null) {
+						const { [request.key]: _drop, ...extUiStatus } = s.extUiStatus;
+						return { extUiStatus };
+					}
+					return { extUiStatus: { ...s.extUiStatus, [request.key]: request.text } };
+				}
+				case "setWidget": {
+					if (request.content === null) {
+						const { [request.key]: _drop, ...extUiWidget } = s.extUiWidget;
+						return { extUiWidget };
+					}
+					return { extUiWidget: { ...s.extUiWidget, [request.key]: request.content } };
+				}
+				case "setTitle": {
+					const wsId = s.activeWorkspaceId;
+					if (!wsId) return {};
+					const tabs = (s.tabsByWorkspace[wsId] ?? []).map((t) =>
+						t.kind === "chat" && t.sessionId === request.sessionId
+							? { ...t, name: request.title }
+							: t,
+					);
+					return { tabsByWorkspace: { ...s.tabsByWorkspace, [wsId]: tabs } };
+				}
 				default:
 					return {};
 			}
