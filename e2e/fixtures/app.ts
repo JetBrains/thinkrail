@@ -41,6 +41,30 @@ export async function openFixtureProject(page: Page): Promise<void> {
 	await expect(page.getByTestId("project-item").first()).toBeVisible();
 }
 
+/**
+ * Open the fixture project, create a workspace, and start a chat — leaving the composer ready. Creation
+ * is retried: when the `@agent` suite shares one host under load, an `add-workspace` click can
+ * occasionally not register, so we re-click until a workspace becomes active (re-clicking only while none
+ * exists, so we never spawn duplicates). Use this for any chat-driven spec.
+ */
+export async function openWorkspaceChat(page: Page): Promise<void> {
+	await openFixtureProject(page);
+	await expect(async () => {
+		if ((await page.getByTestId("workspace-item").count()) === 0) {
+			await page.getByTestId("add-workspace").first().click();
+		}
+		await expect(page.locator('[data-testid="workspace-item"][data-active="true"]')).toHaveCount(
+			1,
+			{
+				timeout: 5_000,
+			},
+		);
+	}).toPass({ timeout: 30_000 });
+	await page.getByTestId("start-chat").click();
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
+	await expect(page.getByTestId("chat-input")).toBeVisible();
+}
+
 /** The terminal layer currently shown (exactly one is `data-visible="true"` at a time). */
 export function visibleTerminal(page: Page): Locator {
 	return page.locator('[data-testid="terminal-instance"][data-visible="true"]');

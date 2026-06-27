@@ -35,7 +35,9 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   chat is never clobbered. The
   pure **`reduceSessionEvent`** folds a `PiEvent` into a runtime (Appendix B); **`handlePiEvent(event,
   sessionId)`** and **`applyExtUi(request)`** route by id via the `withRuntime` helper (a no-op for an
-  unknown session). The host-wide **`models`** list stays global (not per session). The `EditorTab`
+  unknown session). The host-wide **`models`** list stays global (not per session). The transient **`changesRequest`** +
+  **`requestChangesView(workspaceId, path)`** are a UI deep-link intent (a chat turn-divider asking the
+  right panel to surface a file's diff); the panels watch it, scoped by workspace. The `EditorTab`
   (`FileTab` | `ChatTab`) + `TerminalTab` + `ClosedChat` + `SessionRuntime` types. (Chat *render* types +
   renderers live in the `chat` module.)
 - **Public surface (barrel):** `useAppStore`, `EditorTab` (`FileTab`/`ChatTab`), `TerminalTab`, `ClosedChat`,

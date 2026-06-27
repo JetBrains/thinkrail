@@ -23,8 +23,11 @@ a future `packages/chat-ui`).
 - **Owns:**
   - **Presentational renderers** (props-driven, **no store/transport** → reusable): `ChatTurnView`
     (dispatch by turn kind); `AssistantTurn` (walks an `AssistantMessage`'s `content` blocks **in order** —
-    `text`→`Markdown`, `thinking`→thinking block, `toolCall`→`ToolCard` paired with its result);
-    `UserTurn`; `SystemTurn`; `Markdown` (react-markdown + remark-gfm + shiki code blocks); `ToolCard`.
+    `text`→`Markdown`, `thinking`→an auto-expanding thinking block, `toolCall`→`ToolCard` paired with its
+    result); `UserTurn`; `SystemTurn`; `TurnDivider` (+ the pure `turnDivider` deriver — between-turns
+    orientation: elapsed time, tool-call count, a "files changed" chip); `RetryIndicator` (auto-retry
+    countdown bar); `Markdown` (react-markdown + remark-gfm + shiki code blocks); `ToolCard`; the
+    pointer-aware `useChatScroll` hook.
   - **Composer + cheap-win primitives** (M12, also props-driven, **no store/transport**): `Composer`
     (send/steer/followUp/abort, `@`-mention completion, `/` slash-command menu, image paste/drop);
     `ModelSelector` + `ThinkingSelector` (cheap win #1); `SessionStatsBar` (cheap win #3); `ChatHeader`
@@ -32,8 +35,15 @@ a future `packages/chat-ui`).
     `pi.extensionUi` bridge).
   - **Tool-renderer registry** (`toolRegistry.tsx`) — `registerToolRenderer` / `getToolRenderer` /
     `DefaultToolRenderer` + `ToolRenderer` / `ToolRenderProps` / `toText`. **THE extension point.**
+  - **Built-in tool renderers** (`tools/`) — props-driven cards for pi's core tools: `bash` (terminal
+    block), `read`/`write` (highlighted file via the shared `CodeBlock`), `edit` (removed/added line
+    diff), plus the shared `CodeBlock` / `Collapsible` (long output folds behind a "Show all N lines"
+    toggle) and pure `toolHelpers`. Registered via `registerToolRenderer` by `tools/register` (a
+    side-effect import in `ChatView`, so it runs once when the chat module mounts). Unregistered tools
+    still fall back to `DefaultToolRenderer`.
   - **View types** (`types.ts`) — `ChatTurn` (user/assistant are pi `UserMessage`/`AssistantMessage`;
-    `system` is a web-local notice) + `ToolResultState` + `ExtUiDialogRequest` (the reply-needing
+    `system` is a web-local notice; `retry` is a live auto-retry countdown) + `ToolResultState` +
+    `ExtUiDialogRequest` (the reply-needing
     `ExtUiRequest` subset the store's `pendingExtUi` is typed by).
   - **Hydration** (`hydrate.ts`) — the pure **`messagesToRuntime(Message[])`** converter (the read-side
     counterpart of the event reducer): folds a session's pi-canonical transcript into `{ turns, toolResults }`
@@ -42,7 +52,8 @@ a future `packages/chat-ui`).
     wiring store + transport: model list / stats / commands / mentions / dialog replies). Reads **its own
     session's runtime** via `store.sessions[sessionId]` (falling back to `EMPTY_RUNTIME`) and addresses every
     mutator/command with that `sessionId`, so multiple chats coexist. The **only** file here that touches
-    `store`/`transport`.
+    `store`/`transport` — including the turn-divider's "files changed" chip, which calls the store's
+    `requestChangesView` to deep-link the right panel to a file's diff.
 - **Public surface:** the registry API (`toolRegistry`), the renderers, the view types, and `ChatView`
   (lazy-mounted by `panels/CenterTabs`). **No `index.ts` barrel** — chat pulls **shiki**, so per the
   code-splitting exception (as with `panels` / `components/ui`) imports stay **per-file**: `CenterTabs`

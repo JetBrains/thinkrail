@@ -1,12 +1,15 @@
 import type { ImageContent, Model, ThinkingLevel } from "@thinkrail-pi/contracts";
-import { useCallback, useEffect, useState } from "react";
-import { Virtuoso } from "react-virtuoso";
+import { ArrowDown } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { EMPTY_RUNTIME, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 import { ChatHeader } from "./ChatHeader";
 import { Composer, type MentionCandidate, type SubmitBehavior } from "./Composer";
 import { ExtUiDialog } from "./ExtUiDialog";
-import { ChatTurnView } from "./turns";
+import "./tools/register"; // side-effect: register the built-in pi tool renderers (bash/read/edit/write)
+import { ChatTurnView, TurnDivider, turnDivider } from "./turns";
+import { useChatScroll } from "./useChatScroll";
 
 /**
  * One chat session as a center tab — the app-integration layer that wires the store + transport to the
@@ -35,6 +38,10 @@ export default function ChatView({ sessionId }: { sessionId: string }) {
 
 	const [mentionQuery, setMentionQuery] = useState<string | null>(null);
 	const [mentionCandidates, setMentionCandidates] = useState<MentionCandidate[]>([]);
+
+	const virtuosoRef = useRef<VirtuosoHandle>(null);
+	const { followOutput, handleAtBottom, showScrollButton, scrollToBottom, containerProps } =
+		useChatScroll(virtuosoRef);
 
 	// Models are global to the host — fetch once, then every chat's picker shares them.
 	useEffect(() => {
@@ -130,6 +137,17 @@ export default function ChatView({ sessionId }: { sessionId: string }) {
 			.catch(() => {});
 	};
 
+	// A turn-divider's "files changed" chip → surface the first changed file's diff in the right panel.
+	// This is the one chat touch of the store outside the renderers, kept here in the integration layer.
+	const onOpenChanges = useCallback(
+		(paths: string[]) => {
+			const path = paths[0];
+			if (!activeWorkspaceId || !path) return;
+			useAppStore.getState().requestChangesView(activeWorkspaceId, path);
+		},
+		[activeWorkspaceId],
+	);
+
 	const onExtUiReply = (value: string | boolean | null) => {
 		if (!pendingExtUi) return;
 		const id = pendingExtUi.id;
@@ -152,16 +170,41 @@ export default function ChatView({ sessionId }: { sessionId: string }) {
 				onSelectModel={onSelectModel}
 				onSelectThinking={onSelectThinking}
 			/>
-			<Virtuoso
-				data={turns}
-				className="min-h-0 flex-1"
-				followOutput="smooth"
-				itemContent={(_index, turn) => (
-					<div className="mx-auto max-w-3xl px-md py-xs">
-						<ChatTurnView turn={turn} toolResults={toolResults} />
-					</div>
-				)}
-			/>
+			<div
+				data-testid="chat-scroll"
+				className="relative flex min-h-0 flex-1 flex-col"
+				{...containerProps}
+			>
+				<Virtuoso
+					ref={virtuosoRef}
+					data={turns}
+					className="min-h-0 flex-1"
+					followOutput={followOutput}
+					atBottomStateChange={handleAtBottom}
+					atBottomThreshold={50}
+					itemContent={(index, turn) => {
+						// A divider precedes every user turn except the first — it summarizes the round just ended.
+						const divider = turn.kind === "user" && index > 0 ? turnDivider(turns, index) : null;
+						return (
+							<div className="mx-auto max-w-3xl px-md py-xs">
+								{divider ? <TurnDivider data={divider} onOpenChanges={onOpenChanges} /> : null}
+								<ChatTurnView turn={turn} toolResults={toolResults} />
+							</div>
+						);
+					}}
+				/>
+				{showScrollButton ? (
+					<button
+						type="button"
+						data-testid="scroll-to-bottom"
+						onClick={scrollToBottom}
+						className="-translate-x-1/2 absolute bottom-md left-1/2 flex items-center gap-xs rounded-[var(--radius-lg)] border border-border2 bg-elevated px-sm py-xs text-muted text-xs shadow-[var(--shadow-md)] hover:bg-hover hover:text-text"
+					>
+						<ArrowDown className="size-3" />
+						New messages
+					</button>
+				) : null}
+			</div>
 			{widgetEntries.length > 0 ? (
 				<div className="shrink-0 border-border2 border-t bg-elevated px-md py-xs text-muted text-xs">
 					{widgetEntries.map(([key, lines]) => (

@@ -1,5 +1,6 @@
 import type { GitFileStatus, GitStatus } from "@thinkrail-pi/contracts";
 import { lazy, Suspense, useEffect, useState } from "react";
+import { useAppStore } from "../store";
 import { getTransport } from "../transport";
 
 const DiffViewer = lazy(() => import("./DiffViewer"));
@@ -24,6 +25,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	const [status, setStatus] = useState<GitStatus | null>(null);
 	const [selected, setSelected] = useState<string | null>(null);
 	const [diff, setDiff] = useState<string | null>(null);
+	const changesRequest = useAppStore((s) => s.changesRequest);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -53,6 +55,18 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 			setDiff("");
 		}
 	};
+
+	// A chat deep-link (turn-divider chip) targeting this workspace: select the requested file once the
+	// status list is loaded. Match by suffix so an absolute pi path still resolves to the relative entry.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: `selectFile` is stable enough; the request + status are the triggers
+	useEffect(() => {
+		if (!status || changesRequest?.workspaceId !== workspaceId) return;
+		const want = changesRequest.path;
+		// Anchor the suffix at a path separator so an absolute pi path resolves to its relative entry
+		// without `a-foo.ts` spuriously matching the entry `foo.ts`.
+		const match = status.changes.find((c) => c.path === want || want.endsWith(`/${c.path}`));
+		void selectFile(match ? match.path : want);
+	}, [changesRequest, status, workspaceId]);
 
 	if (status === null) {
 		return <p className="px-sm py-xs text-xs text-hint">Loading…</p>;

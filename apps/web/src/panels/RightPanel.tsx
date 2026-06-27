@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAppStore } from "../store";
 import { ChangesPanel } from "./ChangesPanel";
 import { FileTree } from "./FileTree";
@@ -8,7 +8,13 @@ type RightTab = "files" | "changes";
 /** Right panel for the active worktree: All-files tree and Changes (git diff vs base). Checks/Review = V2. */
 export function RightPanel() {
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
+	const changesRequest = useAppStore((s) => s.changesRequest);
 	const [tab, setTab] = useState<RightTab>("files");
+
+	// A deep-link from chat (turn-divider chip) targeting this workspace flips us to the Changes view.
+	useEffect(() => {
+		if (changesRequest?.workspaceId === activeWorkspaceId) setTab("changes");
+	}, [changesRequest, activeWorkspaceId]);
 
 	return (
 		<div className="flex h-full min-h-0 flex-col">

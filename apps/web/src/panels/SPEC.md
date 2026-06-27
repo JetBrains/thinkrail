@@ -33,6 +33,9 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
 
 ## Get right
 
+- `RightPanel`/`ChangesPanel` watch the store's `changesRequest` deep-link (set by a chat turn-divider's
+  "files changed" chip): when it targets the active workspace, `RightPanel` flips to the Changes tab and
+  `ChangesPanel` selects the requested file (matched by path suffix against `git.status`).
 - Heavy deps (Monaco / shiki / xterm) load via `React.lazy(() => import())` to stay out of the eager bundle.
 - Streaming invariant (when chat lands): `text_delta`/`thinking_delta` **APPEND**;
   `tool_execution_update.partialResult` **REPLACE**.

@@ -14,7 +14,9 @@ export type ExtUiDialogRequest = Extract<
 export type ChatTurn =
 	| { kind: "user"; id: string; message: UserMessage }
 	| { kind: "assistant"; id: string; message: AssistantMessage; streaming: boolean }
-	| { kind: "system"; id: string; text: string };
+	| { kind: "system"; id: string; text: string }
+	/** A live auto-retry countdown (shown during the back-off, cleared when the retry resolves). */
+	| { kind: "retry"; id: string; attempt: number; maxAttempts: number; delayMs: number };
 
 export type ToolStatus = "running" | "done" | "error";
 

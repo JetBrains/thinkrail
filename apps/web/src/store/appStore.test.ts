@@ -7,6 +7,19 @@ const agentStart = { type: "agent_start" } as unknown as PiEvent;
 const agentEnd = { type: "agent_end", willRetry: false, messages: [] } as unknown as PiEvent;
 const toolStart = (toolCallId: string) =>
 	({ type: "tool_execution_start", toolCallId, toolName: "bash" }) as unknown as PiEvent;
+const toolUpdate = (toolCallId: string, partialResult: unknown) =>
+	({ type: "tool_execution_update", toolCallId, partialResult }) as unknown as PiEvent;
+const toolEnd = (toolCallId: string, result: unknown, isError = false) =>
+	({ type: "tool_execution_end", toolCallId, result, isError }) as unknown as PiEvent;
+const retryStart = (attempt: number, maxAttempts: number, delayMs: number) =>
+	({
+		type: "auto_retry_start",
+		attempt,
+		maxAttempts,
+		delayMs,
+		errorMessage: "rate limit",
+	}) as unknown as PiEvent;
+const retryEnd = { type: "auto_retry_end", success: true, attempt: 1 } as unknown as PiEvent;
 const assistantStart = {
 	type: "message_start",
 	message: { role: "assistant" },
@@ -83,6 +96,60 @@ test("an assistant turn is built (and replaced, not duplicated) from message_upd
 	expect(after.isStreaming).toBe(false);
 	expect(after.currentAssistantId).toBeNull();
 	expect(after.turns.some((t) => t.kind === "system" && t.text === "✓ Done")).toBe(true);
+});
+
+test("the tool lifecycle folds into toolResults (the status + raw the renderers read)", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+
+	// start → running, no result yet.
+	store.handlePiEvent(toolStart("t1"), "a");
+	expect(rt("a").toolResults.t1).toEqual({ status: "running", raw: undefined });
+
+	// update → still running, carries the partial snapshot (REPLACE semantics).
+	const partial = { content: [{ type: "text", text: "partial" }] };
+	store.handlePiEvent(toolUpdate("t1", partial), "a");
+	expect(rt("a").toolResults.t1).toEqual({ status: "running", raw: partial });
+
+	// end (ok) → done, carries the final result.
+	const final = { content: [{ type: "text", text: "done" }] };
+	store.handlePiEvent(toolEnd("t1", final), "a");
+	expect(rt("a").toolResults.t1).toEqual({ status: "done", raw: final });
+});
+
+test("a failed tool ends in the error status (the red-path the renderers branch on)", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+
+	store.handlePiEvent(toolStart("t1"), "a");
+	const errResult = { content: [{ type: "text", text: "boom" }] };
+	store.handlePiEvent(toolEnd("t1", errResult, true), "a");
+	expect(rt("a").toolResults.t1).toEqual({ status: "error", raw: errResult });
+});
+
+test("auto-retry adds a countdown turn, and resolving it clears the indicator", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+
+	store.handlePiEvent(retryStart(2, 3, 5_000), "a");
+	const retry = rt("a").turns.find((t) => t.kind === "retry");
+	expect(retry?.kind === "retry" && retry.attempt).toBe(2);
+	expect(retry?.kind === "retry" && retry.maxAttempts).toBe(3);
+	expect(retry?.kind === "retry" && retry.delayMs).toBe(5_000);
+
+	// auto_retry_end removes it — the retried attempt's streaming/answer takes over.
+	store.handlePiEvent(retryEnd, "a");
+	expect(rt("a").turns.some((t) => t.kind === "retry")).toBe(false);
+});
+
+test("a lingering retry countdown is swept up by the final agent_end", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+
+	store.handlePiEvent(retryStart(1, 3, 1_000), "a");
+	store.handlePiEvent(agentEnd, "a"); // willRetry: false → conclude
+	expect(rt("a").turns.some((t) => t.kind === "retry")).toBe(false);
+	expect(rt("a").turns.some((t) => t.kind === "system" && t.text === "✓ Done")).toBe(true);
 });
 
 test("a message_update with no prior message_start still builds the turn (mid-stream hydration)", () => {

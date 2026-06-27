@@ -161,22 +161,34 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 			if (event.willRetry) return rt; // auto-retry / compaction follows — stay streaming
 			return {
 				...rt,
-				turns: [...rt.turns, { kind: "system", id: crypto.randomUUID(), text: "✓ Done" }],
+				// Drop any lingering retry countdown; the turn concluded.
+				turns: [
+					...rt.turns.filter((t) => t.kind !== "retry"),
+					{ kind: "system", id: crypto.randomUUID(), text: "✓ Done" },
+				],
 				isStreaming: false,
 				currentAssistantId: null,
 			};
 		case "auto_retry_start":
+			// Show a live countdown over the back-off; cleared on auto_retry_end (or the final agent_end).
 			return {
 				...rt,
 				turns: [
 					...rt.turns,
 					{
-						kind: "system",
+						kind: "retry",
 						id: crypto.randomUUID(),
-						text: `Retrying (${event.attempt}/${event.maxAttempts})…`,
+						attempt: event.attempt,
+						maxAttempts: event.maxAttempts,
+						delayMs: event.delayMs,
 					},
 				],
 			};
+		case "auto_retry_end":
+			// The retry resolved → normal streaming/answer rendering replaces the indicator.
+			return rt.turns.some((t) => t.kind === "retry")
+				? { ...rt, turns: rt.turns.filter((t) => t.kind !== "retry") }
+				: rt;
 		case "thinking_level_changed":
 			return { ...rt, thinkingLevel: event.level };
 		default:
@@ -250,6 +262,12 @@ interface AppState {
 	sessions: Record<string, SessionRuntime>;
 	/** Models with configured auth (cheap win #1) — fetched once, shared by every chat's picker. */
 	models: Model<string>[];
+	/**
+	 * A request to surface a file's diff in the right-panel Changes view (e.g. a chat turn-divider's
+	 * "files changed" chip). The panels watch it and switch tab / select the file when it targets the
+	 * active workspace; a fresh object each call so identical re-requests still fire.
+	 */
+	changesRequest: { workspaceId: string; path: string } | null;
 	setStatus: (status: ConnectionStatus) => void;
 	setWelcome: (protocolVersion: number) => void;
 	setProjects: (projects: Project[]) => void;
@@ -303,6 +321,8 @@ interface AppState {
 	clearPendingExtUi: (sessionId: string, id: string) => void;
 	/** Route an inbound `pi.extensionUi` frame to its session's runtime (dialogs/notices/status/widget/title). */
 	applyExtUi: (request: ExtUiRequest) => void;
+	/** Ask the right panel to open `path`'s diff in its Changes view (deep-link from chat). */
+	requestChangesView: (workspaceId: string, path: string) => void;
 }
 
 /** Apply an immutable update to one session's runtime; a no-op (and no new `sessions` object) if it's gone. */
@@ -331,6 +351,7 @@ export const useAppStore = create<AppState>((set) => ({
 	activeTerminalByWorkspace: {},
 	sessions: {},
 	models: [],
+	changesRequest: null,
 	setStatus: (status) => set({ status }),
 	setWelcome: (protocolVersion) => set({ protocolVersion }),
 	setProjects: (projects) => set({ projects }),
@@ -610,4 +631,5 @@ export const useAppStore = create<AppState>((set) => ({
 			}
 			return withRuntime(s, request.sessionId, (rt) => reduceExtUi(rt, request));
 		}),
+	requestChangesView: (workspaceId, path) => set({ changesRequest: { workspaceId, path } }),
 }));
