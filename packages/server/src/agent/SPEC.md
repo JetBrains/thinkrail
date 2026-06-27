@@ -19,12 +19,17 @@ in-process `uiContext` dialog calls into WS frames.
 - **Owns:**
   - `piRuntime` (one shared `AuthStorage` + `ModelRegistry`; `getPiRuntime()` lazy,
     `configurePiRuntime()` for tests).
-  - `agentSessionManager` — sessions keyed by `session.sessionId`,
-    `createSession({ cwd, model?, thinkingLevel? })` → `createAgentSession(...)` with a per-session
-    `SessionManager` + `bindExtensions({ mode:'rpc', uiContext })`; `subscribe` forwards each event tagged
-    with its id; `prompt`/`steer`/`followUp` (with images) / `abort` / `setModel` / `setThinkingLevel` /
-    `compact` / `getSessionStats` (+ contextUsage) / `getSessionCommands` / `listAvailableModels`;
-    `removeSession`/`disposeAllSessions`; `setSessionPublisher` + `setSessionManagerFactory` seams.
+  - `agentSessionManager` — sessions keyed by `session.sessionId` (each `Entry` also tracks its
+    `workspaceId`), `createSession({ cwd, workspaceId, model?, thinkingLevel? })` → `createAgentSession(...)`
+    with a per-session `SessionManager`; a shared `registerSession` forwards each event tagged with its id +
+    `bindExtensions({ mode:'rpc', uiContext })`; `prompt`/`steer`/`followUp` (with images) / `abort` /
+    `setModel` / `setThinkingLevel` / `compact` / `getSessionStats` (+ contextUsage) / `getSessionCommands` /
+    `listAvailableModels`; the **hydration read side** — `listSessions(workspaceId, cwd)` (live sessions
+    **unioned with on-disk** ones pi persisted under `cwd`, live winning on id → `SessionSummary[]` tagged
+    `live`) + `getSessionMessages(sessionId, workspaceId, cwd)` (re-opens a disk session into the manager if
+    not live, then returns `{ summary, messages }` — the pi-canonical `Message` subset); the disk half is
+    what survives a host **restart**; `removeSession`/`disposeAllSessions`; `setSessionPublisher` +
+    `setSessionManagerFactory` seams.
   - `webUiContext` — `createWebUiContext(sessionId)` builds the `ExtensionUIContext` pi calls (dialogs
     round-trip to the browser, fire-and-forget methods push, TUI-only members inert); `setExtUiPublisher`
     (server→client push seam), `resolveExtUi` (browser reply), `cancelExtUiForSession` (on dispose),

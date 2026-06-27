@@ -5,10 +5,12 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type {
 	ImageContent,
+	Message,
 	Model,
 	PiEvent,
 	SessionEventPayload,
 	SessionStats,
+	SessionSummary,
 	SlashCommandInfo,
 	ThinkingLevel,
 } from "@thinkrail-pi/contracts";
@@ -18,6 +20,8 @@ import { cancelExtUiForSession, createWebUiContext, notifyExtUi } from "./webUiC
 interface Entry {
 	session: AgentSession;
 	unsubscribe: () => void;
+	/** The workspace this session belongs to — so `listSessions` can report a workspace's sessions. */
+	workspaceId: string;
 }
 
 const sessions = new Map<string, Entry>();
@@ -46,6 +50,8 @@ function mustGet(sessionId: string): AgentSession {
 export interface CreateSessionInput {
 	/** The active workspace's worktree — a chat session belongs to a workspace. */
 	cwd: string;
+	/** The workspace id, kept alongside the session so it can be listed back per workspace. */
+	workspaceId: string;
 	model?: Model<string>;
 	thinkingLevel?: ThinkingLevel;
 }
@@ -55,6 +61,27 @@ export interface CreateSessionResult {
 	sessionId: string;
 	model: Model<string> | null;
 	thinkingLevel: ThinkingLevel;
+}
+
+/** Wire a freshly-created/opened session into the manager: forward its events + bind the extension-UI bridge. */
+async function registerSession(
+	session: AgentSession,
+	workspaceId: string,
+): Promise<CreateSessionResult> {
+	const { sessionId } = session;
+	const unsubscribe = session.subscribe((event) => publish({ sessionId, event: event as PiEvent }));
+	// `rpc` mode = dialog-capable, non-TUI: extension `uiContext` dialogs bridge to the browser over WS.
+	await session.bindExtensions({
+		mode: "rpc",
+		uiContext: createWebUiContext(sessionId),
+		onError: (error) => notifyExtUi(sessionId, `Extension error: ${error.error}`, "error"),
+	});
+	sessions.set(sessionId, { session, unsubscribe, workspaceId });
+	return {
+		sessionId,
+		model: (session.model ?? null) as Model<string> | null,
+		thinkingLevel: session.thinkingLevel,
+	};
 }
 
 /** Create an in-process AgentSession rooted in `cwd`; its events stream out tagged with the session id. */
@@ -68,20 +95,120 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
 		...(input.model ? { model: input.model } : {}),
 		...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
 	});
-	const { sessionId } = session;
-	const unsubscribe = session.subscribe((event) => publish({ sessionId, event: event as PiEvent }));
-	// `rpc` mode = dialog-capable, non-TUI: extension `uiContext` dialogs bridge to the browser over WS.
-	await session.bindExtensions({
-		mode: "rpc",
-		uiContext: createWebUiContext(sessionId),
-		onError: (error) => notifyExtUi(sessionId, `Extension error: ${error.error}`, "error"),
-	});
-	sessions.set(sessionId, { session, unsubscribe });
+	return registerSession(session, input.workspaceId);
+}
+
+/** A live session's summary (drawn from the running `AgentSession`). */
+function summaryOf(sessionId: string, entry: Entry): SessionSummary {
+	const { session } = entry;
 	return {
 		sessionId,
+		workspaceId: entry.workspaceId,
+		title: session.sessionName ?? "Chat",
 		model: (session.model ?? null) as Model<string> | null,
 		thinkingLevel: session.thinkingLevel,
+		isStreaming: session.isStreaming,
+		messageCount: session.messages.length,
+		updatedAt: Date.now(),
+		live: true,
 	};
+}
+
+/**
+ * A workspace's chat sessions — live (in-memory) unioned with on-disk ones pi persisted under `cwd`. Live
+ * wins on id. This is the domain state a reconnecting/second client hydrates from; the disk half is what
+ * survives a host restart.
+ */
+export async function listSessions(workspaceId: string, cwd: string): Promise<SessionSummary[]> {
+	const live: SessionSummary[] = [];
+	const liveIds = new Set<string>();
+	for (const [sessionId, entry] of sessions) {
+		if (entry.workspaceId !== workspaceId) continue;
+		live.push(summaryOf(sessionId, entry));
+		liveIds.add(sessionId);
+	}
+	let disk: SessionSummary[] = [];
+	try {
+		const infos = await SessionManager.list(cwd);
+		// `list(cwd)` reads one encoded-cwd dir, but pi's encoding (`[/\:]`→`-`) can map distinct cwds to the
+		// same dir, so match on the session's true recorded `cwd` to disambiguate; live ones are already above.
+		disk = infos
+			.filter((info) => info.cwd === cwd && !liveIds.has(info.id))
+			.map((info) => ({
+				sessionId: info.id,
+				workspaceId,
+				title: info.name ?? "Chat",
+				// Placeholders until the session is opened (disk metadata doesn't carry model/thinking).
+				model: null,
+				thinkingLevel: "medium" as ThinkingLevel,
+				isStreaming: false,
+				messageCount: info.messageCount,
+				updatedAt: info.modified.getTime(),
+				live: false,
+			}));
+	} catch {
+		// No sessions dir for this cwd yet — only the live ones.
+	}
+	return [...live, ...disk];
+}
+
+// In-flight disk re-opens, deduped by session id: concurrent `getSessionMessages` for the same disk session
+// (two tabs / a fast double-click) must attach it exactly once — a second `AgentSession` on the same id
+// would orphan the first (leaked subscription/handles) and have two writers appending one transcript file.
+const attaching = new Map<string, Promise<void>>();
+
+/** Re-open a persisted session from disk into the manager (restart survival), keyed by its stable id. */
+function attachDiskSession(sessionId: string, workspaceId: string, cwd: string): Promise<void> {
+	if (sessions.has(sessionId)) return Promise.resolve();
+	let pending = attaching.get(sessionId);
+	if (!pending) {
+		pending = openDiskSession(sessionId, workspaceId, cwd).finally(() =>
+			attaching.delete(sessionId),
+		);
+		attaching.set(sessionId, pending);
+	}
+	return pending;
+}
+
+async function openDiskSession(sessionId: string, workspaceId: string, cwd: string): Promise<void> {
+	const info = (await SessionManager.list(cwd)).find((i) => i.id === sessionId && i.cwd === cwd);
+	if (!info) throw new Error(`Unknown session: ${sessionId}`);
+	if (sessions.has(sessionId)) return; // attached while we listed
+	const { authStorage, modelRegistry } = getPiRuntime();
+	const { session } = await createAgentSession({
+		cwd,
+		authStorage,
+		modelRegistry,
+		sessionManager: SessionManager.open(info.path),
+	});
+	// Lost a race after the open — drop this duplicate rather than clobber the registered one.
+	if (sessions.has(sessionId)) {
+		session.dispose();
+		return;
+	}
+	await registerSession(session, workspaceId);
+}
+
+/**
+ * A session's transcript (pi-canonical user/assistant/toolResult messages) + its current summary. Re-opens
+ * the session from disk first if it isn't live, so a reopened chat is continuable and its summary accurate.
+ */
+export async function getSessionMessages(
+	sessionId: string,
+	workspaceId: string,
+	cwd: string,
+): Promise<{ summary: SessionSummary; messages: Message[] }> {
+	let entry = sessions.get(sessionId);
+	// Scope the read to the requested workspace — a client can't pull a session from a different one.
+	if (entry && entry.workspaceId !== workspaceId) throw new Error(`Unknown session: ${sessionId}`);
+	if (!entry) {
+		await attachDiskSession(sessionId, workspaceId, cwd);
+		entry = sessions.get(sessionId);
+		if (!entry) throw new Error(`Unknown session: ${sessionId}`);
+	}
+	const renderable = new Set(["user", "assistant", "toolResult"]);
+	const messages = entry.session.messages.filter((m) => renderable.has(m.role)) as Message[];
+	return { summary: summaryOf(sessionId, entry), messages };
 }
 
 /** Send a turn. `prompt()` throws while streaming, so fall back to `steer()` then. */

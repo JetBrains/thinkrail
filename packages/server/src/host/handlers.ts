@@ -5,8 +5,10 @@ import {
 	createSession,
 	followUpSession,
 	getSessionCommands,
+	getSessionMessages,
 	getSessionStats,
 	listAvailableModels,
+	listSessions,
 	promptSession,
 	removeSession,
 	resolveExtUi,
@@ -73,8 +75,9 @@ const handlers: Record<string, Handler> = {
 	// session.* — the pi engine. A thrown/failed call returns a `{ ok:false, error }` WS response;
 	// streaming faults arrive as `pi.event`s (the error/agent_end variants), not here.
 	"session.create": async (params) => {
-		const ws = getWorkspace((params as { workspaceId: string }).workspaceId);
-		return createSession({ cwd: ws.worktreePath });
+		const { workspaceId } = params as { workspaceId: string };
+		const ws = getWorkspace(workspaceId);
+		return createSession({ cwd: ws.worktreePath, workspaceId });
 	},
 	"session.prompt": async (params) => {
 		const p = params as { sessionId: string; text: string; images?: ImageContent[] };
@@ -117,6 +120,14 @@ const handlers: Record<string, Handler> = {
 	"session.getStats": (params) => getSessionStats((params as { sessionId: string }).sessionId),
 	"session.getCommands": (params) =>
 		getSessionCommands((params as { sessionId: string }).sessionId),
+	"session.list": (params) => {
+		const { workspaceId } = params as { workspaceId: string };
+		return listSessions(workspaceId, getWorkspace(workspaceId).worktreePath);
+	},
+	"session.getMessages": (params) => {
+		const p = params as { sessionId: string; workspaceId: string };
+		return getSessionMessages(p.sessionId, p.workspaceId, getWorkspace(p.workspaceId).worktreePath);
+	},
 	"session.extUiReply": (params) => {
 		resolveExtUi((params as { response: ExtUiResponse }).response);
 		return { ok: true } as const;

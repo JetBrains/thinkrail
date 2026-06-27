@@ -20,6 +20,7 @@ export type {
 } from "@earendil-works/pi-ai";
 
 import type { AgentEvent, AgentMessage, ThinkingLevel } from "@earendil-works/pi-agent-core";
+import type { Model } from "@earendil-works/pi-ai";
 
 // The unified render union the UI switches on. The real superset (`AgentSessionEvent`) is declared in the
 // Node-only `pi-coding-agent` (it pulls node:fs), so it's MIRRORED here type-only, derived from the
@@ -73,6 +74,28 @@ export interface SessionStats {
 	tokens: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number };
 	cost: number;
 	contextUsage?: ContextUsage;
+}
+
+/**
+ * A chat session as the host reports it for hydration — the domain state a client rebuilds its chat tab +
+ * runtime from on connect (the transcript is fetched separately via `session.getMessages`).
+ */
+export interface SessionSummary {
+	sessionId: string;
+	workspaceId: string;
+	title: string;
+	model: Model<string> | null;
+	thinkingLevel: ThinkingLevel;
+	isStreaming: boolean;
+	messageCount: number;
+	/** Epoch ms of last activity — for ordering (esp. once disk-persisted sessions populate history). */
+	updatedAt: number;
+	/**
+	 * `true` for a session live in the host's memory (auto-restore as an open tab); `false` for one only on
+	 * disk (a past session a client surfaces in chat-history and re-opens on demand). `model`/`thinkingLevel`
+	 * are placeholders for a disk session until it's opened.
+	 */
+	live: boolean;
 }
 
 export type SlashCommandSource = "extension" | "prompt" | "skill";

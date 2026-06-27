@@ -3,7 +3,7 @@ import { openFixtureProject } from "./fixtures/app";
 
 // Tagged @agent (see agent.live.spec.ts): runs a REAL pi agent. Proves M13 — several chats in one
 // workspace, each its own runtime, streaming concurrently; switching is an instant swap; closing one
-// disposes only its session. (The deterministic routing guarantee is unit-tested in store/appStore.test.ts.)
+// leaves the other untouched. (The deterministic routing guarantee is unit-tested in store/appStore.test.ts.)
 test("two chats in one workspace stream independently; closing one keeps the other", {
 	tag: "@agent",
 }, async ({ page }) => {
@@ -37,7 +37,7 @@ test("two chats in one workspace stream independently; closing one keeps the oth
 	await chatTabs.first().locator("button").first().click();
 	await expect(doneNotice).toBeVisible({ timeout: 90_000 });
 
-	// Close A → only B's tab remains, its content intact (closing one disposes only that session).
+	// Close A → only B's tab remains, its content intact (closing one leaves the other untouched).
 	await chatTabs.first().getByTestId("editor-tab-close").click();
 	await expect(chatTabs).toHaveCount(1);
 	await expect(doneNotice).toBeVisible();

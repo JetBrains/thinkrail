@@ -42,6 +42,10 @@ runtime exports being the WS method/channel constants and the protocol version. 
   - the cheap-win mirrors (declared in the Node-only `pi-coding-agent`): **`SessionStats`** + **`ContextUsage`**
     (tokens/cost/context bar — display only) and **`SlashCommandInfo`** + **`SlashCommandSourceInfo`** (the
     skill catalog).
+  - **`SessionSummary`** — a chat session as the host reports it for hydration (read side); `live`
+    distinguishes an in-memory session (auto-restored) from a disk-only one (surfaced in chat-history,
+    re-opened on demand). `session.getMessages` returns `{ summary, messages }` (the transcript is the
+    pi-canonical `Message[]`; the summary reflects the now-live session after a disk re-open).
   - the **extension-UI frames** **`ExtUiRequest`** / **`ExtUiResponse`** — our wire shape for pi's in-process
     `uiContext` calls (`select`/`confirm`/`input`/`editor` round-trip; `notify`/`setStatus`/`setWidget`/
     `setTitle`/`dismiss` are fire-and-forget), carried on the `pi.extensionUi` channel.
@@ -49,7 +53,8 @@ runtime exports being the WS method/channel constants and the protocol version. 
   `FileNode` (file-tree node), `TabStatus`, `Git*`/diff types.
 - **wsProtocol.ts** — `WS_METHODS` (`project.*` / `workspace.*` / `fs.*` / `git.*` / `terminal.*` /
   `model.list` / `session.*` — `create`/`prompt`/`steer`/`followUp`/`abort`/`dispose`/`setModel`/
-  `setThinkingLevel`/`compact`/`getStats`/`getCommands`/`extUiReply`), `WS_CHANNELS` (`server.welcome` /
+  `setThinkingLevel`/`compact`/`getStats`/`getCommands`/`extUiReply`/**`list`**/**`getMessages`** (the M16
+  read side)), `WS_CHANNELS` (`server.welcome` /
   `pi.event` / `pi.extensionUi` / `terminal.data`), the `WsMethodMap` typed request/result map +
   `WsParams`/`WsResult` helpers, and `PROTOCOL_VERSION`.
 

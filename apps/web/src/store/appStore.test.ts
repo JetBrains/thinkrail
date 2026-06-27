@@ -1,5 +1,5 @@
 import { beforeEach, expect, test } from "bun:test";
-import type { ExtUiRequest, PiEvent } from "@thinkrail-pi/contracts";
+import type { ExtUiRequest, PiEvent, SessionSummary } from "@thinkrail-pi/contracts";
 import { type SessionRuntime, useAppStore } from "./appStore";
 
 // Event fixtures — the reducer only reads the fields below, so casting minimal objects is safe here.
@@ -22,7 +22,13 @@ const assistantText = (text: string) =>
 	}) as unknown as PiEvent;
 
 beforeEach(() => {
-	useAppStore.setState({ sessions: {}, tabsByWorkspace: {}, activeTabByWorkspace: {} });
+	useAppStore.setState({
+		sessions: {},
+		tabsByWorkspace: {},
+		activeTabByWorkspace: {},
+		closedChatsByWorkspace: {},
+		activeWorkspaceId: null,
+	});
 });
 
 function rt(sessionId: string): SessionRuntime {
@@ -77,6 +83,21 @@ test("an assistant turn is built (and replaced, not duplicated) from message_upd
 	expect(after.isStreaming).toBe(false);
 	expect(after.currentAssistantId).toBeNull();
 	expect(after.turns.some((t) => t.kind === "system" && t.text === "✓ Done")).toBe(true);
+});
+
+test("a message_update with no prior message_start still builds the turn (mid-stream hydration)", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+
+	// Hydrated mid-stream: we missed message_start, so currentAssistantId is null. A streaming update must
+	// still adopt the in-flight turn (and set currentAssistantId so later cumulative updates land on it).
+	store.handlePiEvent(assistantText("partial reply"), "a");
+	expect(rt("a").turns.filter((t) => t.kind === "assistant")).toHaveLength(1);
+	expect(rt("a").currentAssistantId).not.toBeNull();
+
+	// A terminal `done` then clears it.
+	store.handlePiEvent(assistantText("partial reply") /* still streaming */, "a");
+	expect(rt("a").turns.filter((t) => t.kind === "assistant")).toHaveLength(1); // same turn, replaced
 });
 
 test("an event for an unknown session is a no-op (no runtime is conjured)", () => {
@@ -137,4 +158,112 @@ test("a second dialog for a busy session queues instead of orphaning the first",
 	store.clearPendingExtUi("a", "d1");
 	expect(rt("a").pendingExtUi?.id).toBe("d2");
 	expect(rt("a").extUiQueue).toHaveLength(0);
+});
+
+test("closing a chat moves it to history with its runtime kept; reopening restores full state", () => {
+	const store = useAppStore.getState();
+	useAppStore.setState({ activeWorkspaceId: "ws1" });
+	store.openChatSession("ws1", "a", null, "medium");
+	store.handlePiEvent(agentStart, "a"); // give the runtime live state to prove it survives close
+
+	store.closeChatToHistory("a");
+	let st = useAppStore.getState();
+	expect(st.tabsByWorkspace.ws1?.some((t) => t.kind === "chat" && t.sessionId === "a")).toBe(false);
+	expect(st.closedChatsByWorkspace.ws1?.map((c) => c.sessionId)).toEqual(["a"]);
+	expect(st.sessions.a).toBeDefined(); // runtime NOT disposed
+	expect(st.sessions.a?.isStreaming).toBe(true);
+
+	store.reopenChat("a");
+	st = useAppStore.getState();
+	expect(st.tabsByWorkspace.ws1?.some((t) => t.kind === "chat" && t.sessionId === "a")).toBe(true);
+	expect(st.activeTabByWorkspace.ws1).toBe("ws1:a");
+	expect(st.closedChatsByWorkspace.ws1 ?? []).toHaveLength(0); // removed from history on reopen
+	expect(st.sessions.a?.isStreaming).toBe(true); // full transcript/state intact
+});
+
+test("hydrateSession rebuilds a runtime + tab on connect, and never clobbers a live one", () => {
+	const store = useAppStore.getState();
+	useAppStore.setState({ activeWorkspaceId: "ws1" });
+	const summary: SessionSummary = {
+		sessionId: "h1",
+		workspaceId: "ws1",
+		title: "Chat",
+		model: null,
+		thinkingLevel: "medium",
+		isStreaming: false,
+		messageCount: 1,
+		updatedAt: 0,
+		live: true,
+	};
+	store.hydrateSession(
+		summary,
+		[{ kind: "user", id: "u1", message: { role: "user", content: "hi", timestamp: 0 } }],
+		{},
+	);
+	const st = useAppStore.getState();
+	expect(st.sessions.h1?.turns).toHaveLength(1);
+	expect(st.tabsByWorkspace.ws1?.some((t) => t.kind === "chat" && t.sessionId === "h1")).toBe(true);
+
+	// A second hydrate (e.g. stale list) must NOT overwrite the now-live runtime.
+	store.hydrateSession({ ...summary, messageCount: 99 }, [], {});
+	expect(useAppStore.getState().sessions.h1?.turns).toHaveLength(1);
+});
+
+test("noteClosedChats surfaces disk-only sessions in history, skipping live/open/known ones", () => {
+	const store = useAppStore.getState();
+	useAppStore.setState({ activeWorkspaceId: "ws1" });
+	store.openChatSession("ws1", "live1", null, "medium"); // a live, open tab
+
+	store.noteClosedChats("ws1", [
+		{ sessionId: "disk1", title: "Old chat", closedAt: 200 },
+		{ sessionId: "disk2", title: "Older chat", closedAt: 100 },
+		{ sessionId: "live1", title: "dup of open tab", closedAt: 300 }, // already open → skipped
+	]);
+	let history = useAppStore.getState().closedChatsByWorkspace.ws1 ?? [];
+	expect(history.map((c) => c.sessionId)).toEqual(["disk1", "disk2"]); // newest-first, live1 excluded
+
+	// Idempotent: re-noting the same disk sessions adds nothing.
+	store.noteClosedChats("ws1", [{ sessionId: "disk1", title: "Old chat", closedAt: 200 }]);
+	history = useAppStore.getState().closedChatsByWorkspace.ws1 ?? [];
+	expect(history).toHaveLength(2);
+});
+
+test("hydrateSession(activate) reopens a disk-only chat: builds it, focuses it, and drops it from history", () => {
+	const store = useAppStore.getState();
+	useAppStore.setState({ activeWorkspaceId: "ws1" });
+	store.openChatSession("ws1", "other", null, "medium"); // an existing active tab
+	store.noteClosedChats("ws1", [{ sessionId: "disk1", title: "Old", closedAt: 1 }]);
+
+	const summary: SessionSummary = {
+		sessionId: "disk1",
+		workspaceId: "ws1",
+		title: "Old",
+		model: null,
+		thinkingLevel: "medium",
+		isStreaming: false,
+		messageCount: 2,
+		updatedAt: 1,
+		live: true,
+	};
+	store.hydrateSession(summary, [], {}, true);
+
+	const st = useAppStore.getState();
+	expect(st.sessions.disk1).toBeDefined(); // runtime built from the re-opened session
+	expect(st.closedChatsByWorkspace.ws1 ?? []).toHaveLength(0); // left history (it's open now)
+	expect(st.activeTabByWorkspace.ws1).toBe("ws1:disk1"); // focused, despite an existing active tab
+});
+
+test("clearWorkspaceTabs drops both open and closed chat runtimes + clears history", () => {
+	const store = useAppStore.getState();
+	useAppStore.setState({ activeWorkspaceId: "ws1" });
+	store.openChatSession("ws1", "a", null, "medium");
+	store.openChatSession("ws1", "b", null, "medium");
+	store.closeChatToHistory("a"); // a → history (runtime kept), b stays an open tab
+
+	store.clearWorkspaceTabs("ws1");
+	const st = useAppStore.getState();
+	expect(st.sessions.a).toBeUndefined();
+	expect(st.sessions.b).toBeUndefined();
+	expect(st.closedChatsByWorkspace.ws1).toBeUndefined();
+	expect(st.tabsByWorkspace.ws1).toBeUndefined();
 });

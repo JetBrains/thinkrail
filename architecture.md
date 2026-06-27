@@ -4,7 +4,7 @@ type: architecture-design
 status: active
 title: ThinkRail-PI — top-level architecture
 parent: goal-and-requirements
-covers: [client-host-split, cli-entrypoint, wire-contract, transport-endpoint, ui-shell-panels, git-worktrees, remote-tailscale]
+covers: [client-host-split, cli-entrypoint, wire-contract, transport-endpoint, ui-shell-panels, git-worktrees, remote-tailscale, hydrate-then-stream, domain-vs-view-state]
 tags: [v1, architecture]
 ---
 
@@ -54,6 +54,21 @@ packages/shared     shellEnv (server-side only)
    `pi` connected last. Real PR / Checks / Review stay V2.
 7. **Auth is external.** Tailscale ACLs / device identity are the auth; the app carries an `owner` field,
    not a login UI.
+8. **Hydrate-then-stream (every client reconstructs from the host).** A client never relies on having
+   *witnessed* events to know state — on connect it **reads** the current state, then **subscribes** to
+   live deltas. The host exposes the read side of the wire (`project.list` / `workspace.list` /
+   **`session.list`** / **`session.getMessages`**) alongside the `pi.event` delta stream. So a reload, a
+   second tab, a phone, or a **host restart** all rebuild the same view: `session.list` unions the host's
+   in-memory sessions (auto-restored as tabs) with pi's **on-disk** sessions (surfaced in chat-history,
+   re-opened on demand via `session.getMessages`, which attaches the persisted session back into the host).
+   The client is a **stateless projection**, never a second source of truth.
+9. **Domain state vs. view state.** *Domain* state — projects, workspaces, **sessions + their
+   transcripts**, git — is backend-owned, shared across all clients, and persistent; every client hydrates
+   it from the host. *View* state — which sessions are open as tabs, the active tab, composer drafts, panel
+   sizes — is **per-client** and lives only in that client (ephemeral, or localStorage for reload-restore);
+   it is never sent to the backend (that would couple clients to each other). Corollary: **closing a tab is
+   a view action, not a domain dispose** — a session stays alive for other clients; disposing/deleting a
+   session is a separate, explicit domain action.
 
 ## Invariants
 
@@ -63,7 +78,9 @@ packages/shared     shellEnv (server-side only)
 - One id model: the UI tab id vs `session.sessionId` (the `AgentSession` id). No separate pi UUID.
 - The agent runs in-process with **no crash isolation** — wrap session calls and forward errors; a fatal
   fault takes the whole host down (accepted tradeoff vs the subprocess RPC mode).
-- `pi` owns state and emits the truth; the host is a thin bridge and does not recompute what `pi` reports.
+- `pi` owns state and emits the truth; the host is a thin bridge — it **exposes** `pi`'s state through read
+  methods (it does not recompute it) and forwards `pi`'s events as deltas. Clients **hydrate from the reads,
+  then stream the deltas** — they hold only view state of their own.
 
 ## Out of scope (V1)
 

@@ -35,6 +35,9 @@ a future `packages/chat-ui`).
   - **View types** (`types.ts`) — `ChatTurn` (user/assistant are pi `UserMessage`/`AssistantMessage`;
     `system` is a web-local notice) + `ToolResultState` + `ExtUiDialogRequest` (the reply-needing
     `ExtUiRequest` subset the store's `pendingExtUi` is typed by).
+  - **Hydration** (`hydrate.ts`) — the pure **`messagesToRuntime(Message[])`** converter (the read-side
+    counterpart of the event reducer): folds a session's pi-canonical transcript into `{ turns, toolResults }`
+    so a reconnecting / second client rebuilds a chat on connect (M16). No store/transport/shiki.
   - **App integration** — `ChatView` (react-virtuoso list + `ChatHeader` + `Composer` + `ExtUiDialog`,
     wiring store + transport: model list / stats / commands / mentions / dialog replies). Reads **its own
     session's runtime** via `store.sessions[sessionId]` (falling back to `EMPTY_RUNTIME`) and addresses every

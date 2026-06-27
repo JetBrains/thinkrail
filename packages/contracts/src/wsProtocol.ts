@@ -4,8 +4,10 @@ import type { DiffStats, FileNode, GitStatus, Project, Workspace } from "./domai
 import type {
 	ExtUiResponse,
 	ImageContent,
+	Message,
 	Model,
 	SessionStats,
+	SessionSummary,
 	SlashCommandInfo,
 	ThinkingLevel,
 } from "./piProtocol";
@@ -44,6 +46,10 @@ export const WS_METHODS = {
 	sessionGetStats: "session.getStats",
 	sessionGetCommands: "session.getCommands",
 	sessionExtUiReply: "session.extUiReply",
+	// Read side of the wire (hydrate-then-stream, M16): a client lists a workspace's sessions and pulls a
+	// transcript to rebuild its view on connect.
+	sessionList: "session.list",
+	sessionGetMessages: "session.getMessages",
 	modelList: "model.list",
 } as const;
 
@@ -106,6 +112,13 @@ export interface WsMethodMap {
 	"session.getStats": { params: { sessionId: string }; result: SessionStats };
 	"session.getCommands": { params: { sessionId: string }; result: SlashCommandInfo[] };
 	"session.extUiReply": { params: { response: ExtUiResponse }; result: Ack };
+	"session.list": { params: { workspaceId: string }; result: SessionSummary[] };
+	// Re-opens the session from disk if it isn't already live, so the returned `summary` reflects the
+	// now-live model/thinking (a disk `SessionSummary` only carries placeholders).
+	"session.getMessages": {
+		params: { sessionId: string; workspaceId: string };
+		result: { summary: SessionSummary; messages: Message[] };
+	};
 	"model.list": { params: Record<string, never>; result: Model<string>[] };
 }
 

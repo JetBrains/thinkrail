@@ -4,6 +4,7 @@ import type {
 	PiEvent,
 	Project,
 	SessionStats,
+	SessionSummary,
 	SlashCommandInfo,
 	ThinkingLevel,
 	Workspace,
@@ -35,6 +36,13 @@ export interface TerminalTab {
 	clientId: string;
 	workspaceId: string;
 	title: string;
+}
+
+/** A chat tab the user closed — reopenable from history; its session + runtime stay alive in `sessions`. */
+export interface ClosedChat {
+	sessionId: string;
+	title: string;
+	closedAt: number;
 }
 
 /**
@@ -100,8 +108,6 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 				? { ...rt, currentAssistantId: crypto.randomUUID() }
 				: rt;
 		case "message_update": {
-			const id = rt.currentAssistantId;
-			if (!id) return rt;
 			const ame = event.assistantMessageEvent;
 			// Streaming variants carry `partial`; the terminals carry `message` (done) / `error`.
 			const snapshot =
@@ -113,10 +119,15 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 							? ame.error
 							: null;
 			if (!snapshot) return rt;
+			// Adopt the in-flight turn even if we missed `message_start` (e.g. hydrated mid-stream) by minting
+			// an id; `partial` is cumulative, so the next update reconstructs the whole turn. Set on streaming,
+			// clear on a terminal variant.
+			const id = rt.currentAssistantId ?? crypto.randomUUID();
 			const streaming = !(ame.type === "done" || ame.type === "error");
 			const turn: ChatTurn = { kind: "assistant", id, message: snapshot, streaming };
 			return {
 				...rt,
+				currentAssistantId: streaming ? id : null,
 				turns: rt.turns.some((t) => t.id === id)
 					? rt.turns.map((t) => (t.id === id ? turn : t))
 					: [...rt.turns, turn],
@@ -230,6 +241,8 @@ interface AppState {
 	/** Center tabs belong to a workspace — switching workspaces swaps the visible tab set. */
 	tabsByWorkspace: Record<string, EditorTab[]>;
 	activeTabByWorkspace: Record<string, string | null>;
+	/** Chat tabs the user closed, per workspace (most-recent-first) — reopenable while their runtime lives. */
+	closedChatsByWorkspace: Record<string, ClosedChat[]>;
 	/** Terminals are workspace-scoped too; their instances stay mounted (hidden) to preserve buffers. */
 	terminalsByWorkspace: Record<string, TerminalTab[]>;
 	activeTerminalByWorkspace: Record<string, string | null>;
@@ -258,6 +271,26 @@ interface AppState {
 	) => void;
 	/** Drop a chat's runtime on tab close (the `AgentSession` is disposed over the wire by the caller). */
 	closeChatRuntime: (sessionId: string) => void;
+	/** Close a chat tab to history: remove the tab but keep its runtime + session alive for reopening. */
+	closeChatToHistory: (sessionId: string) => void;
+	/** Reopen a chat from history (its runtime is still live, so the full transcript returns instantly). */
+	reopenChat: (sessionId: string) => void;
+	/**
+	 * Record disk-only sessions (from `session.list`) in chat-history so they can be reopened on demand.
+	 * Skips any already live, open as a tab, or already listed — so it's idempotent across re-hydration.
+	 */
+	noteClosedChats: (workspaceId: string, entries: ClosedChat[]) => void;
+	/**
+	 * Rebuild a chat's runtime + tab from the host's report on connect — a no-op if a runtime already exists.
+	 * Drops the session from chat-history (it's open now). `activate` focuses the tab (a user-driven reopen);
+	 * otherwise it only takes focus if the workspace has none yet (auto-restore must not steal focus).
+	 */
+	hydrateSession: (
+		summary: SessionSummary,
+		turns: ChatTurn[],
+		toolResults: Record<string, ToolResultState>,
+		activate?: boolean,
+	) => void;
 	appendUserMessage: (sessionId: string, text: string) => void;
 	handlePiEvent: (event: PiEvent, sessionId: string) => void;
 	setModels: (models: Model<string>[]) => void;
@@ -293,6 +326,7 @@ export const useAppStore = create<AppState>((set) => ({
 	activeWorkspaceId: null,
 	tabsByWorkspace: {},
 	activeTabByWorkspace: {},
+	closedChatsByWorkspace: {},
 	terminalsByWorkspace: {},
 	activeTerminalByWorkspace: {},
 	sessions: {},
@@ -336,13 +370,17 @@ export const useAppStore = create<AppState>((set) => ({
 		),
 	clearWorkspaceTabs: (workspaceId) =>
 		set((s) => {
-			// Drop the runtimes of this workspace's chats too (their AgentSessions are freed on host shutdown).
+			// Drop the runtimes of this workspace's chats — both open tabs and closed-to-history ones (their
+			// AgentSessions are freed on host shutdown).
 			const sessions = { ...s.sessions };
 			for (const tab of s.tabsByWorkspace[workspaceId] ?? []) {
 				if (tab.kind === "chat") delete sessions[tab.sessionId];
 			}
+			for (const closed of s.closedChatsByWorkspace[workspaceId] ?? [])
+				delete sessions[closed.sessionId];
 			const { [workspaceId]: _tabs, ...tabsByWorkspace } = s.tabsByWorkspace;
 			const { [workspaceId]: _activeTab, ...activeTabByWorkspace } = s.activeTabByWorkspace;
+			const { [workspaceId]: _closed, ...closedChatsByWorkspace } = s.closedChatsByWorkspace;
 			// Dropping the terminals unmounts their instances, which close the PTYs server-side.
 			const { [workspaceId]: _terms, ...terminalsByWorkspace } = s.terminalsByWorkspace;
 			const { [workspaceId]: _activeTerm, ...activeTerminalByWorkspace } =
@@ -350,6 +388,7 @@ export const useAppStore = create<AppState>((set) => ({
 			return {
 				tabsByWorkspace,
 				activeTabByWorkspace,
+				closedChatsByWorkspace,
 				terminalsByWorkspace,
 				activeTerminalByWorkspace,
 				sessions,
@@ -406,6 +445,113 @@ export const useAppStore = create<AppState>((set) => ({
 			if (!s.sessions[sessionId]) return {};
 			const { [sessionId]: _drop, ...sessions } = s.sessions;
 			return { sessions };
+		}),
+	closeChatToHistory: (sessionId) =>
+		set((s) => {
+			const wsId = s.activeWorkspaceId;
+			if (!wsId) return {};
+			const tabs = s.tabsByWorkspace[wsId] ?? [];
+			const tab = tabs.find((t) => t.kind === "chat" && t.sessionId === sessionId);
+			if (!tab) return {};
+			const remaining = tabs.filter((t) => t.id !== tab.id);
+			const wasActive = s.activeTabByWorkspace[wsId] === tab.id;
+			const entry: ClosedChat = { sessionId, title: tab.name, closedAt: Date.now() };
+			return {
+				tabsByWorkspace: { ...s.tabsByWorkspace, [wsId]: remaining },
+				activeTabByWorkspace: {
+					...s.activeTabByWorkspace,
+					[wsId]: wasActive
+						? (remaining.at(-1)?.id ?? null)
+						: (s.activeTabByWorkspace[wsId] ?? null),
+				},
+				// Prepend (most-recent-first); the runtime in `sessions` is intentionally left alive.
+				closedChatsByWorkspace: {
+					...s.closedChatsByWorkspace,
+					[wsId]: [entry, ...(s.closedChatsByWorkspace[wsId] ?? [])],
+				},
+			};
+		}),
+	reopenChat: (sessionId) =>
+		set((s) => {
+			const wsId = s.activeWorkspaceId;
+			if (!wsId) return {};
+			const closed = s.closedChatsByWorkspace[wsId] ?? [];
+			const entry = closed.find((c) => c.sessionId === sessionId);
+			if (!entry) return {};
+			const id = `${wsId}:${sessionId}`;
+			const tab: ChatTab = { kind: "chat", id, workspaceId: wsId, name: entry.title, sessionId };
+			const tabs = s.tabsByWorkspace[wsId] ?? [];
+			return {
+				// The runtime is still live in `sessions`, so the reopened tab shows the full transcript.
+				tabsByWorkspace: tabs.some((t) => t.id === id)
+					? s.tabsByWorkspace
+					: { ...s.tabsByWorkspace, [wsId]: [...tabs, tab] },
+				activeTabByWorkspace: { ...s.activeTabByWorkspace, [wsId]: id },
+				closedChatsByWorkspace: {
+					...s.closedChatsByWorkspace,
+					[wsId]: closed.filter((c) => c.sessionId !== sessionId),
+				},
+			};
+		}),
+	noteClosedChats: (workspaceId, entries) =>
+		set((s) => {
+			const existing = s.closedChatsByWorkspace[workspaceId] ?? [];
+			const known = new Set([
+				...existing.map((c) => c.sessionId),
+				...(s.tabsByWorkspace[workspaceId] ?? [])
+					.filter((t): t is ChatTab => t.kind === "chat")
+					.map((t) => t.sessionId),
+			]);
+			const fresh = entries.filter((e) => !known.has(e.sessionId) && !s.sessions[e.sessionId]);
+			if (fresh.length === 0) return {};
+			return {
+				closedChatsByWorkspace: {
+					...s.closedChatsByWorkspace,
+					// Newest-first; disk entries carry their last-modified time as `closedAt`.
+					[workspaceId]: [...existing, ...fresh].sort((a, b) => b.closedAt - a.closedAt),
+				},
+			};
+		}),
+	hydrateSession: (summary, turns, toolResults, activate = false) =>
+		set((s) => {
+			if (s.sessions[summary.sessionId]) return {}; // a live/ahead runtime wins — never clobber it
+			const wsId = summary.workspaceId;
+			const runtime: SessionRuntime = {
+				...newRuntime(summary.model, summary.thinkingLevel),
+				turns,
+				toolResults,
+				isStreaming: summary.isStreaming,
+			};
+			const id = `${wsId}:${summary.sessionId}`;
+			const tab: ChatTab = {
+				kind: "chat",
+				id,
+				workspaceId: wsId,
+				name: summary.title,
+				sessionId: summary.sessionId,
+			};
+			const tabs = s.tabsByWorkspace[wsId] ?? [];
+			const hasActive = s.activeTabByWorkspace[wsId] != null;
+			const closed = s.closedChatsByWorkspace[wsId] ?? [];
+			return {
+				sessions: { ...s.sessions, [summary.sessionId]: runtime },
+				tabsByWorkspace: tabs.some((t) => t.id === id)
+					? s.tabsByWorkspace
+					: { ...s.tabsByWorkspace, [wsId]: [...tabs, tab] },
+				// Focus on an explicit reopen; otherwise only if the workspace has no active tab yet (auto-restore
+				// must not steal focus). Keyed to the summary's workspace, not the active one.
+				activeTabByWorkspace:
+					activate || !hasActive
+						? { ...s.activeTabByWorkspace, [wsId]: id }
+						: s.activeTabByWorkspace,
+				// It's open now, so it leaves history (if it was a disk-only entry there).
+				closedChatsByWorkspace: closed.some((c) => c.sessionId === summary.sessionId)
+					? {
+							...s.closedChatsByWorkspace,
+							[wsId]: closed.filter((c) => c.sessionId !== summary.sessionId),
+						}
+					: s.closedChatsByWorkspace,
+			};
 		}),
 	appendUserMessage: (sessionId, text) =>
 		set((s) =>

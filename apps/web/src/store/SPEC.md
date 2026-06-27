@@ -25,13 +25,20 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   `chat`'s `ExtUiDialogRequest`) + `extUiQueue` (overlapping dialogs FIFO so none orphans its server
   promise) + `extUiStatus` / `extUiWidget`). `openChatSession` creates a runtime; `closeChatRuntime` /
   `clearWorkspaceTabs` drop it; per-session mutators (`appendUserMessage` / `setStats` / `setCommands` /
-  `setCurrentModel` / `setThinkingLevel` / `setChatDraft` / `clearPendingExtUi`) take a `sessionId`. The
+  `setCurrentModel` / `setThinkingLevel` / `setChatDraft` / `clearPendingExtUi`) take a `sessionId`. Closed
+  chats are reopenable: **`closeChatToHistory`** removes a chat tab but **keeps its runtime + session
+  alive**, recording it in **`closedChatsByWorkspace`** (`ClosedChat[]`, per workspace, most-recent-first);
+  **`reopenChat`** restores the tab with full state (the runtime never left); **`noteClosedChats`** records
+  disk-only sessions (from `session.list`) there too — idempotently (skips live/open/already-listed) — so a
+  chat that survived a host restart is reopenable. **`hydrateSession`** rebuilds a runtime + tab from a host
+  `SessionSummary` + converted transcript on connect — a no-op if a runtime already exists, so a live/ahead
+  chat is never clobbered. The
   pure **`reduceSessionEvent`** folds a `PiEvent` into a runtime (Appendix B); **`handlePiEvent(event,
   sessionId)`** and **`applyExtUi(request)`** route by id via the `withRuntime` helper (a no-op for an
   unknown session). The host-wide **`models`** list stays global (not per session). The `EditorTab`
-  (`FileTab` | `ChatTab`) + `TerminalTab` + `SessionRuntime` types. (Chat *render* types + renderers live in
-  the `chat` module.)
-- **Public surface (barrel):** `useAppStore`, `EditorTab` (`FileTab`/`ChatTab`), `TerminalTab`,
+  (`FileTab` | `ChatTab`) + `TerminalTab` + `ClosedChat` + `SessionRuntime` types. (Chat *render* types +
+  renderers live in the `chat` module.)
+- **Public surface (barrel):** `useAppStore`, `EditorTab` (`FileTab`/`ChatTab`), `TerminalTab`, `ClosedChat`,
   `SessionRuntime` + `EMPTY_RUNTIME` (ChatView's pre-creation fallback), `reduceSessionEvent`.
 - **Allowed deps:** `contracts` (`Project`/`Workspace`/`Model`/`ThinkingLevel`/`SessionStats`/
   `SlashCommandInfo`/`ExtUiRequest`; `PiEvent`, **type-only**); `chat` (`ChatTurn`/`ToolResultState`,
