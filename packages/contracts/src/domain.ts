@@ -65,3 +65,22 @@ export interface GitStatus {
 	branch: string;
 	changes: GitFileChange[];
 }
+
+/** A repo's branches for the New-Workspace base picker. `defaultBranch` is `origin/main` when known. */
+export interface BranchList {
+	/** Local branch names (`git for-each-ref refs/heads`), e.g. `main`, `feature/x`. */
+	local: string[];
+	/** Remote-tracking branches under `origin` (e.g. `origin/main`), minus `origin/HEAD`. */
+	remote: string[];
+	/** Preselected base — `origin/HEAD` target → `origin/main` → repo `HEAD` branch (in that order). */
+	defaultBranch: string;
+}
+
+/** Local `gh` CLI auth status (read-only, shelled server-side) for the New-Workspace + Settings surfaces. */
+export interface GithubAuthStatus {
+	connected: boolean;
+	/** The authenticated github.com account, when connected. */
+	login?: string;
+	/** The token's OAuth scopes, when reported by `gh auth status`. */
+	scopes?: string[];
+}

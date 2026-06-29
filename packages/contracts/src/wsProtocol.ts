@@ -1,6 +1,14 @@
 // The browser↔host API — ours, not pi's. Methods are request/response; channels are server→client push.
 
-import type { DiffStats, FileNode, GitStatus, Project, Workspace } from "./domain";
+import type {
+	BranchList,
+	DiffStats,
+	FileNode,
+	GithubAuthStatus,
+	GitStatus,
+	Project,
+	Workspace,
+} from "./domain";
 import type {
 	ExtUiResponse,
 	ImageContent,
@@ -24,6 +32,10 @@ export const WS_METHODS = {
 	workspaceList: "workspace.list",
 	workspaceRemove: "workspace.remove",
 	workspaceDiffStats: "workspace.diffStats",
+	// gh-backed New-Workspace surface (M14): branch list per project + local `gh` auth status.
+	gitListBranches: "git.listBranches",
+	githubAuthStatus: "github.authStatus",
+	githubRefresh: "github.refresh",
 	fsReadDir: "fs.readDir",
 	fsReadFile: "fs.readFile",
 	gitStatus: "git.status",
@@ -51,6 +63,7 @@ export const WS_METHODS = {
 	sessionList: "session.list",
 	sessionGetMessages: "session.getMessages",
 	modelList: "model.list",
+	modelDefault: "model.default",
 } as const;
 
 /** Server→client push channels. */
@@ -74,10 +87,18 @@ export interface WsMethodMap {
 	"project.open": { params: { path: string }; result: Project };
 	"project.list": { params: Record<string, never>; result: Project[] };
 	"project.close": { params: { id: string }; result: Ack };
-	"workspace.create": { params: { projectId: string; name?: string }; result: Workspace };
+	// `baseRef` (M14): the base branch the worktree is cut from (a remote ref is fetched first); when
+	// omitted, the worktree branches off the repo's current HEAD (the M5 behavior).
+	"workspace.create": {
+		params: { projectId: string; name?: string; baseRef?: string };
+		result: Workspace;
+	};
 	"workspace.list": { params: { projectId: string }; result: Workspace[] };
 	"workspace.remove": { params: { id: string }; result: Ack };
 	"workspace.diffStats": { params: { id: string }; result: DiffStats };
+	"git.listBranches": { params: { projectId: string }; result: BranchList };
+	"github.authStatus": { params: Record<string, never>; result: GithubAuthStatus };
+	"github.refresh": { params: Record<string, never>; result: GithubAuthStatus };
 	"fs.readDir": { params: { workspaceId: string; path: string }; result: FileNode[] };
 	"fs.readFile": { params: { workspaceId: string; path: string }; result: { content: string } };
 	"git.status": { params: { workspaceId: string }; result: GitStatus };
@@ -88,7 +109,9 @@ export interface WsMethodMap {
 	"terminal.close": { params: { id: string }; result: Ack };
 	"dialog.selectDirectory": { params: Record<string, never>; result: { path: string | null } };
 	"session.create": {
-		params: { workspaceId: string };
+		// `model`/`thinkingLevel` (M14): applied at create time via `createAgentSession`, e.g. the
+		// New-Workspace dialog's pre-session picks. Omitted → pi resolves defaults from auth + settings.
+		params: { workspaceId: string; model?: Model<string>; thinkingLevel?: ThinkingLevel };
 		// The resolved model/thinking the new session starts with (pi picks defaults from auth + settings).
 		result: { sessionId: string; model: Model<string> | null; thinkingLevel: ThinkingLevel };
 	};
@@ -120,6 +143,12 @@ export interface WsMethodMap {
 		result: { summary: SessionSummary; messages: Message[] };
 	};
 	"model.list": { params: Record<string, never>; result: Model<string>[] };
+	// The model/thinking a fresh session resolves to (settings default, else first available) — so the
+	// New-Workspace dialog shows the exact pre-session model, not a placeholder.
+	"model.default": {
+		params: Record<string, never>;
+		result: { model: Model<string> | null; thinkingLevel: ThinkingLevel };
+	};
 }
 
 export type WsMethodName = keyof WsMethodMap;

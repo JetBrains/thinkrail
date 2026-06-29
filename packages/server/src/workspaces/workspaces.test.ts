@@ -4,6 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createWorkspace, listWorkspaces, removeWorkspace } from "./workspaces";
 
+function gitOut(cwd: string, ...args: string[]): string {
+	const r = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "pipe", stderr: "ignore" });
+	return new TextDecoder().decode(r.stdout).trim();
+}
+
 let dataDir: string;
 let repo: string;
 const savedDataDir = process.env.THINKRAIL_PI_DATA_DIR;
@@ -34,6 +39,25 @@ afterEach(() => {
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_PI_DATA_DIR;
 	else process.env.THINKRAIL_PI_DATA_DIR = savedDataDir;
+});
+
+test("createWorkspace cuts a fresh branch from baseRef and records it as the base", () => {
+	// A second branch with its own commit, so "branched from here" is verifiable by commit sha.
+	git(repo, "branch", "feature/base");
+	git(repo, "switch", "feature/base");
+	writeFileSync(join(repo, "feature.txt"), "feature\n");
+	git(repo, "add", "-A");
+	git(repo, "commit", "-m", "feature commit");
+	git(repo, "switch", "main");
+	const baseSha = gitOut(repo, "rev-parse", "feature/base");
+
+	const ws = createWorkspace("p1", undefined, "feature/base");
+	expect(ws.baseBranch).toBe("feature/base");
+	// The worktree's new branch was cut from feature/base's tip, not main's.
+	expect(gitOut(ws.worktreePath, "rev-parse", "HEAD")).toBe(baseSha);
+	// And it's its own fresh local branch (not a detached checkout of the base).
+	expect(gitOut(ws.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe(ws.branch);
+	expect(ws.branch).not.toBe("feature/base");
 });
 
 test("removeWorkspace cleans up even when the worktree dir is already gone", () => {

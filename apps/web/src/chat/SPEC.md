@@ -30,7 +30,11 @@ a future `packages/chat-ui`).
     pointer-aware `useChatScroll` hook.
   - **Composer + cheap-win primitives** (M12, also props-driven, **no store/transport**): `Composer`
     (send/steer/followUp/abort, `@`-mention completion, `/` slash-command menu, image paste/drop);
-    `ModelSelector` + `ThinkingSelector` (cheap win #1); `SessionStatsBar` (cheap win #3); `ChatHeader`
+    `ModelSelector` (a pill opening a searchable `Command` list grouped by provider, no leading icon) +
+    `ThinkingSelector` (a pill opening the six thinking levels — same trigger+popover shape as the model
+    picker) (cheap win #1, restyled at M14 — shared with `NewWorkspaceDialog`'s pre-session mode); both take
+    an optional `container` so their popovers portal into a host Dialog (keeping the list scrollable under
+    the Dialog's scroll lock); `SessionStatsBar` (cheap win #3); `ChatHeader`
     (arranges them); `ExtUiDialog` (renders pi's `select`/`confirm`/`input`/`editor` from the
     `pi.extensionUi` bridge).
   - **Tool-renderer registry** (`toolRegistry.tsx`) — `registerToolRenderer` / `getToolRenderer` /
@@ -60,7 +64,8 @@ a future `packages/chat-ui`).
   lazy-imports `chat/ChatView`; the registry is importable from `chat/toolRegistry` **without** pulling shiki.
 - **Allowed deps:** `contracts` (pi message/content-block types, **type-only**); `store` + `transport`
   (**`ChatView` only** — the app-integration edge); `react-markdown` / `remark-gfm` / `shiki` (via
-  `lib/highlighter`); `react-virtuoso`; `lucide-react`; `components/ui` (`Button`); `lib` (`cn`).
+  `lib/highlighter`); `react-virtuoso`; `lucide-react`; `components/ui` (`Button`, `Popover`, `Command`);
+  `lib` (`cn`).
 - **Forbidden:** value-importing any `pi` package; a **presentational** renderer importing
   `store`/`transport` (only `ChatView` may — keep the renderers reusable).
 

@@ -36,6 +36,9 @@ export default defineConfig({
 			THINKRAIL_PI_DATA_DIR: E2E_DATA_DIR,
 			// Stub the host's native directory picker so "Open project" is drivable headlessly.
 			THINKRAIL_PI_PICK_DIR: E2E_FIXTURE_REPO,
+			// Force the New-Workspace dialog's `gh` probe to "Not connected" so the suite is deterministic
+			// regardless of the dev machine's real `gh` auth — and exercises the offline/local-branch degrade path.
+			THINKRAIL_PI_GH_OFFLINE: "1",
 			// Point pi at an ISOLATED agent dir (seeded with a copy of the user's auth in globalSetup), so the
 			// @agent suite uses a real provider yet `setModel`/`setThinkingLevel` persist here — never the
 			// user's real `~/.pi/agent`. (Provider env vars in the inherited env still resolve auth too.)

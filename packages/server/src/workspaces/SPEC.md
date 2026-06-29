@@ -15,8 +15,11 @@ chats.
 
 ## Boundary
 
-- **Owns:** `createWorkspace` (off the repo HEAD; **branch name made unique** — archiving leaves the
-  branch behind, so re-creating must not collide; path `dataDir/worktrees/<project-slug>/<branch>`),
+- **Owns:** `createWorkspace` (off `baseRef` when given — a remote ref is `git fetch`ed *then* branched
+  from with `worktree add -b`, never a detached remote checkout; off the repo `HEAD` otherwise;
+  `Workspace.baseBranch` records the base the diff is measured against; **branch name made unique** —
+  archiving leaves the branch behind, so re-creating must not collide; path
+  `dataDir/worktrees/<project-slug>/<branch>`),
   `listWorkspaces` (with diff stats), `removeWorkspace` (`git worktree remove --force`, keeps the branch;
   hardened: rm + `prune` if git fails), `workspaceDiffStats`.
 - **Public surface (barrel):** `createWorkspace`, `listWorkspaces`, `removeWorkspace`, `workspaceDiffStats`.

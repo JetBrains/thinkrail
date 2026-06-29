@@ -1,0 +1,396 @@
+import type { BranchList, Model, ThinkingLevel, Workspace } from "@thinkrail-pi/contracts";
+import { Box, Check, ChevronDown, GitBranch, RefreshCw } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ModelSelector } from "@/chat/ModelSelector";
+import { ThinkingSelector } from "@/chat/ThinkingSelector";
+import {
+	Command,
+	CommandEmpty,
+	CommandGroup,
+	CommandInput,
+	CommandItem,
+	CommandList,
+} from "@/components/ui/command";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Textarea } from "@/components/ui/textarea";
+import { useAppStore } from "@/store";
+import { getTransport } from "@/transport";
+
+/** A shared pill-trigger look for the project + branch pickers (mockup `.pill`). */
+const PILL =
+	"flex h-8 min-w-0 items-center gap-sm rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-sm text-sm text-text outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-[var(--primary-60)] data-[open=true]:bg-hover";
+
+/**
+ * The New-Workspace "create + kick-off" surface (M14): pick a base branch, say what to work on, pick a
+ * model + effort, then Create → cut a worktree from that base, open a chat in it, and send the prompt.
+ * With an empty prompt it just creates the workspace (no chat) — the fast path for poking at files.
+ *
+ * The only app-integration piece here: it wires the store + transport. `onCreated(ws)` lets the parent
+ * (ProjectTree) expand + reload its list; the dialog itself sets the active workspace + kicks off the chat.
+ */
+export function NewWorkspaceDialog({
+	open,
+	projectId,
+	onOpenChange,
+	onCreated,
+}: {
+	open: boolean;
+	/** The project the "+" was clicked on — the picker's default (changeable). */
+	projectId: string;
+	onOpenChange: (open: boolean) => void;
+	onCreated: (workspace: Workspace) => void;
+}) {
+	const projects = useAppStore((s) => s.projects);
+	const models = useAppStore((s) => s.models);
+
+	const [selectedProjectId, setSelectedProjectId] = useState(projectId);
+	const [branches, setBranches] = useState<BranchList | null>(null);
+	const [baseRef, setBaseRef] = useState<string>("");
+	const [refreshing, setRefreshing] = useState(false);
+	const [prompt, setPrompt] = useState("");
+	const [model, setModel] = useState<Model<string> | null>(null);
+	const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>("medium");
+	const [creating, setCreating] = useState(false);
+	const promptRef = useRef<HTMLTextAreaElement>(null);
+	// The dialog content node — popovers portal into it so their lists stay scrollable under the Dialog's
+	// scroll lock (react-remove-scroll blocks wheel/trackpad on body-portaled content).
+	const [dialogEl, setDialogEl] = useState<HTMLElement | null>(null);
+
+	// Reset the form each time the dialog opens, anchored to the project the "+" was clicked on.
+	useEffect(() => {
+		if (!open) return;
+		setSelectedProjectId(projectId);
+		setPrompt("");
+		setCreating(false);
+	}, [open, projectId]);
+
+	// Models are global to the host — fetch once into the shared store; the picker reads them.
+	useEffect(() => {
+		if (!open || models.length > 0) return;
+		getTransport()
+			.request("model.list", {})
+			.then((m) => useAppStore.getState().setModels(m))
+			.catch(() => {});
+	}, [open, models.length]);
+
+	// Preselect the exact model + effort a fresh session would resolve to (so the picker shows the real
+	// model, not a placeholder). Passing it back at create time is a no-op vs. the host default.
+	useEffect(() => {
+		if (!open) return;
+		let cancelled = false;
+		getTransport()
+			.request("model.default", {})
+			.then((d) => {
+				if (cancelled) return;
+				setModel(d.model);
+				setThinkingLevel(d.thinkingLevel);
+			})
+			.catch(() => {});
+		return () => {
+			cancelled = true;
+		};
+	}, [open]);
+
+	// Branches for the selected project; preselect the default base. Refetched when the project changes.
+	useEffect(() => {
+		if (!open) return;
+		let cancelled = false;
+		setBranches(null);
+		getTransport()
+			.request("git.listBranches", { projectId: selectedProjectId })
+			.then((list) => {
+				if (cancelled) return;
+				setBranches(list);
+				setBaseRef(list.defaultBranch);
+			})
+			.catch(() => {
+				if (!cancelled) setBranches({ local: [], remote: [], defaultBranch: "HEAD" });
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [open, selectedProjectId]);
+
+	const refreshBranches = async () => {
+		setRefreshing(true);
+		try {
+			const list = await getTransport().request("git.listBranches", {
+				projectId: selectedProjectId,
+			});
+			setBranches(list);
+		} catch {
+			// Keep the current list on failure.
+		} finally {
+			setRefreshing(false);
+		}
+	};
+
+	const create = async () => {
+		if (creating) return;
+		setCreating(true);
+		let workspace: Workspace;
+		try {
+			workspace = await getTransport().request("workspace.create", {
+				projectId: selectedProjectId,
+				...(baseRef ? { baseRef } : {}),
+			});
+		} catch {
+			// Worktree creation failed (bad ref, etc.) — keep the dialog open so the user can retry/adjust.
+			// (A toast comes with the error-handling pass.)
+			setCreating(false);
+			return;
+		}
+
+		// The worktree exists — the "new workspace" intent is fulfilled, so close the dialog *now* and run the
+		// (slower, optional) chat kick-off in the background. This keeps the dialog from lingering while pi
+		// spins up a session, and a kick-off failure can't strand the dialog open.
+		const store = useAppStore.getState();
+		onCreated(workspace);
+		store.setActiveWorkspace(workspace.id);
+		onOpenChange(false);
+
+		const text = prompt.trim();
+		if (!text) return;
+		try {
+			const session = await getTransport().request("session.create", {
+				workspaceId: workspace.id,
+				...(model ? { model } : {}),
+				thinkingLevel,
+			});
+			store.openChatSession(workspace.id, session.sessionId, session.model, session.thinkingLevel);
+			store.appendUserMessage(session.sessionId, text);
+			// Fire-and-forget the turn (it resolves only when the turn ends); the now-open chat tab streams it.
+			getTransport()
+				.request("session.prompt", { sessionId: session.sessionId, text })
+				.catch(() => {});
+		} catch {
+			// Kick-off failed; the workspace still exists and the dialog is already closed. (Error-handling pass.)
+		}
+	};
+
+	const selectedProject = projects.find((p) => p.id === selectedProjectId);
+
+	return (
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent
+				ref={setDialogEl}
+				hideClose
+				data-testid="new-workspace-dialog"
+				className="max-w-[600px] gap-md p-md"
+				onOpenAutoFocus={(e) => {
+					// Land focus on the prompt (the hero), not the first picker Radix would otherwise focus.
+					e.preventDefault();
+					promptRef.current?.focus();
+				}}
+			>
+				<DialogTitle className="sr-only">New workspace</DialogTitle>
+
+				{/* controls-top: project + base-branch pickers */}
+				<div className="flex flex-wrap items-center gap-sm">
+					<ProjectPicker
+						projects={projects}
+						current={selectedProject?.name ?? "Project"}
+						container={dialogEl}
+						onSelect={setSelectedProjectId}
+					/>
+					<BranchPicker
+						branches={branches}
+						baseRef={baseRef}
+						refreshing={refreshing}
+						container={dialogEl}
+						onSelect={setBaseRef}
+						onRefresh={() => void refreshBranches()}
+					/>
+				</div>
+
+				{/* hero: the prompt */}
+				<Textarea
+					ref={promptRef}
+					data-testid="ws-prompt"
+					value={prompt}
+					onChange={(e) => setPrompt(e.target.value)}
+					placeholder="What do you want to work on?"
+					spellCheck={false}
+					rows={6}
+					className="min-h-[160px]"
+					onKeyDown={(e) => {
+						if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+							e.preventDefault();
+							void create();
+						}
+					}}
+				/>
+
+				{/* controls-bottom: model + effort (left), Create (right) */}
+				<div className="flex flex-wrap items-center gap-sm">
+					<div className="flex min-w-0 flex-1 flex-wrap items-center gap-sm">
+						<ModelSelector
+							models={models}
+							current={model}
+							container={dialogEl}
+							onSelect={setModel}
+						/>
+						<ThinkingSelector
+							level={thinkingLevel}
+							container={dialogEl}
+							onSelect={setThinkingLevel}
+						/>
+					</div>
+					<button
+						type="button"
+						data-testid="create-workspace"
+						disabled={creating}
+						onClick={() => void create()}
+						className="flex h-8 shrink-0 items-center gap-sm rounded-[var(--radius-md)] bg-primary px-md font-medium text-on-accent text-sm outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
+					>
+						Create
+						<span className="inline-flex h-4 min-w-4 items-center justify-center rounded-[3px] bg-[var(--on-accent-16)] px-1 font-[var(--font-mono)] text-xs">
+							↵
+						</span>
+					</button>
+				</div>
+			</DialogContent>
+		</Dialog>
+	);
+}
+
+/** The project picker pill (defaults to the project the "+" was clicked on). */
+function ProjectPicker({
+	projects,
+	current,
+	container,
+	onSelect,
+}: {
+	projects: { id: string; name: string }[];
+	current: string;
+	container: HTMLElement | null;
+	onSelect: (projectId: string) => void;
+}) {
+	const [open, setOpen] = useState(false);
+	return (
+		<Popover open={open} onOpenChange={setOpen}>
+			<PopoverTrigger
+				data-testid="ws-project-picker"
+				data-open={open}
+				className={`${PILL} max-w-[180px]`}
+			>
+				<span className="flex size-[18px] shrink-0 items-center justify-center rounded-[5px] bg-primary">
+					<Box className="size-3 text-on-accent" />
+				</span>
+				<span className="truncate">{current}</span>
+				<ChevronDown className="size-3 shrink-0 text-hint" />
+			</PopoverTrigger>
+			<PopoverContent align="start" container={container} className="w-[280px] p-0">
+				<Command>
+					<CommandInput placeholder="Search projects…" />
+					<CommandList>
+						<CommandEmpty>No projects.</CommandEmpty>
+						<CommandGroup>
+							{projects.map((p) => (
+								<CommandItem
+									key={p.id}
+									value={p.name}
+									data-testid="ws-project-option"
+									onSelect={() => {
+										onSelect(p.id);
+										setOpen(false);
+									}}
+								>
+									<Box className="size-3.5 shrink-0 text-muted" />
+									<span className="truncate">{p.name}</span>
+								</CommandItem>
+							))}
+						</CommandGroup>
+					</CommandList>
+				</Command>
+			</PopoverContent>
+		</Popover>
+	);
+}
+
+/** The base-branch combobox: searchable, grouped Remote/Local, with a Refresh that re-lists branches. */
+function BranchPicker({
+	branches,
+	baseRef,
+	refreshing,
+	container,
+	onSelect,
+	onRefresh,
+}: {
+	branches: BranchList | null;
+	baseRef: string;
+	refreshing: boolean;
+	container: HTMLElement | null;
+	onSelect: (ref: string) => void;
+	onRefresh: () => void;
+}) {
+	const [open, setOpen] = useState(false);
+	const remote = branches?.remote ?? [];
+	const local = branches?.local ?? [];
+	const defaultBranch = branches?.defaultBranch;
+
+	const renderItem = (ref: string) => (
+		<CommandItem
+			key={ref}
+			value={ref}
+			data-testid="branch-option"
+			data-branch={ref}
+			onSelect={() => {
+				onSelect(ref);
+				setOpen(false);
+			}}
+		>
+			<span className="flex w-3.5 shrink-0 justify-center">
+				{ref === baseRef ? <Check className="size-3.5 text-primary" /> : null}
+			</span>
+			<GitBranch className="size-3.5 shrink-0 text-hint" />
+			<span className="truncate font-[var(--font-mono)] text-xs">{ref}</span>
+			{ref === defaultBranch ? (
+				<span className="ml-auto shrink-0 font-[var(--font-mono)] text-hint text-xs">default</span>
+			) : null}
+		</CommandItem>
+	);
+
+	return (
+		<Popover open={open} onOpenChange={setOpen}>
+			<PopoverTrigger
+				data-testid="ws-branch-picker"
+				data-open={open}
+				className={`${PILL} max-w-[220px]`}
+			>
+				<GitBranch className="size-3.5 shrink-0 text-muted" />
+				<span className="truncate font-[var(--font-mono)] text-muted text-xs">
+					{baseRef || "branch"}
+				</span>
+				<ChevronDown className="size-3 shrink-0 text-hint" />
+			</PopoverTrigger>
+			<PopoverContent align="start" container={container} className="w-[320px] p-0">
+				<div className="flex items-center justify-end border-border border-b px-sm py-xs">
+					<button
+						type="button"
+						data-testid="branch-refresh"
+						aria-label="Refresh branches"
+						title="Refresh branches"
+						onClick={onRefresh}
+						className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-hint outline-none transition-colors hover:bg-hover hover:text-muted focus-visible:ring-2 focus-visible:ring-primary"
+					>
+						<RefreshCw className={`size-3.5 ${refreshing ? "animate-spin" : ""}`} />
+					</button>
+				</div>
+				<Command>
+					<CommandInput placeholder="Search branches…" />
+					<CommandList>
+						<CommandEmpty>No branches found.</CommandEmpty>
+						{remote.length > 0 ? (
+							<CommandGroup heading="Remote">{remote.map(renderItem)}</CommandGroup>
+						) : null}
+						{local.length > 0 ? (
+							<CommandGroup heading="Local">{local.map(renderItem)}</CommandGroup>
+						) : null}
+					</CommandList>
+				</Command>
+			</PopoverContent>
+		</Popover>
+	);
+}

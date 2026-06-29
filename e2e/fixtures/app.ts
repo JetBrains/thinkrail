@@ -31,6 +31,21 @@ function resetState(): void {
 	}
 }
 
+/**
+ * Open the New-Workspace dialog from the first project's "+" and create a *bare* workspace (no prompt, so
+ * no agent session). The M14 dialog replaced the old one-click create; this is the headless equivalent for
+ * the no-agent suite. Resilient to a click that doesn't register under load (re-opens the dialog).
+ */
+export async function createWorkspaceViaDialog(page: Page): Promise<void> {
+	const dialog = page.getByTestId("new-workspace-dialog");
+	await expect(async () => {
+		if (!(await dialog.isVisible())) await page.getByTestId("add-workspace").first().click();
+		await expect(dialog).toBeVisible({ timeout: 5_000 });
+	}).toPass({ timeout: 30_000 });
+	await page.getByTestId("create-workspace").click();
+	await expect(dialog).toBeHidden();
+}
+
 /** Reset state, then open the fixture repo as a project via the (stubbed) picker; auto-selects + expands. */
 export async function openFixtureProject(page: Page): Promise<void> {
 	resetState();
@@ -51,7 +66,7 @@ export async function openWorkspaceChat(page: Page): Promise<void> {
 	await openFixtureProject(page);
 	await expect(async () => {
 		if ((await page.getByTestId("workspace-item").count()) === 0) {
-			await page.getByTestId("add-workspace").first().click();
+			await createWorkspaceViaDialog(page);
 		}
 		await expect(page.locator('[data-testid="workspace-item"][data-active="true"]')).toHaveCount(
 			1,

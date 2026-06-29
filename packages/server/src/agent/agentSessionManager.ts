@@ -2,6 +2,7 @@ import {
 	type AgentSession,
 	createAgentSession,
 	SessionManager,
+	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import type {
 	ImageContent,
@@ -309,6 +310,33 @@ export function getSessionCommands(sessionId: string): SlashCommandInfo[] {
 export function listAvailableModels(): Model<string>[] {
 	// `getAvailable()` is `Model<Api>[]`; the wire uses the looser `Model<string>` (the picker reads id/name/provider).
 	return getPiRuntime().modelRegistry.getAvailable() as unknown as Model<string>[];
+}
+
+/** The model + thinking level a new session resolves to (settings default if available, else first available). */
+export interface DefaultModelResult {
+	model: Model<string> | null;
+	thinkingLevel: ThinkingLevel;
+}
+
+/**
+ * The default the *next* session would start with — so the New-Workspace dialog can show the exact model
+ * pre-session (not a "Default" placeholder). Mirrors pi's resolution for a fresh session: the settings
+ * default (if it's available), else the first available model. Passing it back to `session.create` is a
+ * no-op vs. omitting it, so an `@agent` test that doesn't touch the picker still lands on the pinned model.
+ */
+export function getDefaultModel(): DefaultModelResult {
+	const { modelRegistry } = getPiRuntime();
+	const available = modelRegistry.getAvailable();
+	const settings = SettingsManager.create(process.cwd());
+	const provider = settings.getDefaultProvider();
+	const modelId = settings.getDefaultModel();
+	const pinned =
+		provider && modelId
+			? available.find((m) => m.provider === provider && m.id === modelId)
+			: undefined;
+	const model = (pinned ?? available[0] ?? null) as Model<string> | null;
+	const thinkingLevel = settings.getDefaultThinkingLevel() ?? "medium";
+	return { model, thinkingLevel };
 }
 
 export function isSessionStreaming(sessionId: string): boolean {

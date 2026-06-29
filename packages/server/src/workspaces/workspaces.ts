@@ -44,8 +44,13 @@ function diffStats(worktreePath: string, baseBranch: string): DiffStats {
 	};
 }
 
-/** Create a workspace = a `git worktree` on its own branch, under the data dir. */
-export function createWorkspace(projectId: string, name?: string): Workspace {
+/**
+ * Create a workspace = a `git worktree` on its own fresh branch, under the data dir. `baseRef` is the base
+ * the branch is cut from (the New-Workspace picker): a remote ref (`origin/<b>`) is `git fetch`ed first,
+ * then `worktree add -b <branch> <baseRef>` cuts a *local* branch from it — never a detached remote
+ * checkout. Omitted → branch off the repo's current `HEAD` (the M5 behavior).
+ */
+export function createWorkspace(projectId: string, name?: string, baseRef?: string): Workspace {
 	const project = getProjects().find((p) => p.id === projectId);
 	if (!project) throw new Error(`Unknown project: ${projectId}`);
 
@@ -55,12 +60,23 @@ export function createWorkspace(projectId: string, name?: string): Workspace {
 		: nextAutoBranch(project.path);
 	const wsName = branch;
 
-	const head = git(project.path, ["rev-parse", "--abbrev-ref", "HEAD"]);
-	const baseBranch = head.ok ? head.out : "HEAD";
+	const base = baseRef?.trim();
+	let baseBranch: string;
+	if (base) {
+		// A remote ref: fetch it so the local tip is current before branching (best-effort — offline keeps
+		// whatever ref already exists locally; `worktree add` then fails loudly if the ref is unknown).
+		if (base.startsWith("origin/")) {
+			git(project.path, ["fetch", "origin", base.slice("origin/".length)]);
+		}
+		baseBranch = base;
+	} else {
+		const head = git(project.path, ["rev-parse", "--abbrev-ref", "HEAD"]);
+		baseBranch = head.ok ? head.out : "HEAD";
+	}
 
 	const worktreePath = join(dataDir(), "worktrees", project.slug, branch);
 	mkdirSync(dirname(worktreePath), { recursive: true });
-	const added = git(project.path, ["worktree", "add", worktreePath, "-b", branch]);
+	const added = git(project.path, ["worktree", "add", worktreePath, "-b", branch, baseBranch]);
 	if (!added.ok) throw new Error(`git worktree add failed: ${added.err}`);
 
 	const workspace: Workspace = {

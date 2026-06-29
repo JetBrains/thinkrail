@@ -36,7 +36,8 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `persistence` | JSON app state under the data dir (projects + workspaces) | [persistence/SPEC.md](src/persistence/SPEC.md) |
 | `projects` | open/list/close git repos as projects (validate, dedupe, slug) | [projects/SPEC.md](src/projects/SPEC.md) |
 | `workspaces` | workspaces = `git worktree`s on their own branch | [workspaces/SPEC.md](src/workspaces/SPEC.md) |
-| `git` | the `git(cwd, args)` runner + worktree status/diff vs base | [git/SPEC.md](src/git/SPEC.md) |
+| `git` | the `git(cwd, args)` runner + worktree status/diff vs base + branch list | [git/SPEC.md](src/git/SPEC.md) |
+| `github` | read-only local `gh` auth status (shell-out) for the New-Workspace surface | [github/SPEC.md](src/github/SPEC.md) |
 | `fs` | read dirs/files inside a worktree (path-contained) | [fs/SPEC.md](src/fs/SPEC.md) |
 | `terminal` | workspace-scoped `bun-pty` terminals | [terminal/SPEC.md](src/terminal/SPEC.md) |
 | `agent` | in-process pi `AgentSession`s + the shared pi runtime | [agent/SPEC.md](src/agent/SPEC.md) |
@@ -48,11 +49,11 @@ internals**. The edges between them are owned here (see the dependency graph), n
 
 `host` is the **only composition root** — it wires each feature's handlers into the WS registry.
 
-- `host` → `projects`, `workspaces`, `git`, `fs`, `terminal`, `dialog`
+- `host` → `projects`, `workspaces`, `git`, `github`, `fs`, `terminal`, `dialog`
 - `workspaces` → `projects`, `git`, `persistence`
 - `projects`, `git`, `fs`, `terminal` → `persistence`
 - `agent` → (no internal deps — only the pi runtime)
-- `persistence`, `dialog` → (leaves)
+- `persistence`, `dialog`, `github` → (leaves)
 
 Rules: features never import `host`, and never each other except the edges above. The graph is acyclic.
 `agent`'s WS surface (`session.*` + `pi.event` forwarding) attaches to `host` at M11.

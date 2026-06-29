@@ -9,6 +9,7 @@
 	--secondary: #464857;
 	--blue: #6ac8ff;
 	--green: #6ad859;
+	--green-tint: rgba(106, 216, 89, 0.12);
 	--red: #ff4b75;
 	--gold: #ffd54b;
 	/* White opacity scale */
@@ -21,6 +22,7 @@
 	--white-100: rgba(255, 255, 255, 1);
 	/* Elevation / overlays */
 	--on-accent: #fff;
+	--on-accent-16: rgba(255, 255, 255, 0.16);
 	--sunken: rgba(0, 0, 0, 0.12);
 	--overlay: rgba(0, 0, 0, 0.5);
 	--shadow-xs: 0 1px 3px rgba(0, 0, 0, 0.18);

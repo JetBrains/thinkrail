@@ -24,7 +24,9 @@ in-process `uiContext` dialog calls into WS frames.
     with a per-session `SessionManager`; a shared `registerSession` forwards each event tagged with its id +
     `bindExtensions({ mode:'rpc', uiContext })`; `prompt`/`steer`/`followUp` (with images) / `abort` /
     `setModel` / `setThinkingLevel` / `compact` / `getSessionStats` (+ contextUsage) / `getSessionCommands` /
-    `listAvailableModels`; the **hydration read side** — `listSessions(workspaceId, cwd)` (live sessions
+    `listAvailableModels` / `getDefaultModel` (the model + thinking a fresh session resolves to — settings
+    default if available, else first available — so the New-Workspace dialog shows the exact pre-session
+    model); the **hydration read side** — `listSessions(workspaceId, cwd)` (live sessions
     **unioned with on-disk** ones pi persisted under `cwd`, live winning on id → `SessionSummary[]` tagged
     `live`) + `getSessionMessages(sessionId, workspaceId, cwd)` (re-opens a disk session into the manager if
     not live, then returns `{ summary, messages }` — the pi-canonical `Message` subset); the disk half is

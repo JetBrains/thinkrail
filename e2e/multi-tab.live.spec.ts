@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openFixtureProject } from "./fixtures/app";
+import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
 
 // Tagged @agent (see agent.live.spec.ts): a REAL pi agent + two browser tabs against ONE host. Proves M16
 // (hydrate-then-stream): a second client reconstructs the workspace's chats + transcript on connect, and
@@ -13,7 +13,7 @@ test("a second tab hydrates the same workspace's chats and then sees live update
 
 	// --- Tab A: create a workspace, open a chat, run a turn -----------------------------------------
 	await openFixtureProject(page);
-	await page.getByTestId("add-workspace").first().click();
+	await createWorkspaceViaDialog(page);
 	await expect(page.getByTestId("workspace-item").first()).toHaveAttribute("data-active", "true");
 	await page.getByTestId("start-chat").click();
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);

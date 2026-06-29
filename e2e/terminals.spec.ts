@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import {
+	createWorkspaceViaDialog,
 	openFixtureProject,
 	openTerminal,
 	runInTerminal,
@@ -11,7 +12,7 @@ test("a workspace opens a terminal automatically, rooted in the worktree, with w
 	page,
 }) => {
 	await openFixtureProject(page);
-	await page.getByTestId("add-workspace").first().click();
+	await createWorkspaceViaDialog(page);
 	await expect(page.getByTestId("workspace-item")).toHaveCount(1);
 
 	// No click needed — landing on the workspace opens a terminal on its own.
@@ -30,13 +31,13 @@ test("a workspace opens a terminal automatically, rooted in the worktree, with w
 
 test("terminals are workspace-scoped and survive workspace switches", async ({ page }) => {
 	await openFixtureProject(page);
-	await page.getByTestId("add-workspace").first().click(); // workspace 1 (auto terminal)
+	await createWorkspaceViaDialog(page); // workspace 1 (auto terminal)
 	await waitTerminalReady(page);
 	await runInTerminal(page, "echo TR_WS1_BUFFER");
 	await expect(visibleTerminal(page)).toContainText("TR_WS1_BUFFER");
 
 	// A fresh second workspace gets its own auto terminal — not workspace 1's.
-	await page.getByTestId("add-workspace").first().click(); // workspace 2 (now active)
+	await createWorkspaceViaDialog(page); // workspace 2 (now active)
 	await expect(page.getByTestId("workspace-item")).toHaveCount(2);
 	await waitTerminalReady(page);
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
@@ -52,7 +53,7 @@ test("multiple terminals per workspace keep independent buffers and can be close
 	page,
 }) => {
 	await openFixtureProject(page);
-	await page.getByTestId("add-workspace").first().click();
+	await createWorkspaceViaDialog(page);
 
 	await waitTerminalReady(page); // the auto terminal (terminal 1)
 	await runInTerminal(page, "echo TR_ONE");

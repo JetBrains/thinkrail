@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { openFixtureProject } from "./fixtures/app";
+import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
 
 test("opens a file in a center Monaco tab, focuses on re-open, and closes", async ({ page }) => {
 	await openFixtureProject(page);
 
 	// Create a workspace → its worktree files populate the All-files tree.
-	await page.getByTestId("add-workspace").first().click();
+	await createWorkspaceViaDialog(page);
 	const readme = page.getByTestId("file-node").filter({ hasText: "README.md" });
 	await expect(readme).toBeVisible();
 

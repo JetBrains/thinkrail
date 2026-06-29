@@ -15,8 +15,19 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
 
 ## Boundary
 
-- **Owns:** `ProjectTree`, `FileTree`, `RightPanel`, `ChangesPanel` + lazy `DiffViewer`, `CenterTabs` +
-  lazy `MonacoEditor`, `TerminalsPanel` + lazy `TerminalInstance`. Panels compose their own sub-panels
+- **Owns:** `ProjectTree` (+ the `NewWorkspaceDialog` its "+" opens), `FileTree`, `RightPanel`,
+  `ChangesPanel` + lazy `DiffViewer`, `CenterTabs` + lazy `MonacoEditor`, `TerminalsPanel` + lazy
+  `TerminalInstance`. **`NewWorkspaceDialog`** (M14) is the create-and-kick-off surface: a base-branch
+  combobox (`git.listBranches`, degrading to local branches offline; a Refresh re-lists; `origin/HEAD` is
+  filtered so no stray `origin`), a project picker, the prompt hero, and the reused
+  `chat/ModelSelector`+`ThinkingSelector` in **pre-session** mode — preselected to the host's resolved
+  default via `model.default` so the exact model shows (values held in dialog state, applied at create
+  time). The pickers' popovers portal into the dialog node (so their lists scroll under the Dialog scroll
+  lock). Create = `workspace.create({ projectId, baseRef })` → set active → (with a prompt) open a chat +
+  `session.create({ model, thinkingLevel })` + fire-and-forget `prompt`; with an empty prompt it just
+  creates the workspace. (`gh` status lives in `SettingsDialog`, not the create dialog.) **`SettingsDialog`** (M14) is the app-settings surface the shell's topbar gear opens — its
+  "Local GitHub" block shows `github.authStatus()` (Connected + login / Not connected) with a Refresh.
+  Panels compose their own sub-panels
   (e.g. `RightPanel`→`FileTree`/`ChangesPanel`, `CenterTabs`→`MonacoEditor`) — an internal hierarchy.
   `CenterTabs` closing a chat tab routes to `store.closeChatToHistory` (keeps the session alive) and shows a
   **chat-history** dropdown (recently-closed + disk-only chats, shown only when non-empty). On
@@ -27,8 +38,10 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   host.
 - **Public surface:** the top-level panels the shell mounts (`ProjectTree`, `CenterTabs`, `RightPanel`,
   `TerminalsPanel`), imported **per-file** (no barrel — keeps the lazy chunks split).
-- **Allowed deps:** `store`, `transport`, `components/ui`, `lib`, `contracts`; `lucide-react`; and the
-  heavy libs each lazy panel owns (`monaco-editor`, `shiki`, `@xterm/*`) loaded via `import()`.
+- **Allowed deps:** `store`, `transport`, `components/ui` (incl. `popover`/`command`/`textarea` for the
+  dialog), `chat` (`ModelSelector`/`ThinkingSelector`, reused by `NewWorkspaceDialog`), `lib`,
+  `contracts`; `lucide-react`; and the heavy libs each lazy panel owns (`monaco-editor`, `shiki`,
+  `@xterm/*`) loaded via `import()`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `shell`; reaching across unrelated panels.
 
 ## Get right

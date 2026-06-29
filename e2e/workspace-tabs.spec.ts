@@ -1,20 +1,19 @@
 import { expect, test } from "@playwright/test";
-import { openFixtureProject } from "./fixtures/app";
+import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
 
 test("editor tabs are scoped to the active workspace", async ({ page }) => {
 	await openFixtureProject(page);
-	const addWorkspace = page.getByTestId("add-workspace").first();
 	const tabs = page.getByTestId("editor-tab");
 	const workspaces = page.getByTestId("workspace-item");
 
 	// Workspace 1: open README.md in a center tab.
-	await addWorkspace.click();
+	await createWorkspaceViaDialog(page);
 	await expect(workspaces).toHaveCount(1);
 	await page.getByTestId("file-node").filter({ hasText: "README.md" }).dblclick();
 	await expect(tabs).toHaveCount(1);
 
 	// Workspace 2 is brand new → it must show none of workspace 1's tabs.
-	await addWorkspace.click();
+	await createWorkspaceViaDialog(page);
 	await expect(workspaces).toHaveCount(2);
 	await expect(workspaces.nth(1)).toHaveAttribute("data-active", "true");
 	await expect(tabs).toHaveCount(0);

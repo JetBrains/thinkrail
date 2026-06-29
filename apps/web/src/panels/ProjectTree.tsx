@@ -1,14 +1,5 @@
 import type { Project, Workspace } from "@thinkrail-pi/contracts";
-import {
-	Archive,
-	ChevronDown,
-	ChevronRight,
-	Folder,
-	GitBranch,
-	Globe,
-	Loader2,
-	Plus,
-} from "lucide-react";
+import { Archive, ChevronDown, ChevronRight, Folder, GitBranch, Globe, Plus } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,6 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
+import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 
 /** Left-nav: projects → workspaces (git worktrees). Open a repo, select it, create/select workspaces. */
 export function ProjectTree() {
@@ -31,7 +23,9 @@ export function ProjectTree() {
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
 
 	const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
-	const [creatingFor, setCreatingFor] = useState<string | null>(null);
+	// The project a New-Workspace dialog is open for (null = closed). The "+" opens it instead of
+	// creating a workspace directly (M14).
+	const [dialogProjectId, setDialogProjectId] = useState<string | null>(null);
 
 	const loadWorkspaces = async (projectId: string) => {
 		useAppStore
@@ -80,18 +74,11 @@ export function ProjectTree() {
 		}
 	};
 
-	const addWorkspace = async (projectId: string) => {
-		setCreatingFor(projectId);
-		try {
-			const workspace = await getTransport().request("workspace.create", { projectId });
-			setExpanded((prev) => new Set(prev).add(projectId));
-			await loadWorkspaces(projectId);
-			useAppStore.getState().setActiveWorkspace(workspace.id);
-		} catch {
-			// Ignored until the error-handling pass.
-		} finally {
-			setCreatingFor(null);
-		}
+	// After the dialog creates a workspace: expand its project + reload the list (the dialog itself sets
+	// the active workspace and kicks off any chat).
+	const onWorkspaceCreated = async (workspace: Workspace) => {
+		setExpanded((prev) => new Set(prev).add(workspace.projectId));
+		await loadWorkspaces(workspace.projectId);
 	};
 
 	const archiveWorkspace = async (projectId: string, workspaceId: string) => {
@@ -130,10 +117,9 @@ export function ProjectTree() {
 									isSelected={selectedProjectId === project.id}
 									isExpanded={isExpanded}
 									workspaceCount={list.length}
-									isCreating={creatingFor === project.id}
 									onToggle={() => toggleExpand(project.id)}
 									onSelect={() => void selectProject(project.id)}
-									onAddWorkspace={() => void addWorkspace(project.id)}
+									onAddWorkspace={() => setDialogProjectId(project.id)}
 								/>
 								{isExpanded && (
 									<ul className="flex flex-col">
@@ -157,6 +143,17 @@ export function ProjectTree() {
 					})}
 				</ul>
 			)}
+
+			{dialogProjectId !== null ? (
+				<NewWorkspaceDialog
+					open
+					projectId={dialogProjectId}
+					onOpenChange={(o) => {
+						if (!o) setDialogProjectId(null);
+					}}
+					onCreated={(ws) => void onWorkspaceCreated(ws)}
+				/>
+			) : null}
 		</nav>
 	);
 }
@@ -214,7 +211,6 @@ function ProjectRow({
 	isSelected,
 	isExpanded,
 	workspaceCount,
-	isCreating,
 	onToggle,
 	onSelect,
 	onAddWorkspace,
@@ -223,7 +219,6 @@ function ProjectRow({
 	isSelected: boolean;
 	isExpanded: boolean;
 	workspaceCount: number;
-	isCreating: boolean;
 	onToggle: () => void;
 	onSelect: () => void;
 	onAddWorkspace: () => void;
@@ -261,11 +256,10 @@ function ProjectRow({
 				type="button"
 				data-testid="add-workspace"
 				aria-label="Create workspace"
-				disabled={isCreating}
 				onClick={onAddWorkspace}
-				className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-muted opacity-0 transition hover:bg-elevated hover:text-text group-hover:opacity-100 disabled:opacity-50"
+				className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-muted opacity-0 transition hover:bg-elevated hover:text-text group-hover:opacity-100"
 			>
-				{isCreating ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+				<Plus className="size-4" />
 			</button>
 		</div>
 	);

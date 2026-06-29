@@ -4,6 +4,7 @@ import {
 	compactSession,
 	createSession,
 	followUpSession,
+	getDefaultModel,
 	getSessionCommands,
 	getSessionMessages,
 	getSessionStats,
@@ -18,7 +19,8 @@ import {
 } from "../agent";
 import { selectDirectory } from "../dialog";
 import { readDir, readFile } from "../fs";
-import { gitDiff, gitStatus } from "../git";
+import { gitDiff, gitStatus, listBranches } from "../git";
+import { githubAuthStatus, githubRefresh } from "../github";
 import { closeProject, listProjects, openProject } from "../projects";
 import { closeTerminal, createTerminal, resizeTerminal, writeTerminal } from "../terminal";
 import {
@@ -38,17 +40,19 @@ const handlers: Record<string, Handler> = {
 		closeProject((params as { id: string }).id);
 		return { ok: true } as const;
 	},
-	"workspace.create": (params) =>
-		createWorkspace(
-			(params as { projectId: string }).projectId,
-			(params as { name?: string }).name,
-		),
+	"workspace.create": (params) => {
+		const p = params as { projectId: string; name?: string; baseRef?: string };
+		return createWorkspace(p.projectId, p.name, p.baseRef);
+	},
 	"workspace.list": (params) => listWorkspaces((params as { projectId: string }).projectId),
 	"workspace.remove": (params) => {
 		removeWorkspace((params as { id: string }).id);
 		return { ok: true } as const;
 	},
 	"workspace.diffStats": (params) => workspaceDiffStats((params as { id: string }).id),
+	"git.listBranches": (params) => listBranches((params as { projectId: string }).projectId),
+	"github.authStatus": () => githubAuthStatus(),
+	"github.refresh": () => githubRefresh(),
 	"dialog.selectDirectory": () => selectDirectory(),
 	"fs.readDir": (params) =>
 		readDir((params as { workspaceId: string }).workspaceId, (params as { path: string }).path),
@@ -75,9 +79,18 @@ const handlers: Record<string, Handler> = {
 	// session.* — the pi engine. A thrown/failed call returns a `{ ok:false, error }` WS response;
 	// streaming faults arrive as `pi.event`s (the error/agent_end variants), not here.
 	"session.create": async (params) => {
-		const { workspaceId } = params as { workspaceId: string };
-		const ws = getWorkspace(workspaceId);
-		return createSession({ cwd: ws.worktreePath, workspaceId });
+		const p = params as {
+			workspaceId: string;
+			model?: Model<string>;
+			thinkingLevel?: ThinkingLevel;
+		};
+		const ws = getWorkspace(p.workspaceId);
+		return createSession({
+			cwd: ws.worktreePath,
+			workspaceId: p.workspaceId,
+			...(p.model ? { model: p.model } : {}),
+			...(p.thinkingLevel ? { thinkingLevel: p.thinkingLevel } : {}),
+		});
 	},
 	"session.prompt": async (params) => {
 		const p = params as { sessionId: string; text: string; images?: ImageContent[] };
@@ -133,6 +146,7 @@ const handlers: Record<string, Handler> = {
 		return { ok: true } as const;
 	},
 	"model.list": () => listAvailableModels(),
+	"model.default": () => getDefaultModel(),
 };
 
 /** Route a WS request to its handler. Throws on unknown method (→ a `{ ok:false }` WS response). */

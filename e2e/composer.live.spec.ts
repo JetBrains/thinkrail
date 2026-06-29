@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openFixtureProject } from "./fixtures/app";
+import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
 
 // Tagged @agent (see agent.live.spec.ts): excluded from the default `bun run e2e`; run via
 // `bun run e2e:agent`. These exercise the M12 Composer + cheap wins against a REAL pi agent + pi's
@@ -8,7 +8,7 @@ import { openFixtureProject } from "./fixtures/app";
 /** Create a workspace, open a chat tab in it, and wait for the composer to mount. */
 async function openChat(page: import("@playwright/test").Page): Promise<void> {
 	await openFixtureProject(page);
-	await page.getByTestId("add-workspace").first().click();
+	await createWorkspaceViaDialog(page);
 	await expect(page.getByTestId("workspace-item").first()).toHaveAttribute("data-active", "true");
 	await page.getByTestId("start-chat").click();
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);

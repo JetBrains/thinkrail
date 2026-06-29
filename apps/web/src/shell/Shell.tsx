@@ -1,8 +1,11 @@
+import { Settings } from "lucide-react";
+import { useState } from "react";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../components/ui/resizable";
 import { PRODUCT_NAME } from "../constants/branding";
 import { CenterTabs } from "../panels/CenterTabs";
 import { ProjectTree } from "../panels/ProjectTree";
 import { RightPanel } from "../panels/RightPanel";
+import { SettingsDialog } from "../panels/SettingsDialog";
 import { TerminalsPanel } from "../panels/TerminalsPanel";
 import { useAppStore } from "../store";
 import type { ConnectionStatus } from "../transport";
@@ -21,20 +24,34 @@ const STATUS_DOT: Record<ConnectionStatus, string> = {
 
 export function Shell() {
 	const status = useAppStore((s) => s.status);
+	const [settingsOpen, setSettingsOpen] = useState(false);
 	return (
 		<div data-testid="shell" className="grid h-full grid-rows-[auto_1fr]">
 			<header className="flex items-center justify-between border-b border-border2 bg-bg-dark px-lg py-sm">
 				<span className="font-[var(--font-accent)] text-lg font-extrabold tracking-[0.5px] text-primary">
 					{PRODUCT_NAME}
 				</span>
-				<span
-					data-testid="connection-status"
-					data-status={status}
-					className="inline-flex items-center gap-sm text-sm text-muted"
-				>
-					<span className={`size-2 rounded-full ${STATUS_DOT[status]}`} />
-					{STATUS_LABEL[status]}
-				</span>
+				<div className="flex items-center gap-md">
+					<span
+						data-testid="connection-status"
+						data-status={status}
+						className="inline-flex items-center gap-sm text-sm text-muted"
+					>
+						<span className={`size-2 rounded-full ${STATUS_DOT[status]}`} />
+						{STATUS_LABEL[status]}
+					</span>
+					<button
+						type="button"
+						data-testid="open-settings"
+						aria-label="Settings"
+						title="Settings"
+						onClick={() => setSettingsOpen(true)}
+						className="flex size-7 items-center justify-center rounded-[var(--radius-sm)] text-muted outline-none transition-colors hover:bg-hover hover:text-text focus-visible:ring-2 focus-visible:ring-primary"
+					>
+						<Settings className="size-4" />
+					</button>
+				</div>
+				<SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
 			</header>
 			<ResizablePanelGroup direction="horizontal" autoSaveId="thinkrail-shell" className="min-h-0">
 				<ResizablePanel id="left" order={1} defaultSize={18} minSize={12}>

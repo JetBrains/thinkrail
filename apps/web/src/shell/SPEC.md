@@ -15,7 +15,7 @@ later, the mobile single-view-with-switcher).
 ## Boundary
 
 - **Owns:** `Shell.tsx` — the resizable 3 columns (projects | center | right-over-terminals), the topbar
-  wordmark + connection-status pill.
+  wordmark + connection-status pill + a Settings gear that opens the `panels/SettingsDialog` (M14).
 - **Public surface:** `Shell`.
 - **Allowed deps:** `panels`, `store` (status), `transport` (`ConnectionStatus` type), `components/ui`
   (resizable), `constants` (branding).

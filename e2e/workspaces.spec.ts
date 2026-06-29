@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { expect, test } from "@playwright/test";
-import { openFixtureProject } from "./fixtures/app";
+import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 
 test("creates, archives, and re-creates worktree workspaces (no branch collision)", async ({
@@ -8,10 +8,9 @@ test("creates, archives, and re-creates worktree workspaces (no branch collision
 }) => {
 	await openFixtureProject(page);
 	const items = page.getByTestId("workspace-item");
-	const addWorkspace = page.getByTestId("add-workspace").first();
 
-	// Create a workspace — a real git worktree appears.
-	await addWorkspace.click();
+	// Create a workspace via the New-Workspace dialog — a real git worktree appears.
+	await createWorkspaceViaDialog(page);
 	await expect(items).toHaveCount(1);
 	const worktrees = execFileSync("git", ["-C", E2E_FIXTURE_REPO, "worktree", "list"], {
 		encoding: "utf8",
@@ -30,6 +29,6 @@ test("creates, archives, and re-creates worktree workspaces (no branch collision
 	expect(afterArchive.trim().split("\n").length).toBe(1);
 
 	// Create again — must succeed despite the lingering branch (the bug was a silent no-op here).
-	await addWorkspace.click();
+	await createWorkspaceViaDialog(page);
 	await expect(items).toHaveCount(1);
 });
