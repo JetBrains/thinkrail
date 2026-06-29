@@ -1,0 +1,74 @@
+name: E2E
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A run boots the full stack and is far slower than the unit suite; cancel
+# superseded runs on the same ref so a new push doesn't queue behind a stale one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            e2e/package-lock.json
+
+      # Pre-warm the stack's deps. playwright.config.ts boots the stack itself
+      # (its `webServer` runs ./run.sh, which would otherwise uv-sync and
+      # npm-install on first hit); doing it up front keeps the boot inside the
+      # webServer's 5-min window and surfaces a dependency failure as its own
+      # step instead of an opaque webServer timeout.
+      - name: Install backend deps
+        working-directory: backend
+        run: uv sync
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install e2e deps
+        working-directory: e2e
+        run: npm ci
+
+      - name: Install Playwright browser
+        working-directory: e2e
+        run: npx playwright install --with-deps chromium
+
+      - name: Run e2e suite
+        working-directory: e2e
+        # playwright.config.ts spawns the full ThinkRail stack via ./run.sh on
+        # free ports and points the runner at it — no manual server start. CI=true
+        # (set by Actions) makes the config forbid `.only`.
+        run: npm test
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            e2e/playwright-report/
+            e2e/test-results/
+          retention-days: 7
