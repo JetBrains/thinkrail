@@ -1,8 +1,9 @@
 import { test, expect, type Page } from "../fixtures";
 import { openProject } from "../helpers/project";
 import { header, newSession } from "../helpers/selectors";
-import { seedSessionDefaults, getSessionDefaults } from "../helpers/appSettings";
+import { seedSessionDefaults, getSessionDefaults, type SessionDefaults } from "../helpers/appSettings";
 import { selectedLabel } from "../helpers/draftConfig";
+import { acquireAppStoreLock, releaseAppStoreLock } from "../helpers/appStoreLock";
 
 /**
  * Settings modal round-trip: open → flip Session Defaults → save → verify the
@@ -29,6 +30,18 @@ async function pickSetting(page: Page, rowLabel: string, optLabel: string): Prom
     .first()
     .click();
 }
+
+let _savedDefaults: SessionDefaults;
+
+test.beforeEach(async ({ tempProject }) => {
+  await acquireAppStoreLock();
+  _savedDefaults = await getSessionDefaults(tempProject.path);
+});
+
+test.afterEach(async ({ tempProject }) => {
+  await seedSessionDefaults(tempProject.path, _savedDefaults);
+  releaseAppStoreLock();
+});
 
 test("settings modal Session Defaults tab saves new defaults and they flow into new sessions", async ({
   page,

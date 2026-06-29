@@ -1,8 +1,9 @@
 import { test, expect } from "../fixtures";
 import { openProject } from "../helpers/project";
 import { newSession } from "../helpers/selectors";
-import { seedSessionDefaults } from "../helpers/appSettings";
+import { seedSessionDefaults, getSessionDefaults, type SessionDefaults } from "../helpers/appSettings";
 import { selectedLabel } from "../helpers/draftConfig";
+import { acquireAppStoreLock, releaseAppStoreLock } from "../helpers/appStoreLock";
 
 /**
  * Regression: a new session draft must pick up the user-scoped session
@@ -16,6 +17,18 @@ import { selectedLabel } from "../helpers/draftConfig";
  * them. Each dropdown's trigger shows the active option's label; for perms
  * and effort the SDK value doubles as that label.
  */
+
+let _savedDefaults: SessionDefaults;
+
+test.beforeEach(async ({ tempProject }) => {
+  await acquireAppStoreLock();
+  _savedDefaults = await getSessionDefaults(tempProject.path);
+});
+
+test.afterEach(async ({ tempProject }) => {
+  await seedSessionDefaults(tempProject.path, _savedDefaults);
+  releaseAppStoreLock();
+});
 
 test("new-session draft reflects user-scoped session defaults", async ({
   page,

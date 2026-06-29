@@ -59,8 +59,8 @@ const FRONTEND_URL = `http://localhost:${FRONTEND_PORT}`;
 const BACKEND_URL = `http://localhost:${BACKEND_PORT}`;
 
 // Helpers / globalSetup / specs read these from `process.env`. We set them
-// here at config load time so the single worker (workers=1) and the spawned
-// webServer all see the same values.
+// here at config load time so all workers and the spawned webServer all see
+// the same values.
 process.env.THINKRAIL_FRONTEND_URL = FRONTEND_URL;
 process.env.THINKRAIL_BACKEND_URL = BACKEND_URL;
 
@@ -72,7 +72,7 @@ export default defineConfig({
   timeout: 90_000,
   expect: { timeout: 15_000 },
   fullyParallel: false,
-  workers: 1,
+  workers: process.env.CI ? 1 : 4,
   retries: 0,
   forbidOnly: !!process.env.CI,
   reporter: [["list"], ["html", { open: "never" }]],

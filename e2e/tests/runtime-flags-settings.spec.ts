@@ -1,7 +1,8 @@
 import { test, expect } from "../fixtures";
 import { openProject } from "../helpers/project";
 import { header, newSession } from "../helpers/selectors";
-import { seedSessionDefaults, getSessionDefaults } from "../helpers/appSettings";
+import { seedSessionDefaults, getSessionDefaults, type SessionDefaults } from "../helpers/appSettings";
+import { acquireAppStoreLock, releaseAppStoreLock } from "../helpers/appStoreLock";
 
 /**
  * Runtime-declared flags render as toggles in Session Defaults and persist to
@@ -14,6 +15,18 @@ import { seedSessionDefaults, getSessionDefaults } from "../helpers/appSettings"
 
 const MODAL = ".settings-modal";
 const NAV = `${MODAL} nav[aria-label='Settings sections']`;
+
+let _savedDefaults: SessionDefaults;
+
+test.beforeEach(async ({ tempProject }) => {
+  await acquireAppStoreLock();
+  _savedDefaults = await getSessionDefaults(tempProject.path);
+});
+
+test.afterEach(async ({ tempProject }) => {
+  await seedSessionDefaults(tempProject.path, _savedDefaults);
+  releaseAppStoreLock();
+});
 
 test("the runtime's 1M-context flag renders in settings and persists when toggled", async ({
   page,
