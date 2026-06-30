@@ -38,13 +38,19 @@ a future `packages/chat-ui`).
     (arranges them); `ExtUiDialog` (renders pi's `select`/`confirm`/`input`/`editor` from the
     `pi.extensionUi` bridge).
   - **Tool-renderer registry** (`toolRegistry.tsx`) — `registerToolRenderer` / `getToolRenderer` /
-    `DefaultToolRenderer` + `ToolRenderer` / `ToolRenderProps` / `toText`. **THE extension point.**
+    `getToolSummary` / `DefaultToolRenderer` + `ToolRenderer` / `ToolSummary` / `ToolRenderProps` /
+    `toText`. **THE extension point.** A registration is a renderer (the card *body*) plus an optional
+    `summary` (a pure one-liner for the collapsed header — e.g. a bash command, a file name).
   - **Built-in tool renderers** (`tools/`) — props-driven cards for pi's core tools: `bash` (terminal
     block), `read`/`write` (highlighted file via the shared `CodeBlock`), `edit` (removed/added line
     diff), plus the shared `CodeBlock` / `Collapsible` (long output folds behind a "Show all N lines"
-    toggle) and pure `toolHelpers`. Registered via `registerToolRenderer` by `tools/register` (a
-    side-effect import in `ChatView`, so it runs once when the chat module mounts). Unregistered tools
-    still fall back to `DefaultToolRenderer`.
+    toggle) and pure `toolHelpers`. Registered (with their header summaries) via `registerToolRenderer`
+    by `tools/register` (a side-effect import in `ChatView`, so it runs once when the chat module
+    mounts). Unregistered tools still fall back to `DefaultToolRenderer`.
+  - **`ToolCard`** pairs a tool call with its result and is **collapsed by default** — routine calls
+    (bash/read/edit/…) stay folded so they don't clutter the chat; the header shows the tool name + its
+    registered `summary` and a chevron, and clicking it reveals the body. Errors **auto-expand** so
+    failures stay visible; a manual toggle wins thereafter.
   - **View types** (`types.ts`) — `ChatTurn` (user/assistant are pi `UserMessage`/`AssistantMessage`;
     `system` is a web-local notice; `retry` is a live auto-retry countdown) + `ToolResultState` +
     `ExtUiDialogRequest` (the reply-needing
