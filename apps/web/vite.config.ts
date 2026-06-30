@@ -13,8 +13,9 @@ export default defineConfig({
 	server: {
 		port: 24269,
 		proxy: {
+			// The dev launcher (`bun run dev`) sets THINKRAIL_PI_PORT to the host's free port; match it.
 			"/ws": {
-				target: "ws://localhost:24242",
+				target: `ws://localhost:${process.env.THINKRAIL_PI_PORT ?? 24242}`,
 				ws: true,
 			},
 		},

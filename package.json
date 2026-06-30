@@ -9,7 +9,7 @@
 	"type": "module",
 	"scripts": {
 		"build": "turbo run build",
-		"dev": "turbo run dev",
+		"dev": "bun scripts/dev.ts",
 		"dev:server": "turbo run dev --filter=@thinkrail-pi/server",
 		"dev:web": "turbo run dev --filter=@thinkrail-pi/web",
 		"build:web": "turbo run build --filter=@thinkrail-pi/web",
@@ -29,6 +29,7 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.5.0",
+		"@thinkrail-pi/shared": "workspace:*",
 		"@playwright/test": "^1.61.0",
 		"husky": "^9.1.7",
 		"turbo": "^2.9.18",

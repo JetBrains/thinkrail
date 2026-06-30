@@ -5,31 +5,25 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { type CreateServerOptions, createServer, type RunningServer } from "@thinkrail-pi/server";
+import { findFreePort } from "@thinkrail-pi/shared/freePort";
 import { resolveShellEnv } from "@thinkrail-pi/shared/shellEnv";
-import { type CliOptions, parseArgs, USAGE } from "./args";
+import { type CliOptions, DEFAULT_HOST, DEFAULT_PORT, parseArgs, USAGE } from "./args";
 
 /** The built web app shipped with the bin, relative to this file (src in dev, dist when bundled). */
 const DEFAULT_STATIC_DIR = resolve(import.meta.dir, "../../web/dist");
 
-/** Bun.serve throws synchronously when the port is taken (`code === "EADDRINUSE"`). */
-function isAddrInUse(err: unknown): boolean {
-	return (
-		(err as { code?: string } | null)?.code === "EADDRINUSE" ||
-		(err instanceof Error && err.message.includes("EADDRINUSE"))
-	);
-}
-
-/** Start the host, falling back to an OS-assigned port if the requested one is in use. */
-function startServer(options: CreateServerOptions): RunningServer {
-	try {
-		return createServer(options);
-	} catch (err) {
-		if (isAddrInUse(err) && options.port !== 0) {
-			console.warn(`Port ${options.port} is in use; falling back to a free port.`);
-			return createServer({ ...options, port: 0 });
-		}
-		throw err;
+/**
+ * Start the host on a free port at or above the requested one. `Bun.serve` does not report a busy
+ * `localhost` port (it can share it via `SO_REUSEPORT`), so `findFreePort` probes for an open one rather
+ * than relying on a bind error.
+ */
+async function startServer(options: CreateServerOptions): Promise<RunningServer> {
+	const requested = options.port ?? DEFAULT_PORT;
+	const port = await findFreePort(requested, options.host ?? DEFAULT_HOST);
+	if (port !== requested) {
+		console.warn(`Port ${requested} is in use; using free port ${port}.`);
 	}
+	return createServer({ ...options, port });
 }
 
 /** Open the user's default browser at `url` (cross-platform), best-effort — never blocks/keeps us alive. */
@@ -47,7 +41,7 @@ function openBrowser(url: string): void {
 	}
 }
 
-function bootstrap(): void {
+async function bootstrap(): Promise<void> {
 	let options: CliOptions;
 	try {
 		options = parseArgs(Bun.argv.slice(2), process.env);
@@ -71,7 +65,7 @@ function bootstrap(): void {
 		console.warn(`Web app not found at ${staticDir} — run \`bun run build:web\` to build the UI.`);
 	}
 
-	const server = startServer({
+	const server = await startServer({
 		port: options.port,
 		host: options.host,
 		staticDir,
@@ -96,4 +90,7 @@ function bootstrap(): void {
 	process.on("SIGTERM", shutdown);
 }
 
-bootstrap();
+bootstrap().catch((err) => {
+	console.error(err instanceof Error ? err.message : String(err));
+	process.exit(1);
+});

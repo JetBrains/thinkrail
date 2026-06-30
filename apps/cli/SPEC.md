@@ -20,8 +20,9 @@ its URL. It is a thin launcher — all engine logic lives in `packages/server`.
    runs once, before any `AgentSession` (sessions are created lazily, on a WS request).
 3. Resolve the static dir (`THINKRAIL_PI_STATIC_DIR`, else the built web app shipped beside the bin) and
    warn if it's missing.
-4. `createServer({ port, host, staticDir, projectPath? })` — embed the host in this Bun process. On an
-   `EADDRINUSE` collision, retry once on an OS-assigned port (`port: 0`).
+4. Resolve a free listen port at or above the requested one (`findFreePort` — `Bun.serve` won't report a
+   busy port), then `createServer({ port, host, staticDir, projectPath? })` to embed the host in this Bun
+   process.
 5. Resolve the actual port, log the URL, then open the browser at it (cross-platform: `open` / `start` /
    `xdg-open`, best-effort), unless `--no-open`.
 6. SIGINT / SIGTERM → `server.stop()` (disposes agent sessions + PTYs, closes the socket), then exit.
@@ -29,7 +30,7 @@ its URL. It is a thin launcher — all engine logic lives in `packages/server`.
 ## Interface
 
 `bin` = `./src/index.ts` (bun runs the TS source directly). Args: `--port` (stable default 24242,
-fallback-on-collision), `--host` (default `localhost`), `--no-open`, `-h`/`--help`, and one positional
+scans upward to the next free port on collision), `--host` (default `localhost`), `--no-open`, `-h`/`--help`, and one positional
 `project-dir` (a git repo to open as a project on boot, best-effort). Env defaults:
 `THINKRAIL_PI_PORT` / `THINKRAIL_PI_HOST` / `THINKRAIL_PI_STATIC_DIR` (flag > env > default).
 
@@ -64,7 +65,9 @@ lib; the only extra step is the **web UI** (a directory the host normally serves
 ## Get right
 
 - A stable default port is friendlier than `port:0` for a CLI you re-run, but you must know the resolved
-  port to open the URL — so try the default, fall back to ephemeral, then open the resolved origin.
+  port to open the URL — so scan upward from the requested port to the first free one, then open the
+  resolved origin. (`Bun.serve` won't surface `EADDRINUSE` for a busy port, so the free port is found by
+  probing, not by catching a bind error — see `@thinkrail-pi/shared/freePort`.)
 - The browser is the V1 client, not a fallback — the same UI can point at a remote host (the V2 path).
 - The agent runs in this process — a fatal fault takes the app down (the accepted in-process tradeoff).
 - `resolveShellEnv()` runs once, before any `AgentSession`.

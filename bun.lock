@@ -7,6 +7,7 @@
       "devDependencies": {
         "@biomejs/biome": "^2.5.0",
         "@playwright/test": "^1.61.0",
+        "@thinkrail-pi/shared": "workspace:*",
         "husky": "^9.1.7",
         "turbo": "^2.9.18",
         "typescript": "^6.0.3",

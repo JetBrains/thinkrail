@@ -4,7 +4,8 @@
 	"private": true,
 	"type": "module",
 	"exports": {
-		"./shellEnv": "./src/shellEnv.ts"
+		"./shellEnv": "./src/shellEnv.ts",
+		"./freePort": "./src/freePort.ts"
 	},
 	"scripts": {
 		"typecheck": "tsc --noEmit",
