@@ -1,4 +1,4 @@
-// Dev/e2e entry: boot the host from env. The polished `thinkrail-pi` bin (apps/cli) lands at M14.
+// Dev/e2e entry: boot the host from env. The polished `thinkrail-pi` bin lives in apps/cli (M15).
 import { resolveShellEnv } from "@thinkrail-pi/shared/shellEnv";
 import { createServer } from "./host";
 

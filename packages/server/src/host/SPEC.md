@@ -17,7 +17,8 @@ and channel fan-out.
 
 - **Owns:** `server.ts` (`createServer` → `Bun.serve` with `/health`, `/ws` upgrade, static serving with
   `index.html` fallback, the `server.welcome` push, `terminal.data` topic subscribe + `server.publish`,
-  and `stop()` → terminal/session cleanup); `handlers.ts` (the WS method→handler registry).
+  an optional boot-time `openProject(projectPath)` (best-effort — a launcher convenience), and
+  `stop()` → agent-session + terminal cleanup then socket close); `handlers.ts` (the WS method→handler registry).
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer`.
 - **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, `WS_CHANNELS`); the feature modules it composes (per
   the parent dependency graph); Bun/Node.

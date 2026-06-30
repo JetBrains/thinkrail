@@ -21,7 +21,10 @@ in-process `uiContext` dialog calls into WS frames.
     `configurePiRuntime()` for tests).
   - `agentSessionManager` — sessions keyed by `session.sessionId` (each `Entry` also tracks its
     `workspaceId`), `createSession({ cwd, workspaceId, model?, thinkingLevel? })` → `createAgentSession(...)`
-    with a per-session `SessionManager`; a shared `registerSession` forwards each event tagged with its id +
+    with a per-session `SessionManager` **and a `buildSessionSettings(cwd)` settings manager** (the user's
+    real settings + an in-memory `images.autoResize:false` override — never persisted — so the `read` tool
+    sends image files **raw**, bypassing pi's photon/WASM resizer that the single-file binary can't bundle;
+    the web UI downsizes user-attached images itself); a shared `registerSession` forwards each event tagged with its id +
     `bindExtensions({ mode:'rpc', uiContext })`; `prompt`/`steer`/`followUp` (with images) / `abort` /
     `setModel` / `setThinkingLevel` / `compact` / `getSessionStats` (+ contextUsage) / `getSessionCommands` /
     `listAvailableModels` / `getDefaultModel` (the model + thinking a fresh session resolves to — settings

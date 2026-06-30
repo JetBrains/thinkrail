@@ -10,3 +10,6 @@ playwright/.cache/
 
 docs/*
 .playwright-mcp/
+
+# Build-only manifest written transiently by apps/cli/scripts/build-binary.ts
+apps/cli/src/web-assets.generated.ts

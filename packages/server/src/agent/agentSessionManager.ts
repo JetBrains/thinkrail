@@ -48,6 +48,22 @@ function mustGet(sessionId: string): AgentSession {
 	return entry.session;
 }
 
+/**
+ * The pi settings a session runs with: the user's real settings **plus** an in-memory override turning
+ * `images.autoResize` **off** (never persisted — `applyOverrides`, not `set…`+`save`). With it off, the
+ * `read` tool sends image files to the model **raw** instead of routing them through pi's photon
+ * (Rust→WASM) resizer. That's deliberate: the resizer can't be bundled into our single-file binary (its
+ * wasm loads via a worker + `fs` path that a compiled binary can't satisfy), and the web UI downsizes
+ * user-attached images itself — so we keep image-read working everywhere without depending on photon.
+ * `SettingsManager.create(cwd)` defaults its agentDir to `getAgentDir()` (honors `PI_CODING_AGENT_DIR`),
+ * matching the manager `createAgentSession` builds when we omit `settingsManager`.
+ */
+export function buildSessionSettings(cwd: string): SettingsManager {
+	const settings = SettingsManager.create(cwd);
+	settings.applyOverrides({ images: { autoResize: false } });
+	return settings;
+}
+
 export interface CreateSessionInput {
 	/** The active workspace's worktree — a chat session belongs to a workspace. */
 	cwd: string;
@@ -93,6 +109,7 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
 		authStorage,
 		modelRegistry,
 		sessionManager: sessionManagerFactory(input.cwd),
+		settingsManager: buildSessionSettings(input.cwd),
 		...(input.model ? { model: input.model } : {}),
 		...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
 	});
@@ -181,6 +198,7 @@ async function openDiskSession(sessionId: string, workspaceId: string, cwd: stri
 		authStorage,
 		modelRegistry,
 		sessionManager: SessionManager.open(info.path),
+		settingsManager: buildSessionSettings(cwd),
 	});
 	// Lost a race after the open — drop this duplicate rather than clobber the registered one.
 	if (sessions.has(sessionId)) {

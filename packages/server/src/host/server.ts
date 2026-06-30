@@ -1,7 +1,7 @@
 import { join, normalize } from "node:path";
 import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail-pi/contracts";
-import { setExtUiPublisher, setSessionPublisher } from "../agent";
-import { listProjects } from "../projects";
+import { disposeAllSessions, setExtUiPublisher, setSessionPublisher } from "../agent";
+import { listProjects, openProject } from "../projects";
 import { closeAllTerminals, setTerminalPublisher } from "../terminal";
 import { handleRequest } from "./handlers";
 
@@ -10,6 +10,8 @@ export interface CreateServerOptions {
 	host?: string;
 	/** When set, serve the built web app (SPA) from this directory. */
 	staticDir?: string;
+	/** When set, open this git repo as a project on boot (best-effort — a launcher convenience). */
+	projectPath?: string;
 }
 
 export interface RunningServer {
@@ -19,7 +21,7 @@ export interface RunningServer {
 
 /** Boot the engine host: Bun.serve HTTP+WS, /health, optional static SPA, and the server.welcome push. */
 export function createServer(options: CreateServerOptions = {}): RunningServer {
-	const { port = 24242, host = "localhost", staticDir } = options;
+	const { port = 24242, host = "localhost", staticDir, projectPath } = options;
 
 	const server = Bun.serve({
 		port,
@@ -90,11 +92,25 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		);
 	});
 
+	// Open a project on boot if the launcher passed one (e.g. `thinkrail-pi /path/to/repo`). Best-effort:
+	// a non-repo / missing dir is a warning, not a boot failure — the UI's Open-Project flow still works.
+	if (projectPath) {
+		try {
+			openProject(projectPath);
+		} catch (err) {
+			console.warn(
+				`Could not open project ${projectPath}: ${err instanceof Error ? err.message : err}`,
+			);
+		}
+	}
+
 	return {
 		get port() {
 			return server.port ?? port;
 		},
 		stop() {
+			// Symmetric teardown: dispose in-process agent sessions + PTYs before closing the socket.
+			disposeAllSessions();
 			closeAllTerminals();
 			server.stop(true);
 		},

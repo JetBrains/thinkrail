@@ -6,6 +6,7 @@ import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/prov
 import { AuthStorage, ModelRegistry, SessionManager } from "@earendil-works/pi-coding-agent";
 import type { ExtUiRequest } from "@thinkrail-pi/contracts";
 import {
+	buildSessionSettings,
 	createSession,
 	disposeAllSessions,
 	getSessionCommands,
@@ -135,6 +136,11 @@ test("two sessions in two worktrees stream independently; disposing one leaves t
 
 	expect(seen(b.sessionId)).toContain("BRAVO_AGAIN");
 	expect((events.get(a.sessionId) ?? []).length).toBe(aEventsBefore);
+});
+
+test("buildSessionSettings disables image autoResize (in-memory, so the read tool sends images raw)", () => {
+	// Off so the read tool bypasses pi's photon resizer (not bundled in the single-file binary).
+	expect(buildSessionSettings(tmpCwd("trpi-settings-")).getImageAutoResize()).toBe(false);
 });
 
 test("listAvailableModels returns the configured (faux) models", () => {
