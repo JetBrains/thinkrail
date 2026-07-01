@@ -19,6 +19,7 @@ import { buildDefaultSessionConfig } from "@/utils/sessionConfig.ts";
 import { DEFAULT_SESSION_NAME, SAVE_THRESHOLD, deriveSessionName, nonWs, resolveDraftName } from "@/utils/sessionName.ts";
 import * as draftAutosave from "./draftAutosave.ts";
 import { useInputDraftStore } from "./inputDraftStore.ts";
+import { useAnswerDraftStore } from "./answerDraftStore.ts";
 import { useNotificationStore } from "./notificationStore.ts";
 import { useBoardStore } from "./boardStore.ts";
 import { useFileStore } from "./fileStore.ts";
@@ -171,6 +172,7 @@ interface SessionStore {
 
   // Subsession actions
   createSubsession: (parentThinkrailSid: string, type: "discussion" | "refinement", context?: string, name?: string, origin?: SubsessionOrigin) => Promise<string>;
+  requestReturnSummary: (thinkrailSid: string) => Promise<void>;
   approveReturn: (thinkrailSid: string, text: string) => Promise<void>;
   dismissReturn: (thinkrailSid: string) => Promise<void>;
   reviseReturn: (thinkrailSid: string, feedback: string) => Promise<void>;
@@ -210,6 +212,7 @@ interface SessionStore {
   ) => Promise<void>;
   onConfigChanged: (params: Record<string, unknown>) => void;
   onSubsessionReturned: (params: Record<string, unknown>) => void;
+  onSummaryDrafted: (params: Record<string, unknown>) => void;
 }
 
 function emptyContextUsage(): ContextUsage {
@@ -2851,10 +2854,23 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       // Switch to parent tab so user sees the revised text in the input box
       set(() => ({ activeSessionId: parentSid }));
     } else {
-      // Discussion: add result card to parent chat stream
+      // Discussion: route the summary by origin (a still-pending question's
+      // "Other" field, else the parent's message box), post a result card,
+      // switch to the parent, and close (archive) the child tab.
+      const origin = p.origin as { kind?: string; requestId?: string } | undefined;
+      const parent = get().sessions.get(parentSid);
+      const questionStillPending = !!(
+        origin?.requestId &&
+        parent?.pendingRequests?.some((r) => r.requestId === origin.requestId)
+      );
+      if (origin?.kind === "question" && questionStillPending && origin.requestId) {
+        useAnswerDraftStore.getState().setDraft(origin.requestId, summary);
+      } else {
+        useInputDraftStore.getState().setDraft(parentSid, summary);
+      }
       set((s) => {
         const parent = s.sessions.get(parentSid);
-        if (!parent) return s;
+        if (!parent) return { activeSessionId: parentSid };
         const next = new Map(s.sessions);
         const event = {
           thinkrailSid: parentSid,
@@ -2869,9 +2885,41 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           },
         };
         next.set(parentSid, { ...parent, events: [...parent.events, event] });
-        return { sessions: next };
+        return { sessions: next, activeSessionId: parentSid };
       });
+      const childSid = p.childThinkRailSid as string | undefined;
+      if (childSid) get().closeSession(childSid);
     }
+  },
+
+  onSummaryDrafted: (params) => {
+    const p = params as Record<string, unknown>;
+    const sid = p.thinkrailSid as string;
+    set((s) => {
+      const session = s.sessions.get(sid);
+      if (!session) return s;
+      const next = new Map(s.sessions);
+      next.set(sid, {
+        ...session,
+        returnStatus:
+          (p.returnStatus as Session["returnStatus"]) ?? SessionReturnStatus.Pending,
+        returnSummary: (p.returnSummary as string) ?? null,
+      });
+      return { sessions: next };
+    });
+  },
+
+  requestReturnSummary: async (thinkrailSid) => {
+    const { createSubsessionApi } = await import("@/api/methods/subsessions.ts");
+    const api = createSubsessionApi(getClient());
+    await api.requestSummary(thinkrailSid);
+    set((s) => {
+      const session = s.sessions.get(thinkrailSid);
+      if (!session) return s;
+      const next = new Map(s.sessions);
+      next.set(thinkrailSid, { ...session, returnStatus: SessionReturnStatus.Pending });
+      return { sessions: next };
+    });
   },
 
 }));
