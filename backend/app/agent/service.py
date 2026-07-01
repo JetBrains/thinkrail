@@ -9,7 +9,7 @@ from typing import Any
 from app import analytics
 from app.agent.context import build_context
 from app.agent.exceptions import InvalidCapabilityValueError
-from app.agent.models import AgentConfig, AgentTask, SessionReturnStatus, SubagentMode, SubsessionType, TaskStatus, is_quiescent, is_settled, is_streaming, is_terminal
+from app.agent.models import AgentConfig, AgentTask, SessionReturnStatus, SubagentMode, SubsessionOrigin, SubsessionType, TaskStatus, is_quiescent, is_settled, is_streaming, is_terminal
 from app.agent.persistence import append_event, save_session, load_session, list_sessions as list_sessions_from_disk, delete_session as delete_session_from_disk, update_session_metadata, load_events
 from app.agent.runtime import (
     IAgentRuntime,
@@ -515,6 +515,15 @@ class AgentService:
             "previewPath": task.preview_path,
             "subagentMode": task.subagent_mode,
             "stepGate": task.step_gate,
+            "parentThinkrailSid": task.parent_thinkrail_sid,
+            "subsessionType": task.subsession_type.value if task.subsession_type else None,
+            "subsessionContext": task.subsession_context,
+            "subsessionOrigin": (
+                task.subsession_origin.model_dump(by_alias=True, mode="json")
+                if task.subsession_origin else None
+            ),
+            "returnStatus": task.return_status.value if task.return_status else None,
+            "returnSummary": task.return_summary,
         }
         if task.system_prompt is not None:
             data["systemPrompt"] = task.system_prompt
@@ -816,6 +825,15 @@ class AgentService:
         task.ticket_id = old.get("ticketId")
         task.subagent_mode = old.get("subagentMode", "step-session")
         task.step_gate = old.get("stepGate", "approve")
+        task.parent_thinkrail_sid = old.get("parentThinkrailSid")
+        _st = old.get("subsessionType")
+        task.subsession_type = SubsessionType(_st) if _st else None
+        task.subsession_context = old.get("subsessionContext")
+        _so = old.get("subsessionOrigin")
+        task.subsession_origin = SubsessionOrigin.model_validate(_so) if _so else None
+        _rs = old.get("returnStatus")
+        task.return_status = SessionReturnStatus(_rs) if _rs else None
+        task.return_summary = old.get("returnSummary")
         self._validate_config_against_caps(task)
 
         # Re-hydrate artifact tracking so the right Context Panel doesn't
@@ -846,6 +864,15 @@ class AgentService:
             "previewPath": task.preview_path,
             "subagentMode": task.subagent_mode,
             "stepGate": task.step_gate,
+            "parentThinkrailSid": task.parent_thinkrail_sid,
+            "subsessionType": task.subsession_type.value if task.subsession_type else None,
+            "subsessionContext": task.subsession_context,
+            "subsessionOrigin": (
+                task.subsession_origin.model_dump(by_alias=True, mode="json")
+                if task.subsession_origin else None
+            ),
+            "returnStatus": task.return_status.value if task.return_status else None,
+            "returnSummary": task.return_summary,
         }
         save_session(self._config.project_root, metadata)
 
