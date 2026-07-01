@@ -35,6 +35,14 @@ in-process `uiContext` dialog calls into WS frames.
     not live, then returns `{ summary, messages }` — the pi-canonical `Message` subset); the disk half is
     what survives a host **restart**; `removeSession`/`disposeAllSessions`; `setSessionPublisher` +
     `setSessionManagerFactory` seams.
+  - `oneshot` — one-shot LLM completions **without** an `AgentSession` (no tools/extensions/disk):
+    `completeOnce(request)` picks a model from the shared runtime's authenticated set, resolves its auth
+    (OAuth refresh included) via `modelRegistry.getApiKeyAndHeaders`, and dispatches a single `complete()`
+    (from `@earendil-works/pi-ai/compat` — the api-dispatch entry; re-verify on pi bumps, it's a compat
+    surface). `pickModel(tier)` = the model choice: `cheap` prefers a curated small/fast allowlist ∩ the
+    authenticated set, else the cheapest by per-token cost; `default` = first available; `null` when
+    nothing is authenticated. This is the primitive the `assist` tasks (workspace naming, PR drafting)
+    run on — the only place model **dispatch** happens outside a session.
   - `webUiContext` — `createWebUiContext(sessionId)` builds the `ExtensionUIContext` pi calls (dialogs
     round-trip to the browser, fire-and-forget methods push, TUI-only members inert); `setExtUiPublisher`
     (server→client push seam), `resolveExtUi` (browser reply), `cancelExtUiForSession` (on dispose),
@@ -46,8 +54,10 @@ in-process `uiContext` dialog calls into WS frames.
     `web_search`'s `workflow` to `"none"`, since pi-web-access would otherwise open a browser curator our
     `rpc` host can't render). Both session paths pass it as `resourceLoader`. Internal helper (not on the barrel).
 - **Public surface (barrel):** the manager operations + `CreateSessionInput`/`CreateSessionResult` +
-  `SessionEventPayload`; `configurePiRuntime`/`getPiRuntime`; the `webUiContext` seams.
-- **Allowed deps:** `@earendil-works/pi-coding-agent` (runtime); `pi-web-access` (the bundled web-tools
+  `SessionEventPayload`; `configurePiRuntime`/`getPiRuntime`; `completeOnce`/`pickModel` +
+  `OneShotRequest`/`OneShotResult`/`ModelTier`; the `webUiContext` seams.
+- **Allowed deps:** `@earendil-works/pi-coding-agent` (runtime); `@earendil-works/pi-ai` (runtime — the
+  `complete()` dispatch used by `oneshot`); `pi-web-access` (the bundled web-tools
   extension — loaded by path, not value-imported); `contracts` (`PiEvent`/`Model`/`ThinkingLevel`/
   `ImageContent`/`SessionStats`/`SlashCommandInfo`/`ExtUi*`); Node.
 - **Forbidden:** `host`; sibling features (the `cwd` is passed in, not looked up via `persistence`).

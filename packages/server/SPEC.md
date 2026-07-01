@@ -23,7 +23,7 @@ and runs the `pi` agent in-process via `createAgentSession`. Launched in-process
   → BootedHost` (the process-boot wrapper: resolves the login-shell PATH, picks the port per `portMode`,
   and installs SIGINT/SIGTERM graceful-shutdown handlers around `createServer`), both re-exported from `host/`.
 - **Allowed deps:** `contracts` (types + WS constants), `shared` (`shellEnv`), `bun-pty`,
-  `@earendil-works/pi-coding-agent` (runtime), Bun/Node.
+  `@earendil-works/pi-coding-agent` + `@earendil-works/pi-ai` (runtime), Bun/Node.
 - **Forbidden:** importing `web`/`cli`/`desktop`; being bundled into the browser.
 
 ## Internal modules
@@ -42,7 +42,8 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `github` | read-only local `gh` auth status (shell-out) for the New-Workspace surface | [github/SPEC.md](src/github/SPEC.md) |
 | `fs` | read dirs/files inside a worktree (path-contained) | [fs/SPEC.md](src/fs/SPEC.md) |
 | `terminal` | workspace-scoped `bun-pty` terminals | [terminal/SPEC.md](src/terminal/SPEC.md) |
-| `agent` | in-process pi `AgentSession`s + the shared pi runtime | [agent/SPEC.md](src/agent/SPEC.md) |
+| `agent` | in-process pi `AgentSession`s + the shared pi runtime + one-shot completions | [agent/SPEC.md](src/agent/SPEC.md) |
+| `assist` | ad-hoc one-shot tasks (workspace naming, …) on a cheap model, best-effort | [assist/SPEC.md](src/assist/SPEC.md) |
 | `dialog` | the host's native folder picker | [dialog/SPEC.md](src/dialog/SPEC.md) |
 
 `src/index.ts` re-exports `host`; `src/dev.ts` boots the host from env via `bootHost` for dev/e2e.
@@ -51,9 +52,10 @@ internals**. The edges between them are owned here (see the dependency graph), n
 
 `host` is the **only composition root** — it wires each feature's handlers into the WS registry.
 
-- `host` → `projects`, `workspaces`, `git`, `github`, `fs`, `terminal`, `dialog`
+- `host` → `projects`, `workspaces`, `git`, `github`, `fs`, `terminal`, `dialog`, `agent`, `assist`
 - `workspaces` → `projects`, `git`, `persistence`
 - `projects`, `git`, `fs`, `terminal` → `persistence`
+- `assist` → `agent` (the one-shot completion primitive)
 - `agent` → (no internal deps — only the pi runtime)
 - `persistence`, `dialog`, `github` → (leaves)
 
