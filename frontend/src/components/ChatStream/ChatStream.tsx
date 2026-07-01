@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef, useState, forwardRef, useImperativeHand
 import type { AgentEvent, AskUserQuestionEvent } from "@/types/agent.ts";
 import type { Session } from "@/types/session.ts";
 import { EventType } from "@/constants/eventTypes.ts";
-import { SessionReturnStatus, SessionStatus } from "@/constants/status.ts";
+import { SessionReturnStatus, SessionStatus, isStreaming } from "@/constants/status.ts";
 import { DraftConfigCard } from "./DraftConfigCard.tsx";
+import { deriveTaskSnapshot } from "@/hooks/useTaskSnapshot.ts";
+import { TaskDockedBar, shouldShowDockedBar } from "./TaskDockedBar.tsx";
 import { useViewMode, type ViewMode } from "@/context/ViewModeContext.tsx";
 import { useSettingsStore } from "@/store/settingsStore.ts";
 import { useSessionStore } from "@/store/sessionStore.ts";
@@ -307,6 +309,29 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
     }
   }
 
+  // Docked task bar: pin progress + live activity to the top of the stream
+  // once the inline task card scrolls out of view during a running session.
+  const taskSnapshot = deriveTaskSnapshot(events, session?.status ?? SessionStatus.Done);
+  const [anchorVisible, setAnchorVisible] = useState(true);
+  useEffect(() => {
+    const root = scrollRef.current;
+    if (!root || typeof IntersectionObserver === "undefined") return;
+    const anchor = root.querySelector("[data-task-card-anchor]");
+    if (!anchor) { setAnchorVisible(true); return; }
+    const obs = new IntersectionObserver(
+      ([entry]) => setAnchorVisible(entry.isIntersecting),
+      { root, threshold: 0 },
+    );
+    obs.observe(anchor);
+    return () => obs.disconnect();
+  }, [taskCollectionAnchor, events.length]);
+
+  const showDock = shouldShowDockedBar({
+    running: isStreaming(session?.status ?? SessionStatus.Done),
+    total: taskSnapshot.total,
+    anchorVisible,
+  });
+
   // ── Pre-scan: link confirmAction events to their toolCallStart ──
   const approvalByToolIndex = new Map<number, ApprovalInfo>();
   {
@@ -413,6 +438,7 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
       onScroll={handleScroll}
       onContextMenu={handleContextMenu}
     >
+      {showDock && <TaskDockedBar snapshot={taskSnapshot} />}
       {session?.status === SessionStatus.Draft && (
         <DraftConfigCard thinkrailSid={session.thinkrailSid} />
       )}
