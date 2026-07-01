@@ -24,11 +24,12 @@ a future `packages/chat-ui`).
   - **Presentational renderers** (props-driven, **no store/transport** → reusable): `ChatTurnView`
     (dispatch by turn kind); `AssistantTurn` (walks an `AssistantMessage`'s `content` blocks **in order** —
     `text`→`Markdown`, `thinking`→an auto-expanding thinking block, `toolCall`→`ToolCard` paired with its
-    result); `UserTurn`; `SystemTurn`; `TurnDivider` (+ the pure `turnDivider` deriver — between-turns
-    orientation: elapsed time, tool-call count, a "files changed" chip); `RetryIndicator` (auto-retry
-    countdown bar); `StreamIndicator` (the single streaming loader — typing-dots wave + a phase label,
-    from the pure `streamStatus` deriver); `Markdown` (react-markdown + remark-gfm + shiki code blocks);
-    `ToolCard`; the pointer-aware `useChatScroll` hook.
+    result); `UserTurn`; `SystemTurn`; `TurnDivider` (+ the pure `turnDivider` deriver — a **round-end**
+    summary rendered the instant a turn finishes, below its "✓ Done" marker (anchored at the round end,
+    not the next user turn): elapsed time (user-submit → agent_end), tool-call count, a "files changed"
+    chip); `RetryIndicator` (auto-retry countdown bar); `StreamIndicator` (the single streaming loader —
+    typing-dots wave + a phase label, from the pure `streamStatus` deriver); `Markdown` (react-markdown +
+    remark-gfm + shiki code blocks); `ToolCard`; the pointer-aware `useChatScroll` hook.
   - **Composer + cheap-win primitives** (M12, also props-driven, **no store/transport**): `Composer`
     (send/steer/followUp/abort, `@`-mention completion, `/` slash-command menu, image paste/drop);
     `ModelSelector` (a pill opening a searchable `Command` list grouped by provider, no leading icon) +

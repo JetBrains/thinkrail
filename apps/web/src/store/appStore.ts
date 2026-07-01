@@ -179,7 +179,9 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 				// Drop any lingering retry countdown + sweep any turn still flagged streaming; the run concluded.
 				turns: [
 					...clearTurnStreaming(rt.turns).filter((t) => t.kind !== "retry"),
-					{ kind: "system", id: crypto.randomUUID(), text: "✓ Done" },
+					// `endedAt` timestamps the turn end so the round summary (shown right here) can measure the
+					// turn's duration — user-submit → agent_end — without waiting for the next user turn.
+					{ kind: "system", id: crypto.randomUUID(), text: "✓ Done", endedAt: Date.now() },
 				],
 				isStreaming: false,
 				currentAssistantId: null,

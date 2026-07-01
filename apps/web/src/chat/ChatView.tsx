@@ -213,12 +213,18 @@ export default function ChatView({ sessionId }: { sessionId: string }) {
 					atBottomStateChange={handleAtBottom}
 					atBottomThreshold={50}
 					itemContent={(index, turn) => {
-						// A divider precedes every user turn except the first — it summarizes the round just ended.
-						const divider = turn.kind === "user" && index > 0 ? turnDivider(turns, index) : null;
+						// A divider closes each round the instant it ends — below the round's last turn (its "✓ Done"
+						// marker, or its final assistant turn when hydrated), i.e. when the next turn is a new user
+						// turn or this is the last turn of a finished (non-streaming) transcript. Anchoring it here
+						// (not before the next user turn) surfaces the summary immediately, not on the follow-up.
+						const roundEnded =
+							turn.kind !== "user" &&
+							(turns[index + 1]?.kind === "user" || (index === turns.length - 1 && !isStreaming));
+						const divider = roundEnded ? turnDivider(turns, index) : null;
 						return (
 							<div className="mx-auto max-w-3xl px-md py-xs">
-								{divider ? <TurnDivider data={divider} onOpenChanges={onOpenChanges} /> : null}
 								<ChatTurnView turn={turn} toolResults={toolResults} />
+								{divider ? <TurnDivider data={divider} onOpenChanges={onOpenChanges} /> : null}
 							</div>
 						);
 					}}

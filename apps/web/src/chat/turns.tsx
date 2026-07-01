@@ -201,52 +201,57 @@ function RetryIndicator({
 	);
 }
 
-/** Orientation metadata for the divider shown before a user turn (derived in the view, not the reducer). */
+/** Orientation metadata for the round-end divider (derived in the view, not the reducer). */
 export interface TurnDividerData {
-	/** Wall-clock between the previous user turn and this one, or null if unknown. */
+	/** Wall-clock from the round's user turn to its end (agent_end, or the last assistant reply), or null. */
 	elapsedMs: number | null;
-	/** Tool calls made by the assistant turn(s) since the previous user turn. */
+	/** Tool calls made by the assistant turn(s) in this round. */
 	toolCount: number;
 	/** Distinct files written/edited by those tool calls (worktree-relative or absolute, as pi reported). */
 	changedFiles: string[];
 }
 
 /**
- * Derive the divider that precedes the user turn at `index`: the elapsed time since the previous user
- * turn, plus the tool calls + edited/written files of the assistant turn(s) in between. Returns null when
- * there is no preceding user turn (nothing to divide). Pure — the reducer stays untouched.
+ * Derive the divider that closes the round *ending* at `endIndex` (its "✓ Done" marker, or its last
+ * assistant turn when hydrated): the round's tool calls + edited/written files, plus the elapsed wall-clock
+ * from the round's user turn to its end. Anchored at the round end (not the next user turn) so the summary
+ * appears the instant the turn finishes. The end time comes from the "✓ Done" marker's `endedAt` when
+ * present (live), else the last assistant message's timestamp (hydrated) — stable either way, so the number
+ * never jumps when a follow-up arrives. Returns null when there is no user turn starting the round. Pure.
  */
-export function turnDivider(turns: ChatTurn[], index: number): TurnDividerData | null {
-	let prevUser = -1;
-	for (let i = index - 1; i >= 0; i--) {
+export function turnDivider(turns: ChatTurn[], endIndex: number): TurnDividerData | null {
+	let userIdx = -1;
+	for (let i = endIndex; i >= 0; i--) {
 		if (turns[i]?.kind === "user") {
-			prevUser = i;
+			userIdx = i;
 			break;
 		}
 	}
-	if (prevUser < 0) return null;
+	if (userIdx < 0) return null;
 
 	let toolCount = 0;
 	const changedFiles: string[] = [];
-	for (let i = prevUser + 1; i < index; i++) {
+	let endMs: number | null = null;
+	for (let i = userIdx + 1; i <= endIndex; i++) {
 		const turn = turns[i];
-		if (turn?.kind !== "assistant") continue;
-		for (const block of turn.message.content) {
-			if (block.type !== "toolCall") continue;
-			toolCount++;
-			if (block.name === "edit" || block.name === "write") {
-				const path = strArg(block.arguments, "path");
-				if (path && !changedFiles.includes(path)) changedFiles.push(path);
+		if (turn?.kind === "assistant") {
+			if (turn.message.timestamp) endMs = turn.message.timestamp;
+			for (const block of turn.message.content) {
+				if (block.type !== "toolCall") continue;
+				toolCount++;
+				if (block.name === "edit" || block.name === "write") {
+					const path = strArg(block.arguments, "path");
+					if (path && !changedFiles.includes(path)) changedFiles.push(path);
+				}
 			}
+		} else if (turn?.kind === "system" && turn.endedAt != null) {
+			endMs = turn.endedAt; // the live "✓ Done" marker carries the precise turn-end time
 		}
 	}
 
-	const cur = turns[index];
-	const prev = turns[prevUser];
-	const elapsedMs =
-		cur?.kind === "user" && prev?.kind === "user"
-			? cur.message.timestamp - prev.message.timestamp
-			: null;
+	const user = turns[userIdx];
+	const startMs = user?.kind === "user" ? user.message.timestamp : null;
+	const elapsedMs = startMs != null && endMs != null ? endMs - startMs : null;
 
 	return { elapsedMs, toolCount, changedFiles };
 }
@@ -260,9 +265,10 @@ function formatElapsed(ms: number): string {
 }
 
 /**
- * A subtle between-turns divider: tool-call count, a clickable "N files changed" chip (opens those files
- * in the Changes/diff panel via `onOpenChanges`), and elapsed wall-clock. Presentational — the store touch
- * lives in `ChatView`, which supplies `onOpenChanges`.
+ * A subtle round-end divider (rendered right when the turn finishes, below its "✓ Done" marker): tool-call
+ * count, a clickable "N files changed" chip (opens those files in the Changes/diff panel via
+ * `onOpenChanges`), and elapsed wall-clock. Presentational — the store touch lives in `ChatView`, which
+ * supplies `onOpenChanges`.
  */
 export function TurnDivider({
 	data,

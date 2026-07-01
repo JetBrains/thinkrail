@@ -6,13 +6,18 @@ function user(id: string, timestamp: number): ChatTurn {
 	return { kind: "user", id, message: { role: "user", content: "hi", timestamp } } as ChatTurn;
 }
 
-function assistant(id: string, toolCalls: Array<{ name: string; path?: string }>): ChatTurn {
+function assistant(
+	id: string,
+	toolCalls: Array<{ name: string; path?: string }>,
+	timestamp = 0,
+): ChatTurn {
 	return {
 		kind: "assistant",
 		id,
 		streaming: false,
 		message: {
 			role: "assistant",
+			timestamp,
 			content: toolCalls.map((tc, i) => ({
 				type: "toolCall",
 				id: `${id}-${i}`,
@@ -23,11 +28,16 @@ function assistant(id: string, toolCalls: Array<{ name: string; path?: string }>
 	} as unknown as ChatTurn;
 }
 
-test("turnDivider is null before the first user turn (nothing to divide)", () => {
-	expect(turnDivider([user("u1", 1000)], 0)).toBeNull();
+function done(id: string, endedAt: number): ChatTurn {
+	return { kind: "system", id, text: "✓ Done", endedAt } as ChatTurn;
+}
+
+test("turnDivider is null with no user turn to open the round (nothing to summarize)", () => {
+	expect(turnDivider([done("s1", 1000)], 0)).toBeNull();
 });
 
-test("turnDivider counts tools, collects only edit/write files, and measures elapsed", () => {
+test("turnDivider counts tools, collects only edit/write files, and measures user→end elapsed", () => {
+	// Anchored at the round's "✓ Done" marker (index 2); elapsed = endedAt − user.timestamp.
 	const turns: ChatTurn[] = [
 		user("u1", 1_000),
 		assistant("a1", [
@@ -36,7 +46,7 @@ test("turnDivider counts tools, collects only edit/write files, and measures ela
 			{ name: "edit", path: "a.ts" },
 			{ name: "read", path: "b.ts" },
 		]),
-		user("u2", 73_000),
+		done("s1", 73_000),
 	];
 	const d = turnDivider(turns, 2);
 	expect(d?.toolCount).toBe(4);
@@ -44,25 +54,36 @@ test("turnDivider counts tools, collects only edit/write files, and measures ela
 	expect(d?.elapsedMs).toBe(72_000);
 });
 
-test("turnDivider spans multiple assistant turns (system turns ignored) and dedupes files", () => {
+test("turnDivider spans multiple assistant turns in the round and dedupes files", () => {
 	const turns: ChatTurn[] = [
 		user("u1", 0),
 		assistant("a1", [{ name: "write", path: "x.ts" }]),
-		{ kind: "system", id: "s1", text: "✓ Done" } as ChatTurn,
 		assistant("a2", [
 			{ name: "edit", path: "x.ts" },
 			{ name: "write", path: "y.ts" },
 		]),
-		user("u2", 5_000),
+		done("s1", 5_000),
 	];
-	const d = turnDivider(turns, 4);
+	const d = turnDivider(turns, 3);
 	expect(d?.toolCount).toBe(3);
 	expect(d?.changedFiles).toEqual(["x.ts", "y.ts"]);
 	expect(d?.elapsedMs).toBe(5_000);
 });
 
+test("turnDivider falls back to the last assistant timestamp when there is no ✓ Done marker (hydrated)", () => {
+	// Hydrated rounds carry no web-local "✓ Done" marker; the end time comes from the assistant reply.
+	const turns: ChatTurn[] = [
+		user("u1", 1_000),
+		assistant("a1", [{ name: "write", path: "x.ts" }], 6_000),
+	];
+	const d = turnDivider(turns, 1);
+	expect(d?.toolCount).toBe(1);
+	expect(d?.changedFiles).toEqual(["x.ts"]);
+	expect(d?.elapsedMs).toBe(5_000);
+});
+
 test("turnDivider reports no changed files / zero tools for a plain Q&A round", () => {
-	const turns: ChatTurn[] = [user("u1", 0), assistant("a1", []), user("u2", 2_000)];
+	const turns: ChatTurn[] = [user("u1", 0), assistant("a1", [], 2_000), done("s1", 2_000)];
 	const d = turnDivider(turns, 2);
 	expect(d?.toolCount).toBe(0);
 	expect(d?.changedFiles).toEqual([]);
