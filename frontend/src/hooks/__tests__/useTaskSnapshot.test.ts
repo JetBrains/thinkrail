@@ -52,6 +52,16 @@ describe("deriveTaskSnapshot", () => {
     expect(snap.running).toBe(false);
     expect(snap.activity).toBeNull();
   });
+
+  it("excludes TaskCreate events that carry an agentId (subagent tasks)", () => {
+    const events: AgentEvent[] = [
+      toolStart("TaskCreate", "c1", { subject: "top-level" }),
+      { eventType: "toolCallStart", payload: { toolName: "TaskCreate", toolUseId: "s1", toolInput: { subject: "sub" }, agentId: "sub-1" } } as unknown as AgentEvent,
+    ];
+    const snap = deriveTaskSnapshot(events, SessionStatus.Running);
+    expect(snap.total).toBe(1);
+    expect(snap.items[0]).toMatchObject({ content: "top-level" });
+  });
 });
 
 describe("deriveLiveActivity", () => {
@@ -72,6 +82,13 @@ describe("deriveLiveActivity", () => {
 
   it("returns null when all tool calls are finished", () => {
     const events: AgentEvent[] = [toolStart("Read", "t1"), toolEnd("t1")];
+    expect(deriveLiveActivity(events)).toBeNull();
+  });
+
+  it("returns null when the only tool call carries an agentId", () => {
+    const events: AgentEvent[] = [
+      { eventType: "toolCallStart", payload: { toolName: "Edit", toolUseId: "s1", toolInput: { file_path: "a.ts" }, agentId: "sub-1" } } as unknown as AgentEvent,
+    ];
     expect(deriveLiveActivity(events)).toBeNull();
   });
 });

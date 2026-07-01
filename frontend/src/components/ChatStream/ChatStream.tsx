@@ -255,63 +255,26 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
     }
   }
 
-  // ── Pre-scan: accumulate Task* events into a single ordered list ──
-  // Task ids are assigned sequentially by TaskCreate order ("1", "2", ...);
-  // TaskUpdate references them by that id. Subagent task tracking renders
-  // inside its SubagentBlock, so child indices are skipped here.
-  let taskCollectionAnchor: number | null = null;
-  const taskCollection: TaskItem[] = [];
-  {
-    const taskById = new Map<string, TaskItem>();
-    let createCounter = 0;
-    for (let i = 0; i < events.length; i++) {
-      if (childIndices.has(i)) continue;
-      const ev = events[i];
-      if (ev.eventType !== EventType.ToolCallStart) continue;
-      const tn = ev.payload.toolName;
-      if (tn !== "TaskCreate" && tn !== "TaskUpdate") continue;
-      if (taskCollectionAnchor === null) taskCollectionAnchor = i;
-
-      const input = (ev.payload.toolInput ?? {}) as Record<string, unknown>;
-      if (tn === "TaskCreate") {
-        createCounter += 1;
-        const id = String(createCounter);
-        const item: TaskItem = {
-          id,
-          subject: typeof input.subject === "string" ? input.subject : undefined,
-          activeForm: typeof input.activeForm === "string" ? input.activeForm : undefined,
-          status: "pending",
-        };
-        taskById.set(id, item);
-        taskCollection.push(item);
-      } else {
-        const id = typeof input.taskId === "string" ? input.taskId : "";
-        if (!id) continue;
-        let item = taskById.get(id);
-        if (!item) {
-          item = { id, status: "pending" };
-          taskById.set(id, item);
-          taskCollection.push(item);
-        }
-        const status = typeof input.status === "string" ? input.status : undefined;
-        if (status === "deleted") {
-          taskById.delete(id);
-          const idx = taskCollection.indexOf(item);
-          if (idx !== -1) taskCollection.splice(idx, 1);
-          continue;
-        }
-        if (status === "pending" || status === "in_progress" || status === "completed") {
-          item.status = status;
-        }
-        if (typeof input.subject === "string") item.subject = input.subject;
-        if (typeof input.activeForm === "string") item.activeForm = input.activeForm;
-      }
-    }
-  }
-
-  // Docked task bar: pin progress + live activity to the top of the stream
-  // once the inline task card scrolls out of view during a running session.
+  // ── Task snapshot: one shared derivation feeds the inline card AND the
+  // docked bar. deriveTaskSnapshot skips subagent (agentId) task events, so
+  // the consolidated inline card and the docked bar agree with the historical
+  // "subagent tasks render inside their SubagentBlock" behavior.
   const taskSnapshot = deriveTaskSnapshot(events, session?.status ?? SessionStatus.Done);
+  const taskCollection: TaskItem[] = taskSnapshot.items.map((it) => ({
+    id: it.key,
+    subject: it.content,
+    status: it.status,
+  }));
+  // Anchor: index of the first top-level TaskCreate/TaskUpdate event — where the
+  // consolidated inline card renders (child/subagent Task events are skipped).
+  let taskCollectionAnchor: number | null = null;
+  for (let i = 0; i < events.length; i++) {
+    if (childIndices.has(i)) continue;
+    const ev = events[i];
+    if (ev.eventType !== EventType.ToolCallStart) continue;
+    const tn = ev.payload.toolName;
+    if (tn === "TaskCreate" || tn === "TaskUpdate") { taskCollectionAnchor = i; break; }
+  }
   const [anchorVisible, setAnchorVisible] = useState(true);
   useEffect(() => {
     const root = scrollRef.current;

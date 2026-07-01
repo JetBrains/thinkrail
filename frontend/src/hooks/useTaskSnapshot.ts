@@ -45,6 +45,7 @@ export function deriveLiveActivity(events: AgentEvent[]): LiveActivity | null {
   for (const ev of events) {
     if (ev.eventType === EventType.ToolCallStart) {
       const p = ev.payload as unknown as Record<string, unknown>;
+      if (p.agentId) continue;
       const toolName = typeof p.toolName === "string" ? p.toolName : "";
       const toolUseId = typeof p.toolUseId === "string" ? p.toolUseId : "";
       if (!toolUseId || TODO_TOOLS.has(toolName) || toolName.endsWith("thinkrail_visualize")) continue;
@@ -52,6 +53,7 @@ export function deriveLiveActivity(events: AgentEvent[]): LiveActivity | null {
       order.push(toolUseId);
     } else if (ev.eventType === EventType.ToolCallEnd) {
       const p = ev.payload as unknown as Record<string, unknown>;
+      if (p.agentId) continue;
       const toolUseId = typeof p.toolUseId === "string" ? p.toolUseId : "";
       if (toolUseId) open.delete(toolUseId);
     }
@@ -75,6 +77,7 @@ export function deriveTaskSnapshot(events: AgentEvent[], status: SessionStatus):
   for (const ev of events) {
     if (ev.eventType !== EventType.ToolCallStart) continue;
     const p = ev.payload as unknown as Record<string, unknown>;
+    if (p.agentId) continue;
     const toolName = p.toolName;
     const input = (p.toolInput ?? {}) as Record<string, unknown>;
 
