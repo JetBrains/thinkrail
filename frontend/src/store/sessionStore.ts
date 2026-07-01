@@ -8,6 +8,7 @@ import type {
   IterationUsage,
   ArchivedSession,
   PendingRequest,
+  SubsessionOrigin,
 } from "@/types/session.ts";
 import type { SessionSummary } from "@/api/methods/sessions.ts";
 import { SessionStatus, SessionReturnStatus, isQuiescent, isTerminal, isTransient } from "@/constants/status.ts";
@@ -18,6 +19,7 @@ import { buildDefaultSessionConfig } from "@/utils/sessionConfig.ts";
 import { DEFAULT_SESSION_NAME, SAVE_THRESHOLD, deriveSessionName, nonWs, resolveDraftName } from "@/utils/sessionName.ts";
 import * as draftAutosave from "./draftAutosave.ts";
 import { useInputDraftStore } from "./inputDraftStore.ts";
+import { useAnswerDraftStore } from "./answerDraftStore.ts";
 import { useNotificationStore } from "./notificationStore.ts";
 import { useBoardStore } from "./boardStore.ts";
 import { useFileStore } from "./fileStore.ts";
@@ -169,7 +171,9 @@ interface SessionStore {
   loadActiveSessions: (opts?: { includeRecentDiskSession?: boolean }) => Promise<void>;
 
   // Subsession actions
-  createSubsession: (parentThinkrailSid: string, type: "discussion" | "refinement", context?: string, name?: string) => Promise<string>;
+  createSubsession: (parentThinkrailSid: string, type: "discussion" | "refinement", context?: string, name?: string, origin?: SubsessionOrigin) => Promise<string>;
+  requestReturnSummary: (thinkrailSid: string) => Promise<void>;
+  returnWithoutResult: (thinkrailSid: string) => void;
   approveReturn: (thinkrailSid: string, text: string) => Promise<void>;
   dismissReturn: (thinkrailSid: string) => Promise<void>;
   reviseReturn: (thinkrailSid: string, feedback: string) => Promise<void>;
@@ -209,6 +213,7 @@ interface SessionStore {
   ) => Promise<void>;
   onConfigChanged: (params: Record<string, unknown>) => void;
   onSubsessionReturned: (params: Record<string, unknown>) => void;
+  onSummaryDrafted: (params: Record<string, unknown>) => void;
 }
 
 function emptyContextUsage(): ContextUsage {
@@ -521,6 +526,7 @@ function ensureSession(
     parentThinkrailSid: null,
     subsessionType: null,
     subsessionContext: null,
+    subsessionOrigin: null,
     returnStatus: null,
     returnSummary: null,
     outcome: null,
@@ -785,6 +791,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         parentThinkrailSid: null,
         subsessionType: null,
         subsessionContext: null,
+        subsessionOrigin: null,
         returnStatus: null,
         returnSummary: null,
         artifacts: [],
@@ -833,6 +840,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         parentThinkrailSid: null,
         subsessionType: null,
         subsessionContext: null,
+        subsessionOrigin: null,
         returnStatus: null,
         returnSummary: null,
         artifacts: existing?.artifacts ?? [],
@@ -893,6 +901,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         parentThinkrailSid: null,
         subsessionType: null,
         subsessionContext: null,
+        subsessionOrigin: null,
         returnStatus: null,
         returnSummary: null,
         artifacts: [],
@@ -1405,6 +1414,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       parentThinkrailSid: (data as unknown as Record<string, unknown>).parentThinkrailSid as string ?? null,
       subsessionType: (data as unknown as Record<string, unknown>).subsessionType as Session["subsessionType"] ?? null,
       subsessionContext: (data as unknown as Record<string, unknown>).subsessionContext as string ?? null,
+      subsessionOrigin: (data as unknown as Record<string, unknown>).subsessionOrigin as Session["subsessionOrigin"] ?? null,
       returnStatus: (data as unknown as Record<string, unknown>).returnStatus as Session["returnStatus"] ?? null,
       returnSummary: (data as unknown as Record<string, unknown>).returnSummary as string ?? null,
       outcome: ((data as unknown as Record<string, unknown>).outcome as Session["outcome"]) ?? null,
@@ -1550,6 +1560,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           parentThinkrailSid: (data as unknown as Record<string, unknown>)?.parentThinkrailSid as string ?? null,
           subsessionType: (data as unknown as Record<string, unknown>)?.subsessionType as Session["subsessionType"] ?? null,
           subsessionContext: (data as unknown as Record<string, unknown>)?.subsessionContext as string ?? null,
+          subsessionOrigin: (data as unknown as Record<string, unknown>)?.subsessionOrigin as Session["subsessionOrigin"] ?? null,
           returnStatus: (data as unknown as Record<string, unknown>)?.returnStatus as Session["returnStatus"] ?? null,
           returnSummary: (data as unknown as Record<string, unknown>)?.returnSummary as string ?? null,
           outcome: ((data as unknown as Record<string, unknown>)?.outcome
@@ -2607,6 +2618,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             parentThinkrailSid: (params.parentThinkrailSid as string) ?? null,
             subsessionType: (params.subsessionType as Session["subsessionType"]) ?? null,
             subsessionContext: (params.subsessionContext as string) ?? null,
+            subsessionOrigin: (params.subsessionOrigin as Session["subsessionOrigin"]) ?? null,
             returnStatus: null,
             returnSummary: null,
             artifacts: [],
@@ -2708,7 +2720,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   // ── Subsession actions ──
 
-  createSubsession: async (parentThinkrailSid, type, context, name) => {
+  createSubsession: async (parentThinkrailSid, type, context, name, origin) => {
     const { createSubsessionApi } = await import("@/api/methods/subsessions.ts");
     const client = getClient();
     const api = createSubsessionApi(client);
@@ -2718,6 +2730,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       type,
       context,
       name: name ?? (type === "discussion" ? "Discussion" : "Refinement"),
+      origin,
     });
 
     // Load the created subsession from backend
@@ -2775,6 +2788,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         parentThinkrailSid: (data as unknown as Record<string, unknown>).parentThinkrailSid as string ?? parentThinkrailSid,
         subsessionType: (data as unknown as Record<string, unknown>).subsessionType as Session["subsessionType"] ?? type,
         subsessionContext: (data as unknown as Record<string, unknown>).subsessionContext as string ?? context ?? null,
+        subsessionOrigin: (data as unknown as Record<string, unknown>).subsessionOrigin as Session["subsessionOrigin"] ?? origin ?? null,
         returnStatus: (data as unknown as Record<string, unknown>).returnStatus as Session["returnStatus"] ?? null,
         returnSummary: (data as unknown as Record<string, unknown>).returnSummary as string ?? null,
         outcome: ((data as unknown as Record<string, unknown>).outcome as Session["outcome"]) ?? null,
@@ -2793,6 +2807,13 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         tabs.add(thinkrailSid);
         return { sessions: next, openTabs: tabs, activeSessionId: thinkrailSid };
       });
+
+      // Discussion subsessions run immediately — no explicit Start step.
+      if (type === "discussion") {
+        get().startDraft(thinkrailSid, "").catch((err) =>
+          console.error("[createSubsession] auto-start failed:", err),
+        );
+      }
     }
     return thinkrailSid;
   },
@@ -2841,10 +2862,23 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       // Switch to parent tab so user sees the revised text in the input box
       set(() => ({ activeSessionId: parentSid }));
     } else {
-      // Discussion: add result card to parent chat stream
+      // Discussion: route the summary by origin (a still-pending question's
+      // "Other" field, else the parent's message box), post a result card,
+      // switch to the parent, and close (archive) the child tab.
+      const origin = p.origin as { kind?: string; requestId?: string } | undefined;
+      const parent = get().sessions.get(parentSid);
+      const questionStillPending = !!(
+        origin?.requestId &&
+        parent?.pendingRequests?.some((r) => r.requestId === origin.requestId)
+      );
+      if (origin?.kind === "question" && questionStillPending && origin.requestId) {
+        useAnswerDraftStore.getState().setDraft(origin.requestId, summary);
+      } else {
+        useInputDraftStore.getState().setDraft(parentSid, summary);
+      }
       set((s) => {
         const parent = s.sessions.get(parentSid);
-        if (!parent) return s;
+        if (!parent) return { activeSessionId: parentSid };
         const next = new Map(s.sessions);
         const event = {
           thinkrailSid: parentSid,
@@ -2859,9 +2893,75 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           },
         };
         next.set(parentSid, { ...parent, events: [...parent.events, event] });
-        return { sessions: next };
+        return { sessions: next, activeSessionId: parentSid };
+      });
+      const childSid = p.childThinkRailSid as string | undefined;
+      if (childSid) get().closeSession(childSid);
+    }
+  },
+
+  returnWithoutResult: (thinkrailSid) => {
+    const session = get().sessions.get(thinkrailSid);
+    const parentSid = session?.parentThinkrailSid ?? null;
+    const childName = session?.name ?? "discussion";
+    // Mark dismissed on the backend (best-effort; local lifecycle proceeds regardless).
+    get().dismissReturn(thinkrailSid).catch((err) =>
+      console.warn("[returnWithoutResult] dismiss failed:", err),
+    );
+    if (parentSid) {
+      set((s) => {
+        const parent = s.sessions.get(parentSid);
+        if (!parent) return { activeSessionId: parentSid };
+        const next = new Map(s.sessions);
+        const event = {
+          thinkrailSid: parentSid,
+          sessionId: "",
+          eventType: "notification" as const,
+          payload: {
+            message: `Discussion “${childName}” closed — no result returned.`,
+          },
+        };
+        next.set(parentSid, { ...parent, events: [...parent.events, event] });
+        return { sessions: next, activeSessionId: parentSid };
       });
     }
+    get().closeSession(thinkrailSid);
+  },
+
+  onSummaryDrafted: (params) => {
+    const p = params as Record<string, unknown>;
+    const sid = p.thinkrailSid as string;
+    set((s) => {
+      const session = s.sessions.get(sid);
+      if (!session) return s;
+      const next = new Map(s.sessions);
+      next.set(sid, {
+        ...session,
+        returnStatus:
+          (p.returnStatus as Session["returnStatus"]) ?? SessionReturnStatus.Pending,
+        returnSummary: (p.returnSummary as string) ?? null,
+      });
+      return { sessions: next };
+    });
+  },
+
+  requestReturnSummary: async (thinkrailSid) => {
+    const { createSubsessionApi } = await import("@/api/methods/subsessions.ts");
+    const api = createSubsessionApi(getClient());
+    await api.requestSummary(thinkrailSid);
+    set((s) => {
+      const session = s.sessions.get(thinkrailSid);
+      if (!session) return s;
+      const next = new Map(s.sessions);
+      // Clear any prior summary so the dialog shows the "drafting" state until
+      // the fresh draft arrives (also drives Regenerate).
+      next.set(thinkrailSid, {
+        ...session,
+        returnStatus: SessionReturnStatus.Pending,
+        returnSummary: null,
+      });
+      return { sessions: next };
+    });
   },
 
 }));

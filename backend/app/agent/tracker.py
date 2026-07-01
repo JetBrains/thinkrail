@@ -45,6 +45,7 @@ class Tracker:
         self._interrupted: set[str] = set()
         self._turn_text: dict[str, list[str]] = {}  # thinkrail_sid → accumulated text blocks
         self._last_messages: dict[str, str] = {}  # thinkrail_sid → last user message (for retry)
+        self._awaiting_summary: set[str] = set()  # sids whose next turn drafts a return summary
         self._approved_sigs: dict[str, set[str]] = {}  # thinkrail_sid → remembered approvals
 
     # -- task lifecycle -------------------------------------------------------
@@ -320,3 +321,15 @@ class Tracker:
     def clear_turn_text(self, thinkrail_sid: str) -> None:
         """Clear the turn text buffer (called at the start of each query)."""
         self._turn_text.pop(thinkrail_sid, None)
+
+    # -- return-summary drafting -----------------------------------------------
+
+    def mark_awaiting_summary(self, thinkrail_sid: str) -> None:
+        """Flag that the session's next completed turn is a return-summary draft."""
+        self._awaiting_summary.add(thinkrail_sid)
+
+    def is_awaiting_summary(self, thinkrail_sid: str) -> bool:
+        return thinkrail_sid in self._awaiting_summary
+
+    def clear_awaiting_summary(self, thinkrail_sid: str) -> None:
+        self._awaiting_summary.discard(thinkrail_sid)

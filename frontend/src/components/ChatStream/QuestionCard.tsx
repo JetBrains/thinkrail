@@ -7,6 +7,7 @@ import { QuestionOptionsPanel } from "./QuestionOptionsPanel.tsx";
 import { QuestionPreviewPanel } from "./QuestionPreviewPanel.tsx";
 import { ChatMarkdown } from "./ChatMarkdown.tsx";
 import { PRODUCT_NAME } from "@/constants/branding";
+import { useAnswerDraftStore } from "@/store/answerDraftStore.ts";
 
 interface QuestionCardProps {
   questions: Question[];
@@ -72,6 +73,27 @@ export function QuestionCard({
       if (autoAdvanceTimer.current !== null) clearTimeout(autoAdvanceTimer.current);
     };
   }, []);
+
+  // Seed the "Other" field from a returned discussion summary. A discussion
+  // subsession launched from this question writes its result into the answer
+  // draft (keyed by requestId); pick it up (whether set before or after mount),
+  // select Other, focus it, and consume the draft.
+  const answerDraft = useAnswerDraftStore((s) =>
+    requestId ? s.drafts.get(requestId) : undefined,
+  );
+  useEffect(() => {
+    if (answered || !requestId || answerDraft == null) return;
+    const q0 = questions[0];
+    setActiveTab(0);
+    setOtherText((prev) => ({ ...prev, 0: answerDraft }));
+    if (q0.multiSelect) {
+      setCheckedItems((prev) => ({ ...prev, 0: new Set(prev[0]).add(q0.options.length) }));
+    } else {
+      setSelectedSingle((prev) => ({ ...prev, 0: q0.options.length }));
+    }
+    useAnswerDraftStore.getState().clearDraft(requestId);
+    setTimeout(() => otherInputRef.current?.focus(), 0);
+  }, [answerDraft, answered, requestId, questions]);
 
   const q = questions[activeTab];
   const isMulti = q?.multiSelect ?? false;
@@ -422,7 +444,8 @@ export function QuestionCard({
                         activeId,
                         "discussion",
                         questionText,
-                        "Discuss: " + (questions[0]?.question ?? "").slice(0, 40)
+                        "Discuss: " + (questions[0]?.question ?? "").slice(0, 40),
+                        { kind: "question", requestId: requestId ?? null, questionIndex: activeTab }
                       );
                     }
                   }).catch(console.error);

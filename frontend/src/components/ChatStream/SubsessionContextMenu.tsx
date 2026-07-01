@@ -45,6 +45,7 @@ export function SubsessionContextMenu({ containerRef, sessionId }: SubsessionCon
         "discussion",
         selectedText,
         "Discuss: " + selectedText.slice(0, 40),
+        { kind: "message" },
       );
     }).catch(console.error);
     setVisible(false);

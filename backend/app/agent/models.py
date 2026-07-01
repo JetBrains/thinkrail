@@ -803,6 +803,22 @@ class SessionReturnStatus(StrEnum):
     DISMISSED = "dismissed"
 
 
+class SubsessionOriginKind(StrEnum):
+    question = "question"
+    message = "message"
+
+
+class SubsessionOrigin(BaseModel):
+    """Where a subsession was launched from, so its return can land in the right
+    place in the parent: a pending question's ``Other`` field, or the message box."""
+
+    model_config = _CAMEL_CONFIG
+
+    kind: SubsessionOriginKind = SubsessionOriginKind.message
+    request_id: str | None = None
+    question_index: int = 0
+
+
 class AgentTask(BaseModel):
     """Task record tracking an agent run."""
 
@@ -829,6 +845,7 @@ class AgentTask(BaseModel):
     parent_thinkrail_sid: str | None = None
     subsession_type: SubsessionType | None = None
     subsession_context: str | None = None
+    subsession_origin: SubsessionOrigin | None = None
     return_status: SessionReturnStatus | None = None
     return_summary: str | None = None
     outcome: SessionOutcome | None = None

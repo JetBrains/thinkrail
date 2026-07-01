@@ -25,14 +25,16 @@ const DiffCard = lazy(() => import("../DiffCard.tsx").then(m => ({ default: m.Di
  * Unspecified event types fall back to classicRenderers via the registry.
  */
 export const compactRenderers: ViewRenderers = {
-  sessionStart: (_ev, _i, k, ctx) => (
-    <DraftConfigCard
-      key={k}
-      thinkrailSid={ctx.session!.thinkrailSid}
-      readOnly
-      onVisibilityChange={ctx.onContextCardVisibility}
-    />
-  ),
+  sessionStart: (_ev, _i, k, ctx) =>
+    // Discussion subsessions hide their config entirely (auto-run, inherited config).
+    ctx.session?.subsessionType === "discussion" ? null : (
+      <DraftConfigCard
+        key={k}
+        thinkrailSid={ctx.session!.thinkrailSid}
+        readOnly
+        onVisibilityChange={ctx.onContextCardVisibility}
+      />
+    ),
 
   userMessage: (ev, _i, k) => (
     <CompactUserMessage

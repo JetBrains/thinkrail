@@ -5,7 +5,7 @@ from typing import Any
 
 from jsonrpcserver import JsonRpcError, Result, Success
 
-from app.agent.models import SubsessionType
+from app.agent.models import SubsessionOrigin, SubsessionType
 from app.agent.service import AgentService
 from app.rpc.bus import bus
 from app.rpc.context import get_current_conn
@@ -35,11 +35,14 @@ def _handle_errors(func):  # type: ignore[type-arg]
 @_handle_errors
 async def create_subsession(service: AgentService, **params: Any) -> dict:
     """Create a subsession linked to a parent session."""
+    origin_raw = params.get("origin")
+    origin = SubsessionOrigin.model_validate(origin_raw) if origin_raw else None
     task = await service.create_subsession(
         parent_thinkrail_sid=params["parentThinkrailSid"],
         subsession_type=SubsessionType(params["type"]),
         context=params.get("context"),
         name=params.get("name", ""),
+        origin=origin,
     )
     conn = get_current_conn()
     if conn:
@@ -86,6 +89,10 @@ async def approve_summary(service: AgentService, **params: Any) -> dict:
                 "childName": task.name,
                 "type": task.subsession_type.value if task.subsession_type else "discussion",
                 "summary": text,
+                "origin": (
+                    task.subsession_origin.model_dump(by_alias=True, mode="json")
+                    if task.subsession_origin else None
+                ),
             },
         )
     return {"ok": True}
