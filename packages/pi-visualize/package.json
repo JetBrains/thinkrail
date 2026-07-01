@@ -1,0 +1,23 @@
+{
+	"name": "pi-visualize",
+	"version": "0.1.0",
+	"description": "A pi extension adding a `visualize` tool: render mermaid diagrams and option comparisons as rich cards.",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"typecheck": "tsc --noEmit",
+		"test": "bun test"
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-ai": "*",
+		"@earendil-works/pi-coding-agent": "*",
+		"typebox": "*"
+	},
+	"devDependencies": {
+		"@earendil-works/pi-ai": "^0.80.2",
+		"@earendil-works/pi-coding-agent": "^0.80.2",
+		"@types/bun": "^1.3.14",
+		"typebox": "^1.1.38",
+		"typescript": "^6.0.3"
+	}
+}

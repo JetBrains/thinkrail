@@ -47,8 +47,9 @@ in-process `uiContext` dialog calls into WS frames.
     round-trip to the browser, fire-and-forget methods push, TUI-only members inert); `setExtUiPublisher`
     (server→client push seam), `resolveExtUi` (browser reply), `cancelExtUiForSession` (on dispose),
     `notifyExtUi`.
-  - `webExtensions` — `buildResourceLoader(cwd, settingsManager)`: a `DefaultResourceLoader` (pi's normal
-    disk discovery) that also loads the bundled **`pi-web-access`** extension (`web_search` + `fetch_content`)
+  - `extensions` — `buildResourceLoader(cwd, settingsManager)`: a `DefaultResourceLoader` (pi's normal
+    disk discovery) that also loads the bundled **`pi-web-access`** (`web_search` + `fetch_content`) and
+    **`pi-visualize`** (`visualize`) extensions
     via `additionalExtensionPaths` (pi's loader jiti-loads its raw `.ts` — no value-import into our
     typecheck), plus a tiny `extensionFactories` **headless-search policy** (a `tool_call` hook defaulting
     `web_search`'s `workflow` to `"none"`, since pi-web-access would otherwise open a browser curator our

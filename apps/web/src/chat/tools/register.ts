@@ -5,6 +5,7 @@ import { BashCard } from "./BashCard";
 import { EditCard } from "./EditCard";
 import { ReadCard } from "./ReadCard";
 import { fileName, strArg } from "./toolHelpers";
+import "./visualize/register";
 import "./web/register";
 import { WriteCard } from "./WriteCard";
 

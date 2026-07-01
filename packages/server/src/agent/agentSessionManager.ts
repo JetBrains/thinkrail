@@ -15,8 +15,8 @@ import type {
 	SlashCommandInfo,
 	ThinkingLevel,
 } from "@thinkrail-pi/contracts";
+import { buildResourceLoader } from "./extensions";
 import { getPiRuntime } from "./piRuntime";
-import { buildResourceLoader } from "./webExtensions";
 import { cancelExtUiForSession, createWebUiContext, notifyExtUi } from "./webUiContext";
 
 interface Entry {

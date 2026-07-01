@@ -49,6 +49,14 @@ a future `packages/chat-ui`).
     toggle) and pure `toolHelpers`. Registered (with their header summaries) via `registerToolRenderer`
     by `tools/register` (a side-effect import in `ChatView`, so it runs once when the chat module
     mounts). Unregistered tools still fall back to `DefaultToolRenderer`.
+  - **Visualization renderer** (`tools/visualize/`) — the card for the `visualize` tool (from the
+    bundled `pi-visualize` extension): `VisualizationCard` dispatches on `args.type` to `DiagramCard`
+    (mermaid → themed SVG via the **lazy-loaded** `mermaid`, falling back to the source on a parse error)
+    and `ComparisonCard` (option cards: pros/cons, a `recommended` highlight, an optional per-option
+    inline diagram); the shared `MermaidView` re-renders on `[data-theme]` change and offers a
+    **full-screen** view (a `Dialog` — its own close button + Esc/overlay dismissal — whose `PanZoomView`
+    adds scroll on both axes, zoom via buttons + Ctrl/⌘-wheel, and mouse drag-to-pan). Registered by
+    `tools/visualize/register`.
   - **`ToolCard`** pairs a tool call with its result and is **collapsed by default** — routine calls
     (bash/read/edit/…) stay folded so they don't clutter the chat; the header shows the tool name + its
     registered `summary` and a chevron, and clicking it reveals the body. Errors **auto-expand** so
@@ -72,8 +80,8 @@ a future `packages/chat-ui`).
   lazy-imports `chat/ChatView`; the registry is importable from `chat/toolRegistry` **without** pulling shiki.
 - **Allowed deps:** `contracts` (pi message/content-block types, **type-only**); `store` + `transport`
   (**`ChatView` only** — the app-integration edge); `react-markdown` / `remark-gfm` / `shiki` (via
-  `lib/highlighter`); `react-virtuoso`; `lucide-react`; `components/ui` (`Button`, `Popover`, `Command`);
-  `lib` (`cn`).
+  `lib/highlighter`); `mermaid` (**lazy-loaded, `tools/visualize` only**); `react-virtuoso`;
+  `lucide-react`; `components/ui` (`Button`, `Popover`, `Command`, `Dialog`); `lib` (`cn`).
 - **Forbidden:** value-importing any `pi` package; a **presentational** renderer importing
   `store`/`transport` (only `ChatView` may — keep the renderers reusable).
 

@@ -17,6 +17,7 @@
 		"@thinkrail-pi/contracts": "workspace:*",
 		"@thinkrail-pi/shared": "workspace:*",
 		"bun-pty": "^0.4.10",
+		"pi-visualize": "workspace:*",
 		"pi-web-access": "^0.13.0"
 	},
 	"devDependencies": {
