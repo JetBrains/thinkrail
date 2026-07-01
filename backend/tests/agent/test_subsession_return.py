@@ -126,3 +126,17 @@ class TestSummaryCapture:
         assert service._maybe_capture_summary(task) is None
         # Flag stays set so a later non-empty turn can still capture.
         assert service._tracker.is_awaiting_summary(task.thinkrail_sid) is True
+
+
+class TestApprove:
+    def test_approve_marks_done(self, tmp_path: Path) -> None:
+        service = _make_service(tmp_path)
+        task = service._tracker.create_task([], AgentConfig(), name="disc")
+        task.subsession_type = SubsessionType.discussion
+        service._save_task(task)
+
+        service.approve_summary(task.thinkrail_sid, "final text")
+
+        assert task.return_status == SessionReturnStatus.APPROVED
+        assert task.return_summary == "final text"
+        assert task.status == TaskStatus.DONE

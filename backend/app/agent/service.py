@@ -1582,6 +1582,7 @@ class AgentService:
         task = self._tracker.get_task(thinkrail_sid)
         task.return_status = SessionReturnStatus.APPROVED
         task.return_summary = text
+        task.status = TaskStatus.DONE
         task.updated = datetime.now(UTC).isoformat()
         self._save_task(task)
 

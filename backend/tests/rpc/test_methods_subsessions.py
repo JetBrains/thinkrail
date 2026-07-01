@@ -41,6 +41,7 @@ class TestCreateSubsession:
             subsession_type=SubsessionType.discussion,
             context=None,
             name="Discuss auth",
+            origin=None,
         )
 
 

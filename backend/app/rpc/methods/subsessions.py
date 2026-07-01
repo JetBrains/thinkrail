@@ -89,6 +89,10 @@ async def approve_summary(service: AgentService, **params: Any) -> dict:
                 "childName": task.name,
                 "type": task.subsession_type.value if task.subsession_type else "discussion",
                 "summary": text,
+                "origin": (
+                    task.subsession_origin.model_dump(by_alias=True, mode="json")
+                    if task.subsession_origin else None
+                ),
             },
         )
     return {"ok": True}
