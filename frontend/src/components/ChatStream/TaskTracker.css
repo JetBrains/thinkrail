@@ -1,0 +1,65 @@
+/* ── Live activity line ─────────────────────────────────────── */
+.task-activity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--blue);
+  font-family: var(--font-mono);
+  font-size: var(--font-xs);
+  min-width: 0;
+}
+.task-activity__text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.task-activity__dot {
+  flex: none; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--blue); animation: task-pulse 1.4s infinite;
+}
+@keyframes task-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(106, 200, 255, 0.5); }
+  70%  { box-shadow: 0 0 0 6px rgba(106, 200, 255, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(106, 200, 255, 0); }
+}
+
+/* ── Docked bar ─────────────────────────────────────────────── */
+.task-dock {
+  position: sticky; top: var(--space-sm); z-index: 20;
+  margin: 0 var(--space-sm) var(--space-sm);
+  display: flex; align-items: center; gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-dark);
+  border: 1px solid var(--primary-40);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+}
+.task-dock__spinner {
+  flex: none; width: 12px; height: 12px; border-radius: 50%;
+  border: 2px solid var(--primary-40); border-top-color: var(--primary);
+  animation: task-spin 1s linear infinite;
+}
+@keyframes task-spin { to { transform: rotate(360deg); } }
+.task-dock__count { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.task-dock .task-activity { flex: 1; }
+.task-dock__open {
+  margin-left: auto; flex: none; color: var(--text);
+  border: 1px solid var(--primary-40); border-radius: 14px;
+  padding: 2px var(--space-sm); background: var(--primary-10);
+  font-size: var(--font-xs);
+}
+
+/* ── Inline-expand popover ──────────────────────────────────── */
+.task-dock-pop {
+  position: sticky; top: calc(var(--space-sm) + 40px); z-index: 21;
+  margin: calc(-1 * var(--space-sm)) var(--space-sm) var(--space-sm);
+  padding: var(--space-md);
+  background: var(--bg-dark);
+  border: 1px solid var(--primary-40);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+}
+.task-dock-pop__header {
+  display: flex; align-items: center; gap: var(--space-sm);
+  margin-bottom: var(--space-sm); padding-bottom: var(--space-sm);
+  border-bottom: 1px dashed var(--border2);
+}
+.task-dock-pop__title { font-weight: 600; }
+.task-dock-pop__count { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
