@@ -3,7 +3,7 @@ import { Check, ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
-/** The honest effort knob pi exposes (M14): the six thinking levels. pi clamps any the model can't do. */
+/** The honest effort knob pi exposes: the six thinking levels. pi clamps any the model can't do. */
 const LEVELS: ThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh"];
 
 /**

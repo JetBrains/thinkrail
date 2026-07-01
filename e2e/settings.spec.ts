@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-// The Settings dialog's "Local GitHub" block (M14). The e2e host forces gh offline
+// The Settings dialog's "Local GitHub" block. The e2e host forces gh offline
 // (THINKRAIL_PI_GH_OFFLINE), so it must degrade to "Not connected" — proving the graceful-degrade path.
 test("settings shows the Local GitHub status block and degrades gh gracefully", async ({
 	page,

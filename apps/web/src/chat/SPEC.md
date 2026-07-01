@@ -30,11 +30,11 @@ a future `packages/chat-ui`).
     chip); `RetryIndicator` (auto-retry countdown bar); `StreamIndicator` (the single streaming loader —
     typing-dots wave + a phase label, from the pure `streamStatus` deriver); `Markdown` (react-markdown +
     remark-gfm + shiki code blocks); `ToolCard`; the pointer-aware `useChatScroll` hook.
-  - **Composer + cheap-win primitives** (M12, also props-driven, **no store/transport**): `Composer`
+  - **Composer + cheap-win primitives** (also props-driven, **no store/transport**): `Composer`
     (send/steer/followUp/abort, `@`-mention completion, `/` slash-command menu, image paste/drop);
     `ModelSelector` (a pill opening a searchable `Command` list grouped by provider, no leading icon) +
     `ThinkingSelector` (a pill opening the six thinking levels — same trigger+popover shape as the model
-    picker) (cheap win #1, restyled at M14 — shared with `NewWorkspaceDialog`'s pre-session mode); both take
+    picker) (cheap win #1 — shared with `NewWorkspaceDialog`'s pre-session mode); both take
     an optional `container` so their popovers portal into a host Dialog (keeping the list scrollable under
     the Dialog's scroll lock); `SessionStatsBar` (cheap win #3); `ChatHeader`
     (arranges them); `ExtUiDialog` (renders pi's `select`/`confirm`/`input`/`editor` from the
@@ -59,7 +59,7 @@ a future `packages/chat-ui`).
     `ExtUiRequest` subset the store's `pendingExtUi` is typed by).
   - **Hydration** (`hydrate.ts`) — the pure **`messagesToRuntime(Message[])`** converter (the read-side
     counterpart of the event reducer): folds a session's pi-canonical transcript into `{ turns, toolResults }`
-    so a reconnecting / second client rebuilds a chat on connect (M16). No store/transport/shiki.
+    so a reconnecting / second client rebuilds a chat on connect. No store/transport/shiki.
   - **App integration** — `ChatView` (react-virtuoso list + `ChatHeader` + `Composer` + `ExtUiDialog`,
     wiring store + transport: model list / stats / commands / mentions / dialog replies). Reads **its own
     session's runtime** via `store.sessions[sessionId]` (falling back to `EMPTY_RUNTIME`) and addresses every
@@ -86,7 +86,7 @@ A tool has two **decoupled** sides, joined by the **tool name**:
 2. **Presentation (here):** `registerToolRenderer("<toolName>", MyToolCard)`. A `ToolRenderer` returns the
    card body; the header/status chrome is shared. Unregistered tools fall back to `DefaultToolRenderer`.
 3. **Interaction (optional):** tools that prompt the user route through pi's extension-UI bridge (the
-   `pi.extensionUi` channel, M12).
+   `pi.extensionUi` channel).
 
 ## Streaming model
 

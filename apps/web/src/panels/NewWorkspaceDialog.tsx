@@ -22,7 +22,7 @@ const PILL =
 	"flex h-8 min-w-0 items-center gap-sm rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-sm text-sm text-text outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-[var(--primary-60)] data-[open=true]:bg-hover";
 
 /**
- * The New-Workspace "create + kick-off" surface (M14): pick a base branch, say what to work on, pick a
+ * The New-Workspace "create + kick-off" surface: pick a base branch, say what to work on, pick a
  * model + effort, then Create → cut a worktree from that base, open a chat in it, and send the prompt.
  * With an empty prompt it just creates the workspace (no chat) — the fast path for poking at files.
  *

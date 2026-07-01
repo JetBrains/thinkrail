@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { getTransport } from "@/transport";
 
 /**
- * App settings (M14: the "Local GitHub" block). Shows the host's read-only `gh` auth status — Connected
+ * App settings (the "Local GitHub" block). Shows the host's read-only `gh` auth status — Connected
  * with the account login, or Not connected (with the same graceful degrade the New-Workspace dialog uses)
  * — and a Refresh that re-probes `gh`.
  */

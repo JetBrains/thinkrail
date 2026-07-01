@@ -3,7 +3,7 @@ import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 
 // Shared shiki highlighter for chat code blocks: the JS regex engine (no WASM), one theme, a curated
 // language set — all behind dynamic imports so nothing loads until the first code block renders. Matches
-// the M8 DiffViewer pattern (which only needs `diff`); kept here so chat can highlight many languages.
+// the DiffViewer pattern (which only needs `diff`); kept here so chat can highlight many languages.
 const THEME = "github-dark-default";
 
 const CANONICAL = new Set([

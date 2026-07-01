@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
 
-// Tagged @agent (see agent.live.spec.ts): runs a REAL pi agent. Proves M13 — several chats in one
+// Tagged @agent (see agent.live.spec.ts): runs a REAL pi agent. Proves several chats in one
 // workspace, each its own runtime, streaming concurrently; switching is an instant swap; closing one
 // leaves the other untouched. (The deterministic routing guarantee is unit-tested in store/appStore.test.ts.)
 test("two chats in one workspace stream independently; closing one keeps the other", {

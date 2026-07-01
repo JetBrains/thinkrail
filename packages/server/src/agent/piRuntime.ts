@@ -1,6 +1,6 @@
 import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
 
-/** Shared pi services — one `authStorage` + `modelRegistry` for every session (per Appendix A). */
+/** Shared pi services — one `authStorage` + `modelRegistry` for every session. */
 export interface PiRuntime {
 	authStorage: AuthStorage;
 	modelRegistry: ModelRegistry;

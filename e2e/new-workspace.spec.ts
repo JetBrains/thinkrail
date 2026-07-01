@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { openFixtureProject } from "./fixtures/app";
 
-// The New-Workspace dialog (M14), no agent required: project + base-branch pickers, the effort picker, and
+// The New-Workspace dialog, no agent required: project + base-branch pickers, the effort picker, and
 // the bare-create flow. The agent kick-off (Create with a prompt → streaming chat) and the model-list
 // wheel-scroll are covered in new-workspace.live.spec.ts (@agent).
 

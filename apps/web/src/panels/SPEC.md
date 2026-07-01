@@ -17,7 +17,7 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
 
 - **Owns:** `ProjectTree` (+ the `NewWorkspaceDialog` its "+" opens), `FileTree`, `RightPanel`,
   `ChangesPanel` + lazy `DiffViewer`, `CenterTabs` + lazy `MonacoEditor`, `TerminalsPanel` + lazy
-  `TerminalInstance`. **`NewWorkspaceDialog`** (M14) is the create-and-kick-off surface: a base-branch
+  `TerminalInstance`. **`NewWorkspaceDialog`** is the create-and-kick-off surface: a base-branch
   combobox (`git.listBranches`, degrading to local branches offline; a Refresh re-lists; `origin/HEAD` is
   filtered so no stray `origin`), a project picker, the prompt hero, and the reused
   `chat/ModelSelector`+`ThinkingSelector` in **pre-session** mode — preselected to the host's resolved
@@ -25,7 +25,7 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   time). The pickers' popovers portal into the dialog node (so their lists scroll under the Dialog scroll
   lock). Create = `workspace.create({ projectId, baseRef })` → set active → (with a prompt) open a chat +
   `session.create({ model, thinkingLevel })` + fire-and-forget `prompt`; with an empty prompt it just
-  creates the workspace. (`gh` status lives in `SettingsDialog`, not the create dialog.) **`SettingsDialog`** (M14) is the app-settings surface the shell's topbar gear opens — its
+  creates the workspace. (`gh` status lives in `SettingsDialog`, not the create dialog.) **`SettingsDialog`** is the app-settings surface the shell's topbar gear opens — its
   "Local GitHub" block shows `github.authStatus()` (Connected + login / Not connected) with a Refresh.
   Panels compose their own sub-panels
   (e.g. `RightPanel`→`FileTree`/`ChangesPanel`, `CenterTabs`→`MonacoEditor`) — an internal hierarchy.

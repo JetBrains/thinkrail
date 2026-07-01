@@ -6,8 +6,6 @@ runs `pi` and bridges it to a rich UI; `pi` owns models, skills, compaction, cos
 Canonical specs (read these first):
 - `goal-and-requirements.md` — product goal + V1/V2 scope
 - `architecture.md` — top-level architecture, decisions, invariants
-- `docs/V1-TUTORIAL.md` — the buildable V1 milestone ladder (M0–M15), gotchas, dependency pins, type map
-- `docs/V2-ROADMAP.md` — the destination V1 is designed to reach
 
 ## Module structure & boundaries (top-priority requirement)
 
@@ -122,7 +120,7 @@ reusable by any pi UI (extraction-ready as a future `packages/chat-ui`).
 - **Adding a tool = two decoupled sides, joined by tool name:** the **capability** is a pi **custom tool /
   extension/skill** (server-side, passed to `createAgentSession`); the **presentation** is a UI renderer
   registered via **`registerToolRenderer("<name>", …)`** (`chat/toolRegistry`) — unregistered tools fall
-  back to `DefaultToolRenderer`. Interactive tools route through the `pi.extensionUi` bridge (M12).
+  back to `DefaultToolRenderer`. Interactive tools route through the `pi.extensionUi` bridge.
 - Full module spec: `apps/web/src/chat/SPEC.md`.
 
 ## Verification (run for every app-affecting change)
@@ -153,5 +151,4 @@ Fast gates (also the husky pre-commit): `bun run lint` (biome) + `bun run typech
 ## Stack
 
 Bun + Turbo monorepo · TypeScript (strict) · React 19 + Zustand + Tailwind v4 (web) · in-process `pi`
-via `@earendil-works/pi-coding-agent` (Node ≥ 22.19; verify Bun-compat at Checkpoint 0). Pinned versions
-in `docs/V1-TUTORIAL.md` Appendix F. On-disk app state under `~/.thinkrail-pi`.
+via `@earendil-works/pi-coding-agent` (Node ≥ 22.19). On-disk app state under `~/.thinkrail-pi`.

@@ -23,7 +23,7 @@ import type {
 /** Bumped on any breaking wire change; sent in `server.welcome` so a stale UI can detect host drift. */
 export const PROTOCOL_VERSION = 1;
 
-/** Request/response methods. `session.*` (the pi engine) is added at M10. */
+/** Request/response methods. `session.*` drives the pi engine. */
 export const WS_METHODS = {
 	projectOpen: "project.open",
 	projectList: "project.list",
@@ -32,7 +32,7 @@ export const WS_METHODS = {
 	workspaceList: "workspace.list",
 	workspaceRemove: "workspace.remove",
 	workspaceDiffStats: "workspace.diffStats",
-	// gh-backed New-Workspace surface (M14): branch list per project + local `gh` auth status.
+	// gh-backed New-Workspace surface: branch list per project + local `gh` auth status.
 	gitListBranches: "git.listBranches",
 	githubAuthStatus: "github.authStatus",
 	githubRefresh: "github.refresh",
@@ -45,7 +45,7 @@ export const WS_METHODS = {
 	terminalResize: "terminal.resize",
 	terminalClose: "terminal.close",
 	dialogSelectDirectory: "dialog.selectDirectory",
-	// session.* — the pi engine (M10); the Composer + cheap wins (model/thinking/stats/skills) join at M12.
+	// session.* — the pi engine; the Composer + cheap wins (model/thinking/stats/skills).
 	sessionCreate: "session.create",
 	sessionPrompt: "session.prompt",
 	sessionSteer: "session.steer",
@@ -58,7 +58,7 @@ export const WS_METHODS = {
 	sessionGetStats: "session.getStats",
 	sessionGetCommands: "session.getCommands",
 	sessionExtUiReply: "session.extUiReply",
-	// Read side of the wire (hydrate-then-stream, M16): a client lists a workspace's sessions and pulls a
+	// Read side of the wire (hydrate-then-stream): a client lists a workspace's sessions and pulls a
 	// transcript to rebuild its view on connect.
 	sessionList: "session.list",
 	sessionGetMessages: "session.getMessages",
@@ -87,8 +87,8 @@ export interface WsMethodMap {
 	"project.open": { params: { path: string }; result: Project };
 	"project.list": { params: Record<string, never>; result: Project[] };
 	"project.close": { params: { id: string }; result: Ack };
-	// `baseRef` (M14): the base branch the worktree is cut from (a remote ref is fetched first); when
-	// omitted, the worktree branches off the repo's current HEAD (the M5 behavior).
+	// `baseRef`: the base branch the worktree is cut from (a remote ref is fetched first); when
+	// omitted, the worktree branches off the repo's current HEAD (the default behavior).
 	"workspace.create": {
 		params: { projectId: string; name?: string; baseRef?: string };
 		result: Workspace;
@@ -109,7 +109,7 @@ export interface WsMethodMap {
 	"terminal.close": { params: { id: string }; result: Ack };
 	"dialog.selectDirectory": { params: Record<string, never>; result: { path: string | null } };
 	"session.create": {
-		// `model`/`thinkingLevel` (M14): applied at create time via `createAgentSession`, e.g. the
+		// `model`/`thinkingLevel`: applied at create time via `createAgentSession`, e.g. the
 		// New-Workspace dialog's pre-session picks. Omitted → pi resolves defaults from auth + settings.
 		params: { workspaceId: string; model?: Model<string>; thinkingLevel?: ThinkingLevel };
 		// The resolved model/thinking the new session starts with (pi picks defaults from auth + settings).
@@ -155,7 +155,7 @@ export type WsMethodName = keyof WsMethodMap;
 export type WsParams<M extends WsMethodName> = WsMethodMap[M]["params"];
 export type WsResult<M extends WsMethodName> = WsMethodMap[M]["result"];
 
-/** Client→host request. `sessionId` routes a command to a specific session (M10+). */
+/** Client→host request. `sessionId` routes a command to a specific session. */
 export interface WsRequest<M extends WsMethodName = WsMethodName> {
 	id: string;
 	method: M;

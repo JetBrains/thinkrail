@@ -48,7 +48,7 @@ function diffStats(worktreePath: string, baseBranch: string): DiffStats {
  * Create a workspace = a `git worktree` on its own fresh branch, under the data dir. `baseRef` is the base
  * the branch is cut from (the New-Workspace picker): a remote ref (`origin/<b>`) is `git fetch`ed first,
  * then `worktree add -b <branch> <baseRef>` cuts a *local* branch from it — never a detached remote
- * checkout. Omitted → branch off the repo's current `HEAD` (the M5 behavior).
+ * checkout. Omitted → branch off the repo's current `HEAD` (the default behavior).
  */
 export function createWorkspace(projectId: string, name?: string, baseRef?: string): Workspace {
 	const project = getProjects().find((p) => p.id === projectId);

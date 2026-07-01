@@ -3,7 +3,7 @@ import type { ChatTurn, ToolResultState } from "./types";
 
 /**
  * Fold a session's pi-canonical transcript (`session.getMessages`) into the runtime shape the renderers
- * consume — the read-side counterpart of the event reducer, used to hydrate a chat on connect (M16). pi
+ * consume — the read-side counterpart of the event reducer, used to hydrate a chat on connect. pi
  * messages carry no stable id, so we mint one per turn; tool results are indexed by `toolCallId` (which
  * pairs with the `toolCall` block's `id` inside the assistant turn, exactly as in the live path).
  */

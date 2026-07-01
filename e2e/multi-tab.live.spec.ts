@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
 
-// Tagged @agent (see agent.live.spec.ts): a REAL pi agent + two browser tabs against ONE host. Proves M16
-// (hydrate-then-stream): a second client reconstructs the workspace's chats + transcript on connect, and
+// Tagged @agent (see agent.live.spec.ts): a REAL pi agent + two browser tabs against ONE host. Proves
+// hydrate-then-stream: a second client reconstructs the workspace's chats + transcript on connect, and
 // then sees live updates — because the host is the source of truth and the client hydrates + streams.
 test("a second tab hydrates the same workspace's chats and then sees live updates", {
 	tag: "@agent",

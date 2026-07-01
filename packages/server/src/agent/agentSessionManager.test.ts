@@ -170,7 +170,7 @@ test("getSessionStats + getSessionCommands read live session info (cheap wins #3
 	removeSession(s.sessionId);
 });
 
-test("listSessions reports a workspace's live sessions; getSessionMessages returns its transcript (M16)", async () => {
+test("listSessions reports a workspace's live sessions; getSessionMessages returns its transcript", async () => {
 	fauxA.setResponses([fauxAssistantMessage("HYDRATE_REPLY")]);
 	const cwd = tmpCwd("trpi-hyd-");
 	const s = await createSession({

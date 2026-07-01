@@ -53,7 +53,7 @@ runtime exports being the WS method/channel constants and the protocol version. 
   `FileNode` (file-tree node), `TabStatus`, `Git*`/diff types.
 - **wsProtocol.ts** — `WS_METHODS` (`project.*` / `workspace.*` / `fs.*` / `git.*` / `terminal.*` /
   `model.list` / `session.*` — `create`/`prompt`/`steer`/`followUp`/`abort`/`dispose`/`setModel`/
-  `setThinkingLevel`/`compact`/`getStats`/`getCommands`/`extUiReply`/**`list`**/**`getMessages`** (the M16
+  `setThinkingLevel`/`compact`/`getStats`/`getCommands`/`extUiReply`/**`list`**/**`getMessages`** (the
   read side)), `WS_CHANNELS` (`server.welcome` /
   `pi.event` / `pi.extensionUi` / `terminal.data`), the `WsMethodMap` typed request/result map +
   `WsParams`/`WsResult` helpers, and `PROTOCOL_VERSION`.
@@ -68,10 +68,10 @@ runtime exports being the WS method/channel constants and the protocol version. 
   never a top-level event `type`.
 - Internal relative imports are **extensionless** (`./domain`), not `./domain.ts` — `composite` emits
   declarations, which is incompatible with `allowImportingTsExtensions`.
-- **Bundle gate (M1 checkpoint):** `bun build` the web app and confirm **no** `@anthropic-ai/sdk` /
+- **Bundle gate:** `bun build` the web app and confirm **no** `@anthropic-ai/sdk` /
   `openai` / `node:fs` appears.
 
 ## Consumed by
 
 `web` (types + WS constants) and `server` (same, + mapping `session.*` to `AgentSession` methods). The
-shell milestones (M3–M9) need `domain` + `wsProtocol`; the `pi` types + `PiEvent` are the wire for M10+.
+shell panels need `domain` + `wsProtocol`; the `pi` types + `PiEvent` are the wire for the agent session.

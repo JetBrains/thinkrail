@@ -58,7 +58,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 - `persistence`, `dialog`, `github` → (leaves)
 
 Rules: features never import `host`, and never each other except the edges above. The graph is acyclic.
-`agent`'s WS surface (`session.*` + `pi.event` forwarding) attaches to `host` at M11.
+`agent`'s WS surface (`session.*` + `pi.event` forwarding) attaches to `host`.
 
 ## Get right
 
@@ -68,5 +68,4 @@ Rules: features never import `host`, and never each other except the edges above
 
 ## Later
 
-`session.*` WS methods + `pi.event` forwarding (M11, with the chat UI), extension-UI bridge via
-`bindExtensions` (M12), persistence behind a data layer (V2), `owner` threading.
+Persistence behind a data layer (V2), `owner` threading.

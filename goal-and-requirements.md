@@ -42,7 +42,3 @@ V1 is explicitly **not**: workflows, editable specs / drift detection, the spec-
 Workflow layer (#8), spec layer (#9: pre-build approval → drift detection → living spec graph),
 self-improvement (#4), configurable automations (#6), remote/phone over Tailscale (#7), and deepened
 parallelism / cost ledger / per-step routing.
-
-## Reference
-
-`docs/V1-TUTORIAL.md` is the buildable V1 ladder; `docs/V2-ROADMAP.md` is the destination.

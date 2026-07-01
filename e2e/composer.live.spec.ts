@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
 
 // Tagged @agent (see agent.live.spec.ts): excluded from the default `bun run e2e`; run via
-// `bun run e2e:agent`. These exercise the M12 Composer + cheap wins against a REAL pi agent + pi's
+// `bun run e2e:agent`. These exercise the Composer + cheap wins against a REAL pi agent + pi's
 // default auth, since the model list and a session both need a working provider.
 
 /** Create a workspace, open a chat tab in it, and wait for the composer to mount. */

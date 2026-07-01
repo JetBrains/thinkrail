@@ -36,7 +36,7 @@ export type PiEvent =
 	| {
 			type: "compaction_end";
 			reason: "manual" | "threshold" | "overflow";
-			// `CompactionResult` lives in the Node-only pi-coding-agent; the UI doesn't read it (M11).
+			// `CompactionResult` lives in the Node-only pi-coding-agent; the UI doesn't read it.
 			result: unknown;
 			aborted: boolean;
 			willRetry: boolean;

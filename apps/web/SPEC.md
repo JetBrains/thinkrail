@@ -54,11 +54,10 @@ CSS token theme contract — see Styling & theming). `main.tsx` is the entry/com
 
 Rules: a panel never imports another panel sideways; nothing imports `shell` (it's the composition root).
 
-Built through M9: `transport` / `store` / branded `shell` (M3); `ProjectTree` (M4–M5); `FileTree` +
-`RightPanel` (M6); `CenterTabs` + lazy `MonacoEditor` (M7); `ChangesPanel` + lazy `DiffViewer` (M8);
-`TerminalsPanel` + lazy `TerminalInstance` (M9). The `chat` module — `ChatView` + content-block
-renderers + the tool-renderer registry — lands at **M11**; the full `Composer` (model/effort/@-mentions)
-is M12.
+The module set: `transport` / `store` / branded `shell`; `ProjectTree`; `FileTree` + `RightPanel`;
+`CenterTabs` + lazy `MonacoEditor`; `ChangesPanel` + lazy `DiffViewer`; `TerminalsPanel` + lazy
+`TerminalInstance`. The `chat` module — `ChatView` + content-block renderers + the tool-renderer registry
+— plus the full `Composer` (model/effort/@-mentions).
 
 ## Styling & theming
 

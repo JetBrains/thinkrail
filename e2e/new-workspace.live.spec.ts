@@ -1,10 +1,10 @@
 import { expect, test } from "@playwright/test";
 import { openFixtureProject } from "./fixtures/app";
 
-// Tagged @agent (see agent.live.spec.ts): drives a REAL pi agent. Proves the M14 headline — the
+// Tagged @agent (see agent.live.spec.ts): drives a REAL pi agent. Proves the New-Workspace headline — the
 // New-Workspace dialog's "create + kick-off": Create with a prompt cuts a worktree, opens a chat in it,
 // and sends the prompt; and a second dialog kick-off in another workspace streams concurrently (which
-// works only because the web client went per-session at M13).
+// works only because the web client is per-session).
 
 /** Open the New-Workspace dialog from the first project's "+", type a prompt, and Create. */
 async function kickOff(page: import("@playwright/test").Page, prompt: string): Promise<void> {

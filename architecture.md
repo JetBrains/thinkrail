@@ -85,4 +85,4 @@ packages/shared     shellEnv (server-side only)
 ## Out of scope (V1)
 
 Workflows, editable specs / drift detection, self-improvement, automations, per-step model routing,
-cost ledger. See `docs/V2-ROADMAP.md`.
+cost ledger.

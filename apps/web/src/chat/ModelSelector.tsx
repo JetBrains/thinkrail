@@ -26,7 +26,7 @@ function subLine(model: Model<string>): string {
 }
 
 /**
- * The per-session model picker (cheap win #1, restyled for M14): a pill trigger opening a searchable
+ * The per-session model picker (cheap win #1): a pill trigger opening a searchable
  * `Command` list grouped by provider. Props-driven, no store — shared by the chat header and the
  * New-Workspace dialog (pre-session mode, where `current` may be null = the host default).
  */

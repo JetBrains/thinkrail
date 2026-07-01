@@ -24,7 +24,7 @@ export function ProjectTree() {
 
 	const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
 	// The project a New-Workspace dialog is open for (null = closed). The "+" opens it instead of
-	// creating a workspace directly (M14).
+	// creating a workspace directly.
 	const [dialogProjectId, setDialogProjectId] = useState<string | null>(null);
 
 	const loadWorkspaces = async (projectId: string) => {

@@ -33,7 +33,7 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   chat that survived a host restart is reopenable. **`hydrateSession`** rebuilds a runtime + tab from a host
   `SessionSummary` + converted transcript on connect — a no-op if a runtime already exists, so a live/ahead
   chat is never clobbered. The
-  pure **`reduceSessionEvent`** folds a `PiEvent` into a runtime (Appendix B); **`handlePiEvent(event,
+  pure **`reduceSessionEvent`** folds a `PiEvent` into a runtime; **`handlePiEvent(event,
   sessionId)`** and **`applyExtUi(request)`** route by id via the `withRuntime` helper (a no-op for an
   unknown session). The host-wide **`models`** list stays global (not per session). The transient **`changesRequest`** +
   **`requestChangesView(workspaceId, path)`** are a UI deep-link intent (a chat turn-divider asking the

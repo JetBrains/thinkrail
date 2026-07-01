@@ -109,7 +109,7 @@ function clearTurnStreaming(turns: ChatTurn[]): ChatTurn[] {
 	return turns.map((t) => (t.kind === "assistant" && t.streaming ? { ...t, streaming: false } : t));
 }
 
-/** Fold one pi event into a session's runtime (Appendix B). Pure — returns the same ref when nothing changes. */
+/** Fold one pi event into a session's runtime. Pure — returns the same ref when nothing changes. */
 export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionRuntime {
 	switch (event.type) {
 		case "agent_start":

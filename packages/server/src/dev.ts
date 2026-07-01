@@ -1,4 +1,4 @@
-// Dev/e2e entry: boot the host from env. The polished `thinkrail-pi` bin lives in apps/cli (M15).
+// Dev/e2e entry: boot the host from env. The polished `thinkrail-pi` bin lives in apps/cli.
 import { bootHost } from "./host";
 
 const host = process.env.THINKRAIL_PI_HOST ?? "localhost";

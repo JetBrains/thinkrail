@@ -33,7 +33,7 @@ function resetState(): void {
 
 /**
  * Open the New-Workspace dialog from the first project's "+" and create a *bare* workspace (no prompt, so
- * no agent session). The M14 dialog replaced the old one-click create; this is the headless equivalent for
+ * no agent session). The dialog replaced the old one-click create; this is the headless equivalent for
  * the no-agent suite. Resilient to a click that doesn't register under load (re-opens the dialog).
  */
 export async function createWorkspaceViaDialog(page: Page): Promise<void> {
