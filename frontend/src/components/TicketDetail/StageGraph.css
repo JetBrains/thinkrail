@@ -362,3 +362,9 @@
   background: var(--purple, #6B57FF);
   color: #fff;
 }
+
+.stage-session-activity {
+  margin-left: var(--space-sm);
+  min-width: 0;
+  overflow: hidden;
+}

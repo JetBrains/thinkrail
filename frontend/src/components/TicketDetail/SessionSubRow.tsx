@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { useTicketRouteStore } from "@/store/ticketRouteStore.ts";
 import { deriveSessionTodoState } from "./sessionTodoState.ts";
+import { deriveLiveActivity } from "@/hooks/useTaskSnapshot.ts";
+import { TaskActivityLine } from "@/components/ChatStream/TaskActivityLine.tsx";
 import type { SessionArtifact } from "@/types/agent.ts";
 
 const TODO_STATUS_GLYPH: Record<string, string> = {
@@ -65,6 +67,8 @@ export function SessionSubRow({
   const liveSnapshot = deriveSessionTodoState(session?.events ?? []);
   const todos = liveSnapshot?.todos ?? summary?.todos ?? [];
 
+  const activity = isActive ? deriveLiveActivity(session?.events ?? []) : null;
+
   const artifactPaths = new Set<string>();
   const artifactList: SessionArtifact[] = [];
   for (const a of session?.artifacts ?? []) {
@@ -108,6 +112,9 @@ export function SessionSubRow({
         </span>
         {todos.length > 0 && (
           <span className="stage-session-count">{doneCount}/{totalCount}</span>
+        )}
+        {activity && (
+          <span className="stage-session-activity"><TaskActivityLine activity={activity} /></span>
         )}
       </div>
       {expanded && hasContent && (
