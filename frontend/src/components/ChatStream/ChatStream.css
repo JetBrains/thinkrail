@@ -1954,6 +1954,128 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* ── Return to parent (discussion subsessions) ── */
+.return-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border2);
+  background: linear-gradient(0deg, var(--bg), var(--primary-10));
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+.return-banner-icon { font-size: 15px; }
+.return-banner-title { font-weight: 600; }
+.return-banner-sub { color: var(--muted); font-size: 12px; }
+.return-banner-spacer,
+.return-nudge-spacer,
+.return-dialog-spacer { flex: 1; }
+
+.return-nudge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 16px 0;
+  padding: 9px 12px;
+  border: 1px dashed var(--primary-40);
+  border-radius: var(--radius-md);
+  background: var(--primary-10);
+  color: var(--muted);
+}
+.return-nudge-text b { color: var(--text); }
+.return-nudge-x,
+.return-dialog-x {
+  cursor: pointer;
+  color: var(--hint);
+  background: transparent;
+  border: 0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 16px;
+  line-height: 1;
+}
+.return-nudge-x:hover,
+.return-dialog-x:hover { background: var(--hover); }
+
+.return-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+.return-dialog {
+  width: 560px;
+  max-width: 92vw;
+  background: var(--bg);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+.return-dialog-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border2);
+}
+.return-dialog-title { font-weight: 700; font-size: 15px; }
+.return-dialog-body { padding: 16px; }
+.return-dialog-sub { color: var(--muted); margin-bottom: 14px; }
+.return-dialog-target {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--primary-10);
+  border: 1px solid var(--primary-40);
+  color: var(--text);
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  margin-bottom: 14px;
+}
+.return-dialog-target-key { color: var(--primary); font-weight: 600; }
+.return-dialog-sumhead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.return-dialog-sumlabel { font-size: 12px; color: var(--muted); font-weight: 600; }
+.return-dialog-regen {
+  color: var(--primary);
+  cursor: pointer;
+  font-size: 12px;
+  background: transparent;
+  border: 0;
+}
+.return-dialog-regen:disabled { color: var(--hint); cursor: default; }
+.return-dialog-summary {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  padding: 10px 12px;
+  font: inherit;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 120px;
+}
+.return-dialog-hint { color: var(--hint); font-size: 11px; margin-top: 8px; }
+.return-dialog-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-top: 1px solid var(--border2);
+}
+
 /* ── ReturnFlowCard ── */
 .return-flow-card {
   background: rgba(59, 116, 238, 0.08);

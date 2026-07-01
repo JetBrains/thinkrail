@@ -14,6 +14,8 @@ import { isWizardSkill } from "@/components/Wizard/registry.ts";
 import { SessionContextMenu } from "./SessionContextMenu.tsx";
 import { SubsessionContextMenu } from "./SubsessionContextMenu.tsx";
 import { ReturnFlowCard } from "./ReturnFlowCard.tsx";
+import { ReturnToParentBanner, ReturnToParentNudge } from "./ReturnToParentBanner.tsx";
+import { ReturnToParentDialog } from "./ReturnToParentDialog.tsx";
 import {
   EXPAND_ALL_EVENT,
   COLLAPSE_EVENTS_EVENT,
@@ -97,6 +99,19 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
   const autoScroll = useRef(true);
   const viewMode = useViewMode();
   const isOnboarding = isWizardSkill(session?.skillId);
+
+  // ── Return-to-parent (discussion subsessions) ──
+  const [returnDialogOpen, setReturnDialogOpen] = useState(false);
+  const [nudgeDismissed, setNudgeDismissed] = useState(false);
+  const parentName = useSessionStore((s) =>
+    session?.parentThinkrailSid
+      ? s.sessions.get(session.parentThinkrailSid)?.name ?? "parent session"
+      : "parent session",
+  );
+  useEffect(() => {
+    setReturnDialogOpen(false);
+    setNudgeDismissed(false);
+  }, [session?.thinkrailSid]);
   const categoryVisibility = useUiStore((s) =>
     isOnboarding ? s.onboardingChatCategoryVisibility : s.chatCategoryVisibility,
   );
@@ -406,6 +421,38 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
     ? "chat-stream chat-stream--compact"
     : "chat-stream";
 
+  const isDiscussion = session?.subsessionType === "discussion";
+  const showReturnBanner = isDiscussion && session?.status !== SessionStatus.Draft;
+  const returnDrafting =
+    session?.returnStatus === SessionReturnStatus.Pending && !session?.returnSummary;
+  const showReturnNudge =
+    showReturnBanner &&
+    !nudgeDismissed &&
+    !returnDialogOpen &&
+    session?.status === SessionStatus.Idle &&
+    session?.returnStatus !== SessionReturnStatus.Pending &&
+    events.some((e) => e.eventType === "textDelta");
+
+  const store = useSessionStore.getState;
+  const openReturnDialog = () => {
+    if (!session) return;
+    setReturnDialogOpen(true);
+    store().requestReturnSummary(session.thinkrailSid).catch(console.error);
+  };
+  const handleReturnWith = (text: string) => {
+    if (!session) return;
+    store().approveReturn(session.thinkrailSid, text).catch(console.error);
+    setReturnDialogOpen(false);
+  };
+  const handleReturnWithout = () => {
+    if (!session) return;
+    const parentSid = session.parentThinkrailSid;
+    store().dismissReturn(session.thinkrailSid).catch(console.error);
+    if (parentSid) store().switchSession(parentSid);
+    store().closeSession(session.thinkrailSid);
+    setReturnDialogOpen(false);
+  };
+
   return (
     <div
       className={containerClass}
@@ -413,6 +460,9 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
       onScroll={handleScroll}
       onContextMenu={handleContextMenu}
     >
+      {showReturnBanner && (
+        <ReturnToParentBanner parentName={parentName} onReturn={openReturnDialog} />
+      )}
       {session?.status === SessionStatus.Draft && (
         <DraftConfigCard thinkrailSid={session.thinkrailSid} />
       )}
@@ -439,6 +489,13 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
         );
       })}
 
+      {showReturnNudge && (
+        <ReturnToParentNudge
+          onReturn={openReturnDialog}
+          onDismiss={() => setNudgeDismissed(true)}
+        />
+      )}
+
       {session?.returnStatus === SessionReturnStatus.Pending && session?.returnSummary && (
         <ReturnFlowCard
           thinkrailSid={session.thinkrailSid}
@@ -459,6 +516,20 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
               useSessionStore.getState().reviseReturn(session.thinkrailSid, feedback);
             }).catch(console.error);
           }}
+        />
+      )}
+
+      {isDiscussion && (
+        <ReturnToParentDialog
+          open={returnDialogOpen}
+          parentName={parentName}
+          targetKind={session?.subsessionOrigin?.kind === "question" ? "question" : "message"}
+          draftSummary={session?.returnSummary ?? ""}
+          drafting={returnDrafting}
+          onRegenerate={openReturnDialog}
+          onReturnWith={handleReturnWith}
+          onReturnWithout={handleReturnWithout}
+          onCancel={() => setReturnDialogOpen(false)}
         />
       )}
 

@@ -2917,7 +2917,13 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const session = s.sessions.get(thinkrailSid);
       if (!session) return s;
       const next = new Map(s.sessions);
-      next.set(thinkrailSid, { ...session, returnStatus: SessionReturnStatus.Pending });
+      // Clear any prior summary so the dialog shows the "drafting" state until
+      // the fresh draft arrives (also drives Regenerate).
+      next.set(thinkrailSid, {
+        ...session,
+        returnStatus: SessionReturnStatus.Pending,
+        returnSummary: null,
+      });
       return { sessions: next };
     });
   },
