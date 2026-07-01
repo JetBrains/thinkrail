@@ -96,6 +96,19 @@ function newRuntime(model: Model<string> | null, thinkingLevel: ThinkingLevel): 
 /** A stable empty runtime for the brief window before a session's runtime exists (read-only fallback). */
 export const EMPTY_RUNTIME: SessionRuntime = newRuntime(null, "medium");
 
+/**
+ * Clear the `streaming` flag on every assistant turn (returning the same array ref when none was set, to
+ * preserve the reducer's "same ref when nothing changes" contract). pi splits one agent run into several
+ * assistant messages (one per tool round), but only sends a terminal `done`/`error` for some of them — so
+ * an earlier in-flight turn can keep `streaming: true` forever, leaving a stray live-indicator behind. We
+ * sweep the flag whenever a *new* assistant message starts and again when the run ends, so at most one turn
+ * is ever marked streaming and none survives the turn.
+ */
+function clearTurnStreaming(turns: ChatTurn[]): ChatTurn[] {
+	if (!turns.some((t) => t.kind === "assistant" && t.streaming)) return turns;
+	return turns.map((t) => (t.kind === "assistant" && t.streaming ? { ...t, streaming: false } : t));
+}
+
 /** Fold one pi event into a session's runtime (Appendix B). Pure — returns the same ref when nothing changes. */
 export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionRuntime {
 	switch (event.type) {
@@ -103,9 +116,11 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 			return { ...rt, isStreaming: true };
 		case "message_start":
 			// User turns are shown optimistically on send; the assistant turn is created lazily on the first
-			// message_update (from its `partial` snapshot) — here we just reserve its id.
+			// message_update (from its `partial` snapshot) — here we just reserve its id. A new assistant
+			// message also finalizes the previous one (pi may not send it a terminal `done`), so its live
+			// indicator doesn't linger.
 			return event.message.role === "assistant"
-				? { ...rt, currentAssistantId: crypto.randomUUID() }
+				? { ...rt, currentAssistantId: crypto.randomUUID(), turns: clearTurnStreaming(rt.turns) }
 				: rt;
 		case "message_update": {
 			const ame = event.assistantMessageEvent;
@@ -161,9 +176,9 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 			if (event.willRetry) return rt; // auto-retry / compaction follows — stay streaming
 			return {
 				...rt,
-				// Drop any lingering retry countdown; the turn concluded.
+				// Drop any lingering retry countdown + sweep any turn still flagged streaming; the run concluded.
 				turns: [
-					...rt.turns.filter((t) => t.kind !== "retry"),
+					...clearTurnStreaming(rt.turns).filter((t) => t.kind !== "retry"),
 					{ kind: "system", id: crypto.randomUUID(), text: "✓ Done" },
 				],
 				isStreaming: false,

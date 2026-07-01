@@ -106,7 +106,6 @@ function AssistantTurn({
 				}
 				return null;
 			})}
-			{streaming ? <span className="inline-block animate-pulse text-primary">▍</span> : null}
 		</div>
 	);
 }

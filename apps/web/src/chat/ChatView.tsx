@@ -1,15 +1,33 @@
 import type { ImageContent, Model, ThinkingLevel } from "@thinkrail-pi/contracts";
 import { ArrowDown } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { EMPTY_RUNTIME, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 import { ChatHeader } from "./ChatHeader";
 import { Composer, type MentionCandidate, type SubmitBehavior } from "./Composer";
 import { ExtUiDialog } from "./ExtUiDialog";
+import { StreamIndicator, type StreamStatus, streamStatus } from "./StreamIndicator";
 import "./tools/register"; // side-effect: register the built-in pi tool renderers (bash/read/edit/write)
 import { ChatTurnView, TurnDivider, turnDivider } from "./turns";
+import type { ChatTurn } from "./types";
 import { useChatScroll } from "./useChatScroll";
+
+/** Context threaded to the Virtuoso footer so the streaming loader lives at the end of the conversation. */
+type ChatListContext = { status: StreamStatus | null };
+
+/** The conversation footer: the streaming loader, or nothing when idle. Stable module-scope component so
+ * Virtuoso never remounts it; its data arrives via `context`, not closure. */
+function StreamFooter({ context }: { context: ChatListContext }) {
+	if (!context.status) return null;
+	return (
+		<div className="mx-auto max-w-3xl px-md pb-sm">
+			<StreamIndicator status={context.status} />
+		</div>
+	);
+}
+
+const CHAT_LIST_COMPONENTS = { Footer: StreamFooter };
 
 /**
  * One chat session as a center tab — the app-integration layer that wires the store + transport to the
@@ -26,6 +44,7 @@ export default function ChatView({ sessionId }: { sessionId: string }) {
 		turns,
 		toolResults,
 		isStreaming,
+		currentAssistantId,
 		stats,
 		commands,
 		draft,
@@ -35,6 +54,15 @@ export default function ChatView({ sessionId }: { sessionId: string }) {
 		model: currentModel,
 		thinkingLevel,
 	} = runtime;
+
+	// The streaming loader lives as the list footer (so it forms where the next message will). Suppressed
+	// during a retry countdown, which renders its own indicator turn. `working` covers the post-send gap.
+	const listContext = useMemo<ChatListContext>(() => {
+		const last = turns[turns.length - 1];
+		const status =
+			isStreaming && last?.kind !== "retry" ? streamStatus(turns, currentAssistantId) : null;
+		return { status };
+	}, [turns, isStreaming, currentAssistantId]);
 
 	const [mentionQuery, setMentionQuery] = useState<string | null>(null);
 	const [mentionCandidates, setMentionCandidates] = useState<MentionCandidate[]>([]);
@@ -175,9 +203,11 @@ export default function ChatView({ sessionId }: { sessionId: string }) {
 				className="relative flex min-h-0 flex-1 flex-col"
 				{...containerProps}
 			>
-				<Virtuoso
+				<Virtuoso<ChatTurn, ChatListContext>
 					ref={virtuosoRef}
 					data={turns}
+					context={listContext}
+					components={CHAT_LIST_COMPONENTS}
 					className="min-h-0 flex-1"
 					followOutput={followOutput}
 					atBottomStateChange={handleAtBottom}

@@ -98,6 +98,30 @@ test("an assistant turn is built (and replaced, not duplicated) from message_upd
 	expect(after.turns.some((t) => t.kind === "system" && t.text === "✓ Done")).toBe(true);
 });
 
+test("a multi-message turn leaves no assistant turn flagged streaming (no stray live indicator)", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+
+	// pi splits one run into several assistant messages (one per tool round) and does NOT send each a
+	// terminal `done`. Message A streams, then message B starts before A ever concludes.
+	store.handlePiEvent(agentStart, "a");
+	store.handlePiEvent(assistantStart, "a");
+	store.handlePiEvent(assistantText("first"), "a"); // A: streaming
+	store.handlePiEvent(assistantStart, "a"); // B starts — A must be finalized here
+	expect(rt("a").turns.filter((t) => t.kind === "assistant" && t.streaming)).toHaveLength(0);
+	store.handlePiEvent(assistantText("second"), "a"); // B: streaming
+	const streamingMid = rt("a").turns.filter((t) => t.kind === "assistant" && t.streaming);
+	expect(streamingMid).toHaveLength(1); // exactly one turn is ever live at a time
+
+	// The run ends without B getting a `done` either — agent_end must sweep the flag off every turn, or a
+	// blinking cursor lingers in the transcript after "✓ Done".
+	store.handlePiEvent(agentEnd, "a");
+	const after = rt("a");
+	expect(after.turns.filter((t) => t.kind === "assistant")).toHaveLength(2);
+	expect(after.turns.some((t) => t.kind === "assistant" && t.streaming)).toBe(false);
+	expect(after.isStreaming).toBe(false);
+});
+
 test("the tool lifecycle folds into toolResults (the status + raw the renderers read)", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");

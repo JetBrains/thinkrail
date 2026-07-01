@@ -26,8 +26,9 @@ a future `packages/chat-ui`).
     `text`→`Markdown`, `thinking`→an auto-expanding thinking block, `toolCall`→`ToolCard` paired with its
     result); `UserTurn`; `SystemTurn`; `TurnDivider` (+ the pure `turnDivider` deriver — between-turns
     orientation: elapsed time, tool-call count, a "files changed" chip); `RetryIndicator` (auto-retry
-    countdown bar); `Markdown` (react-markdown + remark-gfm + shiki code blocks); `ToolCard`; the
-    pointer-aware `useChatScroll` hook.
+    countdown bar); `StreamIndicator` (the single streaming loader — typing-dots wave + a phase label,
+    from the pure `streamStatus` deriver); `Markdown` (react-markdown + remark-gfm + shiki code blocks);
+    `ToolCard`; the pointer-aware `useChatScroll` hook.
   - **Composer + cheap-win primitives** (M12, also props-driven, **no store/transport**): `Composer`
     (send/steer/followUp/abort, `@`-mention completion, `/` slash-command menu, image paste/drop);
     `ModelSelector` (a pill opening a searchable `Command` list grouped by provider, no leading icon) +
@@ -93,6 +94,17 @@ the event's id so chats stream concurrently): the in-flight assistant turn **is*
 `assistantMessageEvent.partial` snapshot (replaced each update — not hand-accumulated; on `done`/`error`
 the snapshot is `message`/`error`). Tool results are indexed by `toolCallId` in the runtime's `toolResults`
 and paired with their `toolCall` block inside the assistant turn.
+
+**One live indicator, always.** pi splits a run into several assistant messages (one per tool round) but
+only sends *some* of them a terminal `done`/`error`, so a naive per-turn `streaming` flag can get stuck on
+an earlier message and leave a stray cursor behind. The reducer therefore sweeps the flag whenever a **new**
+assistant message starts *and* on `agent_end` (`clearTurnStreaming`), so at most one turn is ever flagged
+streaming and none survives the turn. The **loader itself is a single footer** (`StreamIndicator`, rendered
+as the Virtuoso `Footer` by `ChatView` while `isStreaming` and not mid-retry) — not a per-turn cursor — so it
+can't be duplicated and it **fills the post-send gap** before the first token. `streamStatus(turns,
+currentAssistantId)` names the phase from the active turn's last block: `working` (nothing visible yet) →
+`thinking` → `running-tool` (with the tool name) → `writing`. `data-testid="stream-indicator"` +
+`data-phase` make the loader lifecycle assertable.
 
 ## Get right
 
