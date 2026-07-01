@@ -1,8 +1,9 @@
-"""WorkNode — the universal unit for ticket stages and plan steps.
+"""WorkNode — the unit of a ticket's stage DAG.
 
-Stages form a ticket's top-level DAG; the implementing node's ``children``
-form the step sub-DAG. ``ready`` is derived (see helpers), never stored.
-See TICKET_LIFECYCLE_DESIGN.md (Data model — WorkNode).
+Stages form a ticket's top-level DAG. ``children`` is an optional nested
+sub-DAG the reducer/validator handle generically; it is currently unused —
+implementation *steps* live in the ticket's plan (see ``board/plan.py``), not
+as node children. ``ready`` is derived (see helpers), never stored.
 """
 
 from __future__ import annotations
@@ -49,7 +50,7 @@ class NodeRun(BaseModel):
     kind: Literal["session", "subagent"]
     session_id: str | None = None        # kind == "session"
     orchestrator_sid: str | None = None  # kind == "subagent": parent session
-    tool_use_id: str | None = None       # kind == "subagent": Task tool_use id
+    tool_use_id: str | None = None       # kind == "subagent": Agent tool_use id
     agent_id: str | None = None          # kind == "subagent": SDK subagent transcript id
     status: RunStatus = RunStatus.RUNNING
     summary: str | None = None
@@ -68,6 +69,8 @@ class WorkNode(BaseModel):
     summary: str | None = None
     artifact_kind: str | None = None
     executes_plan: bool = False
+    # Optional nested sub-DAG, handled generically by the reducer/validator.
+    # Currently unpopulated — implementation steps live in the plan, not here.
     children: list["WorkNode"] | None = None
     # Completion timestamp (ISO) of the latest successful run — used for staleness.
     completed_at: str | None = None

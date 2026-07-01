@@ -4,9 +4,10 @@ Every structural change is an op applied by ``apply_op``; the result is
 validated before being returned. Top-level *structural* ops (addNode,
 removeNode, setDependsOn, proposePipeline) act on the stage list. Run-tracking
 ops (recordRunStart/Finish, reRunNode) locate their target node *anywhere* in
-the tree — stages or an implementing node's ``children`` (the steps) — so the
-nested implement-orchestrator can advance step status with the same ops.
-See design §6–§8.
+the tree via ``find_node`` — the reducer keeps the recursion generic over a
+node's optional ``children`` sub-DAG. Implementation *steps* are not modelled
+as children: they live in the ticket's plan and are driven by the
+implement-orchestrator (``suggest_step`` / ``Agent`` subagents). See design §6–§8.
 """
 
 from __future__ import annotations
@@ -71,12 +72,6 @@ def apply_op(stages: list[WorkNode], op: dict[str, Any]) -> list[WorkNode]:
 
     elif kind == "proposePipeline":
         nodes = [WorkNode.model_validate(n) for n in op["nodes"]]
-
-    elif kind == "proposeChildren":
-        parent = find_node(nodes, op["parentId"])
-        if parent is None:
-            raise DagError(f"unknown node {op['parentId']!r}")
-        parent.children = [WorkNode.model_validate(n) for n in op["nodes"]]
 
     elif kind == "reRunNode":
         target = find_node(nodes, op["id"])

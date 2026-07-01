@@ -90,10 +90,11 @@ def _session_ref(agent_service, sid: str, run: NodeRun | None) -> SessionRef:
 def build_ticket_state(board_service: "BoardService", ticket_id: str) -> TicketState:
     """Compose a TicketState from the ticket's stage DAG and sessions.
 
-    Steps live as the implementing node's ``children`` inside ``stages`` — there
-    is no separate plan document. ``sessions`` is derived from the DAG's
-    persisted session runs plus the orchestrator / attached session ids, so the
-    set is authoritative without depending on the live tracker.
+    ``stages`` is the top-level stage DAG; implementation steps live in the
+    ticket's plan (``board/plan.py``), not as node children. ``sessions`` is
+    derived from the DAG's persisted session runs plus the orchestrator /
+    attached session ids, so the set is authoritative without depending on the
+    live tracker.
     """
     ticket = board_service.get_ticket(ticket_id)
     agent_service = getattr(board_service, "agent_service", None)

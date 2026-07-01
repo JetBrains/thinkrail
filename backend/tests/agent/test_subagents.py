@@ -1,14 +1,23 @@
 """Tests for the ticket-step-executor subagent definition and step-marker
-prompt parser. See app/agent/subagents.py and TICKET_LIFECYCLE_DESIGN.md
-§ Implementation orchestration modes.
+prompt parser. See app/agent/subagents.py.
 """
 
 from __future__ import annotations
 
 from app.agent.subagents import (
+    SUBAGENT_TOOL_NAME,
     TICKET_STEP_EXECUTOR,
     parse_thinkrail_step_marker,
 )
+
+
+class TestSubagentToolName:
+    def test_is_agent(self) -> None:
+        # The runtime correlation (runtime.py) and the plan-step linkage
+        # (service.py) both key off this exact name. The SDK's subagent-dispatch
+        # tool is ``Agent`` (older builds called it ``Task``); a mismatch silently
+        # breaks step↔subagent linking in subagent mode. See #57.
+        assert SUBAGENT_TOOL_NAME == "Agent"
 
 
 class TestTicketStepExecutorDefinition:

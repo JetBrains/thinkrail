@@ -90,22 +90,6 @@ async def _set_depends_on(args: dict) -> dict:
     )
 
 
-CHILDREN_SCHEMA = {
-    "type": "object", "required": ["parentId", "nodes"],
-    "properties": {"parentId": {"type": "string"},
-                   "nodes": {"type": "array", "items": {"type": "object"}}},
-}
-
-
-@tool("propose_children",
-      "Break a node (the implementing node) into its step children (a sub-DAG).",
-      CHILDREN_SCHEMA)
-async def _propose_children(args: dict) -> dict:
-    return await _apply_and_emit(
-        {"op": "proposeChildren", "parentId": args["parentId"], "nodes": args["nodes"]},
-    )
-
-
 @tool("start_node",
       "Launch an interactive session for a ready node (stage or step). The "
       "session runs the node's skill (or ticket-implement for the executesPlan "
@@ -185,27 +169,29 @@ async def _start_node(args: dict) -> dict:
         "kind": "session", "sessionId": child.thinkrail_sid, "status": RunStatus.RUNNING,
     }})
     await publish_ticket_state(board, str(ctx.config.project_root), ticket_id)
-    impl_hint = (
-        "\n\nThis is the implementation stage: drive your step children — if you "
-        "have no children yet, call propose_children(...), then launch each ready "
-        "step (start_node for interactive steps, or Agent for subagent steps per "
-        "the ticket's step_execution setting)."
-        if node.executes_plan else ""
-    )
-    await agent_service.send_message(
-        child.thinkrail_sid,
-        f"You are running stage '{node.title}' (node {node.id}) of ticket "
-        f"{ticket_id}. Read the linked specs/source, do the work, edit files "
-        f"directly, and call SessionFinalize when the "
-        f"deliverable is ready." + impl_hint,
-    )
+    if node.executes_plan:
+        kickoff = (
+            f"You are orchestrating the implementation stage (node {node.id}) of "
+            f"ticket {ticket_id}. Drive the ticket's implementation plan to "
+            f"completion: follow the ticket-implement skill and the "
+            f"orchestration-mode instructions in your system prompt to execute "
+            f"each plan step, then call SessionFinalize once every step is done "
+            f"and verified."
+        )
+    else:
+        kickoff = (
+            f"You are running stage '{node.title}' (node {node.id}) of ticket "
+            f"{ticket_id}. Read the linked specs/source, do the work, edit files "
+            f"directly, and call SessionFinalize when the deliverable is ready."
+        )
+    await agent_service.send_message(child.thinkrail_sid, kickoff)
     return _ok(f"✓ launched session {child.thinkrail_sid[:8]} for node {node.id}")
 
 
 orchestration_mcp_server = create_sdk_mcp_server(
     name=f"{MCP_PREFIX}orchestration",
     tools=[_propose_pipeline, _add_node, _remove_node, _set_depends_on,
-           _propose_children, _start_node],
+           _start_node],
 )
 
 

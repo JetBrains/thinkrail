@@ -4,8 +4,11 @@ import asyncio
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from app.core.config import load_config
 from app.board.service import BoardService
+from app.board.work_node import DagError
 import app.agent.tools.orchestration as orch
 
 
@@ -345,3 +348,85 @@ class TestStartNodeDependencyGuard:
         result = self._run(board, ctx)
         assert "isError" not in result
         assert calls, "run_task should be called when all deps are done"
+
+
+class TestStartNodeKickoffMessage:
+    """Regression guard for #57. The kick-off message for the implementing
+    node must orient the child at the plan-step model (its skill + injected
+    mode instructions), never the retired node-DAG step vocabulary
+    (``propose_children`` / ``start_node`` / "Agent for subagent steps").
+    """
+
+    def _launch_message(self, tmp_path: Path, *, executes_plan: bool) -> str:
+        (tmp_path / ".tr").mkdir(exist_ok=True)
+        board = BoardService(load_config(tmp_path))
+        ticket = board.create_ticket(title="T")
+        if executes_plan:
+            node = {"id": "impl", "title": "Implementing",
+                    "skill": "ticket-implement", "executesPlan": True}
+            node_id = "impl"
+        else:
+            node = {"id": "pd", "title": "Product design",
+                    "skill": "ticket-product-design"}
+            node_id = "pd"
+        board.apply(ticket.id, {"op": "addNode", "node": node})
+        board.apply(ticket.id, {"op": "setOrchestration",
+                                 "config": {"stageGate": "autonomous"}})
+
+        agent = MagicMock()
+        agent.run_task = AsyncMock(return_value=MagicMock(thinkrail_sid="child"))
+        agent.send_message = AsyncMock()
+
+        ctx = MagicMock()
+        ctx.notify = AsyncMock()
+        ctx.config = load_config(tmp_path)
+        ctx.task.ticket_id = ticket.id
+        ctx.task.config = MagicMock()
+        ctx.agent_service = agent
+
+        with (
+            patch.object(orch, "get_tool_context", return_value=ctx),
+            patch.object(orch, "BoardService", return_value=board),
+            patch.object(orch, "publish_ticket_state", new=AsyncMock()),
+        ):
+            fn = orch._start_node.handler if hasattr(orch._start_node, "handler") else orch._start_node
+            asyncio.run(fn({"id": node_id}))
+
+        agent.send_message.assert_awaited_once()
+        return agent.send_message.call_args.args[1]
+
+    def test_implementing_message_drops_node_dag_step_vocabulary(self, tmp_path):
+        msg = self._launch_message(tmp_path, executes_plan=True)
+        assert "propose_children" not in msg
+        assert "start_node" not in msg
+        assert "step children" not in msg
+        # It should orient the child as the plan orchestrator.
+        assert "plan" in msg.lower()
+        assert "SessionFinalize" in msg
+
+    def test_regular_stage_message_still_tells_the_session_to_do_the_work(self, tmp_path):
+        msg = self._launch_message(tmp_path, executes_plan=False)
+        assert "do the work" in msg
+        assert "propose_children" not in msg
+
+
+class TestProposeChildrenRetired:
+    """#57 reconciliation: the vestigial node-DAG-for-steps entry points are
+    gone. Steps live in the plan (``suggest_step`` / ``Agent``), not as
+    ``WorkNode`` children, so ``propose_children`` is no longer a tool or op.
+    """
+
+    def test_propose_children_op_is_unknown(self, tmp_path):
+        (tmp_path / ".tr").mkdir(exist_ok=True)
+        board = BoardService(load_config(tmp_path))
+        ticket = board.create_ticket(title="T")
+        board.apply(ticket.id, {"op": "addNode", "node": {"id": "impl", "title": "I"}})
+        with pytest.raises(DagError):
+            board.apply(ticket.id,
+                        {"op": "proposeChildren", "parentId": "impl", "nodes": []})
+
+    def test_propose_children_not_registered_as_tool(self):
+        from app.agent.permissions import _INTERCEPTOR_CATEGORIES
+        from app.agent.tools import INTERCEPTORS
+        assert "propose_children" not in _INTERCEPTOR_CATEGORIES
+        assert "propose_children" not in INTERCEPTORS
