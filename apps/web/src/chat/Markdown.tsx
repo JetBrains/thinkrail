@@ -7,10 +7,19 @@ import { highlightCode } from "@/lib/highlighter";
 export function Markdown({ text }: { text: string }) {
 	return (
 		<div className="max-w-none break-words [&_a]:text-primary [&_a]:underline [&_h1]:font-semibold [&_h2]:font-semibold [&_li]:my-0.5 [&_ol]:my-sm [&_ol]:list-decimal [&_ol]:pl-lg [&_p]:my-sm [&_ul]:my-sm [&_ul]:list-disc [&_ul]:pl-lg">
-			<ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: CodeBlock }}>
+			<ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: CodeBlock, a: Anchor }}>
 				{text}
 			</ReactMarkdown>
 		</div>
+	);
+}
+
+/** Open all links in a new tab (never navigate away from the app), with safe rel attrs. */
+function Anchor({ href, children }: { href?: string | undefined; children?: ReactNode }) {
+	return (
+		<a href={href} target="_blank" rel="noopener noreferrer">
+			{children}
+		</a>
 	);
 }
 
