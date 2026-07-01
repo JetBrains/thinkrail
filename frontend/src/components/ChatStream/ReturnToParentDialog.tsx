@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "../ui/Button";
 
 interface ReturnToParentDialogProps {
@@ -8,6 +8,9 @@ interface ReturnToParentDialogProps {
   targetKind: "question" | "message";
   /** Agent-drafted summary; may arrive after the dialog opens (see `drafting`). */
   draftSummary: string;
+  /** Instant fallback shown until the draft arrives — the discussion's last
+   *  assistant message — so the box is never empty/blocking. */
+  fallbackSummary: string;
   /** True while the agent is still drafting the summary. */
   drafting: boolean;
   onRegenerate: () => void;
@@ -21,18 +24,27 @@ export function ReturnToParentDialog({
   parentName,
   targetKind,
   draftSummary,
+  fallbackSummary,
   drafting,
   onRegenerate,
   onReturnWith,
   onReturnWithout,
   onCancel,
 }: ReturnToParentDialogProps) {
-  const [editText, setEditText] = useState(draftSummary);
+  const [editText, setEditText] = useState(draftSummary || fallbackSummary);
+  const touched = useRef(false);
 
-  // Sync in the agent's draft when it arrives / is regenerated.
+  // Until the user edits, mirror the best available text: the agent's draft
+  // once it arrives, otherwise the last-message fallback.
   useEffect(() => {
-    setEditText(draftSummary);
-  }, [draftSummary]);
+    if (touched.current) return;
+    setEditText(draftSummary || fallbackSummary);
+  }, [draftSummary, fallbackSummary]);
+
+  // Fresh start each time the dialog reopens.
+  useEffect(() => {
+    if (open) touched.current = false;
+  }, [open]);
 
   if (!open) return null;
 
@@ -41,7 +53,7 @@ export function ReturnToParentDialog({
       ? "the “Other” field of the question you were answering"
       : "your message box in the parent session";
 
-  const canReturnWith = !drafting && editText.trim().length > 0;
+  const canReturnWith = editText.trim().length > 0;
 
   return (
     <div className="return-dialog-overlay" onClick={onCancel}>
@@ -83,14 +95,16 @@ export function ReturnToParentDialog({
           <textarea
             className="return-dialog-summary"
             value={editText}
-            onChange={(e) => setEditText(e.target.value)}
+            onChange={(e) => {
+              touched.current = true;
+              setEditText(e.target.value);
+            }}
             rows={6}
-            placeholder={drafting ? "Drafting a summary…" : "Write the summary to return…"}
-            disabled={drafting}
+            placeholder="Write the summary to return…"
           />
           <div className="return-dialog-hint">
             {drafting
-              ? "The agent is drafting this from the discussion…"
+              ? "Showing the last message — the agent is drafting a fuller summary…"
               : "Edit freely — you approve exactly what goes back."}
           </div>
         </div>

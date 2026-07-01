@@ -1584,6 +1584,7 @@ class AgentService:
         task.return_summary = text
         task.status = TaskStatus.DONE
         task.updated = datetime.now(UTC).isoformat()
+        self._tracker.clear_awaiting_summary(thinkrail_sid)
         self._save_task(task)
 
     def dismiss_summary(self, thinkrail_sid: str) -> None:
@@ -1592,6 +1593,7 @@ class AgentService:
         task.return_status = SessionReturnStatus.DISMISSED
         task.return_summary = None
         task.updated = datetime.now(UTC).isoformat()
+        self._tracker.clear_awaiting_summary(thinkrail_sid)
         self._save_task(task)
 
     def revise_summary(self, thinkrail_sid: str, feedback: str) -> None:

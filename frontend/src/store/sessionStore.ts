@@ -173,6 +173,7 @@ interface SessionStore {
   // Subsession actions
   createSubsession: (parentThinkrailSid: string, type: "discussion" | "refinement", context?: string, name?: string, origin?: SubsessionOrigin) => Promise<string>;
   requestReturnSummary: (thinkrailSid: string) => Promise<void>;
+  returnWithoutResult: (thinkrailSid: string) => void;
   approveReturn: (thinkrailSid: string, text: string) => Promise<void>;
   dismissReturn: (thinkrailSid: string) => Promise<void>;
   reviseReturn: (thinkrailSid: string, feedback: string) => Promise<void>;
@@ -2890,6 +2891,34 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const childSid = p.childThinkRailSid as string | undefined;
       if (childSid) get().closeSession(childSid);
     }
+  },
+
+  returnWithoutResult: (thinkrailSid) => {
+    const session = get().sessions.get(thinkrailSid);
+    const parentSid = session?.parentThinkrailSid ?? null;
+    const childName = session?.name ?? "discussion";
+    // Mark dismissed on the backend (best-effort; local lifecycle proceeds regardless).
+    get().dismissReturn(thinkrailSid).catch((err) =>
+      console.warn("[returnWithoutResult] dismiss failed:", err),
+    );
+    if (parentSid) {
+      set((s) => {
+        const parent = s.sessions.get(parentSid);
+        if (!parent) return { activeSessionId: parentSid };
+        const next = new Map(s.sessions);
+        const event = {
+          thinkrailSid: parentSid,
+          sessionId: "",
+          eventType: "notification" as const,
+          payload: {
+            message: `Discussion “${childName}” closed — no result returned.`,
+          },
+        };
+        next.set(parentSid, { ...parent, events: [...parent.events, event] });
+        return { sessions: next, activeSessionId: parentSid };
+      });
+    }
+    get().closeSession(thinkrailSid);
   },
 
   onSummaryDrafted: (params) => {

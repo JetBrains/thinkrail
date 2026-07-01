@@ -82,4 +82,22 @@ describe("sessionStore.onSubsessionReturned — discussion routing + lifecycle",
     expect(useInputDraftStore.getState().getDraft("parent")).toBe("use keychain");
     expect(useAnswerDraftStore.getState().getDraft("req-9")).toBeUndefined();
   });
+
+  it("returnWithoutResult posts a 'no result' note, switches to parent, closes child", () => {
+    seed(false);
+    useSessionStore.getState().returnWithoutResult("child");
+
+    const s = useSessionStore.getState();
+    expect(s.activeSessionId).toBe("parent");
+    expect(s.openTabs.has("child")).toBe(false);
+    // No result carried back.
+    expect(useInputDraftStore.getState().getDraft("parent")).toBe("");
+    // A quiet system note lands in the parent chat.
+    const parent = s.sessions.get("parent")!;
+    expect(
+      parent.events.some((e) =>
+        String((e.payload as { message?: string })?.message ?? "").includes("no result returned"),
+      ),
+    ).toBe(true);
+  });
 });

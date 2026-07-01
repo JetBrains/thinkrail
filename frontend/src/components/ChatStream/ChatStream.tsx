@@ -73,6 +73,22 @@ function buildTranscript(events: AgentEvent[]): string {
   return lines.filter(Boolean).join("\n");
 }
 
+/** The trailing run of assistant text deltas — the discussion's last message.
+ *  Used as an instant, editable fallback in the return dialog while the agent
+ *  drafts a fuller summary. */
+function lastAssistantText(events: AgentEvent[]): string {
+  const parts: string[] = [];
+  for (let i = events.length - 1; i >= 0; i--) {
+    const ev = events[i];
+    if (ev.eventType === "textDelta") {
+      parts.unshift((ev.payload as { text?: string }).text ?? "");
+    } else if (parts.length > 0) {
+      break;
+    }
+  }
+  return parts.join("").trim();
+}
+
 export interface ChatStreamHandle {
   scrollToTop: () => void;
   scrollToEvent: (index: number) => void;
@@ -446,10 +462,7 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
   };
   const handleReturnWithout = () => {
     if (!session) return;
-    const parentSid = session.parentThinkrailSid;
-    store().dismissReturn(session.thinkrailSid).catch(console.error);
-    if (parentSid) store().switchSession(parentSid);
-    store().closeSession(session.thinkrailSid);
+    store().returnWithoutResult(session.thinkrailSid);
     setReturnDialogOpen(false);
   };
 
@@ -525,6 +538,7 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
           parentName={parentName}
           targetKind={session?.subsessionOrigin?.kind === "question" ? "question" : "message"}
           draftSummary={session?.returnSummary ?? ""}
+          fallbackSummary={lastAssistantText(events)}
           drafting={returnDrafting}
           onRegenerate={openReturnDialog}
           onReturnWith={handleReturnWith}

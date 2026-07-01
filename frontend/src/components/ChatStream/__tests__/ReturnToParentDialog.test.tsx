@@ -11,6 +11,7 @@ function makeProps(overrides = {}) {
     parentName: "Add OAuth login",
     targetKind: "question" as const,
     draftSummary: "use keychain",
+    fallbackSummary: "",
     drafting: false,
     onRegenerate: vi.fn(),
     onReturnWith: vi.fn(),
@@ -51,9 +52,24 @@ describe("ReturnToParentDialog", () => {
     expect(props.onReturnWithout).toHaveBeenCalled();
   });
 
-  it("disables 'Return with result' while drafting", () => {
-    render(<ReturnToParentDialog {...makeProps({ drafting: true, draftSummary: "" })} />);
+  it("disables 'Return with result' while drafting with no text or fallback", () => {
+    render(
+      <ReturnToParentDialog
+        {...makeProps({ drafting: true, draftSummary: "", fallbackSummary: "" })}
+      />,
+    );
     const btn = screen.getByRole("button", { name: /Return with result/i }) as HTMLButtonElement;
     expect(btn.disabled).toBe(true);
+  });
+
+  it("shows the last-message fallback (editable) while drafting, so it never blocks", () => {
+    render(
+      <ReturnToParentDialog
+        {...makeProps({ drafting: true, draftSummary: "", fallbackSummary: "previous message" })}
+      />,
+    );
+    expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("previous message");
+    const btn = screen.getByRole("button", { name: /Return with result/i }) as HTMLButtonElement;
+    expect(btn.disabled).toBe(false);
   });
 });
