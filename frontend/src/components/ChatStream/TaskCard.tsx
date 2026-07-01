@@ -1,5 +1,6 @@
 import type { TaskItem } from "./renderers/types.ts";
 import { CardState } from "@/constants/status.ts";
+import { TaskChecklist } from "./TaskChecklist.tsx";
 
 interface TaskCardProps {
   toolName: string;
@@ -19,28 +20,6 @@ function parseTodos(toolInput: Record<string, unknown>): TodoItem[] {
   const raw = toolInput.todos;
   if (!Array.isArray(raw)) return [];
   return raw as TodoItem[];
-}
-
-function statusIcon(status?: string): { icon: string; className: string } {
-  switch (status) {
-    case "completed":
-      return { icon: "\u2713", className: "task-item--completed" };
-    case "in_progress":
-      return { icon: "\u25C9", className: "task-item--in-progress" };
-    default:
-      return { icon: "\u25CB", className: "task-item--pending" };
-  }
-}
-
-function statusColor(status?: string): string {
-  switch (status) {
-    case "completed":
-      return "var(--green)";
-    case "in_progress":
-      return "var(--gold)";
-    default:
-      return "var(--muted)";
-  }
 }
 
 interface ChecklistItem {
@@ -73,19 +52,7 @@ function ChecklistCard({
       </div>
       {items.length > 0 && (
         <div className="chat-tool-body" style={{ resize: "none", minHeight: "auto" }}>
-          <div className="task-list">
-            {items.map((item, i) => {
-              const s = statusIcon(item.status);
-              return (
-                <div key={item.id ?? i} className={`task-item ${s.className}`}>
-                  <span className="task-status-icon" style={{ color: statusColor(item.status) }}>
-                    {s.icon}
-                  </span>
-                  <span>{item.label}</span>
-                </div>
-              );
-            })}
-          </div>
+          <TaskChecklist items={items.map((t) => ({ key: t.id, label: t.label, status: t.status }))} />
         </div>
       )}
     </div>
