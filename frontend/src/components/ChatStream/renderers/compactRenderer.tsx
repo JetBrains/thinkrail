@@ -103,14 +103,15 @@ export const compactRenderers: ViewRenderers = {
       if (isTaskFamily) {
         if (ctx.taskCollectionAnchor !== i) return null;
         return (
-          <TaskCard
-            key={k}
-            toolName={toolName}
-            toolInput={p.toolInput}
-            state={state}
-            isError={end?.isError}
-            tasks={ctx.taskCollection}
-          />
+          <div key={k} data-task-card-anchor>
+            <TaskCard
+              toolName={toolName}
+              toolInput={p.toolInput}
+              state={state}
+              isError={end?.isError}
+              tasks={ctx.taskCollection}
+            />
+          </div>
         );
       }
       return (
