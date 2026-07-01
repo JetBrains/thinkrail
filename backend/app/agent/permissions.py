@@ -92,7 +92,6 @@ _INTERCEPTOR_CATEGORIES: dict[str, ToolCategory] = {
     "add_node": "edit",
     "remove_node": "edit",
     "set_depends_on": "edit",
-    "propose_children": "edit",
     "start_node": "edit",
     # Mutating — must be denied in plan mode. ``spec_delete`` removes
     # spec files; it doesn't go through a second permission gate inside

@@ -2,10 +2,11 @@
 
 When ``ticket-implement`` runs with ``task.subagent_mode == "subagent"``, the
 runtime registers the agents below via ``ClaudeAgentOptions.agents`` so the
-orchestrator can invoke them through the SDK's ``Task`` tool.
+orchestrator can invoke them through the SDK's ``Agent`` tool.
 
-See ``.tr/design_docs/TICKET_LIFECYCLE_DESIGN.md`` §
-*Implementation orchestration modes* for the full design.
+See the ``ticket-implement`` skill (``claude-plugin/skills/ticket-implement``)
+and ``AgentService._render_orchestration_mode_section`` for how the orchestrator
+drives plan steps in each mode.
 """
 
 from __future__ import annotations
@@ -14,6 +15,12 @@ import re
 from typing import Any
 
 from claude_agent_sdk import AgentDefinition
+
+# Name of the SDK tool that dispatches a subagent. The runtime correlates its
+# tool-use blocks with SubagentStart hooks, and the persistence layer links its
+# ``[thinkrail-step …]`` markers to plan steps — both must key off this exact
+# name (older builds called it ``Task``).
+SUBAGENT_TOOL_NAME = "Agent"
 
 # The subagent's tool set mirrors what today's step session can do, minus the
 # orchestration tool the orchestrator alone owns:
@@ -53,8 +60,8 @@ TICKET_STEP_EXECUTOR = AgentDefinition(
 
 
 # ── Step-prompt marker ───────────────────────────────────────────────────────
-# The orchestrator prefixes every Task prompt with a self-identifying line so
-# the persistence interceptor can link the resulting Task tool block back to
+# The orchestrator prefixes every Agent prompt with a self-identifying line so
+# the persistence interceptor can link the resulting Agent tool block back to
 # the plan step. Example:
 #
 #     [thinkrail-step ticket=mt_abc12 step=5]
@@ -69,7 +76,7 @@ _MARKER_RE = re.compile(
 
 
 def parse_thinkrail_step_marker(prompt: str) -> dict[str, Any] | None:
-    """Parse the leading ``[thinkrail-step …]`` marker on a Task prompt.
+    """Parse the leading ``[thinkrail-step …]`` marker on an Agent prompt.
 
     Returns ``{"ticket_id": str, "step": int}`` on success, ``None`` if the
     prompt has no marker or the marker is malformed (missing ticket or step).
@@ -80,23 +87,3 @@ def parse_thinkrail_step_marker(prompt: str) -> dict[str, Any] | None:
     if not m:
         return None
     return {"ticket_id": m.group("ticket"), "step": int(m.group("step"))}
-
-
-# ── Node-prompt marker ───────────────────────────────────────────────────────
-
-_NODE_MARKER_RE = re.compile(
-    r"^\[thinkrail-node\s+ticket=(?P<ticket>[^\s\]]+)\s+node=(?P<node>[^\s\]]+)\]",
-)
-
-
-def parse_thinkrail_node_marker(prompt: str) -> dict[str, Any] | None:
-    """Parse the leading ``[thinkrail-node …]`` marker on a Task prompt.
-
-    Returns ``{"ticket_id": str, "node": str}`` or ``None``.
-    """
-    if not prompt:
-        return None
-    m = _NODE_MARKER_RE.match(prompt.lstrip("\n").strip())
-    if not m:
-        return None
-    return {"ticket_id": m.group("ticket"), "node": m.group("node")}

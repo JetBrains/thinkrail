@@ -47,8 +47,8 @@ class SubagentHooks:
         # Maps SDK ``parent_tool_use_id`` → our ``agent_id`` so streamed
         # assistant / tool events can be grouped under the right subagent.
         self._parent_to_agent: dict[str, str] = {}
-        # Queue of Task ToolUseBlock.id values awaiting a SubagentStart hook.
-        # Each Task tool call triggers exactly one SubagentStart in order.
+        # Queue of Agent ToolUseBlock.id values awaiting a SubagentStart hook.
+        # Each Agent tool call triggers exactly one SubagentStart in order.
         self._pending_task_tool_ids: list[str] = []
 
     async def _emit(self, method: str, params: dict[str, Any]) -> None:
