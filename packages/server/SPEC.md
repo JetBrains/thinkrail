@@ -19,7 +19,9 @@ and runs the `pi` agent in-process via `createAgentSession`. Launched in-process
 - **Owns:** the HTTP+WS server, static serving, the WS dispatch registry, server-side feature services
   (project/workspace/git/fs/terminal + the in-process `AgentSession` manager), and `~/.thinkrail-pi`
   persistence.
-- **Public surface:** `createServer(options) → RunningServer` (`{ port, stop }`), re-exported from `host/`.
+- **Public surface:** `createServer(options) → RunningServer` (`{ port, stop }`) and `bootHost(options)
+  → BootedHost` (the process-boot wrapper: resolves the login-shell PATH, picks the port per `portMode`,
+  and installs SIGINT/SIGTERM graceful-shutdown handlers around `createServer`), both re-exported from `host/`.
 - **Allowed deps:** `contracts` (types + WS constants), `shared` (`shellEnv`), `bun-pty`,
   `@earendil-works/pi-coding-agent` (runtime), Bun/Node.
 - **Forbidden:** importing `web`/`cli`/`desktop`; being bundled into the browser.
@@ -43,7 +45,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `agent` | in-process pi `AgentSession`s + the shared pi runtime | [agent/SPEC.md](src/agent/SPEC.md) |
 | `dialog` | the host's native folder picker | [dialog/SPEC.md](src/dialog/SPEC.md) |
 
-`src/index.ts` re-exports `host`; `src/dev.ts` boots `createServer` from env for dev/e2e.
+`src/index.ts` re-exports `host`; `src/dev.ts` boots the host from env via `bootHost` for dev/e2e.
 
 ## Internal dependency graph
 

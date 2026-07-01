@@ -12,6 +12,9 @@ export default defineConfig({
 	},
 	server: {
 		port: 24269,
+		// The full `bun run dev` launcher sets THINKRAIL_PI_DEV_OPEN; when it does, open the browser at this
+		// HMR URL on start (it proxies `/ws` to the host). A bare `dev:web` leaves it unset and won't open.
+		open: process.env.THINKRAIL_PI_DEV_OPEN === "1",
 		proxy: {
 			// The dev launcher (`bun run dev`) sets THINKRAIL_PI_PORT to the host's free port; match it.
 			"/ws": {
