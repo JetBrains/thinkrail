@@ -5,6 +5,7 @@ import { BashCard } from "./BashCard";
 import { EditCard } from "./EditCard";
 import { ReadCard } from "./ReadCard";
 import { fileName, strArg } from "./toolHelpers";
+import "./web/register";
 import { WriteCard } from "./WriteCard";
 
 // Each summary feeds the collapsed-by-default card header: a bash command, or the file name acted on.

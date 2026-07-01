@@ -16,6 +16,7 @@ import type {
 	ThinkingLevel,
 } from "@thinkrail-pi/contracts";
 import { getPiRuntime } from "./piRuntime";
+import { buildResourceLoader } from "./webExtensions";
 import { cancelExtUiForSession, createWebUiContext, notifyExtUi } from "./webUiContext";
 
 interface Entry {
@@ -104,12 +105,14 @@ async function registerSession(
 /** Create an in-process AgentSession rooted in `cwd`; its events stream out tagged with the session id. */
 export async function createSession(input: CreateSessionInput): Promise<CreateSessionResult> {
 	const { authStorage, modelRegistry } = getPiRuntime();
+	const settingsManager = buildSessionSettings(input.cwd);
 	const { session } = await createAgentSession({
 		cwd: input.cwd,
 		authStorage,
 		modelRegistry,
 		sessionManager: sessionManagerFactory(input.cwd),
-		settingsManager: buildSessionSettings(input.cwd),
+		settingsManager,
+		resourceLoader: await buildResourceLoader(input.cwd, settingsManager),
 		...(input.model ? { model: input.model } : {}),
 		...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
 	});
@@ -193,12 +196,14 @@ async function openDiskSession(sessionId: string, workspaceId: string, cwd: stri
 	if (!info) throw new Error(`Unknown session: ${sessionId}`);
 	if (sessions.has(sessionId)) return; // attached while we listed
 	const { authStorage, modelRegistry } = getPiRuntime();
+	const settingsManager = buildSessionSettings(cwd);
 	const { session } = await createAgentSession({
 		cwd,
 		authStorage,
 		modelRegistry,
 		sessionManager: SessionManager.open(info.path),
-		settingsManager: buildSessionSettings(cwd),
+		settingsManager,
+		resourceLoader: await buildResourceLoader(cwd, settingsManager),
 	});
 	// Lost a race after the open — drop this duplicate rather than clobber the registered one.
 	if (sessions.has(sessionId)) {

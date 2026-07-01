@@ -39,10 +39,17 @@ in-process `uiContext` dialog calls into WS frames.
     round-trip to the browser, fire-and-forget methods push, TUI-only members inert); `setExtUiPublisher`
     (server→client push seam), `resolveExtUi` (browser reply), `cancelExtUiForSession` (on dispose),
     `notifyExtUi`.
+  - `webExtensions` — `buildResourceLoader(cwd, settingsManager)`: a `DefaultResourceLoader` (pi's normal
+    disk discovery) that also loads the bundled **`pi-web-access`** extension (`web_search` + `fetch_content`)
+    via `additionalExtensionPaths` (pi's loader jiti-loads its raw `.ts` — no value-import into our
+    typecheck), plus a tiny `extensionFactories` **headless-search policy** (a `tool_call` hook defaulting
+    `web_search`'s `workflow` to `"none"`, since pi-web-access would otherwise open a browser curator our
+    `rpc` host can't render). Both session paths pass it as `resourceLoader`. Internal helper (not on the barrel).
 - **Public surface (barrel):** the manager operations + `CreateSessionInput`/`CreateSessionResult` +
   `SessionEventPayload`; `configurePiRuntime`/`getPiRuntime`; the `webUiContext` seams.
-- **Allowed deps:** `@earendil-works/pi-coding-agent` (runtime); `contracts` (`PiEvent`/`Model`/
-  `ThinkingLevel`/`ImageContent`/`SessionStats`/`SlashCommandInfo`/`ExtUi*`); Node.
+- **Allowed deps:** `@earendil-works/pi-coding-agent` (runtime); `pi-web-access` (the bundled web-tools
+  extension — loaded by path, not value-imported); `contracts` (`PiEvent`/`Model`/`ThinkingLevel`/
+  `ImageContent`/`SessionStats`/`SlashCommandInfo`/`ExtUi*`); Node.
 - **Forbidden:** `host`; sibling features (the `cwd` is passed in, not looked up via `persistence`).
 
 ## Get right
