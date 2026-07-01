@@ -24,7 +24,7 @@ import type { Model } from "@earendil-works/pi-ai";
 
 // The unified render union the UI switches on. The real superset (`AgentSessionEvent`) is declared in the
 // Node-only `pi-coding-agent` (it pulls node:fs), so it's MIRRORED here type-only, derived from the
-// imported `AgentEvent`. Keep in sync with @earendil-works/pi-coding-agent@0.80.2
+// imported `AgentEvent`. Keep in sync with @earendil-works/pi-coding-agent@0.80.3
 // (core/agent-session.d.ts) — the session-event members below are what `session.subscribe` emits.
 export type PiEvent =
 	| Exclude<AgentEvent, { type: "agent_end" }>
@@ -58,7 +58,7 @@ export interface SessionEventPayload {
 }
 
 // The shapes below are declared in the Node-only `pi-coding-agent` (it pulls node:fs), so they're
-// MIRRORED here type-only for the wire. Keep in sync with @earendil-works/pi-coding-agent@0.80.2.
+// MIRRORED here type-only for the wire. Keep in sync with @earendil-works/pi-coding-agent@0.80.3.
 
 /** Context-window usage for the active model. `tokens`/`percent` are null when unknown (post-compaction). */
 export interface ContextUsage {

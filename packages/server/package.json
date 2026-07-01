@@ -12,14 +12,14 @@
 		"test": "bun test"
 	},
 	"dependencies": {
-		"@earendil-works/pi-coding-agent": "0.80.2",
+		"@earendil-works/pi-coding-agent": "0.80.3",
 		"@thinkrail-pi/contracts": "workspace:*",
 		"@thinkrail-pi/shared": "workspace:*",
 		"bun-pty": "^0.4.10",
 		"pi-web-access": "^0.13.0"
 	},
 	"devDependencies": {
-		"@earendil-works/pi-ai": "0.80.2",
+		"@earendil-works/pi-ai": "0.80.3",
 		"@types/bun": "^1.3.14",
 		"typescript": "^6.0.3"
 	}
