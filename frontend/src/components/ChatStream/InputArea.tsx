@@ -284,7 +284,8 @@ export function InputArea({ sessionId, disabled, placeholder, onSend, isRunning,
           sessionId,
           "discussion",
           topic || undefined,
-          topic ? `Discuss: ${topic.slice(0, 40)}` : "Discussion"
+          topic ? `Discuss: ${topic.slice(0, 40)}` : "Discussion",
+          { kind: "message" }
         );
       }).catch(console.error);
       clearTextAndDraft();
