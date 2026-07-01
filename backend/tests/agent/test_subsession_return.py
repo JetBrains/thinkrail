@@ -90,3 +90,39 @@ class TestCreateSubsessionOrigin:
         data = load_session(tmp_path, child.thinkrail_sid)
         assert data is not None
         assert data["subsessionOrigin"]["requestId"] == "req-9"
+
+
+class TestSummaryCapture:
+    def test_capture_reads_turn_text_when_awaiting(self, tmp_path: Path) -> None:
+        service = _make_service(tmp_path)
+        task = service._tracker.create_task([], AgentConfig(), name="disc")
+        service._save_task(task)
+        service._tracker.append_turn_text(task.thinkrail_sid, "Decision: use keychain.")
+        service._tracker.mark_awaiting_summary(task.thinkrail_sid)
+
+        captured = service._maybe_capture_summary(task)
+
+        assert captured == "Decision: use keychain."
+        assert task.return_summary == "Decision: use keychain."
+        assert task.return_status == SessionReturnStatus.PENDING
+        assert service._tracker.is_awaiting_summary(task.thinkrail_sid) is False
+        # Persisted so a reload shows the drafted summary.
+        data = load_session(tmp_path, task.thinkrail_sid)
+        assert data is not None and data["returnSummary"] == "Decision: use keychain."
+
+    def test_capture_noop_when_not_awaiting(self, tmp_path: Path) -> None:
+        service = _make_service(tmp_path)
+        task = service._tracker.create_task([], AgentConfig(), name="disc")
+        service._tracker.append_turn_text(task.thinkrail_sid, "chatter")
+
+        assert service._maybe_capture_summary(task) is None
+        assert task.return_summary is None
+
+    def test_capture_noop_when_turn_text_empty(self, tmp_path: Path) -> None:
+        service = _make_service(tmp_path)
+        task = service._tracker.create_task([], AgentConfig(), name="disc")
+        service._tracker.mark_awaiting_summary(task.thinkrail_sid)
+
+        assert service._maybe_capture_summary(task) is None
+        # Flag stays set so a later non-empty turn can still capture.
+        assert service._tracker.is_awaiting_summary(task.thinkrail_sid) is True

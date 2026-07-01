@@ -1113,6 +1113,18 @@ class AgentService:
                     update_session_metadata(self._config.project_root, task.thinkrail_sid, {
                         "sessionId": sid,
                     }, overwrite=False)
+
+            # A subsession awaiting a drafted return summary: snapshot this turn's
+            # assistant text and push it to the subsession's client so the return
+            # dialog can show it.
+            if method == "agent/turnComplete":
+                captured = self._maybe_capture_summary(task)
+                if captured is not None:
+                    await _bus.publish_to_session(
+                        task.thinkrail_sid, "subsession/summaryDrafted",
+                        {"thinkrailSid": task.thinkrail_sid,
+                         "returnStatus": "pending", "returnSummary": captured},
+                    )
         notify = _persisting_notify
 
         exec_config = RuntimeExecutionConfig(
@@ -1557,6 +1569,7 @@ class AgentService:
         task.updated = datetime.now(UTC).isoformat()
         self._save_task(task)
         if is_quiescent(task.status):
+            self._tracker.mark_awaiting_summary(thinkrail_sid)
             summary_prompt = (
                 "Please summarize the key conclusions from our discussion. "
                 "Write a concise summary that captures the decision, rationale, "
@@ -1587,5 +1600,23 @@ class AgentService:
         task.updated = datetime.now(UTC).isoformat()
         self._save_task(task)
         if is_quiescent(task.status):
+            self._tracker.mark_awaiting_summary(thinkrail_sid)
             revision_prompt = f"Please revise the summary based on this feedback:\n\n{feedback}"
             self._tracker.enqueue_message(thinkrail_sid, revision_prompt)
+
+    def _maybe_capture_summary(self, task: AgentTask) -> str | None:
+        """If the session is awaiting a drafted return summary, snapshot the
+        just-finished turn's assistant text into ``return_summary``. Returns the
+        captured text, or ``None`` if not awaiting / the turn produced no text."""
+        sid = task.thinkrail_sid
+        if not self._tracker.is_awaiting_summary(sid):
+            return None
+        text = self._tracker.get_turn_text(sid).strip()
+        if not text:
+            return None
+        task.return_status = SessionReturnStatus.PENDING
+        task.return_summary = text
+        task.updated = datetime.now(UTC).isoformat()
+        self._tracker.clear_awaiting_summary(sid)
+        self._save_task(task)
+        return text
