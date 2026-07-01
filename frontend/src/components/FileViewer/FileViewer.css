@@ -166,32 +166,6 @@
 
 .md-zoom-sep { width: 1px; height: 14px; background: var(--border); margin: 0 2px; align-self: center; }
 
-/* Per-diagram — resizable container with zoom controls */
-.md-mermaid-wrapper {
-  position: relative;
-  margin: 1.5em 0;
-  resize: both;
-  overflow: hidden;
-  min-height: 80px;
-  min-width: 200px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--elevated);
-}
-
-.md-mermaid-zoom {
-  position: absolute;
-  top: var(--space-sm);
-  right: var(--space-sm);
-  z-index: 5;
-  opacity: 0;
-  transition: opacity var(--transition-fast);
-}
-
-.md-mermaid-wrapper:hover .md-mermaid-zoom {
-  opacity: 1;
-}
-
 /* ── Markdown Preview ── */
 .md-preview {
   padding: var(--space-lg) var(--space-xl);
@@ -303,78 +277,15 @@
   margin-right: var(--space-xs);
 }
 
-
-/* Mermaid diagram inner container */
-.md-mermaid {
-  padding: var(--space-lg);
-  text-align: center;
-  overflow: auto;
-  height: 100%;
-}
-
-.md-mermaid svg {
-  min-width: 400px;
-}
-
-.md-mermaid-error {
-  background: rgba(247, 84, 100, 0.05);
-  border: 1px solid var(--red);
-  border-radius: var(--radius-md);
-  padding: var(--space-md);
-  margin: 1em 0;
-}
-
-.md-mermaid-error-msg {
-  color: var(--red);
-  font-size: var(--font-md);
-  margin-top: var(--space-sm);
-}
-
-/* Mermaid popup — opened from the ⧉ button in the ZoomBar.
-   Fills the viewport (minus a small inset) so the diagram has the
-   maximum possible canvas. */
-.md-mermaid-popup {
-  width: calc(100vw - 32px);
-  height: calc(100vh - 32px);
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.md-mermaid-popup-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border);
-  background: var(--elevated);
-}
-
-.md-mermaid-popup-close {
+/* Mermaid fences render as a self-contained diagram box — strip the default
+   <pre> code-block chrome that react-markdown wraps every fenced block in. */
+.md-preview pre:has(.vis-mermaid-wrapper) {
+  margin: 1.5em 0;
+  padding: 0;
+  background: none;
   border: none;
-  background: transparent;
-  color: var(--muted);
-  font-size: 22px;
-  line-height: 1;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-}
-.md-mermaid-popup-close:hover {
-  background: var(--hover);
-  color: var(--text);
-}
-
-.md-mermaid-popup-body {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding: 20px 24px;
+  border-radius: 0;
+  overflow: visible;
 }
 
 .fv-loading {

@@ -3,8 +3,8 @@ import { MarkdownPreview } from "./MarkdownPreview";
 
 /**
  * MarkdownPreview renders spec/doc markdown: GitHub-flavored markdown (headings,
- * lists, tables, code), a frontmatter card when present, and Mermaid diagrams.
- * Has a zoom bar.
+ * lists, tables, code), a frontmatter card when present, and Mermaid diagrams
+ * that expand to a full-screen, zoomable view on click.
  */
 const DOC = `---
 title: Agent Runner
@@ -40,7 +40,7 @@ const meta = {
   parameters: {
     layout: "padded",
     docs: { description: { component:
-      "MarkdownPreview renders spec/doc markdown: GitHub-flavored markdown (headings, lists, tables, code), a frontmatter card when present, and Mermaid diagrams. Has a zoom bar.\n\n📍 **In the app:** in the file viewer when previewing a markdown/spec file (open a file from the Files/Specs tree)." } },
+      "MarkdownPreview renders spec/doc markdown: GitHub-flavored markdown (headings, lists, tables, code), a frontmatter card when present, and Mermaid diagrams that expand to a full-screen, zoomable view on click.\n\n📍 **In the app:** in the file viewer when previewing a markdown/spec file (open a file from the Files/Specs tree)." } },
   },
   args: { content: DOC },
 } satisfies Meta<typeof MarkdownPreview>;
