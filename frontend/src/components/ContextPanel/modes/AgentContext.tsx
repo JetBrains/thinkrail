@@ -1,7 +1,9 @@
 import { useSessionStore } from "@/store/sessionStore.ts";
 import { useFileStore } from "@/store/fileStore.ts";
+import { useTaskSnapshot } from "@/hooks/useTaskSnapshot.ts";
 import type { ContextUsage, TurnUsage } from "@/types/session.ts";
 import { CollapsibleSection } from "../CollapsibleSection.tsx";
+import { TasksSection } from "./TasksSection.tsx";
 import { fmtTokens, shortPath } from "../utils.tsx";
 import "./AgentContext.css";
 
@@ -263,6 +265,7 @@ export function AgentContext() {
   const session = useSessionStore((s) =>
     s.activeSessionId ? s.sessions.get(s.activeSessionId) : undefined,
   );
+  const taskSnapshot = useTaskSnapshot(activeSessionId ?? undefined);
 
   if (!activeSessionId || !session) {
     return <div className="agent-context__empty">No active session</div>;
@@ -277,6 +280,7 @@ export function AgentContext() {
 
   return (
     <div className="agent-context">
+      <TasksSection snapshot={taskSnapshot} />
       {/* Utilization header — always visible */}
       <div className="agent-context__header">
         <div className="agent-context__pct" style={{ color }}>{pct}%</div>
