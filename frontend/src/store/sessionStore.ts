@@ -2807,6 +2807,13 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         tabs.add(thinkrailSid);
         return { sessions: next, openTabs: tabs, activeSessionId: thinkrailSid };
       });
+
+      // Discussion subsessions run immediately — no explicit Start step.
+      if (type === "discussion") {
+        get().startDraft(thinkrailSid, "").catch((err) =>
+          console.error("[createSubsession] auto-start failed:", err),
+        );
+      }
     }
     return thinkrailSid;
   },

@@ -476,7 +476,7 @@ export const ChatStream = forwardRef<ChatStreamHandle, ChatStreamProps>(function
       {showReturnBanner && (
         <ReturnToParentBanner parentName={parentName} onReturn={openReturnDialog} />
       )}
-      {session?.status === SessionStatus.Draft && (
+      {session?.status === SessionStatus.Draft && !isDiscussion && (
         <DraftConfigCard thinkrailSid={session.thinkrailSid} />
       )}
       {events.map((ev, i) => {

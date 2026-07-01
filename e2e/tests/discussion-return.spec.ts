@@ -2,7 +2,7 @@ import { test, expect } from "../fixtures";
 import { openProject } from "../helpers/project";
 import { seedDeliverable } from "../helpers/board";
 import { startSessionWithModel, waitForSessionActivity } from "../helpers/session";
-import { newSession, sessionPanel } from "../helpers/selectors";
+import { sessionPanel } from "../helpers/selectors";
 
 /**
  * Discussion subsession → "Return to parent".
@@ -44,22 +44,18 @@ test("a discussion subsession returns to its parent without a result", async ({
     timeout: 90_000,
   });
 
-  // Branch a discussion subsession off the parent via /discuss.
+  // Branch a discussion subsession off the parent via /discuss. It auto-starts
+  // (no explicit Start) and hides its draft config.
   await page
     .locator(sessionPanel.inputTextarea)
     .fill("/discuss where to store OAuth tokens");
   await page.locator(sessionPanel.inputSend).click();
 
-  // Start the subsession draft so it leaves DRAFT and the return banner mounts.
-  const startBtn = page.getByRole(newSession.startButton.role, {
-    name: newSession.startButton.name,
-  });
-  await expect(startBtn).toBeVisible({ timeout: 15_000 });
-  await startBtn.click();
-
-  // The always-visible "Return to parent" banner appears for the discussion.
+  // Auto-start: the "Return to parent" banner mounts on its own — no Start click —
+  // and no draft "Start Session" button is ever shown.
   const banner = page.locator(".return-banner");
   await expect(banner).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("button", { name: /Start Session/ })).toHaveCount(0);
 
   // Open the return dialog from the banner.
   await banner.getByRole("button", { name: /Return to parent/ }).click();
