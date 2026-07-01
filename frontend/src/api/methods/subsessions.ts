@@ -7,6 +7,7 @@ export function createSubsessionApi(client: RpcClient) {
       type: "discussion" | "refinement";
       context?: string;
       name?: string;
+      origin?: { kind: "question" | "message"; requestId?: string | null; questionIndex?: number };
     }) => client.request<{ thinkrailSid: string }>("subsession/create", params),
 
     requestSummary: (thinkrailSid: string) =>

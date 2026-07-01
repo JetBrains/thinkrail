@@ -8,6 +8,7 @@ import type {
   IterationUsage,
   ArchivedSession,
   PendingRequest,
+  SubsessionOrigin,
 } from "@/types/session.ts";
 import type { SessionSummary } from "@/api/methods/sessions.ts";
 import { SessionStatus, SessionReturnStatus, isQuiescent, isTerminal, isTransient } from "@/constants/status.ts";
@@ -169,7 +170,7 @@ interface SessionStore {
   loadActiveSessions: (opts?: { includeRecentDiskSession?: boolean }) => Promise<void>;
 
   // Subsession actions
-  createSubsession: (parentThinkrailSid: string, type: "discussion" | "refinement", context?: string, name?: string) => Promise<string>;
+  createSubsession: (parentThinkrailSid: string, type: "discussion" | "refinement", context?: string, name?: string, origin?: SubsessionOrigin) => Promise<string>;
   approveReturn: (thinkrailSid: string, text: string) => Promise<void>;
   dismissReturn: (thinkrailSid: string) => Promise<void>;
   reviseReturn: (thinkrailSid: string, feedback: string) => Promise<void>;
@@ -521,6 +522,7 @@ function ensureSession(
     parentThinkrailSid: null,
     subsessionType: null,
     subsessionContext: null,
+    subsessionOrigin: null,
     returnStatus: null,
     returnSummary: null,
     outcome: null,
@@ -785,6 +787,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         parentThinkrailSid: null,
         subsessionType: null,
         subsessionContext: null,
+        subsessionOrigin: null,
         returnStatus: null,
         returnSummary: null,
         artifacts: [],
@@ -833,6 +836,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         parentThinkrailSid: null,
         subsessionType: null,
         subsessionContext: null,
+        subsessionOrigin: null,
         returnStatus: null,
         returnSummary: null,
         artifacts: existing?.artifacts ?? [],
@@ -893,6 +897,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         parentThinkrailSid: null,
         subsessionType: null,
         subsessionContext: null,
+        subsessionOrigin: null,
         returnStatus: null,
         returnSummary: null,
         artifacts: [],
@@ -1405,6 +1410,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       parentThinkrailSid: (data as unknown as Record<string, unknown>).parentThinkrailSid as string ?? null,
       subsessionType: (data as unknown as Record<string, unknown>).subsessionType as Session["subsessionType"] ?? null,
       subsessionContext: (data as unknown as Record<string, unknown>).subsessionContext as string ?? null,
+      subsessionOrigin: (data as unknown as Record<string, unknown>).subsessionOrigin as Session["subsessionOrigin"] ?? null,
       returnStatus: (data as unknown as Record<string, unknown>).returnStatus as Session["returnStatus"] ?? null,
       returnSummary: (data as unknown as Record<string, unknown>).returnSummary as string ?? null,
       outcome: ((data as unknown as Record<string, unknown>).outcome as Session["outcome"]) ?? null,
@@ -1550,6 +1556,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           parentThinkrailSid: (data as unknown as Record<string, unknown>)?.parentThinkrailSid as string ?? null,
           subsessionType: (data as unknown as Record<string, unknown>)?.subsessionType as Session["subsessionType"] ?? null,
           subsessionContext: (data as unknown as Record<string, unknown>)?.subsessionContext as string ?? null,
+          subsessionOrigin: (data as unknown as Record<string, unknown>)?.subsessionOrigin as Session["subsessionOrigin"] ?? null,
           returnStatus: (data as unknown as Record<string, unknown>)?.returnStatus as Session["returnStatus"] ?? null,
           returnSummary: (data as unknown as Record<string, unknown>)?.returnSummary as string ?? null,
           outcome: ((data as unknown as Record<string, unknown>)?.outcome
@@ -2607,6 +2614,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             parentThinkrailSid: (params.parentThinkrailSid as string) ?? null,
             subsessionType: (params.subsessionType as Session["subsessionType"]) ?? null,
             subsessionContext: (params.subsessionContext as string) ?? null,
+            subsessionOrigin: (params.subsessionOrigin as Session["subsessionOrigin"]) ?? null,
             returnStatus: null,
             returnSummary: null,
             artifacts: [],
@@ -2708,7 +2716,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   // ── Subsession actions ──
 
-  createSubsession: async (parentThinkrailSid, type, context, name) => {
+  createSubsession: async (parentThinkrailSid, type, context, name, origin) => {
     const { createSubsessionApi } = await import("@/api/methods/subsessions.ts");
     const client = getClient();
     const api = createSubsessionApi(client);
@@ -2718,6 +2726,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       type,
       context,
       name: name ?? (type === "discussion" ? "Discussion" : "Refinement"),
+      origin,
     });
 
     // Load the created subsession from backend
@@ -2775,6 +2784,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         parentThinkrailSid: (data as unknown as Record<string, unknown>).parentThinkrailSid as string ?? parentThinkrailSid,
         subsessionType: (data as unknown as Record<string, unknown>).subsessionType as Session["subsessionType"] ?? type,
         subsessionContext: (data as unknown as Record<string, unknown>).subsessionContext as string ?? context ?? null,
+        subsessionOrigin: (data as unknown as Record<string, unknown>).subsessionOrigin as Session["subsessionOrigin"] ?? origin ?? null,
         returnStatus: (data as unknown as Record<string, unknown>).returnStatus as Session["returnStatus"] ?? null,
         returnSummary: (data as unknown as Record<string, unknown>).returnSummary as string ?? null,
         outcome: ((data as unknown as Record<string, unknown>).outcome as Session["outcome"]) ?? null,
