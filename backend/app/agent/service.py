@@ -1510,6 +1510,7 @@ class AgentService:
         subsession_type: SubsessionType,
         context: str | None = None,
         name: str = "",
+        origin: SubsessionOrigin | None = None,
     ) -> AgentTask:
         """Create a draft subsession linked to a parent session."""
         from app.agent.context import build_parent_context
@@ -1534,6 +1535,7 @@ class AgentService:
         task.parent_thinkrail_sid = parent_thinkrail_sid
         task.subsession_type = subsession_type
         task.subsession_context = context
+        task.subsession_origin = origin
         task.status = TaskStatus.DRAFT
 
         parent_context = build_parent_context(

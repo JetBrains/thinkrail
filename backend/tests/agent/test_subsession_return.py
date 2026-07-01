@@ -66,3 +66,27 @@ class TestSubsessionPersistence:
         }
         assert data["returnStatus"] == "pending"
         assert data["returnSummary"] == "use the keychain"
+
+
+class TestCreateSubsessionOrigin:
+    async def test_create_subsession_stores_origin(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from unittest.mock import AsyncMock
+
+        service = _make_service(tmp_path)
+        monkeypatch.setattr(service, "_build_context_for", AsyncMock(return_value=""))
+        parent = service._tracker.create_task([], AgentConfig(), name="parent")
+        service._save_task(parent)
+
+        origin = SubsessionOrigin(kind=SubsessionOriginKind.question, request_id="req-9")
+        child = await service.create_subsession(
+            parent_thinkrail_sid=parent.thinkrail_sid,
+            subsession_type=SubsessionType.discussion,
+            context="topic", name="disc", origin=origin,
+        )
+
+        assert child.subsession_origin == origin
+        data = load_session(tmp_path, child.thinkrail_sid)
+        assert data is not None
+        assert data["subsessionOrigin"]["requestId"] == "req-9"
