@@ -1,10 +1,13 @@
-// Bundles the `pi-web-access` (web_search + fetch_content) and `pi-visualize` (the `visualize` tool)
-// extensions into a session's resource loader, so the tools are present out of the box without a separate
-// install. Loaded by pi's own loader via explicit paths (`additionalExtensionPaths`) rather than
-// value-imports, because these extensions ship raw `.ts` with no `exports` — pi's loader jiti-loads TS,
-// keeping their source out of our typecheck.
+// Bundles the `pi-web-access` (web_search + fetch_content), `pi-visualize` (the `visualize` tool), and
+// `pi-spec-graph` (spec_* tools + the spec-graph skill) extensions into a session's resource loader, so
+// the tools are present out of the box without a separate install. Extensions load via explicit
+// `additionalExtensionPaths` (all ship raw `.ts` with no `exports`; pi's loader jiti-loads TS, keeping
+// their source out of our typecheck graph). `pi-spec-graph` is a workspace package (not pi-installed), so
+// pi's package manager won't auto-discover its `pi.skills` manifest — we point `additionalSkillPaths` at
+// its `skills/` dir explicitly.
 
 import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
 import {
 	DefaultResourceLoader,
 	type ExtensionAPI,
@@ -19,6 +22,10 @@ const require = createRequire(import.meta.url);
 const webAccessPath = require.resolve("pi-web-access/index.ts");
 /** Our `pi-visualize` extension entry (the `visualize` tool; raw `.ts`, loaded by path like pi-web-access). */
 const visualizePath = require.resolve("pi-visualize/index.ts");
+/** The `pi-spec-graph` extension entry (workspace package, raw `.ts`; pi's loader handles it). */
+const specGraphPath = require.resolve("pi-spec-graph/index.ts");
+/** `pi-spec-graph`'s bundled skills dir (`skills/spec-graph/SKILL.md`), wired explicitly (see header). */
+const specGraphSkillsDir = join(dirname(specGraphPath), "skills");
 
 /**
  * `pi-web-access`'s `web_search` opens an interactive **browser curator** whenever the UI is dialog-capable
@@ -34,7 +41,7 @@ const headlessSearchPolicy: ExtensionFactory = (pi: ExtensionAPI) => {
 	});
 };
 
-/** A resource loader with `pi-web-access` (+ the headless-search policy) layered onto pi's default discovery. */
+/** A resource loader with `pi-web-access` + `pi-visualize` + `pi-spec-graph` (and its skill) + the headless-search policy layered onto pi's default discovery. */
 export async function buildResourceLoader(
 	cwd: string,
 	settingsManager: SettingsManager,
@@ -43,7 +50,8 @@ export async function buildResourceLoader(
 		cwd,
 		agentDir: getAgentDir(),
 		settingsManager,
-		additionalExtensionPaths: [webAccessPath, visualizePath],
+		additionalExtensionPaths: [webAccessPath, visualizePath, specGraphPath],
+		additionalSkillPaths: [specGraphSkillsDir],
 		extensionFactories: [headlessSearchPolicy],
 	});
 	await loader.reload();

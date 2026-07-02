@@ -1,0 +1,41 @@
+{
+	"name": "pi-spec-graph",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"description": "Teaches the pi agent a project's spec-graph: search, navigate, and manage frontmatter-tagged specs.",
+	"keywords": [
+		"pi-package",
+		"pi",
+		"pi-coding-agent",
+		"extension",
+		"spec-graph"
+	],
+	"scripts": {
+		"typecheck": "tsc --noEmit",
+		"test": "bun test"
+	},
+	"dependencies": {
+		"yaml": "^2.9.0"
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-ai": "*",
+		"@earendil-works/pi-coding-agent": "*",
+		"typebox": "*"
+	},
+	"devDependencies": {
+		"@earendil-works/pi-ai": "0.80.2",
+		"@earendil-works/pi-coding-agent": "0.80.2",
+		"@types/bun": "^1.3.14",
+		"typebox": "1.1.38",
+		"typescript": "^6.0.3"
+	},
+	"pi": {
+		"extensions": [
+			"./index.ts"
+		],
+		"skills": [
+			"./skills"
+		]
+	}
+}

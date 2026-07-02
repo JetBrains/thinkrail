@@ -18,7 +18,8 @@ host over Tailscale.
 ## Topology — three rings
 
 - **Engine host** (`packages/server` + `packages/shared`, launched by `apps/cli` now / `apps/desktop`
-  later): owns `pi`, session state, persistence, and serves the wire endpoint.
+  later): owns `pi`, session state, persistence, and serves the wire endpoint. It bundles pi extensions
+  (`pi-web-access`, `pi-visualize`, `pi-spec-graph`) into every session.
 - **The wire** (`packages/contracts`): the typed, versioned protocol — the only coupling between client
   and host.
 - **UI client** (`apps/web`): a mobile-first React client, transport-driven and endpoint-configurable,
@@ -31,6 +32,7 @@ apps/desktop    Electrobun host launcher (deferred)               ── depends
 packages/server createServer(): Bun.serve(HTTP+WS) + AgentSessionManager (in-process pi) ── depends on ─▶ packages/contracts, packages/shared
 packages/contracts  the wire (types-only)
 packages/shared     shellEnv (server-side only)
+packages/spec-graph portable pi extension: spec_* tools + skill (bundled into every session by packages/server)
 ```
 
 ## Decisions
@@ -84,5 +86,6 @@ packages/shared     shellEnv (server-side only)
 
 ## Out of scope (V1)
 
-Workflows, editable specs / drift detection, self-improvement, automations, per-step model routing,
-cost ledger.
+Workflows; the spec-graph **product layer** (viewer, drift detection, pre-build approval, living graph)
+— the pi-side spec-graph *capability* ships in V1 as a bundled extension (`module-spec-graph`);
+self-improvement, automations, per-step model routing, cost ledger.

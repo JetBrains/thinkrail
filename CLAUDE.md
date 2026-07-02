@@ -70,6 +70,7 @@ packages/
   server/     createServer(): Bun.serve + AgentSessionManager  (SPEC.md)
   contracts/  the wire (types-only)                     (SPEC.md)
   shared/     shellEnv (server-side only)               (SPEC.md)
+  spec-graph/ portable pi extension: spec_* tools + skill (SPEC.md)
 ```
 
 ## Spec graph (how decisions are recorded)

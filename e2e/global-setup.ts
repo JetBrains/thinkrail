@@ -36,6 +36,14 @@ export default function globalSetup(): void {
 	git("config", "user.email", "e2e@thinkrail.test");
 	git("config", "user.name", "ThinkRail E2E");
 	writeFileSync(join(E2E_FIXTURE_REPO, "README.md"), "# sample-project\n");
+	// A seed spec so the @agent `spec-tools` suite has a deterministic `spec_grep` match, proving the
+	// bundled `pi-spec-graph` extension is wired into a live session (see e2e/spec-tools.live.spec.ts). The
+	// token SPECGRAPHPROBE is distinctive so a match can't be an echo of the query; the file path it lives
+	// in is the proof of a real hit.
+	writeFileSync(
+		join(E2E_FIXTURE_REPO, "SPEC.md"),
+		"---\nid: sample-root\ntype: goal-and-requirements\ntitle: Sample Project\n---\n\n## Goal\n\nA throwaway fixture project for the thinkrail-pi e2e suite. It carries the token SPECGRAPHPROBE so spec_grep has a deterministic match to find.\n",
+	);
 	git("add", "-A");
 	git("commit", "-m", "init");
 }

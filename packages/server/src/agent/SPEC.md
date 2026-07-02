@@ -5,6 +5,7 @@ status: active
 title: agent — in-process pi sessions
 parent: module-server
 depends-on: [module-contracts]
+references: [module-spec-graph]
 tags: [v1, pi]
 ---
 
@@ -48,18 +49,20 @@ in-process `uiContext` dialog calls into WS frames.
     (server→client push seam), `resolveExtUi` (browser reply), `cancelExtUiForSession` (on dispose),
     `notifyExtUi`.
   - `extensions` — `buildResourceLoader(cwd, settingsManager)`: a `DefaultResourceLoader` (pi's normal
-    disk discovery) that also loads the bundled **`pi-web-access`** (`web_search` + `fetch_content`) and
-    **`pi-visualize`** (`visualize`) extensions
-    via `additionalExtensionPaths` (pi's loader jiti-loads its raw `.ts` — no value-import into our
-    typecheck), plus a tiny `extensionFactories` **headless-search policy** (a `tool_call` hook defaulting
-    `web_search`'s `workflow` to `"none"`, since pi-web-access would otherwise open a browser curator our
-    `rpc` host can't render). Both session paths pass it as `resourceLoader`. Internal helper (not on the barrel).
+    disk discovery) that also loads three bundled extensions via `additionalExtensionPaths` (pi's loader
+    jiti-loads their raw `.ts` — no value-import into our typecheck): **`pi-web-access`** (`web_search` +
+    `fetch_content`), **`pi-visualize`** (`visualize`), and **`pi-spec-graph`** (the `spec_*` tools + its
+    `before_agent_start` rule). The last is a workspace package, so its `pi.skills` manifest isn't
+    auto-discovered — its `skills/` dir is wired via **`additionalSkillPaths`**. Plus a tiny
+    `extensionFactories` **headless-search policy** (a `tool_call` hook defaulting `web_search`'s `workflow`
+    to `"none"`, since pi-web-access would otherwise open a browser curator our `rpc` host can't render).
+    Both session paths pass it as `resourceLoader`. Internal helper (not on the barrel).
 - **Public surface (barrel):** the manager operations + `CreateSessionInput`/`CreateSessionResult` +
   `SessionEventPayload`; `configurePiRuntime`/`getPiRuntime`; `completeOnce`/`pickModel` +
   `OneShotRequest`/`OneShotResult`/`ModelTier`; the `webUiContext` seams.
 - **Allowed deps:** `@earendil-works/pi-coding-agent` (runtime); `@earendil-works/pi-ai` (runtime — the
-  `complete()` dispatch used by `oneshot`); `pi-web-access` (the bundled web-tools
-  extension — loaded by path, not value-imported); `contracts` (`PiEvent`/`Model`/`ThinkingLevel`/
+  `complete()` dispatch used by `oneshot`); `pi-web-access` + `pi-visualize` + `pi-spec-graph` (the bundled
+  extensions — loaded by path, not value-imported); `contracts` (`PiEvent`/`Model`/`ThinkingLevel`/
   `ImageContent`/`SessionStats`/`SlashCommandInfo`/`ExtUi*`); Node.
 - **Forbidden:** `host`; sibling features (the `cwd` is passed in, not looked up via `persistence`).
 
