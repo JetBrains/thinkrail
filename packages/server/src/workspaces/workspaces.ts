@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { DiffStats, Workspace } from "@thinkrail-pi/contracts";
-import { git } from "../git";
+import { git, gitAsync } from "../git";
 import { dataDir, loadProjects, loadWorkspaces, saveWorkspaces } from "../persistence";
 import { getProjects } from "../projects";
 
@@ -46,11 +46,19 @@ function diffStats(worktreePath: string, baseBranch: string): DiffStats {
 
 /**
  * Create a workspace = a `git worktree` on its own fresh branch, under the data dir. `baseRef` is the base
- * the branch is cut from (the New-Workspace picker): a remote ref (`origin/<b>`) is `git fetch`ed first,
- * then `worktree add -b <branch> <baseRef>` cuts a *local* branch from it — never a detached remote
- * checkout. Omitted → branch off the repo's current `HEAD` (the default behavior).
+ * the branch is cut from (the New-Workspace picker): `worktree add -b <branch> <baseRef>` cuts a *local*
+ * branch from it — never a detached remote checkout. Omitted → branch off the repo's current `HEAD`.
+ *
+ * Freshness for a remote ref (`origin/<b>`) is kept off this critical path: the New-Workspace dialog
+ * `prefetchBranch`es it in the background when it opens, so the local remote-tracking ref is already
+ * current by the time we branch. We only fetch *here* as a cheap fallback when the ref isn't present
+ * locally at all (never fetched) — a ~10ms `rev-parse` guard, so the common case pays no network cost.
  */
-export function createWorkspace(projectId: string, name?: string, baseRef?: string): Workspace {
+export async function createWorkspace(
+	projectId: string,
+	name?: string,
+	baseRef?: string,
+): Promise<Workspace> {
 	const project = getProjects().find((p) => p.id === projectId);
 	if (!project) throw new Error(`Unknown project: ${projectId}`);
 
@@ -63,10 +71,15 @@ export function createWorkspace(projectId: string, name?: string, baseRef?: stri
 	const base = baseRef?.trim();
 	let baseBranch: string;
 	if (base) {
-		// A remote ref: fetch it so the local tip is current before branching (best-effort — offline keeps
-		// whatever ref already exists locally; `worktree add` then fails loudly if the ref is unknown).
-		if (base.startsWith("origin/")) {
-			git(project.path, ["fetch", "origin", base.slice("origin/".length)]);
+		// Fallback fetch only when the remote-tracking ref is missing locally, so `worktree add` can't fail on
+		// an unknown ref (the freshness fetch already happened in the background via `prefetchBranch`). The
+		// `rev-parse` guard is ~10ms; offline it degrades to whatever ref exists locally. Async (`gitAsync`) so
+		// the network round-trip can't block the event loop; `--` guards against `-`-prefixed branch names.
+		if (
+			base.startsWith("origin/") &&
+			!git(project.path, ["rev-parse", "--verify", "--quiet", base]).ok
+		) {
+			await gitAsync(project.path, ["fetch", "origin", "--", base.slice("origin/".length)]);
 		}
 		baseBranch = base;
 	} else {

@@ -41,7 +41,7 @@ afterEach(() => {
 	else process.env.THINKRAIL_PI_DATA_DIR = savedDataDir;
 });
 
-test("createWorkspace cuts a fresh branch from baseRef and records it as the base", () => {
+test("createWorkspace cuts a fresh branch from baseRef and records it as the base", async () => {
 	// A second branch with its own commit, so "branched from here" is verifiable by commit sha.
 	git(repo, "branch", "feature/base");
 	git(repo, "switch", "feature/base");
@@ -51,7 +51,7 @@ test("createWorkspace cuts a fresh branch from baseRef and records it as the bas
 	git(repo, "switch", "main");
 	const baseSha = gitOut(repo, "rev-parse", "feature/base");
 
-	const ws = createWorkspace("p1", undefined, "feature/base");
+	const ws = await createWorkspace("p1", undefined, "feature/base");
 	expect(ws.baseBranch).toBe("feature/base");
 	// The worktree's new branch was cut from feature/base's tip, not main's.
 	expect(gitOut(ws.worktreePath, "rev-parse", "HEAD")).toBe(baseSha);
@@ -60,8 +60,24 @@ test("createWorkspace cuts a fresh branch from baseRef and records it as the bas
 	expect(ws.branch).not.toBe("feature/base");
 });
 
-test("removeWorkspace cleans up even when the worktree dir is already gone", () => {
-	const ws = createWorkspace("p1");
+test("createWorkspace branches off a locally-present remote ref without a network fetch", async () => {
+	// A bare remote whose main is already fetched locally as origin/main. Create off origin/main must
+	// branch from the local remote-tracking ref (no `git fetch` on the critical path).
+	const remoteRepo = join(dataDir, "remote.git");
+	git(repo, "init", "--bare", remoteRepo);
+	git(repo, "remote", "add", "origin", remoteRepo);
+	git(repo, "push", "origin", "main");
+	git(repo, "fetch", "origin"); // origin/main now present locally
+	const originSha = gitOut(repo, "rev-parse", "origin/main");
+
+	const ws = await createWorkspace("p1", undefined, "origin/main");
+	expect(ws.baseBranch).toBe("origin/main");
+	expect(gitOut(ws.worktreePath, "rev-parse", "HEAD")).toBe(originSha);
+	expect(gitOut(ws.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe(ws.branch);
+});
+
+test("removeWorkspace cleans up even when the worktree dir is already gone", async () => {
+	const ws = await createWorkspace("p1");
 	expect(listWorkspaces("p1")).toHaveLength(1);
 
 	// Simulate drift: delete the worktree dir behind git's back so `git worktree remove` can't.

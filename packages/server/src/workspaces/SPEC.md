@@ -15,8 +15,11 @@ chats.
 
 ## Boundary
 
-- **Owns:** `createWorkspace` (off `baseRef` when given — a remote ref is `git fetch`ed *then* branched
-  from with `worktree add -b`, never a detached remote checkout; off the repo `HEAD` otherwise;
+- **Owns:** `createWorkspace` (**async**; off `baseRef` when given — branched with `worktree add -b`, never a detached
+  remote checkout; off the repo `HEAD` otherwise; **remote-ref freshness is prefetched off this critical
+  path** — the New-Workspace dialog `git.prefetch`es the base in the background, so create only `git
+  fetch`es as a cheap fallback when the local remote-tracking ref is missing entirely — that fallback runs
+  via `gitAsync` (network must not block the event loop) with the branch passed after `--`;
   `Workspace.baseBranch` records the base the diff is measured against; **branch name made unique** —
   archiving leaves the branch behind, so re-creating must not collide; path
   `dataDir/worktrees/<project-slug>/<branch>`),

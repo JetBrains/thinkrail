@@ -6,7 +6,7 @@ import type {
 	Workspace,
 } from "@thinkrail-pi/contracts";
 import { loadProjects, loadWorkspaces } from "../persistence";
-import { git } from "./gitExec";
+import { git, gitAsync } from "./gitExec";
 
 function workspace(workspaceId: string): Workspace {
 	const ws = loadWorkspaces().find((w) => w.id === workspaceId);
@@ -52,6 +52,27 @@ export function listBranches(projectId: string): BranchList {
 	}
 
 	return { local, remote, defaultBranch };
+}
+
+/**
+ * Best-effort **background** fetch of a remote branch, so a *subsequent* `createWorkspace` branches off a
+ * fresh tip without paying the ~2s network round-trip on the create critical path. The New-Workspace dialog
+ * fires this when it opens (for the default base) and when a different remote base is picked — the fetch
+ * overlaps the time the user spends choosing a branch / typing the prompt, so the create itself stays local
+ * and instant. Async (`gitAsync`, never `spawnSync`) so the network fetch can't block the host's event
+ * loop; a local (non-`origin/`) ref or an offline/failed fetch is a harmless no-op ack.
+ */
+export async function prefetchBranch(projectId: string, ref: string): Promise<{ ok: boolean }> {
+	const project = loadProjects().find((p) => p.id === projectId);
+	if (!project || !ref.startsWith("origin/")) return { ok: false };
+	// `--` so a `-`-prefixed branch name can't be parsed by git as an option.
+	const result = await gitAsync(project.path, [
+		"fetch",
+		"origin",
+		"--",
+		ref.slice("origin/".length),
+	]);
+	return { ok: result.ok };
 }
 
 /** Map a `git diff --name-status` code (`M`, `A`, `D`, `R100`, …) to our status enum. */

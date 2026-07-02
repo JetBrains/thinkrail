@@ -92,6 +92,22 @@ export function NewWorkspaceDialog({
 		};
 	}, [open]);
 
+	// Warm a remote base ref in the background so `workspace.create` branches off a fresh tip without
+	// paying the ~2s `git fetch` on the create path. Fire-and-forget: it overlaps branch-picking / typing,
+	// and offline / local refs are a no-op host-side. Called on open (default base) + on a remote pick.
+	const prefetchBase = (ref: string) => {
+		if (!ref.startsWith("origin/")) return;
+		getTransport()
+			.request("git.prefetch", { projectId: selectedProjectId, ref })
+			.catch(() => {});
+	};
+
+	// Base picked in the combobox: set it and warm it (if remote) so create stays instant.
+	const selectBaseRef = (ref: string) => {
+		setBaseRef(ref);
+		prefetchBase(ref);
+	};
+
 	// Branches for the selected project; preselect the default base. Refetched when the project changes.
 	useEffect(() => {
 		if (!open) return;
@@ -103,6 +119,13 @@ export function NewWorkspaceDialog({
 				if (cancelled) return;
 				setBranches(list);
 				setBaseRef(list.defaultBranch);
+				// Warm the preselected base now, while the user reads/types — create then skips the fetch.
+				// Inlined (not via prefetchBase) so the effect's deps stay [open, selectedProjectId].
+				if (list.defaultBranch.startsWith("origin/")) {
+					getTransport()
+						.request("git.prefetch", { projectId: selectedProjectId, ref: list.defaultBranch })
+						.catch(() => {});
+				}
 			})
 			.catch(() => {
 				if (!cancelled) setBranches({ local: [], remote: [], defaultBranch: "HEAD" });
@@ -203,7 +226,7 @@ export function NewWorkspaceDialog({
 						baseRef={baseRef}
 						refreshing={refreshing}
 						container={dialogEl}
-						onSelect={setBaseRef}
+						onSelect={selectBaseRef}
 						onRefresh={() => void refreshBranches()}
 					/>
 				</div>

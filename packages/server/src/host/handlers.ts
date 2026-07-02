@@ -19,7 +19,7 @@ import {
 } from "../agent";
 import { selectDirectory } from "../dialog";
 import { readDir, readFile } from "../fs";
-import { gitDiff, gitStatus, listBranches } from "../git";
+import { gitDiff, gitStatus, listBranches, prefetchBranch } from "../git";
 import { githubAuthStatus, githubRefresh } from "../github";
 import { closeProject, listProjects, openProject } from "../projects";
 import { closeTerminal, createTerminal, resizeTerminal, writeTerminal } from "../terminal";
@@ -51,6 +51,10 @@ const handlers: Record<string, Handler> = {
 	},
 	"workspace.diffStats": (params) => workspaceDiffStats((params as { id: string }).id),
 	"git.listBranches": (params) => listBranches((params as { projectId: string }).projectId),
+	"git.prefetch": (params) => {
+		const p = params as { projectId: string; ref: string };
+		return prefetchBranch(p.projectId, p.ref);
+	},
 	"github.authStatus": () => githubAuthStatus(),
 	"github.refresh": () => githubRefresh(),
 	"dialog.selectDirectory": () => selectDirectory(),

@@ -34,6 +34,9 @@ export const WS_METHODS = {
 	workspaceDiffStats: "workspace.diffStats",
 	// gh-backed New-Workspace surface: branch list per project + local `gh` auth status.
 	gitListBranches: "git.listBranches",
+	// Background freshness fetch of a remote base ref, fired when the New-Workspace dialog opens/picks a
+	// base — keeps the ~2s network round-trip off the create critical path.
+	gitPrefetch: "git.prefetch",
 	githubAuthStatus: "github.authStatus",
 	githubRefresh: "github.refresh",
 	fsReadDir: "fs.readDir",
@@ -97,6 +100,9 @@ export interface WsMethodMap {
 	"workspace.remove": { params: { id: string }; result: Ack };
 	"workspace.diffStats": { params: { id: string }; result: DiffStats };
 	"git.listBranches": { params: { projectId: string }; result: BranchList };
+	// Best-effort background `git fetch` of a remote ref (`origin/<b>`); `ok` reports whether the fetch ran
+	// (offline / non-remote ref → `false`). The UI fires-and-forgets it to warm the ref before create.
+	"git.prefetch": { params: { projectId: string; ref: string }; result: { ok: boolean } };
 	"github.authStatus": { params: Record<string, never>; result: GithubAuthStatus };
 	"github.refresh": { params: Record<string, never>; result: GithubAuthStatus };
 	"fs.readDir": { params: { workspaceId: string; path: string }; result: FileNode[] };

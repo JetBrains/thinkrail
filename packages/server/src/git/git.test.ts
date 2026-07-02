@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { listBranches } from "./git";
+import { listBranches, prefetchBranch } from "./git";
 
 let dataDir: string;
 let repo: string;
@@ -62,4 +62,40 @@ test("listBranches surfaces origin branches and the origin default", () => {
 
 test("listBranches throws on an unknown project", () => {
 	expect(() => listBranches("nope")).toThrow(/Unknown project/);
+});
+
+test("prefetchBranch fetches a remote ref and no-ops on a local ref or unknown project", async () => {
+	const remoteRepo = join(dataDir, "remote.git");
+	git(repo, "init", "--bare", remoteRepo);
+	git(repo, "remote", "add", "origin", remoteRepo);
+	git(repo, "push", "origin", "main");
+
+	// A commit that only exists on the remote (pushed from a throwaway clone), so a successful prefetch is
+	// observable: origin/main advances locally only if the fetch actually ran.
+	const clone = join(dataDir, "clone");
+	git(repo, "clone", remoteRepo, clone);
+	// Pin the clone to `main` from origin/main rather than trusting its checked-out default branch — the
+	// remote's default depends on the runner's `init.defaultBranch` (may be `master` on CI), which would
+	// otherwise leave no local `main` for the push below.
+	git(clone, "checkout", "-B", "main", "origin/main");
+	git(clone, "config", "user.email", "t@thinkrail.test");
+	git(clone, "config", "user.name", "test");
+	writeFileSync(join(clone, "remote-only.txt"), "remote\n");
+	git(clone, "add", "-A");
+	git(clone, "commit", "-m", "remote-only");
+	git(clone, "push", "origin", "main");
+
+	const gitOut = (cwd: string, ...args: string[]): string =>
+		new TextDecoder()
+			.decode(Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "pipe" }).stdout)
+			.trim();
+	const remoteTip = gitOut(remoteRepo, "rev-parse", "main");
+	expect(gitOut(repo, "rev-parse", "origin/main")).not.toBe(remoteTip);
+
+	expect(await prefetchBranch("p1", "origin/main")).toEqual({ ok: true });
+	expect(gitOut(repo, "rev-parse", "origin/main")).toBe(remoteTip);
+
+	// A local ref never touches the network; an unknown project can't fetch — both are quiet no-ops.
+	expect(await prefetchBranch("p1", "main")).toEqual({ ok: false });
+	expect(await prefetchBranch("nope", "origin/main")).toEqual({ ok: false });
 });
