@@ -3,7 +3,7 @@ id: pi-visualize-module
 type: module-design
 status: active
 title: pi-visualize extension
-parent: ../../architecture.md
+parent: architecture
 tags: [pi-extension, visualization, mermaid]
 ---
 
