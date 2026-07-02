@@ -794,9 +794,16 @@ class AgentService:
                     old_session_id = (ev.get("payload") or {}).get("sessionId", "")
                     if old_session_id:
                         break
-        if not old_session_id:
-            raise ValueError(
-                f"Cannot resume session {thinkrail_sid}: no stored sessionId"
+        # No stored sessionId means the session never opened a CLI conversation
+        # (e.g. it was restarted — say, to apply a model/effort change — while
+        # still idle, before the first message). There is nothing to --resume,
+        # so relaunch fresh rather than failing the restart. ``None`` flows to
+        # ``run_session`` as "no resume".
+        resume_session_id = old_session_id or None
+        if not resume_session_id:
+            logger.info(
+                "[%s] continue_session: no stored sessionId; relaunching fresh",
+                thinkrail_sid[:8],
             )
 
         # Re-create task with SAME thinkrail_sid
@@ -837,7 +844,7 @@ class AgentService:
             "specIds": old_spec_ids,
             "config": old_config.model_dump(by_alias=True),
             "status": TaskStatus.INITIALIZING,
-            "sessionId": old_session_id,
+            "sessionId": resume_session_id,
             "ticketId": task.ticket_id,
             "createdAt": old.get("createdAt", task.created),
             "updatedAt": task.updated,
@@ -854,7 +861,7 @@ class AgentService:
 
         bg_task = asyncio.create_task(
             self._run_background(task, spec_context,
-                                 resume_session_id=old_session_id)
+                                 resume_session_id=resume_session_id)
         )
         self._running_tasks[task.thinkrail_sid] = bg_task
         return task

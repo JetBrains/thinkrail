@@ -79,7 +79,9 @@ class TestRuntimesCapabilities:
 
         result = _success(await runtimes_capabilities(reg, runtimeType="claude"))
 
-        assert set(result.keys()) == {"permissionModes", "effortLevels", "models", "flags"}
+        assert set(result.keys()) == {
+            "permissionModes", "effortLevels", "models", "flags", "modelCapabilities",
+        }
         assert result["permissionModes"][0]["value"] == "default"
         assert result["effortLevels"][0]["value"] == "auto"
         assert [m["value"] for m in result["models"]] == [

@@ -26,6 +26,7 @@ from app.agent.runtime.registry import (
 from app.agent.runtime.types import (
     IAgentRuntime,
     LabeledOption,
+    ModelCapability,
     RuntimeCapabilities,
     RuntimeExecutionConfig,
     RuntimeFlag,
@@ -39,6 +40,7 @@ __all__ = [
     "DuplicateRuntimeError",
     "IAgentRuntime",
     "LabeledOption",
+    "ModelCapability",
     "RuntimeCapabilities",
     "RuntimeEvent",
     "RuntimeExecutionConfig",

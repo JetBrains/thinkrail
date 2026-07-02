@@ -35,10 +35,17 @@ async def continue_session(service: AgentService, **params: Any) -> dict:
 
 @_handle_errors
 async def restart_session(service: AgentService, **params: Any) -> dict:
-    """End current session and resume with updated config."""
+    """End current session and resume with updated config.
+
+    Subscribe *after* the restart: ending the old session runs the runner's
+    cleanup, which calls ``bus.cleanup_topic("session:<sid>")`` and wipes the
+    topic's subscribers. Subscribing before that (the obvious order) would be
+    undone by the teardown, leaving the relaunched session with no live event
+    delivery (config changes, streaming) until a page reload.
+    """
     thinkrail_sid = params["thinkrailSid"]
-    auto_subscribe_all(thinkrail_sid)
     task = await service.restart_session(thinkrail_sid)
+    auto_subscribe_all(thinkrail_sid)
     return {"thinkrailSid": task.thinkrail_sid}
 
 

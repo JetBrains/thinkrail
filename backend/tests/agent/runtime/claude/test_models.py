@@ -8,11 +8,12 @@ from app.agent.runtime.types import LabeledOption
 
 
 class TestClaudeModelRegistry:
-    def test_list_options_returns_four_entries_in_declared_order(self) -> None:
+    def test_list_options_excludes_hidden_models_in_declared_order(self) -> None:
         reg = ClaudeModelRegistry()
         values = [o.value for o in reg.list_options()]
+        # Fable 5 is marked hidden in the catalog — kept for pricing, dropped
+        # from the picker.
         assert values == [
-            "claude-fable-5",
             "claude-opus-4-8",
             "claude-sonnet-4-6",
             "claude-haiku-4-5-20251001",
@@ -24,11 +25,60 @@ class TestClaudeModelRegistry:
             assert isinstance(o, LabeledOption)
             assert set(LabeledOption.model_fields) == {"value", "label", "description"}
 
-    def test_first_option_is_fable(self) -> None:
+    def test_first_option_is_opus(self) -> None:
         reg = ClaudeModelRegistry()
         first = reg.list_options()[0]
-        assert first.value == "claude-fable-5"
-        assert first.label == "Fable 5"
+        assert first.value == "claude-opus-4-8"
+        assert first.label == "Opus 4.8"
+
+
+class TestSupportedEfforts:
+    def test_opus_supports_full_effort_set(self) -> None:
+        reg = ClaudeModelRegistry()
+        assert reg.supported_efforts("claude-opus-4-8") == (
+            "low", "medium", "high", "xhigh", "max",
+        )
+
+    def test_sonnet_has_no_xhigh(self) -> None:
+        reg = ClaudeModelRegistry()
+        efforts = reg.supported_efforts("claude-sonnet-4-6")
+        assert efforts == ("low", "medium", "high", "max")
+        assert "xhigh" not in efforts
+
+    def test_haiku_supports_no_effort(self) -> None:
+        reg = ClaudeModelRegistry()
+        assert reg.supported_efforts("claude-haiku-4-5-20251001") == ()
+
+    def test_out_of_catalog_id_resolves_by_tier(self) -> None:
+        reg = ClaudeModelRegistry()
+        assert reg.supported_efforts("claude-opus-4-1-20250805") == reg.supported_efforts(
+            "claude-opus-4-8"
+        )
+
+    def test_unknown_model_defaults_to_sonnet(self) -> None:
+        reg = ClaudeModelRegistry()
+        assert reg.supported_efforts("gpt-4o") == reg.supported_efforts("claude-sonnet-4-6")
+
+
+class TestSupports1m:
+    def test_opus_and_sonnet_support_1m(self) -> None:
+        reg = ClaudeModelRegistry()
+        assert reg.supports_1m("claude-opus-4-8") is True
+        assert reg.supports_1m("claude-sonnet-4-6") is True
+
+    def test_haiku_does_not_support_1m(self) -> None:
+        reg = ClaudeModelRegistry()
+        assert reg.supports_1m("claude-haiku-4-5-20251001") is False
+
+    def test_out_of_catalog_resolves_by_tier(self) -> None:
+        reg = ClaudeModelRegistry()
+        assert reg.supports_1m("claude-opus-4-1-20250805") is True
+
+    def test_hidden_model_still_resolves_capabilities(self) -> None:
+        reg = ClaudeModelRegistry()
+        # Fable 5 is hidden from the picker but still in the catalog.
+        assert reg.supports_1m("claude-fable-5") is True
+        assert "xhigh" in reg.supported_efforts("claude-fable-5")
 
 
 class TestRatesFor:

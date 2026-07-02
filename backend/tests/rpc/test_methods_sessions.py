@@ -1,14 +1,42 @@
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.board.models import OrchestratorRef, Ticket
-from app.rpc.methods.sessions import promote_to_ticket
+from app.rpc.methods.sessions import promote_to_ticket, restart_session
 
 
 def _unwrap(result):
     """Extract value from jsonrpcserver Success result."""
     return result._value.result
+
+
+class TestRestartSession:
+    async def test_subscribes_after_restart_not_before(self) -> None:
+        """The conn must be re-subscribed AFTER the restart completes. Ending
+        the old session runs ``bus.cleanup_topic("session:<sid>")``, which wipes
+        the topic's subscribers — so subscribing before the restart (the obvious
+        order) leaves the relaunched session with no live event delivery until a
+        page reload. Lock the order."""
+        order: list[str] = []
+        svc = MagicMock()
+        task = MagicMock()
+        task.thinkrail_sid = "sid-1"
+
+        async def _restart(sid: str):
+            order.append("restart")
+            return task
+
+        svc.restart_session = AsyncMock(side_effect=_restart)
+
+        with patch(
+            "app.rpc.methods.sessions.auto_subscribe_all",
+            side_effect=lambda sid: order.append("subscribe"),
+        ):
+            result = await restart_session(svc, thinkrailSid="sid-1")
+
+        assert order == ["restart", "subscribe"]
+        assert _unwrap(result)["thinkrailSid"] == "sid-1"
 
 
 class TestPromoteToTicket:
