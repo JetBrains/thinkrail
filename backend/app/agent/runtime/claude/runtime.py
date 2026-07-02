@@ -37,7 +37,7 @@ from claude_agent_sdk.types import StreamEvent
 from app.agent.models import AgentResult, AgentTask, TaskStatus, to_camel
 from app.agent.permissions import claude_can_use_tool_adapter
 from app.agent.pricing import TokenUsage, cost
-from app.agent.subagents import TICKET_STEP_EXECUTOR
+from app.agent.subagents import SUBAGENT_TOOL_NAME, TICKET_STEP_EXECUTOR
 
 
 def _build_agents_for(task: AgentTask) -> dict[str, AgentDefinition]:
@@ -344,8 +344,8 @@ class ClaudeRuntime:
         env_overrides = {k: "" for k in ("CLAUDECODE", "CLAUDE_CODE_EXECPATH") if k in os.environ}
 
         # Register the ticket-step-executor subagent when the orchestrator is
-        # ticket-implement in subagent mode — see TICKET_LIFECYCLE_DESIGN.md
-        # § Implementation orchestration modes.
+        # ticket-implement in subagent mode (step-session mode drives steps via
+        # suggest_step instead and needs no subagent).
         agents = _build_agents_for(task)
 
         options = ClaudeAgentOptions(
@@ -471,9 +471,9 @@ class ClaudeRuntime:
                                         ),
                                     ))
                                 elif isinstance(block, ToolUseBlock):
-                                    # Track Task tool calls so we can correlate
-                                    # them with SubagentStart hooks.
-                                    if block.name == "Agent":
+                                    # Track subagent-dispatch tool calls so we can
+                                    # correlate them with SubagentStart hooks.
+                                    if block.name == SUBAGENT_TOOL_NAME:
                                         hooks.record_task_tool_call(block.id)
                                     if block.name == "ExitPlanMode":
                                         _mode_change_tools[block.id] = "default"

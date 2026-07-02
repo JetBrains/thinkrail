@@ -11,6 +11,7 @@ from app.agent.context import build_context
 from app.agent.exceptions import InvalidCapabilityValueError
 from app.agent.models import AgentConfig, AgentTask, SessionReturnStatus, SubagentMode, SubsessionType, TaskStatus, is_quiescent, is_settled, is_streaming, is_terminal
 from app.agent.persistence import append_event, save_session, load_session, list_sessions as list_sessions_from_disk, delete_session as delete_session_from_disk, update_session_metadata, load_events
+from app.agent.subagents import SUBAGENT_TOOL_NAME
 from app.agent.runtime import (
     IAgentRuntime,
     LabeledOption,
@@ -545,7 +546,7 @@ class AgentService:
 
     # ── Subagent → plan-step linkage ─────────────────────────────────────
     # Used by _persisting_notify when the orchestrator (ticket-implement in
-    # subagent mode) emits a Task call carrying a ``[thinkrail-step …]`` marker.
+    # subagent mode) emits an Agent call carrying a ``[thinkrail-step …]`` marker.
 
     def _mark_step_running(
         self, ticket_id: str, step_number: int, event_index: int,
@@ -927,7 +928,7 @@ class AgentService:
         }
         _wall_start = time.monotonic()
 
-        # Maps SDK tool_use_id → plan step number for in-flight Task subagent
+        # Maps SDK tool_use_id → plan step number for in-flight Agent subagent
         # calls. Populated on agent/toolCallStart when the prompt carries a
         # ``[thinkrail-step …]`` marker; drained on the matching agent/toolCallEnd.
         # Scoped to one orchestrator run; restart loses the mapping (matches
@@ -948,15 +949,14 @@ class AgentService:
                 task.thinkrail_sid, method, params, request_id=request_id,
             )
             # Subagent step linkage — when ticket-implement's orchestrator
-            # fires a Task call whose prompt carries a ``[thinkrail-step …]``
+            # fires an Agent call whose prompt carries a ``[thinkrail-step …]``
             # marker, point the matching plan step at this event's index
-            # and flip status to ``executing``. See TICKET_LIFECYCLE_DESIGN.md
-            # § Implementation orchestration modes.
+            # and flip status to ``executing``.
             if method == "agent/toolCallStart":
                 tool_name = params.get("toolName") or ""
                 tool_use_id = params.get("toolUseId") or ""
                 tool_input = params.get("toolInput") or {}
-                if tool_name == "Task" and task.ticket_id and tool_use_id:
+                if tool_name == SUBAGENT_TOOL_NAME and task.ticket_id and tool_use_id:
                     from app.agent.subagents import parse_thinkrail_step_marker
 
                     prompt_text = (
@@ -1404,20 +1404,30 @@ class AgentService:
 
         Branches on ``task.subagent_mode`` × ``task.step_gate``; the failure
         policy comes from ``.tr/settings.json`` (``tickets.subagentFailurePolicy``).
-        See TICKET_LIFECYCLE_DESIGN.md § Implementation orchestration modes.
+        In ``step-session`` mode each step runs as its own session (proposed via
+        ``suggest_step``); in ``subagent`` mode the orchestrator dispatches the
+        ``ticket-step-executor`` subagent via the ``Agent`` tool.
         """
         from app.core.settings import load_settings
 
         if task.subagent_mode == "step-session":
-            # Today's default — no new behavior to instruct; the existing
-            # plan section above already told the orchestrator to use suggest_step.
-            return ""
+            return (
+                "## Step-Session Mode\n\n"
+                "Execute the plan one step at a time, each as its own session.\n"
+                "1. Find the next unblocked step (its `depends_on` are all done).\n"
+                "2. Call `suggest_step(ticketId=…, stepNumber=…)` to propose it — "
+                "the user approves the card and a dedicated session runs that step.\n"
+                "3. Wait for that step's session to finish, check the result, then "
+                "propose the next unblocked step. Repeat until every step is done.\n\n"
+                "Do NOT dispatch steps yourself with the `Agent` subagent tool — in "
+                "this mode every step runs as its own session via `suggest_step`."
+            )
 
         # subagent mode
         policy = load_settings(self._config.project_root).tickets.subagent_failure_policy
         policy_line = (
             "Failure policy: **fail-fast**. On the first sibling failure, stop "
-            "issuing new Task calls; in-flight siblings finish naturally."
+            "issuing new Agent calls; in-flight siblings finish naturally."
             if policy == "fail-fast"
             else "Failure policy: **wait-all**. Gather all sibling results "
             "before reporting; report each as done or failed individually."
@@ -1433,11 +1443,11 @@ class AgentService:
                 "2. In a single assistant turn, emit one `suggest_step` tool call "
                 "per unblocked step. The user sees one approval card per step.\n"
                 "3. As each card resolves, immediately invoke "
-                "`Task(subagent_type=\"ticket-step-executor\", prompt=…)`. The "
+                "`Agent(subagent_type=\"ticket-step-executor\", prompt=…)`. The "
                 "prompt MUST start with the line:\n\n"
                 "    [thinkrail-step ticket={ticket_id} step={step_number}]\n\n"
                 "    followed by the step's description and any relevant context.\n"
-                "4. Await all in-flight Task calls before re-scanning for the "
+                "4. Await all in-flight Agent calls before re-scanning for the "
                 "next batch. Do not call `suggest_step` again until the current "
                 "batch has finished.\n\n"
                 f"{policy_line}"
@@ -1447,12 +1457,12 @@ class AgentService:
             "## Subagent Mode (autonomous)\n\n"
             "You drive plan execution via SDK subagents with no per-step approval.\n"
             "1. Scan the plan for unblocked steps as above.\n"
-            "2. Emit one `Task(subagent_type=\"ticket-step-executor\", prompt=…)` "
+            "2. Emit one `Agent(subagent_type=\"ticket-step-executor\", prompt=…)` "
             "per unblocked step, in a single assistant turn. Each prompt MUST "
             "start with `[thinkrail-step ticket={ticket_id} step={step_number}]`.\n"
             "3. Do NOT emit `suggest_step` in autonomous mode — that's only "
             "for the gated variant.\n"
-            "4. Await all in-flight Task calls before re-scanning for the next batch.\n\n"
+            "4. Await all in-flight Agent calls before re-scanning for the next batch.\n\n"
             f"{policy_line}"
         )
 
@@ -1469,9 +1479,9 @@ class AgentService:
         if skill_id == "ticket-implement":
             return (
                 "## Implementation Plan\n\n"
-                "The following plan is associated with this ticket. "
-                "As the orchestrator, read the plan, identify the next unblocked step, "
-                "and call `suggest_step` to propose it for execution.\n\n"
+                "The following plan is associated with this ticket. As the "
+                "orchestrator, read the plan and drive its steps to completion "
+                "following the mode-specific instructions below.\n\n"
                 f"{plan_text}"
             )
         return (

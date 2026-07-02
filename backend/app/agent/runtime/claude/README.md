@@ -96,7 +96,7 @@ The loop terminates on `END_SIGNAL` (graceful end_session), interrupt
 
 ## SubagentHooks correlation
 
-The Claude SDK's `Task` tool spawns a child agent and emits
+The Claude SDK's `Agent` tool spawns a child agent and emits
 `SubagentStart` / `SubagentStop` hooks. ThinkRail needs to:
 
 1. Emit `agent/subagentStart` / `agent/subagentEnd` events to the
@@ -113,8 +113,8 @@ The Claude SDK's `Task` tool spawns a child agent and emits
   `parent_tool_use_id` → thinkrail `agent_id`. Streamed events from the
   child carry the parent id; the runtime resolves the agent id via
   `hooks.resolve_agent_id`.
-- `_pending_task_tool_ids: list[str]` — queue of `Task` tool-use ids
-  awaiting their Start hook. Each Task tool call triggers exactly one
+- `_pending_task_tool_ids: list[str]` — queue of `Agent` tool-use ids
+  awaiting their Start hook. Each Agent tool call triggers exactly one
   Start in order; the runtime calls `hooks.record_task_tool_call` to
   enqueue.
 

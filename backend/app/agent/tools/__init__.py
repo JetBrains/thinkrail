@@ -69,7 +69,6 @@ INTERCEPTORS: dict[str, InterceptFn] = {
     "add_node": intercept_orchestration,
     "remove_node": intercept_orchestration,
     "set_depends_on": intercept_orchestration,
-    "propose_children": intercept_orchestration,
     "start_node": intercept_orchestration,
     "suggest_step": intercept_orchestrator,
     "CreateBoardTicket": intercept_create_board_ticket,

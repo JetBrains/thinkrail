@@ -147,15 +147,25 @@ class TestBuildContextPlanInjection:
 class TestSubagentModeFraming:
     """Cover the orchestration-mode section injected for ticket-implement."""
 
-    async def test_step_session_mode_has_no_subagent_section(
+    async def test_step_session_mode_instructs_suggest_step_not_subagent(
         self, tmp_path: Path,
     ) -> None:
+        """Regression guard for #57: in the default step-session mode the
+        orchestrator must be told to use ``suggest_step`` and must NOT be
+        pointed at the ``ticket-step-executor`` subagent — that agent is only
+        registered in subagent mode, so referencing it here makes the model
+        emit an ``Agent(subagent_type="ticket-step-executor")`` call that the
+        SDK rejects with "ticket-step-executor not found".
+        """
         agent, ticket_id, config = await _build_service_with_plan(tmp_path)
         _seed_skill(config, "ticket-implement")
         task = _make_task(agent, ticket_id, skill_id="ticket-implement")
         # Default is step-session
         prompt = await agent._build_context_for(task)
-        assert "Subagent Mode" not in prompt
+        assert "Step-Session Mode" in prompt
+        assert "suggest_step" in prompt
+        # The subagent path must not leak into step-session mode.
+        assert "ticket-step-executor" not in prompt
         assert "[thinkrail-step" not in prompt
 
     async def test_subagent_gated_mode_includes_marker_instructions(
@@ -170,6 +180,10 @@ class TestSubagentModeFraming:
         assert "Subagent Mode (approve each)" in prompt
         assert "[thinkrail-step ticket=" in prompt
         assert "Failure policy: **fail-fast**" in prompt
+        # The subagent tool the runtime registers + correlates is ``Agent``,
+        # not the legacy ``Task`` name (see #57).
+        assert 'Agent(subagent_type="ticket-step-executor"' in prompt
+        assert "Task(subagent_type=" not in prompt
 
     async def test_subagent_autonomous_mode_omits_suggest_step(
         self, tmp_path: Path,
@@ -182,6 +196,8 @@ class TestSubagentModeFraming:
         prompt = await agent._build_context_for(task)
         assert "Subagent Mode (autonomous)" in prompt
         assert "Do NOT emit `suggest_step`" in prompt
+        assert 'Agent(subagent_type="ticket-step-executor"' in prompt
+        assert "Task(subagent_type=" not in prompt
 
     async def test_wait_all_policy_reflected_in_prompt(
         self, tmp_path: Path,

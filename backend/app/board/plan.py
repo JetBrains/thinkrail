@@ -64,7 +64,7 @@ class PlanStep(BaseModel):
     input_spec_ids: list[str] = Field(default_factory=list)
     session_id: str | None = None
     # Index into the orchestrator session's events.jsonl of the toolCallStart
-    # for this step's Task subagent — set in subagent_mode. Mutually exclusive
+    # for this step's Agent subagent — set in subagent_mode. Mutually exclusive
     # with session_id (step-session mode).
     event_index: int | None = None
     agent_instructions: str = ""
