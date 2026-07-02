@@ -18,6 +18,16 @@ export function messagesToRuntime(messages: Message[]): {
 			turns.push({ kind: "user", id: crypto.randomUUID(), message });
 		} else if (message.role === "assistant") {
 			turns.push({ kind: "assistant", id: crypto.randomUUID(), message, streaming: false });
+			// A persisted turn that ended in a provider/model error carries `stopReason: "error"` + the
+			// provider's `errorMessage`. Re-surface it as an error turn so a reopened chat shows the failure,
+			// matching the live path (the reducer's terminal-error `agent_end`).
+			if (message.stopReason === "error") {
+				turns.push({
+					kind: "error",
+					id: crypto.randomUUID(),
+					text: message.errorMessage || "The agent run ended in an error.",
+				});
+			}
 		} else if (message.role === "toolResult") {
 			toolResults[message.toolCallId] = {
 				status: message.isError ? "error" : "done",

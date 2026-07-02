@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { useAppStore } from "@/store";
-import { getTransport } from "@/transport";
+import { errorText, getTransport } from "@/transport";
 
 /** A shared pill-trigger look for the project + branch pickers (mockup `.pill`). */
 const PILL =
@@ -161,11 +161,15 @@ export function NewWorkspaceDialog({
 			store.openChatSession(workspace.id, session.sessionId, session.model, session.thinkingLevel);
 			store.appendUserMessage(session.sessionId, text);
 			// Fire-and-forget the turn (it resolves only when the turn ends); the now-open chat tab streams it.
+			// A rejected send (bad model / no API key) surfaces as an error turn in the just-opened chat rather
+			// than vanishing — the "pick a bad model → nothing happens" failure. Streaming faults arrive as events.
 			getTransport()
 				.request("session.prompt", { sessionId: session.sessionId, text })
-				.catch(() => {});
-		} catch {
-			// Kick-off failed; the workspace still exists and the dialog is already closed. (Error-handling pass.)
+				.catch((err) => store.appendErrorTurn(session.sessionId, errorText(err)));
+		} catch (err) {
+			// `session.create` itself failed (no session/tab to host an error turn) — the workspace still exists
+			// and the dialog is already closed, so log for now. (A toast comes with the broader error pass.)
+			console.error("session.create failed:", errorText(err));
 		}
 	};
 

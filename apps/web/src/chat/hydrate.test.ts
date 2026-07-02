@@ -35,6 +35,22 @@ test("messagesToRuntime folds a transcript into ordered turns + a toolResults ma
 	expect(toolResults.tc1?.status).toBe("done");
 });
 
+test("an assistant turn that ended in a provider error hydrates a following error turn", () => {
+	const { turns } = messagesToRuntime([
+		{ role: "user", content: "hi", timestamp: 1 },
+		{
+			role: "assistant",
+			content: [],
+			stopReason: "error",
+			errorMessage: "model 'gpt-5.5' not found",
+		},
+	] as unknown as Message[]);
+	// The failure re-surfaces so a reopened chat shows it, matching the live path.
+	expect(turns.map((t) => t.kind)).toEqual(["user", "assistant", "error"]);
+	const err = turns.find((t) => t.kind === "error");
+	expect(err?.kind === "error" && err.text).toContain("gpt-5.5");
+});
+
 test("a failed tool result maps to error status", () => {
 	const { toolResults } = messagesToRuntime([
 		{

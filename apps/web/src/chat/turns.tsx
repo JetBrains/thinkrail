@@ -1,5 +1,13 @@
 import type { AssistantMessage, UserMessage } from "@thinkrail-pi/contracts";
-import { Brain, ChevronRight, Clock, FileDiff, RotateCw, Wrench } from "lucide-react";
+import {
+	Brain,
+	ChevronRight,
+	Clock,
+	FileDiff,
+	RotateCw,
+	TriangleAlert,
+	Wrench,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Markdown } from "./Markdown";
 import { ToolCard } from "./ToolCard";
@@ -31,6 +39,8 @@ export function ChatTurnView({
 			);
 		case "system":
 			return <SystemTurn text={turn.text} />;
+		case "error":
+			return <ErrorTurn text={turn.text} />;
 		case "retry":
 			return (
 				<RetryIndicator
@@ -158,6 +168,23 @@ function SystemTurn({ text }: { text: string }) {
 	return (
 		<div data-testid="chat-message" data-role="system" className="text-center text-hint text-xs">
 			{text}
+		</div>
+	);
+}
+
+/**
+ * A failure notice: the run ended in a provider/model error, or the host rejected a send (bad model,
+ * missing API key, …). Kept visible (not collapsed) so a failed turn never looks like nothing happened.
+ */
+function ErrorTurn({ text }: { text: string }) {
+	return (
+		<div
+			data-testid="chat-message"
+			data-role="error"
+			className="flex items-start gap-sm rounded-[var(--radius-md)] border border-red/40 bg-red/10 px-md py-sm text-red text-sm"
+		>
+			<TriangleAlert className="mt-[2px] size-4 shrink-0" />
+			<span className="min-w-0 whitespace-pre-wrap break-words">{text}</span>
 		</div>
 	);
 }

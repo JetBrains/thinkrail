@@ -24,7 +24,9 @@ a future `packages/chat-ui`).
   - **Presentational renderers** (props-driven, **no store/transport** → reusable): `ChatTurnView`
     (dispatch by turn kind); `AssistantTurn` (walks an `AssistantMessage`'s `content` blocks **in order** —
     `text`→`Markdown`, `thinking`→an auto-expanding thinking block, `toolCall`→`ToolCard` paired with its
-    result); `UserTurn`; `SystemTurn`; `TurnDivider` (+ the pure `turnDivider` deriver — a **round-end**
+    result); `UserTurn`; `SystemTurn`; **`ErrorTurn`** (a persistent, tinted failure notice — a run that
+    ended in a provider/model error, or a send the host rejected: a bad model / missing API key — never
+    collapsed, so a failed turn can't look like nothing happened); `TurnDivider` (+ the pure `turnDivider` deriver — a **round-end**
     summary rendered the instant a turn finishes, below its "✓ Done" marker (anchored at the round end,
     not the next user turn): elapsed time (user-submit → agent_end), tool-call count, a "files changed"
     chip); `RetryIndicator` (auto-retry countdown bar); `StreamIndicator` (the single streaming loader —
@@ -62,24 +64,32 @@ a future `packages/chat-ui`).
     registered `summary` and a chevron, and clicking it reveals the body. Errors **auto-expand** so
     failures stay visible; a manual toggle wins thereafter.
   - **View types** (`types.ts`) — `ChatTurn` (user/assistant are pi `UserMessage`/`AssistantMessage`;
-    `system` is a web-local notice; `retry` is a live auto-retry countdown) + `ToolResultState` +
+    `system` is a web-local notice; **`error` is a web-local failure notice**; `retry` is a live auto-retry
+    countdown) + `ToolResultState` +
     `ExtUiDialogRequest` (the reply-needing
     `ExtUiRequest` subset the store's `pendingExtUi` is typed by).
   - **Hydration** (`hydrate.ts`) — the pure **`messagesToRuntime(Message[])`** converter (the read-side
     counterpart of the event reducer): folds a session's pi-canonical transcript into `{ turns, toolResults }`
-    so a reconnecting / second client rebuilds a chat on connect. No store/transport/shiki.
+    so a reconnecting / second client rebuilds a chat on connect. A persisted assistant message with
+    `stopReason: "error"` re-surfaces a following `error` turn (its `errorMessage`), matching the live path.
+    No store/transport/shiki.
   - **App integration** — `ChatView` (react-virtuoso list + `ChatHeader` + `Composer` + `ExtUiDialog`,
     wiring store + transport: model list / stats / commands / mentions / dialog replies). Reads **its own
     session's runtime** via `store.sessions[sessionId]` (falling back to `EMPTY_RUNTIME`) and addresses every
     mutator/command with that `sessionId`, so multiple chats coexist. The **only** file here that touches
     `store`/`transport` — including the turn-divider's "files changed" chip, which calls the store's
-    `requestChangesView` to deep-link the right panel to a file's diff.
+    `requestChangesView` to deep-link the right panel to a file's diff. A **rejected** turn-driving send
+    (`session.prompt`/`steer`/`followUp`) is surfaced via the store's **`appendErrorTurn`** (formatting the
+    rejection with `transport`'s `errorText`) instead of being swallowed, so a failed send never leaves the
+    chat looking frozen; *streaming* faults still arrive as pi events (reduced to an `error` turn on the
+    terminal-error `agent_end`).
 - **Public surface:** the registry API (`toolRegistry`), the renderers, the view types, and `ChatView`
   (lazy-mounted by `panels/CenterTabs`). **No `index.ts` barrel** — chat pulls **shiki**, so per the
   code-splitting exception (as with `panels` / `components/ui`) imports stay **per-file**: `CenterTabs`
   lazy-imports `chat/ChatView`; the registry is importable from `chat/toolRegistry` **without** pulling shiki.
 - **Allowed deps:** `contracts` (pi message/content-block types, **type-only**); `store` + `transport`
-  (**`ChatView` only** — the app-integration edge); `react-markdown` / `remark-gfm` / `shiki` (via
+  (**`ChatView` only** — the app-integration edge; incl. the store's `appendErrorTurn` + transport's
+  `errorText`); `react-markdown` / `remark-gfm` / `shiki` (via
   `lib/highlighter`); `mermaid` (**lazy-loaded, `tools/visualize` only**); `react-virtuoso`;
   `lucide-react`; `components/ui` (`Button`, `Popover`, `Command`, `Dialog`); `lib` (`cn`).
 - **Forbidden:** value-importing any `pi` package; a **presentational** renderer importing

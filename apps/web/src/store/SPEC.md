@@ -24,8 +24,13 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   `thinkingLevel` / `stats` / `commands` / `draft` and its **extension-UI state** (`pendingExtUi` (typed by
   `chat`'s `ExtUiDialogRequest`) + `extUiQueue` (overlapping dialogs FIFO so none orphans its server
   promise) + `extUiStatus` / `extUiWidget`). `openChatSession` creates a runtime; `closeChatRuntime` /
-  `clearWorkspaceTabs` drop it; per-session mutators (`appendUserMessage` / `setStats` / `setCommands` /
-  `setCurrentModel` / `setThinkingLevel` / `setChatDraft` / `clearPendingExtUi`) take a `sessionId`. Closed
+  `clearWorkspaceTabs` drop it; per-session mutators (`appendUserMessage` / **`appendErrorTurn`** / `setStats` / `setCommands` /
+  `setCurrentModel` / `setThinkingLevel` / `setChatDraft` / `clearPendingExtUi`) take a `sessionId`.
+  **`appendErrorTurn(sessionId, text)`** appends an `error` turn for a **rejected** turn-driving wire call
+  (`session.prompt`/`steer`/`followUp`/`create`) — e.g. `prompt()` throwing "no API key" / a bad model —
+  so a failed send lands in the chat instead of being swallowed; a *streaming* fault instead ends the run
+  via **`reduceSessionEvent`**'s terminal-error `agent_end` (last assistant `stopReason: "error"` → an
+  `error` turn carrying its `errorMessage`, in place of the "✓ Done" marker). Closed
   chats are reopenable: **`closeChatToHistory`** removes a chat tab but **keeps its runtime + session
   alive**, recording it in **`closedChatsByWorkspace`** (`ClosedChat[]`, per workspace, most-recent-first);
   **`reopenChat`** restores the tab with full state (the runtime never left); **`noteClosedChats`** records

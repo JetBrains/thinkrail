@@ -172,20 +172,33 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 					[event.toolCallId]: { status: event.isError ? "error" : "done", raw: event.result },
 				},
 			};
-		case "agent_end":
+		case "agent_end": {
 			if (event.willRetry) return rt; // auto-retry / compaction follows — stay streaming
+			// Did the run terminally fail? pi ends an errored turn (retries exhausted / non-retryable, e.g. a
+			// nonexistent model 404-ing) with `willRetry: false` and a last assistant message carrying
+			// `stopReason: "error"` + the provider's `errorMessage`. Surface that as a visible error turn
+			// instead of a misleading "✓ Done" — otherwise a bad model just looks like nothing happened.
+			const lastAssistant = [...event.messages]
+				.reverse()
+				.find((m): m is Extract<typeof m, { role: "assistant" }> => m.role === "assistant");
+			const closer: ChatTurn =
+				lastAssistant?.stopReason === "error"
+					? {
+							kind: "error",
+							id: crypto.randomUUID(),
+							text: lastAssistant.errorMessage || "The agent run ended in an error.",
+						}
+					: // `endedAt` timestamps the turn end so the round summary (shown right here) can measure the
+						// turn's duration — user-submit → agent_end — without waiting for the next user turn.
+						{ kind: "system", id: crypto.randomUUID(), text: "✓ Done", endedAt: Date.now() };
 			return {
 				...rt,
 				// Drop any lingering retry countdown + sweep any turn still flagged streaming; the run concluded.
-				turns: [
-					...clearTurnStreaming(rt.turns).filter((t) => t.kind !== "retry"),
-					// `endedAt` timestamps the turn end so the round summary (shown right here) can measure the
-					// turn's duration — user-submit → agent_end — without waiting for the next user turn.
-					{ kind: "system", id: crypto.randomUUID(), text: "✓ Done", endedAt: Date.now() },
-				],
+				turns: [...clearTurnStreaming(rt.turns).filter((t) => t.kind !== "retry"), closer],
 				isStreaming: false,
 				currentAssistantId: null,
 			};
+		}
 		case "auto_retry_start":
 			// Show a live countdown over the back-off; cleared on auto_retry_end (or the final agent_end).
 			return {
@@ -327,6 +340,12 @@ interface AppState {
 		activate?: boolean,
 	) => void;
 	appendUserMessage: (sessionId: string, text: string) => void;
+	/**
+	 * Surface a failed send as a visible error turn. The turn-driving wire calls (`session.prompt`/`steer`/
+	 * `followUp`/`create`) can reject before any pi event streams — e.g. `prompt()` throws "no API key" /
+	 * validates a bad model. Without this the rejection is swallowed and the chat looks frozen.
+	 */
+	appendErrorTurn: (sessionId: string, text: string) => void;
 	handlePiEvent: (event: PiEvent, sessionId: string) => void;
 	setModels: (models: Model<string>[]) => void;
 	setCurrentModel: (sessionId: string, model: Model<string>) => void;
@@ -603,6 +622,16 @@ export const useAppStore = create<AppState>((set) => ({
 						message: { role: "user", content: text, timestamp: Date.now() },
 					},
 				],
+			})),
+		),
+	appendErrorTurn: (sessionId, text) =>
+		set((s) =>
+			withRuntime(s, sessionId, (rt) => ({
+				...rt,
+				// The send never started a run — clear streaming so the composer + loader don't hang.
+				isStreaming: false,
+				currentAssistantId: null,
+				turns: [...clearTurnStreaming(rt.turns), { kind: "error", id: crypto.randomUUID(), text }],
 			})),
 		),
 	// The event→store dispatcher: route each pi event to its session's runtime, so chats stream independently.

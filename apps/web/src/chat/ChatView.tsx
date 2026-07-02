@@ -3,7 +3,7 @@ import { ArrowDown } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { EMPTY_RUNTIME, useAppStore } from "@/store";
-import { getTransport } from "@/transport";
+import { errorText, getTransport } from "@/transport";
 import { ChatHeader } from "./ChatHeader";
 import { Composer, type MentionCandidate, type SubmitBehavior } from "./Composer";
 import { ExtUiDialog } from "./ExtUiDialog";
@@ -156,7 +156,9 @@ export default function ChatView({ sessionId }: { sessionId: string }) {
 					: "session.prompt";
 		getTransport()
 			.request(method, params)
-			.catch(() => {});
+			// A rejected send (e.g. `prompt()` throwing "no API key" / a bad model) must land in the chat, not
+			// be swallowed — otherwise the turn just looks frozen. Streaming faults arrive as pi events instead.
+			.catch((err) => useAppStore.getState().appendErrorTurn(sessionId, errorText(err)));
 	};
 
 	const onAbort = () => {

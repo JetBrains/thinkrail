@@ -20,6 +20,15 @@ const retryStart = (attempt: number, maxAttempts: number, delayMs: number) =>
 		errorMessage: "rate limit",
 	}) as unknown as PiEvent;
 const retryEnd = { type: "auto_retry_end", success: true, attempt: 1 } as unknown as PiEvent;
+// A turn that ends in a provider/model error: retries exhausted (or non-retryable), so `willRetry` is
+// false and the run's last assistant message carries `stopReason: "error"` + the provider's `errorMessage`
+// (this is what a bad model like a nonexistent "gpt-5.5" produces — a 404/model-not-found from the API).
+const agentEndError = (errorMessage: string) =>
+	({
+		type: "agent_end",
+		willRetry: false,
+		messages: [{ role: "assistant", content: [], stopReason: "error", errorMessage }],
+	}) as unknown as PiEvent;
 const assistantStart = {
 	type: "message_start",
 	message: { role: "assistant" },
@@ -174,6 +183,37 @@ test("a lingering retry countdown is swept up by the final agent_end", () => {
 	store.handlePiEvent(agentEnd, "a"); // willRetry: false → conclude
 	expect(rt("a").turns.some((t) => t.kind === "retry")).toBe(false);
 	expect(rt("a").turns.some((t) => t.kind === "system" && t.text === "✓ Done")).toBe(true);
+});
+
+test("a turn that ends in a provider error surfaces the error (not a false ✓ Done)", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+
+	// Reproduces "pick a bad model → nothing happens": the run streams no content and ends in an error.
+	store.handlePiEvent(agentStart, "a");
+	store.handlePiEvent(agentEndError("model 'gpt-5.5' not found"), "a");
+
+	const after = rt("a");
+	expect(after.isStreaming).toBe(false);
+	// The failure must be visible — an error turn carrying the provider message.
+	const err = after.turns.find((t) => t.kind === "error");
+	expect(err?.kind === "error" && err.text).toContain("gpt-5.5");
+	// And it must NOT masquerade as a successful "✓ Done".
+	expect(after.turns.some((t) => t.kind === "system" && t.text === "✓ Done")).toBe(false);
+});
+
+test("appendErrorTurn surfaces a failed send (a rejected prompt) as a visible error turn", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+
+	// A `session.prompt`/`session.create` rejection (e.g. `prompt()` throwing "no API key") must land in
+	// the chat instead of being swallowed by a bare `.catch(() => {})`.
+	store.appendUserMessage("a", "do the thing");
+	store.appendErrorTurn("a", "No API key configured for provider openai");
+
+	const err = rt("a").turns.find((t) => t.kind === "error");
+	expect(err?.kind === "error" && err.text).toContain("No API key");
+	expect(rt("a").isStreaming).toBe(false);
 });
 
 test("a message_update with no prior message_start still builds the turn (mid-stream hydration)", () => {

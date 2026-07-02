@@ -25,7 +25,9 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   time). The pickers' popovers portal into the dialog node (so their lists scroll under the Dialog scroll
   lock). Create = `workspace.create({ projectId, baseRef })` → set active → (with a prompt) open a chat +
   `session.create({ model, thinkingLevel })` + fire-and-forget `prompt`; with an empty prompt it just
-  creates the workspace. (`gh` status lives in `SettingsDialog`, not the create dialog.) **`SettingsDialog`** is the app-settings surface the shell's topbar gear opens — its
+  creates the workspace. A **rejected** kick-off `prompt` (a bad model / missing API key — e.g. picking a
+  nonexistent model) surfaces as an `error` turn in the just-opened chat via `store.appendErrorTurn` (with
+  `transport`'s `errorText`) rather than vanishing. (`gh` status lives in `SettingsDialog`, not the create dialog.) **`SettingsDialog`** is the app-settings surface the shell's topbar gear opens — its
   "Local GitHub" block shows `github.authStatus()` (Connected + login / Not connected) with a Refresh.
   Panels compose their own sub-panels
   (e.g. `RightPanel`→`FileTree`/`ChangesPanel`, `CenterTabs`→`MonacoEditor`) — an internal hierarchy.
