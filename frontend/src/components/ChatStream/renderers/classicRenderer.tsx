@@ -60,14 +60,16 @@ function UserMessageBubble({ text, isMarkdown }: { text: string; isMarkdown: boo
 }
 
 export const classicRenderers: ViewRenderers = {
-  sessionStart: (_ev, _i, k, ctx) => (
-    <DraftConfigCard
-      key={k}
-      thinkrailSid={ctx.session!.thinkrailSid}
-      readOnly
-      onVisibilityChange={ctx.onContextCardVisibility}
-    />
-  ),
+  sessionStart: (_ev, _i, k, ctx) =>
+    // Discussion subsessions hide their config entirely (auto-run, inherited config).
+    ctx.session?.subsessionType === "discussion" ? null : (
+      <DraftConfigCard
+        key={k}
+        thinkrailSid={ctx.session!.thinkrailSid}
+        readOnly
+        onVisibilityChange={ctx.onContextCardVisibility}
+      />
+    ),
 
   userMessage: (ev, _i, k) => (
     <UserMessageBubble

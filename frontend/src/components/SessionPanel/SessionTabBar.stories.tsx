@@ -54,6 +54,7 @@ function makeSession(overrides: Partial<Session>): Session {
     parentThinkrailSid: null,
     subsessionType: null,
     subsessionContext: null,
+    subsessionOrigin: null,
     returnStatus: null,
     returnSummary: null,
     artifacts: [],

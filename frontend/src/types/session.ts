@@ -132,6 +132,15 @@ export interface SessionOutcome {
   actions: OutcomeAction[];
 }
 
+/** Where a discussion subsession was launched from, so its return can land in
+ *  the right place in the parent: a pending question's "Other" field, or the
+ *  message box. Mirrors backend `SubsessionOrigin`. */
+export interface SubsessionOrigin {
+  kind: "question" | "message";
+  requestId?: string | null;
+  questionIndex?: number;
+}
+
 export interface Session {
   thinkrailSid: string;
   name: string;
@@ -187,6 +196,7 @@ export interface Session {
   parentThinkrailSid: string | null;
   subsessionType: "discussion" | "refinement" | null;
   subsessionContext: string | null;
+  subsessionOrigin: SubsessionOrigin | null;
   /** Identifies how the session was created. "stage-default" sessions are
    *  auto-spawned by the ticket view for the ticket's current phase. The
    *  Discard control is hidden for these — the UI created them, not the user. */

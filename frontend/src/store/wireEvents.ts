@@ -377,6 +377,11 @@ export function wireEvents(client: RpcClient): Unsubscribe {
       useSessionStore.getState().onSubsessionReturned(p as Record<string, unknown>);
     }),
   );
+  unsubs.push(
+    client.on("subsession/summaryDrafted", (p) => {
+      useSessionStore.getState().onSummaryDrafted(p as Record<string, unknown>);
+    }),
+  );
 
   // ── Board notifications ──
   unsubs.push(

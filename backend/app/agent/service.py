@@ -9,7 +9,7 @@ from typing import Any
 from app import analytics
 from app.agent.context import build_context
 from app.agent.exceptions import InvalidCapabilityValueError
-from app.agent.models import AgentConfig, AgentTask, SessionReturnStatus, SubagentMode, SubsessionType, TaskStatus, is_quiescent, is_settled, is_streaming, is_terminal
+from app.agent.models import AgentConfig, AgentTask, SessionReturnStatus, SubagentMode, SubsessionOrigin, SubsessionType, TaskStatus, is_quiescent, is_settled, is_streaming, is_terminal
 from app.agent.persistence import append_event, save_session, load_session, list_sessions as list_sessions_from_disk, delete_session as delete_session_from_disk, update_session_metadata, load_events
 from app.agent.subagents import SUBAGENT_TOOL_NAME
 from app.agent.runtime import (
@@ -516,6 +516,15 @@ class AgentService:
             "previewPath": task.preview_path,
             "subagentMode": task.subagent_mode,
             "stepGate": task.step_gate,
+            "parentThinkrailSid": task.parent_thinkrail_sid,
+            "subsessionType": task.subsession_type.value if task.subsession_type else None,
+            "subsessionContext": task.subsession_context,
+            "subsessionOrigin": (
+                task.subsession_origin.model_dump(by_alias=True, mode="json")
+                if task.subsession_origin else None
+            ),
+            "returnStatus": task.return_status.value if task.return_status else None,
+            "returnSummary": task.return_summary,
         }
         if task.system_prompt is not None:
             data["systemPrompt"] = task.system_prompt
@@ -824,6 +833,15 @@ class AgentService:
         task.ticket_id = old.get("ticketId")
         task.subagent_mode = old.get("subagentMode", "step-session")
         task.step_gate = old.get("stepGate", "approve")
+        task.parent_thinkrail_sid = old.get("parentThinkrailSid")
+        _st = old.get("subsessionType")
+        task.subsession_type = SubsessionType(_st) if _st else None
+        task.subsession_context = old.get("subsessionContext")
+        _so = old.get("subsessionOrigin")
+        task.subsession_origin = SubsessionOrigin.model_validate(_so) if _so else None
+        _rs = old.get("returnStatus")
+        task.return_status = SessionReturnStatus(_rs) if _rs else None
+        task.return_summary = old.get("returnSummary")
         self._validate_config_against_caps(task)
 
         # Re-hydrate artifact tracking so the right Context Panel doesn't
@@ -854,6 +872,15 @@ class AgentService:
             "previewPath": task.preview_path,
             "subagentMode": task.subagent_mode,
             "stepGate": task.step_gate,
+            "parentThinkrailSid": task.parent_thinkrail_sid,
+            "subsessionType": task.subsession_type.value if task.subsession_type else None,
+            "subsessionContext": task.subsession_context,
+            "subsessionOrigin": (
+                task.subsession_origin.model_dump(by_alias=True, mode="json")
+                if task.subsession_origin else None
+            ),
+            "returnStatus": task.return_status.value if task.return_status else None,
+            "returnSummary": task.return_summary,
         }
         save_session(self._config.project_root, metadata)
 
@@ -1093,6 +1120,18 @@ class AgentService:
                     update_session_metadata(self._config.project_root, task.thinkrail_sid, {
                         "sessionId": sid,
                     }, overwrite=False)
+
+            # A subsession awaiting a drafted return summary: snapshot this turn's
+            # assistant text and push it to the subsession's client so the return
+            # dialog can show it.
+            if method == "agent/turnComplete":
+                captured = self._maybe_capture_summary(task)
+                if captured is not None:
+                    await _bus.publish_to_session(
+                        task.thinkrail_sid, "subsession/summaryDrafted",
+                        {"thinkrailSid": task.thinkrail_sid,
+                         "returnStatus": "pending", "returnSummary": captured},
+                    )
         notify = _persisting_notify
 
         exec_config = RuntimeExecutionConfig(
@@ -1500,6 +1539,7 @@ class AgentService:
         subsession_type: SubsessionType,
         context: str | None = None,
         name: str = "",
+        origin: SubsessionOrigin | None = None,
     ) -> AgentTask:
         """Create a draft subsession linked to a parent session."""
         from app.agent.context import build_parent_context
@@ -1524,6 +1564,7 @@ class AgentService:
         task.parent_thinkrail_sid = parent_thinkrail_sid
         task.subsession_type = subsession_type
         task.subsession_context = context
+        task.subsession_origin = origin
         task.status = TaskStatus.DRAFT
 
         parent_context = build_parent_context(
@@ -1545,6 +1586,7 @@ class AgentService:
         task.updated = datetime.now(UTC).isoformat()
         self._save_task(task)
         if is_quiescent(task.status):
+            self._tracker.mark_awaiting_summary(thinkrail_sid)
             summary_prompt = (
                 "Please summarize the key conclusions from our discussion. "
                 "Write a concise summary that captures the decision, rationale, "
@@ -1557,7 +1599,9 @@ class AgentService:
         task = self._tracker.get_task(thinkrail_sid)
         task.return_status = SessionReturnStatus.APPROVED
         task.return_summary = text
+        task.status = TaskStatus.DONE
         task.updated = datetime.now(UTC).isoformat()
+        self._tracker.clear_awaiting_summary(thinkrail_sid)
         self._save_task(task)
 
     def dismiss_summary(self, thinkrail_sid: str) -> None:
@@ -1566,6 +1610,7 @@ class AgentService:
         task.return_status = SessionReturnStatus.DISMISSED
         task.return_summary = None
         task.updated = datetime.now(UTC).isoformat()
+        self._tracker.clear_awaiting_summary(thinkrail_sid)
         self._save_task(task)
 
     def revise_summary(self, thinkrail_sid: str, feedback: str) -> None:
@@ -1575,5 +1620,23 @@ class AgentService:
         task.updated = datetime.now(UTC).isoformat()
         self._save_task(task)
         if is_quiescent(task.status):
+            self._tracker.mark_awaiting_summary(thinkrail_sid)
             revision_prompt = f"Please revise the summary based on this feedback:\n\n{feedback}"
             self._tracker.enqueue_message(thinkrail_sid, revision_prompt)
+
+    def _maybe_capture_summary(self, task: AgentTask) -> str | None:
+        """If the session is awaiting a drafted return summary, snapshot the
+        just-finished turn's assistant text into ``return_summary``. Returns the
+        captured text, or ``None`` if not awaiting / the turn produced no text."""
+        sid = task.thinkrail_sid
+        if not self._tracker.is_awaiting_summary(sid):
+            return None
+        text = self._tracker.get_turn_text(sid).strip()
+        if not text:
+            return None
+        task.return_status = SessionReturnStatus.PENDING
+        task.return_summary = text
+        task.updated = datetime.now(UTC).isoformat()
+        self._tracker.clear_awaiting_summary(sid)
+        self._save_task(task)
+        return text
