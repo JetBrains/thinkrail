@@ -171,3 +171,34 @@ describe("relaunch goes live", () => {
     expect(s.events.length).toBe(2);
   });
 });
+
+describe("restartSession preserves an in-flight turn's status", () => {
+  it("keeps 'running' (no 'initializing' flash) when a turn is in flight", async () => {
+    const stub = makeStubClient();
+    setClient(stub as unknown as RpcClient);
+    seedSession({ status: "running" });
+
+    await useSessionStore.getState().restartSession(SID);
+
+    const s = useSessionStore.getState().sessions.get(SID)!;
+    // A turn already in flight keeps running on the old model until it
+    // completes; the relaunch applies the new model afterward. Painting
+    // "initializing" over a live turn would show it for the whole turn — no
+    // event re-asserts "running" mid-turn. The guard is still set so the old
+    // run's transient done/didEnd stay suppressed.
+    expect(s.status).toBe("running");
+    expect(s.restarting).toBe(true);
+    expect(methodsCalled(stub)).toContain("session/restart");
+  });
+
+  it("shows 'initializing' when restarting a quiescent (idle) session", async () => {
+    const stub = makeStubClient();
+    setClient(stub as unknown as RpcClient);
+    seedSession({ status: "idle" });
+
+    await useSessionStore.getState().restartSession(SID);
+
+    expect(useSessionStore.getState().sessions.get(SID)?.status).toBe("initializing");
+    expect(useSessionStore.getState().sessions.get(SID)?.restarting).toBe(true);
+  });
+});

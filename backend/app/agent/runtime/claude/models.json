@@ -1,14 +1,31 @@
-[
-  { "id": "claude-fable-5",            "label": "Fable 5", "hidden": true,
-    "efforts": ["low", "medium", "high", "xhigh", "max"], "context1m": true,
-    "pricing": { "input": 10.0, "output": 50.0, "cacheWrite5m": 12.5, "cacheWrite1h": 20.0, "cacheRead": 1.0 } },
-  { "id": "claude-opus-4-8",           "label": "Opus 4.8",
-    "efforts": ["low", "medium", "high", "xhigh", "max"], "context1m": true,
-    "pricing": { "input": 5.0, "output": 25.0, "cacheWrite5m": 6.25, "cacheWrite1h": 10.0, "cacheRead": 0.5 } },
-  { "id": "claude-sonnet-4-6",         "label": "Sonnet 4.6",
-    "efforts": ["low", "medium", "high", "max"], "context1m": true,
-    "pricing": { "input": 3.0, "output": 15.0, "cacheWrite5m": 3.75, "cacheWrite1h": 6.0, "cacheRead": 0.3 } },
-  { "id": "claude-haiku-4-5-20251001", "label": "Haiku 4.5",
-    "efforts": [], "context1m": false,
-    "pricing": { "input": 1.0, "output": 5.0, "cacheWrite5m": 1.25, "cacheWrite1h": 2.0, "cacheRead": 0.1 } }
-]
+{
+  "schemaVersion": 1,
+  "defaultModel": "claude-opus-4-8",
+  "models": [
+    { "id": "claude-fable-5", "label": "Fable 5", "hidden": true,
+      "efforts": ["low", "medium", "high", "xhigh", "max"], "context1m": true,
+      "pricing": { "input": 10.0, "output": 50.0, "cacheWrite5m": 12.5, "cacheWrite1h": 20.0, "cacheRead": 1.0 } },
+    { "id": "claude-opus-4-8", "label": "Opus 4.8",
+      "efforts": ["low", "medium", "high", "xhigh", "max"], "context1m": true,
+      "pricing": { "input": 5.0, "output": 25.0, "cacheWrite5m": 6.25, "cacheWrite1h": 10.0, "cacheRead": 0.5 } },
+    { "id": "claude-sonnet-4-6", "label": "Sonnet 4.6",
+      "efforts": ["low", "medium", "high", "max"], "context1m": true,
+      "pricing": { "input": 3.0, "output": 15.0, "cacheWrite5m": 3.75, "cacheWrite1h": 6.0, "cacheRead": 0.3 } },
+    { "id": "claude-haiku-4-5-20251001", "label": "Haiku 4.5",
+      "efforts": [], "context1m": false,
+      "pricing": { "input": 1.0, "output": 5.0, "cacheWrite5m": 1.25, "cacheWrite1h": 2.0, "cacheRead": 0.1 } }
+  ],
+  "flags": [
+    { "key": "context1m", "label": "1M context window", "type": "boolean", "default": true,
+      "beta": "context-1m-2025-08-07",
+      "description": "Request the 1M-token context window on models that support it (Opus 4.8, Sonnet 4.6). Off caps the session at 200K." }
+  ],
+  "permissionModes": {
+    "default":           { "label": "Ask first",    "description": "Prompts before edits, commands & other risky tools." },
+    "acceptEdits":       { "label": "Accept edits",  "description": "Auto-approves file edits; still asks for commands." },
+    "plan":              { "label": "Plan only",     "description": "Reads & reasons only — no edits or commands run." },
+    "bypassPermissions": { "label": "Yolo",          "description": "Runs every tool without asking. Use with care." },
+    "auto":              { "label": "Autopilot",     "description": "An AI classifier approves or denies each tool call." },
+    "dontAsk":           { "hidden": true }
+  }
+}

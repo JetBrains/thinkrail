@@ -14,15 +14,15 @@ tags:
 ---
 # `app.agent.runtime.claude` — Claude SDK Runtime
 
-> Parent: [Runtime Abstraction](../README.md) | Status: **Active** | Created: 2026-04-29 | Last updated: 2026-05-25 (hardcoded model catalog)
+> Parent: [Runtime Abstraction](../README.md) | Status: **Active** | Created: 2026-04-29 | Last updated: 2026-06-25 (GitHub-fetched catalog)
 
 ## Overview
 
 `runtime/claude/` implements `IAgentRuntime` for the Claude Agent SDK.
 It owns the conversational loop, drives the SDK client, maps SDK
-messages onto thinkrail's unified event stream, serves the static Claude
-model catalog shipped with the package, and runs the per-session
-subagent / PreCompact correlation logic.
+messages onto thinkrail's unified event stream, serves the Claude model
+catalog (fetched live from GitHub and hot-swapped without restart), and
+runs the per-session subagent / PreCompact correlation logic.
 
 The body of `run_session` was migrated verbatim from the legacy
 `app/agent/runner.py`; the module is the only place under `runtime/`
@@ -33,9 +33,10 @@ that imports from `claude_agent_sdk`.
 | File | Responsibility |
 |------|----------------|
 | `__init__.py` | Re-exports `ClaudeRuntime` |
-| `runtime.py` | `class ClaudeRuntime` — IAgentRuntime impl. Owns SDK lifecycle, conversation loop, tool-result serialization, cost-iteration tracking, mode-change tracking. `capabilities()` projects the permission/effort/flag module constants plus `self._models.list_options()` and a per-model `model_capabilities` allowlist; clamps effort + the 1M beta to what the model supports at the SDK boundary (`_effective_effort` / `_wants_1m_beta`); delegates `list_skills()` to `ClaudeSkillRegistry` |
-| `models.py` | `class ClaudeModelRegistry` — loads `models.json` shipped with the package via `importlib.resources` and serves `list_options()` (hidden entries excluded), `rates_for()`, `supported_efforts()`, `supports_1m()`. No fetch, no cache, no refresh |
-| `models.json` | Curated catalog of Claude models (`[{id, label, efforts, context1m, hidden?, pricing}]`) exposed to the picker. Edit-and-ship to add or change a model |
+| `runtime.py` | `class ClaudeRuntime` — IAgentRuntime impl. Owns SDK lifecycle, conversation loop, tool-result serialization, cost-iteration tracking, mode-change tracking. `capabilities()` projects capability facts from the catalog holder plus `self._models.list_options()` and a per-model `model_capabilities` allowlist; clamps effort + the 1M beta to what the model supports at the SDK boundary (`_effective_effort` / `_wants_1m_beta`); delegates `list_skills()` to `ClaudeSkillRegistry` |
+| `catalog.py` | `CatalogDocument` Pydantic schema (`schemaVersion`, `defaultModel`, `models[]`, `flags[]`, `permissionModes{}`); `parse_catalog()` (rejects bad JSON / schema failure / unknown `schemaVersion`); `load_bundled()`; process-wide `CatalogHolder` singleton `catalog_holder` (atomic `.swap()`); background fetch/cache/refresh (`fetch_catalog`, `read_cache`/`write_cache`, `refresh_catalog`, `catalog_url()`) |
+| `models.py` | `class ClaudeModelRegistry` — stateless reader over `catalog_holder.current`; no file I/O. `list_options()` returns visible models default-first, `default_model()` resolves the catalog `defaultModel`, `rates_for()`, `supported_efforts()`, `supports_1m()` |
+| `models.json` | Object-form catalog (`{schemaVersion, defaultModel, models[], flags[], permissionModes{}}`). Bundled fallback and the file fetched from GitHub `main`. Updating this file in a release changes the bundled baseline; the live fetch keeps running instances current between releases |
 | `skills.py` | `class ClaudeSkillRegistry` — multi-source skill discovery (user / project / plugin / command / builtin) with first-wins dedup and a process-lifetime mtime cache. See [Skill catalog](#skill-catalog--multi-source-scan) |
 | `hooks.py` | `class SubagentHooks` — per-session subagent / PreCompact correlation (Task-tool ↔ SubagentStart) |
 | `adapter.py` | Pure event-shape builders — `agent/toolCallStart` / `agent/toolCallEnd` param construction. Locks the payload shape as the wire contract any runtime adapter must mirror |
@@ -122,39 +123,83 @@ on interrupt. The runtime's interrupted branch calls
 `hooks.close_orphaned_subagents()` to emit synthetic `subagentEnd`
 events for everything still in `_active_subagent_ids`.
 
-## Model catalog — static
+## Model catalog — fetched
 
-`ClaudeModelRegistry` is a one-shot JSON loader:
+The catalog is defined by `CatalogDocument` in `catalog.py` and stored in
+`models.json` as an object:
+`{schemaVersion, defaultModel, models[], flags[], permissionModes{}}`.
 
-- Constructor reads `models.json` from the package via
-  `importlib.resources.files(__package__).joinpath("models.json")` —
-  path-stable across source checkout, wheel install, and zipapp.
-- Each entry carries `{id, label, efforts, context1m, pricing}` plus an
-  optional `hidden` flag. `efforts` is the list of effort values the model
-  accepts (excluding the always-available `auto`); `context1m` is whether it
-  supports the 1M window.
-- No fetch, no cache, no refresh, no fallback. Adding or changing a
-  model is an edit to `models.json` shipped in a normal release.
-- `list_options()` returns the projected `LabeledOption` list, in declared
-  order, **excluding `hidden` entries** (kept in the catalog for
-  `rates_for()` / capability lookups but dropped from the picker — e.g. Fable
-  5). `ClaudeRuntime.capabilities()` surfaces it as the `models` capability.
-- `supported_efforts(model)` / `supports_1m(model)` resolve a model's
-  capability facts by exact id, then by tier keyword, then the sonnet default
-  (same resolution as `rates_for()`).
+### Schema
+
+Each `models[]` entry carries `{id, label, efforts, context1m, pricing}` plus
+an optional `hidden` flag. `efforts` is the list of effort values the model
+accepts (excluding the always-available `auto`); `context1m` is whether it
+supports the 1M window. `flags[]` are runtime option toggles (currently
+`context1m`). `permissionModes{}` maps mode keys to label/description/hidden
+overlays applied on top of the SDK-sourced set.
+
+### Process-wide holder
+
+`catalog_holder` (a `CatalogHolder` instance) is the single source of truth
+every reader (`ClaudeModelRegistry`, `ClaudeRuntime.capabilities()`) consults.
+`CatalogHolder.swap(doc)` is an atomic attribute assignment; readers see either
+the old or the new document, both valid.
+
+### Startup and refresh flow
+
+On startup the lifespan boots `catalog_holder` from the last-good cache
+(`~/.tr/model-catalog.json`) if present and valid, else from the bundled file.
+A background task then GETs `models.json` from GitHub `main` via `httpx`
+(~3 s timeout), validates it with `parse_catalog()`, and — if the document
+differs from the current one — writes the cache, calls `holder.swap()`, logs
+`"Model catalog updated"`, and broadcasts `runtimes/capabilitiesChanged` so
+connected frontends re-fetch capabilities live.
+
+Fallback chain: **fetched → last-good cache → bundled**. Any failure at any
+step (network, bad JSON, schema mismatch, unknown `schemaVersion`) is logged at
+`debug` and leaves the current catalog in place — the app never crashes on a
+catalog problem.
+
+`THINKRAIL_MODEL_CATALOG_URL` overrides the source URL; setting it to an empty
+string disables fetching entirely (useful for offline environments or tests).
+
+### SDK-sourced boundary
+
+The permission-mode **set** (`get_args(PermissionMode)`) and the effort
+**universe** (`get_args(EffortLevel)`) are NOT in the catalog — they come from
+the installed `claude_agent_sdk` literals so the picker never drifts from what
+the runtime accepts. The catalog supplies per-model effort allow-lists,
+`context1m`, pricing, the default model, flag definitions (including the 1M
+beta header string), and permission-mode label/description/hidden overlays.
+
+Model/effort/context combinations are clamped at the SDK boundary regardless of
+how the config was produced: `_effective_effort` drops an unsupported effort
+back to `None` (auto), and `_wants_1m_beta` requests the `context-1m-2025-08-07`
+beta only when the flag is on **and** the model supports it.
+
+### Registry
+
+`ClaudeModelRegistry` is stateless over the holder — every method reads
+`catalog_holder.current` at call time, so a background swap is reflected
+immediately. `list_options()` returns visible models default-first (catalog
+`defaultModel` leads; the rest follow in declared order). `default_model()`
+returns the catalog `defaultModel` when it is present and visible, else the
+first visible model, else a hardcoded fallback. `rates_for()`,
+`supported_efforts(model)`, and `supports_1m(model)` resolve by exact id, then
+by tier keyword, then the sonnet default.
 
 ## Capabilities
 
 `ClaudeRuntime.capabilities()` returns a `RuntimeCapabilities` built from
 these sources:
 
-- `permission_modes` ← `get_args(PermissionMode)` from the SDK; the value
-  doubles as the display label.
+- `permission_modes` ← `get_args(PermissionMode)` from the SDK (the set), with
+  labels, descriptions, and a `hidden` flag narrowed/overlaid by `catalog_holder.current.permission_modes` (a `hidden` mode is dropped from the picker).
 - `effort_levels` ← `get_args(EffortLevel)` from the SDK, with ThinkRail's `auto`
   prepended.
 - `models` ← `self._models.list_options()`.
-- `flags` ← module constant `_CLAUDE_FLAGS` — runtime-declared option toggles
-  surfaced in settings (currently the `context1m` boolean, default on).
+- `flags` ← `catalog_holder.current.flags` — option toggles declared in the
+  catalog (currently the `context1m` boolean, default on).
 - `model_capabilities` ← one `ModelCapability {model, effort_levels, flags}` per
   visible model: the runtime-wide effort/flag menus narrowed to what *that*
   model accepts (`auto` always leads `effort_levels`; `flags` holds `context1m`
@@ -214,8 +259,7 @@ extracted from `app/agent/context.py` — no duplicate parser.
 root's mtime differs from the cached snapshot, the cache is dropped and
 the affected roots are re-scanned. mtime stat is cheap enough that the
 cache effectively eliminates SKILL.md parsing in steady state. No
-periodic refresh, no protocol-level lifecycle — same philosophy as the
-model catalog.
+periodic refresh, no protocol-level lifecycle.
 
 **Robustness.**
 
@@ -321,7 +365,9 @@ No `cancel_event`, no polling.
 |------|----------------|
 | `backend/tests/agent/runtime/claude/test_runtime.py` | Full `run_session` lifecycle — turn complete, interrupt, multi-turn, tool approval round-trip, cost tracking, plan-mode toggle, all six preserved special-case behaviours |
 | `backend/tests/agent/runtime/claude/test_skills.py` | `TestListSkills` — fixture-tree scan per source kind (user/project/plugin/command/builtin), first-wins dedup ordering, mtime cache hit + invalidation, missing-root silent skip, malformed-SKILL.md logs + skips without raising |
-| `backend/tests/agent/runtime/claude/test_models.py` | `ClaudeModelRegistry` — constructor loads `models.json`, `list_options()` excludes hidden entries in declared order, `rates_for()`, and per-model `supported_efforts()` / `supports_1m()` (incl. tier fallback) |
+| `backend/tests/agent/runtime/claude/test_models.py` | `ClaudeModelRegistry` — reads through a swapped `catalog_holder`, `default_model()`, `list_options()` (default-first, hidden excluded), `rates_for()`, `supported_efforts()` / `supports_1m()` (incl. tier fallback) |
+| `backend/tests/agent/runtime/claude/test_catalog.py` | `CatalogDocument` schema, `parse_catalog()` validation, `load_bundled()` |
+| `backend/tests/agent/runtime/claude/test_catalog_fetch.py` | `refresh_catalog()` fetch/cache/swap/broadcast flow, fallback chain, URL env override |
 | `backend/tests/agent/runtime/claude/test_model_capabilities.py` | Per-model `capabilities().model_capabilities` payload and the SDK-boundary clamp (`_effective_effort` / `_wants_1m_beta`) — Haiku + xhigh / 1M can't reach the SDK |
 | `backend/tests/agent/runtime/claude/test_hooks.py` | `SubagentHooks` correlation — Task-tool / SubagentStart ordering, orphan close on interrupt, `parent_to_agent` mapping |
 | `backend/tests/agent/runtime/claude/test_adapter.py` | Event-shape builder unit tests; locks the `agent/toolCallStart` / `agent/toolCallEnd` payload shape so any runtime adapter can mirror it |
