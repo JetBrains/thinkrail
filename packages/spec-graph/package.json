@@ -24,11 +24,11 @@
 		"typebox": "*"
 	},
 	"devDependencies": {
-		"@earendil-works/pi-ai": "0.80.2",
-		"@earendil-works/pi-coding-agent": "0.80.2",
-		"@types/bun": "^1.3.14",
-		"typebox": "1.1.38",
-		"typescript": "^6.0.3"
+		"@earendil-works/pi-ai": "catalog:",
+		"@earendil-works/pi-coding-agent": "catalog:",
+		"@types/bun": "catalog:",
+		"typebox": "catalog:",
+		"typescript": "catalog:"
 	},
 	"pi": {
 		"extensions": [
