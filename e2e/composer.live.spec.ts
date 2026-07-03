@@ -15,6 +15,38 @@ async function openChat(page: import("@playwright/test").Page): Promise<void> {
 	await expect(page.getByTestId("chat-input")).toBeVisible();
 }
 
+test("composer prompt is moderately tall with model and effort controls underneath", {
+	tag: "@agent",
+}, async ({ page }) => {
+	await openChat(page);
+
+	const input = page.getByTestId("chat-input");
+	const modelSelector = page.getByTestId("model-selector");
+	const effortSelector = page.getByTestId("thinking-selector");
+	const send = page.getByTestId("chat-send");
+
+	await expect(input).toBeVisible();
+	await expect(modelSelector).toBeVisible();
+	await expect(effortSelector).toBeVisible();
+	await expect(send).toBeVisible();
+
+	const inputBox = await input.boundingBox();
+	const modelBox = await modelSelector.boundingBox();
+	const effortBox = await effortSelector.boundingBox();
+	const sendBox = await send.boundingBox();
+	if (!inputBox || !modelBox || !effortBox || !sendBox) {
+		throw new Error("Composer layout boxes were not measurable");
+	}
+
+	// Four rows is intentionally ~2/3 of the New-Workspace prompt height — roomy, but not as tall as the dialog hero.
+	expect(inputBox.height).toBeGreaterThanOrEqual(100);
+	expect(inputBox.height).toBeLessThanOrEqual(130);
+	const belowInputY = inputBox.y + inputBox.height;
+	expect(modelBox.y).toBeGreaterThanOrEqual(belowInputY);
+	expect(effortBox.y).toBeGreaterThanOrEqual(belowInputY);
+	expect(sendBox.y).toBeGreaterThanOrEqual(belowInputY);
+});
+
 test("model picker lists models and @-mention completes a worktree file", {
 	tag: "@agent",
 }, async ({ page }) => {

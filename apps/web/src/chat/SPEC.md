@@ -33,13 +33,14 @@ a future `packages/chat-ui`).
     typing-dots wave + a phase label, from the pure `streamStatus` deriver); `Markdown` (react-markdown +
     remark-gfm + shiki code blocks); `ToolCard`; the pointer-aware `useChatScroll` hook.
   - **Composer + cheap-win primitives** (also props-driven, **no store/transport**): `Composer`
-    (send/steer/followUp/abort, `@`-mention completion, `/` slash-command menu, image paste/drop);
+    (a tall four-row prompt field with a controls row underneath for send/steer/followUp/abort plus the
+    per-session model + effort pickers, `@`-mention completion, `/` slash-command menu, image paste/drop);
     `ModelSelector` (a pill opening a searchable `Command` list grouped by provider, no leading icon) +
     `ThinkingSelector` (a pill opening the six thinking levels — same trigger+popover shape as the model
     picker) (cheap win #1 — shared with `NewWorkspaceDialog`'s pre-session mode); both take
     an optional `container` so their popovers portal into a host Dialog (keeping the list scrollable under
     the Dialog's scroll lock); `SessionStatsBar` (cheap win #3); `ChatHeader`
-    (arranges them); `ExtUiDialog` (renders pi's `select`/`confirm`/`input`/`editor` from the
+    (extension status + stats only); `ExtUiDialog` (renders pi's `select`/`confirm`/`input`/`editor` from the
     `pi.extensionUi` bridge).
   - **Tool-renderer registry** (`toolRegistry.tsx`) — `registerToolRenderer` / `getToolRenderer` /
     `getToolSummary` / `getToolChrome` / `DefaultToolRenderer` + `ToolRenderer` / `ToolSummary` /
@@ -100,8 +101,8 @@ a future `packages/chat-ui`).
     `toolResults[id].raw` mirrors the live `tool_execution_end` result shape (`{ content, details }`) so
     renderers read the same value streamed or hydrated (e.g. `ask_user_question`'s structured answers live
     in `details`). No store/transport/shiki.
-  - **App integration** — `ChatView` (react-virtuoso list + `ChatHeader` + `Composer` + `ExtUiDialog`,
-    wiring store + transport: model list / stats / commands / mentions / dialog replies; provides the
+  - **App integration** — `ChatView` (react-virtuoso list + slim `ChatHeader` + `Composer` + `ExtUiDialog`,
+    wiring store + transport: model list / current model + thinking level / stats / commands / mentions / dialog replies; provides the
     `ChatActions` context — `answerQuestion` → `session.answerQuestion`). Reads **its own
     session's runtime** via `store.sessions[sessionId]` (falling back to `EMPTY_RUNTIME`) and addresses every
     mutator/command with that `sessionId`, so multiple chats coexist. The **only** file here that touches

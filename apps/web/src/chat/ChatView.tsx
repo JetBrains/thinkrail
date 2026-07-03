@@ -37,8 +37,9 @@ const CHAT_LIST_COMPONENTS = { Footer: StreamFooter };
 
 /**
  * One chat session as a center tab — the app-integration layer that wires the store + transport to the
- * presentational chat primitives (header pickers, turn list, composer, extension-UI dialog). The renderers
- * stay store-free so they're reusable; this is the only file in `chat/` that touches store/transport.
+ * presentational chat primitives (header status/stats, turn list, composer pickers, extension-UI dialog).
+ * The renderers stay store-free so they're reusable; this is the only file in `chat/` that touches
+ * store/transport.
  */
 export default function ChatView({
 	sessionId,
@@ -223,15 +224,7 @@ export default function ChatView({
 	return (
 		<ChatActionsContext.Provider value={chatActions}>
 			<div className="flex h-full min-h-0 flex-col bg-bg">
-				<ChatHeader
-					models={models}
-					currentModel={currentModel}
-					thinkingLevel={thinkingLevel}
-					stats={stats}
-					statusEntries={Object.entries(extUiStatus)}
-					onSelectModel={onSelectModel}
-					onSelectThinking={onSelectThinking}
-				/>
+				<ChatHeader stats={stats} statusEntries={Object.entries(extUiStatus)} />
 				<div
 					data-testid="chat-scroll"
 					className="relative flex min-h-0 flex-1 flex-col"
@@ -292,7 +285,12 @@ export default function ChatView({
 					isStreaming={isStreaming}
 					commands={commands}
 					mentionCandidates={mentionCandidates}
+					models={models}
+					currentModel={currentModel}
+					thinkingLevel={thinkingLevel}
 					onMentionQuery={onMentionQuery}
+					onSelectModel={onSelectModel}
+					onSelectThinking={onSelectThinking}
 					onSubmit={onSubmit}
 					onAbort={onAbort}
 				/>

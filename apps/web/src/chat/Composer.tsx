@@ -1,4 +1,4 @@
-import type { ImageContent, SlashCommandInfo } from "@thinkrail-pi/contracts";
+import type { ImageContent, Model, SlashCommandInfo, ThinkingLevel } from "@thinkrail-pi/contracts";
 import { ArrowUp, FileIcon, FolderIcon, Square, X } from "lucide-react";
 import {
 	type ClipboardEvent,
@@ -8,6 +8,8 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { ModelSelector } from "./ModelSelector";
+import { ThinkingSelector } from "./ThinkingSelector";
 
 /** How a submit is delivered: a fresh turn, an interrupt, or a queued message after the current turn. */
 export type SubmitBehavior = "send" | "steer" | "followUp";
@@ -50,8 +52,9 @@ function activeToken(value: string, caret: number): { token: string; start: numb
 
 /**
  * The chat composer (props-driven, no store/transport). Enter sends (or **steers** mid-stream);
- * Cmd/Ctrl+Enter queues a **follow-up**; a Stop button **aborts**. `@` opens worktree file completion,
- * a leading `/` opens the skill/command menu, and images can be pasted or dropped in.
+ * Cmd/Ctrl+Enter queues a **follow-up**; a Stop button **aborts**. The model + effort controls sit in
+ * the row under the tall prompt field, mirroring the New-Workspace dialog's layout. `@` opens worktree
+ * file completion, a leading `/` opens the skill/command menu, and images can be pasted or dropped in.
  */
 export function Composer({
 	value,
@@ -59,7 +62,12 @@ export function Composer({
 	isStreaming,
 	commands,
 	mentionCandidates,
+	models,
+	currentModel,
+	thinkingLevel,
 	onMentionQuery,
+	onSelectModel,
+	onSelectThinking,
 	onSubmit,
 	onAbort,
 }: {
@@ -68,7 +76,12 @@ export function Composer({
 	isStreaming: boolean;
 	commands: SlashCommandInfo[];
 	mentionCandidates: MentionCandidate[];
+	models: Model<string>[];
+	currentModel: Model<string> | null;
+	thinkingLevel: ThinkingLevel;
 	onMentionQuery: (query: string | null) => void;
+	onSelectModel: (model: Model<string>) => void;
+	onSelectThinking: (level: ThinkingLevel) => void;
 	onSubmit: (text: string, images: ImageContent[], behavior: SubmitBehavior) => void;
 	onAbort: () => void;
 }) {
@@ -265,7 +278,7 @@ export function Composer({
 				</div>
 			) : null}
 
-			<div className="flex items-end gap-sm p-sm">
+			<div className="flex flex-col gap-sm p-sm">
 				<textarea
 					ref={ref}
 					data-testid="chat-input"
@@ -279,35 +292,43 @@ export function Composer({
 					onKeyDown={onKeyDown}
 					onPaste={onPaste}
 					onDrop={onDrop}
-					rows={2}
+					rows={4}
 					placeholder={
 						isStreaming
 							? "Enter to steer · Cmd/Ctrl+Enter to queue · @ files · / commands"
 							: "Message the agent…  (@ files · / commands · Enter to send)"
 					}
-					className="min-h-0 flex-1 resize-none rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-sm py-xs text-sm text-text outline-none placeholder:text-hint focus:border-primary"
+					className="min-h-[108px] w-full resize-none rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-md py-sm text-sm text-text outline-none transition-colors placeholder:text-hint focus:border-primary focus-visible:ring-2 focus-visible:ring-[var(--primary-20)]"
 				/>
-				{isStreaming ? (
-					<button
-						type="button"
-						data-testid="chat-abort"
-						aria-label="Stop"
-						onClick={onAbort}
-						className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-border2 bg-elevated text-text hover:bg-hover"
-					>
-						<Square className="size-3.5" />
-					</button>
-				) : null}
-				<button
-					type="button"
-					data-testid="chat-send"
-					aria-label={isStreaming ? "Steer" : "Send"}
-					onClick={() => submit(isStreaming ? "steer" : "send")}
-					disabled={!value.trim() && images.length === 0}
-					className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-primary text-on-accent hover:opacity-90 disabled:pointer-events-none disabled:opacity-50"
-				>
-					<ArrowUp className="size-4" />
-				</button>
+				<div className="flex flex-wrap items-center gap-sm">
+					<div className="flex min-w-0 flex-1 flex-wrap items-center gap-sm">
+						<ModelSelector models={models} current={currentModel} onSelect={onSelectModel} />
+						<ThinkingSelector level={thinkingLevel} onSelect={onSelectThinking} />
+					</div>
+					<div className="flex shrink-0 items-center gap-sm">
+						{isStreaming ? (
+							<button
+								type="button"
+								data-testid="chat-abort"
+								aria-label="Stop"
+								onClick={onAbort}
+								className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-border2 bg-elevated text-text hover:bg-hover"
+							>
+								<Square className="size-3.5" />
+							</button>
+						) : null}
+						<button
+							type="button"
+							data-testid="chat-send"
+							aria-label={isStreaming ? "Steer" : "Send"}
+							onClick={() => submit(isStreaming ? "steer" : "send")}
+							disabled={!value.trim() && images.length === 0}
+							className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-primary text-on-accent hover:opacity-90 disabled:pointer-events-none disabled:opacity-50"
+						>
+							<ArrowUp className="size-4" />
+						</button>
+					</div>
+				</div>
 			</div>
 		</div>
 	);
