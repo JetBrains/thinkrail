@@ -11,6 +11,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { Markdown } from "./Markdown";
 import { ToolCard } from "./ToolCard";
+import { getToolChrome, getToolRenderer } from "./toolRegistry";
 import { strArg } from "./tools/toolHelpers";
 import type { ChatTurn, ToolResultState } from "./types";
 
@@ -95,11 +96,16 @@ function AssistantTurn({
 			{message.content.map((block, index) => {
 				if (block.type === "toolCall") {
 					return (
-						<ToolCard
+						<ToolBlock
 							key={block.id}
+							toolCallId={block.id}
 							toolName={block.name}
 							args={block.arguments}
 							tool={toolResults[block.id]}
+							streaming={streaming}
+							// An aborted/errored message never executes its tool calls (pi records no result for
+							// them) — without this they'd render as "running" forever.
+							callDead={message.stopReason === "aborted" || message.stopReason === "error"}
 						/>
 					);
 				}
@@ -117,6 +123,52 @@ function AssistantTurn({
 				return null;
 			})}
 		</div>
+	);
+}
+
+/**
+ * A tool call, framed by its registered chrome. `"bare"` tools (e.g. the inline `ask_user_question`
+ * questionnaire) own their whole frame and render full-width without the collapsible header; everything
+ * else goes through the shared, collapsed-by-default {@link ToolCard}. A `"bare"` call on a dead message
+ * (aborted/errored — pi never executes those tool calls) is rendered as errored rather than left
+ * interactive forever.
+ */
+function ToolBlock({
+	toolCallId,
+	toolName,
+	args,
+	tool,
+	streaming,
+	callDead,
+}: {
+	toolCallId: string;
+	toolName: string;
+	args: Record<string, unknown>;
+	tool: ToolResultState | undefined;
+	streaming: boolean;
+	callDead: boolean;
+}) {
+	if (getToolChrome(toolName) === "bare") {
+		const Renderer = getToolRenderer(toolName);
+		return (
+			<Renderer
+				toolCallId={toolCallId}
+				toolName={toolName}
+				args={args}
+				result={tool?.raw}
+				status={tool?.status ?? (callDead ? "error" : "running")}
+				streaming={streaming}
+			/>
+		);
+	}
+	return (
+		<ToolCard
+			toolCallId={toolCallId}
+			toolName={toolName}
+			args={args}
+			tool={tool}
+			streaming={streaming}
+		/>
 	);
 }
 

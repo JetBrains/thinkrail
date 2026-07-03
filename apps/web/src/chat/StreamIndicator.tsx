@@ -20,10 +20,16 @@ export interface StreamStatus {
  * nothing. Kept independent of the reducer so it's unit-testable and reusable by any pi UI.
  */
 export function streamStatus(turns: ChatTurn[], currentAssistantId: string | null): StreamStatus {
-	const active = turns.find(
-		(t): t is Extract<ChatTurn, { kind: "assistant" }> =>
-			t.kind === "assistant" && t.id === currentAssistantId,
-	);
+	// While a message streams, the turn named by `currentAssistantId` is authoritative. Between a message's
+	// end and the next one starting — i.e. while its tools execute — no id is current, so the phase falls
+	// back to the round's trailing assistant turn ("Running bash…" during the run, not a bare "Working…").
+	// A user/system turn at the tail means a fresh post-send gap instead — no lingering stale phase.
+	const lastTurn = turns.at(-1);
+	const active =
+		turns.find(
+			(t): t is Extract<ChatTurn, { kind: "assistant" }> =>
+				t.kind === "assistant" && t.id === currentAssistantId,
+		) ?? (currentAssistantId == null && lastTurn?.kind === "assistant" ? lastTurn : undefined);
 	const last = active?.message.content.at(-1);
 	if (!last) return { phase: "working" };
 	if (last.type === "toolCall") return { phase: "running-tool", toolName: last.name };

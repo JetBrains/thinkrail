@@ -131,6 +131,43 @@ test("a multi-message turn leaves no assistant turn flagged streaming (no stray 
 	expect(after.isStreaming).toBe(false);
 });
 
+test("message_end finalizes the turn the moment its message completes (not at agent_end)", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+
+	// pi forwards only *streaming* variants as message_update — a message's real terminal is message_end.
+	// The distinction matters most for a tool-calling message: its tools run AFTER it completes (for
+	// ask_user_question, until the user answers), and the card gates Submit on the turn's streaming flag —
+	// were the flag to survive until agent_end, an interactive tool could never be answered.
+	store.handlePiEvent(agentStart, "a");
+	store.handlePiEvent(assistantStart, "a");
+	store.handlePiEvent(assistantText("asking…"), "a");
+	expect(rt("a").turns.some((t) => t.kind === "assistant" && t.streaming)).toBe(true);
+
+	const finalMessage = {
+		role: "assistant",
+		content: [{ type: "toolCall", id: "ask1", name: "ask_user_question", arguments: {} }],
+		stopReason: "toolUse",
+	};
+	store.handlePiEvent({ type: "message_end", message: finalMessage } as unknown as PiEvent, "a");
+
+	const after = rt("a");
+	expect(after.isStreaming).toBe(true); // the ROUND is still live (its tool is executing)
+	expect(after.currentAssistantId).toBeNull();
+	const turn = after.turns.find((t) => t.kind === "assistant");
+	expect(turn?.kind === "assistant" && turn.streaming).toBe(false); // …but the MESSAGE is final
+	// The final message (with stopReason — how renderers spot dead tool calls) replaced the partial.
+	expect(turn?.kind === "assistant" && turn.message.stopReason).toBe("toolUse");
+
+	// A non-assistant message_end (toolResult/user) is a no-op for the turn list.
+	const before = rt("a");
+	store.handlePiEvent(
+		{ type: "message_end", message: { role: "toolResult" } } as unknown as PiEvent,
+		"a",
+	);
+	expect(rt("a")).toBe(before);
+});
+
 test("the tool lifecycle folds into toolResults (the status + raw the renderers read)", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");

@@ -40,4 +40,17 @@
 	--spacing-md: var(--space-md);
 	--spacing-lg: var(--space-lg);
 	--spacing-xl: var(--space-xl);
+
+	/* A block appearing in place (e.g. the ask-question card's atomic reveal once its args are final). */
+	--animate-reveal: reveal 150ms ease-out;
+	@keyframes reveal {
+		from {
+			opacity: 0;
+			transform: translateY(4px);
+		}
+		to {
+			opacity: 1;
+			transform: none;
+		}
+	}
 }

@@ -49,11 +49,18 @@ runtime exports being the WS method/channel constants and the protocol version. 
   - the **extension-UI frames** **`ExtUiRequest`** / **`ExtUiResponse`** — our wire shape for pi's in-process
     `uiContext` calls (`select`/`confirm`/`input`/`editor` round-trip; `notify`/`setStatus`/`setWidget`/
     `setTitle`/`dismiss` are fire-and-forget), carried on the `pi.extensionUi` channel.
+  - the **`ask_user_question`** wire types — **`AskUserQuestionArgs`** (`AskUserQuestionItem` + `AskUserQuestionOption`:
+    the questions the agent authors, what the tool card reads from the `toolCall` block) and
+    **`AskUserQuestionResult`** (`AskUserQuestionAnswer[]` + `cancelled`: the browser's reply). The capability
+    is a **host-owned pi custom tool** (server `agent/askUserQuestion` — see its SPEC for the design
+    rationale); the tool blocks while the chat renders the questionnaire **inline** and replies via
+    `session.answerQuestion` (correlated by the tool call id).
 - **domain.ts** — app entities: `Project` (git repo + unique `slug`), `Workspace` (git worktree), `Session` (chat tab),
   `FileNode` (file-tree node), `TabStatus`, `Git*`/diff types.
 - **wsProtocol.ts** — `WS_METHODS` (`project.*` / `workspace.*` / `fs.*` / `git.*` / `terminal.*` /
   `model.list` / `session.*` — `create`/`prompt`/`steer`/`followUp`/`abort`/`dispose`/`setModel`/
-  `setThinkingLevel`/`compact`/`getStats`/`getCommands`/`extUiReply`/**`list`**/**`getMessages`** (the
+  `setThinkingLevel`/`compact`/`getStats`/`getCommands`/`extUiReply`/**`answerQuestion`** (the inline
+  `ask_user_question` reply, correlated by tool call id)/**`list`**/**`getMessages`** (the
   read side)), `WS_CHANNELS` (`server.welcome` /
   `pi.event` / `pi.extensionUi` / `terminal.data`), the `WsMethodMap` typed request/result map +
   `WsParams`/`WsResult` helpers, and `PROTOCOL_VERSION`.

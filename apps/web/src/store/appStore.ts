@@ -148,6 +148,23 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 					: [...rt.turns, turn],
 			};
 		}
+		case "message_end": {
+			// The message's true terminal: pi forwards only *streaming* variants as `message_update` (the
+			// LLM-level done/error become this event), so without it the turn would stay flagged streaming
+			// until `agent_end` — seconds or minutes later when tools run (and never, for a tool blocked on
+			// user input like `ask_user_question`). Adopt the final message too: it carries `stopReason`,
+			// which the renderers use to spot dead (aborted/errored) tool calls.
+			if (event.message.role !== "assistant" || !rt.currentAssistantId) return rt;
+			const id = rt.currentAssistantId;
+			const turn: ChatTurn = { kind: "assistant", id, message: event.message, streaming: false };
+			return {
+				...rt,
+				currentAssistantId: null,
+				turns: rt.turns.some((t) => t.id === id)
+					? rt.turns.map((t) => (t.id === id ? turn : t))
+					: [...rt.turns, turn],
+			};
+		}
 		case "tool_execution_start":
 			return {
 				...rt,

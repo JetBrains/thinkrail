@@ -14,18 +14,29 @@ import type { ToolResultState } from "./types";
  * manual toggle wins thereafter.
  */
 export function ToolCard({
+	toolCallId,
 	toolName,
 	args,
 	tool,
+	streaming,
 }: {
+	toolCallId: string;
 	toolName: string;
 	args: Record<string, unknown>;
 	tool: ToolResultState | undefined;
+	streaming: boolean;
 }) {
 	const status = tool?.status ?? "running";
 	const isError = status === "error";
 	const Renderer = getToolRenderer(toolName);
-	const summary = getToolSummary(toolName, { toolName, args, result: tool?.raw, status });
+	const summary = getToolSummary(toolName, {
+		toolCallId,
+		toolName,
+		args,
+		result: tool?.raw,
+		status,
+		streaming,
+	});
 
 	const [expanded, setExpanded] = useState(isError);
 	const userToggled = useRef(false);
@@ -72,7 +83,14 @@ export function ToolCard({
 			</button>
 			{expanded ? (
 				<div className={cn("px-sm pb-xs", isError && "text-red")}>
-					<Renderer toolName={toolName} args={args} result={tool?.raw} status={status} />
+					<Renderer
+						toolCallId={toolCallId}
+						toolName={toolName}
+						args={args}
+						result={tool?.raw}
+						status={status}
+						streaming={streaming}
+					/>
 				</div>
 			) : null}
 		</div>

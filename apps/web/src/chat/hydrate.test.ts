@@ -64,3 +64,41 @@ test("a failed tool result maps to error status", () => {
 	] as unknown as Message[]);
 	expect(toolResults.x?.status).toBe("error");
 });
+
+test("a toolCall with no matching toolResult has no entry — a blocked interactive tool stays 'running'", () => {
+	// A pending `ask_user_question`: the assistant emitted the toolCall, but `execute` is still blocked so no
+	// toolResult message exists yet. On reconnect the card must re-render as still-pending — which it does
+	// because the absent `toolResults` entry makes ToolCard/ToolBlock default the status to "running".
+	const { turns, toolResults } = messagesToRuntime([
+		{
+			role: "assistant",
+			content: [
+				{ type: "toolCall", id: "ask1", name: "ask_user_question", arguments: { questions: [] } },
+			],
+		},
+	] as unknown as Message[]);
+	expect(turns).toHaveLength(1);
+	expect(toolResults.ask1).toBeUndefined();
+});
+
+test("a resolved toolResult keeps its structured `details` (the ask_user_question record on reconnect)", () => {
+	// hydrate mirrors the live `tool_execution_end` shape (`{ content, details }`) so the resolved
+	// questionnaire record survives a reconnect — the answers live in `details`.
+	const details = {
+		answers: [{ questionIndex: 0, question: "Q?", kind: "option", answer: "A" }],
+		cancelled: false,
+	};
+	const { toolResults } = messagesToRuntime([
+		{
+			role: "toolResult",
+			toolCallId: "ask2",
+			toolName: "ask_user_question",
+			content: [{ type: "text", text: "User has answered…" }],
+			details,
+			isError: false,
+			timestamp: 1,
+		},
+	] as unknown as Message[]);
+	expect(toolResults.ask2?.status).toBe("done");
+	expect((toolResults.ask2?.raw as { details: unknown }).details).toEqual(details);
+});

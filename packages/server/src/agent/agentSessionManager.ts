@@ -15,6 +15,7 @@ import type {
 	SlashCommandInfo,
 	ThinkingLevel,
 } from "@thinkrail-pi/contracts";
+import { cancelQuestionsForSession } from "./askUserQuestion";
 import { buildResourceLoader } from "./extensions";
 import { getPiRuntime } from "./piRuntime";
 import { cancelExtUiForSession, createWebUiContext, notifyExtUi } from "./webUiContext";
@@ -47,6 +48,11 @@ function mustGet(sessionId: string): AgentSession {
 	const entry = sessions.get(sessionId);
 	if (!entry) throw new Error(`Unknown session: ${sessionId}`);
 	return entry.session;
+}
+
+/** Whether a session is live in this manager — the wire's cheap liveness guard for reply-style methods. */
+export function hasSession(sessionId: string): boolean {
+	return sessions.has(sessionId);
 }
 
 /**
@@ -371,6 +377,7 @@ export function removeSession(sessionId: string): void {
 	const entry = sessions.get(sessionId);
 	if (!entry) return;
 	cancelExtUiForSession(sessionId);
+	cancelQuestionsForSession(sessionId);
 	entry.unsubscribe();
 	entry.session.dispose();
 	sessions.delete(sessionId);
@@ -380,6 +387,7 @@ export function removeSession(sessionId: string): void {
 export function disposeAllSessions(): void {
 	for (const [sessionId, entry] of sessions) {
 		cancelExtUiForSession(sessionId);
+		cancelQuestionsForSession(sessionId);
 		entry.unsubscribe();
 		entry.session.dispose();
 	}

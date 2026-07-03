@@ -6,11 +6,22 @@ import type { ToolStatus } from "./types";
  * (the pi event `result` / `partialResult`, typed `unknown` — narrow defensively).
  */
 export interface ToolRenderProps {
+	/** The pi tool call's id — lets an interactive renderer address its reply (e.g. `ask_user_question`). */
+	toolCallId: string;
 	toolName: string;
 	args: Record<string, unknown>;
 	result: unknown;
 	status: ToolStatus;
+	/** True while the owning assistant message still streams — `args` may be incomplete. */
+	streaming: boolean;
 }
+
+/**
+ * How a tool's card is framed. `"card"` (default) = the shared collapsible `ToolCard` chrome (routine
+ * calls fold away). `"bare"` = the renderer owns its whole frame, rendered full-width with no toggle — for
+ * interactive/primary tools like `ask_user_question` whose questionnaire must stay open and prominent.
+ */
+export type ToolChrome = "card" | "bare";
 
 /** A tool renderer returns the *body* of a tool card; the card chrome (header/status icon) is shared. */
 export type ToolRenderer = (props: ToolRenderProps) => ReactNode;
@@ -24,6 +35,7 @@ export type ToolSummary = (props: ToolRenderProps) => string;
 
 const registry = new Map<string, ToolRenderer>();
 const summaries = new Map<string, ToolSummary>();
+const chromes = new Map<string, ToolChrome>();
 
 /**
  * Register a renderer for a tool, keyed by the tool's name. THE extension point: a custom tool's UI is
@@ -35,9 +47,11 @@ export function registerToolRenderer(
 	toolName: string,
 	renderer: ToolRenderer,
 	summary?: ToolSummary,
+	chrome?: ToolChrome,
 ): void {
 	registry.set(toolName, renderer);
 	if (summary) summaries.set(toolName, summary);
+	if (chrome) chromes.set(toolName, chrome);
 }
 
 /** The renderer for a tool, or the default fallback when none is registered. */
@@ -48,6 +62,11 @@ export function getToolRenderer(toolName: string): ToolRenderer {
 /** The header summary for a tool, or "" when none is registered (card header is then just the name). */
 export function getToolSummary(toolName: string, props: ToolRenderProps): string {
 	return summaries.get(toolName)?.(props) ?? "";
+}
+
+/** A tool's card chrome — `"card"` (default collapsible frame) unless registered as `"bare"`. */
+export function getToolChrome(toolName: string): ToolChrome {
+	return chromes.get(toolName) ?? "card";
 }
 
 /** Best-effort text from a value of unknown shape (tool args/results are typed `any` on the wire). */

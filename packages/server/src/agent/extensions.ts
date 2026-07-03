@@ -16,6 +16,7 @@ import {
 	type ResourceLoader,
 	type SettingsManager,
 } from "@earendil-works/pi-coding-agent";
+import { askUserQuestionExtension } from "./askUserQuestion";
 
 const require = createRequire(import.meta.url);
 /** The installed `pi-web-access` extension entry (raw `.ts`; pi's loader handles it). */
@@ -41,7 +42,10 @@ const headlessSearchPolicy: ExtensionFactory = (pi: ExtensionAPI) => {
 	});
 };
 
-/** A resource loader with `pi-web-access` + `pi-visualize` + `pi-spec-graph` (and its skill) + the headless-search policy layered onto pi's default discovery. */
+/**
+ * A resource loader with `pi-web-access` + `pi-visualize` + `pi-spec-graph` (and its skill) (+ the
+ * headless-search policy) and our host-owned `ask_user_question` tool layered onto pi's default discovery.
+ */
 export async function buildResourceLoader(
 	cwd: string,
 	settingsManager: SettingsManager,
@@ -52,7 +56,7 @@ export async function buildResourceLoader(
 		settingsManager,
 		additionalExtensionPaths: [webAccessPath, visualizePath, specGraphPath],
 		additionalSkillPaths: [specGraphSkillsDir],
-		extensionFactories: [headlessSearchPolicy],
+		extensionFactories: [headlessSearchPolicy, askUserQuestionExtension],
 	});
 	await loader.reload();
 	return loader;

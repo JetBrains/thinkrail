@@ -111,6 +111,7 @@
         "pi-spec-graph": "workspace:*",
         "pi-visualize": "workspace:*",
         "pi-web-access": "^0.13.0",
+        "typebox": "catalog:",
       },
       "devDependencies": {
         "@types/bun": "catalog:",

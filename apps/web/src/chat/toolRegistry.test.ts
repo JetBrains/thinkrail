@@ -1,12 +1,19 @@
 import { describe, expect, it } from "bun:test";
 import type { ToolRenderProps } from "./toolRegistry";
-import { getToolRenderer, getToolSummary, registerToolRenderer } from "./toolRegistry";
+import {
+	getToolChrome,
+	getToolRenderer,
+	getToolSummary,
+	registerToolRenderer,
+} from "./toolRegistry";
 
 const props = (args: Record<string, unknown>): ToolRenderProps => ({
+	toolCallId: "tc1",
 	toolName: "x",
 	args,
 	result: undefined,
 	status: "running",
+	streaming: false,
 });
 
 describe("toolRegistry summaries", () => {
@@ -34,5 +41,18 @@ describe("toolRegistry summaries", () => {
 		expect(getToolRenderer("with-renderer")).toBe(renderer);
 		// Unknown tools fall back rather than throwing.
 		expect(typeof getToolRenderer("totally-unknown")).toBe("function");
+	});
+});
+
+describe("toolRegistry chrome", () => {
+	it("defaults to 'card' (the collapsible frame)", () => {
+		registerToolRenderer("card-tool", () => null);
+		expect(getToolChrome("card-tool")).toBe("card");
+		expect(getToolChrome("never-registered-chrome")).toBe("card");
+	});
+
+	it("honors a registered 'bare' chrome (renderer owns its frame)", () => {
+		registerToolRenderer("bare-tool", () => null, undefined, "bare");
+		expect(getToolChrome("bare-tool")).toBe("bare");
 	});
 });

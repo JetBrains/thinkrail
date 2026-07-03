@@ -10,6 +10,7 @@ import type {
 	Workspace,
 } from "./domain";
 import type {
+	AskUserQuestionResult,
 	ExtUiResponse,
 	ImageContent,
 	Message,
@@ -61,6 +62,9 @@ export const WS_METHODS = {
 	sessionGetStats: "session.getStats",
 	sessionGetCommands: "session.getCommands",
 	sessionExtUiReply: "session.extUiReply",
+	// Inline `ask_user_question` reply: the browser sends the questionnaire result, correlated by the tool
+	// call's id, to resolve the blocked tool `execute`.
+	sessionAnswerQuestion: "session.answerQuestion",
 	// Read side of the wire (hydrate-then-stream): a client lists a workspace's sessions and pulls a
 	// transcript to rebuild its view on connect.
 	sessionList: "session.list",
@@ -141,6 +145,10 @@ export interface WsMethodMap {
 	"session.getStats": { params: { sessionId: string }; result: SessionStats };
 	"session.getCommands": { params: { sessionId: string }; result: SlashCommandInfo[] };
 	"session.extUiReply": { params: { response: ExtUiResponse }; result: Ack };
+	"session.answerQuestion": {
+		params: { sessionId: string; toolCallId: string; result: AskUserQuestionResult };
+		result: Ack;
+	};
 	"session.list": { params: { workspaceId: string }; result: SessionSummary[] };
 	// Re-opens the session from disk if it isn't already live, so the returned `summary` reflects the
 	// now-live model/thinking (a disk `SessionSummary` only carries placeholders).

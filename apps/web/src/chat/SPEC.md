@@ -42,15 +42,32 @@ a future `packages/chat-ui`).
     (arranges them); `ExtUiDialog` (renders pi's `select`/`confirm`/`input`/`editor` from the
     `pi.extensionUi` bridge).
   - **Tool-renderer registry** (`toolRegistry.tsx`) — `registerToolRenderer` / `getToolRenderer` /
-    `getToolSummary` / `DefaultToolRenderer` + `ToolRenderer` / `ToolSummary` / `ToolRenderProps` /
-    `toText`. **THE extension point.** A registration is a renderer (the card *body*) plus an optional
-    `summary` (a pure one-liner for the collapsed header — e.g. a bash command, a file name).
+    `getToolSummary` / `getToolChrome` / `DefaultToolRenderer` + `ToolRenderer` / `ToolSummary` /
+    `ToolChrome` / `ToolRenderProps` (`{ toolCallId, toolName, args, result, status, streaming }` —
+    `toolCallId` lets an interactive renderer address its reply; `streaming` is true while the owning
+    assistant message still streams, i.e. `args` may be incomplete) / `toText`. **THE extension point.** A
+    registration is a renderer (the card *body*) plus an optional `summary` (a pure one-liner for the
+    collapsed header — a bash command, a file name) and an optional `chrome`: `"card"` (default — the
+    collapsible `ToolCard` frame) or `"bare"` (the renderer owns its whole frame, full-width, no fold — for
+    interactive/primary tools like `ask_user_question`). A `"bare"` call on a **dead** message
+    (`stopReason` `aborted`/`error` — pi never executes those calls) renders with status `"error"` instead
+    of staying interactive forever.
   - **Built-in tool renderers** (`tools/`) — props-driven cards for pi's core tools: `bash` (terminal
     block), `read`/`write` (highlighted file via the shared `CodeBlock`), `edit` (removed/added line
-    diff), plus the shared `CodeBlock` / `Collapsible` (long output folds behind a "Show all N lines"
-    toggle) and pure `toolHelpers`. Registered (with their header summaries) via `registerToolRenderer`
-    by `tools/register` (a side-effect import in `ChatView`, so it runs once when the chat module
-    mounts). Unregistered tools still fall back to `DefaultToolRenderer`.
+    diff), plus the interactive **`AskUserQuestionCard`** (the host-owned `ask_user_question` tool: an
+    inline questionnaire — tabs per question, single/multi-select, side-by-side markdown previews
+    (single-select only), a free-text "Type your own answer" row (single-select without previews), Skip,
+    per-option notes; registered with `"bare"` chrome, answers via the `ChatActions` context. **Controls
+    never stream:** while the tool call's args stream the card shows a stable composing placeholder
+    (skeleton rows + a live ready-count — mutating form controls read as broken, so none are rendered),
+    and the complete questionnaire reveals **atomically at message end** (`streaming` flipping false) with
+    a motion-safe fade. Per-call UI state lives in a module-level cache keyed by `toolCallId` so
+    react-virtuoso unmounting the row doesn't wipe selections; entries drop on resolve), and the shared
+    `CodeBlock` / `Collapsible`
+    (long output folds behind a "Show all N lines" toggle) and pure `toolHelpers`. Registered (with their
+    header summaries / chrome) via `registerToolRenderer` by `tools/register` (a side-effect import in
+    `ChatView`, so it runs once when the chat module mounts). Unregistered tools still fall back to
+    `DefaultToolRenderer`.
   - **Visualization renderer** (`tools/visualize/`) — the card for the `visualize` tool (from the
     bundled `pi-visualize` extension): `VisualizationCard` dispatches on `args.type` to `DiagramCard`
     (mermaid → themed SVG via the **lazy-loaded** `mermaid`, falling back to the source on a parse error)
@@ -68,13 +85,21 @@ a future `packages/chat-ui`).
     countdown) + `ToolResultState` +
     `ExtUiDialogRequest` (the reply-needing
     `ExtUiRequest` subset the store's `pendingExtUi` is typed by).
+  - **`ChatActions`** (`ChatActions.tsx`) — the interaction seam for renderers that need to talk **back**
+    to the agent: a React context (provided by `ChatView`, `null` when a renderer is used standalone).
+    Today: `answerQuestion(toolCallId, result): Promise<void>` for the inline `ask_user_question` card —
+    it **rejects** when the host refuses the reply, and the card un-latches its "Answer sent" state so the
+    user can retry. Keeps the presentational renderers store/transport-free while still letting them reply.
   - **Hydration** (`hydrate.ts`) — the pure **`messagesToRuntime(Message[])`** converter (the read-side
     counterpart of the event reducer): folds a session's pi-canonical transcript into `{ turns, toolResults }`
     so a reconnecting / second client rebuilds a chat on connect. A persisted assistant message with
     `stopReason: "error"` re-surfaces a following `error` turn (its `errorMessage`), matching the live path.
-    No store/transport/shiki.
+    `toolResults[id].raw` mirrors the live `tool_execution_end` result shape (`{ content, details }`) so
+    renderers read the same value streamed or hydrated (e.g. `ask_user_question`'s structured answers live
+    in `details`). No store/transport/shiki.
   - **App integration** — `ChatView` (react-virtuoso list + `ChatHeader` + `Composer` + `ExtUiDialog`,
-    wiring store + transport: model list / stats / commands / mentions / dialog replies). Reads **its own
+    wiring store + transport: model list / stats / commands / mentions / dialog replies; provides the
+    `ChatActions` context — `answerQuestion` → `session.answerQuestion`). Reads **its own
     session's runtime** via `store.sessions[sessionId]` (falling back to `EMPTY_RUNTIME`) and addresses every
     mutator/command with that `sessionId`, so multiple chats coexist. The **only** file here that touches
     `store`/`transport` — including the turn-divider's "files changed" chip, which calls the store's
@@ -101,24 +126,38 @@ A tool has two **decoupled** sides, joined by the **tool name**:
 1. **Capability (server):** register it with the pi session — a pi **custom tool**
    (`createAgentSession({ customTools })`) or a packaged pi **extension/skill**. The agent then calls it
    and emits `tool_execution_*` tagged with `toolName`.
-2. **Presentation (here):** `registerToolRenderer("<toolName>", MyToolCard)`. A `ToolRenderer` returns the
-   card body; the header/status chrome is shared. Unregistered tools fall back to `DefaultToolRenderer`.
-3. **Interaction (optional):** tools that prompt the user route through pi's extension-UI bridge (the
-   `pi.extensionUi` channel).
+2. **Presentation (here):** `registerToolRenderer("<toolName>", MyToolCard, summary?, chrome?)`. A
+   `ToolRenderer` returns the card body; the header/status chrome is shared (`"card"`) unless registered
+   `"bare"` (the renderer owns its frame). Unregistered tools fall back to `DefaultToolRenderer`.
+
+   Worked example — **`ask_user_question`** (structured clarifying questions, rendered inline): capability
+   is a **host-owned pi custom tool** (server `agent/askUserQuestion` — its SPEC records the design
+   rationale). Its
+   `execute` blocks; the questions ride the normal `toolCall` block (args) so `AskUserQuestionCard` renders
+   them inline while `status === "running"`; the answer goes back via the `ChatActions` context
+   (`answerQuestion` → `session.answerQuestion`, correlated by `toolCallId`) to resolve the blocked tool.
+3. **Interaction (optional):** two paths for tools that need user input mid-run. A packaged pi
+   **extension** using pi's `uiContext` routes through the extension-UI bridge (`pi.extensionUi` →
+   `ExtUiDialog`). A **host-owned custom tool** that wants a rich inline card (like `ask_user_question`)
+   instead renders from its `toolCall` args and replies through the **`ChatActions`** context — no modal, no
+   pi-tui.
 
 ## Streaming model
 
 The `store` folds pi events into pi-canonical turns **per session** (`store.sessions[sessionId]`, routed by
 the event's id so chats stream concurrently): the in-flight assistant turn **is** the latest
-`assistantMessageEvent.partial` snapshot (replaced each update — not hand-accumulated; on `done`/`error`
-the snapshot is `message`/`error`). Tool results are indexed by `toolCallId` in the runtime's `toolResults`
-and paired with their `toolCall` block inside the assistant turn.
+`assistantMessageEvent.partial` snapshot (replaced each update — not hand-accumulated). A message's true
+terminal is **`message_end`** (pi forwards only *streaming* variants as `message_update`): the reducer
+adopts the final message (it carries `stopReason`, how renderers spot dead tool calls) and clears the
+turn's `streaming` flag **there** — not at `agent_end`, which for a tool-calling message arrives only after
+its tools ran (for `ask_user_question`, only after the user answers; the card gates Submit on this flag).
+Tool results are indexed by `toolCallId` in the runtime's `toolResults` and paired with their `toolCall`
+block inside the assistant turn.
 
-**One live indicator, always.** pi splits a run into several assistant messages (one per tool round) but
-only sends *some* of them a terminal `done`/`error`, so a naive per-turn `streaming` flag can get stuck on
-an earlier message and leave a stray cursor behind. The reducer therefore sweeps the flag whenever a **new**
-assistant message starts *and* on `agent_end` (`clearTurnStreaming`), so at most one turn is ever flagged
-streaming and none survives the turn. The **loader itself is a single footer** (`StreamIndicator`, rendered
+**One live indicator, always.** pi splits a run into several assistant messages (one per tool round), so a
+per-turn `streaming` flag could get stuck on an earlier message and leave a stray cursor behind. Besides
+`message_end`, the reducer therefore sweeps the flag whenever a **new** assistant message starts *and* on
+`agent_end` (`clearTurnStreaming`), so at most one turn is ever flagged streaming and none survives the turn. The **loader itself is a single footer** (`StreamIndicator`, rendered
 as the Virtuoso `Footer` by `ChatView` while `isStreaming` and not mid-retry) — not a per-turn cursor — so it
 can't be duplicated and it **fills the post-send gap** before the first token. `streamStatus(turns,
 currentAssistantId)` names the phase from the active turn's last block: `working` (nothing visible yet) →

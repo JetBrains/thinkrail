@@ -1,6 +1,7 @@
 // Registers the built-in pi tool renderers. Imported for its side effect by ChatView (the app-integration
 // layer), so registration happens once when the chat module mounts. Idempotent: re-import is a no-op.
 import { registerToolRenderer } from "../toolRegistry";
+import { AskUserQuestionCard } from "./AskUserQuestionCard";
 import { BashCard } from "./BashCard";
 import { EditCard } from "./EditCard";
 import { ReadCard } from "./ReadCard";
@@ -14,3 +15,7 @@ registerToolRenderer("bash", BashCard, ({ args }) => strArg(args, "command"));
 registerToolRenderer("read", ReadCard, ({ args }) => fileName(strArg(args, "path")));
 registerToolRenderer("edit", EditCard, ({ args }) => fileName(strArg(args, "path")));
 registerToolRenderer("write", WriteCard, ({ args }) => fileName(strArg(args, "path")));
+
+// The inline clarifying-questions questionnaire (host-owned `ask_user_question` tool). Registered with
+// `"bare"` chrome so it renders as a full-width, always-open panel (interactive, never folded).
+registerToolRenderer("ask_user_question", AskUserQuestionCard, undefined, "bare");

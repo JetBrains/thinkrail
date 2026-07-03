@@ -12,8 +12,9 @@ tags: [v1, pi]
 ## Responsibility
 
 The in-process `pi` engine: a shared runtime (auth + model registry), the lifecycle of `AgentSession`s
-(one per chat tab, rooted in a workspace's worktree), and the **extension-UI bridge** that turns pi's
-in-process `uiContext` dialog calls into WS frames.
+(one per chat tab, rooted in a workspace's worktree), the **extension-UI bridge** that turns pi's
+in-process `uiContext` dialog calls into WS frames, and the host-owned **`ask_user_question`** tool +
+its inline answer bridge.
 
 ## Boundary
 
@@ -48,22 +49,53 @@ in-process `uiContext` dialog calls into WS frames.
     round-trip to the browser, fire-and-forget methods push, TUI-only members inert); `setExtUiPublisher`
     (server→client push seam), `resolveExtUi` (browser reply), `cancelExtUiForSession` (on dispose),
     `notifyExtUi`.
+  - `askUserQuestion` — the host-owned **`ask_user_question`** pi custom tool (`createAskUserQuestionTool`,
+    registered on every session via the `askUserQuestionExtension` factory in `extensions`).
+    **Rejected alternative** (the one place this decision is recorded): bundling the community
+    `@juicesharp/rpiv-ask-user-question` extension. Its questionnaire UI is a live pi-tui component handed
+    to the host via `ctx.ui.custom(factory)` — *code, not data* — so it can't be serialized over the WS
+    bridge or hosted by a browser; the tool would block forever. Interception is technically possible
+    (stub the TUI in `webUiContext.custom`, capture the factory's `done` callback, synthesize its result)
+    but couples us to two fast-moving packages' private internals (the result shape `done` expects, the
+    TUI surface the factory touches) and still requires all the same browser-side work — so we own the
+    small LLM-facing contract instead (schema/validation/envelope mirror the rpiv tool's so the model
+    behaves the same). Ours renders **nothing** — its
+    `execute` guards on `ctx.hasUI`, runs the pure `validateQuestionnaire`, then **blocks** awaiting a
+    structured `AskUserQuestionResult` from the browser (keyed by the unique tool call id, cancelled on the
+    agent abort `signal`), and formats the LLM envelope with `buildQuestionnaireResponse` (a partial
+    submission lists its unanswered questions explicitly as declined). The reply arrives over
+    `session.answerQuestion` → `answerQuestion(sessionId, toolCallId, result)`; the WS handler vets the
+    session is live (`hasSession`) and the result shape before forwarding. **The reply can beat the tool:**
+    the inline card is interactive as soon as the tool call's args stream in, but `execute` (which registers
+    the pending entry) only runs once the assistant message completes — so an answer with no pending entry
+    is **held**, keyed by tool call id, and consumed when `awaitAnswer` registers (only if the session
+    matches; holds are bounded per session, oldest evicted). `cancelQuestionsForSession(sessionId)` (called
+    from `removeSession`/`disposeAllSessions`) settles any awaiting question as cancelled and drops the
+    session's held answers. The
+    questionnaire is rendered **inline** in chat by `apps/web`'s `AskUserQuestionCard` (joined by tool name).
+    Correlation is exact because `ctx.sessionManager.getSessionId()` **is** the `AgentSession.sessionId` we
+    key on. The LLM-facing contract (TypeBox schema, validation, envelope) is re-implemented here so we own
+    it and avoid the package's pi-tui/i18n peer deps.
   - `extensions` — `buildResourceLoader(cwd, settingsManager)`: a `DefaultResourceLoader` (pi's normal
     disk discovery) that also loads three bundled extensions via `additionalExtensionPaths` (pi's loader
     jiti-loads their raw `.ts` — no value-import into our typecheck): **`pi-web-access`** (`web_search` +
     `fetch_content`), **`pi-visualize`** (`visualize`), and **`pi-spec-graph`** (the `spec_*` tools + its
     `before_agent_start` rule). The last is a workspace package, so its `pi.skills` manifest isn't
-    auto-discovered — its `skills/` dir is wired via **`additionalSkillPaths`**. Plus a tiny
-    `extensionFactories` **headless-search policy** (a `tool_call` hook defaulting `web_search`'s `workflow`
-    to `"none"`, since pi-web-access would otherwise open a browser curator our `rpc` host can't render).
+    auto-discovered — its `skills/` dir is wired via **`additionalSkillPaths`**. Plus `extensionFactories`:
+    a **headless-search policy** (a `tool_call` hook defaulting `web_search`'s `workflow`
+    to `"none"`, since pi-web-access would otherwise open a browser curator our `rpc` host can't render)
+    **and** `askUserQuestionExtension` (registers the `ask_user_question` tool).
     Both session paths pass it as `resourceLoader`. Internal helper (not on the barrel).
 - **Public surface (barrel):** the manager operations + `CreateSessionInput`/`CreateSessionResult` +
   `SessionEventPayload`; `configurePiRuntime`/`getPiRuntime`; `completeOnce`/`pickModel` +
-  `OneShotRequest`/`OneShotResult`/`ModelTier`; the `webUiContext` seams.
+  `OneShotRequest`/`OneShotResult`/`ModelTier`; the `webUiContext` seams; the
+  `askUserQuestion` bridge (`answerQuestion`/`cancelQuestionsForSession`) + its pure helpers
+  (`validateQuestionnaire`/`buildQuestionnaireResponse`).
 - **Allowed deps:** `@earendil-works/pi-coding-agent` (runtime); `@earendil-works/pi-ai` (runtime — the
   `complete()` dispatch used by `oneshot`); `pi-web-access` + `pi-visualize` + `pi-spec-graph` (the bundled
-  extensions — loaded by path, not value-imported); `contracts` (`PiEvent`/`Model`/`ThinkingLevel`/
-  `ImageContent`/`SessionStats`/`SlashCommandInfo`/`ExtUi*`); Node.
+  extensions — loaded by path, not value-imported); `typebox` (the `ask_user_question` parameter schema);
+  `contracts` (`PiEvent`/`Model`/`ThinkingLevel`/`ImageContent`/`SessionStats`/`SlashCommandInfo`/`ExtUi*`/
+  `AskUserQuestion*`); Node.
 - **Forbidden:** `host`; sibling features (the `cwd` is passed in, not looked up via `persistence`).
 
 ## Get right

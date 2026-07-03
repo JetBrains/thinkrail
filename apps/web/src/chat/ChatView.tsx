@@ -1,9 +1,15 @@
-import type { ImageContent, Model, ThinkingLevel } from "@thinkrail-pi/contracts";
+import type {
+	AskUserQuestionResult,
+	ImageContent,
+	Model,
+	ThinkingLevel,
+} from "@thinkrail-pi/contracts";
 import { ArrowDown } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { EMPTY_RUNTIME, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
+import { type ChatActions, ChatActionsContext } from "./ChatActions";
 import { ChatHeader } from "./ChatHeader";
 import { Composer, type MentionCandidate, type SubmitBehavior } from "./Composer";
 import { ExtUiDialog } from "./ExtUiDialog";
@@ -178,6 +184,19 @@ export default function ChatView({ sessionId }: { sessionId: string }) {
 		[activeWorkspaceId],
 	);
 
+	// Interactive tool renderers reach the agent through this context (kept out of the presentational
+	// renderers). Currently: the inline `ask_user_question` card answering its blocked tool call. The
+	// promise is handed to the caller — the card owns the failure UX (it un-latches its "sent" state).
+	const chatActions = useMemo<ChatActions>(
+		() => ({
+			answerQuestion: (toolCallId: string, result: AskUserQuestionResult) =>
+				getTransport()
+					.request("session.answerQuestion", { sessionId, toolCallId, result })
+					.then(() => undefined),
+		}),
+		[sessionId],
+	);
+
 	const onExtUiReply = (value: string | boolean | null) => {
 		if (!pendingExtUi) return;
 		const id = pendingExtUi.id;
@@ -190,79 +209,81 @@ export default function ChatView({ sessionId }: { sessionId: string }) {
 	const widgetEntries = Object.entries(extUiWidget);
 
 	return (
-		<div className="flex h-full min-h-0 flex-col bg-bg">
-			<ChatHeader
-				models={models}
-				currentModel={currentModel}
-				thinkingLevel={thinkingLevel}
-				stats={stats}
-				statusEntries={Object.entries(extUiStatus)}
-				onSelectModel={onSelectModel}
-				onSelectThinking={onSelectThinking}
-			/>
-			<div
-				data-testid="chat-scroll"
-				className="relative flex min-h-0 flex-1 flex-col"
-				{...containerProps}
-			>
-				<Virtuoso<ChatTurn, ChatListContext>
-					ref={virtuosoRef}
-					data={turns}
-					context={listContext}
-					components={CHAT_LIST_COMPONENTS}
-					className="min-h-0 flex-1"
-					followOutput={followOutput}
-					atBottomStateChange={handleAtBottom}
-					atBottomThreshold={50}
-					itemContent={(index, turn) => {
-						// A divider closes each round the instant it ends — below the round's last turn (its "✓ Done"
-						// marker, or its final assistant turn when hydrated), i.e. when the next turn is a new user
-						// turn or this is the last turn of a finished (non-streaming) transcript. Anchoring it here
-						// (not before the next user turn) surfaces the summary immediately, not on the follow-up.
-						const roundEnded =
-							turn.kind !== "user" &&
-							(turns[index + 1]?.kind === "user" || (index === turns.length - 1 && !isStreaming));
-						const divider = roundEnded ? turnDivider(turns, index) : null;
-						return (
-							<div className="mx-auto max-w-3xl px-md py-xs">
-								<ChatTurnView turn={turn} toolResults={toolResults} />
-								{divider ? <TurnDivider data={divider} onOpenChanges={onOpenChanges} /> : null}
-							</div>
-						);
-					}}
+		<ChatActionsContext.Provider value={chatActions}>
+			<div className="flex h-full min-h-0 flex-col bg-bg">
+				<ChatHeader
+					models={models}
+					currentModel={currentModel}
+					thinkingLevel={thinkingLevel}
+					stats={stats}
+					statusEntries={Object.entries(extUiStatus)}
+					onSelectModel={onSelectModel}
+					onSelectThinking={onSelectThinking}
 				/>
-				{showScrollButton ? (
-					<button
-						type="button"
-						data-testid="scroll-to-bottom"
-						onClick={scrollToBottom}
-						className="-translate-x-1/2 absolute bottom-md left-1/2 flex items-center gap-xs rounded-[var(--radius-lg)] border border-border2 bg-elevated px-sm py-xs text-muted text-xs shadow-[var(--shadow-md)] hover:bg-hover hover:text-text"
-					>
-						<ArrowDown className="size-3" />
-						New messages
-					</button>
+				<div
+					data-testid="chat-scroll"
+					className="relative flex min-h-0 flex-1 flex-col"
+					{...containerProps}
+				>
+					<Virtuoso<ChatTurn, ChatListContext>
+						ref={virtuosoRef}
+						data={turns}
+						context={listContext}
+						components={CHAT_LIST_COMPONENTS}
+						className="min-h-0 flex-1"
+						followOutput={followOutput}
+						atBottomStateChange={handleAtBottom}
+						atBottomThreshold={50}
+						itemContent={(index, turn) => {
+							// A divider closes each round the instant it ends — below the round's last turn (its "✓ Done"
+							// marker, or its final assistant turn when hydrated), i.e. when the next turn is a new user
+							// turn or this is the last turn of a finished (non-streaming) transcript. Anchoring it here
+							// (not before the next user turn) surfaces the summary immediately, not on the follow-up.
+							const roundEnded =
+								turn.kind !== "user" &&
+								(turns[index + 1]?.kind === "user" || (index === turns.length - 1 && !isStreaming));
+							const divider = roundEnded ? turnDivider(turns, index) : null;
+							return (
+								<div className="mx-auto max-w-3xl px-md py-xs">
+									<ChatTurnView turn={turn} toolResults={toolResults} />
+									{divider ? <TurnDivider data={divider} onOpenChanges={onOpenChanges} /> : null}
+								</div>
+							);
+						}}
+					/>
+					{showScrollButton ? (
+						<button
+							type="button"
+							data-testid="scroll-to-bottom"
+							onClick={scrollToBottom}
+							className="-translate-x-1/2 absolute bottom-md left-1/2 flex items-center gap-xs rounded-[var(--radius-lg)] border border-border2 bg-elevated px-sm py-xs text-muted text-xs shadow-[var(--shadow-md)] hover:bg-hover hover:text-text"
+						>
+							<ArrowDown className="size-3" />
+							New messages
+						</button>
+					) : null}
+				</div>
+				{widgetEntries.length > 0 ? (
+					<div className="shrink-0 border-border2 border-t bg-elevated px-md py-xs text-muted text-xs">
+						{widgetEntries.map(([key, lines]) => (
+							<div key={key}>{lines.join(" ")}</div>
+						))}
+					</div>
+				) : null}
+				<Composer
+					value={draft}
+					onChange={(v) => useAppStore.getState().setChatDraft(sessionId, v)}
+					isStreaming={isStreaming}
+					commands={commands}
+					mentionCandidates={mentionCandidates}
+					onMentionQuery={onMentionQuery}
+					onSubmit={onSubmit}
+					onAbort={onAbort}
+				/>
+				{pendingExtUi ? (
+					<ExtUiDialog key={pendingExtUi.id} request={pendingExtUi} onReply={onExtUiReply} />
 				) : null}
 			</div>
-			{widgetEntries.length > 0 ? (
-				<div className="shrink-0 border-border2 border-t bg-elevated px-md py-xs text-muted text-xs">
-					{widgetEntries.map(([key, lines]) => (
-						<div key={key}>{lines.join(" ")}</div>
-					))}
-				</div>
-			) : null}
-			<Composer
-				value={draft}
-				onChange={(v) => useAppStore.getState().setChatDraft(sessionId, v)}
-				isStreaming={isStreaming}
-				commands={commands}
-				mentionCandidates={mentionCandidates}
-				onMentionQuery={onMentionQuery}
-				onSubmit={onSubmit}
-				onAbort={onAbort}
-			/>
-			{pendingExtUi ? (
-				<ExtUiDialog key={pendingExtUi.id} request={pendingExtUi} onReply={onExtUiReply} />
-			) : null}
-		</div>
+		</ChatActionsContext.Provider>
 	);
 }

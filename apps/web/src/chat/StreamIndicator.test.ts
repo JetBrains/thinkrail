@@ -58,6 +58,17 @@ test("a trailing tool call surfaces the tool name for the loader", () => {
 	expect(streamStatus([turn], "a1")).toEqual({ phase: "running-tool", toolName: "bash" });
 });
 
+test("after message_end (no current id) the phase falls back to the round's trailing assistant turn", () => {
+	// A tool-calling message has completed (message_end cleared currentAssistantId) and its tool is now
+	// executing — the loader must keep naming the tool, not degrade to "Working…".
+	const turn = assistant("a1", [
+		{ type: "toolCall", id: "t1", name: "bash", arguments: { command: "ls" } },
+	]);
+	expect(streamStatus([turn], null)).toEqual({ phase: "running-tool", toolName: "bash" });
+	// …but a user turn at the tail is a fresh post-send gap — no stale phase from the previous round.
+	expect(streamStatus([turn, user], null)).toEqual({ phase: "working" });
+});
+
 test("status tracks the turn named by currentAssistantId, not merely the last turn", () => {
 	const turns = [
 		assistant("a1", [{ type: "toolCall", id: "t1", name: "read", arguments: {} }]),

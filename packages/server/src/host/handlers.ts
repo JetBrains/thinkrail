@@ -1,6 +1,13 @@
-import type { ExtUiResponse, ImageContent, Model, ThinkingLevel } from "@thinkrail-pi/contracts";
+import type {
+	AskUserQuestionResult,
+	ExtUiResponse,
+	ImageContent,
+	Model,
+	ThinkingLevel,
+} from "@thinkrail-pi/contracts";
 import {
 	abortSession,
+	answerQuestion,
 	compactSession,
 	createSession,
 	followUpSession,
@@ -8,6 +15,7 @@ import {
 	getSessionCommands,
 	getSessionMessages,
 	getSessionStats,
+	hasSession,
 	listAvailableModels,
 	listSessions,
 	promptSession,
@@ -30,6 +38,7 @@ import {
 	removeWorkspace,
 	workspaceDiffStats,
 } from "../workspaces";
+import { ackSend } from "./ackSend";
 
 type Handler = (params: unknown) => unknown | Promise<unknown>;
 
@@ -96,19 +105,21 @@ const handlers: Record<string, Handler> = {
 			...(p.thinkingLevel ? { thinkingLevel: p.thinkingLevel } : {}),
 		});
 	},
+	// Sends are acked when ACCEPTED, not when the turn ends — see `ackSend` (a turn can outlive the
+	// client's request timeout; an `ask_user_question` turn blocks until the user answers).
 	"session.prompt": async (params) => {
 		const p = params as { sessionId: string; text: string; images?: ImageContent[] };
-		await promptSession(p.sessionId, p.text, p.images);
+		await ackSend(promptSession(p.sessionId, p.text, p.images));
 		return { ok: true } as const;
 	},
 	"session.steer": async (params) => {
 		const p = params as { sessionId: string; text: string; images?: ImageContent[] };
-		await steerSession(p.sessionId, p.text, p.images);
+		await ackSend(steerSession(p.sessionId, p.text, p.images));
 		return { ok: true } as const;
 	},
 	"session.followUp": async (params) => {
 		const p = params as { sessionId: string; text: string; images?: ImageContent[] };
-		await followUpSession(p.sessionId, p.text, p.images);
+		await ackSend(followUpSession(p.sessionId, p.text, p.images));
 		return { ok: true } as const;
 	},
 	"session.abort": async (params) => {
@@ -147,6 +158,16 @@ const handlers: Record<string, Handler> = {
 	},
 	"session.extUiReply": (params) => {
 		resolveExtUi((params as { response: ExtUiResponse }).response);
+		return { ok: true } as const;
+	},
+	"session.answerQuestion": (params) => {
+		const p = params as { sessionId: string; toolCallId: string; result: AskUserQuestionResult };
+		// Reply-style method: vet the target before holding anything (a disposed/unknown session must fail
+		// the request, not silently park an answer), and reject shapes the tool envelope can't digest.
+		if (!hasSession(p.sessionId)) throw new Error(`Unknown session: ${p.sessionId}`);
+		if (!p.result || !Array.isArray(p.result.answers) || typeof p.result.cancelled !== "boolean")
+			throw new Error("Malformed ask_user_question result");
+		answerQuestion(p.sessionId, p.toolCallId, p.result);
 		return { ok: true } as const;
 	},
 	"model.list": () => listAvailableModels(),

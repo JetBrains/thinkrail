@@ -20,11 +20,13 @@ test("jump button appears when scrolled up and returns to the latest on click", 
 }, async ({ page }) => {
 	test.setTimeout(120_000);
 	// Short viewport + a long list → the conversation overflows by a wide margin regardless of the exact
-	// reply length, so the test never depends on the model producing a precise number of lines.
+	// reply length, so the test never depends on the model producing a precise number of lines. Blank-line
+	// separation matters: the chat renders markdown, which collapses single newlines into spaces — plain
+	// "one per line" output can flatten into a single short paragraph too small to scroll.
 	await page.setViewportSize({ width: 1100, height: 360 });
 	await openChatAndSend(
 		page,
-		"List every integer from 1 to 100, each on its own line, and nothing else.",
+		"List every integer from 1 to 100, each as its own paragraph separated by a blank line, and nothing else.",
 	);
 
 	// Wait for the turn to complete so the content height is stable before we scroll.

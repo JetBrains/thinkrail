@@ -144,3 +144,58 @@ export interface ExtUiResponse {
 	id: string;
 	value: string | boolean | null;
 }
+
+// ---- ask_user_question — structured clarifying questions, rendered INLINE in the chat ----
+// The capability is a host-owned pi custom tool (server `agent/askUserQuestion`): the agent calls
+// `ask_user_question` with these args; the tool blocks while the browser renders the questionnaire card
+// and awaits an `AskUserQuestionResult` (correlated by the tool call's id).
+
+/** One selectable option in a question. */
+export interface AskUserQuestionOption {
+	/** Short display label (1–5 words). */
+	label: string;
+	/** What the choice means / its trade-off. */
+	description: string;
+	/** Optional markdown preview shown beside the option (code, ASCII diagram, config). Single-select only. */
+	preview?: string;
+}
+
+/** One question in the questionnaire. */
+export interface AskUserQuestionItem {
+	/** The full question text (ends with "?"). */
+	question: string;
+	/** Very short chip/tag shown next to the question (≤16 chars). */
+	header: string;
+	/** 2–4 mutually-exclusive choices (unless `multiSelect`). */
+	options: AskUserQuestionOption[];
+	/** Allow several answers; suppresses the free-text "Type your own answer" row. */
+	multiSelect?: boolean;
+}
+
+/** The `ask_user_question` tool-call arguments (what the agent authors). 1–4 questions. */
+export interface AskUserQuestionArgs {
+	questions: AskUserQuestionItem[];
+}
+
+/**
+ * One answer the browser sends back, tagged by how it was produced:
+ * - `option` — picked one author-defined option (`answer` = its label);
+ * - `custom` — typed free text via the "Type your own answer" row (`answer` = the text);
+ * - `multi`  — committed multi-select choices (`selected` = chosen labels, `answer` = null).
+ */
+export interface AskUserQuestionAnswer {
+	questionIndex: number;
+	question: string;
+	kind: "option" | "custom" | "multi";
+	answer: string | null;
+	selected?: string[];
+	notes?: string;
+	/** Echoed back when the chosen single-select option carried a `preview`. */
+	preview?: string;
+}
+
+/** The browser's reply to an `ask_user_question` tool call — resolves the awaiting tool `execute`. */
+export interface AskUserQuestionResult {
+	answers: AskUserQuestionAnswer[];
+	cancelled: boolean;
+}

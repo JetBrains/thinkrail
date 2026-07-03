@@ -29,9 +29,12 @@ export function messagesToRuntime(messages: Message[]): {
 				});
 			}
 		} else if (message.role === "toolResult") {
+			// Mirror the live `tool_execution_end` result shape (`{ content, details }`) so renderers read the
+			// same value whether streamed or hydrated (e.g. the `ask_user_question` card's structured answers
+			// live in `details`, so they survive a reconnect).
 			toolResults[message.toolCallId] = {
 				status: message.isError ? "error" : "done",
-				raw: message.content,
+				raw: { content: message.content, details: message.details },
 			};
 		}
 	}
