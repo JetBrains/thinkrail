@@ -19,24 +19,28 @@ export function ToolCard({
 	args,
 	tool,
 	streaming,
+	workspaceRoot,
 }: {
 	toolCallId: string;
 	toolName: string;
 	args: Record<string, unknown>;
 	tool: ToolResultState | undefined;
 	streaming: boolean;
+	workspaceRoot?: string | undefined;
 }) {
 	const status = tool?.status ?? "running";
 	const isError = status === "error";
 	const Renderer = getToolRenderer(toolName);
-	const summary = getToolSummary(toolName, {
+	const renderProps = {
 		toolCallId,
 		toolName,
 		args,
 		result: tool?.raw,
 		status,
+		workspaceRoot,
 		streaming,
-	});
+	};
+	const summary = getToolSummary(toolName, renderProps);
 
 	const [expanded, setExpanded] = useState(isError);
 	const userToggled = useRef(false);
@@ -83,14 +87,7 @@ export function ToolCard({
 			</button>
 			{expanded ? (
 				<div className={cn("px-sm pb-xs", isError && "text-red")}>
-					<Renderer
-						toolCallId={toolCallId}
-						toolName={toolName}
-						args={args}
-						result={tool?.raw}
-						status={status}
-						streaming={streaming}
-					/>
+					<Renderer {...renderProps} />
 				</div>
 			) : null}
 		</div>

@@ -2,11 +2,12 @@ import { FilePlus } from "lucide-react";
 import type { ToolRenderProps } from "../toolRegistry";
 import { CodeBlock } from "./CodeBlock";
 import { Collapsible, countLines } from "./Collapsible";
-import { fileName, languageFromPath, resultText, strArg } from "./toolHelpers";
+import { languageFromPath, projectRelativePath, resultText, strArg } from "./toolHelpers";
 
 /** Body for the `write` tool: file header + highlighted preview of the written content. */
-export function WriteCard({ args, result, status }: ToolRenderProps) {
+export function WriteCard({ args, result, status, workspaceRoot }: ToolRenderProps) {
 	const path = strArg(args, "path");
+	const displayPath = projectRelativePath(path, workspaceRoot);
 	const content = strArg(args, "content");
 	const lang = languageFromPath(path);
 	const message = resultText(result);
@@ -16,7 +17,7 @@ export function WriteCard({ args, result, status }: ToolRenderProps) {
 			<div className="flex items-center gap-xs text-xs">
 				<FilePlus className="size-3.5 shrink-0 text-green" />
 				<span className="truncate text-text" title={path}>
-					{fileName(path)}
+					{displayPath}
 				</span>
 				<span className="shrink-0 text-hint">written</span>
 			</div>

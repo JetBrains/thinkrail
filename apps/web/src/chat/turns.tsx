@@ -23,9 +23,11 @@ import type { ChatTurn, ToolResultState } from "./types";
 export function ChatTurnView({
 	turn,
 	toolResults,
+	workspaceRoot,
 }: {
 	turn: ChatTurn;
 	toolResults: Record<string, ToolResultState>;
+	workspaceRoot?: string | undefined;
 }) {
 	switch (turn.kind) {
 		case "user":
@@ -36,6 +38,7 @@ export function ChatTurnView({
 					message={turn.message}
 					streaming={turn.streaming}
 					toolResults={toolResults}
+					workspaceRoot={workspaceRoot}
 				/>
 			);
 		case "system":
@@ -78,10 +81,12 @@ function AssistantTurn({
 	message,
 	streaming,
 	toolResults,
+	workspaceRoot,
 }: {
 	message: AssistantMessage;
 	streaming: boolean;
 	toolResults: Record<string, ToolResultState>;
+	workspaceRoot?: string | undefined;
 }) {
 	// While the model is still thinking and no answer text has arrived, the thinking block expands to let
 	// the user watch live; once any answer text exists it folds away so the answer is the focus.
@@ -103,6 +108,7 @@ function AssistantTurn({
 							args={block.arguments}
 							tool={toolResults[block.id]}
 							streaming={streaming}
+							workspaceRoot={workspaceRoot}
 							// An aborted/errored message never executes its tool calls (pi records no result for
 							// them) — without this they'd render as "running" forever.
 							callDead={message.stopReason === "aborted" || message.stopReason === "error"}
@@ -139,6 +145,7 @@ function ToolBlock({
 	args,
 	tool,
 	streaming,
+	workspaceRoot,
 	callDead,
 }: {
 	toolCallId: string;
@@ -146,6 +153,7 @@ function ToolBlock({
 	args: Record<string, unknown>;
 	tool: ToolResultState | undefined;
 	streaming: boolean;
+	workspaceRoot?: string | undefined;
 	callDead: boolean;
 }) {
 	if (getToolChrome(toolName) === "bare") {
@@ -157,6 +165,7 @@ function ToolBlock({
 				args={args}
 				result={tool?.raw}
 				status={tool?.status ?? (callDead ? "error" : "running")}
+				workspaceRoot={workspaceRoot}
 				streaming={streaming}
 			/>
 		);
@@ -168,6 +177,7 @@ function ToolBlock({
 			args={args}
 			tool={tool}
 			streaming={streaming}
+			workspaceRoot={workspaceRoot}
 		/>
 	);
 }

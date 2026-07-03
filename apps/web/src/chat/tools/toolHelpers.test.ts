@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { fileName, languageFromPath, numArg, resultText, strArg } from "./toolHelpers";
+import { languageFromPath, numArg, projectRelativePath, resultText, strArg } from "./toolHelpers";
 
 test("resultText joins the text blocks of an AgentToolResult-shaped value", () => {
 	expect(
@@ -56,11 +56,22 @@ test("numArg returns the number value, or null when missing / wrong-typed", () =
 	expect(numArg({ offset: "10" }, "offset")).toBeNull();
 });
 
-test("fileName returns the last path segment", () => {
-	expect(fileName("/a/b/App.tsx")).toBe("App.tsx");
-	expect(fileName("App.tsx")).toBe("App.tsx");
-	expect(fileName("a/b/")).toBe("b");
-	expect(fileName("")).toBe("");
+test("projectRelativePath keeps already-relative paths", () => {
+	expect(projectRelativePath("apps/web/src/App.tsx", "/repo")).toBe("apps/web/src/App.tsx");
+	expect(projectRelativePath("./apps/web/src/App.tsx", "/repo")).toBe("apps/web/src/App.tsx");
+	expect(projectRelativePath("")).toBe("");
+});
+
+test("projectRelativePath strips a matching workspace root from absolute paths", () => {
+	expect(projectRelativePath("/repo/apps/web/src/App.tsx", "/repo")).toBe("apps/web/src/App.tsx");
+	expect(projectRelativePath("/repo/apps/web/src/App.tsx", "/repo/")).toBe("apps/web/src/App.tsx");
+	expect(projectRelativePath("C:\\repo\\apps\\web\\src\\App.tsx", "C:\\repo")).toBe(
+		"apps/web/src/App.tsx",
+	);
+});
+
+test("projectRelativePath leaves unmatched absolute paths intact", () => {
+	expect(projectRelativePath("/other/App.tsx", "/repo")).toBe("/other/App.tsx");
 });
 
 test("languageFromPath maps known extensions and falls back to ''", () => {

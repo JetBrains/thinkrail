@@ -2,11 +2,12 @@ import { FileText } from "lucide-react";
 import type { ToolRenderProps } from "../toolRegistry";
 import { CodeBlock } from "./CodeBlock";
 import { Collapsible, countLines } from "./Collapsible";
-import { fileName, languageFromPath, numArg, resultText, strArg } from "./toolHelpers";
+import { languageFromPath, numArg, projectRelativePath, resultText, strArg } from "./toolHelpers";
 
 /** Body for the `read` tool: file path + optional line range + highlighted content. */
-export function ReadCard({ args, result, status }: ToolRenderProps) {
+export function ReadCard({ args, result, status, workspaceRoot }: ToolRenderProps) {
 	const path = strArg(args, "path");
+	const displayPath = projectRelativePath(path, workspaceRoot);
 	const offset = numArg(args, "offset");
 	const limit = numArg(args, "limit");
 	const output = resultText(result);
@@ -24,7 +25,7 @@ export function ReadCard({ args, result, status }: ToolRenderProps) {
 			<div className="flex items-center gap-xs text-xs">
 				<FileText className="size-3.5 shrink-0 text-muted" />
 				<span className="truncate text-primary" title={path}>
-					{fileName(path)}
+					{displayPath}
 				</span>
 				{range ? <span className="shrink-0 text-hint">{range}</span> : null}
 			</div>

@@ -245,7 +245,11 @@ export function CenterTabs() {
 						}
 					>
 						{active.kind === "chat" ? (
-							<ChatView key={active.id} sessionId={active.sessionId} />
+							<ChatView
+								key={active.id}
+								sessionId={active.sessionId}
+								workspaceId={active.workspaceId}
+							/>
 						) : (
 							<MonacoEditor key={active.id} path={active.path} content={active.content} />
 						)}

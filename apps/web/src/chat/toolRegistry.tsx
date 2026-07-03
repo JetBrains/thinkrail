@@ -12,6 +12,8 @@ export interface ToolRenderProps {
 	args: Record<string, unknown>;
 	result: unknown;
 	status: ToolStatus;
+	/** Absolute workspace/project root, when the host knows it, for rendering file paths relatively. */
+	workspaceRoot?: string | undefined;
 	/** True while the owning assistant message still streams — `args` may be incomplete. */
 	streaming: boolean;
 }

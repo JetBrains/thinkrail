@@ -40,12 +40,24 @@ const CHAT_LIST_COMPONENTS = { Footer: StreamFooter };
  * presentational chat primitives (header pickers, turn list, composer, extension-UI dialog). The renderers
  * stay store-free so they're reusable; this is the only file in `chat/` that touches store/transport.
  */
-export default function ChatView({ sessionId }: { sessionId: string }) {
+export default function ChatView({
+	sessionId,
+	workspaceId,
+}: {
+	sessionId: string;
+	workspaceId: string;
+}) {
 	// This tab's runtime — zustand only re-renders when *this* session's slice ref changes, so a background
 	// chat streaming into its own runtime never re-renders the foreground one.
 	const runtime = useAppStore((s) => s.sessions[sessionId]) ?? EMPTY_RUNTIME;
 	const models = useAppStore((s) => s.models);
-	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
+	const workspaceRoot = useAppStore((s) => {
+		for (const workspaces of Object.values(s.workspaces)) {
+			const workspace = workspaces.find((w) => w.id === workspaceId);
+			if (workspace) return workspace.worktreePath;
+		}
+		return undefined;
+	});
 	const {
 		turns,
 		toolResults,
@@ -105,7 +117,7 @@ export default function ChatView({ sessionId }: { sessionId: string }) {
 
 	// `@`-mention completion: read the worktree directory implied by the token, filter by its basename.
 	useEffect(() => {
-		if (mentionQuery === null || !activeWorkspaceId) {
+		if (mentionQuery === null) {
 			setMentionCandidates([]);
 			return;
 		}
@@ -115,7 +127,7 @@ export default function ChatView({ sessionId }: { sessionId: string }) {
 		let cancelled = false;
 		const timer = setTimeout(() => {
 			getTransport()
-				.request("fs.readDir", { workspaceId: activeWorkspaceId, path: dir })
+				.request("fs.readDir", { workspaceId, path: dir })
 				.then((nodes) => {
 					if (cancelled) return;
 					setMentionCandidates(
@@ -133,7 +145,7 @@ export default function ChatView({ sessionId }: { sessionId: string }) {
 			cancelled = true;
 			clearTimeout(timer);
 		};
-	}, [mentionQuery, activeWorkspaceId]);
+	}, [mentionQuery, workspaceId]);
 
 	const onMentionQuery = useCallback((q: string | null) => setMentionQuery(q), []);
 
@@ -178,10 +190,10 @@ export default function ChatView({ sessionId }: { sessionId: string }) {
 	const onOpenChanges = useCallback(
 		(paths: string[]) => {
 			const path = paths[0];
-			if (!activeWorkspaceId || !path) return;
-			useAppStore.getState().requestChangesView(activeWorkspaceId, path);
+			if (!path) return;
+			useAppStore.getState().requestChangesView(workspaceId, path);
 		},
-		[activeWorkspaceId],
+		[workspaceId],
 	);
 
 	// Interactive tool renderers reach the agent through this context (kept out of the presentational
@@ -245,7 +257,11 @@ export default function ChatView({ sessionId }: { sessionId: string }) {
 							const divider = roundEnded ? turnDivider(turns, index) : null;
 							return (
 								<div className="mx-auto max-w-3xl px-md py-xs">
-									<ChatTurnView turn={turn} toolResults={toolResults} />
+									<ChatTurnView
+										turn={turn}
+										toolResults={toolResults}
+										workspaceRoot={workspaceRoot}
+									/>
 									{divider ? <TurnDivider data={divider} onOpenChanges={onOpenChanges} /> : null}
 								</div>
 							);

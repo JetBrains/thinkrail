@@ -43,18 +43,21 @@ a future `packages/chat-ui`).
     `pi.extensionUi` bridge).
   - **Tool-renderer registry** (`toolRegistry.tsx`) — `registerToolRenderer` / `getToolRenderer` /
     `getToolSummary` / `getToolChrome` / `DefaultToolRenderer` + `ToolRenderer` / `ToolSummary` /
-    `ToolChrome` / `ToolRenderProps` (`{ toolCallId, toolName, args, result, status, streaming }` —
-    `toolCallId` lets an interactive renderer address its reply; `streaming` is true while the owning
+    `ToolChrome` / `ToolRenderProps` (`{ toolCallId, toolName, args, result, status, workspaceRoot,
+    streaming }` — `toolCallId` lets an interactive renderer address its reply; `workspaceRoot` lets file
+    tools display project-relative paths while staying props-driven; `streaming` is true while the owning
     assistant message still streams, i.e. `args` may be incomplete) / `toText`. **THE extension point.** A
     registration is a renderer (the card *body*) plus an optional `summary` (a pure one-liner for the
-    collapsed header — a bash command, a file name) and an optional `chrome`: `"card"` (default — the
-    collapsible `ToolCard` frame) or `"bare"` (the renderer owns its whole frame, full-width, no fold — for
-    interactive/primary tools like `ask_user_question`). A `"bare"` call on a **dead** message
+    collapsed header — a bash command, a project-relative file path) and an optional `chrome`: `"card"`
+    (default — the collapsible `ToolCard` frame) or `"bare"` (the renderer owns its whole frame,
+    full-width, no fold — for interactive/primary tools like `ask_user_question`). A `"bare"` call on a
+    **dead** message
     (`stopReason` `aborted`/`error` — pi never executes those calls) renders with status `"error"` instead
     of staying interactive forever.
   - **Built-in tool renderers** (`tools/`) — props-driven cards for pi's core tools: `bash` (terminal
-    block), `read`/`write` (highlighted file via the shared `CodeBlock`), `edit` (removed/added line
-    diff), plus the interactive **`AskUserQuestionCard`** (the host-owned `ask_user_question` tool: an
+    block), `read`/`write` (project-relative file path + highlighted file via the shared `CodeBlock`),
+    `edit` (project-relative file path + removed/added line diff), plus the interactive
+    **`AskUserQuestionCard`** (the host-owned `ask_user_question` tool: an
     inline questionnaire — tabs per question, single/multi-select, side-by-side markdown previews
     (single-select only), a free-text "Type your own answer" row (single-select without previews), Skip,
     per-option notes; registered with `"bare"` chrome, answers via the `ChatActions` context. **Controls

@@ -1,10 +1,10 @@
 import { Pencil } from "lucide-react";
 import type { ToolRenderProps } from "../toolRegistry";
 import { Collapsible } from "./Collapsible";
-import { fileName, resultText, strArg } from "./toolHelpers";
+import { projectRelativePath, resultText, strArg } from "./toolHelpers";
 
 /** Body for the `edit` tool: a simple removed/added line diff. */
-export function EditCard({ args, result, status }: ToolRenderProps) {
+export function EditCard({ args, result, status, workspaceRoot }: ToolRenderProps) {
 	const path = strArg(args, "path");
 	// pi's edit arg names can vary; fall back across the common variants.
 	const oldText = strArg(args, "oldText") || strArg(args, "old_string") || strArg(args, "old");
@@ -14,7 +14,7 @@ export function EditCard({ args, result, status }: ToolRenderProps) {
 	if (status === "error") {
 		return (
 			<div data-testid="tool-edit" className="flex flex-col gap-xs">
-				<EditHeader path={path} />
+				<EditHeader path={path} workspaceRoot={workspaceRoot} />
 				<pre className="overflow-auto px-sm py-xs text-red text-xs">{message}</pre>
 			</div>
 		);
@@ -25,7 +25,7 @@ export function EditCard({ args, result, status }: ToolRenderProps) {
 
 	return (
 		<div data-testid="tool-edit" className="flex flex-col gap-xs">
-			<EditHeader path={path} />
+			<EditHeader path={path} workspaceRoot={workspaceRoot} />
 			<Collapsible
 				lines={oldLines.length + newLines.length}
 				fadeClass="bg-[linear-gradient(to_top,var(--elevated),transparent)]"
@@ -56,12 +56,13 @@ export function EditCard({ args, result, status }: ToolRenderProps) {
 	);
 }
 
-function EditHeader({ path }: { path: string }) {
+function EditHeader({ path, workspaceRoot }: { path: string; workspaceRoot?: string | undefined }) {
+	const displayPath = projectRelativePath(path, workspaceRoot);
 	return (
 		<div className="flex items-center gap-xs text-xs">
 			<Pencil className="size-3.5 shrink-0 text-gold" />
 			<span className="truncate text-text" title={path}>
-				{fileName(path)}
+				{displayPath}
 			</span>
 			<span className="shrink-0 text-hint">edited</span>
 		</div>

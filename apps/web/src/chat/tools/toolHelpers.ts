@@ -37,10 +37,38 @@ export function numArg(args: Record<string, unknown>, key: string): number | nul
 	return typeof v === "number" ? v : null;
 }
 
+function normalizePath(path: string): string {
+	return path.replaceAll("\\", "/");
+}
+
 /** The last path segment, e.g. "/a/b/App.tsx" -> "App.tsx". */
-export function fileName(path: string): string {
-	const parts = path.split("/").filter(Boolean);
+function fileName(path: string): string {
+	const parts = normalizePath(path).split("/").filter(Boolean);
 	return parts.at(-1) ?? path;
+}
+
+function trimTrailingSlashes(path: string): string {
+	return path.replace(/\/+$/, "");
+}
+
+function isAbsolutePath(path: string): boolean {
+	return path.startsWith("/") || /^[A-Za-z]:\//.test(path);
+}
+
+/**
+ * Display a file path relative to the workspace/project root when possible. Tool args may already be
+ * relative; absolute paths are trimmed only when the host-provided root matches.
+ */
+export function projectRelativePath(path: string, workspaceRoot?: string | undefined): string {
+	const normalized = normalizePath(path).replace(/^\.\/+/, "");
+	if (!normalized || !isAbsolutePath(normalized)) return normalized;
+
+	const root = workspaceRoot ? trimTrailingSlashes(normalizePath(workspaceRoot)) : "";
+	if (root && (normalized === root || normalized.startsWith(`${root}/`))) {
+		return normalized.slice(root.length).replace(/^\/+/, "") || fileName(normalized);
+	}
+
+	return normalized;
 }
 
 /** A shiki language id inferred from a file extension (falls back to "" -> plain text). */
