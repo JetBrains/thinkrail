@@ -56,9 +56,12 @@ runtime exports being the WS method/channel constants and the protocol version. 
     rationale); the tool blocks while the chat renders the questionnaire **inline** and replies via
     `session.answerQuestion` (correlated by the tool call id).
 - **domain.ts** — app entities: `Project` (git repo + unique `slug`), `Workspace` (git worktree), `Session` (chat tab),
-  `FileNode` (file-tree node), `TabStatus`, `Git*`/diff types.
-- **wsProtocol.ts** — `WS_METHODS` (`project.*` / `workspace.*` / `fs.*` / `git.*` / `terminal.*` /
-  `model.list` / `session.*` — `create`/`prompt`/`steer`/`followUp`/`abort`/`dispose`/`setModel`/
+  `FileNode` (file-tree node), `TabStatus`, `Git*`/diff types; **`SpecGraphNode`/`SpecGraphSnapshot`** — the
+  Specs-viewer read DTOs, **mirrored** (like `PiEvent`), never imported from `pi-spec-graph` — the wire
+  carries only what the panel renders (`type`/`status` stay `string`: tolerate whatever is on disk).
+- **wsProtocol.ts** — `WS_METHODS` (`project.*` / `workspace.*` / `fs.*` / `git.*` / **`spec.graph`**
+  (the Specs-viewer whole-graph read, per workspace) / `terminal.*` / `model.list` / `session.*` —
+  `create`/`prompt`/`steer`/`followUp`/`abort`/`dispose`/`setModel`/
   `setThinkingLevel`/`compact`/`getStats`/`getCommands`/`extUiReply`/**`answerQuestion`** (the inline
   `ask_user_question` reply, correlated by tool call id)/**`list`**/**`getMessages`** (the
   read side)), `WS_CHANNELS` (`server.welcome` /

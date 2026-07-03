@@ -27,7 +27,9 @@ comments / nested fields, and writes back the original line ending (LF or CRLF).
   tools, and the skill + `before_agent_start` rule.
 - **Public surface:** the extension entry `index.ts` (default `ExtensionFactory`) and the `pi` manifest in
   `package.json` (`{ extensions: ["./index.ts"], skills: ["./skills"] }`) — how vanilla `pi` (`pi install`)
-  and thinkrail (`additionalExtensionPaths` / `additionalSkillPaths`) load it. `core/` is internal.
+  and thinkrail (`additionalExtensionPaths` / `additionalSkillPaths`) load it — plus the **`pi-spec-graph/core`
+  export** (the pi-free read model), consumable by hosts (thinkrail's server) without going through the
+  agent. `tools/` stays internal.
 - **Allowed deps:** `@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai`, `typebox` (peer); `yaml`
   (frontmatter parse/serialize); Node built-ins.
 - **Forbidden:** any `@thinkrail-pi/*` package — the dependency edge is one-way (thinkrail → this
@@ -74,7 +76,10 @@ pi-native prompt influence through an extension, not host prompt assembly.
 `packages/server/src/agent/extensions.ts` layers this package into every session's
 `DefaultResourceLoader` the same way as `pi-web-access`: `require.resolve("pi-spec-graph/index.ts")` on
 `additionalExtensionPaths`, the package's `skills` dir on `additionalSkillPaths`. Server references it only
-by resolved path (no value import), so it stays out of server's typecheck graph.
+by resolved path (no value import), so it stays out of server's typecheck graph. Separately,
+`packages/server/src/spec/` value-imports **`pi-spec-graph/core`** (the pi-free model — no pi packages in
+that subtree) to serve the read-only Specs viewer over the wire — the same is-a-spec rule, parser, and
+revalidate-on-read `SpecIndex` the agent tools use.
 
 ## Invariants
 
@@ -87,5 +92,5 @@ by resolved path (no value import), so it stays out of server's typecheck graph.
 
 ## Non-goals
 
-UI and viewer, semantic/embedding search, a related-code frontmatter field, orphan-directory
-detection, and moving/renaming specs.
+UI in this package (thinkrail's Specs viewer consumes `core/` from the outside), semantic/embedding
+search, a related-code frontmatter field, orphan-directory detection, and moving/renaming specs.

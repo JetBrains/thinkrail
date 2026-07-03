@@ -9,6 +9,7 @@ test("editor tabs are scoped to the active workspace", async ({ page }) => {
 	// Workspace 1: open README.md in a center tab.
 	await createWorkspaceViaDialog(page);
 	await expect(workspaces).toHaveCount(1);
+	await page.getByTestId("tab-files").click();
 	await page.getByTestId("file-node").filter({ hasText: "README.md" }).dblclick();
 	await expect(tabs).toHaveCount(1);
 

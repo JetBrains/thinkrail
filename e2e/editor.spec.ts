@@ -6,6 +6,7 @@ test("opens a file in a center Monaco tab, focuses on re-open, and closes", asyn
 
 	// Create a workspace → its worktree files populate the All-files tree.
 	await createWorkspaceViaDialog(page);
+	await page.getByTestId("tab-files").click();
 	const readme = page.getByTestId("file-node").filter({ hasText: "README.md" });
 	await expect(readme).toBeVisible();
 

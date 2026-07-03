@@ -41,6 +41,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `git` | the `git(cwd, args)` runner + worktree status/diff vs base + branch list | [git/SPEC.md](src/git/SPEC.md) |
 | `github` | read-only local `gh` auth status (shell-out) for the New-Workspace surface | [github/SPEC.md](src/github/SPEC.md) |
 | `fs` | read dirs/files inside a worktree (path-contained) | [fs/SPEC.md](src/fs/SPEC.md) |
+| `spec` | the worktree's spec-graph snapshot (`spec.graph`), via `pi-spec-graph/core` | [spec/SPEC.md](src/spec/SPEC.md) |
 | `terminal` | workspace-scoped `bun-pty` terminals | [terminal/SPEC.md](src/terminal/SPEC.md) |
 | `agent` | in-process pi `AgentSession`s + the shared pi runtime + one-shot completions | [agent/SPEC.md](src/agent/SPEC.md) |
 | `assist` | ad-hoc one-shot tasks (workspace naming, …) on a cheap model, best-effort | [assist/SPEC.md](src/assist/SPEC.md) |
@@ -52,9 +53,9 @@ internals**. The edges between them are owned here (see the dependency graph), n
 
 `host` is the **only composition root** — it wires each feature's handlers into the WS registry.
 
-- `host` → `projects`, `workspaces`, `git`, `github`, `fs`, `terminal`, `dialog`, `agent`, `assist`
+- `host` → `projects`, `workspaces`, `git`, `github`, `fs`, `spec`, `terminal`, `dialog`, `agent`, `assist`
 - `workspaces` → `projects`, `git`, `persistence`
-- `projects`, `git`, `fs`, `terminal` → `persistence`
+- `projects`, `git`, `fs`, `spec`, `terminal` → `persistence` (`spec` also → `pi-spec-graph/core`, external)
 - `assist` → `agent` (the one-shot completion primitive)
 - `agent` → (no internal deps — only the pi runtime)
 - `persistence`, `dialog`, `github` → (leaves)

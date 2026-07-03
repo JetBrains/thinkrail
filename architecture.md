@@ -32,7 +32,8 @@ apps/desktop    Electrobun host launcher (deferred)               ── depends
 packages/server createServer(): Bun.serve(HTTP+WS) + AgentSessionManager (in-process pi) ── depends on ─▶ packages/contracts, packages/shared
 packages/contracts  the wire (types-only)
 packages/shared     shellEnv (server-side only)
-packages/spec-graph portable pi extension: spec_* tools + skill (bundled into every session by packages/server)
+packages/spec-graph portable pi extension: spec_* tools + skill (bundled into every session by packages/server;
+                    its pi-free core/ read model also backs the host's spec.graph read method)
 ```
 
 ## Decisions
@@ -86,6 +87,7 @@ packages/spec-graph portable pi extension: spec_* tools + skill (bundled into ev
 
 ## Out of scope (V1)
 
-Workflows; the spec-graph **product layer** (viewer, drift detection, pre-build approval, living graph)
-— the pi-side spec-graph *capability* ships in V1 as a bundled extension (`module-spec-graph`);
+Workflows; the spec-graph **product layer** beyond the read-only viewer (drift detection, pre-build
+approval, living graph) — the pi-side spec-graph *capability* ships in V1 as a bundled extension
+(`module-spec-graph`), and the V1 viewer is a read-only Specs tab over a `spec.graph` wire read;
 self-improvement, automations, per-step model routing, cost ledger.

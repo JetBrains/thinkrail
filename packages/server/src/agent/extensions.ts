@@ -1,8 +1,9 @@
 // Bundles the `pi-web-access` (web_search + fetch_content), `pi-visualize` (the `visualize` tool), and
 // `pi-spec-graph` (spec_* tools + the spec-graph skill) extensions into a session's resource loader, so
 // the tools are present out of the box without a separate install. Extensions load via explicit
-// `additionalExtensionPaths` (all ship raw `.ts` with no `exports`; pi's loader jiti-loads TS, keeping
-// their source out of our typecheck graph). `pi-spec-graph` is a workspace package (not pi-installed), so
+// `additionalExtensionPaths` (all ship raw `.ts`; pi's loader jiti-loads TS, keeping their source out of
+// our typecheck graph — `pi-spec-graph`'s exports map keeps `./index.ts` reachable alongside the `./core`
+// subpath the `spec/` module value-imports). `pi-spec-graph` is a workspace package (not pi-installed), so
 // pi's package manager won't auto-discover its `pi.skills` manifest — we point `additionalSkillPaths` at
 // its `skills/` dir explicitly.
 

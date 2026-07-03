@@ -30,6 +30,7 @@ import { readDir, readFile } from "../fs";
 import { gitDiff, gitStatus, listBranches, prefetchBranch } from "../git";
 import { githubAuthStatus, githubRefresh } from "../github";
 import { closeProject, listProjects, openProject } from "../projects";
+import { evictSpecIndex, specGraph } from "../spec";
 import { closeTerminal, createTerminal, resizeTerminal, writeTerminal } from "../terminal";
 import {
 	createWorkspace,
@@ -55,7 +56,9 @@ const handlers: Record<string, Handler> = {
 	},
 	"workspace.list": (params) => listWorkspaces((params as { projectId: string }).projectId),
 	"workspace.remove": (params) => {
-		removeWorkspace((params as { id: string }).id);
+		const id = (params as { id: string }).id;
+		removeWorkspace(id);
+		evictSpecIndex(id); // the archived worktree's spec parse cache must not outlive it
 		return { ok: true } as const;
 	},
 	"workspace.diffStats": (params) => workspaceDiffStats((params as { id: string }).id),
@@ -71,6 +74,7 @@ const handlers: Record<string, Handler> = {
 		readDir((params as { workspaceId: string }).workspaceId, (params as { path: string }).path),
 	"fs.readFile": (params) =>
 		readFile((params as { workspaceId: string }).workspaceId, (params as { path: string }).path),
+	"spec.graph": (params) => specGraph((params as { workspaceId: string }).workspaceId),
 	"git.status": (params) => gitStatus((params as { workspaceId: string }).workspaceId),
 	"git.diff": (params) =>
 		gitDiff((params as { workspaceId: string }).workspaceId, (params as { path?: string }).path),

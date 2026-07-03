@@ -53,6 +53,32 @@ export interface FileNode {
 	children?: FileNode[];
 }
 
+/**
+ * A node of a worktree's spec-graph, as the Specs viewer renders it. Mirrored from `pi-spec-graph`'s
+ * core model (never imported — the extension package stays out of the wire); `type`/`status` stay
+ * `string` so the wire tolerates whatever is on disk.
+ */
+export interface SpecGraphNode {
+	id: string;
+	type: string;
+	/** Frontmatter `title`, falling back to `id` host-side. */
+	title: string;
+	status?: string;
+	/** Path relative to the worktree root — feeds the open-file flow. */
+	path: string;
+	/** Parent spec id (the tree edge); absent or dangling → rendered as a root. */
+	parent?: string;
+	dependsOn: string[];
+	references: string[];
+	implements: string[];
+	tags: string[];
+}
+
+/** The whole-graph snapshot `spec.graph` returns; the client derives the tree. */
+export interface SpecGraphSnapshot {
+	nodes: SpecGraphNode[];
+}
+
 export type GitFileStatus = "added" | "modified" | "deleted" | "renamed" | "untracked";
 
 export interface GitFileChange {

@@ -7,6 +7,7 @@ import type {
 	GithubAuthStatus,
 	GitStatus,
 	Project,
+	SpecGraphSnapshot,
 	Workspace,
 } from "./domain";
 import type {
@@ -42,6 +43,7 @@ export const WS_METHODS = {
 	githubRefresh: "github.refresh",
 	fsReadDir: "fs.readDir",
 	fsReadFile: "fs.readFile",
+	specGraph: "spec.graph",
 	gitStatus: "git.status",
 	gitDiff: "git.diff",
 	terminalCreate: "terminal.create",
@@ -111,6 +113,7 @@ export interface WsMethodMap {
 	"github.refresh": { params: Record<string, never>; result: GithubAuthStatus };
 	"fs.readDir": { params: { workspaceId: string; path: string }; result: FileNode[] };
 	"fs.readFile": { params: { workspaceId: string; path: string }; result: { content: string } };
+	"spec.graph": { params: { workspaceId: string }; result: SpecGraphSnapshot };
 	"git.status": { params: { workspaceId: string }; result: GitStatus };
 	"git.diff": { params: { workspaceId: string; path?: string }; result: { diff: string } };
 	"terminal.create": { params: { workspaceId: string }; result: { id: string } };

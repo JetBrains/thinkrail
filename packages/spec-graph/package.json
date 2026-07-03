@@ -3,6 +3,12 @@
 	"version": "0.0.0",
 	"private": true,
 	"type": "module",
+	"exports": {
+		".": "./index.ts",
+		"./index.ts": "./index.ts",
+		"./core": "./core/index.ts",
+		"./package.json": "./package.json"
+	},
 	"description": "Teaches the pi agent a project's spec-graph: search, navigate, and manage frontmatter-tagged specs.",
 	"keywords": [
 		"pi-package",

@@ -44,6 +44,13 @@ export default function globalSetup(): void {
 		join(E2E_FIXTURE_REPO, "SPEC.md"),
 		"---\nid: sample-root\ntype: goal-and-requirements\ntitle: Sample Project\n---\n\n## Goal\n\nA throwaway fixture project for the thinkrail-pi e2e suite. It carries the token SPECGRAPHPROBE so spec_grep has a deterministic match to find.\n",
 	);
+	// A child spec under the root, so the Specs viewer has a deterministic parent-tree to render
+	// (see e2e/specs-panel.spec.ts).
+	mkdirSync(join(E2E_FIXTURE_REPO, "module-a"), { recursive: true });
+	writeFileSync(
+		join(E2E_FIXTURE_REPO, "module-a", "SPEC.md"),
+		"---\nid: sample-module\ntype: module-design\nstatus: active\ntitle: Sample Module\nparent: sample-root\n---\n\n## Responsibility\n\nA fixture module spec, child of sample-root.\n",
+	);
 	git("add", "-A");
 	git("commit", "-m", "init");
 }

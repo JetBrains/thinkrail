@@ -1,8 +1,9 @@
 import { execFileSync } from "node:child_process";
-import { rmSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import type { Locator, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
+import type { Workspace } from "@thinkrail-pi/contracts";
 import { E2E_DATA_DIR, E2E_FIXTURE_REPO, E2E_PI_AGENT_DIR } from "./paths";
 
 /**
@@ -31,12 +32,21 @@ function resetState(): void {
 	}
 }
 
+function loadPersistedWorkspaces(): Workspace[] {
+	try {
+		return JSON.parse(readFileSync(join(E2E_DATA_DIR, "workspaces.json"), "utf8")) as Workspace[];
+	} catch {
+		return [];
+	}
+}
+
 /**
  * Open the New-Workspace dialog from the first project's "+" and create a *bare* workspace (no prompt, so
  * no agent session). The dialog replaced the old one-click create; this is the headless equivalent for
  * the no-agent suite. Resilient to a click that doesn't register under load (re-opens the dialog).
  */
-export async function createWorkspaceViaDialog(page: Page): Promise<void> {
+export async function createWorkspaceViaDialog(page: Page): Promise<Workspace> {
+	const before = new Set(loadPersistedWorkspaces().map((w) => w.id));
 	const dialog = page.getByTestId("new-workspace-dialog");
 	await expect(async () => {
 		if (!(await dialog.isVisible())) await page.getByTestId("add-workspace").first().click();
@@ -44,6 +54,9 @@ export async function createWorkspaceViaDialog(page: Page): Promise<void> {
 	}).toPass({ timeout: 30_000 });
 	await page.getByTestId("create-workspace").click();
 	await expect(dialog).toBeHidden();
+	const created = loadPersistedWorkspaces().find((w) => !before.has(w.id));
+	if (!created) throw new Error("Workspace was not persisted after creation");
+	return created;
 }
 
 /** Reset state, then open the fixture repo as a project via the (stubbed) picker; auto-selects + expands. */

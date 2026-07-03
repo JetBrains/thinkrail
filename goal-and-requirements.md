@@ -32,13 +32,17 @@ The shell is built first, `pi` connected last:
 - Cheap wins `pi` already emits: per-session model pick (#1), token/cost display (#3), skill catalog (#2).
 - Multiple chat sessions per workspace, streaming concurrently (#5).
 - A bundled **spec-graph** pi extension (`pi-spec-graph`): the agent searches, navigates, and manages
-  the project's specs via `spec_*` tools + a skill (no UI).
+  the project's specs via `spec_*` tools + a skill.
+- A read-only **Specs** tab in the right rail (left of All files / Changes): the active worktree's
+  spec-graph rendered as its `parent` tree, backed by the same `pi-spec-graph` core model host-side;
+  opening a node opens the spec file as an editor tab. Viewer only — no editing, drift detection, or
+  graph canvas.
 - ThinkRail branding (violet `#8C81FF`, Darcula background, Geist / JetBrains Mono / Cabinet Grotesk).
 - On-disk state under `~/.thinkrail-pi`.
 
-V1 is explicitly **not**: workflows; the spec-graph **product layer** (viewer, drift detection, pre-build
-approval, living graph — the pi-side spec capability ships as the bundled extension above); PR / Checks /
-Review, self-improvement, automations, per-step model routing, cost ledger.
+V1 is explicitly **not**: workflows; the spec-graph **product layer** beyond the read-only viewer
+(drift detection, pre-build approval, living graph — the pi-side spec capability ships as the bundled
+extension above); PR / Checks / Review, self-improvement, automations, per-step model routing, cost ledger.
 
 ## V2 — the product
 
