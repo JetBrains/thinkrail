@@ -10,10 +10,11 @@ function persistedWorkspaces(): Workspace[] {
 	return JSON.parse(readFileSync(join(E2E_DATA_DIR, "workspaces.json"), "utf8")) as Workspace[];
 }
 
-// Tagged @agent: drives a real turn AND the real assist one-shot (both need pi auth). The rename fires
-// asynchronously after the turn settles; waiting for it in the UI is load-bearing — it also drains the
-// hook before the next test's resetState() sweeps branches.
-test("first settled turn auto-renames the workspace: name, branch, live push", {
+// Tagged @agent: drives a real turn AND the real assist one-shot (both need pi auth). The naive pass
+// renames instantly on turn start (no model); the agentic refine fires asynchronously after the turn
+// settles. Waiting for the refine in the UI is load-bearing — it also drains the hook before the next
+// test's resetState() sweeps branches.
+test("turn start names the workspace instantly, then the settled turn refines it: name, branch, live push", {
 	tag: "@agent",
 }, async ({ page }) => {
 	test.setTimeout(150_000);
@@ -32,31 +33,43 @@ test("first settled turn auto-renames the workspace: name, branch, live push", {
 		.getByTestId("chat-input")
 		.fill("Plan how to add a login form to this project. Answer in one short sentence, no tools.");
 	await page.getByTestId("chat-send").click();
+
+	// Instant naive rename the moment the first prompt lands (a user message_end, before the model
+	// responds): a deterministic, non-agentic slug from the first prompt ("Plan how to add a login form…"
+	// → the first ~5 words), pushed live over workspace.updated — so the workspace leaves `workspace-N`
+	// immediately, without waiting for the (possibly long) turn to settle. `(-\d+)?` tolerates a suffix.
+	await expect(name).toHaveText(/^plan-how-to-add-a(-\d+)?$/, { timeout: 20_000 });
+
 	const done = page
 		.locator('[data-testid="chat-message"][data-role="system"]')
 		.filter({ hasText: "Done" });
 	await expect(done).toBeVisible({ timeout: 80_000 });
 
-	// The workspace.updated push lands after the one-shot (≤12s) — the tree renames live, no refetch.
-	// A transiently-failed suggestion leaves the flag unset by design; the retry trigger is the next
-	// settled turn, so drive one before giving up rather than flaking on a one-off provider blip.
+	// The agentic pass refines the provisional name on the settled turn (≤12s one-shot) and flags it —
+	// the definitive "refine landed" signal is the persisted `renamed` flag (the refined slug can, rarely,
+	// match the naive one, so don't key on the displayed text changing). A transiently-failed suggestion
+	// leaves the flag unset by design; the retry trigger is the next settled turn, so drive one before
+	// giving up rather than flaking on a one-off provider blip.
+	const isFlagged = (): boolean =>
+		persistedWorkspaces().find((w) => w.id === before.id)?.renamed === true;
 	try {
-		await expect(name).not.toHaveText(initialName, { timeout: 20_000 });
+		await expect.poll(isFlagged, { timeout: 20_000 }).toBe(true);
 	} catch {
 		await page.getByTestId("chat-input").fill("Thanks — reply with the single word: ok");
 		await page.getByTestId("chat-send").click();
 		await expect(done).toHaveCount(2, { timeout: 80_000 });
-		await expect(name).not.toHaveText(initialName, { timeout: 30_000 });
+		await expect.poll(isFlagged, { timeout: 30_000 }).toBe(true);
 	}
-	const slug = (await name.textContent()) ?? "";
-	expect(slug).toMatch(/^[a-z0-9][a-z0-9-]*$/);
 
 	// The persisted record moved with it: same id, name === branch, flagged renamed, dir untouched.
 	const renamed = persistedWorkspaces().find((w) => w.id === before.id);
-	expect(renamed?.name).toBe(slug);
+	const slug = renamed?.name ?? "";
+	expect(slug).toMatch(/^[a-z0-9][a-z0-9-]*$/);
 	expect(renamed?.branch).toBe(slug);
 	expect(renamed?.renamed).toBe(true);
 	expect(renamed?.worktreePath).toBe(before.worktreePath);
+	// The refined name is live in the tree too (workspace.updated push, no refetch).
+	await expect(name).toHaveText(slug, { timeout: 20_000 });
 
 	// Git followed: the old auto-branch is gone, the new one exists — and the worktree DIR kept its name.
 	const branches = execFileSync(

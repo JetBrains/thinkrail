@@ -22,19 +22,31 @@ channel fan-out, and the process-boot wrapper both launchers share.
   login-shell PATH, pick the port per `portMode` (`"exact"` vs `"free"`), start `createServer`, and
   install SIGINT/SIGTERM handlers that `stop()` then exit); `handlers.ts` (the WS method→handler registry);
   `ackSend.ts` (the send-ack policy — see "Get right"); `autoRename.ts` (the **workspace auto-rename
-  flow** — the composition of `agent` + `assist` + `workspaces` only the host may make:
-  `maybeAutoRenameWorkspace(sessionId, workspaceId)` is teed from the session publisher closure in
-  `createServer` on every **settled** turn (`isSettledTurn(event)`, exported: `agent_end` with
-  `willRetry: false`), fire-and-forget. It reads the session **transcript** via `getSessionMessages`
-  (never `agent_end.messages` — that array is run-local and empty of the prompt on auto-retry
-  continuations), extracts the first **clean** turn (assist's `extractFirstTurn` skips killed
-  error/aborted turns, so a retracted prompt never becomes the name), asks assist for a slug, re-checks
-  the workspace (exists, not `renamed`) after the await, then calls `renameWorkspace` in the same tick
-  and resolves to the updated `Workspace` for the caller to push on **`workspace.updated`**. Best-effort
-  by contract: every failure path resolves `null` and leaves the flag unset so a later settled turn
-  retries — but a swallowed exception is `console.warn`ed (a broken rename path must stay
-  distinguishable from "assist had nothing"). A per-workspace **in-flight set** — not the flag — dedupes
-  concurrent turns/sessions. An injectable transcript reader is the unit-test seam).
+  flow** — the composition of `agent` + `assist` + `workspaces` only the host may make, in **two passes**
+  the session-publisher closure in `createServer` tees fire-and-forget, both pushing **`workspace.updated`**
+  and both reading the session **transcript** via `getSessionMessages` (never `agent_end.messages` — that
+  array is run-local and empty of the prompt on auto-retry continuations) then `extractFirstTurn` (assist
+  skips killed error/aborted turns, so a retracted prompt never becomes the name); an injectable
+  transcript reader is the unit-test seam:
+  - **Naive (instant):** `maybeNaiveNameWorkspace(sessionId, workspaceId)` when the **first prompt lands**
+    (`isPromptCommitted(event)`, exported: a **user `message_end`** — `agent_start`/`turn_start` fire
+    *before* the prompt's `message_end`, so the transcript wouldn't yet hold the prompt at those; this
+    still fires before the model responds, so the name is instant and no tool/question can block it). It
+    derives a slug from the first prompt with assist's non-agentic `naiveWorkspaceSlug` (no model call)
+    and renames **provisionally** (`renameWorkspace(..., { lock: false })` — name + branch move but
+    `renamed` stays unset). It fires only on a **pristine** workspace (`!renamed` AND name still
+    `workspace-N`), so it lands once and never overwrites a user/agentic name; a per-workspace `naiveInFlight`
+    set dedupes re-fired prompt-commits. This is why a long first turn no longer leaves the workspace as
+    `workspace-N` for minutes.
+  - **Agentic (refine):** `maybeAutoRenameWorkspace(sessionId, workspaceId)` on every **settled** turn
+    (`isSettledTurn(event)`, exported: `agent_end` with `willRetry: false`). It asks assist for a slug
+    (cheap model), re-checks the workspace (exists, not `renamed`) after the await, then calls
+    `renameWorkspace` in the same tick — upgrading the provisional naive slug into the final name and
+    **locking** it (`renamed: true`). Best-effort by contract: every failure path resolves `null` and
+    leaves the flag unset so a later settled turn retries — but a swallowed exception is `console.warn`ed
+    (a broken rename path must stay distinguishable from "assist had nothing"). Its own per-workspace
+    **in-flight set** (independent of the naive one — the two passes can overlap on a short turn) dedupes
+    concurrent turns/sessions.
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer`, `bootHost`,
   `BootHostOptions`, `BootedHost`.
 - **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for

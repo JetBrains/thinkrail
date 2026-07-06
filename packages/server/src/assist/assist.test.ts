@@ -2,6 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import type { AssistantMessage, Message, UserMessage } from "@thinkrail-pi/contracts";
 import {
 	extractFirstTurn,
+	naiveWorkspaceSlug,
 	type OneShotRunner,
 	setOneShotRunner,
 	suggestWorkspaceName,
@@ -45,6 +46,35 @@ test("toWorkspaceSlug normalizes model output into a safe, bounded kebab slug", 
 	expect(toWorkspaceSlug("one two three four five six")).toBe("one-two-three-four-five"); // ≤5 words
 	expect(toWorkspaceSlug("!!! ??? ...")).toBeNull(); // nothing usable
 	expect(toWorkspaceSlug("")).toBeNull();
+});
+
+test("naiveWorkspaceSlug derives a bounded kebab slug straight from the first prompt", () => {
+	// Word-boundary growth stops at the 5-word cap; apostrophes split like the shared slug alphabet.
+	expect(naiveWorkspaceSlug("Let's figure out how to better implement")).toBe(
+		"let-s-figure-out-how",
+	);
+	expect(naiveWorkspaceSlug("refactor the workspace naming flow please")).toBe(
+		"refactor-the-workspace-naming-flow",
+	);
+	// Punctuation collapses to the slug alphabet; leading/trailing junk is trimmed.
+	expect(naiveWorkspaceSlug("  add a login form!!! ")).toBe("add-a-login-form");
+});
+
+test("naiveWorkspaceSlug grows short words to the minimum but never past the maxima", () => {
+	// A run of very short words keeps growing until ~10 chars / 2 words is met.
+	expect(naiveWorkspaceSlug("a b c d e f g")).toBe("a-b-c-d-e"); // 5-word cap
+	// Long words stop before the 40-char cap once the minimum (2 words / 10 chars) is met.
+	expect(naiveWorkspaceSlug("implement authentication authorization middleware refactor")).toBe(
+		"implement-authentication-authorization",
+	);
+	// A prompt shorter than the minimum simply uses what it has (words ran out).
+	expect(naiveWorkspaceSlug("add login")).toBe("add-login");
+});
+
+test("naiveWorkspaceSlug returns null for a blank or unusable prompt", () => {
+	expect(naiveWorkspaceSlug("")).toBeNull();
+	expect(naiveWorkspaceSlug("   ")).toBeNull();
+	expect(naiveWorkspaceSlug("!!! ??? ...")).toBeNull();
 });
 
 test("extractFirstTurn pulls the first prompt + first assistant answer from a transcript", () => {

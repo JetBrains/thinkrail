@@ -104,6 +104,22 @@ test("renameWorkspace moves the branch in place: record + git follow, the worktr
 	expect(listWorkspaces("p1")[0]?.name).toBe("add-login-flow");
 });
 
+test("renameWorkspace with lock:false renames name + branch but leaves renamed unset (provisional)", async () => {
+	const ws = await createWorkspace("p1");
+	const renamed = renameWorkspace(ws.id, "add login flow", { lock: false });
+
+	expect(renamed.name).toBe("add-login-flow");
+	expect(renamed.branch).toBe("add-login-flow");
+	expect(renamed.renamed).toBeUndefined(); // still eligible for the agentic refinement
+	expect(gitOut(ws.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe("add-login-flow");
+	expect(listWorkspaces("p1")[0]?.renamed).toBeUndefined();
+
+	// A later default (lock) rename still moves the branch and now locks it.
+	const locked = renameWorkspace(ws.id, "final name");
+	expect(locked.name).toBe("final-name");
+	expect(locked.renamed).toBe(true);
+});
+
 test("renameWorkspace suffixes on collision with an existing branch", async () => {
 	git(repo, "branch", "add-login-flow");
 	const ws = await createWorkspace("p1");

@@ -5,7 +5,12 @@ import { join } from "node:path";
 import type { Message, PiEvent } from "@thinkrail-pi/contracts";
 import { setOneShotRunner } from "../assist";
 import { createWorkspace, listWorkspaces, removeWorkspace, renameWorkspace } from "../workspaces";
-import { isSettledTurn, maybeAutoRenameWorkspace } from "./autoRename";
+import {
+	isPromptCommitted,
+	isSettledTurn,
+	maybeAutoRenameWorkspace,
+	maybeNaiveNameWorkspace,
+} from "./autoRename";
 
 let dataDir: string;
 let repo: string;
@@ -184,6 +189,78 @@ test("a user rename landing during the one-shot wins; the late suggestion is dro
 
 	expect(await pending).toBeNull();
 	expect(listWorkspaces("p1")[0]?.name).toBe("user-picked-this");
+});
+
+test("naive-rename names the workspace instantly from the first prompt, provisionally", async () => {
+	const ws = await createWorkspace("p1");
+
+	const named = await maybeNaiveNameWorkspace("s1", ws.id, firstTurn);
+
+	// Bounded kebab slug from "add a login form to the settings page" (5-word cap).
+	expect(named?.name).toBe("add-a-login-form-to");
+	expect(named?.branch).toBe("add-a-login-form-to");
+	expect(named?.worktreePath).toBe(ws.worktreePath); // dir never moves
+	// Provisional: `renamed` stays unset so the agentic pass still refines it.
+	expect(named?.renamed).toBeUndefined();
+	expect(listWorkspaces("p1")[0]?.renamed).toBeUndefined();
+});
+
+test("naive-rename fires only while the name is pristine (workspace-N)", async () => {
+	const ws = await createWorkspace("p1");
+	await maybeNaiveNameWorkspace("s1", ws.id, firstTurn);
+
+	// Second turn start: the name is no longer `workspace-N`, so it never re-fires.
+	expect(await maybeNaiveNameWorkspace("s1", ws.id, firstTurn)).toBeNull();
+	expect(listWorkspaces("p1")[0]?.name).toBe("add-a-login-form-to");
+});
+
+test("naive-rename never touches a user-named workspace", async () => {
+	const ws = await createWorkspace("p1", "chosen name");
+
+	expect(await maybeNaiveNameWorkspace("s1", ws.id, firstTurn)).toBeNull();
+	expect(listWorkspaces("p1")[0]?.name).toBe("chosen-name");
+});
+
+test("the agentic pass refines a provisional naive name and locks it", async () => {
+	const ws = await createWorkspace("p1");
+	fakeRunner("Add Login Flow");
+
+	const provisional = await maybeNaiveNameWorkspace("s1", ws.id, firstTurn);
+	expect(provisional?.name).toBe("add-a-login-form-to");
+	expect(provisional?.renamed).toBeUndefined();
+
+	// Settled turn: the agentic namer still runs (renamed was unset) and upgrades + locks.
+	const refined = await maybeAutoRenameWorkspace("s1", ws.id, firstTurn);
+	expect(refined?.name).toBe("add-login-flow");
+	expect(refined?.renamed).toBe(true);
+
+	// And the now-locked name is inert to a further turn start.
+	expect(await maybeNaiveNameWorkspace("s1", ws.id, firstTurn)).toBeNull();
+	expect(listWorkspaces("p1")[0]?.name).toBe("add-login-flow");
+});
+
+test("naive-rename resolves null when the first prompt is blank or unusable", async () => {
+	const ws = await createWorkspace("p1");
+	const punctOnly = async (): Promise<Message[]> => [user("!!! ??? ..."), assistant("hm")];
+
+	expect(await maybeNaiveNameWorkspace("s1", ws.id, punctOnly)).toBeNull();
+	expect(listWorkspaces("p1")[0]?.name).toBe("workspace-1");
+	expect(await maybeNaiveNameWorkspace("s1", ws.id, async () => [])).toBeNull();
+});
+
+test("isPromptCommitted: only a user message_end has the prompt in the transcript", () => {
+	expect(
+		isPromptCommitted({ type: "message_end", message: { role: "user" } } as unknown as PiEvent),
+	).toBe(true);
+	// An assistant message_end is not the prompt; agent_start/turn_start fire before the prompt lands.
+	expect(
+		isPromptCommitted({
+			type: "message_end",
+			message: { role: "assistant" },
+		} as unknown as PiEvent),
+	).toBe(false);
+	expect(isPromptCommitted({ type: "agent_start" } as PiEvent)).toBe(false);
+	expect(isPromptCommitted({ type: "turn_start" } as PiEvent)).toBe(false);
 });
 
 test("isSettledTurn: only a no-retry agent_end settles a turn", () => {

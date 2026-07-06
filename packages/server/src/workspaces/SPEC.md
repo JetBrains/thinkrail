@@ -28,11 +28,14 @@ chats.
   `renameWorkspace` (**sync**; slugs + uniques the requested name, `git branch -m` from the project repo
   — the branch ref moves and the worktree's HEAD follows, but the **worktree dir never moves** (pi keys
   sessions by exact cwd; terminals/tabs are cwd'd there — the stale dir name is the accepted cost);
-  keeps the `name === branch` invariant by setting both to the final unique branch; sets `renamed: true`;
-  **re-points sibling records whose `baseBranch` was the old branch** in the same save so their diffs
-  don't silently empty; **re-loads the records after the git subprocess** — a record that vanished
-  meanwhile (archived / e2e reset) aborts the save instead of resurrecting it; throws on unknown id or
-  git failure — callers decide, the auto-rename hook treats it as best-effort),
+  keeps the `name === branch` invariant by setting both to the final unique branch; **re-points sibling
+  records whose `baseBranch` was the old branch** in the same save so their diffs don't silently empty;
+  **re-loads the records after the git subprocess** — a record that vanished meanwhile (archived / e2e
+  reset) aborts the save instead of resurrecting it; throws on unknown id or git failure — callers decide,
+  the auto-rename hook treats it as best-effort. `opts.lock` (default `true`) sets `renamed: true`,
+  marking the name deliberate so the auto-namer never touches it again — what a user rename and the
+  agentic auto-rename want; the host's **provisional naive rename** passes `lock: false` to rename name +
+  branch while leaving `renamed` unset, so the settled-turn agentic pass still refines it),
   `listWorkspaces` (with diff stats), `removeWorkspace` (`git worktree remove --force`, keeps the branch;
   hardened: rm + `prune` if git fails), `workspaceDiffStats`, `getWorkspace` (by-id lookup, throws on
   unknown — anchors a chat session's cwd).

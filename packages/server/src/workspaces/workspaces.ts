@@ -125,11 +125,21 @@ export async function createWorkspace(
  * Rename a workspace: its record (display name + branch, kept equal) and its git branch — in place. The
  * branch ref moves via `git branch -m` from the project repo (the worktree's HEAD follows); the worktree
  * directory never moves — pi keys sessions by exact cwd, and terminals/tabs are rooted there, so the dir
- * keeps its creation name. The requested name is slugified and made unique (refs + worktree dirs); sets
- * `renamed`, and re-points sibling records that based their diff on the old branch. Sync on purpose: a
- * caller's check-then-rename can't interleave on the event loop. Throws on unknown id / git failure.
+ * keeps its creation name. The requested name is slugified and made unique (refs + worktree dirs), and
+ * re-points sibling records that based their diff on the old branch. Sync on purpose: a caller's
+ * check-then-rename can't interleave on the event loop. Throws on unknown id / git failure.
+ *
+ * `lock` (default `true`) sets `renamed`, marking the name deliberate so the auto-namer never touches it
+ * again — what a user rename and the agentic auto-rename want. The **provisional naive rename** passes
+ * `lock: false`: it renames name + branch but leaves `renamed` unset, so the settled-turn agentic pass
+ * still refines the slug into a final name and locks it then.
  */
-export function renameWorkspace(id: string, requestedName: string): Workspace {
+export function renameWorkspace(
+	id: string,
+	requestedName: string,
+	opts: { lock?: boolean } = {},
+): Workspace {
+	const lock = opts.lock ?? true;
 	const ws = loadWorkspaces().find((w) => w.id === id);
 	if (!ws) throw new Error(`Unknown workspace: ${id}`);
 	const project = getProjects().find((p) => p.id === ws.projectId);
@@ -153,7 +163,7 @@ export function renameWorkspace(id: string, requestedName: string): Workspace {
 	}
 	target.name = branch;
 	target.branch = branch;
-	target.renamed = true;
+	if (lock) target.renamed = true;
 	saveWorkspaces(all);
 	return target;
 }

@@ -1,4 +1,5 @@
 import { join, normalize } from "node:path";
+import type { Workspace } from "@thinkrail-pi/contracts";
 import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail-pi/contracts";
 import {
 	disposeAllSessions,
@@ -8,7 +9,12 @@ import {
 } from "../agent";
 import { listProjects, openProject } from "../projects";
 import { closeAllTerminals, setTerminalPublisher } from "../terminal";
-import { isSettledTurn, maybeAutoRenameWorkspace } from "./autoRename";
+import {
+	isPromptCommitted,
+	isSettledTurn,
+	maybeAutoRenameWorkspace,
+	maybeNaiveNameWorkspace,
+} from "./autoRename";
 import { handleRequest } from "./handlers";
 
 export interface CreateServerOptions {
@@ -83,25 +89,35 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		server.publish(channel, JSON.stringify({ channel, data }));
 	});
 
-	// Stream each in-process AgentSession's events to subscribed clients over the pi.event channel.
-	// A settled turn (agent_end, no retry incoming) also tees the best-effort workspace auto-rename;
-	// `void` (fire-and-forget) — the hook never rejects, and this closure's slot is sync by design.
+	// Push a host-initiated workspace mutation (an auto-rename) to every subscribed client. The web store
+	// folds `workspace.updated` by id, so a naive-then-agentic pair is two idempotent updates (last wins).
+	const pushWorkspaceUpdated = (ws: Workspace | null): void => {
+		if (!ws) return;
+		server.publish(
+			WS_CHANNELS.workspaceUpdated,
+			JSON.stringify({ channel: WS_CHANNELS.workspaceUpdated, data: ws }),
+		);
+	};
+
+	// Stream each in-process AgentSession's events to subscribed clients over the pi.event channel, and
+	// tee the best-effort workspace auto-rename off two points, fire-and-forget (`void` — the hooks never
+	// reject, and this closure's slot is sync by design): the **first prompt landing** (a user
+	// `message_end`, before the model responds) gets an instant non-agentic name, and a **settled turn**
+	// (agent_end, no retry) refines it with the agentic namer and locks it. Both push `workspace.updated`.
 	setSessionPublisher((payload) => {
 		server.publish(
 			WS_CHANNELS.piEvent,
 			JSON.stringify({ channel: WS_CHANNELS.piEvent, data: payload }),
 		);
-		if (isSettledTurn(payload.event)) {
+		if (isPromptCommitted(payload.event)) {
 			const workspaceId = getSessionWorkspaceId(payload.sessionId);
 			if (workspaceId) {
-				void maybeAutoRenameWorkspace(payload.sessionId, workspaceId).then((renamed) => {
-					if (renamed) {
-						server.publish(
-							WS_CHANNELS.workspaceUpdated,
-							JSON.stringify({ channel: WS_CHANNELS.workspaceUpdated, data: renamed }),
-						);
-					}
-				});
+				void maybeNaiveNameWorkspace(payload.sessionId, workspaceId).then(pushWorkspaceUpdated);
+			}
+		} else if (isSettledTurn(payload.event)) {
+			const workspaceId = getSessionWorkspaceId(payload.sessionId);
+			if (workspaceId) {
+				void maybeAutoRenameWorkspace(payload.sessionId, workspaceId).then(pushWorkspaceUpdated);
 			}
 		}
 	});

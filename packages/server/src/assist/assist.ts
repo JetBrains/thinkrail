@@ -40,6 +40,47 @@ const NAME_TIMEOUT_MS = 12_000;
 const MAX_SLUG_LENGTH = 60;
 
 /**
+ * Naive-slug bounds. Grow the slug word-by-word to *at least* the minimum (so a run of very short words
+ * still reads), then stop *before* a maximum. Tuned for branch-friendly, human-recognisable names.
+ */
+const NAIVE_MIN_WORDS = 2;
+const NAIVE_MAX_WORDS = 5;
+const NAIVE_MIN_CHARS = 10;
+const NAIVE_MAX_CHARS = 40;
+
+/**
+ * Derive a short kebab slug straight from a raw user prompt — the **non-agentic** instant name shown the
+ * moment a turn starts, before the agentic {@link suggestWorkspaceName} refinement lands. Grows a word at
+ * a time: never stops before `MIN_WORDS`/`MIN_CHARS` (unless the prompt runs out of words), never exceeds
+ * `MAX_WORDS`, and stops before `MAX_CHARS` once that minimum is met; the result is hard-clamped and its
+ * trailing `-` stripped. Returns `null` for a blank/unusable prompt so the caller keeps its default.
+ * Pure — same slug alphabet as {@link toWorkspaceSlug}; no runner, no auth, no network.
+ */
+export function naiveWorkspaceSlug(prompt: string): string | null {
+	const words = prompt
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, " ")
+		.trim()
+		.split(/\s+/)
+		.filter(Boolean);
+	if (words.length === 0) return null;
+
+	const picked: string[] = [];
+	let length = 0; // running length of the joined kebab slug
+	for (const word of words) {
+		const next = length === 0 ? word.length : length + 1 + word.length;
+		const haveMinimum = picked.length >= NAIVE_MIN_WORDS && length >= NAIVE_MIN_CHARS;
+		if (picked.length >= NAIVE_MAX_WORDS) break;
+		if (next > NAIVE_MAX_CHARS && haveMinimum) break;
+		picked.push(word);
+		length = next;
+	}
+
+	const slug = picked.join("-").slice(0, NAIVE_MAX_CHARS).replace(/-+$/g, "");
+	return slug.length > 0 ? slug : null;
+}
+
+/**
  * Suggest a short kebab-case workspace/branch name from a session's first turn. **Best-effort**: returns
  * `null` on any failure (nothing authenticated, timeout, empty/garbage output) so the caller keeps its
  * `workspace-N` default. Never throws.
