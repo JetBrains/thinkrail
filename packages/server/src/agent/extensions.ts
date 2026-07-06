@@ -1,11 +1,12 @@
-// Bundles the `pi-web-access` (web_search + fetch_content), `pi-visualize` (the `visualize` tool), and
-// `pi-spec-graph` (spec_* tools + the spec-graph skill) extensions into a session's resource loader, so
-// the tools are present out of the box without a separate install. Extensions load via explicit
-// `additionalExtensionPaths` (all ship raw `.ts`; pi's loader jiti-loads TS, keeping their source out of
-// our typecheck graph — `pi-spec-graph`'s exports map keeps `./index.ts` reachable alongside the `./core`
-// subpath the `spec/` module value-imports). `pi-spec-graph` is a workspace package (not pi-installed), so
-// pi's package manager won't auto-discover its `pi.skills` manifest — we point `additionalSkillPaths` at
-// its `skills/` dir explicitly.
+// Bundles the `pi-web-access` (web_search + fetch_content), `pi-visualize` (the `visualize` tool),
+// `pi-spec-graph` (spec_* tools + the spec-graph skill), and `pi-thinkrail-workflow` (the brainstorming
+// skill) extensions into a session's resource loader, so the tools are present out of the box without a
+// separate install. Extensions load via explicit `additionalExtensionPaths` (all ship raw `.ts`; pi's
+// loader jiti-loads TS, keeping their source out of our typecheck graph — `pi-spec-graph`'s exports map
+// keeps `./index.ts` reachable alongside the `./core` subpath the `spec/` module value-imports).
+// `pi-spec-graph` and `pi-thinkrail-workflow` are workspace packages (not pi-installed), so pi's package
+// manager won't auto-discover their `pi.skills` manifests — we point `additionalSkillPaths` at their
+// `skills/` dirs explicitly.
 
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
@@ -28,6 +29,10 @@ const visualizePath = require.resolve("pi-visualize/index.ts");
 const specGraphPath = require.resolve("pi-spec-graph/index.ts");
 /** `pi-spec-graph`'s bundled skills dir (`skills/spec-graph/SKILL.md`), wired explicitly (see header). */
 const specGraphSkillsDir = join(dirname(specGraphPath), "skills");
+/** The `pi-thinkrail-workflow` extension entry (workspace package, raw `.ts`; pi's loader handles it). */
+const workflowPath = require.resolve("pi-thinkrail-workflow/index.ts");
+/** `pi-thinkrail-workflow`'s bundled skills dir (`skills/brainstorming/SKILL.md`), wired explicitly. */
+const workflowSkillsDir = join(dirname(workflowPath), "skills");
 
 /**
  * `pi-web-access`'s `web_search` opens an interactive **browser curator** whenever the UI is dialog-capable
@@ -44,8 +49,9 @@ const headlessSearchPolicy: ExtensionFactory = (pi: ExtensionAPI) => {
 };
 
 /**
- * A resource loader with `pi-web-access` + `pi-visualize` + `pi-spec-graph` (and its skill) (+ the
- * headless-search policy) and our host-owned `ask_user_question` tool layered onto pi's default discovery.
+ * A resource loader with `pi-web-access` + `pi-visualize` + `pi-spec-graph` (and its skill) +
+ * `pi-thinkrail-workflow` (and its skill) (+ the headless-search policy) and our host-owned
+ * `ask_user_question` tool layered onto pi's default discovery.
  */
 export async function buildResourceLoader(
 	cwd: string,
@@ -55,8 +61,8 @@ export async function buildResourceLoader(
 		cwd,
 		agentDir: getAgentDir(),
 		settingsManager,
-		additionalExtensionPaths: [webAccessPath, visualizePath, specGraphPath],
-		additionalSkillPaths: [specGraphSkillsDir],
+		additionalExtensionPaths: [webAccessPath, visualizePath, specGraphPath, workflowPath],
+		additionalSkillPaths: [specGraphSkillsDir, workflowSkillsDir],
 		extensionFactories: [headlessSearchPolicy, askUserQuestionExtension],
 	});
 	await loader.reload();

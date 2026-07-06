@@ -1,0 +1,34 @@
+{
+	"name": "pi-thinkrail-workflow",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"description": "Process/workflow skills for the pi agent, starting with a spec-native brainstorming skill.",
+	"keywords": [
+		"pi-package",
+		"pi",
+		"pi-coding-agent",
+		"extension",
+		"workflow"
+	],
+	"scripts": {
+		"typecheck": "tsc --noEmit",
+		"test": "bun test"
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-coding-agent": "*"
+	},
+	"devDependencies": {
+		"@earendil-works/pi-coding-agent": "catalog:",
+		"@types/bun": "catalog:",
+		"typescript": "catalog:"
+	},
+	"pi": {
+		"extensions": [
+			"./index.ts"
+		],
+		"skills": [
+			"./skills"
+		]
+	}
+}
