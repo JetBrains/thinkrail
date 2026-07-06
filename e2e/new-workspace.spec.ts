@@ -61,3 +61,30 @@ test("the dialog lists local branches (no stray origin) and creates a worktree",
 	// No prompt → no chat tab was opened.
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(0);
 });
+
+test("Enter in the prompt creates; Shift+Enter inserts a newline", async ({ page }) => {
+	await openFixtureProject(page);
+
+	await page.getByTestId("add-workspace").first().click();
+	const dialog = page.getByTestId("new-workspace-dialog");
+	await expect(dialog).toBeVisible();
+	const prompt = dialog.getByTestId("ws-prompt");
+
+	// Regression: plain Enter used to insert a newline; only Shift+Enter should. Shift+Enter keeps the
+	// dialog open and adds a line break — it must NOT create.
+	await prompt.fill("first line");
+	await prompt.press("Shift+Enter");
+	await prompt.pressSequentially("second line");
+	await expect(prompt).toHaveValue("first line\nsecond line");
+	await expect(dialog).toBeVisible();
+	await expect(page.getByTestId("workspace-item")).toHaveCount(0);
+
+	// Plain Enter submits, matching the Create button's ↵ affordance. Clearing the prompt first keeps this
+	// in the no-agent suite (an empty prompt creates a bare worktree with no chat kick-off) while still
+	// exercising the same keydown→create() path the bug lived in.
+	await prompt.fill("");
+	await prompt.press("Enter");
+	await expect(dialog).toBeHidden();
+	await expect(page.getByTestId("workspace-item")).toHaveCount(1);
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(0);
+});

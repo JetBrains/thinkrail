@@ -242,7 +242,8 @@ export function NewWorkspaceDialog({
 					rows={6}
 					className="min-h-[160px]"
 					onKeyDown={(e) => {
-						if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+						// Enter creates (matching the button's ↵ affordance); Shift+Enter inserts a newline.
+						if (e.key === "Enter" && !e.shiftKey) {
 							e.preventDefault();
 							void create();
 						}

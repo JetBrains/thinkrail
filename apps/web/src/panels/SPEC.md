@@ -23,7 +23,8 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   `chat/ModelSelector`+`ThinkingSelector` in **pre-session** mode — preselected to the host's resolved
   default via `model.default` so the exact model shows (values held in dialog state, applied at create
   time). The pickers' popovers portal into the dialog node (so their lists scroll under the Dialog scroll
-  lock). Create = `workspace.create({ projectId, baseRef })` → set active → (with a prompt) open a chat +
+  lock). In the prompt hero, **Enter creates** (matching the Create button's `↵` affordance) and
+  **Shift+Enter** inserts a newline. Create = `workspace.create({ projectId, baseRef })` → set active → (with a prompt) open a chat +
   `session.create({ model, thinkingLevel })` + fire-and-forget `prompt`; with an empty prompt it just
   creates the workspace. A **rejected** kick-off `prompt` (a bad model / missing API key — e.g. picking a
   nonexistent model) surfaces as an `error` turn in the just-opened chat via `store.appendErrorTurn` (with
