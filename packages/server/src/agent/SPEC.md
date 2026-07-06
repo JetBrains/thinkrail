@@ -35,8 +35,9 @@ its inline answer bridge.
     **unioned with on-disk** ones pi persisted under `cwd`, live winning on id → `SessionSummary[]` tagged
     `live`) + `getSessionMessages(sessionId, workspaceId, cwd)` (re-opens a disk session into the manager if
     not live, then returns `{ summary, messages }` — the pi-canonical `Message` subset); the disk half is
-    what survives a host **restart**; `removeSession`/`disposeAllSessions`; `setSessionPublisher` +
-    `setSessionManagerFactory` seams.
+    what survives a host **restart**; `getSessionWorkspaceId(sessionId)` (the live session→workspace
+    lookup the host's auto-rename hook keys on); `removeSession`/`disposeAllSessions`;
+    `setSessionPublisher` + `setSessionManagerFactory` seams.
   - `oneshot` — one-shot LLM completions **without** an `AgentSession` (no tools/extensions/disk):
     `completeOnce(request)` picks a model from the shared runtime's authenticated set, resolves its auth
     (OAuth refresh included) via `modelRegistry.getApiKeyAndHeaders`, and dispatches a single `complete()`

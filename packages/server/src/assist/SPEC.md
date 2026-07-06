@@ -12,9 +12,10 @@ tags: [v1, pi, oneshot]
 
 Small, **best-effort** agentic helpers that run a single cheap-model completion — the "ad-hoc one-shot
 task service." Each task owns its prompt, its output parsing/guards, and its graceful-degrade fallback;
-it never blocks or crashes its caller. First task: **workspace naming** from a session's first turn.
-PR-draft (title/body) and similar tasks land here next. The tasks are a **library surface** — no wire
-method is exposed yet; a host handler / auto-rename flow wires them in when a consumer needs it.
+it never blocks or crashes its caller. First task: **workspace naming** from a session's first turn,
+consumed by the host's auto-rename flow (`host/autoRename` — it owns the settled-turn gating, the flag
+lifecycle, and the rename/push; assist only turns a turn into a slug). PR-draft (title/body) and similar
+tasks land here next. The tasks are a **library surface** — no wire method; consumers are host-side flows.
 
 ## Boundary
 
@@ -25,9 +26,13 @@ method is exposed yet; a host handler / auto-rename flow wires them in when a co
     time-boxed (`AbortSignal.timeout`) and bounded (`maxTokens`).
   - `toWorkspaceSlug(raw)` — pure model-output → safe slug normalization (strip wrapping quotes/backticks,
     collapse to kebab-case, clamp words + length).
-  - `extractFirstTurn(messages)` — pure: pull the first `{ prompt, answer }` turn out of a pi-canonical
-    transcript (`Message[]`), or `null` if there's no user message yet. Meant to be composed by a host
-    handler with `session.getMessages` (not wired yet); assist never reads session state itself.
+  - `extractFirstTurn(messages)` — pure: pull the first **clean** `{ prompt, answer }` turn out of a
+    pi-canonical transcript (`Message[]`), or `null` if there is none. **Killed turns are skipped, not
+    just gated:** a turn whose terminal assistant message stopped `error`/`aborted` is passed over
+    (naming from a retracted prompt is the failure mode — an aborted first prompt must not become the
+    name once a later turn settles cleanly). Composed by the host's auto-rename flow with
+    `getSessionMessages`; assist never reads session state itself — settled-turn gating is the
+    caller's job.
   - `setOneShotRunner(fn)` — a test seam swapping the one-shot runner (default = `agent.completeOnce`) so
     tasks unit-test against a fake with no pi/auth/network.
 - **Public surface (barrel):** `suggestWorkspaceName`, `toWorkspaceSlug`, `extractFirstTurn`,

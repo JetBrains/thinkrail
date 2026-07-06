@@ -11,25 +11,38 @@ import { E2E_DATA_DIR, E2E_FIXTURE_REPO, E2E_PI_AGENT_DIR } from "./paths";
  * fixture repo to just `main`. The host reads these files per-request, so tests are isolated despite
  * sharing one host. (pi keys sessions by worktree cwd, and worktree paths repeat across tests since branches
  * are reset — so stale sessions must be cleared or they'd resurface in a later test's reused worktree.)
+ *
+ * Runs concurrently with the host: a previous @agent spec's settled turn can leave a best-effort
+ * auto-rename in flight (a `git branch -m` + a `workspaces.json` save, up to ~12s after the turn). So
+ * branch cleanup tolerates per-branch failures and sweeps twice, and `workspaces.json` is deleted last —
+ * the host aborts a rename whose record is already gone instead of resurrecting the file.
  */
 function resetState(): void {
 	rmSync(join(E2E_DATA_DIR, "projects.json"), { force: true });
-	rmSync(join(E2E_DATA_DIR, "workspaces.json"), { force: true });
 	rmSync(join(E2E_DATA_DIR, "worktrees"), { recursive: true, force: true });
 	rmSync(join(E2E_PI_AGENT_DIR, "sessions"), { recursive: true, force: true });
 
 	execFileSync("git", ["-C", E2E_FIXTURE_REPO, "worktree", "prune"]);
-	const branches = execFileSync(
-		"git",
-		["-C", E2E_FIXTURE_REPO, "for-each-ref", "--format=%(refname:short)", "refs/heads"],
-		{ encoding: "utf8" },
-	)
-		.split("\n")
-		.map((b) => b.trim())
-		.filter((b) => b && b !== "main");
-	for (const branch of branches) {
-		execFileSync("git", ["-C", E2E_FIXTURE_REPO, "branch", "-D", branch], { stdio: "ignore" });
+	for (let sweep = 0; sweep < 2; sweep += 1) {
+		const branches = execFileSync(
+			"git",
+			["-C", E2E_FIXTURE_REPO, "for-each-ref", "--format=%(refname:short)", "refs/heads"],
+			{ encoding: "utf8" },
+		)
+			.split("\n")
+			.map((b) => b.trim())
+			.filter((b) => b && b !== "main");
+		if (branches.length === 0) break;
+		for (const branch of branches) {
+			try {
+				execFileSync("git", ["-C", E2E_FIXTURE_REPO, "branch", "-D", branch], { stdio: "ignore" });
+			} catch {
+				// Renamed out from under us mid-sweep — the next sweep sees its new name.
+			}
+		}
 	}
+
+	rmSync(join(E2E_DATA_DIR, "workspaces.json"), { force: true });
 }
 
 function loadPersistedWorkspaces(): Workspace[] {

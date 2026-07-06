@@ -92,19 +92,37 @@ export function toWorkspaceSlug(raw: string): string | null {
 }
 
 /**
- * Extract the first `{ prompt, answer }` turn from a pi-canonical transcript, or `null` if there's no
- * user message yet. `answer` is the concatenated text of the first assistant message after that prompt
- * (empty if the turn hasn't produced text). Pure — the host composes this with `session.getMessages`.
+ * Extract the first **clean** `{ prompt, answer }` turn from a pi-canonical transcript, or `null` if
+ * there is none. A turn is its user message plus everything up to the next user message; a turn whose
+ * run was killed — its terminal assistant message stopped `"error"` or `"aborted"` — is skipped, so a
+ * prompt the user retracted (or that never produced work) can't become naming material. Blank prompts
+ * are skipped the same way. `answer` is the concatenated text of the clean turn's first assistant
+ * message (empty if it hasn't produced text). Pure — the host composes this with `session.getMessages`.
  */
 export function extractFirstTurn(messages: Message[]): WorkspaceNameTurn | null {
-	const firstUser = messages.findIndex((m) => m.role === "user");
-	if (firstUser === -1) return null;
-	const prompt = userText(messages[firstUser] as UserMessage);
-	if (!prompt.trim()) return null;
-	const assistant = messages
-		.slice(firstUser + 1)
-		.find((m): m is AssistantMessage => m.role === "assistant");
-	return { prompt, answer: assistant ? assistantText(assistant) : "" };
+	for (let i = 0; i < messages.length; i += 1) {
+		const message = messages[i];
+		if (message?.role !== "user") continue;
+		// The turn's span: everything until the next user message.
+		let firstAssistant: AssistantMessage | undefined;
+		let lastAssistant: AssistantMessage | undefined;
+		let j = i + 1;
+		for (; j < messages.length && messages[j]?.role !== "user"; j += 1) {
+			const m = messages[j];
+			if (m?.role === "assistant") {
+				firstAssistant ??= m as AssistantMessage;
+				lastAssistant = m as AssistantMessage;
+			}
+		}
+		const killed = lastAssistant?.stopReason === "error" || lastAssistant?.stopReason === "aborted";
+		const prompt = userText(message as UserMessage);
+		if (killed || !prompt.trim()) {
+			i = j - 1;
+			continue;
+		}
+		return { prompt, answer: firstAssistant ? assistantText(firstAssistant) : "" };
+	}
+	return null;
 }
 
 function userText(message: UserMessage): string {

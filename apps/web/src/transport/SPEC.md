@@ -16,12 +16,14 @@ The single WebSocket client to the host, and its app-wide singleton.
 
 - **Owns:** `transport.ts` (`WsTransport`: id-correlated `request`, channel `subscribe` with last-value
   replay, reconnect/backoff; `inferUrl` defaults to same-origin); `wireTransport.ts` (`initTransport`/
-  `getTransport` singleton; routes the `server.welcome`, `pi.event`, **and `pi.extensionUi`** pushes into
-  the store — `pi.event` via `handlePiEvent(event, sessionId)`, `pi.extensionUi` via `applyExtUi(request)`);
+  `getTransport` singleton; routes the `server.welcome`, `pi.event`, `pi.extensionUi`, **and
+  `workspace.updated`** pushes into the store — `pi.event` via `handlePiEvent(event, sessionId)`,
+  `pi.extensionUi` via `applyExtUi(request)`, `workspace.updated` via `updateWorkspace(workspace)`;
+  all subscriptions happen once at init, never in component effects);
   `errorText.ts` (**`errorText(err, fallback?)`** — normalizes a rejected `request` (the host's error
   string / a timeout / a thrown non-Error) into a short, display-ready line for an error turn/notice).
 - **Public surface (barrel):** `initTransport`, `getTransport`, `errorText`, `ConnectionStatus`, `TransportOptions`.
 - **Allowed deps:** `contracts` (method maps, `WS_CHANNELS`, `Project` for welcome, `SessionEventPayload`
-  for `pi.event`, `ExtUiRequest` for `pi.extensionUi`); `store` (welcome + event routing — a runtime edge
-  owned by the parent graph); the browser `WebSocket`.
+  for `pi.event`, `ExtUiRequest` for `pi.extensionUi`, `Workspace` for `workspace.updated`); `store`
+  (welcome + event routing — a runtime edge owned by the parent graph); the browser `WebSocket`.
 - **Forbidden:** `server`/`shared`/any `pi` package; importing `panels`/`shell`.

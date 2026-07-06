@@ -29,6 +29,12 @@ export interface Workspace {
 	worktreePath: string;
 	/** Branch the worktree's diff is measured against. */
 	baseBranch: string;
+	/**
+	 * Set once the workspace carries a deliberate name (assist auto-rename or a user rename; user-named
+	 * creation sets it too). Absent = still the auto `workspace-N` default, eligible for exactly one
+	 * assist rename on a settled turn.
+	 */
+	renamed?: boolean;
 	diffStats?: DiffStats;
 }
 

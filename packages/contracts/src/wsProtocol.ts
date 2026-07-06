@@ -81,6 +81,9 @@ export const WS_CHANNELS = {
 	piEvent: "pi.event",
 	piExtensionUi: "pi.extensionUi",
 	terminalData: "terminal.data",
+	// A host-initiated workspace mutation (the auto-rename), broadcast to every client. `data` is the
+	// full persisted `Workspace` snapshot — idempotent under last-value replay, never a delta.
+	workspaceUpdated: "workspace.updated",
 } as const;
 
 export type WsMethod = (typeof WS_METHODS)[keyof typeof WS_METHODS];

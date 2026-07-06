@@ -1,4 +1,9 @@
-import type { ExtUiRequest, Project, SessionEventPayload } from "@thinkrail-pi/contracts";
+import type {
+	ExtUiRequest,
+	Project,
+	SessionEventPayload,
+	Workspace,
+} from "@thinkrail-pi/contracts";
 import { WS_CHANNELS } from "@thinkrail-pi/contracts";
 import { useAppStore } from "../store";
 import { WsTransport } from "./transport";
@@ -30,6 +35,10 @@ export function initTransport(): WsTransport {
 
 	transport.subscribe(WS_CHANNELS.piExtensionUi, (data) => {
 		useAppStore.getState().applyExtUi(data as ExtUiRequest);
+	});
+
+	transport.subscribe(WS_CHANNELS.workspaceUpdated, (data) => {
+		useAppStore.getState().updateWorkspace(data as Workspace);
 	});
 
 	transport.connect();

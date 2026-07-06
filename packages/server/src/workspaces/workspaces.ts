@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { DiffStats, Workspace } from "@thinkrail-pi/contracts";
+import type { DiffStats, Project, Workspace } from "@thinkrail-pi/contracts";
 import { git, gitAsync } from "../git";
 import { dataDir, loadProjects, loadWorkspaces, saveWorkspaces } from "../persistence";
 import { getProjects } from "../projects";
@@ -19,18 +19,30 @@ function branchExists(repoPath: string, branch: string): boolean {
 	return git(repoPath, ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`]).ok;
 }
 
-/** A branch name not yet in the repo — `base`, else `base-2`, `base-3`, … (archiving leaves branches). */
-function uniqueBranch(repoPath: string, base: string): string {
-	if (!branchExists(repoPath, base)) return base;
+/**
+ * Whether a candidate branch name is unusable for this project: the branch exists (archiving leaves
+ * branches behind), or its would-be worktree directory is occupied (a rename frees the branch name but
+ * the worktree dir stays where it was — `worktreePath` never moves).
+ */
+function nameTaken(project: Project, candidate: string): boolean {
+	return (
+		branchExists(project.path, candidate) ||
+		existsSync(join(dataDir(), "worktrees", project.slug, candidate))
+	);
+}
+
+/** A usable branch name — `base`, else `base-2`, `base-3`, … (free as a ref *and* as a worktree dir). */
+function uniqueBranch(project: Project, base: string): string {
+	if (!nameTaken(project, base)) return base;
 	let n = 2;
-	while (branchExists(repoPath, `${base}-${n}`)) n += 1;
+	while (nameTaken(project, `${base}-${n}`)) n += 1;
 	return `${base}-${n}`;
 }
 
-/** First free `workspace-N` — skips branches left behind by archived workspaces. */
-function nextAutoBranch(repoPath: string): string {
+/** First free `workspace-N` (free as a ref *and* as a worktree dir). */
+function nextAutoBranch(project: Project): string {
 	let n = 1;
-	while (branchExists(repoPath, `workspace-${n}`)) n += 1;
+	while (nameTaken(project, `workspace-${n}`)) n += 1;
 	return `workspace-${n}`;
 }
 
@@ -63,9 +75,10 @@ export async function createWorkspace(
 	if (!project) throw new Error(`Unknown project: ${projectId}`);
 
 	const all = loadWorkspaces();
-	const branch = name?.trim()
-		? uniqueBranch(project.path, toBranch(name))
-		: nextAutoBranch(project.path);
+	const trimmedName = name?.trim();
+	const branch = trimmedName
+		? uniqueBranch(project, toBranch(trimmedName))
+		: nextAutoBranch(project);
 	const wsName = branch;
 
 	const base = baseRef?.trim();
@@ -99,10 +112,50 @@ export async function createWorkspace(
 		branch,
 		worktreePath,
 		baseBranch,
+		// A user-chosen name is a deliberate one — the auto-namer must never touch it. Auto `workspace-N`
+		// leaves the flag unset: eligible for one assist rename.
+		...(trimmedName ? { renamed: true } : {}),
 	};
 	all.push(workspace);
 	saveWorkspaces(all);
 	return workspace;
+}
+
+/**
+ * Rename a workspace: its record (display name + branch, kept equal) and its git branch — in place. The
+ * branch ref moves via `git branch -m` from the project repo (the worktree's HEAD follows); the worktree
+ * directory never moves — pi keys sessions by exact cwd, and terminals/tabs are rooted there, so the dir
+ * keeps its creation name. The requested name is slugified and made unique (refs + worktree dirs); sets
+ * `renamed`, and re-points sibling records that based their diff on the old branch. Sync on purpose: a
+ * caller's check-then-rename can't interleave on the event loop. Throws on unknown id / git failure.
+ */
+export function renameWorkspace(id: string, requestedName: string): Workspace {
+	const ws = loadWorkspaces().find((w) => w.id === id);
+	if (!ws) throw new Error(`Unknown workspace: ${id}`);
+	const project = getProjects().find((p) => p.id === ws.projectId);
+	if (!project) throw new Error(`Unknown project: ${ws.projectId}`);
+
+	const wanted = toBranch(requestedName);
+	const branch = wanted === ws.branch ? ws.branch : uniqueBranch(project, wanted);
+	if (branch !== ws.branch) {
+		const moved = git(project.path, ["branch", "-m", ws.branch, branch]);
+		if (!moved.ok) throw new Error(`git branch -m failed: ${moved.err}`);
+	}
+
+	// Re-load after the git subprocess: another process can touch workspaces.json while the JS thread is
+	// blocked in it (the e2e reset does exactly that). A record that vanished meanwhile was archived out
+	// from under us — abort without saving rather than resurrect it (the moved branch ref is harmless).
+	const all = loadWorkspaces();
+	const target = all.find((w) => w.id === id);
+	if (!target) throw new Error(`Unknown workspace: ${id}`);
+	for (const w of all) {
+		if (w.projectId === target.projectId && w.baseBranch === ws.branch) w.baseBranch = branch;
+	}
+	target.name = branch;
+	target.branch = branch;
+	target.renamed = true;
+	saveWorkspaces(all);
+	return target;
 }
 
 export function listWorkspaces(projectId: string): Workspace[] {

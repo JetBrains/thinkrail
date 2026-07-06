@@ -319,6 +319,12 @@ interface AppState {
 	setWelcome: (protocolVersion: number) => void;
 	setProjects: (projects: Project[]) => void;
 	setWorkspaces: (projectId: string, workspaces: Workspace[]) => void;
+	/**
+	 * Fold a server-pushed `workspace.updated` snapshot in (e.g. the auto-rename): merge by id into the
+	 * project's list. A project never fetched, or an id absent from its list, is a no-op — the next
+	 * `workspace.list` reconciles.
+	 */
+	updateWorkspace: (workspace: Workspace) => void;
 	selectProject: (projectId: string) => void;
 	setActiveWorkspace: (id: string) => void;
 	openTab: (tab: EditorTab) => void;
@@ -410,6 +416,21 @@ export const useAppStore = create<AppState>((set) => ({
 	setProjects: (projects) => set({ projects }),
 	setWorkspaces: (projectId, workspaces) =>
 		set((s) => ({ workspaces: { ...s.workspaces, [projectId]: workspaces } })),
+	updateWorkspace: (workspace) =>
+		set((s) => {
+			const list = s.workspaces[workspace.projectId];
+			if (!list?.some((w) => w.id === workspace.id)) return {};
+			return {
+				workspaces: {
+					...s.workspaces,
+					// Spread over the existing record: the push is the persisted snapshot, which carries no
+					// computed diffStats — a plain replace would wipe the +/− badge until the next list.
+					[workspace.projectId]: list.map((w) =>
+						w.id === workspace.id ? { ...w, ...workspace } : w,
+					),
+				},
+			};
+		}),
 	selectProject: (selectedProjectId) => set({ selectedProjectId }),
 	setActiveWorkspace: (activeWorkspaceId) => set({ activeWorkspaceId }),
 	openTab: (tab) =>

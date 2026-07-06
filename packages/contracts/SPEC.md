@@ -55,7 +55,10 @@ runtime exports being the WS method/channel constants and the protocol version. 
     is a **host-owned pi custom tool** (server `agent/askUserQuestion` — see its SPEC for the design
     rationale); the tool blocks while the chat renders the questionnaire **inline** and replies via
     `session.answerQuestion` (correlated by the tool call id).
-- **domain.ts** — app entities: `Project` (git repo + unique `slug`), `Workspace` (git worktree), `Session` (chat tab),
+- **domain.ts** — app entities: `Project` (git repo + unique `slug`), `Workspace` (git worktree; its
+  optional **`renamed`** flag is the naming lifecycle — absent = still auto-named `workspace-N` and
+  eligible for one assist auto-rename, `true` = deliberately named (assist or user), never auto-touched
+  again), `Session` (chat tab),
   `FileNode` (file-tree node), `TabStatus`, `Git*`/diff types; **`SpecGraphNode`/`SpecGraphSnapshot`** — the
   Specs-viewer read DTOs, **mirrored** (like `PiEvent`), never imported from `pi-spec-graph` — the wire
   carries only what the panel renders (`type`/`status` stay `string`: tolerate whatever is on disk).
@@ -65,7 +68,10 @@ runtime exports being the WS method/channel constants and the protocol version. 
   `setThinkingLevel`/`compact`/`getStats`/`getCommands`/`extUiReply`/**`answerQuestion`** (the inline
   `ask_user_question` reply, correlated by tool call id)/**`list`**/**`getMessages`** (the
   read side)), `WS_CHANNELS` (`server.welcome` /
-  `pi.event` / `pi.extensionUi` / `terminal.data`), the `WsMethodMap` typed request/result map +
+  `pi.event` / `pi.extensionUi` / `terminal.data` / **`workspace.updated`** — a host-initiated workspace
+  mutation (the auto-rename) pushed to every client; `data` is the **full persisted `Workspace`
+  snapshot** (idempotent under the transport's last-value replay — never a delta), keyed by `id` +
+  `projectId`), the `WsMethodMap` typed request/result map +
   `WsParams`/`WsResult` helpers, and `PROTOCOL_VERSION`.
 
 ## Get right

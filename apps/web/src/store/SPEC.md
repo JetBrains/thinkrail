@@ -16,7 +16,11 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
 
 ## Boundary
 
-- **Owns:** `appStore.ts` — connection/projects/workspaces state + setters; `tabsByWorkspace` /
+- **Owns:** `appStore.ts` — connection/projects/workspaces state + setters (**`updateWorkspace(ws)`**
+  folds a server-pushed `workspace.updated` snapshot in: merge by `id` into `workspaces[ws.projectId]`,
+  spreading over the existing record so the computed `diffStats` badge survives the push (the snapshot
+  is the persisted record, which has none); a project never fetched or an id absent from its list is a
+  **no-op** — the next `workspace.list` reconciles); `tabsByWorkspace` /
   `activeTabByWorkspace` (`openTab`/`closeTab`/`setActiveTab`/`clearWorkspaceTabs`); `terminalsByWorkspace`
   / `activeTerminalByWorkspace` (`addTerminal`/`closeTerminalTab`/`setActiveTerminalTab`); the
   **per-session chat state** — `sessions: Record<sessionId, SessionRuntime>`, where a `SessionRuntime` holds

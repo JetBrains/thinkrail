@@ -18,7 +18,7 @@ afterEach(() => setOneShotRunner(null));
 function user(content: UserMessage["content"]): Message {
 	return { role: "user", content, timestamp: 0 } as Message;
 }
-function assistant(text: string): Message {
+function assistant(text: string, stopReason: AssistantMessage["stopReason"] = "stop"): Message {
 	return {
 		role: "assistant",
 		content: [{ type: "text", text }],
@@ -33,7 +33,7 @@ function assistant(text: string): Message {
 			totalTokens: 0,
 			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 		},
-		stopReason: "stop",
+		stopReason,
 		timestamp: 0,
 	} as AssistantMessage as Message;
 }
@@ -70,6 +70,38 @@ test("extractFirstTurn returns null when there is no user turn yet", () => {
 	expect(extractFirstTurn([])).toBeNull();
 	expect(extractFirstTurn([assistant("hi")])).toBeNull();
 	expect(extractFirstTurn([user("   ")])).toBeNull();
+});
+
+test("extractFirstTurn skips killed turns — a retracted prompt is never naming material", () => {
+	const turn = extractFirstTurn([
+		user("refactor the billing engine"), // aborted a second later — wrong workspace
+		assistant("Starting on billing…", "aborted"),
+		user("fix the header layout"),
+		assistant("Done — header fixed."),
+	]);
+	expect(turn).toEqual({ prompt: "fix the header layout", answer: "Done — header fixed." });
+});
+
+test("extractFirstTurn returns null when every turn was killed", () => {
+	expect(
+		extractFirstTurn([
+			user("do a thing"),
+			assistant("", "error"),
+			user("try again"),
+			assistant("", "aborted"),
+		]),
+	).toBeNull();
+});
+
+test("extractFirstTurn skips a killed multi-round turn by its terminal assistant message", () => {
+	const turn = extractFirstTurn([
+		user("first task"),
+		assistant("let me look…"), // pre-tool preamble stopped clean…
+		assistant("", "aborted"), // …but the run's terminal message was the abort
+		user("second task"),
+		assistant("on it"),
+	]);
+	expect(turn).toEqual({ prompt: "second task", answer: "on it" });
 });
 
 test("suggestWorkspaceName runs the turn through the runner and slugifies the reply", async () => {

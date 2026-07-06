@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createWorkspace, listWorkspaces, removeWorkspace } from "./workspaces";
+import { createWorkspace, listWorkspaces, removeWorkspace, renameWorkspace } from "./workspaces";
 
 function gitOut(cwd: string, ...args: string[]): string {
 	const r = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "pipe", stderr: "ignore" });
@@ -74,6 +74,80 @@ test("createWorkspace branches off a locally-present remote ref without a networ
 	expect(ws.baseBranch).toBe("origin/main");
 	expect(gitOut(ws.worktreePath, "rev-parse", "HEAD")).toBe(originSha);
 	expect(gitOut(ws.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe(ws.branch);
+});
+
+test("createWorkspace marks a user-named workspace renamed; an auto-named one stays eligible", async () => {
+	const auto = await createWorkspace("p1");
+	expect(auto.name).toBe("workspace-1");
+	expect(auto.renamed).toBeUndefined();
+
+	const named = await createWorkspace("p1", "My Feature");
+	expect(named.name).toBe("my-feature");
+	expect(named.branch).toBe("my-feature");
+	expect(named.renamed).toBe(true);
+});
+
+test("renameWorkspace moves the branch in place: record + git follow, the worktree dir does not", async () => {
+	const ws = await createWorkspace("p1");
+	const renamed = renameWorkspace(ws.id, "add login flow");
+
+	expect(renamed.name).toBe("add-login-flow");
+	expect(renamed.branch).toBe("add-login-flow");
+	expect(renamed.renamed).toBe(true);
+	expect(renamed.worktreePath).toBe(ws.worktreePath);
+	// The worktree's HEAD followed the ref rename; the old branch is gone from the repo.
+	expect(gitOut(ws.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe("add-login-flow");
+	expect(gitOut(repo, "for-each-ref", "--format=%(refname:short)", "refs/heads")).not.toContain(
+		"workspace-1",
+	);
+	// And the record on disk agrees.
+	expect(listWorkspaces("p1")[0]?.name).toBe("add-login-flow");
+});
+
+test("renameWorkspace suffixes on collision with an existing branch", async () => {
+	git(repo, "branch", "add-login-flow");
+	const ws = await createWorkspace("p1");
+	const renamed = renameWorkspace(ws.id, "add login flow");
+	expect(renamed.branch).toBe("add-login-flow-2");
+	expect(renamed.name).toBe("add-login-flow-2");
+});
+
+test("renameWorkspace re-points siblings basing their diff on the old branch", async () => {
+	const first = await createWorkspace("p1");
+	const dependent = await createWorkspace("p1", "on top", first.branch);
+	expect(dependent.baseBranch).toBe(first.branch);
+
+	renameWorkspace(first.id, "core work");
+	const after = listWorkspaces("p1");
+	expect(after.find((w) => w.id === dependent.id)?.baseBranch).toBe("core-work");
+	expect(after.find((w) => w.id === first.id)?.branch).toBe("core-work");
+});
+
+test("renameWorkspace throws on an unknown workspace", () => {
+	expect(() => renameWorkspace("nope", "anything")).toThrow("Unknown workspace: nope");
+});
+
+test("renameWorkspace also suffixes when the candidate's worktree dir is occupied (branch free)", async () => {
+	const first = await createWorkspace("p1");
+	renameWorkspace(first.id, "real name"); // frees branch workspace-1; dir workspace-1 stays occupied
+
+	const second = await createWorkspace("p1"); // dir-aware create lands on workspace-2
+	const renamed = renameWorkspace(second.id, "workspace 1"); // branch free, dir taken → suffix
+	expect(renamed.branch).toBe("workspace-1-2");
+	expect(renamed.name).toBe("workspace-1-2");
+});
+
+test("creating after a rename skips the freed name whose worktree dir is still occupied", async () => {
+	const ws = await createWorkspace("p1");
+	expect(ws.branch).toBe("workspace-1");
+	renameWorkspace(ws.id, "real name");
+
+	// Branch `workspace-1` is free again, but its dir is still this workspace's cwd — the next create
+	// must not try to reuse it (`git worktree add` would fail on the existing directory).
+	const next = await createWorkspace("p1");
+	expect(next.branch).toBe("workspace-2");
+	expect(next.worktreePath).not.toBe(ws.worktreePath);
+	expect(existsSync(next.worktreePath)).toBe(true);
 });
 
 test("removeWorkspace cleans up even when the worktree dir is already gone", async () => {

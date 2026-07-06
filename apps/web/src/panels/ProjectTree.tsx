@@ -293,6 +293,7 @@ function WorkspaceRow({
 			>
 				<GitBranch className={`size-4 shrink-0 ${isActive ? "text-primary" : "text-hint"}`} />
 				<span
+					data-testid="workspace-name"
 					className={`truncate text-sm ${isActive ? "font-medium text-primary" : "text-muted"}`}
 				>
 					{workspace.name}

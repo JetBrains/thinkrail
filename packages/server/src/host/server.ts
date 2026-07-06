@@ -1,8 +1,14 @@
 import { join, normalize } from "node:path";
 import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail-pi/contracts";
-import { disposeAllSessions, setExtUiPublisher, setSessionPublisher } from "../agent";
+import {
+	disposeAllSessions,
+	getSessionWorkspaceId,
+	setExtUiPublisher,
+	setSessionPublisher,
+} from "../agent";
 import { listProjects, openProject } from "../projects";
 import { closeAllTerminals, setTerminalPublisher } from "../terminal";
+import { isSettledTurn, maybeAutoRenameWorkspace } from "./autoRename";
 import { handleRequest } from "./handlers";
 
 export interface CreateServerOptions {
@@ -44,6 +50,7 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 				ws.subscribe(WS_CHANNELS.terminalData);
 				ws.subscribe(WS_CHANNELS.piEvent);
 				ws.subscribe(WS_CHANNELS.piExtensionUi);
+				ws.subscribe(WS_CHANNELS.workspaceUpdated);
 				ws.send(
 					JSON.stringify({
 						channel: WS_CHANNELS.serverWelcome,
@@ -77,11 +84,26 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 	});
 
 	// Stream each in-process AgentSession's events to subscribed clients over the pi.event channel.
+	// A settled turn (agent_end, no retry incoming) also tees the best-effort workspace auto-rename;
+	// `void` (fire-and-forget) — the hook never rejects, and this closure's slot is sync by design.
 	setSessionPublisher((payload) => {
 		server.publish(
 			WS_CHANNELS.piEvent,
 			JSON.stringify({ channel: WS_CHANNELS.piEvent, data: payload }),
 		);
+		if (isSettledTurn(payload.event)) {
+			const workspaceId = getSessionWorkspaceId(payload.sessionId);
+			if (workspaceId) {
+				void maybeAutoRenameWorkspace(payload.sessionId, workspaceId).then((renamed) => {
+					if (renamed) {
+						server.publish(
+							WS_CHANNELS.workspaceUpdated,
+							JSON.stringify({ channel: WS_CHANNELS.workspaceUpdated, data: renamed }),
+						);
+					}
+				});
+			}
+		}
 	});
 
 	// Push extension-UI dialog requests (the in-process `uiContext` bridge) over the pi.extensionUi channel.

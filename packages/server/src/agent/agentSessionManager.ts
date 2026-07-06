@@ -55,6 +55,11 @@ export function hasSession(sessionId: string): boolean {
 	return sessions.has(sessionId);
 }
 
+/** The workspace a live session belongs to — the host's session→workspace lookup (e.g. auto-rename). */
+export function getSessionWorkspaceId(sessionId: string): string | undefined {
+	return sessions.get(sessionId)?.workspaceId;
+}
+
 /**
  * The pi settings a session runs with: the user's real settings **plus** an in-memory override turning
  * `images.autoResize` **off** (never persisted — `applyOverrides`, not `set…`+`save`). With it off, the

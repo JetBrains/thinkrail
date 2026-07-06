@@ -1,5 +1,5 @@
 import { beforeEach, expect, test } from "bun:test";
-import type { ExtUiRequest, PiEvent, SessionSummary } from "@thinkrail-pi/contracts";
+import type { ExtUiRequest, PiEvent, SessionSummary, Workspace } from "@thinkrail-pi/contracts";
 import { type SessionRuntime, useAppStore } from "./appStore";
 
 // Event fixtures — the reducer only reads the fields below, so casting minimal objects is safe here.
@@ -434,4 +434,55 @@ test("clearWorkspaceTabs drops both open and closed chat runtimes + clears histo
 	expect(st.sessions.b).toBeUndefined();
 	expect(st.closedChatsByWorkspace.ws1).toBeUndefined();
 	expect(st.tabsByWorkspace.ws1).toBeUndefined();
+});
+
+// ---- updateWorkspace: the workspace.updated push folds in without losing local computed state ----
+
+function pushedWorkspace(over: Partial<Workspace> = {}): Workspace {
+	return {
+		id: "w1",
+		projectId: "p1",
+		name: "add-login-flow",
+		branch: "add-login-flow",
+		worktreePath: "/tmp/worktrees/p/workspace-1",
+		baseBranch: "main",
+		renamed: true,
+		...over,
+	};
+}
+
+test("updateWorkspace merges the pushed snapshot by id, keeping the computed diffStats badge", () => {
+	useAppStore.setState({
+		workspaces: {
+			p1: [
+				{
+					...pushedWorkspace({ name: "workspace-1", branch: "workspace-1" }),
+					renamed: undefined,
+					diffStats: { added: 3, removed: 1 },
+				},
+			],
+		},
+	});
+	useAppStore.getState().updateWorkspace(pushedWorkspace());
+
+	const ws = useAppStore.getState().workspaces.p1?.[0];
+	expect(ws?.name).toBe("add-login-flow");
+	expect(ws?.renamed).toBe(true);
+	expect(ws?.diffStats).toEqual({ added: 3, removed: 1 }); // the push carries none — merge keeps it
+});
+
+test("updateWorkspace is a no-op for a project whose list was never fetched", () => {
+	useAppStore.setState({ workspaces: {} });
+	useAppStore.getState().updateWorkspace(pushedWorkspace());
+	expect(useAppStore.getState().workspaces).toEqual({});
+});
+
+test("updateWorkspace never appends an unknown id to a fetched list", () => {
+	const existing = pushedWorkspace({ id: "other", name: "workspace-2", branch: "workspace-2" });
+	useAppStore.setState({ workspaces: { p1: [existing] } });
+	useAppStore.getState().updateWorkspace(pushedWorkspace()); // id w1 — not in the list
+
+	const list = useAppStore.getState().workspaces.p1;
+	expect(list).toHaveLength(1);
+	expect(list?.[0]?.id).toBe("other");
 });
