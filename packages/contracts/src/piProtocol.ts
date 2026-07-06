@@ -168,7 +168,7 @@ export interface AskUserQuestionItem {
 	header: string;
 	/** 2–4 mutually-exclusive choices (unless `multiSelect`). */
 	options: AskUserQuestionOption[];
-	/** Allow several answers; suppresses the free-text "Type your own answer" row. */
+	/** Allow several answers. The free-text row is still offered; its text rides along as an extra answer. */
 	multiSelect?: boolean;
 }
 
@@ -181,7 +181,8 @@ export interface AskUserQuestionArgs {
  * One answer the browser sends back, tagged by how it was produced:
  * - `option` — picked one author-defined option (`answer` = its label);
  * - `custom` — typed free text via the "Type your own answer" row (`answer` = the text);
- * - `multi`  — committed multi-select choices (`selected` = chosen labels, `answer` = null).
+ * - `multi`  — committed multi-select choices (`selected` = chosen labels; `answer` = the free text
+ *   typed in the "Type your own answer" row as an ADDITIONAL answer, or null when none).
  */
 export interface AskUserQuestionAnswer {
 	questionIndex: number;

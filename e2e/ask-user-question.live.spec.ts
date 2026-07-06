@@ -101,6 +101,44 @@ test("multi-select: several options can be checked and submitted", { tag: "@agen
 	).toHaveCount(2);
 });
 
+test("multi-select: the free-text row is mandatory and additive — checks + typed text round-trip", {
+	tag: "@agent",
+}, async ({ page }) => {
+	test.setTimeout(150_000);
+	await ask(
+		page,
+		`Call the ask_user_question tool with EXACTLY ONE question with multiSelect set to true and 3 short options. ${ONLY_TOOL}`,
+	);
+
+	const card = activeCard(page);
+	await expect(card).toBeVisible({ timeout: 90_000 });
+
+	// Issue #50: the "Other" free-text option must be offered on EVERY question — multi-select no
+	// longer suppresses it. It renders as a native option row with its own checkbox.
+	const custom = card.getByTestId("ask-custom");
+	await expect(custom).toBeVisible();
+	await expect(card.getByTestId("ask-custom-row")).toHaveAttribute("data-selected", "false");
+
+	// Check two options AND type a custom answer — typing checks the "Other" row (native checkbox) and
+	// must not clear the other checks (additive, not exclusive).
+	const options = card.getByTestId("ask-option");
+	await options.nth(0).click();
+	await options.nth(1).click();
+	await custom.fill("my-extra-e2e-answer");
+	await expect(card.getByTestId("ask-custom-row")).toHaveAttribute("data-selected", "true");
+	await expect(card.locator('[data-testid="ask-option"][data-selected="true"]')).toHaveCount(2);
+
+	await card.getByTestId("ask-submit").click();
+	const record = answeredRecord(page);
+	await expect(record).toBeVisible({ timeout: 60_000 });
+	// Both checked options round-trip into the record…
+	await expect(
+		record.locator('[data-testid="ask-record-option"][data-selected="true"]'),
+	).toHaveCount(2);
+	// …and the record echoes the additional typed answer.
+	await expect(record).toContainText("my-extra-e2e-answer");
+});
+
 test("freeform: a typed answer via 'Type your own answer' resolves the tool", {
 	tag: "@agent",
 }, async ({ page }) => {
@@ -113,7 +151,7 @@ test("freeform: a typed answer via 'Type your own answer' resolves the tool", {
 	const card = activeCard(page);
 	await expect(card).toBeVisible({ timeout: 90_000 });
 
-	// Single-select without previews offers the free-text row.
+	// Every question offers the free-text row; on single-select it is exclusive with the radio pick.
 	const custom = card.getByTestId("ask-custom");
 	await expect(custom).toBeVisible();
 	await custom.fill("my-own-e2e-answer");

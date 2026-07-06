@@ -86,8 +86,52 @@ describe("deriveAnswer", () => {
 		});
 	});
 
-	it("multi-select with nothing checked stays unanswered", () => {
+	it("multi-select with nothing checked and no text stays unanswered", () => {
 		expect(deriveAnswer(q({ multiSelect: true }), 0, state())).toBeNull();
+	});
+
+	it("multi-select: typed free text rides along as an additional answer (issue #50)", () => {
+		const a = deriveAnswer(
+			q({ multiSelect: true }),
+			1,
+			state({ multi: ["A"], customText: "  extra  ", customActive: true }),
+		);
+		expect(a).toEqual({
+			questionIndex: 1,
+			question: "Which?",
+			kind: "multi",
+			answer: "extra",
+			selected: ["A"],
+		});
+	});
+
+	it("multi-select: typed free text alone (nothing checked) is a valid answer", () => {
+		expect(
+			deriveAnswer(q({ multiSelect: true }), 0, state({ customText: "solo", customActive: true })),
+		).toEqual({
+			questionIndex: 0,
+			question: "Which?",
+			kind: "multi",
+			answer: "solo",
+			selected: [],
+		});
+	});
+
+	it("multi-select: an unchecked 'Other' row keeps its text OUT of the answer", () => {
+		// Typing checks the row; the user then unchecked it — the text stays visible but must not submit.
+		expect(
+			deriveAnswer(
+				q({ multiSelect: true }),
+				0,
+				state({ multi: ["A"], customText: "extra", customActive: false }),
+			),
+		).toEqual({
+			questionIndex: 0,
+			question: "Which?",
+			kind: "multi",
+			answer: null,
+			selected: ["A"],
+		});
 	});
 
 	it("drops a selected label that no longer exists in the options (clicked mid-stream, then renamed)", () => {

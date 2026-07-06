@@ -22,8 +22,9 @@ import { resultText } from "./toolHelpers";
 // The inline `ask_user_question` questionnaire — the browser side of the host-owned tool. Rendered as a
 // "bare" tool card (see the tool registry `chrome`), so it's a full-width, always-open panel rather than a
 // folded card. Styled after the app's inline prompt-card spec: the question IS the card header, options are
-// radio/checkbox rows (the recommended one badged), an "or" free-text row, a footer with a mode hint +
-// Skip/Submit, and compact, borderless "record" states once resolved. Presentational: reads the questions
+// radio/checkbox rows (the recommended one badged) closed by a mandatory native "Other" row (same
+// radio/checkbox indicator, inline free-text field), a footer with a mode hint + Skip/Submit, and compact,
+// borderless "record" states once resolved. Presentational: reads the questions
 // from the tool-call `args`, replies through the `ChatActions` context (provided by `ChatView`) — never the
 // store/transport directly, so it stays reusable.
 
@@ -78,8 +79,12 @@ export function deriveAnswer(
 		// Same stale-label rule as single-select below: a label checked while the args were still streaming
 		// may not exist in the final options — it must not ride along in the answer.
 		const valid = state.multi.filter((label) => question.options.some((o) => o.label === label));
-		if (valid.length === 0) return null;
-		return { ...base, kind: "multi", answer: null, selected: valid };
+		// Multi-select free text is ADDITIVE (issue #50): a checked "Other" row's non-empty text is one
+		// more answer alongside the checked options — and text alone (nothing else checked) is a valid
+		// answer too. Typing checks the row; an explicitly unchecked row keeps its text out.
+		const custom = state.customActive ? state.customText.trim() : "";
+		if (valid.length === 0 && !custom) return null;
+		return { ...base, kind: "multi", answer: custom || null, selected: valid };
 	}
 	if (state.customActive && state.customText.trim()) {
 		return { ...base, kind: "custom", answer: state.customText.trim() };
@@ -112,11 +117,6 @@ export function readAskResult(raw: unknown): AskUserQuestionResult | null {
 		return (raw as { details: AskUserQuestionResult }).details;
 	}
 	return isResult(raw) ? raw : null;
-}
-
-/** Freeform ("Type your own answer") is offered on single-select questions without side-by-side previews. */
-function allowsFreeform(q: AskUserQuestionItem): boolean {
-	return !q.multiSelect && !q.options.some((o) => o.preview);
 }
 
 // ---- the card ----
@@ -244,9 +244,8 @@ export function AskUserQuestionCard({
 						<QuestionBody
 							question={q}
 							state={state}
-							onSelect={(label) =>
-								patch(tab, { option: label, customActive: false, customText: "" })
-							}
+							// Picking an authored option deactivates "Other" but keeps its text (cheap to re-activate).
+							onSelect={(label) => patch(tab, { option: label, customActive: false })}
 							onToggleMulti={(label) =>
 								patch(tab, {
 									multi: state.multi.includes(label)
@@ -257,6 +256,8 @@ export function AskUserQuestionCard({
 							onCustomText={(text) =>
 								patch(tab, { customText: text, customActive: true, option: null })
 							}
+							onCustomActivate={() => patch(tab, { customActive: true, option: null })}
+							onToggleCustom={() => patch(tab, { customActive: !state.customActive })}
 							onToggleNote={(label) =>
 								patch(tab, { noteFor: state.noteFor === label ? null : label })
 							}
@@ -423,6 +424,8 @@ function QuestionBody({
 	onSelect,
 	onToggleMulti,
 	onCustomText,
+	onCustomActivate,
+	onToggleCustom,
 	onToggleNote,
 	onNote,
 }: {
@@ -431,6 +434,8 @@ function QuestionBody({
 	onSelect: (label: string) => void;
 	onToggleMulti: (label: string) => void;
 	onCustomText: (text: string) => void;
+	onCustomActivate: () => void;
+	onToggleCustom: () => void;
 	onToggleNote: (label: string) => void;
 	onNote: (label: string, text: string) => void;
 }) {
@@ -493,25 +498,17 @@ function QuestionBody({
 						);
 					})}
 
-					{allowsFreeform(question) ? (
-						<>
-							<div className="flex items-center gap-sm py-xs text-hint text-xs">
-								<span className="h-px flex-1 bg-border2" />
-								or
-								<span className="h-px flex-1 bg-border2" />
-							</div>
-							<div className="relative">
-								<Pencil className="-translate-y-1/2 absolute top-1/2 left-sm size-3.5 text-hint" />
-								<input
-									data-testid="ask-custom"
-									value={state.customText}
-									placeholder="Type your own answer…"
-									onChange={(e) => onCustomText(e.target.value)}
-									className="w-full rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] py-sm pr-sm pl-8 text-sm text-text outline-none placeholder:text-hint focus:border-primary"
-								/>
-							</div>
-						</>
-					) : null}
+					{/* The "Other" option is MANDATORY — offered on every question (issue #50) — and looks native:
+					    one more option row (radio on single-select, checkbox on multi-select) with the free-text
+					    field inline. Single-select: exclusive with the authored options; multi-select: additive. */}
+					<OtherOptionRow
+						multi={!!question.multiSelect}
+						active={state.customActive}
+						text={state.customText}
+						onActivate={onCustomActivate}
+						onToggle={onToggleCustom}
+						onText={onCustomText}
+					/>
 				</div>
 
 				{anyPreview && previewSource?.preview ? (
@@ -565,6 +562,68 @@ function OptionRow({
 	);
 }
 
+/**
+ * The mandatory "Other" choice, styled as one more option row so it reads native: the same indicator as
+ * its siblings (radio on single-select, checkbox on multi-select) plus an inline free-text field. The
+ * row is a <label>, so clicking anywhere focuses the input; focusing/typing activates it (on
+ * single-select that clears the radio pick — exclusive; on multi-select the checked options stay —
+ * additive). On multi-select the checkbox itself is a separate toggle, so the typed text can be
+ * excluded without deleting it.
+ */
+function OtherOptionRow({
+	multi,
+	active,
+	text,
+	onActivate,
+	onToggle,
+	onText,
+}: {
+	multi: boolean;
+	active: boolean;
+	text: string;
+	onActivate: () => void;
+	onToggle: () => void;
+	onText: (text: string) => void;
+}) {
+	return (
+		<label
+			data-testid="ask-custom-row"
+			data-selected={active}
+			className={cn(
+				"flex cursor-text items-center gap-sm rounded-[var(--radius-md)] border px-md py-sm transition-colors",
+				active ? "border-primary bg-primary/10" : "border-border2 hover:bg-hover",
+			)}
+		>
+			{multi ? (
+				<button
+					type="button"
+					data-testid="ask-custom-toggle"
+					aria-label={active ? "Exclude your own answer" : "Include your own answer"}
+					onClick={(e) => {
+						// The checkbox purely toggles — never let the label's default (focus the input) re-activate.
+						e.preventDefault();
+						onToggle();
+					}}
+					className="flex items-center"
+				>
+					<Indicator selected={active} multi className="mt-0" />
+				</button>
+			) : (
+				<Indicator selected={active} multi={false} className="mt-0" />
+			)}
+			<span className="font-medium text-sm text-text">Other</span>
+			<input
+				data-testid="ask-custom"
+				value={text}
+				placeholder="type your own answer…"
+				onFocus={onActivate}
+				onChange={(e) => onText(e.target.value)}
+				className="min-w-0 flex-1 border-none bg-transparent text-sm text-text outline-none placeholder:text-hint"
+			/>
+		</label>
+	);
+}
+
 /** The "Recommended" pill next to an agent-recommended option. */
 function RecommendedBadge() {
 	return (
@@ -575,13 +634,22 @@ function RecommendedBadge() {
 }
 
 /** A radio (single) or checkbox (multi) marker: an accent ring/box, filled when selected. */
-function Indicator({ selected, multi }: { selected: boolean; multi: boolean }) {
+function Indicator({
+	selected,
+	multi,
+	className,
+}: {
+	selected: boolean;
+	multi: boolean;
+	className?: string;
+}) {
 	if (multi) {
 		return (
 			<span
 				className={cn(
 					"mt-0.5 flex size-[18px] shrink-0 items-center justify-center rounded-[var(--radius-sm)] border",
 					selected ? "border-primary bg-primary text-on-accent" : "border-border2",
+					className,
 				)}
 			>
 				{selected ? <Check className="size-3" /> : null}
@@ -593,6 +661,7 @@ function Indicator({ selected, multi }: { selected: boolean; multi: boolean }) {
 			className={cn(
 				"mt-0.5 flex size-[18px] shrink-0 items-center justify-center rounded-full border",
 				selected ? "border-primary" : "border-border2",
+				className,
 			)}
 		>
 			{selected ? <span className="size-2 rounded-full bg-primary" /> : null}
@@ -738,6 +807,16 @@ function RecordRow({
 							</li>
 						);
 					})}
+					{/* A multi answer's free text (typed in addition to the checks) is the list's final row —
+						    inside the <ul> so it aligns exactly with the option rows above it. */}
+					{answer.kind === "multi" && answer.answer ? (
+						<li
+							data-testid="ask-record-custom"
+							className="flex items-center gap-xs text-sm text-text"
+						>
+							<Check className="size-3.5 shrink-0 text-green" />“{answer.answer}”
+						</li>
+					) : null}
 				</ul>
 			)}
 			{answer?.notes ? (
@@ -749,8 +828,11 @@ function RecordRow({
 	);
 }
 
-/** One answer as a short human string for the review panel. */
+/** One answer as a short human string for the review panel (a multi answer's free text is quoted). */
 function summarizeAnswer(a: AskUserQuestionAnswer): string {
-	const value = a.kind === "multi" ? (a.selected ?? []).join(", ") : (a.answer ?? "(no answer)");
+	const value =
+		a.kind === "multi"
+			? [...(a.selected ?? []), ...(a.answer ? [`“${a.answer}”`] : [])].join(", ")
+			: (a.answer ?? "(no answer)");
 	return a.notes ? `${value} — ${a.notes}` : value;
 }

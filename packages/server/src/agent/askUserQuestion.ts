@@ -63,12 +63,13 @@ const QuestionSchema = Type.Object({
 		minItems: MIN_OPTIONS,
 		maxItems: MAX_OPTIONS,
 		description:
-			"2-4 distinct choices. A free-text row and a Skip escape are added automatically — do NOT author 'Other'-style options.",
+			"2-4 distinct choices. An 'Other' free-text option and a Skip escape are added automatically — do NOT author 'Other'-style options.",
 	}),
 	multiSelect: Type.Optional(
 		Type.Boolean({
 			default: false,
-			description: "Allow multiple selections. Suppresses the free-text row.",
+			description:
+				'Allow multiple selections. The "Other" free-text option stays available; its text arrives as an additional answer alongside the checked options.',
 		}),
 	),
 });
@@ -88,8 +89,8 @@ const DESCRIPTION = `Ask the user one or more structured, multiple-choice questi
 2. You need a user preference, requirement, or a direction/implementation choice.
 
 The questions render inline in the chat as an interactive card (tabs when there are several). Notes:
-- Single-select questions without previews also get a free-text "Type your own answer" row, and the user can always Skip the whole questionnaire (you are told they declined) — do NOT author "Other"-style, free-text, or escape options yourself (reserved labels are rejected).
-- Set multiSelect: true when several answers are valid (this suppresses the free-text row).
+- Every question also gets an "Other" option with a free-text field, and the user can always Skip the whole questionnaire (you are told they declined) — do NOT author "Other"-style, free-text, or escape options yourself (reserved labels are rejected).
+- Set multiSelect: true when several answers are valid; the user may combine checked options with their own typed answer.
 - If you recommend one option, make it FIRST and append "(Recommended)" to its label.
 - Use options[].preview (markdown) for concrete artifacts to compare side-by-side (code, ASCII mockups, configs). Single-select only.
 - Group all clarifying questions into ONE call — do not chain calls back-to-back.
@@ -98,7 +99,7 @@ The questions render inline in the chat as an interactive card (tabs when there 
 const PROMPT_GUIDELINES = [
 	`Call ask_user_question whenever the request is ambiguous and a concrete decision is needed — up to ${MAX_QUESTIONS} questions per call, ${MIN_OPTIONS}-${MAX_OPTIONS} options each.`,
 	"Every option needs a concise label (1-5 words) and a description of what it means / its trade-off.",
-	'Recommend by putting the option first with "(Recommended)" appended; the user can always type a custom answer (single-select, no previews) or skip the questionnaire.',
+	'Recommend by putting the option first with "(Recommended)" appended; the user can always type a custom answer or skip the questionnaire.',
 ];
 
 const ERROR_NO_UI = "Error: UI not available (running in non-interactive mode)";
@@ -161,10 +162,16 @@ function toolResult(text: string, details: AskUserQuestionResult): ToolResult {
 	return { content: [{ type: "text", text }], details };
 }
 
-/** Human-readable one-liner for a single answer (pinned shape: `"Q"="A". selected preview: … . user notes: …`). */
+/**
+ * Human-readable one-liner for a single answer (pinned shape:
+ * `"Q"="A". user's own answer: "…". selected preview: … . user notes: …`). A multi answer's `answer`
+ * is the free text typed in addition to the checked options — marked as the user's own words so the
+ * model can tell it apart from authored option labels.
+ */
 function answerSegment(a: AskUserQuestionAnswer): string {
 	const scalar = a.kind === "multi" ? (a.selected ?? []).join(", ") : (a.answer ?? "(no answer)");
 	const parts = [`"${a.question}"="${scalar}"`];
+	if (a.kind === "multi" && a.answer) parts.push(`user's own answer: "${a.answer}"`);
 	if (a.preview) parts.push(`selected preview: ${a.preview}`);
 	if (a.notes) parts.push(`user notes: ${a.notes}`);
 	return `${parts.join(". ")}.`;

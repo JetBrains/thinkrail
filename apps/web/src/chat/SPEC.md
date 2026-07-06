@@ -60,7 +60,9 @@ a future `packages/chat-ui`).
     `edit` (project-relative file path + removed/added line diff), plus the interactive
     **`AskUserQuestionCard`** (the host-owned `ask_user_question` tool: an
     inline questionnaire — tabs per question, single/multi-select, side-by-side markdown previews
-    (single-select only), a free-text "Type your own answer" row (single-select without previews), Skip,
+    (single-select only), a mandatory native "Other" option row on every question (same radio/checkbox
+    indicator as its siblings + an inline free-text field — exclusive with the radio pick on
+    single-select, additive alongside the checks on multi-select), Skip,
     per-option notes; registered with `"bare"` chrome, answers via the `ChatActions` context. **Controls
     never stream:** while the tool call's args stream the card shows a stable composing placeholder
     (skeleton rows + a live ready-count — mutating form controls read as broken, so none are rendered),

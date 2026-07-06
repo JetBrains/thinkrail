@@ -59,8 +59,9 @@ assumptions get caught cheaply. Scale the *depth* to the task; never skip the wo
 
 ## Working with `ask_user_question`
 
-- This tool batches: up to 4 multiple-choice questions per call, 2-4 options each, one free-text
-  fallback row on single-select questions, an always-available Skip. It is not a one-question-at-a-time
+- This tool batches: up to 4 multiple-choice questions per call, 2-4 options each, a free-text
+  fallback row on every question (additive alongside the checks on multi-select), an always-available
+  Skip. It is not a one-question-at-a-time
   chat turn — group what you need into a round, and don't call it again immediately after with a trivial
   follow-up.
 - Always put your recommended option first and label it "(Recommended)" when you have one.

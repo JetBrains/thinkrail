@@ -123,6 +123,24 @@ test("buildQuestionnaireResponse: an answer → the envelope with the option + n
 	expect(r.content[0]?.text).toContain("user notes: for tz");
 });
 
+test("buildQuestionnaireResponse: a multi answer's typed free text is marked as the user's own answer", () => {
+	const result: AskUserQuestionResult = {
+		cancelled: false,
+		answers: [
+			{
+				questionIndex: 0,
+				question: "Which library?",
+				kind: "multi",
+				answer: "some-other-lib",
+				selected: ["date-fns"],
+			},
+		],
+	};
+	const r = buildQuestionnaireResponse(result, args());
+	expect(r.content[0]?.text).toContain('"Which library?"="date-fns"');
+	expect(r.content[0]?.text).toContain('user\'s own answer: "some-other-lib"');
+});
+
 test("execute blocks until answerQuestion resolves it, then formats the envelope", async () => {
 	const promise = run("tc-1", "s1");
 	answerQuestion("s1", "tc-1", {
