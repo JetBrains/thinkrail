@@ -78,23 +78,37 @@ its inline answer bridge.
     key on. The LLM-facing contract (TypeBox schema, validation, envelope) is re-implemented here so we own
     it and avoid the package's pi-tui/i18n peer deps.
   - `extensions` — `buildResourceLoader(cwd, settingsManager)`: a `DefaultResourceLoader` (pi's normal
-    disk discovery) that also loads three bundled extensions via `additionalExtensionPaths` (pi's loader
-    jiti-loads their raw `.ts` — no value-import into our typecheck): **`pi-web-access`** (`web_search` +
-    `fetch_content`), **`pi-visualize`** (`visualize`), and **`pi-spec-graph`** (the `spec_*` tools + its
-    `before_agent_start` rule). The last is a workspace package, so its `pi.skills` manifest isn't
-    auto-discovered — its `skills/` dir is wired via **`additionalSkillPaths`**. Plus `extensionFactories`:
-    a **headless-search policy** (a `tool_call` hook defaulting `web_search`'s `workflow`
-    to `"none"`, since pi-web-access would otherwise open a browser curator our `rpc` host can't render)
-    **and** `askUserQuestionExtension` (registers the `ask_user_question` tool).
-    Both session paths pass it as `resourceLoader`. Internal helper (not on the barrel).
+    disk discovery) that also loads the four bundled extensions — **`pi-web-access`** (`web_search` +
+    `fetch_content`), **`pi-visualize`** (`visualize`), **`pi-spec-graph`** (the `spec_*` tools + its
+    `before_agent_start` rule), and **`pi-thinkrail-workflow`** (the brainstorming rule + skill) — in one
+    of **two modes**:
+    - **Run-from-source (default):** `additionalExtensionPaths` pointing at the packages' raw `.ts`
+      entries (pi's loader jiti-loads them — no value-import into our typecheck graph), resolved
+      **lazily on first use** (never at module load: the resolve requires `node_modules`, which a
+      compiled binary lacks). The workspace packages' `pi.skills` manifests aren't auto-discovered for
+      file-path entries — their `skills/` dirs (`pi-spec-graph`, `pi-thinkrail-workflow`) are wired via
+      **`additionalSkillPaths`**.
+    - **Compiled binary:** the launcher calls the **`setBundledExtensions({ factories, skillsDir })`
+      seam** before the first session — the same four extensions as **value-imported default-export
+      factories** (pi gives `extensionFactories` full API parity with path loading; what's lost —
+      file-relative `baseDir`, per-reload re-evaluation — none of the four use) plus a staged on-disk
+      skills dir (pi reads `SKILL.md` via plain fs, so skills must live on the real filesystem).
+    Both modes append `extensionFactories`: a **headless-search policy** (a `tool_call` hook defaulting
+    `web_search`'s `workflow` to `"none"`, since pi-web-access would otherwise open a browser curator our
+    `rpc` host can't render) **and** `askUserQuestionExtension` (registers the `ask_user_question` tool).
+    Both session paths pass it as `resourceLoader`. `buildResourceLoader` stays internal; the seam +
+    its types are on the barrel.
 - **Public surface (barrel):** the manager operations + `CreateSessionInput`/`CreateSessionResult` +
   `SessionEventPayload`; `configurePiRuntime`/`getPiRuntime`; `completeOnce`/`pickModel` +
   `OneShotRequest`/`OneShotResult`/`ModelTier`; the `webUiContext` seams; the
   `askUserQuestion` bridge (`answerQuestion`/`cancelQuestionsForSession`) + its pure helpers
-  (`validateQuestionnaire`/`buildQuestionnaireResponse`).
+  (`validateQuestionnaire`/`buildQuestionnaireResponse`); the compiled-binary extension seam
+  (`setBundledExtensions` + `BundledExtensions`/`BundledExtensionFactory`).
 - **Allowed deps:** `@earendil-works/pi-coding-agent` (runtime); `@earendil-works/pi-ai` (runtime — the
-  `complete()` dispatch used by `oneshot`); `pi-web-access` + `pi-visualize` + `pi-spec-graph` (the bundled
-  extensions — loaded by path, not value-imported); `typebox` (the `ask_user_question` parameter schema);
+  `complete()` dispatch used by `oneshot`); `pi-web-access` + `pi-visualize` + `pi-spec-graph` +
+  `pi-thinkrail-workflow` (the bundled extensions — loaded by path, never value-imported here; the
+  compiled binary's value-imports live in `apps/cli`'s generated build module); `typebox` (the
+  `ask_user_question` parameter schema);
   `contracts` (`PiEvent`/`Model`/`ThinkingLevel`/`ImageContent`/`SessionStats`/`SlashCommandInfo`/`ExtUi*`/
   `AskUserQuestion*`); Node.
 - **Forbidden:** `host`; sibling features (the `cwd` is passed in, not looked up via `persistence`).

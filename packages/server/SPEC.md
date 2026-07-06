@@ -21,7 +21,10 @@ and runs the `pi` agent in-process via `createAgentSession`. Launched in-process
   persistence.
 - **Public surface:** `createServer(options) → RunningServer` (`{ port, stop }`) and `bootHost(options)
   → BootedHost` (the process-boot wrapper: resolves the login-shell PATH, picks the port per `portMode`,
-  and installs SIGINT/SIGTERM graceful-shutdown handlers around `createServer`), both re-exported from `host/`.
+  and installs SIGINT/SIGTERM graceful-shutdown handlers around `createServer`), both re-exported from
+  `host/`; plus `setBundledExtensions` (+ its types, re-exported from `agent/`) — the compiled-binary
+  seam by which a launcher that cannot path-load the bundled pi extensions (no `node_modules` inside a
+  `bun build --compile` binary) injects them as value-imported factories + a staged skills dir.
 - **Allowed deps:** `contracts` (types + WS constants), `shared` (`shellEnv`), `bun-pty`,
   `@earendil-works/pi-coding-agent` + `@earendil-works/pi-ai` (runtime), Bun/Node.
 - **Forbidden:** importing `web`/`cli`/`desktop`; being bundled into the browser.
@@ -47,7 +50,8 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `assist` | ad-hoc one-shot tasks (workspace naming, …) on a cheap model, best-effort | [assist/SPEC.md](src/assist/SPEC.md) |
 | `dialog` | the host's native folder picker | [dialog/SPEC.md](src/dialog/SPEC.md) |
 
-`src/index.ts` re-exports `host`; `src/dev.ts` boots the host from env via `bootHost` for dev/e2e.
+`src/index.ts` re-exports `host` + the `agent` barrel's `setBundledExtensions` seam; `src/dev.ts` boots
+the host from env via `bootHost` for dev/e2e.
 
 ## Internal dependency graph
 

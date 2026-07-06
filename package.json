@@ -24,6 +24,7 @@
 		"dev:web": "turbo run dev --filter=@thinkrail-pi/web",
 		"build:web": "turbo run build --filter=@thinkrail-pi/web",
 		"build:binary": "bun run build:web && bun apps/cli/scripts/build-binary.ts",
+		"smoke:binary": "bun apps/cli/scripts/smoke-binary.ts",
 		"setup-central-cli": "bun scripts/setup-central-cli.ts",
 		"typecheck": "turbo run typecheck",
 		"test": "turbo run test",

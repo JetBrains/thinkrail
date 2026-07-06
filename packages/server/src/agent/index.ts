@@ -2,6 +2,11 @@
 
 export * from "./agentSessionManager";
 export * from "./askUserQuestion";
+export {
+	type BundledExtensionFactory,
+	type BundledExtensions,
+	setBundledExtensions,
+} from "./extensions";
 export * from "./oneshot";
 export * from "./piRuntime";
 export * from "./webUiContext";

@@ -75,3 +75,24 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 7
+
+  binary:
+    name: Binary smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - name: Cache bun install
+        uses: actions/cache@v5
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+      - run: bun install --frozen-lockfile
+      # Build the single-file binary for the runner's platform, then boot the artifact and assert it
+      # serves the staged UI + skills and shuts down cleanly — regressions in the extension/asset
+      # bundling only exist inside the compiled binary, so from-source suites can't catch them.
+      - run: bun run build:binary
+      - run: bun run smoke:binary
