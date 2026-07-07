@@ -212,10 +212,11 @@ export function AskUserQuestionCard({
 	return (
 		<div className="flex flex-col gap-xs motion-safe:animate-reveal">
 			<WaitingLine />
+			{/* Awaiting an answer — the subtle primary-tinted accent ring is the "needs you" cue. */}
 			<div
 				data-testid="ask-user-question"
 				data-tone="active"
-				className="overflow-hidden rounded-[var(--radius-lg)] border border-border2 bg-elevated"
+				className="overflow-hidden rounded-[var(--radius-lg)] border border-primary/40 bg-elevated ring-1 ring-primary/25"
 			>
 				{multi ? (
 					<div className="flex items-center gap-xs overflow-x-auto border-border2 border-b px-md py-sm">

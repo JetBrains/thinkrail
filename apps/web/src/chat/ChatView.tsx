@@ -13,10 +13,10 @@ import { type ChatActions, ChatActionsContext } from "./ChatActions";
 import { ChatHeader } from "./ChatHeader";
 import { Composer, type MentionCandidate, type SubmitBehavior } from "./Composer";
 import { ExtUiDialog } from "./ExtUiDialog";
+import { type ChatRow, deriveRows } from "./rows";
 import { StreamIndicator, type StreamStatus, streamStatus } from "./StreamIndicator";
 import "./tools/register"; // side-effect: register the built-in pi tool renderers (bash/read/edit/write)
-import { ChatTurnView, TurnDivider, turnDivider } from "./turns";
-import type { ChatTurn } from "./types";
+import { ChatTurnView } from "./turns";
 import { useChatScroll } from "./useChatScroll";
 
 /** Context threaded to the Virtuoso footer so the streaming loader lives at the end of the conversation. */
@@ -73,6 +73,14 @@ export default function ChatView({
 		model: currentModel,
 		thinkingLevel,
 	} = runtime;
+
+	// The transcript renders derived rows, not raw turns: routine activity folds across assistant-message
+	// boundaries, so the row model is re-derived per snapshot (pure + memoized; stable row ids keep
+	// Virtuoso keys and fold state steady while streaming).
+	const rows = useMemo(
+		() => deriveRows(turns, toolResults, isStreaming),
+		[turns, toolResults, isStreaming],
+	);
 
 	// The streaming loader lives as the list footer (so it forms where the next message will). Suppressed
 	// during a retry countdown, which renders its own indicator turn. `working` covers the post-send gap.
@@ -230,35 +238,26 @@ export default function ChatView({
 					className="relative flex min-h-0 flex-1 flex-col"
 					{...containerProps}
 				>
-					<Virtuoso<ChatTurn, ChatListContext>
+					<Virtuoso<ChatRow, ChatListContext>
 						ref={virtuosoRef}
-						data={turns}
+						data={rows}
 						context={listContext}
 						components={CHAT_LIST_COMPONENTS}
 						className="min-h-0 flex-1"
 						followOutput={followOutput}
 						atBottomStateChange={handleAtBottom}
 						atBottomThreshold={50}
-						itemContent={(index, turn) => {
-							// A divider closes each round the instant it ends — below the round's last turn (its "✓ Done"
-							// marker, or its final assistant turn when hydrated), i.e. when the next turn is a new user
-							// turn or this is the last turn of a finished (non-streaming) transcript. Anchoring it here
-							// (not before the next user turn) surfaces the summary immediately, not on the follow-up.
-							const roundEnded =
-								turn.kind !== "user" &&
-								(turns[index + 1]?.kind === "user" || (index === turns.length - 1 && !isStreaming));
-							const divider = roundEnded ? turnDivider(turns, index) : null;
-							return (
-								<div className="mx-auto max-w-3xl px-md py-xs">
-									<ChatTurnView
-										turn={turn}
-										toolResults={toolResults}
-										workspaceRoot={workspaceRoot}
-									/>
-									{divider ? <TurnDivider data={divider} onOpenChanges={onOpenChanges} /> : null}
-								</div>
-							);
-						}}
+						// Row ids are stable across streaming snapshots (rows.ts), so items never remount mid-stream.
+						computeItemKey={(_, row) => row.id}
+						itemContent={(_, row) => (
+							<div className="mx-auto max-w-3xl px-md py-xs">
+								<ChatTurnView
+									row={row}
+									workspaceRoot={workspaceRoot}
+									onOpenChanges={onOpenChanges}
+								/>
+							</div>
+						)}
 					/>
 					{showScrollButton ? (
 						<button

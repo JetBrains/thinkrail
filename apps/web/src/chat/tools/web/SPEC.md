@@ -3,7 +3,7 @@ id: submodule-web-chat-tools-web
 type: submodule-design
 status: draft
 title: web tool renderers (web_search / fetch_content)
-parent: submodule-web-chat
+parent: submodule-web-chat-tools
 depends-on: [module-contracts]
 tags: [v1, chat, web-tools]
 ---

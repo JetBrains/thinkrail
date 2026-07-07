@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openWorkspaceChat } from "./fixtures/app";
+import { openWorkspaceChat, waitForDone } from "./fixtures/app";
 
 // Tagged @agent (see agent.live.spec.ts): drives a REAL pi agent to make a file change, then proves the
 // chat turn-divider (Task 9) — it appears the instant the turn ends (no follow-up needed), and its "files
@@ -18,13 +18,15 @@ test("turn-divider files-changed chip opens the file's diff in the Changes panel
 			"Use the write tool to create a new file notes.txt whose only content is the line: hello",
 		);
 	await page.getByTestId("chat-send").click();
-	// Tool cards are collapsed by default — assert the card header (always rendered), not its body.
-	await expect(page.locator('[data-testid="tool-card"][data-tool="write"]').first()).toBeVisible({
-		timeout: 90_000,
-	});
+	// `write` is routine — it folds into an activity run. Assert the fold surfaced it by name: either the
+	// collapsed group header's tally ("N steps · write …") or a single-step run's bare step row.
 	await expect(
-		page.locator('[data-testid="chat-message"][data-role="system"]').filter({ hasText: "Done" }),
+		page
+			.locator('[data-testid="activity-group"], [data-testid="activity-step"]')
+			.filter({ hasText: "write" })
+			.first(),
 	).toBeVisible({ timeout: 90_000 });
+	await waitForDone(page);
 
 	// The divider closes the round the instant it ends — no follow-up turn required.
 	const chip = page.getByTestId("turn-divider-files").first();

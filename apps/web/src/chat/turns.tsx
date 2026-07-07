@@ -1,58 +1,58 @@
-import type { AssistantMessage, UserMessage } from "@thinkrail/contracts";
-import {
-	Brain,
-	ChevronRight,
-	Clock,
-	FileDiff,
-	RotateCw,
-	TriangleAlert,
-	Wrench,
-} from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import type { UserMessage } from "@thinkrail/contracts";
+import { Clock, FileDiff, RotateCw, TriangleAlert, Wrench } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ActivityGroup } from "./ActivityGroup";
 import { Markdown } from "./Markdown";
+import type { ChatRow, TurnDividerData } from "./rows";
 import { ToolCard } from "./ToolCard";
 import { getToolChrome, getToolRenderer } from "./toolRegistry";
-import { strArg } from "./tools/toolHelpers";
-import type { ChatTurn, ToolResultState } from "./types";
 
 /**
- * Render a chat turn. Presentational + props-driven (no store/transport) so the renderers stay reusable;
- * `ChatView` is the app-integration layer that feeds these from the store. `toolResults` pairs a tool
- * call (inside an assistant turn) with its output by `toolCallId`.
+ * Render one derived chat row (see `rows.ts` — the transcript renders rows, not raw turns, so routine
+ * activity can fold across assistant-message boundaries). Presentational + props-driven (no
+ * store/transport) so the renderers stay reusable; `ChatView` derives the rows from the store and feeds
+ * them here. `onOpenChanges` is the divider's "files changed" deep link — supplied by the integration
+ * layer, a no-op default keeps the primitives standalone.
  */
 export function ChatTurnView({
-	turn,
-	toolResults,
+	row,
 	workspaceRoot,
+	onOpenChanges,
 }: {
-	turn: ChatTurn;
-	toolResults: Record<string, ToolResultState>;
+	row: ChatRow;
 	workspaceRoot?: string | undefined;
+	onOpenChanges?: ((paths: string[]) => void) | undefined;
 }) {
-	switch (turn.kind) {
+	switch (row.kind) {
 		case "user":
-			return <UserTurn message={turn.message} />;
-		case "assistant":
+			return <UserTurn message={row.message} />;
+		case "system":
+			return <SystemTurn text={row.text} />;
+		case "error":
+			return <ErrorTurn text={row.text} />;
+		case "retry":
 			return (
-				<AssistantTurn
-					message={turn.message}
-					streaming={turn.streaming}
-					toolResults={toolResults}
+				<RetryIndicator attempt={row.attempt} maxAttempts={row.maxAttempts} delayMs={row.delayMs} />
+			);
+		case "markdown":
+			return (
+				<div data-testid="chat-message" data-role="assistant" className="text-sm text-text">
+					<Markdown text={row.text} />
+				</div>
+			);
+		case "tool":
+			return <ToolRow row={row} workspaceRoot={workspaceRoot} />;
+		case "activity":
+			return (
+				<ActivityGroup
+					id={row.id}
+					steps={row.steps}
+					live={row.live}
 					workspaceRoot={workspaceRoot}
 				/>
 			);
-		case "system":
-			return <SystemTurn text={turn.text} />;
-		case "error":
-			return <ErrorTurn text={turn.text} />;
-		case "retry":
-			return (
-				<RetryIndicator
-					attempt={turn.attempt}
-					maxAttempts={turn.maxAttempts}
-					delayMs={turn.delayMs}
-				/>
-			);
+		case "divider":
+			return <TurnDivider data={row.data} onOpenChanges={onOpenChanges ?? (() => {})} />;
 		default:
 			return null;
 	}
@@ -76,153 +76,46 @@ function UserTurn({ message }: { message: UserMessage }) {
 	);
 }
 
-/** Walk the assistant message's content blocks IN ORDER: text → markdown, thinking → block, toolCall → card. */
-function AssistantTurn({
-	message,
-	streaming,
-	toolResults,
-	workspaceRoot,
-}: {
-	message: AssistantMessage;
-	streaming: boolean;
-	toolResults: Record<string, ToolResultState>;
-	workspaceRoot?: string | undefined;
-}) {
-	// While the model is still thinking and no answer text has arrived, the thinking block expands to let
-	// the user watch live; once any answer text exists it folds away so the answer is the focus.
-	const hasAnswerText = message.content.some((b) => b.type === "text" && b.text.trim().length > 0);
-	const thinkingActive = streaming && !hasAnswerText;
-	return (
-		<div
-			data-testid="chat-message"
-			data-role="assistant"
-			className="flex flex-col gap-sm text-sm text-text"
-		>
-			{message.content.map((block, index) => {
-				if (block.type === "toolCall") {
-					return (
-						<ToolBlock
-							key={block.id}
-							toolCallId={block.id}
-							toolName={block.name}
-							args={block.arguments}
-							tool={toolResults[block.id]}
-							streaming={streaming}
-							workspaceRoot={workspaceRoot}
-							// An aborted/errored message never executes its tool calls (pi records no result for
-							// them) — without this they'd render as "running" forever.
-							callDead={message.stopReason === "aborted" || message.stopReason === "error"}
-						/>
-					);
-				}
-				// Text/thinking blocks have no id; their array position is stable (pi appends, never reorders),
-				// so the index is a correct, safe key here.
-				const key = `${block.type}-${index}`;
-				if (block.type === "text") {
-					return block.text ? <Markdown key={key} text={block.text} /> : null;
-				}
-				if (block.type === "thinking") {
-					return block.thinking ? (
-						<ThinkingBlock key={key} text={block.thinking} active={thinkingActive} />
-					) : null;
-				}
-				return null;
-			})}
-		</div>
-	);
-}
-
 /**
- * A tool call, framed by its registered chrome. `"bare"` tools (e.g. the inline `ask_user_question`
- * questionnaire) own their whole frame and render full-width without the collapsible header; everything
- * else goes through the shared, collapsed-by-default {@link ToolCard}. A `"bare"` call on a dead message
- * (aborted/errored — pi never executes those tool calls) is rendered as errored rather than left
- * interactive forever.
+ * A primary tool call, framed by its registered chrome. `"bare"` tools (e.g. the inline
+ * `ask_user_question` questionnaire) own their whole frame and render full-width without the collapsible
+ * header; everything else goes through the shared {@link ToolCard} (collapsed unless `defaultExpanded`;
+ * errors auto-expand). A call on a dead message (aborted/errored — pi never executes those calls) renders
+ * as errored rather than staying running/interactive forever.
  */
-function ToolBlock({
-	toolCallId,
-	toolName,
-	args,
-	tool,
-	streaming,
+function ToolRow({
+	row,
 	workspaceRoot,
-	callDead,
 }: {
-	toolCallId: string;
-	toolName: string;
-	args: Record<string, unknown>;
-	tool: ToolResultState | undefined;
-	streaming: boolean;
+	row: Extract<ChatRow, { kind: "tool" }>;
 	workspaceRoot?: string | undefined;
-	callDead: boolean;
 }) {
-	if (getToolChrome(toolName) === "bare") {
-		const Renderer = getToolRenderer(toolName);
+	if (getToolChrome(row.toolName) === "bare") {
+		const Renderer = getToolRenderer(row.toolName);
 		return (
-			<Renderer
-				toolCallId={toolCallId}
-				toolName={toolName}
-				args={args}
-				result={tool?.raw}
-				status={tool?.status ?? (callDead ? "error" : "running")}
-				workspaceRoot={workspaceRoot}
-				streaming={streaming}
-			/>
+			<div className="text-sm text-text">
+				<Renderer
+					toolCallId={row.toolCallId}
+					toolName={row.toolName}
+					args={row.args}
+					result={row.tool?.raw}
+					status={row.tool?.status ?? (row.dead ? "error" : "running")}
+					workspaceRoot={workspaceRoot}
+					streaming={row.streaming}
+				/>
+			</div>
 		);
 	}
 	return (
 		<ToolCard
-			toolCallId={toolCallId}
-			toolName={toolName}
-			args={args}
-			tool={tool}
-			streaming={streaming}
+			toolCallId={row.toolCallId}
+			toolName={row.toolName}
+			args={row.args}
+			tool={row.tool}
+			dead={row.dead}
+			streaming={row.streaming}
 			workspaceRoot={workspaceRoot}
 		/>
-	);
-}
-
-/** Compact a character count: 1234 → "1.2k", 980 → "980". */
-function formatChars(n: number): string {
-	return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
-}
-
-/**
- * The model's reasoning. Auto-expands while actively thinking (no answer yet) and auto-collapses once the
- * answer begins — unless the user has manually toggled it, in which case their choice sticks for the turn.
- */
-function ThinkingBlock({ text, active }: { text: string; active: boolean }) {
-	const [expanded, setExpanded] = useState(active);
-	const userToggled = useRef(false);
-
-	useEffect(() => {
-		if (!userToggled.current) setExpanded(active);
-	}, [active]);
-
-	const toggle = () => {
-		userToggled.current = true;
-		setExpanded((e) => !e);
-	};
-
-	return (
-		<div
-			data-testid="thinking-block"
-			data-expanded={expanded}
-			className="rounded-[var(--radius-sm)] border border-border2 bg-elevated px-sm py-xs text-muted text-xs"
-		>
-			<button
-				type="button"
-				onClick={toggle}
-				className="flex w-full cursor-pointer select-none items-center gap-xs text-left"
-			>
-				<Brain className="size-3.5 shrink-0" />
-				<ChevronRight
-					className={`size-3 shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
-				/>
-				<span>{expanded ? "Thinking" : `Thinking (${formatChars(text.length)} chars)`}</span>
-			</button>
-			{expanded ? <div className="mt-xs whitespace-pre-wrap">{text}</div> : null}
-		</div>
 	);
 }
 
@@ -236,7 +129,7 @@ function SystemTurn({ text }: { text: string }) {
 
 /**
  * A failure notice: the run ended in a provider/model error, or the host rejected a send (bad model,
- * missing API key, …). Kept visible (not collapsed) so a failed turn never looks like nothing happened.
+ * missing API key, …). Kept visible (never folded) so a failed turn never looks like nothing happened.
  */
 function ErrorTurn({ text }: { text: string }) {
 	return (
@@ -290,61 +183,6 @@ function RetryIndicator({
 	);
 }
 
-/** Orientation metadata for the round-end divider (derived in the view, not the reducer). */
-export interface TurnDividerData {
-	/** Wall-clock from the round's user turn to its end (agent_end, or the last assistant reply), or null. */
-	elapsedMs: number | null;
-	/** Tool calls made by the assistant turn(s) in this round. */
-	toolCount: number;
-	/** Distinct files written/edited by those tool calls (worktree-relative or absolute, as pi reported). */
-	changedFiles: string[];
-}
-
-/**
- * Derive the divider that closes the round *ending* at `endIndex` (its "✓ Done" marker, or its last
- * assistant turn when hydrated): the round's tool calls + edited/written files, plus the elapsed wall-clock
- * from the round's user turn to its end. Anchored at the round end (not the next user turn) so the summary
- * appears the instant the turn finishes. The end time comes from the "✓ Done" marker's `endedAt` when
- * present (live), else the last assistant message's timestamp (hydrated) — stable either way, so the number
- * never jumps when a follow-up arrives. Returns null when there is no user turn starting the round. Pure.
- */
-export function turnDivider(turns: ChatTurn[], endIndex: number): TurnDividerData | null {
-	let userIdx = -1;
-	for (let i = endIndex; i >= 0; i--) {
-		if (turns[i]?.kind === "user") {
-			userIdx = i;
-			break;
-		}
-	}
-	if (userIdx < 0) return null;
-
-	let toolCount = 0;
-	const changedFiles: string[] = [];
-	let endMs: number | null = null;
-	for (let i = userIdx + 1; i <= endIndex; i++) {
-		const turn = turns[i];
-		if (turn?.kind === "assistant") {
-			if (turn.message.timestamp) endMs = turn.message.timestamp;
-			for (const block of turn.message.content) {
-				if (block.type !== "toolCall") continue;
-				toolCount++;
-				if (block.name === "edit" || block.name === "write") {
-					const path = strArg(block.arguments, "path");
-					if (path && !changedFiles.includes(path)) changedFiles.push(path);
-				}
-			}
-		} else if (turn?.kind === "system" && turn.endedAt != null) {
-			endMs = turn.endedAt; // the live "✓ Done" marker carries the precise turn-end time
-		}
-	}
-
-	const user = turns[userIdx];
-	const startMs = user?.kind === "user" ? user.message.timestamp : null;
-	const elapsedMs = startMs != null && endMs != null ? endMs - startMs : null;
-
-	return { elapsedMs, toolCount, changedFiles };
-}
-
 /** "1m 12s" / "45s" from a millisecond span. */
 function formatElapsed(ms: number): string {
 	const totalSec = Math.round(ms / 1000);
@@ -357,7 +195,7 @@ function formatElapsed(ms: number): string {
  * A subtle round-end divider (rendered right when the turn finishes, below its "✓ Done" marker): tool-call
  * count, a clickable "N files changed" chip (opens those files in the Changes/diff panel via
  * `onOpenChanges`), and elapsed wall-clock. Presentational — the store touch lives in `ChatView`, which
- * supplies `onOpenChanges`.
+ * supplies `onOpenChanges`. The data comes from the pure `turnDivider` deriver in `rows.ts`.
  */
 export function TurnDivider({
 	data,

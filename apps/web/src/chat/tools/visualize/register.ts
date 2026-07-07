@@ -4,13 +4,19 @@ import { registerToolRenderer } from "../../toolRegistry";
 import { strArg } from "../toolHelpers";
 import { VisualizationCard } from "./VisualizationCard";
 
-// Collapsed-card header summary: the title, else a type-derived label.
-registerToolRenderer("visualize", VisualizationCard, ({ args }) => {
-	const title = strArg(args, "title");
-	if (title) return title;
-	if (strArg(args, "type") === "comparison") {
-		const count = Array.isArray(args.options) ? args.options.length : 0;
-		return `comparison — ${count} option${count === 1 ? "" : "s"}`;
-	}
-	return "diagram";
+// PRIMARY + defaultExpanded: a visualization is output *for the user*, not plumbing — it escapes the
+// activity fold and renders open on completion (while its args stream it stays a slim running row).
+// The summary is the card-header line: the title, else a type-derived label.
+registerToolRenderer("visualize", VisualizationCard, {
+	prominence: "primary",
+	defaultExpanded: true,
+	summary: ({ args }) => {
+		const title = strArg(args, "title");
+		if (title) return title;
+		if (strArg(args, "type") === "comparison") {
+			const count = Array.isArray(args.options) ? args.options.length : 0;
+			return `comparison — ${count} option${count === 1 ? "" : "s"}`;
+		}
+		return "diagram";
+	},
 });

@@ -106,6 +106,41 @@ export async function openWorkspaceChat(page: Page): Promise<void> {
 	await expect(page.getByTestId("chat-input")).toBeVisible();
 }
 
+/** Wait for the current round to finish (its "✓ Done" marker) so the transcript is stable. */
+export async function waitForDone(page: Page, timeout = 90_000): Promise<void> {
+	await expect(
+		page
+			.locator('[data-testid="chat-message"][data-role="system"]')
+			.filter({ hasText: "Done" })
+			.last(),
+	).toBeVisible({ timeout });
+}
+
+/** Expand every collapsed activity group so the routine step rows exist in the DOM. */
+export async function expandAllActivityGroups(page: Page): Promise<void> {
+	const collapsed = page.locator('[data-testid="activity-group"][data-expanded="false"]');
+	while ((await collapsed.count()) > 0) {
+		await collapsed.first().getByTestId("activity-group-toggle").click();
+	}
+}
+
+/**
+ * Reveal + expand the first activity step for `tool`, returning its locator. Routine tools don't get
+ * their own cards — they fold into collapsed activity groups (a single-step run renders its step row
+ * directly) — so this expands the groups first, then the step, revealing its full renderer body.
+ * Call after the round ended ({@link waitForDone}) so the fold set is stable.
+ */
+export async function expandActivityStep(page: Page, tool: string): Promise<Locator> {
+	await expandAllActivityGroups(page);
+	const step = page.locator(`[data-testid="activity-step"][data-tool="${tool}"]`).first();
+	await expect(step).toBeVisible();
+	if ((await step.getAttribute("data-expanded")) !== "true") {
+		await step.getByTestId("activity-step-toggle").click();
+		await expect(step).toHaveAttribute("data-expanded", "true");
+	}
+	return step;
+}
+
 /** The terminal layer currently shown (exactly one is `data-visible="true"` at a time). */
 export function visibleTerminal(page: Page): Locator {
 	return page.locator('[data-testid="terminal-instance"][data-visible="true"]');

@@ -5,6 +5,7 @@ import {
 	getToolRenderer,
 	getToolSummary,
 	registerToolRenderer,
+	resolveProminence,
 } from "./toolRegistry";
 
 const props = (args: Record<string, unknown>): ToolRenderProps => ({
@@ -27,11 +28,9 @@ describe("toolRegistry summaries", () => {
 	});
 
 	it("invokes the registered summary with the render props", () => {
-		registerToolRenderer(
-			"summary-tool",
-			() => null,
-			({ args }) => `ran ${String(args.command)}`,
-		);
+		registerToolRenderer("summary-tool", () => null, {
+			summary: ({ args }) => `ran ${String(args.command)}`,
+		});
 		expect(getToolSummary("summary-tool", props({ command: "echo hi" }))).toBe("ran echo hi");
 	});
 
@@ -52,7 +51,45 @@ describe("toolRegistry chrome", () => {
 	});
 
 	it("honors a registered 'bare' chrome (renderer owns its frame)", () => {
-		registerToolRenderer("bare-tool", () => null, undefined, "bare");
-		expect(getToolChrome("bare-tool")).toBe("bare");
+		registerToolRenderer("bare-chrome-tool", () => null, { chrome: "bare" });
+		expect(getToolChrome("bare-chrome-tool")).toBe("bare");
+	});
+});
+
+describe("resolveProminence (the settings seam)", () => {
+	it("defaults to routine + not defaultExpanded — including unregistered tools", () => {
+		registerToolRenderer("plain-tool", () => null);
+		expect(resolveProminence("plain-tool")).toEqual({
+			prominence: "routine",
+			defaultExpanded: false,
+		});
+		expect(resolveProminence("never-registered")).toEqual({
+			prominence: "routine",
+			defaultExpanded: false,
+		});
+	});
+
+	it("honors a registered primary + defaultExpanded (the visualize shape)", () => {
+		registerToolRenderer("viz-like-tool", () => null, {
+			prominence: "primary",
+			defaultExpanded: true,
+		});
+		expect(resolveProminence("viz-like-tool")).toEqual({
+			prominence: "primary",
+			defaultExpanded: true,
+		});
+	});
+
+	it("'bare' chrome implies primary (a self-framed renderer can't fold into step rows)", () => {
+		registerToolRenderer("bare-implies-primary", () => null, { chrome: "bare" });
+		expect(resolveProminence("bare-implies-primary").prominence).toBe("primary");
+	});
+
+	it("'bare' chrome wins even over an explicit routine prominence (misregistration guard)", () => {
+		registerToolRenderer("bare-declared-routine", () => null, {
+			chrome: "bare",
+			prominence: "routine",
+		});
+		expect(resolveProminence("bare-declared-routine").prominence).toBe("primary");
 	});
 });

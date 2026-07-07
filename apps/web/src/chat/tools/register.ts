@@ -10,18 +10,20 @@ import "./visualize/register";
 import "./web/register";
 import { WriteCard } from "./WriteCard";
 
-// Each summary feeds the collapsed-by-default card header: a bash command, or the file path acted on.
-registerToolRenderer("bash", BashCard, ({ args }) => strArg(args, "command"));
-registerToolRenderer("read", ReadCard, ({ args, workspaceRoot }) =>
-	projectRelativePath(strArg(args, "path"), workspaceRoot),
-);
-registerToolRenderer("edit", EditCard, ({ args, workspaceRoot }) =>
-	projectRelativePath(strArg(args, "path"), workspaceRoot),
-);
-registerToolRenderer("write", WriteCard, ({ args, workspaceRoot }) =>
-	projectRelativePath(strArg(args, "path"), workspaceRoot),
-);
+// The core pi tools are ROUTINE (the default): they fold into activity groups. Each summary feeds the
+// fold's step rows (and the collapsed card header): a bash command, or the file path acted on.
+registerToolRenderer("bash", BashCard, { summary: ({ args }) => strArg(args, "command") });
+registerToolRenderer("read", ReadCard, {
+	summary: ({ args, workspaceRoot }) => projectRelativePath(strArg(args, "path"), workspaceRoot),
+});
+registerToolRenderer("edit", EditCard, {
+	summary: ({ args, workspaceRoot }) => projectRelativePath(strArg(args, "path"), workspaceRoot),
+});
+registerToolRenderer("write", WriteCard, {
+	summary: ({ args, workspaceRoot }) => projectRelativePath(strArg(args, "path"), workspaceRoot),
+});
 
 // The inline clarifying-questions questionnaire (host-owned `ask_user_question` tool). Registered with
-// `"bare"` chrome so it renders as a full-width, always-open panel (interactive, never folded).
-registerToolRenderer("ask_user_question", AskUserQuestionCard, undefined, "bare");
+// `"bare"` chrome so it renders as a full-width, always-open panel (interactive — and primary by
+// construction: bare implies it, so it never folds into an activity group).
+registerToolRenderer("ask_user_question", AskUserQuestionCard, { chrome: "bare" });

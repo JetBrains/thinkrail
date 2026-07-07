@@ -1,16 +1,16 @@
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
-import { openWorkspaceChat } from "./fixtures/app";
+import { expandActivityStep, openWorkspaceChat, waitForDone } from "./fixtures/app";
 
 // Tagged @agent (see agent.live.spec.ts): drives a REAL pi agent. Proves the built-in tool renderers
-// registered in chat/tools/register.ts render their specialized card bodies (not the generic JSON
-// fallback) — the presence of a `data-testid="tool-<name>"` body is itself the proof the registry
-// matched, since DefaultToolRenderer carries no such hook. pi's built-in tools execute without an
-// approval prompt, so no extension-UI dialog is in the way.
+// registered in chat/tools/register.ts render their specialized bodies (not the generic JSON fallback) —
+// the presence of a `data-testid="tool-<name>"` body is itself the proof the registry matched, since
+// DefaultToolRenderer carries no such hook. pi's built-in tools execute without an approval prompt, so no
+// extension-UI dialog is in the way.
 //
-// Tool cards are COLLAPSED by default (ToolCard) to keep routine calls from cluttering the chat, so
-// each test waits for the card by its `data-tool`, then expands it via the header toggle before
-// asserting on the (now-rendered) body.
+// Core tools are ROUTINE: they fold into collapsed activity groups ("N steps · bash ×2, …") rather than
+// rendering their own cards, and a single-step run renders its slim step row directly. Each test waits
+// for the round to end, expands the folds, then expands the step to reveal the (registry-rendered) body.
 
 /** Open a workspace chat and send `prompt`. */
 async function openChatAndSend(page: Page, prompt: string): Promise<void> {
@@ -19,41 +19,36 @@ async function openChatAndSend(page: Page, prompt: string): Promise<void> {
 	await page.getByTestId("chat-send").click();
 }
 
-/** Wait for the collapsed tool card with the given `data-tool`, expand it, and return the card locator. */
-async function expandToolCard(page: Page, tool: string): Promise<Locator> {
-	const card = page.locator(`[data-testid="tool-card"][data-tool="${tool}"]`).first();
-	await expect(card).toBeVisible({ timeout: 90_000 });
-	if ((await card.getAttribute("data-expanded")) !== "true") {
-		await card.getByTestId("tool-card-toggle").click();
-		await expect(card).toHaveAttribute("data-expanded", "true");
-	}
-	return card;
+/** Wait for the round to end, then reveal + expand the activity step for `tool`. */
+async function expandToolStep(page: Page, tool: string): Promise<Locator> {
+	await waitForDone(page);
+	return expandActivityStep(page, tool);
 }
 
-test("bash tool renders as a terminal card", { tag: "@agent" }, async ({ page }) => {
+test("bash tool renders as a terminal step body", { tag: "@agent" }, async ({ page }) => {
 	test.setTimeout(120_000);
 	await openChatAndSend(
 		page,
 		"Use the bash tool to run exactly this command: echo thinkrail-bash-marker — and nothing else.",
 	);
-	const card = await expandToolCard(page, "bash");
+	const step = await expandToolStep(page, "bash");
 	// The command line + the captured stdout both surface inside the terminal body.
-	const body = card.getByTestId("tool-bash");
+	const body = step.getByTestId("tool-bash");
 	await expect(body).toBeVisible();
 	await expect(body).toContainText("thinkrail-bash-marker");
 });
 
-test("read tool renders a file card naming the file", { tag: "@agent" }, async ({ page }) => {
+test("read tool renders a file step naming the file", { tag: "@agent" }, async ({ page }) => {
 	test.setTimeout(120_000);
 	await openChatAndSend(
 		page,
 		"Use the read tool to read the file README.md in the current directory. Do not summarize it.",
 	);
-	const card = await expandToolCard(page, "read");
-	await expect(card.getByTestId("tool-read")).toContainText("README.md");
+	const step = await expandToolStep(page, "read");
+	await expect(step.getByTestId("tool-read")).toContainText("README.md");
 });
 
-test("write then edit render a preview card and a diff card", { tag: "@agent" }, async ({
+test("write then edit render a preview body and a diff body", { tag: "@agent" }, async ({
 	page,
 }) => {
 	test.setTimeout(150_000);
@@ -62,10 +57,10 @@ test("write then edit render a preview card and a diff card", { tag: "@agent" },
 		"First use the write tool to create a new file notes.txt whose only content is the line: hello world. " +
 			"Then use the edit tool to replace 'hello world' with 'goodbye world' in notes.txt.",
 	);
-	const write = await expandToolCard(page, "write");
+	const write = await expandToolStep(page, "write");
 	await expect(write.getByTestId("tool-write")).toContainText("notes.txt");
 
-	const edit = await expandToolCard(page, "edit");
+	const edit = await expandToolStep(page, "edit");
 	await expect(edit.getByTestId("tool-edit")).toContainText("notes.txt");
 });
 
@@ -77,13 +72,13 @@ test("long written content collapses behind a Show all toggle (Task 10)", {
 		page,
 		"Use the write tool to create a file count.txt containing the numbers 1 to 40, one number per line, and nothing else.",
 	);
-	const card = await expandToolCard(page, "write");
+	const step = await expandToolStep(page, "write");
 
 	// 40 lines is well over the collapse threshold → a "Show all N lines" toggle, collapsed by default.
-	const toggle = card.getByTestId("collapsible-toggle").first();
+	const toggle = step.getByTestId("collapsible-toggle").first();
 	await expect(toggle).toBeVisible({ timeout: 30_000 });
 	await expect(toggle).toContainText("Show all");
-	const collapsible = card.getByTestId("collapsible").first();
+	const collapsible = step.getByTestId("collapsible").first();
 	await expect(collapsible).toHaveAttribute("data-expanded", "false");
 
 	// Expanding flips the label and the state.

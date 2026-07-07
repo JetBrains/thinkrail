@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openWorkspaceChat } from "./fixtures/app";
+import { expandAllActivityGroups, openWorkspaceChat, waitForDone } from "./fixtures/app";
 
 // Tagged @agent (see agent.live.spec.ts): drives a REAL pi agent to produce a conversation tall enough
 // to scroll. Covers the pointer-aware auto-scroll (Task 7) — the floating jump button and that scrolling
@@ -30,9 +30,7 @@ test("jump button appears when scrolled up and returns to the latest on click", 
 	);
 
 	// Wait for the turn to complete so the content height is stable before we scroll.
-	await expect(
-		page.locator('[data-testid="chat-message"][data-role="system"]').filter({ hasText: "Done" }),
-	).toBeVisible({ timeout: 90_000 });
+	await waitForDone(page);
 
 	// Pinned to the bottom after streaming → no jump button.
 	await expect(page.getByTestId("scroll-to-bottom")).toHaveCount(0);
@@ -60,8 +58,10 @@ test("jump button appears when scrolled up and returns to the latest on click", 
 });
 
 // Best-effort @agent: the e2e agent dir pins thinking level "low", so a reasoning prompt emits a
-// thinking block. Covers Task 8 — it auto-collapses once the answer arrives and reopens on click.
-test("thinking block auto-collapses after the answer and reopens on click", {
+// thinking block. Thinking is ROUTINE: it folds into the activity run (the slim ticker replaces the old
+// watch-the-stream default), so after the round ends the thinking step sits collapsed behind the fold —
+// expanding the fold and clicking the step reveals the thinking text.
+test("thinking folds into the activity run and its step reveals the text on click", {
 	tag: "@agent",
 }, async ({ page }) => {
 	test.setTimeout(120_000);
@@ -70,18 +70,17 @@ test("thinking block auto-collapses after the answer and reopens on click", {
 		"Reason step by step, then give the answer: what is 17 multiplied by 23?",
 	);
 
-	const thinking = page.getByTestId("thinking-block").first();
-	await expect(thinking).toBeVisible({ timeout: 90_000 });
+	// Once the turn completes the run is folded (the user never toggled it) — reveal the step rows.
+	await waitForDone(page);
+	await expandAllActivityGroups(page);
 
-	// Once the turn completes the answer text exists, so the block auto-collapsed (user never toggled it),
-	// showing its character count.
-	await expect(
-		page.locator('[data-testid="chat-message"][data-role="system"]').filter({ hasText: "Done" }),
-	).toBeVisible({ timeout: 90_000 });
+	// The thinking step row: collapsed by default, showing its character count.
+	const thinking = page.locator('[data-testid="activity-step"][data-step="thinking"]').first();
+	await expect(thinking).toBeVisible();
 	await expect(thinking).toHaveAttribute("data-expanded", "false");
 	await expect(thinking).toContainText("chars");
 
-	// The user can reopen it; their manual choice sticks.
-	await thinking.locator("button").click();
+	// Clicking the step reveals the full thinking text; the manual choice sticks.
+	await thinking.getByTestId("activity-step-toggle").click();
 	await expect(thinking).toHaveAttribute("data-expanded", "true");
 });

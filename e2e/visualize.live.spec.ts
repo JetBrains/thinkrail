@@ -6,7 +6,9 @@ import { openWorkspaceChat } from "./fixtures/app";
 // extension end to end, rendered by our own cards (joined by tool name). Proves the whole path: the agent
 // calls `visualize` → VisualizationCard matches (the `tool-visualize` body is the proof the registry
 // matched; the generic fallback carries no such hook) → it dispatches on `type` to the diagram /
-// comparison card. Cards are collapsed by default, so expand before asserting.
+// comparison card. `visualize` is registered PRIMARY + defaultExpanded: it escapes the activity fold
+// (its own `tool-card`, never an activity step) and auto-expands once the call completes — asserted
+// here rather than clicking the toggle, pinning the progressive-disclosure contract.
 
 async function openChatAndSend(page: Page, prompt: string): Promise<void> {
 	await openWorkspaceChat(page);
@@ -14,13 +16,11 @@ async function openChatAndSend(page: Page, prompt: string): Promise<void> {
 	await page.getByTestId("chat-send").click();
 }
 
-async function expandToolCard(page: Page, tool: string): Promise<Locator> {
+/** Wait for the primary `visualize` card and its auto-expand on completion (defaultExpanded). */
+async function awaitExpandedCard(page: Page, tool: string): Promise<Locator> {
 	const card = page.locator(`[data-testid="tool-card"][data-tool="${tool}"]`).first();
 	await expect(card).toBeVisible({ timeout: 90_000 });
-	if ((await card.getAttribute("data-expanded")) !== "true") {
-		await card.getByTestId("tool-card-toggle").click();
-		await expect(card).toHaveAttribute("data-expanded", "true");
-	}
+	await expect(card).toHaveAttribute("data-expanded", "true", { timeout: 90_000 });
 	return card;
 }
 
@@ -32,7 +32,7 @@ test("visualize (diagram) renders mermaid as an SVG", { tag: "@agent" }, async (
 		page,
 		"Use the visualize tool with type='diagram' and this exact mermaid source: `flowchart TD; User --> Server --> Database`. Use only that tool.",
 	);
-	const card = await expandToolCard(page, "visualize");
+	const card = await awaitExpandedCard(page, "visualize");
 	await expect(card.getByTestId("tool-visualize")).toBeVisible();
 	await expect(card.getByTestId("tool-visualize-diagram")).toBeVisible();
 	// A real <svg> proves mermaid actually rendered (not just the source echoed / an error fallback).
@@ -82,7 +82,7 @@ test("visualize (comparison) renders option cards with a recommended pick", {
 		page,
 		"Use the visualize tool with type='comparison' to compare REST and GraphQL — give each two pros and one con, and mark exactly one option as recommended. Use only that tool.",
 	);
-	const card = await expandToolCard(page, "visualize");
+	const card = await awaitExpandedCard(page, "visualize");
 	const body = card.getByTestId("tool-visualize-comparison");
 	await expect(body).toBeVisible();
 	await expect(body).toContainText("REST");
