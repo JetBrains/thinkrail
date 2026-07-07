@@ -12,10 +12,12 @@ import {
 	getSessionCommands,
 	getSessionMessages,
 	getSessionStats,
+	hasSession,
 	listAvailableModels,
 	listSessions,
 	promptSession,
 	removeSession,
+	removeWorkspaceSessions,
 	setSessionManagerFactory,
 	setSessionPublisher,
 } from "./agentSessionManager";
@@ -238,6 +240,49 @@ test("disk-reopen: a disposed session is re-listed from disk and re-opened with 
 			(await listSessions("ws-disk", cwd)).filter((x) => x.sessionId === s.sessionId),
 		).toHaveLength(1);
 		removeSession(s.sessionId);
+	} finally {
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
+test("removeWorkspaceSessions: archives a workspace's live sessions + purges their on-disk transcripts, leaving siblings", async () => {
+	// Disk-backed so there are real transcript files to purge (the other faux tests run in-memory).
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	try {
+		fauxA.setResponses([fauxAssistantMessage("ARCHIVE_ME")]);
+		fauxB.setResponses([fauxAssistantMessage("KEEP_ME")]);
+		const doomedCwd = tmpCwd("trpi-arch-");
+		const doomed = await createSession({
+			cwd: doomedCwd,
+			workspaceId: "ws-doomed",
+			// biome-ignore lint/suspicious/noExplicitAny: faux Model<string> satisfies the SDK's Model<any>
+			model: fauxA.getModel() as any,
+		});
+		const keepCwd = tmpCwd("trpi-arch-keep-");
+		const survivor = await createSession({
+			cwd: keepCwd,
+			workspaceId: "ws-keep",
+			// biome-ignore lint/suspicious/noExplicitAny: see above
+			model: fauxB.getModel() as any,
+		});
+		await Promise.all([
+			promptSession(doomed.sessionId, "persist doomed"),
+			promptSession(survivor.sessionId, "persist survivor"),
+		]);
+
+		// Both persisted a transcript on disk before the archive.
+		expect(await listSessions("ws-doomed", doomedCwd)).toHaveLength(1);
+		expect(await listSessions("ws-keep", keepCwd)).toHaveLength(1);
+
+		await removeWorkspaceSessions("ws-doomed", doomedCwd);
+
+		// The archived workspace has no session left — not live, and not on disk.
+		expect(hasSession(doomed.sessionId)).toBe(false);
+		expect(await listSessions("ws-doomed", doomedCwd)).toHaveLength(0);
+		// A sibling workspace is untouched: still live and still on disk.
+		expect(hasSession(survivor.sessionId)).toBe(true);
+		expect(await listSessions("ws-keep", keepCwd)).toHaveLength(1);
+		removeSession(survivor.sessionId);
 	} finally {
 		setSessionManagerFactory(() => SessionManager.inMemory());
 	}

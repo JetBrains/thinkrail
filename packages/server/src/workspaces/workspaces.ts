@@ -174,23 +174,39 @@ export function listWorkspaces(projectId: string): Workspace[] {
 		.map((w) => ({ ...w, diffStats: diffStats(w.worktreePath, w.baseBranch) }));
 }
 
-/** Archive a workspace: drop its worktree (keep the branch — the work stays recoverable). */
-export function removeWorkspace(id: string): void {
+/**
+ * Drop a workspace's persistence record (fast) and return the removed record (or `null` if unknown). The
+ * worktree/branch are reclaimed separately via `reclaimWorktree` — splitting the record-drop from the slow
+ * git subprocess lets the host archive a workspace off the request's critical path (drop the record now so
+ * it's gone from `listWorkspaces` immediately, reclaim the worktree in the background).
+ */
+export function forgetWorkspace(id: string): Workspace | null {
 	const all = loadWorkspaces();
 	const ws = all.find((w) => w.id === id);
-	if (ws) {
-		const project = loadProjects().find((p) => p.id === ws.projectId);
-		if (project) {
-			const removed = git(project.path, ["worktree", "remove", "--force", ws.worktreePath]);
-			if (!removed.ok) {
-				// Fallback (path drift, dir gone, etc.): delete the dir if it lingers, then prune the
-				// stale registration so `git worktree list` stays clean and the worktree never orphans.
-				rmSync(ws.worktreePath, { recursive: true, force: true });
-				git(project.path, ["worktree", "prune"]);
-			}
-		}
-	}
+	if (!ws) return null;
 	saveWorkspaces(all.filter((w) => w.id !== id));
+	return ws;
+}
+
+/**
+ * Reclaim a worktree from git + disk (the slow half of archiving — a `git worktree remove` subprocess).
+ * Keeps the branch, so the work stays recoverable. Best-effort and hardened: on git failure, delete the
+ * dir if it lingers then `prune` the stale registration so `git worktree list` never orphans it.
+ */
+export function reclaimWorktree(ws: Workspace): void {
+	const project = loadProjects().find((p) => p.id === ws.projectId);
+	if (!project) return;
+	const removed = git(project.path, ["worktree", "remove", "--force", ws.worktreePath]);
+	if (!removed.ok) {
+		rmSync(ws.worktreePath, { recursive: true, force: true });
+		git(project.path, ["worktree", "prune"]);
+	}
+}
+
+/** Archive a workspace synchronously: drop the record then reclaim the worktree (keeps the branch). */
+export function removeWorkspace(id: string): void {
+	const ws = forgetWorkspace(id);
+	if (ws) reclaimWorktree(ws);
 }
 
 export function workspaceDiffStats(id: string): DiffStats {

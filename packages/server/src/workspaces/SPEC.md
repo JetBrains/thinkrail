@@ -36,10 +36,14 @@ chats.
   marking the name deliberate so the auto-namer never touches it again — what a user rename and the
   agentic auto-rename want; the host's **provisional naive rename** passes `lock: false` to rename name +
   branch while leaving `renamed` unset, so the settled-turn agentic pass still refines it),
-  `listWorkspaces` (with diff stats), `removeWorkspace` (`git worktree remove --force`, keeps the branch;
-  hardened: rm + `prune` if git fails), `workspaceDiffStats`, `getWorkspace` (by-id lookup, throws on
-  unknown — anchors a chat session's cwd).
-- **Public surface (barrel):** `createWorkspace`, `listWorkspaces`, `removeWorkspace`,
-  `workspaceDiffStats`, `getWorkspace`, `renameWorkspace`.
+  `listWorkspaces` (with diff stats), `workspaceDiffStats`, `getWorkspace` (by-id lookup, throws on
+  unknown — anchors a chat session's cwd), and the **archive** primitives, split so the fast record-drop
+  and the slow git reclaim are separable (the host archives off the request's critical path):
+  `forgetWorkspace(id)` (drop the persistence record, return the removed record or `null` — gone from
+  `listWorkspaces` immediately), `reclaimWorktree(ws)` (the slow half — `git worktree remove --force`,
+  keeps the branch; hardened: rm + `prune` if git fails), and `removeWorkspace(id)` (the synchronous
+  composition of the two, kept for callers/tests that want the whole archive in one call).
+- **Public surface (barrel):** `createWorkspace`, `listWorkspaces`, `forgetWorkspace`, `reclaimWorktree`,
+  `removeWorkspace`, `workspaceDiffStats`, `getWorkspace`, `renameWorkspace`.
 - **Allowed deps:** `projects` (repo lookup), `git` (the runner), `persistence`; `contracts`; Node.
 - **Forbidden:** `host`; reaching into another feature's internals (use its barrel).

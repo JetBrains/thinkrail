@@ -1,3 +1,4 @@
+import { rmSync } from "node:fs";
 import {
 	type AgentSession,
 	createAgentSession,
@@ -397,4 +398,42 @@ export function disposeAllSessions(): void {
 		entry.session.dispose();
 	}
 	sessions.clear();
+}
+
+/**
+ * Tear down a workspace's chat sessions when it's **archived**: abort any in-flight turn, then
+ * `removeSession` (unsubscribe + settle dialogs + dispose) every live session for the workspace, then
+ * delete pi's on-disk transcripts rooted at the worktree `cwd`. The host calls this before removing the
+ * worktree so no session — in memory or on disk — outlives it. `cwd` is optional: on a double-archive the
+ * record is already gone, so we still reap any lingering live sessions and just skip the disk purge.
+ */
+export async function removeWorkspaceSessions(workspaceId: string, cwd?: string): Promise<void> {
+	const ids = [...sessions]
+		.filter(([, entry]) => entry.workspaceId === workspaceId)
+		.map(([sessionId]) => sessionId);
+	for (const sessionId of ids) {
+		const entry = sessions.get(sessionId);
+		if (!entry) continue;
+		// Abort a streaming turn before disposing — a mid-stream dispose drops it less cleanly.
+		if (entry.session.isStreaming) await entry.session.abort().catch(() => {});
+		removeSession(sessionId);
+	}
+	if (cwd) await purgeDiskSessions(cwd);
+}
+
+/**
+ * Delete pi's persisted session files for a worktree `cwd`. Mirrors `listSessions`' disambiguation: pi's
+ * cwd→dir encoding can alias distinct cwds to one dir, so delete only the files whose recorded `cwd` is
+ * exactly this one — never `rm -rf` the encoded dir.
+ */
+async function purgeDiskSessions(cwd: string): Promise<void> {
+	let infos: Awaited<ReturnType<typeof SessionManager.list>>;
+	try {
+		infos = await SessionManager.list(cwd);
+	} catch {
+		return; // no sessions dir for this cwd yet
+	}
+	for (const info of infos) {
+		if (info.cwd === cwd) rmSync(info.path, { force: true });
+	}
 }

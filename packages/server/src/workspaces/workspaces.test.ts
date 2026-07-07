@@ -2,7 +2,14 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createWorkspace, listWorkspaces, removeWorkspace, renameWorkspace } from "./workspaces";
+import {
+	createWorkspace,
+	forgetWorkspace,
+	listWorkspaces,
+	reclaimWorktree,
+	removeWorkspace,
+	renameWorkspace,
+} from "./workspaces";
 
 function gitOut(cwd: string, ...args: string[]): string {
 	const r = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "pipe", stderr: "ignore" });
@@ -164,6 +171,27 @@ test("creating after a rename skips the freed name whose worktree dir is still o
 	expect(next.branch).toBe("workspace-2");
 	expect(next.worktreePath).not.toBe(ws.worktreePath);
 	expect(existsSync(next.worktreePath)).toBe(true);
+});
+
+test("forgetWorkspace drops the record + returns it, but leaves the worktree for a separate reclaim", async () => {
+	const ws = await createWorkspace("p1");
+	expect(listWorkspaces("p1")).toHaveLength(1);
+
+	// forgetWorkspace removes the record synchronously (gone from the list) and hands back the record…
+	const forgotten = forgetWorkspace(ws.id);
+	expect(forgotten?.id).toBe(ws.id);
+	expect(listWorkspaces("p1")).toHaveLength(0);
+	// …but the worktree is still registered with git (the slow reclaim runs separately, e.g. backgrounded).
+	const before = Bun.spawnSync(["git", "-C", repo, "worktree", "list"], { stdout: "pipe" });
+	expect(new TextDecoder().decode(before.stdout)).toContain(ws.worktreePath);
+
+	// reclaimWorktree then removes it from git + disk.
+	reclaimWorktree(forgotten as NonNullable<typeof forgotten>);
+	const after = Bun.spawnSync(["git", "-C", repo, "worktree", "list"], { stdout: "pipe" });
+	expect(new TextDecoder().decode(after.stdout)).not.toContain(ws.worktreePath);
+
+	// A second forget (double-archive) is a no-op returning null.
+	expect(forgetWorkspace(ws.id)).toBeNull();
 });
 
 test("removeWorkspace cleans up even when the worktree dir is already gone", async () => {

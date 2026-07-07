@@ -47,6 +47,18 @@ channel fan-out, and the process-boot wrapper both launchers share.
     (a broken rename path must stay distinguishable from "assist had nothing"). Its own per-workspace
     **in-flight set** (independent of the naive one — the two passes can overlap on a short turn) dedupes
     concurrent turns/sessions.
+  - The **workspace-archive teardown** — the other composition of `agent` + `terminal` + `workspaces` only
+    the host may make. `workspace.remove` reaps *everything* rooted in the worktree but is **non-blocking**:
+    it does the fast part synchronously — `forgetWorkspace` (drop the record → gone from `workspace.list`
+    immediately) → `evictSpecIndex` (drop the spec cache) → `closeWorkspaceTerminals` (kill its PTYs) —
+    **acks**, then runs the slow reclamation in the **background** (`archiveTeardown`, fire-and-forget):
+    `removeWorkspaceSessions` (abort a streaming turn, dispose the live sessions, **and** purge pi's
+    on-disk transcripts for the cwd) → `reclaimWorktree` (`git worktree remove`). So the user never waits
+    for the git subprocess + session abort. **Ordering holds:** terminals (sync) and sessions (bg, before
+    the reclaim) are down before the dir is deleted, since they hold it as cwd. Best-effort by contract —
+    a failed background teardown is `console.warn`ed, never thrown into the void (nothing awaits it), like
+    the auto-rename tee. **Archive keeps the branch but not the chat:** the git branch stays (code is
+    recoverable), yet chat history is purged with the worktree — a deliberate scope choice, not a leak.
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer`, `bootHost`,
   `BootHostOptions`, `BootedHost`.
 - **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for

@@ -4,6 +4,7 @@ import type {
 	ImageContent,
 	Model,
 	ThinkingLevel,
+	Workspace,
 } from "@thinkrail/contracts";
 import {
 	abortSession,
@@ -20,6 +21,7 @@ import {
 	listSessions,
 	promptSession,
 	removeSession,
+	removeWorkspaceSessions,
 	resolveExtUi,
 	setSessionModel,
 	setSessionThinkingLevel,
@@ -31,17 +33,40 @@ import { gitDiff, gitStatus, listBranches, prefetchBranch } from "../git";
 import { githubAuthStatus, githubRefresh } from "../github";
 import { closeProject, listProjects, openProject } from "../projects";
 import { evictSpecIndex, specGraph } from "../spec";
-import { closeTerminal, createTerminal, resizeTerminal, writeTerminal } from "../terminal";
+import {
+	closeTerminal,
+	closeWorkspaceTerminals,
+	createTerminal,
+	resizeTerminal,
+	writeTerminal,
+} from "../terminal";
 import {
 	createWorkspace,
+	forgetWorkspace,
 	getWorkspace,
 	listWorkspaces,
-	removeWorkspace,
+	reclaimWorktree,
 	workspaceDiffStats,
 } from "../workspaces";
 import { ackSend } from "./ackSend";
 
 type Handler = (params: unknown) => unknown | Promise<unknown>;
+
+/**
+ * The slow half of archiving a workspace, run in the background after `workspace.remove` acks: tear down
+ * the workspace's sessions (abort a streaming turn, dispose, purge on-disk transcripts) then reclaim the
+ * worktree (`git worktree remove`). Sessions/terminals are down before the dir is deleted (terminals are
+ * killed synchronously in the handler; sessions here, before the reclaim). Best-effort by contract — a
+ * failure is logged, never thrown into the void (nothing awaits it).
+ */
+async function archiveTeardown(ws: Workspace): Promise<void> {
+	try {
+		await removeWorkspaceSessions(ws.id, ws.worktreePath);
+		reclaimWorktree(ws);
+	} catch (error) {
+		console.warn(`workspace archive teardown failed for ${ws.id}: ${error}`);
+	}
+}
 
 const handlers: Record<string, Handler> = {
 	"project.open": (params) => openProject((params as { path: string }).path),
@@ -57,8 +82,13 @@ const handlers: Record<string, Handler> = {
 	"workspace.list": (params) => listWorkspaces((params as { projectId: string }).projectId),
 	"workspace.remove": (params) => {
 		const id = (params as { id: string }).id;
-		removeWorkspace(id);
+		// Non-blocking archive: drop the record now (gone from `workspace.list` immediately) + the fast
+		// teardown, ack, then reclaim sessions/worktree in the background so the user never waits for the
+		// slow git subprocess + session abort.
+		const ws = forgetWorkspace(id);
 		evictSpecIndex(id); // the archived worktree's spec parse cache must not outlive it
+		closeWorkspaceTerminals(id); // fast: kill workspace-scoped PTYs before the dir is reclaimed
+		if (ws) void archiveTeardown(ws);
 		return { ok: true } as const;
 	},
 	"workspace.diffStats": (params) => workspaceDiffStats((params as { id: string }).id),

@@ -70,3 +70,15 @@ export function closeAllTerminals(): void {
 	for (const { pty } of terminals.values()) pty.kill();
 	terminals.clear();
 }
+
+/**
+ * Kill every PTY rooted in a workspace — called when the workspace is archived so no shell process
+ * orphans on a now-deleted worktree dir.
+ */
+export function closeWorkspaceTerminals(workspaceId: string): void {
+	for (const [id, entry] of terminals) {
+		if (entry.workspaceId !== workspaceId) continue;
+		entry.pty.kill();
+		terminals.delete(id);
+	}
+}

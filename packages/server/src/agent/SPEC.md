@@ -37,6 +37,11 @@ its inline answer bridge.
     not live, then returns `{ summary, messages }` — the pi-canonical `Message` subset); the disk half is
     what survives a host **restart**; `getSessionWorkspaceId(sessionId)` (the live session→workspace
     lookup the host's auto-rename hook keys on); `removeSession`/`disposeAllSessions`;
+    **`removeWorkspaceSessions(workspaceId, cwd?)`** (the **archive teardown**: abort a streaming turn,
+    `removeSession` every live session for the workspace, then delete pi's on-disk transcripts rooted at
+    the worktree `cwd` — pi's `SessionManager` is append-only, so purge = `list(cwd)` then `rm` the files
+    whose recorded `cwd` matches, never `rm -rf` the encoded dir since pi's cwd→dir encoding can alias
+    distinct cwds; `cwd` omitted on a double-archive skips only the disk purge);
     `setSessionPublisher` + `setSessionManagerFactory` seams.
   - `oneshot` — one-shot LLM completions **without** an `AgentSession` (no tools/extensions/disk):
     `completeOnce(request)` picks a model from the shared runtime's authenticated set, resolves its auth

@@ -15,7 +15,11 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
 
 ## Boundary
 
-- **Owns:** `ProjectTree` (+ the `NewWorkspaceDialog` its "+" opens), `FileTree`, `SpecsPanel`, `RightPanel`,
+- **Owns:** `ProjectTree` (+ the `NewWorkspaceDialog` its "+" opens **and** the `ConfirmDialog` its archive
+  button opens — a small reusable yes/no built on `components/ui/dialog` that **forces a deliberate choice**
+  (no ✕ — `hideClose`; Cancel takes initial focus; a `destructive` confirm shows a warning glyph + red
+  button); archive is **optimistic + non-blocking**: on confirm it drops the row via `store.removeWorkspace` + `clearWorkspaceTabs`
+  and fires `workspace.remove` without awaiting, reconciling a failure by re-listing), `FileTree`, `SpecsPanel`, `RightPanel`,
   `ChangesPanel` + lazy `DiffViewer`, `CenterTabs` + lazy `MonacoEditor`, `TerminalsPanel` + lazy
   `TerminalInstance`. **`NewWorkspaceDialog`** is the create-and-kick-off surface: a base-branch
   combobox (`git.listBranches`, degrading to local branches offline; a Refresh re-lists; `origin/HEAD` is

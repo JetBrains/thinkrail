@@ -486,3 +486,17 @@ test("updateWorkspace never appends an unknown id to a fetched list", () => {
 	expect(list).toHaveLength(1);
 	expect(list?.[0]?.id).toBe("other");
 });
+
+test("removeWorkspace optimistically drops the row, leaving siblings; unknown project/id is a no-op", () => {
+	const keep = pushedWorkspace({ id: "other", name: "workspace-2", branch: "workspace-2" });
+	useAppStore.setState({ workspaces: { p1: [pushedWorkspace(), keep] } });
+
+	useAppStore.getState().removeWorkspace("p1", "w1");
+	expect(useAppStore.getState().workspaces.p1?.map((w) => w.id)).toEqual(["other"]);
+
+	// Unknown id leaves the list untouched; an unfetched project is a no-op (no empty list conjured).
+	useAppStore.getState().removeWorkspace("p1", "missing");
+	expect(useAppStore.getState().workspaces.p1).toHaveLength(1);
+	useAppStore.getState().removeWorkspace("p2", "w1");
+	expect(useAppStore.getState().workspaces.p2).toBeUndefined();
+});

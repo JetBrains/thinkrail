@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 
 /** Left-nav: projects → workspaces (git worktrees). Open a repo, select it, create/select workspaces. */
@@ -26,6 +27,12 @@ export function ProjectTree() {
 	// The project a New-Workspace dialog is open for (null = closed). The "+" opens it instead of
 	// creating a workspace directly.
 	const [dialogProjectId, setDialogProjectId] = useState<string | null>(null);
+	// The workspace an archive-confirmation is open for (null = closed). The archive button opens this
+	// instead of deleting directly.
+	const [archiveTarget, setArchiveTarget] = useState<{
+		projectId: string;
+		workspace: Workspace;
+	} | null>(null);
 
 	const loadWorkspaces = async (projectId: string) => {
 		useAppStore
@@ -81,15 +88,16 @@ export function ProjectTree() {
 		await loadWorkspaces(workspace.projectId);
 	};
 
-	const archiveWorkspace = async (projectId: string, workspaceId: string) => {
-		try {
-			await getTransport().request("workspace.remove", { id: workspaceId });
-			useAppStore.getState().clearWorkspaceTabs(workspaceId);
-			if (activeWorkspaceId === workspaceId) useAppStore.getState().setActiveWorkspace("");
-			await loadWorkspaces(projectId);
-		} catch {
-			// Ignored until the error-handling pass.
-		}
+	// Optimistic archive: drop the row + its tabs now, then fire the request without blocking the UI (the
+	// host acks fast and reclaims the worktree in the background). A failed delete reconciles by re-listing.
+	const archiveWorkspace = (projectId: string, workspaceId: string) => {
+		const store = useAppStore.getState();
+		store.removeWorkspace(projectId, workspaceId);
+		store.clearWorkspaceTabs(workspaceId);
+		if (activeWorkspaceId === workspaceId) store.setActiveWorkspace("");
+		void getTransport()
+			.request("workspace.remove", { id: workspaceId })
+			.catch(() => void loadWorkspaces(projectId));
 	};
 
 	return (
@@ -132,7 +140,9 @@ export function ProjectTree() {
 													workspace={ws}
 													isActive={activeWorkspaceId === ws.id}
 													onSelect={() => useAppStore.getState().setActiveWorkspace(ws.id)}
-													onArchive={() => void archiveWorkspace(project.id, ws.id)}
+													onArchive={() =>
+														setArchiveTarget({ projectId: project.id, workspace: ws })
+													}
 												/>
 											))
 										)}
@@ -154,6 +164,27 @@ export function ProjectTree() {
 					onCreated={(ws) => void onWorkspaceCreated(ws)}
 				/>
 			) : null}
+
+			<ConfirmDialog
+				open={archiveTarget !== null}
+				onOpenChange={(o) => {
+					if (!o) setArchiveTarget(null);
+				}}
+				title={`Archive ${archiveTarget?.workspace.name ?? "workspace"}?`}
+				description={
+					<>
+						This deletes the workspace's chats, terminals, and its worktree. The git branch{" "}
+						<span className="font-medium text-text">{archiveTarget?.workspace.branch}</span> is
+						kept.
+					</>
+				}
+				confirmLabel="Archive"
+				destructive
+				confirmTestId="confirm-archive"
+				onConfirm={() => {
+					if (archiveTarget) archiveWorkspace(archiveTarget.projectId, archiveTarget.workspace.id);
+				}}
+			/>
 		</nav>
 	);
 }

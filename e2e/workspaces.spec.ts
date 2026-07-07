@@ -19,14 +19,21 @@ test("creates, archives, and re-creates worktree workspaces (no branch collision
 	// Worktrees live under a readable project-name dir, not the project id.
 	expect(worktrees).toContain("/worktrees/sample-project/");
 
-	// Archive it: the row goes away AND the worktree is removed from disk (back to just `main`).
+	// Archive it: the button opens a confirmation; confirming removes the row optimistically (instantly)
+	// AND the worktree is reclaimed from disk in the background (back to just `main`).
 	await items.first().hover();
 	await items.first().getByTestId("workspace-archive").click();
+	await page.getByTestId("confirm-archive").click();
 	await expect(items).toHaveCount(0);
-	const afterArchive = execFileSync("git", ["-C", E2E_FIXTURE_REPO, "worktree", "list"], {
-		encoding: "utf8",
-	});
-	expect(afterArchive.trim().split("\n").length).toBe(1);
+	// The worktree teardown is backgrounded server-side, so poll rather than read once.
+	await expect
+		.poll(
+			() =>
+				execFileSync("git", ["-C", E2E_FIXTURE_REPO, "worktree", "list"], { encoding: "utf8" })
+					.trim()
+					.split("\n").length,
+		)
+		.toBe(1);
 
 	// Create again — must succeed despite the lingering branch (the bug was a silent no-op here).
 	await createWorkspaceViaDialog(page);

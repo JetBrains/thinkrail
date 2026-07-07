@@ -325,6 +325,9 @@ interface AppState {
 	 * `workspace.list` reconciles.
 	 */
 	updateWorkspace: (workspace: Workspace) => void;
+	/** Optimistically drop a workspace from its project's list (the archive flow removes the row before
+	 * the host finishes tearing the worktree down). A missing project/id is a no-op. */
+	removeWorkspace: (projectId: string, workspaceId: string) => void;
 	selectProject: (projectId: string) => void;
 	setActiveWorkspace: (id: string) => void;
 	openTab: (tab: EditorTab) => void;
@@ -429,6 +432,14 @@ export const useAppStore = create<AppState>((set) => ({
 						w.id === workspace.id ? { ...w, ...workspace } : w,
 					),
 				},
+			};
+		}),
+	removeWorkspace: (projectId, workspaceId) =>
+		set((s) => {
+			const list = s.workspaces[projectId];
+			if (!list) return {};
+			return {
+				workspaces: { ...s.workspaces, [projectId]: list.filter((w) => w.id !== workspaceId) },
 			};
 		}),
 	selectProject: (selectedProjectId) => set({ selectedProjectId }),
