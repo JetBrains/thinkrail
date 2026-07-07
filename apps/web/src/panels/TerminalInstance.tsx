@@ -46,8 +46,8 @@ interface Props {
 export default function TerminalInstance({ clientId, workspaceId, visible }: Props) {
 	const hostRef = useRef<HTMLDivElement>(null);
 	const termRef = useRef<XTerm | null>(null);
-	const fitRef = useRef<FitAddon | null>(null);
 	const serverIdRef = useRef<string | null>(null);
+	const fitFnRef = useRef<(() => void) | null>(null);
 	const [ready, setReady] = useState(false);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: mount-once; clientId/workspaceId are stable per instance
@@ -71,9 +71,22 @@ export default function TerminalInstance({ clientId, workspaceId, visible }: Pro
 		});
 		tryLoad(() => term.loadAddon(new ClipboardAddon()));
 		termRef.current = term;
-		fitRef.current = fit;
 		term.open(host);
-		requestAnimationFrame(() => tryLoad(() => fit.fit()));
+
+		// Fit + push the new size to the PTY — but only when the host actually has a size. A hidden layer
+		// (display:none) reports 0×0, and fitting against that resizes xterm to a bogus 1-row viewport,
+		// spilling the scrollback out of view (it looks like the buffer was cleared on the next re-show).
+		// Skipping the zero-size case keeps the buffer intact across workspace/tab switches; the
+		// ResizeObserver re-fits for real once the layer is shown and laid out.
+		const applyFit = (): void => {
+			if (host.clientWidth === 0 || host.clientHeight === 0) return;
+			tryLoad(() => fit.fit());
+			const id = serverIdRef.current;
+			if (id)
+				void getTransport().request("terminal.resize", { id, cols: term.cols, rows: term.rows });
+		};
+		fitFnRef.current = applyFit;
+		requestAnimationFrame(applyFit);
 
 		// Buffer output that arrives before the PTY id is known (e.g. the initial shell prompt).
 		const early: { id: string; data: string }[] = [];
@@ -109,12 +122,7 @@ export default function TerminalInstance({ clientId, workspaceId, visible }: Pro
 			})
 			.catch(() => {});
 
-		const resizeObserver = new ResizeObserver(() => {
-			tryLoad(() => fit.fit());
-			const id = serverIdRef.current;
-			if (id)
-				void getTransport().request("terminal.resize", { id, cols: term.cols, rows: term.rows });
-		});
+		const resizeObserver = new ResizeObserver(applyFit);
 		resizeObserver.observe(host);
 
 		const themeObserver = new MutationObserver(() => {
@@ -140,17 +148,18 @@ export default function TerminalInstance({ clientId, workspaceId, visible }: Pro
 		};
 	}, [clientId, workspaceId]);
 
-	// Hidden containers report zero size, so fit + focus when this layer becomes visible.
+	// Hidden containers report zero size, so fit + focus when this layer becomes visible. `applyFit`
+	// no-ops until the layer has a real size, so a not-yet-laid-out frame can't shrink the buffer; the
+	// ResizeObserver fires the effective fit once layout settles.
 	useEffect(() => {
 		if (!visible) return;
 		const frame = requestAnimationFrame(() => {
-			tryLoad(() => fitRef.current?.fit());
-			const term = termRef.current;
-			const id = serverIdRef.current;
-			if (term && id) {
-				void getTransport().request("terminal.resize", { id, cols: term.cols, rows: term.rows });
-			}
-			term?.focus();
+			fitFnRef.current?.();
+			// Snap the viewport back to the live prompt: a resize while hidden can leave it scrolled off the
+			// buffer, so on re-show the rendered rows would otherwise show blank/stale rows instead of the
+			// preserved output.
+			termRef.current?.scrollToBottom();
+			termRef.current?.focus();
 		});
 		return () => cancelAnimationFrame(frame);
 	}, [visible]);
