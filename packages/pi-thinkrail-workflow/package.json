@@ -3,7 +3,7 @@
 	"version": "0.0.0",
 	"private": true,
 	"type": "module",
-	"description": "Process/workflow skills for the pi agent, starting with a spec-native brainstorming skill.",
+	"description": "Process/workflow skills for the pi agent: spec-native brainstorming and project-setup.",
 	"keywords": [
 		"pi-package",
 		"pi",
