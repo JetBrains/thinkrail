@@ -1,10 +1,10 @@
 {
-	"name": "@thinkrail-pi/cli",
+	"name": "@thinkrail/cli",
 	"version": "0.0.0",
 	"private": true,
 	"type": "module",
 	"bin": {
-		"thinkrail-pi": "./src/index.ts"
+		"thinkrail": "./src/index.ts"
 	},
 	"scripts": {
 		"dev": "bun run --watch src/index.ts",
@@ -15,8 +15,8 @@
 		"test": "bun test"
 	},
 	"dependencies": {
-		"@thinkrail-pi/server": "workspace:*",
-		"@thinkrail-pi/shared": "workspace:*"
+		"@thinkrail/server": "workspace:*",
+		"@thinkrail/shared": "workspace:*"
 	},
 	"devDependencies": {
 		"@types/bun": "catalog:",

@@ -6,7 +6,7 @@ import { listBranches, prefetchBranch } from "./git";
 
 let dataDir: string;
 let repo: string;
-const savedDataDir = process.env.THINKRAIL_PI_DATA_DIR;
+const savedDataDir = process.env.THINKRAIL_DATA_DIR;
 
 function git(cwd: string, ...args: string[]): void {
 	const result = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "ignore", stderr: "ignore" });
@@ -15,7 +15,7 @@ function git(cwd: string, ...args: string[]): void {
 
 beforeEach(() => {
 	dataDir = mkdtempSync(join(tmpdir(), "trpi-git-test-"));
-	process.env.THINKRAIL_PI_DATA_DIR = dataDir;
+	process.env.THINKRAIL_DATA_DIR = dataDir;
 	repo = join(dataDir, "repo");
 	mkdirSync(repo);
 	git(repo, "init", "-b", "main");
@@ -32,8 +32,8 @@ beforeEach(() => {
 
 afterEach(() => {
 	rmSync(dataDir, { recursive: true, force: true });
-	if (savedDataDir === undefined) delete process.env.THINKRAIL_PI_DATA_DIR;
-	else process.env.THINKRAIL_PI_DATA_DIR = savedDataDir;
+	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
+	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
 });
 
 test("listBranches with no remote returns local branches and falls back to the repo HEAD", () => {

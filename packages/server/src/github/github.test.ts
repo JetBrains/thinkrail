@@ -1,14 +1,14 @@
 import { afterEach, expect, test } from "bun:test";
 import { githubAuthStatus, parseGhAuthStatus } from "./github";
 
-const saved = process.env.THINKRAIL_PI_GH_OFFLINE;
+const saved = process.env.THINKRAIL_GH_OFFLINE;
 afterEach(() => {
-	if (saved === undefined) delete process.env.THINKRAIL_PI_GH_OFFLINE;
-	else process.env.THINKRAIL_PI_GH_OFFLINE = saved;
+	if (saved === undefined) delete process.env.THINKRAIL_GH_OFFLINE;
+	else process.env.THINKRAIL_GH_OFFLINE = saved;
 });
 
-test("THINKRAIL_PI_GH_OFFLINE forces a disconnected status without shelling out", () => {
-	process.env.THINKRAIL_PI_GH_OFFLINE = "1";
+test("THINKRAIL_GH_OFFLINE forces a disconnected status without shelling out", () => {
+	process.env.THINKRAIL_GH_OFFLINE = "1";
 	expect(githubAuthStatus()).toEqual({ connected: false });
 });
 

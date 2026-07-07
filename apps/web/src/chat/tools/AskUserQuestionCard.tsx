@@ -3,7 +3,7 @@ import type {
 	AskUserQuestionArgs,
 	AskUserQuestionItem,
 	AskUserQuestionResult,
-} from "@thinkrail-pi/contracts";
+} from "@thinkrail/contracts";
 import {
 	Check,
 	CircleDot,

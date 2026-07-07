@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { isPortFree } from "@thinkrail-pi/shared/freePort";
+import { isPortFree } from "@thinkrail/shared/freePort";
 import { type BootedHost, bootHost } from "./boot";
 
 // bootHost registers a SIGINT/SIGTERM handler per call; a handful of boots stays well under the warn

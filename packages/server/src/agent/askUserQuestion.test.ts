@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import type { AskUserQuestionArgs, AskUserQuestionResult } from "@thinkrail-pi/contracts";
+import type { AskUserQuestionArgs, AskUserQuestionResult } from "@thinkrail/contracts";
 import {
 	answerQuestion,
 	buildQuestionnaireResponse,

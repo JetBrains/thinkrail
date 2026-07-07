@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { DiffStats, Project, Workspace } from "@thinkrail-pi/contracts";
+import type { DiffStats, Project, Workspace } from "@thinkrail/contracts";
 import { git, gitAsync } from "../git";
 import { dataDir, loadProjects, loadWorkspaces, saveWorkspaces } from "../persistence";
 import { getProjects } from "../projects";

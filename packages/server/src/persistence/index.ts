@@ -1,2 +1,2 @@
-/** JSON app state under `~/.thinkrail-pi` (or `THINKRAIL_PI_DATA_DIR`): projects + workspaces. */
+/** JSON app state under `~/.thinkrail` (or `THINKRAIL_DATA_DIR`): projects + workspaces. */
 export * from "./persistence";

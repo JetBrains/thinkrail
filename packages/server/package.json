@@ -1,5 +1,5 @@
 {
-	"name": "@thinkrail-pi/server",
+	"name": "@thinkrail/server",
 	"version": "0.0.0",
 	"private": true,
 	"type": "module",
@@ -14,8 +14,8 @@
 	"dependencies": {
 		"@earendil-works/pi-ai": "catalog:",
 		"@earendil-works/pi-coding-agent": "catalog:",
-		"@thinkrail-pi/contracts": "workspace:*",
-		"@thinkrail-pi/shared": "workspace:*",
+		"@thinkrail/contracts": "workspace:*",
+		"@thinkrail/shared": "workspace:*",
 		"bun-pty": "^0.4.10",
 		"pi-spec-graph": "workspace:*",
 		"pi-thinkrail-workflow": "workspace:*",

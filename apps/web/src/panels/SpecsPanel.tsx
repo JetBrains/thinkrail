@@ -1,4 +1,4 @@
-import type { SpecGraphNode } from "@thinkrail-pi/contracts";
+import type { SpecGraphNode } from "@thinkrail/contracts";
 import { ChevronDown, ChevronRight, FileText } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useAppStore } from "../store";

@@ -1,10 +1,5 @@
-import type {
-	ExtUiRequest,
-	Project,
-	SessionEventPayload,
-	Workspace,
-} from "@thinkrail-pi/contracts";
-import { WS_CHANNELS } from "@thinkrail-pi/contracts";
+import type { ExtUiRequest, Project, SessionEventPayload, Workspace } from "@thinkrail/contracts";
+import { WS_CHANNELS } from "@thinkrail/contracts";
 import { useAppStore } from "../store";
 import { WsTransport } from "./transport";
 

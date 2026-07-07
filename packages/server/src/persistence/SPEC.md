@@ -14,7 +14,7 @@ Durable app state — projects and workspaces — as JSON under the data dir.
 
 ## Boundary
 
-- **Owns:** `dataDir()` (`THINKRAIL_PI_DATA_DIR` for dev/e2e isolation, else `~/.thinkrail-pi`);
+- **Owns:** `dataDir()` (`THINKRAIL_DATA_DIR` for dev/e2e isolation, else `~/.thinkrail`);
   `loadProjects`/`saveProjects`, `loadWorkspaces`/`saveWorkspaces` (tab-indented JSON).
 - **Public surface (barrel):** `dataDir`, `loadProjects`, `saveProjects`, `loadWorkspaces`, `saveWorkspaces`.
 - **Allowed deps:** `contracts` (`Project`/`Workspace` types); Node `fs`/`os`/`path`.

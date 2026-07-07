@@ -15,7 +15,7 @@ The host's native directory picker, so the browser "Open project" gets a real OS
 
 - **Owns:** `selectDirectory()` — the host's native folder picker, per OS via `pickersFor(platform)`:
   macOS `osascript` (`choose folder`), Linux `zenity` then `kdialog` (whichever is installed), Windows a
-  PowerShell `FolderBrowserDialog`. `THINKRAIL_PI_PICK_DIR` overrides it for dev/e2e; returns `null` on
+  PowerShell `FolderBrowserDialog`. `THINKRAIL_PICK_DIR` overrides it for dev/e2e; returns `null` on
   cancel or when no native picker is available. A missing binary falls through to the next candidate; a
   non-zero exit is a user cancel.
 - **Public surface (barrel):** `selectDirectory` (+ `pickersFor` / `Picker`, exposed for unit tests).

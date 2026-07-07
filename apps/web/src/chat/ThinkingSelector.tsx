@@ -1,4 +1,4 @@
-import type { ThinkingLevel } from "@thinkrail-pi/contracts";
+import type { ThinkingLevel } from "@thinkrail/contracts";
 import { Check, ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";

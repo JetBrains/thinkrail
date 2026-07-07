@@ -1,7 +1,7 @@
 // Pure tree-build for the Specs viewer: flat `spec.graph` snapshot -> the materialized `parent` tree.
 // No React, no store, no transport — unit-testable on its own.
 
-import type { SpecGraphNode } from "@thinkrail-pi/contracts";
+import type { SpecGraphNode } from "@thinkrail/contracts";
 
 /** A materialized node of the `parent` tree: the spec plus its (title-sorted) children. */
 export interface SpecTreeNode {

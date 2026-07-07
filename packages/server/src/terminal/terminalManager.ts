@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { WS_CHANNELS } from "@thinkrail-pi/contracts";
+import { WS_CHANNELS } from "@thinkrail/contracts";
 import { type IPty, spawn } from "bun-pty";
 import { loadWorkspaces } from "../persistence";
 

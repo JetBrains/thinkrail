@@ -10,7 +10,7 @@
  * flag, and while it's unset a later settled turn retries. Never throws, never blocks a turn.
  */
 
-import type { Message, PiEvent, Workspace } from "@thinkrail-pi/contracts";
+import type { Message, PiEvent, Workspace } from "@thinkrail/contracts";
 import { getSessionMessages } from "../agent";
 import { extractFirstTurn, naiveWorkspaceSlug, suggestWorkspaceName } from "../assist";
 import { getWorkspace, renameWorkspace } from "../workspaces";

@@ -9,7 +9,7 @@
  * network — and default to the real {@link completeOnce} primitive in the `agent` module.
  */
 
-import type { AssistantMessage, Message, TextContent, UserMessage } from "@thinkrail-pi/contracts";
+import type { AssistantMessage, Message, TextContent, UserMessage } from "@thinkrail/contracts";
 import { completeOnce, type OneShotRequest, type OneShotResult } from "../agent";
 
 /** The first turn of a session — the raw material for a workspace name. */

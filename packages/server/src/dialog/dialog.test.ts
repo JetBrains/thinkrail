@@ -35,13 +35,13 @@ test("picker output is trimmed, trailing separators dropped, empty → null", ()
 	expect(parse("")).toBeNull();
 });
 
-test("THINKRAIL_PI_PICK_DIR overrides the native picker", async () => {
-	const saved = process.env.THINKRAIL_PI_PICK_DIR;
-	process.env.THINKRAIL_PI_PICK_DIR = "/tmp/forced/repo";
+test("THINKRAIL_PICK_DIR overrides the native picker", async () => {
+	const saved = process.env.THINKRAIL_PICK_DIR;
+	process.env.THINKRAIL_PICK_DIR = "/tmp/forced/repo";
 	try {
 		expect(await selectDirectory()).toEqual({ path: "/tmp/forced/repo" });
 	} finally {
-		if (saved === undefined) delete process.env.THINKRAIL_PI_PICK_DIR;
-		else process.env.THINKRAIL_PI_PICK_DIR = saved;
+		if (saved === undefined) delete process.env.THINKRAIL_PICK_DIR;
+		else process.env.THINKRAIL_PICK_DIR = saved;
 	}
 });

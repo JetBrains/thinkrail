@@ -1,4 +1,4 @@
-import type { AssistantMessage, UserMessage } from "@thinkrail-pi/contracts";
+import type { AssistantMessage, UserMessage } from "@thinkrail/contracts";
 import {
 	Brain,
 	ChevronRight,

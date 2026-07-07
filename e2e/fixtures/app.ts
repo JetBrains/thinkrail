@@ -3,7 +3,7 @@ import { readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import type { Locator, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
-import type { Workspace } from "@thinkrail-pi/contracts";
+import type { Workspace } from "@thinkrail/contracts";
 import { E2E_DATA_DIR, E2E_FIXTURE_REPO, E2E_PI_AGENT_DIR } from "./paths";
 
 /**
@@ -109,6 +109,17 @@ export async function openWorkspaceChat(page: Page): Promise<void> {
 /** The terminal layer currently shown (exactly one is `data-visible="true"` at a time). */
 export function visibleTerminal(page: Page): Locator {
 	return page.locator('[data-testid="terminal-instance"][data-visible="true"]');
+}
+
+/**
+ * The visible terminal's rendered rows. Assert terminal *text* against this, never the container:
+ * xterm appends hidden `.xterm-char-measure-element` width-probe spans (each `char.repeat(32)`, e.g.
+ * 32×"E" / 32×"1") inside the terminal element, and `toContainText` on the container reads them too —
+ * so before the shell output paints, the container text is a run of measure glyphs, not the command.
+ * `.xterm-rows` holds only the painted screen, so assertions wait for the real output.
+ */
+export function visibleTerminalScreen(page: Page): Locator {
+	return visibleTerminal(page).locator(".xterm-rows");
 }
 
 /** Wait until the visible terminal's PTY is wired up (ready to receive input). */

@@ -32,7 +32,7 @@ comments / nested fields, and writes back the original line ending (LF or CRLF).
   agent. `tools/` stays internal.
 - **Allowed deps:** `@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai`, `typebox` (peer); `yaml`
   (frontmatter parse/serialize); Node built-ins.
-- **Forbidden:** any `@thinkrail-pi/*` package — the dependency edge is one-way (thinkrail → this
+- **Forbidden:** any `@thinkrail/*` package — the dependency edge is one-way (thinkrail → this
   package), which is what keeps it portable.
 
 ## Sub-modules

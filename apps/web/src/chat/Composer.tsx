@@ -1,4 +1,4 @@
-import type { ImageContent, Model, SlashCommandInfo, ThinkingLevel } from "@thinkrail-pi/contracts";
+import type { ImageContent, Model, SlashCommandInfo, ThinkingLevel } from "@thinkrail/contracts";
 import { ArrowUp, FileIcon, FolderIcon, Square, X } from "lucide-react";
 import {
 	type ClipboardEvent,

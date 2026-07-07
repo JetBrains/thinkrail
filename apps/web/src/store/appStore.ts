@@ -8,7 +8,7 @@ import type {
 	SlashCommandInfo,
 	ThinkingLevel,
 	Workspace,
-} from "@thinkrail-pi/contracts";
+} from "@thinkrail/contracts";
 import { create } from "zustand";
 import type { ChatTurn, ExtUiDialogRequest, ToolResultState } from "../chat/types";
 import type { ConnectionStatus } from "../transport";

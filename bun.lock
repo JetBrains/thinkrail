@@ -3,25 +3,25 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "@thinkrail-pi/monorepo",
+      "name": "@thinkrail/monorepo",
       "devDependencies": {
         "@biomejs/biome": "^2.5.0",
         "@playwright/test": "^1.61.0",
-        "@thinkrail-pi/shared": "workspace:*",
+        "@thinkrail/shared": "workspace:*",
         "husky": "^9.1.7",
         "turbo": "^2.9.18",
         "typescript": "catalog:",
       },
     },
     "apps/cli": {
-      "name": "@thinkrail-pi/cli",
+      "name": "@thinkrail/cli",
       "version": "0.0.0",
       "bin": {
-        "thinkrail-pi": "./src/index.ts",
+        "thinkrail": "./src/index.ts",
       },
       "dependencies": {
-        "@thinkrail-pi/server": "workspace:*",
-        "@thinkrail-pi/shared": "workspace:*",
+        "@thinkrail/server": "workspace:*",
+        "@thinkrail/shared": "workspace:*",
       },
       "devDependencies": {
         "@types/bun": "catalog:",
@@ -29,7 +29,7 @@
       },
     },
     "apps/web": {
-      "name": "@thinkrail-pi/web",
+      "name": "@thinkrail/web",
       "version": "0.0.0",
       "dependencies": {
         "@monaco-editor/react": "4.7.0",
@@ -39,7 +39,7 @@
         "@radix-ui/react-tooltip": "^1.2.10",
         "@shikijs/langs": "4.2.0",
         "@shikijs/themes": "4.2.0",
-        "@thinkrail-pi/contracts": "workspace:*",
+        "@thinkrail/contracts": "workspace:*",
         "@xterm/addon-clipboard": "^0.2.0",
         "@xterm/addon-fit": "^0.11.0",
         "@xterm/addon-image": "^0.9.0",
@@ -75,7 +75,7 @@
       },
     },
     "packages/contracts": {
-      "name": "@thinkrail-pi/contracts",
+      "name": "@thinkrail/contracts",
       "version": "0.0.0",
       "devDependencies": {
         "@earendil-works/pi-agent-core": "catalog:",
@@ -112,13 +112,13 @@
       },
     },
     "packages/server": {
-      "name": "@thinkrail-pi/server",
+      "name": "@thinkrail/server",
       "version": "0.0.0",
       "dependencies": {
         "@earendil-works/pi-ai": "catalog:",
         "@earendil-works/pi-coding-agent": "catalog:",
-        "@thinkrail-pi/contracts": "workspace:*",
-        "@thinkrail-pi/shared": "workspace:*",
+        "@thinkrail/contracts": "workspace:*",
+        "@thinkrail/shared": "workspace:*",
         "bun-pty": "^0.4.10",
         "pi-spec-graph": "workspace:*",
         "pi-thinkrail-workflow": "workspace:*",
@@ -132,10 +132,10 @@
       },
     },
     "packages/shared": {
-      "name": "@thinkrail-pi/shared",
+      "name": "@thinkrail/shared",
       "version": "0.0.0",
       "dependencies": {
-        "@thinkrail-pi/contracts": "workspace:*",
+        "@thinkrail/contracts": "workspace:*",
       },
       "devDependencies": {
         "@types/bun": "catalog:",
@@ -512,15 +512,15 @@
 
     "@tailwindcss/vite": ["@tailwindcss/vite@4.3.1", "", { "dependencies": { "@tailwindcss/node": "4.3.1", "@tailwindcss/oxide": "4.3.1", "tailwindcss": "4.3.1" }, "peerDependencies": { "vite": "^5.2.0 || ^6 || ^7 || ^8" } }, "sha512-hItDHuIIlEV61R+faXu66s1K36aTurO/Qw0e45Vskz57gXl9pWOT6eg3zmcEui6CZXddbN7zd41bwmvag4JGwQ=="],
 
-    "@thinkrail-pi/cli": ["@thinkrail-pi/cli@workspace:apps/cli"],
+    "@thinkrail/cli": ["@thinkrail/cli@workspace:apps/cli"],
 
-    "@thinkrail-pi/contracts": ["@thinkrail-pi/contracts@workspace:packages/contracts"],
+    "@thinkrail/contracts": ["@thinkrail/contracts@workspace:packages/contracts"],
 
-    "@thinkrail-pi/server": ["@thinkrail-pi/server@workspace:packages/server"],
+    "@thinkrail/server": ["@thinkrail/server@workspace:packages/server"],
 
-    "@thinkrail-pi/shared": ["@thinkrail-pi/shared@workspace:packages/shared"],
+    "@thinkrail/shared": ["@thinkrail/shared@workspace:packages/shared"],
 
-    "@thinkrail-pi/web": ["@thinkrail-pi/web@workspace:apps/web"],
+    "@thinkrail/web": ["@thinkrail/web@workspace:apps/web"],
 
     "@turbo/darwin-64": ["@turbo/darwin-64@2.9.18", "", { "os": "darwin", "cpu": "x64" }, "sha512-9f27peFu16ur8c0v9nUFUEyBnbKuuFsUTjHFWfmwGfzySBXbHwzU44QhZon6Mznz0cHsIr3984NQj/bVrnGSRw=="],
 

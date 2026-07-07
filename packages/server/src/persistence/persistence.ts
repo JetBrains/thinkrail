@@ -1,12 +1,12 @@
-// App state under the data dir (THINKRAIL_PI_DATA_DIR for dev/e2e isolation, else ~/.thinkrail-pi).
+// App state under the data dir (THINKRAIL_DATA_DIR for dev/e2e isolation, else ~/.thinkrail).
 // This is OUR state, never the agent's — pi's own session files live under ~/.pi/agent.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { Project, Workspace } from "@thinkrail-pi/contracts";
+import type { Project, Workspace } from "@thinkrail/contracts";
 
 export function dataDir(): string {
-	return process.env.THINKRAIL_PI_DATA_DIR ?? join(homedir(), ".thinkrail-pi");
+	return process.env.THINKRAIL_DATA_DIR ?? join(homedir(), ".thinkrail");
 }
 
 function readJson<T>(file: string, fallback: T): T {

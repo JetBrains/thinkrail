@@ -1,24 +1,24 @@
 #!/usr/bin/env bun
-// Boot-smoke the compiled `thinkrail-pi` binary: start it against throwaway data/agent/cache dirs and
+// Boot-smoke the compiled `thinkrail` binary: start it against throwaway data/agent/cache dirs and
 // assert it comes up, serves the staged web UI, staged the bundled skills, and shuts down cleanly on
 // SIGTERM. This gates the regression class that only exists inside the compiled artifact (dev + e2e run
 // from source and can never see it) — extension/asset wiring that resolves out of `node_modules` or the
 // source tree at runtime.
 //
 // Usage:  bun run scripts/smoke-binary.ts [path-to-binary]
-//   Default binary: `dist/thinkrail-pi` — run `bun run build:binary` first (we error if it's missing).
+//   Default binary: `dist/thinkrail` — run `bun run build:binary` first (we error if it's missing).
 
 import { existsSync, globSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-const binary = resolve(process.argv[2] ?? join(import.meta.dir, "..", "dist", "thinkrail-pi"));
+const binary = resolve(process.argv[2] ?? join(import.meta.dir, "..", "dist", "thinkrail"));
 if (!existsSync(binary)) {
 	console.error(`binary not found at ${binary} — run \`bun run build:binary\` first.`);
 	process.exit(1);
 }
 
-const tmp = mkdtempSync(join(tmpdir(), "thinkrail-pi-smoke-"));
+const tmp = mkdtempSync(join(tmpdir(), "thinkrail-smoke-"));
 const cacheDir = join(tmp, "cache");
 
 function fail(message: string): never {
@@ -41,7 +41,7 @@ const proc = Bun.spawn([binary, "--no-open", "--port", "24262"], {
 		...process.env,
 		// Full isolation: never touch the runner/dev machine's real state, and force a fresh
 		// cache so the binary's staging path (web assets + skills) is exercised from scratch.
-		THINKRAIL_PI_DATA_DIR: join(tmp, "data"),
+		THINKRAIL_DATA_DIR: join(tmp, "data"),
 		PI_CODING_AGENT_DIR: join(tmp, "pi-agent"),
 		XDG_CACHE_HOME: cacheDir,
 	},
@@ -49,13 +49,13 @@ const proc = Bun.spawn([binary, "--no-open", "--port", "24262"], {
 	stderr: "inherit",
 });
 
-/** The URL from the CLI's `thinkrail-pi → http://…` line (it may scan past a busy port). */
+/** The URL from the CLI's `thinkrail → http://…` line (it may scan past a busy port). */
 async function readServedUrl(): Promise<string> {
 	const decoder = new TextDecoder();
 	let buffered = "";
 	for await (const chunk of proc.stdout) {
 		buffered += decoder.decode(chunk, { stream: true });
-		const match = buffered.match(/thinkrail-pi → (http:\/\/\S+)/);
+		const match = buffered.match(/thinkrail → (http:\/\/\S+)/);
 		if (match) return match[1];
 	}
 	throw new Error(`stdout closed without a serving URL (output: ${JSON.stringify(buffered)})`);
@@ -84,7 +84,7 @@ try {
 
 	// The bundled extensions' skills must be staged to the real filesystem (pi reads SKILL.md via fs).
 	for (const skill of ["spec-graph", "brainstorming"]) {
-		const hits = globSync(join(cacheDir, "thinkrail-pi", "skills", "*", skill, "SKILL.md"));
+		const hits = globSync(join(cacheDir, "thinkrail", "skills", "*", skill, "SKILL.md"));
 		if (hits.length === 0) fail(`bundled skill "${skill}" was not staged under ${cacheDir}`);
 	}
 

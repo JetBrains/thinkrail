@@ -1,4 +1,4 @@
-import type { WsMethodName, WsParams, WsResult, WsServerMessage } from "@thinkrail-pi/contracts";
+import type { WsMethodName, WsParams, WsResult, WsServerMessage } from "@thinkrail/contracts";
 
 export type ConnectionStatus = "connecting" | "connected" | "disconnected";
 type PushHandler = (data: unknown) => void;

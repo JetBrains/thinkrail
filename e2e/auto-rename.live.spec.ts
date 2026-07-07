@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import type { Workspace } from "@thinkrail-pi/contracts";
+import type { Workspace } from "@thinkrail/contracts";
 import { createWorkspaceViaDialog, openWorkspaceChat } from "./fixtures/app";
 import { E2E_DATA_DIR, E2E_FIXTURE_REPO } from "./fixtures/paths";
 

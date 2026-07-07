@@ -1,4 +1,4 @@
-import type { GitFileStatus, GitStatus } from "@thinkrail-pi/contracts";
+import type { GitFileStatus, GitStatus } from "@thinkrail/contracts";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";

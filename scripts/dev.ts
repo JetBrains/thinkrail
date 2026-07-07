@@ -1,28 +1,28 @@
 #!/usr/bin/env bun
 // `bun run dev`: pick free host + web ports, run the web (vite) + server (host) dev tasks, and open the
-// default browser at the vite URL once it's serving. The host reads THINKRAIL_PI_PORT (vite proxies `/ws`
-// to it); vite reads THINKRAIL_PI_WEB_PORT — both pre-picked here, so a second dev session (e.g. another
+// default browser at the vite URL once it's serving. The host reads THINKRAIL_PORT (vite proxies `/ws`
+// to it); vite reads THINKRAIL_WEB_PORT — both pre-picked here, so a second dev session (e.g. another
 // branch) lands on its own ports instead of silently sharing one. apps/cli is excluded: it's the
 // standalone product launcher (free-picks its own port + serves a built SPA), so running it here would
 // boot a redundant second host that nothing connects to.
 
-import { findFreePort } from "@thinkrail-pi/shared/freePort";
+import { findFreePort } from "@thinkrail/shared/freePort";
 
-const host = process.env.THINKRAIL_PI_HOST ?? "localhost";
-const preferred = Number(process.env.THINKRAIL_PI_PORT ?? 24242);
+const host = process.env.THINKRAIL_HOST ?? "localhost";
+const preferred = Number(process.env.THINKRAIL_PORT ?? 24242);
 const port = await findFreePort(preferred, host);
 if (port !== preferred) {
-	console.log(`thinkrail-pi dev: host port ${preferred} is in use → using ${port}`);
+	console.log(`thinkrail dev: host port ${preferred} is in use → using ${port}`);
 }
 const webPort = await findFreePort(24269, host);
 
 const turbo = Bun.spawn(
-	["bunx", "turbo", "run", "dev", "--filter=@thinkrail-pi/web", "--filter=@thinkrail-pi/server"],
+	["bunx", "turbo", "run", "dev", "--filter=@thinkrail/web", "--filter=@thinkrail/server"],
 	{
 		env: {
 			...process.env,
-			THINKRAIL_PI_PORT: String(port),
-			THINKRAIL_PI_WEB_PORT: String(webPort),
+			THINKRAIL_PORT: String(port),
+			THINKRAIL_WEB_PORT: String(webPort),
 		},
 		stdin: "inherit",
 		stdout: "inherit",

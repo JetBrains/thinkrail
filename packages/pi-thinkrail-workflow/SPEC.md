@@ -34,11 +34,11 @@ sub-module if one is ever needed. Nothing about the layout changes to add the ne
 - **Allowed deps:** `@earendil-works/pi-coding-agent` (**types only** — `ExtensionAPI`/`ExtensionFactory`),
   as a `peerDependency`. No `typebox` in v1: this package registers no custom tool, only a
   `before_agent_start` rule and skill content.
-- **Forbidden:** any `@thinkrail-pi/*` package, `apps/web`, `packages/server` internals — reached only by
+- **Forbidden:** any `@thinkrail/*` package, `apps/web`, `packages/server` internals — reached only by
   tool *name* (`ask_user_question`, `spec_*`), never by import.
 - **Not portable, and honest about it.** Unlike `pi-spec-graph` and `pi-visualize`, this package's skill
   content assumes the host's `ask_user_question` tool (`packages/server/src/agent/askUserQuestion.ts`) is
-  present in the session — that tool exists only in thinkrail-pi. This package does not claim to run
+  present in the session — that tool exists only in thinkrail. This package does not claim to run
   under vanilla `pi`; it is a workspace-internal module, not a portable capability. It stays its own
   package rather than folding into `packages/server` anyway, for the same reason `packages/shared` isn't
   folded into `server`: non-portable is not the same as infra-runtime-coupled. A `SKILL.md` has no runtime
@@ -143,7 +143,7 @@ e2e spec is a reasonable follow-up once a skill's wording stabilizes — not req
 ## Non-goals
 
 - A vanilla-pi-portable brainstorming or project-setup skill (would require replacing `ask_user_question`
-  with a lowest-common-denominator question mechanism — not worth it for a thinkrail-pi-only host
+  with a lowest-common-denominator question mechanism — not worth it for a thinkrail-only host
   feature).
 - Building out the rest of the skill family (thinkrail-implement, bug-fix, etc.) now — this spec only
   covers `brainstorming` and `project-setup`; the structure is ready for more, they are not designed here.
@@ -152,4 +152,4 @@ e2e spec is a reasonable follow-up once a skill's wording stabilizes — not req
   build thinkrail itself) as a pi package. That is dev-tooling for a different, ticket-based product and
   has no board/ticket system to run against here. This does **not** rule out porting an individual
   *product-facing* skill like `new-project` → `project-setup`, adapted to this app's own tools, when it's
-  useful to ThinkRail-PI's own users.
+  useful to ThinkRail's own users.

@@ -1,5 +1,5 @@
-import { findFreePort } from "@thinkrail-pi/shared/freePort";
-import { resolveShellEnv } from "@thinkrail-pi/shared/shellEnv";
+import { findFreePort } from "@thinkrail/shared/freePort";
+import { resolveShellEnv } from "@thinkrail/shared/shellEnv";
 import { createServer, type RunningServer } from "./server";
 
 export interface BootHostOptions {

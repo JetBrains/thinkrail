@@ -1,6 +1,6 @@
 import { join, normalize } from "node:path";
-import type { Workspace } from "@thinkrail-pi/contracts";
-import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail-pi/contracts";
+import type { Workspace } from "@thinkrail/contracts";
+import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
 import {
 	disposeAllSessions,
 	getSessionWorkspaceId,
@@ -130,7 +130,7 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		);
 	});
 
-	// Open a project on boot if the launcher passed one (e.g. `thinkrail-pi /path/to/repo`). Best-effort:
+	// Open a project on boot if the launcher passed one (e.g. `thinkrail /path/to/repo`). Best-effort:
 	// a non-repo / missing dir is a warning, not a boot failure — the UI's Open-Project flow still works.
 	if (projectPath) {
 		try {

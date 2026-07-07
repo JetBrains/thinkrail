@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
-import type { FileNode } from "@thinkrail-pi/contracts";
+import type { FileNode } from "@thinkrail/contracts";
 import { loadWorkspaces } from "../persistence";
 
 /** Resolve `path` (relative to the worktree root) to an absolute path, refusing anything that escapes it. */

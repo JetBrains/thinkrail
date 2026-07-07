@@ -1,10 +1,10 @@
 #!/usr/bin/env bun
-// The `thinkrail-pi` bin: boots the engine host in-process (same Bun loop) and opens the browser to the
-// app. A thin launcher — all engine logic lives in `@thinkrail-pi/server`.
+// The `thinkrail` bin: boots the engine host in-process (same Bun loop) and opens the browser to the
+// app. A thin launcher — all engine logic lives in `@thinkrail/server`.
 
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { bootHost } from "@thinkrail-pi/server";
+import { bootHost } from "@thinkrail/server";
 import { type CliOptions, parseArgs, USAGE } from "./args";
 
 /** The built web app shipped with the bin, relative to this file (src in dev, dist when bundled). */
@@ -61,7 +61,7 @@ async function bootstrap(): Promise<void> {
 	// `localhost`/`0.0.0.0`/`::` are bind hosts, not addresses to open — point the browser at localhost.
 	const openHost = options.host === "0.0.0.0" || options.host === "::" ? "localhost" : options.host;
 	const url = `http://${openHost}:${port}`;
-	console.log(`thinkrail-pi → ${url}`);
+	console.log(`thinkrail → ${url}`);
 	if (options.open) openBrowser(url);
 }
 

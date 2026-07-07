@@ -1,5 +1,5 @@
 import { beforeEach, expect, test } from "bun:test";
-import type { ExtUiRequest, PiEvent, SessionSummary, Workspace } from "@thinkrail-pi/contracts";
+import type { ExtUiRequest, PiEvent, SessionSummary, Workspace } from "@thinkrail/contracts";
 import { type SessionRuntime, useAppStore } from "./appStore";
 
 // Event fixtures — the reducer only reads the fields below, so casting minimal objects is safe here.

@@ -4,7 +4,7 @@ import type {
 	ImageContent,
 	Model,
 	ThinkingLevel,
-} from "@thinkrail-pi/contracts";
+} from "@thinkrail/contracts";
 import {
 	abortSession,
 	answerQuestion,

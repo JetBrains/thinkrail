@@ -16,8 +16,8 @@ Exposed through explicit subpath exports, not a barrel.
 ## Boundary
 
 - **Owns:** host-side runtime helpers that are neither engine- nor transport-specific.
-- **Public surface:** `@thinkrail-pi/shared/shellEnv` → `resolveShellEnv()`, `pathLooksComplete()`;
-  `@thinkrail-pi/shared/freePort` → `findFreePort()`, `isPortFree()`.
+- **Public surface:** `@thinkrail/shared/shellEnv` → `resolveShellEnv()`, `pathLooksComplete()`;
+  `@thinkrail/shared/freePort` → `findFreePort()`, `isPortFree()`.
 - **Allowed deps:** Bun/Node runtime (`@types/bun`); may use `contracts` types if needed (none today).
 - **Forbidden:** importing `server` / `web` / any `pi` package; being imported by `web` (it carries
   Bun/Node code that must not reach the browser bundle).

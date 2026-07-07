@@ -4,7 +4,7 @@
 // TUI-only members of `ExtensionUIContext` are inert no-ops — pi never invokes them in `rpc` (non-TUI) mode.
 
 import type { ExtensionUIContext, ExtensionUIDialogOptions } from "@earendil-works/pi-coding-agent";
-import type { ExtUiRequest, ExtUiResponse } from "@thinkrail-pi/contracts";
+import type { ExtUiRequest, ExtUiResponse } from "@thinkrail/contracts";
 
 let publish: (request: ExtUiRequest) => void = () => {};
 /** Wired in `createServer` to push frames on the `pi.extensionUi` channel (defaults to a no-op). */

@@ -1,4 +1,4 @@
-import type { AssistantMessage, ExtUiRequest, UserMessage } from "@thinkrail-pi/contracts";
+import type { AssistantMessage, ExtUiRequest, UserMessage } from "@thinkrail/contracts";
 
 /** The extension-UI frames that await a browser reply (the ones `ExtUiDialog` renders). */
 export type ExtUiDialogRequest = Extract<

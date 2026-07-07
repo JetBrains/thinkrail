@@ -2,14 +2,14 @@
 id: goal-and-requirements
 type: goal-and-requirements
 status: active
-title: ThinkRail-PI — product goal and scope
+title: ThinkRail — product goal and scope
 covers: [product-goal, v1-scope, v2-scope, engine-decision]
 tags: [product, scope]
 ---
 
 ## Goal
 
-ThinkRail-PI is a ThinkRail-branded desktop-and-mobile client for the `pi` coding agent. The product
+ThinkRail is a ThinkRail-branded desktop-and-mobile client for the `pi` coding agent. The product
 is a thin host that bridges `pi` to a rich UI and, over time, layers spec-driven workflows on top.
 
 ## Engine
@@ -25,7 +25,7 @@ A ThinkRail, git-worktree IDE, driven by a CLI you run that opens a browser UI.
 The shell is built first, `pi` connected last:
 
 - **Projects → workspaces**: open a git repo as a project; a workspace is a `git worktree` (own branch +
-  cwd) under `~/.thinkrail-pi/worktrees`.
+  cwd) under `~/.thinkrail/worktrees`.
 - **Center**: a tabbed area — Monaco file tabs + (once `pi` lands) chat tabs.
 - **Right**: an All-files tree of the active worktree + a Changes (git diff) tab; terminals below,
   scoped to the worktree.
@@ -38,7 +38,7 @@ The shell is built first, `pi` connected last:
   opening a node opens the spec file as an editor tab. Viewer only — no editing, drift detection, or
   graph canvas.
 - ThinkRail branding (violet `#8C81FF`, Darcula background, Geist / JetBrains Mono / Cabinet Grotesk).
-- On-disk state under `~/.thinkrail-pi`.
+- On-disk state under `~/.thinkrail`.
 
 V1 is explicitly **not**: workflows; the spec-graph **product layer** beyond the read-only viewer
 (drift detection, pre-build approval, living graph — the pi-side spec capability ships as the bundled

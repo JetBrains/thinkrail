@@ -2,7 +2,7 @@
 id: architecture
 type: architecture-design
 status: active
-title: ThinkRail-PI — top-level architecture
+title: ThinkRail — top-level architecture
 parent: goal-and-requirements
 covers: [client-host-split, cli-entrypoint, wire-contract, transport-endpoint, ui-shell-panels, git-worktrees, remote-tailscale, hydrate-then-stream, domain-vs-view-state]
 tags: [v1, architecture]
@@ -53,7 +53,7 @@ packages/spec-graph portable pi extension: spec_* tools + skill (bundled into ev
    tabs + chat tabs**. The shell arranges panels by layout mode: desktop multi-pane /
    mobile single-view-with-switcher. Both modes share the same panels and store.
 6. **Workspaces are git worktrees (V1).** project (git repo) → workspace (`git worktree` on its own
-   branch/cwd, under `~/.thinkrail-pi/worktrees`) → {chats, files, terminals}. The shell is built first,
+   branch/cwd, under `~/.thinkrail/worktrees`) → {chats, files, terminals}. The shell is built first,
    `pi` connected last. Real PR / Checks / Review stay V2.
 7. **Auth is external.** Tailscale ACLs / device identity are the auth; the app carries an `owner` field,
    not a login UI.

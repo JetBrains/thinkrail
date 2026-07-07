@@ -1,5 +1,5 @@
 {
-	"name": "@thinkrail-pi/monorepo",
+	"name": "@thinkrail/monorepo",
 	"private": true,
 	"packageManager": "bun@1.3.14",
 	"workspaces": {
@@ -20,9 +20,9 @@
 	"scripts": {
 		"build": "turbo run build",
 		"dev": "bun scripts/dev.ts",
-		"dev:server": "turbo run dev --filter=@thinkrail-pi/server",
-		"dev:web": "turbo run dev --filter=@thinkrail-pi/web",
-		"build:web": "turbo run build --filter=@thinkrail-pi/web",
+		"dev:server": "turbo run dev --filter=@thinkrail/server",
+		"dev:web": "turbo run dev --filter=@thinkrail/web",
+		"build:web": "turbo run build --filter=@thinkrail/web",
 		"build:binary": "bun run build:web && bun apps/cli/scripts/build-binary.ts",
 		"smoke:binary": "bun apps/cli/scripts/smoke-binary.ts",
 		"setup-central-cli": "bun scripts/setup-central-cli.ts",
@@ -42,7 +42,7 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.5.0",
-		"@thinkrail-pi/shared": "workspace:*",
+		"@thinkrail/shared": "workspace:*",
 		"@playwright/test": "^1.61.0",
 		"husky": "^9.1.7",
 		"turbo": "^2.9.18",

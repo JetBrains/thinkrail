@@ -10,7 +10,7 @@ tags: [v1, host]
 
 ## Responsibility
 
-The V1 entrypoint: the `thinkrail-pi` bin. Boots the engine host in-process and opens the browser UI at
+The V1 entrypoint: the `thinkrail` bin. Boots the engine host in-process and opens the browser UI at
 its URL. It is a thin launcher — all engine logic lives in `packages/server`.
 
 ## Flow
@@ -18,7 +18,7 @@ its URL. It is a thin launcher — all engine logic lives in `packages/server`.
 1. Parse argv + env into options (`src/args.ts`, a pure function); `--help` prints usage and exits.
 2. `resolveShellEnv()` first (a GUI- or `npx`-launched process must still find `pi`/`git` on PATH); it
    runs once, before any `AgentSession` (sessions are created lazily, on a WS request).
-3. Resolve the static dir (`THINKRAIL_PI_STATIC_DIR`, else the built web app shipped beside the bin) and
+3. Resolve the static dir (`THINKRAIL_STATIC_DIR`, else the built web app shipped beside the bin) and
    warn if it's missing.
 4. Resolve a free listen port at or above the requested one (`findFreePort` — `Bun.serve` won't report a
    busy port), then `createServer({ port, host, staticDir, projectPath? })` to embed the host in this Bun
@@ -32,11 +32,11 @@ its URL. It is a thin launcher — all engine logic lives in `packages/server`.
 `bin` = `./src/index.ts` (bun runs the TS source directly). Args: `--port` (stable default 24242,
 scans upward to the next free port on collision), `--host` (default `localhost`), `--no-open`, `-h`/`--help`, and one positional
 `project-dir` (a git repo to open as a project on boot, best-effort). Env defaults:
-`THINKRAIL_PI_PORT` / `THINKRAIL_PI_HOST` / `THINKRAIL_PI_STATIC_DIR` (flag > env > default).
+`THINKRAIL_PORT` / `THINKRAIL_HOST` / `THINKRAIL_STATIC_DIR` (flag > env > default).
 
 ## Single-file binary (`build:binary`)
 
-`bun run build:binary` produces a **standalone `thinkrail-pi` executable** — one self-contained file per
+`bun run build:binary` produces a **standalone `thinkrail` executable** — one self-contained file per
 platform — via `bun build --compile`. Bun bundles the host *and* transparently embeds the `bun-pty` native
 lib; the extra steps are the **web UI** (a directory the host normally serves) and the **bundled pi
 extensions** (which the server path-loads out of `node_modules` in dev — impossible inside a binary):
@@ -58,7 +58,7 @@ extensions** (which the server path-loads out of `node_modules` in dev — impos
 - `src/compiled-entry.ts` is the binary's entry: on startup it stages the embedded web + skills files to
   per-build cache dirs (`$XDG_CACHE_HOME`/`~/.cache`/temp; **atomic** — written to a temp dir then
   renamed into place, so a killed first run can't leave a poisoned half-extracted cache; presence of the
-  final dir = complete), sets `THINKRAIL_PI_STATIC_DIR`, registers the factories + staged skills dir via
+  final dir = complete), sets `THINKRAIL_STATIC_DIR`, registers the factories + staged skills dir via
   the server's **`setBundledExtensions`** seam, then hands off to `index.ts`. (`bun-pty` self-extracts
   automatically; **no photon wasm** — the agent's read tool is set to send images raw, server-side.
   Skills must be staged to the *real* filesystem: pi reads `SKILL.md` via plain fs and embeds the path in
@@ -80,8 +80,8 @@ extensions** (which the server path-loads out of `node_modules` in dev — impos
   run-from-source `bootstrap()`: shell env → server → browser open → signal handlers), and the binary build
   + its boot smoke (`scripts/build-binary.ts`, `scripts/smoke-binary.ts`, `src/compiled-entry.ts`,
   `src/web-assets.generated.*`, `src/bundled-extensions.generated.*`).
-- **Allowed deps:** `@thinkrail-pi/server` (`createServer`, `setBundledExtensions`),
-  `@thinkrail-pi/shared/shellEnv` (`resolveShellEnv`), Bun/Node; the generated build module may
+- **Allowed deps:** `@thinkrail/server` (`createServer`, `setBundledExtensions`),
+  `@thinkrail/shared/shellEnv` (`resolveShellEnv`), Bun/Node; the generated build module may
   value-import the bundled extension packages' entries (resolved via the server package — build-time
   only, deleted after compile).
 - **Forbidden:** reaching into the server's internals (use only its public surface), the browser/`contracts`
@@ -92,7 +92,7 @@ extensions** (which the server path-loads out of `node_modules` in dev — impos
 - A stable default port is friendlier than `port:0` for a CLI you re-run, but you must know the resolved
   port to open the URL — so scan upward from the requested port to the first free one, then open the
   resolved origin. (`Bun.serve` won't surface `EADDRINUSE` for a busy port, so the free port is found by
-  probing, not by catching a bind error — see `@thinkrail-pi/shared/freePort`.)
+  probing, not by catching a bind error — see `@thinkrail/shared/freePort`.)
 - The browser is the V1 client, not a fallback — the same UI can point at a remote host (the V2 path).
 - The agent runs in this process — a fatal fault takes the app down (the accepted in-process tradeoff).
 - `resolveShellEnv()` runs once, before any `AgentSession`.

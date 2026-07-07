@@ -18,7 +18,7 @@ Read-only local GitHub CLI (`gh`) auth status for the New-Workspace dialog's "Co
 - **Owns:** `githubAuthStatus()` → `{ connected, login?, scopes? }` by shelling `gh auth status` (parsing
   its report for the account + token scopes); `githubRefresh()` (re-shells the same check). Degrades
   gracefully — a missing / un-authed `gh` returns `{ connected: false }` so the dialog works fully offline.
-  `THINKRAIL_PI_GH_OFFLINE=1` forces the disconnected result without shelling (e2e drives the offline path).
+  `THINKRAIL_GH_OFFLINE=1` forces the disconnected result without shelling (e2e drives the offline path).
 - **Public surface (barrel):** `githubAuthStatus`, `githubRefresh`.
 - **Allowed deps:** `contracts` (`GithubAuthStatus`); Bun (spawn). No `git`/`projects` reach — it's a pure
   `gh` probe.

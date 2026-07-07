@@ -2,7 +2,7 @@
 // Reads through pi-spec-graph's derived index (revalidate-on-read), so every fetch sees the current
 // filesystem; one SpecIndex is reused per worktree root so the parse cache pays off across fetches.
 
-import type { SpecGraphNode, SpecGraphSnapshot } from "@thinkrail-pi/contracts";
+import type { SpecGraphNode, SpecGraphSnapshot } from "@thinkrail/contracts";
 import { FIELDS, list, SpecIndex, scalar } from "pi-spec-graph/core";
 import { loadWorkspaces } from "../persistence";
 

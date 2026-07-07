@@ -1,4 +1,4 @@
-// Pure CLI argument + env parsing for the `thinkrail-pi` bin. Kept free of any `@thinkrail-pi/server`
+// Pure CLI argument + env parsing for the `thinkrail` bin. Kept free of any `@thinkrail/server`
 // import so it stays cheaply unit-testable (no `pi` runtime pulled in).
 
 export const DEFAULT_PORT = 24242;
@@ -10,7 +10,7 @@ export interface CliOptions {
 	host: string;
 	/** Open the browser at the resolved URL on boot. */
 	open: boolean;
-	/** Static SPA dir override (`THINKRAIL_PI_STATIC_DIR`); when unset the bin derives a default. */
+	/** Static SPA dir override (`THINKRAIL_STATIC_DIR`); when unset the bin derives a default. */
 	staticDir: string | undefined;
 	/** A git repo to open as a project on boot (the positional arg), or undefined. */
 	projectDir: string | undefined;
@@ -20,9 +20,9 @@ export interface CliOptions {
 
 export type ParseEnv = Record<string, string | undefined>;
 
-export const USAGE = `Usage: thinkrail-pi [options] [project-dir]
+export const USAGE = `Usage: thinkrail [options] [project-dir]
 
-Boots the ThinkRail-PI engine host in-process and opens the browser to the app.
+Boots the ThinkRail engine host in-process and opens the browser to the app.
 
 Options:
   --port <n>     Listen port (default ${DEFAULT_PORT}; falls back to a free port if taken).
@@ -34,8 +34,8 @@ Arguments:
   project-dir    A git repo to open as a project on launch (optional).
 
 Env:
-  THINKRAIL_PI_PORT / THINKRAIL_PI_HOST   Defaults for --port / --host.
-  THINKRAIL_PI_STATIC_DIR                 Override the built web app served by the host.`;
+  THINKRAIL_PORT / THINKRAIL_HOST   Defaults for --port / --host.
+  THINKRAIL_STATIC_DIR                 Override the built web app served by the host.`;
 
 /** Read a flag's value from either `--flag value` or `--flag=value`; returns the value + how many argv slots it consumed. */
 function readFlagValue(arg: string, next: string | undefined): { value: string; consumed: number } {
@@ -84,15 +84,15 @@ export function parseArgs(argv: readonly string[], env: ParseEnv = {}): CliOptio
 		}
 	}
 
-	const envPort = env.THINKRAIL_PI_PORT !== undefined ? Number(env.THINKRAIL_PI_PORT) : undefined;
+	const envPort = env.THINKRAIL_PORT !== undefined ? Number(env.THINKRAIL_PORT) : undefined;
 	const resolvedPort =
 		port ?? (envPort !== undefined && Number.isInteger(envPort) ? envPort : DEFAULT_PORT);
 
 	return {
 		port: resolvedPort,
-		host: host ?? env.THINKRAIL_PI_HOST ?? DEFAULT_HOST,
+		host: host ?? env.THINKRAIL_HOST ?? DEFAULT_HOST,
 		open,
-		staticDir: env.THINKRAIL_PI_STATIC_DIR,
+		staticDir: env.THINKRAIL_STATIC_DIR,
 		projectDir,
 		help,
 	};

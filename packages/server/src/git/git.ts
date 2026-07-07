@@ -4,7 +4,7 @@ import type {
 	GitFileStatus,
 	GitStatus,
 	Workspace,
-} from "@thinkrail-pi/contracts";
+} from "@thinkrail/contracts";
 import { loadProjects, loadWorkspaces } from "../persistence";
 import { git, gitAsync } from "./gitExec";
 

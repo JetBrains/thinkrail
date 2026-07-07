@@ -14,7 +14,7 @@ export default function globalSetup(): void {
 	// configured with an apiKey)), and pin a deterministic default model — so every run uses the *same*
 	// known-current model rather than pi's "first available" (which depends on registry order + which
 	// providers are authed, and could silently land on a deprecated one). A test's `setModel` then persists
-	// *here*, never `~/.pi/agent`. Override for other auth/CI with THINKRAIL_PI_E2E_MODEL="<provider>/<id>".
+	// *here*, never `~/.pi/agent`. Override for other auth/CI with THINKRAIL_E2E_MODEL="<provider>/<id>".
 	mkdirSync(E2E_PI_AGENT_DIR, { recursive: true });
 	// Source from a dev's relocated pi dir if they've set one, else the default ~/.pi/agent.
 	const userAgentDir = process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent");
@@ -23,7 +23,7 @@ export default function globalSetup(): void {
 		if (existsSync(src)) copyFileSync(src, join(E2E_PI_AGENT_DIR, file));
 	}
 	const [provider, ...idParts] = (
-		process.env.THINKRAIL_PI_E2E_MODEL ?? "anthropic/claude-opus-4-8"
+		process.env.THINKRAIL_E2E_MODEL ?? "anthropic/claude-opus-4-8"
 	).split("/");
 	writeFileSync(
 		join(E2E_PI_AGENT_DIR, "settings.json"),
@@ -42,7 +42,7 @@ export default function globalSetup(): void {
 	// in is the proof of a real hit.
 	writeFileSync(
 		join(E2E_FIXTURE_REPO, "SPEC.md"),
-		"---\nid: sample-root\ntype: goal-and-requirements\ntitle: Sample Project\n---\n\n## Goal\n\nA throwaway fixture project for the thinkrail-pi e2e suite. It carries the token SPECGRAPHPROBE so spec_grep has a deterministic match to find.\n",
+		"---\nid: sample-root\ntype: goal-and-requirements\ntitle: Sample Project\n---\n\n## Goal\n\nA throwaway fixture project for the thinkrail e2e suite. It carries the token SPECGRAPHPROBE so spec_grep has a deterministic match to find.\n",
 	);
 	// A child spec under the root, so the Specs viewer has a deterministic parent-tree to render
 	// (see e2e/specs-panel.spec.ts).

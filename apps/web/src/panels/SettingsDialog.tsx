@@ -1,4 +1,4 @@
-import type { GithubAuthStatus } from "@thinkrail-pi/contracts";
+import type { GithubAuthStatus } from "@thinkrail/contracts";
 import { Check, RefreshCw, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";

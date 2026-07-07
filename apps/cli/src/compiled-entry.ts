@@ -3,7 +3,7 @@
 // host *and* transparently embeds the `bun-pty` native lib — two things it can't serve from inside the
 // binary are the web UI (a directory of files) and the bundled pi extensions' skills (pi reads SKILL.md
 // via plain fs). So we embed both (`web-assets.generated`, `bundled-extensions.generated`) and, on
-// startup, stage them to per-build cache dirs, point the host at them (`THINKRAIL_PI_STATIC_DIR` + the
+// startup, stage them to per-build cache dirs, point the host at them (`THINKRAIL_STATIC_DIR` + the
 // server's `setBundledExtensions` seam — which also injects the extensions themselves as value-imported
 // factories, since a binary has no `node_modules` to path-load them from), then hand off to the normal
 // bootstrap (`index.ts`).
@@ -30,7 +30,7 @@ function cacheRoot(): string {
 }
 
 /**
- * Stage embedded files to `<cacheRoot>/thinkrail-pi/<kind>/<version>` (idempotent). Extraction is
+ * Stage embedded files to `<cacheRoot>/thinkrail/<kind>/<version>` (idempotent). Extraction is
  * atomic — written to a temp dir, then renamed into place — so the final dir either exists complete or
  * not at all (a killed first run can't poison the per-version cache). Returns the dir.
  */
@@ -39,7 +39,7 @@ async function stage(
 	version: string,
 	files: { route: string; data: string }[],
 ): Promise<string> {
-	const dir = join(cacheRoot(), "thinkrail-pi", kind, version);
+	const dir = join(cacheRoot(), "thinkrail", kind, version);
 	if (existsSync(dir)) return dir;
 	const staging = `${dir}.staging-${process.pid}`;
 	await Promise.all(
@@ -62,7 +62,7 @@ async function stage(
 const staticDir = await stage("web", webAssetsVersion, embeddedWebAssets);
 const skillsDir = await stage("skills", bundledSkillsVersion, embeddedSkillFiles);
 // Respect an explicit override (e.g. pointing at a dev build); otherwise serve the staged UI.
-process.env.THINKRAIL_PI_STATIC_DIR ??= staticDir;
-const { setBundledExtensions } = await import("@thinkrail-pi/server");
+process.env.THINKRAIL_STATIC_DIR ??= staticDir;
+const { setBundledExtensions } = await import("@thinkrail/server");
 setBundledExtensions({ factories: bundledExtensionFactories, skillsDir });
 await import("./index");

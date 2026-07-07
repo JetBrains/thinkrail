@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import type { AssistantMessage, Message, UserMessage } from "@thinkrail-pi/contracts";
+import type { AssistantMessage, Message, UserMessage } from "@thinkrail/contracts";
 import {
 	extractFirstTurn,
 	naiveWorkspaceSlug,

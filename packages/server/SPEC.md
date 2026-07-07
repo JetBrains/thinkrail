@@ -17,7 +17,7 @@ and runs the `pi` agent in-process via `createAgentSession`. Launched in-process
 ## Boundary
 
 - **Owns:** the HTTP+WS server, static serving, the WS dispatch registry, server-side feature services
-  (project/workspace/git/fs/terminal + the in-process `AgentSession` manager), and `~/.thinkrail-pi`
+  (project/workspace/git/fs/terminal + the in-process `AgentSession` manager), and `~/.thinkrail`
   persistence.
 - **Public surface:** `createServer(options) → RunningServer` (`{ port, stop }`) and `bootHost(options)
   → BootedHost` (the process-boot wrapper: resolves the login-shell PATH, picks the port per `portMode`,

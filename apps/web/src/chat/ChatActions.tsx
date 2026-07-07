@@ -1,4 +1,4 @@
-import type { AskUserQuestionResult } from "@thinkrail-pi/contracts";
+import type { AskUserQuestionResult } from "@thinkrail/contracts";
 import { createContext, useContext } from "react";
 
 /**

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import type { AskUserQuestionItem } from "@thinkrail-pi/contracts";
+import type { AskUserQuestionItem } from "@thinkrail/contracts";
 import {
 	deriveAnswer,
 	parseQuestions,

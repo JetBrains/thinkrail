@@ -1,4 +1,4 @@
-# ThinkRail-PI
+# ThinkRail
 
 A ThinkRail-branded desktop-and-mobile client for the `pi` coding agent. The app is a thin host that
 runs `pi` and bridges it to a rich UI; `pi` owns models, skills, compaction, cost, and session state.
@@ -49,11 +49,11 @@ only alternative if fault isolation ever becomes worth the complexity.
 - **The wire** — `packages/contracts`: the typed, versioned protocol. Types-only.
 - **UI client** — `apps/web`: mobile-first React, ships independently, dials a host over the wire.
 
-V1 entrypoint is `apps/cli`: a `thinkrail-pi` bin that boots the host in-process and opens the browser.
+V1 entrypoint is `apps/cli`: a `thinkrail` bin that boots the host in-process and opens the browser.
 Remote/phone access (V2) is over Tailscale; auth stays external (the app carries an `owner` field).
 
 **V1 shape (Worktree IDE):** left = projects (git repos) → workspaces (each a `git
-worktree`, own branch/cwd, under `~/.thinkrail-pi/worktrees`); center = a tabbed area of Monaco file tabs
+worktree`, own branch/cwd, under `~/.thinkrail/worktrees`); center = a tabbed area of Monaco file tabs
 + chat tabs; right = an All-files tree + Changes (git diff) + terminals, all scoped to the active
 worktree. The shell is built **first**, `pi` connected **last**. Deferred to V2: spec-graph viewer,
 PR/Checks/Review.
@@ -128,7 +128,7 @@ reusable by any pi UI (extraction-ready as a future `packages/chat-ui`).
 
 Every change that touches the app is verified by the **e2e suite** before it's considered done.
 `bun run e2e` is **fully self-contained**: it builds the web app, boots the host on a dedicated port
-(24252) with an **isolated state dir** (never touches `~/.thinkrail-pi`), seeds fixtures (Playwright
+(24252) with an **isolated state dir** (never touches `~/.thinkrail`), seeds fixtures (Playwright
 `globalSetup`), runs the suite headless against the real web UI, then tears the host down and cleans up
 (`globalTeardown`). Tests live in `e2e/` and assert via `data-testid` / `data-status` hooks. When
 Electrobun lands, the same suite runs against the desktop app too.
@@ -138,7 +138,7 @@ Electrobun lands, the same suite runs against the desktop app too.
 throwaway dir under the e2e data dir; `globalSetup` copies the user's pi auth config (`auth.json` **+
 `models.json`** — auth lives in both: OAuth providers in `auth.json`, apiKey providers in `models.json`) so a
 real provider works, and seeds a `settings.json` pinning a **deterministic default model** — override with
-`THINKRAIL_PI_E2E_MODEL=<provider>/<modelId>`) — so a test's `setModel`/`setThinkingLevel` persists *there*,
+`THINKRAIL_E2E_MODEL=<provider>/<modelId>`) — so a test's `setModel`/`setThinkingLevel` persists *there*,
 **never the user's real `~/.pi/agent`**. (Corollary: don't let an `@agent` test *select* a model — it would
 pin a default mid-run.) Select suites by marker: `bun run e2e`
 runs the **no-agent** suite (`--grep-invert @agent`) — projects/workspaces/files/editor/changes/terminals,
@@ -152,4 +152,4 @@ Fast gates (also the husky pre-commit): `bun run lint` (biome) + `bun run typech
 ## Stack
 
 Bun + Turbo monorepo · TypeScript (strict) · React 19 + Zustand + Tailwind v4 (web) · in-process `pi`
-via `@earendil-works/pi-coding-agent` (Node ≥ 22.19). On-disk app state under `~/.thinkrail-pi`.
+via `@earendil-works/pi-coding-agent` (Node ≥ 22.19). On-disk app state under `~/.thinkrail`.

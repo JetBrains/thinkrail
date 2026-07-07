@@ -6,11 +6,11 @@ import { evictSpecIndex, specGraph } from "./specs";
 
 let dataDir: string;
 let worktree: string;
-const savedDataDir = process.env.THINKRAIL_PI_DATA_DIR;
+const savedDataDir = process.env.THINKRAIL_DATA_DIR;
 
 beforeEach(() => {
 	dataDir = mkdtempSync(join(tmpdir(), "trpi-spec-test-"));
-	process.env.THINKRAIL_PI_DATA_DIR = dataDir;
+	process.env.THINKRAIL_DATA_DIR = dataDir;
 	worktree = join(dataDir, "worktree");
 	mkdirSync(worktree);
 	writeFileSync(
@@ -32,8 +32,8 @@ beforeEach(() => {
 
 afterEach(() => {
 	rmSync(dataDir, { recursive: true, force: true });
-	if (savedDataDir === undefined) delete process.env.THINKRAIL_PI_DATA_DIR;
-	else process.env.THINKRAIL_PI_DATA_DIR = savedDataDir;
+	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
+	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
 });
 
 function writeSpec(rel: string, frontmatter: string): void {

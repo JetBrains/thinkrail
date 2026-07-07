@@ -1,5 +1,5 @@
 // Native directory picker, run on the host (the machine the repos live on). One picker per OS
-// (macOS `osascript`, Linux `zenity`/`kdialog`, Windows PowerShell); `THINKRAIL_PI_PICK_DIR`
+// (macOS `osascript`, Linux `zenity`/`kdialog`, Windows PowerShell); `THINKRAIL_PICK_DIR`
 // overrides it so the flow is drivable headlessly in dev/e2e.
 
 /** A candidate native picker: the command to spawn + how to read a chosen path from its stdout. */
@@ -56,7 +56,7 @@ export function pickersFor(platform: NodeJS.Platform): Picker[] {
  * A missing binary falls through to the next candidate; a non-zero exit is a user cancel (stop).
  */
 export async function selectDirectory(): Promise<{ path: string | null }> {
-	const override = process.env.THINKRAIL_PI_PICK_DIR;
+	const override = process.env.THINKRAIL_PICK_DIR;
 	if (override) return { path: override };
 
 	for (const picker of pickersFor(process.platform)) {

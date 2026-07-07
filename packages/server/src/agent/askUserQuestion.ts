@@ -16,7 +16,7 @@ import type {
 	AskUserQuestionAnswer,
 	AskUserQuestionArgs,
 	AskUserQuestionResult,
-} from "@thinkrail-pi/contracts";
+} from "@thinkrail/contracts";
 import { type Static, Type } from "typebox";
 
 // ---- limits (mirrors the rpiv contract so the model behaves the same) ----

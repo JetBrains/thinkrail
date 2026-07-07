@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { Message } from "@thinkrail-pi/contracts";
+import type { Message } from "@thinkrail/contracts";
 import { messagesToRuntime } from "./hydrate";
 
 // Partial fixtures cast to Message — the converter reads only `role` (+ toolCallId/isError/content for

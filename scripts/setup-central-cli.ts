@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 // Point pi's model registry at the local JetBrains Central CLI proxy (`jbcentral`), so the pi agent behind
-// thinkrail-pi talks to the JetBrains AI Platform using your JetBrains auth — the same path Claude Code and
+// thinkrail talks to the JetBrains AI Platform using your JetBrains auth — the same path Claude Code and
 // Codex use.
 //
 // Run this manually (it edits your real ~/.pi/agent/models.json), not from `bun run dev`:
@@ -119,7 +119,7 @@ console.log(`  anthropic: ${anthropicUrl}`);
 console.log(`  openai:    ${openaiUrl}`);
 console.log();
 console.log(
-	"The built-in Anthropic (Claude) and OpenAI (GPT) model picks in pi / thinkrail-pi now route",
+	"The built-in Anthropic (Claude) and OpenAI (GPT) model picks in pi / thinkrail now route",
 );
 console.log(
 	"through JetBrains AI. Note: direct provider access is shadowed while these overrides are set,",

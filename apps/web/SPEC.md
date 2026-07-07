@@ -17,7 +17,7 @@ event stream as a chat-centric, multi-session IDE shell.
 
 - **Owns:** the browser UI — transport client, store, panels, the responsive shell, branding tokens.
 - **Public surface:** the built static bundle (`dist/`) — a deployable artifact that dials a host.
-- **Allowed deps:** `@thinkrail-pi/contracts` (types + WS constants) ONLY; React / Zustand / Vite / etc.
+- **Allowed deps:** `@thinkrail/contracts` (types + WS constants) ONLY; React / Zustand / Vite / etc.
 - **Forbidden:** importing `server` / `shared` / any `pi` package (value or type). Kept clean by type-only
   imports + `verbatimModuleSyntax` (a `dist/` build shows no provider SDK / `node:fs`).
 

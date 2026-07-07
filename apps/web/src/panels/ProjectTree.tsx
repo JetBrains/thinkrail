@@ -1,4 +1,4 @@
-import type { Project, Workspace } from "@thinkrail-pi/contracts";
+import type { Project, Workspace } from "@thinkrail/contracts";
 import { Archive, ChevronDown, ChevronRight, Folder, GitBranch, Globe, Plus } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";

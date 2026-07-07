@@ -3,7 +3,7 @@ import type {
 	ImageContent,
 	Model,
 	ThinkingLevel,
-} from "@thinkrail-pi/contracts";
+} from "@thinkrail/contracts";
 import { ArrowDown } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";

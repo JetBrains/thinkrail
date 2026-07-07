@@ -1,5 +1,5 @@
 {
-	"name": "@thinkrail-pi/shared",
+	"name": "@thinkrail/shared",
 	"version": "0.0.0",
 	"private": true,
 	"type": "module",
@@ -12,7 +12,7 @@
 		"test": "bun test"
 	},
 	"dependencies": {
-		"@thinkrail-pi/contracts": "workspace:*"
+		"@thinkrail/contracts": "workspace:*"
 	},
 	"devDependencies": {
 		"@types/bun": "catalog:",

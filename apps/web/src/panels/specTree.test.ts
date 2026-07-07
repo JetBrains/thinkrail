@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { SpecGraphNode } from "@thinkrail-pi/contracts";
+import type { SpecGraphNode } from "@thinkrail/contracts";
 import { buildSpecTree } from "./specTree";
 
 function node(id: string, over: Partial<SpecGraphNode> = {}): SpecGraphNode {

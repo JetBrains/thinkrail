@@ -23,7 +23,7 @@ grep with metadata filters, bounded graph slices, and structural validation. Imp
   file directly.
 - **Allowed deps:** `yaml`; Node built-ins.
 - **Forbidden:** any `@earendil-works/*` (this is what keeps `core/` isolated and unit-testable) and any
-  `@thinkrail-pi/*` package.
+  `@thinkrail/*` package.
 
 ## Leaves & the dependency graph
 

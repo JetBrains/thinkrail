@@ -1,4 +1,4 @@
-import type { SessionStats } from "@thinkrail-pi/contracts";
+import type { SessionStats } from "@thinkrail/contracts";
 import { SessionStatsBar } from "./SessionStatsBar";
 
 /** The chat tab's slim top bar: extension status + token/cost stats. */

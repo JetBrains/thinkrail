@@ -14,7 +14,7 @@ import type {
 	SessionSummary,
 	SlashCommandInfo,
 	ThinkingLevel,
-} from "@thinkrail-pi/contracts";
+} from "@thinkrail/contracts";
 import { cancelQuestionsForSession } from "./askUserQuestion";
 import { buildResourceLoader } from "./extensions";
 import { getPiRuntime } from "./piRuntime";
@@ -29,7 +29,7 @@ interface Entry {
 
 const sessions = new Map<string, Entry>();
 
-// `SessionEventPayload` is a wire type — it lives in `@thinkrail-pi/contracts`; re-exported so the
+// `SessionEventPayload` is a wire type — it lives in `@thinkrail/contracts`; re-exported so the
 // `../agent` barrel keeps exposing it.
 export type { SessionEventPayload };
 

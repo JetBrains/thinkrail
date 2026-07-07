@@ -3,7 +3,7 @@
 // committed so `tsc` can resolve `compiled-entry`'s import when the generated `.ts` is absent (the normal
 // state in the repo); the compiler (`bun build`) uses the real `.ts` instead.
 
-import type { BundledExtensionFactory } from "@thinkrail-pi/server";
+import type { BundledExtensionFactory } from "@thinkrail/server";
 
 /** The four bundled pi extensions' default-export factories, value-imported, in load order. */
 export declare const bundledExtensionFactories: BundledExtensionFactory[];

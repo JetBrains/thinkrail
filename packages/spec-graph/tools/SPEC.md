@@ -24,7 +24,7 @@ None edit prose.
 - **Allowed deps:** `core/` (via its barrel), `@earendil-works/pi-coding-agent` (types + `registerTool`),
   `@earendil-works/pi-ai/compat` (`StringEnum`), `typebox`, Node built-ins (`node:fs`/`node:path`, write
   tools only).
-- **Forbidden:** reaching into `core/` leaf files (import only the barrel); any `@thinkrail-pi/*` package.
+- **Forbidden:** reaching into `core/` leaf files (import only the barrel); any `@thinkrail/*` package.
 
 ## Leaves
 

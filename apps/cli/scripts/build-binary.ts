@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// Build a single-file `thinkrail-pi` executable: embed the built web UI + the bundled pi extensions into
+// Build a single-file `thinkrail` executable: embed the built web UI + the bundled pi extensions into
 // generated modules and `bun build --compile` `compiled-entry.ts`. Bun bundles the host + the `bun-pty`
 // native lib automatically; this script wires in the two things it can't: the web assets (a directory the
 // host serves) and the bundled extensions (which the server path-loads out of `node_modules` in dev — a
@@ -107,7 +107,7 @@ function generateBundledExtensions(): void {
 }
 
 const target = process.argv.find((a) => a.startsWith("--target="))?.slice("--target=".length);
-const outName = target ? `thinkrail-pi-${target.replace(/^bun-/, "")}` : "thinkrail-pi";
+const outName = target ? `thinkrail-${target.replace(/^bun-/, "")}` : "thinkrail";
 const outFile = join(outDir, outName);
 
 mkdirSync(outDir, { recursive: true });

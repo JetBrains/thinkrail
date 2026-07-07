@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Message, PiEvent } from "@thinkrail-pi/contracts";
+import type { Message, PiEvent } from "@thinkrail/contracts";
 import { setOneShotRunner } from "../assist";
 import { createWorkspace, listWorkspaces, removeWorkspace, renameWorkspace } from "../workspaces";
 import {
@@ -14,7 +14,7 @@ import {
 
 let dataDir: string;
 let repo: string;
-const savedDataDir = process.env.THINKRAIL_PI_DATA_DIR;
+const savedDataDir = process.env.THINKRAIL_DATA_DIR;
 
 function git(cwd: string, ...args: string[]): void {
 	const result = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "ignore", stderr: "ignore" });
@@ -23,7 +23,7 @@ function git(cwd: string, ...args: string[]): void {
 
 beforeEach(() => {
 	dataDir = mkdtempSync(join(tmpdir(), "trpi-rename-test-"));
-	process.env.THINKRAIL_PI_DATA_DIR = dataDir;
+	process.env.THINKRAIL_DATA_DIR = dataDir;
 	repo = join(dataDir, "repo");
 	mkdirSync(repo);
 	git(repo, "init", "-b", "main");
@@ -41,8 +41,8 @@ beforeEach(() => {
 afterEach(() => {
 	setOneShotRunner(null);
 	rmSync(dataDir, { recursive: true, force: true });
-	if (savedDataDir === undefined) delete process.env.THINKRAIL_PI_DATA_DIR;
-	else process.env.THINKRAIL_PI_DATA_DIR = savedDataDir;
+	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
+	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
 });
 
 function user(text: string): Message {

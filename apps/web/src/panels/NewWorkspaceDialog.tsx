@@ -1,4 +1,4 @@
-import type { BranchList, Model, ThinkingLevel, Workspace } from "@thinkrail-pi/contracts";
+import type { BranchList, Model, ThinkingLevel, Workspace } from "@thinkrail/contracts";
 import { Box, Check, ChevronDown, GitBranch, RefreshCw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { ModelSelector } from "@/chat/ModelSelector";

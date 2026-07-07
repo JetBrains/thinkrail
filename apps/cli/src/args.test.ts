@@ -15,9 +15,9 @@ describe("parseArgs", () => {
 
 	test("flags win over env over defaults", () => {
 		const env = {
-			THINKRAIL_PI_PORT: "9000",
-			THINKRAIL_PI_HOST: "envhost",
-			THINKRAIL_PI_STATIC_DIR: "/web/dist",
+			THINKRAIL_PORT: "9000",
+			THINKRAIL_HOST: "envhost",
+			THINKRAIL_STATIC_DIR: "/web/dist",
 		};
 		expect(parseArgs(["--port", "8080", "--host", "0.0.0.0"], env)).toMatchObject({
 			port: 8080,
@@ -27,9 +27,10 @@ describe("parseArgs", () => {
 	});
 
 	test("env fills in when a flag is absent", () => {
-		expect(
-			parseArgs([], { THINKRAIL_PI_PORT: "9000", THINKRAIL_PI_HOST: "envhost" }),
-		).toMatchObject({ port: 9000, host: "envhost" });
+		expect(parseArgs([], { THINKRAIL_PORT: "9000", THINKRAIL_HOST: "envhost" })).toMatchObject({
+			port: 9000,
+			host: "envhost",
+		});
 	});
 
 	test("supports --flag=value form", () => {
@@ -68,6 +69,6 @@ describe("parseArgs", () => {
 	});
 
 	test("ignores a non-numeric env port (falls back to default)", () => {
-		expect(parseArgs([], { THINKRAIL_PI_PORT: "notanumber" }).port).toBe(DEFAULT_PORT);
+		expect(parseArgs([], { THINKRAIL_PORT: "notanumber" }).port).toBe(DEFAULT_PORT);
 	});
 });

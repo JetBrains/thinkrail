@@ -1,4 +1,4 @@
-import type { Message } from "@thinkrail-pi/contracts";
+import type { Message } from "@thinkrail/contracts";
 import type { ChatTurn, ToolResultState } from "./types";
 
 /**

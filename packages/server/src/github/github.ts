@@ -1,15 +1,15 @@
-import type { GithubAuthStatus } from "@thinkrail-pi/contracts";
+import type { GithubAuthStatus } from "@thinkrail/contracts";
 
 /**
  * Read-only local `gh` auth status by shelling `gh auth status` on the host's resolved PATH (login PATH is
  * resolved at boot via `resolveShellEnv`). Never bundled — this is server-only. Degrades gracefully: a
  * missing/un-authed `gh` returns `{ connected: false }` so the New-Workspace dialog still works offline.
  *
- * `THINKRAIL_PI_GH_OFFLINE=1` forces the disconnected result without shelling out — e2e uses it to drive
+ * `THINKRAIL_GH_OFFLINE=1` forces the disconnected result without shelling out — e2e uses it to drive
  * the offline/degrade path deterministically regardless of the dev machine's real `gh` state.
  */
 export function githubAuthStatus(): GithubAuthStatus {
-	if (process.env.THINKRAIL_PI_GH_OFFLINE === "1") return { connected: false };
+	if (process.env.THINKRAIL_GH_OFFLINE === "1") return { connected: false };
 
 	let result: { success: boolean; stdout: Uint8Array; stderr: Uint8Array };
 	try {

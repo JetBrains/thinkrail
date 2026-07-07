@@ -11,10 +11,10 @@ tags: [pi-extension, visualization, mermaid]
 
 A standalone **pi extension** that registers one tool, `visualize`, for rendering **diagrams** (raw
 mermaid) and **option comparisons**. It is the *capability* half of the visualization feature; the
-*presentation* half (rich cards in the ThinkRail-PI web chat) lives in `apps/web/src/chat/tools/visualize/`
+*presentation* half (rich cards in the ThinkRail web chat) lives in `apps/web/src/chat/tools/visualize/`
 and is joined to this package only by the tool **name**.
 
-This package has **no dependency on ThinkRail-PI** and is installable into any bare `pi`.
+This package has **no dependency on ThinkRail** and is installable into any bare `pi`.
 
 ## What it owns
 
@@ -34,7 +34,7 @@ This package has **no dependency on ThinkRail-PI** and is installable into any b
 - **Allowed deps:** `typebox` (schema), `@earendil-works/pi-ai` (`StringEnum`), and
   `@earendil-works/pi-coding-agent` (**types only**). All declared as `peerDependencies` — the host pi
   provides them at runtime.
-- **Forbidden:** anything from ThinkRail-PI (`@thinkrail-pi/*`, `apps/web`, the server). Reaching into the
+- **Forbidden:** anything from ThinkRail (`@thinkrail/*`, `apps/web`, the server). Reaching into the
   host would defeat portability.
 
 ## Structure

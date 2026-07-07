@@ -11,7 +11,7 @@ function gitOut(cwd: string, ...args: string[]): string {
 
 let dataDir: string;
 let repo: string;
-const savedDataDir = process.env.THINKRAIL_PI_DATA_DIR;
+const savedDataDir = process.env.THINKRAIL_DATA_DIR;
 
 function git(cwd: string, ...args: string[]): void {
 	const result = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "ignore", stderr: "ignore" });
@@ -20,7 +20,7 @@ function git(cwd: string, ...args: string[]): void {
 
 beforeEach(() => {
 	dataDir = mkdtempSync(join(tmpdir(), "trpi-ws-test-"));
-	process.env.THINKRAIL_PI_DATA_DIR = dataDir;
+	process.env.THINKRAIL_DATA_DIR = dataDir;
 	repo = join(dataDir, "repo");
 	mkdirSync(repo);
 	git(repo, "init", "-b", "main");
@@ -37,8 +37,8 @@ beforeEach(() => {
 
 afterEach(() => {
 	rmSync(dataDir, { recursive: true, force: true });
-	if (savedDataDir === undefined) delete process.env.THINKRAIL_PI_DATA_DIR;
-	else process.env.THINKRAIL_PI_DATA_DIR = savedDataDir;
+	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
+	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
 });
 
 test("createWorkspace cuts a fresh branch from baseRef and records it as the base", async () => {

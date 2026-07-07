@@ -1,4 +1,4 @@
-import type { FileNode } from "@thinkrail-pi/contracts";
+import type { FileNode } from "@thinkrail/contracts";
 import { ChevronDown, ChevronRight, File as FileIcon, Folder } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAppStore } from "../store";
