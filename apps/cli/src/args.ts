@@ -16,18 +16,23 @@ export interface CliOptions {
 	projectDir: string | undefined;
 	/** `--help`/`-h` was requested — the bin prints usage and exits. */
 	help: boolean;
+	/** `--version`/`-v` was requested — the bin prints the baked version and exits. */
+	version: boolean;
 }
 
 export type ParseEnv = Record<string, string | undefined>;
 
 export const USAGE = `Usage: thinkrail [options] [project-dir]
+       thinkrail update [--channel stable|nightly] [--version X.Y.Z]
 
 Boots the ThinkRail engine host in-process and opens the browser to the app.
+The \`update\` subcommand re-downloads + installs the latest build for your channel.
 
 Options:
   --port <n>     Listen port (default ${DEFAULT_PORT}; falls back to a free port if taken).
   --host <h>     Bind host (default ${DEFAULT_HOST}).
   --no-open      Don't open the browser (e.g. headless / remote host).
+  -v, --version  Print the version and exit.
   -h, --help     Show this help.
 
 Arguments:
@@ -55,6 +60,7 @@ export function parseArgs(argv: readonly string[], env: ParseEnv = {}): CliOptio
 	let host: string | undefined;
 	let open = true;
 	let help = false;
+	let version = false;
 	let projectDir: string | undefined;
 
 	for (let i = 0; i < argv.length; i += 1) {
@@ -63,6 +69,8 @@ export function parseArgs(argv: readonly string[], env: ParseEnv = {}): CliOptio
 			open = false;
 		} else if (arg === "-h" || arg === "--help") {
 			help = true;
+		} else if (arg === "-v" || arg === "--version") {
+			version = true;
 		} else if (arg === "--port" || arg.startsWith("--port=")) {
 			const { value, consumed } = readFlagValue(arg, argv[i + 1]);
 			const parsed = Number(value);
@@ -95,5 +103,6 @@ export function parseArgs(argv: readonly string[], env: ParseEnv = {}): CliOptio
 		staticDir: env.THINKRAIL_STATIC_DIR,
 		projectDir,
 		help,
+		version,
 	};
 }

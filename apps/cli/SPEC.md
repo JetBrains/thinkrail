@@ -29,10 +29,33 @@ its URL. It is a thin launcher — all engine logic lives in `packages/server`.
 
 ## Interface
 
-`bin` = `./src/index.ts` (bun runs the TS source directly). Args: `--port` (stable default 24242,
-scans upward to the next free port on collision), `--host` (default `localhost`), `--no-open`, `-h`/`--help`, and one positional
-`project-dir` (a git repo to open as a project on boot, best-effort). Env defaults:
-`THINKRAIL_PORT` / `THINKRAIL_HOST` / `THINKRAIL_STATIC_DIR` (flag > env > default).
+`bin` = `./src/index.ts` (bun runs the TS source directly). A leading `update` positional is a
+**subcommand** (`thinkrail update [--channel stable|nightly] [--version X.Y.Z]`) intercepted before the
+launch flags — see *Self-update* below. Otherwise the launch args: `--port` (stable default 24242,
+scans upward to the next free port on collision), `--host` (default `localhost`), `--no-open`,
+`-v`/`--version` (print the baked version and exit), `-h`/`--help`, and one positional `project-dir` (a
+git repo to open as a project on boot, best-effort). Env defaults: `THINKRAIL_PORT` / `THINKRAIL_HOST` /
+`THINKRAIL_STATIC_DIR` (flag > env > default).
+
+## Self-update (`thinkrail update`)
+
+`src/update.ts` ports the old repo's `thinkrail upgrade` (renamed): it re-invokes the published
+`install.sh` for the binary's channel, so the installer stays the single source of the download →
+checksum → replace → PATH logic. Channel/prefix resolve as flag > `~/.config/thinkrail/install.json` >
+baked channel (from `version.ts`; `dev` → `stable`) / `~/.local`. Unix-only (replacing a running `.exe`
+in place isn't possible on Windows → points to the releases page). The arg parse + channel/prefix
+resolution are pure (`parseUpdateArgs` / `resolveUpdatePlan`, unit-tested); only fetch (`curl`) + run
+(`bash -s`) touch IO. `THINKRAIL_INSTALL_SCRIPT_URL` overrides the installer URL (testing / forks). See
+`module-ci-release` for the installer itself.
+
+## Version stamping (release seam)
+
+`src/version.ts` exports `{ version, channel, commit }` with a from-source default (`0.0.0-dev`). Unlike
+the transient `*.generated.ts`, it's a **permanent committed module** so `--version` + `tsc` work from
+source. The release pipeline (`module-ci-release`) overwrites it in the throwaway CI checkout before
+`build:binary`, baking the real release identity into the binary. `index.ts` reads it, prints it for
+`--version`, and passes `appVersion` into `bootHost` — so the host echoes it in `server.welcome`
+(`ServerWelcome.appVersion`), letting a client report host version alongside the protocol-drift check.
 
 ## Single-file binary (`build:binary`)
 
@@ -79,7 +102,8 @@ extensions** (which the server path-loads out of `node_modules` in dev — impos
 - **Owns:** `src/args.ts` (pure `parseArgs(argv, env) → CliOptions` + `USAGE`), `src/index.ts` (the
   run-from-source `bootstrap()`: shell env → server → browser open → signal handlers), and the binary build
   + its boot smoke (`scripts/build-binary.ts`, `scripts/smoke-binary.ts`, `src/compiled-entry.ts`,
-  `src/web-assets.generated.*`, `src/bundled-extensions.generated.*`).
+  `src/web-assets.generated.*`, `src/bundled-extensions.generated.*`), `src/version.ts` (the release
+  version stamped in at build time), and `src/update.ts` (the `update` subcommand).
 - **Allowed deps:** `@thinkrail/server` (`createServer`, `setBundledExtensions`),
   `@thinkrail/shared/shellEnv` (`resolveShellEnv`), Bun/Node; the generated build module may
   value-import the bundled extension packages' entries (resolved via the server package — build-time

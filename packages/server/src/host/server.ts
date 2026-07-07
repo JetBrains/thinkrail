@@ -1,5 +1,5 @@
 import { join, normalize } from "node:path";
-import type { Workspace } from "@thinkrail/contracts";
+import type { ServerWelcome, Workspace } from "@thinkrail/contracts";
 import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
 import {
 	disposeAllSessions,
@@ -24,6 +24,8 @@ export interface CreateServerOptions {
 	staticDir?: string;
 	/** When set, open this git repo as a project on boot (best-effort — a launcher convenience). */
 	projectPath?: string;
+	/** The launcher's baked release version, echoed in the `server.welcome` push (undefined from source). */
+	appVersion?: string;
 }
 
 export interface RunningServer {
@@ -33,7 +35,7 @@ export interface RunningServer {
 
 /** Boot the engine host: Bun.serve HTTP+WS, /health, optional static SPA, and the server.welcome push. */
 export function createServer(options: CreateServerOptions = {}): RunningServer {
-	const { port = 24242, host = "localhost", staticDir, projectPath } = options;
+	const { port = 24242, host = "localhost", staticDir, projectPath, appVersion } = options;
 
 	const server = Bun.serve({
 		port,
@@ -57,12 +59,12 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 				ws.subscribe(WS_CHANNELS.piEvent);
 				ws.subscribe(WS_CHANNELS.piExtensionUi);
 				ws.subscribe(WS_CHANNELS.workspaceUpdated);
-				ws.send(
-					JSON.stringify({
-						channel: WS_CHANNELS.serverWelcome,
-						data: { protocolVersion: PROTOCOL_VERSION, projects: listProjects() },
-					}),
-				);
+				const welcome: ServerWelcome = {
+					protocolVersion: PROTOCOL_VERSION,
+					projects: listProjects(),
+					...(appVersion ? { appVersion } : {}),
+				};
+				ws.send(JSON.stringify({ channel: WS_CHANNELS.serverWelcome, data: welcome }));
 			},
 			async message(ws, message) {
 				const raw = typeof message === "string" ? message : message.toString();

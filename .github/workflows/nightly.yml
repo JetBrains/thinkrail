@@ -1,0 +1,54 @@
+name: Nightly
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.compute.outputs.version }}
+      prev_tag: ${{ steps.compute.outputs.prev_tag }}
+      should_run: ${{ steps.compute.outputs.should_run }}
+    steps:
+      - name: Verify branch is main
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::Nightly releases must run from main (got: $GITHUB_REF)"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - id: compute
+        name: Compute next nightly version
+        run: |
+          set -eu
+          prev=$(bash .github/scripts/next-version.sh latest-nightly)
+          if [ -n "$prev" ] && [ "$(git rev-list "v${prev}..HEAD" --count)" = "0" ]; then
+            echo "No commits since v${prev}; skipping nightly."
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          version=$(bash .github/scripts/next-version.sh nightly)
+          echo "Next nightly: $version (previous: ${prev:-<none>})"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "prev_tag=${prev:+v${prev}}" >> "$GITHUB_OUTPUT"
+          echo "should_run=true" >> "$GITHUB_OUTPUT"
+
+  release:
+    needs: prepare
+    if: needs.prepare.outputs.should_run == 'true'
+    uses: ./.github/workflows/_release.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+      channel: nightly
+      prev_tag: ${{ needs.prepare.outputs.prev_tag }}
+    secrets: inherit

@@ -10,6 +10,7 @@ describe("parseArgs", () => {
 			staticDir: undefined,
 			projectDir: undefined,
 			help: false,
+			version: false,
 		});
 	});
 
@@ -44,6 +45,11 @@ describe("parseArgs", () => {
 	test("--help / -h set help", () => {
 		expect(parseArgs(["--help"], {}).help).toBe(true);
 		expect(parseArgs(["-h"], {}).help).toBe(true);
+	});
+
+	test("--version / -v set version", () => {
+		expect(parseArgs(["--version"], {}).version).toBe(true);
+		expect(parseArgs(["-v"], {}).version).toBe(true);
 	});
 
 	test("a positional arg is the project dir", () => {

@@ -1,0 +1,76 @@
+name: Build ThinkRail binary
+description: >-
+  Builds the web UI, stamps the release version into the CLI, compiles the single-file `thinkrail`
+  binary for one Bun target, and boot-smokes it on this (native) runner. Assumes the repo is checked out
+  with Bun set up and `bun install` already run. Output: apps/cli/dist/<artifact-name>.
+
+inputs:
+  version:
+    description: "Version to bake into the binary (e.g. 0.2.0-nightly.5)"
+    required: true
+  channel:
+    description: "Release channel: nightly, stable, or dev"
+    required: true
+  target:
+    description: "Bun compile target for this runner (e.g. bun-darwin-arm64 / bun-windows-x64)"
+    required: true
+
+outputs:
+  artifact-name:
+    description: "Final artifact filename (thinkrail-<os>-<arch>[.exe])"
+    value: ${{ steps.resolve.outputs.name }}
+  artifact-path:
+    description: "Path to the built binary"
+    value: ${{ steps.resolve.outputs.path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Build web UI
+      shell: bash
+      run: bun run build:web
+
+    - name: Stamp version into the CLI
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        CHANNEL: ${{ inputs.channel }}
+      run: |
+        set -eu
+        commit=$(git rev-parse --short HEAD)
+        cat > apps/cli/src/version.ts <<EOF
+        // Stamped at release time by .github/actions/build-binary. Do not commit this edit.
+        export const version = "${VERSION}";
+        export const channel = "${CHANNEL}";
+        export const commit = "${commit}";
+        EOF
+        echo "Stamped apps/cli/src/version.ts:"
+        cat apps/cli/src/version.ts
+
+    - name: Compile single-file binary
+      shell: bash
+      env:
+        TARGET: ${{ inputs.target }}
+      run: bun apps/cli/scripts/build-binary.ts --target="$TARGET"
+
+    - id: resolve
+      name: Resolve artifact path
+      shell: bash
+      env:
+        TARGET: ${{ inputs.target }}
+      run: |
+        set -eu
+        # build-binary.ts names the output thinkrail-<target-without-bun-> (Bun appends .exe on Windows).
+        name="thinkrail-${TARGET#bun-}"
+        case "$TARGET" in *windows*) name="${name}.exe" ;; esac
+        path="apps/cli/dist/${name}"
+        [ -f "$path" ] || { echo "::error::expected binary not found at $path"; ls -la apps/cli/dist; exit 1; }
+        {
+          echo "name=$name"
+          echo "path=$path"
+        } >> "$GITHUB_OUTPUT"
+        echo "Built $path"
+
+    - name: Boot-smoke the binary (native)
+      shell: bash
+      run: bun run smoke:binary "${{ steps.resolve.outputs.path }}"

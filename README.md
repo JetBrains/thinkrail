@@ -11,9 +11,40 @@ editor, and the wire.
 own branch and cwd), and work across a tabbed Monaco editor, git Changes view, terminals, a read-only
 spec-graph viewer, and multiple concurrent `pi` chat sessions — all scoped to the active worktree.
 
+## Install
+
+ThinkRail ships as a single self-contained executable per platform. The installer downloads the right
+build from the GitHub releases, verifies its SHA-256 checksum, and puts `thinkrail` on your PATH:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash
+```
+
+Nightly builds and pinned versions:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash -s -- --channel nightly
+curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash -s -- --version 0.2.0
+```
+
+Then run `thinkrail` (add a git repo path to open it as a project: `thinkrail ~/code/my-repo`). To update
+later, run `thinkrail update` (re-installs the latest build for your channel; macOS/Linux only — on
+Windows, re-download from releases). `thinkrail --help` lists the flags; `thinkrail --version` prints the
+build.
+
+**Prebuilt platforms:** macOS (Apple Silicon), Linux arm64 + x64, Windows x64 (`.exe`). Intel macOS isn't
+prebuilt — use Apple Silicon or build from source.
+
+> Prefer a manual install? Download a binary + `SHA256SUMS` from the
+> [releases page](https://github.com/JetBrains/thinkrail/releases), verify the checksum, `chmod +x`, and
+> move it onto your PATH.
+
+**Runtime prerequisites:** `git` on PATH, and an authenticated `pi` provider (the agent runs against your
+real provider credentials). App state lives under `~/.thinkrail`.
+
 ## Quick start
 
-### Prerequisites
+### Prerequisites (developing ThinkRail)
 
 - **Bun** ≥ 1.3 (the package manager and runtime)
 - **Node.js** ≥ 22.19 (required by the in-process `pi` engine)

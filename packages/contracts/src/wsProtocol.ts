@@ -25,6 +25,17 @@ import type {
 /** Bumped on any breaking wire change; sent in `server.welcome` so a stale UI can detect host drift. */
 export const PROTOCOL_VERSION = 1;
 
+/**
+ * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
+ * stale UI detect host drift; `appVersion` is the host launcher's baked release version (a released
+ * binary stamps it — `undefined` when run from source); `projects` seeds the initial project list.
+ */
+export interface ServerWelcome {
+	protocolVersion: number;
+	appVersion?: string;
+	projects: Project[];
+}
+
 /** Request/response methods. `session.*` drives the pi engine. */
 export const WS_METHODS = {
 	projectOpen: "project.open",

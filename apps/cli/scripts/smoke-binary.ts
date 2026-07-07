@@ -89,8 +89,13 @@ try {
 	}
 
 	proc.kill("SIGTERM");
-	const exitCode = await within(proc.exited, 15_000, "clean shutdown on SIGTERM");
-	if (exitCode !== 0) fail(`SIGTERM shutdown exited with code ${exitCode}`);
+	const exitCode = await within(proc.exited, 15_000, "shutdown on SIGTERM");
+	// Windows has no real SIGTERM: Bun force-terminates the process, so the CLI's graceful handler never
+	// runs and the exit code isn't meaningful — we only require that it terminates within the timeout.
+	// Elsewhere the handler must run and exit 0.
+	if (process.platform !== "win32" && exitCode !== 0) {
+		fail(`SIGTERM shutdown exited with code ${exitCode}`);
+	}
 
 	console.log(
 		`smoke OK: ${binary} booted at ${url}, served the UI + staged skills, exited cleanly.`,

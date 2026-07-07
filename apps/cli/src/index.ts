@@ -6,6 +6,8 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { bootHost } from "@thinkrail/server";
 import { type CliOptions, parseArgs, USAGE } from "./args";
+import { runUpdate } from "./update";
+import { version } from "./version";
 
 /** The built web app shipped with the bin, relative to this file (src in dev, dist when bundled). */
 const DEFAULT_STATIC_DIR = resolve(import.meta.dir, "../../web/dist");
@@ -26,9 +28,15 @@ function openBrowser(url: string): void {
 }
 
 async function bootstrap(): Promise<void> {
+	const argv = Bun.argv.slice(2);
+	// `update` is a subcommand, not a launch flag: re-install the latest build, then exit.
+	if (argv[0] === "update") {
+		process.exit(await runUpdate(argv.slice(1), process.env));
+	}
+
 	let options: CliOptions;
 	try {
-		options = parseArgs(Bun.argv.slice(2), process.env);
+		options = parseArgs(argv, process.env);
 	} catch (err) {
 		console.error(err instanceof Error ? err.message : String(err));
 		console.error(`\n${USAGE}`);
@@ -37,6 +45,11 @@ async function bootstrap(): Promise<void> {
 
 	if (options.help) {
 		console.log(USAGE);
+		return;
+	}
+
+	if (options.version) {
+		console.log(version);
 		return;
 	}
 
@@ -52,6 +65,7 @@ async function bootstrap(): Promise<void> {
 		host: options.host,
 		portMode: "free",
 		staticDir,
+		appVersion: version,
 		...(options.projectDir ? { projectPath: resolve(process.cwd(), options.projectDir) } : {}),
 	});
 	if (port !== requested) {

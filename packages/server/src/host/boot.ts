@@ -17,6 +17,8 @@ export interface BootHostOptions {
 	staticDir?: string;
 	/** When set, open this git repo as a project on boot (best-effort — a launcher convenience). */
 	projectPath?: string;
+	/** The launcher's baked release version, forwarded onto the `server.welcome` push. */
+	appVersion?: string;
 }
 
 export interface BootedHost {
@@ -46,6 +48,7 @@ export async function bootHost(options: BootHostOptions): Promise<BootedHost> {
 		host: options.host,
 		...(options.staticDir ? { staticDir: options.staticDir } : {}),
 		...(options.projectPath ? { projectPath: options.projectPath } : {}),
+		...(options.appVersion ? { appVersion: options.appVersion } : {}),
 	});
 
 	let stopping = false;

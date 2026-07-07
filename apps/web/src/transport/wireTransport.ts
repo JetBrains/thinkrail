@@ -1,4 +1,9 @@
-import type { ExtUiRequest, Project, SessionEventPayload, Workspace } from "@thinkrail/contracts";
+import type {
+	ExtUiRequest,
+	ServerWelcome,
+	SessionEventPayload,
+	Workspace,
+} from "@thinkrail/contracts";
 import { WS_CHANNELS } from "@thinkrail/contracts";
 import { useAppStore } from "../store";
 import { WsTransport } from "./transport";
@@ -14,7 +19,7 @@ export function initTransport(): WsTransport {
 	});
 
 	transport.subscribe(WS_CHANNELS.serverWelcome, (data) => {
-		const welcome = data as { protocolVersion?: number; projects?: Project[] };
+		const welcome = data as Partial<ServerWelcome>;
 		if (typeof welcome.protocolVersion === "number") {
 			useAppStore.getState().setWelcome(welcome.protocolVersion);
 		}

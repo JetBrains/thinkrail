@@ -1,0 +1,62 @@
+name: Build binaries
+
+# Native OS matrix: each runner compiles + boot-smokes the single-file `thinkrail` binary for its own
+# platform (target == host), so the correct bun-pty native lib is embedded and the artifact is verified
+# on the real OS. Cross-compiling all targets from one host is possible (bun-pty ships every platform's
+# lib) but can't be smoke-tested and is unproven for the embedded FFI lib — see .github/SPEC.md.
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Version to bake into binaries (e.g. 0.2.0-nightly.5)"
+        required: true
+        type: string
+      channel:
+        description: "Release channel: nightly, stable, or dev"
+        required: true
+        type: string
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: bun-linux-x64
+          - os: ubuntu-24.04-arm
+            target: bun-linux-arm64
+          # Disabled: the macos-13 (Intel) runner queue is long enough to stall every release. Re-enable
+          # if macOS x64 downloads are needed (Apple Silicon is the default mac target below).
+          # - os: macos-13
+          #   target: bun-darwin-x64
+          - os: macos-14
+            target: bun-darwin-arm64
+          - os: windows-latest
+            target: bun-windows-x64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - run: bun install --frozen-lockfile
+
+      - id: build
+        uses: ./.github/actions/build-binary
+        with:
+          version: ${{ inputs.version }}
+          channel: ${{ inputs.channel }}
+          target: ${{ matrix.target }}
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: ${{ steps.build.outputs.artifact-name }}
+          path: ${{ steps.build.outputs.artifact-path }}
+          retention-days: 7
+          if-no-files-found: error
