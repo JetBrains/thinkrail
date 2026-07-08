@@ -1,0 +1,14 @@
+name: zz-temp-verify-binary
+
+# TEMPORARY — remove before merge. Exercises the full binary build + boot-smoke matrix (incl.
+# windows-latest) on this branch, since nightly.yml is main-only and ci.yml doesn't build binaries.
+on:
+  push:
+    branches: [fix/windows-binary-staging]
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build.yml
+    with:
+      version: 0.0.0-dev
+      channel: dev
