@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig, devices } from "@playwright/test";
-import { E2E_DATA_DIR, E2E_FIXTURE_REPO, E2E_PI_AGENT_DIR } from "./e2e/fixtures/paths";
+import { E2E_DATA_DIR, E2E_PI_AGENT_DIR, E2E_PICK_DIR_POINTER } from "./e2e/fixtures/paths";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
 const staticDir = fileURLToPath(new URL("./apps/web/dist", import.meta.url));
@@ -34,8 +34,10 @@ export default defineConfig({
 			THINKRAIL_PORT: String(PORT),
 			THINKRAIL_STATIC_DIR: staticDir,
 			THINKRAIL_DATA_DIR: E2E_DATA_DIR,
-			// Stub the host's native directory picker so "Open project" is drivable headlessly.
-			THINKRAIL_PICK_DIR: E2E_FIXTURE_REPO,
+			// Stub the host's native directory picker so "Open project" is drivable headlessly. It names a
+			// control *file* (seeded to the git fixture in globalSetup); a test can rewrite it to hand the
+			// picker a different folder (e.g. a non-git one) without restarting the shared host.
+			THINKRAIL_PICK_DIR: E2E_PICK_DIR_POINTER,
 			// Force the New-Workspace dialog's `gh` probe to "Not connected" so the suite is deterministic
 			// regardless of the dev machine's real `gh` auth — and exercises the offline/local-branch degrade path.
 			THINKRAIL_GH_OFFLINE: "1",

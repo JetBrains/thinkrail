@@ -13,9 +13,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { PopoverTrigger } from "@/components/ui/popover";
 import { useAppStore } from "../store";
-import { getTransport } from "../transport";
+import { errorText, getTransport } from "../transport";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { ConfirmPopover } from "./ConfirmPopover";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
+import { NoticeDialog } from "./NoticeDialog";
 
 /** Left-nav: projects → workspaces (git worktrees). Open a repo, select it, create/select workspaces. */
 export function ProjectTree() {
@@ -28,6 +30,12 @@ export function ProjectTree() {
 	// The project a New-Workspace dialog is open for (null = closed). The "+" opens it instead of
 	// creating a workspace directly.
 	const [dialogProjectId, setDialogProjectId] = useState<string | null>(null);
+	// A plain folder we've offered to `git init` (null = closed) — set when `project.open` fails and the
+	// host reports the path is `initable`.
+	const [initTarget, setInitTarget] = useState<string | null>(null);
+	// A non-actionable open failure to surface (a stale recent, a broken path). null = no notice.
+	const [openError, setOpenError] = useState<string | null>(null);
+
 	const loadWorkspaces = async (projectId: string) => {
 		useAppStore
 			.getState()
@@ -53,15 +61,39 @@ export function ProjectTree() {
 		});
 	};
 
+	// Record a freshly opened/initialised project in the store and select it.
+	const adoptProject = async (projectId: string) => {
+		useAppStore.getState().setProjects(await getTransport().request("project.list", {}));
+		await selectProject(projectId);
+	};
+
 	const openProject = async (rawPath: string) => {
 		const trimmed = rawPath.trim();
 		if (!trimmed) return;
 		try {
 			const project = await getTransport().request("project.open", { path: trimmed });
-			useAppStore.getState().setProjects(await getTransport().request("project.list", {}));
-			await selectProject(project.id);
-		} catch {
-			// Error surfacing (toast) comes with the error-handling pass; ignore for now.
+			await adoptProject(project.id);
+		} catch (err) {
+			// Open failed — the common case is a plain (non-git) folder. Ask the host what the path is so we
+			// either offer to initialise a repo or surface a legible error, instead of failing silently.
+			const status = await getTransport()
+				.request("project.inspect", { path: trimmed })
+				.catch(() => null);
+			if (status?.kind === "initable") setInitTarget(trimmed);
+			else if (status?.kind === "missing")
+				setOpenError(`This folder no longer exists:\n${trimmed}`);
+			else if (status?.kind === "notDirectory") setOpenError(`This isn't a folder:\n${trimmed}`);
+			else setOpenError(errorText(err, `Couldn't open ${trimmed}.`));
+		}
+	};
+
+	// Confirmed the init offer: `git init` + commit the folder, then open it as a project.
+	const initProject = async (path: string) => {
+		try {
+			const project = await getTransport().request("project.init", { path });
+			await adoptProject(project.id);
+		} catch (err) {
+			setOpenError(errorText(err, `Couldn't initialise a git repository in ${path}.`));
 		}
 	};
 
@@ -156,6 +188,36 @@ export function ProjectTree() {
 					onCreated={(ws) => void onWorkspaceCreated(ws)}
 				/>
 			) : null}
+
+			<ConfirmDialog
+				open={initTarget !== null}
+				onOpenChange={(o) => {
+					if (!o) setInitTarget(null);
+				}}
+				title="Initialize a git repository?"
+				description={
+					<>
+						<span className="font-medium text-text">{initTarget}</span> isn't a git repository.
+						ThinkRail works on git worktrees, so it needs one. Initialize a repo here and commit the
+						folder's current contents?
+					</>
+				}
+				confirmLabel="Initialize & open"
+				confirmTestId="confirm-init-repo"
+				onConfirm={() => {
+					if (initTarget) void initProject(initTarget);
+				}}
+			/>
+
+			<NoticeDialog
+				open={openError !== null}
+				onOpenChange={(o) => {
+					if (!o) setOpenError(null);
+				}}
+				title="Couldn't open project"
+				description={<span className="whitespace-pre-line">{openError}</span>}
+				testId="open-error-dialog"
+			/>
 		</nav>
 	);
 }

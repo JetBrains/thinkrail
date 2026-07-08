@@ -7,6 +7,7 @@ import type {
 	GithubAuthStatus,
 	GitStatus,
 	Project,
+	ProjectPathStatus,
 	SpecGraphSnapshot,
 	Workspace,
 } from "./domain";
@@ -41,6 +42,10 @@ export const WS_METHODS = {
 	projectOpen: "project.open",
 	projectList: "project.list",
 	projectClose: "project.close",
+	// Classify a candidate path (existing repo / initable dir / broken) so the UI picks how to open it,
+	// and initialise a plain directory as a git repo (init + commit) before opening it.
+	projectInspect: "project.inspect",
+	projectInit: "project.init",
 	workspaceCreate: "workspace.create",
 	workspaceList: "workspace.list",
 	workspaceRemove: "workspace.remove",
@@ -110,6 +115,11 @@ export interface WsMethodMap {
 	"project.open": { params: { path: string }; result: Project };
 	"project.list": { params: Record<string, never>; result: Project[] };
 	"project.close": { params: { id: string }; result: Ack };
+	// Read-only classification of a path (repo / initable / missing / notDirectory) — the UI calls this
+	// after a failed `project.open` to decide between an init offer and a plain error.
+	"project.inspect": { params: { path: string }; result: ProjectPathStatus };
+	// `git init` + `git add -A` + an (allow-empty) initial commit, then open the folder as a project.
+	"project.init": { params: { path: string }; result: Project };
 	// `baseRef`: the base branch the worktree is cut from (a remote ref is fetched first); when
 	// omitted, the worktree branches off the repo's current HEAD (the default behavior).
 	"workspace.create": {

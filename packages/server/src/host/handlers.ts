@@ -31,7 +31,13 @@ import { selectDirectory } from "../dialog";
 import { readDir, readFile } from "../fs";
 import { gitDiff, gitStatus, listBranches, prefetchBranch } from "../git";
 import { githubAuthStatus, githubRefresh } from "../github";
-import { closeProject, listProjects, openProject } from "../projects";
+import {
+	closeProject,
+	initProject,
+	inspectProjectPath,
+	listProjects,
+	openProject,
+} from "../projects";
 import { evictSpecIndex, specGraph } from "../spec";
 import {
 	closeTerminal,
@@ -70,6 +76,8 @@ async function archiveTeardown(ws: Workspace): Promise<void> {
 
 const handlers: Record<string, Handler> = {
 	"project.open": (params) => openProject((params as { path: string }).path),
+	"project.inspect": (params) => inspectProjectPath((params as { path: string }).path),
+	"project.init": (params) => initProject((params as { path: string }).path),
 	"project.list": () => listProjects(),
 	"project.close": (params) => {
 		closeProject((params as { id: string }).id);

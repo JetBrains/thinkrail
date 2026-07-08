@@ -1,6 +1,7 @@
 import { basename } from "node:path";
 import { expect, test } from "@playwright/test";
-import { E2E_FIXTURE_REPO } from "./fixtures/paths";
+import { createWorkspaceViaDialog, stagePlainFolder } from "./fixtures/app";
+import { E2E_FIXTURE_REPO, E2E_PLAIN_DIR } from "./fixtures/paths";
 
 test("opens a git repo as a project via the directory picker", async ({ page }) => {
 	await page.goto("/");
@@ -13,4 +14,30 @@ test("opens a git repo as a project via the directory picker", async ({ page }) 
 	await expect(
 		page.getByTestId("project-item").filter({ hasText: basename(E2E_FIXTURE_REPO) }),
 	).toBeVisible();
+});
+
+test("opening a non-git folder offers to initialise a repo, then opens it end-to-end", async ({
+	page,
+}) => {
+	// A plain (non-git) folder for the stubbed picker to return.
+	stagePlainFolder();
+	await page.goto("/");
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+
+	// "Open project" — the folder isn't a repo, so instead of failing silently we're asked to initialise.
+	await page.getByTestId("add-project-menu").click();
+	await page.getByTestId("menu-open-project").click();
+	const confirmInit = page.getByTestId("confirm-init-repo");
+	await expect(confirmInit).toBeVisible();
+	await confirmInit.click();
+
+	// The initialised folder now shows up as a project…
+	await expect(
+		page.getByTestId("project-item").filter({ hasText: basename(E2E_PLAIN_DIR) }),
+	).toBeVisible();
+
+	// …and it's usable end-to-end: a workspace (git worktree) can be created, which needs the HEAD the
+	// initial commit gave the fresh repo.
+	await createWorkspaceViaDialog(page);
+	await expect(page.getByTestId("workspace-item").first()).toBeVisible();
 });
