@@ -9,10 +9,11 @@ import { AddProjectMenu } from "./AddProjectMenu";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { useOpenProject } from "./useOpenProject";
 
-// Seeds the New-Workspace prompt hero for "Set up project" — nudges the agent's project-setup workflow
-// (turn a raw idea into goal-and-requirements.md before feature work).
-const SETUP_PROMPT =
-	"Let's set up this project — define its goal and requirements and capture them in goal-and-requirements.md.";
+// Seeds the New-Workspace prompt hero for "Set up project" — pi's skill-command syntax `/skill:<name>`,
+// which FORCES the project-setup dispatcher to load (vs. hoping the model auto-matches its description).
+// The dispatcher then detects new-vs-existing and routes to project-new / project-import. Still editable
+// in the dialog.
+const SETUP_PROMPT = "/skill:project-setup";
 
 /**
  * The first-touch surface the shell mounts (centered, beside the projects rail) whenever no workspace is
