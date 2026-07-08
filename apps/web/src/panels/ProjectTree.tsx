@@ -1,20 +1,13 @@
 import type { Project, Workspace } from "@thinkrail/contracts";
-import { Archive, ChevronDown, ChevronRight, Folder, GitBranch, Globe, Plus } from "lucide-react";
+import { Archive, ChevronDown, ChevronRight, Folder, GitBranch, Plus } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuGroup,
-	DropdownMenuItem,
-	DropdownMenuLabel,
-	DropdownMenuSeparator,
-	DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
+import { AddProjectMenu } from "./AddProjectMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
+import { openProjectPath, pickAndOpenProject } from "./projectActions";
 
 /** Left-nav: projects → workspaces (git worktrees). Open a repo, select it, create/select workspaces. */
 export function ProjectTree() {
@@ -59,26 +52,16 @@ export function ProjectTree() {
 		});
 	};
 
+	// Open a known path (a "Recents" pick), then select + expand it. Orchestration lives in projectActions.
 	const openProject = async (rawPath: string) => {
-		const trimmed = rawPath.trim();
-		if (!trimmed) return;
-		try {
-			const project = await getTransport().request("project.open", { path: trimmed });
-			useAppStore.getState().setProjects(await getTransport().request("project.list", {}));
-			await selectProject(project.id);
-		} catch {
-			// Error surfacing (toast) comes with the error-handling pass; ignore for now.
-		}
+		const project = await openProjectPath(rawPath);
+		if (project) await selectProject(project.id);
 	};
 
-	/** "Open project" → ask the host for a directory via its native picker, then open it. */
+	/** "Open project" → ask the host for a directory via its native picker, then select + expand it. */
 	const pickAndOpen = async () => {
-		try {
-			const { path } = await getTransport().request("dialog.selectDirectory", {});
-			if (path) await openProject(path);
-		} catch {
-			// Cancelled / unavailable — nothing to do.
-		}
+		const project = await pickAndOpenProject();
+		if (project) await selectProject(project.id);
 	};
 
 	// After the dialog creates a workspace: expand its project + reload the list (the dialog itself sets
@@ -108,51 +91,54 @@ export function ProjectTree() {
 					projects={projects}
 					onOpen={() => void pickAndOpen()}
 					onOpenRecent={(p) => void openProject(p)}
-				/>
+				>
+					<Button
+						variant="ghost"
+						size="icon"
+						data-testid="add-project-menu"
+						aria-label="Add project"
+					>
+						<Plus className="size-4" />
+					</Button>
+				</AddProjectMenu>
 			</header>
 
-			{projects.length === 0 ? (
-				<EmptyState onOpen={() => void pickAndOpen()} />
-			) : (
-				<ul className="flex flex-col">
-					{projects.map((project) => {
-						const isExpanded = expanded.has(project.id);
-						const list = workspaces[project.id] ?? [];
-						return (
-							<li key={project.id}>
-								<ProjectRow
-									project={project}
-									isSelected={selectedProjectId === project.id}
-									isExpanded={isExpanded}
-									workspaceCount={list.length}
-									onToggle={() => toggleExpand(project.id)}
-									onSelect={() => void selectProject(project.id)}
-									onAddWorkspace={() => setDialogProjectId(project.id)}
-								/>
-								{isExpanded && (
-									<ul className="flex flex-col">
-										{list.length === 0 ? (
-											<li className="py-xs pr-sm pl-xl text-xs text-hint">No workspaces yet</li>
-										) : (
-											list.map((ws) => (
-												<WorkspaceRow
-													key={ws.id}
-													workspace={ws}
-													isActive={activeWorkspaceId === ws.id}
-													onSelect={() => useAppStore.getState().setActiveWorkspace(ws.id)}
-													onArchive={() =>
-														setArchiveTarget({ projectId: project.id, workspace: ws })
-													}
-												/>
-											))
-										)}
-									</ul>
-								)}
-							</li>
-						);
-					})}
-				</ul>
-			)}
+			<ul className="flex flex-col">
+				{projects.map((project) => {
+					const isExpanded = expanded.has(project.id);
+					const list = workspaces[project.id] ?? [];
+					return (
+						<li key={project.id}>
+							<ProjectRow
+								project={project}
+								isSelected={selectedProjectId === project.id}
+								isExpanded={isExpanded}
+								workspaceCount={list.length}
+								onToggle={() => toggleExpand(project.id)}
+								onSelect={() => void selectProject(project.id)}
+								onAddWorkspace={() => setDialogProjectId(project.id)}
+							/>
+							{isExpanded && (
+								<ul className="flex flex-col">
+									{list.length === 0 ? (
+										<li className="py-xs pr-sm pl-xl text-xs text-hint">No workspaces yet</li>
+									) : (
+										list.map((ws) => (
+											<WorkspaceRow
+												key={ws.id}
+												workspace={ws}
+												isActive={activeWorkspaceId === ws.id}
+												onSelect={() => useAppStore.getState().setActiveWorkspace(ws.id)}
+												onArchive={() => setArchiveTarget({ projectId: project.id, workspace: ws })}
+											/>
+										))
+									)}
+								</ul>
+							)}
+						</li>
+					);
+				})}
+			</ul>
 
 			{dialogProjectId !== null ? (
 				<NewWorkspaceDialog
@@ -186,54 +172,6 @@ export function ProjectTree() {
 				}}
 			/>
 		</nav>
-	);
-}
-
-function AddProjectMenu({
-	projects,
-	onOpen,
-	onOpenRecent,
-}: {
-	projects: Project[];
-	onOpen: () => void;
-	onOpenRecent: (path: string) => void;
-}) {
-	return (
-		<DropdownMenu>
-			<DropdownMenuTrigger asChild>
-				<Button variant="ghost" size="icon" data-testid="add-project-menu" aria-label="Add project">
-					<Plus className="size-4" />
-				</Button>
-			</DropdownMenuTrigger>
-			<DropdownMenuContent align="end">
-				<DropdownMenuItem data-testid="menu-open-project" onSelect={() => onOpen()}>
-					<Folder />
-					<span>Open project</span>
-				</DropdownMenuItem>
-				<DropdownMenuItem disabled>
-					<Globe />
-					<span>Open GitHub project</span>
-				</DropdownMenuItem>
-				{projects.length > 0 && (
-					<>
-						<DropdownMenuSeparator />
-						<DropdownMenuLabel>Recents</DropdownMenuLabel>
-						<DropdownMenuGroup>
-							{projects.map((project) => (
-								<DropdownMenuItem
-									key={project.id}
-									onSelect={() => onOpenRecent(project.path)}
-									title={project.path}
-								>
-									<Folder />
-									<span className="truncate">{project.path}</span>
-								</DropdownMenuItem>
-							))}
-						</DropdownMenuGroup>
-					</>
-				)}
-			</DropdownMenuContent>
-		</DropdownMenu>
 	);
 }
 
@@ -345,19 +283,6 @@ function WorkspaceRow({
 			>
 				<Archive className="size-4" />
 			</button>
-		</div>
-	);
-}
-
-function EmptyState({ onOpen }: { onOpen: () => void }) {
-	return (
-		<div className="flex flex-col items-start gap-sm rounded-[var(--radius-md)] border border-border2 border-dashed p-md">
-			<p className="text-sm text-muted">No projects open.</p>
-			<p className="text-xs text-hint">Open a git repository to get started.</p>
-			<Button variant="outline" size="sm" onClick={onOpen}>
-				<Folder className="size-4" />
-				Open project
-			</Button>
 		</div>
 	);
 }

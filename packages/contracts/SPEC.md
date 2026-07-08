@@ -55,7 +55,9 @@ runtime exports being the WS method/channel constants and the protocol version. 
     is a **host-owned pi custom tool** (server `agent/askUserQuestion` — see its SPEC for the design
     rationale); the tool blocks while the chat renders the questionnaire **inline** and replies via
     `session.answerQuestion` (correlated by the tool call id).
-- **domain.ts** — app entities: `Project` (git repo + unique `slug`), `Workspace` (git worktree; its
+- **domain.ts** — app entities: `Project` (git repo + unique `slug`; optional **`hasSpecs`** — host-computed
+  per read, never persisted: does the repo root carry a `goal-and-requirements.md`, for the Welcome
+  screen's "Set up project" suggestion), `Workspace` (git worktree; its
   optional **`renamed`** flag is the naming lifecycle — absent = **not yet locked** (either pristine
   `workspace-N`, or a *provisional* non-agentic name the host applied from the first prompt), so still
   eligible for the agentic auto-rename; `true` = deliberately named (agentic or user), never auto-touched

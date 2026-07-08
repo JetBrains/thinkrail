@@ -12,6 +12,12 @@ export interface Project {
 	slug: string;
 	/** Epoch ms of last open, for sort order. */
 	lastOpened: number;
+	/**
+	 * Whether the repo root already carries the project's specs (a `goal-and-requirements.md`). Computed
+	 * fresh by the host on open/list (never persisted — specs change on disk); drives the Welcome screen's
+	 * "Set up project" suggestion. Optional/additive — absent on older data reads as "unknown".
+	 */
+	hasSpecs?: boolean;
 }
 
 export interface DiffStats {

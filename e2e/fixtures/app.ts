@@ -72,11 +72,16 @@ export async function createWorkspaceViaDialog(page: Page): Promise<Workspace> {
 	return created;
 }
 
-/** Reset state, then open the fixture repo as a project via the (stubbed) picker; auto-selects + expands. */
-export async function openFixtureProject(page: Page): Promise<void> {
+/** Reset to a clean slate (no projects/workspaces) and load the app — leaving the Welcome screen shown. */
+export async function openAppFresh(page: Page): Promise<void> {
 	resetState();
 	await page.goto("/");
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+}
+
+/** Reset state, then open the fixture repo as a project via the (stubbed) picker; auto-selects + expands. */
+export async function openFixtureProject(page: Page): Promise<void> {
+	await openAppFresh(page);
 	await page.getByTestId("add-project-menu").click();
 	await page.getByTestId("menu-open-project").click();
 	await expect(page.getByTestId("project-item").first()).toBeVisible();

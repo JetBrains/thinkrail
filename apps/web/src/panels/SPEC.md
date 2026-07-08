@@ -21,7 +21,25 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   button); archive is **optimistic + non-blocking**: on confirm it drops the row via `store.removeWorkspace` + `clearWorkspaceTabs`
   and fires `workspace.remove` without awaiting, reconciling a failure by re-listing), `FileTree`, `SpecsPanel`, `RightPanel`,
   `ChangesPanel` + lazy `DiffViewer`, `CenterTabs` + lazy `MonacoEditor`, `TerminalsPanel` + lazy
-  `TerminalInstance`. **`NewWorkspaceDialog`** is the create-and-kick-off surface: a base-branch
+  `TerminalInstance`. **`WelcomePanel`** is the first-touch surface the shell mounts (centered, left-nav beside it) whenever no
+workspace is active. The `PRODUCT_NAME` wordmark as the hero (the topbar's brand styling — accent font,
+`text-primary` — enlarged), with the **active project's name as a small eyebrow** (folder icon) above it
+once a project is selected, over a **constant** spec-first pitch (not spec-conditional) and
+**one-to-three cards** (Conductor-inspired: icon top-left, label + explainer
+bottom-left; the primary is a filled-violet card carrying the stable `welcome-cta` hook, others quiet
+`welcome-action`s). The cards by state: **no projects** → **"Open project"** (one card); **project +
+`hasSpecs`** → **"Start building"** (primary) + "Open project"; **project + no specs** → a spec-first
+**"Set up project"** (primary) + "Start building" + "Open project". The **"Open project"** card hangs the shared
+**`AddProjectMenu`** dropdown off it (same menu as the projects-rail "+": Open project / Open GitHub (soon)
+/ Recents), so `Card` is a `forwardRef` usable as a Radix `asChild` trigger. **"Start building"** is the
+intent-first framing of the create-and-kick-off flow — it opens `NewWorkspaceDialog` (which cuts a
+worktree-isolated workspace + starts a chat); *workspace* is the mechanism, not the label. **"Set up
+project"** opens the same dialog with an `initialPrompt` seed (nudging the `project-setup` skill). Which
+project drives the has-specs states = `selectedProjectId ?? projects[0]`, read reactively (so the visible
+nav's selection updates it). `projectActions.ts` is the shared leaf helper (`openProjectPath` /
+`pickAndOpenProject`) for the open-project orchestration reused by both `WelcomePanel` and `ProjectTree`.
+**`NewWorkspaceDialog`** is the create-and-kick-off surface: an optional **`initialPrompt`** seeds the
+prompt hero (still editable; empty by default), a base-branch
   combobox (`git.listBranches`, degrading to local branches offline; a Refresh re-lists; `origin/HEAD` is
   filtered so no stray `origin`), a project picker, the prompt hero, and the reused
   `chat/ModelSelector`+`ThinkingSelector` in **pre-session** mode — preselected to the host's resolved
@@ -44,8 +62,10 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   via `store.noteClosedChats`. Reopening restores a live runtime's tab, or for a disk-only chat re-opens it
   on the host (`getMessages`) + hydrates — so a reload, a second tab, or a host restart all rebuild from the
   host.
-- **Public surface:** the top-level panels the shell mounts (`ProjectTree`, `CenterTabs`, `RightPanel`,
-  `TerminalsPanel`), imported **per-file** (no barrel — keeps the lazy chunks split).
+- **Public surface:** the top-level panels the shell mounts (`ProjectTree`, `WelcomePanel`, `CenterTabs`,
+  `RightPanel`, `TerminalsPanel`), imported **per-file** (no barrel — keeps the lazy chunks split).
+  (`WelcomePanel` and `CenterTabs`/`RightPanel`/`TerminalsPanel` are mutually exclusive — the shell mounts
+  one set or the other on the active-workspace branch.)
 - **Allowed deps:** `store`, `transport`, `components/ui` (incl. `popover`/`command`/`textarea` for the
   dialog), `chat` (`ModelSelector`/`ThinkingSelector`, reused by `NewWorkspaceDialog`), `lib`,
   `contracts`; `lucide-react`; and the heavy libs each lazy panel owns (`monaco-editor`, `shiki`,

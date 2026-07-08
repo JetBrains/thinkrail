@@ -1,7 +1,22 @@
 import { randomUUID } from "node:crypto";
-import { basename } from "node:path";
+import { existsSync } from "node:fs";
+import { basename, join } from "node:path";
 import type { Project } from "@thinkrail/contracts";
 import { loadProjects, saveProjects } from "../persistence";
+
+/**
+ * Does the repo root carry the project's specs? A cheap existence check for `goal-and-requirements.md`
+ * (the `project-setup` inception output) — the signal the Welcome screen uses to offer "Set up project".
+ * Computed per read, never persisted, so it always reflects current disk state.
+ */
+function computeHasSpecs(path: string): boolean {
+	return existsSync(join(path, "goal-and-requirements.md"));
+}
+
+/** Stamp a persisted project record with its freshly-computed `hasSpecs` for the wire (non-mutating). */
+function withSpecs(project: Project): Project {
+	return { ...project, hasSpecs: computeHasSpecs(project.path) };
+}
 
 /** The git repo root for a path, or null if it isn't inside a git work tree. */
 function gitToplevel(path: string): string | null {
@@ -61,7 +76,7 @@ export function openProject(path: string): Project {
 	if (existing) {
 		existing.lastOpened = Date.now();
 		saveProjects(projects);
-		return existing;
+		return withSpecs(existing);
 	}
 
 	const taken = new Set(projects.map((p) => p.slug));
@@ -74,11 +89,13 @@ export function openProject(path: string): Project {
 	};
 	projects.push(project);
 	saveProjects(projects);
-	return project;
+	return withSpecs(project);
 }
 
 export function listProjects(): Project[] {
-	return getProjects().sort((a, b) => b.lastOpened - a.lastOpened);
+	return getProjects()
+		.sort((a, b) => b.lastOpened - a.lastOpened)
+		.map(withSpecs);
 }
 
 export function closeProject(id: string): void {
