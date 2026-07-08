@@ -29,9 +29,10 @@ its URL. It is a thin launcher — all engine logic lives in `packages/server`.
 
 ## Interface
 
-`bin` = `./src/index.ts` (bun runs the TS source directly). A leading `update` positional is a
-**subcommand** (`thinkrail update [--channel stable|nightly] [--version X.Y.Z]`) intercepted before the
-launch flags — see *Self-update* below. Otherwise the launch args: `--port` (stable default 24242,
+`bin` = `./src/index.ts` (bun runs the TS source directly). Leading `update` / `central` positionals are
+**subcommands** (`thinkrail update [--channel stable|nightly] [--version X.Y.Z]`,
+`thinkrail central [--remove]`) intercepted before the launch flags — see *Self-update* and *JetBrains
+Central wiring* below. Otherwise the launch args: `--port` (stable default 24242,
 scans upward to the next free port on collision), `--host` (default `localhost`), `--no-open`,
 `-v`/`--version` (print the baked version and exit), `-h`/`--help`, and one positional `project-dir` (a
 git repo to open as a project on boot, best-effort). Env defaults: `THINKRAIL_PORT` / `THINKRAIL_HOST` /
@@ -47,6 +48,23 @@ in place isn't possible on Windows → points to the releases page). The arg par
 resolution are pure (`parseUpdateArgs` / `resolveUpdatePlan`, unit-tested); only fetch (`curl`) + run
 (`bash -s`) touch IO. `THINKRAIL_INSTALL_SCRIPT_URL` overrides the installer URL (testing / forks). See
 `module-ci-release` for the installer itself.
+
+## JetBrains Central wiring (`thinkrail central`)
+
+`src/central.ts` points pi's model registry at the local **JetBrains Central CLI** (`jbcentral`) proxy, so
+the built-in `anthropic` (Claude) + `openai` (GPT) picks route through the user's JetBrains AI auth — the
+same path Claude Code / Codex use. It runs `jbcentral proxy start --ensure-updated --return-key` for the
+persistent secret, resolves the port (`WIRE_PROXY_PORT` env > `~/.wire/config.json` proxy_port > 19516),
+and overrides only each provider's `baseUrl` (+ a dummy `apiKey`; the proxy strips agent-side creds) in
+`$PI_CODING_AGENT_DIR/models.json` (default `~/.pi/agent`, backed up to `.bak`). `--remove` undoes it.
+**Cross-platform, no preinstalled bun**: living in the CLI, it ships inside the compiled binary (which
+carries the Bun runtime), so `thinkrail central` works on mac/linux/windows — unlike `update`, it has no
+Windows carve-out (its side effects are JSON writes + a `jbcentral` call, both OS-neutral). The one
+external requirement is `jbcentral` on PATH; when absent it prints per-OS install guidance
+(`centralInstallHint`). Arg parse + config transforms are pure + unit-tested (`parseCentralArgs`,
+`resolveProxyPort`, `buildProxyUrls`, `apply`/`removeCentralOverrides`); only fs + the `jbcentral`
+invocation touch IO. `scripts/setup-central-cli.ts` is a thin wrapper over `runCentral` for
+run-from-source dev (`bun run setup-central-cli`).
 
 ## Version stamping (release seam)
 
@@ -105,7 +123,8 @@ extensions** (which the server path-loads out of `node_modules` in dev — impos
   run-from-source `bootstrap()`: shell env → server → browser open → signal handlers), and the binary build
   + its boot smoke (`scripts/build-binary.ts`, `scripts/smoke-binary.ts`, `src/compiled-entry.ts`,
   `src/web-assets.generated.*`, `src/bundled-extensions.generated.*`), `src/version.ts` (the release
-  version stamped in at build time), and `src/update.ts` (the `update` subcommand).
+  version stamped in at build time), `src/update.ts` (the `update` subcommand), and `src/central.ts` (the
+  `central` subcommand — JetBrains Central CLI proxy wiring).
 - **Allowed deps:** `@thinkrail/server` (`createServer`, `setBundledExtensions`),
   `@thinkrail/shared/shellEnv` (`resolveShellEnv`), Bun/Node; the generated build module may
   value-import the bundled extension packages' entries (resolved via the server package — build-time
