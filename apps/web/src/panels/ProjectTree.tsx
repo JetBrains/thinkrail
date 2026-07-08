@@ -1,5 +1,5 @@
 import type { Project, Workspace } from "@thinkrail/contracts";
-import { Archive, ChevronDown, ChevronRight, Folder, GitBranch, Globe, Plus } from "lucide-react";
+import { ChevronDown, ChevronRight, Folder, GitBranch, Globe, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,9 +11,10 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { PopoverTrigger } from "@/components/ui/popover";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
-import { ConfirmDialog } from "./ConfirmDialog";
+import { ConfirmPopover } from "./ConfirmPopover";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 
 /** Left-nav: projects → workspaces (git worktrees). Open a repo, select it, create/select workspaces. */
@@ -27,13 +28,6 @@ export function ProjectTree() {
 	// The project a New-Workspace dialog is open for (null = closed). The "+" opens it instead of
 	// creating a workspace directly.
 	const [dialogProjectId, setDialogProjectId] = useState<string | null>(null);
-	// The workspace an archive-confirmation is open for (null = closed). The archive button opens this
-	// instead of deleting directly.
-	const [archiveTarget, setArchiveTarget] = useState<{
-		projectId: string;
-		workspace: Workspace;
-	} | null>(null);
-
 	const loadWorkspaces = async (projectId: string) => {
 		useAppStore
 			.getState()
@@ -88,9 +82,9 @@ export function ProjectTree() {
 		await loadWorkspaces(workspace.projectId);
 	};
 
-	// Optimistic archive: drop the row + its tabs now, then fire the request without blocking the UI (the
+	// Optimistic removal: drop the row + its tabs now, then fire the request without blocking the UI (the
 	// host acks fast and reclaims the worktree in the background). A failed delete reconciles by re-listing.
-	const archiveWorkspace = (projectId: string, workspaceId: string) => {
+	const removeWorkspace = (projectId: string, workspaceId: string) => {
 		const store = useAppStore.getState();
 		store.removeWorkspace(projectId, workspaceId);
 		store.clearWorkspaceTabs(workspaceId);
@@ -140,9 +134,7 @@ export function ProjectTree() {
 													workspace={ws}
 													isActive={activeWorkspaceId === ws.id}
 													onSelect={() => useAppStore.getState().setActiveWorkspace(ws.id)}
-													onArchive={() =>
-														setArchiveTarget({ projectId: project.id, workspace: ws })
-													}
+													onRemove={() => removeWorkspace(project.id, ws.id)}
 												/>
 											))
 										)}
@@ -164,27 +156,6 @@ export function ProjectTree() {
 					onCreated={(ws) => void onWorkspaceCreated(ws)}
 				/>
 			) : null}
-
-			<ConfirmDialog
-				open={archiveTarget !== null}
-				onOpenChange={(o) => {
-					if (!o) setArchiveTarget(null);
-				}}
-				title={`Archive ${archiveTarget?.workspace.name ?? "workspace"}?`}
-				description={
-					<>
-						This deletes the workspace's chats, terminals, and its worktree. The git branch{" "}
-						<span className="font-medium text-text">{archiveTarget?.workspace.branch}</span> is
-						kept.
-					</>
-				}
-				confirmLabel="Archive"
-				destructive
-				confirmTestId="confirm-archive"
-				onConfirm={() => {
-					if (archiveTarget) archiveWorkspace(archiveTarget.projectId, archiveTarget.workspace.id);
-				}}
-			/>
 		</nav>
 	);
 }
@@ -300,52 +271,74 @@ function WorkspaceRow({
 	workspace,
 	isActive,
 	onSelect,
-	onArchive,
+	onRemove,
 }: {
 	workspace: Workspace;
 	isActive: boolean;
 	onSelect: () => void;
-	onArchive: () => void;
+	onRemove: () => void;
 }) {
 	const stats = workspace.diffStats;
 	const hasStats = stats != null && (stats.added > 0 || stats.removed > 0);
+	// Confirm-before-remove lives on the row so the popover anchors right beneath it (contextual to the
+	// workspace being removed) rather than as a centered modal.
+	const [confirmOpen, setConfirmOpen] = useState(false);
 	return (
-		<div
-			data-testid="workspace-item"
-			data-active={isActive}
-			className={`group flex h-7 items-center gap-sm rounded-[var(--radius-sm)] pr-xs pl-xl transition-colors ${
-				isActive ? "bg-hover" : "hover:bg-hover"
-			}`}
+		<ConfirmPopover
+			open={confirmOpen}
+			onOpenChange={setConfirmOpen}
+			title={`Remove ${workspace.name} workspace`}
+			description={
+				<>
+					Deletes this workspace's chats, terminals, and its worktree. The git branch{" "}
+					<span className="font-medium text-text">{workspace.branch}</span> is kept.
+				</>
+			}
+			confirmLabel="Remove"
+			destructive
+			confirmTestId="confirm-remove"
+			onConfirm={onRemove}
+			align="end"
 		>
-			<button
-				type="button"
-				onClick={onSelect}
-				className="flex min-w-0 flex-1 items-center gap-sm text-left"
+			{/* Anchored to the Remove button (the PopoverTrigger), right border aligned via align="end". */}
+			<div
+				data-testid="workspace-item"
+				data-active={isActive}
+				className={`group flex h-7 items-center gap-sm rounded-[var(--radius-sm)] pr-xs pl-xl transition-colors ${
+					isActive ? "bg-hover" : "hover:bg-hover"
+				}`}
 			>
-				<GitBranch className={`size-4 shrink-0 ${isActive ? "text-primary" : "text-hint"}`} />
-				<span
-					data-testid="workspace-name"
-					className={`truncate text-sm ${isActive ? "font-medium text-primary" : "text-muted"}`}
+				<button
+					type="button"
+					onClick={onSelect}
+					className="flex min-w-0 flex-1 items-center gap-sm text-left"
 				>
-					{workspace.name}
-				</span>
-			</button>
-			{hasStats && (
-				<span className="shrink-0 text-xs tabular-nums group-hover:hidden">
-					<span className="text-green">+{stats.added}</span>{" "}
-					<span className="text-red">−{stats.removed}</span>
-				</span>
-			)}
-			<button
-				type="button"
-				data-testid="workspace-archive"
-				aria-label="Archive workspace"
-				onClick={onArchive}
-				className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-muted opacity-0 transition hover:bg-elevated hover:text-red group-hover:opacity-100"
-			>
-				<Archive className="size-4" />
-			</button>
-		</div>
+					<GitBranch className={`size-4 shrink-0 ${isActive ? "text-primary" : "text-hint"}`} />
+					<span
+						data-testid="workspace-name"
+						className={`truncate text-sm ${isActive ? "font-medium text-primary" : "text-muted"}`}
+					>
+						{workspace.name}
+					</span>
+				</button>
+				{hasStats && (
+					<span className="shrink-0 text-xs tabular-nums group-hover:hidden">
+						<span className="text-green">+{stats.added}</span>{" "}
+						<span className="text-red">−{stats.removed}</span>
+					</span>
+				)}
+				<PopoverTrigger asChild>
+					<button
+						type="button"
+						data-testid="workspace-remove"
+						aria-label="Remove workspace"
+						className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-muted opacity-0 transition hover:bg-elevated hover:text-red group-hover:opacity-100 data-[state=open]:opacity-100"
+					>
+						<Trash2 className="size-4" />
+					</button>
+				</PopoverTrigger>
+			</div>
+		</ConfirmPopover>
 	);
 }
 
