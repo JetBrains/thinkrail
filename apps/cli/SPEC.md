@@ -51,20 +51,11 @@ resolution are pure (`parseUpdateArgs` / `resolveUpdatePlan`, unit-tested); only
 
 ## JetBrains Central wiring (`thinkrail central`)
 
-`src/central.ts` points pi's model registry at the local **JetBrains Central CLI** (`jbcentral`) proxy, so
-the built-in `anthropic` (Claude) + `openai` (GPT) picks route through the user's JetBrains AI auth — the
-same path Claude Code / Codex use. It runs `jbcentral proxy start --ensure-updated --return-key` for the
-persistent secret, resolves the port (`WIRE_PROXY_PORT` env > `~/.wire/config.json` proxy_port > 19516),
-and overrides only each provider's `baseUrl` (+ a dummy `apiKey`; the proxy strips agent-side creds) in
-`$PI_CODING_AGENT_DIR/models.json` (default `~/.pi/agent`, backed up to `.bak`). `--remove` undoes it.
-**Cross-platform, no preinstalled bun**: living in the CLI, it ships inside the compiled binary (which
-carries the Bun runtime), so `thinkrail central` works on mac/linux/windows — unlike `update`, it has no
-Windows carve-out (its side effects are JSON writes + a `jbcentral` call, both OS-neutral). The one
-external requirement is `jbcentral` on PATH; when absent it prints per-OS install guidance
-(`centralInstallHint`). Arg parse + config transforms are pure + unit-tested (`parseCentralArgs`,
-`resolveProxyPort`, `buildProxyUrls`, `apply`/`removeCentralOverrides`); only fs + the `jbcentral`
-invocation touch IO. `scripts/setup-central-cli.ts` is a thin wrapper over `runCentral` for
-run-from-source dev (`bun run setup-central-cli`).
+`src/central.ts` overrides the `anthropic`/`openai` provider `baseUrl` in
+`$PI_CODING_AGENT_DIR/models.json` to route Claude/GPT through the local JetBrains Central CLI
+(`jbcentral`) proxy under the user's JetBrains auth; `--remove` reverts it. It lives in the CLI (not just
+`scripts/setup-central-cli.ts`, now a thin wrapper) so it ships in the binary — one command, no bun,
+mac/linux/windows. Requires `jbcentral` on PATH. Parse + config transforms are pure and unit-tested.
 
 ## Version stamping (release seam)
 
