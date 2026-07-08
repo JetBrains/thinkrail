@@ -1,27 +1,27 @@
 import { describe, expect, test } from "bun:test";
 import {
-	applyCentralOverrides,
+	applyJbcentralOverrides,
 	buildProxyUrls,
-	centralInstallHint,
+	jbcentralInstallHint,
 	type ModelsConfig,
-	parseCentralArgs,
-	removeCentralOverrides,
+	parseJbcentralArgs,
+	removeJbcentralOverrides,
 	resolveProxyPort,
-} from "./central";
+} from "./jbcentral";
 
-describe("parseCentralArgs", () => {
+describe("parseJbcentralArgs", () => {
 	test("defaults to wire (no remove, no help)", () => {
-		expect(parseCentralArgs([])).toEqual({ remove: false, help: false });
+		expect(parseJbcentralArgs([])).toEqual({ remove: false, help: false });
 	});
 
 	test("reads --remove and -h/--help", () => {
-		expect(parseCentralArgs(["--remove"])).toEqual({ remove: true, help: false });
-		expect(parseCentralArgs(["-h"])).toEqual({ remove: false, help: true });
-		expect(parseCentralArgs(["--help"])).toEqual({ remove: false, help: true });
+		expect(parseJbcentralArgs(["--remove"])).toEqual({ remove: true, help: false });
+		expect(parseJbcentralArgs(["-h"])).toEqual({ remove: false, help: true });
+		expect(parseJbcentralArgs(["--help"])).toEqual({ remove: false, help: true });
 	});
 
 	test("rejects an unknown flag", () => {
-		expect(() => parseCentralArgs(["--nope"])).toThrow("Unknown option: --nope");
+		expect(() => parseJbcentralArgs(["--nope"])).toThrow("Unknown option: --nope");
 	});
 });
 
@@ -56,11 +56,11 @@ describe("buildProxyUrls", () => {
 	});
 });
 
-describe("applyCentralOverrides", () => {
+describe("applyJbcentralOverrides", () => {
 	const urls = buildProxyUrls(19516, "s");
 
 	test("sets baseUrl + apiKey on anthropic and openai", () => {
-		const config = applyCentralOverrides({}, urls);
+		const config = applyJbcentralOverrides({}, urls);
 		expect(config.providers?.anthropic).toEqual({
 			baseUrl: urls.anthropicUrl,
 			apiKey: "wire-proxy",
@@ -75,7 +75,7 @@ describe("applyCentralOverrides", () => {
 				custom: { baseUrl: "keep" },
 			},
 		};
-		applyCentralOverrides(config, urls);
+		applyJbcentralOverrides(config, urls);
 		expect(config.providers?.anthropic).toEqual({
 			models: ["x"],
 			baseUrl: urls.anthropicUrl,
@@ -85,7 +85,7 @@ describe("applyCentralOverrides", () => {
 	});
 });
 
-describe("removeCentralOverrides", () => {
+describe("removeJbcentralOverrides", () => {
 	test("drops only baseUrl/apiKey, keeping other fields", () => {
 		const config: ModelsConfig = {
 			providers: {
@@ -93,25 +93,25 @@ describe("removeCentralOverrides", () => {
 				openai: { baseUrl: "x", apiKey: "y" },
 			},
 		};
-		removeCentralOverrides(config);
+		removeJbcentralOverrides(config);
 		expect(config.providers?.anthropic).toEqual({ models: ["m"] } as never);
 		// openai had only the managed fields → the now-empty entry is removed.
 		expect(config.providers?.openai).toBeUndefined();
 	});
 
 	test("is a no-op when there are no providers", () => {
-		expect(removeCentralOverrides({})).toEqual({});
+		expect(removeJbcentralOverrides({})).toEqual({});
 	});
 });
 
-describe("centralInstallHint", () => {
+describe("jbcentralInstallHint", () => {
 	test("unix points at the install.sh one-liner", () => {
-		expect(centralInstallHint("linux")).toContain("install.sh | bash");
-		expect(centralInstallHint("darwin")).toContain("install.sh | bash");
+		expect(jbcentralInstallHint("linux")).toContain("install.sh | bash");
+		expect(jbcentralInstallHint("darwin")).toContain("install.sh | bash");
 	});
 
 	test("windows points at the JetBrains installer, not the sh script", () => {
-		const hint = centralInstallHint("win32");
+		const hint = jbcentralInstallHint("win32");
 		expect(hint).toContain("Windows");
 		expect(hint).not.toContain("install.sh");
 	});

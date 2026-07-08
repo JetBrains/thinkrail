@@ -1,8 +1,9 @@
-// `thinkrail central` — point pi's model registry at the local JetBrains Central CLI proxy (`jbcentral`),
-// so the pi agent behind thinkrail talks to the JetBrains AI Platform using your JetBrains auth (the same
-// path Claude Code and Codex use). Ported into the CLI so it ships **inside the compiled binary** — the
-// binary already carries a full Bun runtime, so `thinkrail central` works on mac/linux/windows with no
-// preinstalled bun. `scripts/setup-central-cli.ts` is now a thin wrapper over `runCentral`.
+// `thinkrail jbcentral` — point pi's model registry at the local JetBrains Central CLI proxy
+// (`jbcentral`), so the pi agent behind thinkrail talks to the JetBrains AI Platform using your JetBrains
+// auth (the same path Claude Code and Codex use). Ported into the CLI so it ships **inside the compiled
+// binary** — the binary already carries a full Bun runtime, so `thinkrail jbcentral` works on
+// mac/linux/windows with no preinstalled bun. `scripts/setup-jbcentral-cli.ts` is a thin wrapper over
+// `runJbcentral`.
 //
 // It discovers the proxy secret + port from `jbcentral` and overrides the built-in `anthropic`/`openai`
 // providers' baseUrl. Built-in providers keep their model lists (cost/context/thinking-level metadata) —
@@ -19,7 +20,7 @@ const DUMMY_API_KEY = "wire-proxy";
 /** Fallback proxy port when neither `WIRE_PROXY_PORT` nor `~/.wire/config.json` supplies one. */
 const DEFAULT_PROXY_PORT = 19516;
 
-export const CENTRAL_USAGE = `Usage: thinkrail central [--remove]
+export const JBCENTRAL_USAGE = `Usage: thinkrail jbcentral [--remove]
 
 Wire pi's model registry through the local JetBrains Central CLI (jbcentral) proxy, so the
 built-in Claude (anthropic) and GPT (openai) model picks route through your JetBrains AI auth.
@@ -38,15 +39,15 @@ export type ParseEnv = Record<string, string | undefined>;
 export type ProviderConfig = { baseUrl?: string; apiKey?: string } & Record<string, unknown>;
 export type ModelsConfig = { providers?: Record<string, ProviderConfig> } & Record<string, unknown>;
 
-export interface CentralArgs {
+export interface JbcentralArgs {
 	/** `--remove` was passed — undo the overrides instead of wiring them. */
 	remove: boolean;
 	/** `-h`/`--help` was passed — print usage and exit. */
 	help: boolean;
 }
 
-/** Parse `central`'s argv (the slice after `central`). Throws on an unknown flag. */
-export function parseCentralArgs(argv: readonly string[]): CentralArgs {
+/** Parse `jbcentral`'s argv (the slice after `jbcentral`). Throws on an unknown flag. */
+export function parseJbcentralArgs(argv: readonly string[]): JbcentralArgs {
 	let remove = false;
 	let help = false;
 	for (const arg of argv) {
@@ -87,7 +88,7 @@ export function buildProxyUrls(port: number, secret: string): ProxyUrls {
 }
 
 /** Wire the anthropic + openai providers' baseUrl/apiKey to the proxy, preserving their other fields. Mutates + returns `config`. */
-export function applyCentralOverrides(config: ModelsConfig, urls: ProxyUrls): ModelsConfig {
+export function applyJbcentralOverrides(config: ModelsConfig, urls: ProxyUrls): ModelsConfig {
 	config.providers ??= {};
 	config.providers.anthropic = {
 		...config.providers.anthropic,
@@ -103,7 +104,7 @@ export function applyCentralOverrides(config: ModelsConfig, urls: ProxyUrls): Mo
 }
 
 /** Drop the baseUrl/apiKey we manage from anthropic + openai (removing a provider entry left empty). Mutates + returns `config`. */
-export function removeCentralOverrides(config: ModelsConfig): ModelsConfig {
+export function removeJbcentralOverrides(config: ModelsConfig): ModelsConfig {
 	if (!config.providers) return config;
 	for (const id of ["anthropic", "openai"] as const) {
 		const provider = config.providers[id];
@@ -116,11 +117,11 @@ export function removeCentralOverrides(config: ModelsConfig): ModelsConfig {
 }
 
 /** Per-OS guidance shown when `jbcentral` isn't on PATH. */
-export function centralInstallHint(platform: NodeJS.Platform): string {
+export function jbcentralInstallHint(platform: NodeJS.Platform): string {
 	if (platform === "win32") {
 		return (
 			"jbcentral not found on PATH. Install the JetBrains Central CLI for Windows, then re-run\n" +
-			"`thinkrail central`. See your JetBrains AI / Central CLI setup docs for the Windows installer."
+			"`thinkrail jbcentral`. See your JetBrains AI / Central CLI setup docs for the Windows installer."
 		);
 	}
 	return (
@@ -148,18 +149,18 @@ async function writeModels(path: string, config: ModelsConfig): Promise<void> {
 	await Bun.write(path, `${JSON.stringify(config, null, 2)}\n`);
 }
 
-/** Run the `central` subcommand. Returns a process exit code. */
-export async function runCentral(argv: readonly string[], env: ParseEnv): Promise<number> {
-	let parsed: CentralArgs;
+/** Run the `jbcentral` subcommand. Returns a process exit code. */
+export async function runJbcentral(argv: readonly string[], env: ParseEnv): Promise<number> {
+	let parsed: JbcentralArgs;
 	try {
-		parsed = parseCentralArgs(argv);
+		parsed = parseJbcentralArgs(argv);
 	} catch (err) {
 		console.error(err instanceof Error ? err.message : String(err));
-		console.error(`\n${CENTRAL_USAGE}`);
+		console.error(`\n${JBCENTRAL_USAGE}`);
 		return 1;
 	}
 	if (parsed.help) {
-		console.log(CENTRAL_USAGE);
+		console.log(JBCENTRAL_USAGE);
 		return 0;
 	}
 
@@ -178,7 +179,7 @@ export async function runCentral(argv: readonly string[], env: ParseEnv): Promis
 
 	// --- Remove mode -----------------------------------------------------------------------------
 	if (parsed.remove) {
-		removeCentralOverrides(config);
+		removeJbcentralOverrides(config);
 		await writeModels(modelsJson, config);
 		console.log(`Removed jbcentral overrides from ${modelsJson} (backup: ${modelsJson}.bak).`);
 		console.log("The built-in anthropic/openai providers are back to their defaults.");
@@ -187,7 +188,7 @@ export async function runCentral(argv: readonly string[], env: ParseEnv): Promis
 
 	// --- Discover the proxy ----------------------------------------------------------------------
 	if (!Bun.which("jbcentral")) {
-		console.error(centralInstallHint(process.platform));
+		console.error(jbcentralInstallHint(process.platform));
 		return 1;
 	}
 
@@ -216,7 +217,7 @@ export async function runCentral(argv: readonly string[], env: ParseEnv): Promis
 
 	// --- Write the overrides ---------------------------------------------------------------------
 	const urls = buildProxyUrls(port, secret);
-	applyCentralOverrides(config, urls);
+	applyJbcentralOverrides(config, urls);
 	await writeModels(modelsJson, config);
 
 	// --- Summary ---------------------------------------------------------------------------------
@@ -232,7 +233,7 @@ export async function runCentral(argv: readonly string[], env: ParseEnv): Promis
 		"through JetBrains AI. Note: direct provider access is shadowed while these overrides are set,",
 	);
 	console.log(
-		"and the picker may list models JetBrains AI doesn't serve. Undo with: thinkrail central --remove",
+		"and the picker may list models JetBrains AI doesn't serve. Undo with: thinkrail jbcentral --remove",
 	);
 	return 0;
 }

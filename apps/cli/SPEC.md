@@ -29,9 +29,9 @@ its URL. It is a thin launcher — all engine logic lives in `packages/server`.
 
 ## Interface
 
-`bin` = `./src/index.ts` (bun runs the TS source directly). Leading `update` / `central` positionals are
+`bin` = `./src/index.ts` (bun runs the TS source directly). Leading `update` / `jbcentral` positionals are
 **subcommands** (`thinkrail update [--channel stable|nightly] [--version X.Y.Z]`,
-`thinkrail central [--remove]`) intercepted before the launch flags — see *Self-update* and *JetBrains
+`thinkrail jbcentral [--remove]`) intercepted before the launch flags — see *Self-update* and *JetBrains
 Central wiring* below. Otherwise the launch args: `--port` (stable default 24242,
 scans upward to the next free port on collision), `--host` (default `localhost`), `--no-open`,
 `-v`/`--version` (print the baked version and exit), `-h`/`--help`, and one positional `project-dir` (a
@@ -49,12 +49,12 @@ resolution are pure (`parseUpdateArgs` / `resolveUpdatePlan`, unit-tested); only
 (`bash -s`) touch IO. `THINKRAIL_INSTALL_SCRIPT_URL` overrides the installer URL (testing / forks). See
 `module-ci-release` for the installer itself.
 
-## JetBrains Central wiring (`thinkrail central`)
+## JetBrains Central wiring (`thinkrail jbcentral`)
 
-`src/central.ts` overrides the `anthropic`/`openai` provider `baseUrl` in
+`src/jbcentral.ts` overrides the `anthropic`/`openai` provider `baseUrl` in
 `$PI_CODING_AGENT_DIR/models.json` to route Claude/GPT through the local JetBrains Central CLI
 (`jbcentral`) proxy under the user's JetBrains auth; `--remove` reverts it. It lives in the CLI (not just
-`scripts/setup-central-cli.ts`, now a thin wrapper) so it ships in the binary — one command, no bun,
+`scripts/setup-jbcentral-cli.ts`, now a thin wrapper) so it ships in the binary — one command, no bun,
 mac/linux/windows. Requires `jbcentral` on PATH. Parse + config transforms are pure and unit-tested.
 
 ## Version stamping (release seam)
@@ -114,8 +114,8 @@ extensions** (which the server path-loads out of `node_modules` in dev — impos
   run-from-source `bootstrap()`: shell env → server → browser open → signal handlers), and the binary build
   + its boot smoke (`scripts/build-binary.ts`, `scripts/smoke-binary.ts`, `src/compiled-entry.ts`,
   `src/web-assets.generated.*`, `src/bundled-extensions.generated.*`), `src/version.ts` (the release
-  version stamped in at build time), `src/update.ts` (the `update` subcommand), and `src/central.ts` (the
-  `central` subcommand — JetBrains Central CLI proxy wiring).
+  version stamped in at build time), `src/update.ts` (the `update` subcommand), and `src/jbcentral.ts` (the
+  `jbcentral` subcommand — JetBrains Central CLI proxy wiring).
 - **Allowed deps:** `@thinkrail/server` (`createServer`, `setBundledExtensions`),
   `@thinkrail/shared/shellEnv` (`resolveShellEnv`), Bun/Node; the generated build module may
   value-import the bundled extension packages' entries (resolved via the server package — build-time
