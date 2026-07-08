@@ -79,9 +79,11 @@ extensions** (which the server path-loads out of `node_modules` in dev — impos
     server's exported `BundledExtensionFactory`, so `cli` still never imports
     `@earendil-works/pi-coding-agent`.
 - `src/compiled-entry.ts` is the binary's entry: on startup it stages the embedded web + skills files to
-  per-build cache dirs (`$XDG_CACHE_HOME`/`~/.cache`/temp; **atomic** — written to a temp dir then
-  renamed into place, so a killed first run can't leave a poisoned half-extracted cache; presence of the
-  final dir = complete), sets `THINKRAIL_STATIC_DIR`, registers the factories + staged skills dir via
+  per-build cache dirs (`$XDG_CACHE_HOME`/`~/.cache`/temp; files written straight into the versioned dir,
+  then a sibling `<dir>.complete` marker written **last** — readiness is gated on the marker, so a killed
+  first run leaves an incomplete cache that's re-extracted next launch. **No stage-then-rename**: Bun's
+  `renameSync` of a fresh non-empty dir `EPERM`s on Windows, so the marker replaces the directory-rename
+  publish), sets `THINKRAIL_STATIC_DIR`, registers the factories + staged skills dir via
   the server's **`setBundledExtensions`** seam, then hands off to `index.ts`. (`bun-pty` self-extracts
   automatically; **no photon wasm** — the agent's read tool is set to send images raw, server-side.
   Skills must be staged to the *real* filesystem: pi reads `SKILL.md` via plain fs and embeds the path in
