@@ -77,7 +77,7 @@ test("a project without specs suggests setting it up", async ({ page }) => {
 		await page.getByTestId("welcome-cta").click();
 		const dialog = page.getByTestId("new-workspace-dialog");
 		await expect(dialog).toBeVisible();
-		await expect(dialog.getByTestId("ws-prompt")).toHaveValue(/goal-and-requirements\.md/);
+		await expect(dialog.getByTestId("ws-prompt")).toHaveValue(/^\/skill:project-setup\b/);
 
 		// Clear the seed (no agent kick-off — keeps this in the no-agent suite) and create the worktree; it
 		// becomes active → the welcome unmounts and the full 3-column surface appears.
