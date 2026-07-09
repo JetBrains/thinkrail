@@ -1,23 +1,14 @@
 import type { Project, Workspace } from "@thinkrail/contracts";
-import { ChevronDown, ChevronRight, Folder, GitBranch, Globe, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Folder, GitBranch, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuGroup,
-	DropdownMenuItem,
-	DropdownMenuLabel,
-	DropdownMenuSeparator,
-	DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { PopoverTrigger } from "@/components/ui/popover";
 import { useAppStore } from "../store";
-import { errorText, getTransport } from "../transport";
-import { ConfirmDialog } from "./ConfirmDialog";
+import { getTransport } from "../transport";
+import { AddProjectMenu } from "./AddProjectMenu";
 import { ConfirmPopover } from "./ConfirmPopover";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
-import { NoticeDialog } from "./NoticeDialog";
+import { useOpenProject } from "./useOpenProject";
 
 /** Left-nav: projects → workspaces (git worktrees). Open a repo, select it, create/select workspaces. */
 export function ProjectTree() {
@@ -30,11 +21,6 @@ export function ProjectTree() {
 	// The project a New-Workspace dialog is open for (null = closed). The "+" opens it instead of
 	// creating a workspace directly.
 	const [dialogProjectId, setDialogProjectId] = useState<string | null>(null);
-	// A plain folder we've offered to `git init` (null = closed) — set when `project.open` fails and the
-	// host reports the path is `initable`.
-	const [initTarget, setInitTarget] = useState<string | null>(null);
-	// A non-actionable open failure to surface (a stale recent, a broken path). null = no notice.
-	const [openError, setOpenError] = useState<string | null>(null);
 
 	const loadWorkspaces = async (projectId: string) => {
 		useAppStore
@@ -43,7 +29,13 @@ export function ProjectTree() {
 	};
 
 	const selectProject = async (projectId: string) => {
-		useAppStore.getState().selectProject(projectId);
+		const store = useAppStore.getState();
+		// Selecting a project returns to its Welcome — deselect any active workspace (the shell renders the
+		// Welcome when no workspace is active). The row is a deliberate "project home" gesture; the chevron
+		// handles expand/collapse separately, so this never fires from just expanding. The workspace's tabs
+		// survive in the store, so re-selecting it restores its view.
+		store.setActiveWorkspace(null);
+		store.selectProject(projectId);
 		setExpanded((prev) => new Set(prev).add(projectId));
 		await loadWorkspaces(projectId);
 	};
@@ -61,51 +53,11 @@ export function ProjectTree() {
 		});
 	};
 
-	// Record a freshly opened/initialised project in the store and select it.
-	const adoptProject = async (projectId: string) => {
-		useAppStore.getState().setProjects(await getTransport().request("project.list", {}));
-		await selectProject(projectId);
-	};
-
-	const openProject = async (rawPath: string) => {
-		const trimmed = rawPath.trim();
-		if (!trimmed) return;
-		try {
-			const project = await getTransport().request("project.open", { path: trimmed });
-			await adoptProject(project.id);
-		} catch (err) {
-			// Open failed — the common case is a plain (non-git) folder. Ask the host what the path is so we
-			// either offer to initialise a repo or surface a legible error, instead of failing silently.
-			const status = await getTransport()
-				.request("project.inspect", { path: trimmed })
-				.catch(() => null);
-			if (status?.kind === "initable") setInitTarget(trimmed);
-			else if (status?.kind === "missing")
-				setOpenError(`This folder no longer exists:\n${trimmed}`);
-			else if (status?.kind === "notDirectory") setOpenError(`This isn't a folder:\n${trimmed}`);
-			else setOpenError(errorText(err, `Couldn't open ${trimmed}.`));
-		}
-	};
-
-	// Confirmed the init offer: `git init` + commit the folder, then open it as a project.
-	const initProject = async (path: string) => {
-		try {
-			const project = await getTransport().request("project.init", { path });
-			await adoptProject(project.id);
-		} catch (err) {
-			setOpenError(errorText(err, `Couldn't initialise a git repository in ${path}.`));
-		}
-	};
-
-	/** "Open project" → ask the host for a directory via its native picker, then open it. */
-	const pickAndOpen = async () => {
-		try {
-			const { path } = await getTransport().request("dialog.selectDirectory", {});
-			if (path) await openProject(path);
-		} catch {
-			// Cancelled / unavailable — nothing to do.
-		}
-	};
+	// The shared open-project flow (open → offer to git-init a non-git folder → or a legible error). Its
+	// adopt step selects + expands the freshly opened/initialised project; `dialogs` is rendered below.
+	const { openProject, pickAndOpen, dialogs } = useOpenProject((project) =>
+		selectProject(project.id),
+	);
 
 	// After the dialog creates a workspace: expand its project + reload the list (the dialog itself sets
 	// the active workspace and kicks off any chat).
@@ -120,7 +72,7 @@ export function ProjectTree() {
 		const store = useAppStore.getState();
 		store.removeWorkspace(projectId, workspaceId);
 		store.clearWorkspaceTabs(workspaceId);
-		if (activeWorkspaceId === workspaceId) store.setActiveWorkspace("");
+		if (activeWorkspaceId === workspaceId) store.setActiveWorkspace(null);
 		void getTransport()
 			.request("workspace.remove", { id: workspaceId })
 			.catch(() => void loadWorkspaces(projectId));
@@ -134,49 +86,54 @@ export function ProjectTree() {
 					projects={projects}
 					onOpen={() => void pickAndOpen()}
 					onOpenRecent={(p) => void openProject(p)}
-				/>
+				>
+					<Button
+						variant="ghost"
+						size="icon"
+						data-testid="add-project-menu"
+						aria-label="Add project"
+					>
+						<Plus className="size-4" />
+					</Button>
+				</AddProjectMenu>
 			</header>
 
-			{projects.length === 0 ? (
-				<EmptyState onOpen={() => void pickAndOpen()} />
-			) : (
-				<ul className="flex flex-col">
-					{projects.map((project) => {
-						const isExpanded = expanded.has(project.id);
-						const list = workspaces[project.id] ?? [];
-						return (
-							<li key={project.id}>
-								<ProjectRow
-									project={project}
-									isSelected={selectedProjectId === project.id}
-									isExpanded={isExpanded}
-									workspaceCount={list.length}
-									onToggle={() => toggleExpand(project.id)}
-									onSelect={() => void selectProject(project.id)}
-									onAddWorkspace={() => setDialogProjectId(project.id)}
-								/>
-								{isExpanded && (
-									<ul className="flex flex-col">
-										{list.length === 0 ? (
-											<li className="py-xs pr-sm pl-xl text-xs text-hint">No workspaces yet</li>
-										) : (
-											list.map((ws) => (
-												<WorkspaceRow
-													key={ws.id}
-													workspace={ws}
-													isActive={activeWorkspaceId === ws.id}
-													onSelect={() => useAppStore.getState().setActiveWorkspace(ws.id)}
-													onRemove={() => removeWorkspace(project.id, ws.id)}
-												/>
-											))
-										)}
-									</ul>
-								)}
-							</li>
-						);
-					})}
-				</ul>
-			)}
+			<ul className="flex flex-col">
+				{projects.map((project) => {
+					const isExpanded = expanded.has(project.id);
+					const list = workspaces[project.id] ?? [];
+					return (
+						<li key={project.id}>
+							<ProjectRow
+								project={project}
+								isSelected={selectedProjectId === project.id}
+								isExpanded={isExpanded}
+								workspaceCount={list.length}
+								onToggle={() => toggleExpand(project.id)}
+								onSelect={() => void selectProject(project.id)}
+								onAddWorkspace={() => setDialogProjectId(project.id)}
+							/>
+							{isExpanded && (
+								<ul className="flex flex-col">
+									{list.length === 0 ? (
+										<li className="py-xs pr-sm pl-xl text-xs text-hint">No workspaces yet</li>
+									) : (
+										list.map((ws) => (
+											<WorkspaceRow
+												key={ws.id}
+												workspace={ws}
+												isActive={activeWorkspaceId === ws.id}
+												onSelect={() => useAppStore.getState().setActiveWorkspace(ws.id)}
+												onRemove={() => removeWorkspace(project.id, ws.id)}
+											/>
+										))
+									)}
+								</ul>
+							)}
+						</li>
+					);
+				})}
+			</ul>
 
 			{dialogProjectId !== null ? (
 				<NewWorkspaceDialog
@@ -189,84 +146,8 @@ export function ProjectTree() {
 				/>
 			) : null}
 
-			<ConfirmDialog
-				open={initTarget !== null}
-				onOpenChange={(o) => {
-					if (!o) setInitTarget(null);
-				}}
-				title="Initialize a git repository?"
-				description={
-					<>
-						<span className="font-medium text-text">{initTarget}</span> isn't a git repository.
-						ThinkRail works on git worktrees, so it needs one. Initialize a repo here and commit the
-						folder's current contents?
-					</>
-				}
-				confirmLabel="Initialize & open"
-				confirmTestId="confirm-init-repo"
-				onConfirm={() => {
-					if (initTarget) void initProject(initTarget);
-				}}
-			/>
-
-			<NoticeDialog
-				open={openError !== null}
-				onOpenChange={(o) => {
-					if (!o) setOpenError(null);
-				}}
-				title="Couldn't open project"
-				description={<span className="whitespace-pre-line">{openError}</span>}
-				testId="open-error-dialog"
-			/>
+			{dialogs}
 		</nav>
-	);
-}
-
-function AddProjectMenu({
-	projects,
-	onOpen,
-	onOpenRecent,
-}: {
-	projects: Project[];
-	onOpen: () => void;
-	onOpenRecent: (path: string) => void;
-}) {
-	return (
-		<DropdownMenu>
-			<DropdownMenuTrigger asChild>
-				<Button variant="ghost" size="icon" data-testid="add-project-menu" aria-label="Add project">
-					<Plus className="size-4" />
-				</Button>
-			</DropdownMenuTrigger>
-			<DropdownMenuContent align="end">
-				<DropdownMenuItem data-testid="menu-open-project" onSelect={() => onOpen()}>
-					<Folder />
-					<span>Open project</span>
-				</DropdownMenuItem>
-				<DropdownMenuItem disabled>
-					<Globe />
-					<span>Open GitHub project</span>
-				</DropdownMenuItem>
-				{projects.length > 0 && (
-					<>
-						<DropdownMenuSeparator />
-						<DropdownMenuLabel>Recents</DropdownMenuLabel>
-						<DropdownMenuGroup>
-							{projects.map((project) => (
-								<DropdownMenuItem
-									key={project.id}
-									onSelect={() => onOpenRecent(project.path)}
-									title={project.path}
-								>
-									<Folder />
-									<span className="truncate">{project.path}</span>
-								</DropdownMenuItem>
-							))}
-						</DropdownMenuGroup>
-					</>
-				)}
-			</DropdownMenuContent>
-		</DropdownMenu>
 	);
 }
 
@@ -401,18 +282,5 @@ function WorkspaceRow({
 				</PopoverTrigger>
 			</div>
 		</ConfirmPopover>
-	);
-}
-
-function EmptyState({ onOpen }: { onOpen: () => void }) {
-	return (
-		<div className="flex flex-col items-start gap-sm rounded-[var(--radius-md)] border border-border2 border-dashed p-md">
-			<p className="text-sm text-muted">No projects open.</p>
-			<p className="text-xs text-hint">Open a git repository to get started.</p>
-			<Button variant="outline" size="sm" onClick={onOpen}>
-				<Folder className="size-4" />
-				Open project
-			</Button>
-		</div>
 	);
 }

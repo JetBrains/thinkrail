@@ -32,12 +32,15 @@ const PILL =
 export function NewWorkspaceDialog({
 	open,
 	projectId,
+	initialPrompt,
 	onOpenChange,
 	onCreated,
 }: {
 	open: boolean;
 	/** The project the "+" was clicked on — the picker's default (changeable). */
 	projectId: string;
+	/** Optional seed for the prompt hero (still fully editable) — e.g. Welcome's "Set up project". */
+	initialPrompt?: string;
 	onOpenChange: (open: boolean) => void;
 	onCreated: (workspace: Workspace) => void;
 }) {
@@ -57,13 +60,14 @@ export function NewWorkspaceDialog({
 	// scroll lock (react-remove-scroll blocks wheel/trackpad on body-portaled content).
 	const [dialogEl, setDialogEl] = useState<HTMLElement | null>(null);
 
-	// Reset the form each time the dialog opens, anchored to the project the "+" was clicked on.
+	// Reset the form each time the dialog opens, anchored to the project the "+" was clicked on and any
+	// seed prompt (empty by default).
 	useEffect(() => {
 		if (!open) return;
 		setSelectedProjectId(projectId);
-		setPrompt("");
+		setPrompt(initialPrompt ?? "");
 		setCreating(false);
-	}, [open, projectId]);
+	}, [open, projectId, initialPrompt]);
 
 	// Models are global to the host — fetch once into the shared store; the picker reads them.
 	useEffect(() => {

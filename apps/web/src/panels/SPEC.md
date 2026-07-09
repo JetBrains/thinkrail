@@ -22,14 +22,42 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   deliberate choice** (Cancel takes initial focus; a `destructive` confirm shows a warning glyph + red
   button; Esc + outside-click cancel); removal is **optimistic + non-blocking**: on confirm it drops the row via `store.removeWorkspace` + `clearWorkspaceTabs`
   and fires `workspace.remove` without awaiting, reconciling a failure by re-listing).
-  **Opening a project** goes through `project.open`; on failure `ProjectTree` asks `project.inspect` and
-  either offers to bootstrap the folder into a repo — a modal **`ConfirmDialog`** (confirm → `project.init`)
-  — when it's `initable`, or surfaces the error in a **`NoticeDialog`** — so a non-git folder is never a
-  silent no-op. Both are modals on `components/ui/dialog` (the init offer has no on-screen anchor, unlike the
-  Remove popover); `NoticeDialog` is a single-button info modal for failures with no yes/no follow-up. Also
+  **Opening a project** goes through the shared **`useOpenProject`** hook (reused by `ProjectTree` **and**
+  `WelcomePanel`, so the flow is identical in the rail and the Welcome screen): `project.open`, and on
+  failure `project.inspect` → either offers to bootstrap the folder into a repo — a modal **`ConfirmDialog`**
+  (confirm → `project.init`) — when it's `initable`, or surfaces the error in a **`NoticeDialog`** — so a
+  non-git folder is never a silent no-op. Both are modals on `components/ui/dialog` (the init offer has no
+  on-screen anchor, unlike the Remove popover); `NoticeDialog` is a single-button info modal for failures
+  with no yes/no follow-up. The hook returns a `dialogs` node each consumer renders. **Selecting a
+  project** (clicking its row — the chevron expands/collapses separately) **deselects any active
+  workspace**, so the shell returns to that project's Welcome — a deliberate "project home" gesture; the
+  workspace's tabs survive in the store, so re-selecting it restores its view. Also
   `FileTree`, `SpecsPanel`, `RightPanel`,
   `ChangesPanel` + lazy `DiffViewer`, `CenterTabs` + lazy `MonacoEditor`, `TerminalsPanel` + lazy
-  `TerminalInstance`. **`NewWorkspaceDialog`** is the create-and-kick-off surface: a base-branch
+  `TerminalInstance`. **`WelcomePanel`** is the first-touch surface the shell mounts (centered, left-nav beside it) whenever no
+workspace is active. The `PRODUCT_NAME` wordmark as the hero (the topbar's brand styling — accent font,
+`text-primary` — enlarged), with the **active project's name as a small eyebrow** (folder icon) above it
+once a project is selected, over a **constant** spec-first pitch (not spec-conditional) and
+**one-to-three cards** (Conductor-inspired: icon top-left, label + explainer
+bottom-left; the primary is a filled-violet card carrying the stable `welcome-cta` hook, others quiet
+`welcome-action`s). The cards by state: **no projects** → **"Open project"** (one card); **project +
+`hasSpecs`** → **"Start building"** (primary) + "Open project"; **project + no specs** → a spec-first
+**"Set up project"** (primary) + "Start building" + "Open project". The **"Open project"** card hangs the shared
+**`AddProjectMenu`** dropdown off it (same menu as the projects-rail "+": Open project / Open GitHub (soon)
+/ Recents), so `Card` is a `forwardRef` usable as a Radix `asChild` trigger. **"Start building"** is the
+intent-first framing of the create-and-kick-off flow — it opens `NewWorkspaceDialog` (which cuts a
+worktree-isolated workspace + starts a chat); *workspace* is the mechanism, not the label. **"Set up
+project"** opens the same dialog with an `initialPrompt` seed — the `/skill:project-setup` command, which
+**forces** the project-setup dispatcher skill to load (pi's skill-command syntax; expanded on the
+`session.prompt` path) rather than hoping the model auto-matches it; the dispatcher then detects
+new-vs-existing and drafts the specs accordingly (see [[module-thinkrail-workflow]]). Which
+project drives the has-specs states = `selectedProjectId ?? projects[0]`, read reactively (so the visible
+nav's selection updates it). Its `hasSpecs` is **fetched lazily** via `project.hasSpecs` for that one
+project (a full-tree walk, kept off the connect handshake) — pending until it resolves, so the cards wait
+on it. The open-project orchestration lives in the shared **`useOpenProject`** hook
+(above), so the Welcome "Open project" card gets the same non-git init/notice handling as the rail.
+**`NewWorkspaceDialog`** is the create-and-kick-off surface: an optional **`initialPrompt`** seeds the
+prompt hero (still editable; empty by default), a base-branch
   combobox (`git.listBranches`, degrading to local branches offline; a Refresh re-lists; `origin/HEAD` is
   filtered so no stray `origin`), a project picker, the prompt hero, and the reused
   `chat/ModelSelector`+`ThinkingSelector` in **pre-session** mode — preselected to the host's resolved
@@ -52,8 +80,10 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   via `store.noteClosedChats`. Reopening restores a live runtime's tab, or for a disk-only chat re-opens it
   on the host (`getMessages`) + hydrates — so a reload, a second tab, or a host restart all rebuild from the
   host.
-- **Public surface:** the top-level panels the shell mounts (`ProjectTree`, `CenterTabs`, `RightPanel`,
-  `TerminalsPanel`), imported **per-file** (no barrel — keeps the lazy chunks split).
+- **Public surface:** the top-level panels the shell mounts (`ProjectTree`, `WelcomePanel`, `CenterTabs`,
+  `RightPanel`, `TerminalsPanel`), imported **per-file** (no barrel — keeps the lazy chunks split).
+  (`WelcomePanel` and `CenterTabs`/`RightPanel`/`TerminalsPanel` are mutually exclusive — the shell mounts
+  one set or the other on the active-workspace branch.)
 - **Allowed deps:** `store`, `transport`, `components/ui` (incl. `popover`/`command`/`textarea` for the
   dialog), `chat` (`ModelSelector`/`ThinkingSelector`, reused by `NewWorkspaceDialog`), `lib`,
   `contracts`; `lucide-react`; and the heavy libs each lazy panel owns (`monaco-editor`, `shiki`,

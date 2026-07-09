@@ -44,7 +44,7 @@ CSS token theme contract — see Styling & theming). `main.tsx` is the entry/com
 ### Dependency graph
 
 - `shell` → `panels`, `store`, `transport`, `components/ui`, `constants`
-- `panels` → `store`, `transport`, `components/ui`, `lib`, `contracts`, `chat` (`CenterTabs` lazy-mounts `chat/ChatView`; `NewWorkspaceDialog` eagerly reuses `chat/ModelSelector`+`ThinkingSelector` — these are shiki-free, so the eager import stays split-safe)
+- `panels` → `store`, `transport`, `components/ui`, `lib`, `contracts`, `constants` (`WelcomePanel`'s wordmark), `chat` (`CenterTabs` lazy-mounts `chat/ChatView`; `NewWorkspaceDialog` eagerly reuses `chat/ModelSelector`+`ThinkingSelector` — these are shiki-free, so the eager import stays split-safe)
 - `chat` → `contracts` (pi message types, **type-only**), `components/ui`, `lib`; `store` + `transport` (**`ChatView` only** — the renderers are store-free)
 - `store` → `transport` (**type-only** — `ConnectionStatus`), `chat` (**type-only** — `ChatTurn`/`ToolResultState`), `contracts`
 - `transport` → `contracts`, `store` (welcome routing; the `store → transport` back-edge is type-only, so

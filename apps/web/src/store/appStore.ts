@@ -329,7 +329,7 @@ interface AppState {
 	 * the host finishes tearing the worktree down). A missing project/id is a no-op. */
 	removeWorkspace: (projectId: string, workspaceId: string) => void;
 	selectProject: (projectId: string) => void;
-	setActiveWorkspace: (id: string) => void;
+	setActiveWorkspace: (id: string | null) => void;
 	openTab: (tab: EditorTab) => void;
 	closeTab: (id: string) => void;
 	setActiveTab: (id: string) => void;
