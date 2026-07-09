@@ -1,5 +1,6 @@
 import { stripFrontmatter } from "@/lib/utils";
 import { Markdown } from "../chat/Markdown";
+import { alertComponents, remarkGithubAlerts } from "./markdownAlerts";
 
 /**
  * Document "prose skin" for the file-tab rendered view. Reading-optimized typography modeled on the
@@ -56,7 +57,12 @@ export default function MarkdownPreview({ content }: { content: string }) {
 	return (
 		<div data-testid="markdown-preview" className="h-full overflow-auto bg-surface-content">
 			<article className="mx-auto max-w-[78ch] px-xl py-lg">
-				<Markdown text={stripFrontmatter(content)} className={DOCUMENT_PROSE} />
+				<Markdown
+					text={stripFrontmatter(content)}
+					className={DOCUMENT_PROSE}
+					remarkPlugins={[remarkGithubAlerts]}
+					components={alertComponents}
+				/>
 			</article>
 		</div>
 	);

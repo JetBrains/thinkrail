@@ -82,8 +82,10 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   `MarkdownPreview` (reuses `chat/Markdown` for GFM+shiki but owns the **document skin** — a
   reading-optimized token-utility prose treatment modeled on GitHub's markdown CSS: an em-relative
   heading scale (h1 2em…h6 .85em) with h1/h2 rules, a capped reading measure (~78ch) with wide
-  tables/code scrolling inside it, zebra-striped bordered tables, muted accent blockquotes, and crisp
-  rules — in a centered reading column; strips a leading YAML frontmatter block via
+  tables/code scrolling inside it, zebra-striped bordered tables, muted accent blockquotes, crisp
+  rules, and **GitHub-style alert callouts** (`> [!NOTE]`…`[!CAUTION]`, via the in-repo
+  `markdownAlerts` remark transform + a lucide/token `AlertCallout`, wired in only here — not chat) — in
+  a centered reading column; strips a leading YAML frontmatter block via
   `lib.stripFrontmatter` so a spec's metadata doesn't render as a stray heading — source view still shows
   it) and source being the lazy read-only `MonacoEditor`. The choice
   is a per-tab `store.setFileTabView` (survives tab switches; not persisted across reload). Non-markdown

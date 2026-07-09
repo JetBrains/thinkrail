@@ -95,7 +95,9 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 - **Public surface:** the registry API (`toolRegistry`), the renderers (incl. the presentational
   `Markdown` — GFM + shiki, no store/transport; the rendering is fixed but the **prose skin** is the
   caller's via an optional `className` — chat uses a compact bubble skin, `panels/MarkdownPreview` a
-  reading-optimized document skin; code blocks size in `em` so they scale with the skin), the view types
+  reading-optimized document skin; code blocks size in `em` so they scale with the skin; a caller may
+  also **extend** the render with extra `remarkPlugins` + `components`, e.g. the file view's GitHub
+  alert callouts), the view types
   (`types.ts`,
   incl. `ToolResultState` + `ExtUiDialogRequest`), and `ChatView` (lazy-mounted by `panels/CenterTabs`).
   **No `index.ts` barrel** — chat pulls **shiki**, so per the code-splitting exception imports stay

@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from "react";
+import { type ComponentProps, type ReactNode, useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { highlightCode } from "@/lib/highlighter";
@@ -11,12 +11,27 @@ const CHAT_PROSE =
 /**
  * Render GFM markdown with shiki-highlighted fenced code blocks. Presentational — no app/store deps.
  * The rendering (GFM + shiki) is fixed; the **prose skin** is the caller's via `className` (defaults to
- * the compact chat skin). Code blocks size in `em`, so they scale with the skin's base font.
+ * the compact chat skin). Code blocks size in `em`, so they scale with the skin's base font. A caller can
+ * also **extend** the rendering with extra `remarkPlugins` + `components` (e.g. the file view's GitHub
+ * alert callouts) — they're merged after the built-in GFM plugin / `code`+`a` renderers.
  */
-export function Markdown({ text, className = CHAT_PROSE }: { text: string; className?: string }) {
+export function Markdown({
+	text,
+	className = CHAT_PROSE,
+	remarkPlugins,
+	components,
+}: {
+	text: string;
+	className?: string;
+	remarkPlugins?: ComponentProps<typeof ReactMarkdown>["remarkPlugins"];
+	components?: ComponentProps<typeof ReactMarkdown>["components"];
+}) {
 	return (
 		<div className={className}>
-			<ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: CodeBlock, a: Anchor }}>
+			<ReactMarkdown
+				remarkPlugins={remarkPlugins ? [remarkGfm, ...remarkPlugins] : [remarkGfm]}
+				components={{ code: CodeBlock, a: Anchor, ...components }}
+			>
 				{text}
 			</ReactMarkdown>
 		</div>

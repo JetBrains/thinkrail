@@ -38,6 +38,32 @@ export default function globalSetup(): void {
 	writeFileSync(join(E2E_FIXTURE_REPO, "README.md"), "# sample-project\n");
 	// A non-markdown file so the editor suite can assert the source-only path (no rendered-view toggle).
 	writeFileSync(join(E2E_FIXTURE_REPO, "notes.txt"), "plain-text-fixture\n");
+	// A markdown file exercising GitHub-style alert callouts (+ a plain blockquote for contrast), for the
+	// rendered-preview suite (see e2e/markdown-alerts.spec.ts).
+	writeFileSync(
+		join(E2E_FIXTURE_REPO, "ALERTS.md"),
+		[
+			"# Alert callouts",
+			"",
+			"> [!NOTE]",
+			"> Useful information users should know.",
+			"",
+			"> [!TIP]",
+			"> Helpful advice for doing things better.",
+			"",
+			"> [!IMPORTANT]",
+			"> Key information to achieve a goal.",
+			"",
+			"> [!WARNING]",
+			"> Urgent info needing immediate attention.",
+			"",
+			"> [!CAUTION]",
+			"> Advises about risky outcomes.",
+			"",
+			"> A plain blockquote, no marker, so it stays a quote.",
+			"",
+		].join("\n"),
+	);
 	// A seed spec so the @agent `spec-tools` suite has a deterministic `spec_grep` match, proving the
 	// bundled `pi-spec-graph` extension is wired into a live session (see e2e/spec-tools.live.spec.ts). The
 	// token SPECGRAPHPROBE is distinctive so a match can't be an echo of the query; the file path it lives
