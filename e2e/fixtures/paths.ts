@@ -10,7 +10,8 @@ export const E2E_FIXTURE_REPO = join(E2E_DATA_DIR, "sample-project");
 /**
  * A dev/e2e control file the stubbed directory picker (`THINKRAIL_PICK_DIR`) points at: `selectDirectory`
  * returns the path written here, re-read per call. Global setup seeds it with `E2E_FIXTURE_REPO`; a test
- * can rewrite it to hand the picker a different folder without restarting the shared host.
+ * can rewrite it to hand the picker a different folder without restarting the shared host. Safe only
+ * because the suite is serial (`workers: 1`); parallelism would need a per-worker pointer.
  */
 export const E2E_PICK_DIR_POINTER = join(E2E_DATA_DIR, "pick-dir");
 
