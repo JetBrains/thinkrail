@@ -13,9 +13,7 @@ import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 // "Has specs" = the repo has ANY registered spec (a file with id+type frontmatter), via the spec index —
 // not a lowercased goal-and-requirements.md filename. The fixture ships SPEC.md files, so it's "has specs"
 // by default; state 3 is exercised by stripping those specs for the duration of one test.
-// Screenshots are captured for the PR (into e2e/screenshots/, gitignored).
 
-const SHOTS = "e2e/screenshots";
 // The fixture's committed specs — removed to force the "needs setup" state, restored via git afterwards.
 const FIXTURE_SPECS = ["SPEC.md", join("module-a", "SPEC.md")];
 
@@ -31,8 +29,6 @@ test("opens a clean ThinkRail with no projects imported", async ({ page }) => {
 	// State 1: a single "Open project" card, and no project eyebrow (no project selected yet).
 	await expect(page.getByTestId("welcome-cta")).toContainText("Open project");
 	await expect(page.getByTestId("welcome-action")).toHaveCount(0);
-
-	await page.screenshot({ path: `${SHOTS}/welcome-01-no-projects.png` });
 
 	// The "Open project" card opens the same dropdown as the projects-rail "+".
 	await page.getByTestId("welcome-cta").click();
@@ -52,8 +48,6 @@ test("a project with specs offers Start building over Set up", async ({ page }) 
 		page.getByTestId("welcome-action").filter({ hasText: "Open project" }),
 	).toBeVisible();
 	await expect(page.getByText("Set up project")).toHaveCount(0);
-
-	await page.screenshot({ path: `${SHOTS}/welcome-02-has-specs.png` });
 });
 
 test("a project without specs suggests setting it up", async ({ page }) => {
@@ -74,14 +68,11 @@ test("a project without specs suggests setting it up", async ({ page }) => {
 			page.getByTestId("welcome-action").filter({ hasText: "Open project" }),
 		).toBeVisible();
 
-		await page.screenshot({ path: `${SHOTS}/welcome-03-needs-setup.png` });
-
 		// "Set up project" opens the New-Workspace dialog with the prompt hero pre-seeded.
 		await page.getByTestId("welcome-cta").click();
 		const dialog = page.getByTestId("new-workspace-dialog");
 		await expect(dialog).toBeVisible();
 		await expect(dialog.getByTestId("ws-prompt")).toHaveValue(/goal-and-requirements\.md/);
-		await page.screenshot({ path: `${SHOTS}/welcome-04-setup-dialog.png` });
 
 		// Clear the seed (no agent kick-off — keeps this in the no-agent suite) and create the worktree; it
 		// becomes active → the welcome unmounts and the full 3-column surface appears.
