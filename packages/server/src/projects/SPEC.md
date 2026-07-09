@@ -23,9 +23,9 @@ classify it and bootstrap it into one so it can be opened.
   commit — committing the folder's contents, or an empty commit when it's empty, so the repo gets a HEAD
   and `git worktree add` works; an already-a-repo path short-circuits to `openProject`; a missing / non-dir
   path throws). The commit supplies a **fallback `user.name`/`user.email` only for a field git has none
-  configured for**, so a real global identity is never overridden. (The wire's `Project.hasSpecs` is
-  **not** computed here — `host` stamps it via `spec.projectHasSpecs`, keeping this module free of any
-  spec dependency.)
+  configured for**, so a real global identity is never overridden. ("Does the project have specs?" is
+  **not** computed here — `host` answers the lazy `project.hasSpecs` query via `spec.projectHasSpecs`,
+  keeping this module free of any spec dependency.)
 - **Public surface (barrel):** `openProject`, `listProjects`, `closeProject`, `getProjects`,
   `inspectProjectPath`, `initProject`.
 - **Allowed deps:** `persistence`; the `git` sub-module (shared `git()` runner, bound to live `env` for

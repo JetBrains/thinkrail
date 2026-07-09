@@ -12,13 +12,6 @@ export interface Project {
 	slug: string;
 	/** Epoch ms of last open, for sort order. */
 	lastOpened: number;
-	/**
-	 * Whether the repo carries **any** registered spec (a file with `id` + `type` frontmatter, resolved
-	 * through the spec index — not a filename check). Computed fresh by the host on open/list (never
-	 * persisted — specs change on disk); drives the Welcome screen's "Set up project" suggestion.
-	 * Optional/additive — absent on older data reads as "unknown".
-	 */
-	hasSpecs?: boolean;
 }
 
 /**

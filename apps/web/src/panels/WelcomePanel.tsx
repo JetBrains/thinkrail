@@ -1,6 +1,6 @@
 import type { Workspace } from "@thinkrail/contracts";
 import { Folder, FolderOpen, type LucideIcon, Rocket, Sparkles } from "lucide-react";
-import { type ComponentPropsWithoutRef, forwardRef, useState } from "react";
+import { type ComponentPropsWithoutRef, forwardRef, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { PRODUCT_NAME } from "../constants/branding";
 import { useAppStore } from "../store";
@@ -29,9 +29,37 @@ export function WelcomePanel() {
 	// The New-Workspace dialog target (null = closed). `prompt` seeds the hero — "" for a plain create,
 	// the setup text for "Set up project".
 	const [dialog, setDialog] = useState<{ projectId: string; prompt: string } | null>(null);
+	// Whether the shown project has any registered spec, fetched lazily (a full-tree walk — so it's
+	// requested only for this one project, on demand, never eagerly for every project on connect).
+	// null = pending/unknown (cards wait for it).
+	const [hasSpecs, setHasSpecs] = useState<boolean | null>(null);
 
 	// The project the has-specs states key off — the selected one, else the most-recent (list is sorted).
 	const project = projects.find((p) => p.id === selectedProjectId) ?? projects[0] ?? null;
+
+	// Re-check the shown project's specs on demand — keeps the full-tree walk off the connect handshake
+	// (the welcome push no longer stamps hasSpecs for every project).
+	useEffect(() => {
+		const projectId = project?.id;
+		if (!projectId) {
+			setHasSpecs(null);
+			return;
+		}
+		let cancelled = false;
+		setHasSpecs(null);
+		getTransport()
+			.request("project.hasSpecs", { projectId })
+			.then((r) => {
+				if (!cancelled) setHasSpecs(r.hasSpecs);
+			})
+			.catch(() => {
+				// Transport error — don't nag "Set up project" on uncertainty; assume specs exist.
+				if (!cancelled) setHasSpecs(true);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [project?.id]);
 
 	// The shared open-project flow (offers to git-init a non-git folder, or shows a legible error). Its
 	// adopt step just selects the project — the visible rail reflects it; there's no tree to expand here.
@@ -51,7 +79,6 @@ export function WelcomePanel() {
 	};
 
 	const noProjects = project == null;
-	const needsSetup = !noProjects && !project.hasSpecs;
 
 	// The "Open project" card triggers the same dropdown as the projects-rail "+".
 	const openProjectCard = ({
@@ -101,7 +128,19 @@ export function WelcomePanel() {
 			<div className="mt-xl flex flex-wrap justify-center gap-md">
 				{noProjects ? (
 					openProjectCard({ primary: true, subtitle: "Choose a local git repository to work in." })
-				) : needsSetup ? (
+				) : hasSpecs === null ? null : hasSpecs ? (
+					<>
+						<Card
+							cta
+							primary
+							icon={Rocket}
+							title="Start building"
+							subtitle="Cut an isolated worktree + branch, then pair with the agent to build it."
+							onClick={() => setDialog({ projectId: project.id, prompt: "" })}
+						/>
+						{openProjectCard({ subtitle: "Add another local git repository." })}
+					</>
+				) : (
 					<>
 						<Card
 							cta
@@ -116,18 +155,6 @@ export function WelcomePanel() {
 							icon={Rocket}
 							title="Start building"
 							subtitle="Cut an isolated worktree + branch and pair with the agent."
-							onClick={() => setDialog({ projectId: project.id, prompt: "" })}
-						/>
-						{openProjectCard({ subtitle: "Add another local git repository." })}
-					</>
-				) : (
-					<>
-						<Card
-							cta
-							primary
-							icon={Rocket}
-							title="Start building"
-							subtitle="Cut an isolated worktree + branch, then pair with the agent to build it."
 							onClick={() => setDialog({ projectId: project.id, prompt: "" })}
 						/>
 						{openProjectCard({ subtitle: "Add another local git repository." })}

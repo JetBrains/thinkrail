@@ -3,7 +3,6 @@ import type {
 	ExtUiResponse,
 	ImageContent,
 	Model,
-	Project,
 	ThinkingLevel,
 	Workspace,
 } from "@thinkrail/contracts";
@@ -60,17 +59,6 @@ import { ackSend } from "./ackSend";
 type Handler = (params: unknown) => unknown | Promise<unknown>;
 
 /**
- * Stamp the host-computed `hasSpecs` (any registered spec in the repo, via the spec index) onto a Project
- * for the wire. Lives in `host` — the composition layer that may use both `projects` and `spec` — so the
- * `projects` module stays free of any spec dependency. Applied wherever the host sends projects to a
- * client (welcome push + `project.open` / `project.list`).
- */
-export const withProjectSpecs = (p: Project): Project => ({
-	...p,
-	hasSpecs: projectHasSpecs(p.path),
-});
-
-/**
  * The slow half of archiving a workspace, run in the background after `workspace.remove` acks: tear down
  * the workspace's sessions (abort a streaming turn, dispose, purge on-disk transcripts) then reclaim the
  * worktree (`git worktree remove`). Sessions/terminals are down before the dir is deleted (terminals are
@@ -87,10 +75,17 @@ async function archiveTeardown(ws: Workspace): Promise<void> {
 }
 
 const handlers: Record<string, Handler> = {
-	"project.open": (params) => withProjectSpecs(openProject((params as { path: string }).path)),
+	"project.open": (params) => openProject((params as { path: string }).path),
 	"project.inspect": (params) => inspectProjectPath((params as { path: string }).path),
-	"project.init": (params) => withProjectSpecs(initProject((params as { path: string }).path)),
-	"project.list": () => listProjects().map(withProjectSpecs),
+	"project.init": (params) => initProject((params as { path: string }).path),
+	"project.list": () => listProjects(),
+	// Lazy, per-project: the Welcome screen requests this only for the one project it renders, so the
+	// full-tree spec walk never sits on the connect handshake (which fans out over every project).
+	"project.hasSpecs": (params) => {
+		const { projectId } = params as { projectId: string };
+		const project = listProjects().find((p) => p.id === projectId);
+		return { hasSpecs: project ? projectHasSpecs(project.path) : false };
+	},
 	"project.close": (params) => {
 		closeProject((params as { id: string }).id);
 		return { ok: true } as const;

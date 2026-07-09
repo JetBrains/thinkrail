@@ -15,7 +15,7 @@ import {
 	maybeAutoRenameWorkspace,
 	maybeNaiveNameWorkspace,
 } from "./autoRename";
-import { handleRequest, withProjectSpecs } from "./handlers";
+import { handleRequest } from "./handlers";
 
 export interface CreateServerOptions {
 	port?: number;
@@ -61,7 +61,7 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 				ws.subscribe(WS_CHANNELS.workspaceUpdated);
 				const welcome: ServerWelcome = {
 					protocolVersion: PROTOCOL_VERSION,
-					projects: listProjects().map(withProjectSpecs),
+					projects: listProjects(),
 					...(appVersion ? { appVersion } : {}),
 				};
 				ws.send(JSON.stringify({ channel: WS_CHANNELS.serverWelcome, data: welcome }));

@@ -46,6 +46,9 @@ export const WS_METHODS = {
 	// and initialise a plain directory as a git repo (init + commit) before opening it.
 	projectInspect: "project.inspect",
 	projectInit: "project.init",
+	// Lazy per-project "has any registered spec?" (the Welcome screen's "Set up project" signal) — a
+	// full-tree walk, so it's on-demand for the one project shown, never eagerly for every project.
+	projectHasSpecs: "project.hasSpecs",
 	workspaceCreate: "workspace.create",
 	workspaceList: "workspace.list",
 	workspaceRemove: "workspace.remove",
@@ -120,6 +123,9 @@ export interface WsMethodMap {
 	"project.inspect": { params: { path: string }; result: ProjectPathStatus };
 	// `git init` + `git add -A` + an (allow-empty) initial commit, then open the folder as a project.
 	"project.init": { params: { path: string }; result: Project };
+	// Does the project's repo carry any registered spec? Computed lazily (a full-tree walk), so it's
+	// requested only for the project the Welcome screen renders — never eagerly for every project.
+	"project.hasSpecs": { params: { projectId: string }; result: { hasSpecs: boolean } };
 	// `baseRef`: the base branch the worktree is cut from (a remote ref is fetched first); when
 	// omitted, the worktree branches off the repo's current HEAD (the default behavior).
 	"workspace.create": {

@@ -52,7 +52,9 @@ project"** opens the same dialog with an `initialPrompt` seed — the `/skill:pr
 `session.prompt` path) rather than hoping the model auto-matches it; the dispatcher then detects
 new-vs-existing and drafts the specs accordingly (see [[module-thinkrail-workflow]]). Which
 project drives the has-specs states = `selectedProjectId ?? projects[0]`, read reactively (so the visible
-nav's selection updates it). The open-project orchestration lives in the shared **`useOpenProject`** hook
+nav's selection updates it). Its `hasSpecs` is **fetched lazily** via `project.hasSpecs` for that one
+project (a full-tree walk, kept off the connect handshake) — pending until it resolves, so the cards wait
+on it. The open-project orchestration lives in the shared **`useOpenProject`** hook
 (above), so the Welcome "Open project" card gets the same non-git init/notice handling as the rail.
 **`NewWorkspaceDialog`** is the create-and-kick-off surface: an optional **`initialPrompt`** seeds the
 prompt hero (still editable; empty by default), a base-branch

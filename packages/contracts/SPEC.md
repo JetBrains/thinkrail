@@ -55,11 +55,10 @@ runtime exports being the WS method/channel constants and the protocol version. 
     is a **host-owned pi custom tool** (server `agent/askUserQuestion` — see its SPEC for the design
     rationale); the tool blocks while the chat renders the questionnaire **inline** and replies via
     `session.answerQuestion` (correlated by the tool call id).
-- **domain.ts** — app entities: `Project` (git repo + unique `slug`; optional **`hasSpecs`** — host-computed
-  per read, never persisted: does the repo carry **any** registered spec (via the spec index), for the
-  Welcome screen's "Set up project" suggestion), **`ProjectPathStatus`** (a candidate path's kind —
-  `repo` / `initable` / `missing` / `notDirectory` — so the UI opens, offers a `git init`, or shows an
-  error), `Workspace` (git worktree; its
+- **domain.ts** — app entities: `Project` (git repo + unique `slug`; "does it have specs?" is **not** a
+  field — it's the lazy `project.hasSpecs` query, since it's a full-tree walk), **`ProjectPathStatus`** (a
+  candidate path's kind — `repo` / `initable` / `missing` / `notDirectory` — so the UI opens, offers a
+  `git init`, or shows an error), `Workspace` (git worktree; its
   optional **`renamed`** flag is the naming lifecycle — absent = **not yet locked** (either pristine
   `workspace-N`, or a *provisional* non-agentic name the host applied from the first prompt), so still
   eligible for the agentic auto-rename; `true` = deliberately named (agentic or user), never auto-touched
@@ -68,7 +67,9 @@ runtime exports being the WS method/channel constants and the protocol version. 
   Specs-viewer read DTOs, **mirrored** (like `PiEvent`), never imported from `pi-spec-graph` — the wire
   carries only what the panel renders (`type`/`status` stay `string`: tolerate whatever is on disk).
 - **wsProtocol.ts** — `WS_METHODS` (`project.*` — incl. **`project.inspect`** (classify a path) +
-  **`project.init`** (`git init` + commit, then open) / `workspace.*` / `fs.*` / `git.*` / **`spec.graph`**
+  **`project.init`** (`git init` + commit, then open) + **`project.hasSpecs`** (lazy per-project "has any
+  registered spec?" for the Welcome screen — a full-tree walk, so requested only for the shown project,
+  never eagerly for every project) / `workspace.*` / `fs.*` / `git.*` / **`spec.graph`**
   (the Specs-viewer whole-graph read, per workspace) / `terminal.*` / `model.list` / `session.*` —
   `create`/`prompt`/`steer`/`followUp`/`abort`/`dispose`/`setModel`/
   `setThinkingLevel`/`compact`/`getStats`/`getCommands`/`extUiReply`/**`answerQuestion`** (the inline
