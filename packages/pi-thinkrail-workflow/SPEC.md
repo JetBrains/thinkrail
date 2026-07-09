@@ -2,17 +2,18 @@
 id: module-thinkrail-workflow
 type: module-design
 status: active
-title: pi-thinkrail-workflow — workflow skills (brainstorming, project-setup)
+title: pi-thinkrail-workflow — the workflow system (workflow skills + meta-layer)
 parent: architecture
 depends-on: [module-spec-graph]
-tags: [pi-extension, workflow, brainstorming, project-setup, skill]
+tags: [pi-extension, workflow, brainstorming, project-setup, skill, workflow-system]
 ---
 
 ## Responsibility
 
-`pi-thinkrail-workflow` is a pi extension that ships **process/workflow skills** — skills that codify how
-the agent should *run a piece of work*, as opposed to `pi-spec-graph` (what the spec model is) or
-`pi-visualize` (a rendering tool). It ships two skills:
+`pi-thinkrail-workflow` is a pi extension that ships ThinkRail's **workflow system**: a family of
+**process/workflow skills** — skills that codify how the agent should *run a piece of work* — governed
+by the meta-layer in "The workflow system" below. (Contrast: `pi-spec-graph` defines what the spec
+model is; `pi-visualize` is a rendering tool.) It ships two skills today:
 
 - **`brainstorming`** — turns a raw feature request into a validated design, captured as a spec-graph
   `task-spec`, before any implementation starts, mirroring the discipline this repo already applies to
@@ -25,9 +26,124 @@ the agent should *run a piece of work*, as opposed to `pi-spec-graph` (what the 
   personal-vs-public routing, MVP-first elicitation) is preserved; anything with no equivalent (a
   progress-tracker/summary-box visualization, a ticket/board hand-off) is dropped in favour of plain text.
 
-This package is the seed of a growing family. Future workflow skills (e.g. a thinkrail-implement or
-bug-fix equivalent) are added as sibling `skills/<name>/` sub-modules; a new tool goes under a `tools/`
-sub-module if one is ever needed. Nothing about the layout changes to add the next skill.
+This package is the seed of a growing family. Future workflow skills are added as sibling
+`skills/<name>/` sub-modules per meta-rule 12 below; a new tool goes under a `tools/` sub-module if one
+is ever needed. Nothing about the layout — or the system's shape — changes to add the next skill.
+
+## The workflow system (meta-layer)
+
+The rules that govern every workflow skill in this package. Decided in [[task-workflow-system]]
+(researched against obra/superpowers, gsd-build/gsd-2, Anthropic's skill-authoring guidance, and
+JetBrains/thinkrail-v1 — whose workflows are an *example* of a possible future complex workflow, not a
+template).
+
+### Concept model
+
+- **Workflow** — a repeatable way of running a piece of work, codified as one or more skills.
+- **Workflow skill** — one skill = one phase *or one branch* of a workflow; short, imperative,
+  workflow-focused, with heavy reference material in sibling files read on demand.
+- **Handoff** — the explicit, by-name transition at the end of a workflow skill, or a declared
+  terminal state.
+- **Gate** — a hard discipline point (e.g. "no implementation before the design is approved"),
+  written with anti-rationalization notes, not soft advice.
+- **Artifacts** — *durable*: spec-graph nodes (task-spec working docs, promoted module SPECs);
+  *ephemeral*: per-workflow working files (resume state, scratch plans) with a cleanup contract.
+
+### Skill roles & handoff contracts
+
+Every workflow skill takes exactly one of **two roles**; everything richer is a *pattern* built from
+them.
+
+| Role | Body contains | Ends by |
+|---|---|---|
+| **Router** | classification rules + handoffs only | naming what runs next |
+| **Worker** | one phase's steps | a handoff — fixed successor, back to its caller, or a terminal state |
+
+The **root router** is the single always-on entry; branch skills may route further (fractal routing).
+
+**Patterns** (vocabulary, not roles — no instances yet; for complex work):
+
+- **Composer** — a *stateful router*: agrees a per-task pipeline with the user, records it in the
+  task-spec's **Pipeline section** (checkboxes = plan + frontier + history), and walks it, adjusting as
+  findings land; the workers it launches hand back to it. Its between-stage checking discipline is its
+  own design, not a system rule. The family may hold several composers drawing on a shared pool of
+  stages.
+- **Stage** — any worker reached from a pipeline: upstream artifacts in, one artifact out, hands back
+  to its caller. The same worker can also run standalone (fixed-successor/terminal handoff) —
+  stage-ness is how a worker is *used*, not what it *is*.
+
+No runtime machinery: pipeline state is task-spec content; stage transitions are ordinary handoffs.
+
+```mermaid
+flowchart LR
+  rule([before_agent_start rule]) --> router[root router]
+  router --> ps[project-setup]
+  router --> bs[brainstorming]
+  router -. future .-> comp[composer — stateful router]
+  comp -->|launch| st[stage workers]
+  st -->|hand back| comp
+```
+
+### Meta-rules
+
+**Structure**
+1. One phase/branch per skill. When a workflow needs a conditional fork, each branch becomes its own
+   skill and the *choice rules stay in the skill before the fork*.
+2. Routers route; workers work. A router contains classification rules + handoffs only — never a
+   branch's steps. A worker skill embeds no routing beyond its own terminal handoff.
+3. Skills are concise and workflow-focused: target < ~150 lines of body; push reference detail into
+   sibling files named in the step that needs them (progressive disclosure).
+
+**Discovery & entry**
+4. One always-on entry: the `before_agent_start` rule points at the root router. Other skills are
+   reached by routing/handoff; a skill may *also* carry a narrow self-trigger `description` (as
+   `project-setup` does) when its trigger is unmistakable.
+5. `description` = triggering conditions only ("Use when …"), never a summary of the workflow's steps
+   — a step-summary tempts the agent to follow the description and skip the body.
+
+**Chaining**
+6. Explicit handoffs: every workflow skill ends by naming its successor skill or its terminal state.
+   Cross-reference skills by name; never inline another skill's steps, never force-load files.
+7. Say each thing once: a rule or step lives in exactly one skill; others point at it.
+
+**Artifacts**
+8. Durable output goes to the spec graph: decisions accrete in the task-spec and are promoted into
+   module SPECs. No parallel durable plan/state format.
+9. A workflow *may* declare ephemeral working files (resume/continue state, scratch plans) when it
+   needs to stop/resume or pass info between phases. Contract: the skill names the file's location and
+   shape, the file is consumed/deleted when the work lands, and it never becomes the record — anything
+   durable is promoted to specs before cleanup.
+
+**Scaling**
+10. Scale by route and composition, not by prose: the router sends simple work down short paths;
+    optional phases carry explicit "when to use / when to skip" criteria; complex work composes a
+    per-task pipeline of stage workers. Depth lives in the route taken.
+11. Gates where discipline matters, matching the form to the failure: prohibitions + red-flags for
+    discipline violations; positive recipes for output shape.
+
+**Maintenance**
+12. Adding a workflow = add `skills/<name>/` + one routing line in the root router + one row in the
+    family table below. Nothing else changes shape.
+13. The spec leads: system-shaping changes update this SPEC.md first; the authoring skill carries only
+    the actionable checklist and points here for rationale.
+14. Verify by use: a new or changed skill isn't done until a real request has been observed flowing
+    through it.
+
+### Workflow family
+
+| Skill | Role | Status |
+|---|---|---|
+| `brainstorming` | design workflow (feature/change → validated task-spec) | active; fate under review — routed as-is |
+| `project-setup` | project inception (empty workspace → goal-and-requirements) | active |
+| `choosing-a-workflow` | root router — classification + routing | decided, not yet built |
+| `writing-workflow-skills` | authoring checklist for adding workflows | decided, not yet built |
+
+The family is open and grows from real use; candidates (research/spike, refactor, bug-fix, a composing
+skill in the composer pattern, with its stage workers) each get their own task-spec when they earn
+their place. Until
+`choosing-a-workflow` lands, the `before_agent_start` rule keeps pointing at `brainstorming`; the
+decided entry model (rule → root router) takes effect when the router is built
+([[task-workflow-system]] tracks this).
 
 ## Boundary
 
@@ -145,8 +261,10 @@ e2e spec is a reasonable follow-up once a skill's wording stabilizes — not req
 - A vanilla-pi-portable brainstorming or project-setup skill (would require replacing `ask_user_question`
   with a lowest-common-denominator question mechanism — not worth it for a thinkrail-only host
   feature).
-- Building out the rest of the skill family (thinkrail-implement, bug-fix, etc.) now — this spec only
-  covers `brainstorming` and `project-setup`; the structure is ready for more, they are not designed here.
+- Building out the rest of the skill family now — the meta-layer is in force and the structure is
+  ready, but future workflows are designed one task-spec at a time when they earn their place.
+- Any runtime/engine layer for workflows (YAML pipelines, DAG tools, stage sessions) — this system is
+  skills-only; pipeline state lives in task-spec content, not machinery.
 - Reimplementing old thinkrail's `claude-plugin` **ticket/board engineering workflow** (its
   ticket-orchestrator, ticket-implement, bug-fix, spec-review, etc. skills — used by the thinkrail team to
   build thinkrail itself) as a pi package. That is dev-tooling for a different, ticket-based product and
