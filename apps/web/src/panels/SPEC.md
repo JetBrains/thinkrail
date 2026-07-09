@@ -21,7 +21,13 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   opening just beneath it rather than as a centered modal; it **forces a
   deliberate choice** (Cancel takes initial focus; a `destructive` confirm shows a warning glyph + red
   button; Esc + outside-click cancel); removal is **optimistic + non-blocking**: on confirm it drops the row via `store.removeWorkspace` + `clearWorkspaceTabs`
-  and fires `workspace.remove` without awaiting, reconciling a failure by re-listing), `FileTree`, `SpecsPanel`, `RightPanel`,
+  and fires `workspace.remove` without awaiting, reconciling a failure by re-listing).
+  **Opening a project** goes through `project.open`; on failure `ProjectTree` asks `project.inspect` and
+  either offers to bootstrap the folder into a repo — a modal **`ConfirmDialog`** (confirm → `project.init`)
+  — when it's `initable`, or surfaces the error in a **`NoticeDialog`** — so a non-git folder is never a
+  silent no-op. Both are modals on `components/ui/dialog` (the init offer has no on-screen anchor, unlike the
+  Remove popover); `NoticeDialog` is a single-button info modal for failures with no yes/no follow-up. Also
+  `FileTree`, `SpecsPanel`, `RightPanel`,
   `ChangesPanel` + lazy `DiffViewer`, `CenterTabs` + lazy `MonacoEditor`, `TerminalsPanel` + lazy
   `TerminalInstance`. **`NewWorkspaceDialog`** is the create-and-kick-off surface: a base-branch
   combobox (`git.listBranches`, degrading to local branches offline; a Refresh re-lists; `origin/HEAD` is
