@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { statSync } from "node:fs";
-import { basename } from "node:path";
+import { rmSync, statSync } from "node:fs";
+import { basename, join } from "node:path";
 import type { Project, ProjectPathStatus } from "@thinkrail/contracts";
 import { git as runGit } from "../git";
 import { loadProjects, saveProjects } from "../persistence";
@@ -114,7 +114,8 @@ export function inspectProjectPath(path: string): ProjectPathStatus {
  *
  * **Identity fallback:** a fresh machine may have no `user.name`/`user.email`, which would make `commit`
  * fail. Each field is supplied as a one-off `-c` override **only when it isn't already configured**, so a
- * real global identity is never overridden.
+ * real global identity is never overridden. On any failure after `git init`, the half-created `.git` is
+ * rolled back so a retry re-inits cleanly instead of opening a HEAD-less repo.
  */
 export function initProject(path: string): Project {
 	const status = inspectProjectPath(path);
@@ -122,16 +123,23 @@ export function initProject(path: string): Project {
 	if (status.kind === "notDirectory") throw new Error(`Not a folder: ${path}`);
 	if (status.kind === "repo") return openProject(path);
 
-	const init = git(path, ["init"]);
+	const init = git(path, ["init", "-b", "main"]);
 	if (!init.ok) throw new Error(`git init failed: ${path}`);
-	git(path, ["add", "-A"]);
+	try {
+		const added = git(path, ["add", "-A"]);
+		if (!added.ok) throw new Error(`git add failed: ${path}`);
 
-	const identity: string[] = [];
-	if (!git(path, ["config", "user.name"]).out) identity.push("-c", "user.name=ThinkRail");
-	if (!git(path, ["config", "user.email"]).out)
-		identity.push("-c", "user.email=thinkrail@localhost");
-	const commit = git(path, [...identity, "commit", "--allow-empty", "-m", "Initial commit"]);
-	if (!commit.ok) throw new Error(`git commit failed: ${path}`);
+		const identity: string[] = [];
+		if (!git(path, ["config", "user.name"]).out) identity.push("-c", "user.name=ThinkRail");
+		if (!git(path, ["config", "user.email"]).out)
+			identity.push("-c", "user.email=thinkrail@localhost");
+		const commit = git(path, [...identity, "commit", "--allow-empty", "-m", "Initial commit"]);
+		if (!commit.ok) throw new Error(`git commit failed: ${path}`);
+	} catch (err) {
+		// Remove the `.git` we just created (path was `initable`) so a retry re-inits cleanly.
+		rmSync(join(path, ".git"), { recursive: true, force: true });
+		throw err;
+	}
 
 	return openProject(path);
 }
