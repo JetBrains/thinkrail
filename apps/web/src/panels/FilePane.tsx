@@ -30,6 +30,8 @@ export function FilePane({ tab }: { tab: FileTab }) {
 		<div className="flex h-full min-h-0 flex-col">
 			<div
 				data-testid="markdown-view-toggle"
+				role="toolbar"
+				aria-label="Markdown view mode"
 				className="flex h-8 shrink-0 items-center gap-xs border-border2 border-b bg-bg-dark px-sm"
 			>
 				<ToggleSegment
@@ -74,10 +76,11 @@ function ToggleSegment({
 			type="button"
 			data-testid={testid}
 			data-active={active}
-			onClick={onClick}
+			aria-pressed={active}
 			className={`rounded-[var(--radius-sm)] px-sm py-0.5 text-xs ${
 				active ? "bg-elevated text-text" : "text-hint hover:bg-hover hover:text-text"
 			}`}
+			onClick={onClick}
 		>
 			{label}
 		</button>
