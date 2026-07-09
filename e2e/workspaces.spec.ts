@@ -23,6 +23,8 @@ test("creates, removes, and re-creates worktree workspaces (no branch collision)
 	// optimistically (instantly) AND the worktree is reclaimed from disk in the background (back to just `main`).
 	await items.first().hover();
 	await items.first().getByTestId("workspace-remove").click();
+	// The confirm is an accessible alertdialog named by its title (so screen readers announce it).
+	await expect(page.getByRole("alertdialog", { name: /Remove .+ workspace/ })).toBeVisible();
 	await page.getByTestId("confirm-remove").click();
 	await expect(items).toHaveCount(0);
 	// The worktree teardown is backgrounded server-side, so poll rather than read once.
