@@ -59,7 +59,8 @@ the host from env via `bootHost` for dev/e2e.
 
 - `host` → `projects`, `workspaces`, `git`, `github`, `fs`, `spec`, `terminal`, `dialog`, `agent`, `assist`
 - `workspaces` → `projects`, `git`, `persistence`
-- `projects`, `git`, `fs`, `spec`, `terminal` → `persistence` (`spec` also → `pi-spec-graph/core`, external)
+- `projects` → `git` (shared runner), `persistence`
+- `git`, `fs`, `spec`, `terminal` → `persistence` (`spec` also → `pi-spec-graph/core`, external)
 - `assist` → `agent` (the one-shot completion primitive)
 - `agent` → (no internal deps — only the pi runtime)
 - `persistence`, `dialog`, `github` → (leaves)

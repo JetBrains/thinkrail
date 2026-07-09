@@ -1,4 +1,4 @@
-import type { Project, Workspace } from "@thinkrail/contracts";
+import type { Workspace } from "@thinkrail/contracts";
 import { Folder, FolderOpen, type LucideIcon, Rocket, Sparkles } from "lucide-react";
 import { type ComponentPropsWithoutRef, forwardRef, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -7,7 +7,7 @@ import { useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
-import { openProjectPath, pickAndOpenProject } from "./projectActions";
+import { useOpenProject } from "./useOpenProject";
 
 // Seeds the New-Workspace prompt hero for "Set up project" — nudges the agent's project-setup workflow
 // (turn a raw idea into goal-and-requirements.md before feature work).
@@ -31,9 +31,11 @@ export function WelcomePanel() {
 	// The project the has-specs states key off — the selected one, else the most-recent (list is sorted).
 	const project = projects.find((p) => p.id === selectedProjectId) ?? projects[0] ?? null;
 
-	const selectOpened = (opened: Project | null) => {
-		if (opened) useAppStore.getState().selectProject(opened.id);
-	};
+	// The shared open-project flow (offers to git-init a non-git folder, or shows a legible error). Its
+	// adopt step just selects the project — the visible rail reflects it; there's no tree to expand here.
+	const { openProject, pickAndOpen, dialogs } = useOpenProject((opened) =>
+		useAppStore.getState().selectProject(opened.id),
+	);
 
 	// A workspace was created from the welcome dialog: refresh that project's list (the dialog itself sets
 	// the active workspace, which swaps the shell to the workspace surface — this view then unmounts).
@@ -59,8 +61,8 @@ export function WelcomePanel() {
 	}) => (
 		<AddProjectMenu
 			projects={projects}
-			onOpen={() => void pickAndOpenProject().then(selectOpened)}
-			onOpenRecent={(path) => void openProjectPath(path).then(selectOpened)}
+			onOpen={() => void pickAndOpen()}
+			onOpenRecent={(path) => void openProject(path)}
 			align="start"
 		>
 			<Card
@@ -142,6 +144,7 @@ export function WelcomePanel() {
 					onCreated={(ws) => void onWorkspaceCreated(ws)}
 				/>
 			) : null}
+			{dialogs}
 		</div>
 	);
 }

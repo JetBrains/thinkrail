@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 
-test("creates, archives, and re-creates worktree workspaces (no branch collision)", async ({
+test("creates, removes, and re-creates worktree workspaces (no branch collision)", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -19,15 +19,17 @@ test("creates, archives, and re-creates worktree workspaces (no branch collision
 	// Worktrees live under a readable project-name dir, not the project id.
 	expect(worktrees).toContain("/worktrees/sample-project/");
 
-	// Archive it: the button opens a confirmation; confirming removes the row optimistically (instantly)
-	// AND the worktree is reclaimed from disk in the background (back to just `main`).
+	// Remove it: the button opens a confirmation anchored to the row; confirming removes the row
+	// optimistically (instantly) AND the worktree is reclaimed from disk in the background (back to just `main`).
 	await items.first().hover();
-	await items.first().getByTestId("workspace-archive").click();
-	await page.getByTestId("confirm-archive").click();
+	await items.first().getByTestId("workspace-remove").click();
+	// The confirm is an accessible alertdialog named by its title (so screen readers announce it).
+	await expect(page.getByRole("alertdialog", { name: /Remove .+ workspace/ })).toBeVisible();
+	await page.getByTestId("confirm-remove").click();
 	await expect(items).toHaveCount(0);
 
-	// Archiving the active workspace returns to the Welcome screen — not the empty IDE surface. (Regression:
-	// the archive cleared the active id to "" instead of null, so the shell still rendered a dead 3-column
+	// Removing the active workspace returns to the Welcome screen — not the empty IDE surface. (Regression:
+	// the remove cleared the active id to "" instead of null, so the shell still rendered a dead 3-column
 	// shell with "Select a workspace…" placeholders.)
 	await expect(page.getByTestId("welcome")).toBeVisible();
 	await expect(page.getByTestId("center-tabs")).toHaveCount(0);

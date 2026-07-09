@@ -1,9 +1,9 @@
 import { execFileSync } from "node:child_process";
 import { rmSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { openAppFresh, openFixtureProject } from "./fixtures/app";
-import { E2E_FIXTURE_REPO } from "./fixtures/paths";
+import { openAppFresh, openFixtureProject, stagePlainFolder } from "./fixtures/app";
+import { E2E_FIXTURE_REPO, E2E_PLAIN_DIR } from "./fixtures/paths";
 
 // The first-touch Welcome screen. It replaces the center/right/terminal surface until a workspace is
 // active, and its cards adapt across three states:
@@ -86,4 +86,28 @@ test("a project without specs suggests setting it up", async ({ page }) => {
 	} finally {
 		execFileSync("git", ["-C", E2E_FIXTURE_REPO, "checkout", "--", ...FIXTURE_SPECS]);
 	}
+});
+
+test("opening a non-git folder from the Welcome screen offers to initialise a repo", async ({
+	page,
+}) => {
+	// Point the stubbed picker at a plain (non-git) folder; start with no projects → the Welcome screen.
+	stagePlainFolder();
+	await page.goto("/");
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await expect(page.getByTestId("welcome")).toBeVisible();
+
+	// The Welcome "Open project" card opens the same dropdown as the rail's "+"; pick the folder.
+	await page.getByTestId("welcome-cta").click();
+	await page.getByTestId("menu-open-project").click();
+
+	// The folder isn't a git repo → instead of failing silently, the Welcome flow offers to initialise one.
+	const confirmInit = page.getByTestId("confirm-init-repo");
+	await expect(confirmInit).toBeVisible();
+	await confirmInit.click();
+
+	// It initialises + opens → the folder now shows up as a project in the rail.
+	await expect(
+		page.getByTestId("project-item").filter({ hasText: basename(E2E_PLAIN_DIR) }),
+	).toBeVisible();
 });

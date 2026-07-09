@@ -325,7 +325,7 @@ interface AppState {
 	 * `workspace.list` reconciles.
 	 */
 	updateWorkspace: (workspace: Workspace) => void;
-	/** Optimistically drop a workspace from its project's list (the archive flow removes the row before
+	/** Optimistically drop a workspace from its project's list (the remove flow drops the row before
 	 * the host finishes tearing the worktree down). A missing project/id is a no-op. */
 	removeWorkspace: (projectId: string, workspaceId: string) => void;
 	selectProject: (projectId: string) => void;

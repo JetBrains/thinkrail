@@ -15,11 +15,21 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
 
 ## Boundary
 
-- **Owns:** `ProjectTree` (+ the `NewWorkspaceDialog` its "+" opens **and** the `ConfirmDialog` its archive
-  button opens — a small reusable yes/no built on `components/ui/dialog` that **forces a deliberate choice**
-  (no ✕ — `hideClose`; Cancel takes initial focus; a `destructive` confirm shows a warning glyph + red
-  button); archive is **optimistic + non-blocking**: on confirm it drops the row via `store.removeWorkspace` + `clearWorkspaceTabs`
-  and fires `workspace.remove` without awaiting, reconciling a failure by re-listing), `FileTree`, `SpecsPanel`, `RightPanel`,
+- **Owns:** `ProjectTree` (+ the `NewWorkspaceDialog` its "+" opens **and** the `ConfirmPopover` its per-row
+  **Remove** button (a `Trash2` glyph) opens — a small reusable yes/no built on `components/ui/popover`,
+  **anchored to that Remove button** (`align="end"`, so its right border lines up with the button's) and
+  opening just beneath it rather than as a centered modal; it **forces a
+  deliberate choice** (Cancel takes initial focus; a `destructive` confirm shows a warning glyph + red
+  button; Esc + outside-click cancel); removal is **optimistic + non-blocking**: on confirm it drops the row via `store.removeWorkspace` + `clearWorkspaceTabs`
+  and fires `workspace.remove` without awaiting, reconciling a failure by re-listing).
+  **Opening a project** goes through the shared **`useOpenProject`** hook (reused by `ProjectTree` **and**
+  `WelcomePanel`, so the flow is identical in the rail and the Welcome screen): `project.open`, and on
+  failure `project.inspect` → either offers to bootstrap the folder into a repo — a modal **`ConfirmDialog`**
+  (confirm → `project.init`) — when it's `initable`, or surfaces the error in a **`NoticeDialog`** — so a
+  non-git folder is never a silent no-op. Both are modals on `components/ui/dialog` (the init offer has no
+  on-screen anchor, unlike the Remove popover); `NoticeDialog` is a single-button info modal for failures
+  with no yes/no follow-up. The hook returns a `dialogs` node each consumer renders. Also
+  `FileTree`, `SpecsPanel`, `RightPanel`,
   `ChangesPanel` + lazy `DiffViewer`, `CenterTabs` + lazy `MonacoEditor`, `TerminalsPanel` + lazy
   `TerminalInstance`. **`WelcomePanel`** is the first-touch surface the shell mounts (centered, left-nav beside it) whenever no
 workspace is active. The `PRODUCT_NAME` wordmark as the hero (the topbar's brand styling — accent font,
@@ -36,8 +46,8 @@ intent-first framing of the create-and-kick-off flow — it opens `NewWorkspaceD
 worktree-isolated workspace + starts a chat); *workspace* is the mechanism, not the label. **"Set up
 project"** opens the same dialog with an `initialPrompt` seed (nudging the `project-setup` skill). Which
 project drives the has-specs states = `selectedProjectId ?? projects[0]`, read reactively (so the visible
-nav's selection updates it). `projectActions.ts` is the shared leaf helper (`openProjectPath` /
-`pickAndOpenProject`) for the open-project orchestration reused by both `WelcomePanel` and `ProjectTree`.
+nav's selection updates it). The open-project orchestration lives in the shared **`useOpenProject`** hook
+(above), so the Welcome "Open project" card gets the same non-git init/notice handling as the rail.
 **`NewWorkspaceDialog`** is the create-and-kick-off surface: an optional **`initialPrompt`** seeds the
 prompt hero (still editable; empty by default), a base-branch
   combobox (`git.listBranches`, degrading to local branches offline; a Refresh re-lists; `origin/HEAD` is

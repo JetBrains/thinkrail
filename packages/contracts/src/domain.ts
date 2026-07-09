@@ -21,6 +21,13 @@ export interface Project {
 	hasSpecs?: boolean;
 }
 
+/**
+ * What a candidate project path is, so the UI can decide how to open it: an existing git repo (open
+ * directly), a plain directory that could be `git init`ed (offer to initialise), or a broken path
+ * (show an error). Answered by `project.inspect`.
+ */
+export type ProjectPathStatus = { kind: "repo" | "initable" | "missing" | "notDirectory" };
+
 export interface DiffStats {
 	added: number;
 	removed: number;

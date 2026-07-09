@@ -2,6 +2,8 @@
 // (macOS `osascript`, Linux `zenity`/`kdialog`, Windows PowerShell); `THINKRAIL_PICK_DIR`
 // overrides it so the flow is drivable headlessly in dev/e2e.
 
+import { readFileSync, statSync } from "node:fs";
+
 /** A candidate native picker: the command to spawn + how to read a chosen path from its stdout. */
 export interface Picker {
 	cmd: string[];
@@ -52,11 +54,29 @@ export function pickersFor(platform: NodeJS.Platform): Picker[] {
 }
 
 /**
+ * Resolve the `THINKRAIL_PICK_DIR` dev/e2e override. When it names an existing **file**, the returned
+ * path is that file's trimmed contents — read **live per call**, so a test can rewrite the pointer to
+ * switch which folder the picker returns without restarting the host (e.g. a git repo for one test, a
+ * plain non-git folder for another). Otherwise the value is returned as-is (a directory path). Empty →
+ * no override (fall through to the native picker).
+ */
+function resolveOverride(): string | null {
+	const value = process.env.THINKRAIL_PICK_DIR;
+	if (!value) return null;
+	try {
+		if (statSync(value).isFile()) return readFileSync(value, "utf8").trim() || null;
+	} catch {
+		// Not a stat-able path (e.g. a directory that doesn't exist yet) — treat the value literally.
+	}
+	return value;
+}
+
+/**
  * Pop the host's native folder picker and return the chosen path (`null` on cancel / no picker).
  * A missing binary falls through to the next candidate; a non-zero exit is a user cancel (stop).
  */
 export async function selectDirectory(): Promise<{ path: string | null }> {
-	const override = process.env.THINKRAIL_PICK_DIR;
+	const override = resolveOverride();
 	if (override) return { path: override };
 
 	for (const picker of pickersFor(process.platform)) {

@@ -11,12 +11,10 @@ import {
 } from "@/components/ui/dialog";
 
 /**
- * A small reusable confirmation dialog built on the `Dialog` primitive — for destructive actions that
- * need an explicit yes/no (e.g. archiving a workspace). It forces a deliberate choice: the close ✕ is
- * dropped (`hideClose`) so Cancel/Confirm are the only actions (Esc + outside-click still cancel, which
- * is safe), and Cancel comes first in the DOM so it takes the dialog's initial focus (a destructive
- * action is never one stray Enter away). A `destructive` confirm also gets a warning glyph so the weight
- * of the action reads at a glance.
+ * A small modal confirm on the `Dialog` primitive — a yes/no for an action with no on-screen anchor (e.g.
+ * the "initialize a git repository?" offer). For a confirm anchored to the element it acts on (removing a
+ * workspace), use `ConfirmPopover`. Forces a deliberate choice: no ✕ (`hideClose`), Cancel takes initial
+ * focus (a destructive action is never one stray Enter away), and a `destructive` confirm shows a warning glyph.
  */
 export function ConfirmDialog({
 	open,

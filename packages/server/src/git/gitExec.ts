@@ -1,6 +1,18 @@
-/** Run a git command in `cwd`, capturing trimmed stdout/stderr and whether it exited cleanly. */
-export function git(cwd: string, args: string[]): { ok: boolean; out: string; err: string } {
-	const result = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "pipe", stderr: "pipe" });
+/**
+ * Run a git command in `cwd`, capturing trimmed stdout/stderr + whether it exited cleanly. Pass `opts.env`
+ * to override the child env — Bun's default is a startup snapshot, ignoring later `process.env` mutations.
+ */
+export function git(
+	cwd: string,
+	args: string[],
+	opts: { env?: Record<string, string | undefined> } = {},
+): { ok: boolean; out: string; err: string } {
+	const result = Bun.spawnSync(["git", "-C", cwd, ...args], {
+		stdout: "pipe",
+		stderr: "pipe",
+		// Omit when unset so existing callers keep Bun's inherited default.
+		...(opts.env ? { env: opts.env } : {}),
+	});
 	return {
 		ok: result.success,
 		out: new TextDecoder().decode(result.stdout).trim(),
