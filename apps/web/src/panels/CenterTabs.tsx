@@ -10,9 +10,10 @@ import {
 import { messagesToRuntime } from "../chat/hydrate";
 import { type ClosedChat, type EditorTab, useAppStore } from "../store";
 import { getTransport } from "../transport";
+import { FilePane } from "./FilePane";
 
-// Monaco + the chat view are heavy — load each only when its tab is first shown (protects first paint).
-const MonacoEditor = lazy(() => import("./MonacoEditor"));
+// The chat view is heavy — load it only when its tab is first shown (protects first paint). File panes
+// lazy-load their own Monaco / markdown chunks inside `FilePane`.
 const ChatView = lazy(() => import("../chat/ChatView"));
 
 // Stable empty references so selectors don't re-render the component on unrelated state changes.
@@ -251,7 +252,7 @@ export function CenterTabs() {
 								workspaceId={active.workspaceId}
 							/>
 						) : (
-							<MonacoEditor key={active.id} path={active.path} content={active.content} />
+							<FilePane key={active.id} tab={active} />
 						)}
 					</Suspense>
 				) : (

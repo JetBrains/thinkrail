@@ -21,6 +21,8 @@ export interface FileTab {
 	name: string;
 	path: string;
 	content: string;
+	/** Markdown tabs only: view mode. Absent = rendered (the default); source shows Monaco. */
+	view?: "rendered" | "source";
 }
 export interface ChatTab {
 	kind: "chat";
@@ -333,6 +335,8 @@ interface AppState {
 	openTab: (tab: EditorTab) => void;
 	closeTab: (id: string) => void;
 	setActiveTab: (id: string) => void;
+	/** Set a markdown file tab's view mode (rendered ↔ source); kept on the tab so it survives tab switches. */
+	setFileTabView: (id: string, view: "rendered" | "source") => void;
 	clearWorkspaceTabs: (workspaceId: string) => void;
 	addTerminal: (workspaceId: string) => void;
 	closeTerminalTab: (workspaceId: string, clientId: string) => void;
@@ -474,6 +478,19 @@ export const useAppStore = create<AppState>((set) => ({
 				? { activeTabByWorkspace: { ...s.activeTabByWorkspace, [s.activeWorkspaceId]: id } }
 				: {},
 		),
+	setFileTabView: (id, view) =>
+		set((s) => {
+			const wsId = s.activeWorkspaceId;
+			if (!wsId) return {};
+			const tabs = s.tabsByWorkspace[wsId] ?? [];
+			if (!tabs.some((t) => t.id === id && t.kind === "file")) return {};
+			return {
+				tabsByWorkspace: {
+					...s.tabsByWorkspace,
+					[wsId]: tabs.map((t) => (t.id === id && t.kind === "file" ? { ...t, view } : t)),
+				},
+			};
+		}),
 	clearWorkspaceTabs: (workspaceId) =>
 		set((s) => {
 			// Drop the runtimes of this workspace's chats — both open tabs and closed-to-history ones (their

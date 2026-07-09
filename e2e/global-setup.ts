@@ -36,6 +36,8 @@ export default function globalSetup(): void {
 	git("config", "user.email", "e2e@thinkrail.test");
 	git("config", "user.name", "ThinkRail E2E");
 	writeFileSync(join(E2E_FIXTURE_REPO, "README.md"), "# sample-project\n");
+	// A non-markdown file so the editor suite can assert the source-only path (no rendered-view toggle).
+	writeFileSync(join(E2E_FIXTURE_REPO, "notes.txt"), "plain-text-fixture\n");
 	// A seed spec so the @agent `spec-tools` suite has a deterministic `spec_grep` match, proving the
 	// bundled `pi-spec-graph` extension is wired into a live session (see e2e/spec-tools.live.spec.ts). The
 	// token SPECGRAPHPROBE is distinctive so a match can't be an echo of the query; the file path it lives

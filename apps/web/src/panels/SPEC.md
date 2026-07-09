@@ -20,8 +20,8 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   (no ✕ — `hideClose`; Cancel takes initial focus; a `destructive` confirm shows a warning glyph + red
   button); archive is **optimistic + non-blocking**: on confirm it drops the row via `store.removeWorkspace` + `clearWorkspaceTabs`
   and fires `workspace.remove` without awaiting, reconciling a failure by re-listing), `FileTree`, `SpecsPanel`, `RightPanel`,
-  `ChangesPanel` + lazy `DiffViewer`, `CenterTabs` + lazy `MonacoEditor`, `TerminalsPanel` + lazy
-  `TerminalInstance`. **`NewWorkspaceDialog`** is the create-and-kick-off surface: a base-branch
+  `ChangesPanel` + lazy `DiffViewer`, `CenterTabs` + `FilePane` (+ its lazy `MonacoEditor` /
+  `MarkdownPreview`), `TerminalsPanel` + lazy `TerminalInstance`. **`NewWorkspaceDialog`** is the create-and-kick-off surface: a base-branch
   combobox (`git.listBranches`, degrading to local branches offline; a Refresh re-lists; `origin/HEAD` is
   filtered so no stray `origin`), a project picker, the prompt hero, and the reused
   `chat/ModelSelector`+`ThinkingSelector` in **pre-session** mode — preselected to the host's resolved
@@ -36,7 +36,7 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   create dialog.) **`SettingsDialog`** is the app-settings surface the shell's topbar gear opens — its
   "Local GitHub" block shows `github.authStatus()` (Connected + login / Not connected) with a Refresh.
   Panels compose their own sub-panels
-  (e.g. `RightPanel`→`FileTree`/`ChangesPanel`, `CenterTabs`→`MonacoEditor`) — an internal hierarchy.
+  (e.g. `RightPanel`→`FileTree`/`ChangesPanel`, `CenterTabs`→`FilePane`→`MonacoEditor`) — an internal hierarchy.
   `CenterTabs` closing a chat tab routes to `store.closeChatToHistory` (keeps the session alive) and shows a
   **chat-history** dropdown (recently-closed + disk-only chats, shown only when non-empty). On
   workspace-activate it **hydrates**: `session.list` → **live** sessions auto-restore as tabs
@@ -47,7 +47,8 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
 - **Public surface:** the top-level panels the shell mounts (`ProjectTree`, `CenterTabs`, `RightPanel`,
   `TerminalsPanel`), imported **per-file** (no barrel — keeps the lazy chunks split).
 - **Allowed deps:** `store`, `transport`, `components/ui` (incl. `popover`/`command`/`textarea` for the
-  dialog), `chat` (`ModelSelector`/`ThinkingSelector`, reused by `NewWorkspaceDialog`), `lib`,
+  dialog), `chat` (`ModelSelector`/`ThinkingSelector`, reused by `NewWorkspaceDialog`; `Markdown`,
+  reused by `MarkdownPreview`), `lib`,
   `contracts`; `lucide-react`; and the heavy libs each lazy panel owns (`monaco-editor`, `shiki`,
   `@xterm/*`) loaded via `import()`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `shell`; reaching across unrelated panels.
@@ -75,6 +76,18 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
 - `RightPanel`/`ChangesPanel` watch the store's `changesRequest` deep-link (set by a chat turn-divider's
   "files changed" chip): when it targets the active workspace, `RightPanel` flips to the Changes tab and
   `ChangesPanel` selects the requested file (matched by path suffix against `git.status`).
+- **Markdown file tabs render, don't read.** A `.md`/`.markdown` `FileTab` (from the file tree **or** the
+  Specs panel — same `openTab` path) opens **rendered by default**: `FilePane` gates on `lib.isMarkdownPath`
+  and shows a slim `Preview | Source` header (`markdown-view-toggle`), the rendered view being lazy
+  `MarkdownPreview` (reuses `chat/Markdown` for GFM+shiki but owns the **document skin** — a
+  reading-optimized token-utility prose treatment modeled on GitHub's markdown CSS: an em-relative
+  heading scale (h1 2em…h6 .85em) with h1/h2 rules, a capped reading measure (~78ch) with wide
+  tables/code scrolling inside it, zebra-striped bordered tables, muted accent blockquotes, and crisp
+  rules — in a centered reading column; strips a leading YAML frontmatter block via
+  `lib.stripFrontmatter` so a spec's metadata doesn't render as a stray heading — source view still shows
+  it) and source being the lazy read-only `MonacoEditor`. The choice
+  is a per-tab `store.setFileTabView` (survives tab switches; not persisted across reload). Non-markdown
+  files render Monaco directly with no header, exactly as before.
 - Heavy deps (Monaco / shiki / xterm) load via `React.lazy(() => import())` to stay out of the eager bundle.
 - Streaming invariant (when chat lands): `text_delta`/`thinking_delta` **APPEND**;
   `tool_execution_update.partialResult` **REPLACE**.
