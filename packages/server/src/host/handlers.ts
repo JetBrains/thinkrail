@@ -3,6 +3,7 @@ import type {
 	ExtUiResponse,
 	ImageContent,
 	Model,
+	Project,
 	ThinkingLevel,
 	Workspace,
 } from "@thinkrail/contracts";
@@ -32,7 +33,7 @@ import { readDir, readFile } from "../fs";
 import { gitDiff, gitStatus, listBranches, prefetchBranch } from "../git";
 import { githubAuthStatus, githubRefresh } from "../github";
 import { closeProject, listProjects, openProject } from "../projects";
-import { evictSpecIndex, specGraph } from "../spec";
+import { evictSpecIndex, projectHasSpecs, specGraph } from "../spec";
 import {
 	closeTerminal,
 	closeWorkspaceTerminals,
@@ -53,6 +54,17 @@ import { ackSend } from "./ackSend";
 type Handler = (params: unknown) => unknown | Promise<unknown>;
 
 /**
+ * Stamp the host-computed `hasSpecs` (any registered spec in the repo, via the spec index) onto a Project
+ * for the wire. Lives in `host` — the composition layer that may use both `projects` and `spec` — so the
+ * `projects` module stays free of any spec dependency. Applied wherever the host sends projects to a
+ * client (welcome push + `project.open` / `project.list`).
+ */
+export const withProjectSpecs = (p: Project): Project => ({
+	...p,
+	hasSpecs: projectHasSpecs(p.path),
+});
+
+/**
  * The slow half of archiving a workspace, run in the background after `workspace.remove` acks: tear down
  * the workspace's sessions (abort a streaming turn, dispose, purge on-disk transcripts) then reclaim the
  * worktree (`git worktree remove`). Sessions/terminals are down before the dir is deleted (terminals are
@@ -69,8 +81,8 @@ async function archiveTeardown(ws: Workspace): Promise<void> {
 }
 
 const handlers: Record<string, Handler> = {
-	"project.open": (params) => openProject((params as { path: string }).path),
-	"project.list": () => listProjects(),
+	"project.open": (params) => withProjectSpecs(openProject((params as { path: string }).path)),
+	"project.list": () => listProjects().map(withProjectSpecs),
 	"project.close": (params) => {
 		closeProject((params as { id: string }).id);
 		return { ok: true } as const;

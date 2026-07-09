@@ -77,7 +77,7 @@ export function ProjectTree() {
 		const store = useAppStore.getState();
 		store.removeWorkspace(projectId, workspaceId);
 		store.clearWorkspaceTabs(workspaceId);
-		if (activeWorkspaceId === workspaceId) store.setActiveWorkspace("");
+		if (activeWorkspaceId === workspaceId) store.setActiveWorkspace(null);
 		void getTransport()
 			.request("workspace.remove", { id: workspaceId })
 			.catch(() => void loadWorkspaces(projectId));

@@ -23,6 +23,30 @@ export function evictSpecIndex(workspaceId: string): void {
 	indexes.delete(workspaceId);
 }
 
+/** One reused index per project root, for the project-level `hasSpecs` check below (revalidate-on-read). */
+const projectIndexes = new Map<string, SpecIndex>();
+
+/**
+ * Whether a project's repo root carries **any** registered spec (a file with `id` + `type` frontmatter,
+ * anywhere under the root) — the signal the Welcome screen uses for its "Set up project" suggestion.
+ * Uses the same derived, revalidate-on-read index as the agent's spec tools, so it's robust to any spec
+ * filename/casing (not just a lowercased `goal-and-requirements.md`) and always reflects the filesystem.
+ * A per-root index is reused so repeat reads (welcome, project.list) only pay the glob once. Defensive:
+ * a globbing/parse failure degrades to `false` rather than breaking project open/list.
+ */
+export function projectHasSpecs(root: string): boolean {
+	let index = projectIndexes.get(root);
+	if (!index) {
+		index = new SpecIndex(root);
+		projectIndexes.set(root, index);
+	}
+	try {
+		return index.graph().nodes.size > 0;
+	} catch {
+		return false;
+	}
+}
+
 /** The workspace worktree's spec-graph as a flat node snapshot; the client derives the tree. */
 export function specGraph(workspaceId: string): SpecGraphSnapshot {
 	const ws = loadWorkspaces().find((w) => w.id === workspaceId);
