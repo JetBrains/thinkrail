@@ -2,7 +2,12 @@ import { execFileSync } from "node:child_process";
 import { rmSync } from "node:fs";
 import { basename, join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { openAppFresh, openFixtureProject, stagePlainFolder } from "./fixtures/app";
+import {
+	createWorkspaceViaDialog,
+	openAppFresh,
+	openFixtureProject,
+	stagePlainFolder,
+} from "./fixtures/app";
 import { E2E_FIXTURE_REPO, E2E_PLAIN_DIR } from "./fixtures/paths";
 
 // The first-touch Welcome screen. It replaces the center/right/terminal surface until a workspace is
@@ -110,4 +115,24 @@ test("opening a non-git folder from the Welcome screen offers to initialise a re
 	await expect(
 		page.getByTestId("project-item").filter({ hasText: basename(E2E_PLAIN_DIR) }),
 	).toBeVisible();
+});
+
+test("clicking a project returns to its Welcome, deselecting the active workspace", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	// A workspace is active → the IDE surface is mounted, not the Welcome.
+	await expect(page.getByTestId("center-tabs")).toBeVisible();
+	await expect(page.locator('[data-testid="workspace-item"][data-active="true"]')).toHaveCount(1);
+
+	// Clicking the project row is a "project home" gesture: back to its Welcome, workspace deselected.
+	await page.getByTestId("project-item").first().getByText("sample-project").click();
+	await expect(page.getByTestId("welcome")).toBeVisible();
+	await expect(page.getByTestId("center-tabs")).toHaveCount(0);
+	await expect(page.locator('[data-testid="workspace-item"][data-active="true"]')).toHaveCount(0);
+
+	// Re-selecting the workspace restores the IDE (its tabs/session survive the deselect).
+	await page.getByTestId("workspace-item").first().getByRole("button").first().click();
+	await expect(page.getByTestId("center-tabs")).toBeVisible();
 });

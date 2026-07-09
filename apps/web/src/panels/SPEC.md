@@ -28,7 +28,10 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   (confirm → `project.init`) — when it's `initable`, or surfaces the error in a **`NoticeDialog`** — so a
   non-git folder is never a silent no-op. Both are modals on `components/ui/dialog` (the init offer has no
   on-screen anchor, unlike the Remove popover); `NoticeDialog` is a single-button info modal for failures
-  with no yes/no follow-up. The hook returns a `dialogs` node each consumer renders. Also
+  with no yes/no follow-up. The hook returns a `dialogs` node each consumer renders. **Selecting a
+  project** (clicking its row — the chevron expands/collapses separately) **deselects any active
+  workspace**, so the shell returns to that project's Welcome — a deliberate "project home" gesture; the
+  workspace's tabs survive in the store, so re-selecting it restores its view. Also
   `FileTree`, `SpecsPanel`, `RightPanel`,
   `ChangesPanel` + lazy `DiffViewer`, `CenterTabs` + lazy `MonacoEditor`, `TerminalsPanel` + lazy
   `TerminalInstance`. **`WelcomePanel`** is the first-touch surface the shell mounts (centered, left-nav beside it) whenever no
