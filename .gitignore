@@ -8,6 +8,7 @@ test-results/
 playwright-report/
 blob-report/
 playwright/.cache/
+e2e/screenshots/
 
 docs/*
 .playwright-mcp/

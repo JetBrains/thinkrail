@@ -14,7 +14,9 @@ tags: [v1, spec-viewer]
 Serve the read-only Specs viewer: a whole-graph snapshot of the active worktree's spec-graph
 (`spec.graph`), mapped to the wire DTOs. Read-on-demand — every call re-reads through the derived index
 (revalidate-on-read), so specs edited by the agent, the editor, or git are current on the next fetch; no
-file-watch push.
+file-watch push. Also answers the project-level **`projectHasSpecs(root)`** — does a repo carry *any*
+registered spec — which `host` exposes via the **lazy `project.hasSpecs`** method (a full-tree walk, so
+requested only for the one project the Welcome screen renders, never eagerly for every project).
 
 The read is **synchronous** (core's walk is sync-fs, O(worktree dirs) per call). That's acceptable —
 fetches are on-demand (tab-visit / Refresh, no polling) and the per-file parse cache skips re-reads. If
@@ -29,8 +31,11 @@ core/SPEC.md), not an async wrapper — that would still block the loop in one p
   falls back to `id` so the wire never carries an untitled node). **Mapping only** — no traversal
   logic; the client builds the tree. `evictSpecIndex(workspaceId)` — drops the cached index; `host`
   calls it on `workspace.remove` so an archived workspace's parse cache doesn't outlive it (a later
-  read would just rebuild).
-- **Public surface (barrel):** `specGraph`, `evictSpecIndex`.
+  read would just rebuild). **`projectHasSpecs(root) → boolean`** — whether a repo **root** (not a
+  worktree) carries any spec (`graph().nodes.size > 0`), through a per-root reused `SpecIndex`; the
+  project-level signal behind the Welcome screen's "Set up project" suggestion. Degrades to `false` on a
+  glob/parse failure so it can never break `project.open` / `project.list`.
+- **Public surface (barrel):** `specGraph`, `evictSpecIndex`, `projectHasSpecs`.
 - **Allowed deps:** `persistence` (workspace lookup); `contracts` (DTOs); **`pi-spec-graph/core`** (the
   pi-free read model — the one host-side value-import of the extension package, sanctioned in
   `module-spec-graph`).
