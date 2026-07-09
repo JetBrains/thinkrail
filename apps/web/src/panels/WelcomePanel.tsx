@@ -25,8 +25,9 @@ const SETUP_PROMPT =
 export function WelcomePanel() {
 	const projects = useAppStore((s) => s.projects);
 	const selectedProjectId = useAppStore((s) => s.selectedProjectId);
-	// The New-Workspace dialog target (null = closed). `prompt` seeds the hero (the "Set up project" flow).
-	const [dialog, setDialog] = useState<{ projectId: string; prompt?: string } | null>(null);
+	// The New-Workspace dialog target (null = closed). `prompt` seeds the hero — "" for a plain create,
+	// the setup text for "Set up project".
+	const [dialog, setDialog] = useState<{ projectId: string; prompt: string } | null>(null);
 
 	// The project the has-specs states key off — the selected one, else the most-recent (list is sorted).
 	const project = projects.find((p) => p.id === selectedProjectId) ?? projects[0] ?? null;
@@ -114,7 +115,7 @@ export function WelcomePanel() {
 							icon={Rocket}
 							title="Start building"
 							subtitle="Cut an isolated worktree + branch and pair with the agent."
-							onClick={() => setDialog({ projectId: project.id })}
+							onClick={() => setDialog({ projectId: project.id, prompt: "" })}
 						/>
 						{openProjectCard({ subtitle: "Add another local git repository." })}
 					</>
@@ -126,7 +127,7 @@ export function WelcomePanel() {
 							icon={Rocket}
 							title="Start building"
 							subtitle="Cut an isolated worktree + branch, then pair with the agent to build it."
-							onClick={() => setDialog({ projectId: project.id })}
+							onClick={() => setDialog({ projectId: project.id, prompt: "" })}
 						/>
 						{openProjectCard({ subtitle: "Add another local git repository." })}
 					</>
@@ -137,7 +138,7 @@ export function WelcomePanel() {
 				<NewWorkspaceDialog
 					open
 					projectId={dialog.projectId}
-					{...(dialog.prompt ? { initialPrompt: dialog.prompt } : {})}
+					initialPrompt={dialog.prompt}
 					onOpenChange={(o) => {
 						if (!o) setDialog(null);
 					}}
