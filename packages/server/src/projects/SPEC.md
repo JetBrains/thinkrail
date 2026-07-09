@@ -26,8 +26,7 @@ classify it and bootstrap it into one so it can be opened.
   configured for**, so a real global identity is never overridden.
 - **Public surface (barrel):** `openProject`, `listProjects`, `closeProject`, `getProjects`,
   `inspectProjectPath`, `initProject`.
-- **Allowed deps:** `persistence`; `contracts` (`Project`, `ProjectPathStatus`); Node/Bun. Git is invoked
-  through a **local `git()` helper** (not the `git` sibling — that's a forbidden sibling reach), which
-  passes `env` explicitly so config overrides take effect.
-- **Forbidden:** `host`; sibling features (`workspaces` depends on `projects`, never the reverse; the
-  `git` sub-module likewise — hence the local helper).
+- **Allowed deps:** `persistence`; the `git` sub-module (shared `git()` runner, bound to live `env` for
+  config overrides); `contracts` (`Project`, `ProjectPathStatus`); Node/Bun.
+- **Forbidden:** `host`; sibling features other than `git` (`workspaces` depends on `projects`, never the
+  reverse).

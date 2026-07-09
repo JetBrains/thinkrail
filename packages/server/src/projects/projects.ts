@@ -2,21 +2,12 @@ import { randomUUID } from "node:crypto";
 import { statSync } from "node:fs";
 import { basename } from "node:path";
 import type { Project, ProjectPathStatus } from "@thinkrail/contracts";
+import { git as runGit } from "../git";
 import { loadProjects, saveProjects } from "../persistence";
 
-/**
- * Run a git command in `cwd`, capturing success + trimmed stdout. Local (not the `git` sub-module) to keep
- * `projects` a leaf. `env` is passed explicitly so the child honours the process's *current* `process.env`
- * (Bun snapshots the OS environ at startup and otherwise ignores later mutations) — no prod effect, but it
- * lets git config overrides take effect deterministically.
- */
-function git(cwd: string, args: string[]): { ok: boolean; out: string } {
-	const result = Bun.spawnSync(["git", "-C", cwd, ...args], {
-		stdout: "pipe",
-		stderr: "ignore",
-		env: process.env,
-	});
-	return { ok: result.success, out: new TextDecoder().decode(result.stdout).trim() };
+/** The shared `git` runner, bound to the live `process.env` so runtime config overrides apply. */
+function git(cwd: string, args: string[]) {
+	return runGit(cwd, args, { env: process.env });
 }
 
 /** The git repo root for a path, or null if it isn't inside a git work tree. */
