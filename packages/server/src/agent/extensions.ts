@@ -1,7 +1,7 @@
 // Bundles the `pi-web-access` (web_search + fetch_content), `pi-visualize` (the `visualize` tool),
-// `pi-spec-graph` (spec_* tools + the spec-graph skill), and `pi-thinkrail-workflow` (the brainstorming
-// skill) extensions into a session's resource loader, so the tools are present out of the box without a
-// separate install. Two loading modes:
+// `pi-spec-graph` (spec_* tools + the spec-graph skill), and `pi-thinkrail-workflow` (the workflow-router
+// rule + workflow skills) extensions into a session's resource loader, so the tools are present out of the
+// box without a separate install. Two loading modes:
 // - Run-from-source: explicit `additionalExtensionPaths` (all four ship raw `.ts`; pi's loader jiti-loads
 //   TS, keeping their source out of our typecheck graph — `pi-spec-graph`'s exports map keeps `./index.ts`
 //   reachable alongside the `./core` subpath the `spec/` module value-imports). Paths resolve lazily on
@@ -80,7 +80,7 @@ const headlessSearchPolicy: ExtensionFactory = (pi: ExtensionAPI) => {
 
 /**
  * A resource loader with `pi-web-access` + `pi-visualize` + `pi-spec-graph` (and its skill) +
- * `pi-thinkrail-workflow` (and its skill) (+ the headless-search policy) and our host-owned
+ * `pi-thinkrail-workflow` (and its skills) (+ the headless-search policy) and our host-owned
  * `ask_user_question` tool layered onto pi's default discovery.
  */
 export async function buildResourceLoader(

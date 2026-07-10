@@ -3,7 +3,7 @@
 	"version": "0.0.0",
 	"private": true,
 	"type": "module",
-	"description": "Process/workflow skills for the pi agent: spec-native brainstorming and project-setup.",
+	"description": "ThinkRail's workflow system for the pi agent: a routed family of process/workflow skills.",
 	"keywords": [
 		"pi-package",
 		"pi",

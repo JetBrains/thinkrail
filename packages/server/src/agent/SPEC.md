@@ -85,7 +85,7 @@ its inline answer bridge.
   - `extensions` — `buildResourceLoader(cwd, settingsManager)`: a `DefaultResourceLoader` (pi's normal
     disk discovery) that also loads the four bundled extensions — **`pi-web-access`** (`web_search` +
     `fetch_content`), **`pi-visualize`** (`visualize`), **`pi-spec-graph`** (the `spec_*` tools + its
-    `before_agent_start` rule), and **`pi-thinkrail-workflow`** (the brainstorming rule + skill) — in one
+    `before_agent_start` rule), and **`pi-thinkrail-workflow`** (the workflow-router rule + workflow skills) — in one
     of **two modes**:
     - **Run-from-source (default):** `additionalExtensionPaths` pointing at the packages' raw `.ts`
       entries (pi's loader jiti-loads them — no value-import into our typecheck graph), resolved
