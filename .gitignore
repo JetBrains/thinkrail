@@ -3,6 +3,7 @@ dist/
 .turbo/
 *.tsbuildinfo
 .DS_Store
+.idea/
 test-results/
 playwright-report/
 blob-report/
@@ -11,6 +12,12 @@ e2e/screenshots/
 
 docs/*
 .playwright-mcp/
+.claude/
 
-# Build-only manifest written transiently by apps/cli/scripts/build-binary.ts
-apps/cli/src/web-assets.generated.ts
+# Build-only manifests written transiently by apps/cli/scripts/build-binary.ts
+apps/cli/src/*.generated.ts
+
+# Local env / secrets (Vite auto-loads .env*; app handles provider auth tokens)
+.env
+.env.local
+.env.*.local
