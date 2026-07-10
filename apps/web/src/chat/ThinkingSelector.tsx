@@ -3,11 +3,11 @@ import { Check, ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
-/** The honest effort knob pi exposes: the six thinking levels. pi clamps any the model can't do. */
-const LEVELS: ThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh"];
+/** The honest effort knob pi exposes: the seven thinking levels. pi clamps any the model can't do. */
+const LEVELS: ThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
 
 /**
- * The per-session effort picker (cheap win #1): a pill opening a list of the six thinking levels — the
+ * The per-session effort picker (cheap win #1): a pill opening a list of the seven thinking levels — the
  * same trigger+popover shape as the model picker. Props-driven, no store — shared by the chat header and
  * the New-Workspace dialog.
  */

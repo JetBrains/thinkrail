@@ -42,7 +42,7 @@ test("the dialog lists local branches (no stray origin) and creates a worktree",
 	// pill reflects the choice.
 	const effort = dialog.getByTestId("thinking-selector");
 	await effort.click();
-	await expect(page.getByTestId("thinking-option")).toHaveCount(6);
+	await expect(page.getByTestId("thinking-option")).toHaveCount(7);
 	await page.locator('[data-testid="thinking-option"][data-level="minimal"]').click();
 	await expect(effort).toContainText("minimal");
 
