@@ -33,6 +33,17 @@ export class WsTransport {
 		this.onStatus = opts.onStatus;
 	}
 
+	/**
+	 * HTTP origin of the dialed host (derives from the WS `url`: `ws→http`, `wss→https`, drop `/ws`). Use
+	 * it to build host HTTP URLs — e.g. the `/files/<workspaceId>/<path>` worktree-file endpoint the
+	 * markdown viewer points relative `<img>`s at — so they target the same host the transport dials.
+	 */
+	httpBase(): string {
+		const u = new URL(this.url);
+		u.protocol = u.protocol === "wss:" ? "https:" : "http:";
+		return u.origin;
+	}
+
 	connect(): void {
 		this.onStatus?.("connecting");
 		const ws = new WebSocket(this.url);

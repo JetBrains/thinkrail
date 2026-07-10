@@ -69,6 +69,31 @@ export default function globalSetup(): void {
 			"",
 		].join("\n"),
 	);
+	// A doc + image for the rendered-preview link/anchor/image suite (see e2e/markdown-links.spec.ts):
+	// a relative file link (opens the target tab), an in-doc anchor, and a relative image (host /files route).
+	writeFileSync(
+		join(E2E_FIXTURE_REPO, "LINKS.md"),
+		[
+			"# Link demo",
+			"",
+			"Jump to [Section two](#section-two), open [the spec](SPEC.md), and see the logo:",
+			"",
+			"![logo](logo.png)",
+			"",
+			"## Section two",
+			"",
+			"Target of the in-document anchor.",
+			"",
+		].join("\n"),
+	);
+	// A real 1x1 PNG so the relative-image path serves actual image bytes over the host /files route.
+	writeFileSync(
+		join(E2E_FIXTURE_REPO, "logo.png"),
+		Buffer.from(
+			"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMCAoGB9x0AAAAASUVORK5CYII=",
+			"base64",
+		),
+	);
 	// A seed spec so the @agent `spec-tools` suite has a deterministic `spec_grep` match, proving the
 	// bundled `pi-spec-graph` extension is wired into a live session (see e2e/spec-tools.live.spec.ts). The
 	// token SPECGRAPHPROBE is distinctive so a match can't be an echo of the query; the file path it lives

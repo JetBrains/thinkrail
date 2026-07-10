@@ -128,6 +128,13 @@ prompt hero (still editable; empty by default), a base-branch
   it) and source being the lazy read-only `MonacoEditor`. The choice
   is a per-tab `store.setFileTabView` (survives tab switches; not persisted across reload). Non-markdown
   files render Monaco directly with no header, exactly as before.
+- **Rendered markdown navigates.** In the preview, links + images resolve against the file's own path
+  (via `markdownLinks`, passed as the `a`/`img` renderers): a **relative link** opens the target file as
+  a tab through the shared **`openFileInTab`** (the same flow `FileTree` uses), an **in-doc `#` link**
+  scrolls the preview (headings carry slug ids from the in-repo `remarkHeadingIds` transform), an
+  **external** link opens a new tab, and a **relative image** rewrites to the host **`/files/…`** route
+  (built from `transport.httpBase()`). A cross-file link's `#fragment` is not yet followed (opens the
+  file only).
 - Heavy deps (Monaco / shiki / xterm) load via `React.lazy(() => import())` to stay out of the eager bundle.
 - Streaming invariant (when chat lands): `text_delta`/`thinking_delta` **APPEND**;
   `tool_execution_update.partialResult` **REPLACE**.

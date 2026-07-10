@@ -50,7 +50,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 			<div className="min-h-0 flex-1">
 				<Suspense fallback={loading}>
 					{view === "rendered" ? (
-						<MarkdownPreview content={tab.content} />
+						<MarkdownPreview content={tab.content} workspaceId={tab.workspaceId} path={tab.path} />
 					) : (
 						<MonacoEditor path={tab.path} content={tab.content} />
 					)}

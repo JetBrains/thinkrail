@@ -1,6 +1,7 @@
 import { stripFrontmatter } from "@/lib/utils";
 import { Markdown } from "../chat/Markdown";
 import { alertComponents, remarkGithubAlerts } from "./markdownAlerts";
+import { documentComponents, remarkHeadingIds } from "./markdownLinks";
 
 /**
  * Document "prose skin" for the file-tab rendered view. Reading-optimized typography modeled on the
@@ -53,15 +54,23 @@ const DOCUMENT_PROSE = [
  * the reused `chat/Markdown`. Lazy-loaded — the markdown+shiki chunk only arrives when a markdown tab is
  * shown in preview mode.
  */
-export default function MarkdownPreview({ content }: { content: string }) {
+export default function MarkdownPreview({
+	content,
+	workspaceId,
+	path,
+}: {
+	content: string;
+	workspaceId: string;
+	path: string;
+}) {
 	return (
 		<div data-testid="markdown-preview" className="h-full overflow-auto bg-surface-content">
 			<article className="mx-auto max-w-[78ch] px-xl py-lg">
 				<Markdown
 					text={stripFrontmatter(content)}
 					className={DOCUMENT_PROSE}
-					remarkPlugins={[remarkGithubAlerts]}
-					components={alertComponents}
+					remarkPlugins={[remarkGithubAlerts, remarkHeadingIds]}
+					components={{ ...alertComponents, ...documentComponents({ workspaceId, path }) }}
 				/>
 			</article>
 		</div>

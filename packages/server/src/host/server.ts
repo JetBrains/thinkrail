@@ -7,6 +7,7 @@ import {
 	setExtUiPublisher,
 	setSessionPublisher,
 } from "../agent";
+import { resolveWorktreeFile } from "../fs";
 import { listProjects, openProject } from "../projects";
 import { closeAllTerminals, setTerminalPublisher } from "../terminal";
 import {
@@ -47,6 +48,9 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 			}
 			if (url.pathname === "/health") {
 				return new Response("ok");
+			}
+			if (url.pathname.startsWith("/files/")) {
+				return serveWorktreeFile(url.pathname);
 			}
 			if (staticDir) {
 				return serveStatic(url.pathname, staticDir);
@@ -155,6 +159,26 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 			server.stop(true);
 		},
 	};
+}
+
+/**
+ * Serve a worktree file's raw bytes for `GET /files/<workspaceId>/<relpath>` (e.g. a relative image in
+ * the markdown viewer). Path safety is the `fs` module's `resolveWorktreeFile` (refuses escapes); a bad
+ * id / escape / missing file is a 404. Bun infers the content-type from the extension.
+ */
+async function serveWorktreeFile(pathname: string): Promise<Response> {
+	const rest = pathname.slice("/files/".length);
+	const slash = rest.indexOf("/");
+	if (slash <= 0) return new Response("not found", { status: 404 });
+	const workspaceId = decodeURIComponent(rest.slice(0, slash));
+	const relPath = decodeURIComponent(rest.slice(slash + 1));
+	try {
+		const file = Bun.file(resolveWorktreeFile(workspaceId, relPath));
+		if (!(await file.exists())) return new Response("not found", { status: 404 });
+		return new Response(file);
+	} catch {
+		return new Response("not found", { status: 404 });
+	}
 }
 
 /** Serve a file from `staticDir`, falling back to index.html (SPA). Paths are contained to the dir. */
