@@ -20,7 +20,7 @@ in front of you:
    behavior change, a nontrivial design decision — anything that alters what the project is or does.
 
 If the route is genuinely ambiguous from the request alone, ask one short clarifying question
-(`ask_user_question`) rather than guessing.
+(`ask_user_question`, composed per the **asking-user-questions** concept skill) rather than guessing.
 
 ## Route
 
