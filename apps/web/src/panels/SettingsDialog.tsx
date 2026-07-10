@@ -1,14 +1,15 @@
 import type { GithubAuthStatus } from "@thinkrail/contracts";
 import { Check, RefreshCw, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import { ProvidersSection } from "@/auth";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getTransport } from "@/transport";
 
 /**
- * App settings (the "Local GitHub" block). Shows the host's read-only `gh` auth status — Connected
- * with the account login, or Not connected (with the same graceful degrade the New-Workspace dialog uses)
- * — and a Refresh that re-probes `gh`.
+ * App settings: the Providers section (subscription sign-ins, the jbcentral proxy block, API keys —
+ * see `auth/ProvidersSection`) over the "Local GitHub" block (the host's read-only `gh` auth status —
+ * Connected with the account login, or Not connected — with a Refresh that re-probes `gh`).
  */
 export function SettingsDialog({
 	open,
@@ -51,6 +52,8 @@ export function SettingsDialog({
 				<DialogHeader>
 					<DialogTitle>Settings</DialogTitle>
 				</DialogHeader>
+
+				<ProvidersSection />
 
 				<section className="flex flex-col gap-sm">
 					<h3 className="font-medium text-muted text-xs uppercase tracking-wider">Local GitHub</h3>

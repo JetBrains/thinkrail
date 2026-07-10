@@ -32,6 +32,7 @@ convention; their boundary is held by convention + spec. Sibling edges live here
 | --- | --- | --- | --- |
 | `transport` | the WS client + its singleton/store wiring | yes | [transport/SPEC.md](src/transport/SPEC.md) |
 | `store` | Zustand: connection, projects/workspaces, workspace-scoped tabs + terminals | yes | [store/SPEC.md](src/store/SPEC.md) |
+| `auth` | provider-auth UI: the first-run hard gate + Settings→Providers | yes | [auth/SPEC.md](src/auth/SPEC.md) |
 | `panels` | layout-agnostic, store-driven feature views | no | [panels/SPEC.md](src/panels/SPEC.md) |
 | `chat` | pi conversation UI primitives: content-block renderers + the tool-renderer registry | no | [chat/SPEC.md](src/chat/SPEC.md) |
 | `shell` | the responsive frame + composition of panels | no | [shell/SPEC.md](src/shell/SPEC.md) |
@@ -43,8 +44,10 @@ CSS token theme contract — see Styling & theming). `main.tsx` is the entry/com
 
 ### Dependency graph
 
-- `shell` → `panels`, `store`, `transport`, `components/ui`, `constants`
-- `panels` → `store`, `transport`, `components/ui`, `lib`, `contracts`, `constants` (`WelcomePanel`'s wordmark), `chat` (`CenterTabs` lazy-mounts `chat/ChatView`; `NewWorkspaceDialog` eagerly reuses `chat/ModelSelector`+`ThinkingSelector` — these are shiki-free, so the eager import stays split-safe)
+- `shell` → `panels`, `store`, `transport`, `components/ui`, `constants`, `auth` (mounts `AuthGate`)
+- `auth` → `store`, `transport`, `components/ui`, `lib`, `constants`, `contracts` (`panels`'
+  `SettingsDialog` mounts its `ProvidersSection`)
+- `panels` → `store`, `transport`, `components/ui`, `lib`, `contracts`, `constants` (`WelcomePanel`'s wordmark), `chat` (`CenterTabs` lazy-mounts `chat/ChatView`; `NewWorkspaceDialog` eagerly reuses `chat/ModelSelector`+`ThinkingSelector` — these are shiki-free, so the eager import stays split-safe), `auth` (`SettingsDialog` → `ProvidersSection`)
 - `chat` → `contracts` (pi message types, **type-only**), `components/ui`, `lib`; `store` + `transport` (**`ChatView` only** — the renderers are store-free)
 - `store` → `transport` (**type-only** — `ConnectionStatus`), `chat` (**type-only** — `ChatTurn`/`ToolResultState`), `contracts`
 - `transport` → `contracts`, `store` (welcome routing; the `store → transport` back-edge is type-only, so

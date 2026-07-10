@@ -139,7 +139,10 @@ throwaway dir under the e2e data dir; `globalSetup` copies the user's pi auth co
 `models.json`** — auth lives in both: OAuth providers in `auth.json`, apiKey providers in `models.json`) so a
 real provider works, and seeds a `settings.json` pinning a **deterministic default model** — override with
 `THINKRAIL_E2E_MODEL=<provider>/<modelId>`) — so a test's `setModel`/`setThinkingLevel` persists *there*,
-**never the user's real `~/.pi/agent`**. (Corollary: don't let an `@agent` test *select* a model — it would
+**never the user's real `~/.pi/agent`**. A machine with **no pi auth at all** (CI) gets a **stub
+provider** seeded into the isolated `models.json` instead — without it the first-run **auth gate**
+(zero available models → full-screen Connect surface) would block every no-agent spec; the gate itself
+is covered by `e2e/auth-gate.spec.ts`, which boots a second, zero-auth, provider-env-scrubbed host. (Corollary: don't let an `@agent` test *select* a model — it would
 pin a default mid-run.) Select suites by marker: `bun run e2e`
 runs the **no-agent** suite (`--grep-invert @agent`) — projects/workspaces/files/editor/changes/terminals,
 fast, no auth, run anytime; `bun run e2e:full` runs everything; `bun run e2e:agent` runs only the

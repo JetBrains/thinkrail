@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ThinkRail — Connect a model provider</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@700,800&display=swap" rel="stylesheet" />
+<style>
+/* ─── ThinkRail tokens (verbatim from apps/web/src/styles/tokens.css) ─────────────── */
+:root{
+  --primary:#8c81ff; --primary-10:rgba(140,129,255,.1); --primary-20:rgba(140,129,255,.2);
+  --primary-40:rgba(140,129,255,.4); --primary-60:rgba(140,129,255,.6);
+  --blue:#6ac8ff; --green:#6ad859; --green-tint:rgba(106,216,89,.12); --red:#ff4b75; --gold:#ffd54b;
+  --bg:#2b2b30; --bg-dark:#171719; --input-bg:#272830; --elevated:#2b2d30; --hover:#393b40;
+  --border:#2b2d30; --border2:#43454a; --text:#dfe1e5; --muted:#a8adb5; --hint:#6f737a;
+  --on-accent:#fff; --sunken:rgba(0,0,0,.12); --overlay:rgba(0,0,0,.5);
+  --shadow-md:0 4px 16px rgba(0,0,0,.35); --shadow-lg:0 8px 28px rgba(0,0,0,.4);
+  --shadow-xl:0 24px 64px rgba(0,0,0,.5);
+  --font-xs:10px; --font-sm:12px; --font-body:13px; --font-md:15px; --font-lg:18px;
+  --font-lg2:20px; --font-xl:25px; --font-xxl:40px;
+  --radius-sm:4px; --radius-md:8px; --radius-lg:12px;
+  --transition-fast:120ms ease; --transition-normal:200ms ease;
+  --space-xs:4px; --space-sm:8px; --space-md:12px; --space-lg:16px; --space-xl:24px;
+  --font:"Geist",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --font-mono:"JetBrains Mono","Fira Code",monospace;
+  --font-accent:"Cabinet Grotesk",sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--bg-dark); color:var(--text); font:400 var(--font-body)/1.6 var(--font);
+  -webkit-font-smoothing:antialiased; overflow-x:hidden;
+}
+/* ─── atmosphere: one restrained glow + faint grid ────────────────────────────────── */
+.atmo{position:fixed;inset:0;pointer-events:none;z-index:0}
+.atmo::before{content:"";position:absolute;left:50%;top:-340px;width:1100px;height:640px;transform:translateX(-50%);
+  background:radial-gradient(closest-side,rgba(140,129,255,.14),transparent 70%);}
+.atmo::after{content:"";position:absolute;inset:0;
+  background-image:linear-gradient(rgba(255,255,255,.022) 1px,transparent 1px),
+                   linear-gradient(90deg,rgba(255,255,255,.022) 1px,transparent 1px);
+  background-size:44px 44px;
+  mask-image:radial-gradient(ellipse 90% 62% at 50% 0%,#000 30%,transparent 78%);}
+/* ─── frame ───────────────────────────────────────────────────────────────────────── */
+.top{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between;
+  padding:14px 20px;}
+.wordmark{font:800 var(--font-lg)/1 var(--font-accent);letter-spacing:.5px;color:var(--primary)}
+.statuspill{display:inline-flex;align-items:center;gap:8px;font-size:var(--font-sm);color:var(--muted);
+  border:1px solid var(--border2);border-radius:999px;padding:5px 12px;background:rgba(39,40,48,.6);backdrop-filter:blur(8px)}
+.statuspill .dot{width:7px;height:7px;border-radius:50%;background:var(--gold);box-shadow:0 0 0 3px rgba(255,213,75,.15)}
+.statuspill.ok .dot{background:var(--green);box-shadow:0 0 0 3px var(--green-tint)}
+.statuspill b{color:var(--text);font-weight:500}
+main{position:relative;z-index:1;max-width:660px;margin:0 auto;padding:28px 20px 80px}
+.view{display:none;animation:reveal .28s ease-out}
+.view.on{display:block}
+@keyframes reveal{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+/* ─── headline ───────────────────────────────────────────────────────────────────── */
+.hgroup{text-align:center;margin:26px 0 30px}
+h1{font:800 clamp(30px,5vw,42px)/1.12 var(--font-accent);letter-spacing:.2px}
+h1 .accent{color:var(--primary)}
+.sub{margin-top:10px;color:var(--muted);font-size:var(--font-md);max-width:44ch;margin-inline:auto}
+/* ─── provider marks ─────────────────────────────────────────────────────────────── */
+.mark{flex:none;display:grid;place-items:center;border-radius:10px}
+/* ─── hero tile (JetBrains AI) ───────────────────────────────────────────────────── */
+.tile{position:relative;width:100%;text-align:left;color:var(--text);cursor:pointer;
+  background:linear-gradient(180deg,rgba(43,45,48,.85),rgba(39,40,48,.65));
+  border:1px solid var(--border2);border-radius:var(--radius-lg);
+  transition:border-color var(--transition-fast),background var(--transition-fast),transform var(--transition-fast)}
+.tile:hover{border-color:var(--primary-40);background:linear-gradient(180deg,rgba(48,50,56,.95),rgba(43,44,52,.75))}
+.tile:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.tile:active{transform:scale(.995)}
+.hero{display:flex;align-items:center;gap:16px;padding:18px 20px;
+  border-color:var(--primary-40);
+  background:linear-gradient(135deg,rgba(140,129,255,.13),rgba(39,40,48,.7) 46%);
+  box-shadow:0 0 0 1px rgba(140,129,255,.08),var(--shadow-md)}
+.hero:hover{border-color:var(--primary-60)}
+.hero .body{flex:1;min-width:0}
+.hero .name{display:flex;align-items:center;gap:10px;font:700 var(--font-lg)/1.2 var(--font);letter-spacing:.1px}
+.chip{font-size:var(--font-xs);font-weight:600;letter-spacing:.6px;text-transform:uppercase;color:var(--primary);
+  border:1px solid var(--primary-40);background:var(--primary-10);border-radius:999px;padding:2px 8px}
+.hero .desc{color:var(--muted);font-size:var(--font-sm);margin-top:3px}
+.hero .state{color:var(--hint);font-size:var(--font-sm);margin-top:6px;display:flex;align-items:center;gap:7px;font-family:var(--font-mono)}
+.go{flex:none;display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:var(--font-body);
+  color:var(--on-accent);background:var(--primary);border:none;border-radius:var(--radius-md);
+  padding:9px 14px;cursor:pointer;transition:filter var(--transition-fast)}
+.go:hover{filter:brightness(1.1)}
+.go.ghost{background:transparent;color:var(--primary);border:1px solid var(--primary-40)}
+.go.ghost:hover{background:var(--primary-10)}
+/* ─── small tiles ────────────────────────────────────────────────────────────────── */
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px}
+.small{display:flex;flex-direction:column;gap:10px;padding:16px}
+.small .name{font-weight:600;font-size:var(--font-body)}
+.small .desc{color:var(--hint);font-size:var(--font-sm);line-height:1.45;flex:1}
+.small .cta{color:var(--primary);font-weight:600;font-size:var(--font-sm);display:inline-flex;align-items:center;gap:5px}
+/* ─── api key expander ───────────────────────────────────────────────────────────── */
+.divider{display:flex;align-items:center;gap:14px;color:var(--hint);font-size:var(--font-sm);margin:22px 0 14px}
+.divider::before,.divider::after{content:"";flex:1;height:1px;background:var(--border2);opacity:.7}
+.linkrow{display:flex;justify-content:center}
+.linklike{background:none;border:none;color:var(--muted);font:500 var(--font-body) var(--font);cursor:pointer;
+  display:inline-flex;align-items:center;gap:7px;padding:8px 12px;border-radius:var(--radius-md)}
+.linklike:hover{color:var(--text);background:var(--hover)}
+.trust{display:block;color:var(--hint);font-size:var(--font-sm);margin-top:34px;text-align:center;max-width:56ch;margin-inline:auto}
+.trust svg{display:inline-block;vertical-align:-2px;margin-right:6px}
+.trust code{font-family:var(--font-mono);font-size:11px;color:var(--muted)}
+/* ─── flow panels (wizard / oauth / device / apikey) ─────────────────────────────── */
+.panel{background:linear-gradient(180deg,rgba(43,45,48,.9),rgba(39,40,48,.72));
+  border:1px solid var(--border2);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);overflow:hidden}
+.panel-head{display:flex;align-items:center;gap:14px;padding:16px 20px;border-bottom:1px solid var(--border)}
+.panel-head .t{font:700 var(--font-md)/1.2 var(--font)}
+.panel-head .s{color:var(--hint);font-size:var(--font-sm)}
+.panel-body{padding:20px}
+.back{background:none;border:none;color:var(--muted);font:500 var(--font-sm) var(--font);cursor:pointer;
+  display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border-radius:var(--radius-md);margin-bottom:14px}
+.back:hover{color:var(--text);background:var(--hover)}
+/* stepper */
+.steps{display:flex;gap:0;margin:2px 0 20px}
+.step{flex:1;display:flex;align-items:center;gap:8px;font-size:var(--font-sm);color:var(--hint)}
+.step .b{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:var(--font-xs);
+  font-weight:600;border:1.5px solid var(--border2);color:var(--hint);background:var(--input-bg);flex:none}
+.step.now{color:var(--text)} .step.now .b{border-color:var(--primary);color:var(--primary);box-shadow:0 0 0 3px var(--primary-10)}
+.step.done{color:var(--muted)} .step.done .b{border-color:var(--green);background:var(--green-tint);color:var(--green)}
+.step .bar{flex:1;height:1.5px;background:var(--border2);margin:0 10px}
+.step.done .bar{background:var(--green);opacity:.5}
+.step:last-child .bar{display:none}
+/* command block */
+.cmd{display:flex;align-items:center;gap:10px;background:var(--bg-dark);border:1px solid var(--border2);
+  border-radius:var(--radius-md);padding:11px 13px;font:400 var(--font-sm)/1.5 var(--font-mono);color:var(--muted);
+  white-space:nowrap;min-width:0}
+.cmd .dollar{color:var(--primary);user-select:none;flex:none}
+.cmd .txt{flex:1;color:var(--text);overflow-x:auto;min-width:0;scrollbar-width:thin}
+.copy{flex:none;display:inline-flex;align-items:center;gap:5px;background:none;border:1px solid var(--border2);
+  color:var(--muted);border-radius:var(--radius-sm);padding:4px 8px;font:500 11px var(--font);cursor:pointer}
+.copy:hover{color:var(--text);border-color:var(--hint)}
+.copy.copied{color:var(--green);border-color:var(--green)}
+.note{color:var(--hint);font-size:var(--font-sm);margin-top:10px;line-height:1.55}
+.note b{color:var(--muted);font-weight:600}
+.note a{color:var(--blue);text-decoration:none}
+.btnrow{display:flex;align-items:center;gap:12px;margin-top:18px;flex-wrap:wrap}
+.btn2{background:none;border:none;color:var(--muted);font:500 var(--font-body) var(--font);cursor:pointer;
+  padding:9px 12px;border-radius:var(--radius-md)}
+.btn2:hover{color:var(--text);background:var(--hover)}
+/* progress checklist */
+.checks{display:flex;flex-direction:column;gap:2px;margin-top:6px}
+.check{display:flex;align-items:center;gap:11px;padding:9px 4px;font-size:var(--font-body);color:var(--hint);
+  opacity:.55;transition:opacity var(--transition-normal)}
+.check .ic{width:20px;height:20px;flex:none;display:grid;place-items:center}
+.check.now{color:var(--text);opacity:1}
+.check.ok{color:var(--muted);opacity:1}
+.check.ok .lbl{color:var(--text)}
+.check code{font-family:var(--font-mono);font-size:var(--font-sm);color:inherit}
+.spin{width:14px;height:14px;border-radius:50%;border:2px solid var(--primary-20);border-top-color:var(--primary);
+  animation:rot .8s linear infinite}
+@keyframes rot{to{transform:rotate(360deg)}}
+/* waiting pulse */
+.waitcard{display:flex;flex-direction:column;align-items:center;text-align:center;padding:26px 18px 10px}
+.pulse{position:relative;width:56px;height:56px;border-radius:50%;display:grid;place-items:center;
+  background:var(--primary-10);border:1px solid var(--primary-40);margin-bottom:16px}
+.pulse::before,.pulse::after{content:"";position:absolute;inset:0;border-radius:50%;border:1px solid var(--primary-40);
+  animation:ripple 2.2s ease-out infinite}
+.pulse::after{animation-delay:1.1s}
+@keyframes ripple{from{transform:scale(1);opacity:.7}to{transform:scale(1.9);opacity:0}}
+.wait-t{font:600 var(--font-md) var(--font)}
+.wait-s{color:var(--hint);font-size:var(--font-sm);margin-top:5px;max-width:46ch}
+/* device code */
+.bigcode{display:flex;justify-content:center;gap:10px;margin:20px 0 6px;font:600 34px/1 var(--font-mono);
+  letter-spacing:2px;color:var(--text)}
+.bigcode span{background:var(--bg-dark);border:1px solid var(--border2);border-radius:var(--radius-md);padding:14px 18px}
+/* api key form */
+.field{margin-top:14px}
+.field label{display:block;font-size:var(--font-sm);font-weight:600;color:var(--muted);margin-bottom:6px}
+.input,.select{width:100%;background:var(--input-bg);border:1px solid var(--border2);border-radius:var(--radius-md);
+  color:var(--text);font:400 var(--font-body) var(--font);padding:10px 12px;transition:border-color var(--transition-fast)}
+.input:focus,.select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-10)}
+.input::placeholder{color:var(--hint)}
+.input.mono{font-family:var(--font-mono);font-size:var(--font-sm)}
+.provlist{max-height:212px;overflow-y:auto;border:1px solid var(--border2);border-radius:var(--radius-md);
+  margin-top:8px;background:var(--input-bg)}
+.prov{display:flex;align-items:center;gap:11px;width:100%;text-align:left;padding:9px 12px;background:none;border:none;
+  color:var(--text);font:400 var(--font-body) var(--font);cursor:pointer;border-bottom:1px solid var(--border)}
+.prov:last-child{border-bottom:none}
+.prov:hover{background:var(--hover)}
+.prov.sel{background:var(--primary-10)}
+.prov .env{margin-left:auto;color:var(--hint);font:400 11px var(--font-mono)}
+.prov .mk{width:24px;height:24px;border-radius:6px;font-size:11px}
+/* success */
+.success{display:flex;flex-direction:column;align-items:center;text-align:center;padding:34px 20px 26px}
+.bigok{width:64px;height:64px;border-radius:50%;background:var(--green-tint);border:1px solid rgba(106,216,89,.5);
+  display:grid;place-items:center;margin-bottom:18px;animation:pop .4s cubic-bezier(.2,1.6,.4,1)}
+@keyframes pop{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}
+.models{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin:16px 0 22px}
+.modelchip{font:400 var(--font-sm) var(--font-mono);color:var(--muted);border:1px solid var(--border2);
+  border-radius:999px;padding:4px 11px;background:var(--input-bg)}
+/* demo rail */
+.demorail{position:fixed;right:14px;bottom:14px;z-index:5;display:flex;flex-direction:column;gap:5px;
+  background:rgba(23,23,25,.88);border:1px dashed var(--border2);border-radius:var(--radius-md);padding:10px;backdrop-filter:blur(6px)}
+.demorail .lbl{font-size:var(--font-xs);text-transform:uppercase;letter-spacing:.8px;color:var(--hint);margin-bottom:3px}
+.demorail button{background:none;border:none;color:var(--muted);font:500 var(--font-sm) var(--font);cursor:pointer;
+  text-align:left;padding:3px 6px;border-radius:var(--radius-sm)}
+.demorail button:hover{color:var(--text);background:var(--hover)}
+/* responsive */
+@media (max-width:760px){
+  .grid3{grid-template-columns:1fr}
+  .hero{flex-direction:column;align-items:flex-start}
+  .hero .go{width:100%;justify-content:center}
+  .steps{flex-direction:column;gap:10px}
+  .step .bar{display:none}
+  .bigcode{font-size:26px;gap:8px}
+  .demorail{display:none}
+  main{padding-bottom:48px}
+}
+</style>
+</head>
+<body>
+<div class="atmo"></div>
+
+<header class="top">
+  <span class="wordmark">ThinkRail</span>
+  <span class="statuspill" id="pill"><span class="dot"></span><span id="pillText">Host connected · <b>0 models</b></span></span>
+</header>
+
+<main>
+  <!-- ══════════ VIEW: GATE ══════════ -->
+  <section class="view on" id="view-gate">
+    <div class="hgroup">
+      <h1>Connect a <span class="accent">model provider</span></h1>
+      <p class="sub">ThinkRail drives the pi coding agent. Link one provider — a subscription or an API key — and you're in.</p>
+    </div>
+
+    <!-- hero: JetBrains AI -->
+    <button class="tile hero" onclick="show('jb')" aria-label="Set up JetBrains AI">
+      <span class="mark" style="width:44px;height:44px;background:conic-gradient(from 210deg,#fc801d,#fe2857,#007eff,#fc801d)">
+        <span style="width:36px;height:36px;border-radius:7px;background:#000;display:grid;place-items:center;font:800 15px var(--font-accent);color:#fff">jb</span>
+      </span>
+      <span class="body">
+        <span class="name">JetBrains AI <span class="chip">Recommended</span></span>
+        <span class="desc">Claude &amp; GPT models through your JetBrains AI subscription or ThinkRail early access — no keys to manage.</span>
+        <span class="state" id="jbState"><span class="spin" style="width:11px;height:11px;border-width:1.5px"></span> checking this machine for jbcentral…</span>
+      </span>
+      <span class="go">Set up
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </span>
+    </button>
+
+    <!-- OAuth trio -->
+    <div class="grid3">
+      <button class="tile small" onclick="show('claude')">
+        <span style="display:flex;align-items:center;gap:10px">
+          <span class="mark" style="width:30px;height:30px;background:#d97757">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M12 2.2l1.2 6 4.3-4.3-3 5.4 6.1-.6-5.6 2.6 5.6 2.6-6.1-.6 3 5.4-4.3-4.3-1.2 6-1.2-6-4.3 4.3 3-5.4-6.1.6 5.6-2.6-5.6-2.6 6.1.6-3-5.4 4.3 4.3z"/></svg>
+          </span>
+          <span class="name">Claude</span>
+        </span>
+        <span class="desc">Sign in with your Claude Pro or Max subscription.</span>
+        <span class="cta">Sign in <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+      </button>
+      <button class="tile small" onclick="show('claude','ChatGPT')">
+        <span style="display:flex;align-items:center;gap:10px">
+          <span class="mark" style="width:30px;height:30px;background:#0e0e10;border:1px solid var(--border2)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.7"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v5.2M12 16.2v5.2M3.9 7.3l4.5 2.6M15.6 14.1l4.5 2.6M3.9 16.7l4.5-2.6M15.6 9.9l4.5-2.6"/></svg>
+          </span>
+          <span class="name">ChatGPT</span>
+        </span>
+        <span class="desc">Codex models with a ChatGPT Plus or Pro plan.</span>
+        <span class="cta">Sign in <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+      </button>
+      <button class="tile small" onclick="show('copilot')">
+        <span style="display:flex;align-items:center;gap:10px">
+          <span class="mark" style="width:30px;height:30px;background:#24292f;border:1px solid var(--border2)">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="#fff"><path d="M4 10.5C4 7 7.6 5.5 12 5.5S20 7 20 10.5v3.2c0 .9-.4 1.7-1.2 2.2C16.9 17.2 14.6 18.5 12 18.5s-4.9-1.3-6.8-2.6c-.8-.5-1.2-1.3-1.2-2.2z"/><rect x="7.4" y="10.4" width="2.6" height="3.6" rx="1.2" fill="#24292f"/><rect x="14" y="10.4" width="2.6" height="3.6" rx="1.2" fill="#24292f"/></svg>
+          </span>
+          <span class="name">GitHub Copilot</span>
+        </span>
+        <span class="desc">Use your Copilot seat via a one-time device code.</span>
+        <span class="cta">Sign in <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+      </button>
+    </div>
+
+    <div class="divider">or</div>
+    <div class="linkrow">
+      <button class="linklike" onclick="show('apikey')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.6 7.6a5.5 5.5 0 1 1-7.8 7.8 5.5 5.5 0 0 1 7.8-7.8zm0 0L19 4m-3.5 3.5L18 10"/></svg>
+        Use an API key instead — Anthropic, OpenAI, Google, Groq, OpenRouter &amp; 20 more
+      </button>
+    </div>
+
+    <p class="trust">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+      Credentials stay on this machine, in pi's <code>~/.pi/agent/auth.json</code>. The browser only ever sees connection status.
+    </p>
+  </section>
+
+  <!-- ══════════ VIEW: JETBRAINS WIZARD ══════════ -->
+  <section class="view" id="view-jb">
+    <button class="back" onclick="show('gate')">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>
+      All providers
+    </button>
+    <div class="panel">
+      <div class="panel-head">
+        <span class="mark" style="width:34px;height:34px;background:conic-gradient(from 210deg,#fc801d,#fe2857,#007eff,#fc801d)">
+          <span style="width:27px;height:27px;border-radius:5px;background:#000;display:grid;place-items:center;font:800 12px var(--font-accent);color:#fff">jb</span>
+        </span>
+        <div><div class="t">Set up JetBrains AI</div><div class="s">ThinkRail runs every step on this machine — nothing to type in a terminal.</div></div>
+      </div>
+      <div class="panel-body">
+        <div class="steps">
+          <div class="step" id="jbs1"><span class="b">1</span> Install CLI <span class="bar"></span></div>
+          <div class="step" id="jbs2"><span class="b">2</span> Sign in <span class="bar"></span></div>
+          <div class="step" id="jbs3"><span class="b">3</span> Connect models</div>
+        </div>
+        <div id="jbStage"><!-- js renders stages --></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ VIEW: OAUTH (Claude / ChatGPT) ══════════ -->
+  <section class="view" id="view-claude">
+    <button class="back" onclick="show('gate')">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>
+      All providers
+    </button>
+    <div class="panel">
+      <div class="panel-head">
+        <span class="mark" id="oauthMark" style="width:34px;height:34px;background:#d97757">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M12 2.2l1.2 6 4.3-4.3-3 5.4 6.1-.6-5.6 2.6 5.6 2.6-6.1-.6 3 5.4-4.3-4.3-1.2 6-1.2-6-4.3 4.3 3-5.4-6.1.6 5.6-2.6-5.6-2.6 6.1.6-3-5.4 4.3 4.3z"/></svg>
+        </span>
+        <div><div class="t" id="oauthTitle">Sign in to Claude</div><div class="s" id="oauthSub">Uses your Claude Pro / Max subscription. ThinkRail never sees your password.</div></div>
+      </div>
+      <div class="panel-body">
+        <div class="waitcard">
+          <div class="pulse">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3.5 9h17M3.5 15h17M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg>
+          </div>
+          <div class="wait-t" id="oauthWaitT">Waiting for authorization in your browser…</div>
+          <div class="wait-s">A tab just opened. Approve access there and this screen moves on by itself.</div>
+        </div>
+        <div class="cmd" style="margin-top:16px">
+          <span class="txt" style="color:var(--muted);font-size:11px" id="oauthUrl">https://claude.ai/oauth/authorize?client=thinkrail…</span>
+          <button class="copy" onclick="copied(this)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg> Copy</button>
+        </div>
+        <p class="note">Browser didn't open? Copy the link into any browser — even on another device — then paste the code you're given below.</p>
+        <div class="field" style="display:flex;gap:10px">
+          <input class="input mono" placeholder="Paste authorization code (optional fallback)" style="flex:1" />
+          <button class="go ghost" onclick="finish()">Submit</button>
+        </div>
+        <div class="btnrow">
+          <button class="go" onclick="finish()">Demo: authorization succeeded</button>
+          <button class="btn2" onclick="show('gate')">Cancel sign-in</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ VIEW: COPILOT DEVICE CODE ══════════ -->
+  <section class="view" id="view-copilot">
+    <button class="back" onclick="show('gate')">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>
+      All providers
+    </button>
+    <div class="panel">
+      <div class="panel-head">
+        <span class="mark" style="width:34px;height:34px;background:#24292f;border:1px solid var(--border2)">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="#fff"><path d="M4 10.5C4 7 7.6 5.5 12 5.5S20 7 20 10.5v3.2c0 .9-.4 1.7-1.2 2.2C16.9 17.2 14.6 18.5 12 18.5s-4.9-1.3-6.8-2.6c-.8-.5-1.2-1.3-1.2-2.2z"/><rect x="7.4" y="10.4" width="2.6" height="3.6" rx="1.2" fill="#24292f"/><rect x="14" y="10.4" width="2.6" height="3.6" rx="1.2" fill="#24292f"/></svg>
+        </span>
+        <div><div class="t">Sign in to GitHub Copilot</div><div class="s">Enter this one-time code on github.com — it pairs ThinkRail with your Copilot seat.</div></div>
+      </div>
+      <div class="panel-body" style="text-align:center">
+        <div class="bigcode"><span>C4F7</span><span>-</span><span>9B2D</span></div>
+        <button class="copy" onclick="copied(this)" style="margin-top:4px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg> Copy code</button>
+        <div class="cmd" style="margin-top:18px;text-align:left">
+          <span class="txt" style="color:var(--muted);font-size:11px">https://github.com/login/device</span>
+          <button class="copy" onclick="copied(this)">Copy</button>
+          <button class="copy" onclick="void 0">Open ↗</button>
+        </div>
+        <div class="waitcard" style="padding-top:18px">
+          <div style="display:flex;align-items:center;gap:9px;color:var(--hint);font-size:var(--font-sm)">
+            <span class="spin" style="width:12px;height:12px"></span> Waiting for github.com… code expires in 14:32
+          </div>
+        </div>
+        <div class="btnrow" style="justify-content:center">
+          <button class="go" onclick="finish()">Demo: device authorized</button>
+          <button class="btn2" onclick="show('gate')">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ VIEW: API KEY ══════════ -->
+  <section class="view" id="view-apikey">
+    <button class="back" onclick="show('gate')">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>
+      All providers
+    </button>
+    <div class="panel">
+      <div class="panel-head">
+        <span class="mark" style="width:34px;height:34px;background:var(--primary-10);border:1px solid var(--primary-40)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.6 7.6a5.5 5.5 0 1 1-7.8 7.8 5.5 5.5 0 0 1 7.8-7.8zm0 0L19 4m-3.5 3.5L18 10"/></svg>
+        </span>
+        <div><div class="t">Connect with an API key</div><div class="s">Pay-per-token access. The key is written to pi's auth.json on this machine and never shown again.</div></div>
+      </div>
+      <div class="panel-body">
+        <div class="field">
+          <label for="provsearch">Provider</label>
+          <input class="input" id="provsearch" placeholder="Search 28 providers…" oninput="filterProv(this.value)" />
+          <div class="provlist" id="provlist"></div>
+        </div>
+        <div class="field">
+          <label for="keyinput">API key</label>
+          <input class="input mono" id="keyinput" type="password" placeholder="sk-ant-…" />
+          <p class="note" id="envnote">Already exported <b>ANTHROPIC_API_KEY</b> in your shell? pi picks environment keys up automatically — you only need this form to store a key permanently.</p>
+        </div>
+        <div class="btnrow">
+          <button class="go" onclick="finish()">Save &amp; verify</button>
+          <button class="btn2" onclick="show('gate')">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ VIEW: SUCCESS ══════════ -->
+  <section class="view" id="view-success">
+    <div class="panel">
+      <div class="success">
+        <div class="bigok">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+        </div>
+        <h1 style="font-size:var(--font-xl)">You're connected</h1>
+        <p class="sub" style="margin-top:6px" id="successSub">JetBrains AI is wired up — 14 models are ready.</p>
+        <div class="models">
+          <span class="modelchip">claude-sonnet-4-5</span>
+          <span class="modelchip">claude-opus-4-5</span>
+          <span class="modelchip">gpt-5.2</span>
+          <span class="modelchip">gpt-5.2-codex</span>
+          <span class="modelchip">+10 more</span>
+        </div>
+        <button class="go" style="padding:11px 22px;font-size:var(--font-md)" onclick="reset()">
+          Start building
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </button>
+        <p class="note" style="margin-top:16px">Add or remove providers any time in <b>Settings → Providers</b>.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- demo rail (mockup navigation only) -->
+<nav class="demorail" aria-label="Mockup states">
+  <span class="lbl">Mockup states</span>
+  <button onclick="show('gate')">1 · Gate</button>
+  <button onclick="show('jb');jbStage('detect')">2 · JB detect→install</button>
+  <button onclick="show('jb');jbStage('login')">3 · JB sign-in</button>
+  <button onclick="show('jb');jbStage('configure')">4 · JB configure</button>
+  <button onclick="show('claude')">5 · Claude OAuth</button>
+  <button onclick="show('copilot')">6 · Copilot code</button>
+  <button onclick="show('apikey')">7 · API key</button>
+  <button onclick="finish()">8 · Success</button>
+</nav>
+
+<script>
+/* ── view switching ─────────────────────────────────────────────────────────────── */
+let oauthProvider = "Claude";
+function show(v, provider){
+  document.querySelectorAll(".view").forEach(s=>s.classList.remove("on"));
+  document.getElementById(`view-${v}`).classList.add("on");
+  window.scrollTo({top:0});
+  if(v==="jb") jbStage(currentJbStage||"detect");
+  if(v==="claude"){
+    oauthProvider = provider||"Claude";
+    const isGpt = oauthProvider==="ChatGPT";
+    document.getElementById("oauthTitle").textContent = `Sign in to ${oauthProvider}`;
+    document.getElementById("oauthSub").textContent = isGpt
+      ? "Uses your ChatGPT Plus / Pro plan (Codex). ThinkRail never sees your password."
+      : "Uses your Claude Pro / Max subscription. ThinkRail never sees your password.";
+    document.getElementById("oauthUrl").textContent = isGpt
+      ? "https://auth.openai.com/oauth/authorize?client=thinkrail…"
+      : "https://claude.ai/oauth/authorize?client=thinkrail…";
+  }
+}
+function finish(){
+  const pill=document.getElementById("pill");
+  pill.classList.add("ok");
+  document.getElementById("pillText").innerHTML="Host connected · <b>14 models</b>";
+  show("success");
+}
+function _reset(){
+  document.getElementById("pill").classList.remove("ok");
+  document.getElementById("pillText").innerHTML="Host connected · <b>0 models</b>";
+  currentJbStage="detect";
+  show("gate");
+}
+function _copied(btn){
+  btn.classList.add("copied");
+  const old=btn.innerHTML; btn.innerHTML="✓ Copied";
+  setTimeout(()=>{btn.classList.remove("copied");btn.innerHTML=old;},1400);
+}
+
+/* ── gate hero live probe (simulated) ───────────────────────────────────────────── */
+setTimeout(()=>{
+  const el=document.getElementById("jbState");
+  if(el) el.innerHTML='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg> jbcentral not installed on this machine — setup takes ~2 minutes';
+},1700);
+
+/* ── JetBrains wizard stage machine ─────────────────────────────────────────────── */
+let currentJbStage="detect";
+const jbStages={
+  detect: `
+    <div class="check now" style="opacity:1"><span class="ic"><span class="spin"></span></span> Checking this machine for the JetBrains Central CLI…</div>`,
+  install: `
+    <p class="note" style="margin:0 0 12px">The JetBrains Central CLI (<b>jbcentral</b>) isn't installed. ThinkRail can run the official installer for you — this is the exact command it will execute:</p>
+    <div class="cmd"><span class="dollar">$</span><span class="txt">curl -fsSL https://jetbrains-central-cli.s3.eu-west-1.amazonaws.com/central/stable/install.sh | bash</span>
+      <button class="copy" onclick="copied(this)">Copy</button></div>
+    <div class="btnrow">
+      <button class="go" onclick="jbStage('installing')">Install for me</button>
+      <button class="btn2" onclick="jbStage('detect'),setTimeout(()=>jbStage('login'),1300)">I ran it myself — re-check</button>
+    </div>`,
+  installing: `
+    <div class="checks">
+      <div class="check ok"><span class="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span><span class="lbl">Installer downloaded &amp; checksum verified</span></div>
+      <div class="check now"><span class="ic"><span class="spin"></span></span> Installing jbcentral to ~/.local/bin… <code style="margin-left:auto;color:var(--hint)">8.4 MB / 12.1 MB</code></div>
+      <div class="check"><span class="ic">·</span> Add to PATH</div>
+    </div>`,
+  login: `
+    <div class="waitcard" style="padding-top:14px">
+      <div class="pulse">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3.5 9h17M3.5 15h17M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg>
+      </div>
+      <div class="wait-t">Finish signing in to JetBrains in your browser</div>
+      <div class="wait-s">ThinkRail launched <code style="font-family:var(--font-mono);font-size:11px">jbcentral login</code> and your browser opened the JetBrains sign-in page.</div>
+    </div>
+    <div class="cmd" style="margin-top:14px"><span class="txt" style="color:var(--muted);font-size:11px">https://account.jetbrains.com/authorize?device=thinkrail…</span>
+      <button class="copy" onclick="copied(this)">Copy</button></div>
+    <p class="note"><b>Early access?</b> Choose the <b>ThinkRail-Early</b> organisation when asked. No access yet — request it from <a href="#">@daniil.berezun</a> with your name and email.</p>
+    <div class="btnrow">
+      <button class="go" onclick="jbStage('configure')">Demo: signed in</button>
+      <button class="btn2" onclick="show('gate')">Cancel</button>
+    </div>`,
+  configure: `
+    <div class="checks" id="cfgChecks">
+      <div class="check" data-lbl="Claude models enabled"><span class="ic">·</span> <span class="lbl">Enable Claude models</span> <code style="margin-left:auto;color:var(--hint)">jbcentral add claude</code></div>
+      <div class="check" data-lbl="Codex models enabled"><span class="ic">·</span> <span class="lbl">Enable Codex models</span> <code style="margin-left:auto;color:var(--hint)">jbcentral add codex</code></div>
+      <div class="check" data-lbl="pi routed through the JetBrains proxy"><span class="ic">·</span> <span class="lbl">Route pi through the local JetBrains proxy</span> <code style="margin-left:auto;color:var(--hint)">models.json</code></div>
+      <div class="check" data-lbl="Models reloaded"><span class="ic">·</span> <span class="lbl">Reload model registry</span></div>
+    </div>`,
+};
+function jbStage(name){
+  currentJbStage=name;
+  const s1=document.getElementById("jbs1"),s2=document.getElementById("jbs2"),s3=document.getElementById("jbs3");
+  [s1,s2,s3].forEach(s=>s.className="step");
+  if(name==="detect"||name==="install"||name==="installing") s1.classList.add("now");
+  if(name==="login"){s1.classList.add("done");s2.classList.add("now");}
+  if(name==="configure"){s1.classList.add("done");s2.classList.add("done");s3.classList.add("now");}
+  document.getElementById("jbStage").innerHTML=jbStages[name];
+  if(name==="detect") setTimeout(()=>{if(currentJbStage==="detect")jbStage("install")},1500);
+  if(name==="installing") setTimeout(()=>{if(currentJbStage==="installing")jbStage("login")},2600);
+  if(name==="configure"){
+    const rows=[...document.querySelectorAll("#cfgChecks .check")];
+    let i=0;
+    const tick=()=>{
+      if(i>0){const prev=rows[i-1];prev.className="check ok";
+        prev.querySelector(".ic").innerHTML='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
+        prev.querySelector(".lbl").textContent=prev.dataset.lbl;}
+      if(i<rows.length){rows[i].classList.add("now");rows[i].querySelector(".ic").innerHTML='<span class="spin"></span>';i++;setTimeout(tick,850);}
+      else setTimeout(finish,500);
+    };
+    tick();
+  }
+}
+
+/* ── API key provider list ──────────────────────────────────────────────────────── */
+const PROVIDERS=[
+  ["Anthropic","#d97757","ANTHROPIC_API_KEY"],["OpenAI","#0e0e10","OPENAI_API_KEY"],
+  ["Google Gemini","#4285f4","GEMINI_API_KEY"],["Groq","#f55036","GROQ_API_KEY"],
+  ["OpenRouter","#6467f2","OPENROUTER_API_KEY"],["Mistral","#fa500f","MISTRAL_API_KEY"],
+  ["xAI","#1d1d1f","XAI_API_KEY"],["DeepSeek","#4d6bfe","DEEPSEEK_API_KEY"],
+  ["Cerebras","#f26522","CEREBRAS_API_KEY"],["Fireworks","#5a32fb","FIREWORKS_API_KEY"],
+  ["Together AI","#0f6fff","TOGETHER_API_KEY"],["Hugging Face","#ffd21e","HF_TOKEN"],
+];
+let selProv="Anthropic";
+function renderProv(filter=""){
+  const list=document.getElementById("provlist");
+  list.innerHTML=PROVIDERS.filter(([n])=>n.toLowerCase().includes(filter.toLowerCase()))
+    .map(([n,c,env])=>`
+    <button class="prov ${n===selProv?"sel":""}" onclick="pickProv('${n}','${env}')">
+      <span class="mark mk" style="background:${c};color:#fff;font-weight:700">${n[0]}</span>
+      ${n}<span class="env">${env}</span>
+    </button>`).join("")||'<div style="padding:12px;color:var(--hint);font-size:12px">No providers match.</div>';
+}
+function _pickProv(n,env){
+  selProv=n;renderProv(document.getElementById("provsearch").value);
+  document.getElementById("keyinput").placeholder=n==="Anthropic"?"sk-ant-…":n==="OpenAI"?"sk-…":"paste key…";
+  document.getElementById("envnote").innerHTML=`Already exported <b>${env}</b> in your shell? pi picks environment keys up automatically — you only need this form to store a key permanently.`;
+}
+function _filterProv(v){renderProv(v)}
+renderProv();
+</script>
+</body>
+</html>

@@ -27,6 +27,18 @@ import {
 	setSessionThinkingLevel,
 	steerSession,
 } from "../agent";
+import {
+	answerAuth,
+	buildAuthStatus,
+	cancelAuthFlow,
+	logoutProvider,
+	setApiKey,
+	startJbConfigure,
+	startJbInstall,
+	startJbLogin,
+	startOAuthLogin,
+	unwireJbcentral,
+} from "../auth";
 import { selectDirectory } from "../dialog";
 import { readDir, readFile } from "../fs";
 import { gitDiff, gitStatus, listBranches, prefetchBranch } from "../git";
@@ -221,6 +233,30 @@ const handlers: Record<string, Handler> = {
 	},
 	"model.list": () => listAvailableModels(),
 	"model.default": () => getDefaultModel(),
+	// auth.* — the provider-auth surface. Flow starters return `{ flowId }` and stream progress on the
+	// `auth.event` channel; `auth.answer` settles a blocking prompt/select/manual-code question.
+	"auth.status": () => buildAuthStatus(),
+	"auth.login": (params) => startOAuthLogin((params as { providerId: string }).providerId),
+	"auth.answer": (params) => {
+		const p = params as { requestId: string; value: string | null };
+		if (typeof p.requestId !== "string" || (p.value !== null && typeof p.value !== "string"))
+			throw new Error("Malformed auth answer");
+		answerAuth(p.requestId, p.value);
+		return { ok: true } as const;
+	},
+	"auth.cancel": (params) => {
+		cancelAuthFlow((params as { flowId: string }).flowId);
+		return { ok: true } as const;
+	},
+	"auth.setApiKey": (params) => {
+		const p = params as { providerId: string; key: string };
+		return setApiKey(p.providerId, p.key);
+	},
+	"auth.logout": (params) => logoutProvider((params as { providerId: string }).providerId),
+	"jbcentral.install": () => startJbInstall(),
+	"jbcentral.login": () => startJbLogin(),
+	"jbcentral.configure": () => startJbConfigure(),
+	"jbcentral.unwire": () => unwireJbcentral(),
 };
 
 /** Route a WS request to its handler. Throws on unknown method (→ a `{ ok:false }` WS response). */

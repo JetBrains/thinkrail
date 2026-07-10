@@ -2,4 +2,4 @@
 
 export { errorText } from "./errorText";
 export type { ConnectionStatus, TransportOptions } from "./transport";
-export { getTransport, initTransport } from "./wireTransport";
+export { getTransport, initTransport, refreshAuthStatus } from "./wireTransport";

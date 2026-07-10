@@ -55,7 +55,11 @@ resolution are pure (`parseUpdateArgs` / `resolveUpdatePlan`, unit-tested); only
 `$PI_CODING_AGENT_DIR/models.json` to route Claude/GPT through the local JetBrains Central CLI
 (`jbcentral`) proxy under the user's JetBrains auth; `--remove` reverts it. It lives in the CLI (not just
 `scripts/setup-jbcentral-cli.ts`, now a thin wrapper) so it ships in the binary — one command, no bun,
-mac/linux/windows. Requires `jbcentral` on PATH. Parse + config transforms are pure and unit-tested.
+mac/linux/windows. Requires `jbcentral` on PATH. The **wiring core** (transforms + proxy discovery +
+models.json IO) lives in `@thinkrail/shared/jbcentral`, shared with the host's **in-app JetBrains AI
+flow** (`packages/server/src/auth` — the same wiring, driven from the connect gate); this file owns only
+the CLI front door (arg parse + console output). Parse is unit-tested here; the transforms are tested in
+`shared`.
 
 ## Version stamping (release seam)
 
@@ -115,7 +119,7 @@ extensions** (which the server path-loads out of `node_modules` in dev — impos
   + its boot smoke (`scripts/build-binary.ts`, `scripts/smoke-binary.ts`, `src/compiled-entry.ts`,
   `src/web-assets.generated.*`, `src/bundled-extensions.generated.*`), `src/version.ts` (the release
   version stamped in at build time), `src/update.ts` (the `update` subcommand), and `src/jbcentral.ts` (the
-  `jbcentral` subcommand — JetBrains Central CLI proxy wiring).
+  `jbcentral` subcommand — the CLI front door over `@thinkrail/shared/jbcentral`).
 - **Allowed deps:** `@thinkrail/server` (`createServer`, `setBundledExtensions`),
   `@thinkrail/shared/shellEnv` (`resolveShellEnv`), Bun/Node; the generated build module may
   value-import the bundled extension packages' entries (resolved via the server package — build-time

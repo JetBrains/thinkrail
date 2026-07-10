@@ -55,6 +55,13 @@ runtime exports being the WS method/channel constants and the protocol version. 
     is a **host-owned pi custom tool** (server `agent/askUserQuestion` — see its SPEC for the design
     rationale); the tool blocks while the chat renders the questionnaire **inline** and replies via
     `session.answerQuestion` (correlated by the tool call id).
+- **authProtocol.ts** — the provider-auth wire (OUR shapes, like `ExtUiRequest` — never pi re-exports):
+  **`AuthStatusResult`** (`AuthProviderStatus[]` — OAuth flows + the API-key catalog with per-provider
+  status/labels, **never credential values** — + `JbcentralStatus` + the gate-driving `modelCount`),
+  **`AuthEvent`** (the `auth.event` channel frames: `flow-started`/`auth-url`/`device-code`/
+  `manual-code`/`prompt`/`select`/`progress`/`log`/`step`/`done`, plus the flow-less `changed`
+  invalidation), **`AuthFlowStart`**/**`AuthFlowKind`**. The one credential-bearing message on the whole
+  wire is the `auth.setApiKey` param (client→host, once).
 - **domain.ts** — app entities: `Project` (git repo + unique `slug`; "does it have specs?" is **not** a
   field — it's the lazy `project.hasSpecs` query, since it's a full-tree walk), **`ProjectPathStatus`** (a
   candidate path's kind — `repo` / `initable` / `missing` / `notDirectory` — so the UI opens, offers a

@@ -69,8 +69,12 @@ prompt hero (still editable; empty by default), a base-branch
   creates the workspace. A **rejected** kick-off `prompt` (a bad model / missing API key — e.g. picking a
   nonexistent model) surfaces as an `error` turn in the just-opened chat via `store.appendErrorTurn` (with
   `transport`'s `errorText`) rather than vanishing. (`gh` status lives in `SettingsDialog`, not the
-  create dialog.) **`SettingsDialog`** is the app-settings surface the shell's topbar gear opens — its
-  "Local GitHub" block shows `github.authStatus()` (Connected + login / Not connected) with a Refresh.
+  create dialog.) With **zero available models** the (disabled) picker gains a **"Connect a provider…"**
+  CTA → `store.requestSettings()` (the deep-link to Settings → Providers — the softer post-gate path
+  when auth breaks later). **`SettingsDialog`** is the app-settings surface the shell's topbar gear
+  opens — the `auth` module's **`ProvidersSection`** (subscription sign-ins, the jbcentral block, API
+  keys) over its "Local GitHub" block (`github.authStatus()` — Connected + login / Not connected —
+  with a Refresh).
   Panels compose their own sub-panels
   (e.g. `RightPanel`→`FileTree`/`ChangesPanel`, `CenterTabs`→`MonacoEditor`) — an internal hierarchy.
   `CenterTabs` closing a chat tab routes to `store.closeChatToHistory` (keeps the session alive) and shows a

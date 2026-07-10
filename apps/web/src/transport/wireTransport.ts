@@ -1,4 +1,5 @@
 import type {
+	AuthEvent,
 	ExtUiRequest,
 	ServerWelcome,
 	SessionEventPayload,
@@ -26,6 +27,17 @@ export function initTransport(): WsTransport {
 		if (Array.isArray(welcome.projects)) {
 			useAppStore.getState().setProjects(welcome.projects);
 		}
+		// Hydrate the provider-auth read on every (re)connect — the gate keys off a *definitive*
+		// modelCount, so this fetch is what arms/disarms it.
+		refreshAuthStatus();
+	});
+
+	transport.subscribe(WS_CHANNELS.authEvent, (data) => {
+		const event = data as AuthEvent;
+		useAppStore.getState().applyAuthEvent(event);
+		// Any auth/model change (ours or another client's): re-read status + models so pickers and the
+		// gate reconcile with the host's truth.
+		if (event.kind === "changed") refreshAuthStatus();
 	});
 
 	transport.subscribe(WS_CHANNELS.piEvent, (data) => {
@@ -48,4 +60,20 @@ export function initTransport(): WsTransport {
 export function getTransport(): WsTransport {
 	if (!transport) throw new Error("transport not initialized — call initTransport() first");
 	return transport;
+}
+
+/** Re-read `auth.status` (+ `model.list` so open pickers refresh) into the store. Fire-and-forget. */
+export function refreshAuthStatus(): void {
+	const t = transport;
+	if (!t) return;
+	t.request("auth.status", {})
+		.then((status) => useAppStore.getState().setAuthStatus(status))
+		.catch(() => {
+			/* transient — the next welcome/changed refetches */
+		});
+	t.request("model.list", {})
+		.then((models) => useAppStore.getState().setModels(models))
+		.catch(() => {
+			/* transient */
+		});
 }

@@ -1,5 +1,6 @@
 // The browser↔host API — ours, not pi's. Methods are request/response; channels are server→client push.
 
+import type { AuthFlowStart, AuthStatusResult } from "./authProtocol";
 import type {
 	BranchList,
 	DiffStats,
@@ -92,6 +93,18 @@ export const WS_METHODS = {
 	sessionGetMessages: "session.getMessages",
 	modelList: "model.list",
 	modelDefault: "model.default",
+	// auth.* — the provider-auth surface (the connect gate + Settings→Providers). Flow-starting
+	// methods return a `flowId`; their progress streams on the `auth.event` channel.
+	authStatus: "auth.status",
+	authLogin: "auth.login",
+	authAnswer: "auth.answer",
+	authCancel: "auth.cancel",
+	authSetApiKey: "auth.setApiKey",
+	authLogout: "auth.logout",
+	jbcentralInstall: "jbcentral.install",
+	jbcentralLogin: "jbcentral.login",
+	jbcentralConfigure: "jbcentral.configure",
+	jbcentralUnwire: "jbcentral.unwire",
 } as const;
 
 /** Server→client push channels. */
@@ -103,6 +116,9 @@ export const WS_CHANNELS = {
 	// A host-initiated workspace mutation (the auto-rename), broadcast to every client. `data` is the
 	// full persisted `Workspace` snapshot — idempotent under last-value replay, never a delta.
 	workspaceUpdated: "workspace.updated",
+	// Provider-auth flow frames (`AuthEvent`): OAuth urls/codes/prompts, jbcentral step progress, and
+	// the `changed` invalidation that tells clients to re-fetch `auth.status` + `model.list`.
+	authEvent: "auth.event",
 } as const;
 
 export type WsMethod = (typeof WS_METHODS)[keyof typeof WS_METHODS];
@@ -189,6 +205,26 @@ export interface WsMethodMap {
 		params: { sessionId: string; workspaceId: string };
 		result: { summary: SessionSummary; messages: Message[] };
 	};
+	"auth.status": { params: Record<string, never>; result: AuthStatusResult };
+	// Starts the pi OAuth flow for a provider (`anthropic` / `openai-codex` / `github-copilot`).
+	// Starting any flow cancels a still-running one (last click wins, across all clients).
+	"auth.login": { params: { providerId: string }; result: AuthFlowStart };
+	// Reply to a `prompt` / `select` / `manual-code` event, correlated by `requestId`. `null` cancels
+	// the pending question (and with it the flow, if the flow can't proceed without it).
+	"auth.answer": { params: { requestId: string; value: string | null }; result: Ack };
+	"auth.cancel": { params: { flowId: string }; result: Ack };
+	// The one write that carries a credential value (client→host). Result = fresh status snapshot.
+	"auth.setApiKey": { params: { providerId: string; key: string }; result: AuthStatusResult };
+	"auth.logout": { params: { providerId: string }; result: AuthStatusResult };
+	// jbcentral steps, each an idempotent, separately-retryable flow (events on `auth.event`):
+	// install (runs the official installer — the UI shows the exact command first), login (spawns
+	// `jbcentral login`; the browser opens host-side), configure (`add claude` + `add codex` + wire
+	// the proxy into models.json + reload the model registry).
+	"jbcentral.install": { params: Record<string, never>; result: AuthFlowStart };
+	"jbcentral.login": { params: Record<string, never>; result: AuthFlowStart };
+	"jbcentral.configure": { params: Record<string, never>; result: AuthFlowStart };
+	// Drop the proxy overrides from models.json (Settings escape hatch). Result = fresh status.
+	"jbcentral.unwire": { params: Record<string, never>; result: AuthStatusResult };
 	"model.list": { params: Record<string, never>; result: Model<string>[] };
 	// The model/thinking a fresh session resolves to (settings default, else first available) — so the
 	// New-Workspace dialog shows the exact pre-session model, not a placeholder.

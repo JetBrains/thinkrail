@@ -56,7 +56,13 @@ packages/spec-graph portable pi extension: spec_* tools + skill (bundled into ev
    branch/cwd, under `~/.thinkrail/worktrees`) → {chats, files, terminals}. The shell is built first,
    `pi` connected last. Real PR / Checks / Review stay V2.
 7. **Auth is external.** Tailscale ACLs / device identity are the auth; the app carries an `owner` field,
-   not a login UI.
+   not a login UI. **Provider auth is in-app**, though (distinct concern: model credentials, not user
+   identity): a first-run **hard gate** — while the host reports zero available models, a full-screen
+   Connect surface is the app — offering the JetBrains AI path (host-driven jbcentral
+   install/login/wire), pi's subscription OAuth flows (bridged over the wire as serialized `auth.event`
+   frames), and API keys; managed afterwards in Settings → Providers. Credentials live in pi's
+   `auth.json`/`models.json` on the host and never ride the read side of the wire. (Server
+   `src/auth/SPEC.md` + web `src/auth/SPEC.md`.)
 8. **Hydrate-then-stream (every client reconstructs from the host).** A client never relies on having
    *witnessed* events to know state — on connect it **reads** the current state, then **subscribes** to
    live deltas. The host exposes the read side of the wire (`project.list` / `workspace.list` /

@@ -1,5 +1,6 @@
 import { Settings } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { AuthGate } from "../auth";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../components/ui/resizable";
 import { PRODUCT_NAME } from "../constants/branding";
 import { CenterTabs } from "../panels/CenterTabs";
@@ -26,9 +27,16 @@ const STATUS_DOT: Record<ConnectionStatus, string> = {
 export function Shell() {
 	const status = useAppStore((s) => s.status);
 	const hasActiveWorkspace = useAppStore((s) => s.activeWorkspaceId != null);
+	const settingsRequestSeq = useAppStore((s) => s.settingsRequestSeq);
 	const [settingsOpen, setSettingsOpen] = useState(false);
+	// Deep-link intent (e.g. a model picker's empty state → Providers): each bump opens the dialog.
+	useEffect(() => {
+		if (settingsRequestSeq > 0) setSettingsOpen(true);
+	}, [settingsRequestSeq]);
 	return (
 		<div data-testid="shell" className="grid h-full grid-rows-[auto_1fr]">
+			{/* The first-run hard gate: overlays everything while the host has zero available models. */}
+			<AuthGate />
 			<header className="flex items-center justify-between border-b border-border2 bg-bg-dark px-lg py-sm">
 				<span className="font-[var(--font-accent)] text-lg font-extrabold tracking-[0.5px] text-primary">
 					{PRODUCT_NAME}

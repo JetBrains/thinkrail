@@ -17,7 +17,8 @@ Exposed through explicit subpath exports, not a barrel.
 
 - **Owns:** host-side runtime helpers that are neither engine- nor transport-specific.
 - **Public surface:** `@thinkrail/shared/shellEnv` → `resolveShellEnv()`, `pathLooksComplete()`;
-  `@thinkrail/shared/freePort` → `findFreePort()`, `isPortFree()`.
+  `@thinkrail/shared/freePort` → `findFreePort()`, `isPortFree()`; `@thinkrail/shared/jbcentral` → the
+  jbcentral wiring core (transforms + probes + `wireJbcentralProxy`/`unwireJbcentralProxy`).
 - **Allowed deps:** Bun/Node runtime (`@types/bun`); may use `contracts` types if needed (none today).
 - **Forbidden:** importing `server` / `web` / any `pi` package; being imported by `web` (it carries
   Bun/Node code that must not reach the browser bundle).
@@ -29,6 +30,16 @@ Exposed through explicit subpath exports, not a barrel.
 - **/freePort** — `findFreePort(preferred, host?)`: the first free port at or above `preferred`, so a
   host can pick an open port instead of colliding with one already running. `isPortFree(port, host?)`:
   the underlying single-port check.
+- **/jbcentral** — the JetBrains Central CLI wiring core, shared by BOTH front doors (`thinkrail
+  jbcentral` in `apps/cli` and the host's in-app JetBrains AI flow in `packages/server/src/auth`):
+  the pure models.json transforms (`applyJbcentralOverrides`/`removeJbcentralOverrides`,
+  `buildProxyUrls`, `resolveProxyPort`, `isJbcentralWired`), the official installer commands
+  (`jbcentralInstallCommand` — the exact string shown to the user IS the argv that runs; URLs point at
+  `…/central/stable/install.{sh,ps1}`), binary resolution (`resolveJbcentralBin` — PATH first, then
+  well-known install dirs, since the installer edits the user's shell rc, not the host's PATH), and the
+  wire/unwire runners (`wireJbcentralProxy` spawns `jbcentral proxy start --ensure-updated
+  --return-key` — an empty secret doubles as the "not logged in" signal — then writes the overrides
+  with a `.bak`). Transforms are pure + unit-tested; only the runners touch fs/spawn.
 
 ## Get right (shellEnv)
 

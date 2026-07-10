@@ -263,6 +263,17 @@ export function NewWorkspaceDialog({
 							container={dialogEl}
 							onSelect={setModel}
 						/>
+						{models.length === 0 ? (
+							// No available models (auth broke after first-run) — deep-link to Settings → Providers.
+							<button
+								type="button"
+								data-testid="connect-provider-cta"
+								onClick={() => useAppStore.getState().requestSettings()}
+								className="text-primary text-sm underline-offset-2 hover:underline"
+							>
+								Connect a provider…
+							</button>
+						) : null}
 						<ThinkingSelector
 							level={thinkingLevel}
 							container={dialogEl}

@@ -50,9 +50,17 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   **`requestChangesView(workspaceId, path)`** are a UI deep-link intent (a chat turn-divider asking the
   right panel to surface a file's diff); the panels watch it, scoped by workspace. The `EditorTab`
   (`FileTab` | `ChatTab`) + `TerminalTab` + `ClosedChat` + `SessionRuntime` types. (Chat *render* types +
-  renderers live in the `chat` module.)
+  renderers live in the `chat` module.) The **provider-auth slice**: `authStatus` (the host's
+  `auth.status` read — null until the first fetch, so the gate only shows on a *definitive* zero) +
+  `authFlow` (the single active flow, folded by the pure **`reduceAuthEvent`** — frames for other flow
+  ids are ignored, `step`s upsert by name, logs cap at 200) via `setAuthStatus`/`applyAuthEvent`
+  (whose `changed` frame fast-updates `authStatus.modelCount` in place — the gate's close signal —
+  before the transport's refetch reconciles)/`clearAuthQuestion`/`clearAuthFlow`; and the
+  **`settingsRequestSeq`** counter + `requestSettings()` — a deep-link intent (picker empty state →
+  Settings) the shell reacts to, mirroring `changesRequest`.
 - **Public surface (barrel):** `useAppStore`, `EditorTab` (`FileTab`/`ChatTab`), `TerminalTab`, `ClosedChat`,
-  `SessionRuntime` + `EMPTY_RUNTIME` (ChatView's pre-creation fallback), `reduceSessionEvent`.
+  `SessionRuntime` + `EMPTY_RUNTIME` (ChatView's pre-creation fallback), `reduceSessionEvent`,
+  `AuthFlowState` + `reduceAuthEvent`.
 - **Allowed deps:** `contracts` (`Project`/`Workspace`/`Model`/`ThinkingLevel`/`SessionStats`/
   `SlashCommandInfo`/`ExtUiRequest`; `PiEvent`, **type-only**); `chat` (`ChatTurn`/`ToolResultState`,
   **type-only**); `transport` (`ConnectionStatus`, **type-only**); `zustand`.

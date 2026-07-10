@@ -1,4 +1,7 @@
 import type {
+	AuthEvent,
+	AuthFlowKind,
+	AuthStatusResult,
 	ExtUiRequest,
 	Model,
 	PiEvent,
@@ -385,6 +388,109 @@ interface AppState {
 	applyExtUi: (request: ExtUiRequest) => void;
 	/** Ask the right panel to open `path`'s diff in its Changes view (deep-link from chat). */
 	requestChangesView: (workspaceId: string, path: string) => void;
+	/**
+	 * Provider-auth state. `authStatus` is the host's `auth.status` read (null until first fetch — the
+	 * gate only shows on a *definitive* zero, never while loading); `authFlow` is the single active
+	 * flow, folded from `auth.event` frames. A `changed` frame fast-updates `modelCount` in place
+	 * (the full refetch reconciles right after).
+	 */
+	authStatus: AuthStatusResult | null;
+	authFlow: AuthFlowState | null;
+	setAuthStatus: (status: AuthStatusResult) => void;
+	applyAuthEvent: (event: AuthEvent) => void;
+	/** Clear a consumed blocking question (the answer is sent by the component via the transport). */
+	clearAuthQuestion: (kind: "prompt" | "select" | "manual-code") => void;
+	clearAuthFlow: () => void;
+	/**
+	 * A deep-link intent to open the Settings dialog (e.g. the model picker's empty state → Providers).
+	 * A counter, not a boolean — the shell owns the dialog's open state and reacts to each bump.
+	 */
+	settingsRequestSeq: number;
+	requestSettings: () => void;
+}
+
+/**
+ * The client's view of the host's single active auth flow (OAuth login / jbcentral step), folded
+ * from `auth.event` frames. One at a time by design — mirrors the server's flow registry.
+ */
+export interface AuthFlowState {
+	flowId: string;
+	flow: AuthFlowKind;
+	providerId?: string;
+	authUrl?: string;
+	instructions?: string;
+	deviceCode?: { userCode: string; verificationUri: string; expiresInSeconds?: number };
+	/** A live manual-code paste box (races the provider's browser callback). */
+	manualCodeRequestId?: string;
+	prompt?: { requestId: string; message: string; placeholder?: string; allowEmpty?: boolean };
+	select?: { requestId: string; message: string; options: { id: string; label: string }[] };
+	progress?: string;
+	logs: string[];
+	/** Ordered step ledger (jbcentral wizard) — upserted by step name, last status wins. */
+	steps: { step: string; status: "start" | "ok" | "error"; detail?: string }[];
+	done?: { ok: boolean; message?: string };
+}
+
+/** Fold one `auth.event` frame into the flow state (pure — unit-testable). */
+export function reduceAuthEvent(
+	flow: AuthFlowState | null,
+	event: AuthEvent,
+): AuthFlowState | null {
+	if (event.kind === "flow-started") {
+		return {
+			flowId: event.flowId,
+			flow: event.flow,
+			...(event.providerId ? { providerId: event.providerId } : {}),
+			logs: [],
+			steps: [],
+		};
+	}
+	if (event.kind === "changed" || !flow || event.flowId !== flow.flowId) return flow;
+	switch (event.kind) {
+		case "auth-url":
+			return {
+				...flow,
+				authUrl: event.url,
+				...(event.instructions ? { instructions: event.instructions } : {}),
+			};
+		case "device-code": {
+			const { kind: _k, flowId: _f, ...deviceCode } = event;
+			return { ...flow, deviceCode };
+		}
+		case "manual-code":
+			return { ...flow, manualCodeRequestId: event.requestId };
+		case "prompt": {
+			const { kind: _k, flowId: _f, ...prompt } = event;
+			return { ...flow, prompt };
+		}
+		case "select": {
+			const { kind: _k, flowId: _f, ...select } = event;
+			return { ...flow, select };
+		}
+		case "progress":
+			return { ...flow, progress: event.message };
+		case "log":
+			return { ...flow, logs: [...flow.logs.slice(-199), event.line] };
+		case "step": {
+			const steps = [...flow.steps];
+			const i = steps.findIndex((s) => s.step === event.step);
+			const next = {
+				step: event.step,
+				status: event.status,
+				...(event.detail ? { detail: event.detail } : {}),
+			};
+			if (i >= 0) steps[i] = next;
+			else steps.push(next);
+			return { ...flow, steps };
+		}
+		case "done":
+			return {
+				...flow,
+				done: { ok: event.ok, ...(event.message ? { message: event.message } : {}) },
+			};
+		default:
+			return flow;
+	}
 }
 
 /** Apply an immutable update to one session's runtime; a no-op (and no new `sessions` object) if it's gone. */
@@ -414,6 +520,9 @@ export const useAppStore = create<AppState>((set) => ({
 	sessions: {},
 	models: [],
 	changesRequest: null,
+	authStatus: null,
+	authFlow: null,
+	settingsRequestSeq: 0,
 	setStatus: (status) => set({ status }),
 	setWelcome: (protocolVersion) => set({ protocolVersion }),
 	setProjects: (projects) => set({ projects }),
@@ -687,6 +796,26 @@ export const useAppStore = create<AppState>((set) => ({
 	handlePiEvent: (event, sessionId) =>
 		set((s) => withRuntime(s, sessionId, (rt) => reduceSessionEvent(rt, event))),
 	setModels: (models) => set({ models }),
+	setAuthStatus: (authStatus) => set({ authStatus }),
+	applyAuthEvent: (event) =>
+		set((s) => ({
+			authFlow: reduceAuthEvent(s.authFlow, event),
+			// Fast gate reaction: `changed` carries the new count; the full auth.status refetch follows.
+			...(event.kind === "changed" && s.authStatus
+				? { authStatus: { ...s.authStatus, modelCount: event.modelCount } }
+				: {}),
+		})),
+	clearAuthQuestion: (kind) =>
+		set((s) => {
+			if (!s.authFlow) return {};
+			const flow = { ...s.authFlow };
+			if (kind === "prompt") delete flow.prompt;
+			else if (kind === "select") delete flow.select;
+			else delete flow.manualCodeRequestId;
+			return { authFlow: flow };
+		}),
+	clearAuthFlow: () => set({ authFlow: null }),
+	requestSettings: () => set((s) => ({ settingsRequestSeq: s.settingsRequestSeq + 1 })),
 	setCurrentModel: (sessionId, model) =>
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, model }))),
 	setThinkingLevel: (sessionId, level) =>

@@ -7,6 +7,7 @@ import {
 	setExtUiPublisher,
 	setSessionPublisher,
 } from "../agent";
+import { setAuthEventPublisher } from "../auth";
 import { listProjects, openProject } from "../projects";
 import { closeAllTerminals, setTerminalPublisher } from "../terminal";
 import {
@@ -59,6 +60,7 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 				ws.subscribe(WS_CHANNELS.piEvent);
 				ws.subscribe(WS_CHANNELS.piExtensionUi);
 				ws.subscribe(WS_CHANNELS.workspaceUpdated);
+				ws.subscribe(WS_CHANNELS.authEvent);
 				const welcome: ServerWelcome = {
 					protocolVersion: PROTOCOL_VERSION,
 					projects: listProjects(),
@@ -129,6 +131,15 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		server.publish(
 			WS_CHANNELS.piExtensionUi,
 			JSON.stringify({ channel: WS_CHANNELS.piExtensionUi, data: request }),
+		);
+	});
+
+	// Push provider-auth flow frames (OAuth urls/codes/prompts, jbcentral steps, the `changed`
+	// invalidation) over the auth.event channel.
+	setAuthEventPublisher((event) => {
+		server.publish(
+			WS_CHANNELS.authEvent,
+			JSON.stringify({ channel: WS_CHANNELS.authEvent, data: event }),
 		);
 	});
 

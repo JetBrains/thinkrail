@@ -23,9 +23,37 @@ export default function globalSetup(): void {
 	mkdirSync(E2E_PI_AGENT_DIR, { recursive: true });
 	// Source from a dev's relocated pi dir if they've set one, else the default ~/.pi/agent.
 	const userAgentDir = process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent");
+	let copiedAny = false;
 	for (const file of ["auth.json", "models.json"]) {
 		const src = join(userAgentDir, file);
-		if (existsSync(src)) copyFileSync(src, join(E2E_PI_AGENT_DIR, file));
+		if (existsSync(src)) {
+			copyFileSync(src, join(E2E_PI_AGENT_DIR, file));
+			copiedAny = true;
+		}
+	}
+	// No provider auth at all (CI): seed a stub custom provider with a dummy apiKey so `model.list` is
+	// non-empty and the first-run auth gate stays closed for the no-agent suite. (pi treats a models.json
+	// apiKey as configured auth; nothing ever calls the fake endpoint in no-agent specs.) The gate itself
+	// is covered by e2e/auth-gate.spec.ts, which boots its own zero-auth host.
+	if (!copiedAny) {
+		writeFileSync(
+			join(E2E_PI_AGENT_DIR, "models.json"),
+			`${JSON.stringify(
+				{
+					providers: {
+						"thinkrail-e2e-stub": {
+							name: "E2E Stub",
+							baseUrl: "http://127.0.0.1:9/v1",
+							api: "openai-completions",
+							apiKey: "e2e-stub",
+							models: [{ id: "e2e-stub-model" }],
+						},
+					},
+				},
+				null,
+				2,
+			)}\n`,
+		);
 	}
 	const [provider, ...idParts] = (
 		process.env.THINKRAIL_E2E_MODEL ?? "anthropic/claude-opus-4-8"

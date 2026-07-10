@@ -13,6 +13,14 @@ test("settings shows the Local GitHub status block and degrades gh gracefully", 
 	await expect(dialog).toBeVisible();
 	await expect(dialog).toContainText("Local GitHub");
 
+	// The Providers section renders regardless of what auth the host machine has: the OAuth rows, the
+	// JetBrains AI (jbcentral) block with its probe state, and the add-a-key form.
+	await expect(page.getByTestId("settings-providers")).toBeVisible();
+	await expect(page.getByTestId("settings-provider-anthropic")).toBeVisible();
+	await expect(page.getByTestId("settings-provider-jetbrains")).toBeVisible();
+	await expect(page.getByTestId("settings-jb-status")).toHaveAttribute("data-wired", /true|false/);
+	await expect(page.getByTestId("settings-apikey-input")).toBeVisible();
+
 	// gh is forced offline → Not connected, but the block (and its Refresh) still render.
 	const status = page.getByTestId("settings-gh-status");
 	await expect(status).toHaveAttribute("data-connected", "false");

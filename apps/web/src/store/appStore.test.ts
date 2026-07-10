@@ -500,3 +500,63 @@ test("removeWorkspace optimistically drops the row, leaving siblings; unknown pr
 	useAppStore.getState().removeWorkspace("p2", "w1");
 	expect(useAppStore.getState().workspaces.p2).toBeUndefined();
 });
+
+// ─── provider-auth: reduceAuthEvent + the gate's fast modelCount update ─────────────────────────
+
+test("reduceAuthEvent folds a full OAuth flow and ignores frames for other flows", async () => {
+	const { reduceAuthEvent } = await import("./appStore");
+	let flow = reduceAuthEvent(null, {
+		kind: "flow-started",
+		flowId: "f1",
+		flow: "oauth",
+		providerId: "anthropic",
+	});
+	expect(flow?.flowId).toBe("f1");
+	expect(flow?.providerId).toBe("anthropic");
+
+	flow = reduceAuthEvent(flow, { kind: "auth-url", flowId: "f1", url: "https://x.test/a" });
+	expect(flow?.authUrl).toBe("https://x.test/a");
+
+	// A frame for a different flow id must be ignored (a stale/late frame from a superseded flow).
+	const before = flow;
+	flow = reduceAuthEvent(flow, { kind: "auth-url", flowId: "OTHER", url: "https://evil" });
+	expect(flow).toBe(before);
+
+	flow = reduceAuthEvent(flow, {
+		kind: "prompt",
+		flowId: "f1",
+		requestId: "r1",
+		message: "Paste code",
+	});
+	expect(flow?.prompt?.requestId).toBe("r1");
+
+	flow = reduceAuthEvent(flow, { kind: "done", flowId: "f1", ok: true });
+	expect(flow?.done?.ok).toBe(true);
+});
+
+test("reduceAuthEvent upserts wizard steps by name and caps the log tail", async () => {
+	const { reduceAuthEvent } = await import("./appStore");
+	let flow = reduceAuthEvent(null, { kind: "flow-started", flowId: "j1", flow: "jb-configure" });
+	flow = reduceAuthEvent(flow, { kind: "step", flowId: "j1", step: "add-claude", status: "start" });
+	flow = reduceAuthEvent(flow, { kind: "step", flowId: "j1", step: "add-claude", status: "ok" });
+	flow = reduceAuthEvent(flow, { kind: "step", flowId: "j1", step: "add-codex", status: "start" });
+	expect(flow?.steps).toEqual([
+		{ step: "add-claude", status: "ok" },
+		{ step: "add-codex", status: "start" },
+	]);
+	for (let i = 0; i < 250; i++) {
+		flow = reduceAuthEvent(flow, { kind: "log", flowId: "j1", line: `line ${i}` });
+	}
+	expect(flow?.logs.length).toBe(200);
+	expect(flow?.logs.at(-1)).toBe("line 249");
+});
+
+test("applyAuthEvent `changed` fast-updates modelCount in place (the gate's close signal)", () => {
+	useAppStore.getState().setAuthStatus({
+		providers: [],
+		jbcentral: { installed: false, wired: false },
+		modelCount: 0,
+	});
+	useAppStore.getState().applyAuthEvent({ kind: "changed", modelCount: 14 });
+	expect(useAppStore.getState().authStatus?.modelCount).toBe(14);
+});
