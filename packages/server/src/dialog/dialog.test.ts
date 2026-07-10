@@ -1,4 +1,7 @@
 import { expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { pickersFor, selectDirectory } from "./dialog";
 
 test("macOS picker uses osascript 'choose folder'", () => {
@@ -43,5 +46,24 @@ test("THINKRAIL_PICK_DIR overrides the native picker", async () => {
 	} finally {
 		if (saved === undefined) delete process.env.THINKRAIL_PICK_DIR;
 		else process.env.THINKRAIL_PICK_DIR = saved;
+	}
+});
+
+test("THINKRAIL_PICK_DIR reads its value from a file when it names one (live per call)", async () => {
+	const dir = mkdtempSync(join(tmpdir(), "trpi-pick-"));
+	const pointer = join(dir, "pick-dir");
+	const saved = process.env.THINKRAIL_PICK_DIR;
+	process.env.THINKRAIL_PICK_DIR = pointer;
+	try {
+		writeFileSync(pointer, "/repos/alpha\n");
+		expect(await selectDirectory()).toEqual({ path: "/repos/alpha" });
+		// Rewriting the pointer switches the returned dir without touching the env — re-read per call, so
+		// one host can hand different folders to different e2e tests.
+		writeFileSync(pointer, "/repos/beta");
+		expect(await selectDirectory()).toEqual({ path: "/repos/beta" });
+	} finally {
+		if (saved === undefined) delete process.env.THINKRAIL_PICK_DIR;
+		else process.env.THINKRAIL_PICK_DIR = saved;
+		rmSync(dir, { recursive: true, force: true });
 	}
 });

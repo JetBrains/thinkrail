@@ -21,7 +21,7 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   spreading over the existing record so the computed `diffStats` badge survives the push (the snapshot
   is the persisted record, which has none); a project never fetched or an id absent from its list is a
   **no-op** — the next `workspace.list` reconciles); **`removeWorkspace(projectId, id)`** drops a workspace
-  from its project's list — the **optimistic** archive removes the row before the host finishes reclaiming
+  from its project's list — the **optimistic** remove drops the row before the host finishes reclaiming
   the worktree (unknown project/id is a no-op); `tabsByWorkspace` /
   `activeTabByWorkspace` (`openTab`/`closeTab`/`setActiveTab`/`clearWorkspaceTabs`, plus
   **`setFileTabView(id, view)`** — a markdown `FileTab`'s `view` (`"rendered"`|`"source"`) lives on the tab

@@ -31,8 +31,14 @@ import { selectDirectory } from "../dialog";
 import { readDir, readFile } from "../fs";
 import { gitDiff, gitStatus, listBranches, prefetchBranch } from "../git";
 import { githubAuthStatus, githubRefresh } from "../github";
-import { closeProject, listProjects, openProject } from "../projects";
-import { evictSpecIndex, specGraph } from "../spec";
+import {
+	closeProject,
+	initProject,
+	inspectProjectPath,
+	listProjects,
+	openProject,
+} from "../projects";
+import { evictSpecIndex, projectHasSpecs, specGraph } from "../spec";
 import {
 	closeTerminal,
 	closeWorkspaceTerminals,
@@ -70,7 +76,16 @@ async function archiveTeardown(ws: Workspace): Promise<void> {
 
 const handlers: Record<string, Handler> = {
 	"project.open": (params) => openProject((params as { path: string }).path),
+	"project.inspect": (params) => inspectProjectPath((params as { path: string }).path),
+	"project.init": (params) => initProject((params as { path: string }).path),
 	"project.list": () => listProjects(),
+	// Lazy, per-project: the Welcome screen requests this only for the one project it renders, so the
+	// full-tree spec walk never sits on the connect handshake (which fans out over every project).
+	"project.hasSpecs": (params) => {
+		const { projectId } = params as { projectId: string };
+		const project = listProjects().find((p) => p.id === projectId);
+		return { hasSpecs: project ? projectHasSpecs(project.path) : false };
+	},
 	"project.close": (params) => {
 		closeProject((params as { id: string }).id);
 		return { ok: true } as const;

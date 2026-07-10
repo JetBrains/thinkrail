@@ -1,10 +1,16 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync, rmSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Locator, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
 import type { Workspace } from "@thinkrail/contracts";
-import { E2E_DATA_DIR, E2E_FIXTURE_REPO, E2E_PI_AGENT_DIR } from "./paths";
+import {
+	E2E_DATA_DIR,
+	E2E_FIXTURE_REPO,
+	E2E_PI_AGENT_DIR,
+	E2E_PICK_DIR_POINTER,
+	E2E_PLAIN_DIR,
+} from "./paths";
 
 /**
  * Reset to a pristine slate: clear app state + any worktrees + pi's persisted sessions, and restore the
@@ -43,6 +49,22 @@ function resetState(): void {
 	}
 
 	rmSync(join(E2E_DATA_DIR, "workspaces.json"), { force: true });
+
+	// Restore the stubbed picker to the git fixture, undoing any test that pointed it elsewhere.
+	writeFileSync(E2E_PICK_DIR_POINTER, E2E_FIXTURE_REPO);
+}
+
+/**
+ * Reset state, (re)create a plain **non-git** folder with a file in it, and point the stubbed picker at
+ * it — so "Open project" exercises the "initialise a repo?" flow. Returns the folder path.
+ */
+export function stagePlainFolder(): string {
+	resetState();
+	rmSync(E2E_PLAIN_DIR, { recursive: true, force: true });
+	mkdirSync(E2E_PLAIN_DIR, { recursive: true });
+	writeFileSync(join(E2E_PLAIN_DIR, "notes.txt"), "hello from a plain folder\n");
+	writeFileSync(E2E_PICK_DIR_POINTER, E2E_PLAIN_DIR);
+	return E2E_PLAIN_DIR;
 }
 
 function loadPersistedWorkspaces(): Workspace[] {
@@ -72,11 +94,16 @@ export async function createWorkspaceViaDialog(page: Page): Promise<Workspace> {
 	return created;
 }
 
-/** Reset state, then open the fixture repo as a project via the (stubbed) picker; auto-selects + expands. */
-export async function openFixtureProject(page: Page): Promise<void> {
+/** Reset to a clean slate (no projects/workspaces) and load the app — leaving the Welcome screen shown. */
+export async function openAppFresh(page: Page): Promise<void> {
 	resetState();
 	await page.goto("/");
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+}
+
+/** Reset state, then open the fixture repo as a project via the (stubbed) picker; auto-selects + expands. */
+export async function openFixtureProject(page: Page): Promise<void> {
+	await openAppFresh(page);
 	await page.getByTestId("add-project-menu").click();
 	await page.getByTestId("menu-open-project").click();
 	await expect(page.getByTestId("project-item").first()).toBeVisible();

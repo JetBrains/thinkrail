@@ -2,7 +2,7 @@
 id: module-thinkrail-workflow
 type: module-design
 status: active
-title: pi-thinkrail-workflow — workflow skills (brainstorming, project-setup)
+title: pi-thinkrail-workflow — workflow skills (brainstorming, project setup)
 parent: architecture
 depends-on: [module-spec-graph]
 tags: [pi-extension, workflow, brainstorming, project-setup, skill]
@@ -12,18 +12,25 @@ tags: [pi-extension, workflow, brainstorming, project-setup, skill]
 
 `pi-thinkrail-workflow` is a pi extension that ships **process/workflow skills** — skills that codify how
 the agent should *run a piece of work*, as opposed to `pi-spec-graph` (what the spec model is) or
-`pi-visualize` (a rendering tool). It ships two skills:
+`pi-visualize` (a rendering tool). It ships a **brainstorming** skill and a **project-setup** family:
 
 - **`brainstorming`** — turns a raw feature request into a validated design, captured as a spec-graph
   `task-spec`, before any implementation starts, mirroring the discipline this repo already applies to
   itself (draft → active specs, "the spec leads the code").
-- **`project-setup`** — for project inception only (an empty workspace, no code yet): turns a raw idea
-  into a `goal-and-requirements.md` through a tailored conversation (vision, MVP scope, success criteria,
-  technology), then hands off to `brainstorming` for the features that follow. Ported from old thinkrail's
-  `claude-plugin` `new-project` skill, with its tool calls remapped to what actually exists here (see that
-  skill's own file for the mapping table) — the conversational design (working-model inference,
-  personal-vs-public routing, MVP-first elicitation) is preserved; anything with no equivalent (a
-  progress-tracker/summary-box visualization, a ticket/board hand-off) is dropped in favour of plain text.
+- **project setup (three skills)** — onboarding a project into a spec graph. **`project-setup`** is a tiny
+  **dispatcher**: it detects whether the workspace is a brand-new/empty project or an existing codebase
+  with no specs, then routes to one of two flows. **`project-new`** (the inception flow, distilled from old
+  thinkrail's `claude-plugin` `new-project` skill — working-model inference, personal-vs-PRD routing,
+  MVP-first elicitation, alternatives research, incremental save; the ticket/board hand-off and
+  progress-tracker visualizations it had have no equivalent here and are dropped) turns a raw idea into
+  `goal-and-requirements.md`. **`project-import`** (net-new) reverse-engineers the first spec graph of an
+  existing codebase — `goal-and-requirements.md` + `architecture.md` + short per-module `SPEC.md` files —
+  by reading the code and agent files (`AGENTS.md`/`CLAUDE.md`/`README`/manifests) and interviewing only
+  for the intent the code can't reveal. All three enforce one bar: **short, honest, on-rails specs** (small
+  enough to read, high-signal enough to keep an agent on track), and hand off to `brainstorming` for the
+  features that follow. The single UI entry point is `apps/web`'s "Set up project" card, which seeds the
+  `/skill:project-setup` command — pi's skill-command syntax that **forces** the dispatcher to load
+  (see [[module-web]]).
 
 This package is the seed of a growing family. Future workflow skills (e.g. a thinkrail-implement or
 bug-fix equivalent) are added as sibling `skills/<name>/` sub-modules; a new tool goes under a `tools/`
@@ -52,7 +59,9 @@ pi-thinkrail-workflow/
   index.ts                   — ExtensionFactory: registers the before_agent_start rule below
   skills/
     brainstorming/SKILL.md    — the brainstorming workflow
-    project-setup/SKILL.md    — the project-inception workflow (empty project → goal-and-requirements.md)
+    project-setup/SKILL.md    — dispatcher: detect new vs existing, route to one of the two below
+    project-new/SKILL.md      — inception flow: empty project → goal-and-requirements.md (interview)
+    project-import/SKILL.md   — import flow: existing codebase → first spec graph (derive + minimal interview)
   package.json                — pi: { extensions: ["./index.ts"], skills: ["./skills"] }
 ```
 
@@ -63,9 +72,13 @@ auto-discovered via the `pi.skills` manifest / `additionalSkillPaths`. A short, 
 `before_agent_start` rule (mirroring `pi-spec-graph`'s `SPEC_RULE`) nudges the agent toward the
 brainstorming skill before creative/feature work, the same way `pi-spec-graph`'s rule nudges it toward
 spec tools before exploring or planning. The rule is a pointer, not a restatement — the workflow's actual
-steps live once, in the skill. `project-setup` carries no rule of its own — it's a much narrower trigger
-(an empty project) that the agent finds via the skill's own `description`, per the "nothing about the
-layout changes to add the next skill" note above.
+steps live once, in the skill. The project-setup family carries no rule of its own — it's a narrower
+trigger (onboarding a project) the agent finds via the dispatcher's `description`, and is reached in-app
+via the "Set up project" card's `/skill:project-setup` command seed (force-loading the dispatcher rather
+than relying on description-matching). `project-new` / `project-import` describe themselves as the
+dispatcher's two branches, so the dispatcher is the clean front door while each stays directly reachable
+when the situation is unambiguous — per the "nothing about the layout changes to add the next skill" note
+above.
 
 ## The brainstorming skill (outline)
 
@@ -89,37 +102,40 @@ Full wording is authored in `skills/brainstorming/SKILL.md`; this is the shape i
    `task-spec`'s own definition ([[module-spec-graph]]), retire it once **the work itself** lands, not
    merely once the design is promoted — it stays as the working record through implementation.
 
-## The project-setup skill (outline)
+## The project-setup skills (outline)
 
-Full wording is authored in `skills/project-setup/SKILL.md`; it is a functional port of old thinkrail's
-`claude-plugin` `new-project` skill, with every tool call remapped to what exists in this pi environment
-(the skill file itself documents the mapping — `spec_save` → `spec_create`/`edit`/`spec_update`,
-`AskUserQuestion` → `ask_user_question`, `WebSearch`/`WebFetch` → `web_search`/`fetch_content`,
-`GOAL&REQUIREMENTS.md`/`DESIGN_DOC.md` → `goal-and-requirements.md`/`architecture.md`) and every feature
-with no equivalent here dropped (`thinkrail_visualize`'s progress-tracker/summary-box types, the
-`SessionFinalize`/`CreateBoardTicket`/ticket-queuing done-screen — this app has no board/ticket system).
-Shape:
+Full wording lives in the three `skills/project-*/SKILL.md` files; the dependency edge between them is
+the dispatcher → flow handoff. The single in-app trigger is `apps/web`'s "Set up project" seed prompt.
 
-1. **Infer a working model** from the user's initial request (audience, domain, tech depth, scope signal,
-   urgency) — never re-ask what's already known.
-2. **Fast-path a pre-filled document** — if the request already reads like a spec, parse it straight into
-   `goal-and-requirements.md` and only ask about what's genuinely missing.
-3. **Confirm Overview and Problem**, one `ask_user_question` at a time, tailored to the stated domain —
-   never generic.
-4. **Route** Personal vs. Public/PRD from the working model, asking only if genuinely ambiguous.
-5. **Elicit branch-specific sections** (features, tech, success criteria, goals, NFRs) via batched
-   `ask_user_question` calls, each v1 feature justified against a Goal or Success condition.
-6. **Research alternatives** via `web_search`/`fetch_content` — always offered, never skipped.
-7. **Review the full draft** in plain markdown before finalizing.
-8. **Save**: `spec_create` once (type: `goal-and-requirements`), `edit` per confirmed section as the
-   conversation progresses, `spec_update` to `status: done` at the end — then hand off to `brainstorming`
-   in plain text for the features that follow.
+- **`project-setup` (dispatcher).** Tiny by design. Detect (spec tools + a look at the workspace) →
+  route: **already-specced** → don't redo, offer review/extend or point at `brainstorming`, stop; **empty
+  repo** → follow `project-new`; **real source, no specs** → follow `project-import`. Restates the
+  short/honest/on-rails bar all flows share, nothing more.
+
+- **`project-new` (inception).** Distilled from old thinkrail's `claude-plugin` `new-project` skill, with
+  its tool calls remapped to this environment (`spec_save` → `spec_create`/`edit`/`spec_update`,
+  `AskUserQuestion` → `ask_user_question`, `WebSearch`/`WebFetch` → `web_search`/`fetch_content`) and its
+  board/ticket + progress-tracker machinery dropped (no equivalent here). Shape: infer a working model from
+  the request (never re-ask); fast-path a pre-filled brief; infer-then-confirm Overview + Problem; route
+  Personal vs. PRD; elicit branch sections (each v1 feature justified against a Goal/Success condition);
+  always offer alternatives research; review; save incrementally (`spec_create` once, `edit` per section,
+  `spec_update` to `done`). Kept far leaner than the original port — the working method survives, the
+  step-by-step bulk does not.
+
+- **`project-import` (import, net-new).** Read first, ask last. Survey the repo — agent files
+  (`AGENTS.md`/`CLAUDE.md`/`.cursor`/copilot) first, then docs, manifests, layout, code — and build a
+  working model (what/domain/stack/modules+edges/invariants/decisions). Interview **only** the gaps the
+  code can't answer, batched via `ask_user_question`; skip the interview entirely if the files answered
+  everything. Draft the graph top-down — `goal-and-requirements.md` → `architecture.md` → one short
+  `SPEC.md` per genuine module (responsibility + boundary; sibling edges live in the parent's SPEC), all
+  `status: draft`, wired by `parent`/`depends-on` on real code edges. `spec_validate`, tell the user to
+  review in Changes (nothing merges until they approve), hand off to `brainstorming`.
 
 ## Error handling
 
 - No UI (headless host) → `ask_user_question` reports unavailable; `brainstorming` states its assumptions
-  explicitly in the `task-spec` rather than blocking; `project-setup` does the same in
-  `goal-and-requirements.md`.
+  explicitly in the `task-spec` rather than blocking; the project-setup flows do the same in the specs
+  they draft (`project-import` marks each inferred-but-unconfirmed spec `draft` with a one-line note).
 - User skips/declines questions → proceed on labeled, explicitly-marked-unconfirmed assumptions.
 - Zero-spec project → still works: a `task-spec` (or a fresh `goal-and-requirements.md`) only needs
   frontmatter `id` + `type`, no pre-existing graph required.
@@ -136,9 +152,16 @@ No dedicated unit test for `index.ts` (mirrors `pi-spec-graph`'s own `index.ts`,
 a rule string and tool registration aren't meaningfully unit-testable). Verification is a manual smoke
 test per skill: for `brainstorming`, a real feature request triggers the skill, a `task-spec` appears,
 questions render as an `ask_user_question` card, an approved design gets promoted into a module `SPEC.md`.
-For `project-setup`, a fresh idea in an empty workspace triggers the skill, `goal-and-requirements.md`
-appears and grows section by section, and the finished spec's `status` flips to `done`. A tagged `@agent`
-e2e spec is a reasonable follow-up once a skill's wording stabilizes — not required for v1.
+For project setup, exercise the routing: a fresh idea in an **empty** workspace routes to `project-new`
+and `goal-and-requirements.md` grows section by section to `done`; a **code-only** repo routes to
+`project-import`, which mines agent files, interviews only for gaps, and drafts a short spec graph
+(`goal-and-requirements.md` + `architecture.md` + module `SPEC.md`s, `status: draft`) on the workspace
+branch. The **import branch is covered by a tagged `@agent` e2e** (`e2e/project-setup.live.spec.ts`): it
+turns a workspace worktree into a code-only project (drops the fixture's seed specs, adds an `AGENTS.md` +
+source), drives the button's `/skill:project-setup` command, and asserts the import flow drafts
+`goal-and-requirements.md` (rendered in the Specs rail) — also proving the button's `/skill:` seed drives
+the flow on the `session.prompt` path. A `project-new` `@agent` spec is a reasonable follow-up
+(its heavy interview is harder to drive headlessly) — not required for v1.
 
 ## Non-goals
 
@@ -146,7 +169,8 @@ e2e spec is a reasonable follow-up once a skill's wording stabilizes — not req
   with a lowest-common-denominator question mechanism — not worth it for a thinkrail-only host
   feature).
 - Building out the rest of the skill family (thinkrail-implement, bug-fix, etc.) now — this spec only
-  covers `brainstorming` and `project-setup`; the structure is ready for more, they are not designed here.
+  covers `brainstorming` and the `project-setup` family (`project-setup`/`project-new`/`project-import`);
+  the structure is ready for more, they are not designed here.
 - Reimplementing old thinkrail's `claude-plugin` **ticket/board engineering workflow** (its
   ticket-orchestrator, ticket-implement, bug-fix, spec-review, etc. skills — used by the thinkrail team to
   build thinkrail itself) as a pi package. That is dev-tooling for a different, ticket-based product and

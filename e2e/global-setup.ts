@@ -2,7 +2,12 @@ import { execFileSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { E2E_DATA_DIR, E2E_FIXTURE_REPO, E2E_PI_AGENT_DIR } from "./fixtures/paths";
+import {
+	E2E_DATA_DIR,
+	E2E_FIXTURE_REPO,
+	E2E_PI_AGENT_DIR,
+	E2E_PICK_DIR_POINTER,
+} from "./fixtures/paths";
 
 /** Fresh, isolated state dir + a throwaway git repo to open as a project. (Runs under node, not bun.) */
 export default function globalSetup(): void {
@@ -81,4 +86,8 @@ export default function globalSetup(): void {
 	);
 	git("add", "-A");
 	git("commit", "-m", "init");
+
+	// Point the stubbed picker (its `THINKRAIL_PICK_DIR` names this file) at the git fixture by default;
+	// a test can rewrite it to hand the picker a different folder without restarting the shared host.
+	writeFileSync(E2E_PICK_DIR_POINTER, E2E_FIXTURE_REPO);
 }

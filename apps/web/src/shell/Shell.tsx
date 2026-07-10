@@ -7,6 +7,7 @@ import { ProjectTree } from "../panels/ProjectTree";
 import { RightPanel } from "../panels/RightPanel";
 import { SettingsDialog } from "../panels/SettingsDialog";
 import { TerminalsPanel } from "../panels/TerminalsPanel";
+import { WelcomePanel } from "../panels/WelcomePanel";
 import { useAppStore } from "../store";
 import type { ConnectionStatus } from "../transport";
 
@@ -24,6 +25,7 @@ const STATUS_DOT: Record<ConnectionStatus, string> = {
 
 export function Shell() {
 	const status = useAppStore((s) => s.status);
+	const hasActiveWorkspace = useAppStore((s) => s.activeWorkspaceId != null);
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	return (
 		<div data-testid="shell" className="grid h-full grid-rows-[auto_1fr]">
@@ -53,35 +55,61 @@ export function Shell() {
 				</div>
 				<SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
 			</header>
-			<ResizablePanelGroup direction="horizontal" autoSaveId="thinkrail-shell" className="min-h-0">
-				<ResizablePanel id="left" order={1} defaultSize={18} minSize={12}>
-					<aside data-testid="left-nav" className="h-full overflow-auto bg-surface-sidebar p-md">
-						<ProjectTree />
-					</aside>
-				</ResizablePanel>
-				<ResizableHandle direction="horizontal" data-testid="resize-left" />
-				<ResizablePanel id="center" order={2} defaultSize={52} minSize={28}>
-					<main data-testid="center-tabs" className="h-full min-h-0 bg-surface-content">
-						<CenterTabs />
-					</main>
-				</ResizablePanel>
-				<ResizableHandle direction="horizontal" data-testid="resize-right" />
-				<ResizablePanel id="right" order={3} defaultSize={30} minSize={16}>
-					<ResizablePanelGroup direction="vertical" autoSaveId="thinkrail-right">
-						<ResizablePanel id="right-files" order={1} defaultSize={60} minSize={20}>
-							<div data-testid="right-panel" className="h-full min-h-0 bg-surface-content">
-								<RightPanel />
-							</div>
-						</ResizablePanel>
-						<ResizableHandle direction="vertical" data-testid="resize-terminals" />
-						<ResizablePanel id="right-terminals" order={2} defaultSize={40} minSize={15}>
-							<div className="h-full min-h-0 bg-surface-content">
-								<TerminalsPanel />
-							</div>
-						</ResizablePanel>
-					</ResizablePanelGroup>
-				</ResizablePanel>
-			</ResizablePanelGroup>
+			{hasActiveWorkspace ? (
+				<ResizablePanelGroup
+					direction="horizontal"
+					autoSaveId="thinkrail-shell"
+					className="min-h-0"
+				>
+					<ResizablePanel id="left" order={1} defaultSize={18} minSize={12}>
+						<aside data-testid="left-nav" className="h-full overflow-auto bg-surface-sidebar p-md">
+							<ProjectTree />
+						</aside>
+					</ResizablePanel>
+					<ResizableHandle direction="horizontal" data-testid="resize-left" />
+					<ResizablePanel id="center" order={2} defaultSize={52} minSize={28}>
+						<main data-testid="center-tabs" className="h-full min-h-0 bg-surface-content">
+							<CenterTabs />
+						</main>
+					</ResizablePanel>
+					<ResizableHandle direction="horizontal" data-testid="resize-right" />
+					<ResizablePanel id="right" order={3} defaultSize={30} minSize={16}>
+						<ResizablePanelGroup direction="vertical" autoSaveId="thinkrail-right">
+							<ResizablePanel id="right-files" order={1} defaultSize={60} minSize={20}>
+								<div data-testid="right-panel" className="h-full min-h-0 bg-surface-content">
+									<RightPanel />
+								</div>
+							</ResizablePanel>
+							<ResizableHandle direction="vertical" data-testid="resize-terminals" />
+							<ResizablePanel id="right-terminals" order={2} defaultSize={40} minSize={15}>
+								<div className="h-full min-h-0 bg-surface-content">
+									<TerminalsPanel />
+								</div>
+							</ResizablePanel>
+						</ResizablePanelGroup>
+					</ResizablePanel>
+				</ResizablePanelGroup>
+			) : (
+				// No active workspace — hide the center/right/terminal surface; show the Welcome screen beside the
+				// (still resizable) projects rail. A distinct autoSaveId keeps the 3-column layout's saved sizes.
+				<ResizablePanelGroup
+					direction="horizontal"
+					autoSaveId="thinkrail-shell-welcome"
+					className="min-h-0"
+				>
+					<ResizablePanel id="left" order={1} defaultSize={18} minSize={12}>
+						<aside data-testid="left-nav" className="h-full overflow-auto bg-surface-sidebar p-md">
+							<ProjectTree />
+						</aside>
+					</ResizablePanel>
+					<ResizableHandle direction="horizontal" data-testid="resize-left" />
+					<ResizablePanel id="welcome" order={2} defaultSize={82} minSize={40}>
+						<div className="h-full min-h-0 bg-surface-content">
+							<WelcomePanel />
+						</div>
+					</ResizablePanel>
+				</ResizablePanelGroup>
+			)}
 		</div>
 	);
 }

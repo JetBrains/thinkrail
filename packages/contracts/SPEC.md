@@ -55,7 +55,10 @@ runtime exports being the WS method/channel constants and the protocol version. 
     is a **host-owned pi custom tool** (server `agent/askUserQuestion` — see its SPEC for the design
     rationale); the tool blocks while the chat renders the questionnaire **inline** and replies via
     `session.answerQuestion` (correlated by the tool call id).
-- **domain.ts** — app entities: `Project` (git repo + unique `slug`), `Workspace` (git worktree; its
+- **domain.ts** — app entities: `Project` (git repo + unique `slug`; "does it have specs?" is **not** a
+  field — it's the lazy `project.hasSpecs` query, since it's a full-tree walk), **`ProjectPathStatus`** (a
+  candidate path's kind — `repo` / `initable` / `missing` / `notDirectory` — so the UI opens, offers a
+  `git init`, or shows an error), `Workspace` (git worktree; its
   optional **`renamed`** flag is the naming lifecycle — absent = **not yet locked** (either pristine
   `workspace-N`, or a *provisional* non-agentic name the host applied from the first prompt), so still
   eligible for the agentic auto-rename; `true` = deliberately named (agentic or user), never auto-touched
@@ -63,7 +66,10 @@ runtime exports being the WS method/channel constants and the protocol version. 
   `FileNode` (file-tree node), `TabStatus`, `Git*`/diff types; **`SpecGraphNode`/`SpecGraphSnapshot`** — the
   Specs-viewer read DTOs, **mirrored** (like `PiEvent`), never imported from `pi-spec-graph` — the wire
   carries only what the panel renders (`type`/`status` stay `string`: tolerate whatever is on disk).
-- **wsProtocol.ts** — `WS_METHODS` (`project.*` / `workspace.*` / `fs.*` / `git.*` / **`spec.graph`**
+- **wsProtocol.ts** — `WS_METHODS` (`project.*` — incl. **`project.inspect`** (classify a path) +
+  **`project.init`** (`git init` + commit, then open) + **`project.hasSpecs`** (lazy per-project "has any
+  registered spec?" for the Welcome screen — a full-tree walk, so requested only for the shown project,
+  never eagerly for every project) / `workspace.*` / `fs.*` / `git.*` / **`spec.graph`**
   (the Specs-viewer whole-graph read, per workspace) / `terminal.*` / `model.list` / `session.*` —
   `create`/`prompt`/`steer`/`followUp`/`abort`/`dispose`/`setModel`/
   `setThinkingLevel`/`compact`/`getStats`/`getCommands`/`extUiReply`/**`answerQuestion`** (the inline
@@ -78,7 +84,7 @@ runtime exports being the WS method/channel constants and the protocol version. 
 
 ## Get right
 
-- **Type-only, from the package roots, always** (verified vs 0.80.3: type-only imports are erased by
+- **Type-only, from the package roots, always** (verified vs 0.80.6: type-only imports are erased by
   `verbatimModuleSyntax`, so the web bundle stays provider-free; the pi-ai provider/API subpaths
   statically import the Node SDKs — never touch them). The `/base` entries existed only in 0.79.8–0.79.9.
 - `Model` is generic — expose as `Model<any>`.
