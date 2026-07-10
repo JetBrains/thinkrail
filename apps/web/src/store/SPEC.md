@@ -23,7 +23,9 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   **no-op** — the next `workspace.list` reconciles); **`removeWorkspace(projectId, id)`** drops a workspace
   from its project's list — the **optimistic** remove drops the row before the host finishes reclaiming
   the worktree (unknown project/id is a no-op); `tabsByWorkspace` /
-  `activeTabByWorkspace` (`openTab`/`closeTab`/`setActiveTab`/`clearWorkspaceTabs`); `terminalsByWorkspace`
+  `activeTabByWorkspace` (`openTab`/`closeTab`/`setActiveTab`/`clearWorkspaceTabs`, plus
+  **`setFileTabView(id, view)`** — a markdown `FileTab`'s `view` (`"rendered"`|`"source"`) lives on the tab
+  so the rendered↔source choice survives tab switches; absent = rendered); `terminalsByWorkspace`
   / `activeTerminalByWorkspace` (`addTerminal`/`closeTerminalTab`/`setActiveTerminalTab`); the
   **per-session chat state** — `sessions: Record<sessionId, SessionRuntime>`, where a `SessionRuntime` holds
   one chat's `turns` (pi-canonical) / `toolResults` / `currentAssistantId` / `isStreaming` / `model` /

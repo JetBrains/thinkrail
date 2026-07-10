@@ -33,8 +33,8 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   workspace**, so the shell returns to that project's Welcome — a deliberate "project home" gesture; the
   workspace's tabs survive in the store, so re-selecting it restores its view. Also
   `FileTree`, `SpecsPanel`, `RightPanel`,
-  `ChangesPanel` + lazy `DiffViewer`, `CenterTabs` + lazy `MonacoEditor`, `TerminalsPanel` + lazy
-  `TerminalInstance`. **`WelcomePanel`** is the first-touch surface the shell mounts (centered, left-nav beside it) whenever no
+  `ChangesPanel` + lazy `DiffViewer`, `CenterTabs` + `FilePane` (+ its lazy `MonacoEditor` /
+  `MarkdownPreview`), `TerminalsPanel` + lazy `TerminalInstance`. **`WelcomePanel`** is the first-touch surface the shell mounts (centered, left-nav beside it) whenever no
 workspace is active. The `PRODUCT_NAME` wordmark as the hero (the topbar's brand styling — accent font,
 `text-primary` — enlarged), with the **active project's name as a small eyebrow** (folder icon) above it
 once a project is selected, over a **constant** spec-first pitch (not spec-conditional) and
@@ -72,7 +72,7 @@ prompt hero (still editable; empty by default), a base-branch
   create dialog.) **`SettingsDialog`** is the app-settings surface the shell's topbar gear opens — its
   "Local GitHub" block shows `github.authStatus()` (Connected + login / Not connected) with a Refresh.
   Panels compose their own sub-panels
-  (e.g. `RightPanel`→`FileTree`/`ChangesPanel`, `CenterTabs`→`MonacoEditor`) — an internal hierarchy.
+  (e.g. `RightPanel`→`FileTree`/`ChangesPanel`, `CenterTabs`→`FilePane`→`MonacoEditor`) — an internal hierarchy.
   `CenterTabs` closing a chat tab routes to `store.closeChatToHistory` (keeps the session alive) and shows a
   **chat-history** dropdown (recently-closed + disk-only chats, shown only when non-empty). On
   workspace-activate it **hydrates**: `session.list` → **live** sessions auto-restore as tabs
@@ -85,7 +85,8 @@ prompt hero (still editable; empty by default), a base-branch
   (`WelcomePanel` and `CenterTabs`/`RightPanel`/`TerminalsPanel` are mutually exclusive — the shell mounts
   one set or the other on the active-workspace branch.)
 - **Allowed deps:** `store`, `transport`, `components/ui` (incl. `popover`/`command`/`textarea` for the
-  dialog), `chat` (`ModelSelector`/`ThinkingSelector`, reused by `NewWorkspaceDialog`), `lib`,
+  dialog), `chat` (`ModelSelector`/`ThinkingSelector`, reused by `NewWorkspaceDialog`; `Markdown`,
+  reused by `MarkdownPreview`), `lib`,
   `contracts`; `lucide-react`; and the heavy libs each lazy panel owns (`monaco-editor`, `shiki`,
   `@xterm/*`) loaded via `import()`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `shell`; reaching across unrelated panels.
@@ -113,6 +114,27 @@ prompt hero (still editable; empty by default), a base-branch
 - `RightPanel`/`ChangesPanel` watch the store's `changesRequest` deep-link (set by a chat turn-divider's
   "files changed" chip): when it targets the active workspace, `RightPanel` flips to the Changes tab and
   `ChangesPanel` selects the requested file (matched by path suffix against `git.status`).
+- **Markdown file tabs render, don't read.** A `.md`/`.markdown` `FileTab` (from the file tree **or** the
+  Specs panel — same `openTab` path) opens **rendered by default**: `FilePane` gates on `lib.isMarkdownPath`
+  and shows a slim `Preview | Source` header (`markdown-view-toggle`), the rendered view being lazy
+  `MarkdownPreview` (reuses `chat/Markdown` for GFM+shiki but owns the **document skin** — a
+  reading-optimized token-utility prose treatment modeled on GitHub's markdown CSS: an em-relative
+  heading scale (h1 2em…h6 .85em) with h1/h2 rules, a capped reading measure (~78ch) with wide
+  tables/code scrolling inside it, zebra-striped bordered tables, muted accent blockquotes, crisp
+  rules, and **GitHub-style alert callouts** (`> [!NOTE]`…`[!CAUTION]`, via the in-repo
+  `markdownAlerts` remark transform + a lucide/token `AlertCallout`, wired in only here — not chat) — in
+  a centered reading column; strips a leading YAML frontmatter block via
+  `lib.stripFrontmatter` so a spec's metadata doesn't render as a stray heading — source view still shows
+  it) and source being the lazy read-only `MonacoEditor`. The choice
+  is a per-tab `store.setFileTabView` (survives tab switches; not persisted across reload). Non-markdown
+  files render Monaco directly with no header, exactly as before.
+- **Rendered markdown navigates.** In the preview, links + images resolve against the file's own path
+  (via `markdownLinks`, passed as the `a`/`img` renderers): a **relative link** opens the target file as
+  a tab through the shared **`openFileInTab`** (the same flow `FileTree` uses), an **in-doc `#` link**
+  scrolls the preview (headings carry slug ids from the in-repo `remarkHeadingIds` transform), an
+  **external** link opens a new tab, and a **relative image** rewrites to the host **`/files/…`** route
+  (built from `transport.httpBase()`). A cross-file link's `#fragment` is not yet followed (opens the
+  file only).
 - Heavy deps (Monaco / shiki / xterm) load via `React.lazy(() => import())` to stay out of the eager bundle.
 - Streaming invariant (when chat lands): `text_delta`/`thinking_delta` **APPEND**;
   `tool_execution_update.partialResult` **REPLACE**.

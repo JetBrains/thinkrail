@@ -1,8 +1,8 @@
 import type { FileNode } from "@thinkrail/contracts";
 import { ChevronDown, ChevronRight, File as FileIcon, Folder } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useAppStore } from "../store";
 import { getTransport } from "../transport";
+import { openFileInTab } from "./openFile";
 
 /** Lazy file tree of the active worktree. Double-click a file to open it as a center editor tab. */
 export function FileTree({ workspaceId }: { workspaceId: string }) {
@@ -53,25 +53,7 @@ function FileNodeRow({ node, workspaceId }: { node: FileNode; workspaceId: strin
 		}
 	};
 
-	const open = async () => {
-		const id = `${workspaceId}:${node.path}`;
-		const store = useAppStore.getState();
-		if ((store.tabsByWorkspace[workspaceId] ?? []).some((t) => t.id === id)) {
-			store.setActiveTab(id);
-			return;
-		}
-		try {
-			const { content } = await getTransport().request("fs.readFile", {
-				workspaceId,
-				path: node.path,
-			});
-			useAppStore
-				.getState()
-				.openTab({ kind: "file", id, workspaceId, path: node.path, name: node.name, content });
-		} catch {
-			// a read failure leaves the tree unchanged
-		}
-	};
+	const open = () => void openFileInTab(workspaceId, node.path);
 
 	const Chevron = expanded ? ChevronDown : ChevronRight;
 	return (

@@ -15,7 +15,9 @@ The single WebSocket client to the host, and its app-wide singleton.
 ## Boundary
 
 - **Owns:** `transport.ts` (`WsTransport`: id-correlated `request`, channel `subscribe` with last-value
-  replay, reconnect/backoff; `inferUrl` defaults to same-origin); `wireTransport.ts` (`initTransport`/
+  replay, reconnect/backoff; `inferUrl` defaults to same-origin; **`httpBase()`** derives the host's HTTP origin
+  from the WS `url` — for building host HTTP URLs like the `/files/<workspaceId>/<path>` worktree-file
+  endpoint the markdown viewer points relative `<img>`s at, targeting the same host the transport dials); `wireTransport.ts` (`initTransport`/
   `getTransport` singleton; routes the `server.welcome`, `pi.event`, `pi.extensionUi`, **and
   `workspace.updated`** pushes into the store — `pi.event` via `handlePiEvent(event, sessionId)`,
   `pi.extensionUi` via `applyExtUi(request)`, `workspace.updated` via `updateWorkspace(workspace)`;

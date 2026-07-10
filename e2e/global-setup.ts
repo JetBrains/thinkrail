@@ -41,6 +41,59 @@ export default function globalSetup(): void {
 	git("config", "user.email", "e2e@thinkrail.test");
 	git("config", "user.name", "ThinkRail E2E");
 	writeFileSync(join(E2E_FIXTURE_REPO, "README.md"), "# sample-project\n");
+	// A non-markdown file so the editor suite can assert the source-only path (no rendered-view toggle).
+	writeFileSync(join(E2E_FIXTURE_REPO, "notes.txt"), "plain-text-fixture\n");
+	// A markdown file exercising GitHub-style alert callouts (+ a plain blockquote for contrast), for the
+	// rendered-preview suite (see e2e/markdown-alerts.spec.ts).
+	writeFileSync(
+		join(E2E_FIXTURE_REPO, "ALERTS.md"),
+		[
+			"# Alert callouts",
+			"",
+			"> [!NOTE]",
+			"> Useful information users should know.",
+			"",
+			"> [!TIP]",
+			"> Helpful advice for doing things better.",
+			"",
+			"> [!IMPORTANT]",
+			"> Key information to achieve a goal.",
+			"",
+			"> [!WARNING]",
+			"> Urgent info needing immediate attention.",
+			"",
+			"> [!CAUTION]",
+			"> Advises about risky outcomes.",
+			"",
+			"> A plain blockquote, no marker, so it stays a quote.",
+			"",
+		].join("\n"),
+	);
+	// A doc + image for the rendered-preview link/anchor/image suite (see e2e/markdown-links.spec.ts):
+	// a relative file link (opens the target tab), an in-doc anchor, and a relative image (host /files route).
+	writeFileSync(
+		join(E2E_FIXTURE_REPO, "LINKS.md"),
+		[
+			"# Link demo",
+			"",
+			"Jump to [Section two](#section-two), open [the spec](SPEC.md), and see the logo:",
+			"",
+			"![logo](logo.png)",
+			"",
+			"## Section two",
+			"",
+			"Target of the in-document anchor.",
+			"",
+		].join("\n"),
+	);
+	// A real 1x1 PNG so the relative-image path serves actual image bytes over the host /files route.
+	writeFileSync(
+		join(E2E_FIXTURE_REPO, "logo.png"),
+		Buffer.from(
+			"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMCAoGB9x0AAAAASUVORK5CYII=",
+			"base64",
+		),
+	);
 	// A seed spec so the @agent `spec-tools` suite has a deterministic `spec_grep` match, proving the
 	// bundled `pi-spec-graph` extension is wired into a live session (see e2e/spec-tools.live.spec.ts). The
 	// token SPECGRAPHPROBE is distinctive so a match can't be an echo of the query; the file path it lives

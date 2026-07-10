@@ -36,3 +36,12 @@ export function readFile(workspaceId: string, path: string): { content: string }
 	const { abs } = resolveInWorktree(workspaceId, path);
 	return { content: readFileSync(abs, "utf8") };
 }
+
+/**
+ * Resolve `path` (relative to the worktree root) to an absolute path for serving the file's raw bytes
+ * over HTTP (e.g. a relative image in the markdown viewer). Refuses anything escaping the worktree — the
+ * same guard as the read RPCs. The caller streams the bytes (`Bun.file(abs)`); this owns path safety.
+ */
+export function resolveWorktreeFile(workspaceId: string, path: string): string {
+	return resolveInWorktree(workspaceId, path).abs;
+}

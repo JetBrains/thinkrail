@@ -13,7 +13,9 @@ Tiny UI helpers shared across components.
 
 ## Boundary
 
-- **Owns:** `utils.ts` → `cn()` (merge clsx output through tailwind-merge).
-- **Public surface (barrel):** `cn`.
+- **Owns:** `utils.ts` → `cn()` (merge clsx output through tailwind-merge) + `isMarkdownPath()` (the
+  `.md`/`.markdown` gate for the rendered-preview view) + `stripFrontmatter()` (drop a leading YAML `---`
+  block so the rendered view doesn't render spec metadata as a heading).
+- **Public surface (barrel):** `cn`, `isMarkdownPath`, `stripFrontmatter`.
 - **Allowed deps:** `clsx`, `tailwind-merge`.
 - **Forbidden:** every app-internal module — this is a leaf.
