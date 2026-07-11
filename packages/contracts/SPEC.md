@@ -63,14 +63,17 @@ runtime exports being the WS method/channel constants and the protocol version. 
   `workspace-N`, or a *provisional* non-agentic name the host applied from the first prompt), so still
   eligible for the agentic auto-rename; `true` = deliberately named (agentic or user), never auto-touched
   again), `Session` (chat tab),
-  `FileNode` (file-tree node), `TabStatus`, `Git*`/diff types; **`SpecGraphNode`/`SpecGraphSnapshot`** — the
+  `FileNode` (file-tree node), `TabStatus`, `Git*`/diff types; **`ProviderStatus`/`ProviderStatusReport`**
+  — the auth-provider status rows the Welcome strip renders (per-provider `configured` + auth `kind`:
+  oauth / api-key / env / jbcentral / other — never credential values); **`SpecGraphNode`/`SpecGraphSnapshot`** — the
   Specs-viewer read DTOs, **mirrored** (like `PiEvent`), never imported from `pi-spec-graph` — the wire
   carries only what the panel renders (`type`/`status` stay `string`: tolerate whatever is on disk).
 - **wsProtocol.ts** — `WS_METHODS` (`project.*` — incl. **`project.inspect`** (classify a path) +
   **`project.init`** (`git init` + commit, then open) + **`project.hasSpecs`** (lazy per-project "has any
   registered spec?" for the Welcome screen — a full-tree walk, so requested only for the shown project,
   never eagerly for every project) / `workspace.*` / `fs.*` / `git.*` / **`spec.graph`**
-  (the Specs-viewer whole-graph read, per workspace) / `terminal.*` / `model.list` / `session.*` —
+  (the Specs-viewer whole-graph read, per workspace) / `terminal.*` / `model.list` / **`provider.status`**
+(the auth-provider status report; every read revalidates host-side) / `session.*` —
   `create`/`prompt`/`steer`/`followUp`/`abort`/`dispose`/`setModel`/
   `setThinkingLevel`/`compact`/`getStats`/`getCommands`/`extUiReply`/**`answerQuestion`** (the inline
   `ask_user_question` reply, correlated by tool call id)/**`list`**/**`getMessages`** (the

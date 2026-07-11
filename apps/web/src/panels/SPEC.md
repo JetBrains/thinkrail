@@ -56,6 +56,16 @@ nav's selection updates it). Its `hasSpecs` is **fetched lazily** via `project.h
 project (a full-tree walk, kept off the connect handshake) — pending until it resolves, so the cards wait
 on it. The open-project orchestration lives in the shared **`useOpenProject`** hook
 (above), so the Welcome "Open project" card gets the same non-git init/notice handling as the rail.
+Below the cards, `WelcomePanel` composes **`ProviderStatusStrip`** — the auth-provider status surface
+(a deliberate Welcome-only placement; a Settings-dialog block / picker-footer hints were considered and
+deferred until mid-session visibility proves needed): one `provider.status` fetch on mount + a Refresh re-ask
+(every read revalidates host-side). Configured providers render as rows (glyph + display name + source
+label — "JetBrains AI proxy" / "OAuth subscription" / "API key" / "environment"), unconfigured collapse
+into one compact "N more available: …" line. **Zero configured** flips the strip to warn-toned guidance
+with copyable setup commands — `thinkrail jbcentral` (route Claude/GPT via JetBrains AI) and `pi` +
+`/login` (subscription OAuth; there is **no** `pi auth login`) plus the API-key env hint. A fetch
+failure renders a distinct error hint + Refresh (offline ≠ "no providers"). Read-only by design — no
+in-app login/wiring actions.
 **`NewWorkspaceDialog`** is the create-and-kick-off surface: an optional **`initialPrompt`** seeds the
 prompt hero (still editable; empty by default), a base-branch
   combobox (`git.listBranches`, degrading to local branches offline; a Refresh re-lists; `origin/HEAD` is

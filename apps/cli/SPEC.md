@@ -56,6 +56,9 @@ resolution are pure (`parseUpdateArgs` / `resolveUpdatePlan`, unit-tested); only
 (`jbcentral`) proxy under the user's JetBrains auth; `--remove` reverts it. It lives in the CLI (not just
 `scripts/setup-jbcentral-cli.ts`, now a thin wrapper) so it ships in the binary — one command, no bun,
 mac/linux/windows. Requires `jbcentral` on PATH. Parse + config transforms are pure and unit-tested.
+The proxy-URL **shape is pinned by `@thinkrail/shared/jbcentral`'s `isJbcentralProxyUrl`** (the server's
+provider-status detection reads it); a drift test here asserts `buildProxyUrls` output satisfies that
+predicate, so changing the URL shape forces both sides to move together.
 
 ## Version stamping (release seam)
 

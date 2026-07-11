@@ -8,6 +8,7 @@ import type {
 	GitStatus,
 	Project,
 	ProjectPathStatus,
+	ProviderStatusReport,
 	SpecGraphSnapshot,
 	Workspace,
 } from "./domain";
@@ -92,6 +93,9 @@ export const WS_METHODS = {
 	sessionGetMessages: "session.getMessages",
 	modelList: "model.list",
 	modelDefault: "model.default",
+	// Auth-provider status (the Welcome strip): per-provider configured + auth kind, jbcentral wiring.
+	// Every read revalidates host-side (auth + registry reload), so a Refresh is just a re-request.
+	providerStatus: "provider.status",
 } as const;
 
 /** Server→client push channels. */
@@ -196,6 +200,7 @@ export interface WsMethodMap {
 		params: Record<string, never>;
 		result: { model: Model<string> | null; thinkingLevel: ThinkingLevel };
 	};
+	"provider.status": { params: Record<string, never>; result: ProviderStatusReport };
 }
 
 export type WsMethodName = keyof WsMethodMap;

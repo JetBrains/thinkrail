@@ -13,6 +13,7 @@ import {
 	createSession,
 	followUpSession,
 	getDefaultModel,
+	getProviderStatus,
 	getSessionCommands,
 	getSessionMessages,
 	getSessionStats,
@@ -221,6 +222,7 @@ const handlers: Record<string, Handler> = {
 	},
 	"model.list": () => listAvailableModels(),
 	"model.default": () => getDefaultModel(),
+	"provider.status": () => getProviderStatus(),
 };
 
 /** Route a WS request to its handler. Throws on unknown method (→ a `{ ok:false }` WS response). */

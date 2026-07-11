@@ -7,6 +7,7 @@ import { useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
+import { ProviderStatusStrip } from "./ProviderStatusStrip";
 import { useOpenProject } from "./useOpenProject";
 
 // Seeds the New-Workspace prompt hero for "Set up project" — pi's skill-command syntax `/skill:<name>`,
@@ -161,6 +162,8 @@ export function WelcomePanel() {
 					</>
 				)}
 			</div>
+
+			<ProviderStatusStrip />
 
 			{dialog ? (
 				<NewWorkspaceDialog

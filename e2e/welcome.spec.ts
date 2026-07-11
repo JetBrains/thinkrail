@@ -40,6 +40,42 @@ test("opens a clean ThinkRail with no projects imported", async ({ page }) => {
 	await expect(page.getByTestId("menu-open-project")).toBeVisible();
 });
 
+test("the Welcome screen reports auth-provider status", async ({ page }) => {
+	await openAppFresh(page);
+
+	// The strip renders on the first-touch surface in one of its two data states: configured provider
+	// rows, or the zero-state guidance. Which one shows depends on the machine (globalSetup copies real
+	// pi auth into the isolated agent dir when present; CI has none) — so accept either, and pin the
+	// guidance content only when it's the empty state.
+	const strip = page.getByTestId("welcome-providers");
+	await expect(strip).toBeVisible();
+	await expect(strip).toContainText("Model providers");
+
+	const rows = page.getByTestId("provider-row");
+	const empty = page.getByTestId("providers-empty");
+	await expect(rows.first().or(empty)).toBeVisible();
+
+	if (await empty.isVisible()) {
+		// The guidance pins the *verified* commands: `thinkrail jbcentral`, and `pi` + `/login` (pi has no
+		// `auth login` subcommand — login is the in-TUI slash command).
+		await expect(empty).toContainText("No model providers configured");
+		await expect(empty).toContainText("thinkrail jbcentral");
+		await expect(empty).toContainText("/login");
+		await expect(empty).not.toContainText("pi auth login");
+		await expect(page.getByTestId("provider-copy-cmd")).toHaveCount(2);
+	} else {
+		// Configured rows carry the provider id + a source label; no error/empty state alongside.
+		await expect(rows.first()).toHaveAttribute("data-configured", "true");
+		await expect(empty).toHaveCount(0);
+	}
+	await expect(page.getByTestId("providers-error")).toHaveCount(0);
+
+	// Refresh re-asks the host (every read revalidates) and lands back in a valid state.
+	await page.getByTestId("providers-refresh").click();
+	await expect(rows.first().or(empty)).toBeVisible();
+	await expect(page.getByTestId("providers-error")).toHaveCount(0);
+});
+
 test("a project with specs offers Start building over Set up", async ({ page }) => {
 	// The fixture repo already carries SPEC.md files → the host reports it has specs.
 	await openFixtureProject(page);

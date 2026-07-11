@@ -21,6 +21,16 @@ its inline answer bridge.
 - **Owns:**
   - `piRuntime` (one shared `AuthStorage` + `ModelRegistry`; `getPiRuntime()` lazy,
     `configurePiRuntime()` for tests).
+  - `providerStatus` — `getProviderStatus()` → the wire `ProviderStatusReport` (the Welcome provider
+    strip's read): per-provider `configured` (pi's `hasAuth`-family truth, so env-var auth counts) +
+    auth `kind` (oauth / api-key / env / **jbcentral** / other) + display name, configured-first. It
+    **revalidates on every read** (`authStorage.reload()` + `modelRegistry.refresh()`) so `pi` `/login`
+    or `thinkrail jbcentral` run in a terminal shows up without a host restart (accepted micro-risk:
+    refreshing the shared registry concurrent with a streaming session — same thing pi's TUI does on
+    `/login`). jbcentral wiring is detected from the registry's **effective** model `baseUrl`s (what
+    requests will actually hit) via `shared/jbcentral`'s `isJbcentralProxyUrl` — never a separate
+    `models.json` read. Assembly is a pure `buildProviderReport(sources)` over a narrow sources slice,
+    unit-tested with fixture data.
   - `agentSessionManager` — sessions keyed by `session.sessionId` (each `Entry` also tracks its
     `workspaceId`), `createSession({ cwd, workspaceId, model?, thinkingLevel? })` → `createAgentSession(...)`
     with a per-session `SessionManager` **and a `buildSessionSettings(cwd)` settings manager** (the user's
@@ -104,7 +114,7 @@ its inline answer bridge.
     Both session paths pass it as `resourceLoader`. `buildResourceLoader` stays internal; the seam +
     its types are on the barrel.
 - **Public surface (barrel):** the manager operations + `CreateSessionInput`/`CreateSessionResult` +
-  `SessionEventPayload`; `configurePiRuntime`/`getPiRuntime`; `completeOnce`/`pickModel` +
+  `SessionEventPayload`; `configurePiRuntime`/`getPiRuntime`; `getProviderStatus`; `completeOnce`/`pickModel` +
   `OneShotRequest`/`OneShotResult`/`ModelTier`; the `webUiContext` seams; the
   `askUserQuestion` bridge (`answerQuestion`/`cancelQuestionsForSession`) + its pure helpers
   (`validateQuestionnaire`/`buildQuestionnaireResponse`); the compiled-binary extension seam
@@ -115,7 +125,7 @@ its inline answer bridge.
   compiled binary's value-imports live in `apps/cli`'s generated build module); `typebox` (the
   `ask_user_question` parameter schema);
   `contracts` (`PiEvent`/`Model`/`ThinkingLevel`/`ImageContent`/`SessionStats`/`SlashCommandInfo`/`ExtUi*`/
-  `AskUserQuestion*`); Node.
+  `AskUserQuestion*`/`ProviderStatus*`); `@thinkrail/shared/jbcentral` (the proxy-URL predicate); Node.
 - **Forbidden:** `host`; sibling features (the `cwd` is passed in, not looked up via `persistence`).
 
 ## Get right

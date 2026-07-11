@@ -17,7 +17,8 @@ Exposed through explicit subpath exports, not a barrel.
 
 - **Owns:** host-side runtime helpers that are neither engine- nor transport-specific.
 - **Public surface:** `@thinkrail/shared/shellEnv` → `resolveShellEnv()`, `pathLooksComplete()`;
-  `@thinkrail/shared/freePort` → `findFreePort()`, `isPortFree()`.
+  `@thinkrail/shared/freePort` → `findFreePort()`, `isPortFree()`;
+  `@thinkrail/shared/jbcentral` → `isJbcentralProxyUrl()`.
 - **Allowed deps:** Bun/Node runtime (`@types/bun`); may use `contracts` types if needed (none today).
 - **Forbidden:** importing `server` / `web` / any `pi` package; being imported by `web` (it carries
   Bun/Node code that must not reach the browser bundle).
@@ -29,6 +30,11 @@ Exposed through explicit subpath exports, not a barrel.
 - **/freePort** — `findFreePort(preferred, host?)`: the first free port at or above `preferred`, so a
   host can pick an open port instead of colliding with one already running. `isPortFree(port, host?)`:
   the underlying single-port check.
+- **/jbcentral** — `isJbcentralProxyUrl(url)`: whether a provider `baseUrl` is a jbcentral-managed proxy
+  URL (loopback host + `/wire/` path). The **single place the proxy-URL shape is pinned for readers**:
+  the write side (`apps/cli/src/jbcentral.ts` `buildProxyUrls`) stays in the CLI, and the CLI carries a
+  drift test asserting its built URLs satisfy this predicate — so wiring and detection can't silently
+  diverge. Consumed by the server's provider-status report (`submodule-server-agent`).
 
 ## Get right (shellEnv)
 

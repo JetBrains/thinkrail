@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { isJbcentralProxyUrl } from "@thinkrail/shared/jbcentral";
 import {
 	applyJbcentralOverrides,
 	buildProxyUrls,
@@ -53,6 +54,15 @@ describe("buildProxyUrls", () => {
 			anthropicUrl: "http://127.0.0.1:19516/wire/sEcReT/claude-code/anthropic",
 			openaiUrl: "http://127.0.0.1:19516/wire/sEcReT/codex/openai",
 		});
+	});
+
+	// Drift gate: the server detects jbcentral wiring via `shared/jbcentral`'s predicate. If the URL
+	// shape this writer produces ever stops matching that reader, provider status would silently report
+	// "API key" instead of "JetBrains AI proxy" — this pins the two together.
+	test("built URLs satisfy the shared detection predicate", () => {
+		const urls = buildProxyUrls(19516, "sEcReT");
+		expect(isJbcentralProxyUrl(urls.anthropicUrl)).toBe(true);
+		expect(isJbcentralProxyUrl(urls.openaiUrl)).toBe(true);
 	});
 });
 

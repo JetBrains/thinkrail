@@ -116,6 +116,30 @@ export interface BranchList {
 }
 
 /** Local `gh` CLI auth status (read-only, shelled server-side) for the New-Workspace + Settings surfaces. */
+/** How a model provider is authenticated — drives the status row's label, never carries secrets. */
+export type ProviderAuthKind = "oauth" | "api-key" | "env" | "jbcentral" | "other";
+
+/** One model provider's auth status, as the host reports it (read-only; no credential values). */
+export interface ProviderStatus {
+	/** pi's provider id, e.g. `anthropic`. */
+	id: string;
+	/** Human display name, e.g. `Anthropic`. */
+	name: string;
+	/** Whether the provider is usable (any auth form: stored, env var, models.json, proxy). */
+	configured: boolean;
+	/** The auth source kind, when configured. `jbcentral` = routed through the JetBrains Central proxy. */
+	kind?: ProviderAuthKind;
+	/** Optional human hint for the source (e.g. the env var name, or `models.json`). */
+	detail?: string;
+}
+
+/** The `provider.status` result: configured providers first, then the rest alphabetically. */
+export interface ProviderStatusReport {
+	providers: ProviderStatus[];
+	/** Whether any provider's effective baseUrl routes through the jbcentral proxy. */
+	jbcentralWired: boolean;
+}
+
 export interface GithubAuthStatus {
 	connected: boolean;
 	/** The authenticated github.com account, when connected. */
