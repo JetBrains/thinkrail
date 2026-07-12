@@ -140,6 +140,30 @@ describe("startLogin", () => {
 		expect(h.frames.at(-1)?.frame.kind).toBe("success");
 	});
 
+	test("prompt forwards allowEmpty and returns a blank reply to pi (Copilot github.com path)", async () => {
+		let answered: string | undefined;
+		const h = install(async (_id, cb) => {
+			answered = await cb.onPrompt({
+				message: "GitHub Enterprise URL/domain (blank for github.com)",
+				placeholder: "company.ghe.com",
+				allowEmpty: true,
+			});
+		});
+		const { loginId } = startLogin("github-copilot");
+		await tick();
+		expect(h.frames.at(-1)?.frame).toEqual({
+			kind: "prompt",
+			message: "GitHub Enterprise URL/domain (blank for github.com)",
+			placeholder: "company.ghe.com",
+			allowEmpty: true,
+		});
+		// The empty (github.com) reply must reach pi as "" — not be swallowed as a cancel.
+		resolveLogin({ loginId, value: "" });
+		await tick();
+		expect(answered).toBe("");
+		expect(h.frames.at(-1)?.frame.kind).toBe("success");
+	});
+
 	test("authUrl + concurrent paste: onAuth shows the URL while onManualCodeInput awaits a paste", async () => {
 		let pasted: string | undefined;
 		const h = install(async (_id, cb) => {

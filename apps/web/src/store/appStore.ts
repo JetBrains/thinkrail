@@ -470,6 +470,7 @@ function foldLoginFrame(state: LoginState, frame: LoginFrame): LoginState {
 					kind: "prompt",
 					message: frame.message,
 					...(frame.placeholder ? { placeholder: frame.placeholder } : {}),
+					...(frame.allowEmpty ? { allowEmpty: true } : {}),
 				},
 			};
 		}

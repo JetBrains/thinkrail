@@ -532,6 +532,26 @@ test("beginLogin opens a fresh active login; frames accumulate (url + paste prom
 	});
 });
 
+test("a prompt frame's allowEmpty folds through (Copilot's blank-for-github.com GHE prompt)", () => {
+	const s = useAppStore.getState();
+	s.beginLogin("l1", "github-copilot");
+	s.applyLoginFrame({
+		loginId: "l1",
+		providerId: "github-copilot",
+		frame: {
+			kind: "prompt",
+			message: "GitHub Enterprise URL/domain (blank for github.com)",
+			placeholder: "company.ghe.com",
+			allowEmpty: true,
+		},
+	});
+	// Without allowEmpty carried through, the dialog would refuse to submit a blank github.com answer.
+	expect(useAppStore.getState().activeLogin?.input).toMatchObject({
+		kind: "prompt",
+		allowEmpty: true,
+	});
+});
+
 test("a frame that beats the loginStart response creates the login; beginLogin then no-ops", () => {
 	const s = useAppStore.getState();
 	// Provider fired onAuth synchronously → the frame arrives before beginLogin.

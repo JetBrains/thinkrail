@@ -33,8 +33,11 @@ export function LoginDialog({
 }) {
 	const promptRef = useRef<HTMLInputElement>(null);
 	const submitPrompt = () => {
-		const value = promptRef.current?.value.trim();
-		if (value) onReply(value);
+		const value = promptRef.current?.value.trim() ?? "";
+		// A non-empty answer always submits; an empty one only when pi marked the prompt `allowEmpty`
+		// (e.g. Copilot's "blank for github.com") — otherwise a blank submit is a no-op, not a dead-end.
+		const allowEmpty = state.input?.kind === "prompt" && state.input.allowEmpty;
+		if (value || allowEmpty) onReply(value);
 	};
 
 	const terminal = state.status !== "active";

@@ -9,6 +9,8 @@ export interface LoginInputPrompt {
 	kind: "prompt";
 	message: string;
 	placeholder?: string;
+	/** pi allows a blank answer here (e.g. Copilot's "blank for github.com") — the dialog may submit empty. */
+	allowEmpty?: boolean;
 }
 export type LoginInput = LoginInputSelect | LoginInputPrompt;
 

@@ -171,7 +171,7 @@ export type LoginFrame =
 	| { kind: "authUrl"; url: string; instructions?: string }
 	| { kind: "deviceCode"; userCode: string; verificationUri: string; expiresInSeconds?: number }
 	| { kind: "select"; message: string; options: { id: string; label: string }[] }
-	| { kind: "prompt"; message: string; placeholder?: string }
+	| { kind: "prompt"; message: string; placeholder?: string; allowEmpty?: boolean }
 	| { kind: "progress"; message: string }
 	| { kind: "success" }
 	| { kind: "error"; message: string };

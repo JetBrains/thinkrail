@@ -87,6 +87,9 @@ export function startLogin(providerId: string): { loginId: string } {
 				kind: "prompt",
 				message: prompt.message,
 				...(prompt.placeholder ? { placeholder: prompt.placeholder } : {}),
+				// pi flags prompts where an empty answer is valid (e.g. GitHub Copilot's "blank for github.com"
+				// GHE domain) — forward it so the dialog can let the user submit blank instead of dead-ending.
+				...(prompt.allowEmpty ? { allowEmpty: true } : {}),
 			});
 			if (value === undefined) throw new Error("Login cancelled");
 			return value;
