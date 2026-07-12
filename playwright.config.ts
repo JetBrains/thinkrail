@@ -52,6 +52,9 @@ export default defineConfig({
 			// deterministic and never reads the dev machine's real ~/.wire/config.json.
 			PATH: `${fakeBinDir}:${process.env.PATH ?? ""}`,
 			WIRE_PROXY_PORT: "19516",
+			// Register a deterministic fake OAuth provider (`e2e-oauth`) so the in-app login flow is drivable
+			// end-to-end without a real provider/browser (see packages/server/src/dev.ts).
+			THINKRAIL_E2E_FAKE_OAUTH: "1",
 		},
 	},
 });
