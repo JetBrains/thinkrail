@@ -9,14 +9,25 @@ const INSTALL_CMD =
 	"curl -fsSL https://jetbrains-central-cli.s3.eu-west-1.amazonaws.com/jbcentral/stable/install.sh | bash";
 const LOGIN_CMD = "central login";
 
-type Phase = "idle" | "needs-login" | "needs-install" | "error";
+/**
+ * The outcome of the last in-app connect attempt — and *only* that. It holds the states the server-derived
+ * `wired`/`installed` props can't express on their own: props say "not wired", but not *why* (never tried vs.
+ * not signed in vs. a hard error). `needs-install` also carries the host's exact per-OS hint. Facts we already
+ * have from props (connected, installed) are read straight from the props — never copied in here — so local
+ * state can't silently disagree with the host.
+ */
+type ConnectResult =
+	| { kind: "needs-login" }
+	| { kind: "needs-install"; hint: string }
+	| { kind: "error"; message: string };
 
 /**
  * The JetBrains AI option in the Providers settings: route Claude + GPT through the local `jbcentral` proxy
  * using your JetBrains subscription. A small state machine over the host's jbcentral CLI —
  * connected (Disconnect) / ready (Connect) / not signed in (in-app `jbcentral login` + retry) / not installed
- * (install guidance + Recheck). `wired`/`installed` come from the `provider.status` the pane already fetched;
- * `onChanged` re-reads it after a mutation.
+ * (install guidance + Recheck). `wired`/`installed` come from the `provider.status` the pane already fetched
+ * (the source of truth); `result` layers on only the last connect attempt's outcome; `onChanged` re-reads
+ * status after a mutation.
  */
 export function JetBrainsAiCard({
 	wired,
@@ -27,23 +38,20 @@ export function JetBrainsAiCard({
 	installed: boolean;
 	onChanged: () => void | Promise<void>;
 }) {
-	const [phase, setPhase] = useState<Phase>("idle");
-	const [installHint, setInstallHint] = useState("");
-	const [errorMsg, setErrorMsg] = useState("");
+	const [result, setResult] = useState<ConnectResult | null>(null);
 	const [busy, setBusy] = useState(false);
 	const [signingIn, setSigningIn] = useState(false);
 	const [loginLaunched, setLoginLaunched] = useState(false);
 
-	// Reconcile stale local phase with freshly-fetched props (a re-read after Recheck, an external
-	// `jbcentral login`/wire in a terminal, etc.): once wired, drop all transient state; once installed,
-	// leave the needs-install screen. Functional updates read the latest phase, so `phase` isn't a dep.
+	// `result` describes the *last attempt*; a change in the server-derived facts supersedes it. Once wired
+	// (including an external `central` / `thinkrail jbcentral` picked up on Refresh) drop it entirely; once
+	// installed, drop a stale needs-install (installing doesn't resolve a needs-login/error, so those stay).
 	useEffect(() => {
 		if (wired) {
-			setPhase("idle");
+			setResult(null);
 			setLoginLaunched(false);
-			setErrorMsg("");
 		} else if (installed) {
-			setPhase((p) => (p === "needs-install" ? "idle" : p));
+			setResult((r) => (r?.kind === "needs-install" ? null : r));
 		}
 	}, [wired, installed]);
 
@@ -52,22 +60,18 @@ export function JetBrainsAiCard({
 		try {
 			const r = await getTransport().request("provider.jbcentralConnect", {});
 			if (r.outcome === "connected") {
+				setResult(null);
 				setLoginLaunched(false);
-				setErrorMsg("");
-				setPhase("idle");
 				await onChanged();
 			} else if (r.outcome === "needs-install") {
-				setInstallHint(r.hint ?? "");
-				setPhase("needs-install");
+				setResult({ kind: "needs-install", hint: r.hint ?? "" });
 			} else if (r.outcome === "needs-login") {
-				setPhase("needs-login");
+				setResult({ kind: "needs-login" });
 			} else {
-				setErrorMsg(r.message || "Couldn't connect to JetBrains AI.");
-				setPhase("error");
+				setResult({ kind: "error", message: r.message || "Couldn't connect to JetBrains AI." });
 			}
 		} catch {
-			setErrorMsg("Couldn't reach the host.");
-			setPhase("error");
+			setResult({ kind: "error", message: "Couldn't reach the host." });
 		} finally {
 			setBusy(false);
 		}
@@ -77,8 +81,7 @@ export function JetBrainsAiCard({
 		setBusy(true);
 		try {
 			await getTransport().request("provider.jbcentralDisconnect", {});
-			setPhase("idle");
-			setErrorMsg("");
+			setResult(null);
 			setLoginLaunched(false);
 			await onChanged();
 		} finally {
@@ -100,9 +103,12 @@ export function JetBrainsAiCard({
 		}
 	}, [signingIn]);
 
-	// The not-installed state is known up front from status (no click needed); a failed connect can also
-	// surface it (with the host's exact hint).
-	const showInstall = !wired && (phase === "needs-install" || !installed);
+	// The not-installed state is known up front from status (`!installed`, no click needed); a failed connect
+	// can also surface it (with the host's exact per-OS hint, which drives the Windows-vs-unix copy below).
+	const installHint = result?.kind === "needs-install" ? result.hint : "";
+	const showInstall = !wired && (result?.kind === "needs-install" || !installed);
+	const showLogin = !wired && result?.kind === "needs-login";
+	const errorMsg = result?.kind === "error" ? result.message : "";
 
 	return (
 		<section
@@ -178,7 +184,7 @@ export function JetBrainsAiCard({
 				</div>
 			) : null}
 
-			{!wired && phase === "needs-login" ? (
+			{showLogin ? (
 				<div className="flex flex-col gap-xs" data-testid="jetbrains-needs-login">
 					<p className="text-hint text-xs">
 						{loginLaunched
@@ -214,7 +220,7 @@ export function JetBrainsAiCard({
 				</div>
 			) : null}
 
-			{!wired && phase === "error" ? (
+			{!wired && result?.kind === "error" ? (
 				<div className="flex flex-col gap-xs" data-testid="jetbrains-error">
 					<p className="break-words text-red text-xs">{errorMsg}</p>
 					<Button
