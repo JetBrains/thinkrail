@@ -51,14 +51,12 @@ resolution are pure (`parseUpdateArgs` / `resolveUpdatePlan`, unit-tested); only
 
 ## JetBrains Central wiring (`thinkrail jbcentral`)
 
-`src/jbcentral.ts` overrides the `anthropic`/`openai` provider `baseUrl` in
-`$PI_CODING_AGENT_DIR/models.json` to route Claude/GPT through the local JetBrains Central CLI
-(`jbcentral`) proxy under the user's JetBrains auth; `--remove` reverts it. It lives in the CLI (not just
-`scripts/setup-jbcentral-cli.ts`, now a thin wrapper) so it ships in the binary — one command, no bun,
-mac/linux/windows. Requires `jbcentral` on PATH. Parse + config transforms are pure and unit-tested.
-The proxy-URL **shape is pinned by `@thinkrail/shared/jbcentral`'s `isJbcentralProxyUrl`** (the server's
-provider-status detection reads it); a drift test here asserts `buildProxyUrls` output satisfies that
-predicate, so changing the URL shape forces both sides to move together.
+`src/jbcentral.ts` is a **thin caller** over `@thinkrail/shared/jbcentral`'s `wireJbcentral`/`unwireJbcentral`
+— it owns only arg parsing + console logging. The jbcentral protocol itself (probe the secret, override the
+`anthropic`/`openai` `baseUrl` in `$PI_CODING_AGENT_DIR/models.json`, undo it, the drift-pinned URL shape)
+lives in `shared`, so it's shared verbatim with the server's in-app "Connect JetBrains AI" flow (one
+implementation, two callers). It still lives in the CLI (not just `scripts/setup-jbcentral-cli.ts`, a thin
+wrapper) so it ships in the binary — one command, no bun, mac/linux/windows. Requires `jbcentral` on PATH.
 
 ## Version stamping (release seam)
 

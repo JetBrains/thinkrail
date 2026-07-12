@@ -20,17 +20,9 @@ its inline answer bridge.
 
 - **Owns:**
   - `piRuntime` (one shared `AuthStorage` + `ModelRegistry`; `getPiRuntime()` lazy,
-    `configurePiRuntime()` for tests).
-  - `providerStatus` — `getProviderStatus()` → the wire `ProviderStatusReport` (the Welcome provider
-    strip's read): per-provider `configured` (pi's `hasAuth`-family truth, so env-var auth counts) +
-    auth `kind` (oauth / api-key / env / **jbcentral** / other) + display name, configured-first. It
-    **revalidates on every read** (`authStorage.reload()` + `modelRegistry.refresh()`) so `pi` `/login`
-    or `thinkrail jbcentral` run in a terminal shows up without a host restart (accepted micro-risk:
-    refreshing the shared registry concurrent with a streaming session — same thing pi's TUI does on
-    `/login`). jbcentral wiring is detected from the registry's **effective** model `baseUrl`s (what
-    requests will actually hit) via `shared/jbcentral`'s `isJbcentralProxyUrl` — never a separate
-    `models.json` read. Assembly is a pure `buildProviderReport(sources)` over a narrow sources slice,
-    unit-tested with fixture data.
+    `configurePiRuntime()` for tests). The **provider-credential surface** over this runtime —
+    `provider.status` + in-app login — lives in the sibling `auth` module (which consumes `getPiRuntime`),
+    **not** here.
   - `agentSessionManager` — sessions keyed by `session.sessionId` (each `Entry` also tracks its
     `workspaceId`), `createSession({ cwd, workspaceId, model?, thinkingLevel? })` → `createAgentSession(...)`
     with a per-session `SessionManager` **and a `buildSessionSettings(cwd)` settings manager** (the user's
@@ -114,7 +106,7 @@ its inline answer bridge.
     Both session paths pass it as `resourceLoader`. `buildResourceLoader` stays internal; the seam +
     its types are on the barrel.
 - **Public surface (barrel):** the manager operations + `CreateSessionInput`/`CreateSessionResult` +
-  `SessionEventPayload`; `configurePiRuntime`/`getPiRuntime`; `getProviderStatus`; `completeOnce`/`pickModel` +
+  `SessionEventPayload`; `configurePiRuntime`/`getPiRuntime`; `completeOnce`/`pickModel` +
   `OneShotRequest`/`OneShotResult`/`ModelTier`; the `webUiContext` seams; the
   `askUserQuestion` bridge (`answerQuestion`/`cancelQuestionsForSession`) + its pure helpers
   (`validateQuestionnaire`/`buildQuestionnaireResponse`); the compiled-binary extension seam

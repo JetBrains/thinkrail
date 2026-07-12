@@ -9,5 +9,4 @@ export {
 } from "./extensions";
 export * from "./oneshot";
 export * from "./piRuntime";
-export { buildProviderReport, getProviderStatus } from "./providerStatus";
 export * from "./webUiContext";
