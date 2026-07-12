@@ -48,7 +48,18 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   chat is never clobbered. The
   pure **`reduceSessionEvent`** folds a `PiEvent` into a runtime; **`handlePiEvent(event,
   sessionId)`** and **`applyExtUi(request)`** route by id via the `withRuntime` helper (a no-op for an
-  unknown session). The host-wide **`models`** list stays global (not per session). The transient **`changesRequest`** +
+  unknown session). The host-wide **`models`** list stays global (not per session). The **in-app login** state
+  **`activeLogin: LoginState | null`** (type from `auth`) is **flat + session-less** (a login runs on the
+  Welcome screen before any session exists — routing it through a session runtime would drop its frames):
+  the pure **`foldLoginFrame`** reducer lives here (as `reduceExtUi`/`reduceSessionEvent` do — `auth` stays
+  presentational), and **`beginLogin(loginId, providerId)`** opens the login (a no-op if a frame already
+  created it — the frame can beat the `loginStart` response), **`applyLoginFrame(push)`** folds an inbound
+  `provider.login` frame (creating `activeLogin` if the frame arrived first; ignoring frames for a different
+  live login), **`clearLoginInput()`** drops the live input the instant a reply is sent (no double-submit),
+  and **`clearLogin()`** dismisses it. The **settings surface** state — **`settingsOpen`** +
+  **`settingsSection`** (`"providers"|"github"`) with **`openSettings(section?)`** (deep-links to a section,
+  defaults to Providers) / **`closeSettings()`** / **`setSettingsSection()`** — lives here so the top-bar gear
+  AND the Welcome provider warning open Settings to a section without prop-drilling through the shell. The transient **`changesRequest`** +
   **`requestChangesView(workspaceId, path)`** are a UI deep-link intent (a chat turn-divider asking the
   right panel to surface a file's diff); the panels watch it, scoped by workspace. The `EditorTab`
   (`FileTab` | `ChatTab`) + `TerminalTab` + `ClosedChat` + `SessionRuntime` types. (Chat *render* types +
@@ -56,6 +67,7 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
 - **Public surface (barrel):** `useAppStore`, `EditorTab` (`FileTab`/`ChatTab`), `TerminalTab`, `ClosedChat`,
   `SessionRuntime` + `EMPTY_RUNTIME` (ChatView's pre-creation fallback), `reduceSessionEvent`.
 - **Allowed deps:** `contracts` (`Project`/`Workspace`/`Model`/`ThinkingLevel`/`SessionStats`/
-  `SlashCommandInfo`/`ExtUiRequest`; `PiEvent`, **type-only**); `chat` (`ChatTurn`/`ToolResultState`,
-  **type-only**); `transport` (`ConnectionStatus`, **type-only**); `zustand`.
+  `SlashCommandInfo`/`ExtUiRequest`/`LoginPush`; `PiEvent`/`LoginFrame`, **type-only**); `chat`
+  (`ChatTurn`/`ToolResultState`, **type-only**); `auth` (`LoginState`, **type-only**); `transport`
+  (`ConnectionStatus`, **type-only**); `zustand`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `panels`/`shell` or transport runtime.

@@ -50,6 +50,9 @@ beforeEach(() => {
 		activeTabByWorkspace: {},
 		closedChatsByWorkspace: {},
 		activeWorkspaceId: null,
+		activeLogin: null,
+		settingsOpen: false,
+		settingsSection: "providers",
 	});
 });
 
@@ -499,4 +502,124 @@ test("removeWorkspace optimistically drops the row, leaving siblings; unknown pr
 	expect(useAppStore.getState().workspaces.p1).toHaveLength(1);
 	useAppStore.getState().removeWorkspace("p2", "w1");
 	expect(useAppStore.getState().workspaces.p2).toBeUndefined();
+});
+
+// --- in-app login (flat, session-less) -------------------------------------------------------------
+
+test("beginLogin opens a fresh active login; frames accumulate (url + paste prompt coexist)", () => {
+	const s = useAppStore.getState();
+	s.beginLogin("l1", "anthropic");
+	expect(useAppStore.getState().activeLogin).toEqual({
+		loginId: "l1",
+		providerId: "anthropic",
+		status: "active",
+	});
+
+	s.applyLoginFrame({
+		loginId: "l1",
+		providerId: "anthropic",
+		frame: { kind: "authUrl", url: "https://x/auth" },
+	});
+	s.applyLoginFrame({
+		loginId: "l1",
+		providerId: "anthropic",
+		frame: { kind: "prompt", message: "Paste the code", placeholder: "code" },
+	});
+	// The browser-vs-paste race: the URL and the paste input are live at the same time.
+	expect(useAppStore.getState().activeLogin).toMatchObject({
+		url: "https://x/auth",
+		input: { kind: "prompt", message: "Paste the code", placeholder: "code" },
+	});
+});
+
+test("a frame that beats the loginStart response creates the login; beginLogin then no-ops", () => {
+	const s = useAppStore.getState();
+	// Provider fired onAuth synchronously → the frame arrives before beginLogin.
+	s.applyLoginFrame({
+		loginId: "l9",
+		providerId: "openai-codex",
+		frame: { kind: "authUrl", url: "https://y" },
+	});
+	expect(useAppStore.getState().activeLogin).toMatchObject({ loginId: "l9", url: "https://y" });
+
+	// The late beginLogin for the same id must not clobber the folded state.
+	s.beginLogin("l9", "openai-codex");
+	expect(useAppStore.getState().activeLogin).toMatchObject({ loginId: "l9", url: "https://y" });
+});
+
+test("frames for a different still-active login are ignored (modal — one at a time)", () => {
+	const s = useAppStore.getState();
+	s.beginLogin("l1", "anthropic");
+	s.applyLoginFrame({
+		loginId: "other",
+		providerId: "google",
+		frame: { kind: "authUrl", url: "https://nope" },
+	});
+	expect(useAppStore.getState().activeLogin).toMatchObject({
+		loginId: "l1",
+		providerId: "anthropic",
+	});
+	expect(useAppStore.getState().activeLogin?.url).toBeUndefined();
+});
+
+test("clearLoginInput drops the live input; success is terminal; clearLogin dismisses", () => {
+	const s = useAppStore.getState();
+	s.beginLogin("l1", "anthropic");
+	s.applyLoginFrame({
+		loginId: "l1",
+		providerId: "anthropic",
+		frame: { kind: "select", message: "Pick", options: [{ id: "max", label: "Max" }] },
+	});
+	expect(useAppStore.getState().activeLogin?.input).toBeDefined();
+
+	s.clearLoginInput(); // sent a reply → hide the input immediately (no double-submit)
+	expect(useAppStore.getState().activeLogin?.input).toBeUndefined();
+
+	s.applyLoginFrame({ loginId: "l1", providerId: "anthropic", frame: { kind: "success" } });
+	expect(useAppStore.getState().activeLogin?.status).toBe("success");
+
+	s.clearLogin();
+	expect(useAppStore.getState().activeLogin).toBeNull();
+});
+
+test("openSettings deep-links to a section (default providers); closeSettings hides it", () => {
+	const s = useAppStore.getState();
+	s.openSettings();
+	expect(useAppStore.getState().settingsOpen).toBe(true);
+	expect(useAppStore.getState().settingsSection).toBe("providers");
+
+	s.openSettings("github");
+	expect(useAppStore.getState().settingsSection).toBe("github");
+
+	s.setSettingsSection("providers");
+	expect(useAppStore.getState().settingsSection).toBe("providers");
+
+	s.closeSettings();
+	expect(useAppStore.getState().settingsOpen).toBe(false);
+	// The section is remembered across close/open (not reset).
+	expect(useAppStore.getState().settingsSection).toBe("providers");
+});
+
+test("an error frame is terminal: sets status/error and clears the live input + progress", () => {
+	const s = useAppStore.getState();
+	s.beginLogin("l1", "anthropic");
+	s.applyLoginFrame({
+		loginId: "l1",
+		providerId: "anthropic",
+		frame: { kind: "progress", message: "…" },
+	});
+	s.applyLoginFrame({
+		loginId: "l1",
+		providerId: "anthropic",
+		frame: { kind: "prompt", message: "code" },
+	});
+	s.applyLoginFrame({
+		loginId: "l1",
+		providerId: "anthropic",
+		frame: { kind: "error", message: "Scope revoked by provider" },
+	});
+	const login = useAppStore.getState().activeLogin;
+	expect(login).toMatchObject({ status: "error", error: "Scope revoked by provider" });
+	expect(login?.input).toBeUndefined();
+	expect(login?.progress).toBeUndefined();
 });

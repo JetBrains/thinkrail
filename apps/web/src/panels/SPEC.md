@@ -56,16 +56,12 @@ nav's selection updates it). Its `hasSpecs` is **fetched lazily** via `project.h
 project (a full-tree walk, kept off the connect handshake) — pending until it resolves, so the cards wait
 on it. The open-project orchestration lives in the shared **`useOpenProject`** hook
 (above), so the Welcome "Open project" card gets the same non-git init/notice handling as the rail.
-Below the cards, `WelcomePanel` composes **`ProviderStatusStrip`** — the auth-provider status surface
-(a deliberate Welcome-only placement; a Settings-dialog block / picker-footer hints were considered and
-deferred until mid-session visibility proves needed): one `provider.status` fetch on mount + a Refresh re-ask
-(every read revalidates host-side). Configured providers render as rows (glyph + display name + source
-label — "JetBrains AI proxy" / "OAuth subscription" / "API key" / "environment"), unconfigured collapse
-into one compact "N more available: …" line. **Zero configured** flips the strip to warn-toned guidance
-with copyable setup commands — `thinkrail jbcentral` (route Claude/GPT via JetBrains AI) and `pi` +
-`/login` (subscription OAuth; there is **no** `pi auth login`) plus the API-key env hint. A fetch
-failure renders a distinct error hint + Refresh (offline ≠ "no providers"). Read-only by design — no
-in-app login/wiring actions.
+Above the cards, `WelcomePanel` composes **`ProviderWarningBanner`** — a slim gold banner shown **only when
+no provider is connected** ("No model provider connected — the agent can't run") with a **Connect a provider**
+CTA that opens Settings → Providers (`store.openSettings("providers")`). It reads `provider.status` (a
+provider is "connected" iff any `configured`) on mount and re-checks whenever the settings dialog toggles, so
+it disappears the moment the user connects one; a transport error degrades to *not* nagging (offline ≠ "no
+provider"). All provider **management** lives in Settings, not here (the always-on strip is gone).
 **`NewWorkspaceDialog`** is the create-and-kick-off surface: an optional **`initialPrompt`** seeds the
 prompt hero (still editable; empty by default), a base-branch
   combobox (`git.listBranches`, degrading to local branches offline; a Refresh re-lists; `origin/HEAD` is
@@ -79,8 +75,22 @@ prompt hero (still editable; empty by default), a base-branch
   creates the workspace. A **rejected** kick-off `prompt` (a bad model / missing API key — e.g. picking a
   nonexistent model) surfaces as an `error` turn in the just-opened chat via `store.appendErrorTurn` (with
   `transport`'s `errorText`) rather than vanishing. (`gh` status lives in `SettingsDialog`, not the
-  create dialog.) **`SettingsDialog`** is the app-settings surface the shell's topbar gear opens — its
-  "Local GitHub" block shows `github.authStatus()` (Connected + login / Not connected) with a Refresh.
+  create dialog.) **`SettingsDialog`** is the app-settings surface the shell's topbar gear opens — a
+  **store-driven two-pane shell** (left section rail + scrollable content pane; mobile collapses the rail to
+  a horizontal segmented strip): `settingsOpen`/`settingsSection` live in the store so the gear AND the
+  Welcome banner can open it deep-linked to a section. Live sections: **`ProvidersSettings`** (the in-app
+  provider-auth surface — Connected cards each with a **Sign-out only when `canLogout`** (env / jbcentral /
+  models.json auth shows a "Managed" tag instead, since the host can't unset it); a **"Sign in with a
+  subscription"** block of `canOAuth` providers → `provider.loginStart` → the store-driven `auth/LoginDialog`
+  (open the URL or paste the code, `provider.loginReply`); an **"Add an API key"** group of single-key
+  providers (`provider.setApiKey`, capped with a "Show N more" expander); a multi-field "N more" note; and
+  the **`JetBrainsAiCard`** — route Claude+GPT through your JetBrains subscription (the jbcentral proxy) — a
+  state machine over `jbcentralWired`/`jbcentralInstalled` (from the same status read) + `provider.jbcentral*`:
+  Connected (Disconnect) / ready (Connect) / not signed in (in-app `jbcentral login` + Retry) / not installed
+  (copyable install command + Recheck); each mutation re-reads `provider.status`) and **`GithubSettings`** (the "Local GitHub" block — `github.authStatus()`
+  Connected + login / Not connected + Refresh). Dimmed "General"/"Appearance" nav items ("Soon") signal the
+  shell is built to grow. `ProvidersSettings` is the **integration piece** (store + transport); the
+  `LoginDialog` stays presentational (`auth` module).
   Panels compose their own sub-panels
   (e.g. `RightPanel`→`FileTree`/`ChangesPanel`, `CenterTabs`→`FilePane`→`MonacoEditor`) — an internal hierarchy.
   `CenterTabs` closing a chat tab routes to `store.closeChatToHistory` (keeps the session alive) and shows a

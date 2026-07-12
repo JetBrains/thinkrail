@@ -1,5 +1,7 @@
 import type {
 	ExtUiRequest,
+	LoginFrame,
+	LoginPush,
 	Model,
 	PiEvent,
 	Project,
@@ -10,6 +12,7 @@ import type {
 	Workspace,
 } from "@thinkrail/contracts";
 import { create } from "zustand";
+import type { LoginState } from "../auth";
 import type { ChatTurn, ExtUiDialogRequest, ToolResultState } from "../chat/types";
 import type { ConnectionStatus } from "../transport";
 
@@ -32,6 +35,9 @@ export interface ChatTab {
 	sessionId: string;
 }
 export type EditorTab = FileTab | ChatTab;
+
+/** A section of the settings dialog. Extensible — the two live sections today are providers + github. */
+export type SettingsSection = "providers" | "github";
 
 /** A terminal tab. `clientId` is the stable UI key; the server PTY id is owned by its `TerminalInstance`. */
 export interface TerminalTab {
@@ -317,6 +323,16 @@ interface AppState {
 	 * active workspace; a fresh object each call so identical re-requests still fire.
 	 */
 	changesRequest: { workspaceId: string; path: string } | null;
+	/**
+	 * The in-flight in-app OAuth login, if any (flat + session-less — a login runs on the Welcome screen
+	 * before any session exists, so it must NOT live under a session runtime, or its frames get dropped).
+	 * At most one at a time (the dialog is modal).
+	 */
+	activeLogin: LoginState | null;
+	/** The settings dialog surface — kept in the store so any component (the top-bar gear, the Welcome
+	 * provider warning) can open it to a section without prop-drilling through the shell. */
+	settingsOpen: boolean;
+	settingsSection: SettingsSection;
 	setStatus: (status: ConnectionStatus) => void;
 	setWelcome: (protocolVersion: number) => void;
 	setProjects: (projects: Project[]) => void;
@@ -387,6 +403,18 @@ interface AppState {
 	clearPendingExtUi: (sessionId: string, id: string) => void;
 	/** Route an inbound `pi.extensionUi` frame to its session's runtime (dialogs/notices/status/widget/title). */
 	applyExtUi: (request: ExtUiRequest) => void;
+	/** Open the login dialog for a just-started login (the `provider.loginStart` handle). */
+	beginLogin: (loginId: string, providerId: string) => void;
+	/** Fold an inbound `provider.login` frame into `activeLogin` (creating it if the frame beat `beginLogin`). */
+	applyLoginFrame: (push: LoginPush) => void;
+	/** Drop the input from the active login the moment a reply is sent (avoids a double-submit). */
+	clearLoginInput: () => void;
+	/** Dismiss the login dialog (cancel or after a terminal frame). */
+	clearLogin: () => void;
+	/** Open the settings dialog, optionally deep-linked to a section (defaults to Providers). */
+	openSettings: (section?: SettingsSection) => void;
+	closeSettings: () => void;
+	setSettingsSection: (section: SettingsSection) => void;
 	/** Ask the right panel to open `path`'s diff in its Changes view (deep-link from chat). */
 	requestChangesView: (workspaceId: string, path: string) => void;
 }
@@ -401,6 +429,61 @@ function withRuntime(
 	if (!rt) return {};
 	const next = update(rt);
 	return next === rt ? {} : { sessions: { ...s.sessions, [sessionId]: next } };
+}
+
+/** A fresh in-app login (the `provider.loginStart` handle arrived, or the first frame did). */
+function newLoginState(loginId: string, providerId: string): LoginState {
+	return { loginId, providerId, status: "active" };
+}
+
+/**
+ * Fold one streamed `LoginFrame` into the accumulating login state. `url`/`deviceCode` add to what's shown;
+ * `select`/`prompt` set the live input (dropping stale progress); `success`/`error` are terminal and clear
+ * the input/progress. Keys are dropped rather than set to `undefined` (`exactOptionalPropertyTypes`).
+ */
+function foldLoginFrame(state: LoginState, frame: LoginFrame): LoginState {
+	switch (frame.kind) {
+		case "authUrl":
+			return {
+				...state,
+				url: frame.url,
+				...(frame.instructions ? { instructions: frame.instructions } : {}),
+			};
+		case "deviceCode":
+			return {
+				...state,
+				deviceCode: {
+					userCode: frame.userCode,
+					verificationUri: frame.verificationUri,
+					...(frame.expiresInSeconds ? { expiresInSeconds: frame.expiresInSeconds } : {}),
+				},
+			};
+		case "select": {
+			const { progress: _p, ...rest } = state;
+			return { ...rest, input: { kind: "select", message: frame.message, options: frame.options } };
+		}
+		case "prompt": {
+			const { progress: _p, ...rest } = state;
+			return {
+				...rest,
+				input: {
+					kind: "prompt",
+					message: frame.message,
+					...(frame.placeholder ? { placeholder: frame.placeholder } : {}),
+				},
+			};
+		}
+		case "progress":
+			return { ...state, progress: frame.message };
+		case "success": {
+			const { input: _i, progress: _p, ...rest } = state;
+			return { ...rest, status: "success" };
+		}
+		case "error": {
+			const { input: _i, progress: _p, ...rest } = state;
+			return { ...rest, status: "error", error: frame.message };
+		}
+	}
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -418,6 +501,9 @@ export const useAppStore = create<AppState>((set) => ({
 	sessions: {},
 	models: [],
 	changesRequest: null,
+	activeLogin: null,
+	settingsOpen: false,
+	settingsSection: "providers",
 	setStatus: (status) => set({ status }),
 	setWelcome: (protocolVersion) => set({ protocolVersion }),
 	setProjects: (projects) => set({ projects }),
@@ -743,5 +829,30 @@ export const useAppStore = create<AppState>((set) => ({
 			}
 			return withRuntime(s, request.sessionId, (rt) => reduceExtUi(rt, request));
 		}),
+	beginLogin: (loginId, providerId) =>
+		set((s) =>
+			// A frame can beat the loginStart response (a provider that fires onAuth synchronously): if the
+			// frame already created this login, keep its folded state; otherwise open a fresh one.
+			s.activeLogin?.loginId === loginId ? {} : { activeLogin: newLoginState(loginId, providerId) },
+		),
+	applyLoginFrame: (push) =>
+		set((s) => {
+			const cur = s.activeLogin;
+			// Ignore a frame for some other still-active login (modal — only one runs at a time).
+			if (cur && cur.loginId !== push.loginId && cur.status === "active") return {};
+			const base =
+				cur && cur.loginId === push.loginId ? cur : newLoginState(push.loginId, push.providerId);
+			return { activeLogin: foldLoginFrame(base, push.frame) };
+		}),
+	clearLoginInput: () =>
+		set((s) => {
+			if (!s.activeLogin?.input) return {};
+			const { input: _drop, ...rest } = s.activeLogin;
+			return { activeLogin: rest };
+		}),
+	clearLogin: () => set({ activeLogin: null }),
+	openSettings: (section = "providers") => set({ settingsOpen: true, settingsSection: section }),
+	closeSettings: () => set({ settingsOpen: false }),
+	setSettingsSection: (section) => set({ settingsSection: section }),
 	requestChangesView: (workspaceId, path) => set({ changesRequest: { workspaceId, path } }),
 }));

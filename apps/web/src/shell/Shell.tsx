@@ -1,5 +1,4 @@
 import { Settings } from "lucide-react";
-import { useState } from "react";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../components/ui/resizable";
 import { PRODUCT_NAME } from "../constants/branding";
 import { CenterTabs } from "../panels/CenterTabs";
@@ -26,7 +25,6 @@ const STATUS_DOT: Record<ConnectionStatus, string> = {
 export function Shell() {
 	const status = useAppStore((s) => s.status);
 	const hasActiveWorkspace = useAppStore((s) => s.activeWorkspaceId != null);
-	const [settingsOpen, setSettingsOpen] = useState(false);
 	return (
 		<div data-testid="shell" className="grid h-full grid-rows-[auto_1fr]">
 			<header className="flex items-center justify-between border-b border-border2 bg-bg-dark px-lg py-sm">
@@ -47,13 +45,13 @@ export function Shell() {
 						data-testid="open-settings"
 						aria-label="Settings"
 						title="Settings"
-						onClick={() => setSettingsOpen(true)}
+						onClick={() => useAppStore.getState().openSettings()}
 						className="flex size-7 items-center justify-center rounded-[var(--radius-sm)] text-muted outline-none transition-colors hover:bg-hover hover:text-text focus-visible:ring-2 focus-visible:ring-primary"
 					>
 						<Settings className="size-4" />
 					</button>
 				</div>
-				<SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+				<SettingsDialog />
 			</header>
 			{hasActiveWorkspace ? (
 				<ResizablePanelGroup
