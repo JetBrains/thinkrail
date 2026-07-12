@@ -131,13 +131,62 @@ export interface ProviderStatus {
 	kind?: ProviderAuthKind;
 	/** Optional human hint for the source (e.g. the env var name, or `models.json`). */
 	detail?: string;
+	/** In-app OAuth login is available for this provider (`provider.loginStart`). */
+	canOAuth?: boolean;
+	/** In-app single-key API-key entry is available (`provider.setApiKey`) — false for multi-field creds. */
+	canApiKey?: boolean;
+	/** The provider has a removable `auth.json` credential (`provider.logout`) — false for env / jbcentral /
+	 * models.json auth, which the host can't unset (so the strip shows no Sign-out for those). */
+	canLogout?: boolean;
 }
 
 /** The `provider.status` result: configured providers first, then the rest alphabetically. */
 export interface ProviderStatusReport {
 	providers: ProviderStatus[];
-	/** Whether any provider's effective baseUrl routes through the jbcentral proxy. */
+	/** Whether any provider's effective baseUrl routes through the jbcentral proxy (JetBrains AI is wired). */
 	jbcentralWired: boolean;
+	/** Whether the `jbcentral` CLI is installed on the host (drives the in-app JetBrains AI card's state). */
+	jbcentralInstalled: boolean;
+}
+
+/**
+ * The outcome of an in-app `provider.jbcentralConnect` attempt — a small state machine the JetBrains AI card
+ * walks the user through: connected, or the reason it couldn't (install the CLI / sign in / a hard error).
+ */
+export interface JbcentralConnectResult {
+	outcome: "connected" | "needs-install" | "needs-login" | "error";
+	/** Install guidance (per-OS) when `outcome === "needs-install"`. */
+	hint?: string;
+	/** The failure detail when `outcome === "error"`. */
+	message?: string;
+}
+
+/**
+ * A single update in an in-app OAuth login flow, pushed host→client on the `provider.login` channel
+ * (keyed by `loginId`). Frames **accumulate** into the client's per-login state rather than replacing it:
+ * `authUrl` and `prompt` can be live at once (the anthropic/openai browser-vs-paste race — open the URL
+ * *or* paste the code). `success`/`error` are terminal. `select`/`prompt` await a `provider.loginReply`.
+ */
+export type LoginFrame =
+	| { kind: "authUrl"; url: string; instructions?: string }
+	| { kind: "deviceCode"; userCode: string; verificationUri: string; expiresInSeconds?: number }
+	| { kind: "select"; message: string; options: { id: string; label: string }[] }
+	| { kind: "prompt"; message: string; placeholder?: string }
+	| { kind: "progress"; message: string }
+	| { kind: "success" }
+	| { kind: "error"; message: string };
+
+/** The `provider.login` push payload: a frame tagged with its login handle + the provider it authenticates. */
+export interface LoginPush {
+	loginId: string;
+	providerId: string;
+	frame: LoginFrame;
+}
+
+/** The browser's answer to a `select`/`prompt` frame — resolves the parked pi login callback by `loginId`. */
+export interface LoginReply {
+	loginId: string;
+	value: string;
 }
 
 export interface GithubAuthStatus {

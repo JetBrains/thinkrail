@@ -65,7 +65,16 @@ runtime exports being the WS method/channel constants and the protocol version. 
   again), `Session` (chat tab),
   `FileNode` (file-tree node), `TabStatus`, `Git*`/diff types; **`ProviderStatus`/`ProviderStatusReport`**
   — the auth-provider status rows the Welcome strip renders (per-provider `configured` + auth `kind`:
-  oauth / api-key / env / jbcentral / other — never credential values); **`SpecGraphNode`/`SpecGraphSnapshot`** — the
+  oauth / api-key / env / jbcentral / other — never credential values; plus `canOAuth`/`canApiKey`/`canLogout`,
+  which gate the strip's in-app Sign-in / Sign-out affordances — `canLogout` is true only for a removable
+  auth.json credential, false for env / jbcentral / models.json auth the host can't unset); the **in-app login wire** — **`LoginFrame`** (the streamed
+  flow updates: `authUrl` / `deviceCode` / `select` / `prompt` / `progress` / `success` / `error`, which
+  **accumulate** client-side, never a credential value), **`LoginPush`** (the `provider.login` frame,
+  `{ loginId, providerId, frame }`) and **`LoginReply`** (`{ loginId, value }` — the browser's answer to a
+  `select`/`prompt`); the JetBrains AI wire — **`ProviderStatusReport.jbcentralInstalled`** (is the
+  `jbcentral` CLI on the host) alongside `jbcentralWired`, and **`JbcentralConnectResult`** (the in-app
+  connect state machine: `connected` / `needs-install` (+`hint`) / `needs-login` / `error` (+`message`));
+  **`SpecGraphNode`/`SpecGraphSnapshot`** — the
   Specs-viewer read DTOs, **mirrored** (like `PiEvent`), never imported from `pi-spec-graph` — the wire
   carries only what the panel renders (`type`/`status` stay `string`: tolerate whatever is on disk).
 - **wsProtocol.ts** — `WS_METHODS` (`project.*` — incl. **`project.inspect`** (classify a path) +
@@ -73,12 +82,19 @@ runtime exports being the WS method/channel constants and the protocol version. 
   registered spec?" for the Welcome screen — a full-tree walk, so requested only for the shown project,
   never eagerly for every project) / `workspace.*` / `fs.*` / `git.*` / **`spec.graph`**
   (the Specs-viewer whole-graph read, per workspace) / `terminal.*` / `model.list` / **`provider.status`**
-(the auth-provider status report; every read revalidates host-side) / `session.*` —
-  `create`/`prompt`/`steer`/`followUp`/`abort`/`dispose`/`setModel`/
+(the auth-provider status report; every read revalidates host-side) / the **`provider.*` in-app login**
+  (**`loginStart`** — mints a `loginId` and runs pi's OAuth flow **detached** (it can take minutes; it must
+  not sit on the request nor block the WS pump) / **`loginReply`** — answers a live `select`/`prompt`,
+  correlated by `loginId` / **`loginCancel`** / **`setApiKey`** (single key → auth.json) / **`logout`** /
+  the **JetBrains AI** trio **`jbcentralConnect`** (wire Claude+GPT via the jbcentral proxy → a
+  `JbcentralConnectResult`) / **`jbcentralDisconnect`** / **`jbcentralLogin`** (launch `jbcentral login`)) /
+  `session.*` — `create`/`prompt`/`steer`/`followUp`/`abort`/`dispose`/`setModel`/
   `setThinkingLevel`/`compact`/`getStats`/`getCommands`/`extUiReply`/**`answerQuestion`** (the inline
   `ask_user_question` reply, correlated by tool call id)/**`list`**/**`getMessages`** (the
   read side)), `WS_CHANNELS` (`server.welcome` /
-  `pi.event` / `pi.extensionUi` / `terminal.data` / **`workspace.updated`** — a host-initiated workspace
+  `pi.event` / `pi.extensionUi` / **`provider.login`** — the session-less in-app login stream (a `LoginPush`
+  per frame, keyed by `loginId`; the sibling of `pi.extensionUi`, since a login runs on the Welcome screen
+  before any session exists) / `terminal.data` / **`workspace.updated`** — a host-initiated workspace
   mutation (the auto-rename — the instant naive pass and the agentic refine both push it) fanned out to
   every client; `data` is the **full persisted `Workspace` snapshot** (idempotent under the transport's
   last-value replay, so a naive-then-agentic pair merges by `id` — never a delta), keyed by `id` +

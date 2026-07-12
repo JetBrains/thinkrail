@@ -6,6 +6,8 @@ import type {
 	FileNode,
 	GithubAuthStatus,
 	GitStatus,
+	JbcentralConnectResult,
+	LoginReply,
 	Project,
 	ProjectPathStatus,
 	ProviderStatusReport,
@@ -25,7 +27,7 @@ import type {
 } from "./piProtocol";
 
 /** Bumped on any breaking wire change; sent in `server.welcome` so a stale UI can detect host drift. */
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 3;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -96,6 +98,20 @@ export const WS_METHODS = {
 	// Auth-provider status (the Welcome strip): per-provider configured + auth kind, jbcentral wiring.
 	// Every read revalidates host-side (auth + registry reload), so a Refresh is just a re-request.
 	providerStatus: "provider.status",
+	// In-app provider auth (the Welcome strip's Sign-in). loginStart kicks off pi's OAuth flow DETACHED and
+	// returns a handle immediately (the flow can take minutes — it must not sit on the request); frames
+	// stream on the `provider.login` channel, and loginReply answers a select/prompt frame. setApiKey/logout
+	// mutate auth.json directly. All revalidate the shared registry, so a following provider.status re-read reflects them.
+	providerLoginStart: "provider.loginStart",
+	providerLoginReply: "provider.loginReply",
+	providerLoginCancel: "provider.loginCancel",
+	providerSetApiKey: "provider.setApiKey",
+	providerLogout: "provider.logout",
+	// In-app JetBrains AI (jbcentral proxy) wiring: connect routes Claude+GPT via your JetBrains plan (writes
+	// models.json + refreshes the registry), disconnect undoes it, login launches `jbcentral login` (browser).
+	providerJbcentralConnect: "provider.jbcentralConnect",
+	providerJbcentralDisconnect: "provider.jbcentralDisconnect",
+	providerJbcentralLogin: "provider.jbcentralLogin",
 } as const;
 
 /** Server→client push channels. */
@@ -103,6 +119,9 @@ export const WS_CHANNELS = {
 	serverWelcome: "server.welcome",
 	piEvent: "pi.event",
 	piExtensionUi: "pi.extensionUi",
+	// In-app login flow updates (a `LoginPush` per frame), keyed by loginId. Session-less — a login runs on
+	// the Welcome screen before any session exists, so this is the sibling of pi.extensionUi, not scoped to one.
+	providerLogin: "provider.login",
 	terminalData: "terminal.data",
 	// A host-initiated workspace mutation (the auto-rename), broadcast to every client. `data` is the
 	// full persisted `Workspace` snapshot — idempotent under last-value replay, never a delta.
@@ -201,6 +220,22 @@ export interface WsMethodMap {
 		result: { model: Model<string> | null; thinkingLevel: ThinkingLevel };
 	};
 	"provider.status": { params: Record<string, never>; result: ProviderStatusReport };
+	// Mints a loginId and starts pi's OAuth flow detached; frames arrive on the `provider.login` channel.
+	"provider.loginStart": { params: { providerId: string }; result: { loginId: string } };
+	// Answers a live `select`/`prompt` frame (option id / typed text / pasted code) for the given login.
+	"provider.loginReply": { params: LoginReply; result: Ack };
+	// Cancels an in-flight login: aborts the flow AND settles any parked callback so pi doesn't hang.
+	"provider.loginCancel": { params: { loginId: string }; result: Ack };
+	// Stores a single API key for a provider (auth.json) and refreshes the registry. Not for multi-field creds.
+	"provider.setApiKey": { params: { providerId: string; key: string }; result: Ack };
+	// Removes a provider's stored credentials (auth.json) and refreshes the registry.
+	"provider.logout": { params: { providerId: string }; result: Ack };
+	// Wire Claude+GPT through the local jbcentral proxy (JetBrains AI). Returns a small state machine —
+	// connected / needs-install / needs-login / error — the JetBrains AI card walks the user through.
+	"provider.jbcentralConnect": { params: Record<string, never>; result: JbcentralConnectResult };
+	"provider.jbcentralDisconnect": { params: Record<string, never>; result: Ack };
+	// Launch `jbcentral login` (its browser sign-in) on the host, best-effort.
+	"provider.jbcentralLogin": { params: Record<string, never>; result: { launched: boolean } };
 }
 
 export type WsMethodName = keyof WsMethodMap;
