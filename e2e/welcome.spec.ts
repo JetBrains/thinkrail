@@ -40,40 +40,115 @@ test("opens a clean ThinkRail with no projects imported", async ({ page }) => {
 	await expect(page.getByTestId("menu-open-project")).toBeVisible();
 });
 
-test("the Welcome screen reports auth-provider status", async ({ page }) => {
+test("the Welcome provider warning only shows when no provider is connected, and opens Settings", async ({
+	page,
+}) => {
 	await openAppFresh(page);
 
-	// The strip renders on the first-touch surface in one of its two data states: configured provider
-	// rows, or the zero-state guidance. Which one shows depends on the machine (globalSetup copies real
-	// pi auth into the isolated agent dir when present; CI has none) — so accept either, and pin the
-	// guidance content only when it's the empty state.
-	const strip = page.getByTestId("welcome-providers");
-	await expect(strip).toBeVisible();
-	await expect(strip).toContainText("Model providers");
-
-	const rows = page.getByTestId("provider-row");
-	const empty = page.getByTestId("providers-empty");
-	await expect(rows.first().or(empty)).toBeVisible();
-
-	if (await empty.isVisible()) {
-		// The guidance pins the *verified* commands: `thinkrail jbcentral`, and `pi` + `/login` (pi has no
-		// `auth login` subcommand — login is the in-TUI slash command).
-		await expect(empty).toContainText("No model providers configured");
-		await expect(empty).toContainText("thinkrail jbcentral");
-		await expect(empty).toContainText("/login");
-		await expect(empty).not.toContainText("pi auth login");
-		await expect(page.getByTestId("provider-copy-cmd")).toHaveCount(2);
+	// Provider auth now lives in Settings; the Welcome screen carries only a slim warning, shown ONLY when no
+	// provider is connected. Whether it shows depends on the machine (globalSetup copies real pi auth into the
+	// isolated agent dir when present; CI has none), so branch on it.
+	const banner = page.getByTestId("welcome-provider-warning");
+	if (await banner.isVisible()) {
+		await expect(banner).toContainText("No model provider connected");
+		// Its CTA opens Settings on the Providers section.
+		await page.getByTestId("welcome-connect-provider").click();
+		await expect(page.getByTestId("settings-dialog")).toBeVisible();
+		await expect(page.getByTestId("settings-providers")).toBeVisible();
 	} else {
-		// Configured rows carry the provider id + a source label; no error/empty state alongside.
-		await expect(rows.first()).toHaveAttribute("data-configured", "true");
-		await expect(empty).toHaveCount(0);
+		// A provider is configured → the warning is correctly absent.
+		await expect(banner).toHaveCount(0);
 	}
-	await expect(page.getByTestId("providers-error")).toHaveCount(0);
+});
 
-	// Refresh re-asks the host (every read revalidates) and lands back in a valid state.
-	await page.getByTestId("providers-refresh").click();
-	await expect(rows.first().or(empty)).toBeVisible();
+test("Settings → Providers lists in-app auth options", async ({ page }) => {
+	await openAppFresh(page);
+
+	// Open Settings from the top-bar gear — it lands on the Providers section (pi always registers its
+	// built-ins, so there's always a configured row and/or an in-app sign-in row).
+	await page.getByTestId("open-settings").click();
+	await expect(page.getByTestId("settings-dialog")).toBeVisible();
+	await expect(page.getByTestId("settings-providers")).toBeVisible();
+
+	const anyRow = page.getByTestId("provider-row").or(page.getByTestId("provider-signin-row"));
+	await expect(anyRow.first()).toBeVisible();
 	await expect(page.getByTestId("providers-error")).toHaveCount(0);
+});
+
+test("an API key can be added and removed in Settings (round-trips through the host)", async ({
+	page,
+}) => {
+	await openAppFresh(page);
+	await page.getByTestId("open-settings").click();
+	await expect(page.getByTestId("settings-providers")).toBeVisible();
+
+	// Target the first unconfigured provider offering an inline API-key field (a single-key provider). The
+	// dummy key isn't network-validated — `getAvailable()` is a fast check — so storing it flips the row to
+	// configured deterministically. Clean up by signing out so the isolated agent dir doesn't leak state.
+	const toggle = page.getByTestId("provider-apikey-toggle").first();
+	await expect(toggle).toBeVisible();
+	const providerId = await toggle.getAttribute("data-provider");
+	expect(providerId).toBeTruthy();
+	const sel = (testid: string) =>
+		page.locator(`[data-testid="${testid}"][data-provider="${providerId}"]`);
+
+	await toggle.click();
+	await sel("provider-apikey-input").fill("sk-e2e-dummy-key");
+	await sel("provider-apikey-save").click();
+
+	// The pane re-reads status → the provider now shows as a configured (Connected) row with a Sign-out.
+	const configuredRow = page.locator(
+		`[data-testid="provider-row"][data-provider="${providerId}"][data-configured="true"]`,
+	);
+	await expect(configuredRow).toBeVisible();
+
+	// Sign out removes the credential and re-reads → it's no longer configured.
+	await sel("provider-signout").click();
+	await expect(configuredRow).toHaveCount(0);
+});
+
+test("clicking Sign in (Settings) opens the in-app login dialog, and Cancel dismisses it", async ({
+	page,
+}) => {
+	await openAppFresh(page);
+	await page.getByTestId("open-settings").click();
+	await expect(page.getByTestId("settings-providers")).toBeVisible();
+
+	// An OAuth-capable unconfigured provider offers a Sign-in button; clicking it starts the flow
+	// (`provider.loginStart`) and opens the modal — regardless of whether a provider frame has streamed yet.
+	const signIn = page.getByTestId("provider-signin").first();
+	await expect(signIn).toBeVisible();
+	await signIn.click();
+
+	const dialog = page.getByTestId("login-dialog");
+	await expect(dialog).toBeVisible();
+
+	// Cancel aborts the flow (`provider.loginCancel`) and closes the modal.
+	await page.getByTestId("login-cancel").click();
+	await expect(dialog).toHaveCount(0);
+});
+
+test("Settings → Providers offers JetBrains AI, guiding install when the jbcentral CLI is missing", async ({
+	page,
+}) => {
+	await openAppFresh(page);
+	await page.getByTestId("open-settings").click();
+	await expect(page.getByTestId("settings-providers")).toBeVisible();
+
+	const card = page.getByTestId("jetbrains-ai-card");
+	await expect(card).toBeVisible();
+	await expect(card).toContainText("JetBrains AI");
+
+	// The card's state depends on the host's jbcentral CLI (the e2e host has none → install guidance;
+	// a dev machine with it wired/ready shows Disconnect/Connect). Accept whichever is truthful.
+	if ((await card.getAttribute("data-installed")) === "false") {
+		await expect(page.getByTestId("jetbrains-needs-install")).toBeVisible();
+		await expect(page.getByTestId("jetbrains-connect")).toHaveCount(0);
+	} else if ((await card.getAttribute("data-wired")) === "true") {
+		await expect(page.getByTestId("jetbrains-disconnect")).toBeVisible();
+	} else {
+		await expect(page.getByTestId("jetbrains-connect")).toBeVisible();
+	}
 });
 
 test("a project with specs offers Start building over Set up", async ({ page }) => {

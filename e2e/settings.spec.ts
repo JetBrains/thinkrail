@@ -11,6 +11,9 @@ test("settings shows the Local GitHub status block and degrades gh gracefully", 
 	await page.getByTestId("open-settings").click();
 	const dialog = page.getByTestId("settings-dialog");
 	await expect(dialog).toBeVisible();
+
+	// Settings opens on Providers now (two-pane shell) — switch to the GitHub section.
+	await page.getByTestId("settings-nav-github").click();
 	await expect(dialog).toContainText("Local GitHub");
 
 	// gh is forced offline → Not connected, but the block (and its Refresh) still render.
