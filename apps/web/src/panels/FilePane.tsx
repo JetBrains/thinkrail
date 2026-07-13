@@ -20,7 +20,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 	if (!isMarkdownPath(tab.path)) {
 		return (
 			<Suspense fallback={loading}>
-				<MonacoEditor path={tab.path} content={tab.content} />
+				<MonacoEditor path={tab.path} content={tab.content} workspaceId={tab.workspaceId} />
 			</Suspense>
 		);
 	}
@@ -52,7 +52,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 					{view === "rendered" ? (
 						<MarkdownPreview content={tab.content} workspaceId={tab.workspaceId} path={tab.path} />
 					) : (
-						<MonacoEditor path={tab.path} content={tab.content} />
+						<MonacoEditor path={tab.path} content={tab.content} workspaceId={tab.workspaceId} />
 					)}
 				</Suspense>
 			</div>

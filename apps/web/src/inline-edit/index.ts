@@ -24,5 +24,6 @@ export { SelectionPill } from "./SelectionPill";
 export { SuggestionOverlay } from "./SuggestionOverlay";
 export type { EditHunk, InlineEditRequest, InlineEditStatus, SelectionTarget } from "./types";
 export { useMarkdownInlineEdit } from "./useMarkdownInlineEdit";
+export { useMonacoInlineEdit } from "./useMonacoInlineEdit";
 export type { DiffPart } from "./wordDiff";
 export { wordDiff } from "./wordDiff";
