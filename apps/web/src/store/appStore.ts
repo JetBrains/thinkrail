@@ -783,6 +783,16 @@ export const useAppStore = create<AppState>((set, get) => ({
 			}
 			for (const closed of s.closedChatsByWorkspace[workspaceId] ?? [])
 				delete sessions[closed.sessionId];
+			// Also drop this workspace's inline-edit requests + session index + hidden runtimes — the server
+			// already aborts/disposes their sessions (removeWorkspaceSessions); this is the client-state half.
+			const inlineEdits = { ...s.inlineEdits };
+			const inlineEditBySession = { ...s.inlineEditBySession };
+			for (const req of Object.values(s.inlineEdits)) {
+				if (req.workspaceId !== workspaceId) continue;
+				delete inlineEdits[req.id];
+				delete inlineEditBySession[req.sessionId];
+				delete sessions[req.sessionId];
+			}
 			const { [workspaceId]: _tabs, ...tabsByWorkspace } = s.tabsByWorkspace;
 			const { [workspaceId]: _activeTab, ...activeTabByWorkspace } = s.activeTabByWorkspace;
 			const { [workspaceId]: _closed, ...closedChatsByWorkspace } = s.closedChatsByWorkspace;
@@ -797,6 +807,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 				terminalsByWorkspace,
 				activeTerminalByWorkspace,
 				sessions,
+				inlineEdits,
+				inlineEditBySession,
 			};
 		}),
 	addTerminal: (workspaceId) =>
@@ -911,8 +923,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 			const req = s.inlineEdits[id];
 			if (!req) return {};
 			const { [id]: _drop, ...inlineEdits } = s.inlineEdits;
-			const { [req.sessionId]: _drop2, ...inlineEditBySession } = s.inlineEditBySession;
-			return { inlineEdits, inlineEditBySession };
+			const { [req.sessionId]: _dropIdx, ...inlineEditBySession } = s.inlineEditBySession;
+			// Drop the hidden runtime too — unless the user promoted this session to a chat tab (the tab owns it then).
+			const promoted = Object.values(s.tabsByWorkspace).some((tabs) =>
+				tabs.some((t) => t.kind === "chat" && t.sessionId === req.sessionId),
+			);
+			let sessions = s.sessions;
+			if (!promoted && s.sessions[req.sessionId]) {
+				const { [req.sessionId]: _rt, ...rest } = s.sessions;
+				sessions = rest;
+			}
+			return { inlineEdits, inlineEditBySession, sessions };
 		}),
 	closeChatRuntime: (sessionId) =>
 		set((s) => {

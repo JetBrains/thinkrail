@@ -1,11 +1,7 @@
 import { useMemo } from "react";
-import { ChatActionsContext } from "@/chat/ChatActions";
 import { type ChatRow, deriveRows } from "@/chat/rows";
 import { ChatTurnView } from "@/chat/turns";
 import { EMPTY_RUNTIME, useAppStore } from "@/store";
-
-/** No-op ChatActions: the preview is read-only, so an interactive tool card can't send anything. */
-const READONLY_ACTIONS = { answerQuestion: async () => undefined };
 
 /**
  * Read-only live transcript for a hidden inline-edit session, anchored near its work site. Reuses the chat
@@ -55,13 +51,11 @@ export function PreviewPopover({
 				</button>
 			</div>
 			<div className="min-h-0 flex-1 overflow-auto px-sm py-xs">
-				<ChatActionsContext.Provider value={READONLY_ACTIONS}>
-					{rows.map((row) => (
-						<div key={row.id} className="py-0.5 text-xs">
-							<ChatTurnView row={row} workspaceRoot={undefined} onOpenChanges={() => {}} />
-						</div>
-					))}
-				</ChatActionsContext.Provider>
+				{rows.map((row) => (
+					<div key={row.id} className="py-0.5 text-xs">
+						<ChatTurnView row={row} workspaceRoot={undefined} onOpenChanges={() => {}} />
+					</div>
+				))}
 			</div>
 		</div>
 	);

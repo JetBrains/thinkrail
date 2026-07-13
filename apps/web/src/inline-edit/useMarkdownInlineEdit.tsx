@@ -102,7 +102,7 @@ export function useMarkdownInlineEdit({
 			/>
 		);
 	} else if (target && !request) {
-		overlay = <SelectionPillWrapper rect={target.rect} onClick={() => setPopupOpen(true)} />;
+		overlay = <SelectionPill rect={target.rect} onClick={() => setPopupOpen(true)} />;
 	}
 
 	// Working chip / review overlay for this path's request, anchored over the matched block.
@@ -143,16 +143,6 @@ export function useMarkdownInlineEdit({
 			</>
 		),
 	};
-}
-
-function SelectionPillWrapper({
-	rect,
-	onClick,
-}: {
-	rect: { top: number; left: number };
-	onClick: () => void;
-}) {
-	return <SelectionPill rect={rect} onClick={onClick} />;
 }
 
 /**

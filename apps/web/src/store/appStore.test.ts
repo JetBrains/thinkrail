@@ -884,11 +884,38 @@ test("popInlineEditTurn is a no-op when only one turn remains", () => {
 	expect(useAppStore.getState().inlineEdits.r1.turns).toHaveLength(1);
 });
 
-test("removeInlineEdit drops the request and its session index", () => {
+test("removeInlineEdit drops the request, its session index, and the hidden runtime", () => {
 	const store = useAppStore.getState();
 	store.registerInlineEdit(baseReq(), null, "medium");
+	expect(useAppStore.getState().sessions.s1).toBeDefined(); // the hidden runtime exists first
 	store.removeInlineEdit("r1");
 	const s = useAppStore.getState();
 	expect(s.inlineEdits.r1).toBeUndefined();
 	expect(s.inlineEditBySession.s1).toBeUndefined();
+	expect(s.sessions.s1).toBeUndefined(); // the hidden runtime is dropped too
+});
+
+test("removeInlineEdit keeps the runtime when the session was promoted to a chat tab", () => {
+	const store = useAppStore.getState();
+	useAppStore.setState({ activeWorkspaceId: "w1" });
+	store.registerInlineEdit(baseReq(), null, "medium");
+	store.openChatSession("w1", "s1", null, "medium"); // "open as chat" promotes the hidden session
+
+	store.removeInlineEdit("r1");
+	const s = useAppStore.getState();
+	expect(s.inlineEdits.r1).toBeUndefined();
+	expect(s.inlineEditBySession.s1).toBeUndefined();
+	expect(s.sessions.s1).toBeDefined(); // the chat tab owns the runtime now — it must survive
+});
+
+test("clearWorkspaceTabs drops the workspace's inline-edit request, index, and hidden runtime", () => {
+	const store = useAppStore.getState();
+	useAppStore.setState({ activeWorkspaceId: "w1" });
+	store.registerInlineEdit(baseReq(), null, "medium");
+
+	store.clearWorkspaceTabs("w1");
+	const s = useAppStore.getState();
+	expect(s.inlineEdits.r1).toBeUndefined();
+	expect(s.inlineEditBySession.s1).toBeUndefined();
+	expect(s.sessions.s1).toBeUndefined();
 });

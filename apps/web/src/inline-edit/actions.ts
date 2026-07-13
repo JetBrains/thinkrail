@@ -67,7 +67,7 @@ export async function refineInlineEdit(id: string, comment: string): Promise<voi
 
 /** Keep: the file already holds the edit — just resolve the request. */
 export function keepInlineEdit(id: string): void {
-	useAppStore.getState().setInlineEditStatus(id, "done");
+	useAppStore.getState().removeInlineEdit(id);
 }
 
 /**
@@ -118,7 +118,7 @@ export async function undoLastChange(id: string): Promise<{ ok: boolean; reason?
 	const live = useAppStore.getState().inlineEdits[id];
 	if (live && live.turns.length > 1)
 		useAppStore.getState().popInlineEditTurn(id); // → review of the prior turn
-	else useAppStore.getState().setInlineEditStatus(id, "done"); // only turn → fully reverted
+	else useAppStore.getState().removeInlineEdit(id); // only turn → fully reverted
 	return res;
 }
 
@@ -128,7 +128,7 @@ export async function revertAll(id: string): Promise<{ ok: boolean; reason?: str
 	if (!req) return { ok: false, reason: "gone" };
 	const original = req.turns[0]?.baseContent ?? req.afterContent ?? "";
 	const res = await restoreSnapshot(id, original);
-	if (res.ok) useAppStore.getState().setInlineEditStatus(id, "done");
+	if (res.ok) useAppStore.getState().removeInlineEdit(id);
 	return res;
 }
 
