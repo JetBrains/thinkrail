@@ -8,7 +8,7 @@ import { type AnsweredRound, attachDialog, type DialogConfig } from "./dialog";
 import { captureEvents, type EventLog } from "./events";
 import { type JudgeResult, judgeTranscript } from "./judge";
 import { applyArtifactPreset, isRecordMode, recordFixture, useTranscriptFixture } from "./presets";
-import { appendRunRecord } from "./runlog";
+import { appendAggregatedRunRecord, appendRunRecord, type RunRecord } from "./runlog";
 import { endSession, promptTurn, startSession, stopTurn } from "./session";
 import { type Signal, type SignalHit, watchSignals } from "./signals";
 import { nextUserMessage, openingMessage, type UserSimConfig } from "./userSim";
@@ -42,6 +42,10 @@ export interface ScenarioDef {
 	judge?: { rubric: string[] };
 	/** Record this run as a transcript fixture of that name (record mode only). */
 	record?: string;
+	/** Run this scenario multiple times and aggregate the judge verdicts + pass rate in the run record. */
+	repeat?: number;
+	/** Internal: skip writing the runlog (used during repeated runs so the caller can aggregate). */
+	skipRunlog?: boolean;
 }
 
 export interface ScenarioResult {
@@ -56,6 +60,8 @@ export interface ScenarioResult {
 	cwd: string;
 	model: string;
 	durationMs: number;
+	crashed?: string;
+	runRecord?: RunRecord;
 }
 
 export function defineScenario(def: ScenarioDef): ScenarioDef {
@@ -96,6 +102,7 @@ export async function runScenario(def: ScenarioDef): Promise<ScenarioResult> {
 	// deterministic check failure). Recorded explicitly so the run log never claims a false pass.
 	let crashed: string | undefined;
 	const failed: string[] = [];
+	let resultObj: ScenarioResult | undefined;
 	try {
 		restoreFactory = def.preset?.transcript
 			? useTranscriptFixture(def.preset.transcript, cwd)
@@ -151,20 +158,29 @@ export async function runScenario(def: ScenarioDef): Promise<ScenarioResult> {
 
 		// ---- verdict (binding, deterministic) ----
 		checks = runChecks(def.expect, { log, cwd });
-		for (const check of checks) if (!check.pass) failed.push(`${check.name} — ${check.detail}`);
+		for (const check of checks) {
+			if (!check.pass) {
+				const prefix = check.tag ? `[${check.tag}] ` : "";
+				failed.push(`${prefix}${check.name} — ${check.detail}`);
+			}
+		}
 		const hit = activeWatcher.peek();
-		if (hit?.kind === "forbid") failed.push(`forbid signal fired: ${hit.signal.description}`);
-		if ((def.stopWhen?.length ?? 0) > 0 && hit?.kind !== "stop")
+		if (hit?.kind === "forbid") {
+			const prefix = hit.signal.tag ? `[${hit.signal.tag}] ` : "";
+			failed.push(`${prefix}forbid signal fired: ${hit.signal.description}`);
+		}
+		if ((def.stopWhen?.length ?? 0) > 0 && hit?.kind !== "stop") {
 			failed.push(
 				`no stop signal fired${watchdogReason ? ` — ${watchdogReason}` : " (turn ended without it)"}`,
 			);
+		}
 
 		// ---- judge (advisory) ----
 		if (def.judge) judge = await judgeTranscript(log.renderTranscript(), def.judge.rubric);
 
 		if (isRecordMode() && def.record) await recordFixture(def.record, cwd);
 
-		return {
+		resultObj = {
 			pass: failed.length === 0,
 			failed,
 			checks,
@@ -177,6 +193,7 @@ export async function runScenario(def: ScenarioDef): Promise<ScenarioResult> {
 			model,
 			durationMs: Date.now() - startedAt,
 		};
+		return resultObj;
 	} catch (error) {
 		crashed = error instanceof Error ? error.message : String(error);
 		throw error;
@@ -186,7 +203,8 @@ export async function runScenario(def: ScenarioDef): Promise<ScenarioResult> {
 		dialog?.detach();
 		restoreFactory?.();
 		if (sessionId) endSession(sessionId);
-		appendRunRecord({
+		
+		const record = {
 			at: new Date().toISOString(),
 			model,
 			scenario: def.name,
@@ -203,20 +221,86 @@ export async function runScenario(def: ScenarioDef): Promise<ScenarioResult> {
 			aborted: (watcher?.peek() ?? null) !== null || watchdogReason !== null,
 			...(crashed ? { crashed } : {}),
 			notes: watchdogReason ?? "",
-		});
+		};
+
+		if (resultObj) resultObj.runRecord = record;
+
+		if (!def.skipRunlog) {
+			appendRunRecord(record);
+		} else {
+			// Attach record to the error if we crashed, so workflowTest can collect it.
+			if (crashed) {
+				// We inject it into a global or error object, but throwing is required.
+				// Since we can't easily return it, we will just attach it to the error.
+				try {
+					// @ts-ignore
+					if (typeof error !== "undefined" && error instanceof Error) error.runRecord = record;
+				} catch (e) {}
+			}
+		}
 	}
 }
 
 /** Register a scenario as a Playwright test: run → warn on advisory failures → assert binding verdicts. */
 export function workflowTest(def: ScenarioDef): void {
 	test(def.name, { tag: "@agent" }, async () => {
-		const result = await runScenario(def);
-		const advisoryFailures = result.judge?.items.filter((item) => item.verdict === "fail") ?? [];
-		for (const item of advisoryFailures)
-			console.warn(`[judge advisory] ${def.name}: FAIL "${item.statement}" — ${item.evidence}`);
-		if (!result.pass)
+		const repeats = def.repeat ?? 1;
+		const results: ScenarioResult[] = [];
+		const records: RunRecord[] = [];
+
+		for (let i = 0; i < repeats; i++) {
+			try {
+				const result = await runScenario({ ...def, skipRunlog: repeats > 1 });
+				results.push(result);
+				if (result.runRecord) records.push(result.runRecord);
+			} catch (err: any) {
+				if (err.runRecord) records.push(err.runRecord);
+				throw err;
+			}
+		}
+
+		if (repeats > 1 && records.length > 0) {
+			appendAggregatedRunRecord(records);
+		}
+
+		// Calculate aggregate pass and judge for assertions/warnings
+		const passes = results.filter((r) => r.pass).length;
+		const passRate = passes / repeats;
+		const allFailed = new Set<string>();
+		for (const r of results) {
+			for (const f of r.failed) allFailed.add(f);
+		}
+
+		const validJudges = results.filter((r) => r.judge !== null).map((r) => r.judge!);
+		if (validJudges.length > 0) {
+			const statements = validJudges[0].items.map((i) => i.statement);
+			for (const statement of statements) {
+				let passed = 0;
+				let total = 0;
+				for (const j of validJudges) {
+					const item = j.items.find((i) => i.statement === statement);
+					if (item) {
+						total++;
+						if (item.verdict === "pass") passed++;
+					}
+				}
+				const avg = total > 0 ? passed / total : 0;
+				if (avg < 1) {
+					console.warn(`[judge advisory] ${def.name}: FAIL "${statement}" — pass rate ${(avg * 100).toFixed(0)}%`);
+				}
+			}
+		} else if (repeats === 1) {
+			const advisoryFailures = results[0].judge?.items.filter((item) => item.verdict === "fail") ?? [];
+			for (const item of advisoryFailures)
+				console.warn(`[judge advisory] ${def.name}: FAIL "${item.statement}" — ${item.evidence}`);
+		}
+
+		// Throw if deterministic pass rate drops below 100% (or whatever threshold)
+		// For now, any failure fails the test.
+		if (passRate < 1) {
 			throw new Error(
-				`Scenario "${def.name}" failed deterministic checks:\n- ${result.failed.join("\n- ")}\n\nTranscript:\n${result.log.renderTranscript()}`,
+				`Scenario "${def.name}" failed deterministic checks in ${repeats - passes}/${repeats} runs:\n- ${Array.from(allFailed).join("\n- ")}`,
 			);
+		}
 	});
 }

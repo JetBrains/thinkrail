@@ -31,3 +31,72 @@ export interface RunRecord {
 export function appendRunRecord(record: RunRecord): void {
 	appendFileSync(process.env.THINKRAIL_WORKFLOW_RUNLOG ?? RUN_LOG, `${JSON.stringify(record)}\n`);
 }
+
+export interface AggregatedRunRecord {
+	at: string;
+	model: string;
+	scenario: string;
+	skill: string;
+	runs: number;
+	deterministic: { passRate: number; failed: string[] };
+	judge: { items: { statement: string; passRate: number }[] } | null;
+	durationMsAvg: number;
+	abortedRate: number;
+	crashes: number;
+	notes: string;
+}
+
+export function appendAggregatedRunRecord(records: RunRecord[]): void {
+	if (records.length === 0) return;
+	const at = records[0].at;
+	const model = records[0].model;
+	const scenario = records[0].scenario;
+	const skill = records[0].skill;
+	const runs = records.length;
+
+	const passes = records.filter((r) => r.deterministic.pass).length;
+	const passRate = passes / runs;
+
+	const failedSet = new Set<string>();
+	for (const r of records) {
+		for (const f of r.deterministic.failed) failedSet.add(f);
+	}
+
+	let judge: AggregatedRunRecord["judge"] = null;
+	const validJudges = records.filter((r) => r.judge !== null).map((r) => r.judge!);
+	if (validJudges.length > 0) {
+		const statements = validJudges[0].items.map((i) => i.statement);
+		const items = statements.map((statement) => {
+			let statementPasses = 0;
+			let total = 0;
+			for (const j of validJudges) {
+				const item = j.items.find((i) => i.statement === statement);
+				if (item) {
+					total++;
+					if (item.verdict === "pass") statementPasses++;
+				}
+			}
+			return { statement, passRate: total > 0 ? statementPasses / total : 0 };
+		});
+		judge = { items };
+	}
+
+	const durationMsAvg = records.reduce((sum, r) => sum + r.durationMs, 0) / runs;
+	const abortedRate = records.filter((r) => r.aborted).length / runs;
+	const crashes = records.filter((r) => !!r.crashed).length;
+
+	const aggregated: AggregatedRunRecord = {
+		at,
+		model,
+		scenario,
+		skill,
+		runs,
+		deterministic: { passRate, failed: Array.from(failedSet) },
+		judge,
+		durationMsAvg,
+		abortedRate,
+		crashes,
+		notes: `Aggregated ${runs} runs`,
+	};
+	appendFileSync(process.env.THINKRAIL_WORKFLOW_RUNLOG ?? RUN_LOG, `${JSON.stringify(aggregated)}\n`);
+}

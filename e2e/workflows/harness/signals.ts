@@ -5,6 +5,7 @@ import type { CapturedToolCall, EventLog } from "./events";
 
 export interface Signal {
 	description: string;
+	tag?: "activation" | "outcome";
 	test: (log: EventLog) => boolean;
 }
 
@@ -33,6 +34,7 @@ export const signals = {
 	skillRead(name: string): Signal {
 		return {
 			description: `skill "${name}" read`,
+			tag: "activation",
 			test: (log) => log.skillReads().includes(name),
 		};
 	},
@@ -40,12 +42,14 @@ export const signals = {
 		const suffix = matcher?.pathEndsWith ? ` (…${matcher.pathEndsWith})` : "";
 		return {
 			description: `tool ${name}${suffix} called`,
+			tag: "outcome",
 			test: (log) => log.toolCalls(name).some((call) => matchesToolCall(call, matcher)),
 		};
 	},
 	assistantText(pattern: RegExp): Signal {
 		return {
 			description: `assistant text matching ${pattern}`,
+			tag: "outcome",
 			test: (log) => log.assistantTexts().some((text) => pattern.test(text)),
 		};
 	},
