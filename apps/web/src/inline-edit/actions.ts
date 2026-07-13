@@ -92,6 +92,9 @@ async function restoreSnapshot(
 			content,
 			ifMatchContent: guard,
 		});
+		// We just wrote `content`, so disk == content — sync the write guard so a *second* undo / a
+		// revert-all-after-undo doesn't send a stale `ifMatchContent` and get spuriously rejected.
+		useAppStore.getState().setInlineEditAfterContent(id, content);
 		await refreshTabContent(req.workspaceId, req.path);
 		return { ok: true };
 	} catch (err) {
@@ -111,7 +114,9 @@ export async function undoLastChange(id: string): Promise<{ ok: boolean; reason?
 	if (!current) return { ok: false, reason: "gone" };
 	const res = await restoreSnapshot(id, current.baseContent);
 	if (!res.ok) return res;
-	if (req.turns.length > 1)
+	// Re-fetch after the await (state may have advanced) before deciding pop-vs-done.
+	const live = useAppStore.getState().inlineEdits[id];
+	if (live && live.turns.length > 1)
 		useAppStore.getState().popInlineEditTurn(id); // → review of the prior turn
 	else useAppStore.getState().setInlineEditStatus(id, "done"); // only turn → fully reverted
 	return res;
