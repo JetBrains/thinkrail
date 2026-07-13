@@ -14,7 +14,7 @@ tags: [v1, inline-edit, ux]
 MVP of **inline AI-editing**: select text in an open file, tell the agent what to change in a
 small popup at the selection, the agent edits the file in a hidden background session, and the
 change comes back as an **in-place suggestion** (strikethrough old / highlighted new) with
-Keep / Revert / Refine / Open-as-chat quick actions.
+Keep / Undo-last-change / Revert-all / Refine / Open-as-chat quick actions.
 
 This is the first step of a larger direction: moving from "chat as the center of everything"
 toward a continuous, background-but-transparent AI assistant (later: document comments,
@@ -38,10 +38,13 @@ semantic autocompletion, run-agent-on-comments). Only item "inlined AI-editing" 
 6. **Monaco v0 caveat (accepted):** in the source view, review = changed-lines highlight + the
    same action bar as a compact card (no in-text strikethrough; that needs view zones and is a
    named follow-up). Trigger/chip/popover have full parity on both surfaces.
-7. **Internals = fold pi's edit-tool events** (over a `report_edit` tool or git-snapshot diffs):
-   the hunk ledger comes from `edit`/`write` `tool_execution_end` events; the "why" is the
-   turn's final assistant text; revert reverse-applies hunks via a new guarded `fs.writeFile`;
-   `git.status` at turn end is the safety net for anything the ledger missed.
+7. **Internals = fold pi's edit-tool events into a per-turn history** (over a `report_edit` tool
+   or git-snapshot diffs): each Refine appends a **turn** capturing the target-file content at its
+   start (`baseContent`) + the hunks it produced (from `edit`/`write` `tool_execution_end` events)
+   + its "why" (the turn's final assistant text). **Undo-last-change** and **Revert-all** restore
+   saved content **snapshots** (a turn's `baseContent`, or turn 0's = the fire-time original) via a
+   guarded `fs.writeFile` — no hunk replay, so revert is exact regardless of edit/write or refine
+   depth. `git.status` at turn end is the safety net for anything the ledger missed.
 8. **Scope adds:** Refine-with-comment (followUp on the same session), other-files notice,
    parallel-across-files. **Deferred by choice:** the `@agent` e2e happy-path spec (see
    Verification), document comments, autocompletion, multi-suggestion alternatives.
@@ -87,36 +90,50 @@ Both produce one `SelectionTarget` feeding the shared popup.
 States: `starting → working → review → done` (+ `error`; `reverting` transient).
 
 ```
+EditTurn {
+  instruction,            // the instruction/comment that drove this turn
+  baseContent,            // target-file content at the START of this turn (the step-back target)
+  hunks[{ path, kind, oldText, newText }],
+  pendingTools,           // edit/write tool calls seen start-but-not-end this turn
+  otherPaths[],           // non-target paths this turn touched
+  why?
+}
 InlineEditRequest {
   id, workspaceId, path, sessionId,
   selection { text, startLine, endLine },
-  instruction,            // latest user instruction
-  beforeContent,          // file snapshot at request time
-  status, hunks[{ path, oldText, newText }],
-  why?, otherPaths[], error?
+  afterContent?,          // current on-disk content (readback) — revert guard + anchor base
+  turns[EditTurn],        // ≥1; the last is under review; turns[0].baseContent = fire-time original
+  status, error?
 }
 ```
 
-1. **Fire:** `startInlineEdit` re-reads the file (fresh `beforeContent`), `session.create`
-   (workspace default model), fire-and-forget `session.prompt` with the seed prompt: file path,
-   selected lines, quoted selection, instruction, and rules — *change only what the instruction
-   requires; modify files only via your edit/write tools (never bash); do not ask questions; end
-   with one short sentence explaining the change* (that sentence = the "why"). Seeding a
-   user-turn prompt is the sanctioned pattern (Welcome screen does the same).
-2. **Fold:** successful `edit`/`write` `tool_execution_end` events for inline sessions append
-   to `hunks`; non-target paths accumulate in `otherPaths`.
-3. **Turn end (`agent_end`):** status → `review`; `why` = final assistant text; re-read target
-   file and refresh any open tab content (also fixes the tab-staleness gap for touched files);
-   `git.status` safety net feeds the other-files notice. **Zero hunks** → info card with the
-   agent's reply (Dismiss / Refine only).
-4. **Review render:** locate each target-file hunk's `newText` in fresh content → source lines
-   → stamped blocks → word-level old/new composite in place. Unanchorable hunk → fallback
-   review card under the nearest block (the review is never lost).
-5. **Resolve:** **Keep** → `done` (file already holds the text). **Revert** → client computes
-   restored content (reverse-apply hunks newest-first; any full-file `write` hunk → restore
-   `beforeContent`) → `fs.writeFile` with `ifMatchContent` = last-read content → re-read →
-   `done`. **Refine** → `followUp(comment)` → `working`, ledger keeps accumulating. **Stop** →
-   `session.abort` → `review` if hunks exist, else cancelled.
+1. **Fire:** `startInlineEdit` re-reads the file, `session.create` (workspace default model),
+   registers the request with `turns: [turn0]` (`turn0.baseContent` = the fresh read = fire-time
+   original), then fire-and-forget `session.prompt` with the seed prompt: file path, selected
+   lines, quoted selection, instruction, and rules — *change only what the instruction requires;
+   modify files only via your edit/write tools (never bash); do not ask questions; end with one
+   short sentence explaining the change* (that sentence = the "why"). Seeding a user-turn prompt is
+   the sanctioned pattern (Welcome screen does the same).
+2. **Fold:** successful `edit`/`write` `tool_execution_end` events for inline sessions append to
+   the **current turn's** `hunks`; non-target paths accumulate in that turn's `otherPaths`.
+3. **Turn end (`agent_end`):** status → `review`; current turn's `why` = final assistant text;
+   re-read target file and store as `afterContent` + refresh any open tab (also fixes the
+   tab-staleness gap for touched files); `git.status` safety net feeds the other-files notice.
+   **Zero hunks in the turn** → info card with the agent's reply (Dismiss / Refine only).
+4. **Review render:** the current turn's target-file hunk → locate `newText` in `afterContent` →
+   source lines → stamped block → word-level old/new composite in place. Unanchorable → fallback
+   review card under the nearest block (the review is never lost). A "turn N of M" indicator shows
+   the refine depth.
+5. **Resolve (all snapshot-based, no hunk replay):**
+   - **Keep** → `done` (file already holds the text).
+   - **Refine(comment)** → push a new turn (`baseContent` = current `afterContent`) →
+     `followUp(comment)` → `working`.
+   - **Undo-last-change** → `fs.writeFile(currentTurn.baseContent, ifMatchContent = afterContent)`
+     → re-read → **pop the last turn**: if turns remain, back to `review` of the now-last turn;
+     if it was the only turn, `done`. Repeatable, one refinement at a time.
+   - **Revert-all** → `fs.writeFile(turns[0].baseContent, ifMatchContent = afterContent)` →
+     re-read → `done`.
+   - **Stop** → `session.abort` → `review` if the current turn has hunks, else cancelled.
 
 Sessions are not disposed on resolve (no dispose on the wire today; same lifetime behavior as
 chat sessions). "Open in tab" uses the existing `openChatSession`.
@@ -126,8 +143,7 @@ chat sessions). "Open in tab" uses the existing `openChatSession`.
 - `session.create`/`prompt` rejection → inline error in the popup; no request registered.
 - Mid-turn provider failure: pi `auto_retry_*` renders as "retrying…" on the chip; terminal
   failure → `error` with Retry (followUp) / Dismiss / Open-as-chat.
-- `fs.writeFile` conflict → nothing written; toast, re-read, back to `review` with re-anchored
-  hunks (or fallback card).
+- `fs.writeFile` conflict (undo/revert) → nothing written; toast, re-read, stay in `review`.
 - Host restart: on WS reconnect, in-flight requests → `error("host restarted")`.
 - Closing a tab does **not** cancel its request (state lives in the store; reopening the file
   shows current status). Removing a workspace aborts its inline sessions best-effort.
@@ -148,8 +164,9 @@ re-reads listed above.
 
 ## Verification
 
-- **Unit (bun test):** server `writeFile` containment + guard; hunk-fold reducer; revert
-  computation (incl. `write`-hunk and oldText-not-found); word-diff; sourcepos rehype plugin.
+- **Unit (bun test):** server `writeFile` containment + guard; per-turn fold reducer (hunks land
+  on the current turn after a successful end; refine pushes a turn; agent_end sets review + why);
+  snapshot-based undo/revert-all targets; word-diff; sourcepos rehype plugin.
 - **e2e no-agent (in `bun run e2e`):** selection → pill; ⌘K path; popup lifecycle (esc/enter);
   one-pending-per-file refusal. Suggestion-overlay + Keep/Revert flows via seeded store state if
   a test hook proves practical, else unit-level.
