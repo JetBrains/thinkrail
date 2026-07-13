@@ -9,6 +9,36 @@ export interface SpecTreeNode {
 	children: SpecTreeNode[];
 }
 
+const SPEC_ROLE_LABELS: Record<string, string> = {
+	"goal-and-requirements": "Goal",
+	"architecture-design": "Architecture",
+	"module-design": "Module",
+	"submodule-design": "Submodule",
+	"task-spec": "Task",
+};
+
+const SPEC_ROLE_TAGS: Record<string, string> = {
+	"goal-and-requirements": "GOAL",
+	"architecture-design": "ARCH",
+	"module-design": "MODULE",
+	"submodule-design": "SUBMODULE",
+	"task-spec": "TASK",
+};
+
+/** Humanize a spec type for the document-first tree; unknown wire values remain readable. */
+export function specRoleLabel(type: string): string {
+	const known = SPEC_ROLE_LABELS[type];
+	if (known) return known;
+	const words = type.split(/[-_\s]+/).filter(Boolean);
+	if (words.length === 0) return "Spec";
+	return words.map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
+}
+
+/** Compact trailing role for the one-line tree; the UI width-caps unknown wire values. */
+export function specRoleTag(type: string): string {
+	return SPEC_ROLE_TAGS[type] ?? specRoleLabel(type).toUpperCase();
+}
+
 /**
  * Materialize the `parent` tree from a flat snapshot: roots are nodes with no (or a dangling/self)
  * parent; roots and siblings sort by title. A well-formed graph is assumed — parent cycles are

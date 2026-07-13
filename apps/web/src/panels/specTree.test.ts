@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { SpecGraphNode } from "@thinkrail/contracts";
-import { buildSpecTree } from "./specTree";
+import { buildSpecTree, specRoleLabel, specRoleTag } from "./specTree";
 
 function node(id: string, over: Partial<SpecGraphNode> = {}): SpecGraphNode {
 	return {
@@ -15,6 +15,19 @@ function node(id: string, over: Partial<SpecGraphNode> = {}): SpecGraphNode {
 		...over,
 	};
 }
+
+test("humanizes known and extension-defined spec roles", () => {
+	expect(specRoleLabel("goal-and-requirements")).toBe("Goal");
+	expect(specRoleLabel("architecture-design")).toBe("Architecture");
+	expect(specRoleLabel("module-design")).toBe("Module");
+	expect(specRoleLabel("submodule-design")).toBe("Submodule");
+	expect(specRoleLabel("task-spec")).toBe("Task");
+	expect(specRoleLabel("risk_register")).toBe("Risk Register");
+	expect(specRoleLabel("---")).toBe("Spec");
+	expect(specRoleTag("architecture-design")).toBe("ARCH");
+	expect(specRoleTag("module-design")).toBe("MODULE");
+	expect(specRoleTag("risk_register")).toBe("RISK REGISTER");
+});
 
 test("nests children under their parent; roots and siblings sort by title", () => {
 	const tree = buildSpecTree([
