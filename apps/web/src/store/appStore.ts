@@ -484,7 +484,7 @@ interface AppState {
 	/** Transient notifications, oldest-first (the Toaster renders + times them out). At-most a handful live
 	 * at once; a failed wire call that has no better home (no chat tab to host an error turn) lands here. */
 	toasts: Toast[];
-	/** Inline-edit requests keyed by requestId; the hidden pi session's hunk-ledger projection. */
+	/** Inline-edit requests keyed by requestId; the hidden pi session's per-turn projection. */
 	inlineEdits: Record<string, InlineEditRequest>;
 	/** sessionId → requestId, so `handlePiEvent` can fold tool events into the right request. */
 	inlineEditBySession: Record<string, string>;

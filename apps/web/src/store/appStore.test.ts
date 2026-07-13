@@ -877,6 +877,13 @@ test("pushInlineEditTurn appends a fresh working turn and preserves the prior tu
 	expect(req.status).toBe("review");
 });
 
+test("popInlineEditTurn is a no-op when only one turn remains", () => {
+	const store = useAppStore.getState();
+	store.registerInlineEdit(baseReq(), null, "medium");
+	store.popInlineEditTurn("r1");
+	expect(useAppStore.getState().inlineEdits.r1.turns).toHaveLength(1);
+});
+
 test("removeInlineEdit drops the request and its session index", () => {
 	const store = useAppStore.getState();
 	store.registerInlineEdit(baseReq(), null, "medium");
