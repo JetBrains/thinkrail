@@ -1,5 +1,5 @@
 import { Check, ExternalLink, Loader2, TriangleAlert } from "lucide-react";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
@@ -32,6 +32,19 @@ export function LoginDialog({
 	onClose: () => void;
 }) {
 	const promptRef = useRef<HTMLInputElement>(null);
+
+	// Best-effort: open the device-verification page automatically in a new tab. This fires right after the
+	// user's Submit gesture on the host prompt, so it's usually inside the browser's transient-activation
+	// window (not popup-blocked); if a blocker does stop it, the clickable link below is the reliable
+	// fallback. The ref guards against re-opening on re-render / StrictMode's double-invoke.
+	const openedUrlRef = useRef<string | null>(null);
+	const deviceUri = state.deviceCode?.verificationUri;
+	useEffect(() => {
+		if (!deviceUri || openedUrlRef.current === deviceUri) return;
+		openedUrlRef.current = deviceUri;
+		window.open(deviceUri, "_blank", "noopener,noreferrer");
+	}, [deviceUri]);
+
 	const submitPrompt = () => {
 		const value = promptRef.current?.value.trim() ?? "";
 		// A non-empty answer always submits; an empty one only when pi marked the prompt `allowEmpty`
@@ -103,7 +116,17 @@ export function LoginDialog({
 								data-testid="login-device-code"
 							>
 								<span className="text-hint text-xs">
-									Enter this code at {state.deviceCode.verificationUri}
+									Enter this code at{" "}
+									<a
+										href={state.deviceCode.verificationUri}
+										target="_blank"
+										rel="noopener noreferrer"
+										data-testid="login-device-url"
+										className="inline-flex items-center gap-0.5 break-all rounded-[var(--radius-sm)] text-primary underline underline-offset-2 outline-none hover:opacity-80 focus-visible:ring-2 focus-visible:ring-primary"
+									>
+										{state.deviceCode.verificationUri}
+										<ExternalLink className="size-3 shrink-0" />
+									</a>
 								</span>
 								<code className="select-all text-center font-[var(--font-mono)] text-lg text-text tracking-widest">
 									{state.deviceCode.userCode}

@@ -25,7 +25,8 @@ not here — `auth` stays presentational + types, so nothing here imports `store
     implements — frames **add**, they don't replace (`url` can be live alongside a paste `prompt`, the
     browser-vs-paste race), `status` goes `active → success/error`. **Types only** (like `chat/types`).
   - `LoginDialog` — **props-driven, no store/transport** (like the chat renderers): renders a `LoginState`
-    (open-URL button + selectable URL, device code, a `select`/`prompt` input, progress/working spinner,
+    (open-URL button + selectable URL; a device code with a **clickable verification link** that also
+    **auto-opens** in a new tab best-effort on arrival; a `select`/`prompt` input; progress/working spinner;
     terminal success/error) and calls back `onReply(value)` / `onCancel()` / `onClose()`. Themed with token
     utilities only; `lucide-react` icons; shadcn `Dialog`/`Button`.
 - **Public surface (barrel `index.ts`):** `LoginDialog`; `LoginState`/`LoginInput*` (types).
@@ -48,3 +49,5 @@ not here — `auth` stays presentational + types, so nothing here imports `store
 
 - **Frames accumulate** — the reducer must not clobber `url` when a paste `prompt` arrives, or vice-versa.
 - The dialog is mounted with `key={state.loginId}` so a new login gets fresh local (text/busy) state.
+- Device-code **auto-open** is best-effort (a popup blocker may stop the async `window.open`); the clickable
+  verification link is the guaranteed fallback, so the flow never dead-ends on a blocked popup.
