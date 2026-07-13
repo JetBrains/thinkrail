@@ -23,7 +23,7 @@ parse `auth.json` / `models.json` ourselves and never surface a credential value
     (pi's `hasAuth`-family truth, so env-var auth counts) + auth `kind` (oauth / api-key / env /
     **jbcentral** / other) + display name + the in-app-login capability flags **`canOAuth`/`canApiKey`**,
     configured-first. It **revalidates on every read** (`authStorage.reload()` + `modelRegistry.refresh()`)
-    so a `pi` `/login` or `thinkrail jbcentral` run in a terminal — or an in-app mutation below — shows up
+    so a `pi` `/login` (or a terminal `central` re-wire) — or an in-app mutation below — shows up
     on the next read without a host restart (accepted micro-risk: refreshing the shared registry concurrent
     with a streaming session — same as pi's TUI on `/login`). jbcentral wiring is detected from the
     registry's **effective** model `baseUrl`s via `shared/jbcentral`'s `isJbcentralProxyUrl` — never a

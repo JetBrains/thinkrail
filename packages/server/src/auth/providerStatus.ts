@@ -157,8 +157,8 @@ export function buildProviderReport(sources: ProviderStatusSources): ProviderSta
 
 /**
  * The `provider.status` read. **Revalidates on every call** — `authStorage.reload()` +
- * `modelRegistry.refresh()` (pi's own reload APIs) — so `pi` `/login` or `thinkrail jbcentral` run in a
- * terminal shows up on the next read without restarting the host. (Accepted micro-risk: refreshing the
+ * `modelRegistry.refresh()` (pi's own reload APIs) — so a `pi` `/login` (or a terminal `central` re-wire)
+ * shows up on the next read without restarting the host. (Accepted micro-risk: refreshing the
  * shared registry concurrent with a streaming session — the same thing pi's TUI does on `/login`.)
  */
 export function getProviderStatus(): ProviderStatusReport {

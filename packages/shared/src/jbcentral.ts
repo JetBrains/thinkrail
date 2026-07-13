@@ -1,9 +1,9 @@
 // The JetBrains Central CLI (`jbcentral`) proxy integration — the single home for its wire, pinned here so
 // the **write** side (build the proxy `baseUrl`s + override `models.json`) and the **read** side
-// (`isJbcentralProxyUrl`, how the server detects a wired provider) can never silently diverge. Both
-// `apps/cli` (`thinkrail jbcentral`) and the server's in-app "Connect JetBrains AI" flow are thin callers
-// over `wireJbcentral`/`unwireJbcentral`; each adds only its own follow-up (the CLI logs + exits, the server
-// refreshes the live model registry). Server-side only (shells out + touches `~/.pi/agent/models.json`).
+// (`isJbcentralProxyUrl`, how the server detects a wired provider) can never silently diverge. The server's
+// in-app "Connect JetBrains AI" flow is a thin caller over `wireJbcentral`/`unwireJbcentral`, adding only its
+// own follow-up (refresh the live model registry). Server-side only (shells out + touches
+// `~/.pi/agent/models.json`).
 
 import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";

@@ -44,11 +44,12 @@ Exposed through explicit subpath exports, not a barrel.
   `isJbcentralInstalled()` (`Bun.which`), `launchJbcentralLogin()` (best-effort spawn of `jbcentral login`),
   plus the pure transforms + probe. **Install guidance is per-OS and single-sourced:** `jbcentralInstall(platform)`
   returns the `{platform, shell, command}` one-liner (macOS/Linux → `install.sh` curl pipe; Windows →
-  `install.ps1` PowerShell) off the `central/` S3 path (post-rebrand, not the old `jbcentral/`); the CLI's
-  `jbcentralInstallHint` composes it, and the server carries the same shape to the web card over the wire
-  (`ProviderStatusReport.jbcentralInstall`) so the browser never hard-codes (or guesses) the command.
-  **Two thin callers compose it:** `apps/cli`'s `thinkrail jbcentral` (logs
-  + exits) and the server's `auth` module's in-app "Connect JetBrains AI" (adds `modelRegistry.refresh()`).
+  `install.ps1` PowerShell) off the `central/` S3 path (post-rebrand, not the old `jbcentral/`);
+  `jbcentralInstallHint` composes it for `wireJbcentral`'s needs-install message, and the server carries the
+  same shape to the web card over the wire (`ProviderStatusReport.jbcentralInstall`) so the browser never
+  hard-codes (or guesses) the command.
+  **The server's `auth` module is its sole caller:** the in-app "Connect JetBrains AI" flow composes
+  `wireJbcentral`/`unwireJbcentral` and adds `modelRegistry.refresh()`.
 
 ## Get right (shellEnv)
 

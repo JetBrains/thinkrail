@@ -45,7 +45,7 @@ export function JetBrainsAiCard({
 	const [loginLaunched, setLoginLaunched] = useState(false);
 
 	// `result` describes the *last attempt*; a change in the server-derived facts supersedes it. Once wired
-	// (including an external `central` / `thinkrail jbcentral` picked up on Refresh) drop it entirely; once
+	// (including an external terminal `central` re-wire picked up on Refresh) drop it entirely; once
 	// installed, drop a stale needs-install (installing doesn't resolve a needs-login/error, so those stay).
 	useEffect(() => {
 		if (wired) {

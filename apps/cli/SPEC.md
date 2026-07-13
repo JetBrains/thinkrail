@@ -29,10 +29,9 @@ its URL. It is a thin launcher — all engine logic lives in `packages/server`.
 
 ## Interface
 
-`bin` = `./src/index.ts` (bun runs the TS source directly). Leading `update` / `jbcentral` positionals are
-**subcommands** (`thinkrail update [--channel stable|nightly] [--version X.Y.Z]`,
-`thinkrail jbcentral [--remove]`) intercepted before the launch flags — see *Self-update* and *JetBrains
-Central wiring* below. Otherwise the launch args: `--port` (stable default 24242,
+`bin` = `./src/index.ts` (bun runs the TS source directly). A leading `update` positional is a
+**subcommand** (`thinkrail update [--channel stable|nightly] [--version X.Y.Z]`) intercepted before the
+launch flags — see *Self-update* below. Otherwise the launch args: `--port` (stable default 24242,
 scans upward to the next free port on collision), `--host` (default `localhost`), `--no-open`,
 `-v`/`--version` (print the baked version and exit), `-h`/`--help`, and one positional `project-dir` (a
 git repo to open as a project on boot, best-effort). Env defaults: `THINKRAIL_PORT` / `THINKRAIL_HOST` /
@@ -48,15 +47,6 @@ in place isn't possible on Windows → points to the releases page). The arg par
 resolution are pure (`parseUpdateArgs` / `resolveUpdatePlan`, unit-tested); only fetch (`curl`) + run
 (`bash -s`) touch IO. `THINKRAIL_INSTALL_SCRIPT_URL` overrides the installer URL (testing / forks). See
 `module-ci-release` for the installer itself.
-
-## JetBrains Central wiring (`thinkrail jbcentral`)
-
-`src/jbcentral.ts` is a **thin caller** over `@thinkrail/shared/jbcentral`'s `wireJbcentral`/`unwireJbcentral`
-— it owns only arg parsing + console logging. The jbcentral protocol itself (probe the secret, override the
-`anthropic`/`openai` `baseUrl` in `$PI_CODING_AGENT_DIR/models.json`, undo it, the drift-pinned URL shape)
-lives in `shared`, so it's shared verbatim with the server's in-app "Connect JetBrains AI" flow (one
-implementation, two callers). It still lives in the CLI (not just `scripts/setup-jbcentral-cli.ts`, a thin
-wrapper) so it ships in the binary — one command, no bun, mac/linux/windows. Requires `jbcentral` on PATH.
 
 ## Version stamping (release seam)
 

@@ -6,7 +6,6 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { bootHost } from "@thinkrail/server";
 import { type CliOptions, parseArgs, USAGE } from "./args";
-import { runJbcentral } from "./jbcentral";
 import { runUpdate } from "./update";
 import { version } from "./version";
 
@@ -33,10 +32,6 @@ async function bootstrap(): Promise<void> {
 	// `update` is a subcommand, not a launch flag: re-install the latest build, then exit.
 	if (argv[0] === "update") {
 		process.exit(await runUpdate(argv.slice(1), process.env));
-	}
-	// `jbcentral` is a subcommand: wire pi through the JetBrains Central CLI proxy, then exit.
-	if (argv[0] === "jbcentral") {
-		process.exit(await runJbcentral(argv.slice(1), process.env));
 	}
 
 	let options: CliOptions;

@@ -25,7 +25,7 @@ const MAX_REST_NAMES = 5;
  * The Providers section of the Settings dialog — the in-app model-provider auth surface (moved here from the
  * old Welcome strip). One `provider.status` fetch on mount (every read revalidates host-side), plus in-app
  * auth: Sign-in (OAuth subscriptions), inline API-key entry, and Sign-out — each re-reads status when it
- * settles, so an external `pi` `/login` or `thinkrail jbcentral` shows up on Refresh too.
+ * settles, so an external `pi` `/login` (or a terminal `central` re-wire) shows up on Refresh too.
  */
 export function ProvidersSettings() {
 	const [report, setReport] = useState<ProviderStatusReport | null>(null);
