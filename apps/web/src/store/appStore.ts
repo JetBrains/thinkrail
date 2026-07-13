@@ -311,6 +311,139 @@ function reduceExtUi(
 	}
 }
 
+/** One file change the inline-edit agent made, folded from pi's own `edit`/`write` tool events. */
+export interface EditHunk {
+	path: string;
+	kind: "edit" | "write";
+	oldText: string;
+	newText: string;
+}
+
+export type InlineEditStatus = "starting" | "working" | "review" | "reverting" | "done" | "error";
+
+/**
+ * One inline-edit request: the metadata the store can't derive (selection, instruction, the file snapshot
+ * taken when the request fired) plus the folded hunk ledger + status. The hidden pi session also has a
+ * normal `SessionRuntime` (so the preview popover / promoted tab render its transcript); this is the
+ * inline-edit-specific projection of the same event stream.
+ */
+export interface InlineEditRequest {
+	id: string;
+	workspaceId: string;
+	path: string;
+	sessionId: string;
+	selection: { text: string; startLine: number; endLine: number };
+	instruction: string;
+	/** File content at fire time — the base a Revert restores to for full-file writes. */
+	beforeContent: string;
+	/** Current on-disk content after the turn (loaded by the readback effect) — the revert guard + anchor base. */
+	afterContent?: string;
+	status: InlineEditStatus;
+	hunks: EditHunk[];
+	/** edit/write tool calls seen `start` but not yet `end`, keyed by toolCallId — promoted to hunks on success. */
+	pendingTools: Record<string, EditHunk>;
+	/** Distinct non-target paths the agent also touched (the "also touched N files" notice). */
+	otherPaths: string[];
+	/** The agent's closing one-line explanation (last assistant text at agent_end). */
+	why?: string;
+	error?: string;
+}
+
+/** Read pi's edit/write args (names vary across providers) into a hunk shape. */
+function parseEditArgs(toolName: string, args: Record<string, unknown>): EditHunk {
+	const str = (k: string) => (typeof args[k] === "string" ? (args[k] as string) : "");
+	const path = str("path") || str("file_path") || str("filename");
+	if (toolName === "write") {
+		return { path, kind: "write", oldText: "", newText: str("content") || str("text") };
+	}
+	return {
+		path,
+		kind: "edit",
+		oldText: str("oldText") || str("old_string") || str("old"),
+		newText: str("newText") || str("new_string") || str("new"),
+	};
+}
+
+/** Extract the last assistant message's concatenated text (the closing "why"). */
+function lastAssistantText(messages: readonly unknown[]): string {
+	for (let i = messages.length - 1; i >= 0; i -= 1) {
+		const m = messages[i] as { role?: string; content?: unknown };
+		if (m.role !== "assistant" || !Array.isArray(m.content)) continue;
+		return m.content
+			.filter(
+				(c): c is { type: "text"; text: string } =>
+					typeof c === "object" && c !== null && (c as { type?: string }).type === "text",
+			)
+			.map((c) => c.text)
+			.join("")
+			.trim();
+	}
+	return "";
+}
+
+/**
+ * Fold one pi event into an inline-edit request (the hunk-ledger projection). Pure — same ref when nothing
+ * changes. Only `edit`/`write` tool events and terminal `agent_end` matter; everything else is a no-op.
+ */
+export function foldInlineEditEvent(req: InlineEditRequest, event: PiEvent): InlineEditRequest {
+	switch (event.type) {
+		case "tool_execution_start": {
+			if (event.toolName !== "edit" && event.toolName !== "write") return req;
+			const hunk = parseEditArgs(event.toolName, event.args as Record<string, unknown>);
+			return { ...req, pendingTools: { ...req.pendingTools, [event.toolCallId]: hunk } };
+		}
+		case "tool_execution_end": {
+			const pending = req.pendingTools[event.toolCallId];
+			if (!pending) return req;
+			const { [event.toolCallId]: _drop, ...pendingTools } = req.pendingTools;
+			if (event.isError) return { ...req, pendingTools };
+			const hunks = [...req.hunks, pending];
+			const otherPaths =
+				pending.path !== req.path && !req.otherPaths.includes(pending.path)
+					? [...req.otherPaths, pending.path]
+					: req.otherPaths;
+			return { ...req, pendingTools, hunks, otherPaths };
+		}
+		case "agent_end": {
+			if (event.willRetry) return req; // retry/compaction follows — stay working
+			const last = [...event.messages]
+				.reverse()
+				.find((m): m is Extract<typeof m, { role: "assistant" }> => m.role === "assistant");
+			if (last?.stopReason === "error") {
+				return {
+					...req,
+					status: "error",
+					error: last.errorMessage || "The agent run ended in an error.",
+				};
+			}
+			return { ...req, status: "review", why: lastAssistantText(event.messages) };
+		}
+		default:
+			return req;
+	}
+}
+
+/**
+ * Compute the content a Revert should write, or null if it can't be done cleanly (caller falls back to a
+ * toast + stays in review). A `write` hunk means a full-file replace, so we restore the fire-time snapshot;
+ * otherwise we reverse-apply edits newest-first (replace each `newText` back to its `oldText`).
+ */
+export function computeRevertContent(
+	beforeContent: string,
+	currentContent: string,
+	hunks: EditHunk[],
+): string | null {
+	if (hunks.some((h) => h.kind === "write")) return beforeContent;
+	let text = currentContent;
+	for (let i = hunks.length - 1; i >= 0; i -= 1) {
+		const { newText, oldText } = hunks[i] as EditHunk;
+		const at = text.indexOf(newText);
+		if (at < 0) return null;
+		text = text.slice(0, at) + oldText + text.slice(at + newText.length);
+	}
+	return text;
+}
+
 interface AppState {
 	status: ConnectionStatus;
 	protocolVersion: number | null;
@@ -349,6 +482,24 @@ interface AppState {
 	/** Transient notifications, oldest-first (the Toaster renders + times them out). At-most a handful live
 	 * at once; a failed wire call that has no better home (no chat tab to host an error turn) lands here. */
 	toasts: Toast[];
+	/** Inline-edit requests keyed by requestId; the hidden pi session's hunk-ledger projection. */
+	inlineEdits: Record<string, InlineEditRequest>;
+	/** sessionId → requestId, so `handlePiEvent` can fold tool events into the right request. */
+	inlineEditBySession: Record<string, string>;
+	/** Register a fired request + its hidden runtime (no tab). Idempotent on the runtime. */
+	registerInlineEdit: (
+		req: InlineEditRequest,
+		model: Model<string> | null,
+		thinkingLevel: ThinkingLevel,
+	) => void;
+	setInlineEditStatus: (id: string, status: InlineEditStatus) => void;
+	setInlineEditAfterContent: (id: string, content: string) => void;
+	setInlineEditError: (id: string, message: string) => void;
+	/** Refine: clear the prior turn's review artifacts, set the new instruction, back to working. */
+	resetInlineEditForRefine: (id: string, instruction: string) => void;
+	removeInlineEdit: (id: string) => void;
+	/** Replace an open file tab's content snapshot (after an agent edit / revert re-read). No-op if not open. */
+	updateFileTabContent: (workspaceId: string, path: string, content: string) => void;
 	setStatus: (status: ConnectionStatus) => void;
 	setWelcome: (protocolVersion: number) => void;
 	setProjects: (projects: Project[]) => void;
@@ -528,6 +679,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	settingsOpen: false,
 	settingsSection: "providers",
 	toasts: [],
+	inlineEdits: {},
+	inlineEditBySession: {},
 	setStatus: (status) => set({ status }),
 	setWelcome: (protocolVersion) => set({ protocolVersion }),
 	setProjects: (projects) => set({ projects }),
@@ -598,6 +751,21 @@ export const useAppStore = create<AppState>((set, get) => ({
 				tabsByWorkspace: {
 					...s.tabsByWorkspace,
 					[wsId]: tabs.map((t) => (t.id === id && t.kind === "file" ? { ...t, view } : t)),
+				},
+			};
+		}),
+	updateFileTabContent: (workspaceId, path, content) =>
+		set((s) => {
+			const tabs = s.tabsByWorkspace[workspaceId];
+			if (!tabs) return {};
+			const id = `${workspaceId}:${path}`;
+			if (!tabs.some((t) => t.id === id && t.kind === "file")) return {};
+			return {
+				tabsByWorkspace: {
+					...s.tabsByWorkspace,
+					[workspaceId]: tabs.map((t) =>
+						t.id === id && t.kind === "file" ? { ...t, content } : t,
+					),
 				},
 			};
 		}),
@@ -672,6 +840,64 @@ export const useAppStore = create<AppState>((set, get) => ({
 					? s.sessions
 					: { ...s.sessions, [sessionId]: newRuntime(model, thinkingLevel) },
 			};
+		}),
+	registerInlineEdit: (req, model, thinkingLevel) =>
+		set((s) => ({
+			inlineEdits: { ...s.inlineEdits, [req.id]: req },
+			inlineEditBySession: { ...s.inlineEditBySession, [req.sessionId]: req.id },
+			// A hidden runtime (no tab) so the preview popover + "open in tab" render the transcript.
+			sessions: s.sessions[req.sessionId]
+				? s.sessions
+				: { ...s.sessions, [req.sessionId]: newRuntime(model, thinkingLevel) },
+		})),
+	setInlineEditStatus: (id, status) =>
+		set((s) => {
+			const req = s.inlineEdits[id];
+			if (!req || req.status === status) return {};
+			return { inlineEdits: { ...s.inlineEdits, [id]: { ...req, status } } };
+		}),
+	setInlineEditAfterContent: (id, content) =>
+		set((s) => {
+			const req = s.inlineEdits[id];
+			if (!req) return {};
+			return { inlineEdits: { ...s.inlineEdits, [id]: { ...req, afterContent: content } } };
+		}),
+	setInlineEditError: (id, message) =>
+		set((s) => {
+			const req = s.inlineEdits[id];
+			if (!req) return {};
+			return {
+				inlineEdits: { ...s.inlineEdits, [id]: { ...req, status: "error", error: message } },
+			};
+		}),
+	resetInlineEditForRefine: (id, instruction) =>
+		set((s) => {
+			const req = s.inlineEdits[id];
+			if (!req) return {};
+			// Drop (not set-to-undefined) the prior turn's optional fields — `exactOptionalPropertyTypes`
+			// treats an explicit `undefined` differently from an absent key.
+			const { why: _why, error: _error, afterContent: _afterContent, ...rest } = req;
+			return {
+				inlineEdits: {
+					...s.inlineEdits,
+					[id]: {
+						...rest,
+						instruction,
+						status: "working",
+						hunks: [],
+						pendingTools: {},
+						otherPaths: [],
+					},
+				},
+			};
+		}),
+	removeInlineEdit: (id) =>
+		set((s) => {
+			const req = s.inlineEdits[id];
+			if (!req) return {};
+			const { [id]: _drop, ...inlineEdits } = s.inlineEdits;
+			const { [req.sessionId]: _drop2, ...inlineEditBySession } = s.inlineEditBySession;
+			return { inlineEdits, inlineEditBySession };
 		}),
 	closeChatRuntime: (sessionId) =>
 		set((s) => {
@@ -811,8 +1037,18 @@ export const useAppStore = create<AppState>((set, get) => ({
 			})),
 		),
 	// The event→store dispatcher: route each pi event to its session's runtime, so chats stream independently.
+	// A session that's also a hidden inline-edit run gets the event folded into its request too.
 	handlePiEvent: (event, sessionId) =>
-		set((s) => withRuntime(s, sessionId, (rt) => reduceSessionEvent(rt, event))),
+		set((s) => {
+			const runtimePatch = withRuntime(s, sessionId, (rt) => reduceSessionEvent(rt, event));
+			const reqId = s.inlineEditBySession[sessionId];
+			if (!reqId) return runtimePatch;
+			const req = s.inlineEdits[reqId];
+			if (!req) return runtimePatch;
+			const nextReq = foldInlineEditEvent(req, event);
+			if (nextReq === req) return runtimePatch;
+			return { ...runtimePatch, inlineEdits: { ...s.inlineEdits, [reqId]: nextReq } };
+		}),
 	setModels: (models) => set({ models }),
 	setCurrentModel: (sessionId, model) =>
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, model }))),

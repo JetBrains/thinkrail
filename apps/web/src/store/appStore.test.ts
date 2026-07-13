@@ -1,6 +1,14 @@
 import { beforeEach, expect, test } from "bun:test";
 import type { ExtUiRequest, PiEvent, SessionSummary, Workspace } from "@thinkrail/contracts";
-import { type SessionRuntime, toast, useAppStore } from "./appStore";
+import {
+	computeRevertContent,
+	type EditHunk,
+	foldInlineEditEvent,
+	type InlineEditRequest,
+	type SessionRuntime,
+	toast,
+	useAppStore,
+} from "./appStore";
 
 // Event fixtures — the reducer only reads the fields below, so casting minimal objects is safe here.
 const agentStart = { type: "agent_start" } as unknown as PiEvent;
@@ -54,6 +62,8 @@ beforeEach(() => {
 		settingsOpen: false,
 		settingsSection: "providers",
 		toasts: [],
+		inlineEdits: {},
+		inlineEditBySession: {},
 	});
 });
 
@@ -707,4 +717,156 @@ test("the toast helper enqueues by variant and omits an absent title", () => {
 		{ variant: "error", message: "nope", title: "Failed" },
 	]);
 	expect(useAppStore.getState().toasts[0]).not.toHaveProperty("title");
+// ---- inline-edit ----
+
+const editStart = (toolCallId: string, args: Record<string, unknown>) =>
+	({ type: "tool_execution_start", toolCallId, toolName: "edit", args }) as unknown as PiEvent;
+const writeStart = (toolCallId: string, args: Record<string, unknown>) =>
+	({ type: "tool_execution_start", toolCallId, toolName: "write", args }) as unknown as PiEvent;
+const bashStart = (toolCallId: string) =>
+	({ type: "tool_execution_start", toolCallId, toolName: "bash", args: {} }) as unknown as PiEvent;
+const endOk = (toolCallId: string) =>
+	({
+		type: "tool_execution_end",
+		toolCallId,
+		toolName: "edit",
+		result: "",
+		isError: false,
+	}) as unknown as PiEvent;
+const endErr = (toolCallId: string) =>
+	({
+		type: "tool_execution_end",
+		toolCallId,
+		toolName: "edit",
+		result: "boom",
+		isError: true,
+	}) as unknown as PiEvent;
+const agentEndWhy = (text: string) =>
+	({
+		type: "agent_end",
+		willRetry: false,
+		messages: [{ role: "assistant", content: [{ type: "text", text }], stopReason: "stop" }],
+	}) as unknown as PiEvent;
+const agentEndErr = (msg: string) =>
+	({
+		type: "agent_end",
+		willRetry: false,
+		messages: [{ role: "assistant", content: [], stopReason: "error", errorMessage: msg }],
+	}) as unknown as PiEvent;
+
+function baseReq(): InlineEditRequest {
+	return {
+		id: "r1",
+		workspaceId: "w1",
+		path: "doc.md",
+		sessionId: "s1",
+		selection: { text: "old", startLine: 1, endLine: 1 },
+		instruction: "soften it",
+		beforeContent: "old\n",
+		status: "working",
+		hunks: [],
+		pendingTools: {},
+		otherPaths: [],
+	};
+}
+
+test("foldInlineEditEvent records an edit hunk only after a successful end", () => {
+	let req = baseReq();
+	req = foldInlineEditEvent(
+		req,
+		editStart("t1", { path: "doc.md", oldText: "old", newText: "new" }),
+	);
+	expect(req.hunks).toHaveLength(0); // start alone doesn't commit
+	req = foldInlineEditEvent(req, endOk("t1"));
+	expect(req.hunks).toEqual([{ path: "doc.md", kind: "edit", oldText: "old", newText: "new" }]);
+});
+
+test("foldInlineEditEvent drops a hunk whose tool errored", () => {
+	let req = baseReq();
+	req = foldInlineEditEvent(
+		req,
+		editStart("t1", { path: "doc.md", oldText: "old", newText: "new" }),
+	);
+	req = foldInlineEditEvent(req, endErr("t1"));
+	expect(req.hunks).toHaveLength(0);
+});
+
+test("foldInlineEditEvent accepts the old_string/new_string arg variant and a write (full content)", () => {
+	let req = baseReq();
+	req = foldInlineEditEvent(
+		req,
+		editStart("t1", { path: "doc.md", old_string: "a", new_string: "b" }),
+	);
+	req = foldInlineEditEvent(req, endOk("t1"));
+	req = foldInlineEditEvent(req, writeStart("t2", { path: "other.md", content: "whole file" }));
+	req = foldInlineEditEvent(req, endOk("t2"));
+	expect(req.hunks).toEqual([
+		{ path: "doc.md", kind: "edit", oldText: "a", newText: "b" },
+		{ path: "other.md", kind: "write", oldText: "", newText: "whole file" },
+	]);
+	expect(req.otherPaths).toEqual(["other.md"]);
+});
+
+test("foldInlineEditEvent ignores non-edit tools", () => {
+	let req = baseReq();
+	req = foldInlineEditEvent(req, bashStart("t1"));
+	req = foldInlineEditEvent(req, endOk("t1"));
+	expect(req.hunks).toHaveLength(0);
+});
+
+test("foldInlineEditEvent on agent_end sets review + captures the why", () => {
+	let req = baseReq();
+	req = foldInlineEditEvent(req, agentEndWhy("Softened the sentence."));
+	expect(req.status).toBe("review");
+	expect(req.why).toBe("Softened the sentence.");
+});
+
+test("foldInlineEditEvent on an errored agent_end sets error status", () => {
+	let req = baseReq();
+	req = foldInlineEditEvent(req, agentEndErr("no API key"));
+	expect(req.status).toBe("error");
+	expect(req.error).toBe("no API key");
+});
+
+test("foldInlineEditEvent returns the same ref when nothing changes", () => {
+	const req = baseReq();
+	expect(foldInlineEditEvent(req, agentStart)).toBe(req);
+});
+
+test("computeRevertContent reverses edits newest-first", () => {
+	const hunks: EditHunk[] = [
+		{ path: "d", kind: "edit", oldText: "one", newText: "1" },
+		{ path: "d", kind: "edit", oldText: "two", newText: "2" },
+	];
+	expect(computeRevertContent("one two", "1 2", hunks)).toBe("one two");
+});
+
+test("computeRevertContent restores beforeContent when a write hunk is present", () => {
+	const hunks: EditHunk[] = [{ path: "d", kind: "write", oldText: "", newText: "whole" }];
+	expect(computeRevertContent("original\n", "whole", hunks)).toBe("original\n");
+});
+
+test("computeRevertContent returns null when a newText can't be found", () => {
+	const hunks: EditHunk[] = [{ path: "d", kind: "edit", oldText: "x", newText: "MISSING" }];
+	expect(computeRevertContent("x", "current has no match", hunks)).toBeNull();
+});
+
+test("handlePiEvent folds tool events into the matching inline-edit request", () => {
+	const store = useAppStore.getState();
+	store.registerInlineEdit(baseReq(), null, "medium");
+	store.handlePiEvent(editStart("t1", { path: "doc.md", oldText: "old", newText: "new" }), "s1");
+	store.handlePiEvent(endOk("t1"), "s1");
+	store.handlePiEvent(agentEndWhy("done"), "s1");
+	const req = useAppStore.getState().inlineEdits.r1;
+	expect(req.hunks).toEqual([{ path: "doc.md", kind: "edit", oldText: "old", newText: "new" }]);
+	expect(req.status).toBe("review");
+});
+
+test("removeInlineEdit drops the request and its session index", () => {
+	const store = useAppStore.getState();
+	store.registerInlineEdit(baseReq(), null, "medium");
+	store.removeInlineEdit("r1");
+	const s = useAppStore.getState();
+	expect(s.inlineEdits.r1).toBeUndefined();
+	expect(s.inlineEditBySession.s1).toBeUndefined();
 });

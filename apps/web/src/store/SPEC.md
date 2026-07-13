@@ -73,6 +73,11 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   right panel to surface a file's diff); the panels watch it, scoped by workspace. The `EditorTab`
   (`FileTab` | `ChatTab`) + `TerminalTab` + `ClosedChat` + `SessionRuntime` types. (Chat *render* types +
   renderers live in the `chat` module.)
+- **`inlineEdits` / `inlineEditBySession`** — inline-edit requests (hunk-ledger projection of a hidden pi
+  session's `pi.event` stream) keyed by requestId, plus a sessionId→requestId index so `handlePiEvent`
+  folds `edit`/`write` tool events into the right request via the pure `foldInlineEditEvent`. `computeRevertContent`
+  is the pure Revert calculation. The hidden session also gets a normal `SessionRuntime` (no tab) so the
+  preview popover / promoted tab render its transcript.
 - **Public surface (barrel):** `useAppStore`, `toast` (the fire-from-anywhere helper), `Toast` (type),
   `EditorTab` (`FileTab`/`ChatTab`), `TerminalTab`, `ClosedChat`, `SessionRuntime` + `EMPTY_RUNTIME`
   (ChatView's pre-creation fallback), `reduceSessionEvent`.
