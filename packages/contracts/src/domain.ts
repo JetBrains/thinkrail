@@ -174,9 +174,8 @@ export interface ProviderStatusReport {
  */
 export interface JbcentralConnectResult {
 	outcome: "connected" | "needs-install" | "needs-login" | "error";
-	/** Install guidance (per-OS) when `outcome === "needs-install"`. */
-	hint?: string;
-	/** The failure detail when `outcome === "error"`. */
+	/** The failure detail when `outcome === "error"`. The `needs-install` case carries no message — the card
+	 * renders the per-OS command from `ProviderStatusReport.jbcentralInstall`. */
 	message?: string;
 }
 

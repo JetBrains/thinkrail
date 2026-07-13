@@ -21,8 +21,8 @@ Exposed through explicit subpath exports, not a barrel.
   `@thinkrail/shared/jbcentral` → the full jbcentral protocol: `isJbcentralProxyUrl()` (read) +
   `isJbcentralInstalled()` / `wireJbcentral()` / `unwireJbcentral()` / `launchJbcentralLogin()` (write) + the
   pure transforms/consts they compose (`buildProxyUrls`, `apply`/`removeJbcentralOverrides`,
-  `resolveProxyPort`, `jbcentralInstall` (the single source of truth for the per-OS install one-liner) /
-  `jbcentralInstallHint` (the CLI console text, composed from it), `probeJbcentralSecret`, …).
+  `resolveProxyPort`, `jbcentralInstall` (the single source of truth for the per-OS install one-liner),
+  `probeJbcentralSecret`, …).
 - **Allowed deps:** Bun/Node runtime (`@types/bun`); `contracts` **types** (`JbcentralInstall`, the wire shape
   `jbcentralInstall` returns — kept in the wire so the server can carry it to the card verbatim).
 - **Forbidden:** importing `server` / `web` / any `pi` package; being imported by `web` (it carries
@@ -44,9 +44,8 @@ Exposed through explicit subpath exports, not a barrel.
   `isJbcentralInstalled()` (`Bun.which`), `launchJbcentralLogin()` (best-effort spawn of `jbcentral login`),
   plus the pure transforms + probe. **Install guidance is per-OS and single-sourced:** `jbcentralInstall(platform)`
   returns the `{platform, shell, command}` one-liner (macOS/Linux → `install.sh` curl pipe; Windows →
-  `install.ps1` PowerShell) off the `central/` S3 path (post-rebrand, not the old `jbcentral/`);
-  `jbcentralInstallHint` composes it for `wireJbcentral`'s needs-install message, and the server carries the
-  same shape to the web card over the wire (`ProviderStatusReport.jbcentralInstall`) so the browser never
+  `install.ps1` PowerShell) off the `central/` S3 path (post-rebrand, not the old `jbcentral/`); the server
+  carries it to the web card over the wire (`ProviderStatusReport.jbcentralInstall`) so the browser never
   hard-codes (or guesses) the command.
   **The server's `auth` module is its sole caller:** the in-app "Connect JetBrains AI" flow composes
   `wireJbcentral`/`unwireJbcentral` and adds `modelRegistry.refresh()`.

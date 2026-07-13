@@ -28,7 +28,7 @@ export async function connectJbcentral(): Promise<JbcentralConnectResult> {
 			getPiRuntime().modelRegistry.refresh();
 			return { outcome: "connected" };
 		case "needs-install":
-			return { outcome: "needs-install", hint: result.hint };
+			return { outcome: "needs-install" };
 		case "needs-login":
 			return { outcome: "needs-login" };
 		default:

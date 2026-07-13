@@ -109,10 +109,9 @@ const JBCENTRAL_INSTALL_BASE =
 
 /**
  * The per-OS install command for the JetBrains Central CLI (`central`) on a given host platform — the
- * **single source of truth** for the install one-liner. Composed into the CLI's needs-install message
- * (`jbcentralInstallHint`) and carried over the wire (`ProviderStatusReport.jbcentralInstall`) for the
- * in-app JetBrains AI card, so the two can never diverge. macOS/Linux → the `install.sh` curl pipe;
- * Windows → the PowerShell `install.ps1` one-liner.
+ * **single source of truth** for the install one-liner, carried over the wire
+ * (`ProviderStatusReport.jbcentralInstall`) so the in-app JetBrains AI card shows the right command for the
+ * host's OS. macOS/Linux → the `install.sh` curl pipe; Windows → the PowerShell `install.ps1` one-liner.
  */
 export function jbcentralInstall(platform: NodeJS.Platform): JbcentralInstall {
 	if (platform === "win32") {
@@ -127,12 +126,6 @@ export function jbcentralInstall(platform: NodeJS.Platform): JbcentralInstall {
 		shell: "bash",
 		command: `curl -fsSL ${JBCENTRAL_INSTALL_BASE}/install.sh | bash`,
 	};
-}
-
-/** Per-OS guidance shown (in the CLI console) when `central` isn't on PATH — composes the same command
- * `jbcentralInstall` produces, so the CLI hint and the in-app card never drift. */
-export function jbcentralInstallHint(platform: NodeJS.Platform): string {
-	return `The JetBrains Central CLI (central) isn't installed. Install it with:\n  ${jbcentralInstall(platform).command}`;
 }
 
 /**
@@ -229,10 +222,11 @@ export async function resolveWirePort(env: ParseEnv): Promise<number> {
 	return resolveProxyPort(env, wireConfig);
 }
 
-/** The outcome of an attempted wire — a small state machine the CLI + the in-app card both render. */
+/** The outcome of an attempted wire — a small state machine the in-app card renders. The `needs-install`
+ * variant carries no message: the card shows the per-OS command from `ProviderStatusReport.jbcentralInstall`. */
 export type WireOutcome =
 	| { outcome: "connected"; port: number; urls: ProxyUrls }
-	| { outcome: "needs-install"; hint: string }
+	| { outcome: "needs-install" }
 	| { outcome: "needs-login" }
 	| { outcome: "error"; message: string };
 
@@ -243,9 +237,7 @@ export type WireOutcome =
 export async function wireJbcentral(env: ParseEnv): Promise<WireOutcome> {
 	const probe = await probeJbcentralSecret();
 	if (!probe.ok) {
-		if (probe.reason === "not-installed") {
-			return { outcome: "needs-install", hint: jbcentralInstallHint(process.platform) };
-		}
+		if (probe.reason === "not-installed") return { outcome: "needs-install" };
 		if (probe.reason === "not-logged-in") return { outcome: "needs-login" };
 		return { outcome: "error", message: probe.message || "jbcentral proxy start failed" };
 	}

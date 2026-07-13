@@ -8,7 +8,6 @@ import {
 	isJbcentralInstalled,
 	isJbcentralProxyUrl,
 	jbcentralInstall,
-	jbcentralInstallHint,
 	type ModelsConfig,
 	removeJbcentralOverrides,
 	resolveJbcentralBin,
@@ -178,7 +177,7 @@ describe("resolveJbcentralBin (install detection)", () => {
 	});
 });
 
-describe("jbcentralInstall / jbcentralInstallHint", () => {
+describe("jbcentralInstall", () => {
 	// The install scripts live under the `central/` bucket path (post-rebrand), not the old `jbcentral/`.
 	const BASE = "https://jetbrains-central-cli.s3.eu-west-1.amazonaws.com/central/stable";
 
@@ -200,10 +199,5 @@ describe("jbcentralInstall / jbcentralInstallHint", () => {
 			command: `irm ${BASE}/install.ps1 | iex`,
 		});
 		expect(install.command).not.toContain("install.sh");
-	});
-
-	test("the CLI hint composes the same per-OS command (single source of truth)", () => {
-		expect(jbcentralInstallHint("linux")).toContain(jbcentralInstall("linux").command);
-		expect(jbcentralInstallHint("win32")).toContain(jbcentralInstall("win32").command);
 	});
 });
