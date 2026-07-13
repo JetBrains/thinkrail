@@ -21,8 +21,10 @@ Exposed through explicit subpath exports, not a barrel.
   `@thinkrail/shared/jbcentral` → the full jbcentral protocol: `isJbcentralProxyUrl()` (read) +
   `isJbcentralInstalled()` / `wireJbcentral()` / `unwireJbcentral()` / `launchJbcentralLogin()` (write) + the
   pure transforms/consts they compose (`buildProxyUrls`, `apply`/`removeJbcentralOverrides`,
-  `resolveProxyPort`, `jbcentralInstallHint`, `probeJbcentralSecret`, …).
-- **Allowed deps:** Bun/Node runtime (`@types/bun`); may use `contracts` types if needed (none today).
+  `resolveProxyPort`, `jbcentralInstall` (the single source of truth for the per-OS install one-liner) /
+  `jbcentralInstallHint` (the CLI console text, composed from it), `probeJbcentralSecret`, …).
+- **Allowed deps:** Bun/Node runtime (`@types/bun`); `contracts` **types** (`JbcentralInstall`, the wire shape
+  `jbcentralInstall` returns — kept in the wire so the server can carry it to the card verbatim).
 - **Forbidden:** importing `server` / `web` / any `pi` package; being imported by `web` (it carries
   Bun/Node code that must not reach the browser bundle).
 
@@ -40,7 +42,12 @@ Exposed through explicit subpath exports, not a barrel.
   secret via `jbcentral proxy start`, resolve the port, override anthropic/openai `baseUrl` in `models.json`
   → a `WireOutcome`: `connected` / `needs-install` / `needs-login` / `error`), `unwireJbcentral(env)` (undo),
   `isJbcentralInstalled()` (`Bun.which`), `launchJbcentralLogin()` (best-effort spawn of `jbcentral login`),
-  plus the pure transforms + probe. **Two thin callers compose it:** `apps/cli`'s `thinkrail jbcentral` (logs
+  plus the pure transforms + probe. **Install guidance is per-OS and single-sourced:** `jbcentralInstall(platform)`
+  returns the `{platform, shell, command}` one-liner (macOS/Linux → `install.sh` curl pipe; Windows →
+  `install.ps1` PowerShell) off the `central/` S3 path (post-rebrand, not the old `jbcentral/`); the CLI's
+  `jbcentralInstallHint` composes it, and the server carries the same shape to the web card over the wire
+  (`ProviderStatusReport.jbcentralInstall`) so the browser never hard-codes (or guesses) the command.
+  **Two thin callers compose it:** `apps/cli`'s `thinkrail jbcentral` (logs
   + exits) and the server's `auth` module's in-app "Connect JetBrains AI" (adds `modelRegistry.refresh()`).
 
 ## Get right (shellEnv)

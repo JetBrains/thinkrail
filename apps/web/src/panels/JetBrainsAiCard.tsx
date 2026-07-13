@@ -1,24 +1,21 @@
+import type { JbcentralInstall } from "@thinkrail/contracts";
 import { Check, Copy, ExternalLink, Loader2, LogOut, Zap } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { getTransport } from "@/transport";
 
-// Mirrors the host's per-OS install hint (`@thinkrail/shared/jbcentral`'s `jbcentralInstallHint`) — shown
-// proactively for the not-installed (mac/linux) case so users don't have to click to discover the command.
-const INSTALL_CMD =
-	"curl -fsSL https://jetbrains-central-cli.s3.eu-west-1.amazonaws.com/jbcentral/stable/install.sh | bash";
 const LOGIN_CMD = "central login";
 
 /**
  * The outcome of the last in-app connect attempt — and *only* that. It holds the states the server-derived
  * `wired`/`installed` props can't express on their own: props say "not wired", but not *why* (never tried vs.
- * not signed in vs. a hard error). `needs-install` also carries the host's exact per-OS hint. Facts we already
- * have from props (connected, installed) are read straight from the props — never copied in here — so local
- * state can't silently disagree with the host.
+ * not signed in vs. a hard error). The install *command* itself never lives here — it comes from the host as
+ * the `install` prop (per the host's OS). Facts we already have from props (connected, installed) are read
+ * straight from the props — never copied in here — so local state can't silently disagree with the host.
  */
 type ConnectResult =
 	| { kind: "needs-login" }
-	| { kind: "needs-install"; hint: string }
+	| { kind: "needs-install" }
 	| { kind: "error"; message: string };
 
 /**
@@ -32,10 +29,14 @@ type ConnectResult =
 export function JetBrainsAiCard({
 	wired,
 	installed,
+	install,
 	onChanged,
 }: {
 	wired: boolean;
 	installed: boolean;
+	/** The host's per-OS install command (from `provider.status`), rendered when the CLI isn't installed.
+	 * `undefined` only before the first status read (the card falls back to text-only guidance). */
+	install?: JbcentralInstall | undefined;
 	onChanged: () => void | Promise<void>;
 }) {
 	const [result, setResult] = useState<ConnectResult | null>(null);
@@ -64,7 +65,7 @@ export function JetBrainsAiCard({
 				setLoginLaunched(false);
 				await onChanged();
 			} else if (r.outcome === "needs-install") {
-				setResult({ kind: "needs-install", hint: r.hint ?? "" });
+				setResult({ kind: "needs-install" });
 			} else if (r.outcome === "needs-login") {
 				setResult({ kind: "needs-login" });
 			} else {
@@ -104,8 +105,8 @@ export function JetBrainsAiCard({
 	}, [signingIn]);
 
 	// The not-installed state is known up front from status (`!installed`, no click needed); a failed connect
-	// can also surface it (with the host's exact per-OS hint, which drives the Windows-vs-unix copy below).
-	const installHint = result?.kind === "needs-install" ? result.hint : "";
+	// can also surface it. Either way the command comes from the host's `install` prop (its OS, not the
+	// browser's) — so remote/phone clients still show the command for the machine running the host.
 	const showInstall = !wired && (result?.kind === "needs-install" || !installed);
 	const showLogin = !wired && result?.kind === "needs-login";
 	const errorMsg = result?.kind === "error" ? result.message : "";
@@ -166,11 +167,11 @@ export function JetBrainsAiCard({
 			{showInstall ? (
 				<div className="flex flex-col gap-xs" data-testid="jetbrains-needs-install">
 					<p className="text-hint text-xs">
-						{installHint.includes("Windows")
-							? "Install the JetBrains Central CLI for Windows, then Recheck."
-							: "Install the JetBrains Central CLI (jbcentral), then Recheck:"}
+						{install?.shell === "powershell"
+							? "Install the JetBrains Central CLI (central) in PowerShell, then Recheck:"
+							: "Install the JetBrains Central CLI (central), then Recheck:"}
 					</p>
-					{!installHint.includes("Windows") ? <CopyableCommand command={INSTALL_CMD} /> : null}
+					{install ? <CopyableCommand command={install.command} /> : null}
 					<Button
 						variant="ghost"
 						size="sm"

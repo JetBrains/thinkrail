@@ -61,7 +61,9 @@ parse `auth.json` / `models.json` ourselves and never surface a credential value
     `connectJbcentral()` (`wireJbcentral` → on success `modelRegistry.refresh()` → a `JbcentralConnectResult`:
     connected / needs-install / needs-login / error), `disconnectJbcentral()` (`unwireJbcentral` + refresh),
     `jbcentralLogin()` (best-effort `jbcentral login` browser launch). `providerStatus` also surfaces
-    `jbcentralInstalled` (via `isJbcentralInstalled`) so the card knows its state from the one status read.
+    `jbcentralInstalled` (via `isJbcentralInstalled`) **and `jbcentralInstall`** (the host's per-OS install
+    one-liner, via `jbcentralInstall(process.platform)`) so the card knows its state — and shows the right
+    command for the host's OS — from the one status read.
 - **Public surface (barrel):** `getProviderStatus`, `buildProviderReport` (+ `ProviderStatusSources`);
   `startLogin`, `resolveLogin`, `cancelLogin`, `cancelAllLogins`, `setProviderApiKey`, `logoutProvider`,
   `setLoginPublisher`; `connectJbcentral`, `disconnectJbcentral`, `jbcentralLogin`.

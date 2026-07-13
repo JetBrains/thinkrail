@@ -7,6 +7,7 @@ import {
 	buildProxyUrls,
 	isJbcentralInstalled,
 	isJbcentralProxyUrl,
+	jbcentralInstall,
 	jbcentralInstallHint,
 	type ModelsConfig,
 	removeJbcentralOverrides,
@@ -177,20 +178,32 @@ describe("resolveJbcentralBin (install detection)", () => {
 	});
 });
 
-describe("jbcentralInstallHint", () => {
-	// Pins the exact install URL the web `JetBrainsAiCard` mirrors as `INSTALL_CMD` (web can't import shared).
-	// If this URL changes, this test flags it so the web copy is updated in the same change.
-	const INSTALL_URL =
-		"https://jetbrains-central-cli.s3.eu-west-1.amazonaws.com/jbcentral/stable/install.sh";
+describe("jbcentralInstall / jbcentralInstallHint", () => {
+	// The install scripts live under the `central/` bucket path (post-rebrand), not the old `jbcentral/`.
+	const BASE = "https://jetbrains-central-cli.s3.eu-west-1.amazonaws.com/central/stable";
 
-	test("unix points at the install.sh one-liner (exact URL — mirrored in the web card)", () => {
-		expect(jbcentralInstallHint("linux")).toContain(`curl -fsSL ${INSTALL_URL} | bash`);
-		expect(jbcentralInstallHint("darwin")).toContain(`curl -fsSL ${INSTALL_URL} | bash`);
+	test("macOS/Linux → the install.sh curl one-liner (bash)", () => {
+		for (const platform of ["linux", "darwin"] as const) {
+			expect(jbcentralInstall(platform)).toEqual({
+				platform,
+				shell: "bash",
+				command: `curl -fsSL ${BASE}/install.sh | bash`,
+			});
+		}
 	});
 
-	test("windows points at the JetBrains installer, not the sh script", () => {
-		const hint = jbcentralInstallHint("win32");
-		expect(hint).toContain("Windows");
-		expect(hint).not.toContain("install.sh");
+	test("Windows → the install.ps1 PowerShell one-liner (not the sh script)", () => {
+		const install = jbcentralInstall("win32");
+		expect(install).toEqual({
+			platform: "win32",
+			shell: "powershell",
+			command: `irm ${BASE}/install.ps1 | iex`,
+		});
+		expect(install.command).not.toContain("install.sh");
+	});
+
+	test("the CLI hint composes the same per-OS command (single source of truth)", () => {
+		expect(jbcentralInstallHint("linux")).toContain(jbcentralInstall("linux").command);
+		expect(jbcentralInstallHint("win32")).toContain(jbcentralInstall("win32").command);
 	});
 });

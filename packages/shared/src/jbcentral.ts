@@ -9,6 +9,7 @@ import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import type { JbcentralInstall } from "@thinkrail/contracts";
 
 /** jbcentral strips agent-side credential headers, so any non-empty key works. */
 export const DUMMY_API_KEY = "wire-proxy";
@@ -99,18 +100,39 @@ export function removeJbcentralOverrides(config: ModelsConfig): ModelsConfig {
 	return config;
 }
 
-/** Per-OS guidance shown when `jbcentral` isn't on PATH. */
-export function jbcentralInstallHint(platform: NodeJS.Platform): string {
+/**
+ * The S3 `stable` channel that hosts the JetBrains Central CLI install scripts. Note the path is `central/`
+ * (the tool rebranded jbcentral → central; the bucket path moved with it), not the old `jbcentral/`.
+ */
+const JBCENTRAL_INSTALL_BASE =
+	"https://jetbrains-central-cli.s3.eu-west-1.amazonaws.com/central/stable";
+
+/**
+ * The per-OS install command for the JetBrains Central CLI (`central`) on a given host platform — the
+ * **single source of truth** for the install one-liner. Composed into the CLI's needs-install message
+ * (`jbcentralInstallHint`) and carried over the wire (`ProviderStatusReport.jbcentralInstall`) for the
+ * in-app JetBrains AI card, so the two can never diverge. macOS/Linux → the `install.sh` curl pipe;
+ * Windows → the PowerShell `install.ps1` one-liner.
+ */
+export function jbcentralInstall(platform: NodeJS.Platform): JbcentralInstall {
 	if (platform === "win32") {
-		return (
-			"The JetBrains Central CLI (central) isn't installed. Install it for Windows, then Recheck. " +
-			"See your JetBrains AI / Central CLI setup docs for the Windows installer."
-		);
+		return {
+			platform,
+			shell: "powershell",
+			command: `irm ${JBCENTRAL_INSTALL_BASE}/install.ps1 | iex`,
+		};
 	}
-	return (
-		"The JetBrains Central CLI (central) isn't installed. Install it with:\n" +
-		"  curl -fsSL https://jetbrains-central-cli.s3.eu-west-1.amazonaws.com/jbcentral/stable/install.sh | bash"
-	);
+	return {
+		platform,
+		shell: "bash",
+		command: `curl -fsSL ${JBCENTRAL_INSTALL_BASE}/install.sh | bash`,
+	};
+}
+
+/** Per-OS guidance shown (in the CLI console) when `central` isn't on PATH — composes the same command
+ * `jbcentralInstall` produces, so the CLI hint and the in-app card never drift. */
+export function jbcentralInstallHint(platform: NodeJS.Platform): string {
+	return `The JetBrains Central CLI (central) isn't installed. Install it with:\n  ${jbcentralInstall(platform).command}`;
 }
 
 /**

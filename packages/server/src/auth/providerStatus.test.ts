@@ -1,5 +1,13 @@
 import { describe, expect, test } from "bun:test";
+import type { JbcentralInstall } from "@thinkrail/contracts";
 import { buildProviderReport, type ProviderStatusSources } from "./providerStatus";
+
+/** A fixed per-OS install command — threaded straight through the report (not derived here). */
+const INSTALL: JbcentralInstall = {
+	platform: "linux",
+	shell: "bash",
+	command: "curl -fsSL https://example/install.sh | bash",
+};
 
 /** Fixture sources: everything empty/unconfigured unless overridden. */
 function sources(overrides: Partial<ProviderStatusSources> = {}): ProviderStatusSources {
@@ -13,6 +21,7 @@ function sources(overrides: Partial<ProviderStatusSources> = {}): ProviderStatus
 		displayName: (id) => id,
 		hasAuth: () => false,
 		jbcentralInstalled: false,
+		jbcentralInstall: INSTALL,
 		...overrides,
 	};
 }
@@ -25,7 +34,17 @@ describe("buildProviderReport", () => {
 			providers: [],
 			jbcentralWired: false,
 			jbcentralInstalled: false,
+			jbcentralInstall: INSTALL,
 		});
+	});
+
+	test("the host's per-OS install command flows through from the sources", () => {
+		const win: JbcentralInstall = {
+			platform: "win32",
+			shell: "powershell",
+			command: "irm https://example/install.ps1 | iex",
+		};
+		expect(buildProviderReport(sources({ jbcentralInstall: win })).jbcentralInstall).toEqual(win);
 	});
 
 	test("jbcentralInstalled flows through from the sources", () => {

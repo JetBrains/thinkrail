@@ -1,5 +1,14 @@
-import type { ProviderAuthKind, ProviderStatus, ProviderStatusReport } from "@thinkrail/contracts";
-import { isJbcentralInstalled, isJbcentralProxyUrl } from "@thinkrail/shared/jbcentral";
+import type {
+	JbcentralInstall,
+	ProviderAuthKind,
+	ProviderStatus,
+	ProviderStatusReport,
+} from "@thinkrail/contracts";
+import {
+	isJbcentralInstalled,
+	isJbcentralProxyUrl,
+	jbcentralInstall,
+} from "@thinkrail/shared/jbcentral";
 import { getPiRuntime } from "../agent";
 
 /**
@@ -43,6 +52,9 @@ export interface ProviderStatusSources {
 	hasAuth: (id: string) => boolean;
 	/** Whether the `jbcentral` CLI is on PATH — surfaced so the JetBrains AI card knows its state. */
 	jbcentralInstalled: boolean;
+	/** The host's per-OS install command for the JetBrains Central CLI — carried to the card so it renders
+	 * the right command (for the *host's* OS) when the CLI isn't installed. */
+	jbcentralInstall: JbcentralInstall;
 }
 
 /** Map pi's auth source + credential kind onto the wire's `ProviderAuthKind`. */
@@ -135,7 +147,12 @@ export function buildProviderReport(sources: ProviderStatusSources): ProviderSta
 		if (a.configured !== b.configured) return a.configured ? -1 : 1;
 		return a.name.localeCompare(b.name);
 	});
-	return { providers, jbcentralWired, jbcentralInstalled: sources.jbcentralInstalled };
+	return {
+		providers,
+		jbcentralWired,
+		jbcentralInstalled: sources.jbcentralInstalled,
+		jbcentralInstall: sources.jbcentralInstall,
+	};
 }
 
 /**
@@ -166,5 +183,6 @@ export function getProviderStatus(): ProviderStatusReport {
 		displayName: (id) => modelRegistry.getProviderDisplayName(id),
 		hasAuth: (id) => authStorage.hasAuth(id),
 		jbcentralInstalled: isJbcentralInstalled(),
+		jbcentralInstall: jbcentralInstall(process.platform),
 	});
 }

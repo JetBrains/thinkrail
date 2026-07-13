@@ -140,6 +140,22 @@ export interface ProviderStatus {
 	canLogout?: boolean;
 }
 
+/**
+ * How to install the JetBrains Central CLI (`central`) on the host — a copyable, per-OS one-liner the
+ * JetBrains AI card renders proactively (before any connect attempt). Reflects the **host's** OS, never the
+ * browser's: `central` must be installed on the machine running the host, which may be remote (V2
+ * Tailscale/phone), so the command can't be inferred from the browser. The single source of truth for the
+ * command lives host-side (`@thinkrail/shared/jbcentral`) and travels over the wire here.
+ */
+export interface JbcentralInstall {
+	/** The host OS this command targets (`process.platform`: `darwin` | `linux` | `win32` | …). */
+	platform: string;
+	/** The shell the command runs in — `bash` on macOS/Linux, `powershell` on Windows. */
+	shell: "bash" | "powershell";
+	/** The one-line install command to copy/run on the host. */
+	command: string;
+}
+
 /** The `provider.status` result: configured providers first, then the rest alphabetically. */
 export interface ProviderStatusReport {
 	providers: ProviderStatus[];
@@ -147,6 +163,9 @@ export interface ProviderStatusReport {
 	jbcentralWired: boolean;
 	/** Whether the `jbcentral` CLI is installed on the host (drives the in-app JetBrains AI card's state). */
 	jbcentralInstalled: boolean;
+	/** The host's per-OS install command for the JetBrains Central CLI — rendered by the card when not
+	 * installed (reflects the host's OS, not the browser's). */
+	jbcentralInstall: JbcentralInstall;
 }
 
 /**

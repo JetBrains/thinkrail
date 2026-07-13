@@ -181,6 +181,7 @@ export function ProvidersSettings() {
 					<JetBrainsAiCard
 						wired={report?.jbcentralWired ?? false}
 						installed={report?.jbcentralInstalled ?? false}
+						install={report?.jbcentralInstall}
 						onChanged={load}
 					/>
 

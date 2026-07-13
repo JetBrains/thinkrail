@@ -72,8 +72,11 @@ runtime exports being the WS method/channel constants and the protocol version. 
   **accumulate** client-side, never a credential value), **`LoginPush`** (the `provider.login` frame,
   `{ loginId, providerId, frame }`) and **`LoginReply`** (`{ loginId, value }` — the browser's answer to a
   `select`/`prompt`); the JetBrains AI wire — **`ProviderStatusReport.jbcentralInstalled`** (is the
-  `jbcentral` CLI on the host) alongside `jbcentralWired`, and **`JbcentralConnectResult`** (the in-app
-  connect state machine: `connected` / `needs-install` (+`hint`) / `needs-login` / `error` (+`message`));
+  `jbcentral` CLI on the host) alongside `jbcentralWired` and **`jbcentralInstall`** (**`JbcentralInstall`**:
+  the host's per-OS `{platform, shell, command}` install one-liner — for the *host's* OS, not the browser's,
+  so a remote/phone client still shows the command for the machine running the host), and
+  **`JbcentralConnectResult`** (the in-app connect state machine: `connected` / `needs-install` (+`hint`) /
+  `needs-login` / `error` (+`message`));
   **`SpecGraphNode`/`SpecGraphSnapshot`** — the
   Specs-viewer read DTOs, **mirrored** (like `PiEvent`), never imported from `pi-spec-graph` — the wire
   carries only what the panel renders (`type`/`status` stay `string`: tolerate whatever is on disk).

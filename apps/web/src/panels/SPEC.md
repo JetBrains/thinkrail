@@ -85,9 +85,11 @@ prompt hero (still editable; empty by default), a base-branch
   (open the URL or paste the code, `provider.loginReply`); an **"Add an API key"** group of single-key
   providers (`provider.setApiKey`, capped with a "Show N more" expander); a multi-field "N more" note; and
   the **`JetBrainsAiCard`** — route Claude+GPT through your JetBrains subscription (the jbcentral proxy) — a
-  state machine over `jbcentralWired`/`jbcentralInstalled` (from the same status read) + `provider.jbcentral*`:
+  state machine over `jbcentralWired`/`jbcentralInstalled` + `jbcentralInstall` (all from the same status
+  read) + `provider.jbcentral*`:
   Connected (Disconnect) / ready (Connect) / not signed in (in-app `jbcentral login` + Retry) / not installed
-  (copyable install command + Recheck); each mutation re-reads `provider.status`) and **`GithubSettings`** (the "Local GitHub" block — `github.authStatus()`
+  (the host's per-OS copyable install command — from `jbcentralInstall`, for the *host's* OS, never the
+  browser's — + Recheck); each mutation re-reads `provider.status`) and **`GithubSettings`** (the "Local GitHub" block — `github.authStatus()`
   Connected + login / Not connected + Refresh). Dimmed "General"/"Appearance" nav items ("Soon") signal the
   shell is built to grow. `ProvidersSettings` is the **integration piece** (store + transport); the
   `LoginDialog` stays presentational (`auth` module).

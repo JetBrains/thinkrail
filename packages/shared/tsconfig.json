@@ -1,13 +1,9 @@
 {
 	"extends": "../../tsconfig.base.json",
 	"compilerOptions": {
-		"composite": true,
-		"declaration": true,
-		"declarationMap": true,
-		"outDir": "./dist",
-		"rootDir": "./src",
+		"noEmit": true,
+		"allowImportingTsExtensions": true,
 		"types": ["bun"]
 	},
-	"include": ["src"],
-	"references": [{ "path": "../contracts" }]
+	"include": ["src"]
 }
