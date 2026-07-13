@@ -151,17 +151,14 @@ test("listAvailableModels returns the configured (faux) models", () => {
 	expect(ids).toContain("fauxb");
 });
 
-test("wire models carry no secret-bearing fields (baseUrl/headers stripped before the wire)", () => {
+test("wire models expose only the allowlisted fields (no baseUrl/headers/other Model fields)", () => {
 	// The faux providers register with baseUrl "http://faux.local"; when JetBrains AI is wired the real
-	// baseUrl is `.../wire/<SECRET>/...`. Neither may cross the wire — `toWireModel` drops them.
+	// baseUrl is `.../wire/<SECRET>/...`. `toWireModel` is an allowlist projection, so a wire model carries
+	// EXACTLY these keys — this pins the DTO shut (widening it, incl. re-adding a secret field, fails here).
 	const models = listAvailableModels();
 	expect(models.length).toBeGreaterThan(0);
 	for (const m of models) {
-		expect(m).not.toHaveProperty("baseUrl");
-		expect(m).not.toHaveProperty("headers");
-		// identity + display metadata the picker needs survive.
-		expect(typeof m.id).toBe("string");
-		expect(typeof m.provider).toBe("string");
+		expect(Object.keys(m).sort()).toEqual(["contextWindow", "id", "name", "provider", "reasoning"]);
 	}
 });
 

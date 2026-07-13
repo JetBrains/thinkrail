@@ -23,16 +23,20 @@ import type { AgentEvent, AgentMessage, ThinkingLevel } from "@earendil-works/pi
 import type { Model } from "@earendil-works/pi-ai";
 
 /**
- * A model **as it crosses the wire**: pi's `Model` minus the secret-bearing fields. `baseUrl` carries the
- * jbcentral proxy token (`http://127.0.0.1:<port>/wire/<SECRET>/…`) when JetBrains AI is wired, and
- * `headers` can carry auth — neither must ever leave the host (worst under V2 remote access). The UI only
- * needs identity + display metadata (`id`/`name`/`provider`/`cost`/`contextWindow`/`reasoning`/…) and refers a
- * model back to the host by `{ provider, id }`; the host **re-resolves** the real `Model` (with `baseUrl`)
- * from its own registry before handing it to `pi`. Making this an `Omit` is a *structural* guarantee: the
- * omitted fields can't be serialized because the type doesn't carry them (and a client can't inject a
- * `baseUrl` for the agent to call).
+ * A model **as it crosses the wire**: an **allowlist** of exactly the fields the UI renders — identity
+ * (`id`/`name`/`provider`, which also let the host re-resolve the real model) + the picker's display bits
+ * (`contextWindow`/`reasoning`). Deliberately a `Pick`, **not** an `Omit`: `Model.baseUrl` carries the
+ * jbcentral proxy token (`http://127.0.0.1:<port>/wire/<SECRET>/…`) when JetBrains AI is wired and `headers`
+ * can carry auth, and an allowlist **fails closed** — a future `Model` field (secret or not) is excluded by
+ * default rather than leaking. The client refers a model back by `{ provider, id }`; the host re-resolves the
+ * real `Model` (with `baseUrl`) from its own registry, so a client can neither read the secret nor inject a
+ * `baseUrl` for the agent to call. (Widen this set only for a field the UI truly renders — never a
+ * credential-bearing one.)
  */
-export type WireModel = Omit<Model<string>, "baseUrl" | "headers">;
+export type WireModel = Pick<
+	Model<string>,
+	"id" | "name" | "provider" | "contextWindow" | "reasoning"
+>;
 
 // The unified render union the UI switches on. The real superset (`AgentSessionEvent`) is declared in the
 // Node-only `pi-coding-agent` (it pulls node:fs), so it's MIRRORED here type-only, derived from the

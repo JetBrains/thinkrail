@@ -96,15 +96,21 @@ export interface CreateSessionResult {
 }
 
 /**
- * Redact a `pi` `Model` down to what may cross the wire: drop `baseUrl` (it carries the jbcentral proxy
- * secret `/wire/<SECRET>/…` when JetBrains AI is wired) and `headers` (can carry auth). The UI reads neither;
- * it refers a model back by `{provider,id}`, which the host re-resolves via `resolveWireModel`. This is the
- * single choke point that keeps the secret off every model-bearing wire frame (model.list/default,
- * session.create result, SessionSummary).
+ * Project a `pi` `Model` down to the wire's **allowlist** (`WireModel`) — exactly the fields the UI renders.
+ * An explicit projection (not a `{...rest}` denylist), so `baseUrl` (the jbcentral proxy secret when wired)
+ * and `headers` (can carry auth) — and any future `Model` field — are excluded by default. The UI refers a
+ * model back by `{provider,id}`, which the host re-resolves via `resolveWireModel`. This is the single choke
+ * point that keeps secrets off every model-bearing wire frame (model.list/default, session.create result,
+ * SessionSummary).
  */
 export function toWireModel(model: Model<string>): WireModel {
-	const { baseUrl: _baseUrl, headers: _headers, ...wire } = model;
-	return wire;
+	return {
+		id: model.id,
+		name: model.name,
+		provider: model.provider,
+		contextWindow: model.contextWindow,
+		reasoning: model.reasoning,
+	};
 }
 
 /**

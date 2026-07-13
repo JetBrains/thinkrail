@@ -33,11 +33,12 @@ its inline answer bridge.
     `setModel` / `setThinkingLevel` / `compact` / `getSessionStats` (+ contextUsage) / `getSessionCommands` /
     `listAvailableModels` / `getDefaultModel` (the model + thinking a fresh session resolves to — settings
     default if available, else first available — so the New-Workspace dialog shows the exact pre-session
-    model). **Models cross the wire as `WireModel` (never pi's raw `Model`):** `toWireModel` strips
-    `baseUrl` (it carries the jbcentral proxy secret when JetBrains AI is wired) + `headers`, and the
-    inbound side (`createSession`/`setModel`) **re-resolves** the ref by `{provider,id}` via
-    `resolveWireModel` against `getAvailable()` — pi uses `Model.baseUrl` verbatim, so a client's baseUrl is
-    never trusted (blocks disclosure *and* arbitrary-URL injection). The **hydration read side** —
+    model). **Models cross the wire as `WireModel` (never pi's raw `Model`):** `toWireModel` projects a
+    `Model` onto the wire's **allowlist** (id/name/provider/contextWindow/reasoning) — so `baseUrl` (the
+    jbcentral proxy secret when JetBrains AI is wired), `headers`, and any other field are excluded by
+    default — and the inbound side (`createSession`/`setModel`) **re-resolves** the ref by `{provider,id}`
+    via `resolveWireModel` against `getAvailable()` — pi uses `Model.baseUrl` verbatim, so a client's baseUrl
+    is never trusted (blocks disclosure *and* arbitrary-URL injection). The **hydration read side** —
     `listSessions(workspaceId, cwd)` (live sessions
     **unioned with on-disk** ones pi persisted under `cwd`, live winning on id → `SessionSummary[]` tagged
     `live`) + `getSessionMessages(sessionId, workspaceId, cwd)` (re-opens a disk session into the manager if
@@ -134,7 +135,8 @@ its inline answer bridge.
   `headers` can carry auth). Every model-bearing frame (`model.list`/`model.default`, the `session.create`
   result, `SessionSummary.model`) goes through `toWireModel`; every inbound model ref (`session.create` /
   `session.setModel`) is **re-resolved** host-side by `{provider,id}` (`resolveWireModel`), never trusted.
-  The wire type `WireModel = Omit<Model, "baseUrl"|"headers">` makes this a structural guarantee.
+  The wire type `WireModel = Pick<Model, id|name|provider|contextWindow|reasoning>` is an **allowlist** — it
+  fails closed, so a future `Model` field can't leak by default (a unit test pins the exact key set).
 - The slash-command list is derived from the **same three sources pi's rpc mode uses**
   (`extensionRunner.getRegisteredCommands()` + `promptTemplates` + `resourceLoader.getSkills()`).
 - Dialog promises honor abort/timeout and are settled (+ dismissed in the UI) on session disposal — a
