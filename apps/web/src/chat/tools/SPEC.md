@@ -23,9 +23,12 @@ registration runs once when the chat module mounts. Unregistered tools fall back
 - **`AskUserQuestionCard`** — the inline questionnaire for the host-owned `ask_user_question` tool
   (capability + rationale: the server's `agent/askUserQuestion` SPEC). Registered `"bare"`: it owns its
   full-width frame, never folds, and answers through the `ChatActions` context (correlated by
-  `toolCallId`). Two behaviors worth their invariants:
+  `toolCallId`). Behaviors worth their invariants:
   - **Controls never stream** — while args stream it shows a stable composing placeholder and the
     complete questionnaire reveals atomically at message end (rationale in the component's jsdoc).
+  - **Multi-question completion is review-gated** — every question page advances with **Next**, including
+    the final question; only the synthetic **Review & submit** page exposes **Submit**. A single question
+    keeps its direct **Submit** action.
   - **Per-call UI state survives virtualization** — a module-level cache keyed by `toolCallId` (dropped
     on resolve), since react-virtuoso unmounts off-screen rows. This is the pattern the activity fold's
     expansion state reuses.

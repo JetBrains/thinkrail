@@ -23,8 +23,8 @@ import { resultText } from "./toolHelpers";
 // "bare" tool card (see the tool registry `chrome`), so it's a full-width, always-open panel rather than a
 // folded card. Styled after the app's inline prompt-card spec: the question IS the card header, options are
 // radio/checkbox rows (the recommended one badged) closed by a mandatory native "Other" row (same
-// radio/checkbox indicator, inline free-text field), a footer with a mode hint + Skip/Submit, and compact,
-// borderless "record" states once resolved. Presentational: reads the questions
+// radio/checkbox indicator, inline free-text field), a footer with a mode hint + Skip/Next/Submit, and
+// compact, borderless "record" states once resolved. Presentational: reads the questions
 // from the tool-call `args`, replies through the `ChatActions` context (provided by `ChatView`) — never the
 // store/transport directly, so it stays reusable.
 
@@ -204,8 +204,9 @@ export function AskUserQuestionCard({
 	const state = stateFor(idx);
 	if (!q) return <WaitingCard>Preparing questions…</WaitingCard>;
 
-	const onLastQuestion = idx === questions.length - 1;
-	const showContinue = multi && !onReview && !onLastQuestion;
+	// A multi-question questionnaire always advances through its synthetic review step; only that step
+	// submits. Single-question cards retain their direct Submit action.
+	const showContinue = multi && !onReview;
 	const canSubmit =
 		!!actions && (onReview || !multi ? answers.length > 0 : answeredIndices.has(idx));
 
@@ -282,7 +283,7 @@ export function AskUserQuestionCard({
 								<button
 									type="button"
 									data-testid="ask-continue"
-									onClick={() => setTab(tab + 1)}
+									onClick={() => setTab(Math.min(tab + 1, reviewTab))}
 									className="rounded-[var(--radius-md)] bg-primary px-md py-1.5 font-medium text-on-accent text-sm hover:opacity-90"
 								>
 									Next →
