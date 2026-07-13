@@ -142,7 +142,8 @@ export async function stopInlineEdit(id: string): Promise<void> {
 	const after = useAppStore.getState().inlineEdits[id];
 	if (after && after.status === "working") {
 		const hasHunks = (after.turns.at(-1)?.hunks.length ?? 0) > 0;
-		useAppStore.getState().setInlineEditStatus(id, hasHunks ? "review" : "done");
+		if (hasHunks) useAppStore.getState().setInlineEditStatus(id, "review");
+		else useAppStore.getState().removeInlineEdit(id); // cancelled (no edits landed) → drop it, don't leak
 	}
 }
 
