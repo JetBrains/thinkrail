@@ -19,7 +19,7 @@ host over Tailscale.
 
 - **Engine host** (`packages/server` + `packages/shared`, launched by `apps/cli` now / `apps/desktop`
   later): owns `pi`, session state, persistence, and serves the wire endpoint. It bundles pi extensions
-  (`pi-web-access`, `pi-visualize`, `pi-spec-graph`) into every session.
+  (`pi-web-access`, `pi-visualize`, `pi-spec-graph`, `pi-thinkrail-workflow`) into every session.
 - **The wire** (`packages/contracts`): the typed, versioned protocol — the only coupling between client
   and host.
 - **UI client** (`apps/web`): a mobile-first React client, transport-driven and endpoint-configurable,
@@ -34,6 +34,9 @@ packages/contracts  the wire (types-only)
 packages/shared     shellEnv (server-side only)
 packages/spec-graph portable pi extension: spec_* tools + skill (bundled into every session by packages/server;
                     its pi-free core/ read model also backs the host's spec.graph read method)
+packages/pi-visualize          portable pi extension: the visualize tool (bundled into every session)
+packages/pi-thinkrail-workflow pi extension: the workflow skill system + its always-on routing rule
+                    (bundled into every session; workspace-internal, not portable)
 ```
 
 ## Decisions
@@ -87,7 +90,9 @@ packages/spec-graph portable pi extension: spec_* tools + skill (bundled into ev
 
 ## Out of scope (V1)
 
-Workflows; the spec-graph **product layer** beyond the read-only viewer (drift detection, pre-build
+The workflow **product layer** (a runtime/engine, configurable pipelines) — the skill-based workflow
+*system* ships in V1 as a bundled extension (`module-thinkrail-workflow`: skills + one always-on
+rule, no runtime machinery); the spec-graph **product layer** beyond the read-only viewer (drift detection, pre-build
 approval, living graph) — the pi-side spec-graph *capability* ships in V1 as a bundled extension
 (`module-spec-graph`), and the V1 viewer is a read-only Specs tab over a `spec.graph` wire read;
 self-improvement, automations, per-step model routing, cost ledger.
