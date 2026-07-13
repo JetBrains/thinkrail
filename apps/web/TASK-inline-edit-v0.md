@@ -1,7 +1,7 @@
 ---
 id: task-inline-edit-v0
 type: task-spec
-status: draft
+status: active
 title: Inline AI-editing v0 — select, instruct, review-in-place
 parent: module-web
 depends-on: [module-contracts, submodule-server-fs]
