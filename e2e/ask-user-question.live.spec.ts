@@ -179,7 +179,7 @@ test("skip: declining resolves the tool as a skipped record", { tag: "@agent" },
 	await expect(skipped).toContainText("skipped");
 });
 
-test("multi-question: tab through, review, and submit a batch", { tag: "@agent" }, async ({
+test("multi-question: Next reaches review before submitting the batch", { tag: "@agent" }, async ({
 	page,
 }) => {
 	test.setTimeout(180_000);
@@ -195,16 +195,22 @@ test("multi-question: tab through, review, and submit a batch", { tag: "@agent" 
 	const tabs = card.getByTestId("ask-tab");
 	await expect(tabs).toHaveCount(3);
 
-	// Answer each question tab (all but the last "Review & submit" chip) by picking its first option.
+	// Follow the sequential path: every real question — including the final one — advances with Next.
 	for (let i = 0; i < 2; i++) {
-		await tabs.nth(i).click();
+		await expect(tabs.nth(i)).toHaveAttribute("data-active", "true");
 		await card.getByTestId("ask-option").first().click();
+		await expect(card.getByTestId("ask-submit")).toHaveCount(0);
+		await card.getByTestId("ask-continue").click();
 	}
-	// Every question answered → both tab chips flip to their "answered" marker.
+
+	// Final-question Next must activate review rather than submitting directly.
+	await expect(tabs.nth(2)).toHaveAttribute("data-active", "true");
+	await expect(card).toContainText("Review your answers");
+	await expect(card.getByTestId("ask-continue")).toHaveCount(0);
+	await expect(card.getByTestId("ask-submit")).toBeEnabled();
+	// Every question answered → both question chips carry their answered marker.
 	await expect(card.locator('[data-testid="ask-tab"][data-answered="true"]')).toHaveCount(2);
 
-	// Review, then submit the batch.
-	await tabs.nth(2).click();
 	await card.getByTestId("ask-submit").click();
 	const record = answeredRecord(page);
 	await expect(record).toBeVisible({ timeout: 60_000 });
