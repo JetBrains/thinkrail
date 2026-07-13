@@ -322,10 +322,27 @@ export interface EditHunk {
 export type InlineEditStatus = "starting" | "working" | "review" | "reverting" | "done" | "error";
 
 /**
- * One inline-edit request: the metadata the store can't derive (selection, instruction, the file snapshot
- * taken when the request fired) plus the folded hunk ledger + status. The hidden pi session also has a
- * normal `SessionRuntime` (so the preview popover / promoted tab render its transcript); this is the
- * inline-edit-specific projection of the same event stream.
+ * One agent turn within an inline edit: the instruction/comment that drove it, the target-file content at
+ * its START (`baseContent` — the step-back target for Undo-last-change), and the hunks it produced. Refine
+ * pushes a new turn; the last turn is the one under review.
+ */
+export interface EditTurn {
+	instruction: string;
+	baseContent: string;
+	hunks: EditHunk[];
+	/** edit/write tool calls seen `start` but not yet `end` this turn, keyed by toolCallId. */
+	pendingTools: Record<string, EditHunk>;
+	/** Distinct non-target paths this turn touched (the "also touched N files" notice). */
+	otherPaths: string[];
+	/** The turn's closing one-line explanation (last assistant text at agent_end). */
+	why?: string;
+}
+
+/**
+ * One inline-edit request: the metadata the store can't derive (selection, per-turn history) + status. The
+ * hidden pi session also has a normal `SessionRuntime` (so the preview popover / promoted tab render its
+ * transcript); this is the inline-edit-specific projection of the same event stream. `turns[0].baseContent`
+ * is the fire-time original (Revert-all target); the last turn is under review.
  */
 export interface InlineEditRequest {
 	id: string;
@@ -333,19 +350,11 @@ export interface InlineEditRequest {
 	path: string;
 	sessionId: string;
 	selection: { text: string; startLine: number; endLine: number };
-	instruction: string;
-	/** File content at fire time — the base a Revert restores to for full-file writes. */
-	beforeContent: string;
-	/** Current on-disk content after the turn (loaded by the readback effect) — the revert guard + anchor base. */
+	/** Current on-disk content after the last turn (loaded by the readback effect) — revert guard + anchor base. */
 	afterContent?: string;
+	/** Per-turn history (≥1). Refine appends; Undo-last-change pops. */
+	turns: EditTurn[];
 	status: InlineEditStatus;
-	hunks: EditHunk[];
-	/** edit/write tool calls seen `start` but not yet `end`, keyed by toolCallId — promoted to hunks on success. */
-	pendingTools: Record<string, EditHunk>;
-	/** Distinct non-target paths the agent also touched (the "also touched N files" notice). */
-	otherPaths: string[];
-	/** The agent's closing one-line explanation (last assistant text at agent_end). */
-	why?: string;
 	error?: string;
 }
 
@@ -382,27 +391,37 @@ function lastAssistantText(messages: readonly unknown[]): string {
 }
 
 /**
- * Fold one pi event into an inline-edit request (the hunk-ledger projection). Pure — same ref when nothing
- * changes. Only `edit`/`write` tool events and terminal `agent_end` matter; everything else is a no-op.
+ * Fold one pi event into an inline-edit request's CURRENT turn (the last in `turns`). Pure — same ref when
+ * nothing changes. Only `edit`/`write` tool events and terminal `agent_end` matter; everything else is a
+ * no-op. Hunks power the review DISPLAY; revert/undo use content snapshots (a turn's `baseContent`), not
+ * these hunks.
  */
 export function foldInlineEditEvent(req: InlineEditRequest, event: PiEvent): InlineEditRequest {
+	const current = req.turns.at(-1);
+	if (!current) return req; // turns is never empty in practice; the guard satisfies the type
+	// Replace the current turn immutably; the request keeps the same ref when the turn didn't change.
+	const withCurrent = (next: EditTurn): InlineEditRequest =>
+		next === current ? req : { ...req, turns: [...req.turns.slice(0, -1), next] };
 	switch (event.type) {
 		case "tool_execution_start": {
 			if (event.toolName !== "edit" && event.toolName !== "write") return req;
 			const hunk = parseEditArgs(event.toolName, event.args as Record<string, unknown>);
-			return { ...req, pendingTools: { ...req.pendingTools, [event.toolCallId]: hunk } };
+			return withCurrent({
+				...current,
+				pendingTools: { ...current.pendingTools, [event.toolCallId]: hunk },
+			});
 		}
 		case "tool_execution_end": {
-			const pending = req.pendingTools[event.toolCallId];
+			const pending = current.pendingTools[event.toolCallId];
 			if (!pending) return req;
-			const { [event.toolCallId]: _drop, ...pendingTools } = req.pendingTools;
-			if (event.isError) return { ...req, pendingTools };
-			const hunks = [...req.hunks, pending];
+			const { [event.toolCallId]: _drop, ...pendingTools } = current.pendingTools;
+			if (event.isError) return withCurrent({ ...current, pendingTools });
+			const hunks = [...current.hunks, pending];
 			const otherPaths =
-				pending.path !== req.path && !req.otherPaths.includes(pending.path)
-					? [...req.otherPaths, pending.path]
-					: req.otherPaths;
-			return { ...req, pendingTools, hunks, otherPaths };
+				pending.path !== req.path && !current.otherPaths.includes(pending.path)
+					? [...current.otherPaths, pending.path]
+					: current.otherPaths;
+			return withCurrent({ ...current, pendingTools, hunks, otherPaths });
 		}
 		case "agent_end": {
 			if (event.willRetry) return req; // retry/compaction follows — stay working
@@ -416,32 +435,15 @@ export function foldInlineEditEvent(req: InlineEditRequest, event: PiEvent): Inl
 					error: last.errorMessage || "The agent run ended in an error.",
 				};
 			}
-			return { ...req, status: "review", why: lastAssistantText(event.messages) };
+			const turns = [
+				...req.turns.slice(0, -1),
+				{ ...current, why: lastAssistantText(event.messages) },
+			];
+			return { ...req, turns, status: "review" };
 		}
 		default:
 			return req;
 	}
-}
-
-/**
- * Compute the content a Revert should write, or null if it can't be done cleanly (caller falls back to a
- * toast + stays in review). A `write` hunk means a full-file replace, so we restore the fire-time snapshot;
- * otherwise we reverse-apply edits newest-first (replace each `newText` back to its `oldText`).
- */
-export function computeRevertContent(
-	beforeContent: string,
-	currentContent: string,
-	hunks: EditHunk[],
-): string | null {
-	if (hunks.some((h) => h.kind === "write")) return beforeContent;
-	let text = currentContent;
-	for (let i = hunks.length - 1; i >= 0; i -= 1) {
-		const { newText, oldText } = hunks[i] as EditHunk;
-		const at = text.indexOf(newText);
-		if (at < 0) return null;
-		text = text.slice(0, at) + oldText + text.slice(at + newText.length);
-	}
-	return text;
 }
 
 interface AppState {
@@ -495,8 +497,10 @@ interface AppState {
 	setInlineEditStatus: (id: string, status: InlineEditStatus) => void;
 	setInlineEditAfterContent: (id: string, content: string) => void;
 	setInlineEditError: (id: string, message: string) => void;
-	/** Refine: clear the prior turn's review artifacts, set the new instruction, back to working. */
-	resetInlineEditForRefine: (id: string, instruction: string) => void;
+	/** Refine: append a new turn (its `baseContent` = the content the new turn edits from), back to working. */
+	pushInlineEditTurn: (id: string, instruction: string, baseContent: string) => void;
+	/** Undo-last-change: drop the last turn, back to reviewing the now-last turn. No-op if only one turn. */
+	popInlineEditTurn: (id: string) => void;
 	removeInlineEdit: (id: string) => void;
 	/** Replace an open file tab's content snapshot (after an agent edit / revert re-read). No-op if not open. */
 	updateFileTabContent: (workspaceId: string, path: string, content: string) => void;
@@ -870,24 +874,35 @@ export const useAppStore = create<AppState>((set, get) => ({
 				inlineEdits: { ...s.inlineEdits, [id]: { ...req, status: "error", error: message } },
 			};
 		}),
-	resetInlineEditForRefine: (id, instruction) =>
+	pushInlineEditTurn: (id, instruction, baseContent) =>
 		set((s) => {
 			const req = s.inlineEdits[id];
 			if (!req) return {};
-			// Drop (not set-to-undefined) the prior turn's optional fields — `exactOptionalPropertyTypes`
+			const turn: EditTurn = {
+				instruction,
+				baseContent,
+				hunks: [],
+				pendingTools: {},
+				otherPaths: [],
+			};
+			// Drop (not set-to-undefined) the prior turn's `afterContent`/`error` — `exactOptionalPropertyTypes`
 			// treats an explicit `undefined` differently from an absent key.
-			const { why: _why, error: _error, afterContent: _afterContent, ...rest } = req;
+			const { afterContent: _afterContent, error: _error, ...rest } = req;
 			return {
 				inlineEdits: {
 					...s.inlineEdits,
-					[id]: {
-						...rest,
-						instruction,
-						status: "working",
-						hunks: [],
-						pendingTools: {},
-						otherPaths: [],
-					},
+					[id]: { ...rest, turns: [...req.turns, turn], status: "working" },
+				},
+			};
+		}),
+	popInlineEditTurn: (id) =>
+		set((s) => {
+			const req = s.inlineEdits[id];
+			if (!req || req.turns.length <= 1) return {};
+			return {
+				inlineEdits: {
+					...s.inlineEdits,
+					[id]: { ...req, turns: req.turns.slice(0, -1), status: "review" },
 				},
 			};
 		}),

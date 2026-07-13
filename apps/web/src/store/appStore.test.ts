@@ -1,8 +1,7 @@
 import { beforeEach, expect, test } from "bun:test";
 import type { ExtUiRequest, PiEvent, SessionSummary, Workspace } from "@thinkrail/contracts";
 import {
-	computeRevertContent,
-	type EditHunk,
+	type EditTurn,
 	foldInlineEditEvent,
 	type InlineEditRequest,
 	type SessionRuntime,
@@ -761,24 +760,37 @@ function baseReq(): InlineEditRequest {
 		path: "doc.md",
 		sessionId: "s1",
 		selection: { text: "old", startLine: 1, endLine: 1 },
-		instruction: "soften it",
-		beforeContent: "old\n",
+		turns: [
+			{
+				instruction: "soften it",
+				baseContent: "old\n",
+				hunks: [],
+				pendingTools: {},
+				otherPaths: [],
+			},
+		],
 		status: "working",
-		hunks: [],
-		pendingTools: {},
-		otherPaths: [],
 	};
 }
 
-test("foldInlineEditEvent records an edit hunk only after a successful end", () => {
+/** The current (last) turn — a test helper (throws rather than returning undefined, so assertions are clean). */
+function cur(r: InlineEditRequest): EditTurn {
+	const t = r.turns.at(-1);
+	if (!t) throw new Error("request has no turns");
+	return t;
+}
+
+test("foldInlineEditEvent records an edit hunk on the current turn only after a successful end", () => {
 	let req = baseReq();
 	req = foldInlineEditEvent(
 		req,
 		editStart("t1", { path: "doc.md", oldText: "old", newText: "new" }),
 	);
-	expect(req.hunks).toHaveLength(0); // start alone doesn't commit
+	expect(cur(req).hunks).toHaveLength(0); // start alone doesn't commit
 	req = foldInlineEditEvent(req, endOk("t1"));
-	expect(req.hunks).toEqual([{ path: "doc.md", kind: "edit", oldText: "old", newText: "new" }]);
+	expect(cur(req).hunks).toEqual([
+		{ path: "doc.md", kind: "edit", oldText: "old", newText: "new" },
+	]);
 });
 
 test("foldInlineEditEvent drops a hunk whose tool errored", () => {
@@ -788,7 +800,7 @@ test("foldInlineEditEvent drops a hunk whose tool errored", () => {
 		editStart("t1", { path: "doc.md", oldText: "old", newText: "new" }),
 	);
 	req = foldInlineEditEvent(req, endErr("t1"));
-	expect(req.hunks).toHaveLength(0);
+	expect(cur(req).hunks).toHaveLength(0);
 });
 
 test("foldInlineEditEvent accepts the old_string/new_string arg variant and a write (full content)", () => {
@@ -800,25 +812,25 @@ test("foldInlineEditEvent accepts the old_string/new_string arg variant and a wr
 	req = foldInlineEditEvent(req, endOk("t1"));
 	req = foldInlineEditEvent(req, writeStart("t2", { path: "other.md", content: "whole file" }));
 	req = foldInlineEditEvent(req, endOk("t2"));
-	expect(req.hunks).toEqual([
+	expect(cur(req).hunks).toEqual([
 		{ path: "doc.md", kind: "edit", oldText: "a", newText: "b" },
 		{ path: "other.md", kind: "write", oldText: "", newText: "whole file" },
 	]);
-	expect(req.otherPaths).toEqual(["other.md"]);
+	expect(cur(req).otherPaths).toEqual(["other.md"]);
 });
 
 test("foldInlineEditEvent ignores non-edit tools", () => {
 	let req = baseReq();
 	req = foldInlineEditEvent(req, bashStart("t1"));
 	req = foldInlineEditEvent(req, endOk("t1"));
-	expect(req.hunks).toHaveLength(0);
+	expect(cur(req).hunks).toHaveLength(0);
 });
 
-test("foldInlineEditEvent on agent_end sets review + captures the why", () => {
+test("foldInlineEditEvent on agent_end sets review + captures the current turn's why", () => {
 	let req = baseReq();
 	req = foldInlineEditEvent(req, agentEndWhy("Softened the sentence."));
 	expect(req.status).toBe("review");
-	expect(req.why).toBe("Softened the sentence.");
+	expect(cur(req).why).toBe("Softened the sentence.");
 });
 
 test("foldInlineEditEvent on an errored agent_end sets error status", () => {
@@ -833,32 +845,35 @@ test("foldInlineEditEvent returns the same ref when nothing changes", () => {
 	expect(foldInlineEditEvent(req, agentStart)).toBe(req);
 });
 
-test("computeRevertContent reverses edits newest-first", () => {
-	const hunks: EditHunk[] = [
-		{ path: "d", kind: "edit", oldText: "one", newText: "1" },
-		{ path: "d", kind: "edit", oldText: "two", newText: "2" },
-	];
-	expect(computeRevertContent("one two", "1 2", hunks)).toBe("one two");
-});
-
-test("computeRevertContent restores beforeContent when a write hunk is present", () => {
-	const hunks: EditHunk[] = [{ path: "d", kind: "write", oldText: "", newText: "whole" }];
-	expect(computeRevertContent("original\n", "whole", hunks)).toBe("original\n");
-});
-
-test("computeRevertContent returns null when a newText can't be found", () => {
-	const hunks: EditHunk[] = [{ path: "d", kind: "edit", oldText: "x", newText: "MISSING" }];
-	expect(computeRevertContent("x", "current has no match", hunks)).toBeNull();
-});
-
-test("handlePiEvent folds tool events into the matching inline-edit request", () => {
+test("handlePiEvent folds tool events into the matching request's current turn", () => {
 	const store = useAppStore.getState();
 	store.registerInlineEdit(baseReq(), null, "medium");
 	store.handlePiEvent(editStart("t1", { path: "doc.md", oldText: "old", newText: "new" }), "s1");
 	store.handlePiEvent(endOk("t1"), "s1");
 	store.handlePiEvent(agentEndWhy("done"), "s1");
 	const req = useAppStore.getState().inlineEdits.r1;
-	expect(req.hunks).toEqual([{ path: "doc.md", kind: "edit", oldText: "old", newText: "new" }]);
+	expect(req.turns.at(-1)?.hunks).toEqual([
+		{ path: "doc.md", kind: "edit", oldText: "old", newText: "new" },
+	]);
+	expect(req.turns.at(-1)?.why).toBe("done");
+	expect(req.status).toBe("review");
+});
+
+test("pushInlineEditTurn appends a fresh working turn and preserves the prior turn's hunks; pop returns to review", () => {
+	const store = useAppStore.getState();
+	store.registerInlineEdit(baseReq(), null, "medium");
+	store.handlePiEvent(editStart("t1", { path: "doc.md", oldText: "old", newText: "new" }), "s1");
+	store.handlePiEvent(endOk("t1"), "s1");
+	store.handlePiEvent(agentEndWhy("first"), "s1");
+	store.pushInlineEditTurn("r1", "make it shorter", "new\n");
+	let req = useAppStore.getState().inlineEdits.r1;
+	expect(req.turns).toHaveLength(2);
+	expect(req.status).toBe("working");
+	expect(req.turns[1]?.hunks ?? []).toHaveLength(0); // fresh turn
+	expect(req.turns[0]?.hunks ?? []).toHaveLength(1); // prior turn preserved
+	store.popInlineEditTurn("r1");
+	req = useAppStore.getState().inlineEdits.r1;
+	expect(req.turns).toHaveLength(1);
 	expect(req.status).toBe("review");
 });
 
