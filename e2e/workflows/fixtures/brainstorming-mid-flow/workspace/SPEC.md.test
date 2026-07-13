@@ -1,0 +1,9 @@
+---
+id: acme-root
+type: goal-and-requirements
+title: Acme Widgets
+---
+
+## Goal
+
+A small CLI that batch-resizes images.
