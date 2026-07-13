@@ -1,5 +1,5 @@
 import type * as monaco from "monaco-editor";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAppStore } from "@/store";
 import {
 	hasPendingEditForPath,
@@ -48,12 +48,18 @@ export function useMonacoInlineEdit({
 		),
 	);
 
+	// Selection listener reads live popup state via ref so the effect doesn't need `popupOpen` as a
+	// dependency — `editor.addCommand` returns a plain id (not disposable), so re-running the effect on
+	// every popup toggle would accumulate commands over the session.
+	const popupOpenRef = useRef(popupOpen);
+	popupOpenRef.current = popupOpen;
+
 	// Capture selection changes inside the editor → show the pill (unless one edit is already pending
 	// here, or the instruction popup is already open). ⌘K opens the popup for the current selection.
 	useEffect(() => {
 		if (!editor) return;
 		const sub = editor.onDidChangeCursorSelection(() => {
-			if (hasPendingEditForPath(workspaceId, path) || popupOpen) return;
+			if (hasPendingEditForPath(workspaceId, path) || popupOpenRef.current) return;
 			setTarget(monacoSelectionTarget(editor, { workspaceId, path }));
 		});
 		// 2048 | 41 = monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK. Numeric literals (not the enum) because
@@ -64,7 +70,7 @@ export function useMonacoInlineEdit({
 			sub.dispose();
 			void key;
 		};
-	}, [editor, workspaceId, path, popupOpen]);
+	}, [editor, workspaceId, path]);
 
 	const submit = useCallback(
 		async (instruction: string) => {
@@ -162,6 +168,51 @@ export function useMonacoInlineEdit({
 						/>
 					) : null}
 				</>
+			);
+		} else if (request.status === "error") {
+			requestOverlay = (
+				<div
+					className="absolute top-2 right-2 z-20 w-[360px] rounded-[var(--radius-md)] border border-red/40 bg-elevated p-sm text-xs shadow-[var(--shadow-lg)]"
+					data-testid="inline-edit-error"
+				>
+					<p className="text-red">{request.error ?? "The edit failed."}</p>
+					<div className="mt-xs flex gap-xs">
+						<button
+							type="button"
+							data-testid="inline-edit-error-refine"
+							onClick={() => setRefineOpen(true)}
+							className="rounded-[var(--radius-sm)] border border-border2 px-sm py-0.5 text-text hover:bg-hover"
+						>
+							Retry…
+						</button>
+						<button
+							type="button"
+							data-testid="inline-edit-error-dismiss"
+							onClick={() => keepInlineEdit(request.id)}
+							className="rounded-[var(--radius-sm)] border border-border2 px-sm py-0.5 text-text hover:bg-hover"
+						>
+							Dismiss
+						</button>
+						<button
+							type="button"
+							data-testid="inline-edit-error-open"
+							onClick={() => openInlineEditInTab(request.id)}
+							className="rounded-[var(--radius-sm)] border border-border2 px-sm py-0.5 text-text hover:bg-hover"
+						>
+							Open as chat
+						</button>
+					</div>
+					{refineOpen ? (
+						<InstructionPopup
+							rect={{ top: 60, left: 8 }}
+							onSubmit={(c) => {
+								void refineInlineEdit(request.id, c);
+								setRefineOpen(false);
+							}}
+							onCancel={() => setRefineOpen(false)}
+						/>
+					) : null}
+				</div>
 			);
 		}
 	}
