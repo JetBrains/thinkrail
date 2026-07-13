@@ -1,24 +1,22 @@
 ---
-name: project-new
-description: "The brand-new / empty-project branch of project-setup: turn a raw idea into a focused goal-and-requirements.md through a short, tailored interview (vision, MVP scope, success criteria, tech). Normally reached via the project-setup dispatcher, on an empty workspace with no code yet. For features in an existing project, use brainstorming instead."
+name: starting-a-new-project
+description: "Use when the workspace is empty — no code yet — and the user brings a raw idea: the brand-new branch of setting-up-a-project, normally reached via that dispatcher, directly only when the situation is unmistakable. Not for features in an existing project — use brainstorming instead."
 ---
 
-# Project setup — new project
+# Starting a new project
 
 The workspace is empty: no code, no decisions. Turn the user's idea into one clear, buildable document —
 `goal-and-requirements.md` — then hand off to `brainstorming` for the features that follow.
 
-**Keep it short and honest.** The document must be small enough to read in one sitting and high-signal
-enough to put an agent on rails. Never pad with `[TBD]` sections that weren't discussed — a section that
-hasn't been settled simply doesn't appear yet.
+**Hold the writing-specs bar.** Read that concept skill before saving anything — it carries the
+short / honest / on-rails rules every section you save must meet.
 
 ## Method
 
 1. **Build on what's already said.** Never re-ask what the request already told you.
 2. **Infer, then confirm** — propose a concrete draft and let the user correct it; a suggestion beats an
-   open question. Use `ask_user_question`: the header is a short chip, each option has a label + a
-   description; put your recommended option first. Single-select questions already include a free-text
-   edit row and Skip — don't invent your own.
+   open question. Compose `ask_user_question` rounds per the **asking-user-questions** concept skill
+   (read it before the first round — it carries the option, confirmation, and degradation norms).
 3. **MVP first.** The right v1 is smaller than the user expects. Every v1 capability must justify itself.
 4. **Save incrementally.** Create the file as soon as the first section is settled, then add each
    confirmed section in template order. Don't batch; don't invent unconfirmed content.
@@ -86,4 +84,5 @@ binary Done Conditions instead of metrics). Reject vague goals inline: "'Better 
 ## Next
 
 State plainly that the spec is saved. Suggest the natural next step — sketch `architecture.md`, then use
-`brainstorming` per feature. There is no board/ticket hand-off; just say it and stop.
+`brainstorming` per feature. There is no board/ticket hand-off — say it and stop: **this workflow ends
+here**; feature work from now on routes through choosing-a-workflow → `brainstorming`.

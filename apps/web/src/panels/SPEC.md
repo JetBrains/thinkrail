@@ -47,8 +47,8 @@ bottom-left; the primary is a filled-violet card carrying the stable `welcome-ct
 / Recents), so `Card` is a `forwardRef` usable as a Radix `asChild` trigger. **"Start building"** is the
 intent-first framing of the create-and-kick-off flow — it opens `NewWorkspaceDialog` (which cuts a
 worktree-isolated workspace + starts a chat); *workspace* is the mechanism, not the label. **"Set up
-project"** opens the same dialog with an `initialPrompt` seed — the `/skill:project-setup` command, which
-**forces** the project-setup dispatcher skill to load (pi's skill-command syntax; expanded on the
+project"** opens the same dialog with an `initialPrompt` seed — the `/skill:setting-up-a-project` command,
+which **forces** the setting-up-a-project dispatcher skill to load (pi's skill-command syntax; expanded on the
 `session.prompt` path) rather than hoping the model auto-matches it; the dispatcher then detects
 new-vs-existing and drafts the specs accordingly (see [[module-thinkrail-workflow]]). Which
 project drives the has-specs states = `selectedProjectId ?? projects[0]`, read reactively (so the visible
