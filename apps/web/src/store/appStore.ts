@@ -2,13 +2,13 @@ import type {
 	ExtUiRequest,
 	LoginFrame,
 	LoginPush,
-	Model,
 	PiEvent,
 	Project,
 	SessionStats,
 	SessionSummary,
 	SlashCommandInfo,
 	ThinkingLevel,
+	WireModel,
 	Workspace,
 } from "@thinkrail/contracts";
 import { create } from "zustand";
@@ -66,7 +66,7 @@ export interface SessionRuntime {
 	currentAssistantId: string | null;
 	isStreaming: boolean;
 	/** This chat's model + thinking level (display only; `pi` owns them). */
-	model: Model<string> | null;
+	model: WireModel | null;
 	thinkingLevel: ThinkingLevel;
 	/** Token/cost stats (cheap win #3), refreshed after each turn. */
 	stats: SessionStats | null;
@@ -83,7 +83,7 @@ export interface SessionRuntime {
 	extUiWidget: Record<string, string[]>;
 }
 
-function newRuntime(model: Model<string> | null, thinkingLevel: ThinkingLevel): SessionRuntime {
+function newRuntime(model: WireModel | null, thinkingLevel: ThinkingLevel): SessionRuntime {
 	return {
 		turns: [],
 		toolResults: {},
@@ -316,7 +316,7 @@ interface AppState {
 	/** One runtime per live chat (keyed by `sessionId`) — many can stream at once; switching is a swap. */
 	sessions: Record<string, SessionRuntime>;
 	/** Models with configured auth (cheap win #1) — fetched once, shared by every chat's picker. */
-	models: Model<string>[];
+	models: WireModel[];
 	/**
 	 * A request to surface a file's diff in the right-panel Changes view (e.g. a chat turn-divider's
 	 * "files changed" chip). The panels watch it and switch tab / select the file when it targets the
@@ -360,7 +360,7 @@ interface AppState {
 	openChatSession: (
 		workspaceId: string,
 		sessionId: string,
-		model: Model<string> | null,
+		model: WireModel | null,
 		thinkingLevel: ThinkingLevel,
 	) => void;
 	/** Drop a chat's runtime on tab close (the `AgentSession` is disposed over the wire by the caller). */
@@ -393,8 +393,8 @@ interface AppState {
 	 */
 	appendErrorTurn: (sessionId: string, text: string) => void;
 	handlePiEvent: (event: PiEvent, sessionId: string) => void;
-	setModels: (models: Model<string>[]) => void;
-	setCurrentModel: (sessionId: string, model: Model<string>) => void;
+	setModels: (models: WireModel[]) => void;
+	setCurrentModel: (sessionId: string, model: WireModel) => void;
 	setThinkingLevel: (sessionId: string, level: ThinkingLevel) => void;
 	setStats: (sessionId: string, stats: SessionStats) => void;
 	setCommands: (sessionId: string, commands: SlashCommandInfo[]) => void;

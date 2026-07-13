@@ -1,4 +1,4 @@
-import type { Model } from "@thinkrail/contracts";
+import type { WireModel } from "@thinkrail/contracts";
 import { Check, ChevronDown } from "lucide-react";
 import { useState } from "react";
 import {
@@ -19,7 +19,7 @@ function formatContext(tokens: number): string {
 }
 
 /** A data-derived sub-line for a model row: context window + whether it reasons. */
-function subLine(model: Model<string>): string {
+function subLine(model: WireModel): string {
 	const parts = [`${formatContext(model.contextWindow)} context`];
 	if (model.reasoning) parts.push("reasoning");
 	return parts.join(" · ");
@@ -36,16 +36,16 @@ export function ModelSelector({
 	onSelect,
 	container,
 }: {
-	models: Model<string>[];
-	current: Model<string> | null;
-	onSelect: (model: Model<string>) => void;
+	models: WireModel[];
+	current: WireModel | null;
+	onSelect: (model: WireModel) => void;
 	/** Popover portal target — the host Dialog node when used inside a dialog (so the list scrolls). */
 	container?: HTMLElement | null;
 }) {
 	const [open, setOpen] = useState(false);
 	const providers = [...new Set(models.map((m) => m.provider))];
 
-	const select = (model: Model<string>) => {
+	const select = (model: WireModel) => {
 		onSelect(model);
 		setOpen(false);
 	};

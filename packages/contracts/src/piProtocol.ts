@@ -22,6 +22,18 @@ export type {
 import type { AgentEvent, AgentMessage, ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { Model } from "@earendil-works/pi-ai";
 
+/**
+ * A model **as it crosses the wire**: pi's `Model` minus the secret-bearing fields. `baseUrl` carries the
+ * jbcentral proxy token (`http://127.0.0.1:<port>/wire/<SECRET>/…`) when JetBrains AI is wired, and
+ * `headers` can carry auth — neither must ever leave the host (worst under V2 remote access). The UI only
+ * needs identity + display metadata (`id`/`name`/`provider`/`cost`/`contextWindow`/`reasoning`/…) and refers a
+ * model back to the host by `{ provider, id }`; the host **re-resolves** the real `Model` (with `baseUrl`)
+ * from its own registry before handing it to `pi`. Making this an `Omit` is a *structural* guarantee: the
+ * omitted fields can't be serialized because the type doesn't carry them (and a client can't inject a
+ * `baseUrl` for the agent to call).
+ */
+export type WireModel = Omit<Model<string>, "baseUrl" | "headers">;
+
 // The unified render union the UI switches on. The real superset (`AgentSessionEvent`) is declared in the
 // Node-only `pi-coding-agent` (it pulls node:fs), so it's MIRRORED here type-only, derived from the
 // imported `AgentEvent`. Keep in sync with @earendil-works/pi-coding-agent@0.80.3
@@ -84,7 +96,7 @@ export interface SessionSummary {
 	sessionId: string;
 	workspaceId: string;
 	title: string;
-	model: Model<string> | null;
+	model: WireModel | null;
 	thinkingLevel: ThinkingLevel;
 	isStreaming: boolean;
 	messageCount: number;

@@ -33,6 +33,12 @@ runtime exports being the WS method/channel constants and the protocol version. 
   - `@earendil-works/pi-ai`: `Model`, `Message`, `UserMessage`, `AssistantMessage`,
     `ToolResultMessage`, `TextContent`, `ThinkingContent`, `ImageContent`, `ToolCall`,
     `AssistantMessageEvent`, `Usage`, `StopReason`;
+  - **`WireModel`** = `Omit<Model<string>, "baseUrl" | "headers">` — the shape a model takes **on the wire**
+    (`model.list`/`model.default`, the `session.create` result + params, `session.setModel` params,
+    `SessionSummary.model`). `baseUrl` carries the jbcentral proxy secret (`.../wire/<SECRET>/...`) when
+    JetBrains AI is wired, and `headers` can carry auth; the `Omit` is a **structural guarantee** they can't
+    be serialized. The host re-resolves the real `Model` from `{provider,id}` — so a client can neither read
+    the secret nor inject a `baseUrl` for the agent to call (see the `agent` module SPEC);
   - `@earendil-works/pi-agent-core`: `AgentEvent`, `AgentMessage`, `ThinkingLevel` (the
     `off`-inclusive one);
   - the local render union **`PiEvent`** — the real superset `AgentSessionEvent` lives in the Node-only

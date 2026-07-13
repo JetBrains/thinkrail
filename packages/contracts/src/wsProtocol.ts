@@ -19,15 +19,17 @@ import type {
 	ExtUiResponse,
 	ImageContent,
 	Message,
-	Model,
 	SessionStats,
 	SessionSummary,
 	SlashCommandInfo,
 	ThinkingLevel,
+	WireModel,
 } from "./piProtocol";
 
 /** Bumped on any breaking wire change; sent in `server.welcome` so a stale UI can detect host drift. */
-export const PROTOCOL_VERSION = 3;
+// v4: model.* / session.create / session.setModel / SessionSummary now carry `WireModel` (pi's `Model`
+// minus the secret-bearing `baseUrl`/`headers`); the host re-resolves the real model by `{provider,id}`.
+export const PROTOCOL_VERSION = 4;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -177,9 +179,9 @@ export interface WsMethodMap {
 	"session.create": {
 		// `model`/`thinkingLevel`: applied at create time via `createAgentSession`, e.g. the
 		// New-Workspace dialog's pre-session picks. Omitted → pi resolves defaults from auth + settings.
-		params: { workspaceId: string; model?: Model<string>; thinkingLevel?: ThinkingLevel };
+		params: { workspaceId: string; model?: WireModel; thinkingLevel?: ThinkingLevel };
 		// The resolved model/thinking the new session starts with (pi picks defaults from auth + settings).
-		result: { sessionId: string; model: Model<string> | null; thinkingLevel: ThinkingLevel };
+		result: { sessionId: string; model: WireModel | null; thinkingLevel: ThinkingLevel };
 	};
 	"session.prompt": {
 		params: { sessionId: string; text: string; images?: ImageContent[] };
@@ -195,7 +197,7 @@ export interface WsMethodMap {
 	};
 	"session.abort": { params: { sessionId: string }; result: Ack };
 	"session.dispose": { params: { sessionId: string }; result: Ack };
-	"session.setModel": { params: { sessionId: string; model: Model<string> }; result: Ack };
+	"session.setModel": { params: { sessionId: string; model: WireModel }; result: Ack };
 	"session.setThinkingLevel": { params: { sessionId: string; level: ThinkingLevel }; result: Ack };
 	"session.compact": { params: { sessionId: string; instructions?: string }; result: Ack };
 	"session.getStats": { params: { sessionId: string }; result: SessionStats };
@@ -212,12 +214,12 @@ export interface WsMethodMap {
 		params: { sessionId: string; workspaceId: string };
 		result: { summary: SessionSummary; messages: Message[] };
 	};
-	"model.list": { params: Record<string, never>; result: Model<string>[] };
+	"model.list": { params: Record<string, never>; result: WireModel[] };
 	// The model/thinking a fresh session resolves to (settings default, else first available) — so the
 	// New-Workspace dialog shows the exact pre-session model, not a placeholder.
 	"model.default": {
 		params: Record<string, never>;
-		result: { model: Model<string> | null; thinkingLevel: ThinkingLevel };
+		result: { model: WireModel | null; thinkingLevel: ThinkingLevel };
 	};
 	"provider.status": { params: Record<string, never>; result: ProviderStatusReport };
 	// Mints a loginId and starts pi's OAuth flow detached; frames arrive on the `provider.login` channel.

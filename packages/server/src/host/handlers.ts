@@ -3,8 +3,8 @@ import type {
 	ExtUiResponse,
 	ImageContent,
 	LoginReply,
-	Model,
 	ThinkingLevel,
+	WireModel,
 	Workspace,
 } from "@thinkrail/contracts";
 import {
@@ -155,7 +155,7 @@ const handlers: Record<string, Handler> = {
 	"session.create": async (params) => {
 		const p = params as {
 			workspaceId: string;
-			model?: Model<string>;
+			model?: WireModel;
 			thinkingLevel?: ThinkingLevel;
 		};
 		const ws = getWorkspace(p.workspaceId);
@@ -192,7 +192,7 @@ const handlers: Record<string, Handler> = {
 		return { ok: true } as const;
 	},
 	"session.setModel": async (params) => {
-		const p = params as { sessionId: string; model: Model<string> };
+		const p = params as { sessionId: string; model: WireModel };
 		await setSessionModel(p.sessionId, p.model);
 		return { ok: true } as const;
 	},

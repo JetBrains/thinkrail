@@ -1,4 +1,4 @@
-import type { BranchList, Model, ThinkingLevel, Workspace } from "@thinkrail/contracts";
+import type { BranchList, ThinkingLevel, WireModel, Workspace } from "@thinkrail/contracts";
 import { Box, Check, ChevronDown, GitBranch, RefreshCw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { ModelSelector } from "@/chat/ModelSelector";
@@ -52,7 +52,7 @@ export function NewWorkspaceDialog({
 	const [baseRef, setBaseRef] = useState<string>("");
 	const [refreshing, setRefreshing] = useState(false);
 	const [prompt, setPrompt] = useState("");
-	const [model, setModel] = useState<Model<string> | null>(null);
+	const [model, setModel] = useState<WireModel | null>(null);
 	const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>("medium");
 	const [creating, setCreating] = useState(false);
 	const promptRef = useRef<HTMLTextAreaElement>(null);
