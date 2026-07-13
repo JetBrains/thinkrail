@@ -1,3 +1,5 @@
+import { useRef } from "react";
+import { sourceLineRehype, useMarkdownInlineEdit } from "@/inline-edit";
 import { stripFrontmatter } from "@/lib/utils";
 import { Markdown } from "../chat/Markdown";
 import { alertComponents, remarkGithubAlerts } from "./markdownAlerts";
@@ -52,7 +54,16 @@ const DOCUMENT_PROSE = [
  * Rendered markdown view for a `.md` file tab. Owns the document-view chrome (scroll + a centered,
  * padded reading column capped at a comfortable measure + the document skin); the GFM+shiki rendering is
  * the reused `chat/Markdown`. Lazy-loaded — the markdown+shiki chunk only arrives when a markdown tab is
- * shown in preview mode.
+ * shown in preview mode. Also hosts inline AI-editing (`useMarkdownInlineEdit`): the sourcepos rehype
+ * plugin stamps rendered blocks with source line numbers so a selection can be anchored back to a block,
+ * and the controller's `overlay` renders the pill/popup/chip/review on top of the scroll container.
+ *
+ * Frontmatter caveat: `stripFrontmatter` removes leading YAML, so rendered line numbers are offset from
+ * raw-file line numbers when frontmatter is present. For v0 the selection lines and the block-match lines
+ * are BOTH computed from the stripped/rendered doc, so they're internally consistent (the overlay anchors
+ * correctly). The agent receives raw-file context and edits by text match, not line number, so the offset
+ * doesn't misdirect the edit. If a future task needs raw-file line fidelity, carry the frontmatter offset
+ * through `sourceLineRehype`.
  */
 export default function MarkdownPreview({
 	content,
@@ -63,16 +74,24 @@ export default function MarkdownPreview({
 	workspaceId: string;
 	path: string;
 }) {
+	const scrollRef = useRef<HTMLDivElement>(null);
+	const { overlay } = useMarkdownInlineEdit({ containerRef: scrollRef, workspaceId, path });
 	return (
-		<div data-testid="markdown-preview" className="h-full overflow-auto bg-surface-content">
+		<div
+			ref={scrollRef}
+			data-testid="markdown-preview"
+			className="h-full overflow-auto bg-surface-content"
+		>
 			<article className="mx-auto max-w-[78ch] px-xl py-lg">
 				<Markdown
 					text={stripFrontmatter(content)}
 					className={DOCUMENT_PROSE}
 					remarkPlugins={[remarkGithubAlerts, remarkHeadingIds]}
+					rehypePlugins={[sourceLineRehype]}
 					components={{ ...alertComponents, ...documentComponents({ workspaceId, path }) }}
 				/>
 			</article>
+			{overlay}
 		</div>
 	);
 }
