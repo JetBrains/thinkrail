@@ -6,6 +6,7 @@ title: pi-thinkrail-workflow — pi extension shipping the workflow system
 parent: architecture
 depends-on: [module-spec-graph]
 tags: [pi-extension, workflow, skill, workflow-system]
+references: [module-workflow-tests]
 ---
 
 ## Responsibility
@@ -71,25 +72,21 @@ rather than relying on description-matching (see [[module-web]]).
 
 `index.test.ts` pins the one runtime behavior this package has: the factory registers a
 `before_agent_start` handler that appends `WORKFLOW_RULE` after the existing system prompt, preserving
-it verbatim. That handler is the system's single always-on entry (meta-rule 4 in
-[[submodule-workflow-skills]]) and nothing else exercises it — the `@agent` e2e force-loads the
-dispatcher via `/skill:`, bypassing the rule→router path. The rule's *wording* is prose, not contract,
-and stays unpinned. Skill verification is a manual smoke test per skill: a
-real request flows rule → router → skill, the skill's declared artifact appears (a `task-spec`;
-`goal-and-requirements.md`), and its handoff or terminal state fires — meta-rule 14's verify-by-use (currently suspended as a
-done-gate; see `skills/SPEC.md`, which tracks per-skill verification debt in its family table).
-For the setting-up-a-project trio that means exercising the dispatcher's routing: a fresh idea in an
-**empty** workspace routes to `starting-a-new-project` and `goal-and-requirements.md` grows section by
-section to `done`; a **code-only** repo routes to `importing-a-codebase`, which mines agent files,
-interviews only for gaps, and
-drafts a short spec graph (`goal-and-requirements.md` + `architecture.md` + module `SPEC.md`s,
-`status: draft`) on the workspace branch. The **import branch is covered by a tagged `@agent` e2e**
-(`e2e/setting-up-a-project.live.spec.ts`): it turns a workspace worktree into a code-only project
-(drops the fixture's seed specs, adds an `AGENTS.md` + source), drives the button's
-`/skill:setting-up-a-project` command, and asserts the import flow drafts `goal-and-requirements.md`
-(rendered in the Specs rail) — also proving the button's `/skill:` seed drives the flow on the
-`session.prompt` path. A `starting-a-new-project` `@agent` spec is a reasonable follow-up (its heavy interview is harder to drive headlessly) — not
-required for v1.
+it verbatim. The rule's *wording* is prose, not contract, and stays unpinned.
+
+Skill behavior is tested headlessly by the **workflow-test harness** — design, verdict model,
+suites, and coverage live in [[module-workflow-tests]] (`bun run test:workflows`; on-demand — needs
+pi auth, spends real tokens, never a commit/CI gate). Per-skill observation status lives in the
+family table ([[submodule-workflow-skills]]), which also records the routing suite's one open
+finding (questions bypass the root router). Remaining follow-up — scenario definitions only, no new
+machinery: **worker flows end-to-end** (slice 3: `starting-a-new-project` / `importing-a-codebase` /
+`brainstorming` full runs via the user simulator; design record: [[module-workflow-tests]]).
+
+The import branch is additionally covered **through the app** by a tagged `@agent` browser e2e
+(`e2e/setting-up-a-project.live.spec.ts`): it turns a workspace worktree into a code-only project,
+drives the Welcome card's exact `/skill:setting-up-a-project` command, and asserts the flow drafts
+`goal-and-requirements.md` (rendered in the Specs rail) — proving the button's `/skill:` seed drives
+the flow on the `session.prompt` path, which no headless scenario exercises.
 
 ## Non-goals
 

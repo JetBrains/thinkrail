@@ -160,11 +160,13 @@ flowchart LR
 14. Verify by use — **suspended: a known limitation, not currently a done-gate**. The intended rule:
     a new or changed skill isn't done until a real request has been observed flowing through it —
     for a concept, observed being loaded through a reference (or its self-trigger) and applied.
-    Observation today is manual and expensive (a live run or a dedicated `@agent` e2e per skill), so
-    the gate needs more work — cheaper observation tooling and a place to record runs — before it
-    can bind. Until then: unverified skills still ship as `active`, their verification debt is
-    recorded honestly in the family table (`unverified by use`), and observed runs are still
-    recorded when they happen.
+    **Cheap observation tooling now exists**: the headless workflow-test harness
+    ([[module-workflow-tests]]) drives a real agent through a skill per `defineScenario` and records
+    each run. What still keeps the gate suspended: runs land only in a **gitignored local log**
+    (`e2e/.workflow-runs.jsonl` — a deliberate decision, not an accident), so there is no durable,
+    shared record to bind a done-gate to. Until then: unverified skills still ship as `active`,
+    their verification debt is recorded honestly in the family table (`unverified by use`), and
+    observed runs — manual or harness — are still noted when they happen.
 
 **Naming**
 15. Names are verb-first, active voice, kebab-case (adopted from obra/superpowers' writing-skills
@@ -177,13 +179,13 @@ flowchart LR
 
 | Skill | Role — purpose | Routed from | Status |
 |---|---|---|---|
-| `brainstorming` | worker — design workflow (feature/change → validated task-spec) | `choosing-a-workflow` (root) | active; routed as-is — needs rework (see Current limitations & gaps) |
-| `setting-up-a-project` | router (sub) — dispatcher: detect the workspace's state (specs present / empty / code-only) and route | `choosing-a-workflow` (root) + self-trigger + the app's `/skill:setting-up-a-project` seed | active; adapted to the system |
-| `starting-a-new-project` | worker — inception interview (empty repo → goal-and-requirements) | `setting-up-a-project` + narrow self-trigger | active; unverified by use (rule 14 suspended) |
-| `importing-a-codebase` | worker — existing codebase → first spec graph (derive + minimal interview) | `setting-up-a-project` + narrow self-trigger | active; covered by a tagged `@agent` e2e |
-| `asking-user-questions` | concept — `ask_user_question` rounds, options, inference confirmation, degradation | — (reached by name, rule 4) | active; unverified by use (rule 14 suspended) |
-| `writing-specs` | concept — the spec quality bar (short / honest / on-rails) for every spec-producing flow | — (reached by name, rule 4) | active; unverified by use (rule 14 suspended) |
-| `choosing-a-workflow` | router (root) — classification + routing | — (always-on entry, rule 4) | active |
+| `brainstorming` | worker — design workflow (feature/change → validated task-spec) | `choosing-a-workflow` (root) | active; routed as-is — needs rework (see Current limitations & gaps); route-in observed by the routing suite, a mid-flow round-trip by the harness smokes, a full run manually (2026-07: request → task-spec → round → promotion → retired) |
+| `setting-up-a-project` | router (sub) — dispatcher: detect the workspace's state (specs present / empty / code-only) and route | `choosing-a-workflow` (root) + self-trigger + the app's `/skill:setting-up-a-project` seed | active; all three dispatcher routes observed green by the routing suite (empty → starting, code → importing, specced → offer + no worker) |
+| `starting-a-new-project` | worker — inception interview (empty repo → goal-and-requirements) | `setting-up-a-project` + narrow self-trigger | active; route-in observed by the routing suite; the interview itself unverified by use (rule 14 suspended — a slice-3 candidate via the user simulator) |
+| `importing-a-codebase` | worker — existing codebase → first spec graph (derive + minimal interview) | `setting-up-a-project` + narrow self-trigger | active; covered by a tagged `@agent` e2e; route-in also observed by the routing suite |
+| `asking-user-questions` | concept — `ask_user_question` rounds, options, inference confirmation, degradation | — (reached by name, rule 4) | active; observed by use (2026-07 manual: loaded through brainstorming's reference, a round composed + resolved) |
+| `writing-specs` | concept — the spec quality bar (short / honest / on-rails) for every spec-producing flow | — (reached by name, rule 4) | active; observed by use (2026-07 manual: self-triggered for a spec revision and applied) |
+| `choosing-a-workflow` | router (root) — classification + routing | — (always-on entry, rule 4) | active; all three classifications observed by the routing suite — feature → brainstorming and onboarding → setup family green; the "anything else" row has an observed gap (see Current limitations & gaps) |
 | `writing-workflow-skills` | worker — authoring checklist for adding workflows | — (self-trigger only, rule 4) | active |
 
 The family is open and grows from real use; candidates (research/spike, refactor, bug-fix, a composing
@@ -203,11 +205,27 @@ The family's known debt, stated per its own honesty bar and tracked here until e
 fix:
 
 - **Rule 14 (verify-by-use) is suspended** — not currently a done-gate. The rule above carries the
-  rationale; the family table carries per-skill `unverified by use` debt.
-- **`brainstorming` needs rework.** It predates the family's concept extractions: it does not yet
-  hold the `writing-specs` bar at the step that promotes a validated design into module SPECs, and
-  its scope — the "too small" judgment it owns, its relationship to a future composer pipeline — is
-  under review. It routes and runs as-is until that rework lands.
+  full rationale (observation is now cheap; the missing half is a durable run record); the family
+  table carries per-skill `unverified by use` debt — after the 2026-07 manual observations, only
+  `starting-a-new-project`'s interview still carries it. Slice 3 — worker flows via the user
+  simulator ([[module-thinkrail-workflow]] § Testing) — would burn down the rest.
+- **Questions bypass the root router — observed by the routing suite (advisory judge finding).** For
+  a pure question the agent answers directly without reading `choosing-a-workflow`, so the router's
+  "anything else" one-line declaration ("No workflow skill covers this; proceeding directly.") never
+  happens. Root cause: the always-on `WORKFLOW_RULE` names "a request, feature, change, fix, or
+  fresh project idea" — **questions are not listed** — while this router's own description does claim
+  them. The bypass is question-specific, not a broken row: for a non-question "anything else"
+  request the full path — router read, declaration, proceed — was observed working manually (2026-07:
+  a review request). The binding outcome is still correct either way (no worker skill loads), so the
+  routing scenario passes deterministically and the judge re-flags the missing declaration on every
+  run — keeping the drift visible until it's resolved. Resolving it (extend the rule's wording vs.
+  narrow the router's claim) is a behavior change to the always-on rule and needs its own
+  brainstormed task, not a test-slice side effect.
+- **`brainstorming` needs rework.** It predates the family's concept extractions: it does not name
+  `writing-specs` at the step that promotes a validated design into module SPECs — an observed
+  defect, not a hypothetical (2026-07: a full manual run promoted design into a module SPEC without
+  the bar being loaded) — and its scope — the "too small" judgment it owns, its relationship to a
+  future composer pipeline — is under review. It routes and runs as-is until that rework lands.
 - **Extending an existing spec graph has no worker.** Partial graph → complete graph (a missing
   `architecture.md`, un-specced modules, stale nodes) falls between the two setup workers:
   `importing-a-codebase` refuses specced repos, `brainstorming` designs new work rather than
