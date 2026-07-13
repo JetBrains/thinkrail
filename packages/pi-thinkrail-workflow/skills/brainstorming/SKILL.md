@@ -33,12 +33,12 @@ assumptions get caught cheaply. Scale the *depth* to the task; never skip the wo
    scratch doc. This works even in a project with no existing spec graph: a `task-spec` only needs
    frontmatter `id` and `type` to be a valid spec, no pre-existing graph required — don't skip this step
    just because nothing else in the project is specced yet.
-4. **Clarify.** Ask what you need via `ask_user_question`. Its own guidance applies: batch related
-   questions into one call (up to 4), put a recommended option first, and don't chain calls
-   back-to-back — resolve a full round, update the task-spec with what you learned, and only open a new
-   round if the answers raised a genuinely new question. If the host reports no UI (`ask_user_question`
-   returns "not available"), state your best-guess assumptions explicitly in the task-spec instead of
-   blocking.
+4. **Clarify.** Ask what you need via `ask_user_question`, composing rounds per the
+   **asking-user-questions** concept skill — read it before the first round. Resolve a full round,
+   update the task-spec with what you learned, and only open a new round if the answers raised a
+   genuinely new question. Per that concept's degradation norms, skipped questions or a host with no
+   UI are not blockers: record your best-guess assumptions in the task-spec, explicitly marked
+   unconfirmed, and continue.
 5. **Propose approaches.** Once the ask is clear, write 2-3 approaches into the task-spec with
    trade-offs and a recommendation. When approaches are easiest to compare side by side, ask via a
    single-select `ask_user_question` with each approach as an option (label = approach name, description
@@ -56,19 +56,6 @@ assumptions get caught cheaply. Scale the *depth* to the task; never skip the wo
    approved, implement directly against it — there is no separate plan-writing step here. Keep the
    task-spec and the durable specs honest as the code lands, and retire the task-spec once **the work
    itself** is done, not merely once the design was promoted.
-
-## Working with `ask_user_question`
-
-- This tool batches: up to 4 multiple-choice questions per call, 2-4 options each, a free-text
-  fallback row on every question (additive alongside the checks on multi-select), an always-available
-  Skip. It is not a one-question-at-a-time
-  chat turn — group what you need into a round, and don't call it again immediately after with a trivial
-  follow-up.
-- Always put your recommended option first and label it "(Recommended)" when you have one.
-- Use `options[].preview` (markdown) when a concrete comparison — code, a config, an ASCII mockup — is
-  clearer shown than described.
-- A user who skips or leaves questions unanswered is not a blocker: record the resulting assumptions in
-  the task-spec, explicitly marked unconfirmed, and continue.
 
 ## What a good task-spec looks like
 

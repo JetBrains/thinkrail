@@ -83,10 +83,27 @@ try {
 	}
 
 	// The bundled extensions' skills must be staged to the real filesystem (pi reads SKILL.md via fs).
-	for (const skill of ["spec-graph", "brainstorming"]) {
+	// Full inventory — pi-spec-graph's skill + the whole pi-thinkrail-workflow family (keep in sync with
+	// the family table in packages/pi-thinkrail-workflow/skills/SPEC.md). `choosing-a-workflow` matters
+	// most: the always-on workflow rule points every agent run at it.
+	for (const skill of [
+		"spec-graph",
+		"asking-user-questions",
+		"brainstorming",
+		"choosing-a-workflow",
+		"importing-a-codebase",
+		"setting-up-a-project",
+		"starting-a-new-project",
+		"writing-specs",
+		"writing-workflow-skills",
+	]) {
 		const hits = globSync(join(cacheDir, "thinkrail", "skills", "*", skill, "SKILL.md"));
 		if (hits.length === 0) fail(`bundled skill "${skill}" was not staged under ${cacheDir}`);
 	}
+	// The workflow family's meta-spec is load-bearing at runtime (writing-workflow-skills reads it
+	// from beside the staged skill dirs), so its staging is asserted too.
+	if (globSync(join(cacheDir, "thinkrail", "skills", "*", "SPEC.md")).length === 0)
+		fail(`the workflow family spec (skills/SPEC.md) was not staged under ${cacheDir}`);
 
 	proc.kill("SIGTERM");
 	const exitCode = await within(proc.exited, 15_000, "shutdown on SIGTERM");

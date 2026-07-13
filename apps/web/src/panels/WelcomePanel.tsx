@@ -11,10 +11,10 @@ import { ProviderWarningBanner } from "./ProviderWarningBanner";
 import { useOpenProject } from "./useOpenProject";
 
 // Seeds the New-Workspace prompt hero for "Set up project" — pi's skill-command syntax `/skill:<name>`,
-// which FORCES the project-setup dispatcher to load (vs. hoping the model auto-matches its description).
-// The dispatcher then detects new-vs-existing and routes to project-new / project-import. Still editable
-// in the dialog.
-const SETUP_PROMPT = "/skill:project-setup";
+// which FORCES the setting-up-a-project dispatcher to load (vs. hoping the model auto-matches its
+// description). The dispatcher then detects new-vs-existing and routes to starting-a-new-project /
+// importing-a-codebase. Still editable in the dialog.
+const SETUP_PROMPT = "/skill:setting-up-a-project";
 
 /**
  * The first-touch surface the shell mounts (centered, beside the projects rail) whenever no workspace is

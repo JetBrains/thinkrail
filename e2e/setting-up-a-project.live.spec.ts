@@ -3,18 +3,18 @@ import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject, waitForDone } from "./fixtures/app";
 
-// Tagged @agent (see agent.live.spec.ts): drives a REAL pi agent end to end to prove the project-setup
-// skill family works — the exact `/skill:project-setup` command the "Set up project" button seeds
+// Tagged @agent (see agent.live.spec.ts): drives a REAL pi agent end to end to prove the setting-up-a-project
+// skill family works — the exact `/skill:setting-up-a-project` command the "Set up project" button seeds
 // (WelcomePanel `SETUP_PROMPT`) force-loads the dispatcher, which routes an existing, un-specced codebase
-// to `project-import` and drafts the first spec graph — proving the button's `/skill:project-setup` seed
+// to `importing-a-codebase` and drafts the first spec graph — proving the button's `/skill:setting-up-a-project` seed
 // drives the flow on the programmatic `session.prompt` path.
 //
 // The shared fixture repo carries seed specs (global-setup), so we make *this workspace's* worktree look
 // like a real un-specced project instead: drop the seed specs, add an AGENTS.md + a little source with a
-// clear module boundary. The AGENTS.md is deliberately explicit so `project-import` can infer intent from
+// clear module boundary. The AGENTS.md is deliberately explicit so `importing-a-codebase` can infer intent from
 // the files and skip the interview (a headless run can't answer `ask_user_question`), which we also
 // reinforce in the prompt args.
-test("`/skill:project-setup` routes an existing codebase to import and drafts a spec graph", {
+test("`/skill:setting-up-a-project` routes an existing codebase to import and drafts a spec graph", {
 	tag: "@agent",
 }, async ({ page }) => {
 	test.setTimeout(360_000); // real provider drafting a multi-file graph — well above the 30s default
@@ -58,25 +58,25 @@ test("`/skill:project-setup` routes an existing codebase to import and drafts a 
 	await expect(page.getByTestId("chat-input")).toBeVisible();
 
 	// The SAME command the button seeds, plus a no-questions instruction so the interview can't block the
-	// headless run (project-import is designed to proceed from the files when the user declines to answer).
+	// headless run (importing-a-codebase is designed to proceed from the files when the user declines to answer).
 	await page
 		.getByTestId("chat-input")
 		.fill(
-			"/skill:project-setup This is an existing codebase with no specs. Derive everything from the files and draft the specs now — do not ask me any questions.",
+			"/skill:setting-up-a-project This is an existing codebase with no specs. Derive everything from the files and draft the specs now — do not ask me any questions.",
 		);
 	await page.getByTestId("chat-send").click();
 
-	// The command shows in the transcript — the same `/skill:project-setup` seed the button uses.
+	// The command shows in the transcript — the same `/skill:setting-up-a-project` seed the button uses.
 	await expect(
 		page
 			.locator('[data-testid="chat-message"][data-role="user"]')
-			.filter({ hasText: "/skill:project-setup" }),
+			.filter({ hasText: "/skill:setting-up-a-project" }),
 	).toBeVisible();
 
 	await waitForDone(page, 320_000);
 
 	// Outcome (DOM-stable, tool-order-agnostic): the import flow drafted the graph root on disk in the
-	// worktree — proof it routed to project-import and followed its rails, without depending on expanding
+	// worktree — proof it routed to importing-a-codebase and followed its rails, without depending on expanding
 	// a churning virtualized transcript. (Live spec-tool wiring is covered by spec-tools.live.spec.ts.)
 	expect(existsSync(join(worktree, "goal-and-requirements.md"))).toBe(true);
 
