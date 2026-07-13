@@ -32,6 +32,7 @@
 		"format": "biome check --write .",
 		"prepare": "husky",
 		"e2e": "playwright test --grep-invert @agent",
+		"test:workflows": "playwright test -c playwright.workflows.config.ts",
 		"e2e:full": "playwright test",
 		"e2e:full:headed": "playwright test --headed",
 		"e2e:agent": "playwright test --grep @agent",
@@ -42,6 +43,9 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.5.0",
+		"@earendil-works/pi-coding-agent": "catalog:",
+		"@thinkrail/contracts": "workspace:*",
+		"@thinkrail/server": "workspace:*",
 		"@thinkrail/shared": "workspace:*",
 		"@playwright/test": "^1.61.0",
 		"husky": "^9.1.7",

@@ -8,6 +8,9 @@ const PORT = 24252; // dedicated e2e port — never collides with dev:server (24
 
 export default defineConfig({
 	testDir: "./e2e",
+	// The headless workflow-test suite has its own config (playwright.workflows.config.ts) — no browser,
+	// no webServer; `bun run test:workflows`. Never picked up by the browser suites.
+	testIgnore: "workflows/**",
 	// Serial: the suite shares one stateful host (one DATA_DIR), so tests must not race on persistence.
 	fullyParallel: false,
 	workers: 1,
