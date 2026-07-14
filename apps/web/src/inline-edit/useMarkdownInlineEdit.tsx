@@ -239,7 +239,8 @@ function buildMarkdownReview(props: {
 			mode: "insert",
 			range: { start: request.selection.startLine, end: request.selection.endLine },
 			node: (
-				<div ref={props.workingRef} className="my-md">
+				// Violet left bar marks the region the agent is running on ("running selected place").
+				<div ref={props.workingRef} className="my-md border-l-2 border-primary pl-sm">
 					<EditStatusChip
 						label="editing…"
 						onPreview={props.onPreview}

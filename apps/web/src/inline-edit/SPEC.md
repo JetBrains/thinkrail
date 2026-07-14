@@ -37,6 +37,13 @@ Keep / Revert / Refine / Open-as-chat.
 - **Edits go through pi**, never a host write — except Revert, which is a direct user action via
   `fs.writeFile` (guarded). The hunk ledger is derived from pi's own tool events (`foldInlineEditEvent` in
   `store`), never recomputed from disk diffs.
+- **Left-bar markers (GitHub-style), parity on both surfaces:** the reviewed region carries a colored left
+  bar — green when the change adds/rewrites content, red for a pure deletion (`InlineSuggestion` owns this,
+  so the rendered splice and the Monaco zone share it); Monaco additionally gives the changed *buffer* lines
+  a green wash + green gutter bar (`.inline-edit-changed-*`). While the agent runs, the selected region gets
+  a violet (`--primary`) bar (`.inline-edit-working-gutter` in Monaco; `border-primary` in the rendered
+  working block). The Monaco marker classes are literal CSS in `index.css` (decorations apply class names
+  outside the React tree).
 - Hidden sessions **never** appear in the tab strip unless the user promotes one ("open in tab"/"open as chat").
 - Monaco review/working/error render through a Monaco view zone (a real DOM node Monaco lays out between the
   buffer's lines, portaled into via `ReactDOM.createPortal`) plus a decorations collection for the

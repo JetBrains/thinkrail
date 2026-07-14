@@ -30,19 +30,23 @@ semantic autocompletion, run-agent-on-comments). Only item "inlined AI-editing" 
    tab strip unless explicitly promoted** — via "open in tab" (working chip / popover / review
    bar). Parallel requests on different files are allowed; **one pending request per file**.
 4. **Working state = accent bar + status chip** on the target region with `👁 preview`,
-   `⧉ open in tab`, `■ stop`. The preview is a **read-only** anchored popover showing a live
+   `⧉ open in tab`, `■ stop`. The accent bar is a **violet (`--primary`) left bar** on the region the
+   agent is running on ("running here" — a Monaco gutter bar on the selected lines; a `border-l` on the
+   working block in the rendered view). The preview is a **read-only** anchored popover showing a live
    compact transcript (reuses the presentational chat renderers). No steer box in v0.
 5. **Review presentation = inline, in the document flow (not a floating overlay).** The change is
-   **woven into the text itself** — old struck-through + new highlighted, word-level — and the action
-   box (Keep / Undo-last / Revert-all / Refine / Open-as-chat + the agent's one-line "why" + the "also
-   touched N other files → Changes" notice) is inserted as a **block directly below the change**,
-   pushing following content down (like a review comment attached under the hunk). No `position:fixed`
-   card.
-6. **Monaco source view = the same, natively.** The changed lines get a highlight decoration in place,
-   and a **view zone** is inserted between the lines directly below holding the removed/old text
-   (struck) + the same action box — Monaco pushes lines apart to make room. This covers markdown-source
-   AND code files. (The edit already landed in the buffer under apply→review→revert, so "removed" text
-   lives in the zone.) Trigger/chip/preview have full parity on both surfaces.
+   **woven into the text itself** — old struck-through + new highlighted, word-level — carrying a
+   **GitHub-style colored left bar** on the reviewed region (**green** when the change adds/rewrites
+   content, **red** for a pure deletion). The action box (Keep / Undo-last / Revert-all / Refine /
+   Open-as-chat + the agent's one-line "why" + the "also touched N other files → Changes" notice) is
+   inserted as a **block directly below the change**, pushing following content down (like a review
+   comment attached under the hunk). No `position:fixed` card.
+6. **Monaco source view = the same, natively.** The changed lines get a highlight decoration in place —
+   a subtle green line wash **plus a green left-gutter bar** — and a **view zone** is inserted between
+   the lines directly below holding the woven diff (the same green/red-barred `InlineSuggestion`) + the
+   same action box; Monaco pushes lines apart to make room. This covers markdown-source AND code files.
+   (The edit already landed in the buffer under apply→review→revert, so "removed" text lives in the
+   zone.) Trigger/chip/preview and the left-bar markers have full parity on both surfaces.
 7. **Internals = fold pi's edit-tool events into a per-turn history** (over a `report_edit` tool
    or git-snapshot diffs): each Refine appends a **turn** capturing the target-file content at its
    start (`baseContent`) + the hunks it produced (from `edit`/`write` `tool_execution_end` events)

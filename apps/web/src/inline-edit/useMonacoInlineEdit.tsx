@@ -177,6 +177,7 @@ export function useMonacoInlineEdit({
 	// every unrelated field mutation the store folds into `request`).
 	const requestStatus = request?.status;
 	const selectionStartLine = request?.selection.startLine;
+	const selectionEndLine = request?.selection.endLine;
 
 	// Manage the view zone + decoration as native Monaco state — created/torn down here, never re-derived
 	// from React's render output. At most one zone at a time (the three statuses that render one are
@@ -192,15 +193,39 @@ export function useMonacoInlineEdit({
 		const lineCount = Math.max(1, model.getLineCount());
 
 		let afterLine: number;
-		let decoRange: { start: number; end: number } | null = null;
+		const decoOptions: monaco.editor.IModelDeltaDecoration[] = [];
 		if (requestStatus === "review" || requestStatus === "reverting") {
 			afterLine = Math.min(changedRange?.end ?? selectionStartLine, lineCount);
-			decoRange = changedRange;
-		} else if (
-			requestStatus === "working" ||
-			requestStatus === "starting" ||
-			requestStatus === "error"
-		) {
+			if (changedRange) {
+				// Green wash + green left-gutter bar on the lines this turn changed (GitHub-style).
+				decoOptions.push({
+					range: {
+						startLineNumber: changedRange.start,
+						startColumn: 1,
+						endLineNumber: changedRange.end,
+						endColumn: 1,
+					},
+					options: {
+						isWholeLine: true,
+						className: "inline-edit-changed-line",
+						linesDecorationsClassName: "inline-edit-changed-gutter",
+					},
+				});
+			}
+		} else if (requestStatus === "working" || requestStatus === "starting") {
+			afterLine = Math.min(selectionStartLine, lineCount);
+			// Violet left-gutter bar on the selected lines while the agent runs ("running selected place").
+			const end = Math.min(selectionEndLine ?? selectionStartLine, lineCount);
+			decoOptions.push({
+				range: {
+					startLineNumber: afterLine,
+					startColumn: 1,
+					endLineNumber: Math.max(afterLine, end),
+					endColumn: 1,
+				},
+				options: { isWholeLine: true, linesDecorationsClassName: "inline-edit-working-gutter" },
+			});
+		} else if (requestStatus === "error") {
 			afterLine = Math.min(selectionStartLine, lineCount);
 		} else {
 			return undefined; // "done" — the selector above already excludes it; belt-and-suspenders guard.
@@ -218,21 +243,7 @@ export function useMonacoInlineEdit({
 		editor.changeViewZones((accessor) => {
 			zoneId = accessor.addZone(zone);
 		});
-		const decorations = editor.createDecorationsCollection(
-			decoRange
-				? [
-						{
-							range: {
-								startLineNumber: decoRange.start,
-								startColumn: 1,
-								endLineNumber: decoRange.end,
-								endColumn: 1,
-							},
-							options: { isWholeLine: true, className: "inline-edit-changed-line" },
-						},
-					]
-				: [],
-		);
+		const decorations = editor.createDecorationsCollection(decoOptions);
 		zoneRef.current = { zone, id: zoneId, content: contentNode };
 		setZoneNode(contentNode);
 
@@ -261,6 +272,7 @@ export function useMonacoInlineEdit({
 		editor,
 		requestStatus,
 		selectionStartLine,
+		selectionEndLine,
 		turnHunkIdentity,
 		changedRange,
 		sizeZoneToContent,

@@ -1,17 +1,19 @@
 import { wordDiff } from "./wordDiff";
 
 /**
- * In-flow woven diff for a markdown review: old text struck through, new text highlighted, word-level,
- * rendered as PLAIN document prose in place of the changed lines — no card/box, so it reads as part of the
- * document itself (the "changes inlined" half). The action box renders separately in a between-lines box
- * below it (composed by the controller), never wrapping the diff.
+ * In-flow woven diff for a markdown review: old text struck through, new text highlighted, word-level, in
+ * PLAIN document prose in place of the changed lines — with a GitHub-style colored left bar marking the
+ * reviewed region: **green** when the change adds/rewrites content, **red** when it's a pure deletion. The
+ * action box renders separately in a between-lines box below it (composed by the controller).
  */
 export function InlineSuggestion({ oldText, newText }: { oldText: string; newText: string }) {
 	const parts = wordDiff(oldText, newText);
+	// Pure deletion (nothing left after the edit) reads red; anything that adds or rewrites content reads green.
+	const barColor = newText.trim() === "" ? "border-red" : "border-green";
 	return (
 		<p
 			data-testid="inline-edit-suggestion"
-			className="my-md text-pretty text-[length:var(--font-md)] text-text leading-[1.65]"
+			className={`my-md border-l-2 ${barColor} pl-sm text-pretty text-[length:var(--font-md)] text-text leading-[1.65]`}
 		>
 			{parts.map((p, i) =>
 				p.kind === "del" ? (
