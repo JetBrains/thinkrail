@@ -19,6 +19,9 @@ export async function startInlineEdit(
 	target: SelectionTarget,
 	instruction: string,
 ): Promise<string | null> {
+	// Defensive backstop for "one pending edit per file": the trigger UI already hides the pill while a
+	// request is pending here, but guard the fire path too so a race can't register a second one.
+	if (hasPendingEditForPath(target.workspaceId, target.path)) return null;
 	const store = useAppStore.getState();
 	const transport = getTransport();
 	try {

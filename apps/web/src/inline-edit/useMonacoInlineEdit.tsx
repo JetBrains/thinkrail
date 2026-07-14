@@ -247,11 +247,13 @@ export function useMonacoInlineEdit({
 		return () => {
 			ro.disconnect();
 			try {
+				// The editor may already be disposed (e.g. the tab closed mid-transition) — both the zone removal
+				// AND the decoration clear can throw on a dead editor, so guard them together.
 				editor.changeViewZones((accessor) => accessor.removeZone(zoneId));
+				decorations.clear();
 			} catch {
-				// The editor may already be disposed (e.g. the tab closed mid-transition) — nothing left to clean up.
+				// nothing left to clean up
 			}
-			decorations.clear();
 			zoneRef.current = null;
 			setZoneNode(null);
 		};

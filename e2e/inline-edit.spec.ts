@@ -27,3 +27,21 @@ test("selecting text in a rendered doc surfaces the Edit pill and instruction po
 	await page.keyboard.press("Escape");
 	await expect(popup).toBeHidden();
 });
+
+test("⌘K opens the instruction popup for the current selection (no pill click needed)", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await page.getByTestId("tab-files").click();
+	await page.getByTestId("file-node").filter({ hasText: "LINKS.md" }).dblclick();
+
+	const preview = page.getByTestId("markdown-preview");
+	await expect(preview).toBeVisible();
+
+	// Select a paragraph, then trigger the keyboard shortcut instead of clicking the pill.
+	await preview.getByRole("paragraph").first().click({ clickCount: 3 });
+	await expect(page.getByTestId("inline-edit-pill")).toBeVisible();
+	await page.keyboard.press("ControlOrMeta+k");
+	await expect(page.getByTestId("inline-edit-popup")).toBeVisible();
+});

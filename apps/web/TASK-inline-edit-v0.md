@@ -76,12 +76,14 @@ manual editing reuses it. Protocol version bumps. Everything else rides existing
 
 ### Web (`apps/web`) — new sub-module `src/inline-edit/`
 
-Own `SPEC.md` + barrel, shaped like `chat`: presentational widgets — selection pill, popup,
-status chip, suggestion overlay, action bar, preview popover — plus **one** integration
-component (`InlineEditLayer`) that alone touches store/transport and is mounted by the file
-surfaces. New dependency edges in `apps/web/SPEC.md`: `panels → inline-edit`,
-`inline-edit → chat` (presentational renderers for the popover), `inline-edit → store,
-transport` (integration layer only), `inline-edit → components/ui`.
+Own `SPEC.md` + barrel, shaped like `chat`: the presentational widgets (selection pill, popup, status
+chip, suggestion overlay, action bar, preview popover) stay **internal**, and the barrel exposes only the
+**per-surface controller hooks** (`useMarkdownInlineEdit`, `useMonacoInlineEdit`) that the file surfaces
+call, the headless `InlineEditOrchestrator` (post-turn readback, mounted once), and types. The store/
+transport reach is concentrated in `actions.ts` (fire/refine/keep/revert/stop/open-in-tab) plus those
+integration pieces — not spread through the widgets. New dependency edges in `apps/web/SPEC.md`:
+`panels → inline-edit`, `inline-edit → chat` (presentational renderers for the popover),
+`inline-edit → store, transport`, `inline-edit → components/ui`.
 
 Selection anchoring:
 - **Rendered markdown:** a tiny rehype plugin (preview-only) stamps block elements with source
@@ -152,10 +154,14 @@ chat sessions). "Open in tab" uses the existing `openChatSession`.
 ### Error handling
 
 - `session.create`/`prompt` rejection → inline error in the popup; no request registered.
-- Mid-turn provider failure: pi `auto_retry_*` renders as "retrying…" on the chip; terminal
-  failure → `error` with Retry (followUp) / Dismiss / Open-as-chat.
+- Mid-turn provider failure: pi `auto_retry_*` keeps the working chip while it retries (the countdown
+  isn't a separately-labelled chip state in v0); terminal failure → `error` with Retry (followUp) /
+  Dismiss / Open-as-chat.
 - `fs.writeFile` conflict (undo/revert) → nothing written; toast, re-read, stay in `review`.
-- Host restart: on WS reconnect, in-flight requests → `error("host restarted")`.
+- **Known gap (v0):** host restart does *not* reset in-flight requests. A request that was `working`
+  when the host went down stays on the "editing…" chip (its dead session emits no `agent_end`); **Stop**
+  is the manual escape. Resetting in-flight requests to `error("host restarted")` on WS reconnect is a
+  fast-follow.
 - Closing a tab does **not** cancel its request (state lives in the store; reopening the file
   shows current status). Removing a workspace aborts its inline sessions best-effort.
 
@@ -171,16 +177,23 @@ story — 1 select (pill `✦ Edit ⌘K`), 2 instruct (one-line popup, Enter fir
 Document comments & comment panel; semantic autocompletion; run-agent-on-comments; multiple
 alternative suggestions; per-hunk accept; Monaco in-text strikethrough parity; manual typing /
 save (and any general `fs.writeFile` UI); session disposal; file watching beyond the explicit
-re-reads listed above.
+re-reads listed above. **Rendered-markdown woven-diff fidelity:** the rendered view splits the
+document into two independently-parsed halves around the changed range and renders the changed
+region as flat prose, so a selection spanning a multi-line construct (fenced code, table, list)
+may mis-render *during review* (it self-heals to a correct whole-document render on Keep/Revert).
+True block-level/DOM-tree strikethrough is out of scope for v0.
 
 ## Verification
 
 - **Unit (bun test):** server `writeFile` containment + guard; per-turn fold reducer (hunks land
   on the current turn after a successful end; refine pushes a turn; agent_end sets review + why);
-  snapshot-based undo/revert-all targets; word-diff; sourcepos rehype plugin.
-- **e2e no-agent (in `bun run e2e`):** selection → pill; ⌘K path; popup lifecycle (esc/enter);
-  one-pending-per-file refusal. Suggestion-overlay + Keep/Revert flows via seeded store state if
-  a test hook proves practical, else unit-level.
+  the `actions` snapshot targets on a mocked transport (undo restores the current turn's base then
+  pops; revert-all restores `turns[0]`; the write-guard is re-synced so repeatable undo isn't
+  spuriously rejected; a write conflict stays in `review`; one-pending-per-file is refused at the
+  fire path); word-diff incl. the round-trip invariant; selection anchoring (`anchor.test.ts`).
+- **e2e no-agent (in `bun run e2e`):** selection → pill; ⌘K opens the popup; popup Esc-close. (The
+  full fire → review → Keep/Revert loop needs a live agent — covered by `actions` unit tests above +
+  manual verification, not e2e.)
 - **Known gap (explicit scope cut):** no `@agent` e2e for the full loop in v0; verified
   manually. Fast-follow task: `@agent` spec select → edit → suggestion → revert.
 

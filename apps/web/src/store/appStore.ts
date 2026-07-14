@@ -438,8 +438,11 @@ export function foldInlineEditEvent(req: InlineEditRequest, event: PiEvent): Inl
 			const { [event.toolCallId]: _drop, ...pendingTools } = current.pendingTools;
 			if (event.isError) return withCurrent({ ...current, pendingTools });
 			const hunks = [...current.hunks, pending];
+			// Skip an empty path (an unparseable edit arg) — else it counts as a bogus "also touched 1 other file".
 			const otherPaths =
-				pending.path !== req.path && !current.otherPaths.includes(pending.path)
+				pending.path !== "" &&
+				pending.path !== req.path &&
+				!current.otherPaths.includes(pending.path)
 					? [...current.otherPaths, pending.path]
 					: current.otherPaths;
 			return withCurrent({ ...current, pendingTools, hunks, otherPaths });
