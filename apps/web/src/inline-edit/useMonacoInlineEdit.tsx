@@ -182,7 +182,13 @@ export function useMonacoInlineEdit({
 			return undefined; // "done" — the selector above already excludes it; belt-and-suspenders guard.
 		}
 
+		// Monaco sets the zone's OUTER domNode height to the zone's `heightInPx` (with overflow visible), so
+		// measuring that node feeds back a stuck value AND its box never changes size — a ResizeObserver on it
+		// never fires. We therefore portal the content into an INNER, naturally-sized node and observe THAT;
+		// its real height drives the zone height so nothing clips or overlaps the buffer below.
 		const domNode = document.createElement("div");
+		const contentNode = document.createElement("div");
+		domNode.appendChild(contentNode);
 		const zone: monaco.editor.IViewZone = { afterLineNumber: afterLine, heightInPx: 1, domNode };
 		let zoneId = "";
 		editor.changeViewZones((accessor) => {
@@ -203,18 +209,20 @@ export function useMonacoInlineEdit({
 					]
 				: [],
 		);
-		setZoneNode(domNode);
+		setZoneNode(contentNode);
 
 		// The zone's height is content-driven (the diff + action box, the chip, or the error card) —
-		// remeasure and re-layout whenever the portaled content resizes, so nothing clips.
+		// remeasure the inner content node and re-layout whenever the portaled content resizes, so nothing
+		// clips or overlaps the lines below (this also fires on first paint, e.g. when the editor mounts
+		// straight into an already-active review after a Preview→Source toggle).
 		const ro = new ResizeObserver(() => {
-			const h = Math.ceil(domNode.getBoundingClientRect().height);
+			const h = Math.ceil(contentNode.getBoundingClientRect().height);
 			if (h > 0 && Math.abs((zone.heightInPx ?? 0) - h) > 1) {
 				zone.heightInPx = h;
 				editor.changeViewZones((accessor) => accessor.layoutZone(zoneId));
 			}
 		});
-		ro.observe(domNode);
+		ro.observe(contentNode);
 
 		return () => {
 			ro.disconnect();
