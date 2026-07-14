@@ -39,6 +39,19 @@ export type EditorTab = FileTab | ChatTab;
 /** A section of the settings dialog. Extensible — the two live sections today are providers + github. */
 export type SettingsSection = "providers" | "github";
 
+/** A transient notification. `error` persists until dismissed; `success`/`info` auto-dismiss (the Toaster
+ * owns the timer). `title` is optional — a bare `message` is the common case. */
+export interface Toast {
+	id: string;
+	variant: "error" | "success" | "info";
+	message: string;
+	title?: string;
+}
+
+/** Toast-queue cap: the viewport stacks without scrolling, so past a screenful the oldest drop to keep
+ * the newest visible. */
+const MAX_TOASTS = 5;
+
 /** A terminal tab. `clientId` is the stable UI key; the server PTY id is owned by its `TerminalInstance`. */
 export interface TerminalTab {
 	clientId: string;
@@ -333,6 +346,9 @@ interface AppState {
 	 * provider warning) can open it to a section without prop-drilling through the shell. */
 	settingsOpen: boolean;
 	settingsSection: SettingsSection;
+	/** Transient notifications, oldest-first (the Toaster renders + times them out). At-most a handful live
+	 * at once; a failed wire call that has no better home (no chat tab to host an error turn) lands here. */
+	toasts: Toast[];
 	setStatus: (status: ConnectionStatus) => void;
 	setWelcome: (protocolVersion: number) => void;
 	setProjects: (projects: Project[]) => void;
@@ -417,6 +433,12 @@ interface AppState {
 	setSettingsSection: (section: SettingsSection) => void;
 	/** Ask the right panel to open `path`'s diff in its Changes view (deep-link from chat). */
 	requestChangesView: (workspaceId: string, path: string) => void;
+	/** Enqueue a toast; returns its id so a caller can dismiss it early. An identical live toast (same
+	 * variant/title/message — e.g. a retried failure) coalesces: no twin is added, the existing id returns.
+	 * The queue caps at `MAX_TOASTS` (oldest drop). Prefer the `toast` helper. */
+	pushToast: (toast: Omit<Toast, "id">) => string;
+	/** Drop a toast (user dismiss or the Toaster's auto-timeout). A missing id is a no-op. */
+	dismissToast: (id: string) => void;
 }
 
 /** Apply an immutable update to one session's runtime; a no-op (and no new `sessions` object) if it's gone. */
@@ -487,7 +509,7 @@ function foldLoginFrame(state: LoginState, frame: LoginFrame): LoginState {
 	}
 }
 
-export const useAppStore = create<AppState>((set) => ({
+export const useAppStore = create<AppState>((set, get) => ({
 	status: "connecting",
 	protocolVersion: null,
 	projects: [],
@@ -505,6 +527,7 @@ export const useAppStore = create<AppState>((set) => ({
 	activeLogin: null,
 	settingsOpen: false,
 	settingsSection: "providers",
+	toasts: [],
 	setStatus: (status) => set({ status }),
 	setWelcome: (protocolVersion) => set({ protocolVersion }),
 	setProjects: (projects) => set({ projects }),
@@ -856,4 +879,30 @@ export const useAppStore = create<AppState>((set) => ({
 	closeSettings: () => set({ settingsOpen: false }),
 	setSettingsSection: (section) => set({ settingsSection: section }),
 	requestChangesView: (workspaceId, path) => set({ changesRequest: { workspaceId, path } }),
+	pushToast: (toast) => {
+		const twin = get().toasts.find(
+			(t) => t.variant === toast.variant && t.title === toast.title && t.message === toast.message,
+		);
+		if (twin) return twin.id;
+		const id = crypto.randomUUID();
+		set((s) => ({ toasts: [...s.toasts, { ...toast, id }].slice(-MAX_TOASTS) }));
+		return id;
+	},
+	dismissToast: (id) =>
+		set((s) =>
+			s.toasts.some((t) => t.id === id) ? { toasts: s.toasts.filter((t) => t.id !== id) } : {},
+		),
 }));
+
+/**
+ * Ergonomic entry point for firing a toast from anywhere — components and non-React call sites alike (a
+ * `.catch` in a fire-and-forget wire call). Thin wrapper over `pushToast`; returns the toast id.
+ */
+export const toast = {
+	error: (message: string, title?: string) =>
+		useAppStore.getState().pushToast({ variant: "error", message, ...(title ? { title } : {}) }),
+	success: (message: string, title?: string) =>
+		useAppStore.getState().pushToast({ variant: "success", message, ...(title ? { title } : {}) }),
+	info: (message: string, title?: string) =>
+		useAppStore.getState().pushToast({ variant: "info", message, ...(title ? { title } : {}) }),
+};

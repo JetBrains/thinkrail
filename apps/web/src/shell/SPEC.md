@@ -21,7 +21,8 @@ later, the mobile single-view-with-switcher).
   (`activeWorkspaceId == null` — fresh install / after archiving the last one) → the projects rail (kept
   resizable, `resize-left` preserved) beside the `panels/WelcomePanel`; the center/right/terminal surface
   is not mounted. The welcome-state group uses its own `autoSaveId` so it doesn't clobber the 3-column
-  layout's saved sizes.
+  layout's saved sizes. Mounts the `panels/Toaster` once (outside both layout branches) so notifications
+  show over either state.
 - **Public surface:** `Shell`.
 - **Allowed deps:** `panels`, `store` (status), `transport` (`ConnectionStatus` type), `components/ui`
   (resizable), `constants` (branding).
