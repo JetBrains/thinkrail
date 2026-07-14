@@ -76,3 +76,20 @@
 		}
 	}
 }
+
+/*
+ * Inline-edit markers (Monaco): the buffer lines a turn changed get a subtle green wash + a green
+ * left-gutter bar (GitHub-style), directly above the woven-diff view zone; while the agent is running, the
+ * selected lines get a violet gutter bar ("running here"). Plain CSS classes, not Tailwind utilities —
+ * Monaco decorations apply a literal class name to overlay divs outside the React tree, so they have to
+ * exist as real CSS. Tokens: `--green`/`--green-tint` (changes), `--primary` (#8c81ff, the app's violet).
+ */
+.inline-edit-changed-line {
+	background-color: var(--green-tint);
+}
+.inline-edit-changed-gutter {
+	border-left: 3px solid var(--green);
+}
+.inline-edit-working-gutter {
+	border-left: 3px solid var(--primary);
+}

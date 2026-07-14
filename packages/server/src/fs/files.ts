@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import type { FileNode } from "@thinkrail/contracts";
 import { loadWorkspaces } from "../persistence";
@@ -35,6 +35,27 @@ export function readDir(workspaceId: string, path: string): FileNode[] {
 export function readFile(workspaceId: string, path: string): { content: string } {
 	const { abs } = resolveInWorktree(workspaceId, path);
 	return { content: readFileSync(abs, "utf8") };
+}
+
+/**
+ * Write a UTF-8 text file inside a workspace's worktree (`path` worktree-relative, contained). This is the
+ * ONE host-side write path — a **user-initiated** action (Revert in inline-editing), never an agent edit
+ * (those go through pi). `ifMatchContent`, when given, is optimistic-concurrency: refuse if the file no
+ * longer matches, so a Revert can't clobber a change that landed since the user last saw the file.
+ */
+export function writeFile(
+	workspaceId: string,
+	path: string,
+	content: string,
+	ifMatchContent?: string,
+): { ok: true } {
+	const { abs } = resolveInWorktree(workspaceId, path);
+	if (ifMatchContent !== undefined) {
+		const current = readFileSync(abs, "utf8");
+		if (current !== ifMatchContent) throw new Error("File changed on disk");
+	}
+	writeFileSync(abs, content, "utf8");
+	return { ok: true };
 }
 
 /**

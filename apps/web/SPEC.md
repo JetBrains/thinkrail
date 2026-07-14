@@ -23,8 +23,8 @@ event stream as a chat-centric, multi-session IDE shell.
 
 ## Internal modules
 
-Each is a bounded sub-module; `transport`/`store`/`lib` expose an `index.ts` **barrel** (their only public
-surface). `panels`/`components/ui`/`chat` are imported **per-file by design** — barreling them would pull
+Each is a bounded sub-module; `transport`/`store`/`lib`/`inline-edit` expose an `index.ts` **barrel** (their
+only public surface). `panels`/`components/ui`/`chat` are imported **per-file by design** — barreling them would pull
 the lazily-loaded Monaco/shiki/xterm chunks into the eager bundle and break the shadcn per-primitive
 convention; their boundary is held by convention + spec. Sibling edges live here, not in the leaves.
 
@@ -35,6 +35,7 @@ convention; their boundary is held by convention + spec. Sibling edges live here
 | `panels` | layout-agnostic, store-driven feature views | no | [panels/SPEC.md](src/panels/SPEC.md) |
 | `chat` | pi conversation UI primitives: content-block renderers + the tool-renderer registry | no | [chat/SPEC.md](src/chat/SPEC.md) |
 | `auth` | in-app provider login: the presentational OAuth dialog + its client-side state reducer | yes | [auth/SPEC.md](src/auth/SPEC.md) |
+| `inline-edit` | select→instruct→hidden-session→review-in-place; widgets + controllers + orchestration | yes | [inline-edit/SPEC.md](src/inline-edit/SPEC.md) |
 | `shell` | the responsive frame + composition of panels | no | [shell/SPEC.md](src/shell/SPEC.md) |
 | `components` | the app's single `ErrorBoundary` primitive (contains the `ui/` sub-module) | no | [components/SPEC.md](src/components/SPEC.md) |
 | `components/ui` | shadcn primitives, themed with our tokens | no | [components/ui/SPEC.md](src/components/ui/SPEC.md) |
@@ -48,7 +49,8 @@ shows a reload screen, not a blank root).
 ### Dependency graph
 
 - `shell` → `panels`, `store`, `transport`, `components/ui`, `components` (`ErrorBoundary` around each mounted region), `constants`
-- `panels` → `store`, `transport`, `components/ui`, `components` (`ErrorBoundary` — `CenterTabs`'s per-tab boundary), `lib`, `contracts`, `constants` (`WelcomePanel`'s wordmark), `chat` (`CenterTabs` lazy-mounts `chat/ChatView`; `NewWorkspaceDialog` eagerly reuses `chat/ModelSelector`+`ThinkingSelector` — these are shiki-free, so the eager import stays split-safe), `auth` (`ProvidersSettings` mounts `auth/LoginDialog`)
+- `panels` → `store`, `transport`, `components/ui`, `components` (`ErrorBoundary` — `CenterTabs`'s per-tab boundary), `lib`, `contracts`, `constants` (`WelcomePanel`'s wordmark), `chat` (`CenterTabs` lazy-mounts `chat/ChatView`; `NewWorkspaceDialog` eagerly reuses `chat/ModelSelector`+`ThinkingSelector` — these are shiki-free, so the eager import stays split-safe), `auth` (`ProvidersSettings` mounts `auth/LoginDialog`), `inline-edit` (`MarkdownPreview`/`MonacoEditor` host the inline-edit controllers; `CenterTabs` mounts the orchestrator)
+- `inline-edit` → `store`, `transport`, `chat` (**presentational renderers only** — `rows`/`turns`/`ChatActions` for the read-only preview popover), `components/ui`, `lib`, `contracts` (type-only)
 - `chat` → `contracts` (pi message types, **type-only**), `components/ui`, `lib`; `store` + `transport` (**`ChatView` only** — the renderers are store-free)
 - `auth` → `components/ui` (the dialog is store/transport-free — the panel integrates it; the state types need no imports)
 - `store` → `transport` (**type-only** — `ConnectionStatus`), `chat` (**type-only** — `ChatTurn`/`ToolResultState`), `auth` (**type-only** — `LoginState`; the `foldLoginFrame` reducer lives in `store`, like `reduceExtUi`), `contracts`
@@ -58,6 +60,8 @@ shows a reload screen, not a blank root).
 - leaves (`lib`, `constants`, `utils`, `styles`) → none internal
 
 Rules: a panel never imports another panel sideways; nothing imports `shell` (it's the composition root).
+`inline-edit` is imported by `panels`, never the reverse; its state lives in `store` (the `inlineEdits`
+slice), and the only host write it triggers is the guarded `fs.writeFile` Revert (a direct user action).
 
 The module set: `transport` / `store` / branded `shell`; `ProjectTree`; `FileTree` + `RightPanel`;
 `CenterTabs` + lazy `MonacoEditor`; `ChangesPanel` + lazy `DiffViewer`; `TerminalsPanel` + lazy

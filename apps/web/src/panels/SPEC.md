@@ -116,10 +116,12 @@ prompt hero (still editable; empty by default), a base-branch
   one set or the other on the active-workspace branch.)
 - **Allowed deps:** `store`, `transport`, `components/ui` (incl. `popover`/`command`/`textarea` for the
   dialog), `chat` (`ModelSelector`/`ThinkingSelector`, reused by `NewWorkspaceDialog`; `Markdown`,
-  reused by `MarkdownPreview`), `lib`,
+  reused by `MarkdownPreview`), `inline-edit` (the trigger→pill→popup→review controllers; see the mount
+  points note below), `lib`,
   `contracts`; `lucide-react`; and the heavy libs each lazy panel owns (`monaco-editor`, `shiki`,
   `@xterm/*`) loaded via `import()`.
-- **Forbidden:** `server`/`shared`/`pi`; importing `shell`; reaching across unrelated panels.
+- **Forbidden:** `server`/`shared`/`pi`; importing `shell`; reaching across unrelated panels; reaching into
+  `inline-edit`'s internals — only its barrel (`@/inline-edit`).
 
 ## Get right
 
@@ -171,6 +173,16 @@ prompt hero (still editable; empty by default), a base-branch
   **external** link opens a new tab, and a **relative image** rewrites to the host **`/files/…`** route
   (built from `transport.httpBase()`). A cross-file link's `#fragment` is not yet followed (opens the
   file only).
+- **Inline AI-editing mounts here, panels host it.** `MarkdownPreview` and `MonacoEditor` each host an
+  `inline-edit` controller (`useMarkdownInlineEdit` / `useMonacoInlineEdit`) that drives that surface's
+  trigger→pill→popup→review-in-place sequence — woven into the document flow for markdown, into a native
+  Monaco view zone + changed-lines decoration for Monaco;
+  `CenterTabs` mounts the single workspace-wide `InlineEditOrchestrator` (the post-turn readback that syncs
+  a finished hidden-session edit back into the open tab). The rendered-markdown view stamps source lines
+  via the in-repo `sourceLineRehype` transform (from `inline-edit`, passed as `chat/Markdown`'s
+  `rehypePlugins`) so a text selection can anchor back to a source range. **Panels depend on `inline-edit`,
+  never the reverse** — same one-way rule as `chat`; `inline-edit`'s own state lives in `store` (the
+  `inlineEdits` slice), not here.
 - Heavy deps (Monaco / shiki / xterm) load via `React.lazy(() => import())` to stay out of the eager bundle.
   A lazy chunk that fails to load (or a render throw) is contained by the `components/ErrorBoundary` the
   **shell** wraps each region in (see `shell/SPEC.md`), so a single panel degrades instead of blanking the

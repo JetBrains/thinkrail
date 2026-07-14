@@ -311,6 +311,165 @@ function reduceExtUi(
 	}
 }
 
+/** One file change the inline-edit agent made, folded from pi's own `edit`/`write` tool events. */
+export interface EditHunk {
+	path: string;
+	kind: "edit" | "write";
+	oldText: string;
+	newText: string;
+}
+
+export type InlineEditStatus = "starting" | "working" | "review" | "reverting" | "done" | "error";
+
+/**
+ * One agent turn within an inline edit: the instruction/comment that drove it, the target-file content at
+ * its START (`baseContent` — the step-back target for Undo-last-change), and the hunks it produced. Refine
+ * pushes a new turn; the last turn is the one under review.
+ */
+export interface EditTurn {
+	instruction: string;
+	baseContent: string;
+	hunks: EditHunk[];
+	/** edit/write tool calls seen `start` but not yet `end` this turn, keyed by toolCallId. */
+	pendingTools: Record<string, EditHunk>;
+	/** Distinct non-target paths this turn touched (the "also touched N files" notice). */
+	otherPaths: string[];
+	/** The turn's closing one-line explanation (last assistant text at agent_end). */
+	why?: string;
+}
+
+/**
+ * One inline-edit request: the metadata the store can't derive (selection, per-turn history) + status. The
+ * hidden pi session also has a normal `SessionRuntime` (so the preview popover / promoted tab render its
+ * transcript); this is the inline-edit-specific projection of the same event stream. `turns[0].baseContent`
+ * is the fire-time original (Revert-all target); the last turn is under review.
+ */
+export interface InlineEditRequest {
+	id: string;
+	workspaceId: string;
+	path: string;
+	sessionId: string;
+	selection: { text: string; startLine: number; endLine: number };
+	/** Current on-disk content after the last turn (loaded by the readback effect) — revert guard + anchor base. */
+	afterContent?: string;
+	/** Per-turn history (≥1). Refine appends; Undo-last-change pops. */
+	turns: EditTurn[];
+	status: InlineEditStatus;
+	error?: string;
+}
+
+/**
+ * Read pi's edit/write args into a hunk shape. pi's `edit` tool nests replacements in an `edits` array
+ * (`{ path, edits: [{ oldText, newText }, …] }`) — the primary shape the model emits; we also accept a
+ * legacy top-level `oldText`/`newText` (and provider variants). Multiple `edits[]` entries are joined so
+ * the woven diff shows every change the call made. `write` is a full-file replace (`{ path, content }`).
+ */
+function parseEditArgs(toolName: string, args: Record<string, unknown>): EditHunk {
+	const s = (v: unknown) => (typeof v === "string" ? v : "");
+	const str = (k: string) => s(args[k]);
+	const path = str("path") || str("file_path") || str("filename");
+	if (toolName === "write") {
+		return { path, kind: "write", oldText: "", newText: str("content") || str("text") };
+	}
+	// Modern `edit`: `edits: [{ oldText, newText }, …]`. Join entries so the review shows all replacements.
+	const edits = args.edits;
+	if (Array.isArray(edits) && edits.length > 0) {
+		const pick = (e: unknown, a: string, b: string) => {
+			const o = (e ?? {}) as Record<string, unknown>;
+			return s(o[a]) || s(o[b]);
+		};
+		return {
+			path,
+			kind: "edit",
+			oldText: edits.map((e) => pick(e, "oldText", "old_string")).join("\n"),
+			newText: edits.map((e) => pick(e, "newText", "new_string")).join("\n"),
+		};
+	}
+	// Legacy top-level shape (pi still accepts it; some providers emit it).
+	return {
+		path,
+		kind: "edit",
+		oldText: str("oldText") || str("old_string") || str("old"),
+		newText: str("newText") || str("new_string") || str("new"),
+	};
+}
+
+/** Extract the last assistant message's concatenated text (the closing "why"). */
+function lastAssistantText(messages: readonly unknown[]): string {
+	for (let i = messages.length - 1; i >= 0; i -= 1) {
+		const m = messages[i] as { role?: string; content?: unknown };
+		if (m.role !== "assistant" || !Array.isArray(m.content)) continue;
+		return m.content
+			.filter(
+				(c): c is { type: "text"; text: string } =>
+					typeof c === "object" && c !== null && (c as { type?: string }).type === "text",
+			)
+			.map((c) => c.text)
+			.join("")
+			.trim();
+	}
+	return "";
+}
+
+/**
+ * Fold one pi event into an inline-edit request's CURRENT turn (the last in `turns`). Pure — same ref when
+ * nothing changes. Only `edit`/`write` tool events and terminal `agent_end` matter; everything else is a
+ * no-op. Hunks power the review DISPLAY; revert/undo use content snapshots (a turn's `baseContent`), not
+ * these hunks.
+ */
+export function foldInlineEditEvent(req: InlineEditRequest, event: PiEvent): InlineEditRequest {
+	const current = req.turns.at(-1);
+	if (!current) return req; // turns is never empty in practice; the guard satisfies the type
+	// Replace the current turn immutably; the request keeps the same ref when the turn didn't change.
+	const withCurrent = (next: EditTurn): InlineEditRequest =>
+		next === current ? req : { ...req, turns: [...req.turns.slice(0, -1), next] };
+	switch (event.type) {
+		case "tool_execution_start": {
+			if (event.toolName !== "edit" && event.toolName !== "write") return req;
+			const hunk = parseEditArgs(event.toolName, event.args as Record<string, unknown>);
+			return withCurrent({
+				...current,
+				pendingTools: { ...current.pendingTools, [event.toolCallId]: hunk },
+			});
+		}
+		case "tool_execution_end": {
+			const pending = current.pendingTools[event.toolCallId];
+			if (!pending) return req;
+			const { [event.toolCallId]: _drop, ...pendingTools } = current.pendingTools;
+			if (event.isError) return withCurrent({ ...current, pendingTools });
+			const hunks = [...current.hunks, pending];
+			// Skip an empty path (an unparseable edit arg) — else it counts as a bogus "also touched 1 other file".
+			const otherPaths =
+				pending.path !== "" &&
+				pending.path !== req.path &&
+				!current.otherPaths.includes(pending.path)
+					? [...current.otherPaths, pending.path]
+					: current.otherPaths;
+			return withCurrent({ ...current, pendingTools, hunks, otherPaths });
+		}
+		case "agent_end": {
+			if (event.willRetry) return req; // retry/compaction follows — stay working
+			const last = [...event.messages]
+				.reverse()
+				.find((m): m is Extract<typeof m, { role: "assistant" }> => m.role === "assistant");
+			if (last?.stopReason === "error") {
+				return {
+					...req,
+					status: "error",
+					error: last.errorMessage || "The agent run ended in an error.",
+				};
+			}
+			const turns = [
+				...req.turns.slice(0, -1),
+				{ ...current, why: lastAssistantText(event.messages) },
+			];
+			return { ...req, turns, status: "review" };
+		}
+		default:
+			return req;
+	}
+}
+
 interface AppState {
 	status: ConnectionStatus;
 	protocolVersion: number | null;
@@ -349,6 +508,26 @@ interface AppState {
 	/** Transient notifications, oldest-first (the Toaster renders + times them out). At-most a handful live
 	 * at once; a failed wire call that has no better home (no chat tab to host an error turn) lands here. */
 	toasts: Toast[];
+	/** Inline-edit requests keyed by requestId; the hidden pi session's per-turn projection. */
+	inlineEdits: Record<string, InlineEditRequest>;
+	/** sessionId → requestId, so `handlePiEvent` can fold tool events into the right request. */
+	inlineEditBySession: Record<string, string>;
+	/** Register a fired request + its hidden runtime (no tab). Idempotent on the runtime. */
+	registerInlineEdit: (
+		req: InlineEditRequest,
+		model: WireModel | null,
+		thinkingLevel: ThinkingLevel,
+	) => void;
+	setInlineEditStatus: (id: string, status: InlineEditStatus) => void;
+	setInlineEditAfterContent: (id: string, content: string) => void;
+	setInlineEditError: (id: string, message: string) => void;
+	/** Refine: append a new turn (its `baseContent` = the content the new turn edits from), back to working. */
+	pushInlineEditTurn: (id: string, instruction: string, baseContent: string) => void;
+	/** Undo-last-change: drop the last turn, back to reviewing the now-last turn. No-op if only one turn. */
+	popInlineEditTurn: (id: string) => void;
+	removeInlineEdit: (id: string) => void;
+	/** Replace an open file tab's content snapshot (after an agent edit / revert re-read). No-op if not open. */
+	updateFileTabContent: (workspaceId: string, path: string, content: string) => void;
 	setStatus: (status: ConnectionStatus) => void;
 	setWelcome: (protocolVersion: number) => void;
 	setProjects: (projects: Project[]) => void;
@@ -528,6 +707,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	settingsOpen: false,
 	settingsSection: "providers",
 	toasts: [],
+	inlineEdits: {},
+	inlineEditBySession: {},
 	setStatus: (status) => set({ status }),
 	setWelcome: (protocolVersion) => set({ protocolVersion }),
 	setProjects: (projects) => set({ projects }),
@@ -601,6 +782,21 @@ export const useAppStore = create<AppState>((set, get) => ({
 				},
 			};
 		}),
+	updateFileTabContent: (workspaceId, path, content) =>
+		set((s) => {
+			const tabs = s.tabsByWorkspace[workspaceId];
+			if (!tabs) return {};
+			const id = `${workspaceId}:${path}`;
+			if (!tabs.some((t) => t.id === id && t.kind === "file")) return {};
+			return {
+				tabsByWorkspace: {
+					...s.tabsByWorkspace,
+					[workspaceId]: tabs.map((t) =>
+						t.id === id && t.kind === "file" ? { ...t, content } : t,
+					),
+				},
+			};
+		}),
 	clearWorkspaceTabs: (workspaceId) =>
 		set((s) => {
 			// Drop the runtimes of this workspace's chats — both open tabs and closed-to-history ones (their
@@ -611,6 +807,16 @@ export const useAppStore = create<AppState>((set, get) => ({
 			}
 			for (const closed of s.closedChatsByWorkspace[workspaceId] ?? [])
 				delete sessions[closed.sessionId];
+			// Also drop this workspace's inline-edit requests + session index + hidden runtimes — the server
+			// already aborts/disposes their sessions (removeWorkspaceSessions); this is the client-state half.
+			const inlineEdits = { ...s.inlineEdits };
+			const inlineEditBySession = { ...s.inlineEditBySession };
+			for (const req of Object.values(s.inlineEdits)) {
+				if (req.workspaceId !== workspaceId) continue;
+				delete inlineEdits[req.id];
+				delete inlineEditBySession[req.sessionId];
+				delete sessions[req.sessionId];
+			}
 			const { [workspaceId]: _tabs, ...tabsByWorkspace } = s.tabsByWorkspace;
 			const { [workspaceId]: _activeTab, ...activeTabByWorkspace } = s.activeTabByWorkspace;
 			const { [workspaceId]: _closed, ...closedChatsByWorkspace } = s.closedChatsByWorkspace;
@@ -625,6 +831,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 				terminalsByWorkspace,
 				activeTerminalByWorkspace,
 				sessions,
+				inlineEdits,
+				inlineEditBySession,
 			};
 		}),
 	addTerminal: (workspaceId) =>
@@ -672,6 +880,84 @@ export const useAppStore = create<AppState>((set, get) => ({
 					? s.sessions
 					: { ...s.sessions, [sessionId]: newRuntime(model, thinkingLevel) },
 			};
+		}),
+	registerInlineEdit: (req, model, thinkingLevel) =>
+		set((s) => ({
+			inlineEdits: { ...s.inlineEdits, [req.id]: req },
+			inlineEditBySession: { ...s.inlineEditBySession, [req.sessionId]: req.id },
+			// A hidden runtime (no tab) so the preview popover + "open in tab" render the transcript.
+			sessions: s.sessions[req.sessionId]
+				? s.sessions
+				: { ...s.sessions, [req.sessionId]: newRuntime(model, thinkingLevel) },
+		})),
+	setInlineEditStatus: (id, status) =>
+		set((s) => {
+			const req = s.inlineEdits[id];
+			if (!req || req.status === status) return {};
+			return { inlineEdits: { ...s.inlineEdits, [id]: { ...req, status } } };
+		}),
+	setInlineEditAfterContent: (id, content) =>
+		set((s) => {
+			const req = s.inlineEdits[id];
+			if (!req) return {};
+			return { inlineEdits: { ...s.inlineEdits, [id]: { ...req, afterContent: content } } };
+		}),
+	setInlineEditError: (id, message) =>
+		set((s) => {
+			const req = s.inlineEdits[id];
+			if (!req) return {};
+			return {
+				inlineEdits: { ...s.inlineEdits, [id]: { ...req, status: "error", error: message } },
+			};
+		}),
+	pushInlineEditTurn: (id, instruction, baseContent) =>
+		set((s) => {
+			const req = s.inlineEdits[id];
+			if (!req) return {};
+			const turn: EditTurn = {
+				instruction,
+				baseContent,
+				hunks: [],
+				pendingTools: {},
+				otherPaths: [],
+			};
+			// Drop (not set-to-undefined) the prior turn's `afterContent`/`error` — `exactOptionalPropertyTypes`
+			// treats an explicit `undefined` differently from an absent key.
+			const { afterContent: _afterContent, error: _error, ...rest } = req;
+			return {
+				inlineEdits: {
+					...s.inlineEdits,
+					[id]: { ...rest, turns: [...req.turns, turn], status: "working" },
+				},
+			};
+		}),
+	popInlineEditTurn: (id) =>
+		set((s) => {
+			const req = s.inlineEdits[id];
+			if (!req || req.turns.length <= 1) return {};
+			return {
+				inlineEdits: {
+					...s.inlineEdits,
+					[id]: { ...req, turns: req.turns.slice(0, -1), status: "review" },
+				},
+			};
+		}),
+	removeInlineEdit: (id) =>
+		set((s) => {
+			const req = s.inlineEdits[id];
+			if (!req) return {};
+			const { [id]: _drop, ...inlineEdits } = s.inlineEdits;
+			const { [req.sessionId]: _dropIdx, ...inlineEditBySession } = s.inlineEditBySession;
+			// Drop the hidden runtime too — unless the user promoted this session to a chat tab (the tab owns it then).
+			const promoted = Object.values(s.tabsByWorkspace).some((tabs) =>
+				tabs.some((t) => t.kind === "chat" && t.sessionId === req.sessionId),
+			);
+			let sessions = s.sessions;
+			if (!promoted && s.sessions[req.sessionId]) {
+				const { [req.sessionId]: _rt, ...rest } = s.sessions;
+				sessions = rest;
+			}
+			return { inlineEdits, inlineEditBySession, sessions };
 		}),
 	closeChatRuntime: (sessionId) =>
 		set((s) => {
@@ -811,8 +1097,18 @@ export const useAppStore = create<AppState>((set, get) => ({
 			})),
 		),
 	// The event→store dispatcher: route each pi event to its session's runtime, so chats stream independently.
+	// A session that's also a hidden inline-edit run gets the event folded into its request too.
 	handlePiEvent: (event, sessionId) =>
-		set((s) => withRuntime(s, sessionId, (rt) => reduceSessionEvent(rt, event))),
+		set((s) => {
+			const runtimePatch = withRuntime(s, sessionId, (rt) => reduceSessionEvent(rt, event));
+			const reqId = s.inlineEditBySession[sessionId];
+			if (!reqId) return runtimePatch;
+			const req = s.inlineEdits[reqId];
+			if (!req) return runtimePatch;
+			const nextReq = foldInlineEditEvent(req, event);
+			if (nextReq === req) return runtimePatch;
+			return { ...runtimePatch, inlineEdits: { ...s.inlineEdits, [reqId]: nextReq } };
+		}),
 	setModels: (models) => set({ models }),
 	setCurrentModel: (sessionId, model) =>
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, model }))),

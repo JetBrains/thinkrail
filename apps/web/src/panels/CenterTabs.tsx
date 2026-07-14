@@ -8,6 +8,7 @@ import {
 	DropdownMenuLabel,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { InlineEditOrchestrator } from "@/inline-edit";
 import { messagesToRuntime } from "../chat/hydrate";
 import { type ClosedChat, type EditorTab, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
@@ -185,13 +186,22 @@ export function CenterTabs() {
 		</div>
 	);
 
-	// Nothing open and nothing to reopen → just the centered prompt.
-	if (openTabs.length === 0 && closedChats.length === 0) return placeholder;
+	// Nothing open and nothing to reopen → just the centered prompt. The orchestrator still mounts (it's
+	// headless and keyed to the workspace, not the open tabs) so a readback in flight isn't dropped.
+	if (openTabs.length === 0 && closedChats.length === 0) {
+		return (
+			<>
+				<InlineEditOrchestrator />
+				{placeholder}
+			</>
+		);
+	}
 
 	const active = openTabs.find((t) => t.id === activeTabId) ?? null;
 
 	return (
 		<div className="flex h-full min-h-0 flex-col">
+			<InlineEditOrchestrator />
 			<div className="flex h-8 shrink-0 items-stretch border-border2 border-b bg-bg-dark">
 				<div role="tablist" className="flex flex-1 items-stretch overflow-x-auto">
 					{openTabs.map((tab) => {

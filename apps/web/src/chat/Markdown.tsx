@@ -19,17 +19,20 @@ export function Markdown({
 	text,
 	className = CHAT_PROSE,
 	remarkPlugins,
+	rehypePlugins,
 	components,
 }: {
 	text: string;
 	className?: string;
 	remarkPlugins?: ComponentProps<typeof ReactMarkdown>["remarkPlugins"];
+	rehypePlugins?: ComponentProps<typeof ReactMarkdown>["rehypePlugins"];
 	components?: ComponentProps<typeof ReactMarkdown>["components"];
 }) {
 	return (
 		<div className={className}>
 			<ReactMarkdown
 				remarkPlugins={remarkPlugins ? [remarkGfm, ...remarkPlugins] : [remarkGfm]}
+				rehypePlugins={rehypePlugins}
 				components={{ code: CodeBlock, a: Anchor, ...components }}
 			>
 				{text}

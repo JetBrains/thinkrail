@@ -1,6 +1,13 @@
 import { beforeEach, expect, test } from "bun:test";
 import type { ExtUiRequest, PiEvent, SessionSummary, Workspace } from "@thinkrail/contracts";
-import { type SessionRuntime, toast, useAppStore } from "./appStore";
+import {
+	type EditTurn,
+	foldInlineEditEvent,
+	type InlineEditRequest,
+	type SessionRuntime,
+	toast,
+	useAppStore,
+} from "./appStore";
 
 // Event fixtures — the reducer only reads the fields below, so casting minimal objects is safe here.
 const agentStart = { type: "agent_start" } as unknown as PiEvent;
@@ -54,6 +61,8 @@ beforeEach(() => {
 		settingsOpen: false,
 		settingsSection: "providers",
 		toasts: [],
+		inlineEdits: {},
+		inlineEditBySession: {},
 	});
 });
 
@@ -707,4 +716,239 @@ test("the toast helper enqueues by variant and omits an absent title", () => {
 		{ variant: "error", message: "nope", title: "Failed" },
 	]);
 	expect(useAppStore.getState().toasts[0]).not.toHaveProperty("title");
+});
+
+// ---- inline-edit ----
+
+const editStart = (toolCallId: string, args: Record<string, unknown>) =>
+	({ type: "tool_execution_start", toolCallId, toolName: "edit", args }) as unknown as PiEvent;
+const writeStart = (toolCallId: string, args: Record<string, unknown>) =>
+	({ type: "tool_execution_start", toolCallId, toolName: "write", args }) as unknown as PiEvent;
+const bashStart = (toolCallId: string) =>
+	({ type: "tool_execution_start", toolCallId, toolName: "bash", args: {} }) as unknown as PiEvent;
+const endOk = (toolCallId: string) =>
+	({
+		type: "tool_execution_end",
+		toolCallId,
+		toolName: "edit",
+		result: "",
+		isError: false,
+	}) as unknown as PiEvent;
+const endErr = (toolCallId: string) =>
+	({
+		type: "tool_execution_end",
+		toolCallId,
+		toolName: "edit",
+		result: "boom",
+		isError: true,
+	}) as unknown as PiEvent;
+const agentEndWhy = (text: string) =>
+	({
+		type: "agent_end",
+		willRetry: false,
+		messages: [{ role: "assistant", content: [{ type: "text", text }], stopReason: "stop" }],
+	}) as unknown as PiEvent;
+const agentEndErr = (msg: string) =>
+	({
+		type: "agent_end",
+		willRetry: false,
+		messages: [{ role: "assistant", content: [], stopReason: "error", errorMessage: msg }],
+	}) as unknown as PiEvent;
+
+function baseReq(): InlineEditRequest {
+	return {
+		id: "r1",
+		workspaceId: "w1",
+		path: "doc.md",
+		sessionId: "s1",
+		selection: { text: "old", startLine: 1, endLine: 1 },
+		turns: [
+			{
+				instruction: "soften it",
+				baseContent: "old\n",
+				hunks: [],
+				pendingTools: {},
+				otherPaths: [],
+			},
+		],
+		status: "working",
+	};
+}
+
+/** The current (last) turn — a test helper (throws rather than returning undefined, so assertions are clean). */
+function cur(r: InlineEditRequest): EditTurn {
+	const t = r.turns.at(-1);
+	if (!t) throw new Error("request has no turns");
+	return t;
+}
+
+test("foldInlineEditEvent records an edit hunk on the current turn only after a successful end", () => {
+	let req = baseReq();
+	req = foldInlineEditEvent(
+		req,
+		editStart("t1", { path: "doc.md", oldText: "old", newText: "new" }),
+	);
+	expect(cur(req).hunks).toHaveLength(0); // start alone doesn't commit
+	req = foldInlineEditEvent(req, endOk("t1"));
+	expect(cur(req).hunks).toEqual([
+		{ path: "doc.md", kind: "edit", oldText: "old", newText: "new" },
+	]);
+});
+
+test("foldInlineEditEvent reads pi's edits[] array shape (path top-level, old/new nested)", () => {
+	let req = baseReq();
+	// pi's real `edit` tool: { path, edits: [{ oldText, newText }] } — old/new are NESTED, not top-level.
+	req = foldInlineEditEvent(
+		req,
+		editStart("t1", { path: "doc.md", edits: [{ oldText: "old", newText: "new" }] }),
+	);
+	req = foldInlineEditEvent(req, endOk("t1"));
+	expect(cur(req).hunks).toEqual([
+		{ path: "doc.md", kind: "edit", oldText: "old", newText: "new" },
+	]);
+});
+
+test("foldInlineEditEvent joins multiple edits[] entries for the woven diff", () => {
+	let req = baseReq();
+	req = foldInlineEditEvent(
+		req,
+		editStart("t1", {
+			path: "doc.md",
+			edits: [
+				{ oldText: "a1", newText: "b1" },
+				{ oldText: "a2", newText: "b2" },
+			],
+		}),
+	);
+	req = foldInlineEditEvent(req, endOk("t1"));
+	expect(cur(req).hunks).toEqual([
+		{ path: "doc.md", kind: "edit", oldText: "a1\na2", newText: "b1\nb2" },
+	]);
+});
+
+test("foldInlineEditEvent drops a hunk whose tool errored", () => {
+	let req = baseReq();
+	req = foldInlineEditEvent(
+		req,
+		editStart("t1", { path: "doc.md", oldText: "old", newText: "new" }),
+	);
+	req = foldInlineEditEvent(req, endErr("t1"));
+	expect(cur(req).hunks).toHaveLength(0);
+});
+
+test("foldInlineEditEvent accepts the old_string/new_string arg variant and a write (full content)", () => {
+	let req = baseReq();
+	req = foldInlineEditEvent(
+		req,
+		editStart("t1", { path: "doc.md", old_string: "a", new_string: "b" }),
+	);
+	req = foldInlineEditEvent(req, endOk("t1"));
+	req = foldInlineEditEvent(req, writeStart("t2", { path: "other.md", content: "whole file" }));
+	req = foldInlineEditEvent(req, endOk("t2"));
+	expect(cur(req).hunks).toEqual([
+		{ path: "doc.md", kind: "edit", oldText: "a", newText: "b" },
+		{ path: "other.md", kind: "write", oldText: "", newText: "whole file" },
+	]);
+	expect(cur(req).otherPaths).toEqual(["other.md"]);
+});
+
+test("foldInlineEditEvent ignores non-edit tools", () => {
+	let req = baseReq();
+	req = foldInlineEditEvent(req, bashStart("t1"));
+	req = foldInlineEditEvent(req, endOk("t1"));
+	expect(cur(req).hunks).toHaveLength(0);
+});
+
+test("foldInlineEditEvent on agent_end sets review + captures the current turn's why", () => {
+	let req = baseReq();
+	req = foldInlineEditEvent(req, agentEndWhy("Softened the sentence."));
+	expect(req.status).toBe("review");
+	expect(cur(req).why).toBe("Softened the sentence.");
+});
+
+test("foldInlineEditEvent on an errored agent_end sets error status", () => {
+	let req = baseReq();
+	req = foldInlineEditEvent(req, agentEndErr("no API key"));
+	expect(req.status).toBe("error");
+	expect(req.error).toBe("no API key");
+});
+
+test("foldInlineEditEvent returns the same ref when nothing changes", () => {
+	const req = baseReq();
+	expect(foldInlineEditEvent(req, agentStart)).toBe(req);
+});
+
+test("handlePiEvent folds tool events into the matching request's current turn", () => {
+	const store = useAppStore.getState();
+	store.registerInlineEdit(baseReq(), null, "medium");
+	store.handlePiEvent(editStart("t1", { path: "doc.md", oldText: "old", newText: "new" }), "s1");
+	store.handlePiEvent(endOk("t1"), "s1");
+	store.handlePiEvent(agentEndWhy("done"), "s1");
+	const req = useAppStore.getState().inlineEdits.r1;
+	expect(req.turns.at(-1)?.hunks).toEqual([
+		{ path: "doc.md", kind: "edit", oldText: "old", newText: "new" },
+	]);
+	expect(req.turns.at(-1)?.why).toBe("done");
+	expect(req.status).toBe("review");
+});
+
+test("pushInlineEditTurn appends a fresh working turn and preserves the prior turn's hunks; pop returns to review", () => {
+	const store = useAppStore.getState();
+	store.registerInlineEdit(baseReq(), null, "medium");
+	store.handlePiEvent(editStart("t1", { path: "doc.md", oldText: "old", newText: "new" }), "s1");
+	store.handlePiEvent(endOk("t1"), "s1");
+	store.handlePiEvent(agentEndWhy("first"), "s1");
+	store.pushInlineEditTurn("r1", "make it shorter", "new\n");
+	let req = useAppStore.getState().inlineEdits.r1;
+	expect(req.turns).toHaveLength(2);
+	expect(req.status).toBe("working");
+	expect(req.turns[1]?.hunks ?? []).toHaveLength(0); // fresh turn
+	expect(req.turns[0]?.hunks ?? []).toHaveLength(1); // prior turn preserved
+	store.popInlineEditTurn("r1");
+	req = useAppStore.getState().inlineEdits.r1;
+	expect(req.turns).toHaveLength(1);
+	expect(req.status).toBe("review");
+});
+
+test("popInlineEditTurn is a no-op when only one turn remains", () => {
+	const store = useAppStore.getState();
+	store.registerInlineEdit(baseReq(), null, "medium");
+	store.popInlineEditTurn("r1");
+	expect(useAppStore.getState().inlineEdits.r1.turns).toHaveLength(1);
+});
+
+test("removeInlineEdit drops the request, its session index, and the hidden runtime", () => {
+	const store = useAppStore.getState();
+	store.registerInlineEdit(baseReq(), null, "medium");
+	expect(useAppStore.getState().sessions.s1).toBeDefined(); // the hidden runtime exists first
+	store.removeInlineEdit("r1");
+	const s = useAppStore.getState();
+	expect(s.inlineEdits.r1).toBeUndefined();
+	expect(s.inlineEditBySession.s1).toBeUndefined();
+	expect(s.sessions.s1).toBeUndefined(); // the hidden runtime is dropped too
+});
+
+test("removeInlineEdit keeps the runtime when the session was promoted to a chat tab", () => {
+	const store = useAppStore.getState();
+	useAppStore.setState({ activeWorkspaceId: "w1" });
+	store.registerInlineEdit(baseReq(), null, "medium");
+	store.openChatSession("w1", "s1", null, "medium"); // "open as chat" promotes the hidden session
+
+	store.removeInlineEdit("r1");
+	const s = useAppStore.getState();
+	expect(s.inlineEdits.r1).toBeUndefined();
+	expect(s.inlineEditBySession.s1).toBeUndefined();
+	expect(s.sessions.s1).toBeDefined(); // the chat tab owns the runtime now — it must survive
+});
+
+test("clearWorkspaceTabs drops the workspace's inline-edit request, index, and hidden runtime", () => {
+	const store = useAppStore.getState();
+	useAppStore.setState({ activeWorkspaceId: "w1" });
+	store.registerInlineEdit(baseReq(), null, "medium");
+
+	store.clearWorkspaceTabs("w1");
+	const s = useAppStore.getState();
+	expect(s.inlineEdits.r1).toBeUndefined();
+	expect(s.inlineEditBySession.s1).toBeUndefined();
+	expect(s.sessions.s1).toBeUndefined();
 });

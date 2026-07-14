@@ -13,6 +13,7 @@ e2e/screenshots/
 docs/*
 .playwright-mcp/
 .claude/
+.superpowers/
 
 # Build-only manifests written transiently by apps/cli/scripts/build-binary.ts
 apps/cli/src/*.generated.ts

@@ -40,7 +40,7 @@ import {
 	startLogin,
 } from "../auth";
 import { selectDirectory } from "../dialog";
-import { readDir, readFile } from "../fs";
+import { readDir, readFile, writeFile } from "../fs";
 import { gitDiff, gitStatus, listBranches, prefetchBranch } from "../git";
 import { githubAuthStatus, githubRefresh } from "../github";
 import {
@@ -131,6 +131,15 @@ const handlers: Record<string, Handler> = {
 		readDir((params as { workspaceId: string }).workspaceId, (params as { path: string }).path),
 	"fs.readFile": (params) =>
 		readFile((params as { workspaceId: string }).workspaceId, (params as { path: string }).path),
+	"fs.writeFile": (params) => {
+		const p = params as {
+			workspaceId: string;
+			path: string;
+			content: string;
+			ifMatchContent?: string;
+		};
+		return writeFile(p.workspaceId, p.path, p.content, p.ifMatchContent);
+	},
 	"spec.graph": (params) => specGraph((params as { workspaceId: string }).workspaceId),
 	"git.status": (params) => gitStatus((params as { workspaceId: string }).workspaceId),
 	"git.diff": (params) =>

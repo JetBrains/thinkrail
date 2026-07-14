@@ -29,7 +29,8 @@ import type {
 /** Bumped on any breaking wire change; sent in `server.welcome` so a stale UI can detect host drift. */
 // v4: model.* / session.create / session.setModel / SessionSummary now carry `WireModel` (pi's `Model`
 // minus the secret-bearing `baseUrl`/`headers`); the host re-resolves the real model by `{provider,id}`.
-export const PROTOCOL_VERSION = 4;
+// v5: adds `fs.writeFile` (user-initiated guarded write — Revert in inline-editing).
+export const PROTOCOL_VERSION = 5;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -67,6 +68,9 @@ export const WS_METHODS = {
 	githubRefresh: "github.refresh",
 	fsReadDir: "fs.readDir",
 	fsReadFile: "fs.readFile",
+	// User-initiated guarded write (Revert in inline-editing). `ifMatchContent` is optimistic-concurrency:
+	// the host rejects if the file no longer matches. Agent-driven edits never use this — they go through pi.
+	fsWriteFile: "fs.writeFile",
 	specGraph: "spec.graph",
 	gitStatus: "git.status",
 	gitDiff: "git.diff",
@@ -168,6 +172,10 @@ export interface WsMethodMap {
 	"github.refresh": { params: Record<string, never>; result: GithubAuthStatus };
 	"fs.readDir": { params: { workspaceId: string; path: string }; result: FileNode[] };
 	"fs.readFile": { params: { workspaceId: string; path: string }; result: { content: string } };
+	"fs.writeFile": {
+		params: { workspaceId: string; path: string; content: string; ifMatchContent?: string };
+		result: Ack;
+	};
 	"spec.graph": { params: { workspaceId: string }; result: SpecGraphSnapshot };
 	"git.status": { params: { workspaceId: string }; result: GitStatus };
 	"git.diff": { params: { workspaceId: string; path?: string }; result: { diff: string } };
