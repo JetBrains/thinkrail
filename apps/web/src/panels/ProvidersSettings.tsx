@@ -3,8 +3,8 @@ import { Boxes, Check, KeyRound, Lock, LogIn, LogOut, RefreshCw } from "lucide-r
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { LoginDialog } from "@/auth";
 import { Button } from "@/components/ui/button";
-import { useAppStore } from "@/store";
-import { getTransport } from "@/transport";
+import { toast, useAppStore } from "@/store";
+import { errorText, getTransport } from "@/transport";
 import { JetBrainsAiCard } from "./JetBrainsAiCard";
 
 /** Human label per auth kind (a configured provider's source suffix). */
@@ -62,8 +62,9 @@ export function ProvidersSettings() {
 		try {
 			const { loginId } = await getTransport().request("provider.loginStart", { providerId });
 			useAppStore.getState().beginLogin(loginId, providerId);
-		} catch {
-			// loginStart failing (offline) leaves no dialog — the Sign-in button stays available to retry.
+		} catch (err) {
+			// loginStart failing (offline) leaves no dialog — surface why; the Sign-in button stays for a retry.
+			toast.error(errorText(err), "Couldn't start sign-in");
 		} finally {
 			setBusyProvider(null);
 		}
@@ -75,6 +76,10 @@ export function ProvidersSettings() {
 			try {
 				await getTransport().request("provider.setApiKey", { providerId, key });
 				await load();
+			} catch (err) {
+				// A rejected save (malformed key, disk write failed) was previously an unhandled rejection — the
+				// key field just went quiet. Surface it so the user knows the key didn't take.
+				toast.error(errorText(err), "Couldn't save the API key");
 			} finally {
 				setBusyProvider(null);
 			}
@@ -88,6 +93,9 @@ export function ProvidersSettings() {
 			try {
 				await getTransport().request("provider.logout", { providerId });
 				await load();
+			} catch (err) {
+				// Same unhandled-rejection gap as setApiKey — a failed sign-out left the card looking signed-in.
+				toast.error(errorText(err), "Couldn't sign out");
 			} finally {
 				setBusyProvider(null);
 			}
@@ -231,7 +239,8 @@ export function ProvidersSettings() {
 					onReply={(value) => {
 						getTransport()
 							.request("provider.loginReply", { loginId: activeLogin.loginId, value })
-							.catch(() => {});
+							// A dropped reply strands the login waiting on input that never arrives — surface it.
+							.catch((err) => toast.error(errorText(err), "Couldn't submit"));
 						useAppStore.getState().clearLoginInput();
 					}}
 					onCancel={() => {

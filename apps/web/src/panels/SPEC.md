@@ -74,7 +74,10 @@ prompt hero (still editable; empty by default), a base-branch
   `session.create({ model, thinkingLevel })` + fire-and-forget `prompt`; with an empty prompt it just
   creates the workspace. A **rejected** kick-off `prompt` (a bad model / missing API key — e.g. picking a
   nonexistent model) surfaces as an `error` turn in the just-opened chat via `store.appendErrorTurn` (with
-  `transport`'s `errorText`) rather than vanishing. (`gh` status lives in `SettingsDialog`, not the
+  `transport`'s `errorText`) rather than vanishing. The two rejections with **no chat to host a turn** raise a
+  `store.toast.error` instead: a failed **`workspace.create`** (keeps the dialog open to retry) and a failed
+  **`session.create`** (the dialog has already closed, the workspace exists — the toast is the only place left
+  to report the dropped kick-off). (`gh` status lives in `SettingsDialog`, not the
   create dialog.) **`SettingsDialog`** is the app-settings surface the shell's topbar gear opens — a
   **store-driven two-pane shell** (left section rail + scrollable content pane; mobile collapses the rail to
   a horizontal segmented strip): `settingsOpen`/`settingsSection` live in the store so the gear AND the
@@ -101,9 +104,13 @@ prompt hero (still editable; empty by default), a base-branch
   (`session.getMessages` → `messagesToRuntime` → `store.hydrateSession`); **disk-only** ones go to history
   via `store.noteClosedChats`. Reopening restores a live runtime's tab, or for a disk-only chat re-opens it
   on the host (`getMessages`) + hydrates — so a reload, a second tab, or a host restart all rebuild from the
-  host.
+  host. **`Toaster`** is the app-wide toast host the shell mounts once: it subscribes to `store.toasts` and
+  renders each via the `components/ui/toast` primitives, letting Radix own the auto-timeout + swipe/hover-pause
+  and routing every close back through `store.dismissToast` (so the store stays the single source of truth).
+  Errors persist until dismissed; success/info time out. The **integration piece** — the primitives stay
+  presentational.
 - **Public surface:** the top-level panels the shell mounts (`ProjectTree`, `WelcomePanel`, `CenterTabs`,
-  `RightPanel`, `TerminalsPanel`), imported **per-file** (no barrel — keeps the lazy chunks split).
+  `RightPanel`, `TerminalsPanel`, `Toaster`), imported **per-file** (no barrel — keeps the lazy chunks split).
   (`WelcomePanel` and `CenterTabs`/`RightPanel`/`TerminalsPanel` are mutually exclusive — the shell mounts
   one set or the other on the active-workspace branch.)
 - **Allowed deps:** `store`, `transport`, `components/ui` (incl. `popover`/`command`/`textarea` for the

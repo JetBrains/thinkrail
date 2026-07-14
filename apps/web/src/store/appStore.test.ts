@@ -1,6 +1,6 @@
 import { beforeEach, expect, test } from "bun:test";
 import type { ExtUiRequest, PiEvent, SessionSummary, Workspace } from "@thinkrail/contracts";
-import { type SessionRuntime, useAppStore } from "./appStore";
+import { type SessionRuntime, toast, useAppStore } from "./appStore";
 
 // Event fixtures — the reducer only reads the fields below, so casting minimal objects is safe here.
 const agentStart = { type: "agent_start" } as unknown as PiEvent;
@@ -53,6 +53,7 @@ beforeEach(() => {
 		activeLogin: null,
 		settingsOpen: false,
 		settingsSection: "providers",
+		toasts: [],
 	});
 });
 
@@ -642,4 +643,38 @@ test("an error frame is terminal: sets status/error and clears the live input + 
 	expect(login).toMatchObject({ status: "error", error: "Scope revoked by provider" });
 	expect(login?.input).toBeUndefined();
 	expect(login?.progress).toBeUndefined();
+});
+
+test("pushToast appends with a fresh id and dismissToast removes only that toast", () => {
+	const store = useAppStore.getState();
+	const id1 = store.pushToast({ variant: "error", message: "boom" });
+	const id2 = store.pushToast({ variant: "info", message: "fyi", title: "Heads up" });
+	expect(id1).not.toBe(id2);
+	// Oldest-first, and the optional title is carried only when given.
+	expect(useAppStore.getState().toasts).toMatchObject([
+		{ id: id1, variant: "error", message: "boom" },
+		{ id: id2, variant: "info", message: "fyi", title: "Heads up" },
+	]);
+	expect(useAppStore.getState().toasts[0]).not.toHaveProperty("title");
+
+	store.dismissToast(id1);
+	expect(useAppStore.getState().toasts).toMatchObject([{ id: id2 }]);
+});
+
+test("dismissToast for an unknown id is a no-op (same array ref, no churn)", () => {
+	const store = useAppStore.getState();
+	store.pushToast({ variant: "success", message: "done" });
+	const before = useAppStore.getState().toasts;
+	store.dismissToast("ghost");
+	expect(useAppStore.getState().toasts).toBe(before);
+});
+
+test("the toast helper enqueues by variant and omits an absent title", () => {
+	toast.success("saved");
+	toast.error("nope", "Failed");
+	expect(useAppStore.getState().toasts).toMatchObject([
+		{ variant: "success", message: "saved" },
+		{ variant: "error", message: "nope", title: "Failed" },
+	]);
+	expect(useAppStore.getState().toasts[0]).not.toHaveProperty("title");
 });

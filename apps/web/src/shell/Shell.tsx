@@ -6,6 +6,7 @@ import { ProjectTree } from "../panels/ProjectTree";
 import { RightPanel } from "../panels/RightPanel";
 import { SettingsDialog } from "../panels/SettingsDialog";
 import { TerminalsPanel } from "../panels/TerminalsPanel";
+import { Toaster } from "../panels/Toaster";
 import { WelcomePanel } from "../panels/WelcomePanel";
 import { useAppStore } from "../store";
 import type { ConnectionStatus } from "../transport";
@@ -108,6 +109,7 @@ export function Shell() {
 					</ResizablePanel>
 				</ResizablePanelGroup>
 			)}
+			<Toaster />
 		</div>
 	);
 }
