@@ -53,7 +53,13 @@ export async function startInlineEdit(
 	}
 }
 
-/** Refine: append a new turn (editing from the current on-disk content), then follow up on the same session. */
+/**
+ * Refine: append a new turn (editing from the current on-disk content), then start a fresh turn on the same
+ * session with the comment. At review time the session is IDLE (the prior turn's `agent_end` already fired),
+ * so this must `prompt` (which starts a turn) — NOT `followUp`, which only queues into a running turn and
+ * would leave an idle session stuck. `session.prompt` server-side falls back to `steer` if a turn is somehow
+ * still streaming, so it's safe either way.
+ */
 export async function refineInlineEdit(id: string, comment: string): Promise<void> {
 	const req = useAppStore.getState().inlineEdits[id];
 	if (!req) return;
@@ -61,7 +67,7 @@ export async function refineInlineEdit(id: string, comment: string): Promise<voi
 	const base = req.afterContent ?? req.turns.at(-1)?.baseContent ?? "";
 	useAppStore.getState().pushInlineEditTurn(id, comment, base);
 	getTransport()
-		.request("session.followUp", { sessionId: req.sessionId, text: comment })
+		.request("session.prompt", { sessionId: req.sessionId, text: comment })
 		.catch((err) => useAppStore.getState().setInlineEditError(id, errorText(err)));
 }
 

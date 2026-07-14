@@ -50,7 +50,8 @@ semantic autocompletion, run-agent-on-comments). Only item "inlined AI-editing" 
    saved content **snapshots** (a turn's `baseContent`, or turn 0's = the fire-time original) via a
    guarded `fs.writeFile` — no hunk replay, so revert is exact regardless of edit/write or refine
    depth. `git.status` at turn end is the safety net for anything the ledger missed.
-8. **Scope adds:** Refine-with-comment (followUp on the same session), other-files notice,
+8. **Scope adds:** Refine-with-comment (a fresh `prompt` turn on the same session — the session is idle in
+   review, so `followUp` would only queue, not start a turn), other-files notice,
    parallel-across-files. **Deferred by choice:** the `@agent` e2e happy-path spec (see
    Verification), document comments, autocompletion, multi-suggestion alternatives.
 
@@ -136,7 +137,8 @@ InlineEditRequest {
 5. **Resolve (all snapshot-based, no hunk replay):**
    - **Keep** → `done` (file already holds the text).
    - **Refine(comment)** → push a new turn (`baseContent` = current `afterContent`) →
-     `followUp(comment)` → `working`.
+     `prompt(comment)` on the same (idle) session → `working`. (Not `followUp`: at review the prior turn's
+     `agent_end` has fired, so the session is idle and `followUp` would only queue, never starting a turn.)
    - **Undo-last-change** → `fs.writeFile(currentTurn.baseContent, ifMatchContent = afterContent)`
      → re-read → **pop the last turn**: if turns remain, back to `review` of the now-last turn;
      if it was the only turn, `done`. Repeatable, one refinement at a time.
