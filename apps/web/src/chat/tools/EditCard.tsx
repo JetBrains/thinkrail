@@ -1,14 +1,13 @@
 import { Pencil } from "lucide-react";
 import type { ToolRenderProps } from "../toolRegistry";
 import { Collapsible } from "./Collapsible";
-import { projectRelativePath, resultText, strArg } from "./toolHelpers";
+import { editDiffText, projectRelativePath, resultText, strArg } from "./toolHelpers";
 
 /** Body for the `edit` tool: a simple removed/added line diff. */
 export function EditCard({ args, result, status, workspaceRoot }: ToolRenderProps) {
 	const path = strArg(args, "path");
-	// pi's edit arg names can vary; fall back across the common variants.
-	const oldText = strArg(args, "oldText") || strArg(args, "old_string") || strArg(args, "old");
-	const newText = strArg(args, "newText") || strArg(args, "new_string") || strArg(args, "new");
+	// pi nests replacements in `edits: [{ oldText, newText }]`; `editDiffText` reads that (+ legacy shapes).
+	const { oldText, newText } = editDiffText(args);
 	const message = resultText(result);
 
 	if (status === "error") {

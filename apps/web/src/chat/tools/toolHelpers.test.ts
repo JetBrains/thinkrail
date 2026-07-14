@@ -1,5 +1,37 @@
 import { expect, test } from "bun:test";
-import { languageFromPath, numArg, projectRelativePath, resultText, strArg } from "./toolHelpers";
+import {
+	editDiffText,
+	languageFromPath,
+	numArg,
+	projectRelativePath,
+	resultText,
+	strArg,
+} from "./toolHelpers";
+
+test("editDiffText reads pi's edits[] array (old/new nested), joining multiple entries", () => {
+	expect(editDiffText({ path: "f", edits: [{ oldText: "a", newText: "b" }] })).toEqual({
+		oldText: "a",
+		newText: "b",
+	});
+	expect(
+		editDiffText({
+			path: "f",
+			edits: [
+				{ oldText: "a1", newText: "b1" },
+				{ oldText: "a2", newText: "b2" },
+			],
+		}),
+	).toEqual({ oldText: "a1\na2", newText: "b1\nb2" });
+});
+
+test("editDiffText falls back to legacy top-level oldText/newText (and old_string variants)", () => {
+	expect(editDiffText({ oldText: "x", newText: "y" })).toEqual({ oldText: "x", newText: "y" });
+	expect(editDiffText({ old_string: "x", new_string: "y" })).toEqual({
+		oldText: "x",
+		newText: "y",
+	});
+	expect(editDiffText({ path: "f" })).toEqual({ oldText: "", newText: "" });
+});
 
 test("resultText joins the text blocks of an AgentToolResult-shaped value", () => {
 	expect(

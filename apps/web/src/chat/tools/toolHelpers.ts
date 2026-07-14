@@ -37,6 +37,31 @@ export function numArg(args: Record<string, unknown>, key: string): number | nul
 	return typeof v === "number" ? v : null;
 }
 
+/**
+ * Pull the old/new text out of an `edit` tool call's args. pi's edit tool nests replacements in an
+ * `edits: [{ oldText, newText }, …]` array (the primary shape the model emits); we join the entries for
+ * display. Falls back to a legacy top-level `oldText`/`newText` (and `old_string`/`old` variants) that pi
+ * still accepts and some providers emit. Returns empty strings when nothing matches.
+ */
+export function editDiffText(args: Record<string, unknown>): { oldText: string; newText: string } {
+	const s = (v: unknown) => (typeof v === "string" ? v : "");
+	const edits = args.edits;
+	if (Array.isArray(edits) && edits.length > 0) {
+		const pick = (e: unknown, a: string, b: string) => {
+			const o = (e ?? {}) as Record<string, unknown>;
+			return s(o[a]) || s(o[b]);
+		};
+		return {
+			oldText: edits.map((e) => pick(e, "oldText", "old_string")).join("\n"),
+			newText: edits.map((e) => pick(e, "newText", "new_string")).join("\n"),
+		};
+	}
+	return {
+		oldText: s(args.oldText) || s(args.old_string) || s(args.old),
+		newText: s(args.newText) || s(args.new_string) || s(args.new),
+	};
+}
+
 function normalizePath(path: string): string {
 	return path.replaceAll("\\", "/");
 }
