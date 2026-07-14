@@ -12,7 +12,7 @@ import {
 } from "@thinkrail/shared/jbcentral";
 import { getPiRuntime } from "../agent";
 
-/** Whether the `jbcentral` CLI is on the host's PATH (cheap, side-effect-free). */
+/** Whether the `central` CLI is on the host's PATH (cheap, side-effect-free). */
 export function jbcentralInstalled(): boolean {
 	return isJbcentralInstalled();
 }
@@ -42,7 +42,7 @@ export async function disconnectJbcentral(): Promise<void> {
 	getPiRuntime().modelRegistry.refresh();
 }
 
-/** Best-effort launch of `jbcentral login` (its browser sign-in) on the host. */
+/** Best-effort launch of `central login` (its browser sign-in) on the host. */
 export function jbcentralLogin(): { launched: boolean } {
 	return { launched: launchJbcentralLogin().launched };
 }

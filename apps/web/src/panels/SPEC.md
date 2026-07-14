@@ -82,7 +82,7 @@ prompt hero (still editable; empty by default), a base-branch
   **store-driven two-pane shell** (left section rail + scrollable content pane; mobile collapses the rail to
   a horizontal segmented strip): `settingsOpen`/`settingsSection` live in the store so the gear AND the
   Welcome banner can open it deep-linked to a section. Live sections: **`ProvidersSettings`** (the in-app
-  provider-auth surface — Connected cards each with a **Sign-out only when `canLogout`** (env / jbcentral /
+  provider-auth surface — Connected cards each with a **Sign-out only when `canLogout`** (env / central /
   models.json auth shows a "Managed" tag instead, since the host can't unset it); a **"Sign in with a
   subscription"** block of `canOAuth` providers → `provider.loginStart` → the store-driven `auth/LoginDialog`
   (open the URL or paste the code, `provider.loginReply`); an **"Add an API key"** group of single-key
@@ -90,7 +90,7 @@ prompt hero (still editable; empty by default), a base-branch
   the **`JetBrainsAiCard`** — route Claude+GPT through your JetBrains subscription (the jbcentral proxy) — a
   state machine over `jbcentralWired`/`jbcentralInstalled` + `jbcentralInstall` (all from the same status
   read) + `provider.jbcentral*`:
-  Connected (Disconnect) / ready (Connect) / not signed in (in-app `jbcentral login` + Retry) / not installed
+  Connected (Disconnect) / ready (Connect) / not signed in (in-app `central login` + Retry) / not installed
   (the host's per-OS copyable install command — from `jbcentralInstall`, for the *host's* OS, never the
   browser's — + Recheck); each mutation re-reads `provider.status`) and **`GithubSettings`** (the "Local GitHub" block — `github.authStatus()`
   Connected + login / Not connected + Refresh). Dimmed "General"/"Appearance" nav items ("Soon") signal the

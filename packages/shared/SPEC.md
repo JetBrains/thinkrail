@@ -39,9 +39,9 @@ Exposed through explicit subpath exports, not a barrel.
   they can't silently diverge (a co-located drift test asserts `buildProxyUrls` output satisfies
   `isJbcentralProxyUrl`). **Read:** `isJbcentralProxyUrl(url)` (loopback host + `/wire/` path) — how the
   server's provider-status report detects a wired provider. **Write:** `wireJbcentral(env)` (probe the proxy
-  secret via `jbcentral proxy start`, resolve the port, override anthropic/openai `baseUrl` in `models.json`
+  secret via `central proxy start`, resolve the port, override anthropic/openai `baseUrl` in `models.json`
   → a `WireOutcome`: `connected` / `needs-install` / `needs-login` / `error`), `unwireJbcentral(env)` (undo),
-  `isJbcentralInstalled()` (`Bun.which`), `launchJbcentralLogin()` (best-effort spawn of `jbcentral login`),
+  `isJbcentralInstalled()` (`Bun.which`), `launchJbcentralLogin()` (best-effort spawn of `central login`),
   plus the pure transforms + probe. **Install guidance is per-OS and single-sourced:** `jbcentralInstall(platform)`
   returns the `{platform, shell, command}` one-liner (macOS/Linux → `install.sh` curl pipe; Windows →
   `install.ps1` PowerShell) off the `central/` S3 path (post-rebrand, not the old `jbcentral/`); the server
@@ -61,10 +61,10 @@ Exposed through explicit subpath exports, not a barrel.
 
 ## Get right (jbcentral)
 
-- **Detect + invoke jbcentral by absolute path (`resolveJbcentralBin`), never by bare command.** Two traps,
+- **Detect + invoke central by absolute path (`resolveJbcentralBin`), never by bare command.** Two traps,
   both of which caused an "installed but the in-app Recheck does nothing" bug: (1) `Bun.which(cmd)` with no
   options reads the PATH **snapshotted at process start**, not the live `process.env.PATH` — so we pass
-  `process.env.PATH` explicitly; (2) the installer drops `jbcentral` in `~/.local/bin` and does **not** add
+  `process.env.PATH` explicitly; (2) the installer drops `central` in `~/.local/bin` and does **not** add
   that to PATH (it only prints a hint) — so we fall back to that location. `probeJbcentralSecret` /
   `launchJbcentralLogin` then run the resolved absolute path, so wiring/login work even when it's off PATH.
 - **Back up `models.json` to `.bak` only once** (when no `.bak` exists) — a connect→disconnect→connect cycle

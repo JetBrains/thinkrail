@@ -128,7 +128,7 @@ test("clicking Sign in (Settings) opens the in-app login dialog, and Cancel dism
 	await expect(dialog).toHaveCount(0);
 });
 
-test("Settings → Providers offers JetBrains AI, guiding install when the jbcentral CLI is missing", async ({
+test("Settings → Providers offers JetBrains AI, guiding install when the central CLI is missing", async ({
 	page,
 }) => {
 	await openAppFresh(page);
@@ -139,7 +139,7 @@ test("Settings → Providers offers JetBrains AI, guiding install when the jbcen
 	await expect(card).toBeVisible();
 	await expect(card).toContainText("JetBrains AI");
 
-	// The card's state depends on the host's jbcentral CLI (the e2e host has none → install guidance;
+	// The card's state depends on the host's central CLI (the e2e host has none → install guidance;
 	// a dev machine with it wired/ready shows Disconnect/Connect). Accept whichever is truthful.
 	if ((await card.getAttribute("data-installed")) === "false") {
 		await expect(page.getByTestId("jetbrains-needs-install")).toBeVisible();

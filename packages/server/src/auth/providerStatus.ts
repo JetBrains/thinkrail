@@ -50,7 +50,7 @@ export interface ProviderStatusSources {
 	displayName: (id: string) => string;
 	/** Any auth form at all (stored / runtime / env) — the fallback truth for model-less providers. */
 	hasAuth: (id: string) => boolean;
-	/** Whether the `jbcentral` CLI is on PATH — surfaced so the JetBrains AI card knows its state. */
+	/** Whether the `central` CLI is on PATH — surfaced so the JetBrains AI card knows its state. */
 	jbcentralInstalled: boolean;
 	/** The host's per-OS install command for the JetBrains Central CLI — carried to the card so it renders
 	 * the right command (for the *host's* OS) when the CLI isn't installed. */
@@ -63,7 +63,7 @@ function resolveKind(
 	credentialType: "oauth" | "api_key" | undefined,
 	source: string | undefined,
 ): ProviderAuthKind {
-	if (viaJbcentral) return "jbcentral";
+	if (viaJbcentral) return "central";
 	if (credentialType === "oauth") return "oauth";
 	if (credentialType === "api_key") return "api-key";
 	switch (source) {
@@ -84,7 +84,7 @@ function resolveDetail(
 	source?: string,
 	label?: string,
 ): string | undefined {
-	if (kind === "jbcentral") return undefined; // the kind's label says it all
+	if (kind === "central") return undefined; // the kind's label says it all
 	if (label) return label;
 	if (source === "models_json_key") return "models.json";
 	if (source === "models_json_command") return "models.json (command)";
@@ -95,7 +95,7 @@ function resolveDetail(
 export function buildProviderReport(sources: ProviderStatusSources): ProviderStatusReport {
 	const oauthIds = new Set(sources.oauthProviders.map((p) => p.id));
 	const oauthName = new Map(sources.oauthProviders.map((p) => [p.id, p.name]));
-	// Only providers with a stored auth.json credential are removable in-app; env / jbcentral (models.json) /
+	// Only providers with a stored auth.json credential are removable in-app; env / central (models.json) /
 	// models.json-keyed auth can't be unset by `authStorage.logout`, so Sign-out is hidden for them.
 	const removable = new Set(sources.credentialProviders);
 	// Every loginable thing is a row: model providers + stored credentials + OAuth providers (so the

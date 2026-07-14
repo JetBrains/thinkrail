@@ -53,7 +53,7 @@ describe("buildProviderReport", () => {
 		);
 	});
 
-	test("jbcentral-wired provider reports kind jbcentral and flips jbcentralWired", () => {
+	test("jbcentral-wired provider reports kind central and flips jbcentralWired", () => {
 		const report = buildProviderReport(
 			sources({
 				modelProviders: new Map([
@@ -68,7 +68,7 @@ describe("buildProviderReport", () => {
 		);
 		expect(report.jbcentralWired).toBe(true);
 		expect(report.providers).toEqual([
-			{ id: "anthropic", name: "Anthropic", configured: true, kind: "jbcentral", canApiKey: true },
+			{ id: "anthropic", name: "Anthropic", configured: true, kind: "central", canApiKey: true },
 			{ id: "google", name: "Google", configured: false, canApiKey: true },
 		]);
 	});
