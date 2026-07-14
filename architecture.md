@@ -72,6 +72,15 @@ packages/spec-graph portable pi extension: spec_* tools + skill (bundled into ev
    it is never sent to the backend (that would couple clients to each other). Corollary: **closing a tab is
    a view action, not a domain dispose** — a session stays alive for other clients; disposing/deleting a
    session is a separate, explicit domain action.
+10. **Dependencies pin exact versions.** Every dependency in every manifest pins an **exact** version — no
+    ranges (`^` `~` `>` `<` `.x` `*`). Rationale: `pi` ships breaking releases daily, so a floating range is
+    a live wire; more broadly, a silent minor/patch bump is the classic irreproducible-build trap. Exact
+    pins make the lockfile the single source of a dependency's version and turn every upgrade into an
+    explicit, reviewable diff. Cross-cutting deps (pi, TypeScript, typebox, bun types) are pinned **once** in
+    the root `workspaces.catalog` and referenced via `catalog:`, so their version lives in exactly one place.
+    **Enforced**, not just documented: `scripts/check-catalog.ts` (`bun run check:deps`, in pre-commit + CI)
+    rejects any range and any catalog drift. Exempt: `peerDependencies` (extension packages declare `"*"` on
+    purpose — the host provides the dep) and local protocols (`workspace:` / `link:` / `file:`).
 
 ## Invariants
 

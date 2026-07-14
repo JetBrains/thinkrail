@@ -123,7 +123,7 @@ bun run e2e:agent    # only the @agent specs
 ThinkRail is developed spec-first: hierarchical, interconnected specs live in the repo alongside the
 code — top-level specs at the root (`goal-and-requirements.md`, `architecture.md`) and a co-located
 `SPEC.md` for every module. When you change a boundary, contract, or decision, update the corresponding
-spec in the same change. See [`CLAUDE.md`](CLAUDE.md) for the spec workflow.
+spec in the same change. See [`AGENTS.md`](AGENTS.md) for the spec workflow.
 
 ## Contributing
 

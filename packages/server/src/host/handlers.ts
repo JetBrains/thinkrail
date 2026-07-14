@@ -2,8 +2,9 @@ import type {
 	AskUserQuestionResult,
 	ExtUiResponse,
 	ImageContent,
-	Model,
+	LoginReply,
 	ThinkingLevel,
+	WireModel,
 	Workspace,
 } from "@thinkrail/contracts";
 import {
@@ -27,6 +28,17 @@ import {
 	setSessionThinkingLevel,
 	steerSession,
 } from "../agent";
+import {
+	cancelLogin,
+	connectJbcentral,
+	disconnectJbcentral,
+	getProviderStatus,
+	jbcentralLogin,
+	logoutProvider,
+	resolveLogin,
+	setProviderApiKey,
+	startLogin,
+} from "../auth";
 import { selectDirectory } from "../dialog";
 import { readDir, readFile } from "../fs";
 import { gitDiff, gitStatus, listBranches, prefetchBranch } from "../git";
@@ -143,7 +155,7 @@ const handlers: Record<string, Handler> = {
 	"session.create": async (params) => {
 		const p = params as {
 			workspaceId: string;
-			model?: Model<string>;
+			model?: WireModel;
 			thinkingLevel?: ThinkingLevel;
 		};
 		const ws = getWorkspace(p.workspaceId);
@@ -180,7 +192,7 @@ const handlers: Record<string, Handler> = {
 		return { ok: true } as const;
 	},
 	"session.setModel": async (params) => {
-		const p = params as { sessionId: string; model: Model<string> };
+		const p = params as { sessionId: string; model: WireModel };
 		await setSessionModel(p.sessionId, p.model);
 		return { ok: true } as const;
 	},
@@ -221,6 +233,35 @@ const handlers: Record<string, Handler> = {
 	},
 	"model.list": () => listAvailableModels(),
 	"model.default": () => getDefaultModel(),
+	"provider.status": () => getProviderStatus(),
+	// In-app login. `loginStart` returns its handle at once (the flow runs detached — see `startLogin`);
+	// frames stream on the `provider.login` channel, `loginReply` answers a live select/prompt frame.
+	"provider.loginStart": (params) => startLogin((params as { providerId: string }).providerId),
+	"provider.loginReply": (params) => {
+		resolveLogin(params as LoginReply);
+		return { ok: true } as const;
+	},
+	"provider.loginCancel": (params) => {
+		cancelLogin((params as { loginId: string }).loginId);
+		return { ok: true } as const;
+	},
+	"provider.setApiKey": (params) => {
+		const p = params as { providerId: string; key: string };
+		setProviderApiKey(p.providerId, p.key);
+		return { ok: true } as const;
+	},
+	"provider.logout": (params) => {
+		logoutProvider((params as { providerId: string }).providerId);
+		return { ok: true } as const;
+	},
+	// JetBrains AI (jbcentral proxy): connect/disconnect write models.json + refresh the registry; login
+	// launches `jbcentral login` (browser) on the host.
+	"provider.jbcentralConnect": () => connectJbcentral(),
+	"provider.jbcentralDisconnect": async () => {
+		await disconnectJbcentral();
+		return { ok: true } as const;
+	},
+	"provider.jbcentralLogin": () => jbcentralLogin(),
 };
 
 /** Route a WS request to its handler. Throws on unknown method (→ a `{ ok:false }` WS response). */

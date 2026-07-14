@@ -22,7 +22,7 @@
 		"test": "bun test"
 	},
 	"dependencies": {
-		"yaml": "^2.9.0"
+		"yaml": "2.9.0"
 	},
 	"peerDependencies": {
 		"@earendil-works/pi-ai": "*",

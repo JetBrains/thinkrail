@@ -7,6 +7,7 @@ import { useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
+import { ProviderWarningBanner } from "./ProviderWarningBanner";
 import { useOpenProject } from "./useOpenProject";
 
 // Seeds the New-Workspace prompt hero for "Set up project" — pi's skill-command syntax `/skill:<name>`,
@@ -124,6 +125,8 @@ export function WelcomePanel() {
 				<span className="text-text">connected spec graph</span> that the agent reads, plans, and
 				builds from, all in git worktree isolated workspaces.
 			</p>
+
+			<ProviderWarningBanner />
 
 			<div className="mt-xl flex flex-wrap justify-center gap-md">
 				{noProjects ? (

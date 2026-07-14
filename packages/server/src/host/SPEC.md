@@ -20,6 +20,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `resolveWorktreeFile` — path-contained; bad id/escape/miss → 404; Bun infers the content-type) so the
   markdown viewer's relative `<img>`s resolve, static serving with
   `index.html` fallback, the `server.welcome` push, `terminal.data` topic subscribe + `server.publish`,
+  the **`provider.login`** channel publish (the `auth` module's session-less login-frame bridge, wired like
+  `pi.extensionUi`) and the `provider.*` login handlers, `cancelAllLogins()` in `stop()` before the socket close,
   an optional boot-time `openProject(projectPath)` (best-effort — a launcher convenience), and
   `stop()` → agent-session + terminal cleanup then socket close); `boot.ts` (`bootHost` → resolve the
   login-shell PATH, pick the port per `portMode` (`"exact"` vs `"free"`), start `createServer`, and

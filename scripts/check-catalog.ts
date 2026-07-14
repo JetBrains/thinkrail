@@ -1,12 +1,20 @@
 #!/usr/bin/env bun
-// Enforces the root dependency catalog: a dependency managed there must be referenced from workspace
-// manifests only via the `catalog:` protocol, so its version exists in exactly one place. Checks
-// dependencies/devDependencies/optionalDependencies; peerDependencies are exempt (extension packages
-// declare `"*"` there on purpose — the host provides the dependency). Also rejects `catalog:` references
-// that point at no catalog entry, and catalog entries that are ranges rather than exact versions (the
-// catalog pins; floating would drift into breakage — pi ships breaking releases daily). Exits non-zero
-// listing every violation. Named catalogs (`catalogs` / `catalog:<name>`) are not supported — only the
-// single default catalog this repo uses.
+// Enforces this repo's dependency-pinning policy across every workspace manifest. Two rules, one pass:
+//
+//   1. Exact pins only. Every dependency pins an EXACT version — no ranges (`^` `~` `>` `<` `.x` `*`).
+//      Floating would drift into breakage (pi ships breaking releases daily, and a silent minor bump is
+//      the classic "works on my machine" trap); an exact pin makes the lockfile the single source of a
+//      dependency's version and every upgrade an explicit, reviewable diff.
+//   2. Catalog-managed deps go through the catalog. A dependency listed in the root `workspaces.catalog`
+//      must be referenced from workspace manifests only via the `catalog:` protocol, so its version lives
+//      in exactly one place; and catalog entries must themselves be exact. A `catalog:` reference that
+//      points at no catalog entry is rejected too.
+//
+// Scope: dependencies/devDependencies/optionalDependencies. peerDependencies are exempt (extension
+// packages declare `"*"` there on purpose — the host provides the dependency). Local protocols
+// (`workspace:`, `link:`, `file:`, …) are exempt from rule 1 — they don't carry a registry version.
+// Exits non-zero listing every violation. Named catalogs (`catalogs` / `catalog:<name>`) are not
+// supported — only the single default catalog this repo uses.
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -64,9 +72,19 @@ for (const path of [join(root, "package.json"), ...manifestPaths()]) {
 				if (!(name in catalog)) {
 					violations.push(`${rel}: ${section}.${name} references a missing catalog entry`);
 				}
-			} else if (name in catalog) {
+				continue;
+			}
+			if (name in catalog) {
 				violations.push(
 					`${rel}: ${section}.${name} pins "${version}" — catalog-managed, use "catalog:"`,
+				);
+				continue;
+			}
+			// A protocol reference (`workspace:*`, `link:`, `file:`, …) carries no registry version to pin.
+			if (version.includes(":")) continue;
+			if (!EXACT_VERSION.test(version)) {
+				violations.push(
+					`${rel}: ${section}.${name} pins "${version}" — pin an exact version (no ranges)`,
 				);
 			}
 		}

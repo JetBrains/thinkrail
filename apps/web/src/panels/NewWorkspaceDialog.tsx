@@ -1,4 +1,4 @@
-import type { BranchList, Model, ThinkingLevel, Workspace } from "@thinkrail/contracts";
+import type { BranchList, ThinkingLevel, WireModel, Workspace } from "@thinkrail/contracts";
 import { Box, Check, ChevronDown, GitBranch, RefreshCw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { ModelSelector } from "@/chat/ModelSelector";
@@ -14,7 +14,7 @@ import {
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
-import { useAppStore } from "@/store";
+import { toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 
 /** A shared pill-trigger look for the project + branch pickers (mockup `.pill`). */
@@ -52,7 +52,7 @@ export function NewWorkspaceDialog({
 	const [baseRef, setBaseRef] = useState<string>("");
 	const [refreshing, setRefreshing] = useState(false);
 	const [prompt, setPrompt] = useState("");
-	const [model, setModel] = useState<Model<string> | null>(null);
+	const [model, setModel] = useState<WireModel | null>(null);
 	const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>("medium");
 	const [creating, setCreating] = useState(false);
 	const promptRef = useRef<HTMLTextAreaElement>(null);
@@ -162,9 +162,10 @@ export function NewWorkspaceDialog({
 				projectId: selectedProjectId,
 				...(baseRef ? { baseRef } : {}),
 			});
-		} catch {
-			// Worktree creation failed (bad ref, etc.) — keep the dialog open so the user can retry/adjust.
-			// (A toast comes with the error-handling pass.)
+		} catch (err) {
+			// Worktree creation failed (bad ref, etc.) — keep the dialog open so the user can retry/adjust,
+			// and surface the reason (it's otherwise invisible — the dialog just refuses to close).
+			toast.error(errorText(err), "Couldn't create workspace");
 			setCreating(false);
 			return;
 		}
@@ -194,9 +195,10 @@ export function NewWorkspaceDialog({
 				.request("session.prompt", { sessionId: session.sessionId, text })
 				.catch((err) => store.appendErrorTurn(session.sessionId, errorText(err)));
 		} catch (err) {
-			// `session.create` itself failed (no session/tab to host an error turn) — the workspace still exists
-			// and the dialog is already closed, so log for now. (A toast comes with the broader error pass.)
-			console.error("session.create failed:", errorText(err));
+			// `session.create` itself failed — there's no session/tab to host an error turn, and the dialog has
+			// already closed (the workspace exists), so a toast is the only place left to surface the kick-off
+			// failure. Without it the "create + kick off a chat" intent just silently drops the chat.
+			toast.error(errorText(err), "Couldn't start the chat");
 		}
 	};
 

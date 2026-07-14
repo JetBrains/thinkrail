@@ -72,14 +72,14 @@ repo alongside the code — top-level specs at the root
 [`architecture.md`](architecture.md)) and a co-located `SPEC.md` for every module.
 **The spec leads the code:** a change that moves or blurs a boundary, contract, or
 decision updates the relevant `SPEC.md` first, then the code and the tests that pin
-it. See [`CLAUDE.md`](CLAUDE.md) for the spec workflow.
+it. See [`AGENTS.md`](AGENTS.md) for the spec workflow.
 
 ## Submitting changes
 
 1. [Fork the repository](https://docs.github.com/articles/fork-a-repo) and create a
    branch off `main`.
 2. Make your change, keeping it focused. Match the surrounding code style and the
-   conventions in `CLAUDE.md`.
+   conventions in `AGENTS.md`.
 3. Add or update tests and specs, and run the checks above.
 4. Open a [pull request](https://docs.github.com/articles/creating-a-pull-request)
    against `main` with a clear description of *what* changed and *why*.

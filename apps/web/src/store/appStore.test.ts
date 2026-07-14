@@ -1,6 +1,6 @@
 import { beforeEach, expect, test } from "bun:test";
 import type { ExtUiRequest, PiEvent, SessionSummary, Workspace } from "@thinkrail/contracts";
-import { type SessionRuntime, useAppStore } from "./appStore";
+import { type SessionRuntime, toast, useAppStore } from "./appStore";
 
 // Event fixtures — the reducer only reads the fields below, so casting minimal objects is safe here.
 const agentStart = { type: "agent_start" } as unknown as PiEvent;
@@ -50,6 +50,10 @@ beforeEach(() => {
 		activeTabByWorkspace: {},
 		closedChatsByWorkspace: {},
 		activeWorkspaceId: null,
+		activeLogin: null,
+		settingsOpen: false,
+		settingsSection: "providers",
+		toasts: [],
 	});
 });
 
@@ -499,4 +503,208 @@ test("removeWorkspace optimistically drops the row, leaving siblings; unknown pr
 	expect(useAppStore.getState().workspaces.p1).toHaveLength(1);
 	useAppStore.getState().removeWorkspace("p2", "w1");
 	expect(useAppStore.getState().workspaces.p2).toBeUndefined();
+});
+
+// --- in-app login (flat, session-less) -------------------------------------------------------------
+
+test("beginLogin opens a fresh active login; frames accumulate (url + paste prompt coexist)", () => {
+	const s = useAppStore.getState();
+	s.beginLogin("l1", "anthropic");
+	expect(useAppStore.getState().activeLogin).toEqual({
+		loginId: "l1",
+		providerId: "anthropic",
+		status: "active",
+	});
+
+	s.applyLoginFrame({
+		loginId: "l1",
+		providerId: "anthropic",
+		frame: { kind: "authUrl", url: "https://x/auth" },
+	});
+	s.applyLoginFrame({
+		loginId: "l1",
+		providerId: "anthropic",
+		frame: { kind: "prompt", message: "Paste the code", placeholder: "code" },
+	});
+	// The browser-vs-paste race: the URL and the paste input are live at the same time.
+	expect(useAppStore.getState().activeLogin).toMatchObject({
+		url: "https://x/auth",
+		input: { kind: "prompt", message: "Paste the code", placeholder: "code" },
+	});
+});
+
+test("a prompt frame's allowEmpty folds through (Copilot's blank-for-github.com GHE prompt)", () => {
+	const s = useAppStore.getState();
+	s.beginLogin("l1", "github-copilot");
+	s.applyLoginFrame({
+		loginId: "l1",
+		providerId: "github-copilot",
+		frame: {
+			kind: "prompt",
+			message: "GitHub Enterprise URL/domain (blank for github.com)",
+			placeholder: "company.ghe.com",
+			allowEmpty: true,
+		},
+	});
+	// Without allowEmpty carried through, the dialog would refuse to submit a blank github.com answer.
+	expect(useAppStore.getState().activeLogin?.input).toMatchObject({
+		kind: "prompt",
+		allowEmpty: true,
+	});
+});
+
+test("a frame that beats the loginStart response creates the login; beginLogin then no-ops", () => {
+	const s = useAppStore.getState();
+	// Provider fired onAuth synchronously → the frame arrives before beginLogin.
+	s.applyLoginFrame({
+		loginId: "l9",
+		providerId: "openai-codex",
+		frame: { kind: "authUrl", url: "https://y" },
+	});
+	expect(useAppStore.getState().activeLogin).toMatchObject({ loginId: "l9", url: "https://y" });
+
+	// The late beginLogin for the same id must not clobber the folded state.
+	s.beginLogin("l9", "openai-codex");
+	expect(useAppStore.getState().activeLogin).toMatchObject({ loginId: "l9", url: "https://y" });
+});
+
+test("frames for a different still-active login are ignored (modal — one at a time)", () => {
+	const s = useAppStore.getState();
+	s.beginLogin("l1", "anthropic");
+	s.applyLoginFrame({
+		loginId: "other",
+		providerId: "google",
+		frame: { kind: "authUrl", url: "https://nope" },
+	});
+	expect(useAppStore.getState().activeLogin).toMatchObject({
+		loginId: "l1",
+		providerId: "anthropic",
+	});
+	expect(useAppStore.getState().activeLogin?.url).toBeUndefined();
+});
+
+test("clearLoginInput drops the live input; success is terminal; clearLogin dismisses", () => {
+	const s = useAppStore.getState();
+	s.beginLogin("l1", "anthropic");
+	s.applyLoginFrame({
+		loginId: "l1",
+		providerId: "anthropic",
+		frame: { kind: "select", message: "Pick", options: [{ id: "max", label: "Max" }] },
+	});
+	expect(useAppStore.getState().activeLogin?.input).toBeDefined();
+
+	s.clearLoginInput(); // sent a reply → hide the input immediately (no double-submit)
+	expect(useAppStore.getState().activeLogin?.input).toBeUndefined();
+
+	s.applyLoginFrame({ loginId: "l1", providerId: "anthropic", frame: { kind: "success" } });
+	expect(useAppStore.getState().activeLogin?.status).toBe("success");
+
+	s.clearLogin();
+	expect(useAppStore.getState().activeLogin).toBeNull();
+});
+
+test("openSettings deep-links to a section (default providers); closeSettings hides it", () => {
+	const s = useAppStore.getState();
+	s.openSettings();
+	expect(useAppStore.getState().settingsOpen).toBe(true);
+	expect(useAppStore.getState().settingsSection).toBe("providers");
+
+	s.openSettings("github");
+	expect(useAppStore.getState().settingsSection).toBe("github");
+
+	s.setSettingsSection("providers");
+	expect(useAppStore.getState().settingsSection).toBe("providers");
+
+	s.closeSettings();
+	expect(useAppStore.getState().settingsOpen).toBe(false);
+	// The section is remembered across close/open (not reset).
+	expect(useAppStore.getState().settingsSection).toBe("providers");
+});
+
+test("an error frame is terminal: sets status/error and clears the live input + progress", () => {
+	const s = useAppStore.getState();
+	s.beginLogin("l1", "anthropic");
+	s.applyLoginFrame({
+		loginId: "l1",
+		providerId: "anthropic",
+		frame: { kind: "progress", message: "…" },
+	});
+	s.applyLoginFrame({
+		loginId: "l1",
+		providerId: "anthropic",
+		frame: { kind: "prompt", message: "code" },
+	});
+	s.applyLoginFrame({
+		loginId: "l1",
+		providerId: "anthropic",
+		frame: { kind: "error", message: "Scope revoked by provider" },
+	});
+	const login = useAppStore.getState().activeLogin;
+	expect(login).toMatchObject({ status: "error", error: "Scope revoked by provider" });
+	expect(login?.input).toBeUndefined();
+	expect(login?.progress).toBeUndefined();
+});
+
+test("pushToast appends with a fresh id and dismissToast removes only that toast", () => {
+	const store = useAppStore.getState();
+	const id1 = store.pushToast({ variant: "error", message: "boom" });
+	const id2 = store.pushToast({ variant: "info", message: "fyi", title: "Heads up" });
+	expect(id1).not.toBe(id2);
+	// Oldest-first, and the optional title is carried only when given.
+	expect(useAppStore.getState().toasts).toMatchObject([
+		{ id: id1, variant: "error", message: "boom" },
+		{ id: id2, variant: "info", message: "fyi", title: "Heads up" },
+	]);
+	expect(useAppStore.getState().toasts[0]).not.toHaveProperty("title");
+
+	store.dismissToast(id1);
+	expect(useAppStore.getState().toasts).toMatchObject([{ id: id2 }]);
+});
+
+test("dismissToast for an unknown id is a no-op (same array ref, no churn)", () => {
+	const store = useAppStore.getState();
+	store.pushToast({ variant: "success", message: "done" });
+	const before = useAppStore.getState().toasts;
+	store.dismissToast("ghost");
+	expect(useAppStore.getState().toasts).toBe(before);
+});
+
+test("pushToast coalesces an identical live toast (same variant/title/message) into the existing id", () => {
+	const store = useAppStore.getState();
+	const id1 = store.pushToast({ variant: "error", message: "boom", title: "Failed" });
+	const twin = store.pushToast({ variant: "error", message: "boom", title: "Failed" });
+	expect(twin).toBe(id1);
+	expect(useAppStore.getState().toasts).toHaveLength(1);
+
+	// Any field differing → a distinct toast.
+	store.pushToast({ variant: "info", message: "boom", title: "Failed" });
+	store.pushToast({ variant: "error", message: "boom" });
+	expect(useAppStore.getState().toasts).toHaveLength(3);
+
+	// Once the twin is dismissed, the same content enqueues fresh (with a new id).
+	store.dismissToast(id1);
+	const fresh = store.pushToast({ variant: "error", message: "boom", title: "Failed" });
+	expect(fresh).not.toBe(id1);
+	expect(useAppStore.getState().toasts).toHaveLength(3);
+});
+
+test("pushToast caps the queue, dropping the oldest", () => {
+	const store = useAppStore.getState();
+	const first = store.pushToast({ variant: "error", message: "toast 0" });
+	for (let i = 1; i <= 5; i++) store.pushToast({ variant: "error", message: `toast ${i}` });
+	const toasts = useAppStore.getState().toasts;
+	expect(toasts).toHaveLength(5);
+	expect(toasts.some((t) => t.id === first)).toBe(false);
+	expect(toasts[0]?.message).toBe("toast 1");
+	expect(toasts[4]?.message).toBe("toast 5");
+});
+
+test("the toast helper enqueues by variant and omits an absent title", () => {
+	toast.success("saved");
+	toast.error("nope", "Failed");
+	expect(useAppStore.getState().toasts).toMatchObject([
+		{ variant: "success", message: "saved" },
+		{ variant: "error", message: "nope", title: "Failed" },
+	]);
+	expect(useAppStore.getState().toasts[0]).not.toHaveProperty("title");
 });

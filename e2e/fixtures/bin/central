@@ -1,0 +1,28 @@
+#!/bin/sh
+# e2e stub for the JetBrains Central CLI (`central`). Deterministic: no network, no real proxy/daemon.
+# Mirrors ONLY the surface ThinkRail's jbcentral integration invokes (see packages/shared/src/jbcentral.ts).
+#
+# Outcome is controlled by the file named in $CENTRAL_STUB_STATE (E2E_CENTRAL_STATE), read live per call so a
+# test can drive the card's not-signed-in / error branches without restarting the shared host:
+#   absent/empty  -> signed in     (prints the persistent secret, exit 0)
+#   "needs-login" -> not signed in (empty secret, exit 0)  -> the card's "Sign in to JetBrains" state
+#   "error"       -> hard failure  (stderr + exit 1)        -> the card's error state
+if [ "$1" = "proxy" ] && [ "$2" = "start" ]; then
+	state=""
+	[ -n "$CENTRAL_STUB_STATE" ] && [ -f "$CENTRAL_STUB_STATE" ] && state=$(cat "$CENTRAL_STUB_STATE")
+	if [ "$state" = "needs-login" ]; then
+		# `--return-key` with no JetBrains session prints nothing → the host reads it as not-logged-in.
+		exit 0
+	fi
+	if [ "$state" = "error" ]; then
+		echo "stub central: proxy start failed" >&2
+		exit 1
+	fi
+	# `--return-key`: print ONLY the persistent proxy secret (a URL-safe path segment).
+	echo "e2efakesecret0123456789abcdef01"
+	exit 0
+fi
+if [ "$1" = "login" ]; then
+	exit 0
+fi
+exit 0

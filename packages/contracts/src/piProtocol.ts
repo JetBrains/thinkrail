@@ -22,6 +22,22 @@ export type {
 import type { AgentEvent, AgentMessage, ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { Model } from "@earendil-works/pi-ai";
 
+/**
+ * A model **as it crosses the wire**: an **allowlist** of exactly the fields the UI renders — identity
+ * (`id`/`name`/`provider`, which also let the host re-resolve the real model) + the picker's display bits
+ * (`contextWindow`/`reasoning`). Deliberately a `Pick`, **not** an `Omit`: `Model.baseUrl` carries the
+ * jbcentral proxy token (`http://127.0.0.1:<port>/wire/<SECRET>/…`) when JetBrains AI is wired and `headers`
+ * can carry auth, and an allowlist **fails closed** — a future `Model` field (secret or not) is excluded by
+ * default rather than leaking. The client refers a model back by `{ provider, id }`; the host re-resolves the
+ * real `Model` (with `baseUrl`) from its own registry, so a client can neither read the secret nor inject a
+ * `baseUrl` for the agent to call. (Widen this set only for a field the UI truly renders — never a
+ * credential-bearing one.)
+ */
+export type WireModel = Pick<
+	Model<string>,
+	"id" | "name" | "provider" | "contextWindow" | "reasoning"
+>;
+
 // The unified render union the UI switches on. The real superset (`AgentSessionEvent`) is declared in the
 // Node-only `pi-coding-agent` (it pulls node:fs), so it's MIRRORED here type-only, derived from the
 // imported `AgentEvent`. Keep in sync with @earendil-works/pi-coding-agent@0.80.3
@@ -84,7 +100,7 @@ export interface SessionSummary {
 	sessionId: string;
 	workspaceId: string;
 	title: string;
-	model: Model<string> | null;
+	model: WireModel | null;
 	thinkingLevel: ThinkingLevel;
 	isStreaming: boolean;
 	messageCount: number;

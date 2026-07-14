@@ -1,10 +1,18 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig, devices } from "@playwright/test";
-import { E2E_DATA_DIR, E2E_PI_AGENT_DIR, E2E_PICK_DIR_POINTER } from "./e2e/fixtures/paths";
+import {
+	E2E_CENTRAL_STATE,
+	E2E_DATA_DIR,
+	E2E_PI_AGENT_DIR,
+	E2E_PICK_DIR_POINTER,
+} from "./e2e/fixtures/paths";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
 const staticDir = fileURLToPath(new URL("./apps/web/dist", import.meta.url));
 const PORT = 24252; // dedicated e2e port — never collides with dev:server (24242)
+// A stub `central` (JetBrains Central CLI) on the host's PATH so the JetBrains AI flow is drivable
+// deterministically — no real CLI, network, or JetBrains auth. Prepended so it wins over any real install.
+const fakeBinDir = fileURLToPath(new URL("./e2e/fixtures/bin", import.meta.url));
 
 export default defineConfig({
 	testDir: "./e2e",
@@ -45,6 +53,16 @@ export default defineConfig({
 			// @agent suite uses a real provider yet `setModel`/`setThinkingLevel` persist here — never the
 			// user's real `~/.pi/agent`. (Provider env vars in the inherited env still resolve auth too.)
 			PI_CODING_AGENT_DIR: E2E_PI_AGENT_DIR,
+			// Put the stub `central` first on PATH (see fakeBinDir), and pin the proxy port so wiring is
+			// deterministic and never reads the dev machine's real ~/.wire/config.json.
+			PATH: `${fakeBinDir}:${process.env.PATH ?? ""}`,
+			WIRE_PROXY_PORT: "19516",
+			// Control file the stub `central` reads live to pick its outcome (signed in / not signed in /
+			// error), letting a test drive the JetBrains AI card's non-happy branches without restarting the host.
+			CENTRAL_STUB_STATE: E2E_CENTRAL_STATE,
+			// Register a deterministic fake OAuth provider (`e2e-oauth`) so the in-app login flow is drivable
+			// end-to-end without a real provider/browser (see packages/server/src/dev.ts).
+			THINKRAIL_E2E_FAKE_OAUTH: "1",
 		},
 	},
 });

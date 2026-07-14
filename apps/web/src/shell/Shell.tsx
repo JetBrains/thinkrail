@@ -1,5 +1,4 @@
 import { Settings } from "lucide-react";
-import { useState } from "react";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../components/ui/resizable";
 import { PRODUCT_NAME } from "../constants/branding";
@@ -8,6 +7,7 @@ import { ProjectTree } from "../panels/ProjectTree";
 import { RightPanel } from "../panels/RightPanel";
 import { SettingsDialog } from "../panels/SettingsDialog";
 import { TerminalsPanel } from "../panels/TerminalsPanel";
+import { Toaster } from "../panels/Toaster";
 import { WelcomePanel } from "../panels/WelcomePanel";
 import { useAppStore } from "../store";
 import type { ConnectionStatus } from "../transport";
@@ -28,7 +28,6 @@ export function Shell() {
 	const status = useAppStore((s) => s.status);
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
 	const hasActiveWorkspace = activeWorkspaceId != null;
-	const [settingsOpen, setSettingsOpen] = useState(false);
 	return (
 		<div data-testid="shell" className="grid h-full grid-rows-[auto_1fr]">
 			<header className="flex items-center justify-between border-b border-border2 bg-bg-dark px-lg py-sm">
@@ -49,13 +48,13 @@ export function Shell() {
 						data-testid="open-settings"
 						aria-label="Settings"
 						title="Settings"
-						onClick={() => setSettingsOpen(true)}
+						onClick={() => useAppStore.getState().openSettings()}
 						className="flex size-7 items-center justify-center rounded-[var(--radius-sm)] text-muted outline-none transition-colors hover:bg-hover hover:text-text focus-visible:ring-2 focus-visible:ring-primary"
 					>
 						<Settings className="size-4" />
 					</button>
 				</div>
-				<SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+				<SettingsDialog />
 			</header>
 			{hasActiveWorkspace ? (
 				<ResizablePanelGroup
@@ -118,6 +117,7 @@ export function Shell() {
 					</ResizablePanel>
 				</ResizablePanelGroup>
 			)}
+			<Toaster />
 		</div>
 	);
 }

@@ -25,7 +25,6 @@
 		"build:web": "turbo run build --filter=@thinkrail/web",
 		"build:binary": "bun run build:web && bun apps/cli/scripts/build-binary.ts",
 		"smoke:binary": "bun apps/cli/scripts/smoke-binary.ts",
-		"setup-jbcentral-cli": "bun scripts/setup-jbcentral-cli.ts",
 		"typecheck": "turbo run typecheck",
 		"test": "turbo run test",
 		"lint": "biome check .",
@@ -41,11 +40,11 @@
 		"check:deps": "bun scripts/check-catalog.ts"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.5.0",
+		"@biomejs/biome": "2.5.0",
 		"@thinkrail/shared": "workspace:*",
-		"@playwright/test": "^1.61.0",
-		"husky": "^9.1.7",
-		"turbo": "^2.9.18",
+		"@playwright/test": "1.61.0",
+		"husky": "9.1.7",
+		"turbo": "2.9.18",
 		"typescript": "catalog:"
 	},
 	"trustedDependencies": [
