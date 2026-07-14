@@ -55,15 +55,23 @@ const DOCUMENT_PROSE = [
  * padded reading column capped at a comfortable measure + the document skin); the GFM+shiki rendering is
  * the reused `chat/Markdown`. Lazy-loaded — the markdown+shiki chunk only arrives when a markdown tab is
  * shown in preview mode. Also hosts inline AI-editing (`useMarkdownInlineEdit`): the sourcepos rehype
- * plugin stamps rendered blocks with source line numbers so a selection can be anchored back to a block,
- * and the controller's `overlay` renders the pill/popup/chip/review on top of the scroll container.
+ * plugin stamps rendered blocks with source line numbers so a selection can be anchored back to a block.
+ *
+ * Inline-edit review is rendered IN THE DOCUMENT FLOW, not as a floating overlay: when the controller
+ * reports an active `review` for this path, the stripped doc is split at `review.range` into a before-half
+ * and an after-half — each still the same `<Markdown>` with the same props — with `review.node` (the woven
+ * diff + action box, or the working/error block) spliced between them. `review.mode` "replace" swaps the
+ * changed lines out for the node; "insert" drops the node right after the (unchanged) block. A missing/
+ * unlocatable range falls back to appending the node after the whole document, so the review is never lost.
+ * Only the selection pill + instruction popup (`selectionOverlay`) stay floating — they're transient,
+ * anchored to a live text selection, not part of the document.
  *
  * Frontmatter caveat: `stripFrontmatter` removes leading YAML, so rendered line numbers are offset from
- * raw-file line numbers when frontmatter is present. For v0 the selection lines and the block-match lines
- * are BOTH computed from the stripped/rendered doc, so they're internally consistent (the overlay anchors
- * correctly). The agent receives raw-file context and edits by text match, not line number, so the offset
- * doesn't misdirect the edit. If a future task needs raw-file line fidelity, carry the frontmatter offset
- * through `sourceLineRehype`.
+ * raw-file line numbers when frontmatter is present. For v0 the selection lines and the split-range lines
+ * are BOTH computed from the stripped/rendered doc, so they're internally consistent (the split lands in
+ * the right place). The agent receives raw-file context and edits by text match, not line number, so the
+ * offset doesn't misdirect the edit. If a future task needs raw-file line fidelity, carry the frontmatter
+ * offset through `sourceLineRehype`.
  */
 export default function MarkdownPreview({
 	content,
@@ -75,23 +83,54 @@ export default function MarkdownPreview({
 	path: string;
 }) {
 	const scrollRef = useRef<HTMLDivElement>(null);
-	const { overlay } = useMarkdownInlineEdit({ containerRef: scrollRef, workspaceId, path });
+	const { selectionOverlay, review } = useMarkdownInlineEdit({
+		containerRef: scrollRef,
+		workspaceId,
+		path,
+		content,
+	});
+	const stripped = stripFrontmatter(content);
+	const mdProps = {
+		className: DOCUMENT_PROSE,
+		remarkPlugins: [remarkGithubAlerts, remarkHeadingIds],
+		rehypePlugins: [sourceLineRehype],
+		components: { ...alertComponents, ...documentComponents({ workspaceId, path }) },
+	};
+
+	let body: React.ReactNode;
+	if (review?.range) {
+		const lines = stripped.split("\n");
+		const { start, end } = review.range;
+		const before = lines.slice(0, review.mode === "replace" ? start - 1 : end).join("\n");
+		const after = lines.slice(end).join("\n");
+		body = (
+			<>
+				{before && <Markdown text={before} {...mdProps} />}
+				{review.node}
+				{after && <Markdown text={after} {...mdProps} />}
+			</>
+		);
+	} else if (review?.node) {
+		// Range unavailable (couldn't be located) — append the review after the whole document rather than
+		// losing it.
+		body = (
+			<>
+				<Markdown text={stripped} {...mdProps} />
+				{review.node}
+			</>
+		);
+	} else {
+		body = <Markdown text={stripped} {...mdProps} />;
+	}
+
 	return (
 		<div
 			ref={scrollRef}
 			data-testid="markdown-preview"
 			className="h-full overflow-auto bg-surface-content"
 		>
-			<article className="mx-auto max-w-[78ch] px-xl py-lg">
-				<Markdown
-					text={stripFrontmatter(content)}
-					className={DOCUMENT_PROSE}
-					remarkPlugins={[remarkGithubAlerts, remarkHeadingIds]}
-					rehypePlugins={[sourceLineRehype]}
-					components={{ ...alertComponents, ...documentComponents({ workspaceId, path }) }}
-				/>
-			</article>
-			{overlay}
+			<article className="mx-auto max-w-[78ch] px-xl py-lg">{body}</article>
+			{selectionOverlay}
 		</div>
 	);
 }

@@ -1,11 +1,11 @@
 import { wordDiff } from "./wordDiff";
 
 /**
- * Suggestion-style review for one target-file hunk: old text struck through, new text highlighted, word-level.
- * Rendered in place of the changed block in the markdown view. `children` is the action bar (composed by the
- * controller so this stays purely presentational).
+ * In-flow woven diff for a markdown review: old text struck through, new text highlighted, word-level.
+ * Rendered as a normal document block in place of the changed lines (never fixed/floating) — `children`
+ * (the action bar) renders directly below it, in the flow, pushing following content down.
  */
-export function SuggestionOverlay({
+export function InlineSuggestion({
 	oldText,
 	newText,
 	children,
@@ -18,7 +18,7 @@ export function SuggestionOverlay({
 	return (
 		<div
 			data-testid="inline-edit-suggestion"
-			className="rounded-[var(--radius-sm)] border border-primary/30 bg-primary/5 px-sm py-xs"
+			className="my-md rounded-[var(--radius-sm)] border border-primary/30 bg-primary/5 px-sm py-xs"
 		>
 			<p className="text-sm leading-relaxed">
 				{parts.map((p, i) =>

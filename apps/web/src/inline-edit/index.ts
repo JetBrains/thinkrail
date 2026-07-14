@@ -16,13 +16,15 @@ export { monacoSelectionTarget, resolveMarkdownSelection, sourceLineRehype } fro
 export { EditActionBar } from "./EditActionBar";
 export { EditStatusChip } from "./EditStatusChip";
 export { InlineEditOrchestrator } from "./InlineEditOrchestrator";
+export { InlineSuggestion } from "./InlineSuggestion";
 export { InstructionPopup } from "./InstructionPopup";
+export { changedLineRange } from "./lineDiff";
 export { MonacoReviewCard } from "./MonacoReviewCard";
 export { PreviewPopover } from "./PreviewPopover";
 export { buildSeedPrompt } from "./prompt";
 export { SelectionPill } from "./SelectionPill";
-export { SuggestionOverlay } from "./SuggestionOverlay";
 export type { EditHunk, InlineEditRequest, InlineEditStatus, SelectionTarget } from "./types";
+export type { MarkdownReview } from "./useMarkdownInlineEdit";
 export { useMarkdownInlineEdit } from "./useMarkdownInlineEdit";
 export { useMonacoInlineEdit } from "./useMonacoInlineEdit";
 export type { DiffPart } from "./wordDiff";

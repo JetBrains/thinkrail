@@ -19,9 +19,11 @@ Keep / Revert / Refine / Open-as-chat.
 ## Boundary
 
 - **Owns:** the trigger (selection → pill → popup), the working-state chip + read-only preview popover, the
-  markdown suggestion overlay + action bar, the Monaco review card, per-surface selection→target anchoring,
-  and the fire/refine/keep/revert/stop/open-in-tab orchestration. The inline-edit **state** lives in `store`
-  (`inlineEdits`); this module reads it and drives it through store actions + transport.
+  markdown in-flow woven diff + action box (`InlineSuggestion`, spliced into the rendered document by
+  `MarkdownPreview` at a `lineDiff`-computed range — never a floating overlay), the Monaco review card,
+  per-surface selection→target anchoring, and the fire/refine/keep/revert/stop/open-in-tab orchestration.
+  The inline-edit **state** lives in `store` (`inlineEdits`); this module reads it and drives it through
+  store actions + transport.
 - **Public surface (barrel `index.ts`):** the controller hooks (`useMarkdownInlineEdit`, `useMonacoInlineEdit`),
   the `InlineEditOrchestrator`, and types. Widgets are internal (rendered by the controllers).
 - **Allowed deps:** `store`, `transport`, `chat` (presentational renderers for the preview popover — reused,

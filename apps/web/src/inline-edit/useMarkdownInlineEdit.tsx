@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { stripFrontmatter } from "@/lib/utils";
 import { useAppStore } from "@/store";
 import {
 	hasPendingEditForPath,
@@ -13,26 +14,47 @@ import {
 import { resolveMarkdownSelection } from "./anchor";
 import { EditActionBar } from "./EditActionBar";
 import { EditStatusChip } from "./EditStatusChip";
+import { InlineSuggestion } from "./InlineSuggestion";
 import { InstructionPopup } from "./InstructionPopup";
+import { changedLineRange } from "./lineDiff";
 import { PreviewPopover } from "./PreviewPopover";
 import { SelectionPill } from "./SelectionPill";
-import { SuggestionOverlay } from "./SuggestionOverlay";
 import type { InlineEditRequest, SelectionTarget } from "./types";
 
+/** A rect-anchored floating popover needs a viewport position — kept minimal, {top,left} only. */
+type Rect = { top: number; left: number };
+
 /**
- * Controller for inline editing in the rendered-markdown view. Owns selection→pill→popup→fire and renders
- * this path's working chip / review overlay / preview popover. Returns a single `overlay` node the preview
- * drops in (fixed-positioned children escape the scroll container).
+ * This path's active-request review, described as an IN-FLOW splice for `MarkdownPreview` to weave into the
+ * rendered document — never a floating overlay. `range` is 1-based, against the STRIPPED (frontmatter
+ * removed) rendered doc, matching what `MarkdownPreview` slices on; `null` means "couldn't be located,
+ * render after the whole document" (a fallback, not a normal case). `mode` "replace" swaps the changed lines
+ * out for `node`; "insert" drops `node` in right after the (unchanged) block, pushing later content down.
+ */
+export interface MarkdownReview {
+	mode: "replace" | "insert";
+	range: { start: number; end: number } | null;
+	node: React.ReactNode;
+}
+
+/**
+ * Controller for inline editing in the rendered-markdown view. Owns selection→pill→popup→fire and describes
+ * this path's active request as an in-flow `review` block. Only the selection pill + instruction popup
+ * (transient, anchored to a live text selection) stay floating — returned as `selectionOverlay`, which the
+ * preview still drops on top of the scroll container. The diff + action box, the working "editing…" bar, and
+ * the error card are all in `review`, woven into the document by `MarkdownPreview`.
  */
 export function useMarkdownInlineEdit({
 	containerRef,
 	workspaceId,
 	path,
+	content,
 }: {
 	containerRef: React.RefObject<HTMLElement | null>;
 	workspaceId: string;
 	path: string;
-}) {
+	content: string;
+}): { selectionOverlay: React.ReactNode; review: MarkdownReview | null } {
 	const [target, setTarget] = useState<SelectionTarget | null>(null);
 	const [popupOpen, setPopupOpen] = useState(false);
 	const [popupError, setPopupError] = useState<string | null>(null);
@@ -87,10 +109,10 @@ export function useMarkdownInlineEdit({
 		[target],
 	);
 
-	// Build the overlay node (pill → popup → chip/review/preview by status).
-	let overlay: React.ReactNode = null;
+	// Build the selection overlay (pill → popup); this is the only part that stays floating.
+	let selectionOverlay: React.ReactNode = null;
 	if (popupOpen && target) {
-		overlay = (
+		selectionOverlay = (
 			<InstructionPopup
 				rect={target.rect}
 				error={popupError}
@@ -102,60 +124,100 @@ export function useMarkdownInlineEdit({
 			/>
 		);
 	} else if (target && !request) {
-		overlay = <SelectionPill rect={target.rect} onClick={() => setPopupOpen(true)} />;
+		selectionOverlay = <SelectionPill rect={target.rect} onClick={() => setPopupOpen(true)} />;
 	}
 
-	// Working chip / review overlay for this path's request, anchored over the matched block.
-	const requestOverlay = request ? (
-		<MarkdownRequestOverlay
-			containerRef={containerRef}
-			request={request}
-			previewOpen={previewFor === request.id}
-			refineOpen={refineFor === request.id}
-			onPreview={() => setPreviewFor((p) => (p === request.id ? null : request.id))}
-			onClosePreview={() => setPreviewFor(null)}
-			onOpenInTab={() => openInlineEditInTab(request.id)}
-			onStop={() => void stopInlineEdit(request.id)}
-			onKeep={() => keepInlineEdit(request.id)}
-			onUndoLast={async () => {
+	// The two floating children left (read-only preview popover, refine popup) anchor to their own in-flow
+	// wrapper's rect — recomputed while open, on scroll/resize. No more container-wide block scanning: the
+	// wrapper IS already positioned correctly by the split-render, so we only need its own bounding box.
+	const workingRef = useRef<HTMLDivElement>(null);
+	const reviewRef = useRef<HTMLDivElement>(null);
+	const [previewRect, setPreviewRect] = useState<Rect | null>(null);
+	const [refineRect, setRefineRect] = useState<Rect | null>(null);
+	const previewOpen = !!request && previewFor === request.id;
+	const refineOpen = !!request && refineFor === request.id;
+
+	useLayoutEffect(() => {
+		if (!previewOpen) return;
+		const compute = () => {
+			const r = workingRef.current?.getBoundingClientRect();
+			if (r) setPreviewRect({ top: r.bottom + 4, left: r.left });
+		};
+		compute();
+		window.addEventListener("resize", compute);
+		window.addEventListener("scroll", compute, true);
+		return () => {
+			window.removeEventListener("resize", compute);
+			window.removeEventListener("scroll", compute, true);
+		};
+	}, [previewOpen]);
+
+	useLayoutEffect(() => {
+		if (!refineOpen) return;
+		const compute = () => {
+			const r = reviewRef.current?.getBoundingClientRect();
+			if (r) setRefineRect({ top: r.bottom + 4, left: r.left });
+		};
+		compute();
+		window.addEventListener("resize", compute);
+		window.addEventListener("scroll", compute, true);
+		return () => {
+			window.removeEventListener("resize", compute);
+			window.removeEventListener("scroll", compute, true);
+		};
+	}, [refineOpen]);
+
+	let review: MarkdownReview | null = null;
+	if (request) {
+		review = buildMarkdownReview({
+			request,
+			content,
+			workingRef,
+			reviewRef,
+			previewOpen,
+			previewRect,
+			refineOpen,
+			refineRect,
+			onPreview: () => setPreviewFor((p) => (p === request.id ? null : request.id)),
+			onClosePreview: () => setPreviewFor(null),
+			onOpenInTab: () => openInlineEditInTab(request.id),
+			onStop: () => void stopInlineEdit(request.id),
+			onKeep: () => keepInlineEdit(request.id),
+			onUndoLast: async () => {
 				const res = await undoLastChange(request.id);
 				if (!res.ok) console.warn("undo failed:", res.reason); // TODO(toast): surface via a toast primitive
-			}}
-			onRevertAll={async () => {
+			},
+			onRevertAll: async () => {
 				const res = await revertAll(request.id);
 				if (!res.ok) console.warn("revert-all failed:", res.reason); // TODO(toast): surface via a toast primitive
-			}}
-			onRefineOpen={() => setRefineFor(request.id)}
-			onRefineSubmit={(c) => {
+			},
+			onRefineOpen: () => setRefineFor(request.id),
+			onRefineSubmit: (c) => {
 				void refineInlineEdit(request.id, c);
 				setRefineFor(null);
-			}}
-			onRefineCancel={() => setRefineFor(null)}
-			onOpenChanges={() => useAppStore.getState().requestChangesView(workspaceId, request.path)}
-		/>
-	) : null;
+			},
+			onRefineCancel: () => setRefineFor(null),
+			onOpenChanges: () => useAppStore.getState().requestChangesView(workspaceId, request.path),
+		});
+	}
 
-	return {
-		overlay: (
-			<>
-				{overlay}
-				{requestOverlay}
-			</>
-		),
-	};
+	return { selectionOverlay, review };
 }
 
 /**
- * Position the working chip / review overlay for one request. Anchor: the stamped block whose source lines
- * contain the request's selection (`[data-md-line-start]` ≤ startLine ≤ `[data-md-line-end]`). We track that
- * block's viewport rect and reposition on scroll/resize. If no block matches, we pin a fallback card to the
- * top of the preview (the review is never lost).
+ * Describe one request's in-flow review block: working chip / woven-diff+action-box / error card, by status.
+ * `content` is the file's CURRENT (pre- or post-edit, per status) content — used only to locate the changed
+ * region; the node itself is built from the request/turn data, matching today's behavior exactly.
  */
-function MarkdownRequestOverlay(props: {
-	containerRef: React.RefObject<HTMLElement | null>;
+function buildMarkdownReview(props: {
 	request: InlineEditRequest;
+	content: string;
+	workingRef: React.RefObject<HTMLDivElement | null>;
+	reviewRef: React.RefObject<HTMLDivElement | null>;
 	previewOpen: boolean;
+	previewRect: Rect | null;
 	refineOpen: boolean;
+	refineRect: Rect | null;
 	onPreview: () => void;
 	onClosePreview: () => void;
 	onOpenInTab: () => void;
@@ -167,105 +229,89 @@ function MarkdownRequestOverlay(props: {
 	onRefineSubmit: (comment: string) => void;
 	onRefineCancel: () => void;
 	onOpenChanges: () => void;
-}) {
-	const { containerRef, request } = props;
-	const [rect, setRect] = useState<{ top: number; left: number } | null>(null);
-
-	// `request.status` isn't read in `compute`, but a status change resizes/repositions the rendered card
-	// (chip → review), so it's a recompute trigger.
-	// biome-ignore lint/correctness/useExhaustiveDependencies: status is a recompute trigger, not read directly
-	useEffect(() => {
-		const compute = () => {
-			const root = containerRef.current;
-			if (!root) return;
-			const blocks = Array.from(root.querySelectorAll<HTMLElement>("[data-md-line-start]"));
-			const block = blocks.find((b) => {
-				const s = Number(b.getAttribute("data-md-line-start"));
-				const e = Number(b.getAttribute("data-md-line-end"));
-				return s <= request.selection.startLine && request.selection.startLine <= e;
-			});
-			const r = (block ?? root).getBoundingClientRect();
-			setRect({ top: block ? r.top : r.top + 8, left: r.left });
-		};
-		compute();
-		const root = containerRef.current;
-		root?.addEventListener("scroll", compute, { passive: true });
-		window.addEventListener("resize", compute);
-		return () => {
-			root?.removeEventListener("scroll", compute);
-			window.removeEventListener("resize", compute);
-		};
-	}, [containerRef, request.selection.startLine, request.status]);
-
-	if (!rect) return null;
-	// The current turn under review — hunks/why/otherPaths are per-turn in the per-turn model.
-	const turn = request.turns.at(-1);
-	const targetHunks = (turn?.hunks ?? []).filter((h) => h.path === request.path);
-	const primary = targetHunks[0];
+}): MarkdownReview {
+	const { request } = props;
 
 	if (request.status === "working" || request.status === "starting") {
-		return (
-			<>
-				<div className="fixed z-40" style={{ top: rect.top, left: rect.left }}>
+		// Selection lines were captured against the stripped rendered doc (the anchor plugin stamps stripped
+		// lines) — no frontmatter re-offset needed; they're already relative to what MarkdownPreview slices.
+		return {
+			mode: "insert",
+			range: { start: request.selection.startLine, end: request.selection.endLine },
+			node: (
+				<div ref={props.workingRef} className="my-md">
 					<EditStatusChip
 						label="editing…"
 						onPreview={props.onPreview}
 						onOpenInTab={props.onOpenInTab}
 						onStop={props.onStop}
 					/>
+					{props.previewOpen && props.previewRect ? (
+						<PreviewPopover
+							sessionId={request.sessionId}
+							rect={props.previewRect}
+							onClose={props.onClosePreview}
+							onOpenInTab={props.onOpenInTab}
+						/>
+					) : null}
 				</div>
-				{props.previewOpen ? (
-					<PreviewPopover
-						sessionId={request.sessionId}
-						rect={{ top: rect.top + 26, left: rect.left }}
-						onClose={props.onClosePreview}
-						onOpenInTab={props.onOpenInTab}
-					/>
-				) : null}
-			</>
-		);
+			),
+		};
 	}
 
 	if (request.status === "error") {
-		return (
-			<div
-				className="fixed z-40 w-[360px] rounded-[var(--radius-md)] border border-red/40 bg-elevated p-sm text-xs shadow-[var(--shadow-lg)]"
-				style={{ top: rect.top, left: rect.left }}
-				data-testid="inline-edit-error"
-			>
-				<p className="text-red">{request.error ?? "The edit failed."}</p>
-				<div className="mt-xs flex gap-xs">
-					<button
-						type="button"
-						data-testid="inline-edit-error-refine"
-						onClick={props.onRefineOpen}
-						className="rounded-[var(--radius-sm)] border border-border2 px-sm py-0.5 text-text hover:bg-hover"
-					>
-						Retry…
-					</button>
-					<button
-						type="button"
-						data-testid="inline-edit-error-dismiss"
-						onClick={props.onKeep}
-						className="rounded-[var(--radius-sm)] border border-border2 px-sm py-0.5 text-text hover:bg-hover"
-					>
-						Dismiss
-					</button>
-					<button
-						type="button"
-						data-testid="inline-edit-error-open"
-						onClick={props.onOpenInTab}
-						className="rounded-[var(--radius-sm)] border border-border2 px-sm py-0.5 text-text hover:bg-hover"
-					>
-						Open as chat
-					</button>
+		return {
+			mode: "insert",
+			range: { start: request.selection.startLine, end: request.selection.endLine },
+			node: (
+				<div
+					className="my-md rounded-[var(--radius-md)] border border-red/40 bg-elevated p-sm text-xs shadow-[var(--shadow-lg)]"
+					data-testid="inline-edit-error"
+				>
+					<p className="text-red">{request.error ?? "The edit failed."}</p>
+					<div className="mt-xs flex gap-xs">
+						<button
+							type="button"
+							data-testid="inline-edit-error-refine"
+							onClick={props.onRefineOpen}
+							className="rounded-[var(--radius-sm)] border border-border2 px-sm py-0.5 text-text hover:bg-hover"
+						>
+							Retry…
+						</button>
+						<button
+							type="button"
+							data-testid="inline-edit-error-dismiss"
+							onClick={props.onKeep}
+							className="rounded-[var(--radius-sm)] border border-border2 px-sm py-0.5 text-text hover:bg-hover"
+						>
+							Dismiss
+						</button>
+						<button
+							type="button"
+							data-testid="inline-edit-error-open"
+							onClick={props.onOpenInTab}
+							className="rounded-[var(--radius-sm)] border border-border2 px-sm py-0.5 text-text hover:bg-hover"
+						>
+							Open as chat
+						</button>
+					</div>
 				</div>
-			</div>
-		);
+			),
+		};
 	}
 
-	// review (or reverting): the suggestion overlay (or a "no changes" card) + action bar.
+	// review (or reverting): the woven diff (or a "no changes" card) + action bar, replacing the changed lines.
 	// `why` is dropped (not set-to-undefined) — `EditActionBar`'s `why?: string` is exact-optional.
+	const turn = request.turns.at(-1);
+	const hunk = turn?.hunks.find((h) => h.path === request.path);
+	// `request.afterContent` (set once the post-turn readback lands) gates readiness; the actual "after" text
+	// is `props.content` — the SAME string `MarkdownPreview` is about to slice this render, so the range and
+	// the slice never disagree even if the store field lags a render behind the prop.
+	const range =
+		request.afterContent !== undefined
+			? changedLineRange(stripFrontmatter(turn?.baseContent ?? ""), stripFrontmatter(props.content))
+			: null;
+
 	const actionBar = (
 		<EditActionBar
 			{...(turn?.why !== undefined ? { why: turn.why } : {})}
@@ -281,30 +327,33 @@ function MarkdownRequestOverlay(props: {
 			onOpenChanges={props.onOpenChanges}
 		/>
 	);
-	return (
-		<>
-			<div className="fixed z-40 w-[480px]" style={{ top: rect.top, left: rect.left }}>
-				{primary ? (
-					<SuggestionOverlay oldText={primary.oldText} newText={primary.newText}>
+
+	return {
+		mode: "replace",
+		range,
+		node: (
+			<div ref={props.reviewRef}>
+				{hunk ? (
+					<InlineSuggestion oldText={hunk.oldText} newText={hunk.newText}>
 						{actionBar}
-					</SuggestionOverlay>
+					</InlineSuggestion>
 				) : (
 					<div
 						data-testid="inline-edit-nochanges"
-						className="rounded-[var(--radius-md)] border border-border2 bg-elevated p-sm text-xs shadow-[var(--shadow-lg)]"
+						className="my-md rounded-[var(--radius-md)] border border-border2 bg-elevated p-sm text-xs shadow-[var(--shadow-lg)]"
 					>
 						<p className="text-muted">✦ {turn?.why || "The agent didn't change this file."}</p>
 						{actionBar}
 					</div>
 				)}
+				{props.refineOpen && props.refineRect ? (
+					<InstructionPopup
+						rect={props.refineRect}
+						onSubmit={props.onRefineSubmit}
+						onCancel={props.onRefineCancel}
+					/>
+				) : null}
 			</div>
-			{props.refineOpen ? (
-				<InstructionPopup
-					rect={{ top: rect.top + 30, left: rect.left }}
-					onSubmit={props.onRefineSubmit}
-					onCancel={props.onRefineCancel}
-				/>
-			) : null}
-		</>
-	);
+		),
+	};
 }
