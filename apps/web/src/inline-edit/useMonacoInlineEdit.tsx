@@ -123,18 +123,20 @@ export function useMonacoInlineEdit({
 	const previewOpen = !!request && previewFor === request.id;
 	const refineOpen = !!request && refineFor === request.id;
 
-	// The changed-line range in the BUFFER — raw content, no frontmatter-stripping (Monaco shows the raw
-	// file) — computed against the editor model's live value so it never disagrees with what's on screen.
-	// Only meaningful during review/reverting; `null` when the turn made no change to this file (or before
-	// review starts).
-	const editorValue =
+	// The changed-line range in the BUFFER — raw content, no frontmatter-stripping (Monaco shows the raw file).
+	// Read from `request.afterContent`, the post-turn readback the orchestrator stores from the SAME file tab
+	// that drives Monaco's model, so the range matches what's on screen. Using the reactive store field (not a
+	// `getModel().getValue()` call in the render body) keeps this out of the render path AND makes it recompute
+	// when the readback lands — a raw model read wouldn't re-render on change. Only meaningful during
+	// review/reverting; `null` before the readback lands or when the turn changed nothing in this file.
+	const afterContent =
 		request && (request.status === "review" || request.status === "reverting")
-			? editor?.getModel()?.getValue()
+			? request.afterContent
 			: undefined;
 	const changedRange = useMemo(
 		() =>
-			editorValue !== undefined ? changedLineRange(turn?.baseContent ?? "", editorValue) : null,
-		[editorValue, turn?.baseContent],
+			afterContent !== undefined ? changedLineRange(turn?.baseContent ?? "", afterContent) : null,
+		[afterContent, turn?.baseContent],
 	);
 	// Beyond the line range, "what the zone should show" can change without the range changing (e.g. a
 	// refine that happens to land on the same lines still needs its diff/why text rebuilt) — this identity
@@ -147,6 +149,28 @@ export function useMonacoInlineEdit({
 	// no active zone (no request, or between zone recreations). The render body portals `zoneContent` into
 	// it; it never renders through the `relative` overlay container.
 	const [zoneNode, setZoneNode] = useState<HTMLDivElement | null>(null);
+
+	// Live handle to the current zone (its Monaco object, id, and inner content node), so both the async
+	// ResizeObserver and the synchronous first-paint layout effect below can size it without re-deriving any
+	// of them. `null` while no zone exists; set/cleared in lockstep with the creation effect.
+	const zoneRef = useRef<{
+		zone: monaco.editor.IViewZone;
+		id: string;
+		content: HTMLDivElement;
+	} | null>(null);
+
+	// Measure the current zone's inner content node and re-layout the zone if its height drifted (>1px). Shared
+	// by the ResizeObserver (post-paint content changes) and the synchronous first-paint layout effect. No-op
+	// when there's no zone or the editor is gone.
+	const sizeZoneToContent = useCallback(() => {
+		const z = zoneRef.current;
+		if (!editor || !z) return;
+		const h = Math.ceil(z.content.getBoundingClientRect().height);
+		if (h > 0 && Math.abs((z.zone.heightInPx ?? 0) - h) > 1) {
+			z.zone.heightInPx = h;
+			editor.changeViewZones((accessor) => accessor.layoutZone(z.id));
+		}
+	}, [editor]);
 
 	// Hoisted out of `request` so the effect below closes over plain primitives, not property reads on the
 	// request object — keeps its dependency list narrow (recreate the zone only when THESE change, not on
@@ -209,19 +233,15 @@ export function useMonacoInlineEdit({
 					]
 				: [],
 		);
+		zoneRef.current = { zone, id: zoneId, content: contentNode };
 		setZoneNode(contentNode);
 
-		// The zone's height is content-driven (the diff + action box, the chip, or the error card) —
-		// remeasure the inner content node and re-layout whenever the portaled content resizes, so nothing
-		// clips or overlaps the lines below (this also fires on first paint, e.g. when the editor mounts
-		// straight into an already-active review after a Preview→Source toggle).
-		const ro = new ResizeObserver(() => {
-			const h = Math.ceil(contentNode.getBoundingClientRect().height);
-			if (h > 0 && Math.abs((zone.heightInPx ?? 0) - h) > 1) {
-				zone.heightInPx = h;
-				editor.changeViewZones((accessor) => accessor.layoutZone(zoneId));
-			}
-		});
+		// The zone's height is content-driven (the diff + action box, the chip, or the error card) — remeasure
+		// and re-layout whenever the portaled content resizes AFTER paint (async growth, image/font load, a
+		// popover the content reflows around). The FIRST paint is handled synchronously by the layout effect
+		// below, so a fresh zone never shows at its seed 1px for a painted frame with content overlapping the
+		// lines beneath it.
+		const ro = new ResizeObserver(() => sizeZoneToContent());
 		ro.observe(contentNode);
 
 		return () => {
@@ -232,9 +252,27 @@ export function useMonacoInlineEdit({
 				// The editor may already be disposed (e.g. the tab closed mid-transition) — nothing left to clean up.
 			}
 			decorations.clear();
+			zoneRef.current = null;
 			setZoneNode(null);
 		};
-	}, [editor, requestStatus, selectionStartLine, turnHunkIdentity, changedRange]);
+	}, [
+		editor,
+		requestStatus,
+		selectionStartLine,
+		turnHunkIdentity,
+		changedRange,
+		sizeZoneToContent,
+	]);
+
+	// Size a freshly-created zone to its content synchronously after the portal commits but BEFORE the browser
+	// paints. The creation effect seeds the zone at 1px (content height is unknown until the portal renders),
+	// and the ResizeObserver only fires asynchronously — so without this the zone would show at 1px for one
+	// painted frame, its content spilling over the lines below, then snap open. Keyed on `zoneNode`: a new
+	// inner node means a new, not-yet-measured zone.
+	useLayoutEffect(() => {
+		if (!zoneNode) return;
+		sizeZoneToContent();
+	}, [sizeZoneToContent, zoneNode]);
 
 	// The read-only preview popover (working) / refine popup (review, error) anchor to the zone's own rect —
 	// recomputed while open, on scroll/resize (mirrors the markdown controller's in-flow anchoring; the zone
