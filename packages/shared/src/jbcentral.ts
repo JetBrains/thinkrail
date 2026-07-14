@@ -129,34 +129,31 @@ export function jbcentralInstall(platform: NodeJS.Platform): JbcentralInstall {
 }
 
 /**
- * Candidate binary names, in preference order. The CLI rebranded **jbcentral → central** (v1.x): a fresh
- * install ships only `central`, with `jbcentral` created merely as a legacy-compat symlink when upgrading.
+ * The JetBrains Central CLI binary name. The tool is `central` only — the legacy `jbcentral` name (and any
+ * `ln -s central jbcentral` symlink) is intentionally **not** supported.
  */
-const JBCENTRAL_BINS = ["central", "jbcentral"] as const;
+const CENTRAL_BIN = "central";
 
 /**
  * Resolve the JetBrains Central CLI binary to an absolute path, or `null` if it isn't installed. Subtleties
  * this exists for (each caused the "installed but Recheck does nothing" bug):
- *   1. the tool is now named `central`, not `jbcentral` (see above) — check both.
- *   2. `Bun.which(cmd)` with no options reads the PATH **snapshotted at process start**, not the live
+ *   1. `Bun.which(cmd)` with no options reads the PATH **snapshotted at process start**, not the live
  *      `process.env.PATH` — so we pass `process.env.PATH` explicitly (honors a re-resolved login PATH).
- *   3. the installer drops it in `~/.local/bin` and does NOT add that to PATH (it only prints a hint) — so
+ *   2. the installer drops it in `~/.local/bin` and does NOT add that to PATH (it only prints a hint) — so
  *      we fall back to that well-known location.
  * Invoking by this absolute path also means the proxy/login calls work even when it's off PATH.
  */
 export function resolveJbcentralBin(): string | null {
 	const path = process.env.PATH ?? "";
 	const home = process.env.HOME ?? homedir();
-	for (const name of JBCENTRAL_BINS) {
-		const onPath = Bun.which(name, { PATH: path });
-		if (onPath) return onPath;
-		const local = join(home, ".local", "bin", name);
-		if (existsSync(local)) return local;
-	}
+	const onPath = Bun.which(CENTRAL_BIN, { PATH: path });
+	if (onPath) return onPath;
+	const local = join(home, ".local", "bin", CENTRAL_BIN);
+	if (existsSync(local)) return local;
 	return null;
 }
 
-/** Whether the JetBrains Central CLI is installed (`central`/`jbcentral` on the live PATH or `~/.local/bin`). */
+/** Whether the JetBrains Central CLI (`central`) is installed (on the live PATH or `~/.local/bin`). */
 export function isJbcentralInstalled(): boolean {
 	return resolveJbcentralBin() !== null;
 }

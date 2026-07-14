@@ -155,7 +155,7 @@ describe("resolveJbcentralBin (install detection)", () => {
 		expect(isJbcentralInstalled()).toBe(true);
 	});
 
-	test("still finds the legacy `jbcentral` name when that's all that's present", () => {
+	test("ignores the legacy `jbcentral` name — only `central` is supported", () => {
 		tmp = mkdtempSync(join(tmpdir(), "jbc-home-"));
 		const binDir = join(tmp, ".local", "bin");
 		mkdirSync(binDir, { recursive: true });
@@ -165,7 +165,8 @@ describe("resolveJbcentralBin (install detection)", () => {
 
 		process.env.PATH = "";
 		process.env.HOME = tmp;
-		expect(resolveJbcentralBin()).toBe(bin);
+		expect(resolveJbcentralBin()).toBeNull();
+		expect(isJbcentralInstalled()).toBe(false);
 	});
 
 	test("null when the CLI is neither on PATH nor in ~/.local/bin", () => {
