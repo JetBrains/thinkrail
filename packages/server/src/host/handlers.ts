@@ -255,7 +255,7 @@ const handlers: Record<string, Handler> = {
 		return { ok: true } as const;
 	},
 	// JetBrains AI (jbcentral proxy): connect/disconnect write models.json + refresh the registry; login
-	// launches `jbcentral login` (browser) on the host.
+	// launches `central login` (browser) on the host.
 	"provider.jbcentralConnect": () => connectJbcentral(),
 	"provider.jbcentralDisconnect": async () => {
 		await disconnectJbcentral();

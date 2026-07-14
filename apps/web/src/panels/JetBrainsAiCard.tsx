@@ -20,8 +20,8 @@ type ConnectResult =
 
 /**
  * The JetBrains AI option in the Providers settings: route Claude + GPT through the local `jbcentral` proxy
- * using your JetBrains subscription. A small state machine over the host's jbcentral CLI —
- * connected (Disconnect) / ready (Connect) / not signed in (in-app `jbcentral login` + retry) / not installed
+ * using your JetBrains subscription. A small state machine over the host's central CLI —
+ * connected (Disconnect) / ready (Connect) / not signed in (in-app `central login` + retry) / not installed
  * (install guidance + Recheck). `wired`/`installed` come from the `provider.status` the pane already fetched
  * (the source of truth); `result` layers on only the last connect attempt's outcome; `onChanged` re-reads
  * status after a mutation.
@@ -90,7 +90,7 @@ export function JetBrainsAiCard({
 		}
 	}, [onChanged]);
 
-	// Gate concurrent spawns — without this, rapid clicks launch multiple `jbcentral login` processes.
+	// Gate concurrent spawns — without this, rapid clicks launch multiple `central login` processes.
 	const signIn = useCallback(async () => {
 		if (signingIn) return;
 		setSigningIn(true);

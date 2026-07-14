@@ -117,7 +117,7 @@ export interface BranchList {
 
 /** Local `gh` CLI auth status (read-only, shelled server-side) for the New-Workspace + Settings surfaces. */
 /** How a model provider is authenticated — drives the status row's label, never carries secrets. */
-export type ProviderAuthKind = "oauth" | "api-key" | "env" | "jbcentral" | "other";
+export type ProviderAuthKind = "oauth" | "api-key" | "env" | "central" | "other";
 
 /** One model provider's auth status, as the host reports it (read-only; no credential values). */
 export interface ProviderStatus {
@@ -127,7 +127,7 @@ export interface ProviderStatus {
 	name: string;
 	/** Whether the provider is usable (any auth form: stored, env var, models.json, proxy). */
 	configured: boolean;
-	/** The auth source kind, when configured. `jbcentral` = routed through the JetBrains Central proxy. */
+	/** The auth source kind, when configured. `central` = routed through the JetBrains Central proxy. */
 	kind?: ProviderAuthKind;
 	/** Optional human hint for the source (e.g. the env var name, or `models.json`). */
 	detail?: string;
@@ -135,7 +135,7 @@ export interface ProviderStatus {
 	canOAuth?: boolean;
 	/** In-app single-key API-key entry is available (`provider.setApiKey`) — false for multi-field creds. */
 	canApiKey?: boolean;
-	/** The provider has a removable `auth.json` credential (`provider.logout`) — false for env / jbcentral /
+	/** The provider has a removable `auth.json` credential (`provider.logout`) — false for env / central /
 	 * models.json auth, which the host can't unset (so the strip shows no Sign-out for those). */
 	canLogout?: boolean;
 }
@@ -161,7 +161,7 @@ export interface ProviderStatusReport {
 	providers: ProviderStatus[];
 	/** Whether any provider's effective baseUrl routes through the jbcentral proxy (JetBrains AI is wired). */
 	jbcentralWired: boolean;
-	/** Whether the `jbcentral` CLI is installed on the host (drives the in-app JetBrains AI card's state). */
+	/** Whether the `central` CLI is installed on the host (drives the in-app JetBrains AI card's state). */
 	jbcentralInstalled: boolean;
 	/** The host's per-OS install command for the JetBrains Central CLI — rendered by the card when not
 	 * installed (reflects the host's OS, not the browser's). */

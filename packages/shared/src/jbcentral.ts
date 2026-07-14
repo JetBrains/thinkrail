@@ -1,4 +1,4 @@
-// The JetBrains Central CLI (`jbcentral`) proxy integration — the single home for its wire, pinned here so
+// The JetBrains Central CLI (`central`) proxy integration — the single home for its wire, pinned here so
 // the **write** side (build the proxy `baseUrl`s + override `models.json`) and the **read** side
 // (`isJbcentralProxyUrl`, how the server detects a wired provider) can never silently diverge. The server's
 // in-app "Connect JetBrains AI" flow is a thin caller over `wireJbcentral`/`unwireJbcentral`, adding only its
@@ -129,34 +129,31 @@ export function jbcentralInstall(platform: NodeJS.Platform): JbcentralInstall {
 }
 
 /**
- * Candidate binary names, in preference order. The CLI rebranded **jbcentral → central** (v1.x): a fresh
- * install ships only `central`, with `jbcentral` created merely as a legacy-compat symlink when upgrading.
+ * The JetBrains Central CLI binary name. The tool is `central` only — the legacy `jbcentral` name (and any
+ * `ln -s central jbcentral` symlink) is intentionally **not** supported.
  */
-const JBCENTRAL_BINS = ["central", "jbcentral"] as const;
+const CENTRAL_BIN = "central";
 
 /**
  * Resolve the JetBrains Central CLI binary to an absolute path, or `null` if it isn't installed. Subtleties
  * this exists for (each caused the "installed but Recheck does nothing" bug):
- *   1. the tool is now named `central`, not `jbcentral` (see above) — check both.
- *   2. `Bun.which(cmd)` with no options reads the PATH **snapshotted at process start**, not the live
+ *   1. `Bun.which(cmd)` with no options reads the PATH **snapshotted at process start**, not the live
  *      `process.env.PATH` — so we pass `process.env.PATH` explicitly (honors a re-resolved login PATH).
- *   3. the installer drops it in `~/.local/bin` and does NOT add that to PATH (it only prints a hint) — so
+ *   2. the installer drops it in `~/.local/bin` and does NOT add that to PATH (it only prints a hint) — so
  *      we fall back to that well-known location.
  * Invoking by this absolute path also means the proxy/login calls work even when it's off PATH.
  */
 export function resolveJbcentralBin(): string | null {
 	const path = process.env.PATH ?? "";
 	const home = process.env.HOME ?? homedir();
-	for (const name of JBCENTRAL_BINS) {
-		const onPath = Bun.which(name, { PATH: path });
-		if (onPath) return onPath;
-		const local = join(home, ".local", "bin", name);
-		if (existsSync(local)) return local;
-	}
+	const onPath = Bun.which(CENTRAL_BIN, { PATH: path });
+	if (onPath) return onPath;
+	const local = join(home, ".local", "bin", CENTRAL_BIN);
+	if (existsSync(local)) return local;
 	return null;
 }
 
-/** Whether the JetBrains Central CLI is installed (`central`/`jbcentral` on the live PATH or `~/.local/bin`). */
+/** Whether the JetBrains Central CLI (`central`) is installed (on the live PATH or `~/.local/bin`). */
 export function isJbcentralInstalled(): boolean {
 	return resolveJbcentralBin() !== null;
 }
@@ -197,7 +194,7 @@ export type SecretProbe =
 
 /**
  * Ensure the proxy daemon is running and return its persistent secret. An empty secret means the user isn't
- * signed into JetBrains AI (`jbcentral login`); a non-zero exit is a hard error (surfaced verbatim).
+ * signed into JetBrains AI (`central login`); a non-zero exit is a hard error (surfaced verbatim).
  */
 export async function probeJbcentralSecret(): Promise<SecretProbe> {
 	const bin = resolveJbcentralBin();
@@ -239,7 +236,7 @@ export async function wireJbcentral(env: ParseEnv): Promise<WireOutcome> {
 	if (!probe.ok) {
 		if (probe.reason === "not-installed") return { outcome: "needs-install" };
 		if (probe.reason === "not-logged-in") return { outcome: "needs-login" };
-		return { outcome: "error", message: probe.message || "jbcentral proxy start failed" };
+		return { outcome: "error", message: probe.message || "central proxy start failed" };
 	}
 	let port: number;
 	try {
@@ -270,12 +267,12 @@ export async function unwireJbcentral(env: ParseEnv): Promise<void> {
 }
 
 /**
- * Best-effort launch of `jbcentral login` (its browser sign-in) as a detached child — non-blocking. Returns
- * whether it started; if `jbcentral` needs a TTY and refuses, the caller falls back to terminal guidance.
+ * Best-effort launch of `central login` (its browser sign-in) as a detached child — non-blocking. Returns
+ * whether it started; if `central` needs a TTY and refuses, the caller falls back to terminal guidance.
  */
 export function launchJbcentralLogin(): { launched: boolean; message?: string } {
 	const bin = resolveJbcentralBin();
-	if (!bin) return { launched: false, message: "jbcentral is not installed" };
+	if (!bin) return { launched: false, message: "central is not installed" };
 	try {
 		// Invoke by absolute path (it may be off PATH, e.g. ~/.local/bin); `.unref()` so the browser sign-in
 		// child doesn't keep the host's event loop alive (it outlives this call).

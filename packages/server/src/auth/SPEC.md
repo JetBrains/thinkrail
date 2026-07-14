@@ -21,7 +21,7 @@ parse `auth.json` / `models.json` ourselves and never surface a credential value
 - **Owns:**
   - `providerStatus` — `getProviderStatus()` → the wire `ProviderStatusReport`: per-provider `configured`
     (pi's `hasAuth`-family truth, so env-var auth counts) + auth `kind` (oauth / api-key / env /
-    **jbcentral** / other) + display name + the in-app-login capability flags **`canOAuth`/`canApiKey`**,
+    **central** / other) + display name + the in-app-login capability flags **`canOAuth`/`canApiKey`**,
     configured-first. It **revalidates on every read** (`authStorage.reload()` + `modelRegistry.refresh()`)
     so a `pi` `/login` (or a terminal `central` re-wire) — or an in-app mutation below — shows up
     on the next read without a host restart (accepted micro-risk: refreshing the shared registry concurrent
@@ -39,7 +39,7 @@ parse `auth.json` / `models.json` ourselves and never surface a credential value
       re-derive pi's private `isApiKeyLoginProvider` predicate, which isn't a package export (deep TUI
       import only) — **drift note:** re-check them on pi bumps against pi's provider-display-names map.
       `canLogout` = the id has a stored **auth.json** credential (`credentialProviders`) — the only auth the
-      host can remove; env / jbcentral (models.json) / models.json-keyed auth report `false` (Sign-out would
+      host can remove; env / central (models.json) / models.json-keyed auth report `false` (Sign-out would
       no-op, so the strip hides it).
   - `providerLogin` — the in-app credential **writes**, session-less (a login runs on the Welcome screen
     before any session exists), so a `loginId`-keyed sibling of `agent/webUiContext`:
@@ -60,7 +60,7 @@ parse `auth.json` / `models.json` ourselves and never surface a credential value
     (which owns the protocol) and adding the one live-runtime step the standalone CLI can't:
     `connectJbcentral()` (`wireJbcentral` → on success `modelRegistry.refresh()` → a `JbcentralConnectResult`:
     connected / needs-install / needs-login / error), `disconnectJbcentral()` (`unwireJbcentral` + refresh),
-    `jbcentralLogin()` (best-effort `jbcentral login` browser launch). `providerStatus` also surfaces
+    `jbcentralLogin()` (best-effort `central login` browser launch). `providerStatus` also surfaces
     `jbcentralInstalled` (via `isJbcentralInstalled`) **and `jbcentralInstall`** (the host's per-OS install
     one-liner, via `jbcentralInstall(process.platform)`) so the card knows its state — and shows the right
     command for the host's OS — from the one status read.

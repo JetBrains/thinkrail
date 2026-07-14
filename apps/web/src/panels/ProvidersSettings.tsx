@@ -9,7 +9,7 @@ import { JetBrainsAiCard } from "./JetBrainsAiCard";
 
 /** Human label per auth kind (a configured provider's source suffix). */
 const KIND_LABEL: Record<ProviderAuthKind, string> = {
-	jbcentral: "JetBrains AI proxy",
+	central: "JetBrains AI proxy",
 	oauth: "OAuth subscription",
 	"api-key": "API key",
 	env: "environment",
@@ -299,7 +299,7 @@ function ConnectedCard({
 					{provider.detail ? ` · ${provider.detail}` : ""}
 				</span>
 			</div>
-			{/* Only auth.json credentials are removable here — env / jbcentral / models.json auth can't be
+			{/* Only auth.json credentials are removable here — env / central / models.json auth can't be
 			    unset by the host, so it shows a "Managed" tag instead of a Sign-out that would silently no-op. */}
 			{provider.canLogout ? (
 				<Button
