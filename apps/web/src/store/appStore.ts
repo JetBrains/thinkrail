@@ -1,15 +1,18 @@
 import type {
 	ExtUiRequest,
-	Model,
+	LoginFrame,
+	LoginPush,
 	PiEvent,
 	Project,
 	SessionStats,
 	SessionSummary,
 	SlashCommandInfo,
 	ThinkingLevel,
+	WireModel,
 	Workspace,
 } from "@thinkrail/contracts";
 import { create } from "zustand";
+import type { LoginState } from "../auth";
 import type { ChatTurn, ExtUiDialogRequest, ToolResultState } from "../chat/types";
 import type { ConnectionStatus } from "../transport";
 
@@ -32,6 +35,22 @@ export interface ChatTab {
 	sessionId: string;
 }
 export type EditorTab = FileTab | ChatTab;
+
+/** A section of the settings dialog. Extensible — the two live sections today are providers + github. */
+export type SettingsSection = "providers" | "github";
+
+/** A transient notification. `error` persists until dismissed; `success`/`info` auto-dismiss (the Toaster
+ * owns the timer). `title` is optional — a bare `message` is the common case. */
+export interface Toast {
+	id: string;
+	variant: "error" | "success" | "info";
+	message: string;
+	title?: string;
+}
+
+/** Toast-queue cap: the viewport stacks without scrolling, so past a screenful the oldest drop to keep
+ * the newest visible. */
+const MAX_TOASTS = 5;
 
 /** A terminal tab. `clientId` is the stable UI key; the server PTY id is owned by its `TerminalInstance`. */
 export interface TerminalTab {
@@ -60,7 +79,7 @@ export interface SessionRuntime {
 	currentAssistantId: string | null;
 	isStreaming: boolean;
 	/** This chat's model + thinking level (display only; `pi` owns them). */
-	model: Model<string> | null;
+	model: WireModel | null;
 	thinkingLevel: ThinkingLevel;
 	/** Token/cost stats (cheap win #3), refreshed after each turn. */
 	stats: SessionStats | null;
@@ -77,7 +96,7 @@ export interface SessionRuntime {
 	extUiWidget: Record<string, string[]>;
 }
 
-function newRuntime(model: Model<string> | null, thinkingLevel: ThinkingLevel): SessionRuntime {
+function newRuntime(model: WireModel | null, thinkingLevel: ThinkingLevel): SessionRuntime {
 	return {
 		turns: [],
 		toolResults: {},
@@ -310,13 +329,26 @@ interface AppState {
 	/** One runtime per live chat (keyed by `sessionId`) — many can stream at once; switching is a swap. */
 	sessions: Record<string, SessionRuntime>;
 	/** Models with configured auth (cheap win #1) — fetched once, shared by every chat's picker. */
-	models: Model<string>[];
+	models: WireModel[];
 	/**
 	 * A request to surface a file's diff in the right-panel Changes view (e.g. a chat turn-divider's
 	 * "files changed" chip). The panels watch it and switch tab / select the file when it targets the
 	 * active workspace; a fresh object each call so identical re-requests still fire.
 	 */
 	changesRequest: { workspaceId: string; path: string } | null;
+	/**
+	 * The in-flight in-app OAuth login, if any (flat + session-less — a login runs on the Welcome screen
+	 * before any session exists, so it must NOT live under a session runtime, or its frames get dropped).
+	 * At most one at a time (the dialog is modal).
+	 */
+	activeLogin: LoginState | null;
+	/** The settings dialog surface — kept in the store so any component (the top-bar gear, the Welcome
+	 * provider warning) can open it to a section without prop-drilling through the shell. */
+	settingsOpen: boolean;
+	settingsSection: SettingsSection;
+	/** Transient notifications, oldest-first (the Toaster renders + times them out). At-most a handful live
+	 * at once; a failed wire call that has no better home (no chat tab to host an error turn) lands here. */
+	toasts: Toast[];
 	setStatus: (status: ConnectionStatus) => void;
 	setWelcome: (protocolVersion: number) => void;
 	setProjects: (projects: Project[]) => void;
@@ -344,7 +376,7 @@ interface AppState {
 	openChatSession: (
 		workspaceId: string,
 		sessionId: string,
-		model: Model<string> | null,
+		model: WireModel | null,
 		thinkingLevel: ThinkingLevel,
 	) => void;
 	/** Drop a chat's runtime on tab close (the `AgentSession` is disposed over the wire by the caller). */
@@ -377,8 +409,8 @@ interface AppState {
 	 */
 	appendErrorTurn: (sessionId: string, text: string) => void;
 	handlePiEvent: (event: PiEvent, sessionId: string) => void;
-	setModels: (models: Model<string>[]) => void;
-	setCurrentModel: (sessionId: string, model: Model<string>) => void;
+	setModels: (models: WireModel[]) => void;
+	setCurrentModel: (sessionId: string, model: WireModel) => void;
 	setThinkingLevel: (sessionId: string, level: ThinkingLevel) => void;
 	setStats: (sessionId: string, stats: SessionStats) => void;
 	setCommands: (sessionId: string, commands: SlashCommandInfo[]) => void;
@@ -387,8 +419,26 @@ interface AppState {
 	clearPendingExtUi: (sessionId: string, id: string) => void;
 	/** Route an inbound `pi.extensionUi` frame to its session's runtime (dialogs/notices/status/widget/title). */
 	applyExtUi: (request: ExtUiRequest) => void;
+	/** Open the login dialog for a just-started login (the `provider.loginStart` handle). */
+	beginLogin: (loginId: string, providerId: string) => void;
+	/** Fold an inbound `provider.login` frame into `activeLogin` (creating it if the frame beat `beginLogin`). */
+	applyLoginFrame: (push: LoginPush) => void;
+	/** Drop the input from the active login the moment a reply is sent (avoids a double-submit). */
+	clearLoginInput: () => void;
+	/** Dismiss the login dialog (cancel or after a terminal frame). */
+	clearLogin: () => void;
+	/** Open the settings dialog, optionally deep-linked to a section (defaults to Providers). */
+	openSettings: (section?: SettingsSection) => void;
+	closeSettings: () => void;
+	setSettingsSection: (section: SettingsSection) => void;
 	/** Ask the right panel to open `path`'s diff in its Changes view (deep-link from chat). */
 	requestChangesView: (workspaceId: string, path: string) => void;
+	/** Enqueue a toast; returns its id so a caller can dismiss it early. An identical live toast (same
+	 * variant/title/message — e.g. a retried failure) coalesces: no twin is added, the existing id returns.
+	 * The queue caps at `MAX_TOASTS` (oldest drop). Prefer the `toast` helper. */
+	pushToast: (toast: Omit<Toast, "id">) => string;
+	/** Drop a toast (user dismiss or the Toaster's auto-timeout). A missing id is a no-op. */
+	dismissToast: (id: string) => void;
 }
 
 /** Apply an immutable update to one session's runtime; a no-op (and no new `sessions` object) if it's gone. */
@@ -403,7 +453,63 @@ function withRuntime(
 	return next === rt ? {} : { sessions: { ...s.sessions, [sessionId]: next } };
 }
 
-export const useAppStore = create<AppState>((set) => ({
+/** A fresh in-app login (the `provider.loginStart` handle arrived, or the first frame did). */
+function newLoginState(loginId: string, providerId: string): LoginState {
+	return { loginId, providerId, status: "active" };
+}
+
+/**
+ * Fold one streamed `LoginFrame` into the accumulating login state. `url`/`deviceCode` add to what's shown;
+ * `select`/`prompt` set the live input (dropping stale progress); `success`/`error` are terminal and clear
+ * the input/progress. Keys are dropped rather than set to `undefined` (`exactOptionalPropertyTypes`).
+ */
+function foldLoginFrame(state: LoginState, frame: LoginFrame): LoginState {
+	switch (frame.kind) {
+		case "authUrl":
+			return {
+				...state,
+				url: frame.url,
+				...(frame.instructions ? { instructions: frame.instructions } : {}),
+			};
+		case "deviceCode":
+			return {
+				...state,
+				deviceCode: {
+					userCode: frame.userCode,
+					verificationUri: frame.verificationUri,
+					...(frame.expiresInSeconds ? { expiresInSeconds: frame.expiresInSeconds } : {}),
+				},
+			};
+		case "select": {
+			const { progress: _p, ...rest } = state;
+			return { ...rest, input: { kind: "select", message: frame.message, options: frame.options } };
+		}
+		case "prompt": {
+			const { progress: _p, ...rest } = state;
+			return {
+				...rest,
+				input: {
+					kind: "prompt",
+					message: frame.message,
+					...(frame.placeholder ? { placeholder: frame.placeholder } : {}),
+					...(frame.allowEmpty ? { allowEmpty: true } : {}),
+				},
+			};
+		}
+		case "progress":
+			return { ...state, progress: frame.message };
+		case "success": {
+			const { input: _i, progress: _p, ...rest } = state;
+			return { ...rest, status: "success" };
+		}
+		case "error": {
+			const { input: _i, progress: _p, ...rest } = state;
+			return { ...rest, status: "error", error: frame.message };
+		}
+	}
+}
+
+export const useAppStore = create<AppState>((set, get) => ({
 	status: "connecting",
 	protocolVersion: null,
 	projects: [],
@@ -418,6 +524,10 @@ export const useAppStore = create<AppState>((set) => ({
 	sessions: {},
 	models: [],
 	changesRequest: null,
+	activeLogin: null,
+	settingsOpen: false,
+	settingsSection: "providers",
+	toasts: [],
 	setStatus: (status) => set({ status }),
 	setWelcome: (protocolVersion) => set({ protocolVersion }),
 	setProjects: (projects) => set({ projects }),
@@ -743,5 +853,56 @@ export const useAppStore = create<AppState>((set) => ({
 			}
 			return withRuntime(s, request.sessionId, (rt) => reduceExtUi(rt, request));
 		}),
+	beginLogin: (loginId, providerId) =>
+		set((s) =>
+			// A frame can beat the loginStart response (a provider that fires onAuth synchronously): if the
+			// frame already created this login, keep its folded state; otherwise open a fresh one.
+			s.activeLogin?.loginId === loginId ? {} : { activeLogin: newLoginState(loginId, providerId) },
+		),
+	applyLoginFrame: (push) =>
+		set((s) => {
+			const cur = s.activeLogin;
+			// Ignore a frame for some other still-active login (modal — only one runs at a time).
+			if (cur && cur.loginId !== push.loginId && cur.status === "active") return {};
+			const base =
+				cur && cur.loginId === push.loginId ? cur : newLoginState(push.loginId, push.providerId);
+			return { activeLogin: foldLoginFrame(base, push.frame) };
+		}),
+	clearLoginInput: () =>
+		set((s) => {
+			if (!s.activeLogin?.input) return {};
+			const { input: _drop, ...rest } = s.activeLogin;
+			return { activeLogin: rest };
+		}),
+	clearLogin: () => set({ activeLogin: null }),
+	openSettings: (section = "providers") => set({ settingsOpen: true, settingsSection: section }),
+	closeSettings: () => set({ settingsOpen: false }),
+	setSettingsSection: (section) => set({ settingsSection: section }),
 	requestChangesView: (workspaceId, path) => set({ changesRequest: { workspaceId, path } }),
+	pushToast: (toast) => {
+		const twin = get().toasts.find(
+			(t) => t.variant === toast.variant && t.title === toast.title && t.message === toast.message,
+		);
+		if (twin) return twin.id;
+		const id = crypto.randomUUID();
+		set((s) => ({ toasts: [...s.toasts, { ...toast, id }].slice(-MAX_TOASTS) }));
+		return id;
+	},
+	dismissToast: (id) =>
+		set((s) =>
+			s.toasts.some((t) => t.id === id) ? { toasts: s.toasts.filter((t) => t.id !== id) } : {},
+		),
 }));
+
+/**
+ * Ergonomic entry point for firing a toast from anywhere — components and non-React call sites alike (a
+ * `.catch` in a fire-and-forget wire call). Thin wrapper over `pushToast`; returns the toast id.
+ */
+export const toast = {
+	error: (message: string, title?: string) =>
+		useAppStore.getState().pushToast({ variant: "error", message, ...(title ? { title } : {}) }),
+	success: (message: string, title?: string) =>
+		useAppStore.getState().pushToast({ variant: "success", message, ...(title ? { title } : {}) }),
+	info: (message: string, title?: string) =>
+		useAppStore.getState().pushToast({ variant: "info", message, ...(title ? { title } : {}) }),
+};

@@ -1,5 +1,6 @@
 import type {
 	ExtUiRequest,
+	LoginPush,
 	ServerWelcome,
 	SessionEventPayload,
 	Workspace,
@@ -35,6 +36,10 @@ export function initTransport(): WsTransport {
 
 	transport.subscribe(WS_CHANNELS.piExtensionUi, (data) => {
 		useAppStore.getState().applyExtUi(data as ExtUiRequest);
+	});
+
+	transport.subscribe(WS_CHANNELS.providerLogin, (data) => {
+		useAppStore.getState().applyLoginFrame(data as LoginPush);
 	});
 
 	transport.subscribe(WS_CHANNELS.workspaceUpdated, (data) => {

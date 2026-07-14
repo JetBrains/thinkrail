@@ -15,13 +15,27 @@ later, the mobile single-view-with-switcher).
 ## Boundary
 
 - **Owns:** `Shell.tsx` — the topbar (wordmark + connection-status pill + a Settings gear that opens the
-  `panels/SettingsDialog`) over a body that branches on whether a workspace is active. **Active workspace**
+  store-driven `panels/SettingsDialog` via `store.openSettings()` — open state lives in the store, not local,
+  so other surfaces (the Welcome provider warning) can open it too) over a body that branches on whether a workspace is active. **Active workspace**
   → the resizable 3 columns (projects | center | right-over-terminals). **No active workspace**
   (`activeWorkspaceId == null` — fresh install / after archiving the last one) → the projects rail (kept
   resizable, `resize-left` preserved) beside the `panels/WelcomePanel`; the center/right/terminal surface
   is not mounted. The welcome-state group uses its own `autoSaveId` so it doesn't clobber the 3-column
-  layout's saved sizes.
+  layout's saved sizes. Mounts the `panels/Toaster` once (outside both layout branches) so notifications
+  show over either state.
 - **Public surface:** `Shell`.
 - **Allowed deps:** `panels`, `store` (status), `transport` (`ConnectionStatus` type), `components/ui`
-  (resizable), `constants` (branding).
+  (resizable), `components/ErrorBoundary`, `constants` (branding).
 - **Forbidden:** `server`/`shared`/`pi`; being imported by `panels`/`store`/`transport`.
+
+## Error resilience (why panels can't blank the app)
+
+Panels render (and lazily import) untrusted-shaped data; a throw during render or a failed lazy chunk
+(e.g. a stale Vite dep → 504) would otherwise propagate to the React root and unmount the **whole**
+tree, leaving the bare gray `--bg-dark` background. So the shell wraps each independently-mounted
+region — **center (`CenterTabs`)**, **right (`RightPanel`)**, **terminals (`TerminalsPanel`)** — in its
+own `components/ErrorBoundary`, keyed with `resetKeys={[activeWorkspaceId]}` so switching workspace
+clears a stuck error. A **last-resort boundary wraps `<Shell />` in `main.tsx`**. `CenterTabs` adds a
+per-tab boundary (`resetKeys={[active.id]}`) so one bad tab keeps the tab strip usable. The boundary
+detects failed dynamic imports (`isChunkLoadError`) and steers those to a page **reload** (re-fetches
+the chunk) rather than an in-place retry. Each region degrades independently — never the whole app.

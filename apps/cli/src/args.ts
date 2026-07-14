@@ -24,11 +24,9 @@ export type ParseEnv = Record<string, string | undefined>;
 
 export const USAGE = `Usage: thinkrail [options] [project-dir]
        thinkrail update [--channel stable|nightly] [--version X.Y.Z]
-       thinkrail jbcentral [--remove]
 
 Boots the ThinkRail engine host in-process and opens the browser to the app.
 The \`update\` subcommand re-downloads + installs the latest build for your channel.
-The \`jbcentral\` subcommand wires pi through the JetBrains Central CLI (jbcentral) proxy.
 
 Options:
   --port <n>     Listen port (default ${DEFAULT_PORT}; falls back to a free port if taken).

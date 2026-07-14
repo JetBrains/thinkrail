@@ -15,6 +15,7 @@ import type {
 	SessionSummary,
 	SlashCommandInfo,
 	ThinkingLevel,
+	WireModel,
 } from "@thinkrail/contracts";
 import { cancelQuestionsForSession } from "./askUserQuestion";
 import { buildResourceLoader } from "./extensions";
@@ -82,15 +83,48 @@ export interface CreateSessionInput {
 	cwd: string;
 	/** The workspace id, kept alongside the session so it can be listed back per workspace. */
 	workspaceId: string;
-	model?: Model<string>;
+	/** A wire model reference (`{provider,id}` + display metadata, no `baseUrl`) — re-resolved host-side. */
+	model?: WireModel;
 	thinkingLevel?: ThinkingLevel;
 }
 
 /** The resolved session + the model/thinking it starts with (pi picks defaults from auth + settings). */
 export interface CreateSessionResult {
 	sessionId: string;
-	model: Model<string> | null;
+	model: WireModel | null;
 	thinkingLevel: ThinkingLevel;
+}
+
+/**
+ * Project a `pi` `Model` down to the wire's **allowlist** (`WireModel`) — exactly the fields the UI renders.
+ * An explicit projection (not a `{...rest}` denylist), so `baseUrl` (the jbcentral proxy secret when wired)
+ * and `headers` (can carry auth) — and any future `Model` field — are excluded by default. The UI refers a
+ * model back by `{provider,id}`, which the host re-resolves via `resolveWireModel`. This is the single choke
+ * point that keeps secrets off every model-bearing wire frame (model.list/default, session.create result,
+ * SessionSummary).
+ */
+export function toWireModel(model: Model<string>): WireModel {
+	return {
+		id: model.id,
+		name: model.name,
+		provider: model.provider,
+		contextWindow: model.contextWindow,
+		reasoning: model.reasoning,
+	};
+}
+
+/**
+ * Re-resolve a wire model reference back to the real `Model` (with its `baseUrl`) from the registry, matching
+ * the picker's universe (`getAvailable()`). **Never trust a client-supplied `baseUrl`** — pi's `setModel` /
+ * `createAgentSession` use it verbatim, so accepting it would let a client (esp. a remote V2 one) point the
+ * agent's model traffic at an arbitrary URL. Throws if the ref isn't an available model.
+ */
+function resolveWireModel(ref: Pick<WireModel, "provider" | "id">): Model<string> {
+	const match = getPiRuntime()
+		.modelRegistry.getAvailable()
+		.find((m) => m.provider === ref.provider && m.id === ref.id);
+	if (!match) throw new Error(`Unknown or unavailable model: ${ref.provider}/${ref.id}`);
+	return match as unknown as Model<string>;
 }
 
 /** Wire a freshly-created/opened session into the manager: forward its events + bind the extension-UI bridge. */
@@ -109,7 +143,7 @@ async function registerSession(
 	sessions.set(sessionId, { session, unsubscribe, workspaceId });
 	return {
 		sessionId,
-		model: (session.model ?? null) as Model<string> | null,
+		model: session.model ? toWireModel(session.model as unknown as Model<string>) : null,
 		thinkingLevel: session.thinkingLevel,
 	};
 }
@@ -125,7 +159,8 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
 		sessionManager: sessionManagerFactory(input.cwd),
 		settingsManager,
 		resourceLoader: await buildResourceLoader(input.cwd, settingsManager),
-		...(input.model ? { model: input.model } : {}),
+		// Re-resolve the wire ref to the real model (with baseUrl) host-side — never the client's baseUrl.
+		...(input.model ? { model: resolveWireModel(input.model) } : {}),
 		...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
 	});
 	return registerSession(session, input.workspaceId);
@@ -138,7 +173,7 @@ function summaryOf(sessionId: string, entry: Entry): SessionSummary {
 		sessionId,
 		workspaceId: entry.workspaceId,
 		title: session.sessionName ?? "Chat",
-		model: (session.model ?? null) as Model<string> | null,
+		model: session.model ? toWireModel(session.model as unknown as Model<string>) : null,
 		thinkingLevel: session.thinkingLevel,
 		isStreaming: session.isStreaming,
 		messageCount: session.messages.length,
@@ -288,8 +323,9 @@ export async function abortSession(sessionId: string): Promise<void> {
 	await mustGet(sessionId).abort();
 }
 
-export async function setSessionModel(sessionId: string, model: Model<string>): Promise<void> {
-	await mustGet(sessionId).setModel(model);
+export async function setSessionModel(sessionId: string, model: WireModel): Promise<void> {
+	// Re-resolve the wire ref to the real model host-side (pi's setModel uses baseUrl verbatim).
+	await mustGet(sessionId).setModel(resolveWireModel(model));
 }
 
 export function setSessionThinkingLevel(sessionId: string, level: ThinkingLevel): void {
@@ -341,15 +377,17 @@ export function getSessionCommands(sessionId: string): SlashCommandInfo[] {
 	return [...extension, ...prompt, ...skill];
 }
 
-/** Models with configured auth, for the model picker (cheap win #1). */
-export function listAvailableModels(): Model<string>[] {
-	// `getAvailable()` is `Model<Api>[]`; the wire uses the looser `Model<string>` (the picker reads id/name/provider).
-	return getPiRuntime().modelRegistry.getAvailable() as unknown as Model<string>[];
+/** Models with configured auth, for the model picker (cheap win #1). Redacted to `WireModel` — the raw
+ * `Model.baseUrl` carries the jbcentral proxy secret when wired, and the picker only reads id/name/provider. */
+export function listAvailableModels(): WireModel[] {
+	return getPiRuntime()
+		.modelRegistry.getAvailable()
+		.map((m) => toWireModel(m as unknown as Model<string>));
 }
 
 /** The model + thinking level a new session resolves to (settings default if available, else first available). */
 export interface DefaultModelResult {
-	model: Model<string> | null;
+	model: WireModel | null;
 	thinkingLevel: ThinkingLevel;
 }
 
@@ -369,9 +407,9 @@ export function getDefaultModel(): DefaultModelResult {
 		provider && modelId
 			? available.find((m) => m.provider === provider && m.id === modelId)
 			: undefined;
-	const model = (pinned ?? available[0] ?? null) as Model<string> | null;
+	const resolved = (pinned ?? available[0] ?? null) as Model<string> | null;
 	const thinkingLevel = settings.getDefaultThinkingLevel() ?? "medium";
-	return { model, thinkingLevel };
+	return { model: resolved ? toWireModel(resolved) : null, thinkingLevel };
 }
 
 export function isSessionStreaming(sessionId: string): boolean {

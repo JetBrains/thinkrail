@@ -19,6 +19,14 @@ export const E2E_PICK_DIR_POINTER = join(E2E_DATA_DIR, "pick-dir");
 export const E2E_PLAIN_DIR = join(E2E_DATA_DIR, "plain-folder");
 
 /**
+ * A dev/e2e control file the stub `central` (JetBrains Central CLI) reads live per call to pick its outcome:
+ * absent/empty → signed in (prints a secret); `needs-login` → empty secret (not signed in); `error` → a
+ * non-zero exit. Lets a test drive the JetBrains AI card's not-signed-in / error branches without a real CLI,
+ * mirroring the `E2E_PICK_DIR_POINTER` pattern. Safe only because the suite is serial (`workers: 1`).
+ */
+export const E2E_CENTRAL_STATE = join(E2E_DATA_DIR, "central-state");
+
+/**
  * An isolated pi agent dir for the host (via `PI_CODING_AGENT_DIR`), so `@agent` tests that call
  * `setModel`/`setThinkingLevel` persist *here*, never the user's real `~/.pi/agent`. Global setup seeds it
  * with a copy of the user's `auth.json` + `models.json` (auth lives in both — OAuth providers vs. apiKey

@@ -1,5 +1,6 @@
 import { History, MessageSquarePlus, RotateCcw, X } from "lucide-react";
 import { lazy, Suspense, useEffect } from "react";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -8,8 +9,8 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { messagesToRuntime } from "../chat/hydrate";
-import { type ClosedChat, type EditorTab, useAppStore } from "../store";
-import { getTransport } from "../transport";
+import { type ClosedChat, type EditorTab, toast, useAppStore } from "../store";
+import { errorText, getTransport } from "../transport";
 import { FilePane } from "./FilePane";
 
 // The chat view is heavy — load it only when its tab is first shown (protects first paint). File panes
@@ -142,8 +143,9 @@ export function CenterTabs() {
 			});
 			const { turns, toolResults } = messagesToRuntime(messages);
 			useAppStore.getState().hydrateSession(summary, turns, toolResults, true);
-		} catch {
-			// Leave it in history if the re-open failed.
+		} catch (err) {
+			// The chat stays in history for a retry — but say why the click did nothing.
+			toast.error(errorText(err), "Couldn't reopen the chat");
 		}
 	};
 
@@ -154,8 +156,9 @@ export function CenterTabs() {
 				workspaceId: activeWorkspaceId,
 			});
 			useAppStore.getState().openChatSession(activeWorkspaceId, sessionId, model, thinkingLevel);
-		} catch {
-			// Ignored until the error-handling pass.
+		} catch (err) {
+			// Without this, a failed create makes "+ New chat" do nothing, silently.
+			toast.error(errorText(err), "Couldn't start the chat");
 		}
 	};
 
@@ -240,21 +243,24 @@ export function CenterTabs() {
 			</div>
 			<div data-testid="editor-pane" className="min-h-0 flex-1">
 				{active ? (
-					<Suspense
-						fallback={
-							<div className="flex h-full items-center justify-center text-hint">Loading…</div>
-						}
-					>
-						{active.kind === "chat" ? (
-							<ChatView
-								key={active.id}
-								sessionId={active.sessionId}
-								workspaceId={active.workspaceId}
-							/>
-						) : (
-							<FilePane key={active.id} tab={active} />
-						)}
-					</Suspense>
+					// Per-tab boundary: a tab's crash/failed lazy-load stays contained; switching tabs (new `active.id`) resets it.
+					<ErrorBoundary label={active.kind === "chat" ? "chat" : "editor"} resetKeys={[active.id]}>
+						<Suspense
+							fallback={
+								<div className="flex h-full items-center justify-center text-hint">Loading…</div>
+							}
+						>
+							{active.kind === "chat" ? (
+								<ChatView
+									key={active.id}
+									sessionId={active.sessionId}
+									workspaceId={active.workspaceId}
+								/>
+							) : (
+								<FilePane key={active.id} tab={active} />
+							)}
+						</Suspense>
+					</ErrorBoundary>
 				) : (
 					placeholder
 				)}

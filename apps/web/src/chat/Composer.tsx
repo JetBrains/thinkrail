@@ -1,4 +1,9 @@
-import type { ImageContent, Model, SlashCommandInfo, ThinkingLevel } from "@thinkrail/contracts";
+import type {
+	ImageContent,
+	SlashCommandInfo,
+	ThinkingLevel,
+	WireModel,
+} from "@thinkrail/contracts";
 import { ArrowUp, FileIcon, FolderIcon, Square, X } from "lucide-react";
 import {
 	type ClipboardEvent,
@@ -76,11 +81,11 @@ export function Composer({
 	isStreaming: boolean;
 	commands: SlashCommandInfo[];
 	mentionCandidates: MentionCandidate[];
-	models: Model<string>[];
-	currentModel: Model<string> | null;
+	models: WireModel[];
+	currentModel: WireModel | null;
 	thinkingLevel: ThinkingLevel;
 	onMentionQuery: (query: string | null) => void;
-	onSelectModel: (model: Model<string>) => void;
+	onSelectModel: (model: WireModel) => void;
 	onSelectThinking: (level: ThinkingLevel) => void;
 	onSubmit: (text: string, images: ImageContent[], behavior: SubmitBehavior) => void;
 	onAbort: () => void;

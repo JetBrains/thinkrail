@@ -5,7 +5,8 @@
 	"type": "module",
 	"exports": {
 		"./shellEnv": "./src/shellEnv.ts",
-		"./freePort": "./src/freePort.ts"
+		"./freePort": "./src/freePort.ts",
+		"./jbcentral": "./src/jbcentral.ts"
 	},
 	"scripts": {
 		"typecheck": "tsc --noEmit",

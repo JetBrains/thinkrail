@@ -116,6 +116,97 @@ export interface BranchList {
 }
 
 /** Local `gh` CLI auth status (read-only, shelled server-side) for the New-Workspace + Settings surfaces. */
+/** How a model provider is authenticated — drives the status row's label, never carries secrets. */
+export type ProviderAuthKind = "oauth" | "api-key" | "env" | "jbcentral" | "other";
+
+/** One model provider's auth status, as the host reports it (read-only; no credential values). */
+export interface ProviderStatus {
+	/** pi's provider id, e.g. `anthropic`. */
+	id: string;
+	/** Human display name, e.g. `Anthropic`. */
+	name: string;
+	/** Whether the provider is usable (any auth form: stored, env var, models.json, proxy). */
+	configured: boolean;
+	/** The auth source kind, when configured. `jbcentral` = routed through the JetBrains Central proxy. */
+	kind?: ProviderAuthKind;
+	/** Optional human hint for the source (e.g. the env var name, or `models.json`). */
+	detail?: string;
+	/** In-app OAuth login is available for this provider (`provider.loginStart`). */
+	canOAuth?: boolean;
+	/** In-app single-key API-key entry is available (`provider.setApiKey`) — false for multi-field creds. */
+	canApiKey?: boolean;
+	/** The provider has a removable `auth.json` credential (`provider.logout`) — false for env / jbcentral /
+	 * models.json auth, which the host can't unset (so the strip shows no Sign-out for those). */
+	canLogout?: boolean;
+}
+
+/**
+ * How to install the JetBrains Central CLI (`central`) on the host — a copyable, per-OS one-liner the
+ * JetBrains AI card renders proactively (before any connect attempt). Reflects the **host's** OS, never the
+ * browser's: `central` must be installed on the machine running the host, which may be remote (V2
+ * Tailscale/phone), so the command can't be inferred from the browser. The single source of truth for the
+ * command lives host-side (`@thinkrail/shared/jbcentral`) and travels over the wire here.
+ */
+export interface JbcentralInstall {
+	/** The host OS this command targets (`process.platform`: `darwin` | `linux` | `win32` | …). */
+	platform: string;
+	/** The shell the command runs in — `bash` on macOS/Linux, `powershell` on Windows. */
+	shell: "bash" | "powershell";
+	/** The one-line install command to copy/run on the host. */
+	command: string;
+}
+
+/** The `provider.status` result: configured providers first, then the rest alphabetically. */
+export interface ProviderStatusReport {
+	providers: ProviderStatus[];
+	/** Whether any provider's effective baseUrl routes through the jbcentral proxy (JetBrains AI is wired). */
+	jbcentralWired: boolean;
+	/** Whether the `jbcentral` CLI is installed on the host (drives the in-app JetBrains AI card's state). */
+	jbcentralInstalled: boolean;
+	/** The host's per-OS install command for the JetBrains Central CLI — rendered by the card when not
+	 * installed (reflects the host's OS, not the browser's). */
+	jbcentralInstall: JbcentralInstall;
+}
+
+/**
+ * The outcome of an in-app `provider.jbcentralConnect` attempt — a small state machine the JetBrains AI card
+ * walks the user through: connected, or the reason it couldn't (install the CLI / sign in / a hard error).
+ */
+export interface JbcentralConnectResult {
+	outcome: "connected" | "needs-install" | "needs-login" | "error";
+	/** The failure detail when `outcome === "error"`. The `needs-install` case carries no message — the card
+	 * renders the per-OS command from `ProviderStatusReport.jbcentralInstall`. */
+	message?: string;
+}
+
+/**
+ * A single update in an in-app OAuth login flow, pushed host→client on the `provider.login` channel
+ * (keyed by `loginId`). Frames **accumulate** into the client's per-login state rather than replacing it:
+ * `authUrl` and `prompt` can be live at once (the anthropic/openai browser-vs-paste race — open the URL
+ * *or* paste the code). `success`/`error` are terminal. `select`/`prompt` await a `provider.loginReply`.
+ */
+export type LoginFrame =
+	| { kind: "authUrl"; url: string; instructions?: string }
+	| { kind: "deviceCode"; userCode: string; verificationUri: string; expiresInSeconds?: number }
+	| { kind: "select"; message: string; options: { id: string; label: string }[] }
+	| { kind: "prompt"; message: string; placeholder?: string; allowEmpty?: boolean }
+	| { kind: "progress"; message: string }
+	| { kind: "success" }
+	| { kind: "error"; message: string };
+
+/** The `provider.login` push payload: a frame tagged with its login handle + the provider it authenticates. */
+export interface LoginPush {
+	loginId: string;
+	providerId: string;
+	frame: LoginFrame;
+}
+
+/** The browser's answer to a `select`/`prompt` frame — resolves the parked pi login callback by `loginId`. */
+export interface LoginReply {
+	loginId: string;
+	value: string;
+}
+
 export interface GithubAuthStatus {
 	connected: boolean;
 	/** The authenticated github.com account, when connected. */

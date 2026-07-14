@@ -6,8 +6,11 @@ import type {
 	FileNode,
 	GithubAuthStatus,
 	GitStatus,
+	JbcentralConnectResult,
+	LoginReply,
 	Project,
 	ProjectPathStatus,
+	ProviderStatusReport,
 	SpecGraphSnapshot,
 	Workspace,
 } from "./domain";
@@ -16,15 +19,17 @@ import type {
 	ExtUiResponse,
 	ImageContent,
 	Message,
-	Model,
 	SessionStats,
 	SessionSummary,
 	SlashCommandInfo,
 	ThinkingLevel,
+	WireModel,
 } from "./piProtocol";
 
 /** Bumped on any breaking wire change; sent in `server.welcome` so a stale UI can detect host drift. */
-export const PROTOCOL_VERSION = 1;
+// v4: model.* / session.create / session.setModel / SessionSummary now carry `WireModel` (pi's `Model`
+// minus the secret-bearing `baseUrl`/`headers`); the host re-resolves the real model by `{provider,id}`.
+export const PROTOCOL_VERSION = 4;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -92,6 +97,23 @@ export const WS_METHODS = {
 	sessionGetMessages: "session.getMessages",
 	modelList: "model.list",
 	modelDefault: "model.default",
+	// Auth-provider status (the Welcome strip): per-provider configured + auth kind, jbcentral wiring.
+	// Every read revalidates host-side (auth + registry reload), so a Refresh is just a re-request.
+	providerStatus: "provider.status",
+	// In-app provider auth (the Welcome strip's Sign-in). loginStart kicks off pi's OAuth flow DETACHED and
+	// returns a handle immediately (the flow can take minutes — it must not sit on the request); frames
+	// stream on the `provider.login` channel, and loginReply answers a select/prompt frame. setApiKey/logout
+	// mutate auth.json directly. All revalidate the shared registry, so a following provider.status re-read reflects them.
+	providerLoginStart: "provider.loginStart",
+	providerLoginReply: "provider.loginReply",
+	providerLoginCancel: "provider.loginCancel",
+	providerSetApiKey: "provider.setApiKey",
+	providerLogout: "provider.logout",
+	// In-app JetBrains AI (jbcentral proxy) wiring: connect routes Claude+GPT via your JetBrains plan (writes
+	// models.json + refreshes the registry), disconnect undoes it, login launches `jbcentral login` (browser).
+	providerJbcentralConnect: "provider.jbcentralConnect",
+	providerJbcentralDisconnect: "provider.jbcentralDisconnect",
+	providerJbcentralLogin: "provider.jbcentralLogin",
 } as const;
 
 /** Server→client push channels. */
@@ -99,6 +121,9 @@ export const WS_CHANNELS = {
 	serverWelcome: "server.welcome",
 	piEvent: "pi.event",
 	piExtensionUi: "pi.extensionUi",
+	// In-app login flow updates (a `LoginPush` per frame), keyed by loginId. Session-less — a login runs on
+	// the Welcome screen before any session exists, so this is the sibling of pi.extensionUi, not scoped to one.
+	providerLogin: "provider.login",
 	terminalData: "terminal.data",
 	// A host-initiated workspace mutation (the auto-rename), broadcast to every client. `data` is the
 	// full persisted `Workspace` snapshot — idempotent under last-value replay, never a delta.
@@ -154,9 +179,9 @@ export interface WsMethodMap {
 	"session.create": {
 		// `model`/`thinkingLevel`: applied at create time via `createAgentSession`, e.g. the
 		// New-Workspace dialog's pre-session picks. Omitted → pi resolves defaults from auth + settings.
-		params: { workspaceId: string; model?: Model<string>; thinkingLevel?: ThinkingLevel };
+		params: { workspaceId: string; model?: WireModel; thinkingLevel?: ThinkingLevel };
 		// The resolved model/thinking the new session starts with (pi picks defaults from auth + settings).
-		result: { sessionId: string; model: Model<string> | null; thinkingLevel: ThinkingLevel };
+		result: { sessionId: string; model: WireModel | null; thinkingLevel: ThinkingLevel };
 	};
 	"session.prompt": {
 		params: { sessionId: string; text: string; images?: ImageContent[] };
@@ -172,7 +197,7 @@ export interface WsMethodMap {
 	};
 	"session.abort": { params: { sessionId: string }; result: Ack };
 	"session.dispose": { params: { sessionId: string }; result: Ack };
-	"session.setModel": { params: { sessionId: string; model: Model<string> }; result: Ack };
+	"session.setModel": { params: { sessionId: string; model: WireModel }; result: Ack };
 	"session.setThinkingLevel": { params: { sessionId: string; level: ThinkingLevel }; result: Ack };
 	"session.compact": { params: { sessionId: string; instructions?: string }; result: Ack };
 	"session.getStats": { params: { sessionId: string }; result: SessionStats };
@@ -189,13 +214,30 @@ export interface WsMethodMap {
 		params: { sessionId: string; workspaceId: string };
 		result: { summary: SessionSummary; messages: Message[] };
 	};
-	"model.list": { params: Record<string, never>; result: Model<string>[] };
+	"model.list": { params: Record<string, never>; result: WireModel[] };
 	// The model/thinking a fresh session resolves to (settings default, else first available) — so the
 	// New-Workspace dialog shows the exact pre-session model, not a placeholder.
 	"model.default": {
 		params: Record<string, never>;
-		result: { model: Model<string> | null; thinkingLevel: ThinkingLevel };
+		result: { model: WireModel | null; thinkingLevel: ThinkingLevel };
 	};
+	"provider.status": { params: Record<string, never>; result: ProviderStatusReport };
+	// Mints a loginId and starts pi's OAuth flow detached; frames arrive on the `provider.login` channel.
+	"provider.loginStart": { params: { providerId: string }; result: { loginId: string } };
+	// Answers a live `select`/`prompt` frame (option id / typed text / pasted code) for the given login.
+	"provider.loginReply": { params: LoginReply; result: Ack };
+	// Cancels an in-flight login: aborts the flow AND settles any parked callback so pi doesn't hang.
+	"provider.loginCancel": { params: { loginId: string }; result: Ack };
+	// Stores a single API key for a provider (auth.json) and refreshes the registry. Not for multi-field creds.
+	"provider.setApiKey": { params: { providerId: string; key: string }; result: Ack };
+	// Removes a provider's stored credentials (auth.json) and refreshes the registry.
+	"provider.logout": { params: { providerId: string }; result: Ack };
+	// Wire Claude+GPT through the local jbcentral proxy (JetBrains AI). Returns a small state machine —
+	// connected / needs-install / needs-login / error — the JetBrains AI card walks the user through.
+	"provider.jbcentralConnect": { params: Record<string, never>; result: JbcentralConnectResult };
+	"provider.jbcentralDisconnect": { params: Record<string, never>; result: Ack };
+	// Launch `jbcentral login` (its browser sign-in) on the host, best-effort.
+	"provider.jbcentralLogin": { params: Record<string, never>; result: { launched: boolean } };
 }
 
 export type WsMethodName = keyof WsMethodMap;

@@ -12,6 +12,7 @@
 	--green-tint: rgba(106, 216, 89, 0.12);
 	--red: #ff4b75;
 	--gold: #ffd54b;
+	--gold-tint: rgba(255, 213, 75, 0.12);
 	/* White opacity scale */
 	--white-5: rgba(255, 255, 255, 0.05);
 	--white-10: rgba(255, 255, 255, 0.1);

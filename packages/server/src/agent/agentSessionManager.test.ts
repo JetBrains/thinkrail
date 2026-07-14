@@ -151,6 +151,45 @@ test("listAvailableModels returns the configured (faux) models", () => {
 	expect(ids).toContain("fauxb");
 });
 
+test("wire models expose only the allowlisted fields (no baseUrl/headers/other Model fields)", () => {
+	// The faux providers register with baseUrl "http://faux.local"; when JetBrains AI is wired the real
+	// baseUrl is `.../wire/<SECRET>/...`. `toWireModel` is an allowlist projection, so a wire model carries
+	// EXACTLY these keys — this pins the DTO shut (widening it, incl. re-adding a secret field, fails here).
+	const models = listAvailableModels();
+	expect(models.length).toBeGreaterThan(0);
+	for (const m of models) {
+		expect(Object.keys(m).sort()).toEqual(["contextWindow", "id", "name", "provider", "reasoning"]);
+	}
+});
+
+test("createSession re-resolves a wire model ref by {provider,id}, never trusting a client baseUrl", async () => {
+	fauxA.setResponses([fauxAssistantMessage("RESOLVED_REPLY")]);
+	const ref = listAvailableModels().find((m) => m.id === "fauxa");
+	if (!ref) throw new Error("faux model missing");
+	// `ref` has NO baseUrl — only host-side re-resolution against the registry can reach the faux provider.
+	const s = await createSession({
+		cwd: tmpCwd("trpi-resolve-"),
+		workspaceId: "ws-res",
+		model: ref,
+	});
+	await promptSession(s.sessionId, "hi");
+	expect(seen(s.sessionId)).toContain("RESOLVED_REPLY");
+	// The create result echoes the model back as a wire model — still no secret.
+	expect(s.model).not.toBeNull();
+	expect(s.model).not.toHaveProperty("baseUrl");
+	removeSession(s.sessionId);
+});
+
+test("createSession rejects an unknown/unavailable model ref (no arbitrary baseUrl injection)", async () => {
+	const ref = listAvailableModels().find((m) => m.id === "fauxa");
+	if (!ref) throw new Error("faux model missing");
+	// A client points provider/id at something not in the registry — the host refuses rather than call it.
+	const bogus = { ...ref, provider: "attacker", id: "evil" };
+	await expect(
+		createSession({ cwd: tmpCwd("trpi-bad-"), workspaceId: "ws-bad", model: bogus }),
+	).rejects.toThrow(/Unknown or unavailable model/);
+});
+
 test("getSessionStats + getSessionCommands read live session info (cheap wins #3, #2)", async () => {
 	fauxA.setResponses([fauxAssistantMessage("STATS_REPLY")]);
 	const s = await createSession({

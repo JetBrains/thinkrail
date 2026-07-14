@@ -7,6 +7,7 @@ import {
 	setExtUiPublisher,
 	setSessionPublisher,
 } from "../agent";
+import { cancelAllLogins, setLoginPublisher } from "../auth";
 import { resolveWorktreeFile } from "../fs";
 import { listProjects, openProject } from "../projects";
 import { closeAllTerminals, setTerminalPublisher } from "../terminal";
@@ -62,6 +63,7 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 				ws.subscribe(WS_CHANNELS.terminalData);
 				ws.subscribe(WS_CHANNELS.piEvent);
 				ws.subscribe(WS_CHANNELS.piExtensionUi);
+				ws.subscribe(WS_CHANNELS.providerLogin);
 				ws.subscribe(WS_CHANNELS.workspaceUpdated);
 				const welcome: ServerWelcome = {
 					protocolVersion: PROTOCOL_VERSION,
@@ -136,6 +138,14 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		);
 	});
 
+	// Push in-app login flow frames (the session-less `authStorage.login` bridge) over the provider.login channel.
+	setLoginPublisher((push) => {
+		server.publish(
+			WS_CHANNELS.providerLogin,
+			JSON.stringify({ channel: WS_CHANNELS.providerLogin, data: push }),
+		);
+	});
+
 	// Open a project on boot if the launcher passed one (e.g. `thinkrail /path/to/repo`). Best-effort:
 	// a non-repo / missing dir is a warning, not a boot failure — the UI's Open-Project flow still works.
 	if (projectPath) {
@@ -153,7 +163,9 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 			return server.port ?? port;
 		},
 		stop() {
-			// Symmetric teardown: dispose in-process agent sessions + PTYs before closing the socket.
+			// Symmetric teardown: settle in-flight logins (so no detached `login()` promise leaks), dispose
+			// in-process agent sessions + PTYs, then close the socket.
+			cancelAllLogins();
 			disposeAllSessions();
 			closeAllTerminals();
 			server.stop(true);

@@ -1,8 +1,8 @@
 import type {
 	AskUserQuestionResult,
 	ImageContent,
-	Model,
 	ThinkingLevel,
+	WireModel,
 } from "@thinkrail/contracts";
 import { ArrowDown } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -158,7 +158,7 @@ export default function ChatView({
 
 	const onMentionQuery = useCallback((q: string | null) => setMentionQuery(q), []);
 
-	const onSelectModel = (model: Model<string>) => {
+	const onSelectModel = (model: WireModel) => {
 		useAppStore.getState().setCurrentModel(sessionId, model);
 		getTransport()
 			.request("session.setModel", { sessionId, model })

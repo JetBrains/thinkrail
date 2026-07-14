@@ -56,6 +56,12 @@ nav's selection updates it). Its `hasSpecs` is **fetched lazily** via `project.h
 project (a full-tree walk, kept off the connect handshake) — pending until it resolves, so the cards wait
 on it. The open-project orchestration lives in the shared **`useOpenProject`** hook
 (above), so the Welcome "Open project" card gets the same non-git init/notice handling as the rail.
+Above the cards, `WelcomePanel` composes **`ProviderWarningBanner`** — a slim gold banner shown **only when
+no provider is connected** ("No model provider connected — the agent can't run") with a **Connect a provider**
+CTA that opens Settings → Providers (`store.openSettings("providers")`). It reads `provider.status` (a
+provider is "connected" iff any `configured`) on mount and re-checks whenever the settings dialog toggles, so
+it disappears the moment the user connects one; a transport error degrades to *not* nagging (offline ≠ "no
+provider"). All provider **management** lives in Settings, not here (the always-on strip is gone).
 **`NewWorkspaceDialog`** is the create-and-kick-off surface: an optional **`initialPrompt`** seeds the
 prompt hero (still editable; empty by default), a base-branch
   combobox (`git.listBranches`, degrading to local branches offline; a Refresh re-lists; `origin/HEAD` is
@@ -68,9 +74,28 @@ prompt hero (still editable; empty by default), a base-branch
   `session.create({ model, thinkingLevel })` + fire-and-forget `prompt`; with an empty prompt it just
   creates the workspace. A **rejected** kick-off `prompt` (a bad model / missing API key — e.g. picking a
   nonexistent model) surfaces as an `error` turn in the just-opened chat via `store.appendErrorTurn` (with
-  `transport`'s `errorText`) rather than vanishing. (`gh` status lives in `SettingsDialog`, not the
-  create dialog.) **`SettingsDialog`** is the app-settings surface the shell's topbar gear opens — its
-  "Local GitHub" block shows `github.authStatus()` (Connected + login / Not connected) with a Refresh.
+  `transport`'s `errorText`) rather than vanishing. The two rejections with **no chat to host a turn** raise a
+  `store.toast.error` instead: a failed **`workspace.create`** (keeps the dialog open to retry) and a failed
+  **`session.create`** (the dialog has already closed, the workspace exists — the toast is the only place left
+  to report the dropped kick-off). (`gh` status lives in `SettingsDialog`, not the
+  create dialog.) **`SettingsDialog`** is the app-settings surface the shell's topbar gear opens — a
+  **store-driven two-pane shell** (left section rail + scrollable content pane; mobile collapses the rail to
+  a horizontal segmented strip): `settingsOpen`/`settingsSection` live in the store so the gear AND the
+  Welcome banner can open it deep-linked to a section. Live sections: **`ProvidersSettings`** (the in-app
+  provider-auth surface — Connected cards each with a **Sign-out only when `canLogout`** (env / jbcentral /
+  models.json auth shows a "Managed" tag instead, since the host can't unset it); a **"Sign in with a
+  subscription"** block of `canOAuth` providers → `provider.loginStart` → the store-driven `auth/LoginDialog`
+  (open the URL or paste the code, `provider.loginReply`); an **"Add an API key"** group of single-key
+  providers (`provider.setApiKey`, capped with a "Show N more" expander); a multi-field "N more" note; and
+  the **`JetBrainsAiCard`** — route Claude+GPT through your JetBrains subscription (the jbcentral proxy) — a
+  state machine over `jbcentralWired`/`jbcentralInstalled` + `jbcentralInstall` (all from the same status
+  read) + `provider.jbcentral*`:
+  Connected (Disconnect) / ready (Connect) / not signed in (in-app `jbcentral login` + Retry) / not installed
+  (the host's per-OS copyable install command — from `jbcentralInstall`, for the *host's* OS, never the
+  browser's — + Recheck); each mutation re-reads `provider.status`) and **`GithubSettings`** (the "Local GitHub" block — `github.authStatus()`
+  Connected + login / Not connected + Refresh). Dimmed "General"/"Appearance" nav items ("Soon") signal the
+  shell is built to grow. `ProvidersSettings` is the **integration piece** (store + transport); the
+  `LoginDialog` stays presentational (`auth` module).
   Panels compose their own sub-panels
   (e.g. `RightPanel`→`FileTree`/`ChangesPanel`, `CenterTabs`→`FilePane`→`MonacoEditor`) — an internal hierarchy.
   `CenterTabs` closing a chat tab routes to `store.closeChatToHistory` (keeps the session alive) and shows a
@@ -79,9 +104,14 @@ prompt hero (still editable; empty by default), a base-branch
   (`session.getMessages` → `messagesToRuntime` → `store.hydrateSession`); **disk-only** ones go to history
   via `store.noteClosedChats`. Reopening restores a live runtime's tab, or for a disk-only chat re-opens it
   on the host (`getMessages`) + hydrates — so a reload, a second tab, or a host restart all rebuild from the
-  host.
+  host. A rejected new-chat `session.create` or history-reopen `getMessages` raises a `store.toast.error`
+  (the click would otherwise do nothing, silently; a failed reopen stays in history for a retry). **`Toaster`** is the app-wide toast host the shell mounts once: it subscribes to `store.toasts` and
+  renders each via the `components/ui/toast` primitives, letting Radix own the auto-timeout + swipe/hover-pause
+  and routing every close back through `store.dismissToast` (so the store stays the single source of truth).
+  Errors persist until dismissed; success/info time out. The **integration piece** — the primitives stay
+  presentational.
 - **Public surface:** the top-level panels the shell mounts (`ProjectTree`, `WelcomePanel`, `CenterTabs`,
-  `RightPanel`, `TerminalsPanel`), imported **per-file** (no barrel — keeps the lazy chunks split).
+  `RightPanel`, `TerminalsPanel`, `Toaster`), imported **per-file** (no barrel — keeps the lazy chunks split).
   (`WelcomePanel` and `CenterTabs`/`RightPanel`/`TerminalsPanel` are mutually exclusive — the shell mounts
   one set or the other on the active-workspace branch.)
 - **Allowed deps:** `store`, `transport`, `components/ui` (incl. `popover`/`command`/`textarea` for the
@@ -142,5 +172,8 @@ prompt hero (still editable; empty by default), a base-branch
   (built from `transport.httpBase()`). A cross-file link's `#fragment` is not yet followed (opens the
   file only).
 - Heavy deps (Monaco / shiki / xterm) load via `React.lazy(() => import())` to stay out of the eager bundle.
+  A lazy chunk that fails to load (or a render throw) is contained by the `components/ErrorBoundary` the
+  **shell** wraps each region in (see `shell/SPEC.md`), so a single panel degrades instead of blanking the
+  app; panels themselves don't own the boundary.
 - Streaming invariant (when chat lands): `text_delta`/`thinking_delta` **APPEND**;
   `tool_execution_update.partialResult` **REPLACE**.
