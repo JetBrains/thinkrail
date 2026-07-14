@@ -104,7 +104,8 @@ prompt hero (still editable; empty by default), a base-branch
   (`session.getMessages` → `messagesToRuntime` → `store.hydrateSession`); **disk-only** ones go to history
   via `store.noteClosedChats`. Reopening restores a live runtime's tab, or for a disk-only chat re-opens it
   on the host (`getMessages`) + hydrates — so a reload, a second tab, or a host restart all rebuild from the
-  host. **`Toaster`** is the app-wide toast host the shell mounts once: it subscribes to `store.toasts` and
+  host. A rejected new-chat `session.create` or history-reopen `getMessages` raises a `store.toast.error`
+  (the click would otherwise do nothing, silently; a failed reopen stays in history for a retry). **`Toaster`** is the app-wide toast host the shell mounts once: it subscribes to `store.toasts` and
   renders each via the `components/ui/toast` primitives, letting Radix own the auto-timeout + swipe/hover-pause
   and routing every close back through `store.dismissToast` (so the store stays the single source of truth).
   Errors persist until dismissed; success/info time out. The **integration piece** — the primitives stay

@@ -64,6 +64,9 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   and the ergonomic **`toast.error/success/info(message, title?)`** helper (wraps `pushToast` so a non-React
   call site — a `.catch` in a fire-and-forget wire call — can fire one) — lives here so any surface can raise
   a transient notification; the `panels/Toaster` renders + times them out (errors persist until dismissed).
+  `pushToast` **coalesces an identical live toast** (same variant/title/message — a retried failure returns
+  the existing id instead of stacking a twin) and **caps the queue at 5** (oldest drop — the viewport doesn't
+  scroll, so the newest must stay visible).
   It's the home for a **rejected wire call with no better place to land** (no chat tab to host an error turn),
   complementing `appendErrorTurn` (which handles the in-chat case). The transient **`changesRequest`** +
   **`requestChangesView(workspaceId, path)`** are a UI deep-link intent (a chat turn-divider asking the

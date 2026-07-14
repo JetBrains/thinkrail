@@ -35,6 +35,7 @@ export function ProvidersSettings() {
 	const [showAllKeys, setShowAllKeys] = useState(false);
 	const activeLogin = useAppStore((s) => s.activeLogin);
 
+	/** Re-reads provider status. Never rejects — a failed read renders the pane's error banner instead. */
 	const load = useCallback(async () => {
 		setRefreshing(true);
 		try {
@@ -75,14 +76,14 @@ export function ProvidersSettings() {
 			setBusyProvider(providerId);
 			try {
 				await getTransport().request("provider.setApiKey", { providerId, key });
-				await load();
 			} catch (err) {
-				// A rejected save (malformed key, disk write failed) was previously an unhandled rejection — the
-				// key field just went quiet. Surface it so the user knows the key didn't take.
+				// Surface a rejected save (malformed key, disk write failed) so the user knows the key didn't take.
 				toast.error(errorText(err), "Couldn't save the API key");
+				return;
 			} finally {
 				setBusyProvider(null);
 			}
+			await load();
 		},
 		[load],
 	);
@@ -92,13 +93,14 @@ export function ProvidersSettings() {
 			setBusyProvider(providerId);
 			try {
 				await getTransport().request("provider.logout", { providerId });
-				await load();
 			} catch (err) {
-				// Same unhandled-rejection gap as setApiKey — a failed sign-out left the card looking signed-in.
+				// A failed sign-out leaves the card still showing signed-in — surface why.
 				toast.error(errorText(err), "Couldn't sign out");
+				return;
 			} finally {
 				setBusyProvider(null);
 			}
+			await load();
 		},
 		[load],
 	);

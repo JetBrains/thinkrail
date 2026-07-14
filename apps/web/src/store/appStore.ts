@@ -48,6 +48,10 @@ export interface Toast {
 	title?: string;
 }
 
+/** Toast-queue cap: the viewport stacks without scrolling, so past a screenful the oldest drop to keep
+ * the newest visible. */
+const MAX_TOASTS = 5;
+
 /** A terminal tab. `clientId` is the stable UI key; the server PTY id is owned by its `TerminalInstance`. */
 export interface TerminalTab {
 	clientId: string;
@@ -429,7 +433,9 @@ interface AppState {
 	setSettingsSection: (section: SettingsSection) => void;
 	/** Ask the right panel to open `path`'s diff in its Changes view (deep-link from chat). */
 	requestChangesView: (workspaceId: string, path: string) => void;
-	/** Enqueue a toast; returns its id so a caller can dismiss it early. Prefer the `toast` helper. */
+	/** Enqueue a toast; returns its id so a caller can dismiss it early. An identical live toast (same
+	 * variant/title/message — e.g. a retried failure) coalesces: no twin is added, the existing id returns.
+	 * The queue caps at `MAX_TOASTS` (oldest drop). Prefer the `toast` helper. */
 	pushToast: (toast: Omit<Toast, "id">) => string;
 	/** Drop a toast (user dismiss or the Toaster's auto-timeout). A missing id is a no-op. */
 	dismissToast: (id: string) => void;
@@ -503,7 +509,7 @@ function foldLoginFrame(state: LoginState, frame: LoginFrame): LoginState {
 	}
 }
 
-export const useAppStore = create<AppState>((set) => ({
+export const useAppStore = create<AppState>((set, get) => ({
 	status: "connecting",
 	protocolVersion: null,
 	projects: [],
@@ -874,8 +880,12 @@ export const useAppStore = create<AppState>((set) => ({
 	setSettingsSection: (section) => set({ settingsSection: section }),
 	requestChangesView: (workspaceId, path) => set({ changesRequest: { workspaceId, path } }),
 	pushToast: (toast) => {
+		const twin = get().toasts.find(
+			(t) => t.variant === toast.variant && t.title === toast.title && t.message === toast.message,
+		);
+		if (twin) return twin.id;
 		const id = crypto.randomUUID();
-		set((s) => ({ toasts: [...s.toasts, { ...toast, id }] }));
+		set((s) => ({ toasts: [...s.toasts, { ...toast, id }].slice(-MAX_TOASTS) }));
 		return id;
 	},
 	dismissToast: (id) =>

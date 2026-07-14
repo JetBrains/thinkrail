@@ -669,6 +669,36 @@ test("dismissToast for an unknown id is a no-op (same array ref, no churn)", () 
 	expect(useAppStore.getState().toasts).toBe(before);
 });
 
+test("pushToast coalesces an identical live toast (same variant/title/message) into the existing id", () => {
+	const store = useAppStore.getState();
+	const id1 = store.pushToast({ variant: "error", message: "boom", title: "Failed" });
+	const twin = store.pushToast({ variant: "error", message: "boom", title: "Failed" });
+	expect(twin).toBe(id1);
+	expect(useAppStore.getState().toasts).toHaveLength(1);
+
+	// Any field differing → a distinct toast.
+	store.pushToast({ variant: "info", message: "boom", title: "Failed" });
+	store.pushToast({ variant: "error", message: "boom" });
+	expect(useAppStore.getState().toasts).toHaveLength(3);
+
+	// Once the twin is dismissed, the same content enqueues fresh (with a new id).
+	store.dismissToast(id1);
+	const fresh = store.pushToast({ variant: "error", message: "boom", title: "Failed" });
+	expect(fresh).not.toBe(id1);
+	expect(useAppStore.getState().toasts).toHaveLength(3);
+});
+
+test("pushToast caps the queue, dropping the oldest", () => {
+	const store = useAppStore.getState();
+	const first = store.pushToast({ variant: "error", message: "toast 0" });
+	for (let i = 1; i <= 5; i++) store.pushToast({ variant: "error", message: `toast ${i}` });
+	const toasts = useAppStore.getState().toasts;
+	expect(toasts).toHaveLength(5);
+	expect(toasts.some((t) => t.id === first)).toBe(false);
+	expect(toasts[0]?.message).toBe("toast 1");
+	expect(toasts[4]?.message).toBe("toast 5");
+});
+
 test("the toast helper enqueues by variant and omits an absent title", () => {
 	toast.success("saved");
 	toast.error("nope", "Failed");

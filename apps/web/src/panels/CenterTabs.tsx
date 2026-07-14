@@ -8,8 +8,8 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { messagesToRuntime } from "../chat/hydrate";
-import { type ClosedChat, type EditorTab, useAppStore } from "../store";
-import { getTransport } from "../transport";
+import { type ClosedChat, type EditorTab, toast, useAppStore } from "../store";
+import { errorText, getTransport } from "../transport";
 import { FilePane } from "./FilePane";
 
 // The chat view is heavy — load it only when its tab is first shown (protects first paint). File panes
@@ -142,8 +142,9 @@ export function CenterTabs() {
 			});
 			const { turns, toolResults } = messagesToRuntime(messages);
 			useAppStore.getState().hydrateSession(summary, turns, toolResults, true);
-		} catch {
-			// Leave it in history if the re-open failed.
+		} catch (err) {
+			// The chat stays in history for a retry — but say why the click did nothing.
+			toast.error(errorText(err), "Couldn't reopen the chat");
 		}
 	};
 
@@ -154,8 +155,9 @@ export function CenterTabs() {
 				workspaceId: activeWorkspaceId,
 			});
 			useAppStore.getState().openChatSession(activeWorkspaceId, sessionId, model, thinkingLevel);
-		} catch {
-			// Ignored until the error-handling pass.
+		} catch (err) {
+			// Without this, a failed create makes "+ New chat" do nothing, silently.
+			toast.error(errorText(err), "Couldn't start the chat");
 		}
 	};
 
