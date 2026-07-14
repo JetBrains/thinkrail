@@ -515,7 +515,7 @@ interface AppState {
 	/** Register a fired request + its hidden runtime (no tab). Idempotent on the runtime. */
 	registerInlineEdit: (
 		req: InlineEditRequest,
-		model: Model<string> | null,
+		model: WireModel | null,
 		thinkingLevel: ThinkingLevel,
 	) => void;
 	setInlineEditStatus: (id: string, status: InlineEditStatus) => void;

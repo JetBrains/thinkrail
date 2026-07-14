@@ -716,6 +716,8 @@ test("the toast helper enqueues by variant and omits an absent title", () => {
 		{ variant: "error", message: "nope", title: "Failed" },
 	]);
 	expect(useAppStore.getState().toasts[0]).not.toHaveProperty("title");
+});
+
 // ---- inline-edit ----
 
 const editStart = (toolCallId: string, args: Record<string, unknown>) =>
