@@ -175,7 +175,8 @@ prompt hero (still editable; empty by default), a base-branch
   file only).
 - **Inline AI-editing mounts here, panels host it.** `MarkdownPreview` and `MonacoEditor` each host an
   `inline-edit` controller (`useMarkdownInlineEdit` / `useMonacoInlineEdit`) that drives that surface's
-  trigger→pill→popup→review-in-place sequence (suggestion overlay for markdown, a review card for Monaco);
+  trigger→pill→popup→review-in-place sequence — woven into the document flow for markdown, into a native
+  Monaco view zone + changed-lines decoration for Monaco;
   `CenterTabs` mounts the single workspace-wide `InlineEditOrchestrator` (the post-turn readback that syncs
   a finished hidden-session edit back into the open tab). The rendered-markdown view stamps source lines
   via the in-repo `sourceLineRehype` transform (from `inline-edit`, passed as `chat/Markdown`'s

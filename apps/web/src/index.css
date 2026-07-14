@@ -76,3 +76,13 @@
 		}
 	}
 }
+
+/*
+ * Inline-edit review (Monaco): highlights the buffer lines a turn changed, directly above the woven-diff
+ * view zone (`inline-edit/useMonacoInlineEdit.tsx`). A plain CSS class, not a Tailwind utility — Monaco
+ * decorations apply a literal class name to an overlay div outside the React tree, so it has to exist as
+ * real CSS. `--green-tint` is the token this was defined for.
+ */
+.inline-edit-changed-line {
+	background-color: var(--green-tint);
+}

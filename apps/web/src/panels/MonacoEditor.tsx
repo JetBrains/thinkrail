@@ -53,8 +53,10 @@ const defineThinkrailTheme: BeforeMount = (m) => {
 /**
  * Read-only file viewer; language is inferred from `path`. Editing + save land with `fs.writeFile`. Also
  * hosts inline AI-editing (`useMonacoInlineEdit`): the editor instance is captured via `onMount` so the
- * controller can read selections and place its overlay (pill/popup/chip/review card) in the wrapping
- * `relative` container.
+ * controller can read selections and drive Monaco's own selection/view-zone/decoration APIs directly. The
+ * returned `overlay` still renders here (into the wrapping `relative` container) for the trigger (pill/
+ * popup) — but for the working chip / review / error presentation it's just the React-portal *wrapper*; the
+ * portaled content actually lands in a Monaco view zone the controller manages, not in this container.
  */
 export default function MonacoEditor({
 	path,

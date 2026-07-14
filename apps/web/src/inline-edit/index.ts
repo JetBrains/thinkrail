@@ -19,7 +19,6 @@ export { InlineEditOrchestrator } from "./InlineEditOrchestrator";
 export { InlineSuggestion } from "./InlineSuggestion";
 export { InstructionPopup } from "./InstructionPopup";
 export { changedLineRange } from "./lineDiff";
-export { MonacoReviewCard } from "./MonacoReviewCard";
 export { PreviewPopover } from "./PreviewPopover";
 export { buildSeedPrompt } from "./prompt";
 export { SelectionPill } from "./SelectionPill";

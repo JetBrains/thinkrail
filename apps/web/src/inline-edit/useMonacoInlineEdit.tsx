@@ -1,5 +1,6 @@
 import type * as monaco from "monaco-editor";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useAppStore } from "@/store";
 import {
 	hasPendingEditForPath,
@@ -14,17 +15,24 @@ import {
 import { monacoSelectionTarget } from "./anchor";
 import { EditActionBar } from "./EditActionBar";
 import { EditStatusChip } from "./EditStatusChip";
+import { InlineSuggestion } from "./InlineSuggestion";
 import { InstructionPopup } from "./InstructionPopup";
-import { MonacoReviewCard } from "./MonacoReviewCard";
+import { changedLineRange } from "./lineDiff";
 import { PreviewPopover } from "./PreviewPopover";
 import { SelectionPill } from "./SelectionPill";
 import type { SelectionTarget } from "./types";
 
+/** A rect-anchored floating popover needs a viewport position — kept minimal, {top,left} only. */
+type Rect = { top: number; left: number };
+
 /**
  * Controller for inline editing in the Monaco source view. Owns selection→pill→popup→fire (driven by
- * Monaco's own selection events) and renders this path's working chip / review overlay (`MonacoReviewCard`,
- * the v0 caveat form — no in-text strikethrough yet) / preview popover. Returns a single `overlay` node the
- * editor host drops into its `relative` container (absolute-positioned children anchor to it).
+ * Monaco's own selection events, unchanged) and renders this path's active request — the working chip /
+ * woven-diff+action-box / error card — as a NATIVE Monaco view zone inserted between the lines, plus a
+ * decoration highlighting the changed lines during review. Only the trigger (pill/popup) stays a floating
+ * `overlay` the editor host drops into its `relative` container; the zone is a real DOM node Monaco lays
+ * out inline in the buffer, populated by a React portal this hook creates and tears down itself — never a
+ * floating card.
  */
 export function useMonacoInlineEdit({
 	editor,
@@ -38,8 +46,8 @@ export function useMonacoInlineEdit({
 	const [target, setTarget] = useState<SelectionTarget | null>(null);
 	const [popupOpen, setPopupOpen] = useState(false);
 	const [popupError, setPopupError] = useState<string | null>(null);
-	const [previewOpen, setPreviewOpen] = useState(false);
-	const [refineOpen, setRefineOpen] = useState(false);
+	const [previewFor, setPreviewFor] = useState<string | null>(null);
+	const [refineFor, setRefineFor] = useState<string | null>(null);
 
 	// This path's active (not-done) request, if any.
 	const request = useAppStore((s) =>
@@ -55,7 +63,8 @@ export function useMonacoInlineEdit({
 	popupOpenRef.current = popupOpen;
 
 	// Capture selection changes inside the editor → show the pill (unless one edit is already pending
-	// here, or the instruction popup is already open). ⌘K opens the popup for the current selection.
+	// here, or the instruction popup is already open). ⌘K opens the popup for the current selection. This
+	// trigger path is unchanged by the view-zone rework.
 	useEffect(() => {
 		if (!editor) return;
 		const sub = editor.onDidChangeCursorSelection(() => {
@@ -87,7 +96,8 @@ export function useMonacoInlineEdit({
 		[target],
 	);
 
-	// Build the overlay node (pill → popup by status).
+	// Build the floating trigger overlay (pill → popup by status) — the only part that stays an
+	// absolutely-positioned child of the editor host's `relative` container.
 	let overlay: React.ReactNode = null;
 	if (popupOpen && target) {
 		overlay = (
@@ -105,111 +115,259 @@ export function useMonacoInlineEdit({
 		overlay = <SelectionPill rect={target.rect} onClick={() => setPopupOpen(true)} />;
 	}
 
-	// Working chip / review overlay for this path's request, anchored inside the editor's relative container.
-	let requestOverlay: React.ReactNode = null;
-	if (request) {
-		// The current turn under review — hunks/why/otherPaths are per-turn in the per-turn model.
-		const turn = request.turns.at(-1);
-		const targetHunks = (turn?.hunks ?? []).filter((h) => h.path === request.path);
+	// The turn under review and its target-file hunk — same reading as the markdown controller (`.at(-1)` /
+	// `.find`), so the two surfaces stay in lockstep even though one splices into a DOM tree and the other
+	// into Monaco's own.
+	const turn = request?.turns.at(-1);
+	const hunk = turn?.hunks.find((h) => h.path === request?.path);
+	const previewOpen = !!request && previewFor === request.id;
+	const refineOpen = !!request && refineFor === request.id;
+
+	// The changed-line range in the BUFFER — raw content, no frontmatter-stripping (Monaco shows the raw
+	// file) — computed against the editor model's live value so it never disagrees with what's on screen.
+	// Only meaningful during review/reverting; `null` when the turn made no change to this file (or before
+	// review starts).
+	const editorValue =
+		request && (request.status === "review" || request.status === "reverting")
+			? editor?.getModel()?.getValue()
+			: undefined;
+	const changedRange = useMemo(
+		() =>
+			editorValue !== undefined ? changedLineRange(turn?.baseContent ?? "", editorValue) : null,
+		[editorValue, turn?.baseContent],
+	);
+	// Beyond the line range, "what the zone should show" can change without the range changing (e.g. a
+	// refine that happens to land on the same lines still needs its diff/why text rebuilt) — this identity
+	// forces the zone effect to rerun (and thus remeasure) in that case too.
+	const turnHunkIdentity = turn
+		? `${request?.turns.length}:${hunk?.oldText ?? ""}:${hunk?.newText ?? ""}:${turn.why ?? ""}`
+		: null;
+
+	// The view zone's DOM node — Monaco-owned, created/attached by the effect below; `null` whenever there's
+	// no active zone (no request, or between zone recreations). The render body portals `zoneContent` into
+	// it; it never renders through the `relative` overlay container.
+	const [zoneNode, setZoneNode] = useState<HTMLDivElement | null>(null);
+
+	// Hoisted out of `request` so the effect below closes over plain primitives, not property reads on the
+	// request object — keeps its dependency list narrow (recreate the zone only when THESE change, not on
+	// every unrelated field mutation the store folds into `request`).
+	const requestStatus = request?.status;
+	const selectionStartLine = request?.selection.startLine;
+
+	// Manage the view zone + decoration as native Monaco state — created/torn down here, never re-derived
+	// from React's render output. At most one zone at a time (the three statuses that render one are
+	// mutually exclusive): positioned after the changed range in review, or after the selection's start line
+	// while working/erroring.
+	useLayoutEffect(() => {
+		if (!editor || !requestStatus || selectionStartLine === undefined) return undefined;
+		// `turnHunkIdentity` isn't read below — it's a dependency only, forcing a rebuild when a refine lands
+		// on the same lines but changes the diff/why text (see its definition above).
+		void turnHunkIdentity;
+		const model = editor.getModel();
+		if (!model) return undefined;
+		const lineCount = Math.max(1, model.getLineCount());
+
+		let afterLine: number;
+		let decoRange: { start: number; end: number } | null = null;
+		if (requestStatus === "review" || requestStatus === "reverting") {
+			afterLine = Math.min(changedRange?.end ?? selectionStartLine, lineCount);
+			decoRange = changedRange;
+		} else if (
+			requestStatus === "working" ||
+			requestStatus === "starting" ||
+			requestStatus === "error"
+		) {
+			afterLine = Math.min(selectionStartLine, lineCount);
+		} else {
+			return undefined; // "done" — the selector above already excludes it; belt-and-suspenders guard.
+		}
+
+		const domNode = document.createElement("div");
+		const zone: monaco.editor.IViewZone = { afterLineNumber: afterLine, heightInPx: 1, domNode };
+		let zoneId = "";
+		editor.changeViewZones((accessor) => {
+			zoneId = accessor.addZone(zone);
+		});
+		const decorations = editor.createDecorationsCollection(
+			decoRange
+				? [
+						{
+							range: {
+								startLineNumber: decoRange.start,
+								startColumn: 1,
+								endLineNumber: decoRange.end,
+								endColumn: 1,
+							},
+							options: { isWholeLine: true, className: "inline-edit-changed-line" },
+						},
+					]
+				: [],
+		);
+		setZoneNode(domNode);
+
+		// The zone's height is content-driven (the diff + action box, the chip, or the error card) —
+		// remeasure and re-layout whenever the portaled content resizes, so nothing clips.
+		const ro = new ResizeObserver(() => {
+			const h = Math.ceil(domNode.getBoundingClientRect().height);
+			if (h > 0 && Math.abs((zone.heightInPx ?? 0) - h) > 1) {
+				zone.heightInPx = h;
+				editor.changeViewZones((accessor) => accessor.layoutZone(zoneId));
+			}
+		});
+		ro.observe(domNode);
+
+		return () => {
+			ro.disconnect();
+			try {
+				editor.changeViewZones((accessor) => accessor.removeZone(zoneId));
+			} catch {
+				// The editor may already be disposed (e.g. the tab closed mid-transition) — nothing left to clean up.
+			}
+			decorations.clear();
+			setZoneNode(null);
+		};
+	}, [editor, requestStatus, selectionStartLine, turnHunkIdentity, changedRange]);
+
+	// The read-only preview popover (working) / refine popup (review, error) anchor to the zone's own rect —
+	// recomputed while open, on scroll/resize (mirrors the markdown controller's in-flow anchoring; the zone
+	// node here plays the role its in-flow wrapper refs play there).
+	const [anchorRect, setAnchorRect] = useState<Rect | null>(null);
+	const anchorOpen = previewOpen || refineOpen;
+	useLayoutEffect(() => {
+		if (!zoneNode || !anchorOpen) return undefined;
+		const compute = () => {
+			const r = zoneNode.getBoundingClientRect();
+			setAnchorRect({ top: r.bottom + 4, left: r.left });
+		};
+		compute();
+		window.addEventListener("resize", compute);
+		window.addEventListener("scroll", compute, true);
+		return () => {
+			window.removeEventListener("resize", compute);
+			window.removeEventListener("scroll", compute, true);
+		};
+	}, [zoneNode, anchorOpen]);
+
+	// Build the zone's content for the current status — portaled into `zoneNode` (Monaco's own DOM), never a
+	// floating card. `why` is dropped (not set-to-undefined) — `EditActionBar`'s `why?: string` is
+	// exact-optional.
+	let zoneContent: React.ReactNode = null;
+	if (request && zoneNode) {
 		if (request.status === "working" || request.status === "starting") {
-			requestOverlay = (
-				<div className="absolute top-2 right-2 z-20">
+			zoneContent = (
+				<div className="px-sm py-xs">
 					<EditStatusChip
 						label="editing…"
-						onPreview={() => setPreviewOpen((p) => !p)}
+						onPreview={() => setPreviewFor((p) => (p === request.id ? null : request.id))}
 						onOpenInTab={() => openInlineEditInTab(request.id)}
 						onStop={() => void stopInlineEdit(request.id)}
 					/>
-					{previewOpen ? (
+					{previewOpen && anchorRect ? (
 						<PreviewPopover
 							sessionId={request.sessionId}
-							rect={{ top: 40, left: 8 }}
-							onClose={() => setPreviewOpen(false)}
+							rect={anchorRect}
+							onClose={() => setPreviewFor(null)}
 							onOpenInTab={() => openInlineEditInTab(request.id)}
 						/>
 					) : null}
 				</div>
 			);
 		} else if (request.status === "review" || request.status === "reverting") {
-			// `why` is dropped (not set-to-undefined) — `EditActionBar`'s `why?: string` is exact-optional.
-			requestOverlay = (
-				<>
-					<MonacoReviewCard hunks={targetHunks}>
-						<EditActionBar
-							{...(turn?.why !== undefined ? { why: turn.why } : {})}
-							otherPaths={turn?.otherPaths ?? []}
-							busy={request.status === "reverting"}
-							turnIndex={request.turns.length}
-							turnCount={request.turns.length}
-							onKeep={() => keepInlineEdit(request.id)}
-							onUndoLast={async () => {
-								const r = await undoLastChange(request.id);
-								if (!r.ok) console.warn("undo:", r.reason); // TODO(toast): surface via a toast primitive
-							}}
-							onRevertAll={async () => {
-								const r = await revertAll(request.id);
-								if (!r.ok) console.warn("revert-all:", r.reason); // TODO(toast): surface via a toast primitive
-							}}
-							onRefine={() => setRefineOpen(true)}
-							onOpenInTab={() => openInlineEditInTab(request.id)}
-							onOpenChanges={() =>
-								useAppStore.getState().requestChangesView(workspaceId, request.path)
-							}
-						/>
-					</MonacoReviewCard>
-					{refineOpen ? (
+			const actionBar = (
+				<EditActionBar
+					{...(turn?.why !== undefined ? { why: turn.why } : {})}
+					otherPaths={turn?.otherPaths ?? []}
+					busy={request.status === "reverting"}
+					turnIndex={request.turns.length}
+					turnCount={request.turns.length}
+					onKeep={() => keepInlineEdit(request.id)}
+					onUndoLast={async () => {
+						const r = await undoLastChange(request.id);
+						if (!r.ok) console.warn("undo:", r.reason); // TODO(toast): surface via a toast primitive
+					}}
+					onRevertAll={async () => {
+						const r = await revertAll(request.id);
+						if (!r.ok) console.warn("revert-all:", r.reason); // TODO(toast): surface via a toast primitive
+					}}
+					onRefine={() => setRefineFor(request.id)}
+					onOpenInTab={() => openInlineEditInTab(request.id)}
+					onOpenChanges={() => useAppStore.getState().requestChangesView(workspaceId, request.path)}
+				/>
+			);
+			zoneContent = (
+				<div data-testid="inline-edit-monaco-zone" className="px-sm py-xs">
+					{hunk ? (
+						<>
+							{/* Woven diff, then the action box as a distinct between-lines widget directly below. */}
+							<InlineSuggestion oldText={hunk.oldText} newText={hunk.newText} />
+							<div className="rounded border border-primary/30 bg-elevated px-sm py-xs">
+								{actionBar}
+							</div>
+						</>
+					) : (
+						<div
+							data-testid="inline-edit-nochanges"
+							className="rounded-[var(--radius-md)] border border-border2 bg-elevated p-sm text-xs shadow-[var(--shadow-lg)]"
+						>
+							<p className="text-muted">✦ {turn?.why || "The agent didn't change this file."}</p>
+							{actionBar}
+						</div>
+					)}
+					{refineOpen && anchorRect ? (
 						<InstructionPopup
-							rect={{ top: 60, left: 8 }}
+							rect={anchorRect}
 							onSubmit={(c) => {
 								void refineInlineEdit(request.id, c);
-								setRefineOpen(false);
+								setRefineFor(null);
 							}}
-							onCancel={() => setRefineOpen(false)}
+							onCancel={() => setRefineFor(null)}
 						/>
 					) : null}
-				</>
+				</div>
 			);
 		} else if (request.status === "error") {
-			requestOverlay = (
-				<div
-					className="absolute top-2 right-2 z-20 w-[360px] rounded-[var(--radius-md)] border border-red/40 bg-elevated p-sm text-xs shadow-[var(--shadow-lg)]"
-					data-testid="inline-edit-error"
-				>
-					<p className="text-red">{request.error ?? "The edit failed."}</p>
-					<div className="mt-xs flex gap-xs">
-						<button
-							type="button"
-							data-testid="inline-edit-error-refine"
-							onClick={() => setRefineOpen(true)}
-							className="rounded-[var(--radius-sm)] border border-border2 px-sm py-0.5 text-text hover:bg-hover"
-						>
-							Retry…
-						</button>
-						<button
-							type="button"
-							data-testid="inline-edit-error-dismiss"
-							onClick={() => keepInlineEdit(request.id)}
-							className="rounded-[var(--radius-sm)] border border-border2 px-sm py-0.5 text-text hover:bg-hover"
-						>
-							Dismiss
-						</button>
-						<button
-							type="button"
-							data-testid="inline-edit-error-open"
-							onClick={() => openInlineEditInTab(request.id)}
-							className="rounded-[var(--radius-sm)] border border-border2 px-sm py-0.5 text-text hover:bg-hover"
-						>
-							Open as chat
-						</button>
+			zoneContent = (
+				<div className="px-sm py-xs">
+					<div
+						data-testid="inline-edit-error"
+						className="rounded-[var(--radius-md)] border border-red/40 bg-elevated p-sm text-xs shadow-[var(--shadow-lg)]"
+					>
+						<p className="text-red">{request.error ?? "The edit failed."}</p>
+						<div className="mt-xs flex gap-xs">
+							<button
+								type="button"
+								data-testid="inline-edit-error-refine"
+								onClick={() => setRefineFor(request.id)}
+								className="rounded-[var(--radius-sm)] border border-border2 px-sm py-0.5 text-text hover:bg-hover"
+							>
+								Retry…
+							</button>
+							<button
+								type="button"
+								data-testid="inline-edit-error-dismiss"
+								onClick={() => keepInlineEdit(request.id)}
+								className="rounded-[var(--radius-sm)] border border-border2 px-sm py-0.5 text-text hover:bg-hover"
+							>
+								Dismiss
+							</button>
+							<button
+								type="button"
+								data-testid="inline-edit-error-open"
+								onClick={() => openInlineEditInTab(request.id)}
+								className="rounded-[var(--radius-sm)] border border-border2 px-sm py-0.5 text-text hover:bg-hover"
+							>
+								Open as chat
+							</button>
+						</div>
 					</div>
-					{refineOpen ? (
+					{refineOpen && anchorRect ? (
 						<InstructionPopup
-							rect={{ top: 60, left: 8 }}
+							rect={anchorRect}
 							onSubmit={(c) => {
 								void refineInlineEdit(request.id, c);
-								setRefineOpen(false);
+								setRefineFor(null);
 							}}
-							onCancel={() => setRefineOpen(false)}
+							onCancel={() => setRefineFor(null)}
 						/>
 					) : null}
 				</div>
@@ -221,7 +379,7 @@ export function useMonacoInlineEdit({
 		overlay: (
 			<>
 				{overlay}
-				{requestOverlay}
+				{zoneNode ? createPortal(zoneContent, zoneNode) : null}
 			</>
 		),
 	};
