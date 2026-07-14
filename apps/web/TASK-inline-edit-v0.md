@@ -32,12 +32,17 @@ semantic autocompletion, run-agent-on-comments). Only item "inlined AI-editing" 
 4. **Working state = accent bar + status chip** on the target region with `👁 preview`,
    `⧉ open in tab`, `■ stop`. The preview is a **read-only** anchored popover showing a live
    compact transcript (reuses the presentational chat renderers). No steer box in v0.
-5. **Review presentation = suggestion-style in the text** (mockup option A): old text
-   struck-through + new text highlighted, word-level diff, action bar beneath the change with
-   the agent's one-line "why", plus an "also touched N other files → Changes" notice.
-6. **Monaco v0 caveat (accepted):** in the source view, review = changed-lines highlight + the
-   same action bar as a compact card (no in-text strikethrough; that needs view zones and is a
-   named follow-up). Trigger/chip/popover have full parity on both surfaces.
+5. **Review presentation = inline, in the document flow (not a floating overlay).** The change is
+   **woven into the text itself** — old struck-through + new highlighted, word-level — and the action
+   box (Keep / Undo-last / Revert-all / Refine / Open-as-chat + the agent's one-line "why" + the "also
+   touched N other files → Changes" notice) is inserted as a **block directly below the change**,
+   pushing following content down (like a review comment attached under the hunk). No `position:fixed`
+   card.
+6. **Monaco source view = the same, natively.** The changed lines get a highlight decoration in place,
+   and a **view zone** is inserted between the lines directly below holding the removed/old text
+   (struck) + the same action box — Monaco pushes lines apart to make room. This covers markdown-source
+   AND code files. (The edit already landed in the buffer under apply→review→revert, so "removed" text
+   lives in the zone.) Trigger/chip/preview have full parity on both surfaces.
 7. **Internals = fold pi's edit-tool events into a per-turn history** (over a `report_edit` tool
    or git-snapshot diffs): each Refine appends a **turn** capturing the target-file content at its
    start (`baseContent`) + the hunks it produced (from `edit`/`write` `tool_execution_end` events)
@@ -120,10 +125,14 @@ InlineEditRequest {
    re-read target file and store as `afterContent` + refresh any open tab (also fixes the
    tab-staleness gap for touched files); `git.status` safety net feeds the other-files notice.
    **Zero hunks in the turn** → info card with the agent's reply (Dismiss / Refine only).
-4. **Review render:** the current turn's target-file hunk → locate `newText` in `afterContent` →
-   source lines → stamped block → word-level old/new composite in place. Unanchorable → fallback
-   review card under the nearest block (the review is never lost). A "turn N of M" indicator shows
-   the refine depth.
+4. **Review render (in the document flow, not a floating overlay):** a line-diff of the current turn's
+   `baseContent` vs `afterContent` (both frontmatter-stripped for the rendered view) gives the changed
+   line range. **Rendered markdown:** a per-render rehype pass marks the changed block(s) and inserts a
+   slot after them; component overrides render the woven word-diff (old struck / new highlighted, from
+   the hunk) in place + the action box in the slot (in flow). **Monaco:** a line decoration highlights
+   the changed lines + a view zone below them holds the removed text + action box. A "turn N of M"
+   indicator shows the refine depth. Unanchorable (no changed range found) → the box renders under the
+   nearest block / at the selection line (the review is never lost).
 5. **Resolve (all snapshot-based, no hunk replay):**
    - **Keep** → `done` (file already holds the text).
    - **Refine(comment)** → push a new turn (`baseContent` = current `afterContent`) →
