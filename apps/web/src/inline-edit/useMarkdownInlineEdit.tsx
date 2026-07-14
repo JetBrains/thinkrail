@@ -334,9 +334,14 @@ function buildMarkdownReview(props: {
 		node: (
 			<div ref={props.reviewRef}>
 				{hunk ? (
-					<InlineSuggestion oldText={hunk.oldText} newText={hunk.newText}>
-						{actionBar}
-					</InlineSuggestion>
+					<>
+						{/* Woven diff in plain document prose (changes inlined) … */}
+						<InlineSuggestion oldText={hunk.oldText} newText={hunk.newText} />
+						{/* … then the action box as a distinct between-lines widget directly below. */}
+						<div className="my-md rounded-[var(--radius-md)] border border-primary/30 bg-elevated px-sm py-xs shadow-[var(--shadow-md)]">
+							{actionBar}
+						</div>
+					</>
 				) : (
 					<div
 						data-testid="inline-edit-nochanges"

@@ -358,13 +358,34 @@ export interface InlineEditRequest {
 	error?: string;
 }
 
-/** Read pi's edit/write args (names vary across providers) into a hunk shape. */
+/**
+ * Read pi's edit/write args into a hunk shape. pi's `edit` tool nests replacements in an `edits` array
+ * (`{ path, edits: [{ oldText, newText }, …] }`) — the primary shape the model emits; we also accept a
+ * legacy top-level `oldText`/`newText` (and provider variants). Multiple `edits[]` entries are joined so
+ * the woven diff shows every change the call made. `write` is a full-file replace (`{ path, content }`).
+ */
 function parseEditArgs(toolName: string, args: Record<string, unknown>): EditHunk {
-	const str = (k: string) => (typeof args[k] === "string" ? (args[k] as string) : "");
+	const s = (v: unknown) => (typeof v === "string" ? v : "");
+	const str = (k: string) => s(args[k]);
 	const path = str("path") || str("file_path") || str("filename");
 	if (toolName === "write") {
 		return { path, kind: "write", oldText: "", newText: str("content") || str("text") };
 	}
+	// Modern `edit`: `edits: [{ oldText, newText }, …]`. Join entries so the review shows all replacements.
+	const edits = args.edits;
+	if (Array.isArray(edits) && edits.length > 0) {
+		const pick = (e: unknown, a: string, b: string) => {
+			const o = (e ?? {}) as Record<string, unknown>;
+			return s(o[a]) || s(o[b]);
+		};
+		return {
+			path,
+			kind: "edit",
+			oldText: edits.map((e) => pick(e, "oldText", "old_string")).join("\n"),
+			newText: edits.map((e) => pick(e, "newText", "new_string")).join("\n"),
+		};
+	}
+	// Legacy top-level shape (pi still accepts it; some providers emit it).
 	return {
 		path,
 		kind: "edit",

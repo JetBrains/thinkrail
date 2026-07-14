@@ -793,6 +793,37 @@ test("foldInlineEditEvent records an edit hunk on the current turn only after a 
 	]);
 });
 
+test("foldInlineEditEvent reads pi's edits[] array shape (path top-level, old/new nested)", () => {
+	let req = baseReq();
+	// pi's real `edit` tool: { path, edits: [{ oldText, newText }] } — old/new are NESTED, not top-level.
+	req = foldInlineEditEvent(
+		req,
+		editStart("t1", { path: "doc.md", edits: [{ oldText: "old", newText: "new" }] }),
+	);
+	req = foldInlineEditEvent(req, endOk("t1"));
+	expect(cur(req).hunks).toEqual([
+		{ path: "doc.md", kind: "edit", oldText: "old", newText: "new" },
+	]);
+});
+
+test("foldInlineEditEvent joins multiple edits[] entries for the woven diff", () => {
+	let req = baseReq();
+	req = foldInlineEditEvent(
+		req,
+		editStart("t1", {
+			path: "doc.md",
+			edits: [
+				{ oldText: "a1", newText: "b1" },
+				{ oldText: "a2", newText: "b2" },
+			],
+		}),
+	);
+	req = foldInlineEditEvent(req, endOk("t1"));
+	expect(cur(req).hunks).toEqual([
+		{ path: "doc.md", kind: "edit", oldText: "a1\na2", newText: "b1\nb2" },
+	]);
+});
+
 test("foldInlineEditEvent drops a hunk whose tool errored", () => {
 	let req = baseReq();
 	req = foldInlineEditEvent(
