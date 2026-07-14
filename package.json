@@ -40,11 +40,11 @@
 		"check:deps": "bun scripts/check-catalog.ts"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.5.0",
+		"@biomejs/biome": "2.5.0",
 		"@thinkrail/shared": "workspace:*",
-		"@playwright/test": "^1.61.0",
-		"husky": "^9.1.7",
-		"turbo": "^2.9.18",
+		"@playwright/test": "1.61.0",
+		"husky": "9.1.7",
+		"turbo": "2.9.18",
 		"typescript": "catalog:"
 	},
 	"trustedDependencies": [

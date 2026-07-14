@@ -146,10 +146,16 @@ fast, no auth, run anytime; `bun run e2e:full` runs everything; `bun run e2e:age
 `@agent` specs (which need `pi` authenticated + more time). There is **no fake agent** — agent coverage
 runs against a real provider.
 
-Fast gates (also the husky pre-commit): `bun run lint` (biome) + `bun run typecheck`. Unit tests:
+Fast gates (also the husky pre-commit): `bun run check:deps` (dependency pins) + `bun run lint` (biome) +
+`bun run typecheck`. Unit tests:
 `bun run test` (bun test, per package). One-time setup for a fresh machine: `bunx playwright install chromium`.
 
 ## Stack
 
 Bun + Turbo monorepo · TypeScript (strict) · React 19 + Zustand + Tailwind v4 (web) · in-process `pi`
 via `@earendil-works/pi-coding-agent` (Node ≥ 22.19). On-disk app state under `~/.thinkrail`.
+
+- **Dependencies pin exact versions — no ranges** (`^`/`~`/`.x`/`*`). Cross-cutting deps are pinned once in
+  the root `workspaces.catalog` and referenced via `catalog:`. Enforced by `bun run check:deps`
+  (`scripts/check-catalog.ts`, in pre-commit + CI); `peerDependencies` + local protocols are exempt. See
+  `architecture.md` Decision #10 for the why.
