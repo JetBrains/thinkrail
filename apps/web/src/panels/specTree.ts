@@ -9,6 +9,38 @@ export interface SpecTreeNode {
 	children: SpecTreeNode[];
 }
 
+interface SpecRole {
+	label: string;
+	tag: string;
+}
+
+const SPEC_ROLES = {
+	"goal-and-requirements": { label: "Goal", tag: "GOAL" },
+	"architecture-design": { label: "Architecture", tag: "ARCH" },
+	"module-design": { label: "Module", tag: "MODULE" },
+	"submodule-design": { label: "Submodule", tag: "SUBMODULE" },
+	"task-spec": { label: "Task", tag: "TASK" },
+} as const satisfies Record<string, SpecRole>;
+
+type KnownSpecType = keyof typeof SPEC_ROLES;
+
+function isKnownSpecType(type: string): type is KnownSpecType {
+	return Object.hasOwn(SPEC_ROLES, type);
+}
+
+/** Humanize a spec type for the document-first tree; unknown wire values remain readable. */
+export function specRoleLabel(type: string): string {
+	if (isKnownSpecType(type)) return SPEC_ROLES[type].label;
+	const words = type.split(/[-_\s]+/).filter(Boolean);
+	if (words.length === 0) return "Spec";
+	return words.map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
+}
+
+/** Compact trailing role for the one-line tree; the UI width-caps unknown wire values. */
+export function specRoleTag(type: string): string {
+	return isKnownSpecType(type) ? SPEC_ROLES[type].tag : specRoleLabel(type).toUpperCase();
+}
+
 /**
  * Materialize the `parent` tree from a flat snapshot: roots are nodes with no (or a dangling/self)
  * parent; roots and siblings sort by title. A well-formed graph is assumed — parent cycles are

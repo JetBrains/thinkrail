@@ -134,13 +134,19 @@ prompt hero (still editable; empty by default), a base-branch
   members are unreachable from any root and simply don't render) — but the walk is **visited-guarded**,
   so a malformed graph can never hang or loop the UI. Tree only in this slice — no cross-edge display,
   no editing, no validation badges, no graph canvas.
-- `SpecsPanel` gestures + anatomy: spec nodes are container **and** file at once, so the gestures are
-  disjoint — the **chevron alone** expands/collapses (padded hit target), **double-click** on the row
-  opens the spec file as a Monaco tab via the same `fs.readFile` → `openTab` flow as `FileTree`, and row
-  single-click stays **unclaimed** (reserved for the future selected-node detail strip). Visuals are
-  consistency contracts, not novel design: row anatomy mirrors `FileTree`, the chevron's hover
-  affordance follows `ProjectTree` (the exact classes live in the code). `FileTree` keeps its own
-  gesture model (whole-row click toggles dirs — no collision there).
+- `SpecsPanel` is a compact **document-first tree**: spec nodes are container **and** document, so the
+  controls make both roles explicit. Hierarchy uses fixed per-depth indentation + chevrons, deliberately
+  **without connector rails or branch elbows** (persistent lines overloaded the narrow rail). The padded
+  **chevron alone** expands/collapses, while the rest of the row is a native document button whose
+  **single click** opens the rendered spec through the same `fs.readFile` → `openTab` flow as `FileTree`
+  (there is no hidden double-click gesture). Every row stays on one line: indentation → chevron →
+  shape-coded role icon → truncated title → fixed trailing role (`ARCH` / `MODULE` / `SUBMODULE` / `TASK`;
+  unknown types degrade compactly). The top-level `goal-and-requirements` row instead carries the exact
+  **`Main spec`** label and distinct root icon; the active file tab's row has a persistent selected
+  treatment. **Lifecycle status is not presented at all** — future lint health arrives with a real linter
+  feature, not speculative dots or reused status chrome. This remains a restrained hierarchy — no hero,
+  duplicate root, preview, or graph canvas. `FileTree` keeps its own gesture model (whole-row click
+  toggles dirs — no collision there).
 - `RightPanel`/`ChangesPanel` watch the store's `changesRequest` deep-link (set by a chat turn-divider's
   "files changed" chip): when it targets the active workspace, `RightPanel` flips to the Changes tab and
   `ChangesPanel` selects the requested file (matched by path suffix against `git.status`).

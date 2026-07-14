@@ -1,20 +1,31 @@
 import type { SpecGraphNode } from "@thinkrail/contracts";
-import { ChevronDown, ChevronRight, FileText } from "lucide-react";
+import {
+	BookOpen,
+	Box,
+	Boxes,
+	ChevronDown,
+	ChevronRight,
+	FileText,
+	ListChecks,
+	Network,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { cn } from "../lib";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
-import { buildSpecTree, type SpecTreeNode } from "./specTree";
+import { openFileInTab } from "./openFile";
+import { buildSpecTree, type SpecTreeNode, specRoleLabel, specRoleTag } from "./specTree";
 
 /**
  * Read-only spec-graph viewer for the active worktree: one `spec.graph` fetch per mount (read-on-demand,
  * no push — the header Refresh button in `RightPanel` re-fetches by remounting via `key`), rendered as
- * the `parent` tree — roots are nodes with no (or a dangling) parent — default-expanded. A fetch failure
- * renders a distinct error hint (never the "No specs" empty state). Double-click a node to open its spec
- * file as a center editor tab, like the file tree.
+ * a compact document-first `parent` tree. Fixed indentation carries depth without persistent connector
+ * lines; the chevron expands children and one click on the document row opens its rendered spec.
  */
 export function SpecsPanel({ workspaceId }: { workspaceId: string }) {
 	const [nodes, setNodes] = useState<SpecGraphNode[] | null>(null);
 	const [failed, setFailed] = useState(false);
+	const activeTabId = useAppStore((state) => state.activeTabByWorkspace[workspaceId] ?? null);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -47,81 +58,118 @@ export function SpecsPanel({ workspaceId }: { workspaceId: string }) {
 	return (
 		<ul className="flex flex-col">
 			{roots.map((root) => (
-				<SpecNodeRow key={root.node.id} tree={root} workspaceId={workspaceId} depth={0} />
+				<SpecNodeRow
+					key={root.node.id}
+					tree={root}
+					workspaceId={workspaceId}
+					activeTabId={activeTabId}
+					depth={0}
+				/>
 			))}
 		</ul>
 	);
 }
 
+function specRoleIcon(type: string) {
+	switch (type) {
+		case "goal-and-requirements":
+			return BookOpen;
+		case "architecture-design":
+			return Network;
+		case "module-design":
+			return Box;
+		case "submodule-design":
+			return Boxes;
+		case "task-spec":
+			return ListChecks;
+		default:
+			return FileText;
+	}
+}
+
 function SpecNodeRow({
 	tree,
 	workspaceId,
+	activeTabId,
 	depth,
 }: {
 	tree: SpecTreeNode;
 	workspaceId: string;
+	activeTabId: string | null;
 	depth: number;
 }) {
 	const { node, children } = tree;
 	const [expanded, setExpanded] = useState(true);
-
-	const open = async () => {
-		const id = `${workspaceId}:${node.path}`;
-		const store = useAppStore.getState();
-		if ((store.tabsByWorkspace[workspaceId] ?? []).some((t) => t.id === id)) {
-			store.setActiveTab(id);
-			return;
-		}
-		try {
-			const { content } = await getTransport().request("fs.readFile", {
-				workspaceId,
-				path: node.path,
-			});
-			const name = node.path.split("/").pop() ?? node.path;
-			useAppStore
-				.getState()
-				.openTab({ kind: "file", id, workspaceId, path: node.path, name, content });
-		} catch {
-			// a read failure leaves the tree unchanged
-		}
-	};
-
-	// Spec nodes are container AND file at once, so the gestures are disjoint: the chevron alone
-	// toggles, double-click on the row opens, and row single-click stays unclaimed (reserved for the
-	// future selected-node detail strip). Row anatomy mirrors FileTree; the chevron affordance is the
-	// ProjectTree one (brightens via text color on hover — no background square).
+	const tabId = `${workspaceId}:${node.path}`;
+	const isActive = activeTabId === tabId;
+	const isMainSpec = depth === 0 && node.type === "goal-and-requirements";
+	const role = specRoleLabel(node.type);
+	const trailingRole = isMainSpec ? "Main spec" : specRoleTag(node.type);
+	const DocumentIcon = specRoleIcon(node.type);
 	const Chevron = expanded ? ChevronDown : ChevronRight;
+
 	return (
 		<li>
-			<div className="group flex h-6 items-center gap-xs rounded-[var(--radius-sm)] px-xs transition-colors hover:bg-hover">
+			<div
+				className={cn(
+					"group flex h-7 min-w-0 items-stretch rounded-[var(--radius-sm)] transition-colors",
+					isActive
+						? "bg-[var(--primary-10)] ring-1 ring-[var(--primary-40)] ring-inset"
+						: "hover:bg-hover",
+				)}
+			>
 				{children.length > 0 ? (
 					<button
 						type="button"
 						data-testid="spec-toggle"
-						aria-label={expanded ? "Collapse" : "Expand"}
+						aria-label={expanded ? `Collapse ${node.title}` : `Expand ${node.title}`}
 						aria-expanded={expanded}
-						onClick={() => setExpanded(!expanded)}
-						className="flex size-3.5 shrink-0 items-center justify-center text-hint transition-colors hover:text-text"
+						onClick={() => setExpanded((value) => !value)}
+						className="flex w-5 shrink-0 items-center justify-center self-stretch rounded-[var(--radius-sm)] text-hint outline-none transition-colors hover:text-text focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
 					>
 						<Chevron className="size-3.5" />
 					</button>
 				) : (
-					<span className="size-3.5 shrink-0" />
+					<span className="w-5 shrink-0" />
 				)}
 				<button
 					type="button"
 					data-testid="spec-node"
 					data-spec-id={node.id}
+					data-spec-type={node.type}
+					data-spec-role={trailingRole}
+					data-main-spec={isMainSpec ? "true" : undefined}
+					data-active={isActive}
 					data-depth={depth}
-					title={`${node.id} · ${node.type}`}
-					onDoubleClick={open}
-					className="flex h-6 min-w-0 flex-1 items-center gap-xs text-left text-sm text-muted"
+					aria-current={isActive ? "page" : undefined}
+					aria-label={`Open ${node.title}. ${isMainSpec ? "Main spec" : role}`}
+					title={`${node.title}\n${node.id} · ${node.type}`}
+					onClick={() => void openFileInTab(workspaceId, node.path)}
+					className="flex h-7 min-w-0 flex-1 items-center gap-xs rounded-[var(--radius-sm)] pr-xs text-left outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
 				>
-					<FileText className="size-4 shrink-0 text-hint" />
-					<span className="truncate">{node.title}</span>
-					{node.status && (
-						<span className="ml-auto shrink-0 text-[10px] text-hint">{node.status}</span>
-					)}
+					<DocumentIcon
+						className={cn(
+							"size-3.5 shrink-0 transition-colors",
+							isMainSpec || isActive ? "text-primary" : "text-hint group-hover:text-muted",
+						)}
+					/>
+					<span
+						className={cn(
+							"min-w-0 flex-1 truncate text-sm transition-colors",
+							isActive ? "font-medium text-text" : "text-muted group-hover:text-text",
+						)}
+					>
+						{node.title}
+					</span>
+					<span
+						data-testid="spec-role"
+						className={cn(
+							"max-w-16 shrink-0 truncate text-right text-[9px] uppercase tracking-wider",
+							isMainSpec || isActive ? "font-medium text-primary" : "text-hint",
+						)}
+					>
+						{trailingRole}
+					</span>
 				</button>
 			</div>
 			{children.length > 0 && expanded && (
@@ -131,6 +179,7 @@ function SpecNodeRow({
 							key={child.node.id}
 							tree={child}
 							workspaceId={workspaceId}
+							activeTabId={activeTabId}
 							depth={depth + 1}
 						/>
 					))}
