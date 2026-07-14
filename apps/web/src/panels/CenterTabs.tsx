@@ -1,5 +1,6 @@
 import { History, MessageSquarePlus, RotateCcw, X } from "lucide-react";
 import { lazy, Suspense, useEffect } from "react";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -242,21 +243,24 @@ export function CenterTabs() {
 			</div>
 			<div data-testid="editor-pane" className="min-h-0 flex-1">
 				{active ? (
-					<Suspense
-						fallback={
-							<div className="flex h-full items-center justify-center text-hint">Loading…</div>
-						}
-					>
-						{active.kind === "chat" ? (
-							<ChatView
-								key={active.id}
-								sessionId={active.sessionId}
-								workspaceId={active.workspaceId}
-							/>
-						) : (
-							<FilePane key={active.id} tab={active} />
-						)}
-					</Suspense>
+					// Per-tab boundary: a tab's crash/failed lazy-load stays contained; switching tabs (new `active.id`) resets it.
+					<ErrorBoundary label={active.kind === "chat" ? "chat" : "editor"} resetKeys={[active.id]}>
+						<Suspense
+							fallback={
+								<div className="flex h-full items-center justify-center text-hint">Loading…</div>
+							}
+						>
+							{active.kind === "chat" ? (
+								<ChatView
+									key={active.id}
+									sessionId={active.sessionId}
+									workspaceId={active.workspaceId}
+								/>
+							) : (
+								<FilePane key={active.id} tab={active} />
+							)}
+						</Suspense>
+					</ErrorBoundary>
 				) : (
 					placeholder
 				)}

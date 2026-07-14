@@ -1,4 +1,5 @@
 import { Settings } from "lucide-react";
+import { ErrorBoundary } from "../components/ErrorBoundary";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../components/ui/resizable";
 import { PRODUCT_NAME } from "../constants/branding";
 import { CenterTabs } from "../panels/CenterTabs";
@@ -25,7 +26,8 @@ const STATUS_DOT: Record<ConnectionStatus, string> = {
 
 export function Shell() {
 	const status = useAppStore((s) => s.status);
-	const hasActiveWorkspace = useAppStore((s) => s.activeWorkspaceId != null);
+	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
+	const hasActiveWorkspace = activeWorkspaceId != null;
 	return (
 		<div data-testid="shell" className="grid h-full grid-rows-[auto_1fr]">
 			<header className="flex items-center justify-between border-b border-border2 bg-bg-dark px-lg py-sm">
@@ -68,7 +70,9 @@ export function Shell() {
 					<ResizableHandle direction="horizontal" data-testid="resize-left" />
 					<ResizablePanel id="center" order={2} defaultSize={52} minSize={28}>
 						<main data-testid="center-tabs" className="h-full min-h-0 bg-surface-content">
-							<CenterTabs />
+							<ErrorBoundary label="Editor" resetKeys={[activeWorkspaceId]}>
+								<CenterTabs />
+							</ErrorBoundary>
 						</main>
 					</ResizablePanel>
 					<ResizableHandle direction="horizontal" data-testid="resize-right" />
@@ -76,13 +80,17 @@ export function Shell() {
 						<ResizablePanelGroup direction="vertical" autoSaveId="thinkrail-right">
 							<ResizablePanel id="right-files" order={1} defaultSize={60} minSize={20}>
 								<div data-testid="right-panel" className="h-full min-h-0 bg-surface-content">
-									<RightPanel />
+									<ErrorBoundary label="Files" resetKeys={[activeWorkspaceId]}>
+										<RightPanel />
+									</ErrorBoundary>
 								</div>
 							</ResizablePanel>
 							<ResizableHandle direction="vertical" data-testid="resize-terminals" />
 							<ResizablePanel id="right-terminals" order={2} defaultSize={40} minSize={15}>
 								<div className="h-full min-h-0 bg-surface-content">
-									<TerminalsPanel />
+									<ErrorBoundary label="Terminals" resetKeys={[activeWorkspaceId]}>
+										<TerminalsPanel />
+									</ErrorBoundary>
 								</div>
 							</ResizablePanel>
 						</ResizablePanelGroup>

@@ -166,5 +166,8 @@ prompt hero (still editable; empty by default), a base-branch
   (built from `transport.httpBase()`). A cross-file link's `#fragment` is not yet followed (opens the
   file only).
 - Heavy deps (Monaco / shiki / xterm) load via `React.lazy(() => import())` to stay out of the eager bundle.
+  A lazy chunk that fails to load (or a render throw) is contained by the `components/ErrorBoundary` the
+  **shell** wraps each region in (see `shell/SPEC.md`), so a single panel degrades instead of blanking the
+  app; panels themselves don't own the boundary.
 - Streaming invariant (when chat lands): `text_delta`/`thinking_delta` **APPEND**;
   `tool_execution_update.partialResult` **REPLACE**.
