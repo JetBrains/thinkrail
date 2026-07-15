@@ -1,7 +1,8 @@
 import { describe, expect, it } from "bun:test";
-import type { AskUserQuestionItem } from "@thinkrail/contracts";
+import type { AskUserQuestionAnswer, AskUserQuestionItem } from "@thinkrail/contracts";
 import {
 	deriveAnswer,
+	deriveRecapState,
 	parseQuestions,
 	readAskResult,
 	splitRecommended,
@@ -147,6 +148,68 @@ describe("deriveAnswer", () => {
 			selected: ["A"],
 		});
 		expect(deriveAnswer(q({ multiSelect: true }), 0, state({ multi: ["Gone"] }))).toBeNull();
+	});
+});
+
+describe("deriveRecapState", () => {
+	const base = { questionIndex: 0, question: "Which?" };
+
+	it("shows every option for an unanswered review but not for a resolved skipped record", () => {
+		expect(deriveRecapState(undefined, "review")).toEqual({
+			selectedLabels: [],
+			customAnswer: null,
+			showOptions: true,
+		});
+		expect(deriveRecapState(undefined, "resolved")).toEqual({
+			selectedLabels: [],
+			customAnswer: null,
+			showOptions: false,
+		});
+	});
+
+	it("marks a single authored option selected in both recap variants", () => {
+		const answer: AskUserQuestionAnswer = {
+			...base,
+			kind: "option",
+			answer: "A",
+		};
+		const expected = { selectedLabels: ["A"], customAnswer: null, showOptions: true };
+		expect(deriveRecapState(answer, "review")).toEqual(expected);
+		expect(deriveRecapState(answer, "resolved")).toEqual(expected);
+	});
+
+	it("keeps multi selections and additive custom text in both recap variants", () => {
+		const answer: AskUserQuestionAnswer = {
+			...base,
+			kind: "multi",
+			answer: "extra",
+			selected: ["A", "B"],
+		};
+		const expected = {
+			selectedLabels: ["A", "B"],
+			customAnswer: "extra",
+			showOptions: true,
+		};
+		expect(deriveRecapState(answer, "review")).toEqual(expected);
+		expect(deriveRecapState(answer, "resolved")).toEqual(expected);
+	});
+
+	it("shows authored options around a custom answer only during review", () => {
+		const answer: AskUserQuestionAnswer = {
+			...base,
+			kind: "custom",
+			answer: "mine",
+		};
+		expect(deriveRecapState(answer, "review")).toEqual({
+			selectedLabels: [],
+			customAnswer: "mine",
+			showOptions: true,
+		});
+		expect(deriveRecapState(answer, "resolved")).toEqual({
+			selectedLabels: [],
+			customAnswer: "mine",
+			showOptions: false,
+		});
 	});
 });
 

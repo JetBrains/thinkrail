@@ -135,8 +135,11 @@ test("multi-select: the free-text row is mandatory and additive — checks + typ
 	await expect(
 		record.locator('[data-testid="ask-record-option"][data-selected="true"]'),
 	).toHaveCount(2);
-	// …and the record echoes the additional typed answer.
+	// …and the record echoes the additional typed answer, announced as selected to assistive tech.
 	await expect(record).toContainText("my-extra-e2e-answer");
+	await expect(
+		record.getByTestId("ask-record-custom").getByTestId("ask-selection-status"),
+	).toHaveText("Selected custom answer:");
 });
 
 test("freeform: a typed answer via 'Type your own answer' resolves the tool", {
@@ -196,8 +199,15 @@ test("multi-question: Next reaches review before submitting the batch", { tag: "
 	await expect(tabs).toHaveCount(3);
 
 	// Follow the sequential path: every real question — including the final one — advances with Next.
+	// Capture the agent-authored text so the review can be checked against the exact questions/options.
+	const questionTexts: string[] = [];
+	const optionLabels: string[][] = [];
 	for (let i = 0; i < 2; i++) {
 		await expect(tabs.nth(i)).toHaveAttribute("data-active", "true");
+		questionTexts.push((await card.getByTestId("ask-question-text").innerText()).trim());
+		optionLabels.push(
+			(await card.getByTestId("ask-option-label").allTextContents()).map((label) => label.trim()),
+		);
 		await card.getByTestId("ask-option").first().click();
 		await expect(card.getByTestId("ask-submit")).toHaveCount(0);
 		await card.getByTestId("ask-continue").click();
@@ -208,6 +218,26 @@ test("multi-question: Next reaches review before submitting the batch", { tag: "
 	await expect(card).toContainText("Review your answers");
 	await expect(card.getByTestId("ask-continue")).toHaveCount(0);
 	await expect(card.getByTestId("ask-submit")).toBeEnabled();
+	// Each review item carries the full original question, every option, and the selected answer.
+	const reviewItems = card.getByTestId("ask-review-item");
+	await expect(reviewItems).toHaveCount(2);
+	for (let i = 0; i < 2; i++) {
+		const item = reviewItems.nth(i);
+		await expect(item.getByTestId("ask-review-question")).toHaveText(questionTexts[i] ?? "");
+		const reviewOptions = item.getByTestId("ask-review-option");
+		const labels = optionLabels[i] ?? [];
+		await expect(reviewOptions).toHaveCount(labels.length);
+		for (let j = 0; j < labels.length; j++) {
+			const option = reviewOptions.nth(j);
+			await expect(option).toContainText(labels[j] ?? "");
+			await expect(option.getByTestId("ask-selection-status")).toHaveText(
+				j === 0 ? "Selected:" : "Not selected:",
+			);
+		}
+		await expect(
+			item.locator('[data-testid="ask-review-option"][data-selected="true"]'),
+		).toContainText(labels[0] ?? "");
+	}
 	// Every question answered → both question chips carry their answered marker.
 	await expect(card.locator('[data-testid="ask-tab"][data-answered="true"]')).toHaveCount(2);
 
