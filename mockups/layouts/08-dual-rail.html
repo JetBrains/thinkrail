@@ -1,0 +1,267 @@
+<!doctype html>
+<!-- Mockup 08 — "Dual Rail": the research-consensus conservative evolution.
+     What VS Code / Zed / JetBrains all converged on: files LEFT behind a 40px icon rail,
+     agent chat in a DEDICATED RIGHT dock (~600px, its own chat tabs, promotable into the
+     editor area as tabs), terminal BOTTOM full-width with maximize — and every view
+     relocatable (open ⋮ "Move to" menu = the VS Code views model; Zed agent panel = right
+     640px; Cursor 2.0's forced side-swap backlash proves movability matters).
+     Static design artifact — links kit.css; no JS beyond the notes toggle. -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>08 · Dual Rail</title>
+<link rel="stylesheet" href="kit.css" />
+<style>
+  .app { display: flex; flex-direction: column; height: 100vh; min-width: 1280px; }
+  .topbar {
+    height: 34px; flex-shrink: 0; display: flex; align-items: center; gap: 10px;
+    padding: 0 10px; background: var(--bg-dark); border-bottom: 1px solid var(--border2);
+    position: relative; z-index: 20;
+  }
+  .searchpill {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    width: 340px; height: 22px; display: flex; align-items: center; gap: 7px;
+    padding: 0 9px; border-radius: 999px; background: var(--bg-input);
+    border: 1px solid var(--border2); color: var(--hint); font-size: 11.5px;
+  }
+  .searchpill .kbd { margin-left: auto; }
+  .tb-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+  .body { flex: 1; display: flex; min-height: 0; }
+  .rail { position: relative; flex-shrink: 0; }
+  .rail-btn .sup {
+    position: absolute; top: 0; right: 1px; font-size: 8px; font-weight: 700;
+    color: var(--gold); font-family: var(--font-mono);
+  }
+  .work { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .work-top { flex: 1; display: flex; min-height: 0; }
+  .left { width: 250px; flex-shrink: 0; position: relative; }
+  .center { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
+  .agent-dock { width: 600px; flex-shrink: 0; display: flex; flex-direction: column; min-height: 0; position: relative; }
+  .bottom { height: 300px; flex-shrink: 0; display: flex; flex-direction: column; position: relative; }
+  .strip-btns { display: flex; align-items: center; gap: 2px; padding: 0 6px; }
+  .tab.ghost { opacity: 0.45; }
+  .tab .dot.term { padding: 0; height: 7px; } /* undo kit's .term terminal-body padding on tab dots */
+  .ghost-note { align-self: center; margin-left: 28px; font-size: 10px; font-style: italic; color: var(--hint); white-space: nowrap; }
+  .indent-4 { padding-left: 70px; }
+  /* open "Move to" context menu (anchored under the agent panel's ⋮) */
+  .ctx {
+    position: absolute; top: 32px; right: 6px; z-index: 45; width: 186px;
+    background: var(--elevated); border: 1px solid var(--border2);
+    border-radius: var(--radius-md); box-shadow: var(--shadow-lg);
+    padding: 5px; font-size: 12px;
+  }
+  .ctx .hd { font-size: 10px; text-transform: uppercase; letter-spacing: 0.7px; color: var(--hint); padding: 4px 8px 2px; }
+  .ctx .it { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-radius: var(--radius-sm); color: var(--muted); }
+  .ctx .it:hover, .ctx .it.hot { background: var(--hover); color: var(--text); }
+  .ctx .glyph { width: 16px; text-align: center; color: var(--hint); flex-shrink: 0; }
+  .ctx .sep { height: 1px; background: var(--border2); margin: 4px 6px; }
+  /* anno card moves bottom-LEFT: the right dock owns that corner here */
+  .anno-card { left: 16px; right: auto; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- COMPACT TOP BAR: brand · workspace switcher · ⌘K search · model/status/gear -->
+  <div class="topbar">
+    <span class="brand">ThinkRail</span>
+    <button class="pill" style="color: var(--text);">⌥ thinkrail / main ▾</button>
+    <div class="anno fix" style="left: 216px; top: 7px;">3</div>
+    <button class="searchpill">⌕ Search, files, commands… <span class="kbd">⌘K</span></button>
+    <div class="anno fix" style="left: calc(50% + 180px); top: 7px;">1</div>
+    <div class="tb-right">
+      <span class="pill">claude-fable-5 ▾</span>
+      <span class="status-dot" title="Connected"></span>
+      <button class="icon-btn" title="Settings">⚙</button>
+    </div>
+  </div>
+
+  <div class="body">
+    <!-- FAR LEFT: 40px icon rail -->
+    <div class="rail">
+      <button class="rail-btn active" title="Files">▤</button>
+      <button class="rail-btn" title="Search">⌕</button>
+      <button class="rail-btn" title="Specs">◎</button>
+      <button class="rail-btn" title="Changes">±<span class="sup">3</span></button>
+      <button class="rail-btn" title="Projects">📁</button>
+      <div class="anno fix" style="left: 20px; top: 138px;">3</div>
+      <div class="rail-spacer"></div>
+      <button class="rail-btn" title="Settings">⚙</button>
+    </div>
+
+    <div class="work">
+      <div class="work-top">
+
+        <!-- LEFT SIDEBAR: Explorer -->
+        <div class="left pane">
+          <div class="anno fix" style="right: 58px; top: 4px;">5</div>
+          <div class="pane-hd">Explorer — main <span class="grow"></span>
+            <span class="icon-btn" style="width: 20px; height: 20px; font-size: 11px;">＋</span>
+            <span class="icon-btn" style="width: 20px; height: 20px; font-size: 11px;">↻</span>
+          </div>
+          <div class="pane-bd tree">
+            <div class="tree-item"><span class="twisty">▾</span><span class="ico">📁</span> apps</div>
+            <div class="tree-item indent-1"><span class="twisty">▾</span><span class="ico">📁</span> web</div>
+            <div class="tree-item indent-2"><span class="twisty">▾</span><span class="ico">📁</span> src</div>
+            <div class="tree-item indent-3"><span class="twisty">▸</span><span class="ico">📁</span> chat</div>
+            <div class="tree-item indent-3"><span class="twisty">▸</span><span class="ico">📁</span> panels</div>
+            <div class="tree-item indent-3"><span class="twisty">▾</span><span class="ico">📁</span> shell</div>
+            <div class="tree-item indent-4"><span class="ico">▢</span> AgentDock.tsx <span style="margin-left:auto;" class="badge-add">A</span></div>
+            <div class="tree-item sel indent-4"><span class="ico">▢</span> Shell.tsx <span style="margin-left:auto;" class="badge-mod">M</span></div>
+            <div class="tree-item indent-4"><span class="ico">▢</span> Tabs.tsx</div>
+            <div class="tree-item indent-3"><span class="ico">▢</span> index.css</div>
+            <div class="tree-item"><span class="twisty">▸</span><span class="ico">📁</span> packages</div>
+            <div class="tree-item"><span class="twisty">▾</span><span class="ico">📁</span> mockups</div>
+            <div class="tree-item indent-1"><span class="twisty">▾</span><span class="ico">📁</span> layouts</div>
+            <div class="tree-item indent-2"><span class="ico">▢</span> kit.css</div>
+            <div class="tree-item indent-2"><span class="ico">▢</span> 00-current-baseline.html</div>
+            <div class="tree-item indent-2"><span class="ico">▢</span> 08-dual-rail.html <span style="margin-left:auto;" class="badge-add">A</span></div>
+            <div class="tree-item"><span class="ico">▢</span> AGENTS.md</div>
+          </div>
+        </div>
+
+        <div class="vsplit"></div>
+
+        <!-- CENTER: one editor group (+ ghost chat tab = promotable chats) -->
+        <div class="center">
+          <div class="tabstrip">
+            <span class="tab active"><span class="dot file"></span> Shell.tsx <span class="close">✕</span></span>
+            <span class="tab"><span class="dot file"></span> tokens.css <span class="close">✕</span></span>
+            <span class="tab"><span class="dot file"></span> SPEC.md <span class="close">✕</span></span>
+            <span class="tab ghost"><span class="dot chat"></span> Layout redesign <span class="close">◌</span></span>
+            <div class="anno fix" style="left: 312px; top: 5px;">2</div>
+            <span class="ghost-note">← a dock chat, ⇱-promoted</span>
+            <span style="flex: 1;"></span>
+            <button class="icon-btn" title="Split editor" style="align-self: center; margin-right: 4px;">◫</button>
+          </div>
+          <div class="pane-bd editor">
+            <div class="cl"><span class="ln">1</span><span><span class="k">import</span> { <span class="f">useMemo</span> } <span class="k">from</span> <span class="s">"react"</span>;</span></div>
+            <div class="cl"><span class="ln">2</span><span><span class="k">import</span> { <span class="f">useLayoutStore</span> } <span class="k">from</span> <span class="s">"../store/layoutStore"</span>;</span></div>
+            <div class="cl"><span class="ln">3</span><span><span class="k">import</span> { <span class="t">IconRail</span> } <span class="k">from</span> <span class="s">"./IconRail"</span>;</span></div>
+            <div class="cl"><span class="ln">4</span><span><span class="k">import</span> { <span class="t">AgentDock</span> } <span class="k">from</span> <span class="s">"./AgentDock"</span>;</span></div>
+            <div class="cl"><span class="ln">5</span><span><span class="k">import</span> { <span class="t">BottomDock</span> } <span class="k">from</span> <span class="s">"./BottomDock"</span>;</span></div>
+            <div class="cl"><span class="ln">6</span></div>
+            <div class="cl"><span class="ln">7</span><span><span class="c">/** Shell — arranges rail, sidebar, editor groups and the movable docks. */</span></span></div>
+            <div class="cl"><span class="ln">8</span><span><span class="k">export function</span> <span class="f">Shell</span>() {</span></div>
+            <div class="cl"><span class="ln">9</span><span>  <span class="k">const</span> layout = <span class="f">useLayoutStore</span>((s) =&gt; s.<span class="v">layout</span>);</span></div>
+            <div class="cl"><span class="ln">10</span><span>  <span class="k">const</span> docks = <span class="f">useMemo</span>(() =&gt; <span class="f">resolveDocks</span>(layout), [layout]);</span></div>
+            <div class="cl"><span class="ln">11</span></div>
+            <div class="cl"><span class="ln">12</span><span>  <span class="k">return</span> (</span></div>
+            <div class="cl"><span class="ln">13</span><span>    &lt;<span class="t">div</span> <span class="v">className</span>=<span class="s">"flex h-full min-h-0 flex-col"</span>&gt;</span></div>
+            <div class="cl"><span class="ln">14</span><span>      &lt;<span class="t">TopBar</span> <span class="v">workspace</span>={layout.workspace} /&gt;</span></div>
+            <div class="cl"><span class="ln">15</span><span>      &lt;<span class="t">div</span> <span class="v">className</span>=<span class="s">"flex min-h-0 flex-1"</span>&gt;</span></div>
+            <div class="cl"><span class="ln">16</span><span>        &lt;<span class="t">IconRail</span> <span class="v">active</span>={docks.active} <span class="v">onMove</span>={moveView} /&gt;</span></div>
+          </div>
+        </div>
+
+        <div class="vsplit"></div>
+
+        <!-- RIGHT DOCK (~600px): the dedicated Agent panel -->
+        <div class="agent-dock pane">
+          <div class="tabstrip">
+            <span class="tab active"><span class="dot chat"></span> Layout redesign <span class="close">✕</span></span>
+            <span class="tab"><span class="dot busy"></span> Fix e2e flake <span class="close">✕</span></span>
+            <span class="tab-plus" title="New chat">＋</span>
+            <span style="flex: 1;"></span>
+            <div class="strip-btns">
+              <button class="icon-btn" title="Open as editor tab">⇱</button>
+              <button class="icon-btn" title="Chat history">🕘</button>
+              <button class="icon-btn" title="Panel menu" style="background: var(--hover); color: var(--text);">⋮</button>
+            </div>
+            <div class="anno fix" style="right: 102px; top: 5px;">2</div>
+          </div>
+          <!-- open panel menu: every view is relocatable -->
+          <div class="ctx">
+            <div class="anno fix" style="left: -10px; top: -9px;">6</div>
+            <div class="hd">Move to</div>
+            <div class="it"><span class="glyph">◧</span> Left</div>
+            <div class="it"><span class="glyph">◪</span> Bottom</div>
+            <div class="it hot"><span class="glyph">▣</span> Editor area</div>
+            <div class="it"><span class="glyph">⧉</span> New window</div>
+            <div class="sep"></div>
+            <div class="it"><span class="glyph">🔒</span> Lock panel</div>
+          </div>
+          <div class="chat">
+            <div class="chat-scroll">
+              <div class="msg-user">Add a 2×2 chat grid to the shell so I can watch several agents at once.</div>
+              <div class="msg-think">Reading the shell layout and the tab store…</div>
+              <div class="tool-row"><span class="ok">✓</span> Read apps/web/src/shell/Shell.tsx</div>
+              <div class="tool-row"><span class="ok">✓</span> Read apps/web/src/panels/CenterTabs.tsx</div>
+              <div class="msg-ai"><p>The center area renders a single <b>CenterTabs</b> strip with one visible tab — there is no split container. To get a grid we'd introduce pane groups in the shell and let each group host its own tab strip.</p></div>
+              <div class="tool-row"><span class="ok">✓</span> Edit apps/web/src/shell/Shell.tsx</div>
+              <div class="tool-row"><span class="ok">✓</span> Write apps/web/src/shell/AgentDock.tsx</div>
+              <div class="msg-ai"><p>Editor groups are in. Chats live in this dock by default; <b>⇱</b> promotes any chat into the editor area as a tab, so 1×2 / 2×2 grids fall out of ordinary splits. Running the shell specs to verify.</p></div>
+              <div class="tool-row"><span class="run">●</span> bun run e2e --grep shell <span class="dim">— running…</span></div>
+            </div>
+            <div class="composer">
+              <div class="row"><span class="grow">Reply to the agent…</span><span class="send">➤</span></div>
+              <div class="row"><span class="model">claude-fable-5 · thinking: high</span><span class="grow"></span><span class="kbd">⏎ send</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="hsplit"></div>
+
+      <!-- BOTTOM: full-width terminal panel with maximize -->
+      <div class="bottom pane">
+        <div class="tabstrip">
+          <span class="tab active"><span class="dot term"></span> zsh <span class="close">✕</span></span>
+          <span class="tab"><span class="dot term"></span> bun dev <span class="close">✕</span></span>
+          <span class="tab">Problems</span>
+          <span class="tab">Output</span>
+          <span class="tab-plus" title="New terminal">＋</span>
+          <span style="flex: 1;"></span>
+          <div class="strip-btns">
+            <button class="icon-btn" title="Maximize panel">⌃</button>
+            <button class="icon-btn" title="Close panel">✕</button>
+          </div>
+          <div class="anno fix" style="right: 64px; top: 5px;">4</div>
+        </div>
+        <div class="pane-bd term">
+<span class="p">➜ main</span> <span class="cmd">bun run e2e</span>
+<br /><span class="dim">$ playwright test --grep-invert @agent</span>
+<br /><span class="dim">Running 42 tests using 4 workers</span>
+<br /><span class="ok">✓</span> projects.spec.ts (6 passed, 4.2s)
+<br /><span class="ok">✓</span> workspaces.spec.ts (9 passed, 7.8s)
+<br /><span class="ok">✓</span> files.spec.ts (7 passed, 5.1s)
+<br /><span class="ok">✓</span> editor.spec.ts (8 passed, 9.4s) <span class="dim">← full line, nothing clipped — the panel finally has width</span>
+<br /><span class="ok">✓</span> changes.spec.ts (5 passed, 6.3s)
+<br /><span class="ok">✓</span> terminals.spec.ts (7 passed, 8.0s)
+<br /><span class="ok">42 passed</span> <span class="dim">(41.6s)</span>
+<br /><span class="p">➜ main</span> <span class="cursor">&nbsp;</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STATUS BAR -->
+  <div class="statusbar">
+    <span class="item">⌥ main</span>
+    <span class="item">↑2</span>
+    <span class="item">✕0 ⚠1</span>
+    <span class="grow"></span>
+    <span class="item"><span class="status-dot" style="width: 7px; height: 7px;"></span> 2 agents</span>
+    <span class="item">$0.84 today</span>
+    <span class="item">pi</span>
+    <span class="item">claude-fable-5</span>
+    <span class="item">TS 5.6</span>
+  </div>
+</div>
+
+<div class="anno-card">
+  <h1>08 · Dual Rail</h1>
+  <div class="sub">The conservative evolution every major IDE converged on: files left behind an icon rail, the agent in a dedicated ~600px right dock, a full-width terminal below — and every dock relocatable.</div>
+  <ol>
+    <li><b>Top bar earns its 34px:</b> workspace switcher and the ⌘K search/command pill live there — no more dead chrome.</li>
+    <li><b>2+ chats visible:</b> the agent dock stacks its own chat tabs, and the ghost tab shows any chat promoted (⇱) into the editor area — side-by-side falls out of ordinary splits.</li>
+    <li><b>Projects demoted:</b> a rail icon + the workspace pill replace the always-open 18% panel for a rarely-used switch.</li>
+    <li><b>Terminal breathes:</b> a full-window-width bottom panel with one-click maximize (⌃).</li>
+    <li><b>Files where eyes look:</b> Explorer docks left, behind the Files rail icon — standard IDE muscle memory.</li>
+    <li><b>Views are location-independent:</b> every panel's ⋮ menu offers Move to Left / Bottom / Editor area / New window (the VS Code views model), so no dock position is ever forced.</li>
+  </ol>
+  <span class="pill accent tag">Pattern: VS Code secondary sidebar · Zed agent dock</span>
+</div>
+<button class="anno-toggle" onclick="document.body.classList.toggle('hide-anno'); this.textContent = document.body.classList.contains('hide-anno') ? 'Show notes' : 'Hide notes';" style="bottom: auto; top: 46px;">Hide notes</button>
+</body>
+</html>

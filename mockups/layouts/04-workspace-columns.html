@@ -1,0 +1,229 @@
+<!doctype html>
+<!-- Mockup 04 — WORKSPACE COLUMNS ("Conductor" / mission-control pattern).
+     One column per git-worktree workspace = per parallel agent. The home view is N live
+     agent columns side by side; editor/files appear on demand (⤢ column zoom, peek overlays);
+     terminals share one full-width bottom drawer. Static design artifact, not app code. -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>04 · Workspace Columns</title>
+<link rel="stylesheet" href="kit.css" />
+<style>
+  body { min-width: 1280px; }
+  .app { display: grid; grid-template-rows: 34px minmax(0, 1fr) 26% 22px; height: 100vh; }
+  .topbar { display: flex; align-items: center; gap: 10px; padding: 0 12px; border-bottom: 1px solid var(--border2); background: var(--bg-dark); }
+  .tb-side { flex: 1; display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .tb-side.r { justify-content: flex-end; }
+  .rel { position: relative; display: inline-flex; }
+  .seg { display: inline-flex; align-items: center; background: var(--white-5); border: 1px solid var(--border2); border-radius: var(--radius-sm); overflow: hidden; }
+  .seg button { padding: 1px 9px; font-size: 11px; color: var(--hint); border-right: 1px solid var(--border2); white-space: nowrap; }
+  .seg button:last-child { border-right: 0; }
+  .seg button.active { background: var(--primary-20); color: var(--text); }
+  .btn-new { background: var(--primary); color: #fff; border-radius: var(--radius-sm); padding: 3px 10px; font-size: 11.5px; white-space: nowrap; }
+  /* workspace columns */
+  .cols { display: flex; gap: 1px; background: var(--border2); min-height: 0; position: relative; }
+  .wscol { flex: 1 1 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--bg-dark); position: relative; }
+  .wscol.focused { outline: 1.5px solid var(--primary-40); outline-offset: -1.5px; z-index: 2; }
+  .ws-hd { height: 36px; flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 0 10px; border-bottom: 1px solid var(--border); }
+  .ws-name { font-size: 12.5px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ws-branch { font-family: var(--font-mono); font-size: 10.5px; color: var(--hint); white-space: nowrap; }
+  .ws-hd .icon-btn { width: 22px; height: 22px; font-size: 12px; }
+  .ws-strip { height: 24px; flex-shrink: 0; display: flex; align-items: center; gap: 6px; padding: 0 10px; font-size: 11px; color: var(--muted); background: var(--white-5); border-bottom: 1px solid var(--border); white-space: nowrap; overflow: hidden; }
+  .pill.pulse { animation: pulse 1.2s infinite; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chips .pill { cursor: pointer; }
+  /* peek overlay (files/diff on demand) */
+  .peek { position: absolute; right: 10px; top: 116px; width: 360px; z-index: 35; background: var(--elevated); border: 1px solid var(--border2); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); overflow: hidden; transform: rotate(0deg); }
+  .diffline { display: block; white-space: pre; overflow: hidden; padding: 0 10px; line-height: 1.7; font-family: var(--font-mono); font-size: 11px; }
+  .diffline.ctx { color: var(--muted); }
+  .diffline.badge-add { background: var(--green-tint); }
+  .diffline.badge-del { background: rgba(255, 75, 117, 0.1); }
+  /* bottom drawer */
+  .drawer { display: flex; flex-direction: column; min-height: 0; border-top: 1px solid var(--border2); background: var(--bg-dark); position: relative; }
+  .drawer .tabstrip { border-bottom: 1px solid var(--border); }
+  .drop-strip { inset: 8px 6px 8px auto; width: 110px; padding: 0 12px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- 34px top bar: brand · project switcher · layout-width switcher · new workspace -->
+  <div class="topbar">
+    <div class="tb-side">
+      <span class="brand">ThinkRail</span>
+      <span class="rel">
+        <button class="pill">📁 thinkrail ▾</button>
+        <div class="anno fix" style="right:-26px; top:-2px;">3</div>
+      </span>
+    </div>
+    <span class="rel">
+      <span class="seg" title="Visible workspace columns">
+        <button>▢ 1</button><button>▢▢ 2</button><button class="active">▢▢▢ 3</button><button>⊞ grid</button>
+      </span>
+      <div class="anno fix" style="right:-26px; top:0;">1</div>
+    </span>
+    <div class="tb-side r">
+      <button class="btn-new">＋ New workspace</button>
+      <span class="status-dot" title="Connected"></span>
+      <button class="icon-btn" title="Settings">⚙</button>
+    </div>
+  </div>
+
+  <!-- N live workspace columns, one agent each -->
+  <div class="cols">
+
+    <!-- col 1 · main · the baseline conversation -->
+    <div class="wscol">
+      <div class="ws-hd">
+        <span class="ws-name">Layout redesign</span><span class="ws-branch">◆ main</span>
+        <span class="pill gold pulse" style="font-size:10px; padding:0 8px;">running</span>
+        <span style="flex:1"></span>
+        <button class="icon-btn" title="Focus — zoom to full IDE">⤢</button>
+        <button class="icon-btn" title="Open files">⊞</button>
+        <button class="icon-btn" title="Close">✕</button>
+      </div>
+      <div class="ws-strip"><span style="color:var(--gold);">●</span> Editing Shell.tsx — 2m · $0.52</div>
+      <div class="chat">
+        <div class="chat-scroll">
+          <div class="msg-user">Add a 2×2 chat grid to the shell so I can watch several agents at once.</div>
+          <div class="msg-think">Reading the shell layout and the tab store…</div>
+          <div class="tool-row"><span class="ok">✓</span> Read apps/web/src/shell/Shell.tsx</div>
+          <div class="tool-row"><span class="ok">✓</span> Read apps/web/src/panels/CenterTabs.tsx</div>
+          <div class="msg-ai"><p>The center area renders a single <b>CenterTabs</b> strip with one visible tab — there is no split container. To get a grid we'd introduce pane groups in the shell and let each group host its own tab strip.</p></div>
+          <div class="tool-row"><span class="run">●</span> Edit apps/web/src/shell/Shell.tsx <span class="dim">— running…</span></div>
+        </div>
+        <div class="composer">
+          <div class="row"><span class="grow">Reply to the agent…</span><span class="send">➤</span></div>
+          <div class="row"><span class="model">claude-fable-5 · thinking: high</span><span class="grow"></span><span class="kbd">⏎ send</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- col 2 · feat/layout-v2 · mid-run, keyboard-focused -->
+    <div class="wscol focused">
+      <div class="ws-hd">
+        <span class="ws-name">Tab refactor</span><span class="ws-branch">◆ feat/layout-v2</span>
+        <span class="pill gold pulse" style="font-size:10px; padding:0 8px;">running</span>
+        <span style="flex:1"></span>
+        <button class="icon-btn" title="Focus — zoom to full IDE">⤢</button>
+        <button class="icon-btn" title="Open files">⊞</button>
+        <button class="icon-btn" title="Close">✕</button>
+      </div>
+      <div class="ws-strip"><span style="color:var(--gold);">●</span> Editing CenterTabs.tsx — 40s · 4 files touched · $0.31</div>
+      <div class="chat">
+        <div class="chat-scroll">
+          <div class="msg-user">Break CenterTabs into per-pane tab groups — moving a tab must never remount its editor.</div>
+          <div class="msg-think">Tracing tab ownership through the store so Monaco state survives a move…</div>
+          <div class="tool-row"><span class="ok">✓</span> Grep "useTabStore" — 11 hits in 6 files</div>
+          <div class="tool-row"><span class="run">●</span> Edit apps/web/src/panels/CenterTabs.tsx <span class="dim">— running…</span></div>
+        </div>
+        <div class="composer">
+          <div class="row"><span class="grow">Steer the agent…</span><span class="send">➤</span></div>
+          <div class="row"><span class="model">claude-fable-5 · thinking: high</span><span class="grow"></span><span class="kbd">⏎ send</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- col 3 · fix/tab-dnd · finished run + peek overlay -->
+    <div class="wscol">
+      <div class="ws-hd">
+        <span class="ws-name">Tab DnD fix</span><span class="ws-branch">◆ fix/tab-dnd</span>
+        <span class="pill accent" style="font-size:10px; padding:0 8px;">needs review</span>
+        <span style="flex:1"></span>
+        <button class="icon-btn" title="Focus — zoom to full IDE">⤢</button>
+        <button class="icon-btn" title="Open files">⊞</button>
+        <button class="icon-btn" title="Close">✕</button>
+      </div>
+      <div class="ws-strip"><span style="color:var(--green);">✓</span> e2e green · 9 files changed · $0.84</div>
+      <div class="chat">
+        <div class="chat-scroll">
+          <div class="msg-user">Tabs drop on the wrong pane when dragged fast — fix the hit-testing.</div>
+          <div class="tool-row"><span class="ok">✓</span> Diff <span class="badge-add">＋142</span> <span class="badge-del">−38</span> <span class="dim">across 9 files</span></div>
+          <div class="msg-ai"><p>Drop targets now hit-test pane rects at pointer-up instead of a drag-start snapshot, so fast drags land where the cursor is. The tab-dnd e2e spec passes 12/12 — ready for review.</p></div>
+          <div class="chips">
+            <button class="pill accent">Review changes</button>
+            <button class="pill">Run e2e</button>
+            <button class="pill green">Merge</button>
+          </div>
+        </div>
+        <div class="composer">
+          <div class="row"><span class="grow">Ask a follow-up…</span><span class="send">➤</span></div>
+          <div class="row"><span class="model">claude-sonnet-5 · thinking: medium</span><span class="grow"></span><span class="kbd">⏎ send</span></div>
+        </div>
+      </div>
+      <!-- peek overlay: files/diffs surface on demand inside a column -->
+      <div class="peek">
+        <div class="minitabs">
+          <span class="minitab active" style="text-transform:none; letter-spacing:0.2px;">Changes — fix/tab-dnd</span>
+          <span style="flex:1"></span>
+          <span class="icon-btn" style="width:20px; height:20px; font-size:10px;">✕</span>
+        </div>
+        <div style="padding:5px 0; background:var(--bg-dark);">
+          <span class="diffline ctx">  const order = pane.tabs.map(t =&gt; t.id);</span>
+          <span class="diffline badge-del">- const target = panes[Math.round(x / paneW)];</span>
+          <span class="diffline badge-del">- moveTab(tab.id, target?.id ?? panes[0].id);</span>
+          <span class="diffline badge-add">+ const target = paneAtPoint(ev.x, ev.y);</span>
+          <span class="diffline badge-add">+ if (!target) return setDropHint(null);</span>
+          <span class="diffline badge-add">+ moveTab(tab.id, target.id, indexAt(ev.x));</span>
+        </div>
+      </div>
+      <div class="anno fix" style="right:362px; top:107px;">5</div>
+    </div>
+
+    <!-- drag a task/tab between columns · drop on the far edge = new column -->
+    <div class="drag-ghost" style="left:calc(33.33% - 64px); top:200px;"><span style="color:var(--gold);">●</span> Fix e2e flake</div>
+    <div class="anno fix" style="left:calc(33.33% + 74px); top:200px;">6</div>
+    <div class="drop-hint drop-strip">Drop to open as 4th column</div>
+    <div class="anno fix" style="left:calc(66.66% - 10px); top:calc(50% - 10px);">2</div>
+  </div>
+
+  <!-- full-width bottom drawer: roomy shared terminals + changes, per workspace -->
+  <div class="drawer">
+    <div class="anno fix" style="left:calc(50% - 10px); top:38px;">4</div>
+    <div class="tabstrip">
+      <span class="tab active"><span class="dot term"></span> Terminal — main ▸ zsh <span class="close">✕</span></span>
+      <span class="tab"><span class="dot term"></span> Terminal — feat/layout-v2</span>
+      <span class="tab"><span class="dot file"></span> Changes — feat/layout-v2</span>
+      <span class="tab-plus" title="New terminal">＋</span>
+      <span style="flex:1"></span>
+      <button class="icon-btn" title="Collapse drawer">⌄</button>
+      <button class="icon-btn" title="Maximize drawer" style="margin-right:6px;">⌃</button>
+    </div>
+    <div class="pane-bd term">
+<span class="p">➜ main</span> <span class="cmd">bun run e2e</span>
+<br /><span class="dim">$ build web → boot host :24252 (isolated state dir) → playwright test --grep-invert @agent</span>
+<br /><span class="ok">✓</span> projects.spec.ts (6 passed, 4.1s)
+<br /><span class="ok">✓</span> workspaces.spec.ts (9 passed, 7.8s)
+<br /><span class="ok">✓</span> files-tree.spec.ts (7 passed, 5.2s)
+<br /><span class="ok">✓</span> editor.spec.ts (11 passed, 9.0s)
+<br /><span class="ok">✓</span> changes.spec.ts (5 passed, 4.4s)
+<br /><span class="ok">✓</span> terminals.spec.ts (4 passed, 3.6s)
+<br /><span class="ok">42 passed</span> <span class="dim">(34.7s) · teardown: host stopped, e2e state dir removed</span>
+<br /><span class="p">➜ main</span> <span class="cursor">&nbsp;</span>
+    </div>
+  </div>
+
+  <div class="statusbar">
+    <span class="item">3 workspaces · 2 agents running</span>
+    <span class="grow"></span>
+    <span class="item">⌥ worktrees: ~/.thinkrail/worktrees</span>
+    <span class="item"><span class="status-dot"></span> pi engine ok</span>
+  </div>
+</div>
+
+<div class="anno-card">
+  <h1>04 · Workspace Columns</h1>
+  <div class="sub">Mission control for parallel agents: every git-worktree workspace is a live column — chat first, full IDE on ⤢ zoom.</div>
+  <ol>
+    <li><b>Top bar earns its keep.</b> The 34px row holds the project switcher, the layout-width control (1 / 2 / 3 / grid) and ＋ New workspace.</li>
+    <li><b>Side-by-side chats ARE the layout.</b> One column per workspace agent — watch three runs at once, no tab flipping.</li>
+    <li><b>Projects demoted to a dropdown.</b> A pill replaces the always-open left tree; workspaces are the columns themselves.</li>
+    <li><b>Terminal gets the full width.</b> A collapsible bottom drawer shows whole e2e runs, with per-workspace terminal tabs.</li>
+    <li><b>Files on demand, any side.</b> Peek overlays (and ⤢ column zoom into the full IDE) replace the fixed right-hand file panel.</li>
+    <li><b>Everything drags.</b> Tasks and tabs move between columns; drop at the right edge to open a fourth column.</li>
+  </ol>
+  <span class="pill accent tag">Pattern: Conductor · mission control</span>
+</div>
+<button class="anno-toggle" onclick="document.body.classList.toggle('hide-anno'); this.textContent = document.body.classList.contains('hide-anno') ? 'Show notes' : 'Hide notes';" style="bottom:auto; top:46px;">Hide notes</button>
+</body>
+</html>

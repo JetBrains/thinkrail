@@ -1,0 +1,189 @@
+<!doctype html>
+<!-- Mockup 05 — "Command Zen": chrome-minimal, conversation-first.
+     No top bar — the only permanent chrome is a floating ⌘K capsule, two corner buttons,
+     edge signifiers and a 22px status rail. Panels are Arc-style edge overlays (left FILES
+     shown mid-peek, right TERMINAL collapsed). Centerpiece: the ⌘K palette open, Linear/
+     Superhuman-style — every row teaches its keybinding. NN/g zen-mode caveat honored:
+     opt-in expert mode, every hidden surface keeps a visible signifier.
+     Static design artifact — not app code. -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>05 · Command Zen</title>
+<link rel="stylesheet" href="kit.css" />
+<style>
+  .app { position: relative; height: 100vh; min-width: 1280px; display: flex; flex-direction: column; overflow: hidden; }
+  .main { flex: 1; min-height: 0; display: flex; justify-content: center; }
+
+  /* one centered reading column */
+  .convo { width: 100%; max-width: 860px; }
+  .convo .chat-scroll { padding: 76px 34px 18px; gap: 16px; }
+  .convo .msg-ai { font-size: 13px; line-height: 1.65; }
+  .convo .msg-user { font-size: 13px; }
+  .convo .composer { margin: 6px 34px 20px; }
+
+  /* floating chrome (replaces the dead top bar) */
+  .capsule {
+    position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 15;
+    width: 520px; height: 34px; border-radius: 999px; padding: 0 8px 0 12px;
+    background: var(--elevated); border: 1px solid var(--border2); box-shadow: var(--shadow-md);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .capsule .ph { flex: 1; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; }
+  .corner { position: absolute; top: 12px; right: 14px; z-index: 15; display: flex; gap: 8px; }
+  .corner .icon-btn { width: 28px; height: 28px; border-radius: 999px; background: var(--elevated); border: 1px solid var(--border2); box-shadow: var(--shadow-md); }
+
+  /* edge signifiers (always visible) + left peek overlay */
+  .edge-strip { position: absolute; top: 0; bottom: 0; width: 3px; background: var(--primary-40); z-index: 12; }
+  .edge-tab {
+    position: absolute; top: 38%; transform: translateY(-50%); z-index: 12;
+    writing-mode: vertical-rl; padding: 10px 4px; white-space: nowrap;
+    font-size: 10px; text-transform: uppercase; letter-spacing: 1.2px;
+    background: var(--elevated); border: 1px solid var(--border2); color: var(--muted);
+  }
+  .edge-tab .key { opacity: 0.65; letter-spacing: 0.5px; }
+  .edge-tab.left { left: 3px; border-left: none; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; background: var(--primary-20); border-color: var(--primary-40); color: var(--primary); }
+  .edge-tab.right { right: 3px; border-right: none; border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+  .peek {
+    position: absolute; left: 0; top: 0; bottom: 0; width: 240px; z-index: 10;
+    background: var(--bg-dark); border-right: 1px solid var(--border2); box-shadow: var(--shadow-lg);
+    display: flex; flex-direction: column;
+    -webkit-mask-image: linear-gradient(to right, #000 200px, rgba(0, 0, 0, 0.15) 240px);
+    mask-image: linear-gradient(to right, #000 200px, rgba(0, 0, 0, 0.15) 240px);
+  }
+
+  .tool-row .dim { color: var(--hint); }
+
+  /* the ⌘K palette (centerpiece) */
+  .scrim { position: absolute; inset: 0; z-index: 20; background: var(--overlay); }
+  .palette {
+    position: absolute; top: 22%; left: 50%; transform: translateX(-50%); z-index: 25;
+    width: 560px; background: var(--elevated); border: 1px solid var(--border2);
+    border-radius: var(--radius-lg); box-shadow: 0 18px 56px rgba(0, 0, 0, 0.55);
+  }
+  .pal-input { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-bottom: 1px solid var(--border2); font-size: 13.5px; color: var(--text); }
+  .caret { display: inline-block; width: 7px; height: 16px; border-radius: 1px; background: var(--text); animation: pulse 1s infinite; }
+  .pal-list { padding: 6px; }
+  .pal-row { position: relative; display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: var(--radius-sm); font-size: 12.5px; color: var(--muted); }
+  .pal-row .ico { width: 18px; text-align: center; flex-shrink: 0; }
+  .pal-row.sel { background: var(--primary-20); color: var(--text); }
+  .pal-row .grow, .pal-foot .grow { flex: 1; }
+  .pal-foot { position: relative; display: flex; align-items: center; gap: 8px; padding: 7px 14px; border-top: 1px solid var(--border2); font-size: 11px; color: var(--hint); }
+
+  /* status rail stays crisp above the dim — the visible exits (NN/g fix) */
+  .statusbar { position: relative; z-index: 22; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ONE centered conversation column -->
+  <div class="main">
+    <div class="chat convo">
+      <div class="chat-scroll">
+        <div class="msg-user">Add a 2×2 chat grid to the shell so I can watch several agents at once.</div>
+        <div class="msg-think">Reading the shell layout and the tab store…</div>
+        <div class="tool-row"><span class="ok">✓</span> Read apps/web/src/shell/Shell.tsx</div>
+        <div class="tool-row"><span class="ok">✓</span> Read apps/web/src/panels/CenterTabs.tsx</div>
+        <div class="tool-row"><span class="ok">✓</span> Grep "paneGroup" apps/web/src <span class="dim">— 0 matches</span></div>
+        <div class="msg-ai">
+          <p>The center area renders a single <b>CenterTabs</b> strip with one visible tab — there is no split container. To get a grid we'd introduce <b>pane groups</b> in the shell and let each group host its own tab strip.</p>
+          <p>Plan: add a pane-group tree to the tab store (<b>splitRight</b> / <b>splitDown</b>), render groups recursively in <b>Shell.tsx</b>, and route tab moves by group id. Existing sessions load as a one-group tree, so nothing migrates.</p>
+        </div>
+        <div class="msg-user">Sounds right. Start with splitRight and wire ⌘\ to it — I'll drive the rest from the palette.</div>
+        <div class="msg-think">Adding splitRight to the tab store, then the shell renderer…</div>
+        <div class="tool-row"><span class="run">●</span> Edit apps/web/src/shell/Shell.tsx <span class="dim">— running…</span></div>
+      </div>
+      <div class="composer">
+        <div class="row"><span class="grow">Reply to the agent…</span><span class="send">➤</span></div>
+        <div class="row"><span class="model">claude-fable-5 · thinking: high</span><span class="grow"></span><span class="kbd">⏎ send</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 22px status rail = the always-readable signifier row -->
+  <div class="statusbar">
+    <span class="item">⌥ main</span>
+    <span class="item"><span style="color:var(--gold);">●</span> 1 agent running</span>
+    <span class="grow"></span>
+    <span class="item" style="color:var(--hint);">⌘K commands · ⌘B files · ⌘J terminal · ⌘\ split</span>
+  </div>
+
+  <!-- floating command capsule (the only "top bar") -->
+  <div class="capsule">
+    <span class="kbd">⌘K</span>
+    <span class="ph">thinkrail / main — ask, open, run…</span>
+    <span class="status-dot" style="width:7px;height:7px;"></span>
+  </div>
+  <div class="corner">
+    <button class="icon-btn" title="Settings">⚙</button>
+    <button class="icon-btn" title="Leave zen layout">⤢</button>
+  </div>
+
+  <!-- LEFT edge: files overlay caught mid-peek (Arc-style hover reveal) -->
+  <div class="peek">
+    <div class="pane-hd">All files <span class="grow"></span>⌘B</div>
+    <div class="pane-bd tree">
+      <div class="tree-item"><span class="twisty">▾</span><span class="ico">📁</span> apps/web/src</div>
+      <div class="tree-item indent-1"><span class="twisty">▾</span><span class="ico">📁</span> shell</div>
+      <div class="tree-item indent-2 sel"><span class="ico">📄</span> Shell.tsx</div>
+      <div class="tree-item indent-2"><span class="ico">📄</span> Statusbar.tsx</div>
+      <div class="tree-item indent-1"><span class="twisty">▸</span><span class="ico">📁</span> chat</div>
+      <div class="tree-item indent-1"><span class="twisty">▸</span><span class="ico">📁</span> panels</div>
+      <div class="tree-item indent-1"><span class="twisty">▸</span><span class="ico">📁</span> stores</div>
+      <div class="tree-item indent-1"><span class="ico">📄</span> index.css</div>
+      <div class="tree-item"><span class="twisty">▸</span><span class="ico">📁</span> packages/server</div>
+      <div class="tree-item"><span class="twisty">▸</span><span class="ico">📁</span> e2e</div>
+      <div class="tree-item"><span class="ico">📄</span> architecture.md</div>
+    </div>
+  </div>
+  <div class="edge-strip" style="left:0;"></div>
+  <div class="edge-tab left">Files <span class="key">⌘B</span></div>
+
+  <!-- RIGHT edge: same pattern, collapsed -->
+  <div class="edge-strip" style="right:0;"></div>
+  <div class="edge-tab right">Terminal <span class="key">⌘J</span></div>
+
+  <!-- CENTERPIECE: ⌘K palette over dimmed canvas -->
+  <div class="scrim"></div>
+  <div class="palette">
+    <div class="pal-input"><span class="kbd">⌘K</span><span>split ch</span><span class="caret"></span></div>
+    <div class="pal-list">
+      <div class="pal-row sel"><span class="ico">◫</span><span><b>Split ch</b>at right</span><span class="grow"></span><span class="kbd">⌘\</span>
+        <div class="anno fix" style="right:-9px; top:5px;">2</div>
+      </div>
+      <div class="pal-row"><span class="ico">▣</span><span>Open terminal</span><span class="grow"></span><span class="kbd">⌘J</span></div>
+      <div class="pal-row"><span class="ico">⌥</span><span>Switch workspace: feat/layout-v2</span><span class="grow"></span><span class="kbd">⌘2</span>
+        <div class="anno fix" style="right:-9px; top:5px;">3</div>
+      </div>
+      <div class="pal-row"><span class="ico">📄</span><span>Open file: Shell.tsx</span><span class="grow"></span><span class="kbd">⏎</span></div>
+      <div class="pal-row"><span class="ico" style="color:var(--gold);">●</span><span>Steer running agent: Fix e2e flake</span></div>
+    </div>
+    <div class="pal-foot">↑↓ navigate · ⏎ run · esc close<span class="grow"></span>move pane ⌘⇧←→
+      <div class="anno fix" style="right:-9px; top:3px;">6</div>
+    </div>
+  </div>
+
+  <!-- app-level fix markers -->
+  <div class="anno fix" style="left: calc(50% + 242px); top: 4px;">1</div>
+  <div class="anno fix" style="right: 32px; top: calc(38% - 10px);">4</div>
+  <div class="anno fix" style="left: 208px; top: 58px;">5</div>
+</div>
+
+<div class="anno-card">
+  <h1>05 · Command Zen</h1>
+  <div class="sub">Chrome-minimal, conversation-first: one reading column, everything else a keystroke away. Arc's hidden rails + a Linear-style ⌘K that teaches its own shortcuts.</div>
+  <ol>
+    <li><b>No dead bar.</b> The 38px top row is gone — chrome collapses into a floating ⌘K capsule plus two corner buttons.</li>
+    <li><b>Splits are commands.</b> "Split chat right ⌘\" puts side-by-side chats one keystroke away — no chrome to hunt.</li>
+    <li><b>Projects = a command, not a panel.</b> "Switch workspace ⌘2" replaces the always-open left tree: zero idle width.</li>
+    <li><b>Terminal unsqueezed.</b> ⌘J opens a full-height edge overlay — the whole viewport when needed, a 3px strip when not.</li>
+    <li><b>Files peek from the LEFT.</b> Hover the edge (or ⌘B) and the tree slides in over the column, then gets out of the way.</li>
+    <li><b>Tabs move by command too.</b> "move pane ⌘⇧←→" in the palette footer — rearranging needs no drag targets.</li>
+  </ol>
+  <div style="margin-top:9px;color:var(--hint);font-size:11px;">NN/g caveat honored: opt-in expert mode; every hidden surface keeps a visible signifier (edge tabs + status-bar hints).</div>
+  <span class="pill accent tag">Pattern: Arc · Linear ⌘K · Superhuman</span>
+</div>
+<button class="anno-toggle" onclick="document.body.classList.toggle('hide-anno'); this.textContent = document.body.classList.contains('hide-anno') ? 'Show notes' : 'Hide notes';" style="bottom: auto; top: 46px;">Hide notes</button>
+</body>
+</html>

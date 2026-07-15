@@ -1,0 +1,271 @@
+<!doctype html>
+<!-- Mockup 10 — "SESSION INBOX" — the agent fleet as a messaging app: one waiting-first list of every
+     session across every workspace, one conversation in focus, context (files/changes/term/specs) on
+     demand from a right-edge rail. Research basis: clideck's WhatsApp-like agent list, Slack's
+     list+conversation frame, Anthropic Agent View's "waiting on you first" sort. The one projection
+     that collapses 1:1 onto a phone (bottom tabs: Inbox · Files · Term). -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>10 · Session Inbox</title>
+<link rel="stylesheet" href="kit.css" />
+<style>
+  .app { display: grid; grid-template-rows: 34px 1fr 22px; height: 100vh; min-width: 1280px; }
+  .topbar { display: flex; align-items: center; gap: 14px; padding: 0 12px; border-bottom: 1px solid var(--border2); background: var(--bg-dark); position: relative; }
+  .search { width: 380px; height: 23px; display: flex; align-items: center; gap: 7px; padding: 0 9px; background: var(--bg-input); border: 1px solid var(--border2); border-radius: 999px; font-size: 12px; color: var(--hint); }
+  .search .sp { flex: 1; }
+  .btn-pri { height: 23px; padding: 0 11px; border-radius: var(--radius-sm); background: var(--primary); color: #fff; font-size: 12px; font-weight: 500; display: inline-flex; align-items: center; gap: 5px; }
+  .main { display: flex; min-height: 0; position: relative; }
+  .dim { color: var(--hint); }
+
+  /* ---- session inbox ---- */
+  .inbox { width: 330px; flex-shrink: 0; border-right: 1px solid var(--border2); background: var(--bg-dark); overflow-y: auto; position: relative; padding-bottom: 8px; }
+  .sec { display: flex; align-items: center; gap: 7px; padding: 10px 10px 4px; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.7px; color: var(--hint); position: relative; }
+  .sec.loud { color: var(--gold); }
+  .sess { display: flex; align-items: flex-start; gap: 8px; padding: 6px 10px 6px 8px; border-left: 2px solid transparent; position: relative; }
+  .sess:hover { background: var(--hover); }
+  .sess.sel { background: var(--sel); border-left-color: var(--primary); }
+  .sdot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .sdot.busy { animation: pulse 1.2s infinite; }
+  .sess .sdot { margin-top: 5px; }
+  .sess .sdone { color: var(--green); font-size: 11px; width: 8px; text-align: center; flex-shrink: 0; margin-top: 1px; }
+  .sess-b { flex: 1; min-width: 0; }
+  .r1 { display: flex; align-items: baseline; gap: 8px; }
+  .st { flex: 1; font-size: 12.5px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .st.dim2 { font-weight: 400; color: var(--muted); }
+  .tm { font-size: 10px; color: var(--hint); flex-shrink: 0; }
+  .r2 { display: flex; align-items: center; gap: 6px; margin-top: 2px; min-width: 0; }
+  .ws { font-size: 9.5px; padding: 0 6px; flex-shrink: 0; }
+  .hl { flex: 1; font-size: 11px; color: var(--hint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tail { flex: 1; font-family: var(--font-mono); font-size: 10.5px; color: var(--hint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .meta { font-family: var(--font-mono); font-size: 10.5px; color: var(--hint); flex-shrink: 0; white-space: nowrap; }
+  .unread { min-width: 16px; height: 16px; border-radius: 8px; background: var(--gold); color: #3a2c00; font-size: 10px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; padding: 0 4px; flex-shrink: 0; }
+
+  /* ---- conversation ---- */
+  .convo { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; background: var(--bg-dark); }
+  /* the slide-over covers the rightmost 400px of the conversation — keep content clear of it */
+  .convo-hd { height: 36px; flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 0 412px 0 12px; border-bottom: 1px solid var(--border2); }
+  .convo .chat-scroll { padding-right: 426px; }
+  .convo .composer { margin-right: 422px; }
+  .ct { font-size: 12.5px; font-weight: 600; color: var(--text); }
+  .chips { display: flex; gap: 8px; }
+  .chip { padding: 3px 12px; border-radius: 999px; font-size: 12px; background: var(--white-5); border: 1px solid var(--border2); color: var(--muted); }
+  .chip.pri { background: var(--primary-10); border-color: var(--primary-40); color: var(--primary); }
+
+  /* ---- context rail (right edge) ---- */
+  .ctxrail { width: 44px; flex-shrink: 0; border-left: 1px solid var(--border2); background: var(--bg-dark); display: flex; flex-direction: column; align-items: center; padding: 46px 0 10px; gap: 12px; position: relative; }
+  .rail-item { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .rail-lbl { font-size: 9px; color: var(--hint); letter-spacing: 0.2px; }
+  .rail-item.on .rail-lbl { color: var(--text); }
+  .rail-badge { position: absolute; top: -4px; right: -3px; min-width: 14px; height: 14px; border-radius: 7px; background: var(--gold); color: #3a2c00; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center; padding: 0 3px; }
+
+  /* ---- slide-over panel ---- */
+  .slideover { position: absolute; right: 44px; top: 0; bottom: 0; width: 400px; background: var(--elevated); border-left: 1px solid var(--border2); box-shadow: var(--shadow-lg); z-index: 25; display: flex; flex-direction: column; }
+  .diff-hd { font-family: var(--font-mono); font-size: 10px; color: var(--hint); padding: 10px 12px 3px; border-top: 1px solid var(--border2); margin-top: 8px; }
+  .diff { font-family: var(--font-mono); font-size: 11px; line-height: 1.65; padding: 4px 0 10px; }
+  .dl { padding: 0 12px; white-space: pre; overflow: hidden; }
+  .dl.ctx { color: var(--muted); }
+  .dl.add { color: var(--green); background: var(--green-tint); }
+  .dl.del { color: var(--red); background: rgba(255, 75, 117, 0.08); }
+
+  /* ---- phone frame (mobile story) ---- */
+  .phone { position: absolute; left: 16px; bottom: 36px; width: 180px; height: 360px; border-radius: 18px; border: 2px solid var(--border2); background: var(--elevated); box-shadow: var(--shadow-lg); transform: translate(4px, -2px) rotate(-2deg); z-index: 34; display: flex; flex-direction: column; overflow: hidden; }
+  .p-top { height: 20px; display: flex; align-items: center; gap: 5px; padding: 0 9px; border-bottom: 1px solid var(--border2); flex-shrink: 0; }
+  .p-brand { font-family: var(--font-accent); font-weight: 800; font-size: 9px; color: var(--primary); letter-spacing: 0.4px; }
+  .p-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--green); }
+  .p-sec { padding: 5px 8px 2px; font-size: 7px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--hint); }
+  .p-sec.loud { color: var(--gold); }
+  .p-row { display: flex; align-items: center; gap: 5px; padding: 4px 8px; font-size: 8px; color: var(--muted); border-left: 2px solid transparent; }
+  .p-row.sel { background: var(--sel); border-left-color: var(--primary); color: var(--text); }
+  .p-row .d { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+  .p-row .t { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .p-row .m { font-size: 7px; color: var(--hint); flex-shrink: 0; }
+  .p-un { min-width: 11px; height: 11px; border-radius: 6px; background: var(--gold); color: #3a2c00; font-size: 7px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .p-tabs { height: 32px; border-top: 1px solid var(--border2); display: flex; flex-shrink: 0; margin-top: auto; }
+  .p-tab { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: 7px; color: var(--hint); }
+  .p-tab .d { width: 5px; height: 5px; border-radius: 50%; background: var(--hint); }
+  .p-tab.on { color: var(--primary); } .p-tab.on .d { background: var(--primary); }
+  .phone-cap { position: absolute; left: 32px; bottom: 8px; z-index: 34; transform: rotate(-2deg); }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- top bar: 34px, and it works — search + new session live here -->
+  <div class="topbar">
+    <span class="brand">ThinkRail</span>
+    <div class="search"><span>⌕</span><span class="sp">Search sessions…</span><span class="kbd">⌘K</span></div>
+    <span style="flex:1"></span>
+    <button class="btn-pri">＋ New session</button>
+    <span class="status-dot" title="Connected"></span>
+    <button class="icon-btn" title="Settings">⚙</button>
+    <div class="anno fix" style="left: 506px; top: 7px;">1</div>
+  </div>
+
+  <div class="main">
+    <!-- ZONE 1 · SESSION INBOX -->
+    <div class="inbox">
+      <div class="sec loud">Waiting on you <span class="pill gold" style="font-size:9px;padding:0 6px;">2</span>
+        <div class="anno fix" style="right: 8px; top: 2px;">2</div>
+      </div>
+      <div class="sess">
+        <span class="sdot" style="background:var(--gold)"></span>
+        <div class="sess-b">
+          <div class="r1"><span class="st">Ship spec-graph viewer</span><span class="tm">4m</span></div>
+          <div class="r2"><span class="pill ws">⌥ feat/spec-graph</span><span class="hl">plan ready — approve the module split?</span><span class="unread">1</span></div>
+        </div>
+        <div class="anno fix" style="left: 116px; top: 22px;">3</div>
+      </div>
+      <div class="sess sel">
+        <span class="sdot" style="background:var(--gold)"></span>
+        <div class="sess-b">
+          <div class="r1"><span class="st">Fix e2e flake</span><span class="tm">now</span></div>
+          <div class="r2"><span class="pill ws">⌥ fix/tab-dnd</span><span class="hl">may I bump Playwright to 1.49?</span><span class="unread">1</span></div>
+        </div>
+      </div>
+
+      <div class="sec">Working <span class="pill" style="font-size:9px;padding:0 6px;">3</span></div>
+      <div class="sess">
+        <span class="sdot busy" style="background:var(--gold)"></span>
+        <div class="sess-b">
+          <div class="r1"><span class="st">Refactor tabs store</span><span class="tm">2m</span></div>
+          <div class="r2"><span class="pill ws">⌥ feat/layout-v2</span><span class="tail"><span style="color:var(--gold)">●</span> Edit Shell.tsx — 2m</span></div>
+        </div>
+      </div>
+      <div class="sess">
+        <span class="sdot busy" style="background:var(--primary)"></span>
+        <div class="sess-b">
+          <div class="r1"><span class="st">Write SPEC for chat module</span><span class="tm">5m</span></div>
+          <div class="r2"><span class="pill ws">⌥ main</span><span class="tail">✎ writing SPEC.md</span></div>
+        </div>
+      </div>
+      <div class="sess">
+        <span class="sdot busy" style="background:var(--gold)"></span>
+        <div class="sess-b">
+          <div class="r1"><span class="st">Wire extensionUi bridge</span><span class="tm">1m</span></div>
+          <div class="r2"><span class="pill ws">⌥ feat/ext-ui</span><span class="tail">❯ bun test packages/server — 40s</span></div>
+        </div>
+      </div>
+
+      <div class="sec">Done today <span class="pill" style="font-size:9px;padding:0 6px;">4</span></div>
+      <div class="sess"><span class="sdone">✓</span><div class="sess-b"><div class="r1"><span class="st dim2">Theme tokens audit</span><span class="meta"><span class="badge-add">+86</span> <span class="badge-del">−22</span> · merged</span><span class="tm">1h</span></div></div></div>
+      <div class="sess"><span class="sdone">✓</span><div class="sess-b"><div class="r1"><span class="st dim2">Fix lazy-chunk crash</span><span class="meta"><span class="badge-add">+14</span> <span class="badge-del">−3</span> · merged</span><span class="tm">3h</span></div></div></div>
+      <div class="sess"><span class="sdone">✓</span><div class="sess-b"><div class="r1"><span class="st dim2">central auth-kind rename</span><span class="meta"><span class="badge-add">+41</span> <span class="badge-del">−38</span> · PR #75</span><span class="tm">5h</span></div></div></div>
+      <div class="sess"><span class="sdone">✓</span><div class="sess-b"><div class="r1"><span class="st dim2">Pin Playwright in catalog</span><span class="meta"><span class="badge-add">+6</span> <span class="badge-del">−6</span> · merged</span><span class="tm">7h</span></div></div></div>
+    </div>
+
+    <!-- ZONE 2 · CONVERSATION -->
+    <div class="convo">
+      <div class="convo-hd">
+        <span class="status-dot warn"></span>
+        <span class="ct">Fix e2e flake</span>
+        <span class="pill ws">⌥ fix/tab-dnd</span>
+        <span style="flex:1"></span>
+        <button class="icon-btn" title="Pin to split">◫</button>
+        <button class="icon-btn" title="Expand">⤢</button>
+        <button class="icon-btn" title="More">⋮</button>
+        <div class="anno fix" style="right: 482px; top: 26px;">2</div>
+      </div>
+      <div class="chat">
+        <div class="chat-scroll">
+          <div class="msg-user">editor.spec.ts keeps flaking on CI — “diff panel toBeVisible timed out”, roughly 1 run in 5. Find the race and fix it properly, not with a bigger timeout.</div>
+          <div class="msg-think">Reproducing locally — repeating the spec to isolate the race…</div>
+          <div class="tool-row"><span class="ok">✓</span> Bash bun run e2e -- editor.spec.ts --repeat-each 5 <span class="dim">— 2/5 failed</span></div>
+          <div class="tool-row"><span class="ok">✓</span> Read e2e/editor.spec.ts</div>
+          <div class="msg-ai"><p>Found it. The spec waits on <b>waitForLoadState("networkidle")</b>, but the lazy Monaco chunk keeps the network busy — the diff panel is already visible while the wait races the loader, and sometimes it never settles. The proper fix is <b>locator.waitFor()</b> plus Playwright 1.49’s expect polling.</p></div>
+          <div class="tool-row"><span class="run">●</span> Edit e2e/editor.spec.ts <span class="dim">— staging fix…</span></div>
+          <div class="msg-ai"><p>One blocker: <b>editor.spec.ts pins Playwright 1.48 but the fix needs 1.49 — may I bump it?</b> (one catalog pin; lockfile and the CI browser cache update with it)</p></div>
+          <div class="chips"><button class="chip pri">Yes, bump</button><button class="chip">Explain first</button></div>
+        </div>
+        <div class="composer">
+          <div class="row"><span style="flex:1">Reply — the agent is waiting…</span><span class="send">➤</span></div>
+          <div class="row"><span class="model">claude-fable-5 · thinking: high</span><span style="flex:1"></span><span class="kbd">⏎ send</span></div>
+        </div>
+      </div>
+      <div class="drop-hint" style="left: 40%; right: 412px; top: 46px; bottom: 96px; border-radius: var(--radius-md);">Drop to open split</div>
+    </div>
+
+    <!-- ZONE 3 · CONTEXT RAIL + SLIDE-OVER -->
+    <div class="slideover">
+      <div class="minitabs" style="position:relative;">
+        <span class="minitab active">Changes</span>
+        <span class="minitab">Files</span>
+        <span class="minitab">Terminal</span>
+        <span style="flex:1"></span><span class="icon-btn" style="width:20px;height:20px;font-size:11px;">↻</span>
+        <div class="anno fix" style="left: 146px; top: 14px;">4</div>
+      </div>
+      <div class="pane-bd">
+        <div class="tree">
+          <div class="tree-item sel"><span class="ico">▤</span> e2e/editor.spec.ts <span style="margin-left:auto" class="badge-add">+18</span><span class="badge-del">−6</span></div>
+          <div class="tree-item"><span class="ico">▤</span> e2e/playwright.config.ts <span style="margin-left:auto" class="badge-add">+2</span><span class="badge-del">−1</span></div>
+          <div class="tree-item"><span class="ico">▤</span> apps/web/src/panels/DiffPanel.tsx <span style="margin-left:auto" class="badge-add">+9</span><span class="badge-del">−3</span></div>
+          <div class="tree-item"><span class="ico">▤</span> package.json <span style="margin-left:auto" class="badge-add">+1</span><span class="badge-del">−1</span></div>
+        </div>
+        <div class="diff-hd">e2e/editor.spec.ts · @@ −41,7 +41,8 @@</div>
+        <div class="diff">
+          <div class="dl ctx">   const diff = page.getByTestId("diff-panel");</div>
+          <div class="dl del">−  await page.waitForLoadState("networkidle");</div>
+          <div class="dl del">−  await expect(diff).toBeVisible();</div>
+          <div class="dl add">+  await diff.waitFor({ state: "visible" });</div>
+          <div class="dl add">+  await expect(diff).toBeVisible({ timeout: 15_000 });</div>
+          <div class="dl ctx">   const rows = diff.getByTestId("changed-file");</div>
+          <div class="dl add">+  await expect(rows).toHaveCount(4);</div>
+          <div class="dl ctx">   await expect(page.getByTestId("diff-hunk")).toBeVisible();</div>
+        </div>
+      </div>
+    </div>
+    <div class="ctxrail">
+      <div class="rail-item"><button class="rail-btn">▤</button><span class="rail-lbl">Files</span></div>
+      <div class="rail-item on"><button class="rail-btn active">±<span class="rail-badge">3</span></button><span class="rail-lbl">Changes</span></div>
+      <div class="rail-item"><button class="rail-btn">❯</button><span class="rail-lbl">Term</span></div>
+      <div class="rail-item"><button class="rail-btn">◎</button><span class="rail-lbl">Specs</span></div>
+      <div class="anno fix" style="left: -10px; top: 148px;">5</div>
+    </div>
+
+    <!-- drag story: inbox row → conversation split -->
+    <div class="drag-ghost" style="left: 340px; top: 452px; transform: rotate(2deg);"><span class="sdot busy" style="background:var(--gold)"></span> Refactor tabs store</div>
+    <div class="anno fix" style="left: 312px; top: 446px;">6</div>
+
+    <!-- MOBILE STORY: the same model, shrunk to a phone -->
+    <div class="phone">
+      <div class="p-top"><span class="p-brand">ThinkRail</span><span style="flex:1"></span><span class="p-dot"></span></div>
+      <div class="p-sec loud">Waiting on you</div>
+      <div class="p-row"><span class="d" style="background:var(--gold)"></span><span class="t">Ship spec-graph viewer</span><span class="p-un">1</span></div>
+      <div class="p-row sel"><span class="d" style="background:var(--gold)"></span><span class="t">Fix e2e flake</span><span class="p-un">1</span></div>
+      <div class="p-sec">Working</div>
+      <div class="p-row"><span class="d" style="background:var(--gold);animation:pulse 1.2s infinite"></span><span class="t">Refactor tabs store</span><span class="m">2m</span></div>
+      <div class="p-row"><span class="d" style="background:var(--primary);animation:pulse 1.2s infinite"></span><span class="t">Write SPEC for chat</span><span class="m">5m</span></div>
+      <div class="p-row"><span class="d" style="background:var(--green)"></span><span class="t">Theme tokens audit</span><span class="m">✓ 1h</span></div>
+      <div class="p-tabs">
+        <div class="p-tab on"><span class="d"></span>Inbox</div>
+        <div class="p-tab"><span class="d"></span>Files</div>
+        <div class="p-tab"><span class="d"></span>Term</div>
+      </div>
+    </div>
+    <span class="pill accent phone-cap">same model on the phone</span>
+  </div>
+
+  <div class="statusbar">
+    <span class="item"><span class="status-dot warn"></span> 9 sessions · 2 waiting on you</span>
+    <span class="grow"></span>
+    <span class="item">burn $1.12/h</span>
+    <span class="item"><span class="status-dot"></span> pi engine ok</span>
+  </div>
+</div>
+
+<div class="anno-card">
+  <h1>10 · Session Inbox</h1>
+  <div class="sub">The fleet as a messaging app — a waiting-first list of every session in every workspace, one conversation in focus, context on demand. For monitoring many agents, a chat-style list beats a grid.</div>
+  <ol>
+    <li><b>The top bar earns its 34px:</b> global session search (⌘K) and “New session” live in it.</li>
+    <li><b>Every chat glanceable, waiting-first.</b> Blocked sessions float to the top with what they need from you; the <b>◫ pin-to-split</b> button docks a second conversation side-by-side.</li>
+    <li><b>Projects become metadata.</b> The workspace is a pill on each row — no permanent left panel spent on rarely-switched trees.</li>
+    <li><b>Full-height terminal, one tap away:</b> the slide-over’s Terminal tab gets the whole column, not a 40% strip.</li>
+    <li><b>Files/Changes on demand from one predictable place</b> — the context rail slides panels over the chat instead of squatting on width.</li>
+    <li><b>Rows drag into splits:</b> drop any inbox session on the conversation’s right half to open it alongside.</li>
+  </ol>
+  <p style="margin-top:10px;">The one projection that collapses 1:1 to the phone (bottom tabs: Inbox · Files · Term).</p>
+  <span class="pill accent tag">Pattern: clideck · Slack · Agent View</span>
+</div>
+<button class="anno-toggle" onclick="document.body.classList.toggle('hide-anno'); this.textContent = document.body.classList.contains('hide-anno') ? 'Show notes' : 'Hide notes';" style="bottom: auto; top: 46px;">Hide notes</button>
+</body>
+</html>

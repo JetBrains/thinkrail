@@ -1,0 +1,210 @@
+<!doctype html>
+<!-- Mockup 01 — IDE CLASSIC (VS Code-shaped ThinkRail): one working 34px top bar,
+     40px icon rail, left Explorer, splittable editor groups where chats are tabs
+     like any file, full-width bottom terminal, status bar. Green markers pin where
+     each of baseline 00's six problems is solved. -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>01 · IDE Classic</title>
+<link rel="stylesheet" href="kit.css" />
+<style>
+  /* layout only — visual language comes from kit.css */
+  .app { display: grid; grid-template-rows: 34px 1fr 22px; height: 100vh; min-width: 1280px; }
+  .topbar { display: flex; align-items: center; gap: 10px; padding: 0 10px; border-bottom: 1px solid var(--border2); background: var(--bg-dark); position: relative; }
+  .main { display: flex; min-height: 0; }
+  .sidebar { width: 240px; min-width: 240px; border-right: 1px solid var(--border2); position: relative; }
+  .work { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .groups { flex: 1; min-height: 0; display: flex; position: relative; }
+  .group { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
+  .group-bd { flex: 1; min-height: 0; position: relative; }
+  .bottom { height: 28%; min-height: 170px; display: flex; flex-direction: column; position: relative; }
+  .rail-badge { position: absolute; top: 2px; right: 2px; min-width: 13px; height: 13px; border-radius: 7px; background: var(--primary); color: #fff; font-size: 8.5px; font-weight: 700; line-height: 13px; text-align: center; padding: 0 3px; }
+  .indent-4 { padding-left: 70px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- TOP BAR: every pixel employed -->
+  <div class="topbar">
+    <span class="brand">ThinkRail</span>
+    <button class="pill" title="Switch project / workspace">thinkrail <span style="color:var(--hint);">/</span> feat/layout-v2 <span style="color:var(--hint);">▾</span></button>
+    <span style="flex:1"></span>
+    <button class="pill" style="flex:1;max-width:480px;height:22px;color:var(--hint);"><span class="kbd">⌘K</span> Search, files, commands…</button>
+    <span style="flex:1"></span>
+    <span class="pill accent">claude-fable-5</span>
+    <span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);"><span class="status-dot"></span> Connected</span>
+    <button class="icon-btn" title="Settings">⚙</button>
+    <div class="anno fix" style="left:50%;top:7px;">1</div>
+    <div class="anno fix" style="left:180px;top:7px;">3</div>
+  </div>
+
+  <div class="main">
+    <!-- ICON RAIL (activity bar) -->
+    <div class="rail">
+      <button class="rail-btn active" title="Files">▤</button>
+      <button class="rail-btn" title="Search">⌕</button>
+      <button class="rail-btn" title="Specs">◈</button>
+      <button class="rail-btn" title="Changes">±<span class="rail-badge">3</span></button>
+      <button class="rail-btn" title="Chats">💬</button>
+      <button class="rail-btn" title="Terminals">❯</button>
+      <div class="rail-spacer"></div>
+      <button class="rail-btn" title="Projects">📁</button>
+      <button class="rail-btn" title="Settings">⚙</button>
+    </div>
+
+    <!-- LEFT: Explorer (all-files tree, git-status colored) -->
+    <div class="sidebar pane">
+      <div class="pane-hd">Explorer <span style="text-transform:none;letter-spacing:0;">— feat/layout-v2</span><span class="grow"></span><span class="icon-btn" style="width:20px;height:20px;font-size:11px;">↻</span></div>
+      <div class="pane-bd tree">
+        <div class="tree-item"><span class="twisty">▾</span><span class="ico">📁</span> apps</div>
+        <div class="tree-item indent-1"><span class="twisty">▸</span><span class="ico">📁</span> cli</div>
+        <div class="tree-item indent-1"><span class="twisty">▸</span><span class="ico">📁</span> desktop</div>
+        <div class="tree-item indent-1"><span class="twisty">▾</span><span class="ico">📁</span> web</div>
+        <div class="tree-item indent-2"><span class="twisty">▾</span><span class="ico">📁</span> src</div>
+        <div class="tree-item indent-3"><span class="twisty">▸</span><span class="ico">📁</span> chat</div>
+        <div class="tree-item indent-3"><span class="twisty">▸</span><span class="ico">📁</span> components</div>
+        <div class="tree-item indent-3"><span class="twisty">▸</span><span class="ico">📁</span> panels</div>
+        <div class="tree-item indent-3"><span class="twisty">▾</span><span class="ico">📁</span> shell</div>
+        <div class="tree-item sel indent-4"><span class="ico">▤</span> <span style="color:var(--gold);">Shell.tsx</span> <span class="badge-mod" style="margin-left:auto;">M</span></div>
+        <div class="tree-item indent-4"><span class="ico">▢</span> SPEC.md</div>
+        <div class="tree-item indent-3"><span class="ico">▤</span> index.css</div>
+        <div class="tree-item"><span class="twisty">▸</span><span class="ico">📁</span> e2e</div>
+        <div class="tree-item"><span class="twisty">▾</span><span class="ico">📁</span> mockups</div>
+        <div class="tree-item indent-1"><span class="twisty">▾</span><span class="ico">📁</span> layouts</div>
+        <div class="tree-item indent-2"><span class="ico">▤</span> 00-current-baseline.html</div>
+        <div class="tree-item indent-2"><span class="ico">▤</span> <span style="color:var(--green);">01-ide-classic.html</span> <span class="badge-add" style="margin-left:auto;">A</span></div>
+        <div class="tree-item indent-2"><span class="ico">▤</span> <span style="color:var(--green);">kit.css</span> <span class="badge-add" style="margin-left:auto;">A</span></div>
+        <div class="tree-item"><span class="twisty">▸</span><span class="ico">📁</span> packages</div>
+        <div class="tree-item"><span class="ico">▢</span> AGENTS.md</div>
+        <div class="tree-item"><span class="ico">◈</span> architecture.md</div>
+        <div class="tree-item"><span class="ico">◎</span> goal-and-requirements.md</div>
+      </div>
+      <div class="anno fix" style="right:36px;top:4px;">5</div>
+    </div>
+
+    <div class="work">
+      <div class="groups">
+        <!-- GROUP 1: file tabs -->
+        <div class="group">
+          <div class="tabstrip">
+            <span class="tab active"><span class="dot file"></span> Shell.tsx <span class="close">✕</span></span>
+            <span class="tab" style="opacity:.45;"><span class="dot file"></span> tokens.css <span class="close">✕</span></span>
+            <span class="tab-plus" title="Open file">＋</span>
+          </div>
+          <div class="editor group-bd">
+            <div class="cl"><span class="ln">1</span><span><span class="k">import</span> { <span class="f">useMemo</span> } <span class="k">from</span> <span class="s">"react"</span>;</span></div>
+            <div class="cl"><span class="ln">2</span><span><span class="k">import</span> { <span class="f">useShellStore</span> } <span class="k">from</span> <span class="s">"../store"</span>;</span></div>
+            <div class="cl"><span class="ln">3</span><span><span class="k">import</span> { <span class="t">EditorGroup</span> } <span class="k">from</span> <span class="s">"./EditorGroup"</span>;</span></div>
+            <div class="cl"><span class="ln">4</span><span><span class="k">import</span> { <span class="t">IconRail</span> } <span class="k">from</span> <span class="s">"./IconRail"</span>;</span></div>
+            <div class="cl"><span class="ln">5</span><span><span class="k">import</span> { <span class="t">StatusBar</span> } <span class="k">from</span> <span class="s">"./StatusBar"</span>;</span></div>
+            <div class="cl"><span class="ln">6</span><span><span class="k">import</span> { <span class="f">cn</span> } <span class="k">from</span> <span class="s">"../lib/utils"</span>;</span></div>
+            <div class="cl"><span class="ln">7</span></div>
+            <div class="cl"><span class="ln">8</span><span><span class="c">// Workbench shell: icon rail + sidebar + splittable editor groups.</span></span></div>
+            <div class="cl"><span class="ln">9</span><span><span class="k">export function</span> <span class="f">Shell</span>() {</span></div>
+            <div class="cl"><span class="ln">10</span><span>  <span class="k">const</span> <span class="v">groups</span> = <span class="f">useShellStore</span>((<span class="v">s</span>) =&gt; <span class="v">s</span>.<span class="v">groups</span>);</span></div>
+            <div class="cl"><span class="ln">11</span><span>  <span class="k">const</span> <span class="v">focused</span> = <span class="f">useShellStore</span>((<span class="v">s</span>) =&gt; <span class="v">s</span>.<span class="v">focusedGroup</span>);</span></div>
+            <div class="cl"><span class="ln">12</span><span>  <span class="k">const</span> <span class="v">panes</span> = <span class="f">useMemo</span>(() =&gt; <span class="v">groups</span>.<span class="f">map</span>(<span class="f">toPane</span>), [<span class="v">groups</span>]);</span></div>
+            <div class="cl"><span class="ln">13</span></div>
+            <div class="cl"><span class="ln">14</span><span>  <span class="k">return</span> (</span></div>
+            <div class="cl"><span class="ln">15</span><span>    &lt;<span class="t">div</span> <span class="v">className</span>={<span class="f">cn</span>(<span class="s">"flex h-full min-h-0 flex-col"</span>)}&gt;</span></div>
+            <div class="cl"><span class="ln">16</span><span>      &lt;<span class="t">TopBar</span> /&gt;</span></div>
+            <div class="cl"><span class="ln">17</span><span>      &lt;<span class="t">div</span> <span class="v">className</span>=<span class="s">"flex min-h-0 flex-1"</span>&gt;</span></div>
+            <div class="cl"><span class="ln">18</span><span>        &lt;<span class="t">IconRail</span> <span class="v">active</span>={<span class="v">focused</span>} /&gt;</span></div>
+          </div>
+        </div>
+        <div class="vsplit"></div>
+        <!-- GROUP 2: chat tabs — a chat is a tab like any file -->
+        <div class="group">
+          <div class="tabstrip">
+            <span class="tab active"><span class="dot chat"></span> Layout redesign <span class="close">✕</span></span>
+            <span class="tab"><span class="dot busy"></span> Fix e2e flake <span class="close">✕</span></span>
+            <span class="tab-plus" title="New chat">＋</span>
+            <span style="flex:1"></span>
+            <span class="tab-plus" title="History">🕘</span>
+          </div>
+          <div class="group-bd">
+            <div class="chat">
+              <div class="chat-scroll">
+                <div class="msg-user">Add a 2×2 chat grid to the shell so I can watch several agents at once.</div>
+                <div class="msg-think">Reading the shell layout and the tab store…</div>
+                <div class="tool-row"><span class="ok">✓</span> Read apps/web/src/shell/Shell.tsx</div>
+                <div class="tool-row"><span class="ok">✓</span> Read apps/web/src/panels/CenterTabs.tsx</div>
+                <div class="msg-ai"><p>The center area renders a single <b>CenterTabs</b> strip with one visible tab — there is no split container. To get a grid we'd introduce pane groups in the shell and let each group host its own tab strip.</p></div>
+                <div class="tool-row"><span class="ok">✓</span> todos <span class="dim" style="color:var(--hint);">2/4 — ☑ pane groups · ☑ per-group tab strips · ☐ tab drag · ☐ e2e spec</span></div>
+                <div class="msg-ai"><p>Pane groups are in: the shell now renders an <b>EditorGroup</b> per split, each with its own tab strip — so a chat and a file (or two chats) share the screen. Next I'll wire tab drag between groups, then pin it with an e2e spec.</p></div>
+                <div class="tool-row"><span class="run">●</span> Edit apps/web/src/shell/Shell.tsx <span style="color:var(--hint);">— running…</span></div>
+              </div>
+              <div class="composer">
+                <div class="row"><span class="grow">Reply to the agent…</span><span class="send">➤</span></div>
+                <div class="row"><span class="model">claude-fable-5 · thinking: high</span><span class="grow"></span><span class="kbd">⏎ send</span></div>
+              </div>
+            </div>
+            <div class="drop-hint" style="left:50%;">Drop tab here to split →</div>
+          </div>
+          <div class="anno fix" style="left:320px;top:5px;">6</div>
+        </div>
+        <div class="anno fix" style="left:calc(50% - 10px);top:120px;">2</div>
+        <div class="drag-ghost" style="left:calc(50% - 76px);top:46px;">◐ tokens.css</div>
+      </div>
+
+      <div class="hsplit"></div>
+      <!-- BOTTOM: full-width terminal panel -->
+      <div class="bottom">
+        <div class="tabstrip">
+          <span class="tab active"><span class="dot term"></span> Terminal — zsh <span class="close">✕</span></span>
+          <span class="tab"><span class="dot term"></span> Terminal — bun dev</span>
+          <span class="tab">Problems</span>
+          <span class="tab">Output</span>
+          <span class="tab-plus" title="New terminal">＋</span>
+          <span style="flex:1"></span>
+          <button class="icon-btn" title="Maximize panel" style="align-self:center;margin-right:6px;">⌃</button>
+        </div>
+        <div class="term group-bd">
+<span class="p">➜ feat/layout-v2</span> <span class="cmd">bun run e2e</span>
+<br /><span class="dim">$ playwright test --config e2e/playwright.config.ts --grep-invert @agent</span>
+<br /><span class="dim">Running 42 tests using 4 workers — host :24252 · state dir /tmp/thinkrail-e2e-kx3q</span>
+<br /><span class="ok">✓</span> projects.spec.ts <span class="dim">(6 passed, 4.2s)</span>
+<br /><span class="ok">✓</span> workspaces.spec.ts <span class="dim">(9 passed, 6.8s)</span>
+<br /><span class="ok">✓</span> files-tree.spec.ts <span class="dim">(7 passed, 3.9s)</span>
+<br /><span class="ok">✓</span> editor.spec.ts <span class="dim">(8 passed, 7.1s — full line, was clipped in 00)</span>
+<br /><span class="ok">✓</span> changes.spec.ts <span class="dim">(5 passed, 2.7s)</span>
+<br /><span class="ok">✓</span> terminals.spec.ts <span class="dim">(7 passed, 5.0s)</span>
+<br /><span class="ok">42 passed</span> <span class="dim">(31.4s)</span>
+<br /><span class="p">➜ feat/layout-v2</span> <span class="cursor">&nbsp;</span>
+        </div>
+        <div class="anno fix" style="left:450px;top:5px;">4</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STATUS BAR -->
+  <div class="statusbar">
+    <span class="item">⌥ feat/layout-v2</span>
+    <span class="item">↑2 ↓0</span>
+    <span class="item">✕ 0 ⚠ 1</span>
+    <span class="grow"></span>
+    <span class="item"><span class="status-dot warn"></span> 2 agents running</span>
+    <span class="item">pi · claude-fable-5</span>
+    <span class="item">UTF-8</span>
+    <span class="item">TS 5.6</span>
+  </div>
+</div>
+
+<div class="anno-card">
+  <h1>01 · IDE Classic</h1>
+  <div class="sub">The VS Code workbench shape — chats become first-class editor tabs inside splittable groups.</div>
+  <ol>
+    <li><b>Top bar works for a living.</b> Brand, workspace switcher, ⌘K search/commands, model, connection and settings share one 34px strip — no dead row.</li>
+    <li><b>Side-by-side is just a split.</b> The center is editor groups; a chat sits next to a file (or another chat), each group with its own tab strip.</li>
+    <li><b>Projects demoted to a switcher.</b> The rarely-used 18%-wide panel becomes a top-bar pill (plus a rail icon) — switching costs a click, not width.</li>
+    <li><b>Terminal gets the floor.</b> A full-width bottom panel (~28%, maximize ⌃) with real tabs replaces the cramped right-column strip.</li>
+    <li><b>Files sit left</b> in a classic 240px Explorer with git-status colors, driven from the icon rail — where IDE users expect them.</li>
+    <li><b>Tabs travel.</b> Any tab drags between groups — shown mid-drag: a ghost “tokens.css” and a drop-to-split zone over the chat group.</li>
+  </ol>
+  <span class="pill tag">Pattern: VS Code workbench</span>
+</div>
+<button class="anno-toggle" onclick="document.body.classList.toggle('hide-anno'); this.textContent = document.body.classList.contains('hide-anno') ? 'Show notes' : 'Hide notes';" style="bottom: auto; top: 46px;">Hide notes</button>
+</body>
+</html>

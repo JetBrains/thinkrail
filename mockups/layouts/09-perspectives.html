@@ -1,0 +1,250 @@
+<!doctype html>
+<!-- Mockup 09 — "Perspectives": task-mode saved layouts. JetBrains Window▸Layouts / VS Code
+     profiles kept; Eclipse softened — modes NEVER auto-switch (user clicks or ⌘⇧1..4), the app
+     at most auto-REVEALS a toast. Every mode is user-editable and saved. Shown: Agents mode. -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>09 · Perspectives</title>
+<link rel="stylesheet" href="kit.css" />
+<style>
+  body { min-width: 1280px; }
+  .app { display: grid; grid-template-rows: 36px 1fr 26px 22px; height: 100vh; }
+
+  /* compact top bar = the layout's control center */
+  .topbar {
+    position: relative; z-index: 10; display: flex; align-items: center; gap: 12px;
+    padding: 0 12px; background: var(--bg-dark); border-bottom: 1px solid var(--border2);
+  }
+  .topbar .cluster { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+  .mode-switch {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    display: flex; gap: 2px; padding: 2px;
+    background: var(--white-5); border: 1px solid var(--border2); border-radius: var(--radius-md);
+  }
+  .mode-tab {
+    position: relative; display: inline-flex; align-items: center; gap: 7px;
+    padding: 1px 9px 1px 3px; border-radius: 6px; font-size: 12px; color: var(--muted); white-space: nowrap;
+  }
+  .mode-tab:hover { background: var(--hover); color: var(--text); }
+  .mode-tab.active { background: var(--primary-20); color: var(--primary); }
+  .mode-tab .kbd { font-size: 9px; padding: 0 4px; }
+  /* 44×26 wireframe thumbnails: 1px bordered cells on bg-input */
+  .thumb {
+    width: 44px; height: 26px; flex-shrink: 0; display: flex; gap: 2px; padding: 2px;
+    background: var(--bg-input); border: 1px solid var(--border2); border-radius: 3px;
+  }
+  .thumb .cell { border: 1px solid var(--border2); border-radius: 1px; }
+  .thumb .col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .thumb.grid2 { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+  .mode-tab.active .thumb, .mode-tab.active .thumb .cell { border-color: var(--primary-40); }
+  .ghost-btn {
+    position: relative; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px;
+    border: 1px solid var(--border2); border-radius: var(--radius-sm); font-size: 12px; color: var(--muted);
+  }
+  .ghost-btn:hover { background: var(--hover); color: var(--text); }
+
+  /* main = Agents perspective */
+  .main { display: flex; min-height: 0; position: relative; }
+  .sessions { width: 260px; flex-shrink: 0; border-right: 1px solid var(--border2); position: relative; }
+  .sess {
+    display: flex; align-items: center; gap: 8px; margin: 0 4px; padding: 7px 8px;
+    border-radius: var(--radius-sm); color: var(--muted); font-size: 12.5px;
+  }
+  .sess:hover { background: var(--hover); }
+  .sess.sel { background: var(--primary-20); color: var(--text); }
+  .sess .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .sess .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sess .pill { font-size: 9.5px; padding: 0 7px; }
+  .sess .time { font-size: 10.5px; color: var(--hint); white-space: nowrap; }
+  .sess.done { color: var(--hint); }
+  .center { flex: 1; min-width: 0; display: flex; position: relative; }
+  .chatpane { flex: 1 1 0; min-width: 0; }
+  .chat-hd .title { text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 500; color: var(--text); }
+  .chat-hd .pill { font-size: 9.5px; padding: 0 7px; text-transform: none; letter-spacing: 0; }
+  .chat-hd .note { position: relative; text-transform: none; letter-spacing: 0; font-size: 10.5px; color: var(--hint); }
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px; padding: 3px 11px; border-radius: 999px;
+    font-size: 11.5px; background: var(--primary-10); border: 1px solid var(--primary-40);
+    color: var(--primary); cursor: pointer; white-space: nowrap;
+  }
+  .chip:hover { background: var(--primary-20); }
+  .chip.ghost { background: var(--white-5); border-color: var(--border2); color: var(--muted); }
+
+  /* collapsed bottom drawer (terminals stay one key away in Agents mode) */
+  .drawer {
+    position: relative; display: flex; align-items: center; gap: 9px; padding: 0 12px;
+    font-size: 11.5px; color: var(--muted); background: var(--bg-dark); border-top: 1px solid var(--border2);
+  }
+  .drawer:hover { color: var(--text); }
+  .drawer .tw { color: var(--hint); font-size: 9px; }
+  .drawer .sep { color: var(--hint); }
+  .drawer .tdot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+
+  /* auto-REVEAL toast — never a mode switch */
+  .toast-wrap { position: fixed; top: 46px; right: 124px; z-index: 45; width: 300px; display: flex; flex-direction: column; gap: 5px; }
+  .toast {
+    background: var(--elevated); border: 1px solid var(--border2); border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg); padding: 10px 12px; display: flex; flex-direction: column; gap: 9px;
+    font-size: 12px; color: var(--muted);
+  }
+  .toast b { color: var(--text); font-weight: 600; }
+  .toast .row { display: flex; align-items: center; gap: 8px; }
+  .toast-cap { font-size: 10.5px; color: var(--hint); text-align: right; padding-right: 2px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- 36px top bar: brand · workspace · MODE SWITCHER (centerpiece) · save-layout · status -->
+  <div class="topbar">
+    <span class="brand">ThinkRail</span>
+    <span class="pill">thinkrail / main ▾</span>
+    <div class="mode-switch">
+      <span class="anno fix" style="left:-9px; top: calc(100% - 8px);">1</span>
+      <button class="mode-tab" title="Build — files left, editor center, terminal strip below">
+        <span class="anno fix" style="left:18px; top: calc(100% - 6px);">5</span>
+        <span class="thumb"><span class="cell" style="width:9px;"></span><span class="col"><span class="cell" style="flex:1;"></span><span class="cell" style="height:5px;"></span></span></span>
+        Build <span class="kbd">⌘⇧1</span>
+      </button>
+      <button class="mode-tab active" title="Agents — session list + side-by-side chats">
+        <span class="thumb"><span class="cell" style="width:7px;"></span><span class="cell" style="flex:1;"></span><span class="cell" style="flex:1;"></span></span>
+        Agents <span class="kbd">⌘⇧2</span>
+      </button>
+      <button class="mode-tab" title="Review — diff columns + spec strip">
+        <span class="thumb"><span class="cell" style="flex:1;"></span><span class="cell" style="flex:1;"></span><span class="cell" style="width:7px;"></span></span>
+        Review <span class="kbd">⌘⇧3</span>
+      </button>
+      <button class="mode-tab" title="Ops — a full 2×2 terminal grid">
+        <span class="anno fix" style="left:12px; top: calc(100% - 6px);">4</span>
+        <span class="thumb grid2"><span class="cell"></span><span class="cell"></span><span class="cell"></span><span class="cell"></span></span>
+        Ops <span class="kbd">⌘⇧4</span>
+      </button>
+    </div>
+    <div class="cluster">
+      <button class="ghost-btn">＋ Save layout ▾<span class="anno fix" style="left:-10px; top: calc(100% - 4px);">6</span></button>
+      <span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);"><span class="status-dot"></span> Connected</span>
+      <button class="icon-btn" title="Settings">⚙</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <!-- LEFT: slim cross-workspace session list -->
+    <div class="sessions pane">
+      <span class="anno fix" style="right:8px; top:4px;">3</span>
+      <div class="pane-hd">Sessions — all workspaces<span class="grow"></span><span class="icon-btn" style="width:20px;height:20px;font-size:11px;">＋</span></div>
+      <div class="pane-bd" style="padding:4px 0 8px;">
+        <div class="sess sel"><span class="dot" style="background:var(--primary);"></span><span class="t">Layout redesign</span><span class="pill">main</span><span class="time">now</span></div>
+        <div class="sess"><span class="dot" style="background:var(--gold);"></span><span class="t">Fix e2e flake</span><span class="pill gold">fix/tab-dnd</span><span class="time" style="color:var(--gold);">needs input</span></div>
+        <div class="sess"><span class="dot busy"></span><span class="t">Refactor tabs store</span><span class="pill">feat/layout-v2</span><span class="time">running</span></div>
+        <div class="sess done"><span class="dot" style="background:var(--green);opacity:.5;"></span><span class="t">Spec review</span><span class="pill">main</span><span class="time">done ✓</span></div>
+        <div class="tree-sec">Done today (3)</div>
+        <div class="sess done"><span class="dot" style="background:var(--green);opacity:.35;"></span><span class="t">Wire reveal toasts</span><span class="pill">main</span><span class="time">2h ✓</span></div>
+        <div class="sess done"><span class="dot" style="background:var(--green);opacity:.35;"></span><span class="t">Prune stale worktrees</span><span class="pill">chore/gc</span><span class="time">5h ✓</span></div>
+      </div>
+    </div>
+
+    <!-- CENTER: two chats side-by-side, 50/50 -->
+    <div class="center">
+      <span class="anno fix" style="left: calc(50% - 10px); top: 42px;">2</span>
+
+      <div class="chatpane pane">
+        <div class="pane-hd chat-hd">
+          <span class="title">Layout redesign</span><span class="pill">main</span>
+          <span class="grow"></span>
+          <span class="note">drag panes to rearrange — saves to “Agents”</span>
+          <button class="icon-btn" style="width:20px;height:20px;font-size:11px;" title="Expand">⤢</button>
+        </div>
+        <div class="chat">
+          <div class="chat-scroll">
+            <div class="msg-user">Add a 2×2 chat grid to the shell so I can watch several agents at once.</div>
+            <div class="msg-think">Reading the shell layout and the tab store…</div>
+            <div class="tool-row"><span class="ok">✓</span> Read apps/web/src/shell/Shell.tsx</div>
+            <div class="tool-row"><span class="ok">✓</span> Read apps/web/src/panels/CenterTabs.tsx</div>
+            <div class="msg-ai"><p>The center renders a single <b>CenterTabs</b> strip — no split container. I'm introducing pane groups in the shell so each group hosts its own tab strip; the 2×2 preset builds on that.</p></div>
+            <div class="tool-row"><span class="run">●</span> Edit apps/web/src/shell/Shell.tsx <span class="dim">— running…</span></div>
+          </div>
+          <div class="composer">
+            <div class="row"><span class="grow">Reply to the agent…</span><span class="send">➤</span></div>
+            <div class="row"><span class="model">claude-fable-5 · thinking: high</span><span class="grow"></span><span class="kbd">⏎ send</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="vsplit"></div>
+
+      <div class="chatpane pane">
+        <div class="pane-hd chat-hd">
+          <span class="title">Fix e2e flake</span><span class="pill gold">fix/tab-dnd</span><span class="pill gold">needs input</span>
+          <span class="grow"></span>
+          <button class="icon-btn" style="width:20px;height:20px;font-size:11px;" title="Expand">⤢</button>
+        </div>
+        <div class="chat">
+          <div class="chat-scroll">
+            <div class="msg-user">tab-dnd.spec.ts fails about one run in five on CI. Find the flake and fix it.</div>
+            <div class="msg-think">Reproducing with repeat-each…</div>
+            <div class="tool-row"><span class="ok">✓</span> Bash bun run e2e tab-dnd --repeat-each 5 <span class="dim">(2 failed)</span></div>
+            <div class="tool-row"><span class="ok">✓</span> Read e2e/tab-dnd.spec.ts</div>
+            <div class="msg-ai">
+              <p>Found it: <b>dragTab()</b> fires its pointermove before the drop indicator mounts, so the drop occasionally lands on the old pane. Playwright 1.49 batches pointer moves and fixes exactly this race.</p>
+              <p><b>May I bump Playwright to 1.49?</b> It changes the root catalog pin.</p>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <span class="chip">Yes, bump</span>
+              <span class="chip ghost">Explain</span>
+            </div>
+          </div>
+          <div class="composer">
+            <div class="row"><span class="grow">Answer the agent…</span><span class="send">➤</span></div>
+            <div class="row"><span class="model">claude-fable-5 · thinking: medium</span><span class="grow"></span><span class="kbd">⏎ send</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- collapsed 26px drawer: terminals one key away in Agents mode (Ops mode = the whole screen) -->
+  <div class="drawer">
+    <span class="anno fix" style="left:262px; top:3px;">4</span>
+    <span class="tw">▸</span>
+    <span class="tdot"></span><span>Terminals (2)</span>
+    <span class="sep">·</span>
+    <span>Changes</span>
+    <span class="kbd" style="margin-left:4px;">⌘J</span>
+    <span style="flex:1;"></span>
+  </div>
+
+  <div class="statusbar">
+    <span class="item">Agents mode · 4 sessions · <span style="color:var(--gold);">1 needs input</span></span>
+    <span class="grow"></span>
+    <span class="item">layouts saved: 4 (synced)</span>
+    <span class="item"><span class="status-dot" style="width:6px;height:6px;"></span> pi engine ok</span>
+  </div>
+</div>
+
+<!-- auto-REVEAL toast: the Eclipse lesson — reveal, never switch -->
+<div class="toast-wrap">
+  <div class="toast">
+    <div class="row"><span class="status-dot"></span><span><b>e2e finished</b> in fix/tab-dnd — 38 passed</span></div>
+    <div class="row"><span class="chip">Review changes</span><span class="chip ghost">Dismiss</span></div>
+  </div>
+  <div class="toast-cap">reveals, never switches your layout</div>
+</div>
+
+<div class="anno-card">
+  <h1>09 · Perspectives</h1>
+  <div class="sub">Four saved, user-owned layouts — Build · Agents · Review · Ops — one keystroke apart (⌘⇧1–4). You switch; finished work at most raises a toast. Shown: Agents mode.</div>
+  <ol>
+    <li><b>Top bar earns its keep.</b> The dead row becomes a 36px control center: workspace pill, mode switcher with wireframe thumbnails, save-layout.</li>
+    <li><b>Chats side-by-side.</b> Agents mode centers two live sessions at 50/50 — watch one agent while answering another.</li>
+    <li><b>Left panel right-sized.</b> Projects/workspaces became metadata pills on a cross-workspace session list; the full tree lives only in Build mode.</li>
+    <li><b>Terminals un-squeezed.</b> Ops is a whole 2×2 terminal-grid mode; in every other mode they stay one ⌘J drawer away.</li>
+    <li><b>Files where eyes look.</b> Build mode's thumbnail shows its left file strip — files-left, editor-center, terminal below.</li>
+    <li><b>Layouts are yours.</b> Pane arrangements inside a mode are drag-editable and saved — “＋ Save layout” persists edits or forks a new mode.</li>
+  </ol>
+  <div style="margin-top:10px; color:var(--hint); font-size:11px;">Eclipse's sin avoided: modes never auto-switch; the toast only reveals.</div>
+  <span class="pill accent tag">Pattern: JetBrains Layouts · Eclipse (softened) · VS Code profiles</span>
+</div>
+<button class="anno-toggle" onclick="document.body.classList.toggle('hide-anno'); this.textContent = document.body.classList.contains('hide-anno') ? 'Show notes' : 'Hide notes';" style="bottom: auto; top: 46px;">Hide notes</button>
+</body>
+</html>

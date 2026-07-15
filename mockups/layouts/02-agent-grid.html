@@ -1,0 +1,233 @@
+<!doctype html>
+<!-- Mockup 02 — AGENT GRID: chat-first mission control. Preset multichart grid of live agent
+     chats (research basis: TradingView preset grids, OBS multiview, Anthropic Agent View).
+     Rules applied: preset layouts + maximize-one beat free-form docking; every tile reads
+     status-first; "needs your input" is the loudest signal on screen. Design artifact, not app code. -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>02 · Agent Grid</title>
+<link rel="stylesheet" href="kit.css" />
+<style>
+  /* layout scaffolding only — visual language comes from kit.css tokens/classes */
+  .app { display: grid; grid-template-rows: 34px minmax(0, 1fr) 28px 22px; height: 100vh; min-width: 1280px; }
+
+  .topbar { display: flex; align-items: center; gap: 10px; padding: 0 12px; background: var(--bg-dark); border-bottom: 1px solid var(--border2); position: relative; }
+  .topbar .rt { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+  .layoutseg { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 8px; }
+  .seg { display: flex; align-items: stretch; height: 22px; background: var(--white-5); border: 1px solid var(--border2); border-radius: var(--radius-sm); overflow: hidden; }
+  .seg button { display: inline-flex; align-items: center; gap: 5px; padding: 0 9px; font-size: 11px; color: var(--muted); border-right: 1px solid var(--border2); }
+  .seg button:last-child { border-right: 0; }
+  .seg button:hover { background: var(--hover); color: var(--text); }
+  .seg button.active { background: var(--primary-20); color: var(--text); }
+  .seg .glyph { font-size: 12px; color: var(--hint); }
+  .seg button.active .glyph { color: var(--primary); }
+  .btn-primary { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 11px; border-radius: var(--radius-sm); background: var(--primary); color: #fff; font-size: 12px; font-weight: 600; }
+  .btn-primary:hover { filter: brightness(1.08); }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 1px; background: var(--border2); min-height: 0; position: relative; }
+  .tile { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg-dark); }
+  .tile.needs::after { content: ""; position: absolute; inset: 0; border: 2px solid var(--gold); pointer-events: none; z-index: 20; }
+  .tile-hd { height: 30px; flex-shrink: 0; display: flex; align-items: center; gap: 7px; padding: 0 6px 0 10px; border-bottom: 1px solid var(--border); }
+  .tile-hd .title { font-size: 12px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tile-hd .grow { flex: 1; }
+  .tile-hd .icon-btn { width: 20px; height: 20px; font-size: 11px; }
+  .tile .chat { flex: 1; min-height: 0; height: auto; }
+  .tile .chat-scroll { padding: 10px 12px; gap: 9px; }
+  .tile .composer { margin: 6px 8px 8px; padding: 6px 9px; }
+  .chiprow { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--border); flex-shrink: 0; position: relative; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chips .pill:hover { background: var(--hover); color: var(--text); }
+  .mono { font-family: var(--font-mono); font-size: 11px; }
+  .pulse { animation: pulse 1.2s infinite; }
+  .dim { color: var(--hint); }
+
+  .drawer { display: flex; align-items: center; gap: 8px; padding: 0 12px; background: var(--bg-dark); border-top: 1px solid var(--border2); font-size: 11.5px; color: var(--muted); position: relative; }
+  .drawer .sep { color: var(--hint); }
+  .drawer .grow { flex: 1; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ============ 34px top bar: brand · project pill · preset switcher · new chat ============ -->
+  <div class="topbar">
+    <span class="brand">ThinkRail</span>
+    <button class="pill" style="position: relative;">📁 thinkrail ▾
+      <span class="anno fix" style="right: -26px; top: 0;">3</span>
+    </button>
+    <div class="layoutseg">
+      <div class="anno fix" style="left: -28px; top: 1px;">1</div>
+      <div class="seg">
+        <button title="Single chat"><span class="glyph">▢</span> 1</button>
+        <button title="Two columns"><span class="glyph">◫</span> 1×2</button>
+        <button class="active" title="Four tiles"><span class="glyph">⊞</span> 2×2</button>
+        <button title="One tall + two stacked"><span class="glyph">⬒</span> 1+2</button>
+      </div>
+      <span class="kbd">⌘1–4</span>
+      <button class="pill" title="Command palette">⌘K</button>
+    </div>
+    <div class="rt">
+      <button class="btn-primary">＋ New chat</button>
+      <span class="status-dot" title="Connected"></span>
+      <button class="icon-btn" title="Settings">⚙</button>
+    </div>
+  </div>
+
+  <!-- ============ 2×2 grid of chat tiles ============ -->
+  <div class="grid">
+    <div class="anno fix" style="left: calc(50% - 10px); top: calc(50% - 10px);">2</div>
+
+    <!-- Tile 1 · Layout redesign — RUNNING, with changes peeking as chips -->
+    <div class="tile">
+      <div class="tile-hd">
+        <span class="status-dot warn pulse"></span>
+        <span class="title">Layout redesign</span>
+        <span class="pill">⌥ feat/layout-v2</span>
+        <span class="grow"></span>
+        <button class="icon-btn" title="Maximize (⏎)">⤢</button>
+        <button class="icon-btn" title="Close">✕</button>
+      </div>
+      <div class="chiprow">
+        <span class="pill"><span class="mono">Shell.tsx</span> <span class="badge-add">+12</span> <span class="badge-del">−3</span></span>
+        <span class="pill"><span class="mono">tokens.css</span> <span class="badge-add">+4</span></span>
+        <div class="anno fix" style="left: 258px; top: 6px;">5</div>
+      </div>
+      <div class="chat">
+        <div class="chat-scroll">
+          <div class="msg-user">Add a 2×2 chat grid to the shell so I can watch several agents at once.</div>
+          <div class="msg-think">Reading the shell layout and the tab store…</div>
+          <div class="tool-row"><span class="ok">✓</span> Read apps/web/src/shell/Shell.tsx</div>
+          <div class="msg-ai"><p>No split container in the shell yet — I'm introducing pane groups so each grid cell hosts its own chat, tab strip included.</p></div>
+          <div class="tool-row"><span class="run">●</span> Edit apps/web/src/shell/Shell.tsx <span class="dim">— running…</span></div>
+        </div>
+        <div class="composer">
+          <div class="row"><span class="grow">Steer while it runs…</span><span class="send">➤</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tile 2 · Fix e2e flake — NEEDS INPUT (loudest signal: gold ring + gold pill) -->
+    <div class="tile needs">
+      <div class="tile-hd">
+        <span class="status-dot warn"></span>
+        <span class="title">Fix e2e flake</span>
+        <span class="pill">⌥ fix/e2e-flake</span>
+        <span class="pill gold">needs your input</span>
+        <span class="grow"></span>
+        <button class="icon-btn" title="Maximize (⏎)">⤢</button>
+        <button class="icon-btn" title="Close">✕</button>
+      </div>
+      <div class="chat">
+        <div class="chat-scroll">
+          <div class="msg-user">editor.spec.ts flakes on CI — chase it down and fix it.</div>
+          <div class="tool-row"><span class="ok">✓</span> Bash bunx playwright test editor.spec.ts --repeat-each=20</div>
+          <div class="msg-think">3 of 20 runs race the Monaco lazy chunk before first paint…</div>
+          <div class="msg-ai"><p>Found it — the spec asserts before Monaco's lazy chunk settles. <b>editor.spec.ts pins Playwright 1.48 but the fix needs 1.49 — may I bump it?</b></p></div>
+          <div class="chips">
+            <button class="pill accent">Yes, bump</button>
+            <button class="pill">Explain</button>
+          </div>
+        </div>
+        <div class="composer">
+          <div class="row"><span class="grow">Answer the agent…</span><span class="send">➤</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tile 3 · Refactor tabs store — RUNNING, mid-run tool rows -->
+    <div class="tile">
+      <div class="tile-hd">
+        <span class="status-dot warn pulse"></span>
+        <span class="title">Refactor tabs store</span>
+        <span class="pill">⌥ feat/tabs-store</span>
+        <span class="grow"></span>
+        <button class="icon-btn" title="Maximize (⏎)">⤢</button>
+        <button class="icon-btn" title="Close">✕</button>
+      </div>
+      <div class="chat">
+        <div class="chat-scroll">
+          <div class="msg-user">Split the tabs Zustand store into per-pane slices before the grid work lands.</div>
+          <div class="msg-think">Mapping every consumer of useTabsStore…</div>
+          <div class="tool-row"><span class="ok">✓</span> Grep useTabsStore <span class="dim">— 14 matches</span></div>
+          <div class="tool-row"><span class="ok">✓</span> Edit apps/web/src/stores/tabs.ts</div>
+          <div class="tool-row"><span class="run">●</span> Bash bun run typecheck <span class="dim">— running…</span></div>
+        </div>
+        <div class="composer">
+          <div class="row"><span class="grow">Steer while it runs…</span><span class="send">➤</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tile 4 · Spec review: terminals — DONE, next actions as chips -->
+    <div class="tile">
+      <div class="drop-hint" style="right: 50%;">Drop to swap</div>
+      <div class="tile-hd">
+        <span class="status-dot"></span>
+        <span class="title">Spec review: terminals</span>
+        <span class="pill">⌥ main</span>
+        <span class="grow"></span>
+        <button class="icon-btn" title="Maximize (⏎)">⤢</button>
+        <button class="icon-btn" title="Close">✕</button>
+      </div>
+      <div class="chat">
+        <div class="chat-scroll">
+          <div class="msg-user">Reconcile the terminals SPEC.md with what actually landed this week.</div>
+          <div class="tool-row"><span class="ok">✓</span> Diff <span class="badge-add">＋86</span> <span class="badge-del">−22</span> <span class="dim">across 5 files</span></div>
+          <div class="msg-ai"><p>Spec now matches the code: the host owns PTY lifecycle, resize is bridged over the wire. Terminal e2e specs pass locally.</p></div>
+          <div class="chips">
+            <button class="pill accent">Review changes</button>
+            <button class="pill">Run e2e</button>
+            <button class="pill green">Merge</button>
+          </div>
+        </div>
+        <div class="composer">
+          <div class="row"><span class="grow">Follow up…</span><span class="send">➤</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Drag moment: tile 3's header dragged over the bottom gutter → swap with tile 4 -->
+    <div class="drag-ghost" style="left: calc(50% - 92px); top: 71%;">
+      <span class="status-dot warn pulse"></span> Refactor tabs store
+      <span class="anno fix" style="right: -9px; top: -9px;">6</span>
+    </div>
+  </div>
+
+  <!-- ============ collapsed drawer: IDE surfaces one keystroke away ============ -->
+  <div class="drawer">
+    <span class="dim">▸</span>
+    <span>Terminals</span><span class="sep">·</span><span>Files</span><span class="sep">·</span><span>Changes</span>
+    <div class="anno fix" style="left: 236px; top: 4px;">4</div>
+    <span class="grow"></span>
+    <span class="kbd">⌘J</span>
+  </div>
+
+  <!-- ============ status bar ============ -->
+  <div class="statusbar">
+    <span class="item">4 chats</span><span class="dim">·</span>
+    <span class="item"><span class="status-dot warn pulse" style="width: 7px; height: 7px;"></span> 2 running</span><span class="dim">·</span>
+    <span class="item" style="color: var(--gold);">1 needs input</span>
+    <span class="grow"></span>
+    <span class="item mono">burn $1.12/h</span>
+    <span class="item"><span class="status-dot" style="width: 7px; height: 7px;"></span> pi engine ok</span>
+  </div>
+</div>
+
+<!-- ============ concept annotations ============ -->
+<div class="anno-card">
+  <h1>02 · Agent Grid</h1>
+  <div class="sub">Chat-first mission control: a preset grid of live agents, status-first tiles — and "needs your input" is the loudest thing on screen.</div>
+  <ol>
+    <li><b>Top bar earns its row.</b> Preset layouts (⌘1–4), ⌘K and New chat replace the dead space; maximize-one (⏎) beats free-form docking.</li>
+    <li><b>Side-by-side chats ARE the layout.</b> 1 / 1×2 / 2×2 / 1+2 presets tile the whole center — no single-tab bottleneck.</li>
+    <li><b>Projects shrink to a pill.</b> The rarely-touched tree becomes a dropdown; its ~18% column goes back to chats.</li>
+    <li><b>Terminals get the full width.</b> Terminals · Files · Changes dock in a ⌘J drawer — full-width and maximizable when opened.</li>
+    <li><b>Changes peek into each chat.</b> Per-tile diff chips cover the common glance; the full tree waits in the drawer.</li>
+    <li><b>Tiles rearrange like tabs.</b> Drag a tile header across the grid gutter — drop to swap panes.</li>
+  </ol>
+  <span class="pill accent tag">Pattern: TradingView grid · OBS multiview · Agent View</span>
+</div>
+<button class="anno-toggle" onclick="document.body.classList.toggle('hide-anno'); this.textContent = document.body.classList.contains('hide-anno') ? 'Show notes' : 'Hide notes';" style="bottom: auto; top: 46px;">Hide notes</button>
+</body>
+</html>

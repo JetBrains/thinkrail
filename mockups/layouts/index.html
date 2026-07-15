@@ -1,0 +1,175 @@
+<!doctype html>
+<!-- Gallery — open this file to browse every layout concept. Each card is a live, scaled-down
+     render of the actual mockup (iframe). Click a card to open the full mockup in a new tab. -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>ThinkRail · layout concepts</title>
+<link rel="stylesheet" href="kit.css" />
+<style>
+  body { overflow: auto; }
+  .wrap { max-width: 1560px; margin: 0 auto; padding: 28px 24px 60px; }
+  h1 { font-family: var(--font-accent); font-size: 26px; letter-spacing: 0.3px; }
+  h1 .tr { color: var(--primary); }
+  .lede { color: var(--muted); margin: 8px 0 6px; max-width: 880px; }
+  .legend { display: flex; gap: 14px; align-items: center; margin: 10px 0 26px; color: var(--hint); font-size: 12px; flex-wrap: wrap; }
+  .legend .anno, .legend .anno.fix { position: static; width: 16px; height: 16px; font-size: 9px; box-shadow: none; display: inline-flex; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(460px, 1fr)); gap: 22px; }
+  .card {
+    display: block; text-decoration: none; color: inherit;
+    background: var(--elevated); border: 1px solid var(--border2); border-radius: var(--radius-lg);
+    overflow: hidden; transition: border-color 120ms ease, transform 120ms ease;
+  }
+  .card:hover { border-color: var(--primary-40); transform: translateY(-2px); }
+  .thumb { position: relative; width: 100%; aspect-ratio: 16/10; overflow: hidden; background: var(--bg-dark); border-bottom: 1px solid var(--border2); }
+  .thumb iframe {
+    width: 1600px; height: 1000px; border: 0; transform-origin: top left; pointer-events: none;
+    position: absolute; top: 0; left: 0;
+  }
+  .meta { padding: 12px 14px 14px; }
+  .meta .ttl { font-size: 14px; font-weight: 600; color: var(--text); display: flex; align-items: baseline; gap: 8px; }
+  .meta .num { font-family: var(--font-mono); color: var(--primary); font-size: 12px; }
+  .meta p { color: var(--muted); font-size: 12px; margin: 5px 0 8px; line-height: 1.45; }
+  .meta .pills { display: flex; gap: 6px; flex-wrap: wrap; }
+</style>
+<script>
+  // Scale each 1600x1000 iframe to its card width.
+  addEventListener("load", () => {
+    const fit = () => {
+      document.querySelectorAll(".thumb").forEach((t) => {
+        const f = t.querySelector("iframe");
+        if (f) f.style.transform = `scale(${t.clientWidth / 1600})`;
+      });
+    };
+    fit();
+    addEventListener("resize", fit);
+  });
+</script>
+</head>
+<body>
+<div class="wrap">
+  <h1><span class="tr">ThinkRail</span> · layout concepts</h1>
+  <p class="lede">Twelve full-screen mockups: the annotated current layout plus eleven redesign concepts, each
+  attacking the same six problems from a different direction. Every mockup wears the real product theme
+  (<code style="font-family:var(--font-mono);font-size:11px;">kit.css</code> mirrors <code style="font-family:var(--font-mono);font-size:11px;">tokens.css</code>).
+  Research behind them: <b>RESEARCH.md</b>.</p>
+  <div class="legend">
+    <span><span class="anno">n</span> problem (baseline)</span>
+    <span><span class="anno fix">n</span> where a concept fixes problem n</span>
+    <span>· every mockup has a “Hide notes” toggle (top right)</span>
+    <span>· problems: 1 dead top bar · 2 no multi-chat · 3 fat projects panel · 4 small terminal · 5 files not left · 6 tabs locked</span>
+  </div>
+  <div class="grid">
+
+    <a class="card" href="00-current-baseline.html" target="_blank">
+      <div class="thumb"><iframe src="00-current-baseline.html" loading="lazy" tabindex="-1"></iframe></div>
+      <div class="meta">
+        <div class="ttl"><span class="num">00</span> Current baseline</div>
+        <p>What ships today, with the six problems pinned in place. The reference point.</p>
+        <div class="pills"><span class="pill">not a proposal</span></div>
+      </div>
+    </a>
+
+    <a class="card" href="01-ide-classic.html" target="_blank">
+      <div class="thumb"><iframe src="01-ide-classic.html" loading="lazy" tabindex="-1"></iframe></div>
+      <div class="meta">
+        <div class="ttl"><span class="num">01</span> IDE Classic</div>
+        <p>The VS Code shape: icon rail + files left, splittable editor groups where chats are ordinary tabs, full-width bottom terminal, working top bar.</p>
+        <div class="pills"><span class="pill accent">VS Code workbench</span><span class="pill">conservative</span></div>
+      </div>
+    </a>
+
+    <a class="card" href="02-agent-grid.html" target="_blank">
+      <div class="thumb"><iframe src="02-agent-grid.html" loading="lazy" tabindex="-1"></iframe></div>
+      <div class="meta">
+        <div class="ttl"><span class="num">02</span> Agent Grid</div>
+        <p>Chat-first mission control: preset 1 / 1×2 / 2×2 / 1+2 grids of live chat tiles, needs-input loudest, IDE surfaces one ⌘J away.</p>
+        <div class="pills"><span class="pill accent">TradingView · OBS · Agent View</span><span class="pill">chat-first</span></div>
+      </div>
+    </a>
+
+    <a class="card" href="03-universal-tiles.html" target="_blank">
+      <div class="thumb"><iframe src="03-universal-tiles.html" loading="lazy" tabindex="-1"></iframe></div>
+      <div class="meta">
+        <div class="ttl"><span class="num">03</span> Universal Tiles</div>
+        <p>Everything is a dockable tab — chat, file, terminal, specs — drag anywhere, 5-zone drop, floating panels, saved layouts.</p>
+        <div class="pills"><span class="pill accent">Dockview · Claude desktop</span><span class="pill">max flexibility</span></div>
+      </div>
+    </a>
+
+    <a class="card" href="04-workspace-columns.html" target="_blank">
+      <div class="thumb"><iframe src="04-workspace-columns.html" loading="lazy" tabindex="-1"></iframe></div>
+      <div class="meta">
+        <div class="ttl"><span class="num">04</span> Workspace Columns</div>
+        <p>One live column per worktree/agent, side by side; zoom a column to focus; shared full-width terminal drawer below.</p>
+        <div class="pills"><span class="pill accent">Conductor</span><span class="pill">worktree-native</span></div>
+      </div>
+    </a>
+
+    <a class="card" href="05-command-zen.html" target="_blank">
+      <div class="thumb"><iframe src="05-command-zen.html" loading="lazy" tabindex="-1"></iframe></div>
+      <div class="meta">
+        <div class="ttl"><span class="num">05</span> Command Zen</div>
+        <p>Chrome-free conversation column; ⌘K palette (teaches shortcuts) + hover-peek edges for files/terminal; status bar keeps the exits visible.</p>
+        <div class="pills"><span class="pill accent">Arc · Linear ⌘K</span><span class="pill">opt-in expert mode</span></div>
+      </div>
+    </a>
+
+    <a class="card" href="06-terminal-forward.html" target="_blank">
+      <div class="thumb"><iframe src="06-terminal-forward.html" loading="lazy" tabindex="-1"></iframe></div>
+      <div class="meta">
+        <div class="ttl"><span class="num">06</span> Terminal Forward</div>
+        <p>The bottom panel becomes a tmux-grade workspace — 48% tall, splits, zoom, named layouts, broadcast — and chat tabs can dock into it.</p>
+        <div class="pills"><span class="pill accent">tmux/kitty · Warp</span><span class="pill">terminal-heavy</span></div>
+      </div>
+    </a>
+
+    <a class="card" href="07-fleet-board.html" target="_blank">
+      <div class="thumb"><iframe src="07-fleet-board.html" loading="lazy" tabindex="-1"></iframe></div>
+      <div class="meta">
+        <div class="ttl"><span class="num">07</span> Fleet Board</div>
+        <p>Kanban home for agent runs (Backlog → Running → Review → Done); a card opens a chat/changes/terminal slide-over; full IDE one step deeper.</p>
+        <div class="pills"><span class="pill accent">Vibe Kanban · Codex</span><span class="pill">many agents</span></div>
+      </div>
+    </a>
+
+    <a class="card" href="08-dual-rail.html" target="_blank">
+      <div class="thumb"><iframe src="08-dual-rail.html" loading="lazy" tabindex="-1"></iframe></div>
+      <div class="meta">
+        <div class="ttl"><span class="num">08</span> Dual Rail</div>
+        <p>The 2026 consensus: files left behind a rail, dedicated ~600px chat dock right (promotable to a center tab), full-width bottom terminal, every dock movable.</p>
+        <div class="pills"><span class="pill accent">VS Code + Zed consensus</span><span class="pill">safe default</span></div>
+      </div>
+    </a>
+
+    <a class="card" href="09-perspectives.html" target="_blank">
+      <div class="thumb"><iframe src="09-perspectives.html" loading="lazy" tabindex="-1"></iframe></div>
+      <div class="meta">
+        <div class="ttl"><span class="num">09</span> Perspectives</div>
+        <p>Named task modes — Build / Agents / Review / Ops — as one-key saved layouts with wireframe previews; reveals, never auto-switches.</p>
+        <div class="pills"><span class="pill accent">JetBrains Layouts · Cursor presets</span><span class="pill">modal</span></div>
+      </div>
+    </a>
+
+    <a class="card" href="10-session-inbox.html" target="_blank">
+      <div class="thumb"><iframe src="10-session-inbox.html" loading="lazy" tabindex="-1"></iframe></div>
+      <div class="meta">
+        <div class="ttl"><span class="num">10</span> Session Inbox</div>
+        <p>Messaging-app projection: waiting-on-you-first session list, one conversation center, IDE surfaces as slide-overs — collapses 1:1 onto the phone.</p>
+        <div class="pills"><span class="pill accent">Slack · clideck · Agent View</span><span class="pill">mobile-coherent</span></div>
+      </div>
+    </a>
+
+    <a class="card" href="11-agent-desk.html" target="_blank">
+      <div class="thumb"><iframe src="11-agent-desk.html" loading="lazy" tabindex="-1"></iframe></div>
+      <div class="meta">
+        <div class="ttl"><span class="num">11</span> Agent Desk</div>
+        <p>Devin's reframe: each session = chat + that agent's own desk (Plan / Editor / Shell / Changes) — terminals and files are per-agent surfaces you can take over.</p>
+        <div class="pills"><span class="pill accent">Devin workspace</span><span class="pill">spectator + takeover</span></div>
+      </div>
+    </a>
+
+  </div>
+</div>
+</body>
+</html>

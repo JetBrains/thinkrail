@@ -1,0 +1,241 @@
+<!doctype html>
+<!-- Mockup 07 — "Fleet Board". Kanban home for a fleet of agent runs: columns are stages,
+     cards are runs (each in its own worktree), and deep work opens per-card into a
+     slide-over IDE (Chat / Changes / Terminal). Inspired by Vibe Kanban / Codex task queue.
+     Design artifact, not app code. Green markers = fixes for the six baseline problems. -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>07 · Fleet Board</title>
+<link rel="stylesheet" href="kit.css" />
+<style>
+  .app { display: grid; grid-template-rows: 34px 1fr 22px; height: 100vh; min-width: 1280px; }
+
+  /* compact top bar */
+  .topbar { display: flex; align-items: center; gap: 12px; padding: 0 12px; position: relative; z-index: 25;
+    background: var(--bg-dark); border-bottom: 1px solid var(--border2); }
+  .seg { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    display: flex; gap: 2px; padding: 2px; background: var(--bg-input);
+    border: 1px solid var(--border2); border-radius: var(--radius-sm); }
+  .seg button { padding: 1px 12px; font-size: 11.5px; color: var(--hint); border-radius: 3px; white-space: nowrap; }
+  .seg button:hover { color: var(--text); background: var(--hover); }
+  .seg button.active { color: var(--text); background: var(--primary-20); }
+  .tb-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+  .btn-primary { display: inline-flex; align-items: center; gap: 5px; padding: 3px 11px; white-space: nowrap;
+    background: var(--primary); color: #fff; font-size: 12px; font-weight: 500; border-radius: var(--radius-sm); }
+  .btn-primary:hover { filter: brightness(1.1); }
+  .btn-ghost { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; white-space: nowrap;
+    font-size: 11.5px; color: var(--muted); border: 1px solid var(--border2); border-radius: var(--radius-sm); }
+  .btn-ghost:hover { color: var(--text); background: var(--hover); }
+
+  /* board: --bg gutters between bg-dark columns, so elevated cards read as a board */
+  .mainrow { display: flex; min-height: 0; position: relative; }
+  .board { flex: 1; min-width: 0; display: flex; gap: 1px; background: var(--bg); position: relative; overflow: hidden; }
+  .col { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg-dark); position: relative; }
+  .col-bd { flex: 1; min-height: 0; overflow: auto; padding: 10px; display: flex; flex-direction: column; gap: 10px; }
+  .card { background: var(--elevated); border: 1px solid var(--border2); border-radius: var(--radius-md);
+    padding: 10px; display: flex; flex-direction: column; gap: 5px; position: relative; }
+  .card:hover { border-color: var(--white-20); box-shadow: var(--shadow-md); }
+  .card.sel { border-color: var(--primary-40); box-shadow: 0 0 0 2px var(--primary-40); }
+  .card.lifted { opacity: 0.35; border-style: dashed; }
+  .t { font-size: 13px; font-weight: 500; color: var(--text); line-height: 1.35; }
+  .ws { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tail { font-family: var(--font-mono); font-size: 10.5px; color: var(--gold);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tail.ok { color: var(--green); }
+  .meta { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--hint); }
+  .meta .grow { flex: 1; }
+  .progress { height: 2px; border-radius: 2px; background: var(--white-10); overflow: hidden; }
+  .progress i { display: block; height: 100%; width: 40%; border-radius: 2px; background: var(--primary); }
+  .count { font-size: 9px; padding: 0 6px; }
+  .ghost-card { flex-direction: column; align-items: stretch; gap: 4px; padding: 9px 11px;
+    width: 196px; border-radius: var(--radius-md); }
+
+  /* slide-over: per-card drill-in IDE (board docks left of it so every stage stays visible) */
+  .slideover { width: 44%; flex-shrink: 0; display: flex; flex-direction: column; position: relative; z-index: 20;
+    background: var(--elevated); border-left: 1px solid var(--border2); box-shadow: -14px 0 36px rgba(0, 0, 0, 0.5); }
+  .so-hd { display: flex; align-items: center; gap: 9px; padding: 8px 12px;
+    border-bottom: 1px solid var(--border2); flex-shrink: 0; }
+  .so-hd .title { font-size: 13px; font-weight: 600; color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- 34px top bar: brand · view switcher · filters · new run -->
+  <div class="topbar">
+    <span class="brand">ThinkRail</span>
+    <div class="seg">
+      <button class="active">Board</button>
+      <button>Chats</button>
+      <button>Editor</button>
+      <button>Terminals</button>
+      <span class="anno fix" style="right:-26px; top:3px;">1</span>
+    </div>
+    <div class="tb-right">
+      <span class="pill" style="position:relative;">thinkrail ▾<span class="anno fix" style="right:-9px; top:-7px;">3</span></span>
+      <span class="pill">All models ▾</span>
+      <button class="btn-primary">＋ New run</button>
+      <span class="status-dot" title="Host connected"></span>
+      <button class="icon-btn" title="Settings">⚙</button>
+    </div>
+  </div>
+
+  <div class="mainrow">
+    <div class="board">
+      <!-- BACKLOG -->
+      <div class="col">
+        <div class="pane-hd">Backlog <span class="pill count">2</span><span class="grow"></span>
+          <button class="icon-btn" style="width:20px;height:20px;font-size:11px;" title="Queue a run">＋</button></div>
+        <div class="col-bd">
+          <div class="card">
+            <div class="t">Spec: terminals SPEC.md refresh</div>
+            <div class="ws">⌥ main · worktree on start</div>
+            <div class="meta"><span>queued 25m ago</span><span class="grow"></span><span class="pill count">spec</span></div>
+          </div>
+          <div class="card">
+            <div class="t">Dark-theme contrast audit</div>
+            <div class="ws">⌥ main · worktree on start</div>
+            <div class="meta"><span>queued 1h ago</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RUNNING (the multi-chat view: every live run + tail at once) -->
+      <div class="col">
+        <div class="anno fix" style="right:8px; top:4px;">2</div>
+        <div class="pane-hd"><span class="status-dot warn" style="width:7px;height:7px;"></span> Running
+          <span class="pill gold count">3</span></div>
+        <div class="col-bd">
+          <div class="card">
+            <div class="t">Migrate tabs store to per-pane</div>
+            <div class="ws">⌥ feat/pane-store</div>
+            <div class="tail">● Bash bun test tabs — 3/5 suites…</div>
+            <div class="meta"><span>⏱ 4m</span><span>$0.11</span></div>
+          </div>
+          <div class="card sel">
+            <div class="t">Add 2×2 chat grid to shell</div>
+            <div class="ws">⌥ feat/layout-v2</div>
+            <div class="tail">● Edit Shell.tsx — running…</div>
+            <div class="progress"><i></i></div>
+            <div class="meta"><span>⏱ 12m</span><span>$0.42</span><span class="grow"></span><span style="color:var(--primary);">open ▸</span></div>
+          </div>
+          <div class="card lifted">
+            <div class="t">Fix e2e flake in editor.spec</div>
+            <div class="ws">⌥ fix/e2e-flake</div>
+            <div class="tail ok">✓ e2e 24/24 passed — idle</div>
+            <div class="meta"><span>⏱ 38m</span><span>$0.87</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- NEEDS REVIEW (drop target for the dragged card) -->
+      <div class="col">
+        <div class="pane-hd">Needs review <span class="pill accent count">2</span></div>
+        <div class="drop-hint" style="inset:31px 5px 5px;">Drop to mark for review</div>
+        <div class="col-bd">
+          <div class="card">
+            <div class="t">Bump pi-coding-agent to 0.9</div>
+            <div class="ws">⌥ chore/pi-0-9</div>
+            <div class="meta"><span class="badge-add">+142</span><span class="badge-del">−38</span><span>· 9 files</span></div>
+            <div class="meta"><span class="pill accent count">Review</span><span class="pill green count">e2e ✓</span></div>
+          </div>
+          <div class="card">
+            <div class="t">Slash-command palette in composer</div>
+            <div class="ws">⌥ feat/composer-palette</div>
+            <div class="meta"><span class="badge-add">+96</span><span class="badge-del">−20</span><span>· 6 files</span></div>
+            <div class="meta"><span class="pill accent count">Review</span><span class="pill green count">typecheck ✓</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- DONE -->
+      <div class="col">
+        <div class="pane-hd">Done <span class="pill green count">3</span></div>
+        <div class="col-bd">
+          <div class="card">
+            <div class="t">Fix WS reconnect backoff</div>
+            <div class="ws">⌥ fix/ws-backoff</div>
+            <div class="meta"><span style="color:var(--green);">✓</span><span>merged 2h ago</span></div>
+          </div>
+          <div class="card">
+            <div class="t">Changes panel: stage single hunk</div>
+            <div class="ws">⌥ feat/stage-hunk</div>
+            <div class="meta"><span style="color:var(--green);">✓</span><span>merged 5h ago</span></div>
+          </div>
+          <div class="card">
+            <div class="t">Statusbar cost meter</div>
+            <div class="ws">⌥ feat/cost-meter</div>
+            <div class="meta"><span style="color:var(--green);">✓</span><span>merged yesterday</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- drag ghost: run card mid-flight from Running → Needs review -->
+      <div class="drag-ghost ghost-card" style="left:calc(50% - 55px); top:33%; transform:rotate(2deg);">
+        <span class="t" style="font-size:12.5px;">Fix e2e flake in editor.spec</span>
+        <span class="ws">⌥ fix/e2e-flake</span>
+        <span class="tail ok">✓ e2e 24/24 passed — idle</span>
+        <span class="anno fix" style="right:-9px; top:-10px;">6</span>
+      </div>
+    </div>
+
+    <!-- SLIDE-OVER: the selected run opened in place (board → IDE drill-in) -->
+    <div class="slideover">
+      <div class="so-hd">
+        <span class="title">Add 2×2 chat grid to shell</span>
+        <span class="pill">⌥ feat/layout-v2</span>
+        <span style="flex:1"></span>
+        <button class="btn-ghost">Open full IDE ⤢</button>
+        <button class="icon-btn" title="Close">✕</button>
+      </div>
+      <div class="minitabs">
+        <span class="minitab active">Chat</span>
+        <span class="minitab" style="position:relative;">Changes<span class="anno fix" style="left:50%; margin-left:-10px; top:20px;">5</span></span>
+        <span class="minitab" style="position:relative;">Terminal<span class="anno fix" style="left:50%; margin-left:-10px; top:20px;">4</span></span>
+        <span style="flex:1"></span>
+        <span style="font-size:10px;color:var(--hint);">run 12m · $0.42</span>
+      </div>
+      <div class="chat">
+        <div class="chat-scroll">
+          <div class="msg-user">Add a 2×2 chat grid to the shell so I can watch several agents at once.</div>
+          <div class="msg-think">Reading the shell layout and the tab store…</div>
+          <div class="tool-row"><span class="ok">✓</span> Read apps/web/src/shell/Shell.tsx</div>
+          <div class="tool-row"><span class="ok">✓</span> Read apps/web/src/panels/CenterTabs.tsx</div>
+          <div class="msg-ai"><p>The center area renders a single <b>CenterTabs</b> strip with one visible tab — there is no split container. To get a grid we'd introduce pane groups in the shell and let each group host its own tab strip.</p></div>
+          <div class="tool-row"><span class="run">●</span> Edit apps/web/src/shell/Shell.tsx <span class="dim">— running…</span></div>
+        </div>
+        <div class="composer">
+          <div class="row"><span class="grow">Reply to the agent…</span><span class="send">➤</span></div>
+          <div class="row"><span class="model">claude-fable-5 · thinking: high</span><span class="grow"></span><span class="kbd">⏎ send</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="statusbar">
+    <span class="item">10 runs</span>
+    <span class="item"><span class="status-dot warn" style="width:7px;height:7px;"></span> 3 running</span>
+    <span class="item">burn $1.84/h</span>
+    <span class="grow"></span>
+    <span class="item">worktrees 6 · disk 412MB</span>
+    <span class="item"><span class="status-dot"></span> pi engine ok</span>
+  </div>
+</div>
+
+<div class="anno-card" style="left:16px; right:auto;">
+  <h1>07 · Fleet Board</h1>
+  <div class="sub">Home is a kanban of agent runs by stage — the IDE opens per card as a slide-over. You manage a fleet, not a file tree.</div>
+  <ol>
+    <li><b>Top bar earns its 34px.</b> Board/Chats/Editor/Terminals switcher, fleet filters and ＋ New run — no dead chrome.</li>
+    <li><b>Every live run at once.</b> The Running column is the multi-chat: each card streams a live tail with clock + cost.</li>
+    <li><b>Projects become a filter.</b> Scope the board with the "thinkrail ▾" pill — no always-open 18% tree.</li>
+    <li><b>Terminal one tap away.</b> A minitab in the run's slide-over, full height when opened; card tails echo it on the board.</li>
+    <li><b>Files &amp; diffs in run context.</b> Changes rides inside the card's slide-over, scoped to that worktree — not a far corner panel.</li>
+    <li><b>Cards drag like tabs.</b> "Fix e2e flake" is mid-drag from Running to Needs review — stages move by drop, like tabs.</li>
+  </ol>
+  <span class="pill accent tag">Pattern: Vibe Kanban · Codex task queue</span>
+</div>
+<button class="anno-toggle" onclick="document.body.classList.toggle('hide-anno'); this.textContent = document.body.classList.contains('hide-anno') ? 'Show notes' : 'Hide notes';" style="bottom:auto; top:46px;">Hide notes</button>
+</body>
+</html>

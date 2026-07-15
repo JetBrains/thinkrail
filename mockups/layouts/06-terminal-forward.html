@@ -1,0 +1,208 @@
+<!doctype html>
+<!-- Mockup 06 — TERMINAL FORWARD: the bottom panel becomes a tmux-grade workspace (48% tall,
+     one-key splits, zoom, named layout presets, broadcast — kitty/iTerm2/VS Code panel grammar).
+     Chats are ordinary tabs and can dock in the editor group OR the terminal workspace. -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>06 · Terminal Forward</title>
+<link rel="stylesheet" href="kit.css" />
+<style>
+  .app { display: grid; grid-template-rows: 34px 1fr 22px; height: 100vh; min-width: 1280px; }
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 0 12px; background: var(--bg-dark); border-bottom: 1px solid var(--border2);
+    position: relative;
+  }
+  .tb-group { display: flex; align-items: center; gap: 10px; }
+  .cmdk { position: absolute; left: 50%; transform: translateX(-50%); }
+  .main { display: flex; min-height: 0; }
+  .left { width: 220px; flex-shrink: 0; border-right: 1px solid var(--border2); position: relative; }
+  .center { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
+  .editor-group { height: 52%; display: flex; flex-direction: column; min-height: 0; position: relative; }
+  .editor-group .editor { height: auto; flex: 1; min-height: 0; }
+  .termspace { height: 48%; display: flex; flex-direction: column; min-height: 0; border-top: 1px solid var(--border2); position: relative; }
+  .toolbtns { display: flex; align-items: center; gap: 2px; padding: 0 8px; }
+  .term-body { flex: 1; min-height: 0; display: flex; position: relative; background: #131316; }
+  .term-pane { position: relative; min-width: 0; min-height: 0; }
+  .term-pane.a { width: 55%; }
+  .term-pane.b { width: 45%; }
+  .term-pane.focus > .term { box-shadow: inset 0 0 0 1px var(--primary-40); }
+  .tool-divider { width: 1px; align-self: stretch; margin: 7px 6px; background: var(--border2); }
+  .term-gutter { width: 1px; background: var(--border2); flex-shrink: 0; }
+  .layout-chip {
+    position: absolute; top: 6px; left: 50%; transform: translateX(-50%); z-index: 20;
+    padding: 2px 10px; border-radius: 999px; white-space: nowrap;
+    font-family: var(--font-mono); font-size: 10.5px; color: var(--muted);
+    background: var(--elevated); border: 1px solid var(--border2); box-shadow: var(--shadow-md);
+  }
+  .splitn { color: var(--hint); font-size: 10px; font-family: var(--font-mono); }
+  /* kit's .term (terminal body) also matches class="dot term" — neutralize its padding on tab dots */
+  .tabstrip .dot.term { padding: 0; width: 7px; height: 7px; overflow: hidden; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- TOP BAR — compact 34px, every pixel earns its keep -->
+  <div class="topbar">
+    <div class="tb-group">
+      <span class="brand">ThinkRail</span>
+      <span class="pill" title="Project / workspace switcher"><span style="color:var(--primary);">⌥</span> thinkrail / main ▾</span>
+    </div>
+    <span class="pill cmdk"><span class="kbd">⌘K</span> commands · files · chats</span>
+    <div class="tb-group">
+      <span class="pill accent">claude-fable-5</span>
+      <span class="status-dot" title="pi engine ok"></span>
+      <button class="icon-btn" title="Settings">⚙</button>
+    </div>
+    <div class="anno fix" style="left: 34%; top: 7px;">1</div>
+    <div class="anno fix" style="left: 208px; top: 7px;">3</div>
+  </div>
+
+  <div class="main">
+    <!-- LEFT: Explorer, fixed 220px -->
+    <div class="left pane">
+      <div class="anno fix" style="right: 8px; top: 4px;">5</div>
+      <div class="pane-hd">Explorer<span class="grow"></span><button class="icon-btn" style="width:20px;height:20px;font-size:11px;" title="Collapse all">⊟</button></div>
+      <div class="pane-bd tree">
+        <div class="tree-item"><span class="twisty">▾</span><span class="ico">📁</span> apps/web</div>
+        <div class="tree-item indent-1"><span class="twisty">▾</span><span class="ico">📁</span> src</div>
+        <div class="tree-item indent-2"><span class="twisty">▾</span><span class="ico">📁</span> shell</div>
+        <div class="tree-item sel indent-3"><span class="ico">⌗</span> Shell.tsx <span style="margin-left:auto;" class="badge-mod">M</span></div>
+        <div class="tree-item indent-3"><span class="ico">⌗</span> TopBar.tsx</div>
+        <div class="tree-item indent-2"><span class="twisty">▸</span><span class="ico">📁</span> chat</div>
+        <div class="tree-item indent-2"><span class="twisty">▸</span><span class="ico">📁</span> panels</div>
+        <div class="tree-item indent-2"><span class="twisty">▸</span><span class="ico">📁</span> transport</div>
+        <div class="tree-item indent-2"><span class="ico">#</span> index.css</div>
+        <div class="tree-item"><span class="twisty">▸</span><span class="ico">📁</span> packages/server</div>
+        <div class="tree-item"><span class="twisty">▸</span><span class="ico">📁</span> packages/contracts</div>
+        <div class="tree-item"><span class="ico">▤</span> architecture.md</div>
+      </div>
+    </div>
+
+    <!-- CENTER: one editor group (52%) over the terminal workspace (48%) -->
+    <div class="center">
+
+      <!-- Editor group: file + chat tabs mix in one strip -->
+      <div class="editor-group">
+        <div class="anno fix" style="left: 224px; top: 5px;">2</div>
+        <div class="tabstrip">
+          <span class="tab active"><span class="dot file"></span> Shell.tsx <span class="close">✕</span></span>
+          <span class="tab"><span class="dot chat"></span> Layout redesign <span class="close">✕</span></span>
+          <span class="tab"><span class="dot file"></span> tokens.css <span class="close">✕</span></span>
+          <span class="tab-plus" title="New tab">＋</span>
+          <span style="flex:1"></span>
+        </div>
+        <div class="editor">
+          <div class="cl"><span class="ln">1</span><span><span class="k">import</span> { <span class="v">useLayoutStore</span> } <span class="k">from</span> <span class="s">"../store"</span>;</span></div>
+          <div class="cl"><span class="ln">2</span><span><span class="k">import</span> { <span class="t">EditorGroup</span> } <span class="k">from</span> <span class="s">"../panels/EditorGroup"</span>;</span></div>
+          <div class="cl"><span class="ln">3</span><span><span class="k">import</span> { <span class="t">TerminalWorkspace</span> } <span class="k">from</span> <span class="s">"../terminal/TerminalWorkspace"</span>;</span></div>
+          <div class="cl"><span class="ln">4</span><span></span></div>
+          <div class="cl"><span class="ln">5</span><span><span class="c">// The bottom panel is a pane workspace, not a drawer (see SPEC.md).</span></span></div>
+          <div class="cl"><span class="ln">6</span><span><span class="k">export function</span> <span class="f">Shell</span>() {</span></div>
+          <div class="cl"><span class="ln">7</span><span>  <span class="k">const</span> { <span class="v">groups</span>, <span class="v">layout</span> } = <span class="f">useLayoutStore</span>();</span></div>
+          <div class="cl"><span class="ln">8</span><span>  <span class="k">return</span> (</span></div>
+          <div class="cl"><span class="ln">9</span><span>    &lt;<span class="t">div</span> <span class="v">className</span>=<span class="s">"grid h-full grid-rows-[52fr_48fr]"</span>&gt;</span></div>
+          <div class="cl"><span class="ln">10</span><span>      &lt;<span class="t">EditorGroup</span> <span class="v">tabs</span>={<span class="v">groups</span>.editor} /&gt;</span></div>
+          <div class="cl"><span class="ln">11</span><span>      &lt;<span class="t">TerminalWorkspace</span> <span class="v">preset</span>=<span class="s">"main-vertical"</span> <span class="v">panes</span>={<span class="v">layout</span>.panes} /&gt;</span></div>
+          <div class="cl"><span class="ln">12</span><span>    &lt;/<span class="t">div</span>&gt;</span></div>
+          <div class="cl"><span class="ln">13</span><span>  );</span></div>
+          <div class="cl"><span class="ln">14</span><span>}</span></div>
+        </div>
+      </div>
+
+      <!-- Mid-drag ghost: a chat tab travelling from the editor strip to the terminal workspace -->
+      <div class="drag-ghost" style="top: calc(52% - 16px); left: 47%;">
+        <span class="dot chat"></span> Fix e2e flake
+        <div class="anno fix" style="right: -28px; top: -8px;">6</div>
+      </div>
+
+      <!-- TERMINAL WORKSPACE — the star: 48%, own toolbar, multi-pane body -->
+      <div class="termspace">
+        <div class="anno fix" style="left: 388px; top: 5px;">2</div>
+        <div class="anno fix" style="left: 512px; top: 5px;">4</div>
+        <div class="tabstrip">
+          <span class="tab active"><span class="dot term"></span> main ▸ zsh <span class="close">✕</span></span>
+          <span class="tab"><span class="dot term"></span> bun dev <span class="close">✕</span></span>
+          <span class="tab"><span class="dot term"></span> e2e <span class="splitn">⫿2</span> <span class="close">✕</span></span>
+          <span class="tab"><span class="dot chat"></span> Fix e2e flake <span class="close">✕</span></span>
+          <span class="tab-plus" title="New terminal">＋</span>
+          <span class="tool-divider"></span>
+          <div class="toolbtns">
+            <button class="icon-btn" title="Split (⌘D)">⫿</button>
+            <button class="icon-btn" title="Broadcast input to all panes">⇶</button>
+            <button class="icon-btn" title="Layouts: tall · fat · grid">▤</button>
+            <button class="icon-btn" title="Move to editor area">⇱</button>
+            <button class="icon-btn" title="Maximize (⌘⇧J)">⤢</button>
+          </div>
+          <span style="flex:1"></span>
+        </div>
+        <div class="term-body">
+          <div class="layout-chip">▤ layout: main-vertical · ⌥1–5</div>
+
+          <!-- pane A (focused): bun run e2e -->
+          <div class="term-pane a focus">
+            <div class="term">
+<span class="p">➜ main</span> <span class="cmd">bun run e2e</span>
+<br /><span class="dim">$ playwright test --grep-invert @agent</span>
+<br /><span class="ok">✓</span> projects.spec.ts <span class="dim">(6 passed)</span>
+<br /><span class="ok">✓</span> workspaces.spec.ts <span class="dim">(9 passed)</span>
+<br /><span class="ok">✓</span> files.spec.ts <span class="dim">(7 passed)</span>
+<br /><span class="ok">✓</span> editor.spec.ts <span class="dim">(8 passed)</span>
+<br /><span class="ok">✓</span> terminals.spec.ts <span class="dim">(4 passed)</span>
+<br /><span class="warn">⚠</span> changes.spec.ts › diff gutter — <span class="warn">flaky</span>, retry 1/2 <span class="dim">→ passed</span>
+<br /><span class="ok">✓</span> changes.spec.ts <span class="dim">(4 passed)</span>
+<br /><span class="ok">38 passed</span>, <span class="warn">1 flaky</span> <span class="dim">(2.1m)</span>
+<br /><span class="p">➜ main</span> <span class="cursor">&nbsp;</span>
+            </div>
+          </div>
+          <div class="term-gutter"></div>
+
+          <!-- pane B: bun dev, with a live drop target for the dragged chat tab -->
+          <div class="term-pane b">
+            <div class="term">
+<span class="p">➜ main</span> <span class="cmd">bun dev</span>
+<br /><span class="dim">$ vite --host --port 5173</span>
+<br /><span class="ok">VITE v6.3.5</span>  <span class="dim">ready in</span> 412 ms
+<br /><span class="p">➜</span>  Local:   <span class="cmd">http://localhost:5173/</span>
+<br /><span class="p">➜</span>  Network: <span class="dim">http://100.84.61.20:5173/</span>
+<br /><span class="dim">[vite]</span> hmr update <span class="cmd">/src/shell/Shell.tsx</span>
+<br /><span class="dim">[vite]</span> hmr update <span class="cmd">/src/shell/Shell.tsx</span> <span class="dim">(x2)</span>
+<br /><span class="dim">[vite]</span> hmr update <span class="cmd">/src/index.css</span>
+<br /><span class="dim">[vite]</span> page reload <span class="cmd">/src/shell/TerminalWorkspace.tsx</span>
+            </div>
+            <div class="drop-hint" style="inset: 10px; justify-content: flex-start; padding-left: 26px;">Drop to dock chat here</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STATUS BAR -->
+  <div class="statusbar">
+    <span class="item">⌥ main</span>
+    <span class="item"><span style="color:var(--green);">✓</span> e2e 38/39</span>
+    <span class="grow"></span>
+    <span class="item">⫿ 2 terminals</span>
+    <span class="item">⇶ broadcast off</span>
+    <span class="item"><span class="status-dot"></span> pi engine ok</span>
+  </div>
+</div>
+
+<div class="anno-card">
+  <h1>06 · Terminal Forward</h1>
+  <div class="sub">The bottom panel graduates to a tmux-grade workspace: 48% tall, one-key splits, zoom, named layout presets, broadcast — and chats dock into it like any other tab.</div>
+  <ol>
+    <li><b>Top bar earns its 34px.</b> Brand, workspace switcher, ⌘K palette, model + engine health — no dead chrome.</li>
+    <li><b>Two chats at once — one up, one down.</b> Chats are ordinary tabs: "Layout redesign" lives in the editor group while "Fix e2e flake" is docked in the terminal workspace.</li>
+    <li><b>Projects leave the sidebar.</b> The "thinkrail / main ▾" pill switches project + worktree from the top bar; no always-open panel.</li>
+    <li><b>THE fix: terminal as workspace, not drawer.</b> 48% of the column, ⌘D splits, ⇶ broadcast, ▤ layouts (tall · fat · grid), ⇱ move to editor area, ⤢ maximize (⌘⇧J) — the tmux/kitty checklist.</li>
+    <li><b>Explorer on the left,</b> fixed 220px, where IDE muscle memory expects files.</li>
+    <li><b>Every tab is portable.</b> Chat, file and terminal tabs drag between both strips — the ghost + "Drop to dock chat here" show a chat landing beside a terminal pane.</li>
+  </ol>
+  <span class="pill accent tag">Pattern: tmux/kitty · iTerm2 · VS Code panel</span>
+</div>
+<button class="anno-toggle" onclick="document.body.classList.toggle('hide-anno'); this.textContent = document.body.classList.contains('hide-anno') ? 'Show notes' : 'Hide notes';" style="bottom: auto; top: 46px;">Hide notes</button>
+</body>
+</html>

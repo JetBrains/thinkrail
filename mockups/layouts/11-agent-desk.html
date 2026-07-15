@@ -1,0 +1,193 @@
+<!doctype html>
+<!-- Mockup 11 — AGENT DESK. Devin's model: the unit of the UI is a SESSION = chat + that agent's own
+     workbench. Sessions are top-level tabs floating in a compact 34px top bar; the body is the active
+     session's split — conversation (38%) + the agent's desk (62%: Plan/Editor/Shell/Changes/Browser as
+     uniform swappable surfaces, spectator view, take-over-able). Terminal and files are PER-AGENT
+     surfaces attached to each conversation, not global panels. Static design artifact, not app code. -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>11 · Agent Desk</title>
+<link rel="stylesheet" href="kit.css" />
+<style>
+  .app { display: grid; grid-template-rows: 34px 1fr 22px; height: 100vh; min-width: 1280px; }
+  /* kit sizes dots only inside .tab; bare .chat/.term kit rules also collide — color via .d-* here */
+  .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+  .dot.d-chat { background: var(--primary); } .dot.d-term { background: var(--green); }
+  /* top bar = the session switcher */
+  .topbar { display: flex; align-items: center; gap: 12px; padding: 0 12px; border-bottom: 1px solid var(--border2); background: var(--bg-dark); position: relative; }
+  .sess-strip { display: flex; align-items: center; gap: 3px; height: 26px; padding: 2px; background: var(--white-5); border: 1px solid var(--border2); border-radius: 8px; position: relative; }
+  .sess { display: inline-flex; align-items: center; gap: 7px; height: 20px; padding: 0 11px; border-radius: 6px; font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .sess:hover { background: var(--hover); }
+  .sess.active { background: var(--hover); color: var(--text); }
+  .sess-strip .icon-btn { width: 22px; height: 20px; font-size: 12px; position: relative; }
+  /* body: conversation | desk */
+  .main { display: flex; min-height: 0; position: relative; }
+  .convo { width: 38%; min-width: 430px; display: flex; flex-direction: column; border-right: 1px solid var(--border2); }
+  .convo-hd { height: 32px; flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--border2); font-size: 12px; color: var(--hint); }
+  .convo .chat { flex: 1; min-height: 0; }
+  .tool-row .dim { color: var(--hint); }
+  .desk { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
+  .desk-hd { height: 34px; flex-shrink: 0; display: flex; align-items: center; gap: 4px; padding: 0 10px; border-bottom: 1px solid var(--border2); background: var(--bg-dark); position: relative; }
+  .dtab { display: inline-flex; align-items: center; gap: 7px; padding: 4px 13px; border-radius: 6px; font-size: 12px; color: var(--hint); position: relative; }
+  .dtab:hover { background: var(--hover); color: var(--muted); }
+  .dtab.active { background: var(--primary-20); color: var(--text); font-weight: 500; }
+  .dtab .g { font-size: 11px; opacity: .85; }
+  .dtab .n { font-size: 10px; color: var(--hint); background: var(--white-5); border: 1px solid var(--border2); border-radius: 999px; padding: 0 5px; line-height: 14px; }
+  .desk-bd { flex: 1; min-height: 0; position: relative; overflow: hidden; }
+  /* live-edit rows in the agent's editor */
+  .cl.live { background: var(--green-tint); }
+  .cl.live .ln { color: var(--green); }
+  .takeover { position: absolute; top: 10px; right: 16px; z-index: 38; display: inline-flex; align-items: center; gap: 7px; background: var(--elevated); border: 1px solid var(--border2); border-radius: 999px; box-shadow: var(--shadow-md); padding: 4px 12px; font-size: 11.5px; color: var(--muted); }
+  .takeover .link { color: var(--primary); font-weight: 600; cursor: pointer; }
+  /* the agent's last actions streaming by */
+  .ticker { height: 26px; flex-shrink: 0; display: flex; align-items: center; gap: 9px; padding: 0 12px; border-top: 1px solid var(--border2); background: var(--bg-dark); font-family: var(--font-mono); font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; }
+  .ticker .ok { color: var(--green); } .ticker .dim { color: var(--hint); }
+  /* Shell peek (inset preview of the Shell surface) */
+  .peek { position: absolute; right: 14px; bottom: 14px; z-index: 36; width: 380px; height: 170px; display: flex; flex-direction: column; background: var(--elevated); border: 1px solid var(--border2); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); }
+  .peek-hd { height: 26px; flex-shrink: 0; display: flex; align-items: center; gap: 7px; padding: 0 10px; font-size: 10.5px; text-transform: uppercase; letter-spacing: .7px; color: var(--hint); border-bottom: 1px solid var(--border2); }
+  .peek .term { flex: 1; height: auto; border-radius: 0 0 7px 7px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- compact 34px top bar: brand · project pill · SESSION tabs · status -->
+  <div class="topbar">
+    <span class="brand">ThinkRail</span>
+    <span style="position:relative;">
+      <span class="pill">📁 thinkrail <span style="color:var(--hint);">▾</span></span>
+      <div class="anno fix" style="right:-10px; top:-4px;">3</div>
+    </span>
+    <span style="flex:1"></span>
+    <div class="sess-strip">
+      <div class="anno fix" style="left:-10px; top:3px;">1</div>
+      <span class="sess active"><span class="dot d-chat"></span> Layout redesign</span>
+      <span class="sess"><span class="dot busy"></span> Fix e2e flake</span>
+      <span class="sess"><span class="dot d-chat"></span> Refactor tabs</span>
+      <button class="icon-btn" title="New session">＋</button>
+      <button class="icon-btn" title="Split sessions side-by-side">◫<div class="anno fix" style="right:-11px; top:2px;">2</div></button>
+    </div>
+    <span style="flex:1"></span>
+    <div style="display:flex; align-items:center; gap:10px;">
+      <span class="status-dot"></span>
+      <button class="icon-btn" title="Settings">⚙</button>
+    </div>
+  </div>
+
+  <div class="main">
+
+    <!-- LEFT 38% — the conversation -->
+    <div class="convo">
+      <div class="convo-hd">
+        <span class="dot d-chat"></span>
+        <span style="color:var(--text); font-weight:500;">Layout redesign</span>
+        <span>·</span><span>⌥ main</span><span>·</span>
+        <span style="font-family:var(--font-mono); font-size:11px;">claude-fable-5</span>
+        <span style="flex:1"></span>
+        <button class="icon-btn" style="width:22px; height:22px;">⋯</button>
+      </div>
+      <div class="chat">
+        <div class="chat-scroll">
+          <div class="msg-user">Add a 2×2 chat grid to the shell so I can watch several agents at once.</div>
+          <div class="msg-think">Reading the shell layout and the tab store…</div>
+          <div class="tool-row"><span class="ok">✓</span> Read apps/web/src/shell/Shell.tsx</div>
+          <div class="tool-row"><span class="ok">✓</span> Read apps/web/src/panels/CenterTabs.tsx</div>
+          <div class="msg-ai"><p>The center renders a single <b>CenterTabs</b> strip — there is no split container. I'll introduce <b>pane groups</b> so each group hosts its own tab strip, then wire tab drag-and-drop between groups. Follow along on the desk →</p></div>
+          <div class="tool-row"><span style="color:var(--text);">Plan</span> <span class="ok">1 ✓ read shell</span> <span class="dim">·</span> <span class="ok">2 ✓ add pane groups</span> <span class="dim">·</span> <span class="run">3 ● wire tab DnD</span> <span class="dim">· 4 ○ e2e</span></div>
+          <div class="tool-row"><span class="ok">✓</span> Edit apps/web/src/shell/Shell.tsx <span class="dim">— PaneGroup extracted</span></div>
+          <div class="tool-row"><span class="run">●</span> Edit apps/web/src/shell/Shell.tsx <span class="dim">— wiring tab DnD…</span></div>
+          <div class="msg-ai"><p>Pane groups are in — two hunks on <b>Shell.tsx</b> so far, typecheck green after each. The desk on the right is showing the edit live.</p></div>
+        </div>
+        <div class="composer">
+          <div class="row"><span class="grow">Reply to the agent…</span><span class="send">➤</span></div>
+          <div class="row"><span class="model">claude-fable-5 · thinking: high</span><span class="grow"></span><span class="kbd">⏎ send</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT 62% — THE AGENT'S DESK -->
+    <div class="desk">
+      <div class="desk-hd">
+        <span class="dtab"><span class="g">☰</span> Plan <span class="n">2/4</span></span>
+        <span class="dtab active"><span class="dot busy"></span> Editor</span>
+        <span class="dtab"><span class="g">❯</span> Shell</span>
+        <span class="dtab"><span class="g">±</span> Changes <span class="n">2</span><div class="anno fix" style="right:-9px; top:-8px;">5</div></span>
+        <span class="dtab"><span class="g">◍</span> Browser<div class="anno fix" style="right:-9px; top:-8px;">6</div></span>
+        <span style="flex:1"></span>
+        <span style="font-size:11px; color:var(--hint); margin-right:120px;">Shell.tsx — agent's cursor at 13:52</span>
+      </div>
+
+      <div class="desk-bd">
+        <!-- the agent's live editor view -->
+        <div class="editor">
+          <div class="cl"><span class="ln">1</span><span><span class="k">import</span> { useTabStore } <span class="k">from</span> <span class="s">"../store/tabs"</span>;</span></div>
+          <div class="cl"><span class="ln">2</span><span><span class="k">import</span> { PaneGroup, DropEdge } <span class="k">from</span> <span class="s">"./PaneGroup"</span>;</span></div>
+          <div class="cl"><span class="ln">3</span><span>&nbsp;</span></div>
+          <div class="cl"><span class="ln">4</span><span><span class="c">// Shell: arranges panes; panels stay layout-agnostic.</span></span></div>
+          <div class="cl"><span class="ln">5</span><span><span class="k">export function</span> <span class="f">Shell</span>() {</span></div>
+          <div class="cl"><span class="ln">6</span><span>  <span class="k">const</span> <span class="v">groups</span> = <span class="f">useTabStore</span>((s) =&gt; s.<span class="v">groups</span>);</span></div>
+          <div class="cl"><span class="ln">7</span><span>  <span class="k">const</span> <span class="v">moveTab</span> = <span class="f">useTabStore</span>((s) =&gt; s.<span class="v">moveTab</span>);</span></div>
+          <div class="cl"><span class="ln">8</span><span>&nbsp;</span></div>
+          <div class="cl"><span class="ln">9</span><span>  <span class="k">return</span> (</span></div>
+          <div class="cl"><span class="ln">10</span><span>    &lt;<span class="t">div</span> <span class="v">className</span>=<span class="s">"flex h-full min-h-0"</span>&gt;</span></div>
+          <div class="cl"><span class="ln">11</span><span>      {<span class="v">groups</span>.<span class="f">map</span>((g) =&gt; (</span></div>
+          <div class="cl live"><span class="ln"><span class="badge-add">+</span> 12</span><span>        &lt;<span class="t">PaneGroup</span> <span class="v">key</span>={g.id} <span class="v">group</span>={g} <span class="v">onDropTab</span>={moveTab} /&gt;</span></div>
+          <div class="cl"><span class="ln">13</span><span>      ))}</span></div>
+          <div class="cl live"><span class="ln"><span class="badge-add">+</span> 14</span><span>      &lt;<span class="t">DropEdge</span> <span class="v">side</span>=<span class="s">"right"</span> <span class="v">onDrop</span>={(t) =&gt; <span class="f">splitGroup</span>(t)} /&gt;<span class="cursor">&nbsp;</span></span></div>
+          <div class="cl"><span class="ln">15</span><span>    &lt;/<span class="t">div</span>&gt;</span></div>
+          <div class="cl"><span class="ln">16</span><span>  );</span></div>
+          <div class="cl"><span class="ln">17</span><span>}</span></div>
+        </div>
+
+        <div class="takeover"><span class="status-dot warn"></span> agent is editing — <span class="link">take over</span></div>
+
+        <!-- surfaces split like tabs: drag ghost + right-half drop hint -->
+        <div class="drop-hint" style="left:50%; top:8px; right:10px; bottom:196px;">◫ Split desk</div>
+        <div class="drag-ghost" style="left:46.5%; top:112px;"><span class="dot d-term"></span> Shell</div>
+
+        <!-- PEEK of the Shell surface: each agent carries its own terminal -->
+        <div class="peek">
+          <div class="anno fix" style="left:-9px; top:-9px;">4</div>
+          <span class="pill accent" style="position:absolute; top:-12px; right:44px; background:var(--elevated);">each agent carries its own shell</span>
+          <div class="peek-hd"><span class="dot d-term"></span> Shell — agent <span style="flex:1"></span><span title="Open as desk tab">⤢</span></div>
+          <div class="term">
+<span class="p">➜ main</span> <span class="cmd">bun run e2e</span>
+<br /><span class="dim">$ playwright test --grep-invert @agent</span>
+<br /><span class="ok">✓</span> workspaces.spec.ts <span class="dim">(9 passed)</span>
+<br /><span class="warn">⚠ editor.spec.ts:41 flaky — retried ×2, passed</span>
+<br /><span class="ok">✓</span> 46 passed <span class="dim">· 1 flaky · 84s</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- slim activity ticker: the agent's last actions streaming by -->
+      <div class="ticker"><span class="dim">▸</span> bun run typecheck <span class="ok">✓</span> <span class="dim">·</span> edit Shell.tsx (2 hunks) <span class="dim">·</span> <span class="dim">next: wire tab DnD</span></div>
+    </div>
+  </div>
+
+  <div class="statusbar">
+    <span class="item"><span class="status-dot warn"></span> 3 sessions · 1 needs input</span>
+    <span class="grow"></span>
+    <span class="item"><span style="color:var(--hint);">you are watching:</span> Layout redesign</span>
+    <span class="item"><span class="status-dot"></span> pi engine ok</span>
+  </div>
+</div>
+
+<!-- concept explainer -->
+<div class="anno-card" style="left:16px; right:auto;">
+  <h1>11 · Agent Desk</h1>
+  <div class="sub">Devin's model: the unit of the UI is a session — the chat plus <i>that agent's own workbench</i>. Shell, editor, plan and diffs are per-agent surfaces attached to the conversation, not global panels. You spectate the desk; you can take any surface over.</div>
+  <ol>
+    <li><b>Top bar = session switcher.</b> Sessions are the app's top-level tabs, floating in the 34px bar itself — no dead chrome.</li>
+    <li><b>Side-by-side agents.</b> Each session is one full screen; ◫ opens two sessions next to each other — grids come from splitting <i>sessions</i>, not center tabs.</li>
+    <li><b>No tree panel at all.</b> The project is a pill; each session carries its own worktree (⌥ main). Nothing idles at 18% width.</li>
+    <li><b>Per-agent shell.</b> Every agent brings its own terminal — peeked here, full desk height when its tab is active.</li>
+    <li><b>Files live with the work.</b> Editor/Changes sit on the agent's desk, always one tab away from the conversation they belong to.</li>
+    <li><b>Uniform, splittable surfaces.</b> Plan/Editor/Shell/Changes are swappable desk tabs — drag one to a half to split the desk.</li>
+  </ol>
+  <span class="pill accent tag">Pattern: Devin workspace · Warp agent panes</span>
+</div>
+<button class="anno-toggle" onclick="document.body.classList.toggle('hide-anno'); this.textContent = document.body.classList.contains('hide-anno') ? 'Show notes' : 'Hide notes';" style="bottom: auto; top: 46px;">Hide notes</button>
+</body>
+</html>

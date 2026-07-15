@@ -1,0 +1,135 @@
+<!doctype html>
+<!-- Mockup 00 — CURRENT BASELINE (as shipped today) with the 6 reported problems annotated.
+     Not a proposal: the reference point every other concept is measured against. -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>00 · Current baseline (annotated)</title>
+<link rel="stylesheet" href="kit.css" />
+<style>
+  .app { display: grid; grid-template-rows: 38px 1fr; height: 100vh; }
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 14px; border-bottom: 1px solid var(--border2); background: var(--bg-dark);
+    position: relative;
+  }
+  .main { display: flex; min-height: 0; position: relative; }
+  .left { width: 18%; min-width: 170px; border-right: 1px solid var(--border2); position: relative; }
+  .center { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
+  .right { width: 30%; min-width: 280px; border-left: 1px solid var(--border2); display: flex; flex-direction: column; position: relative; }
+  .right-files { height: 60%; display: flex; flex-direction: column; min-height: 0; border-bottom: 1px solid var(--border2); position: relative; }
+  .right-terms { height: 40%; display: flex; flex-direction: column; min-height: 0; position: relative; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <span class="brand">ThinkRail</span>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);"><span class="status-dot"></span> Connected</span>
+      <button class="icon-btn" title="Settings">⚙</button>
+    </div>
+    <div class="anno" style="left: 50%; top: 9px;">1</div>
+  </div>
+
+  <div class="main">
+    <!-- LEFT: projects / workspaces tree -->
+    <div class="left pane">
+      <div class="anno" style="right: 10px; top: 8px;">3</div>
+      <div class="pane-bd tree">
+        <div class="tree-sec">Projects</div>
+        <div class="tree-item"><span class="twisty">▾</span><span class="ico">📁</span> thinkrail</div>
+        <div class="tree-item sel indent-1"><span class="ico">⌥</span> main <span style="margin-left:auto;" class="badge-mod">●</span></div>
+        <div class="tree-item indent-1"><span class="ico">⌥</span> feat/layout-v2</div>
+        <div class="tree-item indent-1"><span class="ico">⌥</span> fix/tab-dnd</div>
+        <div class="tree-item indent-1" style="color:var(--hint);"><span class="ico">＋</span> New workspace…</div>
+        <div class="tree-item"><span class="twisty">▸</span><span class="ico">📁</span> pi-extensions</div>
+        <div class="tree-item" style="color:var(--hint);"><span class="ico">＋</span> Add project…</div>
+      </div>
+    </div>
+
+    <!-- CENTER: single tab strip, one visible tab -->
+    <div class="center">
+      <div class="tabstrip">
+        <span class="tab active"><span class="dot chat"></span> Layout redesign <span class="close">✕</span></span>
+        <span class="tab"><span class="dot file"></span> Shell.tsx <span class="close">✕</span></span>
+        <span class="tab"><span class="dot file"></span> tokens.css <span class="close">✕</span></span>
+        <span class="tab"><span class="dot busy"></span> Fix e2e flake <span class="close">✕</span></span>
+        <span class="tab-plus" title="New chat">＋</span>
+        <span style="flex:1"></span>
+        <span class="tab-plus" title="History">🕘</span>
+        <div class="anno" style="right: 90px; top: 5px;">6</div>
+      </div>
+      <div class="chat" style="position:relative;">
+        <div class="anno" style="right: 14px; top: 48px;">2</div>
+        <div class="chat-scroll">
+          <div class="msg-user">Add a 2×2 chat grid to the shell so I can watch several agents at once.</div>
+          <div class="msg-think">Reading the shell layout and the tab store…</div>
+          <div class="tool-row"><span class="ok">✓</span> Read apps/web/src/shell/Shell.tsx</div>
+          <div class="tool-row"><span class="ok">✓</span> Read apps/web/src/panels/CenterTabs.tsx</div>
+          <div class="msg-ai"><p>The center area renders a single <b>CenterTabs</b> strip with one visible tab — there is no split container. To get a grid we'd introduce pane groups in the shell and let each group host its own tab strip.</p></div>
+          <div class="tool-row"><span class="run">●</span> Edit apps/web/src/shell/Shell.tsx <span class="dim">— running…</span></div>
+        </div>
+        <div class="composer">
+          <div class="row"><span class="grow">Reply to the agent…</span><span class="send">➤</span></div>
+          <div class="row"><span class="model">claude-fable-5 · thinking: high</span><span class="grow"></span><span class="kbd">⏎ send</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: files/specs/changes over terminals -->
+    <div class="right">
+      <div class="right-files">
+        <div class="anno" style="left: -10px; top: 8px;">5</div>
+        <div class="minitabs">
+          <span class="minitab active">Specs</span>
+          <span class="minitab">All files</span>
+          <span class="minitab">Changes</span>
+          <span style="flex:1"></span><span class="icon-btn" style="width:20px;height:20px;font-size:11px;">↻</span>
+        </div>
+        <div class="pane-bd tree">
+          <div class="tree-item"><span class="twisty">▾</span><span class="ico">◎</span> goal-and-requirements <span class="pill green" style="margin-left:auto;font-size:9px;padding:0 6px;">active</span></div>
+          <div class="tree-item indent-1"><span class="twisty">▾</span><span class="ico">◈</span> architecture</div>
+          <div class="tree-item indent-2"><span class="ico">▤</span> packages/server</div>
+          <div class="tree-item indent-2"><span class="ico">▤</span> packages/contracts</div>
+          <div class="tree-item indent-2 sel"><span class="ico">▤</span> apps/web</div>
+          <div class="tree-item indent-3"><span class="ico">▢</span> shell <span class="pill gold" style="margin-left:auto;font-size:9px;padding:0 6px;">draft</span></div>
+          <div class="tree-item indent-3"><span class="ico">▢</span> chat</div>
+          <div class="tree-item indent-3"><span class="ico">▢</span> panels</div>
+        </div>
+      </div>
+      <div class="right-terms">
+        <div class="anno" style="left: -10px; top: 8px;">4</div>
+        <div class="minitabs">
+          <span class="minitab active">zsh</span>
+          <span class="minitab">bun dev</span>
+          <span class="minitab" style="letter-spacing:0;">＋</span>
+        </div>
+        <div class="pane-bd term">
+<span class="p">➜ main</span> <span class="cmd">bun run e2e</span>
+<br /><span class="dim">$ playwright test --grep-invert @agent</span>
+<br /><span class="ok">✓</span> projects.spec.ts (6 passed)
+<br /><span class="ok">✓</span> workspaces.spec.ts (9 passed)
+<br /><span class="warn">…</span> editor.spec.ts — <span class="dim">line clipped, panel too short</span>
+<br /><span class="p">➜ main</span> <span class="cursor">&nbsp;</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="anno-card">
+  <h1>00 · Current baseline</h1>
+  <div class="sub">What ships today — with the six reported problems pinned where they live.</div>
+  <ol>
+    <li><b>Dead top bar.</b> A full 38px row carries only the logo, a status dot and one gear.</li>
+    <li><b>One chat at a time.</b> The center shows a single tab; no side-by-side (1×2 / 2×2) chats.</li>
+    <li><b>Left panel over-budget.</b> Projects/workspaces are switched rarely, yet hold ~18% width all day.</li>
+    <li><b>Terminal squeezed.</b> Terminals get ~40% of the right column — a few short lines.</li>
+    <li><b>Files on the wrong side.</b> Specs/Files/Changes sit top-right; most IDE users look left.</li>
+    <li><b>Tabs are locked in place.</b> Chat/file/terminal tabs can't be dragged between areas or split.</li>
+  </ol>
+</div>
+<button class="anno-toggle" onclick="document.body.classList.toggle('hide-anno'); this.textContent = document.body.classList.contains('hide-anno') ? 'Show notes' : 'Hide notes';" style="bottom: auto; top: 46px;">Hide notes</button>
+</body>
+</html>

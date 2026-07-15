@@ -1,0 +1,303 @@
+<!doctype html>
+<!-- Mockup 03 — "UNIVERSAL TILES": everything is a dockable tab (Dockview / JupyterLab-Lumino model).
+     Every pane — files, editor, chat, terminal — is the same tile with the same tab strip. Drag a tab
+     anywhere: a 5-zone drop overlay appears (center = merge, edges = split). Panels float, pop out to
+     browser windows, and the whole arrangement serializes into named layout presets ("Deep Work").
+     Headline scene: a zsh tab mid-drag over the center-bottom chat pane, bottom zone hot. -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>03 · Universal Tiles</title>
+<link rel="stylesheet" href="kit.css" />
+<style>
+  .app { display: grid; grid-template-rows: 34px 1fr 22px; height: 100vh; min-width: 1280px; }
+  .pane { position: relative; }
+  /* top bar */
+  .topbar {
+    display: grid; grid-template-columns: 1fr minmax(340px, 440px) 1fr; align-items: center; gap: 14px;
+    padding: 0 12px; border-bottom: 1px solid var(--border2); background: var(--bg-dark);
+  }
+  .tb-left, .tb-right { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .tb-right { justify-content: flex-end; }
+  .tb-search {
+    position: relative; height: 24px; border-radius: 999px;
+    background: var(--bg-input); border: 1px solid var(--border2);
+    color: var(--hint); font-size: 12px;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  /* tile grid: left column full height; center+right share a bottom terminal strip */
+  .main { display: flex; min-height: 0; position: relative; }
+  .col-left { width: 24%; min-width: 240px; display: flex; flex-direction: column; min-height: 0; }
+  .main-right { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+  .upper { flex: 1; min-height: 0; display: flex; }
+  .col-center { flex: 44; min-width: 0; display: flex; flex-direction: column; }
+  .col-right { flex: 32; min-width: 0; display: flex; flex-direction: column; }
+  .bottomstrip { height: 24%; min-height: 168px; }
+  .strip-tools { display: flex; align-items: center; gap: 2px; padding: 0 6px; position: relative; }
+  /* while notes are on, keep the bottom pane's controls clear of the fixed anno-card */
+  body:not(.hide-anno) .bottomstrip .strip-tools { margin-right: 348px; }
+  /* kit's .term (terminal body) collides with the tab type-dot; re-flatten it */
+  .tab .dot.term { height: 7px; padding: 0; }
+  /* Dockview-style 5-zone drop overlay (pure divs, drawn on the target tile's content area) */
+  .dz { position: absolute; inset: 30px 0 0 0; z-index: 30; pointer-events: none; }
+  .dz > div { position: absolute; border-radius: var(--radius-sm); }
+  .dz-c { left: 28%; right: 28%; top: 24%; bottom: 32%; background: var(--primary-10); border: 1px solid var(--primary-40); }
+  .dz-t { left: 10px; right: 10px; top: 10px; height: 26px; border: 1.5px dashed var(--primary-40); }
+  .dz-l { left: 10px; top: 44px; bottom: 68px; width: 26px; border: 1.5px dashed var(--primary-40); }
+  .dz-r { right: 10px; top: 44px; bottom: 68px; width: 26px; border: 1.5px dashed var(--primary-40); }
+  .dz-b {
+    left: 10px; right: 10px; bottom: 10px; height: 50px;
+    background: var(--primary-20); border: 1.5px solid var(--primary);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--primary); font-size: 11.5px; font-weight: 600; letter-spacing: 0.3px;
+  }
+  /* floating panel (part of the docking vocabulary: float + pop out) */
+  .floatwin {
+    position: absolute; right: 70px; top: 238px; width: 330px; height: 200px; z-index: 35;
+    background: var(--elevated); border: 1px solid var(--border2); border-radius: var(--radius-lg);
+    box-shadow: 0 14px 44px rgba(0, 0, 0, 0.55); overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ============ 34px top bar: workspace pill · ⌘K · layout presets ============ -->
+  <div class="topbar">
+    <div class="tb-left">
+      <span class="brand">ThinkRail</span>
+      <span class="pill" style="position:relative;">thinkrail / main ▾
+        <span class="anno fix" style="right:-28px; top:-1px;">3</span>
+      </span>
+    </div>
+    <div class="tb-search">
+      <span class="kbd">⌘K</span> search, files, commands
+      <span class="anno fix" style="right:-30px; top:1px;">1</span>
+    </div>
+    <div class="tb-right">
+      <span class="pill accent">Layout: Deep Work ▾</span>
+      <span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);"><span class="status-dot"></span></span>
+      <button class="icon-btn" title="Settings">⚙</button>
+    </div>
+  </div>
+
+  <div class="main">
+
+    <!-- ============ LEFT column (24%): files tile over changes tile — docked here by the user ============ -->
+    <div class="col-left">
+      <div class="pane" style="flex:0 0 55%;">
+        <span class="anno fix" style="right:10px; top:38px;">5</span>
+        <div class="tabstrip">
+          <span class="tab active"><span class="dot file"></span> All files</span>
+          <span class="tab"><span class="dot file"></span> Specs</span>
+          <span class="tab-plus" title="New tab">＋</span>
+        </div>
+        <div class="pane-bd tree">
+          <div class="tree-sec">main — worktree</div>
+          <div class="tree-item"><span class="twisty">▾</span><span class="ico">📁</span> apps</div>
+          <div class="tree-item indent-1"><span class="twisty">▸</span><span class="ico">📁</span> cli</div>
+          <div class="tree-item indent-1"><span class="twisty">▾</span><span class="ico">📁</span> web</div>
+          <div class="tree-item indent-2"><span class="twisty">▾</span><span class="ico">📁</span> src</div>
+          <div class="tree-item sel indent-3"><span class="ico">📄</span> Shell.tsx</div>
+          <div class="tree-item indent-3"><span class="ico">📄</span> CenterTabs.tsx</div>
+          <div class="tree-item indent-3"><span class="ico">📄</span> index.css</div>
+          <div class="tree-item"><span class="twisty">▾</span><span class="ico">📁</span> packages</div>
+          <div class="tree-item indent-1"><span class="twisty">▸</span><span class="ico">📁</span> contracts</div>
+          <div class="tree-item indent-1"><span class="twisty">▸</span><span class="ico">📁</span> server</div>
+          <div class="tree-item indent-1"><span class="twisty">▸</span><span class="ico">📁</span> spec-graph</div>
+          <div class="tree-item"><span class="twisty">▾</span><span class="ico">📁</span> mockups</div>
+          <div class="tree-item indent-1"><span class="twisty">▾</span><span class="ico">📁</span> layouts</div>
+          <div class="tree-item indent-2"><span class="ico">📄</span> 03-universal-tiles.html</div>
+          <div class="tree-item indent-2"><span class="ico">📄</span> kit.css</div>
+          <div class="tree-item"><span class="twisty">▸</span><span class="ico">📁</span> e2e</div>
+          <div class="tree-item"><span class="ico">📄</span> architecture.md</div>
+          <div class="tree-item"><span class="ico">📄</span> AGENTS.md</div>
+        </div>
+      </div>
+      <div class="hsplit"></div>
+      <div class="pane" style="flex:1;">
+        <div class="tabstrip">
+          <span class="tab active"><span class="dot file"></span> Changes</span>
+          <span class="tab-plus" title="New tab">＋</span>
+        </div>
+        <div class="pane-bd tree">
+          <div class="tree-sec">main · 4 files · <span class="badge-add">+353</span> <span class="badge-del">−18</span></div>
+          <div class="tree-item sel"><span class="ico">📄</span> Shell.tsx <span style="margin-left:auto;"></span><span class="badge-add">+41</span> <span class="badge-del">−9</span> <span class="badge-mod">M</span></div>
+          <div class="tree-item"><span class="ico">📄</span> kit.css <span style="margin-left:auto;"></span><span class="badge-add">+282</span> <span class="badge-add">A</span></div>
+          <div class="tree-item"><span class="ico">📄</span> CenterTabs.tsx <span style="margin-left:auto;"></span><span class="badge-add">+18</span> <span class="badge-del">−6</span> <span class="badge-mod">M</span></div>
+          <div class="tree-item"><span class="ico">📄</span> SPEC.md <span style="margin-left:auto;"></span><span class="badge-add">+12</span> <span class="badge-del">−3</span> <span class="badge-mod">M</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="vsplit"></div>
+
+    <div class="main-right">
+      <div class="upper">
+
+        <!-- ============ CENTER column (44%): editor tile over chat tile ============ -->
+        <div class="col-center">
+          <div class="pane" style="flex:0 0 58%;">
+            <div class="tabstrip">
+              <span class="tab active"><span class="dot file"></span> Shell.tsx <span class="close">✕</span></span>
+              <span class="tab"><span class="dot file"></span> tokens.css <span class="close">✕</span></span>
+              <span class="tab-plus" title="New tab">＋</span>
+            </div>
+            <div class="pane-bd editor">
+              <div class="cl"><span class="ln">1</span><span><span class="k">import</span> { <span class="v">useLayoutStore</span> } <span class="k">from</span> <span class="s">"../stores/layoutStore"</span>;</span></div>
+              <div class="cl"><span class="ln">2</span><span><span class="k">import</span> { <span class="t">DockRoot</span>, <span class="t">PaneGroup</span>, <span class="k">type</span> <span class="t">DropZone</span> } <span class="k">from</span> <span class="s">"../dock"</span>;</span></div>
+              <div class="cl"><span class="ln">3</span><span></span></div>
+              <div class="cl"><span class="ln">4</span><span><span class="c">// Shell — every pane is a tile: files, chats, terminals alike.</span></span></div>
+              <div class="cl"><span class="ln">5</span><span><span class="k">export function</span> <span class="f">Shell</span>() {</span></div>
+              <div class="cl"><span class="ln">6</span><span>  <span class="k">const</span> <span class="v">tree</span> = <span class="f">useLayoutStore</span>((<span class="v">s</span>) =&gt; <span class="v">s</span>.<span class="v">tree</span>);</span></div>
+              <div class="cl"><span class="ln">7</span><span>  <span class="k">const</span> <span class="f">applyDrop</span> = (<span class="v">tab</span>: <span class="t">TabId</span>, <span class="v">zone</span>: <span class="t">DropZone</span>) =&gt;</span></div>
+              <div class="cl"><span class="ln">8</span><span>    <span class="v">tree</span>.<span class="f">split</span>(<span class="v">zone</span>.<span class="v">target</span>, <span class="v">zone</span>.<span class="v">edge</span>, <span class="v">tab</span>);</span></div>
+              <div class="cl"><span class="ln">9</span><span></span></div>
+              <div class="cl"><span class="ln">10</span><span>  <span class="k">return</span> (</span></div>
+              <div class="cl"><span class="ln">11</span><span>    &lt;<span class="t">DockRoot</span> <span class="v">tree</span>={<span class="v">tree</span>} <span class="v">onDrop</span>={<span class="v">applyDrop</span>}&gt;</span></div>
+              <div class="cl"><span class="ln">12</span><span>      {<span class="v">tree</span>.<span class="v">groups</span>.<span class="f">map</span>((<span class="v">group</span>) =&gt; (</span></div>
+              <div class="cl"><span class="ln">13</span><span>        &lt;<span class="t">PaneGroup</span> <span class="v">key</span>={<span class="v">group</span>.<span class="v">id</span>} <span class="v">group</span>={<span class="v">group</span>} /&gt;</span></div>
+              <div class="cl"><span class="ln">14</span><span>      ))}</span></div>
+              <div class="cl"><span class="ln">15</span><span>    &lt;/<span class="t">DockRoot</span>&gt;</span></div>
+              <div class="cl"><span class="ln">16</span><span>  );</span></div>
+              <div class="cl"><span class="ln">17</span><span>}</span></div>
+            </div>
+          </div>
+          <div class="hsplit"></div>
+
+          <!-- chat tile with THE HEADLINE: mid-drag ghost + 5-zone drop overlay -->
+          <div class="pane" style="flex:1;">
+            <div class="tabstrip">
+              <span class="tab active"><span class="dot chat"></span> Layout redesign <span class="close">✕</span></span>
+              <span class="tab-plus" title="New chat">＋</span>
+            </div>
+            <div class="chat">
+              <div class="chat-scroll">
+                <div class="msg-user">Add a 2×2 chat grid to the shell so I can watch several agents at once.</div>
+                <div class="tool-row"><span class="ok">✓</span> Read apps/web/src/shell/Shell.tsx</div>
+                <div class="msg-ai"><p>Done — the shell now mounts a <b>DockRoot</b>; every tab group is a tile. Drag any tab to split or merge panes into whatever grid you want.</p></div>
+              </div>
+              <div class="composer">
+                <div class="row"><span class="grow">Reply to the agent…</span><span class="send">➤</span></div>
+                <div class="row"><span class="model">claude-fable-5 · thinking: high</span><span class="grow"></span><span class="kbd">⏎ send</span></div>
+              </div>
+            </div>
+            <!-- 5-zone Dockview drop indicator: center = merge, edges = split; bottom is hot -->
+            <div class="dz">
+              <div class="dz-c"></div>
+              <div class="dz-t"></div>
+              <div class="dz-l"></div>
+              <div class="dz-r"></div>
+              <div class="dz-b">Split down</div>
+            </div>
+            <span class="anno fix" style="left:calc(50% - 44px); top:34%;">6</span>
+            <div class="drag-ghost" style="left:38%; bottom:72px; transform:rotate(-3deg);"><span style="color:var(--green);">●</span> zsh — main</div>
+          </div>
+        </div>
+
+        <div class="vsplit"></div>
+
+        <!-- ============ RIGHT column (32%): ONE full-height tile — a second chat + a terminal tab co-living ============ -->
+        <div class="col-right">
+          <div class="pane" style="flex:1;">
+            <span class="anno fix" style="right:12px; top:40px;">2</span>
+            <div class="tabstrip">
+              <span class="tab active"><span class="dot chat"></span> Fix e2e flake <span class="close">✕</span></span>
+              <span class="tab"><span class="dot term"></span> zsh <span class="close">✕</span></span>
+              <span class="tab-plus" title="New tab">＋</span>
+            </div>
+            <div class="chat">
+              <div class="chat-scroll">
+                <div class="msg-user">changes.spec.ts went flaky on CI — the trace shows the diff panel mounting twice after a layout restore.</div>
+                <div class="msg-think">Reproducing locally with a repeat loop…</div>
+                <div class="tool-row"><span class="ok">✓</span> Bash bun run e2e -- changes --repeat-each 5 <span class="dim">— 2/5 failed</span></div>
+                <div class="tool-row"><span class="ok">✓</span> Read e2e/changes.spec.ts</div>
+                <div class="tool-row"><span class="ok">✓</span> Read e2e/global-setup.ts</div>
+                <div class="msg-ai"><p>Found it: the assertion races the remount. When the serialized layout is applied, the pane group re-keys, so <b>expect(diffPanel).toBeVisible()</b> can land on the unmounting instance.</p><p>Playwright <b>1.49.1</b> fixes the trace-replay double-mount and adds the polling we need. Want me to bump <b>@playwright/test</b> in the root catalog and re-run the loop 20×?</p></div>
+              </div>
+              <div class="composer">
+                <div class="row"><span class="grow">Reply — the agent is waiting…</span><span class="send">➤</span></div>
+                <div class="row"><span class="model">claude-fable-5 · thinking: high</span><span class="grow"></span><span class="kbd">⏎ send</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="hsplit"></div>
+
+      <!-- ============ BOTTOM strip (center+right only): wide terminal tile ============ -->
+      <div class="pane bottomstrip">
+        <div class="tabstrip">
+          <span class="tab active"><span class="dot term"></span> e2e <span class="close">✕</span></span>
+          <span class="tab"><span class="dot file"></span> Problems</span>
+          <span class="tab-plus" title="New terminal">＋</span>
+          <span style="flex:1"></span>
+          <span class="strip-tools">
+            <span class="anno fix" style="right:8px; top:-13px;">4</span>
+            <button class="icon-btn" title="Maximize pane">⤢</button>
+          </span>
+        </div>
+        <div class="pane-bd term">
+<span class="p">➜ main</span> <span class="cmd">bun run e2e</span>
+<br /><span class="dim">$ playwright test --config e2e/playwright.config.ts --grep-invert @agent</span>
+<br /><span class="dim">Running 46 tests using 4 workers</span>
+<br /><span class="ok">✓</span> projects.spec.ts:12 › create project from local path <span class="dim">(1.8s)</span>
+<br /><span class="ok">✓</span> workspaces.spec.ts:31 › new worktree gets its own branch <span class="dim">(2.4s)</span>
+<br /><span class="ok">✓</span> editor.spec.ts:44 › monaco tab opens with file dot <span class="dim">(1.6s)</span>
+<br /><span class="err">✕</span> changes.spec.ts:58 › diff panel updates on save <span class="warn">(retry #1 — flaky)</span>
+<br /><span class="dim">45 passed, 1 flaky</span> <span class="ok">(38.2s)</span>
+<br /><span class="p">➜ main</span> <span class="cursor">&nbsp;</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ FLOATING tile: a terminal floated out of the grid (can pop out to a window) ============ -->
+    <span class="anno fix" style="right:392px; top:229px;">4</span>
+    <div class="floatwin">
+      <div class="tabstrip">
+        <span class="tab active"><span class="dot term"></span> bun dev</span>
+        <span style="flex:1"></span>
+        <span class="strip-tools">
+          <button class="icon-btn" title="Pop out to browser window">⧉</button>
+          <button class="icon-btn" title="Close">✕</button>
+        </span>
+      </div>
+      <div class="term" style="flex:1;">
+<span class="dim">$ bun run dev --filter @thinkrail/web</span>
+<br /><span class="cmd">VITE v6.0.7</span> <span class="ok">ready in 389 ms</span>
+<br /><span class="p">➜</span> Local: <span class="cmd">http://localhost:5173/</span>
+<br /><span class="dim">[hmr]</span> shell/Shell.tsx updated <span class="dim">(x3)</span>
+<br /><span class="dim">[hmr]</span> styles/tokens.css updated
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ status bar ============ -->
+  <div class="statusbar">
+    <span class="item">⌥ main</span>
+    <span class="item">layout: Deep Work <span style="color:var(--hint);">(autosaved)</span></span>
+    <span class="grow"></span>
+    <span class="item"><span class="status-dot warn"></span> 2 agents running</span>
+    <span class="item">pi · claude-fable-5</span>
+  </div>
+</div>
+
+<!-- ============ concept annotation ============ -->
+<div class="anno-card">
+  <h1>03 · Universal Tiles</h1>
+  <div class="sub">Every tab — file, chat, terminal — lives in one dockable tile system. Drag a tab anywhere: center merges, edges split. Tiles float, pop out to windows, and arrangements save as presets.</div>
+  <ol>
+    <li><b>Working top bar.</b> ⌘K search/commands + a Layout preset pill ("Deep Work") that saves and restores serialized arrangements.</li>
+    <li><b>Many chats at once.</b> Two chats run side by side in independent tile groups — drag any grid into existence; a terminal tab co-lives with a chat.</li>
+    <li><b>Projects shrunk to a pill.</b> Workspace switching moves to the top bar; no always-open 18% column.</li>
+    <li><b>Terminal unsqueezed.</b> Terminals dock wide at the bottom, float as mini windows, pop out (⧉) to a browser window, or maximize (⤢).</li>
+    <li><b>Files where you want them.</b> The files pane is just a tile — this user docked it left. Any pane docks anywhere.</li>
+    <li><b>Tabs are free.</b> Mid-drag, the 5-zone drop overlay appears on the target pane: center = merge into the group, edges = split ("Split down" shown hot).</li>
+  </ol>
+  <span class="pill accent tag">Pattern: Dockview · JupyterLab · VS Code editor groups</span>
+</div>
+<button class="anno-toggle" onclick="document.body.classList.toggle('hide-anno'); this.textContent = document.body.classList.contains('hide-anno') ? 'Show notes' : 'Hide notes';" style="bottom: auto; top: 46px;">Hide notes</button>
+</body>
+</html>
