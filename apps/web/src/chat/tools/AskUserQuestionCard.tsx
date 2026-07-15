@@ -686,7 +686,7 @@ const RECOMMENDED_PILL =
 
 /**
  * The "Recommended" pill next to an agent-recommended option. When the agent gave a `reason`, a (?)
- * affordance sits *beside* the pill (spaced out, in the body font color) revealing *why* — a Popover
+ * affordance sits *beside* the pill (spaced out, in the muted question-icon color) revealing *why* — a Popover
  * styled as a tooltip, opening on hover (desktop) AND tap (mobile-first: Radix Tooltip never opens on
  * touch, so Popover is the base).
  */
@@ -712,7 +712,7 @@ function RecommendedBadgeWithReason({ reason }: { reason: string }) {
 						onClick={(e) => e.stopPropagation()}
 						onPointerEnter={() => setOpen(true)}
 						onPointerLeave={() => setOpen(false)}
-						className="inline-flex cursor-help text-text transition-opacity hover:opacity-70"
+						className="inline-flex cursor-help text-muted hover:text-text"
 					>
 						<CircleHelp className="size-3" />
 					</span>
