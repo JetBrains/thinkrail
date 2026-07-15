@@ -682,12 +682,13 @@ function OtherOptionRow({
 }
 
 const RECOMMENDED_PILL =
-	"inline-flex items-center gap-0.5 rounded-full bg-primary/15 px-xs py-0 font-medium text-[11px] text-primary";
+	"inline-flex items-center rounded-full bg-primary/15 px-xs py-0 font-medium text-[11px] text-primary";
 
 /**
- * The "Recommended" pill next to an agent-recommended option. When the agent gave a `reason`, the pill
- * grows a (?) affordance revealing *why* — a Popover styled as a tooltip, opening on hover (desktop) AND
- * tap (mobile-first: Radix Tooltip never opens on touch, so Popover is the base).
+ * The "Recommended" pill next to an agent-recommended option. When the agent gave a `reason`, a (?)
+ * affordance sits *beside* the pill (spaced out, in the body font color) revealing *why* — a Popover
+ * styled as a tooltip, opening on hover (desktop) AND tap (mobile-first: Radix Tooltip never opens on
+ * touch, so Popover is the base).
  */
 function RecommendedBadge({ reason }: { reason?: string | undefined }) {
 	if (!reason) {
@@ -700,8 +701,8 @@ function RecommendedBadgeWithReason({ reason }: { reason: string }) {
 	const [open, setOpen] = useState(false);
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
-			<span className={RECOMMENDED_PILL}>
-				Recommended
+			<span className="inline-flex items-center gap-1.5">
+				<span className={RECOMMENDED_PILL}>Recommended</span>
 				<PopoverTrigger asChild>
 					{/* A non-focusable <span>, not a nested <button> (the row is already a <button>): keyboard/AT
 					    reach the reason via the sr-only text in OptionRow. Tapping must NOT select the option. */}
@@ -711,7 +712,7 @@ function RecommendedBadgeWithReason({ reason }: { reason: string }) {
 						onClick={(e) => e.stopPropagation()}
 						onPointerEnter={() => setOpen(true)}
 						onPointerLeave={() => setOpen(false)}
-						className="inline-flex cursor-help text-primary/70 hover:text-primary"
+						className="inline-flex cursor-help text-text transition-opacity hover:opacity-70"
 					>
 						<CircleHelp className="size-3" />
 					</span>
