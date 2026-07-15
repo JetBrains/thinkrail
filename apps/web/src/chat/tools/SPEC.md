@@ -35,6 +35,12 @@ registration runs once when the chat module mounts. Unregistered tools fall back
     on resolve), since react-virtuoso unmounts off-screen rows. This is the pattern the activity fold's
     expansion state reuses.
   - Awaiting an answer, the card carries a subtle primary-tinted accent ring (the "needs you" accent).
+  - **Recommended-reason affordance** — a recommended option (label suffix `(Recommended)` **or** a
+    non-empty `recommendedReason` — a reason *implies* recommended, defensively) shows a (?) glyph on
+    its badge revealing *why*. Mobile-first, so it's a Popover styled as a tooltip (opens on hover **and**
+    tap — Radix Tooltip never opens on touch); tapping it must not select the option (`stopPropagation`),
+    and the reason is mirrored as `sr-only` text in the row for keyboard/AT. **Active card only** — the
+    resolved record is unchanged.
 - **`visualize/`** — `VisualizationCard` dispatches on `args.type` to `DiagramCard` (mermaid → themed
   SVG via the **lazy-loaded** `mermaid`, source fallback on parse error) and `ComparisonCard` (option
   cards with pros/cons + `recommended` highlight); shared `MermaidView` re-renders on `[data-theme]`

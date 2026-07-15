@@ -174,6 +174,11 @@ export interface AskUserQuestionOption {
 	description: string;
 	/** Optional markdown preview shown beside the option (code, ASCII diagram, config). Single-select only. */
 	preview?: string;
+	/**
+	 * Why the agent recommends this option — revealed behind the Recommended badge's (?) affordance.
+	 * Meaningful only on the recommended option; optional + back-compatible (absent → no icon).
+	 */
+	recommendedReason?: string;
 }
 
 /** One question in the questionnaire. */

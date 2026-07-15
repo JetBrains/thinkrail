@@ -75,6 +75,31 @@ test("single-select: Submit is gated, an answer resolves the tool, the record re
 	).toBeVisible({ timeout: 60_000 });
 });
 
+test("recommended option: the (?) affordance reveals why it was recommended", {
+	tag: "@agent",
+}, async ({ page }) => {
+	test.setTimeout(150_000);
+	await ask(
+		page,
+		`Call the ask_user_question tool with EXACTLY ONE single-select question (multiSelect false) offering 3 short options with descriptions and no previews. RECOMMEND one option: make it FIRST, append "(Recommended)" to its label, and set its recommendedReason to a short sentence explaining why. ${ONLY_TOOL}`,
+	);
+
+	const card = activeCard(page);
+	await expect(card).toBeVisible({ timeout: 90_000 });
+
+	// The recommended option carries the (?) affordance; the reason panel is hidden until activated.
+	const why = card.getByTestId("ask-recommended-why").first();
+	await expect(why).toBeVisible();
+	await expect(page.getByTestId("ask-recommended-reason")).toHaveCount(0);
+
+	// Activating it reveals a non-empty reason — and does NOT select the option (stopPropagation).
+	await why.click();
+	const reason = page.getByTestId("ask-recommended-reason");
+	await expect(reason).toBeVisible();
+	await expect(reason).not.toBeEmpty();
+	await expect(card.locator('[data-testid="ask-option"][data-selected="true"]')).toHaveCount(0);
+});
+
 test("multi-select: several options can be checked and submitted", { tag: "@agent" }, async ({
 	page,
 }) => {

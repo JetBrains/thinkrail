@@ -56,8 +56,9 @@ runtime exports being the WS method/channel constants and the protocol version. 
   - the **extension-UI frames** **`ExtUiRequest`** / **`ExtUiResponse`** — our wire shape for pi's in-process
     `uiContext` calls (`select`/`confirm`/`input`/`editor` round-trip; `notify`/`setStatus`/`setWidget`/
     `setTitle`/`dismiss` are fire-and-forget), carried on the `pi.extensionUi` channel.
-  - the **`ask_user_question`** wire types — **`AskUserQuestionArgs`** (`AskUserQuestionItem` + `AskUserQuestionOption`:
-    the questions the agent authors, what the tool card reads from the `toolCall` block) and
+  - the **`ask_user_question`** wire types — **`AskUserQuestionArgs`** (`AskUserQuestionItem` + `AskUserQuestionOption`
+    — the latter carries an optional `recommendedReason` the card reveals behind the Recommended badge's
+    (?) affordance: the questions the agent authors, what the tool card reads from the `toolCall` block) and
     **`AskUserQuestionResult`** (`AskUserQuestionAnswer[]` + `cancelled`: the browser's reply). The capability
     is a **host-owned pi custom tool** (server `agent/askUserQuestion` — see its SPEC for the design
     rationale); the tool blocks while the chat renders the questionnaire **inline** and replies via

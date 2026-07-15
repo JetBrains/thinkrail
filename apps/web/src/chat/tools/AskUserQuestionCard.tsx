@@ -7,12 +7,14 @@ import type {
 import {
 	Check,
 	CircleDot,
+	CircleHelp,
 	ListChecks,
 	MessageCircleQuestion,
 	Pencil,
 	SkipForward,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib";
 import { useChatActions } from "../ChatActions";
 import { Markdown } from "../Markdown";
@@ -42,6 +44,24 @@ export function splitRecommended(label: string): { text: string; recommended: bo
 	return m
 		? { text: label.slice(0, m.index).trim(), recommended: true }
 		: { text: label, recommended: false };
+}
+
+/**
+ * Read an option's recommendation: its display text, whether it's recommended, and the optional "why".
+ * A non-empty `recommendedReason` **implies** recommended (defensive — a model that authors a reason but
+ * forgets the "(Recommended)" suffix must not silently lose the badge). Pure.
+ */
+export function readRecommendation(option: {
+	label: string;
+	recommendedReason?: string | undefined;
+}): {
+	text: string;
+	recommended: boolean;
+	reason?: string | undefined;
+} {
+	const { text, recommended } = splitRecommended(option.label);
+	const reason = option.recommendedReason?.trim() || undefined;
+	return { text, recommended: recommended || !!reason, reason };
 }
 
 /** Per-question local UI state. */
@@ -494,6 +514,7 @@ function QuestionBody({
 								<OptionRow
 									label={opt.label}
 									description={opt.description}
+									recommendedReason={opt.recommendedReason}
 									selected={selected}
 									multi={!!question.multiSelect}
 									onClick={() =>
@@ -558,17 +579,19 @@ function QuestionBody({
 function OptionRow({
 	label,
 	description,
+	recommendedReason,
 	selected,
 	multi,
 	onClick,
 }: {
 	label: string;
 	description: string;
+	recommendedReason?: string | undefined;
 	selected: boolean;
 	multi: boolean;
 	onClick: () => void;
 }) {
-	const { text, recommended } = splitRecommended(label);
+	const { text, recommended, reason } = readRecommendation({ label, recommendedReason });
 	return (
 		<button
 			type="button"
@@ -586,7 +609,9 @@ function OptionRow({
 					<span data-testid="ask-option-label" className="font-medium text-sm text-text">
 						{text}
 					</span>
-					{recommended ? <RecommendedBadge /> : null}
+					{recommended ? <RecommendedBadge reason={reason} /> : null}
+					{/* Keyboard/screen-reader users read the reason here, not from the floating panel. */}
+					{reason ? <span className="sr-only">Recommended because: {reason}</span> : null}
 				</span>
 				{description ? <span className="text-muted text-xs">{description}</span> : null}
 			</span>
@@ -656,12 +681,53 @@ function OtherOptionRow({
 	);
 }
 
-/** The "Recommended" pill next to an agent-recommended option. */
-function RecommendedBadge() {
+const RECOMMENDED_PILL =
+	"inline-flex items-center gap-0.5 rounded-full bg-primary/15 px-xs py-0 font-medium text-[11px] text-primary";
+
+/**
+ * The "Recommended" pill next to an agent-recommended option. When the agent gave a `reason`, the pill
+ * grows a (?) affordance revealing *why* — a Popover styled as a tooltip, opening on hover (desktop) AND
+ * tap (mobile-first: Radix Tooltip never opens on touch, so Popover is the base).
+ */
+function RecommendedBadge({ reason }: { reason?: string | undefined }) {
+	if (!reason) {
+		return <span className={RECOMMENDED_PILL}>Recommended</span>;
+	}
+	return <RecommendedBadgeWithReason reason={reason} />;
+}
+
+function RecommendedBadgeWithReason({ reason }: { reason: string }) {
+	const [open, setOpen] = useState(false);
 	return (
-		<span className="inline-flex items-center rounded-full bg-primary/15 px-xs py-0 font-medium text-[11px] text-primary">
-			Recommended
-		</span>
+		<Popover open={open} onOpenChange={setOpen}>
+			<span className={RECOMMENDED_PILL}>
+				Recommended
+				<PopoverTrigger asChild>
+					{/* A non-focusable <span>, not a nested <button> (the row is already a <button>): keyboard/AT
+					    reach the reason via the sr-only text in OptionRow. Tapping must NOT select the option. */}
+					<span
+						data-testid="ask-recommended-why"
+						aria-hidden="true"
+						onClick={(e) => e.stopPropagation()}
+						onPointerEnter={() => setOpen(true)}
+						onPointerLeave={() => setOpen(false)}
+						className="inline-flex cursor-help text-primary/70 hover:text-primary"
+					>
+						<CircleHelp className="size-3" />
+					</span>
+				</PopoverTrigger>
+			</span>
+			<PopoverContent
+				side="top"
+				data-testid="ask-recommended-reason"
+				onOpenAutoFocus={(e) => e.preventDefault()}
+				onPointerEnter={() => setOpen(true)}
+				onPointerLeave={() => setOpen(false)}
+				className="max-w-[16rem] px-sm py-xs text-text text-xs leading-snug"
+			>
+				{reason}
+			</PopoverContent>
+		</Popover>
 	);
 }
 
