@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { evictSpecIndex, specGraph } from "./specs";
+import { evictSpecIndex, projectHasSpecs, specGraph } from "./specs";
 
 let dataDir: string;
 let worktree: string;
@@ -72,6 +72,27 @@ test("maps spec files to wire DTOs (title falls back to id; absent status/parent
 
 test("throws for an unknown workspace", () => {
 	expect(() => specGraph("nope")).toThrow("Unknown workspace: nope");
+});
+
+test("projectHasSpecs ignores ephemeral task-specs — only a durable spec signals 'set up'", () => {
+	const root = mkdtempSync(join(tmpdir(), "trpi-proj-test-"));
+	try {
+		// A lone scratch task-spec (as brainstorming drops in .thinkrail/context/) must not count.
+		writeFileSync(
+			join(root, "TASK-x.md"),
+			"---\nid: task-x\ntype: task-spec\ntitle: Scratch\n---\n\n## Body\n",
+		);
+		expect(projectHasSpecs(root)).toBe(false);
+
+		// A durable spec flips it to true (revalidate-on-read picks up the new file on the same root).
+		writeFileSync(
+			join(root, "SPEC.md"),
+			"---\nid: real\ntype: module-design\ntitle: Real\n---\n\n## Body\n",
+		);
+		expect(projectHasSpecs(root)).toBe(true);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
 });
 
 test("revalidates on read: a spec added after the first fetch appears on the next", () => {

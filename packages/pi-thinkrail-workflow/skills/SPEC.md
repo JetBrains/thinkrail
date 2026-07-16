@@ -38,8 +38,10 @@ whose workflows are an *example* of a possible future complex workflow, not a te
 - **Artifacts** — the **spec tree** (the durable record: decisions, contracts, limitations,
   principles — everything the code can't reveal) and **temp docs** (scaffolding for one piece of
   work: a task-spec and/or workflow-declared working files), governed by rules 8–9. The split is
-  *lifecycle*, not storage — the task-spec lives in-graph while alive (spec tooling) yet is a temp
-  doc.
+  *lifecycle*, not file type — the task-spec lives in-graph while alive (spec tooling) yet is a temp
+  doc. Temp docs also have a designated *home*: the workspace's gitignored `.thinkrail/context/`
+  (host-seeded per worktree, zero git footprint, still scanned by the spec tools), so they are live for
+  the agent yet never reach the committed tree — durable content lands in the spec tree in place (rule 8).
 
 ## Skill roles & handoff contracts
 
@@ -138,9 +140,10 @@ flowchart LR
    parallel durable plan/state format.
 9. Temp docs are optional and belong to their workflow. When used, the task-spec is the default
    spine — design, plan, pipeline state, and review notes live as its sections; extra working files
-   (resume state, scratch plans) are declared by naming their location and shape. The owning
-   workflow also owns cleanup — delete when the work lands, by default; a temp doc never becomes
-   the record.
+   (resume state, scratch plans) are declared by naming their shape. **All temp docs live in the
+   workspace's gitignored `.thinkrail/context/`** (host-seeded per worktree — see the server's
+   workspaces module — so they never reach the committed tree). The owning workflow also owns cleanup
+   — delete when the work lands, by default; a temp doc never becomes the record.
 
 **Scaling**
 10. Scale by route and composition, not by prose: the router sends simple work down short paths;
