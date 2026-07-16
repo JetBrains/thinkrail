@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import type { FileNode } from "@thinkrail/contracts";
+import { WORKSPACE_INTERNAL_DIR } from "@thinkrail/shared/paths";
 import { loadWorkspaces } from "../persistence";
 
 /** Resolve `path` (relative to the worktree root) to an absolute path, refusing anything that escapes it. */
@@ -19,16 +20,22 @@ function resolveInWorktree(workspaceId: string, path: string): { root: string; a
 export function readDir(workspaceId: string, path: string): FileNode[] {
 	const { root, abs } = resolveInWorktree(workspaceId, path);
 
-	return readdirSync(abs, { withFileTypes: true })
-		.filter((entry) => entry.name !== ".git")
-		.map(
-			(entry): FileNode => ({
-				path: relative(root, join(abs, entry.name)),
-				name: entry.name,
-				kind: entry.isDirectory() ? "dir" : "file",
-			}),
-		)
-		.sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === "dir" ? -1 : 1));
+	return (
+		readdirSync(abs, { withFileTypes: true })
+			// Hide host-managed internals, not project source: `.git` and ThinkRail's own `.thinkrail/`
+			// (the per-workspace ephemeral scratch dir — see @thinkrail/shared/paths).
+			.filter((entry) => entry.name !== ".git" && entry.name !== WORKSPACE_INTERNAL_DIR)
+			.map(
+				(entry): FileNode => ({
+					path: relative(root, join(abs, entry.name)),
+					name: entry.name,
+					kind: entry.isDirectory() ? "dir" : "file",
+				}),
+			)
+			.sort((a, b) =>
+				a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === "dir" ? -1 : 1,
+			)
+	);
 }
 
 /** Read a UTF-8 text file inside a workspace's worktree. `path` is relative to the worktree root. */

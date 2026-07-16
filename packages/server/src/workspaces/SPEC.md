@@ -23,10 +23,11 @@ chats.
   `Workspace.baseBranch` records the base the diff is measured against; **branch name made unique
   against refs *and* worktree dirs** — archiving leaves the branch behind and renaming frees a branch
   name whose worktree directory stays occupied, so candidate names skip both; path
-  `dataDir/worktrees/<project-slug>/<branch>`; **seeds an ephemeral `.thinkrail/context/.gitignore`
-  (content `*`, which ignores the file itself — zero git footprint)** in the new worktree — the
-  per-workspace scratch dir for temp docs (task-specs / working files) that stay out of git yet remain
-  scannable by the spec tools (see [[submodule-workflow-skills]]'s artifacts rules); a **user-supplied name sets `renamed: true`** at create —
+  `dataDir/worktrees/<project-slug>/<branch>`; **seeds the ephemeral per-workspace scratch dir**
+  (`WORKSPACE_CONTEXT_DIR` + a self-ignoring `WORKSPACE_CONTEXT_GITIGNORE` — zero git footprint) in the
+  new worktree, the home for temp docs (task-specs / working files) that stay out of git yet remain
+  scannable by the spec tools (the path convention lives in `@thinkrail/shared/paths`; see
+  [[submodule-workflow-skills]]'s artifacts rules); a **user-supplied name sets `renamed: true`** at create —
   the user already chose, so the auto-namer never touches it; auto-`workspace-N` leaves it unset),
   `renameWorkspace` (**sync**; slugs + uniques the requested name, `git branch -m` from the project repo
   — the branch ref moves and the worktree's HEAD follows, but the **worktree dir never moves** (pi keys
@@ -57,5 +58,6 @@ chats.
 - **Public surface (barrel):** `createWorkspace`, `listWorkspaces`, `forgetWorkspace`, `reclaimWorktree`,
   `removeWorkspace`, `workspaceDiffStats`, `getWorkspace`, `renameWorkspace`, `setWorkspacePublisher`,
   `WorkspaceLifecycleEvent`.
-- **Allowed deps:** `projects` (repo lookup), `git` (the runner), `persistence`; `contracts`; Node.
+- **Allowed deps:** `projects` (repo lookup), `git` (the runner), `persistence`; `contracts`;
+  `@thinkrail/shared/paths` (the scratch-dir path convention); Node.
 - **Forbidden:** `host`; reaching into another feature's internals (use its barrel).

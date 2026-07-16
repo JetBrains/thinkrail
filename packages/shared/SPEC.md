@@ -18,6 +18,8 @@ Exposed through explicit subpath exports, not a barrel.
 - **Owns:** host-side runtime helpers that are neither engine- nor transport-specific.
 - **Public surface:** `@thinkrail/shared/shellEnv` → `resolveShellEnv()`, `pathLooksComplete()`;
   `@thinkrail/shared/freePort` → `findFreePort()`, `isPortFree()`;
+  `@thinkrail/shared/paths` → the worktree-relative path conventions (`WORKSPACE_INTERNAL_DIR`,
+  `WORKSPACE_CONTEXT_DIR`, `WORKSPACE_CONTEXT_GITIGNORE`);
   `@thinkrail/shared/jbcentral` → the full jbcentral protocol: `isJbcentralProxyUrl()` (read) +
   `isJbcentralInstalled()` / `wireJbcentral()` / `unwireJbcentral()` / `launchJbcentralLogin()` (write) + the
   pure transforms/consts they compose (`buildProxyUrls`, `apply`/`removeJbcentralOverrides`,
@@ -35,6 +37,11 @@ Exposed through explicit subpath exports, not a barrel.
 - **/freePort** — `findFreePort(preferred, host?)`: the first free port at or above `preferred`, so a
   host can pick an open port instead of colliding with one already running. `isPortFree(port, host?)`:
   the underlying single-port check.
+- **/paths** — the worktree-relative path conventions ThinkRail owns, named once so the code that
+  *creates* the dir (`workspaces`), *hides* it from the file tree (`fs`), and *ignores* it (git) can't
+  drift: `WORKSPACE_INTERNAL_DIR` (`.thinkrail` — the repo-local host-managed dir, hidden like `.git`),
+  `WORKSPACE_CONTEXT_DIR` (its `context/` scratch dir for temp docs), `WORKSPACE_CONTEXT_GITIGNORE` (the
+  self-ignoring `*` body). Distinct from the *home* state dir `~/.thinkrail` (server `persistence`).
 - **/jbcentral** — the **single home for the JetBrains Central CLI proxy protocol**, both read and write, so
   they can't silently diverge (a co-located drift test asserts `buildProxyUrls` output satisfies
   `isJbcentralProxyUrl`). **Read:** `isJbcentralProxyUrl(url)` (loopback host + `/wire/` path) — how the
