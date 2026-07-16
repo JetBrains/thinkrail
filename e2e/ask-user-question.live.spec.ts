@@ -75,7 +75,7 @@ test("single-select: Submit is gated, an answer resolves the tool, the record re
 	).toBeVisible({ timeout: 60_000 });
 });
 
-test("recommended option: the (?) affordance reveals why it was recommended", {
+test("recommended option: its rationale is shown inline (no interaction needed)", {
 	tag: "@agent",
 }, async ({ page }) => {
 	test.setTimeout(150_000);
@@ -87,16 +87,13 @@ test("recommended option: the (?) affordance reveals why it was recommended", {
 	const card = activeCard(page);
 	await expect(card).toBeVisible({ timeout: 90_000 });
 
-	// The recommended option carries the (?) affordance; the reason panel is hidden until activated.
-	const why = card.getByTestId("ask-recommended-why").first();
-	await expect(why).toBeVisible();
-	await expect(page.getByTestId("ask-recommended-reason")).toHaveCount(0);
-
-	// Activating it reveals a non-empty reason — and does NOT select the option (stopPropagation).
-	await why.click();
-	const reason = page.getByTestId("ask-recommended-reason");
+	// The recommended option's rationale is rendered inline — visible up front, no click, no popover.
+	const reason = card.getByTestId("ask-recommended-reason").first();
 	await expect(reason).toBeVisible();
+	await expect(reason).toContainText("Why:");
 	await expect(reason).not.toBeEmpty();
+
+	// And merely surfacing the rationale must not have selected anything.
 	await expect(card.locator('[data-testid="ask-option"][data-selected="true"]')).toHaveCount(0);
 });
 

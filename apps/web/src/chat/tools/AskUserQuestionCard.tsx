@@ -7,14 +7,12 @@ import type {
 import {
 	Check,
 	CircleDot,
-	CircleHelp,
 	ListChecks,
 	MessageCircleQuestion,
 	Pencil,
 	SkipForward,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib";
 import { useChatActions } from "../ChatActions";
 import { Markdown } from "../Markdown";
@@ -498,8 +496,8 @@ function QuestionBody({
 	return (
 		<div className="flex flex-col gap-md">
 			<div className="flex items-start gap-sm">
-				<MessageCircleQuestion className="mt-0.5 size-4 shrink-0 text-muted" />
-				<p data-testid="ask-question-text" className="font-semibold text-md text-text">
+				<MessageCircleQuestion className="mt-0.5 size-5 shrink-0 text-muted" />
+				<p data-testid="ask-question-text" className="font-semibold text-lg text-text">
 					{question.question}
 				</p>
 			</div>
@@ -599,21 +597,26 @@ function OptionRow({
 			data-selected={selected}
 			onClick={onClick}
 			className={cn(
-				"flex items-start gap-sm rounded-[var(--radius-md)] border px-md py-sm text-left transition-colors",
+				"flex items-start gap-sm rounded-[var(--radius-md)] border px-md py-md text-left transition-colors",
 				selected ? "border-primary bg-primary/10" : "border-border2 hover:bg-hover",
 			)}
 		>
 			<Indicator selected={selected} multi={multi} />
 			<span className="flex min-w-0 flex-col gap-0.5">
 				<span className="flex items-center gap-xs">
-					<span data-testid="ask-option-label" className="font-medium text-sm text-text">
+					<span data-testid="ask-option-label" className="font-medium text-md text-text">
 						{text}
 					</span>
-					{recommended ? <RecommendedBadge reason={reason} /> : null}
-					{/* Keyboard/screen-reader users read the reason here, not from the floating panel. */}
-					{reason ? <span className="sr-only">Recommended because: {reason}</span> : null}
+					{recommended ? <RecommendedBadge /> : null}
 				</span>
-				{description ? <span className="text-muted text-xs">{description}</span> : null}
+				{description ? <span className="text-muted text-sm">{description}</span> : null}
+				{/* The recommendation rationale, inline (not a popover): shown up front for a recommended
+				    option so it reads on touch too, and AT reads it as ordinary visible text. */}
+				{reason ? (
+					<span data-testid="ask-recommended-reason" className="mt-0.5 text-muted text-sm">
+						<span className="font-medium text-primary">Why:</span> {reason}
+					</span>
+				) : null}
 			</span>
 		</button>
 	);
@@ -647,7 +650,7 @@ function OtherOptionRow({
 			data-testid="ask-custom-row"
 			data-selected={active}
 			className={cn(
-				"flex cursor-text items-center gap-sm rounded-[var(--radius-md)] border px-md py-sm transition-colors",
+				"flex cursor-text items-center gap-sm rounded-[var(--radius-md)] border px-md py-md transition-colors",
 				active ? "border-primary bg-primary/10" : "border-border2 hover:bg-hover",
 			)}
 		>
@@ -668,68 +671,29 @@ function OtherOptionRow({
 			) : (
 				<Indicator selected={active} multi={false} className="mt-0" />
 			)}
-			<span className="font-medium text-sm text-text">Other</span>
+			<span className="font-medium text-md text-text">Other</span>
 			<input
 				data-testid="ask-custom"
 				value={text}
 				placeholder="type your own answer…"
 				onFocus={onActivate}
 				onChange={(e) => onText(e.target.value)}
-				className="min-w-0 flex-1 border-none bg-transparent text-sm text-text outline-none placeholder:text-hint"
+				className="min-w-0 flex-1 border-none bg-transparent text-md text-text outline-none placeholder:text-hint"
 			/>
 		</label>
 	);
 }
 
 const RECOMMENDED_PILL =
-	"inline-flex items-center rounded-full bg-primary/15 px-xs py-0 font-medium text-[11px] text-primary";
+	"inline-flex items-center rounded-full bg-primary/15 px-2 py-0.5 font-medium text-[11px] text-primary";
 
 /**
- * The "Recommended" pill next to an agent-recommended option. When the agent gave a `reason`, a (?)
- * affordance sits *beside* the pill (spaced out, in the muted question-icon color) revealing *why* — a Popover
- * styled as a tooltip, opening on hover (desktop) AND tap (mobile-first: Radix Tooltip never opens on
- * touch, so Popover is the base).
+ * The "Recommended" pill next to an agent-recommended option. The rationale is rendered inline in
+ * `OptionRow` (a `Why:` block below the description), not behind this pill — so it's visible up front
+ * and works on touch (a popover/tooltip never opens reliably on touch).
  */
-function RecommendedBadge({ reason }: { reason?: string | undefined }) {
-	if (!reason) {
-		return <span className={RECOMMENDED_PILL}>Recommended</span>;
-	}
-	return <RecommendedBadgeWithReason reason={reason} />;
-}
-
-function RecommendedBadgeWithReason({ reason }: { reason: string }) {
-	const [open, setOpen] = useState(false);
-	return (
-		<Popover open={open} onOpenChange={setOpen}>
-			<span className="inline-flex items-center gap-1.5">
-				<span className={RECOMMENDED_PILL}>Recommended</span>
-				<PopoverTrigger asChild>
-					{/* A non-focusable <span>, not a nested <button> (the row is already a <button>): keyboard/AT
-					    reach the reason via the sr-only text in OptionRow. Tapping must NOT select the option. */}
-					<span
-						data-testid="ask-recommended-why"
-						aria-hidden="true"
-						onClick={(e) => e.stopPropagation()}
-						onPointerEnter={() => setOpen(true)}
-						onPointerLeave={() => setOpen(false)}
-						className="inline-flex cursor-help text-muted hover:text-text"
-					>
-						<CircleHelp className="size-3" />
-					</span>
-				</PopoverTrigger>
-			</span>
-			<PopoverContent
-				side="top"
-				data-testid="ask-recommended-reason"
-				onOpenAutoFocus={(e) => e.preventDefault()}
-				onPointerEnter={() => setOpen(true)}
-				onPointerLeave={() => setOpen(false)}
-				className="max-w-[16rem] px-sm py-xs text-text text-xs leading-snug"
-			>
-				{reason}
-			</PopoverContent>
-		</Popover>
-	);
+function RecommendedBadge() {
+	return <span className={RECOMMENDED_PILL}>Recommended</span>;
 }
 
 /** A radio (single) or checkbox (multi) marker: an accent ring/box, filled when selected. */
@@ -793,8 +757,8 @@ function ReviewView({
 	return (
 		<div className="flex flex-col gap-sm">
 			<div className="flex items-start gap-sm">
-				<MessageCircleQuestion className="mt-0.5 size-4 shrink-0 text-muted" />
-				<p className="font-semibold text-md text-text">Review your answers</p>
+				<MessageCircleQuestion className="mt-0.5 size-5 shrink-0 text-muted" />
+				<p className="font-semibold text-lg text-text">Review your answers</p>
 			</div>
 			<ul className="flex flex-col gap-md">
 				{questions.map((q, i) => (
