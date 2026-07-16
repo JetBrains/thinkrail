@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { DiffStats, Project, Workspace } from "@thinkrail/contracts";
 import { git, gitAsync } from "../git";
@@ -130,6 +130,14 @@ export async function createWorkspace(
 	mkdirSync(dirname(worktreePath), { recursive: true });
 	const added = git(project.path, ["worktree", "add", worktreePath, "-b", branch, baseBranch]);
 	if (!added.ok) throw new Error(`git worktree add failed: ${added.err}`);
+
+	// Ephemeral per-workspace scratch dir for temp docs (task-specs / working files). Its `.gitignore` is
+	// a single `*` — which matches the `.gitignore` itself — so the whole dir has zero git footprint
+	// (nothing in `git status`, nothing committable) while staying scannable by the spec tools (they ignore
+	// only node_modules/.git/dist/build, not .gitignore). See submodule-workflow-skills' artifacts rules.
+	const contextDir = join(worktreePath, ".thinkrail", "context");
+	mkdirSync(contextDir, { recursive: true });
+	writeFileSync(join(contextDir, ".gitignore"), "*\n");
 
 	const workspace: Workspace = {
 		id: randomUUID(),

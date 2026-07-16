@@ -27,8 +27,10 @@ export function evictSpecIndex(workspaceId: string): void {
 const projectIndexes = new Map<string, SpecIndex>();
 
 /**
- * Whether a project's repo root carries **any** registered spec (a file with `id` + `type` frontmatter,
- * anywhere under the root) — the signal the Welcome screen uses for its "Set up project" suggestion.
+ * Whether a project's repo root carries any **durable** spec — a file with `id` + `type` frontmatter,
+ * anywhere under the root, whose `type` is not `task-spec` — the signal the Welcome screen uses for its
+ * "Set up project" suggestion. Ephemeral `task-spec`s (temp docs, e.g. in `.thinkrail/context/`) never
+ * count: a scratch design doc must not make a project look already set up.
  * Uses the same derived, revalidate-on-read index as the agent's spec tools, so it's robust to any spec
  * filename/casing (not just a lowercased `goal-and-requirements.md`) and always reflects the filesystem.
  * A per-root index is reused across reads (welcome, project.list) so its parse cache skips re-reading
@@ -42,7 +44,10 @@ export function projectHasSpecs(root: string): boolean {
 		projectIndexes.set(root, index);
 	}
 	try {
-		return index.graph().nodes.size > 0;
+		for (const node of index.graph().nodes.values()) {
+			if (node.type !== "task-spec") return true;
+		}
+		return false;
 	} catch {
 		return false;
 	}
