@@ -24,7 +24,7 @@ chats.
   against refs *and* worktree dirs** — archiving leaves the branch behind and renaming frees a branch
   name whose worktree directory stays occupied, so candidate names skip both; path
   `dataDir/worktrees/<project-slug>/<branch>`; **seeds the ephemeral per-workspace scratch dir**
-  (`WORKSPACE_CONTEXT_DIR` + a self-ignoring `WORKSPACE_CONTEXT_GITIGNORE` — zero git footprint) in the
+  (`WORKSPACE_CONTEXT_DIR`, with a self-ignoring `*` `.gitignore` — zero git footprint) in the
   new worktree, the home for temp docs (task-specs / working files) that stay out of git yet remain
   scannable by the spec tools (the path convention lives in `@thinkrail/shared/paths`; see
   [[submodule-workflow-skills]]'s artifacts rules); a **user-supplied name sets `renamed: true`** at create —

@@ -19,7 +19,7 @@ Exposed through explicit subpath exports, not a barrel.
 - **Public surface:** `@thinkrail/shared/shellEnv` → `resolveShellEnv()`, `pathLooksComplete()`;
   `@thinkrail/shared/freePort` → `findFreePort()`, `isPortFree()`;
   `@thinkrail/shared/paths` → the worktree-relative path conventions (`WORKSPACE_INTERNAL_DIR`,
-  `WORKSPACE_CONTEXT_DIR`, `WORKSPACE_CONTEXT_GITIGNORE`);
+  `WORKSPACE_CONTEXT_DIR`);
   `@thinkrail/shared/jbcentral` → the full jbcentral protocol: `isJbcentralProxyUrl()` (read) +
   `isJbcentralInstalled()` / `wireJbcentral()` / `unwireJbcentral()` / `launchJbcentralLogin()` (write) + the
   pure transforms/consts they compose (`buildProxyUrls`, `apply`/`removeJbcentralOverrides`,
@@ -41,8 +41,9 @@ Exposed through explicit subpath exports, not a barrel.
   consumers agree (today: `workspaces` *creates* the scratch dir and git *ignores* it):
   `WORKSPACE_INTERNAL_DIR` (`.thinkrail` — the repo-local host-managed dir, today holding the ephemeral
   scratch, the intended home for future host files like a cached spec index; **not** hidden from the file
-  tree), `WORKSPACE_CONTEXT_DIR` (its `context/` scratch dir for temp docs), `WORKSPACE_CONTEXT_GITIGNORE`
-  (the self-ignoring `*` body). Distinct from the *home* state dir `~/.thinkrail` (server `persistence`).
+  tree) and `WORKSPACE_CONTEXT_DIR` (its `context/` scratch dir for temp docs). Distinct from the *home*
+  state dir `~/.thinkrail` (server `persistence`). (The `.gitignore` *body* the host seeds into the
+  scratch dir — a lone `*` — is a one-off inlined at that call site, not a path, so it lives there, not here.)
 - **/jbcentral** — the **single home for the JetBrains Central CLI proxy protocol**, both read and write, so
   they can't silently diverge (a co-located drift test asserts `buildProxyUrls` output satisfies
   `isJbcentralProxyUrl`). **Read:** `isJbcentralProxyUrl(url)` (loopback host + `/wire/` path) — how the

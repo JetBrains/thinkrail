@@ -18,9 +18,3 @@ export const WORKSPACE_INTERNAL_DIR = ".thinkrail";
  * invisible to git.
  */
 export const WORKSPACE_CONTEXT_DIR = `${WORKSPACE_INTERNAL_DIR}/context`;
-
-/**
- * The `.gitignore` body seeded into the context dir: a lone `*` matches the `.gitignore` file itself, so
- * the whole context dir has zero git footprint (nothing in `git status`, nothing committable).
- */
-export const WORKSPACE_CONTEXT_GITIGNORE = "*\n";
