@@ -1,5 +1,5 @@
 import type { GitFileStatus, GitStatus } from "@thinkrail/contracts";
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
 
@@ -20,33 +20,32 @@ const STATUS_COLOR: Record<GitFileStatus, string> = {
 	untracked: "text-green",
 };
 
-/** Changes for the active worktree: changed-file list (vs base) over the selected file's diff. */
+/**
+ * Changes for the active worktree: changed-file list (vs base) over the selected file's diff.
+ * Live: the store's per-workspace fs tick silently re-reads `git.status`; the selection survives while
+ * its path is still listed (its diff is re-read too — the content may have changed), else it clears.
+ */
 export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	const [status, setStatus] = useState<GitStatus | null>(null);
 	const [selected, setSelected] = useState<string | null>(null);
 	const [diff, setDiff] = useState<string | null>(null);
 	const changesRequest = useAppStore((s) => s.changesRequest);
+	const fsTick = useAppStore((s) => s.fsChangesByWorkspace[workspaceId]?.tick ?? 0);
+	// The live selection, readable from the async status refetch without re-running it on select.
+	const selectedRef = useRef<string | null>(null);
 
+	// Hard reset only on workspace switch — a tick refresh keeps the old list until the re-read lands.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: workspaceId is the trigger (reset-on-switch), not a body input
 	useEffect(() => {
-		let cancelled = false;
 		setStatus(null);
 		setSelected(null);
+		selectedRef.current = null;
 		setDiff(null);
-		getTransport()
-			.request("git.status", { workspaceId })
-			.then((s) => {
-				if (!cancelled) setStatus(s);
-			})
-			.catch(() => {
-				if (!cancelled) setStatus({ branch: "", changes: [] });
-			});
-		return () => {
-			cancelled = true;
-		};
 	}, [workspaceId]);
 
 	const selectFile = async (path: string) => {
 		setSelected(path);
+		selectedRef.current = path;
 		setDiff(null);
 		try {
 			const result = await getTransport().request("git.diff", { workspaceId, path });
@@ -55,6 +54,38 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 			setDiff("");
 		}
 	};
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: fsTick is the live-refresh trigger, not a body input
+	useEffect(() => {
+		let cancelled = false;
+		getTransport()
+			.request("git.status", { workspaceId })
+			.then((s) => {
+				if (cancelled) return;
+				setStatus(s);
+				// Reconcile the selection against the fresh list: gone → clear; still there → re-read its
+				// diff QUIETLY (the old diff stays visible until the new one lands — no loading flash).
+				const sel = selectedRef.current;
+				if (sel && !s.changes.some((c) => c.path === sel)) {
+					setSelected(null);
+					selectedRef.current = null;
+					setDiff(null);
+				} else if (sel) {
+					getTransport()
+						.request("git.diff", { workspaceId, path: sel })
+						.then((r) => {
+							if (!cancelled && selectedRef.current === sel) setDiff(r.diff);
+						})
+						.catch(() => {});
+				}
+			})
+			.catch(() => {
+				if (!cancelled) setStatus((prev) => prev ?? { branch: "", changes: [] });
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [workspaceId, fsTick]);
 
 	// A chat deep-link (turn-divider chip) targeting this workspace: select the requested file once the
 	// status list is loaded. Match by suffix so an absolute pi path still resolves to the relative entry.

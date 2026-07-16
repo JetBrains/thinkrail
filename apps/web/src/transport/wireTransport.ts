@@ -4,6 +4,7 @@ import type {
 	ServerWelcome,
 	SessionEventPayload,
 	Workspace,
+	WorkspaceFsChangedPayload,
 	WorkspaceRemoved,
 } from "@thinkrail/contracts";
 import { WS_CHANNELS } from "@thinkrail/contracts";
@@ -56,6 +57,10 @@ export function initTransport(): WsTransport {
 	transport.subscribe(WS_CHANNELS.workspaceRemoved, (data) => {
 		const { projectId, id } = data as WorkspaceRemoved;
 		useAppStore.getState().applyWorkspaceRemoved(projectId, id);
+	});
+
+	transport.subscribe(WS_CHANNELS.workspaceFsChanged, (data) => {
+		useAppStore.getState().noteFsChanged(data as WorkspaceFsChangedPayload);
 	});
 
 	transport.connect();

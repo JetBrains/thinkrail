@@ -11,6 +11,7 @@ import { cancelAllLogins, setLoginPublisher } from "../auth";
 import { resolveWorktreeFile } from "../fs";
 import { listProjects, openProject } from "../projects";
 import { closeAllTerminals, setTerminalPublisher } from "../terminal";
+import { setWatchPublisher, stopAllWatches } from "../watch";
 import { setWorkspacePublisher } from "../workspaces";
 import {
 	isPromptCommitted,
@@ -68,6 +69,7 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 				ws.subscribe(WS_CHANNELS.workspaceCreated);
 				ws.subscribe(WS_CHANNELS.workspaceUpdated);
 				ws.subscribe(WS_CHANNELS.workspaceRemoved);
+				ws.subscribe(WS_CHANNELS.workspaceFsChanged);
 				const welcome: ServerWelcome = {
 					protocolVersion: PROTOCOL_VERSION,
 					projects: listProjects(),
@@ -115,6 +117,15 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		const data =
 			event.kind === "removed" ? { projectId: event.projectId, id: event.id } : event.workspace;
 		server.publish(channel, JSON.stringify({ channel, data }));
+	});
+
+	// Push the worktree change notifier's debounced invalidation batches (agent edits, terminal
+	// commands, Finder) to every subscribed client — receivers re-read via the normal read methods.
+	setWatchPublisher((payload) => {
+		server.publish(
+			WS_CHANNELS.workspaceFsChanged,
+			JSON.stringify({ channel: WS_CHANNELS.workspaceFsChanged, data: payload }),
+		);
 	});
 
 	// Stream each in-process AgentSession's events to subscribed clients over the pi.event channel, and
@@ -173,6 +184,7 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 			// Symmetric teardown: settle in-flight logins (so no detached `login()` promise leaks), dispose
 			// in-process agent sessions + PTYs, then close the socket.
 			cancelAllLogins();
+			stopAllWatches();
 			disposeAllSessions();
 			closeAllTerminals();
 			server.stop(true);

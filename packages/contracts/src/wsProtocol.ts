@@ -31,7 +31,9 @@ import type {
 // minus the secret-bearing `baseUrl`/`headers`); the host re-resolves the real model by `{provider,id}`.
 // v5: workspace registry membership now streams to every client — `workspace.created` + `workspace.removed`
 // join the existing `workspace.updated` (the workspace lifecycle trio; see `WS_CHANNELS`).
-export const PROTOCOL_VERSION = 5;
+// v6: the worktree change notifier — `workspace.fsChanged` streams debounced fs-invalidation nudges so
+// clients re-read files/specs/git state instead of polling.
+export const PROTOCOL_VERSION = 6;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -146,6 +148,9 @@ export const WS_CHANNELS = {
 	workspaceCreated: "workspace.created",
 	workspaceUpdated: "workspace.updated",
 	workspaceRemoved: "workspace.removed",
+	// The worktree change notifier (a `WorkspaceFsChangedPayload` per frame), broadcast to every client.
+	// A debounced invalidation nudge, not data — receivers re-read via the read methods they already use.
+	workspaceFsChanged: "workspace.fsChanged",
 } as const;
 
 export type WsMethod = (typeof WS_METHODS)[keyof typeof WS_METHODS];

@@ -127,10 +127,24 @@ prompt hero (still editable; empty by default), a base-branch
 
 - `RightPanel` tabs are **Specs | All files | Changes** (Specs leftmost and the **default** — specs are
   the project's ground truth, so the rail leads with them).
+- **Live refresh (the worktree panels follow the disk).** `FileTree` / `ChangesPanel` / `SpecsPanel` /
+  `FilePane` watch the store's `fsChangesByWorkspace` tick for their workspace (fed by the host's
+  debounced `workspace.fsChanged` push — see [[submodule-server-watch]]) and silently refetch through
+  the same read methods they mount with — agent edits, terminal commands, and Finder changes all land
+  without a manual step. Refetches **preserve view state**: `FileTree` re-reads the root + every
+  expanded dir (rows keyed by path; vanished dirs drop out via their parent), `ChangesPanel` re-reads
+  `git.status` keeping the selection while its path is still listed (re-fetching its diff, else
+  clearing), `SpecsPanel` refetches without remounting (expansion survives), and `FilePane` re-reads an
+  open tab's content when the workspace ticked past the tab's loaded tick (live while visible;
+  background tabs catch up on activation — only the active tab is mounted; a failed re-read — file
+  deleted — keeps the last content, no auto-close). Panels are mounted only for the active workspace,
+  so scoping is natural; a degraded watcher just means back to read-on-demand. Deliberately **not**
+  live (deferred): the project-rail workspace diffStats badges; editable-file conflict handling waits
+  for `fs.writeFile` (the viewer is read-only today).
 - `SpecsPanel` is the read-only spec-graph viewer: one `spec.graph` fetch per workspace-activation /
-  tab-visit, plus a header **Refresh** button re-fetching on demand (read-on-demand, no push — the host
-  side revalidates per read), rendered as the **`parent` tree** (roots = no/dangling parent;
-  default-expanded). A fetch **failure renders a distinct error hint** (pointing at Refresh), never the
+  tab-visit, refetched on the fs tick, plus a header **Refresh** button re-fetching on demand (the
+  manual escape hatch if the host's watcher degraded; the host side revalidates per read), rendered as
+  the **`parent` tree** (roots = no/dangling parent; default-expanded). A fetch **failure renders a distinct error hint** (pointing at Refresh), never the
   "No specs" empty state — offline and empty are different answers. The tree build (`specTree.ts`)
   assumes a well-formed graph — **parent cycles are `spec_validate`'s problem, not the viewer's** (cycle
   members are unreachable from any root and simply don't render) — but the walk is **visited-guarded**,

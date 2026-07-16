@@ -62,8 +62,10 @@ test("Specs tab renders the worktree's spec tree and opens a spec as an editor t
 	await expect(child).toHaveAttribute("data-active", "true");
 	await expect(root).toHaveAttribute("data-active", "false");
 
-	// Specs added outside the app (agent/git/editor) appear after Refresh. A later root sibling plus a
-	// nested child exercise consistent indentation at sibling and grandchild depths.
+	// Specs added outside the app (agent/git/editor) appear LIVE via the worktree watcher (see
+	// live-refresh.spec.ts) — the header Refresh button stays as the manual escape hatch, so it must
+	// still be present and clickable. A later root sibling plus a nested child exercise consistent
+	// indentation at sibling and grandchild depths, and the refresh must NOT collapse expansion state.
 	const worktree = workspace.worktreePath;
 	mkdirSync(join(worktree, "module-b"), { recursive: true });
 	writeFileSync(
@@ -77,8 +79,9 @@ test("Specs tab renders the worktree's spec tree and opens a spec as an editor t
 	);
 	const moduleB = page.locator('[data-testid="spec-node"][data-spec-id="sample-module-b"]');
 	const submodule = page.locator('[data-testid="spec-node"][data-spec-id="sample-submodule"]');
-	await expect(moduleB).toHaveCount(0);
-	await expect(submodule).toHaveCount(0);
+	await expect(moduleB).toBeVisible();
+	await expect(submodule).toBeVisible();
+	await expect(page.getByTestId("specs-refresh")).toBeVisible();
 	await page.getByTestId("specs-refresh").click();
 	await expect(moduleB).toBeVisible();
 	await expect(submodule).toBeVisible();
