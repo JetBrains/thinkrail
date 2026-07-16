@@ -1,0 +1,24 @@
+---
+id: task-verbose-logging
+type: task-spec
+status: draft
+title: Add a --verbose flag to the resize CLI
+---
+
+## Request
+
+Add a `--verbose` flag that logs each resize step as it happens.
+
+## Decisions (confirmed with user)
+
+1. Flag name: `--verbose` (long form only).
+2. Scope: per-file progress lines during the resize pipeline.
+3. Log format: plain text lines (human-readable one-line messages per resize step), not JSON.
+
+## Open questions
+
+- None. All open questions resolved.
+
+## Next step
+
+Design is settled. Ready to implement when approved — do not start implementing yet.

@@ -146,6 +146,11 @@ fast, no auth, run anytime; `bun run e2e:full` runs everything; `bun run e2e:age
 `@agent` specs (which need `pi` authenticated + more time). There is **no fake agent** — agent coverage
 runs against a real provider.
 
+Separate from the browser suite: `bun run test:workflows` — the headless **workflow-skill suite**
+(`e2e/workflows/`, own Playwright config, no browser/webServer; drives a real in-process pi agent
+through the workflow skills). On-demand only: needs pi auth and spends real provider tokens — never a
+commit/CI gate. Design: `e2e/workflows/SPEC.md`.
+
 Fast gates (also the husky pre-commit): `bun run check:deps` (dependency pins) + `bun run lint` (biome) +
 `bun run typecheck`. Unit tests:
 `bun run test` (bun test, per package). One-time setup for a fresh machine: `bunx playwright install chromium`.
