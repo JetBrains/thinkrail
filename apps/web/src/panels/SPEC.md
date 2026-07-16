@@ -20,8 +20,10 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   **anchored to that Remove button** (`align="end"`, so its right border lines up with the button's) and
   opening just beneath it rather than as a centered modal; it **forces a
   deliberate choice** (Cancel takes initial focus; a `destructive` confirm shows a warning glyph + red
-  button; Esc + outside-click cancel); removal is **optimistic + non-blocking**: on confirm it drops the row via `store.removeWorkspace` + `clearWorkspaceTabs`
-  and fires `workspace.remove` without awaiting, reconciling a failure by re-listing).
+  button; Esc + outside-click cancel); removal is **event-driven** (no per-client optimism): on confirm it
+  just fires `workspace.remove` and lets every client — including this one — react to the host's
+  `workspace.removed` push via the store's `applyWorkspaceRemoved`; a rejected request (no event will come)
+  surfaces an error toast, leaving the row in place).
   **Opening a project** goes through the shared **`useOpenProject`** hook (reused by `ProjectTree` **and**
   `WelcomePanel`, so the flow is identical in the rail and the Welcome screen): `project.open`, and on
   failure `project.inspect` → either offers to bootstrap the folder into a repo — a modal **`ConfirmDialog`**

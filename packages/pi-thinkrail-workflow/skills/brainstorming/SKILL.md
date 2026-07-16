@@ -28,9 +28,11 @@ assumptions get caught cheaply. Scale the *depth* to the task; never skip the wo
    brainstorm them one at a time (or in parallel sub-sessions, the user's call) — don't blend unrelated
    decisions into one task-spec.
 3. **Open a task-spec.** As soon as you understand roughly what's being asked, `spec_create` a
-   `task-spec` (id, title, status: draft, parent: the nearest relevant module) to hold the design as it
-   develops. This file is the one artifact — update it live as decisions land; don't also keep a separate
-   scratch doc. This works even in a project with no existing spec graph: a `task-spec` only needs
+   `task-spec` at **`.thinkrail/context/TASK-<slug>.md`** (id, title, status: draft, parent: the nearest
+   relevant module) to hold the design as it develops. `.thinkrail/context/` is the workspace's
+   gitignored scratch dir (host-seeded, zero git footprint) yet stays scannable by the spec tools — the
+   home for every temp doc, never committed. This file is the one artifact — update it live as decisions
+   land; don't also keep a separate scratch doc. This works even in a project with no existing spec graph: a `task-spec` only needs
    frontmatter `id` and `type` to be a valid spec, no pre-existing graph required — don't skip this step
    just because nothing else in the project is specced yet.
 4. **Clarify.** Ask what you need via `ask_user_question`, composing rounds per the

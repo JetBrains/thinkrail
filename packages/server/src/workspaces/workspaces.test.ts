@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -9,6 +9,8 @@ import {
 	reclaimWorktree,
 	removeWorkspace,
 	renameWorkspace,
+	setWorkspacePublisher,
+	type WorkspaceLifecycleEvent,
 } from "./workspaces";
 
 function gitOut(cwd: string, ...args: string[]): string {
@@ -43,6 +45,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+	setWorkspacePublisher(null); // never leak a test's lifecycle sink into the next
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
@@ -81,6 +84,22 @@ test("createWorkspace branches off a locally-present remote ref without a networ
 	expect(ws.baseBranch).toBe("origin/main");
 	expect(gitOut(ws.worktreePath, "rev-parse", "HEAD")).toBe(originSha);
 	expect(gitOut(ws.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe(ws.branch);
+});
+
+test("createWorkspace seeds a self-ignoring .thinkrail/context scratch dir kept out of git", async () => {
+	const ws = await createWorkspace("p1");
+	const gitignore = join(ws.worktreePath, ".thinkrail", "context", ".gitignore");
+	expect(existsSync(gitignore)).toBe(true);
+	expect(readFileSync(gitignore, "utf8")).toBe("*\n");
+
+	// A temp doc written there is ignored by git — nothing to commit.
+	writeFileSync(join(ws.worktreePath, ".thinkrail", "context", "TASK-x.md"), "scratch\n");
+	expect(gitOut(ws.worktreePath, "check-ignore", ".thinkrail/context/TASK-x.md")).toBe(
+		".thinkrail/context/TASK-x.md",
+	);
+	// The self-ignoring `.gitignore` (a lone `*`) matches itself too, so the whole dir is invisible to
+	// `git status` — zero footprint, nothing accidentally committable.
+	expect(gitOut(ws.worktreePath, "status", "--porcelain")).not.toContain(".thinkrail");
 });
 
 test("createWorkspace marks a user-named workspace renamed; an auto-named one stays eligible", async () => {
@@ -192,6 +211,31 @@ test("forgetWorkspace drops the record + returns it, but leaves the worktree for
 
 	// A second forget (double-archive) is a no-op returning null.
 	expect(forgetWorkspace(ws.id)).toBeNull();
+});
+
+test("membership mutations emit lifecycle events through the injected publisher", async () => {
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((e) => events.push(e));
+
+	const ws = await createWorkspace("p1"); // auto-named workspace-1
+	renameWorkspace(ws.id, "my feature"); // → branch my-feature
+	expect(forgetWorkspace(ws.id)).not.toBeNull();
+	expect(forgetWorkspace(ws.id)).toBeNull(); // unknown now → no further event
+
+	expect(events.map((e) => e.kind)).toEqual(["created", "updated", "removed"]);
+	expect(events[0]).toMatchObject({ kind: "created", workspace: { id: ws.id, projectId: "p1" } });
+	expect(events[1]).toMatchObject({
+		kind: "updated",
+		workspace: { id: ws.id, name: "my-feature" },
+	});
+	expect(events[2]).toEqual({ kind: "removed", projectId: "p1", id: ws.id });
+});
+
+test("a null publisher makes lifecycle emits silent no-ops", async () => {
+	setWorkspacePublisher(null);
+	const ws = await createWorkspace("p1");
+	expect(() => removeWorkspace(ws.id)).not.toThrow();
+	expect(listWorkspaces("p1")).toHaveLength(0);
 });
 
 test("removeWorkspace cleans up even when the worktree dir is already gone", async () => {

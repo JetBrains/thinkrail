@@ -19,8 +19,9 @@ test("creates, removes, and re-creates worktree workspaces (no branch collision)
 	// Worktrees live under a readable project-name dir, not the project id.
 	expect(worktrees).toContain("/worktrees/sample-project/");
 
-	// Remove it: the button opens a confirmation anchored to the row; confirming removes the row
-	// optimistically (instantly) AND the worktree is reclaimed from disk in the background (back to just `main`).
+	// Remove it: the button opens a confirmation anchored to the row; confirming fires `workspace.remove`,
+	// and the row disappears when the client reacts to the host's `workspace.removed` push (event-driven, not
+	// optimistic) AND the worktree is reclaimed from disk in the background (back to just `main`).
 	await items.first().hover();
 	await items.first().getByTestId("workspace-remove").click();
 	// The confirm is an accessible alertdialog named by its title (so screen readers announce it).

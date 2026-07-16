@@ -1,10 +1,37 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { DiffStats, Project, Workspace } from "@thinkrail/contracts";
+import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
 import { git, gitAsync } from "../git";
 import { dataDir, loadProjects, loadWorkspaces, saveWorkspaces } from "../persistence";
 import { getProjects } from "../projects";
+
+/**
+ * A workspace-registry membership change, emitted on every create/rename/archive so the host can fan it
+ * out to every client (architecture #9 — registry membership is shared domain state). The module stays
+ * ignorant of WS channels: it emits a domain event; `createServer` maps `kind` → `workspace.*` channel.
+ * `created`/`updated` carry the full record; `removed` carries only the ids (the record is already gone).
+ */
+export type WorkspaceLifecycleEvent =
+	| { kind: "created"; workspace: Workspace }
+	| { kind: "updated"; workspace: Workspace }
+	| { kind: "removed"; projectId: string; id: string };
+
+type WorkspacePublisher = (event: WorkspaceLifecycleEvent) => void;
+
+// Injected by the host (the same publisher inversion `terminal`/`agent`/`auth` use). `null` in unit tests
+// / the e2e reset → emits are silent no-ops, so the pure record functions stay testable in isolation.
+let publishLifecycle: WorkspacePublisher | null = null;
+
+/** Install (or clear with `null`) the sink the workspace lifecycle events are fanned out through. */
+export function setWorkspacePublisher(fn: WorkspacePublisher | null): void {
+	publishLifecycle = fn;
+}
+
+function emit(event: WorkspaceLifecycleEvent): void {
+	publishLifecycle?.(event);
+}
 
 function toBranch(name: string): string {
 	return (
@@ -105,6 +132,13 @@ export async function createWorkspace(
 	const added = git(project.path, ["worktree", "add", worktreePath, "-b", branch, baseBranch]);
 	if (!added.ok) throw new Error(`git worktree add failed: ${added.err}`);
 
+	// Ephemeral per-workspace scratch dir for temp docs (task-specs / working files). Its `.gitignore` is
+	// a lone `*` — which matches the `.gitignore` itself — so the whole dir has zero git footprint yet
+	// stays scannable by the spec tools (they ignore only node_modules/.git/dist/build, not .gitignore).
+	const contextDir = join(worktreePath, WORKSPACE_CONTEXT_DIR);
+	mkdirSync(contextDir, { recursive: true });
+	writeFileSync(join(contextDir, ".gitignore"), "*\n");
+
 	const workspace: Workspace = {
 		id: randomUUID(),
 		projectId,
@@ -118,6 +152,7 @@ export async function createWorkspace(
 	};
 	all.push(workspace);
 	saveWorkspaces(all);
+	emit({ kind: "created", workspace });
 	return workspace;
 }
 
@@ -165,6 +200,7 @@ export function renameWorkspace(
 	target.branch = branch;
 	if (lock) target.renamed = true;
 	saveWorkspaces(all);
+	emit({ kind: "updated", workspace: target });
 	return target;
 }
 
@@ -185,6 +221,7 @@ export function forgetWorkspace(id: string): Workspace | null {
 	const ws = all.find((w) => w.id === id);
 	if (!ws) return null;
 	saveWorkspaces(all.filter((w) => w.id !== id));
+	emit({ kind: "removed", projectId: ws.projectId, id: ws.id });
 	return ws;
 }
 

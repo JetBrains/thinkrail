@@ -110,7 +110,8 @@ function isPristine(workspaceId: string): boolean {
 
 /**
  * Auto-name `workspaceId` off the session's first turn, if it's still eligible. Resolves the updated
- * `Workspace` for the caller to push on `workspace.updated`, or `null` when nothing happened.
+ * `Workspace` (informational — the `workspace.updated` push is self-emitted by `renameWorkspace` via the
+ * lifecycle publisher), or `null` when nothing happened.
  */
 export async function maybeAutoRenameWorkspace(
 	sessionId: string,
