@@ -6,7 +6,8 @@
 	"exports": {
 		"./shellEnv": "./src/shellEnv.ts",
 		"./freePort": "./src/freePort.ts",
-		"./jbcentral": "./src/jbcentral.ts"
+		"./jbcentral": "./src/jbcentral.ts",
+		"./paths": "./src/paths.ts"
 	},
 	"scripts": {
 		"typecheck": "tsc --noEmit",

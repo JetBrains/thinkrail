@@ -9,6 +9,8 @@ playwright-report/
 blob-report/
 playwright/.cache/
 e2e/screenshots/
+# Workflow-test run log — local evidence, deliberately not a committed record (see e2e/workflows/SPEC.md).
+e2e/.workflow-runs.jsonl
 
 docs/*
 .playwright-mcp/

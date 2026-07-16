@@ -40,7 +40,9 @@ The shell is built first, `pi` connected last:
 - ThinkRail branding (violet `#8C81FF`, Darcula background, Geist / JetBrains Mono / Cabinet Grotesk).
 - On-disk state under `~/.thinkrail`.
 
-V1 is explicitly **not**: workflows; the spec-graph **product layer** beyond the read-only viewer
+V1 is explicitly **not**: the workflow **product layer** (a runtime/engine, configurable pipelines —
+the skill-based workflow *system*, skills + an always-on rule with no runtime machinery, ships as the
+bundled `pi-thinkrail-workflow` extension); the spec-graph **product layer** beyond the read-only viewer
 (drift detection, pre-build approval, living graph — the pi-side spec capability ships as the bundled
 extension above); PR / Checks / Review, self-improvement, automations, per-step model routing, cost ledger.
 

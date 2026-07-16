@@ -24,7 +24,12 @@ and runs the `pi` agent in-process via `createAgentSession`. Launched in-process
   and installs SIGINT/SIGTERM graceful-shutdown handlers around `createServer`), both re-exported from
   `host/`; plus `setBundledExtensions` (+ its types, re-exported from `agent/`) — the compiled-binary
   seam by which a launcher that cannot path-load the bundled pi extensions (no `node_modules` inside a
-  `bun build --compile` binary) injects them as value-imported factories + a staged skills dir.
+  `bun build --compile` binary) injects them as value-imported factories + a staged skills dir. The
+  package also exposes the **`@thinkrail/server/agent` subpath export** (the `agent` barrel): the
+  server-side session surface for the **headless workflow-test harness** (`e2e/workflows/`), which
+  drives real in-process sessions through the production wiring without booting the HTTP host — a
+  deliberate second entry that avoids evaluating `host` (Bun-only: `Bun.serve`, `bun-pty`) under the
+  node-run e2e worker. Not for `apps/*` use — the web/CLI boundary rules are unchanged.
 - **Allowed deps:** `contracts` (types + WS constants), `shared` (`shellEnv`), `bun-pty`,
   `@earendil-works/pi-coding-agent` + `@earendil-works/pi-ai` (runtime), Bun/Node.
 - **Forbidden:** importing `web`/`cli`/`desktop`; being bundled into the browser.

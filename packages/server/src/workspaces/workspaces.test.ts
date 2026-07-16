@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -84,6 +84,22 @@ test("createWorkspace branches off a locally-present remote ref without a networ
 	expect(ws.baseBranch).toBe("origin/main");
 	expect(gitOut(ws.worktreePath, "rev-parse", "HEAD")).toBe(originSha);
 	expect(gitOut(ws.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe(ws.branch);
+});
+
+test("createWorkspace seeds a self-ignoring .thinkrail/context scratch dir kept out of git", async () => {
+	const ws = await createWorkspace("p1");
+	const gitignore = join(ws.worktreePath, ".thinkrail", "context", ".gitignore");
+	expect(existsSync(gitignore)).toBe(true);
+	expect(readFileSync(gitignore, "utf8")).toBe("*\n");
+
+	// A temp doc written there is ignored by git — nothing to commit.
+	writeFileSync(join(ws.worktreePath, ".thinkrail", "context", "TASK-x.md"), "scratch\n");
+	expect(gitOut(ws.worktreePath, "check-ignore", ".thinkrail/context/TASK-x.md")).toBe(
+		".thinkrail/context/TASK-x.md",
+	);
+	// The self-ignoring `.gitignore` (a lone `*`) matches itself too, so the whole dir is invisible to
+	// `git status` — zero footprint, nothing accidentally committable.
+	expect(gitOut(ws.worktreePath, "status", "--porcelain")).not.toContain(".thinkrail");
 });
 
 test("createWorkspace marks a user-named workspace renamed; an auto-named one stays eligible", async () => {
