@@ -11,8 +11,4 @@ test("shows the active worktree's files in the All-files tree", async ({ page })
 	// Specs is the right rail's default tab; files live one tab over.
 	await page.getByTestId("tab-files").click();
 	await expect(page.getByTestId("file-node").filter({ hasText: "README.md" })).toBeVisible();
-
-	// The host-managed .thinkrail/ scratch dir (seeded into every worktree) is hidden from the tree,
-	// the same treatment as .git — the tree shows project source only.
-	await expect(page.getByTestId("file-node").filter({ hasText: ".thinkrail" })).toHaveCount(0);
 });

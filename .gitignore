@@ -15,8 +15,9 @@ docs/*
 .claude/
 
 # Per-workspace ephemeral scratch for temp docs (task-specs, working files). The host also seeds a
-# self-ignoring .thinkrail/context/.gitignore in every worktree; this keeps the whole tree out of git here too.
-.thinkrail/
+# self-ignoring .thinkrail/context/.gitignore in every worktree; scoped to context/ so the rest of
+# .thinkrail/ stays free for future durable host files (e.g. a cached spec index).
+.thinkrail/context/
 
 # Build-only manifests written transiently by apps/cli/scripts/build-binary.ts
 apps/cli/src/*.generated.ts

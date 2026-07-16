@@ -1,11 +1,13 @@
-// Worktree-relative path conventions ThinkRail owns, named once so the places that create, hide, and
-// ignore them can't drift. Server-side only (the host seeds/reads them; the browser never needs them —
-// the file reader filters the internal dir out before the wire). Distinct from the *home* state dir
-// (`~/.thinkrail`, resolved in the server's persistence module): these live inside a workspace worktree.
+// Worktree-relative path conventions ThinkRail owns, named once so current and future consumers agree
+// (today: the host seeds the scratch dir and git ignores it). Server-side only — the host creates and
+// ignores these; the browser never needs them. Distinct from the *home* state dir (`~/.thinkrail`,
+// resolved in the server's persistence module): these live inside a workspace worktree.
 
 /**
- * ThinkRail's repo-local directory inside a workspace's worktree. Git-ignored and hidden from the
- * All-files tree (the same treatment as `.git`) — everything under it is host-managed, not project source.
+ * ThinkRail's repo-local directory inside a workspace's worktree. Today it holds the ephemeral `context/`
+ * scratch dir; it is also the intended home for future host-managed files under a worktree (e.g. a cached
+ * spec index), so the base name is shared rather than inlined. Not hidden from the file tree — future
+ * content here should stay visible.
  */
 export const WORKSPACE_INTERNAL_DIR = ".thinkrail";
 
@@ -19,6 +21,6 @@ export const WORKSPACE_CONTEXT_DIR = `${WORKSPACE_INTERNAL_DIR}/context`;
 
 /**
  * The `.gitignore` body seeded into the context dir: a lone `*` matches the `.gitignore` file itself, so
- * the whole dir has zero git footprint (nothing in `git status`, nothing committable).
+ * the whole context dir has zero git footprint (nothing in `git status`, nothing committable).
  */
 export const WORKSPACE_CONTEXT_GITIGNORE = "*\n";
