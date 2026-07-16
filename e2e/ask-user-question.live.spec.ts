@@ -75,6 +75,28 @@ test("single-select: Submit is gated, an answer resolves the tool, the record re
 	).toBeVisible({ timeout: 60_000 });
 });
 
+test("recommended option: its rationale is shown inline (no interaction needed)", {
+	tag: "@agent",
+}, async ({ page }) => {
+	test.setTimeout(150_000);
+	await ask(
+		page,
+		`Call the ask_user_question tool with EXACTLY ONE single-select question (multiSelect false) offering 3 short options with descriptions and no previews. RECOMMEND one option: make it FIRST, append "(Recommended)" to its label, and set its recommendedReason to a short sentence explaining why. ${ONLY_TOOL}`,
+	);
+
+	const card = activeCard(page);
+	await expect(card).toBeVisible({ timeout: 90_000 });
+
+	// The recommended option's rationale is rendered inline — visible up front, no click, no popover.
+	const reason = card.getByTestId("ask-recommended-reason").first();
+	await expect(reason).toBeVisible();
+	await expect(reason).toContainText("Why:");
+	await expect(reason).not.toBeEmpty();
+
+	// And merely surfacing the rationale must not have selected anything.
+	await expect(card.locator('[data-testid="ask-option"][data-selected="true"]')).toHaveCount(0);
+});
+
 test("multi-select: several options can be checked and submitted", { tag: "@agent" }, async ({
 	page,
 }) => {

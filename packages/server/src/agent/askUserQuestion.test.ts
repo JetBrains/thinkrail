@@ -50,6 +50,22 @@ test("validateQuestionnaire accepts a well-formed questionnaire", () => {
 	expect(validateQuestionnaire(args()).ok).toBe(true);
 });
 
+test("the optional recommendedReason field is accepted on an option (no new validation gate)", () => {
+	const withReason: AskUserQuestionArgs = {
+		questions: [
+			{
+				question: "Which library?",
+				header: "Lib",
+				options: [
+					{ label: "date-fns (Recommended)", description: "small", recommendedReason: "lightest" },
+					{ label: "luxon", description: "rich" },
+				],
+			},
+		],
+	};
+	expect(validateQuestionnaire(withReason).ok).toBe(true);
+});
+
 test("validateQuestionnaire rejects empty, too-few-options, dupes, and reserved labels", () => {
 	const one = (options: { label: string; description: string }[]): AskUserQuestionArgs => ({
 		questions: [{ question: "q", header: "h", options }],

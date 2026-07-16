@@ -5,6 +5,7 @@ import {
 	deriveRecapState,
 	parseQuestions,
 	readAskResult,
+	readRecommendation,
 	splitRecommended,
 } from "./AskUserQuestionCard";
 
@@ -226,6 +227,42 @@ describe("splitRecommended", () => {
 	});
 	it("leaves a plain label untouched", () => {
 		expect(splitRecommended("MySQL")).toEqual({ text: "MySQL", recommended: false });
+	});
+});
+
+describe("readRecommendation", () => {
+	it("suffix only → recommended, no reason", () => {
+		expect(readRecommendation({ label: "Postgres (Recommended)" })).toEqual({
+			text: "Postgres",
+			recommended: true,
+			reason: undefined,
+		});
+	});
+	it("suffix + reason → recommended with a trimmed reason", () => {
+		expect(
+			readRecommendation({ label: "Postgres (Recommended)", recommendedReason: "  scales best  " }),
+		).toEqual({ text: "Postgres", recommended: true, reason: "scales best" });
+	});
+	it("reason WITHOUT the suffix still implies recommended (defensive)", () => {
+		expect(readRecommendation({ label: "Postgres", recommendedReason: "scales best" })).toEqual({
+			text: "Postgres",
+			recommended: true,
+			reason: "scales best",
+		});
+	});
+	it("neither → not recommended", () => {
+		expect(readRecommendation({ label: "MySQL" })).toEqual({
+			text: "MySQL",
+			recommended: false,
+			reason: undefined,
+		});
+	});
+	it("a whitespace-only reason is ignored (no icon, suffix decides)", () => {
+		expect(readRecommendation({ label: "MySQL", recommendedReason: "   " })).toEqual({
+			text: "MySQL",
+			recommended: false,
+			reason: undefined,
+		});
 	});
 });
 
