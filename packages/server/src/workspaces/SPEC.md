@@ -43,7 +43,16 @@ chats.
   `listWorkspaces` immediately), `reclaimWorktree(ws)` (the slow half — `git worktree remove --force`,
   keeps the branch; hardened: rm + `prune` if git fails), and `removeWorkspace(id)` (the synchronous
   composition of the two, kept for callers/tests that want the whole archive in one call).
+- **Lifecycle events:** every membership mutation — `createWorkspace` (`created`), `renameWorkspace`
+  (`updated`, both the naive and agentic auto-rename passes since both go through it), `forgetWorkspace`
+  (`removed`) — emits a `WorkspaceLifecycleEvent` through an **injected publisher** (`setWorkspacePublisher`,
+  the same inversion `terminal`/`agent`/`auth` use; `null` in unit tests / the e2e reset → silent no-op).
+  The module stays ignorant of WS channels: it emits a domain event (`created`/`updated` carry the record,
+  `removed` carries `{ projectId, id }`) and the host maps `kind` → `workspace.*` channel. This makes the
+  module the **single source of workspace lifecycle pushes** (the auto-rename tee no longer pushes — rename
+  self-publishes), so registry membership stays shared domain state across every client (architecture #9).
 - **Public surface (barrel):** `createWorkspace`, `listWorkspaces`, `forgetWorkspace`, `reclaimWorktree`,
-  `removeWorkspace`, `workspaceDiffStats`, `getWorkspace`, `renameWorkspace`.
+  `removeWorkspace`, `workspaceDiffStats`, `getWorkspace`, `renameWorkspace`, `setWorkspacePublisher`,
+  `WorkspaceLifecycleEvent`.
 - **Allowed deps:** `projects` (repo lookup), `git` (the runner), `persistence`; `contracts`; Node.
 - **Forbidden:** `host`; reaching into another feature's internals (use its barrel).

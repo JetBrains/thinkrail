@@ -68,7 +68,11 @@ the host from env via `bootHost` for dev/e2e.
 - `persistence`, `dialog`, `github` → (leaves)
 
 Rules: features never import `host`, and never each other except the edges above. The graph is acyclic.
-`agent`'s WS surface (`session.*` + `pi.event` forwarding) attaches to `host`.
+`agent`'s WS surface (`session.*` + `pi.event` forwarding) attaches to `host`. Features that push on their
+own never import `host` either: they expose a **publisher-injection seam** (`setTerminalPublisher`,
+`setSessionPublisher`, `setLoginPublisher`, and `workspaces`' `setWorkspacePublisher` for the
+`workspace.created`/`updated`/`removed` lifecycle trio) that `host` installs at `createServer` — so the
+channel wiring lives only in `host`.
 
 ## Get right
 

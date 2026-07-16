@@ -4,6 +4,7 @@ import type {
 	ServerWelcome,
 	SessionEventPayload,
 	Workspace,
+	WorkspaceRemoved,
 } from "@thinkrail/contracts";
 import { WS_CHANNELS } from "@thinkrail/contracts";
 import { useAppStore } from "../store";
@@ -42,8 +43,19 @@ export function initTransport(): WsTransport {
 		useAppStore.getState().applyLoginFrame(data as LoginPush);
 	});
 
+	// The workspace lifecycle trio — every client (including the initiator) converges by reacting to these,
+	// never a per-client optimistic mutation. `created`/`updated` carry the full snapshot; `removed` the ids.
+	transport.subscribe(WS_CHANNELS.workspaceCreated, (data) => {
+		useAppStore.getState().addWorkspace(data as Workspace);
+	});
+
 	transport.subscribe(WS_CHANNELS.workspaceUpdated, (data) => {
 		useAppStore.getState().updateWorkspace(data as Workspace);
+	});
+
+	transport.subscribe(WS_CHANNELS.workspaceRemoved, (data) => {
+		const { projectId, id } = data as WorkspaceRemoved;
+		useAppStore.getState().applyWorkspaceRemoved(projectId, id);
 	});
 
 	transport.connect();

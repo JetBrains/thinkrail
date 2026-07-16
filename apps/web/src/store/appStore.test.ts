@@ -505,6 +505,67 @@ test("removeWorkspace optimistically drops the row, leaving siblings; unknown pr
 	expect(useAppStore.getState().workspaces.p2).toBeUndefined();
 });
 
+// ---- addWorkspace: the workspace.created push upserts by id ----------------------------------------
+
+test("addWorkspace upserts into a fetched list (append if absent, merge if present)", () => {
+	const other = pushedWorkspace({ id: "other", name: "workspace-2", branch: "workspace-2" });
+	useAppStore.setState({ workspaces: { p1: [other] } });
+
+	useAppStore.getState().addWorkspace(pushedWorkspace()); // id w1 — new row appended
+	expect(useAppStore.getState().workspaces.p1?.map((w) => w.id)).toEqual(["other", "w1"]);
+
+	// Re-applying the same id merges in place (idempotent with the creator's own post-create re-list).
+	useAppStore.getState().addWorkspace(pushedWorkspace({ name: "renamed-later" }));
+	const list = useAppStore.getState().workspaces.p1;
+	expect(list).toHaveLength(2);
+	expect(list?.find((w) => w.id === "w1")?.name).toBe("renamed-later");
+});
+
+test("addWorkspace is a no-op for a project whose list was never fetched", () => {
+	useAppStore.setState({ workspaces: {} });
+	useAppStore.getState().addWorkspace(pushedWorkspace());
+	expect(useAppStore.getState().workspaces).toEqual({});
+});
+
+// ---- applyWorkspaceRemoved: the workspace.removed reaction, run by every client --------------------
+
+test("applyWorkspaceRemoved drops the row, clears its tabs, and returns the active client to Welcome + toast", () => {
+	useAppStore.setState({
+		workspaces: { p1: [pushedWorkspace()] },
+		activeWorkspaceId: "w1",
+		tabsByWorkspace: {
+			w1: [{ kind: "file", id: "w1:a", workspaceId: "w1", name: "a", path: "a", content: "" }],
+		},
+		activeTabByWorkspace: { w1: "w1:a" },
+		toasts: [],
+	});
+
+	useAppStore.getState().applyWorkspaceRemoved("p1", "w1");
+
+	const s = useAppStore.getState();
+	expect(s.workspaces.p1).toEqual([]);
+	expect(s.tabsByWorkspace.w1).toBeUndefined(); // clearWorkspaceTabs dropped its tabs
+	expect(s.activeWorkspaceId).toBeNull(); // shell falls back to the project Welcome
+	expect(s.toasts).toHaveLength(1);
+	expect(s.toasts[0]?.message).toContain("add-login-flow"); // the removed workspace's name
+});
+
+test("applyWorkspaceRemoved on a non-active workspace drops the row silently (no toast, active untouched)", () => {
+	const keep = pushedWorkspace({ id: "other", name: "workspace-2", branch: "workspace-2" });
+	useAppStore.setState({
+		workspaces: { p1: [pushedWorkspace(), keep] },
+		activeWorkspaceId: "other",
+		toasts: [],
+	});
+
+	useAppStore.getState().applyWorkspaceRemoved("p1", "w1");
+
+	const s = useAppStore.getState();
+	expect(s.workspaces.p1?.map((w) => w.id)).toEqual(["other"]);
+	expect(s.activeWorkspaceId).toBe("other"); // a background removal doesn't move the client
+	expect(s.toasts).toHaveLength(0);
+});
+
 // --- in-app login (flat, session-less) -------------------------------------------------------------
 
 test("beginLogin opens a fresh active login; frames accumulate (url + paste prompt coexist)", () => {
