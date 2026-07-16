@@ -3,13 +3,13 @@ import { expect, test } from "@playwright/test";
 import { openFixtureProject } from "./fixtures/app";
 
 // Tagged @agent (see agent.live.spec.ts): drives a REAL pi agent. Proves the error-handling headline — a
-// turn that hits a bad model surfaces a *visible* error turn in the chat instead of looking like nothing
-// happened (the "pick a bad model → nothing happens" bug). The failure is genuinely the provider's: we
-// rewrite the kick-off's `session.create` model id to a nonexistent tag *on the wire*, so pi's real
-// provider 404s and reports a terminal `agent_end` error — the exact event the chat renders as an error
-// turn. Rewriting the wire (not picking a model in the UI) is deliberate: `session.create({ model })`
-// never calls `setModel`, so nothing persists — this can't corrupt the pinned default other @agent tests
-// depend on.
+// kick-off that names a bad model surfaces a *visible* failure instead of looking like nothing happened
+// (the "pick a bad model → nothing happens" bug). We rewrite the kick-off's `session.create` model id to a
+// nonexistent tag *on the wire* (keeping provider/baseUrl real); the host re-resolves the ref against its
+// model registry and rejects `session.create` before any session/chat exists — so the New-Workspace dialog
+// has nowhere to host an in-chat error turn and surfaces the reason as an error *toast* instead. Rewriting
+// the wire (not picking a model in the UI) is deliberate: `session.create({ model })` never calls
+// `setModel`, so nothing persists — this can't corrupt the pinned default other @agent tests depend on.
 
 const BOGUS_MODEL_ID = "definitely-not-a-real-model-9x";
 
@@ -47,15 +47,14 @@ async function forceBadModelOnCreate(page: Page): Promise<void> {
 	});
 }
 
-test("a bad model surfaces a visible error turn, not a false ✓ Done", {
+test("a bad model surfaces a visible error toast, not a false ✓ Done", {
 	tag: "@agent",
 }, async ({ page }) => {
-	test.setTimeout(90_000); // a real provider round-trip (even a 404) can outlast the 30s default
 	await forceBadModelOnCreate(page);
 	await openFixtureProject(page);
 
-	// Kick off a workspace with a prompt: cuts a worktree, opens a chat, and sends the turn — whose session
-	// was created with the rewritten bogus model.
+	// Kick off a workspace with a prompt: cuts a worktree and sends a turn — whose `session.create` carries
+	// the rewritten bogus model.
 	await page.getByTestId("add-workspace").first().click();
 	const dialog = page.getByTestId("new-workspace-dialog");
 	await expect(dialog).toBeVisible();
@@ -66,15 +65,16 @@ test("a bad model surfaces a visible error turn, not a false ✓ Done", {
 	await page.getByTestId("create-workspace").click();
 	await expect(dialog).toBeHidden();
 
-	// A chat opened for the new workspace…
-	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
-
-	// …and the bad model's failure is shown as an error turn — not swallowed, not a false "✓ Done".
-	const errorTurn = page.locator('[data-testid="chat-message"][data-role="error"]');
-	await expect(errorTurn).toBeVisible({ timeout: 60_000 });
-	// The turn carries the provider's real message (a model-not-found 404), so it's the bad model's
+	// The host rejects `session.create` (the bogus model isn't in its registry) before a session/chat
+	// exists, so no chat tab opens — there's nowhere to host an in-chat error turn…
+	const toast = page.locator('[data-testid="toast"][data-variant="error"]');
+	// …instead the failure surfaces as a visible error toast — not swallowed, not a false "✓ Done".
+	await expect(toast).toBeVisible({ timeout: 15_000 });
+	await expect(toast).toContainText("Couldn't start the chat");
+	// The toast carries the host's real reason (the rejected bogus model id), so it's the bad model's
 	// failure surfacing — not an unrelated error nor an empty placeholder.
-	await expect(errorTurn).toContainText(/not found|404/i);
+	await expect(toast).toContainText(BOGUS_MODEL_ID);
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(0);
 	await expect(
 		page.locator('[data-testid="chat-message"][data-role="system"]').filter({ hasText: "Done" }),
 	).toHaveCount(0);
