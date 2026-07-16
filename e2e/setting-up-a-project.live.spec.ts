@@ -1,7 +1,29 @@
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject, waitForDone } from "./fixtures/app";
+
+/**
+ * Whether the worktree holds a drafted graph *root* — a markdown spec whose frontmatter is
+ * `type: goal-and-requirements` — at whatever path the import flow chose. The skill's contract is "draft
+ * the graph root" (file named `goal-and-requirements.md`), not a fixed location: a real agent legitimately
+ * puts it at the repo root or under a `specs/` dir, so match by frontmatter type at any depth rather than a
+ * hard-coded path. (The product's Specs viewer scans nested specs too — see specs-panel.spec.ts.)
+ */
+function hasGoalSpec(dir: string): boolean {
+	for (const entry of readdirSync(dir, { withFileTypes: true })) {
+		if (entry.name === ".git" || entry.name === "node_modules") continue;
+		const full = join(dir, entry.name);
+		if (entry.isDirectory()) {
+			if (hasGoalSpec(full)) return true;
+		} else if (entry.name.endsWith(".md")) {
+			if (/^type:\s*goal-and-requirements\s*$/m.test(readFileSync(full, "utf8").slice(0, 400))) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
 
 // Tagged @agent (see agent.live.spec.ts): drives a REAL pi agent end to end to prove the setting-up-a-project
 // skill family works — the exact `/skill:setting-up-a-project` command the "Set up project" button seeds
@@ -75,10 +97,11 @@ test("`/skill:setting-up-a-project` routes an existing codebase to import and dr
 
 	await waitForDone(page, 320_000);
 
-	// Outcome (DOM-stable, tool-order-agnostic): the import flow drafted the graph root on disk in the
-	// worktree — proof it routed to importing-a-codebase and followed its rails, without depending on expanding
-	// a churning virtualized transcript. (Live spec-tool wiring is covered by spec-tools.live.spec.ts.)
-	expect(existsSync(join(worktree, "goal-and-requirements.md"))).toBe(true);
+	// Outcome (disk-stable, tool-order- AND path-agnostic): the import flow drafted the graph root somewhere
+	// in the worktree — proof it routed to importing-a-codebase and followed its rails, without depending on
+	// expanding a churning virtualized transcript or on the exact dir the agent chose (root vs. `specs/`).
+	// (Live spec-tool wiring is covered by spec-tools.live.spec.ts.)
+	expect(hasGoalSpec(worktree)).toBe(true);
 
 	// And it's a well-formed spec the product renders: refresh the Specs rail → a goal-and-requirements
 	// node appears (the `title` attribute carries `<id> · <type>`).

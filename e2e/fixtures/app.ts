@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Locator, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
@@ -8,9 +8,11 @@ import {
 	E2E_DATA_DIR,
 	E2E_FIXTURE_REPO,
 	E2E_PI_AGENT_DIR,
+	E2E_PI_MODELS_SEED,
 	E2E_PICK_DIR_POINTER,
 	E2E_PLAIN_DIR,
 } from "./paths";
+import { fixtureRepoHealthy, seedFixtureRepo } from "./repo";
 
 /**
  * Reset to a pristine slate: clear app state + any worktrees + pi's persisted sessions, and restore the
@@ -27,6 +29,22 @@ function resetState(): void {
 	rmSync(join(E2E_DATA_DIR, "projects.json"), { force: true });
 	rmSync(join(E2E_DATA_DIR, "worktrees"), { recursive: true, force: true });
 	rmSync(join(E2E_PI_AGENT_DIR, "sessions"), { recursive: true, force: true });
+
+	// Restore the seeded models.json: the JetBrains AI spec's proxy connect/disconnect rewrites this shared
+	// file (stripping the anthropic/openai auth the @agent suite resolves its pinned model through) and leaves
+	// the host disconnected. Re-seed it (or clear a test-written one when the dev authed via auth.json only)
+	// and drop the `.bak` the wire writes; the next page load's provider.status re-reads it and refreshes the
+	// registry, so a later @agent test isn't left with an empty model list.
+	const modelsPath = join(E2E_PI_AGENT_DIR, "models.json");
+	if (existsSync(E2E_PI_MODELS_SEED)) copyFileSync(E2E_PI_MODELS_SEED, modelsPath);
+	else rmSync(modelsPath, { force: true });
+	rmSync(`${modelsPath}.bak`, { force: true });
+
+	// Self-heal the shared fixture repo before pruning it. An @agent spec drives a real agent with `bash` in
+	// a worktree of this repo, so a stray destructive command can remove it out from under every later test
+	// (a single flaky run would otherwise cascade into the whole suite). Re-seed it when it's gone/damaged so
+	// the blast radius stays that one spec.
+	if (!fixtureRepoHealthy()) seedFixtureRepo();
 
 	execFileSync("git", ["-C", E2E_FIXTURE_REPO, "worktree", "prune"]);
 	for (let sweep = 0; sweep < 2; sweep += 1) {
