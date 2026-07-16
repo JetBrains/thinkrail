@@ -119,6 +119,32 @@ export function readAskResult(raw: unknown): AskUserQuestionResult | null {
 	return isResult(raw) ? raw : null;
 }
 
+interface RecapState {
+	selectedLabels: string[];
+	customAnswer: string | null;
+	showOptions: boolean;
+}
+
+/** Derive the shared review/resolved recap model from one structured answer. Pure. */
+export function deriveRecapState(
+	answer: AskUserQuestionAnswer | undefined,
+	variant: "review" | "resolved",
+): RecapState {
+	const selectedLabels =
+		answer?.kind === "multi"
+			? (answer.selected ?? [])
+			: answer?.kind === "option" && answer.answer
+				? [answer.answer]
+				: [];
+	const customAnswer =
+		answer && (answer.kind === "custom" || answer.kind === "multi") ? answer.answer : null;
+	return {
+		selectedLabels,
+		customAnswer,
+		showOptions: variant === "review" || (!!answer && answer.kind !== "custom"),
+	};
+}
+
 // ---- the card ----
 
 /**
@@ -453,7 +479,9 @@ function QuestionBody({
 		<div className="flex flex-col gap-md">
 			<div className="flex items-start gap-sm">
 				<MessageCircleQuestion className="mt-0.5 size-4 shrink-0 text-muted" />
-				<p className="font-semibold text-md text-text">{question.question}</p>
+				<p data-testid="ask-question-text" className="font-semibold text-md text-text">
+					{question.question}
+				</p>
 			</div>
 			<div className={cn("grid gap-sm", anyPreview && "md:grid-cols-2")}>
 				<div className="flex flex-col gap-sm">
@@ -555,7 +583,9 @@ function OptionRow({
 			<Indicator selected={selected} multi={multi} />
 			<span className="flex min-w-0 flex-col gap-0.5">
 				<span className="flex items-center gap-xs">
-					<span className="font-medium text-sm text-text">{text}</span>
+					<span data-testid="ask-option-label" className="font-medium text-sm text-text">
+						{text}
+					</span>
 					{recommended ? <RecommendedBadge /> : null}
 				</span>
 				{description ? <span className="text-muted text-xs">{description}</span> : null}
@@ -699,18 +729,13 @@ function ReviewView({
 				<MessageCircleQuestion className="mt-0.5 size-4 shrink-0 text-muted" />
 				<p className="font-semibold text-md text-text">Review your answers</p>
 			</div>
-			<ul className="flex flex-col gap-sm">
-				{questions.map((q, i) => {
-					const a = byIndex.get(i);
-					return (
-						<li key={q.question} className="flex flex-col">
-							<span className="text-hint text-xs">{q.header || `Q${i + 1}`}</span>
-							<span className="text-sm text-text">
-								{a ? summarizeAnswer(a) : <span className="text-hint italic">Not answered</span>}
-							</span>
-						</li>
-					);
-				})}
+			<ul className="flex flex-col gap-md">
+				{questions.map((q, i) => (
+					<li key={q.question} data-testid="ask-review-item" className="flex flex-col gap-xs">
+						<span className="text-hint text-xs">{q.header || `Q${i + 1}`}</span>
+						<QuestionRecap question={q} answer={byIndex.get(i)} variant="review" />
+					</li>
+				))}
 			</ul>
 			{unanswered.length > 0 ? (
 				<button
@@ -752,7 +777,7 @@ function ResolvedRecord({
 			className="flex flex-col gap-md"
 		>
 			{questions.map((q, i) => (
-				<RecordRow key={q.question} question={q} answer={byIndex.get(i)} />
+				<QuestionRecap key={q.question} question={q} answer={byIndex.get(i)} variant="resolved" />
 			))}
 			{questions.length === 0 ? (
 				<div className="text-muted text-xs">{rawText || "Answered."}</div>
@@ -761,65 +786,97 @@ function ResolvedRecord({
 	);
 }
 
-function RecordRow({
+/** Shared question + answer recap, with fuller context on the pre-submit review page. */
+function QuestionRecap({
 	question,
 	answer,
+	variant,
 }: {
 	question: AskUserQuestionItem;
 	answer: AskUserQuestionAnswer | undefined;
+	variant: "review" | "resolved";
 }) {
-	const selected = new Set(
-		answer?.kind === "multi" ? (answer.selected ?? []) : answer?.answer ? [answer.answer] : [],
-	);
+	const reviewing = variant === "review";
+	const { selectedLabels, customAnswer, showOptions } = deriveRecapState(answer, variant);
+	const selected = new Set(selectedLabels);
+
 	return (
 		<div className="flex flex-col gap-xs">
 			<div className="flex items-start gap-sm">
 				<MessageCircleQuestion className="mt-0.5 size-3.5 shrink-0 text-hint" />
-				<p className="text-muted text-sm">{question.question}</p>
+				<p
+					data-testid={reviewing ? "ask-review-question" : undefined}
+					className={cn("text-sm", reviewing ? "font-medium text-text" : "text-muted")}
+				>
+					{question.question}
+				</p>
 			</div>
-			{!answer ? (
+			{showOptions ? (
+				<>
+					<ul className="flex flex-col gap-0.5 pl-[calc(0.875rem+var(--spacing-sm))]">
+						{question.options.map((opt) => {
+							const isSel = selected.has(opt.label);
+							return (
+								<li
+									key={opt.label}
+									data-testid={reviewing ? "ask-review-option" : "ask-record-option"}
+									data-selected={isSel}
+									className={cn(
+										"flex items-center gap-xs text-sm",
+										isSel ? "text-text" : "text-hint",
+									)}
+								>
+									{isSel ? (
+										<Check aria-hidden="true" className="size-3.5 shrink-0 text-green" />
+									) : (
+										<span
+											aria-hidden="true"
+											className="size-3 shrink-0 rounded-full border border-border2"
+										/>
+									)}
+									<span data-testid="ask-selection-status" className="sr-only">
+										{isSel ? "Selected: " : "Not selected: "}
+									</span>
+									<span>{splitRecommended(opt.label).text}</span>
+								</li>
+							);
+						})}
+						{/* A custom answer follows the authored options: additive for multi-select, exclusive for
+						    single-select review. Keeping it inside the list aligns it with the option rows. */}
+						{customAnswer ? (
+							<li
+								data-testid={reviewing ? "ask-review-custom" : "ask-record-custom"}
+								className="flex items-center gap-xs text-sm text-text"
+							>
+								<Check aria-hidden="true" className="size-3.5 shrink-0 text-green" />
+								<span data-testid="ask-selection-status" className="sr-only">
+									Selected custom answer:{" "}
+								</span>
+								<span>“{customAnswer}”</span>
+							</li>
+						) : null}
+					</ul>
+					{!answer ? (
+						<div
+							data-testid="ask-review-unanswered"
+							className="flex items-center gap-xs pl-[calc(0.875rem+var(--spacing-sm))] text-hint text-xs italic"
+						>
+							<SkipForward className="size-3 shrink-0" /> Not answered
+						</div>
+					) : null}
+				</>
+			) : !answer ? (
 				<div className="flex items-center gap-xs pl-[calc(0.875rem+var(--spacing-sm))] text-hint text-xs italic">
 					<SkipForward className="size-3 shrink-0" /> No answer (skipped).
 				</div>
-			) : answer.kind === "custom" ? (
+			) : (
 				<div className="flex items-center gap-xs border-border2 border-l-2 pl-sm">
-					<Check className="size-3.5 shrink-0 text-green" />
+					<Check aria-hidden="true" className="size-3.5 shrink-0 text-green" />
+					<span data-testid="ask-selection-status" className="sr-only">
+						Selected custom answer:{" "}
+					</span>
 					<span className="text-sm text-text">“{answer.answer}”</span>
 				</div>
-			) : (
-				<ul className="flex flex-col gap-0.5 pl-[calc(0.875rem+var(--spacing-sm))]">
-					{question.options.map((opt) => {
-						const isSel = selected.has(opt.label);
-						return (
-							<li
-								key={opt.label}
-								data-testid="ask-record-option"
-								data-selected={isSel}
-								className={cn(
-									"flex items-center gap-xs text-sm",
-									isSel ? "text-text" : "text-hint",
-								)}
-							>
-								{isSel ? (
-									<Check className="size-3.5 shrink-0 text-green" />
-								) : (
-									<span className="size-3 shrink-0 rounded-full border border-border2" />
-								)}
-								{splitRecommended(opt.label).text}
-							</li>
-						);
-					})}
-					{/* A multi answer's free text (typed in addition to the checks) is the list's final row —
-						    inside the <ul> so it aligns exactly with the option rows above it. */}
-					{answer.kind === "multi" && answer.answer ? (
-						<li
-							data-testid="ask-record-custom"
-							className="flex items-center gap-xs text-sm text-text"
-						>
-							<Check className="size-3.5 shrink-0 text-green" />“{answer.answer}”
-						</li>
-					) : null}
-				</ul>
 			)}
 			{answer?.notes ? (
 				<div className="pl-[calc(0.875rem+var(--spacing-sm))] text-hint text-xs">
@@ -828,13 +885,4 @@ function RecordRow({
 			) : null}
 		</div>
 	);
-}
-
-/** One answer as a short human string for the review panel (a multi answer's free text is quoted). */
-function summarizeAnswer(a: AskUserQuestionAnswer): string {
-	const value =
-		a.kind === "multi"
-			? [...(a.selected ?? []), ...(a.answer ? [`“${a.answer}”`] : [])].join(", ")
-			: (a.answer ?? "(no answer)");
-	return a.notes ? `${value} — ${a.notes}` : value;
 }
