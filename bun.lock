@@ -6,7 +6,10 @@
       "name": "@thinkrail/monorepo",
       "devDependencies": {
         "@biomejs/biome": "2.5.0",
+        "@earendil-works/pi-coding-agent": "catalog:",
         "@playwright/test": "1.61.0",
+        "@thinkrail/contracts": "workspace:*",
+        "@thinkrail/server": "workspace:*",
         "@thinkrail/shared": "workspace:*",
         "husky": "9.1.7",
         "turbo": "2.9.18",

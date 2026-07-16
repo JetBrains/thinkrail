@@ -1,0 +1,11 @@
+---
+id: acme-resize
+type: module-design
+status: active
+title: resize — the pipeline
+parent: acme-root
+---
+
+## Responsibility
+
+The image-resizing pipeline.
