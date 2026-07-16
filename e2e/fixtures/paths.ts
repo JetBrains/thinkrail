@@ -34,3 +34,13 @@ export const E2E_CENTRAL_STATE = join(E2E_DATA_DIR, "central-state");
  * `THINKRAIL_E2E_MODEL=<provider>/<modelId>`).
  */
 export const E2E_PI_AGENT_DIR = join(E2E_DATA_DIR, "pi-agent");
+
+/**
+ * A pristine snapshot of the seeded `models.json`, captured in global setup so per-test reset can restore
+ * it. The in-app JetBrains AI spec connects/disconnects the jbcentral proxy, which rewrites the *shared*
+ * agent-dir `models.json` — stripping the anthropic/openai `baseUrl`+`apiKey` that a proxy- or apiKey-authed
+ * dev's `@agent` runs resolve their pinned model through — and leaves the host disconnected, so without a
+ * restore every later `@agent` test finds an empty model registry. Absent when the user has no `models.json`
+ * (auth via `auth.json` only); reset then just clears any test-written copy instead.
+ */
+export const E2E_PI_MODELS_SEED = join(E2E_DATA_DIR, "pi-agent-models.seed.json");
