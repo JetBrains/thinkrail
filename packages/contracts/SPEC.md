@@ -111,7 +111,11 @@ runtime exports being the WS method/channel constants and the protocol version. 
   publisher (never a per-client optimistic mutation). `created`/`updated` carry the **full persisted
   `Workspace` snapshot** (idempotent under the transport's last-value replay, so e.g. the auto-rename's
   naive-then-agentic pair merges by `id` — never a delta); `removed` carries a **`WorkspaceRemoved`** id
-  pair (`{ projectId, id }` — the record is already gone). The `WsMethodMap` typed request/result map +
+  pair (`{ projectId, id }` — the record is already gone) / **`workspace.fsChanged`** — the worktree
+  change-notifier push (**`WorkspaceFsChangedPayload`**: `{ workspaceId, paths, truncated }`,
+  worktree-relative deduped paths, capped — `truncated` = treat as wildcard); an **invalidation nudge,
+  not data**: clients re-read via the existing read methods, so a duplicate/replayed frame is harmless.
+  The `WsMethodMap` typed request/result map +
   `WsParams`/`WsResult` helpers, and `PROTOCOL_VERSION`.
 
 ## Get right

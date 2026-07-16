@@ -53,7 +53,7 @@ export function RightPanel() {
 					<p className="p-sm text-xs text-hint">Select a workspace to browse files.</p>
 				) : tab === "specs" ? (
 					<div className="p-xs">
-						<SpecsPanel key={specsRefresh} workspaceId={activeWorkspaceId} />
+						<SpecsPanel workspaceId={activeWorkspaceId} refreshToken={specsRefresh} />
 					</div>
 				) : tab === "files" ? (
 					<div className="p-xs">

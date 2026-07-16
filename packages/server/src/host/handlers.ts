@@ -58,6 +58,7 @@ import {
 	resizeTerminal,
 	writeTerminal,
 } from "../terminal";
+import { ensureWatch, stopWatch } from "../watch";
 import {
 	createWorkspace,
 	forgetWorkspace,
@@ -114,6 +115,7 @@ const handlers: Record<string, Handler> = {
 		// slow git subprocess + session abort.
 		const ws = forgetWorkspace(id);
 		evictSpecIndex(id); // the archived worktree's spec parse cache must not outlive it
+		stopWatch(id); // fast: stop the change notifier before the worktree dir is reclaimed
 		closeWorkspaceTerminals(id); // fast: kill workspace-scoped PTYs before the dir is reclaimed
 		if (ws) void archiveTeardown(ws);
 		return { ok: true } as const;
@@ -127,14 +129,33 @@ const handlers: Record<string, Handler> = {
 	"github.authStatus": () => githubAuthStatus(),
 	"github.refresh": () => githubRefresh(),
 	"dialog.selectDirectory": () => selectDirectory(),
-	"fs.readDir": (params) =>
-		readDir((params as { workspaceId: string }).workspaceId, (params as { path: string }).path),
-	"fs.readFile": (params) =>
-		readFile((params as { workspaceId: string }).workspaceId, (params as { path: string }).path),
-	"spec.graph": (params) => specGraph((params as { workspaceId: string }).workspaceId),
-	"git.status": (params) => gitStatus((params as { workspaceId: string }).workspaceId),
-	"git.diff": (params) =>
-		gitDiff((params as { workspaceId: string }).workspaceId, (params as { path?: string }).path),
+	// Workspace reads double as the change-notifier trigger: a read means "a client is looking at this
+	// worktree", so the host lazily starts its watcher (idempotent; unknown ids no-op, the read throws).
+	"fs.readDir": (params) => {
+		const p = params as { workspaceId: string; path: string };
+		ensureWatch(p.workspaceId);
+		return readDir(p.workspaceId, p.path);
+	},
+	"fs.readFile": (params) => {
+		const p = params as { workspaceId: string; path: string };
+		ensureWatch(p.workspaceId);
+		return readFile(p.workspaceId, p.path);
+	},
+	"spec.graph": (params) => {
+		const p = params as { workspaceId: string };
+		ensureWatch(p.workspaceId);
+		return specGraph(p.workspaceId);
+	},
+	"git.status": (params) => {
+		const p = params as { workspaceId: string };
+		ensureWatch(p.workspaceId);
+		return gitStatus(p.workspaceId);
+	},
+	"git.diff": (params) => {
+		const p = params as { workspaceId: string; path?: string };
+		ensureWatch(p.workspaceId);
+		return gitDiff(p.workspaceId, p.path);
+	},
 	"terminal.create": (params) => createTerminal((params as { workspaceId: string }).workspaceId),
 	"terminal.write": (params) => {
 		const p = params as { id: string; data: string };

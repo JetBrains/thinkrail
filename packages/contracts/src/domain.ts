@@ -45,6 +45,18 @@ export interface Workspace {
 	diffStats?: DiffStats;
 }
 
+/**
+ * The `workspace.fsChanged` push frame: the host's worktree watcher noticed on-disk changes (agent
+ * edits, terminal commands, Finder). An **invalidation nudge, not data** — clients re-read via the
+ * existing read methods, so a duplicate/replayed frame is harmless. `paths` are worktree-relative and
+ * deduped, capped host-side; `truncated: true` = treat as a wildcard (anything may have changed).
+ */
+export interface WorkspaceFsChangedPayload {
+	workspaceId: string;
+	paths: string[];
+	truncated: boolean;
+}
+
 /** A chat tab bound to a workspace. `id` is the UI tab id; `sessionId` is the pi `AgentSession` id. */
 export interface Session {
 	id: string;

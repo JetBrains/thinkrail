@@ -9,7 +9,7 @@ import {
 	ListChecks,
 	Network,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "../lib";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
@@ -17,32 +17,54 @@ import { openFileInTab } from "./openFile";
 import { buildSpecTree, type SpecTreeNode, specRoleLabel, specRoleTag } from "./specTree";
 
 /**
- * Read-only spec-graph viewer for the active worktree: one `spec.graph` fetch per mount (read-on-demand,
- * no push — the header Refresh button in `RightPanel` re-fetches by remounting via `key`), rendered as
- * a compact document-first `parent` tree. Fixed indentation carries depth without persistent connector
- * lines; the chevron expands children and one click on the document row opens its rendered spec.
+ * Read-only spec-graph viewer for the active worktree, rendered as a compact document-first `parent`
+ * tree. Fetches `spec.graph` on mount and re-fetches WITHOUT remounting on the store's per-workspace
+ * fs tick (the host's `workspace.fsChanged` nudge) and on the header Refresh button (`refreshToken`
+ * from `RightPanel`) — rows are keyed by spec id, so expansion state survives a silent refresh. A
+ * refetch failure keeps the last good tree; the error hint shows only when there is nothing to show.
+ * The chevron expands children and one click on the document row opens its rendered spec.
  */
-export function SpecsPanel({ workspaceId }: { workspaceId: string }) {
+export function SpecsPanel({
+	workspaceId,
+	refreshToken = 0,
+}: {
+	workspaceId: string;
+	refreshToken?: number;
+}) {
 	const [nodes, setNodes] = useState<SpecGraphNode[] | null>(null);
 	const [failed, setFailed] = useState(false);
 	const activeTabId = useAppStore((state) => state.activeTabByWorkspace[workspaceId] ?? null);
+	const fsTick = useAppStore((s) => s.fsChangesByWorkspace[workspaceId]?.tick ?? 0);
+	// Mirrors `nodes` so the async catch can tell "nothing loaded yet" without re-running the effect.
+	const nodesRef = useRef<SpecGraphNode[] | null>(null);
 
+	// Hard reset only on workspace switch — tick/Refresh refetches keep the old tree until the read lands.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: workspaceId is the trigger (reset-on-switch), not a body input
+	useEffect(() => {
+		setNodes(null);
+		nodesRef.current = null;
+		setFailed(false);
+	}, [workspaceId]);
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: fsTick + refreshToken are refetch triggers, not body inputs
 	useEffect(() => {
 		let cancelled = false;
-		setNodes(null);
-		setFailed(false);
 		getTransport()
 			.request("spec.graph", { workspaceId })
 			.then((result) => {
-				if (!cancelled) setNodes(result.nodes);
+				if (cancelled) return;
+				nodesRef.current = result.nodes;
+				setNodes(result.nodes);
+				setFailed(false);
 			})
 			.catch(() => {
-				if (!cancelled) setFailed(true);
+				// Keep a previously-loaded tree on a failed refresh; only an empty panel shows the hint.
+				if (!cancelled && nodesRef.current === null) setFailed(true);
 			});
 		return () => {
 			cancelled = true;
 		};
-	}, [workspaceId]);
+	}, [workspaceId, fsTick, refreshToken]);
 
 	const roots = useMemo(() => (nodes ? buildSpecTree(nodes) : null), [nodes]);
 

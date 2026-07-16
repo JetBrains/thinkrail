@@ -16,7 +16,12 @@ export async function openFileInTab(workspaceId: string, path: string): Promise<
 	try {
 		const { content } = await getTransport().request("fs.readFile", { workspaceId, path });
 		const name = path.split("/").pop() || path;
-		useAppStore.getState().openTab({ kind: "file", id, workspaceId, path, name, content });
+		// Stamp the workspace's current fs tick: the content is fresh as of now, so FilePane's live
+		// re-read only fires for ticks arriving AFTER this open.
+		const loadedTick = useAppStore.getState().fsChangesByWorkspace[workspaceId]?.tick ?? 0;
+		useAppStore
+			.getState()
+			.openTab({ kind: "file", id, workspaceId, path, name, content, loadedTick });
 	} catch {
 		// a read failure (missing file / not text) leaves tabs unchanged
 	}

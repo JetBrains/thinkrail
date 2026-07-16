@@ -76,7 +76,14 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   the existing id instead of stacking a twin) and **caps the queue at 5** (oldest drop — the viewport doesn't
   scroll, so the newest must stay visible).
   It's the home for a **rejected wire call with no better place to land** (no chat tab to host an error turn),
-  complementing `appendErrorTurn` (which handles the in-chat case). The transient **`changesRequest`** +
+  complementing `appendErrorTurn` (which handles the in-chat case). The **live-refresh signal** —
+  **`fsChangesByWorkspace: Record<workspaceId, { tick, paths, truncated }>`** with
+  **`noteFsChanged(payload)`** (folds a `workspace.fsChanged` push: `tick` increments per frame;
+  `paths`/`truncated` are the last batch) — panels select their workspace's entry and refetch on `tick`
+  change (the store holds only the signal, never fetches; `applyWorkspaceRemoved` drops a removed
+  workspace's entry); and **`updateFileTabContent(id, content,
+  tick)`** — a `FileTab` carries the `tick` its content was loaded at, so `FilePane` detects staleness
+  (`workspaceTick > tab.loadedTick`) across tab switches. The transient **`changesRequest`** +
   **`requestChangesView(workspaceId, path)`** are a UI deep-link intent (a chat turn-divider asking the
   right panel to surface a file's diff); the panels watch it, scoped by workspace. The `EditorTab`
   (`FileTab` | `ChatTab`) + `TerminalTab` + `ClosedChat` + `SessionRuntime` types. (Chat *render* types +
@@ -85,7 +92,7 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   `EditorTab` (`FileTab`/`ChatTab`), `TerminalTab`, `ClosedChat`, `SessionRuntime` + `EMPTY_RUNTIME`
   (ChatView's pre-creation fallback), `reduceSessionEvent`.
 - **Allowed deps:** `contracts` (`Project`/`Workspace`/`Model`/`ThinkingLevel`/`SessionStats`/
-  `SlashCommandInfo`/`ExtUiRequest`/`LoginPush`; `PiEvent`/`LoginFrame`, **type-only**); `chat`
+  `SlashCommandInfo`/`ExtUiRequest`/`LoginPush`/`WorkspaceFsChangedPayload`; `PiEvent`/`LoginFrame`, **type-only**); `chat`
   (`ChatTurn`/`ToolResultState`, **type-only**); `auth` (`LoginState`, **type-only**); `transport`
   (`ConnectionStatus`, **type-only**); `zustand`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `panels`/`shell` or transport runtime.

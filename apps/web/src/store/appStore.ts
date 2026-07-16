@@ -10,6 +10,7 @@ import type {
 	ThinkingLevel,
 	WireModel,
 	Workspace,
+	WorkspaceFsChangedPayload,
 } from "@thinkrail/contracts";
 import { create } from "zustand";
 import type { LoginState } from "../auth";
@@ -26,6 +27,9 @@ export interface FileTab {
 	content: string;
 	/** Markdown tabs only: view mode. Absent = rendered (the default); source shows Monaco. */
 	view?: "rendered" | "source";
+	/** The workspace fs tick `content` was loaded at (see `fsChangesByWorkspace`). Absent = initial load
+	 * (tick 0) — `FilePane` re-reads when the workspace has ticked past this. */
+	loadedTick?: number;
 }
 export interface ChatTab {
 	kind: "chat";
@@ -337,6 +341,13 @@ interface AppState {
 	 */
 	changesRequest: { workspaceId: string; path: string } | null;
 	/**
+	 * The live-refresh signal, per workspace: `tick` increments on every `workspace.fsChanged` push (the
+	 * host's debounced worktree change notifier); `paths`/`truncated` are the LAST batch only. Panels
+	 * select their workspace's entry and silently refetch on `tick` change — the store holds only the
+	 * signal, never fetches.
+	 */
+	fsChangesByWorkspace: Record<string, { tick: number; paths: string[]; truncated: boolean }>;
+	/**
 	 * The in-flight in-app OAuth login, if any (flat + session-less — a login runs on the Welcome screen
 	 * before any session exists, so it must NOT live under a session runtime, or its frames get dropped).
 	 * At most one at a time (the dialog is modal).
@@ -384,6 +395,11 @@ interface AppState {
 	setActiveTab: (id: string) => void;
 	/** Set a markdown file tab's view mode (rendered ↔ source); kept on the tab so it survives tab switches. */
 	setFileTabView: (id: string, view: "rendered" | "source") => void;
+	/** Fold a `workspace.fsChanged` push into the live-refresh signal (tick++, last batch replaces). */
+	noteFsChanged: (payload: WorkspaceFsChangedPayload) => void;
+	/** Replace a file tab's content after a live re-read, recording the fs tick it was loaded at. The tab
+	 * is located across workspaces by its (globally unique) id; a closed tab is a no-op. */
+	updateFileTabContent: (id: string, content: string, tick: number) => void;
 	clearWorkspaceTabs: (workspaceId: string) => void;
 	addTerminal: (workspaceId: string) => void;
 	closeTerminalTab: (workspaceId: string, clientId: string) => void;
@@ -539,6 +555,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	sessions: {},
 	models: [],
 	changesRequest: null,
+	fsChangesByWorkspace: {},
 	activeLogin: null,
 	settingsOpen: false,
 	settingsSection: "providers",
@@ -592,6 +609,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 		const name = s.workspaces[projectId]?.find((w) => w.id === workspaceId)?.name;
 		s.removeWorkspace(projectId, workspaceId);
 		s.clearWorkspaceTabs(workspaceId); // drops the row's tabs + terminals + chat runtimes
+		// Drop the live-refresh signal too — a removed workspace's fs tick record must not linger.
+		set((state) => {
+			const { [workspaceId]: _gone, ...rest } = state.fsChangesByWorkspace;
+			return { fsChangesByWorkspace: rest };
+		});
 		if (wasActive) {
 			s.setActiveWorkspace(null); // the shell falls back to the project Welcome
 			toast.info(`Workspace "${name ?? "?"}" was removed`);
@@ -641,6 +663,35 @@ export const useAppStore = create<AppState>((set, get) => ({
 					[wsId]: tabs.map((t) => (t.id === id && t.kind === "file" ? { ...t, view } : t)),
 				},
 			};
+		}),
+	noteFsChanged: (payload) =>
+		set((s) => {
+			const prev = s.fsChangesByWorkspace[payload.workspaceId];
+			return {
+				fsChangesByWorkspace: {
+					...s.fsChangesByWorkspace,
+					[payload.workspaceId]: {
+						tick: (prev?.tick ?? 0) + 1,
+						paths: payload.paths,
+						truncated: payload.truncated,
+					},
+				},
+			};
+		}),
+	updateFileTabContent: (id, content, tick) =>
+		set((s) => {
+			for (const [wsId, tabs] of Object.entries(s.tabsByWorkspace)) {
+				if (!tabs.some((t) => t.id === id && t.kind === "file")) continue;
+				return {
+					tabsByWorkspace: {
+						...s.tabsByWorkspace,
+						[wsId]: tabs.map((t) =>
+							t.id === id && t.kind === "file" ? { ...t, content, loadedTick: tick } : t,
+						),
+					},
+				};
+			}
+			return {};
 		}),
 	clearWorkspaceTabs: (workspaceId) =>
 		set((s) => {

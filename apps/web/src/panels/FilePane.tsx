@@ -1,7 +1,8 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { isMarkdownPath } from "@/lib/utils";
 import type { FileTab } from "../store";
 import { useAppStore } from "../store";
+import { getTransport } from "../transport";
 
 // Heavy views load only when shown: Monaco for source, markdown+shiki for the rendered preview.
 const MonacoEditor = lazy(() => import("./MonacoEditor"));
@@ -13,9 +14,42 @@ const loading = <div className="flex h-full items-center justify-center text-hin
  * The center pane for a file tab. Non-markdown files render Monaco directly (unchanged). Markdown files
  * open **rendered by default** with a `Preview | Source` toggle in a slim header; the choice lives on the
  * tab (`store.setFileTabView`) so it survives tab switches.
+ *
+ * Live: when the workspace's fs tick moves past the tick this tab's content was loaded at, the file is
+ * re-read and the tab content replaced (Monaco + preview are `content`-controlled, so they follow).
+ * Visible tabs update live; a background tab catches up here on activation (only the active tab mounts).
+ * A single unrelated batch is skipped by path; a failed re-read (file deleted) keeps the last content —
+ * the tree/changes panels are where the deletion shows — and just advances the tab's tick.
  */
 export function FilePane({ tab }: { tab: FileTab }) {
 	const setFileTabView = useAppStore((s) => s.setFileTabView);
+	const change = useAppStore((s) => s.fsChangesByWorkspace[tab.workspaceId]);
+
+	useEffect(() => {
+		if (!change) return;
+		const loaded = tab.loadedTick ?? 0;
+		if (change.tick <= loaded) return;
+		const updateContent = useAppStore.getState().updateFileTabContent;
+		// Exactly one batch behind and this file isn't in it → nothing to re-read, just advance the tick.
+		const skippable =
+			change.tick === loaded + 1 && !change.truncated && !change.paths.includes(tab.path);
+		if (skippable) {
+			updateContent(tab.id, tab.content, change.tick);
+			return;
+		}
+		let cancelled = false;
+		getTransport()
+			.request("fs.readFile", { workspaceId: tab.workspaceId, path: tab.path })
+			.then(({ content }) => {
+				if (!cancelled) updateContent(tab.id, content, change.tick);
+			})
+			.catch(() => {
+				if (!cancelled) updateContent(tab.id, tab.content, change.tick);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [change, tab.id, tab.path, tab.workspaceId, tab.loadedTick, tab.content]);
 
 	if (!isMarkdownPath(tab.path)) {
 		return (

@@ -21,7 +21,11 @@ channel fan-out, and the process-boot wrapper both launchers share.
   markdown viewer's relative `<img>`s resolve, static serving with
   `index.html` fallback, the `server.welcome` push, `terminal.data` topic subscribe + `server.publish`,
   the **`provider.login`** channel publish (the `auth` module's session-less login-frame bridge, wired like
-  `pi.extensionUi`) and the `provider.*` login handlers, `cancelAllLogins()` in `stop()` before the socket close,
+  `pi.extensionUi`) and the `provider.*` login handlers, the **`watch` wiring** (inject the
+  `workspace.fsChanged` publish callback into `watch`; call `ensureWatch(workspaceId)` from the
+  workspace-read handlers (`fs.*`, `git.status`/`git.diff`, `spec.graph`) — a read is the "a client is
+  looking" signal; `stopWatch` in `workspace.remove`'s fast path beside `evictSpecIndex`;
+  `stopAllWatches()` in `stop()`), `cancelAllLogins()` in `stop()` before the socket close,
   an optional boot-time `openProject(projectPath)` (best-effort — a launcher convenience), and
   `stop()` → agent-session + terminal cleanup then socket close); `boot.ts` (`bootHost` → resolve the
   login-shell PATH, pick the port per `portMode` (`"exact"` vs `"free"`), start `createServer`, and

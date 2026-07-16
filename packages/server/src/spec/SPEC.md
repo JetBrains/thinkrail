@@ -13,13 +13,15 @@ tags: [v1, spec-viewer]
 
 Serve the read-only Specs viewer: a whole-graph snapshot of the active worktree's spec-graph
 (`spec.graph`), mapped to the wire DTOs. Read-on-demand — every call re-reads through the derived index
-(revalidate-on-read), so specs edited by the agent, the editor, or git are current on the next fetch; no
-file-watch push. Also answers the project-level **`projectHasSpecs(root)`** — does a repo carry *any*
+(revalidate-on-read), so specs edited by the agent, the editor, or git are current on the next fetch.
+(The sibling `watch` module separately nudges clients to re-fetch — an invalidation push, not a data
+push; this module's read path stays pull-only.) Also answers the project-level **`projectHasSpecs(root)`** — does a repo carry *any*
 registered spec — which `host` exposes via the **lazy `project.hasSpecs`** method (a full-tree walk, so
 requested only for the one project the Welcome screen renders, never eagerly for every project).
 
 The read is **synchronous** (core's walk is sync-fs, O(worktree dirs) per call). That's acceptable —
-fetches are on-demand (tab-visit / Refresh, no polling) and the per-file parse cache skips re-reads. If
+fetches are on-demand (tab-visit / Refresh / a `workspace.fsChanged` nudge, no polling) and the
+per-file parse cache skips re-reads. If
 the walk ever dominates, the escalation is core's **watcher-as-dirty-flag** (see `pi-spec-graph`
 core/SPEC.md), not an async wrapper — that would still block the loop in one piece.
 
