@@ -18,7 +18,8 @@ degrade when answers don't come. Process skills name this concept at the steps t
 
 ## Options
 
-- Recommended option first, label suffixed "(Recommended)".
+- Recommended option first, label suffixed "(Recommended)", plus a one-line `recommendedReason` saying
+  why you recommend it over the alternatives (shown inline under the option as a `Why:` line).
 - Every option: a concise label (1–5 words, ≤ 60 chars) + a description carrying the trade-off or
   consequence of choosing it. Tailor options to the work at hand — never generic placeholders.
 - Never author your own "Other", free-text, or escape options — the tool adds a free-text row to
