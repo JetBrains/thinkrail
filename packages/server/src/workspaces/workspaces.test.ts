@@ -9,6 +9,8 @@ import {
 	reclaimWorktree,
 	removeWorkspace,
 	renameWorkspace,
+	setWorkspacePublisher,
+	type WorkspaceLifecycleEvent,
 } from "./workspaces";
 
 function gitOut(cwd: string, ...args: string[]): string {
@@ -43,6 +45,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+	setWorkspacePublisher(null); // never leak a test's lifecycle sink into the next
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
@@ -192,6 +195,31 @@ test("forgetWorkspace drops the record + returns it, but leaves the worktree for
 
 	// A second forget (double-archive) is a no-op returning null.
 	expect(forgetWorkspace(ws.id)).toBeNull();
+});
+
+test("membership mutations emit lifecycle events through the injected publisher", async () => {
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((e) => events.push(e));
+
+	const ws = await createWorkspace("p1"); // auto-named workspace-1
+	renameWorkspace(ws.id, "my feature"); // → branch my-feature
+	expect(forgetWorkspace(ws.id)).not.toBeNull();
+	expect(forgetWorkspace(ws.id)).toBeNull(); // unknown now → no further event
+
+	expect(events.map((e) => e.kind)).toEqual(["created", "updated", "removed"]);
+	expect(events[0]).toMatchObject({ kind: "created", workspace: { id: ws.id, projectId: "p1" } });
+	expect(events[1]).toMatchObject({
+		kind: "updated",
+		workspace: { id: ws.id, name: "my-feature" },
+	});
+	expect(events[2]).toEqual({ kind: "removed", projectId: "p1", id: ws.id });
+});
+
+test("a null publisher makes lifecycle emits silent no-ops", async () => {
+	setWorkspacePublisher(null);
+	const ws = await createWorkspace("p1");
+	expect(() => removeWorkspace(ws.id)).not.toThrow();
+	expect(listWorkspaces("p1")).toHaveLength(0);
 });
 
 test("removeWorkspace cleans up even when the worktree dir is already gone", async () => {

@@ -6,6 +6,32 @@ import { git, gitAsync } from "../git";
 import { dataDir, loadProjects, loadWorkspaces, saveWorkspaces } from "../persistence";
 import { getProjects } from "../projects";
 
+/**
+ * A workspace-registry membership change, emitted on every create/rename/archive so the host can fan it
+ * out to every client (architecture #9 — registry membership is shared domain state). The module stays
+ * ignorant of WS channels: it emits a domain event; `createServer` maps `kind` → `workspace.*` channel.
+ * `created`/`updated` carry the full record; `removed` carries only the ids (the record is already gone).
+ */
+export type WorkspaceLifecycleEvent =
+	| { kind: "created"; workspace: Workspace }
+	| { kind: "updated"; workspace: Workspace }
+	| { kind: "removed"; projectId: string; id: string };
+
+type WorkspacePublisher = (event: WorkspaceLifecycleEvent) => void;
+
+// Injected by the host (the same publisher inversion `terminal`/`agent`/`auth` use). `null` in unit tests
+// / the e2e reset → emits are silent no-ops, so the pure record functions stay testable in isolation.
+let publishLifecycle: WorkspacePublisher | null = null;
+
+/** Install (or clear with `null`) the sink the workspace lifecycle events are fanned out through. */
+export function setWorkspacePublisher(fn: WorkspacePublisher | null): void {
+	publishLifecycle = fn;
+}
+
+function emit(event: WorkspaceLifecycleEvent): void {
+	publishLifecycle?.(event);
+}
+
 function toBranch(name: string): string {
 	return (
 		name
@@ -118,6 +144,7 @@ export async function createWorkspace(
 	};
 	all.push(workspace);
 	saveWorkspaces(all);
+	emit({ kind: "created", workspace });
 	return workspace;
 }
 
@@ -165,6 +192,7 @@ export function renameWorkspace(
 	target.branch = branch;
 	if (lock) target.renamed = true;
 	saveWorkspaces(all);
+	emit({ kind: "updated", workspace: target });
 	return target;
 }
 
@@ -185,6 +213,7 @@ export function forgetWorkspace(id: string): Workspace | null {
 	const ws = all.find((w) => w.id === id);
 	if (!ws) return null;
 	saveWorkspaces(all.filter((w) => w.id !== id));
+	emit({ kind: "removed", projectId: ws.projectId, id: ws.id });
 	return ws;
 }
 

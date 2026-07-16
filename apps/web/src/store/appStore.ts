@@ -354,14 +354,29 @@ interface AppState {
 	setProjects: (projects: Project[]) => void;
 	setWorkspaces: (projectId: string, workspaces: Workspace[]) => void;
 	/**
+	 * Fold a server-pushed `workspace.created` snapshot in (**upsert** by id). A project never fetched is a
+	 * **no-op** — a client that hasn't opened the project reconciles on its next `workspace.list` rather
+	 * than being handed a partial one-row list (a wrong count); otherwise add if absent / merge if present
+	 * (idempotent with the creating client's own post-create re-list).
+	 */
+	addWorkspace: (workspace: Workspace) => void;
+	/**
 	 * Fold a server-pushed `workspace.updated` snapshot in (e.g. the auto-rename): merge by id into the
 	 * project's list. A project never fetched, or an id absent from its list, is a no-op — the next
 	 * `workspace.list` reconciles.
 	 */
 	updateWorkspace: (workspace: Workspace) => void;
-	/** Optimistically drop a workspace from its project's list (the remove flow drops the row before
-	 * the host finishes tearing the worktree down). A missing project/id is a no-op. */
+	/** Drop a workspace from its project's list (a missing project/id is a no-op). The primitive behind
+	 * `applyWorkspaceRemoved`; not called directly by the remove flow (that reacts to the push). */
 	removeWorkspace: (projectId: string, workspaceId: string) => void;
+	/**
+	 * React to a server-pushed `workspace.removed` — the **entire** removal reaction, run identically by
+	 * every client (including the one that initiated the remove, so there's no per-client optimism): drop
+	 * the row + clear its tabs/terminals/chat runtimes (`clearWorkspaceTabs`), and **if it was this
+	 * client's active workspace** return to the project Welcome (`setActiveWorkspace(null)`) and raise a
+	 * neutral toast (reads correctly for both the initiator and an observer).
+	 */
+	applyWorkspaceRemoved: (projectId: string, workspaceId: string) => void;
 	selectProject: (projectId: string) => void;
 	setActiveWorkspace: (id: string | null) => void;
 	openTab: (tab: EditorTab) => void;
@@ -533,6 +548,21 @@ export const useAppStore = create<AppState>((set, get) => ({
 	setProjects: (projects) => set({ projects }),
 	setWorkspaces: (projectId, workspaces) =>
 		set((s) => ({ workspaces: { ...s.workspaces, [projectId]: workspaces } })),
+	addWorkspace: (workspace) =>
+		set((s) => {
+			const list = s.workspaces[workspace.projectId];
+			// Unlisted project → no-op: reconcile on its next `workspace.list` rather than seed a partial
+			// one-row list. Otherwise upsert by id (merge if somehow already present).
+			if (!list) return {};
+			return {
+				workspaces: {
+					...s.workspaces,
+					[workspace.projectId]: list.some((w) => w.id === workspace.id)
+						? list.map((w) => (w.id === workspace.id ? { ...w, ...workspace } : w))
+						: [...list, workspace],
+				},
+			};
+		}),
 	updateWorkspace: (workspace) =>
 		set((s) => {
 			const list = s.workspaces[workspace.projectId];
@@ -556,6 +586,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 				workspaces: { ...s.workspaces, [projectId]: list.filter((w) => w.id !== workspaceId) },
 			};
 		}),
+	applyWorkspaceRemoved: (projectId, workspaceId) => {
+		const s = get();
+		const wasActive = s.activeWorkspaceId === workspaceId;
+		const name = s.workspaces[projectId]?.find((w) => w.id === workspaceId)?.name;
+		s.removeWorkspace(projectId, workspaceId);
+		s.clearWorkspaceTabs(workspaceId); // drops the row's tabs + terminals + chat runtimes
+		if (wasActive) {
+			s.setActiveWorkspace(null); // the shell falls back to the project Welcome
+			toast.info(`Workspace "${name ?? "?"}" was removed`);
+		}
+	},
 	selectProject: (selectedProjectId) => set({ selectedProjectId }),
 	setActiveWorkspace: (activeWorkspaceId) => set({ activeWorkspaceId }),
 	openTab: (tab) =>

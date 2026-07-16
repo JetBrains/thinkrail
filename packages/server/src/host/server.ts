@@ -1,5 +1,5 @@
 import { join, normalize } from "node:path";
-import type { ServerWelcome, Workspace } from "@thinkrail/contracts";
+import type { ServerWelcome } from "@thinkrail/contracts";
 import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
 import {
 	disposeAllSessions,
@@ -11,6 +11,7 @@ import { cancelAllLogins, setLoginPublisher } from "../auth";
 import { resolveWorktreeFile } from "../fs";
 import { listProjects, openProject } from "../projects";
 import { closeAllTerminals, setTerminalPublisher } from "../terminal";
+import { setWorkspacePublisher } from "../workspaces";
 import {
 	isPromptCommitted,
 	isSettledTurn,
@@ -64,7 +65,9 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 				ws.subscribe(WS_CHANNELS.piEvent);
 				ws.subscribe(WS_CHANNELS.piExtensionUi);
 				ws.subscribe(WS_CHANNELS.providerLogin);
+				ws.subscribe(WS_CHANNELS.workspaceCreated);
 				ws.subscribe(WS_CHANNELS.workspaceUpdated);
+				ws.subscribe(WS_CHANNELS.workspaceRemoved);
 				const welcome: ServerWelcome = {
 					protocolVersion: PROTOCOL_VERSION,
 					projects: listProjects(),
@@ -97,21 +100,29 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		server.publish(channel, JSON.stringify({ channel, data }));
 	});
 
-	// Push a host-initiated workspace mutation (an auto-rename) to every subscribed client. The web store
-	// folds `workspace.updated` by id, so a naive-then-agentic pair is two idempotent updates (last wins).
-	const pushWorkspaceUpdated = (ws: Workspace | null): void => {
-		if (!ws) return;
-		server.publish(
-			WS_CHANNELS.workspaceUpdated,
-			JSON.stringify({ channel: WS_CHANNELS.workspaceUpdated, data: ws }),
-		);
-	};
+	// Fan the `workspaces` module's lifecycle events out to every subscribed client, mapping each domain
+	// `kind` to its `workspace.*` channel (the module stays channel-ignorant). `created`/`updated` send the
+	// full record snapshot (idempotent under the store's fold-by-id, so the auto-rename's naive-then-agentic
+	// pair is two updates, last wins); `removed` sends the `{ projectId, id }` pair. Every client — including
+	// the initiator — converges by reacting to these, never a per-client optimistic mutation.
+	setWorkspacePublisher((event) => {
+		const channel =
+			event.kind === "created"
+				? WS_CHANNELS.workspaceCreated
+				: event.kind === "updated"
+					? WS_CHANNELS.workspaceUpdated
+					: WS_CHANNELS.workspaceRemoved;
+		const data =
+			event.kind === "removed" ? { projectId: event.projectId, id: event.id } : event.workspace;
+		server.publish(channel, JSON.stringify({ channel, data }));
+	});
 
 	// Stream each in-process AgentSession's events to subscribed clients over the pi.event channel, and
 	// tee the best-effort workspace auto-rename off two points, fire-and-forget (`void` — the hooks never
 	// reject, and this closure's slot is sync by design): the **first prompt landing** (a user
 	// `message_end`, before the model responds) gets an instant non-agentic name, and a **settled turn**
-	// (agent_end, no retry) refines it with the agentic namer and locks it. Both push `workspace.updated`.
+	// (agent_end, no retry) refines it with the agentic namer and locks it. The `workspace.updated` push is
+	// self-emitted by `renameWorkspace` (via the lifecycle publisher above) — the tee just triggers it.
 	setSessionPublisher((payload) => {
 		server.publish(
 			WS_CHANNELS.piEvent,
@@ -119,14 +130,10 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		);
 		if (isPromptCommitted(payload.event)) {
 			const workspaceId = getSessionWorkspaceId(payload.sessionId);
-			if (workspaceId) {
-				void maybeNaiveNameWorkspace(payload.sessionId, workspaceId).then(pushWorkspaceUpdated);
-			}
+			if (workspaceId) void maybeNaiveNameWorkspace(payload.sessionId, workspaceId);
 		} else if (isSettledTurn(payload.event)) {
 			const workspaceId = getSessionWorkspaceId(payload.sessionId);
-			if (workspaceId) {
-				void maybeAutoRenameWorkspace(payload.sessionId, workspaceId).then(pushWorkspaceUpdated);
-			}
+			if (workspaceId) void maybeAutoRenameWorkspace(payload.sessionId, workspaceId);
 		}
 	});
 

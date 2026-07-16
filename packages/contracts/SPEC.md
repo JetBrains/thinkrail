@@ -105,11 +105,13 @@ runtime exports being the WS method/channel constants and the protocol version. 
   read side)), `WS_CHANNELS` (`server.welcome` /
   `pi.event` / `pi.extensionUi` / **`provider.login`** — the session-less in-app login stream (a `LoginPush`
   per frame, keyed by `loginId`; the sibling of `pi.extensionUi`, since a login runs on the Welcome screen
-  before any session exists) / `terminal.data` / **`workspace.updated`** — a host-initiated workspace
-  mutation (the auto-rename — the instant naive pass and the agentic refine both push it) fanned out to
-  every client; `data` is the **full persisted `Workspace` snapshot** (idempotent under the transport's
-  last-value replay, so a naive-then-agentic pair merges by `id` — never a delta), keyed by `id` +
-  `projectId`), the `WsMethodMap` typed request/result map +
+  before any session exists) / `terminal.data` / the **workspace lifecycle trio** — **`workspace.created`**
+  / **`workspace.updated`** / **`workspace.removed`** — registry membership changes fanned out to every
+  client so it stays shared domain state (architecture #9), all emitted by the server's `workspaces`
+  publisher (never a per-client optimistic mutation). `created`/`updated` carry the **full persisted
+  `Workspace` snapshot** (idempotent under the transport's last-value replay, so e.g. the auto-rename's
+  naive-then-agentic pair merges by `id` — never a delta); `removed` carries a **`WorkspaceRemoved`** id
+  pair (`{ projectId, id }` — the record is already gone). The `WsMethodMap` typed request/result map +
   `WsParams`/`WsResult` helpers, and `PROTOCOL_VERSION`.
 
 ## Get right

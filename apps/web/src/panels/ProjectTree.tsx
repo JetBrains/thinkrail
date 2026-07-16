@@ -3,8 +3,8 @@ import { ChevronDown, ChevronRight, Folder, GitBranch, Plus, Trash2 } from "luci
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { PopoverTrigger } from "@/components/ui/popover";
-import { useAppStore } from "../store";
-import { getTransport } from "../transport";
+import { toast, useAppStore } from "../store";
+import { errorText, getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
 import { ConfirmPopover } from "./ConfirmPopover";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
@@ -66,16 +66,14 @@ export function ProjectTree() {
 		await loadWorkspaces(workspace.projectId);
 	};
 
-	// Optimistic removal: drop the row + its tabs now, then fire the request without blocking the UI (the
-	// host acks fast and reclaims the worktree in the background). A failed delete reconciles by re-listing.
-	const removeWorkspace = (projectId: string, workspaceId: string) => {
-		const store = useAppStore.getState();
-		store.removeWorkspace(projectId, workspaceId);
-		store.clearWorkspaceTabs(workspaceId);
-		if (activeWorkspaceId === workspaceId) store.setActiveWorkspace(null);
+	// Event-driven removal: just fire the request — no per-client optimism. The host tears the worktree
+	// down and broadcasts `workspace.removed`, which every client (including this one) reacts to via
+	// `applyWorkspaceRemoved`. A rejected request means no event will come, so surface it as an error toast
+	// (the row simply stays).
+	const removeWorkspace = (workspaceId: string) => {
 		void getTransport()
 			.request("workspace.remove", { id: workspaceId })
-			.catch(() => void loadWorkspaces(projectId));
+			.catch((err) => toast.error(errorText(err, "Failed to remove workspace")));
 	};
 
 	return (
@@ -124,7 +122,7 @@ export function ProjectTree() {
 												workspace={ws}
 												isActive={activeWorkspaceId === ws.id}
 												onSelect={() => useAppStore.getState().setActiveWorkspace(ws.id)}
-												onRemove={() => removeWorkspace(project.id, ws.id)}
+												onRemove={() => removeWorkspace(ws.id)}
 											/>
 										))
 									)}
