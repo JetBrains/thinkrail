@@ -175,8 +175,8 @@ export interface AskUserQuestionOption {
 	/** Optional markdown preview shown beside the option (code, ASCII diagram, config). Single-select only. */
 	preview?: string;
 	/**
-	 * Why the agent recommends this option — revealed behind the Recommended badge's (?) affordance.
-	 * Meaningful only on the recommended option; optional + back-compatible (absent → no icon).
+	 * Why the agent recommends this option — rendered inline as a `Why:` line under the option's description.
+	 * Meaningful only on the recommended option; optional + back-compatible (absent → no rationale shown).
 	 */
 	recommendedReason?: string;
 }

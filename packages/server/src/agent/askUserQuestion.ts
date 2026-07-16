@@ -25,6 +25,7 @@ export const MIN_OPTIONS = 2;
 export const MAX_OPTIONS = 4;
 export const MAX_HEADER_LENGTH = 16;
 export const MAX_LABEL_LENGTH = 60;
+export const MAX_RECOMMENDED_REASON_LENGTH = 160;
 
 /**
  * Labels reserved for affordances the card provides itself (the free-text row, the Skip escape, the
@@ -50,8 +51,8 @@ const OptionSchema = Type.Object({
 	),
 	recommendedReason: Type.Optional(
 		Type.String({
-			description:
-				"Why you recommend this option — 1-2 sentences revealed behind a (?) on the Recommended badge. Set only on the option whose label carries '(Recommended)'.",
+			maxLength: MAX_RECOMMENDED_REASON_LENGTH,
+			description: `MAX ${MAX_RECOMMENDED_REASON_LENGTH} CHARACTERS. Why you recommend this option — one short sentence, rendered inline as a 'Why:' line under the option. Set only on the option whose label carries '(Recommended)'.`,
 		}),
 	),
 });
@@ -97,7 +98,7 @@ const DESCRIPTION = `Ask the user one or more structured, multiple-choice questi
 The questions render inline in the chat as an interactive card (tabs when there are several). Notes:
 - Every question also gets an "Other" option with a free-text field, and the user can always Skip the whole questionnaire (you are told they declined) — do NOT author "Other"-style, free-text, or escape options yourself (reserved labels are rejected).
 - Set multiSelect: true when several answers are valid; the user may combine checked options with their own typed answer.
-- If you recommend one option, make it FIRST, append "(Recommended)" to its label, and set its recommendedReason to a short (1-2 sentence) explanation of why you recommend it over the alternatives.
+- If you recommend one option, make it FIRST, append "(Recommended)" to its label, and set its recommendedReason to one short sentence on why you recommend it over the alternatives (shown inline under the option).
 - Use options[].preview (markdown) for concrete artifacts to compare side-by-side (code, ASCII mockups, configs). Single-select only.
 - Group all clarifying questions into ONE call — do not chain calls back-to-back.
 - The user may answer only some questions; unanswered ones are reported as declined.`;
@@ -105,7 +106,7 @@ The questions render inline in the chat as an interactive card (tabs when there 
 const PROMPT_GUIDELINES = [
 	`Call ask_user_question whenever the request is ambiguous and a concrete decision is needed — up to ${MAX_QUESTIONS} questions per call, ${MIN_OPTIONS}-${MAX_OPTIONS} options each.`,
 	"Every option needs a concise label (1-5 words) and a description of what it means / its trade-off.",
-	'Recommend by putting the option first with "(Recommended)" appended and setting its recommendedReason to why you recommend it over the alternatives; the user can always type a custom answer or skip the questionnaire.',
+	'Recommend by putting the option first with "(Recommended)" appended and setting its recommendedReason to one short sentence (shown inline under the option) on why you recommend it over the alternatives; the user can always type a custom answer or skip the questionnaire.',
 ];
 
 const ERROR_NO_UI = "Error: UI not available (running in non-interactive mode)";

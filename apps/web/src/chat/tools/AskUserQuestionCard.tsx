@@ -610,8 +610,8 @@ function OptionRow({
 					{recommended ? <RecommendedBadge /> : null}
 				</span>
 				{description ? <span className="text-muted text-sm">{description}</span> : null}
-				{/* The recommendation rationale, inline (not a popover): shown up front for a recommended
-				    option so it reads on touch too, and AT reads it as ordinary visible text. */}
+				{/* The recommendation rationale, shown inline up front for a recommended option so it
+				    reads on touch, and AT reads it as ordinary visible text. */}
 				{reason ? (
 					<span data-testid="ask-recommended-reason" className="mt-0.5 text-muted text-sm">
 						<span className="font-medium text-primary">Why:</span> {reason}
@@ -688,9 +688,9 @@ const RECOMMENDED_PILL =
 	"inline-flex items-center rounded-full bg-primary/15 px-2 py-0.5 font-medium text-[11px] text-primary";
 
 /**
- * The "Recommended" pill next to an agent-recommended option. The rationale is rendered inline in
- * `OptionRow` (a `Why:` block below the description), not behind this pill — so it's visible up front
- * and works on touch (a popover/tooltip never opens reliably on touch).
+ * The "Recommended" pill next to an agent-recommended option — a plain label. Its rationale renders
+ * inline in `OptionRow` (a `Why:` block below the description) so it's visible up front and on touch,
+ * where a tooltip/popover never opens reliably.
  */
 function RecommendedBadge() {
 	return <span className={RECOMMENDED_PILL}>Recommended</span>;
