@@ -29,7 +29,9 @@ import type {
 /** Bumped on any breaking wire change; sent in `server.welcome` so a stale UI can detect host drift. */
 // v4: model.* / session.create / session.setModel / SessionSummary now carry `WireModel` (pi's `Model`
 // minus the secret-bearing `baseUrl`/`headers`); the host re-resolves the real model by `{provider,id}`.
-export const PROTOCOL_VERSION = 4;
+// v5: workspace registry membership now streams to every client — `workspace.created` + `workspace.removed`
+// join the existing `workspace.updated` (the workspace lifecycle trio; see `WS_CHANNELS`).
+export const PROTOCOL_VERSION = 5;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -40,6 +42,16 @@ export interface ServerWelcome {
 	protocolVersion: number;
 	appVersion?: string;
 	projects: Project[];
+}
+
+/**
+ * The `workspace.removed` push payload. Only the ids: the workspace record is already gone by the time the
+ * event fires, and a client locates the row to drop by `projectId` + `id`. (`workspace.created`/`.updated`
+ * carry a bare `Workspace` snapshot instead.)
+ */
+export interface WorkspaceRemoved {
+	projectId: string;
+	id: string;
 }
 
 /** Request/response methods. `session.*` drives the pi engine. */
@@ -125,9 +137,15 @@ export const WS_CHANNELS = {
 	// the Welcome screen before any session exists, so this is the sibling of pi.extensionUi, not scoped to one.
 	providerLogin: "provider.login",
 	terminalData: "terminal.data",
-	// A host-initiated workspace mutation (the auto-rename), broadcast to every client. `data` is the
-	// full persisted `Workspace` snapshot — idempotent under last-value replay, never a delta.
+	// The workspace-registry lifecycle trio, broadcast to every client so registry membership is shared
+	// domain state (architecture #9), not per-client. All three are emitted by the `workspaces` module's
+	// injected publisher (host maps kind → channel); every client reacts identically (no per-client
+	// optimism). `created`/`updated` carry the full persisted `Workspace` snapshot (idempotent under
+	// last-value replay, never a delta — `updated` is the auto-rename); `removed` carries a `WorkspaceRemoved`
+	// id pair (the record is already gone).
+	workspaceCreated: "workspace.created",
 	workspaceUpdated: "workspace.updated",
+	workspaceRemoved: "workspace.removed",
 } as const;
 
 export type WsMethod = (typeof WS_METHODS)[keyof typeof WS_METHODS];

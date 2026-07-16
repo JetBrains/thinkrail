@@ -28,8 +28,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   install SIGINT/SIGTERM handlers that `stop()` then exit); `handlers.ts` (the WS method→handler registry);
   `ackSend.ts` (the send-ack policy — see "Get right"); `autoRename.ts` (the **workspace auto-rename
   flow** — the composition of `agent` + `assist` + `workspaces` only the host may make, in **two passes**
-  the session-publisher closure in `createServer` tees fire-and-forget, both pushing **`workspace.updated`**
-  and both reading the session **transcript** via `getSessionMessages` (never `agent_end.messages` — that
+  the session-publisher closure in `createServer` tees fire-and-forget, both triggering a
+  `renameWorkspace` (which **self-emits `workspace.updated`** through the lifecycle publisher — the tee no
+  longer pushes) and both reading the session **transcript** via `getSessionMessages` (never `agent_end.messages` — that
   array is run-local and empty of the prompt on auto-retry continuations) then `extractFirstTurn` (assist
   skips killed error/aborted turns, so a retracted prompt never becomes the name); an injectable
   transcript reader is the unit-test seam:
@@ -64,6 +65,12 @@ channel fan-out, and the process-boot wrapper both launchers share.
     a failed background teardown is `console.warn`ed, never thrown into the void (nothing awaits it), like
     the auto-rename tee. **Archive keeps the branch but not the chat:** the git branch stays (code is
     recoverable), yet chat history is purged with the worktree — a deliberate scope choice, not a leak.
+- **Workspace lifecycle fan-out:** `createServer` installs the `workspaces` module's publisher
+  (`setWorkspacePublisher`), mapping each domain event `kind` → its `WS_CHANNELS.workspace*` channel
+  (`created`/`updated` → the full record; `removed` → `{ projectId, id }`) and `server.publish`ing it. This
+  is the **single** place workspace membership changes reach the wire — create/rename/archive all flow
+  through it, so every client (including the initiator) converges by reacting, never by per-client optimism.
+  The two new channels are `ws.subscribe`d in the WS `open` handler alongside `workspace.updated`.
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer`, `bootHost`,
   `BootHostOptions`, `BootedHost`.
 - **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for
@@ -73,10 +80,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
 
 ## Get right
 
-- WS commands return values directly; only events + extension-UI + host-initiated workspace mutations
-  (`workspace.updated`, published from the auto-rename tee with the full persisted snapshot) use push
-  channels. Every push channel a client should hear must be `ws.subscribe`d in the WS `open` handler —
-  a publish on an unsubscribed topic reaches nobody, silently.
+- WS commands return values directly; only events + extension-UI + the workspace lifecycle trio
+  (`workspace.created`/`updated`/`removed`, published from the `workspaces` module's injected publisher)
+  use push channels. Every push channel a client should hear must be `ws.subscribe`d in the WS `open`
+  handler — a publish on an unsubscribed topic reaches nobody, silently.
 - The host is the single place features are wired together — features never reach back into it.
 - **A send (prompt/steer/followUp) is acked when ACCEPTED, not when the turn ends** (`ackSend`): pi's send
   methods resolve only at turn end, and a turn can outlive the client's request timeout (an
