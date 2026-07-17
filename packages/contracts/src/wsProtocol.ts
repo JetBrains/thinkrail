@@ -19,11 +19,11 @@ import type {
 	AskUserQuestionResult,
 	ExtUiResponse,
 	ImageContent,
-	Message,
 	SessionStats,
 	SessionSummary,
 	SlashCommandInfo,
 	ThinkingLevel,
+	TranscriptMessage,
 	WireModel,
 } from "./piProtocol";
 
@@ -37,7 +37,10 @@ import type {
 // v7: server-synced app settings — `server.welcome` now carries `config: AppConfig` (the initial theme
 // travels with the handshake), `settings.update` persists a partial, and `settings.changed` broadcasts
 // the new config to every client so they converge (the same shared-state pattern as the workspace trio).
-export const PROTOCOL_VERSION = 7;
+// v8: `ask_user_question` is ack + terminate — the tool no longer blocks; answers travel as
+// `ask-user-answers` custom messages, and `session.getMessages` now returns `TranscriptMessage[]`
+// (pi-canonical + `custom` role) so the questionnaire card can pair answers by tool call id.
+export const PROTOCOL_VERSION = 8;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -109,7 +112,8 @@ export const WS_METHODS = {
 	sessionGetCommands: "session.getCommands",
 	sessionExtUiReply: "session.extUiReply",
 	// Inline `ask_user_question` reply: the browser sends the questionnaire result, correlated by the tool
-	// call's id, to resolve the blocked tool `execute`.
+	// call's id; the host delivers it to the session as an `ask-user-answers` custom message, starting the
+	// next turn (or steering the current one).
 	sessionAnswerQuestion: "session.answerQuestion",
 	// Read side of the wire (hydrate-then-stream): a client lists a workspace's sessions and pulls a
 	// transcript to rebuild its view on connect.
@@ -167,6 +171,14 @@ export const WS_CHANNELS = {
 
 export type WsMethod = (typeof WS_METHODS)[keyof typeof WS_METHODS];
 export type WsChannel = (typeof WS_CHANNELS)[keyof typeof WS_CHANNELS];
+
+/**
+ * The `customType` of the transcript message that carries an `ask_user_question` reply back to the agent
+ * (host-injected via pi's `sendCustomMessage`, starting/steering a turn). Both ends key on it: the host
+ * builds these messages; the UI pairs them with the questionnaire card by `details.toolCallId`
+ * (`AskUserAnswersDetails`) and never renders them as their own bubble.
+ */
+export const ASK_USER_ANSWERS_CUSTOM_TYPE = "ask-user-answers";
 
 /** Wire result for methods that return nothing meaningful — the host coerces a void handler to this. */
 export interface Ack {
@@ -238,6 +250,8 @@ export interface WsMethodMap {
 	"session.getStats": { params: { sessionId: string }; result: SessionStats };
 	"session.getCommands": { params: { sessionId: string }; result: SlashCommandInfo[] };
 	"session.extUiReply": { params: { response: ExtUiResponse }; result: Ack };
+	// Rejects when the tool call is unknown, already answered, superseded by a later user message, or not
+	// an awaiting ask — so a stale card fails loud instead of silently parking an answer.
 	"session.answerQuestion": {
 		params: { sessionId: string; toolCallId: string; result: AskUserQuestionResult };
 		result: Ack;
@@ -247,7 +261,7 @@ export interface WsMethodMap {
 	// now-live model/thinking (a disk `SessionSummary` only carries placeholders).
 	"session.getMessages": {
 		params: { sessionId: string; workspaceId: string };
-		result: { summary: SessionSummary; messages: Message[] };
+		result: { summary: SessionSummary; messages: TranscriptMessage[] };
 	};
 	"model.list": { params: Record<string, never>; result: WireModel[] };
 	// The model/thinking a fresh session resolves to (settings default, else first available) — so the

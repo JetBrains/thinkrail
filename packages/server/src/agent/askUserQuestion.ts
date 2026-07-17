@@ -1,11 +1,26 @@
 // The `ask_user_question` capability — a HOST-OWNED pi custom tool, registered via an extension factory
 // on every session. It lets the agent put structured, typed clarifying questions to the user instead of
-// guessing. The tool renders nothing itself: it validates, blocks, and awaits a structured
-// `AskUserQuestionResult` pushed back by the browser (`session.answerQuestion`, correlated by the tool
-// call id). The chat renders the questionnaire INLINE as a tool card (see
-// `apps/web/src/chat/tools/AskUserQuestionCard`): tabs per question, single/multi-select, per-option
-// markdown previews, a free-text row, Skip. The design rationale (why host-owned rather than a bundled
-// community extension) is recorded in this module's SPEC.md.
+// guessing. Designed **ack + terminate** so a pending questionnaire survives host restarts:
+//
+//   - `execute` renders nothing and WAITS FOR NOTHING: it validates, then immediately returns an ack
+//     ("questions are shown; answers arrive as the next user message") with `terminate: true`, ending the
+//     turn with no extra LLM call. The transcript is complete and provider-valid the moment the ack lands,
+//     and the session is genuinely idle while the user thinks — for seconds or for weeks, across any
+//     number of restarts.
+//   - The browser renders the questionnaire INLINE from the tool call's args (see
+//     `apps/web/src/chat/tools/AskUserQuestionCard`); the reply arrives over `session.answerQuestion` and
+//     is delivered by the session manager as an `ask-user-answers` CUSTOM MESSAGE (correlated by tool
+//     call id in its `details`) that starts the next turn — or steers the current one. Answering live and
+//     answering after a restart are the same code path.
+//   - A free-form user message sent instead of an answer SUPERSEDES the questionnaire (the ack told the
+//     model answers arrive as the next user message — whatever the user typed is that reply); the pure
+//     `assessAnswerability` below is what makes a late answer to a superseded/answered call fail loud.
+//
+// The earlier blocking design (execute parks on an in-memory promise until the browser replies) is gone:
+// a host restart destroyed the pending promise, left a dangling `toolCall` in the transcript (providers
+// reject unpaired tool_use — the chat bricked), and quietly swallowed post-restart answers. The design
+// rationale — including why this is host-owned rather than the community rpiv extension — is recorded in
+// this module's SPEC.md.
 
 import type {
 	ExtensionAPI,
@@ -13,10 +28,14 @@ import type {
 	ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import type {
+	AgentMessage,
+	AskUserAnswersDetails,
+	AskUserQuestionAckDetails,
 	AskUserQuestionAnswer,
 	AskUserQuestionArgs,
 	AskUserQuestionResult,
 } from "@thinkrail/contracts";
+import { ASK_USER_ANSWERS_CUSTOM_TYPE } from "@thinkrail/contracts";
 import { type Static, Type } from "typebox";
 
 // ---- limits (mirrors the rpiv contract so the model behaves the same) ----
@@ -95,7 +114,7 @@ const DESCRIPTION = `Ask the user one or more structured, multiple-choice questi
 1. The request is underspecified and you cannot proceed without a concrete decision.
 2. You need a user preference, requirement, or a direction/implementation choice.
 
-The questions render inline in the chat as an interactive card (tabs when there are several). Notes:
+Calling this tool ENDS YOUR TURN: the questions render inline in the chat as an interactive card (tabs when there are several), and the user's answers arrive as the NEXT USER MESSAGE (a structured "User has answered your questions:" message). Do not continue working on the blocked task after calling it, and do not assume an answer until that message arrives. If the user replies with a free-form message instead of using the card, treat that message as their reply and re-ask only what is still genuinely undecided. Notes:
 - Every question also gets an "Other" option with a free-text field, and the user can always Skip the whole questionnaire (you are told they declined) — do NOT author "Other"-style, free-text, or escape options yourself (reserved labels are rejected).
 - Set multiSelect: true when several answers are valid; the user may combine checked options with their own typed answer.
 - If you recommend one option, make it FIRST, append "(Recommended)" to its label, and set its recommendedReason to one short sentence on why you recommend it over the alternatives (shown inline under the option).
@@ -104,12 +123,19 @@ The questions render inline in the chat as an interactive card (tabs when there 
 - The user may answer only some questions; unanswered ones are reported as declined.`;
 
 const PROMPT_GUIDELINES = [
-	`Call ask_user_question whenever the request is ambiguous and a concrete decision is needed — up to ${MAX_QUESTIONS} questions per call, ${MIN_OPTIONS}-${MAX_OPTIONS} options each.`,
+	`Call ask_user_question whenever the request is ambiguous and a concrete decision is needed — up to ${MAX_QUESTIONS} questions per call, ${MIN_OPTIONS}-${MAX_OPTIONS} options each. The call ends your turn; the answers arrive as the next user message.`,
 	"Every option needs a concise label (1-5 words) and a description of what it means / its trade-off.",
 	'Recommend by putting the option first with "(Recommended)" appended and setting its recommendedReason to one short sentence (shown inline under the option) on why you recommend it over the alternatives; the user can always type a custom answer or skip the questionnaire.',
 ];
 
 const ERROR_NO_UI = "Error: UI not available (running in non-interactive mode)";
+
+/**
+ * The ack the model receives the instant the questionnaire is on screen. Paired with `terminate: true`,
+ * so the turn ends right here — no "I'll wait" filler completion, no blocked tool.
+ */
+export const ASK_ACK_TEXT =
+	"The questions are now shown to the user. This turn ends here; the user's answers (or their own free-form reply) will arrive as the next user message. Do not assume an answer until it arrives.";
 
 export interface ValidationResult {
 	ok: boolean;
@@ -155,17 +181,23 @@ export function validateQuestionnaire(args: AskUserQuestionArgs): ValidationResu
 	return { ok: true, message: "" };
 }
 
-const DECLINE_MESSAGE = "User declined to answer questions";
+/** The canonical "didn't answer" signal — also composed into the restart-repair decline (sessionRepair). */
+export const DECLINE_MESSAGE = "User declined to answer questions";
 const ENVELOPE_PREFIX = "User has answered your questions:";
 const ENVELOPE_SUFFIX = "You can now continue with the user's answers in mind.";
 
-/** The tool `execute` return shape (an `AgentToolResult<AskUserQuestionResult>`). */
-interface ToolResult {
+/** The tool `execute` return shape (an `AgentToolResult<…>`). */
+interface ToolResult<D> {
 	content: { type: "text"; text: string }[];
-	details: AskUserQuestionResult;
+	details: D;
+	/** pi's early-termination hint: every result in the batch setting it ends the turn after the batch. */
+	terminate?: boolean;
 }
 
-function toolResult(text: string, details: AskUserQuestionResult): ToolResult {
+function toolResult(
+	text: string,
+	details: AskUserQuestionResult,
+): ToolResult<AskUserQuestionResult> {
 	return { content: [{ type: "text", text }], details };
 }
 
@@ -185,15 +217,17 @@ function answerSegment(a: AskUserQuestionAnswer): string {
 }
 
 /**
- * Map an `AskUserQuestionResult` to the LLM-facing tool envelope. Cancelled / no-answers both fall to the
+ * Map an `AskUserQuestionResult` to the LLM-facing envelope. Cancelled / no-answers both fall to the
  * single canonical `DECLINE_MESSAGE` so the model sees one "didn't answer" signal regardless of why. A
  * partial submission lists its unanswered questions explicitly as declined — silence would read as "all
- * answered" and send the model guessing on the very questions it asked. Pure.
+ * answered" and send the model guessing on the very questions it asked. Pure. (Under ack + terminate the
+ * envelope travels as the `ask-user-answers` custom message's text, not as a tool result — same wording,
+ * so the model reads answers exactly as it did under the blocking design.)
  */
 export function buildQuestionnaireResponse(
 	result: AskUserQuestionResult,
 	args: AskUserQuestionArgs,
-): ToolResult {
+): ToolResult<AskUserQuestionResult> {
 	if (result.cancelled)
 		return toolResult(DECLINE_MESSAGE, { answers: result.answers, cancelled: true });
 	const segments: string[] = [];
@@ -213,118 +247,149 @@ export function buildQuestionnaireResponse(
 	);
 }
 
-// ---- the reply bridge: a blocked tool `execute` awaits the browser's answer, keyed by toolCallId ----
-interface PendingQuestion {
-	sessionId: string;
-	finish: (result: AskUserQuestionResult) => void;
+// ---- the answer path: pure transcript assessment + the custom-message payload ----
+
+/** Minimal structural views of the transcript messages the assessors walk (subset of `AgentMessage`). */
+interface ToolCallView {
+	type: string;
+	id?: string;
+	name?: string;
+	arguments?: unknown;
 }
-const pending = new Map<string, PendingQuestion>();
+interface MessageView {
+	role?: string;
+	content?: unknown;
+	customType?: string;
+	details?: unknown;
+	toolCallId?: string;
+}
+
+function toolCallsOf(message: MessageView): ToolCallView[] {
+	if (message.role !== "assistant" || !Array.isArray(message.content)) return [];
+	return (message.content as ToolCallView[]).filter((b) => b?.type === "toolCall");
+}
+
+function isAnswersFor(message: MessageView, toolCallId: string): boolean {
+	return (
+		message.role === "custom" &&
+		message.customType === ASK_USER_ANSWERS_CUSTOM_TYPE &&
+		!!message.details &&
+		(message.details as AskUserAnswersDetails).toolCallId === toolCallId
+	);
+}
+
+/** Whether a tool result's `details` is the ack marker (vs a legacy blocking-era final result). */
+export function isAckDetails(details: unknown): details is AskUserQuestionAckDetails {
+	return !!details && (details as AskUserQuestionAckDetails).kind === "ack";
+}
+
+export type Answerability =
+	| { ok: true; args: AskUserQuestionArgs }
+	| { ok: false; reason: "unknown_call" | "already_answered" | "not_awaiting" | "superseded" };
 
 /**
- * Answers that arrived while no tool call was awaiting them. The legitimate producer is the streaming
- * window: the inline card is interactive as soon as the tool call's arguments stream in, but `execute`
- * (which registers the `pending` entry) only runs once the assistant message completes — a fast submit
- * beats the registration and must be held until `awaitAnswer` consumes it. Answers that never get
- * consumed (a second client re-answering a settled call, a submit after abort, junk tool call ids) are
- * bounded: at most `MAX_HELD_PER_SESSION` per session, oldest evicted first, and a session's holds are
- * dropped when it is disposed.
+ * Can this `ask_user_question` call still take an answer? Pure, derived ENTIRELY from the transcript —
+ * the same verdict falls out live, after a reconnect, or after a host restart:
+ * - `unknown_call` — no such ask tool call in the transcript;
+ * - `already_answered` — an `ask-user-answers` message for it already exists (double-submit, second client);
+ * - `not_awaiting` — its tool result is a final result, not the ack (legacy blocking-era transcript, a
+ *   validation error, or a restart-repaired decline — all already resolved);
+ * - `superseded` — the user sent a free-form message after the questionnaire instead of answering it; the
+ *   conversation has moved on, and the model was told to treat that message as the reply.
  */
-interface EarlyAnswer {
-	sessionId: string;
-	result: AskUserQuestionResult;
-}
-const early = new Map<string, EarlyAnswer>();
-const MAX_HELD_PER_SESSION = 8;
-
-/**
- * Resolve the blocked `ask_user_question` tool call with the browser's answer, or hold the answer until
- * the tool call registers (see `early`). The WS handler has already vetted that the session is live.
- */
-export function answerQuestion(
-	sessionId: string,
+export function assessAnswerability(
+	messages: readonly AgentMessage[],
 	toolCallId: string,
-	result: AskUserQuestionResult,
-): void {
-	const entry = pending.get(toolCallId);
-	if (entry) {
-		entry.finish(result);
-		return;
-	}
-	early.set(toolCallId, { sessionId, result });
-	const mine = [...early.entries()].filter(([, held]) => held.sessionId === sessionId);
-	for (let i = 0; i < mine.length - MAX_HELD_PER_SESSION; i++) {
-		const oldest = mine[i];
-		if (oldest) early.delete(oldest[0]);
-	}
-}
-
-/** Settle every question awaiting on a session as cancelled — used when the session is disposed. */
-export function cancelQuestionsForSession(sessionId: string): void {
-	for (const entry of [...pending.values()]) {
-		if (entry.sessionId === sessionId) entry.finish({ answers: [], cancelled: true });
-	}
-	for (const [toolCallId, held] of [...early.entries()]) {
-		if (held.sessionId === sessionId) early.delete(toolCallId);
-	}
-}
-
-/** Await the browser's answer for one tool call; cancels on the agent abort signal so it never hangs. */
-function awaitAnswer(
-	toolCallId: string,
-	sessionId: string,
-	signal: AbortSignal | undefined,
-): Promise<AskUserQuestionResult> {
-	return new Promise((resolve) => {
-		const held = early.get(toolCallId);
-		if (held) {
-			early.delete(toolCallId);
-			// A hold whose session doesn't match this execution is bogus (stale or spoofed) — drop, don't deliver.
-			if (held.sessionId === sessionId) {
-				resolve(held.result);
-				return;
+): Answerability {
+	const views = messages as readonly MessageView[];
+	let callIndex = -1;
+	let args: AskUserQuestionArgs | null = null;
+	for (let i = 0; i < views.length; i++) {
+		const view = views[i];
+		if (!view) continue;
+		for (const block of toolCallsOf(view)) {
+			if (block.id === toolCallId && block.name === ASK_USER_QUESTION_TOOL_NAME) {
+				callIndex = i;
+				args = (block.arguments ?? { questions: [] }) as AskUserQuestionArgs;
 			}
 		}
-		let settled = false;
-		const finish = (result: AskUserQuestionResult): void => {
-			if (settled) return;
-			settled = true;
-			pending.delete(toolCallId);
-			signal?.removeEventListener("abort", onAbort);
-			resolve(result);
-		};
-		const onAbort = (): void => finish({ answers: [], cancelled: true });
-		pending.set(toolCallId, { sessionId, finish });
-		if (signal) {
-			if (signal.aborted) return finish({ answers: [], cancelled: true });
-			signal.addEventListener("abort", onAbort, { once: true });
-		}
-	});
+	}
+	if (callIndex < 0 || !args) return { ok: false, reason: "unknown_call" };
+
+	for (let i = callIndex + 1; i < views.length; i++) {
+		const view = views[i];
+		if (!view) continue;
+		if (isAnswersFor(view, toolCallId)) return { ok: false, reason: "already_answered" };
+		if (view.role === "toolResult" && view.toolCallId === toolCallId && !isAckDetails(view.details))
+			return { ok: false, reason: "not_awaiting" };
+		if (view.role === "user") return { ok: false, reason: "superseded" };
+	}
+	return { ok: true, args };
 }
 
-/** Build the `ask_user_question` tool definition. Stateless: correlation is by the (unique) tool call id. */
+/** The message a rejected answer surfaces to the client, per verdict. */
+export const ANSWERABILITY_ERRORS: Record<Extract<Answerability, { ok: false }>["reason"], string> =
+	{
+		unknown_call: "Unknown ask_user_question tool call",
+		already_answered: "This questionnaire was already answered",
+		not_awaiting: "This questionnaire is not awaiting an answer",
+		superseded: "This questionnaire was superseded by a later message",
+	};
+
+/**
+ * The `ask-user-answers` custom message for one reply — the payload `AgentSession.sendCustomMessage`
+ * delivers (starting a turn when idle, steering when streaming). `content` is the same LLM envelope the
+ * blocking tool used to return; `details` carries the structured result the questionnaire card renders,
+ * correlated by tool call id. `display: true` so a pi TUI opening the same transcript shows the reply.
+ */
+export function buildAnswersMessage(
+	toolCallId: string,
+	args: AskUserQuestionArgs,
+	result: AskUserQuestionResult,
+): {
+	customType: string;
+	content: string;
+	display: boolean;
+	details: AskUserAnswersDetails;
+} {
+	const envelope = buildQuestionnaireResponse(result, args);
+	return {
+		customType: ASK_USER_ANSWERS_CUSTOM_TYPE,
+		content: envelope.content.map((c) => c.text).join(""),
+		display: true,
+		details: { toolCallId, result },
+	};
+}
+
+export const ASK_USER_QUESTION_TOOL_NAME = "ask_user_question";
+
+/**
+ * Build the `ask_user_question` tool definition. Stateless and instantaneous: validate, then ack +
+ * `terminate` (the turn ends at the tool batch, with no further LLM call). Only the no-UI guard and
+ * validation failures return a plain (non-terminating) result — the model should correct and continue.
+ */
 export function createAskUserQuestionTool(): ToolDefinition<
 	typeof AskUserQuestionSchema,
-	AskUserQuestionResult
+	AskUserQuestionAckDetails | AskUserQuestionResult
 > {
 	return {
-		name: "ask_user_question",
+		name: ASK_USER_QUESTION_TOOL_NAME,
 		label: "Ask User Question",
 		description: DESCRIPTION,
 		promptGuidelines: PROMPT_GUIDELINES,
 		parameters: AskUserQuestionSchema,
-		async execute(toolCallId, params, signal, _onUpdate, ctx: ExtensionContext) {
+		async execute(_toolCallId, params, _signal, _onUpdate, ctx: ExtensionContext) {
 			const args = params as AskUserQuestionArgs;
 			if (!ctx.hasUI) return toolResult(ERROR_NO_UI, { answers: [], cancelled: true });
 
 			const validation = validateQuestionnaire(args);
 			if (!validation.ok) return toolResult(validation.message, { answers: [], cancelled: true });
 
-			// `ctx.sessionManager.getSessionId()` === the `AgentSession.sessionId` we key everything on
-			// (the session's `sessionId` getter delegates to this same manager), so per-session cancellation
-			// on dispose lines up exactly with our manager's key.
-			const sessionId = ctx.sessionManager.getSessionId();
-			const result = await awaitAnswer(toolCallId, sessionId, signal);
-			return buildQuestionnaireResponse(result, args);
+			return {
+				content: [{ type: "text", text: ASK_ACK_TEXT }],
+				details: { kind: "ack" } satisfies AskUserQuestionAckDetails,
+				terminate: true,
+			};
 		},
 	};
 }

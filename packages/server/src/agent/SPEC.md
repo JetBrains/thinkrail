@@ -13,8 +13,8 @@ tags: [v1, pi]
 
 The in-process `pi` engine: a shared runtime (auth + model registry), the lifecycle of `AgentSession`s
 (one per chat tab, rooted in a workspace's worktree), the **extension-UI bridge** that turns pi's
-in-process `uiContext` dialog calls into WS frames, and the host-owned **`ask_user_question`** tool +
-its inline answer bridge.
+in-process `uiContext` dialog calls into WS frames, the host-owned **`ask_user_question`** tool + its
+answer-injection path, and the **restart repair** that keeps re-opened transcripts provider-valid.
 
 ## Boundary
 
@@ -42,8 +42,21 @@ its inline answer bridge.
     `listSessions(workspaceId, cwd)` (live sessions
     **unioned with on-disk** ones pi persisted under `cwd`, live winning on id → `SessionSummary[]` tagged
     `live`) + `getSessionMessages(sessionId, workspaceId, cwd)` (re-opens a disk session into the manager if
-    not live, then returns `{ summary, messages }` — the pi-canonical `Message` subset); the disk half is
-    what survives a host **restart**; `getSessionWorkspaceId(sessionId)` (the live session→workspace
+    not live, then returns `{ summary, messages }` — `TranscriptMessage[]`: the pi-canonical subset **plus
+    `custom` messages**, which carry the `ask-user-answers` replies the questionnaire card pairs by tool
+    call id); the disk half is what survives a host **restart** — and re-attaching runs
+    **`repairDanglingToolCalls` (the `sessionRepair` sibling) BEFORE `createAgentSession` seeds its
+    context**: a host death mid-tool leaves an assistant message with unpaired `toolCall`s, every provider
+    rejects such a context (the chat would brick), and appending behind a live session would desync its
+    in-memory state — so orphans are paired at the one choke point every post-restart session passes.
+    Generic orphans get pi's abort convention (`isError` "Operation aborted (host restarted…)"); an
+    old-format dangling ask gets the canonical decline + a re-ask hint (`details {answers:[],
+    cancelled:true}`), so its card hydrates as the normal skipped record;
+    **`answerQuestion(sessionId, toolCallId, result)`** — the `ask_user_question` reply path (see the
+    `askUserQuestion` bullet); **`settleSessionsForShutdown(timeoutMs)`** — the polite half of shutdown:
+    abort every streaming session and wait (bounded) so pi persists their "Operation aborted" tool results
+    before `process.exit` (the launcher's SIGINT/SIGTERM handler awaits it; whatever misses the window is
+    healed by the restart repair); `getSessionWorkspaceId(sessionId)` (the live session→workspace
     lookup the host's auto-rename hook keys on); `removeSession`/`disposeAllSessions`;
     **`removeWorkspaceSessions(workspaceId, cwd?)`** (the **archive teardown**: abort a streaming turn,
     `removeSession` every live session for the workspace, then delete pi's on-disk transcripts rooted at
@@ -64,32 +77,43 @@ its inline answer bridge.
     (server→client push seam), `resolveExtUi` (browser reply), `cancelExtUiForSession` (on dispose),
     `notifyExtUi`.
   - `askUserQuestion` — the host-owned **`ask_user_question`** pi custom tool (`createAskUserQuestionTool`,
-    registered on every session via the `askUserQuestionExtension` factory in `extensions`).
-    **Rejected alternative** (the one place this decision is recorded): bundling the community
-    `@juicesharp/rpiv-ask-user-question` extension. Its questionnaire UI is a live pi-tui component handed
-    to the host via `ctx.ui.custom(factory)` — *code, not data* — so it can't be serialized over the WS
-    bridge or hosted by a browser; the tool would block forever. Interception is technically possible
-    (stub the TUI in `webUiContext.custom`, capture the factory's `done` callback, synthesize its result)
-    but couples us to two fast-moving packages' private internals (the result shape `done` expects, the
-    TUI surface the factory touches) and still requires all the same browser-side work — so we own the
-    small LLM-facing contract instead (schema/validation/envelope mirror the rpiv tool's so the model
-    behaves the same). Ours renders **nothing** — its
-    `execute` guards on `ctx.hasUI`, runs the pure `validateQuestionnaire`, then **blocks** awaiting a
-    structured `AskUserQuestionResult` from the browser (keyed by the unique tool call id, cancelled on the
-    agent abort `signal`), and formats the LLM envelope with `buildQuestionnaireResponse` (a partial
-    submission lists its unanswered questions explicitly as declined). The reply arrives over
-    `session.answerQuestion` → `answerQuestion(sessionId, toolCallId, result)`; the WS handler vets the
-    session is live (`hasSession`) and the result shape before forwarding. **The reply can beat the tool:**
-    the inline card is interactive as soon as the tool call's args stream in, but `execute` (which registers
-    the pending entry) only runs once the assistant message completes — so an answer with no pending entry
-    is **held**, keyed by tool call id, and consumed when `awaitAnswer` registers (only if the session
-    matches; holds are bounded per session, oldest evicted). `cancelQuestionsForSession(sessionId)` (called
-    from `removeSession`/`disposeAllSessions`) settles any awaiting question as cancelled and drops the
-    session's held answers. The
-    questionnaire is rendered **inline** in chat by `apps/web`'s `AskUserQuestionCard` (joined by tool name).
-    Correlation is exact because `ctx.sessionManager.getSessionId()` **is** the `AgentSession.sessionId` we
-    key on. The LLM-facing contract (TypeBox schema, validation, envelope) is re-implemented here so we own
-    it and avoid the package's pi-tui/i18n peer deps.
+    registered on every session via the `askUserQuestionExtension` factory in `extensions`), designed
+    **ack + terminate** so a questionnaire survives host restarts: `execute` renders nothing and **awaits
+    nothing** — it guards on `ctx.hasUI`, runs the pure `validateQuestionnaire`, then immediately returns
+    the ack (`details {kind:"ack"}`) with **`terminate: true`**, ending the turn at the tool batch with no
+    further LLM call. Nothing pends in memory, the transcript is complete and provider-valid the moment
+    the ack lands, and the session is genuinely **idle** while the user thinks — restarts need no
+    question-specific handling at all. The reply arrives over `session.answerQuestion` → the manager's
+    `answerQuestion(sessionId, toolCallId, result)`: it vets the reply against the transcript with the
+    pure **`assessAnswerability`** (unknown call / already answered / `not_awaiting` legacy-final results /
+    **superseded** — a later free-form user message replaced the answer, so the card is terminal and a
+    stale answer **fails loud**, never parks), then injects **`buildAnswersMessage`** — an
+    **`ask-user-answers` custom message** (`ASK_USER_ANSWERS_CUSTOM_TYPE`, `details {toolCallId, result}`,
+    text = the same `buildQuestionnaireResponse` envelope the blocking design fed the model; a partial
+    submission lists its unanswered questions explicitly as declined) — via pi's public
+    `AgentSession.sendCustomMessage({triggerTurn: true})`, which starts a new turn when idle and steers
+    the current one when streaming. **Answering live and answering after a restart are the same code
+    path.** The questionnaire is rendered **inline** in chat by `apps/web`'s `AskUserQuestionCard`
+    (joined by tool name; lifecycle derived from the transcript — see the chat tools SPEC).
+    **Rejected alternatives** (the one place these decisions are recorded): (1) the original **blocking
+    design** — `execute` parked on an in-memory promise until the browser replied. A host restart
+    destroyed the pending promise and left a dangling `toolCall` in the transcript; providers reject
+    unpaired `tool_use`, so the chat **bricked** on every later prompt, and post-restart answers rotted in
+    a held-answers map. The shutdown handler's synchronous `process.exit` made this deterministic, and
+    questions block on human timescales — restarts during the window are the common case, not the edge.
+    (2) A **suspended-session** variant (write the real result at answer time; tolerate the dangle while
+    waiting) — needs two different answer mechanisms (resolve-blocked-promise live vs
+    heal-file-then-attach post-restart), keeps a deliberately-invalid on-disk state every consumer must
+    tiptoe around, and pi exposes no public turn-resume from a bare tool result anyway. (3) Bundling the
+    community `@juicesharp/rpiv-ask-user-question` extension — its questionnaire UI is a live pi-tui
+    component handed to the host via `ctx.ui.custom(factory)` (*code, not data*), unserializable over the
+    WS bridge; and like every blocking ask-extension it inherits the restart hole. The LLM-facing contract
+    (TypeBox schema, validation, envelope — mirroring rpiv's so the model behaves the same) stays
+    re-implemented here so we own it and avoid the package's pi-tui/i18n peer deps.
+  - `sessionRepair` — `repairDanglingToolCalls(sessionManager)`: the restart safety net (rationale under
+    the manager bullet above). Pure over pi's `SessionManager` (compaction-aware via
+    `buildSessionContext`; idempotent; appends at the leaf, where orphans sit by construction) —
+    unit-tested against `SessionManager.inMemory`.
   - `extensions` — `buildResourceLoader(cwd, settingsManager)`: a `DefaultResourceLoader` (pi's normal
     disk discovery) that also loads the four bundled extensions — **`pi-web-access`** (`web_search` +
     `fetch_content`), **`pi-visualize`** (`visualize`), **`pi-spec-graph`** (the `spec_*` tools + its
@@ -111,11 +135,12 @@ its inline answer bridge.
     `rpc` host can't render) **and** `askUserQuestionExtension` (registers the `ask_user_question` tool).
     Both session paths pass it as `resourceLoader`. `buildResourceLoader` stays internal; the seam +
     its types are on the barrel.
-- **Public surface (barrel):** the manager operations + `CreateSessionInput`/`CreateSessionResult` +
-  `SessionEventPayload`; `configurePiRuntime`/`getPiRuntime`; `completeOnce`/`pickModel` +
-  `OneShotRequest`/`OneShotResult`/`ModelTier`; the `webUiContext` seams; the
-  `askUserQuestion` bridge (`answerQuestion`/`cancelQuestionsForSession`) + its pure helpers
-  (`validateQuestionnaire`/`buildQuestionnaireResponse`); the compiled-binary extension seam
+- **Public surface (barrel):** the manager operations (incl. `answerQuestion` +
+  `settleSessionsForShutdown`) + `CreateSessionInput`/`CreateSessionResult` + `SessionEventPayload`;
+  `configurePiRuntime`/`getPiRuntime`; `completeOnce`/`pickModel` +
+  `OneShotRequest`/`OneShotResult`/`ModelTier`; the `webUiContext` seams; the `askUserQuestion` pure
+  helpers (`validateQuestionnaire`/`buildQuestionnaireResponse`/`assessAnswerability`/
+  `buildAnswersMessage`); `repairDanglingToolCalls`; the compiled-binary extension seam
   (`setBundledExtensions` + `BundledExtensions`/`BundledExtensionFactory`).
 - **Allowed deps:** `@earendil-works/pi-coding-agent` (runtime); `@earendil-works/pi-ai` (runtime — the
   `complete()` dispatch used by `oneshot`); `pi-web-access` + `pi-visualize` + `pi-spec-graph` +
@@ -130,6 +155,13 @@ its inline answer bridge.
 
 - `prompt()` throws while a session is streaming → `promptSession` falls back to `steer()`.
 - Errors arrive via the event stream + thrown methods, not a crash signal — wrap + forward.
+- **A re-opened disk session is repaired before it is seeded** (`repairDanglingToolCalls` between
+  `SessionManager.open` and `createAgentSession`) — never append to a session file behind a live
+  `AgentSession`, its in-memory context would desync.
+- **The ask tool never blocks and never holds state** — anything "pending" about a questionnaire must be
+  derivable from the transcript alone (that's what makes restarts free); reply validity is
+  `assessAnswerability`'s verdict, computed from `session.messages`, and rejections fail the WS request
+  loud.
 - Share one `authStorage`/`modelRegistry`; give each session its own `SessionManager`; `dispose()` on removal.
 - **A `pi` `Model` must never cross the wire raw** — its `baseUrl` carries the jbcentral proxy secret (and
   `headers` can carry auth). Every model-bearing frame (`model.list`/`model.default`, the `session.create`

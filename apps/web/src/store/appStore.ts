@@ -1,5 +1,7 @@
 import type {
 	AppConfig,
+	AskUserAnswersDetails,
+	AskUserQuestionResult,
 	ExtUiRequest,
 	LoginFrame,
 	LoginPush,
@@ -14,9 +16,10 @@ import type {
 	Workspace,
 	WorkspaceFsChangedPayload,
 } from "@thinkrail/contracts";
-import { Theme } from "@thinkrail/contracts";
+import { ASK_USER_ANSWERS_CUSTOM_TYPE, Theme } from "@thinkrail/contracts";
 import { create } from "zustand";
 import type { LoginState } from "../auth";
+import type { HydratedRuntime } from "../chat/hydrate";
 import type { ChatTurn, ExtUiDialogRequest, ToolResultState } from "../chat/types";
 import type { ConnectionStatus } from "../transport";
 
@@ -91,6 +94,8 @@ export interface SessionRuntime {
 	turns: ChatTurn[];
 	/** Live tool state keyed by toolCallId; paired with the toolCall block inside an assistant turn. */
 	toolResults: Record<string, ToolResultState>;
+	/** `ask_user_question` replies keyed by tool call id (from `ask-user-answers` custom messages). */
+	askAnswers: Record<string, AskUserQuestionResult>;
 	currentAssistantId: string | null;
 	isStreaming: boolean;
 	/** This chat's model + thinking level (display only; `pi` owns them). */
@@ -115,6 +120,7 @@ function newRuntime(model: WireModel | null, thinkingLevel: ThinkingLevel): Sess
 	return {
 		turns: [],
 		toolResults: {},
+		askAnswers: {},
 		currentAssistantId: null,
 		isStreaming: false,
 		model,
@@ -185,11 +191,35 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 			};
 		}
 		case "message_end": {
+			// An `ask-user-answers` custom message (the questionnaire reply the host injected) indexes into
+			// `askAnswers` — the questionnaire card is its rendering, it never becomes a turn. The `custom`
+			// role only exists with pi-coding-agent's module augmentation (Node-only), so it's read
+			// structurally here. Unknown customTypes are ignored.
+			const custom = event.message as unknown as {
+				role: string;
+				customType?: string;
+				details?: AskUserAnswersDetails;
+			};
+			if (custom.role === "custom") {
+				if (
+					custom.customType === ASK_USER_ANSWERS_CUSTOM_TYPE &&
+					custom.details?.toolCallId &&
+					custom.details.result
+				) {
+					return {
+						...rt,
+						askAnswers: {
+							...rt.askAnswers,
+							[custom.details.toolCallId]: custom.details.result,
+						},
+					};
+				}
+				return rt;
+			}
 			// The message's true terminal: pi forwards only *streaming* variants as `message_update` (the
 			// LLM-level done/error become this event), so without it the turn would stay flagged streaming
-			// until `agent_end` — seconds or minutes later when tools run (and never, for a tool blocked on
-			// user input like `ask_user_question`). Adopt the final message too: it carries `stopReason`,
-			// which the renderers use to spot dead (aborted/errored) tool calls.
+			// until `agent_end` — seconds or minutes later when tools run. Adopt the final message too: it
+			// carries `stopReason`, which the renderers use to spot dead (aborted/errored) tool calls.
 			if (event.message.role !== "assistant" || !rt.currentAssistantId) return rt;
 			const id = rt.currentAssistantId;
 			const turn: ChatTurn = { kind: "assistant", id, message: event.message, streaming: false };
@@ -440,12 +470,7 @@ interface AppState {
 	 * Drops the session from chat-history (it's open now). `activate` focuses the tab (a user-driven reopen);
 	 * otherwise it only takes focus if the workspace has none yet (auto-restore must not steal focus).
 	 */
-	hydrateSession: (
-		summary: SessionSummary,
-		turns: ChatTurn[],
-		toolResults: Record<string, ToolResultState>,
-		activate?: boolean,
-	) => void;
+	hydrateSession: (summary: SessionSummary, hydrated: HydratedRuntime, activate?: boolean) => void;
 	appendUserMessage: (sessionId: string, text: string) => void;
 	/**
 	 * Surface a failed send as a visible error turn. The turn-driving wire calls (`session.prompt`/`steer`/
@@ -854,14 +879,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 				},
 			};
 		}),
-	hydrateSession: (summary, turns, toolResults, activate = false) =>
+	hydrateSession: (summary, hydrated, activate = false) =>
 		set((s) => {
 			if (s.sessions[summary.sessionId]) return {}; // a live/ahead runtime wins — never clobber it
 			const wsId = summary.workspaceId;
 			const runtime: SessionRuntime = {
 				...newRuntime(summary.model, summary.thinkingLevel),
-				turns,
-				toolResults,
+				turns: hydrated.turns,
+				toolResults: hydrated.toolResults,
+				askAnswers: hydrated.askAnswers,
 				isStreaming: summary.isStreaming,
 			};
 			const id = `${wsId}:${summary.sessionId}`;

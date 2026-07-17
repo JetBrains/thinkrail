@@ -9,7 +9,12 @@
  * network — and default to the real {@link completeOnce} primitive in the `agent` module.
  */
 
-import type { AssistantMessage, Message, TextContent, UserMessage } from "@thinkrail/contracts";
+import type {
+	AssistantMessage,
+	TextContent,
+	TranscriptMessage,
+	UserMessage,
+} from "@thinkrail/contracts";
 import { completeOnce, type OneShotRequest, type OneShotResult } from "../agent";
 
 /** The first turn of a session — the raw material for a workspace name. */
@@ -140,7 +145,7 @@ export function toWorkspaceSlug(raw: string): string | null {
  * are skipped the same way. `answer` is the concatenated text of the clean turn's first assistant
  * message (empty if it hasn't produced text). Pure — the host composes this with `session.getMessages`.
  */
-export function extractFirstTurn(messages: Message[]): WorkspaceNameTurn | null {
+export function extractFirstTurn(messages: TranscriptMessage[]): WorkspaceNameTurn | null {
 	for (let i = 0; i < messages.length; i += 1) {
 		const message = messages[i];
 		if (message?.role !== "user") continue;

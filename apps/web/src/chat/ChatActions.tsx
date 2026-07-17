@@ -3,15 +3,16 @@ import { createContext, useContext } from "react";
 
 /**
  * The interaction seam for chat tool renderers that need to talk BACK to the agent (e.g. the inline
- * `ask_user_question` card answering a blocked tool call). Presentational renderers stay store/transport
+ * `ask_user_question` card sending its reply). Presentational renderers stay store/transport
  * free — they read these callbacks from context instead. `ChatView` (the app-integration layer) provides
  * the value, wired to the transport + this tab's `sessionId`; when no provider is present (a renderer used
  * standalone, e.g. an extracted `packages/chat-ui`), the context is `null` and the card renders read-only.
  */
 export interface ChatActions {
 	/**
-	 * Answer a blocked `ask_user_question` tool call, correlated by its tool call id. Rejects when the host
-	 * refuses the reply (unknown session, malformed result) so the card can un-latch its "sent" state.
+	 * Answer an awaiting `ask_user_question` questionnaire, correlated by its tool call id — the host
+	 * injects the reply as the next turn's `ask-user-answers` message. Rejects when the host refuses it
+	 * (unknown session/call, already answered, superseded) so the card can un-latch its "sent" state.
 	 */
 	answerQuestion: (toolCallId: string, result: AskUserQuestionResult) => Promise<void>;
 }
