@@ -1,12 +1,12 @@
 import { createHighlighterCore, type HighlighterCore } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
+import { DARCULA_SHIKI, SHIKI_THEMES } from "./shikiTheme";
 
 // Shared shiki highlighter for chat code blocks: the JS regex engine (no WASM), a curated language set,
-// and a DUAL theme (dark + light) — all behind dynamic imports so nothing loads until the first code block
-// renders. Matches the DiffViewer pattern; kept here so chat can highlight many languages. The dual theme
-// emits both palettes as CSS vars in one render; `[data-theme="light"] .shiki` (global.css) flips to the
-// light palette, so a theme swap needs no re-highlighting.
-const THEMES = { dark: "github-dark-default", light: "github-light-default" } as const;
+// and the TRI theme (dark + light + darcula, from `shikiTheme.ts`) — all behind dynamic imports so nothing
+// loads until the first code block renders. Matches the DiffViewer pattern; kept here so chat can highlight
+// many languages. One render emits every palette as CSS vars; the `[data-theme]` rules in global.css flip
+// between them, so a theme swap needs no re-highlighting.
 
 const CANONICAL = new Set([
 	"typescript",
@@ -43,6 +43,7 @@ function getHighlighter(): Promise<HighlighterCore> {
 		themes: [
 			import("@shikijs/themes/github-dark-default"),
 			import("@shikijs/themes/github-light-default"),
+			DARCULA_SHIKI,
 		],
 		langs: [
 			import("@shikijs/langs/typescript"),
@@ -70,7 +71,7 @@ export async function highlightCode(code: string, lang: string): Promise<string 
 	if (!CANONICAL.has(canonical)) return null;
 	try {
 		const hl = await getHighlighter();
-		return hl.codeToHtml(code, { lang: canonical, themes: THEMES, defaultColor: "dark" });
+		return hl.codeToHtml(code, { lang: canonical, themes: SHIKI_THEMES, defaultColor: "dark" });
 	} catch {
 		return null;
 	}

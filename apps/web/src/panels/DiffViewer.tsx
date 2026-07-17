@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { createHighlighterCore, type HighlighterCore } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
+import { DARCULA_SHIKI, SHIKI_THEMES } from "@/lib/shikiTheme";
 
-// Dual theme (dark + light) so a theme swap needs no re-highlight: one render emits both palettes as CSS
-// vars and `[data-theme="light"] .shiki` (global.css) flips to the light one. Dark + Darcula use the default.
-const THEMES = { dark: "github-dark-default", light: "github-light-default" } as const;
+// Tri theme (dark + light + darcula, from `lib/shikiTheme.ts`) so a theme swap needs no re-highlight: one
+// render emits every palette as CSS vars and the `[data-theme]` rules in global.css flip between them.
 
 // One shared highlighter: only the `diff` grammar, on the JS regex engine (no WASM).
 let highlighter: Promise<HighlighterCore> | null = null;
@@ -13,6 +13,7 @@ function getHighlighter(): Promise<HighlighterCore> {
 		themes: [
 			import("@shikijs/themes/github-dark-default"),
 			import("@shikijs/themes/github-light-default"),
+			DARCULA_SHIKI,
 		],
 		langs: [import("@shikijs/langs/diff")],
 		engine: createJavaScriptRegexEngine(),
@@ -27,7 +28,9 @@ export default function DiffViewer({ diff }: { diff: string }) {
 	useEffect(() => {
 		let cancelled = false;
 		getHighlighter()
-			.then((hl) => hl.codeToHtml(diff, { lang: "diff", themes: THEMES, defaultColor: "dark" }))
+			.then((hl) =>
+				hl.codeToHtml(diff, { lang: "diff", themes: SHIKI_THEMES, defaultColor: "dark" }),
+			)
 			.then((h) => {
 				if (!cancelled) setHtml(h);
 			})

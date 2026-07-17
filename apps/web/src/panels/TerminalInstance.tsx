@@ -5,23 +5,55 @@ import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { type ITheme, Terminal as XTerm } from "@xterm/xterm";
 import { useEffect, useRef, useState } from "react";
 import "@xterm/xterm/css/xterm.css";
+import { cssColorToHex } from "@/lib";
 import { getTransport } from "../transport";
 
 function cssVar(name: string): string | undefined {
 	return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || undefined;
 }
 
+/** A color token, canonicalized to hex — minified CSS can serve any equivalent form (`#fff`, `gray`),
+ * and xterm's parser takes hex/rgb only. Unparseable reads as unset → xterm's default for that slot. */
+function cssColorVar(name: string): string | undefined {
+	return cssColorToHex(cssVar(name) ?? "") || undefined;
+}
+
+/** The 16 ANSI slots, each fed by its `--ansi-*` token — so shell colors stay legible per theme (the
+ * light theme swaps in a light-tuned palette; xterm's dark-tuned defaults wash out on white). */
+const ANSI_TOKENS = [
+	["black", "--ansi-black"],
+	["red", "--ansi-red"],
+	["green", "--ansi-green"],
+	["yellow", "--ansi-yellow"],
+	["blue", "--ansi-blue"],
+	["magenta", "--ansi-magenta"],
+	["cyan", "--ansi-cyan"],
+	["white", "--ansi-white"],
+	["brightBlack", "--ansi-bright-black"],
+	["brightRed", "--ansi-bright-red"],
+	["brightGreen", "--ansi-bright-green"],
+	["brightYellow", "--ansi-bright-yellow"],
+	["brightBlue", "--ansi-bright-blue"],
+	["brightMagenta", "--ansi-bright-magenta"],
+	["brightCyan", "--ansi-bright-cyan"],
+	["brightWhite", "--ansi-bright-white"],
+] as const;
+
 /** xterm theme from the live CSS tokens (no raw hex; falls back to xterm defaults if a token is unset). */
 function readTheme(): ITheme {
 	const theme: ITheme = {};
-	const bg = cssVar("--surface-content");
+	const bg = cssColorVar("--surface-content");
 	if (bg) theme.background = bg;
-	const fg = cssVar("--text");
+	const fg = cssColorVar("--text");
 	if (fg) theme.foreground = fg;
-	const cursor = cssVar("--primary");
+	const cursor = cssColorVar("--primary");
 	if (cursor) theme.cursor = cursor;
-	const sel = cssVar("--sel");
+	const sel = cssColorVar("--sel");
 	if (sel) theme.selectionBackground = sel;
+	for (const [slot, name] of ANSI_TOKENS) {
+		const color = cssColorVar(name);
+		if (color) theme[slot] = color;
+	}
 	return theme;
 }
 

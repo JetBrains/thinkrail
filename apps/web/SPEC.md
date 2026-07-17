@@ -82,10 +82,18 @@ The module set: `transport` / `store` / branded `shell`; `ProjectTree`; `FileTre
   `server.welcome`, is set from the store's `theme` (fed by transport), applied by the shell's one theme
   effect, and cached in `localStorage` only as a **first-paint hint** (`main.tsx` applies it pre-React so
   the initial paint matches, before the welcome reconciles it). Changed via `settings.update`, converged on
-  the `settings.changed` broadcast. Code surfaces that own their own theming track the swap: **xterm** and
-  **Monaco** observe `[data-theme]` (Monaco also picks its `vs`/`vs-dark` base from it); **shiki** renders
-  dual (dark+light) palettes as CSS vars, flipped by `[data-theme="light"] .shiki`; **mermaid** re-derives
-  from the tokens. Structured for N (pibun's theme engine, lifted at V2).
+  the `settings.changed` broadcast. The token vocabulary also carries the code surfaces: **`--ansi-*`**
+  (the 16 xterm colors — light overrides them, dark-tuned brights wash out on white) and optional
+  **`--code-*`** syntax colors (set by Darcula, whose identity is its syntax palette; unset elsewhere).
+  Code surfaces that own their own theming track the swap: **xterm** and **Monaco** observe
+  `[data-theme]` and rebuild from the tokens (Monaco also picks its `vs`/`vs-dark` base from it, and
+  derives token rules from `--code-*`); **shiki** renders the tri palette (dark+light+darcula, the
+  darcula registration in `lib/shikiTheme.ts`) as CSS vars, flipped by the `[data-theme]` rules in
+  `global.css`; **mermaid** re-derives from the tokens. **Reading color tokens from JS goes through
+  `lib.cssColorToHex`** — the built CSS is minified, so `getComputedStyle` can return any equivalent form
+  (`#fff`, `gray`), which strict consumers (Monaco, xterm) reject. Text/status token values hold a contrast floor (body ≥
+  4.5:1, `--muted` ≥ 4.5:1 on its worst surface, `--hint` ≥ 3:1 — see the note in `tokens.css`).
+  Structured for N (pibun's theme engine, lifted at V2).
 - Token names that collide with Tailwind namespaces (`--font-mono`, `--font-accent`, `--radius-*`) are
   used as token arbitrary values (`font-[var(--font-accent)]`), not `@theme` mappings.
 - **Icons: `lucide-react`. Components: shadcn/ui** (Radix primitives), copy-in under `src/components/ui/`

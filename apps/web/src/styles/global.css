@@ -23,17 +23,23 @@ body {
 }
 
 /*
- * Shiki dual-theme swap. `highlightCode` / `DiffViewer` render with `themes: { dark, light }` +
- * `defaultColor: "dark"`, so the base inline `color` is the dark palette and each token also carries a
- * `--shiki-light` variable. Dark + Darcula use the default; only the Light theme swaps to the light
- * palette — a pure-CSS flip, no re-highlighting. Backgrounds stay owned by the token surfaces the code
- * containers set (`--bg-dark` / transparent), so only the text color is swapped here.
+ * Shiki multi-theme swap. `highlightCode` / `DiffViewer` render with `themes: { dark, light, darcula }`
+ * (see `lib/shikiTheme.ts`) + `defaultColor: "dark"`, so the base inline `color` is the dark palette and
+ * each token also carries `--shiki-light` / `--shiki-darcula` variables. Dark uses the default; Light and
+ * Darcula swap via the rules below — a pure-CSS flip, no re-highlighting. Backgrounds stay owned by the
+ * token surfaces the code containers set (`--bg-dark` / transparent), so only the text color is swapped here.
  */
 [data-theme="light"] .shiki,
 [data-theme="light"] .shiki span {
 	/* biome-ignore lint/complexity/noImportantStyles: shiki writes the token color inline on every span; a
-	   stylesheet rule can only override an inline style with !important. This is shiki's own dual-theme recipe. */
+	   stylesheet rule can only override an inline style with !important. This is shiki's own multi-theme recipe. */
 	color: var(--shiki-light) !important;
+}
+
+[data-theme="darcula"] .shiki,
+[data-theme="darcula"] .shiki span {
+	/* biome-ignore lint/complexity/noImportantStyles: same inline-style override as the light rule above. */
+	color: var(--shiki-darcula) !important;
 }
 
 a {
