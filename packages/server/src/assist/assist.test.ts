@@ -2,11 +2,11 @@ import { afterEach, expect, test } from "bun:test";
 import type { AssistantMessage, Message, UserMessage } from "@thinkrail/contracts";
 import {
 	extractFirstTurn,
-	naiveWorkspaceSlug,
+	naiveWorkspaceName,
 	type OneShotRunner,
 	setOneShotRunner,
 	suggestWorkspaceName,
-	toWorkspaceSlug,
+	toWorkspaceName,
 } from "./assist";
 
 /** Inject a fake one-shot runner returning a fixed text (or throwing) — no pi/auth/network. */
@@ -39,42 +39,43 @@ function assistant(text: string, stopReason: AssistantMessage["stopReason"] = "s
 	} as AssistantMessage as Message;
 }
 
-test("toWorkspaceSlug normalizes model output into a safe, bounded kebab slug", () => {
-	expect(toWorkspaceSlug('"Add Login Flow"')).toBe("add-login-flow");
-	expect(toWorkspaceSlug("`fix: the parser!!!`")).toBe("fix-the-parser");
-	expect(toWorkspaceSlug("  Refactor   Auth  ")).toBe("refactor-auth");
-	expect(toWorkspaceSlug("one two three four five six")).toBe("one-two-three-four-five"); // ≤5 words
-	expect(toWorkspaceSlug("!!! ??? ...")).toBeNull(); // nothing usable
-	expect(toWorkspaceSlug("")).toBeNull();
+test("toWorkspaceName normalizes model output into a safe, bounded display name, preserving casing", () => {
+	expect(toWorkspaceName('"Add Login Flow"')).toBe("Add Login Flow"); // wrapping quotes stripped
+	expect(toWorkspaceName("`fix: the parser!!!`")).toBe("fix the parser"); // backticks + punctuation gone
+	expect(toWorkspaceName("  Refactor   Auth  ")).toBe("Refactor Auth"); // whitespace collapsed
+	expect(toWorkspaceName("one two three four five six")).toBe("one two three four five"); // ≤5 words
+	expect(toWorkspaceName("Add OAuth login")).toBe("Add OAuth login"); // acronym casing survives
+	expect(toWorkspaceName("!!! ??? ...")).toBeNull(); // nothing usable
+	expect(toWorkspaceName("")).toBeNull();
 });
 
-test("naiveWorkspaceSlug derives a bounded kebab slug straight from the first prompt", () => {
-	// Word-boundary growth stops at the 5-word cap; apostrophes split like the shared slug alphabet.
-	expect(naiveWorkspaceSlug("Let's figure out how to better implement")).toBe(
-		"let-s-figure-out-how",
+test("naiveWorkspaceName derives a bounded Title Case name straight from the first prompt", () => {
+	// Word-boundary growth stops at the 5-word cap; apostrophes split into separate words.
+	expect(naiveWorkspaceName("Let's figure out how to better implement")).toBe(
+		"Let S Figure Out How",
 	);
-	expect(naiveWorkspaceSlug("refactor the workspace naming flow please")).toBe(
-		"refactor-the-workspace-naming-flow",
+	expect(naiveWorkspaceName("refactor the workspace naming flow please")).toBe(
+		"Refactor The Workspace Naming Flow",
 	);
-	// Punctuation collapses to the slug alphabet; leading/trailing junk is trimmed.
-	expect(naiveWorkspaceSlug("  add a login form!!! ")).toBe("add-a-login-form");
+	// Punctuation collapses to spaces; leading/trailing junk is trimmed; each word is Title Cased.
+	expect(naiveWorkspaceName("  add a login form!!! ")).toBe("Add A Login Form");
 });
 
-test("naiveWorkspaceSlug grows short words to the minimum but never past the maxima", () => {
+test("naiveWorkspaceName grows short words to the minimum but never past the maxima", () => {
 	// A run of very short words keeps growing until ~10 chars / 2 words is met.
-	expect(naiveWorkspaceSlug("a b c d e f g")).toBe("a-b-c-d-e"); // 5-word cap
+	expect(naiveWorkspaceName("a b c d e f g")).toBe("A B C D E"); // 5-word cap
 	// Long words stop before the 40-char cap once the minimum (2 words / 10 chars) is met.
-	expect(naiveWorkspaceSlug("implement authentication authorization middleware refactor")).toBe(
-		"implement-authentication-authorization",
+	expect(naiveWorkspaceName("implement authentication authorization middleware refactor")).toBe(
+		"Implement Authentication Authorization",
 	);
 	// A prompt shorter than the minimum simply uses what it has (words ran out).
-	expect(naiveWorkspaceSlug("add login")).toBe("add-login");
+	expect(naiveWorkspaceName("add login")).toBe("Add Login");
 });
 
-test("naiveWorkspaceSlug returns null for a blank or unusable prompt", () => {
-	expect(naiveWorkspaceSlug("")).toBeNull();
-	expect(naiveWorkspaceSlug("   ")).toBeNull();
-	expect(naiveWorkspaceSlug("!!! ??? ...")).toBeNull();
+test("naiveWorkspaceName returns null for a blank or unusable prompt", () => {
+	expect(naiveWorkspaceName("")).toBeNull();
+	expect(naiveWorkspaceName("   ")).toBeNull();
+	expect(naiveWorkspaceName("!!! ??? ...")).toBeNull();
 });
 
 test("extractFirstTurn pulls the first prompt + first assistant answer from a transcript", () => {
@@ -134,14 +135,14 @@ test("extractFirstTurn skips a killed multi-round turn by its terminal assistant
 	expect(turn).toEqual({ prompt: "second task", answer: "on it" });
 });
 
-test("suggestWorkspaceName runs the turn through the runner and slugifies the reply", async () => {
+test("suggestWorkspaceName runs the turn through the runner and normalizes the reply", async () => {
 	let seen: string | undefined;
 	fakeRunner(async (req) => {
 		seen = req.prompt;
 		return { text: "Add Login Flow", model: { provider: "p", id: "m" } };
 	});
 	const name = await suggestWorkspaceName({ prompt: "add a login flow", answer: "ok" });
-	expect(name).toBe("add-login-flow");
+	expect(name).toBe("Add Login Flow"); // display name, casing preserved
 	expect(seen).toContain("add a login flow"); // the prompt carried the turn
 	expect(seen).toContain("ok");
 });

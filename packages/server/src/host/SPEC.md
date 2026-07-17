@@ -42,17 +42,18 @@ channel fan-out, and the process-boot wrapper both launchers share.
     (`isPromptCommitted(event)`, exported: a **user `message_end`** — `agent_start`/`turn_start` fire
     *before* the prompt's `message_end`, so the transcript wouldn't yet hold the prompt at those; this
     still fires before the model responds, so the name is instant and no tool/question can block it). It
-    derives a slug from the first prompt with assist's non-agentic `naiveWorkspaceSlug` (no model call)
-    and renames **provisionally** (`renameWorkspace(..., { lock: false })` — name + branch move but
-    `renamed` stays unset). It fires only on a **pristine** workspace (`!renamed` AND name still
-    `workspace-N`), so it lands once and never overwrites a user/agentic name; a per-workspace `naiveInFlight`
+    derives a **display name** from the first prompt with assist's non-agentic `naiveWorkspaceName` (no
+    model call) and renames **provisionally** (`renameWorkspace(..., { lock: false })` — name + derived
+    branch move but `renamed` stays unset). It fires only on a **pristine** workspace (`!renamed` AND its
+    **branch** still `workspace-N` — gated on the branch, not the display name, so the two stay decoupled),
+    so it lands once and never overwrites a user/agentic name; a per-workspace `naiveInFlight`
     set dedupes re-fired prompt-commits. This is why a long first turn no longer leaves the workspace as
     `workspace-N` for minutes.
   - **Agentic (refine):** `maybeAutoRenameWorkspace(sessionId, workspaceId)` on every **settled** turn
-    (`isSettledTurn(event)`, exported: `agent_end` with `willRetry: false`). It asks assist for a slug
-    (cheap model), re-checks the workspace (exists, not `renamed`) after the await, then calls
-    `renameWorkspace` in the same tick — upgrading the provisional naive slug into the final name and
-    **locking** it (`renamed: true`). Best-effort by contract: every failure path resolves `null` and
+    (`isSettledTurn(event)`, exported: `agent_end` with `willRetry: false`). It asks assist for a
+    human-readable name (cheap model), re-checks the workspace (exists, not `renamed`) after the await,
+    then calls `renameWorkspace` in the same tick — upgrading the provisional naive name into the final
+    name (and its derived branch) and **locking** it (`renamed: true`). Best-effort by contract: every failure path resolves `null` and
     leaves the flag unset so a later settled turn retries — but a swallowed exception is `console.warn`ed
     (a broken rename path must stay distinguishable from "assist had nothing"). Its own per-workspace
     **in-flight set** (independent of the naive one — the two passes can overlap on a short turn) dedupes

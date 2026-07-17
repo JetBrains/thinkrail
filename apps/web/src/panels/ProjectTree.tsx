@@ -257,10 +257,20 @@ function WorkspaceRow({
 					<GitBranch className={`size-4 shrink-0 ${isActive ? "text-primary" : "text-hint"}`} />
 					<span
 						data-testid="workspace-name"
-						className={`truncate text-sm ${isActive ? "font-medium text-primary" : "text-muted"}`}
+						className={`min-w-0 truncate text-sm ${isActive ? "font-medium text-primary" : "text-muted"}`}
 					>
 						{workspace.name}
 					</span>
+					{/* Secondary git-branch chip — the display name is decoupled from the branch, so surface the
+					    branch for matching against git. Hidden when they coincide (pristine/legacy rows). */}
+					{workspace.branch !== workspace.name && (
+						<span
+							data-testid="workspace-branch"
+							className="shrink-0 truncate font-[var(--font-mono)] text-hint text-xs"
+						>
+							{workspace.branch}
+						</span>
+					)}
 				</button>
 				{hasStats && (
 					<span className="shrink-0 text-xs tabular-nums group-hover:hidden">

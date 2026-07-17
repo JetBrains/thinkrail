@@ -23,7 +23,10 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   button; Esc + outside-click cancel); removal is **event-driven** (no per-client optimism): on confirm it
   just fires `workspace.remove` and lets every client — including this one — react to the host's
   `workspace.removed` push via the store's `applyWorkspaceRemoved`; a rejected request (no event will come)
-  surfaces an error toast, leaving the row in place).
+  surfaces an error toast, leaving the row in place). Each **workspace row** shows the display `name` with
+  a secondary, muted, **monospace branch chip** (`workspace.branch`) rendered only when it differs from the
+  name (so pristine/legacy `workspace-N` rows stay clean) — the display name is decoupled from the git
+  branch (see [[submodule-server-workspaces]]).
   **Opening a project** goes through the shared **`useOpenProject`** hook (reused by `ProjectTree` **and**
   `WelcomePanel`, so the flow is identical in the rail and the Welcome screen): `project.open`, and on
   failure `project.inspect` → either offers to bootstrap the folder into a repo — a modal **`ConfirmDialog`**

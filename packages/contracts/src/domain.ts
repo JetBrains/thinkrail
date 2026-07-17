@@ -30,7 +30,13 @@ export interface DiffStats {
 export interface Workspace {
 	id: string;
 	projectId: string;
+	/**
+	 * Human-readable display label shown in the UI (Title Case, spaces) — decoupled from `branch`. May
+	 * repeat across workspaces; the branch is what's uniqued. Equals `branch` only for the auto
+	 * `workspace-N` placeholder.
+	 */
 	name: string;
+	/** The git branch this worktree is on — a kebab slug derived from `name`, uniqued (refs + worktree dirs). */
 	branch: string;
 	/** Absolute path to the worktree (the cwd everything downstream uses). */
 	worktreePath: string;

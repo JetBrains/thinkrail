@@ -11,7 +11,9 @@ tags: [v1]
 ## Responsibility
 
 A workspace is a `git worktree` on its own branch under the data dir — the anchor for files/git/terminals/
-chats.
+chats. Its **display `name` is decoupled from its git `branch`**: `name` is a human-readable label
+(Title Case, spaces) and `branch` is a kebab slug derived from it — they were once held equal, and still
+coincide for the auto `workspace-N` placeholder, but a named workspace carries both distinctly.
 
 ## Boundary
 
@@ -27,12 +29,17 @@ chats.
   (`WORKSPACE_CONTEXT_DIR`, with a self-ignoring `*` `.gitignore` — zero git footprint) in the
   new worktree, the home for temp docs (task-specs / working files) that stay out of git yet remain
   scannable by the spec tools (the path convention lives in `@thinkrail/shared/paths`; see
-  [[submodule-workflow-skills]]'s artifacts rules); a **user-supplied name sets `renamed: true`** at create —
-  the user already chose, so the auto-namer never touches it; auto-`workspace-N` leaves it unset),
-  `renameWorkspace` (**sync**; slugs + uniques the requested name, `git branch -m` from the project repo
-  — the branch ref moves and the worktree's HEAD follows, but the **worktree dir never moves** (pi keys
-  sessions by exact cwd; terminals/tabs are cwd'd there — the stale dir name is the accepted cost);
-  keeps the `name === branch` invariant by setting both to the final unique branch; **re-points sibling
+  [[submodule-workflow-skills]]'s artifacts rules); a **user-supplied name is the display name** (casing +
+  punctuation preserved via `toDisplayName`; the branch is derived from it) and **sets `renamed: true`** at
+  create — the user already chose, so the auto-namer never touches it; auto-`workspace-N` leaves it unset,
+  where `name === branch`),
+  `renameWorkspace` (**sync**; sets the **display `name`** (sanitized, casing preserved) and derives the
+  **git branch** from it via `toBranch`, uniqued against refs + worktree dirs, `git branch -m` from the
+  project repo — the branch ref moves and the worktree's HEAD follows, but the **worktree dir never moves**
+  (pi keys sessions by exact cwd; terminals/tabs are cwd'd there — the stale dir name is the accepted cost);
+  **`name` and `branch` deliberately differ** (e.g. `Fix Auth Redirect` / `fix-auth-redirect`) — the name
+  is display-only, never a path/id; only the branch is uniqued (display names may repeat, the branch chip
+  disambiguates — see [[submodule-web-panels]]); **re-points sibling
   records whose `baseBranch` was the old branch** in the same save so their diffs don't silently empty;
   **re-loads the records after the git subprocess** — a record that vanished meanwhile (archived / e2e
   reset) aborts the save instead of resurrecting it; throws on unknown id or git failure — callers decide,
