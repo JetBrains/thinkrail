@@ -23,10 +23,10 @@ body {
 }
 
 /*
- * Shiki multi-theme swap. `highlightCode` / `DiffViewer` render with `themes: { dark, light, darcula }`
- * (see `lib/shikiTheme.ts`) + `defaultColor: "dark"`, so the base inline `color` is the dark palette and
- * each token also carries `--shiki-light` / `--shiki-darcula` variables. Dark uses the default; Light and
- * Darcula swap via the rules below — a pure-CSS flip, no re-highlighting. Backgrounds stay owned by the
+ * Shiki multi-theme swap. `highlightCode` / `DiffViewer` render with the `SHIKI_THEMES` map (see
+ * `lib/shikiTheme.ts`) + `defaultColor: "dark"`, so the base inline `color` is the dark palette and each
+ * token also carries a `--shiki-<name>` variable per other theme. Dark uses the default; every other
+ * theme swaps via its rule below — a pure-CSS flip, no re-highlighting. Backgrounds stay owned by the
  * token surfaces the code containers set (`--bg-dark` / transparent), so only the text color is swapped here.
  */
 [data-theme="light"] .shiki,
@@ -40,6 +40,12 @@ body {
 [data-theme="darcula"] .shiki span {
 	/* biome-ignore lint/complexity/noImportantStyles: same inline-style override as the light rule above. */
 	color: var(--shiki-darcula) !important;
+}
+
+[data-theme="gruvbox"] .shiki,
+[data-theme="gruvbox"] .shiki span {
+	/* biome-ignore lint/complexity/noImportantStyles: same inline-style override as the light rule above. */
+	color: var(--shiki-gruvbox) !important;
 }
 
 a {

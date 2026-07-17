@@ -43,6 +43,7 @@ function getHighlighter(): Promise<HighlighterCore> {
 		themes: [
 			import("@shikijs/themes/github-dark-default"),
 			import("@shikijs/themes/github-light-default"),
+			import("@shikijs/themes/gruvbox-dark-hard"),
 			DARCULA_SHIKI,
 		],
 		langs: [

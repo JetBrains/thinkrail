@@ -88,7 +88,8 @@ what lets the UI ship independently of the host.
   **`JbcentralConnectResult`** (the in-app connect state machine: `connected` / `needs-install` /
   `needs-login` / `error` (+`message`); the `needs-install` command comes from `jbcentralInstall`, not a
   hint on this result));
-  the **theme/config value-set** — **`Theme`** (a const-object "enum": `Dark`/`Light`/`Darcula`), its derived
+  the **theme/config value-set** — **`Theme`** (a const-object "enum": `Dark`/`Light`/`Darcula`/`Gruvbox`;
+  adding a value is wire-compatible — an older client falls back to Dark's `:root` tokens), its derived
   **`ThemeId`** type + runtime-iterable **`THEME_IDS`** (the picker source), and the server-synced
   **`AppConfig`** (`{ theme }` — an extensible bag) with its **`DEFAULT_CONFIG`** fallback (persisted host-side
   as `config.json`, delivered in `server.welcome`, mutated via `settings.update`);

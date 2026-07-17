@@ -10,6 +10,7 @@ const LABELS: Record<ThemeId, string> = {
 	[Theme.Dark]: "Dark",
 	[Theme.Light]: "Light",
 	[Theme.Darcula]: "Darcula",
+	[Theme.Gruvbox]: "Gruvbox",
 };
 
 /** The pickable themes, in display order — the Appearance settings section's source. */

@@ -79,6 +79,10 @@ test("Monaco opens files and re-themes under every theme", async ({ page }) => {
 	await expect(editor).toHaveCSS("background-color", "rgb(43, 43, 43)");
 	await expect(page.getByTestId("error-boundary-fallback")).toHaveCount(0);
 
+	await pickTheme(page, "gruvbox");
+	await expect(editor).toHaveCSS("background-color", "rgb(29, 32, 33)");
+	await expect(page.getByTestId("error-boundary-fallback")).toHaveCount(0);
+
 	// Back to Dark — also restores the suite's default state for the other specs.
 	await pickTheme(page, "dark");
 	await expect(editor).toHaveCSS("background-color", "rgb(23, 23, 25)");

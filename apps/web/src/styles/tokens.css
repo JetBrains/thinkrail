@@ -110,11 +110,13 @@
 
 /*
  * Additional themes. Each overrides only the SEMANTIC surface/text/status tokens + `color-scheme` (and the
- * one-off `--selection-bg`, plus `--ansi-*` where the default terminal palette wouldn't read, and optional
- * `--code-*` syntax colors for Monaco); the brand accent tints, type scale, spacing, radii, and fonts stay
- * shared in `:root`. `applyTheme(id)` sets `[data-theme=id]` on <html>; picking "dark" matches neither block
- * below and falls back to the `:root` defaults. Because `@theme inline` binds every utility to the live
- * `var(--token)`, swapping the block re-themes the whole UI with no component changes.
+ * one-off `--selection-bg`, plus `--ansi-*` where the default terminal palette wouldn't read, optional
+ * `--code-*` syntax colors for Monaco, and — when the palette demands it, as gruvbox's does — the accent
+ * family); type scale, spacing, radii, and fonts stay shared in `:root`. `applyTheme(id)` sets
+ * `[data-theme=id]` on <html>; picking "dark" matches no block below and falls back to the `:root`
+ * defaults (which is also what an older client does for a theme id it doesn't know). Because
+ * `@theme inline` binds every utility to the live `var(--token)`, swapping the block re-themes the whole
+ * UI with no component changes.
  *
  * Contrast floor: body text ≥ 4.5:1 (WCAG AA) on the surfaces it sits on; `--muted` ≥ 4.5:1 on its
  * worst surface; `--hint` is tertiary by design but stays ≥ 3:1. Check with a quick script before
@@ -218,4 +220,83 @@
 	--code-attribute-name: #bababa;
 	--code-attribute-value: #a5c261;
 	--code-json-key: #9876aa;
+}
+
+/* Gruvbox — the vim / tiling-WM classic (morhetz's "retro groove"): warm hard-contrast darks (#1d2021
+   editor inside #282828 tool windows), amber #ebdbb2 text — and, uniquely among the themes, the signature
+   GRUVBOX ORANGE as the interactive accent with dark-on-accent text (violet fights this palette; a theme
+   made for rice deserves the real thing). */
+[data-theme="gruvbox"] {
+	color-scheme: dark;
+
+	/* Accent: gruvbox bright orange; text ON the accent is the hard dark (6.5:1), not white (2.2:1). */
+	--primary: #fe8019;
+	--primary-10: rgba(254, 128, 25, 0.1);
+	--primary-20: rgba(254, 128, 25, 0.2);
+	--primary-40: rgba(254, 128, 25, 0.4);
+	--primary-60: rgba(254, 128, 25, 0.6);
+	--primary-80: rgba(254, 128, 25, 0.8);
+	--secondary: #504945;
+	--on-accent: #1d2021;
+	--on-accent-16: rgba(29, 32, 33, 0.16);
+	/* Status: the gruvbox brights — designed as text on these darks (all ≥ 4.5:1 on the editor bg). */
+	--blue: #83a598;
+	--green: #b8bb26;
+	--green-tint: rgba(184, 187, 38, 0.12);
+	--red: #fb4934;
+	--gold: #fabd2f;
+	--gold-tint: rgba(250, 189, 47, 0.12);
+	/* Chat user bubble follows the accent here — a violet bubble would be the one cold thing on screen. */
+	--bubble-user-bg: rgba(254, 128, 25, 0.1);
+	--bubble-user-border: rgba(254, 128, 25, 0.3);
+
+	--bg: #282828;
+	--bg-dark: #1d2021;
+	--bg-input: #3c3836;
+	--input-bg: #3c3836;
+	--panel: rgba(29, 32, 33, 0.8);
+	--elevated: #3c3836;
+	--hover: #504945;
+	--border: #3c3836;
+	--border2: #504945;
+	--text: #ebdbb2;
+	--text-40: rgba(235, 219, 178, 0.4);
+	--muted: #a89984;
+	--hint: #928374;
+	--sel: #504945;
+	--selection-bg: #504945;
+	/* Two-tone: warm tool windows (sidebar) around the hard-contrast editor (content). */
+	--surface-sidebar: var(--bg);
+	--surface-content: var(--bg-dark);
+
+	/* Terminal ANSI: gruvbox's canonical 16-color palette. */
+	--ansi-black: #282828;
+	--ansi-red: #cc241d;
+	--ansi-green: #98971a;
+	--ansi-yellow: #d79921;
+	--ansi-blue: #458588;
+	--ansi-magenta: #b16286;
+	--ansi-cyan: #689d6a;
+	--ansi-white: #a89984;
+	--ansi-bright-black: #928374;
+	--ansi-bright-red: #fb4934;
+	--ansi-bright-green: #b8bb26;
+	--ansi-bright-yellow: #fabd2f;
+	--ansi-bright-blue: #83a598;
+	--ansi-bright-magenta: #d3869b;
+	--ansi-bright-cyan: #8ec07c;
+	--ansi-bright-white: #ebdbb2;
+
+	/* Gruvbox vim syntax (Monaco rules; shiki uses the shipped `gruvbox-dark-hard`). */
+	--code-keyword: #fb4934;
+	--code-string: #b8bb26;
+	--code-comment: #928374;
+	--code-comment-doc: #928374;
+	--code-number: #d3869b;
+	--code-regexp: #fe8019;
+	--code-annotation: #fabd2f;
+	--code-tag: #8ec07c;
+	--code-attribute-name: #fabd2f;
+	--code-attribute-value: #b8bb26;
+	--code-json-key: #83a598;
 }

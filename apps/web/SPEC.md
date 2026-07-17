@@ -75,10 +75,12 @@ The module set: `transport` / `store` / branded `shell`; `ProjectTree`; `FileTre
 - **`src/styles/tokens.css` is the theme contract.** A *theme* is one set of CSS custom properties; a
   theme swap = changing the token block via `[data-theme="…"]` on `<html>` (`utils/theme` `applyTheme(id)`)
   — nothing in components changes. `@theme inline` keeps utilities pointing at the live `var(--token)`, so
-  the swap re-themes everything. **Ships three themes** — **Dark** (default, under `:root`), **Light**, and
-  classic IntelliJ **Darcula** (`[data-theme="light"|"darcula"]` blocks override only the semantic
-  surface/text/status tokens + `color-scheme`; accent tints, type scale, spacing, radii, fonts stay shared
-  in `:root`). The choice is **server-synced** (`AppConfig.theme`, host-owned): it arrives in
+  the swap re-themes everything. **Ships four themes** — **Dark** (default, under `:root`), **Light**,
+  classic IntelliJ **Darcula**, and **Gruvbox** (the vim classic — warm retro darks; the one theme that
+  swaps the interactive accent to gruvbox orange with dark-on-accent text, so a `[data-theme]` block MAY
+  override the accent family when the palette demands it). Theme blocks override only the semantic
+  surface/text/status tokens + `color-scheme` (+ `--ansi-*`/`--code-*`/accent where the theme calls for
+  it); type scale, spacing, radii, fonts stay shared in `:root`. The choice is **server-synced** (`AppConfig.theme`, host-owned): it arrives in
   `server.welcome`, is set from the store's `theme` (fed by transport), applied by the shell's one theme
   effect, and cached in `localStorage` only as a **first-paint hint** (`main.tsx` applies it pre-React so
   the initial paint matches, before the welcome reconciles it). Changed via `settings.update`, converged on

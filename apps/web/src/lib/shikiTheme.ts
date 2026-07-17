@@ -33,12 +33,14 @@ export const DARCULA_SHIKI: ThemeRegistration = {
 };
 
 /**
- * The tri-palette map for `codeToHtml({ themes })`: `dark` is the inline default color; `light` and
- * `darcula` are emitted as `--shiki-light` / `--shiki-darcula` CSS vars on every token, flipped by the
- * `[data-theme]` rules in `global.css` — a theme swap needs no re-highlighting.
+ * The palette map for `codeToHtml({ themes })`: `dark` is the inline default color; every other entry is
+ * emitted as a `--shiki-<name>` CSS var on every token, flipped by the `[data-theme]` rules in
+ * `global.css` — a theme swap needs no re-highlighting. `darcula` is the custom registration above;
+ * `gruvbox` uses the shiki-shipped `gruvbox-dark-hard` (matching the `#1d2021` content surface).
  */
 export const SHIKI_THEMES = {
 	dark: "github-dark-default",
 	light: "github-light-default",
 	darcula: "darcula",
+	gruvbox: "gruvbox-dark-hard",
 } as const;
