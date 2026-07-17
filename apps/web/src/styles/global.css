@@ -19,7 +19,21 @@ body {
 }
 
 ::selection {
-	background: #2c2947;
+	background: var(--selection-bg);
+}
+
+/*
+ * Shiki dual-theme swap. `highlightCode` / `DiffViewer` render with `themes: { dark, light }` +
+ * `defaultColor: "dark"`, so the base inline `color` is the dark palette and each token also carries a
+ * `--shiki-light` variable. Dark + Darcula use the default; only the Light theme swaps to the light
+ * palette — a pure-CSS flip, no re-highlighting. Backgrounds stay owned by the token surfaces the code
+ * containers set (`--bg-dark` / transparent), so only the text color is swapped here.
+ */
+[data-theme="light"] .shiki,
+[data-theme="light"] .shiki span {
+	/* biome-ignore lint/complexity/noImportantStyles: shiki writes the token color inline on every span; a
+	   stylesheet rule can only override an inline style with !important. This is shiki's own dual-theme recipe. */
+	color: var(--shiki-light) !important;
 }
 
 a {

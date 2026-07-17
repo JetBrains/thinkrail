@@ -1,4 +1,5 @@
 import type {
+	AppConfig,
 	ExtUiRequest,
 	LoginPush,
 	ServerWelcome,
@@ -28,6 +29,11 @@ export function initTransport(): WsTransport {
 		}
 		if (Array.isArray(welcome.projects)) {
 			useAppStore.getState().setProjects(welcome.projects);
+		}
+		// The host's source-of-truth app config (theme, …), applied on connect. Reconciles the pre-React
+		// paint hint; the shell's theme effect performs the DOM swap.
+		if (welcome.config) {
+			useAppStore.getState().applyConfig(welcome.config);
 		}
 	});
 
@@ -61,6 +67,12 @@ export function initTransport(): WsTransport {
 
 	transport.subscribe(WS_CHANNELS.workspaceFsChanged, (data) => {
 		useAppStore.getState().noteFsChanged(data as WorkspaceFsChangedPayload);
+	});
+
+	// A server-synced settings change (theme, …) — every client converges on this broadcast, including the
+	// one that made the change (no optimistic apply).
+	transport.subscribe(WS_CHANNELS.settingsChanged, (data) => {
+		useAppStore.getState().applyConfig(data as AppConfig);
 	});
 
 	transport.connect();

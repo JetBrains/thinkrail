@@ -226,3 +226,29 @@ export interface GithubAuthStatus {
 	/** The token's OAuth scopes, when reported by `gh auth status`. */
 	scopes?: string[];
 }
+
+/**
+ * The selectable UI themes. A const-object "enum" (the codebase's `WS_METHODS`/`WS_CHANNELS` convention):
+ * enum ergonomics (`Theme.Dark`) + a runtime-iterable value list (`THEME_IDS`, the picker source), while the
+ * values stay plain strings so they cross JSON/the wire with no casts. `Dark` is the default ThinkRail dark;
+ * `Light` and `Darcula` (classic IntelliJ surfaces, ThinkRail violet accent) are the additions.
+ */
+export const Theme = {
+	Dark: "dark",
+	Light: "light",
+	Darcula: "darcula",
+} as const;
+export type ThemeId = (typeof Theme)[keyof typeof Theme];
+export const THEME_IDS: readonly ThemeId[] = Object.values(Theme);
+
+/**
+ * Server-synced app settings — OUR config, persisted host-side as `config.json` under the data dir and
+ * delivered to every client in `server.welcome`. A small, extensible bag (theme is the first member);
+ * mutate a subset via `settings.update`, converge on the `settings.changed` broadcast.
+ */
+export interface AppConfig {
+	theme: ThemeId;
+}
+
+/** The config a fresh host (no `config.json` yet) falls back to. */
+export const DEFAULT_CONFIG: AppConfig = { theme: Theme.Dark };

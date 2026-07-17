@@ -26,6 +26,7 @@
 	--on-accent-16: rgba(255, 255, 255, 0.16);
 	--sunken: rgba(0, 0, 0, 0.12);
 	--overlay: rgba(0, 0, 0, 0.5);
+	--selection-bg: #2c2947;
 	--shadow-xs: 0 1px 3px rgba(0, 0, 0, 0.18);
 	--shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
 	--shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35);
@@ -86,4 +87,79 @@
 	--font: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 	--font-mono: "JetBrains Mono", "Fira Code", "SF Mono", "Cascadia Code", monospace;
 	--font-accent: "Cabinet Grotesk", sans-serif;
+}
+
+/*
+ * Additional themes. Each overrides only the SEMANTIC surface/text/status tokens + `color-scheme` (and the
+ * one-off `--selection-bg`); the brand accent tints, type scale, spacing, radii, and fonts stay shared in
+ * `:root`. `applyTheme(id)` sets `[data-theme=id]` on <html>; picking "dark" matches neither block below and
+ * falls back to the `:root` defaults. Because `@theme inline` binds every utility to the live `var(--token)`,
+ * swapping the block re-themes the whole UI with no component changes.
+ */
+
+/* Light — white editor surface, light tool windows, a deeper on-brand violet for legible white-on-accent. */
+[data-theme="light"] {
+	color-scheme: light;
+
+	/* Deeper violet (the #6B57FF brand violet) so `text-on-accent` (white) passes contrast on light. */
+	--primary: #6b57ff;
+	--secondary: #d6d8e0;
+	/* Status colors darkened for contrast against light surfaces. */
+	--blue: #2f7ed8;
+	--green: #2ea043;
+	--red: #e5484d;
+	--gold: #b6890b;
+
+	--bg: #f2f3f5;
+	--bg-dark: #ffffff;
+	--bg-input: #ffffff;
+	--input-bg: #ffffff;
+	--panel: rgba(255, 255, 255, 0.85);
+	--elevated: #ffffff;
+	--hover: #e9eaee;
+	--border: #dcdfe4;
+	--border2: #c7ccd6;
+	--text: #1a1a1e;
+	--text-40: rgba(26, 26, 30, 0.4);
+	--muted: #5a5f6a;
+	--hint: #8a8f99;
+	--sel: #cfe0fb;
+	--selection-bg: rgba(107, 87, 255, 0.22);
+	/* Two-tone: light tool windows (sidebar) around the white editor/content. */
+	--surface-sidebar: var(--bg);
+	--surface-content: var(--bg-dark);
+
+	/* Softer elevation — the dark shadow alphas read as heavy on light. */
+	--sunken: rgba(0, 0, 0, 0.05);
+	--shadow-xs: 0 1px 3px rgba(0, 0, 0, 0.08);
+	--shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.1);
+	--shadow-md: 0 4px 16px rgba(0, 0, 0, 0.12);
+	--shadow-lg: 0 8px 28px rgba(0, 0, 0, 0.14);
+	--shadow-xl: 0 24px 64px rgba(0, 0, 0, 0.18);
+	--shadow-up: 0 -2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Darcula — the famous IntelliJ palette: #3c3f41 tool windows around a #2b2b2b editor, #a9b7c6 foreground,
+   blue selection. ThinkRail's violet stays the interactive accent (per the theme decision). */
+[data-theme="darcula"] {
+	color-scheme: dark;
+
+	--bg: #3c3f41;
+	--bg-dark: #2b2b2b;
+	--bg-input: #45494a;
+	--input-bg: #45494a;
+	--panel: rgba(43, 43, 43, 0.8);
+	--elevated: #3c3f41;
+	--hover: #4c5052;
+	--border: #323232;
+	--border2: #4b4f52;
+	--text: #a9b7c6;
+	--text-40: rgba(169, 183, 198, 0.4);
+	--muted: #808a94;
+	--hint: #6a6f78;
+	--sel: #214283;
+	--selection-bg: #214283;
+	/* Two-tone: lighter tool windows (sidebar) around the darker editor (content). */
+	--surface-sidebar: var(--bg);
+	--surface-content: var(--bg-dark);
 }

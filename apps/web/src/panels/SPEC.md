@@ -94,10 +94,13 @@ prompt hero (still editable; empty by default), a base-branch
   read) + `provider.jbcentral*`:
   Connected (Disconnect) / ready (Connect) / not signed in (in-app `central login` + Retry) / not installed
   (the host's per-OS copyable install command — from `jbcentralInstall`, for the *host's* OS, never the
-  browser's — + Recheck); each mutation re-reads `provider.status`) and **`GithubSettings`** (the "Local GitHub" block — `github.authStatus()`
-  Connected + login / Not connected + Refresh). Dimmed "General"/"Appearance" nav items ("Soon") signal the
-  shell is built to grow. `ProvidersSettings` is the **integration piece** (store + transport); the
-  `LoginDialog` stays presentational (`auth` module).
+  browser's — + Recheck); each mutation re-reads `provider.status`) **`GithubSettings`** (the "Local GitHub" block — `github.authStatus()`
+  Connected + login / Not connected + Refresh); and **`AppearanceSettings`** (the **theme picker** — a
+  labelled list of `utils/theme`'s `THEMES`, the active one from `store.theme` marked; clicking one fires
+  `settings.update` and the UI **converges on the `settings.changed` broadcast** (no optimistic apply), a
+  rejected update raising a toast). A single dimmed "General" nav item ("Soon") still signals the shell is
+  built to grow. `ProvidersSettings`/`AppearanceSettings` are the **integration pieces** (store + transport);
+  the `LoginDialog` stays presentational (`auth` module).
   Panels compose their own sub-panels
   (e.g. `RightPanel`→`FileTree`/`ChangesPanel`, `CenterTabs`→`FilePane`→`MonacoEditor`) — an internal hierarchy.
   `CenterTabs` closing a chat tab routes to `store.closeChatToHistory` (keeps the session alive) and shows a
@@ -118,7 +121,7 @@ prompt hero (still editable; empty by default), a base-branch
   one set or the other on the active-workspace branch.)
 - **Allowed deps:** `store`, `transport`, `components/ui` (incl. `popover`/`command`/`textarea` for the
   dialog), `chat` (`ModelSelector`/`ThinkingSelector`, reused by `NewWorkspaceDialog`; `Markdown`,
-  reused by `MarkdownPreview`), `lib`,
+  reused by `MarkdownPreview`), `lib`, `utils` (`theme`'s `THEMES`, for `AppearanceSettings`),
   `contracts`; `lucide-react`; and the heavy libs each lazy panel owns (`monaco-editor`, `shiki`,
   `@xterm/*`) loaded via `import()`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `shell`; reaching across unrelated panels.

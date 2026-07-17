@@ -1,6 +1,7 @@
 // The browser↔host API — ours, not pi's. Methods are request/response; channels are server→client push.
 
 import type {
+	AppConfig,
 	BranchList,
 	DiffStats,
 	FileNode,
@@ -33,7 +34,10 @@ import type {
 // join the existing `workspace.updated` (the workspace lifecycle trio; see `WS_CHANNELS`).
 // v6: the worktree change notifier — `workspace.fsChanged` streams debounced fs-invalidation nudges so
 // clients re-read files/specs/git state instead of polling.
-export const PROTOCOL_VERSION = 6;
+// v7: server-synced app settings — `server.welcome` now carries `config: AppConfig` (the initial theme
+// travels with the handshake), `settings.update` persists a partial, and `settings.changed` broadcasts
+// the new config to every client so they converge (the same shared-state pattern as the workspace trio).
+export const PROTOCOL_VERSION = 7;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -44,6 +48,8 @@ export interface ServerWelcome {
 	protocolVersion: number;
 	appVersion?: string;
 	projects: Project[];
+	/** The server-synced app settings (theme, …) — applied on connect so the initial paint matches. */
+	config: AppConfig;
 }
 
 /**
@@ -128,6 +134,9 @@ export const WS_METHODS = {
 	providerJbcentralConnect: "provider.jbcentralConnect",
 	providerJbcentralDisconnect: "provider.jbcentralDisconnect",
 	providerJbcentralLogin: "provider.jbcentralLogin",
+	// Persist a partial change to the server-synced app settings (e.g. the theme). The host merges, saves
+	// `config.json`, and broadcasts `settings.changed` — the caller converges on that push, not optimism.
+	settingsUpdate: "settings.update",
 } as const;
 
 /** Server→client push channels. */
@@ -151,6 +160,9 @@ export const WS_CHANNELS = {
 	// The worktree change notifier (a `WorkspaceFsChangedPayload` per frame), broadcast to every client.
 	// A debounced invalidation nudge, not data — receivers re-read via the read methods they already use.
 	workspaceFsChanged: "workspace.fsChanged",
+	// The server-synced app settings changed (carries the full `AppConfig`), broadcast to every client so
+	// they converge — the initiator applies on this push too, never optimistically.
+	settingsChanged: "settings.changed",
 } as const;
 
 export type WsMethod = (typeof WS_METHODS)[keyof typeof WS_METHODS];
@@ -261,6 +273,9 @@ export interface WsMethodMap {
 	"provider.jbcentralDisconnect": { params: Record<string, never>; result: Ack };
 	// Launch `jbcentral login` (its browser sign-in) on the host, best-effort.
 	"provider.jbcentralLogin": { params: Record<string, never>; result: { launched: boolean } };
+	// Merge a partial into the server-synced app settings, persist it, and broadcast `settings.changed`.
+	// Returns the merged, persisted `AppConfig`.
+	"settings.update": { params: { config: Partial<AppConfig> }; result: AppConfig };
 }
 
 export type WsMethodName = keyof WsMethodMap;

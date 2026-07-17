@@ -1,4 +1,5 @@
 import { Settings } from "lucide-react";
+import { useEffect } from "react";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../components/ui/resizable";
 import { PRODUCT_NAME } from "../constants/branding";
@@ -11,6 +12,7 @@ import { Toaster } from "../panels/Toaster";
 import { WelcomePanel } from "../panels/WelcomePanel";
 import { useAppStore } from "../store";
 import type { ConnectionStatus } from "../transport";
+import { applyTheme, writeThemeHint } from "../utils/theme";
 
 const STATUS_LABEL: Record<ConnectionStatus, string> = {
 	connected: "Connected",
@@ -28,6 +30,13 @@ export function Shell() {
 	const status = useAppStore((s) => s.status);
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
 	const hasActiveWorkspace = activeWorkspaceId != null;
+	// The single owner of the theme DOM side-effect: apply the store's (host-owned) theme + cache it as the
+	// next load's first-paint hint. The store is fed by transport (welcome / settings.changed).
+	const theme = useAppStore((s) => s.theme);
+	useEffect(() => {
+		applyTheme(theme);
+		writeThemeHint(theme);
+	}, [theme]);
 	return (
 		<div data-testid="shell" className="grid h-full grid-rows-[auto_1fr]">
 			<header className="flex items-center justify-between border-b border-border2 bg-bg-dark px-lg py-sm">

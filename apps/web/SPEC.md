@@ -40,15 +40,17 @@ convention; their boundary is held by convention + spec. Sibling edges live here
 | `components/ui` | shadcn primitives, themed with our tokens | no | [components/ui/SPEC.md](src/components/ui/SPEC.md) |
 | `lib` | `cn()` (clsx + tailwind-merge) | yes | [lib/SPEC.md](src/lib/SPEC.md) |
 
-Leaf utilities without their own spec: `constants/` (branding), `utils/` (font scaling), `styles/` (the
-CSS token theme contract — see Styling & theming). `main.tsx` is the entry/composition root — it wraps
-`<Shell />` in `components/ErrorBoundary` as the last-resort boundary (a crash escaping every region
-shows a reload screen, not a blank root).
+Leaf utilities without their own spec: `constants/` (branding), `utils/` (font scaling + `theme` — the
+`applyTheme(id)` `[data-theme]` swap, the `THEMES` picker list, and the localStorage first-paint hint),
+`styles/` (the CSS token theme contract — see Styling & theming). `main.tsx` is the entry/composition
+root — it applies the font scale + the cached theme hint pre-React, then wraps `<Shell />` in
+`components/ErrorBoundary` as the last-resort boundary (a crash escaping every region shows a reload
+screen, not a blank root).
 
 ### Dependency graph
 
-- `shell` → `panels`, `store`, `transport`, `components/ui`, `components` (`ErrorBoundary` around each mounted region), `constants`
-- `panels` → `store`, `transport`, `components/ui`, `components` (`ErrorBoundary` — `CenterTabs`'s per-tab boundary), `lib`, `contracts`, `constants` (`WelcomePanel`'s wordmark), `chat` (`CenterTabs` lazy-mounts `chat/ChatView`; `NewWorkspaceDialog` eagerly reuses `chat/ModelSelector`+`ThinkingSelector` — these are shiki-free, so the eager import stays split-safe), `auth` (`ProvidersSettings` mounts `auth/LoginDialog`)
+- `shell` → `panels`, `store`, `transport`, `components/ui`, `components` (`ErrorBoundary` around each mounted region), `constants`, `utils` (`theme` — the single owner of the `applyTheme` DOM effect, driven by `store.theme`)
+- `panels` → `store`, `transport`, `components/ui`, `components` (`ErrorBoundary` — `CenterTabs`'s per-tab boundary), `lib`, `contracts`, `constants` (`WelcomePanel`'s wordmark), `chat` (`CenterTabs` lazy-mounts `chat/ChatView`; `NewWorkspaceDialog` eagerly reuses `chat/ModelSelector`+`ThinkingSelector` — these are shiki-free, so the eager import stays split-safe), `auth` (`ProvidersSettings` mounts `auth/LoginDialog`), `utils` (`AppearanceSettings`'s theme picker uses `theme`'s `THEMES`)
 - `chat` → `contracts` (pi message types, **type-only**), `components/ui`, `lib`; `store` + `transport` (**`ChatView` only** — the renderers are store-free)
 - `auth` → `components/ui` (the dialog is store/transport-free — the panel integrates it; the state types need no imports)
 - `store` → `transport` (**type-only** — `ConnectionStatus`), `chat` (**type-only** — `ChatTurn`/`ToolResultState`), `auth` (**type-only** — `LoginState`; the `foldLoginFrame` reducer lives in `store`, like `reduceExtUi`), `contracts`
@@ -71,9 +73,19 @@ The module set: `transport` / `store` / branded `shell`; `ProjectTree`; `FileTre
   `style` objects, never raw hex.** Responsive (`md:` …) and states (`hover:` / `focus-visible:`) come
   from Tailwind (inline styles can't express them, and the responsive shell needs them).
 - **`src/styles/tokens.css` is the theme contract.** A *theme* is one set of CSS custom properties; a
-  theme swap = changing the token block via `[data-theme="…"]` on `<html>` (`applyTheme(id)`) — nothing
-  in components changes. `@theme inline` keeps utilities pointing at the live `var(--token)`, so the swap
-  re-themes everything. V1 ships one dark theme, structured for N (pibun's theme engine, lifted at V2).
+  theme swap = changing the token block via `[data-theme="…"]` on `<html>` (`utils/theme` `applyTheme(id)`)
+  — nothing in components changes. `@theme inline` keeps utilities pointing at the live `var(--token)`, so
+  the swap re-themes everything. **Ships three themes** — **Dark** (default, under `:root`), **Light**, and
+  classic IntelliJ **Darcula** (`[data-theme="light"|"darcula"]` blocks override only the semantic
+  surface/text/status tokens + `color-scheme`; accent tints, type scale, spacing, radii, fonts stay shared
+  in `:root`). The choice is **server-synced** (`AppConfig.theme`, host-owned): it arrives in
+  `server.welcome`, is set from the store's `theme` (fed by transport), applied by the shell's one theme
+  effect, and cached in `localStorage` only as a **first-paint hint** (`main.tsx` applies it pre-React so
+  the initial paint matches, before the welcome reconciles it). Changed via `settings.update`, converged on
+  the `settings.changed` broadcast. Code surfaces that own their own theming track the swap: **xterm** and
+  **Monaco** observe `[data-theme]` (Monaco also picks its `vs`/`vs-dark` base from it); **shiki** renders
+  dual (dark+light) palettes as CSS vars, flipped by `[data-theme="light"] .shiki`; **mermaid** re-derives
+  from the tokens. Structured for N (pibun's theme engine, lifted at V2).
 - Token names that collide with Tailwind namespaces (`--font-mono`, `--font-accent`, `--radius-*`) are
   used as token arbitrary values (`font-[var(--font-accent)]`), not `@theme` mappings.
 - **Icons: `lucide-react`. Components: shadcn/ui** (Radix primitives), copy-in under `src/components/ui/`
