@@ -496,8 +496,8 @@ function QuestionBody({
 	return (
 		<div className="flex flex-col gap-md">
 			<div className="flex items-start gap-sm">
-				<MessageCircleQuestion className="mt-0.5 size-5 shrink-0 text-muted" />
-				<p data-testid="ask-question-text" className="font-semibold text-lg text-text">
+				<MessageCircleQuestion className="mt-0.5 size-4 shrink-0 text-muted" />
+				<p data-testid="ask-question-text" className="font-semibold text-md text-text">
 					{question.question}
 				</p>
 			</div>
@@ -597,23 +597,23 @@ function OptionRow({
 			data-selected={selected}
 			onClick={onClick}
 			className={cn(
-				"flex items-start gap-sm rounded-[var(--radius-md)] border px-md py-md text-left transition-colors",
+				"flex items-start gap-sm rounded-[var(--radius-md)] border px-md py-sm text-left transition-colors",
 				selected ? "border-primary bg-primary/10" : "border-border2 hover:bg-hover",
 			)}
 		>
 			<Indicator selected={selected} multi={multi} />
 			<span className="flex min-w-0 flex-col gap-0.5">
 				<span className="flex items-center gap-xs">
-					<span data-testid="ask-option-label" className="font-medium text-md text-text">
+					<span data-testid="ask-option-label" className="font-medium text-sm text-text">
 						{text}
 					</span>
 					{recommended ? <RecommendedBadge /> : null}
 				</span>
-				{description ? <span className="text-muted text-sm">{description}</span> : null}
+				{description ? <span className="text-muted text-xs">{description}</span> : null}
 				{/* The recommendation rationale, shown inline up front for a recommended option so it
 				    reads on touch, and AT reads it as ordinary visible text. */}
 				{reason ? (
-					<span data-testid="ask-recommended-reason" className="mt-0.5 text-muted text-sm">
+					<span data-testid="ask-recommended-reason" className="mt-0.5 text-muted text-xs">
 						<span className="font-medium text-primary">Why:</span> {reason}
 					</span>
 				) : null}
@@ -650,7 +650,7 @@ function OtherOptionRow({
 			data-testid="ask-custom-row"
 			data-selected={active}
 			className={cn(
-				"flex cursor-text items-center gap-sm rounded-[var(--radius-md)] border px-md py-md transition-colors",
+				"flex cursor-text items-center gap-sm rounded-[var(--radius-md)] border px-md py-sm transition-colors",
 				active ? "border-primary bg-primary/10" : "border-border2 hover:bg-hover",
 			)}
 		>
@@ -671,21 +671,21 @@ function OtherOptionRow({
 			) : (
 				<Indicator selected={active} multi={false} className="mt-0" />
 			)}
-			<span className="font-medium text-md text-text">Other</span>
+			<span className="font-medium text-sm text-text">Other</span>
 			<input
 				data-testid="ask-custom"
 				value={text}
 				placeholder="type your own answer…"
 				onFocus={onActivate}
 				onChange={(e) => onText(e.target.value)}
-				className="min-w-0 flex-1 border-none bg-transparent text-md text-text outline-none placeholder:text-hint"
+				className="min-w-0 flex-1 border-none bg-transparent text-sm text-text outline-none placeholder:text-hint"
 			/>
 		</label>
 	);
 }
 
 const RECOMMENDED_PILL =
-	"inline-flex items-center rounded-full bg-primary/15 px-2 py-0.5 font-medium text-[11px] text-primary";
+	"inline-flex items-center rounded-full bg-primary/15 px-xs py-0 font-medium text-[11px] text-primary";
 
 /**
  * The "Recommended" pill next to an agent-recommended option — a plain label. Its rationale renders
@@ -757,8 +757,8 @@ function ReviewView({
 	return (
 		<div className="flex flex-col gap-sm">
 			<div className="flex items-start gap-sm">
-				<MessageCircleQuestion className="mt-0.5 size-5 shrink-0 text-muted" />
-				<p className="font-semibold text-lg text-text">Review your answers</p>
+				<MessageCircleQuestion className="mt-0.5 size-4 shrink-0 text-muted" />
+				<p className="font-semibold text-md text-text">Review your answers</p>
 			</div>
 			<ul className="flex flex-col gap-md">
 				{questions.map((q, i) => (
