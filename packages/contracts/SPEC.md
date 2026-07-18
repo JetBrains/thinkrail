@@ -66,8 +66,13 @@ what lets the UI ship independently of the host.
     **`AskUserQuestionResult`** (`AskUserQuestionAnswer[]` + `cancelled`: the browser's reply),
     **`AskUserQuestionAckDetails`** (the tool result's `details` under the **ack + terminate** design —
     the call resolves instantly; the turn ends) and **`AskUserAnswersDetails`** + the
-    **`ASK_USER_ANSWERS_CUSTOM_TYPE`** constant (in `wsProtocol`, the value-bearing half): the reply
-    travels as an `ask-user-answers` custom message the card pairs by `details.toolCallId`. The capability
+    **`ASK_USER_ANSWERS_CUSTOM_TYPE`** constant, **`AskUserAnswersMessage`** (the correctly-paired
+    tag↔details shape the host's builder is compile-held to) and the shared **`isAskUserAnswersMessage`**
+    guard (all in `wsProtocol`, the value-bearing half): the reply travels as an `ask-user-answers`
+    custom message the card pairs by `details.toolCallId`. `WireCustomMessage.customType` itself stays
+    `string` — the namespace is open (any pi extension can mint custom messages and they all cross the
+    wire), so strictness lives at the producer + the guard, which validates the details *shape* (wire
+    data is untrusted — another process, possibly another protocol version). The capability
     is a **host-owned pi custom tool** (server `agent/askUserQuestion` — see its SPEC for the design
     rationale); the chat renders the questionnaire **inline** and replies via `session.answerQuestion`
     (correlated by the tool call id; rejected loud when the call is unknown/answered/superseded).

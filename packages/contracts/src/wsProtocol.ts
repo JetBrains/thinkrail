@@ -16,6 +16,7 @@ import type {
 	Workspace,
 } from "./domain";
 import type {
+	AskUserAnswersDetails,
 	AskUserQuestionResult,
 	ExtUiResponse,
 	ImageContent,
@@ -24,6 +25,7 @@ import type {
 	SlashCommandInfo,
 	ThinkingLevel,
 	TranscriptMessage,
+	WireCustomMessage,
 	WireModel,
 } from "./piProtocol";
 
@@ -179,6 +181,37 @@ export type WsChannel = (typeof WS_CHANNELS)[keyof typeof WS_CHANNELS];
  * (`AskUserAnswersDetails`) and never renders them as their own bubble.
  */
 export const ASK_USER_ANSWERS_CUSTOM_TYPE = "ask-user-answers";
+
+/**
+ * A correctly-paired `ask-user-answers` message. `WireCustomMessage.customType` stays `string` (the
+ * namespace is open — any pi extension can mint custom messages, and they all cross the wire), so the
+ * strictness lives at the two points that matter instead: the host's builder is HELD to this type (a
+ * tag↔details mismatch is a compile error at the one place the message is minted), and
+ * {@link isAskUserAnswersMessage} narrows to it.
+ */
+export interface AskUserAnswersMessage extends WireCustomMessage<AskUserAnswersDetails> {
+	customType: typeof ASK_USER_ANSWERS_CUSTOM_TYPE;
+	details: AskUserAnswersDetails;
+}
+
+/**
+ * THE narrowing point for `ask-user-answers` messages, shared by every consumer (web hydration, the
+ * event reducer, the server's answerability check) instead of hand-rolled checks. Wire data is untrusted
+ * — another process, possibly another protocol version — so it validates the `details` shape, not just
+ * the tag: a malformed reply is ignored rather than trusted on its customType.
+ */
+export function isAskUserAnswersMessage(message: unknown): message is AskUserAnswersMessage {
+	if (!message || typeof message !== "object") return false;
+	const m = message as { role?: unknown; customType?: unknown; details?: unknown };
+	if (m.role !== "custom" || m.customType !== ASK_USER_ANSWERS_CUSTOM_TYPE) return false;
+	const details = m.details as Partial<AskUserAnswersDetails> | undefined;
+	return (
+		typeof details?.toolCallId === "string" &&
+		!!details.result &&
+		Array.isArray(details.result.answers) &&
+		typeof details.result.cancelled === "boolean"
+	);
+}
 
 /** Wire result for methods that return nothing meaningful — the host coerces a void handler to this. */
 export interface Ack {

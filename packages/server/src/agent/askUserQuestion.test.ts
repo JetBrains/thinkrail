@@ -253,6 +253,17 @@ test("assessAnswerability: an answers message for ANOTHER call neither answers n
 	expect(assessAnswerability(messages, "tc").ok).toBe(true);
 });
 
+test("assessAnswerability: a malformed answers message cannot mark a call answered (shared guard)", () => {
+	const malformed = {
+		role: "custom",
+		customType: ASK_USER_ANSWERS_CUSTOM_TYPE,
+		content: "tag right, shape wrong",
+		display: true,
+		details: { toolCallId: "tc", result: { answers: "nope" } }, // no cancelled, answers not an array
+	} as unknown as AgentMessage;
+	expect(assessAnswerability([askCall("tc"), ackResult("tc"), malformed], "tc").ok).toBe(true);
+});
+
 test("assessAnswerability: the tiny pre-ack window (call ended, result not yet) is answerable", () => {
 	// The card unlocks at message end; `execute` (which writes the ack) runs a beat later. An answer in
 	// that window must not be rejected — sendCustomMessage will steer it into the ending turn.

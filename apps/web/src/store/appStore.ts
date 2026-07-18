@@ -1,6 +1,5 @@
 import type {
 	AppConfig,
-	AskUserAnswersDetails,
 	AskUserQuestionResult,
 	ExtUiRequest,
 	LoginFrame,
@@ -16,7 +15,7 @@ import type {
 	Workspace,
 	WorkspaceFsChangedPayload,
 } from "@thinkrail/contracts";
-import { ASK_USER_ANSWERS_CUSTOM_TYPE, Theme } from "@thinkrail/contracts";
+import { isAskUserAnswersMessage, Theme } from "@thinkrail/contracts";
 import { create } from "zustand";
 import type { LoginState } from "../auth";
 import type { HydratedRuntime } from "../chat/hydrate";
@@ -192,29 +191,12 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 		}
 		case "message_end": {
 			// An `ask-user-answers` custom message (the questionnaire reply the host injected) indexes into
-			// `askAnswers` — the questionnaire card is its rendering, it never becomes a turn. The `custom`
-			// role only exists with pi-coding-agent's module augmentation (Node-only), so it's read
-			// structurally here. Unknown customTypes are ignored.
-			const custom = event.message as unknown as {
-				role: string;
-				customType?: string;
-				details?: AskUserAnswersDetails;
-			};
-			if (custom.role === "custom") {
-				if (
-					custom.customType === ASK_USER_ANSWERS_CUSTOM_TYPE &&
-					custom.details?.toolCallId &&
-					custom.details.result
-				) {
-					return {
-						...rt,
-						askAnswers: {
-							...rt.askAnswers,
-							[custom.details.toolCallId]: custom.details.result,
-						},
-					};
-				}
-				return rt;
+			// `askAnswers` — the questionnaire card is its rendering, it never becomes a turn. The shared
+			// guard validates the details shape, not just the tag; every other custom message falls through
+			// to the assistant-only logic below, which ignores it.
+			if (isAskUserAnswersMessage(event.message)) {
+				const { toolCallId, result } = event.message.details;
+				return { ...rt, askAnswers: { ...rt.askAnswers, [toolCallId]: result } };
 			}
 			// The message's true terminal: pi forwards only *streaming* variants as `message_update` (the
 			// LLM-level done/error become this event), so without it the turn would stay flagged streaming

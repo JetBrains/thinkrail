@@ -29,13 +29,13 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import type {
 	AgentMessage,
-	AskUserAnswersDetails,
+	AskUserAnswersMessage,
 	AskUserQuestionAckDetails,
 	AskUserQuestionAnswer,
 	AskUserQuestionArgs,
 	AskUserQuestionResult,
 } from "@thinkrail/contracts";
-import { ASK_USER_ANSWERS_CUSTOM_TYPE } from "@thinkrail/contracts";
+import { ASK_USER_ANSWERS_CUSTOM_TYPE, isAskUserAnswersMessage } from "@thinkrail/contracts";
 import { type Static, Type } from "typebox";
 
 // ---- limits (mirrors the rpiv contract so the model behaves the same) ----
@@ -259,7 +259,6 @@ interface ToolCallView {
 interface MessageView {
 	role?: string;
 	content?: unknown;
-	customType?: string;
 	details?: unknown;
 	toolCallId?: string;
 }
@@ -267,15 +266,6 @@ interface MessageView {
 function toolCallsOf(message: MessageView): ToolCallView[] {
 	if (message.role !== "assistant" || !Array.isArray(message.content)) return [];
 	return (message.content as ToolCallView[]).filter((b) => b?.type === "toolCall");
-}
-
-function isAnswersFor(message: MessageView, toolCallId: string): boolean {
-	return (
-		message.role === "custom" &&
-		message.customType === ASK_USER_ANSWERS_CUSTOM_TYPE &&
-		!!message.details &&
-		(message.details as AskUserAnswersDetails).toolCallId === toolCallId
-	);
 }
 
 /** Whether a tool result's `details` is the ack marker (vs a legacy blocking-era final result). */
@@ -319,7 +309,8 @@ export function assessAnswerability(
 	for (let i = callIndex + 1; i < views.length; i++) {
 		const view = views[i];
 		if (!view) continue;
-		if (isAnswersFor(view, toolCallId)) return { ok: false, reason: "already_answered" };
+		if (isAskUserAnswersMessage(view) && view.details.toolCallId === toolCallId)
+			return { ok: false, reason: "already_answered" };
 		if (view.role === "toolResult" && view.toolCallId === toolCallId && !isAckDetails(view.details))
 			return { ok: false, reason: "not_awaiting" };
 		if (view.role === "user") return { ok: false, reason: "superseded" };
@@ -341,17 +332,13 @@ export const ANSWERABILITY_ERRORS: Record<Extract<Answerability, { ok: false }>[
  * delivers (starting a turn when idle, steering when streaming). `content` is the same LLM envelope the
  * blocking tool used to return; `details` carries the structured result the questionnaire card renders,
  * correlated by tool call id. `display: true` so a pi TUI opening the same transcript shows the reply.
+ * Held to the contracts' `AskUserAnswersMessage` pairing, so a tag↔details mismatch cannot compile.
  */
 export function buildAnswersMessage(
 	toolCallId: string,
 	args: AskUserQuestionArgs,
 	result: AskUserQuestionResult,
-): {
-	customType: string;
-	content: string;
-	display: boolean;
-	details: AskUserAnswersDetails;
-} {
+): Pick<AskUserAnswersMessage, "customType" | "content" | "display" | "details"> {
 	const envelope = buildQuestionnaireResponse(result, args);
 	return {
 		customType: ASK_USER_ANSWERS_CUSTOM_TYPE,

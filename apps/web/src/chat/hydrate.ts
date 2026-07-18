@@ -1,5 +1,5 @@
 import type { AskUserAnswersDetails, TranscriptMessage } from "@thinkrail/contracts";
-import { ASK_USER_ANSWERS_CUSTOM_TYPE } from "@thinkrail/contracts";
+import { isAskUserAnswersMessage } from "@thinkrail/contracts";
 import type { ChatTurn, ToolResultState } from "./types";
 
 /** The runtime slice a transcript hydrates: what `hydrateSession` seeds a fresh `SessionRuntime` with. */
@@ -45,9 +45,9 @@ export function messagesToRuntime(messages: TranscriptMessage[]): HydratedRuntim
 				status: message.isError ? "error" : "done",
 				raw: { content: message.content, details: message.details },
 			};
-		} else if (message.role === "custom" && message.customType === ASK_USER_ANSWERS_CUSTOM_TYPE) {
-			const details = message.details as AskUserAnswersDetails | undefined;
-			if (details?.toolCallId && details.result) askAnswers[details.toolCallId] = details.result;
+		} else if (isAskUserAnswersMessage(message)) {
+			// The shared guard validates the details shape (not just the tag) — a malformed reply is ignored.
+			askAnswers[message.details.toolCallId] = message.details.result;
 		}
 	}
 	return { turns, toolResults, askAnswers };

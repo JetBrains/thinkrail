@@ -128,6 +128,28 @@ test("an ask-user-answers custom message indexes into askAnswers and never becom
 	expect(askAnswers.ask3).toEqual(result as never);
 });
 
+test("an answers message with malformed details is ignored — the guard validates shape, not just tag", () => {
+	const { askAnswers } = messagesToRuntime([
+		// right customType, but details missing / wrong-shaped — wire data is untrusted.
+		{
+			role: "custom",
+			customType: ASK_USER_ANSWERS_CUSTOM_TYPE,
+			content: "looks right, isn't",
+			display: true,
+			timestamp: 1,
+		},
+		{
+			role: "custom",
+			customType: ASK_USER_ANSWERS_CUSTOM_TYPE,
+			content: "still not right",
+			display: true,
+			details: { toolCallId: 42, result: { answers: "nope", cancelled: "nope" } },
+			timestamp: 2,
+		},
+	] as unknown as Message[]);
+	expect(Object.keys(askAnswers)).toHaveLength(0);
+});
+
 test("unknown custom messages are ignored entirely", () => {
 	const { turns, askAnswers } = messagesToRuntime([
 		{
