@@ -1,4 +1,5 @@
 import type {
+	AppConfig,
 	ExtUiRequest,
 	LoginFrame,
 	LoginPush,
@@ -7,11 +8,13 @@ import type {
 	SessionStats,
 	SessionSummary,
 	SlashCommandInfo,
+	ThemeId,
 	ThinkingLevel,
 	WireModel,
 	Workspace,
 	WorkspaceFsChangedPayload,
 } from "@thinkrail/contracts";
+import { Theme } from "@thinkrail/contracts";
 import { create } from "zustand";
 import type { LoginState } from "../auth";
 import type { ChatTurn, ExtUiDialogRequest, ToolResultState } from "../chat/types";
@@ -40,8 +43,16 @@ export interface ChatTab {
 }
 export type EditorTab = FileTab | ChatTab;
 
-/** A section of the settings dialog. Extensible — the two live sections today are providers + github. */
-export type SettingsSection = "providers" | "github";
+/**
+ * A section of the settings dialog (a const-object "enum", the codebase convention). Extensible — the live
+ * sections are providers, github, and appearance (the theme picker).
+ */
+export const SettingsSection = {
+	Providers: "providers",
+	Github: "github",
+	Appearance: "appearance",
+} as const;
+export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSection];
 
 /** A transient notification. `error` persists until dismissed; `success`/`info` auto-dismiss (the Toaster
  * owns the timer). `title` is optional — a bare `message` is the common case. */
@@ -357,6 +368,9 @@ interface AppState {
 	 * provider warning) can open it to a section without prop-drilling through the shell. */
 	settingsOpen: boolean;
 	settingsSection: SettingsSection;
+	/** The active UI theme (host-owned; `applyConfig` sets it from `server.welcome` / `settings.changed`).
+	 * The DOM side-effect (`applyTheme`) is the shell's job — this holds the value the UI reads. */
+	theme: ThemeId;
 	/** Transient notifications, oldest-first (the Toaster renders + times them out). At-most a handful live
 	 * at once; a failed wire call that has no better home (no chat tab to host an error turn) lands here. */
 	toasts: Toast[];
@@ -462,6 +476,8 @@ interface AppState {
 	openSettings: (section?: SettingsSection) => void;
 	closeSettings: () => void;
 	setSettingsSection: (section: SettingsSection) => void;
+	/** Fold the server-synced app config in (from `server.welcome` / the `settings.changed` broadcast). */
+	applyConfig: (config: AppConfig) => void;
 	/** Ask the right panel to open `path`'s diff in its Changes view (deep-link from chat). */
 	requestChangesView: (workspaceId: string, path: string) => void;
 	/** Enqueue a toast; returns its id so a caller can dismiss it early. An identical live toast (same
@@ -558,7 +574,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	fsChangesByWorkspace: {},
 	activeLogin: null,
 	settingsOpen: false,
-	settingsSection: "providers",
+	settingsSection: SettingsSection.Providers,
+	theme: Theme.Dark,
 	toasts: [],
 	setStatus: (status) => set({ status }),
 	setWelcome: (protocolVersion) => set({ protocolVersion }),
@@ -967,9 +984,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 			return { activeLogin: rest };
 		}),
 	clearLogin: () => set({ activeLogin: null }),
-	openSettings: (section = "providers") => set({ settingsOpen: true, settingsSection: section }),
+	openSettings: (section = SettingsSection.Providers) =>
+		set({ settingsOpen: true, settingsSection: section }),
 	closeSettings: () => set({ settingsOpen: false }),
 	setSettingsSection: (section) => set({ settingsSection: section }),
+	applyConfig: (config) => set({ theme: config.theme }),
 	requestChangesView: (workspaceId, path) => set({ changesRequest: { workspaceId, path } }),
 	pushToast: (toast) => {
 		const twin = get().toasts.find(

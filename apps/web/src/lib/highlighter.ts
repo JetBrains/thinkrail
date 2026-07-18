@@ -1,10 +1,12 @@
 import { createHighlighterCore, type HighlighterCore } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
+import { DARCULA_SHIKI, SHIKI_THEMES } from "./shikiTheme";
 
-// Shared shiki highlighter for chat code blocks: the JS regex engine (no WASM), one theme, a curated
-// language set — all behind dynamic imports so nothing loads until the first code block renders. Matches
-// the DiffViewer pattern (which only needs `diff`); kept here so chat can highlight many languages.
-const THEME = "github-dark-default";
+// Shared shiki highlighter for chat code blocks: the JS regex engine (no WASM), a curated language set,
+// and the TRI theme (dark + light + darcula, from `shikiTheme.ts`) — all behind dynamic imports so nothing
+// loads until the first code block renders. Matches the DiffViewer pattern; kept here so chat can highlight
+// many languages. One render emits every palette as CSS vars; the `[data-theme]` rules in global.css flip
+// between them, so a theme swap needs no re-highlighting.
 
 const CANONICAL = new Set([
 	"typescript",
@@ -38,7 +40,12 @@ const ALIAS: Record<string, string> = {
 let highlighterPromise: Promise<HighlighterCore> | null = null;
 function getHighlighter(): Promise<HighlighterCore> {
 	highlighterPromise ??= createHighlighterCore({
-		themes: [import("@shikijs/themes/github-dark-default")],
+		themes: [
+			import("@shikijs/themes/github-dark-default"),
+			import("@shikijs/themes/github-light-default"),
+			import("@shikijs/themes/gruvbox-dark-hard"),
+			DARCULA_SHIKI,
+		],
 		langs: [
 			import("@shikijs/langs/typescript"),
 			import("@shikijs/langs/tsx"),
@@ -65,7 +72,7 @@ export async function highlightCode(code: string, lang: string): Promise<string 
 	if (!CANONICAL.has(canonical)) return null;
 	try {
 		const hl = await getHighlighter();
-		return hl.codeToHtml(code, { lang: canonical, theme: THEME });
+		return hl.codeToHtml(code, { lang: canonical, themes: SHIKI_THEMES, defaultColor: "dark" });
 	} catch {
 		return null;
 	}

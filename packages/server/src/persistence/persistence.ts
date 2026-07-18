@@ -3,7 +3,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { Project, Workspace } from "@thinkrail/contracts";
+import { type AppConfig, DEFAULT_CONFIG, type Project, type Workspace } from "@thinkrail/contracts";
 
 export function dataDir(): string {
 	return process.env.THINKRAIL_DATA_DIR ?? join(homedir(), ".thinkrail");
@@ -36,4 +36,13 @@ export function loadWorkspaces(): Workspace[] {
 
 export function saveWorkspaces(workspaces: Workspace[]): void {
 	writeJson("workspaces.json", workspaces);
+}
+
+/** OUR server-synced app settings. Missing/corrupt file, or missing keys, fall back to `DEFAULT_CONFIG`. */
+export function loadConfig(): AppConfig {
+	return { ...DEFAULT_CONFIG, ...readJson<Partial<AppConfig>>("config.json", {}) };
+}
+
+export function saveConfig(config: AppConfig): void {
+	writeJson("config.json", config);
 }

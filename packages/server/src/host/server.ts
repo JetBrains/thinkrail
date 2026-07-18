@@ -10,6 +10,7 @@ import {
 import { cancelAllLogins, setLoginPublisher } from "../auth";
 import { resolveWorktreeFile } from "../fs";
 import { listProjects, openProject } from "../projects";
+import { getConfig, setSettingsPublisher } from "../settings";
 import { closeAllTerminals, setTerminalPublisher } from "../terminal";
 import { setWatchPublisher, stopAllWatches } from "../watch";
 import { setWorkspacePublisher } from "../workspaces";
@@ -70,9 +71,11 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 				ws.subscribe(WS_CHANNELS.workspaceUpdated);
 				ws.subscribe(WS_CHANNELS.workspaceRemoved);
 				ws.subscribe(WS_CHANNELS.workspaceFsChanged);
+				ws.subscribe(WS_CHANNELS.settingsChanged);
 				const welcome: ServerWelcome = {
 					protocolVersion: PROTOCOL_VERSION,
 					projects: listProjects(),
+					config: getConfig(),
 					...(appVersion ? { appVersion } : {}),
 				};
 				ws.send(JSON.stringify({ channel: WS_CHANNELS.serverWelcome, data: welcome }));
@@ -125,6 +128,15 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		server.publish(
 			WS_CHANNELS.workspaceFsChanged,
 			JSON.stringify({ channel: WS_CHANNELS.workspaceFsChanged, data: payload }),
+		);
+	});
+
+	// Broadcast a server-synced settings change (the full `AppConfig`) to every client so they converge —
+	// the initiator applies on this push too, never optimistically (the workspace-lifecycle pattern).
+	setSettingsPublisher((config) => {
+		server.publish(
+			WS_CHANNELS.settingsChanged,
+			JSON.stringify({ channel: WS_CHANNELS.settingsChanged, data: config }),
 		);
 	});
 
