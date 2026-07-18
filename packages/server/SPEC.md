@@ -43,7 +43,8 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | module | owns | spec |
 | --- | --- | --- |
 | `host` | `Bun.serve` HTTP+WS, static SPA, the WS dispatch registry, channel publish | [host/SPEC.md](src/host/SPEC.md) |
-| `persistence` | JSON app state under the data dir (projects + workspaces) | [persistence/SPEC.md](src/persistence/SPEC.md) |
+| `persistence` | JSON app state under the data dir (projects + workspaces + app config) | [persistence/SPEC.md](src/persistence/SPEC.md) |
+| `settings` | the server-synced app config (theme, …): read/merge/persist + broadcast seam | [settings/SPEC.md](src/settings/SPEC.md) |
 | `projects` | open/list/close git repos as projects (validate, dedupe, slug) | [projects/SPEC.md](src/projects/SPEC.md) |
 | `workspaces` | workspaces = `git worktree`s on their own branch | [workspaces/SPEC.md](src/workspaces/SPEC.md) |
 | `git` | the `git(cwd, args)` runner + worktree status/diff vs base + branch list | [git/SPEC.md](src/git/SPEC.md) |
@@ -64,10 +65,10 @@ the host from env via `bootHost` for dev/e2e.
 
 `host` is the **only composition root** — it wires each feature's handlers into the WS registry.
 
-- `host` → `projects`, `workspaces`, `git`, `github`, `fs`, `spec`, `watch`, `terminal`, `dialog`, `agent`, `auth`, `assist`
+- `host` → `projects`, `workspaces`, `git`, `github`, `fs`, `spec`, `watch`, `terminal`, `dialog`, `agent`, `auth`, `assist`, `settings`
 - `workspaces` → `projects`, `git`, `persistence`
 - `projects` → `git` (shared runner), `persistence`
-- `git`, `fs`, `spec`, `watch`, `terminal` → `persistence` (`spec` also → `pi-spec-graph/core`, external)
+- `git`, `fs`, `spec`, `watch`, `terminal`, `settings` → `persistence` (`spec` also → `pi-spec-graph/core`, external)
 - `assist` → `agent` (the one-shot completion primitive)
 - `auth` → `agent` (`getPiRuntime` — the shared `AuthStorage` + `ModelRegistry`; one-way, `agent` never imports `auth`)
 - `agent` → (no internal deps — only the pi runtime)
@@ -76,9 +77,9 @@ the host from env via `bootHost` for dev/e2e.
 Rules: features never import `host`, and never each other except the edges above. The graph is acyclic.
 `agent`'s WS surface (`session.*` + `pi.event` forwarding) attaches to `host`. Features that push on their
 own never import `host` either: they expose a **publisher-injection seam** (`setTerminalPublisher`,
-`setSessionPublisher`, `setLoginPublisher`, and `workspaces`' `setWorkspacePublisher` for the
-`workspace.created`/`updated`/`removed` lifecycle trio) that `host` installs at `createServer` — so the
-channel wiring lives only in `host`.
+`setSessionPublisher`, `setLoginPublisher`, `workspaces`' `setWorkspacePublisher` for the
+`workspace.created`/`updated`/`removed` lifecycle trio, and `settings`' `setSettingsPublisher` for
+`settings.changed`) that `host` installs at `createServer` — so the channel wiring lives only in `host`.
 
 ## Get right
 

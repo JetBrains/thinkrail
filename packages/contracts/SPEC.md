@@ -11,15 +11,17 @@ tags: [v1, wire]
 ## Responsibility
 
 The browser↔host wire spine: the single source of truth for the protocol. Types-only, with the only
-runtime exports being the WS method/channel constants and the protocol version. The one package
-`apps/web` may depend on — which is what lets the UI ship independently of the host.
+runtime exports being the WS method/channel constants, the protocol version, and the small theme/config
+value-sets (`Theme` / `THEME_IDS` / `DEFAULT_CONFIG`). The one package `apps/web` may depend on — which is
+what lets the UI ship independently of the host.
 
 ## Boundary
 
 - **Owns:** the wire — entity types, the `pi` event/message types (re-exported), the WS method & channel
   registries, and the protocol version.
-- **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain`; `export *` (value) of
-  `wsProtocol` (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`).
+- **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain`; the value re-exports
+  `Theme` / `THEME_IDS` / `DEFAULT_CONFIG` from `domain`; `export *` (value) of `wsProtocol`
+  (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`).
 - **Allowed deps:** none at runtime. **Type-only** devDeps on `@earendil-works/pi-ai` +
   `@earendil-works/pi-agent-core`, imported **from their package roots** (type-only → erased at build).
 - **Forbidden:** any *value* import of a `pi` package; **any** import (even `type`) of
@@ -86,6 +88,11 @@ runtime exports being the WS method/channel constants and the protocol version. 
   **`JbcentralConnectResult`** (the in-app connect state machine: `connected` / `needs-install` /
   `needs-login` / `error` (+`message`); the `needs-install` command comes from `jbcentralInstall`, not a
   hint on this result));
+  the **theme/config value-set** — **`Theme`** (a const-object "enum": `Dark`/`Light`/`Darcula`/`Gruvbox`;
+  adding a value is wire-compatible — an older client falls back to Dark's `:root` tokens), its derived
+  **`ThemeId`** type + runtime-iterable **`THEME_IDS`** (the picker source), and the server-synced
+  **`AppConfig`** (`{ theme }` — an extensible bag) with its **`DEFAULT_CONFIG`** fallback (persisted host-side
+  as `config.json`, delivered in `server.welcome`, mutated via `settings.update`);
   **`SpecGraphNode`/`SpecGraphSnapshot`** — the
   Specs-viewer read DTOs, **mirrored** (like `PiEvent`), never imported from `pi-spec-graph` — the wire
   carries only what the panel renders (`type`/`status` stay `string`: tolerate whatever is on disk).
@@ -103,8 +110,10 @@ runtime exports being the WS method/channel constants and the protocol version. 
   `session.*` — `create`/`prompt`/`steer`/`followUp`/`abort`/`dispose`/`setModel`/
   `setThinkingLevel`/`compact`/`getStats`/`getCommands`/`extUiReply`/**`answerQuestion`** (the inline
   `ask_user_question` reply, correlated by tool call id)/**`list`**/**`getMessages`** (the
-  read side)), `WS_CHANNELS` (`server.welcome` /
-  `pi.event` / `pi.extensionUi` / **`provider.login`** — the session-less in-app login stream (a `LoginPush`
+  read side) / **`settings.update`** (merge + persist a partial `AppConfig`, returns the merged config)),
+  `WS_CHANNELS` (`server.welcome` — which carries the initial `config: AppConfig` alongside `projects` /
+  `pi.event` / `pi.extensionUi` / **`settings.changed`** (the full `AppConfig`, broadcast so every client
+  converges) / **`provider.login`** — the session-less in-app login stream (a `LoginPush`
   per frame, keyed by `loginId`; the sibling of `pi.extensionUi`, since a login runs on the Welcome screen
   before any session exists) / `terminal.data` / the **workspace lifecycle trio** — **`workspace.created`**
   / **`workspace.updated`** / **`workspace.removed`** — registry membership changes fanned out to every

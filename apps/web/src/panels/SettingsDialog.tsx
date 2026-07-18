@@ -1,20 +1,19 @@
 import { GitBranch, KeyRound, type LucideIcon, Palette, SlidersHorizontal } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib";
-import { type SettingsSection, useAppStore } from "@/store";
+import { SettingsSection, useAppStore } from "@/store";
+import { AppearanceSettings } from "./AppearanceSettings";
 import { GithubSettings } from "./GithubSettings";
 import { ProvidersSettings } from "./ProvidersSettings";
 
 /** The live settings sections, in nav order. */
 const SECTIONS: { id: SettingsSection; label: string; icon: LucideIcon }[] = [
-	{ id: "providers", label: "Providers", icon: KeyRound },
-	{ id: "github", label: "GitHub", icon: GitBranch },
+	{ id: SettingsSection.Providers, label: "Providers", icon: KeyRound },
+	{ id: SettingsSection.Github, label: "GitHub", icon: GitBranch },
+	{ id: SettingsSection.Appearance, label: "Appearance", icon: Palette },
 ];
 /** Placeholder sections — shown dimmed so the shell reads as built-to-grow (not yet wired). */
-const SOON: { label: string; icon: LucideIcon }[] = [
-	{ label: "General", icon: SlidersHorizontal },
-	{ label: "Appearance", icon: Palette },
-];
+const SOON: { label: string; icon: LucideIcon }[] = [{ label: "General", icon: SlidersHorizontal }];
 
 /**
  * App settings — a two-pane shell (left section rail + scrollable content pane) so it grows past today's two
@@ -81,7 +80,13 @@ export function SettingsDialog() {
 					</nav>
 
 					<div className="min-h-0 flex-1 overflow-y-auto p-lg">
-						{section === "providers" ? <ProvidersSettings /> : <GithubSettings />}
+						{section === SettingsSection.Providers ? (
+							<ProvidersSettings />
+						) : section === SettingsSection.Github ? (
+							<GithubSettings />
+						) : (
+							<AppearanceSettings />
+						)}
 					</div>
 				</div>
 			</DialogContent>

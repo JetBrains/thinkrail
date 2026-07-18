@@ -26,6 +26,7 @@
 	--on-accent-16: rgba(255, 255, 255, 0.16);
 	--sunken: rgba(0, 0, 0, 0.12);
 	--overlay: rgba(0, 0, 0, 0.5);
+	--selection-bg: #2c2947;
 	--shadow-xs: 0 1px 3px rgba(0, 0, 0, 0.18);
 	--shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
 	--shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35);
@@ -86,4 +87,216 @@
 	--font: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 	--font-mono: "JetBrains Mono", "Fira Code", "SF Mono", "Cascadia Code", monospace;
 	--font-accent: "Cabinet Grotesk", sans-serif;
+	/* Terminal ANSI palette (the 16 xterm colors, VS Code Dark+ values) — read by TerminalInstance so
+	   shell output stays legible per theme; a light theme MUST override these (the dark-tuned brights
+	   wash out on white). */
+	--ansi-black: #000000;
+	--ansi-red: #cd3131;
+	--ansi-green: #0dbc79;
+	--ansi-yellow: #e5e510;
+	--ansi-blue: #2472c8;
+	--ansi-magenta: #bc3fbc;
+	--ansi-cyan: #11a8cd;
+	--ansi-white: #e5e5e5;
+	--ansi-bright-black: #666666;
+	--ansi-bright-red: #f14c4c;
+	--ansi-bright-green: #23d18b;
+	--ansi-bright-yellow: #f5f543;
+	--ansi-bright-blue: #3b8eea;
+	--ansi-bright-magenta: #d670d6;
+	--ansi-bright-cyan: #29b8db;
+	--ansi-bright-white: #e5e5e5;
+}
+
+/*
+ * Additional themes. Each overrides only the SEMANTIC surface/text/status tokens + `color-scheme` (and the
+ * one-off `--selection-bg`, plus `--ansi-*` where the default terminal palette wouldn't read, optional
+ * `--code-*` syntax colors for Monaco, and — when the palette demands it, as gruvbox's does — the accent
+ * family); type scale, spacing, radii, and fonts stay shared in `:root`. `applyTheme(id)` sets
+ * `[data-theme=id]` on <html>; picking "dark" matches no block below and falls back to the `:root`
+ * defaults (which is also what an older client does for a theme id it doesn't know). Because
+ * `@theme inline` binds every utility to the live `var(--token)`, swapping the block re-themes the whole
+ * UI with no component changes.
+ *
+ * Contrast floor: body text ≥ 4.5:1 (WCAG AA) on the surfaces it sits on; `--muted` ≥ 4.5:1 on its
+ * worst surface; `--hint` is tertiary by design but stays ≥ 3:1. Check with a quick script before
+ * changing any text/status value.
+ */
+
+/* Light — white editor surface, light tool windows, a deeper on-brand violet for legible white-on-accent. */
+[data-theme="light"] {
+	color-scheme: light;
+
+	/* Deeper violet (the #6B57FF brand violet) so `text-on-accent` (white) passes contrast on light. */
+	--primary: #6b57ff;
+	--secondary: #d6d8e0;
+	/* Status colors darkened to ≥ 4.5:1 on white — they double as text (diff badges, "M" markers, links). */
+	--blue: #2265cf;
+	--green: #1a7f37;
+	--red: #d02533;
+	--gold: #946300;
+
+	--bg: #f2f3f5;
+	--bg-dark: #ffffff;
+	--bg-input: #ffffff;
+	--input-bg: #ffffff;
+	--panel: rgba(255, 255, 255, 0.85);
+	--elevated: #ffffff;
+	--hover: #e9eaee;
+	--border: #dcdfe4;
+	--border2: #c7ccd6;
+	--text: #1a1a1e;
+	--text-40: rgba(26, 26, 30, 0.4);
+	--muted: #5a5f6a;
+	--hint: #667085;
+	--sel: #cfe0fb;
+	--selection-bg: rgba(107, 87, 255, 0.22);
+	/* Two-tone: light tool windows (sidebar) around the white editor/content. */
+	--surface-sidebar: var(--bg);
+	--surface-content: var(--bg-dark);
+
+	/* Softer elevation — the dark shadow alphas read as heavy on light. */
+	--sunken: rgba(0, 0, 0, 0.05);
+	--shadow-xs: 0 1px 3px rgba(0, 0, 0, 0.08);
+	--shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.1);
+	--shadow-md: 0 4px 16px rgba(0, 0, 0, 0.12);
+	--shadow-lg: 0 8px 28px rgba(0, 0, 0, 0.14);
+	--shadow-xl: 0 24px 64px rgba(0, 0, 0, 0.18);
+	--shadow-up: 0 -2px 8px rgba(0, 0, 0, 0.1);
+
+	/* Terminal ANSI palette for light surfaces (VS Code Light+ values) — the dark brights wash out on white. */
+	--ansi-green: #00bc00;
+	--ansi-yellow: #949800;
+	--ansi-blue: #0451a5;
+	--ansi-magenta: #bc05bc;
+	--ansi-cyan: #0598bc;
+	--ansi-white: #555555;
+	--ansi-bright-red: #cd3131;
+	--ansi-bright-green: #14ce14;
+	--ansi-bright-yellow: #b5ba00;
+	--ansi-bright-blue: #0451a5;
+	--ansi-bright-magenta: #bc05bc;
+	--ansi-bright-cyan: #0598bc;
+	--ansi-bright-white: #a5a5a5;
+}
+
+/* Darcula — the famous IntelliJ palette: #3c3f41 tool windows around a #2b2b2b editor, #a9b7c6 foreground,
+   blue selection. ThinkRail's violet stays the interactive accent (per the theme decision). */
+[data-theme="darcula"] {
+	color-scheme: dark;
+
+	--bg: #3c3f41;
+	--bg-dark: #2b2b2b;
+	--bg-input: #45494a;
+	--input-bg: #45494a;
+	--panel: rgba(43, 43, 43, 0.8);
+	--elevated: #3c3f41;
+	--hover: #4c5052;
+	--border: #323232;
+	--border2: #4b4f52;
+	--text: #a9b7c6;
+	--text-40: rgba(169, 183, 198, 0.4);
+	/* Muted/hint sit in the Darcula blue-gray family but lifted for the lighter #3c3f41 tool windows
+	   (muted ≥ 4.5:1 there; the originals bottomed out near 3:1). */
+	--muted: #9fabb5;
+	--hint: #8b959e;
+	--sel: #214283;
+	--selection-bg: #214283;
+	/* Two-tone: lighter tool windows (sidebar) around the darker editor (content). */
+	--surface-sidebar: var(--bg);
+	--surface-content: var(--bg-dark);
+
+	/* Darcula's signature syntax palette — Monaco builds its token rules from whichever `--code-*` are
+	   set (unset in other themes → the vs/vs-dark base defaults apply). shiki's copy of this palette
+	   lives in `lib/shikiTheme.ts`. */
+	--code-keyword: #cc7832;
+	--code-string: #6a8759;
+	--code-comment: #808080;
+	--code-comment-doc: #629755;
+	--code-number: #6897bb;
+	--code-regexp: #6a8759;
+	--code-annotation: #bbb529;
+	--code-tag: #e8bf6a;
+	--code-attribute-name: #bababa;
+	--code-attribute-value: #a5c261;
+	--code-json-key: #9876aa;
+}
+
+/* Gruvbox — the vim / tiling-WM classic (morhetz's "retro groove"): warm hard-contrast darks (#1d2021
+   editor inside #282828 tool windows), amber #ebdbb2 text — and, uniquely among the themes, the signature
+   GRUVBOX ORANGE as the interactive accent with dark-on-accent text (violet fights this palette; a theme
+   made for rice deserves the real thing). */
+[data-theme="gruvbox"] {
+	color-scheme: dark;
+
+	/* Accent: gruvbox bright orange; text ON the accent is the hard dark (6.5:1), not white (2.2:1). */
+	--primary: #fe8019;
+	--primary-10: rgba(254, 128, 25, 0.1);
+	--primary-20: rgba(254, 128, 25, 0.2);
+	--primary-40: rgba(254, 128, 25, 0.4);
+	--primary-60: rgba(254, 128, 25, 0.6);
+	--primary-80: rgba(254, 128, 25, 0.8);
+	--secondary: #504945;
+	--on-accent: #1d2021;
+	--on-accent-16: rgba(29, 32, 33, 0.16);
+	/* Status: the gruvbox brights — designed as text on these darks (all ≥ 4.5:1 on the editor bg). */
+	--blue: #83a598;
+	--green: #b8bb26;
+	--green-tint: rgba(184, 187, 38, 0.12);
+	--red: #fb4934;
+	--gold: #fabd2f;
+	--gold-tint: rgba(250, 189, 47, 0.12);
+	/* Chat user bubble follows the accent here — a violet bubble would be the one cold thing on screen. */
+	--bubble-user-bg: rgba(254, 128, 25, 0.1);
+	--bubble-user-border: rgba(254, 128, 25, 0.3);
+
+	--bg: #282828;
+	--bg-dark: #1d2021;
+	--bg-input: #3c3836;
+	--input-bg: #3c3836;
+	--panel: rgba(29, 32, 33, 0.8);
+	--elevated: #3c3836;
+	--hover: #504945;
+	--border: #3c3836;
+	--border2: #504945;
+	--text: #ebdbb2;
+	--text-40: rgba(235, 219, 178, 0.4);
+	--muted: #a89984;
+	--hint: #928374;
+	--sel: #504945;
+	--selection-bg: #504945;
+	/* Two-tone: warm tool windows (sidebar) around the hard-contrast editor (content). */
+	--surface-sidebar: var(--bg);
+	--surface-content: var(--bg-dark);
+
+	/* Terminal ANSI: gruvbox's canonical 16-color palette. */
+	--ansi-black: #282828;
+	--ansi-red: #cc241d;
+	--ansi-green: #98971a;
+	--ansi-yellow: #d79921;
+	--ansi-blue: #458588;
+	--ansi-magenta: #b16286;
+	--ansi-cyan: #689d6a;
+	--ansi-white: #a89984;
+	--ansi-bright-black: #928374;
+	--ansi-bright-red: #fb4934;
+	--ansi-bright-green: #b8bb26;
+	--ansi-bright-yellow: #fabd2f;
+	--ansi-bright-blue: #83a598;
+	--ansi-bright-magenta: #d3869b;
+	--ansi-bright-cyan: #8ec07c;
+	--ansi-bright-white: #ebdbb2;
+
+	/* Gruvbox vim syntax (Monaco rules; shiki uses the shipped `gruvbox-dark-hard`). */
+	--code-keyword: #fb4934;
+	--code-string: #b8bb26;
+	--code-comment: #928374;
+	--code-comment-doc: #928374;
+	--code-number: #d3869b;
+	--code-regexp: #fe8019;
+	--code-annotation: #fabd2f;
+	--code-tag: #8ec07c;
+	--code-attribute-name: #fabd2f;
+	--code-attribute-value: #b8bb26;
+	--code-json-key: #83a598;
 }

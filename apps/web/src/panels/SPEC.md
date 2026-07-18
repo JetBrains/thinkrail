@@ -94,10 +94,13 @@ prompt hero (still editable; empty by default), a base-branch
   read) + `provider.jbcentral*`:
   Connected (Disconnect) / ready (Connect) / not signed in (in-app `central login` + Retry) / not installed
   (the host's per-OS copyable install command — from `jbcentralInstall`, for the *host's* OS, never the
-  browser's — + Recheck); each mutation re-reads `provider.status`) and **`GithubSettings`** (the "Local GitHub" block — `github.authStatus()`
-  Connected + login / Not connected + Refresh). Dimmed "General"/"Appearance" nav items ("Soon") signal the
-  shell is built to grow. `ProvidersSettings` is the **integration piece** (store + transport); the
-  `LoginDialog` stays presentational (`auth` module).
+  browser's — + Recheck); each mutation re-reads `provider.status`) **`GithubSettings`** (the "Local GitHub" block — `github.authStatus()`
+  Connected + login / Not connected + Refresh); and **`AppearanceSettings`** (the **theme picker** — a
+  labelled list of `utils/theme`'s `THEMES`, the active one from `store.theme` marked; clicking one fires
+  `settings.update` and the UI **converges on the `settings.changed` broadcast** (no optimistic apply), a
+  rejected update raising a toast). A single dimmed "General" nav item ("Soon") still signals the shell is
+  built to grow. `ProvidersSettings`/`AppearanceSettings` are the **integration pieces** (store + transport);
+  the `LoginDialog` stays presentational (`auth` module).
   Panels compose their own sub-panels
   (e.g. `RightPanel`→`FileTree`/`ChangesPanel`, `CenterTabs`→`FilePane`→`MonacoEditor`) — an internal hierarchy.
   `CenterTabs` closing a chat tab routes to `store.closeChatToHistory` (keeps the session alive) and shows a
@@ -118,7 +121,7 @@ prompt hero (still editable; empty by default), a base-branch
   one set or the other on the active-workspace branch.)
 - **Allowed deps:** `store`, `transport`, `components/ui` (incl. `popover`/`command`/`textarea` for the
   dialog), `chat` (`ModelSelector`/`ThinkingSelector`, reused by `NewWorkspaceDialog`; `Markdown`,
-  reused by `MarkdownPreview`), `lib`,
+  reused by `MarkdownPreview`), `lib`, `utils` (`theme`'s `THEMES`, for `AppearanceSettings`),
   `contracts`; `lucide-react`; and the heavy libs each lazy panel owns (`monaco-editor`, `shiki`,
   `@xterm/*`) loaded via `import()`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `shell`; reaching across unrelated panels.
@@ -187,6 +190,15 @@ prompt hero (still editable; empty by default), a base-branch
   **external** link opens a new tab, and a **relative image** rewrites to the host **`/files/…`** route
   (built from `transport.httpBase()`). A cross-file link's `#fragment` is not yet followed (opens the
   file only).
+- **Code surfaces re-theme from the tokens, resiliently.** `MonacoEditor` defines the `thinkrail` theme
+  from the live tokens (chrome from the surface tokens, `vs`/`vs-dark` base from `[data-theme]`, syntax
+  rules from whichever `--code-*` a theme sets — Darcula today) and redefines it via a `[data-theme]`
+  MutationObserver; token reads are **canonicalized to hex** (`lib.cssColorToHex` — minified CSS serves
+  equivalents like `#fff`/`gray`, which Monaco rejects; unparseable → dropped, never passed through) and
+  the define **degrades to the base palette instead of throwing** (a bad
+  token value must never crash the editor panel). `TerminalInstance` builds the xterm theme the same way,
+  including the **16 `--ansi-*` slots** (so shell colors stay legible per theme), re-read on the same
+  observer. `DiffViewer` renders shiki's tri palette (`lib/shikiTheme`) once; the swap is pure CSS.
 - Heavy deps (Monaco / shiki / xterm) load via `React.lazy(() => import())` to stay out of the eager bundle.
   A lazy chunk that fails to load (or a render throw) is contained by the `components/ErrorBoundary` the
   **shell** wraps each region in (see `shell/SPEC.md`), so a single panel degrades instead of blanking the

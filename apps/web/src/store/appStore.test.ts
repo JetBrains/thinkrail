@@ -769,3 +769,11 @@ test("the toast helper enqueues by variant and omits an absent title", () => {
 	]);
 	expect(useAppStore.getState().toasts[0]).not.toHaveProperty("title");
 });
+
+test("applyConfig folds the server-synced app config in (theme is host-owned, a pure value)", () => {
+	// The DOM swap is the shell's; the store just holds the value the UI reads.
+	useAppStore.getState().applyConfig({ theme: "darcula" });
+	expect(useAppStore.getState().theme).toBe("darcula");
+	useAppStore.getState().applyConfig({ theme: "light" });
+	expect(useAppStore.getState().theme).toBe("light");
+});

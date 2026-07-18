@@ -1,4 +1,5 @@
 import type {
+	AppConfig,
 	AskUserQuestionResult,
 	ExtUiResponse,
 	ImageContent,
@@ -50,6 +51,7 @@ import {
 	listProjects,
 	openProject,
 } from "../projects";
+import { updateConfig } from "../settings";
 import { evictSpecIndex, projectHasSpecs, specGraph } from "../spec";
 import {
 	closeTerminal,
@@ -283,6 +285,9 @@ const handlers: Record<string, Handler> = {
 		return { ok: true } as const;
 	},
 	"provider.jbcentralLogin": () => jbcentralLogin(),
+	// Merge + persist a partial into the server-synced app config (theme, …); the broadcast is fired by
+	// `updateConfig`'s injected publisher (wired in `createServer`), so every client converges.
+	"settings.update": (params) => updateConfig((params as { config: Partial<AppConfig> }).config),
 };
 
 /** Route a WS request to its handler. Throws on unknown method (→ a `{ ok:false }` WS response). */
