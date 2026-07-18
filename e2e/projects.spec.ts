@@ -74,14 +74,14 @@ test("removes a project: workspaces archived, source repo untouched, Welcome res
 
 	// Worktree reclaim is backgrounded — poll until only the source checkout remains.
 	await expect
-	.poll(
-		() =>
-			execFileSync("git", ["-C", E2E_FIXTURE_REPO, "worktree", "list"], { encoding: "utf8" })
-				.trim()
-				.split("\n").length,
-		{ timeout: 30_000 },
-	)
-	.toBe(1);
+		.poll(
+			() =>
+				execFileSync("git", ["-C", E2E_FIXTURE_REPO, "worktree", "list"], { encoding: "utf8" })
+					.trim()
+					.split("\n").length,
+			{ timeout: 30_000 },
+		)
+		.toBe(1);
 
 	// Source directory untouched: files intact, working tree clean, branches kept (including workspace branch).
 	expect(existsSync(join(E2E_FIXTURE_REPO, "README.md"))).toBe(true);

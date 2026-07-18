@@ -65,8 +65,8 @@ import {
 	createWorkspace,
 	forgetWorkspace,
 	getWorkspace,
-	listWorkspaces,
 	listWorkspaceRecords,
+	listWorkspaces,
 	reclaimWorktree,
 	workspaceDiffStats,
 } from "../workspaces";

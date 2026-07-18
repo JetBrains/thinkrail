@@ -25,7 +25,7 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   `workspace.updated` snapshot in: merge by `id` into `workspaces[ws.projectId]`, spreading over the
   existing record so the computed `diffStats` badge survives the push (the snapshot is the persisted
   record, which has none); a project never fetched or an id absent from its list is a **no-op** — the next
-  `workspace.list` reconciles;   **`applyWorkspaceRemoved(projectId, id)`** is the **entire** removal
+  `workspace.list` reconciles; **`applyWorkspaceRemoved(projectId, id)`** is the **entire** removal
   reaction (`removeWorkspace` drops the row + `clearWorkspaceTabs` drops its tabs/terminals/chat runtimes,
   and **if it was this client's active workspace** → `setActiveWorkspace(null)` (shell falls back to the
   project Welcome) + a neutral toast that reads right for both the initiator and an observer); the
