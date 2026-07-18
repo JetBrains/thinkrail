@@ -256,7 +256,7 @@ function ProjectRow({
 							type="button"
 							data-testid="project-menu"
 							aria-label="Project menu"
-						className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-muted opacity-0 transition hover:bg-elevated hover:text-text group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
+							className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-muted opacity-0 transition hover:bg-elevated hover:text-text group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
 						>
 							<MoreHorizontal className="size-4" />
 						</button>
