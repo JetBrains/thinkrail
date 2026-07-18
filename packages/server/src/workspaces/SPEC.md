@@ -38,8 +38,8 @@ coincide for the auto `workspace-N` placeholder, but a named workspace carries b
   project repo — the branch ref moves and the worktree's HEAD follows, but the **worktree dir never moves**
   (pi keys sessions by exact cwd; terminals/tabs are cwd'd there — the stale dir name is the accepted cost);
   **`name` and `branch` deliberately differ** (e.g. `Fix Auth Redirect` / `fix-auth-redirect`) — the name
-  is display-only, never a path/id; only the branch is uniqued (display names may repeat, the branch chip
-  disambiguates — see [[submodule-web-panels]]); **re-points sibling
+  is display-only, never a path/id; only the branch is uniqued (display names may repeat, the branch
+  shown beneath the name in the nav disambiguates — see [[submodule-web-panels]]); **re-points sibling
   records whose `baseBranch` was the old branch** in the same save so their diffs don't silently empty;
   **re-loads the records after the git subprocess** — a record that vanished meanwhile (archived / e2e
   reset) aborts the save instead of resurrecting it; throws on unknown id or git failure — callers decide,

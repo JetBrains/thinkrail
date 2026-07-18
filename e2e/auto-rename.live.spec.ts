@@ -23,8 +23,8 @@ test("turn start names the workspace instantly, then the settled turn refines it
 	// The chat is scoped to the ACTIVE workspace — key everything off its pre-rename record.
 	const activeRow = page.locator('[data-testid="workspace-item"][data-active="true"]');
 	const name = activeRow.getByTestId("workspace-name");
-	// The git branch is surfaced as a secondary chip, shown only once the display name diverges from it.
-	const branchChip = activeRow.getByTestId("workspace-branch");
+	// The git branch is surfaced on a second line beneath the name, shown only once they diverge.
+	const branchLine = activeRow.getByTestId("workspace-branch");
 	const initialName = (await name.textContent()) ?? "";
 	expect(initialName).toMatch(/^workspace-\d+$/);
 	const before = persistedWorkspaces().find((w) => w.name === initialName);
@@ -40,9 +40,9 @@ test("turn start names the workspace instantly, then the settled turn refines it
 	// login form…" → the first ~5 words), pushed live over workspace.updated — so the workspace leaves
 	// `workspace-N` immediately, without waiting for the (possibly long) turn to settle.
 	await expect(name).toHaveText("Plan How To Add A", { timeout: 20_000 });
-	// The display name now differs from the branch, so the branch chip appears with the derived kebab slug
+	// The display name now differs from the branch, so the branch line appears with the derived kebab slug
 	// (`(-\d+)?` tolerates a uniqueness suffix on the branch — never on the display name).
-	await expect(branchChip).toHaveText(/^plan-how-to-add-a(-\d+)?$/, { timeout: 20_000 });
+	await expect(branchLine).toHaveText(/^plan-how-to-add-a(-\d+)?$/, { timeout: 20_000 });
 
 	const done = page
 		.locator('[data-testid="chat-message"][data-role="system"]')
@@ -74,9 +74,9 @@ test("turn start names the workspace instantly, then the settled turn refines it
 	expect(branch).toMatch(/^[a-z0-9][a-z0-9-]*$/); // branch stays a git-clean kebab slug
 	expect(renamed?.renamed).toBe(true);
 	expect(renamed?.worktreePath).toBe(before.worktreePath);
-	// The refined name is live in the tree too (workspace.updated push, no refetch), branch on the chip.
+	// The refined name is live in the tree too (workspace.updated push, no refetch), branch on its line.
 	await expect(name).toHaveText(displayName, { timeout: 20_000 });
-	await expect(branchChip).toHaveText(branch, { timeout: 20_000 });
+	await expect(branchLine).toHaveText(branch, { timeout: 20_000 });
 
 	// Git followed: the old auto-branch is gone, the new one exists — and the worktree DIR kept its name.
 	const branches = execFileSync(

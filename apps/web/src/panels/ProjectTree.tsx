@@ -245,7 +245,7 @@ function WorkspaceRow({
 			<div
 				data-testid="workspace-item"
 				data-active={isActive}
-				className={`group flex h-7 items-center gap-sm rounded-[var(--radius-sm)] pr-xs pl-xl transition-colors ${
+				className={`group flex min-h-7 items-center gap-sm rounded-[var(--radius-sm)] py-xs pr-xs pl-xl transition-colors ${
 					isActive ? "bg-hover" : "hover:bg-hover"
 				}`}
 			>
@@ -255,22 +255,25 @@ function WorkspaceRow({
 					className="flex min-w-0 flex-1 items-center gap-sm text-left"
 				>
 					<GitBranch className={`size-4 shrink-0 ${isActive ? "text-primary" : "text-hint"}`} />
-					<span
-						data-testid="workspace-name"
-						className={`min-w-0 truncate text-sm ${isActive ? "font-medium text-primary" : "text-muted"}`}
-					>
-						{workspace.name}
-					</span>
-					{/* Secondary git-branch chip — the display name is decoupled from the branch, so surface the
-					    branch for matching against git. Hidden when they coincide (pristine/legacy rows). */}
-					{workspace.branch !== workspace.name && (
+					{/* Name on top, the git branch on a second line beneath it — the display name is decoupled
+					    from the branch, so surface both without crowding one line. The branch line is hidden when
+					    they coincide, so pristine/legacy rows stay a single compact line. */}
+					<span className="flex min-w-0 flex-1 flex-col">
 						<span
-							data-testid="workspace-branch"
-							className="shrink-0 truncate font-[var(--font-mono)] text-hint text-xs"
+							data-testid="workspace-name"
+							className={`truncate text-sm leading-tight ${isActive ? "font-medium text-primary" : "text-muted"}`}
 						>
-							{workspace.branch}
+							{workspace.name}
 						</span>
-					)}
+						{workspace.branch !== workspace.name && (
+							<span
+								data-testid="workspace-branch"
+								className="truncate font-[var(--font-mono)] text-hint text-xs leading-tight"
+							>
+								{workspace.branch}
+							</span>
+						)}
+					</span>
 				</button>
 				{hasStats && (
 					<span className="shrink-0 text-xs tabular-nums group-hover:hidden">
