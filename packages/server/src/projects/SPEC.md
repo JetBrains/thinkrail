@@ -11,7 +11,9 @@ tags: [v1]
 ## Responsibility
 
 Open a git repository as a project (list/close projects), and — for a folder that isn't a repo yet —
-classify it and bootstrap it into one so it can be opened.
+classify it and bootstrap it into one so it can be opened. Closing (`closeProject`) only drops the
+project record — archiving its workspaces is composed by `host`'s `project.remove` (this module must
+not import `workspaces`).
 
 ## Boundary
 

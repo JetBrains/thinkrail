@@ -1,11 +1,26 @@
 import type { Project, Workspace } from "@thinkrail/contracts";
-import { ChevronDown, ChevronRight, Folder, GitBranch, Plus, Trash2 } from "lucide-react";
+import {
+	ChevronDown,
+	ChevronRight,
+	Folder,
+	GitBranch,
+	MoreHorizontal,
+	Plus,
+	Trash2,
+} from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { PopoverTrigger } from "@/components/ui/popover";
 import { toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { ConfirmPopover } from "./ConfirmPopover";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { useOpenProject } from "./useOpenProject";
@@ -76,6 +91,30 @@ export function ProjectTree() {
 			.catch((err) => toast.error(errorText(err, "Failed to remove workspace")));
 	};
 
+	// Optimistic: drop local state immediately, then ask the host. On failure re-list to reconcile.
+	const removeProject = (projectId: string) => {
+		useAppStore.getState().removeProject(projectId);
+		setExpanded((prev) => {
+			const next = new Set(prev);
+			next.delete(projectId);
+			return next;
+		});
+		void getTransport()
+			.request("project.remove", { id: projectId })
+			.catch(async (err) => {
+				toast.error(errorText(err, "Failed to remove project"));
+				try {
+					const listed = await getTransport().request("project.list", {});
+					useAppStore.getState().setProjects(listed);
+					if (listed.some((p) => p.id === projectId)) {
+						await loadWorkspaces(projectId);
+					}
+				} catch {
+					// re-list failed — toast already shown
+				}
+			});
+	};
+
 	return (
 		<nav className="flex flex-col gap-sm">
 			<header className="flex h-7 items-center justify-between pr-xs pl-sm">
@@ -110,6 +149,7 @@ export function ProjectTree() {
 								onToggle={() => toggleExpand(project.id)}
 								onSelect={() => void selectProject(project.id)}
 								onAddWorkspace={() => setDialogProjectId(project.id)}
+								onRemove={() => removeProject(project.id)}
 							/>
 							{isExpanded && (
 								<ul className="flex flex-col">
@@ -157,6 +197,7 @@ function ProjectRow({
 	onToggle,
 	onSelect,
 	onAddWorkspace,
+	onRemove,
 }: {
 	project: Project;
 	isSelected: boolean;
@@ -165,46 +206,84 @@ function ProjectRow({
 	onToggle: () => void;
 	onSelect: () => void;
 	onAddWorkspace: () => void;
+	onRemove: () => void;
 }) {
 	const Chevron = isExpanded ? ChevronDown : ChevronRight;
+	const [confirmOpen, setConfirmOpen] = useState(false);
 	return (
-		<div
-			data-testid="project-item"
-			className="group flex h-7 items-center gap-xs rounded-[var(--radius-sm)] pr-xs pl-xs transition-colors hover:bg-hover"
-		>
-			<button
-				type="button"
-				data-testid="project-expand"
-				aria-label={isExpanded ? "Collapse project" : "Expand project"}
-				onClick={onToggle}
-				className="flex size-4 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-hint opacity-0 transition-opacity hover:text-text group-hover:opacity-100 data-[expanded=true]:opacity-100"
-				data-expanded={isExpanded}
+		<>
+			<div
+				data-testid="project-item"
+				className="group flex h-7 items-center gap-xs rounded-[var(--radius-sm)] pr-xs pl-xs transition-colors hover:bg-hover"
 			>
-				<Chevron className="size-4" />
-			</button>
-			<button
-				type="button"
-				onClick={onSelect}
-				className="flex min-w-0 flex-1 items-center gap-sm text-left"
-			>
-				<Folder className={`size-4 shrink-0 ${isSelected ? "text-primary" : "text-muted"}`} />
-				<span className={`truncate text-sm ${isSelected ? "font-medium text-text" : "text-muted"}`}>
-					{project.name}
-				</span>
-			</button>
-			{!isExpanded && workspaceCount > 0 && (
-				<span className="shrink-0 text-xs text-hint group-hover:hidden">{workspaceCount}</span>
-			)}
-			<button
-				type="button"
-				data-testid="add-workspace"
-				aria-label="Create workspace"
-				onClick={onAddWorkspace}
-				className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-muted opacity-0 transition hover:bg-elevated hover:text-text group-hover:opacity-100"
-			>
-				<Plus className="size-4" />
-			</button>
-		</div>
+				<button
+					type="button"
+					data-testid="project-expand"
+					aria-label={isExpanded ? "Collapse project" : "Expand project"}
+					onClick={onToggle}
+					className="flex size-4 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-hint opacity-0 transition-opacity hover:text-text group-hover:opacity-100 data-[expanded=true]:opacity-100"
+					data-expanded={isExpanded}
+				>
+					<Chevron className="size-4" />
+				</button>
+				<button
+					type="button"
+					onClick={onSelect}
+					className="flex min-w-0 flex-1 items-center gap-sm text-left"
+				>
+					<Folder className={`size-4 shrink-0 ${isSelected ? "text-primary" : "text-muted"}`} />
+					<span
+						className={`truncate text-sm ${isSelected ? "font-medium text-text" : "text-muted"}`}
+					>
+						{project.name}
+					</span>
+				</button>
+				{!isExpanded && workspaceCount > 0 && (
+					<span className="shrink-0 text-xs text-hint group-hover:hidden">{workspaceCount}</span>
+				)}
+				<button
+					type="button"
+					data-testid="add-workspace"
+					aria-label="Create workspace"
+					onClick={onAddWorkspace}
+					className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-muted opacity-0 transition hover:bg-elevated hover:text-text group-hover:opacity-100"
+				>
+					<Plus className="size-4" />
+				</button>
+				<DropdownMenu>
+					<DropdownMenuTrigger asChild>
+						<button
+							type="button"
+							data-testid="project-menu"
+							aria-label="Project menu"
+							className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-muted opacity-0 transition hover:bg-elevated hover:text-text group-hover:opacity-100 data-[state=open]:opacity-100"
+						>
+							<MoreHorizontal className="size-4" />
+						</button>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="end">
+						<DropdownMenuItem
+							data-testid="project-remove"
+							className="text-red focus:text-red [&_svg]:text-red"
+							onSelect={() => setConfirmOpen(true)}
+						>
+							<Trash2 />
+							Remove project
+						</DropdownMenuItem>
+					</DropdownMenuContent>
+				</DropdownMenu>
+			</div>
+			<ConfirmDialog
+				open={confirmOpen}
+				onOpenChange={setConfirmOpen}
+				title={`Remove ${project.name}`}
+				description="Removes this project from ThinkRail and deletes all its workspaces (chats, terminals, and worktrees). Your source repository, files, and branches are left untouched."
+				confirmLabel="Remove"
+				destructive
+				confirmTestId="confirm-remove-project"
+				onConfirm={onRemove}
+			/>
+		</>
 	);
 }
 

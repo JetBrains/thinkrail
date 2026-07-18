@@ -20,17 +20,24 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   **anchored to that Remove button** (`align="end"`, so its right border lines up with the button's) and
   opening just beneath it rather than as a centered modal; it **forces a
   deliberate choice** (Cancel takes initial focus; a `destructive` confirm shows a warning glyph + red
-  button; Esc + outside-click cancel); removal is **event-driven** (no per-client optimism): on confirm it
-  just fires `workspace.remove` and lets every client — including this one — react to the host's
+  button; Esc + outside-click cancel); workspace removal is **event-driven** (no per-client optimism): on
+  confirm it just fires `workspace.remove` and lets every client — including this one — react to the host's
   `workspace.removed` push via the store's `applyWorkspaceRemoved`; a rejected request (no event will come)
-  surfaces an error toast, leaving the row in place).
+  surfaces an error toast, leaving the row in place. **Project removal** is a kebab (`…`) on the project
+  row → destructive modal **`ConfirmDialog`** (no row-anchored popover — project remove has no single
+  worktree to point at): on confirm the initiator runs the store's optimistic **`removeProject`** (row +
+  workspaces + tabs/terminals/sessions gone; Welcome if it was selected/active), then fires
+  `project.remove`; a rejected request toasts and reconciles via `project.list` (+ `workspace.list` when
+  the project is still present). There is no `project.removed` push — other clients clear workspace rows
+  via each `workspace.removed` fan-out from `forgetWorkspace`, and pick up a missing project on the next
+  list/reconnect.)
   **Opening a project** goes through the shared **`useOpenProject`** hook (reused by `ProjectTree` **and**
   `WelcomePanel`, so the flow is identical in the rail and the Welcome screen): `project.open`, and on
   failure `project.inspect` → either offers to bootstrap the folder into a repo — a modal **`ConfirmDialog`**
   (confirm → `project.init`) — when it's `initable`, or surfaces the error in a **`NoticeDialog`** — so a
   non-git folder is never a silent no-op. Both are modals on `components/ui/dialog` (the init offer has no
-  on-screen anchor, unlike the Remove popover); `NoticeDialog` is a single-button info modal for failures
-  with no yes/no follow-up. The hook returns a `dialogs` node each consumer renders. **Selecting a
+  on-screen anchor, unlike the workspace Remove popover); `NoticeDialog` is a single-button info modal for
+  failures with no yes/no follow-up. The hook returns a `dialogs` node each consumer renders. **Selecting a
   project** (clicking its row — the chevron expands/collapses separately) **deselects any active
   workspace**, so the shell returns to that project's Welcome — a deliberate "project home" gesture; the
   workspace's tabs survive in the store, so re-selecting it restores its view. Also

@@ -402,6 +402,11 @@ interface AppState {
 	 * neutral toast (reads correctly for both the initiator and an observer).
 	 */
 	applyWorkspaceRemoved: (projectId: string, workspaceId: string) => void;
+	/**
+	 * Optimistic project removal (initiator): drop the project + known workspaces' tabs/terminals/sessions,
+	 * clear selection, return to Welcome. A failed `project.remove` should re-list to reconcile.
+	 */
+	removeProject: (projectId: string) => void;
 	selectProject: (projectId: string) => void;
 	setActiveWorkspace: (id: string | null) => void;
 	openTab: (tab: EditorTab) => void;
@@ -635,6 +640,29 @@ export const useAppStore = create<AppState>((set, get) => ({
 			s.setActiveWorkspace(null); // the shell falls back to the project Welcome
 			toast.info(`Workspace "${name ?? "?"}" was removed`);
 		}
+	},
+	removeProject: (projectId) => {
+		const s = get();
+		const list = s.workspaces[projectId] ?? [];
+		const wasSelected = s.selectedProjectId === projectId;
+		const wasActiveWs = list.some((w) => w.id === s.activeWorkspaceId);
+		for (const ws of list) {
+			s.clearWorkspaceTabs(ws.id);
+		}
+		set((state) => {
+			const { [projectId]: _gone, ...workspaces } = state.workspaces;
+			const fsChangesByWorkspace = { ...state.fsChangesByWorkspace };
+			for (const ws of list) {
+				delete fsChangesByWorkspace[ws.id];
+			}
+			return {
+				projects: state.projects.filter((p) => p.id !== projectId),
+				workspaces,
+				fsChangesByWorkspace,
+				selectedProjectId: wasSelected ? null : state.selectedProjectId,
+				activeWorkspaceId: wasActiveWs ? null : state.activeWorkspaceId,
+			};
+		});
 	},
 	selectProject: (selectedProjectId) => set({ selectedProjectId }),
 	setActiveWorkspace: (activeWorkspaceId) => set({ activeWorkspaceId }),

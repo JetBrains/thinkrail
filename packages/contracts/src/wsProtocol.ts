@@ -34,10 +34,13 @@ import type {
 // join the existing `workspace.updated` (the workspace lifecycle trio; see `WS_CHANNELS`).
 // v6: the worktree change notifier — `workspace.fsChanged` streams debounced fs-invalidation nudges so
 // clients re-read files/specs/git state instead of polling.
+
 // v7: server-synced app settings — `server.welcome` now carries `config: AppConfig` (the initial theme
 // travels with the handshake), `settings.update` persists a partial, and `settings.changed` broadcasts
 // the new config to every client so they converge (the same shared-state pattern as the workspace trio).
-export const PROTOCOL_VERSION = 7;
+
+// v8  : `project.close` → `project.remove` (symmetry with workspace.remove; was unused)
+export const PROTOCOL_VERSION = 8;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -66,7 +69,7 @@ export interface WorkspaceRemoved {
 export const WS_METHODS = {
 	projectOpen: "project.open",
 	projectList: "project.list",
-	projectClose: "project.close",
+	projectRemove: "project.remove",
 	// Classify a candidate path (existing repo / initable dir / broken) so the UI picks how to open it,
 	// and initialise a plain directory as a git repo (init + commit) before opening it.
 	projectInspect: "project.inspect",
@@ -177,7 +180,7 @@ export interface Ack {
 export interface WsMethodMap {
 	"project.open": { params: { path: string }; result: Project };
 	"project.list": { params: Record<string, never>; result: Project[] };
-	"project.close": { params: { id: string }; result: Ack };
+	"project.remove": { params: { id: string }; result: Ack };
 	// Read-only classification of a path (repo / initable / missing / notDirectory) — the UI calls this
 	// after a failed `project.open` to decide between an init offer and a plain error.
 	"project.inspect": { params: { path: string }; result: ProjectPathStatus };

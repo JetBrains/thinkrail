@@ -96,10 +96,11 @@ what lets the UI ship independently of the host.
   **`SpecGraphNode`/`SpecGraphSnapshot`** — the
   Specs-viewer read DTOs, **mirrored** (like `PiEvent`), never imported from `pi-spec-graph` — the wire
   carries only what the panel renders (`type`/`status` stay `string`: tolerate whatever is on disk).
-- **wsProtocol.ts** — `WS_METHODS` (`project.*` — incl. **`project.inspect`** (classify a path) +
-  **`project.init`** (`git init` + commit, then open) + **`project.hasSpecs`** (lazy per-project "has any
-  registered spec?" for the Welcome screen — a full-tree walk, so requested only for the shown project,
-  never eagerly for every project) / `workspace.*` / `fs.*` / `git.*` / **`spec.graph`**
+- **wsProtocol.ts** — `WS_METHODS` (`project.*` — incl. **`project.remove`** (was unused `project.close`;
+  archive every workspace then drop the project; source repo untouched) + **`project.inspect`** (classify
+  a path) + **`project.init`** (`git init` + commit, then open) + **`project.hasSpecs`** (lazy per-project
+  "has any registered spec?" for the Welcome screen — a full-tree walk, so requested only for the shown
+  project, never eagerly for every project) / `workspace.*` / `fs.*` / `git.*` / **`spec.graph`**
   (the Specs-viewer whole-graph read, per workspace) / `terminal.*` / `model.list` / **`provider.status`**
 (the auth-provider status report; every read revalidates host-side) / the **`provider.*` in-app login**
   (**`loginStart`** — mints a `loginId` and runs pi's OAuth flow **detached** (it can take minutes; it must

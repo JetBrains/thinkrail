@@ -566,6 +566,67 @@ test("applyWorkspaceRemoved on a non-active workspace drops the row silently (no
 	expect(s.toasts).toHaveLength(0);
 });
 
+// ---- removeProject: optimistic initiator path for project.remove -----------------------------------
+
+test("removeProject drops the project + workspaces, clears tabs, and returns selected/active to Welcome", () => {
+	const ws = pushedWorkspace();
+	const other = pushedWorkspace({
+		id: "w2",
+		projectId: "p2",
+		name: "other-ws",
+		branch: "other-ws",
+	});
+	useAppStore.setState({
+		projects: [
+			{ id: "p1", name: "repo", path: "/tmp/repo", slug: "repo", lastOpened: 1 },
+			{ id: "p2", name: "other", path: "/tmp/other", slug: "other", lastOpened: 2 },
+		],
+		workspaces: { p1: [ws], p2: [other] },
+		selectedProjectId: "p1",
+		activeWorkspaceId: "w1",
+		tabsByWorkspace: {
+			w1: [{ kind: "file", id: "w1:a", workspaceId: "w1", name: "a", path: "a", content: "" }],
+		},
+		activeTabByWorkspace: { w1: "w1:a" },
+		terminalsByWorkspace: { w1: [{ clientId: "t1", workspaceId: "w1", title: "Terminal 1" }] },
+		fsChangesByWorkspace: { w1: { tick: 1, paths: ["a"], truncated: false } },
+	});
+
+	useAppStore.getState().removeProject("p1");
+
+	const s = useAppStore.getState();
+	expect(s.projects.map((p) => p.id)).toEqual(["p2"]);
+	expect(s.workspaces.p1).toBeUndefined();
+	expect(s.workspaces.p2?.map((w) => w.id)).toEqual(["w2"]); // sibling project untouched
+	expect(s.tabsByWorkspace.w1).toBeUndefined();
+	expect(s.terminalsByWorkspace.w1).toBeUndefined();
+	expect(s.fsChangesByWorkspace.w1).toBeUndefined();
+	expect(s.selectedProjectId).toBeNull();
+	expect(s.activeWorkspaceId).toBeNull();
+});
+
+test("removeProject on a non-selected project leaves selection/active untouched", () => {
+	useAppStore.setState({
+		projects: [
+			{ id: "p1", name: "repo", path: "/tmp/repo", slug: "repo", lastOpened: 1 },
+			{ id: "p2", name: "other", path: "/tmp/other", slug: "other", lastOpened: 2 },
+		],
+		workspaces: {
+			p1: [pushedWorkspace()],
+			p2: [pushedWorkspace({ id: "w2", projectId: "p2", name: "other-ws", branch: "other-ws" })],
+		},
+		selectedProjectId: "p2",
+		activeWorkspaceId: "w2",
+	});
+
+	useAppStore.getState().removeProject("p1");
+
+	const s = useAppStore.getState();
+	expect(s.projects.map((p) => p.id)).toEqual(["p2"]);
+	expect(s.selectedProjectId).toBe("p2");
+	expect(s.activeWorkspaceId).toBe("w2");
+});
+
 // --- in-app login (flat, session-less) -------------------------------------------------------------
 
 test("beginLogin opens a fresh active login; frames accumulate (url + paste prompt coexist)", () => {

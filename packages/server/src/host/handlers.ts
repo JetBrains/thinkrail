@@ -66,6 +66,7 @@ import {
 	forgetWorkspace,
 	getWorkspace,
 	listWorkspaces,
+	listWorkspaceRecords,
 	reclaimWorktree,
 	workspaceDiffStats,
 } from "../workspaces";
@@ -74,16 +75,18 @@ import { ackSend } from "./ackSend";
 type Handler = (params: unknown) => unknown | Promise<unknown>;
 
 /**
- * The slow half of archiving a workspace, run in the background after `workspace.remove` acks: tear down
- * the workspace's sessions (abort a streaming turn, dispose, purge on-disk transcripts) then reclaim the
- * worktree (`git worktree remove`). Sessions/terminals are down before the dir is deleted (terminals are
- * killed synchronously in the handler; sessions here, before the reclaim). Best-effort by contract — a
- * failure is logged, never thrown into the void (nothing awaits it).
+ * The slow half of archiving a workspace, run in the background after `workspace.remove` /
+ * `project.remove` acks: tear down the workspace's sessions (abort a streaming turn, dispose, purge
+ * on-disk transcripts) then reclaim the worktree (`git worktree remove`). Optional `repoPath` is required
+ * when the project record was already dropped (project remove) — `reclaimWorktree` looks it up otherwise.
+ * Sessions/terminals are down before the dir is deleted (terminals are killed synchronously in the
+ * handler; sessions here, before the reclaim). Best-effort by contract — a failure is logged, never
+ * thrown into the void (nothing awaits it).
  */
-async function archiveTeardown(ws: Workspace): Promise<void> {
+async function archiveTeardown(ws: Workspace, repoPath?: string): Promise<void> {
 	try {
 		await removeWorkspaceSessions(ws.id, ws.worktreePath);
-		reclaimWorktree(ws);
+		reclaimWorktree(ws, repoPath);
 	} catch (error) {
 		console.warn(`workspace archive teardown failed for ${ws.id}: ${error}`);
 	}
@@ -101,8 +104,22 @@ const handlers: Record<string, Handler> = {
 		const project = listProjects().find((p) => p.id === projectId);
 		return { hasSpecs: project ? projectHasSpecs(project.path) : false };
 	},
-	"project.close": (params) => {
-		closeProject((params as { id: string }).id);
+	"project.remove": (params) => {
+		// Non-blocking archive of every workspace, then drop the project. Capture `repoPath` before
+		// `closeProject` — background `reclaimWorktree` needs it once the project record is gone.
+		const id = (params as { id: string }).id;
+		const project = listProjects().find((p) => p.id === id);
+		if (!project) return { ok: true } as const;
+		const repoPath = project.path;
+		const workspaces = listWorkspaceRecords(id);
+		for (const ws of workspaces) {
+			forgetWorkspace(ws.id);
+			evictSpecIndex(ws.id);
+			stopWatch(ws.id);
+			closeWorkspaceTerminals(ws.id);
+		}
+		closeProject(id);
+		for (const ws of workspaces) void archiveTeardown(ws, repoPath);
 		return { ok: true } as const;
 	},
 	"workspace.create": (params) => {

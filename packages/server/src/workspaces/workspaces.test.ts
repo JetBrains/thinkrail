@@ -201,16 +201,43 @@ test("forgetWorkspace drops the record + returns it, but leaves the worktree for
 	expect(forgotten?.id).toBe(ws.id);
 	expect(listWorkspaces("p1")).toHaveLength(0);
 	// …but the worktree is still registered with git (the slow reclaim runs separately, e.g. backgrounded).
-	const before = Bun.spawnSync(["git", "-C", repo, "worktree", "list"], { stdout: "pipe" });
-	expect(new TextDecoder().decode(before.stdout)).toContain(ws.worktreePath);
+	// Git prints worktree paths with `/` even on Windows — normalize before comparing.
+	const before = new TextDecoder()
+		.decode(Bun.spawnSync(["git", "-C", repo, "worktree", "list"], { stdout: "pipe" }).stdout)
+		.replaceAll("\\", "/");
+	expect(before).toContain(ws.worktreePath.replaceAll("\\", "/"));
 
 	// reclaimWorktree then removes it from git + disk.
 	reclaimWorktree(forgotten as NonNullable<typeof forgotten>);
-	const after = Bun.spawnSync(["git", "-C", repo, "worktree", "list"], { stdout: "pipe" });
-	expect(new TextDecoder().decode(after.stdout)).not.toContain(ws.worktreePath);
+	const after = new TextDecoder()
+		.decode(Bun.spawnSync(["git", "-C", repo, "worktree", "list"], { stdout: "pipe" }).stdout)
+		.replaceAll("\\", "/");
+	expect(after).not.toContain(ws.worktreePath.replaceAll("\\", "/"));
 
 	// A second forget (double-archive) is a no-op returning null.
 	expect(forgetWorkspace(ws.id)).toBeNull();
+});
+
+test("reclaimWorktree with an explicit repoPath works after the project record is gone", async () => {
+	const ws = await createWorkspace("p1");
+	const forgotten = forgetWorkspace(ws.id);
+	expect(forgotten).not.toBeNull();
+	const listed = (path: string) =>
+		new TextDecoder()
+			.decode(Bun.spawnSync(["git", "-C", repo, "worktree", "list"], { stdout: "pipe" }).stdout)
+			.replaceAll("\\", "/")
+			.includes(path.replaceAll("\\", "/"));
+
+	// Drop the project record first — the lookup path inside reclaimWorktree would no-op without repoPath
+	// (the gotcha `project.remove` hits when it closes the project before background reclaim).
+	writeFileSync(join(dataDir, "projects.json"), JSON.stringify([]));
+	reclaimWorktree(forgotten as NonNullable<typeof forgotten>); // no repoPath → silent no-op
+	expect(listed(ws.worktreePath)).toBe(true);
+
+	reclaimWorktree(forgotten as NonNullable<typeof forgotten>, repo);
+	expect(listed(ws.worktreePath)).toBe(false);
+	// Branch kept (archive semantics).
+	expect(gitOut(repo, "branch", "--list", ws.branch)).toContain(ws.branch);
 });
 
 test("membership mutations emit lifecycle events through the injected publisher", async () => {

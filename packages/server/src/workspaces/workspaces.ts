@@ -204,6 +204,11 @@ export function renameWorkspace(
 	return target;
 }
 
+/** Persisted records only — no `diffStats` (for teardown paths that must stay fast). */
+export function listWorkspaceRecords(projectId: string): Workspace[] {
+	return loadWorkspaces().filter((w) => w.projectId === projectId);
+}
+
 export function listWorkspaces(projectId: string): Workspace[] {
 	return loadWorkspaces()
 		.filter((w) => w.projectId === projectId)
@@ -227,16 +232,18 @@ export function forgetWorkspace(id: string): Workspace | null {
 
 /**
  * Reclaim a worktree from git + disk (the slow half of archiving — a `git worktree remove` subprocess).
- * Keeps the branch, so the work stays recoverable. Best-effort and hardened: on git failure, delete the
- * dir if it lingers then `prune` the stale registration so `git worktree list` never orphans it.
+ * Keeps the branch, so the work stays recoverable. Optional `repoPath` skips the project-record lookup
+ * (needed when `project.remove` has already dropped the project). Best-effort and hardened: on git
+ * failure, delete the dir if it lingers then `prune` the stale registration so `git worktree list`
+ * never orphans it.
  */
-export function reclaimWorktree(ws: Workspace): void {
-	const project = loadProjects().find((p) => p.id === ws.projectId);
-	if (!project) return;
-	const removed = git(project.path, ["worktree", "remove", "--force", ws.worktreePath]);
+export function reclaimWorktree(ws: Workspace, repoPath?: string): void {
+	const path = repoPath ?? loadProjects().find((p) => p.id === ws.projectId)?.path;
+	if (!path) return;
+	const removed = git(path, ["worktree", "remove", "--force", ws.worktreePath]);
 	if (!removed.ok) {
 		rmSync(ws.worktreePath, { recursive: true, force: true });
-		git(project.path, ["worktree", "prune"]);
+		git(path, ["worktree", "prune"]);
 	}
 }
 
