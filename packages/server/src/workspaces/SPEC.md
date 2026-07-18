@@ -56,7 +56,7 @@ chats.
   `removed` carries `{ projectId, id }`) and the host maps `kind` → `workspace.*` channel. This makes the
   module the **single source of workspace lifecycle pushes** (the auto-rename tee no longer pushes — rename
   self-publishes), so registry membership stays shared domain state across every client (architecture #9).
-- **Public surface (barrel):** `createWorkspace`, `listWorkspaces`, `listWorkspaceRecords`,`forgetWorkspace`, `reclaimWorktree`,
+- **Public surface (barrel):** `createWorkspace`, `listWorkspaces`, `listWorkspaceRecords`, `forgetWorkspace`, `reclaimWorktree`,
   `removeWorkspace`, `workspaceDiffStats`, `getWorkspace`, `renameWorkspace`, `setWorkspacePublisher`,
   `WorkspaceLifecycleEvent`.
 - **Allowed deps:** `projects` (repo lookup), `git` (the runner), `persistence`; `contracts`;
