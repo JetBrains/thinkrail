@@ -99,10 +99,10 @@ prompt hero (still editable; empty by default), a base-branch
   (the host's per-OS copyable install command — from `jbcentralInstall`, for the *host's* OS, never the
   browser's — + Recheck); each mutation re-reads `provider.status`) **`GithubSettings`** (the "Local GitHub" block — `github.authStatus()`
   Connected + login / Not connected + Refresh); and **`AppearanceSettings`** (the **theme picker** — the
-  live, subscribable catalog from `themes`, with the resolved active selection from `store.theme` marked;
+  bundled catalog from `themes`, with the resolved active selection from `store.theme` marked;
   clicking one fires `settings.update` and the UI **converges on the `settings.changed` broadcast** (no
-  optimistic apply), a rejected update raising a toast). The picker never owns a theme list: bundled
-  manifests and later registrations appear through the same catalog. A single dimmed "General" nav item
+  optimistic apply), a rejected update raising a toast). The picker never owns a theme list — it renders
+  the catalog the glob discovered at build time. A single dimmed "General" nav item
   ("Soon") still signals the shell is
   built to grow. `ProvidersSettings`/`AppearanceSettings` are the **integration pieces** (store + transport);
   the `LoginDialog` stays presentational (`auth` module).

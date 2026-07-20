@@ -3,7 +3,7 @@ import { createHighlighterCore, type HighlighterCore } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import { THINKRAIL_SHIKI_THEME, THINKRAIL_SHIKI_THEME_NAME } from "@/themes";
 
-// One generic TextMate registration emits semantic CSS-variable colors, so a registry swap updates this
+// One generic TextMate registration emits semantic CSS-variable colors, so a theme swap updates this
 // markup without re-highlighting or importing every bundled syntax theme.
 
 // One shared highlighter: only the `diff` grammar, on the JS regex engine (no WASM).

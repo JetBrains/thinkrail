@@ -71,10 +71,10 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   **`openSettings(section?)`** (deep-links to a section, defaults to Providers) / **`closeSettings()`** /
   **`setSettingsSection()`** — lives here so the top-bar gear AND the Welcome provider warning open Settings
   to a section without prop-drilling through the shell. The **theme** state — **`theme: ThemeId`** (the
-  host-owned selected opaque id; the theme registry resolves visual fallback) with **`applyConfig(config)`**
+  host-owned selected opaque id; the themes module resolves visual fallback) with **`applyConfig(config)`**
   (folds the server-synced `AppConfig` in from
   `server.welcome` / the `settings.changed` broadcast) — lives here too; it's a **pure value only** (the
-  registry application side-effect is the shell's, keyed off `theme`), and defaults to
+  theme-application side-effect is the shell's, keyed off `theme`), and defaults to
   `DEFAULT_CONFIG.theme` until the welcome arrives. The
   **toast queue** — **`toasts: Toast[]`** (oldest-first) with **`pushToast(toast) → id`** / **`dismissToast(id)`**
   and the ergonomic **`toast.error/success/info(message, title?)`** helper (wraps `pushToast` so a non-React

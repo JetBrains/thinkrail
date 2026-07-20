@@ -38,13 +38,13 @@ convention; their boundary is held by convention + spec. Sibling edges live here
 | `shell` | the responsive frame + composition of panels | no | [shell/SPEC.md](src/shell/SPEC.md) |
 | `components` | the app's single `ErrorBoundary` primitive (contains the `ui/` sub-module) | no | [components/SPEC.md](src/components/SPEC.md) |
 | `components/ui` | shadcn primitives, themed with our tokens | no | [components/ui/SPEC.md](src/components/ui/SPEC.md) |
-| `themes` | validated single-file manifests, registry, catalog + atomic token application | yes | [themes/SPEC.md](src/themes/SPEC.md) |
+| `themes` | validated single-file manifests, bundled catalog + atomic token application | yes | [themes/SPEC.md](src/themes/SPEC.md) |
 | `lib` | `cn()` + small shared UI/highlighting helpers | yes | [lib/SPEC.md](src/lib/SPEC.md) |
 
 Leaf utilities without their own spec: `constants/` (branding), `utils/` (font scaling), and `styles/`
 (the structural/derived CSS token contract — theme-specific values belong to `themes`). `main.tsx` is the
-entry/composition root — it synchronously registers bundled manifests, then applies the font scale + the
-registry's cached first-paint hint pre-React before wrapping `<Shell />` in
+entry/composition root — it synchronously builds the bundled theme catalog, then applies the font scale +
+the cached first-paint theme hint pre-React before wrapping `<Shell />` in
 `components/ErrorBoundary` as the last-resort boundary (a crash escaping every region shows a reload
 screen, not a blank root).
 
@@ -78,19 +78,20 @@ The module set: `transport` / `store` / branded `shell`; `ProjectTree`; `FileTre
 - **`src/themes` is the theme contract and catalog; `src/styles/tokens.css` is structural.** A bundled
   theme is one strict, complete `*.theme.json` manifest: appearance/contrast metadata + semantic UI
   colors + all 16 ANSI colors + a semantic syntax palette. Selected-text foreground overrides are the
-  only nullable color slots (`null` retains the consumer default). An eager glob validates/registers the set, so adding a normal theme
-  changes only that file—never contracts, a label map, CSS selectors, editor imports, tests, or specs.
+  only nullable color slots (`null` retains the consumer default). A build-time glob validates the set at
+  bootstrap (our files — a bad one fails loudly), so adding a theme changes only that file — never
+  contracts, a label map, CSS selectors, editor imports, tests, or specs — and appears after a rebuild.
   Manifests are self-contained (no inheritance), contain canonical color data only, and cannot alter
-  layout/type/motion or inject CSS/code. The registry derives repetitive tints/effects and atomically
+  layout/type/motion or inject CSS/code. The engine derives repetitive tints/effects and atomically
   writes the mapped custom properties before changing `[data-theme]`; `@theme inline` keeps every utility
   pointed at the live variables, so components remain unchanged. `tokens.css` retains typography,
   spacing, radii, fonts, motion, and generic derived formulas, but no named theme blocks.
 - The selected id is **server-synced** (`AppConfig.theme`, host-owned and opaque): it arrives in
   `server.welcome`, is folded into the store by transport, applied by the shell, and cached in localStorage
   only as a first-paint hint. `settings.update` converges through `settings.changed`; an unavailable id
-  renders the bundled default without destructively rewriting the requested value. The registry catalog
-  is subscribable, and `registerTheme(untrustedManifest)` is the future extension seam—extension loading,
-  transport, trust, and precedence are deliberately not designed here.
+  renders the bundled default without destructively rewriting the requested value. Themes ship with the
+  app: one is added only via a source PR, and runtime registration/extension loading is deliberately not
+  designed.
 - **Every code surface is catalog-agnostic.** xterm and Monaco rebuild from generic variables after the
   atomic `[data-theme]` signal, including an optional selected-text foreground. Monaco chooses
   `vs`/`vs-dark` or the corresponding high-contrast base from manifest appearance/contrast metadata,

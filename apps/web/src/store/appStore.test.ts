@@ -810,7 +810,7 @@ test("the toast helper enqueues by variant and omits an absent title", () => {
 });
 
 test("applyConfig folds the server-synced app config in (theme is an opaque host-owned value)", () => {
-	// The registry resolves/applies it; the store preserves exactly the id received from the host.
+	// The themes module resolves/applies it; the store preserves exactly the id received from the host.
 	useAppStore.getState().applyConfig({ theme: "acme.solarized" });
 	expect(useAppStore.getState().theme).toBe("acme.solarized");
 	useAppStore.getState().applyConfig({ theme: "custom.high-contrast" });

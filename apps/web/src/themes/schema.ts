@@ -197,32 +197,17 @@ export function parseThemeManifest(value: unknown): ThemeManifestParseResult {
 	if (typeof value.id !== "string" || !isThemeIdSlug(value.id)) {
 		issues.push("theme.id must be a lowercase slug (1-64 characters; letters, numbers, ., _, -)");
 	}
-	if (
-		typeof value.label !== "string" ||
-		value.label.length < 1 ||
-		value.label.length > 80 ||
-		value.label.trim() !== value.label
-	) {
-		issues.push("theme.label must be a trimmed string between 1 and 80 characters");
+	if (typeof value.label !== "string" || value.label.trim().length === 0) {
+		issues.push("theme.label must be a non-empty string");
 	}
-	if (
-		!Number.isInteger(value.order) ||
-		Number(value.order) < -10_000 ||
-		Number(value.order) > 10_000
-	) {
-		issues.push("theme.order must be an integer between -10000 and 10000");
+	if (!Number.isInteger(value.order)) {
+		issues.push("theme.order must be an integer");
 	}
 	if (value.appearance !== "light" && value.appearance !== "dark") {
 		issues.push('theme.appearance must be "light" or "dark"');
 	}
 	if (value.contrast !== "normal" && value.contrast !== "high") {
 		issues.push('theme.contrast must be "normal" or "high"');
-	}
-	if (
-		value.$schema !== undefined &&
-		(typeof value.$schema !== "string" || value.$schema.length < 1 || value.$schema.length > 256)
-	) {
-		issues.push("theme.$schema must be a non-empty string no longer than 256 characters");
 	}
 
 	const colors = parseThemeColors(value.colors, issues);
@@ -245,18 +230,8 @@ export function parseThemeManifest(value: unknown): ThemeManifestParseResult {
 	return { ok: true, value: manifest };
 }
 
-export class InvalidThemeManifestError extends Error {
-	readonly issues: readonly string[];
-
-	constructor(issues: readonly string[]) {
-		super(`Invalid theme manifest:\n- ${issues.join("\n- ")}`);
-		this.name = "InvalidThemeManifestError";
-		this.issues = issues;
-	}
-}
-
 export function assertThemeManifest(value: unknown): ThemeManifest {
 	const parsed = parseThemeManifest(value);
-	if (!parsed.ok) throw new InvalidThemeManifestError(parsed.issues);
+	if (!parsed.ok) throw new Error(`Invalid theme manifest:\n- ${parsed.issues.join("\n- ")}`);
 	return parsed.value;
 }

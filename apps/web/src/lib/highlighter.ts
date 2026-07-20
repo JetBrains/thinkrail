@@ -4,7 +4,7 @@ import { THINKRAIL_SHIKI_THEME, THINKRAIL_SHIKI_THEME_NAME } from "@/themes";
 
 // Shared shiki highlighter for chat code blocks: the JS regex engine (no WASM), a curated language set,
 // and one generic ThinkRail theme whose TextMate colors are live CSS variables. It stays behind the lazy
-// highlighter import; a registry swap changes those variables, so existing markup follows without another
+// highlighter import; a theme swap changes those variables, so existing markup follows without another
 // highlight pass or a per-theme package import.
 
 const CANONICAL = new Set([
