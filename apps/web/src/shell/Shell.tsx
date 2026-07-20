@@ -10,7 +10,7 @@ import { SettingsDialog } from "../panels/SettingsDialog";
 import { TerminalsPanel } from "../panels/TerminalsPanel";
 import { Toaster } from "../panels/Toaster";
 import { WelcomePanel } from "../panels/WelcomePanel";
-import { useAppStore } from "../store";
+import { selectActiveWorkspace, selectContextProject, useAppStore } from "../store";
 import type { ConnectionStatus } from "../transport";
 import { applyTheme, writeThemeHint } from "../utils/theme";
 
@@ -29,18 +29,9 @@ const STATUS_DOT: Record<ConnectionStatus, string> = {
 export function Shell() {
 	const status = useAppStore((s) => s.status);
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
-	const selectedProjectId = useAppStore((s) => s.selectedProjectId);
-	const projects = useAppStore((s) => s.projects);
-	const workspaces = useAppStore((s) => s.workspaces);
+	const activeWorkspace = useAppStore(selectActiveWorkspace);
+	const contextProject = useAppStore(selectContextProject);
 	const hasActiveWorkspace = activeWorkspaceId != null;
-	const activeWorkspace = activeWorkspaceId
-		? Object.values(workspaces)
-				.flat()
-				.find((workspace) => workspace.id === activeWorkspaceId)
-		: undefined;
-	const contextProject = activeWorkspace
-		? projects.find((project) => project.id === activeWorkspace.projectId)
-		: projects.find((project) => project.id === selectedProjectId);
 	// The single owner of the theme DOM side-effect: apply the store's (host-owned) theme + cache it as the
 	// next load's first-paint hint. The store is fed by transport (welcome / settings.changed).
 	const theme = useAppStore((s) => s.theme);

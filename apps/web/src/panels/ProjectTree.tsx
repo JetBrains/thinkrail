@@ -3,7 +3,7 @@ import { ChevronDown, ChevronRight, Folder, GitBranch, Plus, Trash2 } from "luci
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { PopoverTrigger } from "@/components/ui/popover";
-import { toast, useAppStore } from "../store";
+import { selectActiveWorkspaceProjectId, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
 import { ConfirmPopover } from "./ConfirmPopover";
@@ -26,12 +26,7 @@ export function ProjectTree() {
 	// (including the Welcome → IDE remount, where this component's local expansion state starts fresh).
 	// Depend on the resolved project id rather than the workspace arrays themselves: a later auto-rename
 	// snapshot must not undo a deliberate manual collapse while the user stays in the same workspace.
-	const activeProjectId =
-		activeWorkspaceId == null
-			? null
-			: (Object.entries(workspaces).find(([, list]) =>
-					list.some((workspace) => workspace.id === activeWorkspaceId),
-				)?.[0] ?? null);
+	const activeProjectId = useAppStore(selectActiveWorkspaceProjectId);
 	// biome-ignore lint/correctness/useExhaustiveDependencies: activeWorkspaceId is the activation trigger even when two workspaces share a parent project
 	useEffect(() => {
 		if (!activeProjectId) return;

@@ -9,7 +9,13 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { messagesToRuntime } from "../chat/hydrate";
-import { type ClosedChat, type EditorTab, toast, useAppStore } from "../store";
+import {
+	type ClosedChat,
+	type EditorTab,
+	selectActiveWorkspace,
+	toast,
+	useAppStore,
+} from "../store";
 import { errorText, getTransport } from "../transport";
 import { FilePane } from "./FilePane";
 
@@ -71,7 +77,7 @@ function ChatHistoryMenu({
 /** The center area: a strip of the active workspace's tabs (files + chats) over the active tab. */
 export function CenterTabs() {
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
-	const workspaces = useAppStore((s) => s.workspaces);
+	const activeWorkspace = useAppStore(selectActiveWorkspace);
 	const tabsByWorkspace = useAppStore((s) => s.tabsByWorkspace);
 	const activeTabByWorkspace = useAppStore((s) => s.activeTabByWorkspace);
 	const closedChatsByWorkspace = useAppStore((s) => s.closedChatsByWorkspace);
@@ -83,12 +89,6 @@ export function CenterTabs() {
 	const closedChats = activeWorkspaceId
 		? (closedChatsByWorkspace[activeWorkspaceId] ?? NO_CLOSED)
 		: NO_CLOSED;
-	const activeWorkspace = activeWorkspaceId
-		? Object.values(workspaces)
-				.flat()
-				.find((workspace) => workspace.id === activeWorkspaceId)
-		: undefined;
-
 	// Hydrate-on-connect: when a workspace becomes active, pull its sessions from the host. Live ones (still
 	// in host memory) auto-restore as tabs; disk-only ones (survived a host restart) go to chat-history to
 	// reopen on demand. So a reload, a second tab, or a restart all rebuild from the host.

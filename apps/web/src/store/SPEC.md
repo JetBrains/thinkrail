@@ -94,10 +94,13 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   **`requestChangesView(workspaceId, path)`** are a UI deep-link intent (a chat turn-divider asking the
   right panel to surface a file's diff); the panels watch it, scoped by workspace. The `EditorTab`
   (`FileTab` | `ChatTab`) + `TerminalTab` + `ClosedChat` + `SessionRuntime` types. (Chat *render* types +
-  renderers live in the `chat` module.)
-- **Public surface (barrel):** `useAppStore`, `toast` (the fire-from-anywhere helper), `Toast` (type),
-  `EditorTab` (`FileTab`/`ChatTab`), `TerminalTab`, `ClosedChat`, `SessionRuntime` + `EMPTY_RUNTIME`
-  (ChatView's pre-creation fallback), `reduceSessionEvent`.
+  renderers live in the `chat` module.) The pure context selectors in `selectors.ts` resolve the active
+  `Workspace`, its owning project id, and the shell's context project from those canonical ids and
+  collections; derived active-project state is never stored separately.
+- **Public surface (barrel):** `useAppStore`; `selectActiveWorkspace`,
+  `selectActiveWorkspaceProjectId`, and `selectContextProject`; `toast` (the fire-from-anywhere helper),
+  `Toast` (type), `EditorTab` (`FileTab`/`ChatTab`), `TerminalTab`, `ClosedChat`, `SessionRuntime` +
+  `EMPTY_RUNTIME` (ChatView's pre-creation fallback), `reduceSessionEvent`.
 - **Allowed deps:** `contracts` (`Project`/`Workspace`/`Model`/`ThinkingLevel`/`SessionStats`/
   `SlashCommandInfo`/`ExtUiRequest`/`LoginPush`/`WorkspaceFsChangedPayload`/`AppConfig`/`ThemeId`; the
   `Theme` value for the default; `PiEvent`/`LoginFrame`, **type-only**); `chat`
