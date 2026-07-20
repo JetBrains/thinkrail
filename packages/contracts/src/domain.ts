@@ -63,6 +63,23 @@ export interface WorkspaceFsChangedPayload {
 	truncated: boolean;
 }
 
+/** Names of the workspace lifecycle hooks a project can declare in `.thinkrail/hooks.json`. */
+export type HookName = "onCreate" | "onDelete" | "preMerge" | "postMerge";
+
+/**
+ * The `workspace.hook` push payload — one frame per hook-state transition, broadcast to every client so a
+ * workspace tab's setup/teardown status stays in sync everywhere (same convergence model as the
+ * workspace-lifecycle trio). `hookAwaitingApproval` fires instead of `hookStarted` when the hook's command
+ * hasn't been approved yet (or has changed since) — nothing else fires until a `workspace.hooks.approve`
+ * call.
+ */
+export type WorkspaceHookEvent =
+	| { kind: "hookAwaitingApproval"; workspaceId: string; hook: HookName; command: string }
+	| { kind: "hookStarted"; workspaceId: string; hook: HookName }
+	| { kind: "hookOutput"; workspaceId: string; hook: HookName; chunk: string }
+	| { kind: "hookSucceeded"; workspaceId: string; hook: HookName }
+	| { kind: "hookFailed"; workspaceId: string; hook: HookName; exitCode: number };
+
 /** A chat tab bound to a workspace. `id` is the UI tab id; `sessionId` is the pi `AgentSession` id. */
 export interface Session {
 	id: string;

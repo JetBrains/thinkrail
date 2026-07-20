@@ -7,6 +7,7 @@ import type {
 	FileNode,
 	GithubAuthStatus,
 	GitStatus,
+	HookName,
 	JbcentralConnectResult,
 	LoginReply,
 	Project,
@@ -83,6 +84,9 @@ export const WS_METHODS = {
 	workspaceList: "workspace.list",
 	workspaceRemove: "workspace.remove",
 	workspaceDiffStats: "workspace.diffStats",
+	// Records the given command as approved for this project+hook (sha256'd, host-local) so its next run
+	// isn't held at `hookAwaitingApproval`.
+	workspaceHooksApprove: "workspace.hooks.approve",
 	// gh-backed New-Workspace surface: branch list per project + local `gh` auth status.
 	gitListBranches: "git.listBranches",
 	// Background freshness fetch of a remote base ref, fired when the New-Workspace dialog opens/picks a
@@ -166,6 +170,10 @@ export const WS_CHANNELS = {
 	// The worktree change notifier (a `WorkspaceFsChangedPayload` per frame), broadcast to every client.
 	// A debounced invalidation nudge, not data — receivers re-read via the read methods they already use.
 	workspaceFsChanged: "workspace.fsChanged",
+	// One frame per workspace-hook state transition (`WorkspaceHookEvent`), broadcast to every client —
+	// same single-channel-carries-a-typed-payload shape as `workspaceFsChanged`, not the lifecycle trio's
+	// kind→channel mapping (every hook transition shares this one channel).
+	workspaceHook: "workspace.hook",
 	// The server-synced app settings changed (carries the full `AppConfig`), broadcast to every client so
 	// they converge — the initiator applies on this push too, never optimistically.
 	settingsChanged: "settings.changed",
@@ -240,6 +248,10 @@ export interface WsMethodMap {
 	"workspace.list": { params: { projectId: string }; result: Workspace[] };
 	"workspace.remove": { params: { id: string }; result: Ack };
 	"workspace.diffStats": { params: { id: string }; result: DiffStats };
+	"workspace.hooks.approve": {
+		params: { projectId: string; hook: HookName; command: string };
+		result: Ack;
+	};
 	"git.listBranches": { params: { projectId: string }; result: BranchList };
 	// Best-effort background `git fetch` of a remote ref (`origin/<b>`); `ok` reports whether the fetch ran
 	// (offline / non-remote ref → `false`). The UI fires-and-forgets it to warm the ref before create.
