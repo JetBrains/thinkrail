@@ -55,9 +55,14 @@ assumptions get caught cheaply. Scale the *depth* to the task; never skip the wo
    for its frontmatter (draft → active as it firms up), `edit` for prose. Run `spec_validate` after
    structural changes.
 9. **Final review, then build.** Ask the user to review the (now-promoted) design once more. Once
-   approved, implement directly against it — there is no separate plan-writing step here. Keep the
-   task-spec and the durable specs honest as the code lands, and retire the task-spec once **the work
-   itself** is done, not merely once the design was promoted.
+   approved, implement directly against it — there is no separate plan-writing step here. Before
+   handing off, self-review the implementation diff the way step 7 reviewed the spec: no silent
+   lint/type suppressions (a gate error is a design signal — question the flagged state or dependency
+   before guarding it; any genuinely-needed suppression gets explicit user sign-off first), no
+   nontrivial derivation duplicated across files (centralize it), and when the change replaced a
+   pattern, sweep the repo for remnants of the old one. Keep the task-spec and the durable specs
+   honest as the code lands, and retire the task-spec once **the work itself** is done, not merely
+   once the design was promoted.
 
 ## What a good task-spec looks like
 

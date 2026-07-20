@@ -28,6 +28,11 @@ degrade when answers don't come. Process skills name this concept at the steps t
   why you recommend it over the alternatives (shown inline under the option as a `Why:` line).
 - Every option: a concise label (1–5 words, ≤ 60 chars) + a description carrying the trade-off or
   consequence of choosing it. Tailor options to the work at hand — never generic placeholders.
+- Options must be **decidable by the asked user**: frame them as observable behavior or outcomes
+  ("collapsing a project stays collapsed after a rename"), never as implementation mechanics
+  ("semantic guard", "activation ref"). If candidate options differ only internally — identical
+  observable behavior — don't ask: decide yourself and record the reasoning in the workflow's
+  artifact.
 - Never author your own "Other", free-text, or escape options — the tool adds a free-text row to
   every question and an always-available Skip, and reserved labels are rejected. This holds under
   `multiSelect` too: the free-text row stays and is *additive* — a typed answer arrives alongside the
@@ -56,3 +61,6 @@ through the tool's automatic free-text row — do not author an edit option. Rea
   explicitly recorded as unconfirmed in the workflow's artifact (the referencing skill says where).
 - If the host reports no interactive UI (`ask_user_question` returns "not available"), state your
   assumptions the same way instead of blocking.
+- "I don't know / help me understand" is a mis-framing signal, not a missing-knowledge one: re-explain
+  from user-visible behavior in plain language, then re-ask with behavior-framed options — don't
+  repeat the same technical options with more detail.
