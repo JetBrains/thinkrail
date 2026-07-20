@@ -15,6 +15,8 @@ import type {
 	ProjectPathStatus,
 	ProviderStatusReport,
 	SpecGraphSnapshot,
+	TemplateInfo,
+	TemplateScope,
 	TodoItem,
 	TodoPlan,
 	TodoStatus,
@@ -49,7 +51,9 @@ import type {
 // (pi-canonical + `custom` role) so the questionnaire card can pair answers by tool call id.
 // v9: chat-history search — `history.search` reads a lazy in-memory index over pi's session files
 // (prompt recall + full-conversation matches, scoped chat/workspace/project/all, recency-ordered).
-export const PROTOCOL_VERSION = 9;
+// v10: prompt-template CRUD — template.* reads/writes pi's prompt dirs (global + project), so
+// templates stay pi-CLI-portable.
+export const PROTOCOL_VERSION = 10;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -157,6 +161,11 @@ export const WS_METHODS = {
 	// `config.json`, and broadcasts `settings.changed` — the caller converges on that push, not optimism.
 	settingsUpdate: "settings.update",
 	historySearch: "history.search",
+	// Prompt-template CRUD: list/read/write/delete pi's global + project-scoped templates.
+	templateList: "template.list",
+	templateGet: "template.get",
+	templateSave: "template.save",
+	templateDelete: "template.delete",
 } as const;
 
 /** Server→client push channels. */
@@ -362,6 +371,33 @@ export interface WsMethodMap {
 	"history.search": {
 		params: { query: string; scope: HistoryScope; limit?: number };
 		result: HistorySearchResult;
+	};
+	// List all templates (global + project-scoped). `workspaceId` is required to identify the project;
+	// omitted uses only global templates.
+	"template.list": {
+		params: { workspaceId?: string };
+		result: { templates: TemplateInfo[] };
+	};
+	// Fetch a single template by name. `scope` is optional (project wins over global when omitted).
+	// `workspaceId` is required only if the template may be project-scoped.
+	"template.get": {
+		params: { workspaceId?: string; name: string; scope?: TemplateScope };
+		result: TemplateInfo;
+	};
+	// Save a template (creates or overwrites). Returns the persisted `TemplateInfo`.
+	"template.save": {
+		params: {
+			workspaceId?: string;
+			scope: TemplateScope;
+			name: string;
+			content: string;
+		};
+		result: TemplateInfo;
+	};
+	// Delete a template. Returns `Ack` on success.
+	"template.delete": {
+		params: { workspaceId?: string; scope: TemplateScope; name: string };
+		result: Ack;
 	};
 }
 

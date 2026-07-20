@@ -326,3 +326,22 @@ export interface HistorySearchResult {
 	messageTotal: number;
 	indexing: boolean;
 }
+
+/** Scope of a prompt template — global (pi's global dir) or project-scoped. */
+export type TemplateScope = "global" | "project";
+
+/** A prompt template: a re-usable text snippet with optional metadata. */
+export interface TemplateInfo {
+	/** The template's unique name (within its scope). */
+	name: string;
+	/** Optional description of the template's purpose. */
+	description?: string;
+	/** Optional hint for argument placeholders or usage. */
+	argumentHint?: string;
+	/** The full file text: frontmatter + body. */
+	content: string;
+	/** Where the template lives — global or project-scoped. */
+	scope: TemplateScope;
+	/** Absolute path to the template file on disk. */
+	filePath: string;
+}

@@ -133,7 +133,12 @@ of the host.
   `ask_user_question` reply, correlated by tool call id)/**`list`**/**`getMessages`** (the
   read side) / **`settings.update`** (merge + persist a partial `AppConfig`, returns the merged
   config) / **`history.search`** (the prompt-recall + conversation-search read; results capped,
-  recency-ordered)),
+  recency-ordered) / **`template.*`** — prompt-template CRUD: **`template.list`** (all templates,
+  global + project-scoped) / **`template.get`** (single template by name; `scope` optional → project
+  wins over global) / **`template.save`** (create/overwrite) / **`template.delete`** (remove) — all
+  read/write pi's prompt dirs (global + project), so templates stay CLI-portable; **`TemplateScope`**
+  = `"global"` | `"project"`; **`TemplateInfo`** carries the full `content` (frontmatter + body),
+  optional `description`/`argumentHint`, and `filePath` for breadcrumbing,
   `WS_CHANNELS` (`server.welcome` — which carries the initial `config: AppConfig` alongside `projects` /
   `pi.event` / `pi.extensionUi` / **`settings.changed`** (the full `AppConfig`, broadcast so every client
   converges) / **`provider.login`** — the session-less in-app login stream (a `LoginPush`
