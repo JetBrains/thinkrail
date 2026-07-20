@@ -7,9 +7,9 @@
 	"appearance": "dark",
 	"contrast": "high",
 	"colors": {
-		"accent": "#8c81ff",
+		"accent": "#f38518",
 		"onAccent": "#000000",
-		"bubbleAccent": "#6b57ff",
+		"bubbleAccent": "#f38518",
 		"background": "#000000",
 		"content": "#000000",
 		"sidebar": "#000000",
