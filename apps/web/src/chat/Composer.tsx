@@ -4,7 +4,7 @@ import type {
 	ThinkingLevel,
 	WireModel,
 } from "@thinkrail/contracts";
-import { ArrowUp, FileIcon, FolderIcon, Square, X } from "lucide-react";
+import { ArrowUp, FileIcon, FolderIcon, History, Square, X } from "lucide-react";
 import {
 	type ClipboardEvent,
 	type DragEvent,
@@ -64,6 +64,9 @@ interface ComposerProps {
 	isStreaming: boolean;
 	commands: SlashCommandInfo[];
 	mentionCandidates: MentionCandidate[];
+	/** This chat's own prior user-turn texts (newest first, deduped) — backs the plain `↑` recall session
+	 * below; `ChatView` derives it from `turns` via `turnAnchorText`. */
+	recentPrompts: string[];
 	models: WireModel[];
 	currentModel: WireModel | null;
 	thinkingLevel: ThinkingLevel;
@@ -87,8 +90,10 @@ export interface ComposerHandle {
  * The chat composer (props-driven, no store/transport). Enter sends (or **steers** mid-stream);
  * Cmd/Ctrl+Enter queues a **follow-up**; a Stop button **aborts**. The model + effort controls sit in
  * the row under the tall prompt field, mirroring the New-Workspace dialog's layout. `@` opens worktree
- * file completion, a leading `/` opens the skill/command menu, `Ctrl+R` opens history recall, and images
- * can be pasted or dropped in.
+ * file completion, a leading `/` opens the skill/command menu, `Ctrl+R` opens history recall (also
+ * reachable via the always-rendered `history-open` button), plain `↑`/`↓` recall step through
+ * `recentPrompts` when the field is empty or a recall session is already active, and images can be pasted
+ * or dropped in.
  */
 export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Composer(
 	{
@@ -97,6 +102,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		isStreaming,
 		commands,
 		mentionCandidates,
+		recentPrompts,
 		models,
 		currentModel,
 		thinkingLevel,
@@ -114,6 +120,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const [images, setImages] = useState<PendingImage[]>([]);
 	const [activeIndex, setActiveIndex] = useState(0);
 	const [dismissed, setDismissed] = useState(false);
+	// The plain `↑`-recall session: `null` when inactive; otherwise an index into `recentPrompts` (0 =
+	// newest). Reset on a diverging edit (the textarea's `onChange` below) or a submit — see `onKeyDown`'s
+	// recall block (after the mention/slash menu) for the stepping rules.
+	const [recallIdx, setRecallIdx] = useState<number | null>(null);
 
 	const { token, start } = activeToken(value, caret);
 	const mentionQuery = token.startsWith("@") ? token.slice(1) : null;
@@ -192,6 +202,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		);
 		onChange("");
 		setImages([]);
+		setRecallIdx(null);
 	};
 
 	const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -233,6 +244,35 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				}
 				return;
 			}
+		}
+		// Plain `↑`/`↓` recall — reached only once the mention/slash menu is closed (every menu-open branch
+		// above returns before falling through). `↑` steps in only when there's nothing to lose (an empty
+		// field) or a recall session is already active, so it can never eat a draft; `↓` only steps while a
+		// session is active. Both place the caret at the recalled text's end, matching `insertText`/
+		// `pickMention`/`pickSlash`'s own focus-after-change pattern.
+		if (e.key === "ArrowUp" && (value === "" || recallIdx !== null) && recentPrompts.length > 0) {
+			e.preventDefault();
+			const next = recallIdx === null ? 0 : Math.min(recallIdx + 1, recentPrompts.length - 1);
+			const text = recentPrompts[next] ?? "";
+			setRecallIdx(next);
+			onChange(text);
+			focusCaret(text.length);
+			return;
+		}
+		if (e.key === "ArrowDown" && recallIdx !== null) {
+			e.preventDefault();
+			if (recallIdx === 0) {
+				setRecallIdx(null);
+				onChange("");
+				focusCaret(0);
+			} else {
+				const next = recallIdx - 1;
+				const text = recentPrompts[next] ?? "";
+				setRecallIdx(next);
+				onChange(text);
+				focusCaret(text.length);
+			}
+			return;
 		}
 		if (e.key === "Enter" && !e.shiftKey) {
 			e.preventDefault();
@@ -330,7 +370,12 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					data-testid="chat-input"
 					value={value}
 					onChange={(e) => {
-						onChange(e.target.value);
+						const next = e.target.value;
+						// A genuine user edit (typing/pasting/deleting — never fired by the recall/insert paths
+						// themselves, since those set the controlled `value` prop directly rather than mutating the
+						// DOM node) that diverges from the recalled entry exits the recall session.
+						if (recallIdx !== null && next !== recentPrompts[recallIdx]) setRecallIdx(null);
+						onChange(next);
 						setCaret(e.target.selectionStart);
 					}}
 					onKeyUp={(e) => setCaret(e.currentTarget.selectionStart)}
@@ -352,6 +397,17 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 						<ThinkingSelector level={thinkingLevel} onSelect={onSelectThinking} />
 					</div>
 					<div className="flex shrink-0 items-center gap-sm">
+						{/* Always rendered — the tap path to history recall on mobile, and a discoverability
+						 * affordance for `Ctrl+R` on desktop; both open the exact same overlay via `onHistoryOpen`. */}
+						<button
+							type="button"
+							data-testid="history-open"
+							aria-label="Search history"
+							onClick={() => onHistoryOpen?.()}
+							className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-border2 bg-elevated text-text hover:bg-hover"
+						>
+							<History className="size-3.5" />
+						</button>
 						{isStreaming ? (
 							<button
 								type="button"

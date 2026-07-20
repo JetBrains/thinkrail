@@ -33,10 +33,11 @@ import { useChatTodos } from "./useChatTodos";
 import { useHistorySearch } from "./useHistorySearch";
 
 /**
- * Best-effort plain text for anchor-matching a `chatLocationRequest` jump target against a turn — user:
- * `message.content` (a plain string, or text/image blocks); assistant: joined text blocks. `system`/
- * `error`/`retry` turns never carry an anchor (`turnIdByMessageIndex` only maps user/assistant messages),
- * so they fall through to `""` (never matches, never wrongly selected by the fallback scan).
+ * Best-effort plain text for a turn — user: `message.content` (a plain string, or text/image blocks);
+ * assistant: joined text blocks. `system`/`error`/`retry` turns fall through to `""`. Two consumers:
+ * anchor-matching a `chatLocationRequest` jump target (`turnIdByMessageIndex` only maps user/assistant
+ * messages, so a non-anchor turn's `""` never matches and is never wrongly selected by the fallback scan),
+ * and `recentPrompts` below (user turns only, so the assistant/`""` branches never surface there).
  */
 function turnAnchorText(turn: ChatTurn): string {
 	if (turn.kind === "user") {
@@ -148,6 +149,18 @@ export default function ChatView({
 			isStreaming && last?.kind !== "retry" ? streamStatus(turns, currentAssistantId) : null;
 		return { status };
 	}, [turns, isStreaming, currentAssistantId]);
+
+	// The plain `↑`-recall list (`Composer`'s `recentPrompts` prop): this chat's own user-turn texts,
+	// newest first, deduped. Reuses `turnAnchorText`'s user-content extraction (string, or joined text
+	// blocks) rather than re-deriving it — `Set` keeps each string's *first* chronological occurrence, so
+	// a repeated prompt recalls at the position of its earliest use, not its latest (see `chat/SPEC.md`).
+	const recentPrompts = useMemo(() => {
+		const texts = turns
+			.filter((t) => t.kind === "user")
+			.map((t) => turnAnchorText(t))
+			.filter(Boolean);
+		return [...new Set(texts)].reverse();
+	}, [turns]);
 
 	const [mentionQuery, setMentionQuery] = useState<string | null>(null);
 	const [mentionCandidates, setMentionCandidates] = useState<MentionCandidate[]>([]);
@@ -475,6 +488,7 @@ export default function ChatView({
 							isStreaming={isStreaming}
 							commands={commands}
 							mentionCandidates={mentionCandidates}
+							recentPrompts={recentPrompts}
 							models={models}
 							currentModel={currentModel}
 							thinkingLevel={thinkingLevel}

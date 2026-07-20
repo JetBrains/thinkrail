@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
-import { openWorkspaceChat } from "./fixtures/app";
-import { seedExternalCwdSessions } from "./fixtures/sessions";
+import { createWorkspaceViaDialog, openFixtureProject, openWorkspaceChat } from "./fixtures/app";
+import { seedExternalCwdSessions, seedWorkspaceSession } from "./fixtures/sessions";
 
 // No-agent (see composer.live.spec.ts for the @agent-tagged composer suite): the Ctrl+R history-recall
 // overlay never touches the agent — `openWorkspaceChat` creates a chat session but sends nothing to it.
@@ -157,4 +157,117 @@ test("Ctrl+R dismisses an open mention menu instead of overlapping it", async ({
 	await input.press("Control+r");
 	await expect(overlay).toBeVisible();
 	await expect(mentionMenu).not.toBeVisible();
+});
+
+// A9: plain `↑`/`↓` recall (no Ctrl+R, no query typing) steps through *this chat's own* prior prompts — it
+// needs a chat whose runtime actually has prior user turns, so `openWorkspaceChat`'s brand-new session
+// (never sent to) doesn't do; seed one via `seedWorkspaceSession` on a real workspace `worktreePath` (see
+// the comment at its first use in `history-jump.spec.ts` for why that path, not some arbitrary string, is
+// the seed target) and open it. Simplest way in: the `chat-history` / `closed-chat-item` reopen flow
+// (`CenterTabs.tsx`) rather than the search-and-jump flow `history-jump.spec.ts` already covers — a
+// disk-only session surfaces there the moment its workspace becomes active. No `historyIndex` revalidation
+// wait is needed here (contrast the 2.1s waits in `history-jump.spec.ts`): `session.list` reads pi's
+// `SessionManager.list` straight off disk on every call, it isn't behind the throttled `HistoryIndex`
+// singleton that backs `history.search`.
+test("plain ArrowUp/ArrowDown recall steps through this chat's own prior prompts, a diverging edit exits the session, and the history button opens the overlay", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	seedWorkspaceSession(workspace.worktreePath, {
+		id: "e2e-recall-prompts",
+		messages: [
+			{ role: "user", text: "audit the retry backoff", timestamp: 1_700_400_000_000 },
+			{ role: "assistant", text: "Audited it — looks fine.", timestamp: 1_700_400_001_000 },
+			{
+				role: "user",
+				text: "add a jittered ceiling to the backoff",
+				timestamp: 1_700_400_002_000,
+			},
+			{ role: "assistant", text: "Added the ceiling.", timestamp: 1_700_400_003_000 },
+			{ role: "user", text: "write a test for the jitter", timestamp: 1_700_400_004_000 },
+			{ role: "assistant", text: "Added a test.", timestamp: 1_700_400_005_000 },
+		],
+	});
+
+	// A reload doesn't auto-restore the active project/workspace (see `history-jump.spec.ts`) — re-pick both
+	// so `CenterTabs`'s hydrate-on-connect effect re-lists this workspace's sessions from a cold client and
+	// discovers the disk-only seeded one.
+	await page.reload();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await page.getByTestId("project-item").first().click();
+	await page.getByTestId("workspace-item").first().click();
+	await expect(page.locator('[data-testid="workspace-item"][data-active="true"]')).toHaveCount(1);
+
+	await page.getByTestId("chat-history").click();
+	await page.getByTestId("closed-chat-item").first().click();
+	const input = page.getByTestId("chat-input");
+	await expect(input).toBeVisible();
+	// The reopened chat's transcript is restored, but its *draft* is fresh — recall must start from empty.
+	await expect(input).toHaveValue("");
+
+	// Newest first: ArrowUp on the empty field recalls the latest prompt, then steps older.
+	await input.press("ArrowUp");
+	await expect(input).toHaveValue("write a test for the jitter");
+	await input.press("ArrowUp");
+	await expect(input).toHaveValue("add a jittered ceiling to the backoff");
+	await input.press("ArrowUp");
+	await expect(input).toHaveValue("audit the retry backoff");
+	// Clamped at the oldest entry — one more ArrowUp doesn't wrap around.
+	await input.press("ArrowUp");
+	await expect(input).toHaveValue("audit the retry backoff");
+
+	// ArrowDown steps back newer; past the newest restores the empty draft.
+	await input.press("ArrowDown");
+	await expect(input).toHaveValue("add a jittered ceiling to the backoff");
+	await input.press("ArrowDown");
+	await expect(input).toHaveValue("write a test for the jitter");
+	await input.press("ArrowDown");
+	await expect(input).toHaveValue("");
+
+	// A diverging edit (the composer's own `fill`, exactly like a real keystroke — Playwright's `fill`
+	// dispatches a native `input` event React's controlled `onChange` reacts to) exits the recall session:
+	// the next ArrowUp must not step — the value is unchanged besides the edit itself.
+	await input.press("ArrowUp");
+	await expect(input).toHaveValue("write a test for the jitter");
+	await input.fill("write a test for the jitter!");
+	await input.press("ArrowUp");
+	await expect(input).toHaveValue("write a test for the jitter!");
+
+	// The history button — the tap path on mobile, a discoverability affordance on desktop — opens the
+	// exact same overlay `Ctrl+R` does.
+	await page.getByTestId("history-open").click();
+	await expect(page.getByTestId("history-overlay")).toBeVisible();
+});
+
+// A9's mobile-discoverability half: `HistoryOverlay` sizes itself with `left-sm right-sm` insets (see
+// `HistoryOverlay.tsx`) rather than a fixed pixel width, specifically so it can't overflow a narrow
+// container. The app's three-pane layout (`shell/Shell.tsx`) isn't itself the "mobile single-view shell"
+// `architecture.md` describes — that's a separate, not-yet-built concern — so this only isolates what IS
+// this task's concern: the overlay's own sizing at a narrow (~390px, a small-phone width) viewport. Resize
+// only for the check itself (after the normal desktop-sized setup) so a squeezed three-pane layout can't
+// make the setup flow itself flaky.
+test("the history overlay stays inside the viewport and its query stays focusable at a narrow (~390px) width", async ({
+	page,
+}) => {
+	await openWorkspaceChat(page);
+	await page.setViewportSize({ width: 390, height: 844 });
+
+	const input = page.getByTestId("chat-input");
+	const overlay = page.getByTestId("history-overlay");
+	await input.press("Control+r");
+	await expect(overlay).toBeVisible();
+
+	const viewportSize = page.viewportSize();
+	const box = await overlay.boundingBox();
+	expect(box).not.toBeNull();
+	expect(viewportSize).not.toBeNull();
+	if (box && viewportSize) {
+		expect(box.x).toBeGreaterThanOrEqual(0);
+		expect(box.x + box.width).toBeLessThanOrEqual(viewportSize.width);
+	}
+
+	const query = page.getByTestId("history-query");
+	await expect(query).toBeVisible();
+	await expect(query).toBeFocused();
 });
