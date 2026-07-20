@@ -34,6 +34,13 @@ no caller yet (no merge-initiating code exists in v1) — real extension points,
   transition here shares one `workspace.hook` channel).
 - **Public surface (barrel):** `runOnCreateHook`, `runOnDeleteHook`, `runPreMergeHook`, `runPostMergeHook`,
   `setHookPublisher`, `approveHook`.
+- **Known limitation:** `approveHook` only records the approval — it never re-invokes a hook itself. That's
+  sufficient for `onDelete`/`preMerge`, whose next natural invocation (the next delete, the next merge)
+  checks approval fresh and runs. It is **not** sufficient for `onCreate`, which fires exactly once at
+  creation time: a workspace created before its `onCreate` command was approved stays un-bootstrapped
+  forever unless something explicitly re-runs `runOnCreateHook` after approval. No such re-run trigger
+  exists yet — deferred until the approval UI is built (that's naturally when a "run now" affordance would
+  be designed anyway), tracked here rather than silently assumed away.
 - **Allowed deps:** `persistence` (override/approval storage); `contracts`; `@thinkrail/shared/paths` (the
   `.thinkrail/` namespace convention); Node (`node:crypto`, `node:fs`).
 - **Forbidden:** `host`; `git` (no git operation of its own — the caller already has the worktree);

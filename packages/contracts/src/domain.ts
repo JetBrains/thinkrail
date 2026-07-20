@@ -70,8 +70,14 @@ export type HookName = "onCreate" | "onDelete" | "preMerge" | "postMerge";
  * The `workspace.hook` push payload — one frame per hook-state transition, broadcast to every client so a
  * workspace tab's setup/teardown status stays in sync everywhere (same convergence model as the
  * workspace-lifecycle trio). `hookAwaitingApproval` fires instead of `hookStarted` when the hook's command
- * hasn't been approved yet (or has changed since) — nothing else fires until a `workspace.hooks.approve`
- * call.
+ * hasn't been approved yet (or has changed since).
+ *
+ * `workspace.hooks.approve` only records the approval for that project+hook — it does not itself re-run
+ * anything. For `onDelete`/`preMerge`, that's enough: their next natural invocation (the next delete, the
+ * next merge) checks approval fresh and runs. `onCreate` has no such "next invocation" — it fires exactly
+ * once, at creation time — so approving it after the fact does not retroactively bootstrap a workspace
+ * already sitting at `hookAwaitingApproval`. Re-running an already-created workspace's `onCreate` is not
+ * implemented; see `submodule-server-workspaces-hooks`'s SPEC.md.
  */
 export type WorkspaceHookEvent =
 	| { kind: "hookAwaitingApproval"; workspaceId: string; hook: HookName; command: string }

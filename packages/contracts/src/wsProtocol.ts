@@ -84,8 +84,9 @@ export const WS_METHODS = {
 	workspaceList: "workspace.list",
 	workspaceRemove: "workspace.remove",
 	workspaceDiffStats: "workspace.diffStats",
-	// Records the given command as approved for this project+hook (sha256'd, host-local) so its next run
-	// isn't held at `hookAwaitingApproval`.
+	// Records the given command as approved for this project+hook (sha256'd, host-local) — a future
+	// onDelete/preMerge invocation checks this fresh and runs; it does not retroactively re-run onCreate
+	// for a workspace already sitting at `hookAwaitingApproval` (see WorkspaceHookEvent's doc comment).
 	workspaceHooksApprove: "workspace.hooks.approve",
 	// gh-backed New-Workspace surface: branch list per project + local `gh` auth status.
 	gitListBranches: "git.listBranches",
