@@ -1,6 +1,6 @@
 import type { Project, Workspace } from "@thinkrail/contracts";
 import { ChevronDown, ChevronRight, Folder, GitBranch, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { PopoverTrigger } from "@/components/ui/popover";
 import { toast, useAppStore } from "../store";
@@ -22,6 +22,27 @@ export function ProjectTree() {
 	// creating a workspace directly.
 	const [dialogProjectId, setDialogProjectId] = useState<string | null>(null);
 
+	// The active workspace is the user's current scope, so reveal its parent whenever that scope changes
+	// (including the Welcome → IDE remount, where this component's local expansion state starts fresh).
+	// Depend on the resolved project id rather than the workspace arrays themselves: a later auto-rename
+	// snapshot must not undo a deliberate manual collapse while the user stays in the same workspace.
+	const activeProjectId =
+		activeWorkspaceId == null
+			? null
+			: (Object.entries(workspaces).find(([, list]) =>
+					list.some((workspace) => workspace.id === activeWorkspaceId),
+				)?.[0] ?? null);
+	// biome-ignore lint/correctness/useExhaustiveDependencies: activeWorkspaceId is the activation trigger even when two workspaces share a parent project
+	useEffect(() => {
+		if (!activeProjectId) return;
+		setExpanded((prev) => {
+			if (prev.has(activeProjectId)) return prev;
+			const next = new Set(prev);
+			next.add(activeProjectId);
+			return next;
+		});
+	}, [activeWorkspaceId, activeProjectId]);
+
 	const loadWorkspaces = async (projectId: string) => {
 		useAppStore
 			.getState()
@@ -38,6 +59,12 @@ export function ProjectTree() {
 		store.selectProject(projectId);
 		setExpanded((prev) => new Set(prev).add(projectId));
 		await loadWorkspaces(projectId);
+	};
+
+	const selectWorkspace = (workspace: Workspace) => {
+		const store = useAppStore.getState();
+		store.selectProject(workspace.projectId);
+		store.setActiveWorkspace(workspace.id);
 	};
 
 	const toggleExpand = (projectId: string) => {
@@ -121,7 +148,7 @@ export function ProjectTree() {
 												key={ws.id}
 												workspace={ws}
 												isActive={activeWorkspaceId === ws.id}
-												onSelect={() => useAppStore.getState().setActiveWorkspace(ws.id)}
+												onSelect={() => selectWorkspace(ws)}
 												onRemove={() => removeWorkspace(ws.id)}
 											/>
 										))
