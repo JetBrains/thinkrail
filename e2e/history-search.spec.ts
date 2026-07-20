@@ -240,6 +240,49 @@ test("plain ArrowUp/ArrowDown recall steps through this chat's own prior prompts
 	await expect(page.getByTestId("history-overlay")).toBeVisible();
 });
 
+// Regression: `recentPrompts`'s dedup must keep a repeated prompt's NEWEST occurrence (recency-first,
+// matching the server history index's own ranking rule and the atuin/fzf convention) — not its oldest.
+// "alpha" is said twice, "beta" once, in between: the first ArrowUp must recall "alpha" (the most recent
+// prompt), the second must recall "beta", and a third must stay clamped on "beta" — proving "alpha" backs
+// exactly one recall slot (its newest), not two.
+test("a prompt repeated earlier in the chat recalls at its most recent position, deduped to one entry", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	seedWorkspaceSession(workspace.worktreePath, {
+		id: "e2e-recall-dedup",
+		messages: [
+			{ role: "user", text: "alpha", timestamp: 1_700_450_000_000 },
+			{ role: "assistant", text: "ok", timestamp: 1_700_450_001_000 },
+			{ role: "user", text: "beta", timestamp: 1_700_450_002_000 },
+			{ role: "assistant", text: "ok", timestamp: 1_700_450_003_000 },
+			{ role: "user", text: "alpha", timestamp: 1_700_450_004_000 },
+			{ role: "assistant", text: "ok", timestamp: 1_700_450_005_000 },
+		],
+	});
+
+	await page.reload();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await page.getByTestId("project-item").first().click();
+	await page.getByTestId("workspace-item").first().click();
+	await expect(page.locator('[data-testid="workspace-item"][data-active="true"]')).toHaveCount(1);
+
+	await page.getByTestId("chat-history").click();
+	await page.getByTestId("closed-chat-item").first().click();
+	const input = page.getByTestId("chat-input");
+	await expect(input).toBeVisible();
+	await expect(input).toHaveValue("");
+
+	await input.press("ArrowUp");
+	await expect(input).toHaveValue("alpha");
+	await input.press("ArrowUp");
+	await expect(input).toHaveValue("beta");
+	// Clamped at "beta" — if the earlier "alpha" occurrence were a distinct entry, this would step to it.
+	await input.press("ArrowUp");
+	await expect(input).toHaveValue("beta");
+});
+
 // A9's mobile-discoverability half: `HistoryOverlay` sizes itself with `left-sm right-sm` insets (see
 // `HistoryOverlay.tsx`) rather than a fixed pixel width, specifically so it can't overflow a narrow
 // container. The app's three-pane layout (`shell/Shell.tsx`) isn't itself the "mobile single-view shell"

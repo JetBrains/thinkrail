@@ -118,13 +118,14 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `left` slot carries the plan strip), `ExtUiDialog`. All props-driven; behavior detail lives in the
   components' jsdoc.
 - **Plain `↑` recall + history button** — `Composer`'s `recentPrompts` prop (`ChatView`: this chat's own
-  user-turn texts via `turnAnchorText`, newest first, Set-deduped — a repeated prompt recalls at its
-  *first* occurrence's position, not its latest) backs a lightweight recall session (`recallIdx`) gated so
-  it can never eat a draft: `↑` only steps in when the field is **empty** or a recall is already active
-  (older → higher index), `↓` steps newer (past the newest restores `""`), any diverging edit or a submit
-  exits the session, and the recalled text lands with the caret at its end. A `History`-icon button
-  (`data-testid="history-open"`, `aria-label="Search history"`, always rendered next to send) calls the
-  same `onHistoryOpen` as `Ctrl+R` — the tap path on mobile, a discoverability affordance on desktop.
+  user-turn texts via `turnAnchorText`, newest first, deduped **keeping the newest occurrence** — the same
+  recency-first ranking rule as the server history index, the atuin/fzf convention) backs a lightweight
+  recall session (`recallIdx`) gated so it can never eat a draft: `↑` only steps in when the field is
+  **empty** or a recall is already active (older → higher index), `↓` steps newer (past the newest
+  restores `""`), any diverging edit or a submit exits the session, and the recalled text lands with the
+  caret at its end. A `History`-icon button (`data-testid="history-open"`, `aria-label="Search history"`,
+  always rendered next to send) calls the same `onHistoryOpen` as `Ctrl+R` — the tap path on mobile, a
+  discoverability affordance on desktop.
 - **Chat TODO plan** ([[design-todos]]) — the chat's `pi-todos` list surfaced **only in the chat**:
   `useChatTodos` (the `todo.*` data hook — fetch + live `pi.event` refetch + edits + the add-nudge + the
   `openMarkdown` snapshot action), `TodoList` (loose items + named groups, add-row + an "open as markdown"

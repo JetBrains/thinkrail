@@ -151,15 +151,17 @@ export default function ChatView({
 	}, [turns, isStreaming, currentAssistantId]);
 
 	// The plain `↑`-recall list (`Composer`'s `recentPrompts` prop): this chat's own user-turn texts,
-	// newest first, deduped. Reuses `turnAnchorText`'s user-content extraction (string, or joined text
-	// blocks) rather than re-deriving it — `Set` keeps each string's *first* chronological occurrence, so
-	// a repeated prompt recalls at the position of its earliest use, not its latest (see `chat/SPEC.md`).
+	// newest first, deduped keeping the NEWEST occurrence — the same recency-first ranking rule as the
+	// server history index (and the atuin/fzf convention it follows). Reuses `turnAnchorText`'s
+	// user-content extraction (string, or joined text blocks) rather than re-deriving it. Reverse to
+	// newest→oldest *before* deduping: `Set` keeps each string's first-seen entry, so reversing first
+	// makes that first-seen entry the newest one, not the oldest (see `chat/SPEC.md`).
 	const recentPrompts = useMemo(() => {
 		const texts = turns
 			.filter((t) => t.kind === "user")
 			.map((t) => turnAnchorText(t))
 			.filter(Boolean);
-		return [...new Set(texts)].reverse();
+		return [...new Set(texts.reverse())];
 	}, [turns]);
 
 	const [mentionQuery, setMentionQuery] = useState<string | null>(null);
