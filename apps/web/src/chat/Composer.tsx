@@ -13,6 +13,7 @@ import {
 	useCallback,
 	useEffect,
 	useImperativeHandle,
+	useLayoutEffect,
 	useRef,
 	useState,
 } from "react";
@@ -146,14 +147,32 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const menuLen = mentionOpen ? mentionCandidates.length : slashOpen ? slashMatches.length : 0;
 	const menuOpen = menuLen > 0;
 
-	const focusCaret = useCallback((pos: number) => {
-		requestAnimationFrame(() => {
-			const el = ref.current;
-			if (!el) return;
+	// A one-shot imperative caret move requested by `focusCaret`, applied in `useLayoutEffect` below
+	// rather than a `requestAnimationFrame`: RAF only guarantees "before the next paint", leaving a gap
+	// *after the current task ends* where another actor touching the same textarea's selection (a fast
+	// follow-up keystroke, Playwright's `fill()`, a paste) can run first — a stale RAF then collapses
+	// *that* selection instead of the one it was scheduled for. Concretely: `fill()` does select-all
+	// then insert-text as separate steps; if a stale RAF's `setSelectionRange(pos, pos)` fires in the
+	// gap between them, it collapses the select-all to a bare caret, so the subsequent insert appends
+	// at `pos` instead of replacing — producing a doubled `oldValue + newValue` (this is the exact
+	// mechanism behind the flake once seen on the recall test below). `useLayoutEffect` runs
+	// synchronously in React's commit phase, in the same task as the keystroke that triggered it, so
+	// there is no gap for anything else to interleave.
+	const [pendingCaret, setPendingCaret] = useState<number | null>(null);
+
+	useLayoutEffect(() => {
+		if (pendingCaret === null) return;
+		const el = ref.current;
+		if (el) {
 			el.focus();
-			el.setSelectionRange(pos, pos);
-			setCaret(pos);
-		});
+			el.setSelectionRange(pendingCaret, pendingCaret);
+		}
+		setCaret(pendingCaret);
+		setPendingCaret(null);
+	}, [pendingCaret]);
+
+	const focusCaret = useCallback((pos: number) => {
+		setPendingCaret(pos);
 	}, []);
 
 	useImperativeHandle(

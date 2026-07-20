@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject, openWorkspaceChat } from "./fixtures/app";
 import { seedExternalCwdSessions, seedWorkspaceSession } from "./fixtures/sessions";
@@ -238,6 +239,71 @@ test("plain ArrowUp/ArrowDown recall steps through this chat's own prior prompts
 	// exact same overlay `Ctrl+R` does.
 	await page.getByTestId("history-open").click();
 	await expect(page.getByTestId("history-overlay")).toBeVisible();
+});
+
+// Regression for a real flake caught in the test above: `Composer`'s `focusCaret` used to move the caret
+// via a bare `requestAnimationFrame`, which only guarantees "before the next paint" — leaving a gap after
+// the triggering keystroke's task ends where another actor touching the same textarea's selection (e.g.
+// Playwright's `fill`, which does select-all then insert-text as separate steps) could run first. If that
+// stale RAF fired between `fill`'s select-all and insert steps, its `setSelectionRange(pos, pos)` collapsed
+// the select-all to a bare caret, so the insert appended instead of replacing — producing a doubled
+// `oldValue + newValue` (seen as `"write a test for the jitterwrite a test for the jitter!"` under
+// parallel-worker contention). `focusCaret` now moves the caret from a `useLayoutEffect`, which commits
+// synchronously in the same task as the triggering keystroke — there's no longer a gap for `fill` (or any
+// other follow-up interaction) to land in. This mechanism doesn't depend on Playwright specifically — any
+// fast selection-replacing interaction right after a recall step could have raced the old stale RAF — so
+// this is a real feature fix, not test-only synchronization; CPU-throttling below only makes an already-
+// closed race window observable within a short, deterministic test rather than needing rare real-world
+// timing (see `Composer.tsx`'s `focusCaret` comment for the fuller mechanism writeup).
+test("a recall step immediately followed by a full-value replace never doubles the value, even under CPU contention", async ({
+	page,
+}) => {
+	test.setTimeout(60_000);
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	seedWorkspaceSession(workspace.worktreePath, {
+		// Unique per run (unlike this file's other fixed literal ids): this test loops many repeated
+		// recall/replace cycles and is meant to be re-run under `--repeat-each` to prove the race stays
+		// closed. A fixed id would collide with an in-memory session entry from an earlier repeat's
+		// (differently-`workspaceId`'d) run within the same shared webServer lifetime, failing with
+		// "Unknown session" before ever reaching the code path this test exists to exercise.
+		id: `e2e-recall-race-${randomUUID()}`,
+		messages: [
+			{ role: "user", text: "write a test for the jitter", timestamp: 1_700_500_000_000 },
+			{ role: "assistant", text: "Added a test.", timestamp: 1_700_500_001_000 },
+		],
+	});
+
+	await page.reload();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await page.getByTestId("project-item").first().click();
+	await page.getByTestId("workspace-item").first().click();
+	await expect(page.locator('[data-testid="workspace-item"][data-active="true"]')).toHaveCount(1);
+
+	await page.getByTestId("chat-history").click();
+	await page.getByTestId("closed-chat-item").first().click();
+	const input = page.getByTestId("chat-input");
+	await expect(input).toBeVisible();
+	await expect(input).toHaveValue("");
+
+	// Throttle the main thread so any reintroduced deferred-callback gap (RAF or otherwise) would widen
+	// enough to be caught reliably within a handful of iterations — this is what let the old RAF-based
+	// code reproduce the doubled value in ~3% of iterations during root-cause diagnosis. `press` and
+	// `fill` still auto-wait/retry as usual; only real wall-clock CPU speed is reduced.
+	const client = await page.context().newCDPSession(page);
+	await client.send("Emulation.setCPUThrottlingRate", { rate: 4 });
+
+	for (let i = 0; i < 200; i++) {
+		await input.press("ArrowUp");
+		await expect(input).toHaveValue("write a test for the jitter");
+		const replacement = `edit ${i}`;
+		await input.fill(replacement);
+		// A snapshot read, not the auto-retrying `toHaveValue` matcher: the corruption this pins is an
+		// immediate, permanent doubling at `fill`-completion time, not a transient state that later
+		// settles — polling could mask a regression that briefly shows the wrong value.
+		expect(await input.inputValue()).toBe(replacement);
+		await input.fill("");
+	}
 });
 
 // Regression: `recentPrompts`'s dedup must keep a repeated prompt's NEWEST occurrence (recency-first,
