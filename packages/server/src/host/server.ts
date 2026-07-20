@@ -13,7 +13,7 @@ import { listProjects, openProject } from "../projects";
 import { getConfig, setSettingsPublisher } from "../settings";
 import { closeAllTerminals, setTerminalPublisher } from "../terminal";
 import { setWatchPublisher, stopAllWatches } from "../watch";
-import { setWorkspacePublisher } from "../workspaces";
+import { setHookPublisher, setWorkspacePublisher } from "../workspaces";
 import {
 	isPromptCommitted,
 	isSettledTurn,
@@ -71,6 +71,7 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 				ws.subscribe(WS_CHANNELS.workspaceUpdated);
 				ws.subscribe(WS_CHANNELS.workspaceRemoved);
 				ws.subscribe(WS_CHANNELS.workspaceFsChanged);
+				ws.subscribe(WS_CHANNELS.workspaceHook);
 				ws.subscribe(WS_CHANNELS.settingsChanged);
 				const welcome: ServerWelcome = {
 					protocolVersion: PROTOCOL_VERSION,
@@ -120,6 +121,17 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		const data =
 			event.kind === "removed" ? { projectId: event.projectId, id: event.id } : event.workspace;
 		server.publish(channel, JSON.stringify({ channel, data }));
+	});
+
+	// Fan the `workspaces/hooks` submodule's state transitions (setup/teardown/merge-hook runs) out to
+	// every subscribed client over `workspace.hook` — the `WorkspaceHookEvent` from `contracts` is the wire
+	// payload directly, no kind→channel mapping needed (same shape as the watcher's `fsChanged` push, not
+	// the workspace-lifecycle trio's three-channel split, since every hook transition shares one channel).
+	setHookPublisher((event) => {
+		server.publish(
+			WS_CHANNELS.workspaceHook,
+			JSON.stringify({ channel: WS_CHANNELS.workspaceHook, data: event }),
+		);
 	});
 
 	// Push the worktree change notifier's debounced invalidation batches (agent edits, terminal

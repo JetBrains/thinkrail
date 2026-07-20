@@ -2,6 +2,7 @@ import type {
 	AppConfig,
 	AskUserQuestionResult,
 	ExtUiResponse,
+	HookName,
 	ImageContent,
 	LoginReply,
 	ThinkingLevel,
@@ -62,6 +63,7 @@ import {
 } from "../terminal";
 import { ensureWatch, stopWatch } from "../watch";
 import {
+	approveHook,
 	createWorkspace,
 	forgetWorkspace,
 	getWorkspace,
@@ -83,7 +85,7 @@ type Handler = (params: unknown) => unknown | Promise<unknown>;
 async function archiveTeardown(ws: Workspace): Promise<void> {
 	try {
 		await removeWorkspaceSessions(ws.id, ws.worktreePath);
-		reclaimWorktree(ws);
+		await reclaimWorktree(ws);
 	} catch (error) {
 		console.warn(`workspace archive teardown failed for ${ws.id}: ${error}`);
 	}
@@ -123,6 +125,11 @@ const handlers: Record<string, Handler> = {
 		return { ok: true } as const;
 	},
 	"workspace.diffStats": (params) => workspaceDiffStats((params as { id: string }).id),
+	"workspace.hooks.approve": (params) => {
+		const p = params as { projectId: string; hook: HookName; command: string };
+		approveHook(p.projectId, p.hook, p.command);
+		return { ok: true } as const;
+	},
 	"git.listBranches": (params) => listBranches((params as { projectId: string }).projectId),
 	"git.prefetch": (params) => {
 		const p = params as { projectId: string; ref: string };
