@@ -9,4 +9,5 @@ export {
 } from "./extensions";
 export * from "./oneshot";
 export * from "./piRuntime";
+export * from "./sessionRepair";
 export * from "./webUiContext";

@@ -9,7 +9,12 @@
  * network — and default to the real {@link completeOnce} primitive in the `agent` module.
  */
 
-import type { AssistantMessage, Message, TextContent, UserMessage } from "@thinkrail/contracts";
+import type {
+	AssistantMessage,
+	TextContent,
+	TranscriptMessage,
+	UserMessage,
+} from "@thinkrail/contracts";
 import { completeOnce, type OneShotRequest, type OneShotResult } from "../agent";
 
 /** The first turn of a session — the raw material for a workspace name. */
@@ -30,14 +35,18 @@ export function setOneShotRunner(fn: OneShotRunner | null): void {
 }
 
 const NAME_SYSTEM =
-	"You name coding workspaces. Given the first turn of a session, reply with a 2-4 word kebab-case " +
-	"branch name that captures the task. Reply with the name only — no quotes, no prose, no path.";
+	"You name coding workspaces. Given the first turn of a session, reply with a short, human-readable " +
+	'name (2-4 words, Title Case) that captures the task — e.g. "Fix Auth Redirect". Reply with the ' +
+	"name only — no quotes, no prose, no kebab-case, no slashes.";
 
 /** Max ms a name suggestion may take before we give up and let the caller keep its default. */
 const NAME_TIMEOUT_MS = 12_000;
 
-/** Longest slug we keep — long branch names are unwieldy; the model is asked for 2-4 words anyway. */
-const MAX_SLUG_LENGTH = 60;
+/** Longest display name we keep — long names are unwieldy; the model is asked for 2-4 words anyway. */
+const MAX_NAME_LENGTH = 60;
+
+/** Words we keep in a display name — the model is asked for 2-4; this is the hard clamp. */
+const MAX_NAME_WORDS = 5;
 
 /**
  * Naive-slug bounds. Grow the slug word-by-word to *at least* the minimum (so a run of very short words
@@ -49,14 +58,15 @@ const NAIVE_MIN_CHARS = 10;
 const NAIVE_MAX_CHARS = 40;
 
 /**
- * Derive a short kebab slug straight from a raw user prompt — the **non-agentic** instant name shown the
- * moment a turn starts, before the agentic {@link suggestWorkspaceName} refinement lands. Grows a word at
- * a time: never stops before `MIN_WORDS`/`MIN_CHARS` (unless the prompt runs out of words), never exceeds
- * `MAX_WORDS`, and stops before `MAX_CHARS` once that minimum is met; the result is hard-clamped and its
- * trailing `-` stripped. Returns `null` for a blank/unusable prompt so the caller keeps its default.
- * Pure — same slug alphabet as {@link toWorkspaceSlug}; no runner, no auth, no network.
+ * Derive a short **Title Case display name** straight from a raw user prompt — the **non-agentic** instant
+ * name shown the moment a turn starts, before the agentic {@link suggestWorkspaceName} refinement lands.
+ * Grows a word at a time: never stops before `MIN_WORDS`/`MIN_CHARS` (unless the prompt runs out of words),
+ * never exceeds `MAX_WORDS`, and stops before `MAX_CHARS` once that minimum is met; each picked word is
+ * Title Cased and the words are joined with spaces. Returns `null` for a blank/unusable prompt so the
+ * caller keeps its default. Pure — no runner, no auth, no network; the branch is derived from this name
+ * downstream by `workspaces`.
  */
-export function naiveWorkspaceSlug(prompt: string): string | null {
+export function naiveWorkspaceName(prompt: string): string | null {
 	const words = prompt
 		.toLowerCase()
 		.replace(/[^a-z0-9]+/g, " ")
@@ -66,7 +76,7 @@ export function naiveWorkspaceSlug(prompt: string): string | null {
 	if (words.length === 0) return null;
 
 	const picked: string[] = [];
-	let length = 0; // running length of the joined kebab slug
+	let length = 0; // running length of the joined name (word chars + single-char separators)
 	for (const word of words) {
 		const next = length === 0 ? word.length : length + 1 + word.length;
 		const haveMinimum = picked.length >= NAIVE_MIN_WORDS && length >= NAIVE_MIN_CHARS;
@@ -76,14 +86,20 @@ export function naiveWorkspaceSlug(prompt: string): string | null {
 		length = next;
 	}
 
-	const slug = picked.join("-").slice(0, NAIVE_MAX_CHARS).replace(/-+$/g, "");
-	return slug.length > 0 ? slug : null;
+	const name = picked.map(titleCaseWord).join(" ").slice(0, NAIVE_MAX_CHARS).trimEnd();
+	return name.length > 0 ? name : null;
+}
+
+/** Capitalize the first character of a single (already-lowercased) word; the rest is left as-is. */
+function titleCaseWord(word: string): string {
+	return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
 /**
- * Suggest a short kebab-case workspace/branch name from a session's first turn. **Best-effort**: returns
- * `null` on any failure (nothing authenticated, timeout, empty/garbage output) so the caller keeps its
- * `workspace-N` default. Never throws.
+ * Suggest a short, human-readable Title Case workspace name from a session's first turn. **Best-effort**:
+ * returns `null` on any failure (nothing authenticated, timeout, empty/garbage output) so the caller keeps
+ * its `workspace-N` default. Never throws. The git branch is derived from this name downstream by
+ * `workspaces`.
  */
 export async function suggestWorkspaceName(turn: WorkspaceNameTurn): Promise<string | null> {
 	const prompt = buildNamePrompt(turn);
@@ -93,10 +109,10 @@ export async function suggestWorkspaceName(turn: WorkspaceNameTurn): Promise<str
 			system: NAME_SYSTEM,
 			prompt,
 			tier: "cheap",
-			maxTokens: 24,
+			maxTokens: 32,
 			signal: AbortSignal.timeout(NAME_TIMEOUT_MS),
 		});
-		return toWorkspaceSlug(text);
+		return toWorkspaceName(text);
 	} catch {
 		return null;
 	}
@@ -112,24 +128,24 @@ function buildNamePrompt(turn: WorkspaceNameTurn): string | null {
 }
 
 /**
- * Normalize raw model output into a safe, bounded kebab-case slug; `null` if nothing usable remains.
- * Strips wrapping quotes/backticks the model may add, collapses non-alphanumerics to `-`, clamps to a few
- * words and a max length. Pure — shared with `toBranch` in spirit, but this owns the model-output cleanup.
+ * Normalize raw model output into a safe, bounded **display name**; `null` if nothing usable remains.
+ * Strips wrapping quotes/backticks the model may add, drops other punctuation to spaces, collapses runs of
+ * whitespace, and clamps to a few words and a max length — but **preserves the model's casing** (so
+ * `Add OAuth login` survives intact). Pure. The git branch is derived from this by `workspaces`' `toBranch`.
  */
-export function toWorkspaceSlug(raw: string): string | null {
-	const slug = raw
+export function toWorkspaceName(raw: string): string | null {
+	const name = raw
 		.trim()
-		.toLowerCase()
 		.replace(/^[`'"]+|[`'"]+$/g, "")
-		.replace(/[^a-z0-9]+/g, "-")
-		.replace(/^-+|-+$/g, "")
-		.split("-")
+		.replace(/[^A-Za-z0-9]+/g, " ")
+		.trim()
+		.split(/\s+/)
 		.filter(Boolean)
-		.slice(0, 5)
-		.join("-")
-		.slice(0, MAX_SLUG_LENGTH)
-		.replace(/-+$/g, "");
-	return slug.length > 0 ? slug : null;
+		.slice(0, MAX_NAME_WORDS)
+		.join(" ")
+		.slice(0, MAX_NAME_LENGTH)
+		.trimEnd();
+	return name.length > 0 ? name : null;
 }
 
 /**
@@ -140,7 +156,7 @@ export function toWorkspaceSlug(raw: string): string | null {
  * are skipped the same way. `answer` is the concatenated text of the clean turn's first assistant
  * message (empty if it hasn't produced text). Pure — the host composes this with `session.getMessages`.
  */
-export function extractFirstTurn(messages: Message[]): WorkspaceNameTurn | null {
+export function extractFirstTurn(messages: TranscriptMessage[]): WorkspaceNameTurn | null {
 	for (let i = 0; i < messages.length; i += 1) {
 		const message = messages[i];
 		if (message?.role !== "user") continue;

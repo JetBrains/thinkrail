@@ -1,5 +1,6 @@
 import { findFreePort } from "@thinkrail/shared/freePort";
 import { resolveShellEnv } from "@thinkrail/shared/shellEnv";
+import { settleSessionsForShutdown } from "../agent";
 import { createServer, type RunningServer } from "./server";
 
 export interface BootHostOptions {
@@ -55,8 +56,18 @@ export async function bootHost(options: BootHostOptions): Promise<BootedHost> {
 	const shutdown = (): void => {
 		if (stopping) return;
 		stopping = true;
-		server.stop();
-		process.exit(0);
+		// Settle before exit: abort streaming sessions and give pi a bounded window to write their
+		// "Operation aborted" tool results — an immediate `process.exit` here would strand mid-tool
+		// transcripts (an open `ask_user_question` made that deterministic before the ack+terminate
+		// redesign) and lean on the restart repair for what a polite shutdown can persist cleanly.
+		void (async () => {
+			try {
+				await settleSessionsForShutdown();
+			} finally {
+				server.stop();
+				process.exit(0);
+			}
+		})();
 	};
 	process.on("SIGINT", shutdown);
 	process.on("SIGTERM", shutdown);

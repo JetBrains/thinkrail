@@ -53,18 +53,29 @@ what lets the UI ship independently of the host.
     skill catalog).
   - **`SessionSummary`** — a chat session as the host reports it for hydration (read side); `live`
     distinguishes an in-memory session (auto-restored) from a disk-only one (surfaced in chat-history,
-    re-opened on demand). `session.getMessages` returns `{ summary, messages }` (the transcript is the
-    pi-canonical `Message[]`; the summary reflects the now-live session after a disk re-open).
+    re-opened on demand). `session.getMessages` returns `{ summary, messages }` (the transcript is
+    **`TranscriptMessage[]`** — the pi-canonical `Message` union widened with **`WireCustomMessage`**, a
+    type-only mirror of pi-coding-agent's Node-only `CustomMessage`, so extension-injected messages like
+    the ask replies cross the wire; the summary reflects the now-live session after a disk re-open).
   - the **extension-UI frames** **`ExtUiRequest`** / **`ExtUiResponse`** — our wire shape for pi's in-process
     `uiContext` calls (`select`/`confirm`/`input`/`editor` round-trip; `notify`/`setStatus`/`setWidget`/
     `setTitle`/`dismiss` are fire-and-forget), carried on the `pi.extensionUi` channel.
   - the **`ask_user_question`** wire types — **`AskUserQuestionArgs`** (`AskUserQuestionItem` + `AskUserQuestionOption`
     — the latter carries an optional `recommendedReason` the card renders inline as a `Why:` line under the
-    option: the questions the agent authors, what the tool card reads from the `toolCall` block) and
-    **`AskUserQuestionResult`** (`AskUserQuestionAnswer[]` + `cancelled`: the browser's reply). The capability
+    option: the questions the agent authors, what the tool card reads from the `toolCall` block),
+    **`AskUserQuestionResult`** (`AskUserQuestionAnswer[]` + `cancelled`: the browser's reply),
+    **`AskUserQuestionAckDetails`** (the tool result's `details` under the **ack + terminate** design —
+    the call resolves instantly; the turn ends) and **`AskUserAnswersDetails`** + the
+    **`ASK_USER_ANSWERS_CUSTOM_TYPE`** constant, **`AskUserAnswersMessage`** (the correctly-paired
+    tag↔details shape the host's builder is compile-held to) and the shared **`isAskUserAnswersMessage`**
+    guard (all in `wsProtocol`, the value-bearing half): the reply travels as an `ask-user-answers`
+    custom message the card pairs by `details.toolCallId`. `WireCustomMessage.customType` itself stays
+    `string` — the namespace is open (any pi extension can mint custom messages and they all cross the
+    wire), so strictness lives at the producer + the guard, which validates the details *shape* (wire
+    data is untrusted — another process, possibly another protocol version). The capability
     is a **host-owned pi custom tool** (server `agent/askUserQuestion` — see its SPEC for the design
-    rationale); the tool blocks while the chat renders the questionnaire **inline** and replies via
-    `session.answerQuestion` (correlated by the tool call id).
+    rationale); the chat renders the questionnaire **inline** and replies via `session.answerQuestion`
+    (correlated by the tool call id; rejected loud when the call is unknown/answered/superseded).
 - **domain.ts** — app entities: `Project` (git repo + unique `slug`; "does it have specs?" is **not** a
   field — it's the lazy `project.hasSpecs` query, since it's a full-tree walk), **`ProjectPathStatus`** (a
   candidate path's kind — `repo` / `initable` / `missing` / `notDirectory` — so the UI opens, offers a

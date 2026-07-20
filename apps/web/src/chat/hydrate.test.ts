@@ -1,6 +1,9 @@
 import { expect, test } from "bun:test";
-import type { Message } from "@thinkrail/contracts";
+import type { TranscriptMessage } from "@thinkrail/contracts";
+import { ASK_USER_ANSWERS_CUSTOM_TYPE } from "@thinkrail/contracts";
 import { messagesToRuntime } from "./hydrate";
+
+type Message = TranscriptMessage;
 
 // Partial fixtures cast to Message — the converter reads only `role` (+ toolCallId/isError/content for
 // tool results) and passes user/assistant messages through verbatim.
@@ -65,10 +68,9 @@ test("a failed tool result maps to error status", () => {
 	expect(toolResults.x?.status).toBe("error");
 });
 
-test("a toolCall with no matching toolResult has no entry — a blocked interactive tool stays 'running'", () => {
-	// A pending `ask_user_question`: the assistant emitted the toolCall, but `execute` is still blocked so no
-	// toolResult message exists yet. On reconnect the card must re-render as still-pending — which it does
-	// because the absent `toolResults` entry makes ToolCard/ToolBlock default the status to "running".
+test("a toolCall with no matching toolResult has no entry — the call renders as still running", () => {
+	// The (sub-second) window between an assistant message ending and its tool results landing: the absent
+	// `toolResults` entry makes ToolCard/ToolBlock default the status to "running".
 	const { turns, toolResults } = messagesToRuntime([
 		{
 			role: "assistant",
@@ -81,9 +83,9 @@ test("a toolCall with no matching toolResult has no entry — a blocked interact
 	expect(toolResults.ask1).toBeUndefined();
 });
 
-test("a resolved toolResult keeps its structured `details` (the ask_user_question record on reconnect)", () => {
-	// hydrate mirrors the live `tool_execution_end` shape (`{ content, details }`) so the resolved
-	// questionnaire record survives a reconnect — the answers live in `details`.
+test("a resolved toolResult keeps its structured `details` (a legacy blocking-era ask record)", () => {
+	// hydrate mirrors the live `tool_execution_end` shape (`{ content, details }`) so a legacy resolved
+	// questionnaire record (answers in the tool result) survives a reconnect — the card's fallback path.
 	const details = {
 		answers: [{ questionIndex: 0, question: "Q?", kind: "option", answer: "A" }],
 		cancelled: false,
@@ -101,4 +103,63 @@ test("a resolved toolResult keeps its structured `details` (the ask_user_questio
 	] as unknown as Message[]);
 	expect(toolResults.ask2?.status).toBe("done");
 	expect((toolResults.ask2?.raw as { details: unknown }).details).toEqual(details);
+});
+
+test("an ask-user-answers custom message indexes into askAnswers and never becomes a turn", () => {
+	const result = {
+		answers: [{ questionIndex: 0, question: "Q?", kind: "option", answer: "A" }],
+		cancelled: false,
+	};
+	const { turns, askAnswers } = messagesToRuntime([
+		{
+			role: "assistant",
+			content: [{ type: "toolCall", id: "ask3", name: "ask_user_question", arguments: {} }],
+		},
+		{
+			role: "custom",
+			customType: ASK_USER_ANSWERS_CUSTOM_TYPE,
+			content: "User has answered your questions: …",
+			display: true,
+			details: { toolCallId: "ask3", result },
+			timestamp: 2,
+		},
+	] as unknown as Message[]);
+	expect(turns).toHaveLength(1); // the card is the answers' rendering — no separate bubble
+	expect(askAnswers.ask3).toEqual(result as never);
+});
+
+test("an answers message with malformed details is ignored — the guard validates shape, not just tag", () => {
+	const { askAnswers } = messagesToRuntime([
+		// right customType, but details missing / wrong-shaped — wire data is untrusted.
+		{
+			role: "custom",
+			customType: ASK_USER_ANSWERS_CUSTOM_TYPE,
+			content: "looks right, isn't",
+			display: true,
+			timestamp: 1,
+		},
+		{
+			role: "custom",
+			customType: ASK_USER_ANSWERS_CUSTOM_TYPE,
+			content: "still not right",
+			display: true,
+			details: { toolCallId: 42, result: { answers: "nope", cancelled: "nope" } },
+			timestamp: 2,
+		},
+	] as unknown as Message[]);
+	expect(Object.keys(askAnswers)).toHaveLength(0);
+});
+
+test("unknown custom messages are ignored entirely", () => {
+	const { turns, askAnswers } = messagesToRuntime([
+		{
+			role: "custom",
+			customType: "someone-elses-extension",
+			content: "hello",
+			display: true,
+			timestamp: 1,
+		},
+	] as unknown as Message[]);
+	expect(turns).toHaveLength(0);
+	expect(Object.keys(askAnswers)).toHaveLength(0);
 });

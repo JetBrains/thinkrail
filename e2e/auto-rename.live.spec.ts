@@ -21,9 +21,10 @@ test("turn start names the workspace instantly, then the settled turn refines it
 	await openWorkspaceChat(page); // auto-named workspace, chat tab, composer ready
 
 	// The chat is scoped to the ACTIVE workspace — key everything off its pre-rename record.
-	const name = page
-		.locator('[data-testid="workspace-item"][data-active="true"]')
-		.getByTestId("workspace-name");
+	const activeRow = page.locator('[data-testid="workspace-item"][data-active="true"]');
+	const name = activeRow.getByTestId("workspace-name");
+	// The git branch is surfaced on a second line beneath the name, shown only once they diverge.
+	const branchLine = activeRow.getByTestId("workspace-branch");
 	const initialName = (await name.textContent()) ?? "";
 	expect(initialName).toMatch(/^workspace-\d+$/);
 	const before = persistedWorkspaces().find((w) => w.name === initialName);
@@ -35,10 +36,13 @@ test("turn start names the workspace instantly, then the settled turn refines it
 	await page.getByTestId("chat-send").click();
 
 	// Instant naive rename the moment the first prompt lands (a user message_end, before the model
-	// responds): a deterministic, non-agentic slug from the first prompt ("Plan how to add a login form…"
-	// → the first ~5 words), pushed live over workspace.updated — so the workspace leaves `workspace-N`
-	// immediately, without waiting for the (possibly long) turn to settle. `(-\d+)?` tolerates a suffix.
-	await expect(name).toHaveText(/^plan-how-to-add-a(-\d+)?$/, { timeout: 20_000 });
+	// responds): a deterministic, non-agentic Title Case name from the first prompt ("Plan how to add a
+	// login form…" → the first ~5 words), pushed live over workspace.updated — so the workspace leaves
+	// `workspace-N` immediately, without waiting for the (possibly long) turn to settle.
+	await expect(name).toHaveText("Plan How To Add A", { timeout: 20_000 });
+	// The display name now differs from the branch, so the branch line appears with the derived kebab slug
+	// (`(-\d+)?` tolerates a uniqueness suffix on the branch — never on the display name).
+	await expect(branchLine).toHaveText(/^plan-how-to-add-a(-\d+)?$/, { timeout: 20_000 });
 
 	const done = page
 		.locator('[data-testid="chat-message"][data-role="system"]')
@@ -61,15 +65,18 @@ test("turn start names the workspace instantly, then the settled turn refines it
 		await expect.poll(isFlagged, { timeout: 30_000 }).toBe(true);
 	}
 
-	// The persisted record moved with it: same id, name === branch, flagged renamed, dir untouched.
+	// The persisted record moved with it: same id, a human display name DECOUPLED from a kebab branch,
+	// flagged renamed, dir untouched.
 	const renamed = persistedWorkspaces().find((w) => w.id === before.id);
-	const slug = renamed?.name ?? "";
-	expect(slug).toMatch(/^[a-z0-9][a-z0-9-]*$/);
-	expect(renamed?.branch).toBe(slug);
+	const displayName = renamed?.name ?? "";
+	const branch = renamed?.branch ?? "";
+	expect(displayName.length).toBeGreaterThan(0);
+	expect(branch).toMatch(/^[a-z0-9][a-z0-9-]*$/); // branch stays a git-clean kebab slug
 	expect(renamed?.renamed).toBe(true);
 	expect(renamed?.worktreePath).toBe(before.worktreePath);
-	// The refined name is live in the tree too (workspace.updated push, no refetch).
-	await expect(name).toHaveText(slug, { timeout: 20_000 });
+	// The refined name is live in the tree too (workspace.updated push, no refetch), branch on its line.
+	await expect(name).toHaveText(displayName, { timeout: 20_000 });
+	await expect(branchLine).toHaveText(branch, { timeout: 20_000 });
 
 	// Git followed: the old auto-branch is gone, the new one exists — and the worktree DIR kept its name.
 	const branches = execFileSync(
@@ -78,7 +85,7 @@ test("turn start names the workspace instantly, then the settled turn refines it
 		{ encoding: "utf8" },
 	);
 	expect(branches.split("\n")).not.toContain(initialName);
-	expect(branches.split("\n")).toContain(slug);
+	expect(branches.split("\n")).toContain(branch);
 	const worktrees = execFileSync("git", ["-C", E2E_FIXTURE_REPO, "worktree", "list"], {
 		encoding: "utf8",
 	});
