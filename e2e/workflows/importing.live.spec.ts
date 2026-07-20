@@ -143,23 +143,24 @@ function findGraphRoot(cwd: string): string | null {
 	return walk(cwd);
 }
 
-/** Count files in the tree whose spec frontmatter declares the given type. */
-function countSpecsOfType(cwd: string, type: string): number {
-	let count = 0;
-	const walk = (dir: string): void => {
+/** Workspace-relative paths of files whose spec frontmatter declares the given type. */
+function specPathsOfType(cwd: string, type: string): string[] {
+	const hits: string[] = [];
+	const walk = (dir: string, prefix: string): void => {
 		for (const entry of readdirSync(dir, { withFileTypes: true })) {
 			if (entry.name === ".git" || entry.name === "node_modules") continue;
 			const path = join(dir, entry.name);
-			if (entry.isDirectory()) walk(path);
+			const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+			if (entry.isDirectory()) walk(path, relative);
 			else if (entry.name.endsWith(".md")) {
 				const frontmatter = readFileSync(path, "utf8").match(/^---\n([\s\S]*?)\n---/);
 				if (frontmatter?.[1] && new RegExp(`^type:\\s*${type}\\s*$`, "m").test(frontmatter[1]))
-					count += 1;
+					hits.push(relative);
 			}
 		}
 	};
-	walk(cwd);
-	return count;
+	walk(cwd, "");
+	return hits;
 }
 
 /** Binding: a goal-and-requirements.md exists somewhere and is a well-formed spec (id + type). */
@@ -289,12 +290,15 @@ workflowTest(
 				"docs/architecture.md",
 				(content) => content.startsWith("---") && content.includes("The resize pipeline is pure"),
 			),
-			// The filled slot is not drafted again — the adopted doc is the ONLY architecture-design node.
-			// (The pre-change skill drafted a parallel specs/architecture.md while docs/architecture.md sat
-			// ignored — the exact duplication the adoption sub-flow exists to prevent.)
-			checks.custom(
-				"the adopted doc is the only architecture-design node",
-				({ cwd }) => countSpecsOfType(cwd, "architecture-design") === 1,
+			// The filled slot is not drafted again: every architecture-design node must be one of the
+			// project's own adopted docs — never a NEW file. (The pre-change skill drafted a parallel
+			// specs/architecture.md while docs/architecture.md sat ignored — the duplication this sub-flow
+			// exists to prevent. The adopted ADR may legitimately carry architecture-design too — live runs
+			// vary on that typing — so the invariant is "no new node", not "exactly one node".)
+			checks.custom("no new architecture-design node beside the adopted docs", ({ cwd }) =>
+				specPathsOfType(cwd, "architecture-design").every(
+					(path) => path === "docs/architecture.md" || path.startsWith("docs/adr/"),
+				),
 			),
 			// The rest of the graph still lands.
 			graphRootDrafted,
