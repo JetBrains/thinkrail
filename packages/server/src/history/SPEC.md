@@ -28,8 +28,34 @@ full-conversation matches). Reads via pi's `SessionManager.listAll()`; **never w
   strict recency order; prompts deduped by normalized text keeping newest; caps + true totals.
 - Jump anchors are drift-tolerant: hits carry `anchorText` (message-text prefix) the client validates.
 
+## pi file format (pinned v0.80.6 — `@earendil-works/pi-coding-agent`)
+Verified by reading `dist/core/session-manager.{js,d.ts}` in the installed package (source of truth over
+any assumption — re-verify on a pi version bump):
+- **Header line** (always line 1, `SessionHeader`): `{ type: "session", version?: number, id: string,
+  timestamp: string /* ISO */, cwd: string, parentSession?: string }`. `readSessionHeader`/`buildSessionInfo`
+  reject the file (return `null`/`[]`) unless the first line parses as JSON with `type === "session"` and a
+  string `id`. `CURRENT_SESSION_VERSION = 3`; pi's own writer stamps `version: 3` — fixtures should too, so
+  a real `SessionManager` that later opens one never runs migration.
+- **File naming:** discovery is driven **purely by the `.jsonl` suffix** — `listSessionsFromDir` does
+  `readdir(dir).filter(f => f.endsWith(".jsonl"))`; nothing parses the filename. pi's own writer names new
+  files `<isoTimestamp-with-:-and-.-replaced-by-'-'>_<sessionId>.jsonl`, but any `*.jsonl` name works for
+  discovery — fixtures don't need to match that exact pattern.
+- **`cwd` recovery — and the non-recursive-custom-dir trap:** `cwd` always comes from the header's `cwd`
+  field (`header.cwd`), never from directory placement. But *directory structure interacts with discovery*:
+  `SessionManager.listAll()` (no args) walks pi's real default root (`~/.pi/agent/sessions/`) **one level of
+  subdirectories** — one dir per encoded cwd (`getDefaultSessionDirPath`: `--<cwd, / and \ and : → '-'>--`)
+  — and flattens the `.jsonl` files found inside each. But `listAll(sessionDir)` / `list(cwd, sessionDir)`
+  — the path taken whenever a **custom** `sessionDir` string is passed (exactly what `HistoryIndex`'s
+  constructor and this module's tests do) — calls `listSessionsFromDir(customDir)`, which does a **flat,
+  non-recursive** `readdir(customDir)`. Files placed in subdirectories of a custom `sessionDir` are invisible
+  to `listAll`. Consequence for fixtures: multi-session, multi-cwd test fixtures must write all `.jsonl`
+  files **flat, directly under** the given dir; different `cwd`s are expressed via each file's own header
+  `cwd` field, never via subdirectory nesting.
+
 ## Boundary
-- **Public surface (`index.ts`):** `HistoryIndex`, `getHistoryIndex()`, `extractEntries`, types.
+- **Public surface (`index.ts`):** `HistoryIndex`, `getHistoryIndex()`, `matchesTerms`, `makeSnippet`,
+  `extractEntries`, `writeFixtureSession` (test-only; re-exported for A5's e2e fixture seeder), types.
 - **Allowed deps:** `@earendil-works/pi-coding-agent` (`SessionManager`), `@thinkrail/contracts`, `node:fs`.
-- **Forbidden:** importing `agent`/`workspaces`/`projects` (scope mapping is injected by the host handler);
-  writing anything to disk.
+- **Forbidden:** importing `agent`/`workspaces`/`projects` (scope mapping is injected by the host handler
+  via the `filter`/`labels` callbacks passed into `search()`); writing anything to disk (`writeFixtureSession`
+  is test-only, never called from production code paths).
