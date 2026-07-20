@@ -22,6 +22,10 @@ test("selecting a same-workspace message hit opens the chat and flashes the matc
 	await openFixtureProject(page);
 	const workspaceA = await createWorkspaceViaDialog(page);
 
+	// `worktreePath` is the seed target because it's the exact server-side session `cwd`: `workspaces.ts`
+	// builds it as `join(dataDir(), "worktrees", slug, branch)`, and every session opened for this
+	// workspace runs with that same cwd — so a fixture written there is indistinguishable from a session a
+	// real chat would have produced.
 	seedWorkspaceSession(workspaceA.worktreePath, {
 		id: "e2e-jump-same-ws",
 		messages: [
@@ -76,6 +80,9 @@ test("selecting a same-workspace message hit opens the chat and flashes the matc
 	const flashRow = page.locator("[data-flash]");
 	await expect(flashRow).toBeVisible();
 	await expect(flashRow).toContainText("jittered ceiling");
+	// The flash is transient (cleared 1600ms after it starts, decoupled from the location-request effect
+	// so clearing the request doesn't cancel the timer) — confirm it actually turns off, not just on.
+	await expect(page.locator("[data-flash]")).toHaveCount(0, { timeout: 5_000 });
 });
 
 test("selecting a cross-workspace message hit switches the active workspace and flashes the row", async ({

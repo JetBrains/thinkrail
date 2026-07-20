@@ -321,9 +321,18 @@ export default function ChatView({
 		virtuosoRef.current?.scrollToIndex({ index, align: "center" });
 		setFlashRowId(rows[index]?.id ?? null);
 		useAppStore.getState().clearChatLocation();
+	}, [chatLocationRequest, sessionId, rows, runtime.turnIdByMessageIndex, turns]);
+
+	// Auto-clear the flash, decoupled from the effect above: `clearChatLocation()` there flips
+	// `chatLocationRequest` to null, which is one of that effect's own deps — if the timeout lived there,
+	// the re-run's cleanup would cancel it (and the re-run bails on `!chatLocationRequest` before
+	// scheduling a replacement), so `flashRowId` would never reset. Keying solely on `flashRowId` avoids
+	// that churn: this effect only fires when a flash actually starts or ends.
+	useEffect(() => {
+		if (flashRowId === null) return;
 		const timer = setTimeout(() => setFlashRowId(null), 1600);
 		return () => clearTimeout(timer);
-	}, [chatLocationRequest, sessionId, rows, runtime.turnIdByMessageIndex, turns]);
+	}, [flashRowId]);
 
 	// A turn-divider's "files changed" chip → surface the first changed file's diff in the right panel.
 	// This is the one chat touch of the store outside the renderers, kept here in the integration layer.
