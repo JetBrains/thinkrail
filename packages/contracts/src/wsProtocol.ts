@@ -7,6 +7,8 @@ import type {
 	FileNode,
 	GithubAuthStatus,
 	GitStatus,
+	HistoryScope,
+	HistorySearchResult,
 	JbcentralConnectResult,
 	LoginReply,
 	Project,
@@ -45,7 +47,9 @@ import type {
 // v8: `ask_user_question` is ack + terminate — the tool no longer blocks; answers travel as
 // `ask-user-answers` custom messages, and `session.getMessages` now returns `TranscriptMessage[]`
 // (pi-canonical + `custom` role) so the questionnaire card can pair answers by tool call id.
-export const PROTOCOL_VERSION = 8;
+// v9: chat-history search — `history.search` reads a lazy in-memory index over pi's session files
+// (prompt recall + full-conversation matches, scoped chat/workspace/project/all, recency-ordered).
+export const PROTOCOL_VERSION = 9;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -152,6 +156,7 @@ export const WS_METHODS = {
 	// Persist a partial change to the server-synced app settings (e.g. the theme). The host merges, saves
 	// `config.json`, and broadcasts `settings.changed` — the caller converges on that push, not optimism.
 	settingsUpdate: "settings.update",
+	historySearch: "history.search",
 } as const;
 
 /** Server→client push channels. */
@@ -352,6 +357,12 @@ export interface WsMethodMap {
 	// Merge a partial into the server-synced app settings, persist it, and broadcast `settings.changed`.
 	// Returns the merged, persisted `AppConfig`.
 	"settings.update": { params: { config: Partial<AppConfig> }; result: AppConfig };
+	// Prompt recall + full-text conversation search over pi's persisted sessions (and live ones — pi
+	// appends as messages complete). Server-side index; results capped (default 50/section), true totals.
+	"history.search": {
+		params: { query: string; scope: HistoryScope; limit?: number };
+		result: HistorySearchResult;
+	};
 }
 
 export type WsMethodName = keyof WsMethodMap;

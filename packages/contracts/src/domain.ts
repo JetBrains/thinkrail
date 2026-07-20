@@ -287,3 +287,42 @@ export interface AppConfig {
 
 /** The config a fresh host (no `config.json` yet) falls back to. */
 export const DEFAULT_CONFIG: AppConfig = { theme: "dark" };
+
+/** History-search scope — the overlay's cycle: this chat → workspace → project → everywhere. */
+export type HistoryScope =
+	| { kind: "chat"; sessionId: string }
+	| { kind: "workspace"; workspaceId: string }
+	| { kind: "project"; projectId: string }
+	| { kind: "all" };
+
+/** One recalled prompt (prompts section: deduped by normalized text, newest kept, recency-ordered). */
+export interface PromptHit {
+	text: string;
+	timestamp: number;
+	sessionId: string;
+	/** pi's session display name, when set. */
+	sessionTitle?: string;
+	/** Mapped from the session's cwd via the workspace registry; absent for unmapped (pi-CLI) cwds. */
+	workspaceId?: string;
+	projectId?: string;
+	cwd: string;
+}
+
+/** One full-text conversation match. `messageIndex` is the position in the `session.getMessages`
+ * transcript; `anchorText` (a prefix of the message text) lets the client validate/fall back if the
+ * live transcript drifted from the indexed file (e.g. after compaction). */
+export interface MessageHit extends PromptHit {
+	role: "user" | "assistant";
+	snippet: string;
+	messageIndex: number;
+	anchorText: string;
+}
+
+/** `history.search` result. `indexing` = the one-time cold build is still running (show "indexing…"). */
+export interface HistorySearchResult {
+	prompts: PromptHit[];
+	messages: MessageHit[];
+	promptTotal: number;
+	messageTotal: number;
+	indexing: boolean;
+}
