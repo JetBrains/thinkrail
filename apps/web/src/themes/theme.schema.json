@@ -18,9 +18,7 @@
 	],
 	"properties": {
 		"$schema": {
-			"type": "string",
-			"minLength": 1,
-			"maxLength": 256
+			"type": "string"
 		},
 		"schemaVersion": {
 			"const": 1
@@ -31,13 +29,10 @@
 		},
 		"label": {
 			"type": "string",
-			"minLength": 1,
-			"maxLength": 80
+			"minLength": 1
 		},
 		"order": {
-			"type": "integer",
-			"minimum": -10000,
-			"maximum": 10000
+			"type": "integer"
 		},
 		"appearance": {
 			"enum": ["light", "dark"]

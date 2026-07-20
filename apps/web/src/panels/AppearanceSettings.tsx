@@ -1,9 +1,8 @@
 import type { ThemeId } from "@thinkrail/contracts";
 import { Check } from "lucide-react";
-import { useSyncExternalStore } from "react";
 import { cn } from "@/lib";
 import { toast, useAppStore } from "@/store";
-import { getThemes, resolveTheme, subscribeThemes } from "@/themes";
+import { getThemes, resolveTheme } from "@/themes";
 import { getTransport } from "@/transport";
 
 /**
@@ -14,7 +13,7 @@ import { getTransport } from "@/transport";
  */
 export function AppearanceSettings() {
 	const theme = useAppStore((s) => s.theme);
-	const themes = useSyncExternalStore(subscribeThemes, getThemes, getThemes);
+	const themes = getThemes();
 	const activeThemeId = resolveTheme(theme).id;
 
 	const select = (id: ThemeId) => {

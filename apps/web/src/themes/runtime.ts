@@ -1,18 +1,32 @@
 import { DEFAULT_CONFIG, type ThemeId } from "@thinkrail/contracts";
 import { STORAGE_PREFIX } from "../constants/branding";
-import { type ThemeDescriptor, ThemeRegistry } from "./registry";
 import {
 	ANSI_COLOR_KEYS,
 	type AnsiColorKey,
+	assertThemeManifest,
 	isThemeIdSlug,
 	SYNTAX_COLOR_KEYS,
 	type SyntaxColorKey,
 	THEME_COLOR_KEYS,
+	type ThemeAppearance,
 	type ThemeColorKey,
+	type ThemeContrast,
 	type ThemeManifest,
 } from "./schema";
 
-const registry = new ThemeRegistry(DEFAULT_CONFIG.theme);
+export interface ThemeDescriptor {
+	readonly id: ThemeId;
+	readonly label: string;
+	readonly order: number;
+	readonly appearance: ThemeAppearance;
+	readonly contrast: ThemeContrast;
+}
+
+export interface ThemeCatalog {
+	readonly byId: ReadonlyMap<ThemeId, ThemeManifest>;
+	readonly list: readonly ThemeDescriptor[];
+}
+
 const HINT_KEY = `${STORAGE_PREFIX}theme`;
 
 const COLOR_VARIABLES: Record<ThemeColorKey, readonly string[]> = {
@@ -100,13 +114,70 @@ const EFFECTS = {
 	},
 } as const;
 
-let requestedId: ThemeId = DEFAULT_CONFIG.theme;
-let hasApplied = false;
+let catalog: ThemeCatalog = { byId: new Map(), list: [] };
+
+function compareText(a: string, b: string): number {
+	return a < b ? -1 : a > b ? 1 : 0;
+}
+
+function descriptor(theme: ThemeManifest): ThemeDescriptor {
+	return Object.freeze({
+		id: theme.id,
+		label: theme.label,
+		order: theme.order,
+		appearance: theme.appearance,
+		contrast: theme.contrast,
+	});
+}
+
+/** Validate and index manifest candidates (path → parsed JSON). The files are ours: any bad one throws. */
+export function buildThemeCatalog(candidates: Record<string, unknown>): ThemeCatalog {
+	const byId = new Map<ThemeId, ThemeManifest>();
+	for (const [path, candidate] of Object.entries(candidates).sort(([a], [b]) =>
+		compareText(a, b),
+	)) {
+		let theme: ThemeManifest;
+		try {
+			theme = assertThemeManifest(candidate);
+		} catch (error) {
+			throw new Error(`Invalid bundled theme ${path}`, { cause: error });
+		}
+		if (byId.has(theme.id)) throw new Error(`Duplicate bundled theme id: ${theme.id} (${path})`);
+		byId.set(theme.id, theme);
+	}
+	if (!byId.has(DEFAULT_CONFIG.theme)) {
+		throw new Error(`The bundled default theme is missing: ${DEFAULT_CONFIG.theme}`);
+	}
+	const list = Object.freeze(
+		[...byId.values()]
+			.sort((a, b) => {
+				if (a.id === DEFAULT_CONFIG.theme) return -1;
+				if (b.id === DEFAULT_CONFIG.theme) return 1;
+				return a.order - b.order || compareText(a.label, b.label) || compareText(a.id, b.id);
+			})
+			.map(descriptor),
+	);
+	return { byId, list };
+}
+
+export function installThemeCatalog(next: ThemeCatalog): void {
+	catalog = next;
+}
+
+/** The bundled catalog, sorted default-first — fixed after bootstrap. */
+export function getThemes(): readonly ThemeDescriptor[] {
+	return catalog.list;
+}
 
 function requireResolvedTheme(id: ThemeId): ThemeManifest {
-	const theme = registry.resolve(id);
-	if (!theme) throw new Error(`Default theme is not registered: ${DEFAULT_CONFIG.theme}`);
+	const theme = catalog.byId.get(id) ?? catalog.byId.get(DEFAULT_CONFIG.theme);
+	if (!theme) throw new Error(`The bundled default theme is missing: ${DEFAULT_CONFIG.theme}`);
 	return theme;
+}
+
+/** Resolve an available theme or the bundled default. */
+export function resolveTheme(id: ThemeId): ThemeDescriptor {
+	return descriptor(requireResolvedTheme(id));
 }
 
 function applyVariables(root: HTMLElement, theme: ThemeManifest): void {
@@ -126,53 +197,19 @@ function applyVariables(root: HTMLElement, theme: ThemeManifest): void {
 	root.style.setProperty("color-scheme", theme.appearance);
 }
 
-/** Validate and register one manifest. Returns a disposer for exactly this registration. */
-export function registerTheme(input: unknown): () => void {
-	const registration = registry.register(input);
-	if (hasApplied && registration.theme.id === requestedId) applyTheme(requestedId);
-	return () => {
-		const before = registry.resolve(requestedId)?.id;
-		registration.dispose();
-		const after = registry.resolve(requestedId)?.id;
-		if (hasApplied && before !== after) applyTheme(requestedId);
-	};
-}
-
-export function hasTheme(id: ThemeId): boolean {
-	return registry.has(id);
-}
-
-/** Stable, sorted catalog snapshot suitable for React's useSyncExternalStore. */
-export function getThemes(): readonly ThemeDescriptor[] {
-	return registry.getSnapshot();
-}
-
-export function subscribeThemes(listener: () => void): () => void {
-	return registry.subscribe(listener);
-}
-
-/** Resolve an available theme or the configured bundled default. */
-export function resolveTheme(id: ThemeId): ThemeDescriptor {
-	const resolved = registry.resolveDescriptor(id);
-	if (!resolved) throw new Error(`Default theme is not registered: ${DEFAULT_CONFIG.theme}`);
-	return resolved;
-}
-
 /**
  * Apply the requested theme atomically from consumers' perspective: all variables, color-scheme, and
  * contrast metadata are written first, then data-theme changes last so observers see a complete palette.
  */
 export function applyTheme(id: ThemeId): ThemeDescriptor {
-	requestedId = id;
 	const theme = requireResolvedTheme(id);
 	if (typeof document !== "undefined") {
 		const root = document.documentElement;
 		applyVariables(root, theme);
 		root.dataset.themeContrast = theme.contrast;
 		root.dataset.theme = theme.id;
-		hasApplied = true;
 	}
-	return resolveTheme(id);
+	return descriptor(theme);
 }
 
 /** Cached requested id for first paint; it is a hint only, never the source of truth. */
@@ -185,7 +222,7 @@ export function readThemeHint(): ThemeId {
 	}
 }
 
-/** Best-effort first-paint cache. Unknown-but-valid ids are retained for a later registration. */
+/** Best-effort first-paint cache. Unknown-but-valid ids are retained for a later app version. */
 export function writeThemeHint(id: ThemeId): void {
 	try {
 		localStorage.setItem(HINT_KEY, id);

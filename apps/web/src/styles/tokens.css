@@ -1,6 +1,6 @@
 :root {
-	/* Theme-derived helpers. The registry owns the source colors; these repetitive alpha variants are
-	   generic so manifests never repeat them. */
+	/* Theme-derived helpers. The theme engine owns the source colors; these repetitive alpha variants
+	   are generic so manifests never repeat them. */
 	--primary-10: color-mix(in srgb, var(--primary) 10%, transparent);
 	--primary-20: color-mix(in srgb, var(--primary) 20%, transparent);
 	--primary-40: color-mix(in srgb, var(--primary) 40%, transparent);
@@ -49,6 +49,6 @@
 
 /*
  * Theme-specific values are intentionally absent. `themes/bundled/*.theme.json` is the source of truth;
- * the theme registry validates a complete UI + ANSI + syntax palette and writes its CSS custom properties
+ * the theme engine validates a complete UI + ANSI + syntax palette and writes its CSS custom properties
  * before React mounts. Adding a bundled theme therefore adds one JSON file, not a selector block here.
  */

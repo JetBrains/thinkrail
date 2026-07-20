@@ -67,7 +67,7 @@ const SYNTAX_TOKENS: readonly [string, string][] = [
 	["delimiter", "--code-punctuation"],
 ];
 
-/** Define (or redefine) Monaco from the live registry variables: chrome + the complete semantic syntax
+/** Define (or redefine) Monaco from the live theme variables: chrome + the complete semantic syntax
  * palette, with its normal/high-contrast base selected from manifest metadata rather than a known theme id.
  * Called before mount and again after every atomic theme swap. */
 function defineThinkrailTheme(m: Monaco): void {
