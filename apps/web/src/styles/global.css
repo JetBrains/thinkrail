@@ -51,6 +51,12 @@ body {
 	color: var(--shiki-gruvbox) !important;
 }
 
+[data-theme="high-contrast"] .shiki,
+[data-theme="high-contrast"] .shiki span {
+	/* biome-ignore lint/complexity/noImportantStyles: same inline-style override as the light rule above. */
+	color: var(--shiki-high-contrast) !important;
+}
+
 a {
 	color: var(--blue);
 }
