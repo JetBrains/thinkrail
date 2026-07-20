@@ -1,9 +1,9 @@
 import { createHighlighterCore, type HighlighterCore } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
-import { DARCULA_SHIKI, SHIKI_THEMES } from "./shikiTheme";
+import { DARCULA_SHIKI, HC_BLACK_SHIKI, SHIKI_THEMES } from "./shikiTheme";
 
 // Shared shiki highlighter for chat code blocks: the JS regex engine (no WASM), a curated language set,
-// and the TRI theme (dark + light + darcula, from `shikiTheme.ts`) — all behind dynamic imports so nothing
+// and every `SHIKI_THEMES` palette (from `shikiTheme.ts`) — all behind dynamic imports so nothing
 // loads until the first code block renders. Matches the DiffViewer pattern; kept here so chat can highlight
 // many languages. One render emits every palette as CSS vars; the `[data-theme]` rules in global.css flip
 // between them, so a theme swap needs no re-highlighting.
@@ -45,6 +45,7 @@ function getHighlighter(): Promise<HighlighterCore> {
 			import("@shikijs/themes/github-light-default"),
 			import("@shikijs/themes/gruvbox-dark-hard"),
 			DARCULA_SHIKI,
+			HC_BLACK_SHIKI,
 		],
 		langs: [
 			import("@shikijs/langs/typescript"),

@@ -44,7 +44,8 @@ function token(name: string): string {
 	return cssColorToHex(getComputedStyle(document.documentElement).getPropertyValue(name).trim());
 }
 
-/** Monaco token name → the `--code-*` syntax token a theme may set (only Darcula does today). */
+/** Monaco token name → the `--code-*` syntax token a theme may set (Darcula/Gruvbox set full
+ * palettes; High Contrast only the comment pair — the rest rides its hc-black base). */
 const SYNTAX_TOKENS: [string, string][] = [
 	["keyword", "--code-keyword"],
 	["string", "--code-string"],
@@ -60,7 +61,7 @@ const SYNTAX_TOKENS: [string, string][] = [
 ];
 
 /** Define (or redefine) the thinkrail Monaco theme from the live CSS tokens: chrome colors from the
- * surface tokens, the light/dark base from the active `[data-theme]`, and syntax rules from whichever
+ * surface tokens, the per-theme built-in base (`vs`/`vs-dark`/`hc-black`) from the active `[data-theme]`, and syntax rules from whichever
  * `--code-*` tokens the theme sets. Called before mount and again on every theme swap. */
 function defineThinkrailTheme(m: Monaco): void {
 	const colors: Record<string, string> = {};
@@ -72,11 +73,18 @@ function defineThinkrailTheme(m: Monaco): void {
 	set("editorLineNumber.foreground", token("--hint"));
 	set("editorCursor.foreground", token("--primary"));
 	set("editor.selectionBackground", token("--sel"));
+	// Optional selected-text color (high-contrast: black on the yellow selection); unset → base default.
+	set("editor.selectionForeground", token("--sel-fg"));
 	const rules = SYNTAX_TOKENS.flatMap(([monacoToken, name]) => {
 		const color = token(name);
 		return color ? [{ token: monacoToken, foreground: color.replace("#", "") }] : [];
 	});
-	const base = document.documentElement.dataset.theme === "light" ? "vs" : "vs-dark";
+	// Per-theme built-in base: `hc-black` IS the classical VSCode HC syntax palette (white numbers,
+	// #569cd6 keywords, #1aebff variables), which is why the high-contrast theme sets no `--code-*`
+	// beyond the comment green.
+	const dataTheme = document.documentElement.dataset.theme;
+	const base =
+		dataTheme === "light" ? "vs" : dataTheme === "high-contrast" ? "hc-black" : "vs-dark";
 	try {
 		m.editor.defineTheme(THEME, { base, inherit: true, rules, colors });
 	} catch {
@@ -91,7 +99,7 @@ const beforeMount: BeforeMount = (m) => defineThinkrailTheme(m);
 export default function MonacoEditor({ path, content }: { path: string; content: string }) {
 	const observerRef = useRef<MutationObserver | null>(null);
 
-	// Re-theme Monaco on a `[data-theme]` swap: its chrome + light/dark base are read once at define time, so
+	// Re-theme Monaco on a `[data-theme]` swap: its chrome + built-in base are read once at define time, so
 	// without this the editor would keep the theme it mounted with. Mirrors TerminalInstance's observer.
 	const onMount: OnMount = (_editor, m) => {
 		const observer = new MutationObserver(() => {
