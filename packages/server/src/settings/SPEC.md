@@ -10,9 +10,10 @@ tags: [v1]
 
 ## Responsibility
 
-The server-synced app config — OUR settings (theme today), an extensible `AppConfig` bag. Reads/merges/
-persists it and fans changes out to every client, so a preference set on one client follows the user to
-the others (architecture #9: shared domain state).
+The server-synced app config — OUR settings (an opaque theme selection today), an extensible `AppConfig`
+bag. Reads/merges/persists it and fans changes out to every client, so a preference set on one client
+follows the user to the others (architecture #9: shared domain state). The web client owns the available
+theme manifests; settings stores only the selected string id.
 
 ## Boundary
 
@@ -29,3 +30,5 @@ the others (architecture #9: shared domain state).
 - **Converge on the broadcast, no per-client optimism.** `updateConfig` persists then publishes; the
   initiating client applies on the `settings.changed` push like everyone else (the workspace-lifecycle
   pattern). `getConfig()` is the same value `server.welcome` seeds on connect.
+- Theme availability/labels/palettes are not server settings concerns. An id unknown to a given web client
+  remains persisted unchanged; that client owns visual fallback.

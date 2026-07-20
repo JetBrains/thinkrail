@@ -4,8 +4,8 @@
 
 /*
  * Map the ThinkRail design tokens (tokens.css) onto Tailwind's theme namespaces. `inline` makes the
- * utilities resolve to the live `var(--token)` (not a baked value), so swapping the token set via
- * `[data-theme="…"]` re-themes everything. Colors/spacing/text don't collide with token names; the
+ * utilities resolve to the live `var(--token)` (not a baked value), so the theme registry's atomic
+ * custom-property swap re-themes everything. Colors/spacing/text don't collide with token names; the
  * `--font-mono` / `--font-accent` / `--radius-*` tokens DO collide with Tailwind namespaces, so those
  * are referenced as token arbitrary values (e.g. `font-[var(--font-accent)]`) instead.
  */

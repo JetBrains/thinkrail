@@ -234,23 +234,11 @@ export interface GithubAuthStatus {
 }
 
 /**
- * The selectable UI themes. A const-object "enum" (the codebase's `WS_METHODS`/`WS_CHANNELS` convention):
- * enum ergonomics (`Theme.Dark`) + a runtime-iterable value list (`THEME_IDS`, the picker source), while the
- * values stay plain strings so they cross JSON/the wire with no casts. `Dark` is the default ThinkRail dark;
- * `Light`, `Darcula` (classic IntelliJ surfaces, ThinkRail violet accent), `Gruvbox` (the vim classic —
- * warm retro darks, orange accent), and `HighContrast` (the classical VSCode hc-black — pure black, cyan
- * contrast borders, orange focus accent) are the additions. A client that doesn't know a theme id falls back
- * to Dark's `:root` tokens, so adding a value here is wire-compatible.
+ * An opaque UI-theme selection. The independently shipped web client owns its manifest catalog, so the
+ * host must be able to persist an id it did not know when built. A client without that manifest resolves
+ * its own bundled default; no theme enum/list belongs on the wire.
  */
-export const Theme = {
-	Dark: "dark",
-	Light: "light",
-	Darcula: "darcula",
-	Gruvbox: "gruvbox",
-	HighContrast: "high-contrast",
-} as const;
-export type ThemeId = (typeof Theme)[keyof typeof Theme];
-export const THEME_IDS: readonly ThemeId[] = Object.values(Theme);
+export type ThemeId = string;
 
 /**
  * Server-synced app settings — OUR config, persisted host-side as `config.json` under the data dir and
@@ -262,4 +250,4 @@ export interface AppConfig {
 }
 
 /** The config a fresh host (no `config.json` yet) falls back to. */
-export const DEFAULT_CONFIG: AppConfig = { theme: Theme.Dark };
+export const DEFAULT_CONFIG: AppConfig = { theme: "dark" };

@@ -75,10 +75,11 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   **`openSettings(section?)`** (deep-links to a section, defaults to Providers) / **`closeSettings()`** /
   **`setSettingsSection()`** — lives here so the top-bar gear AND the Welcome provider warning open Settings
   to a section without prop-drilling through the shell. The **theme** state — **`theme: ThemeId`** (the
-  host-owned active theme) with **`applyConfig(config)`** (folds the server-synced `AppConfig` in from
+  host-owned selected opaque id; the theme registry resolves visual fallback) with **`applyConfig(config)`**
+  (folds the server-synced `AppConfig` in from
   `server.welcome` / the `settings.changed` broadcast) — lives here too; it's a **pure value only** (the
-  `applyTheme` DOM side-effect is the shell's, keyed off `theme`), and defaults to `Theme.Dark` until the
-  welcome arrives. The
+  registry application side-effect is the shell's, keyed off `theme`), and defaults to
+  `DEFAULT_CONFIG.theme` until the welcome arrives. The
   **toast queue** — **`toasts: Toast[]`** (oldest-first) with **`pushToast(toast) → id`** / **`dismissToast(id)`**
   and the ergonomic **`toast.error/success/info(message, title?)`** helper (wraps `pushToast` so a non-React
   call site — a `.catch` in a fire-and-forget wire call — can fire one) — lives here so any surface can raise
@@ -106,8 +107,8 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   `Toast` (type), `EditorTab` (`FileTab`/`ChatTab`), `TerminalTab`, `ClosedChat`, `SessionRuntime` +
   `EMPTY_RUNTIME` (ChatView's pre-creation fallback), `reduceSessionEvent`.
 - **Allowed deps:** `contracts` (`Project`/`Workspace`/`Model`/`ThinkingLevel`/`SessionStats`/
-  `SlashCommandInfo`/`ExtUiRequest`/`LoginPush`/`WorkspaceFsChangedPayload`/`AppConfig`/`ThemeId`; the
-  `Theme` value for the default; `PiEvent`/`LoginFrame`, **type-only**); `chat`
+  `SlashCommandInfo`/`ExtUiRequest`/`LoginPush`/`WorkspaceFsChangedPayload`/`AppConfig`/`ThemeId`;
+  `DEFAULT_CONFIG` for the pre-welcome default; `PiEvent`/`LoginFrame`, **type-only**); `chat`
   (`ChatTurn`/`ToolResultState`, **type-only**); `auth` (`LoginState`, **type-only**); `transport`
   (`ConnectionStatus`, **type-only**); `zustand`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `panels`/`shell` or transport runtime.

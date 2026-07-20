@@ -1,0 +1,210 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://thinkrail.dev/schemas/theme-manifest-v1.json",
+	"title": "ThinkRail theme manifest",
+	"description": "A complete, declarative ThinkRail UI, terminal, and syntax palette. Selected-text foreground overrides may be null to retain native behavior.",
+	"type": "object",
+	"additionalProperties": false,
+	"required": [
+		"schemaVersion",
+		"id",
+		"label",
+		"order",
+		"appearance",
+		"contrast",
+		"colors",
+		"ansi",
+		"syntax"
+	],
+	"properties": {
+		"$schema": {
+			"type": "string",
+			"minLength": 1,
+			"maxLength": 256
+		},
+		"schemaVersion": {
+			"const": 1
+		},
+		"id": {
+			"type": "string",
+			"pattern": "^[a-z0-9](?:[a-z0-9._-]{0,63})$"
+		},
+		"label": {
+			"type": "string",
+			"minLength": 1,
+			"maxLength": 80
+		},
+		"order": {
+			"type": "integer",
+			"minimum": -10000,
+			"maximum": 10000
+		},
+		"appearance": {
+			"enum": ["light", "dark"]
+		},
+		"contrast": {
+			"enum": ["normal", "high"]
+		},
+		"colors": {
+			"$ref": "#/$defs/colors"
+		},
+		"ansi": {
+			"$ref": "#/$defs/ansi"
+		},
+		"syntax": {
+			"$ref": "#/$defs/syntax"
+		}
+	},
+	"$defs": {
+		"hexColor": {
+			"type": "string",
+			"pattern": "^#[0-9a-f]{6}(?:[0-9a-f]{2})?$"
+		},
+		"colors": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": [
+				"accent",
+				"onAccent",
+				"bubbleAccent",
+				"background",
+				"content",
+				"sidebar",
+				"input",
+				"elevated",
+				"hover",
+				"border",
+				"borderStrong",
+				"text",
+				"muted",
+				"hint",
+				"selection",
+				"selectionForeground",
+				"editorSelection",
+				"editorSelectionForeground",
+				"info",
+				"success",
+				"danger",
+				"warning"
+			],
+			"properties": {
+				"accent": { "$ref": "#/$defs/hexColor" },
+				"onAccent": { "$ref": "#/$defs/hexColor" },
+				"bubbleAccent": { "$ref": "#/$defs/hexColor" },
+				"background": { "$ref": "#/$defs/hexColor" },
+				"content": { "$ref": "#/$defs/hexColor" },
+				"sidebar": { "$ref": "#/$defs/hexColor" },
+				"input": { "$ref": "#/$defs/hexColor" },
+				"elevated": { "$ref": "#/$defs/hexColor" },
+				"hover": { "$ref": "#/$defs/hexColor" },
+				"border": { "$ref": "#/$defs/hexColor" },
+				"borderStrong": { "$ref": "#/$defs/hexColor" },
+				"text": { "$ref": "#/$defs/hexColor" },
+				"muted": { "$ref": "#/$defs/hexColor" },
+				"hint": { "$ref": "#/$defs/hexColor" },
+				"selection": { "$ref": "#/$defs/hexColor" },
+				"selectionForeground": {
+					"oneOf": [{ "$ref": "#/$defs/hexColor" }, { "type": "null" }]
+				},
+				"editorSelection": { "$ref": "#/$defs/hexColor" },
+				"editorSelectionForeground": {
+					"oneOf": [{ "$ref": "#/$defs/hexColor" }, { "type": "null" }]
+				},
+				"info": { "$ref": "#/$defs/hexColor" },
+				"success": { "$ref": "#/$defs/hexColor" },
+				"danger": { "$ref": "#/$defs/hexColor" },
+				"warning": { "$ref": "#/$defs/hexColor" }
+			}
+		},
+		"ansi": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": [
+				"black",
+				"red",
+				"green",
+				"yellow",
+				"blue",
+				"magenta",
+				"cyan",
+				"white",
+				"brightBlack",
+				"brightRed",
+				"brightGreen",
+				"brightYellow",
+				"brightBlue",
+				"brightMagenta",
+				"brightCyan",
+				"brightWhite"
+			],
+			"properties": {
+				"black": { "$ref": "#/$defs/hexColor" },
+				"red": { "$ref": "#/$defs/hexColor" },
+				"green": { "$ref": "#/$defs/hexColor" },
+				"yellow": { "$ref": "#/$defs/hexColor" },
+				"blue": { "$ref": "#/$defs/hexColor" },
+				"magenta": { "$ref": "#/$defs/hexColor" },
+				"cyan": { "$ref": "#/$defs/hexColor" },
+				"white": { "$ref": "#/$defs/hexColor" },
+				"brightBlack": { "$ref": "#/$defs/hexColor" },
+				"brightRed": { "$ref": "#/$defs/hexColor" },
+				"brightGreen": { "$ref": "#/$defs/hexColor" },
+				"brightYellow": { "$ref": "#/$defs/hexColor" },
+				"brightBlue": { "$ref": "#/$defs/hexColor" },
+				"brightMagenta": { "$ref": "#/$defs/hexColor" },
+				"brightCyan": { "$ref": "#/$defs/hexColor" },
+				"brightWhite": { "$ref": "#/$defs/hexColor" }
+			}
+		},
+		"syntax": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": [
+				"foreground",
+				"comment",
+				"commentDoc",
+				"keyword",
+				"string",
+				"number",
+				"regexp",
+				"annotation",
+				"tag",
+				"attributeName",
+				"attributeValue",
+				"property",
+				"function",
+				"type",
+				"variable",
+				"constant",
+				"operator",
+				"punctuation",
+				"inserted",
+				"deleted",
+				"changed"
+			],
+			"properties": {
+				"foreground": { "$ref": "#/$defs/hexColor" },
+				"comment": { "$ref": "#/$defs/hexColor" },
+				"commentDoc": { "$ref": "#/$defs/hexColor" },
+				"keyword": { "$ref": "#/$defs/hexColor" },
+				"string": { "$ref": "#/$defs/hexColor" },
+				"number": { "$ref": "#/$defs/hexColor" },
+				"regexp": { "$ref": "#/$defs/hexColor" },
+				"annotation": { "$ref": "#/$defs/hexColor" },
+				"tag": { "$ref": "#/$defs/hexColor" },
+				"attributeName": { "$ref": "#/$defs/hexColor" },
+				"attributeValue": { "$ref": "#/$defs/hexColor" },
+				"property": { "$ref": "#/$defs/hexColor" },
+				"function": { "$ref": "#/$defs/hexColor" },
+				"type": { "$ref": "#/$defs/hexColor" },
+				"variable": { "$ref": "#/$defs/hexColor" },
+				"constant": { "$ref": "#/$defs/hexColor" },
+				"operator": { "$ref": "#/$defs/hexColor" },
+				"punctuation": { "$ref": "#/$defs/hexColor" },
+				"inserted": { "$ref": "#/$defs/hexColor" },
+				"deleted": { "$ref": "#/$defs/hexColor" },
+				"changed": { "$ref": "#/$defs/hexColor" }
+			}
+		}
+	}
+}

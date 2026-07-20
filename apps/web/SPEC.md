@@ -38,26 +38,29 @@ convention; their boundary is held by convention + spec. Sibling edges live here
 | `shell` | the responsive frame + composition of panels | no | [shell/SPEC.md](src/shell/SPEC.md) |
 | `components` | the app's single `ErrorBoundary` primitive (contains the `ui/` sub-module) | no | [components/SPEC.md](src/components/SPEC.md) |
 | `components/ui` | shadcn primitives, themed with our tokens | no | [components/ui/SPEC.md](src/components/ui/SPEC.md) |
-| `lib` | `cn()` (clsx + tailwind-merge) | yes | [lib/SPEC.md](src/lib/SPEC.md) |
+| `themes` | validated single-file manifests, registry, catalog + atomic token application | yes | [themes/SPEC.md](src/themes/SPEC.md) |
+| `lib` | `cn()` + small shared UI/highlighting helpers | yes | [lib/SPEC.md](src/lib/SPEC.md) |
 
-Leaf utilities without their own spec: `constants/` (branding), `utils/` (font scaling + `theme` — the
-`applyTheme(id)` `[data-theme]` swap, the `THEMES` picker list, and the localStorage first-paint hint),
-`styles/` (the CSS token theme contract — see Styling & theming). `main.tsx` is the entry/composition
-root — it applies the font scale + the cached theme hint pre-React, then wraps `<Shell />` in
+Leaf utilities without their own spec: `constants/` (branding), `utils/` (font scaling), and `styles/`
+(the structural/derived CSS token contract — theme-specific values belong to `themes`). `main.tsx` is the
+entry/composition root — it synchronously registers bundled manifests, then applies the font scale + the
+registry's cached first-paint hint pre-React before wrapping `<Shell />` in
 `components/ErrorBoundary` as the last-resort boundary (a crash escaping every region shows a reload
 screen, not a blank root).
 
 ### Dependency graph
 
-- `shell` → `panels`, `store`, `transport`, `components/ui`, `components` (`ErrorBoundary` around each mounted region), `constants`, `utils` (`theme` — the single owner of the `applyTheme` DOM effect, driven by `store.theme`)
-- `panels` → `store`, `transport`, `components/ui`, `components` (`ErrorBoundary` — `CenterTabs`'s per-tab boundary), `lib`, `contracts`, `constants` (`WelcomePanel`'s wordmark), `chat` (`CenterTabs` lazy-mounts `chat/ChatView`; `NewWorkspaceDialog` eagerly reuses `chat/ModelSelector`+`ThinkingSelector` — these are shiki-free, so the eager import stays split-safe), `auth` (`ProvidersSettings` mounts `auth/LoginDialog`), `utils` (`AppearanceSettings`'s theme picker uses `theme`'s `THEMES`)
+- `shell` → `panels`, `store`, `transport`, `components/ui`, `components` (`ErrorBoundary` around each mounted region), `constants`, `themes` (the single owner of the atomic `applyTheme` DOM effect, driven by `store.theme`)
+- `panels` → `store`, `transport`, `components/ui`, `components` (`ErrorBoundary` — `CenterTabs`'s per-tab boundary), `lib`, `contracts`, `constants` (`WelcomePanel`'s wordmark), `chat` (`CenterTabs` lazy-mounts `chat/ChatView`; `NewWorkspaceDialog` eagerly reuses `chat/ModelSelector`+`ThinkingSelector` — these are shiki-free, so the eager import stays split-safe), `auth` (`ProvidersSettings` mounts `auth/LoginDialog`), `themes` (`AppearanceSettings` consumes the live catalog; code surfaces consume generic theme variables/syntax mapping)
 - `chat` → `contracts` (pi message types, **type-only**), `components/ui`, `lib`; `store` + `transport` (**`ChatView` only** — the renderers are store-free)
 - `auth` → `components/ui` (the dialog is store/transport-free — the panel integrates it; the state types need no imports)
 - `store` → `transport` (**type-only** — `ConnectionStatus`), `chat` (**type-only** — `ChatTurn`/`ToolResultState`), `auth` (**type-only** — `LoginState`; the `foldLoginFrame` reducer lives in `store`, like `reduceExtUi`), `contracts`
 - `transport` → `contracts`, `store` (welcome routing; the `store → transport` back-edge is type-only, so
   the runtime graph is acyclic)
 - `components` (`ErrorBoundary`) → none internal (React + `lucide-react` only, so any region can wrap in it); `components/ui` → `lib`
-- leaves (`lib`, `constants`, `utils`, `styles`) → none internal
+- `lib` → `themes` (the lazy highlighter uses the one generic CSS-variable Shiki registration)
+- `themes` → `constants` (the branding storage prefix scopes the first-paint hint)
+- leaves (`constants`, `utils`, `styles`) → none internal
 
 Rules: a panel never imports another panel sideways; nothing imports `shell` (it's the composition root).
 
@@ -72,37 +75,30 @@ The module set: `transport` / `store` / branded `shell`; `ProjectTree`; `FileTre
   use utilities (`bg-bg-dark`, `text-primary`, `border-border`, `px-lg`, `text-lg`) — **never inline
   `style` objects, never raw hex.** Responsive (`md:` …) and states (`hover:` / `focus-visible:`) come
   from Tailwind (inline styles can't express them, and the responsive shell needs them).
-- **`src/styles/tokens.css` is the theme contract.** A *theme* is one set of CSS custom properties; a
-  theme swap = changing the token block via `[data-theme="…"]` on `<html>` (`utils/theme` `applyTheme(id)`)
-  — nothing in components changes. `@theme inline` keeps utilities pointing at the live `var(--token)`, so
-  the swap re-themes everything. **Ships five themes** — **Dark** (default, under `:root`), **Light**,
-  classic IntelliJ **Darcula**, **Gruvbox** (the vim classic — warm retro darks; the first theme to swap
-  the interactive accent, to gruvbox orange with dark-on-accent text, so a `[data-theme]` block MAY
-  override the accent family when the palette demands it), and **High Contrast** (the classical VSCode
-  hc-black: pure black surfaces, white text, cyan `#6fc3df` contrast borders, orange `#f38518` accent
-  with dark-on-accent text, yellow selection with black selected text). Theme blocks override only the semantic
-  surface/text/status tokens + `color-scheme` (+ `--ansi-*`/`--code-*`/accent where the theme calls for
-  it); type scale, spacing, radii, fonts stay shared in `:root`. The choice is **server-synced** (`AppConfig.theme`, host-owned): it arrives in
-  `server.welcome`, is set from the store's `theme` (fed by transport), applied by the shell's one theme
-  effect, and cached in `localStorage` only as a **first-paint hint** (`main.tsx` applies it pre-React so
-  the initial paint matches, before the welcome reconciles it). Changed via `settings.update`, converged on
-  the `settings.changed` broadcast. The token vocabulary also carries the code surfaces: **`--ansi-*`**
-  (the 16 xterm colors — light overrides them, dark-tuned brights wash out on white), optional
-  **`--code-*`** syntax colors (Darcula's and Gruvbox's identity; High Contrast sets only the comment
-  green over Monaco's real hc-black base), and the optional **`--sel-fg`/`--selection-fg`** selected-text
-  pair (set by High Contrast, whose yellow selection needs black text — unset elsewhere, so other themes
-  keep today's behavior; `--sel-fg` feeds Monaco's `editor.selectionForeground` + xterm's
-  `selectionForeground`, `--selection-fg` the `::selection` rule).
-  Code surfaces that own their own theming track the swap: **xterm** and **Monaco** observe
-  `[data-theme]` and rebuild from the tokens (Monaco picks its `vs`/`vs-dark`/`hc-black` base from it, and
-  derives token rules from `--code-*`); **shiki** renders every `SHIKI_THEMES` palette
-  (dark+light+darcula+gruvbox+high-contrast; the custom darcula + hc-black registrations in
-  `lib/shikiTheme.ts`) as CSS vars, flipped by the `[data-theme]` rules in
-  `global.css`; **mermaid** re-derives from the tokens. **Reading color tokens from JS goes through
-  `lib.cssColorToHex`** — the built CSS is minified, so `getComputedStyle` can return any equivalent form
-  (`#fff`, `gray`), which strict consumers (Monaco, xterm) reject. Text/status token values hold a contrast floor (body ≥
-  4.5:1, `--muted` ≥ 4.5:1 on its worst surface, `--hint` ≥ 3:1 — see the note in `tokens.css`).
-  Structured for N (pibun's theme engine, lifted at V2).
+- **`src/themes` is the theme contract and catalog; `src/styles/tokens.css` is structural.** A bundled
+  theme is one strict, complete `*.theme.json` manifest: appearance/contrast metadata + semantic UI
+  colors + all 16 ANSI colors + a semantic syntax palette. Selected-text foreground overrides are the
+  only nullable color slots (`null` retains the consumer default). An eager glob validates/registers the set, so adding a normal theme
+  changes only that file—never contracts, a label map, CSS selectors, editor imports, tests, or specs.
+  Manifests are self-contained (no inheritance), contain canonical color data only, and cannot alter
+  layout/type/motion or inject CSS/code. The registry derives repetitive tints/effects and atomically
+  writes the mapped custom properties before changing `[data-theme]`; `@theme inline` keeps every utility
+  pointed at the live variables, so components remain unchanged. `tokens.css` retains typography,
+  spacing, radii, fonts, motion, and generic derived formulas, but no named theme blocks.
+- The selected id is **server-synced** (`AppConfig.theme`, host-owned and opaque): it arrives in
+  `server.welcome`, is folded into the store by transport, applied by the shell, and cached in localStorage
+  only as a first-paint hint. `settings.update` converges through `settings.changed`; an unavailable id
+  renders the bundled default without destructively rewriting the requested value. The registry catalog
+  is subscribable, and `registerTheme(untrustedManifest)` is the future extension seam—extension loading,
+  transport, trust, and precedence are deliberately not designed here.
+- **Every code surface is catalog-agnostic.** xterm and Monaco rebuild from generic variables after the
+  atomic `[data-theme]` signal, including an optional selected-text foreground. Monaco chooses
+  `vs`/`vs-dark` or the corresponding high-contrast base from manifest appearance/contrast metadata,
+  never a theme id. Shiki uses one code-owned TextMate scope map whose colors are semantic CSS variables, so it needs
+  no per-theme import/selector or re-highlight. Mermaid re-derives from the same variables. Reads for
+  strict consumers still pass through `lib.cssColorToHex`. Data-driven tests enforce the existing
+  contrast floor (body/muted ≥ 4.5:1 and hint ≥ 3:1 on the primary declared surfaces) for every discovered
+  manifest.
 - Token names that collide with Tailwind namespaces (`--font-mono`, `--font-accent`, `--radius-*`) are
   used as token arbitrary values (`font-[var(--font-accent)]`), not `@theme` mappings.
 - **Icons: `lucide-react`. Components: shadcn/ui** (Radix primitives), copy-in under `src/components/ui/`
