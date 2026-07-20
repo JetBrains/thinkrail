@@ -44,9 +44,8 @@ function token(name: string): string {
 	return cssColorToHex(getComputedStyle(document.documentElement).getPropertyValue(name).trim());
 }
 
-/** Monaco token name → the `--code-*` syntax token a theme may set (Darcula/Gruvbox set full
- * palettes; High Contrast only the comment pair — the rest rides its hc-black base). */
-const SYNTAX_TOKENS: [string, string][] = [
+/** Monaco token names → the complete semantic syntax palette every manifest supplies. */
+const SYNTAX_TOKENS: readonly [string, string][] = [
 	["keyword", "--code-keyword"],
 	["string", "--code-string"],
 	["comment", "--code-comment"],
@@ -55,36 +54,48 @@ const SYNTAX_TOKENS: [string, string][] = [
 	["regexp", "--code-regexp"],
 	["annotation", "--code-annotation"],
 	["tag", "--code-tag"],
+	["metatag", "--code-tag"],
 	["attribute.name", "--code-attribute-name"],
 	["attribute.value", "--code-attribute-value"],
-	["string.key.json", "--code-json-key"],
+	["string.key.json", "--code-property"],
+	["property", "--code-property"],
+	["function", "--code-function"],
+	["type.identifier", "--code-type"],
+	["identifier", "--code-variable"],
+	["constant", "--code-constant"],
+	["operator", "--code-operator"],
+	["delimiter", "--code-punctuation"],
 ];
 
-/** Define (or redefine) the thinkrail Monaco theme from the live CSS tokens: chrome colors from the
- * surface tokens, the per-theme built-in base (`vs`/`vs-dark`/`hc-black`) from the active `[data-theme]`, and syntax rules from whichever
- * `--code-*` tokens the theme sets. Called before mount and again on every theme swap. */
+/** Define (or redefine) Monaco from the live registry variables: chrome + the complete semantic syntax
+ * palette, with its normal/high-contrast base selected from manifest metadata rather than a known theme id.
+ * Called before mount and again after every atomic theme swap. */
 function defineThinkrailTheme(m: Monaco): void {
 	const colors: Record<string, string> = {};
 	const set = (key: string, value: string) => {
 		if (value) colors[key] = value;
 	};
 	set("editor.background", token("--surface-content"));
-	set("editor.foreground", token("--text"));
+	set("editor.foreground", token("--code-foreground"));
 	set("editorLineNumber.foreground", token("--hint"));
 	set("editorCursor.foreground", token("--primary"));
 	set("editor.selectionBackground", token("--sel"));
-	// Optional selected-text color (high-contrast: black on the yellow selection); unset → base default.
 	set("editor.selectionForeground", token("--sel-fg"));
 	const rules = SYNTAX_TOKENS.flatMap(([monacoToken, name]) => {
 		const color = token(name);
 		return color ? [{ token: monacoToken, foreground: color.replace("#", "") }] : [];
 	});
-	// Per-theme built-in base: `hc-black` IS the classical VSCode HC syntax palette (white numbers,
-	// #569cd6 keywords, #1aebff variables), which is why the high-contrast theme sets no `--code-*`
-	// beyond the comment green.
-	const dataTheme = document.documentElement.dataset.theme;
+	const root = document.documentElement;
+	const colorScheme = getComputedStyle(root).colorScheme;
+	const light = colorScheme.split(/\s+/).includes("light");
 	const base =
-		dataTheme === "light" ? "vs" : dataTheme === "high-contrast" ? "hc-black" : "vs-dark";
+		root.dataset.themeContrast === "high"
+			? light
+				? "hc-light"
+				: "hc-black"
+			: light
+				? "vs"
+				: "vs-dark";
 	try {
 		m.editor.defineTheme(THEME, { base, inherit: true, rules, colors });
 	} catch {
@@ -99,7 +110,7 @@ const beforeMount: BeforeMount = (m) => defineThinkrailTheme(m);
 export default function MonacoEditor({ path, content }: { path: string; content: string }) {
 	const observerRef = useRef<MutationObserver | null>(null);
 
-	// Re-theme Monaco on a `[data-theme]` swap: its chrome + built-in base are read once at define time, so
+	// Re-theme Monaco on a `[data-theme]` swap: its chrome + contrast-aware base are read once at define time, so
 	// without this the editor would keep the theme it mounted with. Mirrors TerminalInstance's observer.
 	const onMount: OnMount = (_editor, m) => {
 		const observer = new MutationObserver(() => {

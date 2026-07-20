@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DEFAULT_CONFIG, Theme } from "@thinkrail/contracts";
+import { DEFAULT_CONFIG } from "@thinkrail/contracts";
 import { getConfig, resetConfigCache, setSettingsPublisher, updateConfig } from "./settings";
 
 let dataDir: string;
@@ -26,26 +26,27 @@ test("getConfig falls back to DEFAULT_CONFIG when no config.json exists", () => 
 	expect(getConfig()).toEqual(DEFAULT_CONFIG);
 });
 
-test("updateConfig merges, persists to config.json, and returns the merged config", () => {
-	const next = updateConfig({ theme: Theme.Darcula });
-	expect(next.theme).toBe(Theme.Darcula);
-	// Persisted to disk.
+test("updateConfig merges, persists an opaque theme id, and returns the merged config", () => {
+	const opaqueTheme = "acme.solarized";
+	const next = updateConfig({ theme: opaqueTheme });
+	expect(next.theme).toBe(opaqueTheme);
+	// Persisted to disk without requiring a server-side theme catalog.
 	const onDisk = JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8"));
-	expect(onDisk.theme).toBe(Theme.Darcula);
+	expect(onDisk.theme).toBe(opaqueTheme);
 	// Cached: a re-read reflects it without touching disk again.
-	expect(getConfig().theme).toBe(Theme.Darcula);
+	expect(getConfig().theme).toBe(opaqueTheme);
 });
 
 test("updateConfig broadcasts the new config through the injected publisher", () => {
 	const seen: string[] = [];
 	setSettingsPublisher((c) => seen.push(c.theme));
-	updateConfig({ theme: Theme.Light });
-	expect(seen).toEqual([Theme.Light]);
+	updateConfig({ theme: "acme.broadcast" });
+	expect(seen).toEqual(["acme.broadcast"]);
 });
 
 test("a null publisher makes updates silent no-ops (still persisted)", () => {
 	setSettingsPublisher(null);
-	expect(() => updateConfig({ theme: Theme.Light })).not.toThrow();
+	expect(() => updateConfig({ theme: "acme.silent" })).not.toThrow();
 	expect(existsSync(join(dataDir, "config.json"))).toBe(true);
 });
 

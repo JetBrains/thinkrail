@@ -15,7 +15,7 @@ import type {
 	Workspace,
 	WorkspaceFsChangedPayload,
 } from "@thinkrail/contracts";
-import { isAskUserAnswersMessage, Theme } from "@thinkrail/contracts";
+import { DEFAULT_CONFIG, isAskUserAnswersMessage } from "@thinkrail/contracts";
 import { create } from "zustand";
 import type { LoginState } from "../auth";
 import type { HydratedRuntime } from "../chat/hydrate";
@@ -582,7 +582,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	activeLogin: null,
 	settingsOpen: false,
 	settingsSection: SettingsSection.Providers,
-	theme: Theme.Dark,
+	theme: DEFAULT_CONFIG.theme,
 	toasts: [],
 	setStatus: (status) => set({ status }),
 	setWelcome: (protocolVersion) => set({ protocolVersion }),

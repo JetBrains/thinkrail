@@ -1,9 +1,10 @@
 import type { ThemeId } from "@thinkrail/contracts";
 import { Check } from "lucide-react";
+import { useSyncExternalStore } from "react";
 import { cn } from "@/lib";
 import { toast, useAppStore } from "@/store";
+import { getThemes, resolveTheme, subscribeThemes } from "@/themes";
 import { getTransport } from "@/transport";
-import { THEMES } from "@/utils/theme";
 
 /**
  * The "Appearance" settings section: the theme picker. Server-synced — clicking a theme fires
@@ -13,6 +14,8 @@ import { THEMES } from "@/utils/theme";
  */
 export function AppearanceSettings() {
 	const theme = useAppStore((s) => s.theme);
+	const themes = useSyncExternalStore(subscribeThemes, getThemes, getThemes);
+	const activeThemeId = resolveTheme(theme).id;
 
 	const select = (id: ThemeId) => {
 		if (id === theme) return;
@@ -30,14 +33,17 @@ export function AppearanceSettings() {
 				</p>
 			</div>
 			<div className="flex flex-col gap-xs">
-				{THEMES.map(({ id, label }) => {
-					const active = id === theme;
+				{themes.map(({ id, label, appearance, contrast }) => {
+					const active = id === activeThemeId;
 					return (
 						<button
 							key={id}
 							type="button"
 							aria-pressed={active}
 							data-testid={`theme-option-${id}`}
+							data-theme-id={id}
+							data-appearance={appearance}
+							data-contrast={contrast}
 							data-active={active}
 							onClick={() => select(id)}
 							className={cn(

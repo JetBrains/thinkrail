@@ -1,22 +1,16 @@
 import { useEffect, useState } from "react";
 import { createHighlighterCore, type HighlighterCore } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
-import { DARCULA_SHIKI, HC_BLACK_SHIKI, SHIKI_THEMES } from "@/lib/shikiTheme";
+import { THINKRAIL_SHIKI_THEME, THINKRAIL_SHIKI_THEME_NAME } from "@/themes";
 
-// Every `SHIKI_THEMES` palette (from `lib/shikiTheme.ts`) so a theme swap needs no re-highlight: one
-// render emits every palette as CSS vars and the `[data-theme]` rules in global.css flip between them.
+// One generic TextMate registration emits semantic CSS-variable colors, so a registry swap updates this
+// markup without re-highlighting or importing every bundled syntax theme.
 
 // One shared highlighter: only the `diff` grammar, on the JS regex engine (no WASM).
 let highlighter: Promise<HighlighterCore> | null = null;
 function getHighlighter(): Promise<HighlighterCore> {
 	highlighter ??= createHighlighterCore({
-		themes: [
-			import("@shikijs/themes/github-dark-default"),
-			import("@shikijs/themes/github-light-default"),
-			import("@shikijs/themes/gruvbox-dark-hard"),
-			DARCULA_SHIKI,
-			HC_BLACK_SHIKI,
-		],
+		themes: [THINKRAIL_SHIKI_THEME],
 		langs: [import("@shikijs/langs/diff")],
 		engine: createJavaScriptRegexEngine(),
 	});
@@ -30,9 +24,7 @@ export default function DiffViewer({ diff }: { diff: string }) {
 	useEffect(() => {
 		let cancelled = false;
 		getHighlighter()
-			.then((hl) =>
-				hl.codeToHtml(diff, { lang: "diff", themes: SHIKI_THEMES, defaultColor: "dark" }),
-			)
+			.then((hl) => hl.codeToHtml(diff, { lang: "diff", theme: THINKRAIL_SHIKI_THEME_NAME }))
 			.then((h) => {
 				if (!cancelled) setHtml(h);
 			})

@@ -42,7 +42,6 @@
         "@radix-ui/react-toast": "1.2.19",
         "@radix-ui/react-tooltip": "1.2.10",
         "@shikijs/langs": "4.2.0",
-        "@shikijs/themes": "4.2.0",
         "@thinkrail/contracts": "workspace:*",
         "@xterm/addon-clipboard": "0.2.0",
         "@xterm/addon-fit": "0.11.0",
