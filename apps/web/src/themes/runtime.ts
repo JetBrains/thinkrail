@@ -59,7 +59,7 @@ const ANSI_VARIABLES: Record<AnsiColorKey, string> = {
 	brightWhite: "--ansi-bright-white",
 };
 
-const SYNTAX_VARIABLES: Record<SyntaxColorKey, string> = {
+export const SYNTAX_VARIABLES: Record<SyntaxColorKey, string> = {
 	foreground: "--code-foreground",
 	comment: "--code-comment",
 	commentDoc: "--code-comment-doc",
