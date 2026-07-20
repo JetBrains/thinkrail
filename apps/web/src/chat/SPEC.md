@@ -87,11 +87,15 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   so "answered / superseded / awaiting" is a fact about the transcript, not a tool status — derived once
   per runtime snapshot and consumed by the card via context, keeping it props-driven everywhere else.
 - **Hydration** (`hydrate.ts`) — the pure `messagesToRuntime(TranscriptMessage[])` converter (read-side
-  counterpart of the event reducer): rebuilds `{ turns, toolResults, askAnswers }` (a `HydratedRuntime`)
-  from a persisted transcript so a reconnecting/second client renders identically to the live path (same
-  `raw` result shape, same error-turn surfacing for `stopReason: "error"`). `custom` messages never
-  become turns: known ones (`ask-user-answers`) index into `askAnswers`; unknown customTypes are
-  ignored. No store/transport/shiki.
+  counterpart of the event reducer): rebuilds `{ turns, toolResults, askAnswers, turnIdByMessageIndex }`
+  (a `HydratedRuntime`) from a persisted transcript so a reconnecting/second client renders identically to
+  the live path (same `raw` result shape, same error-turn surfacing for `stopReason: "error"`). It also
+  returns `turnIdByMessageIndex` (message-position → minted turn id) — the jump anchor map a
+  history-search "jump to message" deep link (`chatLocationRequest`, see `store/SPEC.md`) resolves
+  against; entries are `null` for a `toolResult`/`custom` message (never its own turn), and a message that
+  ended in `stopReason: "error"` maps to its own assistant turn's id, never the synthesized error turn's.
+  `custom` messages never become turns: known ones (`ask-user-answers`) index into `askAnswers`; unknown
+  customTypes are ignored. No store/transport/shiki.
 - **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions, `/`
   commands, image paste/drop), `ModelSelector` + `ThinkingSelector` (shared with `NewWorkspaceDialog`;
   optional `container` prop portals their popovers into a host Dialog), `SessionStatsBar`, `ChatHeader`

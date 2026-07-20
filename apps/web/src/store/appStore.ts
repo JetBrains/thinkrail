@@ -97,6 +97,18 @@ export interface ClosedChat {
 }
 
 /**
+ * A history-search "jump to message" deep link: which workspace/session/message to open and scroll to.
+ * `anchorText` (a prefix of the hit's message text, from `MessageHit`) lets the consumer validate/fall
+ * back if the live transcript drifted from the indexed hit (e.g. after compaction).
+ */
+export interface ChatLocationRequest {
+	workspaceId: string;
+	sessionId: string;
+	messageIndex: number;
+	anchorText: string;
+}
+
+/**
  * The live state of one chat session, keyed by its `sessionId` in `store.sessions`. The host already runs
  * N independent `AgentSession`s, so each gets its own runtime here — events route to it by id, letting
  * several chats stream concurrently while switching tabs is an instant in-memory swap.
@@ -104,6 +116,13 @@ export interface ClosedChat {
 export interface SessionRuntime {
 	/** Conversation as pi-canonical turns (user/assistant messages + web-local system notices). */
 	turns: ChatTurn[];
+	/**
+	 * Message-position → turn id, from hydration (`hydrate.ts`'s `HydratedRuntime`); absent until this
+	 * chat has been hydrated (a freshly created session never sets it). The `chatLocationRequest`
+	 * jump-to-message deep link resolves its `messageIndex` against this map, falling back to the
+	 * request's `anchorText` when absent (e.g. an already-live chat `hydrateSession` no-op'd on).
+	 */
+	turnIdByMessageIndex?: (string | null)[];
 	/** Live tool state keyed by toolCallId; paired with the toolCall block inside an assistant turn. */
 	toolResults: Record<string, ToolResultState>;
 	/** `ask_user_question` replies keyed by tool call id (from `ask-user-answers` custom messages). */
@@ -377,6 +396,13 @@ interface AppState {
 	 */
 	changesRequest: { workspaceId: string; path: string } | null;
 	/**
+	 * A history-search "jump to message" deep link, set by `requestChatLocation` and consumed by
+	 * `CenterTabs` (open/hydrate the target chat tab) then `ChatView` (scroll to the anchored turn, then
+	 * clear it) — a fresh object each call so identical re-requests (e.g. the same hit clicked twice)
+	 * still fire.
+	 */
+	chatLocationRequest: ChatLocationRequest | null;
+	/**
 	 * The live-refresh signal, per workspace: `tick` increments on every `workspace.fsChanged` push (the
 	 * host's debounced worktree change notifier); `paths`/`truncated` are the LAST batch only. Panels
 	 * select their workspace's entry and silently refetch on `tick` change — the store holds only the
@@ -505,6 +531,13 @@ interface AppState {
 	applyConfig: (config: AppConfig) => void;
 	/** Ask the right panel to open `path`'s diff in its Changes view (deep-link from chat). */
 	requestChangesView: (workspaceId: string, path: string) => void;
+	/**
+	 * Open a history-search hit: sets `chatLocationRequest` AND switches `activeWorkspaceId` (the hit's
+	 * chat can live in a different workspace than the one the search ran from).
+	 */
+	requestChatLocation: (req: ChatLocationRequest) => void;
+	/** Dismiss the jump deep link once `ChatView` has consumed it (scrolled to the anchored turn). */
+	clearChatLocation: () => void;
 	/** Enqueue a toast; returns its id so a caller can dismiss it early. An identical live toast (same
 	 * variant/title/message — e.g. a retried failure) coalesces: no twin is added, the existing id returns.
 	 * The queue caps at `MAX_TOASTS` (oldest drop). Prefer the `toast` helper. */
@@ -596,6 +629,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	sessions: {},
 	models: [],
 	changesRequest: null,
+	chatLocationRequest: null,
 	fsChangesByWorkspace: {},
 	activeLogin: null,
 	settingsOpen: false,
@@ -902,6 +936,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 				toolResults: hydrated.toolResults,
 				askAnswers: hydrated.askAnswers,
 				isStreaming: summary.isStreaming,
+				...(hydrated.turnIdByMessageIndex
+					? { turnIdByMessageIndex: hydrated.turnIdByMessageIndex }
+					: {}),
 			};
 			const id = `${wsId}:${summary.sessionId}`;
 			const tab: ChatTab = {
@@ -1029,6 +1066,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 	setSettingsSection: (section) => set({ settingsSection: section }),
 	applyConfig: (config) => set({ theme: config.theme }),
 	requestChangesView: (workspaceId, path) => set({ changesRequest: { workspaceId, path } }),
+	requestChatLocation: (req) =>
+		set({ chatLocationRequest: req, activeWorkspaceId: req.workspaceId }),
+	clearChatLocation: () => set({ chatLocationRequest: null }),
 	pushToast: (toast) => {
 		const twin = get().toasts.find(
 			(t) => t.variant === toast.variant && t.title === toast.title && t.message === toast.message,

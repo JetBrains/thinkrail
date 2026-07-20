@@ -100,14 +100,21 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   right panel to surface a file's diff); the panels watch it, scoped by workspace. **`openDoc(tab)`** opens
   (or refreshes + focuses) an ephemeral **`DocTab`** — inline rendered-markdown content, never backed by a
   file on disk (no fs re-read / source toggle) — used for on-demand snapshots like the plan-as-markdown
-  export. The `EditorTab` (`FileTab` | `ChatTab` | `DocTab`) + `TerminalTab` + `ClosedChat` +
-  `SessionRuntime` types. (Chat *render* types + renderers live in the `chat` module.) The pure context
-  selectors in `selectors.ts` resolve the active `Workspace`, its owning project id, and the shell's context
-  project from those canonical ids and collections; derived active-project state is never stored separately.
+  export. The transient **`chatLocationRequest`** — the history-search jump deep link; the requester
+  switches the active workspace, `CenterTabs` opens/hydrates the target chat, `ChatView` consumes + clears
+  — is **`ChatLocationRequest { workspaceId, sessionId, messageIndex, anchorText }`**, set by
+  **`requestChatLocation(req)`** (which also sets `activeWorkspaceId: req.workspaceId`, since the target
+  chat can live in a different workspace than the one the search ran from) and cleared by
+  **`clearChatLocation()`**; the target's anchor resolves against the runtime's `turnIdByMessageIndex`
+  (see `chat/SPEC.md`'s hydration bullet), falling back to `anchorText` when absent. The `EditorTab`
+  (`FileTab` | `ChatTab` | `DocTab`) + `TerminalTab` + `ClosedChat` + `SessionRuntime` types. (Chat
+  *render* types + renderers live in the `chat` module.) The pure context selectors in `selectors.ts`
+  resolve the active `Workspace`, its owning project id, and the shell's context project from those
+  canonical ids and collections; derived active-project state is never stored separately.
 - **Public surface (barrel):** `useAppStore`; `selectActiveWorkspace`,
   `selectActiveWorkspaceProjectId`, and `selectContextProject`; `toast` (the fire-from-anywhere helper),
   `Toast` (type), `EditorTab` (`FileTab`/`ChatTab`/`DocTab`), `TerminalTab`, `ClosedChat`, `SessionRuntime` +
-  `EMPTY_RUNTIME` (ChatView's pre-creation fallback), `reduceSessionEvent`.
+  `EMPTY_RUNTIME` (ChatView's pre-creation fallback), `ChatLocationRequest` (type), `reduceSessionEvent`.
 - **Allowed deps:** `contracts` (`Project`/`Workspace`/`Model`/`ThinkingLevel`/`SessionStats`/
   `SlashCommandInfo`/`ExtUiRequest`/`LoginPush`/`WorkspaceFsChangedPayload`/`AppConfig`/`ThemeId`;
   `DEFAULT_CONFIG` for the pre-welcome default; `PiEvent`/`LoginFrame`, **type-only**); `chat`
