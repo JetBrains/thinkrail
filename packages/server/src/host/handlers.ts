@@ -2,6 +2,7 @@ import type {
 	AppConfig,
 	AskUserQuestionResult,
 	ExtUiResponse,
+	HistoryScope,
 	ImageContent,
 	LoginReply,
 	ThinkingLevel,
@@ -45,6 +46,7 @@ import { selectDirectory } from "../dialog";
 import { readDir, readFile } from "../fs";
 import { gitDiff, gitStatus, listBranches, prefetchBranch } from "../git";
 import { githubAuthStatus, githubRefresh } from "../github";
+import { getHistoryIndex } from "../history";
 import {
 	closeProject,
 	initProject,
@@ -72,6 +74,7 @@ import {
 	workspaceDiffStats,
 } from "../workspaces";
 import { ackSend } from "./ackSend";
+import { buildHistoryScope } from "./historyScope";
 
 type Handler = (params: unknown) => unknown | Promise<unknown>;
 
@@ -308,6 +311,20 @@ const handlers: Record<string, Handler> = {
 	// Merge + persist a partial into the server-synced app config (theme, …); the broadcast is fired by
 	// `updateConfig`'s injected publisher (wired in `createServer`), so every client converges.
 	"settings.update": (params) => updateConfig((params as { config: Partial<AppConfig> }).config),
+	// Prompt recall + conversation search over pi's session files. Scope mapping is resolved here (host
+	// owns the registries); the index itself stays registry-free (see history/SPEC.md).
+	"history.search": (params) => {
+		const p = params as { query: string; scope: HistoryScope; limit?: number };
+		const { filter, labels } = buildHistoryScope(p.scope, listProjects(), (projectId) =>
+			listWorkspaces(projectId),
+		);
+		return getHistoryIndex().search({
+			query: p.query,
+			filter,
+			labels,
+			...(p.limit ? { limit: p.limit } : {}),
+		});
+	},
 };
 
 /** Route a WS request to its handler. Throws on unknown method (→ a `{ ok:false }` WS response). */
