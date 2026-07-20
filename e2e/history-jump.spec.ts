@@ -26,8 +26,11 @@ test("selecting a same-workspace message hit opens the chat and flashes the matc
 	// builds it as `join(dataDir(), "worktrees", slug, branch)`, and every session opened for this
 	// workspace runs with that same cwd — so a fixture written there is indistinguishable from a session a
 	// real chat would have produced.
+	// No explicit `id`: this test never references the seeded session by id (the jump below is driven by
+	// `history.search`'s text match, not the id), so the default fresh-per-call id is enough — and,
+	// unlike a fixed literal id, survives a Playwright retry within the same `webServer` lifetime (see
+	// `seedWorkspaceSession`'s jsdoc for the "Unknown session" collision a fixed id causes there).
 	seedWorkspaceSession(workspaceA.worktreePath, {
-		id: "e2e-jump-same-ws",
 		messages: [
 			{ role: "user", text: "audit the retry backoff", timestamp: 1_700_100_000_000 },
 			{
@@ -90,8 +93,8 @@ test("selecting a cross-workspace message hit switches the active workspace and 
 }) => {
 	await openFixtureProject(page);
 	const workspaceA = await createWorkspaceViaDialog(page);
+	// No explicit `id` — same reasoning as the same-workspace jump test above.
 	seedWorkspaceSession(workspaceA.worktreePath, {
-		id: "e2e-jump-cross-ws",
 		messages: [
 			{ role: "user", text: "review the changelog draft", timestamp: 1_700_200_000_000 },
 			{

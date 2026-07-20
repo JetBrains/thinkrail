@@ -58,7 +58,7 @@ describe("writeFixtureSession — pinned against pi's real SessionManager", () =
 				cwd,
 				name: "Default layout pin",
 				messages: [{ role: "user", text: "seed prompt", timestamp: 1_700_000_000_000 }],
-			});
+			}).path;
 
 			// `getAgentDir()` (and therefore the no-arg default sessions root) reads `PI_CODING_AGENT_DIR`
 			// fresh on every call — verified by reading pi's `config.js`, not cached at module load — so

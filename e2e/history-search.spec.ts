@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject, openWorkspaceChat } from "./fixtures/app";
 import { seedExternalCwdSessions, seedWorkspaceSession } from "./fixtures/sessions";
@@ -175,8 +174,10 @@ test("plain ArrowUp/ArrowDown recall steps through this chat's own prior prompts
 }) => {
 	await openFixtureProject(page);
 	const workspace = await createWorkspaceViaDialog(page);
+	// No explicit `id`: this test never references the seeded session by id again (it reopens via the
+	// `chat-history` → `closed-chat-item` UI flow below), so the default fresh-per-call id is enough —
+	// and, unlike a fixed literal id, survives a Playwright retry within the same `webServer` lifetime.
 	seedWorkspaceSession(workspace.worktreePath, {
-		id: "e2e-recall-prompts",
 		messages: [
 			{ role: "user", text: "audit the retry backoff", timestamp: 1_700_400_000_000 },
 			{ role: "assistant", text: "Audited it — looks fine.", timestamp: 1_700_400_001_000 },
@@ -261,13 +262,12 @@ test("a recall step immediately followed by a full-value replace never doubles t
 	test.setTimeout(60_000);
 	await openFixtureProject(page);
 	const workspace = await createWorkspaceViaDialog(page);
+	// No explicit `id`: this test loops many repeated recall/replace cycles and is meant to be re-run
+	// under `--repeat-each` to prove the race stays closed. A fixed literal id would collide with an
+	// in-memory session entry from an earlier repeat's (differently-`workspaceId`'d) run within the same
+	// shared webServer lifetime, failing with "Unknown session" before ever reaching the code path this
+	// test exists to exercise — the default fresh-per-call id (`seedWorkspaceSession`) sidesteps that.
 	seedWorkspaceSession(workspace.worktreePath, {
-		// Unique per run (unlike this file's other fixed literal ids): this test loops many repeated
-		// recall/replace cycles and is meant to be re-run under `--repeat-each` to prove the race stays
-		// closed. A fixed id would collide with an in-memory session entry from an earlier repeat's
-		// (differently-`workspaceId`'d) run within the same shared webServer lifetime, failing with
-		// "Unknown session" before ever reaching the code path this test exists to exercise.
-		id: `e2e-recall-race-${randomUUID()}`,
 		messages: [
 			{ role: "user", text: "write a test for the jitter", timestamp: 1_700_500_000_000 },
 			{ role: "assistant", text: "Added a test.", timestamp: 1_700_500_001_000 },
@@ -316,8 +316,9 @@ test("a prompt repeated earlier in the chat recalls at its most recent position,
 }) => {
 	await openFixtureProject(page);
 	const workspace = await createWorkspaceViaDialog(page);
+	// No explicit `id` — same reasoning as the recall test above: this test never references the seeded
+	// session by id, so the default fresh-per-call id (survives a same-process retry) is enough.
 	seedWorkspaceSession(workspace.worktreePath, {
-		id: "e2e-recall-dedup",
 		messages: [
 			{ role: "user", text: "alpha", timestamp: 1_700_450_000_000 },
 			{ role: "assistant", text: "ok", timestamp: 1_700_450_001_000 },

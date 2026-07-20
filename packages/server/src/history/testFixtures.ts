@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
@@ -10,30 +11,37 @@ import { join, resolve } from "node:path";
  * multi-session fixtures must NOT nest files in per-cwd subdirectories the way pi's real default
  * sessions root does; distinct `cwd`s are expressed via each file's own header instead.
  *
+ * `opts.id` is optional — omit it to get a fresh `sess-<uuid>` every call (the right default for a
+ * fixture that's seeded once and never referenced by id again); pass an explicit `id` when a caller
+ * needs it to be deterministic (idempotent re-seeding across calls, or a test that asserts against the
+ * literal id) — see e.g. `testFixtures.test.ts`'s pinning cases, which always pass one on purpose.
+ *
  * Exported (not test-only in the barrel sense) so A5's e2e fixture seeder can reuse it against a real
  * on-disk sessions directory.
  *
- * @returns the written file's path — callers can `appendFileSync` more lines onto it directly (e.g. to
- * exercise `HistoryIndex`'s mtime revalidation).
+ * @returns the resolved `id` (generated or the one passed in) and the written file's `path` — callers
+ * can `appendFileSync` more lines onto `path` directly (e.g. to exercise `HistoryIndex`'s mtime
+ * revalidation).
  */
 export function writeFixtureSession(
 	dir: string,
 	opts: {
-		id: string;
+		id?: string;
 		cwd: string;
 		name?: string;
 		messages: Array<{ role: "user" | "assistant"; text: string; timestamp: number }>;
 	},
-): string {
+): { id: string; path: string } {
 	mkdirSync(dir, { recursive: true });
 
-	const entryId = (suffix: string) => `${opts.id}-${suffix}`;
+	const sessionId = opts.id ?? `sess-${randomUUID()}`;
+	const entryId = (suffix: string) => `${sessionId}-${suffix}`;
 	let parentId: string | null = null;
 	const lines: string[] = [
 		JSON.stringify({
 			type: "session",
 			version: 3,
-			id: opts.id,
+			id: sessionId,
 			timestamp: new Date(opts.messages[0]?.timestamp ?? Date.now()).toISOString(),
 			cwd: opts.cwd,
 		}),
@@ -74,9 +82,9 @@ export function writeFixtureSession(
 		parentId = id;
 	});
 
-	const path = join(dir, `${opts.messages[0]?.timestamp ?? Date.now()}_${opts.id}.jsonl`);
+	const path = join(dir, `${opts.messages[0]?.timestamp ?? Date.now()}_${sessionId}.jsonl`);
 	writeFileSync(path, `${lines.join("\n")}\n`);
-	return path;
+	return { id: sessionId, path };
 }
 
 /**

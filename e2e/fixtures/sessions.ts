@@ -65,13 +65,22 @@ export function seedExternalCwdSessions(agentDir: string = E2E_PI_AGENT_DIR): vo
 /**
  * Seeds a session for a real workspace worktree cwd created during a test, using the same default-layout
  * encoding the e2e host's `HistoryIndex` discovers — for later tasks (A6+) that need searchable history
- * scoped to an actual workspace rather than the unmapped `E2E_EXTERNAL_CWD`. Returns the written file's
- * path (appendable, like `writeFixtureSession` itself, e.g. to exercise mtime revalidation).
+ * scoped to an actual workspace rather than the unmapped `E2E_EXTERNAL_CWD`.
+ *
+ * `opts.id` is optional and defaults (via `writeFixtureSession`) to a fresh `sess-<uuid>` per call — the
+ * right choice for most tests, since it's what lets the *same* server process (one `webServer` lifetime
+ * spans the whole Playwright run, including every `--repeat-each` repeat) attach each seeded session
+ * without the "Unknown session" collision a fixed literal id causes once a second repeat's differently-
+ * `workspaceId`'d attempt reuses it (see `AgentSessionManager`'s in-memory `sessions` map). Pass an
+ * explicit `id` only when a test asserts against the literal id or otherwise needs it deterministic.
+ *
+ * @returns the resolved `id` and the written file's `path` (appendable, like `writeFixtureSession`
+ * itself, e.g. to exercise mtime revalidation).
  */
 export function seedWorkspaceSession(
 	worktreePath: string,
 	opts: Omit<Parameters<typeof writeFixtureSession>[1], "cwd">,
-): string {
+): { id: string; path: string } {
 	const dir = defaultSessionDirFor(E2E_PI_AGENT_DIR, worktreePath);
 	return writeFixtureSession(dir, { ...opts, cwd: worktreePath });
 }

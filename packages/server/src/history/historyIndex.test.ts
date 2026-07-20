@@ -151,7 +151,7 @@ describe("HistoryIndex.search", () => {
 			id: "sess-a",
 			cwd: "/repo/a",
 			messages: [{ role: "user", text: "original prompt one", timestamp: 1000 }],
-		});
+		}).path;
 
 		const index = new HistoryIndex(dir);
 		const first = await index.search({ query: "prompt", filter: allowAll, labels: noLabels });
