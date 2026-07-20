@@ -6,6 +6,7 @@ import type {
 	SessionEventPayload,
 	Workspace,
 	WorkspaceFsChangedPayload,
+	WorkspaceHookEvent,
 	WorkspaceRemoved,
 } from "@thinkrail/contracts";
 import { WS_CHANNELS } from "@thinkrail/contracts";
@@ -67,6 +68,10 @@ export function initTransport(): WsTransport {
 
 	transport.subscribe(WS_CHANNELS.workspaceFsChanged, (data) => {
 		useAppStore.getState().noteFsChanged(data as WorkspaceFsChangedPayload);
+	});
+
+	transport.subscribe(WS_CHANNELS.workspaceHook, (data) => {
+		useAppStore.getState().applyWorkspaceHookEvent(data as WorkspaceHookEvent);
 	});
 
 	// A server-synced settings change (theme, …) — every client converges on this broadcast, including the

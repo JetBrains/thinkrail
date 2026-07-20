@@ -19,11 +19,13 @@ The single WebSocket client to the host, and its app-wide singleton.
   from the WS `url` — for building host HTTP URLs like the `/files/<workspaceId>/<path>` worktree-file
   endpoint the markdown viewer points relative `<img>`s at, targeting the same host the transport dials); `wireTransport.ts` (`initTransport`/
   `getTransport` singleton; routes the `server.welcome`, `pi.event`, `pi.extensionUi`, **the
-  `workspace.created`/`updated`/`removed` lifecycle trio, and `workspace.fsChanged`** into the store —
+  `workspace.created`/`updated`/`removed` lifecycle trio, `workspace.fsChanged`, and `workspace.hook`**
+  into the store —
   `pi.event` via `handlePiEvent(event, sessionId)`, `pi.extensionUi` via `applyExtUi(request)`,
   `workspace.created` via `addWorkspace(workspace)`, `workspace.updated` via `updateWorkspace(workspace)`,
   `workspace.removed` via `applyWorkspaceRemoved(projectId, id)`, `workspace.fsChanged` via
-  `noteFsChanged(payload)`, and **`settings.changed`** (+ the `config` field in `server.welcome`) via
+  `noteFsChanged(payload)`, `workspace.hook` via `applyWorkspaceHookEvent(event)`, and
+  **`settings.changed`** (+ the `config` field in `server.welcome`) via
   `applyConfig(config)` — the server-synced app config (theme, …), applied on connect + on every broadcast
   so clients converge; all subscriptions happen once at init, never in component effects);
   `errorText.ts` (**`errorText(err, fallback?)`** — normalizes a rejected `request` (the host's error
@@ -32,6 +34,7 @@ The single WebSocket client to the host, and its app-wide singleton.
 - **Allowed deps:** `contracts` (method maps, `WS_CHANNELS`, `Project` for welcome, `SessionEventPayload`
   for `pi.event`, `ExtUiRequest` for `pi.extensionUi`, `Workspace` for `workspace.created`/`updated`,
   `WorkspaceRemoved` for `workspace.removed`, `WorkspaceFsChangedPayload` for `workspace.fsChanged`,
+  `WorkspaceHookEvent` for `workspace.hook`,
   `AppConfig` for `server.welcome`'s config + `settings.changed`); `store`
   (welcome + event routing — a runtime edge owned by the parent graph); the browser `WebSocket`.
 - **Forbidden:** `server`/`shared`/any `pi` package; importing `panels`/`shell`.

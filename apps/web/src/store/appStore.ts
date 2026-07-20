@@ -2,6 +2,8 @@ import type {
 	AppConfig,
 	AskUserQuestionResult,
 	ExtUiRequest,
+	HookName,
+	HookStatus,
 	LoginFrame,
 	LoginPush,
 	PiEvent,
@@ -14,6 +16,7 @@ import type {
 	WireModel,
 	Workspace,
 	WorkspaceFsChangedPayload,
+	WorkspaceHookEvent,
 } from "@thinkrail/contracts";
 import { isAskUserAnswersMessage, Theme } from "@thinkrail/contracts";
 import { create } from "zustand";
@@ -68,6 +71,28 @@ export interface Toast {
 /** Toast-queue cap: the viewport stacks without scrolling, so past a screenful the oldest drop to keep
  * the newest visible. */
 const MAX_TOASTS = 5;
+
+/** Live hook-output cap (chars) — a chatty `onCreate` (e.g. `pnpm install`) shouldn't grow this
+ * unboundedly in memory; the Hooks panel only ever needs to show the tail. */
+const HOOK_OUTPUT_CAP = 20_000;
+
+/** Derive the durable `HookStatus` a non-output `WorkspaceHookEvent` implies — mirrors the same mapping
+ * the host persists server-side (`workspaces/hooks/hooks.ts`); duplicated here rather than shared, since
+ * `apps/web` depends on `@thinkrail/contracts` only, never server code. */
+function hookStatusFromEvent(
+	event: Exclude<WorkspaceHookEvent, { kind: "hookOutput" }>,
+): HookStatus {
+	switch (event.kind) {
+		case "hookAwaitingApproval":
+			return { state: "awaitingApproval", command: event.command };
+		case "hookStarted":
+			return { state: "running" };
+		case "hookSucceeded":
+			return { state: "succeeded" };
+		case "hookFailed":
+			return { state: "failed", exitCode: event.exitCode };
+	}
+}
 
 /** A terminal tab. `clientId` is the stable UI key; the server PTY id is owned by its `TerminalInstance`. */
 export interface TerminalTab {
@@ -371,6 +396,22 @@ interface AppState {
 	 */
 	fsChangesByWorkspace: Record<string, { tick: number; paths: string[]; truncated: boolean }>;
 	/**
+	 * A request to surface a workspace's Hooks view in the right panel (mirrors `changesRequest`) — set
+	 * when a row's hook badge is clicked for anything other than an approval prompt (that opens a dialog
+	 * instead of switching tabs).
+	 */
+	hooksRequest: { workspaceId: string } | null;
+	/**
+	 * Live hook output, per workspace + hook name: `tick` increments on every `workspace.hook` push for that
+	 * pair; `output` accumulates streamed `hookOutput` chunks (capped) and resets on a fresh
+	 * `hookStarted`/`hookAwaitingApproval`. Purely a live view for the currently-open panel — the durable
+	 * last-known state (survives a reload) lives on `Workspace.hookStatus` instead.
+	 */
+	hookOutputByWorkspace: Record<
+		string,
+		Partial<Record<HookName, { tick: number; output: string }>>
+	>;
+	/**
 	 * The in-flight in-app OAuth login, if any (flat + session-less — a login runs on the Welcome screen
 	 * before any session exists, so it must NOT live under a session runtime, or its frames get dropped).
 	 * At most one at a time (the dialog is modal).
@@ -423,6 +464,13 @@ interface AppState {
 	setFileTabView: (id: string, view: "rendered" | "source") => void;
 	/** Fold a `workspace.fsChanged` push into the live-refresh signal (tick++, last batch replaces). */
 	noteFsChanged: (payload: WorkspaceFsChangedPayload) => void;
+	/**
+	 * Fold a `workspace.hook` push: append to the live output buffer (reset on a fresh run), and — for
+	 * every kind but `hookOutput` — mirror the transition onto the workspace's own `hookStatus` field too,
+	 * so the row badge/tab updates immediately without waiting on a `workspace.updated` round-trip. A
+	 * workspace not found in any loaded project's list (not yet fetched) only updates the live buffer.
+	 */
+	applyWorkspaceHookEvent: (event: WorkspaceHookEvent) => void;
 	/** Replace a file tab's content after a live re-read, recording the fs tick it was loaded at. The tab
 	 * is located across workspaces by its (globally unique) id; a closed tab is a no-op. */
 	updateFileTabContent: (id: string, content: string, tick: number) => void;
@@ -487,6 +535,8 @@ interface AppState {
 	applyConfig: (config: AppConfig) => void;
 	/** Ask the right panel to open `path`'s diff in its Changes view (deep-link from chat). */
 	requestChangesView: (workspaceId: string, path: string) => void;
+	/** Ask the right panel to switch to its Hooks view for `workspaceId` (deep-link from a row's badge). */
+	requestHooksView: (workspaceId: string) => void;
 	/** Enqueue a toast; returns its id so a caller can dismiss it early. An identical live toast (same
 	 * variant/title/message — e.g. a retried failure) coalesces: no twin is added, the existing id returns.
 	 * The queue caps at `MAX_TOASTS` (oldest drop). Prefer the `toast` helper. */
@@ -579,6 +629,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	models: [],
 	changesRequest: null,
 	fsChangesByWorkspace: {},
+	hooksRequest: null,
+	hookOutputByWorkspace: {},
 	activeLogin: null,
 	settingsOpen: false,
 	settingsSection: SettingsSection.Providers,
@@ -636,7 +688,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 		// Drop the live-refresh signal too — a removed workspace's fs tick record must not linger.
 		set((state) => {
 			const { [workspaceId]: _gone, ...rest } = state.fsChangesByWorkspace;
-			return { fsChangesByWorkspace: rest };
+			const { [workspaceId]: _goneHooks, ...restHooks } = state.hookOutputByWorkspace;
+			return { fsChangesByWorkspace: rest, hookOutputByWorkspace: restHooks };
 		});
 		if (wasActive) {
 			s.setActiveWorkspace(null); // the shell falls back to the project Welcome
@@ -699,6 +752,48 @@ export const useAppStore = create<AppState>((set, get) => ({
 						paths: payload.paths,
 						truncated: payload.truncated,
 					},
+				},
+			};
+		}),
+	applyWorkspaceHookEvent: (event) =>
+		set((s) => {
+			const wsOutput = s.hookOutputByWorkspace[event.workspaceId] ?? {};
+			const prev = wsOutput[event.hook];
+			// A fresh attempt (approval-pending or actually starting) clears the prior run's output; a
+			// terminal state (succeeded/failed) keeps it visible until the next fresh attempt overwrites it.
+			const resetOutput = event.kind === "hookStarted" || event.kind === "hookAwaitingApproval";
+			const hookOutputByWorkspace = {
+				...s.hookOutputByWorkspace,
+				[event.workspaceId]: {
+					...wsOutput,
+					[event.hook]: {
+						tick: (prev?.tick ?? 0) + 1,
+						output:
+							event.kind === "hookOutput"
+								? ((prev?.output ?? "") + event.chunk).slice(-HOOK_OUTPUT_CAP)
+								: resetOutput
+									? ""
+									: (prev?.output ?? ""),
+					},
+				},
+			};
+			if (event.kind === "hookOutput") return { hookOutputByWorkspace };
+
+			const status = hookStatusFromEvent(event);
+			const entry = Object.entries(s.workspaces).find(([, list]) =>
+				list.some((w) => w.id === event.workspaceId),
+			);
+			if (!entry) return { hookOutputByWorkspace }; // not yet fetched — the next workspace.list reconciles
+			const [projectId, list] = entry;
+			return {
+				hookOutputByWorkspace,
+				workspaces: {
+					...s.workspaces,
+					[projectId]: list.map((w) =>
+						w.id === event.workspaceId
+							? { ...w, hookStatus: { ...w.hookStatus, [event.hook]: status } }
+							: w,
+					),
 				},
 			};
 		}),
@@ -998,6 +1093,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	setSettingsSection: (section) => set({ settingsSection: section }),
 	applyConfig: (config) => set({ theme: config.theme }),
 	requestChangesView: (workspaceId, path) => set({ changesRequest: { workspaceId, path } }),
+	requestHooksView: (workspaceId) => set({ hooksRequest: { workspaceId } }),
 	pushToast: (toast) => {
 		const twin = get().toasts.find(
 			(t) => t.variant === toast.variant && t.title === toast.title && t.message === toast.message,
