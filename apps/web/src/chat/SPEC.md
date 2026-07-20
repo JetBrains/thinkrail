@@ -80,11 +80,18 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 
 - **`ChatActions`** — a React context (provided by `ChatView`, `null` standalone): how a renderer talks
   **back** to the agent without importing store/transport. Today: `answerQuestion(toolCallId, result)` —
-  it rejects when the host refuses, and the caller owns the failure UX.
-- **Hydration** (`hydrate.ts`) — the pure `messagesToRuntime(Message[])` converter (read-side counterpart
-  of the event reducer): rebuilds `{ turns, toolResults }` from a persisted transcript so a
-  reconnecting/second client renders identically to the live path (same `raw` result shape, same
-  error-turn surfacing for `stopReason: "error"`). No store/transport/shiki.
+  it rejects when the host refuses (unknown/answered/superseded call), and the caller owns the failure UX.
+- **`askState`** — the questionnaire lifecycle seam: the pure `deriveAskStates(turns, askAnswers)` +
+  `AskStatesContext`/`useAskState` (provided by `ChatView`, `null` standalone). The ask tool is **ack +
+  terminate** (its tool result is just an ack; the reply arrives later as an `ask-user-answers` message),
+  so "answered / superseded / awaiting" is a fact about the transcript, not a tool status — derived once
+  per runtime snapshot and consumed by the card via context, keeping it props-driven everywhere else.
+- **Hydration** (`hydrate.ts`) — the pure `messagesToRuntime(TranscriptMessage[])` converter (read-side
+  counterpart of the event reducer): rebuilds `{ turns, toolResults, askAnswers }` (a `HydratedRuntime`)
+  from a persisted transcript so a reconnecting/second client renders identically to the live path (same
+  `raw` result shape, same error-turn surfacing for `stopReason: "error"`). `custom` messages never
+  become turns: known ones (`ask-user-answers`) index into `askAnswers`; unknown customTypes are
+  ignored. No store/transport/shiki.
 - **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions, `/`
   commands, image paste/drop), `ModelSelector` + `ThinkingSelector` (shared with `NewWorkspaceDialog`;
   optional `container` prop portals their popovers into a host Dialog), `SessionStatsBar`, `ChatHeader`,
@@ -109,8 +116,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 - **Forbidden:** value-importing any `pi` package; a **presentational** renderer importing
   `store`/`transport` (only `ChatView` may — keep the renderers reusable).
 - **`ChatView`** is the one app-integration file: wires this session's runtime
-  (`store.sessions[sessionId]`), the transport calls, the `ChatActions` context, and the divider's
-  "files changed" → `requestChangesView` deep link. A **rejected** send (`prompt`/`steer`/`followUp`)
+  (`store.sessions[sessionId]`), the transport calls, the `ChatActions` + `AskStates` contexts, and the
+  divider's "files changed" → `requestChangesView` deep link. A **rejected** send (`prompt`/`steer`/`followUp`)
   lands in the chat via the store's `appendErrorTurn` — never swallowed; *streaming* faults arrive as pi
   events instead.
 
@@ -120,10 +127,10 @@ The `store` folds pi events into pi-canonical turns **per session**: the in-flig
 the latest `assistantMessageEvent.partial` snapshot (replaced each update — not hand-accumulated). A
 message's true terminal is **`message_end`**: the reducer adopts the final message (it carries
 `stopReason`, how renderers spot dead tool calls) and clears the turn's `streaming` flag **there** — not
-at `agent_end`, which for a tool-calling message arrives only after its tools ran (for
-`ask_user_question`, only after the user answers). Tool results are indexed by `toolCallId` in
-`toolResults`. The view re-derives rows each render (`deriveRows` is pure; `ChatView` memoizes) — stable
-row/step ids keep fold state across snapshots.
+at `agent_end`, which for a tool-calling message arrives only after its tools ran. Tool results are
+indexed by `toolCallId` in `toolResults`; `ask-user-answers` custom messages index into `askAnswers`
+(never the turn list — the questionnaire card is their rendering). The view re-derives rows each render
+(`deriveRows` is pure; `ChatView` memoizes) — stable row/step ids keep fold state across snapshots.
 
 **One live indicator, always.** pi splits a run into several assistant messages, so the reducer sweeps
 the `streaming` flag on new-message start and `agent_end` (at most one turn is ever flagged). The loader

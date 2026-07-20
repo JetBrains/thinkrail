@@ -29,7 +29,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   an optional boot-time `openProject(projectPath)` (best-effort — a launcher convenience), and
   `stop()` → agent-session + terminal cleanup then socket close); `boot.ts` (`bootHost` → resolve the
   login-shell PATH, pick the port per `portMode` (`"exact"` vs `"free"`), start `createServer`, and
-  install SIGINT/SIGTERM handlers that `stop()` then exit); `handlers.ts` (the WS method→handler registry);
+  install SIGINT/SIGTERM handlers that **settle before exit**: `settleSessionsForShutdown()` — abort
+  streaming sessions and wait bounded, so pi persists their "Operation aborted" tool results and
+  transcripts land paired — then `stop()` + exit; an immediate exit would strand mid-tool transcripts on
+  the restart repair); `handlers.ts` (the WS method→handler registry);
   `ackSend.ts` (the send-ack policy — see "Get right"); `autoRename.ts` (the **workspace auto-rename
   flow** — the composition of `agent` + `assist` + `workspaces` only the host may make, in **two passes**
   the session-publisher closure in `createServer` tees fire-and-forget, both triggering a
@@ -89,8 +92,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   use push channels. Every push channel a client should hear must be `ws.subscribe`d in the WS `open`
   handler — a publish on an unsubscribed topic reaches nobody, silently.
 - The host is the single place features are wired together — features never reach back into it.
-- **A send (prompt/steer/followUp) is acked when ACCEPTED, not when the turn ends** (`ackSend`): pi's send
-  methods resolve only at turn end, and a turn can outlive the client's request timeout (an
-  `ask_user_question` turn blocks until the user answers) — awaiting completion would surface a phantom
-  "request timed out" over a healthy turn. A rejection inside the ack window still fails the request (bad
-  model / missing key); later faults reach the client via the event stream.
+- **A send (prompt/steer/followUp/answerQuestion) is acked when ACCEPTED, not when the turn ends**
+  (`ackSend`): pi's send methods resolve only at turn end, and a turn can outlive the client's request
+  timeout (long tool rounds and multi-minute reasoning turns are routine) — awaiting completion would
+  surface a phantom "request timed out" over a healthy turn. A rejection inside the ack window still
+  fails the request (bad model / missing key; for `answerQuestion` also an unknown/answered/superseded
+  call — `assessAnswerability`'s loud verdicts); later faults reach the client via the event stream.

@@ -4,13 +4,15 @@ import { openWorkspaceChat } from "./fixtures/app";
 
 // Tagged @agent (see agent.live.spec.ts): these drive a REAL pi agent — the only way to exercise the
 // host-owned `ask_user_question` tool end to end, since the questionnaire is rendered from a real tool
-// call (there is no fake agent). They prove the whole inline path: the agent calls the tool → its
-// `execute` BLOCKS → our `AskUserQuestionCard` renders the questionnaire inline → the user answers/skips →
-// the reply (`session.answerQuestion`) resolves the blocked tool. The card's pure logic (parse/derive/
-// envelope/validation) is unit-tested separately (AskUserQuestionCard.test.ts, askUserQuestion.test.ts);
-// the blocked-tool hydration shape in chat/hydrate.test.ts. Prompts steer the model to a specific question
-// shape; assertions stay structural (data-testid / data-tone / data-selected) so they tolerate the exact
-// wording the model chooses.
+// call (there is no fake agent). They prove the whole inline path under the ack + terminate design: the
+// agent calls the tool → the tool acks and ENDS THE TURN (nothing blocks; the transcript stays valid
+// across restarts) → our `AskUserQuestionCard` renders the awaiting questionnaire inline → the user
+// answers/skips → the reply (`session.answerQuestion`) is injected as an `ask-user-answers` message that
+// starts the next turn, and the card flips to its resolved record. The card's pure logic (parse/derive/
+// envelope/validation/lifecycle) is unit-tested separately (AskUserQuestionCard.test.ts, askState.test.ts,
+// askUserQuestion.test.ts); the hydration shape in chat/hydrate.test.ts. Prompts steer the model to a
+// specific question shape; assertions stay structural (data-testid / data-tone / data-selected) so they
+// tolerate the exact wording the model chooses.
 
 /** Reset state, open the fixture project, create a workspace + chat, and send `prompt`. */
 async function ask(page: Page, prompt: string): Promise<void> {
@@ -19,7 +21,7 @@ async function ask(page: Page, prompt: string): Promise<void> {
 	await page.getByTestId("chat-send").click();
 }
 
-/** The interactive (pending) questionnaire card — visible while the tool call blocks on our answer. */
+/** The interactive (awaiting) questionnaire card — visible until it's answered or superseded. */
 function activeCard(page: Page): Locator {
 	return page.locator('[data-testid="ask-user-question"][data-tone="active"]').first();
 }
@@ -272,7 +274,28 @@ test("multi-question: Next reaches review before submitting the batch", { tag: "
 	).toHaveCount(2);
 });
 
-test("the blocked card survives closing and reopening the chat", { tag: "@agent" }, async ({
+test("typing a message instead of answering supersedes the questionnaire", {
+	tag: "@agent",
+}, async ({ page }) => {
+	test.setTimeout(150_000);
+	await ask(
+		page,
+		`Call the ask_user_question tool with one single-select question and 2 options. ${ONLY_TOOL} If I answer in chat instead, reply with one short sentence.`,
+	);
+	await expect(activeCard(page)).toBeVisible({ timeout: 90_000 });
+
+	// Reply in chat instead of using the card — the user's own words are the answer now.
+	await page.getByTestId("chat-input").fill("Just pick whichever option you prefer — go ahead.");
+	await page.getByTestId("chat-send").click();
+
+	// The card flips to its terminal superseded record (no longer answerable)…
+	await expect(
+		page.locator('[data-testid="ask-user-question"][data-tone="superseded"]').first(),
+	).toBeVisible({ timeout: 30_000 });
+	await expect(activeCard(page)).toHaveCount(0);
+});
+
+test("the awaiting card survives closing and reopening the chat", { tag: "@agent" }, async ({
 	page,
 }) => {
 	test.setTimeout(150_000);
@@ -282,18 +305,19 @@ test("the blocked card survives closing and reopening the chat", { tag: "@agent"
 	);
 
 	const before = activeCard(page);
-	// The active card appears only at message end, i.e. once the blocked tool call is durably in the
-	// transcript — so the reopen below deterministically exercises the hydration path.
+	// The active card appears only at message end, i.e. once the tool call is durably in the transcript —
+	// so the reopen below deterministically exercises the hydration path (the same path a host restart
+	// takes: the awaiting state is pure transcript, nothing pends in memory).
 	await expect(before).toBeVisible({ timeout: 90_000 });
 	await before.getByTestId("ask-option").first().click();
 	await expect(before.getByTestId("ask-submit")).toBeEnabled({ timeout: 30_000 });
 
-	// Close the chat tab — the session/runtime stay alive (the tool is still blocking on the host).
+	// Close the chat tab — the session stays live on the host; the questionnaire stays awaiting.
 	const chatTabs = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
 	await chatTabs.first().getByTestId("editor-tab-close").click();
 	await expect(chatTabs).toHaveCount(0);
 
-	// Reopen from chat history → the still-pending questionnaire re-renders, ready to answer.
+	// Reopen from chat history → the still-awaiting questionnaire re-renders, ready to answer.
 	await page.getByTestId("chat-history").click();
 	await page.getByTestId("closed-chat-item").first().click();
 	await expect(chatTabs).toHaveCount(1);
