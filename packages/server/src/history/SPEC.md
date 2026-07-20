@@ -22,10 +22,10 @@ full-conversation matches). Reads via pi's `SessionManager.listAll()`; **never w
   strict recency order; prompts deduped by normalized text keeping newest; caps + true totals.
 - Jump anchors are drift-tolerant: hits carry `anchorText` (message-text prefix) the client validates.
 - `testFixtures.ts` — test-only session-file builders (pinned by A5): `writeFixtureSession` writes a
-  minimal but real pi-shaped JSONL, one flat file per session, that `extract`/`HistoryIndex` tests and the
-  e2e fixture seeder drive against; `defaultSessionDirFor` replicates pi's private default-layout
-  directory encoding (not importable — see "pi file format" below) so fixtures can land where a real
-  no-arg `listAll()` would actually look.
+  minimal but real pi-shaped JSONL, one flat file per session, that `historyIndex` tests, the e2e fixture
+  seeder, and its own format-pinning test (`testFixtures.test.ts`) drive against; `defaultSessionDirFor`
+  replicates pi's private default-layout directory encoding (not importable — see "pi file format" below)
+  so fixtures can land where a real no-arg `listAll()` would actually look.
 
 ## On-disk JSONL structure (observed from pi session files)
 - **`message` entries:** `{ type: "message", ..., message: { role: "user"|"assistant"|"toolResult", content: string|array, timestamp: ms-number } }`

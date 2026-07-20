@@ -135,8 +135,9 @@ a project picker, the prompt hero, and the reused
   (the click would otherwise do nothing, silently; a failed reopen stays in history for a retry).
   `CenterTabs` also resolves the history-search **`chatLocationRequest`** deep link (see `store/SPEC.md`):
   once its workspace is active, it focuses an already-open tab, `reopenChat`s a live-but-closed one, or
-  fetches + hydrates a disk-only one — the same three cases as the reopen flow above — leaving `ChatView`
-  to consume the request for the scroll + flash (`chat/SPEC.md`'s Jump-to-message bullet). **`Toaster`** is the app-wide toast host the shell mounts once: it subscribes to `store.toasts` and
+  fetches + hydrates a disk-only one — the reopen flow's two cases above, plus a third case for an
+  already-open tab — leaving `ChatView` to consume the request for the scroll + flash (`chat/SPEC.md`'s
+  Jump-to-message bullet). **`Toaster`** is the app-wide toast host the shell mounts once: it subscribes to `store.toasts` and
   renders each via the `components/ui/toast` primitives, letting Radix own the auto-timeout + swipe/hover-pause
   and routing every close back through `store.dismissToast` (so the store stays the single source of truth).
   Errors persist until dismissed; success/info time out. The **integration piece** — the primitives stay
