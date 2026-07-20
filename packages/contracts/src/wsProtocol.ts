@@ -372,8 +372,8 @@ export interface WsMethodMap {
 		params: { query: string; scope: HistoryScope; limit?: number };
 		result: HistorySearchResult;
 	};
-	// List all templates (global + project-scoped). `workspaceId` is required to identify the project;
-	// omitted uses only global templates.
+	// List all templates (global + project-scoped). `workspaceId` needed to resolve the project dir;
+	// omitted → global templates only.
 	"template.list": {
 		params: { workspaceId?: string };
 		result: { templates: TemplateInfo[] };
