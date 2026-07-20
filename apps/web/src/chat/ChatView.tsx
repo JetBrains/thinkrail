@@ -1,6 +1,8 @@
 import type {
 	AskUserQuestionResult,
 	ImageContent,
+	MessageHit,
+	PromptHit,
 	ThinkingLevel,
 	WireModel,
 } from "@thinkrail/contracts";
@@ -14,14 +16,21 @@ import { AskStatesContext, deriveAskStates } from "./askState";
 import { type ChatActions, ChatActionsContext } from "./ChatActions";
 import { ChatHeader } from "./ChatHeader";
 import { ChatPlanContent, ChatPlanStripContent } from "./ChatPlan";
-import { Composer, type MentionCandidate, type SubmitBehavior } from "./Composer";
+import {
+	Composer,
+	type ComposerHandle,
+	type MentionCandidate,
+	type SubmitBehavior,
+} from "./Composer";
 import { ExtUiDialog } from "./ExtUiDialog";
+import { HistoryOverlay } from "./HistoryOverlay";
 import { type ChatRow, deriveRows } from "./rows";
 import { StreamIndicator, type StreamStatus, streamStatus } from "./StreamIndicator";
 import "./tools/register"; // side-effect: register the built-in pi tool renderers (bash/read/edit/write)
 import { ChatTurnView } from "./turns";
 import { useChatScroll } from "./useChatScroll";
 import { useChatTodos } from "./useChatTodos";
+import { useHistorySearch } from "./useHistorySearch";
 
 /** Context threaded to the Virtuoso footer so the streaming loader lives at the end of the conversation. */
 type ChatListContext = { status: StreamStatus | null };
@@ -63,6 +72,26 @@ export default function ChatView({
 		}
 		return undefined;
 	});
+	// Same walk as `workspaceRoot` above, but keyed on the record's own key — `workspaces` is
+	// `Record<projectId, Workspace[]>`, so the walk already has the owning project id (the "project" /
+	// "all" history-search scopes need it).
+	const projectId = useAppStore((s) => {
+		for (const [pid, list] of Object.entries(s.workspaces)) {
+			if (list.some((w) => w.id === workspaceId)) return pid;
+		}
+		return undefined;
+	});
+	// The raw record is a stable reference from zustand's perspective (unlike a fresh object/array
+	// literal, which would re-render this view on every unrelated store update); the workspaceId →
+	// display-name map the history overlay's cross-workspace chip needs is derived below in a `useMemo`.
+	const workspaces = useAppStore((s) => s.workspaces);
+	const workspaceNames = useMemo(() => {
+		const map: Record<string, string> = {};
+		for (const list of Object.values(workspaces)) {
+			for (const w of list) map[w.id] = w.name;
+		}
+		return map;
+	}, [workspaces]);
 	const {
 		turns,
 		toolResults,
@@ -104,6 +133,19 @@ export default function ChatView({
 	const virtuosoRef = useRef<VirtuosoHandle>(null);
 	const { followOutput, handleAtBottom, showScrollButton, scrollToBottom, containerProps } =
 		useChatScroll(virtuosoRef);
+	const composerRef = useRef<ComposerHandle>(null);
+
+	// The Ctrl+R history-recall overlay's integration edge (store/transport) — see `chat/SPEC.md`'s
+	// boundary section for why this hook, not this component's body, owns that edge.
+	const {
+		state: historyState,
+		openOverlay,
+		close: closeHistory,
+		setQuery,
+		cycleScope,
+		toggleStage,
+		moveSelection,
+	} = useHistorySearch(sessionId, workspaceId, projectId);
 
 	// Models are global to the host — fetch once, then every chat's picker shares them.
 	useEffect(() => {
@@ -200,6 +242,28 @@ export default function ChatView({
 			.request("session.abort", { sessionId })
 			.catch(() => {});
 	};
+
+	// Ctrl+R in the composer seeds the overlay with the current draft (never a stale store value) —
+	// `useHistorySearch` owns everything from here (debounce, scope cycling, stale-response drop).
+	const onHistoryOpen = () => openOverlay(draft);
+
+	// Enter on a prompt hit: replace the draft, focus, caret at end, close — no submit.
+	const onInsertHit = (hit: PromptHit) => {
+		composerRef.current?.insertText(hit.text);
+		closeHistory();
+	};
+
+	// Cmd/Ctrl+Enter on a prompt hit: reuse the exact `onSubmit` path a normal composer send takes, then
+	// clear the draft the same way `Composer`'s own `submit()` does after sending.
+	const onInsertAndSendHit = (hit: PromptHit) => {
+		onSubmit(hit.text, [], isStreaming ? "followUp" : "send");
+		useAppStore.getState().setChatDraft(sessionId, "");
+		closeHistory();
+	};
+
+	// A8 wires the "jump to message" deep link (`chatLocationRequest`, see `store/SPEC.md`); until then
+	// Enter on a mapped message hit is a deliberate no-op.
+	const onOpenMessage = (_hit: MessageHit) => {};
 
 	// A turn-divider's "files changed" chip → surface the first changed file's diff in the right panel.
 	// This is the one chat touch of the store outside the renderers, kept here in the integration layer.
@@ -319,21 +383,37 @@ export default function ChatView({
 							))}
 						</div>
 					) : null}
-					<Composer
-						value={draft}
-						onChange={(v) => useAppStore.getState().setChatDraft(sessionId, v)}
-						isStreaming={isStreaming}
-						commands={commands}
-						mentionCandidates={mentionCandidates}
-						models={models}
-						currentModel={currentModel}
-						thinkingLevel={thinkingLevel}
-						onMentionQuery={onMentionQuery}
-						onSelectModel={onSelectModel}
-						onSelectThinking={onSelectThinking}
-						onSubmit={onSubmit}
-						onAbort={onAbort}
-					/>
+					<div className="relative shrink-0">
+						<HistoryOverlay
+							state={historyState}
+							workspaceNames={workspaceNames}
+							onQueryChange={setQuery}
+							onCycleScope={cycleScope}
+							onToggleStage={toggleStage}
+							onMoveSelection={moveSelection}
+							onClose={closeHistory}
+							onInsert={onInsertHit}
+							onInsertAndSend={onInsertAndSendHit}
+							onOpenMessage={onOpenMessage}
+						/>
+						<Composer
+							ref={composerRef}
+							value={draft}
+							onChange={(v) => useAppStore.getState().setChatDraft(sessionId, v)}
+							isStreaming={isStreaming}
+							commands={commands}
+							mentionCandidates={mentionCandidates}
+							models={models}
+							currentModel={currentModel}
+							thinkingLevel={thinkingLevel}
+							onMentionQuery={onMentionQuery}
+							onSelectModel={onSelectModel}
+							onSelectThinking={onSelectThinking}
+							onSubmit={onSubmit}
+							onAbort={onAbort}
+							onHistoryOpen={onHistoryOpen}
+						/>
+					</div>
 					{pendingExtUi ? (
 						<ExtUiDialog key={pendingExtUi.id} request={pendingExtUi} onReply={onExtUiReply} />
 					) : null}

@@ -97,9 +97,11 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `custom` messages never become turns: known ones (`ask-user-answers`) index into `askAnswers`; unknown
   customTypes are ignored. No store/transport/shiki.
 - **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions, `/`
-  commands, image paste/drop), `ModelSelector` + `ThinkingSelector` (shared with `NewWorkspaceDialog`;
-  optional `container` prop portals their popovers into a host Dialog), `SessionStatsBar`, `ChatHeader`
-  (its `left` slot carries the plan strip), `ExtUiDialog`. All props-driven; behavior detail lives in the
+  commands, image paste/drop, `Ctrl+R` → `onHistoryOpen`), `HistoryOverlay` (the history-recall/search
+  overlay `Composer` opens — presentational, driven entirely by `useHistorySearch.ts`'s state +
+  callbacks), `ModelSelector` + `ThinkingSelector` (shared with `NewWorkspaceDialog`; optional
+  `container` prop portals their popovers into a host Dialog), `SessionStatsBar`, `ChatHeader` (its
+  `left` slot carries the plan strip), `ExtUiDialog`. All props-driven; behavior detail lives in the
   components' jsdoc.
 - **Chat TODO plan** ([[design-todos]]) — the chat's `pi-todos` list surfaced **only in the chat**:
   `useChatTodos` (the `todo.*` data hook — fetch + live `pi.event` refetch + edits + the add-nudge + the
@@ -124,16 +126,17 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   **No `index.ts` barrel** — chat pulls **shiki**, so per the code-splitting exception imports stay
   **per-file**; the registry is importable from `chat/toolRegistry` **without** pulling shiki.
 - **Allowed deps:** `contracts` (pi message/content-block types, **type-only**); `store` + `transport`
-  (**`ChatView` only** — the app-integration edge); `react-markdown` / `remark-gfm` / `shiki` (via
-  `lib/highlighter`); `mermaid` (**lazy, `tools/visualize` only**); `react-virtuoso`; `lucide-react`;
-  `components/ui`; `lib`.
+  (**`ChatView` + its integration hooks (`useHistorySearch.ts`) only** — the app-integration edge);
+  `react-markdown` / `remark-gfm` / `shiki` (via `lib/highlighter`); `mermaid` (**lazy,
+  `tools/visualize` only**); `react-virtuoso`; `lucide-react`; `components/ui`; `lib`.
 - **Forbidden:** value-importing any `pi` package; a **presentational** renderer importing
-  `store`/`transport` (only `ChatView` may — keep the renderers reusable).
-- **`ChatView`** is the one app-integration file: wires this session's runtime
+  `store`/`transport` (only `ChatView` and its integration hooks may — keep the renderers reusable).
+- **`ChatView`** is the primary app-integration file: wires this session's runtime
   (`store.sessions[sessionId]`), the transport calls, the `ChatActions` + `AskStates` contexts, and the
-  divider's "files changed" → `requestChangesView` deep link. A **rejected** send (`prompt`/`steer`/`followUp`)
-  lands in the chat via the store's `appendErrorTurn` — never swallowed; *streaming* faults arrive as pi
-  events instead.
+  divider's "files changed" → `requestChangesView` deep link — together with **`useHistorySearch.ts`**,
+  the one other integration point (the Ctrl+R history-recall overlay's store/transport edge). A
+  **rejected** send (`prompt`/`steer`/`followUp`) lands in the chat via the store's `appendErrorTurn` —
+  never swallowed; *streaming* faults arrive as pi events instead.
 
 ## Streaming model
 

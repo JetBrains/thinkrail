@@ -8,8 +8,11 @@ import { ArrowUp, FileIcon, FolderIcon, Square, X } from "lucide-react";
 import {
 	type ClipboardEvent,
 	type DragEvent,
+	forwardRef,
 	type KeyboardEvent,
+	useCallback,
 	useEffect,
+	useImperativeHandle,
 	useRef,
 	useState,
 } from "react";
@@ -55,27 +58,7 @@ function activeToken(value: string, caret: number): { token: string; start: numb
 	return { token: match[0], start: caret - match[0].length };
 }
 
-/**
- * The chat composer (props-driven, no store/transport). Enter sends (or **steers** mid-stream);
- * Cmd/Ctrl+Enter queues a **follow-up**; a Stop button **aborts**. The model + effort controls sit in
- * the row under the tall prompt field, mirroring the New-Workspace dialog's layout. `@` opens worktree
- * file completion, a leading `/` opens the skill/command menu, and images can be pasted or dropped in.
- */
-export function Composer({
-	value,
-	onChange,
-	isStreaming,
-	commands,
-	mentionCandidates,
-	models,
-	currentModel,
-	thinkingLevel,
-	onMentionQuery,
-	onSelectModel,
-	onSelectThinking,
-	onSubmit,
-	onAbort,
-}: {
+interface ComposerProps {
 	value: string;
 	onChange: (value: string) => void;
 	isStreaming: boolean;
@@ -89,7 +72,43 @@ export function Composer({
 	onSelectThinking: (level: ThinkingLevel) => void;
 	onSubmit: (text: string, images: ImageContent[], behavior: SubmitBehavior) => void;
 	onAbort: () => void;
-}) {
+	/** `Ctrl+R` — opens the history-recall overlay (`ChatView` seeds it with the current draft). Optional
+	 * so a standalone/storybook-style render of `Composer` doesn't need to wire it. */
+	onHistoryOpen?: () => void;
+}
+
+/** Imperative handle so `ChatView` can insert a recalled prompt without reaching into the DOM itself. */
+export interface ComposerHandle {
+	/** Replace the draft, focus the textarea, and place the caret at the end. */
+	insertText: (text: string) => void;
+}
+
+/**
+ * The chat composer (props-driven, no store/transport). Enter sends (or **steers** mid-stream);
+ * Cmd/Ctrl+Enter queues a **follow-up**; a Stop button **aborts**. The model + effort controls sit in
+ * the row under the tall prompt field, mirroring the New-Workspace dialog's layout. `@` opens worktree
+ * file completion, a leading `/` opens the skill/command menu, `Ctrl+R` opens history recall, and images
+ * can be pasted or dropped in.
+ */
+export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Composer(
+	{
+		value,
+		onChange,
+		isStreaming,
+		commands,
+		mentionCandidates,
+		models,
+		currentModel,
+		thinkingLevel,
+		onMentionQuery,
+		onSelectModel,
+		onSelectThinking,
+		onSubmit,
+		onAbort,
+		onHistoryOpen,
+	},
+	handleRef,
+) {
 	const ref = useRef<HTMLTextAreaElement>(null);
 	const [caret, setCaret] = useState(0);
 	const [images, setImages] = useState<PendingImage[]>([]);
@@ -117,7 +136,7 @@ export function Composer({
 	const menuLen = mentionOpen ? mentionCandidates.length : slashOpen ? slashMatches.length : 0;
 	const menuOpen = menuLen > 0;
 
-	const focusCaret = (pos: number) => {
+	const focusCaret = useCallback((pos: number) => {
 		requestAnimationFrame(() => {
 			const el = ref.current;
 			if (!el) return;
@@ -125,7 +144,18 @@ export function Composer({
 			el.setSelectionRange(pos, pos);
 			setCaret(pos);
 		});
-	};
+	}, []);
+
+	useImperativeHandle(
+		handleRef,
+		() => ({
+			insertText: (text: string) => {
+				onChange(text);
+				focusCaret(text.length);
+			},
+		}),
+		[onChange, focusCaret],
+	);
 
 	const pickMention = (c: MentionCandidate) => {
 		const before = value.slice(0, start);
@@ -165,6 +195,14 @@ export function Composer({
 	};
 
 	const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+		// Ctrl+R opens history recall — guarded at the very top, before the mention/slash menu, and before
+		// Enter-to-send. Ctrl+R is the browser-reload chord on Windows/Linux, so this must preventDefault
+		// unconditionally; Cmd+R (mac reload) and Alt+R are left alone.
+		if (e.key === "r" && e.ctrlKey && !e.metaKey && !e.altKey) {
+			e.preventDefault();
+			onHistoryOpen?.();
+			return;
+		}
 		if (menuOpen) {
 			if (e.key === "ArrowDown") {
 				e.preventDefault();
@@ -337,4 +375,4 @@ export function Composer({
 			</div>
 		</div>
 	);
-}
+});
