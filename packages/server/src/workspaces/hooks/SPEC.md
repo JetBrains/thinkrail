@@ -34,15 +34,19 @@ no caller yet (no merge-initiating code exists in v1) — real extension points,
   transition here shares one `workspace.hook` channel).
 - **Public surface (barrel):** `runOnCreateHook`, `runOnDeleteHook`, `runPreMergeHook`, `runPostMergeHook`,
   `setHookPublisher`, `approveHook`.
-- **Known limitation:** `approveHook` only records the approval — it never re-invokes a hook itself. That's
-  sufficient for `onDelete`/`preMerge`, whose next natural invocation (the next delete, the next merge)
-  checks approval fresh and runs. It is **not** sufficient for `onCreate`, which fires exactly once at
-  creation time: a workspace created before its `onCreate` command was approved stays un-bootstrapped
-  forever unless something explicitly re-runs `runOnCreateHook` after approval. No such re-run trigger
-  exists yet — deferred until the approval UI is built (that's naturally when a "run now" affordance would
-  be designed anyway), tracked here rather than silently assumed away.
-- **Allowed deps:** `persistence` (override/approval storage); `contracts`; `@thinkrail/shared/paths` (the
-  `.thinkrail/` namespace convention); Node (`node:crypto`, `node:fs`).
+- **Persisted status:** every transition `emit`s through (except the ephemeral `hookOutput`) also writes
+  the hook's latest `HookStatus` onto its workspace's `hookStatus` field via `persistence`'s
+  `loadWorkspaces`/`saveWorkspaces` — durability for a reconnecting/reloaded client (`workspace.list` and
+  the lifecycle trio's `created`/`updated` snapshots carry it "for free"), not the live update path (an
+  already-connected client updates straight from the `workspace.hook` event). `approveHook` itself still
+  only records the approval — it never re-invokes a hook. That's sufficient for `onDelete`/`preMerge`,
+  whose next natural invocation checks approval fresh and runs; it is **not** sufficient for `onCreate`,
+  which fires exactly once at creation time. The host's `workspace.hooks.run` RPC (`host/handlers.ts`,
+  dispatching to `runOnCreateHook`/`runOnDeleteHook` by name) is the explicit re-run trigger the approval UI
+  composes with `approveHook` to actually bootstrap a workspace stuck at `hookAwaitingApproval` — also a
+  general-purpose manual-retry primitive, not approval-specific.
+- **Allowed deps:** `persistence` (override/approval storage, and now `hookStatus` persistence); `contracts`;
+  `@thinkrail/shared/paths` (the `.thinkrail/` namespace convention); Node (`node:crypto`, `node:fs`).
 - **Forbidden:** `host`; `git` (no git operation of its own — the caller already has the worktree);
   `terminal` (hook output is self-contained, never routed through a PTY — see the parent module's
   boundary note on why `workspaces` doesn't depend on `terminal`).

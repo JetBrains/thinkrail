@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Project, Workspace, WorkspaceHookEvent } from "@thinkrail/contracts";
+import { loadWorkspaces, saveWorkspaces } from "../../persistence";
 import {
 	approveHook,
 	runOnCreateHook,
@@ -116,4 +117,54 @@ test("runPreMergeHook returns true when the command succeeds", async () => {
 test("runPreMergeHook returns false (fail-closed) when the command is unapproved", async () => {
 	writeHookConfig({ preMerge: "true" });
 	expect(await runPreMergeHook(workspace, project)).toBe(false);
+});
+
+test("an unapproved hook persists hookStatus: awaitingApproval onto the workspace record", async () => {
+	writeHookConfig({ onDelete: "echo should-not-run" });
+	saveWorkspaces([workspace]);
+	await runOnDeleteHook(workspace, project);
+	const saved = loadWorkspaces().find((w) => w.id === "ws1");
+	expect(saved?.hookStatus?.onDelete).toEqual({
+		state: "awaitingApproval",
+		command: "echo should-not-run",
+	});
+});
+
+test("a succeeding approved hook persists hookStatus: succeeded, replacing the prior state", async () => {
+	writeHookConfig({ onDelete: "true" });
+	approveHook("p1", "onDelete", "true");
+	saveWorkspaces([workspace]);
+	await runOnDeleteHook(workspace, project);
+	const saved = loadWorkspaces().find((w) => w.id === "ws1");
+	expect(saved?.hookStatus?.onDelete).toEqual({ state: "succeeded" });
+});
+
+test("a failing approved hook persists hookStatus: failed with the real exit code", async () => {
+	writeHookConfig({ onDelete: "exit 3" });
+	approveHook("p1", "onDelete", "exit 3");
+	saveWorkspaces([workspace]);
+	await runOnDeleteHook(workspace, project);
+	const saved = loadWorkspaces().find((w) => w.id === "ws1");
+	expect(saved?.hookStatus?.onDelete).toEqual({ state: "failed", exitCode: 3 });
+});
+
+test("persisting hookStatus for a workspace whose record is already gone is a silent no-op", async () => {
+	writeHookConfig({ onDelete: "true" });
+	approveHook("p1", "onDelete", "true");
+	// Deliberately never saved to workspaces.json — mirrors an archived-mid-run workspace.
+	await expect(runOnDeleteHook(workspace, project)).resolves.toBeUndefined();
+	expect(loadWorkspaces()).toEqual([]);
+});
+
+test("hookStatus is set per-hook — persisting onDelete's status doesn't touch onCreate's", async () => {
+	writeHookConfig({ onCreate: "true", onDelete: "true" });
+	approveHook("p1", "onCreate", "true");
+	approveHook("p1", "onDelete", "true");
+	saveWorkspaces([workspace]);
+	runOnCreateHook(workspace, project);
+	await new Promise((resolve) => setTimeout(resolve, 200));
+	await runOnDeleteHook(workspace, project);
+	const saved = loadWorkspaces().find((w) => w.id === "ws1");
+	expect(saved?.hookStatus?.onCreate).toEqual({ state: "succeeded" });
+	expect(saved?.hookStatus?.onDelete).toEqual({ state: "succeeded" });
 });

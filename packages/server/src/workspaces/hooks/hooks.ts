@@ -1,8 +1,14 @@
 // Orchestrates one hook run: resolve its command (committed + host-local override), gate it behind
 // approval, execute it, and publish every state transition through the injected publisher (the same
 // inversion `workspaces`/`terminal`/`settings` use) so the host can fan it out over `workspace.hook`.
-import type { HookName, Project, Workspace, WorkspaceHookEvent } from "@thinkrail/contracts";
-import { loadHookOverrides } from "../../persistence";
+import type {
+	HookName,
+	HookStatus,
+	Project,
+	Workspace,
+	WorkspaceHookEvent,
+} from "@thinkrail/contracts";
+import { loadHookOverrides, loadWorkspaces, saveWorkspaces } from "../../persistence";
 import { approveHook, isApproved } from "./approvals";
 import { loadHookConfig, resolveHookCommand } from "./config";
 import { runShellCommand } from "./runner";
@@ -17,8 +23,44 @@ export function setHookPublisher(fn: HookPublisher | null): void {
 	publishHookEvent = fn;
 }
 
+/**
+ * Persist `hook`'s latest state onto its workspace record (`Workspace.hookStatus`) — durability for a
+ * reconnecting/reloaded client, not the live update path (an already-connected client updates from the
+ * `workspace.hook` event itself). Best-effort: a workspace archived mid-run (record already gone) is a
+ * silent no-op — there's nothing left to persist onto.
+ */
+function persistHookStatus(workspaceId: string, hook: HookName, status: HookStatus): void {
+	const all = loadWorkspaces();
+	const target = all.find((w) => w.id === workspaceId);
+	if (!target) return;
+	target.hookStatus = { ...target.hookStatus, [hook]: status };
+	saveWorkspaces(all);
+}
+
 function emit(event: WorkspaceHookEvent): void {
 	publishHookEvent?.(event);
+	switch (event.kind) {
+		case "hookAwaitingApproval":
+			persistHookStatus(event.workspaceId, event.hook, {
+				state: "awaitingApproval",
+				command: event.command,
+			});
+			break;
+		case "hookStarted":
+			persistHookStatus(event.workspaceId, event.hook, { state: "running" });
+			break;
+		case "hookSucceeded":
+			persistHookStatus(event.workspaceId, event.hook, { state: "succeeded" });
+			break;
+		case "hookFailed":
+			persistHookStatus(event.workspaceId, event.hook, {
+				state: "failed",
+				exitCode: event.exitCode,
+			});
+			break;
+		case "hookOutput":
+			break; // ephemeral — never persisted
+	}
 }
 
 /** A blocking hook's default ceiling — `onDelete`/`preMerge` are awaited by their caller. */
