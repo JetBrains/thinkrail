@@ -31,6 +31,25 @@ async function pump(
 	}
 }
 
+/**
+ * Sends `signal` to every process in `pid`'s process group (`pid` included), not just `pid` itself.
+ *
+ * `sh -c "<command>"` self-execs into the real command only when it's a single simple command in tail
+ * position — anything compound (`&&`, `;`, `|`, a subshell, a backgrounded job, ...) makes `sh` fork a
+ * child to run the earlier stage(s), so signalling just the `sh` pid orphans those forked descendants.
+ * `Bun.spawn`'s `detached: true` makes the spawned `sh` call `setsid()`, so it becomes the leader of its
+ * own new process group (pgid === pid). POSIX `kill(-pgid, signal)` then reaches the leader and every
+ * descendant that hasn't broken out of that group — exactly the compound-command case above. Confirmed
+ * empirically (not just from docs) against a real `sh -c "sleep 5 & ...; wait"` tree on macOS/arm64.
+ */
+function killProcessGroup(pid: number, signal: NodeJS.Signals = "SIGTERM"): void {
+	try {
+		process.kill(-pid, signal);
+	} catch {
+		// ESRCH (group already gone) or a same-shape race — the process tree is dead either way.
+	}
+}
+
 export async function runShellCommand(
 	opts: RunShellCommandOptions,
 ): Promise<RunShellCommandResult> {
@@ -39,6 +58,9 @@ export async function runShellCommand(
 		env: opts.env,
 		stdout: "pipe",
 		stderr: "pipe",
+		// Makes `sh` its own process-group leader (via setsid()) so a timeout can kill the whole tree it
+		// spawns, not just the `sh` pid Bun handed back — see killProcessGroup() above.
+		detached: true,
 	});
 
 	let timedOut = false;
@@ -46,7 +68,7 @@ export async function runShellCommand(
 		opts.timeoutMs !== undefined
 			? setTimeout(() => {
 					timedOut = true;
-					proc.kill();
+					killProcessGroup(proc.pid);
 				}, opts.timeoutMs)
 			: undefined;
 
