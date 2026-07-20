@@ -22,12 +22,10 @@ export function ProjectTree() {
 	// creating a workspace directly.
 	const [dialogProjectId, setDialogProjectId] = useState<string | null>(null);
 
-	// The active workspace is the user's current scope, so reveal its parent whenever that scope changes
-	// (including the Welcome → IDE remount, where this component's local expansion state starts fresh).
-	// Depend on the resolved project id rather than the workspace arrays themselves: a later auto-rename
-	// snapshot must not undo a deliberate manual collapse while the user stays in the same workspace.
+	// Reveal the active workspace's parent on mount or when its derived owner changes/resolves. Depending
+	// only on that project id preserves a deliberate manual collapse across same-project switches and
+	// workspace updates; creation expands its project explicitly in `onWorkspaceCreated` below.
 	const activeProjectId = useAppStore(selectActiveWorkspaceProjectId);
-	// biome-ignore lint/correctness/useExhaustiveDependencies: activeWorkspaceId is the activation trigger even when two workspaces share a parent project
 	useEffect(() => {
 		if (!activeProjectId) return;
 		setExpanded((prev) => {
@@ -36,7 +34,7 @@ export function ProjectTree() {
 			next.add(activeProjectId);
 			return next;
 		});
-	}, [activeWorkspaceId, activeProjectId]);
+	}, [activeProjectId]);
 
 	const loadWorkspaces = async (projectId: string) => {
 		useAppStore

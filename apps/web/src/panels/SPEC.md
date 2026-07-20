@@ -27,10 +27,11 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   `name` on top with the git **branch on a second line beneath it** (muted, monospace), rendered only when
   it differs from the name (so pristine/legacy `workspace-N` rows stay a single compact line) — the display
   name is decoupled from the git branch (see [[submodule-server-workspaces]]). The active workspace must
-  also stay visible: when `activeWorkspaceId` changes — or its owning project first becomes resolvable
-  after hydration/the Welcome → IDE remount — `ProjectTree` expands that parent project. A manual collapse
-  remains respected until the next activation; ordinary `workspace.updated` snapshots do not force it
-  open again. Selecting or creating a workspace also selects its owning project, keeping project-home and
+  also stay visible: when `ProjectTree` mounts with an active workspace, or the active workspace's derived
+  owning project changes or first becomes resolvable, it expands that parent project. A manual collapse
+  remains respected while the owning project is unchanged; ordinary `workspace.updated` snapshots and
+  same-project workspace switches do not force it open again. Workspace creation expands its project
+  explicitly. Selecting or creating a workspace also selects its owning project, keeping project-home and
   active-workspace context coherent even when the create dialog's project picker targets another project.
   **Opening a project** goes through the shared **`useOpenProject`** hook (reused by `ProjectTree` **and**
   `WelcomePanel`, so the flow is identical in the rail and the Welcome screen): `project.open`, and on
