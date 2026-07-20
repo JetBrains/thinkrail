@@ -165,7 +165,7 @@ test("a workspace archived during the one-shot is not renamed or resurrected", a
 	});
 
 	const pending = maybeAutoRenameWorkspace("s1", ws.id, firstTurn);
-	removeWorkspace(ws.id);
+	await removeWorkspace(ws.id);
 	release();
 
 	expect(await pending).toBeNull();
