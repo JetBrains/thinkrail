@@ -1,4 +1,4 @@
-import type { Project, Workspace } from "@thinkrail/contracts";
+import type { HookName, HookStatus, Project, Workspace } from "@thinkrail/contracts";
 import { ChevronDown, ChevronRight, Folder, GitBranch, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -7,8 +7,26 @@ import { toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
 import { ConfirmPopover } from "./ConfirmPopover";
+import { HookApprovalDialog } from "./HookApprovalDialog";
+import { HookStatusIcon } from "./HookStatusIcon";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { useOpenProject } from "./useOpenProject";
+
+/** Lower = more attention-worthy — picks a single badge when a workspace has more than one hook's status. */
+const HOOK_PRIORITY: Record<HookStatus["state"], number> = {
+	awaitingApproval: 0,
+	failed: 1,
+	running: 2,
+	succeeded: 3,
+};
+
+function mostUrgentHook(hookStatus: Workspace["hookStatus"]): [HookName, HookStatus] | null {
+	const entries = Object.entries(hookStatus ?? {}) as [HookName, HookStatus][];
+	if (entries.length === 0) return null;
+	return entries.reduce((best, entry) =>
+		HOOK_PRIORITY[entry[1].state] < HOOK_PRIORITY[best[1].state] ? entry : best,
+	);
+}
 
 /** Left-nav: projects → workspaces (git worktrees). Open a repo, select it, create/select workspaces. */
 export function ProjectTree() {
@@ -221,77 +239,119 @@ function WorkspaceRow({
 }) {
 	const stats = workspace.diffStats;
 	const hasStats = stats != null && (stats.added > 0 || stats.removed > 0);
+	const urgentHook = mostUrgentHook(workspace.hookStatus);
 	// Confirm-before-remove lives on the row so the popover anchors right beneath it (contextual to the
 	// workspace being removed) rather than as a centered modal.
 	const [confirmOpen, setConfirmOpen] = useState(false);
+	// The approval prompt is a centered modal (approving trusts a command for the whole project, not just
+	// this row) — a click on an `awaitingApproval` badge opens it directly; any other hook state instead
+	// deep-links to the Hooks panel (`requestHooksView`), where output/retry live.
+	const [approving, setApproving] = useState(false);
+	const onHookBadgeClick = () => {
+		if (!urgentHook) return;
+		if (urgentHook[1].state === "awaitingApproval") {
+			setApproving(true);
+		} else {
+			onSelect();
+			useAppStore.getState().requestHooksView(workspace.id);
+		}
+	};
 	return (
-		<ConfirmPopover
-			open={confirmOpen}
-			onOpenChange={setConfirmOpen}
-			title={`Remove ${workspace.name} workspace`}
-			description={
-				<>
-					Deletes this workspace's chats, terminals, and its worktree. The git branch{" "}
-					<span className="font-medium text-text">{workspace.branch}</span> is kept.
-				</>
-			}
-			confirmLabel="Remove"
-			destructive
-			confirmTestId="confirm-remove"
-			onConfirm={onRemove}
-			align="end"
-		>
-			{/* Anchored to the Remove button (the PopoverTrigger), right border aligned via align="end". */}
-			<div
-				data-testid="workspace-item"
-				data-active={isActive}
-				className={`group flex min-h-7 items-center gap-sm rounded-[var(--radius-sm)] py-xs pr-xs pl-xl transition-colors ${
-					isActive ? "bg-hover" : "hover:bg-hover"
-				}`}
+		<>
+			<ConfirmPopover
+				open={confirmOpen}
+				onOpenChange={setConfirmOpen}
+				title={`Remove ${workspace.name} workspace`}
+				description={
+					<>
+						Deletes this workspace's chats, terminals, and its worktree. The git branch{" "}
+						<span className="font-medium text-text">{workspace.branch}</span> is kept.
+					</>
+				}
+				confirmLabel="Remove"
+				destructive
+				confirmTestId="confirm-remove"
+				onConfirm={onRemove}
+				align="end"
 			>
-				<button
-					type="button"
-					onClick={onSelect}
-					className="flex min-w-0 flex-1 items-center gap-sm text-left"
+				{/* Anchored to the Remove button (the PopoverTrigger), right border aligned via align="end". */}
+				<div
+					data-testid="workspace-item"
+					data-active={isActive}
+					className={`group flex min-h-7 items-center gap-sm rounded-[var(--radius-sm)] py-xs pr-xs pl-xl transition-colors ${
+						isActive ? "bg-hover" : "hover:bg-hover"
+					}`}
 				>
-					<GitBranch className={`size-4 shrink-0 ${isActive ? "text-primary" : "text-hint"}`} />
-					{/* Name on top, the git branch on a second line beneath it — the display name is decoupled
-					    from the branch, so surface both without crowding one line. The branch line is hidden when
-					    they coincide, so pristine/legacy rows stay a single compact line. */}
-					<span className="flex min-w-0 flex-1 flex-col">
-						<span
-							data-testid="workspace-name"
-							className={`truncate text-sm leading-tight ${isActive ? "font-medium text-primary" : "text-muted"}`}
-						>
-							{workspace.name}
-						</span>
-						{workspace.branch !== workspace.name && (
-							<span
-								data-testid="workspace-branch"
-								className="truncate font-[var(--font-mono)] text-hint text-xs leading-tight"
-							>
-								{workspace.branch}
-							</span>
-						)}
-					</span>
-				</button>
-				{hasStats && (
-					<span className="shrink-0 text-xs tabular-nums group-hover:hidden">
-						<span className="text-green">+{stats.added}</span>{" "}
-						<span className="text-red">−{stats.removed}</span>
-					</span>
-				)}
-				<PopoverTrigger asChild>
 					<button
 						type="button"
-						data-testid="workspace-remove"
-						aria-label="Remove workspace"
-						className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-muted opacity-0 transition hover:bg-elevated hover:text-red group-hover:opacity-100 data-[state=open]:opacity-100"
+						onClick={onSelect}
+						className="flex min-w-0 flex-1 items-center gap-sm text-left"
 					>
-						<Trash2 className="size-4" />
+						<GitBranch className={`size-4 shrink-0 ${isActive ? "text-primary" : "text-hint"}`} />
+						{/* Name on top, the git branch on a second line beneath it — the display name is decoupled
+					    from the branch, so surface both without crowding one line. The branch line is hidden when
+					    they coincide, so pristine/legacy rows stay a single compact line. */}
+						<span className="flex min-w-0 flex-1 flex-col">
+							<span
+								data-testid="workspace-name"
+								className={`truncate text-sm leading-tight ${isActive ? "font-medium text-primary" : "text-muted"}`}
+							>
+								{workspace.name}
+							</span>
+							{workspace.branch !== workspace.name && (
+								<span
+									data-testid="workspace-branch"
+									className="truncate font-[var(--font-mono)] text-hint text-xs leading-tight"
+								>
+									{workspace.branch}
+								</span>
+							)}
+						</span>
 					</button>
-				</PopoverTrigger>
-			</div>
-		</ConfirmPopover>
+					{urgentHook ? (
+						// Unlike the diffStats indicator below, this stays visible on hover — it's actionable
+						// (opens the approval dialog / deep-links to the Hooks tab), so it must survive exactly
+						// the hover state a click implies.
+						<button
+							type="button"
+							data-testid="workspace-hook-badge"
+							data-hook-status={urgentHook[1].state}
+							aria-label={`${urgentHook[0]} ${urgentHook[1].state}`}
+							onClick={onHookBadgeClick}
+							className="flex shrink-0 items-center"
+						>
+							<HookStatusIcon state={urgentHook[1].state} />
+						</button>
+					) : (
+						hasStats && (
+							<span className="shrink-0 text-xs tabular-nums group-hover:hidden">
+								<span className="text-green">+{stats.added}</span>{" "}
+								<span className="text-red">−{stats.removed}</span>
+							</span>
+						)
+					)}
+					<PopoverTrigger asChild>
+						<button
+							type="button"
+							data-testid="workspace-remove"
+							aria-label="Remove workspace"
+							className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-muted opacity-0 transition hover:bg-elevated hover:text-red group-hover:opacity-100 data-[state=open]:opacity-100"
+						>
+							<Trash2 className="size-4" />
+						</button>
+					</PopoverTrigger>
+				</div>
+			</ConfirmPopover>
+			{urgentHook && urgentHook[1].state === "awaitingApproval" && urgentHook[1].command && (
+				<HookApprovalDialog
+					open={approving}
+					onOpenChange={setApproving}
+					projectId={workspace.projectId}
+					workspaceId={workspace.id}
+					hook={urgentHook[0]}
+					command={urgentHook[1].command}
+				/>
+			)}
+		</>
 	);
 }

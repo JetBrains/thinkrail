@@ -27,6 +27,21 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   `name` on top with the git **branch on a second line beneath it** (muted, monospace), rendered only when
   it differs from the name (so pristine/legacy `workspace-N` rows stay a single compact line) — the display
   name is decoupled from the git branch (see [[submodule-server-workspaces]]).
+  Each row also shows the **most attention-worthy hook status** (`mostUrgentHook`, priority
+  awaitingApproval > failed > running > succeeded — a plain icon button via **`HookStatusIcon`**, shared
+  with `HooksPanel`), taking the slot the diffStats +/− chip otherwise occupies, and — unlike that chip —
+  staying visible on hover (it's actionable, so it must survive exactly the hover state a click implies).
+  Clicking it: `awaitingApproval` opens **`HookApprovalDialog`** directly (a centered modal, not an
+  anchored popover — approving trusts a shell command for every workspace in the project from now on, not
+  a one-off row action); any other state instead deep-links to `RightPanel`'s Hooks tab via
+  `store.requestHooksView`. `HooksPanel` lists every hook with a status on the active workspace
+  (`Workspace.hookStatus`) plus its live output (`store.hookOutputByWorkspace`), with a **Retry** action
+  on a `failed` row and the same `HookApprovalDialog` reachable from an `awaitingApproval` row too (both
+  call sites share it rather than duplicating the modal). `hooksActions.ts`'s
+  **`approveAndRunHook`**/**`runHookNow`** wrap `workspace.hooks.approve`/`workspace.hooks.run` — approve
+  alone only records a project-scoped approval (see [[submodule-server-workspaces-hooks]]), so the dialog
+  always composes it with an explicit run to actually bootstrap the workspace that's stuck at
+  `hookAwaitingApproval`.
   **Opening a project** goes through the shared **`useOpenProject`** hook (reused by `ProjectTree` **and**
   `WelcomePanel`, so the flow is identical in the rail and the Welcome screen): `project.open`, and on
   failure `project.inspect` → either offers to bootstrap the folder into a repo — a modal **`ConfirmDialog`**
@@ -131,8 +146,11 @@ prompt hero (still editable; empty by default), a base-branch
 
 ## Get right
 
-- `RightPanel` tabs are **Specs | All files | Changes** (Specs leftmost and the **default** — specs are
-  the project's ground truth, so the rail leads with them).
+- `RightPanel` tabs are **Specs | All files | Changes | Hooks** (Specs leftmost and the **default** —
+  specs are the project's ground truth, so the rail leads with them). The Hooks tab shows a small gold
+  attention dot when the active workspace has any hook `awaitingApproval`/`failed` — the one tab whose
+  label itself carries a status signal, since it's the one thing in this row that can silently need the
+  user's action.
 - **Live refresh (the worktree panels follow the disk).** `FileTree` / `ChangesPanel` / `SpecsPanel` /
   `FilePane` watch the store's `fsChangesByWorkspace` tick for their workspace (fed by the host's
   debounced `workspace.fsChanged` push — see [[submodule-server-watch]]) and silently refetch through
