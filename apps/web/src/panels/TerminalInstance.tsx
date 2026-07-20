@@ -50,6 +50,9 @@ function readTheme(): ITheme {
 	if (cursor) theme.cursor = cursor;
 	const sel = cssColorVar("--sel");
 	if (sel) theme.selectionBackground = sel;
+	// Optional selected-text color (high-contrast: black on the yellow selection); unset → xterm default.
+	const selFg = cssColorVar("--sel-fg");
+	if (selFg) theme.selectionForeground = selFg;
 	for (const [slot, name] of ANSI_TOKENS) {
 		const color = cssColorVar(name);
 		if (color) theme[slot] = color;

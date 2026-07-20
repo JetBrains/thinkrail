@@ -72,11 +72,18 @@ function defineThinkrailTheme(m: Monaco): void {
 	set("editorLineNumber.foreground", token("--hint"));
 	set("editorCursor.foreground", token("--primary"));
 	set("editor.selectionBackground", token("--sel"));
+	// Optional selected-text color (high-contrast: black on the yellow selection); unset → base default.
+	set("editor.selectionForeground", token("--sel-fg"));
 	const rules = SYNTAX_TOKENS.flatMap(([monacoToken, name]) => {
 		const color = token(name);
 		return color ? [{ token: monacoToken, foreground: color.replace("#", "") }] : [];
 	});
-	const base = document.documentElement.dataset.theme === "light" ? "vs" : "vs-dark";
+	// Per-theme built-in base: `hc-black` IS the classical VSCode HC syntax palette (white numbers,
+	// #569cd6 keywords, #1aebff variables), which is why the high-contrast theme sets no `--code-*`
+	// beyond the comment green.
+	const dataTheme = document.documentElement.dataset.theme;
+	const base =
+		dataTheme === "light" ? "vs" : dataTheme === "high-contrast" ? "hc-black" : "vs-dark";
 	try {
 		m.editor.defineTheme(THEME, { base, inherit: true, rules, colors });
 	} catch {
