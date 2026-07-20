@@ -69,6 +69,8 @@ import {
 	getWorkspace,
 	listWorkspaces,
 	reclaimWorktree,
+	runOnCreateHook,
+	runOnDeleteHook,
 	workspaceDiffStats,
 } from "../workspaces";
 import { ackSend } from "./ackSend";
@@ -128,6 +130,20 @@ const handlers: Record<string, Handler> = {
 	"workspace.hooks.approve": (params) => {
 		const p = params as { projectId: string; hook: HookName; command: string };
 		approveHook(p.projectId, p.hook, p.command);
+		return { ok: true } as const;
+	},
+	// Re-invoke a specific hook for a specific workspace on demand (the approval flow's "run now" —
+	// composed with `workspace.hooks.approve` — and a standalone manual-retry primitive). Only
+	// onCreate/onDelete are supported: preMerge/postMerge have no caller anywhere yet, so "run now" has no
+	// meaning for them.
+	"workspace.hooks.run": (params) => {
+		const p = params as { workspaceId: string; hook: HookName };
+		const workspace = getWorkspace(p.workspaceId);
+		const project = listProjects().find((proj) => proj.id === workspace.projectId);
+		if (!project) throw new Error(`Unknown project: ${workspace.projectId}`);
+		if (p.hook === "onCreate") runOnCreateHook(workspace, project);
+		else if (p.hook === "onDelete") void runOnDeleteHook(workspace, project);
+		else throw new Error(`Manual run isn't supported for ${p.hook}`);
 		return { ok: true } as const;
 	},
 	"git.listBranches": (params) => listBranches((params as { projectId: string }).projectId),
