@@ -51,11 +51,28 @@ any assumption — re-verify on a pi version bump):
   to `listAll`. Consequence for fixtures: multi-session, multi-cwd test fixtures must write all `.jsonl`
   files **flat, directly under** the given dir; different `cwd`s are expressed via each file's own header
   `cwd` field, never via subdirectory nesting.
+- **Default-layout encoding is not importable — fixtures replicate it (pinned by A5):** the per-cwd
+  subdirectory name above is computed by `getDefaultSessionDirPath`, a *private* (unexported) helper inside
+  `core/session-manager.js`. The mkdir-ing wrapper that IS exported from that module (`getDefaultSessionDir`)
+  is not re-exported from the package root `@earendil-works/pi-coding-agent` index either (checked
+  `dist/index.js`: only `SessionManager` + a handful of pure tree-traversal helpers cross that boundary) —
+  so nothing importable computes this path. `testFixtures.ts` exports `defaultSessionDirFor(agentDir, cwd)`,
+  a from-scratch replica of the exact regex (`--<cwd, / and \ and : → '-'>--`), pinned in
+  `testFixtures.test.ts` against a real `SessionManager.list(cwd)` / `listAll()` call — re-verify against
+  `dist/core/session-manager.js` on a pi version bump.
+- **`PI_CODING_AGENT_DIR` is read live, not cached (pinned by A5):** `getAgentDir()` (`config.js`) reads
+  `process.env.PI_CODING_AGENT_DIR` directly in its function body on every call — there is no top-level
+  capture at module load. So a same-process test (or the e2e seeder) can set the env var immediately before
+  the `SessionManager` call it needs to affect and restore it in a `finally`/`afterAll`; no subprocess is
+  needed to observe a "live" env read. (Existing precedent: `agent/agentSessionManager.test.ts` already
+  does this for its disk-reopen case.)
 
 ## Boundary
 - **Public surface (`index.ts`):** `HistoryIndex`, `getHistoryIndex()`, `matchesTerms`, `makeSnippet`,
-  `extractEntries`, `writeFixtureSession` (test-only; re-exported for A5's e2e fixture seeder), types.
-- **Allowed deps:** `@earendil-works/pi-coding-agent` (`SessionManager`), `@thinkrail/contracts`, `node:fs`.
+  `extractEntries`, `writeFixtureSession`, `defaultSessionDirFor` (test-only; re-exported for A5's e2e
+  fixture seeder), types.
+- **Allowed deps:** `@earendil-works/pi-coding-agent` (`SessionManager`), `@thinkrail/contracts`, `node:fs`,
+  `node:path`.
 - **Forbidden:** importing `agent`/`workspaces`/`projects` (scope mapping is injected by the host handler
   via the `filter`/`labels` callbacks passed into `search()`); writing anything to disk (`writeFixtureSession`
   is test-only, never called from production code paths).
