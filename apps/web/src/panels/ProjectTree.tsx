@@ -43,21 +43,16 @@ export function ProjectTree() {
 	};
 
 	const selectProject = async (projectId: string) => {
-		const store = useAppStore.getState();
-		// Selecting a project returns to its Welcome — deselect any active workspace (the shell renders the
-		// Welcome when no workspace is active). The row is a deliberate "project home" gesture; the chevron
-		// handles expand/collapse separately, so this never fires from just expanding. The workspace's tabs
-		// survive in the store, so re-selecting it restores its view.
-		store.setActiveWorkspace(null);
-		store.selectProject(projectId);
+		// Selecting a project atomically returns to its Welcome. The row is a deliberate "project home"
+		// gesture; the chevron handles expand/collapse separately, so this never fires from just expanding.
+		// The workspace's tabs survive in the store, so re-selecting it restores its view.
+		useAppStore.getState().selectProject(projectId);
 		setExpanded((prev) => new Set(prev).add(projectId));
 		await loadWorkspaces(projectId);
 	};
 
 	const selectWorkspace = (workspace: Workspace) => {
-		const store = useAppStore.getState();
-		store.selectProject(workspace.projectId);
-		store.setActiveWorkspace(workspace.id);
+		useAppStore.getState().activateWorkspace(workspace);
 	};
 
 	const toggleExpand = (projectId: string) => {

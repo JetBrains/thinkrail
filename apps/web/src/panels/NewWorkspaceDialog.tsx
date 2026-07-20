@@ -181,8 +181,7 @@ export function NewWorkspaceDialog({
 		// spins up a session, and a kick-off failure can't strand the dialog open.
 		const store = useAppStore.getState();
 		onCreated(workspace);
-		store.selectProject(workspace.projectId);
-		store.setActiveWorkspace(workspace.id);
+		store.activateWorkspace(workspace);
 		onOpenChange(false);
 
 		const text = prompt.trim();
