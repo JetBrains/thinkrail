@@ -49,6 +49,13 @@ export interface Workspace {
 	 */
 	renamed?: boolean;
 	diffStats?: DiffStats;
+	/**
+	 * The last known state of each declared lifecycle hook, persisted so a reconnecting/reloaded client
+	 * learns about a still-pending `onCreate` without waiting on a live `workspace.hook` push. An
+	 * already-connected client's live view comes from the `workspace.hook` event stream directly, not a
+	 * round-trip through this field — this is durability across reconnects, not the live update path.
+	 */
+	hookStatus?: Partial<Record<HookName, HookStatus>>;
 }
 
 /**
@@ -65,6 +72,15 @@ export interface WorkspaceFsChangedPayload {
 
 /** Names of the workspace lifecycle hooks a project can declare in `.thinkrail/hooks.json`. */
 export type HookName = "onCreate" | "onDelete" | "preMerge" | "postMerge";
+
+/** One hook's last known state, persisted on its `Workspace` record — see `Workspace.hookStatus`. */
+export interface HookStatus {
+	state: "awaitingApproval" | "running" | "succeeded" | "failed";
+	/** The exact command that produced this state — carried so an approval prompt can show it verbatim. */
+	command?: string;
+	/** Set only when `state === "failed"` and the command actually ran (vs. never got approved). */
+	exitCode?: number;
+}
 
 /**
  * The `workspace.hook` push payload — one frame per hook-state transition, broadcast to every client so a
