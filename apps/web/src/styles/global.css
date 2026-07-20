@@ -20,6 +20,9 @@ body {
 
 ::selection {
 	background: var(--selection-bg);
+	/* Optional per-theme selected-text color (high-contrast: black on yellow); `inherit` = today's
+	   behavior for the themes that don't set it. */
+	color: var(--selection-fg, inherit);
 }
 
 /*
