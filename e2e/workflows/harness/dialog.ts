@@ -120,9 +120,10 @@ export function attachDialog(
 	sessionId: string,
 	log: EventLog,
 	config: DialogConfig = {},
-): { answered: AnsweredRound[]; detach: () => void } {
+): { answered: AnsweredRound[]; detach: () => void; settle: () => Promise<void> } {
 	const answered: AnsweredRound[] = [];
 	const handled = new Set<string>();
+	const pending: Promise<void>[] = [];
 	const fallback = config.fallback ?? "skip";
 
 	const onGrow = (): void => {
@@ -130,7 +131,7 @@ export function attachDialog(
 			if (handled.has(call.toolCallId)) continue;
 			handled.add(call.toolCallId);
 			const questions = (call.args.questions ?? []) as AskUserQuestionItem[];
-			void answerRound(call.toolCallId, questions);
+			pending.push(answerRound(call.toolCallId, questions));
 		}
 	};
 
@@ -163,18 +164,32 @@ export function attachDialog(
 		}
 		const round: AnsweredRound = { questions, result, rung, ...(error ? { error } : {}) };
 		answered.push(round);
-		// Delivery itself can fail — e.g. the round was SUPERSEDED because the user simulator's next
-		// message beat a slow (persona-rung) answer. That is a legitimate race outcome, not a harness
-		// crash: record it on the round and let the scenario's own verdicts decide — never an unhandled
-		// rejection out of this fire-and-forget path.
-		void answerQuestion(sessionId, toolCallId, result).catch((err) => {
+		// Delivery: answerQuestion resolves at the END of the turn its answer triggers — awaiting it here
+		// (tracked in `pending`) is what lets `settle()` guarantee that turn has finished before a
+		// scenario runs its verdicts. Delivery can also fail — e.g. the round was SUPERSEDED because the
+		// user simulator's next message beat a slow (persona-rung) answer. That is a legitimate race
+		// outcome, not a harness crash: record it on the round and let the scenario's own verdicts
+		// decide — never an unhandled rejection.
+		try {
+			await answerQuestion(sessionId, toolCallId, result);
+		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err);
 			// Append — never clobber a script/persona error already recorded on the round.
 			round.error = round.error ? `${round.error}; delivery: ${message}` : `delivery: ${message}`;
-		});
+		}
 	};
 
 	const detach = log.onGrow(onGrow);
 	onGrow(); // handle rounds already in the log
-	return { answered, detach };
+	// Wait until every answered round's triggered turn has ENDED (or its delivery failed) — including
+	// cascading rounds asked DURING a triggered turn (hence the loop over a growing `pending`). The
+	// scenario awaits this before verdicts, so checks never race the turn an answer set in motion;
+	// runaway turns stay bounded by the watchdog's budget tripwire (it aborts, which ends the turn).
+	const settle = async (): Promise<void> => {
+		while (pending.length > 0) {
+			const batch = pending.splice(0);
+			await Promise.all(batch);
+		}
+	};
+	return { answered, detach, settle };
 }

@@ -49,6 +49,10 @@ user?, dialog?, stopWhen?, forbid?, watchdog?, expect, judge?, record? }`.
   too: `answerQuestion` can reject after the fact (a slow persona answer superseded by the user
   simulator's next message), which is recorded on the round, not thrown — scenarios that must win
   that race script their rounds (the script rung answers synchronously at `tool_execution_start`).
+  Because an answer TRIGGERS a new turn (ack+terminate), the dialog tracks every delivery and exposes
+  `settle()` — resolve when all triggered turns have ended (cascading rounds included, runaway turns
+  bounded by the budget tripwire) — which the scenario awaits before verdicts: checks never race the
+  turn an answer set in motion.
 - `presets` — mid-flow entry: artifact presets (workflow-native — the task-spec is the workflow's
   spine) and transcript fixtures (`SessionManager.open` via the server's `setSessionManagerFactory`
   seam; a fixture = `session.jsonl` + `workspace/` snapshot with recorded-cwd rewritten in a temp
@@ -73,8 +77,8 @@ user?, dialog?, stopWhen?, forbid?, watchdog?, expect, judge?, record? }`.
   that throws before its verdict records `crashed` + a failed deterministic verdict — the log never
   claims a pass whose checks never ran (`THINKRAIL_WORKFLOW_RUNLOG` redirects the file so unit tests
   can assert on records without polluting the local evidence).
-- `scenario` — orchestration (seed → presets → start → attach → conversation loop → verdicts → run
-  record) with teardown in `finally` — covering the earliest steps too: the transcript-fixture factory
+- `scenario` — orchestration (seed → presets → start → attach → conversation loop → dialog settle →
+  verdicts → run record) with teardown in `finally` — covering the earliest steps too: the transcript-fixture factory
   swap and `startSession` live inside the guarded region, so a throw there still restores the
   process-wide seam; `workflowTest` registers a scenario as a Playwright test (tagged `@agent`).
 
