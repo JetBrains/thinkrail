@@ -18,3 +18,10 @@ export const WORKSPACE_INTERNAL_DIR = ".thinkrail";
  * invisible to git.
  */
 export const WORKSPACE_CONTEXT_DIR = `${WORKSPACE_INTERNAL_DIR}/context`;
+
+/**
+ * Committed hook config (relative to the worktree root) — a project's own `onCreate`/`onDelete`/`preMerge`/
+ * `postMerge` commands. Unlike `context/`, this one is a normal tracked file: it's checked out the moment
+ * `git worktree add` creates the worktree, so it's already present by the time the `onCreate` hook needs it.
+ */
+export const WORKSPACE_HOOKS_CONFIG_FILE = `${WORKSPACE_INTERNAL_DIR}/hooks.json`;

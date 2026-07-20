@@ -3,7 +3,13 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { type AppConfig, DEFAULT_CONFIG, type HookName, type Project, type Workspace } from "@thinkrail/contracts";
+import {
+	type AppConfig,
+	DEFAULT_CONFIG,
+	type HookName,
+	type Project,
+	type Workspace,
+} from "@thinkrail/contracts";
 
 export function dataDir(): string {
 	return process.env.THINKRAIL_DATA_DIR ?? join(homedir(), ".thinkrail");
@@ -55,7 +61,9 @@ export function loadHookOverrides(): Record<string, Partial<Record<HookName, str
 	return readJson("hookOverrides.json", {});
 }
 
-export function saveHookOverrides(overrides: Record<string, Partial<Record<HookName, string>>>): void {
+export function saveHookOverrides(
+	overrides: Record<string, Partial<Record<HookName, string>>>,
+): void {
 	writeJson("hookOverrides.json", overrides);
 }
 
@@ -67,6 +75,8 @@ export function loadHookApprovals(): Record<string, Partial<Record<HookName, str
 	return readJson("hookApprovals.json", {});
 }
 
-export function saveHookApprovals(approvals: Record<string, Partial<Record<HookName, string>>>): void {
+export function saveHookApprovals(
+	approvals: Record<string, Partial<Record<HookName, string>>>,
+): void {
 	writeJson("hookApprovals.json", approvals);
 }
