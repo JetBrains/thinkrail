@@ -33,7 +33,10 @@ describe("extractEntries", () => {
 			line({
 				type: "custom_message",
 				id: "e",
-				message: { role: "custom", customType: "x", content: "ignored", timestamp: 400 },
+				customType: "x",
+				content: "ignored",
+				timestamp: "2026-01-01T00:00:00.000Z",
+				display: false,
 			}),
 			line({
 				type: "message",
@@ -73,5 +76,34 @@ describe("extractEntries", () => {
 		const entries = extractEntries(jsonl);
 		expect(entries).toHaveLength(1);
 		expect(entries[0]?.text.length).toBe(4000);
+	});
+
+	test("ignores message entries with role='custom' (custom-role arrives only as custom_message type)", () => {
+		const jsonl = [
+			line({
+				type: "message",
+				id: "a",
+				message: { role: "user", content: "real user msg", timestamp: 100 },
+			}),
+			line({
+				type: "message",
+				id: "b",
+				message: { role: "custom", content: "should not appear", timestamp: 200 },
+			}),
+			line({
+				type: "custom_message",
+				id: "c",
+				customType: "x",
+				content: "custom via type",
+				timestamp: "2026-01-01T00:00:00.000Z",
+				display: false,
+			}),
+		].join("\n");
+		const entries = extractEntries(jsonl);
+		// Only the user message should be extracted; the message with role="custom" is skipped,
+		// and the custom_message is counted in messageIndex (index 2) but not extracted.
+		expect(entries).toEqual([
+			{ text: "real user msg", role: "user", timestamp: 100, messageIndex: 0 },
+		]);
 	});
 });

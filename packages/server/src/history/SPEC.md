@@ -16,6 +16,12 @@ full-conversation matches). Reads via pi's `SessionManager.listAll()`; **never w
 - `extract.ts` — pure JSONL→`HistoryEntry[]`; `messageIndex` counts user/assistant/toolResult/custom in
   file order (the `getSessionMessages` filter), so it anchors into the transcript the client renders.
   Searchable text capped (`MAX_SEARCHABLE`); tool results/thinking not indexed (V1).
+
+## On-disk JSONL structure (observed from pi session files)
+- **`message` entries:** `{ type: "message", ..., message: { role: "user"|"assistant"|"toolResult", content: string|array, timestamp: ms-number } }`
+  — `message.role` determines renderability; `message.timestamp` is milliseconds since epoch.
+- **`custom_message` entries:** `{ type: "custom_message", customType: string, content: string|array, timestamp: ISO-string, display: boolean, ... }`
+  — top-level structure (no `message` wrapper); always renderable as role "custom"; `timestamp` is ISO 8601 string at entry level.
 - `historyIndex.ts` — `HistoryIndex`: cold build on first search (batched, yields the event loop);
   freshness = mtime revalidation throttled to ~2 s (pi appends live messages to the file, so the file IS
   the live feed — no agent-module hook). Matching: case-insensitive substring AND over whitespace terms;

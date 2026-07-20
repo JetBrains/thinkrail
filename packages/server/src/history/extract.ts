@@ -11,7 +11,7 @@ export interface HistoryEntry {
  * insert re-reads nothing, the capped text is what's inserted, which V1 accepts for >4k prompts). */
 export const MAX_SEARCHABLE = 4000;
 
-const RENDERABLE = new Set(["user", "assistant", "toolResult", "custom"]);
+const MESSAGE_ROLES = new Set(["user", "assistant", "toolResult"]);
 
 function textOf(content: unknown): string {
 	if (typeof content === "string") return content;
@@ -40,14 +40,25 @@ export function extractEntries(jsonl: string): HistoryEntry[] {
 		} catch {
 			continue;
 		}
+
 		const entry = parsed as {
 			type?: unknown;
 			message?: { role?: unknown; content?: unknown; timestamp?: unknown };
 		};
-		if (entry.type !== "message" && entry.type !== "custom_message") continue;
+
+		// custom_message entries: top-level, no message wrapper, always renderable.
+		if (entry.type === "custom_message") {
+			messageIndex++;
+			continue;
+		}
+
+		// message entries: require message.role to be a known type.
+		if (entry.type !== "message") continue;
 		const role = entry.message?.role;
-		if (typeof role !== "string" || !RENDERABLE.has(role)) continue;
+		if (typeof role !== "string" || !MESSAGE_ROLES.has(role)) continue;
 		const index = messageIndex++;
+
+		// Extract text only from user/assistant roles.
 		if (role !== "user" && role !== "assistant") continue;
 		const text = textOf(entry.message?.content);
 		if (!text.trim()) continue;
