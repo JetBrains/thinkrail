@@ -97,7 +97,9 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   become turns: known ones (`ask-user-answers`) index into `askAnswers`; unknown customTypes are
   ignored. No store/transport/shiki.
 - **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions, `/`
-  commands, image paste/drop), `ModelSelector` + `ThinkingSelector` (shared with `NewWorkspaceDialog`;
+  commands, image paste/drop) plus its props-driven **slash-completion primitive** (filter/menu/caret +
+  Up/Down, Enter/Tab, Escape), reused by `panels/NewWorkspaceDialog` so the two inputs cannot drift;
+  `ModelSelector` + `ThinkingSelector` (also shared with `NewWorkspaceDialog`;
   optional `container` prop portals their popovers into a host Dialog), `SessionStatsBar`, `ChatHeader`
   (its `left` slot carries the plan strip), `ExtUiDialog`. All props-driven; behavior detail lives in the
   components' jsdoc.
@@ -114,8 +116,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 
 ## Boundary
 
-- **Public surface:** the registry API (`toolRegistry`), the renderers (incl. the presentational
-  `Markdown` — GFM + shiki, no store/transport; the rendering is fixed but the **prose skin** is the
+- **Public surface:** the registry API (`toolRegistry`), the props-driven slash-completion primitive, and
+  the renderers (incl. the presentational `Markdown` — GFM + shiki, no store/transport; the rendering is fixed but the **prose skin** is the
   caller's via an optional `className` — chat uses a compact bubble skin, `panels/MarkdownPreview` a
   reading-optimized document skin; code blocks size in `em` so they scale with the skin; a caller may
   also **extend** the render with extra `remarkPlugins` + `components`, e.g. the file view's GitHub

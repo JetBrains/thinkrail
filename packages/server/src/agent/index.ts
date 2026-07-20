@@ -5,6 +5,7 @@ export * from "./askUserQuestion";
 export {
 	type BundledExtensionFactory,
 	type BundledExtensions,
+	listSkillCommands,
 	setBundledExtensions,
 } from "./extensions";
 export * from "./oneshot";

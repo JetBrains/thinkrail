@@ -4,6 +4,7 @@ import { join } from "node:path";
 import {
 	E2E_DATA_DIR,
 	E2E_FIXTURE_REPO,
+	E2E_HOME_DIR,
 	E2E_PI_AGENT_DIR,
 	E2E_PI_MODELS_SEED,
 	E2E_PICK_DIR_POINTER,
@@ -14,6 +15,7 @@ import { seedFixtureRepo } from "./fixtures/repo";
 export default function globalSetup(): void {
 	rmSync(E2E_DATA_DIR, { recursive: true, force: true });
 	mkdirSync(E2E_DATA_DIR, { recursive: true });
+	mkdirSync(E2E_HOME_DIR, { recursive: true });
 
 	// Isolated pi agent dir: copy the user's provider/auth config so a real provider works (the `@agent`
 	// suite needs it — auth lives across BOTH `auth.json` (OAuth providers) and `models.json` (providers

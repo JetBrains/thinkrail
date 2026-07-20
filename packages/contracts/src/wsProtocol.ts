@@ -50,7 +50,8 @@ import type {
 // v10: `provider.setApiKey` is removed — API-key setup goes through the interactive login channel
 // (`provider.loginStart` gains `type?: "oauth" | "api_key"`), so multi-prompt providers (azure, vertex)
 // work and `ProviderStatus.canApiKey` is pi's provider-owned truth (`Provider.auth.apiKey.login`).
-export const PROTOCOL_VERSION = 10;
+// v11: `skill.list` previews a project's skill-only command catalog before a workspace/session exists.
+export const PROTOCOL_VERSION = 11;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -114,6 +115,8 @@ export const WS_METHODS = {
 	terminalResize: "terminal.resize",
 	terminalClose: "terminal.close",
 	dialogSelectDirectory: "dialog.selectDirectory",
+	// Skill-only command preview for New Workspace, before a worktree/session exists.
+	skillList: "skill.list",
 	// session.* — the pi engine; the Composer + cheap wins (model/thinking/stats/skills).
 	sessionCreate: "session.create",
 	sessionPrompt: "session.prompt",
@@ -297,6 +300,8 @@ export interface WsMethodMap {
 	"terminal.resize": { params: { id: string; cols: number; rows: number }; result: Ack };
 	"terminal.close": { params: { id: string }; result: Ack };
 	"dialog.selectDirectory": { params: Record<string, never>; result: { path: string | null } };
+	// Preview from the selected project's current checkout; the eventual worktree session is authoritative.
+	"skill.list": { params: { projectId: string }; result: SlashCommandInfo[] };
 	"session.create": {
 		// `model`/`thinkingLevel`: applied at create time via `createAgentSession`, e.g. the
 		// New-Workspace dialog's pre-session picks. Omitted → pi resolves defaults from auth + settings.

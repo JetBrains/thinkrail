@@ -19,7 +19,7 @@ import type {
 	WireModel,
 } from "@thinkrail/contracts";
 import { ANSWERABILITY_ERRORS, assessAnswerability, buildAnswersMessage } from "./askUserQuestion";
-import { buildResourceLoader } from "./extensions";
+import { buildResourceLoader, toSkillCommands } from "./extensions";
 import { getPiRuntime, refreshCatalogsDetached } from "./piRuntime";
 import { repairDanglingToolCalls } from "./sessionRepair";
 import { cancelExtUiForSession, createWebUiContext, notifyExtUi } from "./webUiContext";
@@ -72,10 +72,11 @@ export function getSessionWorkspaceId(sessionId: string): string | undefined {
  * wasm loads via a worker + `fs` path that a compiled binary can't satisfy), and the web UI downsizes
  * user-attached images itself — so we keep image-read working everywhere without depending on photon.
  * `SettingsManager.create(cwd)` defaults its agentDir to `getAgentDir()` (honors `PI_CODING_AGENT_DIR`),
- * matching the manager `createAgentSession` builds when we omit `settingsManager`.
+ * matching the manager `createAgentSession` builds when we omit `settingsManager`. Persisting/opening a
+ * ThinkRail project is its trust grant, made explicit here instead of relying on Pi's SDK default.
  */
 export function buildSessionSettings(cwd: string): SettingsManager {
-	const settings = SettingsManager.create(cwd);
+	const settings = SettingsManager.create(cwd, undefined, { projectTrusted: true });
 	settings.applyOverrides({ images: { autoResize: false } });
 	return settings;
 }
@@ -398,12 +399,7 @@ export function getSessionCommands(sessionId: string): SlashCommandInfo[] {
 		source: "prompt" as const,
 		sourceInfo: t.sourceInfo,
 	}));
-	const skill = session.resourceLoader.getSkills().skills.map((k) => ({
-		name: `skill:${k.name}`,
-		description: k.description,
-		source: "skill" as const,
-		sourceInfo: k.sourceInfo,
-	}));
+	const skill = toSkillCommands(session.resourceLoader.getSkills().skills);
 	return [...extension, ...prompt, ...skill];
 }
 

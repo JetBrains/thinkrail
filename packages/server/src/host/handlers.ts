@@ -22,6 +22,7 @@ import {
 	hasSession,
 	listAvailableModels,
 	listSessions,
+	listSkillCommands,
 	promptSession,
 	removeSession,
 	removeWorkspaceSessions,
@@ -189,6 +190,12 @@ const handlers: Record<string, Handler> = {
 	"terminal.close": (params) => {
 		closeTerminal((params as { id: string }).id);
 		return { ok: true } as const;
+	},
+	"skill.list": (params) => {
+		const { projectId } = params as { projectId: string };
+		const project = listProjects().find((candidate) => candidate.id === projectId);
+		if (!project) throw new Error(`Unknown project: ${projectId}`);
+		return listSkillCommands(project.path);
 	},
 	// session.* — the pi engine. A thrown/failed call returns a `{ ok:false, error }` WS response;
 	// streaming faults arrive as `pi.event`s (the error/agent_end variants), not here.

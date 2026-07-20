@@ -83,6 +83,33 @@ test("the dialog lists local branches (no stray origin) and creates a worktree",
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(0);
 });
 
+test("project skill autocomplete selects before Enter can create", async ({ page }) => {
+	await openFixtureProject(page);
+
+	await page.getByTestId("add-workspace").first().click();
+	const dialog = page.getByTestId("new-workspace-dialog");
+	await expect(dialog).toBeVisible();
+	const prompt = dialog.getByTestId("ws-prompt");
+
+	await prompt.fill("/e2e");
+	const portable = dialog.getByTestId("slash-command").filter({ hasText: "/skill:e2e-portable" });
+	await expect(portable).toBeVisible();
+	await expect(portable).toContainText("skill/project");
+
+	// Escape dismisses completion rather than closing the parent dialog; changing the query reopens it.
+	await prompt.press("Escape");
+	await expect(dialog.getByTestId("slash-menu")).toBeHidden();
+	await expect(dialog).toBeVisible();
+	await prompt.fill("/e2");
+	await expect(portable).toBeVisible();
+
+	// Completion gets keyboard priority over the dialog's Enter-to-create behavior.
+	await prompt.press("Enter");
+	await expect(prompt).toHaveValue("/skill:e2e-portable ");
+	await expect(dialog).toBeVisible();
+	await expect(page.getByTestId("workspace-item")).toHaveCount(0);
+});
+
 test("Enter in the prompt creates; Shift+Enter inserts a newline", async ({ page }) => {
 	await openFixtureProject(page);
 

@@ -1,7 +1,19 @@
-import type { BranchList, ThinkingLevel, WireModel, Workspace } from "@thinkrail/contracts";
+import type {
+	BranchList,
+	SlashCommandInfo,
+	ThinkingLevel,
+	WireModel,
+	Workspace,
+} from "@thinkrail/contracts";
 import { Box, Check, ChevronDown, GitBranch, RefreshCw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { ModelSelector } from "@/chat/ModelSelector";
+import {
+	SlashCommandMenu,
+	selectedSlashCommandValue,
+	slashCommandCatalogOrEmpty,
+	useSlashCommandCompletion,
+} from "@/chat/SlashCommandCompletion";
 import { ThinkingSelector } from "@/chat/ThinkingSelector";
 import {
 	Command,
@@ -58,6 +70,7 @@ export function NewWorkspaceDialog({
 	const [baseRef, setBaseRef] = useState<string>("");
 	const [refreshing, setRefreshing] = useState(false);
 	const [prompt, setPrompt] = useState("");
+	const [skillCommands, setSkillCommands] = useState<SlashCommandInfo[]>([]);
 	const [model, setModel] = useState<WireModel | null>(null);
 	const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>("medium");
 	const [creating, setCreating] = useState(false);
@@ -65,6 +78,25 @@ export function NewWorkspaceDialog({
 	// The dialog content node — popovers portal into it so their lists stay scrollable under the Dialog's
 	// scroll lock (react-remove-scroll blocks wheel/trackpad on body-portaled content).
 	const [dialogEl, setDialogEl] = useState<HTMLElement | null>(null);
+
+	const focusPromptCaret = (position: number) => {
+		requestAnimationFrame(() => {
+			const input = promptRef.current;
+			if (!input) return;
+			input.focus();
+			input.setSelectionRange(position, position);
+		});
+	};
+
+	const slashCompletion = useSlashCommandCompletion({
+		value: prompt,
+		commands: skillCommands,
+		onSelect: (command) => {
+			const next = selectedSlashCommandValue(command);
+			setPrompt(next);
+			focusPromptCaret(next.length);
+		},
+	});
 
 	// Reset the form each time the dialog opens, anchored to the project the "+" was clicked on and any
 	// seed prompt (empty by default).
@@ -74,6 +106,22 @@ export function NewWorkspaceDialog({
 		setPrompt(initialPrompt ?? "");
 		setCreating(false);
 	}, [open, projectId, initialPrompt]);
+
+	// Skills are previewed from the selected project's current checkout; the created worktree/session is
+	// authoritative if its base ref differs. Autocomplete is an enhancement, so failure degrades to empty.
+	useEffect(() => {
+		if (!open) return;
+		let cancelled = false;
+		setSkillCommands([]);
+		void slashCommandCatalogOrEmpty(() =>
+			getTransport().request("skill.list", { projectId: selectedProjectId }),
+		).then((commands) => {
+			if (!cancelled) setSkillCommands(commands);
+		});
+		return () => {
+			cancelled = true;
+		};
+	}, [open, selectedProjectId]);
 
 	// Models are global to the host — fetch once into the shared store; the picker reads them.
 	useEffect(() => {
@@ -217,6 +265,13 @@ export function NewWorkspaceDialog({
 				hideClose
 				data-testid="new-workspace-dialog"
 				className="max-w-[600px] gap-md p-md"
+				onEscapeKeyDown={(event) => {
+					// Radix handles Escape outside the textarea's React bubble path. Keep the parent dialog open
+					// while completion consumes Escape to dismiss only its menu (even if focus moved elsewhere).
+					if (!slashCompletion.open) return;
+					event.preventDefault();
+					slashCompletion.dismiss();
+				}}
 				onOpenAutoFocus={(e) => {
 					// Land focus on the prompt (the hero), not the first picker Radix would otherwise focus.
 					e.preventDefault();
@@ -250,7 +305,7 @@ export function NewWorkspaceDialog({
 				</div>
 
 				{/* hero: the prompt */}
-				<div className="flex flex-col gap-xs">
+				<div className="relative">
 					<Textarea
 						ref={promptRef}
 						data-testid="ws-prompt"
@@ -261,6 +316,7 @@ export function NewWorkspaceDialog({
 						rows={6}
 						className="min-h-[160px]"
 						onKeyDown={(e) => {
+							if (slashCompletion.handleKeyDown(e)) return;
 							// Enter creates (matching the button's ↵ affordance); Shift+Enter inserts a newline.
 							if (e.key === "Enter" && !e.shiftKey) {
 								e.preventDefault();
@@ -268,7 +324,14 @@ export function NewWorkspaceDialog({
 							}
 						}}
 					/>
-					{prompt.trim() ? (
+					{slashCompletion.open ? (
+						<SlashCommandMenu
+							commands={slashCompletion.matches}
+							activeIndex={slashCompletion.activeIndex}
+							onSelect={slashCompletion.pick}
+							className="absolute top-full left-sm z-50 mt-xs"
+						/>
+					) : prompt.trim() ? (
 						<p data-testid="workspace-naming-hint" className="px-xs text-hint text-xs">
 							ThinkRail will name the workspace and branch from your request.
 						</p>

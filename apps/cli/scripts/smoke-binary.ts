@@ -8,7 +8,7 @@
 // Usage:  bun run scripts/smoke-binary.ts [path-to-binary]
 //   Default binary: `dist/thinkrail` — run `bun run build:binary` first (we error if it's missing).
 
-import { existsSync, globSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, globSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -20,6 +20,8 @@ if (!existsSync(binary)) {
 
 const tmp = mkdtempSync(join(tmpdir(), "thinkrail-smoke-"));
 const cacheDir = join(tmp, "cache");
+const homeDir = join(tmp, "home");
+const projectDir = join(tmp, "project");
 
 function fail(message: string): never {
 	console.error(`smoke FAILED: ${message}`);
@@ -36,6 +38,16 @@ function within<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
 	]);
 }
 
+mkdirSync(homeDir, { recursive: true });
+const skillDir = join(projectDir, ".claude", "skills", "compiled-portable");
+mkdirSync(skillDir, { recursive: true });
+writeFileSync(
+	join(skillDir, "SKILL.md"),
+	"---\nname: compiled-portable\ndescription: Compiled portable smoke skill\n---\n\n# Smoke\n",
+);
+const gitInit = Bun.spawnSync(["git", "-C", projectDir, "init", "-b", "main"]);
+if (gitInit.exitCode !== 0) fail("could not initialise the portable-skill smoke project");
+
 const proc = Bun.spawn([binary, "--no-open", "--port", "24262"], {
 	env: {
 		...process.env,
@@ -44,10 +56,47 @@ const proc = Bun.spawn([binary, "--no-open", "--port", "24262"], {
 		THINKRAIL_DATA_DIR: join(tmp, "data"),
 		PI_CODING_AGENT_DIR: join(tmp, "pi-agent"),
 		XDG_CACHE_HOME: cacheDir,
+		HOME: homeDir,
+		CLAUDE_CONFIG_DIR: join(homeDir, ".claude"),
+		CODEX_HOME: join(homeDir, ".codex"),
+		GEMINI_CLI_HOME: homeDir,
 	},
 	stdout: "pipe",
 	stderr: "inherit",
 });
+
+async function connectRpc(baseUrl: string): Promise<WebSocket> {
+	const socket = new WebSocket(`${baseUrl.replace(/^http/, "ws")}/ws`);
+	await new Promise<void>((resolve, reject) => {
+		socket.addEventListener("open", () => resolve(), { once: true });
+		socket.addEventListener("error", () => reject(new Error("WebSocket connection failed")), {
+			once: true,
+		});
+	});
+	return socket;
+}
+
+let requestSequence = 0;
+function rpc(socket: WebSocket, method: string, params: unknown): Promise<unknown> {
+	const id = `smoke_${++requestSequence}`;
+	return new Promise((resolve, reject) => {
+		const onMessage = (event: MessageEvent) => {
+			if (typeof event.data !== "string") return;
+			const frame = JSON.parse(event.data) as {
+				id?: string;
+				ok?: boolean;
+				result?: unknown;
+				error?: string;
+			};
+			if (frame.id !== id) return;
+			socket.removeEventListener("message", onMessage);
+			if (frame.ok) resolve(frame.result);
+			else reject(new Error(frame.error ?? `${method} failed`));
+		};
+		socket.addEventListener("message", onMessage);
+		socket.send(JSON.stringify({ id, method, params }));
+	});
+}
 
 /** The URL from the CLI's `thinkrail → http://…` line (it may scan past a busy port). */
 async function readServedUrl(): Promise<string> {
@@ -61,6 +110,7 @@ async function readServedUrl(): Promise<string> {
 	throw new Error(`stdout closed without a serving URL (output: ${JSON.stringify(buffered)})`);
 }
 
+let rpcSocket: WebSocket | null = null;
 try {
 	const url = await within(
 		Promise.race([
@@ -80,6 +130,44 @@ try {
 	const body = await index.text();
 	if (!index.ok || !body.includes("ThinkRail")) {
 		fail(`staged web UI not served: / answered ${index.status}`);
+	}
+
+	// Exercise the binary's actual resource-loader mode, not only staged files: a recognized project alias
+	// and a bundled skill must coexist in the pre-session catalog, with truthful project provenance.
+	rpcSocket = await within(connectRpc(url), 10_000, "WebSocket connect");
+	const project = (await within(
+		rpc(rpcSocket, "project.open", { path: projectDir }),
+		10_000,
+		"project.open",
+	)) as { id?: string };
+	if (!project.id) fail("project.open returned no project id");
+	const commands = await within(
+		rpc(rpcSocket, "skill.list", { projectId: project.id }),
+		30_000,
+		"skill.list",
+	);
+	if (!Array.isArray(commands)) fail("skill.list did not return an array");
+	const portable = commands.find(
+		(command) =>
+			typeof command === "object" &&
+			command !== null &&
+			(command as { name?: string }).name === "skill:compiled-portable",
+	) as { description?: string; sourceInfo?: { scope?: string } } | undefined;
+	if (portable?.description !== "Compiled portable smoke skill") {
+		fail("compiled skill.list did not load the cross-agent project alias");
+	}
+	if (portable.sourceInfo?.scope !== "project") {
+		fail("compiled skill.list did not preserve project skill provenance");
+	}
+	if (
+		!commands.some(
+			(command) =>
+				typeof command === "object" &&
+				command !== null &&
+				(command as { name?: string }).name === "skill:brainstorming",
+		)
+	) {
+		fail("compiled skill.list did not load bundled workflow skills");
 	}
 
 	// The bundled extensions' skills must be staged to the real filesystem (pi reads SKILL.md via fs).
@@ -121,5 +209,6 @@ try {
 	proc.kill("SIGKILL");
 	fail(err instanceof Error ? err.message : String(err));
 } finally {
+	rpcSocket?.close();
 	rmSync(tmp, { recursive: true, force: true });
 }

@@ -32,7 +32,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   install SIGINT/SIGTERM handlers that **settle before exit**: `settleSessionsForShutdown()` — abort
   streaming sessions and wait bounded, so pi persists their "Operation aborted" tool results and
   transcripts land paired — then `stop()` + exit; an immediate exit would strand mid-tool transcripts on
-  the restart repair); `handlers.ts` (the WS method→handler registry);
+  the restart repair); `handlers.ts` (the WS method→handler registry, including `skill.list`: resolve the
+  requested `projectId` through `projects`, then pass only its checkout path into agent's
+  `listSkillCommands(cwd)` — the composition stays here; `agent` never imports its sibling);
   `ackSend.ts` (the send-ack policy — see "Get right"); `autoRename.ts` (the **workspace auto-rename
   flow** — the composition of `agent` + `assist` + `workspaces` only the host may make, in **two passes**
   the session-publisher closure in `createServer` tees fire-and-forget, both triggering a

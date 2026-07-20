@@ -47,7 +47,7 @@ test("composer prompt is moderately tall with model and effort controls undernea
 	expect(sendBox.y).toBeGreaterThanOrEqual(belowInputY);
 });
 
-test("model picker lists models and @-mention completes a worktree file", {
+test("model picker plus file and portable-skill completion use the live session catalog", {
 	tag: "@agent",
 }, async ({ page }) => {
 	await openChat(page);
@@ -70,12 +70,27 @@ test("model picker lists models and @-mention completes a worktree file", {
 	await expect(page.getByTestId("session-stats")).toBeVisible();
 	await expect(page.getByTestId("session-stats")).toContainText(/tok/);
 
+	// The worktree session is authoritative and discovers the fixture's Claude-compatible project alias.
+	const input = page.getByTestId("chat-input");
+	await input.fill("/e2e");
+	const portableSkill = page
+		.getByTestId("slash-command")
+		.filter({ hasText: "/skill:e2e-portable" });
+	await expect(portableSkill).toBeVisible();
+	await expect(portableSkill).toContainText("skill/project");
+	await input.press("Tab");
+	await expect(input).toHaveValue("/skill:e2e-portable ");
+	// Selection restores focus/caret on the next animation frame; let that settle before replacing the value.
+	await input.evaluate(
+		() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
+	);
+
 	// Composer @-mention: typing `@RE` lists the worktree's README.md and picking it inserts the path.
-	await page.getByTestId("chat-input").fill("@RE");
+	await input.fill("@RE");
 	const mention = page.getByTestId("mention-item").filter({ hasText: "README.md" });
 	await expect(mention).toBeVisible();
 	await mention.click();
-	await expect(page.getByTestId("chat-input")).toHaveValue(/@README\.md/);
+	await expect(input).toHaveValue(/@README\.md/);
 });
 
 test("stats refresh after a turn completes (cheap win #3)", { tag: "@agent" }, async ({ page }) => {
