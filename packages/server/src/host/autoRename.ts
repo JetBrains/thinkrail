@@ -10,7 +10,7 @@
  * flag, and while it's unset a later settled turn retries. Never throws, never blocks a turn.
  */
 
-import type { Message, PiEvent, Workspace } from "@thinkrail/contracts";
+import type { PiEvent, TranscriptMessage, Workspace } from "@thinkrail/contracts";
 import { getSessionMessages } from "../agent";
 import { extractFirstTurn, naiveWorkspaceName, suggestWorkspaceName } from "../assist";
 import { getWorkspace, renameWorkspace } from "../workspaces";
@@ -55,7 +55,7 @@ const inFlight = new Set<string>();
 const naiveInFlight = new Set<string>();
 
 /** Test seam: the hook's transcript source (defaults to `getSessionMessages` on the live session). */
-export type TranscriptReader = () => Promise<Message[]>;
+export type TranscriptReader = () => Promise<TranscriptMessage[]>;
 
 /**
  * Instantly name `workspaceId` from the session's first prompt, **non-agentically** — a cheap provisional

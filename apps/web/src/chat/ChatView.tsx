@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { EMPTY_RUNTIME, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
+import { AskStatesContext, deriveAskStates } from "./askState";
 import { type ChatActions, ChatActionsContext } from "./ChatActions";
 import { ChatHeader } from "./ChatHeader";
 import { Composer, type MentionCandidate, type SubmitBehavior } from "./Composer";
@@ -205,9 +206,16 @@ export default function ChatView({
 		[workspaceId],
 	);
 
+	// The questionnaire cards' transcript-derived lifecycle (awaiting / answered / superseded) — provided
+	// as context so the presentational card stays store-free (see askState.ts).
+	const askStates = useMemo(
+		() => deriveAskStates(runtime.turns, runtime.askAnswers),
+		[runtime.turns, runtime.askAnswers],
+	);
+
 	// Interactive tool renderers reach the agent through this context (kept out of the presentational
-	// renderers). Currently: the inline `ask_user_question` card answering its blocked tool call. The
-	// promise is handed to the caller — the card owns the failure UX (it un-latches its "sent" state).
+	// renderers). Currently: the inline `ask_user_question` card sending its reply. The promise is handed
+	// to the caller — the card owns the failure UX (it un-latches its "sent" state).
 	const chatActions = useMemo<ChatActions>(
 		() => ({
 			answerQuestion: (toolCallId: string, result: AskUserQuestionResult) =>
@@ -231,72 +239,74 @@ export default function ChatView({
 
 	return (
 		<ChatActionsContext.Provider value={chatActions}>
-			<div className="flex h-full min-h-0 flex-col bg-bg">
-				<ChatHeader stats={stats} statusEntries={Object.entries(extUiStatus)} />
-				<div
-					data-testid="chat-scroll"
-					className="relative flex min-h-0 flex-1 flex-col"
-					{...containerProps}
-				>
-					<Virtuoso<ChatRow, ChatListContext>
-						ref={virtuosoRef}
-						data={rows}
-						context={listContext}
-						components={CHAT_LIST_COMPONENTS}
-						className="min-h-0 flex-1"
-						followOutput={followOutput}
-						atBottomStateChange={handleAtBottom}
-						atBottomThreshold={50}
-						// Row ids are stable across streaming snapshots (rows.ts), so items never remount mid-stream.
-						computeItemKey={(_, row) => row.id}
-						itemContent={(_, row) => (
-							<div className="mx-auto max-w-3xl px-md py-xs">
-								<ChatTurnView
-									row={row}
-									workspaceRoot={workspaceRoot}
-									onOpenChanges={onOpenChanges}
-								/>
-							</div>
-						)}
+			<AskStatesContext.Provider value={askStates}>
+				<div className="flex h-full min-h-0 flex-col bg-bg">
+					<ChatHeader stats={stats} statusEntries={Object.entries(extUiStatus)} />
+					<div
+						data-testid="chat-scroll"
+						className="relative flex min-h-0 flex-1 flex-col"
+						{...containerProps}
+					>
+						<Virtuoso<ChatRow, ChatListContext>
+							ref={virtuosoRef}
+							data={rows}
+							context={listContext}
+							components={CHAT_LIST_COMPONENTS}
+							className="min-h-0 flex-1"
+							followOutput={followOutput}
+							atBottomStateChange={handleAtBottom}
+							atBottomThreshold={50}
+							// Row ids are stable across streaming snapshots (rows.ts), so items never remount mid-stream.
+							computeItemKey={(_, row) => row.id}
+							itemContent={(_, row) => (
+								<div className="mx-auto max-w-3xl px-md py-xs">
+									<ChatTurnView
+										row={row}
+										workspaceRoot={workspaceRoot}
+										onOpenChanges={onOpenChanges}
+									/>
+								</div>
+							)}
+						/>
+						{showScrollButton ? (
+							<button
+								type="button"
+								data-testid="scroll-to-bottom"
+								onClick={scrollToBottom}
+								className="-translate-x-1/2 absolute bottom-md left-1/2 flex items-center gap-xs rounded-[var(--radius-lg)] border border-border2 bg-elevated px-sm py-xs text-muted text-xs shadow-[var(--shadow-md)] hover:bg-hover hover:text-text"
+							>
+								<ArrowDown className="size-3" />
+								New messages
+							</button>
+						) : null}
+					</div>
+					{widgetEntries.length > 0 ? (
+						<div className="shrink-0 border-border2 border-t bg-elevated px-md py-xs text-muted text-xs">
+							{widgetEntries.map(([key, lines]) => (
+								<div key={key}>{lines.join(" ")}</div>
+							))}
+						</div>
+					) : null}
+					<Composer
+						value={draft}
+						onChange={(v) => useAppStore.getState().setChatDraft(sessionId, v)}
+						isStreaming={isStreaming}
+						commands={commands}
+						mentionCandidates={mentionCandidates}
+						models={models}
+						currentModel={currentModel}
+						thinkingLevel={thinkingLevel}
+						onMentionQuery={onMentionQuery}
+						onSelectModel={onSelectModel}
+						onSelectThinking={onSelectThinking}
+						onSubmit={onSubmit}
+						onAbort={onAbort}
 					/>
-					{showScrollButton ? (
-						<button
-							type="button"
-							data-testid="scroll-to-bottom"
-							onClick={scrollToBottom}
-							className="-translate-x-1/2 absolute bottom-md left-1/2 flex items-center gap-xs rounded-[var(--radius-lg)] border border-border2 bg-elevated px-sm py-xs text-muted text-xs shadow-[var(--shadow-md)] hover:bg-hover hover:text-text"
-						>
-							<ArrowDown className="size-3" />
-							New messages
-						</button>
+					{pendingExtUi ? (
+						<ExtUiDialog key={pendingExtUi.id} request={pendingExtUi} onReply={onExtUiReply} />
 					) : null}
 				</div>
-				{widgetEntries.length > 0 ? (
-					<div className="shrink-0 border-border2 border-t bg-elevated px-md py-xs text-muted text-xs">
-						{widgetEntries.map(([key, lines]) => (
-							<div key={key}>{lines.join(" ")}</div>
-						))}
-					</div>
-				) : null}
-				<Composer
-					value={draft}
-					onChange={(v) => useAppStore.getState().setChatDraft(sessionId, v)}
-					isStreaming={isStreaming}
-					commands={commands}
-					mentionCandidates={mentionCandidates}
-					models={models}
-					currentModel={currentModel}
-					thinkingLevel={thinkingLevel}
-					onMentionQuery={onMentionQuery}
-					onSelectModel={onSelectModel}
-					onSelectThinking={onSelectThinking}
-					onSubmit={onSubmit}
-					onAbort={onAbort}
-				/>
-				{pendingExtUi ? (
-					<ExtUiDialog key={pendingExtUi.id} request={pendingExtUi} onReply={onExtUiReply} />
-				) : null}
-			</div>
+			</AskStatesContext.Provider>
 		</ChatActionsContext.Provider>
 	);
 }

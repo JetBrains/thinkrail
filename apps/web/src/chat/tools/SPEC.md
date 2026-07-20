@@ -24,6 +24,14 @@ registration runs once when the chat module mounts. Unregistered tools fall back
   (capability + rationale: the server's `agent/askUserQuestion` SPEC). Registered `"bare"`: it owns its
   full-width frame, never folds, and answers through the `ChatActions` context (correlated by
   `toolCallId`). Behaviors worth their invariants:
+  - **The lifecycle derives from the transcript, not the tool status** (the tool is ack + terminate; its
+    own result is just the ack): `useAskState(toolCallId)` supplies the reply / superseded verdict, and
+    the card resolves in order — **answered/declined** (an `ask-user-answers` reply exists → the resolved
+    record; a legacy blocking-era result or a restart-repaired decline in the tool result renders the
+    same way), **superseded** (a later free-form user message replaced the answer → a terminal compact
+    record; the host rejects late answers, matching), **dead** (owning message aborted/errored → closed
+    record), else **awaiting** — interactive now, after a reconnect, or after any number of host
+    restarts.
   - **Controls never stream** — while args stream it shows a stable composing placeholder and the
     complete questionnaire reveals atomically at message end (rationale in the component's jsdoc).
   - **Multi-question completion is review-gated** — every question page advances with **Next**, including
@@ -32,8 +40,8 @@ registration runs once when the chat module mounts. Unregistered tools fall back
     the submission can be checked in context. Selection status is also exposed as screen-reader text —
     never by icon/color alone. A single question keeps its direct **Submit** action.
   - **Per-call UI state survives virtualization** — a module-level cache keyed by `toolCallId` (dropped
-    on resolve), since react-virtuoso unmounts off-screen rows. This is the pattern the activity fold's
-    expansion state reuses.
+    once no longer awaiting), since react-virtuoso unmounts off-screen rows. This is the pattern the
+    activity fold's expansion state reuses.
   - Awaiting an answer, the card carries a subtle primary-tinted accent ring (the "needs you" accent).
   - **Recommended-reason affordance** — a recommended option (label suffix `(Recommended)` **or** a
     non-empty `recommendedReason` — a reason *implies* recommended, defensively) renders its rationale
@@ -57,8 +65,9 @@ registration runs once when the chat module mounts. Unregistered tools fall back
 
 - **Public surface:** the side-effect `register` import + the shared `CodeBlock`/`Collapsible`/
   `toolHelpers` for sibling renderers. No barrel (chat pulls shiki — per-file imports, as in the parent).
-- **Allowed deps:** parent chat primitives (`toolRegistry`, `Markdown`, `ChatActions`); `contracts`
-  (**type-only**); `components/ui`; `lib`; `lucide-react`; `mermaid` (**lazy, `visualize/` only**).
+- **Allowed deps:** parent chat primitives (`toolRegistry`, `Markdown`, `ChatActions`, `askState`);
+  `contracts` (type-only + the `ASK_USER_ANSWERS_CUSTOM_TYPE` constant); `components/ui`; `lib`;
+  `lucide-react`; `mermaid` (**lazy, `visualize/` only**).
 - **Forbidden:** value-importing any `pi` package; `store`/`transport` (renderers stay presentational —
   extraction-ready into a future `packages/chat-ui`).
 

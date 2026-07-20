@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib";
+import { useAskState } from "../askState";
 import { useChatActions } from "../ChatActions";
 import { Markdown } from "../Markdown";
 import type { ToolRenderProps } from "../toolRegistry";
@@ -24,9 +25,16 @@ import { resultText } from "./toolHelpers";
 // folded card. Styled after the app's inline prompt-card spec: the question IS the card header, options are
 // radio/checkbox rows (the recommended one badged) closed by a mandatory native "Other" row (same
 // radio/checkbox indicator, inline free-text field), a footer with a mode hint + Skip/Next/Submit, and
-// compact, borderless "record" states once resolved. Presentational: reads the questions
-// from the tool-call `args`, replies through the `ChatActions` context (provided by `ChatView`) — never the
-// store/transport directly, so it stays reusable.
+// compact, borderless "record" states once resolved.
+//
+// The tool is **ack + terminate** (its own result is just an ack; the turn ends), so the card's lifecycle
+// derives from the TRANSCRIPT, not the tool status: `useAskState` supplies the reply (an
+// `ask-user-answers` message pairs by tool call id) or the superseded verdict (a later free-form user
+// message closed the questionnaire). With neither, the card is "awaiting" — answerable now, after a
+// reconnect, or after any number of host restarts. Legacy transcripts (the blocking-era tool, validation
+// errors, restart-repaired declines) carry a final result in the tool result itself and render as the
+// same resolved record. Presentational: reads the questions from the tool-call `args`, replies through
+// the `ChatActions` context (provided by `ChatView`) — never the store/transport directly.
 
 // ---- pure helpers (exported for unit tests) ----
 
@@ -185,7 +193,14 @@ export function AskUserQuestionCard({
 	streaming,
 }: ToolRenderProps) {
 	const actions = useChatActions();
+	const ask = useAskState(toolCallId);
 	const questions = useMemo(() => parseQuestions(args), [args]);
+	// The reply, wherever it lives: the transcript's ask-user-answers message (ack + terminate design), or
+	// the tool result itself (legacy blocking-era transcripts, validation errors, restart-repaired declines).
+	const resolvedResult = ask?.answer ?? readAskResult(result);
+	// Awaiting = shown and unanswered: interactive until a reply or a superseding user message exists. A
+	// dead call (aborted/errored owning message → status "error") is terminal, never answerable.
+	const awaiting = !resolvedResult && !ask?.superseded && status !== "error";
 	// Keyed by question index rather than a positional array: the card can first mount while the tool
 	// call's `arguments` are still streaming in (0 questions), so an array sized at init would stay empty
 	// after the questions arrive. A sparse map defaults each question to a fresh state on demand instead.
@@ -198,9 +213,9 @@ export function AskUserQuestionCard({
 	);
 
 	useEffect(() => {
-		if (status === "running") cardStateCache.set(toolCallId, { states, tab, submitted });
+		if (awaiting) cardStateCache.set(toolCallId, { states, tab, submitted });
 		else cardStateCache.delete(toolCallId);
-	}, [toolCallId, status, states, tab, submitted]);
+	}, [toolCallId, awaiting, states, tab, submitted]);
 
 	const stateFor = (qi: number): QState => states[qi] ?? emptyQState();
 	const patch = (qi: number, next: Partial<QState>) =>
@@ -218,15 +233,17 @@ export function AskUserQuestionCard({
 		actions.answerQuestion(toolCallId, r).catch(() => setSubmitted(false));
 	};
 
-	// Resolved (or resolved on another client) → a compact, read-only record.
-	if (status !== "running") {
+	// Answered (here or on another client) / legacy-resolved → a compact, read-only record.
+	if (resolvedResult) {
 		return (
-			<ResolvedRecord
-				questions={questions}
-				result={readAskResult(result)}
-				rawText={resultText(result)}
-			/>
+			<ResolvedRecord questions={questions} result={resolvedResult} rawText={resultText(result)} />
 		);
+	}
+	// A later free-form user message replaced the answer — terminal, matching the host-side verdict.
+	if (ask?.superseded) return <SupersededRecord questions={questions} />;
+	// Dead call (the owning message aborted/errored — pi never ran it): a closed record, never a form.
+	if (status === "error") {
+		return <ResolvedRecord questions={questions} result={null} rawText={resultText(result)} />;
 	}
 	// Controls never stream: while the args arrive the card is a stable placeholder (a form whose labels
 	// mutate under the cursor reads as broken); the complete questionnaire reveals atomically at message end.
@@ -354,6 +371,31 @@ export function AskUserQuestionCard({
 /** "Agent is waiting for your input" — the small status line above the active card. */
 function WaitingLine() {
 	return <div className="text-muted text-xs">Agent is waiting for your input</div>;
+}
+
+/**
+ * The terminal record for a questionnaire the conversation moved past: the user replied with their own
+ * message instead of answering, so the model was told to treat that message as the reply. Read-only — a
+ * late answer would be rejected by the host (`assessAnswerability`) anyway.
+ */
+function SupersededRecord({ questions }: { questions: AskUserQuestionItem[] }) {
+	return (
+		<div
+			data-testid="ask-user-question"
+			data-tone="superseded"
+			className="flex flex-col gap-xs text-muted text-xs"
+		>
+			<div className="flex items-center gap-xs">
+				<SkipForward className="size-3.5 shrink-0" />
+				Superseded — you replied in chat instead of answering these.
+			</div>
+			{questions.map((q) => (
+				<div key={q.question} className="pl-[calc(0.875rem+var(--spacing-sm))] text-hint">
+					{q.question}
+				</div>
+			))}
+		</div>
+	);
 }
 
 /** The card frame used for the transient "answer sent" state (no interactive body). */
