@@ -78,9 +78,11 @@ Skill behavior is tested headlessly by the **workflow-test harness** — design,
 suites, and coverage live in [[module-workflow-tests]] (`bun run test:workflows`; on-demand — needs
 pi auth, spends real tokens, never a commit/CI gate). Per-skill observation status lives in the
 family table ([[submodule-workflow-skills]]), which also records the routing suite's one open
-finding (questions bypass the root router). Remaining follow-up — scenario definitions only, no new
-machinery: **worker flows end-to-end** (slice 3: `starting-a-new-project` / `importing-a-codebase` /
-`brainstorming` full runs via the user simulator; design record: [[module-workflow-tests]]).
+finding (questions bypass the root router). Slice 3 (worker flows end-to-end) is partially landed:
+`importing-a-codebase` runs in the harness's importing suite (adoption + regression scenarios, added
+with the doc-adoption work). Remaining follow-up — scenario definitions only, no new machinery:
+`starting-a-new-project` / `brainstorming` full runs via the user simulator (design record:
+[[module-workflow-tests]]).
 
 The import branch is additionally covered **through the app** by a tagged `@agent` browser e2e
 (`e2e/setting-up-a-project.live.spec.ts`): it turns a workspace worktree into a code-only project,

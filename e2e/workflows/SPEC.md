@@ -45,7 +45,10 @@ user?, dialog?, stopWhen?, forbid?, watchdog?, expect, judge?, record? }`.
   walking a ladder: script matchers → persona (validated; malformed → next rung) → deterministic
   fallback (`skip` / `pickRecommended`). An unscripted interview can never hang a run, and neither
   can a *throwing* script (scenario-author code): it degrades straight to the deterministic fallback
-  with the error recorded on the round — never an unhandled rejection.
+  with the error recorded on the round — never an unhandled rejection. Delivery failures are rounds
+  too: `answerQuestion` can reject after the fact (a slow persona answer superseded by the user
+  simulator's next message), which is recorded on the round, not thrown — scenarios that must win
+  that race script their rounds (the script rung answers synchronously at `tool_execution_start`).
 - `presets` — mid-flow entry: artifact presets (workflow-native — the task-spec is the workflow's
   spine) and transcript fixtures (`SessionManager.open` via the server's `setSessionManagerFactory`
   seam; a fixture = `session.jsonl` + `workspace/` snapshot with recorded-cwd rewritten in a temp
@@ -102,5 +105,12 @@ Dependency direction is one-way: `scenario` → everything; `dialog`/`signals`/`
 - `smoke.live.spec.ts` — the infra-proving live scenarios: a mid-flow `brainstorming` round-trip
   (artifact preset + persona answer + user simulator + on-disk decision), and transcript continuation
   (reopened fixture recalls mid-flow state).
-- Follow-up (scenario definitions only): worker flows end-to-end (slice 3) — tracked in
-  [[module-thinkrail-workflow]] § Testing.
+- `importing.live.spec.ts` — the first slice-3 worker coverage: `importing-a-codebase` end-to-end on a
+  docs-rich fixture — the doc-adoption offer (candidates offered and adopted **in place**, a finished
+  plan file never offered nor touched, the filled architecture slot not re-drafted) — plus a
+  no-candidates regression variant (only README/CHANGELOG/TODO present → the offer must not fire, the
+  plain import path unchanged). Fixture docs are seeded inline from scenario code (no `*.md` fixture
+  files at rest — the masking concern above doesn't arise).
+- Follow-up (scenario definitions only): the remaining worker flows end-to-end (slice 3:
+  `starting-a-new-project` / `brainstorming` full runs) — tracked in [[module-thinkrail-workflow]]
+  § Testing.

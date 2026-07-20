@@ -161,8 +161,17 @@ export function attachDialog(
 			rung = "fallback";
 			result = fallback === "pickRecommended" ? pickRecommended(questions) : skipAll();
 		}
-		answered.push({ questions, result, rung, ...(error ? { error } : {}) });
-		answerQuestion(sessionId, toolCallId, result);
+		const round: AnsweredRound = { questions, result, rung, ...(error ? { error } : {}) };
+		answered.push(round);
+		// Delivery itself can fail — e.g. the round was SUPERSEDED because the user simulator's next
+		// message beat a slow (persona-rung) answer. That is a legitimate race outcome, not a harness
+		// crash: record it on the round and let the scenario's own verdicts decide — never an unhandled
+		// rejection out of this fire-and-forget path.
+		void answerQuestion(sessionId, toolCallId, result).catch((err) => {
+			const message = err instanceof Error ? err.message : String(err);
+			// Append — never clobber a script/persona error already recorded on the round.
+			round.error = round.error ? `${round.error}; delivery: ${message}` : `delivery: ${message}`;
+		});
 	};
 
 	const detach = log.onGrow(onGrow);
