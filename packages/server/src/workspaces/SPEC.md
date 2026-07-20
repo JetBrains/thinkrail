@@ -47,8 +47,10 @@ coincide for the auto `workspace-N` placeholder, but a named workspace carries b
   marking the name deliberate so the auto-namer never touches it again — what a user rename and the
   agentic auto-rename want; the host's **provisional naive rename** passes `lock: false` to rename name +
   branch while leaving `renamed` unset, so the settled-turn agentic pass still refines it),
-  `listWorkspaces` (with diff stats), `workspaceDiffStats`, `getWorkspace` (by-id lookup, throws on
-  unknown — anchors a chat session's cwd), and the **archive** primitives, split so the fast record-drop
+  `listWorkspaces` (with diff stats), `listWorkspaceRecords` (registry records without per-workspace git
+  diffStats — for read-only paths like history scope mapping that block on git spawns),
+  `workspaceDiffStats`, `getWorkspace` (by-id lookup, throws on unknown — anchors a chat session's cwd),
+  and the **archive** primitives, split so the fast record-drop
   and the slow git reclaim are separable (the host archives off the request's critical path):
   `forgetWorkspace(id)` (drop the persistence record, return the removed record or `null` — gone from
   `listWorkspaces` immediately), `reclaimWorktree(ws)` (the slow half — `git worktree remove --force`,
@@ -62,9 +64,9 @@ coincide for the auto `workspace-N` placeholder, but a named workspace carries b
   `removed` carries `{ projectId, id }`) and the host maps `kind` → `workspace.*` channel. This makes the
   module the **single source of workspace lifecycle pushes** (the auto-rename tee no longer pushes — rename
   self-publishes), so registry membership stays shared domain state across every client (architecture #9).
-- **Public surface (barrel):** `createWorkspace`, `listWorkspaces`, `forgetWorkspace`, `reclaimWorktree`,
-  `removeWorkspace`, `workspaceDiffStats`, `getWorkspace`, `renameWorkspace`, `setWorkspacePublisher`,
-  `WorkspaceLifecycleEvent`.
+- **Public surface (barrel):** `createWorkspace`, `listWorkspaces`, `listWorkspaceRecords`, `forgetWorkspace`,
+  `reclaimWorktree`, `removeWorkspace`, `workspaceDiffStats`, `getWorkspace`, `renameWorkspace`,
+  `setWorkspacePublisher`, `WorkspaceLifecycleEvent`.
 - **Allowed deps:** `projects` (repo lookup), `git` (the runner), `persistence`; `contracts`;
   `@thinkrail/shared/paths` (the scratch-dir path convention); Node.
 - **Forbidden:** `host`; reaching into another feature's internals (use its barrel).

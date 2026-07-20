@@ -3,13 +3,16 @@ import type { HistoryScope, Project, Workspace } from "@thinkrail/contracts";
 /**
  * Build the cwd/session filter + cwd→ids labeler for a scope, from registry snapshots. Pure.
  * Single-pass registry traversal (workspacesByProject called once per project).
+ * Only uses id/projectId/worktreePath from workspaces — allows both diffStats-free and full records.
  * For scope.kind === "workspace" with an unknown workspaceId, returns a filter that always
  * returns false (never throws). Unknown scope kinds also filter to false at runtime.
  */
 export function buildHistoryScope(
 	scope: HistoryScope,
 	projects: Project[],
-	workspacesByProject: (projectId: string) => Workspace[],
+	workspacesByProject: (
+		projectId: string,
+	) => Array<Pick<Workspace, "id" | "projectId" | "worktreePath">>,
 ): {
 	filter: (cwd: string, sessionId: string) => boolean;
 	labels: (cwd: string) => { workspaceId?: string; projectId?: string };

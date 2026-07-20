@@ -69,6 +69,7 @@ import {
 	createWorkspace,
 	forgetWorkspace,
 	getWorkspace,
+	listWorkspaceRecords,
 	listWorkspaces,
 	reclaimWorktree,
 	workspaceDiffStats,
@@ -313,10 +314,11 @@ const handlers: Record<string, Handler> = {
 	"settings.update": (params) => updateConfig((params as { config: Partial<AppConfig> }).config),
 	// Prompt recall + conversation search over pi's session files. Scope mapping is resolved here (host
 	// owns the registries); the index itself stays registry-free (see history/SPEC.md).
+	// Uses listWorkspaceRecords (diffStats-free registry read) to avoid blocking on git per keystroke.
 	"history.search": (params) => {
 		const p = params as { query: string; scope: HistoryScope; limit?: number };
 		const { filter, labels } = buildHistoryScope(p.scope, listProjects(), (projectId) =>
-			listWorkspaces(projectId),
+			listWorkspaceRecords(projectId),
 		);
 		return getHistoryIndex().search({
 			query: p.query,
