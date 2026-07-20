@@ -54,14 +54,40 @@ test("workspace scope: filter matches the worktreePath of a known workspace", ()
 	expect(filter("/other/path", "any-session")).toBe(false);
 });
 
-test("workspace scope with unknown workspaceId: filter always returns false", () => {
+test("workspace scope with unknown workspaceId: filter always returns false, even with other workspaces in registry", () => {
+	const p1: Project = {
+		id: "p1",
+		name: "project",
+		path: "/proj",
+		slug: "project",
+		lastOpened: 0,
+	};
+	const ws1: Workspace = {
+		id: "ws1",
+		projectId: "p1",
+		name: "ws1",
+		branch: "ws1",
+		worktreePath: "/proj/worktrees/ws1",
+		baseBranch: "main",
+	};
+	const ws2: Workspace = {
+		id: "ws2",
+		projectId: "p1",
+		name: "ws2",
+		branch: "ws2",
+		worktreePath: "/proj/worktrees/ws2",
+		baseBranch: "main",
+	};
+
 	const { filter } = buildHistoryScope(
 		{ kind: "workspace", workspaceId: "unknown-ws" },
-		[],
-		() => [], // no workspaces available
+		[p1],
+		(projectId) => (projectId === "p1" ? [ws1, ws2] : []),
 	);
 
-	expect(filter("/any/cwd", "any-session")).toBe(false);
+	// Unknown workspace filters everything out, even though other workspaces exist
+	expect(filter("/proj/worktrees/ws1", "any-session")).toBe(false);
+	expect(filter("/proj/worktrees/ws2", "any-session")).toBe(false);
 	expect(filter("/", "session1")).toBe(false);
 	expect(filter("", "")).toBe(false);
 });
@@ -155,4 +181,13 @@ test("labels: build a worktreePath → {workspaceId, projectId} map from all pro
 		projectId: "p2",
 	});
 	expect(labels("/unknown/path")).toEqual({});
+});
+
+test("unknown scope kind: filter always returns false, never throws", () => {
+	// Simulate a malformed scope from a version-skewed client by casting
+	const { filter } = buildHistoryScope({ kind: "bogus" } as never, [], () => []);
+
+	// Unknown kind filters to false, never throws
+	expect(filter("/some/cwd", "session1")).toBe(false);
+	expect(filter("/another/cwd", "session2")).toBe(false);
 });

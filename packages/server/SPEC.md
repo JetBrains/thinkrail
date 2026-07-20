@@ -75,7 +75,7 @@ the host from env via `bootHost` for dev/e2e.
 - `assist` → `agent` (the one-shot completion primitive)
 - `auth` → `agent` (`getPiRuntime` — the shared `AuthStorage` + `ModelRegistry`; one-way, `agent` never imports `auth`)
 - `agent` → (no internal deps — only the pi runtime)
-- `persistence`, `dialog`, `github` → (leaves)
+- `persistence`, `dialog`, `github`, `history` → (leaves)
 
 Rules: features never import `host`, and never each other except the edges above. The graph is acyclic.
 `agent`'s WS surface (`session.*` + `pi.event` forwarding) attaches to `host`. Features that push on their
