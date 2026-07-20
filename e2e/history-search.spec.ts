@@ -89,6 +89,29 @@ test("Ctrl+R opens history recall, cycles scope to all, zooms to messages, inser
 	await query.press("Escape");
 	await expect(overlay).toBeHidden();
 	await expect(input).toHaveValue("my draft");
+
+	// Cmd/Ctrl+Enter on a selected prompt hit inserts AND submits, reusing the composer's own send path —
+	// cheap to cover with no agent: `onSubmit` appends the user message optimistically *before* the (here,
+	// rejected — no auth in this suite) transport call, so the sent text lands in the transcript regardless
+	// of what the host does next. Re-open + re-navigate to the same prompt hit rather than reusing the
+	// overlay instance closed by the Enter-insert above. `ControlOrMeta` is Playwright's cross-platform
+	// modifier alias (Meta on macOS, Control elsewhere) — it matches the app's own check on both the
+	// Composer's and the overlay's key handlers (`e.metaKey || e.ctrlKey`), so this exercises the same
+	// gesture a real user would make on either platform.
+	await input.press("Control+r");
+	await query.fill("fix");
+	await query.press("Control+r");
+	await query.press("Control+r");
+	await expect(scopeBadge).toHaveAttribute("data-scope", "all");
+	await expect(promptItems.filter({ hasText: "fix the flaky watcher test" })).toBeVisible();
+	await query.press("ControlOrMeta+Enter");
+	await expect(overlay).toBeHidden();
+	await expect(input).toHaveValue("");
+	await expect(
+		page
+			.locator('[data-testid="chat-message"][data-role="user"]')
+			.filter({ hasText: "fix the flaky watcher test" }),
+	).toBeVisible();
 });
 
 test("empty query in chat scope shows the empty state for a session with no history yet", async ({
@@ -114,4 +137,24 @@ test("empty query in chat scope shows the empty state for a session with no hist
 	// This chat session was just created and never sent to — no prompts/messages of its own, so an empty
 	// query (which otherwise matches everything) still turns up nothing.
 	await expect(overlay).toContainText("no matches");
+});
+
+test("Ctrl+R dismisses an open mention menu instead of overlapping it", async ({ page }) => {
+	await openWorkspaceChat(page);
+
+	const input = page.getByTestId("chat-input");
+	const overlay = page.getByTestId("history-overlay");
+	const mentionMenu = page.getByTestId("mention-menu");
+
+	// `@` alone matches every root-level entry (`fs.readDir` with an empty prefix) — the fixture repo
+	// always has files at its root, so the mention menu is guaranteed to have candidates to show.
+	await input.fill("@");
+	await expect(mentionMenu).toBeVisible();
+
+	// Regression: both floating panels anchor at the same `bottom-full` rect above the composer, so Ctrl+R
+	// must dismiss the mention menu rather than paint the history overlay on top of it
+	// (`Composer.tsx`'s Ctrl+R guard calls `setDismissed(true)` before `onHistoryOpen()`).
+	await input.press("Control+r");
+	await expect(overlay).toBeVisible();
+	await expect(mentionMenu).not.toBeVisible();
 });

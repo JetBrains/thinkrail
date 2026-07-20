@@ -197,9 +197,12 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
 		// Ctrl+R opens history recall — guarded at the very top, before the mention/slash menu, and before
 		// Enter-to-send. Ctrl+R is the browser-reload chord on Windows/Linux, so this must preventDefault
-		// unconditionally; Cmd+R (mac reload) and Alt+R are left alone.
+		// unconditionally; Cmd+R (mac reload) and Alt+R are left alone. Dismiss any open mention/slash menu
+		// first — the two floating panels share the same anchor rect, so leaving the menu open would paint
+		// both at once (mutual exclusion between the composer's floating panels).
 		if (e.key === "r" && e.ctrlKey && !e.metaKey && !e.altKey) {
 			e.preventDefault();
+			setDismissed(true);
 			onHistoryOpen?.();
 			return;
 		}
