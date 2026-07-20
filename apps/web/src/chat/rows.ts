@@ -210,3 +210,9 @@ export function turnDivider(turns: ChatTurn[], endIndex: number): TurnDividerDat
 
 	return { elapsedMs, toolCount, changedFiles };
 }
+
+/** The first row rendering the turn a jump targets: the turn's own row (user/system/…) or its first
+ * text row (assistant messages dissolve; a matched assistant message always has a text block). */
+export function rowIndexForTurn(rows: ChatRow[], turnId: string): number {
+	return rows.findIndex((r) => r.id === turnId || r.id.startsWith(`${turnId}:text:`));
+}

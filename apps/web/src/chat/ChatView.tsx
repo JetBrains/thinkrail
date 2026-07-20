@@ -1,7 +1,6 @@
 import type {
 	AskUserQuestionResult,
 	ImageContent,
-	MessageHit,
 	PromptHit,
 	ThinkingLevel,
 	WireModel,
@@ -10,7 +9,7 @@ import { ArrowDown } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { Popover, PopoverAnchor, PopoverTrigger } from "@/components/ui/popover";
-import { EMPTY_RUNTIME, useAppStore } from "@/store";
+import { EMPTY_RUNTIME, toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { AskStatesContext, deriveAskStates } from "./askState";
 import { type ChatActions, ChatActionsContext } from "./ChatActions";
@@ -24,13 +23,39 @@ import {
 } from "./Composer";
 import { ExtUiDialog } from "./ExtUiDialog";
 import { HistoryOverlay } from "./HistoryOverlay";
-import { type ChatRow, deriveRows } from "./rows";
+import { type ChatRow, deriveRows, rowIndexForTurn } from "./rows";
 import { StreamIndicator, type StreamStatus, streamStatus } from "./StreamIndicator";
 import "./tools/register"; // side-effect: register the built-in pi tool renderers (bash/read/edit/write)
 import { ChatTurnView } from "./turns";
+import type { ChatTurn } from "./types";
 import { useChatScroll } from "./useChatScroll";
 import { useChatTodos } from "./useChatTodos";
 import { useHistorySearch } from "./useHistorySearch";
+
+/**
+ * Best-effort plain text for anchor-matching a `chatLocationRequest` jump target against a turn — user:
+ * `message.content` (a plain string, or text/image blocks); assistant: joined text blocks. `system`/
+ * `error`/`retry` turns never carry an anchor (`turnIdByMessageIndex` only maps user/assistant messages),
+ * so they fall through to `""` (never matches, never wrongly selected by the fallback scan).
+ */
+function turnAnchorText(turn: ChatTurn): string {
+	if (turn.kind === "user") {
+		const { content } = turn.message;
+		return typeof content === "string"
+			? content
+			: content
+					.filter((b) => b.type === "text")
+					.map((b) => b.text)
+					.join("\n");
+	}
+	if (turn.kind === "assistant") {
+		return turn.message.content
+			.filter((b) => b.type === "text")
+			.map((b) => b.text)
+			.join("\n");
+	}
+	return "";
+}
 
 /** Context threaded to the Virtuoso footer so the streaming loader lives at the end of the conversation. */
 type ChatListContext = { status: StreamStatus | null };
@@ -145,7 +170,15 @@ export default function ChatView({
 		cycleScope,
 		toggleStage,
 		moveSelection,
+		openMessage,
 	} = useHistorySearch(sessionId, workspaceId, projectId);
+
+	// The history-search "jump to message" deep link this session is the target of, if any — cleared by
+	// this effect below once it has resolved (or failed to resolve) a row to scroll to. `CenterTabs` is the
+	// other consumer: it opens/hydrates the target chat's tab but never clears the request (see its own
+	// effect's jsdoc).
+	const chatLocationRequest = useAppStore((s) => s.chatLocationRequest);
+	const [flashRowId, setFlashRowId] = useState<string | null>(null);
 
 	// Models are global to the host — fetch once, then every chat's picker shares them.
 	useEffect(() => {
@@ -261,9 +294,36 @@ export default function ChatView({
 		closeHistory();
 	};
 
-	// A8 wires the "jump to message" deep link (`chatLocationRequest`, see `store/SPEC.md`); until then
-	// Enter on a mapped message hit is a deliberate no-op.
-	const onOpenMessage = (_hit: MessageHit) => {};
+	// Consume a `chatLocationRequest` targeting this session: resolve its `messageIndex` to a turn (via
+	// `turnIdByMessageIndex`, falling back to scanning by `anchorText` when the map entry is absent —
+	// e.g. this runtime came from an already-live `hydrateSession` no-op, or the index is stale after
+	// compaction — or when the mapped turn's own text no longer contains the anchor), scroll its row into
+	// view, and flash it briefly. `rows.length > 0` guards against running before the transcript is ready
+	// (a fresh tab renders zero rows for one tick). Always clears the request — this is its only consumer.
+	useEffect(() => {
+		if (!chatLocationRequest || chatLocationRequest.sessionId !== sessionId || rows.length === 0) {
+			return;
+		}
+		const { messageIndex, anchorText } = chatLocationRequest;
+		const prefix = anchorText.slice(0, 40);
+		const mappedId = runtime.turnIdByMessageIndex?.[messageIndex];
+		const mapped = mappedId ? turns.find((t) => t.id === mappedId) : undefined;
+		const target =
+			mapped && turnAnchorText(mapped).includes(prefix)
+				? mapped
+				: turns.find((t) => turnAnchorText(t).includes(prefix));
+		const index = target ? rowIndexForTurn(rows, target.id) : -1;
+		if (index === -1) {
+			toast.error("couldn't locate the message — the session may have changed");
+			useAppStore.getState().clearChatLocation();
+			return;
+		}
+		virtuosoRef.current?.scrollToIndex({ index, align: "center" });
+		setFlashRowId(rows[index]?.id ?? null);
+		useAppStore.getState().clearChatLocation();
+		const timer = setTimeout(() => setFlashRowId(null), 1600);
+		return () => clearTimeout(timer);
+	}, [chatLocationRequest, sessionId, rows, runtime.turnIdByMessageIndex, turns]);
 
 	// A turn-divider's "files changed" chip → surface the first changed file's diff in the right panel.
 	// This is the one chat touch of the store outside the renderers, kept here in the integration layer.
@@ -355,7 +415,10 @@ export default function ChatView({
 							// Row ids are stable across streaming snapshots (rows.ts), so items never remount mid-stream.
 							computeItemKey={(_, row) => row.id}
 							itemContent={(_, row) => (
-								<div className="mx-auto max-w-3xl px-md py-xs">
+								<div
+									data-flash={row.id === flashRowId || undefined}
+									className="mx-auto max-w-3xl rounded-[var(--radius-md)] px-md py-xs transition-colors data-[flash]:bg-[var(--primary-10)]"
+								>
 									<ChatTurnView
 										row={row}
 										workspaceRoot={workspaceRoot}
@@ -394,7 +457,7 @@ export default function ChatView({
 							onClose={closeHistory}
 							onInsert={onInsertHit}
 							onInsertAndSend={onInsertAndSendHit}
-							onOpenMessage={onOpenMessage}
+							onOpenMessage={openMessage}
 						/>
 						<Composer
 							ref={composerRef}

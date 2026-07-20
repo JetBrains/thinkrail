@@ -55,13 +55,20 @@ export function writeFixtureSession(
 
 	opts.messages.forEach((m, i) => {
 		const id = entryId(`m${i}`);
+		// `UserMessage.content` is typed as `string | (TextContent | ImageContent)[]` (a bare string is
+		// valid), but `AssistantMessage.content` is array-only — pi never emits a bare string there, since
+		// an assistant turn can interleave text with thinking/tool-call blocks. Web-client code (e.g.
+		// `chat/rows.ts`'s `deriveRows`, `chat/ChatView.tsx`'s jump-anchor matching) relies on that
+		// distinction, so a fixture with a bare-string assistant `content` silently renders as an empty
+		// turn instead of tripping a loud parse error — match each role's real shape.
+		const content = m.role === "assistant" ? [{ type: "text", text: m.text }] : m.text;
 		lines.push(
 			JSON.stringify({
 				type: "message",
 				id,
 				parentId,
 				timestamp: new Date(m.timestamp).toISOString(),
-				message: { role: m.role, content: m.text, timestamp: m.timestamp },
+				message: { role: m.role, content, timestamp: m.timestamp },
 			}),
 		);
 		parentId = id;

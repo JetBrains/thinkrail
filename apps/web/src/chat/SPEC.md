@@ -96,6 +96,20 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   ended in `stopReason: "error"` maps to its own assistant turn's id, never the synthesized error turn's.
   `custom` messages never become turns: known ones (`ask-user-answers`) index into `askAnswers`; unknown
   customTypes are ignored. No store/transport/shiki.
+- **Jump-to-message** (`chatLocationRequest` — set by `useHistorySearch.ts`'s `openMessage` on Enter over
+  a mapped message hit; see `store/SPEC.md` for the store-level request/clear contract and
+  `CenterTabs.tsx`'s open/reopen/hydrate half) — `ChatView` is the sole consumer. Once `rows.length > 0`,
+  it resolves the request's `messageIndex` via `runtime.turnIdByMessageIndex` (present only on a
+  *hydrated* runtime — a live/already-open session's runtime, built by the event reducer, never carries
+  one), falling back to scanning `turns` for the first whose own text contains `anchorText`'s prefix — the
+  same fallback also covers a hydrated map entry whose turn no longer contains the anchor (e.g. the
+  transcript changed underneath it). The resolved turn maps to a row via the pure **`rowIndexForTurn(rows,
+  turnId)`** (`rows.ts`) — a turn's own row for `user`/`system`/`error`/`retry`, or its first `:text:` row
+  for `assistant` (whose turns dissolve into `markdown`/`tool`/`activity` rows, never a row of their own)
+  — then `virtuosoRef.scrollToIndex({ align: "center" })` plus a transient `flashRowId` (rendered as
+  `data-flash` + a `bg-[var(--primary-10)]` transition on the row wrapper, cleared after 1600ms) draw the
+  eye to it. Either resolving a row or giving up (toasted as "couldn't locate the message") always clears
+  the request — `ChatView` is its only consumer, so an unresolved request must never linger.
 - **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions, `/`
   commands, image paste/drop, `Ctrl+R` → `onHistoryOpen`), `HistoryOverlay` (the history-recall/search
   overlay `Composer` opens — presentational, driven entirely by `useHistorySearch.ts`'s state +

@@ -5,6 +5,7 @@ import type {
 	PromptHit,
 } from "@thinkrail/contracts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 
 /** `compact` shows prompts only (a few rows); `Tab` zooms to both sections. */
@@ -22,7 +23,7 @@ export interface HistorySearchState {
 	error: boolean;
 }
 
-/** One flat-list selection: a prompt hit (insertable) or a message hit (jump target — A8 wires it). */
+/** One flat-list selection: a prompt hit (insertable) or a message hit (a jump target — see `openMessage`). */
 export type HistorySelection =
 	| { kind: "prompt"; hit: PromptHit }
 	| { kind: "message"; hit: MessageHit };
@@ -102,6 +103,7 @@ export function useHistorySearch(
 	toggleStage: () => void;
 	moveSelection: (delta: number) => void;
 	selectedItem: () => HistorySelection | null;
+	openMessage: (hit: MessageHit) => void;
 } {
 	const [open, setOpen] = useState(false);
 	const [stage, setStage] = useState<HistoryStage>("compact");
@@ -192,6 +194,23 @@ export function useHistorySearch(
 		[stage, result, selected],
 	);
 
+	// Enter on a mapped message hit: jump to it via the store's `chatLocationRequest` deep link (see
+	// `store/SPEC.md`), then close the overlay. An unmapped hit (`hit.workspaceId` absent) is a no-op —
+	// belt-and-suspenders with `HistoryOverlay`'s own gating (it never calls this for an unmapped hit).
+	const openMessage = useCallback(
+		(hit: MessageHit) => {
+			if (!hit.workspaceId) return;
+			useAppStore.getState().requestChatLocation({
+				workspaceId: hit.workspaceId,
+				sessionId: hit.sessionId,
+				messageIndex: hit.messageIndex,
+				anchorText: hit.anchorText,
+			});
+			close();
+		},
+		[close],
+	);
+
 	const state = useMemo<HistorySearchState>(
 		() => ({ open, stage, query, scope, result, selected, error }),
 		[open, stage, query, scope, result, selected, error],
@@ -206,5 +225,6 @@ export function useHistorySearch(
 		toggleStage,
 		moveSelection,
 		selectedItem,
+		openMessage,
 	};
 }

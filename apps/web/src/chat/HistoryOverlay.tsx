@@ -155,7 +155,9 @@ export interface HistoryOverlayProps {
 	onInsert: (hit: PromptHit) => void;
 	/** Cmd/Ctrl+Enter on a prompt hit — insert then submit via the composer's own submit path. */
 	onInsertAndSend: (hit: PromptHit) => void;
-	/** Enter on a mapped message hit — jump to it (a no-op stub until A8 wires the deep link). */
+	/** Enter on a mapped message hit — jump to it (`useHistorySearch`'s `openMessage`). Unmapped hits never
+	 * reach here — both the `Enter` handler below and each `MessageRow`'s `onPick` gate on `hit.workspaceId`
+	 * first. */
 	onOpenMessage: (hit: MessageHit) => void;
 }
 
