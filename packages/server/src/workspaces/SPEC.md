@@ -48,7 +48,7 @@ coincide for the auto `workspace-N` placeholder, but a named workspace carries b
   agentic auto-rename want; the host's **provisional naive rename** passes `lock: false` to rename name +
   branch while leaving `renamed` unset, so the settled-turn agentic pass still refines it),
   `listWorkspaces` (with diff stats), `listWorkspaceRecords` (registry records without per-workspace git
-  diffStats — for read-only paths like history scope mapping that block on git spawns),
+  diffStats — for read-only paths like history scope mapping that must not block on git spawns),
   `workspaceDiffStats`, `getWorkspace` (by-id lookup, throws on unknown — anchors a chat session's cwd),
   and the **archive** primitives, split so the fast record-drop
   and the slow git reclaim are separable (the host archives off the request's critical path):

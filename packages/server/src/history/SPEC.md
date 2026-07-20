@@ -16,17 +16,22 @@ full-conversation matches). Reads via pi's `SessionManager.listAll()`; **never w
 - `extract.ts` — pure JSONL→`HistoryEntry[]`; `messageIndex` counts user/assistant/toolResult/custom in
   file order (the `getSessionMessages` filter), so it anchors into the transcript the client renders.
   Searchable text capped (`MAX_SEARCHABLE`); tool results/thinking not indexed (V1).
+- `historyIndex.ts` — `HistoryIndex`: cold build on first search (batched, yields the event loop);
+  freshness = mtime revalidation throttled to ~2 s (pi appends live messages to the file, so the file IS
+  the live feed — no agent-module hook). Matching: case-insensitive substring AND over whitespace terms;
+  strict recency order; prompts deduped by normalized text keeping newest; caps + true totals.
+- Jump anchors are drift-tolerant: hits carry `anchorText` (message-text prefix) the client validates.
+- `testFixtures.ts` — test-only session-file builders (pinned by A5): `writeFixtureSession` writes a
+  minimal but real pi-shaped JSONL, one flat file per session, that `extract`/`HistoryIndex` tests and the
+  e2e fixture seeder drive against; `defaultSessionDirFor` replicates pi's private default-layout
+  directory encoding (not importable — see "pi file format" below) so fixtures can land where a real
+  no-arg `listAll()` would actually look.
 
 ## On-disk JSONL structure (observed from pi session files)
 - **`message` entries:** `{ type: "message", ..., message: { role: "user"|"assistant"|"toolResult", content: string|array, timestamp: ms-number } }`
   — `message.role` determines renderability; `message.timestamp` is milliseconds since epoch.
 - **`custom_message` entries:** `{ type: "custom_message", customType: string, content: string|array, timestamp: ISO-string, display: boolean, ... }`
   — top-level structure (no `message` wrapper); always renderable as role "custom"; `timestamp` is ISO 8601 string at entry level.
-- `historyIndex.ts` — `HistoryIndex`: cold build on first search (batched, yields the event loop);
-  freshness = mtime revalidation throttled to ~2 s (pi appends live messages to the file, so the file IS
-  the live feed — no agent-module hook). Matching: case-insensitive substring AND over whitespace terms;
-  strict recency order; prompts deduped by normalized text keeping newest; caps + true totals.
-- Jump anchors are drift-tolerant: hits carry `anchorText` (message-text prefix) the client validates.
 
 ## pi file format (pinned v0.80.6 — `@earendil-works/pi-coding-agent`)
 Verified by reading `dist/core/session-manager.{js,d.ts}` in the installed package (source of truth over
