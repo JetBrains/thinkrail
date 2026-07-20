@@ -6,8 +6,8 @@ import {
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import type {
+	AskUserQuestionResult,
 	ImageContent,
-	Message,
 	Model,
 	PiEvent,
 	SessionEventPayload,
@@ -15,11 +15,13 @@ import type {
 	SessionSummary,
 	SlashCommandInfo,
 	ThinkingLevel,
+	TranscriptMessage,
 	WireModel,
 } from "@thinkrail/contracts";
-import { cancelQuestionsForSession } from "./askUserQuestion";
+import { ANSWERABILITY_ERRORS, assessAnswerability, buildAnswersMessage } from "./askUserQuestion";
 import { buildResourceLoader } from "./extensions";
 import { getPiRuntime } from "./piRuntime";
+import { repairDanglingToolCalls } from "./sessionRepair";
 import { cancelExtUiForSession, createWebUiContext, notifyExtUi } from "./webUiContext";
 
 interface Entry {
@@ -244,11 +246,16 @@ async function openDiskSession(sessionId: string, workspaceId: string, cwd: stri
 	if (sessions.has(sessionId)) return; // attached while we listed
 	const { authStorage, modelRegistry } = getPiRuntime();
 	const settingsManager = buildSessionSettings(cwd);
+	const sessionManager = SessionManager.open(info.path);
+	// Restart safety net: pair any tool call the last run left dangling (host died mid-tool) with a
+	// synthetic result BEFORE the session seeds its context — providers reject unpaired tool calls, and
+	// appending behind a live session would desync its in-memory state. See `sessionRepair`.
+	repairDanglingToolCalls(sessionManager);
 	const { session } = await createAgentSession({
 		cwd,
 		authStorage,
 		modelRegistry,
-		sessionManager: SessionManager.open(info.path),
+		sessionManager,
 		settingsManager,
 		resourceLoader: await buildResourceLoader(cwd, settingsManager),
 	});
@@ -268,7 +275,7 @@ export async function getSessionMessages(
 	sessionId: string,
 	workspaceId: string,
 	cwd: string,
-): Promise<{ summary: SessionSummary; messages: Message[] }> {
+): Promise<{ summary: SessionSummary; messages: TranscriptMessage[] }> {
 	let entry = sessions.get(sessionId);
 	// Scope the read to the requested workspace — a client can't pull a session from a different one.
 	if (entry && entry.workspaceId !== workspaceId) throw new Error(`Unknown session: ${sessionId}`);
@@ -277,9 +284,35 @@ export async function getSessionMessages(
 		entry = sessions.get(sessionId);
 		if (!entry) throw new Error(`Unknown session: ${sessionId}`);
 	}
-	const renderable = new Set(["user", "assistant", "toolResult"]);
-	const messages = entry.session.messages.filter((m) => renderable.has(m.role)) as Message[];
+	// `custom` rides along for the ask-user-answers pairing (the card reads `details.toolCallId`); the
+	// web renders only the customTypes it knows and ignores the rest.
+	const renderable = new Set(["user", "assistant", "toolResult", "custom"]);
+	const messages = entry.session.messages.filter((m) =>
+		renderable.has(m.role),
+	) as TranscriptMessage[];
 	return { summary: summaryOf(sessionId, entry), messages };
+}
+
+/**
+ * Deliver the browser's `ask_user_question` reply: vet it against the transcript (pure
+ * `assessAnswerability` — unknown/answered/superseded calls fail loud instead of parking an answer),
+ * then send the `ask-user-answers` custom message. `sendCustomMessage` starts a new turn when the
+ * session is idle (the normal ack+terminate case — also right after a restart re-open) and steers the
+ * current one when it is streaming (a fast submit while the ask turn is still winding down), so
+ * answering live and answering after a restart are the same code path. Resolves at turn end — the WS
+ * handler acks acceptance via `ackSend`, mirroring prompt/steer/followUp.
+ */
+export async function answerQuestion(
+	sessionId: string,
+	toolCallId: string,
+	result: AskUserQuestionResult,
+): Promise<void> {
+	const session = mustGet(sessionId);
+	const verdict = assessAnswerability(session.messages, toolCallId);
+	if (!verdict.ok) throw new Error(`${ANSWERABILITY_ERRORS[verdict.reason]}: ${toolCallId}`);
+	await session.sendCustomMessage(buildAnswersMessage(toolCallId, verdict.args, result), {
+		triggerTurn: true,
+	});
 }
 
 /** Send a turn. `prompt()` throws while streaming, so fall back to `steer()` then. */
@@ -421,7 +454,6 @@ export function removeSession(sessionId: string): void {
 	const entry = sessions.get(sessionId);
 	if (!entry) return;
 	cancelExtUiForSession(sessionId);
-	cancelQuestionsForSession(sessionId);
 	entry.unsubscribe();
 	entry.session.dispose();
 	sessions.delete(sessionId);
@@ -431,11 +463,26 @@ export function removeSession(sessionId: string): void {
 export function disposeAllSessions(): void {
 	for (const [sessionId, entry] of sessions) {
 		cancelExtUiForSession(sessionId);
-		cancelQuestionsForSession(sessionId);
 		entry.unsubscribe();
 		entry.session.dispose();
 	}
 	sessions.clear();
+}
+
+/**
+ * The polite half of shutdown: abort every streaming session and give pi a bounded window to settle —
+ * pi's abort path writes "Operation aborted" tool results through the normal loop, so transcripts land
+ * on disk already paired (no repair needed on the next boot). Bounded because shutdown must not hang on
+ * a wedged provider: whatever doesn't settle inside `timeoutMs` is left to the restart repair
+ * (`sessionRepair`). Callers dispose afterwards (`disposeAllSessions` via `server.stop()`).
+ */
+export async function settleSessionsForShutdown(timeoutMs = 2000): Promise<void> {
+	const streaming = [...sessions.values()].filter((entry) => entry.session.isStreaming);
+	if (streaming.length === 0) return;
+	await Promise.race([
+		Promise.allSettled(streaming.map((entry) => entry.session.abort())),
+		new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
+	]);
 }
 
 /**

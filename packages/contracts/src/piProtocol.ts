@@ -20,7 +20,7 @@ export type {
 } from "@earendil-works/pi-ai";
 
 import type { AgentEvent, AgentMessage, ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { Model } from "@earendil-works/pi-ai";
+import type { ImageContent, Message, Model, TextContent } from "@earendil-works/pi-ai";
 
 /**
  * A model **as it crosses the wire**: an **allowlist** of exactly the fields the UI renders — identity
@@ -162,9 +162,11 @@ export interface ExtUiResponse {
 }
 
 // ---- ask_user_question — structured clarifying questions, rendered INLINE in the chat ----
-// The capability is a host-owned pi custom tool (server `agent/askUserQuestion`): the agent calls
-// `ask_user_question` with these args; the tool blocks while the browser renders the questionnaire card
-// and awaits an `AskUserQuestionResult` (correlated by the tool call's id).
+// The capability is a host-owned pi custom tool (server `agent/askUserQuestion`), designed "ack +
+// terminate": the tool returns an ACK immediately and ends the agent's turn, so nothing blocks and the
+// transcript stays valid across host restarts. The browser renders the questionnaire card from the tool
+// call's args; the user's reply (`session.answerQuestion`, correlated by the tool call's id) is delivered
+// to the session as an `ask-user-answers` custom message that starts the next turn.
 
 /** One selectable option in a question. */
 export interface AskUserQuestionOption {
@@ -216,8 +218,48 @@ export interface AskUserQuestionAnswer {
 	preview?: string;
 }
 
-/** The browser's reply to an `ask_user_question` tool call — resolves the awaiting tool `execute`. */
+/** The browser's reply to an `ask_user_question` tool call. */
 export interface AskUserQuestionResult {
 	answers: AskUserQuestionAnswer[];
 	cancelled: boolean;
 }
+
+/**
+ * The `ask_user_question` tool result's `details` under the ack + terminate design: the call itself
+ * resolves instantly with this marker (the turn ends; the model is told answers arrive as the next user
+ * message). The card treats an ack'd call with no later answers message as "awaiting" — still answerable,
+ * now or after any number of host restarts. Legacy transcripts (the old blocking tool) carry an
+ * `AskUserQuestionResult` here instead, which the card still renders as a resolved record.
+ */
+export interface AskUserQuestionAckDetails {
+	kind: "ack";
+}
+
+/**
+ * `details` of an `ask-user-answers` custom message (its `customType` constant lives in `wsProtocol`,
+ * the value-bearing half of this package): the reply, correlated to its tool call. The UI pairs it with
+ * the questionnaire card by `toolCallId` and never renders the message as its own bubble.
+ */
+export interface AskUserAnswersDetails {
+	toolCallId: string;
+	result: AskUserQuestionResult;
+}
+
+/**
+ * MIRROR of pi-coding-agent's `CustomMessage` (that package is Node-only, so the shape is re-declared
+ * type-only for the wire — keep in sync with @earendil-works/pi-coding-agent@0.80.3 core/messages.d.ts):
+ * an extension-injected transcript message (`sendCustomMessage`). Crosses the wire in
+ * `session.getMessages` and inside `message_start`/`message_end` events; the LLM sees it as a user
+ * message. The web renders only the `customType`s it knows (e.g. `ask-user-answers`) and ignores the rest.
+ */
+export interface WireCustomMessage<T = unknown> {
+	role: "custom";
+	customType: string;
+	content: string | (TextContent | ImageContent)[];
+	display: boolean;
+	details?: T;
+	timestamp: number;
+}
+
+/** A transcript message as `session.getMessages` reports it: pi-canonical + custom messages. */
+export type TranscriptMessage = Message | WireCustomMessage;

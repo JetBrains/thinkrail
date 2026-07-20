@@ -19,8 +19,9 @@ Tiny UI helpers shared across components.
   a CSS color to hex — minified CSS serves `#fff`/`gray`-style equivalents, which strict consumers like
   Monaco and xterm reject; `""` when unparseable). Also the shared
   shiki pieces, **kept out of the barrel** so the eager `@/lib` import stays shiki-free: `highlighter.ts`
-  (the chat code-block highlighter — curated grammars, JS regex engine, tri-theme render) and
-  `shikiTheme.ts` (the `SHIKI_THEMES` tri-palette map + the custom `darcula` registration, shared with
+  (the chat code-block highlighter — curated grammars, JS regex engine, one render carrying every
+  `SHIKI_THEMES` palette) and
+  `shikiTheme.ts` (the `SHIKI_THEMES` palette map + the custom `darcula` and `hc-black` registrations, shared with
   `panels/DiffViewer`); both are imported per-file (`@/lib/highlighter`, `@/lib/shikiTheme`) from lazy
   chunks only.
 - **Public surface (barrel):** `cn`, `isMarkdownPath`, `stripFrontmatter`, `cssColorToHex`.

@@ -76,12 +76,12 @@ test("renames the workspace off the first settled turn and flags it", async () =
 
 	const renamed = await maybeAutoRenameWorkspace("s1", ws.id, firstTurn);
 
-	expect(renamed?.name).toBe("add-login-flow");
-	expect(renamed?.branch).toBe("add-login-flow");
+	expect(renamed?.name).toBe("Add Login Flow"); // display name (Title Case)
+	expect(renamed?.branch).toBe("add-login-flow"); // derived kebab branch
 	expect(renamed?.renamed).toBe(true);
 	expect(renamed?.worktreePath).toBe(ws.worktreePath);
 	expect(runner.calls()).toBe(1);
-	expect(listWorkspaces("p1")[0]?.name).toBe("add-login-flow");
+	expect(listWorkspaces("p1")[0]?.name).toBe("Add Login Flow");
 });
 
 test("a renamed workspace is never touched again", async () => {
@@ -110,7 +110,7 @@ test("a failed suggestion leaves the flag unset so a later turn retries", async 
 
 	fakeRunner("Fix The Parser");
 	const retried = await maybeAutoRenameWorkspace("s1", ws.id, firstTurn);
-	expect(retried?.name).toBe("fix-the-parser");
+	expect(retried?.name).toBe("Fix The Parser");
 });
 
 test("a throwing runner degrades to null", async () => {
@@ -148,7 +148,7 @@ test("a retracted first prompt is never naming material — the first clean turn
 	];
 	const renamed = await maybeAutoRenameWorkspace("s1", ws.id, transcript);
 
-	expect(renamed?.name).toBe("fix-header-layout");
+	expect(renamed?.name).toBe("Fix Header Layout");
 	expect(runner.prompts[0]).toContain("fix the header layout");
 	expect(runner.prompts[0]).not.toContain("billing");
 });
@@ -188,7 +188,7 @@ test("a user rename landing during the one-shot wins; the late suggestion is dro
 	release();
 
 	expect(await pending).toBeNull();
-	expect(listWorkspaces("p1")[0]?.name).toBe("user-picked-this");
+	expect(listWorkspaces("p1")[0]?.name).toBe("user picked this");
 });
 
 test("naive-rename names the workspace instantly from the first prompt, provisionally", async () => {
@@ -196,8 +196,8 @@ test("naive-rename names the workspace instantly from the first prompt, provisio
 
 	const named = await maybeNaiveNameWorkspace("s1", ws.id, firstTurn);
 
-	// Bounded kebab slug from "add a login form to the settings page" (5-word cap).
-	expect(named?.name).toBe("add-a-login-form-to");
+	// Bounded Title Case name from "add a login form to the settings page" (5-word cap); branch derived.
+	expect(named?.name).toBe("Add A Login Form To");
 	expect(named?.branch).toBe("add-a-login-form-to");
 	expect(named?.worktreePath).toBe(ws.worktreePath); // dir never moves
 	// Provisional: `renamed` stays unset so the agentic pass still refines it.
@@ -209,16 +209,16 @@ test("naive-rename fires only while the name is pristine (workspace-N)", async (
 	const ws = await createWorkspace("p1");
 	await maybeNaiveNameWorkspace("s1", ws.id, firstTurn);
 
-	// Second turn start: the name is no longer `workspace-N`, so it never re-fires.
+	// Second turn start: the branch is no longer `workspace-N`, so it never re-fires.
 	expect(await maybeNaiveNameWorkspace("s1", ws.id, firstTurn)).toBeNull();
-	expect(listWorkspaces("p1")[0]?.name).toBe("add-a-login-form-to");
+	expect(listWorkspaces("p1")[0]?.name).toBe("Add A Login Form To");
 });
 
 test("naive-rename never touches a user-named workspace", async () => {
 	const ws = await createWorkspace("p1", "chosen name");
 
 	expect(await maybeNaiveNameWorkspace("s1", ws.id, firstTurn)).toBeNull();
-	expect(listWorkspaces("p1")[0]?.name).toBe("chosen-name");
+	expect(listWorkspaces("p1")[0]?.name).toBe("chosen name");
 });
 
 test("the agentic pass refines a provisional naive name and locks it", async () => {
@@ -226,17 +226,17 @@ test("the agentic pass refines a provisional naive name and locks it", async () 
 	fakeRunner("Add Login Flow");
 
 	const provisional = await maybeNaiveNameWorkspace("s1", ws.id, firstTurn);
-	expect(provisional?.name).toBe("add-a-login-form-to");
+	expect(provisional?.name).toBe("Add A Login Form To");
 	expect(provisional?.renamed).toBeUndefined();
 
 	// Settled turn: the agentic namer still runs (renamed was unset) and upgrades + locks.
 	const refined = await maybeAutoRenameWorkspace("s1", ws.id, firstTurn);
-	expect(refined?.name).toBe("add-login-flow");
+	expect(refined?.name).toBe("Add Login Flow");
 	expect(refined?.renamed).toBe(true);
 
 	// And the now-locked name is inert to a further turn start.
 	expect(await maybeNaiveNameWorkspace("s1", ws.id, firstTurn)).toBeNull();
-	expect(listWorkspaces("p1")[0]?.name).toBe("add-login-flow");
+	expect(listWorkspaces("p1")[0]?.name).toBe("Add Login Flow");
 });
 
 test("naive-rename resolves null when the first prompt is blank or unusable", async () => {
@@ -305,7 +305,7 @@ test("concurrent settling turns dedupe to one attempt", async () => {
 	release();
 	const [a, b] = await Promise.all([first, second]);
 
-	expect(a?.name).toBe("slow-name");
+	expect(a?.name).toBe("Slow Name");
 	expect(b).toBeNull();
 	expect(calls).toBe(1);
 });

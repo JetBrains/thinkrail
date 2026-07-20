@@ -31,6 +31,11 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   the project is still present). There is no `project.removed` push — other clients clear workspace rows
   via each `workspace.removed` fan-out from `forgetWorkspace`, and pick up a missing project on the next
   list/reconnect.)
+  surfaces an error toast, leaving the row in place).
+  Each **workspace row** is **two-line**: the display
+  `name` on top with the git **branch on a second line beneath it** (muted, monospace), rendered only when
+  it differs from the name (so pristine/legacy `workspace-N` rows stay a single compact line) — the display
+  name is decoupled from the git branch (see [[submodule-server-workspaces]]).
   **Opening a project** goes through the shared **`useOpenProject`** hook (reused by `ProjectTree` **and**
   `WelcomePanel`, so the flow is identical in the rail and the Welcome screen): `project.open`, and on
   failure `project.inspect` → either offers to bootstrap the folder into a repo — a modal **`ConfirmDialog`**
@@ -198,14 +203,17 @@ prompt hero (still editable; empty by default), a base-branch
   (built from `transport.httpBase()`). A cross-file link's `#fragment` is not yet followed (opens the
   file only).
 - **Code surfaces re-theme from the tokens, resiliently.** `MonacoEditor` defines the `thinkrail` theme
-  from the live tokens (chrome from the surface tokens, `vs`/`vs-dark` base from `[data-theme]`, syntax
-  rules from whichever `--code-*` a theme sets — Darcula today) and redefines it via a `[data-theme]`
+  from the live tokens (chrome from the surface tokens, the `vs`/`vs-dark`/`hc-black` base from
+  `[data-theme]` — high-contrast rides Monaco's real hc-black palette — syntax rules from whichever
+  `--code-*` a theme sets, and the optional `--sel-fg` selected-text color, high-contrast's
+  black-on-yellow) and redefines it via a `[data-theme]`
   MutationObserver; token reads are **canonicalized to hex** (`lib.cssColorToHex` — minified CSS serves
   equivalents like `#fff`/`gray`, which Monaco rejects; unparseable → dropped, never passed through) and
   the define **degrades to the base palette instead of throwing** (a bad
   token value must never crash the editor panel). `TerminalInstance` builds the xterm theme the same way,
-  including the **16 `--ansi-*` slots** (so shell colors stay legible per theme), re-read on the same
-  observer. `DiffViewer` renders shiki's tri palette (`lib/shikiTheme`) once; the swap is pure CSS.
+  including the **16 `--ansi-*` slots** (so shell colors stay legible per theme) and the optional
+  `--sel-fg` selection foreground, re-read on the same
+  observer. `DiffViewer` renders every `SHIKI_THEMES` palette (`lib/shikiTheme`) once; the swap is pure CSS.
 - Heavy deps (Monaco / shiki / xterm) load via `React.lazy(() => import())` to stay out of the eager bundle.
   A lazy chunk that fails to load (or a render throw) is contained by the `components/ErrorBoundary` the
   **shell** wraps each region in (see `shell/SPEC.md`), so a single panel degrades instead of blanking the

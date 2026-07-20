@@ -42,6 +42,19 @@ function toBranch(name: string): string {
 	);
 }
 
+/** Longest display name we store — keeps the left-nav readable; the branch is derived from it. */
+const MAX_DISPLAY_NAME = 60;
+
+/**
+ * Sanitize a requested **display name** for storage: trim, collapse whitespace, clamp length — casing and
+ * punctuation preserved (unlike `toBranch`). `null` if nothing usable remains. The stored `Workspace.name`
+ * is display-only; its git branch is derived separately via `toBranch`.
+ */
+function toDisplayName(raw: string): string | null {
+	const name = raw.trim().replace(/\s+/g, " ").slice(0, MAX_DISPLAY_NAME).trimEnd();
+	return name.length > 0 ? name : null;
+}
+
 function branchExists(repoPath: string, branch: string): boolean {
 	return git(repoPath, ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`]).ok;
 }
@@ -102,11 +115,13 @@ export async function createWorkspace(
 	if (!project) throw new Error(`Unknown project: ${projectId}`);
 
 	const all = loadWorkspaces();
-	const trimmedName = name?.trim();
-	const branch = trimmedName
-		? uniqueBranch(project, toBranch(trimmedName))
+	// A user-supplied name is the display name (casing/punctuation preserved); the branch is derived from
+	// it. Omitted (or unusable) → the auto `workspace-N` placeholder, where name === branch.
+	const displayName = name ? toDisplayName(name) : null;
+	const branch = displayName
+		? uniqueBranch(project, toBranch(displayName))
 		: nextAutoBranch(project);
-	const wsName = branch;
+	const wsName = displayName ?? branch;
 
 	const base = baseRef?.trim();
 	let baseBranch: string;
@@ -148,7 +163,7 @@ export async function createWorkspace(
 		baseBranch,
 		// A user-chosen name is a deliberate one — the auto-namer must never touch it. Auto `workspace-N`
 		// leaves the flag unset: eligible for one assist rename.
-		...(trimmedName ? { renamed: true } : {}),
+		...(displayName ? { renamed: true } : {}),
 	};
 	all.push(workspace);
 	saveWorkspaces(all);
@@ -157,12 +172,14 @@ export async function createWorkspace(
 }
 
 /**
- * Rename a workspace: its record (display name + branch, kept equal) and its git branch — in place. The
- * branch ref moves via `git branch -m` from the project repo (the worktree's HEAD follows); the worktree
- * directory never moves — pi keys sessions by exact cwd, and terminals/tabs are rooted there, so the dir
- * keeps its creation name. The requested name is slugified and made unique (refs + worktree dirs), and
- * re-points sibling records that based their diff on the old branch. Sync on purpose: a caller's
- * check-then-rename can't interleave on the event loop. Throws on unknown id / git failure.
+ * Rename a workspace: its **display name** and its **git branch** (derived from the name), in place. The
+ * name carries the human label (casing/punctuation preserved); the branch is `toBranch(name)`, made unique
+ * (refs + worktree dirs) — so `name` and `branch` deliberately differ (e.g. `Fix Auth Redirect` /
+ * `fix-auth-redirect`). The branch ref moves via `git branch -m` from the project repo (the worktree's
+ * HEAD follows); the worktree directory never moves — pi keys sessions by exact cwd, and terminals/tabs are
+ * rooted there, so the dir keeps its creation name. Re-points sibling records that based their diff on the
+ * old branch. Sync on purpose: a caller's check-then-rename can't interleave on the event loop. Throws on
+ * unknown id / git failure / an empty requested name.
  *
  * `lock` (default `true`) sets `renamed`, marking the name deliberate so the auto-namer never touches it
  * again — what a user rename and the agentic auto-rename want. The **provisional naive rename** passes
@@ -180,7 +197,9 @@ export function renameWorkspace(
 	const project = getProjects().find((p) => p.id === ws.projectId);
 	if (!project) throw new Error(`Unknown project: ${ws.projectId}`);
 
-	const wanted = toBranch(requestedName);
+	const displayName = toDisplayName(requestedName);
+	if (!displayName) throw new Error(`Invalid workspace name: ${requestedName}`);
+	const wanted = toBranch(displayName);
 	const branch = wanted === ws.branch ? ws.branch : uniqueBranch(project, wanted);
 	if (branch !== ws.branch) {
 		const moved = git(project.path, ["branch", "-m", ws.branch, branch]);
@@ -196,7 +215,7 @@ export function renameWorkspace(
 	for (const w of all) {
 		if (w.projectId === target.projectId && w.baseBranch === ws.branch) w.baseBranch = branch;
 	}
-	target.name = branch;
+	target.name = displayName;
 	target.branch = branch;
 	if (lock) target.renamed = true;
 	saveWorkspaces(all);
