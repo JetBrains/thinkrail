@@ -60,12 +60,13 @@ export type EditorTab = FileTab | ChatTab | DocTab;
 
 /**
  * A section of the settings dialog (a const-object "enum", the codebase convention). Extensible — the live
- * sections are providers, github, and appearance (the theme picker).
+ * sections are providers, github, appearance (the theme picker), and templates (prompt-template manager).
  */
 export const SettingsSection = {
 	Providers: "providers",
 	Github: "github",
 	Appearance: "appearance",
+	Templates: "templates",
 } as const;
 export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSection];
 

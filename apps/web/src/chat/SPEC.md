@@ -114,7 +114,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   commands + template **slot sessions** (Tab-through placeholders — see the Template slots bullet
   below), image paste/drop, `Ctrl+R` → `onHistoryOpen`), `HistoryOverlay` (the history-recall/search
   overlay `Composer` opens — presentational, driven entirely by `useHistorySearch.ts`'s state +
-  callbacks), `ModelSelector` + `ThinkingSelector` (shared with `NewWorkspaceDialog`; optional
+  callbacks, plus a **Save as template** action on the selected prompt row — see the Save-as-template
+  bullet below), `ModelSelector` + `ThinkingSelector` (shared with `NewWorkspaceDialog`; optional
   `container` prop portals their popovers into a host Dialog), `SessionStatsBar`, `ChatHeader` (its
   `left` slot carries the plan strip), `ExtUiDialog`. All props-driven; behavior detail lives in the
   components' jsdoc.
@@ -133,8 +134,9 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   origin: "top-level" }`) — one merged list, `Composer`'s rendering is unchanged. The fetch runs when the
   slash menu opens (**`onSlashActive`**, a boolean prop mirroring `onMentionQuery`'s query signal), cached
   per workspace (one `ChatView` instance never changes workspace) and invalidated by the store's
-  **`templatesVersion`** counter (see `store/SPEC.md`; bumped by the Templates settings panel, Task B6,
-  after a `template.save`/`delete`) — this is what makes `packages/server/src/agent/SPEC.md`'s "the
+  **`templatesVersion`** counter (see `store/SPEC.md`; bumped by `panels/TemplatesSettings.tsx` and
+  `TemplateEditorDialog.tsx` after a `template.save`/`delete` — see the Save-as-template bullet below) —
+  this is what makes `packages/server/src/agent/SPEC.md`'s "the
   composer's `/` menu path is always fresh via `template.list`" claim true, unlike the typed-through
   `/name args` path's frozen create-time snapshot. **Picking a template** (`ChatView`'s `onPickTemplate`, a
   `Composer` prop): instead of `pickSlash`'s plain `/name ` insert, fetches `template.get`, splits
@@ -166,6 +168,52 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   the same anchor rect), a small pill above the textarea — `slot {slotIdx+1}/{n} · ⇥ next · esc done`
   (`data-testid="slot-hint"`) — clickable, tap steps to the next slot (same mirroring rule as `Tab`), the
   mobile path with no keyboard needed.
+- **Save-as-template + template management** (`TemplateEditorDialog.tsx`; `HistoryOverlay`'s save action;
+  `panels/TemplatesSettings.tsx`) — one shared create/edit surface for prompt-template files, reused by two
+  entry points that never talk to each other: the Settings → Templates panel (list + New/Edit/Delete, see
+  `panels/SPEC.md`) and the history overlay's save-as-template action below. **Why this lives in `chat/`,
+  not `panels/`** (a deliberate boundary exception, alongside `ChatView.tsx`/`useHistorySearch.ts` above):
+  `panels/` is allowed to import from `chat/` (already does, for `ModelSelector`/`ThinkingSelector`/
+  `Markdown`) but never the reverse, and `HistoryOverlay` — which needs this same dialog — lives in
+  `chat/`, so the one shared implementation has to live where both sides can reach it. `TemplateEditorDialog`
+  is therefore promoted to a **third** sanctioned store/transport-touching integration piece (see Boundary
+  below), even though it isn't `ChatView` itself.
+  - **Fields**: name (validated client-side against the exact same rule as the server's
+    `isValidTemplateName`, `packages/server/src/templates/templates.ts` — duplicated rather than shared,
+    since it's a 4-line pure predicate and the server module is server-only), a scope radio (Global / This
+    project; "This project" is disabled with no active workspace), description, argument-hint, and a body
+    `Textarea` with a static one-line syntax hint (`$1, $ARGUMENTS, ${1:-default} — pi prompt-template
+    syntax`; the real grammar is parsed by `slotSession.ts` / expanded by pi — this line is documentation
+    text only, not itself parsed).
+  - **Assembly**: `---\ndescription: …\nargument-hint: …\n---\n\n<body>`, omitting either key when its
+    field is empty, and **no frontmatter block at all** when both are empty. Each value is emitted
+    `JSON.stringify`-quoted rather than bare — YAML's double-quoted scalar escape set is a superset of
+    JSON's, so this is always valid YAML without pulling in a `yaml` package just to serialize two short
+    strings (see the seed fixture's own `argument-hint: "[file] [scope]"`, quoted for the same reason: an
+    unquoted value isn't always valid YAML).
+  - **Editing an existing template locks its name + scope** (both fields disabled): `template.save` is
+    create-or-overwrite keyed by `(scope, name)` with no rename/move primitive, so changing either while
+    editing would silently orphan the old file on disk instead of renaming it. Creating new (including
+    save-as-template) leaves both fully editable.
+  - **Save** calls `template.save` then the store's `bumpTemplatesVersion()`; a rejected save renders its
+    message inline via `data-testid="template-error"` (never a toast — the dialog stays open so the error
+    is fixable in place). **Delete has no dialog involvement at all** — `panels/TemplatesSettings.tsx`'s
+    row calls `template.delete` + `bumpTemplatesVersion()` directly, behind a `ConfirmPopover` (the same
+    confirm-before-destructive-action pattern `ProjectTree.tsx`'s workspace-remove row uses).
+  - **Save-as-template** (`HistoryOverlay`'s selected-prompt-row action, `data-testid="history-save-template"`,
+    keyboard **Cmd/Ctrl+S** while a prompt row is selected — the overlay's `onKeyDown` always
+    `preventDefault`s the combo, so the browser's own Save dialog never opens regardless of what's
+    selected, but only fires the action when the resolved selection is a prompt hit) opens the dialog with
+    the body prefilled from that prompt's text — a "new template" case (no existing name/scope identity),
+    same as clicking New. **The composer-overflow entry point was dropped as YAGNI** (the plan's own word)
+    — the history path already covers "reuse what I already wrote"; a second entry point for the same
+    "type it, then decide to save it" gesture would be redundant surface, not a distinct use case.
+  - **Edit-as-file** — project-scoped rows only get an `Open as file` action (`panels/TemplatesSettings.tsx`),
+    reusing `openFile.ts`'s exact `openFileInTab(workspaceId, ".pi/prompts/<name>.md")` (the same action
+    file-tree clicks use), then `store.closeSettings()`. **Global rows are dialog-only** — a deliberate
+    asymmetry, not an oversight: file tabs are worktree-scoped (`tabsByWorkspace` is keyed by workspace
+    id), but a global template lives under the host's agent dir, outside any worktree, so there's no
+    worktree-relative path to open it at.
 - **Plain `↑` recall + history button** — `Composer`'s `recentPrompts` prop (`ChatView`: this chat's own
   user-turn texts via `turnAnchorText`, newest first, deduped **keeping the newest occurrence** — the same
   recency-first ranking rule as the server history index, the atuin/fzf convention) backs a lightweight
@@ -198,15 +246,17 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   **No `index.ts` barrel** — chat pulls **shiki**, so per the code-splitting exception imports stay
   **per-file**; the registry is importable from `chat/toolRegistry` **without** pulling shiki.
 - **Allowed deps:** `contracts` (pi message/content-block types, **type-only**); `store` + `transport`
-  (**`ChatView` + its integration hooks (`useHistorySearch.ts`) only** — the app-integration edge);
-  `react-markdown` / `remark-gfm` / `shiki` (via `lib/highlighter`); `mermaid` (**lazy,
-  `tools/visualize` only**); `react-virtuoso`; `lucide-react`; `components/ui`; `lib`.
+  (**`ChatView` + its integration hooks (`useHistorySearch.ts`) + `TemplateEditorDialog.tsx` only** — the
+  app-integration edge); `react-markdown` / `remark-gfm` / `shiki` (via `lib/highlighter`); `mermaid`
+  (**lazy, `tools/visualize` only**); `react-virtuoso`; `lucide-react`; `components/ui`; `lib`.
 - **Forbidden:** value-importing any `pi` package; a **presentational** renderer importing
-  `store`/`transport` (only `ChatView` and its integration hooks may — keep the renderers reusable).
+  `store`/`transport` (only `ChatView`, its integration hooks, and `TemplateEditorDialog` may — keep the
+  renderers reusable).
 - **`ChatView`** is the primary app-integration file: wires this session's runtime
   (`store.sessions[sessionId]`), the transport calls, the `ChatActions` + `AskStates` contexts, and the
-  divider's "files changed" → `requestChangesView` deep link — together with **`useHistorySearch.ts`**,
-  the one other integration point (the Ctrl+R history-recall overlay's store/transport edge). A
+  divider's "files changed" → `requestChangesView` deep link — together with **`useHistorySearch.ts`**
+  (the Ctrl+R history-recall overlay's store/transport edge) and **`TemplateEditorDialog.tsx`** (the
+  shared template save form), the other two integration points. A
   **rejected** send (`prompt`/`steer`/`followUp`) lands in the chat via the store's `appendErrorTurn` —
   never swallowed; *streaming* faults arrive as pi events instead.
 

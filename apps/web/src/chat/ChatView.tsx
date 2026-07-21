@@ -28,6 +28,7 @@ import { HistoryOverlay } from "./HistoryOverlay";
 import { type ChatRow, deriveRows, rowIndexForTurn } from "./rows";
 import { StreamIndicator, type StreamStatus, streamStatus } from "./StreamIndicator";
 import { parseTemplateSlots } from "./slotSession";
+import { TemplateEditorDialog } from "./TemplateEditorDialog";
 import "./tools/register"; // side-effect: register the built-in pi tool renderers (bash/read/edit/write)
 import { ChatTurnView } from "./turns";
 import type { ChatTurn } from "./types";
@@ -201,6 +202,10 @@ export default function ChatView({
 	const [planOpen, setPlanOpen] = useState(false);
 	const [slashActive, setSlashActive] = useState(false);
 	const [templates, setTemplates] = useState<TemplateInfo[]>([]);
+	// The history overlay's save-as-template dialog: non-null while open, carrying the prompt hit its body
+	// is prefilled from — `TemplateEditorDialog` itself is always mounted (controlled by `open` below), the
+	// same idiom `panels/TemplatesSettings.tsx` uses for its own New/Edit instance.
+	const [saveAsTemplateHit, setSaveAsTemplateHit] = useState<PromptHit | null>(null);
 
 	const virtuosoRef = useRef<VirtuosoHandle>(null);
 	const { followOutput, handleAtBottom, showScrollButton, scrollToBottom, containerProps } =
@@ -371,6 +376,13 @@ export default function ChatView({
 		onSubmit(hit.text, [], isStreaming ? "followUp" : "send");
 		useAppStore.getState().setChatDraft(sessionId, "");
 		closeHistory();
+	};
+
+	// A prompt hit's save-as-template action (row button or Cmd/Ctrl+S): close the overlay and open the
+	// shared editor dialog, body-prefilled with the hit's text — the dialog owns naming/scope/save from here.
+	const onSaveAsTemplateHit = (hit: PromptHit) => {
+		closeHistory();
+		setSaveAsTemplateHit(hit);
 	};
 
 	// Picking a `source: "prompt"` row: fetch the real file (never `commands`' frozen snapshot), split off
@@ -563,6 +575,7 @@ export default function ChatView({
 							onInsert={onInsertHit}
 							onInsertAndSend={onInsertAndSendHit}
 							onOpenMessage={openMessage}
+							onSaveAsTemplate={onSaveAsTemplateHit}
 						/>
 						<Composer
 							ref={composerRef}
@@ -585,6 +598,14 @@ export default function ChatView({
 							onPickTemplate={onPickTemplate}
 						/>
 					</div>
+					<TemplateEditorDialog
+						open={saveAsTemplateHit != null}
+						onOpenChange={(open) => {
+							if (!open) setSaveAsTemplateHit(null);
+						}}
+						workspaceId={workspaceId}
+						initialBody={saveAsTemplateHit?.text ?? ""}
+					/>
 					{pendingExtUi ? (
 						<ExtUiDialog key={pendingExtUi.id} request={pendingExtUi} onReply={onExtUiReply} />
 					) : null}

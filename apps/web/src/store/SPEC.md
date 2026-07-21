@@ -62,12 +62,7 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   chat is never clobbered. The
   pure **`reduceSessionEvent`** folds a `PiEvent` into a runtime; **`handlePiEvent(event,
   sessionId)`** and **`applyExtUi(request)`** route by id via the `withRuntime` helper (a no-op for an
-  unknown session). The host-wide **`models`** list stays global (not per session). The host-wide
-  **`templatesVersion: number`** counter + **`bumpTemplatesVersion()`** (increment) is a bare invalidation
-  signal, the same shape as `fsChangesByWorkspace`'s `tick` — the Templates settings panel (Task B6) calls
-  it after a `template.save`/`delete`, and `chat/ChatView.tsx`'s composer-`/`-menu template fetch keys off
-  it to know its per-workspace cache is stale (see `chat/SPEC.md`'s Template slots bullet); the store holds
-  only the counter, never fetches. The **in-app login** state
+  unknown session). The host-wide **`models`** list stays global (not per session). The **in-app login** state
   **`activeLogin: LoginState | null`** (type from `auth`) is **flat + session-less** (a login runs on the
   Welcome screen before any session exists — routing it through a session runtime would drop its frames):
   the pure **`foldLoginFrame`** reducer lives here (as `reduceExtUi`/`reduceSessionEvent` do — `auth` stays
@@ -76,7 +71,7 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   `provider.login` frame (creating `activeLogin` if the frame arrived first; ignoring frames for a different
   live login), **`clearLoginInput()`** drops the live input the instant a reply is sent (no double-submit),
   and **`clearLogin()`** dismisses it. The **settings surface** state — **`settingsOpen`** +
-  **`settingsSection`** (a const-object enum: `Providers`/`Github`/`Appearance`) with
+  **`settingsSection`** (a const-object enum: `Providers`/`Github`/`Appearance`/`Templates`) with
   **`openSettings(section?)`** (deep-links to a section, defaults to Providers) / **`closeSettings()`** /
   **`setSettingsSection()`** — lives here so the top-bar gear AND the Welcome provider warning open Settings
   to a section without prop-drilling through the shell. The **theme** state — **`theme: ThemeId`** (the
@@ -93,7 +88,12 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   the existing id instead of stacking a twin) and **caps the queue at 5** (oldest drop — the viewport doesn't
   scroll, so the newest must stay visible).
   It's the home for a **rejected wire call with no better place to land** (no chat tab to host an error turn),
-  complementing `appendErrorTurn` (which handles the in-chat case). The **live-refresh signal** —
+  complementing `appendErrorTurn` (which handles the in-chat case).
+  The host-wide **`templatesVersion: number`** counter + **`bumpTemplatesVersion()`** (increment) is a bare
+  invalidation signal, the same shape as `fsChangesByWorkspace`'s `tick` below — **`panels/TemplatesSettings.tsx`**
+  and **`chat/TemplateEditorDialog.tsx`** call it after a `template.save`/`delete`, and `chat/ChatView.tsx`'s
+  composer-`/`-menu template fetch keys off it to know its per-workspace cache is stale (see `chat/SPEC.md`'s
+  Save-as-template bullet); the store holds only the counter, never fetches. The **live-refresh signal** —
   **`fsChangesByWorkspace: Record<workspaceId, { tick, paths, truncated }>`** with
   **`noteFsChanged(payload)`** (folds a `workspace.fsChanged` push: `tick` increments per frame;
   `paths`/`truncated` are the last batch) — panels select their workspace's entry and refetch on `tick`
