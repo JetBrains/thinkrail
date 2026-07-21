@@ -5,6 +5,7 @@ import type {
 	HistoryScope,
 	ImageContent,
 	LoginReply,
+	TemplateScope,
 	ThinkingLevel,
 	TodoStatus,
 	WireModel,
@@ -56,6 +57,13 @@ import {
 } from "../projects";
 import { updateConfig } from "../settings";
 import { evictSpecIndex, projectHasSpecs, specGraph } from "../spec";
+import {
+	deleteTemplate,
+	getTemplate,
+	listTemplates,
+	saveTemplate,
+	templateDirs,
+} from "../templates";
 import {
 	closeTerminal,
 	closeWorkspaceTerminals,
@@ -326,6 +334,35 @@ const handlers: Record<string, Handler> = {
 			labels,
 			...(p.limit ? { limit: p.limit } : {}),
 		});
+	},
+	// Prompt-template CRUD: list/read/write/delete pi's global + project-scoped templates. The
+	// template.* handlers resolve workspaceId → cwd via getWorkspace, then delegate to the templates
+	// module (which stays registry-free: it only takes a cwd, never a workspaceId).
+	"template.list": (params) => {
+		const p = params as { workspaceId?: string };
+		const dirs = templateDirs(p.workspaceId ? getWorkspace(p.workspaceId).worktreePath : undefined);
+		return { templates: listTemplates(dirs) };
+	},
+	"template.get": (params) => {
+		const p = params as { workspaceId?: string; name: string; scope?: TemplateScope };
+		const dirs = templateDirs(p.workspaceId ? getWorkspace(p.workspaceId).worktreePath : undefined);
+		return getTemplate(dirs, p.name, p.scope);
+	},
+	"template.save": (params) => {
+		const p = params as {
+			workspaceId?: string;
+			scope: TemplateScope;
+			name: string;
+			content: string;
+		};
+		const dirs = templateDirs(p.workspaceId ? getWorkspace(p.workspaceId).worktreePath : undefined);
+		return saveTemplate(dirs, p.scope, p.name, p.content);
+	},
+	"template.delete": (params) => {
+		const p = params as { workspaceId?: string; scope: TemplateScope; name: string };
+		const dirs = templateDirs(p.workspaceId ? getWorkspace(p.workspaceId).worktreePath : undefined);
+		deleteTemplate(dirs, p.scope, p.name);
+		return { ok: true } as const;
 	},
 };
 
