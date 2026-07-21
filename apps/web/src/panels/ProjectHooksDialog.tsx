@@ -155,6 +155,11 @@ export function ProjectHooksDialog({
 				<DialogHeader>
 					<DialogTitle>Hooks — {projectName}</DialogTitle>
 				</DialogHeader>
+				<p className="text-hint text-xs">
+					Saved commands apply to workspaces created from now on — an existing workspace keeps
+					running whatever was committed when it was created. To change what runs on this machine
+					right now, use an override instead.
+				</p>
 				{loading ? (
 					<p className="text-hint text-sm">Loading…</p>
 				) : (
