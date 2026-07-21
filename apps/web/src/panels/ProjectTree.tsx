@@ -1,5 +1,5 @@
 import type { HookName, HookStatus, Project, Workspace } from "@thinkrail/contracts";
-import { ChevronDown, ChevronRight, Folder, GitBranch, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Folder, GitBranch, Plus, Settings, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { PopoverTrigger } from "@/components/ui/popover";
@@ -10,6 +10,7 @@ import { ConfirmPopover } from "./ConfirmPopover";
 import { HookApprovalDialog } from "./HookApprovalDialog";
 import { HookStatusIcon } from "./HookStatusIcon";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
+import { ProjectHooksDialog } from "./ProjectHooksDialog";
 import { useOpenProject } from "./useOpenProject";
 
 /** Lower = more attention-worthy — picks a single badge when a workspace has more than one hook's status. */
@@ -39,6 +40,8 @@ export function ProjectTree() {
 	// The project a New-Workspace dialog is open for (null = closed). The "+" opens it instead of
 	// creating a workspace directly.
 	const [dialogProjectId, setDialogProjectId] = useState<string | null>(null);
+	// The project a Hooks-config dialog is open for (null = closed).
+	const [hooksProjectId, setHooksProjectId] = useState<string | null>(null);
 
 	const loadWorkspaces = async (projectId: string) => {
 		useAppStore
@@ -128,6 +131,7 @@ export function ProjectTree() {
 								onToggle={() => toggleExpand(project.id)}
 								onSelect={() => void selectProject(project.id)}
 								onAddWorkspace={() => setDialogProjectId(project.id)}
+								onOpenHooks={() => setHooksProjectId(project.id)}
 							/>
 							{isExpanded && (
 								<ul className="flex flex-col">
@@ -162,6 +166,17 @@ export function ProjectTree() {
 				/>
 			) : null}
 
+			{hooksProjectId !== null ? (
+				<ProjectHooksDialog
+					open
+					projectId={hooksProjectId}
+					projectName={projects.find((p) => p.id === hooksProjectId)?.name ?? ""}
+					onOpenChange={(o) => {
+						if (!o) setHooksProjectId(null);
+					}}
+				/>
+			) : null}
+
 			{dialogs}
 		</nav>
 	);
@@ -175,6 +190,7 @@ function ProjectRow({
 	onToggle,
 	onSelect,
 	onAddWorkspace,
+	onOpenHooks,
 }: {
 	project: Project;
 	isSelected: boolean;
@@ -183,6 +199,7 @@ function ProjectRow({
 	onToggle: () => void;
 	onSelect: () => void;
 	onAddWorkspace: () => void;
+	onOpenHooks: () => void;
 }) {
 	const Chevron = isExpanded ? ChevronDown : ChevronRight;
 	return (
@@ -221,6 +238,15 @@ function ProjectRow({
 				className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-muted opacity-0 transition hover:bg-elevated hover:text-text group-hover:opacity-100"
 			>
 				<Plus className="size-4" />
+			</button>
+			<button
+				type="button"
+				data-testid="project-hooks"
+				aria-label="Configure hooks"
+				onClick={onOpenHooks}
+				className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-muted opacity-0 transition hover:bg-elevated hover:text-text group-hover:opacity-100"
+			>
+				<Settings className="size-4" />
 			</button>
 		</div>
 	);

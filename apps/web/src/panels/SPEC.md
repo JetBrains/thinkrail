@@ -44,7 +44,9 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   `hookAwaitingApproval`. **`ProjectHooksDialog`** is the project-level hooks config form (one row per
   `HookName`: committed command, optional host-local override, approval status + an Approve action),
   reachable with zero workspaces open; composes `hooksActions.ts`'s new
-  `getProjectHooks`/`saveProjectHooks`/`approveProjectHook`.
+  `getProjectHooks`/`saveProjectHooks`/`approveProjectHook`. Two entry points open it: a per-row **gear
+  icon** (`Settings`, testid `project-hooks`) on `ProjectRow`, same hover-reveal treatment as the
+  **Create workspace** `+`, and the Welcome screen's **"Configure hooks"** card (below).
   **Opening a project** goes through the shared **`useOpenProject`** hook (reused by `ProjectTree` **and**
   `WelcomePanel`, so the flow is identical in the rail and the Welcome screen): `project.open`, and on
   failure `project.inspect` → either offers to bootstrap the folder into a repo — a modal **`ConfirmDialog`**
@@ -61,11 +63,14 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
 workspace is active. The `PRODUCT_NAME` wordmark as the hero (the topbar's brand styling — accent font,
 `text-primary` — enlarged), with the **active project's name as a small eyebrow** (folder icon) above it
 once a project is selected, over a **constant** spec-first pitch (not spec-conditional) and
-**one-to-three cards** (Conductor-inspired: icon top-left, label + explainer
+**one-to-four cards** (Conductor-inspired: icon top-left, label + explainer
 bottom-left; the primary is a filled-violet card carrying the stable `welcome-cta` hook, others quiet
 `welcome-action`s). The cards by state: **no projects** → **"Open project"** (one card); **project +
-`hasSpecs`** → **"Start building"** (primary) + "Open project"; **project + no specs** → a spec-first
-**"Set up project"** (primary) + "Start building" + "Open project". The **"Open project"** card hangs the shared
+`hasSpecs`** → **"Start building"** (primary) + "Open project" + "Configure hooks"; **project + no specs**
+→ a spec-first **"Set up project"** (primary) + "Start building" + "Open project" + "Configure hooks".
+Whenever a project is selected, a trailing **"Configure hooks"** card (`Settings` icon) opens the same
+**`ProjectHooksDialog`** as `ProjectRow`'s gear icon (above) — the Welcome-screen entry point reachable
+with zero workspaces. The **"Open project"** card hangs the shared
 **`AddProjectMenu`** dropdown off it (same menu as the projects-rail "+": Open project / Open GitHub (soon)
 / Recents), so `Card` is a `forwardRef` usable as a Radix `asChild` trigger. **"Start building"** is the
 intent-first framing of the create-and-kick-off flow — it opens `NewWorkspaceDialog` (which cuts a

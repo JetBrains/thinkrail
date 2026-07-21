@@ -1,5 +1,5 @@
 import type { Workspace } from "@thinkrail/contracts";
-import { Folder, FolderOpen, type LucideIcon, Rocket, Sparkles } from "lucide-react";
+import { Folder, FolderOpen, type LucideIcon, Rocket, Settings, Sparkles } from "lucide-react";
 import { type ComponentPropsWithoutRef, forwardRef, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { PRODUCT_NAME } from "../constants/branding";
@@ -7,6 +7,7 @@ import { useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
+import { ProjectHooksDialog } from "./ProjectHooksDialog";
 import { ProviderWarningBanner } from "./ProviderWarningBanner";
 import { useOpenProject } from "./useOpenProject";
 
@@ -34,6 +35,8 @@ export function WelcomePanel() {
 	// requested only for this one project, on demand, never eagerly for every project on connect).
 	// null = pending/unknown (cards wait for it).
 	const [hasSpecs, setHasSpecs] = useState<boolean | null>(null);
+	// Whether the project-level Hooks-config dialog is open.
+	const [hooksOpen, setHooksOpen] = useState(false);
 
 	// The project the has-specs states key off — the selected one, else the most-recent (list is sorted).
 	const project = projects.find((p) => p.id === selectedProjectId) ?? projects[0] ?? null;
@@ -142,6 +145,12 @@ export function WelcomePanel() {
 							onClick={() => setDialog({ projectId: project.id, prompt: "" })}
 						/>
 						{openProjectCard({ subtitle: "Add another local git repository." })}
+						<Card
+							icon={Settings}
+							title="Configure hooks"
+							subtitle="Declare setup/teardown commands this project runs per workspace."
+							onClick={() => setHooksOpen(true)}
+						/>
 					</>
 				) : (
 					<>
@@ -161,6 +170,12 @@ export function WelcomePanel() {
 							onClick={() => setDialog({ projectId: project.id, prompt: "" })}
 						/>
 						{openProjectCard({ subtitle: "Add another local git repository." })}
+						<Card
+							icon={Settings}
+							title="Configure hooks"
+							subtitle="Declare setup/teardown commands this project runs per workspace."
+							onClick={() => setHooksOpen(true)}
+						/>
 					</>
 				)}
 			</div>
@@ -176,6 +191,14 @@ export function WelcomePanel() {
 					onCreated={(ws) => void onWorkspaceCreated(ws)}
 				/>
 			) : null}
+			{project && (
+				<ProjectHooksDialog
+					open={hooksOpen}
+					projectId={project.id}
+					projectName={project.name}
+					onOpenChange={setHooksOpen}
+				/>
+			)}
 			{dialogs}
 		</div>
 	);
