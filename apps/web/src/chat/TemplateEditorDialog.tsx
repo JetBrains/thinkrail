@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib";
 import { useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
+import { assembleTemplate, splitTemplate } from "./templateText";
 
 /** Documentation only (not itself parsed) — the real grammar is `slotSession.ts`'s parser / pi's own
  * expansion. Kept as a constant (not inline JSX text) since `${1:-default}` would otherwise be misread
@@ -33,62 +34,6 @@ function isValidTemplateName(name: string): boolean {
 	if (name.length === 0) return false;
 	if (name.startsWith(".")) return false;
 	return !name.includes("/") && !name.includes("\\") && !name.includes("\0");
-}
-
-/**
- * Best-effort single-line scalar read for a `key: value` frontmatter line. Handles exactly the two shapes
- * this dialog itself ever writes — a bare scalar, or one `JSON.stringify`-quoted by `assembleTemplate`
- * below — not general YAML: no parser dependency reaches the browser bundle (see the module SPEC's
- * Save-as-template bullet). A hand-authored template with fancier YAML (folded scalars, extra keys) still
- * *lists* and *sends* fine; editing it through this dialog just round-trips only these two keys.
- */
-function readFrontmatterKey(block: string, key: string): string {
-	const line = block.split("\n").find((l) => l.startsWith(`${key}:`));
-	if (!line) return "";
-	const raw = line.slice(key.length + 1).trim();
-	if (raw.startsWith('"') && raw.endsWith('"')) {
-		try {
-			return JSON.parse(raw) as string;
-		} catch {
-			return raw;
-		}
-	}
-	return raw;
-}
-
-/** Splits a template file's leading frontmatter block from its body — the same shape `ChatView.tsx`'s
- * `stripFrontmatter` splits (duplicated, not shared: this side also needs the two field values, not just
- * the body). */
-function splitTemplate(content: string): {
-	description: string;
-	argumentHint: string;
-	body: string;
-} {
-	const match = content.match(/^---\n([\s\S]*?)\n---\n?/);
-	if (!match) return { description: "", argumentHint: "", body: content };
-	const block = match[1] ?? "";
-	return {
-		description: readFrontmatterKey(block, "description"),
-		argumentHint: readFrontmatterKey(block, "argument-hint"),
-		body: content.slice(match[0].length),
-	};
-}
-
-/**
- * Assembles a template file's full text from form fields — the inverse of {@link splitTemplate}. Omits
- * either frontmatter key when its field is empty, and omits the frontmatter block entirely when both are
- * empty. Each present value is `JSON.stringify`-quoted: YAML's double-quoted scalar escape set is a
- * superset of JSON's, so this is always valid YAML without a `yaml` package dependency (see the seed
- * fixture's own `argument-hint: "[file] [scope]"`, quoted for the same reason).
- */
-function assembleTemplate(description: string, argumentHint: string, body: string): string {
-	const lines: string[] = [];
-	const d = description.trim();
-	const a = argumentHint.trim();
-	if (d) lines.push(`description: ${JSON.stringify(d)}`);
-	if (a) lines.push(`argument-hint: ${JSON.stringify(a)}`);
-	const frontmatter = lines.length > 0 ? `---\n${lines.join("\n")}\n---\n\n` : "";
-	return `${frontmatter}${body}`;
 }
 
 /**

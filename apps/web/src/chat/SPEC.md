@@ -140,8 +140,9 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   composer's `/` menu path is always fresh via `template.list`" claim true, unlike the typed-through
   `/name args` path's frozen create-time snapshot. **Picking a template** (`ChatView`'s `onPickTemplate`, a
   `Composer` prop): instead of `pickSlash`'s plain `/name ` insert, fetches `template.get`, splits
-  frontmatter client-side (a 6-line `/^---\n[\s\S]*?\n---\n/` splitter — pi's own frontmatter parser is
-  server-only, never reaches the browser bundle), runs `parseTemplateSlots(body, argumentHint)`, and hands
+  frontmatter client-side (`templateText.ts`'s shared `stripFrontmatter` — pi's own frontmatter parser is
+  server-only, never reaches the browser bundle, but the boundary rule is pinned to match it exactly; see
+  the Save-as-template bullet below), runs `parseTemplateSlots(body, argumentHint)`, and hands
   the result to `Composer` via a new **`ComposerHandle.insertTemplate`** method (alongside the existing
   `insertText`) — replaces the whole draft (like `pickSlash`, not `pickMention`: a slash command occupies
   the entire input) and, if the parse produced any slots, starts a **slot session** selecting slot 0; no
@@ -178,6 +179,17 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `chat/`, so the one shared implementation has to live where both sides can reach it. `TemplateEditorDialog`
   is therefore promoted to a **third** sanctioned store/transport-touching integration piece (see Boundary
   below), even though it isn't `ChatView` itself.
+  - **`templateText.ts`** is the single shared frontmatter splitter/assembler — `stripFrontmatter`
+    (`ChatView.tsx`'s composer-pick path), `splitTemplate`/`assembleTemplate` (this dialog). Its boundary
+    rule is ported byte-for-byte from pi's own `extractFrontmatter` (`@earendil-works/pi-coding-agent`'s
+    `dist/utils/frontmatter.js`, pinned against pi v0.80.6 — the same pin `packages/server/src/templates/
+    SPEC.md` uses server-side; re-verify both on a pi version bump): the frontmatter block ends at the
+    FIRST later `\n---` line, and the body is everything after that fence run through `.trim()` — not a
+    single optional `\n`. A prior version had two independently hand-rolled regex splitters (one per
+    file), each consuming only one *optional* `\n` after the closing fence instead of trimming — a
+    leading blank line leaked into the body on every pick and every edit-reopen, and **compounded** by one
+    more `\n` per edit-save cycle (the leaked line got saved back into the body field and re-wrapped the
+    next save). `templateText.test.ts` pins the round-trip/stability properties this fix depends on.
   - **Fields**: name (validated client-side against the exact same rule as the server's
     `isValidTemplateName`, `packages/server/src/templates/templates.ts` — duplicated rather than shared,
     since it's a 4-line pure predicate and the server module is server-only), a scope radio (Global / This
@@ -186,11 +198,16 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
     syntax`; the real grammar is parsed by `slotSession.ts` / expanded by pi — this line is documentation
     text only, not itself parsed).
   - **Assembly**: `---\ndescription: …\nargument-hint: …\n---\n\n<body>`, omitting either key when its
-    field is empty, and **no frontmatter block at all** when both are empty. Each value is emitted
-    `JSON.stringify`-quoted rather than bare — YAML's double-quoted scalar escape set is a superset of
-    JSON's, so this is always valid YAML without pulling in a `yaml` package just to serialize two short
-    strings (see the seed fixture's own `argument-hint: "[file] [scope]"`, quoted for the same reason: an
-    unquoted value isn't always valid YAML).
+    field is empty, and **no frontmatter block at all** when both are empty **and the body doesn't start
+    with `---`** — a body that does gets an explicit (possibly empty, `---\n---\n\n`) block forced anyway:
+    saved bare, pi's own loader (and our splitter) would go hunting for a *later* `\n---` line inside that
+    body to treat as a closing fence, silently swallowing real content as YAML the moment the body
+    contains one; forcing the wrapper makes our own fence the earliest possible match unconditionally, so
+    the body's own `---`-looking lines are never reinterpreted (see `templateText.test.ts`'s
+    ambiguous-body case). Each value is emitted `JSON.stringify`-quoted rather than bare — YAML's
+    double-quoted scalar escape set is a superset of JSON's, so this is always valid YAML without pulling
+    in a `yaml` package just to serialize two short strings (see the seed fixture's own `argument-hint:
+    "[file] [scope]"`, quoted for the same reason: an unquoted value isn't always valid YAML).
   - **Editing an existing template locks its name + scope** (both fields disabled): `template.save` is
     create-or-overwrite keyed by `(scope, name)` with no rename/move primitive, so changing either while
     editing would silently orphan the old file on disk instead of renaming it. Creating new (including
@@ -199,7 +216,10 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
     message inline via `data-testid="template-error"` (never a toast — the dialog stays open so the error
     is fixable in place). **Delete has no dialog involvement at all** — `panels/TemplatesSettings.tsx`'s
     row calls `template.delete` + `bumpTemplatesVersion()` directly, behind a `ConfirmPopover` (the same
-    confirm-before-destructive-action pattern `ProjectTree.tsx`'s workspace-remove row uses).
+    confirm-before-destructive-action pattern `ProjectTree.tsx`'s workspace-remove row uses). A **rejected
+    delete** is the one deliberate asymmetry with Save: it surfaces as an error toast, not inline (there's
+    no dialog to render inline into), leaving the row in place — the same pattern `panels/SPEC.md`
+    documents for `ProjectTree`'s own workspace-remove row.
   - **Save-as-template** (`HistoryOverlay`'s selected-prompt-row action, `data-testid="history-save-template"`,
     keyboard **Cmd/Ctrl+S** while a prompt row is selected — the overlay's `onKeyDown` always
     `preventDefault`s the combo, so the browser's own Save dialog never opens regardless of what's

@@ -29,6 +29,7 @@ import { type ChatRow, deriveRows, rowIndexForTurn } from "./rows";
 import { StreamIndicator, type StreamStatus, streamStatus } from "./StreamIndicator";
 import { parseTemplateSlots } from "./slotSession";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
+import { stripFrontmatter } from "./templateText";
 import "./tools/register"; // side-effect: register the built-in pi tool renderers (bash/read/edit/write)
 import { ChatTurnView } from "./turns";
 import type { ChatTurn } from "./types";
@@ -79,13 +80,6 @@ function templateToCommand(t: TemplateInfo): SlashCommandInfo {
 			origin: "top-level",
 		},
 	};
-}
-
-/** pi's frontmatter parser is server-only (real YAML) and never reaches the browser bundle — this only
- * ever needs to locate where the body starts (never to read a frontmatter *value*; those come from
- * `TemplateInfo`'s own `description`/`argumentHint` fields), so a plain 6-line splitter is enough. */
-function stripFrontmatter(content: string): string {
-	return content.replace(/^---\n[\s\S]*?\n---\n/, "");
 }
 
 /** Context threaded to the Virtuoso footer so the streaming loader lives at the end of the conversation. */
@@ -386,9 +380,10 @@ export default function ChatView({
 	};
 
 	// Picking a `source: "prompt"` row: fetch the real file (never `commands`' frozen snapshot), split off
-	// the frontmatter (a 6-line splitter — pi's own parser is server-only), parse the body into slots, and
-	// hand the result to `Composer`'s `insertTemplate` — which starts (or skips, if there are no slots) a
-	// slot session, replacing the whole draft the way `pickSlash` does.
+	// the frontmatter (`templateText.ts`'s shared `stripFrontmatter` — pi's own parser is server-only, but
+	// the boundary rule is pinned to match it exactly), parse the body into slots, and hand the result to
+	// `Composer`'s `insertTemplate` — which starts (or skips, if there are no slots) a slot session,
+	// replacing the whole draft the way `pickSlash` does.
 	const onPickTemplate = useCallback(
 		(name: string) => {
 			getTransport()

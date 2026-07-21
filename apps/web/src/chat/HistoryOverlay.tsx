@@ -10,6 +10,15 @@ const SCOPE_LABELS: Record<HistoryScope["kind"], string> = {
 	all: "All",
 };
 
+/** Cmd on Mac/iOS, Ctrl elsewhere — matches the modifier `onKeyDown` below actually checks
+ * (`e.metaKey || e.ctrlKey`), so the save-as-template button's tooltip never shows a glyph the user's
+ * platform doesn't have. Guarded for a non-browser environment (e.g. this module under a non-DOM test
+ * runner) — falls back to the cross-platform spelling. */
+const SAVE_SHORTCUT_LABEL =
+	typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/.test(navigator.platform ?? "")
+		? "⌘S"
+		: "Ctrl+S";
+
 /** Tiny relative-time formatter — `panels/CenterTabs.tsx` has a private twin; `chat/` can't import from
  * `panels/` (wrong dependency direction), and this is too small to promote to a shared lib. */
 function relativeTime(ms: number): string {
@@ -108,7 +117,7 @@ function PromptRow({
 				type="button"
 				data-testid="history-save-template"
 				aria-label="Save as template"
-				title="Save as template (⌘S)"
+				title={`Save as template (${SAVE_SHORTCUT_LABEL})`}
 				onClick={(e) => {
 					e.stopPropagation();
 					onSaveAsTemplate();

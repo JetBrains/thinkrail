@@ -79,6 +79,61 @@ test.describe("templates management", () => {
 		await expect(menuHit).toHaveCount(0);
 	});
 
+	// Reviewer-flagged regression: the assembler always wraps a real description in frontmatter, so picking
+	// the saved template back up must hand back the body exactly as typed — no leaked leading blank line —
+	// and an edit-save cycle that only touches the description must never grow the body (unit-level pin:
+	// `chat/templateText.test.ts`; this is the end-to-end proof over the real dialog + wire).
+	test("frontmatter round-trip: picking a saved template gets the body verbatim, and an edit-save cycle never grows it", async ({
+		page,
+	}) => {
+		await openWorkspaceChat(page);
+		const input = page.getByTestId("chat-input");
+		const settingsDialog = page.getByTestId("settings-dialog");
+		const editor = page.getByTestId("template-editor-dialog");
+
+		await page.getByTestId("open-settings").click();
+		await page.getByTestId("settings-nav-templates").click();
+		await page.getByTestId("template-new-global").click();
+		await expect(editor).toBeVisible();
+
+		await page.getByTestId("template-name-input").fill("roundtrip");
+		await page.getByTestId("template-description-input").fill("Round-trip check");
+		await page.getByTestId("template-body-input").fill("Notes for the day");
+		await page.getByTestId("template-save").click();
+		await expect(editor).toBeHidden();
+
+		await page.keyboard.press("Escape");
+		await expect(settingsDialog).toBeHidden();
+
+		// Pick via /roundtrip: the draft must equal the body exactly — no leading blank line leaked in by
+		// the client-side splitter.
+		await input.fill("/roundtrip");
+		await page
+			.locator('[data-testid="slash-command"][data-source="prompt"]')
+			.filter({ hasText: "roundtrip" })
+			.first()
+			.click();
+		await expect(input).toHaveValue("Notes for the day");
+		await input.fill("");
+
+		// Edit only the description, save, reopen: the body must be byte-for-byte unchanged — not
+		// compounded with an extra leading blank line from the previous split/assemble cycle.
+		await page.getByTestId("open-settings").click();
+		await page.getByTestId("settings-nav-templates").click();
+		const row = page.locator('[data-testid="template-row"][data-name="roundtrip"]');
+		await row.getByTestId("template-edit").click();
+		await expect(editor).toBeVisible();
+		await expect(page.getByTestId("template-body-input")).toHaveValue("Notes for the day");
+		await page.getByTestId("template-description-input").fill("Round-trip check, revised");
+		await page.getByTestId("template-save").click();
+		await expect(editor).toBeHidden();
+
+		await row.getByTestId("template-edit").click();
+		await expect(editor).toBeVisible();
+		await expect(page.getByTestId("template-body-input")).toHaveValue("Notes for the day");
+		await page.getByTestId("template-cancel").click();
+	});
+
 	test("an invalid template name shows an inline error instead of saving", async ({ page }) => {
 		await openWorkspaceChat(page);
 		await page.getByTestId("open-settings").click();
