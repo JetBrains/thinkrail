@@ -412,6 +412,13 @@ interface AppState {
 		Partial<Record<HookName, { tick: number; output: string }>>
 	>;
 	/**
+	 * Tombstones for workspaces genuinely removed (stamped by `applyWorkspaceRemoved`) — the ONLY signal
+	 * `applyWorkspaceHookEvent` trusts to distinguish "removed" from "this project's list simply hasn't
+	 * loaded yet" (both look identical as `!entry` — absent from every project's `workspaces` list — but
+	 * only the former should raise a toast; see `applyWorkspaceHookEvent`'s doc comment).
+	 */
+	removedWorkspaceIds: Record<string, true>;
+	/**
 	 * The in-flight in-app OAuth login, if any (flat + session-less — a login runs on the Welcome screen
 	 * before any session exists, so it must NOT live under a session runtime, or its frames get dropped).
 	 * At most one at a time (the dialog is modal).
@@ -468,9 +475,12 @@ interface AppState {
 	 * Fold a `workspace.hook` push: append to the live output buffer (reset on a fresh run), and — for
 	 * every kind but `hookOutput` — mirror the transition onto the workspace's own `hookStatus` field too,
 	 * so the row badge/tab updates immediately without waiting on a `workspace.updated` round-trip. A
-	 * workspace not found in any loaded project's list (already removed, or not yet fetched) touches
-	 * neither: `hookAwaitingApproval`/`hookFailed` instead raise a toast (there's no row/tab left to show
-	 * it), everything else is dropped.
+	 * workspace not found in any loaded project's list is ambiguous on its own — it could mean "genuinely
+	 * removed" OR "this project's list was simply never fetched yet" (the same no-op race `addWorkspace`
+	 * already documents for `workspace.created`) — so it's disambiguated via `removedWorkspaceIds`:
+	 * genuinely removed (id is tombstoned) touches neither buffer nor `hookStatus`, and raises a toast for
+	 * `hookAwaitingApproval`/`hookFailed` (there's no row/tab left to show it); not-yet-loaded (id is NOT
+	 * tombstoned) touches nothing AND raises no toast — the row reconciles correctly once the list loads.
 	 */
 	applyWorkspaceHookEvent: (event: WorkspaceHookEvent) => void;
 	/** Replace a file tab's content after a live re-read, recording the fs tick it was loaded at. The tab
@@ -633,6 +643,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	fsChangesByWorkspace: {},
 	hooksRequest: null,
 	hookOutputByWorkspace: {},
+	removedWorkspaceIds: {},
 	activeLogin: null,
 	settingsOpen: false,
 	settingsSection: SettingsSection.Providers,
@@ -687,11 +698,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 		const name = s.workspaces[projectId]?.find((w) => w.id === workspaceId)?.name;
 		s.removeWorkspace(projectId, workspaceId);
 		s.clearWorkspaceTabs(workspaceId); // drops the row's tabs + terminals + chat runtimes
-		// Drop the live-refresh signal too — a removed workspace's fs tick record must not linger.
+		// Drop the live-refresh signal too — a removed workspace's fs tick record must not linger. Stamp the
+		// tombstone here too, so a hook event for this id that arrives after this point (e.g. an in-flight
+		// onDelete's hookAwaitingApproval) can tell "genuinely removed" apart from "list not loaded yet".
 		set((state) => {
 			const { [workspaceId]: _gone, ...rest } = state.fsChangesByWorkspace;
 			const { [workspaceId]: _goneHooks, ...restHooks } = state.hookOutputByWorkspace;
-			return { fsChangesByWorkspace: rest, hookOutputByWorkspace: restHooks };
+			return {
+				fsChangesByWorkspace: rest,
+				hookOutputByWorkspace: restHooks,
+				removedWorkspaceIds: { ...state.removedWorkspaceIds, [workspaceId]: true },
+			};
 		});
 		if (wasActive) {
 			s.setActiveWorkspace(null); // the shell falls back to the project Welcome
@@ -764,12 +781,21 @@ export const useAppStore = create<AppState>((set, get) => ({
 			);
 
 			if (!entry) {
-				// The workspace's row/tab is already gone (e.g. removed mid-teardown, per the onDelete
-				// visibility fix) — there's nothing left to update. hookAwaitingApproval/hookFailed would
-				// otherwise vanish silently, so surface just those two as a toast naming the workspace + project;
-				// the rest (hookStarted/hookOutput/hookSucceeded) have nothing actionable to say and are
-				// dropped — this also closes a latent leak where any kind used to still write into
-				// `hookOutputByWorkspace` for an id nothing will ever read again.
+				// `!entry` is ambiguous on its own: it also fires for a brand-new project whose `workspaces`
+				// list was never fetched (see `addWorkspace`'s doc comment — the same `workspace.created` push
+				// is already a documented no-op for that case). Only `removedWorkspaceIds` (stamped by
+				// `applyWorkspaceRemoved`) tells "genuinely removed" apart from "not yet loaded".
+				if (!s.removedWorkspaceIds[event.workspaceId]) {
+					// Not yet loaded: the workspace is alive, its row just hasn't arrived. Nothing to update and
+					// nothing to say — the row/badge reconciles correctly once the list loads.
+					return {};
+				}
+				// Genuinely removed (e.g. mid-teardown, per the onDelete visibility fix) — there's nothing left
+				// to update. hookAwaitingApproval/hookFailed would otherwise vanish silently, so surface just
+				// those two as a toast naming the workspace + project; the rest (hookStarted/hookOutput/
+				// hookSucceeded) have nothing actionable to say and are dropped — this also closes a latent leak
+				// where any kind used to still write into `hookOutputByWorkspace` for an id nothing will ever
+				// read again.
 				const projectName = s.projects.find((p) => p.id === event.projectId)?.name ?? "the project";
 				if (event.kind === "hookAwaitingApproval") {
 					toast.error(
