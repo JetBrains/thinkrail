@@ -4,7 +4,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { HookName } from "@thinkrail/contracts";
-import { WORKSPACE_HOOKS_CONFIG_FILE } from "@thinkrail/shared/paths";
+import { WORKSPACE_HOOKS_CONFIG_FILE, WORKSPACE_INTERNAL_DIR } from "@thinkrail/shared/paths";
 
 /** The committed hook commands declared in a workspace's own worktree. Missing/corrupt file → `{}`. */
 export function loadHookConfig(worktreePath: string): Partial<Record<HookName, string>> {
@@ -28,9 +28,11 @@ export function writeHookConfig(
 	projectPath: string,
 	hooks: Partial<Record<HookName, string>>,
 ): void {
-	const dir = join(projectPath, ".thinkrail");
-	mkdirSync(dir, { recursive: true });
-	writeFileSync(join(dir, "hooks.json"), `${JSON.stringify(hooks, null, "\t")}\n`);
+	mkdirSync(join(projectPath, WORKSPACE_INTERNAL_DIR), { recursive: true });
+	writeFileSync(
+		join(projectPath, WORKSPACE_HOOKS_CONFIG_FILE),
+		`${JSON.stringify(hooks, null, "\t")}\n`,
+	);
 }
 
 /**
