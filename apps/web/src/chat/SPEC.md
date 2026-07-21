@@ -126,7 +126,15 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `packages/server/src/templates/`) into visible text plus `TemplateSlot` ranges;
   `stripUntouchedSlots`/`shiftSlots` round out the session (strip-on-send, re-track-on-edit) — **parse
   only**, this module never evaluates the grammar (a typed-through `/name args` prompt already expands via
-  pi's own `PromptOptions.expandPromptTemplates`, with or without this parser). **The `/` menu merge**
+  pi's own `PromptOptions.expandPromptTemplates`, with or without this parser). **Observed** (the design's
+  "to verify" #3, resolved by `e2e/templates.live.spec.ts`'s typed-through test): pi's own transcript
+  records the ALREADY-EXPANDED body for a typed-through send, never the raw `/name args` —
+  `AgentSession.prompt()` substitutes args into `expandedText` before persisting the `role: "user"`
+  message, so a `session.getMessages` re-fetch (a reload, or reopening from history) shows the expanded
+  text. The one nuance: the web client's own immediate bubble is an **optimistic echo**
+  (`ChatView.onSubmit` → `appendUserMessage`, store-only, appended *before* the transport call resolves) —
+  it shows exactly what was typed (the raw command) until a re-fetch replaces it with pi's real persisted
+  record. **The `/` menu merge**
   (`ChatView`): pi's `commands` snapshot (`session.getCommands`, frozen at session-create time) minus its
   `source === "prompt"` entries, plus a fresh `template.list { workspaceId }` fetch mapped to
   `SlashCommandInfo` rows (`source: "prompt"`, `sourceInfo` synthesized to match pi's own prompt-template

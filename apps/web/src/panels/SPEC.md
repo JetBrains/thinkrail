@@ -115,10 +115,10 @@ a project picker, the prompt hero, and the reused
   the glob discovered at build time); and **`TemplatesSettings`** (`template.list { workspaceId }`,
   refetched whenever the store's `templatesVersion` bumps) — two groups, **Global** and **This project**
   (the project group renders only with an active workspace), each a header with a **New** button plus its
-  rows (`data-testid="template-row"`: name + description, an **Edit** action, and — project rows only — an
+  rows (`data-testid="template-row"`: name + description, and — project rows only — an
   **Open as file** action that opens `.pi/prompts/<name>.md` through the exact same `openFile.ts`
-  `openFileInTab` the file tree uses, then closes Settings; a global template has no worktree to open a
-  file tab against, so global rows stay dialog-only). **New**/**Edit** open the shared
+  `openFileInTab` the file tree uses, then closes Settings, and an **Edit** action; a global template has
+  no worktree to open a file tab against, so global rows stay dialog-only). **New**/**Edit** open the shared
   `chat/TemplateEditorDialog` (see `chat/SPEC.md`'s Save-as-template bullet — it lives in `chat/` because
   `HistoryOverlay`'s save-as-template action needs the identical form, and `chat/` can't import
   `panels/`). **Delete** is a `ConfirmPopover` on the row (the same anchored-confirm pattern
