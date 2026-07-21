@@ -110,7 +110,8 @@
 
 /*
  * Additional themes. Each overrides only the SEMANTIC surface/text/status tokens + `color-scheme` (and the
- * one-off `--selection-bg`, plus `--ansi-*` where the default terminal palette wouldn't read, optional
+ * one-off `--selection-bg` (+ `--selection-fg`/`--sel-fg` where selected text must flip, as high-contrast's
+ * yellow demands), plus `--ansi-*` where the default terminal palette wouldn't read, optional
  * `--code-*` syntax colors for Monaco, and — when the palette demands it, as gruvbox's does — the accent
  * family); type scale, spacing, radii, and fonts stay shared in `:root`. `applyTheme(id)` sets
  * `[data-theme=id]` on <html>; picking "dark" matches no block below and falls back to the `:root`
@@ -299,4 +300,61 @@
 	--code-attribute-name: #fabd2f;
 	--code-attribute-value: #b8bb26;
 	--code-json-key: #83a598;
+}
+
+/* High Contrast — the classical VSCode "Dark High Contrast" (hc-black): pure black everywhere, white
+   text, one cyan contrast border for every edge, the HC focus orange as the accent (dark-on-accent), and
+   the HC yellow selection with BLACK selected text (the optional `--sel-fg`/`--selection-fg` pair — white
+   on the yellow would be ~1:1). Surfaces don't separate this theme; BORDERS do. Deliberate deviation:
+   `--hover` is a faint fill — real VSCode HC uses outlines, but our components signal hover via
+   background, and an invisible hover would be an a11y regression. Status colors and the ANSI palette
+   inherit `:root` (all ≥ 6.5:1 on black; VSCode HC doesn't re-tint the terminal either). Monaco takes its
+   syntax from the real `hc-black` base, so no `--code-*` palette here — only the comment green, lifted to
+   VSCode's current #7ca668 (Monaco's bundled base still ships the older, dimmer #608b4e; shiki's copy of
+   the palette lives in `lib/shikiTheme.ts`). */
+[data-theme="high-contrast"] {
+	color-scheme: dark;
+
+	/* Accent: the classical HC focus orange (8.2:1 on black); text ON the accent is black, not white (2.6:1). */
+	--primary: #f38518;
+	--primary-10: rgba(243, 133, 24, 0.1);
+	--primary-20: rgba(243, 133, 24, 0.2);
+	--primary-40: rgba(243, 133, 24, 0.4);
+	--primary-60: rgba(243, 133, 24, 0.6);
+	--primary-80: rgba(243, 133, 24, 0.8);
+	--secondary: #2d2d33;
+	--on-accent: #000000;
+	--on-accent-16: rgba(0, 0, 0, 0.16);
+	/* Chat user bubble follows the accent — violet would be the one off-palette thing on screen; border
+	   alpha lifted to 0.4 (HC wants visible edges). */
+	--bubble-user-bg: rgba(243, 133, 24, 0.12);
+	--bubble-user-border: rgba(243, 133, 24, 0.4);
+
+	--bg: #000000;
+	--bg-dark: #000000;
+	--bg-input: #000000;
+	--input-bg: #000000;
+	--panel: rgba(0, 0, 0, 0.9);
+	--elevated: #000000;
+	--hover: #1f1f1f;
+	/* THE signature: the hc-black contrastBorder on every edge — panels, inputs, the scrollbar thumb. */
+	--border: #6fc3df;
+	--border2: #6fc3df;
+	--text: #ffffff;
+	--text-40: rgba(255, 255, 255, 0.4);
+	--muted: #d0d0d0;
+	--hint: #a6a6a6;
+	/* Selection: HC yellow with black selected text (17.9:1) — Monaco/xterm read `--sel` + `--sel-fg`,
+	   `::selection` reads the `--selection-*` pair. */
+	--sel: #f3f518;
+	--sel-fg: #000000;
+	--selection-bg: #f3f518;
+	--selection-fg: #000000;
+	/* Uniform black — borders, not a surface two-tone, separate the sidebar from the content. */
+	--surface-sidebar: var(--bg);
+	--surface-content: var(--bg-dark);
+
+	/* Comments only — the rest of the syntax palette comes from Monaco's `hc-black` base. */
+	--code-comment: #7ca668;
+	--code-comment-doc: #7ca668;
 }

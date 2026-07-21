@@ -155,6 +155,31 @@ Fast gates (also the husky pre-commit): `bun run check:deps` (dependency pins) +
 `bun run typecheck`. Unit tests:
 `bun run test` (bun test, per package). One-time setup for a fresh machine: `bunx playwright install chromium`.
 
+## Handoff hygiene (before any commit, PR, or "done" summary)
+
+Green gates are necessary, not sufficient — they can't see duplication, suppressions, or leftovers.
+Before committing, opening/updating a PR, or declaring work done, re-read the full diff
+(`git diff origin/main...HEAD` + working tree) as a reviewer would, and enforce:
+
+- **No silent suppressions.** Never add `biome-ignore` / `@ts-expect-error` / `@ts-ignore` /
+  `eslint-disable` / `as any` to make a gate pass. A lint/type error is a design signal: first ask
+  whether the state, dependency, or structure it flags should exist at all — prefer deleting the cause
+  over guarding it. If a suppression still seems genuinely right, stop and get user sign-off first; an
+  unrequested suppression must never be discovered in review. Audit before handoff:
+  `git diff origin/main...HEAD -U0 | rg '^\+.*(biome-ignore|eslint-disable|@ts-ignore|@ts-expect-error|as any)'`
+  → must come back empty.
+- **No duplicated derivations.** The same nontrivial expression/lookup landing in 2+ places means
+  centralize it first. Web specifics: derived state belongs in store selectors
+  (`apps/web/src/store/selectors.ts`), components never inline multi-step derivations from store state;
+  store writes that always travel together are one atomic store action, not two calls at each call site.
+- **Refactor sweep.** When a change replaces a pattern or state model, `rg` the repo for the old
+  pattern and migrate every occurrence — or name the survivors and why in the handoff. Never leave call
+  sites half-migrated.
+- **End analyses with an offer.** When the user questions your recent work and your analysis concludes a
+  change is warranted, finish with the concrete change + "apply?" (or just apply it if it's within the
+  approved scope) — never with prose that makes the user say "do the cleanup then please".
+- **UI-visible changes:** offer before/after screenshots alongside the PR without being asked.
+
 ## Stack
 
 Bun + Turbo monorepo · TypeScript (strict) · React 19 + Zustand + Tailwind v4 (web) · in-process `pi`

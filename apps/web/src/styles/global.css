@@ -20,6 +20,9 @@ body {
 
 ::selection {
 	background: var(--selection-bg);
+	/* Optional per-theme selected-text color (high-contrast: black on yellow); `inherit` = today's
+	   behavior for the themes that don't set it. */
+	color: var(--selection-fg, inherit);
 }
 
 /*
@@ -46,6 +49,12 @@ body {
 [data-theme="gruvbox"] .shiki span {
 	/* biome-ignore lint/complexity/noImportantStyles: same inline-style override as the light rule above. */
 	color: var(--shiki-gruvbox) !important;
+}
+
+[data-theme="high-contrast"] .shiki,
+[data-theme="high-contrast"] .shiki span {
+	/* biome-ignore lint/complexity/noImportantStyles: same inline-style override as the light rule above. */
+	color: var(--shiki-high-contrast) !important;
 }
 
 a {

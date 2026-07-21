@@ -237,15 +237,17 @@ export interface GithubAuthStatus {
  * The selectable UI themes. A const-object "enum" (the codebase's `WS_METHODS`/`WS_CHANNELS` convention):
  * enum ergonomics (`Theme.Dark`) + a runtime-iterable value list (`THEME_IDS`, the picker source), while the
  * values stay plain strings so they cross JSON/the wire with no casts. `Dark` is the default ThinkRail dark;
- * `Light`, `Darcula` (classic IntelliJ surfaces, ThinkRail violet accent), and `Gruvbox` (the vim classic —
- * warm retro darks, orange accent) are the additions. A client that doesn't know a theme id falls back to
- * Dark's `:root` tokens, so adding a value here is wire-compatible.
+ * `Light`, `Darcula` (classic IntelliJ surfaces, ThinkRail violet accent), `Gruvbox` (the vim classic —
+ * warm retro darks, orange accent), and `HighContrast` (the classical VSCode hc-black — pure black, cyan
+ * contrast borders, orange focus accent) are the additions. A client that doesn't know a theme id falls back
+ * to Dark's `:root` tokens, so adding a value here is wire-compatible.
  */
 export const Theme = {
 	Dark: "dark",
 	Light: "light",
 	Darcula: "darcula",
 	Gruvbox: "gruvbox",
+	HighContrast: "high-contrast",
 } as const;
 export type ThemeId = (typeof Theme)[keyof typeof Theme];
 export const THEME_IDS: readonly ThemeId[] = Object.values(Theme);

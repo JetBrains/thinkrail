@@ -18,11 +18,15 @@ test("editor tabs are scoped to the active workspace", async ({ page }) => {
 	await expect(workspaces).toHaveCount(2);
 	await expect(workspaces.nth(1)).toHaveAttribute("data-active", "true");
 	await expect(tabs).toHaveCount(0);
-	await expect(page.getByTestId("center-tabs")).toContainText("Open a file or start a chat");
+	await expect(page.getByTestId("workspace-ready")).toContainText("workspace-2");
+	await expect(page.getByTestId("scope-name")).toHaveText("workspace-2");
+	await expect(page.getByTestId("scope-branch")).toHaveText("workspace-2");
 
 	// Switching back to workspace 1 restores its tab.
 	await workspaces.nth(0).getByRole("button").first().click();
 	await expect(workspaces.nth(0)).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("scope-name")).toHaveText("workspace-1");
+	await expect(page.getByTestId("scope-branch")).toHaveText("workspace-1");
 	await expect(tabs).toHaveCount(1);
 	await expect(tabs.filter({ hasText: "README.md" })).toBeVisible();
 });

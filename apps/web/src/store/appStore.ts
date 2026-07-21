@@ -410,12 +410,14 @@ interface AppState {
 	 * React to a server-pushed `workspace.removed` — the **entire** removal reaction, run identically by
 	 * every client (including the one that initiated the remove, so there's no per-client optimism): drop
 	 * the row + clear its tabs/terminals/chat runtimes (`clearWorkspaceTabs`), and **if it was this
-	 * client's active workspace** return to the project Welcome (`setActiveWorkspace(null)`) and raise a
-	 * neutral toast (reads correctly for both the initiator and an observer).
+	 * client's active workspace** return to its owning Project Home and raise a neutral toast (reads
+	 * correctly for both the initiator and an observer).
 	 */
 	applyWorkspaceRemoved: (projectId: string, workspaceId: string) => void;
+	/** Enter a project's home, atomically clearing any active workspace. */
 	selectProject: (projectId: string) => void;
-	setActiveWorkspace: (id: string | null) => void;
+	/** Enter a workspace and select its owning project in one state transition. */
+	activateWorkspace: (workspace: Pick<Workspace, "id" | "projectId">) => void;
 	openTab: (tab: EditorTab) => void;
 	closeTab: (id: string) => void;
 	setActiveTab: (id: string) => void;
@@ -639,12 +641,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 			return { fsChangesByWorkspace: rest };
 		});
 		if (wasActive) {
-			s.setActiveWorkspace(null); // the shell falls back to the project Welcome
+			s.selectProject(projectId); // atomically fall back to the removed workspace's Project Home
 			toast.info(`Workspace "${name ?? "?"}" was removed`);
 		}
 	},
-	selectProject: (selectedProjectId) => set({ selectedProjectId }),
-	setActiveWorkspace: (activeWorkspaceId) => set({ activeWorkspaceId }),
+	selectProject: (selectedProjectId) => set({ selectedProjectId, activeWorkspaceId: null }),
+	activateWorkspace: (workspace) =>
+		set({ selectedProjectId: workspace.projectId, activeWorkspaceId: workspace.id }),
 	openTab: (tab) =>
 		set((s) => {
 			const tabs = s.tabsByWorkspace[tab.workspaceId] ?? [];
