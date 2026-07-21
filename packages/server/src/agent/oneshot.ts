@@ -1,15 +1,12 @@
 /**
  * One-shot LLM completions — the primitive behind the ad-hoc "assist" tasks (workspace naming, PR
- * drafting). It runs a **single** `complete()` request on a cheap, already-authenticated model: no
- * `AgentSession`, no tools, no extensions, nothing written to disk. This mirrors how pi itself runs its
- * compaction summaries — pick a model from the shared runtime's authenticated set, resolve its auth
- * (OAuth refresh included), and dispatch one request.
- *
- * `complete` is imported from `@earendil-works/pi-ai/compat`, the api-dispatch entry pi's own model
- * plumbing uses. It's a compat surface pi will fold into its ModelManager migration — re-verify this
- * import on every pi bump (the `ModelRegistry` half we rely on for model + auth resolution is stable).
+ * drafting). It runs a **single** completion on a cheap, already-authenticated model: no
+ * `AgentSession`, no tools, no extensions, nothing written to disk. Dispatch goes through the shared
+ * `ModelRuntime.completeSimple()` — pi's canonical provider-agnostic request path (it also serves
+ * providers that only implement `streamSimple`, e.g. extension-registered ones), which resolves the
+ * model's auth itself (OAuth refresh included), so there is no separate auth-resolution step here.
  */
-import { type Api, type Context, complete, type Model } from "@earendil-works/pi-ai/compat";
+import type { Api, Context, Model } from "@earendil-works/pi-ai";
 import { getPiRuntime } from "./piRuntime";
 
 /** Which model a one-shot task reaches for. `cheap` = small/fast; `default` = first authenticated. */
@@ -58,8 +55,8 @@ const CHEAP_MODELS: ReadonlyArray<readonly [provider: string, idPrefix: string]>
  * For `default`: the first authenticated model. `null` when nothing is authenticated — the caller
  * degrades gracefully rather than erroring.
  */
-export function pickModel(tier: ModelTier = "cheap"): Model<Api> | null {
-	const available = getPiRuntime().modelRegistry.getAvailable();
+export async function pickModel(tier: ModelTier = "cheap"): Promise<Model<Api> | null> {
+	const available = await (await getPiRuntime()).getAvailable();
 	if (available.length === 0) return null;
 	if (tier === "default") return available[0] ?? null;
 	for (const [provider, prefix] of CHEAP_MODELS) {
@@ -80,21 +77,15 @@ export function pickModel(tier: ModelTier = "cheap"): Model<Api> | null {
  * assist tasks) wrap this and fall back.
  */
 export async function completeOnce(req: OneShotRequest): Promise<OneShotResult> {
-	const { modelRegistry } = getPiRuntime();
-	const model = pickModel(req.tier);
+	const runtime = await getPiRuntime();
+	const model = await pickModel(req.tier);
 	if (!model) throw new Error("no-model");
-
-	const auth = await modelRegistry.getApiKeyAndHeaders(model);
-	if (!auth.ok) throw new Error(auth.error);
 
 	const context: Context = {
 		...(req.system ? { systemPrompt: req.system } : {}),
 		messages: [{ role: "user", content: req.prompt, timestamp: Date.now() }],
 	};
-	const message = await complete(model, context, {
-		...(auth.apiKey ? { apiKey: auth.apiKey } : {}),
-		...(auth.headers ? { headers: auth.headers } : {}),
-		...(auth.env ? { env: auth.env } : {}),
+	const message = await runtime.completeSimple(model, context, {
 		maxTokens: req.maxTokens ?? 256,
 		temperature: req.temperature ?? 0.2,
 		...(req.signal ? { signal: req.signal } : {}),

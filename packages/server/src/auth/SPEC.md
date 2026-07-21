@@ -13,8 +13,8 @@ tags: [v1, auth, pi]
 
 Everything about **model-provider credentials**: the read side the Welcome strip renders
 (`provider.status`) and the write side that configures them from inside the app — OAuth sign-in, single
-API-key entry, and logout. All of it goes through pi's `AuthStorage` (on the shared runtime); we never
-parse `auth.json` / `models.json` ourselves and never surface a credential value over the wire.
+API-key entry, and logout. All of it goes through the shared `ModelRuntime` (pi's model/auth facade);
+we never parse `auth.json` / `models.json` ourselves and never surface a credential value over the wire.
 
 ## Boundary
 
@@ -22,43 +22,53 @@ parse `auth.json` / `models.json` ourselves and never surface a credential value
   - `providerStatus` — `getProviderStatus()` → the wire `ProviderStatusReport`: per-provider `configured`
     (pi's `hasAuth`-family truth, so env-var auth counts) + auth `kind` (oauth / api-key / env /
     **central** / other) + display name + the in-app-login capability flags **`canOAuth`/`canApiKey`**,
-    configured-first. It **revalidates on every read** (`authStorage.reload()` + `modelRegistry.refresh()`)
-    so a `pi` `/login` (or a terminal `central` re-wire) — or an in-app mutation below — shows up
-    on the next read without a host restart (accepted micro-risk: refreshing the shared registry concurrent
-    with a streaming session — same as pi's TUI on `/login`). jbcentral wiring is detected from the
-    registry's **effective** model `baseUrl`s via `shared/jbcentral`'s `isJbcentralProxyUrl` — never a
-    separate `models.json` read. Assembly is a pure `buildProviderReport(sources)` over a narrow sources
-    slice, unit-tested with fixture data.
-    - **OAuth provider ids are first-class rows.** The id universe unions model-registry providers,
-      stored-credential providers, **and** `authStorage.getOAuthProviders()` ids — because an OAuth id can
-      differ from any model-provider id (`openai-codex` ≠ `openai`; `github-copilot` has no model row until
-      authed). `canOAuth` = the row id is an OAuth provider (so `provider.loginStart(row.id)` uses the
-      credential id pi will actually store under). `canApiKey` = the row is a **single-key** model provider,
-      minus `MULTI_FIELD_PROVIDERS` (`amazon-bedrock`/`google-vertex`/`azure-openai-responses` — AWS/GCP/
-      Azure creds aren't one string) and `OAUTH_ONLY_PROVIDERS` (`github-copilot`). These two small sets
-      re-derive pi's private `isApiKeyLoginProvider` predicate, which isn't a package export (deep TUI
-      import only) — **drift note:** re-check them on pi bumps against pi's provider-display-names map.
-      `canLogout` = the id has a stored **auth.json** credential (`credentialProviders`) — the only auth the
-      host can remove; env / central (models.json) / models.json-keyed auth report `false` (Sign-out would
-      no-op, so the strip hides it).
+    configured-first. It **revalidates on every read** (`runtime.reloadConfig()` — reload models.json,
+    recompose providers, refresh availability; auth.json itself is read live under a lock by pi's file
+    credential store, so no separate credentials reload exists or is needed) so a `pi` `/login` (or a
+    terminal `central` re-wire) — or an in-app mutation below — shows up on the next read without a host
+    restart (accepted micro-risk: refreshing the shared runtime concurrent with a streaming session —
+    same as pi's TUI on `/login`). jbcentral wiring is detected from the runtime's **effective** model
+    `baseUrl`s via `shared/jbcentral`'s `isJbcentralProxyUrl` — never a separate `models.json` read.
+    Assembly is a pure `buildProviderReport(sources)` over a narrow sources slice, unit-tested with
+    fixture data.
+    - **OAuth-capable ids are first-class rows.** The id universe unions model-catalog providers,
+      stored-credential providers (`listCredentials()`), **and** providers whose `Provider.auth.oauth`
+      is present — an OAuth id can differ from any model-provider id (`openai-codex` ≠ `openai`), and a
+      stored credential can outlive its models. `canOAuth` = the row's provider carries OAuth auth (so
+      `provider.loginStart(row.id)` uses the credential id pi will actually store under); its row name
+      prefers `auth.oauth.name` (more specific for oauth-only rows). `canApiKey` = the row is a model
+      provider **whose `Provider.auth.apiKey.login` exists** (pi's public api-key-login truth —
+      `openai-codex` has model rows but no key auth), minus `MULTI_FIELD_PROVIDERS`
+      (`amazon-bedrock`/`google-vertex`/`azure-openai-responses`) and `OAUTH_ONLY_PROVIDERS`
+      (`github-copilot`): pi *can* drive those interactively (possibly multi-prompt), but our inline
+      field posts exactly **one** string — the sets stay until the strip drives api-key setup through
+      the interactive login channel (tracked as a follow-up issue). `canLogout` = the id has a stored
+      **auth.json** credential (`credentialProviders`) — the only auth the host can remove; env / central
+      (models.json) / models.json-keyed auth report `false` (Sign-out would no-op, so the strip hides it).
   - `providerLogin` — the in-app credential **writes**, session-less (a login runs on the Welcome screen
     before any session exists), so a `loginId`-keyed sibling of `agent/webUiContext`:
-    - `startLogin(providerId)` → `{ loginId }` **synchronously**; pi's `authStorage.login()` runs
-      **detached** (an OAuth flow can take minutes — awaiting it would blow the client request timeout and
-      block the WS pump). pi's login callbacks are wired to `LoginFrame` pushes on the `provider.login`
-      channel: `onAuth`→`authUrl`, `onDeviceCode`→`deviceCode`, `onProgress`→`progress`,
-      `onSelect`/`onPrompt`/`onManualCodeInput`→a parked `select`/`prompt` frame awaiting a reply. On
-      success it **refreshes the registry** (pi's `login()` writes auth.json but doesn't touch the registry —
-      skip this and the provider is authed-but-invisible) then pushes `success`; on throw, `error`.
-    - `resolveLogin({ loginId, value })` — the browser's reply resolves the parked callback.
+    - `startLogin(providerId)` → `{ loginId }` **synchronously**; `runtime.login(id, "oauth",
+      interaction)` runs **detached** (an OAuth flow can take minutes — awaiting it would blow the client
+      request timeout and block the WS pump). pi's `AuthInteraction` is wired to `LoginFrame` pushes on
+      the `provider.login` channel: `notify` `auth_url`→`authUrl`, `device_code`→`deviceCode`,
+      `progress`/`info`→`progress` (info links appended as plain URLs); `prompt`
+      `select`→a parked `select` frame, `text`/`secret`/`manual_code`→a parked `prompt` frame awaiting a
+      reply. A prompt's own `signal` abort (pi cancelling the loser of its browser-vs-paste race) settles
+      the parked input — identity-guarded so a late abort can't clear a newer parked prompt. pi persists
+      the credential **and refreshes availability inside `login()`**, so success just pushes `success`;
+      on throw, `error`.
+    - `resolveLogin({ loginId, value })` — the browser's reply resolves the parked interaction.
     - `cancelLogin(loginId)` — aborts the signal **and** settles the parked input with `undefined` (which
-      throws inside `onPrompt`/`onManualCodeInput`), because the signal alone won't stop a provider's
+      makes the awaiting `prompt` throw), because the signal alone won't stop a provider's
       browser/callback-server wait; `cancelAllLogins()` sweeps them on host `stop()`.
-    - `setProviderApiKey(id, key)` / `logoutProvider(id)` — `authStorage.set`/`logout` + a registry refresh.
+    - `setProviderApiKey(id, key)` — persists via `runtime.login(id, "api_key", <canned interaction>)`
+      answering the provider's single secret prompt with the key (`setRuntimeApiKey` is a
+      **non-persistent** overlay — never use it for this); only offered for single-key providers (see
+      `canApiKey`). `logoutProvider(id)` — `runtime.logout` (refreshes internally).
     - `setLoginPublisher(fn)` — the server→client push seam (defaults to a no-op).
   - `jbcentral` — the in-app **JetBrains AI** (jbcentral proxy) wiring, composing `@thinkrail/shared/jbcentral`
     (which owns the protocol) and adding the one live-runtime step the standalone CLI can't:
-    `connectJbcentral()` (`wireJbcentral` → on success `modelRegistry.refresh()` → a `JbcentralConnectResult`:
+    `connectJbcentral()` (`wireJbcentral` → on success `runtime.reloadConfig()` → a `JbcentralConnectResult`:
     connected / needs-install / needs-login / error), `disconnectJbcentral()` (`unwireJbcentral` + refresh),
     `jbcentralLogin()` (best-effort `central login` browser launch). `providerStatus` also surfaces
     `jbcentralInstalled` (via `isJbcentralInstalled`) **and `jbcentralInstall`** (the host's per-OS install
@@ -68,8 +78,7 @@ parse `auth.json` / `models.json` ourselves and never surface a credential value
   `startLogin`, `resolveLogin`, `cancelLogin`, `cancelAllLogins`, `setProviderApiKey`, `logoutProvider`,
   `setLoginPublisher`; `connectJbcentral`, `disconnectJbcentral`, `jbcentralLogin`.
 - **Allowed deps:** `contracts` (wire types); `shared/jbcentral`; the **`agent` barrel** for
-  `getPiRuntime()` (the shared `AuthStorage` + `ModelRegistry`); `@earendil-works/pi-ai/compat` (login
-  callback **types** only).
+  `getPiRuntime()` (the shared `ModelRuntime`); `@earendil-works/pi-ai` (auth interaction **types** only).
 - **Forbidden:** reaching into `agent` internals (only `getPiRuntime` via its barrel); importing `host` or
   any other sibling; deep-importing pi's TUI (`modes/interactive/*`) for its private provider constants;
   ever putting a credential **value** on the wire.
@@ -77,7 +86,11 @@ parse `auth.json` / `models.json` ourselves and never surface a credential value
 ## Get right
 
 - **`loginStart` must not `await` the flow** — return the handle, run `login()` detached.
-- **Refresh the registry after every write** (login success / setApiKey / logout) or the change is invisible.
+- **Writes refresh themselves** (pi's `login`/`logout` refresh availability internally) — but the status
+  read still `reloadConfig()`s, or external changes (a terminal `pi /login`, a `central` re-wire) stay
+  invisible until restart.
+- **API keys persist only through `login(id, "api_key")`** — `setRuntimeApiKey` is a session-lifetime
+  overlay and would silently drop the key on host restart.
 - **Cancel settles the parked promise**, not just `abort()`.
 - Frames **accumulate** client-side (the `authUrl` + paste-`prompt` race), so a terminal `success`/`error`
   is what closes a flow — `terminate()` guarantees exactly one terminal outcome per `loginId`.

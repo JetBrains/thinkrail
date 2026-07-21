@@ -1,4 +1,4 @@
-import { StringEnum } from "@earendil-works/pi-ai/compat";
+import { StringEnum } from "@earendil-works/pi-ai";
 import { type Static, Type } from "typebox";
 
 /** One alternative in a `comparison` visualization. */

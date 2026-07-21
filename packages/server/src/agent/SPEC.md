@@ -11,7 +11,7 @@ tags: [v1, pi]
 
 ## Responsibility
 
-The in-process `pi` engine: a shared runtime (auth + model registry), the lifecycle of `AgentSession`s
+The in-process `pi` engine: a shared model/auth runtime, the lifecycle of `AgentSession`s
 (one per chat tab, rooted in a workspace's worktree), the **extension-UI bridge** that turns pi's
 in-process `uiContext` dialog calls into WS frames, the host-owned **`ask_user_question`** tool + its
 answer-injection path, and the **restart repair** that keeps re-opened transcripts provider-valid.
@@ -19,8 +19,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
 ## Boundary
 
 - **Owns:**
-  - `piRuntime` (one shared `AuthStorage` + `ModelRegistry`; `getPiRuntime()` lazy,
-    `configurePiRuntime()` for tests). The **provider-credential surface** over this runtime —
+  - `piRuntime` (one shared `ModelRuntime` — pi's canonical model/auth facade since 0.80.8: catalogs,
+    credentials, availability, login/logout, and request dispatch; `getPiRuntime()` is a lazily-memoized
+    **promise** (`ModelRuntime.create()` is async; a failed create clears the memo so the next call
+    retries), `configurePiRuntime()` for tests). The **provider-credential surface** over this runtime —
     `provider.status` + in-app login — lives in the sibling `auth` module (which consumes `getPiRuntime`),
     **not** here.
   - `agentSessionManager` — sessions keyed by `session.sessionId` (each `Entry` also tracks its
@@ -65,13 +67,13 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     distinct cwds; `cwd` omitted on a double-archive skips only the disk purge);
     `setSessionPublisher` + `setSessionManagerFactory` seams.
   - `oneshot` — one-shot LLM completions **without** an `AgentSession` (no tools/extensions/disk):
-    `completeOnce(request)` picks a model from the shared runtime's authenticated set, resolves its auth
-    (OAuth refresh included) via `modelRegistry.getApiKeyAndHeaders`, and dispatches a single `complete()`
-    (from `@earendil-works/pi-ai/compat` — the api-dispatch entry; re-verify on pi bumps, it's a compat
-    surface). `pickModel(tier)` = the model choice: `cheap` prefers a curated small/fast allowlist ∩ the
-    authenticated set, else the cheapest by per-token cost; `default` = first available; `null` when
-    nothing is authenticated. This is the primitive the `assist` tasks (workspace naming, PR drafting)
-    run on — the only place model **dispatch** happens outside a session.
+    `completeOnce(request)` picks a model from the shared runtime's authenticated set and dispatches a
+    single `runtime.completeSimple()` — pi's canonical provider-agnostic request path, which resolves
+    the model's auth itself (OAuth refresh included) and also serves providers that only implement
+    `streamSimple` (extension-registered ones). `pickModel(tier)` = the model choice: `cheap` prefers a
+    curated small/fast allowlist ∩ the authenticated set, else the cheapest by per-token cost; `default`
+    = first available; `null` when nothing is authenticated. This is the primitive the `assist` tasks
+    (workspace naming, PR drafting) run on — the only place model **dispatch** happens outside a session.
   - `webUiContext` — `createWebUiContext(sessionId)` builds the `ExtensionUIContext` pi calls (dialogs
     round-trip to the browser, fire-and-forget methods push, TUI-only members inert); `setExtUiPublisher`
     (server→client push seam), `resolveExtUi` (browser reply), `cancelExtUiForSession` (on dispose),
@@ -142,8 +144,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   helpers (`validateQuestionnaire`/`buildQuestionnaireResponse`/`assessAnswerability`/
   `buildAnswersMessage`); `repairDanglingToolCalls`; the compiled-binary extension seam
   (`setBundledExtensions` + `BundledExtensions`/`BundledExtensionFactory`).
-- **Allowed deps:** `@earendil-works/pi-coding-agent` (runtime); `@earendil-works/pi-ai` (runtime — the
-  `complete()` dispatch used by `oneshot`); `pi-web-access` + `pi-visualize` + `pi-spec-graph` +
+- **Allowed deps:** `@earendil-works/pi-coding-agent` (runtime); `@earendil-works/pi-ai` (types + test
+  fixtures — dispatch goes through the shared `ModelRuntime`); `pi-web-access` + `pi-visualize` + `pi-spec-graph` +
   `pi-thinkrail-workflow` (the bundled extensions — loaded by path, never value-imported here; the
   compiled binary's value-imports live in `apps/cli`'s generated build module); `typebox` (the
   `ask_user_question` parameter schema);
@@ -162,7 +164,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   derivable from the transcript alone (that's what makes restarts free); reply validity is
   `assessAnswerability`'s verdict, computed from `session.messages`, and rejections fail the WS request
   loud.
-- Share one `authStorage`/`modelRegistry`; give each session its own `SessionManager`; `dispose()` on removal.
+- Share one `ModelRuntime` (each session gets it as `createAgentSession`'s `modelRuntime`); give each
+  session its own `SessionManager`; `dispose()` on removal.
 - **A `pi` `Model` must never cross the wire raw** — its `baseUrl` carries the jbcentral proxy secret (and
   `headers` can carry auth). Every model-bearing frame (`model.list`/`model.default`, the `session.create`
   result, `SessionSummary.model`) goes through `toWireModel`; every inbound model ref (`session.create` /

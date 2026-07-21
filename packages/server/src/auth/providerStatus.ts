@@ -12,10 +12,12 @@ import {
 import { getPiRuntime } from "../agent";
 
 /**
- * Providers whose api key isn't a single string (AWS creds, GCP service account, Azure resource + key) —
- * `provider.setApiKey` can't configure them, so the strip offers no inline key field. (`amazon-bedrock`
- * *is* in pi's api-key display map, so pi's own `isApiKeyLoginProvider` returns true for it, but the TUI
- * special-cases it with a multi-field dialog — we exclude it rather than mis-handle a single key.)
+ * Providers whose api-key setup isn't a single string (AWS creds, GCP service account, Azure resource +
+ * key) — `provider.setApiKey` posts one string, so the strip offers no inline key field for them. Since
+ * pi 0.80.8 the provider-owned truth is public (`Provider.auth.apiKey.login` drives an interactive,
+ * possibly multi-prompt flow — and `amazon-bedrock` now accepts a single API key that way); these sets
+ * stay until the strip adopts that flow (tracked as a follow-up issue) because the inline field can only
+ * answer a single secret prompt.
  */
 const MULTI_FIELD_PROVIDERS = new Set([
 	"amazon-bedrock",
@@ -23,7 +25,7 @@ const MULTI_FIELD_PROVIDERS = new Set([
 	"azure-openai-responses",
 ]);
 
-/** OAuth-only providers (not in pi's api-key display map) — a raw api key is never the right entry for them. */
+/** OAuth-only providers (`Provider.auth` has no api-key login) — a raw api key is never the right entry. */
 const OAUTH_ONLY_PROVIDERS = new Set(["github-copilot"]);
 
 /**
@@ -35,18 +37,21 @@ export interface ProviderStatusSources {
 	modelProviders: Map<string, string[]>;
 	/** Providers with ≥1 model whose auth resolves (the registry's `getAvailable()` truth). */
 	availableProviders: Set<string>;
-	/** Providers holding credentials in auth.json (`authStorage.list()`), even model-less ones. */
+	/** Providers holding credentials in auth.json (`listCredentials()`), even model-less ones. */
 	credentialProviders: string[];
 	/**
-	 * Registered OAuth providers (`authStorage.getOAuthProviders()`) — `id` is the login handle passed to
-	 * `provider.loginStart` (note: `openai-codex`/`github-copilot` ≠ their model-registry provider ids), and
-	 * `name` is a more specific label than the registry's for oauth-only rows.
+	 * OAuth-capable providers (`Provider.auth.oauth` present) — `id` is the login handle passed to
+	 * `provider.loginStart` (note: `openai-codex`/`github-copilot` ≠ their model-catalog provider ids), and
+	 * `name` is the OAuth method's own label, more specific than the provider's for oauth-only rows.
 	 */
 	oauthProviders: { id: string; name: string }[];
 	/** auth.json credential kind, when stored there. */
 	credentialType: (id: string) => "oauth" | "api_key" | undefined;
 	/** pi's provider auth status — `source`/`label` only; `configured` here is auth.json-centric. */
 	providerAuth: (id: string) => { source?: string; label?: string };
+	/** Whether pi's provider supports interactive api-key setup (`Provider.auth.apiKey.login` present) —
+	 * OAuth-only providers (e.g. `openai-codex`) report `false` even though they have model rows. */
+	apiKeyLogin: (id: string) => boolean;
 	displayName: (id: string) => string;
 	/** Any auth form at all (stored / runtime / env) — the fallback truth for model-less providers. */
 	hasAuth: (id: string) => boolean;
@@ -96,7 +101,7 @@ export function buildProviderReport(sources: ProviderStatusSources): ProviderSta
 	const oauthIds = new Set(sources.oauthProviders.map((p) => p.id));
 	const oauthName = new Map(sources.oauthProviders.map((p) => [p.id, p.name]));
 	// Only providers with a stored auth.json credential are removable in-app; env / central (models.json) /
-	// models.json-keyed auth can't be unset by `authStorage.logout`, so Sign-out is hidden for them.
+	// models.json-keyed auth can't be unset by the runtime's `logout`, so Sign-out is hidden for them.
 	const removable = new Set(sources.credentialProviders);
 	// Every loginable thing is a row: model providers + stored credentials + OAuth providers (so the
 	// oauth-only ids `openai-codex`/`github-copilot` show a Sign-in row even with no models registered).
@@ -116,8 +121,11 @@ export function buildProviderReport(sources: ProviderStatusSources): ProviderSta
 		const registryName = sources.displayName(id);
 		const name = registryName === id ? (oauthName.get(id) ?? registryName) : registryName;
 		const canOAuth = oauthIds.has(id);
+		// The inline key field: the provider must have models, pi must support api-key login for it, and it
+		// must not be excluded as multi-field / oauth-only (see the sets above — the field posts ONE string).
 		const canApiKey =
 			sources.modelProviders.has(id) &&
+			sources.apiKeyLogin(id) &&
 			!MULTI_FIELD_PROVIDERS.has(id) &&
 			!OAUTH_ONLY_PROVIDERS.has(id);
 		const login = {
@@ -156,32 +164,39 @@ export function buildProviderReport(sources: ProviderStatusSources): ProviderSta
 }
 
 /**
- * The `provider.status` read. **Revalidates on every call** — `authStorage.reload()` +
- * `modelRegistry.refresh()` (pi's own reload APIs) — so a `pi` `/login` (or a terminal `central` re-wire)
- * shows up on the next read without restarting the host. (Accepted micro-risk: refreshing the
- * shared registry concurrent with a streaming session — the same thing pi's TUI does on `/login`.)
+ * The `provider.status` read. **Revalidates on every call** — `runtime.reloadConfig()` (reload
+ * models.json, recompose providers, refresh availability; auth.json is read live by pi's credential
+ * store) — so a `pi` `/login` (or a terminal `central` re-wire) shows up on the next read without
+ * restarting the host. (Accepted micro-risk: refreshing the shared runtime concurrent with a streaming
+ * session — the same thing pi's TUI does on `/login`.)
  */
-export function getProviderStatus(): ProviderStatusReport {
-	const { authStorage, modelRegistry } = getPiRuntime();
-	authStorage.reload();
-	modelRegistry.refresh();
+export async function getProviderStatus(): Promise<ProviderStatusReport> {
+	const runtime = await getPiRuntime();
+	await runtime.reloadConfig();
 
 	const modelProviders = new Map<string, string[]>();
-	for (const model of modelRegistry.getAll()) {
+	for (const model of runtime.getModels()) {
 		const urls = modelProviders.get(model.provider) ?? [];
 		urls.push(model.baseUrl);
 		modelProviders.set(model.provider, urls);
 	}
+	const available = await runtime.getAvailable();
+	const credentials = await runtime.listCredentials();
+	const credentialTypes = new Map(credentials.map((c) => [c.providerId, c.type]));
 
 	return buildProviderReport({
 		modelProviders,
-		availableProviders: new Set(modelRegistry.getAvailable().map((m) => m.provider)),
-		credentialProviders: authStorage.list(),
-		oauthProviders: authStorage.getOAuthProviders().map((p) => ({ id: p.id, name: p.name })),
-		credentialType: (id) => authStorage.get(id)?.type,
-		providerAuth: (id) => modelRegistry.getProviderAuthStatus(id),
-		displayName: (id) => modelRegistry.getProviderDisplayName(id),
-		hasAuth: (id) => authStorage.hasAuth(id),
+		availableProviders: new Set(available.map((m) => m.provider)),
+		credentialProviders: credentials.map((c) => c.providerId),
+		oauthProviders: runtime
+			.getProviders()
+			.filter((p) => p.auth.oauth)
+			.map((p) => ({ id: p.id, name: p.auth.oauth?.name ?? p.name })),
+		credentialType: (id) => credentialTypes.get(id),
+		providerAuth: (id) => runtime.getProviderAuthStatus(id),
+		apiKeyLogin: (id) => Boolean(runtime.getProvider(id)?.auth.apiKey?.login),
+		displayName: (id) => runtime.getProvider(id)?.name ?? id,
+		hasAuth: (id) => runtime.getProviderAuthStatus(id).configured,
 		jbcentralInstalled: isJbcentralInstalled(),
 		jbcentralInstall: jbcentralInstall(process.platform),
 	});

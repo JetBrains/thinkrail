@@ -18,6 +18,7 @@ function sources(overrides: Partial<ProviderStatusSources> = {}): ProviderStatus
 		oauthProviders: [],
 		credentialType: () => undefined,
 		providerAuth: () => ({}),
+		apiKeyLogin: () => true,
 		displayName: (id) => id,
 		hasAuth: () => false,
 		jbcentralInstalled: false,
@@ -210,6 +211,22 @@ describe("in-app login capability flags", () => {
 			"google-vertex": false,
 			"azure-openai-responses": false,
 			openai: true,
+		});
+	});
+
+	test("canApiKey requires pi's api-key login support (openai-codex has model rows but no key auth)", () => {
+		const report = buildProviderReport(
+			sources({
+				modelProviders: new Map([["openai-codex", ["https://chatgpt.com/backend-api/codex"]]]),
+				oauthProviders: [{ id: "openai-codex", name: "OpenAI Codex" }],
+				apiKeyLogin: () => false, // pi's openai-codex provider is OAuth-only
+			}),
+		);
+		expect(report.providers[0]).toEqual({
+			id: "openai-codex",
+			name: "OpenAI Codex",
+			configured: false,
+			canOAuth: true,
 		});
 	});
 

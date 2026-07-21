@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import type { OAuthLoginCallbacks } from "@earendil-works/pi-ai/compat";
-import type { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
+import type { AuthInteraction, AuthType } from "@earendil-works/pi-ai";
+import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import type { LoginPush } from "@thinkrail/contracts";
 import { configurePiRuntime } from "../agent";
 import {
@@ -16,70 +16,67 @@ import {
 /** Let queued microtasks/timers run so a detached `login()` continuation settles before we assert. */
 const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 
-type LoginImpl = (providerId: string, callbacks: OAuthLoginCallbacks) => Promise<void>;
+type LoginImpl = (providerId: string, interaction: AuthInteraction) => Promise<unknown>;
 
 interface Harness {
 	frames: LoginPush[];
-	refreshCount: () => number;
-	setCalls: () => [string, unknown][];
+	/** Every `runtime.login` call as `[providerId, type]`. */
+	loginCalls: () => [string, AuthType][];
 	logoutCalls: () => string[];
 	lastSignal: () => AbortSignal | undefined;
+	lastInteraction: () => AuthInteraction | undefined;
 }
 
-/** Install a fake pi runtime whose `authStorage.login` is `loginImpl`, and capture pushed frames + calls. */
+/** Install a fake pi runtime whose `login` is `loginImpl`, and capture pushed frames + calls. */
 function install(loginImpl: LoginImpl): Harness {
 	const frames: LoginPush[] = [];
 	setLoginPublisher((push) => frames.push(push));
 
-	let refresh = 0;
-	const set: [string, unknown][] = [];
+	const logins: [string, AuthType][] = [];
 	const logout: string[] = [];
 	let signal: AbortSignal | undefined;
+	let interaction: AuthInteraction | undefined;
 
-	const authStorage = {
-		login: (providerId: string, callbacks: OAuthLoginCallbacks) => {
-			signal = callbacks.signal;
-			return loginImpl(providerId, callbacks);
+	const runtime = {
+		login: (providerId: string, type: AuthType, i: AuthInteraction) => {
+			logins.push([providerId, type]);
+			signal = i.signal;
+			interaction = i;
+			return loginImpl(providerId, i);
 		},
-		set: (id: string, cred: unknown) => set.push([id, cred]),
-		logout: (id: string) => logout.push(id),
-	} as unknown as AuthStorage;
-	const modelRegistry = {
-		refresh: () => {
-			refresh++;
+		logout: async (id: string) => {
+			logout.push(id);
 		},
-	} as unknown as ModelRegistry;
+	} as unknown as ModelRuntime;
 
-	configurePiRuntime({ authStorage, modelRegistry });
+	configurePiRuntime(runtime);
 	return {
 		frames,
-		refreshCount: () => refresh,
-		setCalls: () => set,
+		loginCalls: () => logins,
 		logoutCalls: () => logout,
 		lastSignal: () => signal,
+		lastInteraction: () => interaction,
 	};
 }
 
 afterEach(() => {
 	cancelAllLogins();
 	setLoginPublisher(() => {});
-	configurePiRuntime(
-		undefined as unknown as { authStorage: AuthStorage; modelRegistry: ModelRegistry },
-	);
+	configurePiRuntime(null);
 });
 
 describe("startLogin", () => {
 	test("returns a handle synchronously (the flow runs detached, never awaited)", () => {
 		// A login() that never settles must not block startLogin from returning its loginId.
-		const { frames } = install(() => new Promise<void>(() => {}));
+		const { frames } = install(() => new Promise(() => {}));
 		const { loginId } = startLogin("anthropic");
 		expect(loginId).toMatch(/^login_\d+$/);
 		expect(frames).toEqual([]); // nothing pushed yet — the flow hasn't produced a frame
 	});
 
-	test("device-code flow: pushes deviceCode, refreshes the registry, then success", async () => {
-		const h = install(async (_id, cb) => {
-			cb.onDeviceCode({ userCode: "WDJB-MJHT", verificationUri: "https://x/device" });
+	test("device-code flow: pushes deviceCode, then success (as an oauth login)", async () => {
+		const h = install(async (_id, i) => {
+			i.notify({ type: "device_code", userCode: "WDJB-MJHT", verificationUri: "https://x/device" });
 		});
 		const { loginId } = startLogin("github-copilot");
 		await tick();
@@ -93,14 +90,15 @@ describe("startLogin", () => {
 				verificationUri: "https://x/device",
 			},
 		});
-		expect(h.refreshCount()).toBe(1); // refresh happens before the success frame
+		expect(h.loginCalls()).toEqual([["github-copilot", "oauth"]]);
 	});
 
-	test("progress frames stream through, then the terminal success frame", async () => {
-		const h = install(async (_id, cb) => {
-			cb.onProgress?.("Polling device…");
-			cb.onDeviceCode({ userCode: "WDJB-MJHT", verificationUri: "https://x/device" });
-			cb.onProgress?.("Authorizing…");
+	test("progress + info notifications stream through, then the terminal success frame", async () => {
+		const h = install(async (_id, i) => {
+			i.notify({ type: "progress", message: "Polling device…" });
+			i.notify({ type: "device_code", userCode: "WDJB-MJHT", verificationUri: "https://x/device" });
+			// `info` (possibly with links) renders as progress — links appended as plain URLs.
+			i.notify({ type: "info", message: "See the docs", links: [{ url: "https://docs.example" }] });
 		});
 		startLogin("github-copilot");
 		await tick();
@@ -111,12 +109,17 @@ describe("startLogin", () => {
 			"success",
 		]);
 		expect(h.frames[0]?.frame).toEqual({ kind: "progress", message: "Polling device…" });
+		expect(h.frames[2]?.frame).toEqual({
+			kind: "progress",
+			message: "See the docs https://docs.example",
+		});
 	});
 
 	test("select round-trip: a parked frame is answered by loginReply, then the flow completes", async () => {
 		let chosen: string | undefined;
-		const h = install(async (_id, cb) => {
-			chosen = await cb.onSelect({
+		const h = install(async (_id, i) => {
+			chosen = await i.prompt({
+				type: "select",
 				message: "How do you want to sign in?",
 				options: [
 					{ id: "max", label: "Claude Pro/Max" },
@@ -140,13 +143,13 @@ describe("startLogin", () => {
 		expect(h.frames.at(-1)?.frame.kind).toBe("success");
 	});
 
-	test("prompt forwards allowEmpty and returns a blank reply to pi (Copilot github.com path)", async () => {
+	test('an empty prompt reply reaches pi as "" — not swallowed as a cancel (Copilot github.com path)', async () => {
 		let answered: string | undefined;
-		const h = install(async (_id, cb) => {
-			answered = await cb.onPrompt({
+		const h = install(async (_id, i) => {
+			answered = await i.prompt({
+				type: "text",
 				message: "GitHub Enterprise URL/domain (blank for github.com)",
 				placeholder: "company.ghe.com",
-				allowEmpty: true,
 			});
 		});
 		const { loginId } = startLogin("github-copilot");
@@ -155,21 +158,19 @@ describe("startLogin", () => {
 			kind: "prompt",
 			message: "GitHub Enterprise URL/domain (blank for github.com)",
 			placeholder: "company.ghe.com",
-			allowEmpty: true,
 		});
-		// The empty (github.com) reply must reach pi as "" — not be swallowed as a cancel.
 		resolveLogin({ loginId, value: "" });
 		await tick();
 		expect(answered).toBe("");
 		expect(h.frames.at(-1)?.frame.kind).toBe("success");
 	});
 
-	test("authUrl + concurrent paste: onAuth shows the URL while onManualCodeInput awaits a paste", async () => {
+	test("authUrl + concurrent paste: notify shows the URL while a manual_code prompt awaits a paste", async () => {
 		let pasted: string | undefined;
-		const h = install(async (_id, cb) => {
-			cb.onAuth({ url: "https://provider/authorize?x=1" });
+		const h = install(async (_id, i) => {
+			i.notify({ type: "auth_url", url: "https://provider/authorize?x=1" });
 			// The browser-vs-paste race: in this test the paste wins.
-			pasted = await cb.onManualCodeInput?.();
+			pasted = await i.prompt({ type: "manual_code", message: "Paste the authorization code" });
 		});
 		const { loginId } = startLogin("openai-codex");
 		await tick();
@@ -182,6 +183,26 @@ describe("startLogin", () => {
 		await tick();
 		expect(pasted).toBe("the-code");
 		expect(h.frames.at(-1)?.frame.kind).toBe("success");
+	});
+
+	test("pi aborting a prompt's signal (race lost) settles the parked input; a late reply is a no-op", async () => {
+		const promptAbort = new AbortController();
+		const h = install(async (_id, i) => {
+			// The manual-code prompt loses to the callback server: pi aborts the prompt's own signal and
+			// resolves the flow itself. Our parked input must settle (throw) without failing the login.
+			await i
+				.prompt({ type: "manual_code", message: "Paste code", signal: promptAbort.signal })
+				.catch(() => "callback-won");
+		});
+		const { loginId } = startLogin("anthropic");
+		await tick();
+		expect(h.frames.map((f) => f.frame.kind)).toEqual(["prompt"]);
+		promptAbort.abort();
+		await tick();
+		expect(h.frames.map((f) => f.frame.kind)).toEqual(["prompt", "success"]);
+		resolveLogin({ loginId, value: "late" }); // parked input is gone — must not throw or resurrect
+		await tick();
+		expect(h.frames.map((f) => f.frame.kind)).toEqual(["prompt", "success"]);
 	});
 
 	test("error path: a rejected login() pushes an error frame with the message", async () => {
@@ -197,15 +218,14 @@ describe("startLogin", () => {
 				frame: { kind: "error", message: "provider said no" },
 			},
 		]);
-		expect(h.refreshCount()).toBe(0); // no refresh on failure
 	});
 });
 
 describe("cancelLogin", () => {
 	test("aborts the signal AND rejects the parked prompt — and pushes no stray terminal frame", async () => {
-		const h = install(async (_id, cb) => {
-			// Parks forever unless the parked prompt is settled by cancel (which makes onPrompt throw).
-			await cb.onPrompt({ message: "Paste code" });
+		const h = install(async (_id, i) => {
+			// Parks forever unless the parked prompt is settled by cancel (which makes prompt() throw).
+			await i.prompt({ type: "text", message: "Paste code" });
 		});
 		const { loginId } = startLogin("anthropic");
 		await tick();
@@ -219,26 +239,24 @@ describe("cancelLogin", () => {
 		expect(h.lastSignal()?.aborted).toBe(true);
 	});
 
-	test("a callback firing after cancel pushes no stray frame (push guards on settled)", async () => {
-		let captured: OAuthLoginCallbacks | undefined;
-		const h = install(async (_id, cb) => {
-			captured = cb;
-			await cb.onPrompt({ message: "code" });
+	test("an interaction firing after cancel pushes no stray frame (push guards on settled)", async () => {
+		const h = install(async (_id, i) => {
+			await i.prompt({ type: "text", message: "code" });
 		});
 		const { loginId } = startLogin("anthropic");
 		await tick();
 		cancelLogin(loginId);
 		await tick();
-		// pi's detached flow may invoke a callback after we've cancelled — the guard must swallow it.
-		captured?.onProgress?.("late progress");
-		captured?.onAuth({ url: "https://late" });
+		// pi's detached flow may notify after we've cancelled — the guard must swallow it.
+		h.lastInteraction()?.notify({ type: "progress", message: "late progress" });
+		h.lastInteraction()?.notify({ type: "auth_url", url: "https://late" });
 		await tick();
 		expect(h.frames.map((f) => f.frame.kind)).toEqual(["prompt"]);
 	});
 
 	test("a reply after cancel is a no-op (the login is gone)", async () => {
-		const h = install(async (_id, cb) => {
-			await cb.onPrompt({ message: "code" });
+		const h = install(async (_id, i) => {
+			await i.prompt({ type: "text", message: "code" });
 		});
 		const { loginId } = startLogin("anthropic");
 		await tick();
@@ -250,9 +268,9 @@ describe("cancelLogin", () => {
 
 	test("cancelAllLogins settles every in-flight login", async () => {
 		const signals: (AbortSignal | undefined)[] = [];
-		install(async (_id, cb) => {
-			signals.push(cb.signal);
-			await cb.onPrompt({ message: "code" });
+		install(async (_id, i) => {
+			signals.push(i.signal);
+			await i.prompt({ type: "text", message: "code" });
 		});
 		startLogin("anthropic");
 		startLogin("openai-codex");
@@ -265,22 +283,24 @@ describe("cancelLogin", () => {
 });
 
 describe("setProviderApiKey / logoutProvider", () => {
-	test("setProviderApiKey stores an api_key credential and refreshes the registry", () => {
-		const h = install(async () => {});
-		setProviderApiKey("openai", "  sk-abc  ");
-		expect(h.setCalls()).toEqual([["openai", { type: "api_key", key: "sk-abc" }]]);
-		expect(h.refreshCount()).toBe(1);
+	test("setProviderApiKey persists via login(id, 'api_key') answering the secret prompt with the key", async () => {
+		let stored: string | undefined;
+		const h = install(async (_id, i) => {
+			stored = await i.prompt({ type: "secret", message: "API key" });
+		});
+		await setProviderApiKey("openai", "  sk-abc  ");
+		expect(stored).toBe("sk-abc"); // trimmed
+		expect(h.loginCalls()).toEqual([["openai", "api_key"]]);
 	});
 
-	test("setProviderApiKey rejects an empty/blank key", () => {
+	test("setProviderApiKey rejects an empty/blank key", async () => {
 		install(async () => {});
-		expect(() => setProviderApiKey("openai", "   ")).toThrow(/must not be empty/);
+		await expect(setProviderApiKey("openai", "   ")).rejects.toThrow(/must not be empty/);
 	});
 
-	test("logoutProvider removes the credential and refreshes the registry", () => {
+	test("logoutProvider removes the credential through the runtime", async () => {
 		const h = install(async () => {});
-		logoutProvider("anthropic");
+		await logoutProvider("anthropic");
 		expect(h.logoutCalls()).toEqual(["anthropic"]);
-		expect(h.refreshCount()).toBe(1);
 	});
 });

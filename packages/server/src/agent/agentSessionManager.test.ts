@@ -2,8 +2,9 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
-import { AuthStorage, ModelRegistry, SessionManager } from "@earendil-works/pi-coding-agent";
+import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type { ExtUiRequest } from "@thinkrail/contracts";
 import {
 	buildSessionSettings,
@@ -68,27 +69,30 @@ function tmpCwd(prefix: string): string {
 
 let priorAgentDir: string | undefined;
 
-beforeAll(() => {
+beforeAll(async () => {
 	// Isolate pi's on-disk session files to a throwaway dir — the disk-reopen test writes real ones.
 	priorAgentDir = process.env.PI_CODING_AGENT_DIR;
 	process.env.PI_CODING_AGENT_DIR = tmpCwd("trpi-agentdir-");
 
-	const authStorage = AuthStorage.create();
-	const modelRegistry = ModelRegistry.inMemory(authStorage);
-	// biome-ignore lint/suspicious/noExplicitAny: faux stream/model types bridge pi-ai ↔ pi-coding-agent
-	const reg = modelRegistry as any;
+	// A REAL runtime (in-memory credentials, no models.json, no network) with the faux providers
+	// registered as extension providers — their `streamSimple` does the real (in-process) work.
+	const runtime = await ModelRuntime.create({
+		credentials: new InMemoryCredentialStore(),
+		modelsPath: null,
+		allowModelNetwork: false,
+	});
 	const cfg = (faux: typeof fauxA, id: string) => ({
 		api: faux.api,
-		// baseUrl + apiKey are required when models are defined; streamSimple does the real (in-process) work.
+		// baseUrl + apiKey are required when models are defined.
 		baseUrl: "http://faux.local",
 		apiKey: "faux",
 		streamSimple: faux.streamSimple,
 		models: [{ ...modelDef(id), api: faux.api }],
 	});
-	reg.registerProvider("fauxa", cfg(fauxA, "fauxa"));
-	reg.registerProvider("fauxb", cfg(fauxB, "fauxb"));
+	runtime.registerProvider("fauxa", cfg(fauxA, "fauxa"));
+	runtime.registerProvider("fauxb", cfg(fauxB, "fauxb"));
 
-	configurePiRuntime({ authStorage, modelRegistry });
+	configurePiRuntime(runtime);
 	setSessionManagerFactory(() => SessionManager.inMemory());
 	setSessionPublisher(({ sessionId, event }) => {
 		const list = events.get(sessionId) ?? [];
@@ -145,17 +149,17 @@ test("buildSessionSettings disables image autoResize (in-memory, so the read too
 	expect(buildSessionSettings(tmpCwd("trpi-settings-")).getImageAutoResize()).toBe(false);
 });
 
-test("listAvailableModels returns the configured (faux) models", () => {
-	const ids = listAvailableModels().map((m) => m.id);
+test("listAvailableModels returns the configured (faux) models", async () => {
+	const ids = (await listAvailableModels()).map((m) => m.id);
 	expect(ids).toContain("fauxa");
 	expect(ids).toContain("fauxb");
 });
 
-test("wire models expose only the allowlisted fields (no baseUrl/headers/other Model fields)", () => {
+test("wire models expose only the allowlisted fields (no baseUrl/headers/other Model fields)", async () => {
 	// The faux providers register with baseUrl "http://faux.local"; when JetBrains AI is wired the real
 	// baseUrl is `.../wire/<SECRET>/...`. `toWireModel` is an allowlist projection, so a wire model carries
 	// EXACTLY these keys — this pins the DTO shut (widening it, incl. re-adding a secret field, fails here).
-	const models = listAvailableModels();
+	const models = await listAvailableModels();
 	expect(models.length).toBeGreaterThan(0);
 	for (const m of models) {
 		expect(Object.keys(m).sort()).toEqual(["contextWindow", "id", "name", "provider", "reasoning"]);
@@ -164,7 +168,7 @@ test("wire models expose only the allowlisted fields (no baseUrl/headers/other M
 
 test("createSession re-resolves a wire model ref by {provider,id}, never trusting a client baseUrl", async () => {
 	fauxA.setResponses([fauxAssistantMessage("RESOLVED_REPLY")]);
-	const ref = listAvailableModels().find((m) => m.id === "fauxa");
+	const ref = (await listAvailableModels()).find((m) => m.id === "fauxa");
 	if (!ref) throw new Error("faux model missing");
 	// `ref` has NO baseUrl — only host-side re-resolution against the registry can reach the faux provider.
 	const s = await createSession({
@@ -181,7 +185,7 @@ test("createSession re-resolves a wire model ref by {provider,id}, never trustin
 });
 
 test("createSession rejects an unknown/unavailable model ref (no arbitrary baseUrl injection)", async () => {
-	const ref = listAvailableModels().find((m) => m.id === "fauxa");
+	const ref = (await listAvailableModels()).find((m) => m.id === "fauxa");
 	if (!ref) throw new Error("faux model missing");
 	// A client points provider/id at something not in the registry — the host refuses rather than call it.
 	const bogus = { ...ref, provider: "attacker", id: "evil" };

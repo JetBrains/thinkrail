@@ -1,6 +1,6 @@
 // spec_graph — a bounded slice of the graph: subtree, ancestors, or neighbors across a chosen edge.
 
-import { StringEnum } from "@earendil-works/pi-ai/compat";
+import { StringEnum } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { type GraphSlice, graphSlice, LINK_KINDS, SLICE_DIRECTIONS } from "../core/index.ts";
