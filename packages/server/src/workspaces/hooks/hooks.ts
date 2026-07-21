@@ -47,14 +47,21 @@ function emit(event: WorkspaceHookEvent): void {
 			});
 			break;
 		case "hookStarted":
-			persistHookStatus(event.workspaceId, event.hook, { state: "running" });
+			persistHookStatus(event.workspaceId, event.hook, {
+				state: "running",
+				command: event.command,
+			});
 			break;
 		case "hookSucceeded":
-			persistHookStatus(event.workspaceId, event.hook, { state: "succeeded" });
+			persistHookStatus(event.workspaceId, event.hook, {
+				state: "succeeded",
+				command: event.command,
+			});
 			break;
 		case "hookFailed":
 			persistHookStatus(event.workspaceId, event.hook, {
 				state: "failed",
+				command: event.command,
 				exitCode: event.exitCode,
 			});
 			break;
@@ -99,16 +106,31 @@ async function runHook(
 	project: Project,
 	timeoutMs: number | undefined,
 ): Promise<{ ok: boolean }> {
+	let command: string | undefined;
 	try {
-		const command = resolveCommand(hook, workspace, project);
+		command = resolveCommand(hook, workspace, project);
 		if (!command) return { ok: true }; // nothing declared for this hook — not a failure
 
 		if (!isApproved(project.id, hook, command)) {
-			emit({ kind: "hookAwaitingApproval", workspaceId: workspace.id, hook, command });
+			emit({
+				kind: "hookAwaitingApproval",
+				workspaceId: workspace.id,
+				workspaceName: workspace.name,
+				projectId: project.id,
+				hook,
+				command,
+			});
 			return { ok: false };
 		}
 
-		emit({ kind: "hookStarted", workspaceId: workspace.id, hook });
+		emit({
+			kind: "hookStarted",
+			workspaceId: workspace.id,
+			workspaceName: workspace.name,
+			projectId: project.id,
+			hook,
+			command,
+		});
 		const result = await runShellCommand({
 			command,
 			cwd: workspace.worktreePath,
@@ -117,16 +139,46 @@ async function runHook(
 			// entirely for fire-and-forget hooks instead.
 			...(timeoutMs !== undefined ? { timeoutMs } : {}),
 			onChunk: (_stream, chunk) =>
-				emit({ kind: "hookOutput", workspaceId: workspace.id, hook, chunk }),
+				emit({
+					kind: "hookOutput",
+					workspaceId: workspace.id,
+					workspaceName: workspace.name,
+					projectId: project.id,
+					hook,
+					chunk,
+				}),
 		});
 		if (result.ok) {
-			emit({ kind: "hookSucceeded", workspaceId: workspace.id, hook });
+			emit({
+				kind: "hookSucceeded",
+				workspaceId: workspace.id,
+				workspaceName: workspace.name,
+				projectId: project.id,
+				hook,
+				command,
+			});
 		} else {
-			emit({ kind: "hookFailed", workspaceId: workspace.id, hook, exitCode: result.exitCode });
+			emit({
+				kind: "hookFailed",
+				workspaceId: workspace.id,
+				workspaceName: workspace.name,
+				projectId: project.id,
+				hook,
+				command,
+				exitCode: result.exitCode,
+			});
 		}
 		return { ok: result.ok };
 	} catch (error) {
-		emit({ kind: "hookFailed", workspaceId: workspace.id, hook, exitCode: -1 });
+		emit({
+			kind: "hookFailed",
+			workspaceId: workspace.id,
+			workspaceName: workspace.name,
+			projectId: project.id,
+			hook,
+			command: command ?? "(unknown)",
+			exitCode: -1,
+		});
 		console.warn(`workspace hook ${hook} failed for ${workspace.id}: ${error}`);
 		return { ok: false };
 	}
@@ -159,4 +211,5 @@ export function runPostMergeHook(workspace: Workspace, project: Project): void {
 	queueMicrotask(() => void runHook("postMerge", workspace, project, undefined));
 }
 
-export { approveHook };
+export { loadHookConfig, resolveHookCommand } from "./config";
+export { approveHook, isApproved };

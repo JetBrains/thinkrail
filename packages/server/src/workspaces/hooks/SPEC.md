@@ -33,7 +33,11 @@ no caller yet (no merge-initiating code exists in v1) — real extension points,
   `WorkspaceFsChangedPayload` uses, not the workspace-lifecycle trio's kind→channel mapping, since every
   transition here shares one `workspace.hook` channel).
 - **Public surface (barrel):** `runOnCreateHook`, `runOnDeleteHook`, `runPreMergeHook`, `runPostMergeHook`,
-  `setHookPublisher`, `approveHook`.
+  `setHookPublisher`, `approveHook`, `isApproved` (project+hook+resolved-command approval check — the new
+  `project.hooks.get` handler in `host` uses it to report per-hook approval status), `loadHookConfig`,
+  `resolveHookCommand` (both re-exported from `config.ts` for the same handler — reading a project's
+  committed/resolved hooks needs no workspace, so these are called directly on a project's root path, not
+  just a workspace's worktree; both were already generic over any directory).
 - **Persisted status:** every transition `emit`s through (except the ephemeral `hookOutput`) also writes
   the hook's latest `HookStatus` onto its workspace's `hookStatus` field via `persistence`'s
   `loadWorkspaces`/`saveWorkspaces` — durability for a reconnecting/reloaded client (`workspace.list` and
@@ -45,6 +49,9 @@ no caller yet (no merge-initiating code exists in v1) — real extension points,
   dispatching to `runOnCreateHook`/`runOnDeleteHook` by name) is the explicit re-run trigger the approval UI
   composes with `approveHook` to actually bootstrap a workspace stuck at `hookAwaitingApproval` — also a
   general-purpose manual-retry primitive, not approval-specific.
+- **`HookStatus.command` is populated on every transition**, not just `hookAwaitingApproval` — so a client
+  reading `Workspace.hookStatus` (the Hooks tab; `apps/web/src/panels/HooksPanel.tsx`) can show the
+  resolved command regardless of the hook's current state.
 - **Allowed deps:** `persistence` (override/approval storage, and now `hookStatus` persistence); `contracts`;
   `@thinkrail/shared/paths` (the `.thinkrail/` namespace convention); Node (`node:crypto`, `node:fs`).
 - **Forbidden:** `host`; `git` (no git operation of its own — the caller already has the worktree);

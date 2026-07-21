@@ -62,6 +62,8 @@ test("an unapproved hook emits hookAwaitingApproval and does not run", async () 
 		{
 			kind: "hookAwaitingApproval",
 			workspaceId: "ws1",
+			workspaceName: "ws1",
+			projectId: "p1",
 			hook: "onDelete",
 			command: "echo should-not-run",
 		},
@@ -74,7 +76,24 @@ test("an approved hook runs and emits started then succeeded", async () => {
 	const events: WorkspaceHookEvent[] = [];
 	setHookPublisher((e) => events.push(e));
 	await runOnDeleteHook(workspace, project);
-	expect(events.map((e) => e.kind)).toEqual(["hookStarted", "hookSucceeded"]);
+	expect(events).toEqual([
+		{
+			kind: "hookStarted",
+			workspaceId: "ws1",
+			workspaceName: "ws1",
+			projectId: "p1",
+			hook: "onDelete",
+			command: "true",
+		},
+		{
+			kind: "hookSucceeded",
+			workspaceId: "ws1",
+			workspaceName: "ws1",
+			projectId: "p1",
+			hook: "onDelete",
+			command: "true",
+		},
+	]);
 });
 
 test("a failing approved hook emits hookFailed with the real exit code", async () => {
@@ -84,8 +103,23 @@ test("a failing approved hook emits hookFailed with the real exit code", async (
 	setHookPublisher((e) => events.push(e));
 	await runOnDeleteHook(workspace, project);
 	expect(events).toEqual([
-		{ kind: "hookStarted", workspaceId: "ws1", hook: "onDelete" },
-		{ kind: "hookFailed", workspaceId: "ws1", hook: "onDelete", exitCode: 3 },
+		{
+			kind: "hookStarted",
+			workspaceId: "ws1",
+			workspaceName: "ws1",
+			projectId: "p1",
+			hook: "onDelete",
+			command: "exit 3",
+		},
+		{
+			kind: "hookFailed",
+			workspaceId: "ws1",
+			workspaceName: "ws1",
+			projectId: "p1",
+			hook: "onDelete",
+			command: "exit 3",
+			exitCode: 3,
+		},
 	]);
 });
 
@@ -136,7 +170,7 @@ test("a succeeding approved hook persists hookStatus: succeeded, replacing the p
 	saveWorkspaces([workspace]);
 	await runOnDeleteHook(workspace, project);
 	const saved = loadWorkspaces().find((w) => w.id === "ws1");
-	expect(saved?.hookStatus?.onDelete).toEqual({ state: "succeeded" });
+	expect(saved?.hookStatus?.onDelete).toEqual({ state: "succeeded", command: "true" });
 });
 
 test("a failing approved hook persists hookStatus: failed with the real exit code", async () => {
@@ -145,7 +179,7 @@ test("a failing approved hook persists hookStatus: failed with the real exit cod
 	saveWorkspaces([workspace]);
 	await runOnDeleteHook(workspace, project);
 	const saved = loadWorkspaces().find((w) => w.id === "ws1");
-	expect(saved?.hookStatus?.onDelete).toEqual({ state: "failed", exitCode: 3 });
+	expect(saved?.hookStatus?.onDelete).toEqual({ state: "failed", command: "exit 3", exitCode: 3 });
 });
 
 test("persisting hookStatus for a workspace whose record is already gone is a silent no-op", async () => {
@@ -165,6 +199,15 @@ test("hookStatus is set per-hook — persisting onDelete's status doesn't touch 
 	await new Promise((resolve) => setTimeout(resolve, 200));
 	await runOnDeleteHook(workspace, project);
 	const saved = loadWorkspaces().find((w) => w.id === "ws1");
-	expect(saved?.hookStatus?.onCreate).toEqual({ state: "succeeded" });
-	expect(saved?.hookStatus?.onDelete).toEqual({ state: "succeeded" });
+	expect(saved?.hookStatus?.onCreate).toEqual({ state: "succeeded", command: "true" });
+	expect(saved?.hookStatus?.onDelete).toEqual({ state: "succeeded", command: "true" });
+});
+
+test("a succeeding hook persists its command onto hookStatus too, not just on awaitingApproval", async () => {
+	writeHookConfig({ onDelete: "true" });
+	approveHook("p1", "onDelete", "true");
+	saveWorkspaces([workspace]);
+	await runOnDeleteHook(workspace, project);
+	const saved = loadWorkspaces().find((w) => w.id === "ws1");
+	expect(saved?.hookStatus?.onDelete).toEqual({ state: "succeeded", command: "true" });
 });
