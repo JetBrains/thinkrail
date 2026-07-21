@@ -41,7 +41,10 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   **`approveAndRunHook`**/**`runHookNow`** wrap `workspace.hooks.approve`/`workspace.hooks.run` — approve
   alone only records a project-scoped approval (see [[submodule-server-workspaces-hooks]]), so the dialog
   always composes it with an explicit run to actually bootstrap the workspace that's stuck at
-  `hookAwaitingApproval`.
+  `hookAwaitingApproval`. **`ProjectHooksDialog`** is the project-level hooks config form (one row per
+  `HookName`: committed command, optional host-local override, approval status + an Approve action),
+  reachable with zero workspaces open; composes `hooksActions.ts`'s new
+  `getProjectHooks`/`saveProjectHooks`/`approveProjectHook`.
   **Opening a project** goes through the shared **`useOpenProject`** hook (reused by `ProjectTree` **and**
   `WelcomePanel`, so the flow is identical in the rail and the Welcome screen): `project.open`, and on
   failure `project.inspect` → either offers to bootstrap the folder into a repo — a modal **`ConfirmDialog`**

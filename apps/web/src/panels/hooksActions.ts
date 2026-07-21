@@ -22,3 +22,27 @@ export async function approveAndRunHook(
 export function runHookNow(workspaceId: string, hook: HookName): Promise<Ack> {
 	return getTransport().request("workspace.hooks.run", { workspaceId, hook });
 }
+
+/** Read a project's declared hooks (committed + host-local overrides) + per-hook approval status. */
+export function getProjectHooks(projectId: string) {
+	return getTransport().request("project.hooks.get", { projectId });
+}
+
+/** Write a project's committed hooks + host-local overrides. Never touches approval. */
+export function saveProjectHooks(
+	projectId: string,
+	committed: Partial<Record<HookName, string>>,
+	overrides: Partial<Record<HookName, string>>,
+): Promise<Ack> {
+	return getTransport().request("project.hooks.save", { projectId, committed, overrides });
+}
+
+/** Approve `command` for this project+hook — the project-level "trust this now" action (no workspace
+ * needed, unlike `approveAndRunHook` above, which also re-runs a specific workspace's pending hook). */
+export function approveProjectHook(
+	projectId: string,
+	hook: HookName,
+	command: string,
+): Promise<Ack> {
+	return getTransport().request("workspace.hooks.approve", { projectId, hook, command });
+}
