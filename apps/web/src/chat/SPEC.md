@@ -117,6 +117,15 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `container` prop portals their popovers into a host Dialog), `SessionStatsBar`, `ChatHeader` (its
   `left` slot carries the plan strip), `ExtUiDialog`. All props-driven; behavior detail lives in the
   components' jsdoc.
+- **Template slots** (`slotSession.ts`) — the pure parser behind the composer's future Tab-through slot
+  session (Task B5): `parseTemplateSlots(body, argumentHint)` expands pi's own placeholder grammar
+  (`$1..$n`, `$@`/`$ARGUMENTS`, `${N:-default}`, `${@:N}`, `${@:N:L}`, `$$` escape — pi's grammar, single
+  owner; see `packages/server/src/templates/`) into visible text plus `TemplateSlot` ranges;
+  `stripUntouchedSlots`/`shiftSlots` round out the session (strip-on-send, re-track-on-edit). **Parse
+  only — this module never evaluates the grammar**: a typed-through `/name args` prompt already expands
+  via pi's own `PromptOptions.expandPromptTemplates` today, with or without this parser or Task B5's UI.
+  Zero deps: no React, no store/transport, no `pi` import of any kind — plain strings and offsets in,
+  plain strings and offsets out.
 - **Plain `↑` recall + history button** — `Composer`'s `recentPrompts` prop (`ChatView`: this chat's own
   user-turn texts via `turnAnchorText`, newest first, deduped **keeping the newest occurrence** — the same
   recency-first ranking rule as the server history index, the atuin/fzf convention) backs a lightweight
