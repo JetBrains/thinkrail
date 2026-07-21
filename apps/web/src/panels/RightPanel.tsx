@@ -3,14 +3,26 @@ import { useEffect, useState } from "react";
 import { useAppStore } from "../store";
 import { ChangesPanel } from "./ChangesPanel";
 import { FileTree } from "./FileTree";
+import { HooksPanel } from "./HooksPanel";
 import { SpecsPanel } from "./SpecsPanel";
 
-type RightTab = "specs" | "files" | "changes";
+type RightTab = "specs" | "files" | "changes" | "hooks";
 
-/** Right panel for the active worktree: Specs (read-only spec-graph tree), All-files tree, and Changes (git diff vs base). Checks/Review = V2. */
+/** Right panel for the active worktree: Specs (read-only spec-graph tree), All-files tree, Changes (git
+ * diff vs base), and Hooks (lifecycle hook status/approval/output). Checks/Review = V2. */
 export function RightPanel() {
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
 	const changesRequest = useAppStore((s) => s.changesRequest);
+	const hooksRequest = useAppStore((s) => s.hooksRequest);
+	const hasHookAttention = useAppStore((s) => {
+		if (!activeWorkspaceId) return false;
+		const status = Object.values(s.workspaces)
+			.flat()
+			.find((w) => w.id === activeWorkspaceId)?.hookStatus;
+		return Object.values(status ?? {}).some(
+			(h) => h.state === "awaitingApproval" || h.state === "failed",
+		);
+	});
 	const [tab, setTab] = useState<RightTab>("specs");
 	const [specsRefresh, setSpecsRefresh] = useState(0);
 
@@ -18,6 +30,11 @@ export function RightPanel() {
 	useEffect(() => {
 		if (changesRequest?.workspaceId === activeWorkspaceId) setTab("changes");
 	}, [changesRequest, activeWorkspaceId]);
+
+	// A deep-link from a workspace row's hook badge (non-approval states) flips us to the Hooks view.
+	useEffect(() => {
+		if (hooksRequest?.workspaceId === activeWorkspaceId) setTab("hooks");
+	}, [hooksRequest, activeWorkspaceId]);
 
 	return (
 		<div className="flex h-full min-h-0 flex-col">
@@ -34,6 +51,15 @@ export function RightPanel() {
 					onClick={() => setTab("changes")}
 				>
 					Changes
+				</TabButton>
+				<TabButton testid="tab-hooks" active={tab === "hooks"} onClick={() => setTab("hooks")}>
+					Hooks
+					{hasHookAttention && (
+						<span
+							data-testid="hooks-attention-dot"
+							className="ml-xs inline-block size-1.5 rounded-full bg-gold"
+						/>
+					)}
 				</TabButton>
 				{tab === "specs" && activeWorkspaceId && (
 					<button
@@ -59,8 +85,10 @@ export function RightPanel() {
 					<div className="p-xs">
 						<FileTree workspaceId={activeWorkspaceId} />
 					</div>
-				) : (
+				) : tab === "changes" ? (
 					<ChangesPanel workspaceId={activeWorkspaceId} />
+				) : (
+					<HooksPanel workspaceId={activeWorkspaceId} />
 				)}
 			</div>
 		</div>

@@ -816,3 +816,140 @@ test("applyConfig folds the server-synced app config in (theme is host-owned, a 
 	useAppStore.getState().applyConfig({ theme: "light" });
 	expect(useAppStore.getState().theme).toBe("light");
 });
+
+// ---- applyWorkspaceHookEvent: hook events for workspaces no longer in any project's list --------
+
+test("applyWorkspaceHookEvent toasts (doesn't crash/silently drop) hookAwaitingApproval for a workspace that was genuinely removed", () => {
+	useAppStore.setState({
+		projects: [{ id: "p1", name: "demo", path: "/tmp/demo", slug: "demo", lastOpened: 0 }],
+		workspaces: {}, // the workspace is already gone — mirrors post-removal
+		removedWorkspaceIds: { "gone-1": true }, // the tombstone is what marks this as "genuinely removed"
+		toasts: [],
+	});
+	useAppStore.getState().applyWorkspaceHookEvent({
+		kind: "hookAwaitingApproval",
+		workspaceId: "gone-1",
+		workspaceName: "workspace-3",
+		projectId: "p1",
+		hook: "onDelete",
+		command: "docker compose down",
+	});
+	const toasts = useAppStore.getState().toasts;
+	expect(toasts).toHaveLength(1);
+	expect(toasts[0]?.variant).toBe("error");
+	expect(toasts[0]?.message).toContain("workspace-3");
+	expect(toasts[0]?.message).toContain("demo");
+});
+
+test("applyWorkspaceHookEvent toasts hookFailed for a workspace that was genuinely removed", () => {
+	useAppStore.setState({
+		projects: [{ id: "p1", name: "demo", path: "/tmp/demo", slug: "demo", lastOpened: 0 }],
+		workspaces: {},
+		removedWorkspaceIds: { "gone-1": true },
+		toasts: [],
+	});
+	useAppStore.getState().applyWorkspaceHookEvent({
+		kind: "hookFailed",
+		workspaceId: "gone-1",
+		workspaceName: "workspace-3",
+		projectId: "p1",
+		hook: "onDelete",
+		command: "docker compose down",
+		exitCode: 1,
+	});
+	const toasts = useAppStore.getState().toasts;
+	expect(toasts).toHaveLength(1);
+	expect(toasts[0]?.message).toContain("workspace-3");
+	expect(toasts[0]?.message).toContain("exit 1");
+});
+
+test("applyWorkspaceHookEvent doesn't leak into hookOutputByWorkspace for a workspace that was genuinely removed", () => {
+	useAppStore.setState({
+		projects: [{ id: "p1", name: "demo", path: "/tmp/demo", slug: "demo", lastOpened: 0 }],
+		workspaces: {},
+		removedWorkspaceIds: { "gone-1": true },
+		hookOutputByWorkspace: {},
+	});
+	useAppStore.getState().applyWorkspaceHookEvent({
+		kind: "hookOutput",
+		workspaceId: "gone-1",
+		workspaceName: "workspace-3",
+		projectId: "p1",
+		hook: "onDelete",
+		chunk: "tearing down\n",
+	});
+	expect(useAppStore.getState().hookOutputByWorkspace).toEqual({});
+});
+
+// ---- applyWorkspaceHookEvent: the "not yet loaded" race (brand-new project, list never fetched) ----
+// This is NOT a removal: `addWorkspace`'s own `workspace.created` push is already a documented no-op for
+// an unfetched project's list, so a hook event arriving in that same window must resolve the same way —
+// silently, reconciling once `workspace.list` populates the row — rather than raising a false "was skipped"
+// toast for a workspace that is very much alive.
+
+test("applyWorkspaceHookEvent silently drops hookAwaitingApproval for a workspace whose project list hasn't loaded yet (not removed)", () => {
+	useAppStore.setState({
+		projects: [{ id: "p1", name: "demo", path: "/tmp/demo", slug: "demo", lastOpened: 0 }],
+		workspaces: {}, // p1's list was never fetched — the workspace was just created, not removed
+		removedWorkspaceIds: {},
+		toasts: [],
+		hookOutputByWorkspace: {},
+	});
+	useAppStore.getState().applyWorkspaceHookEvent({
+		kind: "hookAwaitingApproval",
+		workspaceId: "brand-new-1",
+		workspaceName: "workspace-1",
+		projectId: "p1",
+		hook: "onCreate",
+		command: "pnpm install",
+	});
+	expect(useAppStore.getState().toasts).toHaveLength(0);
+	expect(useAppStore.getState().hookOutputByWorkspace).toEqual({});
+});
+
+test("applyWorkspaceHookEvent silently drops hookFailed for the same not-yet-loaded race", () => {
+	useAppStore.setState({
+		projects: [{ id: "p1", name: "demo", path: "/tmp/demo", slug: "demo", lastOpened: 0 }],
+		workspaces: {},
+		removedWorkspaceIds: {},
+		toasts: [],
+		hookOutputByWorkspace: {},
+	});
+	useAppStore.getState().applyWorkspaceHookEvent({
+		kind: "hookFailed",
+		workspaceId: "brand-new-1",
+		workspaceName: "workspace-1",
+		projectId: "p1",
+		hook: "onCreate",
+		command: "pnpm install",
+		exitCode: 1,
+	});
+	expect(useAppStore.getState().toasts).toHaveLength(0);
+	expect(useAppStore.getState().hookOutputByWorkspace).toEqual({});
+});
+
+test("applyWorkspaceRemoved tombstones the id end-to-end, so a subsequent hookAwaitingApproval for it toasts", () => {
+	useAppStore.setState({
+		projects: [{ id: "p1", name: "demo", path: "/tmp/demo", slug: "demo", lastOpened: 0 }],
+		workspaces: { p1: [pushedWorkspace()] },
+		activeWorkspaceId: "other-active", // not the removed workspace, so no active-workspace toast fires
+		toasts: [],
+	});
+
+	useAppStore.getState().applyWorkspaceRemoved("p1", "w1"); // the real removal path, not hand-seeded state
+	expect(useAppStore.getState().toasts).toHaveLength(0); // background removal — no toast yet
+
+	useAppStore.getState().applyWorkspaceHookEvent({
+		kind: "hookAwaitingApproval",
+		workspaceId: "w1",
+		workspaceName: "add-login-flow",
+		projectId: "p1",
+		hook: "onDelete",
+		command: "docker compose down",
+	});
+
+	const toasts = useAppStore.getState().toasts;
+	expect(toasts).toHaveLength(1);
+	expect(toasts[0]?.variant).toBe("error");
+	expect(toasts[0]?.message).toContain("add-login-flow");
+});

@@ -27,6 +27,26 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   `name` on top with the git **branch on a second line beneath it** (muted, monospace), rendered only when
   it differs from the name (so pristine/legacy `workspace-N` rows stay a single compact line) — the display
   name is decoupled from the git branch (see [[submodule-server-workspaces]]).
+  Each row also shows the **most attention-worthy hook status** (`mostUrgentHook`, priority
+  awaitingApproval > failed > running > succeeded — a plain icon button via **`HookStatusIcon`**, shared
+  with `HooksPanel`), taking the slot the diffStats +/− chip otherwise occupies, and — unlike that chip —
+  staying visible on hover (it's actionable, so it must survive exactly the hover state a click implies).
+  Clicking it: `awaitingApproval` opens **`HookApprovalDialog`** directly (a centered modal, not an
+  anchored popover — approving trusts a shell command for every workspace in the project from now on, not
+  a one-off row action); any other state instead deep-links to `RightPanel`'s Hooks tab via
+  `store.requestHooksView`. `HooksPanel` lists every hook with a status on the active workspace
+  (`Workspace.hookStatus`) plus its live output (`store.hookOutputByWorkspace`), with a **Retry** action
+  on a `failed` row and the same `HookApprovalDialog` reachable from an `awaitingApproval` row too (both
+  call sites share it rather than duplicating the modal). `hooksActions.ts`'s
+  **`approveAndRunHook`**/**`runHookNow`** wrap `workspace.hooks.approve`/`workspace.hooks.run` — approve
+  alone only records a project-scoped approval (see [[submodule-server-workspaces-hooks]]), so the dialog
+  always composes it with an explicit run to actually bootstrap the workspace that's stuck at
+  `hookAwaitingApproval`. **`ProjectHooksDialog`** is the project-level hooks config form (one row per
+  `HookName`: committed command, optional host-local override, approval status + an Approve action),
+  reachable with zero workspaces open; composes `hooksActions.ts`'s new
+  `getProjectHooks`/`saveProjectHooks`/`approveProjectHook`. Two entry points open it: a per-row **gear
+  icon** (`Settings`, testid `project-hooks`) on `ProjectRow`, same hover-reveal treatment as the
+  **Create workspace** `+`, and the Welcome screen's **"Configure hooks"** card (below).
   **Opening a project** goes through the shared **`useOpenProject`** hook (reused by `ProjectTree` **and**
   `WelcomePanel`, so the flow is identical in the rail and the Welcome screen): `project.open`, and on
   failure `project.inspect` → either offers to bootstrap the folder into a repo — a modal **`ConfirmDialog`**
@@ -43,11 +63,14 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
 workspace is active. The `PRODUCT_NAME` wordmark as the hero (the topbar's brand styling — accent font,
 `text-primary` — enlarged), with the **active project's name as a small eyebrow** (folder icon) above it
 once a project is selected, over a **constant** spec-first pitch (not spec-conditional) and
-**one-to-three cards** (Conductor-inspired: icon top-left, label + explainer
+**one-to-four cards** (Conductor-inspired: icon top-left, label + explainer
 bottom-left; the primary is a filled-violet card carrying the stable `welcome-cta` hook, others quiet
 `welcome-action`s). The cards by state: **no projects** → **"Open project"** (one card); **project +
-`hasSpecs`** → **"Start building"** (primary) + "Open project"; **project + no specs** → a spec-first
-**"Set up project"** (primary) + "Start building" + "Open project". The **"Open project"** card hangs the shared
+`hasSpecs`** → **"Start building"** (primary) + "Open project" + "Configure hooks"; **project + no specs**
+→ a spec-first **"Set up project"** (primary) + "Start building" + "Open project" + "Configure hooks".
+Whenever a project is selected, a trailing **"Configure hooks"** card (`Settings` icon) opens the same
+**`ProjectHooksDialog`** as `ProjectRow`'s gear icon (above) — the Welcome-screen entry point reachable
+with zero workspaces. The **"Open project"** card hangs the shared
 **`AddProjectMenu`** dropdown off it (same menu as the projects-rail "+": Open project / Open GitHub (soon)
 / Recents), so `Card` is a `forwardRef` usable as a Radix `asChild` trigger. **"Start building"** is the
 intent-first framing of the create-and-kick-off flow — it opens `NewWorkspaceDialog` (which cuts a
@@ -131,8 +154,11 @@ prompt hero (still editable; empty by default), a base-branch
 
 ## Get right
 
-- `RightPanel` tabs are **Specs | All files | Changes** (Specs leftmost and the **default** — specs are
-  the project's ground truth, so the rail leads with them).
+- `RightPanel` tabs are **Specs | All files | Changes | Hooks** (Specs leftmost and the **default** —
+  specs are the project's ground truth, so the rail leads with them). The Hooks tab shows a small gold
+  attention dot when the active workspace has any hook `awaitingApproval`/`failed` — the one tab whose
+  label itself carries a status signal, since it's the one thing in this row that can silently need the
+  user's action.
 - **Live refresh (the worktree panels follow the disk).** `FileTree` / `ChangesPanel` / `SpecsPanel` /
   `FilePane` watch the store's `fsChangesByWorkspace` tick for their workspace (fed by the host's
   debounced `workspace.fsChanged` push — see [[submodule-server-watch]]) and silently refetch through

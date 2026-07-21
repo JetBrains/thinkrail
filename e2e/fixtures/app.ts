@@ -1,5 +1,14 @@
 import { execFileSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	copyFileSync,
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Locator, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
@@ -83,6 +92,29 @@ export function stagePlainFolder(): string {
 	writeFileSync(join(E2E_PLAIN_DIR, "notes.txt"), "hello from a plain folder\n");
 	writeFileSync(E2E_PICK_DIR_POINTER, E2E_PLAIN_DIR);
 	return E2E_PLAIN_DIR;
+}
+
+/**
+ * Reset state, create a *fresh, dedicated* git repo (never `E2E_FIXTURE_REPO` — other specs share that one
+ * and don't expect a `.thinkrail/hooks.json` on its `main`) with the given hook config committed at
+ * `.thinkrail/hooks.json`, and point the stubbed picker at it. Returns the repo path.
+ */
+export function stageHookProject(hooks: Record<string, string>): string {
+	resetState();
+	const repo = mkdtempSync(join(tmpdir(), "thinkrail-e2e-hooks-"));
+	const git = (...args: string[]): void => {
+		execFileSync("git", ["-C", repo, ...args], { stdio: "ignore" });
+	};
+	git("init", "-b", "main");
+	git("config", "user.email", "e2e@thinkrail.test");
+	git("config", "user.name", "e2e");
+	writeFileSync(join(repo, "README.md"), "# hooks fixture\n");
+	mkdirSync(join(repo, ".thinkrail"), { recursive: true });
+	writeFileSync(join(repo, ".thinkrail", "hooks.json"), JSON.stringify(hooks, null, 2));
+	git("add", "-A");
+	git("commit", "-m", "init + hooks.json");
+	writeFileSync(E2E_PICK_DIR_POINTER, repo);
+	return repo;
 }
 
 function loadPersistedWorkspaces(): Workspace[] {

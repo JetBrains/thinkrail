@@ -26,9 +26,11 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   existing record so the computed `diffStats` badge survives the push (the snapshot is the persisted
   record, which has none); a project never fetched or an id absent from its list is a **no-op** — the next
   `workspace.list` reconciles; **`applyWorkspaceRemoved(projectId, id)`** is the **entire** removal
-  reaction (`removeWorkspace` drops the row + `clearWorkspaceTabs` drops its tabs/terminals/chat runtimes,
-  and **if it was this client's active workspace** → `setActiveWorkspace(null)` (shell falls back to the
-  project Welcome) + a neutral toast that reads right for both the initiator and an observer); the
+  reaction (`removeWorkspace` drops the row + `clearWorkspaceTabs` drops its tabs/terminals/chat runtimes +
+  stamps `id` into **`removedWorkspaceIds`** (see below — the tombstone `applyWorkspaceHookEvent` relies on
+  to tell "removed" apart from "not yet loaded"), and **if it was this client's active workspace** →
+  `setActiveWorkspace(null)` (shell falls back to the project Welcome) + a neutral toast that reads right
+  for both the initiator and an observer); the
   primitive **`removeWorkspace(projectId, id)`** just drops the row (unknown project/id is a no-op);
   `tabsByWorkspace` /
   `activeTabByWorkspace` (`openTab`/`closeTab`/`setActiveTab`/`clearWorkspaceTabs`, plus
@@ -92,14 +94,34 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   tick)`** — a `FileTab` carries the `tick` its content was loaded at, so `FilePane` detects staleness
   (`workspaceTick > tab.loadedTick`) across tab switches. The transient **`changesRequest`** +
   **`requestChangesView(workspaceId, path)`** are a UI deep-link intent (a chat turn-divider asking the
-  right panel to surface a file's diff); the panels watch it, scoped by workspace. The `EditorTab`
+  right panel to surface a file's diff); the panels watch it, scoped by workspace. The **workspace hooks**
+  state — **`hookOutputByWorkspace: Record<workspaceId, Partial<Record<HookName, { tick, output }>>>`**
+  with **`applyWorkspaceHookEvent(event)`** (folds a `workspace.hook` push: appends `hookOutput` chunks to
+  the live buffer — capped, reset on a fresh `hookStarted`/`hookAwaitingApproval` — and, for every other
+  kind, *also* mirrors the transition onto the matching workspace's own `hookStatus` field directly, so the
+  row badge/Hooks-tab update from the live event without waiting on a `workspace.updated` round-trip; a
+  workspace not found in any loaded project's list is ambiguous on its own — the same `!entry` shape covers
+  both "genuinely removed" and "this project's list was simply never fetched yet" (the latter is the same
+  no-op race `addWorkspace` already documents for `workspace.created`) — so it's disambiguated via
+  **`removedWorkspaceIds: Record<workspaceId, true>`**, a tombstone map stamped by `applyWorkspaceRemoved`:
+  a removed id updates neither the buffer nor `hookStatus`, and `hookAwaitingApproval`/`hookFailed` instead
+  raise a toast naming the workspace + project (there's no row/tab left for them to render onto), closing
+  what would otherwise be a leak into `hookOutputByWorkspace` for an id nothing will read again; a
+  not-yet-loaded id (absent from `removedWorkspaceIds` too) updates nothing AND raises no toast — the
+  row/badge reconciles correctly once the list loads, matching `addWorkspace`'s own silent no-op for the
+  same race) — mirrors
+  `noteFsChanged`'s "signal, not data" shape, but this one *also* patches durable state
+  (`Workspace.hookStatus`) since that field already lives on the record the lifecycle pushes carry. The transient **`hooksRequest`** +
+  **`requestHooksView(workspaceId)`** mirror `changesRequest`/`requestChangesView` — a workspace row's
+  hook badge deep-links the right panel to its Hooks tab. The `EditorTab`
   (`FileTab` | `ChatTab`) + `TerminalTab` + `ClosedChat` + `SessionRuntime` types. (Chat *render* types +
   renderers live in the `chat` module.)
 - **Public surface (barrel):** `useAppStore`, `toast` (the fire-from-anywhere helper), `Toast` (type),
   `EditorTab` (`FileTab`/`ChatTab`), `TerminalTab`, `ClosedChat`, `SessionRuntime` + `EMPTY_RUNTIME`
   (ChatView's pre-creation fallback), `reduceSessionEvent`.
 - **Allowed deps:** `contracts` (`Project`/`Workspace`/`Model`/`ThinkingLevel`/`SessionStats`/
-  `SlashCommandInfo`/`ExtUiRequest`/`LoginPush`/`WorkspaceFsChangedPayload`/`AppConfig`/`ThemeId`; the
+  `SlashCommandInfo`/`ExtUiRequest`/`LoginPush`/`WorkspaceFsChangedPayload`/`AppConfig`/`ThemeId`/
+  `HookName`/`HookStatus`/`WorkspaceHookEvent`; the
   `Theme` value for the default; `PiEvent`/`LoginFrame`, **type-only**); `chat`
   (`ChatTurn`/`ToolResultState`, **type-only**); `auth` (`LoginState`, **type-only**); `transport`
   (`ConnectionStatus`, **type-only**); `zustand`.

@@ -6,6 +6,7 @@ import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
 import { git, gitAsync } from "../git";
 import { dataDir, loadProjects, loadWorkspaces, saveWorkspaces } from "../persistence";
 import { getProjects } from "../projects";
+import { runOnCreateHook, runOnDeleteHook } from "./hooks";
 
 /**
  * A workspace-registry membership change, emitted on every create/rename/archive so the host can fan it
@@ -168,6 +169,7 @@ export async function createWorkspace(
 	all.push(workspace);
 	saveWorkspaces(all);
 	emit({ kind: "created", workspace });
+	runOnCreateHook(workspace, project); // fire-and-forget — never blocks workspace creation
 	return workspace;
 }
 
@@ -249,9 +251,10 @@ export function forgetWorkspace(id: string): Workspace | null {
  * Keeps the branch, so the work stays recoverable. Best-effort and hardened: on git failure, delete the
  * dir if it lingers then `prune` the stale registration so `git worktree list` never orphans it.
  */
-export function reclaimWorktree(ws: Workspace): void {
+export async function reclaimWorktree(ws: Workspace): Promise<void> {
 	const project = loadProjects().find((p) => p.id === ws.projectId);
 	if (!project) return;
+	await runOnDeleteHook(ws, project); // best-effort — never throws, removal proceeds regardless
 	const removed = git(project.path, ["worktree", "remove", "--force", ws.worktreePath]);
 	if (!removed.ok) {
 		rmSync(ws.worktreePath, { recursive: true, force: true });
@@ -259,10 +262,10 @@ export function reclaimWorktree(ws: Workspace): void {
 	}
 }
 
-/** Archive a workspace synchronously: drop the record then reclaim the worktree (keeps the branch). */
-export function removeWorkspace(id: string): void {
+/** Archive a workspace: drop the record then reclaim the worktree (keeps the branch). */
+export async function removeWorkspace(id: string): Promise<void> {
 	const ws = forgetWorkspace(id);
-	if (ws) reclaimWorktree(ws);
+	if (ws) await reclaimWorktree(ws);
 }
 
 export function workspaceDiffStats(id: string): DiffStats {

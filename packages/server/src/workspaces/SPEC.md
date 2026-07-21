@@ -51,9 +51,10 @@ coincide for the auto `workspace-N` placeholder, but a named workspace carries b
   unknown — anchors a chat session's cwd), and the **archive** primitives, split so the fast record-drop
   and the slow git reclaim are separable (the host archives off the request's critical path):
   `forgetWorkspace(id)` (drop the persistence record, return the removed record or `null` — gone from
-  `listWorkspaces` immediately), `reclaimWorktree(ws)` (the slow half — `git worktree remove --force`,
-  keeps the branch; hardened: rm + `prune` if git fails), and `removeWorkspace(id)` (the synchronous
-  composition of the two, kept for callers/tests that want the whole archive in one call).
+  `listWorkspaces` immediately), `reclaimWorktree(ws)` (**async** — the slow half: awaits the `onDelete`
+  hook, then `git worktree remove --force`, keeps the branch; hardened: rm + `prune` if git fails), and
+  `removeWorkspace(id)` (**async**; the composition of the two, kept for callers/tests that want the whole
+  archive in one call).
 - **Lifecycle events:** every membership mutation — `createWorkspace` (`created`), `renameWorkspace`
   (`updated`, both the naive and agentic auto-rename passes since both go through it), `forgetWorkspace`
   (`removed`) — emits a `WorkspaceLifecycleEvent` through an **injected publisher** (`setWorkspacePublisher`,
@@ -66,5 +67,8 @@ coincide for the auto `workspace-N` placeholder, but a named workspace carries b
   `removeWorkspace`, `workspaceDiffStats`, `getWorkspace`, `renameWorkspace`, `setWorkspacePublisher`,
   `WorkspaceLifecycleEvent`.
 - **Allowed deps:** `projects` (repo lookup), `git` (the runner), `persistence`; `contracts`;
-  `@thinkrail/shared/paths` (the scratch-dir path convention); Node.
+  `@thinkrail/shared/paths` (the scratch-dir path convention); its own nested `hooks` submodule (called at
+  exactly two points: `createWorkspace` fires `runOnCreateHook` right after the scratch-dir seed,
+  fire-and-forget; `reclaimWorktree` awaits `runOnDeleteHook` before `git worktree remove` — see
+  [[submodule-server-workspaces-hooks]]); Node.
 - **Forbidden:** `host`; reaching into another feature's internals (use its barrel).

@@ -7,6 +7,7 @@ import type {
 	FileNode,
 	GithubAuthStatus,
 	GitStatus,
+	HookName,
 	JbcentralConnectResult,
 	LoginReply,
 	Project,
@@ -79,10 +80,28 @@ export const WS_METHODS = {
 	// Lazy per-project "has any registered spec?" (the Welcome screen's "Set up project" signal) — a
 	// full-tree walk, so it's on-demand for the one project shown, never eagerly for every project.
 	projectHasSpecs: "project.hasSpecs",
+	// Read a project's declared hooks (committed `.thinkrail/hooks.json` in its root checkout) + host-local
+	// overrides + whether each hook's *resolved* (override-if-set-else-committed) command is currently
+	// approved — the Project Settings Hooks form's single read. No workspace needed.
+	projectHooksGet: "project.hooks.get",
+	// Write `.thinkrail/hooks.json` (committed to the project's root checkout, pathspec-scoped so it can
+	// never sweep up unrelated staged changes there) + the host-local override map. Never touches approval —
+	// saving a command and trusting it to run are separate decisions.
+	projectHooksSave: "project.hooks.save",
 	workspaceCreate: "workspace.create",
 	workspaceList: "workspace.list",
 	workspaceRemove: "workspace.remove",
 	workspaceDiffStats: "workspace.diffStats",
+	// Records the given command as approved for this project+hook (sha256'd, host-local) — a future
+	// onDelete/preMerge invocation checks this fresh and runs; it does not itself re-run onCreate for a
+	// workspace already sitting at `hookAwaitingApproval` (see WorkspaceHookEvent's doc comment) — the
+	// approval UI composes this with `workspaceHooksRun` below to actually bootstrap that workspace.
+	workspaceHooksApprove: "workspace.hooks.approve",
+	// Re-invoke a specific hook for a specific workspace on demand — the general-purpose "run this now"
+	// primitive: what the approval flow uses to bootstrap a workspace whose onCreate was pending approval,
+	// and (independently) what a manual retry-after-failure would use. Only onCreate/onDelete are
+	// supported (preMerge/postMerge have no caller anywhere yet, so "run now" has no meaning for them).
+	workspaceHooksRun: "workspace.hooks.run",
 	// gh-backed New-Workspace surface: branch list per project + local `gh` auth status.
 	gitListBranches: "git.listBranches",
 	// Background freshness fetch of a remote base ref, fired when the New-Workspace dialog opens/picks a
@@ -166,6 +185,10 @@ export const WS_CHANNELS = {
 	// The worktree change notifier (a `WorkspaceFsChangedPayload` per frame), broadcast to every client.
 	// A debounced invalidation nudge, not data — receivers re-read via the read methods they already use.
 	workspaceFsChanged: "workspace.fsChanged",
+	// One frame per workspace-hook state transition (`WorkspaceHookEvent`), broadcast to every client —
+	// same single-channel-carries-a-typed-payload shape as `workspaceFsChanged`, not the lifecycle trio's
+	// kind→channel mapping (every hook transition shares this one channel).
+	workspaceHook: "workspace.hook",
 	// The server-synced app settings changed (carries the full `AppConfig`), broadcast to every client so
 	// they converge — the initiator applies on this push too, never optimistically.
 	settingsChanged: "settings.changed",
@@ -231,6 +254,22 @@ export interface WsMethodMap {
 	// Does the project's repo carry any registered spec? Computed lazily (a full-tree walk), so it's
 	// requested only for the project the Welcome screen renders — never eagerly for every project.
 	"project.hasSpecs": { params: { projectId: string }; result: { hasSpecs: boolean } };
+	"project.hooks.get": {
+		params: { projectId: string };
+		result: {
+			committed: Partial<Record<HookName, string>>;
+			overrides: Partial<Record<HookName, string>>;
+			approved: Partial<Record<HookName, boolean>>;
+		};
+	};
+	"project.hooks.save": {
+		params: {
+			projectId: string;
+			committed: Partial<Record<HookName, string>>;
+			overrides: Partial<Record<HookName, string>>;
+		};
+		result: Ack;
+	};
 	// `baseRef`: the base branch the worktree is cut from (a remote ref is fetched first); when
 	// omitted, the worktree branches off the repo's current HEAD (the default behavior).
 	"workspace.create": {
@@ -240,6 +279,11 @@ export interface WsMethodMap {
 	"workspace.list": { params: { projectId: string }; result: Workspace[] };
 	"workspace.remove": { params: { id: string }; result: Ack };
 	"workspace.diffStats": { params: { id: string }; result: DiffStats };
+	"workspace.hooks.approve": {
+		params: { projectId: string; hook: HookName; command: string };
+		result: Ack;
+	};
+	"workspace.hooks.run": { params: { workspaceId: string; hook: HookName }; result: Ack };
 	"git.listBranches": { params: { projectId: string }; result: BranchList };
 	// Best-effort background `git fetch` of a remote ref (`origin/<b>`); `ok` reports whether the fetch ran
 	// (offline / non-remote ref → `false`). The UI fires-and-forgets it to warm the ref before create.

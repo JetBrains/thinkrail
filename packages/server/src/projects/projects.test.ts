@@ -1,8 +1,16 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	realpathSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { initProject, inspectProjectPath, listProjects } from "./projects";
+import { commitProjectFile, initProject, inspectProjectPath, listProjects } from "./projects";
 
 function gitOut(cwd: string, ...args: string[]): string {
 	const r = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "pipe", stderr: "ignore" });
@@ -128,4 +136,70 @@ test("initProject: an existing repo is opened, not re-initialised (dedupe, histo
 	expect(listProjects()).toHaveLength(1);
 	// No fresh commit was layered on top — the original history is intact.
 	expect(gitOut(repo, "rev-parse", "HEAD")).toBe(originalHead);
+});
+
+test("commitProjectFile commits a brand-new untracked file", () => {
+	const repo = mkdtempSync(join(tmpdir(), "trpi-projects-test-"));
+	makeRepo(repo);
+	mkdirSync(join(repo, ".thinkrail"), { recursive: true });
+	writeFileSync(join(repo, ".thinkrail", "hooks.json"), '{"onCreate":"npm install"}\n');
+
+	commitProjectFile(repo, ".thinkrail/hooks.json", "chore: update workspace hooks");
+
+	expect(gitOut(repo, "log", "-1", "--format=%s")).toBe("chore: update workspace hooks");
+	expect(gitOut(repo, "status", "--short")).toBe("");
+	rmSync(repo, { recursive: true, force: true });
+});
+
+test("commitProjectFile commits a change to an already-tracked file", () => {
+	const repo = mkdtempSync(join(tmpdir(), "trpi-projects-test-"));
+	makeRepo(repo);
+	mkdirSync(join(repo, ".thinkrail"), { recursive: true });
+	writeFileSync(join(repo, ".thinkrail", "hooks.json"), '{"onCreate":"npm install"}\n');
+	git(repo, "add", "--", ".thinkrail/hooks.json");
+	git(repo, "commit", "-m", "add hooks.json");
+
+	writeFileSync(join(repo, ".thinkrail", "hooks.json"), '{"onCreate":"pnpm install"}\n');
+	commitProjectFile(repo, ".thinkrail/hooks.json", "chore: update workspace hooks");
+
+	expect(JSON.parse(readFileSync(join(repo, ".thinkrail", "hooks.json"), "utf8"))).toEqual({
+		onCreate: "pnpm install",
+	});
+	expect(gitOut(repo, "log", "-1", "--format=%s")).toBe("chore: update workspace hooks");
+	rmSync(repo, { recursive: true, force: true });
+});
+
+test("commitProjectFile is a no-op (doesn't throw) when the file is unchanged", () => {
+	const repo = mkdtempSync(join(tmpdir(), "trpi-projects-test-"));
+	makeRepo(repo);
+	mkdirSync(join(repo, ".thinkrail"), { recursive: true });
+	writeFileSync(join(repo, ".thinkrail", "hooks.json"), '{"onCreate":"npm install"}\n');
+	git(repo, "add", "--", ".thinkrail/hooks.json");
+	git(repo, "commit", "-m", "add hooks.json");
+	const before = gitOut(repo, "rev-parse", "HEAD");
+
+	expect(() =>
+		commitProjectFile(repo, ".thinkrail/hooks.json", "chore: update workspace hooks"),
+	).not.toThrow();
+	expect(gitOut(repo, "rev-parse", "HEAD")).toBe(before); // no new commit was made
+	rmSync(repo, { recursive: true, force: true });
+});
+
+test("commitProjectFile never sweeps up an unrelated file already staged", () => {
+	const repo = mkdtempSync(join(tmpdir(), "trpi-projects-test-"));
+	makeRepo(repo);
+	mkdirSync(join(repo, ".thinkrail"), { recursive: true });
+	writeFileSync(join(repo, ".thinkrail", "hooks.json"), '{"onCreate":"npm install"}\n');
+	git(repo, "add", "--", ".thinkrail/hooks.json");
+	git(repo, "commit", "-m", "add hooks.json");
+
+	writeFileSync(join(repo, "unrelated.txt"), "pre-staged by something else\n");
+	git(repo, "add", "--", "unrelated.txt"); // simulates unrelated staged work already in the index
+
+	writeFileSync(join(repo, ".thinkrail", "hooks.json"), '{"onCreate":"pnpm install"}\n');
+	commitProjectFile(repo, ".thinkrail/hooks.json", "chore: update workspace hooks");
+
+	// unrelated.txt must still be staged, not committed alongside our file.
+	expect(gitOut(repo, "status", "--short")).toBe("A  unrelated.txt");
+	rmSync(repo, { recursive: true, force: true });
 });

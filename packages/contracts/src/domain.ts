@@ -49,6 +49,13 @@ export interface Workspace {
 	 */
 	renamed?: boolean;
 	diffStats?: DiffStats;
+	/**
+	 * The last known state of each declared lifecycle hook, persisted so a reconnecting/reloaded client
+	 * learns about a still-pending `onCreate` without waiting on a live `workspace.hook` push. An
+	 * already-connected client's live view comes from the `workspace.hook` event stream directly, not a
+	 * round-trip through this field — this is durability across reconnects, not the live update path.
+	 */
+	hookStatus?: Partial<Record<HookName, HookStatus>>;
 }
 
 /**
@@ -62,6 +69,78 @@ export interface WorkspaceFsChangedPayload {
 	paths: string[];
 	truncated: boolean;
 }
+
+/** Names of the workspace lifecycle hooks a project can declare in `.thinkrail/hooks.json`. */
+export type HookName = "onCreate" | "onDelete" | "preMerge" | "postMerge";
+
+/** One hook's last known state, persisted on its `Workspace` record — see `Workspace.hookStatus`. */
+export interface HookStatus {
+	state: "awaitingApproval" | "running" | "succeeded" | "failed";
+	/** The exact command that produced this state — carried so an approval prompt can show it verbatim. */
+	command?: string;
+	/** Set only when `state === "failed"` and the command actually ran (vs. never got approved). */
+	exitCode?: number;
+}
+
+/**
+ * The `workspace.hook` push payload — one frame per hook-state transition, broadcast to every client so a
+ * workspace tab's setup/teardown status stays in sync everywhere (same convergence model as the
+ * workspace-lifecycle trio). `hookAwaitingApproval` fires instead of `hookStarted` when the hook's command
+ * hasn't been approved yet (or has changed since).
+ *
+ * `workspace.hooks.approve` only records the approval for that project+hook — it does not itself re-run
+ * anything. For `onDelete`/`preMerge`, that's enough: their next natural invocation (the next delete, the
+ * next merge) checks approval fresh and runs. `onCreate` has no such "next invocation" — it fires exactly
+ * once, at creation time — so approving it after the fact does not retroactively bootstrap a workspace
+ * already sitting at `hookAwaitingApproval`. Re-running an already-created workspace's `onCreate` is not
+ * implemented; see `submodule-server-workspaces-hooks`'s SPEC.md.
+ *
+ * `projectId` and `workspaceName` travel on every variant so a client can still describe a hook event
+ * usefully after the workspace's own record is gone (e.g. removed mid-teardown) — see
+ * `submodule-web-store`'s `applyWorkspaceHookEvent`.
+ */
+export type WorkspaceHookEvent =
+	| {
+			kind: "hookAwaitingApproval";
+			workspaceId: string;
+			workspaceName: string;
+			projectId: string;
+			hook: HookName;
+			command: string;
+	  }
+	| {
+			kind: "hookStarted";
+			workspaceId: string;
+			workspaceName: string;
+			projectId: string;
+			hook: HookName;
+			command: string;
+	  }
+	| {
+			kind: "hookOutput";
+			workspaceId: string;
+			workspaceName: string;
+			projectId: string;
+			hook: HookName;
+			chunk: string;
+	  }
+	| {
+			kind: "hookSucceeded";
+			workspaceId: string;
+			workspaceName: string;
+			projectId: string;
+			hook: HookName;
+			command: string;
+	  }
+	| {
+			kind: "hookFailed";
+			workspaceId: string;
+			workspaceName: string;
+			projectId: string;
+			hook: HookName;
+			command: string;
+			exitCode: number;
+	  };
 
 /** A chat tab bound to a workspace. `id` is the UI tab id; `sessionId` is the pi `AgentSession` id. */
 export interface Session {

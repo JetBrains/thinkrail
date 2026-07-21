@@ -107,7 +107,16 @@ what lets the UI ship independently of the host.
   as `config.json`, delivered in `server.welcome`, mutated via `settings.update`);
   **`SpecGraphNode`/`SpecGraphSnapshot`** — the
   Specs-viewer read DTOs, **mirrored** (like `PiEvent`), never imported from `pi-spec-graph` — the wire
-  carries only what the panel renders (`type`/`status` stay `string`: tolerate whatever is on disk).
+  carries only what the panel renders (`type`/`status` stay `string`: tolerate whatever is on disk);
+  the **workspace hooks wire** — **`HookName`** (`onCreate`/`onDelete`/`preMerge`/`postMerge`, the four
+  points a project can declare in its own `.thinkrail/hooks.json`), **`HookStatus`** (`{ state, command?,
+  exitCode? }` — the last known state of one hook, persisted on **`Workspace.hookStatus`** so a
+  reconnecting/reloaded client learns about a still-pending `onCreate` without a live push) and
+  **`WorkspaceHookEvent`** (the `workspace.hook` push payload — `hookAwaitingApproval` / `hookStarted` /
+  `hookOutput` / `hookSucceeded` / `hookFailed`, each keyed by `workspaceId` + `hook`, and each also
+  carrying `projectId` + `workspaceName` so a client can still describe the event after the workspace's own
+  record is gone — see the server's `workspaces/hooks` module SPEC for the execution/approval design this
+  wire serves).
 - **wsProtocol.ts** — `WS_METHODS` (`project.*` — incl. **`project.inspect`** (classify a path) +
   **`project.init`** (`git init` + commit, then open) + **`project.hasSpecs`** (lazy per-project "has any
   registered spec?" for the Welcome screen — a full-tree walk, so requested only for the shown project,
@@ -122,7 +131,16 @@ what lets the UI ship independently of the host.
   `session.*` — `create`/`prompt`/`steer`/`followUp`/`abort`/`dispose`/`setModel`/
   `setThinkingLevel`/`compact`/`getStats`/`getCommands`/`extUiReply`/**`answerQuestion`** (the inline
   `ask_user_question` reply, correlated by tool call id)/**`list`**/**`getMessages`** (the
-  read side) / **`settings.update`** (merge + persist a partial `AppConfig`, returns the merged config)),
+  read side) / **`settings.update`** (merge + persist a partial `AppConfig`, returns the merged config)) /
+  the **workspace hooks pair** — **`workspace.hooks.approve`** (`{ projectId, hook, command }` → records a
+  sha256'd approval, scoped to the project+hook, not a single workspace) and **`workspace.hooks.run`**
+  (`{ workspaceId, hook }` → re-invokes a hook for one specific workspace on demand; `onCreate`/`onDelete`
+  only — the approval UI composes it with `approve` to bootstrap a workspace stuck at
+  `hookAwaitingApproval`, and it doubles as a manual retry-after-failure action)) / the **project hooks
+  pair** — **`project.hooks.get`** (`{ projectId }` → committed + host-local-override commands per hook,
+  plus whether each hook's resolved command is currently approved — no workspace needed, so it's readable
+  before any workspace exists) and **`project.hooks.save`** (writes both the committed config — committed
+  to the project's root checkout — and the override map; never touches approval),
   `WS_CHANNELS` (`server.welcome` — which carries the initial `config: AppConfig` alongside `projects` /
   `pi.event` / `pi.extensionUi` / **`settings.changed`** (the full `AppConfig`, broadcast so every client
   converges) / **`provider.login`** — the session-less in-app login stream (a `LoginPush`
@@ -136,7 +154,10 @@ what lets the UI ship independently of the host.
   pair (`{ projectId, id }` — the record is already gone) / **`workspace.fsChanged`** — the worktree
   change-notifier push (**`WorkspaceFsChangedPayload`**: `{ workspaceId, paths, truncated }`,
   worktree-relative deduped paths, capped — `truncated` = treat as wildcard); an **invalidation nudge,
-  not data**: clients re-read via the existing read methods, so a duplicate/replayed frame is harmless.
+  not data**: clients re-read via the existing read methods, so a duplicate/replayed frame is harmless /
+  **`workspace.hook`** — one channel for every `WorkspaceHookEvent` transition (not a per-kind split like
+  the lifecycle trio — every transition for every hook shares this one channel, the same
+  single-channel-carries-a-typed-payload shape `workspace.fsChanged` uses).
   The `WsMethodMap` typed request/result map +
   `WsParams`/`WsResult` helpers, and `PROTOCOL_VERSION`.
 

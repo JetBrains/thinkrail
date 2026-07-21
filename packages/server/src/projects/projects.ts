@@ -16,6 +16,20 @@ function gitToplevel(path: string): string | null {
 	return result.ok ? result.out || null : null;
 }
 
+/**
+ * `-c` overrides for `user.name`/`user.email`, supplied **only when not already configured** so a real
+ * global identity is never overridden. Shared by every place this module commits directly to a project's
+ * root checkout (`initProject`, `commitProjectFile`) — a fresh machine may have neither set, which would
+ * otherwise make `git commit` fail.
+ */
+function gitIdentityArgs(path: string): string[] {
+	const identity: string[] = [];
+	if (!git(path, ["config", "user.name"]).out) identity.push("-c", "user.name=ThinkRail");
+	if (!git(path, ["config", "user.email"]).out)
+		identity.push("-c", "user.email=thinkrail@localhost");
+	return identity;
+}
+
 function slugify(name: string): string {
 	return (
 		name
@@ -129,11 +143,13 @@ export function initProject(path: string): Project {
 		const added = git(path, ["add", "-A"]);
 		if (!added.ok) throw new Error(`git add failed: ${path}`);
 
-		const identity: string[] = [];
-		if (!git(path, ["config", "user.name"]).out) identity.push("-c", "user.name=ThinkRail");
-		if (!git(path, ["config", "user.email"]).out)
-			identity.push("-c", "user.email=thinkrail@localhost");
-		const commit = git(path, [...identity, "commit", "--allow-empty", "-m", "Initial commit"]);
+		const commit = git(path, [
+			...gitIdentityArgs(path),
+			"commit",
+			"--allow-empty",
+			"-m",
+			"Initial commit",
+		]);
 		if (!commit.ok) throw new Error(`git commit failed: ${path}`);
 	} catch (err) {
 		// Remove the `.git` we just created (path was `initable`) so a retry re-inits cleanly.
@@ -142,4 +158,23 @@ export function initProject(path: string): Project {
 	}
 
 	return openProject(path);
+}
+
+/**
+ * Commit `relPath`'s current on-disk content (whatever the caller already wrote, e.g. via
+ * `writeHookConfig`) in the project rooted at `path` — the only surface in this module (besides
+ * `initProject`) that commits directly to a project's root checkout rather than an isolated worktree.
+ * `git add` then a **pathspec-scoped commit** (`commit -m … -- relPath`), never `add -A`/a bare `commit`:
+ * the `add` is required for a never-before-tracked file (a pathspec-only commit fails with "did not match
+ * any file(s) known to git" for one, verified empirically), and the pathspec on the commit itself ensures
+ * nothing else already staged in the user's checkout gets swept in even though it's technically in the
+ * index. "Nothing to commit" (unchanged content) is a benign no-op, not a thrown error.
+ */
+export function commitProjectFile(path: string, relPath: string, message: string): void {
+	const added = git(path, ["add", "--", relPath]);
+	if (!added.ok) throw new Error(`git add failed: ${relPath}`);
+	const commit = git(path, [...gitIdentityArgs(path), "commit", "-m", message, "--", relPath]);
+	if (!commit.ok && !/nothing to commit/i.test(`${commit.out}\n${commit.err}`)) {
+		throw new Error(`git commit failed: ${relPath}`);
+	}
 }

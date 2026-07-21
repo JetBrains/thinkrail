@@ -79,6 +79,21 @@ channel fan-out, and the process-boot wrapper both launchers share.
   is the **single** place workspace membership changes reach the wire — create/rename/archive all flow
   through it, so every client (including the initiator) converges by reacting, never by per-client optimism.
   The two new channels are `ws.subscribe`d in the WS `open` handler alongside `workspace.updated`.
+- **Workspace hooks wiring:** `createServer` installs the `workspaces/hooks` submodule's publisher
+  (`setHookPublisher`), publishing every `WorkspaceHookEvent` directly as the `workspace.hook` push
+  `data` — a single channel carries the whole discriminated union (no kind→channel split, unlike the
+  lifecycle trio; the same shape `watch`'s `workspace.fsChanged` uses), also `ws.subscribe`d in `open`.
+  `handlers.ts` adds `workspace.hooks.approve` (records an approval) and `workspace.hooks.run`
+  (re-invokes a specific workspace's hook on demand — what the approval flow composes with `approve` to
+  actually bootstrap a workspace stuck at `hookAwaitingApproval`, and the standalone manual-retry
+  action) — the latter is also why `archiveTeardown`'s `reclaimWorktree(ws)` call is `await`ed: that
+  function became `async` once it started awaiting the `onDelete` hook.
+- **Project-level hooks config surface:** `project.hooks.get`/`project.hooks.save` (no workspace
+  needed) — `get` reads `workspaces/hooks`'s `loadHookConfig` off the **project's root path** (not a
+  workspace worktree) + `persistence`'s `loadHookOverrides`, and computes per-hook approval via
+  `resolveHookCommand` + `isApproved`; `save` writes via `workspaces/hooks`'s `writeHookConfig` then
+  commits via `projects`'s `commitProjectFile`, and persists the override map via `saveHookOverrides` —
+  approval itself is untouched by a save.
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer`, `bootHost`,
   `BootHostOptions`, `BootedHost`.
 - **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for

@@ -2,12 +2,14 @@ import type {
 	AppConfig,
 	AskUserQuestionResult,
 	ExtUiResponse,
+	HookName,
 	ImageContent,
 	LoginReply,
 	ThinkingLevel,
 	WireModel,
 	Workspace,
 } from "@thinkrail/contracts";
+import { WORKSPACE_HOOKS_CONFIG_FILE } from "@thinkrail/shared/paths";
 import {
 	abortSession,
 	answerQuestion,
@@ -44,8 +46,10 @@ import { selectDirectory } from "../dialog";
 import { readDir, readFile } from "../fs";
 import { gitDiff, gitStatus, listBranches, prefetchBranch } from "../git";
 import { githubAuthStatus, githubRefresh } from "../github";
+import { loadHookOverrides, saveHookOverrides } from "../persistence";
 import {
 	closeProject,
+	commitProjectFile,
 	initProject,
 	inspectProjectPath,
 	listProjects,
@@ -62,12 +66,19 @@ import {
 } from "../terminal";
 import { ensureWatch, stopWatch } from "../watch";
 import {
+	approveHook,
 	createWorkspace,
 	forgetWorkspace,
 	getWorkspace,
+	isApproved,
 	listWorkspaces,
+	loadHookConfig,
 	reclaimWorktree,
+	resolveHookCommand,
+	runOnCreateHook,
+	runOnDeleteHook,
 	workspaceDiffStats,
+	writeHookConfig,
 } from "../workspaces";
 import { ackSend } from "./ackSend";
 
@@ -83,7 +94,7 @@ type Handler = (params: unknown) => unknown | Promise<unknown>;
 async function archiveTeardown(ws: Workspace): Promise<void> {
 	try {
 		await removeWorkspaceSessions(ws.id, ws.worktreePath);
-		reclaimWorktree(ws);
+		await reclaimWorktree(ws);
 	} catch (error) {
 		console.warn(`workspace archive teardown failed for ${ws.id}: ${error}`);
 	}
@@ -123,6 +134,53 @@ const handlers: Record<string, Handler> = {
 		return { ok: true } as const;
 	},
 	"workspace.diffStats": (params) => workspaceDiffStats((params as { id: string }).id),
+	"workspace.hooks.approve": (params) => {
+		const p = params as { projectId: string; hook: HookName; command: string };
+		approveHook(p.projectId, p.hook, p.command);
+		return { ok: true } as const;
+	},
+	// Re-invoke a specific hook for a specific workspace on demand (the approval flow's "run now" —
+	// composed with `workspace.hooks.approve` — and a standalone manual-retry primitive). Only
+	// onCreate/onDelete are supported: preMerge/postMerge have no caller anywhere yet, so "run now" has no
+	// meaning for them.
+	"workspace.hooks.run": (params) => {
+		const p = params as { workspaceId: string; hook: HookName };
+		const workspace = getWorkspace(p.workspaceId);
+		const project = listProjects().find((proj) => proj.id === workspace.projectId);
+		if (!project) throw new Error(`Unknown project: ${workspace.projectId}`);
+		if (p.hook === "onCreate") runOnCreateHook(workspace, project);
+		else if (p.hook === "onDelete") void runOnDeleteHook(workspace, project);
+		else throw new Error(`Manual run isn't supported for ${p.hook}`);
+		return { ok: true } as const;
+	},
+	"project.hooks.get": (params) => {
+		const p = params as { projectId: string };
+		const project = listProjects().find((proj) => proj.id === p.projectId);
+		if (!project) throw new Error(`Unknown project: ${p.projectId}`);
+		const committed = loadHookConfig(project.path);
+		const overrides = loadHookOverrides()[project.id] ?? {};
+		const hooks: HookName[] = ["onCreate", "onDelete", "preMerge", "postMerge"];
+		const approved: Partial<Record<HookName, boolean>> = {};
+		for (const hook of hooks) {
+			const resolved = resolveHookCommand(hook, committed, overrides);
+			if (resolved) approved[hook] = isApproved(project.id, hook, resolved);
+		}
+		return { committed, overrides, approved };
+	},
+	"project.hooks.save": (params) => {
+		const p = params as {
+			projectId: string;
+			committed: Partial<Record<HookName, string>>;
+			overrides: Partial<Record<HookName, string>>;
+		};
+		const project = listProjects().find((proj) => proj.id === p.projectId);
+		if (!project) throw new Error(`Unknown project: ${p.projectId}`);
+		writeHookConfig(project.path, p.committed);
+		commitProjectFile(project.path, WORKSPACE_HOOKS_CONFIG_FILE, "chore: update workspace hooks");
+		const allOverrides = loadHookOverrides();
+		saveHookOverrides({ ...allOverrides, [project.id]: p.overrides });
+		return { ok: true } as const;
+	},
 	"git.listBranches": (params) => listBranches((params as { projectId: string }).projectId),
 	"git.prefetch": (params) => {
 		const p = params as { projectId: string; ref: string };

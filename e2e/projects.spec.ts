@@ -1,11 +1,15 @@
 import { basename } from "node:path";
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, stagePlainFolder } from "./fixtures/app";
+import { createWorkspaceViaDialog, openAppFresh, stagePlainFolder } from "./fixtures/app";
 import { E2E_FIXTURE_REPO, E2E_PLAIN_DIR } from "./fixtures/paths";
 
 test("opens a git repo as a project via the directory picker", async ({ page }) => {
-	await page.goto("/");
-	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	// Explicit reset (not just `page.goto`): this test asserts on a *specific* project-item, so it must not
+	// depend on whatever the previous spec file's last test left behind — e.g. `stageHookProject` (used by
+	// `workspace-hooks.spec.ts` / `project-hooks-config.spec.ts`) repoints the stubbed picker at its own
+	// throwaway repo and leaves it there, which used to leak into this test purely by lucky alphabetical
+	// ordering (this file happening to run right after a spec that reset back to `E2E_FIXTURE_REPO`).
+	await openAppFresh(page);
 
 	// "Open project" invokes the host's native directory picker — stubbed to E2E_FIXTURE_REPO in e2e.
 	await page.getByTestId("add-project-menu").click();

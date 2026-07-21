@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { approveHook } from "./hooks";
 import {
 	createWorkspace,
 	forgetWorkspace,
@@ -208,7 +209,7 @@ test("forgetWorkspace drops the record + returns it, but leaves the worktree for
 	expect(new TextDecoder().decode(before.stdout)).toContain(ws.worktreePath);
 
 	// reclaimWorktree then removes it from git + disk.
-	reclaimWorktree(forgotten as NonNullable<typeof forgotten>);
+	await reclaimWorktree(forgotten as NonNullable<typeof forgotten>);
 	const after = Bun.spawnSync(["git", "-C", repo, "worktree", "list"], { stdout: "pipe" });
 	expect(new TextDecoder().decode(after.stdout)).not.toContain(ws.worktreePath);
 
@@ -237,7 +238,7 @@ test("membership mutations emit lifecycle events through the injected publisher"
 test("a null publisher makes lifecycle emits silent no-ops", async () => {
 	setWorkspacePublisher(null);
 	const ws = await createWorkspace("p1");
-	expect(() => removeWorkspace(ws.id)).not.toThrow();
+	await expect(removeWorkspace(ws.id)).resolves.toBeUndefined();
 	expect(listWorkspaces("p1")).toHaveLength(0);
 });
 
@@ -248,10 +249,46 @@ test("removeWorkspace cleans up even when the worktree dir is already gone", asy
 	// Simulate drift: delete the worktree dir behind git's back so `git worktree remove` can't.
 	rmSync(ws.worktreePath, { recursive: true, force: true });
 
-	expect(() => removeWorkspace(ws.id)).not.toThrow();
+	await expect(removeWorkspace(ws.id)).resolves.toBeUndefined();
 	expect(listWorkspaces("p1")).toHaveLength(0);
 
 	// git's worktree registration is pruned — no orphan left behind.
 	const list = Bun.spawnSync(["git", "-C", repo, "worktree", "list"], { stdout: "pipe" });
 	expect(new TextDecoder().decode(list.stdout)).not.toContain(ws.worktreePath);
+});
+
+test("onDelete hook runs before the worktree directory is actually removed", async () => {
+	const ws = await createWorkspace("p1");
+	const command = `test -d "${ws.worktreePath}" && touch "${dataDir}/onDelete-ran"`;
+	mkdirSync(join(ws.worktreePath, ".thinkrail"), { recursive: true });
+	writeFileSync(
+		join(ws.worktreePath, ".thinkrail", "hooks.json"),
+		JSON.stringify({ onDelete: command }),
+	);
+	approveHook("p1", "onDelete", command);
+
+	await reclaimWorktree(ws);
+
+	expect(existsSync(join(dataDir, "onDelete-ran"))).toBe(true); // saw the worktree while it still existed
+	expect(existsSync(ws.worktreePath)).toBe(false); // and the worktree is gone afterward
+});
+
+test("onCreate hook runs in the background and doesn't block createWorkspace's return", async () => {
+	// Commit a slow onCreate hook to the base branch first, so it's already checked out the moment the new
+	// worktree is created.
+	const command = `sleep 0.5 && touch "${dataDir}/onCreate-ran"`;
+	mkdirSync(join(repo, ".thinkrail"), { recursive: true });
+	writeFileSync(join(repo, ".thinkrail", "hooks.json"), JSON.stringify({ onCreate: command }));
+	git(repo, "add", "-A");
+	git(repo, "commit", "-m", "add onCreate hook");
+	approveHook("p1", "onCreate", command);
+
+	const start = Date.now();
+	const ws = await createWorkspace("p1");
+	expect(Date.now() - start).toBeLessThan(500); // returned well before the 0.5s hook could have finished
+	expect(existsSync(join(dataDir, "onCreate-ran"))).toBe(false); // hook hasn't finished yet
+
+	await new Promise((resolve) => setTimeout(resolve, 700));
+	expect(existsSync(join(dataDir, "onCreate-ran"))).toBe(true); // …but it did finish, in the background
+	expect(ws.id).toBeTruthy();
 });
