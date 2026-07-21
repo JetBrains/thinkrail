@@ -86,11 +86,11 @@ function hookStatusFromEvent(
 		case "hookAwaitingApproval":
 			return { state: "awaitingApproval", command: event.command };
 		case "hookStarted":
-			return { state: "running" };
+			return { state: "running", command: event.command };
 		case "hookSucceeded":
-			return { state: "succeeded" };
+			return { state: "succeeded", command: event.command };
 		case "hookFailed":
-			return { state: "failed", exitCode: event.exitCode };
+			return { state: "failed", command: event.command, exitCode: event.exitCode };
 	}
 }
 
@@ -468,7 +468,9 @@ interface AppState {
 	 * Fold a `workspace.hook` push: append to the live output buffer (reset on a fresh run), and — for
 	 * every kind but `hookOutput` — mirror the transition onto the workspace's own `hookStatus` field too,
 	 * so the row badge/tab updates immediately without waiting on a `workspace.updated` round-trip. A
-	 * workspace not found in any loaded project's list (not yet fetched) only updates the live buffer.
+	 * workspace not found in any loaded project's list (already removed, or not yet fetched) touches
+	 * neither: `hookAwaitingApproval`/`hookFailed` instead raise a toast (there's no row/tab left to show
+	 * it), everything else is dropped.
 	 */
 	applyWorkspaceHookEvent: (event: WorkspaceHookEvent) => void;
 	/** Replace a file tab's content after a live re-read, recording the fs tick it was loaded at. The tab
@@ -757,6 +759,30 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	applyWorkspaceHookEvent: (event) =>
 		set((s) => {
+			const entry = Object.entries(s.workspaces).find(([, list]) =>
+				list.some((w) => w.id === event.workspaceId),
+			);
+
+			if (!entry) {
+				// The workspace's row/tab is already gone (e.g. removed mid-teardown, per the onDelete
+				// visibility fix) — there's nothing left to update. hookAwaitingApproval/hookFailed would
+				// otherwise vanish silently, so surface just those two as a toast naming the workspace + project;
+				// the rest (hookStarted/hookOutput/hookSucceeded) have nothing actionable to say and are
+				// dropped — this also closes a latent leak where any kind used to still write into
+				// `hookOutputByWorkspace` for an id nothing will ever read again.
+				const projectName = s.projects.find((p) => p.id === event.projectId)?.name ?? "the project";
+				if (event.kind === "hookAwaitingApproval") {
+					toast.error(
+						`${event.workspaceName}'s ${event.hook} was skipped — it still needs approval. Approve it in ${projectName} → Hooks so future removals aren't skipped too.`,
+					);
+				} else if (event.kind === "hookFailed") {
+					toast.error(
+						`${event.workspaceName}'s ${event.hook} failed (exit ${event.exitCode}) while the workspace was being removed.`,
+					);
+				}
+				return {};
+			}
+
 			const wsOutput = s.hookOutputByWorkspace[event.workspaceId] ?? {};
 			const prev = wsOutput[event.hook];
 			// A fresh attempt (approval-pending or actually starting) clears the prior run's output; a
@@ -780,10 +806,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 			if (event.kind === "hookOutput") return { hookOutputByWorkspace };
 
 			const status = hookStatusFromEvent(event);
-			const entry = Object.entries(s.workspaces).find(([, list]) =>
-				list.some((w) => w.id === event.workspaceId),
-			);
-			if (!entry) return { hookOutputByWorkspace }; // not yet fetched — the next workspace.list reconciles
 			const [projectId, list] = entry;
 			return {
 				hookOutputByWorkspace,

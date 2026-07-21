@@ -98,9 +98,12 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   the live buffer — capped, reset on a fresh `hookStarted`/`hookAwaitingApproval` — and, for every other
   kind, *also* mirrors the transition onto the matching workspace's own `hookStatus` field directly, so the
   row badge/Hooks-tab update from the live event without waiting on a `workspace.updated` round-trip; a
-  workspace not found in any loaded project's list only updates the live buffer) — mirrors `noteFsChanged`'s
-  "signal, not data" shape, but this one *also* patches durable state (`Workspace.hookStatus`) since that
-  field already lives on the record the lifecycle pushes carry. The transient **`hooksRequest`** +
+  workspace not found in any loaded project's list (already removed, or not yet fetched) updates neither the
+  buffer nor `hookStatus` — `hookAwaitingApproval`/`hookFailed` instead raise a toast naming the workspace +
+  project (there's no row/tab left for them to render onto); everything else is dropped, closing what would
+  otherwise be a leak into `hookOutputByWorkspace` for an id nothing will read again) — mirrors
+  `noteFsChanged`'s "signal, not data" shape, but this one *also* patches durable state
+  (`Workspace.hookStatus`) since that field already lives on the record the lifecycle pushes carry. The transient **`hooksRequest`** +
   **`requestHooksView(workspaceId)`** mirror `changesRequest`/`requestChangesView` — a workspace row's
   hook badge deep-links the right panel to its Hooks tab. The `EditorTab`
   (`FileTab` | `ChatTab`) + `TerminalTab` + `ClosedChat` + `SessionRuntime` types. (Chat *render* types +

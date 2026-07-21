@@ -816,3 +816,64 @@ test("applyConfig folds the server-synced app config in (theme is host-owned, a 
 	useAppStore.getState().applyConfig({ theme: "light" });
 	expect(useAppStore.getState().theme).toBe("light");
 });
+
+// ---- applyWorkspaceHookEvent: hook events for workspaces no longer in any project's list --------
+
+test("applyWorkspaceHookEvent toasts (doesn't crash/silently drop) hookAwaitingApproval for a workspace no longer in any project's list", () => {
+	useAppStore.setState({
+		projects: [{ id: "p1", name: "demo", path: "/tmp/demo", slug: "demo", lastOpened: 0 }],
+		workspaces: {}, // the workspace is already gone — mirrors post-removal
+		toasts: [],
+	});
+	useAppStore.getState().applyWorkspaceHookEvent({
+		kind: "hookAwaitingApproval",
+		workspaceId: "gone-1",
+		workspaceName: "workspace-3",
+		projectId: "p1",
+		hook: "onDelete",
+		command: "docker compose down",
+	});
+	const toasts = useAppStore.getState().toasts;
+	expect(toasts).toHaveLength(1);
+	expect(toasts[0]?.variant).toBe("error");
+	expect(toasts[0]?.message).toContain("workspace-3");
+	expect(toasts[0]?.message).toContain("demo");
+});
+
+test("applyWorkspaceHookEvent toasts hookFailed for a workspace no longer in any project's list", () => {
+	useAppStore.setState({
+		projects: [{ id: "p1", name: "demo", path: "/tmp/demo", slug: "demo", lastOpened: 0 }],
+		workspaces: {},
+		toasts: [],
+	});
+	useAppStore.getState().applyWorkspaceHookEvent({
+		kind: "hookFailed",
+		workspaceId: "gone-1",
+		workspaceName: "workspace-3",
+		projectId: "p1",
+		hook: "onDelete",
+		command: "docker compose down",
+		exitCode: 1,
+	});
+	const toasts = useAppStore.getState().toasts;
+	expect(toasts).toHaveLength(1);
+	expect(toasts[0]?.message).toContain("workspace-3");
+	expect(toasts[0]?.message).toContain("exit 1");
+});
+
+test("applyWorkspaceHookEvent doesn't leak into hookOutputByWorkspace for a workspace no longer in any project's list", () => {
+	useAppStore.setState({
+		projects: [{ id: "p1", name: "demo", path: "/tmp/demo", slug: "demo", lastOpened: 0 }],
+		workspaces: {},
+		hookOutputByWorkspace: {},
+	});
+	useAppStore.getState().applyWorkspaceHookEvent({
+		kind: "hookOutput",
+		workspaceId: "gone-1",
+		workspaceName: "workspace-3",
+		projectId: "p1",
+		hook: "onDelete",
+		chunk: "tearing down\n",
+	});
+	expect(useAppStore.getState().hookOutputByWorkspace).toEqual({});
+});
