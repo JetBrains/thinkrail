@@ -14,13 +14,30 @@ export interface TemplateDirs {
 	projectDir?: string;
 }
 
-/** The traversal gate: every caller-supplied name is checked against this before it's joined into a
- * path. A plain slug — no `/`, no leading `.` (so `.`, `..`, and `.hidden` all fail), non-empty. */
-const VALID_NAME = /^[a-z0-9][a-z0-9-_]*$/i;
-
-/** Whether `name` is safe to use as a template filename (minus the `.md` suffix). */
+/**
+ * The traversal gate: every caller-supplied name is checked against this before it's used to build a
+ * path (`${name}.md` under one of the sanctioned dirs). This is a **path-traversal safety check, not a
+ * naming-style rule** — pi's own loader derives a template's name from the filename alone
+ * (`basename(filePath).replace(/\.md$/, "")`, with no sanitization at all — see SPEC.md's pinned pi
+ * facts), so this gate must accept every name pi could legally list, or `listTemplates` and the by-name
+ * operations fall out of parity: a name that shows up in a listing but can't be fetched, overwritten, or
+ * deleted by that same name is a user-visible bug, not a safety win. (An earlier version of this gate
+ * used an `/^[a-z0-9][a-z0-9-_]*$/i` allowlist regex — safe, but over-restrictive: it rejected any name
+ * with an interior dot, e.g. "foo.bar", which pi itself lists without complaint.)
+ *
+ * Rejected — exactly the shapes that are unsafe as a single filename segment:
+ * - empty string
+ * - a leading "." (covers ".", "..", and dotfiles like ".hidden" with one rule)
+ * - a path separator anywhere in the name ("/" or "\" — blocks "a/b", "../x", absolute paths, and
+ *   Windows-style separators)
+ * - an embedded NUL byte
+ *
+ * Everything else — interior dots, uppercase, spaces, unicode — is accepted.
+ */
 export function isValidTemplateName(name: string): boolean {
-	return VALID_NAME.test(name);
+	if (name.length === 0) return false;
+	if (name.startsWith(".")) return false;
+	return !name.includes("/") && !name.includes("\\") && !name.includes("\0");
 }
 
 /** The global + (if `cwd` is given) project prompt directories, pi's own layout: `<agentDir>/prompts`
@@ -132,7 +149,9 @@ export function saveTemplate(
 }
 
 /** Delete a template. Throws on an invalid `name`, a "project" scope with no workspace, or if the
- * template doesn't exist. */
+ * template doesn't exist — a missing file is treated as an error, not a silent no-op, since a delete
+ * request implies the caller's view already named a specific file; loud beats silent for a UI that might
+ * be looking at a stale list (see SPEC.md's "Get right"). */
 export function deleteTemplate(dirs: TemplateDirs, scope: TemplateScope, name: string): void {
 	if (!isValidTemplateName(name)) throw new Error(`invalid template name: ${JSON.stringify(name)}`);
 	const dir = dirForScope(dirs, scope);

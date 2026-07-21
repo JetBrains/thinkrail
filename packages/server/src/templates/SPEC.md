@@ -88,14 +88,21 @@ pi version bump.
   `resource-loader.js`'s `updatePromptsFromPaths`). A template saved through `template.save` must show
   up the next time any client asks (`template.list`, the web `/` menu, the Templates settings panel), so
   this module never memoizes; the cost is a couple of small `readdir`s per call, which is cheap enough.
-- `isValidTemplateName` (`/^[a-z0-9][a-z0-9-_]*$/i`) is the **traversal gate**: applied to every
-  caller-supplied `name` before it's `join()`-ed into a path, in `getTemplate`, `saveTemplate`, and
-  `deleteTemplate` alike. It rejects anything containing `/`, a leading `.` (so `.`, `..`, and `.hidden`
-  all fail the first-character class), or an empty string. `listTemplates` does **not** filter by it —
-  it enumerates whatever `.md` files already exist in the sanctioned dirs, matching pi's own
-  no-validation scan, so a file placed there by another tool with an unusual name still surfaces for
-  reading; it just can't be *targeted* by name through this module unless its derived name happens to
-  satisfy the gate too.
+- `isValidTemplateName` is the **traversal gate**: applied to every caller-supplied `name` before it's
+  `join()`-ed into a path, in `getTemplate`, `saveTemplate`, and `deleteTemplate` alike. Its job is
+  path-traversal *safety*, not naming style, so it rejects only the shapes that are unsafe as a single
+  filename segment — empty, a leading `.` (covers `.`, `..`, and `.hidden`-style dotfiles with one rule),
+  a path separator anywhere in the name (`/` or `\`), or an embedded NUL byte — and accepts everything
+  else, including interior dots (`foo.bar`), uppercase, spaces, and unicode. This matters because pi's
+  own loader performs **no sanitization at all** when deriving a name from a filename (see "pi facts"
+  above), so a narrower rule breaks **list/get parity**: a name `listTemplates` can show but
+  `getTemplate`/`saveTemplate`/`deleteTemplate` refuse is a user-visible bug, not a safety improvement.
+  (This gate originally used an `/^[a-z0-9][a-z0-9-_]*$/i` allowlist regex — safe, but over-restrictive:
+  it rejected any name with an interior dot, so a perfectly ordinary, pi-legal template named `foo.bar`
+  would list but 404 on get/save/delete. Fixed once caught — the allowlist shape was solving the wrong
+  problem, aesthetics instead of traversal.) `listTemplates` does **not** filter by this gate at all — it
+  enumerates whatever `.md` files already exist in the sanctioned dirs, matching pi's own no-validation
+  scan; the gate only guards the three *by-name* operations, where a name is turned into a path.
 - A per-file read/parse failure (unreadable file, malformed YAML frontmatter) is swallowed inside
   `listTemplates`'s directory scan — one bad file must never blank the whole listing — mirroring pi's
   own `loadTemplateFromFile`'s `try { … } catch { return null; }`. `getTemplate` / `saveTemplate` make no
@@ -129,3 +136,15 @@ pi version bump.
 - **Fresh read, every call.** No in-memory cache anywhere in this module (see "Design" above) — this is
   deliberate, not an oversight; don't add one without re-reading the freshness rationale it exists to
   satisfy.
+- **List/get parity.** Every name `listTemplates` can produce, `getTemplate`/`saveTemplate`/
+  `deleteTemplate` must also accept — `isValidTemplateName` excludes only the shapes that are unsafe as a
+  filename segment (empty, leading `.`, a separator, NUL), never an ordinary pi-legal name like `foo.bar`.
+  Don't tighten this gate without checking it still admits everything pi's own loader would list; a
+  narrower "clean slug" regex looks safe in review but silently breaks this parity (it did, once — see
+  "Design" above).
+- **`deleteTemplate` throws when the target is already gone**, rather than treating a missing file as a
+  successful no-op — this is the handler contract Task B3 should build on. A delete request only reaches
+  this module because a caller's UI named one specific existing-as-far-as-it-knows template; if the file
+  is already gone, that view is stale, and the `template.*` handler should surface that as an error (e.g.
+  "already deleted, refresh") rather than reporting success for something that didn't happen. Loud beats
+  silent for a stale UI.

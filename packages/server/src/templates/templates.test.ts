@@ -12,6 +12,11 @@ import {
 	templateDirs,
 } from "./templates";
 
+/** Names that are unsafe as a filename segment — must be rejected by `isValidTemplateName` and,
+ * transitively, by save/get/delete. Shared between the direct gate tests and the by-name-operation tests
+ * below so the two lists can never drift apart. */
+const INVALID_NAMES = ["../x", "a/b", "a\\b", ".hidden", ""];
+
 let root: string;
 let globalDir: string;
 let projectDir: string;
@@ -42,13 +47,16 @@ describe("templateDirs", () => {
 });
 
 describe("isValidTemplateName", () => {
-	for (const name of ["../x", "a/b", ".hidden", ""]) {
+	for (const name of INVALID_NAMES) {
 		test(`rejects ${JSON.stringify(name)}`, () => {
 			expect(isValidTemplateName(name)).toBe(false);
 		});
 	}
 
-	for (const name of ["greet", "My_Template-2", "a"]) {
+	// Interior dots, uppercase, and spaces are all pi-legal (pi's loader does no sanitization) and must
+	// be accepted — this is a traversal gate, not a naming-style rule. "foo.bar" in particular is the
+	// case that a former, over-restrictive allowlist regex used to reject.
+	for (const name of ["greet", "My_Template-2", "a", "foo.bar", "my template"]) {
 		test(`accepts ${JSON.stringify(name)}`, () => {
 			expect(isValidTemplateName(name)).toBe(true);
 		});
@@ -109,6 +117,22 @@ describe("saveTemplate -> listTemplates -> getTemplate", () => {
 		expect(second.content).toBe("second version");
 		expect(getTemplate(dirs, "dup", "global").content).toBe("second version");
 	});
+
+	test(
+		"a name with an interior dot (foo.bar) round-trips through save -> list -> get -> delete " +
+			"(list/get parity: pi lists any *.md with no sanitization, so this module must accept it too)",
+		() => {
+			const content = "Body for a dotted name.";
+			const saved = saveTemplate(dirs, "global", "foo.bar", content);
+			expect(saved.name).toBe("foo.bar");
+
+			expect(listTemplates(dirs).map((t) => t.name)).toEqual(["foo.bar"]);
+			expect(getTemplate(dirs, "foo.bar").content).toBe(content);
+
+			deleteTemplate(dirs, "global", "foo.bar");
+			expect(listTemplates(dirs)).toEqual([]);
+		},
+	);
 });
 
 describe("listTemplates precedence + freshness", () => {
@@ -207,7 +231,7 @@ describe("deleteTemplate", () => {
 });
 
 describe("invalid names are rejected on save/get/delete", () => {
-	for (const name of ["../x", "a/b", ".hidden", ""]) {
+	for (const name of INVALID_NAMES) {
 		test(`rejects ${JSON.stringify(name)}`, () => {
 			expect(() => saveTemplate(dirs, "global", name, "x")).toThrow();
 			expect(() => getTemplate(dirs, name, "global")).toThrow();
