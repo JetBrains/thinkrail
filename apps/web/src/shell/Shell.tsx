@@ -11,8 +11,8 @@ import { TerminalsPanel } from "../panels/TerminalsPanel";
 import { Toaster } from "../panels/Toaster";
 import { WelcomePanel } from "../panels/WelcomePanel";
 import { selectActiveWorkspace, selectContextProject, useAppStore } from "../store";
+import { applyTheme, writeThemeHint } from "../themes";
 import type { ConnectionStatus } from "../transport";
-import { applyTheme, writeThemeHint } from "../utils/theme";
 
 const STATUS_LABEL: Record<ConnectionStatus, string> = {
 	connected: "Connected",

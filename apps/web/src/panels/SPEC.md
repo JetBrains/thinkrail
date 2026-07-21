@@ -108,10 +108,12 @@ a project picker, the prompt hero, and the reused
   Connected (Disconnect) / ready (Connect) / not signed in (in-app `central login` + Retry) / not installed
   (the host's per-OS copyable install command — from `jbcentralInstall`, for the *host's* OS, never the
   browser's — + Recheck); each mutation re-reads `provider.status`) **`GithubSettings`** (the "Local GitHub" block — `github.authStatus()`
-  Connected + login / Not connected + Refresh); and **`AppearanceSettings`** (the **theme picker** — a
-  labelled list of `utils/theme`'s `THEMES`, the active one from `store.theme` marked; clicking one fires
-  `settings.update` and the UI **converges on the `settings.changed` broadcast** (no optimistic apply), a
-  rejected update raising a toast). A single dimmed "General" nav item ("Soon") still signals the shell is
+  Connected + login / Not connected + Refresh); and **`AppearanceSettings`** (the **theme picker** — the
+  bundled catalog from `themes`, with the resolved active selection from `store.theme` marked;
+  clicking one fires `settings.update` and the UI **converges on the `settings.changed` broadcast** (no
+  optimistic apply), a rejected update raising a toast). The picker never owns a theme list — it renders
+  the catalog the glob discovered at build time. A single dimmed "General" nav item
+  ("Soon") still signals the shell is
   built to grow. `ProvidersSettings`/`AppearanceSettings` are the **integration pieces** (store + transport);
   the `LoginDialog` stays presentational (`auth` module).
   Panels compose their own sub-panels
@@ -139,7 +141,7 @@ a project picker, the prompt hero, and the reused
   one set or the other on the active-workspace branch.)
 - **Allowed deps:** `store`, `transport`, `components/ui` (incl. `popover`/`command`/`textarea` for the
   dialog), `chat` (`ModelSelector`/`ThinkingSelector`, reused by `NewWorkspaceDialog`; `Markdown`,
-  reused by `MarkdownPreview`), `lib`, `utils` (`theme`'s `THEMES`, for `AppearanceSettings`),
+  reused by `MarkdownPreview`), `lib`, `themes` (catalog + generic application contract),
   `contracts`; `lucide-react`; and the heavy libs each lazy panel owns (`monaco-editor`, `shiki`,
   `@xterm/*`) loaded via `import()`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `shell`; reaching across unrelated panels.
@@ -208,18 +210,15 @@ a project picker, the prompt hero, and the reused
   **external** link opens a new tab, and a **relative image** rewrites to the host **`/files/…`** route
   (built from `transport.httpBase()`). A cross-file link's `#fragment` is not yet followed (opens the
   file only).
-- **Code surfaces re-theme from the tokens, resiliently.** `MonacoEditor` defines the `thinkrail` theme
-  from the live tokens (chrome from the surface tokens, the `vs`/`vs-dark`/`hc-black` base from
-  `[data-theme]` — high-contrast rides Monaco's real hc-black palette — syntax rules from whichever
-  `--code-*` a theme sets, and the optional `--sel-fg` selected-text color, high-contrast's
-  black-on-yellow) and redefines it via a `[data-theme]`
-  MutationObserver; token reads are **canonicalized to hex** (`lib.cssColorToHex` — minified CSS serves
-  equivalents like `#fff`/`gray`, which Monaco rejects; unparseable → dropped, never passed through) and
-  the define **degrades to the base palette instead of throwing** (a bad
-  token value must never crash the editor panel). `TerminalInstance` builds the xterm theme the same way,
-  including the **16 `--ansi-*` slots** (so shell colors stay legible per theme) and the optional
-  `--sel-fg` selection foreground, re-read on the same
-  observer. `DiffViewer` renders every `SHIKI_THEMES` palette (`lib/shikiTheme`) once; the swap is pure CSS.
+- **Code surfaces re-theme from generic tokens, resiliently.** `MonacoEditor` defines the `thinkrail`
+  theme from live surface + semantic syntax variables and chooses its normal/high-contrast base from
+  manifest appearance/contrast metadata—never from a known id—then redefines it after the theme module's
+  atomic `[data-theme]` signal. Reads are canonicalized to hex (`lib.cssColorToHex`; unparseable values
+  are dropped), and a bad value degrades to Monaco's base palette rather than crashing the panel.
+  `TerminalInstance` similarly rebuilds from the complete 16-slot ANSI variable set; both consume the
+  nullable editor selection-foreground override when provided. `DiffViewer` uses the one generic Shiki
+  CSS-variable registration, so highlighted markup follows a palette swap without re-highlighting or a
+  theme-specific selector/import.
 - Heavy deps (Monaco / shiki / xterm) load via `React.lazy(() => import())` to stay out of the eager bundle.
   A lazy chunk that fails to load (or a render throw) is contained by the `components/ErrorBoundary` the
   **shell** wraps each region in (see `shell/SPEC.md`), so a single panel degrades instead of blanking the

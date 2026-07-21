@@ -30,12 +30,13 @@ later, the mobile single-view-with-switcher).
   is not mounted. The welcome-state group uses its own `autoSaveId` so it doesn't clobber the 3-column
   layout's saved sizes. Mounts the `panels/Toaster` once (outside both layout branches) so notifications
   show over either state. **Owns the theme DOM side-effect** — the single place that applies the store's
-  (host-owned) `theme`: a `useEffect` on `store.theme` calls `utils/theme` `applyTheme(theme)` +
-  `writeThemeHint(theme)` (the localStorage first-paint cache). The value flows store ← transport (welcome /
+  (host-owned) opaque `theme` id: a `useEffect` on `store.theme` calls the `themes` module's atomic
+  `applyTheme(theme)` + `writeThemeHint(theme)` (the localStorage first-paint cache). The value flows
+  store ← transport (welcome /
   `settings.changed`); the shell just performs the swap, so no other component touches `[data-theme]`.
 - **Public surface:** `Shell`.
 - **Allowed deps:** `panels`, `store` (status + theme + project/workspace context), `transport` (`ConnectionStatus` type), `components/ui`
-  (resizable), `components/ErrorBoundary`, `constants` (branding), `utils` (`theme`'s `applyTheme`/`writeThemeHint`).
+  (resizable), `components/ErrorBoundary`, `constants` (branding), `themes` (`applyTheme`/`writeThemeHint`).
 - **Forbidden:** `server`/`shared`/`pi`; being imported by `panels`/`store`/`transport`.
 
 ## Error resilience (why panels can't blank the app)
