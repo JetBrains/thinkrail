@@ -1,4 +1,4 @@
-import { History, MessageSquarePlus, RotateCcw, X } from "lucide-react";
+import { GitBranch, History, MessageSquarePlus, RotateCcw, X } from "lucide-react";
 import { lazy, Suspense, useEffect } from "react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import {
@@ -9,7 +9,13 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { messagesToRuntime } from "../chat/hydrate";
-import { type ClosedChat, type EditorTab, toast, useAppStore } from "../store";
+import {
+	type ClosedChat,
+	type EditorTab,
+	selectActiveWorkspace,
+	toast,
+	useAppStore,
+} from "../store";
 import { errorText, getTransport } from "../transport";
 import { FilePane } from "./FilePane";
 
@@ -71,6 +77,7 @@ function ChatHistoryMenu({
 /** The center area: a strip of the active workspace's tabs (files + chats) over the active tab. */
 export function CenterTabs() {
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
+	const activeWorkspace = useAppStore(selectActiveWorkspace);
 	const tabsByWorkspace = useAppStore((s) => s.tabsByWorkspace);
 	const activeTabByWorkspace = useAppStore((s) => s.activeTabByWorkspace);
 	const closedChatsByWorkspace = useAppStore((s) => s.closedChatsByWorkspace);
@@ -82,7 +89,6 @@ export function CenterTabs() {
 	const closedChats = activeWorkspaceId
 		? (closedChatsByWorkspace[activeWorkspaceId] ?? NO_CLOSED)
 		: NO_CLOSED;
-
 	// Hydrate-on-connect: when a workspace becomes active, pull its sessions from the host. Live ones (still
 	// in host memory) auto-restore as tabs; disk-only ones (survived a host restart) go to chat-history to
 	// reopen on demand. So a reload, a second tab, or a restart all rebuild from the host.
@@ -168,8 +174,30 @@ export function CenterTabs() {
 	};
 
 	const placeholder = (
-		<div className="flex h-full flex-col items-center justify-center gap-sm text-hint">
-			<span>Open a file or start a chat</span>
+		<div className="flex h-full flex-col items-center justify-center gap-md px-lg text-center text-hint">
+			{activeWorkspace ? (
+				<div
+					data-testid="workspace-ready"
+					className="flex max-w-[440px] flex-col items-center gap-xs"
+				>
+					<span className="font-medium text-hint text-xs uppercase tracking-wider">
+						Workspace ready
+					</span>
+					<h2 className="max-w-full truncate font-medium text-md text-text">
+						{activeWorkspace.name}
+					</h2>
+					<p className="flex max-w-full items-center gap-xs font-[var(--font-mono)] text-muted text-xs">
+						<GitBranch className="size-3.5 shrink-0" />
+						<span className="truncate">{activeWorkspace.branch}</span>
+						<span className="shrink-0 text-hint">· from {activeWorkspace.baseBranch}</span>
+					</p>
+					<p className="mt-xs text-muted text-sm">
+						Files, chats, changes, and terminals are scoped to this workspace.
+					</p>
+				</div>
+			) : (
+				<span>Open a file or start a chat</span>
+			)}
 			{activeWorkspaceId ? (
 				<button
 					type="button"

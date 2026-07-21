@@ -16,9 +16,13 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
 
 ## Boundary
 
-- **Owns:** `appStore.ts` — connection/projects/workspaces state + setters, incl. the **workspace
-  lifecycle reactions** every client runs identically on the `workspace.created`/`updated`/`removed`
-  pushes (no per-client optimism — the backend is authoritative): **`addWorkspace(ws)`** upserts a
+- **Owns:** `appStore.ts` — connection/projects/workspaces state + setters, including the two atomic
+  navigation transitions: **`selectProject(projectId)`** enters that Project Home (`selectedProjectId`
+  set + `activeWorkspaceId` cleared in one write), while **`activateWorkspace(workspace)`** enters the
+  workspace and selects its owner (both ids set in one write). There is no generic active-workspace setter
+  that can split that invariant. It also owns the **workspace lifecycle reactions** every client runs
+  identically on the `workspace.created`/`updated`/`removed` pushes (no per-client optimism — the backend
+  is authoritative): **`addWorkspace(ws)`** upserts a
   `workspace.created` snapshot by `id` (no-op if the project isn't listed yet — reconciles on its next
   `workspace.list` rather than seeding a partial one-row list; else add-if-absent / merge-if-present,
   idempotent with the creating client's own post-create re-list); **`updateWorkspace(ws)`** folds a
@@ -27,8 +31,8 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   record, which has none); a project never fetched or an id absent from its list is a **no-op** — the next
   `workspace.list` reconciles; **`applyWorkspaceRemoved(projectId, id)`** is the **entire** removal
   reaction (`removeWorkspace` drops the row + `clearWorkspaceTabs` drops its tabs/terminals/chat runtimes,
-  and **if it was this client's active workspace** → `setActiveWorkspace(null)` (shell falls back to the
-  project Welcome) + a neutral toast that reads right for both the initiator and an observer); the
+  and **if it was this client's active workspace** → `selectProject(projectId)` (shell falls back to its
+  owning Project Home) + a neutral toast that reads right for both the initiator and an observer); the
   primitive **`removeWorkspace(projectId, id)`** just drops the row (unknown project/id is a no-op);
   `tabsByWorkspace` /
   `activeTabByWorkspace` (`openTab`/`closeTab`/`setActiveTab`/`clearWorkspaceTabs`, plus
@@ -94,10 +98,13 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   **`requestChangesView(workspaceId, path)`** are a UI deep-link intent (a chat turn-divider asking the
   right panel to surface a file's diff); the panels watch it, scoped by workspace. The `EditorTab`
   (`FileTab` | `ChatTab`) + `TerminalTab` + `ClosedChat` + `SessionRuntime` types. (Chat *render* types +
-  renderers live in the `chat` module.)
-- **Public surface (barrel):** `useAppStore`, `toast` (the fire-from-anywhere helper), `Toast` (type),
-  `EditorTab` (`FileTab`/`ChatTab`), `TerminalTab`, `ClosedChat`, `SessionRuntime` + `EMPTY_RUNTIME`
-  (ChatView's pre-creation fallback), `reduceSessionEvent`.
+  renderers live in the `chat` module.) The pure context selectors in `selectors.ts` resolve the active
+  `Workspace`, its owning project id, and the shell's context project from those canonical ids and
+  collections; derived active-project state is never stored separately.
+- **Public surface (barrel):** `useAppStore`; `selectActiveWorkspace`,
+  `selectActiveWorkspaceProjectId`, and `selectContextProject`; `toast` (the fire-from-anywhere helper),
+  `Toast` (type), `EditorTab` (`FileTab`/`ChatTab`), `TerminalTab`, `ClosedChat`, `SessionRuntime` +
+  `EMPTY_RUNTIME` (ChatView's pre-creation fallback), `reduceSessionEvent`.
 - **Allowed deps:** `contracts` (`Project`/`Workspace`/`Model`/`ThinkingLevel`/`SessionStats`/
   `SlashCommandInfo`/`ExtUiRequest`/`LoginPush`/`WorkspaceFsChangedPayload`/`AppConfig`/`ThemeId`; the
   `Theme` value for the default; `PiEvent`/`LoginFrame`, **type-only**); `chat`

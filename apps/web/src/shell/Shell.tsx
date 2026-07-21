@@ -1,4 +1,4 @@
-import { Settings } from "lucide-react";
+import { ChevronRight, GitBranch, Settings } from "lucide-react";
 import { useEffect } from "react";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../components/ui/resizable";
@@ -10,7 +10,7 @@ import { SettingsDialog } from "../panels/SettingsDialog";
 import { TerminalsPanel } from "../panels/TerminalsPanel";
 import { Toaster } from "../panels/Toaster";
 import { WelcomePanel } from "../panels/WelcomePanel";
-import { useAppStore } from "../store";
+import { selectActiveWorkspace, selectContextProject, useAppStore } from "../store";
 import type { ConnectionStatus } from "../transport";
 import { applyTheme, writeThemeHint } from "../utils/theme";
 
@@ -29,6 +29,8 @@ const STATUS_DOT: Record<ConnectionStatus, string> = {
 export function Shell() {
 	const status = useAppStore((s) => s.status);
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
+	const activeWorkspace = useAppStore(selectActiveWorkspace);
+	const contextProject = useAppStore(selectContextProject);
 	const hasActiveWorkspace = activeWorkspaceId != null;
 	// The single owner of the theme DOM side-effect: apply the store's (host-owned) theme + cache it as the
 	// next load's first-paint hint. The store is fed by transport (welcome / settings.changed).
@@ -40,10 +42,45 @@ export function Shell() {
 	return (
 		<div data-testid="shell" className="grid h-full grid-rows-[auto_1fr]">
 			<header className="flex items-center justify-between border-b border-border2 bg-bg-dark px-lg py-sm">
-				<span className="font-[var(--font-accent)] text-lg font-extrabold tracking-[0.5px] text-primary">
-					{PRODUCT_NAME}
-				</span>
-				<div className="flex items-center gap-md">
+				<div className="flex min-w-0 items-center gap-md">
+					<span className="shrink-0 font-[var(--font-accent)] text-lg font-extrabold tracking-[0.5px] text-primary">
+						{PRODUCT_NAME}
+					</span>
+					{contextProject ? (
+						<div
+							data-testid="scope-context"
+							data-context={activeWorkspace ? "workspace" : "project-home"}
+							className="min-w-0 border-border2 border-l pl-md leading-tight"
+						>
+							<div className="flex min-w-0 items-center gap-xs text-xs">
+								<span className="hidden min-w-0 items-center gap-xs sm:flex">
+									<span data-testid="scope-project" className="max-w-[160px] truncate text-muted">
+										{contextProject.name}
+									</span>
+									<ChevronRight className="size-3 shrink-0 text-hint" />
+								</span>
+								<span
+									data-testid="scope-name"
+									className="max-w-[220px] truncate font-medium text-text"
+								>
+									{activeWorkspace?.name ?? "Project home"}
+								</span>
+							</div>
+							{activeWorkspace ? (
+								<div className="mt-0.5 flex min-w-0 items-center gap-xs font-[var(--font-mono)] text-[10px] text-hint">
+									<GitBranch className="size-3 shrink-0" />
+									<span data-testid="scope-branch" className="truncate">
+										{activeWorkspace.branch}
+									</span>
+									<span data-testid="scope-base" className="hidden shrink-0 md:inline">
+										· from {activeWorkspace.baseBranch}
+									</span>
+								</div>
+							) : null}
+						</div>
+					) : null}
+				</div>
+				<div className="flex shrink-0 items-center gap-md">
 					<span
 						data-testid="connection-status"
 						data-status={status}

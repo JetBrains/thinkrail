@@ -26,7 +26,13 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   surfaces an error toast, leaving the row in place). Each **workspace row** is **two-line**: the display
   `name` on top with the git **branch on a second line beneath it** (muted, monospace), rendered only when
   it differs from the name (so pristine/legacy `workspace-N` rows stay a single compact line) — the display
-  name is decoupled from the git branch (see [[submodule-server-workspaces]]).
+  name is decoupled from the git branch (see [[submodule-server-workspaces]]). The active workspace must
+  also stay visible: when `ProjectTree` mounts with an active workspace, or the active workspace's derived
+  owning project changes or first becomes resolvable, it expands that parent project. A manual collapse
+  remains respected while the owning project is unchanged; ordinary `workspace.updated` snapshots and
+  same-project workspace switches do not force it open again. Workspace creation expands its project
+  explicitly. Selecting or creating a workspace also selects its owning project, keeping project-home and
+  active-workspace context coherent even when the create dialog's project picker targets another project.
   **Opening a project** goes through the shared **`useOpenProject`** hook (reused by `ProjectTree` **and**
   `WelcomePanel`, so the flow is identical in the rail and the Welcome screen): `project.open`, and on
   failure `project.inspect` → either offers to bootstrap the folder into a repo — a modal **`ConfirmDialog`**
@@ -67,10 +73,14 @@ CTA that opens Settings → Providers (`store.openSettings("providers")`). It re
 provider is "connected" iff any `configured`) on mount and re-checks whenever the settings dialog toggles, so
 it disappears the moment the user connects one; a transport error degrades to *not* nagging (offline ≠ "no
 provider"). All provider **management** lives in Settings, not here (the always-on strip is gone).
-**`NewWorkspaceDialog`** is the create-and-kick-off surface: an optional **`initialPrompt`** seeds the
-prompt hero (still editable; empty by default), a base-branch
-  combobox (`git.listBranches`, degrading to local branches offline; a Refresh re-lists; `origin/HEAD` is
-  filtered so no stray `origin`), a project picker, the prompt hero, and the reused
+**`NewWorkspaceDialog`** is the create-and-kick-off surface. It names the operation visibly — title
+**“Create workspace”** — and states the model without adding a step: **“A separate checkout on its own new
+branch. Files, chats, changes, and terminals stay scoped to it.”** Its base-branch trigger reads **“From
+{base}”**, not an unexplained ref. An optional **`initialPrompt`** seeds the prompt hero (still editable;
+empty by default); while the prompt is non-empty, a secondary hint says ThinkRail will name the workspace
+and branch from the request. The rest stays compact: the base-branch combobox (`git.listBranches`,
+degrading to local branches offline; a Refresh re-lists; `origin/HEAD` is filtered so no stray `origin`),
+a project picker, the prompt hero, and the reused
   `chat/ModelSelector`+`ThinkingSelector` in **pre-session** mode — preselected to the host's resolved
   default via `model.default` so the exact model shows (values held in dialog state, applied at create
   time). The pickers' popovers portal into the dialog node (so their lists scroll under the Dialog scroll
@@ -106,7 +116,12 @@ prompt hero (still editable; empty by default), a base-branch
   the `LoginDialog` stays presentational (`auth` module).
   Panels compose their own sub-panels
   (e.g. `RightPanel`→`FileTree`/`ChangesPanel`, `CenterTabs`→`FilePane`→`MonacoEditor`) — an internal hierarchy.
-  `CenterTabs` closing a chat tab routes to `store.closeChatToHistory` (keeps the session alive) and shows a
+  When the active workspace has no open center tab, `CenterTabs` uses the empty surface as a persistent
+  creation/orientation receipt rather than a generic placeholder: **“Workspace ready”**, the display name,
+  `branch · from baseBranch`, and **“Files, chats, changes, and terminals are scoped to this workspace,”**
+  followed by the existing **New chat** action. It is neither one-time nor dismissible, so it also helps
+  after the last tab closes without introducing onboarding state. `CenterTabs` closing a chat tab routes
+  to `store.closeChatToHistory` (keeps the session alive) and shows a
   **chat-history** dropdown (recently-closed + disk-only chats, shown only when non-empty). On
   workspace-activate it **hydrates**: `session.list` → **live** sessions auto-restore as tabs
   (`session.getMessages` → `messagesToRuntime` → `store.hydrateSession`); **disk-only** ones go to history
