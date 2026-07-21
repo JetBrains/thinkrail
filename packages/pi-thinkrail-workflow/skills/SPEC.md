@@ -185,7 +185,7 @@ flowchart LR
 | `brainstorming` | worker — design workflow (feature/change → validated task-spec) | `choosing-a-workflow` (root) | active; routed as-is — needs rework (see Current limitations & gaps); route-in observed by the routing suite, a mid-flow round-trip by the harness smokes, a full run manually (2026-07: request → task-spec → round → promotion → retired) |
 | `setting-up-a-project` | router (sub) — dispatcher: detect the workspace's state (specs present / empty / code-only) and route | `choosing-a-workflow` (root) + self-trigger + the app's `/skill:setting-up-a-project` seed | active; all three dispatcher routes observed green by the routing suite (empty → starting, code → importing, specced → offer + no worker) |
 | `starting-a-new-project` | worker — inception interview (empty repo → goal-and-requirements) | `setting-up-a-project` + narrow self-trigger | active; route-in observed by the routing suite; the interview itself unverified by use (rule 14 suspended — a slice-3 candidate via the user simulator) |
-| `importing-a-codebase` | worker — existing codebase → first spec graph (derive + minimal interview) | `setting-up-a-project` + narrow self-trigger | active; covered by a tagged `@agent` e2e; route-in also observed by the routing suite |
+| `importing-a-codebase` | worker — existing codebase → first spec graph (derive + adopt existing docs + minimal interview) | `setting-up-a-project` + narrow self-trigger | active; covered by a tagged `@agent` e2e; route-in also observed by the routing suite; the doc-adoption offer observed green by the harness's importing suite (2026-07: adoption + no-candidates regression scenarios; the pre-change skill run red against the same scenario as the before/after control) |
 | `asking-user-questions` | concept — `ask_user_question` rounds, options, inference confirmation, degradation | — (reached by name, rule 4) | active; observed by use (2026-07 manual: loaded through brainstorming's reference, a round composed + resolved) |
 | `writing-specs` | concept — the spec quality bar (short / honest / on-rails) for every spec-producing flow | — (reached by name, rule 4) | active; observed by use (2026-07 manual: self-triggered for a spec revision and applied) |
 | `choosing-a-workflow` | router (root) — classification + routing | — (always-on entry, rule 4) | active; all three classifications observed by the routing suite — feature → brainstorming and onboarding → setup family green; the "anything else" row has an observed gap (see Current limitations & gaps) |
@@ -273,7 +273,12 @@ follows is only the rationale the skill bodies don't state:
   working-model inference, personal-vs-PRD routing, MVP-first elicitation, alternatives research,
   incremental save; board/progress-tracker mechanics dropped (no equivalent here). `importing-a-codebase`
   (net-new) reverse-engineers a first spec graph from code + agent files, interviewing only for the
-  intent the code can't reveal. Adaptation touches were deliberately minimal: descriptions trimmed to
+  intent the code can't reveal. Its doc-adoption offer (2026-07) exists because well-documented
+  un-specced repos were losing their own docs at import: durable declarative docs (never plans or
+  process files) are offered in the interview round and adopted **in place** — frontmatter only, so
+  say-it-once holds, the user's words stay theirs, and the diff is reviewable in Changes — rather
+  than distilled into parallel nodes that would drift; adopted prose is corrected only where it is
+  unclear or has drifted from the code, and every correction is flagged to the user. Adaptation touches were deliberately minimal: descriptions trimmed to
   triggers (rule 5), inlined question norms replaced by pointers to `asking-user-questions` (rule 7),
   endings made explicit (rule 6), the drifting copies of the spec bar later extracted into
   `writing-specs` (rules 3/7) — the flows themselves are untouched.

@@ -14,7 +14,10 @@ The headless workflow-test suite: drives a **real in-process pi agent** through 
 ([[module-thinkrail-workflow]]) with **no browser and no HTTP host**, and decides pass/fail with a
 strict verdict model. Run on demand via `bun run test:workflows` (own Playwright config,
 `playwright.workflows.config.ts` — no `webServer`; shares the browser suite's global setup for the
-isolated `PI_CODING_AGENT_DIR` + pinned model). Needs pi auth and spends real provider tokens — never
+isolated `PI_CODING_AGENT_DIR` + pinned model, which `env.ts` then clones **per worker process**
+(pid-suffixed, auth + settings copied in): workers must never share one agent dir — a dying worker's
+session dispose overlapping the next worker's newborn session in the shared `sessions/` tree turned
+one failure into an ENOENT cascade across every later live-session test). Needs pi auth and spends real provider tokens — never
 part of `bun run test`, pre-commit, CI gates, or the browser `e2e`/`e2e:agent` scripts (the main
 config `testIgnore`s this directory).
 
@@ -45,7 +48,14 @@ user?, dialog?, stopWhen?, forbid?, watchdog?, expect, judge?, record? }`.
   walking a ladder: script matchers → persona (validated; malformed → next rung) → deterministic
   fallback (`skip` / `pickRecommended`). An unscripted interview can never hang a run, and neither
   can a *throwing* script (scenario-author code): it degrades straight to the deterministic fallback
-  with the error recorded on the round — never an unhandled rejection.
+  with the error recorded on the round — never an unhandled rejection. Delivery failures are rounds
+  too: `answerQuestion` can reject after the fact (a slow persona answer superseded by the user
+  simulator's next message), which is recorded on the round, not thrown — scenarios that must win
+  that race script their rounds (the script rung answers synchronously at `tool_execution_start`).
+  Because an answer TRIGGERS a new turn (ack+terminate), the dialog tracks every delivery and exposes
+  `settle()` — resolve when all triggered turns have ended (cascading rounds included, runaway turns
+  bounded by the budget tripwire) — which the scenario awaits before verdicts: checks never race the
+  turn an answer set in motion.
 - `presets` — mid-flow entry: artifact presets (workflow-native — the task-spec is the workflow's
   spine) and transcript fixtures (`SessionManager.open` via the server's `setSessionManagerFactory`
   seam; a fixture = `session.jsonl` + `workspace/` snapshot with recorded-cwd rewritten in a temp
@@ -70,8 +80,8 @@ user?, dialog?, stopWhen?, forbid?, watchdog?, expect, judge?, record? }`.
   that throws before its verdict records `crashed` + a failed deterministic verdict — the log never
   claims a pass whose checks never ran (`THINKRAIL_WORKFLOW_RUNLOG` redirects the file so unit tests
   can assert on records without polluting the local evidence).
-- `scenario` — orchestration (seed → presets → start → attach → conversation loop → verdicts → run
-  record) with teardown in `finally` — covering the earliest steps too: the transcript-fixture factory
+- `scenario` — orchestration (seed → presets → start → attach → conversation loop → dialog settle →
+  verdicts → run record) with teardown in `finally` — covering the earliest steps too: the transcript-fixture factory
   swap and `startSession` live inside the guarded region, so a throw there still restores the
   process-wide seam; `workflowTest` registers a scenario as a Playwright test (tagged `@agent`).
 
@@ -102,5 +112,12 @@ Dependency direction is one-way: `scenario` → everything; `dialog`/`signals`/`
 - `smoke.live.spec.ts` — the infra-proving live scenarios: a mid-flow `brainstorming` round-trip
   (artifact preset + persona answer + user simulator + on-disk decision), and transcript continuation
   (reopened fixture recalls mid-flow state).
-- Follow-up (scenario definitions only): worker flows end-to-end (slice 3) — tracked in
-  [[module-thinkrail-workflow]] § Testing.
+- `importing.live.spec.ts` — the first slice-3 worker coverage: `importing-a-codebase` end-to-end on a
+  docs-rich fixture — the doc-adoption offer (candidates offered and adopted **in place**, a finished
+  plan file never offered nor touched, the filled architecture slot not re-drafted) — plus a
+  no-candidates regression variant (only README/CHANGELOG/TODO present → the offer must not fire, the
+  plain import path unchanged). Fixture docs are seeded inline from scenario code (no `*.md` fixture
+  files at rest — the masking concern above doesn't arise).
+- Follow-up (scenario definitions only): the remaining worker flows end-to-end (slice 3:
+  `starting-a-new-project` / `brainstorming` full runs) — tracked in [[module-thinkrail-workflow]]
+  § Testing.

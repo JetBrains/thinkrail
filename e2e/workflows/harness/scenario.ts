@@ -149,6 +149,11 @@ export async function runScenario(def: ScenarioDef): Promise<ScenarioResult> {
 			text = next;
 		}
 
+		// A round's answer triggers a NEW turn (ack+terminate); the loop above may have broken while it
+		// was still streaming (e.g. the simulator finished). Verdicts must not race it: wait for every
+		// answered round's turn to end (bounded by the budget tripwire, which aborts runaway turns).
+		await dialog.settle();
+
 		// ---- verdict (binding, deterministic) ----
 		checks = runChecks(def.expect, { log, cwd });
 		for (const check of checks) if (!check.pass) failed.push(`${check.name} — ${check.detail}`);
