@@ -80,6 +80,14 @@ export const WS_METHODS = {
 	// Lazy per-project "has any registered spec?" (the Welcome screen's "Set up project" signal) — a
 	// full-tree walk, so it's on-demand for the one project shown, never eagerly for every project.
 	projectHasSpecs: "project.hasSpecs",
+	// Read a project's declared hooks (committed `.thinkrail/hooks.json` in its root checkout) + host-local
+	// overrides + whether each hook's *resolved* (override-if-set-else-committed) command is currently
+	// approved — the Project Settings Hooks form's single read. No workspace needed.
+	projectHooksGet: "project.hooks.get",
+	// Write `.thinkrail/hooks.json` (committed to the project's root checkout, pathspec-scoped so it can
+	// never sweep up unrelated staged changes there) + the host-local override map. Never touches approval —
+	// saving a command and trusting it to run are separate decisions.
+	projectHooksSave: "project.hooks.save",
 	workspaceCreate: "workspace.create",
 	workspaceList: "workspace.list",
 	workspaceRemove: "workspace.remove",
@@ -246,6 +254,22 @@ export interface WsMethodMap {
 	// Does the project's repo carry any registered spec? Computed lazily (a full-tree walk), so it's
 	// requested only for the project the Welcome screen renders — never eagerly for every project.
 	"project.hasSpecs": { params: { projectId: string }; result: { hasSpecs: boolean } };
+	"project.hooks.get": {
+		params: { projectId: string };
+		result: {
+			committed: Partial<Record<HookName, string>>;
+			overrides: Partial<Record<HookName, string>>;
+			approved: Partial<Record<HookName, boolean>>;
+		};
+	};
+	"project.hooks.save": {
+		params: {
+			projectId: string;
+			committed: Partial<Record<HookName, string>>;
+			overrides: Partial<Record<HookName, string>>;
+		};
+		result: Ack;
+	};
 	// `baseRef`: the base branch the worktree is cut from (a remote ref is fetched first); when
 	// omitted, the worktree branches off the repo's current HEAD (the default behavior).
 	"workspace.create": {

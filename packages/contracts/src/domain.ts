@@ -94,13 +94,53 @@ export interface HookStatus {
  * once, at creation time — so approving it after the fact does not retroactively bootstrap a workspace
  * already sitting at `hookAwaitingApproval`. Re-running an already-created workspace's `onCreate` is not
  * implemented; see `submodule-server-workspaces-hooks`'s SPEC.md.
+ *
+ * `projectId` and `workspaceName` travel on every variant so a client can still describe a hook event
+ * usefully after the workspace's own record is gone (e.g. removed mid-teardown) — see
+ * `submodule-web-store`'s `applyWorkspaceHookEvent`.
  */
 export type WorkspaceHookEvent =
-	| { kind: "hookAwaitingApproval"; workspaceId: string; hook: HookName; command: string }
-	| { kind: "hookStarted"; workspaceId: string; hook: HookName }
-	| { kind: "hookOutput"; workspaceId: string; hook: HookName; chunk: string }
-	| { kind: "hookSucceeded"; workspaceId: string; hook: HookName }
-	| { kind: "hookFailed"; workspaceId: string; hook: HookName; exitCode: number };
+	| {
+			kind: "hookAwaitingApproval";
+			workspaceId: string;
+			workspaceName: string;
+			projectId: string;
+			hook: HookName;
+			command: string;
+	  }
+	| {
+			kind: "hookStarted";
+			workspaceId: string;
+			workspaceName: string;
+			projectId: string;
+			hook: HookName;
+			command: string;
+	  }
+	| {
+			kind: "hookOutput";
+			workspaceId: string;
+			workspaceName: string;
+			projectId: string;
+			hook: HookName;
+			chunk: string;
+	  }
+	| {
+			kind: "hookSucceeded";
+			workspaceId: string;
+			workspaceName: string;
+			projectId: string;
+			hook: HookName;
+			command: string;
+	  }
+	| {
+			kind: "hookFailed";
+			workspaceId: string;
+			workspaceName: string;
+			projectId: string;
+			hook: HookName;
+			command: string;
+			exitCode: number;
+	  };
 
 /** A chat tab bound to a workspace. `id` is the UI tab id; `sessionId` is the pi `AgentSession` id. */
 export interface Session {
