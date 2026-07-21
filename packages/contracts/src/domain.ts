@@ -110,6 +110,42 @@ export interface SpecGraphSnapshot {
 	nodes: SpecGraphNode[];
 }
 
+/** Lifecycle of a backlog item (mirrors `pi-todos`' core vocabulary; the extension is never imported). */
+export type TodoStatus = "pending" | "in_progress" | "done";
+/** Who added the item — the agent's plan vs the user's request. */
+export type TodoOrigin = "agent" | "user";
+
+/**
+ * One item of a chat's TODO plan, as the chat's plan popup renders it. Mirrored from `pi-todos`' core
+ * `Todo` (never imported — the extension package stays out of the wire). The plan is scoped to a chat
+ * session.
+ */
+export interface TodoItem {
+	id: string;
+	title: string;
+	status: TodoStatus;
+	origin: TodoOrigin;
+	note?: string;
+	createdAt: string;
+	updatedAt: string;
+}
+
+/** A named container of items — the agent's thematic cluster within a plan. */
+export interface TodoGroupItem {
+	id: string;
+	title: string;
+	todos: TodoItem[];
+}
+
+/**
+ * A chat's whole TODO plan: loose items (the agent's standalone tasks + everything the user adds — never
+ * grouped) followed by named groups, each carrying its own items.
+ */
+export interface TodoPlan {
+	todos: TodoItem[];
+	groups: TodoGroupItem[];
+}
+
 export type GitFileStatus = "added" | "modified" | "deleted" | "renamed" | "untracked";
 
 export interface GitFileChange {
