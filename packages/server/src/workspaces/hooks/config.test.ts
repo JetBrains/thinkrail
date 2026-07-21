@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadHookConfig, resolveHookCommand } from "./config";
+import { loadHookConfig, resolveHookCommand, writeHookConfig } from "./config";
 
 let worktree: string;
 
@@ -49,4 +49,22 @@ test("resolveHookCommand: falls through to committed when there's no override fo
 
 test("resolveHookCommand: undefined when neither committed nor override declares the hook", () => {
 	expect(resolveHookCommand("preMerge", {}, {})).toBeUndefined();
+});
+
+test("writeHookConfig creates .thinkrail/ and writes the given hooks as JSON", () => {
+	writeHookConfig(worktree, { onCreate: "npm install" });
+	expect(loadHookConfig(worktree)).toEqual({ onCreate: "npm install" });
+});
+
+test("writeHookConfig overwrites a prior file entirely (not a merge)", () => {
+	writeHookConfig(worktree, { onCreate: "npm install", onDelete: "echo bye" });
+	writeHookConfig(worktree, { onCreate: "pnpm install" });
+	expect(loadHookConfig(worktree)).toEqual({ onCreate: "pnpm install" });
+});
+
+test("writeHookConfig with {} writes an empty object, not a missing file", () => {
+	writeHookConfig(worktree, { onCreate: "npm install" });
+	writeHookConfig(worktree, {});
+	expect(existsSync(join(worktree, ".thinkrail", "hooks.json"))).toBe(true);
+	expect(loadHookConfig(worktree)).toEqual({});
 });

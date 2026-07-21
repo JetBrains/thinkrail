@@ -1,7 +1,7 @@
 // Committed hook config: `.thinkrail/hooks.json` in a workspace's own worktree — a normal tracked file, so
 // it's already checked out the moment `git worktree add` creates the worktree. Host-local overrides (per
 // developer, never touching the repo) come from `persistence`'s `hookOverrides.json` — see `hooks.ts`.
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { HookName } from "@thinkrail/contracts";
 import { WORKSPACE_HOOKS_CONFIG_FILE } from "@thinkrail/shared/paths";
@@ -15,6 +15,22 @@ export function loadHookConfig(worktreePath: string): Partial<Record<HookName, s
 	} catch {
 		return {};
 	}
+}
+
+/**
+ * Write `hooks` as `.thinkrail/hooks.json` in `projectPath` (creating `.thinkrail/` if needed) — a full
+ * overwrite, not a merge, matching the committed file's own semantics (it's just JSON on disk; the caller
+ * decides what the whole object should be). Pure fs write — no git. The caller (`host/handlers.ts`'s
+ * `project.hooks.save`) commits it separately via `projects.ts`'s `commitProjectFile`, keeping this module
+ * git-free per its SPEC.
+ */
+export function writeHookConfig(
+	projectPath: string,
+	hooks: Partial<Record<HookName, string>>,
+): void {
+	const dir = join(projectPath, ".thinkrail");
+	mkdirSync(dir, { recursive: true });
+	writeFileSync(join(dir, "hooks.json"), `${JSON.stringify(hooks, null, "\t")}\n`);
 }
 
 /**

@@ -211,5 +211,5 @@ export function runPostMergeHook(workspace: Workspace, project: Project): void {
 	queueMicrotask(() => void runHook("postMerge", workspace, project, undefined));
 }
 
-export { loadHookConfig, resolveHookCommand } from "./config";
+export { loadHookConfig, resolveHookCommand, writeHookConfig } from "./config";
 export { approveHook, isApproved };
