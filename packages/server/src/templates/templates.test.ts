@@ -118,6 +118,14 @@ describe("saveTemplate -> listTemplates -> getTemplate", () => {
 		expect(getTemplate(dirs, "dup", "global").content).toBe("second version");
 	});
 
+	test("saveTemplate rejects malformed frontmatter before writing anything (no orphan file)", () => {
+		const badContent = "---\nbad: [unterminated\n---\nbody";
+
+		expect(() => saveTemplate(dirs, "global", "broken", badContent)).toThrow();
+
+		expect(existsSync(join(globalDir, "broken.md"))).toBe(false);
+	});
+
 	test(
 		"a name with an interior dot (foo.bar) round-trips through save -> list -> get -> delete " +
 			"(list/get parity: pi lists any *.md with no sanitization, so this module must accept it too)",
@@ -172,6 +180,25 @@ describe("listTemplates precedence + freshness", () => {
 
 		expect(listTemplates(dirs).map((t) => t.name)).toEqual(["ok"]);
 	});
+
+	test("skips dot-leading filenames entirely (list/get parity: the gate would reject the name too)", () => {
+		mkdirSync(globalDir, { recursive: true });
+		writeFileSync(join(globalDir, ".hidden.md"), "sneaky");
+		saveTemplate(dirs, "global", "visible", "shown");
+
+		expect(listTemplates(dirs).map((t) => t.name)).toEqual(["visible"]);
+	});
+
+	test("a scope dir that isn't actually a directory doesn't blank the other scope's listing", () => {
+		// A deterministic stand-in for an unreadable directory (EACCES setup is flaky cross-platform):
+		// point globalDir at a path that's a plain file. `existsSync` is true, but `readdirSync` throws
+		// (ENOTDIR) just like a permissions failure would.
+		mkdirSync(join(root, "agent-home"), { recursive: true });
+		writeFileSync(globalDir, "not a directory");
+		saveTemplate(dirs, "project", "solo", "project body");
+
+		expect(listTemplates(dirs).map((t) => t.name)).toEqual(["solo"]);
+	});
 });
 
 describe("getTemplate", () => {
@@ -200,6 +227,13 @@ describe("getTemplate", () => {
 		expect(() => getTemplate(dirs, "missing")).toThrow();
 		expect(() => getTemplate(dirs, "missing", "global")).toThrow();
 		expect(() => getTemplate(dirs, "missing", "project")).toThrow();
+	});
+
+	test("throws on a directly-named file with malformed frontmatter (asymmetric vs listTemplates's swallow)", () => {
+		mkdirSync(globalDir, { recursive: true });
+		writeFileSync(join(globalDir, "broken.md"), "---\nbad: [unterminated\n---\nbody");
+
+		expect(() => getTemplate(dirs, "broken", "global")).toThrow();
 	});
 });
 

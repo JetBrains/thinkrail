@@ -31,9 +31,16 @@ pi version bump.
   suffix, once (a name with an embedded dot like `foo.bar.md` derives `foo.bar`).
 - **No name validation in pi's loader, at all.** `loadTemplatesFromDir` accepts any directory entry
   where `entry.isFile()` (or a symlink resolving to a file) `&& entry.name.endsWith(".md")` — no regex,
-  no traversal guard. Path-traversal safety for **our** by-name paths (`saveTemplate` / `getTemplate` /
-  `deleteTemplate`) is entirely this module's own `isValidTemplateName` gate; pi gives us nothing to
-  lean on there.
+  no traversal guard, and no dot-leading filter either (pi would list a hand-placed `.hidden.md`).
+  Path-traversal safety for **our** by-name paths (`saveTemplate` / `getTemplate` / `deleteTemplate`) is
+  entirely this module's own `isValidTemplateName` gate; pi gives us nothing to lean on there.
+- **`loadTemplatesFromDir`'s error handling is two-layered, at two different granularities.** The whole
+  `readdirSync` call plus the loop around it sits inside one `try { … } catch { return templates; }` — an
+  unreadable directory returns whatever had already been collected rather than throwing out of the
+  function. Independently, each file goes through `loadTemplateFromFile`, which has its *own* inner
+  `try { … } catch { return null; }` around the read + `parseFrontmatter` + object-build. This module's
+  `listDir` mirrors both layers (see "Design" below) — the whole-scan wrapper is what protects
+  `listTemplates` from an EACCES (or similar) blanking every scope's results, not just the bad one's.
 - **`parseFrontmatter`'s real signature** (`dist/utils/frontmatter.d.ts`): `parseFrontmatter<T extends
   Record<string, unknown> = Record<string, unknown>>(content: string): { frontmatter: T; body: string
   }` — a plain sync function, generic over the frontmatter shape (unvalidated at runtime; the generic
@@ -100,14 +107,34 @@ pi version bump.
   (This gate originally used an `/^[a-z0-9][a-z0-9-_]*$/i` allowlist regex — safe, but over-restrictive:
   it rejected any name with an interior dot, so a perfectly ordinary, pi-legal template named `foo.bar`
   would list but 404 on get/save/delete. Fixed once caught — the allowlist shape was solving the wrong
-  problem, aesthetics instead of traversal.) `listTemplates` does **not** filter by this gate at all — it
-  enumerates whatever `.md` files already exist in the sanctioned dirs, matching pi's own no-validation
-  scan; the gate only guards the three *by-name* operations, where a name is turned into a path.
-- A per-file read/parse failure (unreadable file, malformed YAML frontmatter) is swallowed inside
-  `listTemplates`'s directory scan — one bad file must never blank the whole listing — mirroring pi's
-  own `loadTemplateFromFile`'s `try { … } catch { return null; }`. `getTemplate` / `saveTemplate` make no
-  such allowance for a *directly named* file: a parse failure there propagates, since the caller asked
-  for that one file specifically and deserves to know something's wrong with it.
+  problem, aesthetics instead of traversal.) `listTemplates` (via `listDir`) **does** filter by this
+  exact gate — not to mirror pi (pi's own scanner has no such filter and would happily list a hand-placed
+  `.hidden.md`), but so list/get parity holds *structurally*: reusing the very predicate that guards
+  get/save/delete, rather than a hand-rolled dot-check that could quietly drift from it later, means any
+  name the gate rejects is invisible to `listTemplates` too, not just un-fetchable through it. (This
+  filter was itself a fix: an earlier version listed every `.md` file unconditionally, so a hand-placed
+  `.hidden.md` would show up in `template.list` and then 404 on `template.get`.)
+- Two layers of failure containment inside `listDir` (the directory scan `listTemplates` calls twice),
+  each mirroring a different pi behavior at a different granularity: **(1)** a per-file read/parse
+  failure (unreadable file, malformed YAML frontmatter) is caught and that one file is skipped — mirrors
+  pi's own `loadTemplateFromFile`'s `try { … } catch { return null; }`. **(2)** the *directory scan
+  itself* — the `readdirSync` call plus the loop around it — is also wrapped, so an unreadable directory
+  (EACCES, or, deterministically, a path that turns out not to be a directory at all) returns whatever
+  had already been collected instead of throwing out of `listTemplates` entirely — mirrors pi's own
+  `loadTemplatesFromDir`, whose try/catch wraps the *whole* scan, not just each file. (Layer (2) was
+  itself a fix: an earlier version had only layer (1), so an unreadable directory propagated straight
+  through `listTemplates` and could blank the *other* scope's results too, not just the bad one's.)
+  `getTemplate` makes no such allowance for a *directly named* file: a parse failure there propagates,
+  since the caller asked for that one file specifically and deserves to know something's wrong with it
+  (covered by a dedicated test — the documented asymmetry against `listTemplates`'s swallow).
+- `saveTemplate` parses the incoming `content`'s frontmatter *before* writing anything. Building the
+  return value already called `parseFrontmatter` via `readTemplateFile` after the write — which meant a
+  syntactically-invalid `---`-fenced block would land the file on disk and *then* throw, orphaning a file
+  that's invisible to `listTemplates` (layer (1) above swallows it) and un-`get`-able (propagates there,
+  by design) — present on disk but unreachable through this module. Validating first turns a rejected
+  save into a no-op on the filesystem: nothing is written, `mkdirSync`/`writeFileSync` never run. The
+  read-back after a successful write can in principle still fail, but only for a filesystem race at that
+  point, not a content problem — an acceptable residual this function doesn't try to eliminate.
 - `listTemplates`'s result is sorted by `name` — `readdir` order isn't guaranteed across platforms, and
   every consumer of a template *list* (the `/` menu, the Templates settings panel) wants a stable order
   more than it wants filesystem-arrival order.
@@ -136,12 +163,15 @@ pi version bump.
 - **Fresh read, every call.** No in-memory cache anywhere in this module (see "Design" above) — this is
   deliberate, not an oversight; don't add one without re-reading the freshness rationale it exists to
   satisfy.
-- **List/get parity.** Every name `listTemplates` can produce, `getTemplate`/`saveTemplate`/
-  `deleteTemplate` must also accept — `isValidTemplateName` excludes only the shapes that are unsafe as a
-  filename segment (empty, leading `.`, a separator, NUL), never an ordinary pi-legal name like `foo.bar`.
-  Don't tighten this gate without checking it still admits everything pi's own loader would list; a
-  narrower "clean slug" regex looks safe in review but silently breaks this parity (it did, once — see
-  "Design" above).
+- **List/get parity, both directions — structural, not a convention.** `isValidTemplateName` excludes
+  only the shapes that are unsafe as a filename segment (empty, leading `.`, a separator, NUL), never an
+  ordinary pi-legal name like `foo.bar` — so don't tighten it without checking it still admits everything
+  pi's own loader would list (a narrower "clean slug" regex looks safe in review but silently breaks
+  this; it did, once — see "Design" above). The reverse direction holds too, by construction: `listDir`
+  filters every directory entry through this *exact same* gate function, not a partial or hand-rolled
+  re-check, so a dot-leading file like a hand-placed `.hidden.md` is ignored by the scan entirely and
+  never surfaces in `listTemplates` in the first place. The gate and the scan can't drift apart because
+  they share one predicate — don't reintroduce a second, parallel check for either direction.
 - **`deleteTemplate` throws when the target is already gone**, rather than treating a missing file as a
   successful no-op — this is the handler contract Task B3 should build on. A delete request only reaches
   this module because a caller's UI named one specific existing-as-far-as-it-knows template; if the file

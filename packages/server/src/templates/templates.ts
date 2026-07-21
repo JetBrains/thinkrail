@@ -82,21 +82,40 @@ function readTemplateFile(dir: string, scope: TemplateScope, name: string): Temp
 	};
 }
 
-/** Every `.md` file directly inside `dir` (non-recursive), as `TemplateInfo`s. A file that fails to
- * read or parse is skipped, not fatal — one bad file must never blank the whole listing (pi's own
- * loader is equally tolerant). Missing/absent `dir` → empty. */
+/** Every `.md` file directly inside `dir` (non-recursive) whose derived name passes
+ * `isValidTemplateName`, as `TemplateInfo`s. Reusing that exact gate (not a hand-rolled dot check) is
+ * what makes list/get parity structurally guaranteed rather than true by coincidence: whatever this
+ * lists, `getTemplate`/`saveTemplate`/`deleteTemplate` can always act on by that same name, and the two
+ * can never drift apart since they share one predicate. This is a deliberate divergence from pi's own
+ * scanner (`loadTemplatesFromDir`), which has no such filter — pi would happily list a hand-placed
+ * `.hidden.md` — done in service of *our* parity invariant, not something pi does for us.
+ *
+ * A per-file read/parse failure (malformed frontmatter, unreadable file) is caught and that one file is
+ * skipped, not fatal — one bad file must never blank the whole listing. The *directory scan itself*
+ * (`readdirSync` and the loop around it) is wrapped too: an unreadable directory (EACCES, or — the
+ * deterministic case exercised in tests — a path that isn't actually a directory) is treated the same
+ * way, mirroring pi's own `loadTemplatesFromDir`'s try/catch-the-whole-scan shape (distinct from
+ * `loadTemplateFromFile`'s narrower per-file catch, which guards a different failure — see SPEC.md).
+ * Missing/absent `dir` → empty, checked before any of this. */
 function listDir(dir: string | undefined, scope: TemplateScope): TemplateInfo[] {
 	if (!dir || !existsSync(dir)) return [];
 	const templates: TemplateInfo[] = [];
-	for (const entry of readdirSync(dir, { withFileTypes: true })) {
-		if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
-		const name = entry.name.replace(/\.md$/, "");
-		try {
-			const template = readTemplateFile(dir, scope, name);
-			if (template) templates.push(template);
-		} catch {
-			// Malformed frontmatter or an unreadable file — skip it, don't fail the whole list.
+	try {
+		for (const entry of readdirSync(dir, { withFileTypes: true })) {
+			if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+			const name = entry.name.replace(/\.md$/, "");
+			if (!isValidTemplateName(name)) continue;
+			try {
+				const template = readTemplateFile(dir, scope, name);
+				if (template) templates.push(template);
+			} catch {
+				// Malformed frontmatter or an unreadable file — skip it, don't fail the whole list.
+			}
 		}
+	} catch {
+		// The directory itself couldn't be scanned — same "one bad thing never blanks everything" policy,
+		// one level up: return whatever's already been collected (nothing, in practice, since a failing
+		// readdirSync throws before yielding any entry).
 	}
 	return templates;
 }
@@ -131,8 +150,13 @@ export function getTemplate(dirs: TemplateDirs, name: string, scope?: TemplateSc
 }
 
 /** Create or overwrite a template. Writes `content` verbatim (the caller assembles frontmatter + body;
- * this module never rewrites it) and creates the scope's dir if missing. Throws on an invalid `name` or
- * a "project" scope with no workspace. */
+ * this module never rewrites it) and creates the scope's dir if missing. Throws on an invalid `name`, a
+ * "project" scope with no workspace, or — checked BEFORE anything touches disk — malformed frontmatter in
+ * `content` (an unparseable `---`-fenced block throws inside `parseFrontmatter`; validating first means a
+ * rejected save writes nothing, instead of landing an orphan file that's invisible to `listTemplates`
+ * (swallowed there) and un-`get`-able (throws there) once it exists). After a successful write, the
+ * read-back used to build the return value can in principle still fail, but only for a filesystem race,
+ * not a content problem — an acceptable residual this function doesn't try to eliminate. */
 export function saveTemplate(
 	dirs: TemplateDirs,
 	scope: TemplateScope,
@@ -140,6 +164,12 @@ export function saveTemplate(
 	content: string,
 ): TemplateInfo {
 	if (!isValidTemplateName(name)) throw new Error(`invalid template name: ${JSON.stringify(name)}`);
+	try {
+		parseFrontmatter(content);
+	} catch (err) {
+		const message = err instanceof Error ? err.message : String(err);
+		throw new Error(`invalid frontmatter: ${message}`);
+	}
 	const dir = dirForScope(dirs, scope);
 	mkdirSync(dir, { recursive: true });
 	writeFileSync(join(dir, `${name}.md`), content, "utf-8");
