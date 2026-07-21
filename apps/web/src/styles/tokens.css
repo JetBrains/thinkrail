@@ -203,8 +203,8 @@
 	--hint: #8b959e;
 	--sel: #214283;
 	--selection-bg: #214283;
-	/* Two-tone: lighter tool windows (sidebar) around the darker editor (content). */
-	--surface-sidebar: var(--bg);
+	/* Uniform dark surfaces (sidebar matches content) as in 'dark' theme. */
+	--surface-sidebar: var(--bg-dark);
 	--surface-content: var(--bg-dark);
 
 	/* Darcula's signature syntax palette — Monaco builds its token rules from whichever `--code-*` are
