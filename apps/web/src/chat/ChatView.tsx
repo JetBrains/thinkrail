@@ -254,12 +254,15 @@ export default function ChatView({
 		if (!slashActive) return;
 		const key = `${workspaceId}:${templatesVersion}`;
 		if (templatesCacheKey.current === key) return;
-		templatesCacheKey.current = key;
 		let cancelled = false;
 		getTransport()
 			.request("template.list", { workspaceId })
 			.then((res) => {
-				if (!cancelled) setTemplates(res.templates);
+				if (cancelled) return;
+				// Only latch the cache key on SUCCESS — a failed/racing fetch must never latch an empty
+				// cache until the next `templatesVersion` bump. Reopening the menu after a failure retries.
+				templatesCacheKey.current = key;
+				setTemplates(res.templates);
 			})
 			.catch(() => {});
 		return () => {

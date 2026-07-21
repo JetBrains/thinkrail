@@ -11,34 +11,73 @@ import { openFileInTab } from "./openFile";
 /**
  * The Settings → Templates panel: two groups — **Global** (always) and **This project** (only with an
  * active workspace) — each listing its prompt-template files with New/Edit/Delete, and (project rows
- * only) an Open-as-file shortcut. One `template.list { workspaceId }` fetch, refetched whenever the
- * store's `templatesVersion` bumps (a save or delete from anywhere — this panel or `HistoryOverlay`'s
- * save-as-template — invalidates it). New/Edit open the shared `chat/TemplateEditorDialog` (see
- * `chat/SPEC.md`'s Save-as-template bullet for why it lives in `chat/`, not here). Delete never touches
- * the dialog — it's a `ConfirmPopover` directly on the row.
+ * only) an Open-as-file shortcut. Fetches `template.list` **twice**, both refetched whenever the store's
+ * `templatesVersion` bumps (a save or delete from anywhere — this panel or `HistoryOverlay`'s
+ * save-as-template — invalidates it):
+ *  - unscoped (`{}`) for the **Global** group — the server's shadow-merge (`templates.ts`'s
+ *    `listTemplates`: a project template wins over a same-named global one, by design — see that
+ *    module's own doc) means a *workspace-scoped* list would silently drop a shadowed global template
+ *    from view entirely. That's the right behavior for the composer's `/` menu (one name expands to one
+ *    thing), but wrong here: Settings must still let the user find, edit, or delete it.
+ *  - `{ workspaceId }`, filtered to `scope === "project"`, for the **This project** group — exactly the
+ *    templates that exist in this worktree's `.pi/prompts/`, whether or not a same-named global template
+ *    also exists.
+ * New/Edit open the shared `chat/TemplateEditorDialog` (see `chat/SPEC.md`'s Save-as-template bullet for
+ * why it lives in `chat/`, not here). Delete never touches the dialog — it's a `ConfirmPopover` directly
+ * on the row.
  */
 export function TemplatesSettings() {
 	const workspaceId = useAppStore((s) => s.activeWorkspaceId);
 	const templatesVersion = useAppStore((s) => s.templatesVersion);
-	const [templates, setTemplates] = useState<TemplateInfo[] | null>(null);
-	const [failed, setFailed] = useState(false);
+	const [globalTemplates, setGlobalTemplates] = useState<TemplateInfo[] | null>(null);
+	const [projectTemplates, setProjectTemplates] = useState<TemplateInfo[] | null>(null);
+	const [globalFailed, setGlobalFailed] = useState(false);
+	const [projectFailed, setProjectFailed] = useState(false);
 	const [editorOpen, setEditorOpen] = useState(false);
 	const [editing, setEditing] = useState<TemplateInfo | null>(null);
 	const [newScope, setNewScope] = useState<TemplateScope>("global");
 
+	// Global group: always unscoped — never the shadow-merged `{ workspaceId }` response (see doc above).
 	// biome-ignore lint/correctness/useExhaustiveDependencies: templatesVersion is the invalidation trigger, not a body input
 	useEffect(() => {
 		let cancelled = false;
 		getTransport()
-			.request("template.list", workspaceId ? { workspaceId } : {})
+			.request("template.list", {})
 			.then((res) => {
 				if (!cancelled) {
-					setTemplates(res.templates);
-					setFailed(false);
+					setGlobalTemplates(res.templates.filter((t) => t.scope === "global"));
+					setGlobalFailed(false);
 				}
 			})
 			.catch(() => {
-				if (!cancelled) setFailed(true);
+				if (!cancelled) setGlobalFailed(true);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [templatesVersion]);
+
+	// Project group: the workspace-scoped (shadow-merged) list, filtered down to the project-scoped
+	// entries. A separate failure flag from the global fetch above — two independent in-flight requests
+	// must never let one's success silently clear the other's already-reported failure.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: templatesVersion is the invalidation trigger, not a body input
+	useEffect(() => {
+		if (!workspaceId) {
+			setProjectTemplates(null);
+			setProjectFailed(false);
+			return;
+		}
+		let cancelled = false;
+		getTransport()
+			.request("template.list", { workspaceId })
+			.then((res) => {
+				if (!cancelled) {
+					setProjectTemplates(res.templates.filter((t) => t.scope === "project"));
+					setProjectFailed(false);
+				}
+			})
+			.catch(() => {
+				if (!cancelled) setProjectFailed(true);
 			});
 		return () => {
 			cancelled = true;
@@ -55,8 +94,9 @@ export function TemplatesSettings() {
 		setEditorOpen(true);
 	};
 
-	const globalTemplates = (templates ?? []).filter((t) => t.scope === "global");
-	const projectTemplates = (templates ?? []).filter((t) => t.scope === "project");
+	const failed = globalFailed || projectFailed;
+	const loading =
+		!failed && (globalTemplates == null || (workspaceId != null && projectTemplates == null));
 
 	return (
 		<section data-testid="settings-templates" className="flex flex-col gap-lg">
@@ -69,7 +109,7 @@ export function TemplatesSettings() {
 				</p>
 			</div>
 
-			{templates == null && !failed ? (
+			{loading ? (
 				<p className="text-hint text-sm">Loading templates…</p>
 			) : failed ? (
 				<p data-testid="templates-error" className="text-hint text-sm">
@@ -80,7 +120,7 @@ export function TemplatesSettings() {
 					<TemplateGroup
 						title="Global"
 						scope="global"
-						templates={globalTemplates}
+						templates={globalTemplates ?? []}
 						workspaceId={workspaceId ?? undefined}
 						showOpenAsFile={false}
 						onNew={() => openNew("global")}
@@ -90,7 +130,7 @@ export function TemplatesSettings() {
 						<TemplateGroup
 							title="This project"
 							scope="project"
-							templates={projectTemplates}
+							templates={projectTemplates ?? []}
 							workspaceId={workspaceId}
 							showOpenAsFile
 							onNew={() => openNew("project")}

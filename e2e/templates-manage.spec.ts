@@ -246,4 +246,67 @@ test.describe("templates management", () => {
 		await page.getByTestId("template-cancel").click();
 		await expect(editor).toBeHidden();
 	});
+
+	// Reviewer-flagged regression: `TemplatesSettings` used to fetch `template.list { workspaceId }` once
+	// and derive both groups from that one response. The server shadow-merges by design (`templates.ts`'s
+	// `listTemplates`: a project template wins over a same-named global one) — right for the composer's
+	// `/` menu (one name, one expansion), but it meant a global template shadowed by a same-named project
+	// one vanished from the Global group entirely, with no way left to find, edit, or delete it. The panel
+	// now fetches twice — unscoped for Global, `{ workspaceId }` filtered to project-scope for This
+	// project — so a shadowed global template stays visible and independently editable.
+	test("a project template shadowing a same-named global one leaves both visible and independently editable", async ({
+		page,
+	}) => {
+		await openWorkspaceChat(page);
+		await page.getByTestId("open-settings").click();
+		await page.getByTestId("settings-nav-templates").click();
+		const editor = page.getByTestId("template-editor-dialog");
+
+		// Global "foo" first.
+		await page.getByTestId("template-new-global").click();
+		await expect(editor).toBeVisible();
+		await page.getByTestId("template-name-input").fill("foo");
+		await page.getByTestId("template-description-input").fill("Global foo");
+		await page.getByTestId("template-body-input").fill("Global foo body");
+		await page.getByTestId("template-save").click();
+		await expect(editor).toBeHidden();
+
+		const globalRow = page.locator(
+			'[data-testid="template-row"][data-name="foo"][data-scope="global"]',
+		);
+		await expect(globalRow).toBeVisible();
+		await expect(globalRow).toContainText("Global foo");
+
+		// Project "foo" — same name, shadowing the global one for the composer's `/` menu, but Settings
+		// must still show both rows.
+		await page.getByTestId("template-new-project").click();
+		await expect(editor).toBeVisible();
+		await page.getByTestId("template-name-input").fill("foo");
+		await page.getByTestId("template-description-input").fill("Project foo");
+		await page.getByTestId("template-body-input").fill("Project foo body");
+		await page.getByTestId("template-save").click();
+		await expect(editor).toBeHidden();
+
+		const projectRow = page.locator(
+			'[data-testid="template-row"][data-name="foo"][data-scope="project"]',
+		);
+		await expect(projectRow).toBeVisible();
+		await expect(projectRow).toContainText("Project foo");
+		// The regression: the global row used to vanish the moment a same-named project template existed.
+		await expect(globalRow).toBeVisible();
+		await expect(globalRow).toContainText("Global foo");
+
+		// Editing the GLOBAL row must update the global template, not the project one — proving the editor
+		// is handed the correct scope regardless of which group's affordance opened it.
+		await globalRow.getByTestId("template-edit").click();
+		await expect(editor).toBeVisible();
+		await expect(page.getByTestId("template-scope-global")).toHaveAttribute("data-active", "true");
+		await page.getByTestId("template-description-input").fill("Global foo, revised");
+		await page.getByTestId("template-save").click();
+		await expect(editor).toBeHidden();
+
+		await expect(globalRow).toContainText("Global foo, revised");
+		await expect(projectRow).toContainText("Project foo");
+		await expect(projectRow).not.toContainText("revised");
+	});
 });

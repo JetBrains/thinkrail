@@ -106,4 +106,30 @@ describe("extractEntries", () => {
 			{ text: "real user msg", role: "user", timestamp: 100, messageIndex: 0 },
 		]);
 	});
+
+	test("a mid-file garbage line and a message entry with no message object don't disturb messageIndex continuity", () => {
+		const jsonl = [
+			line({
+				type: "message",
+				id: "a",
+				message: { role: "user", content: "first", timestamp: 100 },
+			}),
+			"not json at all, sitting mid-file",
+			line({ type: "message", id: "b" }), // `type: "message"` but no `message` object at all
+			line({
+				type: "message",
+				id: "c",
+				message: { role: "assistant", content: "second", timestamp: 200 },
+			}),
+		].join("\n");
+		const entries = extractEntries(jsonl);
+		// Both the unparseable line and the message-shaped-but-message-less entry are pure no-ops: neither
+		// extracts an entry NOR advances messageIndex (the role check that discards them runs before the
+		// `messageIndex++`), so "second" lands at messageIndex 1, right behind "first" at 0 — no gap opened
+		// by the two lines in between.
+		expect(entries).toEqual([
+			{ text: "first", role: "user", timestamp: 100, messageIndex: 0 },
+			{ text: "second", role: "assistant", timestamp: 200, messageIndex: 1 },
+		]);
+	});
 });

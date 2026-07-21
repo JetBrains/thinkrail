@@ -228,3 +228,67 @@ export function shiftSlots(
 		end: mapOffset(slot.end, editStart, editEnd, insertedLen, false),
 	}));
 }
+
+/**
+ * Propagate slot `sourceIdx`'s current text into every OTHER slot sharing its `group`, marking each one
+ * `filled: true` as it's overwritten — the same mirroring rule {@link TemplateSlot}'s `group` doc
+ * documents (siblings are one conceptual argument; pi would expand them from the same value). A sibling
+ * whose text already matches is left untouched — including its `filled` flag, so a sibling a user
+ * independently typed the same text into isn't retroactively relabeled "just mirrored." Skips `sourceIdx`
+ * itself. Purely geometric composition of `shiftSlots`, one sibling at a time, left to right — safe
+ * because mirroring never changes which offsets are `group`-equal, only their text/`filled`.
+ *
+ * Returns `{ value, slots }` unchanged (same references) when there's nothing to mirror — no group-mate,
+ * or every group-mate already agrees — so a caller can cheaply skip the `onChange`/`setSlots` it would
+ * otherwise trigger.
+ */
+export function mirrorSlotGroup(
+	value: string,
+	slots: TemplateSlot[],
+	sourceIdx: number,
+): { value: string; slots: TemplateSlot[] } {
+	const source = slots[sourceIdx];
+	if (!source) return { value, slots };
+	const text = value.slice(source.start, source.end);
+	let nextValue = value;
+	let nextSlots = slots;
+	for (let i = 0; i < nextSlots.length; i++) {
+		if (i === sourceIdx) continue;
+		const sib = nextSlots[i];
+		if (!sib || sib.group !== source.group) continue;
+		if (nextValue.slice(sib.start, sib.end) === text) continue;
+		nextValue = nextValue.slice(0, sib.start) + text + nextValue.slice(sib.end);
+		nextSlots = shiftSlots(nextSlots, sib.start, sib.end - sib.start, text.length).map((s, si) =>
+			si === i ? { ...s, filled: true } : s,
+		);
+	}
+	return { value: nextValue, slots: nextSlots };
+}
+
+/**
+ * `mirrorSlotGroup` for every already-`filled` slot, in array order — the composer's send path has no
+ * single "slot the user just left" the way Tab-stepping does (`Composer.tsx`'s `stepSlot`, the sole other
+ * caller of `mirrorSlotGroup`): a direct Send can happen with any subset of slots filled, in any order, so
+ * every filled slot needs to propagate to its unfilled group-mates, not just the most recently edited one.
+ *
+ * When two group-mates are BOTH already filled and disagree (each independently typed into, never
+ * mirrored against each other — Tab-stepping's own mirroring would normally prevent this, but a direct
+ * Send can still reach it, e.g. pasting into a later slot without ever tabbing back through an earlier
+ * one), the earliest one in array order wins: later iterations see the earlier slot's mirrored text
+ * already sitting at that group's shared offsets and treat it as agreement, same as any other
+ * already-matching sibling. Which literal value "wins" here is inherently arbitrary — the two disagreeing
+ * values can't both survive — earliest-wins is just a deterministic, easy-to-explain tie-break.
+ */
+export function mirrorAllGroups(
+	value: string,
+	slots: TemplateSlot[],
+): { value: string; slots: TemplateSlot[] } {
+	let nextValue = value;
+	let nextSlots = slots;
+	for (let i = 0; i < nextSlots.length; i++) {
+		if (nextSlots[i]?.filled) {
+			({ value: nextValue, slots: nextSlots } = mirrorSlotGroup(nextValue, nextSlots, i));
+		}
+	}
+	return { value: nextValue, slots: nextSlots };
+}

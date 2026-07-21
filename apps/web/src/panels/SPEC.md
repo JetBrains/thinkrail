@@ -112,10 +112,17 @@ a project picker, the prompt hero, and the reused
   bundled catalog from `themes`, with the resolved active selection from `store.theme` marked; clicking
   one fires `settings.update` and the UI **converges on the `settings.changed` broadcast** (no optimistic
   apply), a rejected update raising a toast; the picker never owns a theme list — it renders the catalog
-  the glob discovered at build time); and **`TemplatesSettings`** (`template.list { workspaceId }`,
-  refetched whenever the store's `templatesVersion` bumps) — two groups, **Global** and **This project**
-  (the project group renders only with an active workspace), each a header with a **New** button plus its
-  rows (`data-testid="template-row"`: name + description, and — project rows only — an
+  the glob discovered at build time); and **`TemplatesSettings`** — two groups, **Global** and **This
+  project** (the project group renders only with an active workspace), each a header with a **New**
+  button plus its rows, fetched via **two independent `template.list` calls** (both refetched whenever the
+  store's `templatesVersion` bumps, each with its own failure flag so one's success can never clobber the
+  other's still-real failure): unscoped (`{}`) for **Global**, and `{ workspaceId }` filtered to
+  `scope === "project"` for **This project**. The unscoped call matters specifically because the server's
+  `template.list { workspaceId }` response is **shadow-merged** (`templates.ts`'s `listTemplates`: a
+  project template wins over a same-named global one) — right for the composer's `/` menu, but if Settings
+  used that same workspace-scoped call for its Global group too, a shadowed global template would vanish
+  from view entirely with no way to find, edit, or delete it
+  (`data-testid="template-row"`: name + description, and — project rows only — an
   **Open as file** action that opens `.pi/prompts/<name>.md` through the exact same `openFile.ts`
   `openFileInTab` the file tree uses, then closes Settings, and an **Edit** action; a global template has
   no worktree to open a file tab against, so global rows stay dialog-only). **New**/**Edit** open the shared

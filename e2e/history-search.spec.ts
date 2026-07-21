@@ -381,3 +381,58 @@ test("the history overlay stays inside the viewport and its query stays focusabl
 	await expect(query).toBeVisible();
 	await expect(query).toBeFocused();
 });
+
+// Reviewer-flagged regression: the results list itself scrolls (mouse wheel, drag), but before this fix
+// keyboard-only navigation never moved that scroll position on its own — repeatedly pressing ArrowDown
+// could walk `selected` well past the bottom of what's currently visible, leaving the highlighted row
+// entirely offscreen inside the `overflow-y-auto` results container. `HistoryOverlay` now scrolls the
+// selected row into view (`Element.scrollIntoView({ block: "nearest" })`) whenever the selection changes.
+test("ArrowDown repeatedly scrolls the keyboard-selected row into view inside the results container", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	// 30 distinct prompts, all in this workspace's own cwd — comfortably more than fit inside the compact
+	// stage's `max-h-[40vh]`. An empty query in the default "workspace" scope (no scope cycling needed)
+	// surfaces every one of them as a recent prompt (see `historyIndex.test.ts`'s "(d) empty query returns
+	// recent prompts"), well under the 50-item server cap, so none get paged out.
+	seedWorkspaceSession(workspace.worktreePath, {
+		messages: Array.from({ length: 30 }, (_, i) => ({
+			role: "user" as const,
+			text: `prompt number ${String(i).padStart(2, "0")}`,
+			timestamp: 1_700_600_000_000 + i * 1_000,
+		})),
+	});
+	await page.waitForTimeout(2_100);
+
+	await page.getByTestId("start-chat").click();
+	const input = page.getByTestId("chat-input");
+	await expect(input).toBeVisible();
+
+	await input.press("Control+r");
+	const overlay = page.getByTestId("history-overlay");
+	await expect(overlay).toBeVisible();
+	await expect(page.locator('[data-testid="history-item"][data-kind="prompt"]')).toHaveCount(30);
+
+	const query = page.getByTestId("history-query");
+	const results = page.getByTestId("history-results");
+	const selectedRow = page.locator('[data-testid="history-item"][data-selected="true"]');
+
+	// Walk the selection deep into the list — well past what the compact stage can show without scrolling.
+	for (let i = 0; i < 25; i++) {
+		await query.press("ArrowDown");
+	}
+	await expect(selectedRow).toHaveCount(1);
+
+	// The selected row's own layout box (real position, regardless of the container's overflow-clipping)
+	// must sit entirely within the results container's box — i.e. the container actually scrolled to bring
+	// it into view, rather than leaving it below the visible range.
+	const resultsBox = await results.boundingBox();
+	const rowBox = await selectedRow.boundingBox();
+	expect(resultsBox).not.toBeNull();
+	expect(rowBox).not.toBeNull();
+	if (resultsBox && rowBox) {
+		expect(rowBox.y).toBeGreaterThanOrEqual(resultsBox.y);
+		expect(rowBox.y + rowBox.height).toBeLessThanOrEqual(resultsBox.y + resultsBox.height);
+	}
+});

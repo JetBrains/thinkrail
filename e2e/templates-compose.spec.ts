@@ -107,6 +107,31 @@ test.describe("prompt templates in the composer", () => {
 		await expect(bubble).not.toContainText("⟨");
 	});
 
+	// Reviewer-flagged regression: mirroring used to run only inside `stepSlot` (Tab-out) — `submit()`
+	// stripped untouched slots immediately, so filling slot 1 of a repeated-group template and clicking
+	// Send *without* ever tabbing out sent a prompt with the sibling silently stripped instead of mirrored.
+	// `submit()` now mirrors every already-filled slot into its unfilled group-mates before stripping (see
+	// `slotSession.ts`'s `mirrorAllGroups`, shared with `stepSlot`'s own `mirrorSlotGroup` call).
+	test("sending directly (no Tab) still mirrors a filled slot's text into its same-group sibling", async ({
+		page,
+	}) => {
+		await openWorkspaceChat(page);
+		const input = page.getByTestId("chat-input");
+
+		await input.fill("/rena");
+		await page.locator('[data-testid="slash-command"][data-source="prompt"]').first().click();
+		await expect(input).toHaveValue(/^Rename ⟨name⟩ and update every ⟨name⟩ reference\.\s*$/);
+
+		await page.keyboard.type("Widget");
+		await expect(input).toHaveValue(/^Rename Widget and update every ⟨name⟩ reference\.\s*$/);
+
+		// No Tab — send directly while the second `⟨name⟩` occurrence is still a live, untouched marker.
+		await page.getByTestId("chat-send").click();
+		const bubble = page.locator('[data-testid="chat-message"][data-role="user"]').first();
+		await expect(bubble).toContainText("Rename Widget and update every Widget reference.");
+		await expect(bubble).not.toContainText("⟨");
+	});
+
 	test("Escape ends the session and leaves the text as-is", async ({ page }) => {
 		await openWorkspaceChat(page);
 		const input = page.getByTestId("chat-input");

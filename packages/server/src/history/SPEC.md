@@ -11,6 +11,10 @@ tags: [v1, history]
 ## Responsibility
 The `history.search` backend: a **lazy in-memory index** over pi's session JSONL files (prompt recall +
 full-conversation matches). Reads via pi's `SessionManager.listAll()`; **never writes** session files.
+Because `listAll()` walks every pi session on disk, the host handler's `all` scope (`host/historyScope.ts`'s
+`filter = () => true`) deliberately surfaces pi-CLI sessions outside any registered ThinkRail workspace
+too — a bit more than `session.getMessages` itself ever exposes for a single session, but consistent with
+an owner-scoped host (no multi-tenant isolation to preserve).
 
 ## Design
 - `extract.ts` — pure JSONL→`HistoryEntry[]`; `messageIndex` counts user/assistant/toolResult/custom in

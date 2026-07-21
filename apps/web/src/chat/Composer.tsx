@@ -19,7 +19,7 @@ import {
 } from "react";
 import { ModelSelector } from "./ModelSelector";
 import type { ParsedTemplate, TemplateSlot } from "./slotSession";
-import { shiftSlots, stripUntouchedSlots } from "./slotSession";
+import { mirrorAllGroups, mirrorSlotGroup, shiftSlots, stripUntouchedSlots } from "./slotSession";
 import { ThinkingSelector } from "./ThinkingSelector";
 
 /** How a submit is delivered: a fresh turn, an interrupt, or a queued message after the current turn. */
@@ -301,8 +301,17 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 
 	const submit = (behavior: SubmitBehavior) => {
 		// An active session's text is sent stripped of any untouched marker slots — sent *or* queued
-		// (steer/followUp), same rule; either way, the session always ends here.
-		const text = (slots ? stripUntouchedSlots(value, slots) : value).trim();
+		// (steer/followUp), same rule; either way, the session always ends here. Mirroring runs first: Tab
+		// (`stepSlot` below) mirrors a filled slot's text into its same-group siblings on exit, but a direct
+		// Send can fire before ever tabbing out of the slot that was actually filled — e.g. filling slot 1 of
+		// a repeated-group template and clicking Send without Tab. Without this, `stripUntouchedSlots` would
+		// strip the sibling as "untouched" and the group's mirrored value would silently never reach it.
+		let text = value;
+		if (slots) {
+			const mirrored = mirrorAllGroups(value, slots);
+			text = stripUntouchedSlots(mirrored.value, mirrored.slots);
+		}
+		text = text.trim();
 		if (!text && images.length === 0) return;
 		onSubmit(
 			text,
@@ -318,29 +327,17 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	/** Tab/Shift+Tab (and the hint chip's tap): move to the next/previous slot (wrap), and — when the slot
 	 * being left is `filled` (real content, not an untouched marker) — mirror its current text into every
 	 * OTHER slot sharing its `group` whose text differs (repeated placeholder occurrences propagate on
-	 * exit, not per keystroke). Each splice is re-tracked via `shiftSlots` before the next one, so later
-	 * offsets in the same step stay correct even when more than one sibling needs the mirror. */
+	 * exit, not per keystroke). `mirrorSlotGroup` (shared with `submit`'s own mirror-on-send path below)
+	 * re-tracks each splice via `shiftSlots` before the next one, so later offsets in the same step stay
+	 * correct even when more than one sibling needs the mirror. */
 	const stepSlot = (dir: 1 | -1) => {
 		if (!slots || slots.length === 0) return;
 		const cur = slots[slotIdx];
 		if (!cur) return;
 
-		let nextValue = value;
-		let nextSlots = slots;
-		if (cur.filled) {
-			const text = nextValue.slice(cur.start, cur.end);
-			for (let i = 0; i < nextSlots.length; i++) {
-				if (i === slotIdx) continue;
-				const sib = nextSlots[i];
-				if (!sib || sib.group !== cur.group) continue;
-				const sibText = nextValue.slice(sib.start, sib.end);
-				if (sibText === text) continue;
-				nextValue = nextValue.slice(0, sib.start) + text + nextValue.slice(sib.end);
-				nextSlots = shiftSlots(nextSlots, sib.start, sib.end - sib.start, text.length).map(
-					(s, si) => (si === i ? { ...s, filled: true } : s),
-				);
-			}
-		}
+		const { value: nextValue, slots: nextSlots } = cur.filled
+			? mirrorSlotGroup(value, slots, slotIdx)
+			: { value, slots };
 
 		if (nextValue !== value) onChange(nextValue);
 		setSlots(nextSlots);

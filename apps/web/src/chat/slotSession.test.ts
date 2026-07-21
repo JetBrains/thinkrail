@@ -1,6 +1,12 @@
 import { expect, test } from "bun:test";
 import type { TemplateSlot } from "./slotSession";
-import { parseTemplateSlots, shiftSlots, stripUntouchedSlots } from "./slotSession";
+import {
+	mirrorAllGroups,
+	mirrorSlotGroup,
+	parseTemplateSlots,
+	shiftSlots,
+	stripUntouchedSlots,
+} from "./slotSession";
 
 // slotSession parses pi's placeholder grammar into visible text + editable ranges — it never evaluates
 // it (no args exist client-side; Task B5's composer slot session drives the user through the ranges
@@ -302,4 +308,60 @@ test("shiftSlots composes with the composer's own active-slot growth to stay non
 		{ start: 9, end: 15, group: 1, filled: false },
 	]);
 	expect(slots[1]?.start).toBeGreaterThanOrEqual(slots[0]?.end ?? 0);
+});
+
+// ---- mirrorSlotGroup / mirrorAllGroups ----
+// A repeated placeholder (same `group`) is one conceptual argument occurring more than once — pi would
+// expand every occurrence from the same value, so the composer mirrors a filled slot's text into its
+// unfilled (or differently-filled) group-mates. `stepSlot` (Tab-out) and `submit()` (direct Send) both
+// need this; these functions are the pure, shared core both call into (see Composer.tsx).
+
+const gslot = (start: number, end: number, group: number, filled: boolean): TemplateSlot => ({
+	start,
+	end,
+	group,
+	filled,
+});
+
+test("mirrorSlotGroup propagates the source's text into a differing same-group sibling, marking it filled", () => {
+	const value = "a=X b=Y";
+	const slots = [gslot(2, 3, 0, true), gslot(6, 7, 0, false)];
+	const { value: next, slots: nextSlots } = mirrorSlotGroup(value, slots, 0);
+	expect(next).toBe("a=X b=X");
+	expect(nextSlots[0]).toEqual({ start: 2, end: 3, group: 0, filled: true });
+	expect(nextSlots[1]).toEqual({ start: 6, end: 7, group: 0, filled: true });
+});
+
+test("mirrorSlotGroup never touches a sibling in a different group", () => {
+	const value = "a=X b=Y";
+	const slots = [gslot(2, 3, 0, true), gslot(6, 7, 1, false)];
+	const { value: next, slots: nextSlots } = mirrorSlotGroup(value, slots, 0);
+	expect(next).toBe(value);
+	expect(nextSlots[1]).toEqual(slots[1]);
+});
+
+test("mirrorSlotGroup is a no-op once every member of a group already agrees — returns the same references", () => {
+	const value = "a=X b=X";
+	const slots = [gslot(2, 3, 0, true), gslot(6, 7, 0, true)];
+	const { value: next, slots: nextSlots } = mirrorSlotGroup(value, slots, 0);
+	expect(next).toBe(value);
+	expect(nextSlots).toBe(slots);
+});
+
+test("mirrorAllGroups propagates every already-filled slot's text into its own group's unfilled siblings, and never touches a different group", () => {
+	const value = "W.m.M";
+	const slots = [gslot(0, 1, 0, true), gslot(2, 3, 1, false), gslot(4, 5, 0, false)];
+	const { value: next, slots: nextSlots } = mirrorAllGroups(value, slots);
+	expect(next).toBe("W.m.W");
+	expect(nextSlots[0]).toEqual({ start: 0, end: 1, group: 0, filled: true });
+	expect(nextSlots[1]).toEqual({ start: 2, end: 3, group: 1, filled: false });
+	expect(nextSlots[2]).toEqual({ start: 4, end: 5, group: 0, filled: true });
+});
+
+test("mirrorAllGroups: when two siblings are independently filled with different text, the earliest in array order wins", () => {
+	const value = "a=X b=Y";
+	const slots = [gslot(2, 3, 0, true), gslot(6, 7, 0, true)];
+	const { value: next, slots: nextSlots } = mirrorAllGroups(value, slots);
+	expect(next).toBe("a=X b=X");
+	expect(nextSlots.every((s) => s.filled)).toBe(true);
 });

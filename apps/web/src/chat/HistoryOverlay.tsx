@@ -94,6 +94,7 @@ function PromptRow({
 		<div
 			data-testid="history-item"
 			data-kind="prompt"
+			data-selected={isSelected}
 			className={`group flex w-full items-center gap-xs rounded-[var(--radius-sm)] border-l-2 py-xs pl-sm pr-xs text-left text-sm ${
 				isSelected ? "border-l-primary bg-hover text-text" : "border-l-transparent text-muted"
 			}`}
@@ -149,6 +150,7 @@ function MessageRow({
 			type="button"
 			data-testid="history-item"
 			data-kind="message"
+			data-selected={isSelected}
 			onClick={onPick}
 			disabled={unmapped}
 			className={`flex w-full flex-col gap-0.5 rounded-[var(--radius-sm)] border-l-2 px-sm py-xs text-left text-sm disabled:cursor-default ${
@@ -216,6 +218,7 @@ export function HistoryOverlay({
 }: HistoryOverlayProps) {
 	const { open, stage, query, scope, result, selected, error } = state;
 	const inputRef = useRef<HTMLInputElement>(null);
+	const resultsRef = useRef<HTMLDivElement>(null);
 
 	// Auto-focus with the seeded text selected, the instant the overlay opens — not on every keystroke.
 	useEffect(() => {
@@ -225,6 +228,21 @@ export function HistoryOverlay({
 		el.focus();
 		el.select();
 	}, [open]);
+
+	// Arrow-key navigation moves `selected` past the edge of what's currently scrolled into view — the
+	// container itself scrolls (mouse wheel, drag), but a keyboard-only selection change never does on its
+	// own. `block: "nearest"` is the minimal scroll: it only moves the container when the selected row is
+	// actually outside the visible range, never re-centers a row that's already visible. `selected`/
+	// `stage`/`result` are all trigger-only — the body reaches the selected row through the DOM (via
+	// `data-selected`), not through these values directly — but a stage toggle or a fresh result can change
+	// which row `selected`'s index now points at without the index itself changing, so all three must
+	// re-run the effect.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: selected/stage/result are re-render triggers, not body inputs — the row is found via the DOM, not these values
+	useEffect(() => {
+		resultsRef.current
+			?.querySelector('[data-selected="true"]')
+			?.scrollIntoView({ block: "nearest" });
+	}, [selected, stage, result]);
 
 	if (!open) return null;
 
@@ -278,11 +296,14 @@ export function HistoryOverlay({
 
 	const promptCount = result ? Math.min(result.prompts.length, result.promptTotal) : 0;
 	const messageCount = result ? Math.min(result.messages.length, result.messageTotal) : 0;
-	const isEmpty =
-		!!result &&
-		!result.indexing &&
-		result.prompts.length === 0 &&
-		(stage === "compact" || result.messages.length === 0);
+	// A cold-build partial (`result.indexing`) can still carry real hits — whatever the server's budget
+	// managed to parse before it gave up and returned early. `hasResults` is checked independently of
+	// `indexing` so those partials render instead of being suppressed behind the indexing message; `isEmpty`
+	// only ever fires once indexing is done, so a partial's "nothing found yet" moment never flashes "no
+	// matches" while the index is still filling in.
+	const hasResults =
+		!!result && (result.prompts.length > 0 || (stage === "zoomed" && result.messages.length > 0));
+	const isEmpty = !!result && !result.indexing && !hasResults;
 
 	return (
 		<div
@@ -311,61 +332,75 @@ export function HistoryOverlay({
 					<span className="text-hint">⌃R</span>
 				</button>
 			</div>
-			<div className={`overflow-y-auto ${stage === "zoomed" ? "max-h-[75vh]" : "max-h-[40vh]"}`}>
+			<div
+				ref={resultsRef}
+				data-testid="history-results"
+				className={`overflow-y-auto ${stage === "zoomed" ? "max-h-[75vh]" : "max-h-[40vh]"}`}
+			>
 				{error ? (
 					<div data-testid="history-error" className="p-md text-center text-red text-sm">
 						search unavailable
 					</div>
-				) : !result ? null : result.indexing ? (
-					<div data-testid="history-indexing" className="p-md text-center text-muted text-sm">
-						indexing history…
-					</div>
-				) : isEmpty ? (
-					<div className="p-md text-center text-muted text-sm">no matches</div>
-				) : (
-					<div className="flex flex-col gap-xs p-xs">
-						{result.prompts.length > 0 ? (
-							<div className="flex flex-col gap-0.5">
-								<div className="flex items-center justify-between px-sm py-0.5 text-hint text-xs uppercase tracking-wide">
-									<span>Prompts</span>
-									<span data-testid="history-counts">
-										{promptCount}/{result.promptTotal}
-									</span>
-								</div>
-								{result.prompts.map((hit, i) => (
-									<PromptRow
-										key={`${hit.sessionId}:${hit.timestamp}`}
-										hit={hit}
-										query={query}
-										scope={scope}
-										workspaceName={hit.workspaceId ? workspaceNames[hit.workspaceId] : undefined}
-										isSelected={i === selected}
-										onPick={() => onInsert(hit)}
-										onSaveAsTemplate={() => onSaveAsTemplate(hit)}
-									/>
-								))}
+				) : !result ? null : (
+					<>
+						{result.indexing ? (
+							<div
+								data-testid="history-indexing"
+								className="px-sm py-1 text-center text-hint text-[11px]"
+							>
+								indexing history…
 							</div>
 						) : null}
-						{stage === "zoomed" && result.messages.length > 0 ? (
-							<div className="flex flex-col gap-0.5">
-								<div className="flex items-center justify-between px-sm py-0.5 text-hint text-xs uppercase tracking-wide">
-									<span>Messages</span>
-									<span data-testid="history-counts">
-										{messageCount}/{result.messageTotal}
-									</span>
-								</div>
-								{result.messages.map((hit, i) => (
-									<MessageRow
-										key={`${hit.sessionId}:${hit.messageIndex}`}
-										hit={hit}
-										query={query}
-										isSelected={result.prompts.length + i === selected}
-										onPick={() => hit.workspaceId && onOpenMessage(hit)}
-									/>
-								))}
+						{hasResults ? (
+							<div className="flex flex-col gap-xs p-xs">
+								{result.prompts.length > 0 ? (
+									<div className="flex flex-col gap-0.5">
+										<div className="flex items-center justify-between px-sm py-0.5 text-hint text-xs uppercase tracking-wide">
+											<span>Prompts</span>
+											<span data-testid="history-counts">
+												{promptCount}/{result.promptTotal}
+											</span>
+										</div>
+										{result.prompts.map((hit, i) => (
+											<PromptRow
+												key={`${hit.sessionId}:${hit.timestamp}`}
+												hit={hit}
+												query={query}
+												scope={scope}
+												workspaceName={
+													hit.workspaceId ? workspaceNames[hit.workspaceId] : undefined
+												}
+												isSelected={i === selected}
+												onPick={() => onInsert(hit)}
+												onSaveAsTemplate={() => onSaveAsTemplate(hit)}
+											/>
+										))}
+									</div>
+								) : null}
+								{stage === "zoomed" && result.messages.length > 0 ? (
+									<div className="flex flex-col gap-0.5">
+										<div className="flex items-center justify-between px-sm py-0.5 text-hint text-xs uppercase tracking-wide">
+											<span>Messages</span>
+											<span data-testid="history-counts">
+												{messageCount}/{result.messageTotal}
+											</span>
+										</div>
+										{result.messages.map((hit, i) => (
+											<MessageRow
+												key={`${hit.sessionId}:${hit.messageIndex}`}
+												hit={hit}
+												query={query}
+												isSelected={result.prompts.length + i === selected}
+												onPick={() => hit.workspaceId && onOpenMessage(hit)}
+											/>
+										))}
+									</div>
+								) : null}
 							</div>
+						) : isEmpty ? (
+							<div className="p-md text-center text-muted text-sm">no matches</div>
 						) : null}
-					</div>
+					</>
 				)}
 			</div>
 			{stage === "compact" && !error && result && !result.indexing && result.messageTotal > 0 ? (

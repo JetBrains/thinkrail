@@ -93,7 +93,7 @@ export class HistoryIndex {
 		this.built = true;
 	}
 
-	private ensureFresh(): { indexing: boolean } {
+	private ensureFresh(): void {
 		const now = Date.now();
 		if (!this.building && (!this.built || now - this.lastCheck > REVALIDATE_MS)) {
 			this.lastCheck = now;
@@ -101,7 +101,6 @@ export class HistoryIndex {
 				this.building = null;
 			});
 		}
-		return { indexing: !this.built };
 	}
 
 	/**

@@ -102,7 +102,6 @@ export function useHistorySearch(
 	cycleScope: () => void;
 	toggleStage: () => void;
 	moveSelection: (delta: number) => void;
-	selectedItem: () => HistorySelection | null;
 	openMessage: (hit: MessageHit) => void;
 } {
 	const [open, setOpen] = useState(false);
@@ -140,6 +139,39 @@ export function useHistorySearch(
 		}, 100);
 		return () => clearTimeout(timer);
 	}, [open, query, scope]);
+
+	// A cold (first-ever) build returns a partial result with `indexing: true` once its budget expires —
+	// otherwise correct, just not yet complete. Retry every 300ms for as long as the overlay stays open
+	// and the latest result keeps reporting `indexing`, using a token of its own — never the debounce
+	// effect's `tokenRef` above. Sharing one counter between two independently-triggered schedulers would
+	// mean whichever fires *second* within the same render invalidates the other's already-in-flight
+	// request even when that one is the more relevant of the two (e.g. a query edit arriving while a
+	// retry happens to also be due: both effects would fire in the same pass, and a shared token would let
+	// the retry's bump silently drop the fresh debounced response for the new query). Bumping
+	// unconditionally before the early return mirrors the debounce effect's own token discipline, for the
+	// same reason: a retry in flight when the overlay closes must never land after it reopens. Keyed on
+	// `result` itself, not `result.indexing` — a same-valued `indexing: true` on every retry still
+	// produces a *new* result object each `search()` call, which is what makes this effect re-fire and
+	// reschedule the next retry; a boolean dep would fire once and never repeat.
+	const retryTokenRef = useRef(0);
+	useEffect(() => {
+		const token = ++retryTokenRef.current;
+		if (!open || !result?.indexing) return;
+		const timer = setTimeout(() => {
+			getTransport()
+				.request("history.search", { query, scope, limit: 50 })
+				.then((res) => {
+					if (retryTokenRef.current !== token) return;
+					setResult(res);
+					setError(false);
+				})
+				.catch(() => {
+					if (retryTokenRef.current !== token) return;
+					setError(true);
+				});
+		}, 300);
+		return () => clearTimeout(timer);
+	}, [open, result, query, scope]);
 
 	// Keep `selected` in range as the visible flat list changes shape (a narrower result set, or a stage
 	// toggle that changes which sections are visible).
@@ -189,11 +221,6 @@ export function useHistorySearch(
 		[stage, result],
 	);
 
-	const selectedItem = useCallback(
-		() => resolveHistorySelection(stage, result, selected),
-		[stage, result, selected],
-	);
-
 	// Enter on a mapped message hit: jump to it via the store's `chatLocationRequest` deep link (see
 	// `store/SPEC.md`), then close the overlay. An unmapped hit (`hit.workspaceId` absent) is a no-op —
 	// belt-and-suspenders with `HistoryOverlay`'s own gating (it never calls this for an unmapped hit).
@@ -224,7 +251,6 @@ export function useHistorySearch(
 		cycleScope,
 		toggleStage,
 		moveSelection,
-		selectedItem,
 		openMessage,
 	};
 }
