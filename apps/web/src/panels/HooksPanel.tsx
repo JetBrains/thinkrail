@@ -83,6 +83,14 @@ export function HooksPanel({ workspaceId }: { workspaceId: string }) {
 								</button>
 							)}
 						</div>
+						{status.command && (
+							<code
+								data-testid="hook-command"
+								className="block truncate px-sm pb-xs font-[var(--font-mono)] text-hint text-xs"
+							>
+								{status.command}
+							</code>
+						)}
 						{output?.[hook]?.output ? (
 							<pre
 								data-testid="hook-output"
