@@ -389,6 +389,10 @@ interface AppState {
 	sessions: Record<string, SessionRuntime>;
 	/** Models with configured auth (cheap win #1) — fetched once, shared by every chat's picker. */
 	models: WireModel[];
+	/** Bare invalidation counter for the composer's `/`-menu template cache (`chat/ChatView.tsx`) — the
+	 * Templates settings panel (Task B6) bumps it after a `template.save`/`delete`; the store holds only
+	 * the counter, never fetches (see `chat/SPEC.md`'s Template slots bullet). */
+	templatesVersion: number;
 	/**
 	 * A request to surface a file's diff in the right-panel Changes view (e.g. a chat turn-divider's
 	 * "files changed" chip). The panels watch it and switch tab / select the file when it targets the
@@ -506,6 +510,7 @@ interface AppState {
 	appendErrorTurn: (sessionId: string, text: string) => void;
 	handlePiEvent: (event: PiEvent, sessionId: string) => void;
 	setModels: (models: WireModel[]) => void;
+	bumpTemplatesVersion: () => void;
 	setCurrentModel: (sessionId: string, model: WireModel) => void;
 	setThinkingLevel: (sessionId: string, level: ThinkingLevel) => void;
 	setStats: (sessionId: string, stats: SessionStats) => void;
@@ -628,6 +633,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	activeTerminalByWorkspace: {},
 	sessions: {},
 	models: [],
+	templatesVersion: 0,
 	changesRequest: null,
 	chatLocationRequest: null,
 	fsChangesByWorkspace: {},
@@ -999,6 +1005,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	handlePiEvent: (event, sessionId) =>
 		set((s) => withRuntime(s, sessionId, (rt) => reduceSessionEvent(rt, event))),
 	setModels: (models) => set({ models }),
+	bumpTemplatesVersion: () => set((s) => ({ templatesVersion: s.templatesVersion + 1 })),
 	setCurrentModel: (sessionId, model) =>
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, model }))),
 	setThinkingLevel: (sessionId, level) =>

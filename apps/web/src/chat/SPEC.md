@@ -111,21 +111,61 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   eye to it. Either resolving a row or giving up (toasted as "couldn't locate the message") always clears
   the request — `ChatView` is its only consumer, so an unresolved request must never linger.
 - **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions, `/`
-  commands, image paste/drop, `Ctrl+R` → `onHistoryOpen`), `HistoryOverlay` (the history-recall/search
+  commands + template **slot sessions** (Tab-through placeholders — see the Template slots bullet
+  below), image paste/drop, `Ctrl+R` → `onHistoryOpen`), `HistoryOverlay` (the history-recall/search
   overlay `Composer` opens — presentational, driven entirely by `useHistorySearch.ts`'s state +
   callbacks), `ModelSelector` + `ThinkingSelector` (shared with `NewWorkspaceDialog`; optional
   `container` prop portals their popovers into a host Dialog), `SessionStatsBar`, `ChatHeader` (its
   `left` slot carries the plan strip), `ExtUiDialog`. All props-driven; behavior detail lives in the
   components' jsdoc.
-- **Template slots** (`slotSession.ts`) — the pure parser behind the composer's future Tab-through slot
-  session (Task B5): `parseTemplateSlots(body, argumentHint)` expands pi's own placeholder grammar
-  (`$1..$n`, `$@`/`$ARGUMENTS`, `${N:-default}`, `${@:N}`, `${@:N:L}`, `$$` escape — pi's grammar, single
-  owner; see `packages/server/src/templates/`) into visible text plus `TemplateSlot` ranges;
-  `stripUntouchedSlots`/`shiftSlots` round out the session (strip-on-send, re-track-on-edit). **Parse
-  only — this module never evaluates the grammar**: a typed-through `/name args` prompt already expands
-  via pi's own `PromptOptions.expandPromptTemplates` today, with or without this parser or Task B5's UI.
-  Zero deps: no React, no store/transport, no `pi` import of any kind — plain strings and offsets in,
-  plain strings and offsets out.
+- **Template slots** (`slotSession.ts`'s parser + `Composer`'s session state + `ChatView`'s menu/pick
+  wiring — the composer's Tab-through placeholder flow, end to end). **Parsing** (`slotSession.ts`, pure,
+  zero deps): `parseTemplateSlots(body, argumentHint)` expands pi's own placeholder grammar (`$1..$n`,
+  `$@`/`$ARGUMENTS`, `${N:-default}`, `${@:N}`, `${@:N:L}` — pi's grammar, single owner; see
+  `packages/server/src/templates/`) into visible text plus `TemplateSlot` ranges;
+  `stripUntouchedSlots`/`shiftSlots` round out the session (strip-on-send, re-track-on-edit) — **parse
+  only**, this module never evaluates the grammar (a typed-through `/name args` prompt already expands via
+  pi's own `PromptOptions.expandPromptTemplates`, with or without this parser). **The `/` menu merge**
+  (`ChatView`): pi's `commands` snapshot (`session.getCommands`, frozen at session-create time) minus its
+  `source === "prompt"` entries, plus a fresh `template.list { workspaceId }` fetch mapped to
+  `SlashCommandInfo` rows (`source: "prompt"`, `sourceInfo` synthesized to match pi's own prompt-template
+  convention exactly: `{ path: filePath, source: "local", scope: scope === "global" ? "user" : "project",
+  origin: "top-level" }`) — one merged list, `Composer`'s rendering is unchanged. The fetch runs when the
+  slash menu opens (**`onSlashActive`**, a boolean prop mirroring `onMentionQuery`'s query signal), cached
+  per workspace (one `ChatView` instance never changes workspace) and invalidated by the store's
+  **`templatesVersion`** counter (see `store/SPEC.md`; bumped by the Templates settings panel, Task B6,
+  after a `template.save`/`delete`) — this is what makes `packages/server/src/agent/SPEC.md`'s "the
+  composer's `/` menu path is always fresh via `template.list`" claim true, unlike the typed-through
+  `/name args` path's frozen create-time snapshot. **Picking a template** (`ChatView`'s `onPickTemplate`, a
+  `Composer` prop): instead of `pickSlash`'s plain `/name ` insert, fetches `template.get`, splits
+  frontmatter client-side (a 6-line `/^---\n[\s\S]*?\n---\n/` splitter — pi's own frontmatter parser is
+  server-only, never reaches the browser bundle), runs `parseTemplateSlots(body, argumentHint)`, and hands
+  the result to `Composer` via a new **`ComposerHandle.insertTemplate`** method (alongside the existing
+  `insertText`) — replaces the whole draft (like `pickSlash`, not `pickMention`: a slash command occupies
+  the entire input) and, if the parse produced any slots, starts a **slot session** selecting slot 0; no
+  slots → a plain insert, caret at the end, no session. **The session** (`Composer`, local `useState`:
+  `slots: TemplateSlot[] | null` + `slotIdx`, no store/transport): `Tab`/`Shift+Tab` step to the
+  next/previous slot (wrap; `preventDefault`; a no-op while the mention/slash menu is open — checked at
+  the top of `onKeyDown`, right after the `Ctrl+R` guard and before the menu's own key handling, so a real
+  Tab-to-pick-a-menu-item is unaffected, and symmetrically an `Escape` while the menu is also open lets the
+  menu's own dismiss win first). Stepping **out** of a *filled* slot (real content, not an untouched
+  marker) splices its current text into every other slot sharing its `group` whose text differs (group
+  mirroring — repeated `$N`/`${...}` occurrences propagate on slot exit, not per keystroke), each splice
+  re-tracked via `shiftSlots`. `Escape` ends the session (`setSlots(null)`), leaving the text as-is. A
+  genuine text edit (the textarea's own `onChange` — never a programmatic `onChange(text)` call; those end
+  the session outright instead, since none of `pickMention`/`pickSlash`/arrow-recall/`insertText`
+  participate in slot tracking) diffs the old/new value around the post-edit `selectionStart` (a
+  common-prefix/suffix scan) into `(editStart, removedLen, insertedLen)`, re-tracks every slot via
+  `shiftSlots`, and flags the slot the edit landed in `filled: true`; an edit that consumes the **entire**
+  prior value (a select-all-and-type/delete) ends the session instead of re-tracking a now-meaningless
+  collapsed range set. `submit()` runs an active session's text through `stripUntouchedSlots` first, then
+  always clears the session — sent **or** queued (steer/followUp), same rule. Switching tabs needs no
+  explicit cleanup: `panels/CenterTabs.tsx` mounts only the active tab's component, so leaving a chat tab
+  unmounts `Composer` (and its session) while the store's `draft` text itself persists. **Hint chip**:
+  while a session is active (and the menu is not, so the two absolutely-positioned overlays never share
+  the same anchor rect), a small pill above the textarea — `slot {slotIdx+1}/{n} · ⇥ next · esc done`
+  (`data-testid="slot-hint"`) — clickable, tap steps to the next slot (same mirroring rule as `Tab`), the
+  mobile path with no keyboard needed.
 - **Plain `↑` recall + history button** — `Composer`'s `recentPrompts` prop (`ChatView`: this chat's own
   user-turn texts via `turnAnchorText`, newest first, deduped **keeping the newest occurrence** — the same
   recency-first ranking rule as the server history index, the atuin/fzf convention) backs a lightweight

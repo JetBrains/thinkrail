@@ -62,7 +62,12 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   chat is never clobbered. The
   pure **`reduceSessionEvent`** folds a `PiEvent` into a runtime; **`handlePiEvent(event,
   sessionId)`** and **`applyExtUi(request)`** route by id via the `withRuntime` helper (a no-op for an
-  unknown session). The host-wide **`models`** list stays global (not per session). The **in-app login** state
+  unknown session). The host-wide **`models`** list stays global (not per session). The host-wide
+  **`templatesVersion: number`** counter + **`bumpTemplatesVersion()`** (increment) is a bare invalidation
+  signal, the same shape as `fsChangesByWorkspace`'s `tick` — the Templates settings panel (Task B6) calls
+  it after a `template.save`/`delete`, and `chat/ChatView.tsx`'s composer-`/`-menu template fetch keys off
+  it to know its per-workspace cache is stale (see `chat/SPEC.md`'s Template slots bullet); the store holds
+  only the counter, never fetches. The **in-app login** state
   **`activeLogin: LoginState | null`** (type from `auth`) is **flat + session-less** (a login runs on the
   Welcome screen before any session exists — routing it through a session runtime would drop its frames):
   the pure **`foldLoginFrame`** reducer lives here (as `reduceExtUi`/`reduceSessionEvent` do — `auth` stays

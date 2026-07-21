@@ -18,6 +18,8 @@ import {
 	useState,
 } from "react";
 import { ModelSelector } from "./ModelSelector";
+import type { ParsedTemplate, TemplateSlot } from "./slotSession";
+import { shiftSlots, stripUntouchedSlots } from "./slotSession";
 import { ThinkingSelector } from "./ThinkingSelector";
 
 /** How a submit is delivered: a fresh turn, an interrupt, or a queued message after the current turn. */
@@ -59,6 +61,45 @@ function activeToken(value: string, caret: number): { token: string; start: numb
 	return { token: match[0], start: caret - match[0].length };
 }
 
+/**
+ * Diff two textarea values around the post-edit caret (`newCaret` — always right after whatever was just
+ * typed/pasted/deleted): grows the common prefix greedily but capped at `newCaret`, then grows the common
+ * suffix over what's left. Capping the prefix at the caret is what keeps a coincidentally-matching run
+ * elsewhere in the string (e.g. a repeated word) from being mistaken for the untouched region. Returns the
+ * edit as a `[editStart, editStart + removedLen)` span of `oldVal` replaced by `insertedLen` chars of
+ * `newVal` — the same shape `shiftSlots` takes.
+ */
+function diffValues(
+	oldVal: string,
+	newVal: string,
+	newCaret: number,
+): { editStart: number; removedLen: number; insertedLen: number } {
+	const maxPrefix = Math.min(newCaret, oldVal.length, newVal.length);
+	let prefix = 0;
+	while (prefix < maxPrefix && oldVal[prefix] === newVal[prefix]) prefix++;
+
+	const maxSuffix = Math.min(oldVal.length - prefix, newVal.length - prefix);
+	let suffix = 0;
+	while (
+		suffix < maxSuffix &&
+		oldVal[oldVal.length - 1 - suffix] === newVal[newVal.length - 1 - suffix]
+	) {
+		suffix++;
+	}
+
+	return {
+		editStart: prefix,
+		removedLen: oldVal.length - prefix - suffix,
+		insertedLen: newVal.length - prefix - suffix,
+	};
+}
+
+/** Does the edit at `[editStart, editEnd)` overlap `slot`'s range — the rule for which slot(s) get
+ * flagged `filled: true` after a normal (non-session-ending) edit. */
+function touches(slot: TemplateSlot, editStart: number, editEnd: number): boolean {
+	return editStart < slot.end && editEnd > slot.start;
+}
+
 interface ComposerProps {
 	value: string;
 	onChange: (value: string) => void;
@@ -72,6 +113,9 @@ interface ComposerProps {
 	currentModel: WireModel | null;
 	thinkingLevel: ThinkingLevel;
 	onMentionQuery: (query: string | null) => void;
+	/** Fires as the `/` menu opens/closes — mirrors `onMentionQuery`'s query signal, but as a plain
+	 * boolean: `ChatView`'s fresh-template-list fetch cares only about activity, not the query text. */
+	onSlashActive: (active: boolean) => void;
 	onSelectModel: (model: WireModel) => void;
 	onSelectThinking: (level: ThinkingLevel) => void;
 	onSubmit: (text: string, images: ImageContent[], behavior: SubmitBehavior) => void;
@@ -79,22 +123,31 @@ interface ComposerProps {
 	/** `Ctrl+R` — opens the history-recall overlay (`ChatView` seeds it with the current draft). Optional
 	 * so a standalone/storybook-style render of `Composer` doesn't need to wire it. */
 	onHistoryOpen?: () => void;
+	/** Picking a `source: "prompt"` row: `ChatView` fetches + parses the template and replies via
+	 * `insertTemplate`, instead of `pickSlash`'s plain `/name ` insert. Optional so a standalone render of
+	 * `Composer` still works — those rows just fall back to `pickSlash`. */
+	onPickTemplate?: (name: string) => void;
 }
 
-/** Imperative handle so `ChatView` can insert a recalled prompt without reaching into the DOM itself. */
+/** Imperative handle so `ChatView` can insert a recalled prompt (or a parsed template) without reaching
+ * into the DOM itself. */
 export interface ComposerHandle {
 	/** Replace the draft, focus the textarea, and place the caret at the end. */
 	insertText: (text: string) => void;
+	/** Replace the draft with a parsed template's expansion; if it produced any slots, start a slot
+	 * session selecting slot 0 (else behaves like `insertText`: caret at the end, no session). */
+	insertTemplate: (parsed: ParsedTemplate) => void;
 }
 
 /**
  * The chat composer (props-driven, no store/transport). Enter sends (or **steers** mid-stream);
  * Cmd/Ctrl+Enter queues a **follow-up**; a Stop button **aborts**. The model + effort controls sit in
  * the row under the tall prompt field, mirroring the New-Workspace dialog's layout. `@` opens worktree
- * file completion, a leading `/` opens the skill/command menu, `Ctrl+R` opens history recall (also
- * reachable via the always-rendered `history-open` button), plain `↑`/`↓` recall step through
- * `recentPrompts` when the field is empty or a recall session is already active, and images can be pasted
- * or dropped in.
+ * file completion, a leading `/` opens the skill/command menu (picking a `source: "prompt"` row starts a
+ * **slot session** — see `insertTemplate`/`stepSlot` — instead of the plain `/name ` insert every other
+ * row gets), `Ctrl+R` opens history recall (also reachable via the always-rendered `history-open` button),
+ * plain `↑`/`↓` recall step through `recentPrompts` when the field is empty or a recall session is already
+ * active, and images can be pasted or dropped in.
  */
 export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Composer(
 	{
@@ -108,11 +161,13 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		currentModel,
 		thinkingLevel,
 		onMentionQuery,
+		onSlashActive,
 		onSelectModel,
 		onSelectThinking,
 		onSubmit,
 		onAbort,
 		onHistoryOpen,
+		onPickTemplate,
 	},
 	handleRef,
 ) {
@@ -125,6 +180,12 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	// newest). Reset on a diverging edit (the textarea's `onChange` below) or a submit — see `onKeyDown`'s
 	// recall block (after the mention/slash menu) for the stepping rules.
 	const [recallIdx, setRecallIdx] = useState<number | null>(null);
+	// The template slot session: `null` when inactive. Starts on `insertTemplate`, steps via `stepSlot`
+	// (Tab/Shift+Tab and the hint chip), re-tracked across edits in the textarea's `onChange`, and ends on
+	// `Escape`, submit, or any programmatic mutation that doesn't participate in slot tracking (recall,
+	// mention/plain-slash pick, `insertText`) — see `chat/SPEC.md`'s Template slots section.
+	const [slots, setSlots] = useState<TemplateSlot[] | null>(null);
+	const [slotIdx, setSlotIdx] = useState(0);
 
 	const { token, start } = activeToken(value, caret);
 	const mentionQuery = token.startsWith("@") ? token.slice(1) : null;
@@ -132,6 +193,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const slashQuery = value.startsWith("/") && !value.includes(" ") ? value.slice(1) : null;
 
 	useEffect(() => onMentionQuery(mentionQuery), [mentionQuery, onMentionQuery]);
+	useEffect(() => onSlashActive(slashQuery !== null), [slashQuery, onSlashActive]);
 	// biome-ignore lint/correctness/useExhaustiveDependencies: reset selection when the query changes
 	useEffect(() => {
 		setActiveIndex(0);
@@ -147,58 +209,84 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const menuLen = mentionOpen ? mentionCandidates.length : slashOpen ? slashMatches.length : 0;
 	const menuOpen = menuLen > 0;
 
-	// A one-shot imperative caret move requested by `focusCaret`, applied in `useLayoutEffect` below
-	// rather than a `requestAnimationFrame`: RAF only guarantees "before the next paint", leaving a gap
-	// *after the current task ends* where another actor touching the same textarea's selection (a fast
-	// follow-up keystroke, Playwright's `fill()`, a paste) can run first — a stale RAF then collapses
-	// *that* selection instead of the one it was scheduled for. Concretely: `fill()` does select-all
-	// then insert-text as separate steps; if a stale RAF's `setSelectionRange(pos, pos)` fires in the
-	// gap between them, it collapses the select-all to a bare caret, so the subsequent insert appends
-	// at `pos` instead of replacing — producing a doubled `oldValue + newValue` (this is the exact
-	// mechanism behind the flake once seen on the recall test below). `useLayoutEffect` runs
-	// synchronously in React's commit phase, in the same task as the keystroke that triggered it, so
-	// there is no gap for anything else to interleave.
-	const [pendingCaret, setPendingCaret] = useState<number | null>(null);
+	// A one-shot imperative caret/selection move requested by `focusSelection`, applied in
+	// `useLayoutEffect` below rather than a `requestAnimationFrame`: RAF only guarantees "before the next
+	// paint", leaving a gap *after the current task ends* where another actor touching the same
+	// textarea's selection (a fast follow-up keystroke, Playwright's `fill()`, a paste) can run first — a
+	// stale RAF then collapses *that* selection instead of the one it was scheduled for. Concretely:
+	// `fill()` does select-all then insert-text as separate steps; if a stale RAF's
+	// `setSelectionRange(pos, pos)` fires in the gap between them, it collapses the select-all to a bare
+	// caret, so the subsequent insert appends at `pos` instead of replacing — producing a doubled
+	// `oldValue + newValue` (this is the exact mechanism behind the flake once seen on the recall test
+	// below). `useLayoutEffect` runs synchronously in React's commit phase, in the same task as the
+	// keystroke that triggered it, so there is no gap for anything else to interleave.
+	const [pendingSelection, setPendingSelection] = useState<{ start: number; end: number } | null>(
+		null,
+	);
 
 	useLayoutEffect(() => {
-		if (pendingCaret === null) return;
+		if (pendingSelection === null) return;
 		const el = ref.current;
 		if (el) {
 			el.focus();
-			el.setSelectionRange(pendingCaret, pendingCaret);
+			el.setSelectionRange(pendingSelection.start, pendingSelection.end);
 		}
-		setCaret(pendingCaret);
-		setPendingCaret(null);
-	}, [pendingCaret]);
+		setCaret(pendingSelection.start);
+		setPendingSelection(null);
+	}, [pendingSelection]);
 
-	const focusCaret = useCallback((pos: number) => {
-		setPendingCaret(pos);
+	/** Move the caret (`end` defaults to `start` — a collapsed caret) or place a real selection — a
+	 * template slot's marker range needs the latter so typing over it replaces the whole thing. */
+	const focusSelection = useCallback((start: number, end: number = start) => {
+		setPendingSelection({ start, end });
 	}, []);
 
 	useImperativeHandle(
 		handleRef,
 		() => ({
 			insertText: (text: string) => {
+				setSlots(null);
 				onChange(text);
-				focusCaret(text.length);
+				focusSelection(text.length);
+			},
+			insertTemplate: (parsed: ParsedTemplate) => {
+				onChange(parsed.text);
+				const first = parsed.slots[0];
+				if (first) {
+					setSlots(parsed.slots);
+					setSlotIdx(0);
+					focusSelection(first.start, first.end);
+				} else {
+					setSlots(null);
+					focusSelection(parsed.text.length);
+				}
 			},
 		}),
-		[onChange, focusCaret],
+		[onChange, focusSelection],
 	);
 
 	const pickMention = (c: MentionCandidate) => {
+		setSlots(null);
 		const before = value.slice(0, start);
 		const after = value.slice(caret);
 		const insert = c.kind === "dir" ? `@${c.path}/` : `@${c.path}`;
 		const suffix = c.kind === "dir" ? "" : " ";
 		onChange(`${before}${insert}${suffix}${after}`);
-		focusCaret(before.length + insert.length + suffix.length);
+		focusSelection(before.length + insert.length + suffix.length);
 	};
 
 	const pickSlash = (c: SlashCommandInfo) => {
+		setSlots(null);
 		const next = `/${c.name} `;
 		onChange(next);
-		focusCaret(next.length);
+		focusSelection(next.length);
+	};
+
+	// A fresh `template.list` row (`source: "prompt"`) routes to the template flow (fetch + parse + slot
+	// session, owned by `ChatView`) instead of the plain `/name ` insert every other row gets.
+	const pickSlashCommand = (c: SlashCommandInfo) => {
+		if (c.source === "prompt" && onPickTemplate) onPickTemplate(c.name);
+		else pickSlash(c);
 	};
 
 	const addFiles = async (files: File[]) => {
@@ -212,7 +300,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	};
 
 	const submit = (behavior: SubmitBehavior) => {
-		const text = value.trim();
+		// An active session's text is sent stripped of any untouched marker slots — sent *or* queued
+		// (steer/followUp), same rule; either way, the session always ends here.
+		const text = (slots ? stripUntouchedSlots(value, slots) : value).trim();
 		if (!text && images.length === 0) return;
 		onSubmit(
 			text,
@@ -222,6 +312,43 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		onChange("");
 		setImages([]);
 		setRecallIdx(null);
+		setSlots(null);
+	};
+
+	/** Tab/Shift+Tab (and the hint chip's tap): move to the next/previous slot (wrap), and — when the slot
+	 * being left is `filled` (real content, not an untouched marker) — mirror its current text into every
+	 * OTHER slot sharing its `group` whose text differs (repeated placeholder occurrences propagate on
+	 * exit, not per keystroke). Each splice is re-tracked via `shiftSlots` before the next one, so later
+	 * offsets in the same step stay correct even when more than one sibling needs the mirror. */
+	const stepSlot = (dir: 1 | -1) => {
+		if (!slots || slots.length === 0) return;
+		const cur = slots[slotIdx];
+		if (!cur) return;
+
+		let nextValue = value;
+		let nextSlots = slots;
+		if (cur.filled) {
+			const text = nextValue.slice(cur.start, cur.end);
+			for (let i = 0; i < nextSlots.length; i++) {
+				if (i === slotIdx) continue;
+				const sib = nextSlots[i];
+				if (!sib || sib.group !== cur.group) continue;
+				const sibText = nextValue.slice(sib.start, sib.end);
+				if (sibText === text) continue;
+				nextValue = nextValue.slice(0, sib.start) + text + nextValue.slice(sib.end);
+				nextSlots = shiftSlots(nextSlots, sib.start, sib.end - sib.start, text.length).map(
+					(s, si) => (si === i ? { ...s, filled: true } : s),
+				);
+			}
+		}
+
+		if (nextValue !== value) onChange(nextValue);
+		setSlots(nextSlots);
+		const len = nextSlots.length;
+		const next = (((slotIdx + dir) % len) + len) % len;
+		setSlotIdx(next);
+		const target = nextSlots[next];
+		if (target) focusSelection(target.start, target.end);
 	};
 
 	const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -235,6 +362,23 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			setDismissed(true);
 			onHistoryOpen?.();
 			return;
+		}
+		// A slot session's own keys — checked right after the Ctrl+R guard and before the mention/slash
+		// menu's key handling, and skipped outright while the menu IS open, so a real Tab-to-pick-a-menu-item
+		// (or an Escape that should dismiss the menu) is unaffected; the hint chip and the menu are mutually
+		// exclusive anyway (see the hint's render gate below), so the two floating UIs never fight over the
+		// same key.
+		if (slots && !menuOpen) {
+			if (e.key === "Tab") {
+				e.preventDefault();
+				stepSlot(e.shiftKey ? -1 : 1);
+				return;
+			}
+			if (e.key === "Escape") {
+				e.preventDefault();
+				setSlots(null);
+				return;
+			}
 		}
 		if (menuOpen) {
 			if (e.key === "ArrowDown") {
@@ -259,7 +403,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					if (c) pickMention(c);
 				} else {
 					const c = slashMatches[activeIndex];
-					if (c) pickSlash(c);
+					if (c) pickSlashCommand(c);
 				}
 				return;
 			}
@@ -271,25 +415,27 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		// `pickMention`/`pickSlash`'s own focus-after-change pattern.
 		if (e.key === "ArrowUp" && (value === "" || recallIdx !== null) && recentPrompts.length > 0) {
 			e.preventDefault();
+			setSlots(null);
 			const next = recallIdx === null ? 0 : Math.min(recallIdx + 1, recentPrompts.length - 1);
 			const text = recentPrompts[next] ?? "";
 			setRecallIdx(next);
 			onChange(text);
-			focusCaret(text.length);
+			focusSelection(text.length);
 			return;
 		}
 		if (e.key === "ArrowDown" && recallIdx !== null) {
 			e.preventDefault();
+			setSlots(null);
 			if (recallIdx === 0) {
 				setRecallIdx(null);
 				onChange("");
-				focusCaret(0);
+				focusSelection(0);
 			} else {
 				const next = recallIdx - 1;
 				const text = recentPrompts[next] ?? "";
 				setRecallIdx(next);
 				onChange(text);
-				focusCaret(text.length);
+				focusSelection(text.length);
 			}
 			return;
 		}
@@ -349,7 +495,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 									type="button"
 									data-testid="slash-command"
 									data-source={c.source}
-									onClick={() => pickSlash(c)}
+									onClick={() => pickSlashCommand(c)}
 									className={`flex w-full items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs text-left text-sm ${i === activeIndex ? "bg-hover text-text" : "text-muted"}`}
 								>
 									<span className="font-mono text-text">/{c.name}</span>
@@ -360,6 +506,17 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 								</button>
 							))}
 				</div>
+			) : null}
+
+			{slots && !menuOpen ? (
+				<button
+					type="button"
+					data-testid="slot-hint"
+					onClick={() => stepSlot(1)}
+					className="absolute bottom-full left-sm mb-xs rounded-[var(--radius-sm)] border border-border2 bg-elevated px-sm py-xs text-hint text-xs shadow-[var(--shadow-md)] hover:bg-hover hover:text-text"
+				>
+					slot {slotIdx + 1}/{slots.length} · ⇥ next · esc done
+				</button>
 			) : null}
 
 			{images.length > 0 ? (
@@ -390,12 +547,46 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					value={value}
 					onChange={(e) => {
 						const next = e.target.value;
+						const nextCaret = e.target.selectionStart;
 						// A genuine user edit (typing/pasting/deleting — never fired by the recall/insert paths
 						// themselves, since those set the controlled `value` prop directly rather than mutating the
 						// DOM node) that diverges from the recalled entry exits the recall session.
 						if (recallIdx !== null && next !== recentPrompts[recallIdx]) setRecallIdx(null);
+						if (slots) {
+							const { editStart, removedLen, insertedLen } = diffValues(value, next, nextCaret);
+							if (editStart === 0 && removedLen === value.length) {
+								// The edit consumed the entire prior value (a select-all-and-type/delete, or
+								// Playwright's `fill()`) — re-tracking a now-meaningless collapsed range set would
+								// serve no purpose, so the session just ends instead.
+								setSlots(null);
+							} else {
+								const editEnd = editStart + removedLen;
+								const active = slots[slotIdx];
+								// Still typing at the exact end of the actively-selected slot should keep extending
+								// it. `shiftSlots`' boundary rule otherwise treats a zero-width insert exactly at a
+								// slot's `end` as landing just *after* it (the right default in general — text typed
+								// after a filled value shouldn't retroactively join it), which would otherwise
+								// truncate a multi-character fill to whatever was typed in the very first keystroke.
+								const growing =
+									removedLen === 0 &&
+									insertedLen > 0 &&
+									active !== undefined &&
+									active.end === editStart;
+								const shifted = shiftSlots(slots, editStart, removedLen, insertedLen).map(
+									(slot, i) => {
+										const grown =
+											growing && i === slotIdx ? { ...slot, end: slot.end + insertedLen } : slot;
+										const original = slots[i];
+										return original && touches(original, editStart, editEnd)
+											? { ...grown, filled: true }
+											: grown;
+									},
+								);
+								setSlots(shifted);
+							}
+						}
 						onChange(next);
-						setCaret(e.target.selectionStart);
+						setCaret(nextCaret);
 					}}
 					onKeyUp={(e) => setCaret(e.currentTarget.selectionStart)}
 					onClick={(e) => setCaret(e.currentTarget.selectionStart)}
