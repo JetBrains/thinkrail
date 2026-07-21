@@ -5,6 +5,7 @@ import type {
 	ImageContent,
 	LoginReply,
 	ThinkingLevel,
+	TodoStatus,
 	WireModel,
 	Workspace,
 } from "@thinkrail/contracts";
@@ -60,6 +61,7 @@ import {
 	resizeTerminal,
 	writeTerminal,
 } from "../terminal";
+import { addTodo, listTodos, removeTodo, updateTodo } from "../todos";
 import { ensureWatch, stopWatch } from "../watch";
 import {
 	createWorkspace,
@@ -148,6 +150,22 @@ const handlers: Record<string, Handler> = {
 		ensureWatch(p.workspaceId);
 		return specGraph(p.workspaceId);
 	},
+	"todo.list": (params) => listTodos(params as { workspaceId: string; sessionId: string }),
+	"todo.add": (params) =>
+		addTodo(params as { workspaceId: string; sessionId: string; title: string; note?: string }),
+	"todo.update": (params) =>
+		updateTodo(
+			params as {
+				workspaceId: string;
+				sessionId: string;
+				id: string;
+				status?: TodoStatus;
+				title?: string;
+				note?: string;
+			},
+		),
+	"todo.remove": (params) =>
+		removeTodo(params as { workspaceId: string; sessionId: string; id: string }),
 	"git.status": (params) => {
 		const p = params as { workspaceId: string };
 		ensureWatch(p.workspaceId);

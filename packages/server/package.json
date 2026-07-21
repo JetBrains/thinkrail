@@ -19,6 +19,7 @@
 		"@thinkrail/shared": "workspace:*",
 		"bun-pty": "0.4.10",
 		"pi-spec-graph": "workspace:*",
+		"pi-todos": "workspace:*",
 		"pi-thinkrail-workflow": "workspace:*",
 		"pi-visualize": "workspace:*",
 		"pi-web-access": "0.13.0",

@@ -1,14 +1,14 @@
 // Bundles the `pi-web-access` (web_search + fetch_content), `pi-visualize` (the `visualize` tool),
-// `pi-spec-graph` (spec_* tools + the spec-graph skill), and `pi-thinkrail-workflow` (the workflow-router
-// rule + workflow skills) extensions into a session's resource loader, so the tools are present out of the
-// box without a separate install. Two loading modes:
-// - Run-from-source: explicit `additionalExtensionPaths` (all four ship raw `.ts`; pi's loader jiti-loads
+// `pi-spec-graph` (spec_* tools + the spec-graph skill), `pi-thinkrail-workflow` (the workflow-router
+// rule + workflow skills), and `pi-todos` (todo_* tools + the todos skill) extensions into a session's
+// resource loader, so the tools are present out of the box without a separate install. Two loading modes:
+// - Run-from-source: explicit `additionalExtensionPaths` (all ship raw `.ts`; pi's loader jiti-loads
 //   TS, keeping their source out of our typecheck graph — `pi-spec-graph`'s exports map keeps `./index.ts`
 //   reachable alongside the `./core` subpath the `spec/` module value-imports). Paths resolve lazily on
 //   first use — resolution needs `node_modules`, which a compiled binary lacks. `pi-spec-graph` and
-//   `pi-thinkrail-workflow` are workspace packages (not pi-installed), so pi's package manager won't
-//   auto-discover their `pi.skills` manifests — we point `additionalSkillPaths` at their `skills/` dirs.
-// - Compiled binary: the launcher injects the same four extensions as value-imported factories + a staged
+//   `pi-thinkrail-workflow`/`pi-todos` are workspace packages (not pi-installed), so pi's package manager
+//   won't auto-discover their `pi.skills` manifests — we point `additionalSkillPaths` at their `skills/` dirs.
+// - Compiled binary: the launcher injects the same extensions as value-imported factories + a staged
 //   on-disk skills dir via `setBundledExtensions` (pi gives `extensionFactories` full API parity with
 //   path loading; pi reads skills via plain fs, so they must live on the real filesystem).
 
@@ -57,9 +57,14 @@ function resolveDevPaths(): { extensionPaths: string[]; skillPaths: string[] } {
 	const visualizePath = require.resolve("pi-visualize/index.ts");
 	const specGraphPath = require.resolve("pi-spec-graph/index.ts");
 	const workflowPath = require.resolve("pi-thinkrail-workflow/index.ts");
+	const todosPath = require.resolve("pi-todos/index.ts");
 	devPaths = {
-		extensionPaths: [webAccessPath, visualizePath, specGraphPath, workflowPath],
-		skillPaths: [join(dirname(specGraphPath), "skills"), join(dirname(workflowPath), "skills")],
+		extensionPaths: [webAccessPath, visualizePath, specGraphPath, workflowPath, todosPath],
+		skillPaths: [
+			join(dirname(specGraphPath), "skills"),
+			join(dirname(workflowPath), "skills"),
+			join(dirname(todosPath), "skills"),
+		],
 	};
 	return devPaths;
 }
@@ -80,8 +85,8 @@ const headlessSearchPolicy: ExtensionFactory = (pi: ExtensionAPI) => {
 
 /**
  * A resource loader with `pi-web-access` + `pi-visualize` + `pi-spec-graph` (and its skill) +
- * `pi-thinkrail-workflow` (and its skills) (+ the headless-search policy) and our host-owned
- * `ask_user_question` tool layered onto pi's default discovery.
+ * `pi-thinkrail-workflow` (and its skills) + `pi-todos` (and its skill) (+ the headless-search policy)
+ * and our host-owned `ask_user_question` tool layered onto pi's default discovery.
  */
 export async function buildResourceLoader(
 	cwd: string,
