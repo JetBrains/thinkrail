@@ -180,8 +180,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   (`extensionRunner.getRegisteredCommands()` + `promptTemplates` + `resourceLoader.getSkills()`).
 - Dialog promises honor abort/timeout and are settled (+ dismissed in the UI) on session disposal — a
   bridged `uiContext` call must never hang.
-- **Prompt-template `/name` expansion** — typed-through references like `/name` in a prompt ride the
-  agent's default `expandPromptTemplates: true` behavior; no agent code change needed. The prompt is
-  expanded by the agent's own pi runtime using templates loaded by the session's `ResourceLoader`
-  (which reads them from disk fresh per session — see `templates` module SPEC for freshness rationale),
-  so a template saved through the UI (`template.save`) shows up in the next prompt automatically.
+- **Prompt-template `/name` expansion** — typed-through references like `/name args` in a prompt ride
+  the agent's default `expandPromptTemplates: true` (no agent code change). It expands from the
+  session's **create-time template snapshot** — a template saved mid-session is **NOT** seen by an
+  already-open session's typed-through path (pi passes unknown `/name` text through verbatim). The
+  composer's `/` menu path is always fresh via `template.list` (see `templates/SPEC.md` freshness rule).
