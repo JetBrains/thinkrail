@@ -162,15 +162,19 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   menu's own dismiss win first). Stepping **out** of a *filled* slot (real content, not an untouched
   marker) splices its current text into every other slot sharing its `group` whose text differs (group
   mirroring — repeated `$N`/`${...}` occurrences propagate on slot exit, not per keystroke), each splice
-  re-tracked via `shiftSlots`. `Escape` ends the session (`setSlots(null)`), leaving the text as-is. A
-  genuine text edit (the textarea's own `onChange` — never a programmatic `onChange(text)` call; those end
-  the session outright instead, since none of `pickMention`/`pickSlash`/arrow-recall/`insertText`
-  participate in slot tracking) diffs the old/new value around the post-edit `selectionStart` (a
-  common-prefix/suffix scan) into `(editStart, removedLen, insertedLen)`, re-tracks every slot via
-  `shiftSlots`, and flags the slot the edit landed in `filled: true`; an edit that consumes the **entire**
-  prior value (a select-all-and-type/delete) ends the session instead of re-tracking a now-meaningless
-  collapsed range set. `submit()` runs an active session's text through `stripUntouchedSlots` first, then
-  always clears the session — sent **or** queued (steer/followUp), same rule. Switching tabs needs no
+  re-tracked via `shiftSlots` (`mirrorSlotGroup` in `slotSession.ts`). `Escape` ends the session
+  (`setSlots(null)`), leaving the text as-is. A genuine text edit (the textarea's own `onChange` — never a
+  programmatic `onChange(text)` call; those end the session outright instead, since none of
+  `pickMention`/`pickSlash`/arrow-recall/`insertText` participate in slot tracking) diffs the old/new value
+  around the post-edit `selectionStart` (a common-prefix/suffix scan) into `(editStart, removedLen,
+  insertedLen)`, re-tracks every slot via `shiftSlots`, and flags the slot the edit landed in
+  `filled: true`; an edit that consumes the **entire** prior value (a select-all-and-type/delete) ends the
+  session instead of re-tracking a now-meaningless collapsed range set. On send, `submit()` runs the same
+  group-mirroring pass over **every already-filled slot**, not just the one most recently Tab-exited
+  (`mirrorAllGroups` — a direct Send never has to go through Tab first for its mirroring to take effect),
+  propagating each into its unfilled same-group siblings; only **then** does it strip whatever markers are
+  still untouched (`stripUntouchedSlots`), and always clears the session — sent **or** queued
+  (steer/followUp), same rule. Switching tabs needs no
   explicit cleanup: `panels/CenterTabs.tsx` mounts only the active tab's component, so leaving a chat tab
   unmounts `Composer` (and its session) while the store's `draft` text itself persists. **Hint chip**:
   while a session is active (and the menu is not, so the two absolutely-positioned overlays never share
