@@ -164,4 +164,73 @@ test.describe("prompt templates in the composer", () => {
 		await expect(row).toHaveCount(1);
 		await expect(row).toContainText("skill:spec-graph");
 	});
+
+	// `adjacent.md`'s `$1$2` (no `argument-hint`, no literal text between the two placeholders) is the
+	// exact zero-gap shape the B5 review found broken: filling slot 1 across more than one keystroke used
+	// to corrupt slot 2's `start`, silently absorbing typed characters into it one at a time (see
+	// `slotSession.ts`'s `mapOffset` doc for the fix).
+	test("filling an unfilled slot across several keystrokes never steals characters from a zero-gap sibling", async ({
+		page,
+	}) => {
+		await openWorkspaceChat(page);
+		const input = page.getByTestId("chat-input");
+
+		await input.fill("/adj");
+		const rows = page.locator('[data-testid="slash-command"][data-source="prompt"]');
+		await expect(rows).toHaveCount(1);
+		await expect(rows.first()).toContainText("/adjacent");
+
+		await rows.first().click();
+		await expect(input).toHaveValue(/^⟨arg1⟩⟨arg2⟩\s*$/);
+
+		const hint = page.getByTestId("slot-hint");
+		await expect(hint).toContainText("slot 1/2");
+		const sel1 = await readSelection(input);
+		expect(sel1.value.slice(sel1.start, sel1.end)).toBe("⟨arg1⟩");
+
+		// The first keystroke replaces the whole selected marker (a real edit, not zero-width); the
+		// remaining four are pure zero-width inserts landing exactly on the — now shrunk — shared boundary
+		// with slot 2, one after another. A single keystroke can only ever steal one character, so it's the
+		// repeated boundary hit across several keystrokes that actually exercises the bug.
+		await page.keyboard.type("hello");
+		await expect(input).toHaveValue(/^hello⟨arg2⟩\s*$/);
+
+		// Tab to slot 2 — its selection must be exactly its own marker, never short the characters "hello"
+		// stole into its left edge.
+		await input.press("Tab");
+		await expect(hint).toContainText("slot 2/2");
+		const sel2 = await readSelection(input);
+		expect(sel2.value.slice(sel2.start, sel2.end)).toBe("⟨arg2⟩");
+
+		// Send with slot 2 still unfilled — it gets stripped, and the full "hello" (all 5 characters) must
+		// survive untouched, with no marker glyph left behind.
+		await page.getByTestId("chat-send").click();
+		const bubble = page.locator('[data-testid="chat-message"][data-role="user"]');
+		await expect(bubble).toContainText("hello");
+		await expect(bubble).not.toContainText("⟨");
+	});
+
+	// Minor 2 (B5 review): every send test above ends with all slots filled — none exercises the
+	// strip-at-send path against a *live*, never-touched marker. `review.md`'s `$1` (`⟨file⟩`, no default)
+	// is that marker: sending without ever typing into it strips it and must collapse the doubled space it
+	// would otherwise leave behind down to exactly one — not zero, not two. `toContainText`/`toHaveText`
+	// always normalize whitespace before comparing, even given a plain string — a `not.toContainText("  ")`
+	// assertion here would vacuously pass regardless of the actual bug — so this reads `textContent()`
+	// straight off the DOM and compares it exactly.
+	test("sending with a live unfilled marker strips it and collapses the doubled space to exactly one", async ({
+		page,
+	}) => {
+		await openWorkspaceChat(page);
+		const input = page.getByTestId("chat-input");
+
+		await input.fill("/rev");
+		await page.locator('[data-testid="slash-command"][data-source="prompt"]').first().click();
+		await expect(input).toHaveValue(/^Review ⟨file⟩ for issues, focusing on src\/\.\s*$/);
+
+		// Slot 1 (`⟨file⟩`) is never typed into — it stays live/unfilled all the way to send.
+		await page.getByTestId("chat-send").click();
+		const bubble = page.locator('[data-testid="chat-message"][data-role="user"]').first();
+		await expect(bubble).toBeVisible();
+		expect(await bubble.textContent()).toBe("Review for issues, focusing on src/.");
+	});
 });

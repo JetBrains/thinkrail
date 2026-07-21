@@ -163,14 +163,41 @@ export function stripUntouchedSlots(text: string, slots: TemplateSlot[]): string
 }
 
 /**
- * Map one offset across a `[editStart, editEnd)` → `insertedLen`-chars text edit. A point at or before
+ * Map one offset across a `[editStart, editEnd)` → `insertedLen`-chars text edit, preserving the
+ * invariant `shiftSlots` exists to hold: **slots never overlap after a shift**. A point at or before
  * `editStart` is unaffected; at or after `editEnd` it shifts by the net length delta; a point strictly
- * inside the replaced span collapses to just after the inserted text. That last rule is what makes
- * `shiftSlots` grow/shrink a slot whose interior an edit lands in, rather than leaving it pointing at
- * stale content — applied to both `start` and `end` independently, it also degenerates sensibly for an
- * edit that spans a slot boundary.
+ * inside the replaced span collapses to just after the inserted text (this is what makes `shiftSlots`
+ * grow/shrink a slot whose interior an edit lands in, rather than leaving it pointing at stale content).
+ *
+ * `isSlotStart` breaks the one remaining tie, for **zero-width insertions** (`editStart === editEnd`)
+ * landing exactly on a point where one slot's `end` meets the next one's `start` with zero gap between
+ * them (e.g. a `"$1$2"`-shaped template, no literal text separating the two placeholders). Both
+ * `pos <= editStart` (an `end`, unaffected) and `pos >= editEnd` (a `start`, shifted) are simultaneously
+ * true at that exact point when `editStart === editEnd` — without a tie-break, the *first* branch always
+ * wins, which is correct for the `end` it belongs to but wrong for the coincident `start` right after it:
+ * left in place, that `start` would silently absorb whatever was just inserted (the following slot's
+ * left edge grows by the insert instead of the slot being pushed out of its way — a real, previously
+ * shipped bug: two zero-gap-adjacent slots, filling the first via more than one keystroke, corrupted the
+ * second's boundary one character at a time). The fix: a `start` exactly at a zero-width insert's point
+ * is always treated as `>= editEnd` (pushed forward, out of the way) rather than `<= editStart`
+ * (unaffected) — an `end` at that same point is untouched by this tie-break and still defaults to
+ * unaffected, i.e. it does **not** grow on its own. Growing the slot an edit is conceptually "inside"
+ * (e.g. the composer's actively-selected slot, as the user keeps typing past its end) is a UI/intent
+ * decision this pure module can't make — that stays the composer's job (see `Composer.tsx`'s own
+ * `growing` check) and composes correctly on top of this: the composer grows the one slot it knows is
+ * active, this function independently guarantees any *other* slot's coincident start gets out of the way,
+ * and the two together never overlap.
  */
-function mapOffset(pos: number, editStart: number, editEnd: number, insertedLen: number): number {
+function mapOffset(
+	pos: number,
+	editStart: number,
+	editEnd: number,
+	insertedLen: number,
+	isSlotStart: boolean,
+): number {
+	if (isSlotStart && pos === editStart && editStart === editEnd && insertedLen > 0) {
+		return pos + insertedLen;
+	}
 	if (pos <= editStart) return pos;
 	if (pos >= editEnd) return pos + insertedLen - (editEnd - editStart);
 	return editStart + insertedLen;
@@ -183,7 +210,10 @@ function mapOffset(pos: number, editStart: number, editEnd: number, insertedLen:
  * Whether an edit inside a slot should also flip `filled` to `true` is a decision about user intent
  * (did they actually type something, vs. e.g. an external re-render touching the range?) that belongs to
  * the composer's slot session (Task B5), not this parser; this function only ever moves boundaries.
- * Returns a new array — `slots` is never mutated.
+ *
+ * **Invariant: slots never overlap after a shift** — including the degenerate case of two zero-gap-
+ * adjacent slots (see `mapOffset`'s `isSlotStart` tie-break). Returns a new array — `slots` is never
+ * mutated.
  */
 export function shiftSlots(
 	slots: TemplateSlot[],
@@ -194,7 +224,7 @@ export function shiftSlots(
 	const editEnd = editStart + removedLen;
 	return slots.map((slot) => ({
 		...slot,
-		start: mapOffset(slot.start, editStart, editEnd, insertedLen),
-		end: mapOffset(slot.end, editStart, editEnd, insertedLen),
+		start: mapOffset(slot.start, editStart, editEnd, insertedLen, true),
+		end: mapOffset(slot.end, editStart, editEnd, insertedLen, false),
 	}));
 }

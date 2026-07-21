@@ -256,10 +256,16 @@ export default function ChatView({
 		const key = `${workspaceId}:${templatesVersion}`;
 		if (templatesCacheKey.current === key) return;
 		templatesCacheKey.current = key;
+		let cancelled = false;
 		getTransport()
 			.request("template.list", { workspaceId })
-			.then((res) => setTemplates(res.templates))
+			.then((res) => {
+				if (!cancelled) setTemplates(res.templates);
+			})
 			.catch(() => {});
+		return () => {
+			cancelled = true;
+		};
 	}, [slashActive, workspaceId, templatesVersion]);
 
 	// The composer's `/` menu merge: pi's `commands` snapshot minus its now-stale `source === "prompt"`

@@ -254,3 +254,52 @@ test("shiftSlots keeps filled/group as-is — it is purely geometric, not a fill
 	const [shifted] = shiftSlots([filledSlot], 6, 0, 2);
 	expect(shifted).toEqual({ start: 5, end: 10, group: 3, filled: true });
 });
+
+// ---- shiftSlots: zero-gap adjacent slots (regression — B5 review) ----
+// A "$1$2"-shaped template (no literal text between the placeholders) produces two slots with zero gap:
+// `first.end === second.start`. A zero-width insert (pure keystroke, no selection) landing exactly there
+// is ambiguous — it could belong to `first` (growing its end) or `second` (pushing its start along). Left
+// undifferentiated, the shipped bug always resolved it as "unaffected", which is right for `first.end`
+// but silently let `second.start` absorb the inserted text instead of moving out of its way — corrupting
+// the sibling's boundary one keystroke at a time. See `slotSession.ts`'s `mapOffset` doc for the fix.
+
+test("shiftSlots: a zero-width insert at a zero-gap boundary pushes the following slot's start forward, never letting it absorb the inserted text", () => {
+	const first = slot(0, 6);
+	const second = slot(6, 12);
+	const [shiftedFirst, shiftedSecond] = shiftSlots([first, second], 6, 0, 3);
+	// shiftSlots alone never grows a slot by default — that is the composer's decision (see below) — so
+	// `first` is unaffected by this call...
+	expect(shiftedFirst).toEqual({ start: 0, end: 6, group: 1, filled: false });
+	// ...while `second` is pushed forward by the inserted length, not stolen from.
+	expect(shiftedSecond).toEqual({ start: 9, end: 15, group: 1, filled: false });
+	// The invariant that actually matters: the two never overlap.
+	expect(shiftedSecond?.start).toBeGreaterThanOrEqual(shiftedFirst?.end ?? 0);
+});
+
+test("shiftSlots composes with the composer's own active-slot growth to stay non-overlapping across several keystrokes", () => {
+	// Simulates `Composer.tsx`'s own post-process for the actively-selected slot: after `shiftSlots`,
+	// manually extend the active slot's `end` by the inserted length. `shiftSlots` itself only guarantees
+	// the *other* slot's coincident start gets out of the way; growing the active one is layered on top,
+	// exactly as production code does it — this pins that the composition never overlaps, keystroke after
+	// keystroke, not just on the first one.
+	const grow = (slots: TemplateSlot[], editStart: number, insertedLen: number): TemplateSlot[] =>
+		shiftSlots(slots, editStart, 0, insertedLen).map((s, i) =>
+			i === 0 ? { ...s, end: s.end + insertedLen } : s,
+		);
+
+	let slots: TemplateSlot[] = [slot(0, 6), slot(6, 12)];
+	slots = grow(slots, 6, 1); // 1st keystroke, landing right at the shared boundary
+	expect(slots).toEqual([
+		{ start: 0, end: 7, group: 1, filled: false },
+		{ start: 7, end: 13, group: 1, filled: false },
+	]);
+	expect(slots[1]?.start).toBeGreaterThanOrEqual(slots[0]?.end ?? 0);
+
+	slots = grow(slots, 7, 1); // 2nd keystroke, boundary having moved along with the growth
+	slots = grow(slots, 8, 1); // 3rd keystroke
+	expect(slots).toEqual([
+		{ start: 0, end: 9, group: 1, filled: false },
+		{ start: 9, end: 15, group: 1, filled: false },
+	]);
+	expect(slots[1]?.start).toBeGreaterThanOrEqual(slots[0]?.end ?? 0);
+});
