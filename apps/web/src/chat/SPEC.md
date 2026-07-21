@@ -94,8 +94,18 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   ignored. No store/transport/shiki.
 - **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions, `/`
   commands, image paste/drop), `ModelSelector` + `ThinkingSelector` (shared with `NewWorkspaceDialog`;
-  optional `container` prop portals their popovers into a host Dialog), `SessionStatsBar`, `ChatHeader`,
-  `ExtUiDialog`. All props-driven; behavior detail lives in the components' jsdoc.
+  optional `container` prop portals their popovers into a host Dialog), `SessionStatsBar`, `ChatHeader`
+  (its `left` slot carries the plan strip), `ExtUiDialog`. All props-driven; behavior detail lives in the
+  components' jsdoc.
+- **Chat TODO plan** ([[design-todos]]) — the chat's `pi-todos` list surfaced **only in the chat**:
+  `useChatTodos` (the `todo.*` data hook — fetch + live `pi.event` refetch + edits + the add-nudge + the
+  `openMarkdown` snapshot action), `TodoList` (loose items + named groups, add-row + an "open as markdown"
+  button), `planMarkdown` (a pure `plan → markdown` compiler), and `ChatPlan` (`ChatPlanStripContent` +
+  `ChatPlanContent` — a header strip that opens the plan in a `Popover` over the chat; `ChatView` composes
+  the `Popover` anchored to the header, so the popup hangs flush under it at the chat's left edge). There
+  is no right-panel Todo tab — the plan lives in the conversation. The "open as markdown" action compiles
+  the current plan and opens it as an ephemeral `doc` tab (`store.openDoc`), rendered by the panels'
+  `MarkdownPreview` — no file is written to disk.
 
 ## Boundary
 

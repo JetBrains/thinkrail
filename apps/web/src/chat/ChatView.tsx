@@ -7,11 +7,13 @@ import type {
 import { ArrowDown } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
+import { Popover, PopoverAnchor, PopoverTrigger } from "@/components/ui/popover";
 import { EMPTY_RUNTIME, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { AskStatesContext, deriveAskStates } from "./askState";
 import { type ChatActions, ChatActionsContext } from "./ChatActions";
 import { ChatHeader } from "./ChatHeader";
+import { ChatPlanContent, ChatPlanStripContent } from "./ChatPlan";
 import { Composer, type MentionCandidate, type SubmitBehavior } from "./Composer";
 import { ExtUiDialog } from "./ExtUiDialog";
 import { type ChatRow, deriveRows } from "./rows";
@@ -19,6 +21,7 @@ import { StreamIndicator, type StreamStatus, streamStatus } from "./StreamIndica
 import "./tools/register"; // side-effect: register the built-in pi tool renderers (bash/read/edit/write)
 import { ChatTurnView } from "./turns";
 import { useChatScroll } from "./useChatScroll";
+import { useChatTodos } from "./useChatTodos";
 
 /** Context threaded to the Virtuoso footer so the streaming loader lives at the end of the conversation. */
 type ChatListContext = { status: StreamStatus | null };
@@ -94,6 +97,9 @@ export default function ChatView({
 
 	const [mentionQuery, setMentionQuery] = useState<string | null>(null);
 	const [mentionCandidates, setMentionCandidates] = useState<MentionCandidate[]>([]);
+	// The chat's TODO plan, surfaced inline via a header strip that opens a popup over the chat (design-todos).
+	const plan = useChatTodos(workspaceId, sessionId);
+	const [planOpen, setPlanOpen] = useState(false);
 
 	const virtuosoRef = useRef<VirtuosoHandle>(null);
 	const { followOutput, handleAtBottom, showScrollButton, scrollToBottom, containerProps } =
@@ -241,7 +247,33 @@ export default function ChatView({
 		<ChatActionsContext.Provider value={chatActions}>
 			<AskStatesContext.Provider value={askStates}>
 				<div className="flex h-full min-h-0 flex-col bg-bg">
-					<ChatHeader stats={stats} statusEntries={Object.entries(extUiStatus)} />
+					{/* The plan popover is anchored to the whole header, so it hangs flush under it at the chat's
+					    left edge; the strip in the header's left slot is the trigger. */}
+					<Popover open={planOpen} onOpenChange={setPlanOpen}>
+						<PopoverAnchor asChild>
+							<div className="shrink-0">
+								<ChatHeader
+									stats={stats}
+									statusEntries={Object.entries(extUiStatus)}
+									left={
+										plan.data ? (
+											<PopoverTrigger asChild>
+												<button
+													type="button"
+													data-testid="chat-plan-toggle"
+													data-open={planOpen}
+													className="flex min-w-0 items-center gap-xs text-muted text-xs hover:text-text"
+												>
+													<ChatPlanStripContent plan={plan} open={planOpen} />
+												</button>
+											</PopoverTrigger>
+										) : null
+									}
+								/>
+							</div>
+						</PopoverAnchor>
+						<ChatPlanContent plan={plan} />
+					</Popover>
 					<div
 						data-testid="chat-scroll"
 						className="relative flex min-h-0 flex-1 flex-col"

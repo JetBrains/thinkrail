@@ -1,6 +1,18 @@
-import type { AskUserAnswersDetails, TranscriptMessage } from "@thinkrail/contracts";
+import type { AskUserAnswersDetails, TranscriptMessage, UserMessage } from "@thinkrail/contracts";
 import { isAskUserAnswersMessage } from "@thinkrail/contracts";
 import type { ChatTurn, ToolResultState } from "./types";
+
+/** Prefix on the wake-the-agent nudge sent when a TODO is added; hidden from the transcript (never appended live, skipped on hydrate). */
+export const TODO_NUDGE_PREFIX = "[thinkrail:todo-nudge] ";
+
+/** The leading text of a user message (string or text blocks). */
+function userText(content: UserMessage["content"]): string {
+	if (typeof content === "string") return content;
+	return content
+		.filter((c) => c.type === "text")
+		.map((c) => c.text)
+		.join("");
+}
 
 /** The runtime slice a transcript hydrates: what `hydrateSession` seeds a fresh `SessionRuntime` with. */
 export interface HydratedRuntime {
@@ -24,6 +36,7 @@ export function messagesToRuntime(messages: TranscriptMessage[]): HydratedRuntim
 	const askAnswers: HydratedRuntime["askAnswers"] = {};
 	for (const message of messages) {
 		if (message.role === "user") {
+			if (userText(message.content).startsWith(TODO_NUDGE_PREFIX)) continue; // hidden nudge
 			turns.push({ kind: "user", id: crypto.randomUUID(), message });
 		} else if (message.role === "assistant") {
 			turns.push({ kind: "assistant", id: crypto.randomUUID(), message, streaming: false });

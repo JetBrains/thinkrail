@@ -96,14 +96,16 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   tick)`** — a `FileTab` carries the `tick` its content was loaded at, so `FilePane` detects staleness
   (`workspaceTick > tab.loadedTick`) across tab switches. The transient **`changesRequest`** +
   **`requestChangesView(workspaceId, path)`** are a UI deep-link intent (a chat turn-divider asking the
-  right panel to surface a file's diff); the panels watch it, scoped by workspace. The `EditorTab`
-  (`FileTab` | `ChatTab`) + `TerminalTab` + `ClosedChat` + `SessionRuntime` types. (Chat *render* types +
-  renderers live in the `chat` module.) The pure context selectors in `selectors.ts` resolve the active
-  `Workspace`, its owning project id, and the shell's context project from those canonical ids and
-  collections; derived active-project state is never stored separately.
+  right panel to surface a file's diff); the panels watch it, scoped by workspace. **`openDoc(tab)`** opens
+  (or refreshes + focuses) an ephemeral **`DocTab`** — inline rendered-markdown content, never backed by a
+  file on disk (no fs re-read / source toggle) — used for on-demand snapshots like the plan-as-markdown
+  export. The `EditorTab` (`FileTab` | `ChatTab` | `DocTab`) + `TerminalTab` + `ClosedChat` +
+  `SessionRuntime` types. (Chat *render* types + renderers live in the `chat` module.) The pure context
+  selectors in `selectors.ts` resolve the active `Workspace`, its owning project id, and the shell's context
+  project from those canonical ids and collections; derived active-project state is never stored separately.
 - **Public surface (barrel):** `useAppStore`; `selectActiveWorkspace`,
   `selectActiveWorkspaceProjectId`, and `selectContextProject`; `toast` (the fire-from-anywhere helper),
-  `Toast` (type), `EditorTab` (`FileTab`/`ChatTab`), `TerminalTab`, `ClosedChat`, `SessionRuntime` +
+  `Toast` (type), `EditorTab` (`FileTab`/`ChatTab`/`DocTab`), `TerminalTab`, `ClosedChat`, `SessionRuntime` +
   `EMPTY_RUNTIME` (ChatView's pre-creation fallback), `reduceSessionEvent`.
 - **Allowed deps:** `contracts` (`Project`/`Workspace`/`Model`/`ThinkingLevel`/`SessionStats`/
   `SlashCommandInfo`/`ExtUiRequest`/`LoginPush`/`WorkspaceFsChangedPayload`/`AppConfig`/`ThemeId`; the
