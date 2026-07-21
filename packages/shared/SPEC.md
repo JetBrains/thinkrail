@@ -19,7 +19,7 @@ Exposed through explicit subpath exports, not a barrel.
 - **Public surface:** `@thinkrail/shared/shellEnv` → `resolveShellEnv()`, `pathLooksComplete()`;
   `@thinkrail/shared/freePort` → `findFreePort()`, `isPortFree()`;
   `@thinkrail/shared/paths` → the worktree-relative path conventions (`WORKSPACE_INTERNAL_DIR`,
-  `WORKSPACE_CONTEXT_DIR`);
+  `WORKSPACE_CONTEXT_DIR`, `WORKSPACE_TODOS_DIR`);
   `@thinkrail/shared/jbcentral` → the full jbcentral protocol: `isJbcentralProxyUrl()` (read) +
   `isJbcentralInstalled()` / `wireJbcentral()` / `unwireJbcentral()` / `launchJbcentralLogin()` (write) + the
   pure transforms/consts they compose (`buildProxyUrls`, `apply`/`removeJbcentralOverrides`,
@@ -41,9 +41,13 @@ Exposed through explicit subpath exports, not a barrel.
   consumers agree (today: `workspaces` *creates* the scratch dir and git *ignores* it):
   `WORKSPACE_INTERNAL_DIR` (`.thinkrail` — the repo-local host-managed dir, today holding the ephemeral
   scratch, the intended home for future host files like a cached spec index; **not** hidden from the file
-  tree) and `WORKSPACE_CONTEXT_DIR` (its `context/` scratch dir for temp docs). Distinct from the *home*
-  state dir `~/.thinkrail` (server `persistence`). (The `.gitignore` *body* the host seeds into the
-  scratch dir — a lone `*` — is a one-off inlined at that call site, not a path, so it lives there, not here.)
+  tree), `WORKSPACE_CONTEXT_DIR` (its `context/` scratch dir for temp docs), and `WORKSPACE_TODOS_DIR`
+  (`context/todos/` — the chat TODO plans, one JSON per session, so they're ephemeral with the rest of
+  the scratch). The pi-free `pi-todos/core` can't import this package (it stays vanilla-`pi`-installable),
+  so it keeps a local mirror of the todos path; this module is the host-side source of truth. Distinct
+  from the *home* state dir `~/.thinkrail` (server `persistence`). (The `.gitignore` *body* the host seeds
+  into the scratch dir — a lone `*` — is a one-off inlined at that call site, not a path, so it lives
+  there, not here.)
 - **/jbcentral** — the **single home for the JetBrains Central CLI proxy protocol**, both read and write, so
   they can't silently diverge (a co-located drift test asserts `buildProxyUrls` output satisfies
   `isJbcentralProxyUrl`). **Read:** `isJbcentralProxyUrl(url)` (loopback host + `/wire/` path) — how the

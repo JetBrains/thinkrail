@@ -11,6 +11,7 @@ import {
 import { messagesToRuntime } from "../chat/hydrate";
 import {
 	type ClosedChat,
+	type DocTab,
 	type EditorTab,
 	selectActiveWorkspace,
 	toast,
@@ -22,6 +23,13 @@ import { FilePane } from "./FilePane";
 // The chat view is heavy — load it only when its tab is first shown (protects first paint). File panes
 // lazy-load their own Monaco / markdown chunks inside `FilePane`.
 const ChatView = lazy(() => import("../chat/ChatView"));
+// The rendered-markdown preview (markdown + shiki) — reused for ephemeral `doc` tabs; lazy like FilePane's.
+const MarkdownPreview = lazy(() => import("./MarkdownPreview"));
+
+/** An ephemeral `doc` tab: rendered markdown from inline content, no fs/source toggle (see `DocTab`). */
+function DocPane({ tab }: { tab: DocTab }) {
+	return <MarkdownPreview content={tab.content} workspaceId={tab.workspaceId} path={tab.docPath} />;
+}
 
 // Stable empty references so selectors don't re-render the component on unrelated state changes.
 const NO_TABS: EditorTab[] = [];
@@ -282,6 +290,8 @@ export function CenterTabs() {
 									sessionId={active.sessionId}
 									workspaceId={active.workspaceId}
 								/>
+							) : active.kind === "doc" ? (
+								<DocPane key={active.id} tab={active} />
 							) : (
 								<FilePane key={active.id} tab={active} />
 							)}

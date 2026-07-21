@@ -43,7 +43,20 @@ export interface ChatTab {
 	name: string;
 	sessionId: string;
 }
-export type EditorTab = FileTab | ChatTab;
+/**
+ * An **ephemeral** rendered-markdown tab — content only, never backed by a file on disk (so no fs
+ * re-read / source toggle). Used for on-demand snapshots like the chat's TODO plan compiled to markdown.
+ * `docPath` is a synthetic `.md` name (for the preview's link/heading resolution + a readable label).
+ */
+export interface DocTab {
+	kind: "doc";
+	id: string;
+	workspaceId: string;
+	name: string;
+	content: string;
+	docPath: string;
+}
+export type EditorTab = FileTab | ChatTab | DocTab;
 
 /**
  * A section of the settings dialog (a const-object "enum", the codebase convention). Extensible — the live
@@ -419,6 +432,9 @@ interface AppState {
 	/** Enter a workspace and select its owning project in one state transition. */
 	activateWorkspace: (workspace: Pick<Workspace, "id" | "projectId">) => void;
 	openTab: (tab: EditorTab) => void;
+	/** Open (or refresh + focus, if already open) an ephemeral rendered-markdown `doc` tab. Re-invoking
+	 * with the same id replaces its content so a "compile current state" action always shows the latest. */
+	openDoc: (tab: DocTab) => void;
 	closeTab: (id: string) => void;
 	setActiveTab: (id: string) => void;
 	/** Set a markdown file tab's view mode (rendered ↔ source); kept on the tab so it survives tab switches. */
@@ -655,6 +671,18 @@ export const useAppStore = create<AppState>((set, get) => ({
 				tabsByWorkspace: tabs.some((t) => t.id === tab.id)
 					? s.tabsByWorkspace
 					: { ...s.tabsByWorkspace, [tab.workspaceId]: [...tabs, tab] },
+				activeTabByWorkspace: { ...s.activeTabByWorkspace, [tab.workspaceId]: tab.id },
+			};
+		}),
+	openDoc: (tab) =>
+		set((s) => {
+			const tabs = s.tabsByWorkspace[tab.workspaceId] ?? [];
+			const exists = tabs.some((t) => t.id === tab.id);
+			return {
+				tabsByWorkspace: {
+					...s.tabsByWorkspace,
+					[tab.workspaceId]: exists ? tabs.map((t) => (t.id === tab.id ? tab : t)) : [...tabs, tab],
+				},
 				activeTabByWorkspace: { ...s.activeTabByWorkspace, [tab.workspaceId]: tab.id },
 			};
 		}),

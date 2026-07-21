@@ -99,6 +99,22 @@
         "@earendil-works/pi-coding-agent": "*",
       },
     },
+    "packages/pi-todos": {
+      "name": "pi-todos",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@earendil-works/pi-ai": "catalog:",
+        "@earendil-works/pi-coding-agent": "catalog:",
+        "@types/bun": "catalog:",
+        "typebox": "catalog:",
+        "typescript": "catalog:",
+      },
+      "peerDependencies": {
+        "@earendil-works/pi-ai": "*",
+        "@earendil-works/pi-coding-agent": "*",
+        "typebox": "*",
+      },
+    },
     "packages/pi-visualize": {
       "name": "pi-visualize",
       "version": "0.1.0",
@@ -126,6 +142,7 @@
         "bun-pty": "0.4.10",
         "pi-spec-graph": "workspace:*",
         "pi-thinkrail-workflow": "workspace:*",
+        "pi-todos": "workspace:*",
         "pi-visualize": "workspace:*",
         "pi-web-access": "0.13.0",
         "typebox": "catalog:",
@@ -1105,6 +1122,8 @@
     "pi-spec-graph": ["pi-spec-graph@workspace:packages/spec-graph"],
 
     "pi-thinkrail-workflow": ["pi-thinkrail-workflow@workspace:packages/pi-thinkrail-workflow"],
+
+    "pi-todos": ["pi-todos@workspace:packages/pi-todos"],
 
     "pi-visualize": ["pi-visualize@workspace:packages/pi-visualize"],
 

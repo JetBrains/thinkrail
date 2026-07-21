@@ -107,12 +107,16 @@ of the host.
   the host was built, and a client missing it resolves its own bundled default;
   **`SpecGraphNode`/`SpecGraphSnapshot`** — the
   Specs-viewer read DTOs, **mirrored** (like `PiEvent`), never imported from `pi-spec-graph` — the wire
-  carries only what the panel renders (`type`/`status` stay `string`: tolerate whatever is on disk).
+  carries only what the panel renders (`type`/`status` stay `string`: tolerate whatever is on disk);
+  **`TodoItem`/`TodoGroupItem`/`TodoPlan`** + the **`TodoStatus`/`TodoOrigin`** unions — the in-chat plan
+  DTOs, **mirrored** from `pi-todos/core` (never imported), carrying the chat's per-session TODO list.
 - **wsProtocol.ts** — `WS_METHODS` (`project.*` — incl. **`project.inspect`** (classify a path) +
   **`project.init`** (`git init` + commit, then open) + **`project.hasSpecs`** (lazy per-project "has any
   registered spec?" for the Welcome screen — a full-tree walk, so requested only for the shown project,
   never eagerly for every project) / `workspace.*` / `fs.*` / `git.*` / **`spec.graph`**
-  (the Specs-viewer whole-graph read, per workspace) / `terminal.*` / `model.list` / **`provider.status`**
+  (the Specs-viewer whole-graph read, per workspace) / **`todo.*`** — **`list`**/**`add`**/**`update`**/
+  **`remove`**, the chat's per-session TODO plan (keyed by `workspaceId` + `sessionId`; `add` tags the
+  item `origin:"user"`) / `terminal.*` / `model.list` / **`provider.status`**
 (the auth-provider status report; every read revalidates host-side) / the **`provider.*` in-app login**
   (**`loginStart`** — mints a `loginId` and runs pi's OAuth flow **detached** (it can take minutes; it must
   not sit on the request nor block the WS pump) / **`loginReply`** — answers a live `select`/`prompt`,
