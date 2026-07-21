@@ -1,20 +1,36 @@
 // Parses pi's prompt-template placeholder grammar (`$1..$n`, `$@`/`$ARGUMENTS`, `${N:-default}`,
-// `${@:N}`, `${@:N:L}`, `$$` escape — pi's grammar, single owner; see `packages/server/src/templates/`,
-// which walks the same template dirs but never evaluates the grammar either) into visible text +
-// editable slot ranges for the composer's future Tab-through slot session (Task B5). This module only
-// ever PARSES — no args exist client-side (the user fills slots interactively), so there is nothing here
-// to *evaluate*; that stays pi's, server-side, via `PromptOptions.expandPromptTemplates` (defaults to
-// `true`) — the same in-session expansion that already runs a typed-through `/name args` prompt today,
-// with or without this module. Pure: no React, no store/transport, no `pi` import of any kind — plain
-// strings and offsets in, plain strings and offsets out.
+// `${@:N}`, `${@:N:L}` — pi's grammar, single owner; verified against the installed
+// `@earendil-works/pi-coding-agent`'s own `substituteArgs` regex (`dist/core/prompt-templates.js`) and
+// its `docs/prompt-templates.md`, and see `packages/server/src/templates/`, which walks the same
+// template dirs but never evaluates the grammar either) into visible text + editable slot ranges for the
+// composer's future Tab-through slot session (Task B5). This module only ever PARSES — no args exist
+// client-side (the user fills slots interactively), so there is nothing here to *evaluate*; that stays
+// pi's, server-side, via `PromptOptions.expandPromptTemplates` (defaults to `true`) — the same
+// in-session expansion that already runs a typed-through `/name args` prompt today, with or without this
+// module. pi has **no escape syntax**: a lone `$` that doesn't start a recognized placeholder is always
+// just a literal `$` passed through untouched (see `parseTemplateSlots`'s doc for the `$$1` case this
+// implies). Pure: no React, no store/transport, no `pi` import of any kind — plain strings and offsets
+// in, plain strings and offsets out.
 
 /**
  * One editable range inside `ParsedTemplate.text` — a placeholder pi's grammar expanded, tracked by
  * plain offsets (a plain textarea, no contentEditable in V1; `shiftSlots` re-tracks these across edits).
- * `group` ties sibling ranges together so the composer can mirror an edit across them on slot exit:
- * repeated `$N` (and `${N:-default}` for the same N) share `N` itself; the `⟨arguments⟩`-style forms use
- * `0` for the plain "all arguments" spelling (`$@`/`$ARGUMENTS` — aliases of each other) and `-N` for
- * `${@:N}`/`${@:N:L}` (negative so it can never collide with a positional group, which is always ≥ 1).
+ * `group` ties sibling ranges together so the composer can mirror an edit across them on slot exit — two
+ * slots share a `group` iff they're the same conceptual argument slot (pi would treat them as one
+ * mirrored value). Internally, each distinct placeholder form gets a fresh, opaque `group` number the
+ * first time it's seen, in appearance order (see `groupFor`) — the number itself carries no meaning
+ * beyond equality:
+ *  - positional `$N` and `${N:-default}` share one group per `N`. `N` ≥ 0 is valid syntax — pi evaluates
+ *    `$0` as always-blank (there's no argument 0), but it's still its own distinct positional slot, never
+ *    the same group as any of the all-arguments forms below.
+ *  - the plain "all arguments" spellings — `$@`, `$ARGUMENTS`, and `${@:N}` with N ≤ 1 — are pi-verified
+ *    aliases of each other (pi clamps N ≤ 1 to "from the start", so they're the same value for any args)
+ *    and share one group.
+ *  - an unlimited `${@:N}` with N ≥ 2 gets its own group per distinct `N` (a different start position is
+ *    generally a different value, so `${@:2}` and `${@:3}` never share).
+ *  - a length-limited `${@:N:L}` gets its own group per distinct `N:L` pair, for *any* `N` — the limit
+ *    changes the value even when N ≤ 1 (a truncated slice of "all arguments" isn't "all arguments"), so
+ *    it never joins the plain all-arguments group either.
  */
 export interface TemplateSlot {
 	start: number;
@@ -24,17 +40,22 @@ export interface TemplateSlot {
 	filled: boolean;
 }
 
-/** The result of expanding one template body: the visible text plus its editable slot ranges. */
+/**
+ * The result of expanding one template body: the visible text plus its editable slot ranges. `slots` is
+ * the **sole source of truth** for where the editable ranges are — never re-derive positions by scanning
+ * `text` for the `⟨…⟩` marker glyphs; a template body may legitimately contain those characters itself.
+ */
 export interface ParsedTemplate {
 	text: string;
 	slots: TemplateSlot[];
 }
 
-// The one scan across the grammar: `$$` escape | `$N` | `${N:-default}` | `$ARGUMENTS` | `$@` |
-// `${@:N}` / `${@:N:L}`. Capture groups line up with the branches below: 1 = N for `$N`, 2/3 = N/default
-// for `${N:-default}`, 4/5 = N/L for `${@:N(:L)}` (L is read from the match but doesn't affect grouping —
-// see the `TemplateSlot.group` doc above).
-const SLOT_PATTERN = /\$\$|\$(\d+)|\$\{(\d+):-([^}]*)\}|\$ARGUMENTS|\$@|\$\{@:(\d+)(?::(\d+))?\}/g;
+// The one scan across the grammar, lifted verbatim from pi's own `substituteArgs` regex
+// (`@earendil-works/pi-coding-agent`'s `dist/core/prompt-templates.js`) — pi has no `$$`/escape
+// alternative at all, which is why there isn't one here either. Capture groups line up with the branches
+// below: 1/2 = N/default for `${N:-default}`, 3/4 = N/L for `${@:N(:L)}`, 5 = the bare form's payload
+// ("ARGUMENTS", "@", or a digit string for `$N`).
+const SLOT_PATTERN = /\$\{(\d+):-([^}]*)\}|\$\{@:(\d+)(?::(\d+))?\}|\$(ARGUMENTS|@|\d+)/g;
 
 const ARGUMENTS_MARKER = "⟨arguments⟩";
 
@@ -50,43 +71,67 @@ function hintMarkerWord(argumentHint: string | undefined, n: number): string {
 }
 
 /**
+ * Assigns each distinct value-class `key` (see {@link TemplateSlot}'s `group` doc) a fresh, opaque
+ * `group` number the first time it's seen, in appearance order; later matches of the same key reuse it.
+ * `seen` is scoped to one `parseTemplateSlots` call — group numbers carry no meaning across calls.
+ */
+function groupFor(key: string, seen: Map<string, number>): number {
+	const existing = seen.get(key);
+	if (existing !== undefined) return existing;
+	const group = seen.size;
+	seen.set(key, group);
+	return group;
+}
+
+/** The `${@:N}` / `${@:N:L}` value-class key (see {@link TemplateSlot}'s `group` doc): the length limit,
+ * when present, always makes its own class; without one, N ≤ 1 clamps to the plain all-arguments class. */
+function rangeKey(rangeN: string, rangeL: string | undefined): string {
+	if (rangeL !== undefined) return `args:${rangeN}:${rangeL}`;
+	return Number(rangeN) <= 1 ? "args" : `args:${rangeN}`;
+}
+
+/**
  * Expand pi's placeholders into visible text + editable ranges (see {@link TemplateSlot}). `$N` becomes
  * a visible `⟨hint⟩` marker (or `⟨argN⟩` without a usable hint word), `filled: false` — nothing is
  * "there" yet, it's a prompt to fill in. `${N:-default}` inserts the default text itself, `filled: true`
  * — it's already real content, just still selected/editable. `$@`/`$ARGUMENTS`/`${@:N}`/`${@:N:L}` each
- * become one `⟨arguments⟩` marker slot. `$$` collapses to a literal `$` with no slot at all. Parse
- * only — evaluation semantics (what a slot's content actually substitutes to) stay pi's.
+ * become one `⟨arguments⟩` marker slot. Parse only — evaluation semantics (what a slot's content
+ * actually substitutes to) stay pi's; in particular, pi has no escape syntax, so a lone `$` that doesn't
+ * start a recognized placeholder is always just a literal `$` passed through untouched — e.g. `$$1` is a
+ * literal `$` immediately followed by a live `$1` slot, never an escaped `$`.
  */
 export function parseTemplateSlots(body: string, argumentHint?: string): ParsedTemplate {
 	let text = "";
 	let cursor = 0;
 	const slots: TemplateSlot[] = [];
+	const groups = new Map<string, number>();
 
 	for (const match of body.matchAll(SLOT_PATTERN)) {
-		const [full = "", posArg, defArg, defValue = "", argsFromArg] = match;
+		const [full = "", defN, defValue = "", rangeN, rangeL, simple] = match;
 		text += body.slice(cursor, match.index);
 		cursor = match.index + full.length;
 
-		if (full === "$$") {
-			text += "$";
-		} else if (posArg !== undefined) {
-			const n = Number(posArg);
-			const marker = `⟨${hintMarkerWord(argumentHint, n)}⟩`;
-			const start = text.length;
-			text += marker;
-			slots.push({ start, end: start + marker.length, group: n, filled: false });
-		} else if (defArg !== undefined) {
-			const n = Number(defArg);
+		if (defN !== undefined) {
 			const start = text.length;
 			text += defValue;
-			slots.push({ start, end: start + defValue.length, group: n, filled: true });
-		} else {
-			// $ARGUMENTS, $@, ${@:N}, or ${@:N:L} — one ⟨arguments⟩ marker each (never one slot per
-			// captured number: the whole construct is a single unit, see the module-doc grouping rule).
+			const group = groupFor(`pos:${defN}`, groups);
+			slots.push({ start, end: start + defValue.length, group, filled: true });
+		} else if (rangeN !== undefined) {
 			const start = text.length;
 			text += ARGUMENTS_MARKER;
-			const group = argsFromArg !== undefined ? -Number(argsFromArg) : 0;
+			const group = groupFor(rangeKey(rangeN, rangeL), groups);
 			slots.push({ start, end: start + ARGUMENTS_MARKER.length, group, filled: false });
+		} else if (simple === "ARGUMENTS" || simple === "@") {
+			const start = text.length;
+			text += ARGUMENTS_MARKER;
+			const group = groupFor("args", groups);
+			slots.push({ start, end: start + ARGUMENTS_MARKER.length, group, filled: false });
+		} else if (simple !== undefined) {
+			const marker = `⟨${hintMarkerWord(argumentHint, Number(simple))}⟩`;
+			const start = text.length;
+			text += marker;
+			const group = groupFor(`pos:${simple}`, groups);
+			slots.push({ start, end: start + marker.length, group, filled: false });
 		}
 	}
 	text += body.slice(cursor);

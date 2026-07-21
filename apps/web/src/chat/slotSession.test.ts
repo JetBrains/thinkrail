@@ -12,8 +12,8 @@ test("$1 repeated shares one group; no argumentHint falls back to argN", () => {
 	const { text, slots } = parseTemplateSlots("fix $1 then fix $1 again");
 	expect(text).toBe("fix ⟨arg1⟩ then fix ⟨arg1⟩ again");
 	expect(slots).toHaveLength(2);
-	expect(slots[0]).toEqual({ start: 4, end: 10, group: 1, filled: false });
-	expect(slots[1]).toEqual({ start: 20, end: 26, group: 1, filled: false });
+	expect(slots[0]).toEqual({ start: 4, end: 10, group: 0, filled: false });
+	expect(slots[1]).toEqual({ start: 20, end: 26, group: 0, filled: false });
 	expect(slots[0]?.group).toBe(slots[1]?.group);
 });
 
@@ -22,7 +22,7 @@ test("${2:-src/} pre-fills the default text and is marked filled", () => {
 	// biome-ignore lint/suspicious/noTemplateCurlyInString: pi grammar syntax, not a template literal
 	const { text, slots } = parseTemplateSlots("copy to ${2:-src/}");
 	expect(text).toBe("copy to src/");
-	expect(slots).toEqual([{ start: 8, end: 12, group: 2, filled: true }]);
+	expect(slots).toEqual([{ start: 8, end: 12, group: 0, filled: true }]);
 });
 
 // biome-ignore lint/suspicious/noTemplateCurlyInString: pi grammar syntax, not a template literal
@@ -30,7 +30,7 @@ test("${N:-default} with an empty default is a zero-length filled slot", () => {
 	// biome-ignore lint/suspicious/noTemplateCurlyInString: pi grammar syntax, not a template literal
 	const { text, slots } = parseTemplateSlots("note: ${1:-}");
 	expect(text).toBe("note: ");
-	expect(slots).toEqual([{ start: 6, end: 6, group: 1, filled: true }]);
+	expect(slots).toEqual([{ start: 6, end: 6, group: 0, filled: true }]);
 });
 
 test("$ARGUMENTS becomes one ⟨arguments⟩ marker slot", () => {
@@ -51,24 +51,96 @@ test("${@:2} becomes one ⟨arguments⟩ marker slot, grouped apart from $1 and 
 	const { text, slots } = parseTemplateSlots("send $1 and ${@:2}");
 	expect(text).toBe("send ⟨arg1⟩ and ⟨arguments⟩");
 	expect(slots).toHaveLength(2);
-	expect(slots[0]).toEqual({ start: 5, end: 11, group: 1, filled: false });
-	expect(slots[1]).toEqual({ start: 16, end: 27, group: -2, filled: false });
+	expect(slots[0]).toEqual({ start: 5, end: 11, group: 0, filled: false });
+	expect(slots[1]).toEqual({ start: 16, end: 27, group: 1, filled: false });
 	expect(slots[0]?.group).not.toBe(slots[1]?.group);
 });
 
 // biome-ignore lint/suspicious/noTemplateCurlyInString: pi grammar syntax, not a template literal
-test("${@:2:3} parses the same as ${@:2} — one marker slot; the limit doesn't add a second slot", () => {
+test("${@:2:3} still parses to one marker slot — a length limit changes its value-class, not the slot count", () => {
 	// biome-ignore lint/suspicious/noTemplateCurlyInString: pi grammar syntax, not a template literal
 	const { text, slots } = parseTemplateSlots("send ${@:2:3}");
 	expect(text).toBe("send ⟨arguments⟩");
-	expect(slots).toEqual([{ start: 5, end: 16, group: -2, filled: false }]);
+	expect(slots).toEqual([{ start: 5, end: 16, group: 0, filled: false }]);
 });
 
-test("$$ escapes to a literal $ and creates no slot; offsets after it stay exact", () => {
-	const { text, slots } = parseTemplateSlots("cost is $$5, arg: $1");
-	expect(text).toBe("cost is $5, arg: ⟨arg1⟩");
-	expect(slots).toEqual([{ start: 17, end: 23, group: 1, filled: false }]);
+// ---- pi's real $ behavior (no escape syntax exists) ----
+// An earlier version of this parser had a $$-escape branch; that was a bug — pi's own substituteArgs
+// regex (see slotSession.ts's header comment) has no $-escape alternative at all.
+
+test("a $ that never starts a recognized placeholder is a literal character, unconditionally", () => {
+	const { text, slots } = parseTemplateSlots("just $$ dollars");
+	expect(text).toBe("just $$ dollars");
+	expect(slots).toEqual([]);
+});
+
+test("$$1 is a literal $ immediately followed by a live $1 slot — pi has no escape form for $", () => {
+	const { text, slots } = parseTemplateSlots("cost is $$1 dollars");
+	expect(text).toBe("cost is $⟨arg1⟩ dollars");
+	expect(slots).toEqual([{ start: 9, end: 15, group: 0, filled: false }]);
 	expect(text.slice(slots[0]?.start, slots[0]?.end)).toBe("⟨arg1⟩");
+});
+
+// ---- group scheme: two slots share a group iff they're the same value-class (see TemplateSlot's doc) ----
+
+test("$0 and $ARGUMENTS get DISTINCT groups — $0 is its own positional slot, never an all-args alias", () => {
+	const { slots } = parseTemplateSlots("arg0=$0 all=$ARGUMENTS");
+	expect(slots).toHaveLength(2);
+	expect(slots[0]?.group).not.toBe(slots[1]?.group);
+});
+
+// biome-ignore lint/suspicious/noTemplateCurlyInString: pi grammar syntax, not a template literal
+test("$@, $ARGUMENTS, and ${@:1} share one group — pi clamps N <= 1 to the same 'from the start' value", () => {
+	// biome-ignore lint/suspicious/noTemplateCurlyInString: pi grammar syntax, not a template literal
+	const { slots } = parseTemplateSlots("a=$@ b=$ARGUMENTS c=${@:1}");
+	expect(slots).toHaveLength(3);
+	expect(new Set(slots.map((s) => s.group)).size).toBe(1);
+});
+
+// biome-ignore lint/suspicious/noTemplateCurlyInString: pi grammar syntax, not a template literal
+test("${@:2} repeated shares one group, same as any repeated placeholder", () => {
+	// biome-ignore lint/suspicious/noTemplateCurlyInString: pi grammar syntax, not a template literal
+	const { slots } = parseTemplateSlots("x=${@:2} y=${@:2}");
+	expect(slots).toHaveLength(2);
+	expect(slots[0]?.group).toBe(slots[1]?.group);
+});
+
+// biome-ignore lint/suspicious/noTemplateCurlyInString: pi grammar syntax, not a template literal
+test("${@:2} and ${@:3} get DISTINCT groups — a different start position is a different value", () => {
+	// biome-ignore lint/suspicious/noTemplateCurlyInString: pi grammar syntax, not a template literal
+	const { slots } = parseTemplateSlots("x=${@:2} y=${@:3}");
+	expect(slots).toHaveLength(2);
+	expect(slots[0]?.group).not.toBe(slots[1]?.group);
+});
+
+// biome-ignore lint/suspicious/noTemplateCurlyInString: pi grammar syntax, not a template literal
+test("${@:2} and ${@:2:3} get DISTINCT groups too — a length limit always makes its own class", () => {
+	// biome-ignore lint/suspicious/noTemplateCurlyInString: pi grammar syntax, not a template literal
+	const { slots } = parseTemplateSlots("x=${@:2} y=${@:2:3}");
+	expect(slots).toHaveLength(2);
+	expect(slots[0]?.group).not.toBe(slots[1]?.group);
+});
+
+// ---- fidelity: examples verbatim from pi's own bundled docs/prompt-templates.md ----
+// Catches future grammar drift against the upstream authority, not just this module's own regex.
+
+test("docs example: 'Create a React component named $1 with features: $@'", () => {
+	const { text, slots } = parseTemplateSlots("Create a React component named $1 with features: $@");
+	expect(text).toBe("Create a React component named ⟨arg1⟩ with features: ⟨arguments⟩");
+	expect(slots).toEqual([
+		{ start: 31, end: 37, group: 0, filled: false },
+		{ start: 53, end: 64, group: 1, filled: false },
+	]);
+});
+
+// biome-ignore lint/suspicious/noTemplateCurlyInString: pi grammar syntax, not a template literal
+test("docs example: 'Summarize the current state in ${1:-7} bullet points.'", () => {
+	const { text, slots } = parseTemplateSlots(
+		// biome-ignore lint/suspicious/noTemplateCurlyInString: pi grammar syntax, not a template literal
+		"Summarize the current state in ${1:-7} bullet points.",
+	);
+	expect(text).toBe("Summarize the current state in 7 bullet points.");
+	expect(slots).toEqual([{ start: 31, end: 32, group: 0, filled: true }]);
 });
 
 test("marker text uses the Nth argumentHint word, stripped of []-brackets", () => {
