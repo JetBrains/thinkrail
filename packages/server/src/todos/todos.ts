@@ -2,7 +2,7 @@
 // plan here (the user's UI edits). Value-imports pi-todos' pi-free `TodoStore` (the extension itself
 // never reaches the bundle), the way `server/src/spec` value-imports `pi-spec-graph/core`. The store is
 // the source of truth and re-reads its per-session file on every op, so a UI edit and the agent's
-// in-session `todo_*` writes converge on the same `.thinkrail/todos/<sessionId>.json`.
+// in-session `todo_*` writes converge on the same `.thinkrail/context/todos/<sessionId>.json`.
 
 import type { TodoItem, TodoPlan, TodoStatus } from "@thinkrail/contracts";
 import { TodoStore } from "pi-todos/core";

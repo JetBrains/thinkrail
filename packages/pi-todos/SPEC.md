@@ -21,7 +21,7 @@ modeled on [[module-spec-graph]]: a skill, five `todo_*` custom tools, and one `
   with the list lives in the skill; each tool's invariants live in its own description.** (We tried
   injecting the live list into every prompt and pulled it back — the tools + skill carry it instead.)
 - **`core/`** — the pi-free model ([[submodule-pi-todos-core]]): the `Todo` types and the per-session
-  `TodoStore` (read-modify-write `.thinkrail/todos/<sessionId>.json`). No `@earendil-works/*` imports, so
+  `TodoStore` (read-modify-write `.thinkrail/context/todos/<sessionId>.json`). No `@earendil-works/*` imports, so
   the host can value-import `pi-todos/core` to power the plan viewer — reading the plan and writing the
   user's own edits (the `spec/` → `spec.graph` pattern).
 - **`tools/`** — the five `todo_*` custom tools ([[submodule-pi-todos-tools]]), thin wrappers over `core/`.
@@ -34,7 +34,7 @@ modeled on [[module-spec-graph]]: a skill, five `todo_*` custom tools, and one `
 | --- | --- |
 | `todo_list` | Read the current list (optionally filtered by status). |
 | `todo_add` | Append one item. |
-| `todo_update` | Change an item's status / title / note — how the agent flips `pending → in_progress → done`. |
+| `todo_update` | Change an item's status / title / note / artifacts — how the agent flips `pending → in_progress → done`. |
 | `todo_remove` | Drop an item. |
 | `todo_write` | Replace the whole list with an ordered plan (the plan-first pattern). |
 
@@ -44,11 +44,13 @@ of the conversation it runs in.
 ## Scope & persistence — one list per chat
 
 The list is **scoped to a chat session**, not the worktree: one JSON file per session,
-`.thinkrail/todos/<sessionId>.json` under the worktree root. It is the agent's working plan for that
-conversation; the user can add items to it (from the UI), and the agent picks them up on its next turn
-(`todo_list`). The file is the source of truth — `TodoStore` re-reads it on every op — so the agent's
-in-session writes and the user's UI edits converge with no staleness window; a missing or corrupt file
-reads as an empty list. Ephemeral per chat (gitignored), not committed with the repo.
+`.thinkrail/context/todos/<sessionId>.json` under the worktree root — inside the ephemeral `context/`
+scratch dir the host seeds and git ignores, so the plans live alongside the other per-conversation
+working files. It is the agent's working plan for that conversation; the user can add items to it (from
+the UI), and the agent picks them up on its next turn (`todo_list`). The file is the source of truth —
+`TodoStore` re-reads it on every op — so the agent's in-session writes and the user's UI edits converge
+with no staleness window; a missing or corrupt file reads as an empty list. Ephemeral per chat
+(gitignored), not committed with the repo.
 
 ## Status ownership & provenance
 
@@ -62,6 +64,16 @@ Each item carries an **`origin`** (`agent` | `user`) — UI adds are `user`, the
 **preserves `user` items and any `done` item**, replacing only the agent's own open items — so a re-plan
 can never drop the user's requests or the completed history. The UI marks `user` items so the human sees
 which are theirs.
+
+## Artifacts
+
+An item may link to what it produced via **`artifacts`** — `kind: "file" | "change" | "spec"`, a
+worktree-relative `path`, an optional `label`, and (spec only) a durable `specId`. Ownership splits by
+kind: the **agent** attaches `file`/`spec` through the tools (a `spec` from `spec_create`'s `{path,id}`);
+**`change` is host-owned** — the host attaches it automatically when the agent marks an item `done`
+(the files changed during the step, see [[submodule-server-todos]]). The pi-free `core`/`tools` never
+touch git — they just store whatever artifacts they're handed; the diff of a `change` is computed live in
+the UI, not persisted. The on-disk file `version` is `3` (a `2` file with no artifacts upgrades on write).
 
 ## Boundary
 

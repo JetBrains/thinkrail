@@ -3,9 +3,12 @@
 
 export { countItems, STORE_DIR, storeRel, TodoStore } from "./store.ts";
 export {
+	TODO_ARTIFACT_KINDS,
 	TODO_ORIGINS,
 	TODO_STATUSES,
 	type Todo,
+	type TodoArtifact,
+	type TodoArtifactKind,
 	type TodoFile,
 	type TodoGroup,
 	type TodoInput,

@@ -1,4 +1,4 @@
-// The per-session TODO store: read-modify-write a single JSON file (`.thinkrail/todos/<sessionId>.json`)
+// The per-session TODO store: read-modify-write a single JSON file (`.thinkrail/context/todos/<sessionId>.json`)
 // under a worktree root. The file is the source of truth — every op re-reads it, so external edits and
 // other sessions are always seen; there is no cache to stale (the list is tiny). Pi-free (node built-ins
 // only) so the host can value-import it to read *and write* the plan (the user's UI edits), the way
@@ -13,9 +13,11 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import {
+	TODO_ARTIFACT_KINDS,
 	TODO_ORIGINS,
 	TODO_STATUSES,
 	type Todo,
+	type TodoArtifact,
 	type TodoFile,
 	type TodoGroup,
 	type TodoInput,
@@ -26,8 +28,13 @@ import {
 	type WritePlan,
 } from "./types.ts";
 
+// ThinkRail's ephemeral per-worktree scratch dir. Mirrors `@thinkrail/shared`'s `WORKSPACE_CONTEXT_DIR`,
+// duplicated (not imported) on purpose: `core/` stays free of any `@thinkrail/*` dep so `pi-todos` remains
+// installable under vanilla `pi`. The host is the source of truth — keep this value in step with shared.
+const CONTEXT_DIR = ".thinkrail/context";
+
 /** Directory (under a worktree root) holding one file per chat session's TODO list. */
-export const STORE_DIR = ".thinkrail/todos";
+export const STORE_DIR = `${CONTEXT_DIR}/todos`;
 
 /**
  * A session id becomes a single path segment (`<sessionId>.json`), so it must not contain path
@@ -51,10 +58,11 @@ export function countItems(plan: TodoPlan): number {
 	return plan.todos.length + plan.groups.reduce((n, g) => n + g.todos.length, 0);
 }
 
-const CURRENT_VERSION = 2 as const;
+const CURRENT_VERSION = 3 as const;
 
 const STATUS_SET: ReadonlySet<string> = new Set(TODO_STATUSES);
 const ORIGIN_SET: ReadonlySet<string> = new Set(TODO_ORIGINS);
+const ARTIFACT_KIND_SET: ReadonlySet<string> = new Set(TODO_ARTIFACT_KINDS);
 
 function isStatus(v: unknown): v is TodoStatus {
 	return typeof v === "string" && STATUS_SET.has(v);
@@ -91,6 +99,27 @@ function decodeIfAgent(s: string, origin: TodoOrigin): string {
 	return origin === "agent" ? decodeEscapes(s) : s;
 }
 
+/**
+ * Coerce a parsed value into a list of valid artifacts, dropping malformed entries; returns `undefined`
+ * (not `[]`) when there are none, so an item without artifacts serializes without the key. `label` is
+ * decoded for agent-authored items (like `title`/`note`); `path`/`specId` are stored verbatim.
+ */
+function sanitizeArtifacts(raw: unknown, origin: TodoOrigin): TodoArtifact[] | undefined {
+	if (!Array.isArray(raw)) return undefined;
+	const out: TodoArtifact[] = [];
+	for (const entry of raw) {
+		if (typeof entry !== "object" || entry === null) continue;
+		const o = entry as Record<string, unknown>;
+		if (typeof o.kind !== "string" || !ARTIFACT_KIND_SET.has(o.kind)) continue;
+		if (typeof o.path !== "string" || !o.path) continue;
+		const artifact: TodoArtifact = { kind: o.kind as TodoArtifact["kind"], path: o.path };
+		if (typeof o.label === "string" && o.label) artifact.label = decodeIfAgent(o.label, origin);
+		if (typeof o.specId === "string" && o.specId) artifact.specId = o.specId;
+		out.push(artifact);
+	}
+	return out.length > 0 ? out : undefined;
+}
+
 /** Coerce an arbitrary parsed value into a valid Todo, or drop it (return null) when unusable. */
 function sanitize(raw: unknown): Todo | null {
 	if (typeof raw !== "object" || raw === null) return null;
@@ -107,6 +136,8 @@ function sanitize(raw: unknown): Todo | null {
 		updatedAt: typeof o.updatedAt === "string" ? o.updatedAt : now,
 	};
 	if (typeof o.note === "string" && o.note) todo.note = decodeIfAgent(o.note, origin);
+	const artifacts = sanitizeArtifacts(o.artifacts, origin);
+	if (artifacts) todo.artifacts = artifacts;
 	return todo;
 }
 
@@ -126,7 +157,13 @@ function sanitizeGroup(raw: unknown): TodoGroup | null {
 	};
 }
 
-function makeTodo(title: string, status: TodoStatus, origin: TodoOrigin, note?: string): Todo {
+function makeTodo(
+	title: string,
+	status: TodoStatus,
+	origin: TodoOrigin,
+	note?: string,
+	artifacts?: TodoArtifact[],
+): Todo {
 	const now = nowIso();
 	const todo: Todo = {
 		id: freshId("t"),
@@ -137,12 +174,14 @@ function makeTodo(title: string, status: TodoStatus, origin: TodoOrigin, note?: 
 		updatedAt: now,
 	};
 	if (note) todo.note = decodeIfAgent(note, origin);
+	const clean = sanitizeArtifacts(artifacts, origin);
+	if (clean) todo.artifacts = clean;
 	return todo;
 }
 
 /**
  * A single chat session's TODO plan, stored as one JSON file under the worktree
- * (`.thinkrail/todos/<sessionId>.json`). One instance per (root, session); every method re-reads the
+ * (`.thinkrail/context/todos/<sessionId>.json`). One instance per (root, session); every method re-reads the
  * file, so the instance holds no mutable state and stale reads are impossible — the agent's writes and
  * the user's UI writes converge on the same file.
  */
@@ -195,7 +234,13 @@ export class TodoStore {
 	 * created if new — otherwise it's appended loose.
 	 */
 	add(input: TodoInput): Todo {
-		const todo = makeTodo(input.title, "pending", input.origin ?? "agent", input.note);
+		const todo = makeTodo(
+			input.title,
+			"pending",
+			input.origin ?? "agent",
+			input.note,
+			input.artifacts,
+		);
 		const plan = this.read();
 		const groupTitle = input.group ? decodeEscapes(input.group) : undefined;
 		if (groupTitle) {
@@ -223,6 +268,11 @@ export class TodoStore {
 			if (patch.note) todo.note = decodeIfAgent(patch.note, todo.origin);
 			else delete todo.note;
 		}
+		if (patch.artifacts !== undefined) {
+			const clean = sanitizeArtifacts(patch.artifacts, todo.origin);
+			if (clean) todo.artifacts = clean;
+			else delete todo.artifacts;
+		}
 		todo.updatedAt = nowIso();
 		this.write(plan);
 		return todo;
@@ -248,12 +298,14 @@ export class TodoStore {
 	 */
 	replaceAll(plan: WritePlan): TodoPlan {
 		const freshLoose = (plan.todos ?? []).map((w) =>
-			makeTodo(w.title, w.status ?? "pending", "agent", w.note),
+			makeTodo(w.title, w.status ?? "pending", "agent", w.note, w.artifacts),
 		);
 		const freshGroups: TodoGroup[] = (plan.groups ?? []).map((g) => ({
 			id: freshId("g"),
 			title: decodeEscapes(g.title),
-			todos: g.todos.map((w) => makeTodo(w.title, w.status ?? "pending", "agent", w.note)),
+			todos: g.todos.map((w) =>
+				makeTodo(w.title, w.status ?? "pending", "agent", w.note, w.artifacts),
+			),
 		}));
 
 		const current = this.read();
@@ -279,7 +331,7 @@ export class TodoStore {
 	}
 
 	/**
-	 * Serialize the plan back to disk (dropping empty groups; creating `.thinkrail/todos/` if needed).
+	 * Serialize the plan back to disk (dropping empty groups; creating `.thinkrail/context/todos/` if needed).
 	 * Atomic: write a sibling temp file then `rename` it over the target, so a crash or a concurrent
 	 * reader (this package is portable to vanilla pi, where a second process is real) never observes a
 	 * half-written file — and `read()`'s torn-file fallback (→ empty plan) can't silently drop the list.
