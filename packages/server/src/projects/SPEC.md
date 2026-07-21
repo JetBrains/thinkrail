@@ -25,9 +25,13 @@ classify it and bootstrap it into one so it can be opened.
   path throws). The commit supplies a **fallback `user.name`/`user.email` only for a field git has none
   configured for**, so a real global identity is never overridden. ("Does the project have specs?" is
   **not** computed here — `host` answers the lazy `project.hasSpecs` query via `spec.projectHasSpecs`,
-  keeping this module free of any spec dependency.)
+  keeping this module free of any spec dependency.) **`commitProjectFile`** — commits an already-written
+  project-root file, pathspec-scoped (never sweeps up unrelated staged changes), reusing the same
+  git-identity fallback `initProject` has. Used by `host/handlers.ts`'s `project.hooks.save` to commit
+  `.thinkrail/hooks.json` after `workspaces/hooks`'s `writeHookConfig` writes it — `workspaces/hooks` stays
+  git-free per its own SPEC; this module is the one place that already commits to a project's root.
 - **Public surface (barrel):** `openProject`, `listProjects`, `closeProject`, `getProjects`,
-  `inspectProjectPath`, `initProject`.
+  `inspectProjectPath`, `initProject`, `commitProjectFile`.
 - **Allowed deps:** `persistence`; the `git` sub-module (shared `git()` runner, bound to live `env` for
   config overrides); `contracts` (`Project`, `ProjectPathStatus`); Node/Bun.
 - **Forbidden:** `host`; sibling features other than `git` (`workspaces` depends on `projects`, never the
