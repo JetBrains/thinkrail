@@ -32,20 +32,31 @@ function isWorkspace(result: Project | Workspace): result is Workspace {
 	return "projectId" in result;
 }
 
+/** Whether a worktree-relative path is inside a skill directory — the auto-detect trigger for a reload. */
+export function isSkillPath(path: string): boolean {
+	return /(^|\/)\.(claude|github|gemini|pi|agents)\/skills(\/|$)/.test(path);
+}
+
 export function SkillsDialog({
 	workspaceId,
 	sessionId,
 	projectId,
 	streaming,
+	stale,
 	open,
 	onOpenChange,
+	onReloaded,
 }: {
 	workspaceId: string;
 	sessionId: string;
 	projectId: string;
 	streaming: boolean;
+	/** The worktree's skills changed on disk since this session loaded (pull/branch/edit) — prompt a reload. */
+	stale?: boolean;
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
+	/** Fired after a successful reload so the caller can clear its stale flag. */
+	onReloaded?: () => void;
 }) {
 	const [entries, setEntries] = useState<SkillCatalogEntry[] | null>(null);
 	const [busy, setBusy] = useState(false);
@@ -88,6 +99,7 @@ export function SkillsDialog({
 		setBusy(true);
 		try {
 			await getTransport().request("session.reloadResources", { sessionId });
+			onReloaded?.();
 			toast.success("This chat now uses the updated skills.", "Skills reloaded");
 		} catch (err) {
 			toast.error(errorText(err), "Couldn't reload skills");
@@ -119,6 +131,16 @@ export function SkillsDialog({
 						Reload
 					</Button>
 				</div>
+
+				{stale ? (
+					<div
+						data-testid="skills-stale"
+						className="rounded-[var(--radius-md)] border border-border2 bg-elevated px-md py-sm text-muted text-xs"
+					>
+						This worktree's skills changed on disk — <span className="text-text">Reload</span> to
+						apply them to this chat.
+					</div>
+				) : null}
 
 				{untrustedCount > 0 ? (
 					<div

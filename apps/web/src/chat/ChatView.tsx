@@ -17,7 +17,7 @@ import { ChatPlanContent, ChatPlanStripContent } from "./ChatPlan";
 import { Composer, type MentionCandidate, type SubmitBehavior } from "./Composer";
 import { ExtUiDialog } from "./ExtUiDialog";
 import { type ChatRow, deriveRows } from "./rows";
-import { SkillsDialog } from "./SkillsDialog";
+import { isSkillPath, SkillsDialog } from "./SkillsDialog";
 import { StreamIndicator, type StreamStatus, streamStatus } from "./StreamIndicator";
 import "./tools/register"; // side-effect: register the built-in pi tool renderers (bash/read/edit/write)
 import { ChatTurnView } from "./turns";
@@ -65,6 +65,16 @@ export default function ChatView({
 				.find((w) => w.id === workspaceId)?.projectId ?? null,
 	);
 	const [skillsOpen, setSkillsOpen] = useState(false);
+	// Auto-detect: the worktree watcher's fs nudge flags skills stale (the session loaded an older set) when
+	// a skill dir changes on disk — a pull/branch/edit. Reload is manual, so this only prompts.
+	const fsSignal = useAppStore((s) => s.fsChangesByWorkspace[workspaceId]);
+	const [skillsStale, setSkillsStale] = useState(false);
+	const lastSkillTick = useRef(0);
+	useEffect(() => {
+		if (!fsSignal || fsSignal.tick === lastSkillTick.current) return;
+		lastSkillTick.current = fsSignal.tick;
+		if (fsSignal.truncated || fsSignal.paths.some(isSkillPath)) setSkillsStale(true);
+	}, [fsSignal]);
 	const workspaceRoot = useAppStore((s) => {
 		for (const workspaces of Object.values(s.workspaces)) {
 			const workspace = workspaces.find((w) => w.id === workspaceId);
@@ -279,6 +289,7 @@ export default function ChatView({
 											</PopoverTrigger>
 										) : null
 									}
+									skillsStale={skillsStale}
 									{...(projectId ? { onOpenSkills: () => setSkillsOpen(true) } : {})}
 								/>
 							</div>
@@ -354,8 +365,10 @@ export default function ChatView({
 							sessionId={sessionId}
 							projectId={projectId}
 							streaming={isStreaming}
+							stale={skillsStale}
 							open={skillsOpen}
 							onOpenChange={setSkillsOpen}
+							onReloaded={() => setSkillsStale(false)}
 						/>
 					) : null}
 				</div>
