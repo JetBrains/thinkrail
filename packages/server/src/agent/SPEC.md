@@ -22,7 +22,11 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   - `piRuntime` (one shared `ModelRuntime` — pi's canonical model/auth facade since 0.80.8: catalogs,
     credentials, availability, login/logout, and request dispatch; `getPiRuntime()` is a lazily-memoized
     **promise** (`ModelRuntime.create()` is async; a failed create clears the memo so the next call
-    retries), `configurePiRuntime()` for tests). The **provider-credential surface** over this runtime —
+    retries), `configurePiRuntime()` for tests). Created with **`allowModelNetwork: false`**: catalog
+    reads stay local (builtins + models.json + the persisted models-store), because `reloadConfig()`/
+    `refresh()` await remote pi.dev catalog checks with no timeout — on the `provider.status` and
+    jbcentral-connect paths that stalls wherever egress is slow or blocked. Live catalog refresh is a
+    deliberate, detached opt-in (`refresh({ allowNetwork: true })`) tracked as a follow-up (issue #98). The **provider-credential surface** over this runtime —
     `provider.status` + in-app login — lives in the sibling `auth` module (which consumes `getPiRuntime`),
     **not** here.
   - `agentSessionManager` — sessions keyed by `session.sessionId` (each `Entry` also tracks its
