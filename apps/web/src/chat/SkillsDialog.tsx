@@ -230,12 +230,12 @@ export function SkillsDialog({
 				) : null}
 
 				<div className="max-h-[50vh] overflow-y-auto">
-					{/* The all-plugins master follows the same sticky pattern: it pins at the scroll top, then the
-					    first group's sticky header covers it as you scroll into the groups. */}
+					{/* The all-plugins master stays pinned on top of everything (higher z, fixed h-8); group
+					    headers stick *below* it at `top-8`, so it's a two-level sticky (VSCode breadcrumb style). */}
 					{hasPlugins ? (
 						<div
 							data-testid="skills-all-plugins"
-							className="sticky top-0 z-10 flex items-center gap-sm border-border2 border-y bg-bg-dark px-sm py-1.5"
+							className="sticky top-0 z-20 flex h-8 items-center gap-sm border-border2 border-y bg-bg-dark px-sm"
 						>
 							<span className="min-w-0 flex-1 font-medium text-text text-xs uppercase tracking-wide">
 								All plugins
@@ -265,10 +265,16 @@ export function SkillsDialog({
 									data-group={group.key}
 									data-on={groupOn}
 								>
-									{/* Sticky section header (VSCode-style): pins to the scroll top while the group is in
-									    view, then the next group's header pushes it out. No `overflow-hidden` ancestor
-									    (that would clip sticky); an opaque bg keeps rows from bleeding through. */}
-									<div className="sticky top-0 z-10 flex items-center gap-sm border-border2 border-y bg-bg-dark px-sm py-1.5">
+									{/* Sticky section header (VSCode-style): pins while the group is in view, then the next
+									    group's header pushes it out — below the always-pinned all-plugins master (`top-8`) when
+									    present, else at the scroll top. No `overflow-hidden` ancestor (would clip sticky); an
+									    opaque bg keeps rows from bleeding through. */}
+									<div
+										className={cn(
+											"sticky z-10 flex items-center gap-sm border-border2 border-y bg-bg-dark px-sm py-1.5",
+											hasPlugins ? "top-8" : "top-0",
+										)}
+									>
 										<span className="font-medium text-text text-xs uppercase tracking-wide">
 											{group.label}
 										</span>
