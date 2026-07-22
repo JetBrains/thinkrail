@@ -75,11 +75,13 @@ export function NewWorkspaceDialog({
 	// The dialog content node — popovers portal into it so their lists stay scrollable under the Dialog's
 	// scroll lock (react-remove-scroll blocks wheel/trackpad on body-portaled content).
 	const [dialogEl, setDialogEl] = useState<HTMLElement | null>(null);
-	// The selected project's declared-hooks state, behind the Advanced disclosure: `null` means "not yet
-	// loaded" (or the fetch failed) — create() then omits `hookCombineMode` from the request rather than
-	// guessing, and the host resolves the real project default itself. `hasProjectHooks` gates whether the
-	// disclosure renders at all (hookless projects show nothing extra).
+	// The Advanced disclosure's hook-combine state. `hookCombineMode` is the user's EXPLICIT per-workspace
+	// choice: `null` = untouched (or not loaded / fetch failed) → create() omits it, so the workspace
+	// dynamically inherits the project's live committed default at every hook run (see Workspace.hookCombineMode).
+	// `projectDefaultMode` is only the value shown in the selector until the user picks. `hasProjectHooks`
+	// gates whether the disclosure renders at all (hookless projects show nothing extra).
 	const [hookCombineMode, setHookCombineMode] = useState<CombineMode | null>(null);
+	const [projectDefaultMode, setProjectDefaultMode] = useState<CombineMode>("both");
 	const [hasProjectHooks, setHasProjectHooks] = useState(false);
 	const [advancedOpen, setAdvancedOpen] = useState(false);
 
@@ -170,12 +172,13 @@ export function NewWorkspaceDialog({
 		if (!open) return;
 		let cancelled = false;
 		setHookCombineMode(null);
+		setProjectDefaultMode("both");
 		setHasProjectHooks(false);
 		setAdvancedOpen(false);
 		getProjectHooks(selectedProjectId)
 			.then((hooks) => {
 				if (cancelled) return;
-				setHookCombineMode(hooks.combineMode);
+				setProjectDefaultMode(hooks.combineMode);
 				setHasProjectHooks(
 					Object.keys(hooks.shared).length > 0 || Object.keys(hooks.local).length > 0,
 				);
@@ -310,7 +313,7 @@ export function NewWorkspaceDialog({
 				{hasProjectHooks ? (
 					<HookModeDisclosure
 						open={advancedOpen}
-						mode={hookCombineMode ?? "both"}
+						mode={hookCombineMode ?? projectDefaultMode}
 						onToggle={() => setAdvancedOpen((v) => !v)}
 						onSelect={setHookCombineMode}
 					/>
