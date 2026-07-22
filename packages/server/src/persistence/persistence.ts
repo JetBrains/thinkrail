@@ -7,6 +7,8 @@ import {
 	type AppConfig,
 	DEFAULT_CONFIG,
 	type HookName,
+	type HookSource,
+	type HookStatus,
 	type HookValue,
 	type Project,
 	type Workspace,
@@ -37,8 +39,35 @@ export function saveProjects(projects: Project[]): void {
 	writeJson("projects.json", projects);
 }
 
+/**
+ * Pre-upgrade `Workspace.hookStatus` records held one flat `HookStatus` per hook — no `HookSource`
+ * nesting, because only the committed ("shared") command existed before Local hooks landed. Detect that
+ * legacy shape by its top-level `state` string (a source-nested value never has one) and wrap it under
+ * `shared`, so an old `workspaces.json` reads the same as a freshly-written one. Already-nested values
+ * (and absent hooks) pass through untouched.
+ */
+function normalizeHookStatus(
+	hookStatus: Partial<Record<HookName, unknown>>,
+): Partial<Record<HookName, Partial<Record<HookSource, HookStatus>>>> {
+	const normalized: Partial<Record<HookName, Partial<Record<HookSource, HookStatus>>>> = {};
+	for (const hook of Object.keys(hookStatus) as HookName[]) {
+		const value = hookStatus[hook];
+		if (value === undefined) continue;
+		normalized[hook] =
+			typeof (value as { state?: unknown }).state === "string"
+				? { shared: value as HookStatus }
+				: (value as Partial<Record<HookSource, HookStatus>>);
+	}
+	return normalized;
+}
+
 export function loadWorkspaces(): Workspace[] {
-	return readJson<Workspace[]>("workspaces.json", []);
+	const workspaces = readJson<Workspace[]>("workspaces.json", []);
+	for (const workspace of workspaces) {
+		const { hookStatus } = workspace;
+		if (hookStatus) workspace.hookStatus = normalizeHookStatus(hookStatus);
+	}
+	return workspaces;
 }
 
 export function saveWorkspaces(workspaces: Workspace[]): void {
