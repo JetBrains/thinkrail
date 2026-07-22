@@ -80,8 +80,9 @@ of the host.
     (correlated by the tool call id; rejected loud when the call is unknown/answered/superseded).
 - **domain.ts** — app entities: `Project` (git repo + unique `slug` + the skill-trust fields **`trusted`**
   (the per-project grant), **`acknowledgedSkills`** (re-confirm-new — which committed aliases are OK'd) and
-  **`disabledSkills`** (project-baseline per-skill off), which gate what its committed cross-agent skill
-  aliases contribute; a workspace layers **`Workspace.skillOverrides`** (per-skill on/off) over that baseline;
+  **`disabledSkills`** / **`disabledGroups`** (project-baseline per-skill and per-group off — a group is a
+  plugin, a source tier, or the special `@plugins`), which gate what its skills contribute; a workspace layers
+  **`Workspace.skillOverrides`** (per-skill on/off) over that baseline;
   "does it have specs?" is **not** a field — it's the lazy `project.hasSpecs` query, since it's a full-tree
   walk), **`ProjectPathStatus`** (a
   candidate path's kind — `repo` / `initable` / `missing` / `notDirectory` — so the UI opens, offers a
@@ -136,10 +137,12 @@ of the host.
   that project's current checkout with its **project-scoped aliases gated by trust**; the eventual worktree
   session is authoritative) / the **Skills-manager set** — **`project.aliasSkills`** (present committed alias
   names, for the presence-gated notice's count) / **`project.acknowledgeSkills`** (confirm skills that
-  appeared after trust) / **`project.setSkillEnabled`** (project baseline) / **`workspace.setSkillOverride`**
-  (per-workspace on/off/clear → the `Workspace`) / **`skills.state`** (`SkillCatalogEntry[]` for a
-  `workspaceId` — the full catalog + per-skill decision) / **`session.reloadResources`** (re-scan skills +
-  rebuild the system prompt for one running session; rejected while streaming) /
+  appeared after trust) / **`project.setSkillEnabled`** (project baseline) / **`project.setGroupEnabled`**
+  (turn a plugin / source tier / `@plugins` on/off at the baseline) / **`workspace.setSkillOverride`**
+  (per-workspace on/off/clear → the `Workspace`) / **`skills.state`** (`SkillCatalogEntry[]` — full catalog +
+  per-skill `decision` + `group` — for a `workspaceId`) / **`project.skills`** (the same, project-scoped, for
+  the pre-session manager) / **`session.reloadResources`** (re-scan skills + rebuild the system prompt for one
+  running session; rejected while streaming) /
   `session.*` — `create`/`prompt`/`steer`/`followUp`/`abort`/`dispose`/`setModel`/
   `setThinkingLevel`/`compact`/`getStats`/`getCommands`/`extUiReply`/**`answerQuestion`** (the inline
   `ask_user_question` reply, correlated by tool call id)/**`list`**/**`getMessages`** (the

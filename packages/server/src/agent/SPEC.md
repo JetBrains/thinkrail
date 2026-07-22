@@ -154,17 +154,22 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     clone and injected into the system prompt, so per-skill they resolve to `load` / `untrusted` /
     `pending-ack` / `disabled` from an **admission context** — the project's `trusted` + `acknowledgedSkills`
     (granting trust acknowledges only what's present, so a later pull/branch skill is `pending-ack` until
-    confirmed) + `disabledSkills` baseline, layered with the workspace's `skillOverrides` (the trust gate is
-    checked before the toggle layer, so an "on" override can never un-gate an untrusted alias). `skillsGate`
-    filters + relabels in one `skillsOverride`; only `load` skills reach the system prompt / `/skill:` list.
+    confirmed) + `disabledSkills` / **`disabledGroups`** baselines (a group key = a plugin name, a source tier
+    `project`/`personal`/`bundled`/`pi`, or the special `@plugins` — assigned per skill by `skillGroup`, matching
+    `SkillCatalogEntry.group`), layered with the workspace's per-skill `skillOverrides` (the trust gate is
+    checked before the toggle layer, so an "on" override can never un-gate an untrusted alias, and a per-skill
+    `on` beats a group disable). `skillsGate` filters + relabels in one `skillsOverride`; only `load` skills
+    reach the system prompt / `/skill:` list.
     The host resolves the context via the **`setSkillAdmissionResolver`** seam (keyed by `workspaceId`, fails
     closed). Personal / bundled / pi-native resources are never trust-gated (only the enable/disable layer);
     the gate is scoped to the compatibility aliases (pi-native `.pi` / `.agents` project trust is unchanged).
     `listSkillCommands(cwd, admission)` reuses the same gated inputs through a short-lived skills-only
     `DefaultResourceLoader` (no model/session/transcript, no extension factories) for pre-workspace
     autocomplete, cached briefly per `(cwd, admission)`; **`listSkillCatalog(cwd, admission)`** is the Skills
-    manager's unfiltered variant (every discovered skill + its `decision`), and **`listProjectAliasSkillNames`**
-    is the notice's present-alias count. The full session loader supports **two modes**:
+    manager's unfiltered variant (every discovered skill + its `group` + `decision`) — driven with a workspace
+    (via `skills.state`) or a project (via `project.skills`, current checkout, no overrides) — and
+    **`listProjectAliasSkillNames`** is the notice's present-alias count. The full session loader supports
+    **two modes**:
     - **Run-from-source (default):** `additionalExtensionPaths` pointing at the packages' raw `.ts`
       entries (pi's loader jiti-loads them — no value-import into our typecheck graph), resolved
       **lazily on first use** (never at module load: the resolve requires `node_modules`, which a
