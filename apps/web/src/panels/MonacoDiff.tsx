@@ -1,6 +1,12 @@
 import { type BeforeMount, DiffEditor, type DiffOnMount } from "@monaco-editor/react";
 import { useEffect, useRef } from "react";
-import { defineThinkrailTheme, THEME, watchThemeSwap } from "./monacoSetup";
+import {
+	defineThinkrailTheme,
+	languageForPath,
+	sharedEditorOptions,
+	THEME,
+	watchThemeSwap,
+} from "./monacoSetup";
 
 const beforeMount: BeforeMount = (m) => defineThinkrailTheme(m);
 
@@ -34,6 +40,7 @@ export default function MonacoDiff({
 			height="100%"
 			original={original}
 			modified={modified}
+			language={languageForPath(path)}
 			originalModelPath={`diff-original://${path}`}
 			modifiedModelPath={`diff-modified://${path}`}
 			theme={THEME}
@@ -42,14 +49,7 @@ export default function MonacoDiff({
 			loading={
 				<div className="flex h-full items-center justify-center text-hint">Loading diff…</div>
 			}
-			options={{
-				readOnly: true,
-				renderSideBySide: view === "split",
-				minimap: { enabled: false },
-				fontSize: 13,
-				scrollBeyondLastLine: false,
-				automaticLayout: true,
-			}}
+			options={{ ...sharedEditorOptions(), renderSideBySide: view === "split" }}
 		/>
 	);
 }

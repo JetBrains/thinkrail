@@ -1,6 +1,6 @@
 import MonacoReact, { type BeforeMount, type OnMount } from "@monaco-editor/react";
 import { useEffect, useRef } from "react";
-import { defineThinkrailTheme, THEME, watchThemeSwap } from "./monacoSetup";
+import { defineThinkrailTheme, sharedEditorOptions, THEME, watchThemeSwap } from "./monacoSetup";
 
 const beforeMount: BeforeMount = (m) => defineThinkrailTheme(m);
 
@@ -26,13 +26,7 @@ export default function MonacoEditor({ path, content }: { path: string; content:
 			loading={
 				<div className="flex h-full items-center justify-center text-hint">Loading editor…</div>
 			}
-			options={{
-				readOnly: true,
-				minimap: { enabled: false },
-				fontSize: 13,
-				scrollBeyondLastLine: false,
-				automaticLayout: true,
-			}}
+			options={sharedEditorOptions()}
 		/>
 	);
 }
