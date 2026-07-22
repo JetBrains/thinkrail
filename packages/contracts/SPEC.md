@@ -107,15 +107,32 @@ what lets the UI ship independently of the host.
   **`SpecGraphNode`/`SpecGraphSnapshot`** — the
   Specs-viewer read DTOs, **mirrored** (like `PiEvent`), never imported from `pi-spec-graph` — the wire
   carries only what the panel renders (`type`/`status` stay `string`: tolerate whatever is on disk);
-  the **workspace hooks wire** — **`HookName`** (`onCreate`/`onDelete`/`preMerge`/`postMerge`, the four
-  points a project can declare in its own `.thinkrail/hooks.json`), **`HookStatus`** (`{ state, command?,
-  exitCode? }` — the last known state of one hook, persisted on **`Workspace.hookStatus`** so a
-  reconnecting/reloaded client learns about a still-pending `onCreate` without a live push) and
+  the **workspace hooks wire** — two tiers, one combine-mode, richer values: **`HookName`**
+  (`onCreate`/`onDelete`/`preMerge`/`postMerge`, the four points a project can declare in its own
+  `.thinkrail/hooks.json`); **`CombineMode`** (`both`/`shared`/`local` — how a Shared and a Local command
+  for the *same* event combine, one setting for all four events, not per-event; resolved as
+  `Workspace.hookCombineMode ?? HookConfigFile.combineMode ?? "both"`; `both` runs Shared then Local, fixed
+  order, so a personal addition can only extend the team's baseline, never silently replace it);
+  **`HookSource`** (`shared`/`local` — which tier a command/status/event belongs to: Shared is committed in
+  `.thinkrail/hooks.json` and versioned for the whole repo, Local is host-local (`hookOverrides.json`) and
+  never committed; both scoped to a single project — no machine-global or role tier); **`HookValue`**
+  (`string | { command } | { script }` — a hook's declared value: a bare string / `{ command }` is inline,
+  `{ script }` is a path run with `sh <path>` instead of `sh -c`; a Shared `script` path resolves relative
+  to the worktree root, a Local one may be absolute); **`HookConfigFile`** (`{ version: 1, combineMode,
+  hooks }` — the parsed shape of the committed `.thinkrail/hooks.json`; types-only, the server owns parsing
+  and the legacy flat-file back-compat); **`HookStatus`** (`{ state, command?, exitCode? }` — the last known
+  state of one hook for one source; for a script hook, `command` carries a display label like `script:
+  .thinkrail/hooks/teardown.sh`, not the file contents) persisted on **`Workspace.hookStatus`**, now nested
+  `Partial<Record<HookName, Partial<Record<HookSource, HookStatus>>>>` (a `combineMode` of `"both"` can run
+  both tiers for the same event) so a reconnecting/reloaded client learns about a still-pending `onCreate`
+  without a live push, alongside **`Workspace.hookCombineMode`** (the workspace's own combine-mode
+  override, chosen at create time; `undefined` inherits the project's committed default); and
   **`WorkspaceHookEvent`** (the `workspace.hook` push payload — `hookAwaitingApproval` / `hookStarted` /
-  `hookOutput` / `hookSucceeded` / `hookFailed`, each keyed by `workspaceId` + `hook`, and each also
-  carrying `projectId` + `workspaceName` so a client can still describe the event after the workspace's own
-  record is gone — see the server's `workspaces/hooks` module SPEC for the execution/approval design this
-  wire serves).
+  `hookOutput` / `hookSucceeded` / `hookFailed`, each keyed by `workspaceId` + `hook` + **`source:
+  HookSource`** (a `both` run emits two tagged sequences per hook, Shared then Local, so a client tells
+  them apart instead of conflating them), and each also carrying `projectId` + `workspaceName` so a client
+  can still describe the event after the workspace's own record is gone — see the server's
+  `workspaces/hooks` module SPEC for the execution/approval design this wire serves).
 - **wsProtocol.ts** — `WS_METHODS` (`project.*` — incl. **`project.inspect`** (classify a path) +
   **`project.init`** (`git init` + commit, then open) + **`project.hasSpecs`** (lazy per-project "has any
   registered spec?" for the Welcome screen — a full-tree walk, so requested only for the shown project,
@@ -136,10 +153,16 @@ what lets the UI ship independently of the host.
   (`{ workspaceId, hook }` → re-invokes a hook for one specific workspace on demand; `onCreate`/`onDelete`
   only — the approval UI composes it with `approve` to bootstrap a workspace stuck at
   `hookAwaitingApproval`, and it doubles as a manual retry-after-failure action)) / the **project hooks
-  pair** — **`project.hooks.get`** (`{ projectId }` → committed + host-local-override commands per hook,
-  plus whether each hook's resolved command is currently approved — no workspace needed, so it's readable
-  before any workspace exists) and **`project.hooks.save`** (writes both the committed config — committed
-  to the project's root checkout — and the override map; never touches approval),
+  pair** — **`project.hooks.get`** (`{ projectId }` → `{ combineMode, shared, local, approved,
+  sharedCommittable }`: both tiers' declared `HookValue`s per hook, the project's `CombineMode` default,
+  per-`(hook, source)` approval, and whether Shared can even be committed here — `sharedCommittable: false`
+  when `.thinkrail/` is gitignored — no workspace needed, so it's readable before any workspace exists) and
+  **`project.hooks.save`** (`{ projectId, combineMode, shared, local }` → `Ack`: writes+commits Shared to
+  the project's root checkout when committable, persists Local, and **approves** every `(hook, source)` it
+  writes on this machine — unlike the superseded committed/override model, saving no longer leaves a hook
+  sitting unapproved) / `workspace.create` params also gain an optional **`hookCombineMode`** (the
+  New-Workspace "Advanced" override of the project's combine-mode default, stamped onto the created
+  `Workspace` record),
   `WS_CHANNELS` (`server.welcome` — which carries the initial `config: AppConfig` alongside `projects` /
   `pi.event` / `pi.extensionUi` / **`settings.changed`** (the full `AppConfig`, broadcast so every client
   converges) / **`provider.login`** — the session-less in-app login stream (a `LoginPush`

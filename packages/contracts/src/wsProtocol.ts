@@ -3,11 +3,14 @@
 import type {
 	AppConfig,
 	BranchList,
+	CombineMode,
 	DiffStats,
 	FileNode,
 	GithubAuthStatus,
 	GitStatus,
 	HookName,
+	HookSource,
+	HookValue,
 	JbcentralConnectResult,
 	LoginReply,
 	Project,
@@ -43,7 +46,12 @@ import type {
 // v8: `ask_user_question` is ack + terminate — the tool no longer blocks; answers travel as
 // `ask-user-answers` custom messages, and `session.getMessages` now returns `TranscriptMessage[]`
 // (pi-canonical + `custom` role) so the questionnaire card can pair answers by tool call id.
-export const PROTOCOL_VERSION = 8;
+// v9: workspace hooks widen to two tiers (Shared/Local) with a `combineMode` and script-file values —
+// `project.hooks.get`/`.save` reshape entirely (`shared`/`local`/`combineMode`/`sharedCommittable` replace
+// the old `committed`/`overrides`), `workspace.create` gains `hookCombineMode`, and every
+// `WorkspaceHookEvent` variant gains `source: HookSource` (a `both` run emits two tagged sequences per
+// hook instead of one).
+export const PROTOCOL_VERSION = 9;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -80,13 +88,17 @@ export const WS_METHODS = {
 	// Lazy per-project "has any registered spec?" (the Welcome screen's "Set up project" signal) — a
 	// full-tree walk, so it's on-demand for the one project shown, never eagerly for every project.
 	projectHasSpecs: "project.hasSpecs",
-	// Read a project's declared hooks (committed `.thinkrail/hooks.json` in its root checkout) + host-local
-	// overrides + whether each hook's *resolved* (override-if-set-else-committed) command is currently
-	// approved — the Project Settings Hooks form's single read. No workspace needed.
+	// Read a project's declared hooks, both tiers — Shared (committed `.thinkrail/hooks.json` in its root
+	// checkout) and Local (host-local overrides) — plus the project's combine-mode default, whether each
+	// (hook, source) is currently approved, and whether Shared can even be committed here (a gitignored
+	// `.thinkrail/` reports `sharedCommittable: false`) — the Project Settings Hooks form's single read. No
+	// workspace needed.
 	projectHooksGet: "project.hooks.get",
-	// Write `.thinkrail/hooks.json` (committed to the project's root checkout, pathspec-scoped so it can
-	// never sweep up unrelated staged changes there) + the host-local override map. Never touches approval —
-	// saving a command and trusting it to run are separate decisions.
+	// Write both tiers: Shared (committed to the project's root checkout, pathspec-scoped so it can never
+	// sweep up unrelated staged changes there — skipped when `sharedCommittable` is false) and Local
+	// (host-local). Unlike the old override model, this DOES approve — every (hook, source) it writes is
+	// approved on this machine, closing the "configured but never ran" gap; see `WorkspaceHookEvent`'s doc
+	// comment for why `onCreate` still can't be retroactively bootstrapped by an approval alone.
 	projectHooksSave: "project.hooks.save",
 	workspaceCreate: "workspace.create",
 	workspaceList: "workspace.list",
@@ -257,23 +269,30 @@ export interface WsMethodMap {
 	"project.hooks.get": {
 		params: { projectId: string };
 		result: {
-			committed: Partial<Record<HookName, string>>;
-			overrides: Partial<Record<HookName, string>>;
-			approved: Partial<Record<HookName, boolean>>;
+			combineMode: CombineMode;
+			shared: Partial<Record<HookName, HookValue>>;
+			local: Partial<Record<HookName, HookValue>>;
+			approved: Partial<Record<HookName, Partial<Record<HookSource, boolean>>>>;
+			// Whether Shared can even be committed here — `false` when `.thinkrail/` is gitignored (see
+			// `project.hooks.save`, which then skips writing Shared rather than force-committing it).
+			sharedCommittable: boolean;
 		};
 	};
 	"project.hooks.save": {
 		params: {
 			projectId: string;
-			committed: Partial<Record<HookName, string>>;
-			overrides: Partial<Record<HookName, string>>;
+			combineMode: CombineMode;
+			shared: Partial<Record<HookName, HookValue>>;
+			local: Partial<Record<HookName, HookValue>>;
 		};
 		result: Ack;
 	};
-	// `baseRef`: the base branch the worktree is cut from (a remote ref is fetched first); when
-	// omitted, the worktree branches off the repo's current HEAD (the default behavior).
+	// `baseRef`: the base branch the worktree is cut from (a remote ref is fetched first); when omitted,
+	// the worktree branches off the repo's current HEAD (the default behavior). `hookCombineMode`: an
+	// optional per-workspace override of the project's committed combine-mode default (an "Advanced"
+	// New-Workspace control) — omitted inherits that default.
 	"workspace.create": {
-		params: { projectId: string; name?: string; baseRef?: string };
+		params: { projectId: string; name?: string; baseRef?: string; hookCombineMode?: CombineMode };
 		result: Workspace;
 	};
 	"workspace.list": { params: { projectId: string }; result: Workspace[] };

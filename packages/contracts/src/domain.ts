@@ -50,12 +50,22 @@ export interface Workspace {
 	renamed?: boolean;
 	diffStats?: DiffStats;
 	/**
-	 * The last known state of each declared lifecycle hook, persisted so a reconnecting/reloaded client
-	 * learns about a still-pending `onCreate` without waiting on a live `workspace.hook` push. An
-	 * already-connected client's live view comes from the `workspace.hook` event stream directly, not a
-	 * round-trip through this field — this is durability across reconnects, not the live update path.
+	 * This workspace's combine-mode override, chosen at create time (an "Advanced" control, shown only
+	 * when the project declares hooks) and fixed for the workspace's whole life — read at every hook
+	 * invocation, not just `onCreate`. `undefined` inherits the project's committed default
+	 * (`HookConfigFile.combineMode`, itself defaulting to `"both"`).
 	 */
-	hookStatus?: Partial<Record<HookName, HookStatus>>;
+	hookCombineMode?: CombineMode;
+	/**
+	 * The last known state of each declared lifecycle hook, nested by `HookSource` because a
+	 * `combineMode` of `"both"` runs Shared *and* Local for the same event — persisted so a
+	 * reconnecting/reloaded client learns about a still-pending `onCreate` without waiting on a live
+	 * `workspace.hook` push. An already-connected client's live view comes from the `workspace.hook`
+	 * event stream directly, not a round-trip through this field — this is durability across reconnects,
+	 * not the live update path. For a script hook, `HookStatus.command` carries a display label (e.g.
+	 * `script: .thinkrail/hooks/teardown.sh`), not the file contents.
+	 */
+	hookStatus?: Partial<Record<HookName, Partial<Record<HookSource, HookStatus>>>>;
 }
 
 /**
@@ -73,6 +83,43 @@ export interface WorkspaceFsChangedPayload {
 /** Names of the workspace lifecycle hooks a project can declare in `.thinkrail/hooks.json`. */
 export type HookName = "onCreate" | "onDelete" | "preMerge" | "postMerge";
 
+/**
+ * How a project's Shared and Local commands for the *same* event combine — one setting for all four
+ * `HookName`s, not per-event. `both` (the default) runs Shared then Local, in that fixed order, so a
+ * personal addition can only extend the team's baseline, never silently replace it; `shared`/`local` run
+ * only that one tier. Resolved as `Workspace.hookCombineMode ?? HookConfigFile.combineMode ?? "both"`.
+ */
+export type CombineMode = "both" | "shared" | "local";
+
+/**
+ * Which tier a hook command/status/event belongs to: `shared` is committed in `.thinkrail/hooks.json`
+ * (versioned, delivered to everyone on the repo — the team's reviewed setup); `local` is host-local
+ * (`hookOverrides.json`), this machine only, never committed. Both tiers are scoped to a single project —
+ * there is no machine-global or role tier.
+ */
+export type HookSource = "shared" | "local";
+
+/**
+ * One hook's declared value. A bare string is an inline command (the back-compatible shorthand — same as
+ * `{ command }`, spelled out); `{ script }` is a path to a script file, run with `sh <path>` instead of
+ * `sh -c "<command>"`. A Shared `script` path resolves relative to the worktree root (it propagates into
+ * every worktree the same way the rest of `.thinkrail/hooks.json` does); a Local `script` path may be
+ * absolute or worktree-relative.
+ */
+export type HookValue = string | { command: string } | { script: string };
+
+/**
+ * The parsed shape of a project's committed `.thinkrail/hooks.json` — the Shared tier's declared hooks
+ * plus the project-wide default `combineMode`. Types-only: the server owns parsing, including back-compat
+ * with the legacy flat file (`{ onCreate: "…" }`, no `version`/`hooks` keys), which reads as
+ * `{ version: 1, combineMode: "both", hooks: <the flat object> }`.
+ */
+export interface HookConfigFile {
+	version: 1;
+	combineMode: CombineMode;
+	hooks: Partial<Record<HookName, HookValue>>;
+}
+
 /** One hook's last known state, persisted on its `Workspace` record — see `Workspace.hookStatus`. */
 export interface HookStatus {
 	state: "awaitingApproval" | "running" | "succeeded" | "failed";
@@ -87,6 +134,12 @@ export interface HookStatus {
  * workspace tab's setup/teardown status stays in sync everywhere (same convergence model as the
  * workspace-lifecycle trio). `hookAwaitingApproval` fires instead of `hookStarted` when the hook's command
  * hasn't been approved yet (or has changed since).
+ *
+ * Every variant carries `source: HookSource`. A `combineMode` of `"both"` runs Shared *then* Local for the
+ * same `hook`, as two ordered entries (Shared first) — each gets its own
+ * `hookStarted`/`hookOutput`/`hookSucceeded`/`hookFailed`/`hookAwaitingApproval` sequence tagged by its
+ * `source`, so a client tells the two runs apart instead of conflating them into one. An unapproved entry
+ * halts the remaining ones (see `submodule-server-workspaces-hooks`'s SPEC.md for the run/approval order).
  *
  * `workspace.hooks.approve` only records the approval for that project+hook — it does not itself re-run
  * anything. For `onDelete`/`preMerge`, that's enough: their next natural invocation (the next delete, the
@@ -106,6 +159,7 @@ export type WorkspaceHookEvent =
 			workspaceName: string;
 			projectId: string;
 			hook: HookName;
+			source: HookSource;
 			command: string;
 	  }
 	| {
@@ -114,6 +168,7 @@ export type WorkspaceHookEvent =
 			workspaceName: string;
 			projectId: string;
 			hook: HookName;
+			source: HookSource;
 			command: string;
 	  }
 	| {
@@ -122,6 +177,7 @@ export type WorkspaceHookEvent =
 			workspaceName: string;
 			projectId: string;
 			hook: HookName;
+			source: HookSource;
 			chunk: string;
 	  }
 	| {
@@ -130,6 +186,7 @@ export type WorkspaceHookEvent =
 			workspaceName: string;
 			projectId: string;
 			hook: HookName;
+			source: HookSource;
 			command: string;
 	  }
 	| {
@@ -138,6 +195,7 @@ export type WorkspaceHookEvent =
 			workspaceName: string;
 			projectId: string;
 			hook: HookName;
+			source: HookSource;
 			command: string;
 			exitCode: number;
 	  };
