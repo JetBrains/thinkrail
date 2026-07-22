@@ -44,12 +44,20 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   workspace**, so the shell returns to that project's Welcome — a deliberate "project home" gesture; the
   workspace's tabs survive in the store, so re-selecting it restores its view. Also
   `FileTree`, `SpecsPanel`, `RightPanel`,
-  `ChangesPanel` (the changed-file list — clicking a file opens/focuses its **center Monaco diff tab**),
+  `ChangesPanel` (the changed files, with a header **List | Tree** toggle (`store.changesView`, app-wide)
+  switching a flat list and a folder **`ChangesTree`**; clicking a file in either opens/focuses its
+  **center Monaco diff tab**),
   `CenterTabs` + `FilePane` (+ its lazy `MonacoEditor` / `MarkdownPreview`) + `DiffPane` (+ its lazy
   `MonacoDiff`), `TerminalsPanel` + lazy `TerminalInstance`. The Monaco plumbing both editors share —
   worker wiring, the local loader, the token-driven `thinkrail` theme + the `[data-theme]` re-theme
   observer — lives once in `monacoSetup.ts`; the slim header view-toggle segment (`Preview|Source`,
-  `Split|Inline`) is the shared `ToggleSegment`. **`WelcomePanel`** is the first-touch surface the shell mounts (centered, left-nav beside it) whenever no
+  `Split|Inline`, `List|Tree`) is the shared `ToggleSegment`. The **file-style tree row** (chevron/spacer
+  lead, folder/file icon, truncated label, trailing slot) is the shared **`TreeRow`**, used by both
+  `FileTree` and `ChangesTree` so the two trees stay identical; the **`+N −M` diff-count badge** is the
+  shared **`DiffStatBadge`**, used by the project-rail worktree stats and the Changes tree's per-file /
+  per-folder counts. `ChangesTree`'s tree build + `+/−` aggregation + shared status glyphs live in the pure
+  **`changesModel.ts`** (unit-tested; no store/transport — `ChangesTree` is presentational, fed `changes` +
+  `onOpen`/`isActive` by `ChangesPanel`). **`WelcomePanel`** is the first-touch surface the shell mounts (centered, left-nav beside it) whenever no
 workspace is active. The `PRODUCT_NAME` wordmark as the hero (the topbar's brand styling — accent font,
 `text-primary` — enlarged), with the **active project's name as a small eyebrow** (folder icon) above it
 once a project is selected, over a **constant** spec-first pitch (not spec-conditional) and
@@ -205,6 +213,16 @@ a project picker, the prompt hero, and the reused
   `MonacoDiff` (`@monaco-editor/react` `DiffEditor`, model paths derived from the file's path so both
   sides highlight alike). A row is shown selected when its diff tab is the active center tab (or it's
   the deep-link highlight). A failed `git.diffFile` leaves tabs unchanged (the row stays for a retry).
+- **Changes: List | Tree.** A header toggle (`store.changesView`, app-wide — persisted in the store, not
+  per workspace, so it survives workspace switches) switches the flat **List** and a folder **Tree**
+  (`ChangesTree`), both built from the same `git.status` list. The Tree is styled exactly like the
+  All-files tree (shared `TreeRow`); folders **default expanded** (change sets are small); **no single-child
+  folder compaction** — one row per segment, matching `FileTree`. **Status is shown on the file name, not
+  a letter glyph** (the git-decoration convention — `changesModel.statusNameClass`, shared by both views):
+  added / untracked → green, deleted → red + strikethrough, renamed → blue, modified → plain. Each file
+  and folder also shows a `+N −M` badge (shared `DiffStatBadge`) — per-file counts come from `git.status`
+  (`GitFileChange.added/removed`, from `git diff --numstat`; untracked files count their whole content as
+  added), folder counts are summed client-side. Both views share `ChangesPanel`'s `openDiff` + `isActive`.
 - **Markdown file tabs render, don't read.** A `.md`/`.markdown` `FileTab` (from the file tree **or** the
   Specs panel — same `openTab` path) opens **rendered by default**: `FilePane` gates on `lib.isMarkdownPath`
   and shows a slim `Preview | Source` header (`markdown-view-toggle`), the rendered view being lazy

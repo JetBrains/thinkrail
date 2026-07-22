@@ -152,6 +152,13 @@ export interface GitFileChange {
 	/** Path relative to the worktree root. */
 	path: string;
 	status: GitFileStatus;
+	/**
+	 * Lines added / removed vs the base branch (`git diff --numstat`; untracked files count their whole
+	 * content as added). Omitted when git reports no per-line count — binary files, or a rename whose
+	 * numstat path couldn't be resolved. Used by the Changes tree's per-file / per-folder `+/−` badge.
+	 */
+	added?: number;
+	removed?: number;
 }
 
 export interface GitStatus {

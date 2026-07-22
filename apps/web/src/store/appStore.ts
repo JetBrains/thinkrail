@@ -456,6 +456,10 @@ interface AppState {
 	/** Set a markdown file tab's view mode (rendered ↔ source); kept on the tab so it survives tab switches. */
 	setFileTabView: (id: string, view: "rendered" | "source") => void;
 	setDiffTabView: (id: string, view: "split" | "inline") => void;
+	/** How the Changes panel lays out its changed files — flat `list` or a `tree` of folders. App-wide,
+	 * persisted in the store (not per workspace) so the choice survives workspace switches. */
+	changesView: "list" | "tree";
+	setChangesView: (view: "list" | "tree") => void;
 	/** Fold a `workspace.fsChanged` push into the live-refresh signal (tick++, last batch replaces). */
 	noteFsChanged: (payload: WorkspaceFsChangedPayload) => void;
 	/** Replace a file tab's content after a live re-read, recording the fs tick it was loaded at. The tab
@@ -615,6 +619,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	sessions: {},
 	models: [],
 	changesRequest: null,
+	changesView: "list",
 	fsChangesByWorkspace: {},
 	activeLogin: null,
 	settingsOpen: false,
@@ -751,6 +756,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				},
 			};
 		}),
+	setChangesView: (view) => set({ changesView: view }),
 	noteFsChanged: (payload) =>
 		set((s) => {
 			const prev = s.fsChangesByWorkspace[payload.workspaceId];

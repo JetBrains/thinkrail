@@ -1,4 +1,4 @@
-import { writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
@@ -38,4 +38,43 @@ test("Changes tab shows the active worktree's diff and swaps per workspace", asy
 	await createWorkspaceViaDialog(page);
 	await expect(page.getByTestId("workspace-item")).toHaveCount(2);
 	await expect(page.getByTestId("changes-empty")).toBeVisible();
+});
+
+test("Changes has a List|Tree toggle; Tree groups files into folders with +/- counts", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+
+	// A changed file inside a subfolder, so the tree has a folder row to group under.
+	const worktree = join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
+	mkdirSync(join(worktree, "docs"), { recursive: true });
+	writeFileSync(join(worktree, "docs", "notes.md"), "one\ntwo\nthree\n");
+
+	await page.getByTestId("tab-changes").click();
+	// List is the default view.
+	await expect(page.getByTestId("changes-toggle-list")).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("change-item").filter({ hasText: "docs/notes.md" })).toBeVisible();
+
+	// Switch to the folder tree.
+	await page.getByTestId("changes-toggle-tree").click();
+	await expect(page.getByTestId("changes-toggle-tree")).toHaveAttribute("data-active", "true");
+
+	// A `docs` folder row (default-expanded) and the file node beneath it, with a +count badge.
+	await expect(page.getByTestId("change-tree-folder").filter({ hasText: "docs" })).toBeVisible();
+	const fileNode = page.getByTestId("change-node").filter({ hasText: "notes.md" });
+	await expect(fileNode).toBeVisible();
+	await expect(fileNode).toHaveAttribute("data-status", "untracked");
+	await expect(fileNode).toContainText("+3");
+
+	// Clicking a file in the tree opens its diff tab, exactly like the list.
+	await fileNode.click();
+	const diffTab = page.locator('[data-testid="editor-tab"][data-kind="diff"]');
+	await expect(diffTab).toHaveCount(1);
+	await expect(page.getByTestId("diff-pane")).toContainText("three");
+
+	// The view choice is app-wide: leaving Changes and returning keeps Tree selected.
+	await page.getByTestId("tab-files").click();
+	await page.getByTestId("tab-changes").click();
+	await expect(page.getByTestId("changes-toggle-tree")).toHaveAttribute("data-active", "true");
 });

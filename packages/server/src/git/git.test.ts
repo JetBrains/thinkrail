@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { gitDiffFile, listBranches, prefetchBranch } from "./git";
+import { gitDiffFile, gitStatus, listBranches, numstatPath, prefetchBranch } from "./git";
 
 let dataDir: string;
 let repo: string;
@@ -73,6 +73,25 @@ test("gitDiffFile: untracked → empty original; deleted → empty modified", ()
 	const deleted = gitDiffFile("w1", "README.md");
 	expect(deleted.original).toBe("# repo\n");
 	expect(deleted.modified).toBe("");
+});
+
+test("gitStatus attaches per-file +/- counts, incl. untracked line counts", () => {
+	seedWorkspace();
+	// Base README.md is "# repo\n" (1 line): keep it, append two lines → +2 / −0.
+	writeFileSync(join(repo, "README.md"), "# repo\nline two\nline three\n");
+	writeFileSync(join(repo, "new.txt"), "a\nb\n"); // untracked, 2 lines
+
+	const { changes } = gitStatus("w1");
+	const readme = changes.find((c) => c.path === "README.md");
+	expect(readme).toMatchObject({ status: "modified", added: 2, removed: 0 });
+	const untracked = changes.find((c) => c.path === "new.txt");
+	expect(untracked).toMatchObject({ status: "untracked", added: 2, removed: 0 });
+});
+
+test("numstatPath resolves rename/copy forms to the destination path", () => {
+	expect(numstatPath("src/a.ts")).toBe("src/a.ts");
+	expect(numstatPath("old.ts => new.ts")).toBe("new.ts");
+	expect(numstatPath("src/{a => b}/x.ts")).toBe("src/b/x.ts");
 });
 
 test("gitDiffFile refuses a path escaping the worktree", () => {

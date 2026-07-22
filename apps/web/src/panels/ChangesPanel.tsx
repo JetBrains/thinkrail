@@ -1,31 +1,17 @@
-import type { GitFileStatus, GitStatus } from "@thinkrail/contracts";
+import type { GitStatus } from "@thinkrail/contracts";
 import { useEffect, useState } from "react";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
-
-const STATUS_LABEL: Record<GitFileStatus, string> = {
-	added: "A",
-	modified: "M",
-	deleted: "D",
-	renamed: "R",
-	untracked: "U",
-};
-const STATUS_COLOR: Record<GitFileStatus, string> = {
-	added: "text-green",
-	modified: "text-gold",
-	deleted: "text-red",
-	renamed: "text-blue",
-	untracked: "text-green",
-};
-
-/** A diff tab's id — the one-tab-per-file identity (re-clicking a row focuses the existing tab). */
-function diffTabId(workspaceId: string, path: string): string {
-	return `${workspaceId}:diff:${path}`;
-}
+import { ChangesTree } from "./ChangesTree";
+import { diffTabId, statusNameClass } from "./changesModel";
+import { DiffStatBadge } from "./DiffStatBadge";
+import { ToggleSegment } from "./ToggleSegment";
 
 /**
  * Changes for the active worktree: the changed-file list (vs base). Clicking a file opens (or focuses)
  * its Monaco diff tab in the center — the diff itself renders there (`DiffPane`), not under the list.
+ * Two layouts, switched by the header toggle (`store.changesView`, app-wide): a flat **List** and a
+ * folder **Tree** (`ChangesTree`, styled like the All-files tree, with per-file/-folder `+/−` counts).
  * Live: the store's per-workspace fs tick silently re-reads `git.status`; the open diff tabs follow the
  * disk on their own (DiffPane's re-read). A chat deep-link only highlights its row — no tab is opened
  * until the user clicks.
@@ -34,6 +20,8 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	const [status, setStatus] = useState<GitStatus | null>(null);
 	const [highlighted, setHighlighted] = useState<string | null>(null);
 	const changesRequest = useAppStore((s) => s.changesRequest);
+	const changesView = useAppStore((s) => s.changesView);
+	const setChangesView = useAppStore((s) => s.setChangesView);
 	const fsTick = useAppStore((s) => s.fsChangesByWorkspace[workspaceId]?.tick ?? 0);
 	const activeTabId = useAppStore((s) => s.activeTabByWorkspace[workspaceId] ?? null);
 
@@ -98,6 +86,10 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 		setHighlighted(match ? match.path : want);
 	}, [changesRequest, status, workspaceId]);
 
+	// A row is selected when its diff tab is the active center tab, or it's the deep-link highlight.
+	const isActive = (path: string) =>
+		activeTabId === diffTabId(workspaceId, path) || highlighted === path;
+
 	if (status === null) {
 		return <p className="px-sm py-xs text-xs text-hint">Loading…</p>;
 	}
@@ -110,29 +102,54 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	}
 
 	return (
-		<ul className="h-full overflow-auto">
-			{status.changes.map((change) => {
-				const isActive =
-					activeTabId === diffTabId(workspaceId, change.path) || highlighted === change.path;
-				return (
-					<li key={change.path}>
-						<button
-							type="button"
-							data-testid="change-item"
-							data-status={change.status}
-							onClick={() => void openDiff(change.path)}
-							className={`flex w-full items-center gap-sm px-sm py-xs text-left text-sm hover:bg-hover ${
-								isActive ? "bg-hover" : ""
-							}`}
-						>
-							<span className={`w-3 shrink-0 text-center text-xs ${STATUS_COLOR[change.status]}`}>
-								{STATUS_LABEL[change.status]}
-							</span>
-							<span className="truncate text-muted">{change.path}</span>
-						</button>
-					</li>
-				);
-			})}
-		</ul>
+		<div className="flex h-full min-h-0 flex-col">
+			<div
+				data-testid="changes-view-toggle"
+				role="toolbar"
+				aria-label="Changes view mode"
+				className="flex h-8 shrink-0 items-center justify-end gap-xs border-border2 border-b bg-bg-dark px-sm"
+			>
+				<ToggleSegment
+					testid="changes-toggle-list"
+					label="List"
+					active={changesView === "list"}
+					onClick={() => setChangesView("list")}
+				/>
+				<ToggleSegment
+					testid="changes-toggle-tree"
+					label="Tree"
+					active={changesView === "tree"}
+					onClick={() => setChangesView("tree")}
+				/>
+			</div>
+			<div className="min-h-0 flex-1 overflow-auto">
+				{changesView === "tree" ? (
+					<ChangesTree changes={status.changes} onOpen={openDiff} isActive={isActive} />
+				) : (
+					<ul>
+						{status.changes.map((change) => (
+							<li key={change.path}>
+								<button
+									type="button"
+									data-testid="change-item"
+									data-status={change.status}
+									onClick={() => void openDiff(change.path)}
+									className={`flex w-full items-center gap-sm px-sm py-xs text-left text-sm hover:bg-hover ${
+										isActive(change.path) ? "bg-hover" : ""
+									}`}
+								>
+									<span
+										className={`min-w-0 flex-1 truncate ${statusNameClass(change.status) || "text-muted"}`}
+									>
+										{change.path}
+									</span>
+									<DiffStatBadge added={change.added ?? 0} removed={change.removed ?? 0} />
+								</button>
+							</li>
+						))}
+					</ul>
+				)}
+			</div>
+		</div>
 	);
 }
