@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { copyFileSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { basename, join } from "node:path";
 import type { Locator, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
 import type { Workspace } from "@thinkrail/contracts";
@@ -10,7 +10,6 @@ import {
 	E2E_PI_AGENT_DIR,
 	E2E_PI_MODELS_SEED,
 	E2E_PICK_DIR_POINTER,
-	E2E_PLAIN_DIR,
 } from "./paths";
 import { fixtureRepoHealthy, seedFixtureRepo } from "./repo";
 
@@ -72,19 +71,6 @@ function resetState(): void {
 	writeFileSync(E2E_PICK_DIR_POINTER, E2E_FIXTURE_REPO);
 }
 
-/**
- * Reset state, (re)create a plain **non-git** folder with a file in it, and point the stubbed picker at
- * it — so "Open project" exercises the "initialise a repo?" flow. Returns the folder path.
- */
-export function stagePlainFolder(): string {
-	resetState();
-	rmSync(E2E_PLAIN_DIR, { recursive: true, force: true });
-	mkdirSync(E2E_PLAIN_DIR, { recursive: true });
-	writeFileSync(join(E2E_PLAIN_DIR, "notes.txt"), "hello from a plain folder\n");
-	writeFileSync(E2E_PICK_DIR_POINTER, E2E_PLAIN_DIR);
-	return E2E_PLAIN_DIR;
-}
-
 function loadPersistedWorkspaces(): Workspace[] {
 	try {
 		return JSON.parse(readFileSync(join(E2E_DATA_DIR, "workspaces.json"), "utf8")) as Workspace[];
@@ -119,12 +105,30 @@ export async function openAppFresh(page: Page): Promise<void> {
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 }
 
-/** Reset state, then open the fixture repo as a project via the (stubbed) picker; auto-selects + expands. */
+/**
+ * Register the fixture repo as a project directly. The product's open flow is now a mocked dialog (no
+ * `project.open`), so the harness seeds `projects.json` — which the host reads per-request — to make the
+ * REAL fixture repo available to the file/editor/terminal/changes specs. No wire call is involved.
+ */
+export function seedFixtureProject(): void {
+	const name = basename(E2E_FIXTURE_REPO);
+	writeFileSync(
+		join(E2E_DATA_DIR, "projects.json"),
+		JSON.stringify([
+			{ id: "fixture-project", name, path: E2E_FIXTURE_REPO, slug: name, lastOpened: Date.now() },
+		]),
+	);
+}
+
+/** Reset state, seed the fixture project, load, and select it → its read-only ProjectView. */
 export async function openFixtureProject(page: Page): Promise<void> {
-	await openAppFresh(page);
-	await page.getByTestId("add-project-menu").click();
-	await page.getByTestId("menu-open-project").click();
-	await expect(page.getByTestId("project-item").first()).toBeVisible();
+	resetState();
+	seedFixtureProject();
+	await page.goto("/");
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	// Selecting a project is a view-navigation action → the read-only ProjectView.
+	await page.getByTestId("project-item").first().getByText(basename(E2E_FIXTURE_REPO)).click();
+	await expect(page.getByTestId("project-view")).toBeVisible();
 }
 
 /**
@@ -153,12 +157,8 @@ export async function openWorkspaceChat(page: Page): Promise<void> {
 
 /** Wait for the current round to finish (its "✓ Done" marker) so the transcript is stable. */
 export async function waitForDone(page: Page, timeout = 90_000): Promise<void> {
-	await expect(
-		page
-			.locator('[data-testid="chat-message"][data-role="system"]')
-			.filter({ hasText: "Done" })
-			.last(),
-	).toBeVisible({ timeout });
+	// The turn-end "Done" marker now lives as the badge in the merged completion line (the turn divider).
+	await expect(page.getByTestId("turn-done").last()).toBeVisible({ timeout });
 }
 
 /** Expand every collapsed activity group so the routine step rows exist in the DOM. */

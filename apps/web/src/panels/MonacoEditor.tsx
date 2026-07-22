@@ -35,7 +35,9 @@ window.MonacoEnvironment = {
 // Use the locally-bundled Monaco instead of the loader's CDN default — keeps the app self-contained.
 loader.config({ monaco });
 
-const THEME = "thinkrail";
+/** The one Monaco theme id — shared by the file viewer and `DiffPane` (both define it from the live
+ * CSS tokens via `defineThinkrailTheme`). */
+export const THEME = "thinkrail";
 
 /** Read a CSS custom property off the document root, so Monaco's chrome tracks the active theme tokens.
  * Canonicalized to hex: the built CSS is minified (`#ffffff` → `#fff`, `#808080` → `gray`), and Monaco
@@ -63,7 +65,7 @@ const SYNTAX_TOKENS: [string, string][] = [
 /** Define (or redefine) the thinkrail Monaco theme from the live CSS tokens: chrome colors from the
  * surface tokens, the per-theme built-in base (`vs`/`vs-dark`/`hc-black`) from the active `[data-theme]`, and syntax rules from whichever
  * `--code-*` tokens the theme sets. Called before mount and again on every theme swap. */
-function defineThinkrailTheme(m: Monaco): void {
+export function defineThinkrailTheme(m: Monaco): void {
 	const colors: Record<string, string> = {};
 	const set = (key: string, value: string) => {
 		if (value) colors[key] = value;
@@ -95,25 +97,51 @@ function defineThinkrailTheme(m: Monaco): void {
 
 const beforeMount: BeforeMount = (m) => defineThinkrailTheme(m);
 
-/** Read-only file viewer; language is inferred from `path`. Editing + save land with `fs.writeFile`. */
-export default function MonacoEditor({ path, content }: { path: string; content: string }) {
-	const observerRef = useRef<MutationObserver | null>(null);
+/** Re-theme Monaco on a `[data-theme]` swap: chrome + base are read once at define time, so without
+ * this an editor keeps the theme it mounted with. Shared by the file viewer and `DiffPane`; the
+ * caller disconnects the returned observer on unmount. Mirrors TerminalInstance's observer. */
+export function observeThemeSwap(m: Monaco): MutationObserver {
+	const observer = new MutationObserver(() => {
+		defineThinkrailTheme(m);
+		m.editor.setTheme(THEME);
+	});
+	observer.observe(document.documentElement, {
+		attributes: true,
+		attributeFilter: ["data-theme"],
+	});
+	return observer;
+}
 
-	// Re-theme Monaco on a `[data-theme]` swap: its chrome + built-in base are read once at define time, so
-	// without this the editor would keep the theme it mounted with. Mirrors TerminalInstance's observer.
-	const onMount: OnMount = (_editor, m) => {
-		const observer = new MutationObserver(() => {
-			defineThinkrailTheme(m);
-			m.editor.setTheme(THEME);
-		});
-		observer.observe(document.documentElement, {
-			attributes: true,
-			attributeFilter: ["data-theme"],
-		});
-		observerRef.current = observer;
+/** File viewer; language is inferred from `path`. Read-only by default (the transcript/file-tab viewer);
+ * pass `readOnly={false}` to allow inline editing. `onReadOnlyEdit` fires when the user tries to type
+ * while read-only (Monaco's `onDidAttemptReadonlyEdit`) — used to surface a soft-edit hint. */
+export default function MonacoEditor({
+	path,
+	content,
+	readOnly = true,
+	onReadOnlyEdit,
+}: {
+	path: string;
+	content: string;
+	readOnly?: boolean;
+	onReadOnlyEdit?: () => void;
+}) {
+	const observerRef = useRef<MutationObserver | null>(null);
+	const editRef = useRef<{ dispose: () => void } | null>(null);
+
+	const onMount: OnMount = (editor, m) => {
+		observerRef.current = observeThemeSwap(m);
+		// A keystroke in a read-only editor fires this instead of being silently swallowed.
+		editRef.current = editor.onDidAttemptReadOnlyEdit(() => onReadOnlyEdit?.());
 	};
 
-	useEffect(() => () => observerRef.current?.disconnect(), []);
+	useEffect(
+		() => () => {
+			observerRef.current?.disconnect();
+			editRef.current?.dispose();
+		},
+		[],
+	);
 
 	return (
 		<MonacoReact
@@ -127,7 +155,7 @@ export default function MonacoEditor({ path, content }: { path: string; content:
 				<div className="flex h-full items-center justify-center text-hint">Loading editor…</div>
 			}
 			options={{
-				readOnly: true,
+				readOnly,
 				minimap: { enabled: false },
 				fontSize: 13,
 				scrollBeyondLastLine: false,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { summarizeSteps } from "./ActivityGroup";
+import { summarizeSteps, windowActivity } from "./ActivityGroup";
 import type { ActivityStep } from "./rows";
 
 const tool = (id: string, toolName: string): ActivityStep => ({
@@ -47,5 +47,29 @@ describe("summarizeSteps (the collapsed activity-group header)", () => {
 			tool("f", "glob"),
 		];
 		expect(summarizeSteps(steps)).toBe("6 steps · bash, read, edit, write, +2 more");
+	});
+});
+
+describe("windowActivity (running-state step windowing)", () => {
+	it("folds older steps into a count and keeps the last `window` visible (current step last)", () => {
+		const steps = [
+			tool("a", "bash"),
+			tool("b", "read"),
+			tool("c", "edit"),
+			tool("d", "write"),
+			tool("e", "grep"),
+			tool("f", "glob"), // the current (in-progress) step
+		];
+		const { olderCount, visible } = windowActivity(steps, 4);
+		expect(olderCount).toBe(2); // a, b fold into "2 completed steps"
+		expect(visible.map((s) => s.id)).toEqual(["c", "d", "e", "f"]);
+		expect(visible.at(-1)?.id).toBe("f"); // current step stays visible, last
+	});
+
+	it("shows every step with no summary when at or under the window", () => {
+		const steps = [tool("a", "bash"), tool("b", "read"), tool("c", "edit")];
+		const { olderCount, visible } = windowActivity(steps, 4);
+		expect(olderCount).toBe(0);
+		expect(visible).toHaveLength(3);
 	});
 });

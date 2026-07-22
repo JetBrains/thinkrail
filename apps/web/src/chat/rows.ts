@@ -122,7 +122,9 @@ export function deriveRows(
 					rows.push({ kind: "user", id: turn.id, message: turn.message });
 					break;
 				case "system":
-					rows.push({ kind: "system", id: turn.id, text: turn.text });
+					// The turn-end "✓ Done" marker (it carries `endedAt`) is merged into the round divider (its
+					// Done badge), so it no longer renders as its own row; other system notices still map 1:1.
+					if (turn.endedAt == null) rows.push({ kind: "system", id: turn.id, text: turn.text });
 					break;
 				case "error":
 					rows.push({ kind: "error", id: turn.id, text: turn.text });

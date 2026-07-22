@@ -48,9 +48,14 @@ beforeEach(() => {
 		sessions: {},
 		tabsByWorkspace: {},
 		activeTabByWorkspace: {},
-		closedChatsByWorkspace: {},
 		selectedProjectId: null,
 		activeWorkspaceId: null,
+		workspaces: {},
+		docHistoryByWorkspace: {},
+		terminalsByWorkspace: {},
+		activeTerminalByWorkspace: {},
+		backgroundedTerminalsByWorkspace: {},
+		terminalCounterByWorkspace: {},
 		activeLogin: null,
 		settingsOpen: false,
 		settingsSection: "providers",
@@ -369,27 +374,6 @@ test("a second dialog for a busy session queues instead of orphaning the first",
 	expect(rt("a").extUiQueue).toHaveLength(0);
 });
 
-test("closing a chat moves it to history with its runtime kept; reopening restores full state", () => {
-	const store = useAppStore.getState();
-	useAppStore.setState({ activeWorkspaceId: "ws1" });
-	store.openChatSession("ws1", "a", null, "medium");
-	store.handlePiEvent(agentStart, "a"); // give the runtime live state to prove it survives close
-
-	store.closeChatToHistory("a");
-	let st = useAppStore.getState();
-	expect(st.tabsByWorkspace.ws1?.some((t) => t.kind === "chat" && t.sessionId === "a")).toBe(false);
-	expect(st.closedChatsByWorkspace.ws1?.map((c) => c.sessionId)).toEqual(["a"]);
-	expect(st.sessions.a).toBeDefined(); // runtime NOT disposed
-	expect(st.sessions.a?.isStreaming).toBe(true);
-
-	store.reopenChat("a");
-	st = useAppStore.getState();
-	expect(st.tabsByWorkspace.ws1?.some((t) => t.kind === "chat" && t.sessionId === "a")).toBe(true);
-	expect(st.activeTabByWorkspace.ws1).toBe("ws1:a");
-	expect(st.closedChatsByWorkspace.ws1 ?? []).toHaveLength(0); // removed from history on reopen
-	expect(st.sessions.a?.isStreaming).toBe(true); // full transcript/state intact
-});
-
 test("hydrateSession rebuilds a runtime + tab on connect, and never clobbers a live one", () => {
 	const store = useAppStore.getState();
 	useAppStore.setState({ activeWorkspaceId: "ws1" });
@@ -421,63 +405,102 @@ test("hydrateSession rebuilds a runtime + tab on connect, and never clobbers a l
 	expect(useAppStore.getState().sessions.h1?.turns).toHaveLength(1);
 });
 
-test("noteClosedChats surfaces disk-only sessions in history, skipping live/open/known ones", () => {
-	const store = useAppStore.getState();
-	useAppStore.setState({ activeWorkspaceId: "ws1" });
-	store.openChatSession("ws1", "live1", null, "medium"); // a live, open tab
+// ---- noteDocOpened: the per-workspace opened-documents History (view state, capped, deduped) --------
 
-	store.noteClosedChats("ws1", [
-		{ sessionId: "disk1", title: "Old chat", closedAt: 200 },
-		{ sessionId: "disk2", title: "Older chat", closedAt: 100 },
-		{ sessionId: "live1", title: "dup of open tab", closedAt: 300 }, // already open → skipped
+test("noteDocOpened prepends most-recent-first and dedupes a re-open to the top", () => {
+	const store = useAppStore.getState();
+	store.noteDocOpened("ws1", { kind: "file", path: "a.ts", name: "a.ts" });
+	store.noteDocOpened("ws1", { kind: "file", path: "b.ts", name: "b.ts" });
+	store.noteDocOpened("ws1", { kind: "diff", path: "b.ts", name: "b.ts" }); // a diff is distinct from the file
+	expect(useAppStore.getState().docHistoryByWorkspace.ws1).toEqual([
+		{ kind: "diff", path: "b.ts", name: "b.ts" },
+		{ kind: "file", path: "b.ts", name: "b.ts" },
+		{ kind: "file", path: "a.ts", name: "a.ts" },
 	]);
-	let history = useAppStore.getState().closedChatsByWorkspace.ws1 ?? [];
-	expect(history.map((c) => c.sessionId)).toEqual(["disk1", "disk2"]); // newest-first, live1 excluded
 
-	// Idempotent: re-noting the same disk sessions adds nothing.
-	store.noteClosedChats("ws1", [{ sessionId: "disk1", title: "Old chat", closedAt: 200 }]);
-	history = useAppStore.getState().closedChatsByWorkspace.ws1 ?? [];
-	expect(history).toHaveLength(2);
+	// Re-opening a.ts moves it back to the top (dedupe by kind+path, no duplicate row).
+	store.noteDocOpened("ws1", { kind: "file", path: "a.ts", name: "a.ts" });
+	const list = useAppStore.getState().docHistoryByWorkspace.ws1 ?? [];
+	expect(list[0]).toEqual({ kind: "file", path: "a.ts", name: "a.ts" });
+	expect(list.filter((e) => e.kind === "file" && e.path === "a.ts")).toHaveLength(1);
 });
 
-test("hydrateSession(activate) reopens a disk-only chat: builds it, focuses it, and drops it from history", () => {
+test("noteDocOpened caps the History at 10, dropping the oldest", () => {
 	const store = useAppStore.getState();
-	useAppStore.setState({ activeWorkspaceId: "ws1" });
-	store.openChatSession("ws1", "other", null, "medium"); // an existing active tab
-	store.noteClosedChats("ws1", [{ sessionId: "disk1", title: "Old", closedAt: 1 }]);
-
-	const summary: SessionSummary = {
-		sessionId: "disk1",
-		workspaceId: "ws1",
-		title: "Old",
-		model: null,
-		thinkingLevel: "medium",
-		isStreaming: false,
-		messageCount: 2,
-		updatedAt: 1,
-		live: true,
-	};
-	store.hydrateSession(summary, { turns: [], toolResults: {}, askAnswers: {} }, true);
-
-	const st = useAppStore.getState();
-	expect(st.sessions.disk1).toBeDefined(); // runtime built from the re-opened session
-	expect(st.closedChatsByWorkspace.ws1 ?? []).toHaveLength(0); // left history (it's open now)
-	expect(st.activeTabByWorkspace.ws1).toBe("ws1:disk1"); // focused, despite an existing active tab
+	for (let i = 0; i < 12; i++) {
+		store.noteDocOpened("ws1", { kind: "file", path: `f${i}.ts`, name: `f${i}.ts` });
+	}
+	const list = useAppStore.getState().docHistoryByWorkspace.ws1 ?? [];
+	expect(list).toHaveLength(10);
+	expect(list[0]?.path).toBe("f11.ts"); // newest on top
+	expect(list.at(-1)?.path).toBe("f2.ts"); // f0/f1 dropped off the bottom
+	expect(list.some((e) => e.path === "f0.ts")).toBe(false);
 });
 
-test("clearWorkspaceTabs drops both open and closed chat runtimes + clears history", () => {
+test("docHistory is scoped per workspace", () => {
+	const store = useAppStore.getState();
+	store.noteDocOpened("ws1", { kind: "file", path: "a.ts", name: "a.ts" });
+	store.noteDocOpened("ws2", { kind: "file", path: "z.ts", name: "z.ts" });
+	expect(useAppStore.getState().docHistoryByWorkspace.ws1?.map((e) => e.path)).toEqual(["a.ts"]);
+	expect(useAppStore.getState().docHistoryByWorkspace.ws2?.map((e) => e.path)).toEqual(["z.ts"]);
+});
+
+test("clearWorkspaceTabs drops the open chat runtime and the workspace's doc history", () => {
 	const store = useAppStore.getState();
 	useAppStore.setState({ activeWorkspaceId: "ws1" });
 	store.openChatSession("ws1", "a", null, "medium");
-	store.openChatSession("ws1", "b", null, "medium");
-	store.closeChatToHistory("a"); // a → history (runtime kept), b stays an open tab
+	store.noteDocOpened("ws1", { kind: "file", path: "a.ts", name: "a.ts" });
 
 	store.clearWorkspaceTabs("ws1");
 	const st = useAppStore.getState();
 	expect(st.sessions.a).toBeUndefined();
-	expect(st.sessions.b).toBeUndefined();
-	expect(st.closedChatsByWorkspace.ws1).toBeUndefined();
+	expect(st.docHistoryByWorkspace.ws1).toBeUndefined();
 	expect(st.tabsByWorkspace.ws1).toBeUndefined();
+});
+
+// ---- terminals: stable numbering + close-detaches-to-background + reattach --------------------------
+
+function termTitles(ws: string): string[] {
+	return (useAppStore.getState().terminalsByWorkspace[ws] ?? []).map((t) => t.title);
+}
+function bgTitles(ws: string): string[] {
+	return (useAppStore.getState().backgroundedTerminalsByWorkspace[ws] ?? []).map((t) => t.title);
+}
+
+test("addTerminal numbers in creation order; numbers are stable and never reused on close", () => {
+	const store = useAppStore.getState();
+	store.addTerminal("ws1"); // Terminal 1
+	store.addTerminal("ws1"); // Terminal 2
+	store.addTerminal("ws1"); // Terminal 3
+	expect(termTitles("ws1")).toEqual(["Terminal 1", "Terminal 2", "Terminal 3"]);
+
+	// Close Terminal 2 → the survivors keep their numbers (1 and 3, not 1 and 2).
+	const t2 = useAppStore.getState().terminalsByWorkspace.ws1?.[1];
+	if (!t2) throw new Error("no terminal 2");
+	store.closeTerminalTab("ws1", t2.clientId);
+	expect(termTitles("ws1")).toEqual(["Terminal 1", "Terminal 3"]);
+
+	// The next terminal is Terminal 4 — the closed 2 is not reused.
+	store.addTerminal("ws1");
+	expect(termTitles("ws1")).toEqual(["Terminal 1", "Terminal 3", "Terminal 4"]);
+});
+
+test("closing a terminal detaches it to the background list (view action, kept for reattach)", () => {
+	const store = useAppStore.getState();
+	store.addTerminal("ws1"); // Terminal 1
+	store.addTerminal("ws1"); // Terminal 2 (active)
+	const t1 = useAppStore.getState().terminalsByWorkspace.ws1?.[0];
+	if (!t1) throw new Error("no terminal 1");
+
+	store.closeTerminalTab("ws1", t1.clientId);
+	expect(termTitles("ws1")).toEqual(["Terminal 2"]); // tab removed from the strip
+	expect(bgTitles("ws1")).toEqual(["Terminal 1"]); // ...but detached, not gone
+
+	// Reattach → back as a tab with its original number, and active; background list empties.
+	store.reattachTerminal("ws1", t1.clientId);
+	expect(termTitles("ws1")).toEqual(["Terminal 2", "Terminal 1"]);
+	expect(bgTitles("ws1")).toEqual([]);
+	expect(useAppStore.getState().activeTerminalByWorkspace.ws1).toBe(t1.clientId);
 });
 
 // ---- updateWorkspace: the workspace.updated push folds in without losing local computed state ----
@@ -502,6 +525,7 @@ test("project and workspace navigation update both scope ids atomically", () => 
 		transitions.push([state.selectedProjectId, state.activeWorkspaceId]);
 	});
 
+	// p2 has no cached workspaces → selecting it lands on its Welcome (no active workspace).
 	useAppStore.getState().selectProject("p2");
 	expect(transitions).toEqual([["p2", null]]);
 
@@ -509,6 +533,21 @@ test("project and workspace navigation update both scope ids atomically", () => 
 	useAppStore.getState().activateWorkspace(pushedWorkspace({ id: "w3", projectId: "p3" }));
 	expect(transitions).toEqual([["p3", "w3"]]);
 	unsubscribe();
+});
+
+// ---- selectProject: opens the read-only project view (never auto-enters a workspace) ----
+
+test("selectProject selects the project and clears any active workspace (opens the read-only view)", () => {
+	const w1 = pushedWorkspace();
+	useAppStore.setState({ workspaces: { p1: [w1] } });
+	useAppStore.getState().activateWorkspace(w1); // in a workspace
+	expect(useAppStore.getState().activeWorkspaceId).toBe("w1");
+
+	// Selecting the project leaves the workspace and shows the project view — even though the project
+	// has a workspace, it is NOT auto-entered.
+	useAppStore.getState().selectProject("p1");
+	expect(useAppStore.getState().selectedProjectId).toBe("p1");
+	expect(useAppStore.getState().activeWorkspaceId).toBeNull();
 });
 
 test("updateWorkspace merges the pushed snapshot by id, keeping the computed diffStats badge", () => {
@@ -602,10 +641,29 @@ test("applyWorkspaceRemoved drops the row, clears its tabs, and returns the acti
 	const s = useAppStore.getState();
 	expect(s.workspaces.p1).toEqual([]);
 	expect(s.tabsByWorkspace.w1).toBeUndefined(); // clearWorkspaceTabs dropped its tabs
-	expect(s.activeWorkspaceId).toBeNull(); // shell falls back to the project Welcome
-	expect(s.selectedProjectId).toBe("p1"); // specifically the removed workspace's owning Project Home
+	expect(s.activeWorkspaceId).toBeNull(); // no sibling remains → shell falls back to the project Welcome
+	expect(s.selectedProjectId).toBe("p1"); // specifically the removed workspace's owning project
 	expect(s.toasts).toHaveLength(1);
 	expect(s.toasts[0]?.message).toContain("add-login-flow"); // the removed workspace's name
+});
+
+test("applyWorkspaceRemoved on the active workspace returns to the project's read-only view", () => {
+	const sibling = pushedWorkspace({ id: "w2", name: "workspace-2", branch: "workspace-2" });
+	useAppStore.setState({
+		workspaces: { p1: [pushedWorkspace(), sibling] },
+		selectedProjectId: "p1",
+		activeWorkspaceId: "w1",
+		toasts: [],
+	});
+
+	useAppStore.getState().applyWorkspaceRemoved("p1", "w1");
+
+	const s = useAppStore.getState();
+	// Removing the active workspace leaves the workspace view for the project's read-only view (the model
+	// no longer auto-enters a sibling — entering a worktree is an explicit action).
+	expect(s.activeWorkspaceId).toBeNull();
+	expect(s.selectedProjectId).toBe("p1");
+	expect(s.toasts).toHaveLength(1); // the removal toast still shows
 });
 
 test("applyWorkspaceRemoved on a non-active workspace drops the row silently (no toast, active untouched)", () => {

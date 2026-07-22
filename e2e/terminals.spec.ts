@@ -56,6 +56,8 @@ test("multiple terminals per workspace keep independent buffers and can be close
 	await createWorkspaceViaDialog(page);
 
 	await waitTerminalReady(page); // the auto terminal (terminal 1)
+	// The sole tab can't be closed (never down to zero) — no close control until there are 2+ tabs.
+	await expect(page.getByTestId("terminal-tab-close")).toHaveCount(0);
 	await runInTerminal(page, "echo TR_ONE");
 	await expect(visibleTerminalScreen(page)).toContainText("TR_ONE");
 
@@ -73,4 +75,56 @@ test("multiple terminals per workspace keep independent buffers and can be close
 	// Closing a terminal removes its tab.
 	await page.getByTestId("terminal-tab-close").nth(1).click();
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
+});
+
+test("terminals get stable numbers; closing detaches to the background dropdown; reattach restores", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await waitTerminalReady(page); // Terminal 1 (auto)
+	const tabs = page.getByTestId("terminal-tab");
+	// Tab labels are the full "Terminal N" name; numbering is stable per terminal.
+	await expect(tabs).toHaveText(["Terminal 1"]);
+	// The background/history control is disabled while nothing is backgrounded.
+	await expect(page.getByTestId("terminal-bg")).toBeDisabled();
+
+	await openTerminal(page); // Terminal 2
+	await openTerminal(page); // Terminal 3
+	await expect(tabs).toHaveText(["Terminal 1", "Terminal 2", "Terminal 3"]);
+
+	// Close Terminal 2 → the survivors keep their numbers (1 and 3, never renumbered to 1 and 2).
+	await page.getByTestId("terminal-tab-close").nth(1).click();
+	await expect(tabs).toHaveText(["Terminal 1", "Terminal 3"]);
+
+	// Terminal 2 is detached (process still running) — the separate background control lists it, enabled now.
+	await expect(page.getByTestId("terminal-bg")).toBeEnabled();
+	await page.getByTestId("terminal-bg").click();
+	await expect(page.getByText("Running in background")).toBeVisible();
+	await expect(page.getByTestId("terminal-bg-item")).toHaveText(["Terminal 2"]);
+
+	// Reattach → Terminal 2 comes back as a tab with its original number.
+	await page.getByTestId("terminal-bg-item").click();
+	await expect(tabs).toHaveText(["Terminal 1", "Terminal 3", "Terminal 2"]);
+
+	// Background list is empty again → the next number is 4 (2 was never reused).
+	await openTerminal(page);
+	await expect(tabs).toHaveText(["Terminal 1", "Terminal 3", "Terminal 2", "Terminal 4"]);
+});
+
+test("the terminal panel collapses downward from the tab bar and re-expands", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await waitTerminalReady(page);
+	await expect(page.getByTestId("terminal-panel")).toBeVisible();
+
+	// The far-left chevron collapses the terminal → panel hidden, a thin re-expand bar takes its place.
+	await page.getByTestId("toggle-terminal-panel").click();
+	await expect(page.getByTestId("terminal-panel")).toHaveCount(0);
+	await expect(page.getByTestId("terminal-collapsed")).toBeVisible();
+
+	// Re-expanding restores the panel.
+	await page.getByTestId("toggle-terminal-panel").click();
+	await expect(page.getByTestId("terminal-panel")).toBeVisible();
+	await expect(page.getByTestId("terminal-collapsed")).toHaveCount(0);
 });

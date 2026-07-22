@@ -30,7 +30,56 @@ export function ActivityGroup({
 	if (single)
 		return <ActivityStepRow step={single} isCurrent={live} workspaceRoot={workspaceRoot} />;
 
-	const summary = live ? liveTicker(steps, workspaceRoot) : summarizeSteps(steps);
+	// While the run is live, window the steps so the current action stays visible instead of a wall of
+	// completed steps: keep the last WINDOW steps as rows (the last is the emphasized current step) and
+	// fold everything older into one "N completed steps" row. Expanding reveals all steps and — via the
+	// shared fold cache — stays expanded across new steps until the user collapses it.
+	if (live) {
+		const { olderCount, visible } = windowActivity(steps, WINDOW);
+		const shown = expanded ? steps : visible;
+		return (
+			<div
+				data-testid="activity-group"
+				data-expanded={expanded}
+				data-live={live}
+				data-steps={steps.length}
+				className="text-muted text-xs"
+			>
+				{olderCount > 0 ? (
+					<button
+						type="button"
+						data-testid="activity-group-toggle"
+						aria-expanded={expanded}
+						onClick={toggle}
+						className="flex w-full cursor-pointer select-none items-center gap-xs rounded-[var(--radius-sm)] px-xs py-xs text-left outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-primary"
+					>
+						<ChevronRight
+							className={`size-3 shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
+						/>
+						<Layers className="size-3 shrink-0" />
+						<span className="min-w-0 truncate">
+							{expanded
+								? "Hide earlier steps"
+								: `${olderCount} completed ${olderCount === 1 ? "step" : "steps"}`}
+						</span>
+					</button>
+				) : null}
+				<div className={olderCount > 0 ? "flex flex-col gap-px pl-md" : "flex flex-col gap-px"}>
+					{shown.map((step, i) => (
+						<ActivityStepRow
+							key={step.id}
+							step={step}
+							isCurrent={i === shown.length - 1}
+							workspaceRoot={workspaceRoot}
+						/>
+					))}
+				</div>
+			</div>
+		);
+	}
+
+	// Finished: the normal collapsed summary header + expand-all (unchanged).
+	const summary = summarizeSteps(steps);
 	return (
 		<div
 			data-testid="activity-group"
@@ -49,30 +98,34 @@ export function ActivityGroup({
 				<ChevronRight
 					className={`size-3 shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
 				/>
-				{live ? (
-					<Loader2 className="size-3 shrink-0 animate-spin motion-reduce:animate-none" />
-				) : (
-					<Layers className="size-3 shrink-0" />
-				)}
+				<Layers className="size-3 shrink-0" />
 				<span className="min-w-0 truncate" title={summary}>
 					{summary}
 				</span>
 			</button>
 			{expanded ? (
 				<div className="flex flex-col gap-px pl-md">
-					{steps.map((step, i) => (
-						<ActivityStepRow
-							key={step.id}
-							step={step}
-							isCurrent={live && i === steps.length - 1}
-							workspaceRoot={workspaceRoot}
-						/>
+					{steps.map((step) => (
+						<ActivityStepRow key={step.id} step={step} workspaceRoot={workspaceRoot} />
 					))}
 				</div>
 			) : null}
 		</div>
 	);
 }
+
+/** Steps kept visible while a run is live: the last `window` (the current step is the last of them),
+ * with everything older folded into the "N completed steps" summary. Pure — unit-tested. */
+export function windowActivity(
+	steps: ActivityStep[],
+	window: number,
+): { olderCount: number; visible: ActivityStep[] } {
+	const olderCount = Math.max(0, steps.length - window);
+	return { olderCount, visible: steps.slice(olderCount) };
+}
+
+/** How many trailing steps stay visible (as rows) while a run streams; older ones collapse to a summary. */
+const WINDOW = 4;
 
 /** Collapsed-header summary: step count + per-tool-name tallies, capped with a "+k more" overflow. */
 export function summarizeSteps(steps: ActivityStep[]): string {
@@ -87,15 +140,6 @@ export function summarizeSteps(steps: ActivityStep[]): string {
 	const more = names.length - MAX_NAMES;
 	const count = `${steps.length} ${steps.length === 1 ? "step" : "steps"}`;
 	return `${count} · ${shown}${more > 0 ? `, +${more} more` : ""}`;
-}
-
-/** The live ticker's text: the current (last) step's name + registered summary. */
-function liveTicker(steps: ActivityStep[], workspaceRoot: string | undefined): string {
-	const current = steps[steps.length - 1];
-	if (!current) return "Working…";
-	if (current.kind === "thinking") return "Thinking…";
-	const summary = getToolSummary(current.toolName, toolRenderProps(current, workspaceRoot));
-	return summary ? `${current.toolName} · ${summary}` : `${current.toolName}…`;
 }
 
 function toolRenderProps(
@@ -136,7 +180,9 @@ function ActivityStepRow({
 				data-testid="activity-step"
 				data-step="thinking"
 				data-expanded={expanded}
-				className="text-muted text-xs"
+				data-current={isCurrent}
+				// Emphasize the current step with the established active-row tint (no new treatment).
+				className={cn("text-muted text-xs", isCurrent && "rounded-[var(--radius-sm)] bg-hover")}
 			>
 				<StepHeader
 					expanded={expanded}
@@ -168,7 +214,9 @@ function ActivityStepRow({
 			data-tool={step.toolName}
 			data-status={status}
 			data-expanded={expanded}
-			className="text-muted text-xs"
+			data-current={isCurrent}
+			// Emphasize the current step with the established active-row tint (no new treatment).
+			className={cn("text-muted text-xs", isCurrent && "rounded-[var(--radius-sm)] bg-hover")}
 		>
 			<StepHeader
 				expanded={expanded}

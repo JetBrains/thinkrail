@@ -28,9 +28,9 @@ test("workspace removal propagates — no zombie row in a second tab", async ({ 
 	await expect(page.getByTestId("workspace-item")).toHaveCount(0);
 
 	// Tab B converges purely by reacting to the `workspace.removed` push: the row disappears (no zombie),
-	// and — since it was B's active workspace — B returns to the Welcome screen with a neutral toast.
+	// and — since it was B's active workspace — B returns to the project's read-only view with a neutral toast.
 	await expect(page2.getByTestId("workspace-item")).toHaveCount(0);
-	await expect(page2.getByTestId("welcome")).toBeVisible();
+	await expect(page2.getByTestId("project-view")).toBeVisible();
 	await expect(page2.getByTestId("toast").filter({ hasText: created.name })).toBeVisible();
 });
 

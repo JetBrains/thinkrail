@@ -9,12 +9,15 @@ const TooltipTrigger = TooltipPrimitive.Trigger;
 function TooltipContent({
 	className,
 	sideOffset = 4,
+	// Keep tooltips clear of panel/viewport edges; Radix auto-flips `side` when it would collide.
+	collisionPadding = 8,
 	...props
 }: React.ComponentProps<typeof TooltipPrimitive.Content>) {
 	return (
 		<TooltipPrimitive.Portal>
 			<TooltipPrimitive.Content
 				sideOffset={sideOffset}
+				collisionPadding={collisionPadding}
 				className={cn(
 					"z-50 overflow-hidden rounded-[var(--radius-sm)] border border-border2 bg-elevated px-sm py-xs text-text text-xs shadow-[var(--shadow-sm)]",
 					className,

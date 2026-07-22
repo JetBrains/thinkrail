@@ -295,7 +295,7 @@ test("typing a message instead of answering supersedes the questionnaire", {
 	await expect(activeCard(page)).toHaveCount(0);
 });
 
-test("the awaiting card survives closing and reopening the chat", { tag: "@agent" }, async ({
+test("the awaiting card survives a reload (single-chat re-hydration)", { tag: "@agent" }, async ({
 	page,
 }) => {
 	test.setTimeout(150_000);
@@ -306,21 +306,18 @@ test("the awaiting card survives closing and reopening the chat", { tag: "@agent
 
 	const before = activeCard(page);
 	// The active card appears only at message end, i.e. once the tool call is durably in the transcript —
-	// so the reopen below deterministically exercises the hydration path (the same path a host restart
+	// so the reload below deterministically exercises the hydration path (the same path a host restart
 	// takes: the awaiting state is pure transcript, nothing pends in memory).
 	await expect(before).toBeVisible({ timeout: 90_000 });
 	await before.getByTestId("ask-option").first().click();
 	await expect(before.getByTestId("ask-submit")).toBeEnabled({ timeout: 30_000 });
 
-	// Close the chat tab — the session stays live on the host; the questionnaire stays awaiting.
+	// The chat tab is non-closable (single-chat view rule), so exercise the same transcript-hydration
+	// path via a reload: the session stays live on the host and the one chat auto-restores on activate.
 	const chatTabs = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
-	await chatTabs.first().getByTestId("editor-tab-close").click();
-	await expect(chatTabs).toHaveCount(0);
-
-	// Reopen from chat history → the still-awaiting questionnaire re-renders, ready to answer.
-	await page.getByTestId("chat-history").click();
-	await page.getByTestId("closed-chat-item").first().click();
-	await expect(chatTabs).toHaveCount(1);
+	await page.reload();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await expect(chatTabs).toHaveCount(1, { timeout: 30_000 });
 	const card = activeCard(page);
 	await expect(card).toBeVisible({ timeout: 30_000 });
 

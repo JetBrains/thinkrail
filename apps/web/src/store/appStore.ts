@@ -21,6 +21,8 @@ import type { LoginState } from "../auth";
 import type { HydratedRuntime } from "../chat/hydrate";
 import type { ChatTurn, ExtUiDialogRequest, ToolResultState } from "../chat/types";
 import type { ConnectionStatus } from "../transport";
+import { DOC_HISTORY_LIMIT, readDocHistory, writeDocHistory } from "./docHistoryStorage";
+import { type PanelCollapsed, readPanelCollapsed, writePanelCollapsed } from "./panelLayoutStorage";
 
 /** A center tab. File tabs (Monaco) and chat tabs share the strip, discriminated by `kind`. */
 export interface FileTab {
@@ -43,7 +45,16 @@ export interface ChatTab {
 	name: string;
 	sessionId: string;
 }
-export type EditorTab = FileTab | ChatTab;
+/** A Changes diff opened in the center: lean — `DiffPane` fetches and reconstructs the two sides
+ * itself (nothing content-shaped to keep in the store), so the tab is just an address. */
+export interface DiffTab {
+	kind: "diff";
+	id: string; // `diff:${workspaceId}:${path}` — distinct from the same path's file tab, focus-on-reopen
+	workspaceId: string;
+	name: string;
+	path: string;
+}
+export type EditorTab = FileTab | ChatTab | DiffTab;
 
 /**
  * A section of the settings dialog (a const-object "enum", the codebase convention). Extensible — the live
@@ -73,14 +84,18 @@ const MAX_TOASTS = 5;
 export interface TerminalTab {
 	clientId: string;
 	workspaceId: string;
+	/** Stable creation-order number, shown as the tab label ("1", "2", …); never reused/renumbered. */
+	n: number;
+	/** Full name ("Terminal N"), shown in the backgrounded list + the close aria-label. */
 	title: string;
 }
 
-/** A chat tab the user closed — reopenable from history; its session + runtime stay alive in `sessions`. */
-export interface ClosedChat {
-	sessionId: string;
-	title: string;
-	closedAt: number;
+/** One entry in the per-workspace opened-documents History (view state only): enough to re-open the
+ * document as a center tab. NOT chat — only file / diff tabs are recorded. */
+export interface DocHistoryEntry {
+	kind: "file" | "diff";
+	path: string; // worktree-relative
+	name: string; // basename, shown in the menu
 }
 
 /**
@@ -348,11 +363,23 @@ interface AppState {
 	/** Center tabs belong to a workspace — switching workspaces swaps the visible tab set. */
 	tabsByWorkspace: Record<string, EditorTab[]>;
 	activeTabByWorkspace: Record<string, string | null>;
-	/** Chat tabs the user closed, per workspace (most-recent-first) — reopenable while their runtime lives. */
-	closedChatsByWorkspace: Record<string, ClosedChat[]>;
+	/** Opened-documents History (view state, per workspace, most-recent-first, capped at 10; persisted to
+	 * localStorage). File/diff tabs only — never chat. The History menu lists it; clicking re-opens a tab. */
+	docHistoryByWorkspace: Record<string, DocHistoryEntry[]>;
 	/** Terminals are workspace-scoped too; their instances stay mounted (hidden) to preserve buffers. */
 	terminalsByWorkspace: Record<string, TerminalTab[]>;
 	activeTerminalByWorkspace: Record<string, string | null>;
+	/** Terminals whose tab was closed but whose process is still running (a view detach, not a kill),
+	 * per workspace, most-recent-first. Their instances stay mounted (hidden) so the PTY survives. */
+	backgroundedTerminalsByWorkspace: Record<string, TerminalTab[]>;
+	/** Monotonic per-workspace terminal counter — drives stable "Terminal N" names that are never reused
+	 * or renumbered when one is closed. */
+	terminalCounterByWorkspace: Record<string, number>;
+	/** Which side panels are collapsed (client-only view state, persisted to localStorage). */
+	panelCollapsed: PanelCollapsed;
+	/** The onboarding overlay: `"first-run"` (blocking) / `"review"` (closable, logo re-open) / null.
+	 * Transient open-state only — the persisted "seen" flag lives in `onboardingStorage` (localStorage). */
+	onboarding: "first-run" | "review" | null;
 	/** One runtime per live chat (keyed by `sessionId`) — many can stream at once; switching is a swap. */
 	sessions: Record<string, SessionRuntime>;
 	/** Models with configured auth (cheap win #1) — fetched once, shared by every chat's picker. */
@@ -363,6 +390,12 @@ interface AppState {
 	 * active workspace; a fresh object each call so identical re-requests still fire.
 	 */
 	changesRequest: { workspaceId: string; path: string } | null;
+	/**
+	 * A one-shot request to switch the right rail to a given tab (a fresh nonce each call so repeat
+	 * requests still fire). Used by the project row's settings gear to jump the already-open project rail
+	 * to "hooks". `tab` is a plain string to keep the store free of the panel's tab union.
+	 */
+	railTabRequest: { tab: string; nonce: number } | null;
 	/**
 	 * The live-refresh signal, per workspace: `tick` increments on every `workspace.fsChanged` push (the
 	 * host's debounced worktree change notifier); `paths`/`truncated` are the LAST batch only. Panels
@@ -380,6 +413,9 @@ interface AppState {
 	 * provider warning) can open it to a section without prop-drilling through the shell. */
 	settingsOpen: boolean;
 	settingsSection: SettingsSection;
+	/** Which project-entry dialog is open (create / open-local / clone), or null. Opened from the projects
+	 * rail + Welcome; the three flows are mocked (see `panels/projectActions`, `panels/ProjectDialogs`). */
+	projectDialog: "create" | "open" | "clone" | null;
 	/** The active UI theme (host-owned; `applyConfig` sets it from `server.welcome` / `settings.changed`).
 	 * The DOM side-effect (`applyTheme`) is the shell's job — this holds the value the UI reads. */
 	theme: ThemeId;
@@ -410,12 +446,20 @@ interface AppState {
 	 * React to a server-pushed `workspace.removed` — the **entire** removal reaction, run identically by
 	 * every client (including the one that initiated the remove, so there's no per-client optimism): drop
 	 * the row + clear its tabs/terminals/chat runtimes (`clearWorkspaceTabs`), and **if it was this
-	 * client's active workspace** return to its owning Project Home and raise a neutral toast (reads
+	 * client's active workspace** re-select its owning project — which activates a sibling workspace
+	 * when any remain, else falls back to the project's Welcome — and raise a neutral toast (reads
 	 * correctly for both the initiator and an observer).
 	 */
 	applyWorkspaceRemoved: (projectId: string, workspaceId: string) => void;
-	/** Enter a project's home, atomically clearing any active workspace. */
+	/**
+	 * Select a project: re-enter its last-active workspace (falling back to the newest in the cached
+	 * list) when it has any — the Welcome surface only shows for a project with **no** workspaces.
+	 * Decides purely from the cached `workspaces[projectId]`, so callers refresh the list first (the
+	 * panels' `selectProjectWithWorkspaces` helper) to avoid deciding on stale/absent data.
+	 */
 	selectProject: (projectId: string) => void;
+	/** Clear the selection back to the Welcome screen (no project, no workspace) — the header logo. */
+	showWelcome: () => void;
 	/** Enter a workspace and select its owning project in one state transition. */
 	activateWorkspace: (workspace: Pick<Workspace, "id" | "projectId">) => void;
 	openTab: (tab: EditorTab) => void;
@@ -430,8 +474,18 @@ interface AppState {
 	updateFileTabContent: (id: string, content: string, tick: number) => void;
 	clearWorkspaceTabs: (workspaceId: string) => void;
 	addTerminal: (workspaceId: string) => void;
+	/** Close a terminal tab = **detach** it (view action): move it to the backgrounded list with its
+	 * process kept alive (its instance stays mounted). NOT a process kill. */
 	closeTerminalTab: (workspaceId: string, clientId: string) => void;
+	/** Reattach a backgrounded terminal: bring its tab back (with its original number) + activate it. */
+	reattachTerminal: (workspaceId: string, clientId: string) => void;
 	setActiveTerminalTab: (workspaceId: string, clientId: string) => void;
+	/** Collapse/expand a side panel (view-only; persisted to localStorage, never sent to the server). */
+	togglePanel: (side: "left" | "right" | "terminal") => void;
+	/** Open the onboarding overlay (`"first-run"` blocking on first launch, `"review"` from the logo). */
+	openOnboarding: (mode: "first-run" | "review") => void;
+	/** Close the onboarding overlay (finish / Done). */
+	closeOnboarding: () => void;
 	openChatSession: (
 		workspaceId: string,
 		sessionId: string,
@@ -440,19 +494,13 @@ interface AppState {
 	) => void;
 	/** Drop a chat's runtime on tab close (the `AgentSession` is disposed over the wire by the caller). */
 	closeChatRuntime: (sessionId: string) => void;
-	/** Close a chat tab to history: remove the tab but keep its runtime + session alive for reopening. */
-	closeChatToHistory: (sessionId: string) => void;
-	/** Reopen a chat from history (its runtime is still live, so the full transcript returns instantly). */
-	reopenChat: (sessionId: string) => void;
-	/**
-	 * Record disk-only sessions (from `session.list`) in chat-history so they can be reopened on demand.
-	 * Skips any already live, open as a tab, or already listed — so it's idempotent across re-hydration.
-	 */
-	noteClosedChats: (workspaceId: string, entries: ClosedChat[]) => void;
+	/** Record a document open in the per-workspace History (view state): prepend most-recent, dedupe by
+	 * kind+path, cap at 10, persist to localStorage. File/diff only — never chat. */
+	noteDocOpened: (workspaceId: string, entry: DocHistoryEntry) => void;
 	/**
 	 * Rebuild a chat's runtime + tab from the host's report on connect — a no-op if a runtime already exists.
-	 * Drops the session from chat-history (it's open now). `activate` focuses the tab (a user-driven reopen);
-	 * otherwise it only takes focus if the workspace has none yet (auto-restore must not steal focus).
+	 * `activate` focuses the tab (a user-driven reopen); otherwise it only takes focus if the workspace has
+	 * none yet (auto-restore must not steal focus).
 	 */
 	hydrateSession: (summary: SessionSummary, hydrated: HydratedRuntime, activate?: boolean) => void;
 	appendUserMessage: (sessionId: string, text: string) => void;
@@ -483,12 +531,17 @@ interface AppState {
 	clearLogin: () => void;
 	/** Open the settings dialog, optionally deep-linked to a section (defaults to Providers). */
 	openSettings: (section?: SettingsSection) => void;
+	/** Open / close a project-entry dialog (create / open / clone). */
+	openProjectDialog: (kind: "create" | "open" | "clone") => void;
+	closeProjectDialog: () => void;
 	closeSettings: () => void;
 	setSettingsSection: (section: SettingsSection) => void;
 	/** Fold the server-synced app config in (from `server.welcome` / the `settings.changed` broadcast). */
 	applyConfig: (config: AppConfig) => void;
 	/** Ask the right panel to open `path`'s diff in its Changes view (deep-link from chat). */
 	requestChangesView: (workspaceId: string, path: string) => void;
+	/** Ask the right rail to switch to `tab` (e.g. the project gear → "hooks"). */
+	requestRailTab: (tab: string) => void;
 	/** Enqueue a toast; returns its id so a caller can dismiss it early. An identical live toast (same
 	 * variant/title/message — e.g. a retried failure) coalesces: no twin is added, the existing id returns.
 	 * The queue caps at `MAX_TOASTS` (oldest drop). Prefer the `toast` helper. */
@@ -574,16 +627,22 @@ export const useAppStore = create<AppState>((set, get) => ({
 	activeWorkspaceId: null,
 	tabsByWorkspace: {},
 	activeTabByWorkspace: {},
-	closedChatsByWorkspace: {},
+	docHistoryByWorkspace: readDocHistory(),
+	panelCollapsed: readPanelCollapsed(),
+	onboarding: null,
 	terminalsByWorkspace: {},
 	activeTerminalByWorkspace: {},
+	backgroundedTerminalsByWorkspace: {},
+	terminalCounterByWorkspace: {},
 	sessions: {},
 	models: [],
 	changesRequest: null,
+	railTabRequest: null,
 	fsChangesByWorkspace: {},
 	activeLogin: null,
 	settingsOpen: false,
 	settingsSection: SettingsSection.Providers,
+	projectDialog: null,
 	theme: Theme.Dark,
 	toasts: [],
 	setStatus: (status) => set({ status }),
@@ -641,11 +700,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 			return { fsChangesByWorkspace: rest };
 		});
 		if (wasActive) {
-			s.selectProject(projectId); // atomically fall back to the removed workspace's Project Home
+			s.selectProject(projectId); // re-enters a sibling workspace, or the project's Welcome when none remain
 			toast.info(`Workspace "${name ?? "?"}" was removed`);
 		}
 	},
+	// Selecting a project opens its read-only project view in the center (never auto-enters a workspace);
+	// entering the 3-column workspace view is only via `activateWorkspace` (a workspace row / creation).
 	selectProject: (selectedProjectId) => set({ selectedProjectId, activeWorkspaceId: null }),
+	showWelcome: () => set({ selectedProjectId: null, activeWorkspaceId: null }),
 	activateWorkspace: (workspace) =>
 		set({ selectedProjectId: workspace.projectId, activeWorkspaceId: workspace.id }),
 	openTab: (tab) =>
@@ -722,27 +784,34 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	clearWorkspaceTabs: (workspaceId) =>
 		set((s) => {
-			// Drop the runtimes of this workspace's chats — both open tabs and closed-to-history ones (their
-			// AgentSessions are freed on host shutdown).
+			// Drop the runtimes of this workspace's open chat tabs (their AgentSessions are freed on host
+			// shutdown).
 			const sessions = { ...s.sessions };
 			for (const tab of s.tabsByWorkspace[workspaceId] ?? []) {
 				if (tab.kind === "chat") delete sessions[tab.sessionId];
 			}
-			for (const closed of s.closedChatsByWorkspace[workspaceId] ?? [])
-				delete sessions[closed.sessionId];
 			const { [workspaceId]: _tabs, ...tabsByWorkspace } = s.tabsByWorkspace;
 			const { [workspaceId]: _activeTab, ...activeTabByWorkspace } = s.activeTabByWorkspace;
-			const { [workspaceId]: _closed, ...closedChatsByWorkspace } = s.closedChatsByWorkspace;
-			// Dropping the terminals unmounts their instances, which close the PTYs server-side.
+			// The worktree is gone — its opened-documents History (invalid paths now) goes with it.
+			const { [workspaceId]: _docs, ...docHistoryByWorkspace } = s.docHistoryByWorkspace;
+			writeDocHistory(docHistoryByWorkspace);
+			// The worktree is gone — unmount its terminals (open + backgrounded), closing their PTYs, and
+			// drop its numbering counter.
 			const { [workspaceId]: _terms, ...terminalsByWorkspace } = s.terminalsByWorkspace;
 			const { [workspaceId]: _activeTerm, ...activeTerminalByWorkspace } =
 				s.activeTerminalByWorkspace;
+			const { [workspaceId]: _bgTerms, ...backgroundedTerminalsByWorkspace } =
+				s.backgroundedTerminalsByWorkspace;
+			const { [workspaceId]: _termCount, ...terminalCounterByWorkspace } =
+				s.terminalCounterByWorkspace;
 			return {
 				tabsByWorkspace,
 				activeTabByWorkspace,
-				closedChatsByWorkspace,
+				docHistoryByWorkspace,
 				terminalsByWorkspace,
 				activeTerminalByWorkspace,
+				backgroundedTerminalsByWorkspace,
+				terminalCounterByWorkspace,
 				sessions,
 			};
 		}),
@@ -750,20 +819,32 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) => {
 			const list = s.terminalsByWorkspace[workspaceId] ?? [];
 			const clientId = crypto.randomUUID();
-			const tab: TerminalTab = { clientId, workspaceId, title: `Terminal ${list.length + 1}` };
+			// Stable numbering: a monotonic per-workspace counter, so a number is never reused or renumbered
+			// when a terminal is closed (Terminal 1 + Terminal 3 stay 1 and 3).
+			const n = (s.terminalCounterByWorkspace[workspaceId] ?? 0) + 1;
+			const tab: TerminalTab = { clientId, workspaceId, n, title: `Terminal ${n}` };
 			return {
 				terminalsByWorkspace: { ...s.terminalsByWorkspace, [workspaceId]: [...list, tab] },
 				activeTerminalByWorkspace: { ...s.activeTerminalByWorkspace, [workspaceId]: clientId },
+				terminalCounterByWorkspace: { ...s.terminalCounterByWorkspace, [workspaceId]: n },
 			};
 		}),
 	closeTerminalTab: (workspaceId, clientId) =>
 		set((s) => {
-			const list = (s.terminalsByWorkspace[workspaceId] ?? []).filter(
-				(t) => t.clientId !== clientId,
-			);
+			// Detach, don't kill: move the tab to the backgrounded list (its instance stays mounted, so the
+			// PTY keeps running) instead of dropping it.
+			const open = s.terminalsByWorkspace[workspaceId] ?? [];
+			const detached = open.find((t) => t.clientId === clientId);
+			if (!detached) return {};
+			const list = open.filter((t) => t.clientId !== clientId);
 			const wasActive = s.activeTerminalByWorkspace[workspaceId] === clientId;
+			const bg = s.backgroundedTerminalsByWorkspace[workspaceId] ?? [];
 			return {
 				terminalsByWorkspace: { ...s.terminalsByWorkspace, [workspaceId]: list },
+				backgroundedTerminalsByWorkspace: {
+					...s.backgroundedTerminalsByWorkspace,
+					[workspaceId]: [detached, ...bg.filter((t) => t.clientId !== clientId)],
+				},
 				activeTerminalByWorkspace: {
 					...s.activeTerminalByWorkspace,
 					[workspaceId]: wasActive
@@ -772,6 +853,31 @@ export const useAppStore = create<AppState>((set, get) => ({
 				},
 			};
 		}),
+	reattachTerminal: (workspaceId, clientId) =>
+		set((s) => {
+			const bg = s.backgroundedTerminalsByWorkspace[workspaceId] ?? [];
+			const tab = bg.find((t) => t.clientId === clientId);
+			if (!tab) return {};
+			const open = s.terminalsByWorkspace[workspaceId] ?? [];
+			return {
+				// Back to a tab (with its original number) + active; its instance never unmounted, so its
+				// buffer + process are intact.
+				terminalsByWorkspace: { ...s.terminalsByWorkspace, [workspaceId]: [...open, tab] },
+				backgroundedTerminalsByWorkspace: {
+					...s.backgroundedTerminalsByWorkspace,
+					[workspaceId]: bg.filter((t) => t.clientId !== clientId),
+				},
+				activeTerminalByWorkspace: { ...s.activeTerminalByWorkspace, [workspaceId]: clientId },
+			};
+		}),
+	togglePanel: (side) =>
+		set((s) => {
+			const panelCollapsed = { ...s.panelCollapsed, [side]: !s.panelCollapsed[side] };
+			writePanelCollapsed(panelCollapsed);
+			return { panelCollapsed };
+		}),
+	openOnboarding: (onboarding) => set({ onboarding }),
+	closeOnboarding: () => set({ onboarding: null }),
 	setActiveTerminalTab: (workspaceId, clientId) =>
 		set((s) => ({
 			activeTerminalByWorkspace: { ...s.activeTerminalByWorkspace, [workspaceId]: clientId },
@@ -798,71 +904,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 			const { [sessionId]: _drop, ...sessions } = s.sessions;
 			return { sessions };
 		}),
-	closeChatToHistory: (sessionId) =>
+	noteDocOpened: (workspaceId, entry) =>
 		set((s) => {
-			const wsId = s.activeWorkspaceId;
-			if (!wsId) return {};
-			const tabs = s.tabsByWorkspace[wsId] ?? [];
-			const tab = tabs.find((t) => t.kind === "chat" && t.sessionId === sessionId);
-			if (!tab) return {};
-			const remaining = tabs.filter((t) => t.id !== tab.id);
-			const wasActive = s.activeTabByWorkspace[wsId] === tab.id;
-			const entry: ClosedChat = { sessionId, title: tab.name, closedAt: Date.now() };
-			return {
-				tabsByWorkspace: { ...s.tabsByWorkspace, [wsId]: remaining },
-				activeTabByWorkspace: {
-					...s.activeTabByWorkspace,
-					[wsId]: wasActive
-						? (remaining.at(-1)?.id ?? null)
-						: (s.activeTabByWorkspace[wsId] ?? null),
-				},
-				// Prepend (most-recent-first); the runtime in `sessions` is intentionally left alive.
-				closedChatsByWorkspace: {
-					...s.closedChatsByWorkspace,
-					[wsId]: [entry, ...(s.closedChatsByWorkspace[wsId] ?? [])],
-				},
-			};
-		}),
-	reopenChat: (sessionId) =>
-		set((s) => {
-			const wsId = s.activeWorkspaceId;
-			if (!wsId) return {};
-			const closed = s.closedChatsByWorkspace[wsId] ?? [];
-			const entry = closed.find((c) => c.sessionId === sessionId);
-			if (!entry) return {};
-			const id = `${wsId}:${sessionId}`;
-			const tab: ChatTab = { kind: "chat", id, workspaceId: wsId, name: entry.title, sessionId };
-			const tabs = s.tabsByWorkspace[wsId] ?? [];
-			return {
-				// The runtime is still live in `sessions`, so the reopened tab shows the full transcript.
-				tabsByWorkspace: tabs.some((t) => t.id === id)
-					? s.tabsByWorkspace
-					: { ...s.tabsByWorkspace, [wsId]: [...tabs, tab] },
-				activeTabByWorkspace: { ...s.activeTabByWorkspace, [wsId]: id },
-				closedChatsByWorkspace: {
-					...s.closedChatsByWorkspace,
-					[wsId]: closed.filter((c) => c.sessionId !== sessionId),
-				},
-			};
-		}),
-	noteClosedChats: (workspaceId, entries) =>
-		set((s) => {
-			const existing = s.closedChatsByWorkspace[workspaceId] ?? [];
-			const known = new Set([
-				...existing.map((c) => c.sessionId),
-				...(s.tabsByWorkspace[workspaceId] ?? [])
-					.filter((t): t is ChatTab => t.kind === "chat")
-					.map((t) => t.sessionId),
-			]);
-			const fresh = entries.filter((e) => !known.has(e.sessionId) && !s.sessions[e.sessionId]);
-			if (fresh.length === 0) return {};
-			return {
-				closedChatsByWorkspace: {
-					...s.closedChatsByWorkspace,
-					// Newest-first; disk entries carry their last-modified time as `closedAt`.
-					[workspaceId]: [...existing, ...fresh].sort((a, b) => b.closedAt - a.closedAt),
-				},
-			};
+			const list = s.docHistoryByWorkspace[workspaceId] ?? [];
+			// Move-to-top: drop any existing entry for the same document, prepend, cap at the limit.
+			const deduped = list.filter((e) => !(e.kind === entry.kind && e.path === entry.path));
+			const next = [entry, ...deduped].slice(0, DOC_HISTORY_LIMIT);
+			const docHistoryByWorkspace = { ...s.docHistoryByWorkspace, [workspaceId]: next };
+			writeDocHistory(docHistoryByWorkspace);
+			return { docHistoryByWorkspace };
 		}),
 	hydrateSession: (summary, hydrated, activate = false) =>
 		set((s) => {
@@ -885,7 +935,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 			};
 			const tabs = s.tabsByWorkspace[wsId] ?? [];
 			const hasActive = s.activeTabByWorkspace[wsId] != null;
-			const closed = s.closedChatsByWorkspace[wsId] ?? [];
 			return {
 				sessions: { ...s.sessions, [summary.sessionId]: runtime },
 				tabsByWorkspace: tabs.some((t) => t.id === id)
@@ -897,13 +946,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 					activate || !hasActive
 						? { ...s.activeTabByWorkspace, [wsId]: id }
 						: s.activeTabByWorkspace,
-				// It's open now, so it leaves history (if it was a disk-only entry there).
-				closedChatsByWorkspace: closed.some((c) => c.sessionId === summary.sessionId)
-					? {
-							...s.closedChatsByWorkspace,
-							[wsId]: closed.filter((c) => c.sessionId !== summary.sessionId),
-						}
-					: s.closedChatsByWorkspace,
 			};
 		}),
 	appendUserMessage: (sessionId, text) =>
@@ -995,12 +1037,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 			return { activeLogin: rest };
 		}),
 	clearLogin: () => set({ activeLogin: null }),
+	openProjectDialog: (kind) => set({ projectDialog: kind }),
+	closeProjectDialog: () => set({ projectDialog: null }),
 	openSettings: (section = SettingsSection.Providers) =>
 		set({ settingsOpen: true, settingsSection: section }),
 	closeSettings: () => set({ settingsOpen: false }),
 	setSettingsSection: (section) => set({ settingsSection: section }),
 	applyConfig: (config) => set({ theme: config.theme }),
 	requestChangesView: (workspaceId, path) => set({ changesRequest: { workspaceId, path } }),
+	requestRailTab: (tab) => set({ railTabRequest: { tab, nonce: Date.now() } }),
 	pushToast: (toast) => {
 		const twin = get().toasts.find(
 			(t) => t.variant === toast.variant && t.title === toast.title && t.message === toast.message,

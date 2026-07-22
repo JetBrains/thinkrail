@@ -1,11 +1,11 @@
 :root {
 	/* Accent (ThinkRail brand) */
-	--primary: #8c81ff;
-	--primary-10: rgba(140, 129, 255, 0.1);
-	--primary-20: rgba(140, 129, 255, 0.2);
-	--primary-40: rgba(140, 129, 255, 0.4);
-	--primary-60: rgba(140, 129, 255, 0.6);
-	--primary-80: rgba(140, 129, 255, 0.8);
+	--primary: #2dd4bf;
+	--primary-10: rgba(45, 212, 191, 0.1);
+	--primary-20: rgba(45, 212, 191, 0.2);
+	--primary-40: rgba(45, 212, 191, 0.4);
+	--primary-60: rgba(45, 212, 191, 0.6);
+	--primary-80: rgba(45, 212, 191, 0.8);
 	--secondary: #464857;
 	--blue: #6ac8ff;
 	--green: #6ad859;
@@ -22,20 +22,22 @@
 	--white-80: rgba(255, 255, 255, 0.8);
 	--white-100: rgba(255, 255, 255, 1);
 	/* Elevation / overlays */
-	--on-accent: #fff;
-	--on-accent-16: rgba(255, 255, 255, 0.16);
+	/* Text ON accent fills is the hard dark (≈9.3:1 on the teal) — white fails AA on a bright teal.
+	   Red fills share this token; dark-on-red also passes (5.4:1) on the dark themes. */
+	--on-accent: #171719;
+	--on-accent-16: rgba(23, 23, 25, 0.16);
 	--sunken: rgba(0, 0, 0, 0.12);
 	--overlay: rgba(0, 0, 0, 0.5);
-	--selection-bg: #2c2947;
+	--selection-bg: #1b3d3a;
 	--shadow-xs: 0 1px 3px rgba(0, 0, 0, 0.18);
 	--shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
 	--shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35);
 	--shadow-lg: 0 8px 28px rgba(0, 0, 0, 0.4);
 	--shadow-xl: 0 24px 64px rgba(0, 0, 0, 0.5);
 	--shadow-up: 0 -2px 8px rgba(0, 0, 0, 0.3);
-	/* Chat user bubble (intentionally #6B57FF, not --primary) */
-	--bubble-user-bg: rgba(107, 87, 255, 0.12);
-	--bubble-user-border: rgba(107, 87, 255, 0.35);
+	/* Chat user bubble (intentionally the deeper sibling teal #14B8A6, not --primary) */
+	--bubble-user-bg: rgba(20, 184, 166, 0.12);
+	--bubble-user-border: rgba(20, 184, 166, 0.35);
 	/* Semantic (JetBrains New UI / Darcula) */
 	--bg: #2b2b30;
 	--bg-dark: #171719;
@@ -124,12 +126,15 @@
  * changing any text/status value.
  */
 
-/* Light — white editor surface, light tool windows, a deeper on-brand violet for legible white-on-accent. */
+/* Light — white editor surface, light tool windows, a deeper on-brand teal for legible white-on-accent. */
 [data-theme="light"] {
 	color-scheme: light;
 
-	/* Deeper violet (the #6B57FF brand violet) so `text-on-accent` (white) passes contrast on light. */
-	--primary: #6b57ff;
+	/* Deeper teal (teal-700) so `text-on-accent` (white, 5.1:1) passes contrast on light — white also
+	   keeps the shared red fills legible (dark-on-red fails at 2.9:1 on light). */
+	--primary: #0f766e;
+	--on-accent: #fff;
+	--on-accent-16: rgba(255, 255, 255, 0.16);
 	--secondary: #d6d8e0;
 	/* Status colors darkened to ≥ 4.5:1 on white — they double as text (diff badges, "M" markers, links). */
 	--blue: #2265cf;
@@ -151,7 +156,7 @@
 	--muted: #5a5f6a;
 	--hint: #667085;
 	--sel: #cfe0fb;
-	--selection-bg: rgba(107, 87, 255, 0.22);
+	--selection-bg: rgba(13, 148, 136, 0.22);
 	/* Two-tone: light tool windows (sidebar) around the white editor/content. */
 	--surface-sidebar: var(--bg);
 	--surface-content: var(--bg-dark);
@@ -182,7 +187,7 @@
 }
 
 /* Darcula — the famous IntelliJ palette: #3c3f41 tool windows around a #2b2b2b editor, #a9b7c6 foreground,
-   blue selection. ThinkRail's violet stays the interactive accent (per the theme decision). */
+   blue selection. ThinkRail's teal stays the interactive accent (per the theme decision). */
 [data-theme="darcula"] {
 	color-scheme: dark;
 
@@ -225,7 +230,7 @@
 
 /* Gruvbox — the vim / tiling-WM classic (morhetz's "retro groove"): warm hard-contrast darks (#1d2021
    editor inside #282828 tool windows), amber #ebdbb2 text — and, uniquely among the themes, the signature
-   GRUVBOX ORANGE as the interactive accent with dark-on-accent text (violet fights this palette; a theme
+   GRUVBOX ORANGE as the interactive accent with dark-on-accent text (teal fights this palette; a theme
    made for rice deserves the real thing). */
 [data-theme="gruvbox"] {
 	color-scheme: dark;
@@ -247,7 +252,7 @@
 	--red: #fb4934;
 	--gold: #fabd2f;
 	--gold-tint: rgba(250, 189, 47, 0.12);
-	/* Chat user bubble follows the accent here — a violet bubble would be the one cold thing on screen. */
+	/* Chat user bubble follows the accent here — a teal bubble would be the one cold thing on screen. */
 	--bubble-user-bg: rgba(254, 128, 25, 0.1);
 	--bubble-user-border: rgba(254, 128, 25, 0.3);
 
@@ -325,7 +330,7 @@
 	--secondary: #2d2d33;
 	--on-accent: #000000;
 	--on-accent-16: rgba(0, 0, 0, 0.16);
-	/* Chat user bubble follows the accent — violet would be the one off-palette thing on screen; border
+	/* Chat user bubble follows the accent — teal would be the one off-palette thing on screen; border
 	   alpha lifted to 0.4 (HC wants visible edges). */
 	--bubble-user-bg: rgba(243, 133, 24, 0.12);
 	--bubble-user-border: rgba(243, 133, 24, 0.4);

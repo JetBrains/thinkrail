@@ -31,6 +31,9 @@ export default defineConfig({
 	use: {
 		baseURL: `http://localhost:${PORT}`,
 		trace: "on-first-retry",
+		// Pre-seed the mocked onboarding "seen" flag for the app origin so the blocking first-run overlay
+		// doesn't cover every test. `onboarding.spec` overrides this (empty storage) to exercise first-run.
+		storageState: fileURLToPath(new URL("./e2e/fixtures/onboarding-seen.json", import.meta.url)),
 	},
 	projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
 	// Self-contained: build the web app, boot the host on an isolated port + state dir, and tear it all

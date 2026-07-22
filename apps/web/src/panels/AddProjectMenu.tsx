@@ -1,65 +1,42 @@
-import type { Project } from "@thinkrail/contracts";
-import { Folder, Globe } from "lucide-react";
 import type { ReactNode } from "react";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
-	DropdownMenuGroup,
 	DropdownMenuItem,
-	DropdownMenuLabel,
-	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { PROJECT_ACTIONS, type ProjectActionId } from "./projectActions";
 
 /**
- * The shared "add a project" dropdown — Open project / Open GitHub (soon) / Recents. The **trigger is
- * supplied by the caller** (`children`, via Radix `asChild`) so it can hang off the projects-rail "+"
- * button *or* the Welcome screen's "Open project" card. `onOpen` runs the native picker; `onOpenRecent`
- * re-opens a known project path.
+ * The single project-actions dropdown — exactly the three unified actions (Open local project / Clone
+ * from GitHub / Create new project, order from `PROJECT_ACTIONS`); no "Recents". The **trigger is
+ * supplied by the caller** (`children`, via Radix `asChild`) — the PROJECTS-header folder-plus button.
+ * `onAction(id)` opens the matching (mocked) dialog. `min-w-0` lets the menu hug its content instead of
+ * the default `min-w-[12rem]`.
  */
 export function AddProjectMenu({
-	projects,
-	onOpen,
-	onOpenRecent,
+	onAction,
 	align = "end",
 	children,
 }: {
-	projects: Project[];
-	onOpen: () => void;
-	onOpenRecent: (path: string) => void;
+	onAction: (id: ProjectActionId) => void;
 	align?: "start" | "center" | "end";
 	children: ReactNode;
 }) {
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
-			<DropdownMenuContent align={align}>
-				<DropdownMenuItem data-testid="menu-open-project" onSelect={() => onOpen()}>
-					<Folder />
-					<span>Open project</span>
-				</DropdownMenuItem>
-				<DropdownMenuItem disabled>
-					<Globe />
-					<span>Open GitHub project</span>
-				</DropdownMenuItem>
-				{projects.length > 0 && (
-					<>
-						<DropdownMenuSeparator />
-						<DropdownMenuLabel>Recents</DropdownMenuLabel>
-						<DropdownMenuGroup>
-							{projects.map((project) => (
-								<DropdownMenuItem
-									key={project.id}
-									onSelect={() => onOpenRecent(project.path)}
-									title={project.path}
-								>
-									<Folder />
-									<span className="truncate">{project.path}</span>
-								</DropdownMenuItem>
-							))}
-						</DropdownMenuGroup>
-					</>
-				)}
+			<DropdownMenuContent align={align} className="min-w-0">
+				{PROJECT_ACTIONS.map((action) => (
+					<DropdownMenuItem
+						key={action.id}
+						data-testid={`menu-project-${action.id}`}
+						onSelect={() => onAction(action.id)}
+					>
+						<action.icon />
+						<span className="whitespace-nowrap">{action.label}</span>
+					</DropdownMenuItem>
+				))}
 			</DropdownMenuContent>
 		</DropdownMenu>
 	);

@@ -17,12 +17,13 @@ test("the dialog lists local branches (no stray origin) and creates a worktree",
 
 	// The operation and its scope are explicit before any controls: this is a separate checkout/branch,
 	// and the IDE surfaces the user is about to enter are all scoped to it.
-	await expect(dialog.getByRole("heading", { name: "Create workspace" })).toBeVisible();
+	await expect(dialog.getByRole("heading", { name: "Create new worktree" })).toBeVisible();
 	await expect(dialog).toContainText("A separate checkout on its own new branch");
 	await expect(dialog).toContainText("Files, chats, changes, and terminals stay scoped to it");
 
-	// Project picker defaults to the project the "+" was clicked on.
+	// Project picker defaults to the project the "+" was clicked on; the read-only root-path chip is shown.
 	await expect(dialog.getByTestId("ws-project-picker")).toContainText("sample-project");
+	await expect(dialog.getByTestId("ws-root-path")).toContainText(".thinkrail/worktrees");
 
 	// The base-branch picker preselects the repo's default (the fixture has no remote → local `main`).
 	const branchPicker = dialog.getByTestId("ws-branch-picker");
@@ -72,7 +73,8 @@ test("the dialog lists local branches (no stray origin) and creates a worktree",
 	await expect(scope).toHaveAttribute("data-context", "workspace");
 	await expect(scope).toContainText("sample-project");
 	await expect(scope).toContainText("workspace-1");
-	await expect(scope).toContainText("from main");
+	// The base branch is now a tooltip on the breadcrumb name crumb, not inline text (still on the
+	// workspace-ready receipt below).
 	const ready = page.getByTestId("workspace-ready");
 	await expect(ready).toContainText("Workspace ready");
 	await expect(ready).toContainText("workspace-1");

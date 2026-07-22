@@ -41,6 +41,21 @@ function seedState(): void {
 	git("add", "-A");
 	git("commit", "-m", "init");
 
+	// The product's open flow is now a mocked dialog, so register the repo as a project directly (the host
+	// reads projects.json per-request). Its path is the real fixture, so worktrees still work.
+	writeFileSync(
+		join(DATA_DIR, "projects.json"),
+		JSON.stringify([
+			{
+				id: "restart-fixture",
+				name: "sample-project",
+				path: REPO,
+				slug: "sample-project",
+				lastOpened: 1,
+			},
+		]),
+	);
+
 	// Same auth + pinned default model as the shared suite (global setup seeded these from the user's).
 	mkdirSync(AGENT_DIR, { recursive: true });
 	for (const file of ["auth.json", "models.json", "settings.json"]) {
@@ -111,9 +126,8 @@ test("a pending questionnaire survives a host kill -9: reboot, reopen, answer, a
 	// ---- before the restart: open a chat and get a questionnaire on screen ----
 	await page.goto(BASE);
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await page.getByTestId("add-project-menu").click();
-	await page.getByTestId("menu-open-project").click();
-	await expect(page.getByTestId("project-item").first()).toBeVisible();
+	await page.getByTestId("project-item").first().getByText("sample-project").click();
+	await expect(page.getByTestId("project-view")).toBeVisible();
 
 	await page.getByTestId("add-workspace").first().click();
 	const dialog = page.getByTestId("new-workspace-dialog");
@@ -152,13 +166,14 @@ test("a pending questionnaire survives a host kill -9: reboot, reopen, answer, a
 
 	// The project persisted but renders collapsed after a fresh load — select it to reveal its workspaces.
 	await page.getByTestId("project-item").first().click();
-	// The workspace persisted; its session is now DISK-ONLY (the live one died with the host), so it
-	// surfaces in chat history and re-opens through the hydration path.
+	// The workspace persisted; its session is now DISK-ONLY (the live one died with the host). Single-chat
+	// hydration auto-restores that one chat tab on activate (getMessages re-opens the disk-only session) —
+	// no chat-history click, since the chat is the workspace's single, non-closable tab.
 	await expect(page.getByTestId("workspace-item").first()).toBeVisible({ timeout: 15_000 });
 	await page.getByTestId("workspace-item").first().click();
-	await page.getByTestId("chat-history").click();
-	await page.getByTestId("closed-chat-item").first().click();
-	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1, {
+		timeout: 15_000,
+	});
 
 	// The questionnaire is STILL ANSWERABLE — the awaiting state is pure transcript, no host memory.
 	const card = activeCard(page);

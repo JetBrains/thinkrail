@@ -29,10 +29,10 @@ test("creates, removes, and re-creates worktree workspaces (no branch collision)
 	await page.getByTestId("confirm-remove").click();
 	await expect(items).toHaveCount(0);
 
-	// Removing the active workspace returns to the Welcome screen — not the empty IDE surface. (Regression:
-	// the remove cleared the active id to "" instead of null, so the shell still rendered a dead 3-column
-	// shell with "Select a workspace…" placeholders.)
-	await expect(page.getByTestId("welcome")).toBeVisible();
+	// Removing the active workspace returns to the project's read-only view — not the empty IDE surface.
+	// (Regression guard: the remove must clear the active id to null, not "", so the shell doesn't render a
+	// dead 3-column shell with "Select a workspace…" placeholders.)
+	await expect(page.getByTestId("project-view")).toBeVisible();
 	await expect(page.getByTestId("center-tabs")).toHaveCount(0);
 	// The worktree teardown is backgrounded server-side, so poll rather than read once.
 	await expect

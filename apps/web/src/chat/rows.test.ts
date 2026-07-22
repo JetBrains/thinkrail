@@ -64,7 +64,8 @@ describe("deriveRows grouping", () => {
 			done("s1"),
 		];
 		const rows = deriveRows(turns, {}, false);
-		expect(kinds(rows)).toEqual(["user", "activity", "markdown", "system", "divider"]);
+		// The "✓ Done" marker no longer emits its own row — it's merged into the divider's Done badge.
+		expect(kinds(rows)).toEqual(["user", "activity", "markdown", "divider"]);
 		const activity = rows[1];
 		if (activity?.kind !== "activity") throw new Error("expected activity row");
 		expect(activity.steps.map((s) => s.id)).toEqual(["a1:thinking:0", "t1", "t2", "t3"]);
@@ -86,7 +87,7 @@ describe("deriveRows grouping", () => {
 			done("s1"),
 		];
 		const rows = deriveRows(turns, {}, false);
-		expect(kinds(rows)).toEqual(["user", "activity", "markdown", "activity", "system", "divider"]);
+		expect(kinds(rows)).toEqual(["user", "activity", "markdown", "activity", "divider"]);
 		const first = rows[1];
 		const second = rows[3];
 		if (first?.kind !== "activity" || second?.kind !== "activity") throw new Error("bad rows");
@@ -101,19 +102,23 @@ describe("deriveRows grouping", () => {
 			done("s1"),
 		];
 		const rows = deriveRows(turns, {}, false);
-		expect(kinds(rows)).toEqual([
-			"user",
-			"activity",
-			"tool",
-			"activity",
-			"tool",
-			"system",
-			"divider",
-		]);
+		expect(kinds(rows)).toEqual(["user", "activity", "tool", "activity", "tool", "divider"]);
 		const primary = rows[2];
 		if (primary?.kind !== "tool") throw new Error("expected tool row");
 		expect(primary.toolCallId).toBe("v1");
 		expect(rows[4]?.id).toBe("q1");
+	});
+
+	test("a system notice WITHOUT endedAt still maps 1:1 (only the ✓ Done marker is merged away)", () => {
+		const turns: ChatTurn[] = [
+			user("u1"),
+			{ kind: "system", id: "sys1", text: "Context compacted" },
+			assistant("a1", [tc("t1")]),
+			done("s1"),
+		];
+		const rows = deriveRows(turns, {}, false);
+		// The plain notice renders; the "✓ Done" marker does not (merged into the divider).
+		expect(kinds(rows)).toEqual(["user", "system", "activity", "divider"]);
 	});
 
 	test("non-assistant turns (user/system/error/retry) break runs and map 1:1", () => {
@@ -203,9 +208,9 @@ describe("deriveRows live trailing run", () => {
 			assistant("a2", [tc("t2")], { streaming: true }),
 		];
 		const rows = deriveRows(turns, {}, true);
-		expect(kinds(rows)).toEqual(["user", "activity", "system", "divider", "user", "activity"]);
+		expect(kinds(rows)).toEqual(["user", "activity", "divider", "user", "activity"]);
 		expect(rows[1]?.kind === "activity" && rows[1].live).toBe(false);
-		expect(rows[5]?.kind === "activity" && rows[5].live).toBe(true);
+		expect(rows[4]?.kind === "activity" && rows[4].live).toBe(true);
 	});
 
 	test("row and step ids are stable across streaming snapshots (fold-state keys)", () => {
@@ -237,8 +242,8 @@ describe("deriveRows dividers", () => {
 	test("a divider row closes the round at its ✓ Done marker (not at the next user turn)", () => {
 		const turns = [user("u1", 1_000), assistant("a1", [tc("t1", "write")]), done("s1", 3_000)];
 		const rows = deriveRows(turns, {}, false);
-		expect(kinds(rows)).toEqual(["user", "activity", "system", "divider"]);
-		const divider = rows[3];
+		expect(kinds(rows)).toEqual(["user", "activity", "divider"]);
+		const divider = rows[2];
 		if (divider?.kind !== "divider") throw new Error("expected divider row");
 		expect(divider.data.toolCount).toBe(1);
 		expect(divider.id).toBe("s1:divider");

@@ -2,6 +2,7 @@ import "./index.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { TooltipProvider } from "./components/ui/tooltip";
 import { Shell } from "./shell/Shell";
 import { initTransport } from "./transport";
 import { applyFontScale } from "./utils/fontScale";
@@ -19,7 +20,10 @@ if (root) {
 		<StrictMode>
 			{/* Last-resort boundary: a crash escaping every panel boundary shows a reload screen, not a gray unmounted root. */}
 			<ErrorBoundary label="app">
-				<Shell />
+				{/* One app-wide tooltip provider: hover-after-delay (~450ms) + focus, shared by every `Tip`. */}
+				<TooltipProvider delayDuration={450}>
+					<Shell />
+				</TooltipProvider>
 			</ErrorBoundary>
 		</StrictMode>,
 	);

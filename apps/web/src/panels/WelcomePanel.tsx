@@ -1,14 +1,13 @@
 import type { Workspace } from "@thinkrail/contracts";
-import { Folder, FolderOpen, type LucideIcon, Rocket, Sparkles } from "lucide-react";
+import { Folder, type LucideIcon, Rocket, Sparkles } from "lucide-react";
 import { type ComponentPropsWithoutRef, forwardRef, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { PRODUCT_NAME } from "../constants/branding";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
-import { AddProjectMenu } from "./AddProjectMenu";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { ProviderWarningBanner } from "./ProviderWarningBanner";
-import { useOpenProject } from "./useOpenProject";
+import { PROJECT_ACTIONS } from "./projectActions";
 
 // Seeds the New-Workspace prompt hero for "Set up project" — pi's skill-command syntax `/skill:<name>`,
 // which FORCES the setting-up-a-project dispatcher to load (vs. hoping the model auto-matches its
@@ -62,12 +61,6 @@ export function WelcomePanel() {
 		};
 	}, [project?.id]);
 
-	// The shared open-project flow (offers to git-init a non-git folder, or shows a legible error). Its
-	// adopt step just selects the project — the visible rail reflects it; there's no tree to expand here.
-	const { openProject, pickAndOpen, dialogs } = useOpenProject((opened) =>
-		useAppStore.getState().selectProject(opened.id),
-	);
-
 	// A workspace was created from the welcome dialog: refresh that project's list (the dialog itself sets
 	// the active workspace, which swaps the shell to the workspace surface — this view then unmounts).
 	const onWorkspaceCreated = async (ws: Workspace) => {
@@ -82,87 +75,86 @@ export function WelcomePanel() {
 	const noProjects = project == null;
 
 	// The "Open project" card triggers the same dropdown as the projects-rail "+".
-	const openProjectCard = ({
-		primary = false,
-		subtitle,
-	}: {
-		primary?: boolean;
-		subtitle: string;
-	}) => (
-		<AddProjectMenu
-			projects={projects}
-			onOpen={() => void pickAndOpen()}
-			onOpenRecent={(path) => void openProject(path)}
-			align="start"
-		>
+	// The three unified project-entry cards (shared `PROJECT_ACTIONS` source of truth) — same labels /
+	// descriptions / icons / order as the projects-rail menu. `createPrimary` makes "Create new project"
+	// the filled-accent CTA (the no-project state, where there's no "Start building").
+	const projectActionCards = (createPrimary = false) =>
+		PROJECT_ACTIONS.map((action) => (
 			<Card
-				cta={primary}
-				primary={primary}
-				icon={FolderOpen}
-				title="Open project"
-				subtitle={subtitle}
+				key={action.id}
+				cta={createPrimary && action.id === "create"}
+				primary={createPrimary && action.id === "create"}
+				icon={action.icon}
+				title={action.label}
+				subtitle={action.description}
+				onClick={() => useAppStore.getState().openProjectDialog(action.id)}
 			/>
-		</AddProjectMenu>
-	);
+		));
 
 	return (
 		<div
 			data-testid="welcome"
-			className="flex h-full min-h-0 flex-col items-center justify-center overflow-auto px-xl py-xl text-center"
+			className="flex h-full min-h-0 flex-col justify-center overflow-auto px-xl py-xl"
 		>
-			{project ? (
-				<p className="mb-sm flex max-w-full items-center gap-xs px-md text-muted text-sm">
-					<Folder className="size-3.5 shrink-0 text-hint" />
-					<span className="truncate font-[var(--font-mono)]">{project.name}</span>
+			{/* A single left-aligned block, ~60% of the center area (wider on mobile), centered by position
+			    alone — no border/card/panel. Text flush-left at the top; the action cards at the bottom-right,
+			    sharing the block's bounds, so the eye reads text (top-left) → action (bottom-right). */}
+			<div className="mx-auto flex w-full max-w-[90%] flex-col md:max-w-[60%]">
+				{project ? (
+					<p className="mb-sm flex max-w-full items-center gap-xs text-muted text-sm">
+						<Folder className="size-3.5 shrink-0 text-hint" />
+						<span className="truncate font-[var(--font-mono)]">{project.name}</span>
+					</p>
+				) : null}
+				<h1 className="font-[var(--font-accent)] font-extrabold text-[length:var(--font-xl)] text-primary leading-tight tracking-[0.5px]">
+					{PRODUCT_NAME}
+				</h1>
+
+				<p className="mt-lg text-md text-muted">
+					A spec-first way to build with AI. ThinkRail keeps your project's intent as a{" "}
+					<span className="text-text">connected spec graph</span> that the agent reads, plans, and
+					builds from, all in git worktree isolated workspaces.
 				</p>
-			) : null}
-			<h1 className="font-[var(--font-accent)] font-extrabold text-[44px] text-primary leading-tight tracking-[0.5px]">
-				{PRODUCT_NAME}
-			</h1>
 
-			<p className="mt-lg max-w-[440px] text-md text-muted">
-				A spec-first way to build with AI. ThinkRail keeps your project's intent as a{" "}
-				<span className="text-text">connected spec graph</span> that the agent reads, plans, and
-				builds from, all in git worktree isolated workspaces.
-			</p>
+				<ProviderWarningBanner />
 
-			<ProviderWarningBanner />
-
-			<div className="mt-xl flex flex-wrap justify-center gap-md">
-				{noProjects ? (
-					openProjectCard({ primary: true, subtitle: "Choose a local git repository to work in." })
-				) : hasSpecs === null ? null : hasSpecs ? (
-					<>
-						<Card
-							cta
-							primary
-							icon={Rocket}
-							title="Start building"
-							subtitle="Cut an isolated worktree + branch, then pair with the agent to build it."
-							onClick={() => setDialog({ projectId: project.id, prompt: "" })}
-						/>
-						{openProjectCard({ subtitle: "Add another local git repository." })}
-					</>
-				) : (
-					<>
-						<Card
-							cta
-							primary
-							icon={Sparkles}
-							title="Set up project"
-							tag="spec-first"
-							subtitle="Prepare the specifications first with the agent before building."
-							onClick={() => setDialog({ projectId: project.id, prompt: SETUP_PROMPT })}
-						/>
-						<Card
-							icon={Rocket}
-							title="Start building"
-							subtitle="Cut an isolated worktree + branch and pair with the agent."
-							onClick={() => setDialog({ projectId: project.id, prompt: "" })}
-						/>
-						{openProjectCard({ subtitle: "Add another local git repository." })}
-					</>
-				)}
+				<div className="mt-xl flex flex-wrap justify-end gap-md">
+					{noProjects ? (
+						// No project yet — the three project-entry actions, "Create new project" as the CTA.
+						projectActionCards(true)
+					) : hasSpecs === null ? null : hasSpecs ? (
+						<>
+							<Card
+								cta
+								primary
+								icon={Rocket}
+								title="Start building"
+								subtitle="Cut an isolated worktree + branch, then pair with the agent to build it."
+								onClick={() => setDialog({ projectId: project.id, prompt: "" })}
+							/>
+							{projectActionCards()}
+						</>
+					) : (
+						<>
+							<Card
+								cta
+								primary
+								icon={Sparkles}
+								title="Set up project"
+								tag="spec-first"
+								subtitle="Prepare the specifications first with the agent before building."
+								onClick={() => setDialog({ projectId: project.id, prompt: SETUP_PROMPT })}
+							/>
+							<Card
+								icon={Rocket}
+								title="Start building"
+								subtitle="Cut an isolated worktree + branch and pair with the agent."
+								onClick={() => setDialog({ projectId: project.id, prompt: "" })}
+							/>
+							{projectActionCards()}
+						</>
+					)}
+				</div>
 			</div>
 
 			{dialog ? (
@@ -176,14 +168,13 @@ export function WelcomePanel() {
 					onCreated={(ws) => void onWorkspaceCreated(ws)}
 				/>
 			) : null}
-			{dialogs}
 		</div>
 	);
 }
 
 /**
  * One welcome card (Conductor-style: icon top-left, label + explainer bottom-left). The state's primary
- * is a filled-violet card carrying the stable `welcome-cta` hook; others are quiet outlined
+ * is a filled-accent card carrying the stable `welcome-cta` hook; others are quiet outlined
  * `welcome-action`s. A `forwardRef` so it can serve as a Radix `asChild` trigger (the "Open project" card
  * hangs the `AddProjectMenu` dropdown off it).
  */

@@ -1,6 +1,7 @@
-import { GitBranch, History, MessageSquarePlus, RotateCcw, X } from "lucide-react";
+import { FileText, GitBranch, GitCompare, History, MessageSquarePlus, X } from "lucide-react";
 import { lazy, Suspense, useEffect } from "react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { Tip } from "@/components/Tip";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -10,7 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { messagesToRuntime } from "../chat/hydrate";
 import {
-	type ClosedChat,
+	type DocHistoryEntry,
 	type EditorTab,
 	selectActiveWorkspace,
 	toast,
@@ -18,55 +19,53 @@ import {
 } from "../store";
 import { errorText, getTransport } from "../transport";
 import { FilePane } from "./FilePane";
+import { openDiffInTab, openFileInTab } from "./openFile";
 
 // The chat view is heavy — load it only when its tab is first shown (protects first paint). File panes
 // lazy-load their own Monaco / markdown chunks inside `FilePane`.
 const ChatView = lazy(() => import("../chat/ChatView"));
+// The diff pane pulls Monaco's diff editor — load it only when a diff tab is first shown.
+const DiffPane = lazy(() => import("./DiffPane"));
 
 // Stable empty references so selectors don't re-render the component on unrelated state changes.
 const NO_TABS: EditorTab[] = [];
-const NO_CLOSED: ClosedChat[] = [];
+const NO_DOCS: DocHistoryEntry[] = [];
 
-function relativeTime(ms: number): string {
-	const s = Math.floor((Date.now() - ms) / 1000);
-	if (s < 60) return "just now";
-	const m = Math.floor(s / 60);
-	if (m < 60) return `${m}m ago`;
-	const h = Math.floor(m / 60);
-	if (h < 24) return `${h}h ago`;
-	return `${Math.floor(h / 24)}d ago`;
-}
-
-/** Dropdown of chats closed in this workspace; picking one reopens it (and removes it from history). */
-function ChatHistoryMenu({
-	closedChats,
-	onReopen,
+/** History of the last documents opened in this workspace (files + diffs, most-recent-first); picking
+ * one re-opens it as a center tab. View state only — never chat. */
+function DocHistoryMenu({
+	entries,
+	onOpen,
 }: {
-	closedChats: ClosedChat[];
-	onReopen: (sessionId: string) => void;
+	entries: DocHistoryEntry[];
+	onOpen: (entry: DocHistoryEntry) => void;
 }) {
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger
-				data-testid="chat-history"
-				aria-label="Reopen a closed chat"
-				title="View chat history"
+				data-testid="doc-history"
+				aria-label="Recently opened documents"
+				title="Recently opened documents"
 				className="flex shrink-0 items-center border-border2 border-l px-sm text-hint outline-none hover:bg-hover hover:text-text focus-visible:ring-2 focus-visible:ring-primary"
 			>
 				<History className="size-4" />
 			</DropdownMenuTrigger>
-			<DropdownMenuContent align="end" className="min-w-[16rem]">
-				<DropdownMenuLabel>Recently closed</DropdownMenuLabel>
-				{closedChats.map((c) => (
+			<DropdownMenuContent align="end" className="min-w-[18rem]">
+				<DropdownMenuLabel>Recently opened</DropdownMenuLabel>
+				{entries.map((entry) => (
 					<DropdownMenuItem
-						key={c.sessionId}
-						data-testid="closed-chat-item"
-						data-session-id={c.sessionId}
-						onSelect={() => onReopen(c.sessionId)}
+						key={`${entry.kind}:${entry.path}`}
+						data-testid="doc-history-item"
+						data-kind={entry.kind}
+						onSelect={() => onOpen(entry)}
 					>
-						<span className="flex-1 truncate">{c.title}</span>
-						<span className="shrink-0 text-hint text-xs">{relativeTime(c.closedAt)}</span>
-						<RotateCcw className="size-3.5 shrink-0 text-muted" />
+						{entry.kind === "diff" ? (
+							<GitCompare className="size-3.5 shrink-0 text-muted" />
+						) : (
+							<FileText className="size-3.5 shrink-0 text-muted" />
+						)}
+						<span className="flex-1 truncate">{entry.name}</span>
+						<span className="max-w-[9rem] shrink-0 truncate text-hint text-xs">{entry.path}</span>
 					</DropdownMenuItem>
 				))}
 			</DropdownMenuContent>
@@ -80,49 +79,39 @@ export function CenterTabs() {
 	const activeWorkspace = useAppStore(selectActiveWorkspace);
 	const tabsByWorkspace = useAppStore((s) => s.tabsByWorkspace);
 	const activeTabByWorkspace = useAppStore((s) => s.activeTabByWorkspace);
-	const closedChatsByWorkspace = useAppStore((s) => s.closedChatsByWorkspace);
+	const docHistoryByWorkspace = useAppStore((s) => s.docHistoryByWorkspace);
 	const setActiveTab = useAppStore((s) => s.setActiveTab);
 	const closeTab = useAppStore((s) => s.closeTab);
 
 	const openTabs = activeWorkspaceId ? (tabsByWorkspace[activeWorkspaceId] ?? NO_TABS) : NO_TABS;
 	const activeTabId = activeWorkspaceId ? (activeTabByWorkspace[activeWorkspaceId] ?? null) : null;
-	const closedChats = activeWorkspaceId
-		? (closedChatsByWorkspace[activeWorkspaceId] ?? NO_CLOSED)
-		: NO_CLOSED;
-	// Hydrate-on-connect: when a workspace becomes active, pull its sessions from the host. Live ones (still
-	// in host memory) auto-restore as tabs; disk-only ones (survived a host restart) go to chat-history to
-	// reopen on demand. So a reload, a second tab, or a restart all rebuild from the host.
+	const docHistory = activeWorkspaceId
+		? (docHistoryByWorkspace[activeWorkspaceId] ?? NO_DOCS)
+		: NO_DOCS;
+	// Hydrate-on-connect: when a workspace becomes active, restore its ONE chat tab from the host. Only
+	// ever one chat tab exists (view restriction), so if this workspace already has one, there's nothing
+	// to do; otherwise pull the host's sessions and restore the most-recently-updated one (live or
+	// disk-only — `session.getMessages` re-opens a disk-only session on the host). Any other host sessions
+	// stay alive, just untabbed: the single-chat limit is view-only and never disposes a session.
 	useEffect(() => {
 		if (!activeWorkspaceId) return;
+		const ws = activeWorkspaceId;
+		if ((useAppStore.getState().tabsByWorkspace[ws] ?? []).some((t) => t.kind === "chat")) return;
 		let cancelled = false;
 		void getTransport()
-			.request("session.list", { workspaceId: activeWorkspaceId })
+			.request("session.list", { workspaceId: ws })
 			.then(async (summaries) => {
-				const diskOnly: ClosedChat[] = [];
-				for (const summary of summaries) {
-					if (cancelled) return;
-					if (useAppStore.getState().sessions[summary.sessionId]) continue; // already hydrated/live here
-					if (!summary.live) {
-						diskOnly.push({
-							sessionId: summary.sessionId,
-							title: summary.title,
-							closedAt: summary.updatedAt,
-						});
-						continue;
-					}
-					try {
-						const { summary: fresh, messages } = await getTransport().request(
-							"session.getMessages",
-							{ sessionId: summary.sessionId, workspaceId: activeWorkspaceId },
-						);
-						if (cancelled) return;
-						useAppStore.getState().hydrateSession(fresh, messagesToRuntime(messages));
-					} catch {
-						// Skip a session that failed to load; the others still hydrate.
-					}
-				}
-				if (!cancelled && diskOnly.length > 0) {
-					useAppStore.getState().noteClosedChats(activeWorkspaceId, diskOnly);
+				if (cancelled || summaries.length === 0) return;
+				const summary = [...summaries].sort((a, b) => b.updatedAt - a.updatedAt)[0];
+				if (!summary || useAppStore.getState().sessions[summary.sessionId]) return;
+				try {
+					const { summary: fresh, messages } = await getTransport().request("session.getMessages", {
+						sessionId: summary.sessionId,
+						workspaceId: ws,
+					});
+					if (!cancelled) useAppStore.getState().hydrateSession(fresh, messagesToRuntime(messages));
+				} catch {
+					// Skip a session that failed to load — the placeholder "New chat" bootstrap still works.
 				}
 			})
 			.catch(() => {});
@@ -131,26 +120,12 @@ export function CenterTabs() {
 		};
 	}, [activeWorkspaceId]);
 
-	// Reopen a chat from history: a live runtime just restores its tab; a disk-only one is re-opened on the
-	// host, its transcript fetched, then hydrated + focused (hydrateSession drops it from history, keyed to
-	// the session's own workspace — robust to a workspace switch during the fetch).
-	const onReopenChat = async (sessionId: string) => {
-		const store = useAppStore.getState();
-		if (store.sessions[sessionId]) {
-			store.reopenChat(sessionId);
-			return;
-		}
+	// Re-open a document from History (view state): files re-read fresh, diffs reconstruct — both dedupe
+	// to their existing tab if already open.
+	const onOpenDoc = (entry: DocHistoryEntry) => {
 		if (!activeWorkspaceId) return;
-		try {
-			const { summary, messages } = await getTransport().request("session.getMessages", {
-				sessionId,
-				workspaceId: activeWorkspaceId,
-			});
-			useAppStore.getState().hydrateSession(summary, messagesToRuntime(messages), true);
-		} catch (err) {
-			// The chat stays in history for a retry — but say why the click did nothing.
-			toast.error(errorText(err), "Couldn't reopen the chat");
-		}
+		if (entry.kind === "file") void openFileInTab(activeWorkspaceId, entry.path);
+		else openDiffInTab(activeWorkspaceId, entry.path);
 	};
 
 	const startChat = async () => {
@@ -161,16 +136,15 @@ export function CenterTabs() {
 			});
 			useAppStore.getState().openChatSession(activeWorkspaceId, sessionId, model, thinkingLevel);
 		} catch (err) {
-			// Without this, a failed create makes "+ New chat" do nothing, silently.
+			// Without this, a failed create makes the "New chat" bootstrap do nothing, silently.
 			toast.error(errorText(err), "Couldn't start the chat");
 		}
 	};
 
-	// Closing a chat tab moves it to history (its session + runtime stay alive so it can be reopened with
-	// full state); file tabs just close.
+	// Only file/diff tabs are closable (a pure view action); the single chat tab is non-closable, so its
+	// session is never touched by the view. (This is only ever called from a file/diff tab's close button.)
 	const onCloseTab = (tab: EditorTab) => {
-		if (tab.kind === "chat") useAppStore.getState().closeChatToHistory(tab.sessionId);
-		else closeTab(tab.id);
+		closeTab(tab.id);
 	};
 
 	const placeholder = (
@@ -211,8 +185,8 @@ export function CenterTabs() {
 		</div>
 	);
 
-	// Nothing open and nothing to reopen → just the centered prompt.
-	if (openTabs.length === 0 && closedChats.length === 0) return placeholder;
+	// Nothing open → just the centered prompt (which carries the single-chat bootstrap).
+	if (openTabs.length === 0) return placeholder;
 
 	const active = openTabs.find((t) => t.id === activeTabId) ?? null;
 
@@ -239,33 +213,25 @@ export function CenterTabs() {
 								>
 									{tab.name}
 								</button>
-								<button
-									type="button"
-									data-testid="editor-tab-close"
-									aria-label={`Close ${tab.name}`}
-									onClick={() => onCloseTab(tab)}
-									className="rounded-[var(--radius-sm)] p-0.5 text-hint opacity-0 hover:bg-hover hover:text-text group-hover:opacity-100"
-								>
-									<X className="size-3.5" />
-								</button>
+								{/* The single chat tab is non-closable (view-only limit); file/diff tabs close freely. */}
+								{tab.kind === "chat" ? null : (
+									<Tip side="bottom" label="Close tab (keeps the session running)">
+										<button
+											type="button"
+											data-testid="editor-tab-close"
+											aria-label={`Close ${tab.name}`}
+											onClick={() => onCloseTab(tab)}
+											className="rounded-[var(--radius-sm)] p-0.5 text-hint opacity-0 hover:bg-hover hover:text-text group-hover:opacity-100"
+										>
+											<X className="size-3.5" />
+										</button>
+									</Tip>
+								)}
 							</div>
 						);
 					})}
-					{activeWorkspaceId ? (
-						<button
-							type="button"
-							data-testid="new-chat"
-							aria-label="New chat"
-							onClick={() => void startChat()}
-							className="flex items-center px-sm text-hint hover:bg-hover hover:text-text"
-						>
-							<MessageSquarePlus className="size-4" />
-						</button>
-					) : null}
 				</div>
-				{closedChats.length > 0 ? (
-					<ChatHistoryMenu closedChats={closedChats} onReopen={(id) => void onReopenChat(id)} />
-				) : null}
+				{docHistory.length > 0 ? <DocHistoryMenu entries={docHistory} onOpen={onOpenDoc} /> : null}
 			</div>
 			<div data-testid="editor-pane" className="min-h-0 flex-1">
 				{active ? (
@@ -282,6 +248,8 @@ export function CenterTabs() {
 									sessionId={active.sessionId}
 									workspaceId={active.workspaceId}
 								/>
+							) : active.kind === "diff" ? (
+								<DiffPane key={active.id} tab={active} />
 							) : (
 								<FilePane key={active.id} tab={active} />
 							)}

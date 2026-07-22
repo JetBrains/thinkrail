@@ -1,4 +1,4 @@
-import type { Project, Workspace } from "@thinkrail/contracts";
+import type { Project, SessionStats, Workspace } from "@thinkrail/contracts";
 
 interface ActiveWorkspaceState {
 	activeWorkspaceId: string | null;
@@ -29,4 +29,20 @@ export function selectActiveWorkspaceProjectId(state: ActiveWorkspaceState): str
 export function selectContextProject(state: ProjectContextState): Project | null {
 	const projectId = selectActiveWorkspace(state)?.projectId ?? state.selectedProjectId;
 	return state.projects.find((project) => project.id === projectId) ?? null;
+}
+
+interface ActiveSessionStatsState {
+	activeWorkspaceId: string | null;
+	tabsByWorkspace: Record<string, ReadonlyArray<{ kind: string; sessionId?: string }>>;
+	sessions: Record<string, { stats: SessionStats | null }>;
+}
+
+/** Usage stats for the active workspace's chat session (its single chat tab), or null when no chat is
+ * active — lets the global left-panel footer surface the active session's token/cost/context usage. */
+export function selectActiveSessionStats(state: ActiveSessionStatsState): SessionStats | null {
+	const workspaceId = state.activeWorkspaceId;
+	if (!workspaceId) return null;
+	const chat = (state.tabsByWorkspace[workspaceId] ?? []).find((tab) => tab.kind === "chat");
+	if (!chat?.sessionId) return null;
+	return state.sessions[chat.sessionId]?.stats ?? null;
 }

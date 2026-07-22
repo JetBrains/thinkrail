@@ -1,8 +1,10 @@
 import type { UserMessage } from "@thinkrail/contracts";
-import { Clock, FileDiff, RotateCw, TriangleAlert, Wrench } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Check, Clock, Copy, FileDiff, RotateCw, TriangleAlert, Wrench } from "lucide-react";
+import { type ReactNode, useEffect, useState } from "react";
 import { ActivityGroup } from "./ActivityGroup";
+import { useFold } from "./foldState";
 import { Markdown } from "./Markdown";
+import { MESSAGE_COLLAPSE_LIMIT, shouldCollapseMessage } from "./messageCollapse";
 import type { ChatRow, TurnDividerData } from "./rows";
 import { ToolCard } from "./ToolCard";
 import { getToolChrome, getToolRenderer } from "./toolRegistry";
@@ -18,14 +20,17 @@ export function ChatTurnView({
 	row,
 	workspaceRoot,
 	onOpenChanges,
+	isLastMessage = false,
 }: {
 	row: ChatRow;
 	workspaceRoot?: string | undefined;
 	onOpenChanges?: ((paths: string[]) => void) | undefined;
+	/** True for the thread's last text message (user prompt or agent response) — it never collapses. */
+	isLastMessage?: boolean;
 }) {
 	switch (row.kind) {
 		case "user":
-			return <UserTurn message={row.message} />;
+			return <UserTurn message={row.message} id={row.id} isLast={isLastMessage} />;
 		case "system":
 			return <SystemTurn text={row.text} />;
 		case "error":
@@ -35,21 +40,35 @@ export function ChatTurnView({
 				<RetryIndicator attempt={row.attempt} maxAttempts={row.maxAttempts} delayMs={row.delayMs} />
 			);
 		case "markdown":
+			// Agent message content is capped at 85% of the chat column, left-aligned (slack on the right) —
+			// the mirror of the user bubble's `max-w-[85%]`. Applies to text, tool, and activity rows.
 			return (
-				<div data-testid="chat-message" data-role="assistant" className="text-sm text-text">
-					<Markdown text={row.text} />
+				<div
+					data-testid="chat-message"
+					data-role="assistant"
+					className="max-w-[85%] text-sm text-text"
+				>
+					<CollapsibleMessage id={row.id} text={row.text} isLast={isLastMessage}>
+						{(shown) => <Markdown text={shown} />}
+					</CollapsibleMessage>
 				</div>
 			);
 		case "tool":
-			return <ToolRow row={row} workspaceRoot={workspaceRoot} />;
+			return (
+				<div className="max-w-[85%]">
+					<ToolRow row={row} workspaceRoot={workspaceRoot} />
+				</div>
+			);
 		case "activity":
 			return (
-				<ActivityGroup
-					id={row.id}
-					steps={row.steps}
-					live={row.live}
-					workspaceRoot={workspaceRoot}
-				/>
+				<div className="max-w-[85%]">
+					<ActivityGroup
+						id={row.id}
+						steps={row.steps}
+						live={row.live}
+						workspaceRoot={workspaceRoot}
+					/>
+				</div>
 			);
 		case "divider":
 			return <TurnDivider data={row.data} onOpenChanges={onOpenChanges ?? (() => {})} />;
@@ -66,12 +85,90 @@ function userText(content: UserMessage["content"]): string {
 		.join("");
 }
 
-function UserTurn({ message }: { message: UserMessage }) {
+function UserTurn({ message, id, isLast }: { message: UserMessage; id: string; isLast: boolean }) {
+	const text = userText(message.content);
 	return (
 		<div data-testid="chat-message" data-role="user" className="flex justify-end">
-			<div className="max-w-[85%] whitespace-pre-wrap rounded-[var(--radius-md)] border border-[var(--bubble-user-border)] bg-[var(--bubble-user-bg)] px-md py-sm text-sm text-text">
-				{userText(message.content)}
+			{/* `group` + `relative`: the copy button is absolutely placed 6px below the bubble, right-aligned to
+			    its edge, revealed on hover — absolute so it sits in the existing gap below without reflowing the
+			    layout (the between-message spacing is unchanged). */}
+			<div className="group relative max-w-[85%]">
+				<div className="whitespace-pre-wrap rounded-[var(--radius-md)] border border-[var(--bubble-user-border)] bg-[var(--bubble-user-bg)] px-md py-sm text-sm text-text">
+					<CollapsibleMessage id={id} text={text} isLast={isLast}>
+						{(shown) => shown}
+					</CollapsibleMessage>
+				</div>
+				<CopyMessageButton text={text} />
 			</div>
+		</div>
+	);
+}
+
+/**
+ * Copy a user message's text to the clipboard — the shared copy affordance (Copy icon → a green Check for
+ * ~1.5s), reused from `JetBrainsAiCard`'s `CopyableCommand`. Hidden until the message is hovered
+ * (`group-hover`); absolutely positioned below the bubble (right-aligned, 6px gap) so revealing it never
+ * reflows the transcript.
+ */
+function CopyMessageButton({ text }: { text: string }) {
+	const [copied, setCopied] = useState(false);
+	const copy = async () => {
+		try {
+			await navigator.clipboard.writeText(text);
+			setCopied(true);
+			setTimeout(() => setCopied(false), 1500);
+		} catch {
+			// Clipboard unavailable — the message text stays selectable.
+		}
+	};
+	return (
+		<button
+			type="button"
+			data-testid="copy-user-message"
+			aria-label="Copy message"
+			title="Copy"
+			onClick={() => void copy()}
+			className="absolute top-full right-0 mt-[6px] flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-muted opacity-0 outline-none transition hover:bg-hover hover:text-text focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary group-hover:opacity-100"
+		>
+			{copied ? <Check className="size-3.5 text-green" /> : <Copy className="size-3.5" />}
+		</button>
+	);
+}
+
+/**
+ * Collapse a long history message behind an Expand control (reusing the `Collapsible` toggle styling).
+ * The last message and any message ≤ {@link MESSAGE_COLLAPSE_LIMIT} render in full, unwrapped (no layout
+ * change). Otherwise the first ~limit chars show with an Expand/Collapse toggle; the expanded state is
+ * per-message client view state via `useFold(id)` (survives virtualization while the thread is open,
+ * never sent to the server). `children(shown)` renders the (possibly-truncated) text — plain for a user
+ * bubble, `<Markdown>` for an assistant response.
+ */
+function CollapsibleMessage({
+	id,
+	text,
+	isLast,
+	children,
+}: {
+	id: string;
+	text: string;
+	isLast: boolean;
+	children: (shown: string) => ReactNode;
+}) {
+	const [expanded, toggle] = useFold(id);
+	if (!shouldCollapseMessage(text, isLast)) return <>{children(text)}</>;
+	const shown = expanded ? text : `${text.slice(0, MESSAGE_COLLAPSE_LIMIT)}…`;
+	return (
+		<div className="flex flex-col gap-xs">
+			{children(shown)}
+			<button
+				type="button"
+				data-testid="message-collapse-toggle"
+				aria-expanded={expanded}
+				onClick={toggle}
+				className="self-start text-primary text-xs hover:underline"
+			>
+				{expanded ? "Collapse" : "Expand"}
+			</button>
 		</div>
 	);
 }
@@ -192,9 +289,10 @@ function formatElapsed(ms: number): string {
 }
 
 /**
- * A subtle round-end divider (rendered right when the turn finishes, below its "✓ Done" marker): tool-call
- * count, a clickable "N files changed" chip (opens those files in the Changes/diff panel via
- * `onOpenChanges`), and elapsed wall-clock. Presentational — the store touch lives in `ChatView`, which
+ * The round-end completion line (rendered the instant the turn finishes): a circled accent "Done" badge,
+ * the divider rule, then the metrics — tool-call count, elapsed wall-clock, and a clickable "N files
+ * changed" chip (opens those files in the Changes/diff panel via `onOpenChanges`). It replaces the old
+ * standalone "✓ Done" line (that `system` marker no longer renders as its own row; see `rows.ts`). Presentational — the store touch lives in `ChatView`, which
  * supplies `onOpenChanges`. The data comes from the pure `turnDivider` deriver in `rows.ts`.
  */
 export function TurnDivider({
@@ -205,17 +303,29 @@ export function TurnDivider({
 	onOpenChanges: (paths: string[]) => void;
 }) {
 	const { elapsedMs, toolCount, changedFiles } = data;
-	if (toolCount === 0 && changedFiles.length === 0 && (elapsedMs == null || elapsedMs < 1000)) {
-		// Nothing worth noting between these turns — just a hairline rule.
-		return <div data-testid="turn-divider" className="my-sm h-px bg-border2" />;
-	}
+	// One completion line: a circled accent "Done" badge (left), the divider rule filling the middle, and
+	// the metrics (right) — tool calls · time · files changed. Metrics render only when there's something
+	// worth noting; the badge + rule always show so a finished turn is always marked.
 	return (
-		<div data-testid="turn-divider" className="my-sm flex items-center gap-sm text-hint text-xs">
+		<div data-testid="turn-divider" className="flex items-center gap-sm text-hint text-xs">
+			<span
+				data-testid="turn-done"
+				className="flex shrink-0 items-center gap-xs rounded-full bg-primary/15 px-sm py-0.5 font-medium text-primary"
+			>
+				<Check className="size-3 shrink-0" />
+				Done
+			</span>
 			<span className="h-px flex-1 bg-border2" />
 			{toolCount > 0 ? (
 				<span className="flex items-center gap-xs">
 					<Wrench className="size-3 shrink-0" />
 					{toolCount} {toolCount === 1 ? "tool call" : "tool calls"}
+				</span>
+			) : null}
+			{elapsedMs != null && elapsedMs >= 1000 ? (
+				<span className="flex items-center gap-xs">
+					<Clock className="size-3 shrink-0" />
+					{formatElapsed(elapsedMs)}
 				</span>
 			) : null}
 			{changedFiles.length > 0 ? (
@@ -229,13 +339,6 @@ export function TurnDivider({
 					{changedFiles.length} {changedFiles.length === 1 ? "file changed" : "files changed"}
 				</button>
 			) : null}
-			{elapsedMs != null && elapsedMs >= 1000 ? (
-				<span className="flex items-center gap-xs">
-					<Clock className="size-3 shrink-0" />
-					{formatElapsed(elapsedMs)}
-				</span>
-			) : null}
-			<span className="h-px flex-1 bg-border2" />
 		</div>
 	);
 }

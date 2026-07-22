@@ -14,6 +14,7 @@ import { type ChatActions, ChatActionsContext } from "./ChatActions";
 import { ChatHeader } from "./ChatHeader";
 import { Composer, type MentionCandidate, type SubmitBehavior } from "./Composer";
 import { ExtUiDialog } from "./ExtUiDialog";
+import { selectFollowUpChips } from "./followUpChips";
 import { type ChatRow, deriveRows } from "./rows";
 import { StreamIndicator, type StreamStatus, streamStatus } from "./StreamIndicator";
 import "./tools/register"; // side-effect: register the built-in pi tool renderers (bash/read/edit/write)
@@ -35,6 +36,24 @@ function StreamFooter({ context }: { context: ChatListContext }) {
 }
 
 const CHAT_LIST_COMPONENTS = { Footer: StreamFooter };
+
+/**
+ * Vertical rhythm inside the transcript, expressed as the *lower* row's top padding (bottom padding stays
+ * 0, so the gap between two rows is exactly this value; the assistant `markdown` block's outer paragraph
+ * margins are trimmed in `Markdown.tsx` so the box hugs its text and these values render exactly). The
+ * hierarchy: 12px binds a reasoning chunk (`markdown`) to the steps row (`activity`) directly under it —
+ * one visual group; 12px separates one group from the next and sets off the round's completion line;
+ * 40px sets an agent turn off from the next message. The completion is a single `divider` row (its Done
+ * badge + metrics), so 12px sits before it and 40px after (the next user message). The first row gets
+ * 20px of top breathing; anything unspecified keeps the 40px turn gap.
+ */
+function rowTopGap(prev: ChatRow["kind"] | null, cur: ChatRow["kind"]): string {
+	if (prev === null) return "pt-[20px]";
+	if (cur === "activity" && prev === "markdown") return "pt-[6px]"; // steps under their reasoning
+	if (cur === "markdown" && prev === "activity") return "pt-[12px]"; // next group's reasoning
+	if (cur === "divider") return "pt-[12px]"; // before the round's completion line
+	return "pt-[40px]"; // turn boundary (→ next message) & any other row
+}
 
 /**
  * One chat session as a center tab — the app-integration layer that wires the store + transport to the
@@ -65,7 +84,6 @@ export default function ChatView({
 		toolResults,
 		isStreaming,
 		currentAssistantId,
-		stats,
 		commands,
 		draft,
 		pendingExtUi,
@@ -83,13 +101,26 @@ export default function ChatView({
 		[turns, toolResults, isStreaming],
 	);
 
+	// The thread's last text message (user prompt or agent response) never collapses; every earlier long
+	// one does. Find the last `user`/`markdown` row so `ChatTurnView` can keep it in full.
+	const lastMessageRowId = useMemo(() => {
+		for (let i = rows.length - 1; i >= 0; i--) {
+			const row = rows[i];
+			if (row && (row.kind === "user" || row.kind === "markdown")) return row.id;
+		}
+		return null;
+	}, [rows]);
+
 	// The streaming loader lives as the list footer (so it forms where the next message will). Suppressed
 	// during a retry countdown, which renders its own indicator turn. `working` covers the post-send gap.
+	// Also suppressed for the `thinking` phase: the reasoning activity row already shows a "thinking"
+	// spinner + label, so a "Thinking…" footer would double it (one state = one indicator). Every other
+	// phase keeps the footer, since it carries unique status ("Running bash…", "Writing…", "Working…").
 	const listContext = useMemo<ChatListContext>(() => {
 		const last = turns[turns.length - 1];
 		const status =
 			isStreaming && last?.kind !== "retry" ? streamStatus(turns, currentAssistantId) : null;
-		return { status };
+		return { status: status?.phase === "thinking" ? null : status };
 	}, [turns, isStreaming, currentAssistantId]);
 
 	const [mentionQuery, setMentionQuery] = useState<string | null>(null);
@@ -241,7 +272,7 @@ export default function ChatView({
 		<ChatActionsContext.Provider value={chatActions}>
 			<AskStatesContext.Provider value={askStates}>
 				<div className="flex h-full min-h-0 flex-col bg-bg">
-					<ChatHeader stats={stats} statusEntries={Object.entries(extUiStatus)} />
+					<ChatHeader statusEntries={Object.entries(extUiStatus)} />
 					<div
 						data-testid="chat-scroll"
 						className="relative flex min-h-0 flex-1 flex-col"
@@ -258,15 +289,22 @@ export default function ChatView({
 							atBottomThreshold={50}
 							// Row ids are stable across streaming snapshots (rows.ts), so items never remount mid-stream.
 							computeItemKey={(_, row) => row.id}
-							itemContent={(_, row) => (
-								<div className="mx-auto max-w-3xl px-md py-xs">
-									<ChatTurnView
-										row={row}
-										workspaceRoot={workspaceRoot}
-										onOpenChanges={onOpenChanges}
-									/>
-								</div>
-							)}
+							itemContent={(index, row) => {
+								const prevKind = index > 0 ? (rows[index - 1]?.kind ?? null) : null;
+								const isLast = index === rows.length - 1;
+								return (
+									<div
+										className={`mx-auto max-w-3xl px-md ${rowTopGap(prevKind, row.kind)}${isLast ? " pb-[20px]" : ""}`}
+									>
+										<ChatTurnView
+											row={row}
+											workspaceRoot={workspaceRoot}
+											onOpenChanges={onOpenChanges}
+											isLastMessage={row.id === lastMessageRowId}
+										/>
+									</div>
+								);
+							}}
 						/>
 						{showScrollButton ? (
 							<button
@@ -296,6 +334,8 @@ export default function ChatView({
 						models={models}
 						currentModel={currentModel}
 						thinkingLevel={thinkingLevel}
+						// MOCK source — the real chips will come from structured follow-up/ask data (followUpChips.ts).
+						followUpChips={selectFollowUpChips(isStreaming)}
 						onMentionQuery={onMentionQuery}
 						onSelectModel={onSelectModel}
 						onSelectThinking={onSelectThinking}

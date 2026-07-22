@@ -17,10 +17,16 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
 ## Boundary
 
 - **Owns:** `appStore.ts` — connection/projects/workspaces state + setters, including the two atomic
-  navigation transitions: **`selectProject(projectId)`** enters that Project Home (`selectedProjectId`
-  set + `activeWorkspaceId` cleared in one write), while **`activateWorkspace(workspace)`** enters the
-  workspace and selects its owner (both ids set in one write). There is no generic active-workspace setter
-  that can split that invariant. It also owns the **workspace lifecycle reactions** every client runs
+  navigation transitions: **`selectProject(projectId)`** = `{ selectedProjectId, activeWorkspaceId:
+  null }` — it selects the project and **opens its read-only project view** in the center; it never
+  auto-enters a workspace. **`activateWorkspace(workspace)`** = `{ selectedProjectId: projectId,
+  activeWorkspaceId: workspace.id }` — the **only** path into the 3-column workspace view (a workspace
+  row click or a freshly created workspace). So the center routes on these two ids:
+  `activeWorkspaceId` → workspace IDE; else `selectedProjectId` → read-only `panels/ProjectView`; else the
+  Welcome screen (no project). **`showWelcome()`** = `{ selectedProjectId: null, activeWorkspaceId: null }`
+  clears both back to the Welcome screen (the header logo). Callers still go through the panels' `selectProjectWithWorkspaces` helper
+  (refresh the project's `workspace.list` into the store, then select) so the tree shows its worktrees.
+  There is no generic active-workspace setter that can split that invariant. It also owns the **workspace lifecycle reactions** every client runs
   identically on the `workspace.created`/`updated`/`removed` pushes (no per-client optimism — the backend
   is authoritative): **`addWorkspace(ws)`** upserts a
   `workspace.created` snapshot by `id` (no-op if the project isn't listed yet — reconciles on its next
@@ -31,14 +37,25 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   record, which has none); a project never fetched or an id absent from its list is a **no-op** — the next
   `workspace.list` reconciles; **`applyWorkspaceRemoved(projectId, id)`** is the **entire** removal
   reaction (`removeWorkspace` drops the row + `clearWorkspaceTabs` drops its tabs/terminals/chat runtimes,
-  and **if it was this client's active workspace** → `selectProject(projectId)` (shell falls back to its
-  owning Project Home) + a neutral toast that reads right for both the initiator and an observer); the
+  and **if it was this client's active workspace** → `selectProject(projectId)` (back to the project's
+  read-only view) + a neutral toast that reads right for both the
+  initiator and an observer); the
   primitive **`removeWorkspace(projectId, id)`** just drops the row (unknown project/id is a no-op);
   `tabsByWorkspace` /
   `activeTabByWorkspace` (`openTab`/`closeTab`/`setActiveTab`/`clearWorkspaceTabs`, plus
   **`setFileTabView(id, view)`** — a markdown `FileTab`'s `view` (`"rendered"`|`"source"`) lives on the tab
   so the rendered↔source choice survives tab switches; absent = rendered); `terminalsByWorkspace`
-  / `activeTerminalByWorkspace` (`addTerminal`/`closeTerminalTab`/`setActiveTerminalTab`); the
+  / `activeTerminalByWorkspace` / `backgroundedTerminalsByWorkspace` / `terminalCounterByWorkspace`
+  (`addTerminal` names “Terminal N” from the monotonic per-workspace counter — **stable, never reused or
+  renumbered** on close; **`closeTerminalTab`** is a **view detach**, not a kill — it moves the tab to
+  `backgroundedTerminalsByWorkspace` and its instance stays mounted so the PTY keeps running;
+  **`reattachTerminal`** brings a backgrounded terminal back as a tab with its original number;
+  `setActiveTerminalTab`); **`panelCollapsed: { left, right, terminal }`** + **`togglePanel(side)`**
+  (`side` = `left`/`right`/`terminal` — the terminal collapses the lower-right region downward) — which
+  panels are collapsed, client-only view state persisted to localStorage (`panelLayoutStorage.ts`), never
+  sent to the server; **`onboarding: "first-run" | "review" | null`** + **`openOnboarding(mode)`** /
+  **`closeOnboarding()`** — the onboarding overlay's transient open-state (the persisted "seen" flag is
+  the mocked `onboardingStorage.ts` localStorage key, not store state); the
   **per-session chat state** — `sessions: Record<sessionId, SessionRuntime>`, where a `SessionRuntime` holds
   one chat's `turns` (pi-canonical) / `toolResults` / `askAnswers` (the `ask-user-answers` replies keyed
   by tool call id — indexed by the reducer and hydration, never turned into bubbles) /
@@ -52,12 +69,11 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   (`session.prompt`/`steer`/`followUp`/`create`) — e.g. `prompt()` throwing "no API key" / a bad model —
   so a failed send lands in the chat instead of being swallowed; a *streaming* fault instead ends the run
   via **`reduceSessionEvent`**'s terminal-error `agent_end` (last assistant `stopReason: "error"` → an
-  `error` turn carrying its `errorMessage`, in place of the "✓ Done" marker). Closed
-  chats are reopenable: **`closeChatToHistory`** removes a chat tab but **keeps its runtime + session
-  alive**, recording it in **`closedChatsByWorkspace`** (`ClosedChat[]`, per workspace, most-recent-first);
-  **`reopenChat`** restores the tab with full state (the runtime never left); **`noteClosedChats`** records
-  disk-only sessions (from `session.list`) there too — idempotently (skips live/open/already-listed) — so a
-  chat that survived a host restart is reopenable. **`hydrateSession`** rebuilds a runtime + tab from a host
+  `error` turn carrying its `errorMessage`, in place of the "✓ Done" marker). **Single chat (view
+  restriction):** there is **only ever one chat tab** per workspace and it is **non-closable** — the view
+  never disposes a session, so the closed-chat/reopen concept is gone (`CenterTabs` restores exactly one
+  chat tab on activate via `hydrateSession`; any extra host sessions stay live but untabbed).
+  **`hydrateSession`** rebuilds a runtime + tab from a host
   `SessionSummary` + converted transcript on connect — a no-op if a runtime already exists, so a live/ahead
   chat is never clobbered. The
   pure **`reduceSessionEvent`** folds a `PiEvent` into a runtime; **`handlePiEvent(event,
@@ -74,7 +90,10 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   **`settingsSection`** (a const-object enum: `Providers`/`Github`/`Appearance`) with
   **`openSettings(section?)`** (deep-links to a section, defaults to Providers) / **`closeSettings()`** /
   **`setSettingsSection()`** — lives here so the top-bar gear AND the Welcome provider warning open Settings
-  to a section without prop-drilling through the shell. The **theme** state — **`theme: ThemeId`** (the
+  to a section without prop-drilling through the shell. Likewise **`createProjectOpen`** +
+  **`projectDialog: "create" | "open" | "clone" | null`** + **`openProjectDialog(kind)`** /
+  **`closeProjectDialog()`** back the three unified (mocked) project-entry dialogs so the rail menu/new-
+  folder button and the Welcome cards open the shell-mounted `ProjectDialogs`. The **theme** state — **`theme: ThemeId`** (the
   host-owned active theme) with **`applyConfig(config)`** (folds the server-synced `AppConfig` in from
   `server.welcome` / the `settings.changed` broadcast) — lives here too; it's a **pure value only** (the
   `applyTheme` DOM side-effect is the shell's, keyed off `theme`), and defaults to `Theme.Dark` until the
@@ -97,13 +116,19 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   (`workspaceTick > tab.loadedTick`) across tab switches. The transient **`changesRequest`** +
   **`requestChangesView(workspaceId, path)`** are a UI deep-link intent (a chat turn-divider asking the
   right panel to surface a file's diff); the panels watch it, scoped by workspace. The `EditorTab`
-  (`FileTab` | `ChatTab`) + `TerminalTab` + `ClosedChat` + `SessionRuntime` types. (Chat *render* types +
+  (`FileTab` | `ChatTab` | `DiffTab` — a Changes diff center tab, lean: just the address, `DiffPane`
+  fetches its own sides) + `TerminalTab` + `SessionRuntime` types, plus **`DocHistoryEntry`** (the
+  opened-documents History rows). **`docHistoryByWorkspace`** holds the per-workspace last-10 opened
+  documents (file/diff, most-recent-first) as **view state persisted to localStorage** (`noteDocOpened`
+  dedupes by kind+path, prepends, caps at 10, persists via the store-internal `docHistoryStorage.ts`;
+  `clearWorkspaceTabs` drops a removed workspace's list). (Chat *render* types +
   renderers live in the `chat` module.) The pure context selectors in `selectors.ts` resolve the active
   `Workspace`, its owning project id, and the shell's context project from those canonical ids and
   collections; derived active-project state is never stored separately.
 - **Public surface (barrel):** `useAppStore`; `selectActiveWorkspace`,
-  `selectActiveWorkspaceProjectId`, and `selectContextProject`; `toast` (the fire-from-anywhere helper),
-  `Toast` (type), `EditorTab` (`FileTab`/`ChatTab`), `TerminalTab`, `ClosedChat`, `SessionRuntime` +
+  `selectActiveWorkspaceProjectId`, `selectContextProject`, and `selectActiveSessionStats` (the active
+  chat session's usage, for the left-panel footer); `toast` (the fire-from-anywhere helper),
+  `Toast` (type), `EditorTab` (`FileTab`/`ChatTab`/`DiffTab`), `TerminalTab`, `DocHistoryEntry`, `SessionRuntime` +
   `EMPTY_RUNTIME` (ChatView's pre-creation fallback), `reduceSessionEvent`.
 - **Allowed deps:** `contracts` (`Project`/`Workspace`/`Model`/`ThinkingLevel`/`SessionStats`/
   `SlashCommandInfo`/`ExtUiRequest`/`LoginPush`/`WorkspaceFsChangedPayload`/`AppConfig`/`ThemeId`; the

@@ -36,7 +36,7 @@ convention; their boundary is held by convention + spec. Sibling edges live here
 | `chat` | pi conversation UI primitives: content-block renderers + the tool-renderer registry | no | [chat/SPEC.md](src/chat/SPEC.md) |
 | `auth` | in-app provider login: the presentational OAuth dialog + its client-side state reducer | yes | [auth/SPEC.md](src/auth/SPEC.md) |
 | `shell` | the responsive frame + composition of panels | no | [shell/SPEC.md](src/shell/SPEC.md) |
-| `components` | the app's single `ErrorBoundary` primitive (contains the `ui/` sub-module) | no | [components/SPEC.md](src/components/SPEC.md) |
+| `components` | the app's `ErrorBoundary` + shared `Tip` (tooltip) primitives (contains the `ui/` sub-module) | no | [components/SPEC.md](src/components/SPEC.md) |
 | `components/ui` | shadcn primitives, themed with our tokens | no | [components/ui/SPEC.md](src/components/ui/SPEC.md) |
 | `lib` | `cn()` (clsx + tailwind-merge) | yes | [lib/SPEC.md](src/lib/SPEC.md) |
 
@@ -56,13 +56,13 @@ screen, not a blank root).
 - `store` → `transport` (**type-only** — `ConnectionStatus`), `chat` (**type-only** — `ChatTurn`/`ToolResultState`), `auth` (**type-only** — `LoginState`; the `foldLoginFrame` reducer lives in `store`, like `reduceExtUi`), `contracts`
 - `transport` → `contracts`, `store` (welcome routing; the `store → transport` back-edge is type-only, so
   the runtime graph is acyclic)
-- `components` (`ErrorBoundary`) → none internal (React + `lucide-react` only, so any region can wrap in it); `components/ui` → `lib`
+- `components` → `ErrorBoundary` uses none internal (React + `lucide-react` only, so any region can wrap in it); `Tip`/`useIsTruncated` → `components/ui` (`tooltip`); `components/ui` → `lib`
 - leaves (`lib`, `constants`, `utils`, `styles`) → none internal
 
 Rules: a panel never imports another panel sideways; nothing imports `shell` (it's the composition root).
 
 The module set: `transport` / `store` / branded `shell`; `ProjectTree`; `FileTree` + `RightPanel`;
-`CenterTabs` + lazy `MonacoEditor`; `ChangesPanel` + lazy `DiffViewer`; `TerminalsPanel` + lazy
+`CenterTabs` + lazy `MonacoEditor` / `DiffPane`; `ChangesPanel`; `TerminalsPanel` + lazy
 `TerminalInstance`. The `chat` module — `ChatView` + content-block renderers + the tool-renderer registry
 — plus the full `Composer` (model/effort/@-mentions).
 

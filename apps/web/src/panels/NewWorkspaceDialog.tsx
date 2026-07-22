@@ -1,5 +1,5 @@
 import type { BranchList, ThinkingLevel, WireModel, Workspace } from "@thinkrail/contracts";
-import { Box, Check, ChevronDown, GitBranch, RefreshCw } from "lucide-react";
+import { Box, Check, ChevronDown, Folder, GitBranch, RefreshCw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { ModelSelector } from "@/chat/ModelSelector";
 import { ThinkingSelector } from "@/chat/ThinkingSelector";
@@ -26,6 +26,9 @@ import { errorText, getTransport } from "@/transport";
 /** A shared pill-trigger look for the project + branch pickers (mockup `.pill`). */
 const PILL =
 	"flex h-8 min-w-0 items-center gap-sm rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-sm text-sm text-text outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-[var(--primary-60)] data-[open=true]:bg-hover";
+
+// MOCK root where a new worktree lands (display-only here — same value onboarding shows; no host lookup).
+const MOCK_WORKTREE_ROOT = "~/.thinkrail/worktrees";
 
 /**
  * The New-Workspace "create + kick-off" surface: pick a base branch, say what to work on, pick a
@@ -224,7 +227,7 @@ export function NewWorkspaceDialog({
 				}}
 			>
 				<DialogHeader>
-					<DialogTitle>Create workspace</DialogTitle>
+					<DialogTitle>Create new worktree</DialogTitle>
 					<DialogDescription>
 						A separate checkout on its own new branch. Files, chats, changes, and terminals stay
 						scoped to it.
@@ -247,6 +250,15 @@ export function NewWorkspaceDialog({
 						onSelect={selectBaseRef}
 						onRefresh={() => void refreshBranches()}
 					/>
+					{/* Read-only: where the new worktree lands (mock; can't be changed here — just for awareness). */}
+					<div
+						data-testid="ws-root-path"
+						title={`${MOCK_WORKTREE_ROOT}/…`}
+						className="flex h-8 min-w-0 items-center gap-sm rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-sm text-muted text-xs"
+					>
+						<Folder className="size-3.5 shrink-0 text-hint" />
+						<span className="truncate font-[var(--font-mono)]">{MOCK_WORKTREE_ROOT}/…</span>
+					</div>
 				</div>
 
 				{/* hero: the prompt */}
@@ -256,7 +268,7 @@ export function NewWorkspaceDialog({
 						data-testid="ws-prompt"
 						value={prompt}
 						onChange={(e) => setPrompt(e.target.value)}
-						placeholder="What do you want to work on?"
+						placeholder="Describe your task…"
 						spellCheck={false}
 						rows={6}
 						className="min-h-[160px]"
@@ -297,10 +309,7 @@ export function NewWorkspaceDialog({
 						onClick={() => void create()}
 						className="flex h-8 shrink-0 items-center gap-sm rounded-[var(--radius-md)] bg-primary px-md font-medium text-on-accent text-sm outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
 					>
-						Create
-						<span className="inline-flex h-4 min-w-4 items-center justify-center rounded-[3px] bg-[var(--on-accent-16)] px-1 font-[var(--font-mono)] text-xs">
-							↵
-						</span>
+						Create worktree
 					</button>
 				</div>
 			</DialogContent>

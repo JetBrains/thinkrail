@@ -13,6 +13,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import type { FollowUpChip } from "./followUpChips";
 import { ModelSelector } from "./ModelSelector";
 import { ThinkingSelector } from "./ThinkingSelector";
 
@@ -70,6 +71,7 @@ export function Composer({
 	models,
 	currentModel,
 	thinkingLevel,
+	followUpChips,
 	onMentionQuery,
 	onSelectModel,
 	onSelectThinking,
@@ -81,6 +83,8 @@ export function Composer({
 	isStreaming: boolean;
 	commands: SlashCommandInfo[];
 	mentionCandidates: MentionCandidate[];
+	/** Always-present action chips shown above the input; clicking one submits its text (see followUpChips). */
+	followUpChips: FollowUpChip[];
 	models: WireModel[];
 	currentModel: WireModel | null;
 	thinkingLevel: ThinkingLevel;
@@ -162,6 +166,14 @@ export function Composer({
 		);
 		onChange("");
 		setImages([]);
+	};
+
+	// Clicking a chip sends its text as a user message — the same path as typing it and pressing send
+	// (steer while a turn streams, otherwise a fresh turn). Does not touch the draft.
+	const submitChip = (chip: FollowUpChip) => {
+		const text = chip.text.trim();
+		if (!text) return;
+		onSubmit(text, [], isStreaming ? "steer" : "send");
 	};
 
 	const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -283,55 +295,78 @@ export function Composer({
 				</div>
 			) : null}
 
-			<div className="flex flex-col gap-sm p-sm">
-				<textarea
-					ref={ref}
-					data-testid="chat-input"
-					value={value}
-					onChange={(e) => {
-						onChange(e.target.value);
-						setCaret(e.target.selectionStart);
-					}}
-					onKeyUp={(e) => setCaret(e.currentTarget.selectionStart)}
-					onClick={(e) => setCaret(e.currentTarget.selectionStart)}
-					onKeyDown={onKeyDown}
-					onPaste={onPaste}
-					onDrop={onDrop}
-					rows={4}
-					placeholder={
-						isStreaming
-							? "Enter to steer · Cmd/Ctrl+Enter to queue · @ files · / commands"
-							: "Message the agent…  (@ files · / commands · Enter to send)"
-					}
-					className="min-h-[108px] w-full resize-none rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-md py-sm text-sm text-text outline-none transition-colors placeholder:text-hint focus:border-primary focus-visible:ring-2 focus-visible:ring-[var(--primary-20)]"
-				/>
-				<div className="flex flex-wrap items-center gap-sm">
-					<div className="flex min-w-0 flex-1 flex-wrap items-center gap-sm">
-						<ModelSelector models={models} current={currentModel} onSelect={onSelectModel} />
-						<ThinkingSelector level={thinkingLevel} onSelect={onSelectThinking} />
-					</div>
-					<div className="flex shrink-0 items-center gap-sm">
-						{isStreaming ? (
+			{/* Always-present action chips (Conductor-style outlined pills), directly above the input. When the
+			    agent is asking, its options render here (priority case); otherwise default starters. The row
+			    hides only when there are genuinely no chips. Data is mocked for now (see followUpChips). */}
+			{followUpChips.length > 0 ? (
+				<div data-testid="followup-chips" className="flex flex-wrap gap-xs px-sm pt-sm">
+					{followUpChips.map((chip) => (
+						<button
+							key={chip.id}
+							type="button"
+							data-testid="followup-chip"
+							onClick={() => submitChip(chip)}
+							className="rounded-[var(--radius-lg)] border border-border2 bg-elevated px-sm py-xs text-muted text-xs hover:bg-hover hover:text-text"
+						>
+							{chip.label}
+						</button>
+					))}
+				</div>
+			) : null}
+
+			{/* One bordered container: the text field on top, the controls along the bottom inside the same
+			    frame. The focus ring is on the container (focus-within), not the inner textarea. */}
+			<div className="p-sm">
+				<div className="flex flex-col rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] transition-colors focus-within:border-primary focus-within:ring-2 focus-within:ring-[var(--primary-20)]">
+					<textarea
+						ref={ref}
+						data-testid="chat-input"
+						value={value}
+						onChange={(e) => {
+							onChange(e.target.value);
+							setCaret(e.target.selectionStart);
+						}}
+						onKeyUp={(e) => setCaret(e.currentTarget.selectionStart)}
+						onClick={(e) => setCaret(e.currentTarget.selectionStart)}
+						onKeyDown={onKeyDown}
+						onPaste={onPaste}
+						onDrop={onDrop}
+						rows={4}
+						placeholder={
+							isStreaming
+								? "Enter to steer · Cmd/Ctrl+Enter to queue · @ files · / commands"
+								: "Message the agent…  (@ files · / commands · Enter to send)"
+						}
+						className="min-h-[108px] w-full resize-none bg-transparent px-md pt-sm pb-xs text-sm text-text outline-none placeholder:text-hint"
+					/>
+					<div className="flex flex-wrap items-center gap-sm px-sm pb-sm">
+						<div className="flex min-w-0 flex-1 flex-wrap items-center gap-sm">
+							<ModelSelector models={models} current={currentModel} onSelect={onSelectModel} />
+							<ThinkingSelector level={thinkingLevel} onSelect={onSelectThinking} />
+						</div>
+						<div className="flex shrink-0 items-center gap-sm">
+							{isStreaming ? (
+								<button
+									type="button"
+									data-testid="chat-abort"
+									aria-label="Stop"
+									onClick={onAbort}
+									className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-border2 bg-elevated text-text hover:bg-hover"
+								>
+									<Square className="size-3.5" />
+								</button>
+							) : null}
 							<button
 								type="button"
-								data-testid="chat-abort"
-								aria-label="Stop"
-								onClick={onAbort}
-								className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-border2 bg-elevated text-text hover:bg-hover"
+								data-testid="chat-send"
+								aria-label={isStreaming ? "Steer" : "Send"}
+								onClick={() => submit(isStreaming ? "steer" : "send")}
+								disabled={!value.trim() && images.length === 0}
+								className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-primary text-on-accent hover:opacity-90 disabled:pointer-events-none disabled:opacity-50"
 							>
-								<Square className="size-3.5" />
+								<ArrowUp className="size-4" />
 							</button>
-						) : null}
-						<button
-							type="button"
-							data-testid="chat-send"
-							aria-label={isStreaming ? "Steer" : "Send"}
-							onClick={() => submit(isStreaming ? "steer" : "send")}
-							disabled={!value.trim() && images.length === 0}
-							className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-primary text-on-accent hover:opacity-90 disabled:pointer-events-none disabled:opacity-50"
-						>
-							<ArrowUp className="size-4" />
-						</button>
+						</div>
 					</div>
 				</div>
 			</div>

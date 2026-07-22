@@ -33,9 +33,12 @@ test("turn-divider files-changed chip opens the file's diff in the Changes panel
 	await expect(chip).toBeVisible({ timeout: 30_000 });
 	await expect(chip).toContainText("file changed");
 
-	// Clicking it flips the right panel to Changes and shows notes.txt's diff.
+	// Clicking it flips the right panel to Changes and opens notes.txt's diff as a center tab.
 	await chip.click();
 	await expect(page.getByTestId("tab-changes")).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("change-item").filter({ hasText: "notes.txt" })).toBeVisible();
-	await expect(page.getByTestId("diff-viewer")).toContainText("hello");
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="diff"]')).toContainText(
+		"notes.txt",
+	);
+	await expect(page.getByTestId("diff-pane")).toContainText("hello");
 });

@@ -8,11 +8,13 @@ import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
 test("a failed editor chunk shows the boundary's reload fallback and keeps the shell alive", async ({
 	page,
 }) => {
+	// Abort the lazily-loaded Monaco chunk (Vite default name: `assets/MonacoEditor-<hash>.js`) up front —
+	// the read-only project view also lazy-loads Monaco, so blocking it before selecting the project keeps
+	// the chunk from being cached before the workspace editor tries to load it.
+	await page.route(/MonacoEditor.*\.js(\?.*)?$/, (route) => route.abort());
+
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
-
-	// Abort the lazily-loaded Monaco chunk (Vite default name: `assets/MonacoEditor-<hash>.js`).
-	await page.route(/MonacoEditor.*\.js(\?.*)?$/, (route) => route.abort());
 
 	await page.getByTestId("tab-files").click();
 	const notes = page.getByTestId("file-node").filter({ hasText: "notes.txt" });
