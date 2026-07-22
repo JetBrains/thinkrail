@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
+import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
 
 // Tagged @agent (see agent.live.spec.ts): a REAL pi agent + two browser tabs against ONE host. Proves
 // hydrate-then-stream: a second client reconstructs the workspace's chats + transcript on connect, and
@@ -14,7 +14,7 @@ test("a second tab hydrates the same workspace's chats and then sees live update
 	// --- Tab A: create a workspace, open a chat, run a turn -----------------------------------------
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
-	await expect(page.getByTestId("workspace-item").first()).toHaveAttribute("data-active", "true");
+	await expect(worktreeRows(page).first()).toHaveAttribute("data-active", "true");
 	await page.getByTestId("start-chat").click();
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 	await page.getByTestId("chat-input").fill("Reply with the single word: alpha");
@@ -30,7 +30,7 @@ test("a second tab hydrates the same workspace's chats and then sees live update
 	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	// Navigate to the workspace tab A created (it's persisted + listed) → activating it triggers hydration.
 	await page2.getByTestId("project-expand").first().click(); // expand → load workspaces
-	await page2.getByTestId("workspace-item").first().click(); // activate → hydrate-on-connect
+	await worktreeRows(page2).first().click(); // activate → hydrate-on-connect
 
 	// Tab B rebuilds the chat tab + its transcript purely from the host (it never witnessed the turn).
 	await expect(page2.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1, {

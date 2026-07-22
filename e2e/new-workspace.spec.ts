@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openFixtureProject } from "./fixtures/app";
+import { openFixtureProject, worktreeRows } from "./fixtures/app";
 
 // The New-Workspace dialog, no agent required: project + base-branch pickers, the effort picker, and
 // the bare-create flow. The agent kick-off (Create with a prompt → streaming chat) and the model-list
@@ -58,18 +58,18 @@ test("the dialog lists local branches (no stray origin) and creates a worktree",
 	if (modelResolved) await expect(effort).toBeEnabled();
 	else await expect(effort).toBeDisabled();
 
-	// Dismissing the dialog (Escape) creates nothing.
+	// Dismissing the dialog (Escape) creates nothing (only the built-in Default row is present).
 	await page.keyboard.press("Escape");
 	await expect(dialog).toBeHidden();
-	await expect(page.getByTestId("workspace-item")).toHaveCount(0);
+	await expect(worktreeRows(page)).toHaveCount(0);
 
 	// Reopen and Create with an empty prompt → a worktree is created (no chat), and it becomes active.
 	await page.getByTestId("add-workspace").first().click();
 	await expect(dialog).toBeVisible();
 	await page.getByTestId("create-workspace").click();
 	await expect(dialog).toBeHidden();
-	await expect(page.getByTestId("workspace-item")).toHaveCount(1);
-	await expect(page.getByTestId("workspace-item").first()).toHaveAttribute("data-active", "true");
+	await expect(worktreeRows(page)).toHaveCount(1);
+	await expect(worktreeRows(page).first()).toHaveAttribute("data-active", "true");
 
 	// The active scope stays visible after the Welcome → IDE remount, both in the tree and the global
 	// context spine. The empty center is a persistent receipt, not a generic blank-state prompt.
@@ -121,7 +121,8 @@ test("a project's committed skills are gated behind trust, then autocomplete", a
 	await prompt.press("Enter");
 	await expect(prompt).toHaveValue("/skill:e2e-portable ");
 	await expect(dialog).toBeVisible();
-	await expect(page.getByTestId("workspace-item")).toHaveCount(0);
+	// Nothing was created — only the project's built-in Default row exists.
+	await expect(worktreeRows(page)).toHaveCount(0);
 });
 
 test("Enter in the prompt creates; Shift+Enter inserts a newline", async ({ page }) => {
@@ -142,7 +143,7 @@ test("Enter in the prompt creates; Shift+Enter inserts a newline", async ({ page
 	await prompt.pressSequentially("second line");
 	await expect(prompt).toHaveValue("first line\nsecond line");
 	await expect(dialog).toBeVisible();
-	await expect(page.getByTestId("workspace-item")).toHaveCount(0);
+	await expect(worktreeRows(page)).toHaveCount(0);
 
 	// Plain Enter submits, matching the Create button's ↵ affordance. Clearing the prompt first keeps this
 	// in the no-agent suite (an empty prompt creates a bare worktree with no chat kick-off) while still
@@ -151,6 +152,6 @@ test("Enter in the prompt creates; Shift+Enter inserts a newline", async ({ page
 	await expect(dialog.getByTestId("workspace-naming-hint")).toHaveCount(0);
 	await prompt.press("Enter");
 	await expect(dialog).toBeHidden();
-	await expect(page.getByTestId("workspace-item")).toHaveCount(1);
+	await expect(worktreeRows(page)).toHaveCount(1);
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(0);
 });
