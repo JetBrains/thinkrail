@@ -1,9 +1,10 @@
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense } from "react";
 import { isMarkdownPath } from "@/lib/utils";
 import type { DiffTab } from "../store";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { ToggleSegment } from "./ToggleSegment";
+import { useLiveTabContent } from "./useLiveTabContent";
 
 // Heavy views load only when shown — same lazy stance as FilePane: Monaco for the diff, markdown+shiki
 // (+ htmldiff) for the rendered rich-diff view of a markdown file's diff.
@@ -29,33 +30,15 @@ const loading = <div className="flex h-full items-center justify-center text-hin
 export function DiffPane({ tab }: { tab: DiffTab }) {
 	const setDiffTabView = useAppStore((s) => s.setDiffTabView);
 	const setDiffTabRendered = useAppStore((s) => s.setDiffTabRendered);
-	const change = useAppStore((s) => s.fsChangesByWorkspace[tab.workspaceId]);
 
-	useEffect(() => {
-		if (!change) return;
-		const loaded = tab.loadedTick ?? 0;
-		if (change.tick <= loaded) return;
-		const updateContent = useAppStore.getState().updateDiffTabContent;
-		// Exactly one batch behind and this file isn't in it → nothing to re-read, just advance the tick.
-		const skippable =
-			change.tick === loaded + 1 && !change.truncated && !change.paths.includes(tab.path);
-		if (skippable) {
-			updateContent(tab.id, tab.original, tab.modified, change.tick);
-			return;
-		}
-		let cancelled = false;
-		getTransport()
-			.request("git.diffFile", { workspaceId: tab.workspaceId, path: tab.path })
-			.then(({ original, modified }) => {
-				if (!cancelled) updateContent(tab.id, original, modified, change.tick);
-			})
-			.catch(() => {
-				if (!cancelled) updateContent(tab.id, tab.original, tab.modified, change.tick);
-			});
-		return () => {
-			cancelled = true;
-		};
-	}, [change, tab.id, tab.path, tab.workspaceId, tab.loadedTick, tab.original, tab.modified]);
+	useLiveTabContent(tab, {
+		read: () =>
+			getTransport().request("git.diffFile", { workspaceId: tab.workspaceId, path: tab.path }),
+		applyFresh: ({ original, modified }, tick) =>
+			useAppStore.getState().updateDiffTabContent(tab.id, original, modified, tick),
+		keepCurrent: (tick) =>
+			useAppStore.getState().updateDiffTabContent(tab.id, tab.original, tab.modified, tick),
+	});
 
 	const markdown = isMarkdownPath(tab.path);
 	const view = tab.view ?? "split";

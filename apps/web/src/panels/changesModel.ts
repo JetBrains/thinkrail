@@ -26,6 +26,11 @@ export function diffTabId(workspaceId: string, path: string): string {
 	return `${workspaceId}:diff:${path}`;
 }
 
+/** Whether `tabId` is a diff tab of `workspaceId` — the shared prefix of every `diffTabId` there. */
+export function isDiffTabId(workspaceId: string, tabId: string | null | undefined): boolean {
+	return tabId?.startsWith(`${workspaceId}:diff:`) ?? false;
+}
+
 export interface ChangeTreeFile {
 	kind: "file";
 	name: string;

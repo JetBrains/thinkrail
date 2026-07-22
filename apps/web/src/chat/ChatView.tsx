@@ -201,8 +201,9 @@ export default function ChatView({
 			.catch(() => {});
 	};
 
-	// A turn-divider's "files changed" chip → surface the first changed file's diff in the right panel.
-	// This is the one chat touch of the store outside the renderers, kept here in the integration layer.
+	// A turn-divider's "files changed" chip → deep-link the right panel to the first changed file (flip to
+	// Changes + highlight its row; the diff opens only on an explicit click). This is the one chat touch of
+	// the store outside the renderers, kept here in the integration layer.
 	const onOpenChanges = useCallback(
 		(paths: string[]) => {
 			const path = paths[0];

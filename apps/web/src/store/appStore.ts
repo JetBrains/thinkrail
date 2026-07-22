@@ -391,9 +391,10 @@ interface AppState {
 	/** Models with configured auth (cheap win #1) — fetched once, shared by every chat's picker. */
 	models: WireModel[];
 	/**
-	 * A request to surface a file's diff in the right-panel Changes view (e.g. a chat turn-divider's
-	 * "files changed" chip). The panels watch it and switch tab / select the file when it targets the
-	 * active workspace; a fresh object each call so identical re-requests still fire.
+	 * A request to surface a file in the right-panel Changes view (e.g. a chat turn-divider's "files
+	 * changed" chip). The panels watch it and, when it targets the active workspace, switch to the Changes
+	 * tab and **highlight** the file's row — the diff opens only on an explicit click. A fresh object each
+	 * call so identical re-requests still fire.
 	 */
 	changesRequest: { workspaceId: string; path: string } | null;
 	/**
