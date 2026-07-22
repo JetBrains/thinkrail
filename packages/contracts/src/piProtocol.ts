@@ -40,7 +40,7 @@ export type WireModel = Pick<
 
 // The unified render union the UI switches on. The real superset (`AgentSessionEvent`) is declared in the
 // Node-only `pi-coding-agent` (it pulls node:fs), so it's MIRRORED here type-only, derived from the
-// imported `AgentEvent`. Keep in sync with @earendil-works/pi-coding-agent@0.80.3
+// imported `AgentEvent`. Keep in sync with @earendil-works/pi-coding-agent@0.81.1
 // (core/agent-session.d.ts) — the session-event members below are what `session.subscribe` emits.
 export type PiEvent =
 	| Exclude<AgentEvent, { type: "agent_end" }>
@@ -74,7 +74,7 @@ export interface SessionEventPayload {
 }
 
 // The shapes below are declared in the Node-only `pi-coding-agent` (it pulls node:fs), so they're
-// MIRRORED here type-only for the wire. Keep in sync with @earendil-works/pi-coding-agent@0.80.3.
+// MIRRORED here type-only for the wire. Keep in sync with @earendil-works/pi-coding-agent@0.81.1.
 
 /** Context-window usage for the active model. `tokens`/`percent` are null when unknown (post-compaction). */
 export interface ContextUsage {
@@ -247,7 +247,7 @@ export interface AskUserAnswersDetails {
 
 /**
  * MIRROR of pi-coding-agent's `CustomMessage` (that package is Node-only, so the shape is re-declared
- * type-only for the wire — keep in sync with @earendil-works/pi-coding-agent@0.80.3 core/messages.d.ts):
+ * type-only for the wire — keep in sync with @earendil-works/pi-coding-agent@0.81.1 core/messages.d.ts):
  * an extension-injected transcript message (`sendCustomMessage`). Crosses the wire in
  * `session.getMessages` and inside `message_start`/`message_end` events; the LLM sees it as a user
  * message. The web renders only the `customType`s it knows (e.g. `ask-user-answers`) and ignores the rest.

@@ -146,7 +146,7 @@ of the host.
 
 ## Get right
 
-- **Type-only, from the package roots, always** (verified vs 0.80.6: type-only imports are erased by
+- **Type-only, from the package roots, always** (verified vs 0.81.1: type-only imports are erased by
   `verbatimModuleSyntax`, so the web bundle stays provider-free; the pi-ai provider/API subpaths
   statically import the Node SDKs — never touch them). The `/base` entries existed only in 0.79.8–0.79.9.
 - `Model` is generic — expose as `Model<any>`.
