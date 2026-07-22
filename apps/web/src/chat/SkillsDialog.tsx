@@ -1,5 +1,5 @@
 import type { Project, SkillCatalogEntry, SkillDecision, Workspace } from "@thinkrail/contracts";
-import { RefreshCw, ShieldCheck } from "lucide-react";
+import { Puzzle, RefreshCw, ShieldCheck } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -173,7 +173,8 @@ export function SkillsDialog({
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent data-testid="skills-dialog" className="max-w-[560px] gap-md p-md">
-				<div className="flex items-center justify-between gap-sm">
+				{/* pr-8 reserves room for the DialogContent's absolute close (X) so it can't overlap Reload. */}
+				<div className="flex items-center justify-between gap-sm pr-8">
 					<DialogTitle className="text-sm text-text">Skills</DialogTitle>
 					{workspace ? (
 						<Button
@@ -275,6 +276,9 @@ export function SkillsDialog({
 											hasPlugins ? "top-8" : "top-0",
 										)}
 									>
+										{group.isPlugin ? (
+											<Puzzle className="size-3.5 shrink-0 text-hint" aria-hidden />
+										) : null}
 										<span className="font-medium text-text text-xs uppercase tracking-wide">
 											{group.label}
 										</span>
@@ -289,7 +293,8 @@ export function SkillsDialog({
 											onClick={() => setGroupEnabled(group.key, !groupOn)}
 										/>
 									</div>
-									<div className="divide-y divide-border2">
+									{/* Indent + left rail nests the skills visually under their group/plugin header. */}
+									<div className="ml-sm divide-y divide-border2 border-border2 border-l">
 										{group.items.map((entry) => (
 											<SkillRow
 												key={`${group.key}:${entry.name}`}
@@ -378,7 +383,7 @@ function SkillRow({
 			data-testid="skill-row"
 			data-skill={entry.name}
 			data-decision={entry.decision}
-			className="flex items-center gap-sm px-sm py-1.5 hover:bg-hover"
+			className="flex items-center gap-sm py-1.5 pr-sm pl-md hover:bg-hover"
 		>
 			<span className="flex min-w-0 flex-1 flex-col">
 				<span className="truncate font-[var(--font-mono)] text-sm text-text">{entry.name}</span>
