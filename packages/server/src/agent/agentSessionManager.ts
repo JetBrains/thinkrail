@@ -85,6 +85,22 @@ export function getSessionWorkspaceId(sessionId: string): string | undefined {
 }
 
 /**
+ * Re-scan skills/settings and rebuild the system prompt for a live session — the active-chat "Reload skills"
+ * path, so a trust grant or a worktree skill change lands without dropping the conversation. Refuses while
+ * the session is streaming (pi's reload rebuilds the runtime; mid-turn would desync) — the caller retries
+ * after the turn. Throws for an unknown session.
+ */
+export async function reloadSessionResources(sessionId: string): Promise<void> {
+	const session = mustGet(sessionId);
+	if (session.isStreaming) {
+		throw new Error(
+			"Can't reload skills while the session is streaming — try again after the turn.",
+		);
+	}
+	await session.reload();
+}
+
+/**
  * The pi settings a session runs with: the user's real settings **plus** an in-memory override turning
  * `images.autoResize` **off** (never persisted — `applyOverrides`, not `set…`+`save`). With it off, the
  * `read` tool sends image files to the model **raw** instead of routing them through pi's photon

@@ -27,7 +27,7 @@ import {
 	SettingsManager,
 	type Skill,
 } from "@earendil-works/pi-coding-agent";
-import type { SlashCommandInfo } from "@thinkrail/contracts";
+import type { SkillCatalogEntry, SlashCommandInfo } from "@thinkrail/contracts";
 import { askUserQuestionExtension } from "./askUserQuestion";
 import { decideSkill, type SkillAdmissionContext } from "./skillAdmission";
 import { type CompatibilitySkillSource, discoverCompatibilitySkillSources } from "./skillSources";
@@ -279,4 +279,54 @@ export async function listProjectAliasSkillNames(cwd: string): Promise<string[]>
 		.getSkills()
 		.skills.filter((skill) => projectPaths.some((path) => isUnderPath(skill.filePath, path)))
 		.map((skill) => skill.name);
+}
+
+/**
+ * The full skill catalog for a workspace's Skills manager: every discovered skill (bundled + personal +
+ * project + pi-native) with its admission verdict, so hidden skills show a reason instead of vanishing.
+ * Unlike `listSkillCommands` this does NOT filter — it relabels provenance only and attaches each skill's
+ * `decision`, letting the UI render untrusted / pending-ack / disabled entries with the right affordance.
+ */
+export async function listSkillCatalog(
+	cwd: string,
+	admission: SkillAdmissionContext,
+): Promise<SkillCatalogEntry[]> {
+	const discovered = discoverCompatibilitySkillSources(cwd);
+	const projectAliasPaths = discovered.filter((s) => s.scope === "project").map((s) => s.path);
+	const isProjectAlias = (filePath: string) =>
+		projectAliasPaths.some((path) => isUnderPath(filePath, path));
+	const personal = discovered.filter((s) => s.scope === "user");
+	const project = discovered.filter((s) => s.scope === "project");
+	const bundledSkillPaths = bundled ? [bundled.skillsDir] : resolveDevPaths().skillPaths;
+	const settingsManager = SettingsManager.create(cwd, getAgentDir(), { projectTrusted: true });
+	const loader = new DefaultResourceLoader({
+		cwd,
+		agentDir: getAgentDir(),
+		settingsManager,
+		additionalSkillPaths: [
+			...bundledSkillPaths,
+			...personal.map((s) => s.path),
+			...project.map((s) => s.path),
+		],
+		// Relabel only (no admission filter) so the manager sees every discovered skill + its verdict.
+		skillsOverride: (current) => ({
+			...current,
+			skills: current.skills.map((skill) => relabelAliasProvenance(skill, discovered)),
+		}),
+		noExtensions: true,
+		noPromptTemplates: true,
+		noThemes: true,
+		noContextFiles: true,
+	});
+	await loader.reload();
+	return loader.getSkills().skills.map((skill) => {
+		const gated = isProjectAlias(skill.filePath);
+		return {
+			name: skill.name,
+			description: skill.description,
+			sourceInfo: skill.sourceInfo,
+			gated,
+			decision: decideSkill({ name: skill.name, isProjectAlias: gated }, admission),
+		};
+	});
 }

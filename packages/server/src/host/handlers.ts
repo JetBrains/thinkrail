@@ -23,8 +23,10 @@ import {
 	listAvailableModels,
 	listProjectAliasSkillNames,
 	listSessions,
+	listSkillCatalog,
 	listSkillCommands,
 	promptSession,
+	reloadSessionResources,
 	removeSession,
 	removeWorkspaceSessions,
 	resolveExtUi,
@@ -47,11 +49,13 @@ import { readDir, readFile } from "../fs";
 import { gitDiffFile, gitStatus, listBranches, prefetchBranch } from "../git";
 import { githubAuthStatus, githubRefresh } from "../github";
 import {
+	acknowledgeProjectSkills,
 	closeProject,
 	initProject,
 	inspectProjectPath,
 	listProjects,
 	openProject,
+	setProjectSkillEnabled,
 	setProjectTrust,
 } from "../projects";
 import { updateConfig } from "../settings";
@@ -71,6 +75,7 @@ import {
 	getWorkspace,
 	listWorkspaces,
 	reclaimWorktree,
+	setWorkspaceSkillOverride,
 	workspaceDiffStats,
 } from "../workspaces";
 import { ackSend } from "./ackSend";
@@ -214,6 +219,39 @@ const handlers: Record<string, Handler> = {
 			disabled: project.disabledSkills ?? [],
 			overrides: {},
 		});
+	},
+	// The workspace Skills manager: the full catalog + each skill's admission verdict, resolved against the
+	// worktree's checkout and the owning project's trust/toggles plus this workspace's overrides.
+	"skills.state": (params) => {
+		const { workspaceId } = params as { workspaceId: string };
+		const ws = getWorkspace(workspaceId);
+		const project = listProjects().find((p) => p.id === ws.projectId);
+		return listSkillCatalog(ws.worktreePath, {
+			trusted: project?.trusted === true,
+			acknowledged: project?.acknowledgedSkills ?? [],
+			disabled: project?.disabledSkills ?? [],
+			overrides: ws.skillOverrides ?? {},
+		});
+	},
+	// Confirm project-scoped skills that appeared after trust (re-confirm-new) — echoes the updated Project.
+	"project.acknowledgeSkills": (params) => {
+		const p = params as { id: string; names: string[] };
+		return acknowledgeProjectSkills(p.id, p.names);
+	},
+	// Project-baseline per-skill enable/disable.
+	"project.setSkillEnabled": (params) => {
+		const p = params as { id: string; name: string; enabled: boolean };
+		return setProjectSkillEnabled(p.id, p.name, p.enabled);
+	},
+	// Per-workspace per-skill override over the project baseline (`null` clears it).
+	"workspace.setSkillOverride": (params) => {
+		const p = params as { id: string; name: string; override: "on" | "off" | null };
+		return setWorkspaceSkillOverride(p.id, p.name, p.override);
+	},
+	// Apply skill/settings changes to a running session (active-chat reload); rejects while streaming.
+	"session.reloadResources": async (params) => {
+		await reloadSessionResources((params as { sessionId: string }).sessionId);
+		return { ok: true } as const;
 	},
 	// session.* — the pi engine. A thrown/failed call returns a `{ ok:false, error }` WS response;
 	// streaming faults arrive as `pi.event`s (the error/agent_end variants), not here.

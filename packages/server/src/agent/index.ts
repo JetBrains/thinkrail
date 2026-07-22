@@ -6,6 +6,7 @@ export {
 	type BundledExtensionFactory,
 	type BundledExtensions,
 	listProjectAliasSkillNames,
+	listSkillCatalog,
 	listSkillCommands,
 	setBundledExtensions,
 } from "./extensions";

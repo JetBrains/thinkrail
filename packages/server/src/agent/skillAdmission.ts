@@ -1,3 +1,7 @@
+import type { SkillDecision } from "@thinkrail/contracts";
+
+export type { SkillDecision };
+
 // The pure decision layer for which skills a session actually loads. Kept free of pi/fs so it can be
 // exhaustively unit-tested: given a skill's facts and the resolved admission context (project trust +
 // acknowledged set + project-baseline disables + per-workspace overrides), it returns one verdict.
@@ -25,16 +29,6 @@ export interface SkillFacts {
 	/** True for a committed project-scoped alias (the trust-gated class); false for personal/bundled/pi. */
 	isProjectAlias: boolean;
 }
-
-/**
- * Why a skill is or isn't loaded — the UI renders all four so a hidden skill is never a silent mystery:
- * - `load` — in the agent's context / invocable.
- * - `untrusted` — a project alias, but the project isn't trusted yet (grant trust to consider it).
- * - `pending-ack` — a project alias under a trusted project that appeared *after* trust was granted
- *   (a pull / branch switch); needs a one-tap confirm before it loads.
- * - `disabled` — admissible but turned off (workspace override, else project baseline).
- */
-export type SkillDecision = "load" | "untrusted" | "pending-ack" | "disabled";
 
 /**
  * The single source of truth for admission. Order matters: the **trust gate is checked first** for a
