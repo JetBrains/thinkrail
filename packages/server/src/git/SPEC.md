@@ -19,7 +19,10 @@ warms a remote base ref off the workspace-create critical path.
 - **Owns:** `git(cwd, args)` (spawn git *sync*, capture trimmed stdout/stderr + ok; `opts.raw` keeps
   stdout byte-exact for file-content reads) and `gitAsync(cwd,
   args)` (its async twin — `Bun.spawn`, off the event loop, for network-bound ops like `fetch` that must
-  not block the host); `gitStatus(workspaceId)` — changed files vs the base branch plus untracked;
+  not block the host); `gitStatus(workspaceId)` — changed files vs the base branch plus untracked, each
+  carrying per-file `added`/`removed` line counts (`git diff --numstat`, its rename-mangled paths resolved
+  via `numstatPath` to match `--name-status`; binary rows dropped; untracked files count their whole
+  content as added) for the Changes tree's `+/−` badges;
   `gitDiffFile(workspaceId, path)` → `{ original, modified }` — both sides of one file's change for the
   center Monaco diff tab (`original` = `git show base:path`, raw, empty when absent there — untracked/
   added, or a renamed file's new path, degrading to an add-style diff; `modified` = the worktree file,

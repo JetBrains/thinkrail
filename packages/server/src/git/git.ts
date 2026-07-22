@@ -85,10 +85,49 @@ function mapStatus(code: string): GitFileStatus {
 	return "modified";
 }
 
-/** A worktree's changed files vs its base branch, plus any untracked files. */
+/**
+ * Resolve a `git diff --numstat` path to its final path so it matches `--name-status`'s destination.
+ * Rename/copy rows arrive mangled: plain `old => new`, or brace form `pre{old => new}post` →
+ * `pre + new + post` (e.g. `src/{a => b}/x.ts` → `src/b/x.ts`).
+ */
+export function numstatPath(raw: string): string {
+	if (!raw.includes("=>")) return raw;
+	const brace = raw.match(/^(.*)\{.* => (.*)\}(.*)$/);
+	if (brace) return `${brace[1]}${brace[2]}${brace[3]}`.replace(/\/\//g, "/");
+	const arrow = raw.match(/ => (.*)$/);
+	return arrow ? (arrow[1] ?? raw) : raw;
+}
+
+/** Per-file `{added, removed}` vs base, keyed by (resolved) path. Binary rows (`-`/`-`) are skipped. */
+function numstat(
+	worktreePath: string,
+	baseBranch: string,
+): Map<string, { added: number; removed: number }> {
+	const counts = new Map<string, { added: number; removed: number }>();
+	const out = git(worktreePath, ["diff", "--numstat", baseBranch]);
+	if (!out.ok || !out.out) return counts;
+	for (const line of out.out.split("\n")) {
+		const parts = line.split("\t");
+		if (parts.length < 3) continue;
+		const added = Number(parts[0]);
+		const removed = Number(parts[1]);
+		if (!Number.isFinite(added) || !Number.isFinite(removed)) continue; // binary: "-" / "-"
+		counts.set(numstatPath(parts.slice(2).join("\t")), { added, removed });
+	}
+	return counts;
+}
+
+/** Count a file's lines the way git counts additions (final line without a trailing newline still counts). */
+function lineCount(content: string): number {
+	if (content.length === 0) return 0;
+	return content.split("\n").length - (content.endsWith("\n") ? 1 : 0);
+}
+
+/** A worktree's changed files vs its base branch, plus any untracked files. Each carries `+/−` counts. */
 export function gitStatus(workspaceId: string): GitStatus {
 	const ws = workspace(workspaceId);
 	const changes: GitFileChange[] = [];
+	const counts = numstat(ws.worktreePath, ws.baseBranch);
 
 	const tracked = git(ws.worktreePath, ["diff", "--name-status", ws.baseBranch]);
 	if (tracked.ok && tracked.out) {
@@ -97,14 +136,22 @@ export function gitStatus(workspaceId: string): GitStatus {
 			const code = parts[0] ?? "";
 			// Renames/copies have a third field (old → new); take the destination path.
 			const path = parts.length > 2 ? parts[parts.length - 1] : parts[1];
-			if (path) changes.push({ path, status: mapStatus(code) });
+			if (path) changes.push({ path, status: mapStatus(code), ...counts.get(path) });
 		}
 	}
 
 	const untracked = git(ws.worktreePath, ["ls-files", "--others", "--exclude-standard"]);
 	if (untracked.ok && untracked.out) {
 		for (const path of untracked.out.split("\n")) {
-			if (path) changes.push({ path, status: "untracked" });
+			if (!path) continue;
+			// Untracked files never appear in `git diff` — count their whole content as added.
+			let added = 0;
+			try {
+				added = lineCount(readFileSync(resolve(ws.worktreePath, path), "utf8"));
+			} catch {
+				// unreadable (e.g. a dir entry or a race) → leave counts off
+			}
+			changes.push({ path, status: "untracked", added, removed: 0 });
 		}
 	}
 
