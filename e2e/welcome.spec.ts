@@ -4,9 +4,11 @@ import { basename, join } from "node:path";
 import { expect, test } from "@playwright/test";
 import {
 	createWorkspaceViaDialog,
+	goProjectHome,
 	openAppFresh,
 	openFixtureProject,
 	stagePlainFolder,
+	worktreeRows,
 } from "./fixtures/app";
 import { E2E_FIXTURE_REPO, E2E_PLAIN_DIR } from "./fixtures/paths";
 
@@ -172,6 +174,8 @@ test("a project with specs offers Start building over Set up", async ({ page }) 
 	// The fixture repo already carries SPEC.md files → the host reports it has specs.
 	await openFixtureProject(page);
 
+	// Opening auto-entered the Default workspace; the Welcome cards live one project-row click away.
+	await goProjectHome(page);
 	await expect(page.getByTestId("welcome")).toBeVisible();
 	// The active project's name shows as the eyebrow above the wordmark.
 	await expect(page.getByTestId("welcome")).toContainText("sample-project");
@@ -196,6 +200,8 @@ test("a project without specs suggests setting it up", async ({ page }) => {
 	try {
 		await openFixtureProject(page);
 
+		// Opening auto-entered the Default workspace — back to the project home for the spec-first cards.
+		await goProjectHome(page);
 		await expect(page.getByTestId("welcome")).toBeVisible();
 		await expect(page.getByTestId("welcome")).toContainText("sample-project");
 		// Three cards: Set up project (primary) + Start building + Open project.
@@ -247,10 +253,17 @@ test("opening a non-git folder from the Welcome screen offers to initialise a re
 	await expect(confirmInit).toBeVisible();
 	await confirmInit.click();
 
-	// It initialises + opens → the folder now shows up as a project in the rail.
+	// It initialises + opens → the folder now shows up as a project in the rail…
 	await expect(
 		page.getByTestId("project-item").filter({ hasText: basename(E2E_PLAIN_DIR) }),
 	).toBeVisible();
+	// …and the open auto-enters its built-in Default workspace (the folder itself): the IDE surface
+	// mounts, and the just-initialised repo's file is already browsable.
+	await expect(page.getByTestId("center-tabs")).toBeVisible();
+	await expect(page.locator('[data-testid="workspace-item"][data-kind="default"]')).toHaveAttribute(
+		"data-active",
+		"true",
+	);
 });
 
 test("clicking a project returns to its Welcome, deselecting the active workspace", async ({
@@ -269,6 +282,6 @@ test("clicking a project returns to its Welcome, deselecting the active workspac
 	await expect(page.locator('[data-testid="workspace-item"][data-active="true"]')).toHaveCount(0);
 
 	// Re-selecting the workspace restores the IDE (its tabs/session survive the deselect).
-	await page.getByTestId("workspace-item").first().getByRole("button").first().click();
+	await worktreeRows(page).first().getByRole("button").first().click();
 	await expect(page.getByTestId("center-tabs")).toBeVisible();
 });

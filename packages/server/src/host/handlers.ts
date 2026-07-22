@@ -83,6 +83,7 @@ import { addTodo, listTodos, removeTodo, updateTodo } from "../todos";
 import { ensureWatch, stopWatch } from "../watch";
 import {
 	createWorkspace,
+	ensureWorkspaceScratchDir,
 	forgetWorkspace,
 	getWorkspace,
 	listWorkspaceRecords,
@@ -304,6 +305,9 @@ const handlers: Record<string, Handler> = {
 			thinkingLevel?: ThinkingLevel;
 		};
 		const ws = getWorkspace(p.workspaceId);
+		// Chat start is what seeds the gitignored scratch dir — for the Default workspace this is the one
+		// moment ThinkRail may write into the user's repo (worktrees self-heal a deleted dir the same way).
+		ensureWorkspaceScratchDir(ws);
 		const created = await createSession({
 			cwd: ws.worktreePath,
 			workspaceId: p.workspaceId,

@@ -119,12 +119,33 @@ export async function openAppFresh(page: Page): Promise<void> {
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 }
 
-/** Reset state, then open the fixture repo as a project via the (stubbed) picker; auto-selects + expands. */
+/**
+ * Reset state, then open the fixture repo as a project via the (stubbed) picker; auto-selects + expands
+ * — and, per the open flow, **auto-enters the project's built-in Default workspace** (the project folder
+ * itself), so the page lands on the IDE surface, not the Welcome screen.
+ */
 export async function openFixtureProject(page: Page): Promise<void> {
 	await openAppFresh(page);
 	await page.getByTestId("add-project-menu").click();
 	await page.getByTestId("menu-open-project").click();
 	await expect(page.getByTestId("project-item").first()).toBeVisible();
+	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "true");
+}
+
+/** The built-in Default workspace's row (exactly one per open project in the rail). */
+export function defaultWorkspaceRow(page: Page): Locator {
+	return page.locator('[data-testid="workspace-item"][data-kind="default"]');
+}
+
+/** The *worktree* workspace rows — every workspace row minus the always-present Default. */
+export function worktreeRows(page: Page): Locator {
+	return page.locator('[data-testid="workspace-item"]:not([data-kind="default"])');
+}
+
+/** The "project home" gesture: click the project row to deselect the workspace → its Welcome screen. */
+export async function goProjectHome(page: Page): Promise<void> {
+	await page.getByTestId("project-item").first().getByText("sample-project").click();
+	await expect(page.getByTestId("welcome")).toBeVisible();
 }
 
 /**
@@ -135,16 +156,20 @@ export async function openFixtureProject(page: Page): Promise<void> {
  */
 export async function openWorkspaceChat(page: Page): Promise<void> {
 	await openFixtureProject(page);
+	// Chat in a *worktree* workspace, not the auto-entered Default (the fixture repo itself): agent specs
+	// run bash/edits in the workspace cwd, and worktree isolation is what keeps them off the shared repo.
 	await expect(async () => {
-		if ((await page.getByTestId("workspace-item").count()) === 0) {
+		if ((await worktreeRows(page).count()) === 0) {
 			await createWorkspaceViaDialog(page);
 		}
-		await expect(page.locator('[data-testid="workspace-item"][data-active="true"]')).toHaveCount(
-			1,
-			{
-				timeout: 5_000,
-			},
-		);
+		// Activate it explicitly (a no-op when the dialog's create already did) — the auto-entered Default
+		// must not stay active, and a lost activation would otherwise never self-heal.
+		await worktreeRows(page).first().getByRole("button").first().click();
+		await expect(
+			page.locator('[data-testid="workspace-item"][data-active="true"]:not([data-kind="default"])'),
+		).toHaveCount(1, {
+			timeout: 5_000,
+		});
 	}).toPass({ timeout: 30_000 });
 	await page.getByTestId("start-chat").click();
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);

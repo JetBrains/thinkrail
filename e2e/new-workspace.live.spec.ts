@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openFixtureProject } from "./fixtures/app";
+import { openFixtureProject, worktreeRows } from "./fixtures/app";
 
 // Tagged @agent (see agent.live.spec.ts): drives a REAL pi agent. Proves the New-Workspace headline — the
 // New-Workspace dialog's "create + kick-off": Create with a prompt cuts a worktree, opens a chat in it,
@@ -51,7 +51,7 @@ test("Create with a prompt cuts a worktree and streams the answer in a new chat"
 	await kickOff(page, "Reply with the single word: pong");
 
 	// A worktree appears + becomes active, and a chat tab opened with the prompt already sent.
-	await expect(page.getByTestId("workspace-item").first()).toHaveAttribute("data-active", "true");
+	await expect(worktreeRows(page).first()).toHaveAttribute("data-active", "true");
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 	await expect(
 		page.locator('[data-testid="chat-message"][data-role="user"]').filter({ hasText: "pong" }),
@@ -75,16 +75,16 @@ test("two dialog kick-offs in separate workspaces stream concurrently", {
 
 	// Workspace A — kick off a turn…
 	await kickOff(page, "Reply with the single word: alpha");
-	await expect(page.getByTestId("workspace-item")).toHaveCount(1);
+	await expect(worktreeRows(page)).toHaveCount(1);
 
 	// …then immediately spin up workspace B with its own kick-off, before A necessarily finishes.
 	await kickOff(page, "Reply with the single word: bravo");
-	await expect(page.getByTestId("workspace-item")).toHaveCount(2);
+	await expect(worktreeRows(page)).toHaveCount(2);
 
 	// B (now active) reaches its turn-completion notice while A streamed in the background.
 	await expect(doneNotice).toBeVisible({ timeout: 90_000 });
 
 	// Switch back to workspace A → its chat streamed to completion concurrently (background runtime).
-	await page.getByTestId("workspace-item").nth(0).getByRole("button").first().click();
+	await worktreeRows(page).nth(0).getByRole("button").first().click();
 	await expect(doneNotice).toBeVisible({ timeout: 90_000 });
 });

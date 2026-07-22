@@ -75,7 +75,10 @@ import type {
 // templates stay pi-CLI-portable. `template.list` is metadata-only (`TemplateInfo`, no `content` — the
 // host reads just each file's bounded frontmatter head); the full text travels solely on the by-name
 // `template.get`/`template.save` path (`Template`), both size-capped host-side.
-export const PROTOCOL_VERSION = 16;
+// v17: the built-in Default workspace — `Workspace.kind: "default"` marks the project folder itself as
+// a per-project, non-removable, non-renamable workspace, ensured lazily and pinned first in
+// `workspace.list`; `workspace.remove` rejects it.
+export const PROTOCOL_VERSION = 17;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
