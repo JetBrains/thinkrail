@@ -37,6 +37,8 @@ test("loadHookApprovals defaults to an empty object when the file doesn't exist"
 });
 
 test("saveHookApprovals then loadHookApprovals round-trips", () => {
-	saveHookApprovals({ p1: { onCreate: "abc123hash" } });
-	expect(loadHookApprovals()).toEqual({ p1: { onCreate: "abc123hash" } });
+	saveHookApprovals({ p1: { onCreate: { shared: "abc123hash", local: "def456hash" } } });
+	expect(loadHookApprovals()).toEqual({
+		p1: { onCreate: { shared: "abc123hash", local: "def456hash" } },
+	});
 });

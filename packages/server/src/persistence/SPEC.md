@@ -20,9 +20,11 @@ submodule's host-local hook overrides/approvals — as JSON under the data dir.
   (`config.json`, merged over `DEFAULT_CONFIG` so a missing file or key degrades cleanly), and
   `loadHookOverrides`/`saveHookOverrides` (`hookOverrides.json` — a per-project, host-local hook-command
   override, keyed by `HookName`, that replaces rather than merges with the committed
-  `.thinkrail/hooks.json` value) + `loadHookApprovals`/`saveHookApprovals` (`hookApprovals.json` — a
-  per-project sha256 of the approved command per `HookName`, read/written by `workspaces/hooks`'s approval
-  gate) — all tab-indented JSON.
+  `.thinkrail/hooks.json` value) + `loadHookApprovals`/`saveHookApprovals` (`hookApprovals.json` —
+  `Record<string, Partial<Record<HookName, { shared?: string; local?: string }>>>`: per-project, per-hook,
+  a sha256 of the approved material for *each* `HookSource` independently — Shared and Local approve
+  separately since `combineMode: "both"` can run both for the same event; read/written by
+  `workspaces/hooks`'s approval gate) — all tab-indented JSON.
 - **Public surface (barrel):** `dataDir`, `loadProjects`, `saveProjects`, `loadWorkspaces`,
   `saveWorkspaces`, `loadConfig`, `saveConfig`, `loadHookOverrides`, `saveHookOverrides`,
   `loadHookApprovals`, `saveHookApprovals`.

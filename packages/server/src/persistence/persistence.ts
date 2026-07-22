@@ -68,15 +68,20 @@ export function saveHookOverrides(
 }
 
 /**
- * Per-project record of which hook command (as a sha256) the user has approved to auto-run. Editing a
- * committed or overridden command invalidates its approval — the stored hash no longer matches.
+ * Per-project, per-hook, per-`HookSource` record of which material (as a sha256) the user has approved to
+ * auto-run — Shared and Local are approved independently since `combineMode: "both"` can run both for the
+ * same event. Editing the approved material (the inline command, or a script's file contents) invalidates
+ * that source's approval — the stored hash no longer matches.
  */
-export function loadHookApprovals(): Record<string, Partial<Record<HookName, string>>> {
+export function loadHookApprovals(): Record<
+	string,
+	Partial<Record<HookName, { shared?: string; local?: string }>>
+> {
 	return readJson("hookApprovals.json", {});
 }
 
 export function saveHookApprovals(
-	approvals: Record<string, Partial<Record<HookName, string>>>,
+	approvals: Record<string, Partial<Record<HookName, { shared?: string; local?: string }>>>,
 ): void {
 	writeJson("hookApprovals.json", approvals);
 }
