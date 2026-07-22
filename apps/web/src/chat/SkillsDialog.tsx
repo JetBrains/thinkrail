@@ -14,13 +14,16 @@ import { errorText, getTransport } from "@/transport";
  * - **project** (Welcome / New Workspace, no session yet): `project.skills` catalog, per-**project**-baseline
  *   skill toggles, no Reload.
  * Both share trust, re-confirm-new, and the per-project **group** toggles (a plugin / source tier, or all
- * plugins at once). Skills are grouped by source — Project / Personal / a box per Claude plugin / Bundled / Pi.
+ * plugins at once). Skills are grouped by source — Bundled / Pi / Personal / a box per Claude plugin / Project
+ * — with sticky section headers.
  */
+// ThinkRail-bundled + pi-native first-party skills lead; then personal, then plugins (sorted), then the
+// repo's gated project skills last.
 const TIER_META: Record<string, { label: string; hint: string; rank: number }> = {
-	project: { label: "Project", hint: "Committed to the repo — gated behind trust.", rank: 0 },
-	personal: { label: "Personal", hint: "Your own libraries (~/.claude, ~/.codex, …).", rank: 1 },
-	bundled: { label: "Bundled", hint: "Shipped with ThinkRail.", rank: 3 },
-	pi: { label: "Pi", hint: "Pi-native / configured.", rank: 4 },
+	bundled: { label: "Bundled", hint: "Shipped with ThinkRail.", rank: 0 },
+	pi: { label: "Pi", hint: "Pi-native / configured.", rank: 1 },
+	personal: { label: "Personal", hint: "Your own libraries (~/.claude, ~/.codex, …).", rank: 2 },
+	project: { label: "Project", hint: "Committed to the repo — gated behind trust.", rank: 4 },
 };
 
 interface Group {
@@ -31,7 +34,7 @@ interface Group {
 	items: SkillCatalogEntry[];
 }
 
-/** Group entries by their canonical group key; order Project → Personal → plugins (sorted) → Bundled → Pi. */
+/** Group entries by their canonical group key; order Bundled → Pi → Personal → plugins (sorted) → Project. */
 function groupCatalog(entries: SkillCatalogEntry[]): Group[] {
 	const byKey = new Map<string, { isPlugin: boolean; items: SkillCatalogEntry[] }>();
 	for (const entry of entries) {
@@ -48,7 +51,7 @@ function groupCatalog(entries: SkillCatalogEntry[]): Group[] {
 				hint: group.isPlugin ? "Claude plugin" : (meta?.hint ?? ""),
 				isPlugin: group.isPlugin,
 				items: group.items,
-				rank: group.isPlugin ? 2 : (meta?.rank ?? 5),
+				rank: group.isPlugin ? 3 : (meta?.rank ?? 5),
 			};
 		})
 		.sort((a, b) => a.rank - b.rank || a.label.localeCompare(b.label));
@@ -258,9 +261,11 @@ export function SkillsDialog({
 									data-testid="skill-group"
 									data-group={group.key}
 									data-on={groupOn}
-									className="mb-md overflow-hidden rounded-[var(--radius-md)] border border-border2"
 								>
-									<div className="flex items-center gap-sm border-border2 border-b bg-bg-dark px-sm py-1.5">
+									{/* Sticky section header (VSCode-style): pins to the scroll top while the group is in
+									    view, then the next group's header pushes it out. No `overflow-hidden` ancestor
+									    (that would clip sticky); an opaque bg keeps rows from bleeding through. */}
+									<div className="sticky top-0 z-10 flex items-center gap-sm border-border2 border-y bg-bg-dark px-sm py-1.5">
 										<span className="font-medium text-text text-xs uppercase tracking-wide">
 											{group.label}
 										</span>
