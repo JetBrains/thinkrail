@@ -1,43 +1,79 @@
 // Committed hook config: `.thinkrail/hooks.json` in a workspace's own worktree — a normal tracked file, so
 // it's already checked out the moment `git worktree add` creates the worktree. Host-local overrides (per
 // developer, never touching the repo) come from `persistence`'s `hookOverrides.json` — see `hooks.ts`.
+// Git-free by design (fs only) — the caller (`host/handlers.ts`'s `project.hooks.save`) commits the
+// written file separately via `projects.ts`'s `commitProjectFile`.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import type { HookName } from "@thinkrail/contracts";
+import { isAbsolute, join } from "node:path";
+import type {
+	CombineMode,
+	HookConfigFile,
+	HookName,
+	HookSource,
+	HookValue,
+} from "@thinkrail/contracts";
 import { WORKSPACE_HOOKS_CONFIG_FILE, WORKSPACE_INTERNAL_DIR } from "@thinkrail/shared/paths";
 
-/** The committed hook commands declared in a workspace's own worktree. Missing/corrupt file → `{}`. */
-export function loadHookConfig(worktreePath: string): Partial<Record<HookName, string>> {
-	const file = join(worktreePath, WORKSPACE_HOOKS_CONFIG_FILE);
-	if (!existsSync(file)) return {};
+/** The empty config a missing/corrupt/non-object file falls back to. */
+function defaultConfig(): HookConfigFile {
+	return { version: 1, combineMode: "both", hooks: {} };
+}
+
+/**
+ * Parse a project's committed `.thinkrail/hooks.json` into the versioned `HookConfigFile` shape, with
+ * back-compat for the legacy flat file (`{ onCreate: "…" }`, no `version`/`hooks` keys of its own) — that
+ * whole object is treated as `hooks`, `combineMode` defaults to `"both"`. A new-shape file (has a `hooks`
+ * key) is used as-is, `combineMode` defaulting to `"both"` only when absent. Missing file, malformed JSON,
+ * or a parsed value that isn't a plain object all fall back to `defaultConfig()` — this never throws.
+ */
+export function loadHookConfig(dir: string): HookConfigFile {
+	const file = join(dir, WORKSPACE_HOOKS_CONFIG_FILE);
+	if (!existsSync(file)) return defaultConfig();
 	try {
-		return JSON.parse(readFileSync(file, "utf8")) as Partial<Record<HookName, string>>;
+		const parsed = JSON.parse(readFileSync(file, "utf8"));
+		if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+			return defaultConfig();
+		}
+		const obj = parsed as Record<string, unknown>;
+		// Legacy flat file: neither a `version` nor a `hooks` key of its own ⇒ the whole object IS the
+		// hooks map.
+		if (!("version" in obj) && !("hooks" in obj)) {
+			return {
+				version: 1,
+				combineMode: "both",
+				hooks: obj as Partial<Record<HookName, HookValue>>,
+			};
+		}
+		return {
+			version: 1,
+			combineMode: (obj.combineMode as CombineMode | undefined) ?? "both",
+			hooks: (obj.hooks as Partial<Record<HookName, HookValue>> | undefined) ?? {},
+		};
 	} catch {
-		return {};
+		return defaultConfig();
 	}
 }
 
 /**
- * Write `hooks` as `.thinkrail/hooks.json` in `projectPath` (creating `.thinkrail/` if needed) — a full
+ * Write `config` as `.thinkrail/hooks.json` in `projectPath` (creating `.thinkrail/` if needed) — a full
  * overwrite, not a merge, matching the committed file's own semantics (it's just JSON on disk; the caller
- * decides what the whole object should be). Pure fs write — no git. The caller (`host/handlers.ts`'s
- * `project.hooks.save`) commits it separately via `projects.ts`'s `commitProjectFile`, keeping this module
- * git-free per its SPEC.
+ * decides what the whole object should be). Pure fs write — no git; the caller commits it separately.
  */
-export function writeHookConfig(
-	projectPath: string,
-	hooks: Partial<Record<HookName, string>>,
-): void {
+export function writeHookConfig(projectPath: string, config: HookConfigFile): void {
 	mkdirSync(join(projectPath, WORKSPACE_INTERNAL_DIR), { recursive: true });
 	writeFileSync(
 		join(projectPath, WORKSPACE_HOOKS_CONFIG_FILE),
-		`${JSON.stringify(hooks, null, "\t")}\n`,
+		`${JSON.stringify(config, null, "\t")}\n`,
 	);
 }
 
 /**
  * Resolve the command that should run for `hook`: a host-local override replaces the committed value
  * entirely (never merged) — if you override a hook, you own its whole command.
+ *
+ * @deprecated Superseded by `resolveHookRun`, which resolves both tiers (per `CombineMode`) into an
+ * ordered list instead of one tier winning outright. Kept in place — and still called by `hooks.ts` and
+ * `host/handlers.ts` — until those callers migrate; removed once its last caller is gone.
  */
 export function resolveHookCommand(
 	hook: HookName,
@@ -45,4 +81,71 @@ export function resolveHookCommand(
 	override: Partial<Record<HookName, string>>,
 ): string | undefined {
 	return override[hook] ?? committed[hook];
+}
+
+/** One resolved entry in a hook's ordered run list — see `resolveHookRun`. */
+export interface ResolvedHookEntry {
+	/** Which tier this entry came from — carried onto every event/status this entry produces. */
+	source: HookSource;
+	/** `"inline"` runs via `sh -c "<exec>"`; `"script"` runs via `sh "<exec>"` (both in `hooks.ts`/`runner.ts`). */
+	kind: "inline" | "script";
+	/** Inline: the command text itself. Script: the resolved ABSOLUTE path to the script file. */
+	exec: string;
+	/** UI/event label: the command text (inline), or `` `script: <original path>` `` (script, unresolved). */
+	display: string;
+	/** What to hash for approval: the command text (inline), or the script's current contents (script) —
+	 * `null` when the script file is missing (nothing to hash; see `missing`). */
+	approvalMaterial: string | null;
+	/** Set (never `false`) only for a script entry whose file didn't exist at resolve time. */
+	missing?: boolean;
+}
+
+/** A Shared `script` path always resolves against `basePath`; a Local one only when it's not already absolute. */
+function resolveScriptPath(source: HookSource, scriptPath: string, basePath: string): string {
+	if (source === "local" && isAbsolute(scriptPath)) return scriptPath;
+	return join(basePath, scriptPath);
+}
+
+/** Turn one tier's raw `HookValue` into its resolved run entry — reading the script file (if any) now, so
+ * approval/missing status is decided once, at resolve time, not re-derived later. */
+function toEntry(source: HookSource, value: HookValue, basePath: string): ResolvedHookEntry {
+	if (typeof value === "string" || "command" in value) {
+		const command = typeof value === "string" ? value : value.command;
+		return { source, kind: "inline", exec: command, display: command, approvalMaterial: command };
+	}
+	const exec = resolveScriptPath(source, value.script, basePath);
+	const display = `script: ${value.script}`;
+	try {
+		return { source, kind: "script", exec, display, approvalMaterial: readFileSync(exec, "utf8") };
+	} catch {
+		return { source, kind: "script", exec, display, approvalMaterial: null, missing: true };
+	}
+}
+
+/**
+ * Resolve `args.hook` into an ordered list of run entries per `args.mode`: `"both"` → `[shared?, local?]`
+ * (Shared first, personal extras after — a tier with no value for this hook is skipped, not a gap in the
+ * order); `"shared"` → `[shared?]`; `"local"` → `[local?]`. `args.basePath` is the worktree root at run
+ * time or the project root at get-time — Shared script paths and relative Local script paths resolve
+ * against it; an absolute Local script path is used as-is. Reads script files synchronously to fill
+ * `approvalMaterial`/`missing` — never throws (a missing script becomes `missing: true`, not an error).
+ */
+export function resolveHookRun(args: {
+	hook: HookName;
+	committed: HookConfigFile;
+	local: Partial<Record<HookName, HookValue>>;
+	mode: CombineMode;
+	basePath: string;
+}): ResolvedHookEntry[] {
+	const { hook, committed, local, mode, basePath } = args;
+	const entries: ResolvedHookEntry[] = [];
+	const sharedValue = committed.hooks[hook];
+	if (mode !== "local" && sharedValue !== undefined) {
+		entries.push(toEntry("shared", sharedValue, basePath));
+	}
+	const localValue = local[hook];
+	if (mode !== "shared" && localValue !== undefined) {
+		entries.push(toEntry("local", localValue, basePath));
+	}
+	return entries;
 }
