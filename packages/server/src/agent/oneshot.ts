@@ -39,14 +39,12 @@ export interface OneShotResult {
 // ship cheaper tiers — the cost-based fallback below covers anything not listed here.
 const CHEAP_MODELS: ReadonlyArray<readonly [provider: string, idPrefix: string]> = [
 	["anthropic", "claude-haiku"],
-	["anthropic", "claude-3-5-haiku"],
 	["openai", "gpt-5-mini"],
 	["openai", "gpt-4o-mini"],
 	["openai", "gpt-4.1-mini"],
 	["google", "gemini-2.5-flash"],
 	["google", "gemini-flash"],
-	["xai", "grok-code-fast"],
-	["xai", "grok-3-mini"],
+	["xai", "grok-build"],
 ];
 
 /**

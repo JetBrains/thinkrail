@@ -154,10 +154,12 @@ describe("startLogin", () => {
 		});
 		const { loginId } = startLogin("github-copilot");
 		await tick();
+		// `text` prompts carry allowEmpty so the dialog can submit a blank (github.com) answer.
 		expect(h.frames.at(-1)?.frame).toEqual({
 			kind: "prompt",
 			message: "GitHub Enterprise URL/domain (blank for github.com)",
 			placeholder: "company.ghe.com",
+			allowEmpty: true,
 		});
 		resolveLogin({ loginId, value: "" });
 		await tick();

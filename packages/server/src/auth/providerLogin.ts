@@ -47,11 +47,14 @@ function frameForPrompt(prompt: AuthPrompt): LoginFrame {
 			options: prompt.options.map((o) => ({ id: o.id, label: o.label })),
 		};
 	}
-	// `text`, `secret`, and `manual_code` all collect one string (the paste-code race included).
+	// `text`, `secret`, and `manual_code` all collect one string (the paste-code race included). Only
+	// `text` prompts may be submitted blank — providers define empty semantics there (Copilot's GHE
+	// prompt treats blank as github.com), while an empty secret/auth-code is never meaningful.
 	return {
 		kind: "prompt",
 		message: prompt.message,
 		...(prompt.placeholder ? { placeholder: prompt.placeholder } : {}),
+		...(prompt.type === "text" ? { allowEmpty: true } : {}),
 	};
 }
 
