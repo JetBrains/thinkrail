@@ -101,6 +101,9 @@ export const WS_METHODS = {
 	// enable/disable for any skill.
 	projectAcknowledgeSkills: "project.acknowledgeSkills",
 	projectSetSkillEnabled: "project.setSkillEnabled",
+	// Names of the project's committed alias skills present in its current checkout — powers the presence-
+	// gated trust notice (shown as a count, never attacker-controlled text) before any workspace exists.
+	projectAliasSkills: "project.aliasSkills",
 	workspaceCreate: "workspace.create",
 	workspaceList: "workspace.list",
 	workspaceRemove: "workspace.remove",
@@ -277,6 +280,8 @@ export interface WsMethodMap {
 		params: { id: string; name: string; enabled: boolean };
 		result: Project;
 	};
+	// Present committed alias skill names in the project's current checkout (for the presence-gated notice).
+	"project.aliasSkills": { params: { projectId: string }; result: string[] };
 	// `baseRef`: the base branch the worktree is cut from (a remote ref is fetched first); when
 	// omitted, the worktree branches off the repo's current HEAD (the default behavior).
 	"workspace.create": {

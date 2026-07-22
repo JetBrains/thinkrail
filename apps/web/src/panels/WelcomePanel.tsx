@@ -7,6 +7,7 @@ import { useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
+import { ProjectSkillsNotice } from "./ProjectSkillsNotice";
 import { ProviderWarningBanner } from "./ProviderWarningBanner";
 import { useOpenProject } from "./useOpenProject";
 
@@ -127,6 +128,7 @@ export function WelcomePanel() {
 			</p>
 
 			<ProviderWarningBanner />
+			{project ? <ProjectSkillsNotice projectId={project.id} /> : null}
 
 			<div className="mt-xl flex flex-wrap justify-center gap-md">
 				{noProjects ? (

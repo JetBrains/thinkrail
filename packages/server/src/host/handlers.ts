@@ -243,6 +243,13 @@ const handlers: Record<string, Handler> = {
 		const p = params as { id: string; name: string; enabled: boolean };
 		return setProjectSkillEnabled(p.id, p.name, p.enabled);
 	},
+	// Present committed alias skill names in the project's checkout — the count behind the trust notice.
+	"project.aliasSkills": (params) => {
+		const { projectId } = params as { projectId: string };
+		const project = listProjects().find((p) => p.id === projectId);
+		if (!project) throw new Error(`Unknown project: ${projectId}`);
+		return listProjectAliasSkillNames(project.path);
+	},
 	// Per-workspace per-skill override over the project baseline (`null` clears it).
 	"workspace.setSkillOverride": (params) => {
 		const p = params as { id: string; name: string; override: "on" | "off" | null };

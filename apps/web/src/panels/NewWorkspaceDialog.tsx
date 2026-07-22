@@ -72,6 +72,7 @@ export function NewWorkspaceDialog({
 	const [refreshing, setRefreshing] = useState(false);
 	const [prompt, setPrompt] = useState("");
 	const [skillCommands, setSkillCommands] = useState<SlashCommandInfo[]>([]);
+	const [aliasSkills, setAliasSkills] = useState<string[]>([]);
 	const [model, setModel] = useState<WireModel | null>(null);
 	const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>("medium");
 	const [creating, setCreating] = useState(false);
@@ -120,6 +121,23 @@ export function NewWorkspaceDialog({
 		).then((commands) => {
 			if (!cancelled) setSkillCommands(commands);
 		});
+		return () => {
+			cancelled = true;
+		};
+	}, [open, selectedProjectId]);
+
+	// Whether the selected project ships committed skills — a count, so the trust notice is presence-gated
+	// (hidden when there's nothing to trust) and never renders the skills' names before trust.
+	useEffect(() => {
+		if (!open) return;
+		let cancelled = false;
+		setAliasSkills([]);
+		getTransport()
+			.request("project.aliasSkills", { projectId: selectedProjectId })
+			.then((names) => {
+				if (!cancelled) setAliasSkills(names);
+			})
+			.catch(() => {});
 		return () => {
 			cancelled = true;
 		};
@@ -332,16 +350,15 @@ export function NewWorkspaceDialog({
 
 				{/* Trust gate: a repo's committed skills (`.claude/skills` …) are attacker-controlled for a clone,
 				    so they load only after an explicit grant. Personal + bundled skills are always on. */}
-				{selectedProject && selectedProject.trusted !== true ? (
+				{selectedProject && selectedProject.trusted !== true && aliasSkills.length > 0 ? (
 					<div
 						data-testid="ws-trust-notice"
 						className="flex w-full items-center gap-sm rounded-[var(--radius-md)] border border-border2 border-l-[3px] border-l-[var(--gold)] bg-[var(--gold-tint)] px-md py-sm text-left"
 					>
 						<TriangleAlert className="size-4 shrink-0 text-gold" />
 						<span className="min-w-0 flex-1 text-sm text-text">
-							Skills this project ships (
-							<span className="font-[var(--font-mono)]">.claude/skills</span> …) stay off until you
-							trust it. Your personal and ThinkRail's built-in skills are unaffected.
+							This project ships {aliasSkills.length} skill{aliasSkills.length === 1 ? "" : "s"} —
+							off until you trust it. Your personal and ThinkRail's built-in skills are unaffected.
 						</span>
 						<Button
 							size="sm"
