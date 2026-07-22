@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { DiffStats, Project, Workspace } from "@thinkrail/contracts";
 import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
-import { git, gitAsync } from "../git";
+import { currentBranch, git, gitAsync, resolveDefaultBranch } from "../git";
 import { dataDir, loadProjects, loadWorkspaces, saveWorkspaces } from "../persistence";
 import { getProjects } from "../projects";
 
@@ -147,13 +147,6 @@ export async function createWorkspace(
 	const added = git(project.path, ["worktree", "add", worktreePath, "-b", branch, baseBranch]);
 	if (!added.ok) throw new Error(`git worktree add failed: ${added.err}`);
 
-	// Ephemeral per-workspace scratch dir for temp docs (task-specs / working files). Its `.gitignore` is
-	// a lone `*` — which matches the `.gitignore` itself — so the whole dir has zero git footprint yet
-	// stays scannable by the spec tools (they ignore only node_modules/.git/dist/build, not .gitignore).
-	const contextDir = join(worktreePath, WORKSPACE_CONTEXT_DIR);
-	mkdirSync(contextDir, { recursive: true });
-	writeFileSync(join(contextDir, ".gitignore"), "*\n");
-
 	const workspace: Workspace = {
 		id: randomUUID(),
 		projectId,
@@ -164,6 +157,77 @@ export async function createWorkspace(
 		// A user-chosen name is a deliberate one — the auto-namer must never touch it. Auto `workspace-N`
 		// leaves the flag unset: eligible for one assist rename.
 		...(displayName ? { renamed: true } : {}),
+	};
+	ensureWorkspaceScratchDir(workspace);
+	all.push(workspace);
+	saveWorkspaces(all);
+	emit({ kind: "created", workspace });
+	return workspace;
+}
+
+/**
+ * Idempotently seed a workspace's ephemeral scratch dir (`WORKSPACE_CONTEXT_DIR`) for temp docs
+ * (task-specs / working files). Its `.gitignore` is a lone `*` — which matches the `.gitignore`
+ * itself — so the whole dir has zero git footprint yet stays scannable by the spec tools (they ignore
+ * only node_modules/.git/dist/build, not .gitignore). Worktree creation seeds eagerly; the host also
+ * calls this on session create, which is what seeds the **Default** workspace — merely listing or
+ * entering it must never write into the user's repo, starting a chat there may.
+ */
+export function ensureWorkspaceScratchDir(ws: Workspace): void {
+	const contextDir = join(ws.worktreePath, WORKSPACE_CONTEXT_DIR);
+	mkdirSync(contextDir, { recursive: true });
+	writeFileSync(join(contextDir, ".gitignore"), "*\n");
+}
+
+/**
+ * Ensure the project's built-in **Default workspace** (`kind: "default"`) — the project folder itself
+ * (git's main working tree) surfaced as a workspace. Exactly one per project: find-or-create keyed by
+ * `projectId` + `kind` (the id is a plain `randomUUID` — the `kind` field is the marker, never an id
+ * convention), collapsing duplicates defensively if out-of-band state churn ever produced two (keep
+ * the oldest, emit `removed` for the rest so clients converge). No `git worktree add` (the folder
+ * already is a working tree) and no scratch-dir seeding (see `ensureWorkspaceScratchDir`).
+ *
+ * Fields are folder-truth: `branch` = whatever the folder has checked out, `baseBranch` = the repo's
+ * default branch — both refreshed **quietly** when they drifted out-of-band (no lifecycle event;
+ * membership didn't change). `renamed: true` keeps the auto-rename passes away, belt-and-suspenders on
+ * top of the hard guards in `renameWorkspace`/`forgetWorkspace`.
+ */
+function ensureDefaultWorkspace(project: Project): Workspace {
+	const all = loadWorkspaces();
+	const defaults = all.filter((w) => w.projectId === project.id && w.kind === "default");
+	const branch = currentBranch(project.path);
+	const baseBranch = resolveDefaultBranch(project.path);
+
+	const existing = defaults[0];
+	if (existing) {
+		let dirty = false;
+		if (defaults.length > 1) {
+			// Duplicates are corruption (the ensure is the only writer) — collapse to the oldest record.
+			const extras = defaults.slice(1);
+			const keep = all.filter((w) => !extras.includes(w));
+			all.length = 0;
+			all.push(...keep);
+			dirty = true;
+			for (const extra of extras) emit({ kind: "removed", projectId: project.id, id: extra.id });
+		}
+		if (existing.branch !== branch || existing.baseBranch !== baseBranch) {
+			existing.branch = branch;
+			existing.baseBranch = baseBranch;
+			dirty = true;
+		}
+		if (dirty) saveWorkspaces(all);
+		return existing;
+	}
+
+	const workspace: Workspace = {
+		id: randomUUID(),
+		projectId: project.id,
+		kind: "default",
+		name: "Default",
+		branch,
+		worktreePath: project.path,
+		baseBranch,
+		renamed: true,
 	};
 	all.push(workspace);
 	saveWorkspaces(all);
@@ -197,6 +261,8 @@ export function renameWorkspace(
 	const project = getProjects().find((p) => p.id === ws.projectId);
 	if (!project) throw new Error(`Unknown project: ${ws.projectId}`);
 
+	// The Default workspace's branch is the user's real branch — renaming would `git branch -m` it.
+	if (ws.kind === "default") throw new Error("The Default workspace cannot be renamed");
 	const displayName = toDisplayName(requestedName);
 	if (!displayName) throw new Error(`Invalid workspace name: ${requestedName}`);
 	const wanted = toBranch(displayName);
@@ -224,9 +290,15 @@ export function renameWorkspace(
 }
 
 export function listWorkspaces(projectId: string): Workspace[] {
-	return loadWorkspaces()
-		.filter((w) => w.projectId === projectId)
-		.map((w) => ({ ...w, diffStats: diffStats(w.worktreePath, w.baseBranch) }));
+	// Lazily ensure the built-in Default workspace on every list: find-or-create is idempotent, backfills
+	// projects opened before the feature existed, and self-heals out-of-band state churn (the e2e reset
+	// rewrites workspaces.json mid-run). Unknown project → no ensure, the filter returns [] as before.
+	const project = getProjects().find((p) => p.id === projectId);
+	if (project) ensureDefaultWorkspace(project);
+	const rows = loadWorkspaces().filter((w) => w.projectId === projectId);
+	// Pin the Default workspace first (creation order would put a backfilled one last).
+	rows.sort((a, b) => (a.kind === "default" ? -1 : 0) - (b.kind === "default" ? -1 : 0));
+	return rows.map((w) => ({ ...w, diffStats: diffStats(w.worktreePath, w.baseBranch) }));
 }
 
 /**
@@ -239,6 +311,10 @@ export function forgetWorkspace(id: string): Workspace | null {
 	const all = loadWorkspaces();
 	const ws = all.find((w) => w.id === id);
 	if (!ws) return null;
+	// Loud, before any side-effect: the record's worktreePath is the project folder — forgetting it
+	// would hand the archive teardown's `rm -rf` fallback the user's repo. The UI offers no Remove for
+	// it; this guard is for buggy/rogue clients.
+	if (ws.kind === "default") throw new Error("The Default workspace cannot be removed");
 	saveWorkspaces(all.filter((w) => w.id !== id));
 	emit({ kind: "removed", projectId: ws.projectId, id: ws.id });
 	return ws;
@@ -250,6 +326,9 @@ export function forgetWorkspace(id: string): Workspace | null {
  * dir if it lingers then `prune` the stale registration so `git worktree list` never orphans it.
  */
 export function reclaimWorktree(ws: Workspace): void {
+	// Defense in depth: never reclaim the project folder itself (`git worktree remove` would refuse the
+	// main working tree, but the hardened rm-fallback below would not).
+	if (ws.kind === "default") return;
 	const project = loadProjects().find((p) => p.id === ws.projectId);
 	if (!project) return;
 	const removed = git(project.path, ["worktree", "remove", "--force", ws.worktreePath]);

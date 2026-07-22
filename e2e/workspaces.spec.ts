@@ -1,13 +1,13 @@
 import { execFileSync } from "node:child_process";
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
+import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 
 test("creates, removes, and re-creates worktree workspaces (no branch collision)", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
-	const items = page.getByTestId("workspace-item");
+	const items = worktreeRows(page);
 
 	// Create a workspace via the New-Workspace dialog — a real git worktree appears.
 	await createWorkspaceViaDialog(page);

@@ -21,11 +21,20 @@ warms a remote base ref off the workspace-create critical path.
   not block the host); `gitStatus`/`gitDiff(workspaceId, path?)` — changes vs the base branch, untracked
   files listed and shown in full via `--no-index`; `listBranches(projectId)` → `{ local, remote,
   defaultBranch }` (local `refs/heads`, remote `refs/remotes/origin` minus `origin/HEAD`, default =
-  `origin/HEAD`→`origin/main`→repo `HEAD`); `prefetchBranch(projectId, ref)` — best-effort background
+  `origin/HEAD`→`origin/main`→repo `HEAD`); **`resolveDefaultBranch(repoPath)`** — that default-branch
+  resolution factored out (named once), shared by `listBranches` and the `workspaces` module's
+  Default-workspace ensure (its `baseBranch`); `prefetchBranch(projectId, ref)` — best-effort background
   `git fetch` of a remote ref (via `gitAsync`, branch passed after `--` so a `-`-prefixed name can't be
   parsed as a git option), so a later `createWorkspace` branches off a fresh tip without the network
   round-trip on its critical path (non-`origin/` ref / offline → no-op).
-- **Public surface (barrel):** `git`, `gitAsync`, `gitStatus`, `gitDiff`, `listBranches`, `prefetchBranch`.
+- **Public surface (barrel):** `git`, `gitAsync`, `gitStatus`, `gitDiff`, `listBranches`,
+  `resolveDefaultBranch`, `prefetchBranch`.
+
+## Get right
+
+- `gitStatus` reports the **live** current branch for a `kind: "default"` workspace (the project
+  folder's branch moves out-of-band — a terminal `git checkout` — and the persisted snapshot self-heals
+  only at list time; the Changes header must not lag).
 - **Allowed deps:** `persistence` (workspace + project lookup); `contracts` (`Git*`/`BranchList` types);
   Bun (spawn).
 - **Forbidden:** `host`; sibling features.

@@ -14,6 +14,7 @@ import {
 	type DocTab,
 	type EditorTab,
 	selectActiveWorkspace,
+	selectContextProject,
 	toast,
 	useAppStore,
 } from "../store";
@@ -86,6 +87,7 @@ function ChatHistoryMenu({
 export function CenterTabs() {
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
 	const activeWorkspace = useAppStore(selectActiveWorkspace);
+	const contextProject = useAppStore(selectContextProject);
 	const tabsByWorkspace = useAppStore((s) => s.tabsByWorkspace);
 	const activeTabByWorkspace = useAppStore((s) => s.activeTabByWorkspace);
 	const closedChatsByWorkspace = useAppStore((s) => s.closedChatsByWorkspace);
@@ -181,6 +183,9 @@ export function CenterTabs() {
 		else closeTab(tab.id);
 	};
 
+	// The Default workspace is the project folder itself — its receipt must tell the truth ("runs
+	// directly in your project folder") instead of promising worktree isolation.
+	const isDefaultWorkspace = activeWorkspace?.kind === "default";
 	const placeholder = (
 		<div className="flex h-full flex-col items-center justify-center gap-md px-lg text-center text-hint">
 			{activeWorkspace ? (
@@ -189,18 +194,28 @@ export function CenterTabs() {
 					className="flex max-w-[440px] flex-col items-center gap-xs"
 				>
 					<span className="font-medium text-hint text-xs uppercase tracking-wider">
-						Workspace ready
+						{isDefaultWorkspace ? "Default workspace" : "Workspace ready"}
 					</span>
 					<h2 className="max-w-full truncate font-medium text-md text-text">
-						{activeWorkspace.name}
+						{isDefaultWorkspace
+							? (contextProject?.name ?? activeWorkspace.name)
+							: activeWorkspace.name}
 					</h2>
 					<p className="flex max-w-full items-center gap-xs font-[var(--font-mono)] text-muted text-xs">
 						<GitBranch className="size-3.5 shrink-0" />
-						<span className="truncate">{activeWorkspace.branch}</span>
-						<span className="shrink-0 text-hint">· from {activeWorkspace.baseBranch}</span>
+						{isDefaultWorkspace ? (
+							<span className="truncate">on {activeWorkspace.branch}</span>
+						) : (
+							<>
+								<span className="truncate">{activeWorkspace.branch}</span>
+								<span className="shrink-0 text-hint">· from {activeWorkspace.baseBranch}</span>
+							</>
+						)}
 					</p>
 					<p className="mt-xs text-muted text-sm">
-						Files, chats, changes, and terminals are scoped to this workspace.
+						{isDefaultWorkspace
+							? "Chats, changes, and terminals run directly in your project folder."
+							: "Files, chats, changes, and terminals are scoped to this workspace."}
 					</p>
 				</div>
 			) : (

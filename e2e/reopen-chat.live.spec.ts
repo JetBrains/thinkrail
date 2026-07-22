@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
+import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
 
 // Tagged @agent (see agent.live.spec.ts): needs a real session. Proves the "reopen closed chat" feature —
 // closing a chat moves it to history (its session/runtime stay alive); reopening restores the full
@@ -10,7 +10,7 @@ test("a closed chat reopens from history with its transcript intact", { tag: "@a
 	test.setTimeout(90_000);
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
-	await expect(page.getByTestId("workspace-item").first()).toHaveAttribute("data-active", "true");
+	await expect(worktreeRows(page).first()).toHaveAttribute("data-active", "true");
 
 	const chatTabs = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
 	const history = page.getByTestId("chat-history");

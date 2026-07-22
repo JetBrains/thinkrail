@@ -25,10 +25,22 @@ export function useOpenProject(onOpened: (project: Project) => void | Promise<vo
 	// A non-actionable open failure to surface (a stale recent, a broken path). null = no notice.
 	const [openError, setOpenError] = useState<string | null>(null);
 
-	// Refresh the store's project list, then let the caller adopt (select/expand) the opened project.
+	// Refresh the store's project list, then let the caller adopt (select/expand) the opened project,
+	// then auto-enter the project's built-in **Default workspace** (the project folder itself) so opening
+	// a project lands in the IDE view — files, changes, terminals — not on Welcome. The list also ensures
+	// the Default exists host-side. Best-effort: no Default row (an older host) or a failed list degrades
+	// to the caller's select-project behavior (Welcome) — the open itself already succeeded.
 	const adopt = async (project: Project) => {
 		useAppStore.getState().setProjects(await getTransport().request("project.list", {}));
 		await onOpened(project);
+		try {
+			const workspaces = await getTransport().request("workspace.list", { projectId: project.id });
+			useAppStore.getState().setWorkspaces(project.id, workspaces);
+			const def = workspaces.find((w) => w.kind === "default");
+			if (def) useAppStore.getState().activateWorkspace(def);
+		} catch {
+			// Entering Default is additive — a failure leaves the caller's selection (Welcome) in place.
+		}
 	};
 
 	const openProject = async (rawPath: string) => {

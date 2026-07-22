@@ -26,14 +26,24 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   surfaces an error toast, leaving the row in place). Each **workspace row** is **two-line**: the display
   `name` on top with the git **branch on a second line beneath it** (muted, monospace), rendered only when
   it differs from the name (so pristine/legacy `workspace-N` rows stay a single compact line) — the display
-  name is decoupled from the git branch (see [[submodule-server-workspaces]]). The active workspace must
+  name is decoupled from the git branch (see [[submodule-server-workspaces]]). The **Default workspace**
+  (`kind === "default"` — the project folder itself) renders **pinned first** (the server pins it in
+  `workspace.list`; `addWorkspace` appends created worktree rows after it), with a **`House` icon** in
+  place of the `GitBranch` glyph and **no Remove button** (non-removable — the server enforces it; the UI
+  simply offers nothing). Its branch line shows the folder's real current branch. The active workspace must
   also stay visible: when `ProjectTree` mounts with an active workspace, or the active workspace's derived
   owning project changes or first becomes resolvable, it expands that parent project. A manual collapse
   remains respected while the owning project is unchanged; ordinary `workspace.updated` snapshots and
   same-project workspace switches do not force it open again. Workspace creation expands its project
   explicitly. Selecting or creating a workspace also selects its owning project, keeping project-home and
   active-workspace context coherent even when the create dialog's project picker targets another project.
-  **Opening a project** goes through the shared **`useOpenProject`** hook (reused by `ProjectTree` **and**
+  **Opening a project** ends by **auto-entering that project's Default workspace**: after a successful
+  open the hook lists the project's workspaces and activates the `kind === "default"` row (store's
+  existing activate action), so the user lands in the IDE view — files, changes, terminals — of their
+  project folder, not on Welcome. (No Default in the list — an older host — degrades to the previous
+  select-project behavior.) Clicking an already-listed **project row** keeps the "project home" gesture
+  below — Welcome, with the spec-first cards, stays one click away. Opening goes through the shared
+  **`useOpenProject`** hook (reused by `ProjectTree` **and**
   `WelcomePanel`, so the flow is identical in the rail and the Welcome screen): `project.open`, and on
   failure `project.inspect` → either offers to bootstrap the folder into a repo — a modal **`ConfirmDialog`**
   (confirm → `project.init`) — when it's `initable`, or surfaces the error in a **`NoticeDialog`** — so a
@@ -121,7 +131,9 @@ a project picker, the prompt hero, and the reused
   When the active workspace has no open center tab, `CenterTabs` uses the empty surface as a persistent
   creation/orientation receipt rather than a generic placeholder: **“Workspace ready”**, the display name,
   `branch · from baseBranch`, and **“Files, chats, changes, and terminals are scoped to this workspace,”**
-  followed by the existing **New chat** action. It is neither one-time nor dismissible, so it also helps
+  followed by the existing **New chat** action. For the **Default workspace** the receipt tells the truth
+  instead of promising isolation: **“Default workspace”**, the project name, `on <branch>`, and “Chats,
+  changes, and terminals run directly in your project folder.” It is neither one-time nor dismissible, so it also helps
   after the last tab closes without introducing onboarding state. `CenterTabs` also renders ephemeral
   **`doc`** tabs (`DocTab` — inline rendered markdown, no file on disk) via its own
   `DocPane`→`MarkdownPreview`; used for the plan-as-markdown snapshot (see the `chat` module). `CenterTabs`

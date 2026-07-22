@@ -1,5 +1,5 @@
 import type { Project, Workspace } from "@thinkrail/contracts";
-import { ChevronDown, ChevronRight, Folder, GitBranch, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Folder, GitBranch, House, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { PopoverTrigger } from "@/components/ui/popover";
@@ -236,9 +236,71 @@ function WorkspaceRow({
 }) {
 	const stats = workspace.diffStats;
 	const hasStats = stats != null && (stats.added > 0 || stats.removed > 0);
+	// The built-in Default workspace (the project folder itself) is non-removable — the server enforces
+	// it; the UI simply offers nothing. It wears a House icon in place of the branch glyph.
+	const isDefault = workspace.kind === "default";
+	const Icon = isDefault ? House : GitBranch;
 	// Confirm-before-remove lives on the row so the popover anchors right beneath it (contextual to the
 	// workspace being removed) rather than as a centered modal.
 	const [confirmOpen, setConfirmOpen] = useState(false);
+	const row = (
+		<div
+			data-testid="workspace-item"
+			data-active={isActive}
+			data-kind={workspace.kind ?? "worktree"}
+			className={`group flex min-h-7 items-center gap-sm rounded-[var(--radius-sm)] py-xs pr-xs pl-xl transition-colors ${
+				isActive ? "bg-hover" : "hover:bg-hover"
+			}`}
+		>
+			<button
+				type="button"
+				onClick={onSelect}
+				className="flex min-w-0 flex-1 items-center gap-sm text-left"
+			>
+				<Icon className={`size-4 shrink-0 ${isActive ? "text-primary" : "text-hint"}`} />
+				{/* Name on top, the git branch on a second line beneath it — the display name is decoupled
+				    from the branch, so surface both without crowding one line. The branch line is hidden when
+				    they coincide, so pristine/legacy rows stay a single compact line. */}
+				<span className="flex min-w-0 flex-1 flex-col">
+					<span
+						data-testid="workspace-name"
+						className={`truncate text-sm leading-tight ${isActive ? "font-medium text-primary" : "text-muted"}`}
+					>
+						{workspace.name}
+					</span>
+					{workspace.branch !== workspace.name && (
+						<span
+							data-testid="workspace-branch"
+							className="truncate font-[var(--font-mono)] text-hint text-xs leading-tight"
+						>
+							{workspace.branch}
+						</span>
+					)}
+				</span>
+			</button>
+			{hasStats && (
+				<span className="shrink-0 text-xs tabular-nums group-hover:hidden">
+					<span className="text-green">+{stats.added}</span>{" "}
+					<span className="text-red">−{stats.removed}</span>
+				</span>
+			)}
+			{!isDefault && (
+				<PopoverTrigger asChild>
+					<button
+						type="button"
+						data-testid="workspace-remove"
+						aria-label="Remove workspace"
+						className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-muted opacity-0 transition hover:bg-elevated hover:text-red group-hover:opacity-100 data-[state=open]:opacity-100"
+					>
+						<Trash2 className="size-4" />
+					</button>
+				</PopoverTrigger>
+			)}
+		</div>
+	);
+	// No ConfirmPopover for the Default row — there is nothing to confirm (and PopoverTrigger only
+	// renders inside the popover context of the removable branch below).
+	if (isDefault) return row;
 	return (
 		<ConfirmPopover
 			open={confirmOpen}
@@ -257,56 +319,7 @@ function WorkspaceRow({
 			align="end"
 		>
 			{/* Anchored to the Remove button (the PopoverTrigger), right border aligned via align="end". */}
-			<div
-				data-testid="workspace-item"
-				data-active={isActive}
-				className={`group flex min-h-7 items-center gap-sm rounded-[var(--radius-sm)] py-xs pr-xs pl-xl transition-colors ${
-					isActive ? "bg-hover" : "hover:bg-hover"
-				}`}
-			>
-				<button
-					type="button"
-					onClick={onSelect}
-					className="flex min-w-0 flex-1 items-center gap-sm text-left"
-				>
-					<GitBranch className={`size-4 shrink-0 ${isActive ? "text-primary" : "text-hint"}`} />
-					{/* Name on top, the git branch on a second line beneath it — the display name is decoupled
-					    from the branch, so surface both without crowding one line. The branch line is hidden when
-					    they coincide, so pristine/legacy rows stay a single compact line. */}
-					<span className="flex min-w-0 flex-1 flex-col">
-						<span
-							data-testid="workspace-name"
-							className={`truncate text-sm leading-tight ${isActive ? "font-medium text-primary" : "text-muted"}`}
-						>
-							{workspace.name}
-						</span>
-						{workspace.branch !== workspace.name && (
-							<span
-								data-testid="workspace-branch"
-								className="truncate font-[var(--font-mono)] text-hint text-xs leading-tight"
-							>
-								{workspace.branch}
-							</span>
-						)}
-					</span>
-				</button>
-				{hasStats && (
-					<span className="shrink-0 text-xs tabular-nums group-hover:hidden">
-						<span className="text-green">+{stats.added}</span>{" "}
-						<span className="text-red">−{stats.removed}</span>
-					</span>
-				)}
-				<PopoverTrigger asChild>
-					<button
-						type="button"
-						data-testid="workspace-remove"
-						aria-label="Remove workspace"
-						className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-muted opacity-0 transition hover:bg-elevated hover:text-red group-hover:opacity-100 data-[state=open]:opacity-100"
-					>
-						<Trash2 className="size-4" />
-					</button>
-				</PopoverTrigger>
-			</div>
+			{row}
 		</ConfirmPopover>
 	);
 }

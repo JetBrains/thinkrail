@@ -62,7 +62,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
     **in-flight set** (independent of the naive one — the two passes can overlap on a short turn) dedupes
     concurrent turns/sessions.
   - The **workspace-archive teardown** — the other composition of `agent` + `terminal` + `workspaces` only
-    the host may make. `workspace.remove` reaps *everything* rooted in the worktree but is **non-blocking**:
+    the host may make. `workspace.remove` **rejects a `kind: "default"` workspace loudly, before any
+    side-effect** (the record's `worktreePath` is the project folder — the reclaim's `rm -rf` fallback
+    must never see it; the UI hides Remove, this guard is for buggy/rogue clients). Otherwise it
+    reaps *everything* rooted in the worktree but is **non-blocking**:
     it does the fast part synchronously — `forgetWorkspace` (drop the record → gone from `workspace.list`
     immediately) → `evictSpecIndex` (drop the spec cache) → `closeWorkspaceTerminals` (kill its PTYs) —
     **acks**, then runs the slow reclamation in the **background** (`archiveTeardown`, fire-and-forget):
@@ -73,6 +76,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
     a failed background teardown is `console.warn`ed, never thrown into the void (nothing awaits it), like
     the auto-rename tee. **Archive keeps the branch but not the chat:** the git branch stays (code is
     recoverable), yet chat history is purged with the worktree — a deliberate scope choice, not a leak.
+- **Scratch-dir seeding on chat start:** the `session.create` handler calls `workspaces`'
+  `ensureWorkspaceScratchDir` before creating the session — the Default workspace's gitignored
+  `.thinkrail/context/` lands in the user's repo only when a chat actually starts there (and a
+  worktree's deleted scratch dir self-heals). Host-composed — no new module edges.
 - **Workspace lifecycle fan-out:** `createServer` installs the `workspaces` module's publisher
   (`setWorkspacePublisher`), mapping each domain event `kind` → its `WS_CHANNELS.workspace*` channel
   (`created`/`updated` → the full record; `removed` → `{ projectId, id }`) and `server.publish`ing it. This
