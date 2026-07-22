@@ -1,12 +1,100 @@
 import type { TemplateInfo, TemplateScope } from "@thinkrail/contracts";
-import { FileText, Pencil, Plus, Trash2 } from "lucide-react";
+import { FileText, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { TemplateEditorDialog } from "@/chat/TemplateEditorDialog";
+import { assembleTemplate } from "@/chat/templateText";
+import { Button } from "@/components/ui/button";
 import { PopoverTrigger } from "@/components/ui/popover";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { ConfirmPopover } from "./ConfirmPopover";
 import { openFileInTab } from "./openFile";
+
+/**
+ * R4: verbatim starter-template content offered by `StarterTemplatesOffer` below (design doc "Amendments
+ * (2026-07-22)" item 4). Bodies use pi's own `$1`/`${N:-default}` placeholder grammar — not a JS template
+ * literal — so `${2:-the riskiest parts}` / `${1:-mine}` need a lint escape (see the two biome-ignores
+ * below); `explain`/`tests` only ever use bare `$1`, which doesn't trip the rule.
+ */
+const STARTER_TEMPLATES: ReadonlyArray<{
+	name: string;
+	description: string;
+	argumentHint: string;
+	body: string;
+}> = [
+	{
+		name: "review",
+		description: "Code review of a file or directory",
+		argumentHint: "[path] [focus]",
+		// biome-ignore lint/suspicious/noTemplateCurlyInString: literal pi prompt-template syntax, not a JS placeholder
+		body: "Review $1 for correctness, clarity, and maintainability, focusing on ${2:-the riskiest parts}.\nList concrete findings with file:line references, ordered by severity, then suggest fixes.",
+	},
+	{
+		name: "explain",
+		description: "Explain how something works",
+		argumentHint: "[path-or-topic]",
+		body: "Explain how $1 works in this codebase: its purpose, the key control/data flow, and what depends on\nit. Keep it concise and point to the load-bearing files and lines.",
+	},
+	{
+		name: "tests",
+		description: "Write tests for a target",
+		argumentHint: "[path]",
+		body: "Write tests for $1. Cover the main behavior, the edge cases, and one failure path. Match the\nproject's existing test conventions and runner, and run the tests after writing them.",
+	},
+	{
+		name: "standup",
+		description: "One-line standup update",
+		argumentHint: "[team]",
+		// biome-ignore lint/suspicious/noTemplateCurlyInString: literal pi prompt-template syntax, not a JS placeholder
+		body: "Write a one-line standup update for team ${1:-mine} based on this workspace's recent changes.\nReply with just that line.",
+	},
+];
+
+/**
+ * R4: the Global group's empty-state nudge — one click seeds the four `STARTER_TEMPLATES` above via the
+ * same `template.save` wire call `TemplateEditorDialog` uses (scope `"global"`, body assembled by the same
+ * `assembleTemplate` helper), sequentially, then bumps `templatesVersion` once so both this panel and the
+ * composer's `/` menu cache pick them up. No dismiss state to track: once the list is non-empty,
+ * `TemplateGroup` renders the normal row list instead and this component never mounts again.
+ */
+function StarterTemplatesOffer() {
+	const [adding, setAdding] = useState(false);
+
+	const addStarters = async () => {
+		if (adding) return;
+		setAdding(true);
+		try {
+			for (const t of STARTER_TEMPLATES) {
+				await getTransport().request("template.save", {
+					scope: "global",
+					name: t.name,
+					content: assembleTemplate(t.description, t.argumentHint, t.body),
+				});
+			}
+			useAppStore.getState().bumpTemplatesVersion();
+		} catch (err) {
+			toast.error(errorText(err), "Couldn't add starter templates");
+		} finally {
+			setAdding(false);
+		}
+	};
+
+	return (
+		<div className="flex flex-col items-start gap-sm">
+			<p className="text-hint text-xs">No templates yet. Add a few common ones to get started.</p>
+			<Button
+				data-testid="template-starters"
+				variant="outline"
+				size="sm"
+				disabled={adding}
+				onClick={() => void addStarters()}
+			>
+				<Sparkles className="size-3.5" />
+				Add starter templates
+			</Button>
+		</div>
+	);
+}
 
 /**
  * The Settings → Templates panel: two groups — **Global** (always) and **This project** (only with an
@@ -183,7 +271,11 @@ function TemplateGroup({
 				</button>
 			</div>
 			{templates.length === 0 ? (
-				<p className="text-hint text-xs">No templates yet.</p>
+				scope === "global" ? (
+					<StarterTemplatesOffer />
+				) : (
+					<p className="text-hint text-xs">No templates yet.</p>
+				)
 			) : (
 				<div className="flex flex-col gap-xs">
 					{templates.map((t) => (

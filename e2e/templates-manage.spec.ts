@@ -1,6 +1,11 @@
 import { expect, test } from "@playwright/test";
 import { openWorkspaceChat } from "./fixtures/app";
 import { seedExternalCwdSessions } from "./fixtures/sessions";
+import {
+	clearTemplateFixtures,
+	removeGlobalTemplates,
+	seedTemplateFixtures,
+} from "./fixtures/templates";
 
 // No-agent: Settings → Templates (create/edit/delete, both scopes) + the history overlay's
 // save-as-template action. `templates-compose.spec.ts` already covers the composer `/` menu + slot
@@ -9,6 +14,66 @@ import { seedExternalCwdSessions } from "./fixtures/sessions";
 // deleted one must vanish from) that same `/` menu, proving the store's `templatesVersion` bump actually
 // invalidates `ChatView`'s cached fetch rather than just exercising the settings panel in isolation.
 test.describe("templates management", () => {
+	// R4 (design doc "Amendments (2026-07-22)" item 4): when the Global group's list is empty, the panel
+	// offers to seed four starter templates instead of the bare "No templates yet." — one click creates
+	// all four, sequentially, via the same `template.save` wire call the editor dialog uses.
+	//
+	// Deliberately the FIRST test in this file: Playwright preserves declaration order within a file
+	// (`fullyParallel: false`, `workers: 1`, see playwright.config.ts), and this file is the only place
+	// anything ever adds to the Global group (`templates-compose.spec.ts` only reads the fixtures below;
+	// no other spec touches templates at all) — so running first guarantees neither "standup" (created and
+	// deleted by the test below) nor "foo" (created, and left, by the shadowing test below) exists yet.
+	// `globalSetup` seeds three Global fixtures once for the whole run and `resetState` never wipes
+	// `prompts/` (see `fixtures/templates.ts`), so the Global group is otherwise never empty during the
+	// suite — manufacturing that condition means removing those three ourselves first. Restores them (and
+	// removes the four starters this test adds) at the end, so every test/file that runs after — including
+	// this file's own later tests, and `templates-compose.spec.ts`, which depends on `review`/`rename`/
+	// `adjacent`'s exact original content — sees the world exactly as it was before this test ran.
+	test("Global empty state offers starter templates; adding them fills the composer's / menu", async ({
+		page,
+	}) => {
+		await openWorkspaceChat(page);
+		clearTemplateFixtures();
+
+		await page.getByTestId("open-settings").click();
+		await page.getByTestId("settings-nav-templates").click();
+		const settingsDialog = page.getByTestId("settings-dialog");
+		await expect(settingsDialog).toContainText("Prompt templates");
+
+		const globalRows = page.locator('[data-testid="template-row"][data-scope="global"]');
+		await expect(globalRows).toHaveCount(0);
+		const offer = page.getByTestId("template-starters");
+		await expect(offer).toBeVisible();
+
+		await offer.click();
+		await expect(globalRows).toHaveCount(4);
+		for (const name of ["review", "explain", "tests", "standup"]) {
+			await expect(
+				page.locator(`[data-testid="template-row"][data-name="${name}"][data-scope="global"]`),
+			).toBeVisible();
+		}
+		// The offer disappears the instant the list is non-empty.
+		await expect(offer).toHaveCount(0);
+
+		await page.keyboard.press("Escape");
+		await expect(settingsDialog).toBeHidden();
+
+		// The freshly-added "review" starter (not the fixture of the same name — that one was removed
+		// above) shows up in the composer's `/` menu, same as any other template would.
+		const input = page.getByTestId("chat-input");
+		await input.fill("/rev");
+		await expect(
+			page
+				.locator('[data-testid="slash-command"][data-source="prompt"]')
+				.filter({ hasText: "review" }),
+		).toHaveCount(1);
+		await input.fill("");
+
+		// Restore: remove the four starters this test added, then put the original three fixtures back.
+		removeGlobalTemplates(["review", "explain", "tests", "standup"]);
+		seedTemplateFixtures();
+	});
+
 	test("global template: create shows up in the composer's / menu, edit updates it, delete removes it from both", async ({
 		page,
 	}) => {

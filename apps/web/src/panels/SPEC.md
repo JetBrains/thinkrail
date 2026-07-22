@@ -130,7 +130,15 @@ a project picker, the prompt hero, and the reused
   `HistoryOverlay`'s save-as-template action needs the identical form, and `chat/` can't import
   `panels/`). **Delete** is a `ConfirmPopover` on the row (the same anchored-confirm pattern
   `ProjectTree.tsx`'s workspace-remove uses) calling `template.delete` directly — the dialog itself is
-  never involved in deletion. A single dimmed "General" nav item ("Soon") still signals the shell is
+  never involved in deletion. **R4 — starter-templates offer:** when the **Global** group's fetch has
+  resolved with zero rows and no error, its empty state swaps the bare "No templates yet." for that same
+  hint plus a button (`data-testid="template-starters"`) — clicking it `template.save`s four verbatim
+  starter templates (review/explain/tests/standup; scope `"global"`, body assembled client-side via
+  `chat/templateText.ts`'s `assembleTemplate`, the same helper `TemplateEditorDialog` uses) sequentially,
+  then bumps `templatesVersion` once, the same invalidation the row list already refetches on — the
+  offer disappears on its own next render once the list is non-empty, no dismiss state to track. **This
+  project**'s empty state is unchanged (still the bare text) — the offer is Global-only, since it only
+  ever seeds global files. No server change. A single dimmed "General" nav item ("Soon") still signals the shell is
   built to grow. `ProvidersSettings`/`AppearanceSettings`/`TemplatesSettings` are the **integration pieces**
   (store + transport); the `LoginDialog` stays presentational (`auth` module).
   Panels compose their own sub-panels

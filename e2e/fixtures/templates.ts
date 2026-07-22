@@ -3,7 +3,7 @@
 // discover. Mirrors `sessions.ts`'s fixture pattern: a pure, re-callable seeding function, called once
 // from `globalSetup`. Safe there: per-test `resetState` (`fixtures/app.ts`) wipes `pi-agent/sessions/`, not
 // `pi-agent/prompts/`, so this never needs re-seeding mid-suite the way session fixtures sometimes do.
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { E2E_PI_AGENT_DIR } from "./paths";
 
@@ -56,4 +56,28 @@ description: Two zero-gap adjacent slots (regression fixture)
 $1$2
 `,
 	);
+}
+
+/**
+ * Removes named global template files, by template name (not filename) — a targeted delete, never a
+ * blanket directory wipe, so this can't clobber something an unrelated test/file has independently
+ * written into the same shared prompts dir. The primitive both helpers below are built from.
+ */
+export function removeGlobalTemplates(names: string[], agentDir: string = E2E_PI_AGENT_DIR): void {
+	const dir = join(agentDir, "prompts");
+	for (const name of names) {
+		rmSync(join(dir, `${name}.md`), { force: true });
+	}
+}
+
+/**
+ * Removes just the three `seedTemplateFixtures` files. `globalSetup` seeds them once for the whole run
+ * and `resetState` never wipes `prompts/` (see this file's header), so the Global templates group is
+ * otherwise never empty during the suite — a test of the empty-state starter-templates offer (R3+R4
+ * brief, `templates-manage.spec.ts`) has to manufacture that condition itself. Paired with a re-call of
+ * `seedTemplateFixtures()` to restore them once that test is done, so every other test/file keeps seeing
+ * the same three fixtures regardless of run order.
+ */
+export function clearTemplateFixtures(agentDir: string = E2E_PI_AGENT_DIR): void {
+	removeGlobalTemplates(["review", "rename", "adjacent"], agentDir);
 }
