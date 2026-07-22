@@ -39,12 +39,21 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   on a `failed` row and the same `HookApprovalDialog` reachable from an `awaitingApproval` row too (both
   call sites share it rather than duplicating the modal). `hooksActions.ts`'s
   **`approveAndRunHook`**/**`runHookNow`** wrap `workspace.hooks.approve`/`workspace.hooks.run` — approve
-  alone only records a project-scoped approval (see [[submodule-server-workspaces-hooks]]), so the dialog
-  always composes it with an explicit run to actually bootstrap the workspace that's stuck at
-  `hookAwaitingApproval`. **`ProjectHooksDialog`** is the project-level hooks config form (one row per
-  `HookName`: committed command, optional host-local override, approval status + an Approve action),
-  reachable with zero workspaces open; composes `hooksActions.ts`'s new
-  `getProjectHooks`/`saveProjectHooks`/`approveProjectHook`. Two entry points open it: a per-row **gear
+  alone only records a per-(project, hook, source) approval (see [[submodule-server-workspaces-hooks]]),
+  scoped to the given `workspaceId` (so a Shared script hook resolves/hashes against that workspace's own
+  worktree, not the project root), so the dialog always composes it with an explicit run to actually
+  bootstrap the workspace that's stuck at `hookAwaitingApproval`. **`ProjectHooksDialog`** is the
+  project-level hooks config form, reachable with zero workspaces open: a top **combine-mode** segmented
+  control (Both / Shared only / Local only, testid `hook-combine-mode` + a per-option testid) plus, per
+  `HookName`, a **Shared** and a **Local** sub-field, each an **Inline | Script** toggle (Inline = a
+  multi-line `pre-wrap` monospace textarea; Script = a single-line path input) carrying its own read-only
+  approval status ("Approved"/"Not yet approved") — **no Approve button**, since saving approves everything
+  it writes on this machine — and an explicit **remove (×)** that clears just that sub-field (instead of an
+  implicit blank-to-delete). When the project gitignores `.thinkrail/` (`sharedCommittable: false`), the
+  whole Shared column is disabled with an inline note (`shared-uncommittable-note`) and Local stays the
+  escape hatch (host-local, no git, still runs in every workspace). Composes `hooksActions.ts`'s
+  `getProjectHooks`/`saveProjectHooks`, typed to the tiered `{combineMode, shared, local}` payloads — there
+  is no standalone `approveProjectHook`; save folds approval in. Two entry points open it: a per-row **gear
   icon** (`Settings`, testid `project-hooks`) on `ProjectRow`, same hover-reveal treatment as the
   **Create workspace** `+`, and the Welcome screen's **"Configure hooks"** card (below).
   **Opening a project** goes through the shared **`useOpenProject`** hook (reused by `ProjectTree` **and**
