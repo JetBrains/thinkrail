@@ -14,13 +14,14 @@ import { errorText, getTransport } from "@/transport";
  * - **project** (Welcome / New Workspace, no session yet): `project.skills` catalog, per-**project**-baseline
  *   skill toggles, no Reload.
  * Both share trust, re-confirm-new, and the per-project **group** toggles (a plugin / source tier, or all
- * plugins at once). Skills are grouped by source — Bundled / Pi / Personal / a box per Claude plugin / Project
- * — with sticky section headers.
+ * plugins at once). Skills are grouped by source — ThinkRail / Pi / Personal / a group per Claude plugin /
+ * Project — with sticky section headers; the first-party ThinkRail and Pi groups lead, above the All-plugins
+ * master (which governs only the plugin groups).
  */
 // ThinkRail-bundled + pi-native first-party skills lead; then personal, then plugins (sorted), then the
 // repo's gated project skills last.
 const TIER_META: Record<string, { label: string; hint: string; rank: number }> = {
-	bundled: { label: "Bundled", hint: "Shipped with ThinkRail.", rank: 0 },
+	bundled: { label: "ThinkRail", hint: "Bundled with the app.", rank: 0 },
 	pi: { label: "Pi", hint: "Pi-native / configured.", rank: 1 },
 	personal: { label: "Personal", hint: "Your own libraries (~/.claude, ~/.codex, …).", rank: 2 },
 	project: { label: "Project", hint: "Committed to the repo — gated behind trust.", rank: 4 },
@@ -34,7 +35,7 @@ interface Group {
 	items: SkillCatalogEntry[];
 }
 
-/** Group entries by their canonical group key; order Bundled → Pi → Personal → plugins (sorted) → Project. */
+/** Group entries by their canonical group key; order ThinkRail → Pi → Personal → plugins (sorted) → Project. */
 function groupCatalog(entries: SkillCatalogEntry[]): Group[] {
 	const byKey = new Map<string, { isPlugin: boolean; items: SkillCatalogEntry[] }>();
 	for (const entry of entries) {
@@ -169,6 +170,70 @@ export function SkillsDialog({
 	const untrustedCount = entries?.filter((e) => e.decision === "untrusted").length ?? 0;
 	const groups = groupCatalog(entries ?? []);
 	const hasPlugins = groups.some((g) => g.isPlugin);
+	// First-party skills (ThinkRail + Pi) render above the all-plugins master — they aren't plugins and
+	// the master doesn't govern them; every other group renders below it.
+	const isLeadingKey = (key: string) => key === "bundled" || key === "pi";
+	const leadingGroups = groups.filter((g) => isLeadingKey(g.key));
+	const otherGroups = groups.filter((g) => !isLeadingKey(g.key));
+
+	const renderGroup = (group: Group) => {
+		// A plugin group is locked off when the "all plugins" master is off; either way a disabled
+		// group grays its skill toggles (re-enable the group to change individual skills).
+		const lockedByMaster = group.isPlugin && pluginsDisabled;
+		const groupOn = !lockedByMaster && !disabledGroups.has(group.key);
+		return (
+			<div key={group.key} data-testid="skill-group" data-group={group.key} data-on={groupOn}>
+				{/* Sticky section header (VSCode-style): pins while the group is in view, then the next
+				    group's header pushes it out. The first-party leads (ThinkRail, Pi) sit at the scroll top
+				    (`top-0`), above the all-plugins master; every other header pins below the master at
+				    `top-8` when plugins exist. No `overflow-hidden` ancestor (would clip sticky); an opaque
+				    bg keeps rows from bleeding through. */}
+				<div
+					className={cn(
+						"sticky z-10 flex items-center gap-sm border-border2 border-y bg-bg-dark px-sm py-1.5",
+						hasPlugins && !isLeadingKey(group.key) ? "top-8" : "top-0",
+					)}
+				>
+					{group.isPlugin ? <Puzzle className="size-3.5 shrink-0 text-hint" aria-hidden /> : null}
+					<span className="font-medium text-text text-xs uppercase tracking-wide">
+						{group.label}
+					</span>
+					<span className="min-w-0 flex-1 truncate text-hint text-xs">{group.hint}</span>
+					<span className="shrink-0 rounded-full bg-hover px-1.5 text-hint text-xs">
+						{group.items.length}
+					</span>
+					<Toggle
+						on={groupOn}
+						busy={busy || lockedByMaster}
+						testid="group-toggle"
+						onClick={() => setGroupEnabled(group.key, !groupOn)}
+					/>
+				</div>
+				{/* Indent + left rail nests the skills visually under their group/plugin header. */}
+				<div className="ml-sm divide-y divide-border2 border-border2 border-l">
+					{group.items.map((entry) => (
+						<SkillRow
+							key={`${group.key}:${entry.name}`}
+							entry={entry}
+							busy={busy}
+							groupOff={!groupOn}
+							onToggle={(enabled) => setSkillEnabled(entry.name, enabled)}
+							onAcknowledge={() =>
+								void mutate(
+									() =>
+										getTransport().request("project.acknowledgeSkills", {
+											id: projectId,
+											names: [entry.name],
+										}),
+									"Couldn't confirm skill",
+								)
+							}
+						/>
+					))}
+				</div>
+			</div>
+		);
+	};
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
@@ -231,93 +296,34 @@ export function SkillsDialog({
 				) : null}
 
 				<div className="max-h-[50vh] overflow-y-auto">
-					{/* The all-plugins master stays pinned on top of everything (higher z, fixed h-8); group
-					    headers stick *below* it at `top-8`, so it's a two-level sticky (VSCode breadcrumb style). */}
-					{hasPlugins ? (
-						<div
-							data-testid="skills-all-plugins"
-							className="sticky top-0 z-20 flex h-8 items-center gap-sm border-border2 border-y bg-bg-dark px-sm"
-						>
-							<span className="min-w-0 flex-1 font-medium text-text text-xs uppercase tracking-wide">
-								All plugins
-							</span>
-							<Toggle
-								on={!pluginsDisabled}
-								busy={busy}
-								testid="all-plugins-toggle"
-								onClick={() => setGroupEnabled("@plugins", pluginsDisabled)}
-							/>
-						</div>
-					) : null}
 					{entries === null ? (
 						<p className="px-sm py-md text-hint text-sm">Loading skills…</p>
 					) : entries.length === 0 ? (
 						<p className="px-sm py-md text-hint text-sm">No skills discovered.</p>
 					) : (
-						groups.map((group) => {
-							// A plugin group is locked off when the "all plugins" master is off; either way a disabled
-							// group grays its skill toggles (re-enable the group to change individual skills).
-							const lockedByMaster = group.isPlugin && pluginsDisabled;
-							const groupOn = !lockedByMaster && !disabledGroups.has(group.key);
-							return (
+						<>
+							{/* First-party skills (ThinkRail + Pi) lead, above the all-plugins master. */}
+							{leadingGroups.map(renderGroup)}
+							{/* Once the first-party groups scroll past, the all-plugins master pins at the scroll top
+							    (higher z, fixed h-8); plugin/other headers stick below it at `top-8` — a two-level sticky. */}
+							{hasPlugins ? (
 								<div
-									key={group.key}
-									data-testid="skill-group"
-									data-group={group.key}
-									data-on={groupOn}
+									data-testid="skills-all-plugins"
+									className="sticky top-0 z-20 flex h-8 items-center gap-sm border-border2 border-y bg-bg-dark px-sm"
 								>
-									{/* Sticky section header (VSCode-style): pins while the group is in view, then the next
-									    group's header pushes it out — below the always-pinned all-plugins master (`top-8`) when
-									    present, else at the scroll top. No `overflow-hidden` ancestor (would clip sticky); an
-									    opaque bg keeps rows from bleeding through. */}
-									<div
-										className={cn(
-											"sticky z-10 flex items-center gap-sm border-border2 border-y bg-bg-dark px-sm py-1.5",
-											hasPlugins ? "top-8" : "top-0",
-										)}
-									>
-										{group.isPlugin ? (
-											<Puzzle className="size-3.5 shrink-0 text-hint" aria-hidden />
-										) : null}
-										<span className="font-medium text-text text-xs uppercase tracking-wide">
-											{group.label}
-										</span>
-										<span className="min-w-0 flex-1 truncate text-hint text-xs">{group.hint}</span>
-										<span className="shrink-0 rounded-full bg-hover px-1.5 text-hint text-xs">
-											{group.items.length}
-										</span>
-										<Toggle
-											on={groupOn}
-											busy={busy || lockedByMaster}
-											testid="group-toggle"
-											onClick={() => setGroupEnabled(group.key, !groupOn)}
-										/>
-									</div>
-									{/* Indent + left rail nests the skills visually under their group/plugin header. */}
-									<div className="ml-sm divide-y divide-border2 border-border2 border-l">
-										{group.items.map((entry) => (
-											<SkillRow
-												key={`${group.key}:${entry.name}`}
-												entry={entry}
-												busy={busy}
-												groupOff={!groupOn}
-												onToggle={(enabled) => setSkillEnabled(entry.name, enabled)}
-												onAcknowledge={() =>
-													void mutate(
-														() =>
-															getTransport().request("project.acknowledgeSkills", {
-																id: projectId,
-																names: [entry.name],
-															}),
-														"Couldn't confirm skill",
-													)
-												}
-											/>
-										))}
-									</div>
+									<span className="min-w-0 flex-1 font-medium text-text text-xs uppercase tracking-wide">
+										All plugins
+									</span>
+									<Toggle
+										on={!pluginsDisabled}
+										busy={busy}
+										testid="all-plugins-toggle"
+										onClick={() => setGroupEnabled("@plugins", pluginsDisabled)}
+									/>
 								</div>
-							);
-						})
+							) : null}
+							{otherGroups.map(renderGroup)}
+						</>
 					)}
 				</div>
 			</DialogContent>
