@@ -142,8 +142,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     tools + its `before_agent_start` rule), and **`pi-thinkrail-workflow`** (the workflow-router rule +
     workflow skills). Existing personal aliases are Claude
     (`${CLAUDE_CONFIG_DIR:-~/.claude}/skills`), Codex (`${CODEX_HOME:-~/.codex}/skills`), Copilot
-    (`~/.copilot/skills`), and Gemini (`${GEMINI_CLI_HOME:-~}/.gemini/skills`); project-root aliases are `.claude/skills`,
-    `.github/skills`, and `.gemini/skills`. Only existing directories are added — never arbitrary
+    (`~/.copilot/skills`), and Gemini (`${GEMINI_CLI_HOME:-~}/.gemini/skills`), **plus each installed Claude
+    plugin's `skills/` dir** (read from `~/.claude/plugins/installed_plugins.json` — the resolved `installPath`,
+    never a cache sweep, so stale versions and transitive `node_modules/**/skills` are excluded); project-root
+    aliases are `.claude/skills`, `.github/skills`, and `.gemini/skills`. Only existing directories are added — never arbitrary
     dot-directory scanning, plugin caches, commands, or nested downward discovery. Pi remains the parser:
     vendor-only macros/hooks/models/subagents/metadata are not emulated. First-name-wins precedence is
     Pi native/configured/shared → ThinkRail-bundled → personal aliases → project aliases, so a repo can

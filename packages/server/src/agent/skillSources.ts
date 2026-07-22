@@ -1,4 +1,4 @@
-import { existsSync, realpathSync, statSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -33,9 +33,40 @@ function existingDirectory(path: string): string | null {
 }
 
 /**
- * Discover the explicit compatibility allowlist in precedence order: project aliases before personal
- * aliases. Pi-native/configured/shared roots are not returned here — DefaultResourceLoader owns those and
- * places them before this list; ThinkRail's bundled skills are appended after it.
+ * The `skills/` dir of each installed Claude Code **plugin**, read from the plugin manager's authoritative
+ * `installed_plugins.json` (`{ plugins: { "<name>@<market>": [{ installPath, … }] } }`). We take each
+ * install's resolved `installPath` (version-pinned) + `/skills` — never a blind scan of the plugin cache,
+ * which would sweep in stale versions and transitive `node_modules/**​/skills` junk. Missing/garbled
+ * manifest → none. These are personal-scope (the user installed them via Claude).
+ */
+function readClaudePluginSkillDirs(claudeConfigDir: string): string[] {
+	const manifest = join(claudeConfigDir, "plugins", "installed_plugins.json");
+	if (!existsSync(manifest)) return [];
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(readFileSync(manifest, "utf8"));
+	} catch {
+		return [];
+	}
+	const plugins = (parsed as { plugins?: Record<string, unknown> } | null)?.plugins;
+	if (!plugins || typeof plugins !== "object") return [];
+	const dirs: string[] = [];
+	for (const installs of Object.values(plugins)) {
+		if (!Array.isArray(installs)) continue;
+		for (const install of installs) {
+			const installPath = (install as { installPath?: unknown } | null)?.installPath;
+			if (typeof installPath === "string") dirs.push(join(installPath, "skills"));
+		}
+	}
+	return dirs;
+}
+
+/**
+ * Discover the explicit compatibility allowlist: the fixed project + personal alias dirs, plus each
+ * installed Claude plugin's `skills/` dir (from `installed_plugins.json`, personal-scope). Pi-native/
+ * configured/shared roots are not returned here — DefaultResourceLoader owns those and places them before
+ * this list; ThinkRail's bundled skills are appended after it. `resolveSkillInputs` applies the real
+ * precedence (bundled > personal > project); this returns discovery order.
  */
 export function discoverCompatibilitySkillSources(
 	cwd: string,
@@ -73,6 +104,12 @@ export function discoverCompatibilitySkillSources(
 		},
 		{ path: join(geminiHome, ".gemini", "skills"), scope: "user", provider: "gemini" },
 	];
+
+	// Installed Claude plugins (superpowers, etc.) — appended after the hand-written personal aliases so a
+	// loose `~/.claude/skills/<name>` wins a name collision over a plugin's.
+	for (const path of readClaudePluginSkillDirs(claudeConfigDir)) {
+		candidates.push({ path, scope: "user", provider: "claude" });
+	}
 
 	const sources: CompatibilitySkillSource[] = [];
 	const seen = new Set<string>();

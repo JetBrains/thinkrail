@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { discoverCompatibilitySkillSources } from "./skillSources";
@@ -64,6 +64,38 @@ describe("discoverCompatibilitySkillSources", () => {
 			"user:gemini",
 		]);
 		expect(sources.map((source) => source.path)).not.toContain(join(project, ".cursor", "skills"));
+	});
+
+	it("discovers installed Claude plugins' skills from installed_plugins.json, not a cache sweep", () => {
+		const root = temporaryRoot();
+		const project = directory(join(root, "project"));
+		const home = directory(join(root, "home"));
+		const claudeConfig = directory(join(root, "claude-config"));
+		// A version-pinned plugin install with a skills dir + a transitive node_modules skills dir (junk).
+		const installPath = join(claudeConfig, "plugins", "cache", "market", "superpowers", "6.1.1");
+		directory(join(installPath, "skills", "brainstorming"));
+		directory(join(installPath, "node_modules", "dep", "skills"));
+		writeFileSync(
+			join(claudeConfig, "plugins", "installed_plugins.json"),
+			JSON.stringify({
+				version: 2,
+				plugins: { "superpowers@market": [{ scope: "user", installPath, version: "6.1.1" }] },
+			}),
+		);
+
+		const sources = discoverCompatibilitySkillSources(project, {
+			env: { HOME: home, CLAUDE_CONFIG_DIR: claudeConfig },
+		});
+
+		// The plugin's own skills dir is discovered (personal-scope)…
+		expect(
+			sources.some(
+				(s) =>
+					s.path === join(installPath, "skills") && s.scope === "user" && s.provider === "claude",
+			),
+		).toBe(true);
+		// …but never the transitive node_modules skills junk (we read the manifest, not a blind find).
+		expect(sources.some((s) => s.path.includes("node_modules"))).toBe(false);
 	});
 
 	it("uses default homes, ignores missing roots, and deduplicates aliased directories", () => {
