@@ -23,16 +23,35 @@ test("Changes tab shows the active worktree's diff and swaps per workspace", asy
 	await expect(diffTab).toHaveCount(1);
 	await expect(diffTab).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("diff-pane")).toContainText("edited by e2e");
-	await expect(page.getByTestId("diff-toggle-split")).toHaveAttribute("data-active", "true");
 
-	// Split ↔ inline is a per-tab toggle in the pane header.
-	await page.getByTestId("diff-toggle-inline").click();
-	await expect(page.getByTestId("diff-toggle-inline")).toHaveAttribute("data-active", "true");
-	await expect(page.getByTestId("diff-pane")).toContainText("edited by e2e");
+	// A markdown diff has exactly two views: Source (basic Monaco split, the default) | Rendered
+	// (one htmldiff-merged rendered document with ins/del markers). No Split|Inline segment.
+	await expect(page.getByTestId("diff-toggle-source")).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("diff-toggle-split")).toHaveCount(0);
+	await page.getByTestId("diff-toggle-rendered").click();
+	await expect(page.getByTestId("diff-toggle-rendered")).toHaveAttribute("data-active", "true");
+	const renderedDiff = page.getByTestId("rendered-diff");
+	await expect(renderedDiff.locator("h1")).toHaveText("sample-project");
+	await expect(renderedDiff.locator("ins")).toContainText("edited by e2e");
+
+	// Switching back to Source returns to the raw Monaco diff.
+	await page.getByTestId("diff-toggle-source").click();
+	await expect(page.getByTestId("diff-toggle-source")).toHaveAttribute("data-active", "true");
+	await expect(renderedDiff).toHaveCount(0);
 
 	// Re-clicking the row focuses the existing tab — one diff tab per file, never a duplicate.
 	await changed.click();
 	await expect(diffTab).toHaveCount(1);
+
+	// A non-markdown diff has no Source|Rendered — just Split | Inline (per-tab).
+	writeFileSync(join(worktree, "script.ts"), "export const edited = true;\n");
+	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).click();
+	await expect(page.getByTestId("diff-pane")).toContainText("edited = true");
+	await expect(page.getByTestId("diff-toggle-split")).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("diff-toggle-rendered")).toHaveCount(0);
+	await page.getByTestId("diff-toggle-inline").click();
+	await expect(page.getByTestId("diff-toggle-inline")).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("diff-pane")).toContainText("edited = true");
 
 	// A fresh second workspace has its own (empty) change set.
 	await createWorkspaceViaDialog(page);

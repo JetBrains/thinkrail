@@ -211,7 +211,21 @@ a project picker, the prompt hero, and the reused
   file; a re-click focuses the existing tab). `DiffPane` renders a slim header (the path + a per-tab
   **Split | Inline** toggle via `store.setDiffTabView`; split is the default) over the read-only lazy
   `MonacoDiff` (`@monaco-editor/react` `DiffEditor`, model paths derived from the file's path so both
-  sides highlight alike). A row is shown selected when its diff tab is the active center tab (or it's
+  sides highlight alike; `useInlineViewWhenSpaceIsLimited: false` — the toggle must do what it says, so
+  Split never silently renders as inline on a narrow pane; the inline view's dual line-number gutter
+  — base-branch no. left, worktree no. right — is Monaco's standard and stays). **A markdown diff has exactly two
+  views** instead, via a **Source | Rendered** toggle (`diff-toggle-source`/`diff-toggle-rendered`,
+  per-tab `DiffTab.rendered` via `store.setDiffTabRendered`, gated on `lib.isMarkdownPath`; Source is
+  the default — no Split|Inline segment for markdown). **Source** = the basic Monaco split diff.
+  **Rendered** is a **real rich diff**, not plain previews (see [[task-rendered-markdown-diff]]): the
+  lazy `RenderedDiff` renders **both sides** through the same document pipeline as `MarkdownPreview`
+  (the shared `MarkdownDocument` — prose skin, alerts, heading ids, frontmatter stripped) to static
+  HTML (`renderToStaticMarkup`; effects don't run, so code blocks show the plain fallback and link
+  handlers are inert — accepted for a diff view), then merges them with **`node-htmldiff`** into ONE
+  document carrying `<ins>`/`<del>` markers (`del` red + strikethrough, `ins` green — token colors),
+  injected via `dangerouslySetInnerHTML` (same accepted risk class as the shiki path in
+  `chat/Markdown`). This mirrors VS Code's opt-in "markdown preview in the diff view" — a feature of
+  VS Code's webview layer, absent from standalone Monaco, hence built here. A row is shown selected when its diff tab is the active center tab (or it's
   the deep-link highlight). A failed `git.diffFile` leaves tabs unchanged (the row stays for a retry).
 - **Changes: List | Tree.** A header toggle (`store.changesView`, app-wide — persisted in the store, not
   per workspace, so it survives workspace switches) switches the flat **List** and a folder **Tree**
