@@ -10,13 +10,17 @@
  * flag, and while it's unset a later settled turn retries. Never throws, never blocks a turn.
  */
 
-import type { Message, PiEvent, Workspace } from "@thinkrail/contracts";
+import type { PiEvent, TranscriptMessage, Workspace } from "@thinkrail/contracts";
 import { getSessionMessages } from "../agent";
-import { extractFirstTurn, naiveWorkspaceSlug, suggestWorkspaceName } from "../assist";
+import { extractFirstTurn, naiveWorkspaceName, suggestWorkspaceName } from "../assist";
 import { getWorkspace, renameWorkspace } from "../workspaces";
 
-/** A pristine, never-touched auto name (`workspace-N`) — the only state the naive pass may overwrite. */
-const PRISTINE_NAME = /^workspace-\d+$/;
+/**
+ * A pristine, never-touched auto workspace — the only state the naive pass may overwrite. Keyed off the
+ * **branch** (always `workspace-N` when auto), not the display `name`, so the two are decoupled: the
+ * display name's format can change without breaking this gate.
+ */
+const PRISTINE_BRANCH = /^workspace-\d+$/;
 
 /**
  * A settled turn: the run concluded and no auto-retry follows. `turn_end` is NOT settlement (it fires
@@ -51,7 +55,7 @@ const inFlight = new Set<string>();
 const naiveInFlight = new Set<string>();
 
 /** Test seam: the hook's transcript source (defaults to `getSessionMessages` on the live session). */
-export type TranscriptReader = () => Promise<Message[]>;
+export type TranscriptReader = () => Promise<TranscriptMessage[]>;
 
 /**
  * Instantly name `workspaceId` from the session's first prompt, **non-agentically** — a cheap provisional
@@ -59,9 +63,9 @@ export type TranscriptReader = () => Promise<Message[]>;
  * `workspace-N` for minutes while the agentic pass waits for the turn to settle.
  *
  * Provisional by contract: it renames name + branch but leaves `renamed` unset (`lock: false`), so
- * {@link maybeAutoRenameWorkspace} still refines the slug into a final name and locks it on settle. It
- * fires only on a **pristine** workspace (`!renamed` AND name still `workspace-N`) — once the naive slug
- * lands the name no longer matches, so it never fires twice and never overwrites a user/agentic name.
+ * {@link maybeAutoRenameWorkspace} still refines the name and locks it on settle. It fires only on a
+ * **pristine** workspace (`!renamed` AND its branch still `workspace-N`) — once the naive rename lands the
+ * branch no longer matches, so it never fires twice and never overwrites a user/agentic name.
  * Best-effort like the agentic pass: every failure path resolves `null`; never throws, never blocks.
  */
 export async function maybeNaiveNameWorkspace(
@@ -81,13 +85,13 @@ export async function maybeNaiveNameWorkspace(
 					.messages);
 		const turn = extractFirstTurn(await read());
 		if (!turn) return null;
-		const slug = naiveWorkspaceSlug(turn.prompt);
-		if (!slug) return null;
+		const name = naiveWorkspaceName(turn.prompt);
+		if (!name) return null;
 
 		// Re-check across the await, then rename in the same synchronous tick. `lock: false` keeps the
 		// workspace eligible for the agentic refinement that follows on the settled turn.
 		if (!isPristine(workspaceId)) return null;
-		return renameWorkspace(workspaceId, slug, { lock: false });
+		return renameWorkspace(workspaceId, name, { lock: false });
 	} catch (err) {
 		console.warn(
 			`workspace naive-rename skipped (${workspaceId}): ${err instanceof Error ? err.message : err}`,
@@ -98,11 +102,11 @@ export async function maybeNaiveNameWorkspace(
 	}
 }
 
-/** A workspace still carrying its pristine auto name (`workspace-N`, never renamed). `false` if gone. */
+/** A workspace still on its pristine auto branch (`workspace-N`, never renamed). `false` if gone. */
 function isPristine(workspaceId: string): boolean {
 	try {
 		const ws = getWorkspace(workspaceId);
-		return !ws.renamed && PRISTINE_NAME.test(ws.name);
+		return !ws.renamed && PRISTINE_BRANCH.test(ws.branch);
 	} catch {
 		return false; // archived out from under the starting turn
 	}
@@ -140,14 +144,14 @@ export async function maybeAutoRenameWorkspace(
 
 		const turn = extractFirstTurn(messages);
 		if (!turn) return null;
-		const slug = await suggestWorkspaceName(turn);
-		if (!slug) return null;
+		const name = await suggestWorkspaceName(turn);
+		if (!name) return null;
 
 		// Re-check across the awaits, then rename in the same synchronous tick — no interleaving possible
 		// on this event loop between the check and the save (renameWorkspace is sync).
 		const fresh = getWorkspace(workspaceId);
 		if (fresh.renamed) return null;
-		return renameWorkspace(workspaceId, slug);
+		return renameWorkspace(workspaceId, name);
 	} catch (err) {
 		// Best-effort means null, not silent: without the trace, a permanently-broken rename path would be
 		// indistinguishable from the tolerated "assist had nothing to offer" case.

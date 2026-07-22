@@ -108,8 +108,8 @@ test("createWorkspace marks a user-named workspace renamed; an auto-named one st
 	expect(auto.renamed).toBeUndefined();
 
 	const named = await createWorkspace("p1", "My Feature");
-	expect(named.name).toBe("my-feature");
-	expect(named.branch).toBe("my-feature");
+	expect(named.name).toBe("My Feature"); // display name: casing preserved
+	expect(named.branch).toBe("my-feature"); // branch: derived kebab slug
 	expect(named.renamed).toBe(true);
 });
 
@@ -117,8 +117,8 @@ test("renameWorkspace moves the branch in place: record + git follow, the worktr
 	const ws = await createWorkspace("p1");
 	const renamed = renameWorkspace(ws.id, "add login flow");
 
-	expect(renamed.name).toBe("add-login-flow");
-	expect(renamed.branch).toBe("add-login-flow");
+	expect(renamed.name).toBe("add login flow"); // display name (sanitized), decoupled from the branch
+	expect(renamed.branch).toBe("add-login-flow"); // branch: derived kebab slug
 	expect(renamed.renamed).toBe(true);
 	expect(renamed.worktreePath).toBe(ws.worktreePath);
 	// The worktree's HEAD followed the ref rename; the old branch is gone from the repo.
@@ -127,14 +127,15 @@ test("renameWorkspace moves the branch in place: record + git follow, the worktr
 		"workspace-1",
 	);
 	// And the record on disk agrees.
-	expect(listWorkspaces("p1")[0]?.name).toBe("add-login-flow");
+	expect(listWorkspaces("p1")[0]?.name).toBe("add login flow");
+	expect(listWorkspaces("p1")[0]?.branch).toBe("add-login-flow");
 });
 
 test("renameWorkspace with lock:false renames name + branch but leaves renamed unset (provisional)", async () => {
 	const ws = await createWorkspace("p1");
 	const renamed = renameWorkspace(ws.id, "add login flow", { lock: false });
 
-	expect(renamed.name).toBe("add-login-flow");
+	expect(renamed.name).toBe("add login flow");
 	expect(renamed.branch).toBe("add-login-flow");
 	expect(renamed.renamed).toBeUndefined(); // still eligible for the agentic refinement
 	expect(gitOut(ws.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe("add-login-flow");
@@ -142,7 +143,8 @@ test("renameWorkspace with lock:false renames name + branch but leaves renamed u
 
 	// A later default (lock) rename still moves the branch and now locks it.
 	const locked = renameWorkspace(ws.id, "final name");
-	expect(locked.name).toBe("final-name");
+	expect(locked.name).toBe("final name");
+	expect(locked.branch).toBe("final-name");
 	expect(locked.renamed).toBe(true);
 });
 
@@ -150,8 +152,9 @@ test("renameWorkspace suffixes on collision with an existing branch", async () =
 	git(repo, "branch", "add-login-flow");
 	const ws = await createWorkspace("p1");
 	const renamed = renameWorkspace(ws.id, "add login flow");
+	// The branch is uniqued on collision; the display name stays clean (the chip disambiguates).
 	expect(renamed.branch).toBe("add-login-flow-2");
-	expect(renamed.name).toBe("add-login-flow-2");
+	expect(renamed.name).toBe("add login flow");
 });
 
 test("renameWorkspace re-points siblings basing their diff on the old branch", async () => {
@@ -176,7 +179,7 @@ test("renameWorkspace also suffixes when the candidate's worktree dir is occupie
 	const second = await createWorkspace("p1"); // dir-aware create lands on workspace-2
 	const renamed = renameWorkspace(second.id, "workspace 1"); // branch free, dir taken → suffix
 	expect(renamed.branch).toBe("workspace-1-2");
-	expect(renamed.name).toBe("workspace-1-2");
+	expect(renamed.name).toBe("workspace 1"); // display name unaffected by the branch's dir-collision suffix
 });
 
 test("creating after a rename skips the freed name whose worktree dir is still occupied", async () => {
@@ -253,7 +256,7 @@ test("membership mutations emit lifecycle events through the injected publisher"
 	expect(events[0]).toMatchObject({ kind: "created", workspace: { id: ws.id, projectId: "p1" } });
 	expect(events[1]).toMatchObject({
 		kind: "updated",
-		workspace: { id: ws.id, name: "my-feature" },
+		workspace: { id: ws.id, name: "my feature", branch: "my-feature" },
 	});
 	expect(events[2]).toEqual({ kind: "removed", projectId: "p1", id: ws.id });
 });

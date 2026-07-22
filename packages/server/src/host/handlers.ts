@@ -236,7 +236,7 @@ const handlers: Record<string, Handler> = {
 		});
 	},
 	// Sends are acked when ACCEPTED, not when the turn ends — see `ackSend` (a turn can outlive the
-	// client's request timeout; an `ask_user_question` turn blocks until the user answers).
+	// client's request timeout; long tool rounds are routine).
 	"session.prompt": async (params) => {
 		const p = params as { sessionId: string; text: string; images?: ImageContent[] };
 		await ackSend(promptSession(p.sessionId, p.text, p.images));
@@ -290,14 +290,16 @@ const handlers: Record<string, Handler> = {
 		resolveExtUi((params as { response: ExtUiResponse }).response);
 		return { ok: true } as const;
 	},
-	"session.answerQuestion": (params) => {
+	"session.answerQuestion": async (params) => {
 		const p = params as { sessionId: string; toolCallId: string; result: AskUserQuestionResult };
-		// Reply-style method: vet the target before holding anything (a disposed/unknown session must fail
-		// the request, not silently park an answer), and reject shapes the tool envelope can't digest.
+		// Reply-style method: vet the shape and the target up front — a disposed/unknown session or a
+		// non-awaiting tool call (already answered / superseded / legacy-resolved) fails the request loud;
+		// nothing is ever parked. Delivery starts the answer TURN, so like prompt/steer/followUp it's acked
+		// when accepted (`ackSend`), and later faults arrive via the event stream.
 		if (!hasSession(p.sessionId)) throw new Error(`Unknown session: ${p.sessionId}`);
 		if (!p.result || !Array.isArray(p.result.answers) || typeof p.result.cancelled !== "boolean")
 			throw new Error("Malformed ask_user_question result");
-		answerQuestion(p.sessionId, p.toolCallId, p.result);
+		await ackSend(answerQuestion(p.sessionId, p.toolCallId, p.result));
 		return { ok: true } as const;
 	},
 	"model.list": () => listAvailableModels(),

@@ -110,8 +110,7 @@ export function CenterTabs() {
 							{ sessionId: summary.sessionId, workspaceId: activeWorkspaceId },
 						);
 						if (cancelled) return;
-						const { turns, toolResults } = messagesToRuntime(messages);
-						useAppStore.getState().hydrateSession(fresh, turns, toolResults);
+						useAppStore.getState().hydrateSession(fresh, messagesToRuntime(messages));
 					} catch {
 						// Skip a session that failed to load; the others still hydrate.
 					}
@@ -141,8 +140,7 @@ export function CenterTabs() {
 				sessionId,
 				workspaceId: activeWorkspaceId,
 			});
-			const { turns, toolResults } = messagesToRuntime(messages);
-			useAppStore.getState().hydrateSession(summary, turns, toolResults, true);
+			useAppStore.getState().hydrateSession(summary, messagesToRuntime(messages), true);
 		} catch (err) {
 			// The chat stays in history for a retry — but say why the click did nothing.
 			toast.error(errorText(err), "Couldn't reopen the chat");

@@ -11,6 +11,7 @@ const LABELS: Record<ThemeId, string> = {
 	[Theme.Light]: "Light",
 	[Theme.Darcula]: "Darcula",
 	[Theme.Gruvbox]: "Gruvbox",
+	[Theme.HighContrast]: "High Contrast",
 };
 
 /** The pickable themes, in display order — the Appearance settings section's source. */

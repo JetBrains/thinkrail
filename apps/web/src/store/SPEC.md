@@ -46,7 +46,9 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   so the rendered↔source choice survives tab switches; absent = rendered); `terminalsByWorkspace`
   / `activeTerminalByWorkspace` (`addTerminal`/`closeTerminalTab`/`setActiveTerminalTab`); the
   **per-session chat state** — `sessions: Record<sessionId, SessionRuntime>`, where a `SessionRuntime` holds
-  one chat's `turns` (pi-canonical) / `toolResults` / `currentAssistantId` / `isStreaming` / `model` /
+  one chat's `turns` (pi-canonical) / `toolResults` / `askAnswers` (the `ask-user-answers` replies keyed
+  by tool call id — indexed by the reducer and hydration, never turned into bubbles) /
+  `currentAssistantId` / `isStreaming` / `model` /
   `thinkingLevel` / `stats` / `commands` / `draft` and its **extension-UI state** (`pendingExtUi` (typed by
   `chat`'s `ExtUiDialogRequest`) + `extUiQueue` (overlapping dialogs FIFO so none orphans its server
   promise) + `extUiStatus` / `extUiWidget`). `openChatSession` creates a runtime; `closeChatRuntime` /

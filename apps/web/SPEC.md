@@ -75,22 +75,29 @@ The module set: `transport` / `store` / branded `shell`; `ProjectTree`; `FileTre
 - **`src/styles/tokens.css` is the theme contract.** A *theme* is one set of CSS custom properties; a
   theme swap = changing the token block via `[data-theme="…"]` on `<html>` (`utils/theme` `applyTheme(id)`)
   — nothing in components changes. `@theme inline` keeps utilities pointing at the live `var(--token)`, so
-  the swap re-themes everything. **Ships four themes** — **Dark** (default, under `:root`), **Light**,
-  classic IntelliJ **Darcula**, and **Gruvbox** (the vim classic — warm retro darks; the one theme that
-  swaps the interactive accent to gruvbox orange with dark-on-accent text, so a `[data-theme]` block MAY
-  override the accent family when the palette demands it). Theme blocks override only the semantic
+  the swap re-themes everything. **Ships five themes** — **Dark** (default, under `:root`), **Light**,
+  classic IntelliJ **Darcula**, **Gruvbox** (the vim classic — warm retro darks; the first theme to swap
+  the interactive accent, to gruvbox orange with dark-on-accent text, so a `[data-theme]` block MAY
+  override the accent family when the palette demands it), and **High Contrast** (the classical VSCode
+  hc-black: pure black surfaces, white text, cyan `#6fc3df` contrast borders, orange `#f38518` accent
+  with dark-on-accent text, yellow selection with black selected text). Theme blocks override only the semantic
   surface/text/status tokens + `color-scheme` (+ `--ansi-*`/`--code-*`/accent where the theme calls for
   it); type scale, spacing, radii, fonts stay shared in `:root`. The choice is **server-synced** (`AppConfig.theme`, host-owned): it arrives in
   `server.welcome`, is set from the store's `theme` (fed by transport), applied by the shell's one theme
   effect, and cached in `localStorage` only as a **first-paint hint** (`main.tsx` applies it pre-React so
   the initial paint matches, before the welcome reconciles it). Changed via `settings.update`, converged on
   the `settings.changed` broadcast. The token vocabulary also carries the code surfaces: **`--ansi-*`**
-  (the 16 xterm colors — light overrides them, dark-tuned brights wash out on white) and optional
-  **`--code-*`** syntax colors (set by Darcula, whose identity is its syntax palette; unset elsewhere).
+  (the 16 xterm colors — light overrides them, dark-tuned brights wash out on white), optional
+  **`--code-*`** syntax colors (Darcula's and Gruvbox's identity; High Contrast sets only the comment
+  green over Monaco's real hc-black base), and the optional **`--sel-fg`/`--selection-fg`** selected-text
+  pair (set by High Contrast, whose yellow selection needs black text — unset elsewhere, so other themes
+  keep today's behavior; `--sel-fg` feeds Monaco's `editor.selectionForeground` + xterm's
+  `selectionForeground`, `--selection-fg` the `::selection` rule).
   Code surfaces that own their own theming track the swap: **xterm** and **Monaco** observe
-  `[data-theme]` and rebuild from the tokens (Monaco also picks its `vs`/`vs-dark` base from it, and
-  derives token rules from `--code-*`); **shiki** renders the tri palette (dark+light+darcula, the
-  darcula registration in `lib/shikiTheme.ts`) as CSS vars, flipped by the `[data-theme]` rules in
+  `[data-theme]` and rebuild from the tokens (Monaco picks its `vs`/`vs-dark`/`hc-black` base from it, and
+  derives token rules from `--code-*`); **shiki** renders every `SHIKI_THEMES` palette
+  (dark+light+darcula+gruvbox+high-contrast; the custom darcula + hc-black registrations in
+  `lib/shikiTheme.ts`) as CSS vars, flipped by the `[data-theme]` rules in
   `global.css`; **mermaid** re-derives from the tokens. **Reading color tokens from JS goes through
   `lib.cssColorToHex`** — the built CSS is minified, so `getComputedStyle` can return any equivalent form
   (`#fff`, `gray`), which strict consumers (Monaco, xterm) reject. Text/status token values hold a contrast floor (body ≥

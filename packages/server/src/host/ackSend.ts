@@ -1,7 +1,7 @@
 /**
- * How long a send (prompt/steer/followUp) may run before the wire acks it as ACCEPTED. pi's send methods
- * resolve only when the whole turn ends — but a turn can outlive any client request timeout (an
- * `ask_user_question` turn blocks until the user answers; long tool rounds are routine), so awaiting
+ * How long a send (prompt/steer/followUp/answerQuestion) may run before the wire acks it as ACCEPTED.
+ * pi's send methods resolve only when the whole turn ends — but a turn can outlive any client request
+ * timeout (long tool rounds and multi-minute reasoning models are routine), so awaiting
  * completion would time the request out client-side and surface a phantom "request timed out" error over
  * a perfectly healthy turn. An immediate rejection (bad model, missing API key, malformed send) still
  * lands well inside the window; a fault after the ack reaches the client through the event stream

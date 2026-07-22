@@ -172,6 +172,42 @@ test("message_end finalizes the turn the moment its message completes (not at ag
 	expect(rt("a")).toBe(before);
 });
 
+test("an ask-user-answers custom message_end indexes into askAnswers (never the turn list)", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+
+	const result = {
+		answers: [{ questionIndex: 0, question: "Q?", kind: "option", answer: "A" }],
+		cancelled: false,
+	};
+	store.handlePiEvent(
+		{
+			type: "message_end",
+			message: {
+				role: "custom",
+				customType: "ask-user-answers",
+				content: "User has answered your questions: …",
+				display: true,
+				details: { toolCallId: "ask1", result },
+			},
+		} as unknown as PiEvent,
+		"a",
+	);
+	expect(rt("a").askAnswers.ask1).toEqual(result as never);
+	expect(rt("a").turns.filter((t) => t.kind === "assistant" || t.kind === "user")).toHaveLength(0);
+
+	// Unknown customTypes are ignored without touching the runtime ref.
+	const before = rt("a");
+	store.handlePiEvent(
+		{
+			type: "message_end",
+			message: { role: "custom", customType: "other", content: "x", display: false },
+		} as unknown as PiEvent,
+		"a",
+	);
+	expect(rt("a")).toBe(before);
+});
+
 test("the tool lifecycle folds into toolResults (the status + raw the renderers read)", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");
@@ -367,17 +403,20 @@ test("hydrateSession rebuilds a runtime + tab on connect, and never clobbers a l
 		updatedAt: 0,
 		live: true,
 	};
-	store.hydrateSession(
-		summary,
-		[{ kind: "user", id: "u1", message: { role: "user", content: "hi", timestamp: 0 } }],
-		{},
-	);
+	store.hydrateSession(summary, {
+		turns: [{ kind: "user", id: "u1", message: { role: "user", content: "hi", timestamp: 0 } }],
+		toolResults: {},
+		askAnswers: {},
+	});
 	const st = useAppStore.getState();
 	expect(st.sessions.h1?.turns).toHaveLength(1);
 	expect(st.tabsByWorkspace.ws1?.some((t) => t.kind === "chat" && t.sessionId === "h1")).toBe(true);
 
 	// A second hydrate (e.g. stale list) must NOT overwrite the now-live runtime.
-	store.hydrateSession({ ...summary, messageCount: 99 }, [], {});
+	store.hydrateSession(
+		{ ...summary, messageCount: 99 },
+		{ turns: [], toolResults: {}, askAnswers: {} },
+	);
 	expect(useAppStore.getState().sessions.h1?.turns).toHaveLength(1);
 });
 
@@ -417,7 +456,7 @@ test("hydrateSession(activate) reopens a disk-only chat: builds it, focuses it, 
 		updatedAt: 1,
 		live: true,
 	};
-	store.hydrateSession(summary, [], {}, true);
+	store.hydrateSession(summary, { turns: [], toolResults: {}, askAnswers: {} }, true);
 
 	const st = useAppStore.getState();
 	expect(st.sessions.disk1).toBeDefined(); // runtime built from the re-opened session

@@ -29,7 +29,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   an optional boot-time `openProject(projectPath)` (best-effort — a launcher convenience), and
   `stop()` → agent-session + terminal cleanup then socket close); `boot.ts` (`bootHost` → resolve the
   login-shell PATH, pick the port per `portMode` (`"exact"` vs `"free"`), start `createServer`, and
-  install SIGINT/SIGTERM handlers that `stop()` then exit); `handlers.ts` (the WS method→handler registry);
+  install SIGINT/SIGTERM handlers that **settle before exit**: `settleSessionsForShutdown()` — abort
+  streaming sessions and wait bounded, so pi persists their "Operation aborted" tool results and
+  transcripts land paired — then `stop()` + exit; an immediate exit would strand mid-tool transcripts on
+  the restart repair); `handlers.ts` (the WS method→handler registry);
   `ackSend.ts` (the send-ack policy — see "Get right"); `autoRename.ts` (the **workspace auto-rename
   flow** — the composition of `agent` + `assist` + `workspaces` only the host may make, in **two passes**
   the session-publisher closure in `createServer` tees fire-and-forget, both triggering a
@@ -42,17 +45,18 @@ channel fan-out, and the process-boot wrapper both launchers share.
     (`isPromptCommitted(event)`, exported: a **user `message_end`** — `agent_start`/`turn_start` fire
     *before* the prompt's `message_end`, so the transcript wouldn't yet hold the prompt at those; this
     still fires before the model responds, so the name is instant and no tool/question can block it). It
-    derives a slug from the first prompt with assist's non-agentic `naiveWorkspaceSlug` (no model call)
-    and renames **provisionally** (`renameWorkspace(..., { lock: false })` — name + branch move but
-    `renamed` stays unset). It fires only on a **pristine** workspace (`!renamed` AND name still
-    `workspace-N`), so it lands once and never overwrites a user/agentic name; a per-workspace `naiveInFlight`
+    derives a **display name** from the first prompt with assist's non-agentic `naiveWorkspaceName` (no
+    model call) and renames **provisionally** (`renameWorkspace(..., { lock: false })` — name + derived
+    branch move but `renamed` stays unset). It fires only on a **pristine** workspace (`!renamed` AND its
+    **branch** still `workspace-N` — gated on the branch, not the display name, so the two stay decoupled),
+    so it lands once and never overwrites a user/agentic name; a per-workspace `naiveInFlight`
     set dedupes re-fired prompt-commits. This is why a long first turn no longer leaves the workspace as
     `workspace-N` for minutes.
   - **Agentic (refine):** `maybeAutoRenameWorkspace(sessionId, workspaceId)` on every **settled** turn
-    (`isSettledTurn(event)`, exported: `agent_end` with `willRetry: false`). It asks assist for a slug
-    (cheap model), re-checks the workspace (exists, not `renamed`) after the await, then calls
-    `renameWorkspace` in the same tick — upgrading the provisional naive slug into the final name and
-    **locking** it (`renamed: true`). Best-effort by contract: every failure path resolves `null` and
+    (`isSettledTurn(event)`, exported: `agent_end` with `willRetry: false`). It asks assist for a
+    human-readable name (cheap model), re-checks the workspace (exists, not `renamed`) after the await,
+    then calls `renameWorkspace` in the same tick — upgrading the provisional naive name into the final
+    name (and its derived branch) and **locking** it (`renamed: true`). Best-effort by contract: every failure path resolves `null` and
     leaves the flag unset so a later settled turn retries — but a swallowed exception is `console.warn`ed
     (a broken rename path must stay distinguishable from "assist had nothing"). Its own per-workspace
     **in-flight set** (independent of the naive one — the two passes can overlap on a short turn) dedupes
@@ -103,8 +107,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   Every push channel a client should hear must be `ws.subscribe`d in the WS `open` handler — a publish on
   an unsubscribed topic reaches nobody, silently.
 - The host is the single place features are wired together — features never reach back into it.
-- **A send (prompt/steer/followUp) is acked when ACCEPTED, not when the turn ends** (`ackSend`): pi's send
-  methods resolve only at turn end, and a turn can outlive the client's request timeout (an
-  `ask_user_question` turn blocks until the user answers) — awaiting completion would surface a phantom
-  "request timed out" over a healthy turn. A rejection inside the ack window still fails the request (bad
-  model / missing key); later faults reach the client via the event stream.
+- **A send (prompt/steer/followUp/answerQuestion) is acked when ACCEPTED, not when the turn ends**
+  (`ackSend`): pi's send methods resolve only at turn end, and a turn can outlive the client's request
+  timeout (long tool rounds and multi-minute reasoning turns are routine) — awaiting completion would
+  surface a phantom "request timed out" over a healthy turn. A rejection inside the ack window still
+  fails the request (bad model / missing key; for `answerQuestion` also an unknown/answered/superseded
+  call — `assessAnswerability`'s loud verdicts); later faults reach the client via the event stream.
