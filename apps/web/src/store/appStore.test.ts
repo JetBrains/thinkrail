@@ -1,6 +1,6 @@
 import { beforeEach, expect, test } from "bun:test";
 import type { ExtUiRequest, PiEvent, SessionSummary, Workspace } from "@thinkrail/contracts";
-import { type SessionRuntime, toast, useAppStore } from "./appStore";
+import { aggregateHookState, type SessionRuntime, toast, useAppStore } from "./appStore";
 
 // Event fixtures — the reducer only reads the fields below, so casting minimal objects is safe here.
 const agentStart = { type: "agent_start" } as unknown as PiEvent;
@@ -952,4 +952,125 @@ test("applyWorkspaceRemoved tombstones the id end-to-end, so a subsequent hookAw
 	expect(toasts).toHaveLength(1);
 	expect(toasts[0]?.variant).toBe("error");
 	expect(toasts[0]?.message).toContain("add-login-flow");
+});
+
+// ---- applyWorkspaceHookEvent: per-source status, nested by HookSource under hookStatus[hook] ------
+// A `combineMode` of "both" runs Shared then Local for the same hook, each with its own event sequence
+// tagged by `source` — the write must land both side by side, never clobbering one with the other.
+
+test("applyWorkspaceHookEvent writes hookStarted(shared) then hookSucceeded(local) for one hook, preserving both sources", () => {
+	useAppStore.setState({
+		projects: [{ id: "p1", name: "demo", path: "/tmp/demo", slug: "demo", lastOpened: 0 }],
+		workspaces: { p1: [pushedWorkspace()] },
+		removedWorkspaceIds: {},
+		hookOutputByWorkspace: {},
+	});
+
+	useAppStore.getState().applyWorkspaceHookEvent({
+		kind: "hookStarted",
+		workspaceId: "w1",
+		workspaceName: "add-login-flow",
+		projectId: "p1",
+		hook: "onCreate",
+		source: "shared",
+		command: "pnpm install",
+	});
+	expect(useAppStore.getState().workspaces.p1?.[0]?.hookStatus).toEqual({
+		onCreate: { shared: { state: "running", command: "pnpm install" } },
+	});
+
+	useAppStore.getState().applyWorkspaceHookEvent({
+		kind: "hookSucceeded",
+		workspaceId: "w1",
+		workspaceName: "add-login-flow",
+		projectId: "p1",
+		hook: "onCreate",
+		source: "local",
+		command: "echo local ok",
+	});
+	// The shared entry written by the first event is untouched by the local one that follows it.
+	expect(useAppStore.getState().workspaces.p1?.[0]?.hookStatus).toEqual({
+		onCreate: {
+			shared: { state: "running", command: "pnpm install" },
+			local: { state: "succeeded", command: "echo local ok" },
+		},
+	});
+});
+
+test("applyWorkspaceHookEvent leaves other hooks' status untouched when one hook/source updates", () => {
+	useAppStore.setState({
+		projects: [{ id: "p1", name: "demo", path: "/tmp/demo", slug: "demo", lastOpened: 0 }],
+		workspaces: {
+			p1: [
+				{
+					...pushedWorkspace(),
+					hookStatus: {
+						onDelete: { shared: { state: "succeeded", command: "docker compose down" } },
+					},
+				},
+			],
+		},
+		removedWorkspaceIds: {},
+		hookOutputByWorkspace: {},
+	});
+
+	useAppStore.getState().applyWorkspaceHookEvent({
+		kind: "hookFailed",
+		workspaceId: "w1",
+		workspaceName: "add-login-flow",
+		projectId: "p1",
+		hook: "onCreate",
+		source: "shared",
+		command: "pnpm install",
+		exitCode: 1,
+	});
+
+	expect(useAppStore.getState().workspaces.p1?.[0]?.hookStatus).toEqual({
+		onDelete: { shared: { state: "succeeded", command: "docker compose down" } },
+		onCreate: { shared: { state: "failed", command: "pnpm install", exitCode: 1 } },
+	});
+});
+
+// ---- aggregateHookState: the per-hook badge's worst-of across sources ------------------------------
+
+test("aggregateHookState: failed outranks every other state", () => {
+	expect(
+		aggregateHookState({
+			shared: { state: "failed", command: "a", exitCode: 1 },
+			local: { state: "succeeded", command: "b" },
+		}),
+	).toBe("failed");
+	expect(
+		aggregateHookState({
+			shared: { state: "awaitingApproval", command: "a" },
+			local: { state: "failed", command: "b", exitCode: 1 },
+		}),
+	).toBe("failed");
+});
+
+test("aggregateHookState: awaitingApproval outranks running/succeeded", () => {
+	expect(
+		aggregateHookState({
+			shared: { state: "awaitingApproval", command: "a" },
+			local: { state: "succeeded", command: "b" },
+		}),
+	).toBe("awaitingApproval");
+});
+
+test("aggregateHookState: running outranks succeeded", () => {
+	expect(
+		aggregateHookState({
+			shared: { state: "running", command: "a" },
+			local: { state: "succeeded", command: "b" },
+		}),
+	).toBe("running");
+});
+
+test("aggregateHookState is undefined for an empty or absent map; a single source reports its own state", () => {
+	expect(aggregateHookState({})).toBeUndefined();
+	expect(aggregateHookState(undefined)).toBeUndefined();
+	expect(aggregateHookState({ local: { state: "succeeded", command: "b" } })).toBe("succeeded");
+	expect(aggregateHookState({ shared: { state: "awaitingApproval", command: "a" } })).toBe(
+		"awaitingApproval",
+	);
 });

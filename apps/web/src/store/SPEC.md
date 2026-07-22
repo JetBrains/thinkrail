@@ -99,8 +99,16 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   with **`applyWorkspaceHookEvent(event)`** (folds a `workspace.hook` push: appends `hookOutput` chunks to
   the live buffer — capped, reset on a fresh `hookStarted`/`hookAwaitingApproval` — and, for every other
   kind, *also* mirrors the transition onto the matching workspace's own `hookStatus` field directly, so the
-  row badge/Hooks-tab update from the live event without waiting on a `workspace.updated` round-trip; a
-  workspace not found in any loaded project's list is ambiguous on its own — the same `!entry` shape covers
+  row badge/Hooks-tab update from the live event without waiting on a `workspace.updated` round-trip. Every
+  event carries a **`source: HookSource`** (`"shared" | "local"` — a `combineMode` of `"both"` runs both for
+  the same hook, each on its own event sequence), so the write nests by source —
+  **`hookStatus[event.hook][event.source]`** — spreading the hook's existing sources first so it never
+  clobbers the sibling one still mid-run; **`hookStatusFromEvent(event)`** derives the single-entry
+  `HookStatus` (state/command/exitCode) that lands there. **`aggregateHookState(bySource)`** is the
+  read-side counterpart a per-hook badge calls: worst-of across whatever sources are present, by fixed
+  precedence `failed > awaitingApproval > running > succeeded` (`undefined` for an absent/empty map — no
+  source has reported anything for that hook). A workspace not found in any loaded project's list is
+  ambiguous on its own — the same `!entry` shape covers
   both "genuinely removed" and "this project's list was simply never fetched yet" (the latter is the same
   no-op race `addWorkspace` already documents for `workspace.created`) — so it's disambiguated via
   **`removedWorkspaceIds: Record<workspaceId, true>`**, a tombstone map stamped by `applyWorkspaceRemoved`:
@@ -118,10 +126,11 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   renderers live in the `chat` module.)
 - **Public surface (barrel):** `useAppStore`, `toast` (the fire-from-anywhere helper), `Toast` (type),
   `EditorTab` (`FileTab`/`ChatTab`), `TerminalTab`, `ClosedChat`, `SessionRuntime` + `EMPTY_RUNTIME`
-  (ChatView's pre-creation fallback), `reduceSessionEvent`.
+  (ChatView's pre-creation fallback), `reduceSessionEvent`, `aggregateHookState` (the per-hook badge's
+  worst-of-across-sources; see above).
 - **Allowed deps:** `contracts` (`Project`/`Workspace`/`Model`/`ThinkingLevel`/`SessionStats`/
   `SlashCommandInfo`/`ExtUiRequest`/`LoginPush`/`WorkspaceFsChangedPayload`/`AppConfig`/`ThemeId`/
-  `HookName`/`HookStatus`/`WorkspaceHookEvent`; the
+  `HookName`/`HookSource`/`HookStatus`/`WorkspaceHookEvent`; the
   `Theme` value for the default; `PiEvent`/`LoginFrame`, **type-only**); `chat`
   (`ChatTurn`/`ToolResultState`, **type-only**); `auth` (`LoginState`, **type-only**); `transport`
   (`ConnectionStatus`, **type-only**); `zustand`.

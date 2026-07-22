@@ -3,6 +3,7 @@ import type {
 	AskUserQuestionResult,
 	ExtUiRequest,
 	HookName,
+	HookSource,
 	HookStatus,
 	LoginFrame,
 	LoginPush,
@@ -76,9 +77,11 @@ const MAX_TOASTS = 5;
  * unboundedly in memory; the Hooks panel only ever needs to show the tail. */
 const HOOK_OUTPUT_CAP = 20_000;
 
-/** Derive the durable `HookStatus` a non-output `WorkspaceHookEvent` implies — mirrors the same mapping
- * the host persists server-side (`workspaces/hooks/hooks.ts`); duplicated here rather than shared, since
- * `apps/web` depends on `@thinkrail/contracts` only, never server code. */
+/** Derive the durable `HookStatus` a non-output `WorkspaceHookEvent` implies for its one (hook, source)
+ * entry — mirrors the same mapping the host persists server-side (`workspaces/hooks/hooks.ts`); duplicated
+ * here rather than shared, since `apps/web` depends on `@thinkrail/contracts` only, never server code. The
+ * caller (`applyWorkspaceHookEvent`) nests this under `hookStatus[event.hook][event.source]` — it never
+ * spans sources itself. */
 function hookStatusFromEvent(
 	event: Exclude<WorkspaceHookEvent, { kind: "hookOutput" }>,
 ): HookStatus {
@@ -92,6 +95,33 @@ function hookStatusFromEvent(
 		case "hookFailed":
 			return { state: "failed", command: event.command, exitCode: event.exitCode };
 	}
+}
+
+/** Worst-of precedence for `aggregateHookState`: lower = more urgent. A failure outranks a still-pending
+ * approval, which outranks an in-flight run, which outranks a clean success. */
+const HOOK_STATE_SEVERITY: Record<HookStatus["state"], number> = {
+	failed: 0,
+	awaitingApproval: 1,
+	running: 2,
+	succeeded: 3,
+};
+
+/**
+ * The per-hook badge's aggregate across sources: a `combineMode` of `"both"` runs Shared and Local for the
+ * same hook, so the two can sit at different states at once (e.g. Shared succeeded, Local still running) —
+ * this picks the single state worth surfacing, by `HOOK_STATE_SEVERITY` (worst-of: `failed >
+ * awaitingApproval > running > succeeded`). `undefined` when no source has reported anything yet (an absent
+ * hook, or an empty map).
+ */
+export function aggregateHookState(
+	bySource: Partial<Record<HookSource, HookStatus>> | undefined,
+): HookStatus["state"] | undefined {
+	let worst: HookStatus["state"] | undefined;
+	for (const status of Object.values(bySource ?? {})) {
+		if (!worst || HOOK_STATE_SEVERITY[status.state] < HOOK_STATE_SEVERITY[worst])
+			worst = status.state;
+	}
+	return worst;
 }
 
 /** A terminal tab. `clientId` is the stable UI key; the server PTY id is owned by its `TerminalInstance`. */
@@ -474,13 +504,17 @@ interface AppState {
 	/**
 	 * Fold a `workspace.hook` push: append to the live output buffer (reset on a fresh run), and — for
 	 * every kind but `hookOutput` — mirror the transition onto the workspace's own `hookStatus` field too,
-	 * so the row badge/tab updates immediately without waiting on a `workspace.updated` round-trip. A
-	 * workspace not found in any loaded project's list is ambiguous on its own — it could mean "genuinely
-	 * removed" OR "this project's list was simply never fetched yet" (the same no-op race `addWorkspace`
-	 * already documents for `workspace.created`) — so it's disambiguated via `removedWorkspaceIds`:
-	 * genuinely removed (id is tombstoned) touches neither buffer nor `hookStatus`, and raises a toast for
-	 * `hookAwaitingApproval`/`hookFailed` (there's no row/tab left to show it); not-yet-loaded (id is NOT
-	 * tombstoned) touches nothing AND raises no toast — the row reconciles correctly once the list loads.
+	 * so the row badge/tab updates immediately without waiting on a `workspace.updated` round-trip. The
+	 * write nests by source — `hookStatus[event.hook][event.source]` — immutably preserving the sibling
+	 * source (a `combineMode` of `"both"` runs Shared *and* Local for the same hook, each on its own event
+	 * sequence) and every other hook untouched; see `aggregateHookState` for the per-hook worst-of a badge
+	 * reads across both. A workspace not found in any loaded project's list is ambiguous on its own — it
+	 * could mean "genuinely removed" OR "this project's list was simply never fetched yet" (the same no-op
+	 * race `addWorkspace` already documents for `workspace.created`) — so it's disambiguated via
+	 * `removedWorkspaceIds`: genuinely removed (id is tombstoned) touches neither buffer nor `hookStatus`,
+	 * and raises a toast for `hookAwaitingApproval`/`hookFailed` (there's no row/tab left to show it);
+	 * not-yet-loaded (id is NOT tombstoned) touches nothing AND raises no toast — the row reconciles
+	 * correctly once the list loads.
 	 */
 	applyWorkspaceHookEvent: (event: WorkspaceHookEvent) => void;
 	/** Replace a file tab's content after a live re-read, recording the fs tick it was loaded at. The tab
@@ -839,7 +873,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 					...s.workspaces,
 					[projectId]: list.map((w) =>
 						w.id === event.workspaceId
-							? { ...w, hookStatus: { ...w.hookStatus, [event.hook]: status } }
+							? {
+									...w,
+									hookStatus: {
+										...w.hookStatus,
+										// Nest by source, spreading the hook's existing sources first so the sibling
+										// (e.g. a `both` run's other tier) survives this write untouched.
+										[event.hook]: { ...w.hookStatus?.[event.hook], [event.source]: status },
+									},
+								}
 							: w,
 					),
 				},
