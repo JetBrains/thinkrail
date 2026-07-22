@@ -107,7 +107,14 @@ prompt hero (still editable; empty by default), a base-branch
   default via `model.default` so the exact model shows (values held in dialog state, applied at create
   time). The pickers' popovers portal into the dialog node (so their lists scroll under the Dialog scroll
   lock). In the prompt hero, **Enter creates** (matching the Create button's `↵` affordance) and
-  **Shift+Enter** inserts a newline. Create = `workspace.create({ projectId, baseRef })` → set active → (with a prompt) open a chat +
+  **Shift+Enter** inserts a newline. When the selected project declares any hook (Shared or Local — via
+  `hooksActions.ts`'s **`getProjectHooks`**, refetched per selected project like the branch list above), an
+  **Advanced** disclosure (`ws-advanced-toggle`) reveals a per-workspace **hook mode** selector
+  (`ws-hook-mode`, three options Both/Shared only/Local only — each also its own `ws-hook-mode-{mode}`, the
+  same three choices as `ProjectHooksDialog`'s combine-mode control, kept as its own small local toggle
+  rather than a shared import since the two serve different scopes) defaulting to that project's own
+  `combineMode`; a hookless project shows nothing extra, keeping the default create flow uncluttered.
+  Create = `workspace.create({ projectId, baseRef, hookCombineMode })` → set active → (with a prompt) open a chat +
   `session.create({ model, thinkingLevel })` + fire-and-forget `prompt`; with an empty prompt it just
   creates the workspace. A **rejected** kick-off `prompt` (a bad model / missing API key — e.g. picking a
   nonexistent model) surfaces as an `error` turn in the just-opened chat via `store.appendErrorTurn` (with

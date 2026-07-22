@@ -1,5 +1,11 @@
-import type { BranchList, ThinkingLevel, WireModel, Workspace } from "@thinkrail/contracts";
-import { Box, Check, ChevronDown, GitBranch, RefreshCw } from "lucide-react";
+import type {
+	BranchList,
+	CombineMode,
+	ThinkingLevel,
+	WireModel,
+	Workspace,
+} from "@thinkrail/contracts";
+import { Box, Check, ChevronDown, ChevronRight, GitBranch, RefreshCw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { ModelSelector } from "@/chat/ModelSelector";
 import { ThinkingSelector } from "@/chat/ThinkingSelector";
@@ -14,12 +20,22 @@ import {
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
+import { getProjectHooks } from "./hooksActions";
 
 /** A shared pill-trigger look for the project + branch pickers (mockup `.pill`). */
 const PILL =
 	"flex h-8 min-w-0 items-center gap-sm rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-sm text-sm text-text outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-[var(--primary-60)] data-[open=true]:bg-hover";
+
+/** The per-workspace hook-combine-mode choices offered by `HookModeDisclosure` below — same three
+ * options/labels as `ProjectHooksDialog`'s project-level combine-mode control. */
+const HOOK_MODES: { value: CombineMode; label: string }[] = [
+	{ value: "both", label: "Both" },
+	{ value: "shared", label: "Shared only" },
+	{ value: "local", label: "Local only" },
+];
 
 /**
  * The New-Workspace "create + kick-off" surface: pick a base branch, say what to work on, pick a
@@ -59,6 +75,13 @@ export function NewWorkspaceDialog({
 	// The dialog content node — popovers portal into it so their lists stay scrollable under the Dialog's
 	// scroll lock (react-remove-scroll blocks wheel/trackpad on body-portaled content).
 	const [dialogEl, setDialogEl] = useState<HTMLElement | null>(null);
+	// The selected project's declared-hooks state, behind the Advanced disclosure: `null` means "not yet
+	// loaded" (or the fetch failed) — create() then omits `hookCombineMode` from the request rather than
+	// guessing, and the host resolves the real project default itself. `hasProjectHooks` gates whether the
+	// disclosure renders at all (hookless projects show nothing extra).
+	const [hookCombineMode, setHookCombineMode] = useState<CombineMode | null>(null);
+	const [hasProjectHooks, setHasProjectHooks] = useState(false);
+	const [advancedOpen, setAdvancedOpen] = useState(false);
 
 	// Reset the form each time the dialog opens, anchored to the project the "+" was clicked on and any
 	// seed prompt (empty by default).
@@ -139,6 +162,33 @@ export function NewWorkspaceDialog({
 		};
 	}, [open, selectedProjectId]);
 
+	// The project's declared hooks, refetched per selected project (like the branch list above) so
+	// switching projects in the picker keeps the Advanced selector's default/visibility in sync. Reset up
+	// front so a project switch can't show the previous project's stale mode/visibility while the new fetch
+	// is in flight.
+	useEffect(() => {
+		if (!open) return;
+		let cancelled = false;
+		setHookCombineMode(null);
+		setHasProjectHooks(false);
+		setAdvancedOpen(false);
+		getProjectHooks(selectedProjectId)
+			.then((hooks) => {
+				if (cancelled) return;
+				setHookCombineMode(hooks.combineMode);
+				setHasProjectHooks(
+					Object.keys(hooks.shared).length > 0 || Object.keys(hooks.local).length > 0,
+				);
+			})
+			.catch(() => {
+				// Leave hasProjectHooks false (selector hidden) and hookCombineMode null (create omits it) —
+				// the same safe fallback a genuinely hookless project gets.
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [open, selectedProjectId]);
+
 	const refreshBranches = async () => {
 		setRefreshing(true);
 		try {
@@ -161,6 +211,7 @@ export function NewWorkspaceDialog({
 			workspace = await getTransport().request("workspace.create", {
 				projectId: selectedProjectId,
 				...(baseRef ? { baseRef } : {}),
+				...(hookCombineMode ? { hookCombineMode } : {}),
 			});
 		} catch (err) {
 			// Worktree creation failed (bad ref, etc.) — keep the dialog open so the user can retry/adjust,
@@ -255,6 +306,15 @@ export function NewWorkspaceDialog({
 						}
 					}}
 				/>
+
+				{hasProjectHooks ? (
+					<HookModeDisclosure
+						open={advancedOpen}
+						mode={hookCombineMode ?? "both"}
+						onToggle={() => setAdvancedOpen((v) => !v)}
+						onSelect={setHookCombineMode}
+					/>
+				) : null}
 
 				{/* controls-bottom: model + effort (left), Create (right) */}
 				<div className="flex flex-wrap items-center gap-sm">
@@ -426,5 +486,71 @@ function BranchPicker({
 				</Command>
 			</PopoverContent>
 		</Popover>
+	);
+}
+
+/**
+ * The per-workspace hook-mode override, tucked behind an "Advanced" disclosure so it never clutters the
+ * default create flow — the parent renders this at all only when the selected project declares at least
+ * one Shared/Local hook (`hasProjectHooks`). `mode` defaults to the project's own `combineMode`; picking a
+ * different one here threads through `create()` as `Workspace.hookCombineMode`, which then governs that
+ * one workspace's hook events for its whole life. Same three choices/labels as `ProjectHooksDialog`'s
+ * project-level combine-mode control, kept as a small local toggle here rather than a shared import — the
+ * two controls serve different scopes (project default vs. one-off per-workspace override).
+ */
+function HookModeDisclosure({
+	open,
+	mode,
+	onToggle,
+	onSelect,
+}: {
+	open: boolean;
+	mode: CombineMode;
+	onToggle: () => void;
+	onSelect: (mode: CombineMode) => void;
+}) {
+	return (
+		<div className="flex flex-col gap-xs">
+			<button
+				type="button"
+				data-testid="ws-advanced-toggle"
+				aria-expanded={open}
+				onClick={onToggle}
+				className="flex items-center gap-xs self-start rounded-[var(--radius-sm)] text-hint text-xs outline-none transition-colors hover:text-text focus-visible:ring-2 focus-visible:ring-primary"
+			>
+				{open ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+				Advanced
+			</button>
+			{open ? (
+				<div className="flex flex-col gap-xs pl-md">
+					<span className="font-medium text-text text-xs">Hook mode</span>
+					<div
+						data-testid="ws-hook-mode"
+						role="toolbar"
+						aria-label="Workspace hook mode"
+						className="inline-flex items-center gap-xs self-start rounded-[var(--radius-md)] border border-border2 bg-bg-dark p-0.5"
+					>
+						{HOOK_MODES.map(({ value, label }) => (
+							<button
+								key={value}
+								type="button"
+								data-testid={`ws-hook-mode-${value}`}
+								data-active={mode === value}
+								aria-pressed={mode === value}
+								onClick={() => onSelect(value)}
+								className={cn(
+									"rounded-[var(--radius-sm)] px-sm py-0.5 text-xs transition-colors",
+									mode === value
+										? "bg-elevated text-text"
+										: "text-hint hover:bg-hover hover:text-text",
+								)}
+							>
+								{label}
+							</button>
+						))}
+					</div>
+				</div>
+			) : null}
+		</div>
 	);
 }
