@@ -63,20 +63,17 @@ semantics.
   `"script"` (`{ script }`, resolved to an absolute path — a Shared path and a relative Local path resolve
   against `args.basePath`, an absolute Local path is used as-is); a script entry pre-reads the file into
   `approvalMaterial` at resolve time, so a missing script becomes `missing: true, approvalMaterial: null`
-  rather than throwing. `resolveHookCommand` — the older single-tier resolver (a flat committed-map and a
-  flat host-local-override-map, override replacing outright) — stays in place only because
-  `host/handlers.ts` still calls it; it's dropped once that last caller migrates to `resolveHookRun` (a
-  later task). `hooks.ts`'s own `runHook` already runs on `resolveHookRun`, and re-exports it through this
-  module's barrel; `ResolvedHookEntry` itself isn't re-exported — reached only by `hooks.ts` importing
-  `./config` directly.
+  rather than throwing. `hooks.ts`'s own `runHook` and every `host/handlers.ts` caller (`project.hooks.get`/
+  `.save`, `workspace.hooks.approve`) now run on `resolveHookRun` alone — the older single-tier
+  `resolveHookCommand` (a flat committed-map and a flat host-local-override-map, override replacing
+  outright) is gone; `resolveHookRun` is re-exported through this module's barrel, and `ResolvedHookEntry`
+  itself isn't re-exported — reached only by `hooks.ts` importing `./config` directly.
 - **Public surface (barrel):** `runOnCreateHook`, `runOnDeleteHook`, `runPreMergeHook`, `runPostMergeHook`,
   `setHookPublisher`, `approveHook`, `isApproved` (project+hook+`HookSource`+material approval check — the
   `project.hooks.get` handler in `host` uses it to report per-source approval status), `loadHookConfig`,
-  `resolveHookCommand`, `resolveHookRun`, `writeHookConfig` (all four re-exported from `config.ts` — reading/
-  writing/resolving a project's committed hooks needs no workspace, so these are called directly on a
-  project's root path, not just a workspace's worktree; all were already generic over any directory).
-  `resolveHookCommand` is the older single-tier resolver, kept only until `host/handlers.ts` — its last
-  remaining caller — migrates to `resolveHookRun` too (`hooks.ts` itself already has).
+  `resolveHookRun`, `writeHookConfig` (all three re-exported from `config.ts` — reading/writing/resolving a
+  project's committed hooks needs no workspace, so these are called directly on a project's root path, not
+  just a workspace's worktree; all were already generic over any directory).
 - **Persisted status:** every transition `emit`s through (except the ephemeral `hookOutput`) also writes
   the hook's latest `HookStatus` onto its workspace's `hookStatus` field via `persistence`'s
   `loadWorkspaces`/`saveWorkspaces` — durability for a reconnecting/reloaded client (`workspace.list` and
