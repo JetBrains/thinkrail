@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { ChangesTree } from "./ChangesTree";
-import { diffTabId, statusNameClass } from "./changesModel";
+import { diffTabId, isDiffTabId, statusNameClass } from "./changesModel";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { ToggleSegment } from "./ToggleSegment";
 
@@ -86,9 +86,21 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 		setHighlighted(match ? match.path : want);
 	}, [changesRequest, status, workspaceId]);
 
-	// A row is selected when its diff tab is the active center tab, or it's the deep-link highlight.
+	// Keep the deep-link highlight from lingering once the user starts navigating diff tabs: clear it as
+	// soon as a diff tab of this workspace is the active center tab, so closing that tab later doesn't
+	// resurrect a stale highlight.
+	useEffect(() => {
+		if (isDiffTabId(workspaceId, activeTabId)) setHighlighted(null);
+	}, [activeTabId, workspaceId]);
+
+	// Exactly one row is ever selected: while a diff tab of this workspace is active, that tab is the sole
+	// signal (an active tab matches exactly one path); only when none is open does the deep-link highlight
+	// apply. This can't show two rows at once — unlike OR-ing the two signals, where a stale highlight plus
+	// a different active tab would both read as selected.
 	const isActive = (path: string) =>
-		activeTabId === diffTabId(workspaceId, path) || highlighted === path;
+		isDiffTabId(workspaceId, activeTabId)
+			? activeTabId === diffTabId(workspaceId, path)
+			: highlighted === path;
 
 	if (status === null) {
 		return <p className="px-sm py-xs text-xs text-hint">Loading…</p>;
@@ -133,6 +145,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 									type="button"
 									data-testid="change-item"
 									data-status={change.status}
+									data-active={isActive(change.path) ? true : undefined}
 									onClick={() => void openDiff(change.path)}
 									className={`flex w-full items-center gap-sm px-sm py-xs text-left text-sm hover:bg-hover ${
 										isActive(change.path) ? "bg-hover" : ""

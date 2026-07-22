@@ -193,9 +193,10 @@ function formatElapsed(ms: number): string {
 
 /**
  * A subtle round-end divider (rendered right when the turn finishes, below its "✓ Done" marker): tool-call
- * count, a clickable "N files changed" chip (opens those files in the Changes/diff panel via
- * `onOpenChanges`), and elapsed wall-clock. Presentational — the store touch lives in `ChatView`, which
- * supplies `onOpenChanges`. The data comes from the pure `turnDivider` deriver in `rows.ts`.
+ * count, a clickable "N files changed" chip (deep-links the Changes panel to the file — flips to the tab
+ * and highlights its row, leaving the diff to an explicit click — via `onOpenChanges`), and elapsed
+ * wall-clock. Presentational — the store touch lives in `ChatView`, which supplies `onOpenChanges`. The
+ * data comes from the pure `turnDivider` deriver in `rows.ts`.
  */
 export function TurnDivider({
 	data,

@@ -88,6 +88,25 @@ test("gitStatus attaches per-file +/- counts, incl. untracked line counts", () =
 	expect(untracked).toMatchObject({ status: "untracked", added: 2, removed: 0 });
 });
 
+test("gitStatus omits counts for untracked binary or oversized files (matches tracked binaries)", () => {
+	seedWorkspace();
+	// A binary untracked file (NUL byte in the head) → listed, but no count — like a tracked binary, which
+	// `--numstat` reports as `-`/`-` and we skip. (Without the sniff this counted mojibake "lines".)
+	writeFileSync(join(repo, "blob.bin"), Buffer.from([0x00, 0x01, 0x02, 0x0a, 0x0a]));
+	// An oversized untracked text file (> 2 MiB) → no count, so a large artifact isn't re-read into memory
+	// on every `git.status` tick.
+	writeFileSync(join(repo, "big.txt"), `${"x".repeat(2 * 1024 * 1024 + 1)}\n`);
+	// A small text untracked file still counts, to prove only the guarded cases drop out.
+	writeFileSync(join(repo, "small.txt"), "one\ntwo\n");
+
+	const { changes } = gitStatus("w1");
+	const bin = changes.find((c) => c.path === "blob.bin");
+	expect(bin).toMatchObject({ status: "untracked" });
+	expect(bin?.added).toBeUndefined();
+	expect(changes.find((c) => c.path === "big.txt")?.added).toBeUndefined();
+	expect(changes.find((c) => c.path === "small.txt")).toMatchObject({ added: 2 });
+});
+
 test("numstatPath resolves rename/copy forms to the destination path", () => {
 	expect(numstatPath("src/a.ts")).toBe("src/a.ts");
 	expect(numstatPath("old.ts => new.ts")).toBe("new.ts");

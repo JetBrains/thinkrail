@@ -3,9 +3,10 @@ import { openWorkspaceChat, waitForDone } from "./fixtures/app";
 
 // Tagged @agent (see agent.live.spec.ts): drives a REAL pi agent to make a file change, then proves the
 // chat turn-divider (Task 9) — it appears the instant the turn ends (no follow-up needed), and its "files
-// changed" chip deep-links the right panel's Changes view to the edited file's diff.
+// changed" chip deep-links the right panel's Changes view, highlighting the edited file's row (the diff
+// itself opens only on an explicit click — the chip never steals the center area; see panels/SPEC.md).
 
-test("turn-divider files-changed chip opens the file's diff in the Changes panel", {
+test("turn-divider files-changed chip highlights the file's row in the Changes panel", {
 	tag: "@agent",
 }, async ({ page }) => {
 	test.setTimeout(150_000);
@@ -33,9 +34,12 @@ test("turn-divider files-changed chip opens the file's diff in the Changes panel
 	await expect(chip).toBeVisible({ timeout: 30_000 });
 	await expect(chip).toContainText("file changed");
 
-	// Clicking it flips the right panel to Changes and shows notes.txt's diff.
+	// Clicking it flips the right panel to Changes and highlights notes.txt's row — no diff tab opens
+	// (highlight-only deep link: the diff opens only on an explicit row click).
 	await chip.click();
 	await expect(page.getByTestId("tab-changes")).toHaveAttribute("data-active", "true");
-	await expect(page.getByTestId("change-item").filter({ hasText: "notes.txt" })).toBeVisible();
-	await expect(page.getByTestId("diff-viewer")).toContainText("hello");
+	const row = page.getByTestId("change-item").filter({ hasText: "notes.txt" });
+	await expect(row).toBeVisible();
+	await expect(row).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("diff-pane")).toHaveCount(0);
 });

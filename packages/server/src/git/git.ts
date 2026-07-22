@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
 import type {
 	BranchList,
@@ -123,6 +123,27 @@ function lineCount(content: string): number {
 	return content.split("\n").length - (content.endsWith("\n") ? 1 : 0);
 }
 
+// An untracked file's whole content counts as added (it never shows in `git diff`), but bounded: a file
+// over this size, or one that looks binary (a NUL byte in its head), gets NO count — matching how tracked
+// binaries drop out of `--numstat` (`-`/`-`). This also keeps a large untracked artifact (build output,
+// archive) from being re-read into memory on every `git.status` tick.
+const UNTRACKED_COUNT_MAX_BYTES = 2 * 1024 * 1024;
+const BINARY_SNIFF_BYTES = 8192;
+
+/** Added-line count for an untracked file, or `undefined` when it's too large or looks binary. */
+function untrackedAdded(worktreePath: string, path: string): number | undefined {
+	try {
+		const abs = resolve(worktreePath, path);
+		if (statSync(abs).size > UNTRACKED_COUNT_MAX_BYTES) return undefined;
+		const buf = readFileSync(abs);
+		if (buf.subarray(0, BINARY_SNIFF_BYTES).includes(0)) return undefined; // NUL byte → treat as binary
+		return lineCount(buf.toString("utf8"));
+	} catch {
+		// unreadable (a dir entry, perms, a race) → no count
+		return undefined;
+	}
+}
+
 /** A worktree's changed files vs its base branch, plus any untracked files. Each carries `+/−` counts. */
 export function gitStatus(workspaceId: string): GitStatus {
 	const ws = workspace(workspaceId);
@@ -144,14 +165,14 @@ export function gitStatus(workspaceId: string): GitStatus {
 	if (untracked.ok && untracked.out) {
 		for (const path of untracked.out.split("\n")) {
 			if (!path) continue;
-			// Untracked files never appear in `git diff` — count their whole content as added.
-			let added = 0;
-			try {
-				added = lineCount(readFileSync(resolve(ws.worktreePath, path), "utf8"));
-			} catch {
-				// unreadable (e.g. a dir entry or a race) → leave counts off
-			}
-			changes.push({ path, status: "untracked", added, removed: 0 });
+			const added = untrackedAdded(ws.worktreePath, path);
+			// Countable (small text) → whole content added, nothing removed. Binary/oversized → no counts at
+			// all, matching the tracked-binary rows `--numstat` drops (and satisfying `exactOptionalPropertyTypes`).
+			changes.push({
+				path,
+				status: "untracked",
+				...(added !== undefined && { added, removed: 0 }),
+			});
 		}
 	}
 
@@ -175,7 +196,15 @@ export function gitDiffFile(
 	if (rel.startsWith("..") || isAbsolute(rel)) throw new Error("Path escapes the worktree");
 
 	const base = git(ws.worktreePath, ["show", `${ws.baseBranch}:${path}`], { raw: true });
-	const original = base.ok ? base.out : "";
+	let original = "";
+	if (base.ok) {
+		original = base.out;
+	} else if (!/does not exist in|exists on disk, but not in/.test(base.err)) {
+		// A clean "path absent from the base ref" (untracked/added, or a rename's new path) is the intended
+		// empty-original case. Any *other* failure — index-lock contention, an invalid/removed base ref, repo
+		// corruption — would otherwise masquerade as a whole-file add; surface it so the broken read is visible.
+		console.warn(`git show ${ws.baseBranch}:${path} failed: ${base.err || "unknown error"}`);
+	}
 
 	let modified = "";
 	try {

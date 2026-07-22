@@ -175,7 +175,10 @@ a project picker, the prompt hero, and the reused
   open tab's content when the workspace ticked past the tab's loaded tick (live while visible;
   background tabs catch up on activation — only the active tab is mounted; a failed re-read — file
   deleted — keeps the last content, no auto-close; a diff tab whose file left the change set likewise
-  keeps its last contents — the Changes list is where the disappearance shows). Panels are mounted only for the active workspace,
+  keeps its last contents — the Changes list is where the disappearance shows). `FilePane` and `DiffPane`
+  run the **one** tab-content live-refresh contract — the shared **`useLiveTabContent(tab, {read, applyFresh,
+  keepCurrent})`** hook — differing only in the read method (`fs.readFile` vs `git.diffFile`) and the store
+  write (`updateFileTabContent` vs `updateDiffTabContent`). Panels are mounted only for the active workspace,
   so scoping is natural; a degraded watcher just means back to read-on-demand. Deliberately **not**
   live (deferred): the project-rail workspace diffStats badges; editable-file conflict handling waits
   for `fs.writeFile` (the viewer is read-only today).
@@ -236,7 +239,8 @@ a project picker, the prompt hero, and the reused
   added / untracked → green, deleted → red + strikethrough, renamed → blue, modified → plain. Each file
   and folder also shows a `+N −M` badge (shared `DiffStatBadge`) — per-file counts come from `git.status`
   (`GitFileChange.added/removed`, from `git diff --numstat`; untracked files count their whole content as
-  added), folder counts are summed client-side. Both views share `ChangesPanel`'s `openDiff` + `isActive`.
+  added — but a binary or oversized untracked file gets no count, mirroring how tracked binaries drop out
+  of `--numstat`), folder counts are summed client-side. Both views share `ChangesPanel`'s `openDiff` + `isActive`.
 - **Markdown file tabs render, don't read.** A `.md`/`.markdown` `FileTab` (from the file tree **or** the
   Specs panel — same `openTab` path) opens **rendered by default**: `FilePane` gates on `lib.isMarkdownPath`
   and shows a slim `Preview | Source` header (`markdown-view-toggle`), the rendered view being lazy

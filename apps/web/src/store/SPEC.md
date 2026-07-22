@@ -99,7 +99,9 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   **`updateDiffTabContent(id, original, modified, tick)`** — a `DiffTab` follows the same staleness
   contract in `DiffPane`. The transient **`changesRequest`** +
   **`requestChangesView(workspaceId, path)`** are a UI deep-link intent (a chat turn-divider asking the
-  right panel to surface a file's diff); the panels watch it, scoped by workspace. **`openDoc(tab)`** opens
+  right panel to surface a file in its Changes view — flip to the tab and **highlight the row**, without
+  opening the diff; that waits for an explicit click); the panels watch it, scoped by workspace.
+  **`openDoc(tab)`** opens
   (or refreshes + focuses) an ephemeral **`DocTab`** — inline rendered-markdown content, never backed by a
   file on disk (no fs re-read / source toggle) — used for on-demand snapshots like the plan-as-markdown
   export. **`DiffTab`** is a read-only Monaco diff of one

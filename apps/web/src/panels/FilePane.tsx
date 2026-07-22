@@ -1,9 +1,10 @@
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense } from "react";
 import { isMarkdownPath } from "@/lib/utils";
 import type { FileTab } from "../store";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { ToggleSegment } from "./ToggleSegment";
+import { useLiveTabContent } from "./useLiveTabContent";
 
 // Heavy views load only when shown: Monaco for source, markdown+shiki for the rendered preview.
 const MonacoEditor = lazy(() => import("./MonacoEditor"));
@@ -24,33 +25,14 @@ const loading = <div className="flex h-full items-center justify-center text-hin
  */
 export function FilePane({ tab }: { tab: FileTab }) {
 	const setFileTabView = useAppStore((s) => s.setFileTabView);
-	const change = useAppStore((s) => s.fsChangesByWorkspace[tab.workspaceId]);
 
-	useEffect(() => {
-		if (!change) return;
-		const loaded = tab.loadedTick ?? 0;
-		if (change.tick <= loaded) return;
-		const updateContent = useAppStore.getState().updateFileTabContent;
-		// Exactly one batch behind and this file isn't in it → nothing to re-read, just advance the tick.
-		const skippable =
-			change.tick === loaded + 1 && !change.truncated && !change.paths.includes(tab.path);
-		if (skippable) {
-			updateContent(tab.id, tab.content, change.tick);
-			return;
-		}
-		let cancelled = false;
-		getTransport()
-			.request("fs.readFile", { workspaceId: tab.workspaceId, path: tab.path })
-			.then(({ content }) => {
-				if (!cancelled) updateContent(tab.id, content, change.tick);
-			})
-			.catch(() => {
-				if (!cancelled) updateContent(tab.id, tab.content, change.tick);
-			});
-		return () => {
-			cancelled = true;
-		};
-	}, [change, tab.id, tab.path, tab.workspaceId, tab.loadedTick, tab.content]);
+	useLiveTabContent(tab, {
+		read: () =>
+			getTransport().request("fs.readFile", { workspaceId: tab.workspaceId, path: tab.path }),
+		applyFresh: ({ content }, tick) =>
+			useAppStore.getState().updateFileTabContent(tab.id, content, tick),
+		keepCurrent: (tick) => useAppStore.getState().updateFileTabContent(tab.id, tab.content, tick),
+	});
 
 	if (!isMarkdownPath(tab.path)) {
 		return (
