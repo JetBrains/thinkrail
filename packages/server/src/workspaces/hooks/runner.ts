@@ -1,8 +1,11 @@
-// Spawns one hook command as a POSIX shell subprocess (`sh -c "<command>"`), streaming stdout/stderr chunks
-// to a callback and enforcing an optional timeout. Assumes a POSIX shell is on PATH — Windows-native (no
-// WSL/git-bash) isn't supported by this runner.
+// Spawns one hook command as a POSIX shell subprocess (`sh -c "<command>"` or `sh <script>`),
+// streaming stdout/stderr chunks to a callback and enforcing an optional timeout. Assumes a POSIX
+// shell is on PATH — Windows-native (no WSL/git-bash) isn't supported by this runner.
 export interface RunShellCommandOptions {
-	command: string;
+	/** Inline shell command (e.g., "echo hello"). Either `command` or `script` must be provided, not both. */
+	command?: string;
+	/** Path to a shell script file to execute. Either `command` or `script` must be provided, not both. */
+	script?: string;
 	cwd: string;
 	env: Record<string, string | undefined>;
 	/** No timeout when omitted — the caller is fire-and-forget and never awaits this anyway. */
@@ -53,7 +56,8 @@ function killProcessGroup(pid: number, signal: NodeJS.Signals = "SIGTERM"): void
 export async function runShellCommand(
 	opts: RunShellCommandOptions,
 ): Promise<RunShellCommandResult> {
-	const proc = Bun.spawn(["sh", "-c", opts.command], {
+	const argv = opts.script ? ["sh", opts.script] : ["sh", "-c", opts.command ?? ""];
+	const proc = Bun.spawn(argv, {
 		cwd: opts.cwd,
 		env: opts.env,
 		stdout: "pipe",

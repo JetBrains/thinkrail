@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runShellCommand } from "./runner";
@@ -97,3 +97,49 @@ test("runShellCommand kills the whole process tree, not just the shell, when a c
 		rmSync(dir, { recursive: true, force: true });
 	}
 }, 10000);
+
+test("runShellCommand with script mode runs the script file and reports ok:true and exitCode 0 for success", async () => {
+	const dir = mkdtempSync(join(tmpdir(), "trpi-runner-script-test-"));
+	try {
+		const scriptPath = join(dir, "test.sh");
+		writeFileSync(scriptPath, "#!/bin/sh\necho hello\nexit 0\n", { mode: 0o755 });
+
+		const chunks: Array<{ stream: string; chunk: string }> = [];
+		const result = await runShellCommand({
+			script: scriptPath,
+			cwd: dir,
+			env: {},
+			onChunk: (stream, chunk) => chunks.push({ stream, chunk }),
+		});
+
+		expect(result).toEqual({ ok: true, exitCode: 0, timedOut: false });
+
+		const stdout = chunks
+			.filter((c) => c.stream === "stdout")
+			.map((c) => c.chunk)
+			.join("");
+		expect(stdout).toBe("hello\n");
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test("runShellCommand with script mode reports the correct exit code for a failing script", async () => {
+	const dir = mkdtempSync(join(tmpdir(), "trpi-runner-script-test-"));
+	try {
+		const scriptPath = join(dir, "test.sh");
+		writeFileSync(scriptPath, "#!/bin/sh\nexit 3\n", { mode: 0o755 });
+
+		const result = await runShellCommand({
+			script: scriptPath,
+			cwd: dir,
+			env: {},
+		});
+
+		expect(result.ok).toBe(false);
+		expect(result.exitCode).toBe(3);
+		expect(result.timedOut).toBe(false);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
