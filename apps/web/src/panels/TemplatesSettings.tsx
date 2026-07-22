@@ -71,10 +71,14 @@ function StarterTemplatesOffer() {
 					content: assembleTemplate(t.description, t.argumentHint, t.body),
 				});
 			}
-			useAppStore.getState().bumpTemplatesVersion();
 		} catch (err) {
 			toast.error(errorText(err), "Couldn't add starter templates");
 		} finally {
+			// Bump even on a partial failure (e.g. the 3rd of 4 saves throws): `template.save` is an
+			// idempotent overwrite, so whichever starters landed before the throw are real rows the
+			// list refetch should pick up — without the bump they'd exist on disk but never appear, and
+			// the offer would linger since the (still-empty, per its stale fetch) list never re-renders.
+			useAppStore.getState().bumpTemplatesVersion();
 			setAdding(false);
 		}
 	};

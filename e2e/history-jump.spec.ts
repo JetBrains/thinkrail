@@ -228,6 +228,9 @@ test("searching a prompt's own words that an assistant reply also echoes shows o
 		.filter({ hasText: "refactor the auth middleware" });
 	await expect(promptRow).toBeVisible();
 	await expect(promptRow.getByTestId("history-jump")).toBeVisible();
+	// It's also the default (index-0) keyboard selection, so its shortcut glyph is visible without a
+	// mouse hover — the whole point of a keyboard-discoverable shortcut.
+	await expect(promptRow.getByTestId("history-jump-shortcut")).toHaveText("⇧⏎");
 
 	// MESSAGES: only the assistant's own line — no user-role row duplicates it.
 	const messageRows = page.locator('[data-testid="history-item"][data-kind="message"]');
@@ -271,9 +274,13 @@ test("Shift+Enter on the selected prompt row jumps to the chat and flashes the m
 		.filter({ hasText: "zephyr7000" });
 	await expect(hit).toBeVisible();
 	await expect(hit.getByTestId("history-jump")).toBeVisible();
+	// The only match is this prompt hit (default selection, index 0), so its shortcut glyph is already
+	// visible — no hover needed — confirming a keyboard-only user can discover Shift+Enter before
+	// pressing it, not just after the fact.
+	await expect(hit.getByTestId("history-jump-shortcut")).toHaveText("⇧⏎");
 
-	// The only match is this prompt hit (default selection, index 0) — Shift+Enter jumps it, rather than
-	// inserting it the way plain Enter / Cmd+Enter do (see history-search.spec.ts).
+	// Shift+Enter jumps it, rather than inserting it the way plain Enter / Cmd+Enter do (see
+	// history-search.spec.ts).
 	await query.press("Shift+Enter");
 
 	await expect(overlay).toBeHidden();
@@ -316,6 +323,9 @@ test("an unmapped prompt hit shows no jump icon, and Shift+Enter on it is a no-o
 		.filter({ hasText: "flaky watcher" });
 	await expect(hit).toBeVisible();
 	await expect(hit.getByTestId("history-jump")).toHaveCount(0);
+	// Selected (default index 0, only match) but unmapped — no shortcut glyph either, same rule as the
+	// icon it sits beside.
+	await expect(hit.getByTestId("history-jump-shortcut")).toHaveCount(0);
 
 	await query.press("Shift+Enter");
 

@@ -35,43 +35,51 @@ test.describe("templates management", () => {
 		await openWorkspaceChat(page);
 		clearTemplateFixtures();
 
-		await page.getByTestId("open-settings").click();
-		await page.getByTestId("settings-nav-templates").click();
-		const settingsDialog = page.getByTestId("settings-dialog");
-		await expect(settingsDialog).toContainText("Prompt templates");
+		// Everything from here on must restore the three original fixtures no matter how the test body
+		// exits: this is a serial suite (one shared host, `workers: 1`), there's no `afterEach`, and
+		// `templates-compose.spec.ts` depends on `review`/`rename`/`adjacent`'s exact original content — a
+		// thrown assertion between the clear above and the restore below would otherwise leave the shared
+		// `prompts/` dir permanently short those three fixtures for every test that runs after this one.
+		try {
+			await page.getByTestId("open-settings").click();
+			await page.getByTestId("settings-nav-templates").click();
+			const settingsDialog = page.getByTestId("settings-dialog");
+			await expect(settingsDialog).toContainText("Prompt templates");
 
-		const globalRows = page.locator('[data-testid="template-row"][data-scope="global"]');
-		await expect(globalRows).toHaveCount(0);
-		const offer = page.getByTestId("template-starters");
-		await expect(offer).toBeVisible();
+			const globalRows = page.locator('[data-testid="template-row"][data-scope="global"]');
+			await expect(globalRows).toHaveCount(0);
+			const offer = page.getByTestId("template-starters");
+			await expect(offer).toBeVisible();
 
-		await offer.click();
-		await expect(globalRows).toHaveCount(4);
-		for (const name of ["review", "explain", "tests", "standup"]) {
+			await offer.click();
+			await expect(globalRows).toHaveCount(4);
+			for (const name of ["review", "explain", "tests", "standup"]) {
+				await expect(
+					page.locator(`[data-testid="template-row"][data-name="${name}"][data-scope="global"]`),
+				).toBeVisible();
+			}
+			// The offer disappears the instant the list is non-empty.
+			await expect(offer).toHaveCount(0);
+
+			await page.keyboard.press("Escape");
+			await expect(settingsDialog).toBeHidden();
+
+			// The freshly-added "review" starter (not the fixture of the same name — that one was removed
+			// above) shows up in the composer's `/` menu, same as any other template would.
+			const input = page.getByTestId("chat-input");
+			await input.fill("/rev");
 			await expect(
-				page.locator(`[data-testid="template-row"][data-name="${name}"][data-scope="global"]`),
-			).toBeVisible();
+				page
+					.locator('[data-testid="slash-command"][data-source="prompt"]')
+					.filter({ hasText: "review" }),
+			).toHaveCount(1);
+			await input.fill("");
+		} finally {
+			// Restore: remove the four starters this test added, then put the original three fixtures
+			// back — always, even if an assertion above threw.
+			removeGlobalTemplates(["review", "explain", "tests", "standup"]);
+			seedTemplateFixtures();
 		}
-		// The offer disappears the instant the list is non-empty.
-		await expect(offer).toHaveCount(0);
-
-		await page.keyboard.press("Escape");
-		await expect(settingsDialog).toBeHidden();
-
-		// The freshly-added "review" starter (not the fixture of the same name — that one was removed
-		// above) shows up in the composer's `/` menu, same as any other template would.
-		const input = page.getByTestId("chat-input");
-		await input.fill("/rev");
-		await expect(
-			page
-				.locator('[data-testid="slash-command"][data-source="prompt"]')
-				.filter({ hasText: "review" }),
-		).toHaveCount(1);
-		await input.fill("");
-
-		// Restore: remove the four starters this test added, then put the original three fixtures back.
-		removeGlobalTemplates(["review", "explain", "tests", "standup"]);
-		seedTemplateFixtures();
 	});
 
 	test("global template: create shows up in the composer's / menu, edit updates it, delete removes it from both", async ({

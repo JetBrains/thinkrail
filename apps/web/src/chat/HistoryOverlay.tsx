@@ -142,6 +142,16 @@ function PromptRow({
 				) : null}
 				<span className="shrink-0 text-hint text-xs">{relativeTime(hit.timestamp)}</span>
 			</button>
+			{isSelected ? (
+				// Persistent keyboard-shortcut glyph — the same precedent as the scope badge's `⌃R`
+				// (always visible next to its label, not hover-only). The icon beside it is still
+				// hover-revealed via `group-hover`/`isSelected` opacity; this glyph is the part a
+				// keyboard-only user (Shift+Enter's own audience) needs, so it can't be mouse-hover-gated
+				// the way the icon itself is.
+				<span data-testid="history-save-shortcut" className="shrink-0 text-[10px] text-hint">
+					{SAVE_SHORTCUT_LABEL}
+				</span>
+			) : null}
 			<button
 				type="button"
 				data-testid="history-save-template"
@@ -158,21 +168,28 @@ function PromptRow({
 				<Save className="size-3.5" />
 			</button>
 			{target ? (
-				<button
-					type="button"
-					data-testid="history-jump"
-					aria-label="Go to chat"
-					title="⇧⏎ go to chat"
-					onClick={(e) => {
-						e.stopPropagation();
-						onOpenMessage(target);
-					}}
-					className={`flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] p-xs text-muted opacity-0 transition hover:bg-elevated hover:text-text group-hover:opacity-100 ${
-						isSelected ? "opacity-100" : ""
-					}`}
-				>
-					<CornerUpRight className="size-3.5" />
-				</button>
+				<>
+					{isSelected ? (
+						<span data-testid="history-jump-shortcut" className="shrink-0 text-[10px] text-hint">
+							⇧⏎
+						</span>
+					) : null}
+					<button
+						type="button"
+						data-testid="history-jump"
+						aria-label="Go to chat"
+						title="⇧⏎ go to chat"
+						onClick={(e) => {
+							e.stopPropagation();
+							onOpenMessage(target);
+						}}
+						className={`flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] p-xs text-muted opacity-0 transition hover:bg-elevated hover:text-text group-hover:opacity-100 ${
+							isSelected ? "opacity-100" : ""
+						}`}
+					>
+						<CornerUpRight className="size-3.5" />
+					</button>
+				</>
 			) : null}
 		</div>
 	);

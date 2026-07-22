@@ -166,6 +166,13 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `null`, so the icon's render gate, the `Shift+Enter` handler, and the message-hit gate can never
   disagree on "is this jumpable." An unmapped/legacy prompt row shows no icon and `Shift+Enter` is a
   no-op (overlay stays open) — the same belt-and-suspenders gating the message-hit path already had.
+  The icon itself stays hover-revealed (`group-hover`/`isSelected` opacity, like the save-as-template
+  icon beside it), but its shortcut glyph (`data-testid="history-jump-shortcut"`, literal `⇧⏎`) is a
+  **selected-only**, not hover-only, persistent `<span>` — the same precedent as the scope badge's `⌃R`
+  (always next to its label) — since a keyboard-only user, `Shift+Enter`'s own audience, never triggers
+  `:hover`. The save-as-template icon's own shortcut (`SAVE_SHORTCUT_LABEL`, `⌘S`/`Ctrl+S`) gets the
+  identical selected-only glyph (`data-testid="history-save-shortcut"`) for the same reason, symmetric
+  with the jump icon.
 - **Template slots** (`slotSession.ts`'s parser + `Composer`'s session state + `ChatView`'s menu/pick
   wiring — the composer's Tab-through placeholder flow, end to end). **Parsing** (`slotSession.ts`, pure,
   zero deps): `parseTemplateSlots(body, argumentHint)` expands pi's own placeholder grammar (`$1..$n`,
