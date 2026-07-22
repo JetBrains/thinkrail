@@ -7,7 +7,7 @@ import type { SkillAdmissionContext } from "./skillAdmission";
 
 /** A context with the given trust + acknowledged names, and no baseline disables / workspace overrides. */
 function ctx(trusted: boolean, acknowledged: string[] = []): SkillAdmissionContext {
-	return { trusted, acknowledged, disabled: [], overrides: {} };
+	return { trusted, acknowledged, disabled: [], disabledGroups: [], overrides: {} };
 }
 
 function writeSkill(root: string, name: string, description: string): void {

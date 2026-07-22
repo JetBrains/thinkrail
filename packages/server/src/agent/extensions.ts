@@ -116,12 +116,36 @@ function relabelAliasProvenance(skill: Skill, sources: CompatibilitySkillSource[
 }
 
 /**
- * The combined skills override: relabel compatibility aliases' provenance AND apply the admission decision,
- * so a session only ever loads skills that resolve to `load` — untrusted / unacknowledged / disabled ones
- * never reach the system prompt or the `/skill:` list. `sources` identifies which loaded skills are
- * project-scoped aliases (by file path); `ctx` carries trust + acknowledged + disables + workspace overrides.
+ * The canonical group key + plugin flag for a skill, by where its file lives — a plugin name, else the
+ * source tier (`project`/`personal`/`bundled`/`pi`). Must match the key the UI groups/toggles by
+ * (`SkillCatalogEntry.group`) so a group disable resolves consistently on both sides.
  */
-function skillsGate(sources: CompatibilitySkillSource[], ctx: SkillAdmissionContext) {
+function skillGroup(
+	filePath: string,
+	sources: CompatibilitySkillSource[],
+	bundledPaths: string[],
+): { group: string; isPlugin: boolean } {
+	const source = sources.find((candidate) => isUnderPath(filePath, candidate.path));
+	if (source?.plugin) return { group: source.plugin, isPlugin: true };
+	if (source?.scope === "project") return { group: "project", isPlugin: false };
+	if (source?.scope === "user") return { group: "personal", isPlugin: false };
+	if (bundledPaths.some((path) => isUnderPath(filePath, path))) {
+		return { group: "bundled", isPlugin: false };
+	}
+	return { group: "pi", isPlugin: false };
+}
+
+/**
+ * The combined skills override: relabel compatibility aliases' provenance AND apply the admission decision,
+ * so a session only ever loads skills that resolve to `load` — untrusted / unacknowledged / disabled (per
+ * skill or per group) ones never reach the system prompt or the `/skill:` list. `sources` + `bundledPaths`
+ * classify each loaded skill (project alias? which group?); `ctx` carries the trust/acknowledge/disable state.
+ */
+function skillsGate(
+	sources: CompatibilitySkillSource[],
+	bundledPaths: string[],
+	ctx: SkillAdmissionContext,
+) {
 	const projectAliasPaths = sources.filter((s) => s.scope === "project").map((s) => s.path);
 	const isProjectAlias = (filePath: string) =>
 		projectAliasPaths.some((path) => isUnderPath(filePath, path));
@@ -129,11 +153,15 @@ function skillsGate(sources: CompatibilitySkillSource[], ctx: SkillAdmissionCont
 		...current,
 		skills: current.skills
 			.map((skill) => relabelAliasProvenance(skill, sources))
-			.filter(
-				(skill) =>
-					decideSkill({ name: skill.name, isProjectAlias: isProjectAlias(skill.filePath) }, ctx) ===
-					"load",
-			),
+			.filter((skill) => {
+				const { group, isPlugin } = skillGroup(skill.filePath, sources, bundledPaths);
+				return (
+					decideSkill(
+						{ name: skill.name, isProjectAlias: isProjectAlias(skill.filePath), group, isPlugin },
+						ctx,
+					) === "load"
+				);
+			}),
 	});
 }
 
@@ -157,7 +185,7 @@ function resolveSkillInputs(
 			...personal.map((source) => source.path),
 			...project.map((source) => source.path),
 		],
-		skillsOverride: skillsGate(discovered, ctx),
+		skillsOverride: skillsGate(discovered, bundledSkillPaths, ctx),
 	};
 }
 
@@ -319,13 +347,18 @@ export async function listSkillCatalog(
 	return loader.getSkills().skills.map((skill) => {
 		const source = discovered.find((candidate) => isUnderPath(skill.filePath, candidate.path));
 		const gated = source?.scope === "project";
+		const { group, isPlugin } = skillGroup(skill.filePath, discovered, bundledSkillPaths);
 		return {
 			name: skill.name,
 			description: skill.description,
 			sourceInfo: skill.sourceInfo,
 			gated,
+			group,
 			...(source?.plugin ? { plugin: source.plugin } : {}),
-			decision: decideSkill({ name: skill.name, isProjectAlias: gated }, admission),
+			decision: decideSkill(
+				{ name: skill.name, isProjectAlias: gated, group, isPlugin },
+				admission,
+			),
 		};
 	});
 }

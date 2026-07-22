@@ -28,6 +28,12 @@ export interface Project {
 	acknowledgedSkills?: string[];
 	/** Names disabled at the project baseline (any source), overridable per-workspace. */
 	disabledSkills?: string[];
+	/**
+	 * Group keys disabled at the project baseline — a plugin name or a source tier
+	 * (`project`/`personal`/`bundled`/`pi`), plus the special `@plugins` (all plugin skills). Turns a whole
+	 * plugin/source off in one toggle and keeps future skills in that group off; a per-skill toggle overrides.
+	 */
+	disabledGroups?: string[];
 }
 
 /**

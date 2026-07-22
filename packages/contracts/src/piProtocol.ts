@@ -168,6 +168,8 @@ export interface SkillCatalogEntry {
 	gated: boolean;
 	/** The installing Claude plugin's name, when this skill came from one — lets the manager group by plugin. */
 	plugin?: string;
+	/** Canonical group key the skill toggles under: a plugin name, or `project`/`personal`/`bundled`/`pi`. */
+	group: string;
 	decision: SkillDecision;
 }
 

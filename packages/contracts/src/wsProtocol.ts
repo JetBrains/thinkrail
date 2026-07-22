@@ -58,7 +58,10 @@ import type {
 // (apply skill changes to a running session), `project.acknowledgeSkills` / `project.setSkillEnabled` /
 // `workspace.setSkillOverride`; `Project` gains `acknowledgedSkills`/`disabledSkills`, `Workspace` gains
 // `skillOverrides`.
-export const PROTOCOL_VERSION = 13;
+// v14: group/source toggles + pre-session manager — `project.setGroupEnabled` (turn a plugin or source tier,
+// incl. `@plugins`, on/off at the project baseline) + `project.skills` (project-scoped catalog for Welcome /
+// New Workspace); `Project` gains `disabledGroups`, `SkillCatalogEntry` gains `group`.
+export const PROTOCOL_VERSION = 14;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -104,6 +107,10 @@ export const WS_METHODS = {
 	// Names of the project's committed alias skills present in its current checkout — powers the presence-
 	// gated trust notice (shown as a count, never attacker-controlled text) before any workspace exists.
 	projectAliasSkills: "project.aliasSkills",
+	// Turn a whole group (a plugin, a source tier, or `@plugins`) on/off at the project baseline; the
+	// project-scoped skill catalog for the pre-session manager (Welcome / New Workspace).
+	projectSetGroupEnabled: "project.setGroupEnabled",
+	projectSkills: "project.skills",
 	workspaceCreate: "workspace.create",
 	workspaceList: "workspace.list",
 	workspaceRemove: "workspace.remove",
@@ -282,6 +289,13 @@ export interface WsMethodMap {
 	};
 	// Present committed alias skill names in the project's current checkout (for the presence-gated notice).
 	"project.aliasSkills": { params: { projectId: string }; result: string[] };
+	// Turn a group on/off at the project baseline (`group` = a plugin name, a source tier, or `@plugins`).
+	"project.setGroupEnabled": {
+		params: { id: string; group: string; enabled: boolean };
+		result: Project;
+	};
+	// Project-scoped skill catalog (current checkout, no workspace overrides) for the pre-session manager.
+	"project.skills": { params: { projectId: string }; result: SkillCatalogEntry[] };
 	// `baseRef`: the base branch the worktree is cut from (a remote ref is fetched first); when
 	// omitted, the worktree branches off the repo's current HEAD (the default behavior).
 	"workspace.create": {

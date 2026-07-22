@@ -60,6 +60,7 @@ let skillAdmissionResolver: (workspaceId: string) => SkillAdmissionContext = () 
 	trusted: false,
 	acknowledged: [],
 	disabled: [],
+	disabledGroups: [],
 	overrides: {},
 });
 export function setSkillAdmissionResolver(

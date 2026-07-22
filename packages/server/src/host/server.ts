@@ -117,10 +117,11 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 				trusted: project?.trusted === true,
 				acknowledged: project?.acknowledgedSkills ?? [],
 				disabled: project?.disabledSkills ?? [],
+				disabledGroups: project?.disabledGroups ?? [],
 				overrides: skillOverrides ?? {},
 			};
 		} catch {
-			return { trusted: false, acknowledged: [], disabled: [], overrides: {} };
+			return { trusted: false, acknowledged: [], disabled: [], disabledGroups: [], overrides: {} };
 		}
 	});
 

@@ -55,6 +55,7 @@ import {
 	inspectProjectPath,
 	listProjects,
 	openProject,
+	setProjectGroupEnabled,
 	setProjectSkillEnabled,
 	setProjectTrust,
 } from "../projects";
@@ -217,6 +218,7 @@ const handlers: Record<string, Handler> = {
 			trusted: project.trusted === true,
 			acknowledged: project.acknowledgedSkills ?? [],
 			disabled: project.disabledSkills ?? [],
+			disabledGroups: project.disabledGroups ?? [],
 			overrides: {},
 		});
 	},
@@ -230,6 +232,7 @@ const handlers: Record<string, Handler> = {
 			trusted: project?.trusted === true,
 			acknowledged: project?.acknowledgedSkills ?? [],
 			disabled: project?.disabledSkills ?? [],
+			disabledGroups: project?.disabledGroups ?? [],
 			overrides: ws.skillOverrides ?? {},
 		});
 	},
@@ -249,6 +252,24 @@ const handlers: Record<string, Handler> = {
 		const project = listProjects().find((p) => p.id === projectId);
 		if (!project) throw new Error(`Unknown project: ${projectId}`);
 		return listProjectAliasSkillNames(project.path);
+	},
+	// Turn a group (plugin / source tier / `@plugins`) on/off at the project baseline.
+	"project.setGroupEnabled": (params) => {
+		const p = params as { id: string; group: string; enabled: boolean };
+		return setProjectGroupEnabled(p.id, p.group, p.enabled);
+	},
+	// Project-scoped catalog for the pre-session manager (current checkout, no per-workspace overrides).
+	"project.skills": (params) => {
+		const { projectId } = params as { projectId: string };
+		const project = listProjects().find((p) => p.id === projectId);
+		if (!project) throw new Error(`Unknown project: ${projectId}`);
+		return listSkillCatalog(project.path, {
+			trusted: project.trusted === true,
+			acknowledged: project.acknowledgedSkills ?? [],
+			disabled: project.disabledSkills ?? [],
+			disabledGroups: project.disabledGroups ?? [],
+			overrides: {},
+		});
 	},
 	// Per-workspace per-skill override over the project baseline (`null` clears it).
 	"workspace.setSkillOverride": (params) => {

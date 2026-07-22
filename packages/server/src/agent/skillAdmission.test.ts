@@ -5,10 +5,22 @@ const EMPTY: SkillAdmissionContext = {
 	trusted: false,
 	acknowledged: [],
 	disabled: [],
+	disabledGroups: [],
 	overrides: {},
 };
-const alias = (name: string) => ({ name, isProjectAlias: true });
-const own = (name: string) => ({ name, isProjectAlias: false });
+const alias = (name: string) => ({ name, isProjectAlias: true, group: "project", isPlugin: false });
+const own = (name: string, group = "personal") => ({
+	name,
+	isProjectAlias: false,
+	group,
+	isPlugin: false,
+});
+const pluginSkill = (name: string, plugin: string) => ({
+	name,
+	isProjectAlias: false,
+	group: plugin,
+	isPlugin: true,
+});
 
 describe("decideSkill — trust gate (project-scoped aliases)", () => {
 	it("withholds an alias until the project is trusted", () => {
@@ -70,9 +82,42 @@ describe("decideSkill — the trust gate is checked before the toggle layer (saf
 				trusted: true,
 				acknowledged: ["deploy"],
 				disabled: [],
+				disabledGroups: [],
 				overrides: { deploy: "off" },
 			}),
 		).toBe("disabled");
+	});
+});
+
+describe("decideSkill — group / source disable (per-project baseline)", () => {
+	it("disables every skill in a disabled group (a plugin, or a source tier)", () => {
+		expect(
+			decideSkill(pluginSkill("x", "superpowers"), { ...EMPTY, disabledGroups: ["superpowers"] }),
+		).toBe("disabled");
+		expect(decideSkill(own("y", "personal"), { ...EMPTY, disabledGroups: ["personal"] })).toBe(
+			"disabled",
+		);
+	});
+
+	it("the @plugins super-toggle disables all plugin skills but not personal/bundled", () => {
+		const ctx = { ...EMPTY, disabledGroups: ["@plugins"] };
+		expect(decideSkill(pluginSkill("x", "superpowers"), ctx)).toBe("disabled");
+		expect(decideSkill(pluginSkill("y", "chrome-devtools-mcp"), ctx)).toBe("disabled");
+		expect(decideSkill(own("z", "personal"), ctx)).toBe("load");
+	});
+
+	it("a per-skill 'on' override re-enables one skill out of a disabled group", () => {
+		expect(
+			decideSkill(pluginSkill("x", "superpowers"), {
+				...EMPTY,
+				disabledGroups: ["superpowers"],
+				overrides: { x: "on" },
+			}),
+		).toBe("load");
+	});
+
+	it("a disabled group still can't un-gate an untrusted project alias (trust checked first)", () => {
+		expect(decideSkill(alias("a"), { ...EMPTY, disabledGroups: ["project"] })).toBe("untrusted");
 	});
 });
 

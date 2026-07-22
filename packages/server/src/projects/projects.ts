@@ -132,6 +132,22 @@ export function setProjectSkillEnabled(id: string, name: string, enabled: boolea
 	return project;
 }
 
+/**
+ * Turn a whole group on/off at the project baseline (`group` = a plugin name, a source tier, or the special
+ * `@plugins`). A disabled group withholds all its skills — including ones added later — until re-enabled.
+ */
+export function setProjectGroupEnabled(id: string, group: string, enabled: boolean): Project {
+	const projects = getProjects();
+	const project = projects.find((p) => p.id === id);
+	if (!project) throw new Error(`Unknown project: ${id}`);
+	const groups = new Set(project.disabledGroups ?? []);
+	if (enabled) groups.delete(group);
+	else groups.add(group);
+	project.disabledGroups = [...groups];
+	saveProjects(projects);
+	return project;
+}
+
 /** Whether a project (by id) is trusted. Unknown or undecided → false (fail closed). */
 export function isProjectTrusted(id: string): boolean {
 	return getProjects().find((p) => p.id === id)?.trusted === true;

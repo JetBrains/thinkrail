@@ -19,6 +19,12 @@ export interface SkillAdmissionContext {
 	acknowledged: readonly string[];
 	/** Project-baseline disabled skill names, any source (`Project.disabledSkills`). */
 	disabled: readonly string[];
+	/**
+	 * Project-baseline disabled **group** keys (`Project.disabledGroups`) — a group key is a plugin name or
+	 * a source tier (`project`/`personal`/`bundled`/`pi`), plus the special `@plugins` (all plugin skills).
+	 * Turns a whole plugin/source off in one toggle, and keeps *future* skills in that group off too.
+	 */
+	disabledGroups: readonly string[];
 	/** Per-workspace overrides by skill name (`Workspace.skillOverrides`). */
 	overrides: Readonly<Record<string, "on" | "off">>;
 }
@@ -28,12 +34,18 @@ export interface SkillFacts {
 	name: string;
 	/** True for a committed project-scoped alias (the trust-gated class); false for personal/bundled/pi. */
 	isProjectAlias: boolean;
+	/** The group key this skill toggles under (plugin name, or `project`/`personal`/`bundled`/`pi`). */
+	group: string;
+	/** Whether it belongs to a Claude plugin — subject to the `@plugins` super-toggle. */
+	isPlugin: boolean;
 }
 
 /**
- * The single source of truth for admission. Order matters: the **trust gate is checked first** for a
- * project alias (so an "on" override can never un-gate an untrusted or unacknowledged repo skill), then
- * the enable/disable layer (workspace override wins over project baseline).
+ * The single source of truth for admission. Precedence, most-specific first: the **trust gate** for a
+ * project alias (so an "on" override can never un-gate an untrusted/unacknowledged repo skill) → the
+ * per-skill **workspace override** (an explicit `on` beats a group disable; `off` always wins) → the
+ * project-baseline **group** disable (the skill's own group, or `@plugins` for any plugin skill) → the
+ * project-baseline **per-skill** disable → load.
  */
 export function decideSkill(skill: SkillFacts, ctx: SkillAdmissionContext): SkillDecision {
 	if (skill.isProjectAlias) {
@@ -43,6 +55,8 @@ export function decideSkill(skill: SkillFacts, ctx: SkillAdmissionContext): Skil
 	const override = ctx.overrides[skill.name];
 	if (override === "off") return "disabled";
 	if (override === "on") return "load";
+	if (ctx.disabledGroups.includes(skill.group)) return "disabled";
+	if (skill.isPlugin && ctx.disabledGroups.includes("@plugins")) return "disabled";
 	if (ctx.disabled.includes(skill.name)) return "disabled";
 	return "load";
 }
