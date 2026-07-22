@@ -1,5 +1,5 @@
 import type { SessionStats } from "@thinkrail/contracts";
-import { Sparkles } from "lucide-react";
+import { BookOpen } from "lucide-react";
 import type { ReactNode } from "react";
 import { SessionStatsBar } from "./SessionStatsBar";
 
@@ -39,7 +39,7 @@ export function ChatHeader({
 						title={skillsStale ? "Skills changed on disk — reload" : "Skills"}
 						className="flex shrink-0 items-center gap-xs rounded-[var(--radius-sm)] px-sm py-0.5 text-muted text-xs outline-none transition-colors hover:bg-hover hover:text-text focus-visible:ring-2 focus-visible:ring-primary"
 					>
-						<Sparkles className="size-3.5" />
+						<BookOpen className="size-3.5" />
 						Skills
 						{skillsStale ? <span className="size-1.5 rounded-full bg-gold" aria-hidden /> : null}
 					</button>
