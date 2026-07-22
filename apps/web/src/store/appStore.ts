@@ -56,7 +56,23 @@ export interface DocTab {
 	content: string;
 	docPath: string;
 }
-export type EditorTab = FileTab | ChatTab | DocTab;
+/**
+ * A read-only Monaco diff of one changed file vs the workspace's base branch (opened from the Changes
+ * panel; one tab per file). `view` is the render mode — absent = split (side-by-side), the default.
+ */
+export interface DiffTab {
+	kind: "diff";
+	id: string; // `${workspaceId}:diff:${path}` — stable, so re-clicking a file focuses its tab
+	workspaceId: string;
+	name: string;
+	path: string;
+	original: string;
+	modified: string;
+	view?: "split" | "inline";
+	/** The workspace fs tick the contents were loaded at — same live-refresh contract as `FileTab`. */
+	loadedTick?: number;
+}
+export type EditorTab = FileTab | ChatTab | DocTab | DiffTab;
 
 /**
  * A section of the settings dialog (a const-object "enum", the codebase convention). Extensible — the live
@@ -439,11 +455,14 @@ interface AppState {
 	setActiveTab: (id: string) => void;
 	/** Set a markdown file tab's view mode (rendered ↔ source); kept on the tab so it survives tab switches. */
 	setFileTabView: (id: string, view: "rendered" | "source") => void;
+	setDiffTabView: (id: string, view: "split" | "inline") => void;
 	/** Fold a `workspace.fsChanged` push into the live-refresh signal (tick++, last batch replaces). */
 	noteFsChanged: (payload: WorkspaceFsChangedPayload) => void;
 	/** Replace a file tab's content after a live re-read, recording the fs tick it was loaded at. The tab
 	 * is located across workspaces by its (globally unique) id; a closed tab is a no-op. */
 	updateFileTabContent: (id: string, content: string, tick: number) => void;
+	/** Replace a diff tab's two sides after a live re-read (see `DiffPane`). */
+	updateDiffTabContent: (id: string, original: string, modified: string, tick: number) => void;
 	clearWorkspaceTabs: (workspaceId: string) => void;
 	addTerminal: (workspaceId: string) => void;
 	closeTerminalTab: (workspaceId: string, clientId: string) => void;
@@ -719,6 +738,19 @@ export const useAppStore = create<AppState>((set, get) => ({
 				},
 			};
 		}),
+	setDiffTabView: (id, view) =>
+		set((s) => {
+			const wsId = s.activeWorkspaceId;
+			if (!wsId) return {};
+			const tabs = s.tabsByWorkspace[wsId] ?? [];
+			if (!tabs.some((t) => t.id === id && t.kind === "diff")) return {};
+			return {
+				tabsByWorkspace: {
+					...s.tabsByWorkspace,
+					[wsId]: tabs.map((t) => (t.id === id && t.kind === "diff" ? { ...t, view } : t)),
+				},
+			};
+		}),
 	noteFsChanged: (payload) =>
 		set((s) => {
 			const prev = s.fsChangesByWorkspace[payload.workspaceId];
@@ -742,6 +774,21 @@ export const useAppStore = create<AppState>((set, get) => ({
 						...s.tabsByWorkspace,
 						[wsId]: tabs.map((t) =>
 							t.id === id && t.kind === "file" ? { ...t, content, loadedTick: tick } : t,
+						),
+					},
+				};
+			}
+			return {};
+		}),
+	updateDiffTabContent: (id, original, modified, tick) =>
+		set((s) => {
+			for (const [wsId, tabs] of Object.entries(s.tabsByWorkspace)) {
+				if (!tabs.some((t) => t.id === id && t.kind === "diff")) continue;
+				return {
+					tabsByWorkspace: {
+						...s.tabsByWorkspace,
+						[wsId]: tabs.map((t) =>
+							t.id === id && t.kind === "diff" ? { ...t, original, modified, loadedTick: tick } : t,
 						),
 					},
 				};

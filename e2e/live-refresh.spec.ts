@@ -34,8 +34,8 @@ test("worktree changes on disk appear live in Specs, All files, Changes, and an 
 	rmSync(join(worktree, "fresh-file.txt"));
 	await expect(freshFile).toHaveCount(0);
 
-	// --- Changes: a tracked-file edit surfaces while the tab is open, and the selected diff follows
-	// further edits (the status re-read keeps the selection; its diff is re-read quietly).
+	// --- Changes: a tracked-file edit surfaces while the tab is open, and the open Monaco diff tab
+	// follows further edits (DiffPane re-reads both sides on the workspace's fs tick).
 	await page.getByTestId("tab-changes").click();
 	const readmeRow = page.getByTestId("change-item").filter({ hasText: "README.md" });
 	await expect(
@@ -45,9 +45,9 @@ test("worktree changes on disk appear live in Specs, All files, Changes, and an 
 	writeFileSync(join(worktree, "README.md"), "# sample-project\n\nedited live by e2e\n");
 	await expect(readmeRow).toHaveAttribute("data-status", "modified");
 	await readmeRow.click();
-	await expect(page.getByTestId("diff-viewer")).toContainText("edited live by e2e");
+	await expect(page.getByTestId("diff-pane")).toContainText("edited live by e2e");
 	writeFileSync(join(worktree, "README.md"), "# sample-project\n\nedited twice by e2e\n");
-	await expect(page.getByTestId("diff-viewer")).toContainText("edited twice by e2e");
+	await expect(page.getByTestId("diff-pane")).toContainText("edited twice by e2e");
 
 	// --- Open file tab: the visible tab's content follows the disk (the viewer is read-only, so a
 	// silent swap is conflict-free).

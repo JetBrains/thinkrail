@@ -45,7 +45,9 @@ import type {
 // v8: `ask_user_question` is ack + terminate — the tool no longer blocks; answers travel as
 // `ask-user-answers` custom messages, and `session.getMessages` now returns `TranscriptMessage[]`
 // (pi-canonical + `custom` role) so the questionnaire card can pair answers by tool call id.
-export const PROTOCOL_VERSION = 8;
+// v9: `git.diff` (unified patch text) is replaced by `git.diffFile` — both sides of one file's change
+// (base-branch content + worktree content), feeding the center Monaco diff tab.
+export const PROTOCOL_VERSION = 9;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -103,7 +105,7 @@ export const WS_METHODS = {
 	todoUpdate: "todo.update",
 	todoRemove: "todo.remove",
 	gitStatus: "git.status",
-	gitDiff: "git.diff",
+	gitDiffFile: "git.diffFile",
 	terminalCreate: "terminal.create",
 	terminalWrite: "terminal.write",
 	terminalResize: "terminal.resize",
@@ -279,7 +281,14 @@ export interface WsMethodMap {
 	};
 	"todo.remove": { params: { workspaceId: string; sessionId: string; id: string }; result: Ack };
 	"git.status": { params: { workspaceId: string }; result: GitStatus };
-	"git.diff": { params: { workspaceId: string; path?: string }; result: { diff: string } };
+	// One changed file, both sides: `original` = the file at the workspace's base branch (empty for
+	// untracked/added — and for a renamed file's new path, which degrades to an add-style diff),
+	// `modified` = the worktree content (empty when deleted). Feeds Monaco's diff editor, which needs
+	// two contents rather than a unified patch.
+	"git.diffFile": {
+		params: { workspaceId: string; path: string };
+		result: { original: string; modified: string };
+	};
 	"terminal.create": { params: { workspaceId: string }; result: { id: string } };
 	"terminal.write": { params: { id: string; data: string }; result: Ack };
 	"terminal.resize": { params: { id: string; cols: number; rows: number }; result: Ack };

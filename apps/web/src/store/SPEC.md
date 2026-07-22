@@ -95,12 +95,17 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   change (the store holds only the signal, never fetches; `applyWorkspaceRemoved` drops a removed
   workspace's entry); and **`updateFileTabContent(id, content,
   tick)`** — a `FileTab` carries the `tick` its content was loaded at, so `FilePane` detects staleness
-  (`workspaceTick > tab.loadedTick`) across tab switches. The transient **`changesRequest`** +
+  (`workspaceTick > tab.loadedTick`) across tab switches, and its diff twin
+  **`updateDiffTabContent(id, original, modified, tick)`** — a `DiffTab` follows the same staleness
+  contract in `DiffPane`. The transient **`changesRequest`** +
   **`requestChangesView(workspaceId, path)`** are a UI deep-link intent (a chat turn-divider asking the
   right panel to surface a file's diff); the panels watch it, scoped by workspace. **`openDoc(tab)`** opens
   (or refreshes + focuses) an ephemeral **`DocTab`** — inline rendered-markdown content, never backed by a
   file on disk (no fs re-read / source toggle) — used for on-demand snapshots like the plan-as-markdown
-  export. The `EditorTab` (`FileTab` | `ChatTab` | `DocTab`) + `TerminalTab` + `ClosedChat` +
+  export. **`DiffTab`** is a read-only Monaco diff of one
+changed file vs the workspace's base branch (id `${workspaceId}:diff:${path}` — one tab per file;
+`view` split|inline via **`setDiffTabView`**, split the default; opened by `ChangesPanel`).
+The `EditorTab` (`FileTab` | `ChatTab` | `DocTab` | `DiffTab`) + `TerminalTab` + `ClosedChat` +
   `SessionRuntime` types. (Chat *render* types + renderers live in the `chat` module.) The pure context
   selectors in `selectors.ts` resolve the active `Workspace`, its owning project id, and the shell's context
   project from those canonical ids and collections; derived active-project state is never stored separately.

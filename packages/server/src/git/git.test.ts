@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { listBranches, prefetchBranch } from "./git";
+import { gitDiffFile, listBranches, prefetchBranch } from "./git";
 
 let dataDir: string;
 let repo: string;
@@ -34,6 +34,50 @@ afterEach(() => {
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
+});
+
+/** Register the repo itself as workspace `w1` (branch = base = main) for the gitDiffFile tests. */
+function seedWorkspace(): void {
+	writeFileSync(
+		join(dataDir, "workspaces.json"),
+		JSON.stringify([
+			{
+				id: "w1",
+				projectId: "p1",
+				name: "w1",
+				branch: "main",
+				worktreePath: repo,
+				baseBranch: "main",
+				createdAt: 1,
+			},
+		]),
+	);
+}
+
+test("gitDiffFile returns both sides: base content vs worktree content (trailing newline intact)", () => {
+	seedWorkspace();
+	writeFileSync(join(repo, "README.md"), "# repo\n\nedited\n");
+	const { original, modified } = gitDiffFile("w1", "README.md");
+	expect(original).toBe("# repo\n");
+	expect(modified).toBe("# repo\n\nedited\n");
+});
+
+test("gitDiffFile: untracked → empty original; deleted → empty modified", () => {
+	seedWorkspace();
+	writeFileSync(join(repo, "new.txt"), "fresh\n");
+	const added = gitDiffFile("w1", "new.txt");
+	expect(added.original).toBe("");
+	expect(added.modified).toBe("fresh\n");
+
+	rmSync(join(repo, "README.md"));
+	const deleted = gitDiffFile("w1", "README.md");
+	expect(deleted.original).toBe("# repo\n");
+	expect(deleted.modified).toBe("");
+});
+
+test("gitDiffFile refuses a path escaping the worktree", () => {
+	seedWorkspace();
+	expect(() => gitDiffFile("w1", "../outside.txt")).toThrow("Path escapes the worktree");
 });
 
 test("listBranches with no remote returns local branches and falls back to the repo HEAD", () => {

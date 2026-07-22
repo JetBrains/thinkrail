@@ -1,11 +1,13 @@
 /**
  * Run a git command in `cwd`, capturing trimmed stdout/stderr + whether it exited cleanly. Pass `opts.env`
  * to override the child env — Bun's default is a startup snapshot, ignoring later `process.env` mutations.
+ * Pass `opts.raw` to keep stdout byte-exact (file *content* reads — e.g. `git show ref:path` — must not
+ * lose leading/trailing whitespace to the trim).
  */
 export function git(
 	cwd: string,
 	args: string[],
-	opts: { env?: Record<string, string | undefined> } = {},
+	opts: { env?: Record<string, string | undefined>; raw?: boolean } = {},
 ): { ok: boolean; out: string; err: string } {
 	const result = Bun.spawnSync(["git", "-C", cwd, ...args], {
 		stdout: "pipe",
@@ -13,9 +15,10 @@ export function git(
 		// Omit when unset so existing callers keep Bun's inherited default.
 		...(opts.env ? { env: opts.env } : {}),
 	});
+	const stdout = new TextDecoder().decode(result.stdout);
 	return {
 		ok: result.success,
-		out: new TextDecoder().decode(result.stdout).trim(),
+		out: opts.raw ? stdout : stdout.trim(),
 		err: new TextDecoder().decode(result.stderr).trim(),
 	};
 }
