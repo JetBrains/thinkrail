@@ -166,6 +166,8 @@ export interface SkillCatalogEntry {
 	sourceInfo: SlashCommandSourceInfo;
 	/** True for a committed project-scoped alias (the trust-gated class). */
 	gated: boolean;
+	/** The installing Claude plugin's name, when this skill came from one — lets the manager group by plugin. */
+	plugin?: string;
 	decision: SkillDecision;
 }
 

@@ -292,9 +292,6 @@ export async function listSkillCatalog(
 	admission: SkillAdmissionContext,
 ): Promise<SkillCatalogEntry[]> {
 	const discovered = discoverCompatibilitySkillSources(cwd);
-	const projectAliasPaths = discovered.filter((s) => s.scope === "project").map((s) => s.path);
-	const isProjectAlias = (filePath: string) =>
-		projectAliasPaths.some((path) => isUnderPath(filePath, path));
 	const personal = discovered.filter((s) => s.scope === "user");
 	const project = discovered.filter((s) => s.scope === "project");
 	const bundledSkillPaths = bundled ? [bundled.skillsDir] : resolveDevPaths().skillPaths;
@@ -320,12 +317,14 @@ export async function listSkillCatalog(
 	});
 	await loader.reload();
 	return loader.getSkills().skills.map((skill) => {
-		const gated = isProjectAlias(skill.filePath);
+		const source = discovered.find((candidate) => isUnderPath(skill.filePath, candidate.path));
+		const gated = source?.scope === "project";
 		return {
 			name: skill.name,
 			description: skill.description,
 			sourceInfo: skill.sourceInfo,
 			gated,
+			...(source?.plugin ? { plugin: source.plugin } : {}),
 			decision: decideSkill({ name: skill.name, isProjectAlias: gated }, admission),
 		};
 	});

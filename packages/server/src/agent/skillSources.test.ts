@@ -87,11 +87,14 @@ describe("discoverCompatibilitySkillSources", () => {
 			env: { HOME: home, CLAUDE_CONFIG_DIR: claudeConfig },
 		});
 
-		// The plugin's own skills dir is discovered (personal-scope)…
+		// The plugin's own skills dir is discovered (personal-scope, tagged with the plugin name)…
 		expect(
 			sources.some(
 				(s) =>
-					s.path === join(installPath, "skills") && s.scope === "user" && s.provider === "claude",
+					s.path === join(installPath, "skills") &&
+					s.scope === "user" &&
+					s.provider === "claude" &&
+					s.plugin === "superpowers",
 			),
 		).toBe(true);
 		// …but never the transitive node_modules skills junk (we read the manifest, not a blind find).

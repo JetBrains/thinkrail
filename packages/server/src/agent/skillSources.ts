@@ -9,6 +9,8 @@ export interface CompatibilitySkillSource {
 	path: string;
 	scope: "project" | "user";
 	provider: CompatibilitySkillProvider;
+	/** For a Claude-plugin source, the plugin's display name — lets the Skills manager group by plugin. */
+	plugin?: string;
 }
 
 interface DiscoverCompatibilitySkillSourcesOptions {
@@ -39,7 +41,7 @@ function existingDirectory(path: string): string | null {
  * which would sweep in stale versions and transitive `node_modules/**​/skills` junk. Missing/garbled
  * manifest → none. These are personal-scope (the user installed them via Claude).
  */
-function readClaudePluginSkillDirs(claudeConfigDir: string): string[] {
+function readClaudePluginSkillDirs(claudeConfigDir: string): { path: string; plugin: string }[] {
 	const manifest = join(claudeConfigDir, "plugins", "installed_plugins.json");
 	if (!existsSync(manifest)) return [];
 	let parsed: unknown;
@@ -50,12 +52,13 @@ function readClaudePluginSkillDirs(claudeConfigDir: string): string[] {
 	}
 	const plugins = (parsed as { plugins?: Record<string, unknown> } | null)?.plugins;
 	if (!plugins || typeof plugins !== "object") return [];
-	const dirs: string[] = [];
-	for (const installs of Object.values(plugins)) {
+	const dirs: { path: string; plugin: string }[] = [];
+	for (const [key, installs] of Object.entries(plugins)) {
 		if (!Array.isArray(installs)) continue;
+		const plugin = key.split("@")[0] || key; // "superpowers@claude-plugins-official" → "superpowers"
 		for (const install of installs) {
 			const installPath = (install as { installPath?: unknown } | null)?.installPath;
-			if (typeof installPath === "string") dirs.push(join(installPath, "skills"));
+			if (typeof installPath === "string") dirs.push({ path: join(installPath, "skills"), plugin });
 		}
 	}
 	return dirs;
@@ -107,8 +110,8 @@ export function discoverCompatibilitySkillSources(
 
 	// Installed Claude plugins (superpowers, etc.) — appended after the hand-written personal aliases so a
 	// loose `~/.claude/skills/<name>` wins a name collision over a plugin's.
-	for (const path of readClaudePluginSkillDirs(claudeConfigDir)) {
-		candidates.push({ path, scope: "user", provider: "claude" });
+	for (const { path, plugin } of readClaudePluginSkillDirs(claudeConfigDir)) {
+		candidates.push({ path, scope: "user", provider: "claude", plugin });
 	}
 
 	const sources: CompatibilitySkillSource[] = [];

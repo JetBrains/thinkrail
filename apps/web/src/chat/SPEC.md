@@ -103,10 +103,11 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   optional `container` prop portals their popovers into a host Dialog), `SessionStatsBar`, `ChatHeader`
   (its `left` slot carries the plan strip; its **Skills** button — badged when a skill dir changed on
   disk — opens the manager), `ExtUiDialog`, and **`SkillsDialog`** (the **workspace-scoped Skills
-  manager**: `skills.state` catalog grouped by source with each skill's admission verdict, project-trust +
-  re-confirm-new + per-workspace enable/disable toggles, and a **Reload** that applies changes to *this*
-  chat's session via `session.reloadResources`, disabled while streaming). All props-driven; behavior
-  detail lives in the components' jsdoc.
+  manager**: `skills.state` catalog grouped by source — Project / Personal / **a group per installed
+  Claude plugin** / Bundled / Pi — with each skill's admission verdict, project-trust + re-confirm-new +
+  per-workspace enable/disable toggles, and a **Reload** that applies changes to *this* chat's session via
+  `session.reloadResources`, disabled while streaming). All props-driven; behavior detail lives in the
+  components' jsdoc.
 - **Chat TODO plan** — the chat's `pi-todos` list surfaced **only in the chat** (engine:
   [[module-pi-todos]]; host read/write: [[submodule-server-todos]]):
   `useChatTodos` (the `todo.*` data hook — fetch + live `pi.event` refetch + edits + the add-nudge + the

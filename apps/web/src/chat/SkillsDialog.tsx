@@ -10,22 +10,43 @@ import { errorText, getTransport } from "@/transport";
 /** The workspace-scoped Skills manager (opened from the chat header). Lists every discovered skill grouped
  * by source with its admission verdict, exposes trust + per-workspace enable/disable + re-confirm-new, and
  * a Reload that applies changes to *this* chat's running session. */
-const GROUPS = ["Project", "Personal", "Bundled", "Pi"] as const;
-type Group = (typeof GROUPS)[number];
+const FIXED_HINT: Record<string, string> = {
+	Project: "Committed to the repo — gated behind trust.",
+	Personal: "Your own libraries (~/.claude, ~/.codex, …).",
+	Bundled: "Shipped with ThinkRail.",
+	Pi: "Pi-native / configured.",
+};
+const FIXED_RANK: Record<string, number> = { Project: 0, Personal: 1, Bundled: 3, Pi: 4 };
 
-function groupOf(entry: SkillCatalogEntry): Group {
+function fixedLabel(entry: SkillCatalogEntry): "Project" | "Personal" | "Bundled" | "Pi" {
 	if (entry.gated) return "Project";
 	if (entry.sourceInfo.scope === "user") return "Personal";
 	if (entry.sourceInfo.scope === "temporary") return "Bundled";
 	return "Pi";
 }
 
-const GROUP_HINT: Record<Group, string> = {
-	Project: "Committed to the repo — gated behind trust.",
-	Personal: "Your own libraries (~/.claude, ~/.codex, …).",
-	Bundled: "Shipped with ThinkRail.",
-	Pi: "Pi-native / configured.",
-};
+/** Group entries by installing plugin (if any), else by source tier; order Project → Personal → plugins
+ * (sorted) → Bundled → Pi, so a plugin's skills sit together under the plugin's name. */
+function groupCatalog(
+	entries: SkillCatalogEntry[],
+): { label: string; hint: string; items: SkillCatalogEntry[] }[] {
+	const byLabel = new Map<string, { isPlugin: boolean; items: SkillCatalogEntry[] }>();
+	for (const entry of entries) {
+		const label = entry.plugin ?? fixedLabel(entry);
+		const group = byLabel.get(label) ?? { isPlugin: Boolean(entry.plugin), items: [] };
+		group.items.push(entry);
+		byLabel.set(label, group);
+	}
+	return [...byLabel.entries()]
+		.map(([label, group]) => ({
+			label,
+			hint: group.isPlugin ? "Claude plugin" : (FIXED_HINT[label] ?? ""),
+			items: group.items,
+			rank: group.isPlugin ? 2 : (FIXED_RANK[label] ?? 5),
+		}))
+		.sort((a, b) => a.rank - b.rank || a.label.localeCompare(b.label))
+		.map(({ label, hint, items }) => ({ label, hint, items }));
+}
 
 /** A skill result carries `projectId` only when it's a Workspace; Project has no such field. */
 function isWorkspace(result: Project | Workspace): result is Workspace {
@@ -109,10 +130,7 @@ export function SkillsDialog({
 	};
 
 	const untrustedCount = entries?.filter((e) => e.decision === "untrusted").length ?? 0;
-	const grouped = GROUPS.map((group) => ({
-		group,
-		items: (entries ?? []).filter((e) => groupOf(e) === group),
-	})).filter((g) => g.items.length > 0);
+	const grouped = groupCatalog(entries ?? []);
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
@@ -175,17 +193,17 @@ export function SkillsDialog({
 							No skills discovered for this workspace.
 						</p>
 					) : (
-						grouped.map(({ group, items }) => (
-							<div key={group} className="mb-md">
+						grouped.map(({ label, hint, items }) => (
+							<div key={label} className="mb-md">
 								<div className="px-sm py-xs">
 									<span className="font-medium text-text text-xs uppercase tracking-wide">
-										{group}
+										{label}
 									</span>
-									<span className="ml-sm text-hint text-xs">{GROUP_HINT[group]}</span>
+									<span className="ml-sm text-hint text-xs">{hint}</span>
 								</div>
 								{items.map((entry) => (
 									<SkillRow
-										key={`${group}:${entry.name}`}
+										key={`${label}:${entry.name}`}
 										entry={entry}
 										busy={busy}
 										onToggle={(enabled) =>
