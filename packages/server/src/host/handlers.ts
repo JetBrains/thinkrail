@@ -1,8 +1,11 @@
 import type {
 	AppConfig,
 	AskUserQuestionResult,
+	CombineMode,
 	ExtUiResponse,
 	HookName,
+	HookSource,
+	HookValue,
 	ImageContent,
 	LoginReply,
 	ThinkingLevel,
@@ -52,6 +55,7 @@ import {
 	commitProjectFile,
 	initProject,
 	inspectProjectPath,
+	isPathIgnored,
 	listProjects,
 	openProject,
 } from "../projects";
@@ -74,7 +78,7 @@ import {
 	listWorkspaces,
 	loadHookConfig,
 	reclaimWorktree,
-	resolveHookCommand,
+	resolveHookRun,
 	runOnCreateHook,
 	runOnDeleteHook,
 	workspaceDiffStats,
@@ -117,8 +121,13 @@ const handlers: Record<string, Handler> = {
 		return { ok: true } as const;
 	},
 	"workspace.create": (params) => {
-		const p = params as { projectId: string; name?: string; baseRef?: string };
-		return createWorkspace(p.projectId, p.name, p.baseRef);
+		const p = params as {
+			projectId: string;
+			name?: string;
+			baseRef?: string;
+			hookCombineMode?: CombineMode;
+		};
+		return createWorkspace(p.projectId, p.name, p.baseRef, p.hookCombineMode);
 	},
 	"workspace.list": (params) => listWorkspaces((params as { projectId: string }).projectId),
 	"workspace.remove": (params) => {
@@ -134,9 +143,30 @@ const handlers: Record<string, Handler> = {
 		return { ok: true } as const;
 	},
 	"workspace.diffStats": (params) => workspaceDiffStats((params as { id: string }).id),
+	// Pre-dates per-source approval and carries no `source` over the wire — so this re-resolves both tiers
+	// fresh off disk (never trusts the client's `command` as the material to hash) and approves whichever
+	// entry's *current* display matches it. For an inline entry display IS the material; for a `{script}`
+	// entry the display is just its label (`script: <path>`) while the material actually hashed is the
+	// script's live file contents, read here — so approving a script through this path still content-hashes
+	// correctly rather than hashing the label string.
 	"workspace.hooks.approve": (params) => {
 		const p = params as { projectId: string; hook: HookName; command: string };
-		approveHook(p.projectId, p.hook, p.command);
+		const project = listProjects().find((proj) => proj.id === p.projectId);
+		if (!project) throw new Error(`Unknown project: ${p.projectId}`);
+		const committed = loadHookConfig(project.path);
+		const local = loadHookOverrides()[p.projectId] ?? {};
+		const entries = resolveHookRun({
+			hook: p.hook,
+			committed,
+			local,
+			mode: "both",
+			basePath: project.path,
+		});
+		for (const entry of entries) {
+			if (entry.display === p.command && entry.approvalMaterial != null) {
+				approveHook(p.projectId, p.hook, entry.source, entry.approvalMaterial);
+			}
+		}
 		return { ok: true } as const;
 	},
 	// Re-invoke a specific hook for a specific workspace on demand (the approval flow's "run now" —
@@ -158,27 +188,82 @@ const handlers: Record<string, Handler> = {
 		const project = listProjects().find((proj) => proj.id === p.projectId);
 		if (!project) throw new Error(`Unknown project: ${p.projectId}`);
 		const committed = loadHookConfig(project.path);
-		const overrides = loadHookOverrides()[project.id] ?? {};
-		const hooks: HookName[] = ["onCreate", "onDelete", "preMerge", "postMerge"];
-		const approved: Partial<Record<HookName, boolean>> = {};
-		for (const hook of hooks) {
-			const resolved = resolveHookCommand(hook, committed, overrides);
-			if (resolved) approved[hook] = isApproved(project.id, hook, resolved);
+		const local = loadHookOverrides()[project.id] ?? {};
+		// A project whose `.gitignore` covers `.thinkrail/` can't commit a Shared hook there at all — see
+		// `project.hooks.save`, which skips writing Shared rather than force-committing it in that case.
+		const sharedCommittable = !isPathIgnored(project.path, WORKSPACE_HOOKS_CONFIG_FILE);
+		const hookNames: HookName[] = ["onCreate", "onDelete", "preMerge", "postMerge"];
+		const approved: Partial<Record<HookName, Partial<Record<HookSource, boolean>>>> = {};
+		for (const hook of hookNames) {
+			// mode "both" so BOTH tiers' entries resolve, regardless of the project's actual combine-mode —
+			// this map reports every declared entry's approval state, not just the ones that would run.
+			const entries = resolveHookRun({
+				hook,
+				committed,
+				local,
+				mode: "both",
+				basePath: project.path,
+			});
+			for (const entry of entries) {
+				if (entry.approvalMaterial == null) continue; // a missing script has nothing to hash
+				approved[hook] = {
+					...approved[hook],
+					[entry.source]: isApproved(project.id, hook, entry.source, entry.approvalMaterial),
+				};
+			}
 		}
-		return { committed, overrides, approved };
+		return {
+			combineMode: committed.combineMode,
+			shared: committed.hooks,
+			local,
+			approved,
+			sharedCommittable,
+		};
 	},
 	"project.hooks.save": (params) => {
 		const p = params as {
 			projectId: string;
-			committed: Partial<Record<HookName, string>>;
-			overrides: Partial<Record<HookName, string>>;
+			combineMode: CombineMode;
+			shared: Partial<Record<HookName, HookValue>>;
+			local: Partial<Record<HookName, HookValue>>;
 		};
 		const project = listProjects().find((proj) => proj.id === p.projectId);
 		if (!project) throw new Error(`Unknown project: ${p.projectId}`);
-		writeHookConfig(project.path, p.committed);
-		commitProjectFile(project.path, WORKSPACE_HOOKS_CONFIG_FILE, "chore: update workspace hooks");
-		const allOverrides = loadHookOverrides();
-		saveHookOverrides({ ...allOverrides, [project.id]: p.overrides });
+
+		const sharedCommittable = !isPathIgnored(project.path, WORKSPACE_HOOKS_CONFIG_FILE);
+		if (Object.keys(p.shared).length > 0 && !sharedCommittable) {
+			throw new Error(
+				"This project ignores .thinkrail/ — shared hooks can't be committed here. Use a Local hook instead.",
+			);
+		}
+		// Committable: always write+commit, even with an empty `shared` map, so the chosen `combineMode`
+		// still persists as the project's default. Not committable: `shared` is already known empty (the
+		// guard above threw otherwise), so there's nothing to write — Shared stays unavailable, by design.
+		if (sharedCommittable) {
+			writeHookConfig(project.path, { version: 1, combineMode: p.combineMode, hooks: p.shared });
+			commitProjectFile(project.path, WORKSPACE_HOOKS_CONFIG_FILE, "chore: update workspace hooks");
+		}
+		saveHookOverrides({ ...loadHookOverrides(), [project.id]: p.local });
+
+		// Approve-on-save (this machine): every entry this save just wrote — Shared (when committable) and
+		// Local — is now trusted, so a workspace created right after never sits at `hookAwaitingApproval` for
+		// something the user just configured themselves. A script whose file is absent has null material
+		// (nothing to hash) and is simply skipped — it approves on its next run instead.
+		const hookNames: HookName[] = ["onCreate", "onDelete", "preMerge", "postMerge"];
+		for (const hook of hookNames) {
+			const entries = resolveHookRun({
+				hook,
+				committed: { version: 1, combineMode: p.combineMode, hooks: p.shared },
+				local: p.local,
+				mode: "both",
+				basePath: project.path,
+			});
+			for (const entry of entries) {
+				if (entry.approvalMaterial != null) {
+					approveHook(project.id, hook, entry.source, entry.approvalMaterial);
+				}
+			}
+		}
 		return { ok: true } as const;
 	},
 	"git.listBranches": (params) => listBranches((params as { projectId: string }).projectId),

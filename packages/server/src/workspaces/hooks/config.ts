@@ -75,29 +75,12 @@ export function writeHookConfig(projectPath: string, config: HookConfigFile): vo
 	);
 }
 
-/**
- * Resolve the command that should run for `hook`: a host-local override replaces the committed value
- * entirely (never merged) — if you override a hook, you own its whole command.
- *
- * @deprecated Superseded by `resolveHookRun`, which resolves both tiers (per `CombineMode`) into an
- * ordered list instead of one tier winning outright. Kept in place — and still called by `hooks.ts` and
- * `host/handlers.ts` — until those callers migrate; removed once its last caller is gone.
- */
-export function resolveHookCommand(
-	hook: HookName,
-	committed: Partial<Record<HookName, string>>,
-	override: Partial<Record<HookName, string>>,
-): string | undefined {
-	return override[hook] ?? committed[hook];
-}
-
 /** One resolved entry in a hook's ordered run list — see `resolveHookRun`. */
 export interface ResolvedHookEntry {
 	/** Which tier this entry came from — carried onto every event/status this entry produces. */
 	source: HookSource;
-	/** `"inline"` is meant to run via `sh -c "<exec>"`; `"script"` via `sh "<exec>"` — intended behavior
-	 * once `hooks.ts`/`runner.ts` are wired to consume `ResolvedHookEntry` (a later task; today `runner.ts`
-	 * only runs inline commands, resolved via the deprecated `resolveHookCommand`). */
+	/** `"inline"` runs via `sh -c "<exec>"`; `"script"` via `sh "<exec>"` — see `hooks.ts`'s `runHookEntry`,
+	 * which dispatches on this to build the `runner.ts` call. */
 	kind: "inline" | "script";
 	/** Inline: the command text itself. Script: the resolved ABSOLUTE path to the script file. */
 	exec: string;

@@ -83,17 +83,33 @@ channel fan-out, and the process-boot wrapper both launchers share.
   (`setHookPublisher`), publishing every `WorkspaceHookEvent` directly as the `workspace.hook` push
   `data` — a single channel carries the whole discriminated union (no kind→channel split, unlike the
   lifecycle trio; the same shape `watch`'s `workspace.fsChanged` uses), also `ws.subscribe`d in `open`.
-  `handlers.ts` adds `workspace.hooks.approve` (records an approval) and `workspace.hooks.run`
-  (re-invokes a specific workspace's hook on demand — what the approval flow composes with `approve` to
-  actually bootstrap a workspace stuck at `hookAwaitingApproval`, and the standalone manual-retry
-  action) — the latter is also why `archiveTeardown`'s `reclaimWorktree(ws)` call is `await`ed: that
-  function became `async` once it started awaiting the `onDelete` hook.
+  `handlers.ts` adds `workspace.hooks.approve` and `workspace.hooks.run` (re-invokes a specific
+  workspace's hook on demand — what the approval flow composes with `approve` to actually bootstrap a
+  workspace stuck at `hookAwaitingApproval`, and the standalone manual-retry action) — the latter is
+  also why `archiveTeardown`'s `reclaimWorktree(ws)` call is `await`ed: that function became `async`
+  once it started awaiting the `onDelete` hook. `workspace.hooks.approve`'s wire shape pre-dates
+  per-source approval (`{ projectId, hook, command }` — no `source`), so the handler never trusts the
+  client's `command` as the material to hash: it re-resolves both tiers fresh off the **project's root
+  path** (`workspaces/hooks`'s `resolveHookRun`, mode `"both"`) and calls `approveHook` (with `source`)
+  for whichever resolved entry's *current* `display` matches `command` — for an inline entry `display`
+  IS the material, but for a `{script}` entry `display` is just its label (`` `script: <path>` ``) while
+  the material actually hashed is the script's live file contents, read fresh at approval time.
 - **Project-level hooks config surface:** `project.hooks.get`/`project.hooks.save` (no workspace
-  needed) — `get` reads `workspaces/hooks`'s `loadHookConfig` off the **project's root path** (not a
-  workspace worktree) + `persistence`'s `loadHookOverrides`, and computes per-hook approval via
-  `resolveHookCommand` + `isApproved`; `save` writes via `workspaces/hooks`'s `writeHookConfig` then
-  commits via `projects`'s `commitProjectFile`, and persists the override map via `saveHookOverrides` —
-  approval itself is untouched by a save.
+  needed), both keyed off the **project's root path** (never a workspace worktree — a script's
+  `approvalMaterial`/`missing` there reflects the project root's on-disk state, not any one workspace's
+  checkout). `get` loads `workspaces/hooks`'s `loadHookConfig` (the committed Shared tier +
+  `combineMode`) and `persistence`'s `loadHookOverrides` (the Local tier), computes `sharedCommittable`
+  via `projects`'s `isPathIgnored` against `WORKSPACE_HOOKS_CONFIG_FILE`, and for each of the four hooks
+  calls `resolveHookRun` (mode `"both"`, so both tiers' entries always resolve regardless of the
+  project's actual combine-mode) to fill a per-source `approved` map via `isApproved` — an entry whose
+  `approvalMaterial` is `null` (a missing script) is left out, not marked unapproved. `save` throws a
+  friendly, actionable error (never the raw `git add failed` string) if asked to write a non-empty
+  Shared map on a project where `sharedCommittable` is false; otherwise, whenever committable, it writes
+  via `writeHookConfig` and commits via `projects`'s `commitProjectFile` **even with an empty Shared
+  map**, so the chosen `combineMode` still persists as the project's default. It always persists the
+  Local tier via `saveHookOverrides`, then **approves on save**: `resolveHookRun` again (over what was
+  just written, mode `"both"`) and `approveHook` per resolved entry — so a workspace created right after
+  saving never sits at `hookAwaitingApproval` for something the user just configured on this machine.
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer`, `bootHost`,
   `BootHostOptions`, `BootedHost`.
 - **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for

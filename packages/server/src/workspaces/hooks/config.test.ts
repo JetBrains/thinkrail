@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { HookConfigFile } from "@thinkrail/contracts";
-import { loadHookConfig, resolveHookCommand, resolveHookRun, writeHookConfig } from "./config";
+import { loadHookConfig, resolveHookRun, writeHookConfig } from "./config";
 
 let worktree: string;
 
@@ -133,26 +133,6 @@ test("writeHookConfig with an empty hooks map still writes a file, not leaving i
 	writeHookConfig(worktree, { version: 1, combineMode: "both", hooks: {} });
 	expect(existsSync(join(worktree, ".thinkrail", "hooks.json"))).toBe(true);
 	expect(loadHookConfig(worktree)).toEqual({ version: 1, combineMode: "both", hooks: {} });
-});
-
-// --- resolveHookCommand (legacy; still called by hooks.ts/handlers.ts until later tasks) --------
-
-test("resolveHookCommand: an override replaces the committed value entirely", () => {
-	const committed = { onCreate: "pnpm install" };
-	const override = { onCreate: "pnpm install --frozen-lockfile" };
-	expect(resolveHookCommand("onCreate", committed, override)).toBe(
-		"pnpm install --frozen-lockfile",
-	);
-});
-
-test("resolveHookCommand: falls through to committed when there's no override for that hook", () => {
-	const committed = { onCreate: "pnpm install", onDelete: "rm -rf tmp" };
-	const override = { onCreate: "pnpm install --frozen-lockfile" };
-	expect(resolveHookCommand("onDelete", committed, override)).toBe("rm -rf tmp");
-});
-
-test("resolveHookCommand: undefined when neither committed nor override declares the hook", () => {
-	expect(resolveHookCommand("preMerge", {}, {})).toBeUndefined();
 });
 
 // --- resolveHookRun -----------------------------------------------------------------------
