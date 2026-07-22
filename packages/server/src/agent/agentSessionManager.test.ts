@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
+import { InMemoryCredentialStore, type ModelsRefreshResult } from "@earendil-works/pi-ai";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type { ExtUiRequest } from "@thinkrail/contracts";
@@ -56,6 +56,22 @@ const fauxB = createFauxCore({
 	models: [modelDef("fauxb")],
 	tokensPerSecond: 2000,
 });
+// Registered only DURING the catalog-refresh test below — the "newly shipped" model a refresh delivers.
+const fauxC = createFauxCore({
+	provider: "fauxc",
+	api: "fauxc",
+	models: [modelDef("fauxc")],
+	tokensPerSecond: 2000,
+});
+
+/** Provider config for `registerProvider` (baseUrl + apiKey are required when models are defined). */
+const cfg = (faux: typeof fauxA, id: string) => ({
+	api: faux.api,
+	baseUrl: "http://faux.local",
+	apiKey: "faux",
+	streamSimple: faux.streamSimple,
+	models: [{ ...modelDef(id), api: faux.api }],
+});
 
 const events = new Map<string, unknown[]>();
 const seen = (id: string) => JSON.stringify(events.get(id) ?? []);
@@ -68,26 +84,25 @@ function tmpCwd(prefix: string): string {
 }
 
 let priorAgentDir: string | undefined;
+let priorOffline: string | undefined;
+let runtime: ModelRuntime;
 
 beforeAll(async () => {
 	// Isolate pi's on-disk session files to a throwaway dir — the disk-reopen test writes real ones.
 	priorAgentDir = process.env.PI_CODING_AGENT_DIR;
 	process.env.PI_CODING_AGENT_DIR = tmpCwd("trpi-agentdir-");
 
+	// `listAvailableModels` fires a detached network catalog refresh (issue #98) — keep this suite
+	// hermetic the same way e2e is, via pi's own PI_OFFLINE convention. The refresh tests lift it locally.
+	priorOffline = process.env.PI_OFFLINE;
+	process.env.PI_OFFLINE = "1";
+
 	// A REAL runtime (in-memory credentials, no models.json, no network) with the faux providers
 	// registered as extension providers — their `streamSimple` does the real (in-process) work.
-	const runtime = await ModelRuntime.create({
+	runtime = await ModelRuntime.create({
 		credentials: new InMemoryCredentialStore(),
 		modelsPath: null,
 		allowModelNetwork: false,
-	});
-	const cfg = (faux: typeof fauxA, id: string) => ({
-		api: faux.api,
-		// baseUrl + apiKey are required when models are defined.
-		baseUrl: "http://faux.local",
-		apiKey: "faux",
-		streamSimple: faux.streamSimple,
-		models: [{ ...modelDef(id), api: faux.api }],
 	});
 	runtime.registerProvider("fauxa", cfg(fauxA, "fauxa"));
 	runtime.registerProvider("fauxb", cfg(fauxB, "fauxb"));
@@ -106,6 +121,8 @@ afterAll(() => {
 	for (const dir of tmpDirs) rmSync(dir, { recursive: true, force: true });
 	if (priorAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
 	else process.env.PI_CODING_AGENT_DIR = priorAgentDir;
+	if (priorOffline === undefined) delete process.env.PI_OFFLINE;
+	else process.env.PI_OFFLINE = priorOffline;
 });
 
 test("two sessions in two worktrees stream independently; disposing one leaves the other working", async () => {
@@ -153,6 +170,65 @@ test("listAvailableModels returns the configured (faux) models", async () => {
 	const ids = (await listAvailableModels()).map((m) => m.id);
 	expect(ids).toContain("fauxa");
 	expect(ids).toContain("fauxb");
+});
+
+/** Let a detached refresh task's `.then/.finally` chain settle (macrotask — nothing sleeps). */
+const refreshSettled = () => new Promise<void>((r) => setTimeout(r, 0));
+
+test("model.list is never blocked by a hanging catalog refresh (fire-and-forget, issue #98)", async () => {
+	delete process.env.PI_OFFLINE;
+	const originalRefresh = runtime.refresh.bind(runtime);
+	let releaseHang = () => {};
+	try {
+		runtime.refresh = () =>
+			new Promise<ModelsRefreshResult>((resolve) => {
+				releaseHang = () => resolve({ aborted: false, errors: new Map() });
+			});
+		// Resolves immediately from the snapshot while the "network" refresh hangs unresolved.
+		const ids = (await listAvailableModels()).map((m) => m.id);
+		expect(ids).toContain("fauxa");
+	} finally {
+		releaseHang(); // frees the single-flight slot so this test leaves no pending state behind
+		await refreshSettled();
+		runtime.refresh = originalRefresh;
+		process.env.PI_OFFLINE = "1";
+	}
+});
+
+test("a newly-shipped catalog model appears on a later model.list without a restart (issue #98)", async () => {
+	delete process.env.PI_OFFLINE;
+	const originalRefresh = runtime.refresh.bind(runtime);
+	let landRefresh = () => {};
+	let refreshCalls = 0;
+	try {
+		// The first "network" refresh delivers a new provider+model when it lands — deferred, so the first
+		// read provably serves the pre-refresh snapshot. Any later trigger settles instantly and delivers
+		// nothing, mirroring pi's freshness throttle.
+		runtime.refresh = () => {
+			refreshCalls += 1;
+			if (refreshCalls > 1) return Promise.resolve({ aborted: false, errors: new Map() });
+			return new Promise<ModelsRefreshResult>((resolve) => {
+				landRefresh = () => {
+					runtime.registerProvider("fauxc", cfg(fauxC, "fauxc"));
+					resolve({ aborted: false, errors: new Map() });
+				};
+			});
+		};
+
+		const before = (await listAvailableModels()).map((m) => m.id); // triggers the detached refresh
+		expect(before).not.toContain("fauxc");
+
+		landRefresh();
+		await refreshSettled();
+
+		const after = (await listAvailableModels()).map((m) => m.id);
+		expect(after).toContain("fauxc");
+	} finally {
+		await refreshSettled(); // let the second trigger's instant refresh settle before restoring
+		runtime.unregisterProvider("fauxc");
+		runtime.refresh = originalRefresh;
+		process.env.PI_OFFLINE = "1";
+	}
 });
 
 test("wire models expose only the allowlisted fields (no baseUrl/headers/other Model fields)", async () => {
