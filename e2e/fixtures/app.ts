@@ -9,7 +9,7 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type { Locator, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
 import type { Workspace } from "@thinkrail/contracts";
@@ -98,8 +98,20 @@ export function stagePlainFolder(): string {
  * Reset state, create a *fresh, dedicated* git repo (never `E2E_FIXTURE_REPO` — other specs share that one
  * and don't expect a `.thinkrail/hooks.json` on its `main`) with the given hook config committed at
  * `.thinkrail/hooks.json`, and point the stubbed picker at it. Returns the repo path.
+ *
+ * `opts.scripts` additionally commits one or more script files, keyed by their path relative to the repo
+ * root (e.g. `.thinkrail/hooks/setup.sh`) — for exercising a `{ script: "<path>" }` hook value that points
+ * at a real, committed file (propagates into a worktree exactly like `hooks.json` does).
+ *
+ * `opts.gitignoreThinkrail` commits a `.gitignore` covering `.thinkrail/` *before* `git add -A` runs, so
+ * anything under `.thinkrail/` (including `hooks.json` itself) is silently skipped by `add -A` rather than
+ * committed — `git add -A` never errors on an ignored path, it just leaves it untracked. This reproduces a
+ * project that can't commit a Shared hook at all (`project.hooks.get`'s `sharedCommittable: false`).
  */
-export function stageHookProject(hooks: Record<string, string>): string {
+export function stageHookProject(
+	hooks: Record<string, string>,
+	opts?: { scripts?: Record<string, string>; gitignoreThinkrail?: boolean },
+): string {
 	resetState();
 	const repo = mkdtempSync(join(tmpdir(), "thinkrail-e2e-hooks-"));
 	const git = (...args: string[]): void => {
@@ -109,8 +121,14 @@ export function stageHookProject(hooks: Record<string, string>): string {
 	git("config", "user.email", "e2e@thinkrail.test");
 	git("config", "user.name", "e2e");
 	writeFileSync(join(repo, "README.md"), "# hooks fixture\n");
+	if (opts?.gitignoreThinkrail) writeFileSync(join(repo, ".gitignore"), ".thinkrail/\n");
 	mkdirSync(join(repo, ".thinkrail"), { recursive: true });
 	writeFileSync(join(repo, ".thinkrail", "hooks.json"), JSON.stringify(hooks, null, 2));
+	for (const [relPath, contents] of Object.entries(opts?.scripts ?? {})) {
+		const abs = join(repo, relPath);
+		mkdirSync(dirname(abs), { recursive: true });
+		writeFileSync(abs, contents);
+	}
 	git("add", "-A");
 	git("commit", "-m", "init + hooks.json");
 	writeFileSync(E2E_PICK_DIR_POINTER, repo);
