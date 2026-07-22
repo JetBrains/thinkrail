@@ -49,7 +49,13 @@ export default function MonacoDiff({
 			loading={
 				<div className="flex h-full items-center justify-center text-hint">Loading diff…</div>
 			}
-			options={{ ...sharedEditorOptions(), renderSideBySide: view === "split" }}
+			// `useInlineViewWhenSpaceIsLimited: false`: the pane-header toggle must do what it says — without
+			// it Monaco silently renders Split as inline on a narrow pane, which reads as a broken toggle.
+			options={{
+				...sharedEditorOptions(),
+				renderSideBySide: view === "split",
+				useInlineViewWhenSpaceIsLimited: false,
+			}}
 		/>
 	);
 }

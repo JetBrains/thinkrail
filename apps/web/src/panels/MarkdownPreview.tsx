@@ -49,10 +49,33 @@ const DOCUMENT_PROSE = [
 ].join(" ");
 
 /**
+ * The document pipeline shared by the plain preview and `RenderedDiff`: GFM+shiki via `chat/Markdown`
+ * wearing the document prose skin, with alert callouts, heading ids, workspace-aware links/images, and
+ * a leading YAML frontmatter block stripped. Pure — also safe under `renderToStaticMarkup`.
+ */
+export function MarkdownDocument({
+	content,
+	workspaceId,
+	path,
+}: {
+	content: string;
+	workspaceId: string;
+	path: string;
+}) {
+	return (
+		<Markdown
+			text={stripFrontmatter(content)}
+			className={DOCUMENT_PROSE}
+			remarkPlugins={[remarkGithubAlerts, remarkHeadingIds]}
+			components={{ ...alertComponents, ...documentComponents({ workspaceId, path }) }}
+		/>
+	);
+}
+
+/**
  * Rendered markdown view for a `.md` file tab. Owns the document-view chrome (scroll + a centered,
- * padded reading column capped at a comfortable measure + the document skin); the GFM+shiki rendering is
- * the reused `chat/Markdown`. Lazy-loaded — the markdown+shiki chunk only arrives when a markdown tab is
- * shown in preview mode.
+ * padded reading column capped at a comfortable measure); the content is the shared `MarkdownDocument`.
+ * Lazy-loaded — the markdown+shiki chunk only arrives when a markdown tab is shown in preview mode.
  */
 export default function MarkdownPreview({
 	content,
@@ -66,12 +89,7 @@ export default function MarkdownPreview({
 	return (
 		<div data-testid="markdown-preview" className="h-full overflow-auto bg-surface-content">
 			<article className="mx-auto max-w-[78ch] px-xl py-lg">
-				<Markdown
-					text={stripFrontmatter(content)}
-					className={DOCUMENT_PROSE}
-					remarkPlugins={[remarkGithubAlerts, remarkHeadingIds]}
-					components={{ ...alertComponents, ...documentComponents({ workspaceId, path }) }}
-				/>
+				<MarkdownDocument content={content} workspaceId={workspaceId} path={path} />
 			</article>
 		</div>
 	);

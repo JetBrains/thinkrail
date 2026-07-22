@@ -104,7 +104,9 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   file on disk (no fs re-read / source toggle) — used for on-demand snapshots like the plan-as-markdown
   export. **`DiffTab`** is a read-only Monaco diff of one
 changed file vs the workspace's base branch (id `${workspaceId}:diff:${path}` — one tab per file;
-`view` split|inline via **`setDiffTabView`**, split the default; opened by `ChangesPanel`).
+`view` split|inline via **`setDiffTabView`**, split the default; a markdown diff's `rendered` flag via
+**`setDiffTabRendered`** swaps raw lines for compiled documents — `DiffPane` offers it for markdown
+paths only; opened by `ChangesPanel`).
 The `EditorTab` (`FileTab` | `ChatTab` | `DocTab` | `DiffTab`) + `TerminalTab` + `ClosedChat` +
   `SessionRuntime` types. (Chat *render* types + renderers live in the `chat` module.) The pure context
   selectors in `selectors.ts` resolve the active `Workspace`, its owning project id, and the shell's context

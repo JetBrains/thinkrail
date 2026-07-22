@@ -57,9 +57,12 @@ export interface DocTab {
 	docPath: string;
 }
 /**
- * A read-only Monaco diff of one changed file vs the workspace's base branch (opened from the Changes
- * panel; one tab per file). `view` is the render mode — absent = split (side-by-side), the default.
+ * A read-only diff of one changed file vs the workspace's base branch (opened from the Changes panel;
+ * one tab per file). `view` is the layout — absent = split (side-by-side), the default. `rendered`
+ * (markdown paths only — `DiffPane` gates the toggle) swaps raw Monaco lines for compiled documents:
+ * split shows base | worktree previews side by side, inline shows the worktree preview alone.
  */
+export type DiffTabView = "split" | "inline";
 export interface DiffTab {
 	kind: "diff";
 	id: string; // `${workspaceId}:diff:${path}` — stable, so re-clicking a file focuses its tab
@@ -68,7 +71,8 @@ export interface DiffTab {
 	path: string;
 	original: string;
 	modified: string;
-	view?: "split" | "inline";
+	view?: DiffTabView;
+	rendered?: boolean;
 	/** The workspace fs tick the contents were loaded at — same live-refresh contract as `FileTab`. */
 	loadedTick?: number;
 }
@@ -455,7 +459,8 @@ interface AppState {
 	setActiveTab: (id: string) => void;
 	/** Set a markdown file tab's view mode (rendered ↔ source); kept on the tab so it survives tab switches. */
 	setFileTabView: (id: string, view: "rendered" | "source") => void;
-	setDiffTabView: (id: string, view: "split" | "inline") => void;
+	setDiffTabView: (id: string, view: DiffTabView) => void;
+	setDiffTabRendered: (id: string, rendered: boolean) => void;
 	/** How the Changes panel lays out its changed files — flat `list` or a `tree` of folders. App-wide,
 	 * persisted in the store (not per workspace) so the choice survives workspace switches. */
 	changesView: "list" | "tree";
@@ -753,6 +758,19 @@ export const useAppStore = create<AppState>((set, get) => ({
 				tabsByWorkspace: {
 					...s.tabsByWorkspace,
 					[wsId]: tabs.map((t) => (t.id === id && t.kind === "diff" ? { ...t, view } : t)),
+				},
+			};
+		}),
+	setDiffTabRendered: (id, rendered) =>
+		set((s) => {
+			const wsId = s.activeWorkspaceId;
+			if (!wsId) return {};
+			const tabs = s.tabsByWorkspace[wsId] ?? [];
+			if (!tabs.some((t) => t.id === id && t.kind === "diff")) return {};
+			return {
+				tabsByWorkspace: {
+					...s.tabsByWorkspace,
+					[wsId]: tabs.map((t) => (t.id === id && t.kind === "diff" ? { ...t, rendered } : t)),
 				},
 			};
 		}),
