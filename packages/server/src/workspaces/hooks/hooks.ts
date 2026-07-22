@@ -1,8 +1,10 @@
-// Orchestrates one hook run: resolve its command (committed + host-local override), gate it behind
-// approval, execute it, and publish every state transition through the injected publisher (the same
-// inversion `workspaces`/`terminal`/`settings` use) so the host can fan it out over `workspace.hook`.
+// Orchestrates one hook's run: resolve its ordered list of run entries (Shared/Local, combined per the
+// effective `CombineMode`), gate each entry behind its own per-source approval, execute it, and publish
+// every state transition through the injected publisher (the same inversion `workspaces`/`terminal`/
+// `settings` use) so the host can fan it out over `workspace.hook`.
 import type {
 	HookName,
+	HookSource,
 	HookStatus,
 	Project,
 	Workspace,
@@ -10,7 +12,7 @@ import type {
 } from "@thinkrail/contracts";
 import { loadHookOverrides, loadWorkspaces, saveWorkspaces } from "../../persistence";
 import { approveHook, isApproved } from "./approvals";
-import { loadHookConfig, resolveHookCommand } from "./config";
+import { loadHookConfig, type ResolvedHookEntry, resolveHookRun } from "./config";
 import { runShellCommand } from "./runner";
 
 type HookPublisher = (event: WorkspaceHookEvent) => void;
@@ -24,16 +26,26 @@ export function setHookPublisher(fn: HookPublisher | null): void {
 }
 
 /**
- * Persist `hook`'s latest state onto its workspace record (`Workspace.hookStatus`) — durability for a
- * reconnecting/reloaded client, not the live update path (an already-connected client updates from the
- * `workspace.hook` event itself). Best-effort: a workspace archived mid-run (record already gone) is a
- * silent no-op — there's nothing left to persist onto.
+ * Persist `hook`'s latest per-`HookSource` state onto its workspace record (`Workspace.hookStatus`) —
+ * durability for a reconnecting/reloaded client, not the live update path (an already-connected client
+ * updates from the `workspace.hook` event itself). Merges into the hook's existing entry so the sibling
+ * source's last-known status (e.g. Shared sitting at `succeeded` while Local is now `running`) is never
+ * clobbered. Best-effort: a workspace archived mid-run (record already gone) is a silent no-op — there's
+ * nothing left to persist onto.
  */
-function persistHookStatus(workspaceId: string, hook: HookName, status: HookStatus): void {
+function persistHookStatus(
+	workspaceId: string,
+	hook: HookName,
+	source: HookSource,
+	status: HookStatus,
+): void {
 	const all = loadWorkspaces();
 	const target = all.find((w) => w.id === workspaceId);
 	if (!target) return;
-	target.hookStatus = { ...target.hookStatus, [hook]: status };
+	target.hookStatus = {
+		...target.hookStatus,
+		[hook]: { ...target.hookStatus?.[hook], [source]: status },
+	};
 	saveWorkspaces(all);
 }
 
@@ -41,25 +53,25 @@ function emit(event: WorkspaceHookEvent): void {
 	publishHookEvent?.(event);
 	switch (event.kind) {
 		case "hookAwaitingApproval":
-			persistHookStatus(event.workspaceId, event.hook, {
+			persistHookStatus(event.workspaceId, event.hook, event.source, {
 				state: "awaitingApproval",
 				command: event.command,
 			});
 			break;
 		case "hookStarted":
-			persistHookStatus(event.workspaceId, event.hook, {
+			persistHookStatus(event.workspaceId, event.hook, event.source, {
 				state: "running",
 				command: event.command,
 			});
 			break;
 		case "hookSucceeded":
-			persistHookStatus(event.workspaceId, event.hook, {
+			persistHookStatus(event.workspaceId, event.hook, event.source, {
 				state: "succeeded",
 				command: event.command,
 			});
 			break;
 		case "hookFailed":
-			persistHookStatus(event.workspaceId, event.hook, {
+			persistHookStatus(event.workspaceId, event.hook, event.source, {
 				state: "failed",
 				command: event.command,
 				exitCode: event.exitCode,
@@ -83,44 +95,53 @@ function buildHookEnv(workspace: Workspace): Record<string, string | undefined> 
 	};
 }
 
-/** Resolve `hook`'s command from this workspace's own worktree (committed) + the host-local override for
- * its project. */
-function resolveCommand(
-	hook: HookName,
-	workspace: Workspace,
-	project: Project,
-): string | undefined {
-	const committed = loadHookConfig(workspace.worktreePath);
-	const override = loadHookOverrides()[project.id] ?? {};
-	return resolveHookCommand(hook, committed, override);
-}
-
 /**
- * Run `hook` for this workspace/project if it has a resolved command and that command is approved. Never
- * throws — any failure (missing approval, non-zero exit, timeout, an unexpected error) resolves to
- * `ok: false`; callers decide what that means for their own hook (abort a merge, or just log it).
+ * Run one resolved entry to completion, gating it behind its own approval first. Returns whether it's safe
+ * to continue on to the next entry in the list — `true` only for a clean, approved, zero-exit run; `false`
+ * for a missing script, unapproved material, a non-zero exit, or an unexpected error — which is exactly
+ * what gives the caller its stop-on-first-non-clean-entry behavior. Never throws: an error the subprocess
+ * layer itself raises (as opposed to a non-zero exit, which it reports normally) is caught and converted
+ * into a `hookFailed`, the same public shape as any other failure.
  */
-async function runHook(
+async function runHookEntry(
 	hook: HookName,
 	workspace: Workspace,
 	project: Project,
+	entry: ResolvedHookEntry,
 	timeoutMs: number | undefined,
-): Promise<{ ok: boolean }> {
-	let command: string | undefined;
+): Promise<boolean> {
+	const { source, display } = entry;
 	try {
-		command = resolveCommand(hook, workspace, project);
-		if (!command) return { ok: true }; // nothing declared for this hook — not a failure
-
-		if (!isApproved(project.id, hook, command)) {
+		if (entry.missing) {
+			emit({
+				kind: "hookFailed",
+				workspaceId: workspace.id,
+				workspaceName: workspace.name,
+				projectId: project.id,
+				hook,
+				source,
+				command: display,
+				exitCode: -1,
+			});
+			return false;
+		}
+		// `approvalMaterial` is `null` only when `entry.missing` is set (nothing to hash) — already handled
+		// above — but the type doesn't encode that link, so this null check both guards `isApproved` (which
+		// takes a plain `string`) and doubles as the "may be null → not approved" case the caller must honor.
+		if (
+			entry.approvalMaterial === null ||
+			!isApproved(project.id, hook, source, entry.approvalMaterial)
+		) {
 			emit({
 				kind: "hookAwaitingApproval",
 				workspaceId: workspace.id,
 				workspaceName: workspace.name,
 				projectId: project.id,
 				hook,
-				command,
+				source,
+				command: display,
 			});
-			return { ok: false };
+			return false;
 		}
 
 		emit({
@@ -129,10 +150,11 @@ async function runHook(
 			workspaceName: workspace.name,
 			projectId: project.id,
 			hook,
-			command,
+			source,
+			command: display,
 		});
 		const result = await runShellCommand({
-			command,
+			...(entry.kind === "script" ? { script: entry.exec } : { command: entry.exec }),
 			cwd: workspace.worktreePath,
 			env: buildHookEnv(workspace),
 			// `exactOptionalPropertyTypes` forbids passing an explicit `timeoutMs: undefined` — omit the key
@@ -145,6 +167,7 @@ async function runHook(
 					workspaceName: workspace.name,
 					projectId: project.id,
 					hook,
+					source,
 					chunk,
 				}),
 		});
@@ -155,7 +178,8 @@ async function runHook(
 				workspaceName: workspace.name,
 				projectId: project.id,
 				hook,
-				command,
+				source,
+				command: display,
 			});
 		} else {
 			emit({
@@ -164,11 +188,12 @@ async function runHook(
 				workspaceName: workspace.name,
 				projectId: project.id,
 				hook,
-				command,
+				source,
+				command: display,
 				exitCode: result.exitCode,
 			});
 		}
-		return { ok: result.ok };
+		return result.ok;
 	} catch (error) {
 		emit({
 			kind: "hookFailed",
@@ -176,17 +201,52 @@ async function runHook(
 			workspaceName: workspace.name,
 			projectId: project.id,
 			hook,
-			command: command ?? "(unknown)",
+			source,
+			command: display,
 			exitCode: -1,
 		});
-		console.warn(`workspace hook ${hook} failed for ${workspace.id}: ${error}`);
-		return { ok: false };
+		console.warn(`workspace hook ${hook} (${source}) failed for ${workspace.id}: ${error}`);
+		return false;
 	}
+}
+
+/**
+ * Run `hook` for this workspace/project: resolve its ordered list of run entries — Shared/Local per the
+ * effective `CombineMode` (`workspace.hookCombineMode`, falling back to the project's committed default,
+ * falling back to `"both"`) — then run them one at a time, in that order. Stops at the first entry that
+ * isn't a clean approved zero-exit run (`&&` semantics) and returns `{ ok: false }` without touching the
+ * remaining entries; `{ ok: true }` only when every entry ran and succeeded, including the vacuous case
+ * where the list is empty (nothing declared for this hook is not a failure). Never throws — any failure
+ * mode (missing approval, a missing script, a non-zero exit, timeout, an unexpected error) resolves to
+ * `ok: false`; callers decide what that means for their own hook (abort a merge, or just log it).
+ */
+async function runHook(
+	hook: HookName,
+	workspace: Workspace,
+	project: Project,
+	timeoutMs: number | undefined,
+): Promise<{ ok: boolean }> {
+	const committed = loadHookConfig(workspace.worktreePath);
+	const mode = workspace.hookCombineMode ?? committed.combineMode ?? "both";
+	const local = loadHookOverrides()[project.id] ?? {};
+	const entries = resolveHookRun({
+		hook,
+		committed,
+		local,
+		mode,
+		basePath: workspace.worktreePath,
+	});
+
+	for (const entry of entries) {
+		const ok = await runHookEntry(hook, workspace, project, entry, timeoutMs);
+		if (!ok) return { ok: false };
+	}
+	return { ok: true };
 }
 
 /** Fire the `onCreate` hook in the background — never blocks workspace creation. Deferred to a microtask:
  * `runHook`'s own body runs synchronously up to its first `await` (normal JS async-function semantics), so
- * without this, `resolveCommand`/`isApproved`/the `hookStarted` emit would run inline on this call's stack
+ * without this, entry resolution/`isApproved`/the `hookStarted` emit would run inline on this call's stack
  * — this call must return before any of that happens. */
 export function runOnCreateHook(workspace: Workspace, project: Project): void {
 	queueMicrotask(() => void runHook("onCreate", workspace, project, undefined));
@@ -211,5 +271,5 @@ export function runPostMergeHook(workspace: Workspace, project: Project): void {
 	queueMicrotask(() => void runHook("postMerge", workspace, project, undefined));
 }
 
-export { loadHookConfig, resolveHookCommand, writeHookConfig } from "./config";
+export { loadHookConfig, resolveHookCommand, resolveHookRun, writeHookConfig } from "./config";
 export { approveHook, isApproved };
