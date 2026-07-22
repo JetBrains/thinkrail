@@ -35,6 +35,57 @@ loader.config({ monaco });
 
 export const THEME = "thinkrail";
 
+// Resolved language ids, cached per path. The probe model below is disposed immediately, and the answer
+// is pure per path, so a given file is probed at most once.
+const languageByPath = new Map<string, string>();
+
+/**
+ * Resolve a Monaco language id from a file path using Monaco's *own* built-in resolver — the same
+ * inference the file `Editor` gets implicitly when it creates a model without a language.
+ * `@monaco-editor/react`'s `DiffEditor` instead defaults to `"text"` when no `language` is passed, so the
+ * diff renders unhighlighted unless we resolve the language ourselves. Rather than reimplement Monaco's
+ * matching (extensions + filenames + glob + first-line), we probe with a throwaway model on a private
+ * `lang-probe://` scheme (so it can never collide with a real model), read what Monaco guessed, and
+ * dispose it — so the diff and the file viewer resolve language through exactly one path. Memoized.
+ */
+export function languageForPath(path: string): string {
+	const cached = languageByPath.get(path);
+	if (cached !== undefined) return cached;
+	const uri = monaco.Uri.parse(`lang-probe://probe/${path}`);
+	const existing = monaco.editor.getModel(uri);
+	const model = existing ?? monaco.editor.createModel("", undefined, uri);
+	const id = model.getLanguageId();
+	if (!existing) model.dispose();
+	languageByPath.set(path, id);
+	return id;
+}
+
+/** Raw CSS custom property off the document root (no hex canonicalization — for font tokens, not colors). */
+function cssVar(name: string): string | undefined {
+	return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || undefined;
+}
+
+/**
+ * The text/style options shared by the file viewer (`MonacoEditor`) and the diff tab (`MonacoDiff`), so
+ * plain code and a diff of that code render identically. Font size/family/line-height track the app tokens
+ * (`--font-base`, `--font-mono`, `--line-height`) — the same tokens the rest of the UI uses — instead of
+ * Monaco's built-in monospace defaults. Read at render time (like the theme) so DOM tokens are resolved.
+ */
+export function sharedEditorOptions() {
+	const fontSize = Number.parseFloat(cssVar("--font-base") ?? "") || 13;
+	// `--line-height` is a unitless multiplier (e.g. 1.6); Monaco reads 0<v<8 as a multiplier of fontSize.
+	const lineHeight = Number.parseFloat(cssVar("--line-height") ?? "") || undefined;
+	return {
+		readOnly: true,
+		minimap: { enabled: false },
+		scrollBeyondLastLine: false,
+		automaticLayout: true,
+		fontSize,
+		fontFamily: cssVar("--font-mono") ?? "monospace",
+		...(lineHeight && lineHeight > 0 ? { lineHeight } : {}),
+	} as const;
+}
+
 /** Read a CSS custom property off the document root, so Monaco's chrome tracks the active theme tokens.
  * Canonicalized to hex: the built CSS is minified (`#ffffff` → `#fff`, `#808080` → `gray`), and Monaco
  * accepts only hex — an unparseable value reads as unset (`""`) and is dropped by the callers. */
