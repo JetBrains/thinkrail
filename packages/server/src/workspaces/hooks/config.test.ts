@@ -225,7 +225,7 @@ test('resolveHookRun: mode "local" returns only the local entry, ignoring shared
 	]);
 });
 
-test('resolveHookRun: mode "both" skips a tier that doesn\'t declare the hook', () => {
+test('resolveHookRun: mode "both" skips local when it doesn\'t declare the hook', () => {
 	const committed: HookConfigFile = {
 		version: 1,
 		combineMode: "both",
@@ -245,6 +245,27 @@ test('resolveHookRun: mode "both" skips a tier that doesn\'t declare the hook', 
 			exec: "npm i",
 			display: "npm i",
 			approvalMaterial: "npm i",
+		},
+	]);
+});
+
+test('resolveHookRun: mode "both" skips shared when it doesn\'t declare the hook', () => {
+	const committed: HookConfigFile = { version: 1, combineMode: "both", hooks: {} };
+	const local = { onCreate: "echo local-only" };
+	const result = resolveHookRun({
+		hook: "onCreate",
+		committed,
+		local,
+		mode: "both",
+		basePath: worktree,
+	});
+	expect(result).toEqual([
+		{
+			source: "local",
+			kind: "inline",
+			exec: "echo local-only",
+			display: "echo local-only",
+			approvalMaterial: "echo local-only",
 		},
 	]);
 });
