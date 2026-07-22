@@ -1,13 +1,33 @@
 import type { HistoryScope, MessageHit, PromptHit } from "@thinkrail/contracts";
-import { Save } from "lucide-react";
+import { Check, Save } from "lucide-react";
 import { type KeyboardEvent, useEffect, useRef } from "react";
-import { type HistorySearchState, resolveHistorySelection } from "./useHistorySearch";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+	type HistorySearchState,
+	type HistorySelection,
+	resolveHistorySelection,
+	SCOPE_ORDER,
+} from "./useHistorySearch";
 
 const SCOPE_LABELS: Record<HistoryScope["kind"], string> = {
 	chat: "Chat",
 	workspace: "Workspace",
 	project: "Project",
 	all: "All",
+};
+
+/** The scope picker's dropdown labels (R2) — fuller than the terse badge label above (a menu has room a
+ * pill doesn't), matching the design doc's prose exactly: "This chat / Workspace / Project / Everywhere". */
+const SCOPE_MENU_LABELS: Record<HistoryScope["kind"], string> = {
+	chat: "This chat",
+	workspace: "Workspace",
+	project: "Project",
+	all: "Everywhere",
 };
 
 /** Cmd on Mac/iOS, Ctrl elsewhere — matches the modifier `onKeyDown` below actually checks
@@ -174,6 +194,72 @@ function MessageRow({
 	);
 }
 
+/** A prompt hit's preview footer: chat title (when set) / a workspace chip whenever the hit has a
+ * `workspaceId` — unlike `PromptRow`'s chip, never scope-gated, since a single detail pane has room a
+ * dense list row doesn't — / relative time, `·`-joined like every other crumb in this file. */
+function PromptPreviewFooter({
+	hit,
+	workspaceName,
+}: {
+	hit: PromptHit;
+	workspaceName: string | undefined;
+}) {
+	const parts = [
+		hit.sessionTitle,
+		hit.workspaceId ? (workspaceName ?? "workspace") : undefined,
+		relativeTime(hit.timestamp),
+	].filter((part): part is string => !!part);
+	return <>{parts.join(" · ")}</>;
+}
+
+/**
+ * The zoomed stage's right-hand pane (R1) — a full-text preview of the flat-list keyboard-selected item.
+ * Always mounted while `stage === "zoomed"` (never in `compact`), so `data-testid="history-preview"`'s
+ * mere presence in the DOM doubles as the zoomed/compact signal. `item` is `null` when there's nothing
+ * selected (an empty result set) — renders an empty panel then, never a crash. Body reuses `Highlight`
+ * **verbatim** (the same helper `PromptRow`/`MessageRow` use for their truncated text) over the hit's
+ * full `text` — never a row's first-line/snippet truncation — so a long prompt's tail, cut off in the
+ * list, reads in full here.
+ */
+function HistoryPreview({
+	item,
+	query,
+	workspaceName,
+	className,
+}: {
+	item: HistorySelection | null;
+	query: string;
+	workspaceName: string | undefined;
+	className: string;
+}) {
+	return (
+		<div data-testid="history-preview" className={`flex flex-col overflow-hidden ${className}`}>
+			{item ? (
+				<>
+					<div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap break-words p-sm text-sm text-text">
+						<Highlight text={item.hit.text} query={query} />
+					</div>
+					<div className="shrink-0 border-t border-border2 px-sm py-xs text-[11px] text-hint">
+						{item.kind === "prompt" ? (
+							<PromptPreviewFooter hit={item.hit} workspaceName={workspaceName} />
+						) : (
+							messageCrumb(item.hit)
+						)}
+					</div>
+				</>
+			) : null}
+		</div>
+	);
+}
+
+/** A message hit's preview footer — the literal `sessionTitle · role · relative time` crumb (R1 spec),
+ * deliberately simpler than `MessageRow`'s own header (which also flags an unmapped session): the row
+ * immediately to this preview's left already carries that flag, so the preview isn't the only place it
+ * shows. */
+function messageCrumb(hit: MessageHit): string {
+	return `${hit.sessionTitle || hit.cwd.split("/").pop() || "session"} · ${hit.role} · ${relativeTime(hit.timestamp)}`;
+}
+
 export interface HistoryOverlayProps {
 	state: HistorySearchState;
 	/** `workspaceId → display name` for every known workspace, so the "project"/"all" scope's cross-
@@ -196,6 +282,10 @@ export interface HistoryOverlayProps {
 	 * Cmd/Ctrl+S while that row is the keyboard selection. Opens `TemplateEditorDialog` body-prefilled;
 	 * `ChatView` owns the dialog, this overlay only reports the hit. */
 	onSaveAsTemplate: (hit: PromptHit) => void;
+	/** R2's mouse path: a direct scope pick from the badge's dropdown menu. `onCycleScope` stays the
+	 * `Ctrl+R` keyboard path, unaffected — both just set the same underlying scope state
+	 * (`useHistorySearch.ts`'s `setScope`/`cycleScope` reset the results selection identically). */
+	onSetScope: (kind: HistoryScope["kind"]) => void;
 }
 
 /**
@@ -215,6 +305,7 @@ export function HistoryOverlay({
 	onInsertAndSend,
 	onOpenMessage,
 	onSaveAsTemplate,
+	onSetScope,
 }: HistoryOverlayProps) {
 	const { open, stage, query, scope, result, selected, error } = state;
 	const inputRef = useRef<HTMLInputElement>(null);
@@ -305,6 +396,79 @@ export function HistoryOverlay({
 		!!result && (result.prompts.length > 0 || (stage === "zoomed" && result.messages.length > 0));
 	const isEmpty = !!result && !result.indexing && !hasResults;
 
+	// The zoomed stage's preview (R1) mirrors whatever the flat-list `selected` index currently resolves
+	// to — the same resolution `Enter`/Cmd/Ctrl+S already use above, so the preview and the keyboard
+	// actions can never disagree on "the selected item." `null` (no result yet, or an empty result set)
+	// renders an empty panel, never a crash — see `HistoryPreview`.
+	const selectedItem = resolveHistorySelection(stage, result, selected);
+	const selectedWorkspaceName = selectedItem?.hit.workspaceId
+		? workspaceNames[selectedItem.hit.workspaceId]
+		: undefined;
+
+	const resultsBody = error ? (
+		<div data-testid="history-error" className="p-md text-center text-red text-sm">
+			search unavailable
+		</div>
+	) : !result ? null : (
+		<>
+			{result.indexing ? (
+				<div
+					data-testid="history-indexing"
+					className="px-sm py-1 text-center text-hint text-[11px]"
+				>
+					indexing history…
+				</div>
+			) : null}
+			{hasResults ? (
+				<div className="flex flex-col gap-xs p-xs">
+					{result.prompts.length > 0 ? (
+						<div className="flex flex-col gap-0.5">
+							<div className="flex items-center justify-between px-sm py-0.5 text-hint text-xs uppercase tracking-wide">
+								<span>Prompts</span>
+								<span data-testid="history-counts">
+									{promptCount}/{result.promptTotal}
+								</span>
+							</div>
+							{result.prompts.map((hit, i) => (
+								<PromptRow
+									key={`${hit.sessionId}:${hit.timestamp}`}
+									hit={hit}
+									query={query}
+									scope={scope}
+									workspaceName={hit.workspaceId ? workspaceNames[hit.workspaceId] : undefined}
+									isSelected={i === selected}
+									onPick={() => onInsert(hit)}
+									onSaveAsTemplate={() => onSaveAsTemplate(hit)}
+								/>
+							))}
+						</div>
+					) : null}
+					{stage === "zoomed" && result.messages.length > 0 ? (
+						<div className="flex flex-col gap-0.5">
+							<div className="flex items-center justify-between px-sm py-0.5 text-hint text-xs uppercase tracking-wide">
+								<span>Messages</span>
+								<span data-testid="history-counts">
+									{messageCount}/{result.messageTotal}
+								</span>
+							</div>
+							{result.messages.map((hit, i) => (
+								<MessageRow
+									key={`${hit.sessionId}:${hit.messageIndex}`}
+									hit={hit}
+									query={query}
+									isSelected={result.prompts.length + i === selected}
+									onPick={() => hit.workspaceId && onOpenMessage(hit)}
+								/>
+							))}
+						</div>
+					) : null}
+				</div>
+			) : isEmpty ? (
+				<div className="p-md text-center text-muted text-sm">no matches</div>
+			) : null}
+		</>
+	);
+
 	return (
 		<div
 			data-testid="history-overlay"
@@ -321,88 +485,65 @@ export function HistoryOverlay({
 					placeholder="Search prompts and conversations…"
 					className="min-w-0 flex-1 bg-transparent text-sm text-text outline-none placeholder:text-hint"
 				/>
-				<button
-					type="button"
-					data-testid="history-scope"
-					data-scope={scope.kind}
-					onClick={onCycleScope}
-					className="flex shrink-0 items-center gap-xs rounded-full border border-border2 bg-bg px-sm py-0.5 text-[11px] text-muted hover:bg-hover"
-				>
-					<span>{SCOPE_LABELS[scope.kind]}</span>
-					<span className="text-hint">⌃R</span>
-				</button>
-			</div>
-			<div
-				ref={resultsRef}
-				data-testid="history-results"
-				className={`overflow-y-auto ${stage === "zoomed" ? "max-h-[75vh]" : "max-h-[40vh]"}`}
-			>
-				{error ? (
-					<div data-testid="history-error" className="p-md text-center text-red text-sm">
-						search unavailable
-					</div>
-				) : !result ? null : (
-					<>
-						{result.indexing ? (
-							<div
-								data-testid="history-indexing"
-								className="px-sm py-1 text-center text-hint text-[11px]"
+				<DropdownMenu>
+					<DropdownMenuTrigger
+						data-testid="history-scope"
+						data-scope={scope.kind}
+						className="flex shrink-0 items-center gap-xs rounded-full border border-border2 bg-bg px-sm py-0.5 text-[11px] text-muted outline-none hover:bg-hover"
+					>
+						<span>{SCOPE_LABELS[scope.kind]}</span>
+						<span className="text-hint">⌃R</span>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent
+						align="end"
+						// Radix's default on close is to return focus to the trigger — override it so focus
+						// lands back on the query input instead, the same place it is right after `Enter`
+						// inserts a prompt. `Ctrl+R` cycling only fires from the input's own `onKeyDown`, so
+						// this is also what keeps it working right after a mouse pick.
+						onCloseAutoFocus={(e) => {
+							e.preventDefault();
+							inputRef.current?.focus();
+						}}
+					>
+						{SCOPE_ORDER.map((kind) => (
+							<DropdownMenuItem
+								key={kind}
+								data-testid="history-scope-option"
+								data-scope={kind}
+								onSelect={() => onSetScope(kind)}
 							>
-								indexing history…
-							</div>
-						) : null}
-						{hasResults ? (
-							<div className="flex flex-col gap-xs p-xs">
-								{result.prompts.length > 0 ? (
-									<div className="flex flex-col gap-0.5">
-										<div className="flex items-center justify-between px-sm py-0.5 text-hint text-xs uppercase tracking-wide">
-											<span>Prompts</span>
-											<span data-testid="history-counts">
-												{promptCount}/{result.promptTotal}
-											</span>
-										</div>
-										{result.prompts.map((hit, i) => (
-											<PromptRow
-												key={`${hit.sessionId}:${hit.timestamp}`}
-												hit={hit}
-												query={query}
-												scope={scope}
-												workspaceName={
-													hit.workspaceId ? workspaceNames[hit.workspaceId] : undefined
-												}
-												isSelected={i === selected}
-												onPick={() => onInsert(hit)}
-												onSaveAsTemplate={() => onSaveAsTemplate(hit)}
-											/>
-										))}
-									</div>
-								) : null}
-								{stage === "zoomed" && result.messages.length > 0 ? (
-									<div className="flex flex-col gap-0.5">
-										<div className="flex items-center justify-between px-sm py-0.5 text-hint text-xs uppercase tracking-wide">
-											<span>Messages</span>
-											<span data-testid="history-counts">
-												{messageCount}/{result.messageTotal}
-											</span>
-										</div>
-										{result.messages.map((hit, i) => (
-											<MessageRow
-												key={`${hit.sessionId}:${hit.messageIndex}`}
-												hit={hit}
-												query={query}
-												isSelected={result.prompts.length + i === selected}
-												onPick={() => hit.workspaceId && onOpenMessage(hit)}
-											/>
-										))}
-									</div>
-								) : null}
-							</div>
-						) : isEmpty ? (
-							<div className="p-md text-center text-muted text-sm">no matches</div>
-						) : null}
-					</>
-				)}
+								<Check className={kind === scope.kind ? "size-3.5" : "size-3.5 invisible"} />
+								<span>{SCOPE_MENU_LABELS[kind]}</span>
+							</DropdownMenuItem>
+						))}
+					</DropdownMenuContent>
+				</DropdownMenu>
 			</div>
+			{stage === "zoomed" ? (
+				<div className="flex flex-col overflow-hidden md:flex-row">
+					<div
+						ref={resultsRef}
+						data-testid="history-results"
+						className="max-h-[37.5vh] overflow-y-auto md:max-h-[75vh] md:w-[55%]"
+					>
+						{resultsBody}
+					</div>
+					<HistoryPreview
+						item={selectedItem}
+						query={query}
+						workspaceName={selectedWorkspaceName}
+						className="max-h-[37.5vh] border-border2 border-t md:max-h-[75vh] md:w-[45%] md:border-t-0 md:border-l"
+					/>
+				</div>
+			) : (
+				<div
+					ref={resultsRef}
+					data-testid="history-results"
+					className="max-h-[40vh] overflow-y-auto"
+				>
+					{resultsBody}
+				</div>
+			)}
 			{stage === "compact" && !error && result && !result.indexing && result.messageTotal > 0 ? (
 				<button
 					type="button"

@@ -436,3 +436,185 @@ test("ArrowDown repeatedly scrolls the keyboard-selected row into view inside th
 		expect(rowBox.y + rowBox.height).toBeLessThanOrEqual(resultsBox.y + resultsBox.height);
 	}
 });
+
+// R1: the zoomed stage's two-pane preview (`data-testid="history-preview"`) shows the keyboard-selected
+// item's FULL text — never the row's truncated first line — with query terms highlighted the same way a
+// row highlights its own text (`Highlight` is reused verbatim, never forked). The compact stage has no
+// preview pane in the DOM at all (not merely hidden), and moving the keyboard selection swaps the preview
+// to match the newly-selected item.
+test("the zoomed stage's preview pane shows the selected item's full text, including a tail truncated in its row, and updates on ArrowDown; the compact stage has no preview at all", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	// A 3-line, >200-char prompt whose FIRST line never mentions the tail marker "zephyr9000" —
+	// `PromptRow` shows only `hit.text.split("\n")[0]`, so a hit whose full text matched the query can
+	// still show a row whose visible first line doesn't contain the very term that matched. That's the
+	// "truncated in the row" case R1's preview pane exists for.
+	const longPrompt = [
+		"Investigate the deployment pipeline failure end to end before the next release window opens.",
+		"Check the retry policy, the queue backlog depth, and every healthcheck threshold across all services.",
+		"Root cause found: the zephyr9000 rollback trigger misfired under load and needs a guard added.",
+	].join("\n");
+	expect(longPrompt.length).toBeGreaterThan(200);
+	seedWorkspaceSession(workspace.worktreePath, {
+		messages: [
+			{ role: "user", text: longPrompt, timestamp: 1_700_900_000_000 },
+			{ role: "user", text: "a shorter unrelated prompt", timestamp: 1_700_900_001_000 },
+		],
+	});
+	await page.waitForTimeout(2_100);
+
+	await page.getByTestId("start-chat").click();
+	const input = page.getByTestId("chat-input");
+	await expect(input).toBeVisible();
+
+	await input.press("Control+r");
+	const overlay = page.getByTestId("history-overlay");
+	await expect(overlay).toBeVisible();
+	const query = page.getByTestId("history-query");
+	const preview = page.getByTestId("history-preview");
+
+	// Compact stage: the preview pane doesn't exist in the DOM at all, not merely hidden.
+	await expect(preview).toHaveCount(0);
+
+	await query.fill("zephyr9000");
+	const longRow = page
+		.locator('[data-testid="history-item"][data-kind="prompt"]')
+		.filter({ hasText: "Investigate the deployment pipeline" });
+	await expect(longRow).toBeVisible();
+	// The row shows only the truncated first line — the tail term that actually matched never appears.
+	await expect(longRow).not.toContainText("zephyr9000");
+
+	await query.press("Tab");
+	await expect(overlay).toHaveAttribute("data-stage", "zoomed");
+	await expect(preview).toBeVisible();
+	// The preview shows the FULL text, including the tail the row truncated away.
+	await expect(preview).toContainText("zephyr9000");
+	await expect(preview).toContainText("Investigate the deployment pipeline failure");
+
+	// Broaden to an empty query so both seeded prompts are in the flat list; newest first ("a shorter
+	// unrelated prompt", seeded one second later) is selected initially — the preview follows.
+	await query.fill("");
+	await expect(page.locator('[data-testid="history-item"][data-kind="prompt"]')).toHaveCount(2);
+	await expect(preview).toContainText("a shorter unrelated prompt");
+	await expect(preview).not.toContainText("zephyr9000");
+
+	// ArrowDown moves the keyboard selection onto the long prompt — the preview updates to match.
+	await query.press("ArrowDown");
+	await expect(preview).toContainText("zephyr9000");
+	await expect(preview).toContainText("Investigate the deployment pipeline failure");
+});
+
+// R1: at a narrow (~390px) viewport, the zoomed stage's preview pane stacks BELOW the results list
+// instead of beside it — the two-pane wrapper switches to a column flex layout under the `md` breakpoint
+// (the same convention `SettingsDialog`'s own two-pane shell uses). Keeps the existing 390px overlay-
+// sizing e2e (above) passing unmodified — this is a separate assertion about the *zoomed* stage only.
+test("at a narrow (~390px) viewport, the zoomed stage's preview pane stacks below the results list, both visible", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	seedWorkspaceSession(workspace.worktreePath, {
+		messages: [
+			{
+				role: "user",
+				text: "a narrow-viewport preview stacking test prompt",
+				timestamp: 1_701_000_000_000,
+			},
+		],
+	});
+	await page.waitForTimeout(2_100);
+
+	await page.getByTestId("start-chat").click();
+	const input = page.getByTestId("chat-input");
+	await expect(input).toBeVisible();
+	await page.setViewportSize({ width: 390, height: 844 });
+
+	await input.press("Control+r");
+	const overlay = page.getByTestId("history-overlay");
+	await expect(overlay).toBeVisible();
+	const query = page.getByTestId("history-query");
+	await query.press("Tab");
+	await expect(overlay).toHaveAttribute("data-stage", "zoomed");
+	const results = page.getByTestId("history-results");
+	const preview = page.getByTestId("history-preview");
+	await expect(results).toBeVisible();
+	await expect(preview).toBeVisible();
+
+	const resultsBox = await results.boundingBox();
+	const previewBox = await preview.boundingBox();
+	expect(resultsBox).not.toBeNull();
+	expect(previewBox).not.toBeNull();
+	if (resultsBox && previewBox) {
+		// Stacked, list first: the preview's top sits at or below the list's own bottom edge.
+		expect(previewBox.y).toBeGreaterThanOrEqual(resultsBox.y + resultsBox.height - 1);
+	}
+});
+
+// R2: the scope badge is now a dropdown picker (the discoverable mouse path — atuin's "cycling is
+// invisible" lesson) alongside the unchanged `Ctrl+R` cycle. Also proves the brief's sharp edge: while
+// the picker is open, ArrowDown belongs to the menu, never to the overlay's own results selection —
+// Radix's portaled content is a sibling of the query `<input>` the overlay's key handler is bound to,
+// never its descendant, so there's nothing for the two handlers to double up on; this test is the proof.
+test("the scope badge opens a picker that selects a scope directly without disturbing the results selection, returns focus to the query input, and Ctrl+R still cycles afterward", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	seedWorkspaceSession(workspace.worktreePath, {
+		messages: [
+			{
+				role: "user",
+				text: "alpha prompt for the scope picker test",
+				timestamp: 1_701_100_000_000,
+			},
+			{ role: "user", text: "beta prompt for the scope picker test", timestamp: 1_701_100_001_000 },
+		],
+	});
+	seedExternalCwdSessions();
+	await page.waitForTimeout(2_100);
+
+	await page.getByTestId("start-chat").click();
+	const input = page.getByTestId("chat-input");
+	await expect(input).toBeVisible();
+
+	await input.press("Control+r");
+	const overlay = page.getByTestId("history-overlay");
+	await expect(overlay).toBeVisible();
+	const query = page.getByTestId("history-query");
+	const scopeBadge = page.getByTestId("history-scope");
+	const scopeOptions = page.getByTestId("history-scope-option");
+	const selectedRow = page.locator('[data-testid="history-item"][data-selected="true"]');
+
+	// Default "workspace" scope, empty query: both seeded prompts, newest ("beta…") first and selected.
+	await expect(page.locator('[data-testid="history-item"][data-kind="prompt"]')).toHaveCount(2);
+	await expect(selectedRow).toContainText("beta prompt for the scope picker test");
+
+	// Click the badge → 4 options, correct data-scopes, in cycle order.
+	await scopeBadge.click();
+	await expect(scopeOptions).toHaveCount(4);
+	await expect(scopeOptions.nth(0)).toHaveAttribute("data-scope", "chat");
+	await expect(scopeOptions.nth(1)).toHaveAttribute("data-scope", "workspace");
+	await expect(scopeOptions.nth(2)).toHaveAttribute("data-scope", "project");
+	await expect(scopeOptions.nth(3)).toHaveAttribute("data-scope", "all");
+
+	// Sharp edge: ArrowDown while the menu is open belongs to the menu, not the overlay's results list.
+	await page.keyboard.press("ArrowDown");
+	await expect(selectedRow).toContainText("beta prompt for the scope picker test");
+
+	// Click "Everywhere" selects it directly (no Ctrl+R needed), closes the menu, and returns focus to
+	// the query input.
+	await scopeOptions.filter({ hasText: "Everywhere" }).click();
+	await expect(scopeBadge).toHaveAttribute("data-scope", "all");
+	await expect(query).toBeFocused();
+	await expect(
+		page
+			.locator('[data-testid="history-item"][data-kind="prompt"]')
+			.filter({ hasText: "deploy the docs site" }),
+	).toBeVisible();
+
+	// Ctrl+R still cycles after the mouse pick — from "all" it wraps forward to "chat".
+	await query.press("Control+r");
+	await expect(scopeBadge).toHaveAttribute("data-scope", "chat");
+});

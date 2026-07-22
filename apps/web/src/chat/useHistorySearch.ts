@@ -28,8 +28,10 @@ export type HistorySelection =
 	| { kind: "prompt"; hit: PromptHit }
 	| { kind: "message"; hit: MessageHit };
 
-const SCOPE_ORDER = ["chat", "workspace", "project", "all"] as const;
-type ScopeKind = (typeof SCOPE_ORDER)[number];
+/** Exported so the scope picker (`HistoryOverlay`'s dropdown menu, R2) can render its four options in
+ * this exact cycle order — the same order `Ctrl+R`'s `cycleScope` advances through. */
+export const SCOPE_ORDER = ["chat", "workspace", "project", "all"] as const;
+export type ScopeKind = (typeof SCOPE_ORDER)[number];
 
 function buildScope(
 	kind: ScopeKind,
@@ -100,6 +102,7 @@ export function useHistorySearch(
 	close: () => void;
 	setQuery: (q: string) => void;
 	cycleScope: () => void;
+	setScope: (kind: ScopeKind) => void;
 	toggleStage: () => void;
 	moveSelection: (delta: number) => void;
 	openMessage: (hit: MessageHit) => void;
@@ -206,6 +209,14 @@ export function useHistorySearch(
 		setSelected(0);
 	}, []);
 
+	// R2's mouse path: the scope picker's dropdown items pick a scope directly rather than stepping
+	// through `cycleScope` — `Ctrl+R` keeps calling `cycleScope` above, unchanged. Resets `selected` the
+	// same way cycling does, for the same reason (a scope change reshapes the flat list under it).
+	const setScope = useCallback((kind: ScopeKind) => {
+		setScopeKind(kind);
+		setSelected(0);
+	}, []);
+
 	const toggleStage = useCallback(() => {
 		setStage((s) => (s === "compact" ? "zoomed" : "compact"));
 	}, []);
@@ -249,6 +260,7 @@ export function useHistorySearch(
 		close,
 		setQuery,
 		cycleScope,
+		setScope,
 		toggleStage,
 		moveSelection,
 		openMessage,

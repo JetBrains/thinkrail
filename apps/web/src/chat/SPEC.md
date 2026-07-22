@@ -115,10 +115,43 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   below), image paste/drop, `Ctrl+R` → `onHistoryOpen`), `HistoryOverlay` (the history-recall/search
   overlay `Composer` opens — presentational, driven entirely by `useHistorySearch.ts`'s state +
   callbacks, plus a **Save as template** action on the selected prompt row — see the Save-as-template
-  bullet below), `ModelSelector` + `ThinkingSelector` (shared with `NewWorkspaceDialog`; optional
-  `container` prop portals their popovers into a host Dialog), `SessionStatsBar`, `ChatHeader` (its
-  `left` slot carries the plan strip), `ExtUiDialog`. All props-driven; behavior detail lives in the
-  components' jsdoc.
+  bullet below, and a **zoomed-stage preview pane** + **scope picker** — see the next bullet),
+  `ModelSelector` + `ThinkingSelector` (shared with `NewWorkspaceDialog`; optional `container` prop
+  portals their popovers into a host Dialog), `SessionStatsBar`, `ChatHeader` (its `left` slot carries the plan strip), `ExtUiDialog`. All
+  props-driven; behavior detail lives in the components' jsdoc.
+- **History overlay: zoomed preview pane + scope picker** (`HistoryOverlay.tsx`) — `Tab` grows the
+  compact single-column overlay into a **two-pane** `zoomed` layout: the existing Prompts/Messages
+  sections list stays on the left (~55% width, `data-testid="history-results"` — keyboard nav,
+  `scrollIntoView`, counts, and the save-as-template action are all unchanged), and a preview of the
+  flat-list **keyboard-selected** item renders on the right (~45%, `data-testid="history-preview"`,
+  resolved via the same `resolveHistorySelection` that `Enter`/Cmd/Ctrl+S already use — the preview and
+  the keyboard actions can never disagree on "the selected item"). The `compact` stage is untouched: no
+  preview pane exists in the DOM at all until `Tab` (not merely hidden), so `history-preview`'s bare
+  presence doubles as the zoomed/compact signal. **Preview body:** the hit's full `text` — never the
+  row's truncated first line (`PromptRow`) or snippet (`MessageRow`) — is what makes the preview worth
+  having: a long prompt's tail, cut off in the list, reads in full here. `whitespace-pre-wrap
+  break-words`, scrollable (`overflow-y-auto`), query terms highlighted via `Highlight` reused
+  **verbatim** (the same helper the rows use) so highlighting can never drift between a row and its own
+  preview. **Preview footer** (muted, small): for a prompt hit, chat title (when set) / a workspace chip
+  whenever `workspaceId` is present (unlike `PromptRow`'s chip, never scope-gated — a single detail pane
+  has room a dense list row doesn't) / relative time, `·`-joined; for a message hit,
+  `sessionTitle · role · relative time`. No selection (an empty result set) renders an empty panel —
+  never a crash. **Narrow widths** (below the `md` breakpoint): the preview collapses **below** the
+  list instead of beside it (list first in source order, so a column flex stack already places it
+  there), each pane independently scrollable within its own height budget. The **scope badge**
+  (`data-testid="history-scope"`, unchanged `<scope> ⌃R` label + `data-scope`) is now also a
+  `components/ui/dropdown-menu` trigger: its content lists all four scopes in cycle order
+  (`data-testid="history-scope-option"` + `data-scope`, fuller labels than the badge itself — "This
+  chat" / "Workspace" / "Project" / "Everywhere" — with the current one check-marked). Picking one
+  calls `useHistorySearch.ts`'s new `setScope(kind)`, which resets the results selection exactly like
+  `cycleScope` — the unchanged `Ctrl+R` keyboard path, since both just set the same underlying scope
+  state. Radix's default on close is to return focus to the trigger; `onCloseAutoFocus` is overridden
+  (`preventDefault` + focus the query input) so a mouse pick hands focus back to the query input
+  instead — typing (and `Ctrl+R` cycling) resumes immediately, no extra click needed. The menu never
+  fights the overlay's own `ArrowUp`/`ArrowDown`/`Enter` handling: that handler is bound to the query
+  `<input>` element itself, and Radix's portaled dropdown content is a **sibling** subtree — never a
+  descendant of the input — so a keydown while the menu holds focus cannot reach the input's handler by
+  construction, not by a case-by-case guard.
 - **Template slots** (`slotSession.ts`'s parser + `Composer`'s session state + `ChatView`'s menu/pick
   wiring — the composer's Tab-through placeholder flow, end to end). **Parsing** (`slotSession.ts`, pure,
   zero deps): `parseTemplateSlots(body, argumentHint)` expands pi's own placeholder grammar (`$1..$n`,

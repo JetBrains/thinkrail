@@ -214,6 +214,7 @@ export default function ChatView({
 		close: closeHistory,
 		setQuery,
 		cycleScope,
+		setScope,
 		toggleStage,
 		moveSelection,
 		openMessage,
@@ -567,6 +568,7 @@ export default function ChatView({
 							workspaceNames={workspaceNames}
 							onQueryChange={setQuery}
 							onCycleScope={cycleScope}
+							onSetScope={setScope}
 							onToggleStage={toggleStage}
 							onMoveSelection={moveSelection}
 							onClose={closeHistory}

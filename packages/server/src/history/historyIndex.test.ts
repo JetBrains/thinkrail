@@ -193,6 +193,39 @@ describe("HistoryIndex.search", () => {
 		expect(result.messages[0]?.snippet.length).toBeLessThan(longText.length);
 	});
 
+	// R1 step 0 (task-R1R2-brief.md): the web zoomed-stage preview pane renders a message hit's FULL
+	// text, not its truncated `snippet`. `search()`'s message-hit construction spreads the same `hit`
+	// object it builds for prompts (`{ ...hit, role, snippet, messageIndex, anchorText }`) — `text` is
+	// never overwritten in that spread, so it already carries `entry.text` (the extractor's full,
+	// 4000-char-capped text) unchanged. This pins that invariant with an **assistant**-role message,
+	// deliberately: an assistant entry can never become a `promptCandidate` (only `role === "user"`
+	// does), so a passing assertion here can only be explained by the message-hit-specific construction
+	// path itself carrying the full text — not by some accidental aliasing with the prompts branch.
+	test("(h) a message hit's `.text` carries the entry's full text, not the snippet — what the R1 preview pane renders", async () => {
+		const longText = `intro ${"padding ".repeat(40)}needle-marker ${"more-padding ".repeat(40)}`;
+		writeFixtureSession(dir, {
+			id: "sess-a",
+			cwd: "/repo/a",
+			messages: [{ role: "assistant", text: longText, timestamp: 1000 }],
+		});
+
+		const index = new HistoryIndex(dir);
+		const result = await index.search({
+			query: "needle-marker",
+			filter: allowAll,
+			labels: noLabels,
+		});
+
+		expect(result.messages).toHaveLength(1);
+		expect(result.messages[0]?.text).toBe(longText);
+		expect(result.messages[0]?.text.length).toBeGreaterThan(
+			result.messages[0]?.snippet.length ?? 0,
+		);
+		// Confirms the fixture's assistant-only setup: no prompt hit exists to have accidentally supplied
+		// `.text` instead.
+		expect(result.prompts).toHaveLength(0);
+	});
+
 	test("scope labels (workspaceId/projectId) are merged onto every hit", async () => {
 		writeFixtureSession(dir, {
 			id: "sess-a",
