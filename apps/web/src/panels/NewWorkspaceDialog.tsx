@@ -5,7 +5,7 @@ import type {
 	WireModel,
 	Workspace,
 } from "@thinkrail/contracts";
-import { Box, Check, ChevronDown, GitBranch, RefreshCw } from "lucide-react";
+import { Box, Check, ChevronDown, GitBranch, RefreshCw, TriangleAlert } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { ModelSelector } from "@/chat/ModelSelector";
 import {
@@ -15,6 +15,7 @@ import {
 	useSlashCommandCompletion,
 } from "@/chat/SlashCommandCompletion";
 import { ThinkingSelector } from "@/chat/ThinkingSelector";
+import { Button } from "@/components/ui/button";
 import {
 	Command,
 	CommandEmpty,
@@ -74,6 +75,7 @@ export function NewWorkspaceDialog({
 	const [model, setModel] = useState<WireModel | null>(null);
 	const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>("medium");
 	const [creating, setCreating] = useState(false);
+	const [trusting, setTrusting] = useState(false);
 	const promptRef = useRef<HTMLTextAreaElement>(null);
 	// The dialog content node — popovers portal into it so their lists stay scrollable under the Dialog's
 	// scroll lock (react-remove-scroll blocks wheel/trackpad on body-portaled content).
@@ -256,6 +258,30 @@ export function NewWorkspaceDialog({
 		}
 	};
 
+	// Grant the project trust, then re-preview: the skill effect keys off open/project only, so a grant
+	// wouldn't otherwise refresh the catalog. The updated project is folded back into the store so the
+	// notice clears (trust rides `Project` through the wire).
+	const trustProject = async () => {
+		if (trusting) return;
+		setTrusting(true);
+		try {
+			const updated = await getTransport().request("project.setTrust", {
+				id: selectedProjectId,
+				trusted: true,
+			});
+			const store = useAppStore.getState();
+			store.setProjects(store.projects.map((p) => (p.id === updated.id ? updated : p)));
+			const commands = await slashCommandCatalogOrEmpty(() =>
+				getTransport().request("skill.list", { projectId: selectedProjectId }),
+			);
+			setSkillCommands(commands);
+		} catch (err) {
+			toast.error(errorText(err), "Couldn't trust project");
+		} finally {
+			setTrusting(false);
+		}
+	};
+
 	const selectedProject = projects.find((p) => p.id === selectedProjectId);
 
 	return (
@@ -304,6 +330,31 @@ export function NewWorkspaceDialog({
 					/>
 				</div>
 
+				{/* Trust gate: a repo's committed skills (`.claude/skills` …) are attacker-controlled for a clone,
+				    so they load only after an explicit grant. Personal + bundled skills are always on. */}
+				{selectedProject && selectedProject.trusted !== true ? (
+					<div
+						data-testid="ws-trust-notice"
+						className="flex w-full items-center gap-sm rounded-[var(--radius-md)] border border-border2 border-l-[3px] border-l-[var(--gold)] bg-[var(--gold-tint)] px-md py-sm text-left"
+					>
+						<TriangleAlert className="size-4 shrink-0 text-gold" />
+						<span className="min-w-0 flex-1 text-sm text-text">
+							Skills this project ships (
+							<span className="font-[var(--font-mono)]">.claude/skills</span> …) stay off until you
+							trust it. Your personal and ThinkRail's built-in skills are unaffected.
+						</span>
+						<Button
+							size="sm"
+							data-testid="ws-trust-project"
+							disabled={trusting}
+							onClick={() => void trustProject()}
+							className="shrink-0"
+						>
+							Trust project
+						</Button>
+					</div>
+				) : null}
+
 				{/* hero: the prompt */}
 				<div className="relative">
 					<Textarea
@@ -335,7 +386,12 @@ export function NewWorkspaceDialog({
 						<p data-testid="workspace-naming-hint" className="px-xs text-hint text-xs">
 							ThinkRail will name the workspace and branch from your request.
 						</p>
-					) : null}
+					) : (
+						<p className="mt-xs text-hint text-xs">
+							Type <span className="font-[var(--font-mono)]">/</span> for a project skill —
+							previewed from the current checkout; the created workspace's session is authoritative.
+						</p>
+					)}
 				</div>
 
 				{/* controls-bottom: model + effort (left), Create (right) */}

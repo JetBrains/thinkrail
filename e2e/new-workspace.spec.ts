@@ -83,16 +83,25 @@ test("the dialog lists local branches (no stray origin) and creates a worktree",
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(0);
 });
 
-test("project skill autocomplete selects before Enter can create", async ({ page }) => {
+test("a project's committed skills are gated behind trust, then autocomplete", async ({ page }) => {
 	await openFixtureProject(page);
 
 	await page.getByTestId("add-workspace").first().click();
 	const dialog = page.getByTestId("new-workspace-dialog");
 	await expect(dialog).toBeVisible();
 	const prompt = dialog.getByTestId("ws-prompt");
-
-	await prompt.fill("/e2e");
 	const portable = dialog.getByTestId("slash-command").filter({ hasText: "/skill:e2e-portable" });
+
+	// A freshly-opened project is untrusted (`resetState` wipes projects.json): the trust notice shows and
+	// the fixture's committed `.claude/skills/e2e-portable` alias is withheld — its prefix surfaces nothing.
+	await expect(dialog.getByTestId("ws-trust-notice")).toBeVisible();
+	await prompt.fill("/e2e");
+	await expect(portable).toHaveCount(0);
+
+	// Grant trust → the notice clears and the project skill becomes available (truthful `skill/project`).
+	await dialog.getByTestId("ws-trust-project").click();
+	await expect(dialog.getByTestId("ws-trust-notice")).toBeHidden();
+	await prompt.fill("/e2e");
 	await expect(portable).toBeVisible();
 	await expect(portable).toContainText("skill/project");
 

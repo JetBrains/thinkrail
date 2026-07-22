@@ -8,6 +8,13 @@ import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
 /** Create a workspace, open a chat tab in it, and wait for the composer to mount. */
 async function openChat(page: import("@playwright/test").Page): Promise<void> {
 	await openFixtureProject(page);
+	// The fixture ships a committed `.claude/skills` alias; trust the project so the live session loads it
+	// (project-scoped aliases are gated behind trust). Open the dialog, grant, then create through it.
+	await page.getByTestId("add-workspace").first().click();
+	const trustDialog = page.getByTestId("new-workspace-dialog");
+	await expect(trustDialog).toBeVisible();
+	await trustDialog.getByTestId("ws-trust-project").click();
+	await expect(trustDialog.getByTestId("ws-trust-notice")).toBeHidden();
 	await createWorkspaceViaDialog(page);
 	await expect(page.getByTestId("workspace-item").first()).toHaveAttribute("data-active", "true");
 	await page.getByTestId("start-chat").click();

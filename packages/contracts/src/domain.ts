@@ -12,6 +12,13 @@ export interface Project {
 	slug: string;
 	/** Epoch ms of last open, for sort order. */
 	lastOpened: number;
+	/**
+	 * Whether the user has granted this project trust. Gates loading the project's **committed cross-agent
+	 * skill aliases** (`.claude/skills`, `.github/skills`, `.gemini/skills`) — attacker-controlled for a
+	 * cloned repo, and injected into the agent's system prompt. `undefined` = undecided (treated as
+	 * untrusted). Personal (`~/.claude` …), pi-native, and ThinkRail-bundled skills load regardless.
+	 */
+	trusted?: boolean;
 }
 
 /**

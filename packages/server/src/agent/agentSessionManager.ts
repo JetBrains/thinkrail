@@ -48,6 +48,17 @@ export function setSessionManagerFactory(factory: (cwd: string) => SessionManage
 	sessionManagerFactory = factory;
 }
 
+/**
+ * Host seam: resolve whether a workspace's owning project is trusted. Trust gates the project's committed
+ * cross-agent skill aliases (`.claude/skills` etc.) — see `buildResourceLoader`. Keyed by `workspaceId`,
+ * the one id both the create and disk-restore paths hold. Fails closed (untrusted) until the host wires the
+ * real resolver at boot, so a mis-wire can never silently load an untrusted repo's skills.
+ */
+let projectTrustResolver: (workspaceId: string) => boolean = () => false;
+export function setProjectTrustResolver(resolver: (workspaceId: string) => boolean): void {
+	projectTrustResolver = resolver;
+}
+
 function mustGet(sessionId: string): AgentSession {
 	const entry = sessions.get(sessionId);
 	if (!entry) throw new Error(`Unknown session: ${sessionId}`);
@@ -72,8 +83,10 @@ export function getSessionWorkspaceId(sessionId: string): string | undefined {
  * wasm loads via a worker + `fs` path that a compiled binary can't satisfy), and the web UI downsizes
  * user-attached images itself — so we keep image-read working everywhere without depending on photon.
  * `SettingsManager.create(cwd)` defaults its agentDir to `getAgentDir()` (honors `PI_CODING_AGENT_DIR`),
- * matching the manager `createAgentSession` builds when we omit `settingsManager`. Persisting/opening a
- * ThinkRail project is its trust grant, made explicit here instead of relying on Pi's SDK default.
+ * matching the manager `createAgentSession` builds when we omit `settingsManager`. `projectTrusted: true`
+ * here covers pi-**native** project resources (`.pi` / `.agents`, project settings) — unchanged behavior.
+ * The committed **cross-agent skill aliases** carry their own explicit per-project trust gate
+ * (`buildResourceLoader`'s `trustedProject` / `setProjectTrustResolver`), not this flag.
  */
 export function buildSessionSettings(cwd: string): SettingsManager {
 	const settings = SettingsManager.create(cwd, undefined, { projectTrusted: true });
@@ -159,7 +172,11 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
 		modelRuntime,
 		sessionManager: sessionManagerFactory(input.cwd),
 		settingsManager,
-		resourceLoader: await buildResourceLoader(input.cwd, settingsManager),
+		resourceLoader: await buildResourceLoader(
+			input.cwd,
+			settingsManager,
+			projectTrustResolver(input.workspaceId),
+		),
 		// Re-resolve the wire ref to the real model (with baseUrl) host-side — never the client's baseUrl.
 		...(input.model ? { model: await resolveWireModel(input.model) } : {}),
 		...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
@@ -255,7 +272,11 @@ async function openDiskSession(sessionId: string, workspaceId: string, cwd: stri
 		modelRuntime,
 		sessionManager,
 		settingsManager,
-		resourceLoader: await buildResourceLoader(cwd, settingsManager),
+		resourceLoader: await buildResourceLoader(
+			cwd,
+			settingsManager,
+			projectTrustResolver(workspaceId),
+		),
 	});
 	// Lost a race after the open — drop this duplicate rather than clobber the registered one.
 	if (sessions.has(sessionId)) {

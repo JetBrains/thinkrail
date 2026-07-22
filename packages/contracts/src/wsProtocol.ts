@@ -51,7 +51,9 @@ import type {
 // (`provider.loginStart` gains `type?: "oauth" | "api_key"`), so multi-prompt providers (azure, vertex)
 // work and `ProviderStatus.canApiKey` is pi's provider-owned truth (`Provider.auth.apiKey.login`).
 // v11: `skill.list` previews a project's skill-only command catalog before a workspace/session exists.
-export const PROTOCOL_VERSION = 11;
+// v12: `project.setTrust` records the per-project trust grant that gates its committed cross-agent skill
+// aliases; `Project` gains an optional `trusted` field carried in `server.welcome` / `project.list`.
+export const PROTOCOL_VERSION = 12;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -88,6 +90,8 @@ export const WS_METHODS = {
 	// Lazy per-project "has any registered spec?" (the Welcome screen's "Set up project" signal) — a
 	// full-tree walk, so it's on-demand for the one project shown, never eagerly for every project.
 	projectHasSpecs: "project.hasSpecs",
+	// Record the user's trust grant for a project — gates loading its committed cross-agent skill aliases.
+	projectSetTrust: "project.setTrust",
 	workspaceCreate: "workspace.create",
 	workspaceList: "workspace.list",
 	workspaceRemove: "workspace.remove",
@@ -248,6 +252,9 @@ export interface WsMethodMap {
 	// Does the project's repo carry any registered spec? Computed lazily (a full-tree walk), so it's
 	// requested only for the project the Welcome screen renders — never eagerly for every project.
 	"project.hasSpecs": { params: { projectId: string }; result: { hasSpecs: boolean } };
+	// Persist the user's trust decision for a project. Trust gates loading the repo's committed cross-agent
+	// skill aliases (`.claude/skills` etc.); the updated `Project` echoes back so the client refreshes.
+	"project.setTrust": { params: { id: string; trusted: boolean }; result: Project };
 	// `baseRef`: the base branch the worktree is cut from (a remote ref is fetched first); when
 	// omitted, the worktree branches off the repo's current HEAD (the default behavior).
 	"workspace.create": {

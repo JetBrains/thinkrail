@@ -33,8 +33,11 @@ channel fan-out, and the process-boot wrapper both launchers share.
   streaming sessions and wait bounded, so pi persists their "Operation aborted" tool results and
   transcripts land paired — then `stop()` + exit; an immediate exit would strand mid-tool transcripts on
   the restart repair); `handlers.ts` (the WS method→handler registry, including `skill.list`: resolve the
-  requested `projectId` through `projects`, then pass only its checkout path into agent's
-  `listSkillCommands(cwd)` — the composition stays here; `agent` never imports its sibling);
+  requested `projectId` through `projects`, then pass its checkout path **and `trusted` flag** into agent's
+  `listSkillCommands(cwd, trusted)`, plus **`project.setTrust`** (persist the grant → updated `Project`) —
+  the composition stays here; `agent` never imports its sibling. `createServer` also wires
+  **`setProjectTrustResolver`**, mapping a session's `workspaceId` → its project's persisted `trusted`
+  (fail-closed), so `agent` gates project-scoped skill aliases without importing `projects`/`workspaces`);
   `ackSend.ts` (the send-ack policy — see "Get right"); `autoRename.ts` (the **workspace auto-rename
   flow** — the composition of `agent` + `assist` + `workspaces` only the host may make, in **two passes**
   the session-publisher closure in `createServer` tees fire-and-forget, both triggering a

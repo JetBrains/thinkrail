@@ -51,6 +51,7 @@ import {
 	inspectProjectPath,
 	listProjects,
 	openProject,
+	setProjectTrust,
 } from "../projects";
 import { updateConfig } from "../settings";
 import { evictSpecIndex, projectHasSpecs, specGraph } from "../spec";
@@ -106,6 +107,12 @@ const handlers: Record<string, Handler> = {
 	"project.close": (params) => {
 		closeProject((params as { id: string }).id);
 		return { ok: true } as const;
+	},
+	// Persist the user's trust grant; gates loading the repo's committed cross-agent skill aliases. Returns
+	// the updated project so the client refreshes its store (trust rides `Project` through `project.list`).
+	"project.setTrust": (params) => {
+		const p = params as { id: string; trusted: boolean };
+		return setProjectTrust(p.id, p.trusted);
 	},
 	"workspace.create": (params) => {
 		const p = params as { projectId: string; name?: string; baseRef?: string };
@@ -195,7 +202,8 @@ const handlers: Record<string, Handler> = {
 		const { projectId } = params as { projectId: string };
 		const project = listProjects().find((candidate) => candidate.id === projectId);
 		if (!project) throw new Error(`Unknown project: ${projectId}`);
-		return listSkillCommands(project.path);
+		// Project-scoped aliases surface only once the project is trusted (same gate the live session uses).
+		return listSkillCommands(project.path, project.trusted === true);
 	},
 	// session.* — the pi engine. A thrown/failed call returns a `{ ok:false, error }` WS response;
 	// streaming faults arrive as `pi.event`s (the error/agent_end variants), not here.

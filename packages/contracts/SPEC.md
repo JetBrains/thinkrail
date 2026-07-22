@@ -77,8 +77,10 @@ of the host.
     is a **host-owned pi custom tool** (server `agent/askUserQuestion` — see its SPEC for the design
     rationale); the chat renders the questionnaire **inline** and replies via `session.answerQuestion`
     (correlated by the tool call id; rejected loud when the call is unknown/answered/superseded).
-- **domain.ts** — app entities: `Project` (git repo + unique `slug`; "does it have specs?" is **not** a
-  field — it's the lazy `project.hasSpecs` query, since it's a full-tree walk), **`ProjectPathStatus`** (a
+- **domain.ts** — app entities: `Project` (git repo + unique `slug` + optional **`trusted`** — the
+  per-project grant, set via `project.setTrust`, that gates loading its committed cross-agent skill aliases;
+  "does it have specs?" is **not** a field — it's the lazy `project.hasSpecs` query, since it's a full-tree
+  walk), **`ProjectPathStatus`** (a
   candidate path's kind — `repo` / `initable` / `missing` / `notDirectory` — so the UI opens, offers a
   `git init`, or shows an error), `Workspace` (git worktree; its
   optional **`renamed`** flag is the naming lifecycle — absent = **not yet locked** (either pristine
@@ -125,8 +127,11 @@ of the host.
   correlated by `loginId` / **`loginCancel`** / **`logout`** /
   the **JetBrains AI** trio **`jbcentralConnect`** (wire Claude+GPT via the jbcentral proxy → a
   `JbcentralConnectResult`) / **`jbcentralDisconnect`** / **`jbcentralLogin`** (launch `central login`)) /
-  **`skill.list`** (a pre-session, skill-only `SlashCommandInfo[]` preview for a `projectId`, resolved
-  from that project's current checkout; the eventual worktree session is authoritative) /
+  **`project.setTrust`** (persist a project's trust grant → the updated `Project`; gates its committed
+  cross-agent skill aliases) /
+  **`skill.list`** (a pre-session, skill-only `SlashCommandInfo[]` preview for a `projectId`, resolved from
+  that project's current checkout with its **project-scoped aliases gated by trust**; the eventual worktree
+  session is authoritative) /
   `session.*` — `create`/`prompt`/`steer`/`followUp`/`abort`/`dispose`/`setModel`/
   `setThinkingLevel`/`compact`/`getStats`/`getCommands`/`extUiReply`/**`answerQuestion`** (the inline
   `ask_user_question` reply, correlated by tool call id)/**`list`**/**`getMessages`** (the

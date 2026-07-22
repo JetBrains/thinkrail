@@ -141,6 +141,13 @@ try {
 		"project.open",
 	)) as { id?: string };
 	if (!project.id) fail("project.open returned no project id");
+	// Project-scoped aliases are gated behind trust — grant it so the compiled skill.list surfaces the
+	// committed `.claude/skills` alias below (personal/bundled skills would load regardless).
+	await within(
+		rpc(rpcSocket, "project.setTrust", { id: project.id, trusted: true }),
+		10_000,
+		"project.setTrust",
+	);
 	const commands = await within(
 		rpc(rpcSocket, "skill.list", { projectId: project.id }),
 		30_000,

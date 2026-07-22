@@ -5,6 +5,7 @@ import {
 	disposeAllSessions,
 	getSessionWorkspaceId,
 	setExtUiPublisher,
+	setProjectTrustResolver,
 	setSessionPublisher,
 } from "../agent";
 import { cancelAllLogins, setLoginPublisher } from "../auth";
@@ -13,7 +14,7 @@ import { listProjects, openProject } from "../projects";
 import { getConfig, setSettingsPublisher } from "../settings";
 import { closeAllTerminals, setTerminalPublisher } from "../terminal";
 import { setWatchPublisher, stopAllWatches } from "../watch";
-import { setWorkspacePublisher } from "../workspaces";
+import { getWorkspace, setWorkspacePublisher } from "../workspaces";
 import {
 	isPromptCommitted,
 	isSettledTurn,
@@ -103,6 +104,18 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 	// Stream PTY output to every subscribed client over the terminal.data channel.
 	setTerminalPublisher((channel, data) => {
 		server.publish(channel, JSON.stringify({ channel, data }));
+	});
+
+	// Gate a project's committed cross-agent skill aliases behind its trust grant: map the workspace a
+	// session belongs to back to its project's persisted `trusted` flag. Fail closed on any lookup miss, so
+	// a stale/unknown id never loads an untrusted repo's skills.
+	setProjectTrustResolver((workspaceId) => {
+		try {
+			const { projectId } = getWorkspace(workspaceId);
+			return listProjects().find((project) => project.id === projectId)?.trusted === true;
+		} catch {
+			return false;
+		}
 	});
 
 	// Fan the `workspaces` module's lifecycle events out to every subscribed client, mapping each domain

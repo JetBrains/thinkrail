@@ -89,6 +89,25 @@ export function closeProject(id: string): void {
 }
 
 /**
+ * Record the user's trust decision for a project and persist it. Trust gates loading the repo's committed
+ * cross-agent skill aliases (`.claude/skills` etc.) — attacker-controlled for a cloned repo. Returns the
+ * updated project so the wire can echo it back to the client. Throws on an unknown id.
+ */
+export function setProjectTrust(id: string, trusted: boolean): Project {
+	const projects = getProjects();
+	const project = projects.find((p) => p.id === id);
+	if (!project) throw new Error(`Unknown project: ${id}`);
+	project.trusted = trusted;
+	saveProjects(projects);
+	return project;
+}
+
+/** Whether a project (by id) is trusted. Unknown or undecided → false (fail closed). */
+export function isProjectTrusted(id: string): boolean {
+	return getProjects().find((p) => p.id === id)?.trusted === true;
+}
+
+/**
  * Classify a candidate path so the UI can decide how to open it: an existing git repo (open directly),
  * a plain directory that can be `git init`ed (offer to initialise), a path that doesn't exist, or one
  * that exists but isn't a directory. Read-only — touches nothing.

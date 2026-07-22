@@ -97,11 +97,15 @@ a project picker, the prompt hero, and the reused
   default via `model.default` so the exact model shows (values held in dialog state, applied at create
   time). The pickers' popovers portal into the dialog node (so their lists scroll under the Dialog scroll
   lock). On open and project-picker changes, the dialog reads **`skill.list({projectId})`** and feeds the
-  result to chat's shared slash-completion primitive: a leading `/` autocompletes portable skills from the
-  selected project's **current checkout** plus personal/bundled sources, selecting one inserts
-  `/skill:<name> `; failure degrades silently to no menu. Up/Down navigate, Enter/Tab select, Escape
-  dismisses. The created worktree's real session catalog is authoritative if the selected base branch
-  differs. When the menu is closed, **Enter creates** (matching the Create button's `↵` affordance) and
+  result to chat's shared slash-completion primitive: a leading `/` autocompletes skills from the selected
+  project's **current checkout** plus personal/bundled sources, selecting one inserts `/skill:<name> `;
+  failure degrades silently to no menu. Up/Down navigate, Enter/Tab select, Escape dismisses. A caption under
+  the prompt marks the preview as **from the current checkout** (the created worktree's session catalog is
+  authoritative if the selected base branch differs). An **untrusted** selected project shows a **trust
+  notice** with a *Trust project* button — the repo's committed skills stay withheld until granted
+  (`project.setTrust`, which folds the updated project back into the store and re-previews); personal +
+  bundled skills show regardless. When the menu is closed, **Enter creates** (matching the Create button's
+  `↵` affordance) and
   **Shift+Enter** inserts a newline. Create = `workspace.create({ projectId, baseRef })` → set active → (with a prompt) open a chat +
   `session.create({ model, thinkingLevel })` + fire-and-forget `prompt`; with an empty prompt it just
   creates the workspace. A **rejected** kick-off `prompt` (a bad model / missing API key — e.g. picking a

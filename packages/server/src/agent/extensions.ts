@@ -8,7 +8,8 @@
 //   first use — resolution needs `node_modules`, which a compiled binary lacks. `pi-spec-graph`,
 //   `pi-thinkrail-workflow`, and `pi-todos` are workspace packages (not pi-installed), so pi's package
 //   manager won't auto-discover their `pi.skills` manifests — we point `additionalSkillPaths` at their
-//   `skills/` dirs, after the compatible project/personal aliases.
+//   `skills/` dirs, before the personal/project aliases so bundled skills outrank them (precedence in
+//   `resolveSkillInputs`).
 // - Compiled binary: the launcher injects the same five extensions as value-imported factories + a staged
 //   on-disk skills dir via `setBundledExtensions` (pi gives `extensionFactories` full API parity with
 //   path loading; pi reads skills via plain fs, so they must live on the real filesystem).
@@ -118,16 +119,27 @@ function compatibilitySkillsOverride(sources: CompatibilitySkillSource[]) {
 	});
 }
 
-function resolveSkillInputs(cwd: string): {
+function resolveSkillInputs(
+	cwd: string,
+	trustedProject: boolean,
+): {
 	additionalSkillPaths: string[];
 	skillsOverride: ReturnType<typeof compatibilitySkillsOverride>;
 } {
-	const sources = discoverCompatibilitySkillSources(cwd);
+	const discovered = discoverCompatibilitySkillSources(cwd);
+	// Personal aliases (`~/.claude` …) are the user's own machine — always safe. Project-scoped aliases (a
+	// repo's committed `.claude/skills` etc.) are attacker-controlled for a cloned repo and get injected into
+	// the agent's system prompt, so they load only after an explicit project-trust grant. Fail closed: an
+	// untrusted (or undecided) project contributes no aliases at all.
+	const personal = discovered.filter((source) => source.scope === "user");
+	const project = trustedProject ? discovered.filter((source) => source.scope === "project") : [];
+	const sources = [...personal, ...project];
 	const bundledSkillPaths = bundled ? [bundled.skillsDir] : resolveDevPaths().skillPaths;
 	return {
-		// DefaultResourceLoader puts Pi settings/native/shared resources first. Compatibility project aliases
-		// then personal aliases are in `sources` order; bundled skills stay last so user skills can override.
-		additionalSkillPaths: [...sources.map((source) => source.path), ...bundledSkillPaths],
+		// DefaultResourceLoader puts Pi settings/native/shared resources first. We then add ThinkRail's bundled
+		// skills, the user's personal aliases, then (only when trusted) the project's aliases — so first-name-wins
+		// gives pi-native > bundled > personal > project: a repo can never shadow your own or ThinkRail's skills.
+		additionalSkillPaths: [...bundledSkillPaths, ...sources.map((source) => source.path)],
 		skillsOverride: compatibilitySkillsOverride(sources),
 	};
 }
@@ -143,16 +155,19 @@ export function toSkillCommands(skills: readonly Skill[]): SlashCommandInfo[] {
 }
 
 /**
+ * A resource loader with `pi-web-access` + `pi-visualize` + `pi-spec-graph` (and its skill) +
  * `pi-thinkrail-workflow` (and its skills) + `pi-todos` (and its skill) (+ the headless-search policy),
  * our host-owned `ask_user_question` tool, and portable cross-agent skill aliases layered onto Pi's
- * default discovery.
+ * default discovery. `trustedProject` gates the project-scoped aliases (personal/bundled always load) —
+ * pass the owning project's trust decision; fail closed (`false`) when it is unknown.
  */
 export async function buildResourceLoader(
 	cwd: string,
 	settingsManager: SettingsManager,
+	trustedProject: boolean,
 ): Promise<ResourceLoader> {
 	const sharedFactories = [headlessSearchPolicy, askUserQuestionExtension];
-	const skillInputs = resolveSkillInputs(cwd);
+	const skillInputs = resolveSkillInputs(cwd, trustedProject);
 	const common = {
 		cwd,
 		agentDir: getAgentDir(),
@@ -175,23 +190,36 @@ export async function buildResourceLoader(
 	return loader;
 }
 
+const SKILL_LIST_TTL_MS = 5_000;
+const skillListCache = new Map<string, { at: number; value: SlashCommandInfo[] }>();
+
 /**
  * Skill-only pre-session catalog for New Workspace autocomplete. It shares the real session's Pi settings,
  * package/native discovery, compatibility aliases, and bundled skills, but never loads extension factories
- * or creates a model/session/transcript.
+ * or creates a model/session/transcript. `trustedProject` gates the project-scoped aliases, exactly as the
+ * live session does. Cached briefly per `(cwd, trust)` so flipping the project picker doesn't re-walk the
+ * filesystem each time; because trust is part of the key, a fresh grant misses the stale untrusted entry.
  */
-export async function listSkillCommands(cwd: string): Promise<SlashCommandInfo[]> {
+export async function listSkillCommands(
+	cwd: string,
+	trustedProject: boolean,
+): Promise<SlashCommandInfo[]> {
+	const cacheKey = `${trustedProject ? "T" : "U"} ${cwd}`;
+	const cached = skillListCache.get(cacheKey);
+	if (cached && Date.now() - cached.at < SKILL_LIST_TTL_MS) return cached.value;
 	const settingsManager = SettingsManager.create(cwd, getAgentDir(), { projectTrusted: true });
 	const loader = new DefaultResourceLoader({
 		cwd,
 		agentDir: getAgentDir(),
 		settingsManager,
-		...resolveSkillInputs(cwd),
+		...resolveSkillInputs(cwd, trustedProject),
 		noExtensions: true,
 		noPromptTemplates: true,
 		noThemes: true,
 		noContextFiles: true,
 	});
 	await loader.reload();
-	return toSkillCommands(loader.getSkills().skills);
+	const value = toSkillCommands(loader.getSkills().skills);
+	skillListCache.set(cacheKey, { at: Date.now(), value });
+	return value;
 }
