@@ -19,6 +19,14 @@ function defaultConfig(): HookConfigFile {
 	return { version: 1, combineMode: "both", hooks: {} };
 }
 
+const COMBINE_MODES: readonly CombineMode[] = ["both", "shared", "local"];
+
+/** Narrows a parsed `combineMode` field to a real `CombineMode` — anything else (missing, a typo, a
+ * stray number) defaults to `"both"` rather than passing an arbitrary value through. */
+function isCombineMode(value: unknown): value is CombineMode {
+	return typeof value === "string" && (COMBINE_MODES as readonly string[]).includes(value);
+}
+
 /**
  * Parse a project's committed `.thinkrail/hooks.json` into the versioned `HookConfigFile` shape, with
  * back-compat for the legacy flat file (`{ onCreate: "…" }`, no `version`/`hooks` keys of its own) — that
@@ -46,7 +54,7 @@ export function loadHookConfig(dir: string): HookConfigFile {
 		}
 		return {
 			version: 1,
-			combineMode: (obj.combineMode as CombineMode | undefined) ?? "both",
+			combineMode: isCombineMode(obj.combineMode) ? obj.combineMode : "both",
 			hooks: (obj.hooks as Partial<Record<HookName, HookValue>> | undefined) ?? {},
 		};
 	} catch {
@@ -87,7 +95,9 @@ export function resolveHookCommand(
 export interface ResolvedHookEntry {
 	/** Which tier this entry came from — carried onto every event/status this entry produces. */
 	source: HookSource;
-	/** `"inline"` runs via `sh -c "<exec>"`; `"script"` runs via `sh "<exec>"` (both in `hooks.ts`/`runner.ts`). */
+	/** `"inline"` is meant to run via `sh -c "<exec>"`; `"script"` via `sh "<exec>"` — intended behavior
+	 * once `hooks.ts`/`runner.ts` are wired to consume `ResolvedHookEntry` (a later task; today `runner.ts`
+	 * only runs inline commands, resolved via the deprecated `resolveHookCommand`). */
 	kind: "inline" | "script";
 	/** Inline: the command text itself. Script: the resolved ABSOLUTE path to the script file. */
 	exec: string;
@@ -106,9 +116,23 @@ function resolveScriptPath(source: HookSource, scriptPath: string, basePath: str
 	return join(basePath, scriptPath);
 }
 
+/** Whether a parsed-JSON value is a well-formed `HookValue` — a string, `{ command: <string> }`, or
+ * `{ script: <string> }`. `hooks.json`/`hookOverrides.json` are hand-editable and never validated on
+ * write, so a value reaching `toEntry` may be anything JSON allows (`null`, `{}`, `[]`, `{ script: 123 }`,
+ * …); this guard is what lets `toEntry` treat those as absent instead of crashing on them. */
+function isHookValue(value: unknown): value is HookValue {
+	if (typeof value === "string") return true;
+	if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+	const record = value as Record<string, unknown>;
+	return typeof record.command === "string" || typeof record.script === "string";
+}
+
 /** Turn one tier's raw `HookValue` into its resolved run entry — reading the script file (if any) now, so
- * approval/missing status is decided once, at resolve time, not re-derived later. */
-function toEntry(source: HookSource, value: HookValue, basePath: string): ResolvedHookEntry {
+ * approval/missing status is decided once, at resolve time, not re-derived later. Returns `null` for a
+ * malformed value (see `isHookValue`) — treated as if that tier declared nothing for this hook, not as an
+ * error. */
+function toEntry(source: HookSource, value: unknown, basePath: string): ResolvedHookEntry | null {
+	if (!isHookValue(value)) return null;
 	if (typeof value === "string" || "command" in value) {
 		const command = typeof value === "string" ? value : value.command;
 		return { source, kind: "inline", exec: command, display: command, approvalMaterial: command };
@@ -128,7 +152,9 @@ function toEntry(source: HookSource, value: HookValue, basePath: string): Resolv
  * order); `"shared"` → `[shared?]`; `"local"` → `[local?]`. `args.basePath` is the worktree root at run
  * time or the project root at get-time — Shared script paths and relative Local script paths resolve
  * against it; an absolute Local script path is used as-is. Reads script files synchronously to fill
- * `approvalMaterial`/`missing` — never throws (a missing script becomes `missing: true`, not an error).
+ * `approvalMaterial`/`missing` — never throws: a missing script becomes `missing: true`, and a malformed
+ * `HookValue` (not a string, `{command}`, or `{script}` — hand-edited JSON is never validated on write)
+ * is skipped entirely, as if that tier hadn't declared the hook.
  */
 export function resolveHookRun(args: {
 	hook: HookName;
@@ -141,11 +167,13 @@ export function resolveHookRun(args: {
 	const entries: ResolvedHookEntry[] = [];
 	const sharedValue = committed.hooks[hook];
 	if (mode !== "local" && sharedValue !== undefined) {
-		entries.push(toEntry("shared", sharedValue, basePath));
+		const entry = toEntry("shared", sharedValue, basePath);
+		if (entry) entries.push(entry);
 	}
 	const localValue = local[hook];
 	if (mode !== "shared" && localValue !== undefined) {
-		entries.push(toEntry("local", localValue, basePath));
+		const entry = toEntry("local", localValue, basePath);
+		if (entry) entries.push(entry);
 	}
 	return entries;
 }

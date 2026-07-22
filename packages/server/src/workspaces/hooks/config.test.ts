@@ -70,6 +70,20 @@ test("loadHookConfig returns the default config when the file is valid JSON but 
 	expect(loadHookConfig(worktree)).toEqual(DEFAULT_CONFIG);
 });
 
+test("loadHookConfig returns the default config for a literal empty {} file", () => {
+	writeRawHooksJson({});
+	expect(loadHookConfig(worktree)).toEqual(DEFAULT_CONFIG);
+});
+
+test('loadHookConfig: a new-shape file with an invalid combineMode defaults it to "both" instead of passing it through', () => {
+	writeRawHooksJson({ combineMode: "bogus", hooks: { onCreate: "npm i" } });
+	expect(loadHookConfig(worktree)).toEqual({
+		version: 1,
+		combineMode: "both",
+		hooks: { onCreate: "npm i" },
+	});
+});
+
 // --- writeHookConfig -----------------------------------------------------------------------
 
 test("writeHookConfig creates .thinkrail/ and writes the given versioned config as pretty JSON", () => {
@@ -404,6 +418,114 @@ test("resolveHookRun: a missing script file resolves with missing:true and appro
 			display: "script: .thinkrail/hooks/missing.sh",
 			approvalMaterial: null,
 			missing: true,
+		},
+	]);
+});
+
+// --- resolveHookRun: malformed HookValue (hand-edited hooks.json/hookOverrides.json aren't validated,
+// so a value that isn't a string, {command}, or {script} must be skipped, never thrown) --------------
+
+test("resolveHookRun: a null hook value is skipped (treated as absent), not thrown", () => {
+	const committed = {
+		version: 1,
+		combineMode: "shared",
+		hooks: { onCreate: null },
+	} as unknown as HookConfigFile;
+	const result = resolveHookRun({
+		hook: "onCreate",
+		committed,
+		local: {},
+		mode: "shared",
+		basePath: worktree,
+	});
+	expect(result).toEqual([]);
+});
+
+test("resolveHookRun: an empty-object ({}) hook value is skipped, not thrown", () => {
+	const committed = {
+		version: 1,
+		combineMode: "shared",
+		hooks: { onCreate: {} },
+	} as unknown as HookConfigFile;
+	const result = resolveHookRun({
+		hook: "onCreate",
+		committed,
+		local: {},
+		mode: "shared",
+		basePath: worktree,
+	});
+	expect(result).toEqual([]);
+});
+
+test("resolveHookRun: an array ([]) hook value is skipped, not thrown", () => {
+	const committed = {
+		version: 1,
+		combineMode: "shared",
+		hooks: { onCreate: [] },
+	} as unknown as HookConfigFile;
+	const result = resolveHookRun({
+		hook: "onCreate",
+		committed,
+		local: {},
+		mode: "shared",
+		basePath: worktree,
+	});
+	expect(result).toEqual([]);
+});
+
+test("resolveHookRun: a {script: 123} hook value (non-string script) is skipped, not thrown", () => {
+	const committed = {
+		version: 1,
+		combineMode: "shared",
+		hooks: { onCreate: { script: 123 } },
+	} as unknown as HookConfigFile;
+	const result = resolveHookRun({
+		hook: "onCreate",
+		committed,
+		local: {},
+		mode: "shared",
+		basePath: worktree,
+	});
+	expect(result).toEqual([]);
+});
+
+test("resolveHookRun: a {command: 5} hook value (non-string command) is skipped, not thrown", () => {
+	const committed = {
+		version: 1,
+		combineMode: "shared",
+		hooks: { onCreate: { command: 5 } },
+	} as unknown as HookConfigFile;
+	const result = resolveHookRun({
+		hook: "onCreate",
+		committed,
+		local: {},
+		mode: "shared",
+		basePath: worktree,
+	});
+	expect(result).toEqual([]);
+});
+
+test("resolveHookRun: a malformed shared value doesn't block a well-formed local entry in the same resolve", () => {
+	const committed = {
+		version: 1,
+		combineMode: "both",
+		hooks: { onCreate: null },
+	} as unknown as HookConfigFile;
+	const local = { onCreate: "echo local-ok" };
+	const result = resolveHookRun({
+		hook: "onCreate",
+		committed,
+		local,
+		mode: "both",
+		basePath: worktree,
+	});
+	expect(result).toEqual([
+		{
+			source: "local",
+			kind: "inline",
+			exec: "echo local-ok",
+			display: "echo local-ok",
+			approvalMaterial: "echo local-ok",
 		},
 	]);
 });
