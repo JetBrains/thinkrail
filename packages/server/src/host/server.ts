@@ -20,7 +20,7 @@ import {
 	maybeAutoRenameWorkspace,
 	maybeNaiveNameWorkspace,
 } from "./autoRename";
-import { handleRequest, setProjectRemovedPublisher } from "./handlers";
+import { handleRequest, setProjectOpenedPublisher, setProjectRemovedPublisher } from "./handlers";
 
 export interface CreateServerOptions {
 	port?: number;
@@ -70,6 +70,7 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 				ws.subscribe(WS_CHANNELS.workspaceCreated);
 				ws.subscribe(WS_CHANNELS.workspaceUpdated);
 				ws.subscribe(WS_CHANNELS.workspaceRemoved);
+				ws.subscribe(WS_CHANNELS.projectOpened);
 				ws.subscribe(WS_CHANNELS.projectRemoved);
 				ws.subscribe(WS_CHANNELS.workspaceFsChanged);
 				ws.subscribe(WS_CHANNELS.settingsChanged);
@@ -123,9 +124,14 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		server.publish(channel, JSON.stringify({ channel, data }));
 	});
 
-	// Fan `project.removed` out after `project.remove` closes the project (handler-side seam — projects
-	// module stays channel-ignorant). Payload is `{ id }`; every client drops the project row so multi-tab
-	// observers don't keep an empty ghost after their workspaces already cleared via `workspace.removed`.
+	// Fan project registry membership out after open/init/remove (handler-side seams — projects module
+	// stays channel-ignorant). `opened` carries the full `Project` snapshot; `removed` carries `{ id }`.
+	setProjectOpenedPublisher((project) => {
+		server.publish(
+			WS_CHANNELS.projectOpened,
+			JSON.stringify({ channel: WS_CHANNELS.projectOpened, data: project }),
+		);
+	});
 	setProjectRemovedPublisher((id) => {
 		server.publish(
 			WS_CHANNELS.projectRemoved,

@@ -4,6 +4,7 @@ import type {
 	ExtUiResponse,
 	ImageContent,
 	LoginReply,
+	Project,
 	ThinkingLevel,
 	WireModel,
 	Workspace,
@@ -74,9 +75,16 @@ import { ackSend } from "./ackSend";
 
 type Handler = (params: unknown) => unknown | Promise<unknown>;
 
-/** Host→wire fan-out for `project.removed` (installed by `createServer`; silent no-op in unit tests). */
+/** Host→wire fan-out for project registry membership (installed by `createServer`; silent in unit tests). */
+type ProjectOpenedPublisher = (project: Project) => void;
 type ProjectRemovedPublisher = (id: string) => void;
+let publishProjectOpened: ProjectOpenedPublisher | null = null;
 let publishProjectRemoved: ProjectRemovedPublisher | null = null;
+
+/** Install (or clear with `null`) the sink that broadcasts `project.opened` after open/init. */
+export function setProjectOpenedPublisher(fn: ProjectOpenedPublisher | null): void {
+	publishProjectOpened = fn;
+}
 
 /** Install (or clear with `null`) the sink that broadcasts `project.removed` after a successful close. */
 export function setProjectRemovedPublisher(fn: ProjectRemovedPublisher | null): void {
@@ -102,9 +110,18 @@ async function archiveTeardown(ws: Workspace, repoPath?: string): Promise<void> 
 }
 
 const handlers: Record<string, Handler> = {
-	"project.open": (params) => openProject((params as { path: string }).path),
+	"project.open": (params) => {
+		const project = openProject((params as { path: string }).path);
+		// Fan membership to every client (new row or re-open lastOpened bump). Projects stay channel-ignorant.
+		publishProjectOpened?.(project);
+		return project;
+	},
 	"project.inspect": (params) => inspectProjectPath((params as { path: string }).path),
-	"project.init": (params) => initProject((params as { path: string }).path),
+	"project.init": (params) => {
+		const project = initProject((params as { path: string }).path);
+		publishProjectOpened?.(project);
+		return project;
+	},
 	"project.list": () => listProjects(),
 	// Lazy, per-project: the Welcome screen requests this only for the one project it renders, so the
 	// full-tree spec walk never sits on the connect handshake (which fans out over every project).

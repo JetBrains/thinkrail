@@ -377,6 +377,12 @@ interface AppState {
 	setStatus: (status: ConnectionStatus) => void;
 	setWelcome: (protocolVersion: number) => void;
 	setProjects: (projects: Project[]) => void;
+	/**
+	 * Fold a server-pushed `project.opened` snapshot in (**upsert** by id, re-sort by `lastOpened` desc).
+	 * Idempotent with the opening client's post-open `project.list` re-list / a re-open lastOpened bump.
+	 * Does **not** steal selection — only the initiator adopts (select/expand).
+	 */
+	applyProjectOpened: (project: Project) => void;
 	setWorkspaces: (projectId: string, workspaces: Workspace[]) => void;
 	/**
 	 * Fold a server-pushed `workspace.created` snapshot in (**upsert** by id). A project never fetched is a
@@ -592,6 +598,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 	setStatus: (status) => set({ status }),
 	setWelcome: (protocolVersion) => set({ protocolVersion }),
 	setProjects: (projects) => set({ projects }),
+	applyProjectOpened: (project) =>
+		set((s) => {
+			const rest = s.projects.filter((p) => p.id !== project.id);
+			const projects = [project, ...rest].sort((a, b) => b.lastOpened - a.lastOpened);
+			return { projects };
+		}),
 	setWorkspaces: (projectId, workspaces) =>
 		set((s) => ({ workspaces: { ...s.workspaces, [projectId]: workspaces } })),
 	addWorkspace: (workspace) =>

@@ -84,8 +84,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   is the **single** place workspace membership changes reach the wire — create/rename/archive all flow
   through it, so every client (including the initiator) converges by reacting, never by per-client optimism.
   The two new channels are `ws.subscribe`d in the WS `open` handler alongside `workspace.updated`.
-- **Project removed fan-out:** `createServer` installs `setProjectRemovedPublisher` (handlers seam) →
-  `server.publish` on `WS_CHANNELS.projectRemoved`. Clients subscribe in the WS `open` handler.
+- **Project membership fan-out:** `createServer` installs `setProjectOpenedPublisher` /
+  `setProjectRemovedPublisher` (handlers seams) → `server.publish` on `WS_CHANNELS.projectOpened` /
+  `projectRemoved`. Handlers publish after `project.open` / `project.init` (full `Project` snapshot) and
+  after `closeProject` (`{ id }`). Clients subscribe in the WS `open` handler.
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer`, `bootHost`,
   `BootHostOptions`, `BootedHost`.
 - **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for
@@ -97,9 +99,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
 
 - WS commands return values directly; only events + extension-UI + the workspace lifecycle trio
   (`workspace.created`/`updated`/`removed`, published from the `workspaces` module's injected publisher)
-  + **`project.removed`** (host publisher after `closeProject`) use push channels. Every push channel a
-  client should hear must be `ws.subscribe`d in the WS `open` handler — a publish on an unsubscribed topic
-  reaches nobody, silently.
+  + **`project.opened`** / **`project.removed`** (host publishers after open/init/close) use push channels.
+  Every push channel a client should hear must be `ws.subscribe`d in the WS `open` handler — a publish on
+  an unsubscribed topic reaches nobody, silently.
 - The host is the single place features are wired together — features never reach back into it.
 - **A send (prompt/steer/followUp) is acked when ACCEPTED, not when the turn ends** (`ackSend`): pi's send
   methods resolve only at turn end, and a turn can outlive the client's request timeout (an

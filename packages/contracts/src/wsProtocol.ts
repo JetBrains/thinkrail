@@ -38,11 +38,15 @@ import type {
 // v7: server-synced app settings — `server.welcome` now carries `config: AppConfig` (the initial theme
 // travels with the handshake), `settings.update` persists a partial, and `settings.changed` broadcasts
 // the new config to every client so they converge (the same shared-state pattern as the workspace trio).
-
-// v8  : `project.close` → `project.remove` (symmetry with workspace.remove; was unused)
-// v9  : `project.removed` push — project registry membership streams to every client (mirrors
-//       `workspace.removed` so a multi-tab remove doesn't leave an empty ghost project row).
-export const PROTOCOL_VERSION = 9;
+// v8: `ask_user_question` is ack + terminate — the tool no longer blocks; answers travel as
+// `ask-user-answers` custom messages, and `session.getMessages` now returns `TranscriptMessage[]`
+// (pi-canonical + `custom` role) so the questionnaire card can pair answers by tool call id.
+// v9: `project.close` → `project.remove` (symmetry with workspace.remove; was unused)
+// v10: `project.removed` push — project registry membership streams to every client (mirrors
+//      `workspace.removed` so a multi-tab remove doesn't leave an empty ghost project row).
+// v11: `project.opened` push — open/init fans the project snapshot to every client (mirrors
+//      `workspace.created` so a multi-tab open doesn't leave other tabs missing the new row).
+export const PROTOCOL_VERSION = 11;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -170,10 +174,11 @@ export const WS_CHANNELS = {
 	workspaceCreated: "workspace.created",
 	workspaceUpdated: "workspace.updated",
 	workspaceRemoved: "workspace.removed",
-	// Project registry membership (mirrors the workspace trio's `removed`): broadcast after `project.remove`
-	// so every client drops the project row (not just its workspaces via `workspace.removed`). Payload is a
-	// `ProjectRemoved` `{ id }` — the record is already gone. Initiator may still optimistically
-	// `removeProject`; applying the push again is idempotent.
+	// Project registry membership (mirrors the workspace lifecycle): `opened` after `project.open` /
+	// `project.init` carries the full `Project` snapshot (upsert by id — re-open bumps `lastOpened`);
+	// `removed` after `project.remove` carries a `ProjectRemoved` `{ id }`. Initiator may re-list /
+	// optimistically remove; re-applying either push is idempotent.
+	projectOpened: "project.opened",
 	projectRemoved: "project.removed",
 	// The worktree change notifier (a `WorkspaceFsChangedPayload` per frame), broadcast to every client.
 	// A debounced invalidation nudge, not data — receivers re-read via the read methods they already use.

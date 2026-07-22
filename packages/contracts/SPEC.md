@@ -122,11 +122,12 @@ what lets the UI ship independently of the host.
   publisher (never a per-client optimistic mutation). `created`/`updated` carry the **full persisted
   `Workspace` snapshot** (idempotent under the transport's last-value replay, so e.g. the auto-rename's
   naive-then-agentic pair merges by `id` — never a delta); `removed` carries a **`WorkspaceRemoved`** id
-  pair (`{ projectId, id }` — the record is already gone) / **`project.removed`** — project registry
-  membership (mirrors `workspace.removed`; broadcast after `project.remove` / `closeProject` so multi-tab
-  clients drop the project row, not just its workspaces). Payload is a **`ProjectRemoved`** `{ id }`
-  (the record is already gone). Initiator may still optimistically `removeProject`; re-applying the push
-  is idempotent / **`workspace.fsChanged`** — the worktree
+  pair (`{ projectId, id }` — the record is already gone) / **`project.opened`** / **`project.removed`** —
+  project registry membership (mirrors the workspace lifecycle). **`project.opened`** is broadcast after
+  `project.open` / `project.init` with the full **`Project`** snapshot (upsert by id — re-open bumps
+  `lastOpened`); **`project.removed`** after `project.remove` / `closeProject` with a **`ProjectRemoved`**
+  `{ id }`. Initiator may re-list / optimistically remove; re-applying either push is idempotent /
+  **`workspace.fsChanged`** — the worktree
   change-notifier push (**`WorkspaceFsChangedPayload`**: `{ workspaceId, paths, truncated }`,
   worktree-relative deduped paths, capped — `truncated` = treat as wildcard); an **invalidation nudge,
   not data**: clients re-read via the existing read methods, so a duplicate/replayed frame is harmless.

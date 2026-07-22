@@ -566,6 +566,50 @@ test("applyWorkspaceRemoved on a non-active workspace drops the row silently (no
 	expect(s.toasts).toHaveLength(0);
 });
 
+// ---- applyProjectOpened: project.opened reaction (multi-tab open/init) -----------------------------
+
+test("applyProjectOpened upserts a new project and sorts by lastOpened desc", () => {
+	useAppStore.setState({
+		projects: [{ id: "p-old", name: "older", path: "/tmp/older", slug: "older", lastOpened: 100 }],
+		selectedProjectId: null,
+	});
+
+	useAppStore.getState().applyProjectOpened({
+		id: "p-new",
+		name: "newer",
+		path: "/tmp/newer",
+		slug: "newer",
+		lastOpened: 200,
+	});
+
+	const s = useAppStore.getState();
+	expect(s.projects.map((p) => p.id)).toEqual(["p-new", "p-old"]);
+	expect(s.selectedProjectId).toBeNull(); // push never steals selection
+});
+
+test("applyProjectOpened re-open merges by id and re-sorts (lastOpened bump)", () => {
+	useAppStore.setState({
+		projects: [
+			{ id: "p1", name: "repo", path: "/tmp/repo", slug: "repo", lastOpened: 10 },
+			{ id: "p2", name: "other", path: "/tmp/other", slug: "other", lastOpened: 20 },
+		],
+		selectedProjectId: "p2",
+	});
+
+	useAppStore.getState().applyProjectOpened({
+		id: "p1",
+		name: "repo",
+		path: "/tmp/repo",
+		slug: "repo",
+		lastOpened: 30,
+	});
+
+	const s = useAppStore.getState();
+	expect(s.projects.map((p) => p.id)).toEqual(["p1", "p2"]);
+	expect(s.projects[0]?.lastOpened).toBe(30);
+	expect(s.selectedProjectId).toBe("p2"); // still no selection steal
+});
+
 // ---- applyProjectRemoved / removeProject: project.removed reaction + optimistic initiator path -----
 
 test("applyProjectRemoved drops the project + workspaces, clears tabs, and returns selected/active to Welcome", () => {

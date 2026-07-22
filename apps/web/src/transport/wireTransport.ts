@@ -2,6 +2,7 @@ import type {
 	AppConfig,
 	ExtUiRequest,
 	LoginPush,
+	Project,
 	ProjectRemoved,
 	ServerWelcome,
 	SessionEventPayload,
@@ -66,8 +67,12 @@ export function initTransport(): WsTransport {
 		useAppStore.getState().applyWorkspaceRemoved(projectId, id);
 	});
 
-	// Project membership — every client drops the project row (initiator may already have optimistically
-	// `removeProject`'d; `applyProjectRemoved` is idempotent).
+	// Project registry membership — every client upserts on open / drops on remove. Initiator may also
+	// re-list or optimistically remove; both applies are idempotent. Open does not steal selection.
+	transport.subscribe(WS_CHANNELS.projectOpened, (data) => {
+		useAppStore.getState().applyProjectOpened(data as Project);
+	});
+
 	transport.subscribe(WS_CHANNELS.projectRemoved, (data) => {
 		const { id } = data as ProjectRemoved;
 		useAppStore.getState().applyProjectRemoved(id);

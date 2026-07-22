@@ -30,6 +30,10 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   and **if it was this client's active workspace** → `setActiveWorkspace(null)` (shell falls back to the
   project Welcome) + a neutral toast that reads right for both the initiator and an observer); the
   primitive **`removeWorkspace(projectId, id)`** just drops the row (unknown project/id is a no-op);
+  **`applyProjectOpened(project)`** is the **`project.opened`** reaction: **upsert** the `Project`
+  snapshot by id into `projects` and re-sort by `lastOpened` desc (idempotent with the opener's post-open
+  `project.list` re-list / a re-open lastOpened bump). Does **not** steal selection — only the initiator
+  adopts (select/expand);
   **`applyProjectRemoved(projectId)`** is the **`project.removed`** reaction (and the shared body for
   optimistic **`removeProject`**): drop the project from `projects`, clear `workspaces[projectId]`,
   `clearWorkspaceTabs` every known child workspace (+ its `fsChangesByWorkspace` tick), and if it was
