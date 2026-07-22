@@ -49,6 +49,7 @@ beforeEach(() => {
 		tabsByWorkspace: {},
 		activeTabByWorkspace: {},
 		closedChatsByWorkspace: {},
+		selectedProjectId: null,
 		activeWorkspaceId: null,
 		activeLogin: null,
 		settingsOpen: false,
@@ -494,6 +495,22 @@ function pushedWorkspace(over: Partial<Workspace> = {}): Workspace {
 	};
 }
 
+test("project and workspace navigation update both scope ids atomically", () => {
+	useAppStore.setState({ selectedProjectId: "p1", activeWorkspaceId: "w1" });
+	const transitions: [string | null, string | null][] = [];
+	const unsubscribe = useAppStore.subscribe((state) => {
+		transitions.push([state.selectedProjectId, state.activeWorkspaceId]);
+	});
+
+	useAppStore.getState().selectProject("p2");
+	expect(transitions).toEqual([["p2", null]]);
+
+	transitions.length = 0;
+	useAppStore.getState().activateWorkspace(pushedWorkspace({ id: "w3", projectId: "p3" }));
+	expect(transitions).toEqual([["p3", "w3"]]);
+	unsubscribe();
+});
+
 test("updateWorkspace merges the pushed snapshot by id, keeping the computed diffStats badge", () => {
 	useAppStore.setState({
 		workspaces: {
@@ -571,6 +588,7 @@ test("addWorkspace is a no-op for a project whose list was never fetched", () =>
 test("applyWorkspaceRemoved drops the row, clears its tabs, and returns the active client to Welcome + toast", () => {
 	useAppStore.setState({
 		workspaces: { p1: [pushedWorkspace()] },
+		selectedProjectId: "stale-project",
 		activeWorkspaceId: "w1",
 		tabsByWorkspace: {
 			w1: [{ kind: "file", id: "w1:a", workspaceId: "w1", name: "a", path: "a", content: "" }],
@@ -585,6 +603,7 @@ test("applyWorkspaceRemoved drops the row, clears its tabs, and returns the acti
 	expect(s.workspaces.p1).toEqual([]);
 	expect(s.tabsByWorkspace.w1).toBeUndefined(); // clearWorkspaceTabs dropped its tabs
 	expect(s.activeWorkspaceId).toBeNull(); // shell falls back to the project Welcome
+	expect(s.selectedProjectId).toBe("p1"); // specifically the removed workspace's owning Project Home
 	expect(s.toasts).toHaveLength(1);
 	expect(s.toasts[0]?.message).toContain("add-login-flow"); // the removed workspace's name
 });
@@ -953,10 +972,10 @@ test("the toast helper enqueues by variant and omits an absent title", () => {
 	expect(useAppStore.getState().toasts[0]).not.toHaveProperty("title");
 });
 
-test("applyConfig folds the server-synced app config in (theme is host-owned, a pure value)", () => {
-	// The DOM swap is the shell's; the store just holds the value the UI reads.
-	useAppStore.getState().applyConfig({ theme: "darcula" });
-	expect(useAppStore.getState().theme).toBe("darcula");
-	useAppStore.getState().applyConfig({ theme: "light" });
-	expect(useAppStore.getState().theme).toBe("light");
+test("applyConfig folds the server-synced app config in (theme is an opaque host-owned value)", () => {
+	// The themes module resolves/applies it; the store preserves exactly the id received from the host.
+	useAppStore.getState().applyConfig({ theme: "acme.solarized" });
+	expect(useAppStore.getState().theme).toBe("acme.solarized");
+	useAppStore.getState().applyConfig({ theme: "custom.high-contrast" });
+	expect(useAppStore.getState().theme).toBe("custom.high-contrast");
 });

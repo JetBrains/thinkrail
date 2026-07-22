@@ -11,16 +11,16 @@ tags: [v1, wire]
 ## Responsibility
 
 The browser↔host wire spine: the single source of truth for the protocol. Types-only, with the only
-runtime exports being the WS method/channel constants, the protocol version, and the small theme/config
-value-sets (`Theme` / `THEME_IDS` / `DEFAULT_CONFIG`). The one package `apps/web` may depend on — which is
-what lets the UI ship independently of the host.
+runtime exports being the WS method/channel constants, the protocol version, and the small config default
+(`DEFAULT_CONFIG`). The one package `apps/web` may depend on—which is what lets the UI ship independently
+of the host.
 
 ## Boundary
 
 - **Owns:** the wire — entity types, the `pi` event/message types (re-exported), the WS method & channel
   registries, and the protocol version.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain`; the value re-exports
-  `Theme` / `THEME_IDS` / `DEFAULT_CONFIG` from `domain`; `export *` (value) of `wsProtocol`
+  `DEFAULT_CONFIG` from `domain`; `export *` (value) of `wsProtocol`
   (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`).
 - **Allowed deps:** none at runtime. **Type-only** devDeps on `@earendil-works/pi-ai` +
   `@earendil-works/pi-agent-core`, imported **from their package roots** (type-only → erased at build).
@@ -99,21 +99,25 @@ what lets the UI ship independently of the host.
   **`JbcentralConnectResult`** (the in-app connect state machine: `connected` / `needs-install` /
   `needs-login` / `error` (+`message`); the `needs-install` command comes from `jbcentralInstall`, not a
   hint on this result));
-  the **theme/config value-set** — **`Theme`** (a const-object "enum":
-  `Dark`/`Light`/`Darcula`/`Gruvbox`/`HighContrast`;
-  adding a value is wire-compatible — an older client falls back to Dark's `:root` tokens), its derived
-  **`ThemeId`** type + runtime-iterable **`THEME_IDS`** (the picker source), and the server-synced
-  **`AppConfig`** (`{ theme }` — an extensible bag) with its **`DEFAULT_CONFIG`** fallback (persisted host-side
-  as `config.json`, delivered in `server.welcome`, mutated via `settings.update`);
+  the **theme/config selection** — **`ThemeId`** is an open string on the wire, because the host persists
+  an opaque selection while the independently shipped web client owns the available manifest catalog;
+  **`AppConfig`** (`{ theme }` — an extensible bag) carries it with the **`DEFAULT_CONFIG`** fallback
+  (persisted host-side as `config.json`, delivered in `server.welcome`, mutated via `settings.update`).
+  Contracts deliberately exports no theme enum/list/labels: a future manifest can mint an id unknown when
+  the host was built, and a client missing it resolves its own bundled default;
   **`SpecGraphNode`/`SpecGraphSnapshot`** — the
   Specs-viewer read DTOs, **mirrored** (like `PiEvent`), never imported from `pi-spec-graph` — the wire
-  carries only what the panel renders (`type`/`status` stay `string`: tolerate whatever is on disk).
+  carries only what the panel renders (`type`/`status` stay `string`: tolerate whatever is on disk);
+  **`TodoItem`/`TodoGroupItem`/`TodoPlan`** + the **`TodoStatus`/`TodoOrigin`** unions — the in-chat plan
+  DTOs, **mirrored** from `pi-todos/core` (never imported), carrying the chat's per-session TODO list.
 - **wsProtocol.ts** — `WS_METHODS` (`project.*` — incl. **`project.remove`** (was unused `project.close`;
   archive every workspace then drop the project; source repo untouched) + **`project.inspect`** (classify
   a path) + **`project.init`** (`git init` + commit, then open) + **`project.hasSpecs`** (lazy per-project
   "has any registered spec?" for the Welcome screen — a full-tree walk, so requested only for the shown
   project, never eagerly for every project) / `workspace.*` / `fs.*` / `git.*` / **`spec.graph`**
-  (the Specs-viewer whole-graph read, per workspace) / `terminal.*` / `model.list` / **`provider.status`**
+  (the Specs-viewer whole-graph read, per workspace) / **`todo.*`** — **`list`**/**`add`**/**`update`**/
+  **`remove`**, the chat's per-session TODO plan (keyed by `workspaceId` + `sessionId`; `add` tags the
+  item `origin:"user"`) / `terminal.*` / `model.list` / **`provider.status`**
 (the auth-provider status report; every read revalidates host-side) / the **`provider.*` in-app login**
   (**`loginStart`** — mints a `loginId` and runs pi's OAuth flow **detached** (it can take minutes; it must
   not sit on the request nor block the WS pump) / **`loginReply`** — answers a live `select`/`prompt`,

@@ -28,12 +28,15 @@ test("opens a file in a center Monaco tab, focuses on re-open, and closes", asyn
 	await readme.dblclick();
 	await expect(page.getByTestId("editor-tab")).toHaveCount(1);
 
-	// Close it → back to the empty-center hint.
+	// Close it → back to the workspace receipt, which re-orients after the last tab closes.
 	const tab = page.getByTestId("editor-tab");
 	await tab.hover();
 	await tab.getByTestId("editor-tab-close").click();
 	await expect(page.getByTestId("editor-tab")).toHaveCount(0);
-	await expect(page.getByTestId("center-tabs")).toContainText("Open a file or start a chat");
+	await expect(page.getByTestId("workspace-ready")).toContainText("Workspace ready");
+	await expect(page.getByTestId("workspace-ready")).toContainText(
+		"Files, chats, changes, and terminals are scoped to this workspace",
+	);
 });
 
 test("hides YAML frontmatter in the rendered view but shows it in source", async ({ page }) => {

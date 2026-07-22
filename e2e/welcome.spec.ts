@@ -158,6 +158,12 @@ test("a project with specs offers Start building over Set up", async ({ page }) 
 	await expect(page.getByTestId("welcome")).toBeVisible();
 	// The active project's name shows as the eyebrow above the wordmark.
 	await expect(page.getByTestId("welcome")).toContainText("sample-project");
+	// The global context makes the selected-but-not-active state explicit instead of making a project-row
+	// click look like the workspace silently disappeared.
+	const scope = page.getByTestId("scope-context");
+	await expect(scope).toHaveAttribute("data-context", "project-home");
+	await expect(scope).toContainText("sample-project");
+	await expect(scope).toContainText("Project home");
 	// Two cards: Start building (primary) + Open project — and no "Set up project".
 	await expect(page.getByTestId("welcome-cta")).toContainText("Start building");
 	await expect(

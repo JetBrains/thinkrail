@@ -12,7 +12,11 @@ let counter = 0;
 
 /** Fabricate a workspace: fresh dir, git init + commit; custom seeds run after the base init. */
 export function seedWorkspace(seed: WorkspaceSeed): string {
-	const cwd = join(E2E_DATA_DIR, `workflow-ws-${++counter}`);
+	// The pid keeps names unique across Playwright WORKER RESTARTS too: after a test failure the next
+	// test runs in a fresh worker whose module state (this counter) resets — a bare counter would then
+	// reuse workflow-ws-1 with the failed test's leftovers inside (a poisoned fixture) and collide on
+	// pi's per-cwd session dir (observed as mid-run ENOENT on the session jsonl).
+	const cwd = join(E2E_DATA_DIR, `workflow-ws-${process.pid}-${++counter}`);
 	mkdirSync(cwd, { recursive: true });
 	const git = (...args: string[]) => execFileSync("git", ["-C", cwd, ...args], { stdio: "ignore" });
 	git("init", "-b", "main");

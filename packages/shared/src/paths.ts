@@ -18,3 +18,12 @@ export const WORKSPACE_INTERNAL_DIR = ".thinkrail";
  * invisible to git.
  */
 export const WORKSPACE_CONTEXT_DIR = `${WORKSPACE_INTERNAL_DIR}/context`;
+
+/**
+ * Where the chat TODO lists live — one JSON file per session under the context scratch dir, so the plans
+ * are ephemeral (gitignored with the rest of `context/`) alongside the other per-conversation working
+ * files. The pi-free `pi-todos/core` cannot import this package (it stays portable to vanilla `pi`), so it
+ * carries its own local mirror of this value; this is the host-side source of truth (the server filters
+ * and attributes paths against it). Keep the two in step.
+ */
+export const WORKSPACE_TODOS_DIR = `${WORKSPACE_CONTEXT_DIR}/todos`;

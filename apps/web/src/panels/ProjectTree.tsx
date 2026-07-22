@@ -8,7 +8,7 @@ import {
 	Plus,
 	Trash2,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
 	DropdownMenu,
@@ -17,7 +17,7 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { PopoverTrigger } from "@/components/ui/popover";
-import { toast, useAppStore } from "../store";
+import { selectActiveWorkspaceProjectId, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -37,6 +37,20 @@ export function ProjectTree() {
 	// creating a workspace directly.
 	const [dialogProjectId, setDialogProjectId] = useState<string | null>(null);
 
+	// Reveal the active workspace's parent on mount or when its derived owner changes/resolves. Depending
+	// only on that project id preserves a deliberate manual collapse across same-project switches and
+	// workspace updates; creation expands its project explicitly in `onWorkspaceCreated` below.
+	const activeProjectId = useAppStore(selectActiveWorkspaceProjectId);
+	useEffect(() => {
+		if (!activeProjectId) return;
+		setExpanded((prev) => {
+			if (prev.has(activeProjectId)) return prev;
+			const next = new Set(prev);
+			next.add(activeProjectId);
+			return next;
+		});
+	}, [activeProjectId]);
+
 	const loadWorkspaces = async (projectId: string) => {
 		useAppStore
 			.getState()
@@ -44,15 +58,16 @@ export function ProjectTree() {
 	};
 
 	const selectProject = async (projectId: string) => {
-		const store = useAppStore.getState();
-		// Selecting a project returns to its Welcome — deselect any active workspace (the shell renders the
-		// Welcome when no workspace is active). The row is a deliberate "project home" gesture; the chevron
-		// handles expand/collapse separately, so this never fires from just expanding. The workspace's tabs
-		// survive in the store, so re-selecting it restores its view.
-		store.setActiveWorkspace(null);
-		store.selectProject(projectId);
+		// Selecting a project atomically returns to its Welcome. The row is a deliberate "project home"
+		// gesture; the chevron handles expand/collapse separately, so this never fires from just expanding.
+		// The workspace's tabs survive in the store, so re-selecting it restores its view.
+		useAppStore.getState().selectProject(projectId);
 		setExpanded((prev) => new Set(prev).add(projectId));
 		await loadWorkspaces(projectId);
+	};
+
+	const selectWorkspace = (workspace: Workspace) => {
+		useAppStore.getState().activateWorkspace(workspace);
 	};
 
 	const toggleExpand = (projectId: string) => {
@@ -162,7 +177,7 @@ export function ProjectTree() {
 												key={ws.id}
 												workspace={ws}
 												isActive={activeWorkspaceId === ws.id}
-												onSelect={() => useAppStore.getState().setActiveWorkspace(ws.id)}
+												onSelect={() => selectWorkspace(ws)}
 												onRemove={() => removeWorkspace(ws.id)}
 											/>
 										))

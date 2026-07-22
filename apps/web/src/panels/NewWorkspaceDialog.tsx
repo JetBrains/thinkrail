@@ -11,7 +11,13 @@ import {
 	CommandItem,
 	CommandList,
 } from "@/components/ui/command";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { toast, useAppStore } from "@/store";
@@ -175,7 +181,7 @@ export function NewWorkspaceDialog({
 		// spins up a session, and a kick-off failure can't strand the dialog open.
 		const store = useAppStore.getState();
 		onCreated(workspace);
-		store.setActiveWorkspace(workspace.id);
+		store.activateWorkspace(workspace);
 		onOpenChange(false);
 
 		const text = prompt.trim();
@@ -217,7 +223,13 @@ export function NewWorkspaceDialog({
 					promptRef.current?.focus();
 				}}
 			>
-				<DialogTitle className="sr-only">New workspace</DialogTitle>
+				<DialogHeader>
+					<DialogTitle>Create workspace</DialogTitle>
+					<DialogDescription>
+						A separate checkout on its own new branch. Files, chats, changes, and terminals stay
+						scoped to it.
+					</DialogDescription>
+				</DialogHeader>
 
 				{/* controls-top: project + base-branch pickers */}
 				<div className="flex flex-wrap items-center gap-sm">
@@ -238,23 +250,30 @@ export function NewWorkspaceDialog({
 				</div>
 
 				{/* hero: the prompt */}
-				<Textarea
-					ref={promptRef}
-					data-testid="ws-prompt"
-					value={prompt}
-					onChange={(e) => setPrompt(e.target.value)}
-					placeholder="What do you want to work on?"
-					spellCheck={false}
-					rows={6}
-					className="min-h-[160px]"
-					onKeyDown={(e) => {
-						// Enter creates (matching the button's ↵ affordance); Shift+Enter inserts a newline.
-						if (e.key === "Enter" && !e.shiftKey) {
-							e.preventDefault();
-							void create();
-						}
-					}}
-				/>
+				<div className="flex flex-col gap-xs">
+					<Textarea
+						ref={promptRef}
+						data-testid="ws-prompt"
+						value={prompt}
+						onChange={(e) => setPrompt(e.target.value)}
+						placeholder="What do you want to work on?"
+						spellCheck={false}
+						rows={6}
+						className="min-h-[160px]"
+						onKeyDown={(e) => {
+							// Enter creates (matching the button's ↵ affordance); Shift+Enter inserts a newline.
+							if (e.key === "Enter" && !e.shiftKey) {
+								e.preventDefault();
+								void create();
+							}
+						}}
+					/>
+					{prompt.trim() ? (
+						<p data-testid="workspace-naming-hint" className="px-xs text-hint text-xs">
+							ThinkRail will name the workspace and branch from your request.
+						</p>
+					) : null}
+				</div>
 
 				{/* controls-bottom: model + effort (left), Create (right) */}
 				<div className="flex flex-wrap items-center gap-sm">
@@ -394,6 +413,7 @@ function BranchPicker({
 				className={`${PILL} max-w-[220px]`}
 			>
 				<GitBranch className="size-3.5 shrink-0 text-muted" />
+				<span className="shrink-0 text-hint text-xs">From</span>
 				<span className="truncate font-[var(--font-mono)] text-muted text-xs">
 					{baseRef || "branch"}
 				</span>

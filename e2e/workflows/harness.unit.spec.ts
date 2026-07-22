@@ -118,6 +118,21 @@ test("dialog: a throwing script degrades to the fallback rung and records the er
 	detach();
 });
 
+test("dialog: settle resolves once deliveries finish and records delivery failures", async () => {
+	const log = new EventLog();
+	// Unknown session id → the production bridge rejects the delivery; settle must still resolve,
+	// with the failure recorded on the round (appended, never clobbering a script error).
+	const { answered, detach, settle } = attachDialog("unit-session-settle", log, {
+		fallback: "pickRecommended",
+	});
+	log.push(toolStart("q1", "ask_user_question", { questions: QUESTIONS }));
+	await settle();
+	expect(answered).toHaveLength(1);
+	expect(answered[0]?.error).toContain("delivery:");
+	expect(answered[0]?.result.answers[0]?.answer).toBe("Plain text (Recommended)");
+	detach();
+});
+
 test("dialog: pickRecommended, skipAll, persona reply parsing", () => {
 	const recommended = pickRecommended(QUESTIONS);
 	expect(recommended.cancelled).toBe(false);

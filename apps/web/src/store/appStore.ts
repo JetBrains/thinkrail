@@ -15,7 +15,7 @@ import type {
 	Workspace,
 	WorkspaceFsChangedPayload,
 } from "@thinkrail/contracts";
-import { isAskUserAnswersMessage, Theme } from "@thinkrail/contracts";
+import { DEFAULT_CONFIG, isAskUserAnswersMessage } from "@thinkrail/contracts";
 import { create } from "zustand";
 import type { LoginState } from "../auth";
 import type { HydratedRuntime } from "../chat/hydrate";
@@ -43,7 +43,20 @@ export interface ChatTab {
 	name: string;
 	sessionId: string;
 }
-export type EditorTab = FileTab | ChatTab;
+/**
+ * An **ephemeral** rendered-markdown tab — content only, never backed by a file on disk (so no fs
+ * re-read / source toggle). Used for on-demand snapshots like the chat's TODO plan compiled to markdown.
+ * `docPath` is a synthetic `.md` name (for the preview's link/heading resolution + a readable label).
+ */
+export interface DocTab {
+	kind: "doc";
+	id: string;
+	workspaceId: string;
+	name: string;
+	content: string;
+	docPath: string;
+}
+export type EditorTab = FileTab | ChatTab | DocTab;
 
 /**
  * A section of the settings dialog (a const-object "enum", the codebase convention). Extensible — the live
@@ -416,8 +429,8 @@ interface AppState {
 	 * React to a server-pushed `workspace.removed` — the **entire** removal reaction, run identically by
 	 * every client (including the one that initiated the remove, so there's no per-client optimism): drop
 	 * the row + clear its tabs/terminals/chat runtimes (`clearWorkspaceTabs`), and **if it was this
-	 * client's active workspace** return to the project Welcome (`setActiveWorkspace(null)`) and raise a
-	 * neutral toast (reads correctly for both the initiator and an observer).
+	 * client's active workspace** return to its owning Project Home and raise a neutral toast (reads
+	 * correctly for both the initiator and an observer).
 	 */
 	applyWorkspaceRemoved: (projectId: string, workspaceId: string) => void;
 	/**
@@ -432,9 +445,14 @@ interface AppState {
 	 * `project.remove` should re-list to reconcile; the subsequent `project.removed` push is a no-op.
 	 */
 	removeProject: (projectId: string) => void;
+	/** Enter a project's home, atomically clearing any active workspace. */
 	selectProject: (projectId: string) => void;
-	setActiveWorkspace: (id: string | null) => void;
+	/** Enter a workspace and select its owning project in one state transition. */
+	activateWorkspace: (workspace: Pick<Workspace, "id" | "projectId">) => void;
 	openTab: (tab: EditorTab) => void;
+	/** Open (or refresh + focus, if already open) an ephemeral rendered-markdown `doc` tab. Re-invoking
+	 * with the same id replaces its content so a "compile current state" action always shows the latest. */
+	openDoc: (tab: DocTab) => void;
 	closeTab: (id: string) => void;
 	setActiveTab: (id: string) => void;
 	/** Set a markdown file tab's view mode (rendered ↔ source); kept on the tab so it survives tab switches. */
@@ -600,7 +618,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	activeLogin: null,
 	settingsOpen: false,
 	settingsSection: SettingsSection.Providers,
-	theme: Theme.Dark,
+	theme: DEFAULT_CONFIG.theme,
 	toasts: [],
 	setStatus: (status) => set({ status }),
 	setWelcome: (protocolVersion) => set({ protocolVersion }),
@@ -663,7 +681,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			return { fsChangesByWorkspace: rest };
 		});
 		if (wasActive) {
-			s.setActiveWorkspace(null); // the shell falls back to the project Welcome
+			s.selectProject(projectId); // atomically fall back to the removed workspace's Project Home
 			toast.info(`Workspace "${name ?? "?"}" was removed`);
 		}
 	},
@@ -695,8 +713,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 	removeProject: (projectId) => {
 		get().applyProjectRemoved(projectId);
 	},
-	selectProject: (selectedProjectId) => set({ selectedProjectId }),
-	setActiveWorkspace: (activeWorkspaceId) => set({ activeWorkspaceId }),
+	selectProject: (selectedProjectId) => set({ selectedProjectId, activeWorkspaceId: null }),
+	activateWorkspace: (workspace) =>
+		set({ selectedProjectId: workspace.projectId, activeWorkspaceId: workspace.id }),
 	openTab: (tab) =>
 		set((s) => {
 			const tabs = s.tabsByWorkspace[tab.workspaceId] ?? [];
@@ -704,6 +723,18 @@ export const useAppStore = create<AppState>((set, get) => ({
 				tabsByWorkspace: tabs.some((t) => t.id === tab.id)
 					? s.tabsByWorkspace
 					: { ...s.tabsByWorkspace, [tab.workspaceId]: [...tabs, tab] },
+				activeTabByWorkspace: { ...s.activeTabByWorkspace, [tab.workspaceId]: tab.id },
+			};
+		}),
+	openDoc: (tab) =>
+		set((s) => {
+			const tabs = s.tabsByWorkspace[tab.workspaceId] ?? [];
+			const exists = tabs.some((t) => t.id === tab.id);
+			return {
+				tabsByWorkspace: {
+					...s.tabsByWorkspace,
+					[tab.workspaceId]: exists ? tabs.map((t) => (t.id === tab.id ? tab : t)) : [...tabs, tab],
+				},
 				activeTabByWorkspace: { ...s.activeTabByWorkspace, [tab.workspaceId]: tab.id },
 			};
 		}),

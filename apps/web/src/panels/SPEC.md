@@ -34,7 +34,13 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   Each **workspace row** is **two-line**: the display
   `name` on top with the git **branch on a second line beneath it** (muted, monospace), rendered only when
   it differs from the name (so pristine/legacy `workspace-N` rows stay a single compact line) — the display
-  name is decoupled from the git branch (see [[submodule-server-workspaces]]).
+  name is decoupled from the git branch (see [[submodule-server-workspaces]]). The active workspace must
+  also stay visible: when `ProjectTree` mounts with an active workspace, or the active workspace's derived
+  owning project changes or first becomes resolvable, it expands that parent project. A manual collapse
+  remains respected while the owning project is unchanged; ordinary `workspace.updated` snapshots and
+  same-project workspace switches do not force it open again. Workspace creation expands its project
+  explicitly. Selecting or creating a workspace also selects its owning project, keeping project-home and
+  active-workspace context coherent even when the create dialog's project picker targets another project.
   **Opening a project** goes through the shared **`useOpenProject`** hook (reused by `ProjectTree` **and**
   `WelcomePanel`, so the flow is identical in the rail and the Welcome screen): `project.open`, and on
   failure `project.inspect` → either offers to bootstrap the folder into a repo — a modal **`ConfirmDialog`**
@@ -75,10 +81,14 @@ CTA that opens Settings → Providers (`store.openSettings("providers")`). It re
 provider is "connected" iff any `configured`) on mount and re-checks whenever the settings dialog toggles, so
 it disappears the moment the user connects one; a transport error degrades to *not* nagging (offline ≠ "no
 provider"). All provider **management** lives in Settings, not here (the always-on strip is gone).
-**`NewWorkspaceDialog`** is the create-and-kick-off surface: an optional **`initialPrompt`** seeds the
-prompt hero (still editable; empty by default), a base-branch
-  combobox (`git.listBranches`, degrading to local branches offline; a Refresh re-lists; `origin/HEAD` is
-  filtered so no stray `origin`), a project picker, the prompt hero, and the reused
+**`NewWorkspaceDialog`** is the create-and-kick-off surface. It names the operation visibly — title
+**“Create workspace”** — and states the model without adding a step: **“A separate checkout on its own new
+branch. Files, chats, changes, and terminals stay scoped to it.”** Its base-branch trigger reads **“From
+{base}”**, not an unexplained ref. An optional **`initialPrompt`** seeds the prompt hero (still editable;
+empty by default); while the prompt is non-empty, a secondary hint says ThinkRail will name the workspace
+and branch from the request. The rest stays compact: the base-branch combobox (`git.listBranches`,
+degrading to local branches offline; a Refresh re-lists; `origin/HEAD` is filtered so no stray `origin`),
+a project picker, the prompt hero, and the reused
   `chat/ModelSelector`+`ThinkingSelector` in **pre-session** mode — preselected to the host's resolved
   default via `model.default` so the exact model shows (values held in dialog state, applied at create
   time). The pickers' popovers portal into the dialog node (so their lists scroll under the Dialog scroll
@@ -106,15 +116,24 @@ prompt hero (still editable; empty by default), a base-branch
   Connected (Disconnect) / ready (Connect) / not signed in (in-app `central login` + Retry) / not installed
   (the host's per-OS copyable install command — from `jbcentralInstall`, for the *host's* OS, never the
   browser's — + Recheck); each mutation re-reads `provider.status`) **`GithubSettings`** (the "Local GitHub" block — `github.authStatus()`
-  Connected + login / Not connected + Refresh); and **`AppearanceSettings`** (the **theme picker** — a
-  labelled list of `utils/theme`'s `THEMES`, the active one from `store.theme` marked; clicking one fires
-  `settings.update` and the UI **converges on the `settings.changed` broadcast** (no optimistic apply), a
-  rejected update raising a toast). A single dimmed "General" nav item ("Soon") still signals the shell is
+  Connected + login / Not connected + Refresh); and **`AppearanceSettings`** (the **theme picker** — the
+  bundled catalog from `themes`, with the resolved active selection from `store.theme` marked;
+  clicking one fires `settings.update` and the UI **converges on the `settings.changed` broadcast** (no
+  optimistic apply), a rejected update raising a toast). The picker never owns a theme list — it renders
+  the catalog the glob discovered at build time. A single dimmed "General" nav item
+  ("Soon") still signals the shell is
   built to grow. `ProvidersSettings`/`AppearanceSettings` are the **integration pieces** (store + transport);
   the `LoginDialog` stays presentational (`auth` module).
   Panels compose their own sub-panels
   (e.g. `RightPanel`→`FileTree`/`ChangesPanel`, `CenterTabs`→`FilePane`→`MonacoEditor`) — an internal hierarchy.
-  `CenterTabs` closing a chat tab routes to `store.closeChatToHistory` (keeps the session alive) and shows a
+  When the active workspace has no open center tab, `CenterTabs` uses the empty surface as a persistent
+  creation/orientation receipt rather than a generic placeholder: **“Workspace ready”**, the display name,
+  `branch · from baseBranch`, and **“Files, chats, changes, and terminals are scoped to this workspace,”**
+  followed by the existing **New chat** action. It is neither one-time nor dismissible, so it also helps
+  after the last tab closes without introducing onboarding state. `CenterTabs` also renders ephemeral
+  **`doc`** tabs (`DocTab` — inline rendered markdown, no file on disk) via its own
+  `DocPane`→`MarkdownPreview`; used for the plan-as-markdown snapshot (see the `chat` module). `CenterTabs`
+  closing a chat tab routes to `store.closeChatToHistory` (keeps the session alive) and shows a
   **chat-history** dropdown (recently-closed + disk-only chats, shown only when non-empty). On
   workspace-activate it **hydrates**: `session.list` → **live** sessions auto-restore as tabs
   (`session.getMessages` → `messagesToRuntime` → `store.hydrateSession`); **disk-only** ones go to history
@@ -132,7 +151,7 @@ prompt hero (still editable; empty by default), a base-branch
   one set or the other on the active-workspace branch.)
 - **Allowed deps:** `store`, `transport`, `components/ui` (incl. `popover`/`command`/`textarea` for the
   dialog), `chat` (`ModelSelector`/`ThinkingSelector`, reused by `NewWorkspaceDialog`; `Markdown`,
-  reused by `MarkdownPreview`), `lib`, `utils` (`theme`'s `THEMES`, for `AppearanceSettings`),
+  reused by `MarkdownPreview`), `lib`, `themes` (catalog + generic application contract),
   `contracts`; `lucide-react`; and the heavy libs each lazy panel owns (`monaco-editor`, `shiki`,
   `@xterm/*`) loaded via `import()`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `shell`; reaching across unrelated panels.
@@ -201,18 +220,15 @@ prompt hero (still editable; empty by default), a base-branch
   **external** link opens a new tab, and a **relative image** rewrites to the host **`/files/…`** route
   (built from `transport.httpBase()`). A cross-file link's `#fragment` is not yet followed (opens the
   file only).
-- **Code surfaces re-theme from the tokens, resiliently.** `MonacoEditor` defines the `thinkrail` theme
-  from the live tokens (chrome from the surface tokens, the `vs`/`vs-dark`/`hc-black` base from
-  `[data-theme]` — high-contrast rides Monaco's real hc-black palette — syntax rules from whichever
-  `--code-*` a theme sets, and the optional `--sel-fg` selected-text color, high-contrast's
-  black-on-yellow) and redefines it via a `[data-theme]`
-  MutationObserver; token reads are **canonicalized to hex** (`lib.cssColorToHex` — minified CSS serves
-  equivalents like `#fff`/`gray`, which Monaco rejects; unparseable → dropped, never passed through) and
-  the define **degrades to the base palette instead of throwing** (a bad
-  token value must never crash the editor panel). `TerminalInstance` builds the xterm theme the same way,
-  including the **16 `--ansi-*` slots** (so shell colors stay legible per theme) and the optional
-  `--sel-fg` selection foreground, re-read on the same
-  observer. `DiffViewer` renders every `SHIKI_THEMES` palette (`lib/shikiTheme`) once; the swap is pure CSS.
+- **Code surfaces re-theme from generic tokens, resiliently.** `MonacoEditor` defines the `thinkrail`
+  theme from live surface + semantic syntax variables and chooses its normal/high-contrast base from
+  manifest appearance/contrast metadata—never from a known id—then redefines it after the theme module's
+  atomic `[data-theme]` signal. Reads are canonicalized to hex (`lib.cssColorToHex`; unparseable values
+  are dropped), and a bad value degrades to Monaco's base palette rather than crashing the panel.
+  `TerminalInstance` similarly rebuilds from the complete 16-slot ANSI variable set; both consume the
+  nullable editor selection-foreground override when provided. `DiffViewer` uses the one generic Shiki
+  CSS-variable registration, so highlighted markup follows a palette swap without re-highlighting or a
+  theme-specific selector/import.
 - Heavy deps (Monaco / shiki / xterm) load via `React.lazy(() => import())` to stay out of the eager bundle.
   A lazy chunk that fails to load (or a render throw) is contained by the `components/ErrorBoundary` the
   **shell** wraps each region in (see `shell/SPEC.md`), so a single panel degrades instead of blanking the

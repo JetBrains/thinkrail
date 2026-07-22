@@ -1,12 +1,11 @@
 import { createHighlighterCore, type HighlighterCore } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
-import { DARCULA_SHIKI, HC_BLACK_SHIKI, SHIKI_THEMES } from "./shikiTheme";
+import { THINKRAIL_SHIKI_THEME, THINKRAIL_SHIKI_THEME_NAME } from "@/themes";
 
 // Shared shiki highlighter for chat code blocks: the JS regex engine (no WASM), a curated language set,
-// and every `SHIKI_THEMES` palette (from `shikiTheme.ts`) — all behind dynamic imports so nothing
-// loads until the first code block renders. Matches the DiffViewer pattern; kept here so chat can highlight
-// many languages. One render emits every palette as CSS vars; the `[data-theme]` rules in global.css flip
-// between them, so a theme swap needs no re-highlighting.
+// and one generic ThinkRail theme whose TextMate colors are live CSS variables. It stays behind the lazy
+// highlighter import; a theme swap changes those variables, so existing markup follows without another
+// highlight pass or a per-theme package import.
 
 const CANONICAL = new Set([
 	"typescript",
@@ -40,13 +39,7 @@ const ALIAS: Record<string, string> = {
 let highlighterPromise: Promise<HighlighterCore> | null = null;
 function getHighlighter(): Promise<HighlighterCore> {
 	highlighterPromise ??= createHighlighterCore({
-		themes: [
-			import("@shikijs/themes/github-dark-default"),
-			import("@shikijs/themes/github-light-default"),
-			import("@shikijs/themes/gruvbox-dark-hard"),
-			DARCULA_SHIKI,
-			HC_BLACK_SHIKI,
-		],
+		themes: [THINKRAIL_SHIKI_THEME],
 		langs: [
 			import("@shikijs/langs/typescript"),
 			import("@shikijs/langs/tsx"),
@@ -73,7 +66,7 @@ export async function highlightCode(code: string, lang: string): Promise<string 
 	if (!CANONICAL.has(canonical)) return null;
 	try {
 		const hl = await getHighlighter();
-		return hl.codeToHtml(code, { lang: canonical, themes: SHIKI_THEMES, defaultColor: "dark" });
+		return hl.codeToHtml(code, { lang: canonical, theme: THINKRAIL_SHIKI_THEME_NAME });
 	} catch {
 		return null;
 	}

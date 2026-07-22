@@ -13,6 +13,9 @@ import type {
 	ProjectPathStatus,
 	ProviderStatusReport,
 	SpecGraphSnapshot,
+	TodoItem,
+	TodoPlan,
+	TodoStatus,
 	Workspace,
 } from "./domain";
 import type {
@@ -107,6 +110,12 @@ export const WS_METHODS = {
 	fsReadDir: "fs.readDir",
 	fsReadFile: "fs.readFile",
 	specGraph: "spec.graph",
+	// A chat's TODO list (pi-todos), scoped by `sessionId`. Read + the user's write ops (the agent writes
+	// the same per-session file via its own todo_* tools in-session; these are the UI's editing path).
+	todoList: "todo.list",
+	todoAdd: "todo.add",
+	todoUpdate: "todo.update",
+	todoRemove: "todo.remove",
 	gitStatus: "git.status",
 	gitDiff: "git.diff",
 	terminalCreate: "terminal.create",
@@ -269,6 +278,26 @@ export interface WsMethodMap {
 	"fs.readDir": { params: { workspaceId: string; path: string }; result: FileNode[] };
 	"fs.readFile": { params: { workspaceId: string; path: string }; result: { content: string } };
 	"spec.graph": { params: { workspaceId: string }; result: SpecGraphSnapshot };
+	"todo.list": {
+		params: { workspaceId: string; sessionId: string };
+		result: TodoPlan;
+	};
+	"todo.add": {
+		params: { workspaceId: string; sessionId: string; title: string; note?: string };
+		result: TodoItem;
+	};
+	"todo.update": {
+		params: {
+			workspaceId: string;
+			sessionId: string;
+			id: string;
+			status?: TodoStatus;
+			title?: string;
+			note?: string;
+		};
+		result: TodoItem;
+	};
+	"todo.remove": { params: { workspaceId: string; sessionId: string; id: string }; result: Ack };
 	"git.status": { params: { workspaceId: string }; result: GitStatus };
 	"git.diff": { params: { workspaceId: string; path?: string }; result: { diff: string } };
 	"terminal.create": { params: { workspaceId: string }; result: { id: string } };
