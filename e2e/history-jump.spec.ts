@@ -181,3 +181,148 @@ test("an unmapped message hit is a no-op — the overlay stays open and the acti
 	await expect(workspaces.nth(1)).toHaveAttribute("data-active", "true");
 	await expect(workspaces.nth(0)).not.toHaveAttribute("data-active", "true");
 });
+
+// v11: MESSAGES is assistant-only, and a `PromptHit` now carries the same jump anchor a `MessageHit`
+// always had (`messageIndex`/`anchorText`, populated from the entry's own occurrence) — so the prompt row
+// itself is jumpable via a go-to-chat icon and `Shift+Enter`, joining the existing save-as-template icon
+// and `Cmd/Ctrl+S`. The three tests below pin: (1) the messages section drops the user-role duplicate a
+// pre-v11 host would have shown, while the prompt row gains the icon; (2) the jump itself, via
+// `Shift+Enter`, lands on the USER turn (not the assistant's); (3) an unmapped prompt hit — same rule a
+// `MessageHit` already followed — gets neither the icon nor a working shortcut.
+
+test("searching a prompt's own words that an assistant reply also echoes shows only an assistant crumb in MESSAGES, and the prompt row gets a jump icon", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspaceA = await createWorkspaceViaDialog(page);
+	// The assistant reply deliberately echoes the user's own words ("auth middleware"): pre-v11 the
+	// user-role entry itself would ALSO have surfaced here as a second, textually-duplicate message hit
+	// (see `historyIndex.test.ts`'s test (a)); v11 drops it — the location it used to carry now lives on
+	// the prompt hit's `messageIndex`/`anchorText` instead.
+	seedWorkspaceSession(workspaceA.worktreePath, {
+		messages: [
+			{ role: "user", text: "refactor the auth middleware", timestamp: 1_700_700_000_000 },
+			{
+				role: "assistant",
+				text: "Refactored the auth middleware to extract the token check into its own helper.",
+				timestamp: 1_700_700_001_000,
+			},
+		],
+	});
+	await page.waitForTimeout(2_100);
+
+	await page.getByTestId("start-chat").click();
+	await expect(page.getByTestId("chat-input")).toBeVisible();
+
+	await page.getByTestId("chat-input").press("Control+r");
+	const overlay = page.getByTestId("history-overlay");
+	await expect(overlay).toBeVisible();
+	const query = page.getByTestId("history-query");
+	await query.fill("auth middleware");
+	await query.press("Tab");
+	await expect(overlay).toHaveAttribute("data-stage", "zoomed");
+
+	// PROMPTS: the user's own line — mapped to a real workspace, so it carries a go-to-chat icon.
+	const promptRow = page
+		.locator('[data-testid="history-item"][data-kind="prompt"]')
+		.filter({ hasText: "refactor the auth middleware" });
+	await expect(promptRow).toBeVisible();
+	await expect(promptRow.getByTestId("history-jump")).toBeVisible();
+
+	// MESSAGES: only the assistant's own line — no user-role row duplicates it.
+	const messageRows = page.locator('[data-testid="history-item"][data-kind="message"]');
+	await expect(messageRows).toHaveCount(1);
+	await expect(messageRows.filter({ hasText: "assistant" })).toHaveCount(1);
+	await expect(messageRows).toContainText("Refactored the auth middleware");
+});
+
+test("Shift+Enter on the selected prompt row jumps to the chat and flashes the matching USER turn", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspaceA = await createWorkspaceViaDialog(page);
+	seedWorkspaceSession(workspaceA.worktreePath, {
+		messages: [
+			{
+				role: "user",
+				text: "investigate the zephyr7000 regression",
+				timestamp: 1_700_800_000_000,
+			},
+			{
+				role: "assistant",
+				text: "Looked into it — turned out to be a stale cache entry.",
+				timestamp: 1_700_800_001_000,
+			},
+		],
+	});
+	await page.waitForTimeout(2_100);
+
+	await page.getByTestId("start-chat").click();
+	await expect(page.getByTestId("chat-input")).toBeVisible();
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
+
+	await page.getByTestId("chat-input").press("Control+r");
+	const overlay = page.getByTestId("history-overlay");
+	await expect(overlay).toBeVisible();
+	const query = page.getByTestId("history-query");
+	await query.fill("zephyr7000");
+	const hit = page
+		.locator('[data-testid="history-item"][data-kind="prompt"]')
+		.filter({ hasText: "zephyr7000" });
+	await expect(hit).toBeVisible();
+	await expect(hit.getByTestId("history-jump")).toBeVisible();
+
+	// The only match is this prompt hit (default selection, index 0) — Shift+Enter jumps it, rather than
+	// inserting it the way plain Enter / Cmd+Enter do (see history-search.spec.ts).
+	await query.press("Shift+Enter");
+
+	await expect(overlay).toBeHidden();
+	// The seeded session opened as a second tab and is now active.
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(2);
+	const flashRow = page.locator("[data-flash]");
+	await expect(flashRow).toBeVisible();
+	// Flashes the USER turn the prompt hit's anchor points at — not the assistant reply.
+	await expect(flashRow).toContainText("investigate the zephyr7000 regression");
+	// The flash is transient — confirm it actually turns off, not just on (see the same-workspace jump
+	// test above for why this is decoupled from the location-request effect).
+	await expect(page.locator("[data-flash]")).toHaveCount(0, { timeout: 5_000 });
+});
+
+test("an unmapped prompt hit shows no jump icon, and Shift+Enter on it is a no-op", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page); // workspace A
+	await createWorkspaceViaDialog(page); // workspace B — active
+	// Deliberately-unmapped external-cwd fixture (see fixtures/sessions.ts): no project/workspace maps to
+	// its cwd, so its prompt hits carry no `workspaceId` — and therefore no jump anchor (`jumpTarget`
+	// requires one), the same rule an unmapped message hit already followed.
+	seedExternalCwdSessions();
+	await page.waitForTimeout(2_100);
+
+	await page.getByTestId("start-chat").click();
+	await expect(page.getByTestId("chat-input")).toBeVisible();
+
+	await page.getByTestId("chat-input").press("Control+r");
+	const overlay = page.getByTestId("history-overlay");
+	await expect(overlay).toBeVisible();
+	const query = page.getByTestId("history-query");
+	await query.press("Control+r");
+	await query.press("Control+r");
+	await expect(page.getByTestId("history-scope")).toHaveAttribute("data-scope", "all");
+	await query.fill("flaky watcher");
+	const hit = page
+		.locator('[data-testid="history-item"][data-kind="prompt"]')
+		.filter({ hasText: "flaky watcher" });
+	await expect(hit).toBeVisible();
+	await expect(hit.getByTestId("history-jump")).toHaveCount(0);
+
+	await query.press("Shift+Enter");
+
+	// No-op: overlay stays open, no new tab, active workspace unchanged (still B).
+	await expect(overlay).toBeVisible();
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
+	const workspaces = page.getByTestId("workspace-item");
+	await expect(workspaces.nth(1)).toHaveAttribute("data-active", "true");
+	await expect(workspaces.nth(0)).not.toHaveAttribute("data-active", "true");
+});

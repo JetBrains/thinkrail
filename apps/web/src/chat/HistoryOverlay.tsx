@@ -1,5 +1,5 @@
 import type { HistoryScope, MessageHit, PromptHit } from "@thinkrail/contracts";
-import { Check, Save } from "lucide-react";
+import { Check, CornerUpRight, Save } from "lucide-react";
 import { type KeyboardEvent, useEffect, useRef } from "react";
 import {
 	DropdownMenu,
@@ -8,8 +8,10 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+	type ChatLocationRequest,
 	type HistorySearchState,
 	type HistorySelection,
+	jumpTarget,
 	resolveHistorySelection,
 	SCOPE_ORDER,
 } from "./useHistorySearch";
@@ -99,6 +101,7 @@ function PromptRow({
 	isSelected,
 	onPick,
 	onSaveAsTemplate,
+	onOpenMessage,
 }: {
 	hit: PromptHit;
 	query: string;
@@ -107,9 +110,14 @@ function PromptRow({
 	isSelected: boolean;
 	onPick: () => void;
 	onSaveAsTemplate: () => void;
+	onOpenMessage: (target: ChatLocationRequest) => void;
 }) {
 	const firstLine = hit.text.split("\n")[0] ?? hit.text;
 	const showChip = (scope.kind === "project" || scope.kind === "all") && !!hit.workspaceId;
+	// v11: jumpable once the hit carries its jump anchor (absent for an unmapped cwd, or a pre-v11
+	// host) — the same rule the overlay's `Shift+Enter` handler gates on, so the icon and the shortcut
+	// can never disagree.
+	const target = jumpTarget(hit);
 	return (
 		<div
 			data-testid="history-item"
@@ -149,6 +157,23 @@ function PromptRow({
 			>
 				<Save className="size-3.5" />
 			</button>
+			{target ? (
+				<button
+					type="button"
+					data-testid="history-jump"
+					aria-label="Go to chat"
+					title="⇧⏎ go to chat"
+					onClick={(e) => {
+						e.stopPropagation();
+						onOpenMessage(target);
+					}}
+					className={`flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] p-xs text-muted opacity-0 transition hover:bg-elevated hover:text-text group-hover:opacity-100 ${
+						isSelected ? "opacity-100" : ""
+					}`}
+				>
+					<CornerUpRight className="size-3.5" />
+				</button>
+			) : null}
 		</div>
 	);
 }
@@ -274,10 +299,12 @@ export interface HistoryOverlayProps {
 	onInsert: (hit: PromptHit) => void;
 	/** Cmd/Ctrl+Enter on a prompt hit — insert then submit via the composer's own submit path. */
 	onInsertAndSend: (hit: PromptHit) => void;
-	/** Enter on a mapped message hit — jump to it (`useHistorySearch`'s `openMessage`). Unmapped hits never
-	 * reach here — both the `Enter` handler below and each `MessageRow`'s `onPick` gate on `hit.workspaceId`
-	 * first. */
-	onOpenMessage: (hit: MessageHit) => void;
+	/** Jump to an already-resolved target — `Enter`/click on a mapped message hit, or (v11) the
+	 * go-to-chat icon / `Shift+Enter` on a jumpable prompt hit. Every call site resolves its hit through
+	 * the shared `jumpTarget` helper first and only calls this when it returns non-null, so an unmapped
+	 * hit (or a pre-v11 prompt hit missing its anchor) never reaches here — belt-and-suspenders, not a
+	 * redundant guard inside `useHistorySearch`'s `openMessage`. */
+	onOpenMessage: (target: ChatLocationRequest) => void;
 	/** A prompt row's save-as-template action — its own button (hover-revealed, every row) and
 	 * Cmd/Ctrl+S while that row is the keyboard selection. Opens `TemplateEditorDialog` body-prefilled;
 	 * `ChatView` owns the dialog, this overlay only reports the hit. */
@@ -376,12 +403,16 @@ export function HistoryOverlay({
 			e.preventDefault();
 			const item = resolveHistorySelection(stage, result, selected);
 			if (!item) return;
-			if (item.kind === "prompt") {
+			// v11: Shift+Enter on a prompt row jumps to its chat location instead of inserting — the
+			// same target its go-to-chat icon resolves via `jumpTarget`. A message row has no separate
+			// insert action, so Shift+Enter there just falls through to the same jump Enter already did.
+			if (item.kind === "prompt" && !e.shiftKey) {
 				if (e.metaKey || e.ctrlKey) onInsertAndSend(item.hit);
 				else onInsert(item.hit);
-			} else if (item.hit.workspaceId) {
-				onOpenMessage(item.hit);
+				return;
 			}
+			const target = jumpTarget(item.hit);
+			if (target) onOpenMessage(target);
 		}
 	};
 
@@ -439,6 +470,7 @@ export function HistoryOverlay({
 									isSelected={i === selected}
 									onPick={() => onInsert(hit)}
 									onSaveAsTemplate={() => onSaveAsTemplate(hit)}
+									onOpenMessage={onOpenMessage}
 								/>
 							))}
 						</div>
@@ -457,7 +489,10 @@ export function HistoryOverlay({
 									hit={hit}
 									query={query}
 									isSelected={result.prompts.length + i === selected}
-									onPick={() => hit.workspaceId && onOpenMessage(hit)}
+									onPick={() => {
+										const target = jumpTarget(hit);
+										if (target) onOpenMessage(target);
+									}}
 								/>
 							))}
 						</div>

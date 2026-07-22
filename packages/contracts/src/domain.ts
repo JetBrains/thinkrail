@@ -306,6 +306,18 @@ export interface PromptHit {
 	workspaceId?: string;
 	projectId?: string;
 	cwd: string;
+	/**
+	 * The kept-newest occurrence's position in `session.getMessages` order — the same jump anchor a
+	 * `MessageHit` carries, letting the prompt row itself be jumped to (v11). Optional only because a
+	 * server predating v11 never populates it; a v11+ host always sets it alongside `anchorText`.
+	 */
+	messageIndex?: number;
+	/**
+	 * The kept-newest occurrence's message-text prefix — the same drift-tolerant jump validation a
+	 * `MessageHit` carries (v11). Optional only because a server predating v11 never populates it; a
+	 * v11+ host always sets it alongside `messageIndex`.
+	 */
+	anchorText?: string;
 }
 
 /** One full-text conversation match. `messageIndex` is the position in the `session.getMessages`

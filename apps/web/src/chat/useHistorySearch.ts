@@ -5,8 +5,13 @@ import type {
 	PromptHit,
 } from "@thinkrail/contracts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useAppStore } from "@/store";
+import { type ChatLocationRequest, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
+
+// Re-exported so `HistoryOverlay.tsx` (props-driven, no store/transport of its own — see `chat/SPEC.md`'s
+// boundary section) can type its `onOpenMessage` prop and call `jumpTarget` without importing `@/store`
+// directly; this hook stays the one seam that does.
+export type { ChatLocationRequest };
 
 /** `compact` shows prompts only (a few rows); `Tab` zooms to both sections. */
 export type HistoryStage = "compact" | "zoomed";
@@ -86,6 +91,24 @@ export function resolveHistorySelection(
 }
 
 /**
+ * The `ChatLocationRequest` a hit resolves to, or `null` when it isn't jumpable (v11). A `MessageHit` is
+ * jumpable once mapped to a workspace (`workspaceId` present) — unchanged from before. A `PromptHit` is
+ * jumpable once it also carries its kept-newest occurrence's `messageIndex`/`anchorText` — absent for an
+ * unmapped-cwd hit, or a pre-v11 host that never populated those two fields. Shared by `PromptRow`'s
+ * go-to-chat icon, the overlay's `Shift+Enter` handler, and `MessageRow`'s click/`Enter` handler, so all
+ * three gate on the exact same rule and can never disagree on "is this jumpable."
+ */
+export function jumpTarget(hit: PromptHit | MessageHit): ChatLocationRequest | null {
+	if (!hit.workspaceId || hit.messageIndex == null || hit.anchorText == null) return null;
+	return {
+		workspaceId: hit.workspaceId,
+		sessionId: hit.sessionId,
+		messageIndex: hit.messageIndex,
+		anchorText: hit.anchorText,
+	};
+}
+
+/**
  * The Ctrl+R history-recall overlay's integration edge — the one hook (besides `ChatView` itself)
  * sanctioned to touch store/transport (see `chat/SPEC.md`'s boundary section). Owns the overlay's
  * open/stage/query/scope/selection state, debounces `history.search` 100ms per query/scope change, and
@@ -105,7 +128,7 @@ export function useHistorySearch(
 	setScope: (kind: ScopeKind) => void;
 	toggleStage: () => void;
 	moveSelection: (delta: number) => void;
-	openMessage: (hit: MessageHit) => void;
+	openMessage: (target: ChatLocationRequest) => void;
 } {
 	const [open, setOpen] = useState(false);
 	const [stage, setStage] = useState<HistoryStage>("compact");
@@ -232,18 +255,14 @@ export function useHistorySearch(
 		[stage, result],
 	);
 
-	// Enter on a mapped message hit: jump to it via the store's `chatLocationRequest` deep link (see
-	// `store/SPEC.md`), then close the overlay. An unmapped hit (`hit.workspaceId` absent) is a no-op —
-	// belt-and-suspenders with `HistoryOverlay`'s own gating (it never calls this for an unmapped hit).
+	// Jump to an already-resolved target (see `jumpTarget` above) via the store's `chatLocationRequest`
+	// deep link (see `store/SPEC.md`), then close the overlay. Callers only ever pass a target `jumpTarget`
+	// produced, so there's nothing left to gate here — the "is this jumpable" check happened at the call
+	// site (the icon's render gate / `Shift+Enter` handler / message-hit click), belt-and-suspenders by
+	// construction rather than a redundant guard here.
 	const openMessage = useCallback(
-		(hit: MessageHit) => {
-			if (!hit.workspaceId) return;
-			useAppStore.getState().requestChatLocation({
-				workspaceId: hit.workspaceId,
-				sessionId: hit.sessionId,
-				messageIndex: hit.messageIndex,
-				anchorText: hit.anchorText,
-			});
+		(target: ChatLocationRequest) => {
+			useAppStore.getState().requestChatLocation(target);
 			close();
 		},
 		[close],

@@ -23,8 +23,15 @@ an owner-scoped host (no multi-tenant isolation to preserve).
 - `historyIndex.ts` — `HistoryIndex`: cold build on first search (batched, yields the event loop);
   freshness = mtime revalidation throttled to ~2 s (pi appends live messages to the file, so the file IS
   the live feed — no agent-module hook). Matching: case-insensitive substring AND over whitespace terms;
-  strict recency order; prompts deduped by normalized text keeping newest; caps + true totals.
+  strict recency order; prompts deduped by normalized text keeping newest; caps + true totals. **v11:**
+  the messages section (and `messageTotal`) is filtered to `role === "assistant"` only — a user-role hit
+  is always a textual duplicate of its own prompt entry (user text IS a prompt in this extraction), so it
+  would add no text, only a location; that location moves onto the prompt hit instead, via the two
+  fields below.
 - Jump anchors are drift-tolerant: hits carry `anchorText` (message-text prefix) the client validates.
+  **v11:** every prompt hit now also carries its kept-newest occurrence's `messageIndex`/`anchorText` —
+  the same two fields `MessageHit` always had — making the prompt row itself jumpable. Both fields are
+  optional on `PromptHit` (absent only when the server predates v11).
 - `testFixtures.ts` — test-only session-file builders (pinned by A5): `writeFixtureSession` writes a
   minimal but real pi-shaped JSONL, one flat file per session, that `historyIndex` tests, the e2e fixture
   seeder, and its own format-pinning test (`testFixtures.test.ts`) drive against; `defaultSessionDirFor`

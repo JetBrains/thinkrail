@@ -111,10 +111,13 @@ of the host.
   **`TodoItem`/`TodoGroupItem`/`TodoPlan`** + the **`TodoStatus`/`TodoOrigin`** unions — the in-chat plan
   DTOs, **mirrored** from `pi-todos/core` (never imported), carrying the chat's per-session TODO list.
   **history-search read DTOs** — **`HistoryScope`** (the overlay's cycle: this chat → workspace →
-  project → everywhere), **`PromptHit`** + **`MessageHit`** (server-computed hits over pi session
-  transcripts; `messageIndex` anchors jump-to-message into `session.getMessages` order; `anchorText`
-  makes the anchor drift-tolerant), and **`HistorySearchResult`** (the prompts + full-text messages
-  sections, with totals and indexing status);
+  project → everywhere); **`PromptHit`** (a recalled prompt; **v11:** gains optional `messageIndex` +
+  `anchorText` — the kept-newest occurrence's jump anchor, present unless the host predates v11) and
+  **`MessageHit`** (a full-text conversation match; **v11:** assistant-only — a user-role hit only ever
+  duplicates its own `PromptHit`'s text, so the jump affordance moved there instead; `messageIndex`
+  anchors jump-to-message into `session.getMessages` order, `anchorText` makes the anchor
+  drift-tolerant), and **`HistorySearchResult`** (the prompts + full-text messages sections, with totals
+  and indexing status);
   **prompt-template DTOs** — **`TemplateScope`** (`"global"` | `"project"` — where a template lives),
   and **`TemplateInfo`** (name, optional `description`/`argumentHint`, full `content` — frontmatter +
   body — `scope`, and `filePath` for breadcrumbing).
@@ -136,7 +139,9 @@ of the host.
   `ask_user_question` reply, correlated by tool call id)/**`list`**/**`getMessages`** (the
   read side) / **`settings.update`** (merge + persist a partial `AppConfig`, returns the merged
   config) / **`history.search`** (the prompt-recall + conversation-search read; results capped,
-  recency-ordered) / **`template.*`** — prompt-template CRUD (**`template.list`**, **`template.get`**
+  recency-ordered; **v11:** the messages section is assistant-only — a user-role hit surfaces as a
+  jumpable `PromptHit` instead, never a separate `MessageHit`) / **`template.*`** — prompt-template CRUD
+  (**`template.list`**, **`template.get`**
   — `scope` optional, project wins over global, **`template.save`**, **`template.delete`**) — all
   read/write pi's prompt dirs (global + project), so templates stay CLI-portable,
   `WS_CHANNELS` (`server.welcome` — which carries the initial `config: AppConfig` alongside `projects` /

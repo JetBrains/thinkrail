@@ -61,9 +61,11 @@ test("Ctrl+R opens history recall, cycles scope to all, zooms to messages, inser
 	const debounceHit = messageItems.filter({ hasText: "debounce window overlaps" });
 	await expect(debounceHit).toBeVisible();
 	await expect(debounceHit).toContainText("not a ThinkRail workspace");
-	// Both message entries ("fix the flaky watcher test" reappearing as a message, and the assistant
-	// reply) match "fix" — the Messages counter is the second `history-counts` (Prompts renders first).
-	await expect(page.getByTestId("history-counts").last()).toHaveText("2/2");
+	// v11: messages is assistant-only — "fix the flaky watcher test" (user-role) no longer reappears as a
+	// message (its jump anchor now lives on the prompt hit above instead); only the assistant reply
+	// matches "fix" (via "Fixed"). The Messages counter is the second `history-counts` (Prompts renders
+	// first).
+	await expect(page.getByTestId("history-counts").last()).toHaveText("1/1");
 
 	// ↓ moves the flat-list selection off the prompt and onto that (unmapped) message hit; Enter on an
 	// unmapped message hit is a deliberate no-op — the overlay stays open and the draft is untouched.

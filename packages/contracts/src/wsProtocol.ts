@@ -53,7 +53,10 @@ import type {
 // (prompt recall + full-conversation matches, scoped chat/workspace/project/all, recency-ordered).
 // v10: prompt-template CRUD — template.* reads/writes pi's prompt dirs (global + project), so
 // templates stay pi-CLI-portable.
-export const PROTOCOL_VERSION = 10;
+// v11: history.search messages section is assistant-only (a user-role hit only ever duplicates its own
+// prompt's text); PromptHit gains optional `messageIndex`/`anchorText` so the prompt row itself is
+// jumpable — the location a dropped user-role message hit used to carry.
+export const PROTOCOL_VERSION = 11;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a

@@ -136,17 +136,25 @@ export class HistoryIndex {
 			const scope = input.labels(rec.cwd);
 			for (const entry of rec.entries) {
 				if (!matchesTerms(entry.text, terms)) continue;
+				// v11: every prompt hit carries its own jump anchor (the same two fields a MessageHit
+				// always had) — populated from this entry, so dedup (below) naturally keeps the
+				// kept-newest occurrence's anchor along with its text.
 				const hit: PromptHit = {
 					text: entry.text,
 					timestamp: entry.timestamp,
 					sessionId: rec.sessionId,
 					cwd: rec.cwd,
+					messageIndex: entry.messageIndex,
+					anchorText: entry.text.slice(0, 120),
 					...(rec.title ? { sessionTitle: rec.title } : {}),
 					...(scope.workspaceId ? { workspaceId: scope.workspaceId } : {}),
 					...(scope.projectId ? { projectId: scope.projectId } : {}),
 				};
 				if (entry.role === "user") promptCandidates.push(hit);
-				if (!emptyQuery) {
+				// v11: messages section is assistant-only — a user-role hit is always a textual
+				// duplicate of its own prompt entry above, so it would add no text, only a location;
+				// that location now lives on the prompt hit's messageIndex/anchorText instead.
+				if (!emptyQuery && entry.role === "assistant") {
 					messageCandidates.push({
 						...hit,
 						role: entry.role,

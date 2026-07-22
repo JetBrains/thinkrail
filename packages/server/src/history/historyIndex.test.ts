@@ -45,11 +45,15 @@ describe("HistoryIndex.search", () => {
 		});
 
 		// AND matching: "unrelated note about lunch" (no "deploy") never appears.
-		expect(result.messages.map((m) => m.timestamp)).toEqual([3000, 2000, 1000]);
+		// v11: messages is assistant-only, so only sess-a's assistant line qualifies; the two
+		// user-role "deploy ... service" hits surface as prompts instead.
+		expect(result.messages.map((m) => m.timestamp)).toEqual([3000]);
+		expect(result.messages.map((m) => m.sessionId)).toEqual(["sess-a"]);
+		// Cross-session recency still holds for prompts: sess-b's t=2000 sorts ahead of sess-a's
+		// t=1000, even though sess-a's file was written first — proves the merge is global, not
+		// grouped per session.
 		expect(result.prompts.map((p) => p.timestamp)).toEqual([2000, 1000]);
-		// Cross-session recency: t=3000 (sess-a) sorts ahead of t=2000 (sess-b) ahead of t=1000
-		// (sess-a again) — proves the merge is global, not grouped per session.
-		expect(result.messages.map((m) => m.sessionId)).toEqual(["sess-a", "sess-b", "sess-a"]);
+		expect(result.prompts.map((p) => p.sessionId)).toEqual(["sess-b", "sess-a"]);
 		// Tiny fixture — the cold build finishes well inside the 150ms budget.
 		expect(result.indexing).toBe(false);
 	});
@@ -119,7 +123,7 @@ describe("HistoryIndex.search", () => {
 		expect(result.promptTotal).toBe(1);
 	});
 
-	test("(e) totals are pre-cap counts — they exceed the returned page when limit is smaller", async () => {
+	test("(e) totals are pre-cap counts, filtered per section — they exceed the returned page when limit is smaller (v11)", async () => {
 		writeFixtureSession(dir, {
 			id: "sess-a",
 			cwd: "/repo/a",
@@ -127,6 +131,9 @@ describe("HistoryIndex.search", () => {
 				{ role: "user", text: "widget one", timestamp: 1000 },
 				{ role: "user", text: "widget two", timestamp: 2000 },
 				{ role: "user", text: "widget three", timestamp: 3000 },
+				{ role: "assistant", text: "widget four report", timestamp: 4000 },
+				{ role: "assistant", text: "widget five report", timestamp: 5000 },
+				{ role: "assistant", text: "widget six report", timestamp: 6000 },
 			],
 		});
 
@@ -138,12 +145,15 @@ describe("HistoryIndex.search", () => {
 			labels: noLabels,
 		});
 
+		// v11: prompts (user-role) and messages (assistant-role) are counted/capped independently —
+		// 3 of each match "widget", so each section's total is 3 (not 6), and each cap keeps its own
+		// newest 2, proving the role filter and the pagination cap compose correctly.
 		expect(result.prompts).toHaveLength(2);
 		expect(result.promptTotal).toBe(3);
+		expect(result.prompts.map((p) => p.timestamp)).toEqual([3000, 2000]);
 		expect(result.messages).toHaveLength(2);
 		expect(result.messageTotal).toBe(3);
-		// Cap keeps the newest first.
-		expect(result.prompts.map((p) => p.timestamp)).toEqual([3000, 2000]);
+		expect(result.messages.map((m) => m.timestamp)).toEqual([6000, 5000]);
 	});
 
 	test("(f) revalidates after the 2s throttle and picks up an appended line", async () => {
@@ -176,7 +186,7 @@ describe("HistoryIndex.search", () => {
 		expect(second.prompts.map((p) => p.text)).toEqual(["fresh prompt two", "original prompt one"]);
 	});
 
-	test("(g) hits carry a 120-char anchorText prefix and a snippet around the match", async () => {
+	test("(g) a user-text match produces a jumpable prompt hit (messageIndex + 120-char anchorText) and no message hit (v11)", async () => {
 		const longText = `${"x".repeat(150)} needle ${"y".repeat(150)}`;
 		writeFixtureSession(dir, {
 			id: "sess-a",
@@ -187,10 +197,13 @@ describe("HistoryIndex.search", () => {
 		const index = new HistoryIndex(dir);
 		const result = await index.search({ query: "needle", filter: allowAll, labels: noLabels });
 
-		expect(result.messages).toHaveLength(1);
-		expect(result.messages[0]?.anchorText).toBe(longText.slice(0, 120));
-		expect(result.messages[0]?.snippet).toContain("needle");
-		expect(result.messages[0]?.snippet.length).toBeLessThan(longText.length);
+		expect(result.prompts).toHaveLength(1);
+		expect(result.prompts[0]?.messageIndex).toBe(0);
+		expect(result.prompts[0]?.anchorText).toBe(longText.slice(0, 120));
+		// v11: messages is assistant-only — a user-role hit never gets a separate message hit; the
+		// location it used to carry now lives on the prompt hit above instead.
+		expect(result.messages).toHaveLength(0);
+		expect(result.messageTotal).toBe(0);
 	});
 
 	// R1 step 0 (task-R1R2-brief.md): the web zoomed-stage preview pane renders a message hit's FULL
@@ -201,7 +214,7 @@ describe("HistoryIndex.search", () => {
 	// deliberately: an assistant entry can never become a `promptCandidate` (only `role === "user"`
 	// does), so a passing assertion here can only be explained by the message-hit-specific construction
 	// path itself carrying the full text — not by some accidental aliasing with the prompts branch.
-	test("(h) a message hit's `.text` carries the entry's full text, not the snippet — what the R1 preview pane renders", async () => {
+	test("(h) an assistant-text match produces a message hit — full text, snippet, anchorText — same as before v11", async () => {
 		const longText = `intro ${"padding ".repeat(40)}needle-marker ${"more-padding ".repeat(40)}`;
 		writeFixtureSession(dir, {
 			id: "sess-a",
@@ -217,7 +230,11 @@ describe("HistoryIndex.search", () => {
 		});
 
 		expect(result.messages).toHaveLength(1);
+		expect(result.messages[0]?.role).toBe("assistant");
 		expect(result.messages[0]?.text).toBe(longText);
+		expect(result.messages[0]?.anchorText).toBe(longText.slice(0, 120));
+		expect(result.messages[0]?.snippet).toContain("needle-marker");
+		expect(result.messages[0]?.snippet.length).toBeLessThan(longText.length);
 		expect(result.messages[0]?.text.length).toBeGreaterThan(
 			result.messages[0]?.snippet.length ?? 0,
 		);

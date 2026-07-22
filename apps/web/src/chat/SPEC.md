@@ -152,6 +152,20 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `<input>` element itself, and Radix's portaled dropdown content is a **sibling** subtree — never a
   descendant of the input — so a keydown while the menu holds focus cannot reach the input's handler by
   construction, not by a case-by-case guard.
+- **History overlay: assistant-only messages + jumpable prompts** (`HistoryOverlay.tsx`,
+  `useHistorySearch.ts` — R3) — `MESSAGES` now only ever contains assistant-role hits (the server
+  filters; see `packages/server/src/history/SPEC.md`): a user-role hit is always a textual duplicate of
+  its own `PromptHit` entry, so the location it used to add moved onto the prompt row instead. Every
+  prompt row now renders a go-to-chat icon (`data-testid="history-jump"`, `aria-label="Go to chat"`,
+  `title="⇧⏎ go to chat"`, next to the existing save-as-template icon) **when jumpable** —
+  `workspaceId` present and `messageIndex != null` (absent for an unmapped-cwd hit, or a pre-v11 host
+  that never populated the prompt's anchor fields). Clicking it, or **`Shift+Enter`** while a prompt row
+  is the keyboard selection, routes through the exact same `onOpenMessage` path a message hit's
+  `Enter`/click already used — both now go through the shared **`jumpTarget(hit)`** helper
+  (`useHistorySearch.ts`, exported pure), which resolves either hit shape to a `ChatLocationRequest` or
+  `null`, so the icon's render gate, the `Shift+Enter` handler, and the message-hit gate can never
+  disagree on "is this jumpable." An unmapped/legacy prompt row shows no icon and `Shift+Enter` is a
+  no-op (overlay stays open) — the same belt-and-suspenders gating the message-hit path already had.
 - **Template slots** (`slotSession.ts`'s parser + `Composer`'s session state + `ChatView`'s menu/pick
   wiring — the composer's Tab-through placeholder flow, end to end). **Parsing** (`slotSession.ts`, pure,
   zero deps): `parseTemplateSlots(body, argumentHint)` expands pi's own placeholder grammar (`$1..$n`,
