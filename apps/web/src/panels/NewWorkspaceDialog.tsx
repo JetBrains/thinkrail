@@ -8,6 +8,7 @@ import type {
 import { Box, Check, ChevronDown, GitBranch, RefreshCw, TriangleAlert } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { ModelSelector } from "@/chat/ModelSelector";
+import { SkillsDialog } from "@/chat/SkillsDialog";
 import {
 	SlashCommandMenu,
 	selectedSlashCommandValue,
@@ -77,6 +78,7 @@ export function NewWorkspaceDialog({
 	const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>("medium");
 	const [creating, setCreating] = useState(false);
 	const [trusting, setTrusting] = useState(false);
+	const [manageSkills, setManageSkills] = useState(false);
 	const promptRef = useRef<HTMLTextAreaElement>(null);
 	// The dialog content node — popovers portal into it so their lists stay scrollable under the Dialog's
 	// scroll lock (react-remove-scroll blocks wheel/trackpad on body-portaled content).
@@ -346,6 +348,14 @@ export function NewWorkspaceDialog({
 						onSelect={selectBaseRef}
 						onRefresh={() => void refreshBranches()}
 					/>
+					<button
+						type="button"
+						data-testid="ws-manage-skills"
+						onClick={() => setManageSkills(true)}
+						className="ml-auto text-hint text-xs underline-offset-2 hover:text-text hover:underline"
+					>
+						Manage skills
+					</button>
 				</div>
 
 				{/* Trust gate: a repo's committed skills (`.claude/skills` …) are attacker-controlled for a clone,
@@ -439,6 +449,11 @@ export function NewWorkspaceDialog({
 						</span>
 					</button>
 				</div>
+				<SkillsDialog
+					projectId={selectedProjectId}
+					open={manageSkills}
+					onOpenChange={setManageSkills}
+				/>
 			</DialogContent>
 		</Dialog>
 	);

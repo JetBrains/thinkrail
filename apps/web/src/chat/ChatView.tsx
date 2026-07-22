@@ -361,14 +361,16 @@ export default function ChatView({
 					) : null}
 					{projectId ? (
 						<SkillsDialog
-							workspaceId={workspaceId}
-							sessionId={sessionId}
 							projectId={projectId}
-							streaming={isStreaming}
-							stale={skillsStale}
+							workspace={{
+								workspaceId,
+								sessionId,
+								streaming: isStreaming,
+								stale: skillsStale,
+								onReloaded: () => setSkillsStale(false),
+							}}
 							open={skillsOpen}
 							onOpenChange={setSkillsOpen}
-							onReloaded={() => setSkillsStale(false)}
 						/>
 					) : null}
 				</div>

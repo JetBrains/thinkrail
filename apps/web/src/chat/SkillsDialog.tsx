@@ -7,48 +7,54 @@ import { cn } from "@/lib/utils";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 
-/** The workspace-scoped Skills manager (opened from the chat header). Lists every discovered skill grouped
- * by source with its admission verdict, exposes trust + per-workspace enable/disable + re-confirm-new, and
- * a Reload that applies changes to *this* chat's running session. */
-const FIXED_HINT: Record<string, string> = {
-	Project: "Committed to the repo — gated behind trust.",
-	Personal: "Your own libraries (~/.claude, ~/.codex, …).",
-	Bundled: "Shipped with ThinkRail.",
-	Pi: "Pi-native / configured.",
+/**
+ * The Skills manager. Two modes from one component:
+ * - **workspace** (chat header): `skills.state` catalog, per-**workspace** skill overrides, and a Reload
+ *   that applies changes to that chat's running session.
+ * - **project** (Welcome / New Workspace, no session yet): `project.skills` catalog, per-**project**-baseline
+ *   skill toggles, no Reload.
+ * Both share trust, re-confirm-new, and the per-project **group** toggles (a plugin / source tier, or all
+ * plugins at once). Skills are grouped by source — Project / Personal / a box per Claude plugin / Bundled / Pi.
+ */
+const TIER_META: Record<string, { label: string; hint: string; rank: number }> = {
+	project: { label: "Project", hint: "Committed to the repo — gated behind trust.", rank: 0 },
+	personal: { label: "Personal", hint: "Your own libraries (~/.claude, ~/.codex, …).", rank: 1 },
+	bundled: { label: "Bundled", hint: "Shipped with ThinkRail.", rank: 3 },
+	pi: { label: "Pi", hint: "Pi-native / configured.", rank: 4 },
 };
-const FIXED_RANK: Record<string, number> = { Project: 0, Personal: 1, Bundled: 3, Pi: 4 };
 
-function fixedLabel(entry: SkillCatalogEntry): "Project" | "Personal" | "Bundled" | "Pi" {
-	if (entry.gated) return "Project";
-	if (entry.sourceInfo.scope === "user") return "Personal";
-	if (entry.sourceInfo.scope === "temporary") return "Bundled";
-	return "Pi";
+interface Group {
+	key: string;
+	label: string;
+	hint: string;
+	isPlugin: boolean;
+	items: SkillCatalogEntry[];
 }
 
-/** Group entries by installing plugin (if any), else by source tier; order Project → Personal → plugins
- * (sorted) → Bundled → Pi, so a plugin's skills sit together under the plugin's name. */
-function groupCatalog(
-	entries: SkillCatalogEntry[],
-): { label: string; hint: string; items: SkillCatalogEntry[] }[] {
-	const byLabel = new Map<string, { isPlugin: boolean; items: SkillCatalogEntry[] }>();
+/** Group entries by their canonical group key; order Project → Personal → plugins (sorted) → Bundled → Pi. */
+function groupCatalog(entries: SkillCatalogEntry[]): Group[] {
+	const byKey = new Map<string, { isPlugin: boolean; items: SkillCatalogEntry[] }>();
 	for (const entry of entries) {
-		const label = entry.plugin ?? fixedLabel(entry);
-		const group = byLabel.get(label) ?? { isPlugin: Boolean(entry.plugin), items: [] };
+		const group = byKey.get(entry.group) ?? { isPlugin: Boolean(entry.plugin), items: [] };
 		group.items.push(entry);
-		byLabel.set(label, group);
+		byKey.set(entry.group, group);
 	}
-	return [...byLabel.entries()]
-		.map(([label, group]) => ({
-			label,
-			hint: group.isPlugin ? "Claude plugin" : (FIXED_HINT[label] ?? ""),
-			items: group.items,
-			rank: group.isPlugin ? 2 : (FIXED_RANK[label] ?? 5),
-		}))
-		.sort((a, b) => a.rank - b.rank || a.label.localeCompare(b.label))
-		.map(({ label, hint, items }) => ({ label, hint, items }));
+	return [...byKey.entries()]
+		.map(([key, group]) => {
+			const meta = TIER_META[key];
+			return {
+				key,
+				label: meta?.label ?? key,
+				hint: group.isPlugin ? "Claude plugin" : (meta?.hint ?? ""),
+				isPlugin: group.isPlugin,
+				items: group.items,
+				rank: group.isPlugin ? 2 : (meta?.rank ?? 5),
+			};
+		})
+		.sort((a, b) => a.rank - b.rank || a.label.localeCompare(b.label));
 }
 
-/** A skill result carries `projectId` only when it's a Workspace; Project has no such field. */
+/** A mutation result carries `projectId` only when it's a Workspace; Project has no such field. */
 function isWorkspace(result: Project | Workspace): result is Workspace {
 	return "projectId" in result;
 }
@@ -58,37 +64,44 @@ export function isSkillPath(path: string): boolean {
 	return /(^|\/)\.(claude|github|gemini|pi|agents)\/skills(\/|$)/.test(path);
 }
 
-export function SkillsDialog({
-	workspaceId,
-	sessionId,
-	projectId,
-	streaming,
-	stale,
-	open,
-	onOpenChange,
-	onReloaded,
-}: {
+/** Chat-mode extras: a live session to reload after changes. Absent in project mode (pre-session). */
+export interface SkillsWorkspaceContext {
 	workspaceId: string;
 	sessionId: string;
-	projectId: string;
 	streaming: boolean;
-	/** The worktree's skills changed on disk since this session loaded (pull/branch/edit) — prompt a reload. */
+	/** Skills changed on disk since the session loaded — prompt a reload. */
 	stale?: boolean;
-	open: boolean;
-	onOpenChange: (open: boolean) => void;
 	/** Fired after a successful reload so the caller can clear its stale flag. */
 	onReloaded?: () => void;
+}
+
+export function SkillsDialog({
+	projectId,
+	workspace,
+	open,
+	onOpenChange,
+}: {
+	projectId: string;
+	workspace?: SkillsWorkspaceContext;
+	open: boolean;
+	onOpenChange: (open: boolean) => void;
 }) {
+	const project = useAppStore((s) => s.projects.find((p) => p.id === projectId));
 	const [entries, setEntries] = useState<SkillCatalogEntry[] | null>(null);
 	const [busy, setBusy] = useState(false);
+	const workspaceId = workspace?.workspaceId;
 
 	const refresh = useCallback(async () => {
 		try {
-			setEntries(await getTransport().request("skills.state", { workspaceId }));
+			setEntries(
+				workspaceId
+					? await getTransport().request("skills.state", { workspaceId })
+					: await getTransport().request("project.skills", { projectId }),
+			);
 		} catch {
 			setEntries([]);
 		}
-	}, [workspaceId]);
+	}, [workspaceId, projectId]);
 
 	useEffect(() => {
 		if (!open) return;
@@ -96,8 +109,8 @@ export function SkillsDialog({
 		void refresh();
 	}, [open, refresh]);
 
-	// Fold a mutation's echoed record back into the store (Project only — a Workspace update also arrives on
-	// the workspace.updated push), then re-read the catalog so decisions reflect the change.
+	// Fold a mutation's echoed record into the store (Project only — a Workspace update also arrives on the
+	// workspace.updated push), then re-read the catalog so decisions reflect the change.
 	const mutate = async (request: () => Promise<Project | Workspace>, failure: string) => {
 		if (busy) return;
 		setBusy(true);
@@ -116,11 +129,11 @@ export function SkillsDialog({
 	};
 
 	const reload = async () => {
-		if (busy) return;
+		if (busy || !workspace) return;
 		setBusy(true);
 		try {
-			await getTransport().request("session.reloadResources", { sessionId });
-			onReloaded?.();
+			await getTransport().request("session.reloadResources", { sessionId: workspace.sessionId });
+			workspace.onReloaded?.();
 			toast.success("This chat now uses the updated skills.", "Skills reloaded");
 		} catch (err) {
 			toast.error(errorText(err), "Couldn't reload skills");
@@ -129,28 +142,56 @@ export function SkillsDialog({
 		}
 	};
 
+	const setGroupEnabled = (group: string, enabled: boolean) =>
+		void mutate(
+			() => getTransport().request("project.setGroupEnabled", { id: projectId, group, enabled }),
+			"Couldn't update group",
+		);
+
+	const setSkillEnabled = (name: string, enabled: boolean) =>
+		void mutate(
+			() =>
+				workspace
+					? getTransport().request("workspace.setSkillOverride", {
+							id: workspace.workspaceId,
+							name,
+							override: enabled ? "on" : "off",
+						})
+					: getTransport().request("project.setSkillEnabled", { id: projectId, name, enabled }),
+			"Couldn't update skill",
+		);
+
+	const disabledGroups = new Set(project?.disabledGroups ?? []);
+	const pluginsDisabled = disabledGroups.has("@plugins");
 	const untrustedCount = entries?.filter((e) => e.decision === "untrusted").length ?? 0;
-	const grouped = groupCatalog(entries ?? []);
+	const groups = groupCatalog(entries ?? []);
+	const hasPlugins = groups.some((g) => g.isPlugin);
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent data-testid="skills-dialog" className="max-w-[560px] gap-md p-md">
 				<div className="flex items-center justify-between gap-sm">
 					<DialogTitle className="text-sm text-text">Skills</DialogTitle>
-					<Button
-						size="sm"
-						variant="outline"
-						data-testid="skills-reload"
-						disabled={busy || streaming}
-						title={streaming ? "Available once the current turn finishes" : "Apply to this chat"}
-						onClick={() => void reload()}
-					>
-						<RefreshCw className="size-3.5" />
-						Reload
-					</Button>
+					{workspace ? (
+						<Button
+							size="sm"
+							variant="outline"
+							data-testid="skills-reload"
+							disabled={busy || workspace.streaming}
+							title={
+								workspace.streaming
+									? "Available once the current turn finishes"
+									: "Apply to this chat"
+							}
+							onClick={() => void reload()}
+						>
+							<RefreshCw className="size-3.5" />
+							Reload
+						</Button>
+					) : null}
 				</div>
 
-				{stale ? (
+				{workspace?.stale ? (
 					<div
 						data-testid="skills-stale"
 						className="rounded-[var(--radius-md)] border border-border2 bg-elevated px-md py-sm text-muted text-xs"
@@ -185,66 +226,114 @@ export function SkillsDialog({
 					</div>
 				) : null}
 
+				{hasPlugins ? (
+					<div
+						data-testid="skills-all-plugins"
+						className="flex items-center gap-sm rounded-[var(--radius-md)] border border-border2 px-md py-1.5"
+					>
+						<span className="min-w-0 flex-1 text-sm text-text">All Claude plugins</span>
+						<Toggle
+							on={!pluginsDisabled}
+							busy={busy}
+							testid="all-plugins-toggle"
+							onClick={() => setGroupEnabled("@plugins", pluginsDisabled)}
+						/>
+					</div>
+				) : null}
+
 				<div className="max-h-[50vh] overflow-y-auto">
 					{entries === null ? (
 						<p className="px-sm py-md text-hint text-sm">Loading skills…</p>
 					) : entries.length === 0 ? (
-						<p className="px-sm py-md text-hint text-sm">
-							No skills discovered for this workspace.
-						</p>
+						<p className="px-sm py-md text-hint text-sm">No skills discovered.</p>
 					) : (
-						grouped.map(({ label, hint, items }) => (
-							<div
-								key={label}
-								data-testid="skill-group"
-								data-group={label}
-								className="mb-md overflow-hidden rounded-[var(--radius-md)] border border-border2"
-							>
-								<div className="flex items-baseline gap-sm border-border2 border-b bg-bg-dark px-sm py-1.5">
-									<span className="font-medium text-text text-xs uppercase tracking-wide">
-										{label}
-									</span>
-									<span className="min-w-0 flex-1 truncate text-hint text-xs">{hint}</span>
-									<span className="shrink-0 rounded-full bg-hover px-1.5 text-hint text-xs">
-										{items.length}
-									</span>
-								</div>
-								<div className="divide-y divide-border2">
-									{items.map((entry) => (
-										<SkillRow
-											key={`${label}:${entry.name}`}
-											entry={entry}
-											busy={busy}
-											onToggle={(enabled) =>
-												void mutate(
-													() =>
-														getTransport().request("workspace.setSkillOverride", {
-															id: workspaceId,
-															name: entry.name,
-															override: enabled ? "on" : "off",
-														}),
-													"Couldn't update skill",
-												)
-											}
-											onAcknowledge={() =>
-												void mutate(
-													() =>
-														getTransport().request("project.acknowledgeSkills", {
-															id: projectId,
-															names: [entry.name],
-														}),
-													"Couldn't confirm skill",
-												)
-											}
+						groups.map((group) => {
+							// A plugin group is locked off when the "all plugins" master is off; either way a disabled
+							// group grays its skill toggles (re-enable the group to change individual skills).
+							const lockedByMaster = group.isPlugin && pluginsDisabled;
+							const groupOn = !lockedByMaster && !disabledGroups.has(group.key);
+							return (
+								<div
+									key={group.key}
+									data-testid="skill-group"
+									data-group={group.key}
+									data-on={groupOn}
+									className="mb-md overflow-hidden rounded-[var(--radius-md)] border border-border2"
+								>
+									<div className="flex items-center gap-sm border-border2 border-b bg-bg-dark px-sm py-1.5">
+										<span className="font-medium text-text text-xs uppercase tracking-wide">
+											{group.label}
+										</span>
+										<span className="min-w-0 flex-1 truncate text-hint text-xs">{group.hint}</span>
+										<span className="shrink-0 rounded-full bg-hover px-1.5 text-hint text-xs">
+											{group.items.length}
+										</span>
+										<Toggle
+											on={groupOn}
+											busy={busy || lockedByMaster}
+											testid="group-toggle"
+											onClick={() => setGroupEnabled(group.key, !groupOn)}
 										/>
-									))}
+									</div>
+									<div className="divide-y divide-border2">
+										{group.items.map((entry) => (
+											<SkillRow
+												key={`${group.key}:${entry.name}`}
+												entry={entry}
+												busy={busy}
+												groupOff={!groupOn}
+												onToggle={(enabled) => setSkillEnabled(entry.name, enabled)}
+												onAcknowledge={() =>
+													void mutate(
+														() =>
+															getTransport().request("project.acknowledgeSkills", {
+																id: projectId,
+																names: [entry.name],
+															}),
+														"Couldn't confirm skill",
+													)
+												}
+											/>
+										))}
+									</div>
 								</div>
-							</div>
-						))
+							);
+						})
 					)}
 				</div>
 			</DialogContent>
 		</Dialog>
+	);
+}
+
+/** A small on/off pill toggle (group + all-plugins controls). */
+function Toggle({
+	on,
+	busy,
+	testid,
+	onClick,
+}: {
+	on: boolean;
+	busy: boolean;
+	testid: string;
+	onClick: () => void;
+}) {
+	return (
+		<button
+			type="button"
+			data-testid={testid}
+			data-on={on}
+			disabled={busy}
+			onClick={onClick}
+			className={cn(
+				"shrink-0 rounded-[var(--radius-sm)] border px-sm py-0.5 text-xs transition-colors disabled:opacity-50",
+				on
+					? "border-[var(--primary-40)] bg-[var(--primary-10)] text-primary"
+					: "border-border2 text-muted hover:bg-hover",
+			)}
+		>
+			{on ? "on" : "off"}
+		</button>
 	);
 }
 
@@ -258,11 +347,14 @@ const DECISION_TEXT: Record<SkillDecision, string> = {
 function SkillRow({
 	entry,
 	busy,
+	groupOff,
 	onToggle,
 	onAcknowledge,
 }: {
 	entry: SkillCatalogEntry;
 	busy: boolean;
+	/** The skill's group (or the all-plugins master) is disabled — toggling this one skill won't apply. */
+	groupOff: boolean;
 	onToggle: (enabled: boolean) => void;
 	onAcknowledge: () => void;
 }) {
@@ -287,6 +379,10 @@ function SkillRow({
 				</Button>
 			) : entry.decision === "untrusted" ? (
 				<span className="shrink-0 text-hint text-xs">{DECISION_TEXT.untrusted}</span>
+			) : groupOff ? (
+				<span className="shrink-0 text-hint text-xs" title="Enable the group to change this skill">
+					group off
+				</span>
 			) : (
 				<button
 					type="button"
