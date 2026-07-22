@@ -1,6 +1,6 @@
 import { RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useAppStore } from "../store";
+import { aggregateHookState, useAppStore } from "../store";
 import { ChangesPanel } from "./ChangesPanel";
 import { FileTree } from "./FileTree";
 import { HooksPanel } from "./HooksPanel";
@@ -19,9 +19,10 @@ export function RightPanel() {
 		const status = Object.values(s.workspaces)
 			.flat()
 			.find((w) => w.id === activeWorkspaceId)?.hookStatus;
-		return Object.values(status ?? {}).some(
-			(h) => h.state === "awaitingApproval" || h.state === "failed",
-		);
+		return Object.values(status ?? {}).some((bySource) => {
+			const state = aggregateHookState(bySource);
+			return state === "awaitingApproval" || state === "failed";
+		});
 	});
 	const [tab, setTab] = useState<RightTab>("specs");
 	const [specsRefresh, setSpecsRefresh] = useState(0);

@@ -3,7 +3,7 @@ import { ChevronDown, ChevronRight, Folder, GitBranch, Plus, Settings, Trash2 } 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { PopoverTrigger } from "@/components/ui/popover";
-import { toast, useAppStore } from "../store";
+import { aggregateHookState, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
 import { ConfirmPopover } from "./ConfirmPopover";
@@ -21,12 +21,31 @@ const HOOK_PRIORITY: Record<HookStatus["state"], number> = {
 	succeeded: 3,
 };
 
-function mostUrgentHook(hookStatus: Workspace["hookStatus"]): [HookName, HookStatus] | null {
-	const entries = Object.entries(hookStatus ?? {}) as [HookName, HookStatus][];
-	if (entries.length === 0) return null;
-	return entries.reduce((best, entry) =>
-		HOOK_PRIORITY[entry[1].state] < HOOK_PRIORITY[best[1].state] ? entry : best,
-	);
+/**
+ * The one (hook, state, command) a workspace row's single badge surfaces. `state` is the per-hook
+ * worst-of-both-tiers (`aggregateHookState`, worst-of Shared/Local); across a workspace's several hooks,
+ * the worst-of-hooks pick still uses `HOOK_PRIORITY` unchanged (badge semantics stay as-is — only the
+ * source of the state changed). `command` — needed only to open the approval dialog — is read off
+ * whichever source actually produced that state, not an arbitrary tier.
+ */
+interface UrgentHook {
+	hook: HookName;
+	state: HookStatus["state"];
+	command?: string | undefined;
+}
+
+function mostUrgentHook(hookStatus: Workspace["hookStatus"]): UrgentHook | null {
+	let best: UrgentHook | null = null;
+	for (const hook of Object.keys(hookStatus ?? {}) as HookName[]) {
+		const bySource = hookStatus?.[hook];
+		const state = aggregateHookState(bySource);
+		if (!state) continue;
+		if (!best || HOOK_PRIORITY[state] < HOOK_PRIORITY[best.state]) {
+			const command = Object.values(bySource ?? {}).find((s) => s.state === state)?.command;
+			best = { hook, state, command };
+		}
+	}
+	return best;
 }
 
 /** Left-nav: projects → workspaces (git worktrees). Open a repo, select it, create/select workspaces. */
@@ -275,7 +294,7 @@ function WorkspaceRow({
 	const [approving, setApproving] = useState(false);
 	const onHookBadgeClick = () => {
 		if (!urgentHook) return;
-		if (urgentHook[1].state === "awaitingApproval") {
+		if (urgentHook.state === "awaitingApproval") {
 			setApproving(true);
 		} else {
 			onSelect();
@@ -341,12 +360,12 @@ function WorkspaceRow({
 						<button
 							type="button"
 							data-testid="workspace-hook-badge"
-							data-hook-status={urgentHook[1].state}
-							aria-label={`${urgentHook[0]} ${urgentHook[1].state}`}
+							data-hook-status={urgentHook.state}
+							aria-label={`${urgentHook.hook} ${urgentHook.state}`}
 							onClick={onHookBadgeClick}
 							className="flex shrink-0 items-center"
 						>
-							<HookStatusIcon state={urgentHook[1].state} />
+							<HookStatusIcon state={urgentHook.state} />
 						</button>
 					) : (
 						hasStats && (
@@ -368,14 +387,14 @@ function WorkspaceRow({
 					</PopoverTrigger>
 				</div>
 			</ConfirmPopover>
-			{urgentHook && urgentHook[1].state === "awaitingApproval" && urgentHook[1].command && (
+			{urgentHook && urgentHook.state === "awaitingApproval" && urgentHook.command && (
 				<HookApprovalDialog
 					open={approving}
 					onOpenChange={setApproving}
 					projectId={workspace.projectId}
 					workspaceId={workspace.id}
-					hook={urgentHook[0]}
-					command={urgentHook[1].command}
+					hook={urgentHook.hook}
+					command={urgentHook.command}
 				/>
 			)}
 		</>

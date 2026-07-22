@@ -35,7 +35,7 @@ export function HookApprovalDialog({
 					<p className="pb-xs">
 						This command will run automatically for every workspace in this project from now on:
 					</p>
-					<code className="block overflow-auto rounded-[var(--radius-sm)] bg-elevated px-sm py-xs font-[var(--font-mono)] text-xs">
+					<code className="block overflow-auto whitespace-pre-wrap rounded-[var(--radius-sm)] bg-elevated px-sm py-xs font-[var(--font-mono)] text-xs">
 						{command}
 					</code>
 				</>

@@ -27,22 +27,37 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   `name` on top with the git **branch on a second line beneath it** (muted, monospace), rendered only when
   it differs from the name (so pristine/legacy `workspace-N` rows stay a single compact line) — the display
   name is decoupled from the git branch (see [[submodule-server-workspaces]]).
-  Each row also shows the **most attention-worthy hook status** (`mostUrgentHook`, priority
-  awaitingApproval > failed > running > succeeded — a plain icon button via **`HookStatusIcon`**, shared
-  with `HooksPanel`), taking the slot the diffStats +/− chip otherwise occupies, and — unlike that chip —
-  staying visible on hover (it's actionable, so it must survive exactly the hover state a click implies).
-  Clicking it: `awaitingApproval` opens **`HookApprovalDialog`** directly (a centered modal, not an
-  anchored popover — approving trusts a shell command for every workspace in the project from now on, not
-  a one-off row action); any other state instead deep-links to `RightPanel`'s Hooks tab via
+  Each row also shows the **most attention-worthy hook status** (`mostUrgentHook`: per-hook state is the
+  worst-of-both-tiers via the store's **`aggregateHookState`** (worst-of Shared/Local — failed >
+  awaitingApproval > running > succeeded), then the worst-of-hooks pick across a workspace's several
+  hooks still uses that same priority order, unchanged — a plain icon button via **`HookStatusIcon`**,
+  shared with `HooksPanel`), taking the slot the diffStats +/− chip otherwise occupies, and — unlike that
+  chip — staying visible on hover (it's actionable, so it must survive exactly the hover state a click
+  implies). Clicking it: `awaitingApproval` opens **`HookApprovalDialog`** directly (a centered modal, not
+  an anchored popover — approving trusts a shell command for every workspace in the project from now on,
+  not a one-off row action), using whichever source actually produced the aggregated state (not an
+  arbitrary tier); any other state instead deep-links to `RightPanel`'s Hooks tab via
   `store.requestHooksView`. `HooksPanel` lists every hook with a status on the active workspace
-  (`Workspace.hookStatus`) plus its live output (`store.hookOutputByWorkspace`), with a **Retry** action
-  on a `failed` row and the same `HookApprovalDialog` reachable from an `awaitingApproval` row too (both
-  call sites share it rather than duplicating the modal). `hooksActions.ts`'s
-  **`approveAndRunHook`**/**`runHookNow`** wrap `workspace.hooks.approve`/`workspace.hooks.run` — approve
-  alone only records a per-(project, hook, source) approval (see [[submodule-server-workspaces-hooks]]),
-  scoped to the given `workspaceId` (so a Shared script hook resolves/hashes against that workspace's own
-  worktree, not the project root), so the dialog always composes it with an explicit run to actually
-  bootstrap the workspace that's stuck at `hookAwaitingApproval`. **`ProjectHooksDialog`** is the
+  (`Workspace.hookStatus`, nested `HookName → HookSource → HookStatus` — a `combineMode` of `"both"` can
+  have Shared and Local sitting at different states at once) plus its live output
+  (`store.hookOutputByWorkspace`, still keyed by hook only, not per source). Each hook's row header shows
+  its aggregated state (`aggregateHookState`), with a **Retry** action on a `failed` aggregate and an
+  **Approve & Run** action on an `awaitingApproval` aggregate — both stay hook-level, matching the wire's
+  `workspace.hooks.run`/`.approve` (no source param; approving resumes the ordered Shared→Local sequence
+  from the top). Beneath the header, one row **per source that has reported a status** (labeled Shared /
+  Local, its own `HookStatusIcon` + a failed row's exit code) shows that source's own command, rendered
+  `whitespace-pre-wrap` (multi-line commands display properly; a script hook's command is already the
+  display label `script: <path>`, rendered as-is). The same `HookApprovalDialog` is reachable from both the
+  workspace-row badge and an `awaitingApproval` hook here (both call sites share it rather than duplicating
+  the modal — it stays source-agnostic, just approving whichever command the caller resolved).
+  `hooksActions.ts`'s **`approveAndRunHook`**/**`runHookNow`** wrap
+  `workspace.hooks.approve`/`workspace.hooks.run` — approve alone only records a per-(project, hook,
+  source) approval (see [[submodule-server-workspaces-hooks]]); the server resolves *which* source by
+  matching the approved command's text against the workspace's current Shared/Local entries, so the client
+  never sends a `source` on the wire — scoped to the given `workspaceId` (so a Shared script hook
+  resolves/hashes against that workspace's own worktree, not the project root), so the dialog always
+  composes it with an explicit run to actually bootstrap the workspace that's stuck at
+  `hookAwaitingApproval`. **`ProjectHooksDialog`** is the
   project-level hooks config form, reachable with zero workspaces open: a top **combine-mode** segmented
   control (Both / Shared only / Local only, testid `hook-combine-mode` + a per-option testid) plus, per
   `HookName`, a **Shared** and a **Local** sub-field, each an **Inline | Script** toggle (Inline = a
