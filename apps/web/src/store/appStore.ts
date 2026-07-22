@@ -403,8 +403,15 @@ interface AppState {
 	 */
 	applyWorkspaceRemoved: (projectId: string, workspaceId: string) => void;
 	/**
-	 * Optimistic project removal (initiator): drop the project + known workspaces' tabs/terminals/sessions,
-	 * clear selection, return to Welcome. A failed `project.remove` should re-list to reconcile.
+	 * React to a server-pushed `project.removed` — drop the project + known workspaces' tabs/terminals/
+	 * sessions, clear selection/active when they pointed at it (Welcome). Idempotent: a second apply (e.g.
+	 * initiator already ran optimistic `removeProject`) is a safe no-op. Also used as the optimistic
+	 * initiator path via `removeProject`.
+	 */
+	applyProjectRemoved: (projectId: string) => void;
+	/**
+	 * Optimistic project removal (initiator): same reaction as `applyProjectRemoved`. A failed
+	 * `project.remove` should re-list to reconcile; the subsequent `project.removed` push is a no-op.
 	 */
 	removeProject: (projectId: string) => void;
 	selectProject: (projectId: string) => void;
@@ -641,7 +648,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 			toast.info(`Workspace "${name ?? "?"}" was removed`);
 		}
 	},
-	removeProject: (projectId) => {
+	applyProjectRemoved: (projectId) => {
+		// Idempotent: filtering a missing id / clearing an empty workspace list / re-nulling selection
+		// are all no-ops — safe when the initiator already ran optimistic `removeProject`.
 		const s = get();
 		const list = s.workspaces[projectId] ?? [];
 		const wasSelected = s.selectedProjectId === projectId;
@@ -663,6 +672,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 				activeWorkspaceId: wasActiveWs ? null : state.activeWorkspaceId,
 			};
 		});
+	},
+	removeProject: (projectId) => {
+		get().applyProjectRemoved(projectId);
 	},
 	selectProject: (selectedProjectId) => set({ selectedProjectId }),
 	setActiveWorkspace: (activeWorkspaceId) => set({ activeWorkspaceId }),

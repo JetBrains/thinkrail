@@ -1,10 +1,13 @@
+import { basename } from "node:path";
 import { expect, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
+import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 
 // Two tabs on ONE host, no agent. Registry membership is backend-owned shared domain state (architecture
 // #9), so a create/remove in one tab streams to the other via the workspace lifecycle pushes — every
 // client (including the initiator) reacts identically, with no per-client optimism. Regression cover for
 // issue #77: a workspace removed in one tab used to linger as a broken "zombie" row in the others.
+// Project remove is the same shape via `project.removed` (without it, other tabs kept an empty ghost row).
 
 test("workspace removal propagates — no zombie row in a second tab", async ({ page, context }) => {
 	// Tab A: open the project + create a workspace (it becomes A's active workspace).
@@ -51,4 +54,45 @@ test("workspace creation propagates to a second tab's rail", async ({ page, cont
 
 	// Tab B sees it appear via the `workspace.created` push — no manual re-list, no focus stolen.
 	await expect(page2.getByTestId("workspace-item")).toHaveCount(1);
+});
+
+// Project registry membership is shared domain state too: without `project.removed`, Tab B kept an empty
+// ghost project row after Tab A removed the project (workspaces cleared via `workspace.removed`, project
+// row stayed until reconnect).
+
+test("project removal propagates — no ghost project row in a second tab", async ({
+	page,
+	context,
+}) => {
+	const projectName = basename(E2E_FIXTURE_REPO);
+
+	// Tab A: open the project + create a workspace so removal has children.
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	const projectRowA = page.getByTestId("project-item").filter({ hasText: projectName });
+	await expect(projectRowA).toBeVisible();
+	await expect(page.getByTestId("workspace-item")).toHaveCount(1);
+
+	// Tab B: same host — project visible, expand so workspaces are loaded (the ghost case is project
+	// still listed after workspaces go).
+	const page2 = await context.newPage();
+	await page2.goto("/");
+	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	const projectRowB = page2.getByTestId("project-item").filter({ hasText: projectName });
+	await expect(projectRowB).toBeVisible();
+	await page2.getByTestId("project-expand").first().click();
+	await expect(page2.getByTestId("workspace-item")).toHaveCount(1);
+
+	// Tab A: remove the project (kebab → Remove → confirm).
+	await projectRowA.hover();
+	await projectRowA.getByTestId("project-menu").click();
+	await page.getByTestId("project-remove").click();
+	await expect(page.getByTestId("confirm-dialog")).toBeVisible();
+	await page.getByTestId("confirm-remove-project").click();
+	await expect(projectRowA).toHaveCount(0);
+	await expect(page.getByTestId("workspace-item")).toHaveCount(0);
+
+	// Tab B converges on `project.removed` (+ workspace.removed for children): no ghost project row.
+	await expect(projectRowB).toHaveCount(0);
+	await expect(page2.getByTestId("workspace-item")).toHaveCount(0);
 });

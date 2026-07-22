@@ -2,6 +2,7 @@ import type {
 	AppConfig,
 	ExtUiRequest,
 	LoginPush,
+	ProjectRemoved,
 	ServerWelcome,
 	SessionEventPayload,
 	Workspace,
@@ -63,6 +64,13 @@ export function initTransport(): WsTransport {
 	transport.subscribe(WS_CHANNELS.workspaceRemoved, (data) => {
 		const { projectId, id } = data as WorkspaceRemoved;
 		useAppStore.getState().applyWorkspaceRemoved(projectId, id);
+	});
+
+	// Project membership — every client drops the project row (initiator may already have optimistically
+	// `removeProject`'d; `applyProjectRemoved` is idempotent).
+	transport.subscribe(WS_CHANNELS.projectRemoved, (data) => {
+		const { id } = data as ProjectRemoved;
+		useAppStore.getState().applyProjectRemoved(id);
 	});
 
 	transport.subscribe(WS_CHANNELS.workspaceFsChanged, (data) => {

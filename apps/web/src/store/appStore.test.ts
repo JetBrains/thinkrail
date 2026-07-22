@@ -566,9 +566,9 @@ test("applyWorkspaceRemoved on a non-active workspace drops the row silently (no
 	expect(s.toasts).toHaveLength(0);
 });
 
-// ---- removeProject: optimistic initiator path for project.remove -----------------------------------
+// ---- applyProjectRemoved / removeProject: project.removed reaction + optimistic initiator path -----
 
-test("removeProject drops the project + workspaces, clears tabs, and returns selected/active to Welcome", () => {
+test("applyProjectRemoved drops the project + workspaces, clears tabs, and returns selected/active to Welcome", () => {
 	const ws = pushedWorkspace();
 	const other = pushedWorkspace({
 		id: "w2",
@@ -592,7 +592,7 @@ test("removeProject drops the project + workspaces, clears tabs, and returns sel
 		fsChangesByWorkspace: { w1: { tick: 1, paths: ["a"], truncated: false } },
 	});
 
-	useAppStore.getState().removeProject("p1");
+	useAppStore.getState().applyProjectRemoved("p1");
 
 	const s = useAppStore.getState();
 	expect(s.projects.map((p) => p.id)).toEqual(["p2"]);
@@ -605,7 +605,7 @@ test("removeProject drops the project + workspaces, clears tabs, and returns sel
 	expect(s.activeWorkspaceId).toBeNull();
 });
 
-test("removeProject on a non-selected project leaves selection/active untouched", () => {
+test("applyProjectRemoved on a non-selected project leaves selection/active untouched", () => {
 	useAppStore.setState({
 		projects: [
 			{ id: "p1", name: "repo", path: "/tmp/repo", slug: "repo", lastOpened: 1 },
@@ -619,12 +619,51 @@ test("removeProject on a non-selected project leaves selection/active untouched"
 		activeWorkspaceId: "w2",
 	});
 
-	useAppStore.getState().removeProject("p1");
+	useAppStore.getState().applyProjectRemoved("p1");
 
 	const s = useAppStore.getState();
 	expect(s.projects.map((p) => p.id)).toEqual(["p2"]);
 	expect(s.selectedProjectId).toBe("p2");
 	expect(s.activeWorkspaceId).toBe("w2");
+});
+
+test("applyProjectRemoved is idempotent after optimistic removeProject (push re-apply is a no-op)", () => {
+	useAppStore.setState({
+		projects: [
+			{ id: "p1", name: "repo", path: "/tmp/repo", slug: "repo", lastOpened: 1 },
+			{ id: "p2", name: "other", path: "/tmp/other", slug: "other", lastOpened: 2 },
+		],
+		workspaces: { p1: [pushedWorkspace()] },
+		selectedProjectId: "p1",
+		activeWorkspaceId: "w1",
+	});
+
+	// Initiator optimism, then the `project.removed` push (same client).
+	useAppStore.getState().removeProject("p1");
+	useAppStore.getState().applyProjectRemoved("p1");
+
+	const s = useAppStore.getState();
+	expect(s.projects.map((p) => p.id)).toEqual(["p2"]);
+	expect(s.workspaces.p1).toBeUndefined();
+	expect(s.selectedProjectId).toBeNull();
+	expect(s.activeWorkspaceId).toBeNull();
+});
+
+test("applyProjectRemoved clears a ghost project row after workspaces already gone", () => {
+	// Other-tab scenario: workspace.removed already emptied the list; project row still shows.
+	useAppStore.setState({
+		projects: [{ id: "p1", name: "repo", path: "/tmp/repo", slug: "repo", lastOpened: 1 }],
+		workspaces: { p1: [] },
+		selectedProjectId: "p1",
+		activeWorkspaceId: null,
+	});
+
+	useAppStore.getState().applyProjectRemoved("p1");
+
+	const s = useAppStore.getState();
+	expect(s.projects).toEqual([]);
+	expect(s.workspaces.p1).toBeUndefined();
+	expect(s.selectedProjectId).toBeNull();
 });
 
 // --- in-app login (flat, session-less) -------------------------------------------------------------

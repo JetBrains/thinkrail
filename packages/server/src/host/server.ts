@@ -20,7 +20,7 @@ import {
 	maybeAutoRenameWorkspace,
 	maybeNaiveNameWorkspace,
 } from "./autoRename";
-import { handleRequest } from "./handlers";
+import { handleRequest, setProjectRemovedPublisher } from "./handlers";
 
 export interface CreateServerOptions {
 	port?: number;
@@ -70,6 +70,7 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 				ws.subscribe(WS_CHANNELS.workspaceCreated);
 				ws.subscribe(WS_CHANNELS.workspaceUpdated);
 				ws.subscribe(WS_CHANNELS.workspaceRemoved);
+				ws.subscribe(WS_CHANNELS.projectRemoved);
 				ws.subscribe(WS_CHANNELS.workspaceFsChanged);
 				ws.subscribe(WS_CHANNELS.settingsChanged);
 				const welcome: ServerWelcome = {
@@ -120,6 +121,16 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		const data =
 			event.kind === "removed" ? { projectId: event.projectId, id: event.id } : event.workspace;
 		server.publish(channel, JSON.stringify({ channel, data }));
+	});
+
+	// Fan `project.removed` out after `project.remove` closes the project (handler-side seam — projects
+	// module stays channel-ignorant). Payload is `{ id }`; every client drops the project row so multi-tab
+	// observers don't keep an empty ghost after their workspaces already cleared via `workspace.removed`.
+	setProjectRemovedPublisher((id) => {
+		server.publish(
+			WS_CHANNELS.projectRemoved,
+			JSON.stringify({ channel: WS_CHANNELS.projectRemoved, data: { id } }),
+		);
 	});
 
 	// Push the worktree change notifier's debounced invalidation batches (agent edits, terminal

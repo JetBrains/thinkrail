@@ -30,11 +30,12 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   and **if it was this client's active workspace** → `setActiveWorkspace(null)` (shell falls back to the
   project Welcome) + a neutral toast that reads right for both the initiator and an observer); the
   primitive **`removeWorkspace(projectId, id)`** just drops the row (unknown project/id is a no-op);
-  **`removeProject(projectId)`** is the **optimistic** initiator path for `project.remove` (there is no
-  `project.removed` push): drop the project from `projects`, clear `workspaces[projectId]`,
+  **`applyProjectRemoved(projectId)`** is the **`project.removed`** reaction (and the shared body for
+  optimistic **`removeProject`**): drop the project from `projects`, clear `workspaces[projectId]`,
   `clearWorkspaceTabs` every known child workspace (+ its `fsChangesByWorkspace` tick), and if it was
-  selected / held the active workspace → `selectedProjectId` / `activeWorkspaceId` null (Welcome). A failed
-  request must re-list to reconcile;
+  selected / held the active workspace → `selectedProjectId` / `activeWorkspaceId` null (Welcome).
+  **Idempotent** — re-applying after initiator optimism is a safe no-op. A failed initiator request must
+  re-list to reconcile;
   `tabsByWorkspace` /
   `activeTabByWorkspace` (`openTab`/`closeTab`/`setActiveTab`/`clearWorkspaceTabs`, plus
   **`setFileTabView(id, view)`** — a markdown `FileTab`'s `view` (`"rendered"`|`"source"`) lives on the tab

@@ -91,7 +91,8 @@ export function ProjectTree() {
 			.catch((err) => toast.error(errorText(err, "Failed to remove workspace")));
 	};
 
-	// Optimistic: drop local state immediately, then ask the host. On failure re-list to reconcile.
+	// Optimistic for the initiator; host also broadcasts `project.removed` so other tabs converge via
+	// `applyProjectRemoved` (idempotent when this client already cleared). On failure re-list to reconcile.
 	const removeProject = (projectId: string) => {
 		useAppStore.getState().removeProject(projectId);
 		setExpanded((prev) => {

@@ -74,6 +74,15 @@ import { ackSend } from "./ackSend";
 
 type Handler = (params: unknown) => unknown | Promise<unknown>;
 
+/** Host→wire fan-out for `project.removed` (installed by `createServer`; silent no-op in unit tests). */
+type ProjectRemovedPublisher = (id: string) => void;
+let publishProjectRemoved: ProjectRemovedPublisher | null = null;
+
+/** Install (or clear with `null`) the sink that broadcasts `project.removed` after a successful close. */
+export function setProjectRemovedPublisher(fn: ProjectRemovedPublisher | null): void {
+	publishProjectRemoved = fn;
+}
+
 /**
  * The slow half of archiving a workspace, run in the background after `workspace.remove` /
  * `project.remove` acks: tear down the workspace's sessions (abort a streaming turn, dispose, purge
@@ -119,6 +128,9 @@ const handlers: Record<string, Handler> = {
 			closeWorkspaceTerminals(ws.id);
 		}
 		closeProject(id);
+		// Fan project membership out after the record is gone (mirrors `workspace.removed` from
+		// `forgetWorkspace`). Every client — including an optimistic initiator — drops the project row.
+		publishProjectRemoved?.(id);
 		for (const ws of workspaces) void archiveTeardown(ws, repoPath);
 		return { ok: true } as const;
 	},

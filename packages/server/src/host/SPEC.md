@@ -71,17 +71,21 @@ channel fan-out, and the process-boot wrapper both launchers share.
     branch stays (code is recoverable), yet chat history is purged with the worktree — a deliberate scope
     choice, not a leak.
   - **`project.remove`** — the same archive, applied to **every** workspace of the project, then
-    `closeProject`. Composition lives here because `projects` must not import `workspaces`. Captures
+    `closeProject`, then **`project.removed`** (`{ id }`) via the host's `setProjectRemovedPublisher`
+    seam. Composition lives here because `projects` must not import `workspaces`. Captures
     `repoPath` **before** dropping the project record and passes it into each background
     `archiveTeardown`/`reclaimWorktree` (lookup via the project record would no-op once the row is gone).
     The source directory is never touched: worktrees/chats/terminals/records go away; branches and the
-    repo working tree stay.
+    repo working tree stay. Each child `forgetWorkspace` still fans `workspace.removed`; the project
+    push is what clears the project **row** on other tabs (workspaces alone leave an empty ghost).
 - **Workspace lifecycle fan-out:** `createServer` installs the `workspaces` module's publisher
   (`setWorkspacePublisher`), mapping each domain event `kind` → its `WS_CHANNELS.workspace*` channel
   (`created`/`updated` → the full record; `removed` → `{ projectId, id }`) and `server.publish`ing it. This
   is the **single** place workspace membership changes reach the wire — create/rename/archive all flow
   through it, so every client (including the initiator) converges by reacting, never by per-client optimism.
   The two new channels are `ws.subscribe`d in the WS `open` handler alongside `workspace.updated`.
+- **Project removed fan-out:** `createServer` installs `setProjectRemovedPublisher` (handlers seam) →
+  `server.publish` on `WS_CHANNELS.projectRemoved`. Clients subscribe in the WS `open` handler.
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer`, `bootHost`,
   `BootHostOptions`, `BootedHost`.
 - **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for
@@ -93,8 +97,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
 
 - WS commands return values directly; only events + extension-UI + the workspace lifecycle trio
   (`workspace.created`/`updated`/`removed`, published from the `workspaces` module's injected publisher)
-  use push channels. Every push channel a client should hear must be `ws.subscribe`d in the WS `open`
-  handler — a publish on an unsubscribed topic reaches nobody, silently.
+  + **`project.removed`** (host publisher after `closeProject`) use push channels. Every push channel a
+  client should hear must be `ws.subscribe`d in the WS `open` handler — a publish on an unsubscribed topic
+  reaches nobody, silently.
 - The host is the single place features are wired together — features never reach back into it.
 - **A send (prompt/steer/followUp) is acked when ACCEPTED, not when the turn ends** (`ackSend`): pi's send
   methods resolve only at turn end, and a turn can outlive the client's request timeout (an

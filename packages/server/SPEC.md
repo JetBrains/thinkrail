@@ -80,6 +80,8 @@ own never import `host` either: they expose a **publisher-injection seam** (`set
 `setSessionPublisher`, `setLoginPublisher`, `workspaces`' `setWorkspacePublisher` for the
 `workspace.created`/`updated`/`removed` lifecycle trio, and `settings`' `setSettingsPublisher` for
 `settings.changed`) that `host` installs at `createServer` — so the channel wiring lives only in `host`.
+Host also owns **`project.removed`** fan-out (`setProjectRemovedPublisher` in handlers, published after
+`closeProject`) — projects stay channel-ignorant.
 
 ## Get right
 

@@ -40,7 +40,9 @@ import type {
 // the new config to every client so they converge (the same shared-state pattern as the workspace trio).
 
 // v8  : `project.close` → `project.remove` (symmetry with workspace.remove; was unused)
-export const PROTOCOL_VERSION = 8;
+// v9  : `project.removed` push — project registry membership streams to every client (mirrors
+//       `workspace.removed` so a multi-tab remove doesn't leave an empty ghost project row).
+export const PROTOCOL_VERSION = 9;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -62,6 +64,14 @@ export interface ServerWelcome {
  */
 export interface WorkspaceRemoved {
 	projectId: string;
+	id: string;
+}
+
+/**
+ * The `project.removed` push payload. Only the id: the project record is already gone by the time the
+ * event fires (mirrors `WorkspaceRemoved` — registry membership is shared domain state).
+ */
+export interface ProjectRemoved {
 	id: string;
 }
 
@@ -160,6 +170,11 @@ export const WS_CHANNELS = {
 	workspaceCreated: "workspace.created",
 	workspaceUpdated: "workspace.updated",
 	workspaceRemoved: "workspace.removed",
+	// Project registry membership (mirrors the workspace trio's `removed`): broadcast after `project.remove`
+	// so every client drops the project row (not just its workspaces via `workspace.removed`). Payload is a
+	// `ProjectRemoved` `{ id }` — the record is already gone. Initiator may still optimistically
+	// `removeProject`; applying the push again is idempotent.
+	projectRemoved: "project.removed",
 	// The worktree change notifier (a `WorkspaceFsChangedPayload` per frame), broadcast to every client.
 	// A debounced invalidation nudge, not data — receivers re-read via the read methods they already use.
 	workspaceFsChanged: "workspace.fsChanged",

@@ -27,10 +27,10 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   row → destructive modal **`ConfirmDialog`** (no row-anchored popover — project remove has no single
   worktree to point at): on confirm the initiator runs the store's optimistic **`removeProject`** (row +
   workspaces + tabs/terminals/sessions gone; Welcome if it was selected/active), then fires
-  `project.remove`; a rejected request toasts and reconciles via `project.list` (+ `workspace.list` when
-  the project is still present). There is no `project.removed` push — other clients clear workspace rows
-  via each `workspace.removed` fan-out from `forgetWorkspace`, and pick up a missing project on the next
-  list/reconnect.)
+  `project.remove`. The host archives workspaces (each `forgetWorkspace` → `workspace.removed`) then
+  `closeProject` and broadcasts **`project.removed`** (`{ id }`); every client — including the initiator —
+  runs **`applyProjectRemoved`** (idempotent with optimism). A rejected request toasts and reconciles via
+  `project.list` (+ `workspace.list` when the project is still present).
   **Opening a project** goes through the shared **`useOpenProject`** hook (reused by `ProjectTree` **and**
   `WelcomePanel`, so the flow is identical in the rail and the Welcome screen): `project.open`, and on
   failure `project.inspect` → either offers to bootstrap the folder into a repo — a modal **`ConfirmDialog`**
