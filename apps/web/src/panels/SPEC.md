@@ -85,6 +85,13 @@ CTA that opens Settings → Providers (`store.openSettings("providers")`). It re
 provider is "connected" iff any `configured`) on mount and re-checks whenever the settings dialog toggles, so
 it disappears the moment the user connects one; a transport error degrades to *not* nagging (offline ≠ "no
 provider"). All provider **management** lives in Settings, not here (the always-on strip is gone).
+
+Beneath it, **`ProjectSkillsNotice`** is the pre-workspace trust surface (so trust is reachable with no
+workspace yet): **presence-gated** — renders nothing unless the selected project ships committed skills —
+showing a **count** ("ships N skills → *Trust project*"), a "N new → *Review & enable*" state for skills that
+appeared after trust (`project.acknowledgeSkills`), else a quiet "N trusted" line. It never renders the
+skills' (attacker-controlled) names before trust. The full per-skill manager lives in `chat/SkillsDialog`.
+
 **`NewWorkspaceDialog`** is the create-and-kick-off surface. It names the operation visibly — title
 **“Create workspace”** — and states the model without adding a step: **“A separate checkout on its own new
 branch. Files, chats, changes, and terminals stay scoped to it.”** Its base-branch trigger reads **“From
@@ -101,10 +108,10 @@ a project picker, the prompt hero, and the reused
   project's **current checkout** plus personal/bundled sources, selecting one inserts `/skill:<name> `;
   failure degrades silently to no menu. Up/Down navigate, Enter/Tab select, Escape dismisses. A caption under
   the prompt marks the preview as **from the current checkout** (the created worktree's session catalog is
-  authoritative if the selected base branch differs). An **untrusted** selected project shows a **trust
-  notice** with a *Trust project* button — the repo's committed skills stay withheld until granted
-  (`project.setTrust`, which folds the updated project back into the store and re-previews); personal +
-  bundled skills show regardless. When the menu is closed, **Enter creates** (matching the Create button's
+  authoritative if the selected base branch differs). When the selected project is **untrusted AND ships
+  committed skills** (a count from `project.aliasSkills`, never their names), a **trust notice** shows a
+  *Trust project* button — the repo's skills stay withheld until granted (`project.setTrust`, which folds the
+  updated project back into the store and re-previews); personal + bundled skills show regardless. When the menu is closed, **Enter creates** (matching the Create button's
   `↵` affordance) and
   **Shift+Enter** inserts a newline. Create = `workspace.create({ projectId, baseRef })` → set active → (with a prompt) open a chat +
   `session.create({ model, thinkingLevel })` + fire-and-forget `prompt`; with an empty prompt it just

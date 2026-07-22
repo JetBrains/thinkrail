@@ -51,7 +51,8 @@ of the host.
   - the cheap-win mirrors (declared in the Node-only `pi-coding-agent`): **`SessionStats`** + **`ContextUsage`**
     (tokens/cost/context bar — display only) and **`SlashCommandInfo`** + **`SlashCommandSourceInfo`** (the
     command/skill autocomplete catalog, returned by live `session.getCommands` and skill-only pre-session
-    `skill.list`).
+    `skill.list`), and **`SkillCatalogEntry`** + **`SkillDecision`** (`load`/`untrusted`/`pending-ack`/
+    `disabled`) — the workspace Skills manager's `skills.state` rows.
   - **`SessionSummary`** — a chat session as the host reports it for hydration (read side); `live`
     distinguishes an in-memory session (auto-restored) from a disk-only one (surfaced in chat-history,
     re-opened on demand). `session.getMessages` returns `{ summary, messages }` (the transcript is
@@ -77,8 +78,10 @@ of the host.
     is a **host-owned pi custom tool** (server `agent/askUserQuestion` — see its SPEC for the design
     rationale); the chat renders the questionnaire **inline** and replies via `session.answerQuestion`
     (correlated by the tool call id; rejected loud when the call is unknown/answered/superseded).
-- **domain.ts** — app entities: `Project` (git repo + unique `slug` + optional **`trusted`** — the
-  per-project grant, set via `project.setTrust`, that gates loading its committed cross-agent skill aliases;
+- **domain.ts** — app entities: `Project` (git repo + unique `slug` + the skill-trust fields **`trusted`**
+  (the per-project grant), **`acknowledgedSkills`** (re-confirm-new — which committed aliases are OK'd) and
+  **`disabledSkills`** (project-baseline per-skill off), which gate what its committed cross-agent skill
+  aliases contribute; a workspace layers **`Workspace.skillOverrides`** (per-skill on/off) over that baseline;
   "does it have specs?" is **not** a field — it's the lazy `project.hasSpecs` query, since it's a full-tree
   walk), **`ProjectPathStatus`** (a
   candidate path's kind — `repo` / `initable` / `missing` / `notDirectory` — so the UI opens, offers a
@@ -131,7 +134,12 @@ of the host.
   cross-agent skill aliases) /
   **`skill.list`** (a pre-session, skill-only `SlashCommandInfo[]` preview for a `projectId`, resolved from
   that project's current checkout with its **project-scoped aliases gated by trust**; the eventual worktree
-  session is authoritative) /
+  session is authoritative) / the **Skills-manager set** — **`project.aliasSkills`** (present committed alias
+  names, for the presence-gated notice's count) / **`project.acknowledgeSkills`** (confirm skills that
+  appeared after trust) / **`project.setSkillEnabled`** (project baseline) / **`workspace.setSkillOverride`**
+  (per-workspace on/off/clear → the `Workspace`) / **`skills.state`** (`SkillCatalogEntry[]` for a
+  `workspaceId` — the full catalog + per-skill decision) / **`session.reloadResources`** (re-scan skills +
+  rebuild the system prompt for one running session; rejected while streaming) /
   `session.*` — `create`/`prompt`/`steer`/`followUp`/`abort`/`dispose`/`setModel`/
   `setThinkingLevel`/`compact`/`getStats`/`getCommands`/`extUiReply`/**`answerQuestion`** (the inline
   `ask_user_question` reply, correlated by tool call id)/**`list`**/**`getMessages`** (the

@@ -135,7 +135,7 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     the manager bullet above). Pure over pi's `SessionManager` (compaction-aware via
     `buildSessionContext`; idempotent; appends at the leaf, where orphans sit by construction) —
     unit-tested against `SessionManager.inMemory`.
-  - `extensions` — Pi resource wiring. `buildResourceLoader(cwd, settingsManager, trustedProject)` starts
+  - `extensions` — Pi resource wiring. `buildResourceLoader(cwd, settingsManager, admission)` starts
     with a `DefaultResourceLoader` (Pi's normal settings/package + `.pi` / `.agents` discovery), adds
     automatic **portable cross-agent skill aliases**, then loads the four bundled extensions — **`pi-web-access`**
     (`web_search` + `fetch_content`), **`pi-visualize`** (`visualize`), **`pi-spec-graph`** (the `spec_*`
@@ -148,15 +148,21 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     vendor-only macros/hooks/models/subagents/metadata are not emulated. First-name-wins precedence is
     Pi native/configured/shared → ThinkRail-bundled → personal aliases → project aliases, so a repo can
     never shadow your own or ThinkRail's skills; source metadata preserves truthful `project` / `user` scope.
-    **Trust gate:** a repo's committed **project-scoped** aliases are attacker-controlled for a clone and are
-    injected into the system prompt, so they load only when the owning project is **trusted** — the host
-    resolves that via the **`setProjectTrustResolver`** seam (keyed by `workspaceId`, fails closed);
-    personal / bundled / pi-native resources load regardless. (The gate is scoped to these compatibility
-    aliases; pi-native `.pi` / `.agents` project trust is unchanged.) `listSkillCommands(cwd, trustedProject)`
-    reuses the same gated skill inputs through a short-lived skills-only `DefaultResourceLoader` (no
-    model/session/transcript and no extension factory execution) for pre-workspace autocomplete, cached
-    briefly per `(cwd, trust)`; Pi's normal configured-package resolution still applies. The full session
-    loader supports **two modes**:
+    **Admission gate (`skillAdmission`):** committed **project-scoped** aliases are attacker-controlled for a
+    clone and injected into the system prompt, so per-skill they resolve to `load` / `untrusted` /
+    `pending-ack` / `disabled` from an **admission context** — the project's `trusted` + `acknowledgedSkills`
+    (granting trust acknowledges only what's present, so a later pull/branch skill is `pending-ack` until
+    confirmed) + `disabledSkills` baseline, layered with the workspace's `skillOverrides` (the trust gate is
+    checked before the toggle layer, so an "on" override can never un-gate an untrusted alias). `skillsGate`
+    filters + relabels in one `skillsOverride`; only `load` skills reach the system prompt / `/skill:` list.
+    The host resolves the context via the **`setSkillAdmissionResolver`** seam (keyed by `workspaceId`, fails
+    closed). Personal / bundled / pi-native resources are never trust-gated (only the enable/disable layer);
+    the gate is scoped to the compatibility aliases (pi-native `.pi` / `.agents` project trust is unchanged).
+    `listSkillCommands(cwd, admission)` reuses the same gated inputs through a short-lived skills-only
+    `DefaultResourceLoader` (no model/session/transcript, no extension factories) for pre-workspace
+    autocomplete, cached briefly per `(cwd, admission)`; **`listSkillCatalog(cwd, admission)`** is the Skills
+    manager's unfiltered variant (every discovered skill + its `decision`), and **`listProjectAliasSkillNames`**
+    is the notice's present-alias count. The full session loader supports **two modes**:
     - **Run-from-source (default):** `additionalExtensionPaths` pointing at the packages' raw `.ts`
       entries (pi's loader jiti-loads them — no value-import into our typecheck graph), resolved
       **lazily on first use** (never at module load: the resolve requires `node_modules`, which a
@@ -178,8 +184,11 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   `configurePiRuntime`/`getPiRuntime`; `completeOnce`/`pickModel` +
   `OneShotRequest`/`OneShotResult`/`ModelTier`; the `webUiContext` seams; the `askUserQuestion` pure
   helpers (`validateQuestionnaire`/`buildQuestionnaireResponse`/`assessAnswerability`/
-  `buildAnswersMessage`); `repairDanglingToolCalls`; `listSkillCommands(cwd, trustedProject)` (pre-session
-  skill-only catalog); the **`setProjectTrustResolver`** seam (host wires `workspaceId` → project trust);
+  `buildAnswersMessage`); `repairDanglingToolCalls`; the skill catalog helpers
+  `listSkillCommands(cwd, admission)` (filtered, pre-session autocomplete) / `listSkillCatalog(cwd, admission)`
+  (unfiltered, the manager's `skills.state`) / `listProjectAliasSkillNames(cwd)` (present-alias count);
+  `reloadSessionResources(sessionId)` (active-chat reload); the **`setSkillAdmissionResolver`** seam (host
+  wires `workspaceId` → the admission context);
   the compiled-binary extension seam (`setBundledExtensions` +
   `BundledExtensions`/`BundledExtensionFactory`).
 - **Allowed deps:** `@earendil-works/pi-coding-agent` (runtime); `@earendil-works/pi-ai` (types + test

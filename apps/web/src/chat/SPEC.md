@@ -101,8 +101,12 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   Up/Down, Enter/Tab, Escape), reused by `panels/NewWorkspaceDialog` so the two inputs cannot drift;
   `ModelSelector` + `ThinkingSelector` (also shared with `NewWorkspaceDialog`;
   optional `container` prop portals their popovers into a host Dialog), `SessionStatsBar`, `ChatHeader`
-  (its `left` slot carries the plan strip), `ExtUiDialog`. All props-driven; behavior detail lives in the
-  components' jsdoc.
+  (its `left` slot carries the plan strip; its **Skills** button — badged when a skill dir changed on
+  disk — opens the manager), `ExtUiDialog`, and **`SkillsDialog`** (the **workspace-scoped Skills
+  manager**: `skills.state` catalog grouped by source with each skill's admission verdict, project-trust +
+  re-confirm-new + per-workspace enable/disable toggles, and a **Reload** that applies changes to *this*
+  chat's session via `session.reloadResources`, disabled while streaming). All props-driven; behavior
+  detail lives in the components' jsdoc.
 - **Chat TODO plan** — the chat's `pi-todos` list surfaced **only in the chat** (engine:
   [[module-pi-todos]]; host read/write: [[submodule-server-todos]]):
   `useChatTodos` (the `todo.*` data hook — fetch + live `pi.event` refetch + edits + the add-nudge + the
@@ -123,7 +127,9 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   also **extend** the render with extra `remarkPlugins` + `components`, e.g. the file view's GitHub
   alert callouts), the view types
   (`types.ts`,
-  incl. `ToolResultState` + `ExtUiDialogRequest`), and `ChatView` (lazy-mounted by `panels/CenterTabs`).
+  incl. `ToolResultState` + `ExtUiDialogRequest`), and `ChatView` (lazy-mounted by `panels/CenterTabs`;
+  it wires `SkillsDialog` + the header Skills trigger, resolving the owning `projectId` from the store and
+  flagging staleness off the worktree `fsChanged` nudge via `SkillsDialog`'s exported `isSkillPath`).
   **No `index.ts` barrel** — chat pulls **shiki**, so per the code-splitting exception imports stay
   **per-file**; the registry is importable from `chat/toolRegistry` **without** pulling shiki.
 - **Allowed deps:** `contracts` (pi message/content-block types, **type-only**); `store` + `transport`
