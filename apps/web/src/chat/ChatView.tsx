@@ -17,6 +17,7 @@ import { ChatPlanContent, ChatPlanStripContent } from "./ChatPlan";
 import { Composer, type MentionCandidate, type SubmitBehavior } from "./Composer";
 import { ExtUiDialog } from "./ExtUiDialog";
 import { type ChatRow, deriveRows } from "./rows";
+import { SkillsDialog } from "./SkillsDialog";
 import { StreamIndicator, type StreamStatus, streamStatus } from "./StreamIndicator";
 import "./tools/register"; // side-effect: register the built-in pi tool renderers (bash/read/edit/write)
 import { ChatTurnView } from "./turns";
@@ -56,6 +57,14 @@ export default function ChatView({
 	// chat streaming into its own runtime never re-renders the foreground one.
 	const runtime = useAppStore((s) => s.sessions[sessionId]) ?? EMPTY_RUNTIME;
 	const models = useAppStore((s) => s.models);
+	// This chat's owning project (workspaces are keyed by project) — for the Skills manager's trust ops.
+	const projectId = useAppStore(
+		(s) =>
+			Object.values(s.workspaces)
+				.flat()
+				.find((w) => w.id === workspaceId)?.projectId ?? null,
+	);
+	const [skillsOpen, setSkillsOpen] = useState(false);
 	const workspaceRoot = useAppStore((s) => {
 		for (const workspaces of Object.values(s.workspaces)) {
 			const workspace = workspaces.find((w) => w.id === workspaceId);
@@ -270,6 +279,7 @@ export default function ChatView({
 											</PopoverTrigger>
 										) : null
 									}
+									{...(projectId ? { onOpenSkills: () => setSkillsOpen(true) } : {})}
 								/>
 							</div>
 						</PopoverAnchor>
@@ -337,6 +347,16 @@ export default function ChatView({
 					/>
 					{pendingExtUi ? (
 						<ExtUiDialog key={pendingExtUi.id} request={pendingExtUi} onReply={onExtUiReply} />
+					) : null}
+					{projectId ? (
+						<SkillsDialog
+							workspaceId={workspaceId}
+							sessionId={sessionId}
+							projectId={projectId}
+							streaming={isStreaming}
+							open={skillsOpen}
+							onOpenChange={setSkillsOpen}
+						/>
 					) : null}
 				</div>
 			</AskStatesContext.Provider>

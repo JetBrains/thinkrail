@@ -1,0 +1,259 @@
+import type { Project, SkillCatalogEntry, SkillDecision, Workspace } from "@thinkrail/contracts";
+import { RefreshCw, ShieldCheck } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
+import { toast, useAppStore } from "@/store";
+import { errorText, getTransport } from "@/transport";
+
+/** The workspace-scoped Skills manager (opened from the chat header). Lists every discovered skill grouped
+ * by source with its admission verdict, exposes trust + per-workspace enable/disable + re-confirm-new, and
+ * a Reload that applies changes to *this* chat's running session. */
+const GROUPS = ["Project", "Personal", "Bundled", "Pi"] as const;
+type Group = (typeof GROUPS)[number];
+
+function groupOf(entry: SkillCatalogEntry): Group {
+	if (entry.gated) return "Project";
+	if (entry.sourceInfo.scope === "user") return "Personal";
+	if (entry.sourceInfo.scope === "temporary") return "Bundled";
+	return "Pi";
+}
+
+const GROUP_HINT: Record<Group, string> = {
+	Project: "Committed to the repo — gated behind trust.",
+	Personal: "Your own libraries (~/.claude, ~/.codex, …).",
+	Bundled: "Shipped with ThinkRail.",
+	Pi: "Pi-native / configured.",
+};
+
+/** A skill result carries `projectId` only when it's a Workspace; Project has no such field. */
+function isWorkspace(result: Project | Workspace): result is Workspace {
+	return "projectId" in result;
+}
+
+export function SkillsDialog({
+	workspaceId,
+	sessionId,
+	projectId,
+	streaming,
+	open,
+	onOpenChange,
+}: {
+	workspaceId: string;
+	sessionId: string;
+	projectId: string;
+	streaming: boolean;
+	open: boolean;
+	onOpenChange: (open: boolean) => void;
+}) {
+	const [entries, setEntries] = useState<SkillCatalogEntry[] | null>(null);
+	const [busy, setBusy] = useState(false);
+
+	const refresh = useCallback(async () => {
+		try {
+			setEntries(await getTransport().request("skills.state", { workspaceId }));
+		} catch {
+			setEntries([]);
+		}
+	}, [workspaceId]);
+
+	useEffect(() => {
+		if (!open) return;
+		setEntries(null);
+		void refresh();
+	}, [open, refresh]);
+
+	// Fold a mutation's echoed record back into the store (Project only — a Workspace update also arrives on
+	// the workspace.updated push), then re-read the catalog so decisions reflect the change.
+	const mutate = async (request: () => Promise<Project | Workspace>, failure: string) => {
+		if (busy) return;
+		setBusy(true);
+		try {
+			const result = await request();
+			if (!isWorkspace(result)) {
+				const store = useAppStore.getState();
+				store.setProjects(store.projects.map((p) => (p.id === result.id ? result : p)));
+			}
+			await refresh();
+		} catch (err) {
+			toast.error(errorText(err), failure);
+		} finally {
+			setBusy(false);
+		}
+	};
+
+	const reload = async () => {
+		if (busy) return;
+		setBusy(true);
+		try {
+			await getTransport().request("session.reloadResources", { sessionId });
+			toast.success("This chat now uses the updated skills.", "Skills reloaded");
+		} catch (err) {
+			toast.error(errorText(err), "Couldn't reload skills");
+		} finally {
+			setBusy(false);
+		}
+	};
+
+	const untrustedCount = entries?.filter((e) => e.decision === "untrusted").length ?? 0;
+	const grouped = GROUPS.map((group) => ({
+		group,
+		items: (entries ?? []).filter((e) => groupOf(e) === group),
+	})).filter((g) => g.items.length > 0);
+
+	return (
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent data-testid="skills-dialog" className="max-w-[560px] gap-md p-md">
+				<div className="flex items-center justify-between gap-sm">
+					<DialogTitle className="text-sm text-text">Skills</DialogTitle>
+					<Button
+						size="sm"
+						variant="outline"
+						data-testid="skills-reload"
+						disabled={busy || streaming}
+						title={streaming ? "Available once the current turn finishes" : "Apply to this chat"}
+						onClick={() => void reload()}
+					>
+						<RefreshCw className="size-3.5" />
+						Reload
+					</Button>
+				</div>
+
+				{untrustedCount > 0 ? (
+					<div
+						data-testid="skills-trust-all"
+						className="flex items-center gap-sm rounded-[var(--radius-md)] border border-border2 border-l-[3px] border-l-[var(--gold)] bg-[var(--gold-tint)] px-md py-sm"
+					>
+						<span className="min-w-0 flex-1 text-sm text-text">
+							{untrustedCount} project skill{untrustedCount === 1 ? "" : "s"} off until you trust
+							this repo.
+						</span>
+						<Button
+							size="sm"
+							disabled={busy}
+							onClick={() =>
+								void mutate(
+									() =>
+										getTransport().request("project.setTrust", { id: projectId, trusted: true }),
+									"Couldn't trust project",
+								)
+							}
+						>
+							Trust project
+						</Button>
+					</div>
+				) : null}
+
+				<div className="max-h-[50vh] overflow-y-auto">
+					{entries === null ? (
+						<p className="px-sm py-md text-hint text-sm">Loading skills…</p>
+					) : entries.length === 0 ? (
+						<p className="px-sm py-md text-hint text-sm">
+							No skills discovered for this workspace.
+						</p>
+					) : (
+						grouped.map(({ group, items }) => (
+							<div key={group} className="mb-md">
+								<div className="px-sm py-xs">
+									<span className="font-medium text-text text-xs uppercase tracking-wide">
+										{group}
+									</span>
+									<span className="ml-sm text-hint text-xs">{GROUP_HINT[group]}</span>
+								</div>
+								{items.map((entry) => (
+									<SkillRow
+										key={`${group}:${entry.name}`}
+										entry={entry}
+										busy={busy}
+										onToggle={(enabled) =>
+											void mutate(
+												() =>
+													getTransport().request("workspace.setSkillOverride", {
+														id: workspaceId,
+														name: entry.name,
+														override: enabled ? "on" : "off",
+													}),
+												"Couldn't update skill",
+											)
+										}
+										onAcknowledge={() =>
+											void mutate(
+												() =>
+													getTransport().request("project.acknowledgeSkills", {
+														id: projectId,
+														names: [entry.name],
+													}),
+												"Couldn't confirm skill",
+											)
+										}
+									/>
+								))}
+							</div>
+						))
+					)}
+				</div>
+			</DialogContent>
+		</Dialog>
+	);
+}
+
+const DECISION_TEXT: Record<SkillDecision, string> = {
+	load: "on",
+	disabled: "off",
+	untrusted: "trust to enable",
+	"pending-ack": "new",
+};
+
+function SkillRow({
+	entry,
+	busy,
+	onToggle,
+	onAcknowledge,
+}: {
+	entry: SkillCatalogEntry;
+	busy: boolean;
+	onToggle: (enabled: boolean) => void;
+	onAcknowledge: () => void;
+}) {
+	const loaded = entry.decision === "load";
+	return (
+		<div
+			data-testid="skill-row"
+			data-skill={entry.name}
+			data-decision={entry.decision}
+			className="flex items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs hover:bg-hover"
+		>
+			<span className="flex min-w-0 flex-1 flex-col">
+				<span className="truncate font-[var(--font-mono)] text-sm text-text">{entry.name}</span>
+				{entry.description ? (
+					<span className="truncate text-hint text-xs">{entry.description}</span>
+				) : null}
+			</span>
+			{entry.decision === "pending-ack" ? (
+				<Button size="sm" data-testid="skill-ack" disabled={busy} onClick={onAcknowledge}>
+					<ShieldCheck className="size-3.5" />
+					Enable
+				</Button>
+			) : entry.decision === "untrusted" ? (
+				<span className="shrink-0 text-hint text-xs">{DECISION_TEXT.untrusted}</span>
+			) : (
+				<button
+					type="button"
+					data-testid="skill-toggle"
+					data-on={loaded}
+					disabled={busy}
+					onClick={() => onToggle(!loaded)}
+					className={cn(
+						"shrink-0 rounded-[var(--radius-sm)] border px-sm py-0.5 text-xs transition-colors disabled:opacity-50",
+						loaded
+							? "border-[var(--primary-40)] bg-[var(--primary-10)] text-primary"
+							: "border-border2 text-muted hover:bg-hover",
+					)}
+				>
+					{DECISION_TEXT[entry.decision]}
+				</button>
+			)}
+		</div>
+	);
+}
