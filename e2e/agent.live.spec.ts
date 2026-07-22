@@ -2,8 +2,8 @@ import { expect, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
 
 // Tagged @agent: excluded from the default `bun run e2e` (--grep-invert @agent); run via `bun run
-// e2e:agent` (or `bun run e2e:full`). It drives a REAL pi agent using pi's **default auth** (`AuthStorage`
-// resolves provider env vars or `~/.pi/agent/auth.json`) — run it where `pi` is authenticated. No fake.
+// e2e:agent` (or `bun run e2e:full`). It drives a REAL pi agent using pi's **default auth** (the model
+// runtime resolves provider env vars or `~/.pi/agent/auth.json`) — run it where `pi` is authenticated. No fake.
 test("streams an assistant reply from a real provider", { tag: "@agent" }, async ({ page }) => {
 	test.setTimeout(90_000); // real provider latency varies — don't fail on a slow turn under the 30s default
 	await openFixtureProject(page);

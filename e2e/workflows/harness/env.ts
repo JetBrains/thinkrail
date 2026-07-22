@@ -1,6 +1,6 @@
 // Isolation guard — MUST be imported before anything that touches the pi runtime. ES imports hoist, so
 // modules that import the server agent barrel import this file FIRST (see session.ts); pi reads
-// PI_CODING_AGENT_DIR lazily (AuthStorage.create / SettingsManager.create at first use), so setting it at
+// PI_CODING_AGENT_DIR lazily (ModelRuntime.create / SettingsManager.create at first use), so setting it at
 // module-evaluation time in a fresh Playwright worker process is race-free.
 //
 // PER-WORKER clone: each Playwright worker process gets its OWN pi-agent dir, cloned from the one

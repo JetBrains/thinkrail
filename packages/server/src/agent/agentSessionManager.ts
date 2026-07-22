@@ -121,10 +121,9 @@ export function toWireModel(model: Model<string>): WireModel {
  * `createAgentSession` use it verbatim, so accepting it would let a client (esp. a remote V2 one) point the
  * agent's model traffic at an arbitrary URL. Throws if the ref isn't an available model.
  */
-function resolveWireModel(ref: Pick<WireModel, "provider" | "id">): Model<string> {
-	const match = getPiRuntime()
-		.modelRegistry.getAvailable()
-		.find((m) => m.provider === ref.provider && m.id === ref.id);
+async function resolveWireModel(ref: Pick<WireModel, "provider" | "id">): Promise<Model<string>> {
+	const available = await (await getPiRuntime()).getAvailable();
+	const match = available.find((m) => m.provider === ref.provider && m.id === ref.id);
 	if (!match) throw new Error(`Unknown or unavailable model: ${ref.provider}/${ref.id}`);
 	return match as unknown as Model<string>;
 }
@@ -152,17 +151,16 @@ async function registerSession(
 
 /** Create an in-process AgentSession rooted in `cwd`; its events stream out tagged with the session id. */
 export async function createSession(input: CreateSessionInput): Promise<CreateSessionResult> {
-	const { authStorage, modelRegistry } = getPiRuntime();
+	const modelRuntime = await getPiRuntime();
 	const settingsManager = buildSessionSettings(input.cwd);
 	const { session } = await createAgentSession({
 		cwd: input.cwd,
-		authStorage,
-		modelRegistry,
+		modelRuntime,
 		sessionManager: sessionManagerFactory(input.cwd),
 		settingsManager,
 		resourceLoader: await buildResourceLoader(input.cwd, settingsManager),
 		// Re-resolve the wire ref to the real model (with baseUrl) host-side — never the client's baseUrl.
-		...(input.model ? { model: resolveWireModel(input.model) } : {}),
+		...(input.model ? { model: await resolveWireModel(input.model) } : {}),
 		...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
 	});
 	return registerSession(session, input.workspaceId);
@@ -244,7 +242,7 @@ async function openDiskSession(sessionId: string, workspaceId: string, cwd: stri
 	const info = (await SessionManager.list(cwd)).find((i) => i.id === sessionId && i.cwd === cwd);
 	if (!info) throw new Error(`Unknown session: ${sessionId}`);
 	if (sessions.has(sessionId)) return; // attached while we listed
-	const { authStorage, modelRegistry } = getPiRuntime();
+	const modelRuntime = await getPiRuntime();
 	const settingsManager = buildSessionSettings(cwd);
 	const sessionManager = SessionManager.open(info.path);
 	// Restart safety net: pair any tool call the last run left dangling (host died mid-tool) with a
@@ -253,8 +251,7 @@ async function openDiskSession(sessionId: string, workspaceId: string, cwd: stri
 	repairDanglingToolCalls(sessionManager);
 	const { session } = await createAgentSession({
 		cwd,
-		authStorage,
-		modelRegistry,
+		modelRuntime,
 		sessionManager,
 		settingsManager,
 		resourceLoader: await buildResourceLoader(cwd, settingsManager),
@@ -358,7 +355,7 @@ export async function abortSession(sessionId: string): Promise<void> {
 
 export async function setSessionModel(sessionId: string, model: WireModel): Promise<void> {
 	// Re-resolve the wire ref to the real model host-side (pi's setModel uses baseUrl verbatim).
-	await mustGet(sessionId).setModel(resolveWireModel(model));
+	await mustGet(sessionId).setModel(await resolveWireModel(model));
 }
 
 export function setSessionThinkingLevel(sessionId: string, level: ThinkingLevel): void {
@@ -412,10 +409,9 @@ export function getSessionCommands(sessionId: string): SlashCommandInfo[] {
 
 /** Models with configured auth, for the model picker (cheap win #1). Redacted to `WireModel` — the raw
  * `Model.baseUrl` carries the jbcentral proxy secret when wired, and the picker only reads id/name/provider. */
-export function listAvailableModels(): WireModel[] {
-	return getPiRuntime()
-		.modelRegistry.getAvailable()
-		.map((m) => toWireModel(m as unknown as Model<string>));
+export async function listAvailableModels(): Promise<WireModel[]> {
+	const available = await (await getPiRuntime()).getAvailable();
+	return available.map((m) => toWireModel(m as unknown as Model<string>));
 }
 
 /** The model + thinking level a new session resolves to (settings default if available, else first available). */
@@ -430,9 +426,8 @@ export interface DefaultModelResult {
  * default (if it's available), else the first available model. Passing it back to `session.create` is a
  * no-op vs. omitting it, so an `@agent` test that doesn't touch the picker still lands on the pinned model.
  */
-export function getDefaultModel(): DefaultModelResult {
-	const { modelRegistry } = getPiRuntime();
-	const available = modelRegistry.getAvailable();
+export async function getDefaultModel(): Promise<DefaultModelResult> {
+	const available = await (await getPiRuntime()).getAvailable();
 	const settings = SettingsManager.create(process.cwd());
 	const provider = settings.getDefaultProvider();
 	const modelId = settings.getDefaultModel();

@@ -288,16 +288,16 @@ const handlers: Record<string, Handler> = {
 		cancelLogin((params as { loginId: string }).loginId);
 		return { ok: true } as const;
 	},
-	"provider.setApiKey": (params) => {
+	"provider.setApiKey": async (params) => {
 		const p = params as { providerId: string; key: string };
-		setProviderApiKey(p.providerId, p.key);
+		await setProviderApiKey(p.providerId, p.key);
 		return { ok: true } as const;
 	},
-	"provider.logout": (params) => {
-		logoutProvider((params as { providerId: string }).providerId);
+	"provider.logout": async (params) => {
+		await logoutProvider((params as { providerId: string }).providerId);
 		return { ok: true } as const;
 	},
-	// JetBrains AI (jbcentral proxy): connect/disconnect write models.json + refresh the registry; login
+	// JetBrains AI (jbcentral proxy): connect/disconnect write models.json + reload the runtime config; login
 	// launches `central login` (browser) on the host.
 	"provider.jbcentralConnect": () => connectJbcentral(),
 	"provider.jbcentralDisconnect": async () => {

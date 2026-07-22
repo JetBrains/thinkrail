@@ -1,25 +1,15 @@
 // Dev/e2e entry: boot the host from env. The polished `thinkrail` bin lives in apps/cli.
+import type { OAuthCredentials, OAuthLoginCallbacks } from "@earendil-works/pi-ai/oauth";
 import { bootHost } from "./host";
 
 // e2e-only: register a deterministic fake pi OAuth provider so the in-app login flow (select → open URL /
 // paste code → success) is drivable end-to-end without a real provider or browser. Gated by
 // THINKRAIL_E2E_FAKE_OAUTH; this file is the dev/e2e entry and never ships (apps/cli is the prod bin).
 if (process.env.THINKRAIL_E2E_FAKE_OAUTH === "1") {
-	const { registerOAuthProvider } = await import("@earendil-works/pi-ai/oauth");
-	const { ModelRegistry } = await import("@earendil-works/pi-coding-agent");
-	const fakeProvider = {
-		id: "e2e-oauth",
+	const { getPiRuntime } = await import("./agent");
+	const fakeOauth = {
 		name: "E2E Test Provider",
-		usesCallbackServer: false,
-		async login(callbacks: {
-			onSelect: (p: {
-				message: string;
-				options: { id: string; label: string }[];
-			}) => Promise<string | undefined>;
-			onAuth: (i: { url: string }) => void;
-			onManualCodeInput?: () => Promise<string>;
-			onProgress?: (m: string) => void;
-		}) {
+		async login(callbacks: OAuthLoginCallbacks): Promise<OAuthCredentials> {
 			const choice = await callbacks.onSelect({
 				message: "How do you want to sign in?",
 				options: [
@@ -38,24 +28,16 @@ if (process.env.THINKRAIL_E2E_FAKE_OAUTH === "1") {
 				expires: 4102444800000,
 			};
 		},
-		async refreshToken(credentials: unknown) {
+		async refreshToken(credentials: OAuthCredentials): Promise<OAuthCredentials> {
 			return credentials;
 		},
-		getApiKey(credentials: { access?: unknown }) {
+		getApiKey(credentials: OAuthCredentials): string {
 			return String(credentials.access);
 		},
 	};
-	// ModelRegistry.refresh() calls resetOAuthProviders() (wiping external registrations), and the host reads
-	// provider.status (→ refresh) on every check — so re-register the fake after each refresh. Patching the
-	// prototype here keeps production code untouched; safe because dev.ts is e2e/dev-only.
-	type Refreshable = { refresh: () => void };
-	const proto = ModelRegistry.prototype as unknown as Refreshable;
-	const originalRefresh = proto.refresh;
-	proto.refresh = function reRegisterFakeOAuth(this: Refreshable) {
-		originalRefresh.call(this);
-		registerOAuthProvider(fakeProvider as never);
-	};
-	registerOAuthProvider(fakeProvider as never);
+	// An extension provider on the shared runtime: pi keeps extension registrations across
+	// refresh()/reloadConfig() (they're a composed overlay), so no re-register hook is needed.
+	(await getPiRuntime()).registerProvider("e2e-oauth", { oauth: fakeOauth });
 }
 
 const host = process.env.THINKRAIL_HOST ?? "localhost";
