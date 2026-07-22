@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { isAbsolute, relative, resolve } from "node:path";
 import type {
 	BranchList,
 	GitFileChange,
@@ -110,23 +112,29 @@ export function gitStatus(workspaceId: string): GitStatus {
 	return { branch: ws.branch, changes };
 }
 
-/** A unified diff for the whole worktree (vs base) or one file. Untracked files are shown in full. */
-export function gitDiff(workspaceId: string, path?: string): { diff: string } {
+/**
+ * Both sides of one changed file, for the center Monaco diff tab: `original` = the file at the base
+ * branch (empty when it doesn't exist there — untracked/added, or a renamed file's new path, which
+ * degrades to an add-style diff), `modified` = the worktree content (empty when deleted).
+ */
+export function gitDiffFile(
+	workspaceId: string,
+	path: string,
+): { original: string; modified: string } {
 	const ws = workspace(workspaceId);
-	if (!path) return { diff: git(ws.worktreePath, ["diff", "--no-color", ws.baseBranch]).out };
 
-	const untracked = git(ws.worktreePath, [
-		"ls-files",
-		"--others",
-		"--exclude-standard",
-		"--",
-		path,
-	]);
-	if (untracked.ok && untracked.out) {
-		// `git diff --no-index` exits non-zero when files differ; the patch is still on stdout.
-		return {
-			diff: git(ws.worktreePath, ["diff", "--no-color", "--no-index", "/dev/null", path]).out,
-		};
+	const abs = resolve(ws.worktreePath, path);
+	const rel = relative(ws.worktreePath, abs);
+	if (rel.startsWith("..") || isAbsolute(rel)) throw new Error("Path escapes the worktree");
+
+	const base = git(ws.worktreePath, ["show", `${ws.baseBranch}:${path}`], { raw: true });
+	const original = base.ok ? base.out : "";
+
+	let modified = "";
+	try {
+		modified = readFileSync(abs, "utf8");
+	} catch {
+		// deleted (or unreadable) in the worktree → empty modified side
 	}
-	return { diff: git(ws.worktreePath, ["diff", "--no-color", ws.baseBranch, "--", path]).out };
+	return { original, modified };
 }

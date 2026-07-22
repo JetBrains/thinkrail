@@ -44,8 +44,12 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   workspace**, so the shell returns to that project's Welcome — a deliberate "project home" gesture; the
   workspace's tabs survive in the store, so re-selecting it restores its view. Also
   `FileTree`, `SpecsPanel`, `RightPanel`,
-  `ChangesPanel` + lazy `DiffViewer`, `CenterTabs` + `FilePane` (+ its lazy `MonacoEditor` /
-  `MarkdownPreview`), `TerminalsPanel` + lazy `TerminalInstance`. **`WelcomePanel`** is the first-touch surface the shell mounts (centered, left-nav beside it) whenever no
+  `ChangesPanel` (the changed-file list — clicking a file opens/focuses its **center Monaco diff tab**),
+  `CenterTabs` + `FilePane` (+ its lazy `MonacoEditor` / `MarkdownPreview`) + `DiffPane` (+ its lazy
+  `MonacoDiff`), `TerminalsPanel` + lazy `TerminalInstance`. The Monaco plumbing both editors share —
+  worker wiring, the local loader, the token-driven `thinkrail` theme + the `[data-theme]` re-theme
+  observer — lives once in `monacoSetup.ts`; the slim header view-toggle segment (`Preview|Source`,
+  `Split|Inline`) is the shared `ToggleSegment`. **`WelcomePanel`** is the first-touch surface the shell mounts (centered, left-nav beside it) whenever no
 workspace is active. The `PRODUCT_NAME` wordmark as the hero (the topbar's brand styling — accent font,
 `text-primary` — enlarged), with the **active project's name as a small eyebrow** (folder icon) above it
 once a project is selected, over a **constant** spec-first pitch (not spec-conditional) and
@@ -158,11 +162,12 @@ a project picker, the prompt hero, and the reused
   the same read methods they mount with — agent edits, terminal commands, and Finder changes all land
   without a manual step. Refetches **preserve view state**: `FileTree` re-reads the root + every
   expanded dir (rows keyed by path; vanished dirs drop out via their parent), `ChangesPanel` re-reads
-  `git.status` keeping the selection while its path is still listed (re-fetching its diff, else
-  clearing), `SpecsPanel` refetches without remounting (expansion survives), and `FilePane` re-reads an
+  `git.status` (list-only — the diff renders in the center tab, not under the list), `SpecsPanel`
+  refetches without remounting (expansion survives), and `FilePane`/`DiffPane` re-read an
   open tab's content when the workspace ticked past the tab's loaded tick (live while visible;
   background tabs catch up on activation — only the active tab is mounted; a failed re-read — file
-  deleted — keeps the last content, no auto-close). Panels are mounted only for the active workspace,
+  deleted — keeps the last content, no auto-close; a diff tab whose file left the change set likewise
+  keeps its last contents — the Changes list is where the disappearance shows). Panels are mounted only for the active workspace,
   so scoping is natural; a degraded watcher just means back to read-on-demand. Deliberately **not**
   live (deferred): the project-rail workspace diffStats badges; editable-file conflict handling waits
   for `fs.writeFile` (the viewer is read-only today).
@@ -190,7 +195,16 @@ a project picker, the prompt hero, and the reused
   toggles dirs — no collision there).
 - `RightPanel`/`ChangesPanel` watch the store's `changesRequest` deep-link (set by a chat turn-divider's
   "files changed" chip): when it targets the active workspace, `RightPanel` flips to the Changes tab and
-  `ChangesPanel` selects the requested file (matched by path suffix against `git.status`).
+  `ChangesPanel` **highlights** the requested file's row (matched by path suffix against `git.status`) —
+  deliberately without opening its diff tab; the diff opens only on the user's explicit click, so a chat
+  chip never steals the center area.
+- **The diff is a center tab, not a rail inset.** Clicking a Changes row fetches `git.diffFile` (both
+  sides: base branch vs worktree) and opens a **`DiffTab`** (`${workspaceId}:diff:${path}` — one tab per
+  file; a re-click focuses the existing tab). `DiffPane` renders a slim header (the path + a per-tab
+  **Split | Inline** toggle via `store.setDiffTabView`; split is the default) over the read-only lazy
+  `MonacoDiff` (`@monaco-editor/react` `DiffEditor`, model paths derived from the file's path so both
+  sides highlight alike). A row is shown selected when its diff tab is the active center tab (or it's
+  the deep-link highlight). A failed `git.diffFile` leaves tabs unchanged (the row stays for a retry).
 - **Markdown file tabs render, don't read.** A `.md`/`.markdown` `FileTab` (from the file tree **or** the
   Specs panel — same `openTab` path) opens **rendered by default**: `FilePane` gates on `lib.isMarkdownPath`
   and shows a slim `Preview | Source` header (`markdown-view-toggle`), the rendered view being lazy
@@ -218,9 +232,9 @@ a project picker, the prompt hero, and the reused
   atomic `[data-theme]` signal. Reads are canonicalized to hex (`lib.cssColorToHex`; unparseable values
   are dropped), and a bad value degrades to Monaco's base palette rather than crashing the panel.
   `TerminalInstance` similarly rebuilds from the complete 16-slot ANSI variable set; both consume the
-  nullable editor selection-foreground override when provided. `DiffViewer` uses the one generic Shiki
-  CSS-variable registration, so highlighted markup follows a palette swap without re-highlighting or a
-  theme-specific selector/import.
+  nullable editor selection-foreground override when provided. `MonacoDiff` re-themes exactly like
+  `MonacoEditor` — both consume `monacoSetup.ts`'s define + observer, so a palette swap lands in the
+  diff tab too.
 - Heavy deps (Monaco / shiki / xterm) load via `React.lazy(() => import())` to stay out of the eager bundle.
   A lazy chunk that fails to load (or a render throw) is contained by the `components/ErrorBoundary` the
   **shell** wraps each region in (see `shell/SPEC.md`), so a single panel degrades instead of blanking the

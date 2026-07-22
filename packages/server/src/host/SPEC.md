@@ -23,7 +23,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   the **`provider.login`** channel publish (the `auth` module's session-less login-frame bridge, wired like
   `pi.extensionUi`) and the `provider.*` login handlers, the **`watch` wiring** (inject the
   `workspace.fsChanged` publish callback into `watch`; call `ensureWatch(workspaceId)` from the
-  workspace-read handlers (`fs.*`, `git.status`/`git.diff`, `spec.graph`) — a read is the "a client is
+  workspace-read handlers (`fs.*`, `git.status`/`git.diffFile`, `spec.graph`) — a read is the "a client is
   looking" signal; `stopWatch` in `workspace.remove`'s fast path beside `evictSpecIndex`;
   `stopAllWatches()` in `stop()`), `cancelAllLogins()` in `stop()` before the socket close,
   an optional boot-time `openProject(projectPath)` (best-effort — a launcher convenience), and

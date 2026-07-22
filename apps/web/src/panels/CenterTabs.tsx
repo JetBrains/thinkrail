@@ -1,4 +1,11 @@
-import { GitBranch, History, MessageSquarePlus, RotateCcw, X } from "lucide-react";
+import {
+	GitBranch,
+	GitCompareArrows,
+	History,
+	MessageSquarePlus,
+	RotateCcw,
+	X,
+} from "lucide-react";
 import { lazy, Suspense, useEffect } from "react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import {
@@ -18,6 +25,7 @@ import {
 	useAppStore,
 } from "../store";
 import { errorText, getTransport } from "../transport";
+import { DiffPane } from "./DiffPane";
 import { FilePane } from "./FilePane";
 
 // The chat view is heavy — load it only when its tab is first shown (protects first paint). File panes
@@ -242,10 +250,13 @@ export function CenterTabs() {
 							>
 								<button
 									type="button"
-									className="max-w-[160px] truncate py-xs"
+									className="flex max-w-[180px] items-center gap-xs py-xs"
 									onClick={() => setActiveTab(tab.id)}
 								>
-									{tab.name}
+									{tab.kind === "diff" ? (
+										<GitCompareArrows className="size-3.5 shrink-0 text-hint" />
+									) : null}
+									<span className="truncate">{tab.name}</span>
 								</button>
 								<button
 									type="button"
@@ -292,6 +303,8 @@ export function CenterTabs() {
 								/>
 							) : active.kind === "doc" ? (
 								<DocPane key={active.id} tab={active} />
+							) : active.kind === "diff" ? (
+								<DiffPane key={active.id} tab={active} />
 							) : (
 								<FilePane key={active.id} tab={active} />
 							)}

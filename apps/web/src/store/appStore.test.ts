@@ -835,3 +835,40 @@ test("applyConfig folds the server-synced app config in (theme is an opaque host
 	useAppStore.getState().applyConfig({ theme: "custom.high-contrast" });
 	expect(useAppStore.getState().theme).toBe("custom.high-contrast");
 });
+
+test("diff tabs: openTab dedupes by id + activates; view + contents update in place", () => {
+	const s = () => useAppStore.getState();
+	useAppStore.setState({ activeWorkspaceId: "ws1" });
+	const tab = {
+		kind: "diff" as const,
+		id: "ws1:diff:src/a.ts",
+		workspaceId: "ws1",
+		name: "a.ts",
+		path: "src/a.ts",
+		original: "old",
+		modified: "new",
+		loadedTick: 1,
+	};
+	s().openTab(tab);
+	s().openTab(tab); // re-open = no duplicate, stays active
+	expect(s().tabsByWorkspace.ws1).toHaveLength(1);
+	expect(s().activeTabByWorkspace.ws1).toBe(tab.id);
+
+	// Split ↔ inline is per-tab state; a wrong-kind id is a no-op.
+	s().setDiffTabView(tab.id, "inline");
+	const afterView = s().tabsByWorkspace.ws1?.[0];
+	expect(afterView?.kind === "diff" && afterView.view).toBe("inline");
+	s().setFileTabView(tab.id, "source"); // kind-guarded: must not touch the diff tab
+	const guarded = s().tabsByWorkspace.ws1?.[0];
+	expect(guarded?.kind === "diff" && guarded.view).toBe("inline");
+
+	// A live re-read replaces both sides and advances the tick.
+	s().updateDiffTabContent(tab.id, "old2", "new2", 5);
+	const updated = s().tabsByWorkspace.ws1?.[0];
+	expect(updated?.kind).toBe("diff");
+	if (updated?.kind === "diff") {
+		expect(updated.original).toBe("old2");
+		expect(updated.modified).toBe("new2");
+		expect(updated.loadedTick).toBe(5);
+	}
+});

@@ -1,9 +1,7 @@
 import type { GitFileStatus, GitStatus } from "@thinkrail/contracts";
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
-
-const DiffViewer = lazy(() => import("./DiffViewer"));
 
 const STATUS_LABEL: Record<GitFileStatus, string> = {
 	added: "A",
@@ -20,40 +18,31 @@ const STATUS_COLOR: Record<GitFileStatus, string> = {
 	untracked: "text-green",
 };
 
+/** A diff tab's id — the one-tab-per-file identity (re-clicking a row focuses the existing tab). */
+function diffTabId(workspaceId: string, path: string): string {
+	return `${workspaceId}:diff:${path}`;
+}
+
 /**
- * Changes for the active worktree: changed-file list (vs base) over the selected file's diff.
- * Live: the store's per-workspace fs tick silently re-reads `git.status`; the selection survives while
- * its path is still listed (its diff is re-read too — the content may have changed), else it clears.
+ * Changes for the active worktree: the changed-file list (vs base). Clicking a file opens (or focuses)
+ * its Monaco diff tab in the center — the diff itself renders there (`DiffPane`), not under the list.
+ * Live: the store's per-workspace fs tick silently re-reads `git.status`; the open diff tabs follow the
+ * disk on their own (DiffPane's re-read). A chat deep-link only highlights its row — no tab is opened
+ * until the user clicks.
  */
 export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	const [status, setStatus] = useState<GitStatus | null>(null);
-	const [selected, setSelected] = useState<string | null>(null);
-	const [diff, setDiff] = useState<string | null>(null);
+	const [highlighted, setHighlighted] = useState<string | null>(null);
 	const changesRequest = useAppStore((s) => s.changesRequest);
 	const fsTick = useAppStore((s) => s.fsChangesByWorkspace[workspaceId]?.tick ?? 0);
-	// The live selection, readable from the async status refetch without re-running it on select.
-	const selectedRef = useRef<string | null>(null);
+	const activeTabId = useAppStore((s) => s.activeTabByWorkspace[workspaceId] ?? null);
 
 	// Hard reset only on workspace switch — a tick refresh keeps the old list until the re-read lands.
 	// biome-ignore lint/correctness/useExhaustiveDependencies: workspaceId is the trigger (reset-on-switch), not a body input
 	useEffect(() => {
 		setStatus(null);
-		setSelected(null);
-		selectedRef.current = null;
-		setDiff(null);
+		setHighlighted(null);
 	}, [workspaceId]);
-
-	const selectFile = async (path: string) => {
-		setSelected(path);
-		selectedRef.current = path;
-		setDiff(null);
-		try {
-			const result = await getTransport().request("git.diff", { workspaceId, path });
-			setDiff(result.diff);
-		} catch {
-			setDiff("");
-		}
-	};
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: fsTick is the live-refresh trigger, not a body input
 	useEffect(() => {
@@ -61,23 +50,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 		getTransport()
 			.request("git.status", { workspaceId })
 			.then((s) => {
-				if (cancelled) return;
-				setStatus(s);
-				// Reconcile the selection against the fresh list: gone → clear; still there → re-read its
-				// diff QUIETLY (the old diff stays visible until the new one lands — no loading flash).
-				const sel = selectedRef.current;
-				if (sel && !s.changes.some((c) => c.path === sel)) {
-					setSelected(null);
-					selectedRef.current = null;
-					setDiff(null);
-				} else if (sel) {
-					getTransport()
-						.request("git.diff", { workspaceId, path: sel })
-						.then((r) => {
-							if (!cancelled && selectedRef.current === sel) setDiff(r.diff);
-						})
-						.catch(() => {});
-				}
+				if (!cancelled) setStatus(s);
 			})
 			.catch(() => {
 				if (!cancelled) setStatus((prev) => prev ?? { branch: "", changes: [] });
@@ -87,16 +60,42 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 		};
 	}, [workspaceId, fsTick]);
 
-	// A chat deep-link (turn-divider chip) targeting this workspace: select the requested file once the
-	// status list is loaded. Match by suffix so an absolute pi path still resolves to the relative entry.
-	// biome-ignore lint/correctness/useExhaustiveDependencies: `selectFile` is stable enough; the request + status are the triggers
+	// Open (or focus) the file's Monaco diff tab in the center.
+	const openDiff = async (path: string) => {
+		setHighlighted(path);
+		const id = diffTabId(workspaceId, path);
+		const store = useAppStore.getState();
+		if ((store.tabsByWorkspace[workspaceId] ?? []).some((t) => t.id === id)) {
+			store.setActiveTab(id);
+			return;
+		}
+		try {
+			const { original, modified } = await getTransport().request("git.diffFile", {
+				workspaceId,
+				path,
+			});
+			const name = path.split("/").pop() || path;
+			// Stamp the workspace's current fs tick: the contents are fresh as of now, so DiffPane's live
+			// re-read only fires for ticks arriving AFTER this open.
+			const loadedTick = useAppStore.getState().fsChangesByWorkspace[workspaceId]?.tick ?? 0;
+			useAppStore
+				.getState()
+				.openTab({ kind: "diff", id, workspaceId, path, name, original, modified, loadedTick });
+		} catch {
+			// a failed read leaves tabs unchanged; the row stays for a retry
+		}
+	};
+
+	// A chat deep-link (turn-divider chip) targeting this workspace: highlight the requested row once the
+	// status list is loaded — the diff opens only on the user's explicit click. Match by suffix so an
+	// absolute pi path still resolves to the relative entry.
 	useEffect(() => {
 		if (!status || changesRequest?.workspaceId !== workspaceId) return;
 		const want = changesRequest.path;
 		// Anchor the suffix at a path separator so an absolute pi path resolves to its relative entry
 		// without `a-foo.ts` spuriously matching the entry `foo.ts`.
 		const match = status.changes.find((c) => c.path === want || want.endsWith(`/${c.path}`));
-		void selectFile(match ? match.path : want);
+		setHighlighted(match ? match.path : want);
 	}, [changesRequest, status, workspaceId]);
 
 	if (status === null) {
@@ -111,17 +110,19 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	}
 
 	return (
-		<div className="flex h-full min-h-0 flex-col">
-			<ul className="max-h-1/3 shrink-0 overflow-auto border-b border-border2">
-				{status.changes.map((change) => (
+		<ul className="h-full overflow-auto">
+			{status.changes.map((change) => {
+				const isActive =
+					activeTabId === diffTabId(workspaceId, change.path) || highlighted === change.path;
+				return (
 					<li key={change.path}>
 						<button
 							type="button"
 							data-testid="change-item"
 							data-status={change.status}
-							onClick={() => void selectFile(change.path)}
+							onClick={() => void openDiff(change.path)}
 							className={`flex w-full items-center gap-sm px-sm py-xs text-left text-sm hover:bg-hover ${
-								selected === change.path ? "bg-hover" : ""
+								isActive ? "bg-hover" : ""
 							}`}
 						>
 							<span className={`w-3 shrink-0 text-center text-xs ${STATUS_COLOR[change.status]}`}>
@@ -130,19 +131,8 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 							<span className="truncate text-muted">{change.path}</span>
 						</button>
 					</li>
-				))}
-			</ul>
-			<div data-testid="diff-viewer" className="min-h-0 flex-1 overflow-auto">
-				{selected === null ? (
-					<p className="px-sm py-xs text-xs text-hint">Select a file to see its diff.</p>
-				) : diff === null ? (
-					<p className="px-sm py-xs text-xs text-hint">Loading diff…</p>
-				) : (
-					<Suspense fallback={<p className="px-sm py-xs text-xs text-hint">Loading…</p>}>
-						<DiffViewer diff={diff} />
-					</Suspense>
-				)}
-			</div>
-		</div>
+				);
+			})}
+		</ul>
 	);
 }
