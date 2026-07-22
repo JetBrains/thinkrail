@@ -2,7 +2,13 @@ import { describe, expect, it } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { listSkillCommands } from "./extensions";
+import { listProjectAliasSkillNames, listSkillCommands } from "./extensions";
+import type { SkillAdmissionContext } from "./skillAdmission";
+
+/** A context with the given trust + acknowledged names, and no baseline disables / workspace overrides. */
+function ctx(trusted: boolean, acknowledged: string[] = []): SkillAdmissionContext {
+	return { trusted, acknowledged, disabled: [], overrides: {} };
+}
 
 function writeSkill(root: string, name: string, description: string): void {
 	const directory = join(root, name);
@@ -79,7 +85,11 @@ describe("listSkillCommands", () => {
 				`import { writeFileSync } from "node:fs";\nwriteFileSync(${JSON.stringify(marker)}, "ran");\nexport default () => {};\n`,
 			);
 
-			const commands = await listSkillCommands(project, true);
+			// Trusting acknowledges every project alias present now — mirror that so the aliases are admitted.
+			const commands = await listSkillCommands(
+				project,
+				ctx(true, await listProjectAliasSkillNames(project)),
+			);
 			const byName = (name: string) => commands.find((command) => command.name === `skill:${name}`);
 
 			expect(byName("configured-wins")?.description).toBe("configured description");
@@ -150,7 +160,7 @@ describe("listSkillCommands", () => {
 			writeSkill(join(project, ".pi", "skills"), "repo-native", "pi-native repo skill");
 			writeSkill(join(home, ".claude", "skills"), "personal-skill", "personal skill");
 
-			const untrusted = await listSkillCommands(project, false);
+			const untrusted = await listSkillCommands(project, ctx(false));
 			// The attacker-controlled project alias is withheld until trust is granted…
 			expect(untrusted.some((command) => command.name === "skill:repo-alias")).toBe(false);
 			// …but the user's own personal library still loads, and (this fix is scoped to the compatibility
@@ -159,7 +169,10 @@ describe("listSkillCommands", () => {
 			expect(untrusted.some((command) => command.name === "skill:repo-native")).toBe(true);
 
 			// Granting trust surfaces the project alias — a distinct cache key, so no stale untrusted hit.
-			const trusted = await listSkillCommands(project, true);
+			const trusted = await listSkillCommands(
+				project,
+				ctx(true, await listProjectAliasSkillNames(project)),
+			);
 			expect(trusted.some((command) => command.name === "skill:repo-alias")).toBe(true);
 		} finally {
 			restoreEnvironment(original);

@@ -13,12 +13,21 @@ export interface Project {
 	/** Epoch ms of last open, for sort order. */
 	lastOpened: number;
 	/**
-	 * Whether the user has granted this project trust. Gates loading the project's **committed cross-agent
-	 * skill aliases** (`.claude/skills`, `.github/skills`, `.gemini/skills`) — attacker-controlled for a
-	 * cloned repo, and injected into the agent's system prompt. `undefined` = undecided (treated as
-	 * untrusted). Personal (`~/.claude` …), pi-native, and ThinkRail-bundled skills load regardless.
+	 * Whether the user has engaged trust for this project — the gate on loading its **committed cross-agent
+	 * skill aliases** (`.claude/skills`, `.github/skills`, `.gemini/skills`), which are attacker-controlled
+	 * for a cloned repo and injected into the agent's system prompt. `undefined` = undecided (untrusted).
+	 * Personal (`~/.claude` …), pi-native, and ThinkRail-bundled skills load regardless.
 	 */
 	trusted?: boolean;
+	/**
+	 * Names of project-scoped alias skills the user has **acknowledged**. Granting trust acknowledges every
+	 * such skill present at that moment; a skill that appears later (a pull, or a branch that ships a new
+	 * one) is *not* here until confirmed — so trusting today's checkout can't silently admit tomorrow's
+	 * committed skill. A project-scoped skill loads only when `trusted` **and** its name is in this set.
+	 */
+	acknowledgedSkills?: string[];
+	/** Names disabled at the project baseline (any source), overridable per-workspace. */
+	disabledSkills?: string[];
 }
 
 /**
@@ -56,6 +65,13 @@ export interface Workspace {
 	 */
 	renamed?: boolean;
 	diffStats?: DiffStats;
+	/**
+	 * Per-skill enable/disable **overrides** for this workspace, keyed by skill name — `"on"` forces an
+	 * admissible skill on (even if the project baseline disabled it), `"off"` forces it off. Absent → the
+	 * project baseline (`Project.disabledSkills`) applies. Never un-gates an untrusted/unacknowledged
+	 * project alias (admissibility is checked first).
+	 */
+	skillOverrides?: Record<string, "on" | "off">;
 }
 
 /**

@@ -22,6 +22,7 @@ import { ANSWERABILITY_ERRORS, assessAnswerability, buildAnswersMessage } from "
 import { buildResourceLoader, toSkillCommands } from "./extensions";
 import { getPiRuntime, refreshCatalogsDetached } from "./piRuntime";
 import { repairDanglingToolCalls } from "./sessionRepair";
+import type { SkillAdmissionContext } from "./skillAdmission";
 import { cancelExtUiForSession, createWebUiContext, notifyExtUi } from "./webUiContext";
 
 interface Entry {
@@ -49,14 +50,22 @@ export function setSessionManagerFactory(factory: (cwd: string) => SessionManage
 }
 
 /**
- * Host seam: resolve whether a workspace's owning project is trusted. Trust gates the project's committed
- * cross-agent skill aliases (`.claude/skills` etc.) — see `buildResourceLoader`. Keyed by `workspaceId`,
- * the one id both the create and disk-restore paths hold. Fails closed (untrusted) until the host wires the
- * real resolver at boot, so a mis-wire can never silently load an untrusted repo's skills.
+ * Host seam: resolve a workspace's **skill-admission context** — the owning project's trust + acknowledged
+ * set + baseline disables, plus that workspace's per-skill overrides. Gates which skills a session loads
+ * (see `buildResourceLoader` / `skillAdmission`). Keyed by `workspaceId`, the one id both the create and
+ * disk-restore paths hold. Fails closed (nothing trusted/acknowledged) until the host wires the real
+ * resolver at boot, so a mis-wire can never silently load an untrusted repo's skills.
  */
-let projectTrustResolver: (workspaceId: string) => boolean = () => false;
-export function setProjectTrustResolver(resolver: (workspaceId: string) => boolean): void {
-	projectTrustResolver = resolver;
+let skillAdmissionResolver: (workspaceId: string) => SkillAdmissionContext = () => ({
+	trusted: false,
+	acknowledged: [],
+	disabled: [],
+	overrides: {},
+});
+export function setSkillAdmissionResolver(
+	resolver: (workspaceId: string) => SkillAdmissionContext,
+): void {
+	skillAdmissionResolver = resolver;
 }
 
 function mustGet(sessionId: string): AgentSession {
@@ -85,8 +94,8 @@ export function getSessionWorkspaceId(sessionId: string): string | undefined {
  * `SettingsManager.create(cwd)` defaults its agentDir to `getAgentDir()` (honors `PI_CODING_AGENT_DIR`),
  * matching the manager `createAgentSession` builds when we omit `settingsManager`. `projectTrusted: true`
  * here covers pi-**native** project resources (`.pi` / `.agents`, project settings) — unchanged behavior.
- * The committed **cross-agent skill aliases** carry their own explicit per-project trust gate
- * (`buildResourceLoader`'s `trustedProject` / `setProjectTrustResolver`), not this flag.
+ * The committed **cross-agent skill aliases** carry their own explicit admission gate
+ * (`buildResourceLoader`'s `admission` context / `setSkillAdmissionResolver`), not this flag.
  */
 export function buildSessionSettings(cwd: string): SettingsManager {
 	const settings = SettingsManager.create(cwd, undefined, { projectTrusted: true });
@@ -175,7 +184,7 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
 		resourceLoader: await buildResourceLoader(
 			input.cwd,
 			settingsManager,
-			projectTrustResolver(input.workspaceId),
+			skillAdmissionResolver(input.workspaceId),
 		),
 		// Re-resolve the wire ref to the real model (with baseUrl) host-side — never the client's baseUrl.
 		...(input.model ? { model: await resolveWireModel(input.model) } : {}),
@@ -275,7 +284,7 @@ async function openDiskSession(sessionId: string, workspaceId: string, cwd: stri
 		resourceLoader: await buildResourceLoader(
 			cwd,
 			settingsManager,
-			projectTrustResolver(workspaceId),
+			skillAdmissionResolver(workspaceId),
 		),
 	});
 	// Lost a race after the open — drop this duplicate rather than clobber the registered one.

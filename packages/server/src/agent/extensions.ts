@@ -29,6 +29,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type { SlashCommandInfo } from "@thinkrail/contracts";
 import { askUserQuestionExtension } from "./askUserQuestion";
+import { decideSkill, type SkillAdmissionContext } from "./skillAdmission";
 import { type CompatibilitySkillSource, discoverCompatibilitySkillSources } from "./skillSources";
 
 /** A bundled extension entry's default export — the pi factory shape the loader invokes. */
@@ -96,51 +97,67 @@ function isUnderPath(path: string, root: string): boolean {
 	return normalizedPath === normalizedRoot || normalizedPath.startsWith(`${normalizedRoot}${sep}`);
 }
 
-/** Keep compatibility aliases' provenance truthful without overwriting an explicit Pi settings source. */
-function compatibilitySkillsOverride(sources: CompatibilitySkillSource[]) {
+/** Relabel one skill's default `temporary` scope to its true provider/scope; leave configured ones alone. */
+function relabelAliasProvenance(skill: Skill, sources: CompatibilitySkillSource[]): Skill {
+	// Pi-configured/native/shared resources already carry user/project metadata and outrank inferred aliases;
+	// only the loader's default `temporary` scope (an additional path) needs relabeling.
+	if (skill.sourceInfo.scope !== "temporary") return skill;
+	const source = sources.find((candidate) => isUnderPath(skill.filePath, candidate.path));
+	if (!source) return skill;
+	return {
+		...skill,
+		sourceInfo: createSyntheticSourceInfo(skill.filePath, {
+			source: source.provider,
+			scope: source.scope,
+			origin: "top-level",
+			baseDir: source.path,
+		}),
+	};
+}
+
+/**
+ * The combined skills override: relabel compatibility aliases' provenance AND apply the admission decision,
+ * so a session only ever loads skills that resolve to `load` — untrusted / unacknowledged / disabled ones
+ * never reach the system prompt or the `/skill:` list. `sources` identifies which loaded skills are
+ * project-scoped aliases (by file path); `ctx` carries trust + acknowledged + disables + workspace overrides.
+ */
+function skillsGate(sources: CompatibilitySkillSource[], ctx: SkillAdmissionContext) {
+	const projectAliasPaths = sources.filter((s) => s.scope === "project").map((s) => s.path);
+	const isProjectAlias = (filePath: string) =>
+		projectAliasPaths.some((path) => isUnderPath(filePath, path));
 	return (current: { skills: Skill[]; diagnostics: ResourceDiagnostic[] }) => ({
 		...current,
-		skills: current.skills.map((skill) => {
-			// Pi-configured/native/shared resources already carry user/project metadata and outrank inferred
-			// aliases. Only additional paths get the loader's default temporary scope and need relabeling.
-			if (skill.sourceInfo.scope !== "temporary") return skill;
-			const source = sources.find((candidate) => isUnderPath(skill.filePath, candidate.path));
-			if (!source) return skill;
-			return {
-				...skill,
-				sourceInfo: createSyntheticSourceInfo(skill.filePath, {
-					source: source.provider,
-					scope: source.scope,
-					origin: "top-level",
-					baseDir: source.path,
-				}),
-			};
-		}),
+		skills: current.skills
+			.map((skill) => relabelAliasProvenance(skill, sources))
+			.filter(
+				(skill) =>
+					decideSkill({ name: skill.name, isProjectAlias: isProjectAlias(skill.filePath) }, ctx) ===
+					"load",
+			),
 	});
 }
 
 function resolveSkillInputs(
 	cwd: string,
-	trustedProject: boolean,
+	ctx: SkillAdmissionContext,
 ): {
 	additionalSkillPaths: string[];
-	skillsOverride: ReturnType<typeof compatibilitySkillsOverride>;
+	skillsOverride: ReturnType<typeof skillsGate>;
 } {
 	const discovered = discoverCompatibilitySkillSources(cwd);
-	// Personal aliases (`~/.claude` …) are the user's own machine — always safe. Project-scoped aliases (a
-	// repo's committed `.claude/skills` etc.) are attacker-controlled for a cloned repo and get injected into
-	// the agent's system prompt, so they load only after an explicit project-trust grant. Fail closed: an
-	// untrusted (or undecided) project contributes no aliases at all.
 	const personal = discovered.filter((source) => source.scope === "user");
-	const project = trustedProject ? discovered.filter((source) => source.scope === "project") : [];
-	const sources = [...personal, ...project];
+	const project = discovered.filter((source) => source.scope === "project");
 	const bundledSkillPaths = bundled ? [bundled.skillsDir] : resolveDevPaths().skillPaths;
 	return {
-		// DefaultResourceLoader puts Pi settings/native/shared resources first. We then add ThinkRail's bundled
-		// skills, the user's personal aliases, then (only when trusted) the project's aliases — so first-name-wins
-		// gives pi-native > bundled > personal > project: a repo can never shadow your own or ThinkRail's skills.
-		additionalSkillPaths: [...bundledSkillPaths, ...sources.map((source) => source.path)],
-		skillsOverride: compatibilitySkillsOverride(sources),
+		// All alias dirs are made discoverable so the catalog can enumerate them; the per-skill admission gate
+		// (`skillsGate`) is what actually withholds untrusted/unacknowledged/disabled ones. Path order sets the
+		// first-name-wins precedence pi-native > bundled > personal > project.
+		additionalSkillPaths: [
+			...bundledSkillPaths,
+			...personal.map((source) => source.path),
+			...project.map((source) => source.path),
+		],
+		skillsOverride: skillsGate(discovered, ctx),
 	};
 }
 
@@ -158,16 +175,17 @@ export function toSkillCommands(skills: readonly Skill[]): SlashCommandInfo[] {
  * A resource loader with `pi-web-access` + `pi-visualize` + `pi-spec-graph` (and its skill) +
  * `pi-thinkrail-workflow` (and its skills) + `pi-todos` (and its skill) (+ the headless-search policy),
  * our host-owned `ask_user_question` tool, and portable cross-agent skill aliases layered onto Pi's
- * default discovery. `trustedProject` gates the project-scoped aliases (personal/bundled always load) —
- * pass the owning project's trust decision; fail closed (`false`) when it is unknown.
+ * default discovery. `admission` gates the skills (project-scoped aliases behind trust + acknowledgment,
+ * plus the per-skill enable/disable layer) — pass the owning workspace's resolved context; fail closed
+ * when it is unknown.
  */
 export async function buildResourceLoader(
 	cwd: string,
 	settingsManager: SettingsManager,
-	trustedProject: boolean,
+	admission: SkillAdmissionContext,
 ): Promise<ResourceLoader> {
 	const sharedFactories = [headlessSearchPolicy, askUserQuestionExtension];
-	const skillInputs = resolveSkillInputs(cwd, trustedProject);
+	const skillInputs = resolveSkillInputs(cwd, admission);
 	const common = {
 		cwd,
 		agentDir: getAgentDir(),
@@ -190,21 +208,32 @@ export async function buildResourceLoader(
 	return loader;
 }
 
+/** A stable cache key for a `(cwd, admission)` pair — sorted so equal contexts collide, distinct ones don't. */
+function admissionCacheKey(cwd: string, ctx: SkillAdmissionContext): string {
+	return JSON.stringify([
+		cwd,
+		ctx.trusted,
+		[...ctx.acknowledged].sort(),
+		[...ctx.disabled].sort(),
+		Object.entries(ctx.overrides).sort(([a], [b]) => a.localeCompare(b)),
+	]);
+}
+
 const SKILL_LIST_TTL_MS = 5_000;
 const skillListCache = new Map<string, { at: number; value: SlashCommandInfo[] }>();
 
 /**
  * Skill-only pre-session catalog for New Workspace autocomplete. It shares the real session's Pi settings,
  * package/native discovery, compatibility aliases, and bundled skills, but never loads extension factories
- * or creates a model/session/transcript. `trustedProject` gates the project-scoped aliases, exactly as the
- * live session does. Cached briefly per `(cwd, trust)` so flipping the project picker doesn't re-walk the
- * filesystem each time; because trust is part of the key, a fresh grant misses the stale untrusted entry.
+ * or creates a model/session/transcript. `admission` gates the skills exactly as the live session does.
+ * Cached briefly per `(cwd, admission)` so flipping the project picker doesn't re-walk the filesystem; a
+ * fresh grant changes the key, so it never returns a stale untrusted list.
  */
 export async function listSkillCommands(
 	cwd: string,
-	trustedProject: boolean,
+	admission: SkillAdmissionContext,
 ): Promise<SlashCommandInfo[]> {
-	const cacheKey = `${trustedProject ? "T" : "U"} ${cwd}`;
+	const cacheKey = admissionCacheKey(cwd, admission);
 	const cached = skillListCache.get(cacheKey);
 	if (cached && Date.now() - cached.at < SKILL_LIST_TTL_MS) return cached.value;
 	const settingsManager = SettingsManager.create(cwd, getAgentDir(), { projectTrusted: true });
@@ -212,7 +241,7 @@ export async function listSkillCommands(
 		cwd,
 		agentDir: getAgentDir(),
 		settingsManager,
-		...resolveSkillInputs(cwd, trustedProject),
+		...resolveSkillInputs(cwd, admission),
 		noExtensions: true,
 		noPromptTemplates: true,
 		noThemes: true,
@@ -222,4 +251,32 @@ export async function listSkillCommands(
 	const value = toSkillCommands(loader.getSkills().skills);
 	skillListCache.set(cacheKey, { at: Date.now(), value });
 	return value;
+}
+
+/**
+ * The project-scoped alias skill names present in a checkout right now — what granting trust acknowledges,
+ * and the count the New Workspace / Welcome trust notice shows. A skills-only loader restricted to the
+ * project alias dirs (no admission filter), so it enumerates them regardless of the current trust state.
+ */
+export async function listProjectAliasSkillNames(cwd: string): Promise<string[]> {
+	const projectPaths = discoverCompatibilitySkillSources(cwd)
+		.filter((source) => source.scope === "project")
+		.map((source) => source.path);
+	if (projectPaths.length === 0) return [];
+	const settingsManager = SettingsManager.create(cwd, getAgentDir(), { projectTrusted: true });
+	const loader = new DefaultResourceLoader({
+		cwd,
+		agentDir: getAgentDir(),
+		settingsManager,
+		additionalSkillPaths: projectPaths,
+		noExtensions: true,
+		noPromptTemplates: true,
+		noThemes: true,
+		noContextFiles: true,
+	});
+	await loader.reload();
+	return loader
+		.getSkills()
+		.skills.filter((skill) => projectPaths.some((path) => isUnderPath(skill.filePath, path)))
+		.map((skill) => skill.name);
 }

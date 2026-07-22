@@ -5,8 +5,8 @@ import {
 	disposeAllSessions,
 	getSessionWorkspaceId,
 	setExtUiPublisher,
-	setProjectTrustResolver,
 	setSessionPublisher,
+	setSkillAdmissionResolver,
 } from "../agent";
 import { cancelAllLogins, setLoginPublisher } from "../auth";
 import { resolveWorktreeFile } from "../fs";
@@ -106,15 +106,21 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		server.publish(channel, JSON.stringify({ channel, data }));
 	});
 
-	// Gate a project's committed cross-agent skill aliases behind its trust grant: map the workspace a
-	// session belongs to back to its project's persisted `trusted` flag. Fail closed on any lookup miss, so
-	// a stale/unknown id never loads an untrusted repo's skills.
-	setProjectTrustResolver((workspaceId) => {
+	// Resolve a session's skill-admission context: map the workspace it belongs to back to its project's
+	// persisted trust + acknowledged set + baseline disables, plus that workspace's per-skill overrides.
+	// Fail closed on any lookup miss, so a stale/unknown id never loads an untrusted repo's skills.
+	setSkillAdmissionResolver((workspaceId) => {
 		try {
-			const { projectId } = getWorkspace(workspaceId);
-			return listProjects().find((project) => project.id === projectId)?.trusted === true;
+			const { projectId, skillOverrides } = getWorkspace(workspaceId);
+			const project = listProjects().find((p) => p.id === projectId);
+			return {
+				trusted: project?.trusted === true,
+				acknowledged: project?.acknowledgedSkills ?? [],
+				disabled: project?.disabledSkills ?? [],
+				overrides: skillOverrides ?? {},
+			};
 		} catch {
-			return false;
+			return { trusted: false, acknowledged: [], disabled: [], overrides: {} };
 		}
 	});
 
