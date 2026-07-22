@@ -229,22 +229,25 @@ export function SkillsDialog({
 					</div>
 				) : null}
 
-				{hasPlugins ? (
-					<div
-						data-testid="skills-all-plugins"
-						className="flex items-center gap-sm rounded-[var(--radius-md)] border border-border2 px-md py-1.5"
-					>
-						<span className="min-w-0 flex-1 text-sm text-text">All Claude plugins</span>
-						<Toggle
-							on={!pluginsDisabled}
-							busy={busy}
-							testid="all-plugins-toggle"
-							onClick={() => setGroupEnabled("@plugins", pluginsDisabled)}
-						/>
-					</div>
-				) : null}
-
 				<div className="max-h-[50vh] overflow-y-auto">
+					{/* The all-plugins master follows the same sticky pattern: it pins at the scroll top, then the
+					    first group's sticky header covers it as you scroll into the groups. */}
+					{hasPlugins ? (
+						<div
+							data-testid="skills-all-plugins"
+							className="sticky top-0 z-10 flex items-center gap-sm border-border2 border-y bg-bg-dark px-sm py-1.5"
+						>
+							<span className="min-w-0 flex-1 font-medium text-text text-xs uppercase tracking-wide">
+								All plugins
+							</span>
+							<Toggle
+								on={!pluginsDisabled}
+								busy={busy}
+								testid="all-plugins-toggle"
+								onClick={() => setGroupEnabled("@plugins", pluginsDisabled)}
+							/>
+						</div>
+					) : null}
 					{entries === null ? (
 						<p className="px-sm py-md text-hint text-sm">Loading skills…</p>
 					) : entries.length === 0 ? (
