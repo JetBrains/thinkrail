@@ -236,10 +236,11 @@ const handlers: Record<string, Handler> = {
 				"This project ignores .thinkrail/ — shared hooks can't be committed here. Use a Local hook instead.",
 			);
 		}
-		// Committable: always write+commit, even with an empty `shared` map, so the chosen `combineMode`
-		// still persists as the project's default. Not committable: `shared` is already known empty (the
-		// guard above threw otherwise), so there's nothing to write — Shared stays unavailable, by design.
-		if (sharedCommittable) {
+		// Write+commit only when committable AND `shared` is non-empty — an empty map isn't worth a commit
+		// (an absent/untouched file already means "no Shared hooks"; there's no separate on-disk slot for
+		// `combineMode` alone). Not committable: the guard above already ensured `shared` is empty in that
+		// case, so this condition still correctly skips — Shared stays unavailable there, by design.
+		if (sharedCommittable && Object.keys(p.shared).length > 0) {
 			writeHookConfig(project.path, { version: 1, combineMode: p.combineMode, hooks: p.shared });
 			commitProjectFile(project.path, WORKSPACE_HOOKS_CONFIG_FILE, "chore: update workspace hooks");
 		}

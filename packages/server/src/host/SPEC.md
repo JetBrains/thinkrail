@@ -104,12 +104,15 @@ channel fan-out, and the process-boot wrapper both launchers share.
   project's actual combine-mode) to fill a per-source `approved` map via `isApproved` — an entry whose
   `approvalMaterial` is `null` (a missing script) is left out, not marked unapproved. `save` throws a
   friendly, actionable error (never the raw `git add failed` string) if asked to write a non-empty
-  Shared map on a project where `sharedCommittable` is false; otherwise, whenever committable, it writes
-  via `writeHookConfig` and commits via `projects`'s `commitProjectFile` **even with an empty Shared
-  map**, so the chosen `combineMode` still persists as the project's default. It always persists the
-  Local tier via `saveHookOverrides`, then **approves on save**: `resolveHookRun` again (over what was
-  just written, mode `"both"`) and `approveHook` per resolved entry — so a workspace created right after
-  saving never sits at `hookAwaitingApproval` for something the user just configured on this machine.
+  Shared map on a project where `sharedCommittable` is false; otherwise it writes via `writeHookConfig`
+  and commits via `projects`'s `commitProjectFile` **only when committable AND the Shared map is
+  non-empty** — an empty map isn't worth a commit (an absent/untouched file already means "no Shared
+  hooks"; there's no separate on-disk slot for `combineMode` alone, so a project with zero Shared hooks
+  can't persist a bare `combineMode` change through this call). It always persists the Local tier via
+  `saveHookOverrides`, then **approves on save**: `resolveHookRun` again (over the just-submitted
+  `{combineMode, shared, local}`, mode `"both"`) and `approveHook` per resolved entry — so a workspace
+  created right after saving never sits at `hookAwaitingApproval` for something the user just configured
+  on this machine.
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer`, `bootHost`,
   `BootHostOptions`, `BootedHost`.
 - **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for
