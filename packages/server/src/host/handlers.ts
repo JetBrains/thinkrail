@@ -149,22 +149,43 @@ const handlers: Record<string, Handler> = {
 	// entry the display is just its label (`script: <path>`) while the material actually hashed is the
 	// script's live file contents, read here — so approving a script through this path still content-hashes
 	// correctly rather than hashing the label string.
+	// `workspaceId` (optional) anchors that re-resolve to a specific workspace's worktree — the paired
+	// `workspace.hooks.run` always resolves against `workspace.worktreePath`, so a Shared `{script}` hook
+	// whose worktree contents differ from the project root's must be approved against that SAME worktree,
+	// or the hash this records never matches what `run` re-checks and the hook loops back to
+	// `hookAwaitingApproval` forever. Omitted (older/legacy callers) falls back to the project-root-based
+	// resolution below, unchanged.
 	"workspace.hooks.approve": (params) => {
-		const p = params as { projectId: string; hook: HookName; command: string };
-		const project = listProjects().find((proj) => proj.id === p.projectId);
-		if (!project) throw new Error(`Unknown project: ${p.projectId}`);
-		const committed = loadHookConfig(project.path);
-		const local = loadHookOverrides()[p.projectId] ?? {};
+		const p = params as {
+			projectId: string;
+			hook: HookName;
+			command: string;
+			workspaceId?: string;
+		};
+		let projectId: string;
+		let basePath: string;
+		if (p.workspaceId) {
+			const ws = getWorkspace(p.workspaceId);
+			projectId = ws.projectId;
+			basePath = ws.worktreePath;
+		} else {
+			const project = listProjects().find((proj) => proj.id === p.projectId);
+			if (!project) throw new Error(`Unknown project: ${p.projectId}`);
+			projectId = p.projectId;
+			basePath = project.path;
+		}
+		const committed = loadHookConfig(basePath);
+		const local = loadHookOverrides()[projectId] ?? {};
 		const entries = resolveHookRun({
 			hook: p.hook,
 			committed,
 			local,
 			mode: "both",
-			basePath: project.path,
+			basePath,
 		});
 		for (const entry of entries) {
 			if (entry.display === p.command && entry.approvalMaterial != null) {
-				approveHook(p.projectId, p.hook, entry.source, entry.approvalMaterial);
+				approveHook(projectId, p.hook, entry.source, entry.approvalMaterial);
 			}
 		}
 		return { ok: true } as const;
@@ -236,11 +257,17 @@ const handlers: Record<string, Handler> = {
 				"This project ignores .thinkrail/ — shared hooks can't be committed here. Use a Local hook instead.",
 			);
 		}
-		// Write+commit only when committable AND `shared` is non-empty — an empty map isn't worth a commit
-		// (an absent/untouched file already means "no Shared hooks"; there's no separate on-disk slot for
-		// `combineMode` alone). Not committable: the guard above already ensured `shared` is empty in that
-		// case, so this condition still correctly skips — Shared stays unavailable there, by design.
-		if (sharedCommittable && Object.keys(p.shared).length > 0) {
+		// Write+commit when committable AND either the new `shared` is non-empty OR the existing committed
+		// file already had Shared hooks — the second half is what lets a save with `shared: {}` actually
+		// CLEAR a previously-committed hook (writes `hooks: {}` and commits it) rather than leaving the
+		// stale file untouched forever (there's no separate on-disk slot for `combineMode` alone, so an
+		// empty write is still meaningful once something was committed before). A brand-new project with
+		// nothing committed and an empty `shared` still writes nothing (no noise). Not committable: the
+		// guard above already ensured `shared` is empty in that case, so this condition still correctly
+		// skips — Shared stays unavailable there, by design.
+		const existing = loadHookConfig(project.path);
+		const hadShared = Object.keys(existing.hooks).length > 0;
+		if (sharedCommittable && (Object.keys(p.shared).length > 0 || hadShared)) {
 			writeHookConfig(project.path, { version: 1, combineMode: p.combineMode, hooks: p.shared });
 			commitProjectFile(project.path, WORKSPACE_HOOKS_CONFIG_FILE, "chore: update workspace hooks");
 		}

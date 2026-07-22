@@ -107,7 +107,9 @@ export const WS_METHODS = {
 	// Records the given command as approved for this project+hook (sha256'd, host-local) — a future
 	// onDelete/preMerge invocation checks this fresh and runs; it does not itself re-run onCreate for a
 	// workspace already sitting at `hookAwaitingApproval` (see WorkspaceHookEvent's doc comment) — the
-	// approval UI composes this with `workspaceHooksRun` below to actually bootstrap that workspace.
+	// approval UI composes this with `workspaceHooksRun` below to actually bootstrap that workspace. An
+	// optional `workspaceId` anchors resolution to that workspace's worktree instead of the project root —
+	// see `WsMethodMap`'s doc comment on this method for why.
 	workspaceHooksApprove: "workspace.hooks.approve",
 	// Re-invoke a specific hook for a specific workspace on demand — the general-purpose "run this now"
 	// primitive: what the approval flow uses to bootstrap a workspace whose onCreate was pending approval,
@@ -299,7 +301,11 @@ export interface WsMethodMap {
 	"workspace.remove": { params: { id: string }; result: Ack };
 	"workspace.diffStats": { params: { id: string }; result: DiffStats };
 	"workspace.hooks.approve": {
-		params: { projectId: string; hook: HookName; command: string };
+		// `workspaceId` is optional: when given, the host resolves/hashes against that workspace's worktree
+		// (matching `workspace.hooks.run`'s basePath) instead of the project root — needed for a Shared
+		// script hook whose worktree contents can differ from the root checkout. Omitted keeps the legacy
+		// project-root-based resolution for backward compatibility.
+		params: { projectId: string; hook: HookName; command: string; workspaceId?: string };
 		result: Ack;
 	};
 	"workspace.hooks.run": { params: { workspaceId: string; hook: HookName }; result: Ack };

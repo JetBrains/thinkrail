@@ -148,8 +148,11 @@ what lets the UI ship independently of the host.
   `setThinkingLevel`/`compact`/`getStats`/`getCommands`/`extUiReply`/**`answerQuestion`** (the inline
   `ask_user_question` reply, correlated by tool call id)/**`list`**/**`getMessages`** (the
   read side) / **`settings.update`** (merge + persist a partial `AppConfig`, returns the merged config)) /
-  the **workspace hooks pair** — **`workspace.hooks.approve`** (`{ projectId, hook, command }` → records a
-  sha256'd approval, scoped to the project+hook, not a single workspace) and **`workspace.hooks.run`**
+  the **workspace hooks pair** — **`workspace.hooks.approve`** (`{ projectId, hook, command, workspaceId?
+  }` → records a sha256'd approval, scoped to the project+hook; an optional `workspaceId` anchors
+  resolution/hashing to that workspace's worktree — matching `workspace.hooks.run`'s basePath — instead of
+  the project root, so a Shared script hook's approval hashes the exact worktree contents `run` will
+  re-check; omitted falls back to the legacy project-root-based resolution) and **`workspace.hooks.run`**
   (`{ workspaceId, hook }` → re-invokes a hook for one specific workspace on demand; `onCreate`/`onDelete`
   only — the approval UI composes it with `approve` to bootstrap a workspace stuck at
   `hookAwaitingApproval`, and it doubles as a manual retry-after-failure action)) / the **project hooks

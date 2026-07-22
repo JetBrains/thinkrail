@@ -93,7 +93,14 @@ channel fan-out, and the process-boot wrapper both launchers share.
   path** (`workspaces/hooks`'s `resolveHookRun`, mode `"both"`) and calls `approveHook` (with `source`)
   for whichever resolved entry's *current* `display` matches `command` — for an inline entry `display`
   IS the material, but for a `{script}` entry `display` is just its label (`` `script: <path>` ``) while
-  the material actually hashed is the script's live file contents, read fresh at approval time.
+  the material actually hashed is the script's live file contents, read fresh at approval time. An
+  optional `workspaceId` on the request anchors this whole re-resolve to that workspace instead —
+  `basePath`/`loadHookConfig` become `workspace.worktreePath` and `local` keys off `workspace.projectId`
+  — matching what the paired `workspace.hooks.run` always resolves against, so a Shared `{script}` hook
+  whose worktree contents differ from the project root's is approved against the SAME content `run` will
+  re-check (otherwise the hash never matches and the hook loops back to `hookAwaitingApproval` forever).
+  Omitted (older/legacy callers) falls back to the project-root-based resolution described above,
+  unchanged.
 - **Project-level hooks config surface:** `project.hooks.get`/`project.hooks.save` (no workspace
   needed), both keyed off the **project's root path** (never a workspace worktree — a script's
   `approvalMaterial`/`missing` there reflects the project root's on-disk state, not any one workspace's
@@ -105,10 +112,13 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `approvalMaterial` is `null` (a missing script) is left out, not marked unapproved. `save` throws a
   friendly, actionable error (never the raw `git add failed` string) if asked to write a non-empty
   Shared map on a project where `sharedCommittable` is false; otherwise it writes via `writeHookConfig`
-  and commits via `projects`'s `commitProjectFile` **only when committable AND the Shared map is
-  non-empty** — an empty map isn't worth a commit (an absent/untouched file already means "no Shared
-  hooks"; there's no separate on-disk slot for `combineMode` alone, so a project with zero Shared hooks
-  can't persist a bare `combineMode` change through this call). It always persists the Local tier via
+  and commits via `projects`'s `commitProjectFile` when committable AND *either* the submitted Shared
+  map is non-empty *or* the existing committed file already had Shared hooks — the second clause is what
+  lets a save with an empty Shared map actually CLEAR a previously-committed hook (writes `hooks: {}` and
+  commits it) instead of leaving the stale file untouched forever; a brand-new project with nothing
+  committed and an empty Shared map still writes nothing (no noise — there's no separate on-disk slot for
+  `combineMode` alone, so an empty write only matters once something was committed before). It always
+  persists the Local tier via
   `saveHookOverrides`, then **approves on save**: `resolveHookRun` again (over the just-submitted
   `{combineMode, shared, local}`, mode `"both"`) and `approveHook` per resolved entry — so a workspace
   created right after saving never sits at `hookAwaitingApproval` for something the user just configured
