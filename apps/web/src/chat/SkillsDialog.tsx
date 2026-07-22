@@ -194,41 +194,51 @@ export function SkillsDialog({
 						</p>
 					) : (
 						grouped.map(({ label, hint, items }) => (
-							<div key={label} className="mb-md">
-								<div className="px-sm py-xs">
+							<div
+								key={label}
+								data-testid="skill-group"
+								data-group={label}
+								className="mb-md overflow-hidden rounded-[var(--radius-md)] border border-border2"
+							>
+								<div className="flex items-baseline gap-sm border-border2 border-b bg-bg-dark px-sm py-1.5">
 									<span className="font-medium text-text text-xs uppercase tracking-wide">
 										{label}
 									</span>
-									<span className="ml-sm text-hint text-xs">{hint}</span>
+									<span className="min-w-0 flex-1 truncate text-hint text-xs">{hint}</span>
+									<span className="shrink-0 rounded-full bg-hover px-1.5 text-hint text-xs">
+										{items.length}
+									</span>
 								</div>
-								{items.map((entry) => (
-									<SkillRow
-										key={`${label}:${entry.name}`}
-										entry={entry}
-										busy={busy}
-										onToggle={(enabled) =>
-											void mutate(
-												() =>
-													getTransport().request("workspace.setSkillOverride", {
-														id: workspaceId,
-														name: entry.name,
-														override: enabled ? "on" : "off",
-													}),
-												"Couldn't update skill",
-											)
-										}
-										onAcknowledge={() =>
-											void mutate(
-												() =>
-													getTransport().request("project.acknowledgeSkills", {
-														id: projectId,
-														names: [entry.name],
-													}),
-												"Couldn't confirm skill",
-											)
-										}
-									/>
-								))}
+								<div className="divide-y divide-border2">
+									{items.map((entry) => (
+										<SkillRow
+											key={`${label}:${entry.name}`}
+											entry={entry}
+											busy={busy}
+											onToggle={(enabled) =>
+												void mutate(
+													() =>
+														getTransport().request("workspace.setSkillOverride", {
+															id: workspaceId,
+															name: entry.name,
+															override: enabled ? "on" : "off",
+														}),
+													"Couldn't update skill",
+												)
+											}
+											onAcknowledge={() =>
+												void mutate(
+													() =>
+														getTransport().request("project.acknowledgeSkills", {
+															id: projectId,
+															names: [entry.name],
+														}),
+													"Couldn't confirm skill",
+												)
+											}
+										/>
+									))}
+								</div>
 							</div>
 						))
 					)}
@@ -262,7 +272,7 @@ function SkillRow({
 			data-testid="skill-row"
 			data-skill={entry.name}
 			data-decision={entry.decision}
-			className="flex items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs hover:bg-hover"
+			className="flex items-center gap-sm px-sm py-1.5 hover:bg-hover"
 		>
 			<span className="flex min-w-0 flex-1 flex-col">
 				<span className="truncate font-[var(--font-mono)] text-sm text-text">{entry.name}</span>
