@@ -10,7 +10,13 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { commitProjectFile, initProject, inspectProjectPath, listProjects } from "./projects";
+import {
+	commitProjectFile,
+	initProject,
+	inspectProjectPath,
+	isPathIgnored,
+	listProjects,
+} from "./projects";
 
 function gitOut(cwd: string, ...args: string[]): string {
 	const r = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "pipe", stderr: "ignore" });
@@ -202,4 +208,27 @@ test("commitProjectFile never sweeps up an unrelated file already staged", () =>
 	// unrelated.txt must still be staged, not committed alongside our file.
 	expect(gitOut(repo, "status", "--short")).toBe("A  unrelated.txt");
 	rmSync(repo, { recursive: true, force: true });
+});
+
+test("isPathIgnored: true for a path covered by a committed .gitignore rule", () => {
+	const repo = join(dataDir, "repo");
+	makeRepo(repo);
+	writeFileSync(join(repo, ".gitignore"), ".thinkrail/\n");
+
+	expect(isPathIgnored(repo, ".thinkrail/hooks.json")).toBe(true);
+});
+
+test("isPathIgnored: false in a plain repo with no matching ignore rule", () => {
+	const repo = join(dataDir, "repo");
+	makeRepo(repo);
+
+	expect(isPathIgnored(repo, ".thinkrail/hooks.json")).toBe(false);
+});
+
+test("isPathIgnored: false (never throws) when git itself errors, e.g. not a repo at all", () => {
+	const notARepo = join(dataDir, "not-a-repo");
+	mkdirSync(notARepo, { recursive: true });
+
+	expect(() => isPathIgnored(notARepo, ".thinkrail/hooks.json")).not.toThrow();
+	expect(isPathIgnored(notARepo, ".thinkrail/hooks.json")).toBe(false);
 });

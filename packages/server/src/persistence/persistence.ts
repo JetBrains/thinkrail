@@ -7,6 +7,7 @@ import {
 	type AppConfig,
 	DEFAULT_CONFIG,
 	type HookName,
+	type HookValue,
 	type Project,
 	type Workspace,
 } from "@thinkrail/contracts";
@@ -54,15 +55,16 @@ export function saveConfig(config: AppConfig): void {
 }
 
 /**
- * Per-project, host-local override of a hook command — read by `workspaces/hooks`; replaces (never merges
- * with) the committed `.thinkrail/hooks.json` value for that hook. Never touches the repo.
+ * Per-project, host-local override of a hook value (inline command or `{ script }` reference) — read by
+ * `workspaces/hooks`; replaces (never merges with) the committed `.thinkrail/hooks.json` value for that
+ * hook. Never touches the repo.
  */
-export function loadHookOverrides(): Record<string, Partial<Record<HookName, string>>> {
+export function loadHookOverrides(): Record<string, Partial<Record<HookName, HookValue>>> {
 	return readJson("hookOverrides.json", {});
 }
 
 export function saveHookOverrides(
-	overrides: Record<string, Partial<Record<HookName, string>>>,
+	overrides: Record<string, Partial<Record<HookName, HookValue>>>,
 ): void {
 	writeJson("hookOverrides.json", overrides);
 }

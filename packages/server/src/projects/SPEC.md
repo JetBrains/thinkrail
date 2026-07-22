@@ -30,8 +30,13 @@ classify it and bootstrap it into one so it can be opened.
   git-identity fallback `initProject` has. Used by `host/handlers.ts`'s `project.hooks.save` to commit
   `.thinkrail/hooks.json` after `workspaces/hooks`'s `writeHookConfig` writes it — `workspaces/hooks` stays
   git-free per its own SPEC; this module is the one place that already commits to a project's root.
+  **`isPathIgnored(projectPath, relPath)`** — `git check-ignore --quiet -- <relPath>` in `projectPath`;
+  exit 0 (ignored) → `true`, exit 1 (not ignored) → `false`, and any other outcome (a git error — not a
+  repo, missing path, …) also reads as `false`, the safer default. Never throws. Backs the host's
+  `sharedCommittable` computation (`project.hooks.get`): a project whose `.gitignore` covers `.thinkrail/`
+  can't commit a Shared hook there, so the UI steers the user to a Local (host-local) hook instead.
 - **Public surface (barrel):** `openProject`, `listProjects`, `closeProject`, `getProjects`,
-  `inspectProjectPath`, `initProject`, `commitProjectFile`.
+  `inspectProjectPath`, `initProject`, `commitProjectFile`, `isPathIgnored`.
 - **Allowed deps:** `persistence`; the `git` sub-module (shared `git()` runner, bound to live `env` for
   config overrides); `contracts` (`Project`, `ProjectPathStatus`); Node/Bun.
 - **Forbidden:** `host`; sibling features other than `git` (`workspaces` depends on `projects`, never the

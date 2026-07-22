@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { DiffStats, Project, Workspace } from "@thinkrail/contracts";
+import type { CombineMode, DiffStats, Project, Workspace } from "@thinkrail/contracts";
 import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
 import { git, gitAsync } from "../git";
 import { dataDir, loadProjects, loadWorkspaces, saveWorkspaces } from "../persistence";
@@ -106,11 +106,16 @@ function diffStats(worktreePath: string, baseBranch: string): DiffStats {
  * `prefetchBranch`es it in the background when it opens, so the local remote-tracking ref is already
  * current by the time we branch. We only fetch *here* as a cheap fallback when the ref isn't present
  * locally at all (never fetched) — a ~10ms `rev-parse` guard, so the common case pays no network cost.
+ *
+ * `hookCombineMode`, when given, is stamped onto the new record (before `runOnCreateHook` fires, so the
+ * very first hook run already sees it) as this workspace's fixed override of how Shared/Local hooks combine
+ * for its whole life — omitted leaves the field absent entirely, inheriting the project's committed default.
  */
 export async function createWorkspace(
 	projectId: string,
 	name?: string,
 	baseRef?: string,
+	hookCombineMode?: CombineMode,
 ): Promise<Workspace> {
 	const project = getProjects().find((p) => p.id === projectId);
 	if (!project) throw new Error(`Unknown project: ${projectId}`);
@@ -165,6 +170,8 @@ export async function createWorkspace(
 		// A user-chosen name is a deliberate one — the auto-namer must never touch it. Auto `workspace-N`
 		// leaves the flag unset: eligible for one assist rename.
 		...(displayName ? { renamed: true } : {}),
+		// Omitted ⇒ field absent (not present-but-undefined) — inherits the project's committed default.
+		...(hookCombineMode ? { hookCombineMode } : {}),
 	};
 	all.push(workspace);
 	saveWorkspaces(all);

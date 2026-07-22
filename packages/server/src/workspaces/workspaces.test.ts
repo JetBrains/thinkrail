@@ -114,6 +114,21 @@ test("createWorkspace marks a user-named workspace renamed; an auto-named one st
 	expect(named.renamed).toBe(true);
 });
 
+test("createWorkspace stamps hookCombineMode onto the record when given; omitted leaves it absent", async () => {
+	const withMode = await createWorkspace("p1", undefined, undefined, "shared");
+	expect(withMode.hookCombineMode).toBe("shared");
+	// Persisted, not just returned — a reload sees the same value.
+	expect(listWorkspaces("p1").find((w) => w.id === withMode.id)?.hookCombineMode).toBe("shared");
+
+	const withoutMode = await createWorkspace("p1");
+	expect(withoutMode.hookCombineMode).toBeUndefined();
+	// Not merely `undefined` — the key itself must be absent (exactOptionalPropertyTypes discipline).
+	expect(Object.hasOwn(withoutMode, "hookCombineMode")).toBe(false);
+	expect(
+		listWorkspaces("p1").find((w) => w.id === withoutMode.id)?.hookCombineMode,
+	).toBeUndefined();
+});
+
 test("renameWorkspace moves the branch in place: record + git follow, the worktree dir does not", async () => {
 	const ws = await createWorkspace("p1");
 	const renamed = renameWorkspace(ws.id, "add login flow");
@@ -265,7 +280,7 @@ test("onDelete hook runs before the worktree directory is actually removed", asy
 		join(ws.worktreePath, ".thinkrail", "hooks.json"),
 		JSON.stringify({ onDelete: command }),
 	);
-	approveHook("p1", "onDelete", command);
+	approveHook("p1", "onDelete", "shared", command);
 
 	await reclaimWorktree(ws);
 
@@ -281,7 +296,7 @@ test("onCreate hook runs in the background and doesn't block createWorkspace's r
 	writeFileSync(join(repo, ".thinkrail", "hooks.json"), JSON.stringify({ onCreate: command }));
 	git(repo, "add", "-A");
 	git(repo, "commit", "-m", "add onCreate hook");
-	approveHook("p1", "onCreate", command);
+	approveHook("p1", "onCreate", "shared", command);
 
 	const start = Date.now();
 	const ws = await createWorkspace("p1");

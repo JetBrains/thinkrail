@@ -32,7 +32,11 @@ coincide for the auto `workspace-N` placeholder, but a named workspace carries b
   [[submodule-workflow-skills]]'s artifacts rules); a **user-supplied name is the display name** (casing +
   punctuation preserved via `toDisplayName`; the branch is derived from it) and **sets `renamed: true`** at
   create — the user already chose, so the auto-namer never touches it; auto-`workspace-N` leaves it unset,
-  where `name === branch`),
+  where `name === branch`; an optional 4th `hookCombineMode` param is **stamped onto the record before
+  `runOnCreateHook` fires** — so the workspace's very first hook run already honors it — when given;
+  omitted leaves the field absent entirely (not present-but-`undefined`), inheriting the project's committed
+  default (`HookConfigFile.combineMode`, itself `"both"` unless the project overrides it); see
+  [[submodule-server-workspaces-hooks]]),
   `renameWorkspace` (**sync**; sets the **display `name`** (sanitized, casing preserved) and derives the
   **git branch** from it via `toBranch`, uniqued against refs + worktree dirs, `git branch -m` from the
   project repo — the branch ref moves and the worktree's HEAD follows, but the **worktree dir never moves**

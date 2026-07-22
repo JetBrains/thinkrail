@@ -161,6 +161,19 @@ export function initProject(path: string): Project {
 }
 
 /**
+ * Whether `relPath` is git-ignored in the repo rooted at `projectPath` — `git check-ignore --quiet --
+ * <relPath>` exits 0 when the path is ignored, 1 when it isn't; pattern-matches the path string, so it
+ * works whether or not `relPath` actually exists on disk yet. Gates `sharedCommittable`: a project whose
+ * `.gitignore` covers `.thinkrail/` can't commit a Shared hook there, only a Local (host-local) one. Any
+ * other outcome (a git error — not a repo, `projectPath` missing, …) reads as "not ignored", the safer
+ * default: a caller that goes on to `git add` it gets its own clear failure rather than the hook silently
+ * vanishing into "ignored". Never throws.
+ */
+export function isPathIgnored(projectPath: string, relPath: string): boolean {
+	return git(projectPath, ["check-ignore", "--quiet", "--", relPath]).ok;
+}
+
+/**
  * Commit `relPath`'s current on-disk content (whatever the caller already wrote, e.g. via
  * `writeHookConfig`) in the project rooted at `path` — the only surface in this module (besides
  * `initProject`) that commits directly to a project's root checkout rather than an isolated worktree.
