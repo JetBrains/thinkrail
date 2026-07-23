@@ -7,6 +7,8 @@ import type {
 	FileNode,
 	GithubAuthStatus,
 	GitStatus,
+	HistoryScope,
+	HistorySearchResult,
 	JbcentralConnectResult,
 	LoginReply,
 	Project,
@@ -61,7 +63,12 @@ import type {
 // v14: group/source toggles + pre-session manager — `project.setGroupEnabled` (turn a plugin or source tier,
 // incl. `@plugins`, on/off at the project baseline) + `project.skills` (project-scoped catalog for Welcome /
 // New Workspace); `Project` gains `disabledGroups`, `SkillCatalogEntry` gains `group`.
-export const PROTOCOL_VERSION = 14;
+// v15: chat-history search — `history.search` reads a lazy in-memory index over pi's session files
+// (prompt recall + full-conversation matches, scoped chat/workspace/project/all, recency-ordered). The
+// messages section is assistant-only (a user-role hit only ever duplicates its own prompt's text);
+// `PromptHit` carries optional `messageIndex`/`anchorText` so the prompt row itself is jumpable — the
+// location a dropped user-role message hit used to carry.
+export const PROTOCOL_VERSION = 15;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -189,6 +196,7 @@ export const WS_METHODS = {
 	// Persist a partial change to the server-synced app settings (e.g. the theme). The host merges, saves
 	// `config.json`, and broadcasts `settings.changed` — the caller converges on that push, not optimism.
 	settingsUpdate: "settings.update",
+	historySearch: "history.search",
 } as const;
 
 /** Server→client push channels. */
@@ -428,6 +436,12 @@ export interface WsMethodMap {
 	// Merge a partial into the server-synced app settings, persist it, and broadcast `settings.changed`.
 	// Returns the merged, persisted `AppConfig`.
 	"settings.update": { params: { config: Partial<AppConfig> }; result: AppConfig };
+	// Prompt recall + full-text conversation search over pi's persisted sessions (and live ones — pi
+	// appends as messages complete). Server-side index; results capped (default 50/section), true totals.
+	"history.search": {
+		params: { query: string; scope: HistoryScope; limit?: number };
+		result: HistorySearchResult;
+	};
 }
 
 export type WsMethodName = keyof WsMethodMap;

@@ -60,6 +60,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `auth` | provider status (`provider.status`) + in-app login (OAuth / API key / logout) | [auth/SPEC.md](src/auth/SPEC.md) |
 | `assist` | ad-hoc one-shot tasks (workspace naming, …) on a cheap model, best-effort | [assist/SPEC.md](src/assist/SPEC.md) |
 | `dialog` | the host's native folder picker | [dialog/SPEC.md](src/dialog/SPEC.md) |
+| `history` | prompt recall + conversation search over pi's session files | [history/SPEC.md](src/history/SPEC.md) |
 
 `src/index.ts` re-exports `host` + the `agent` barrel's `registerBundledRuntime` seam; `src/dev.ts` boots
 the host from env via `bootHost` for dev/e2e.
@@ -68,7 +69,7 @@ the host from env via `bootHost` for dev/e2e.
 
 `host` is the **only composition root** — it wires each feature's handlers into the WS registry.
 
-- `host` → `projects`, `workspaces`, `git`, `github`, `fs`, `spec`, `todos`, `watch`, `terminal`, `dialog`, `agent`, `auth`, `assist`, `settings`
+- `host` → `projects`, `workspaces`, `git`, `github`, `fs`, `spec`, `todos`, `watch`, `terminal`, `dialog`, `agent`, `auth`, `assist`, `settings`, `history`
 - `workspaces` → `projects`, `git`, `persistence`
 - `projects` → `git` (shared runner), `persistence`
 - `git`, `fs`, `spec`, `watch`, `terminal`, `settings` → `persistence` (`spec` also → `pi-spec-graph/core`, external)
@@ -76,7 +77,7 @@ the host from env via `bootHost` for dev/e2e.
 - `assist` → `agent` (the one-shot completion primitive)
 - `auth` → `agent` (`getPiRuntime` — the shared `AuthStorage` + `ModelRegistry`; one-way, `agent` never imports `auth`)
 - `agent` → (no internal deps — only the pi runtime)
-- `persistence`, `dialog`, `github` → (leaves)
+- `persistence`, `dialog`, `github`, `history` → (leaves)
 
 Rules: features never import `host`, and never each other except the edges above. The graph is acyclic.
 `agent`'s WS surface (`session.*` + `pi.event` forwarding) attaches to `host`. Features that push on their
@@ -84,6 +85,8 @@ own never import `host` either: they expose a **publisher-injection seam** (`set
 `setSessionPublisher`, `setLoginPublisher`, `workspaces`' `setWorkspacePublisher` for the
 `workspace.created`/`updated`/`removed` lifecycle trio, and `settings`' `setSettingsPublisher` for
 `settings.changed`) that `host` installs at `createServer` — so the channel wiring lives only in `host`.
+`history` stays registry-free (never imports `projects`/`workspaces`); `host` injects the scope filter
++ labels from the registries at the handler layer (`history.search` handler).
 
 ## Get right
 

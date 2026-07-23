@@ -54,6 +54,39 @@ test("an assistant turn that ended in a provider error hydrates a following erro
 	expect(err?.kind === "error" && err.text).toContain("gpt-5.5");
 });
 
+test("turnIdByMessageIndex maps each message's position to its own turn id, null for non-turn messages, and the assistant's id (not the injected error turn's) when the message ended in an error", () => {
+	const { turns, turnIdByMessageIndex } = messagesToRuntime([
+		{ role: "user", content: "hi", timestamp: 1 },
+		{ role: "assistant", content: [], stopReason: "error", errorMessage: "boom" },
+		{
+			role: "toolResult",
+			toolCallId: "x",
+			toolName: "bash",
+			content: [],
+			isError: false,
+			timestamp: 2,
+		},
+		{
+			role: "custom",
+			customType: "someone-elses-extension",
+			content: "hello",
+			display: true,
+			timestamp: 3,
+		},
+		{ role: "user", content: "again", timestamp: 4 },
+	] as unknown as Message[]);
+
+	// [user, assistant, error, user] — the injected error turn has no message index of its own.
+	expect(turns.map((t) => t.kind)).toEqual(["user", "assistant", "error", "user"]);
+	expect(turnIdByMessageIndex).toHaveLength(5);
+	expect(turnIdByMessageIndex[0]).toBe(turns[0]?.id);
+	expect(turnIdByMessageIndex[1]).toBe(turns[1]?.id); // the assistant turn itself...
+	expect(turnIdByMessageIndex[1]).not.toBe(turns[2]?.id); // ...never the synthesized error turn
+	expect(turnIdByMessageIndex[2]).toBeNull(); // toolResult never becomes a turn
+	expect(turnIdByMessageIndex[3]).toBeNull(); // custom never becomes a turn
+	expect(turnIdByMessageIndex[4]).toBe(turns[3]?.id); // the trailing user turn
+});
+
 test("a failed tool result maps to error status", () => {
 	const { toolResults } = messagesToRuntime([
 		{
