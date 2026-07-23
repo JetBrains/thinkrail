@@ -252,6 +252,14 @@ export function listWorkspaces(projectId: string): Workspace[] {
 }
 
 /**
+ * Registry records without per-workspace git diffStats — for read paths (like history scope mapping)
+ * that only need ids/paths and must not block the event loop on git spawns. Pure registry load.
+ */
+export function listWorkspaceRecords(projectId: string): Workspace[] {
+	return loadWorkspaces().filter((w) => w.projectId === projectId);
+}
+
+/**
  * Drop a workspace's persistence record (fast) and return the removed record (or `null` if unknown). The
  * worktree/branch are reclaimed separately via `reclaimWorktree` — splitting the record-drop from the slow
  * git subprocess lets the host archive a workspace off the request's critical path (drop the record now so

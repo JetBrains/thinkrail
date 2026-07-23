@@ -331,3 +331,53 @@ export interface AppConfig {
 
 /** The config a fresh host (no `config.json` yet) falls back to. */
 export const DEFAULT_CONFIG: AppConfig = { theme: "dark" };
+
+/** History-search scope — the overlay's cycle: this chat → workspace → project → everywhere. */
+export type HistoryScope =
+	| { kind: "chat"; sessionId: string }
+	| { kind: "workspace"; workspaceId: string }
+	| { kind: "project"; projectId: string }
+	| { kind: "all" };
+
+/** One recalled prompt (prompts section: deduped by normalized text, newest kept, recency-ordered). */
+export interface PromptHit {
+	text: string;
+	timestamp: number;
+	sessionId: string;
+	/** pi's session display name, when set. */
+	sessionTitle?: string;
+	/** Mapped from the session's cwd via the workspace registry; absent for unmapped (pi-CLI) cwds. */
+	workspaceId?: string;
+	projectId?: string;
+	cwd: string;
+	/**
+	 * The kept-newest occurrence's position in `session.getMessages` order — the same jump anchor a
+	 * `MessageHit` carries, letting the prompt row itself be jumped to. Optional for tolerance; a v10+
+	 * host always sets it alongside `anchorText`.
+	 */
+	messageIndex?: number;
+	/**
+	 * The kept-newest occurrence's message-text prefix — the same drift-tolerant jump validation a
+	 * `MessageHit` carries. Optional for tolerance; a v10+ host always sets it alongside `messageIndex`.
+	 */
+	anchorText?: string;
+}
+
+/** One full-text conversation match. `messageIndex` is the position in the `session.getMessages`
+ * transcript; `anchorText` (a prefix of the message text) lets the client validate/fall back if the
+ * live transcript drifted from the indexed file (e.g. after compaction). */
+export interface MessageHit extends PromptHit {
+	role: "user" | "assistant";
+	snippet: string;
+	messageIndex: number;
+	anchorText: string;
+}
+
+/** `history.search` result. `indexing` = the one-time cold build is still running (show "indexing…"). */
+export interface HistorySearchResult {
+	prompts: PromptHit[];
+	messages: MessageHit[];
+	promptTotal: number;
+	messageTotal: number;
+	indexing: boolean;
+}

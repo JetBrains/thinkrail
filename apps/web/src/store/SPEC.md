@@ -108,15 +108,21 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
 changed file vs the workspace's base branch (id `${workspaceId}:diff:${path}` — one tab per file;
 `view` split|inline via **`setDiffTabView`**, split the default; a markdown diff's `rendered` flag via
 **`setDiffTabRendered`** swaps raw lines for compiled documents — `DiffPane` offers it for markdown
-paths only; opened by `ChangesPanel`).
-The `EditorTab` (`FileTab` | `ChatTab` | `DocTab` | `DiffTab`) + `TerminalTab` + `ClosedChat` +
+paths only; opened by `ChangesPanel`). The transient **`chatLocationRequest`** — the history-search jump
+  deep link; the requester switches the active workspace, `CenterTabs` opens/hydrates the target chat,
+  `ChatView` consumes + clears — is **`ChatLocationRequest { workspaceId, sessionId, messageIndex,
+  anchorText }`**, set by **`requestChatLocation(req)`** (which also sets `activeWorkspaceId:
+  req.workspaceId`, since the target chat can live in a different workspace than the one the search ran
+  from) and cleared by **`clearChatLocation()`**; the target's anchor resolves against the runtime's
+  `turnIdByMessageIndex` (see `chat/SPEC.md`'s hydration bullet), falling back to `anchorText` when
+  absent. The `EditorTab` (`FileTab` | `ChatTab` | `DocTab` | `DiffTab`) + `TerminalTab` + `ClosedChat` +
   `SessionRuntime` types. (Chat *render* types + renderers live in the `chat` module.) The pure context
   selectors in `selectors.ts` resolve the active `Workspace`, its owning project id, and the shell's context
   project from those canonical ids and collections; derived active-project state is never stored separately.
 - **Public surface (barrel):** `useAppStore`; `selectActiveWorkspace`,
   `selectActiveWorkspaceProjectId`, and `selectContextProject`; `toast` (the fire-from-anywhere helper),
   `Toast` (type), `EditorTab` (`FileTab`/`ChatTab`/`DocTab`), `TerminalTab`, `ClosedChat`, `SessionRuntime` +
-  `EMPTY_RUNTIME` (ChatView's pre-creation fallback), `reduceSessionEvent`.
+  `EMPTY_RUNTIME` (ChatView's pre-creation fallback), `ChatLocationRequest` (type), `reduceSessionEvent`.
 - **Allowed deps:** `contracts` (`Project`/`Workspace`/`Model`/`ThinkingLevel`/`SessionStats`/
   `SlashCommandInfo`/`ExtUiRequest`/`LoginPush`/`WorkspaceFsChangedPayload`/`AppConfig`/`ThemeId`;
   `DEFAULT_CONFIG` for the pre-welcome default; `PiEvent`/`LoginFrame`, **type-only**); `chat`

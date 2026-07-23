@@ -97,6 +97,7 @@ export function CenterTabs() {
 	const tabsByWorkspace = useAppStore((s) => s.tabsByWorkspace);
 	const activeTabByWorkspace = useAppStore((s) => s.activeTabByWorkspace);
 	const closedChatsByWorkspace = useAppStore((s) => s.closedChatsByWorkspace);
+	const chatLocationRequest = useAppStore((s) => s.chatLocationRequest);
 	const setActiveTab = useAppStore((s) => s.setActiveTab);
 	const closeTab = useAppStore((s) => s.closeTab);
 
@@ -146,6 +147,47 @@ export function CenterTabs() {
 			cancelled = true;
 		};
 	}, [activeWorkspaceId]);
+
+	// Jump-to-message deep link from history search (`chatLocationRequest`, see `store/SPEC.md`): open,
+	// reopen, or activate the target chat in this workspace. `requestChatLocation` already set
+	// `activeWorkspaceId` to the request's own workspace, so this only has to place/focus the tab; it
+	// deliberately never clears the request — `ChatView` (mounted once its tab is active) consumes it to
+	// scroll + flash, and clears it once it has resolved a row (or given up and toasted).
+	useEffect(() => {
+		if (!chatLocationRequest || chatLocationRequest.workspaceId !== activeWorkspaceId) return;
+		const { sessionId } = chatLocationRequest;
+		// (a) Already open in a tab — just focus it, the exact action its own tab button calls.
+		const tab = openTabs.find((t) => t.kind === "chat" && t.sessionId === sessionId);
+		if (tab) {
+			setActiveTab(tab.id);
+			return;
+		}
+		const store = useAppStore.getState();
+		// (b) Closed to history but its runtime is still live (`closeChatToHistory`, not a restart) —
+		// `reopenChat` just re-attaches the tab; no fetch needed.
+		if (store.sessions[sessionId]) {
+			store.reopenChat(sessionId);
+			return;
+		}
+		// (c) Neither — the same fetch + hydrate `onReopenChat` below does for a disk-only history entry.
+		let cancelled = false;
+		void getTransport()
+			.request("session.getMessages", { sessionId, workspaceId: chatLocationRequest.workspaceId })
+			.then(({ summary, messages }) => {
+				if (cancelled) return;
+				useAppStore.getState().hydrateSession(summary, messagesToRuntime(messages), true);
+			})
+			.catch((err) => {
+				if (cancelled) return;
+				// The request would otherwise sit unconsumed forever (its only other consumer, `ChatView`,
+				// never mounts for a session whose tab never opens) — say why the jump did nothing.
+				toast.error(errorText(err), "Couldn't open the chat");
+				useAppStore.getState().clearChatLocation();
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [chatLocationRequest, activeWorkspaceId, openTabs, setActiveTab]);
 
 	// Reopen a chat from history: a live runtime just restores its tab; a disk-only one is re-opened on the
 	// host, its transcript fetched, then hydrated + focused (hydrateSession drops it from history, keyed to
