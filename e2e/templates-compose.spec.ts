@@ -107,6 +107,40 @@ test.describe("prompt templates in the composer", () => {
 		await expect(bubble).not.toContainText("⟨");
 	});
 
+	// The highlight backdrop (Task R5): `rename.md`'s two `⟨name⟩` occurrences give one gap per slot, so
+	// the tint span count must match the slot count exactly, the currently-selected slot must be the one
+	// marked "active", and stepping via Tab must move both the mirrored fill state and the active marker.
+	test("the highlight backdrop tints each gap and tracks the active slot as Tab steps through", async ({
+		page,
+	}) => {
+		await openWorkspaceChat(page);
+		const input = page.getByTestId("chat-input");
+
+		await input.fill("/rena");
+		await page.locator('[data-testid="slash-command"][data-source="prompt"]').first().click();
+		await expect(input).toHaveValue(/^Rename ⟨name⟩ and update every ⟨name⟩ reference\.\s*$/);
+
+		const backdrop = page.getByTestId("slot-backdrop");
+		await expect(backdrop).toBeVisible();
+		const highlights = page.getByTestId("slot-highlight");
+		// One tint span per gap — both `⟨name⟩` occurrences, none more, none folded together.
+		await expect(highlights).toHaveCount(2);
+		await expect(highlights.nth(0)).toHaveAttribute("data-slot-state", "active");
+		await expect(highlights.nth(1)).toHaveAttribute("data-slot-state", "unfilled");
+
+		await page.keyboard.type("Widget");
+		// Tab out of the now-filled first slot mirrors "Widget" into the sibling and moves the active
+		// marker to slot 2 — the backdrop must reflect both: the first gap is now filled (mirrored, not
+		// untouched), and the active tint is on the second.
+		await input.press("Tab");
+		await expect(highlights.nth(0)).toHaveAttribute("data-slot-state", "filled");
+		await expect(highlights.nth(1)).toHaveAttribute("data-slot-state", "active");
+
+		// Sending ends the session — the backdrop unmounts along with it.
+		await page.getByTestId("chat-send").click();
+		await expect(backdrop).not.toBeVisible();
+	});
+
 	// Reviewer-flagged regression: mirroring used to run only inside `stepSlot` (Tab-out) — `submit()`
 	// stripped untouched slots immediately, so filling slot 1 of a repeated-group template and clicking
 	// Send *without* ever tabbing out sent a prompt with the sibling silently stripped instead of mirrored.

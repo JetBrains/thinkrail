@@ -234,7 +234,26 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   while a session is active (and the menu is not, so the two absolutely-positioned overlays never share
   the same anchor rect), a small pill above the textarea — `slot {slotIdx+1}/{n} · ⇥ next · esc done`
   (`data-testid="slot-hint"`) — clickable, tap steps to the next slot (same mirroring rule as `Tab`), the
-  mobile path with no keyboard needed.
+  mobile path with no keyboard needed. **Highlight backdrop**: while a session is active, the composer's
+  gaps are visually tinted in the message field itself — a native `<textarea>` can't style text ranges
+  inside it, so `Composer` renders a **highlight-backdrop** (a styled mirror layer positioned behind a
+  now-`bg-transparent` textarea; the input background moves up to the wrapping container instead, clipped
+  to the same `rounded-[var(--radius-md)]` so nothing changes visually outside a session). The pure
+  `highlightSegments(value, slots, activeIdx)` (`slotSession.ts`) breaks `value` into ordered
+  plain/unfilled/filled/active runs — a slot range is `"active"` when its `slots` index is `activeIdx`
+  (`Composer`'s own `slotIdx`), else `"unfilled"`/`"filled"` per its own `filled` flag; everything else is
+  `"plain"` — pure offsets/slices, no empty segment for zero-gap-adjacent slots, and the tests pin
+  `segments.map(s => s.text).join("") === value` in every case. The backdrop's inner mirror div matches the
+  textarea's box model **exactly** (`px-md py-sm`, `text-sm`, a `border border-transparent` of the same
+  width so the content box lines up, `whitespace-pre-wrap break-words` — spelled out explicitly since a
+  `<div>`, unlike a `<textarea>`, doesn't soft-wrap this way by default) so each `SlotSegment`'s tint span
+  (`data-testid="slot-highlight"` + `data-slot-state`, `rounded-[2px]` `bg-[var(--primary-20/40/10)]` for
+  unfilled/active/filled, no tint for plain, every span `text-transparent` so only the real textarea text
+  above shows through) lands exactly under its own characters. **Scroll sync**: the textarea's `onScroll`
+  tracks `{ scrollLeft, scrollTop }` in state, applied to the backdrop's inner div as
+  `translate(-scrollLeft, -scrollTop)` — the **one** inline `style` in the whole module (chat/SPEC.md's
+  Get-right styling rule is otherwise token-utilities-only), since a computed live pixel offset has no
+  token; the backdrop's outer layer is `overflow-hidden` so the translated content never spills past it.
 - **Save-as-template + template management** (`TemplateEditorDialog.tsx`; `HistoryOverlay`'s save action;
   `panels/TemplatesSettings.tsx`) — one shared create/edit surface for prompt-template files, reused by two
   entry points that never talk to each other: the Settings → Templates panel (list + New/Edit/Delete, see

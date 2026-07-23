@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import type { TemplateSlot } from "./slotSession";
 import {
+	highlightSegments,
 	mirrorAllGroups,
 	mirrorSlotGroup,
 	parseTemplateSlots,
@@ -383,4 +384,98 @@ test("mirrorAllGroups: when two siblings are independently filled with different
 	const { value: next, slots: nextSlots } = mirrorAllGroups(value, slots);
 	expect(next).toBe("a=X b=X");
 	expect(nextSlots.every((s) => s.filled)).toBe(true);
+});
+
+// ---- highlightSegments ----
+// The composer's backdrop layer breaks the live value into ordered plain/unfilled/filled/active runs for
+// the highlight tint spans. Every case below also asserts the concatenation invariant: the segments must
+// reconstruct `value` exactly, or the backdrop text would silently drift from the textarea's real text.
+
+const segText = (segs: { text: string }[]) => segs.map((s) => s.text).join("");
+
+test("highlightSegments: no slots produces one plain segment spanning the whole value", () => {
+	const value = "hello world";
+	const segs = highlightSegments(value, [], 0);
+	expect(segs).toEqual([{ text: "hello world", state: "plain" }]);
+	expect(segText(segs)).toBe(value);
+});
+
+test("highlightSegments: no slots on an empty value still round-trips (one empty plain segment)", () => {
+	const segs = highlightSegments("", [], 0);
+	expect(segs).toEqual([{ text: "", state: "plain" }]);
+	expect(segText(segs)).toBe("");
+});
+
+test("highlightSegments: a single unfilled slot renders plain/unfilled/plain around it", () => {
+	const before = "fix ";
+	const marker = "⟨arg1⟩";
+	const after = " now";
+	const value = before + marker + after;
+	const slots = [gslot(before.length, before.length + marker.length, 0, false)];
+	// activeIdx points at no real slot — nothing should be marked "active".
+	const segs = highlightSegments(value, slots, -1);
+	expect(segs).toEqual([
+		{ text: before, state: "plain" },
+		{ text: marker, state: "unfilled" },
+		{ text: after, state: "plain" },
+	]);
+	expect(segText(segs)).toBe(value);
+});
+
+test("highlightSegments: a filled slot renders as 'filled'", () => {
+	const before = "copy to ";
+	const filled = "src/";
+	const value = before + filled;
+	const slots = [gslot(before.length, before.length + filled.length, 0, true)];
+	const segs = highlightSegments(value, slots, -1);
+	expect(segs).toEqual([
+		{ text: before, state: "plain" },
+		{ text: filled, state: "filled" },
+	]);
+	expect(segText(segs)).toBe(value);
+});
+
+test("highlightSegments: activeIdx marks exactly the slot at that array index 'active', regardless of filled", () => {
+	const value = "ab";
+	const slots = [gslot(0, 1, 0, false), gslot(1, 2, 1, true)];
+	const segs = highlightSegments(value, slots, 1);
+	expect(segs).toEqual([
+		{ text: "a", state: "unfilled" },
+		{ text: "b", state: "active" },
+	]);
+	expect(segs.filter((s) => s.state === "active")).toHaveLength(1);
+	expect(segText(segs)).toBe(value);
+});
+
+test("highlightSegments: zero-gap adjacent slots (the $1$2 shape) produce no empty plain segment between them", () => {
+	const first = "⟨arg1⟩";
+	const second = "⟨arg2⟩";
+	const value = first + second;
+	const slots = [
+		gslot(0, first.length, 0, false),
+		gslot(first.length, first.length + second.length, 1, false),
+	];
+	const segs = highlightSegments(value, slots, 0);
+	expect(segs).toEqual([
+		{ text: first, state: "active" },
+		{ text: second, state: "unfilled" },
+	]);
+	expect(segs.some((s) => s.state === "plain")).toBe(false);
+	expect(segText(segs)).toBe(value);
+});
+
+test("highlightSegments: a multi-word slot's text stays in one segment", () => {
+	const before = "Rename ";
+	const mid = "the auth module";
+	const after = " now";
+	const value = before + mid + after;
+	const slots = [gslot(before.length, before.length + mid.length, 0, true)];
+	const segs = highlightSegments(value, slots, -1);
+	expect(segs).toEqual([
+		{ text: before, state: "plain" },
+		{ text: mid, state: "filled" },
+		{ text: after, state: "plain" },
+	]);
+	expect(segs).toHaveLength(3);
+	expect(segText(segs)).toBe(value);
 });

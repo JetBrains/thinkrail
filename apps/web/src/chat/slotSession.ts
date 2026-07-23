@@ -265,6 +265,58 @@ export function mirrorSlotGroup(
 	return { value: nextValue, slots: nextSlots };
 }
 
+/** One of the composer backdrop's four tint states for a highlight segment: `"plain"` is ordinary text
+ * (outside any slot, no tint); `"unfilled"`/`"filled"` mirror a slot's own `filled` flag; `"active"`
+ * overrides both for whichever slot the session is currently sitting on (`Composer`'s `slotIdx`). */
+export type SlotHighlightState = "plain" | "unfilled" | "filled" | "active";
+
+/** One run of `value` for the composer's highlight backdrop, tagged with the tint its span should render
+ * (see {@link SlotHighlightState}). Ordered left to right; concatenating every `text` reconstructs
+ * `value` exactly. */
+export interface SlotSegment {
+	text: string;
+	state: SlotHighlightState;
+}
+
+/**
+ * Break `value` into ordered segments for the highlight backdrop (see `Composer.tsx`'s backdrop layer):
+ * text inside a slot range is `"active"` when its index into `slots` equals `activeIdx`, else
+ * `"filled"`/`"unfilled"` per that slot's own `filled` flag; text between/outside slots is `"plain"`.
+ * `slots` is assumed non-overlapping and sorted by `start` (it is, post-`shiftSlots` — this function
+ * still sorts defensively by `start` before walking, so a caller passing them in `slots` array order
+ * rather than left-to-right text order can't produce out-of-order segments). Zero-gap-adjacent slots
+ * (the `$1$2` shape — one slot's `end` equals the next one's `start`) never get an empty `"plain"`
+ * segment spliced between them: a plain run is only emitted for a strictly positive gap. Pure — no
+ * React, just offsets and slices, so the tests can assert the concatenation invariant directly. `activeIdx`
+ * is an index into `slots` (matching `Composer`'s own `slotIdx` state), not a text offset; an out-of-range
+ * value (e.g. `-1`) simply means no segment is ever marked `"active"`.
+ */
+export function highlightSegments(
+	value: string,
+	slots: TemplateSlot[],
+	activeIdx: number,
+): SlotSegment[] {
+	const ordered = slots
+		.map((slot, index) => ({ slot, index }))
+		.sort((a, b) => a.slot.start - b.slot.start);
+
+	const segments: SlotSegment[] = [];
+	let cursor = 0;
+	for (const { slot, index } of ordered) {
+		if (slot.start > cursor) {
+			segments.push({ text: value.slice(cursor, slot.start), state: "plain" });
+		}
+		const state: SlotHighlightState =
+			index === activeIdx ? "active" : slot.filled ? "filled" : "unfilled";
+		segments.push({ text: value.slice(slot.start, slot.end), state });
+		cursor = Math.max(cursor, slot.end);
+	}
+	if (cursor < value.length || segments.length === 0) {
+		segments.push({ text: value.slice(cursor), state: "plain" });
+	}
+	return segments;
+}
+
 /**
  * `mirrorSlotGroup` for every already-`filled` slot, in array order — the composer's send path has no
  * single "slot the user just left" the way Tab-stepping does (`Composer.tsx`'s `stepSlot`, the sole other

@@ -18,8 +18,14 @@ import {
 	useState,
 } from "react";
 import { ModelSelector } from "./ModelSelector";
-import type { ParsedTemplate, TemplateSlot } from "./slotSession";
-import { mirrorAllGroups, mirrorSlotGroup, shiftSlots, stripUntouchedSlots } from "./slotSession";
+import type { ParsedTemplate, SlotHighlightState, SlotSegment, TemplateSlot } from "./slotSession";
+import {
+	highlightSegments,
+	mirrorAllGroups,
+	mirrorSlotGroup,
+	shiftSlots,
+	stripUntouchedSlots,
+} from "./slotSession";
 import { ThinkingSelector } from "./ThinkingSelector";
 
 /** How a submit is delivered: a fresh turn, an interrupt, or a queued message after the current turn. */
@@ -98,6 +104,34 @@ function diffValues(
  * flagged `filled: true` after a normal (non-session-ending) edit. */
 function touches(slot: TemplateSlot, editStart: number, editEnd: number): boolean {
 	return editStart < slot.end && editEnd > slot.start;
+}
+
+/** `highlightSegments`' output, one render pass, tagged with each segment's start offset — a stable,
+ * content-derived React key (its position in `value`, not the array index `.map` would otherwise hand
+ * out) for the backdrop's tint spans below. */
+function withOffsets(segments: SlotSegment[]): (SlotSegment & { start: number })[] {
+	let offset = 0;
+	return segments.map((seg) => {
+		const start = offset;
+		offset += seg.text.length;
+		return { ...seg, start };
+	});
+}
+
+/** The backdrop tint utility for one `highlightSegments` state — token-only per `chat/SPEC.md`'s styling
+ * rule; `"plain"` gets no tint at all (the class list is just `text-transparent`, applied unconditionally
+ * by the caller). */
+function highlightTint(state: SlotHighlightState): string {
+	switch (state) {
+		case "unfilled":
+			return "rounded-[2px] bg-[var(--primary-20)]";
+		case "active":
+			return "rounded-[2px] bg-[var(--primary-40)]";
+		case "filled":
+			return "rounded-[2px] bg-[var(--primary-10)]";
+		case "plain":
+			return "";
+	}
 }
 
 interface ComposerProps {
@@ -186,6 +220,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	// mention/plain-slash pick, `insertText`) — see `chat/SPEC.md`'s Template slots section.
 	const [slots, setSlots] = useState<TemplateSlot[] | null>(null);
 	const [slotIdx, setSlotIdx] = useState(0);
+	// The textarea's live scroll offset, mirrored onto the highlight backdrop's inner layer (see the
+	// `onScroll` handler below) so its tint spans stay pixel-aligned with the real text while scrolling.
+	// Tracked unconditionally (not gated on `slots !== null`) so the backdrop already has the right offset
+	// the instant a session starts, rather than flashing at `{0, 0}` for one frame.
+	const [scroll, setScroll] = useState({ left: 0, top: 0 });
 
 	const { token, start } = activeToken(value, caret);
 	const mentionQuery = token.startsWith("@") ? token.slice(1) : null;
@@ -538,66 +577,112 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			) : null}
 
 			<div className="flex flex-col gap-sm p-sm">
-				<textarea
-					ref={ref}
-					data-testid="chat-input"
-					value={value}
-					onChange={(e) => {
-						const next = e.target.value;
-						const nextCaret = e.target.selectionStart;
-						// A genuine user edit (typing/pasting/deleting — never fired by the recall/insert paths
-						// themselves, since those set the controlled `value` prop directly rather than mutating the
-						// DOM node) that diverges from the recalled entry exits the recall session.
-						if (recallIdx !== null && next !== recentPrompts[recallIdx]) setRecallIdx(null);
-						if (slots) {
-							const { editStart, removedLen, insertedLen } = diffValues(value, next, nextCaret);
-							if (editStart === 0 && removedLen === value.length) {
-								// The edit consumed the entire prior value (a select-all-and-type/delete, or
-								// Playwright's `fill()`) — re-tracking a now-meaningless collapsed range set would
-								// serve no purpose, so the session just ends instead.
-								setSlots(null);
-							} else {
-								const editEnd = editStart + removedLen;
-								const active = slots[slotIdx];
-								// Still typing at the exact end of the actively-selected slot should keep extending
-								// it. `shiftSlots`' boundary rule otherwise treats a zero-width insert exactly at a
-								// slot's `end` as landing just *after* it (the right default in general — text typed
-								// after a filled value shouldn't retroactively join it), which would otherwise
-								// truncate a multi-character fill to whatever was typed in the very first keystroke.
-								const growing =
-									removedLen === 0 &&
-									insertedLen > 0 &&
-									active !== undefined &&
-									active.end === editStart;
-								const shifted = shiftSlots(slots, editStart, removedLen, insertedLen).map(
-									(slot, i) => {
-										const grown =
-											growing && i === slotIdx ? { ...slot, end: slot.end + insertedLen } : slot;
-										const original = slots[i];
-										return original && touches(original, editStart, editEnd)
-											? { ...grown, filled: true }
-											: grown;
-									},
-								);
-								setSlots(shifted);
-							}
+				{/* Input background now lives here (not on the textarea below — it's `bg-transparent`), so the
+				 * backdrop's tint spans, painted behind the textarea's transparent background, show through.
+				 * `rounded-[var(--radius-md)]` matches the textarea's own corner radius so this container's own
+				 * background is clipped to the same rounded shape — with no session active this wrapper is
+				 * otherwise invisible (no border, no padding of its own), so the composer looks identical to
+				 * before this layer existed. */}
+				<div className="relative rounded-[var(--radius-md)] bg-[var(--input-bg)]">
+					{slots ? (
+						<div
+							data-testid="slot-backdrop"
+							aria-hidden
+							className="pointer-events-none absolute inset-0 overflow-hidden rounded-[var(--radius-md)]"
+						>
+							{/* Mirrors the textarea's box model EXACTLY (same px-md py-sm padding, text-sm
+							 * font size/line-height, a transparent border of the same width so the content box
+							 * lines up) plus `whitespace-pre-wrap break-words` — a native textarea soft-wraps
+							 * this way by default (its own UA stylesheet), but a plain <div> does not, so this
+							 * has to be spelled out explicitly for the two to wrap identical text identically. */}
+							<div
+								className="w-full whitespace-pre-wrap break-words border border-transparent px-md py-sm text-sm"
+								// The one allowed inline style (chat/SPEC.md's styling rule): a computed pixel
+								// transform mirroring the textarea's own live scroll offset (updated by its
+								// `onScroll` handler below) — there is no token/utility for "translate by this
+								// frame's scroll position", it's inherently a runtime pixel value.
+								style={{ transform: `translate(${-scroll.left}px, ${-scroll.top}px)` }}
+							>
+								{withOffsets(highlightSegments(value, slots, slotIdx)).map((seg) => (
+									<span
+										key={seg.start}
+										data-testid={seg.state === "plain" ? undefined : "slot-highlight"}
+										data-slot-state={seg.state === "plain" ? undefined : seg.state}
+										className={`text-transparent ${highlightTint(seg.state)}`}
+									>
+										{seg.text}
+									</span>
+								))}
+							</div>
+						</div>
+					) : null}
+					<textarea
+						ref={ref}
+						data-testid="chat-input"
+						value={value}
+						onScroll={(e) =>
+							setScroll({ left: e.currentTarget.scrollLeft, top: e.currentTarget.scrollTop })
 						}
-						onChange(next);
-						setCaret(nextCaret);
-					}}
-					onKeyUp={(e) => setCaret(e.currentTarget.selectionStart)}
-					onClick={(e) => setCaret(e.currentTarget.selectionStart)}
-					onKeyDown={onKeyDown}
-					onPaste={onPaste}
-					onDrop={onDrop}
-					rows={4}
-					placeholder={
-						isStreaming
-							? "Enter to steer · Cmd/Ctrl+Enter to queue · @ files · / commands"
-							: "Message the agent…  (@ files · / commands · Enter to send)"
-					}
-					className="min-h-[108px] w-full resize-none rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-md py-sm text-sm text-text outline-none transition-colors placeholder:text-hint focus:border-primary focus-visible:ring-2 focus-visible:ring-[var(--primary-20)]"
-				/>
+						onChange={(e) => {
+							const next = e.target.value;
+							const nextCaret = e.target.selectionStart;
+							// A genuine user edit (typing/pasting/deleting — never fired by the recall/insert paths
+							// themselves, since those set the controlled `value` prop directly rather than mutating the
+							// DOM node) that diverges from the recalled entry exits the recall session.
+							if (recallIdx !== null && next !== recentPrompts[recallIdx]) setRecallIdx(null);
+							if (slots) {
+								const { editStart, removedLen, insertedLen } = diffValues(value, next, nextCaret);
+								if (editStart === 0 && removedLen === value.length) {
+									// The edit consumed the entire prior value (a select-all-and-type/delete, or
+									// Playwright's `fill()`) — re-tracking a now-meaningless collapsed range set would
+									// serve no purpose, so the session just ends instead.
+									setSlots(null);
+								} else {
+									const editEnd = editStart + removedLen;
+									const active = slots[slotIdx];
+									// Still typing at the exact end of the actively-selected slot should keep extending
+									// it. `shiftSlots`' boundary rule otherwise treats a zero-width insert exactly at a
+									// slot's `end` as landing just *after* it (the right default in general — text typed
+									// after a filled value shouldn't retroactively join it), which would otherwise
+									// truncate a multi-character fill to whatever was typed in the very first keystroke.
+									const growing =
+										removedLen === 0 &&
+										insertedLen > 0 &&
+										active !== undefined &&
+										active.end === editStart;
+									const shifted = shiftSlots(slots, editStart, removedLen, insertedLen).map(
+										(slot, i) => {
+											const grown =
+												growing && i === slotIdx ? { ...slot, end: slot.end + insertedLen } : slot;
+											const original = slots[i];
+											return original && touches(original, editStart, editEnd)
+												? { ...grown, filled: true }
+												: grown;
+										},
+									);
+									setSlots(shifted);
+								}
+							}
+							onChange(next);
+							setCaret(nextCaret);
+						}}
+						onKeyUp={(e) => setCaret(e.currentTarget.selectionStart)}
+						onClick={(e) => setCaret(e.currentTarget.selectionStart)}
+						onKeyDown={onKeyDown}
+						onPaste={onPaste}
+						onDrop={onDrop}
+						rows={4}
+						placeholder={
+							isStreaming
+								? "Enter to steer · Cmd/Ctrl+Enter to queue · @ files · / commands"
+								: "Message the agent…  (@ files · / commands · Enter to send)"
+						}
+						// `relative` keeps the textarea a positioned participant so it paints ABOVE the absolute
+						// slot-highlight backdrop (its earlier DOM sibling) — otherwise a static textarea paints
+						// under the backdrop and the native caret/selection get dimmed by the active-slot tint.
+						className="relative min-h-[108px] w-full resize-none rounded-[var(--radius-md)] border border-border2 bg-transparent px-md py-sm text-sm text-text outline-none transition-colors placeholder:text-hint focus:border-primary focus-visible:ring-2 focus-visible:ring-[var(--primary-20)]"
+					/>
+				</div>
 				<div className="flex flex-wrap items-center gap-sm">
 					<div className="flex min-w-0 flex-1 flex-wrap items-center gap-sm">
 						<ModelSelector models={models} current={currentModel} onSelect={onSelectModel} />
