@@ -1,10 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
+import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
 
 test("editor tabs are scoped to the active workspace", async ({ page }) => {
 	await openFixtureProject(page);
 	const tabs = page.getByTestId("editor-tab");
-	const workspaces = page.getByTestId("workspace-item");
+	const workspaces = worktreeRows(page);
 
 	// Workspace 1: open README.md in a center tab.
 	await createWorkspaceViaDialog(page);

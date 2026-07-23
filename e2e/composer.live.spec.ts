@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
+import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
 
 // Tagged @agent (see agent.live.spec.ts): excluded from the default `bun run e2e`; run via
 // `bun run e2e:agent`. These exercise the Composer + cheap wins against a REAL pi agent + pi's
@@ -9,7 +9,7 @@ import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
 async function openChat(page: import("@playwright/test").Page): Promise<void> {
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
-	await expect(page.getByTestId("workspace-item").first()).toHaveAttribute("data-active", "true");
+	await expect(worktreeRows(page).first()).toHaveAttribute("data-active", "true");
 	await page.getByTestId("start-chat").click();
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 	await expect(page.getByTestId("chat-input")).toBeVisible();

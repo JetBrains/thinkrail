@@ -56,7 +56,11 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
    tabs + chat tabs**. The shell arranges panels by layout mode: desktop multi-pane /
    mobile single-view-with-switcher. Both modes share the same panels and store.
 6. **Workspaces are git worktrees (V1).** project (git repo) → workspace (`git worktree` on its own
-   branch/cwd, under `~/.thinkrail/worktrees`) → {chats, files, terminals}. The shell is built first,
+   branch/cwd, under `~/.thinkrail/worktrees`) → {chats, files, terminals}. **One deliberate
+   exception:** every project carries exactly one built-in **Default workspace** (`kind: "default"`)
+   whose cwd is the project folder itself (git's *main working tree*) — auto-entered on open,
+   non-removable, non-renamable — the "just work in my project folder" anchor for users lost in the
+   worktree model (see [[submodule-server-workspaces]]). The shell is built first,
    `pi` connected last. Real PR / Checks / Review stay V2.
 7. **Auth is external.** Tailscale ACLs / device identity are the auth; the app carries an `owner` field,
    not a login UI.

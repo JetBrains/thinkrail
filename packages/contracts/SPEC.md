@@ -83,7 +83,10 @@ of the host.
   optional **`renamed`** flag is the naming lifecycle — absent = **not yet locked** (either pristine
   `workspace-N`, or a *provisional* non-agentic name the host applied from the first prompt), so still
   eligible for the agentic auto-rename; `true` = deliberately named (agentic or user), never auto-touched
-  again), `Session` (chat tab),
+  again; its optional **`kind: "default"`** marks the built-in per-project **Default workspace** — the
+  project folder itself as a workspace, exactly one per project, pinned first in `workspace.list`,
+  non-removable and non-renamable server-side; absent = a normal worktree workspace — an explicit wire
+  field, never an id convention), `Session` (chat tab),
   `FileNode` (file-tree node), `TabStatus`, `Git*`/diff types; **`ProviderStatus`/`ProviderStatusReport`**
   — the auth-provider status rows the Welcome strip renders (per-provider `configured` + auth `kind`:
   oauth / api-key / env / central / other — never credential values; plus `canOAuth`/`canApiKey`/`canLogout`,

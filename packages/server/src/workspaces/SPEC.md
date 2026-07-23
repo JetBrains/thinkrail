@@ -15,6 +15,10 @@ chats. Its **display `name` is decoupled from its git `branch`**: `name` is a hu
 (Title Case, spaces) and `branch` is a kebab slug derived from it — they were once held equal, and still
 coincide for the auto `workspace-N` placeholder, but a named workspace carries both distinctly.
 
+Every project also carries **exactly one built-in Default workspace** (`kind: "default"`) whose
+`worktreePath` is the project folder itself (git's *main working tree*) — the "just work in my project
+folder" anchor, ensured lazily, **non-removable and non-renamable**.
+
 ## Boundary
 
 - **Owns:** `createWorkspace` (**async**; off `baseRef` when given — branched with `worktree add -b`, never a detached
@@ -54,6 +58,26 @@ coincide for the auto `workspace-N` placeholder, but a named workspace carries b
   `listWorkspaces` immediately), `reclaimWorktree(ws)` (the slow half — `git worktree remove --force`,
   keeps the branch; hardened: rm + `prune` if git fails), and `removeWorkspace(id)` (the synchronous
   composition of the two, kept for callers/tests that want the whole archive in one call).
+- **Default workspace (`kind: "default"`):** exactly one per project. `listWorkspaces` **ensures** it
+  — find-or-create by `projectId`+`kind` (id a plain `randomUUID`; the `kind` field is the marker,
+  never an id convention), **collapsing duplicates** defensively if out-of-band state churn ever
+  produced two — and returns it **pinned first**. No `git worktree add` (the folder already is the
+  main working tree) and **no scratch-dir seeding at ensure** — merely listing a project must never
+  write into the user's repo (see `ensureWorkspaceScratchDir`). Fields are folder-truth, refreshed
+  quietly at list time when drifted (no lifecycle event — membership didn't change): `branch` = the
+  folder's current HEAD (`symbolic-ref --short`, unborn-safe; detached → literal `HEAD`), `baseBranch`
+  = the repo's default branch via `git`'s `resolveDefaultBranch` — so Default's Changes measure like
+  any workspace, degenerating to uncommitted work when the folder sits on the default branch itself.
+  First materialization emits `created` (idempotent for stores). **Non-removable + non-renamable,
+  enforced here, not just hidden in the UI:** `forgetWorkspace` and `renameWorkspace` **throw** on
+  `kind: "default"` — forget would hand the archive teardown's `rm -rf` fallback the project folder,
+  rename would `git branch -m` the user's real branch; the record carries `renamed: true` so both
+  auto-rename passes stay away as belt-and-suspenders.
+- **`ensureWorkspaceScratchDir(ws)`** — idempotent seed of the gitignored `WORKSPACE_CONTEXT_DIR`
+  scratch dir (mkdir + self-ignoring `*` `.gitignore`); the host calls it on **session create** for
+  every workspace, so the Default workspace writes into the user's repo only when a chat actually
+  starts there (worktree creation still seeds eagerly at create; this also self-heals a worktree
+  whose scratch dir was deleted).
 - **Lifecycle events:** every membership mutation — `createWorkspace` (`created`), `renameWorkspace`
   (`updated`, both the naive and agentic auto-rename passes since both go through it), `forgetWorkspace`
   (`removed`) — emits a `WorkspaceLifecycleEvent` through an **injected publisher** (`setWorkspacePublisher`,
@@ -63,8 +87,8 @@ coincide for the auto `workspace-N` placeholder, but a named workspace carries b
   module the **single source of workspace lifecycle pushes** (the auto-rename tee no longer pushes — rename
   self-publishes), so registry membership stays shared domain state across every client (architecture #9).
 - **Public surface (barrel):** `createWorkspace`, `listWorkspaces`, `forgetWorkspace`, `reclaimWorktree`,
-  `removeWorkspace`, `workspaceDiffStats`, `getWorkspace`, `renameWorkspace`, `setWorkspacePublisher`,
-  `WorkspaceLifecycleEvent`.
+  `removeWorkspace`, `workspaceDiffStats`, `getWorkspace`, `renameWorkspace`, `ensureWorkspaceScratchDir`,
+  `setWorkspacePublisher`, `WorkspaceLifecycleEvent`.
 - **Allowed deps:** `projects` (repo lookup), `git` (the runner), `persistence`; `contracts`;
   `@thinkrail/shared/paths` (the scratch-dir path convention); Node.
 - **Forbidden:** `host`; reaching into another feature's internals (use its barrel).

@@ -31,6 +31,13 @@ export interface Workspace {
 	id: string;
 	projectId: string;
 	/**
+	 * `"default"` marks the built-in per-project **Default workspace** — the project folder itself
+	 * (git's main working tree) surfaced as a workspace. Exactly one per project, pinned first in
+	 * `workspace.list`, non-removable and non-renamable (enforced server-side). Absent = a normal
+	 * worktree workspace. An explicit wire field — clients must never detect it by id convention.
+	 */
+	kind?: "default";
+	/**
 	 * Human-readable display label shown in the UI (Title Case, spaces) — decoupled from `branch`. May
 	 * repeat across workspaces; the branch is what's uniqued. Equals `branch` only for the auto
 	 * `workspace-N` placeholder.

@@ -45,7 +45,10 @@ import type {
 // v8: `ask_user_question` is ack + terminate — the tool no longer blocks; answers travel as
 // `ask-user-answers` custom messages, and `session.getMessages` now returns `TranscriptMessage[]`
 // (pi-canonical + `custom` role) so the questionnaire card can pair answers by tool call id.
-export const PROTOCOL_VERSION = 8;
+// v9: the built-in Default workspace — `Workspace.kind: "default"` marks the project folder itself as
+// a per-project, non-removable, non-renamable workspace, ensured lazily and pinned first in
+// `workspace.list`; `workspace.remove` rejects it.
+export const PROTOCOL_VERSION = 9;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a

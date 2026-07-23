@@ -12,6 +12,11 @@ import {
 	maybeNaiveNameWorkspace,
 } from "./autoRename";
 
+/** The project's worktree workspaces — `listWorkspaces` minus the always-ensured Default. */
+function worktrees(projectId = "p1") {
+	return listWorkspaces(projectId).filter((w) => w.kind !== "default");
+}
+
 let dataDir: string;
 let repo: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
@@ -81,7 +86,7 @@ test("renames the workspace off the first settled turn and flags it", async () =
 	expect(renamed?.renamed).toBe(true);
 	expect(renamed?.worktreePath).toBe(ws.worktreePath);
 	expect(runner.calls()).toBe(1);
-	expect(listWorkspaces("p1")[0]?.name).toBe("Add Login Flow");
+	expect(worktrees()[0]?.name).toBe("Add Login Flow");
 });
 
 test("a renamed workspace is never touched again", async () => {
@@ -106,7 +111,7 @@ test("a failed suggestion leaves the flag unset so a later turn retries", async 
 	fakeRunner("!!! ???"); // slugs to nothing → suggestion degrades to null
 
 	expect(await maybeAutoRenameWorkspace("s1", ws.id, firstTurn)).toBeNull();
-	expect(listWorkspaces("p1")[0]?.renamed).toBeUndefined();
+	expect(worktrees()[0]?.renamed).toBeUndefined();
 
 	fakeRunner("Fix The Parser");
 	const retried = await maybeAutoRenameWorkspace("s1", ws.id, firstTurn);
@@ -120,7 +125,7 @@ test("a throwing runner degrades to null", async () => {
 	});
 
 	expect(await maybeAutoRenameWorkspace("s1", ws.id, firstTurn)).toBeNull();
-	expect(listWorkspaces("p1")[0]?.renamed).toBeUndefined();
+	expect(worktrees()[0]?.renamed).toBeUndefined();
 });
 
 test("an errored or aborted run never names the workspace", async () => {
@@ -169,7 +174,7 @@ test("a workspace archived during the one-shot is not renamed or resurrected", a
 	release();
 
 	expect(await pending).toBeNull();
-	expect(listWorkspaces("p1")).toHaveLength(0);
+	expect(worktrees()).toHaveLength(0);
 });
 
 test("a user rename landing during the one-shot wins; the late suggestion is dropped", async () => {
@@ -188,7 +193,7 @@ test("a user rename landing during the one-shot wins; the late suggestion is dro
 	release();
 
 	expect(await pending).toBeNull();
-	expect(listWorkspaces("p1")[0]?.name).toBe("user picked this");
+	expect(worktrees()[0]?.name).toBe("user picked this");
 });
 
 test("naive-rename names the workspace instantly from the first prompt, provisionally", async () => {
@@ -202,7 +207,7 @@ test("naive-rename names the workspace instantly from the first prompt, provisio
 	expect(named?.worktreePath).toBe(ws.worktreePath); // dir never moves
 	// Provisional: `renamed` stays unset so the agentic pass still refines it.
 	expect(named?.renamed).toBeUndefined();
-	expect(listWorkspaces("p1")[0]?.renamed).toBeUndefined();
+	expect(worktrees()[0]?.renamed).toBeUndefined();
 });
 
 test("naive-rename fires only while the name is pristine (workspace-N)", async () => {
@@ -211,14 +216,14 @@ test("naive-rename fires only while the name is pristine (workspace-N)", async (
 
 	// Second turn start: the branch is no longer `workspace-N`, so it never re-fires.
 	expect(await maybeNaiveNameWorkspace("s1", ws.id, firstTurn)).toBeNull();
-	expect(listWorkspaces("p1")[0]?.name).toBe("Add A Login Form To");
+	expect(worktrees()[0]?.name).toBe("Add A Login Form To");
 });
 
 test("naive-rename never touches a user-named workspace", async () => {
 	const ws = await createWorkspace("p1", "chosen name");
 
 	expect(await maybeNaiveNameWorkspace("s1", ws.id, firstTurn)).toBeNull();
-	expect(listWorkspaces("p1")[0]?.name).toBe("chosen name");
+	expect(worktrees()[0]?.name).toBe("chosen name");
 });
 
 test("the agentic pass refines a provisional naive name and locks it", async () => {
@@ -236,7 +241,7 @@ test("the agentic pass refines a provisional naive name and locks it", async () 
 
 	// And the now-locked name is inert to a further turn start.
 	expect(await maybeNaiveNameWorkspace("s1", ws.id, firstTurn)).toBeNull();
-	expect(listWorkspaces("p1")[0]?.name).toBe("Add Login Flow");
+	expect(worktrees()[0]?.name).toBe("Add Login Flow");
 });
 
 test("naive-rename resolves null when the first prompt is blank or unusable", async () => {
@@ -244,7 +249,7 @@ test("naive-rename resolves null when the first prompt is blank or unusable", as
 	const punctOnly = async (): Promise<Message[]> => [user("!!! ??? ..."), assistant("hm")];
 
 	expect(await maybeNaiveNameWorkspace("s1", ws.id, punctOnly)).toBeNull();
-	expect(listWorkspaces("p1")[0]?.name).toBe("workspace-1");
+	expect(worktrees()[0]?.name).toBe("workspace-1");
 	expect(await maybeNaiveNameWorkspace("s1", ws.id, async () => [])).toBeNull();
 });
 
