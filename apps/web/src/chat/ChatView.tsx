@@ -97,7 +97,7 @@ export default function ChatView({
 
 	const [mentionQuery, setMentionQuery] = useState<string | null>(null);
 	const [mentionCandidates, setMentionCandidates] = useState<MentionCandidate[]>([]);
-	// The chat's TODO plan, surfaced inline via a header strip that opens a popup over the chat (design-todos).
+	// The chat's TODO plan, surfaced inline via a header strip that opens a popup over the chat (SPEC §Chat TODO plan).
 	const plan = useChatTodos(workspaceId, sessionId);
 	const [planOpen, setPlanOpen] = useState(false);
 

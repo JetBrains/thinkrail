@@ -1,6 +1,6 @@
 import type { TodoItem, TodoPlan } from "@thinkrail/contracts";
 
-// Compile a chat's TODO plan to a temporary, human-readable markdown snapshot (design-todos) — the
+// Compile a chat's TODO plan to a temporary, human-readable markdown snapshot (SPEC §Chat TODO plan) — the
 // "Open as markdown" action in the plan popup. Pure + presentational-adjacent (no store/transport): it
 // just maps the plan to GFM. Structure mirrors the plan's own shape — named groups as `##` sections, the
 // loose items last — with a progress header and GFM task-list checkboxes.

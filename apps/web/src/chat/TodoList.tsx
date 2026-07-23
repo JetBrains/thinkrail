@@ -13,7 +13,7 @@ import {
 import { useState } from "react";
 import { cn } from "../lib";
 
-// Presentational TODO rendering for the in-chat plan popup (design-todos). Props-driven (no transport) —
+// Presentational TODO rendering for the in-chat plan popup (SPEC §Chat TODO plan). Props-driven (no transport) —
 // the caller supplies the plan + edit callbacks (see `useChatTodos`). The plan renders as three status
 // sections (In progress / To do / Done); every item (loose or grouped) falls into the section for its
 // status. The one exception is Done: a group whose every item is done folds into one expandable row
