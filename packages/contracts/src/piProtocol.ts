@@ -65,7 +65,24 @@ export type PiEvent =
 			delayMs: number;
 			errorMessage: string;
 	  }
-	| { type: "auto_retry_end"; success: boolean; attempt: number; finalError?: string };
+	| { type: "auto_retry_end"; success: boolean; attempt: number; finalError?: string }
+	// Compaction / branch-summary retry lifecycle (pi ≥0.81.1). The UI renders the countdown
+	// (`scheduled`) and the all-clear (`finished`); `attempt_start` is delivered but deliberately ignored
+	// (by the time an attempt starts, the countdown has drained — nothing new to show).
+	| {
+			type: "summarization_retry_scheduled";
+			attempt: number;
+			maxAttempts: number;
+			delayMs: number;
+			errorMessage: string;
+	  }
+	| { type: "summarization_retry_attempt_start"; source: "branchSummary" }
+	| {
+			type: "summarization_retry_attempt_start";
+			source: "compaction";
+			reason: "manual" | "threshold" | "overflow";
+	  }
+	| { type: "summarization_retry_finished" };
 
 /** The `pi.event` push frame: a session's event tagged with its id. */
 export interface SessionEventPayload {

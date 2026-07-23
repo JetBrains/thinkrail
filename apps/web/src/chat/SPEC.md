@@ -27,7 +27,11 @@ spans assistant-message boundaries (pi emits one assistant message per tool roun
 model can't group. The pure **`deriveRows(turns, toolResults, isStreaming)`** (`rows.ts`) walks blocks in
 order into rows; `ChatTurnView` dispatches on row kind:
 
-- `user` / `system` / `retry` — 1:1 renderers. **`ErrorTurn`** is a persistent tinted failure notice
+- `user` / `system` / `retry` — 1:1 renderers. The retry countdown carries a `source` (`turn` =
+  pi `auto_retry_*`; `summarization` = compaction/branch-summary `summarization_retry_*`, pi ≥0.81.1) —
+  the flows can overlap mid-run, each keeps exactly one indicator (re-scheduling replaces, each source's
+  end event clears only its own), and `RetryIndicator` labels them apart ("Retrying" vs "Retrying
+  summarization"). **`ErrorTurn`** is a persistent tinted failure notice
   (provider/model error, or a rejected send) — **never folded**, so a failed turn can't look like
   nothing happened.
 - `markdown` — a non-empty assistant text block (react-markdown + remark-gfm + shiki).
@@ -97,7 +101,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   optional `container` prop portals their popovers into a host Dialog), `SessionStatsBar`, `ChatHeader`
   (its `left` slot carries the plan strip), `ExtUiDialog`. All props-driven; behavior detail lives in the
   components' jsdoc.
-- **Chat TODO plan** ([[design-todos]]) — the chat's `pi-todos` list surfaced **only in the chat**:
+- **Chat TODO plan** — the chat's `pi-todos` list surfaced **only in the chat** (engine:
+  [[module-pi-todos]]; host read/write: [[submodule-server-todos]]):
   `useChatTodos` (the `todo.*` data hook — fetch + live `pi.event` refetch + edits + the add-nudge + the
   `openMarkdown` snapshot action), `TodoList` (loose items + named groups, add-row + an "open as markdown"
   button), `planMarkdown` (a pure `plan → markdown` compiler), and `ChatPlan` (`ChatPlanStripContent` +

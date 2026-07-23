@@ -32,7 +32,12 @@ export function ChatTurnView({
 			return <ErrorTurn text={row.text} />;
 		case "retry":
 			return (
-				<RetryIndicator attempt={row.attempt} maxAttempts={row.maxAttempts} delayMs={row.delayMs} />
+				<RetryIndicator
+					source={row.source}
+					attempt={row.attempt}
+					maxAttempts={row.maxAttempts}
+					delayMs={row.delayMs}
+				/>
 			);
 		case "markdown":
 			return (
@@ -150,10 +155,12 @@ function ErrorTurn({ text }: { text: string }) {
  * duration is an inline style — color/width are token utilities.
  */
 function RetryIndicator({
+	source,
 	attempt,
 	maxAttempts,
 	delayMs,
 }: {
+	source: "turn" | "summarization";
 	attempt: number;
 	maxAttempts: number;
 	delayMs: number;
@@ -167,11 +174,13 @@ function RetryIndicator({
 	return (
 		<div
 			data-testid="retry-indicator"
+			data-source={source}
 			className="flex flex-col gap-xs rounded-[var(--radius-sm)] border border-border2 bg-elevated px-sm py-xs text-muted text-xs"
 		>
 			<span className="flex items-center gap-xs">
 				<RotateCw className="size-3 shrink-0" />
-				Retrying ({attempt}/{maxAttempts})…
+				{source === "summarization" ? "Retrying summarization" : "Retrying"} ({attempt}/
+				{maxAttempts})…
 			</span>
 			<div className="h-1 w-full overflow-hidden rounded-full bg-border2">
 				<div
