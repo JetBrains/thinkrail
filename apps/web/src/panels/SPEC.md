@@ -42,7 +42,36 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   with no yes/no follow-up. The hook returns a `dialogs` node each consumer renders. **Selecting a
   project** (clicking its row — the chevron expands/collapses separately) **deselects any active
   workspace**, so the shell returns to that project's Welcome — a deliberate "project home" gesture; the
-  workspace's tabs survive in the store, so re-selecting it restores its view. Also
+  workspace's tabs survive in the store, so re-selecting it restores its view. `ProjectTree`'s **footer**
+  carries a help button (`open-docs`, a `HelpCircle` glyph, "Getting started") that re-opens the
+  onboarding overlay via `store.openOnboarding("review")`. **`Onboarding`** is a large **card floating over the still-visible IDE**
+  (not a full-screen takeover), rendered on `components/ui/dialog` with the backdrop swapped to the darkest
+  surface at 80% (`overlayClassName`) and the card on the darkest surface (`bg-bg-dark`) with a hairline
+  `border-border2`; ~55% viewport width on desktop (32px/16px margins on medium/mobile). The card itself
+  is padding-less + `overflow-hidden`: the **text column is on the left** (copy + pagination, 32px inset),
+  and the **media column on the right** (2/3) holds a **fixed 4:3** placeholder (never stretched) that
+  **anchors the card height** — so both screens are always the exact same height regardless of
+  text/screenshot content — fading into the exact card background (`--bg-dark`) near the bottom so the
+  **primary action floats over that faded band**, right/bottom-inset 32px (never touching the edge); a
+  48px column gap separates the columns. The left column's content sits in a `flex-1` region with the
+  pagination **pinned 96px below it** (fixed rhythm — extra height flexes into the content region, never
+  the gap). Primary buttons use `text-bg` (the app background color) on the accent fill. It
+  reads `store.onboarding` (renders nothing when null), auto-opens once on mount guarded by the
+  `store/onboardingStorage` localStorage "seen" flag (`readOnboardingSeen`/`markOnboardingSeen`), blocks
+  Escape/outside-click on first run, and is freely dismissible in "review" mode. **Two screens**, a
+  two-column layout (media 2/3 left · text 1/3 right, stacking on mobile). The **interactive** two-square
+  page indicators are the only cross-screen navigation (no Back button); each text-column **footer** is a
+  baseline row with pagination left + the primary action right. **(1) Welcome** — title, subtitle, body,
+  and a neutral-gray "Learn more in docs" link (Lucide `ExternalLink`, mock URL); the mock worktrees-root
+  path lives centered **inside** the media placeholder; the primary action is **Confirm path**. **(2) Key
+  features** — a selectable three-item list (12px×8px padding, 8px gaps; the fill/selected surface is
+  `--input-bg` at 50% — the shared "inactive" neutral also used by inactive pagination indicators — with
+  accent text on the active item) that swaps the media placeholder; **Get started** sits under the media.
+  The list runs a **single autoplay walkthrough**: each
+  feature is active for 5s while its background fills like a progress bar (`--animate-fill` in
+  `index.css`), completed items keep their fill, and it stops for good after the third (no loop); a manual
+  pick stops autoplay and never resumes. Typography is two levels (Title in accent + Body), reusing Button
+  typography for buttons. Also
   `FileTree`, `SpecsPanel`, `RightPanel`,
   `ChangesPanel` (the changed files, with a header **List | Tree** toggle (`store.changesView`, app-wide)
   switching a flat list and a folder **`ChangesTree`**; clicking a file in either opens/focuses its
@@ -150,7 +179,7 @@ a project picker, the prompt hero, and the reused
   Errors persist until dismissed; success/info time out. The **integration piece** — the primitives stay
   presentational.
 - **Public surface:** the top-level panels the shell mounts (`ProjectTree`, `WelcomePanel`, `CenterTabs`,
-  `RightPanel`, `TerminalsPanel`, `Toaster`), imported **per-file** (no barrel — keeps the lazy chunks split).
+  `RightPanel`, `TerminalsPanel`, `Toaster`, `Onboarding`), imported **per-file** (no barrel — keeps the lazy chunks split).
   (`WelcomePanel` and `CenterTabs`/`RightPanel`/`TerminalsPanel` are mutually exclusive — the shell mounts
   one set or the other on the active-workspace branch.)
 - **Allowed deps:** `store`, `transport`, `components/ui` (incl. `popover`/`command`/`textarea` for the

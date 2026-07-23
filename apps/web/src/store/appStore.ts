@@ -414,6 +414,9 @@ interface AppState {
 	 * provider warning) can open it to a section without prop-drilling through the shell. */
 	settingsOpen: boolean;
 	settingsSection: SettingsSection;
+	/** The onboarding overlay's transient open-state (which mode is showing), or null when closed. The
+	 * durable "seen" bit lives in localStorage (`onboardingStorage`), not here — this is open-state only. */
+	onboarding: "first-run" | "review" | null;
 	/** The active UI theme (host-owned; `applyConfig` sets it from `server.welcome` / `settings.changed`).
 	 * The DOM side-effect (`applyTheme`) is the shell's job — this holds the value the UI reads. */
 	theme: ThemeId;
@@ -529,6 +532,9 @@ interface AppState {
 	/** Open the settings dialog, optionally deep-linked to a section (defaults to Providers). */
 	openSettings: (section?: SettingsSection) => void;
 	closeSettings: () => void;
+	/** Open the onboarding overlay: "first-run" is blocking (auto-shown once), "review" is dismissible. */
+	openOnboarding: (mode: "first-run" | "review") => void;
+	closeOnboarding: () => void;
 	setSettingsSection: (section: SettingsSection) => void;
 	/** Fold the server-synced app config in (from `server.welcome` / the `settings.changed` broadcast). */
 	applyConfig: (config: AppConfig) => void;
@@ -630,6 +636,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	activeLogin: null,
 	settingsOpen: false,
 	settingsSection: SettingsSection.Providers,
+	onboarding: null,
 	theme: DEFAULT_CONFIG.theme,
 	toasts: [],
 	setStatus: (status) => set({ status }),
@@ -1098,6 +1105,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	openSettings: (section = SettingsSection.Providers) =>
 		set({ settingsOpen: true, settingsSection: section }),
 	closeSettings: () => set({ settingsOpen: false }),
+	openOnboarding: (mode) => set({ onboarding: mode }),
+	closeOnboarding: () => set({ onboarding: null }),
 	setSettingsSection: (section) => set({ settingsSection: section }),
 	applyConfig: (config) => set({ theme: config.theme }),
 	requestChangesView: (workspaceId, path) => set({ changesRequest: { workspaceId, path } }),

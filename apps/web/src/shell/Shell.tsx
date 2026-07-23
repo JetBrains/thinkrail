@@ -4,6 +4,7 @@ import { ErrorBoundary } from "../components/ErrorBoundary";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../components/ui/resizable";
 import { PRODUCT_NAME } from "../constants/branding";
 import { CenterTabs } from "../panels/CenterTabs";
+import { Onboarding } from "../panels/Onboarding";
 import { ProjectTree } from "../panels/ProjectTree";
 import { RightPanel } from "../panels/RightPanel";
 import { SettingsDialog } from "../panels/SettingsDialog";
@@ -164,6 +165,7 @@ export function Shell() {
 				</ResizablePanelGroup>
 			)}
 			<Toaster />
+			<Onboarding />
 		</div>
 	);
 }

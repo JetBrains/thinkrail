@@ -23,11 +23,16 @@ function DialogContent({
 	className,
 	children,
 	hideClose = false,
+	overlayClassName,
 	...props
-}: React.ComponentProps<typeof DialogPrimitive.Content> & { hideClose?: boolean }) {
+}: React.ComponentProps<typeof DialogPrimitive.Content> & {
+	hideClose?: boolean;
+	/** Extra classes for the backdrop (e.g. to swap the default `--overlay` scrim for a themed one). */
+	overlayClassName?: string;
+}) {
 	return (
 		<DialogPrimitive.Portal>
-			<DialogOverlay />
+			<DialogOverlay className={overlayClassName} />
 			<DialogPrimitive.Content
 				className={cn(
 					"-translate-x-1/2 -translate-y-1/2 fixed top-1/2 left-1/2 z-50 flex w-full max-w-[28rem] flex-col gap-lg rounded-[var(--radius-lg)] border border-border2 bg-elevated p-lg text-text shadow-[var(--shadow-lg)]",
