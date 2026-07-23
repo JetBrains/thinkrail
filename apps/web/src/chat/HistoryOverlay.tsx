@@ -1,5 +1,5 @@
 import type { HistoryScope, MessageHit, PromptHit } from "@thinkrail/contracts";
-import { Check, CornerUpRight } from "lucide-react";
+import { Check, CornerUpRight, Save } from "lucide-react";
 import { type KeyboardEvent, useEffect, useMemo, useRef } from "react";
 import {
 	DropdownMenu,
@@ -31,6 +31,15 @@ const SCOPE_MENU_LABELS: Record<HistoryScope["kind"], string> = {
 	project: "Project",
 	all: "Everywhere",
 };
+
+/** Cmd on Mac/iOS, Ctrl elsewhere — matches the modifier `onKeyDown` below actually checks
+ * (`e.metaKey || e.ctrlKey`), so the save-as-template button's tooltip never shows a glyph the user's
+ * platform doesn't have. Guarded for a non-browser environment (e.g. this module under a non-DOM test
+ * runner) — falls back to the cross-platform spelling. */
+const SAVE_SHORTCUT_LABEL =
+	typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/.test(navigator.platform ?? "")
+		? "⌘S"
+		: "Ctrl+S";
 
 /** Tiny relative-time formatter — `panels/CenterTabs.tsx` has a private twin; `chat/` can't import from
  * `panels/` (wrong dependency direction), and this is too small to promote to a shared lib. */
@@ -91,6 +100,7 @@ function PromptRow({
 	workspaceName,
 	isSelected,
 	onPick,
+	onSaveAsTemplate,
 	onOpenMessage,
 }: {
 	hit: PromptHit;
@@ -99,6 +109,7 @@ function PromptRow({
 	workspaceName: string | undefined;
 	isSelected: boolean;
 	onPick: () => void;
+	onSaveAsTemplate: () => void;
 	onOpenMessage: (target: ChatLocationRequest) => void;
 }) {
 	const firstLine = hit.text.split("\n")[0] ?? hit.text;
@@ -130,6 +141,31 @@ function PromptRow({
 					</span>
 				) : null}
 				<span className="shrink-0 text-hint text-xs">{relativeTime(hit.timestamp)}</span>
+			</button>
+			{isSelected ? (
+				// Persistent keyboard-shortcut glyph — the same precedent as the scope badge's `⌃R`
+				// (always visible next to its label, not hover-only). The icon beside it is still
+				// hover-revealed via `group-hover`/`isSelected` opacity; this glyph is the part a
+				// keyboard-only user (Shift+Enter's own audience) needs, so it can't be mouse-hover-gated
+				// the way the icon itself is.
+				<span data-testid="history-save-shortcut" className="shrink-0 text-[10px] text-hint">
+					{SAVE_SHORTCUT_LABEL}
+				</span>
+			) : null}
+			<button
+				type="button"
+				data-testid="history-save-template"
+				aria-label="Save as template"
+				title={`Save as template (${SAVE_SHORTCUT_LABEL})`}
+				onClick={(e) => {
+					e.stopPropagation();
+					onSaveAsTemplate();
+				}}
+				className={`flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] p-xs text-muted opacity-0 transition hover:bg-elevated hover:text-text group-hover:opacity-100 ${
+					isSelected ? "opacity-100" : ""
+				}`}
+			>
+				<Save className="size-3.5" />
 			</button>
 			{target ? (
 				<>
@@ -286,6 +322,10 @@ export interface HistoryOverlayProps {
 	 * hit (or a prompt hit missing its anchor) never reaches here — belt-and-suspenders, not a
 	 * redundant guard inside `useHistorySearch`'s `openMessage`. */
 	onOpenMessage: (target: ChatLocationRequest) => void;
+	/** A prompt row's save-as-template action — its own button (hover-revealed, every row) and
+	 * Cmd/Ctrl+S while that row is the keyboard selection. Opens `TemplateEditorDialog` body-prefilled;
+	 * `ChatView` owns the dialog, this overlay only reports the hit. */
+	onSaveAsTemplate: (hit: PromptHit) => void;
 	/** R2's mouse path: a direct scope pick from the badge's dropdown menu. `onCycleScope` stays the
 	 * `Ctrl+R` keyboard path, unaffected — both just set the same underlying scope state
 	 * (`useHistorySearch.ts`'s `setScope`/`cycleScope` reset the results selection identically). */
@@ -308,6 +348,7 @@ export function HistoryOverlay({
 	onInsert,
 	onInsertAndSend,
 	onOpenMessage,
+	onSaveAsTemplate,
 	onSetScope,
 }: HistoryOverlayProps) {
 	const { open, stage, query, scope, result, selected, error } = state;
@@ -354,6 +395,15 @@ export function HistoryOverlay({
 		if (e.key === "r" && e.ctrlKey && !e.metaKey && !e.altKey) {
 			e.preventDefault();
 			onCycleScope();
+			return;
+		}
+		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+			// Always swallow — Cmd/Ctrl+S is the browser's own "save page" shortcut. Only a prompt row
+			// selection actually opens the save-as-template dialog; on a message hit (or none) this is a
+			// no-op, same as Enter's message-hit gating above.
+			e.preventDefault();
+			const item = resolveHistorySelection(stage, result, selected);
+			if (item?.kind === "prompt") onSaveAsTemplate(item.hit);
 			return;
 		}
 		if (e.key === "ArrowDown") {
@@ -446,6 +496,7 @@ export function HistoryOverlay({
 									workspaceName={hit.workspaceId ? workspaceNames[hit.workspaceId] : undefined}
 									isSelected={i === selected}
 									onPick={() => onInsert(hit)}
+									onSaveAsTemplate={() => onSaveAsTemplate(hit)}
 									onOpenMessage={onOpenMessage}
 								/>
 							))}

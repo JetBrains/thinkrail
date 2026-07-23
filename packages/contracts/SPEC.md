@@ -125,7 +125,10 @@ of the host.
   conversation match; assistant-only — a user-role hit only ever duplicates its own `PromptHit`'s text,
   so the jump affordance lives there instead; `messageIndex` anchors jump-to-message into
   `session.getMessages` order, `anchorText` makes the anchor drift-tolerant), and
-  **`HistorySearchResult`** (the prompts + full-text messages sections, with totals and indexing status).
+  **`HistorySearchResult`** (the prompts + full-text messages sections, with totals and indexing status);
+  **prompt-template DTOs** — **`TemplateScope`** (`"global"` | `"project"` — where a template lives),
+  and **`TemplateInfo`** (name, optional `description`/`argumentHint`, full `content` — frontmatter +
+  body — `scope`, and `filePath` for breadcrumbing).
 - **wsProtocol.ts** — `WS_METHODS` (`project.*` — incl. **`project.inspect`** (classify a path) +
   **`project.init`** (`git init` + commit, then open) + **`project.hasSpecs`** (lazy per-project "has any
   registered spec?" for the Welcome screen — a full-tree walk, so requested only for the shown project,
@@ -158,7 +161,10 @@ of the host.
   read side) / **`settings.update`** (merge + persist a partial `AppConfig`, returns the merged
   config) / **`history.search`** (the prompt-recall + conversation-search read; results capped,
   recency-ordered; the messages section is assistant-only — a user-role hit surfaces as a jumpable
-  `PromptHit` instead, never a separate `MessageHit`)),
+  `PromptHit` instead, never a separate `MessageHit`) / **`template.*`** — prompt-template CRUD
+  (**`template.list`**, **`template.get`**
+  — `scope` optional, project wins over global, **`template.save`**, **`template.delete`**) — all
+  read/write pi's prompt dirs (global + project), so templates stay CLI-portable,
   `WS_CHANNELS` (`server.welcome` — which carries the initial `config: AppConfig` alongside `projects` /
   `pi.event` / `pi.extensionUi` / **`settings.changed`** (the full `AppConfig`, broadcast so every client
   converges) / **`provider.login`** — the session-less in-app login stream (a `LoginPush`

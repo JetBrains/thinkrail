@@ -81,12 +81,13 @@ export type EditorTab = FileTab | ChatTab | DocTab | DiffTab;
 
 /**
  * A section of the settings dialog (a const-object "enum", the codebase convention). Extensible — the live
- * sections are providers, github, and appearance (the theme picker).
+ * sections are providers, github, appearance (the theme picker), and templates (prompt-template manager).
  */
 export const SettingsSection = {
 	Providers: "providers",
 	Github: "github",
 	Appearance: "appearance",
+	Templates: "templates",
 } as const;
 export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSection];
 
@@ -438,6 +439,10 @@ interface AppState {
 	sessions: Record<string, SessionRuntime>;
 	/** Models with configured auth (cheap win #1) — fetched once, shared by every chat's picker. */
 	models: WireModel[];
+	/** Bare invalidation counter for the composer's `/`-menu template cache (`chat/ChatView.tsx`) — the
+	 * Templates settings panel (Task B6) bumps it after a `template.save`/`delete`; the store holds only
+	 * the counter, never fetches (see `chat/SPEC.md`'s Template slots bullet). */
+	templatesVersion: number;
 	/**
 	 * A request to surface a file in the right-panel Changes view (e.g. a chat turn-divider's "files
 	 * changed" chip). The panels watch it and, when it targets the active workspace, switch to the Changes
@@ -595,6 +600,7 @@ interface AppState {
 	appendErrorTurn: (sessionId: string, text: string) => void;
 	handlePiEvent: (event: PiEvent, sessionId: string) => void;
 	setModels: (models: WireModel[]) => void;
+	bumpTemplatesVersion: () => void;
 	setCurrentModel: (sessionId: string, model: WireModel) => void;
 	setThinkingLevel: (sessionId: string, level: ThinkingLevel) => void;
 	setStats: (sessionId: string, stats: SessionStats) => void;
@@ -718,6 +724,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	activeTerminalByWorkspace: {},
 	sessions: {},
 	models: [],
+	templatesVersion: 0,
 	changesRequest: null,
 	changesView: "list",
 	chatLocationRequest: null,
@@ -1189,6 +1196,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	handlePiEvent: (event, sessionId) =>
 		set((s) => withRuntime(s, sessionId, (rt) => reduceSessionEvent(rt, event))),
 	setModels: (models) => set({ models }),
+	bumpTemplatesVersion: () => set((s) => ({ templatesVersion: s.templatesVersion + 1 })),
 	setCurrentModel: (sessionId, model) =>
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, model }))),
 	setThinkingLevel: (sessionId, level) =>
