@@ -20,7 +20,7 @@ import type {
 } from "@thinkrail/contracts";
 import { ANSWERABILITY_ERRORS, assessAnswerability, buildAnswersMessage } from "./askUserQuestion";
 import { buildResourceLoader } from "./extensions";
-import { getPiRuntime } from "./piRuntime";
+import { getPiRuntime, refreshCatalogsDetached } from "./piRuntime";
 import { repairDanglingToolCalls } from "./sessionRepair";
 import { cancelExtUiForSession, createWebUiContext, notifyExtUi } from "./webUiContext";
 
@@ -408,9 +408,13 @@ export function getSessionCommands(sessionId: string): SlashCommandInfo[] {
 }
 
 /** Models with configured auth, for the model picker (cheap win #1). Redacted to `WireModel` — the raw
- * `Model.baseUrl` carries the jbcentral proxy secret when wired, and the picker only reads id/name/provider. */
+ * `Model.baseUrl` carries the jbcentral proxy secret when wired, and the picker only reads id/name/provider.
+ * Also fires the detached catalog refresh (issue #98): the read below returns the current snapshot
+ * immediately — never awaiting the network — and a later `model.list` picks up whatever the refresh landed. */
 export async function listAvailableModels(): Promise<WireModel[]> {
-	const available = await (await getPiRuntime()).getAvailable();
+	const runtime = await getPiRuntime();
+	refreshCatalogsDetached(runtime);
+	const available = await runtime.getAvailable();
 	return available.map((m) => toWireModel(m as unknown as Model<string>));
 }
 
