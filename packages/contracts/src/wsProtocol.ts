@@ -47,7 +47,10 @@ import type {
 // (pi-canonical + `custom` role) so the questionnaire card can pair answers by tool call id.
 // v9: `git.diff` (unified patch text) is replaced by `git.diffFile` — both sides of one file's change
 // (base-branch content + worktree content), feeding the center Monaco diff tab.
-export const PROTOCOL_VERSION = 9;
+// v10: `provider.setApiKey` is removed — API-key setup goes through the interactive login channel
+// (`provider.loginStart` gains `type?: "oauth" | "api_key"`), so multi-prompt providers (azure, vertex)
+// work and `ProviderStatus.canApiKey` is pi's provider-owned truth (`Provider.auth.apiKey.login`).
+export const PROTOCOL_VERSION = 10;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -137,14 +140,14 @@ export const WS_METHODS = {
 	// Auth-provider status (the Welcome strip): per-provider configured + auth kind, jbcentral wiring.
 	// Every read revalidates host-side (auth + registry reload), so a Refresh is just a re-request.
 	providerStatus: "provider.status",
-	// In-app provider auth (the Welcome strip's Sign-in). loginStart kicks off pi's OAuth flow DETACHED and
-	// returns a handle immediately (the flow can take minutes — it must not sit on the request); frames
-	// stream on the `provider.login` channel, and loginReply answers a select/prompt frame. setApiKey/logout
-	// mutate auth.json directly. All revalidate the shared registry, so a following provider.status re-read reflects them.
+	// In-app provider auth (the Welcome strip's Sign-in). loginStart kicks off pi's login flow (OAuth or
+	// interactive API-key entry, per `type`) DETACHED and returns a handle immediately (a flow can take
+	// minutes — it must not sit on the request); frames stream on the `provider.login` channel, and
+	// loginReply answers a select/prompt frame. logout mutates auth.json directly. All revalidate the
+	// shared registry, so a following provider.status re-read reflects them.
 	providerLoginStart: "provider.loginStart",
 	providerLoginReply: "provider.loginReply",
 	providerLoginCancel: "provider.loginCancel",
-	providerSetApiKey: "provider.setApiKey",
 	providerLogout: "provider.logout",
 	// In-app JetBrains AI (jbcentral proxy) wiring: connect routes Claude+GPT via your JetBrains plan (writes
 	// models.json + refreshes the registry), disconnect undoes it, login launches `jbcentral login` (browser).
@@ -342,14 +345,16 @@ export interface WsMethodMap {
 		result: { model: WireModel | null; thinkingLevel: ThinkingLevel };
 	};
 	"provider.status": { params: Record<string, never>; result: ProviderStatusReport };
-	// Mints a loginId and starts pi's OAuth flow detached; frames arrive on the `provider.login` channel.
-	"provider.loginStart": { params: { providerId: string }; result: { loginId: string } };
+	// Mints a loginId and starts pi's login flow detached (`type` absent = "oauth"; "api_key" drives the
+	// provider-owned interactive key entry — possibly multi-prompt); frames arrive on `provider.login`.
+	"provider.loginStart": {
+		params: { providerId: string; type?: "oauth" | "api_key" };
+		result: { loginId: string };
+	};
 	// Answers a live `select`/`prompt` frame (option id / typed text / pasted code) for the given login.
 	"provider.loginReply": { params: LoginReply; result: Ack };
 	// Cancels an in-flight login: aborts the flow AND settles any parked callback so pi doesn't hang.
 	"provider.loginCancel": { params: { loginId: string }; result: Ack };
-	// Stores a single API key for a provider (auth.json) and refreshes the registry. Not for multi-field creds.
-	"provider.setApiKey": { params: { providerId: string; key: string }; result: Ack };
 	// Removes a provider's stored credentials (auth.json) and refreshes the registry.
 	"provider.logout": { params: { providerId: string }; result: Ack };
 	// Wire Claude+GPT through the local jbcentral proxy (JetBrains AI). Returns a small state machine —

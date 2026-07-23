@@ -72,11 +72,12 @@ export function LoginDialog({
 			>
 				<DialogHeader>
 					<DialogTitle>
+						{/* "Connect", not "Sign in" — one dialog serves OAuth and API-key entry alike. */}
 						{state.status === "success"
-							? `Signed in to ${providerName}`
+							? `${providerName} connected`
 							: state.status === "error"
-								? "Couldn't sign in"
-								: `Sign in to ${providerName}`}
+								? "Couldn't connect"
+								: `Connect ${providerName}`}
 					</DialogTitle>
 					{state.instructions && state.status === "active" ? (
 						<DialogDescription>{state.instructions}</DialogDescription>
@@ -164,6 +165,7 @@ export function LoginDialog({
 										ref={promptRef}
 										data-testid="login-input"
 										autoFocus
+										type={state.input.secret ? "password" : "text"}
 										placeholder={state.input.placeholder ?? ""}
 										onKeyDown={(e) => {
 											if (e.key === "Enter") {

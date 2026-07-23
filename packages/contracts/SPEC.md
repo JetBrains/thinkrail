@@ -118,9 +118,10 @@ of the host.
   **`remove`**, the chat's per-session TODO plan (keyed by `workspaceId` + `sessionId`; `add` tags the
   item `origin:"user"`) / `terminal.*` / `model.list` / **`provider.status`**
 (the auth-provider status report; every read revalidates host-side) / the **`provider.*` in-app login**
-  (**`loginStart`** — mints a `loginId` and runs pi's OAuth flow **detached** (it can take minutes; it must
+  (**`loginStart`** — mints a `loginId` and runs pi's login flow **detached** (`type` `"oauth"` |
+  `"api_key"`, issue #97 — both auth routes ride one channel; a flow can take minutes and must
   not sit on the request nor block the WS pump) / **`loginReply`** — answers a live `select`/`prompt`,
-  correlated by `loginId` / **`loginCancel`** / **`setApiKey`** (single key → auth.json) / **`logout`** /
+  correlated by `loginId` / **`loginCancel`** / **`logout`** /
   the **JetBrains AI** trio **`jbcentralConnect`** (wire Claude+GPT via the jbcentral proxy → a
   `JbcentralConnectResult`) / **`jbcentralDisconnect`** / **`jbcentralLogin`** (launch `central login`)) /
   `session.*` — `create`/`prompt`/`steer`/`followUp`/`abort`/`dispose`/`setModel`/

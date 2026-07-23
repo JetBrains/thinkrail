@@ -111,9 +111,11 @@ a project picker, the prompt hero, and the reused
   Welcome banner can open it deep-linked to a section. Live sections: **`ProvidersSettings`** (the in-app
   provider-auth surface — Connected cards each with a **Sign-out only when `canLogout`** (env / central /
   models.json auth shows a "Managed" tag instead, since the host can't unset it); a **"Sign in with a
-  subscription"** block of `canOAuth` providers → `provider.loginStart` → the store-driven `auth/LoginDialog`
-  (open the URL or paste the code, `provider.loginReply`); an **"Add an API key"** group of single-key
-  providers (`provider.setApiKey`, capped with a "Show N more" expander); a multi-field "N more" note; and
+  subscription"** block of `canOAuth` providers; an **"Add an API key"** group of `canApiKey`-only
+  providers (capped with a "Show N more" expander) — **both routes start `provider.loginStart`**
+  (`type` `"oauth"` / `"api_key"`, issue #97) into the same store-driven `auth/LoginDialog` (open the
+  URL / paste a code / answer the provider's own key prompts, `provider.loginReply` — no inline key
+  field); a "configured outside the app" note for rows with neither flag; and
   the **`JetBrainsAiCard`** — route Claude+GPT through your JetBrains subscription (the jbcentral proxy) — a
   state machine over `jbcentralWired`/`jbcentralInstalled` + `jbcentralInstall` (all from the same status
   read) + `provider.jbcentral*`:

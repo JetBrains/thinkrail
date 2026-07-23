@@ -618,6 +618,7 @@ function foldLoginFrame(state: LoginState, frame: LoginFrame): LoginState {
 					message: frame.message,
 					...(frame.placeholder ? { placeholder: frame.placeholder } : {}),
 					...(frame.allowEmpty ? { allowEmpty: true } : {}),
+					...(frame.secret ? { secret: true } : {}),
 				},
 			};
 		}

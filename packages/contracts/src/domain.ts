@@ -194,7 +194,8 @@ export interface ProviderStatus {
 	detail?: string;
 	/** In-app OAuth login is available for this provider (`provider.loginStart`). */
 	canOAuth?: boolean;
-	/** In-app single-key API-key entry is available (`provider.setApiKey`) — false for multi-field creds. */
+	/** Interactive API-key login is available (`provider.loginStart` with `type: "api_key"`) — pi's
+	 * provider-owned truth (`Provider.auth.apiKey.login`), multi-prompt providers included. */
 	canApiKey?: boolean;
 	/** The provider has a removable `auth.json` credential (`provider.logout`) — false for env / central /
 	 * models.json auth, which the host can't unset (so the strip shows no Sign-out for those). */
@@ -250,7 +251,14 @@ export type LoginFrame =
 	| { kind: "authUrl"; url: string; instructions?: string }
 	| { kind: "deviceCode"; userCode: string; verificationUri: string; expiresInSeconds?: number }
 	| { kind: "select"; message: string; options: { id: string; label: string }[] }
-	| { kind: "prompt"; message: string; placeholder?: string; allowEmpty?: boolean }
+	| {
+			kind: "prompt";
+			message: string;
+			placeholder?: string;
+			allowEmpty?: boolean;
+			/** pi marked the prompt `secret` (an API key) — the dialog masks the input. */
+			secret?: boolean;
+	  }
 	| { kind: "progress"; message: string }
 	| { kind: "success" }
 	| { kind: "error"; message: string };

@@ -38,7 +38,6 @@ import {
 	jbcentralLogin,
 	logoutProvider,
 	resolveLogin,
-	setProviderApiKey,
 	startLogin,
 } from "../auth";
 import { selectDirectory } from "../dialog";
@@ -277,20 +276,19 @@ const handlers: Record<string, Handler> = {
 	"model.list": () => listAvailableModels(),
 	"model.default": () => getDefaultModel(),
 	"provider.status": () => getProviderStatus(),
-	// In-app login. `loginStart` returns its handle at once (the flow runs detached — see `startLogin`);
-	// frames stream on the `provider.login` channel, `loginReply` answers a live select/prompt frame.
-	"provider.loginStart": (params) => startLogin((params as { providerId: string }).providerId),
+	// In-app login (OAuth or interactive API-key entry, per `type`). `loginStart` returns its handle at
+	// once (the flow runs detached — see `startLogin`); frames stream on the `provider.login` channel,
+	// `loginReply` answers a live select/prompt frame.
+	"provider.loginStart": (params) => {
+		const p = params as { providerId: string; type?: "oauth" | "api_key" };
+		return startLogin(p.providerId, p.type ?? "oauth");
+	},
 	"provider.loginReply": (params) => {
 		resolveLogin(params as LoginReply);
 		return { ok: true } as const;
 	},
 	"provider.loginCancel": (params) => {
 		cancelLogin((params as { loginId: string }).loginId);
-		return { ok: true } as const;
-	},
-	"provider.setApiKey": async (params) => {
-		const p = params as { providerId: string; key: string };
-		await setProviderApiKey(p.providerId, p.key);
 		return { ok: true } as const;
 	},
 	"provider.logout": async (params) => {

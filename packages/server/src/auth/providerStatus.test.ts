@@ -133,13 +133,16 @@ describe("buildProviderReport", () => {
 		});
 	});
 
-	test("a model-less credential provider still shows, via hasAuth (no canApiKey — no model row)", () => {
+	test("a model-less credential provider still shows, via hasAuth (no canApiKey — pi doesn't know it)", () => {
 		const report = buildProviderReport(
 			sources({
 				credentialProviders: ["mystery"],
 				credentialType: () => "api_key",
 				providerAuth: () => ({ source: "stored" }),
 				hasAuth: (id) => id === "mystery",
+				// A leftover credential for a provider pi no longer registers: `getProvider(id)` is undefined,
+				// so the interactive key flow can't be offered — only Sign-out remains.
+				apiKeyLogin: () => false,
 			}),
 		);
 		expect(report.providers).toEqual([
@@ -175,6 +178,7 @@ describe("in-app login capability flags", () => {
 					{ id: "openai-codex", name: "ChatGPT Plus/Pro (Codex Subscription)" },
 					{ id: "github-copilot", name: "GitHub Copilot" },
 				],
+				apiKeyLogin: () => false, // this test is about row surfacing/naming, not the key flag
 			}),
 		);
 		// Sorted by display name: "ChatGPT…" (C) before "GitHub Copilot" (G).
@@ -194,7 +198,9 @@ describe("in-app login capability flags", () => {
 		]);
 	});
 
-	test("canApiKey excludes multi-field credential providers (bedrock / vertex / azure)", () => {
+	test("multi-field credential providers get canApiKey — the dialog carries the whole interaction (#97)", () => {
+		// Pre-#97, hand-maintained sets suppressed these because the inline field posted ONE string. The
+		// interactive login channel parks every prompt the provider asks, so pi's metadata is the only gate.
 		const report = buildProviderReport(
 			sources({
 				modelProviders: new Map([
@@ -207,9 +213,9 @@ describe("in-app login capability flags", () => {
 		);
 		const canApiKey = Object.fromEntries(report.providers.map((p) => [p.id, p.canApiKey ?? false]));
 		expect(canApiKey).toEqual({
-			"amazon-bedrock": false,
-			"google-vertex": false,
-			"azure-openai-responses": false,
+			"amazon-bedrock": true,
+			"google-vertex": true,
+			"azure-openai-responses": true,
 			openai: true,
 		});
 	});
@@ -230,7 +236,9 @@ describe("in-app login capability flags", () => {
 		});
 	});
 
-	test("canApiKey excludes OAuth-only providers even when they have model rows", () => {
+	test("a provider with OAuth AND pi api-key login offers both routes (github-copilot)", () => {
+		// pi's own metadata says copilot supports interactive key entry — the old OAUTH_ONLY set
+		// suppressed a real capability; flags now derive from `Provider.auth` alone (#97).
 		const report = buildProviderReport(
 			sources({
 				modelProviders: new Map([["github-copilot", ["https://api.githubcopilot.com"]]]),
@@ -242,6 +250,7 @@ describe("in-app login capability flags", () => {
 			name: "GitHub Copilot",
 			configured: false,
 			canOAuth: true,
+			canApiKey: true,
 		});
 	});
 
