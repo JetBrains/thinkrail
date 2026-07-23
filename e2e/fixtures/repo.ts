@@ -61,6 +61,11 @@ export function seedFixtureRepo(): void {
 			"",
 		].join("\n"),
 	);
+	// A large, highly repetitive markdown doc (hundreds of identical list rows) — the worst case
+	// for node-htmldiff's matcher — for the rendered-diff main-thread test (see e2e/changes.spec.ts):
+	// diffing this inline used to block the UI for seconds, so the suite pins that the merge stays off
+	// the main thread.
+	writeFileSync(join(E2E_FIXTURE_REPO, "LARGE.md"), largeRepetitiveMarkdown());
 	// A doc + image for the rendered-preview link/anchor/image suite (see e2e/markdown-links.spec.ts):
 	// a relative file link (opens the target tab), an in-doc anchor, and a relative image (host /files route).
 	writeFileSync(
@@ -103,4 +108,22 @@ export function seedFixtureRepo(): void {
 	);
 	git("add", "-A");
 	git("commit", "-m", "init");
+}
+
+/**
+ * The seeded contents of `LARGE.md`: 800 **identical** list rows — identical (not merely similar)
+ * rows are what degrades node-htmldiff's matching to multi-second runtimes (unique rows match in
+ * linear time). `largeRepetitiveMarkdownEdited` derives the worktree-side edit here too, so the
+ * doc's shape (header offset, row text) lives in exactly one place.
+ */
+export function largeRepetitiveMarkdown(): string {
+	const rows = Array.from({ length: 800 }, () => "- alpha beta gamma delta epsilon");
+	return `# Large repetitive doc\n\n${rows.join("\n")}\n`;
+}
+
+/** The edited worktree version: one mid-document row replaced + one row appended. */
+export function largeRepetitiveMarkdownEdited(): string {
+	const lines = largeRepetitiveMarkdown().split("\n");
+	lines[400] = "- EDITED replacement row";
+	return `${lines.join("\n")}- appended row by e2e\n`;
 }

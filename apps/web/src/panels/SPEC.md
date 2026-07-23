@@ -227,7 +227,16 @@ a project picker, the prompt hero, and the reused
   handlers are inert — accepted for a diff view), then merges them with **`node-htmldiff`** into ONE
   document carrying `<ins>`/`<del>` markers (`del` red + strikethrough, `ins` green — token colors),
   injected via `dangerouslySetInnerHTML` (same accepted risk class as the shiki path in
-  `chat/Markdown`). This mirrors VS Code's opt-in "markdown preview in the diff view" — a feature of
+  `chat/Markdown`). **The htmldiff merge runs in a Web Worker** (`htmldiff.worker.ts`, one worker per
+  pending request — terminate = cancel): htmldiff's matcher is super-linear on repetitive content
+  (seconds of synchronous blocking for a few hundred near-identical rows), so it must never run on the
+  main thread; while it computes, `RenderedDiff` shows a `rendered-diff-loading` placeholder, and a
+  worker failure (script asset failing to load, htmldiff throwing) shows a `rendered-diff-error`
+  placeholder pointing at the Source view — never an eternal spinner. The
+  static-markup render of both sides is linear and stays on the main thread. Pinned by e2e in
+  `e2e/changes.spec.ts`: the long-task test (seeded `LARGE.md`, 800 identical rows), the
+  worker-failure test (worker asset blocked → `rendered-diff-error`), and the live-edit test (fs
+  tick re-reads both sides → stale merge cancelled, fresh one lands). This mirrors VS Code's opt-in "markdown preview in the diff view" — a feature of
   VS Code's webview layer, absent from standalone Monaco, hence built here. A row is shown selected when its diff tab is the active center tab (or it's
   the deep-link highlight). A failed `git.diffFile` leaves tabs unchanged (the row stays for a retry).
 - **Changes: List | Tree.** A header toggle (`store.changesView`, app-wide — persisted in the store, not
