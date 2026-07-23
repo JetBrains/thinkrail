@@ -78,6 +78,14 @@
         "vite": "8.0.16",
       },
     },
+    "apps/website": {
+      "name": "@thinkrail/website",
+      "version": "0.0.0",
+      "devDependencies": {
+        "typescript": "catalog:",
+        "vite": "8.0.16",
+      },
+    },
     "packages/contracts": {
       "name": "@thinkrail/contracts",
       "version": "0.0.0",
@@ -544,6 +552,8 @@
     "@thinkrail/shared": ["@thinkrail/shared@workspace:packages/shared"],
 
     "@thinkrail/web": ["@thinkrail/web@workspace:apps/web"],
+
+    "@thinkrail/website": ["@thinkrail/website@workspace:apps/website"],
 
     "@turbo/darwin-64": ["@turbo/darwin-64@2.9.18", "", { "os": "darwin", "cpu": "x64" }, "sha512-9f27peFu16ur8c0v9nUFUEyBnbKuuFsUTjHFWfmwGfzySBXbHwzU44QhZon6Mznz0cHsIr3984NQj/bVrnGSRw=="],
 

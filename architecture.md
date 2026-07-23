@@ -29,6 +29,7 @@ host over Tailscale.
 apps/cli        host launcher (V1): boot server + open browser   ── depends on ─▶ packages/server
 apps/web        UI client (mobile-first)                          ── depends on ─▶ packages/contracts
 apps/desktop    Electrobun host launcher (deferred)               ── depends on ─▶ packages/server, packages/contracts
+apps/website    public landing page (GitHub Pages)                ── standalone: no workspace deps
 packages/server createServer(): Bun.serve(HTTP+WS) + AgentSessionManager (in-process pi) ── depends on ─▶ packages/contracts, packages/shared
 packages/contracts  the wire (types-only)
 packages/shared     shellEnv (server-side only)

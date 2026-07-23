@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>ThinkRail — the worktree IDE for the pi coding agent</title>
+		<meta
+			name="description"
+			content="Open a repo as a project, cut isolated git-worktree workspaces, and pair with the pi coding agent in a real IDE — Monaco tabs, terminals, diffs, concurrent chats, and a spec graph the agent actually reads. Open source, Apache-2.0, a JetBrains incubator project."
+		/>
+		<link rel="canonical" href="https://jetbrains.github.io/thinkrail/" />
+		<meta property="og:type" content="website" />
+		<meta property="og:title" content="ThinkRail — the worktree IDE for the pi coding agent" />
+		<meta
+			property="og:description"
+			content="Git-worktree workspaces, a real editor, terminals, concurrent agent chats, and a spec graph the agent reads. Open source, Apache-2.0."
+		/>
+		<meta property="og:url" content="https://jetbrains.github.io/thinkrail/" />
+		<meta property="og:image" content="https://jetbrains.github.io/thinkrail/og.png" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="theme-color" content="#171719" />
+		<link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+		<!-- Restore a previously picked theme before first paint (same trick the app uses). -->
+		<script>
+			try {
+				const t = localStorage.getItem("thinkrail-site-theme");
+				if (t) document.documentElement.setAttribute("data-theme", t);
+			} catch (_) {}
+		</script>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link rel="preconnect" href="https://api.fontshare.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+			rel="stylesheet"
+		/>
+		<link
+			href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@700,800&display=swap"
+			rel="stylesheet"
+		/>
+		<link rel="stylesheet" href="/src/styles.css" />
+	</head>
+	<body>
+		<svg xmlns="http://www.w3.org/2000/svg" class="sprite" aria-hidden="true">
+			<symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6" /></symbol>
+			<symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" /></symbol>
+			<symbol id="i-folder" viewBox="0 0 24 24">
+				<path
+					d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+				/>
+			</symbol>
+			<symbol id="i-file" viewBox="0 0 24 24">
+				<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+				<path d="M14 2v4a2 2 0 0 0 2 2h4" />
+			</symbol>
+			<symbol id="i-branch" viewBox="0 0 24 24">
+				<path d="M6 3v12" />
+				<circle cx="18" cy="6" r="3" />
+				<circle cx="6" cy="18" r="3" />
+				<path d="M18 9a9 9 0 0 1-9 9" />
+			</symbol>
+			<symbol id="i-terminal" viewBox="0 0 24 24">
+				<path d="m4 17 6-6-6-6" />
+				<path d="M12 19h8" />
+			</symbol>
+			<symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14" /><path d="M12 5v14" /></symbol>
+			<symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></symbol>
+			<symbol id="i-copy" viewBox="0 0 24 24">
+				<rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+				<path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+			</symbol>
+			<symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5" /></symbol>
+			<symbol id="i-settings" viewBox="0 0 24 24">
+				<path
+					d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
+				/>
+				<circle cx="12" cy="12" r="3" />
+			</symbol>
+			<symbol id="i-chat" viewBox="0 0 24 24">
+				<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+				<path d="M12 7v6" />
+				<path d="M9 10h6" />
+			</symbol>
+			<symbol id="i-book" viewBox="0 0 24 24">
+				<path d="M12 7v14" />
+				<path
+					d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+				/>
+			</symbol>
+			<symbol id="i-fork" viewBox="0 0 24 24">
+				<circle cx="12" cy="18" r="3" />
+				<circle cx="6" cy="6" r="3" />
+				<circle cx="18" cy="6" r="3" />
+				<path d="M18 9v2c0 .6-.4 1-1 1H7c-.6 0-1-.4-1-1V9" />
+				<path d="M12 12v3" />
+			</symbol>
+			<symbol id="i-box" viewBox="0 0 24 24">
+				<path
+					d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"
+				/>
+				<path d="m3.3 7 8.7 5 8.7-5" />
+				<path d="M12 22V12" />
+			</symbol>
+			<symbol id="i-arrow-up" viewBox="0 0 24 24"><path d="m5 12 7-7 7 7" /><path d="M12 19V5" /></symbol>
+			<symbol id="i-menu" viewBox="0 0 24 24">
+				<path d="M4 6h16" />
+				<path d="M4 12h16" />
+				<path d="M4 18h16" />
+			</symbol>
+			<symbol id="i-star" viewBox="0 0 24 24">
+				<path
+					d="M11.5 3.1a.55.55 0 0 1 1 0l2.4 4.8a.55.55 0 0 0 .4.3l5.3.8a.55.55 0 0 1 .3.94l-3.8 3.7a.55.55 0 0 0-.16.5l.9 5.2a.55.55 0 0 1-.8.6l-4.7-2.5a.55.55 0 0 0-.52 0l-4.7 2.5a.55.55 0 0 1-.8-.6l.9-5.2a.55.55 0 0 0-.16-.5L2.6 9.94a.55.55 0 0 1 .3-.94l5.3-.8a.55.55 0 0 0 .4-.3z"
+				/>
+			</symbol>
+			<symbol id="i-github" viewBox="0 0 16 16">
+				<path
+					d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"
+				/>
+			</symbol>
+		</svg>
+
+		<a class="skip-link" href="#readme">Skip to content</a>
+
+		<div class="window">
+			<!-- ══ Title bar ══ -->
+			<header class="titlebar">
+				<div class="traffic" aria-hidden="true"><i></i><i></i><i></i></div>
+				<span class="wordmark">ThinkRail</span>
+				<div class="scope">
+					<span class="scope-crumbs">
+						<span class="scope-project">thinkrail</span>
+						<svg class="i" aria-hidden="true"><use href="#i-chevron-right" /></svg>
+						<span class="scope-name">website</span>
+					</span>
+					<span class="scope-branch">
+						<svg class="i" aria-hidden="true"><use href="#i-branch" /></svg>
+						workspace/website · from main
+					</span>
+				</div>
+				<div class="titlebar-right">
+					<div class="theme-menu-wrap">
+						<button
+							type="button"
+							class="theme-trigger"
+							id="theme-trigger"
+							aria-haspopup="menu"
+							aria-expanded="false"
+							aria-label="Theme"
+						>
+							<span class="theme-swatch" data-swatch="dark" aria-hidden="true"></span>
+							<span class="theme-current" id="theme-current">Dark</span>
+							<svg class="i" aria-hidden="true"><use href="#i-chevron-down" /></svg>
+						</button>
+						<div class="theme-menu" id="theme-menu" role="menu" aria-label="Theme" hidden>
+							<button type="button" class="theme-item" role="menuitemradio" aria-checked="true" data-theme-id="dark">
+								<span class="theme-swatch" data-swatch="dark" aria-hidden="true"></span>Dark
+								<svg class="i theme-check" aria-hidden="true"><use href="#i-check" /></svg>
+							</button>
+							<button type="button" class="theme-item" role="menuitemradio" aria-checked="false" data-theme-id="darcula">
+								<span class="theme-swatch" data-swatch="darcula" aria-hidden="true"></span>Darcula
+								<svg class="i theme-check" aria-hidden="true"><use href="#i-check" /></svg>
+							</button>
+							<button type="button" class="theme-item" role="menuitemradio" aria-checked="false" data-theme-id="light">
+								<span class="theme-swatch" data-swatch="light" aria-hidden="true"></span>Light
+								<svg class="i theme-check" aria-hidden="true"><use href="#i-check" /></svg>
+							</button>
+							<button type="button" class="theme-item" role="menuitemradio" aria-checked="false" data-theme-id="gruvbox">
+								<span class="theme-swatch" data-swatch="gruvbox" aria-hidden="true"></span>Gruvbox
+								<svg class="i theme-check" aria-hidden="true"><use href="#i-check" /></svg>
+							</button>
+						</div>
+					</div>
+					<a
+						class="chrome-btn gh-btn"
+						href="https://github.com/JetBrains/thinkrail"
+						aria-label="ThinkRail on GitHub"
+					>
+						<svg class="i i-fill" aria-hidden="true"><use href="#i-github" /></svg>
+						<span class="gh-stars" id="gh-stars" hidden></span>
+					</a>
+					<button type="button" class="chrome-btn nav-toggle" id="nav-toggle" aria-expanded="false" aria-controls="rail-right" aria-label="Open file tree">
+						<svg class="i" aria-hidden="true"><use href="#i-menu" /></svg>
+					</button>
+				</div>
+			</header>
+
+			<div class="cols">
+				<!-- ══ Left rail: projects ══ -->
+				<aside class="rail-left" aria-label="Projects">
+					<div class="rail-heading">Projects <svg class="i" aria-hidden="true"><use href="#i-plus" /></svg></div>
+					<div class="tree">
+						<div class="tree-row">
+							<svg class="i" aria-hidden="true"><use href="#i-chevron-down" /></svg>
+							<svg class="i" aria-hidden="true"><use href="#i-folder" /></svg>
+							<span>thinkrail</span>
+						</div>
+						<div class="tree-row workspace active">
+							<svg class="i" aria-hidden="true"><use href="#i-branch" /></svg>
+							<span>website</span>
+						</div>
+						<div class="tree-row workspace dim">
+							<svg class="i" aria-hidden="true"><use href="#i-branch" /></svg>
+							<span>quick-tour-what-is-thinkrail</span>
+						</div>
+						<div class="tree-row dim">
+							<svg class="i" aria-hidden="true"><use href="#i-chevron-right" /></svg>
+							<svg class="i" aria-hidden="true"><use href="#i-folder" /></svg>
+							<span>your-repo</span>
+						</div>
+					</div>
+					<div class="rail-note">
+						A workspace is a <code>git worktree</code>: its own branch, files, terminals, and chats.
+					</div>
+				</aside>
+
+				<!-- ══ Center: tab strip + the scrolling "editor" ══ -->
+				<div class="center">
+					<nav class="tabstrip" aria-label="Sections">
+						<a class="tab" href="#readme"><svg class="i" aria-hidden="true"><use href="#i-file" /></svg>README.md<i class="tab-x"></i></a>
+						<a class="tab" href="#why"><svg class="i" aria-hidden="true"><use href="#i-file" /></svg>why.md<i class="tab-x"></i></a>
+						<a class="tab" href="#worktrees"><svg class="i" aria-hidden="true"><use href="#i-file" /></svg>worktrees.md<i class="tab-x"></i></a>
+						<a class="tab" href="#editor"><svg class="i" aria-hidden="true"><use href="#i-file" /></svg>editor.md<i class="tab-x"></i></a>
+						<a class="tab" href="#agent-chat"><svg class="i" aria-hidden="true"><use href="#i-chat" /></svg>agent-chat.md<i class="tab-x"></i></a>
+						<a class="tab" href="#specs"><svg class="i" aria-hidden="true"><use href="#i-book" /></svg>specs.md<i class="tab-x"></i></a>
+						<a class="tab" href="#install"><svg class="i" aria-hidden="true"><use href="#i-terminal" /></svg>install.sh<i class="tab-x"></i></a>
+						<a class="tab" href="#contributing"><svg class="i" aria-hidden="true"><use href="#i-file" /></svg>CONTRIBUTING.md<i class="tab-x"></i></a>
+					</nav>
+
+					<main class="editor" id="editor-scroll" aria-label="Page content">
+						<!-- ── README.md ─ hero ── -->
+						<section class="file-section hero" id="readme" data-file="README.md">
+							<p class="file-comment">&lt;!-- README.md --&gt;</p>
+							<p class="hero-kicker">
+								<span class="pill pill-accent">JetBrains incubator</span>
+								<span class="pill">Apache-2.0</span>
+								<span class="pill">open source</span>
+							</p>
+							<h1 class="hero-title">ThinkRail</h1>
+							<p class="hero-tagline">The worktree IDE for the <code>pi</code> coding agent.</p>
+							<p class="hero-lede">
+								Open a repo as a project. Cut isolated <strong>git-worktree workspaces</strong>. Pair
+								with a real agent across Monaco tabs, terminals, and diffs — while your project's
+								intent lives in a <strong>spec graph the agent actually reads</strong>.
+							</p>
+							<div class="install-line">
+								<code
+									id="install-cmd"
+									>curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash</code
+								>
+								<button type="button" class="copy-btn" data-copy="curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash" aria-label="Copy install command">
+									<svg class="i" aria-hidden="true"><use href="#i-copy" /></svg>
+									<svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg>
+								</button>
+							</div>
+							<p class="hero-platforms">
+								One self-contained binary. macOS (Apple Silicon) · Linux arm64 / x64 · Windows x64.
+							</p>
+							<div class="hero-ctas">
+								<a class="btn btn-primary" href="https://github.com/JetBrains/thinkrail">
+									<svg class="i i-fill" aria-hidden="true"><use href="#i-github" /></svg>
+									Star on GitHub
+								</a>
+								<a class="btn" href="#agent-chat">See it in action</a>
+							</div>
+						</section>
+
+						<!-- ── why.md ── -->
+						<section class="file-section" id="why" data-file="why.md">
+							<p class="file-comment">&lt;!-- why.md --&gt;</p>
+							<h2>Why ThinkRail</h2>
+							<div class="beats">
+								<div class="beat">
+									<h3>Agents deserve worktrees, not your working tree.</h3>
+									<p>
+										Every workspace is a real <code>git worktree</code> — its own branch, its own
+										cwd. Run several agents in parallel; each one's mess stays on its branch, and
+										<code>main</code> stays clean until you say otherwise.
+									</p>
+								</div>
+								<div class="beat">
+									<h3>Specs are the ground truth.</h3>
+									<p>
+										ThinkRail is built spec-first, and so are your projects: a connected graph of
+										spec files lives beside the code, and the agent reads, searches, and maintains
+										it with dedicated tools. Intent survives the session.
+									</p>
+								</div>
+								<div class="beat">
+									<h3>A thin host, a real engine.</h3>
+									<p>
+										The <a href="https://pi.dev"><code>pi</code> coding agent</a>
+										runs in-process and owns models, skills, compaction, and cost. ThinkRail owns
+										the workspace, the editor, and the wire — it never assembles prompts behind
+										your back.
+									</p>
+								</div>
+							</div>
+						</section>
+
+						<!-- ── features/worktrees.md ── -->
+						<section class="file-section" id="worktrees" data-file="features/worktrees.md">
+							<p class="file-comment">&lt;!-- features/worktrees.md --&gt;</p>
+							<h2>Projects &rarr; workspaces</h2>
+							<p>
+								A project is any local git repo. A workspace is a <code>git worktree</code> cut from
+								it — created in one click, listed in the rail, disposable without ceremony.
+							</p>
+							<pre class="code-block"><code><span class="sx-cm"># one repo, three parallel lines of thought</span>
+~/code/my-repo                        <span class="sx-cm">← project</span>
+└─ ~/.thinkrail/worktrees/
+   ├─ workspace-1   <span class="sx-str">⎇ feature/auth</span>      <span class="sx-cm">agent A building</span>
+   ├─ workspace-2   <span class="sx-str">⎇ fix/flaky-test</span>    <span class="sx-cm">agent B fixing</span>
+   └─ workspace-3   <span class="sx-str">⎇ spike/ideas</span>       <span class="sx-cm">you, exploring</span></code></pre>
+							<ul>
+								<li>Own branch + cwd per workspace — files, diffs, terminals, and chats all scope to it.</li>
+								<li>Switch workspaces instantly; nothing reloads, nothing leaks across.</li>
+								<li>Merge the good one, delete the rest. Your repo never noticed the chaos.</li>
+							</ul>
+						</section>
+
+						<!-- ── features/editor.md ── -->
+						<section class="file-section" id="editor" data-file="features/editor.md">
+							<p class="file-comment">&lt;!-- features/editor.md --&gt;</p>
+							<h2>A real IDE around the agent</h2>
+							<p>Watch the agent work — or work beside it — without leaving the page.</p>
+							<div class="feature-grid">
+								<div class="feature-card">
+									<h3><svg class="i" aria-hidden="true"><use href="#i-file" /></svg> Monaco editor tabs</h3>
+									<p>The VS Code editor engine: syntax everywhere, rendered markdown with a source toggle, file tabs per workspace.</p>
+								</div>
+								<div class="feature-card">
+									<h3><svg class="i" aria-hidden="true"><use href="#i-folder" /></svg> All-files tree</h3>
+									<p>The active worktree at a glance — like the rail on the right of this very page.</p>
+								</div>
+								<div class="feature-card">
+									<h3><svg class="i" aria-hidden="true"><use href="#i-branch" /></svg> Changes</h3>
+									<p>A live git diff of the workspace branch, so you review the agent's work as it lands.</p>
+								</div>
+								<div class="feature-card">
+									<h3><svg class="i" aria-hidden="true"><use href="#i-terminal" /></svg> Terminals</h3>
+									<p>Real PTYs scoped to the worktree — run the tests yourself while the agent keeps typing.</p>
+								</div>
+							</div>
+						</section>
+
+						<!-- ── features/agent-chat.md ── -->
+						<section class="file-section" id="agent-chat" data-file="features/agent-chat.md">
+							<p class="file-comment">&lt;!-- features/agent-chat.md --&gt;</p>
+							<h2>Chats that stream like the engine thinks</h2>
+							<p>
+								This transcript is a real <code>pi</code> session, captured in ThinkRail while it
+								worked on its own repo:
+							</p>
+							<div class="chat-demo" id="chat-demo">
+								<div class="chat-msg user" data-step>
+									Quick tour: what is ThinkRail, and what are the three rings of its architecture?
+									Keep it brief.
+								</div>
+								<div class="chat-activity" data-step>
+									<svg class="i" aria-hidden="true"><use href="#i-check" /></svg>
+									<span>read <code>goal-and-requirements.md</code> · <code>architecture.md</code></span>
+								</div>
+								<div class="chat-msg assistant">
+									<p data-step>
+										ThinkRail is a desktop-and-mobile client for the <code>pi</code> coding agent —
+										a thin host that runs <code>pi</code> in-process and bridges it to a rich UI,
+										while <code>pi</code> owns models, skills, compaction, cost, and session state.
+									</p>
+									<p data-step>The <strong>three rings</strong>:</p>
+									<ol>
+										<li data-step>
+											<strong>Engine host</strong> (<code>packages/server</code>) —
+											<code>createServer()</code> runs an HTTP+WS host plus an
+											<code>AgentSessionManager</code>: one in-process <code>pi</code> session per tab.
+										</li>
+										<li data-step>
+											<strong>The wire</strong> (<code>packages/contracts</code>) — the typed,
+											versioned protocol between host and UI. Types only.
+										</li>
+										<li data-step>
+											<strong>UI client</strong> (<code>apps/web</code>) — mobile-first React that
+											ships independently and dials any host over the wire.
+										</li>
+									</ol>
+								</div>
+								<div class="chat-done" data-step>
+									<span><svg class="i" aria-hidden="true"><use href="#i-check" /></svg> Done</span>
+									<span>5s · 25.9k tok · $0.17</span>
+								</div>
+								<div class="chat-composer" aria-hidden="true">
+									<div class="composer-box">Message the agent… (@ files · / commands · Enter to send)</div>
+									<div class="composer-row">
+										<span class="chip">Claude Opus 4.8 <svg class="i" aria-hidden="true"><use href="#i-chevron-down" /></svg></span>
+										<span class="chip chip-dim">EFFORT&nbsp;<b>Low</b></span>
+										<span class="send-btn"><svg class="i" aria-hidden="true"><use href="#i-arrow-up" /></svg></span>
+									</div>
+								</div>
+							</div>
+							<ul>
+								<li>Several sessions per workspace, streaming concurrently.</li>
+								<li>Pick the model per session; tokens and cost tick live in the header.</li>
+								<li>Steer a running turn or queue a follow-up — no waiting for the agent to finish.</li>
+								<li>Interactive tools: the agent can ask structured questions back, right in the chat.</li>
+							</ul>
+						</section>
+
+						<!-- ── features/specs.md ── -->
+						<section class="file-section" id="specs" data-file="features/specs.md">
+							<p class="file-comment">&lt;!-- features/specs.md --&gt;</p>
+							<h2>Specs are first-class</h2>
+							<p>
+								Every module carries a <code>SPEC.md</code> with frontmatter linking it into a graph —
+								goal, architecture, modules, tasks. The bundled <code>pi-spec-graph</code> extension
+								gives the agent <code>spec_*</code> tools to search, navigate, and maintain it, and
+								the Specs tab renders the live graph of your worktree:
+							</p>
+							<div class="spec-tree">
+								<div class="spec-row depth-0">
+									<svg class="i" aria-hidden="true"><use href="#i-book" /></svg>
+									<span>ThinkRail — product goal and scope</span>
+									<b class="spec-badge badge-accent">main spec</b>
+								</div>
+								<div class="spec-row depth-1">
+									<svg class="i" aria-hidden="true"><use href="#i-fork" /></svg>
+									<span>ThinkRail — top-level architecture</span>
+									<b class="spec-badge">arch</b>
+								</div>
+								<div class="spec-row depth-2">
+									<svg class="i" aria-hidden="true"><use href="#i-box" /></svg>
+									<span>Engine host (server library)</span>
+									<b class="spec-badge">module</b>
+								</div>
+								<div class="spec-row depth-3">
+									<svg class="i" aria-hidden="true"><use href="#i-box" /></svg>
+									<span>agent — in-process pi sessions</span>
+									<b class="spec-badge">submodule</b>
+								</div>
+								<div class="spec-row depth-2">
+									<svg class="i" aria-hidden="true"><use href="#i-box" /></svg>
+									<span>Web UI client</span>
+									<b class="spec-badge">module</b>
+								</div>
+							</div>
+							<pre class="code-block"><code><span class="sx-punct">---</span>
+<span class="sx-prop">id:</span> <span class="sx-str">module-server</span>
+<span class="sx-prop">type:</span> <span class="sx-str">module-design</span>
+<span class="sx-prop">status:</span> <span class="sx-str">active</span>
+<span class="sx-prop">parent:</span> <span class="sx-str">architecture</span>
+<span class="sx-punct">---</span></code></pre>
+							<p>
+								Plain markdown, plain frontmatter, versioned with the code — reading the specs is
+								enough to understand an area and formulate the next task. The agent keeps them honest
+								as it builds.
+							</p>
+						</section>
+
+						<!-- ── install.sh ── -->
+						<section class="file-section" id="install" data-file="install.sh">
+							<p class="file-comment"># install.sh</p>
+							<h2>Install</h2>
+							<pre class="code-block install-block"><code><span class="sx-cm"># one line: downloads the right build, verifies its SHA-256, puts `thinkrail` on your PATH</span>
+<span class="line-copy" data-copy="curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash"><span class="sx-fn">curl</span> -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | <span class="sx-fn">bash</span></span>
+
+<span class="sx-cm"># nightly channel, or pin a version</span>
+<span class="line-copy" data-copy="curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash -s -- --channel nightly"><span class="sx-fn">curl</span> -fsSL … | <span class="sx-fn">bash</span> -s -- <span class="sx-str">--channel nightly</span></span>
+<span class="line-copy" data-copy="curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash -s -- --version 0.2.0"><span class="sx-fn">curl</span> -fsSL … | <span class="sx-fn">bash</span> -s -- <span class="sx-str">--version 0.2.0</span></span>
+
+<span class="sx-cm"># then</span>
+<span class="line-copy" data-copy="thinkrail"><span class="sx-fn">thinkrail</span>         <span class="sx-cm"># launch — opens the IDE in your browser</span></span>
+<span class="line-copy" data-copy="thinkrail update"><span class="sx-fn">thinkrail</span> update  <span class="sx-cm"># grab the latest build later</span></span></code></pre>
+							<ul>
+								<li><strong>Prebuilt:</strong> macOS (Apple Silicon), Linux arm64 + x64, Windows x64.</li>
+								<li><strong>Needs:</strong> <code>git</code> on PATH and an authenticated <code>pi</code> provider — the agent runs against your real credentials.</li>
+								<li>
+									Prefer manual? Grab a binary + <code>SHA256SUMS</code> from the
+									<a href="https://github.com/JetBrains/thinkrail/releases">releases page</a>, verify,
+									<code>chmod +x</code>, done. App state lives under <code>~/.thinkrail</code>.
+								</li>
+							</ul>
+						</section>
+
+						<!-- ── CONTRIBUTING.md ─ footer ── -->
+						<section class="file-section footer-section" id="contributing" data-file="CONTRIBUTING.md">
+							<p class="file-comment">&lt;!-- CONTRIBUTING.md --&gt;</p>
+							<h2>Open source, spec-first</h2>
+							<p>
+								ThinkRail is a <a href="https://github.com/JetBrains">JetBrains</a> incubator project,
+								licensed <a href="https://github.com/JetBrains/thinkrail/blob/main/LICENSE">Apache-2.0</a>.
+								The repo is developed spec-first — the top-level specs are the product's ground truth,
+								and this website is itself a module with a <code>SPEC.md</code>.
+							</p>
+							<nav class="footer-links" aria-label="Project links">
+								<a href="https://github.com/JetBrains/thinkrail">GitHub</a>
+								<a href="https://github.com/JetBrains/thinkrail/issues">Issues</a>
+								<a href="https://github.com/JetBrains/thinkrail/blob/main/CONTRIBUTING.md">Contributing</a>
+								<a href="https://github.com/JetBrains/thinkrail/blob/main/CODE_OF_CONDUCT.md">Code of Conduct</a>
+								<a href="https://github.com/JetBrains/thinkrail/releases">Releases</a>
+							</nav>
+							<p class="footer-fineprint">© JetBrains s.r.o. and contributors · Apache License 2.0</p>
+						</section>
+					</main>
+				</div>
+
+				<!-- ══ Right rail: file tree + terminal ══ -->
+				<aside class="rail-right" id="rail-right" aria-label="Files and terminal">
+					<div class="rail-tabs">
+						<span class="rail-tab dim" title="In the app: the worktree's spec graph">Specs</span>
+						<span class="rail-tab active">All files</span>
+						<span class="rail-tab dim" title="In the app: the live git diff">Changes <b class="badge-add">+2,431</b></span>
+					</div>
+					<nav class="filetree" aria-label="Files">
+						<a class="ft-row file" href="#readme"><svg class="i" aria-hidden="true"><use href="#i-file" /></svg>README.md</a>
+						<a class="ft-row file" href="#why"><svg class="i" aria-hidden="true"><use href="#i-file" /></svg>why.md</a>
+						<div class="ft-row folder open"><svg class="i" aria-hidden="true"><use href="#i-chevron-down" /></svg><svg class="i" aria-hidden="true"><use href="#i-folder" /></svg>features</div>
+						<a class="ft-row file depth-1" href="#worktrees"><svg class="i" aria-hidden="true"><use href="#i-file" /></svg>worktrees.md</a>
+						<a class="ft-row file depth-1" href="#editor"><svg class="i" aria-hidden="true"><use href="#i-file" /></svg>editor.md</a>
+						<a class="ft-row file depth-1" href="#agent-chat"><svg class="i" aria-hidden="true"><use href="#i-file" /></svg>agent-chat.md</a>
+						<a class="ft-row file depth-1" href="#specs"><svg class="i" aria-hidden="true"><use href="#i-file" /></svg>specs.md</a>
+						<a class="ft-row file" href="#install"><svg class="i" aria-hidden="true"><use href="#i-terminal" /></svg>install.sh</a>
+						<a class="ft-row file" href="#contributing"><svg class="i" aria-hidden="true"><use href="#i-file" /></svg>CONTRIBUTING.md</a>
+						<div class="ft-row folder dim" title="The real ones live on GitHub"><svg class="i" aria-hidden="true"><use href="#i-chevron-right" /></svg><svg class="i" aria-hidden="true"><use href="#i-folder" /></svg>apps</div>
+						<div class="ft-row folder dim" title="The real ones live on GitHub"><svg class="i" aria-hidden="true"><use href="#i-chevron-right" /></svg><svg class="i" aria-hidden="true"><use href="#i-folder" /></svg>packages</div>
+					</nav>
+					<div class="terminal">
+						<div class="terminal-head">
+							<span class="terminal-label">Terminal</span>
+							<span class="terminal-tab">Terminal 1</span>
+							<button type="button" class="copy-btn term-copy" data-copy="curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash" aria-label="Copy install command">
+								<svg class="i" aria-hidden="true"><use href="#i-copy" /></svg>
+								<svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg>
+							</button>
+						</div>
+						<pre class="term-screen" id="term-screen"><span class="term-line"><span class="term-prompt">❯</span> <span class="term-cmd" data-type="curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash"></span><span class="term-caret"></span></span><span class="term-out" data-out>⬇ thinkrail latest (macos-arm64) · sha256 verified ✓
+✓ installed: ~/.local/bin/thinkrail</span><span class="term-line" data-out><span class="term-prompt">❯</span> <span class="term-cmd2">thinkrail</span></span><span class="term-out" data-out>opening http://localhost:24242 …</span></pre>
+					</div>
+				</aside>
+				<div class="rail-backdrop" id="rail-backdrop" hidden></div>
+			</div>
+
+			<!-- ══ Status bar ══ -->
+			<footer class="statusbar">
+				<span class="sb-item"><svg class="i" aria-hidden="true"><use href="#i-branch" /></svg> main</span>
+				<span class="sb-item sb-wide">pi · Claude Opus 4.8</span>
+				<span class="sb-item sb-wide">25.9k tok · $0.17</span>
+				<span class="sb-spacer"></span>
+				<span class="sb-item" id="sb-ln">Ln 1, Col 1</span>
+				<span class="sb-item sb-wide">Apache-2.0</span>
+				<span class="sb-item sb-wide">a JetBrains incubator project</span>
+			</footer>
+		</div>
+
+		<script type="module" src="/src/main.ts"></script>
+	</body>
+</html>

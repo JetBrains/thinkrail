@@ -7,6 +7,9 @@ coding agent. ThinkRail is a thin host that runs `pi` in-process and bridges it 
 UI — `pi` owns models, skills, compaction, cost, and session state; the app owns the workspace, the
 editor, and the wire.
 
+**Website:** [jetbrains.github.io/thinkrail](https://jetbrains.github.io/thinkrail/) — a landing
+page that *is* the IDE (see [`apps/website`](apps/website)).
+
 **V1 is a Worktree IDE:** open a git repo as a project, spin up workspaces as `git worktree`s (each its
 own branch and cwd), and work across a tabbed Monaco editor, git Changes view, terminals, a read-only
 spec-graph viewer, and multiple concurrent `pi` chat sessions — all scoped to the active worktree.
@@ -92,6 +95,7 @@ apps/
   cli/        V1 entrypoint: boot host + open browser
   web/        mobile-first UI client
   desktop/    Electrobun launcher — deferred
+  website/    public landing page (GitHub Pages)
 packages/
   server/     createServer(): Bun.serve + AgentSessionManager
   contracts/  the wire (types-only)
