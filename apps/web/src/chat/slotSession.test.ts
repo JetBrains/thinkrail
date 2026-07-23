@@ -348,6 +348,25 @@ test("mirrorSlotGroup is a no-op once every member of a group already agrees —
 	expect(nextSlots).toBe(slots);
 });
 
+test("mirrorSlotGroup propagates a MULTI-WORD value into every same-group sibling, re-tracking offsets", () => {
+	// three occurrences of one placeholder (one group) — the /rename shape at scale
+	const { text, slots } = parseTemplateSlots("update $1, then test $1, then ship $1");
+	expect(slots).toHaveLength(3);
+	expect(new Set(slots.map((s) => s.group)).size).toBe(1); // all one group
+	// simulate the user typing a multi-word value into the first occurrence
+	const filled = "the auth module";
+	const s0 = slots[0];
+	if (!s0) throw new Error("expected a first slot");
+	const value = text.slice(0, s0.start) + filled + text.slice(s0.end);
+	const filledSlots = shiftSlots(slots, s0.start, s0.end - s0.start, filled.length).map((s, i) =>
+		i === 0 ? { ...s, filled: true } : s,
+	);
+	const { value: next, slots: out } = mirrorSlotGroup(value, filledSlots, 0);
+	expect(next).toBe("update the auth module, then test the auth module, then ship the auth module");
+	// every occurrence carries the full multi-word text, and each slot's range still bounds it exactly
+	for (const s of out) expect(next.slice(s.start, s.end)).toBe(filled);
+});
+
 test("mirrorAllGroups propagates every already-filled slot's text into its own group's unfilled siblings, and never touches a different group", () => {
 	const value = "W.m.M";
 	const slots = [gslot(0, 1, 0, true), gslot(2, 3, 1, false), gslot(4, 5, 0, false)];
