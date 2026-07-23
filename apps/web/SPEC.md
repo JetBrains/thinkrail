@@ -65,7 +65,7 @@ screen, not a blank root).
 Rules: a panel never imports another panel sideways; nothing imports `shell` (it's the composition root).
 
 The module set: `transport` / `store` / branded `shell`; `ProjectTree`; `FileTree` + `RightPanel`;
-`CenterTabs` + lazy `MonacoEditor`; `ChangesPanel` + lazy `DiffViewer`; `TerminalsPanel` + lazy
+`CenterTabs` + lazy `MonacoEditor`/`MonacoDiff`; `ChangesPanel` (list → center diff tab); `TerminalsPanel` + lazy
 `TerminalInstance`. The `chat` module — `ChatView` + content-block renderers + the tool-renderer registry
 — plus the full `Composer` (model/effort/@-mentions).
 

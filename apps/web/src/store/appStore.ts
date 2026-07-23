@@ -56,7 +56,27 @@ export interface DocTab {
 	content: string;
 	docPath: string;
 }
-export type EditorTab = FileTab | ChatTab | DocTab;
+/**
+ * A read-only diff of one changed file vs the workspace's base branch (opened from the Changes panel;
+ * one tab per file). `view` is the layout — absent = split (side-by-side), the default. `rendered`
+ * (markdown paths only — `DiffPane` gates the toggle) swaps raw Monaco lines for compiled documents:
+ * split shows base | worktree previews side by side, inline shows the worktree preview alone.
+ */
+export type DiffTabView = "split" | "inline";
+export interface DiffTab {
+	kind: "diff";
+	id: string; // `${workspaceId}:diff:${path}` — stable, so re-clicking a file focuses its tab
+	workspaceId: string;
+	name: string;
+	path: string;
+	original: string;
+	modified: string;
+	view?: DiffTabView;
+	rendered?: boolean;
+	/** The workspace fs tick the contents were loaded at — same live-refresh contract as `FileTab`. */
+	loadedTick?: number;
+}
+export type EditorTab = FileTab | ChatTab | DocTab | DiffTab;
 
 /**
  * A section of the settings dialog (a const-object "enum", the codebase convention). Extensible — the live
@@ -371,9 +391,10 @@ interface AppState {
 	/** Models with configured auth (cheap win #1) — fetched once, shared by every chat's picker. */
 	models: WireModel[];
 	/**
-	 * A request to surface a file's diff in the right-panel Changes view (e.g. a chat turn-divider's
-	 * "files changed" chip). The panels watch it and switch tab / select the file when it targets the
-	 * active workspace; a fresh object each call so identical re-requests still fire.
+	 * A request to surface a file in the right-panel Changes view (e.g. a chat turn-divider's "files
+	 * changed" chip). The panels watch it and, when it targets the active workspace, switch to the Changes
+	 * tab and **highlight** the file's row — the diff opens only on an explicit click. A fresh object each
+	 * call so identical re-requests still fire.
 	 */
 	changesRequest: { workspaceId: string; path: string } | null;
 	/**
@@ -439,11 +460,19 @@ interface AppState {
 	setActiveTab: (id: string) => void;
 	/** Set a markdown file tab's view mode (rendered ↔ source); kept on the tab so it survives tab switches. */
 	setFileTabView: (id: string, view: "rendered" | "source") => void;
+	setDiffTabView: (id: string, view: DiffTabView) => void;
+	setDiffTabRendered: (id: string, rendered: boolean) => void;
+	/** How the Changes panel lays out its changed files — flat `list` or a `tree` of folders. App-wide,
+	 * persisted in the store (not per workspace) so the choice survives workspace switches. */
+	changesView: "list" | "tree";
+	setChangesView: (view: "list" | "tree") => void;
 	/** Fold a `workspace.fsChanged` push into the live-refresh signal (tick++, last batch replaces). */
 	noteFsChanged: (payload: WorkspaceFsChangedPayload) => void;
 	/** Replace a file tab's content after a live re-read, recording the fs tick it was loaded at. The tab
 	 * is located across workspaces by its (globally unique) id; a closed tab is a no-op. */
 	updateFileTabContent: (id: string, content: string, tick: number) => void;
+	/** Replace a diff tab's two sides after a live re-read (see `DiffPane`). */
+	updateDiffTabContent: (id: string, original: string, modified: string, tick: number) => void;
 	clearWorkspaceTabs: (workspaceId: string) => void;
 	addTerminal: (workspaceId: string) => void;
 	closeTerminalTab: (workspaceId: string, clientId: string) => void;
@@ -596,6 +625,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	sessions: {},
 	models: [],
 	changesRequest: null,
+	changesView: "list",
 	fsChangesByWorkspace: {},
 	activeLogin: null,
 	settingsOpen: false,
@@ -719,6 +749,33 @@ export const useAppStore = create<AppState>((set, get) => ({
 				},
 			};
 		}),
+	setDiffTabView: (id, view) =>
+		set((s) => {
+			const wsId = s.activeWorkspaceId;
+			if (!wsId) return {};
+			const tabs = s.tabsByWorkspace[wsId] ?? [];
+			if (!tabs.some((t) => t.id === id && t.kind === "diff")) return {};
+			return {
+				tabsByWorkspace: {
+					...s.tabsByWorkspace,
+					[wsId]: tabs.map((t) => (t.id === id && t.kind === "diff" ? { ...t, view } : t)),
+				},
+			};
+		}),
+	setDiffTabRendered: (id, rendered) =>
+		set((s) => {
+			const wsId = s.activeWorkspaceId;
+			if (!wsId) return {};
+			const tabs = s.tabsByWorkspace[wsId] ?? [];
+			if (!tabs.some((t) => t.id === id && t.kind === "diff")) return {};
+			return {
+				tabsByWorkspace: {
+					...s.tabsByWorkspace,
+					[wsId]: tabs.map((t) => (t.id === id && t.kind === "diff" ? { ...t, rendered } : t)),
+				},
+			};
+		}),
+	setChangesView: (view) => set({ changesView: view }),
 	noteFsChanged: (payload) =>
 		set((s) => {
 			const prev = s.fsChangesByWorkspace[payload.workspaceId];
@@ -742,6 +799,21 @@ export const useAppStore = create<AppState>((set, get) => ({
 						...s.tabsByWorkspace,
 						[wsId]: tabs.map((t) =>
 							t.id === id && t.kind === "file" ? { ...t, content, loadedTick: tick } : t,
+						),
+					},
+				};
+			}
+			return {};
+		}),
+	updateDiffTabContent: (id, original, modified, tick) =>
+		set((s) => {
+			for (const [wsId, tabs] of Object.entries(s.tabsByWorkspace)) {
+				if (!tabs.some((t) => t.id === id && t.kind === "diff")) continue;
+				return {
+					tabsByWorkspace: {
+						...s.tabsByWorkspace,
+						[wsId]: tabs.map((t) =>
+							t.id === id && t.kind === "diff" ? { ...t, original, modified, loadedTick: tick } : t,
 						),
 					},
 				};

@@ -56,6 +56,9 @@ export default defineConfig({
 			// @agent suite uses a real provider yet `setModel`/`setThinkingLevel` persist here — never the
 			// user's real `~/.pi/agent`. (Provider env vars in the inherited env still resolve auth too.)
 			PI_CODING_AGENT_DIR: E2E_PI_AGENT_DIR,
+			// Keep the suite hermetic: `model.list` fires a detached pi.dev catalog refresh (issue #98) that
+			// must never leave the machine in tests — PI_OFFLINE is pi's own convention and our guard honors it.
+			PI_OFFLINE: "1",
 			// Put the stub `central` first on PATH (see fakeBinDir), and pin the proxy port so wiring is
 			// deterministic and never reads the dev machine's real ~/.wire/config.json.
 			PATH: `${fakeBinDir}:${process.env.PATH ?? ""}`,

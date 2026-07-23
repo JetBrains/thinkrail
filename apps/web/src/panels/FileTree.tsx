@@ -1,9 +1,9 @@
 import type { FileNode } from "@thinkrail/contracts";
-import { ChevronDown, ChevronRight, File as FileIcon, Folder } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { openFileInTab } from "./openFile";
+import { TreeRow } from "./TreeRow";
 
 /**
  * Lazy file tree of the active worktree. Double-click a file to open it as a center editor tab.
@@ -82,29 +82,16 @@ function FileNodeRow({
 
 	const open = () => void openFileInTab(workspaceId, node.path);
 
-	const Chevron = expanded ? ChevronDown : ChevronRight;
 	return (
 		<li>
-			<button
-				type="button"
-				data-testid="file-node"
-				data-kind={node.kind}
+			<TreeRow
+				testid="file-node"
+				kind={isDir ? "dir" : "file"}
+				expanded={expanded}
+				label={node.name}
 				onClick={isDir ? () => setExpanded((value) => !value) : undefined}
 				onDoubleClick={isDir ? undefined : open}
-				className="flex h-6 w-full items-center gap-xs rounded-[var(--radius-sm)] px-xs text-left text-sm text-muted hover:bg-hover"
-			>
-				{isDir ? (
-					<Chevron className="size-3.5 shrink-0 text-hint" />
-				) : (
-					<span className="size-3.5 shrink-0" />
-				)}
-				{isDir ? (
-					<Folder className="size-4 shrink-0 text-hint" />
-				) : (
-					<FileIcon className="size-4 shrink-0 text-hint" />
-				)}
-				<span className="truncate">{node.name}</span>
-			</button>
+			/>
 			{isDir && expanded && children && (
 				<ul className="flex flex-col pl-md">
 					{children.map((child) => (

@@ -43,7 +43,7 @@ import {
 } from "../auth";
 import { selectDirectory } from "../dialog";
 import { readDir, readFile } from "../fs";
-import { gitDiff, gitStatus, listBranches, prefetchBranch } from "../git";
+import { gitDiffFile, gitStatus, listBranches, prefetchBranch } from "../git";
 import { githubAuthStatus, githubRefresh } from "../github";
 import {
 	closeProject,
@@ -171,10 +171,10 @@ const handlers: Record<string, Handler> = {
 		ensureWatch(p.workspaceId);
 		return gitStatus(p.workspaceId);
 	},
-	"git.diff": (params) => {
-		const p = params as { workspaceId: string; path?: string };
+	"git.diffFile": (params) => {
+		const p = params as { workspaceId: string; path: string };
 		ensureWatch(p.workspaceId);
-		return gitDiff(p.workspaceId, p.path);
+		return gitDiffFile(p.workspaceId, p.path);
 	},
 	"terminal.create": (params) => createTerminal((params as { workspaceId: string }).workspaceId),
 	"terminal.write": (params) => {

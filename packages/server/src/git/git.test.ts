@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { listBranches, prefetchBranch } from "./git";
+import { gitDiffFile, gitStatus, listBranches, numstatPath, prefetchBranch } from "./git";
 
 let dataDir: string;
 let repo: string;
@@ -34,6 +34,88 @@ afterEach(() => {
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
+});
+
+/** Register the repo itself as workspace `w1` (branch = base = main) for the gitDiffFile tests. */
+function seedWorkspace(): void {
+	writeFileSync(
+		join(dataDir, "workspaces.json"),
+		JSON.stringify([
+			{
+				id: "w1",
+				projectId: "p1",
+				name: "w1",
+				branch: "main",
+				worktreePath: repo,
+				baseBranch: "main",
+				createdAt: 1,
+			},
+		]),
+	);
+}
+
+test("gitDiffFile returns both sides: base content vs worktree content (trailing newline intact)", () => {
+	seedWorkspace();
+	writeFileSync(join(repo, "README.md"), "# repo\n\nedited\n");
+	const { original, modified } = gitDiffFile("w1", "README.md");
+	expect(original).toBe("# repo\n");
+	expect(modified).toBe("# repo\n\nedited\n");
+});
+
+test("gitDiffFile: untracked → empty original; deleted → empty modified", () => {
+	seedWorkspace();
+	writeFileSync(join(repo, "new.txt"), "fresh\n");
+	const added = gitDiffFile("w1", "new.txt");
+	expect(added.original).toBe("");
+	expect(added.modified).toBe("fresh\n");
+
+	rmSync(join(repo, "README.md"));
+	const deleted = gitDiffFile("w1", "README.md");
+	expect(deleted.original).toBe("# repo\n");
+	expect(deleted.modified).toBe("");
+});
+
+test("gitStatus attaches per-file +/- counts, incl. untracked line counts", () => {
+	seedWorkspace();
+	// Base README.md is "# repo\n" (1 line): keep it, append two lines → +2 / −0.
+	writeFileSync(join(repo, "README.md"), "# repo\nline two\nline three\n");
+	writeFileSync(join(repo, "new.txt"), "a\nb\n"); // untracked, 2 lines
+
+	const { changes } = gitStatus("w1");
+	const readme = changes.find((c) => c.path === "README.md");
+	expect(readme).toMatchObject({ status: "modified", added: 2, removed: 0 });
+	const untracked = changes.find((c) => c.path === "new.txt");
+	expect(untracked).toMatchObject({ status: "untracked", added: 2, removed: 0 });
+});
+
+test("gitStatus omits counts for untracked binary or oversized files (matches tracked binaries)", () => {
+	seedWorkspace();
+	// A binary untracked file (NUL byte in the head) → listed, but no count — like a tracked binary, which
+	// `--numstat` reports as `-`/`-` and we skip. (Without the sniff this counted mojibake "lines".)
+	writeFileSync(join(repo, "blob.bin"), Buffer.from([0x00, 0x01, 0x02, 0x0a, 0x0a]));
+	// An oversized untracked text file (> 2 MiB) → no count, so a large artifact isn't re-read into memory
+	// on every `git.status` tick.
+	writeFileSync(join(repo, "big.txt"), `${"x".repeat(2 * 1024 * 1024 + 1)}\n`);
+	// A small text untracked file still counts, to prove only the guarded cases drop out.
+	writeFileSync(join(repo, "small.txt"), "one\ntwo\n");
+
+	const { changes } = gitStatus("w1");
+	const bin = changes.find((c) => c.path === "blob.bin");
+	expect(bin).toMatchObject({ status: "untracked" });
+	expect(bin?.added).toBeUndefined();
+	expect(changes.find((c) => c.path === "big.txt")?.added).toBeUndefined();
+	expect(changes.find((c) => c.path === "small.txt")).toMatchObject({ added: 2 });
+});
+
+test("numstatPath resolves rename/copy forms to the destination path", () => {
+	expect(numstatPath("src/a.ts")).toBe("src/a.ts");
+	expect(numstatPath("old.ts => new.ts")).toBe("new.ts");
+	expect(numstatPath("src/{a => b}/x.ts")).toBe("src/b/x.ts");
+});
+
+test("gitDiffFile refuses a path escaping the worktree", () => {
+	seedWorkspace();
+	expect(() => gitDiffFile("w1", "../outside.txt")).toThrow("Path escapes the worktree");
 });
 
 test("listBranches with no remote returns local branches and falls back to the repo HEAD", () => {

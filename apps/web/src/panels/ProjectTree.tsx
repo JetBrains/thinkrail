@@ -7,6 +7,7 @@ import { selectActiveWorkspaceProjectId, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
 import { ConfirmPopover } from "./ConfirmPopover";
+import { DiffStatBadge } from "./DiffStatBadge";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { useOpenProject } from "./useOpenProject";
 
@@ -235,7 +236,6 @@ function WorkspaceRow({
 	onRemove: () => void;
 }) {
 	const stats = workspace.diffStats;
-	const hasStats = stats != null && (stats.added > 0 || stats.removed > 0);
 	// Confirm-before-remove lives on the row so the popover anchors right beneath it (contextual to the
 	// workspace being removed) rather than as a centered modal.
 	const [confirmOpen, setConfirmOpen] = useState(false);
@@ -290,12 +290,11 @@ function WorkspaceRow({
 						)}
 					</span>
 				</button>
-				{hasStats && (
-					<span className="shrink-0 text-xs tabular-nums group-hover:hidden">
-						<span className="text-green">+{stats.added}</span>{" "}
-						<span className="text-red">−{stats.removed}</span>
-					</span>
-				)}
+				<DiffStatBadge
+					added={stats?.added ?? 0}
+					removed={stats?.removed ?? 0}
+					className="group-hover:hidden"
+				/>
 				<PopoverTrigger asChild>
 					<button
 						type="button"
