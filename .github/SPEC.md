@@ -70,6 +70,8 @@ and, threaded `apps/cli` → `bootHost` → `createServer`, in the `server.welco
 
 ## Parts
 
+- `CODEOWNERS` — every path is owned by @rsolmano, @danyaberezun, @OLavrik; the `main` ruleset's
+  pull-request rule (`require_code_owner_review`) makes an approval from one of them required to merge.
 - `scripts/next-version.sh` — channel-aware semver from tags; carries a `--tags=` override for testing.
 - `actions/build-binary` — the release build step: `build:web` → stamp `version.ts` → `build-binary.ts
   --target` → resolve artifact path → native `smoke:binary`. (The Bun replacement for the old repo's
