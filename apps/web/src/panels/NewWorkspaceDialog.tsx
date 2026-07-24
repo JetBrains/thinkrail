@@ -8,6 +8,7 @@ import type {
 import { Box, Check, ChevronDown, GitBranch, RefreshCw, TriangleAlert } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { ModelSelector } from "@/chat/ModelSelector";
+import { SkillsButton } from "@/chat/SkillsButton";
 import { SkillsDialog } from "@/chat/SkillsDialog";
 import {
 	SlashCommandMenu,
@@ -348,14 +349,11 @@ export function NewWorkspaceDialog({
 						onSelect={selectBaseRef}
 						onRefresh={() => void refreshBranches()}
 					/>
-					<button
-						type="button"
-						data-testid="ws-manage-skills"
-						onClick={() => setManageSkills(true)}
-						className="ml-auto text-hint text-xs underline-offset-2 hover:text-text hover:underline"
-					>
-						Manage skills
-					</button>
+					<SkillsButton
+						onOpen={() => setManageSkills(true)}
+						testId="ws-manage-skills"
+						className="ml-auto"
+					/>
 				</div>
 
 				{/* Trust gate: a repo's committed skills (`.claude/skills` …) are attacker-controlled for a clone,

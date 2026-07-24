@@ -1,7 +1,7 @@
 import type { SessionStats } from "@thinkrail/contracts";
-import { BookOpen } from "lucide-react";
 import type { ReactNode } from "react";
 import { SessionStatsBar } from "./SessionStatsBar";
+import { SkillsButton } from "./SkillsButton";
 
 /** The chat tab's slim top bar: an optional left slot (the plan strip), extension status + token/cost
  *  stats, and the Skills manager trigger. */
@@ -31,18 +31,7 @@ export function ChatHeader({
 				))}
 				<SessionStatsBar stats={stats} />
 				{onOpenSkills ? (
-					<button
-						type="button"
-						data-testid="open-skills"
-						data-stale={skillsStale ? "true" : undefined}
-						onClick={onOpenSkills}
-						title={skillsStale ? "Skills changed on disk — reload" : "Skills"}
-						className="flex shrink-0 items-center gap-xs rounded-[var(--radius-sm)] px-sm py-0.5 text-muted text-xs outline-none transition-colors hover:bg-hover hover:text-text focus-visible:ring-2 focus-visible:ring-primary"
-					>
-						<BookOpen className="size-3.5" />
-						Skills
-						{skillsStale ? <span className="size-1.5 rounded-full bg-gold" aria-hidden /> : null}
-					</button>
+					<SkillsButton onOpen={onOpenSkills} testId="open-skills" stale={skillsStale ?? false} />
 				) : null}
 			</div>
 		</div>

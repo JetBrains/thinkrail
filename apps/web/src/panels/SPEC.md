@@ -90,10 +90,11 @@ Beneath it, **`ProjectSkillsNotice`** is the pre-workspace trust surface (so tru
 workspace yet): **presence-gated** — renders nothing unless the selected project ships committed skills —
 showing a **count** ("ships N skills → *Trust project*"), a "N new → *Review & enable*" state for skills that
 appeared after trust (`project.acknowledgeSkills`), else a quiet "N trusted" line. It never renders the
-skills' (attacker-controlled) names before trust. Alongside it a **"Manage skills"** opener mounts
-`chat/SkillsDialog` in **project mode** (no workspace) — the full manager (trust + group/skill toggles) with
-no session yet; New Workspace mounts the same opener. This is the pre-session half of the user's skill
-settings; the chat header opens it in workspace mode (with Reload).
+skills' (attacker-controlled) names before trust. The full manager (`chat/SkillsDialog` in **project mode**
+— trust + group/skill toggles, no session yet) is reached from **New Workspace**, whose opener is the shared
+`chat/SkillsButton` primitive (so it cannot drift from the chat header's Skills trigger). This is the
+pre-session half of the user's skill settings; the chat header opens the same dialog in workspace mode
+(with Reload).
 
 **`NewWorkspaceDialog`** is the create-and-kick-off surface. It names the operation visibly — title
 **“Create workspace”** — and states the model without adding a step: **“A separate checkout on its own new

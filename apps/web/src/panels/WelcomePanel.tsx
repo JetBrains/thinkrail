@@ -1,7 +1,6 @@
 import type { Workspace } from "@thinkrail/contracts";
 import { Folder, FolderOpen, type LucideIcon, Rocket, Sparkles } from "lucide-react";
 import { type ComponentPropsWithoutRef, forwardRef, useEffect, useState } from "react";
-import { SkillsDialog } from "@/chat/SkillsDialog";
 import { cn } from "@/lib/utils";
 import { PRODUCT_NAME } from "../constants/branding";
 import { useAppStore } from "../store";
@@ -36,8 +35,6 @@ export function WelcomePanel() {
 	// requested only for this one project, on demand, never eagerly for every project on connect).
 	// null = pending/unknown (cards wait for it).
 	const [hasSpecs, setHasSpecs] = useState<boolean | null>(null);
-	// The project-scoped Skills manager (trust + group/skill toggles), reachable with no workspace yet.
-	const [manageSkills, setManageSkills] = useState(false);
 
 	// The project the has-specs states key off — the selected one, else the most-recent (list is sorted).
 	const project = projects.find((p) => p.id === selectedProjectId) ?? projects[0] ?? null;
@@ -131,19 +128,7 @@ export function WelcomePanel() {
 			</p>
 
 			<ProviderWarningBanner />
-			{project ? (
-				<>
-					<ProjectSkillsNotice projectId={project.id} />
-					<button
-						type="button"
-						data-testid="welcome-manage-skills"
-						onClick={() => setManageSkills(true)}
-						className="mt-sm text-hint text-xs underline-offset-2 hover:text-text hover:underline"
-					>
-						Manage skills
-					</button>
-				</>
-			) : null}
+			{project ? <ProjectSkillsNotice projectId={project.id} /> : null}
 
 			<div className="mt-xl flex flex-wrap justify-center gap-md">
 				{noProjects ? (
@@ -194,9 +179,6 @@ export function WelcomePanel() {
 				/>
 			) : null}
 			{dialogs}
-			{project ? (
-				<SkillsDialog projectId={project.id} open={manageSkills} onOpenChange={setManageSkills} />
-			) : null}
 		</div>
 	);
 }
