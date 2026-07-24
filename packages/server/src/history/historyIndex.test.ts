@@ -3,7 +3,7 @@ import { appendFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getHistoryIndex, HistoryIndex, makeSnippet, matchesTerms } from "./historyIndex";
-import { writeFixtureSession } from "./testFixtures";
+import { defaultSessionDirFor, writeFixtureSession } from "./testFixtures";
 
 const allowAll = () => true;
 const noLabels = () => ({});
@@ -221,7 +221,7 @@ describe("HistoryIndex.search", () => {
 	// text, not its truncated `snippet`. `search()`'s message-hit construction spreads the same `hit`
 	// object it builds for prompts (`{ ...hit, role, snippet, messageIndex, anchorText }`) — `text` is
 	// never overwritten in that spread, so it already carries `entry.text` (the extractor's full,
-	// 4000-char-capped text) unchanged. This pins that invariant with an **assistant**-role message,
+	// uncapped text) unchanged. This pins that invariant with an **assistant**-role message,
 	// deliberately: an assistant entry can never become a `promptCandidate` (only `role === "user"`
 	// does), so a passing assertion here can only be explained by the message-hit-specific construction
 	// path itself carrying the full text — not by some accidental aliasing with the prompts branch.
@@ -252,6 +252,62 @@ describe("HistoryIndex.search", () => {
 		// Confirms the fixture's assistant-only setup: no prompt hit exists to have accidentally supplied
 		// `.text` instead.
 		expect(result.prompts).toHaveLength(0);
+	});
+
+	// Pins the fix for the truncation finding: a hit's `text` IS what recall inserts and what the
+	// overlay's preview shows as the whole prompt, so a long pasted-log prompt must round-trip in full
+	// and a term past any would-be cutoff must stay searchable.
+	test("(i) a prompt far beyond 4k chars round-trips in full, and its tail is searchable", async () => {
+		const big = `${"log-line ".repeat(1000)}rare-tail-needle`; // ~9k chars, needle at the very end
+		writeFixtureSession(dir, {
+			id: "sess-a",
+			cwd: "/repo/a",
+			messages: [{ role: "user", text: big, timestamp: 1000 }],
+		});
+
+		const index = new HistoryIndex(dir);
+		const result = await index.search({
+			query: "rare-tail-needle",
+			filter: allowAll,
+			labels: noLabels,
+		});
+
+		expect(result.prompts).toHaveLength(1);
+		expect(result.prompts[0]?.text).toBe(big);
+	});
+
+	// Pins the rewritten discovery walk (no `SessionManager.listAll()`): a no-arg index must find files
+	// in pi's real default layout — `<agentDir>/sessions/<encoded-cwd>/*.jsonl`, one subdir level — with
+	// the agent dir resolved live from `PI_CODING_AGENT_DIR` (the same live-read `getAgentDir()` behavior
+	// the e2e host relies on; see SPEC.md).
+	test("(j) default layout: a no-arg index discovers per-cwd subdirectories under the agent dir", async () => {
+		const prev = process.env.PI_CODING_AGENT_DIR;
+		process.env.PI_CODING_AGENT_DIR = dir; // `dir` acts as the agent dir, not a flat session dir
+		try {
+			writeFixtureSession(defaultSessionDirFor(dir, "/repo/a"), {
+				id: "sess-a",
+				cwd: "/repo/a",
+				messages: [{ role: "user", text: "default layout prompt", timestamp: 1000 }],
+			});
+			writeFixtureSession(defaultSessionDirFor(dir, "/repo/b"), {
+				id: "sess-b",
+				cwd: "/repo/b",
+				messages: [{ role: "user", text: "default layout other", timestamp: 2000 }],
+			});
+
+			const index = new HistoryIndex();
+			const result = await index.search({
+				query: "default layout",
+				filter: allowAll,
+				labels: noLabels,
+			});
+
+			expect(result.prompts.map((p) => p.sessionId).sort()).toEqual(["sess-a", "sess-b"]);
+			expect(result.prompts.map((p) => p.cwd).sort()).toEqual(["/repo/a", "/repo/b"]);
+		} finally {
+			if (prev === undefined) delete process.env.PI_CODING_AGENT_DIR;
+			else process.env.PI_CODING_AGENT_DIR = prev;
+		}
 	});
 
 	test("scope labels (workspaceId/projectId) are merged onto every hit", async () => {
