@@ -30,3 +30,32 @@ export function selectContextProject(state: ProjectContextState): Project | null
 	const projectId = selectActiveWorkspace(state)?.projectId ?? state.selectedProjectId;
 	return state.projects.find((project) => project.id === projectId) ?? null;
 }
+
+/** Whether a worktree-relative path is inside a skill directory — the auto-detect trigger for a reload. */
+export function isSkillPath(path: string): boolean {
+	return /(^|\/)\.(claude|github|gemini|pi|agents)\/skills(\/|$)/.test(path);
+}
+
+interface SkillsStaleState {
+	/** Per workspace, the fs tick of the most recent skill-relevant `fsChanged` batch (see `noteFsChanged`). */
+	skillChangeTickByWorkspace: Record<string, number>;
+	/** Per session, the fs tick it last loaded/reloaded skills at (session create + successful reload). */
+	skillsSyncedTickBySession: Record<string, number>;
+}
+
+/**
+ * A session's Skills badge is stale when a skill-dir change landed on disk *after* the session last loaded
+ * (or reloaded) its skills — the workspace's last skill-change tick is past this session's sync tick. Being
+ * store-derived, it survives `ChatView` remounts on tab switch (the reported bug); being keyed per session,
+ * a sibling or newer chat that loaded the current skills is not flagged, and a reload clears only its own.
+ */
+export function selectSkillsStale(
+	state: SkillsStaleState,
+	workspaceId: string,
+	sessionId: string,
+): boolean {
+	return (
+		(state.skillChangeTickByWorkspace[workspaceId] ?? 0) >
+		(state.skillsSyncedTickBySession[sessionId] ?? 0)
+	);
+}

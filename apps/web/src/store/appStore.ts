@@ -21,6 +21,7 @@ import type { LoginState } from "../auth";
 import type { HydratedRuntime } from "../chat/hydrate";
 import type { ChatTurn, ExtUiDialogRequest, ToolResultState } from "../chat/types";
 import type { ConnectionStatus } from "../transport";
+import { isSkillPath } from "./selectors";
 
 /** A center tab. File tabs (Monaco) and chat tabs share the strip, discriminated by `kind`. */
 export interface FileTab {
@@ -429,6 +430,20 @@ interface AppState {
 	 */
 	fsChangesByWorkspace: Record<string, { tick: number; paths: string[]; truncated: boolean }>;
 	/**
+	 * Per workspace, the `fsChangesByWorkspace` tick of the most recent *skill-relevant* batch — a change
+	 * under a `.claude|.github|.gemini|.pi|.agents/skills` dir, or a truncated wildcard we can't inspect.
+	 * Folded alongside the fs signal in `noteFsChanged`; compared against a session's
+	 * `skillsSyncedTickBySession` to derive the Skills-reload badge (`selectSkillsStale`). Accumulated (not
+	 * overwritten by a later non-skill batch), so a genuine pending skill change is never lost.
+	 */
+	skillChangeTickByWorkspace: Record<string, number>;
+	/**
+	 * Per session, the workspace fs tick it last loaded/reloaded its skills at — set when the runtime is
+	 * created (`openChatSession`/`hydrateSession`, anchored to *now* so only a later change flags it) and
+	 * bumped on a successful reload (`markSkillsSynced`). Drives `selectSkillsStale`.
+	 */
+	skillsSyncedTickBySession: Record<string, number>;
+	/**
 	 * The in-flight in-app OAuth login, if any (flat + session-less — a login runs on the Welcome screen
 	 * before any session exists, so it must NOT live under a session runtime, or its frames get dropped).
 	 * At most one at a time (the dialog is modal).
@@ -492,6 +507,8 @@ interface AppState {
 	setChangesView: (view: "list" | "tree") => void;
 	/** Fold a `workspace.fsChanged` push into the live-refresh signal (tick++, last batch replaces). */
 	noteFsChanged: (payload: WorkspaceFsChangedPayload) => void;
+	/** Anchor a session's skills back to the current on-disk state (a successful reload) — clears its badge. */
+	markSkillsSynced: (workspaceId: string, sessionId: string) => void;
 	/** Replace a file tab's content after a live re-read, recording the fs tick it was loaded at. The tab
 	 * is located across workspaces by its (globally unique) id; a closed tab is a no-op. */
 	updateFileTabContent: (id: string, content: string, tick: number) => void;
@@ -652,6 +669,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	changesRequest: null,
 	changesView: "list",
 	fsChangesByWorkspace: {},
+	skillChangeTickByWorkspace: {},
+	skillsSyncedTickBySession: {},
 	activeLogin: null,
 	settingsOpen: false,
 	settingsSection: SettingsSection.Providers,
@@ -709,7 +728,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 		// Drop the live-refresh signal too — a removed workspace's fs tick record must not linger.
 		set((state) => {
 			const { [workspaceId]: _gone, ...rest } = state.fsChangesByWorkspace;
-			return { fsChangesByWorkspace: rest };
+			const { [workspaceId]: _skillGone, ...skillRest } = state.skillChangeTickByWorkspace;
+			return { fsChangesByWorkspace: rest, skillChangeTickByWorkspace: skillRest };
 		});
 		if (wasActive) {
 			s.selectProject(projectId); // atomically fall back to the removed workspace's Project Home
@@ -804,17 +824,32 @@ export const useAppStore = create<AppState>((set, get) => ({
 	noteFsChanged: (payload) =>
 		set((s) => {
 			const prev = s.fsChangesByWorkspace[payload.workspaceId];
+			const tick = (prev?.tick ?? 0) + 1;
+			// A skill-dir change (or a truncated wildcard we can't inspect) advances the workspace's
+			// skill-change tick, flagging every session that loaded skills before it (selectSkillsStale).
+			const skillChanged = payload.truncated || payload.paths.some(isSkillPath);
 			return {
 				fsChangesByWorkspace: {
 					...s.fsChangesByWorkspace,
-					[payload.workspaceId]: {
-						tick: (prev?.tick ?? 0) + 1,
-						paths: payload.paths,
-						truncated: payload.truncated,
-					},
+					[payload.workspaceId]: { tick, paths: payload.paths, truncated: payload.truncated },
 				},
+				...(skillChanged
+					? {
+							skillChangeTickByWorkspace: {
+								...s.skillChangeTickByWorkspace,
+								[payload.workspaceId]: tick,
+							},
+						}
+					: {}),
 			};
 		}),
+	markSkillsSynced: (workspaceId, sessionId) =>
+		set((s) => ({
+			skillsSyncedTickBySession: {
+				...s.skillsSyncedTickBySession,
+				[sessionId]: s.fsChangesByWorkspace[workspaceId]?.tick ?? 0,
+			},
+		})),
 	updateFileTabContent: (id, content, tick) =>
 		set((s) => {
 			for (const [wsId, tabs] of Object.entries(s.tabsByWorkspace)) {
@@ -850,11 +885,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 			// Drop the runtimes of this workspace's chats — both open tabs and closed-to-history ones (their
 			// AgentSessions are freed on host shutdown).
 			const sessions = { ...s.sessions };
+			const skillsSyncedTickBySession = { ...s.skillsSyncedTickBySession };
 			for (const tab of s.tabsByWorkspace[workspaceId] ?? []) {
-				if (tab.kind === "chat") delete sessions[tab.sessionId];
+				if (tab.kind === "chat") {
+					delete sessions[tab.sessionId];
+					delete skillsSyncedTickBySession[tab.sessionId];
+				}
 			}
-			for (const closed of s.closedChatsByWorkspace[workspaceId] ?? [])
+			for (const closed of s.closedChatsByWorkspace[workspaceId] ?? []) {
 				delete sessions[closed.sessionId];
+				delete skillsSyncedTickBySession[closed.sessionId];
+			}
 			const { [workspaceId]: _tabs, ...tabsByWorkspace } = s.tabsByWorkspace;
 			const { [workspaceId]: _activeTab, ...activeTabByWorkspace } = s.activeTabByWorkspace;
 			const { [workspaceId]: _closed, ...closedChatsByWorkspace } = s.closedChatsByWorkspace;
@@ -869,6 +910,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				terminalsByWorkspace,
 				activeTerminalByWorkspace,
 				sessions,
+				skillsSyncedTickBySession,
 			};
 		}),
 	addTerminal: (workspaceId) =>
@@ -906,22 +948,34 @@ export const useAppStore = create<AppState>((set, get) => ({
 			const id = `${workspaceId}:${sessionId}`;
 			const tab: ChatTab = { kind: "chat", id, workspaceId, name: "Chat", sessionId };
 			const tabs = s.tabsByWorkspace[workspaceId] ?? [];
+			const fresh = !s.sessions[sessionId];
 			return {
 				tabsByWorkspace: tabs.some((t) => t.id === id)
 					? s.tabsByWorkspace
 					: { ...s.tabsByWorkspace, [workspaceId]: [...tabs, tab] },
 				activeTabByWorkspace: { ...s.activeTabByWorkspace, [workspaceId]: id },
 				// Keep any existing runtime (idempotent); otherwise start a fresh one.
-				sessions: s.sessions[sessionId]
-					? s.sessions
-					: { ...s.sessions, [sessionId]: newRuntime(model, thinkingLevel) },
+				sessions: fresh
+					? { ...s.sessions, [sessionId]: newRuntime(model, thinkingLevel) }
+					: s.sessions,
+				// A fresh session loads the current on-disk skills, so anchor its sync tick to now: only a
+				// *later* skill change flags it stale (idempotent re-open must not re-anchor a stale session).
+				...(fresh
+					? {
+							skillsSyncedTickBySession: {
+								...s.skillsSyncedTickBySession,
+								[sessionId]: s.fsChangesByWorkspace[workspaceId]?.tick ?? 0,
+							},
+						}
+					: {}),
 			};
 		}),
 	closeChatRuntime: (sessionId) =>
 		set((s) => {
 			if (!s.sessions[sessionId]) return {};
 			const { [sessionId]: _drop, ...sessions } = s.sessions;
-			return { sessions };
+			const { [sessionId]: _syncDrop, ...skillsSyncedTickBySession } = s.skillsSyncedTickBySession;
+			return { sessions, skillsSyncedTickBySession };
 		}),
 	closeChatToHistory: (sessionId) =>
 		set((s) => {
@@ -1013,6 +1067,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 			const closed = s.closedChatsByWorkspace[wsId] ?? [];
 			return {
 				sessions: { ...s.sessions, [summary.sessionId]: runtime },
+				// Restored sessions loaded their skills at reconnect; anchor to the current tick (see openChatSession).
+				skillsSyncedTickBySession: {
+					...s.skillsSyncedTickBySession,
+					[summary.sessionId]: s.fsChangesByWorkspace[wsId]?.tick ?? 0,
+				},
 				tabsByWorkspace: tabs.some((t) => t.id === id)
 					? s.tabsByWorkspace
 					: { ...s.tabsByWorkspace, [wsId]: [...tabs, tab] },

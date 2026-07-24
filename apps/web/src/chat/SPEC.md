@@ -134,7 +134,9 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   (`types.ts`,
   incl. `ToolResultState` + `ExtUiDialogRequest`), and `ChatView` (lazy-mounted by `panels/CenterTabs`;
   it wires `SkillsDialog` + the header Skills trigger, resolving the owning `projectId` from the store and
-  flagging staleness off the worktree `fsChanged` nudge via `SkillsDialog`'s exported `isSkillPath`).
+  reading the reload badge from the store selector `selectSkillsStale(state, workspaceId, sessionId)` —
+  per-session and store-derived, so it survives the tab-switch remount; a successful reload calls
+  `markSkillsSynced` to clear only this chat).
   **No `index.ts` barrel** — chat pulls **shiki**, so per the code-splitting exception imports stay
   **per-file**; the registry is importable from `chat/toolRegistry` **without** pulling shiki.
 - **Allowed deps:** `contracts` (pi message/content-block types, **type-only**); `store` + `transport`

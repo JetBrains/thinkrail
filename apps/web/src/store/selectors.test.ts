@@ -1,9 +1,11 @@
 import { expect, test } from "bun:test";
 import type { Project, Workspace } from "@thinkrail/contracts";
 import {
+	isSkillPath,
 	selectActiveWorkspace,
 	selectActiveWorkspaceProjectId,
 	selectContextProject,
+	selectSkillsStale,
 } from "./selectors";
 
 const projects: Project[] = [
@@ -54,4 +56,44 @@ test("context project falls back to the selected Project Home", () => {
 			workspaces,
 		}),
 	).toBe(projects[0]);
+});
+
+test("isSkillPath matches every alias' skills dir, and only a real skills dir", () => {
+	for (const yes of [
+		".claude/skills/foo/SKILL.md",
+		".github/skills/x.md",
+		".gemini/skills",
+		".agents/skills/z",
+		"nested/dir/.pi/skills/y.md",
+	]) {
+		expect(isSkillPath(yes)).toBe(true);
+	}
+	for (const no of [
+		"README.md",
+		".claude/settings.json", // an alias dir, but not its skills
+		".claudeskills/x", // no `/skills` segment
+		"src/claude/skills/x", // "claude" without the leading dot
+		"skills/x", // bare skills, no alias parent
+	]) {
+		expect(isSkillPath(no)).toBe(false);
+	}
+});
+
+test("selectSkillsStale is a strict tick comparison, defaulting missing ticks to 0", () => {
+	const stale = { skillChangeTickByWorkspace: { w: 2 }, skillsSyncedTickBySession: { s: 1 } };
+	expect(selectSkillsStale(stale, "w", "s")).toBe(true);
+	// Synced at or past the last skill change → not stale.
+	const synced = { skillChangeTickByWorkspace: { w: 2 }, skillsSyncedTickBySession: { s: 2 } };
+	expect(selectSkillsStale(synced, "w", "s")).toBe(false);
+	// A skill change with no recorded sync (→ 0) is stale; nothing recorded at all is not.
+	expect(
+		selectSkillsStale(
+			{ skillChangeTickByWorkspace: { w: 1 }, skillsSyncedTickBySession: {} },
+			"w",
+			"s",
+		),
+	).toBe(true);
+	expect(
+		selectSkillsStale({ skillChangeTickByWorkspace: {}, skillsSyncedTickBySession: {} }, "w", "s"),
+	).toBe(false);
 });

@@ -63,11 +63,6 @@ function isWorkspace(result: Project | Workspace): result is Workspace {
 	return "projectId" in result;
 }
 
-/** Whether a worktree-relative path is inside a skill directory — the auto-detect trigger for a reload. */
-export function isSkillPath(path: string): boolean {
-	return /(^|\/)\.(claude|github|gemini|pi|agents)\/skills(\/|$)/.test(path);
-}
-
 /** Chat-mode extras: a live session to reload after changes. Absent in project mode (pre-session). */
 export interface SkillsWorkspaceContext {
 	workspaceId: string;

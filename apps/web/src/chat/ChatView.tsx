@@ -8,7 +8,7 @@ import { ArrowDown } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { Popover, PopoverAnchor, PopoverTrigger } from "@/components/ui/popover";
-import { EMPTY_RUNTIME, useAppStore } from "@/store";
+import { EMPTY_RUNTIME, selectSkillsStale, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { AskStatesContext, deriveAskStates } from "./askState";
 import { type ChatActions, ChatActionsContext } from "./ChatActions";
@@ -17,7 +17,7 @@ import { ChatPlanContent, ChatPlanStripContent } from "./ChatPlan";
 import { Composer, type MentionCandidate, type SubmitBehavior } from "./Composer";
 import { ExtUiDialog } from "./ExtUiDialog";
 import { type ChatRow, deriveRows } from "./rows";
-import { isSkillPath, SkillsDialog } from "./SkillsDialog";
+import { SkillsDialog } from "./SkillsDialog";
 import { StreamIndicator, type StreamStatus, streamStatus } from "./StreamIndicator";
 import "./tools/register"; // side-effect: register the built-in pi tool renderers (bash/read/edit/write)
 import { ChatTurnView } from "./turns";
@@ -65,16 +65,10 @@ export default function ChatView({
 				.find((w) => w.id === workspaceId)?.projectId ?? null,
 	);
 	const [skillsOpen, setSkillsOpen] = useState(false);
-	// Auto-detect: the worktree watcher's fs nudge flags skills stale (the session loaded an older set) when
-	// a skill dir changes on disk — a pull/branch/edit. Reload is manual, so this only prompts.
-	const fsSignal = useAppStore((s) => s.fsChangesByWorkspace[workspaceId]);
-	const [skillsStale, setSkillsStale] = useState(false);
-	const lastSkillTick = useRef(0);
-	useEffect(() => {
-		if (!fsSignal || fsSignal.tick === lastSkillTick.current) return;
-		lastSkillTick.current = fsSignal.tick;
-		if (fsSignal.truncated || fsSignal.paths.some(isSkillPath)) setSkillsStale(true);
-	}, [fsSignal]);
+	// Auto-detect: a skill dir changed on disk (pull/branch/edit) after this session loaded — flag a manual
+	// reload. Store-derived per session, so the badge survives tab-switch remounts (a fresh ChatView reads
+	// the same store state) and a reload clears only this chat (see selectSkillsStale / markSkillsSynced).
+	const skillsStale = useAppStore((s) => selectSkillsStale(s, workspaceId, sessionId));
 	const workspaceRoot = useAppStore((s) => {
 		for (const workspaces of Object.values(s.workspaces)) {
 			const workspace = workspaces.find((w) => w.id === workspaceId);
@@ -367,7 +361,7 @@ export default function ChatView({
 								sessionId,
 								streaming: isStreaming,
 								stale: skillsStale,
-								onReloaded: () => setSkillsStale(false),
+								onReloaded: () => useAppStore.getState().markSkillsSynced(workspaceId, sessionId),
 							}}
 							open={skillsOpen}
 							onOpenChange={setSkillsOpen}
