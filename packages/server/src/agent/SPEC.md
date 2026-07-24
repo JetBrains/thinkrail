@@ -145,7 +145,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     (`~/.copilot/skills`), and Gemini (`${GEMINI_CLI_HOME:-~}/.gemini/skills`), **plus each installed Claude
     plugin's `skills/` dir** (read from `~/.claude/plugins/installed_plugins.json` — the resolved `installPath`,
     never a cache sweep, so stale versions and transitive `node_modules/**/skills` are excluded); project-root
-    aliases are `.claude/skills`, `.github/skills`, and `.gemini/skills`. Only existing directories are added — never arbitrary
+    aliases are `.claude/skills`, `.github/skills`, and `.gemini/skills`. The fixed project/personal alias roots are
+    registered as candidate skill paths **whether or not they exist yet**, so a `loader.reload()` picks up one a branch
+    switch / pull / clone creates mid-session (plugin dirs are the set installed at construction — a plugin added later
+    needs a fresh session); classification still only counts dirs that actually exist. Still never arbitrary
     dot-directory scanning, plugin caches, commands, or nested downward discovery. Pi remains the parser:
     vendor-only macros/hooks/models/subagents/metadata are not emulated. First-name-wins precedence is
     Pi native/configured/shared → ThinkRail-bundled → personal aliases → project aliases, so a repo can
@@ -161,9 +164,11 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `on` beats a group disable). `skillsGate` filters + relabels in one `skillsOverride`; only `load` skills
     reach the system prompt / `/skill:` list.
     The host resolves the context via the **`setSkillAdmissionResolver`** seam (keyed by `workspaceId`, fails
-    closed); `buildResourceLoader` takes the resolver as a thunk and `skillsGate` **re-reads it on every
-    `loader.reload()`**, so `session.reloadResources` picks up a mid-session trust grant or skill/group toggle
-    rather than re-applying the snapshot captured at session creation. Personal / bundled / pi-native resources are never trust-gated (only the enable/disable layer);
+    closed); `buildResourceLoader` takes the resolver as a thunk and `skillsGate` re-resolves **both** the admission
+    context (`getCtx`) **and** the live compatibility source set (fresh discovery) on every `loader.reload()`, so
+    `session.reloadResources` picks up a mid-session trust grant, skill/group toggle, **or a newly-appeared alias
+    dir** — and a late-appearing project alias is still classified + trust-gated, never slipping through as an
+    unclassified load. Personal / bundled / pi-native resources are never trust-gated (only the enable/disable layer);
     the gate is scoped to the compatibility aliases (pi-native `.pi` / `.agents` project trust is unchanged).
     `listSkillCommands(cwd, admission)` reuses the same gated inputs through a short-lived skills-only
     `DefaultResourceLoader` (no model/session/transcript, no extension factories) for pre-workspace

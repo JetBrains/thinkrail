@@ -281,4 +281,75 @@ describe("buildResourceLoader", () => {
 			rmSync(root, { recursive: true, force: true });
 		}
 	});
+
+	// Regression: a compatibility skill dir that appears AFTER session creation (a branch switch / pull
+	// adding `.claude/skills`) must be picked up on reload — the candidate roots are registered up front
+	// so pi scans them once they exist, rather than being frozen to the set present at construction.
+	it("reload picks up a compatibility dir created after construction", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-skill-newdir-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		mkdirSync(project, { recursive: true });
+		mkdirSync(home, { recursive: true });
+		mkdirSync(agentDir, { recursive: true });
+		const restore = stubSkillEnv(home, agentDir);
+
+		try {
+			// `~/.claude/skills` does not exist yet at loader construction (personal scope — not trust-gated).
+			const admission: SkillAdmissionContext = {
+				trusted: true,
+				acknowledged: [],
+				disabled: [],
+				disabledGroups: [],
+				overrides: {},
+			};
+			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
+			const loader = await buildResourceLoader(project, settingsManager, () => admission);
+			const hasLate = () => loader.getSkills().skills.some((skill) => skill.name === "late-widget");
+
+			expect(hasLate()).toBe(false);
+
+			writeSkill(join(home, ".claude", "skills"), "late-widget", "appeared after start");
+			await loader.reload();
+			expect(hasLate()).toBe(true);
+		} finally {
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	// Security regression: a project alias dir (`.claude/skills`) appearing mid-session on an UNTRUSTED
+	// project must still be withheld — the reload's fresh discovery has to classify the late dir as a
+	// project alias so the trust gate holds, not slip through as an unclassified `load`.
+	it("keeps a late-appearing untrusted project alias behind the trust gate on reload", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-skill-latetrust-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		mkdirSync(project, { recursive: true });
+		mkdirSync(home, { recursive: true });
+		mkdirSync(agentDir, { recursive: true });
+		const restore = stubSkillEnv(home, agentDir);
+
+		try {
+			const admission: SkillAdmissionContext = {
+				trusted: false,
+				acknowledged: [],
+				disabled: [],
+				disabledGroups: [],
+				overrides: {},
+			};
+			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
+			const loader = await buildResourceLoader(project, settingsManager, () => admission);
+
+			// The project has no committed skills at start; a branch switch then adds one.
+			writeSkill(join(project, ".claude", "skills"), "repo-late", "committed, appeared late");
+			await loader.reload();
+			expect(loader.getSkills().skills.some((skill) => skill.name === "repo-late")).toBe(false);
+		} finally {
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
 });

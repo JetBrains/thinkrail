@@ -30,7 +30,11 @@ import {
 import type { SkillCatalogEntry, SlashCommandInfo } from "@thinkrail/contracts";
 import { askUserQuestionExtension } from "./askUserQuestion";
 import { decideSkill, type SkillAdmissionContext } from "./skillAdmission";
-import { type CompatibilitySkillSource, discoverCompatibilitySkillSources } from "./skillSources";
+import {
+	type CompatibilitySkillSource,
+	candidateCompatibilitySkillRoots,
+	discoverCompatibilitySkillSources,
+} from "./skillSources";
 
 /** A bundled extension entry's default export — the pi factory shape the loader invokes. */
 export type BundledExtensionFactory = ExtensionFactory;
@@ -138,21 +142,20 @@ function skillGroup(
 /**
  * The combined skills override: relabel compatibility aliases' provenance AND apply the admission decision,
  * so a session only ever loads skills that resolve to `load` — untrusted / unacknowledged / disabled (per
- * skill or per group) ones never reach the system prompt or the `/skill:` list. `sources` + `bundledPaths`
- * classify each loaded skill (project alias? which group?); `getCtx` yields the current trust/acknowledge/
- * disable state — **re-read on every invocation** so `session.reload()` picks up a mid-session trust grant
- * or skill/group toggle instead of re-applying the snapshot captured at session creation.
+ * skill or per group) ones never reach the system prompt or the `/skill:` list. `bundledPaths` classifies
+ * bundled skills; the compatibility `sources` **and** the admission `ctx` are **both re-resolved on every
+ * invocation** (each `loader.reload()`): `getCtx` so a mid-session trust grant or toggle lands, and fresh
+ * discovery so a compatibility dir that appeared mid-session (e.g. `.claude/skills` from a branch switch)
+ * is classified correctly — critically, a newly-appeared project alias is recognised as such and stays
+ * behind the trust gate rather than slipping through as an unclassified `load`.
  */
-function skillsGate(
-	sources: CompatibilitySkillSource[],
-	bundledPaths: string[],
-	getCtx: () => SkillAdmissionContext,
-) {
-	const projectAliasPaths = sources.filter((s) => s.scope === "project").map((s) => s.path);
-	const isProjectAlias = (filePath: string) =>
-		projectAliasPaths.some((path) => isUnderPath(filePath, path));
+function skillsGate(cwd: string, bundledPaths: string[], getCtx: () => SkillAdmissionContext) {
 	return (current: { skills: Skill[]; diagnostics: ResourceDiagnostic[] }) => {
 		const ctx = getCtx();
+		const sources = discoverCompatibilitySkillSources(cwd);
+		const projectAliasPaths = sources.filter((s) => s.scope === "project").map((s) => s.path);
+		const isProjectAlias = (filePath: string) =>
+			projectAliasPaths.some((path) => isUnderPath(filePath, path));
 		return {
 			...current,
 			skills: current.skills
@@ -177,9 +180,13 @@ function resolveSkillInputs(
 	additionalSkillPaths: string[];
 	skillsOverride: ReturnType<typeof skillsGate>;
 } {
-	const discovered = discoverCompatibilitySkillSources(cwd);
-	const personal = discovered.filter((source) => source.scope === "user");
-	const project = discovered.filter((source) => source.scope === "project");
+	// Register the CANDIDATE roots (not just the ones that exist now) so `loader.reload()` picks up a
+	// compatibility dir that appears mid-session — e.g. a branch switch/pull adds `.claude/skills`. Pi
+	// tolerates a not-yet-existing path and scans it once it appears; `skillsGate` re-discovers the live
+	// source set each reload, so a late project alias is still classified + trust-gated correctly.
+	const candidates = candidateCompatibilitySkillRoots(cwd);
+	const personal = candidates.filter((source) => source.scope === "user");
+	const project = candidates.filter((source) => source.scope === "project");
 	const bundledSkillPaths = bundled ? [bundled.skillsDir] : resolveDevPaths().skillPaths;
 	return {
 		// All alias dirs are made discoverable so the catalog can enumerate them; the per-skill admission gate
@@ -190,7 +197,7 @@ function resolveSkillInputs(
 			...personal.map((source) => source.path),
 			...project.map((source) => source.path),
 		],
-		skillsOverride: skillsGate(discovered, bundledSkillPaths, getCtx),
+		skillsOverride: skillsGate(cwd, bundledSkillPaths, getCtx),
 	};
 }
 

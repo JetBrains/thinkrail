@@ -65,13 +65,14 @@ function readClaudePluginSkillDirs(claudeConfigDir: string): { path: string; plu
 }
 
 /**
- * Discover the explicit compatibility allowlist: the fixed project + personal alias dirs, plus each
- * installed Claude plugin's `skills/` dir (from `installed_plugins.json`, personal-scope). Pi-native/
- * configured/shared roots are not returned here — DefaultResourceLoader owns those and places them before
- * this list; ThinkRail's bundled skills are appended after it. `resolveSkillInputs` applies the real
- * precedence (bundled > personal > project); this returns discovery order.
+ * The full compatibility allowlist **before the existence filter**: the fixed project + personal alias
+ * dirs at their conventional paths, plus each currently-installed Claude plugin's `skills/` dir. Returned
+ * whether or not each dir exists right now — so a caller can register them as skill paths a later reload
+ * will pick up the moment a branch switch / pull / clone creates one (a worktree gaining `.claude/skills`
+ * mid-session). `discoverCompatibilitySkillSources` is the existence-filtered view for classification.
+ * (Plugins installed *after* this call are not covered — their install path isn't yet known.)
  */
-export function discoverCompatibilitySkillSources(
+export function candidateCompatibilitySkillRoots(
 	cwd: string,
 	options: DiscoverCompatibilitySkillSourcesOptions = {},
 ): CompatibilitySkillSource[] {
@@ -114,9 +115,25 @@ export function discoverCompatibilitySkillSources(
 		candidates.push({ path, scope: "user", provider: "claude", plugin });
 	}
 
+	return candidates;
+}
+
+/**
+ * The existence-filtered compatibility allowlist (each dir present + canonicalized, deduped): the fixed
+ * project + personal alias dirs, plus each installed Claude plugin's `skills/` dir (from
+ * `installed_plugins.json`, personal-scope). Pi-native/configured/shared roots are not returned here —
+ * DefaultResourceLoader owns those and places them before this list; ThinkRail's bundled skills are
+ * appended after it. `resolveSkillInputs` applies the real precedence (bundled > personal > project);
+ * this returns discovery order. Used for **classification** (group + provenance + project-alias trust
+ * gating), so it must be re-run whenever the on-disk set can have changed (every reload).
+ */
+export function discoverCompatibilitySkillSources(
+	cwd: string,
+	options: DiscoverCompatibilitySkillSourcesOptions = {},
+): CompatibilitySkillSource[] {
 	const sources: CompatibilitySkillSource[] = [];
 	const seen = new Set<string>();
-	for (const candidate of candidates) {
+	for (const candidate of candidateCompatibilitySkillRoots(cwd, options)) {
 		const path = existingDirectory(candidate.path);
 		if (!path) continue;
 		let canonical = path;
