@@ -3,9 +3,13 @@
  * `stripFrontmatter`/`parseFrontmatter` (`@earendil-works/pi-coding-agent`'s `dist/utils/frontmatter.js`,
  * pinned against pi v0.80.6 — the same pin `packages/server/src/templates/SPEC.md` uses for the server
  * side; re-verify both on a pi version bump). pi's real parser is server-only (real YAML via the `yaml`
- * package, `node:fs`) and never reaches the browser bundle, so this file is a small, hand-rolled mirror —
- * not a general YAML parser, since our own frontmatter only ever has two possible keys (`description`,
- * `argument-hint`), each written on its own single line, `JSON.stringify`-quoted by {@link assembleTemplate}.
+ * package, `node:fs`) and never reaches the browser bundle — and this module deliberately does **no YAML
+ * value parsing at all**: it only locates the frontmatter *boundary* (`stripFrontmatter`) and writes a
+ * block from form fields (`assembleTemplate`). Frontmatter VALUES always come from the server-parsed
+ * `TemplateInfo.description`/`argumentHint` — pi's real parser — never from a browser-side reimplementation
+ * (an earlier `splitTemplate` here hand-parsed values and handled only bare/JSON-double-quoted scalars, so
+ * a pi-native `description: 'single-quoted'` loaded into the edit form with its literal quotes and saved
+ * back corrupted).
  *
  * The rule that matters, ported byte-for-byte from pi's `extractFrontmatter`: content must start with the
  * literal `---`; the frontmatter block ends at the FIRST later `\n---` line (never one embedded inside a
@@ -31,73 +35,32 @@ function normalizeNewlines(value: string): string {
 }
 
 /**
- * Locates the frontmatter block's boundary exactly the way pi's own `extractFrontmatter` does.
- * `yamlString` is `null` when there's no frontmatter block at all (content doesn't start with `---`, or a
- * `---` opener never finds a closing `\n---`) — in that case `body` is the untouched (only
- * newline-normalized) content. `yamlString` is `""` (falsy, but not `null`) for a block that's present but
- * empty (`---\n---\n...`) — `body` is still correctly boundary-found and trimmed in that case, same as a
- * non-empty block.
+ * The body pi's own loader would hand to `expandPromptTemplate`, located exactly the way pi's own
+ * `extractFrontmatter` finds the boundary (see the module doc's ported rule). Used by `ChatView.tsx`'s
+ * composer-pick path and `TemplateEditorDialog.tsx`'s body field. Never reads a frontmatter *value* —
+ * those come from `TemplateInfo.description`/`argumentHint`, already parsed server-side by pi. No
+ * frontmatter block at all (content doesn't start with `---`, or a `---` opener never finds a closing
+ * `\n---`) → the untouched (only newline-normalized) content; a present-but-empty block (`---\n---\n…`)
+ * is still boundary-found and its body trimmed, same as a non-empty one.
  */
-function extractFrontmatterBlock(content: string): { yamlString: string | null; body: string } {
-	const normalized = normalizeNewlines(content);
-	if (!normalized.startsWith("---")) return { yamlString: null, body: normalized };
-	const endIndex = normalized.indexOf("\n---", 3);
-	if (endIndex === -1) return { yamlString: null, body: normalized };
-	return { yamlString: normalized.slice(4, endIndex), body: normalized.slice(endIndex + 4).trim() };
-}
-
-/**
- * Best-effort single-line scalar read for a `key: value` frontmatter line. Handles exactly the two shapes
- * {@link assembleTemplate} ever writes — a bare scalar (also what a hand-authored file like the seed
- * fixture's `description: Review a file for issues` uses), or one `JSON.stringify`-quoted by this module —
- * not general YAML.
- */
-function readFrontmatterKey(block: string, key: string): string {
-	const line = block.split("\n").find((l) => l.startsWith(`${key}:`));
-	if (!line) return "";
-	const raw = line.slice(key.length + 1).trim();
-	if (raw.startsWith('"') && raw.endsWith('"')) {
-		try {
-			return JSON.parse(raw) as string;
-		} catch {
-			return raw;
-		}
-	}
-	return raw;
-}
-
-/** The body pi's own loader would hand to `expandPromptTemplate` — used by `ChatView.tsx`'s composer-pick
- * path (never a frontmatter *value*; those come from `TemplateInfo.description`/`argumentHint`, already
- * parsed server-side). */
 export function stripFrontmatter(content: string): string {
-	return extractFrontmatterBlock(content).body;
-}
-
-/** Splits a template file's leading frontmatter block from its body. Used by `TemplateEditorDialog.tsx`,
- * which (unlike `stripFrontmatter` above) also needs the two field values to populate its form. */
-export function splitTemplate(content: string): {
-	description: string;
-	argumentHint: string;
-	body: string;
-} {
-	const { yamlString, body } = extractFrontmatterBlock(content);
-	if (!yamlString) return { description: "", argumentHint: "", body };
-	return {
-		description: readFrontmatterKey(yamlString, "description"),
-		argumentHint: readFrontmatterKey(yamlString, "argument-hint"),
-		body,
-	};
+	const normalized = normalizeNewlines(content);
+	if (!normalized.startsWith("---")) return normalized;
+	const endIndex = normalized.indexOf("\n---", 3);
+	if (endIndex === -1) return normalized;
+	return normalized.slice(endIndex + 4).trim();
 }
 
 /**
- * Assembles a template file's full text from form fields — the inverse of {@link splitTemplate}. Omits
+ * Assembles a template file's full text from form fields — the writer whose output `stripFrontmatter`
+ * (and pi's own loader) can always split back apart. Omits
  * either frontmatter key when its field is empty, and omits the frontmatter block entirely when both are
  * empty *and* `body` doesn't start with `---` (see below). Each present value is `JSON.stringify`-quoted:
  * YAML's double-quoted scalar escape set is a superset of JSON's, so this is always valid YAML without a
  * `yaml` package dependency (see the seed fixture's own quoted `argument-hint: "[file] [scope]"`).
  *
  * **The `---`-body case**: a body that itself starts with `---`, saved with no frontmatter keys, would be
- * written bare — and pi's own loader (and this module's `extractFrontmatterBlock`) would then go hunting
+ * written bare — and pi's own loader (and this module's `stripFrontmatter`) would then go hunting
  * for a *later* `\n---` line inside that body to treat as a closing fence, silently swallowing real body
  * content as if it were YAML the moment the body ever contains (now, or after some future edit) a second
  * line that looks like a fence. Emitting an explicit block — even an empty one, `---\n---\n\n` —

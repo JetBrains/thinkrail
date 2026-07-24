@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	symlinkSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -289,5 +297,101 @@ describe("project ops without a projectDir throw", () => {
 		saveTemplate(globalOnly, "global", "solo", "global body");
 
 		expect(getTemplate(globalOnly, "solo").content).toBe("global body");
+	});
+});
+
+// The no-follow gate (SPEC.md "symlink containment"): a checked-out repo can plant
+// `.pi/prompts/linked.md → <anywhere>`; no by-name operation may read, overwrite, or act through it —
+// a deliberate divergence from pi's read-only scanner, which follows file symlinks.
+describe("symlink containment", () => {
+	let outsideTarget: string;
+
+	beforeEach(() => {
+		outsideTarget = join(root, "outside-secret.txt");
+		writeFileSync(outsideTarget, "outside secret — must never be disclosed or clobbered");
+		mkdirSync(projectDir, { recursive: true });
+		symlinkSync(outsideTarget, join(projectDir, "linked.md"));
+	});
+
+	test("listTemplates omits a symlinked entry (dirent isFile is false — no follow)", () => {
+		expect(listTemplates(dirs).map((t) => t.name)).not.toContain("linked");
+	});
+
+	test("getTemplate treats a symlinked entry as absent — never discloses the target", () => {
+		expect(() => getTemplate(dirs, "linked", "project")).toThrow(/not found/);
+		// Scope-omitted lookup falls through the project dir the same way (and finds no global either).
+		expect(() => getTemplate(dirs, "linked")).toThrow(/not found/);
+	});
+
+	test("saveTemplate refuses to write through a symlinked entry — the target stays untouched", () => {
+		expect(() => saveTemplate(dirs, "project", "linked", "attacker-chosen content")).toThrow(
+			/non-regular file/,
+		);
+		expect(readFileSync(outsideTarget, "utf-8")).toBe(
+			"outside secret — must never be disclosed or clobbered",
+		);
+	});
+
+	test("deleteTemplate treats a symlinked entry as not-found (it was never listed or fetchable)", () => {
+		expect(() => deleteTemplate(dirs, "project", "linked")).toThrow(/not found/);
+		expect(existsSync(outsideTarget)).toBe(true);
+	});
+
+	test("project-scope writes refuse a symlinked .pi/prompts directory (the same escape one level up)", () => {
+		const evilRoot = mkdtempSync(join(tmpdir(), "trpi-templates-evil-"));
+		try {
+			const elsewhere = join(evilRoot, "elsewhere");
+			mkdirSync(elsewhere, { recursive: true });
+			const worktreePi = join(evilRoot, "worktree", ".pi");
+			mkdirSync(worktreePi, { recursive: true });
+			symlinkSync(elsewhere, join(worktreePi, "prompts"));
+			const evilDirs: TemplateDirs = { globalDir, projectDir: join(worktreePi, "prompts") };
+
+			expect(() => saveTemplate(evilDirs, "project", "x", "body")).toThrow(/symlinked directory/);
+			expect(existsSync(join(elsewhere, "x.md"))).toBe(false);
+			expect(() => deleteTemplate(evilDirs, "project", "x")).toThrow(/symlinked directory/);
+			// Reads still work through it, matching pi's own loader (which follows the directory too).
+			writeFileSync(join(elsewhere, "readable.md"), "readable body");
+			expect(getTemplate(evilDirs, "readable", "project").content).toBe("readable body");
+		} finally {
+			rmSync(evilRoot, { recursive: true, force: true });
+		}
+	});
+
+	test("the global dir may itself be a symlink (dotfile setups) — writes still work there", () => {
+		const realGlobal = join(root, "real-global-prompts");
+		mkdirSync(realGlobal, { recursive: true });
+		const linkedGlobal = join(root, "linked-global-prompts");
+		symlinkSync(realGlobal, linkedGlobal);
+		const linkedDirs: TemplateDirs = { globalDir: linkedGlobal, projectDir };
+
+		saveTemplate(linkedDirs, "global", "dotfiled", "body via dir symlink");
+		expect(readFileSync(join(realGlobal, "dotfiled.md"), "utf-8")).toBe("body via dir symlink");
+		deleteTemplate(linkedDirs, "global", "dotfiled");
+		expect(existsSync(join(realGlobal, "dotfiled.md"))).toBe(false);
+	});
+});
+
+// The client's TemplateEditorDialog populates its form fields from THESE parsed values (never from a
+// browser-side YAML reimplementation), so full-YAML scalar fidelity here is what keeps an edit of a
+// pi-native template from corrupting its metadata — pin the styles pi accepts beyond bare/double-quoted.
+describe("frontmatter value fidelity (pi's real YAML parser)", () => {
+	test("a single-quoted scalar parses to its value — quotes are never part of the description", () => {
+		mkdirSync(globalDir, { recursive: true });
+		writeFileSync(join(globalDir, "sq.md"), "---\ndescription: 'Review safely'\n---\nBody\n");
+
+		expect(getTemplate(dirs, "sq", "global").description).toBe("Review safely");
+	});
+
+	test("a folded block scalar parses to its (joined) value, not a literal '>'", () => {
+		mkdirSync(globalDir, { recursive: true });
+		writeFileSync(
+			join(globalDir, "folded.md"),
+			"---\ndescription: >-\n  folded description\n  over two lines\n---\nBody\n",
+		);
+
+		expect(getTemplate(dirs, "folded", "global").description).toBe(
+			"folded description over two lines",
+		);
 	});
 });

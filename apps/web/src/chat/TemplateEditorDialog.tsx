@@ -13,13 +13,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib";
 import { useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
-import { assembleTemplate, splitTemplate } from "./templateText";
+import { assembleTemplate, stripFrontmatter } from "./templateText";
 
 /** Documentation only (not itself parsed) — the real grammar is `slotSession.ts`'s parser / pi's own
  * expansion. Kept as a constant (not inline JSX text) since `${1:-default}` would otherwise be misread
- * as an embedded JS expression by JSX. */
-// biome-ignore lint/suspicious/noTemplateCurlyInString: literal pi syntax being documented, not a template placeholder
-const SYNTAX_HINT = "$1, $ARGUMENTS, ${1:-default} — pi prompt-template syntax";
+ * as an embedded JS expression by JSX; the `\${` escape makes the dollar-brace literal. */
+const SYNTAX_HINT = `$1, $ARGUMENTS, \${1:-default} — pi prompt-template syntax`;
 
 const INPUT_CLASS =
 	"w-full rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-md py-sm text-sm text-text outline-none transition-colors placeholder:text-hint focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-[var(--primary-20)] disabled:opacity-50";
@@ -85,12 +84,15 @@ export function TemplateEditorDialog({
 		setError(null);
 		setSaving(false);
 		if (template) {
-			const parsed = splitTemplate(template.content);
 			setName(template.name);
 			setScope(template.scope);
-			setDescription(parsed.description);
-			setArgumentHint(parsed.argumentHint);
-			setBody(parsed.body);
+			// Field values come from the server-parsed `TemplateInfo` — pi's real YAML parser read them, so
+			// every scalar style (single-quoted, folded/block, …) arrives as its VALUE. The client-side
+			// helper is used only to locate the body (a boundary rule, not YAML) — hand-parsing values here
+			// once corrupted a pi-native `description: 'quoted'` into a form value with literal quotes.
+			setDescription(template.description ?? "");
+			setArgumentHint(template.argumentHint ?? "");
+			setBody(stripFrontmatter(template.content));
 		} else {
 			setName("");
 			setScope(initialScope);
@@ -137,8 +139,9 @@ export function TemplateEditorDialog({
 				</DialogHeader>
 
 				<div className="flex max-h-[60vh] flex-col gap-md overflow-y-auto">
-					<Field label="Name">
+					<Field id="template-name" label="Name">
 						<input
+							id="template-name"
 							data-testid="template-name-input"
 							value={name}
 							disabled={editing}
@@ -174,8 +177,9 @@ export function TemplateEditorDialog({
 						) : null}
 					</div>
 
-					<Field label="Description">
+					<Field id="template-description" label="Description">
 						<input
+							id="template-description"
 							data-testid="template-description-input"
 							value={description}
 							onChange={(e) => setDescription(e.target.value)}
@@ -185,8 +189,9 @@ export function TemplateEditorDialog({
 						/>
 					</Field>
 
-					<Field label="Argument hint">
+					<Field id="template-argument-hint" label="Argument hint">
 						<input
+							id="template-argument-hint"
 							data-testid="template-argument-hint-input"
 							value={argumentHint}
 							onChange={(e) => setArgumentHint(e.target.value)}
@@ -196,8 +201,9 @@ export function TemplateEditorDialog({
 						/>
 					</Field>
 
-					<Field label="Body">
+					<Field id="template-body" label="Body">
 						<Textarea
+							id="template-body"
 							data-testid="template-body-input"
 							value={body}
 							onChange={(e) => setBody(e.target.value)}
@@ -236,15 +242,17 @@ export function TemplateEditorDialog({
 	);
 }
 
-/** A labelled form field — a plain `<label>` wrapping its control needs no `htmlFor`/`id` pairing (the
- * control always renders as `children`; biome's static check can't see through that indirection). */
-function Field({ label, children }: { label: string; children: ReactNode }) {
+/** A labelled form field — an explicit `htmlFor`/`id` pairing (each caller passes the same `id` to its
+ * control) rather than a label wrapping opaque children: the association stays statically checkable,
+ * and non-control children (the Body field's syntax hint) aren't nested inside a `<label>`. */
+function Field({ id, label, children }: { id: string; label: string; children: ReactNode }) {
 	return (
-		// biome-ignore lint/a11y/noLabelWithoutControl: the control is `children`, always an input/textarea
-		<label className="flex flex-col gap-xs text-sm">
-			<span className="font-medium text-text">{label}</span>
+		<div className="flex flex-col gap-xs text-sm">
+			<label htmlFor={id} className="font-medium text-text">
+				{label}
+			</label>
 			{children}
-		</label>
+		</div>
 	);
 }
 
