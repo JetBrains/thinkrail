@@ -112,8 +112,6 @@ export function CenterTabs() {
 	useEffect(() => {
 		if (!activeWorkspaceId) return;
 		let cancelled = false;
-		// Snapshot the sync baseline before the fetch, so a skill change during hydrate keeps chats flagged.
-		const syncedTick = selectWorkspaceTick(useAppStore.getState(), activeWorkspaceId);
 		void getTransport()
 			.request("session.list", { workspaceId: activeWorkspaceId })
 			.then(async (summaries) => {
@@ -135,9 +133,7 @@ export function CenterTabs() {
 							{ sessionId: summary.sessionId, workspaceId: activeWorkspaceId },
 						);
 						if (cancelled) return;
-						useAppStore
-							.getState()
-							.hydrateSession(fresh, messagesToRuntime(messages), false, syncedTick);
+						useAppStore.getState().hydrateSession(fresh, messagesToRuntime(messages), false); // live restore: no reload → no baseline (stays conservatively stale; see hydrateSession)
 					} catch {
 						// Skip a session that failed to load; the others still hydrate.
 					}

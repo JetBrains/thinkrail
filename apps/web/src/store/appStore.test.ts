@@ -1040,24 +1040,36 @@ test("skills badge: markSkillsSynced is monotonic and ignores a disposed session
 	expect(s().skillsSyncedTickBySession.a).toBeUndefined();
 });
 
-test("skills badge: a session hydrated on reconnect anchors to the current fs tick", () => {
+const summaryFor = (sessionId: string, live: boolean): SessionSummary => ({
+	sessionId,
+	workspaceId: "ws1",
+	title: "Chat",
+	model: null,
+	thinkingLevel: "medium",
+	isStreaming: false,
+	messageCount: 0,
+	updatedAt: 0,
+	live,
+});
+
+test("skills badge: a LIVE restore stays conservatively stale; a disk attach anchors to its load tick", () => {
 	const s = () => useAppStore.getState();
-	// A skill change already landed before this client hydrated the session…
-	s().noteFsChanged(skillFs("ws1", [".claude/skills/foo/SKILL.md"]));
-	const summary: SessionSummary = {
-		sessionId: "h1",
-		workspaceId: "ws1",
-		title: "Chat",
-		model: null,
-		thinkingLevel: "medium",
-		isStreaming: false,
-		messageCount: 0,
-		updatedAt: 0,
-		live: true,
-	};
-	s().hydrateSession(summary, { turns: [], toolResults: {}, askAnswers: {} });
-	// …so the reconnected session (which loaded the current skills) is not flagged, only a later change is.
-	expect(isStale("ws1", "h1")).toBe(false);
-	s().noteFsChanged(skillFs("ws1", [".claude/skills/foo/SKILL.md"]));
-	expect(isStale("ws1", "h1")).toBe(true);
+	// A skill change was already observed before this client hydrated these sessions.
+	s().noteFsChanged(skillFs("ws1", [".claude/skills/foo/SKILL.md"])); // tick 1
+
+	// A LIVE restore reused the server session's already-loaded (older) skills — no reload — so the caller
+	// passes no baseline: it must stay flagged (Air's finding — never falsely clear a live session that
+	// predates the change).
+	s().hydrateSession(summaryFor("live1", true), { turns: [], toolResults: {}, askAnswers: {} });
+	expect(isStale("ws1", "live1")).toBe(true);
+
+	// A disk-only attach reconstructs the loader against current disk → the caller passes the load's
+	// request-start tick, and the chat is correctly in sync.
+	s().hydrateSession(
+		summaryFor("disk1", false),
+		{ turns: [], toolResults: {}, askAnswers: {} },
+		false,
+		selectWorkspaceTick(s(), "ws1"),
+	);
+	expect(isStale("ws1", "disk1")).toBe(false);
 });

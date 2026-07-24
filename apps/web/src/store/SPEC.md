@@ -97,11 +97,15 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   `noteFsChanged` also folds **`skillChangeTickByWorkspace: Record<workspaceId, tick>`** — the tick of the
   most recent *skill-relevant* batch (a `.claude|.github|.gemini|.pi|.agents/skills` path, via
   `isSkillPath`, or a truncated wildcard), *accumulated* so a later non-skill batch never clears it — and
-  each chat records **`skillsSyncedTickBySession: Record<sessionId, tick>`** = the tick it loaded skills at
-  (set on `openChatSession`/`hydrateSession`, bumped by **`markSkillsSynced(sessionId, syncedTick)`** on a
-  successful reload — **monotonic** (`Math.max`, so an out-of-order reload completion can't move the
-  baseline backward) and a **no-op for a disposed session** (a late completion can't resurrect an entry
-  dropped by `closeChatRuntime`/`clearWorkspaceTabs`)). That
+  each chat records **`skillsSyncedTickBySession: Record<sessionId, tick>`** = the tick it loaded skills at.
+  It advances **only when resources are actually (re)loaded against current disk**: a fresh
+  `openChatSession`, a disk-only `hydrateSession` attach, and **`markSkillsSynced(sessionId, syncedTick)`** on
+  a successful reload (`markSkillsSynced` is **monotonic** — `Math.max`, so an out-of-order reload completion
+  can't move the baseline backward — and a **no-op for a disposed session**, so a late completion can't
+  resurrect an entry dropped by `closeChatRuntime`/`clearWorkspaceTabs`). A **live** `hydrateSession` restore
+  reuses the server session's already-loaded skills (`getMessages` returns only the transcript, no reload)
+  which the client can't date, so it advances **nothing** — the chat stays *conservatively stale* if a skill
+  change has been observed, never falsely clearing. That
   `syncedTick` is the workspace tick captured at the **start** of the skill-loading round-trip
   (`selectWorkspaceTick`, snapshot by the caller before `session.create`/`reloadResources`/`getMessages`),
   **not** at completion — so a skill change whose `fsChanged` frame folds while the load is in flight (which

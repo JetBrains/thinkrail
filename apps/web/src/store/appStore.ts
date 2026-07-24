@@ -551,8 +551,9 @@ interface AppState {
 		summary: SessionSummary,
 		hydrated: HydratedRuntime,
 		activate?: boolean,
-		/** Skills sync baseline — the workspace tick captured *before* `session.getMessages`; omit to anchor
-		 * at call time. */
+		/** Skills sync baseline — the workspace tick captured *before* `session.getMessages`, passed **only**
+		 * for a disk-only attach (which reloads resources against current disk). Omit for a live restore
+		 * (transcript only, no reload): the baseline is left unset so the chat stays conservatively stale. */
 		syncedTick?: number,
 	) => void;
 	appendUserMessage: (sessionId: string, text: string) => void;
@@ -1087,12 +1088,20 @@ export const useAppStore = create<AppState>((set, get) => ({
 			const closed = s.closedChatsByWorkspace[wsId] ?? [];
 			return {
 				sessions: { ...s.sessions, [summary.sessionId]: runtime },
-				// Restored sessions loaded their skills at reconnect; anchor to the load's request-start tick
-				// (caller-captured; else now) — see openChatSession.
-				skillsSyncedTickBySession: {
-					...s.skillsSyncedTickBySession,
-					[summary.sessionId]: syncedTick ?? selectWorkspaceTick(s, wsId),
-				},
+				// Advance the sync baseline ONLY when this restore actually (re)loaded resources against current
+				// disk — a disk-only attach, where the caller passes its request-start tick. A LIVE restore
+				// reused the server session's already-loaded skills (`getMessages` returns only the transcript,
+				// no reload) and the client can't date them, so the caller passes no tick: leave the baseline
+				// unset → the chat stays conservatively stale if a skill change has been observed, never falsely
+				// clearing the badge for a live session that predates the change.
+				...(syncedTick !== undefined
+					? {
+							skillsSyncedTickBySession: {
+								...s.skillsSyncedTickBySession,
+								[summary.sessionId]: syncedTick,
+							},
+						}
+					: {}),
 				tabsByWorkspace: tabs.some((t) => t.id === id)
 					? s.tabsByWorkspace
 					: { ...s.tabsByWorkspace, [wsId]: [...tabs, tab] },
