@@ -460,15 +460,17 @@ test("hydrateSession rebuilds a runtime + tab on connect, and never clobbers a l
 		turns: [{ kind: "user", id: "u1", message: { role: "user", content: "hi", timestamp: 0 } }],
 		toolResults: {},
 		askAnswers: {},
+		turnIdByMessageIndex: ["u1"],
 	});
 	const st = useAppStore.getState();
 	expect(st.sessions.h1?.turns).toHaveLength(1);
+	expect(st.sessions.h1?.turnIdByMessageIndex).toEqual(["u1"]); // the anchor map copies through
 	expect(st.tabsByWorkspace.ws1?.some((t) => t.kind === "chat" && t.sessionId === "h1")).toBe(true);
 
 	// A second hydrate (e.g. stale list) must NOT overwrite the now-live runtime.
 	store.hydrateSession(
 		{ ...summary, messageCount: 99 },
-		{ turns: [], toolResults: {}, askAnswers: {} },
+		{ turns: [], toolResults: {}, askAnswers: {}, turnIdByMessageIndex: [] },
 	);
 	expect(useAppStore.getState().sessions.h1?.turns).toHaveLength(1);
 });
@@ -509,7 +511,11 @@ test("hydrateSession(activate) reopens a disk-only chat: builds it, focuses it, 
 		updatedAt: 1,
 		live: true,
 	};
-	store.hydrateSession(summary, { turns: [], toolResults: {}, askAnswers: {} }, true);
+	store.hydrateSession(
+		summary,
+		{ turns: [], toolResults: {}, askAnswers: {}, turnIdByMessageIndex: [] },
+		true,
+	);
 
 	const st = useAppStore.getState();
 	expect(st.sessions.disk1).toBeDefined(); // runtime built from the re-opened session
@@ -530,6 +536,36 @@ test("clearWorkspaceTabs drops both open and closed chat runtimes + clears histo
 	expect(st.sessions.b).toBeUndefined();
 	expect(st.closedChatsByWorkspace.ws1).toBeUndefined();
 	expect(st.tabsByWorkspace.ws1).toBeUndefined();
+});
+
+test("requestChatLocation sets the jump deep link AND switches project+workspace atomically; clearChatLocation drops it", () => {
+	const store = useAppStore.getState();
+	useAppStore.setState({ selectedProjectId: "p1", activeWorkspaceId: "ws1" });
+
+	store.requestChatLocation({
+		workspaceId: "ws2",
+		projectId: "p2",
+		sessionId: "s1",
+		messageIndex: 3,
+		anchorText: "deploy the docs",
+	});
+	let st = useAppStore.getState();
+	expect(st.chatLocationRequest).toEqual({
+		workspaceId: "ws2",
+		projectId: "p2",
+		sessionId: "s1",
+		messageIndex: 3,
+		anchorText: "deploy the docs",
+	});
+	// A cross-project jump activates BOTH ids together — never leaving selectedProjectId on the source.
+	expect(st.activeWorkspaceId).toBe("ws2");
+	expect(st.selectedProjectId).toBe("p2");
+
+	store.clearChatLocation();
+	st = useAppStore.getState();
+	expect(st.chatLocationRequest).toBeNull();
+	expect(st.activeWorkspaceId).toBe("ws2"); // clearing the request never reverts the navigation
+	expect(st.selectedProjectId).toBe("p2");
 });
 
 // ---- updateWorkspace: the workspace.updated push folds in without losing local computed state ----

@@ -91,14 +91,35 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   so "answered / superseded / awaiting" is a fact about the transcript, not a tool status — derived once
   per runtime snapshot and consumed by the card via context, keeping it props-driven everywhere else.
 - **Hydration** (`hydrate.ts`) — the pure `messagesToRuntime(TranscriptMessage[])` converter (read-side
-  counterpart of the event reducer): rebuilds `{ turns, toolResults, askAnswers }` (a `HydratedRuntime`)
-  from a persisted transcript so a reconnecting/second client renders identically to the live path (same
-  `raw` result shape, same error-turn surfacing for `stopReason: "error"`). `custom` messages never
-  become turns: known ones (`ask-user-answers`) index into `askAnswers`; unknown customTypes are
-  ignored. No store/transport/shiki.
+  counterpart of the event reducer): rebuilds `{ turns, toolResults, askAnswers, turnIdByMessageIndex }`
+  (a `HydratedRuntime`) from a persisted transcript so a reconnecting/second client renders identically to
+  the live path (same `raw` result shape, same error-turn surfacing for `stopReason: "error"`). It also
+  returns `turnIdByMessageIndex` (message-position → minted turn id) — the jump anchor map a
+  history-search "jump to message" deep link (`chatLocationRequest`, see `store/SPEC.md`) resolves
+  against; entries are `null` for a `toolResult`/`custom` message (never its own turn), and a message that
+  ended in `stopReason: "error"` maps to its own assistant turn's id, never the synthesized error turn's.
+  `custom` messages never become turns: known ones (`ask-user-answers`) index into `askAnswers`; unknown
+  customTypes are ignored. No store/transport/shiki.
+- **Jump-to-message** (`chatLocationRequest` — set by `useHistorySearch.ts`'s `openMessage` on Enter over
+  a mapped message hit; see `store/SPEC.md` for the store-level request/clear contract and
+  `CenterTabs.tsx`'s open/reopen/hydrate half) — `ChatView` is the sole consumer. Once `rows.length > 0`,
+  it resolves the request's `messageIndex` via `runtime.turnIdByMessageIndex` (present only on a
+  *hydrated* runtime — a live/already-open session's runtime, built by the event reducer, never carries
+  one), falling back to scanning `turns` for the first whose own text contains `anchorText`'s prefix — the
+  same fallback also covers a hydrated map entry whose turn no longer contains the anchor (e.g. the
+  transcript changed underneath it). The resolved turn maps to a row via the pure **`rowIndexForTurn(rows,
+  turnId)`** (`rows.ts`) — a turn's own row for `user`/`system`/`error`/`retry`, or its first `:text:` row
+  for `assistant` (whose turns dissolve into `markdown`/`tool`/`activity` rows, never a row of their own)
+  — then `virtuosoRef.scrollToIndex({ align: "center" })` plus a transient `flashRowId` (rendered as
+  `data-flash` + a `bg-[var(--primary-10)]` transition on the row wrapper, cleared after 1600ms) draw the
+  eye to it. Either resolving a row or giving up (toasted as "couldn't locate the message") always clears
+  the request — `ChatView` is its only consumer, so an unresolved request must never linger.
 - **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions, `/`
-  commands, image paste/drop) plus its props-driven **slash-completion primitive** (filter/menu/caret +
-  Up/Down, Enter/Tab, Escape), reused by `panels/NewWorkspaceDialog` so the two inputs cannot drift;
+  commands, image paste/drop, `Ctrl+R` → `onHistoryOpen`) plus its props-driven **slash-completion
+  primitive** (filter/menu/caret + Up/Down, Enter/Tab, Escape), reused by `panels/NewWorkspaceDialog` so
+  the two inputs cannot drift; `HistoryOverlay` (the history-recall/search overlay `Composer` opens —
+  presentational, driven entirely by `useHistorySearch.ts`'s state + callbacks, plus a **zoomed-stage
+  preview pane** + **scope picker** — see the next bullet),
   `ModelSelector` + `ThinkingSelector` (also shared with `NewWorkspaceDialog`;
   optional `container` prop portals their popovers into a host Dialog), `SessionStatsBar`, `ChatHeader`
   (its `left` slot carries the plan strip; its **Skills** button is the presentational **`SkillsButton`**
@@ -112,6 +133,65 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   skill overrides, + a **Reload** that applies changes to this chat's session via `session.reloadResources`,
   disabled while streaming) or project (`project.skills`, per-project-baseline toggles, no session) — the
   latter reused by `panels` pre-session). All props-driven; behavior detail lives in the components' jsdoc.
+- **History overlay: zoomed preview pane + scope picker** (`HistoryOverlay.tsx`) — `Tab` grows the
+  compact single-column overlay into a **two-pane** `zoomed` layout: the existing Prompts/Messages
+  sections list stays on the left (~55% width, `data-testid="history-results"` — keyboard nav,
+  `scrollIntoView`, and counts are all unchanged), and a preview of the
+  flat-list **keyboard-selected** item renders on the right (~45%, `data-testid="history-preview"`,
+  resolved via the same `resolveHistorySelection` that `Enter` already uses — the preview and
+  the keyboard actions can never disagree on "the selected item"). The `compact` stage is untouched: no
+  preview pane exists in the DOM at all until `Tab` (not merely hidden), so `history-preview`'s bare
+  presence doubles as the zoomed/compact signal. **Preview body:** the hit's full `text` — never the
+  row's truncated first line (`PromptRow`) or snippet (`MessageRow`) — is what makes the preview worth
+  having: a long prompt's tail, cut off in the list, reads in full here. `whitespace-pre-wrap
+  break-words`, scrollable (`overflow-y-auto`), query terms highlighted via `Highlight` reused
+  **verbatim** (the same helper the rows use) so highlighting can never drift between a row and its own
+  preview. **Preview footer** (muted, small): for a prompt hit, chat title (when set) / a workspace chip
+  whenever `workspaceId` is present (unlike `PromptRow`'s chip, never scope-gated — a single detail pane
+  has room a dense list row doesn't) / relative time, `·`-joined; for a message hit,
+  `sessionTitle · role · relative time`. No selection (an empty result set) renders an empty panel —
+  never a crash. **Narrow widths** (below the `md` breakpoint): the preview collapses **below** the
+  list instead of beside it (list first in source order, so a column flex stack already places it
+  there), each pane independently scrollable within its own height budget. The **scope badge**
+  (`data-testid="history-scope"`, unchanged `<scope> ⌃R` label + `data-scope`) is now also a
+  `components/ui/dropdown-menu` trigger: its content lists all four scopes in cycle order
+  (`data-testid="history-scope-option"` + `data-scope`, fuller labels than the badge itself — "This
+  chat" / "Workspace" / "Project" / "Everywhere" — with the current one check-marked). Picking one
+  calls `useHistorySearch.ts`'s new `setScope(kind)`, which resets the results selection exactly like
+  `cycleScope` — the unchanged `Ctrl+R` keyboard path, since both just set the same underlying scope
+  state. Radix's default on close is to return focus to the trigger; `onCloseAutoFocus` is overridden
+  (`preventDefault` + focus the query input) so a mouse pick hands focus back to the query input
+  instead — typing (and `Ctrl+R` cycling) resumes immediately, no extra click needed. The menu never
+  fights the overlay's own `ArrowUp`/`ArrowDown`/`Enter` handling: that handler is bound to the query
+  `<input>` element itself, and Radix's portaled dropdown content is a **sibling** subtree — never a
+  descendant of the input — so a keydown while the menu holds focus cannot reach the input's handler by
+  construction, not by a case-by-case guard.
+- **History overlay: assistant-only messages + jumpable prompts** (`HistoryOverlay.tsx`,
+  `useHistorySearch.ts`) — `MESSAGES` only ever contains assistant-role hits (the server
+  filters; see `packages/server/src/history/SPEC.md`): a user-role hit is always a textual duplicate of
+  its own `PromptHit` entry, so the location it used to add moved onto the prompt row instead. Every
+  prompt row renders a go-to-chat icon (`data-testid="history-jump"`, `aria-label="Go to chat"`,
+  `title="⇧⏎ go to chat"`) **when jumpable** — `workspaceId` present and `messageIndex != null` (absent
+  for an unmapped-cwd hit, or a host that never populated the prompt's anchor fields). Clicking it, or
+  **`Shift+Enter`** while a prompt row is the keyboard selection, routes through the exact same
+  `onOpenMessage` path a message hit's `Enter`/click already used — both go through the shared
+  **`jumpTarget(hit)`** helper (`useHistorySearch.ts`, exported pure), which resolves either hit shape to
+  a `ChatLocationRequest` or `null`, so the icon's render gate, the `Shift+Enter` handler, and the
+  message-hit gate can never disagree on "is this jumpable." An unmapped/legacy prompt row shows no icon
+  and `Shift+Enter` is a no-op (overlay stays open) — the same belt-and-suspenders gating the message-hit
+  path already had. The icon itself stays hover-revealed (`group-hover`/`isSelected` opacity), but its
+  shortcut glyph (`data-testid="history-jump-shortcut"`, literal `⇧⏎`) is a **selected-only**, not
+  hover-only, persistent `<span>` — the same precedent as the scope badge's `⌃R` (always next to its
+  label) — since a keyboard-only user, `Shift+Enter`'s own audience, never triggers `:hover`.
+- **Plain `↑` recall + history button** — `Composer`'s `recentPrompts` prop (`ChatView`: this chat's own
+  user-turn texts via `turnAnchorText`, newest first, deduped **keeping the newest occurrence** — the same
+  recency-first ranking rule as the server history index, the atuin/fzf convention) backs a lightweight
+  recall session (`recallIdx`) gated so it can never eat a draft: `↑` only steps in when the field is
+  **empty** or a recall is already active (older → higher index), `↓` steps newer (past the newest
+  restores `""`), any diverging edit or a submit exits the session, and the recalled text lands with the
+  caret at its end. A `History`-icon button (`data-testid="history-open"`, `aria-label="Search history"`,
+  always rendered next to send) calls the same `onHistoryOpen` as `Ctrl+R` — the tap path on mobile, a
+  discoverability affordance on desktop.
 - **Chat TODO plan** — the chat's `pi-todos` list surfaced **only in the chat** (engine:
   [[module-pi-todos]]; host read/write: [[submodule-server-todos]]):
   `useChatTodos` (the `todo.*` data hook — fetch + live `pi.event` refetch + edits + the add-nudge + the
@@ -138,16 +218,18 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   **No `index.ts` barrel** — chat pulls **shiki**, so per the code-splitting exception imports stay
   **per-file**; the registry is importable from `chat/toolRegistry` **without** pulling shiki.
 - **Allowed deps:** `contracts` (pi message/content-block types, **type-only**); `store` + `transport`
-  (**`ChatView` only** — the app-integration edge); `react-markdown` / `remark-gfm` / `shiki` (via
-  `lib/highlighter`); `mermaid` (**lazy, `tools/visualize` only**); `react-virtuoso`; `lucide-react`;
-  `components/ui`; `lib`.
+  (**`ChatView` + its integration hook `useHistorySearch.ts` only** — the
+  app-integration edge); `react-markdown` / `remark-gfm` / `shiki` (via `lib/highlighter`); `mermaid`
+  (**lazy, `tools/visualize` only**); `react-virtuoso`; `lucide-react`; `components/ui`; `lib`.
 - **Forbidden:** value-importing any `pi` package; a **presentational** renderer importing
-  `store`/`transport` (only `ChatView` may — keep the renderers reusable).
-- **`ChatView`** is the one app-integration file: wires this session's runtime
+  `store`/`transport` (only `ChatView` and its integration hook `useHistorySearch.ts` may — keep the
+  renderers reusable).
+- **`ChatView`** is the primary app-integration file: wires this session's runtime
   (`store.sessions[sessionId]`), the transport calls, the `ChatActions` + `AskStates` contexts, and the
-  divider's "files changed" → `requestChangesView` deep link. A **rejected** send (`prompt`/`steer`/`followUp`)
-  lands in the chat via the store's `appendErrorTurn` — never swallowed; *streaming* faults arrive as pi
-  events instead.
+  divider's "files changed" → `requestChangesView` deep link — together with **`useHistorySearch.ts`**
+  (the Ctrl+R history-recall overlay's store/transport edge), the other integration point. A
+  **rejected** send (`prompt`/`steer`/`followUp`) lands in the chat via the store's `appendErrorTurn` —
+  never swallowed; *streaming* faults arrive as pi events instead.
 
 ## Streaming model
 

@@ -1,6 +1,7 @@
 import type {
 	AskUserQuestionResult,
 	ImageContent,
+	PromptHit,
 	ThinkingLevel,
 	WireModel,
 } from "@thinkrail/contracts";
@@ -8,21 +9,55 @@ import { ArrowDown } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { Popover, PopoverAnchor, PopoverTrigger } from "@/components/ui/popover";
-import { EMPTY_RUNTIME, useAppStore } from "@/store";
+import { EMPTY_RUNTIME, toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { AskStatesContext, deriveAskStates } from "./askState";
 import { type ChatActions, ChatActionsContext } from "./ChatActions";
 import { ChatHeader } from "./ChatHeader";
 import { ChatPlanContent, ChatPlanStripContent } from "./ChatPlan";
-import { Composer, type MentionCandidate, type SubmitBehavior } from "./Composer";
+import {
+	Composer,
+	type ComposerHandle,
+	type MentionCandidate,
+	type SubmitBehavior,
+} from "./Composer";
 import { ExtUiDialog } from "./ExtUiDialog";
-import { type ChatRow, deriveRows } from "./rows";
+import { HistoryOverlay } from "./HistoryOverlay";
+import { type ChatRow, deriveRows, rowIndexForTurn } from "./rows";
 import { isSkillPath, SkillsDialog } from "./SkillsDialog";
 import { StreamIndicator, type StreamStatus, streamStatus } from "./StreamIndicator";
 import "./tools/register"; // side-effect: register the built-in pi tool renderers (bash/read/edit/write)
 import { ChatTurnView } from "./turns";
+import type { ChatTurn } from "./types";
 import { useChatScroll } from "./useChatScroll";
 import { useChatTodos } from "./useChatTodos";
+import { useHistorySearch } from "./useHistorySearch";
+
+/**
+ * Best-effort plain text for a turn — user: `message.content` (a plain string, or text/image blocks);
+ * assistant: joined text blocks. `system`/`error`/`retry` turns fall through to `""`. Two consumers:
+ * anchor-matching a `chatLocationRequest` jump target (`turnIdByMessageIndex` only maps user/assistant
+ * messages, so a non-anchor turn's `""` never matches and is never wrongly selected by the fallback scan),
+ * and `recentPrompts` below (user turns only, so the assistant/`""` branches never surface there).
+ */
+function turnAnchorText(turn: ChatTurn): string {
+	if (turn.kind === "user") {
+		const { content } = turn.message;
+		return typeof content === "string"
+			? content
+			: content
+					.filter((b) => b.type === "text")
+					.map((b) => b.text)
+					.join("\n");
+	}
+	if (turn.kind === "assistant") {
+		return turn.message.content
+			.filter((b) => b.type === "text")
+			.map((b) => b.text)
+			.join("\n");
+	}
+	return "";
+}
 
 /** Context threaded to the Virtuoso footer so the streaming loader lives at the end of the conversation. */
 type ChatListContext = { status: StreamStatus | null };
@@ -57,12 +92,13 @@ export default function ChatView({
 	// chat streaming into its own runtime never re-renders the foreground one.
 	const runtime = useAppStore((s) => s.sessions[sessionId]) ?? EMPTY_RUNTIME;
 	const models = useAppStore((s) => s.models);
-	// This chat's owning project (workspaces are keyed by project) — for the Skills manager's trust ops.
+	// This chat's owning project (workspaces are keyed by project) — for the Skills manager's trust ops
+	// and the "project" / "all" history-search scopes.
 	const projectId = useAppStore(
 		(s) =>
 			Object.values(s.workspaces)
 				.flat()
-				.find((w) => w.id === workspaceId)?.projectId ?? null,
+				.find((w) => w.id === workspaceId)?.projectId,
 	);
 	const [skillsOpen, setSkillsOpen] = useState(false);
 	// Auto-detect: the worktree watcher's fs nudge flags skills stale (the session loaded an older set) when
@@ -82,6 +118,17 @@ export default function ChatView({
 		}
 		return undefined;
 	});
+	// The raw record is a stable reference from zustand's perspective (unlike a fresh object/array
+	// literal, which would re-render this view on every unrelated store update); the workspaceId →
+	// display-name map the history overlay's cross-workspace chip needs is derived below in a `useMemo`.
+	const workspaces = useAppStore((s) => s.workspaces);
+	const workspaceNames = useMemo(() => {
+		const map: Record<string, string> = {};
+		for (const list of Object.values(workspaces)) {
+			for (const w of list) map[w.id] = w.name;
+		}
+		return map;
+	}, [workspaces]);
 	const {
 		turns,
 		toolResults,
@@ -114,6 +161,20 @@ export default function ChatView({
 		return { status };
 	}, [turns, isStreaming, currentAssistantId]);
 
+	// The plain `↑`-recall list (`Composer`'s `recentPrompts` prop): this chat's own user-turn texts,
+	// newest first, deduped keeping the NEWEST occurrence — the same recency-first ranking rule as the
+	// server history index (and the atuin/fzf convention it follows). Reuses `turnAnchorText`'s
+	// user-content extraction (string, or joined text blocks) rather than re-deriving it. Reverse to
+	// newest→oldest *before* deduping: `Set` keeps each string's first-seen entry, so reversing first
+	// makes that first-seen entry the newest one, not the oldest (see `chat/SPEC.md`).
+	const recentPrompts = useMemo(() => {
+		const texts = turns
+			.filter((t) => t.kind === "user")
+			.map((t) => turnAnchorText(t))
+			.filter(Boolean);
+		return [...new Set(texts.reverse())];
+	}, [turns]);
+
 	const [mentionQuery, setMentionQuery] = useState<string | null>(null);
 	const [mentionCandidates, setMentionCandidates] = useState<MentionCandidate[]>([]);
 	// The chat's TODO plan, surfaced inline via a header strip that opens a popup over the chat (SPEC §Chat TODO plan).
@@ -123,6 +184,28 @@ export default function ChatView({
 	const virtuosoRef = useRef<VirtuosoHandle>(null);
 	const { followOutput, handleAtBottom, showScrollButton, scrollToBottom, containerProps } =
 		useChatScroll(virtuosoRef);
+	const composerRef = useRef<ComposerHandle>(null);
+
+	// The Ctrl+R history-recall overlay's integration edge (store/transport) — see `chat/SPEC.md`'s
+	// boundary section for why this hook, not this component's body, owns that edge.
+	const {
+		state: historyState,
+		openOverlay,
+		close: closeHistory,
+		setQuery,
+		cycleScope,
+		setScope,
+		toggleStage,
+		moveSelection,
+		openMessage,
+	} = useHistorySearch(sessionId, workspaceId, projectId);
+
+	// The history-search "jump to message" deep link this session is the target of, if any — cleared by
+	// this effect below once it has resolved (or failed to resolve) a row to scroll to. `CenterTabs` is the
+	// other consumer: it opens/hydrates the target chat's tab but never clears the request (see its own
+	// effect's jsdoc).
+	const chatLocationRequest = useAppStore((s) => s.chatLocationRequest);
+	const [flashRowId, setFlashRowId] = useState<string | null>(null);
 
 	// Models are global to the host — fetch once, then every chat's picker shares them.
 	useEffect(() => {
@@ -220,6 +303,69 @@ export default function ChatView({
 			.catch(() => {});
 	};
 
+	// Ctrl+R in the composer seeds the overlay with the current draft (never a stale store value) —
+	// `useHistorySearch` owns everything from here (debounce, scope cycling, stale-response drop).
+	const onHistoryOpen = () => openOverlay(draft);
+
+	// Enter on a prompt hit: replace the draft, focus, caret at end, close — no submit.
+	const onInsertHit = (hit: PromptHit) => {
+		composerRef.current?.insertText(hit.text);
+		closeHistory();
+	};
+
+	// Cmd/Ctrl+Enter on a prompt hit: send through the composer's own submit seam (its imperative
+	// handle), never a ChatView-side `onSubmit` call — the composer privately holds pending image
+	// attachments, and only its own path sends them with the text and clears them with the draft
+	// (which also resets the store draft via the composer's `onChange("")`).
+	const onInsertAndSendHit = (hit: PromptHit) => {
+		composerRef.current?.insertAndSubmit(hit.text, isStreaming ? "followUp" : "send");
+		closeHistory();
+	};
+
+	// Consume a `chatLocationRequest` targeting this session: resolve its `messageIndex` to a turn (via
+	// `turnIdByMessageIndex`, falling back to scanning by `anchorText` when the map entry is absent —
+	// e.g. this runtime came from an already-live `hydrateSession` no-op, or the index is stale after
+	// compaction — or when the mapped turn's own text no longer contains the anchor), scroll its row into
+	// view, and flash it briefly. `rows.length > 0` guards against running before the transcript is ready
+	// (a fresh tab renders zero rows for one tick). Always clears the request — this is its only consumer.
+	useEffect(() => {
+		if (!chatLocationRequest || chatLocationRequest.sessionId !== sessionId || rows.length === 0) {
+			return;
+		}
+		const { messageIndex, anchorText } = chatLocationRequest;
+		const prefix = anchorText.slice(0, 40);
+		const mappedId = runtime.turnIdByMessageIndex?.[messageIndex];
+		const mapped = mappedId ? turns.find((t) => t.id === mappedId) : undefined;
+		// Fall back to the NEWEST turn whose text matches the anchor (`findLast`, not `find`): a hit is
+		// deduped to its newest occurrence, so when there's no exact index map (a never-hydrated live chat)
+		// or the mapped turn's text no longer matches, the newest match is the right target — matching the
+		// oldest would jump repeated prompts to a stale earlier turn.
+		const target =
+			mapped && turnAnchorText(mapped).includes(prefix)
+				? mapped
+				: turns.findLast((t) => turnAnchorText(t).includes(prefix));
+		const index = target ? rowIndexForTurn(rows, target.id) : -1;
+		if (index === -1) {
+			toast.error("couldn't locate the message — the session may have changed");
+			useAppStore.getState().clearChatLocation();
+			return;
+		}
+		virtuosoRef.current?.scrollToIndex({ index, align: "center" });
+		setFlashRowId(rows[index]?.id ?? null);
+		useAppStore.getState().clearChatLocation();
+	}, [chatLocationRequest, sessionId, rows, runtime.turnIdByMessageIndex, turns]);
+
+	// Auto-clear the flash, decoupled from the effect above: `clearChatLocation()` there flips
+	// `chatLocationRequest` to null, which is one of that effect's own deps — if the timeout lived there,
+	// the re-run's cleanup would cancel it (and the re-run bails on `!chatLocationRequest` before
+	// scheduling a replacement), so `flashRowId` would never reset. Keying solely on `flashRowId` avoids
+	// that churn: this effect only fires when a flash actually starts or ends.
+	useEffect(() => {
+		if (flashRowId === null) return;
+		const timer = setTimeout(() => setFlashRowId(null), 1600);
+		return () => clearTimeout(timer);
+	}, [flashRowId]);
+
 	// A turn-divider's "files changed" chip → deep-link the right panel to the first changed file (flip to
 	// Changes + highlight its row; the diff opens only on an explicit click). This is the one chat touch of
 	// the store outside the renderers, kept here in the integration layer.
@@ -313,7 +459,10 @@ export default function ChatView({
 							// Row ids are stable across streaming snapshots (rows.ts), so items never remount mid-stream.
 							computeItemKey={(_, row) => row.id}
 							itemContent={(_, row) => (
-								<div className="mx-auto max-w-3xl px-md py-xs">
+								<div
+									data-flash={row.id === flashRowId || undefined}
+									className="mx-auto max-w-3xl rounded-[var(--radius-md)] px-md py-xs transition-colors data-[flash]:bg-[var(--primary-10)]"
+								>
 									<ChatTurnView
 										row={row}
 										workspaceRoot={workspaceRoot}
@@ -341,21 +490,39 @@ export default function ChatView({
 							))}
 						</div>
 					) : null}
-					<Composer
-						value={draft}
-						onChange={(v) => useAppStore.getState().setChatDraft(sessionId, v)}
-						isStreaming={isStreaming}
-						commands={commands}
-						mentionCandidates={mentionCandidates}
-						models={models}
-						currentModel={currentModel}
-						thinkingLevel={thinkingLevel}
-						onMentionQuery={onMentionQuery}
-						onSelectModel={onSelectModel}
-						onSelectThinking={onSelectThinking}
-						onSubmit={onSubmit}
-						onAbort={onAbort}
-					/>
+					<div className="relative shrink-0">
+						<HistoryOverlay
+							state={historyState}
+							workspaceNames={workspaceNames}
+							onQueryChange={setQuery}
+							onCycleScope={cycleScope}
+							onSetScope={setScope}
+							onToggleStage={toggleStage}
+							onMoveSelection={moveSelection}
+							onClose={closeHistory}
+							onInsert={onInsertHit}
+							onInsertAndSend={onInsertAndSendHit}
+							onOpenMessage={openMessage}
+						/>
+						<Composer
+							ref={composerRef}
+							value={draft}
+							onChange={(v) => useAppStore.getState().setChatDraft(sessionId, v)}
+							isStreaming={isStreaming}
+							commands={commands}
+							mentionCandidates={mentionCandidates}
+							recentPrompts={recentPrompts}
+							models={models}
+							currentModel={currentModel}
+							thinkingLevel={thinkingLevel}
+							onMentionQuery={onMentionQuery}
+							onSelectModel={onSelectModel}
+							onSelectThinking={onSelectThinking}
+							onSubmit={onSubmit}
+							onAbort={onAbort}
+							onHistoryOpen={onHistoryOpen}
+						/>
+					</div>
 					{pendingExtUi ? (
 						<ExtUiDialog key={pendingExtUi.id} request={pendingExtUi} onReply={onExtUiReply} />
 					) : null}
