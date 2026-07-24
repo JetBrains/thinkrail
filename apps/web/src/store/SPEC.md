@@ -99,7 +99,9 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   `isSkillPath`, or a truncated wildcard), *accumulated* so a later non-skill batch never clears it — and
   each chat records **`skillsSyncedTickBySession: Record<sessionId, tick>`** = the tick it loaded skills at
   (set on `openChatSession`/`hydrateSession`, bumped by **`markSkillsSynced(sessionId, syncedTick)`** on a
-  successful reload; dropped with the runtime in `closeChatRuntime`/`clearWorkspaceTabs`). That
+  successful reload — **monotonic** (`Math.max`, so an out-of-order reload completion can't move the
+  baseline backward) and a **no-op for a disposed session** (a late completion can't resurrect an entry
+  dropped by `closeChatRuntime`/`clearWorkspaceTabs`)). That
   `syncedTick` is the workspace tick captured at the **start** of the skill-loading round-trip
   (`selectWorkspaceTick`, snapshot by the caller before `session.create`/`reloadResources`/`getMessages`),
   **not** at completion — so a skill change whose `fsChanged` frame folds while the load is in flight (which

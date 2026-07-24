@@ -858,9 +858,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 			};
 		}),
 	markSkillsSynced: (sessionId, syncedTick) =>
-		set((s) => ({
-			skillsSyncedTickBySession: { ...s.skillsSyncedTickBySession, [sessionId]: syncedTick },
-		})),
+		set((s) => {
+			// A reload can resolve after its chat was disposed (closeChatRuntime/clearWorkspaceTabs) — don't
+			// resurrect a dropped baseline for a session that no longer exists.
+			if (!s.sessions[sessionId]) return {};
+			// Monotonic: out-of-order reload completions (an older request landing last) must never move the
+			// baseline backward and re-light the badge — "synced up to at least tick X" only ever advances.
+			const synced = Math.max(s.skillsSyncedTickBySession[sessionId] ?? 0, syncedTick);
+			return {
+				skillsSyncedTickBySession: { ...s.skillsSyncedTickBySession, [sessionId]: synced },
+			};
+		}),
 	updateFileTabContent: (id, content, tick) =>
 		set((s) => {
 			for (const [wsId, tabs] of Object.entries(s.tabsByWorkspace)) {

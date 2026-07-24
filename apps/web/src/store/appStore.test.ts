@@ -1024,6 +1024,22 @@ test("skills badge: closing a chat runtime drops its sync baseline (no leak)", (
 	expect(s().skillsSyncedTickBySession.a).toBeUndefined();
 });
 
+test("skills badge: markSkillsSynced is monotonic and ignores a disposed session", () => {
+	const s = () => useAppStore.getState();
+	s().openChatSession("ws1", "a", null, "medium");
+
+	// Out-of-order reload completions: a newer baseline lands, then an older request resolves last —
+	// the older tick must not move the baseline backward (which would falsely re-light the badge).
+	s().markSkillsSynced("a", 5);
+	s().markSkillsSynced("a", 2);
+	expect(s().skillsSyncedTickBySession.a).toBe(5);
+
+	// A completion after the runtime was disposed must not resurrect a dropped entry (leak).
+	s().closeChatRuntime("a");
+	s().markSkillsSynced("a", 9);
+	expect(s().skillsSyncedTickBySession.a).toBeUndefined();
+});
+
 test("skills badge: a session hydrated on reconnect anchors to the current fs tick", () => {
 	const s = () => useAppStore.getState();
 	// A skill change already landed before this client hydrated the session…
