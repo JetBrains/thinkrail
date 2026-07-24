@@ -1,8 +1,9 @@
-import { readFileSync, statSync } from "node:fs";
-import { SessionManager } from "@earendil-works/pi-coding-agent";
+import { readdir, readFile, stat } from "node:fs/promises";
+import { join } from "node:path";
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import type { HistorySearchResult, MessageHit, PromptHit } from "@thinkrail/contracts";
 import { MAX_HISTORY_LIMIT, MAX_HISTORY_QUERY_LENGTH } from "@thinkrail/contracts";
-import { extractEntries, type HistoryEntry } from "./extract";
+import { extractSession, type HistoryEntry } from "./extract";
 
 interface SessionRecord {
 	sessionId: string;
@@ -17,12 +18,13 @@ interface SessionRecord {
 }
 
 const REVALIDATE_MS = 2000;
-const BATCH = 20;
 /** Cold (first-ever) build budget: block `search()` this long, then return whatever's parsed so far
- * with `indexing: true`. A warm revalidation is NOT awaited — `SessionManager.listAll()` re-reads and
- * parses every session file (cost scales with the whole corpus, not the mtime diff), so blocking a search
- * on it would tax every query; instead it runs in the background and results are at most one revalidation
- * cycle stale (the same tolerance the cold path's `indexing` flag already relies on). */
+ * with `indexing: true`. A warm revalidation is NOT awaited — an unchanged corpus revalidates for just a
+ * `readdir` walk + one `stat` per file, but a bulk change (the first refresh after a restart, a git
+ * checkout touching many sessions) still re-parses every changed file, so blocking a search on it would
+ * tax exactly the queries that hit the worst case; instead it runs in the background and results are at
+ * most one revalidation cycle stale (the same tolerance the cold path's `indexing` flag already relies
+ * on). */
 const COLD_BUILD_BUDGET_MS = 150;
 /** Default snippet half-window, in chars, on either side of the matched term. */
 const SNIPPET_RADIUS = 60;
@@ -57,6 +59,16 @@ export function makeSnippet(text: string, term: string, radius = SNIPPET_RADIUS)
 	return `${prefix}${text.slice(start, end)}${suffix}`;
 }
 
+/** The `.jsonl` files directly inside `dir` (non-recursive — pi's own rule for a flat session dir);
+ * a missing/unreadable dir is an empty list, matching pi's tolerance for a vanished dir mid-walk. */
+async function listJsonl(dir: string): Promise<string[]> {
+	try {
+		return (await readdir(dir)).filter((f) => f.endsWith(".jsonl")).map((f) => join(dir, f));
+	} catch {
+		return [];
+	}
+}
+
 export class HistoryIndex {
 	private records = new Map<string, SessionRecord>(); // keyed by file path
 	private building: Promise<void> | null = null;
@@ -65,48 +77,74 @@ export class HistoryIndex {
 
 	constructor(private sessionDir?: string) {}
 
-	private async listInfos() {
-		return this.sessionDir ? SessionManager.listAll(this.sessionDir) : SessionManager.listAll();
+	/**
+	 * Enumerate candidate session files WITHOUT reading their contents — never via
+	 * `SessionManager.listAll()`, which reads and JSON-parses every session in full just to list it (see
+	 * SPEC.md). Mirrors pi's pinned discovery rules: a custom `sessionDir` is a flat, non-recursive dir of
+	 * `.jsonl` files; the default root (`<agentDir>/sessions` — agent dir resolved per call via pi's
+	 * `getAgentDir()`, which reads `PI_CODING_AGENT_DIR` live) holds one level of per-cwd subdirectories.
+	 * A missing dir is an empty corpus, not an error.
+	 */
+	private async listFiles(): Promise<string[]> {
+		if (this.sessionDir) return listJsonl(this.sessionDir);
+		const root = join(getAgentDir(), "sessions");
+		let subdirs: string[] = [];
+		try {
+			subdirs = (await readdir(root, { withFileTypes: true }))
+				.filter((entry) => entry.isDirectory())
+				.map((entry) => join(root, entry.name));
+		} catch {
+			return [];
+		}
+		const files: string[] = [];
+		for (const dir of subdirs) files.push(...(await listJsonl(dir)));
+		return files;
 	}
 
-	private loadRecord(info: { path: string; id: string; cwd: string; name?: string }): void {
+	/** One async read + parse; identity (id/cwd/title) comes from the same parse (`extractSession`).
+	 * `mtimeMs`/`size` are the values statted BEFORE the read — if an append lands between the stat and
+	 * the read, the stored pair is older than the stored content, so the next cycle just re-reads (the
+	 * safe direction; recording a post-read stat could mask an append that slipped in between). */
+	private async loadRecord(path: string, mtimeMs: number, size: number): Promise<void> {
 		try {
-			const { mtimeMs, size } = statSync(info.path);
-			const entries = extractEntries(readFileSync(info.path, "utf8"));
-			this.records.set(info.path, {
-				sessionId: info.id,
-				cwd: info.cwd,
-				path: info.path,
+			const session = extractSession(await readFile(path, "utf8"));
+			if (!session) {
+				this.records.delete(path); // a stray non-session .jsonl — pi would skip it too
+				return;
+			}
+			this.records.set(path, {
+				sessionId: session.id,
+				cwd: session.cwd,
+				path,
 				mtimeMs,
 				size,
-				entries,
-				...(info.name ? { title: info.name } : {}),
+				entries: session.entries,
+				...(session.title ? { title: session.title } : {}),
 			});
 		} catch {
-			this.records.delete(info.path); // vanished/unreadable mid-walk — drop it
+			this.records.delete(path); // vanished/unreadable mid-walk — drop it
 		}
 	}
 
-	/** Cold build / revalidation. Batched so it never starves the event loop live sessions share. */
+	/** Cold build / revalidation. Only new/changed files are read and parsed; every file boundary has an
+	 * `await` (stat/read), so the walk never starves the event loop live sessions share — the longest
+	 * uninterrupted stretch is one file's parse. */
 	private async refresh(): Promise<void> {
-		const infos = await this.listInfos();
-		const seen = new Set<string>();
-		let inBatch = 0;
-		for (const info of infos) {
-			seen.add(info.path);
-			const rec = this.records.get(info.path);
+		const files = await this.listFiles();
+		const seen = new Set<string>(files);
+		for (const path of files) {
 			let mtimeMs = 0;
 			let size = 0;
 			try {
-				({ mtimeMs, size } = statSync(info.path));
+				({ mtimeMs, size } = await stat(path));
 			} catch {
 				continue;
 			}
+			const rec = this.records.get(path);
 			// Skip only when BOTH mtime and size are unchanged — an append can land in the same coarse
 			// mtime tick as the last read, but it always changes the size.
 			if (rec && rec.mtimeMs === mtimeMs && rec.size === size) continue;
-			this.loadRecord(info);
-			if (++inBatch % BATCH === 0) await new Promise((r) => setImmediate(r));
+			await this.loadRecord(path, mtimeMs, size);
 		}
 		for (const path of this.records.keys()) if (!seen.has(path)) this.records.delete(path);
 		this.built = true;
@@ -131,9 +169,9 @@ export class HistoryIndex {
 	/**
 	 * Search the index. Blocks on a cold (first-ever) build up to `COLD_BUILD_BUDGET_MS`, then returns
 	 * partial results with `indexing: true` if the build is still running. A warm revalidation (mtime
-	 * throttled to `REVALIDATE_MS`) runs in the background and is **not** awaited — it re-parses the whole
-	 * corpus via `listAll()`, so blocking on it would tax every search; results are instead at most one
-	 * revalidation cycle stale.
+	 * throttled to `REVALIDATE_MS`) runs in the background and is **not** awaited — its worst case (a bulk
+	 * change re-parsing many files) is exactly when blocking would hurt most; results are instead at most
+	 * one revalidation cycle stale.
 	 */
 	async search(input: {
 		query: string;

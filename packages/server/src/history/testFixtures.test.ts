@@ -82,7 +82,9 @@ describe("writeFixtureSession — pinned against pi's real SessionManager", () =
 		}
 	});
 
-	test("default layout: no-arg listAll() also finds it (the exact call HistoryIndex's production default makes)", async () => {
+	// `HistoryIndex` no longer calls `listAll()` (it walks the layout itself — see SPEC.md), so this now
+	// pins the *layout facts* both walkers share: what pi's real discovery sees is what ours must see.
+	test("default layout: pi's real no-arg listAll() finds what HistoryIndex's own default walk must also find", async () => {
 		const agentDir = mkdtempSync(join(tmpdir(), "trpi-fixture-listall-"));
 		const previousEnv = process.env.PI_CODING_AGENT_DIR;
 		try {

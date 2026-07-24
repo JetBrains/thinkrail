@@ -19,7 +19,7 @@ const BASE_TS = 1_700_000_000_000;
 
 /**
  * Seeds two sessions for `E2E_EXTERNAL_CWD` under `agentDir`'s default per-cwd layout — the same layout
- * production `HistoryIndex` discovers via no-arg `SessionManager.listAll()` (see
+ * a no-arg production `HistoryIndex` discovers with its own walk (see
  * `packages/server/src/history/SPEC.md`'s "pi file format" section), and the layout the e2e host actually
  * runs against (`PI_CODING_AGENT_DIR=E2E_PI_AGENT_DIR`, `playwright.config.ts`).
  *

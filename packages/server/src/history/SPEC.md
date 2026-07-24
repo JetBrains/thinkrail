@@ -10,28 +10,47 @@ tags: [v1, history]
 
 ## Responsibility
 The `history.search` backend: a **lazy in-memory index** over pi's session JSONL files (prompt recall +
-full-conversation matches). Reads via pi's `SessionManager.listAll()`; **never writes** session files.
-Because `listAll()` walks every pi session on disk, the host handler's `all` scope (`host/historyScope.ts`'s
-`filter = () => true`) deliberately surfaces pi-CLI sessions outside any registered ThinkRail workspace
-too — a bit more than `session.getMessages` itself ever exposes for a single session, but consistent with
-an owner-scoped host (no multi-tenant isolation to preserve).
+full-conversation matches). Enumerates and reads session files **itself** (async `readdir`/`stat`/
+`readFile`, replicating pi's pinned discovery layout below) — it must **never call
+`SessionManager.listAll()`** on any search/refresh path: `listAll` reads and JSON-parses *every session
+file in full* just to build its `SessionInfo`s (`messageCount`/`allMessagesText` we never use), so an
+index refresh through it costs the whole corpus even when nothing changed, on the event loop every live
+session shares. **Never writes** session files. Because discovery walks every pi session on disk, the
+host handler's `all` scope (`host/historyScope.ts`'s `filter = () => true`) deliberately surfaces pi-CLI
+sessions outside any registered ThinkRail workspace too — a bit more than `session.getMessages` itself
+ever exposes for a single session, but consistent with an owner-scoped host (no multi-tenant isolation
+to preserve).
 
 ## Design
-- `extract.ts` — pure JSONL→`HistoryEntry[]`. Pi session files are **trees** (abandoned branches) that
-  compaction rewrites, so it resolves the file the way pi does before the client renders it —
-  `parseSessionEntries` → `migrateSessionEntries` → `buildSessionContext` (follow the current leaf, apply
-  the latest compaction, drop summarized/abandoned entries) — then indexes the resolved messages, filtered
-  to the same renderable roles `getSessionMessages` sends. So `messageIndex` matches the client's
-  `turnIdByMessageIndex` exactly (no raw-file-order drift), and abandoned/summarized text never becomes a
-  hit. The internal `TODO_NUDGE_PREFIX` control message (hidden from the transcript on hydrate) is skipped
-  after its index slot is consumed, so alignment holds. Searchable text capped (`MAX_SEARCHABLE`); tool
+- `extract.ts` — pure JSONL→`ExtractedSession | null` (`extractSession`): the session's identity
+  (`id`/`cwd` from the header, mirroring pi's own rejection rule — the first parseable entry must be a
+  `type: "session"` header with a string `id`, else `null`), its `title` (the **latest** `session_info`
+  entry's name, including explicit clears — the same latest-wins rule as pi's `buildSessionInfo`), and its
+  `HistoryEntry[]` — all from **one parse**, so the index never needs a second source (`listAll`) for
+  metadata. Pi session files are **trees** (abandoned branches) that compaction rewrites, so it resolves
+  the file the way pi does before the client renders it — `parseSessionEntries` →
+  `migrateSessionEntries` → `buildSessionContext` (follow the current leaf, apply the latest compaction,
+  drop summarized/abandoned entries) — then indexes the resolved messages, filtered to the same renderable
+  roles `getSessionMessages` sends. So `messageIndex` matches the client's `turnIdByMessageIndex` exactly
+  (no raw-file-order drift), and abandoned/summarized text never becomes a hit. The internal
+  `TODO_NUDGE_PREFIX` control message (hidden from the transcript on hydrate) is skipped after its index
+  slot is consumed, so alignment holds. Entry text is **full, never truncated** — a hit's `text` is what
+  recall inserts and what the overlay's preview presents as the whole prompt, so a cap would silently
+  corrupt recall of long pasted-log prompts and make terms past the cutoff unsearchable (the memory
+  precedent is pi itself: `SessionInfo.allMessagesText` holds every session's full text in memory). Tool
   results/thinking not indexed (V1).
-- `historyIndex.ts` — `HistoryIndex`: cold build on first search (batched, yields the event loop; blocks
-  the search up to a budget, then returns partial with `indexing: true`). Freshness = `(mtime, size)`
+- `historyIndex.ts` — `HistoryIndex`: cold build on first search (async per-file IO yields the event loop;
+  blocks the search up to a budget, then returns partial with `indexing: true`). Discovery is its own
+  async enumeration (see "pi file format" below for the pinned layout): a custom `sessionDir` is a flat,
+  non-recursive dir of `.jsonl` files; the default root is `<agentDir>/sessions` — agent dir resolved
+  **per refresh** via pi's exported `getAgentDir()`, which reads `PI_CODING_AGENT_DIR` live — holding one
+  level of per-cwd subdirectories. Freshness = `(mtime, size)`
   revalidation throttled to ~2 s (pi appends live messages to the file, so the file IS the live feed — no
   agent-module hook; size is compared alongside mtime so an append landing in the same coarse mtime tick
-  still reloads). A warm revalidation runs in the **background** — `SessionManager.listAll()` re-parses the
-  whole corpus, so a search never blocks on it; results are at most one cycle stale, and the background
+  still reloads); only a **new or changed** file is read (once, `readFile`) and re-parsed — an unchanged
+  corpus costs one `readdir` walk + one `stat` per file, no reads, no parses. A warm revalidation runs in
+  the **background** — a bulk change (first refresh after restart, a git checkout) can still mean many
+  parses, so a search never blocks on it; results are at most one cycle stale, and the background
   refresh swallows its own errors (an unhandled rejection could crash the in-process host). `indexing` is
   reported whenever any build is in flight (cold OR a background revalidation), so the client's retry loop
   polls until a just-written session lands — read-your-writes without blocking the search. Matching:
@@ -60,7 +79,9 @@ an owner-scoped host (no multi-tenant isolation to preserve).
 
 ## pi file format (pinned v0.80.6 — `@earendil-works/pi-coding-agent`)
 Verified by reading `dist/core/session-manager.{js,d.ts}` in the installed package (source of truth over
-any assumption — re-verify on a pi version bump):
+any assumption — re-verify on a pi version bump). These facts now pin **two** consumers: the fixtures
+below, and `historyIndex.ts`'s own discovery walk (which must see exactly the files pi's `SessionManager`
+would):
 - **Header line** (always line 1, `SessionHeader`): `{ type: "session", version?: number, id: string,
   timestamp: string /* ISO */, cwd: string, parentSession?: string }`. `readSessionHeader`/`buildSessionInfo`
   reject the file (return `null`/`[]`) unless the first line parses as JSON with `type === "session"` and a
@@ -99,14 +120,16 @@ any assumption — re-verify on a pi version bump):
 
 ## Boundary
 - **Public surface (`index.ts`):** `HistoryIndex`, `getHistoryIndex()`, `matchesTerms`, `makeSnippet`,
-  `clampLimit`, `extractEntries`, types. **No test helpers** — `writeFixtureSession`/`defaultSessionDirFor`
+  `clampLimit`, `extractSession`, types. **No test helpers** — `writeFixtureSession`/`defaultSessionDirFor`
   are disk-writing test-only builders and must not enter the runtime module graph; they're reachable only
   through the server package's dedicated **`@thinkrail/server/history-test-fixtures`** subpath export
   (package.json), the sanctioned test boundary — same pattern as `@thinkrail/server/agent`. In-package
   tests import them relatively (`./testFixtures`); the e2e seeder imports the subpath.
-- **Allowed deps:** `@earendil-works/pi-coding-agent` (`SessionManager`, plus the exported session-tree
-  helpers `parseSessionEntries`/`migrateSessionEntries`/`buildSessionContext` used by `extract.ts`),
-  `@thinkrail/contracts`, `node:fs`, `node:path`.
+- **Allowed deps:** `@earendil-works/pi-coding-agent` (`getAgentDir` — the default sessions root — plus
+  the exported session-tree helpers `parseSessionEntries`/`migrateSessionEntries`/`buildSessionContext`
+  used by `extract.ts`; **not `SessionManager`** in production code — see Responsibility. Tests may use
+  `SessionManager` to *pin* layout/format facts against the real thing), `@thinkrail/contracts`,
+  `node:fs`, `node:fs/promises`, `node:path`.
 - **Forbidden:** importing `agent`/`workspaces`/`projects` (scope mapping is injected by the host handler
   via the `filter`/`labels` callbacks passed into `search()`); writing anything to disk (`writeFixtureSession`
   is test-only, never called from production code paths).
