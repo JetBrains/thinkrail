@@ -1,6 +1,7 @@
 import { readFileSync, statSync } from "node:fs";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import type { HistorySearchResult, MessageHit, PromptHit } from "@thinkrail/contracts";
+import { MAX_HISTORY_LIMIT, MAX_HISTORY_QUERY_LENGTH } from "@thinkrail/contracts";
 import { extractEntries, type HistoryEntry } from "./extract";
 
 interface SessionRecord {
@@ -9,17 +10,31 @@ interface SessionRecord {
 	title?: string;
 	path: string;
 	mtimeMs: number;
+	/** File size — paired with `mtimeMs` for change detection so an append that lands in the same coarse
+	 * mtime tick as the last read (the file always grows) still triggers a reload. */
+	size: number;
 	entries: HistoryEntry[];
 }
 
 const REVALIDATE_MS = 2000;
 const BATCH = 20;
 /** Cold (first-ever) build budget: block `search()` this long, then return whatever's parsed so far
- * with `indexing: true`. Warm revalidations (only new/mtime-changed files) are always awaited in full —
- * they're bounded by the mtime diff, so search results are only ever as stale as the last file write. */
+ * with `indexing: true`. A warm revalidation is NOT awaited — `SessionManager.listAll()` re-reads and
+ * parses every session file (cost scales with the whole corpus, not the mtime diff), so blocking a search
+ * on it would tax every query; instead it runs in the background and results are at most one revalidation
+ * cycle stale (the same tolerance the cold path's `indexing` flag already relies on). */
 const COLD_BUILD_BUDGET_MS = 150;
 /** Default snippet half-window, in chars, on either side of the matched term. */
 const SNIPPET_RADIUS = 60;
+
+/** Clamp a client-supplied `limit` to a finite, non-negative integer within the protocol cap — so a
+ * missing/negative/oversized value can neither defeat the cap nor hit `Array.slice`'s negative-index
+ * semantics (`slice(0, -1)` would silently drop the last item). Applied at both the `history.search`
+ * handler boundary and inside `search()` (defense in depth). */
+export function clampLimit(limit: number | undefined): number {
+	if (typeof limit !== "number" || !Number.isFinite(limit)) return 50;
+	return Math.max(0, Math.min(MAX_HISTORY_LIMIT, Math.floor(limit)));
+}
 
 /** `query.toLowerCase().split(/\s+/)` AND-matching: every term must be a case-insensitive substring of
  * `text`. An empty term (from an empty/whitespace-only query) is vacuously true for any text — this is
@@ -56,13 +71,14 @@ export class HistoryIndex {
 
 	private loadRecord(info: { path: string; id: string; cwd: string; name?: string }): void {
 		try {
-			const mtimeMs = statSync(info.path).mtimeMs;
+			const { mtimeMs, size } = statSync(info.path);
 			const entries = extractEntries(readFileSync(info.path, "utf8"));
 			this.records.set(info.path, {
 				sessionId: info.id,
 				cwd: info.cwd,
 				path: info.path,
 				mtimeMs,
+				size,
 				entries,
 				...(info.name ? { title: info.name } : {}),
 			});
@@ -80,12 +96,15 @@ export class HistoryIndex {
 			seen.add(info.path);
 			const rec = this.records.get(info.path);
 			let mtimeMs = 0;
+			let size = 0;
 			try {
-				mtimeMs = statSync(info.path).mtimeMs;
+				({ mtimeMs, size } = statSync(info.path));
 			} catch {
 				continue;
 			}
-			if (rec && rec.mtimeMs === mtimeMs) continue;
+			// Skip only when BOTH mtime and size are unchanged — an append can land in the same coarse
+			// mtime tick as the last read, but it always changes the size.
+			if (rec && rec.mtimeMs === mtimeMs && rec.size === size) continue;
 			this.loadRecord(info);
 			if (++inBatch % BATCH === 0) await new Promise((r) => setImmediate(r));
 		}
@@ -97,17 +116,24 @@ export class HistoryIndex {
 		const now = Date.now();
 		if (!this.building && (!this.built || now - this.lastCheck > REVALIDATE_MS)) {
 			this.lastCheck = now;
-			this.building = this.refresh().finally(() => {
-				this.building = null;
-			});
+			// A warm revalidation isn't awaited by `search()`, so swallow its errors here — an unhandled
+			// rejection would otherwise be able to take down the in-process host. A failed refresh just
+			// leaves the current index in place; the next cycle retries. (A cold build's error is caught the
+			// same way, leaving `built` false so `indexing: true` keeps being reported until it succeeds.)
+			this.building = this.refresh()
+				.catch(() => {})
+				.finally(() => {
+					this.building = null;
+				});
 		}
 	}
 
 	/**
 	 * Search the index. Blocks on a cold (first-ever) build up to `COLD_BUILD_BUDGET_MS`, then returns
 	 * partial results with `indexing: true` if the build is still running. A warm revalidation (mtime
-	 * throttled to `REVALIDATE_MS`) is always awaited fully — it only touches new/changed files, so it's
-	 * bounded and search results should never lag behind an on-disk write by more than the throttle.
+	 * throttled to `REVALIDATE_MS`) runs in the background and is **not** awaited — it re-parses the whole
+	 * corpus via `listAll()`, so blocking on it would tax every search; results are instead at most one
+	 * revalidation cycle stale.
 	 */
 	async search(input: {
 		query: string;
@@ -117,16 +143,25 @@ export class HistoryIndex {
 	}): Promise<HistorySearchResult> {
 		const wasCold = !this.built;
 		this.ensureFresh();
-		if (this.building) {
-			if (wasCold) await Promise.race([this.building, Bun.sleep(COLD_BUILD_BUDGET_MS)]);
-			else await this.building;
+		// Only a cold build blocks the search (up to the budget); a warm revalidation runs in the
+		// background — see `COLD_BUILD_BUDGET_MS`.
+		if (this.building && wasCold) {
+			await Promise.race([this.building, Bun.sleep(COLD_BUILD_BUDGET_MS)]);
 		}
-		const indexing = !this.built;
+		// `indexing` is reported while ANY build is in flight — the first cold build OR a background warm
+		// revalidation — not just the cold one. A warm revalidation returns the current (possibly
+		// one-cycle-stale) records immediately without blocking, but flagging `indexing` keeps the client's
+		// retry loop polling until `this.building` settles, so a just-written session still surfaces without
+		// the search ever having to wait on the full-corpus re-parse (read-your-writes without blocking).
+		const indexing = !this.built || this.building !== null;
 
-		const limit = input.limit ?? 50;
-		const terms = input.query.toLowerCase().split(/\s+/);
+		const limit = clampLimit(input.limit);
+		// Cap the query length as defense against pathological matching work; truncation can't turn a
+		// non-empty query empty, so the "empty query matches everything" branch is unaffected.
+		const query = input.query.slice(0, MAX_HISTORY_QUERY_LENGTH);
+		const terms = query.toLowerCase().split(/\s+/);
 		const primaryTerm = terms.find((t) => t.length > 0) ?? "";
-		const emptyQuery = input.query.trim().length === 0;
+		const emptyQuery = query.trim().length === 0;
 
 		const promptCandidates: PromptHit[] = [];
 		const messageCandidates: MessageHit[] = [];

@@ -49,7 +49,7 @@ import { selectDirectory } from "../dialog";
 import { readDir, readFile } from "../fs";
 import { gitDiffFile, gitStatus, listBranches, prefetchBranch } from "../git";
 import { githubAuthStatus, githubRefresh } from "../github";
-import { getHistoryIndex } from "../history";
+import { clampLimit, getHistoryIndex } from "../history";
 import {
 	acknowledgeProjectSkills,
 	closeProject,
@@ -409,11 +409,12 @@ const handlers: Record<string, Handler> = {
 		const { filter, labels } = buildHistoryScope(p.scope, listProjects(), (projectId) =>
 			listWorkspaceRecords(projectId),
 		);
+		// Clamp the client-controlled limit at the boundary (defense in depth; `search()` clamps too).
 		return getHistoryIndex().search({
 			query: p.query,
 			filter,
 			labels,
-			...(p.limit ? { limit: p.limit } : {}),
+			limit: clampLimit(p.limit),
 		});
 	},
 };

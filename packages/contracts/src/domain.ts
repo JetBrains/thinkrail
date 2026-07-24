@@ -332,6 +332,14 @@ export interface AppConfig {
 /** The config a fresh host (no `config.json` yet) falls back to. */
 export const DEFAULT_CONFIG: AppConfig = { theme: "dark" };
 
+/**
+ * Prefix on the internal "wake the agent" nudge the client sends when a TODO is added. It is control
+ * traffic, not conversation: hidden from the rendered transcript (never appended live, skipped on
+ * hydrate) and excluded from history search. Lives on the wire so both the web client (which authors and
+ * hides it) and the host history indexer (which must skip it) agree on the exact marker.
+ */
+export const TODO_NUDGE_PREFIX = "[thinkrail:todo-nudge] ";
+
 /** History-search scope — the overlay's cycle: this chat → workspace → project → everywhere. */
 export type HistoryScope =
 	| { kind: "chat"; sessionId: string }
@@ -373,7 +381,19 @@ export interface MessageHit extends PromptHit {
 	anchorText: string;
 }
 
-/** `history.search` result. `indexing` = the one-time cold build is still running (show "indexing…"). */
+/**
+ * Protocol maximum for `history.search`'s `limit`. The client asks for far fewer; this is the hard
+ * ceiling the host clamps a request to (defense in depth), so a malformed/oversized/negative `limit`
+ * can neither defeat the cap nor hit `Array.slice`'s negative-index semantics.
+ */
+export const MAX_HISTORY_LIMIT = 200;
+
+/** Protocol maximum for a `history.search` `query`, in characters — bounds worst-case matching work. */
+export const MAX_HISTORY_QUERY_LENGTH = 200;
+
+/** `history.search` result. `indexing` = a build is still in flight — the one-time cold build, or a
+ * background warm revalidation — so results may not yet be complete/current; the client keeps re-querying
+ * (and may show "indexing…") until it clears. */
 export interface HistorySearchResult {
 	prompts: PromptHit[];
 	messages: MessageHit[];

@@ -5,7 +5,8 @@
 	"type": "module",
 	"exports": {
 		".": "./src/index.ts",
-		"./agent": "./src/agent/index.ts"
+		"./agent": "./src/agent/index.ts",
+		"./history-test-fixtures": "./src/history/testFixtures.ts"
 	},
 	"scripts": {
 		"dev": "bun run --watch src/dev.ts",
