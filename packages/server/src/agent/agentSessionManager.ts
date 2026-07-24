@@ -383,7 +383,7 @@ export function getSessionStats(sessionId: string): SessionStats {
 }
 
 // Slash commands / skills available in the session — built from the same three sources pi's own rpc mode
-// uses. In sync with @earendil-works/pi-coding-agent@0.81.1 (modes/rpc get_commands).
+// uses. In sync with @earendil-works/pi-coding-agent@0.82.0 (modes/rpc get_commands).
 export function getSessionCommands(sessionId: string): SlashCommandInfo[] {
 	const session = mustGet(sessionId);
 	const extension = session.extensionRunner.getRegisteredCommands().map((c) => ({

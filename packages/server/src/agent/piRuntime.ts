@@ -17,16 +17,17 @@ export function configurePiRuntime(rt: ModelRuntime | null): void {
  * Create the shared runtime from on-disk auth + catalogs (`~/.pi/agent`), with ambient network OFF.
  *
  * Model-catalog reads stay **local** (builtin catalogs + models.json + the persisted models-store),
- * matching the pre-0.80.8 behavior. Without that, every `reloadConfig()`/`refresh()` — i.e. every
- * `provider.status` read and jbcentral connect — would await remote pi.dev catalog checks with **no
- * timeout** (the catalog fetch takes only the caller's signal, and `reloadConfig` passes none),
- * stalling those paths wherever that egress is slow or blocked (CI, offline). The one deliberate
- * opt-in to live catalogs is `refreshCatalogsDetached` below (issue #98).
+ * matching the pre-0.80.8 behavior. Without that, every no-options `refresh()` (pi 0.82 folded the
+ * old `reloadConfig()` into it) — i.e. every `provider.status` read and jbcentral connect — would
+ * await remote pi.dev catalog checks with **no timeout** (the catalog fetch takes only the caller's
+ * signal, and those callers pass none), stalling those paths wherever that egress is slow or blocked
+ * (CI, offline). The one deliberate opt-in to live catalogs is `refreshCatalogsDetached` below
+ * (issue #98).
  *
  * HOW it stays local changed under us in pi 0.81: `allowModelNetwork: false` now gates only the
- * create-time refresh, while the runtime's ambient-network default (`modelNetworkEnabled`, what
- * `reloadConfig()` resolves) is derived from **`PI_OFFLINE` at construction** — in 0.80.x the option
- * fed both. So the runtime is constructed under a scoped `PI_OFFLINE` (restored right after — a
+ * create-time refresh, while the runtime's ambient-network default (`modelNetworkEnabled`, what a
+ * no-options `refresh()` resolves) is derived from **`PI_OFFLINE` at construction** — in 0.80.x the
+ * option fed both. So the runtime is constructed under a scoped `PI_OFFLINE` (restored right after — a
  * user-set value is left untouched), which restores the 0.80.x semantics: ambient reads local,
  * network strictly a per-call `allowNetwork: true` opt-in. One-time, at the single creation choke
  * point; pi's other PI_OFFLINE consumers (tool downloads, version checks) never see the override
@@ -60,7 +61,7 @@ export function getPiRuntime(): Promise<ModelRuntime> {
 export type CatalogRefreshRuntime = Pick<ModelRuntime, "refresh">;
 
 // One in-flight refresh per runtime instance: pi's `refresh()` does NOT single-flight itself (verified
-// vs 0.81.1 — only the availability sub-refresh is queued), and each picker open triggers us again.
+// vs 0.82.0 — only the availability sub-refresh is queued), and each picker open triggers us again.
 const inflightCatalogRefresh = new WeakMap<CatalogRefreshRuntime, Promise<void>>();
 
 // pi's own model-selector refresh budget. With single-flight, a hung refresh must self-expire or it

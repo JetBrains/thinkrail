@@ -18,14 +18,15 @@ export function jbcentralInstalled(): boolean {
 }
 
 /**
- * Wire Claude+GPT through the jbcentral proxy (writes models.json), then reload the runtime's config so
- * it takes effect at once. Returns the outcome so the card can walk the user forward (install → sign in → connect).
+ * Wire Claude+GPT through the jbcentral proxy (writes models.json), then `refresh()` the runtime (which
+ * reloads models.json — pi 0.82 folded the old `reloadConfig()` into it) so it takes effect at once.
+ * Returns the outcome so the card can walk the user forward (install → sign in → connect).
  */
 export async function connectJbcentral(): Promise<JbcentralConnectResult> {
 	const result = await wireJbcentral(process.env);
 	switch (result.outcome) {
 		case "connected":
-			await (await getPiRuntime()).reloadConfig();
+			await (await getPiRuntime()).refresh();
 			return { outcome: "connected" };
 		case "needs-install":
 			return { outcome: "needs-install" };
@@ -36,10 +37,10 @@ export async function connectJbcentral(): Promise<JbcentralConnectResult> {
 	}
 }
 
-/** Undo the jbcentral overrides (models.json) and reload the config so the built-in endpoints return. */
+/** Undo the jbcentral overrides (models.json) and refresh so the built-in endpoints return. */
 export async function disconnectJbcentral(): Promise<void> {
 	await unwireJbcentral(process.env);
-	await (await getPiRuntime()).reloadConfig();
+	await (await getPiRuntime()).refresh();
 }
 
 /** Best-effort launch of `central login` (its browser sign-in) on the host. */
