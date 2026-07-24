@@ -32,7 +32,16 @@ channel fan-out, and the process-boot wrapper both launchers share.
   install SIGINT/SIGTERM handlers that **settle before exit**: `settleSessionsForShutdown()` — abort
   streaming sessions and wait bounded, so pi persists their "Operation aborted" tool results and
   transcripts land paired — then `stop()` + exit; an immediate exit would strand mid-tool transcripts on
-  the restart repair); `handlers.ts` (the WS method→handler registry);
+  the restart repair); `handlers.ts` (the WS method→handler registry, including the **Skills-manager set**:
+  `skill.list` / `skills.state` / `project.skills` build the admission context from `projects` (+ the
+  workspace's `skillOverrides` when workspace-scoped) and pass it into agent's `listSkillCommands`/
+  `listSkillCatalog`; `project.setTrust` acknowledges the aliases present at grant via agent's
+  `listProjectAliasSkillNames`; `project.acknowledgeSkills` / `project.setSkillEnabled` /
+  `project.setGroupEnabled` / `project.aliasSkills` / `workspace.setSkillOverride` mutate/read the persisted
+  toggles; `session.reloadResources` re-scans a running session — the composition stays here; `agent` never
+  imports its sibling. `createServer` also wires **`setSkillAdmissionResolver`**, mapping a session's
+  `workspaceId` → its project's trust/acknowledged/disabled + that workspace's overrides (fail-closed), so
+  `agent` gates skills without importing `projects`/`workspaces`);
   `ackSend.ts` (the send-ack policy — see "Get right"); `autoRename.ts` (the **workspace auto-rename
   flow** — the composition of `agent` + `assist` + `workspaces` only the host may make, in **two passes**
   the session-publisher closure in `createServer` tees fire-and-forget, both triggering a

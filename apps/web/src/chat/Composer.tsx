@@ -14,6 +14,11 @@ import {
 	useState,
 } from "react";
 import { ModelSelector } from "./ModelSelector";
+import {
+	SlashCommandMenu,
+	selectedSlashCommandValue,
+	useSlashCommandCompletion,
+} from "./SlashCommandCompletion";
 import { ThinkingSelector } from "./ThinkingSelector";
 
 /** How a submit is delivered: a fresh turn, an interrupt, or a queued message after the current turn. */
@@ -93,29 +98,20 @@ export function Composer({
 	const ref = useRef<HTMLTextAreaElement>(null);
 	const [caret, setCaret] = useState(0);
 	const [images, setImages] = useState<PendingImage[]>([]);
-	const [activeIndex, setActiveIndex] = useState(0);
-	const [dismissed, setDismissed] = useState(false);
+	const [mentionActiveIndex, setMentionActiveIndex] = useState(0);
+	const [mentionDismissed, setMentionDismissed] = useState(false);
 
 	const { token, start } = activeToken(value, caret);
 	const mentionQuery = token.startsWith("@") ? token.slice(1) : null;
-	// Slash commands are invoked from the start of the message (e.g. `/compact`, `/skill:foo`).
-	const slashQuery = value.startsWith("/") && !value.includes(" ") ? value.slice(1) : null;
 
 	useEffect(() => onMentionQuery(mentionQuery), [mentionQuery, onMentionQuery]);
 	// biome-ignore lint/correctness/useExhaustiveDependencies: reset selection when the query changes
 	useEffect(() => {
-		setActiveIndex(0);
-		setDismissed(false);
-	}, [mentionQuery, slashQuery]);
+		setMentionActiveIndex(0);
+		setMentionDismissed(false);
+	}, [mentionQuery]);
 
-	const slashMatches =
-		slashQuery !== null
-			? commands.filter((c) => c.name.toLowerCase().includes(slashQuery.toLowerCase())).slice(0, 8)
-			: [];
-	const mentionOpen = !dismissed && mentionQuery !== null && mentionCandidates.length > 0;
-	const slashOpen = !dismissed && slashQuery !== null && slashMatches.length > 0;
-	const menuLen = mentionOpen ? mentionCandidates.length : slashOpen ? slashMatches.length : 0;
-	const menuOpen = menuLen > 0;
+	const mentionOpen = !mentionDismissed && mentionQuery !== null && mentionCandidates.length > 0;
 
 	const focusCaret = (pos: number) => {
 		requestAnimationFrame(() => {
@@ -136,11 +132,15 @@ export function Composer({
 		focusCaret(before.length + insert.length + suffix.length);
 	};
 
-	const pickSlash = (c: SlashCommandInfo) => {
-		const next = `/${c.name} `;
-		onChange(next);
-		focusCaret(next.length);
-	};
+	const slashCompletion = useSlashCommandCompletion({
+		value,
+		commands,
+		onSelect: (command) => {
+			const next = selectedSlashCommandValue(command);
+			onChange(next);
+			focusCaret(next.length);
+		},
+	});
 
 	const addFiles = async (files: File[]) => {
 		const picked = files.filter((f) => f.type.startsWith("image/"));
@@ -165,34 +165,31 @@ export function Composer({
 	};
 
 	const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-		if (menuOpen) {
+		if (mentionOpen) {
+			const menuLen = mentionCandidates.length;
 			if (e.key === "ArrowDown") {
 				e.preventDefault();
-				setActiveIndex((i) => (i + 1) % menuLen);
+				setMentionActiveIndex((i) => (i + 1) % menuLen);
 				return;
 			}
 			if (e.key === "ArrowUp") {
 				e.preventDefault();
-				setActiveIndex((i) => (i - 1 + menuLen) % menuLen);
+				setMentionActiveIndex((i) => (i - 1 + menuLen) % menuLen);
 				return;
 			}
 			if (e.key === "Escape") {
 				e.preventDefault();
-				setDismissed(true);
+				setMentionDismissed(true);
 				return;
 			}
 			if (e.key === "Enter" || e.key === "Tab") {
 				e.preventDefault();
-				if (mentionOpen) {
-					const c = mentionCandidates[activeIndex];
-					if (c) pickMention(c);
-				} else {
-					const c = slashMatches[activeIndex];
-					if (c) pickSlash(c);
-				}
+				const candidate = mentionCandidates[mentionActiveIndex];
+				if (candidate) pickMention(candidate);
 				return;
 			}
 		}
+		if (slashCompletion.handleKeyDown(e)) return;
 		if (e.key === "Enter" && !e.shiftKey) {
 			e.preventDefault();
 			const behavior: SubmitBehavior = isStreaming
@@ -221,45 +218,35 @@ export function Composer({
 
 	return (
 		<div className="relative flex shrink-0 flex-col border-border2 border-t bg-bg-dark">
-			{menuOpen ? (
+			{mentionOpen ? (
 				<div
-					data-testid={mentionOpen ? "mention-menu" : "slash-menu"}
+					data-testid="mention-menu"
 					className="absolute bottom-full left-sm mb-xs max-h-[40vh] w-[min(28rem,90%)] overflow-y-auto rounded-[var(--radius-md)] border border-border2 bg-elevated p-xs shadow-[var(--shadow-md)]"
 				>
-					{mentionOpen
-						? mentionCandidates.map((c, i) => (
-								<button
-									key={c.path}
-									type="button"
-									data-testid="mention-item"
-									onClick={() => pickMention(c)}
-									className={`flex w-full items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs text-left text-sm ${i === activeIndex ? "bg-hover text-text" : "text-muted"}`}
-								>
-									{c.kind === "dir" ? (
-										<FolderIcon className="size-3.5 shrink-0" />
-									) : (
-										<FileIcon className="size-3.5 shrink-0" />
-									)}
-									<span className="truncate">{c.path}</span>
-								</button>
-							))
-						: slashMatches.map((c, i) => (
-								<button
-									key={`${c.source}:${c.name}`}
-									type="button"
-									data-testid="slash-command"
-									data-source={c.source}
-									onClick={() => pickSlash(c)}
-									className={`flex w-full items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs text-left text-sm ${i === activeIndex ? "bg-hover text-text" : "text-muted"}`}
-								>
-									<span className="font-mono text-text">/{c.name}</span>
-									{c.description ? <span className="truncate text-xs">{c.description}</span> : null}
-									<span className="ml-auto shrink-0 text-hint text-xs">
-										{c.source}/{c.sourceInfo.scope}
-									</span>
-								</button>
-							))}
+					{mentionCandidates.map((candidate, index) => (
+						<button
+							key={candidate.path}
+							type="button"
+							data-testid="mention-item"
+							onClick={() => pickMention(candidate)}
+							className={`flex w-full items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs text-left text-sm ${index === mentionActiveIndex ? "bg-hover text-text" : "text-muted"}`}
+						>
+							{candidate.kind === "dir" ? (
+								<FolderIcon className="size-3.5 shrink-0" />
+							) : (
+								<FileIcon className="size-3.5 shrink-0" />
+							)}
+							<span className="truncate">{candidate.path}</span>
+						</button>
+					))}
 				</div>
+			) : slashCompletion.open ? (
+				<SlashCommandMenu
+					commands={slashCompletion.matches}
+					activeIndex={slashCompletion.activeIndex}
+					onSelect={slashCompletion.pick}
+					className="absolute bottom-full left-sm mb-xs"
+				/>
 			) : null}
 
 			{images.length > 0 ? (

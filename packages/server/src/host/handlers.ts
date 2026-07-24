@@ -21,8 +21,12 @@ import {
 	getSessionStats,
 	hasSession,
 	listAvailableModels,
+	listProjectAliasSkillNames,
 	listSessions,
+	listSkillCatalog,
+	listSkillCommands,
 	promptSession,
+	reloadSessionResources,
 	removeSession,
 	removeWorkspaceSessions,
 	resolveExtUi,
@@ -45,11 +49,15 @@ import { readDir, readFile } from "../fs";
 import { gitDiffFile, gitStatus, listBranches, prefetchBranch } from "../git";
 import { githubAuthStatus, githubRefresh } from "../github";
 import {
+	acknowledgeProjectSkills,
 	closeProject,
 	initProject,
 	inspectProjectPath,
 	listProjects,
 	openProject,
+	setProjectGroupEnabled,
+	setProjectSkillEnabled,
+	setProjectTrust,
 } from "../projects";
 import { updateConfig } from "../settings";
 import { evictSpecIndex, projectHasSpecs, specGraph } from "../spec";
@@ -68,6 +76,7 @@ import {
 	getWorkspace,
 	listWorkspaces,
 	reclaimWorktree,
+	setWorkspaceSkillOverride,
 	workspaceDiffStats,
 } from "../workspaces";
 import { ackSend } from "./ackSend";
@@ -105,6 +114,16 @@ const handlers: Record<string, Handler> = {
 	"project.close": (params) => {
 		closeProject((params as { id: string }).id);
 		return { ok: true } as const;
+	},
+	// Persist the user's trust grant → gates the repo's committed cross-agent skill aliases. Granting
+	// acknowledges the skills present *now*, so a skill that appears later (a pull / branch) stays gated
+	// until separately confirmed. Returns the updated project so the client refreshes its store.
+	"project.setTrust": async (params) => {
+		const p = params as { id: string; trusted: boolean };
+		const project = listProjects().find((candidate) => candidate.id === p.id);
+		if (!project) throw new Error(`Unknown project: ${p.id}`);
+		const acknowledged = p.trusted ? await listProjectAliasSkillNames(project.path) : undefined;
+		return setProjectTrust(p.id, p.trusted, acknowledged);
 	},
 	"workspace.create": (params) => {
 		const p = params as { projectId: string; name?: string; baseRef?: string };
@@ -188,6 +207,78 @@ const handlers: Record<string, Handler> = {
 	},
 	"terminal.close": (params) => {
 		closeTerminal((params as { id: string }).id);
+		return { ok: true } as const;
+	},
+	"skill.list": (params) => {
+		const { projectId } = params as { projectId: string };
+		const project = listProjects().find((candidate) => candidate.id === projectId);
+		if (!project) throw new Error(`Unknown project: ${projectId}`);
+		// Same admission gate the live session uses, minus per-workspace overrides (none pre-session).
+		return listSkillCommands(project.path, {
+			trusted: project.trusted === true,
+			acknowledged: project.acknowledgedSkills ?? [],
+			disabled: project.disabledSkills ?? [],
+			disabledGroups: project.disabledGroups ?? [],
+			overrides: {},
+		});
+	},
+	// The workspace Skills manager: the full catalog + each skill's admission verdict, resolved against the
+	// worktree's checkout and the owning project's trust/toggles plus this workspace's overrides.
+	"skills.state": (params) => {
+		const { workspaceId } = params as { workspaceId: string };
+		const ws = getWorkspace(workspaceId);
+		const project = listProjects().find((p) => p.id === ws.projectId);
+		return listSkillCatalog(ws.worktreePath, {
+			trusted: project?.trusted === true,
+			acknowledged: project?.acknowledgedSkills ?? [],
+			disabled: project?.disabledSkills ?? [],
+			disabledGroups: project?.disabledGroups ?? [],
+			overrides: ws.skillOverrides ?? {},
+		});
+	},
+	// Confirm project-scoped skills that appeared after trust (re-confirm-new) — echoes the updated Project.
+	"project.acknowledgeSkills": (params) => {
+		const p = params as { id: string; names: string[] };
+		return acknowledgeProjectSkills(p.id, p.names);
+	},
+	// Project-baseline per-skill enable/disable.
+	"project.setSkillEnabled": (params) => {
+		const p = params as { id: string; name: string; enabled: boolean };
+		return setProjectSkillEnabled(p.id, p.name, p.enabled);
+	},
+	// Present committed alias skill names in the project's checkout — the count behind the trust notice.
+	"project.aliasSkills": (params) => {
+		const { projectId } = params as { projectId: string };
+		const project = listProjects().find((p) => p.id === projectId);
+		if (!project) throw new Error(`Unknown project: ${projectId}`);
+		return listProjectAliasSkillNames(project.path);
+	},
+	// Turn a group (plugin / source tier / `@plugins`) on/off at the project baseline.
+	"project.setGroupEnabled": (params) => {
+		const p = params as { id: string; group: string; enabled: boolean };
+		return setProjectGroupEnabled(p.id, p.group, p.enabled);
+	},
+	// Project-scoped catalog for the pre-session manager (current checkout, no per-workspace overrides).
+	"project.skills": (params) => {
+		const { projectId } = params as { projectId: string };
+		const project = listProjects().find((p) => p.id === projectId);
+		if (!project) throw new Error(`Unknown project: ${projectId}`);
+		return listSkillCatalog(project.path, {
+			trusted: project.trusted === true,
+			acknowledged: project.acknowledgedSkills ?? [],
+			disabled: project.disabledSkills ?? [],
+			disabledGroups: project.disabledGroups ?? [],
+			overrides: {},
+		});
+	},
+	// Per-workspace per-skill override over the project baseline (`null` clears it).
+	"workspace.setSkillOverride": (params) => {
+		const p = params as { id: string; name: string; override: "on" | "off" | null };
+		return setWorkspaceSkillOverride(p.id, p.name, p.override);
+	},
+	// Apply skill/settings changes to a running session (active-chat reload); rejects while streaming.
+	"session.reloadResources": async (params) => {
+		await reloadSessionResources((params as { sessionId: string }).sessionId);
 		return { ok: true } as const;
 	},
 	// session.* — the pi engine. A thrown/failed call returns a `{ ok:false, error }` WS response;

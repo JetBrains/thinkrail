@@ -2,7 +2,13 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { initProject, inspectProjectPath, listProjects } from "./projects";
+import {
+	initProject,
+	inspectProjectPath,
+	isProjectTrusted,
+	listProjects,
+	setProjectTrust,
+} from "./projects";
 
 function gitOut(cwd: string, ...args: string[]): string {
 	const r = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "pipe", stderr: "ignore" });
@@ -128,4 +134,25 @@ test("initProject: an existing repo is opened, not re-initialised (dedupe, histo
 	expect(listProjects()).toHaveLength(1);
 	// No fresh commit was layered on top — the original history is intact.
 	expect(gitOut(repo, "rev-parse", "HEAD")).toBe(originalHead);
+});
+
+test("setProjectTrust: persists a revocable, fail-closed trust decision", () => {
+	const repo = join(dataDir, "repo");
+	makeRepo(repo);
+	const project = initProject(repo);
+
+	// Undecided by default — fail closed.
+	expect(project.trusted).toBeUndefined();
+	expect(isProjectTrusted(project.id)).toBe(false);
+
+	const trusted = setProjectTrust(project.id, true);
+	expect(trusted.trusted).toBe(true);
+	expect(isProjectTrusted(project.id)).toBe(true);
+	// Persisted: a fresh read from projects.json reflects it.
+	expect(listProjects().find((p) => p.id === project.id)?.trusted).toBe(true);
+
+	// Revocable, and an unknown id fails loudly rather than silently trusting nothing.
+	setProjectTrust(project.id, false);
+	expect(isProjectTrusted(project.id)).toBe(false);
+	expect(() => setProjectTrust("nope", true)).toThrow();
 });

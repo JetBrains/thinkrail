@@ -89,6 +89,71 @@ export function closeProject(id: string): void {
 }
 
 /**
+ * Record the user's trust decision for a project and persist it. Trust gates loading the repo's committed
+ * cross-agent skill aliases (`.claude/skills` etc.) — attacker-controlled for a cloned repo. Granting trust
+ * passes the names present at that moment as `acknowledgedSkills`, so a skill that appears *later* (a pull /
+ * branch) stays gated until separately confirmed. Returns the updated project so the wire can echo it back.
+ * Throws on an unknown id.
+ */
+export function setProjectTrust(
+	id: string,
+	trusted: boolean,
+	acknowledgedSkills?: string[],
+): Project {
+	const projects = getProjects();
+	const project = projects.find((p) => p.id === id);
+	if (!project) throw new Error(`Unknown project: ${id}`);
+	project.trusted = trusted;
+	if (acknowledgedSkills !== undefined) project.acknowledgedSkills = acknowledgedSkills;
+	saveProjects(projects);
+	return project;
+}
+
+/** Add skill names to a project's acknowledged set (union; used to confirm skills that appeared later). */
+export function acknowledgeProjectSkills(id: string, names: string[]): Project {
+	const projects = getProjects();
+	const project = projects.find((p) => p.id === id);
+	if (!project) throw new Error(`Unknown project: ${id}`);
+	project.acknowledgedSkills = [...new Set([...(project.acknowledgedSkills ?? []), ...names])];
+	saveProjects(projects);
+	return project;
+}
+
+/** Set a skill's project-baseline enabled state (persisted in `disabledSkills`). */
+export function setProjectSkillEnabled(id: string, name: string, enabled: boolean): Project {
+	const projects = getProjects();
+	const project = projects.find((p) => p.id === id);
+	if (!project) throw new Error(`Unknown project: ${id}`);
+	const disabled = new Set(project.disabledSkills ?? []);
+	if (enabled) disabled.delete(name);
+	else disabled.add(name);
+	project.disabledSkills = [...disabled];
+	saveProjects(projects);
+	return project;
+}
+
+/**
+ * Turn a whole group on/off at the project baseline (`group` = a plugin name, a source tier, or the special
+ * `@plugins`). A disabled group withholds all its skills — including ones added later — until re-enabled.
+ */
+export function setProjectGroupEnabled(id: string, group: string, enabled: boolean): Project {
+	const projects = getProjects();
+	const project = projects.find((p) => p.id === id);
+	if (!project) throw new Error(`Unknown project: ${id}`);
+	const groups = new Set(project.disabledGroups ?? []);
+	if (enabled) groups.delete(group);
+	else groups.add(group);
+	project.disabledGroups = [...groups];
+	saveProjects(projects);
+	return project;
+}
+
+/** Whether a project (by id) is trusted. Unknown or undecided → false (fail closed). */
+export function isProjectTrusted(id: string): boolean {
+	return getProjects().find((p) => p.id === id)?.trusted === true;
+}
+
+/**
  * Classify a candidate path so the UI can decide how to open it: an existing git repo (open directly),
  * a plain directory that can be `git init`ed (offer to initialise), a path that doesn't exist, or one
  * that exists but isn't a directory. Read-only — touches nothing.

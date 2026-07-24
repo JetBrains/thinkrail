@@ -21,7 +21,8 @@ export function fixtureRepoHealthy(): boolean {
 /**
  * (Re)create the shared fixture repo: a throwaway git repo carrying the seed files every suite opens as a
  * "project" — README + a non-markdown file, the markdown-preview demos (alerts/links + a real PNG), and a
- * small seed spec graph (root + one child). Extracted so global setup seeds it once and per-test
+ * small seed spec graph (root + one child), and a portable Claude-compatible skill. Extracted so global
+ * setup seeds it once and per-test
  * `resetState` can re-seed it if a flaky `@agent` run damaged the shared repo — bounding the blast radius to
  * that one spec instead of cascading into every later test's reset.
  */
@@ -105,6 +106,13 @@ export function seedFixtureRepo(): void {
 	writeFileSync(
 		join(E2E_FIXTURE_REPO, "module-a", "SPEC.md"),
 		"---\nid: sample-module\ntype: module-design\nstatus: active\ntitle: Sample Module\nparent: sample-root\n---\n\n## Responsibility\n\nA fixture module spec, child of sample-root.\n",
+	);
+	// A portable project alias used by the no-agent New Workspace autocomplete test.
+	const skillDir = join(E2E_FIXTURE_REPO, ".claude", "skills", "e2e-portable");
+	mkdirSync(skillDir, { recursive: true });
+	writeFileSync(
+		join(skillDir, "SKILL.md"),
+		"---\nname: e2e-portable\ndescription: Portable e2e fixture skill\n---\n\n# Portable skill\n",
 	);
 	git("add", "-A");
 	git("commit", "-m", "init");

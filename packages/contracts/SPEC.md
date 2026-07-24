@@ -52,7 +52,9 @@ of the host.
   - **`SessionEventPayload`** (`{ sessionId, event: PiEvent }`) — the `pi.event` push frame.
   - the cheap-win mirrors (declared in the Node-only `pi-coding-agent`): **`SessionStats`** + **`ContextUsage`**
     (tokens/cost/context bar — display only) and **`SlashCommandInfo`** + **`SlashCommandSourceInfo`** (the
-    skill catalog).
+    command/skill autocomplete catalog, returned by live `session.getCommands` and skill-only pre-session
+    `skill.list`), and **`SkillCatalogEntry`** + **`SkillDecision`** (`load`/`untrusted`/`pending-ack`/
+    `disabled`) — the workspace Skills manager's `skills.state` rows.
   - **`SessionSummary`** — a chat session as the host reports it for hydration (read side); `live`
     distinguishes an in-memory session (auto-restored) from a disk-only one (surfaced in chat-history,
     re-opened on demand). `session.getMessages` returns `{ summary, messages }` (the transcript is
@@ -78,8 +80,13 @@ of the host.
     is a **host-owned pi custom tool** (server `agent/askUserQuestion` — see its SPEC for the design
     rationale); the chat renders the questionnaire **inline** and replies via `session.answerQuestion`
     (correlated by the tool call id; rejected loud when the call is unknown/answered/superseded).
-- **domain.ts** — app entities: `Project` (git repo + unique `slug`; "does it have specs?" is **not** a
-  field — it's the lazy `project.hasSpecs` query, since it's a full-tree walk), **`ProjectPathStatus`** (a
+- **domain.ts** — app entities: `Project` (git repo + unique `slug` + the skill-trust fields **`trusted`**
+  (the per-project grant), **`acknowledgedSkills`** (re-confirm-new — which committed aliases are OK'd) and
+  **`disabledSkills`** / **`disabledGroups`** (project-baseline per-skill and per-group off — a group is a
+  plugin, a source tier, or the special `@plugins`), which gate what its skills contribute; a workspace layers
+  **`Workspace.skillOverrides`** (per-skill on/off) over that baseline;
+  "does it have specs?" is **not** a field — it's the lazy `project.hasSpecs` query, since it's a full-tree
+  walk), **`ProjectPathStatus`** (a
   candidate path's kind — `repo` / `initable` / `missing` / `notDirectory` — so the UI opens, offers a
   `git init`, or shows an error), `Workspace` (git worktree; its
   optional **`renamed`** flag is the naming lifecycle — absent = **not yet locked** (either pristine
@@ -126,6 +133,18 @@ of the host.
   correlated by `loginId` / **`loginCancel`** / **`logout`** /
   the **JetBrains AI** trio **`jbcentralConnect`** (wire Claude+GPT via the jbcentral proxy → a
   `JbcentralConnectResult`) / **`jbcentralDisconnect`** / **`jbcentralLogin`** (launch `central login`)) /
+  **`project.setTrust`** (persist a project's trust grant → the updated `Project`; gates its committed
+  cross-agent skill aliases) /
+  **`skill.list`** (a pre-session, skill-only `SlashCommandInfo[]` preview for a `projectId`, resolved from
+  that project's current checkout with its **project-scoped aliases gated by trust**; the eventual worktree
+  session is authoritative) / the **Skills-manager set** — **`project.aliasSkills`** (present committed alias
+  names, for the presence-gated notice's count) / **`project.acknowledgeSkills`** (confirm skills that
+  appeared after trust) / **`project.setSkillEnabled`** (project baseline) / **`project.setGroupEnabled`**
+  (turn a plugin / source tier / `@plugins` on/off at the baseline) / **`workspace.setSkillOverride`**
+  (per-workspace on/off/clear → the `Workspace`) / **`skills.state`** (`SkillCatalogEntry[]` — full catalog +
+  per-skill `decision` + `group` — for a `workspaceId`) / **`project.skills`** (the same, project-scoped, for
+  the pre-session manager) / **`session.reloadResources`** (re-scan skills + rebuild the system prompt for one
+  running session; rejected while streaming) /
   `session.*` — `create`/`prompt`/`steer`/`followUp`/`abort`/`dispose`/`setModel`/
   `setThinkingLevel`/`compact`/`getStats`/`getCommands`/`extUiReply`/**`answerQuestion`** (the inline
   `ask_user_question` reply, correlated by tool call id)/**`list`**/**`getMessages`** (the

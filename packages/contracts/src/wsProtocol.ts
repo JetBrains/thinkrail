@@ -25,6 +25,7 @@ import type {
 	ImageContent,
 	SessionStats,
 	SessionSummary,
+	SkillCatalogEntry,
 	SlashCommandInfo,
 	ThinkingLevel,
 	TranscriptMessage,
@@ -50,7 +51,17 @@ import type {
 // v10: `provider.setApiKey` is removed — API-key setup goes through the interactive login channel
 // (`provider.loginStart` gains `type?: "oauth" | "api_key"`), so multi-prompt providers (azure, vertex)
 // work and `ProviderStatus.canApiKey` is pi's provider-owned truth (`Provider.auth.apiKey.login`).
-export const PROTOCOL_VERSION = 10;
+// v11: `skill.list` previews a project's skill-only command catalog before a workspace/session exists.
+// v12: `project.setTrust` records the per-project trust grant that gates its committed cross-agent skill
+// aliases; `Project` gains an optional `trusted` field carried in `server.welcome` / `project.list`.
+// v13: the workspace Skills manager — `skills.state` (catalog + per-skill decision), `session.reloadResources`
+// (apply skill changes to a running session), `project.acknowledgeSkills` / `project.setSkillEnabled` /
+// `workspace.setSkillOverride`; `Project` gains `acknowledgedSkills`/`disabledSkills`, `Workspace` gains
+// `skillOverrides`.
+// v14: group/source toggles + pre-session manager — `project.setGroupEnabled` (turn a plugin or source tier,
+// incl. `@plugins`, on/off at the project baseline) + `project.skills` (project-scoped catalog for Welcome /
+// New Workspace); `Project` gains `disabledGroups`, `SkillCatalogEntry` gains `group`.
+export const PROTOCOL_VERSION = 14;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -87,10 +98,25 @@ export const WS_METHODS = {
 	// Lazy per-project "has any registered spec?" (the Welcome screen's "Set up project" signal) — a
 	// full-tree walk, so it's on-demand for the one project shown, never eagerly for every project.
 	projectHasSpecs: "project.hasSpecs",
+	// Record the user's trust grant for a project — gates loading its committed cross-agent skill aliases.
+	projectSetTrust: "project.setTrust",
+	// Confirm project-scoped skills that appeared after trust (re-confirm-new) + set the project-baseline
+	// enable/disable for any skill.
+	projectAcknowledgeSkills: "project.acknowledgeSkills",
+	projectSetSkillEnabled: "project.setSkillEnabled",
+	// Names of the project's committed alias skills present in its current checkout — powers the presence-
+	// gated trust notice (shown as a count, never attacker-controlled text) before any workspace exists.
+	projectAliasSkills: "project.aliasSkills",
+	// Turn a whole group (a plugin, a source tier, or `@plugins`) on/off at the project baseline; the
+	// project-scoped skill catalog for the pre-session manager (Welcome / New Workspace).
+	projectSetGroupEnabled: "project.setGroupEnabled",
+	projectSkills: "project.skills",
 	workspaceCreate: "workspace.create",
 	workspaceList: "workspace.list",
 	workspaceRemove: "workspace.remove",
 	workspaceDiffStats: "workspace.diffStats",
+	// Per-workspace per-skill enable/disable override (over the project baseline).
+	workspaceSetSkillOverride: "workspace.setSkillOverride",
 	// gh-backed New-Workspace surface: branch list per project + local `gh` auth status.
 	gitListBranches: "git.listBranches",
 	// Background freshness fetch of a remote base ref, fired when the New-Workspace dialog opens/picks a
@@ -114,6 +140,10 @@ export const WS_METHODS = {
 	terminalResize: "terminal.resize",
 	terminalClose: "terminal.close",
 	dialogSelectDirectory: "dialog.selectDirectory",
+	// Skill-only command preview for New Workspace, before a worktree/session exists.
+	skillList: "skill.list",
+	// The workspace Skills manager: full catalog + per-skill admission decision for a workspace's worktree.
+	skillsState: "skills.state",
 	// session.* — the pi engine; the Composer + cheap wins (model/thinking/stats/skills).
 	sessionCreate: "session.create",
 	sessionPrompt: "session.prompt",
@@ -126,6 +156,8 @@ export const WS_METHODS = {
 	sessionCompact: "session.compact",
 	sessionGetStats: "session.getStats",
 	sessionGetCommands: "session.getCommands",
+	// Re-scan skills/settings and rebuild the system prompt for a running session (active-chat reload).
+	sessionReloadResources: "session.reloadResources",
 	sessionExtUiReply: "session.extUiReply",
 	// Inline `ask_user_question` reply: the browser sends the questionnaire result, correlated by the tool
 	// call's id; the host delivers it to the session as an `ask-user-answers` custom message, starting the
@@ -245,6 +277,25 @@ export interface WsMethodMap {
 	// Does the project's repo carry any registered spec? Computed lazily (a full-tree walk), so it's
 	// requested only for the project the Welcome screen renders — never eagerly for every project.
 	"project.hasSpecs": { params: { projectId: string }; result: { hasSpecs: boolean } };
+	// Persist the user's trust decision for a project. Trust gates loading the repo's committed cross-agent
+	// skill aliases (`.claude/skills` etc.); the updated `Project` echoes back so the client refreshes.
+	"project.setTrust": { params: { id: string; trusted: boolean }; result: Project };
+	// Confirm project-scoped skills that appeared after trust (`names` join `acknowledgedSkills`), and set a
+	// skill's project-baseline enabled state. Both echo the updated `Project` back for the store.
+	"project.acknowledgeSkills": { params: { id: string; names: string[] }; result: Project };
+	"project.setSkillEnabled": {
+		params: { id: string; name: string; enabled: boolean };
+		result: Project;
+	};
+	// Present committed alias skill names in the project's current checkout (for the presence-gated notice).
+	"project.aliasSkills": { params: { projectId: string }; result: string[] };
+	// Turn a group on/off at the project baseline (`group` = a plugin name, a source tier, or `@plugins`).
+	"project.setGroupEnabled": {
+		params: { id: string; group: string; enabled: boolean };
+		result: Project;
+	};
+	// Project-scoped skill catalog (current checkout, no workspace overrides) for the pre-session manager.
+	"project.skills": { params: { projectId: string }; result: SkillCatalogEntry[] };
 	// `baseRef`: the base branch the worktree is cut from (a remote ref is fetched first); when
 	// omitted, the worktree branches off the repo's current HEAD (the default behavior).
 	"workspace.create": {
@@ -254,6 +305,11 @@ export interface WsMethodMap {
 	"workspace.list": { params: { projectId: string }; result: Workspace[] };
 	"workspace.remove": { params: { id: string }; result: Ack };
 	"workspace.diffStats": { params: { id: string }; result: DiffStats };
+	// Per-workspace per-skill override over the project baseline; `null` clears it. Echoes the `Workspace`.
+	"workspace.setSkillOverride": {
+		params: { id: string; name: string; override: "on" | "off" | null };
+		result: Workspace;
+	};
 	"git.listBranches": { params: { projectId: string }; result: BranchList };
 	// Best-effort background `git fetch` of a remote ref (`origin/<b>`); `ok` reports whether the fetch ran
 	// (offline / non-remote ref → `false`). The UI fires-and-forgets it to warm the ref before create.
@@ -297,6 +353,10 @@ export interface WsMethodMap {
 	"terminal.resize": { params: { id: string; cols: number; rows: number }; result: Ack };
 	"terminal.close": { params: { id: string }; result: Ack };
 	"dialog.selectDirectory": { params: Record<string, never>; result: { path: string | null } };
+	// Preview from the selected project's current checkout; the eventual worktree session is authoritative.
+	"skill.list": { params: { projectId: string }; result: SlashCommandInfo[] };
+	// The workspace Skills manager's catalog: every discovered skill for the worktree + its admission verdict.
+	"skills.state": { params: { workspaceId: string }; result: SkillCatalogEntry[] };
 	"session.create": {
 		// `model`/`thinkingLevel`: applied at create time via `createAgentSession`, e.g. the
 		// New-Workspace dialog's pre-session picks. Omitted → pi resolves defaults from auth + settings.
@@ -323,6 +383,8 @@ export interface WsMethodMap {
 	"session.compact": { params: { sessionId: string; instructions?: string }; result: Ack };
 	"session.getStats": { params: { sessionId: string }; result: SessionStats };
 	"session.getCommands": { params: { sessionId: string }; result: SlashCommandInfo[] };
+	// Re-scan skills/settings + rebuild the system prompt for one running session (skipped while streaming).
+	"session.reloadResources": { params: { sessionId: string }; result: Ack };
 	"session.extUiReply": { params: { response: ExtUiResponse }; result: Ack };
 	// Rejects when the tool call is unknown, already answered, superseded by a later user message, or not
 	// an awaiting ask — so a stale card fails loud instead of silently parking an answer.

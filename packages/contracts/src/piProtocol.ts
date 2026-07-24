@@ -153,6 +153,29 @@ export interface SlashCommandInfo {
 	sourceInfo: SlashCommandSourceInfo;
 }
 
+/**
+ * Why a skill is or isn't loaded — the Skills manager renders all four so a hidden skill is never a silent
+ * mystery. `load` = in the agent's context; `untrusted` = a project alias under an untrusted project;
+ * `pending-ack` = a project alias that appeared after trust was granted (needs confirming); `disabled` =
+ * admissible but toggled off (workspace override, else project baseline).
+ */
+export type SkillDecision = "load" | "untrusted" | "pending-ack" | "disabled";
+
+/** One skill in the workspace Skills manager: its identity, provenance, and current admission verdict. */
+export interface SkillCatalogEntry {
+	/** Bare skill name — the key ack / enable-disable / override operations use. */
+	name: string;
+	description?: string;
+	sourceInfo: SlashCommandSourceInfo;
+	/** True for a committed project-scoped alias (the trust-gated class). */
+	gated: boolean;
+	/** The installing Claude plugin's name, when this skill came from one — lets the manager group by plugin. */
+	plugin?: string;
+	/** Canonical group key the skill toggles under: a plugin name, or `project`/`personal`/`bundled`/`pi`. */
+	group: string;
+	decision: SkillDecision;
+}
+
 // Extension-UI bridge frames — OUR wire shape for pi's in-process `uiContext` calls. The server pushes an
 // `ExtUiRequest` on `pi.extensionUi`; for dialog kinds the browser replies with `ExtUiResponse`
 // (correlated by `id`), which resolves the awaiting `uiContext` promise. The fire-and-forget kinds
