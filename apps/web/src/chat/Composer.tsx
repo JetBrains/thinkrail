@@ -672,6 +672,12 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 									// slot's `end` as landing just *after* it (the right default in general — text typed
 									// after a filled value shouldn't retroactively join it), which would otherwise
 									// truncate a multi-character fill to whatever was typed in the very first keystroke.
+									// Growing IS filling: the extension is user-typed content, so `filled` is set here
+									// too — the `touches` check below can't do it (a zero-width insert at `end` doesn't
+									// overlap the range), and without it the FIRST keystroke into an untouched slot at
+									// its end boundary (ArrowRight collapses the marker selection exactly there, then
+									// the user types) would leave `filled: false` — `stripUntouchedSlots` would then
+									// delete the marker together with everything typed into it on send.
 									const growing =
 										removedLen === 0 &&
 										insertedLen > 0 &&
@@ -680,7 +686,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 									const shifted = shiftSlots(slots, editStart, removedLen, insertedLen).map(
 										(slot, i) => {
 											const grown =
-												growing && i === slotIdx ? { ...slot, end: slot.end + insertedLen } : slot;
+												growing && i === slotIdx
+													? { ...slot, end: slot.end + insertedLen, filled: true }
+													: slot;
 											const original = slots[i];
 											return original && touches(original, editStart, editEnd)
 												? { ...grown, filled: true }

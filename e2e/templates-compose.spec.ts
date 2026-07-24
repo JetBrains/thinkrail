@@ -68,6 +68,38 @@ test.describe("prompt templates in the composer", () => {
 		await expect(hint).not.toBeVisible();
 	});
 
+	// Reviewer-flagged regression (data loss): collapsing the marker's selection to its END (ArrowRight —
+	// the most natural "deselect" gesture) and then typing hits the composer's grow-at-end path, which
+	// used to grow the slot WITHOUT marking it filled — `stripUntouchedSlots` then deleted the marker
+	// together with everything the user had typed into it on send. Growing now fills: the typed text must
+	// survive in the sent message. (The still-visible `⟨file⟩` glyphs are the composer's WYSIWYG contract —
+	// the user sees them next to their text and can delete them; only *untouched* markers are stripped.)
+	test("typing after ArrowRight-collapsing the marker selection is never deleted by the send", async ({
+		page,
+	}) => {
+		await openWorkspaceChat(page);
+		const input = page.getByTestId("chat-input");
+
+		await input.fill("/rev");
+		const rows = page.locator('[data-testid="slash-command"][data-source="prompt"]');
+		await rows.first().click();
+		await expect(input).toHaveValue(/^Review ⟨file⟩ for issues, focusing on src\/\.\s*$/);
+		await expect(page.getByTestId("slot-hint")).toContainText("slot 1/2");
+
+		// ArrowRight collapses the marker's selection to its end — a bare caret at the slot boundary.
+		await input.press("ArrowRight");
+		const sel = await readSelection(input);
+		expect(sel.start).toBe(sel.end);
+		expect(sel.value.slice(0, sel.start).endsWith("⟨file⟩")).toBe(true);
+
+		await page.keyboard.type("server.ts");
+		await page.getByTestId("chat-send").click();
+
+		// The regression: this text used to vanish from the sent message entirely.
+		const bubble = page.locator('[data-testid="chat-message"][data-role="user"]');
+		await expect(bubble).toContainText("server.ts for issues, focusing on src/.");
+	});
+
 	// `rename.md` repeats `$1` twice (same positional slot, same `group` — see `slotSession.ts`'s `group`
 	// doc) — group mirroring: filling the first occurrence and tabbing out splices that text into the
 	// second occurrence too, without the user typing it twice.

@@ -337,26 +337,42 @@ describe("symlink containment", () => {
 		expect(existsSync(outsideTarget)).toBe(true);
 	});
 
-	test("project-scope writes refuse a symlinked .pi/prompts directory (the same escape one level up)", () => {
-		const evilRoot = mkdtempSync(join(tmpdir(), "trpi-templates-evil-"));
-		try {
-			const elsewhere = join(evilRoot, "elsewhere");
-			mkdirSync(elsewhere, { recursive: true });
-			const worktreePi = join(evilRoot, "worktree", ".pi");
-			mkdirSync(worktreePi, { recursive: true });
-			symlinkSync(elsewhere, join(worktreePi, "prompts"));
-			const evilDirs: TemplateDirs = { globalDir, projectDir: join(worktreePi, "prompts") };
+	// Both symlinked directory levels (`.pi/prompts` itself, and `.pi` above it), every operation:
+	// writes refuse loudly; reads treat the project dir as having no templates — without the read half,
+	// `template.list`/`template.get` would disclose the link target's `.md` files over the wire.
+	for (const level of ["prompts", ".pi"] as const) {
+		test(`a symlinked ${level === ".pi" ? ".pi" : ".pi/prompts"} directory: writes refuse, list/get treat the project dir as empty`, () => {
+			const evilRoot = mkdtempSync(join(tmpdir(), "trpi-templates-evil-"));
+			try {
+				const elsewhere = join(evilRoot, "elsewhere");
+				const elsewherePrompts = level === ".pi" ? join(elsewhere, "prompts") : elsewhere;
+				mkdirSync(elsewherePrompts, { recursive: true });
+				writeFileSync(join(elsewherePrompts, "secret.md"), "outside content");
+				const worktree = join(evilRoot, "worktree");
+				let promptsDir: string;
+				if (level === ".pi") {
+					mkdirSync(worktree, { recursive: true });
+					symlinkSync(elsewhere, join(worktree, ".pi"));
+					promptsDir = join(worktree, ".pi", "prompts");
+				} else {
+					mkdirSync(join(worktree, ".pi"), { recursive: true });
+					symlinkSync(elsewhere, join(worktree, ".pi", "prompts"));
+					promptsDir = join(worktree, ".pi", "prompts");
+				}
+				const evilDirs: TemplateDirs = { globalDir, projectDir: promptsDir };
 
-			expect(() => saveTemplate(evilDirs, "project", "x", "body")).toThrow(/symlinked directory/);
-			expect(existsSync(join(elsewhere, "x.md"))).toBe(false);
-			expect(() => deleteTemplate(evilDirs, "project", "x")).toThrow(/symlinked directory/);
-			// Reads still work through it, matching pi's own loader (which follows the directory too).
-			writeFileSync(join(elsewhere, "readable.md"), "readable body");
-			expect(getTemplate(evilDirs, "readable", "project").content).toBe("readable body");
-		} finally {
-			rmSync(evilRoot, { recursive: true, force: true });
-		}
-	});
+				expect(() => saveTemplate(evilDirs, "project", "x", "body")).toThrow(/symlinked directory/);
+				expect(existsSync(join(elsewherePrompts, "x.md"))).toBe(false);
+				expect(() => deleteTemplate(evilDirs, "project", "x")).toThrow(/symlinked directory/);
+				// The read half of the gate: the target's .md files are neither listed nor fetchable.
+				expect(listTemplates(evilDirs).map((t) => t.name)).not.toContain("secret");
+				expect(() => getTemplate(evilDirs, "secret", "project")).toThrow(/not found/);
+				expect(() => getTemplate(evilDirs, "secret")).toThrow(/not found/);
+			} finally {
+				rmSync(evilRoot, { recursive: true, force: true });
+			}
+		});
+	}
 
 	test("the global dir may itself be a symlink (dotfile setups) — writes still work there", () => {
 		const realGlobal = join(root, "real-global-prompts");

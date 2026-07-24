@@ -90,17 +90,34 @@ function isRegularFile(path: string): boolean {
 	return lstatOrNull(path)?.isFile() ?? false;
 }
 
-/** The dir-level half of the no-follow gate, for **project-scope writes** only: the repo controls
- * `<cwd>/.pi` and `<cwd>/.pi/prompts`, so a symlinked component there is the same escape one level up
- * (`saveTemplate` would `mkdir`/write, `deleteTemplate` would `rm`, inside the link's target). The
- * global dir is exempt on purpose — it's user-owned, and dotfile managers routinely symlink it. */
+/** The dir-level half of the no-follow gate: the repo controls `<cwd>/.pi` and `<cwd>/.pi/prompts`, so
+ * a symlinked component there is the same escape one level up — `template.list`/`template.get` would
+ * disclose the link target's `.md` files over the wire, `saveTemplate` would `mkdir`/write and
+ * `deleteTemplate` would `rm` inside it. Every project-scope operation checks this: reads treat an
+ * untraversable project dir as having no templates (same "absent, not followed" posture as the
+ * file-level gate), writes refuse loudly via {@link assertProjectWriteSafe}. The global dir is exempt
+ * on purpose — it's user-owned, and dotfile managers routinely symlink it. */
+function projectDirTraversable(projectDir: string): boolean {
+	return ![dirname(projectDir), projectDir].some(
+		(dir) => lstatOrNull(dir)?.isSymbolicLink() ?? false,
+	);
+}
+
+/** The loud (write-path) form of {@link projectDirTraversable} — a save/delete aimed through a
+ * symlinked project dir must fail visibly, never silently no-op. */
 function assertProjectWriteSafe(dirs: TemplateDirs, scope: TemplateScope): void {
 	if (scope !== "project" || !dirs.projectDir) return;
-	for (const dir of [dirname(dirs.projectDir), dirs.projectDir]) {
-		if (lstatOrNull(dir)?.isSymbolicLink()) {
-			throw new Error(`refusing to write templates through a symlinked directory: ${dir}`);
-		}
+	if (!projectDirTraversable(dirs.projectDir)) {
+		throw new Error(
+			`refusing to write templates through a symlinked directory: ${dirs.projectDir}`,
+		);
 	}
+}
+
+/** `dirs.projectDir`, or `undefined` when it's absent OR untraversable (dir-level no-follow gate) —
+ * the single predicate every project-scope READ goes through, so list and get can never disagree. */
+function readableProjectDir(dirs: TemplateDirs): string | undefined {
+	return dirs.projectDir && projectDirTraversable(dirs.projectDir) ? dirs.projectDir : undefined;
 }
 
 /** Read + parse one template file from `dir`. `null` if it doesn't exist — or exists but isn't a
@@ -170,7 +187,8 @@ function listDir(dir: string | undefined, scope: TemplateScope): TemplateInfo[] 
 export function listTemplates(dirs: TemplateDirs): TemplateInfo[] {
 	const byName = new Map<string, TemplateInfo>();
 	for (const template of listDir(dirs.globalDir, "global")) byName.set(template.name, template);
-	for (const template of listDir(dirs.projectDir, "project")) byName.set(template.name, template);
+	for (const template of listDir(readableProjectDir(dirs), "project"))
+		byName.set(template.name, template);
 	return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -180,12 +198,17 @@ export function listTemplates(dirs: TemplateDirs): TemplateInfo[] {
 export function getTemplate(dirs: TemplateDirs, name: string, scope?: TemplateScope): TemplateInfo {
 	if (!isValidTemplateName(name)) throw new Error(`invalid template name: ${JSON.stringify(name)}`);
 	if (scope) {
-		const template = readTemplateFile(dirForScope(dirs, scope), scope, name);
+		// `dirForScope` first, for its own distinct error (project scope with no workspace at all);
+		// past that, an untraversable project dir reads as "absent" — the dir-level no-follow gate.
+		const scopeDir = dirForScope(dirs, scope);
+		const dir = scope === "project" ? readableProjectDir(dirs) : scopeDir;
+		const template = dir ? readTemplateFile(dir, scope, name) : null;
 		if (!template) throw new Error(`template not found: ${name} (scope: ${scope})`);
 		return template;
 	}
-	if (dirs.projectDir) {
-		const projectTemplate = readTemplateFile(dirs.projectDir, "project", name);
+	const projectDir = readableProjectDir(dirs);
+	if (projectDir) {
+		const projectTemplate = readTemplateFile(projectDir, "project", name);
 		if (projectTemplate) return projectTemplate;
 	}
 	const globalTemplate = readTemplateFile(dirs.globalDir, "global", name);
