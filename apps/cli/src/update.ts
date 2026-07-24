@@ -2,7 +2,8 @@
 // (the Bun-native port of the old repo's `thinkrail upgrade`, renamed). The installer owns the
 // download → checksum → replace → PATH logic; update just fetches it and feeds it the resolved
 // channel/prefix (from `~/.config/thinkrail/install.json`, else the baked channel + `~/.local`). Unix
-// only — replacing a running .exe in place isn't possible on Windows, so we point there to the releases.
+// only — in-place self-replace on Windows is deferred, so we point there at the install.ps1 one-liner
+// (which handles a locked running exe) with the releases page as the manual fallback.
 
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -120,7 +121,13 @@ export async function runUpdate(
 	}
 	if (process.platform === "win32") {
 		console.error(
-			"Automatic update on Windows is not yet supported.\nDownload the latest binary from:\nhttps://github.com/JetBrains/thinkrail/releases",
+			[
+				"Automatic in-place update isn't supported on Windows yet.",
+				"Re-run the installer to get the latest build (works from cmd and PowerShell):",
+				'  powershell -c "irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex"',
+				'(on the nightly channel, run  set "THINKRAIL_CHANNEL=nightly"  first)',
+				"Or download manually: https://github.com/JetBrains/thinkrail/releases",
+			].join("\n"),
 		);
 		return 1;
 	}

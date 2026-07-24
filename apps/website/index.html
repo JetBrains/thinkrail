@@ -461,6 +461,9 @@
 							<pre class="code-block install-block"><code><span class="sx-cm"># one line: downloads the right build, verifies its SHA-256, puts `thinkrail` on your PATH</span>
 <span class="line-copy" data-copy="curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash"><span class="sx-fn">curl</span> -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | <span class="sx-fn">bash</span></span>
 
+<span class="sx-cm"># windows — same thing, from cmd or powershell</span>
+<span class="line-copy" data-copy="powershell -c &quot;irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex&quot;"><span class="sx-fn">powershell</span> -c <span class="sx-str">"irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex"</span></span>
+
 <span class="sx-cm"># nightly channel, or pin a version</span>
 <span class="line-copy" data-copy="curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash -s -- --channel nightly"><span class="sx-fn">curl</span> -fsSL … | <span class="sx-fn">bash</span> -s -- <span class="sx-str">--channel nightly</span></span>
 <span class="line-copy" data-copy="curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash -s -- --version 0.2.0"><span class="sx-fn">curl</span> -fsSL … | <span class="sx-fn">bash</span> -s -- <span class="sx-str">--version 0.2.0</span></span>

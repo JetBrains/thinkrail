@@ -42,8 +42,9 @@ git repo to open as a project on boot, best-effort). Env defaults: `THINKRAIL_PO
 `src/update.ts` ports the old repo's `thinkrail upgrade` (renamed): it re-invokes the published
 `install.sh` for the binary's channel, so the installer stays the single source of the download →
 checksum → replace → PATH logic. Channel/prefix resolve as flag > `~/.config/thinkrail/install.json` >
-baked channel (from `version.ts`; `dev` → `stable`) / `~/.local`. Unix-only (replacing a running `.exe`
-in place isn't possible on Windows → points to the releases page). The arg parse + channel/prefix
+baked channel (from `version.ts`; `dev` → `stable`) / `~/.local`. Unix-only execution (in-place
+self-replace on Windows is deferred → prints the `install.ps1` one-liner — works from cmd and
+PowerShell — with the releases page as the manual fallback). The arg parse + channel/prefix
 resolution are pure (`parseUpdateArgs` / `resolveUpdatePlan`, unit-tested); only fetch (`curl`) + run
 (`bash -s`) touch IO. `THINKRAIL_INSTALL_SCRIPT_URL` overrides the installer URL (testing / forks). See
 `module-ci-release` for the installer itself.
