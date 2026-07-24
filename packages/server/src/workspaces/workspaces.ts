@@ -223,6 +223,28 @@ export function renameWorkspace(
 	return target;
 }
 
+/**
+ * Set a per-workspace per-skill override (`on`/`off`) or clear it (`null`), and persist. Broadcasts the
+ * updated workspace so every client's rail converges (like `renameWorkspace`). Throws for an unknown id.
+ */
+export function setWorkspaceSkillOverride(
+	id: string,
+	name: string,
+	override: "on" | "off" | null,
+): Workspace {
+	const all = loadWorkspaces();
+	const ws = all.find((w) => w.id === id);
+	if (!ws) throw new Error(`Unknown workspace: ${id}`);
+	const overrides = { ...(ws.skillOverrides ?? {}) };
+	if (override === null) delete overrides[name];
+	else overrides[name] = override;
+	if (Object.keys(overrides).length > 0) ws.skillOverrides = overrides;
+	else delete ws.skillOverrides;
+	saveWorkspaces(all);
+	emit({ kind: "updated", workspace: ws });
+	return ws;
+}
+
 export function listWorkspaces(projectId: string): Workspace[] {
 	return loadWorkspaces()
 		.filter((w) => w.projectId === projectId)

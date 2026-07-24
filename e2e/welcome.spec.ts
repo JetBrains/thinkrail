@@ -75,26 +75,43 @@ test("Settings → Providers lists in-app auth options", async ({ page }) => {
 	await expect(page.getByTestId("providers-error")).toHaveCount(0);
 });
 
-test("an API key can be added and removed in Settings (round-trips through the host)", async ({
+test("a real provider's API key round-trips through the login dialog (add in Settings, sign out)", async ({
 	page,
 }) => {
 	await openAppFresh(page);
 	await page.getByTestId("open-settings").click();
 	await expect(page.getByTestId("settings-providers")).toBeVisible();
 
-	// Target the first unconfigured provider offering an inline API-key field (a single-key provider). The
-	// dummy key isn't network-validated — `getAvailable()` is a fast check — so storing it flips the row to
-	// configured deterministically. Clean up by signing out so the isolated agent dir doesn't leak state.
-	const toggle = page.getByTestId("provider-apikey-toggle").first();
-	await expect(toggle).toBeVisible();
-	const providerId = await toggle.getAttribute("data-provider");
+	// Drive the FIRST unconfigured builtin through the interactive key flow (#97) — unlike
+	// provider-apikey.spec's fake, this exercises a real provider's own login metadata (machine-agnostic:
+	// whatever isn't configured in the copied auth). The provider-owned flow may ask one prompt or several
+	// (bedrock/azure-style), so answer whatever arrives until it settles. Dummy values aren't
+	// network-validated — `getAvailable()` is a fast local check — so the row flips to configured
+	// deterministically. Clean up by signing out so the isolated agent dir doesn't leak state.
+	const keyBtn = page.getByTestId("provider-apikey").first();
+	await expect(keyBtn).toBeVisible();
+	const providerId = await keyBtn.getAttribute("data-provider");
 	expect(providerId).toBeTruthy();
-	const sel = (testid: string) =>
-		page.locator(`[data-testid="${testid}"][data-provider="${providerId}"]`);
+	await keyBtn.click();
 
-	await toggle.click();
-	await sel("provider-apikey-input").fill("sk-e2e-dummy-key");
-	await sel("provider-apikey-save").click();
+	const dialog = page.getByTestId("login-dialog");
+	await expect(dialog).toBeVisible();
+	for (let i = 0; i < 8; i++) {
+		if (await page.getByTestId("login-success").isVisible()) break;
+		const option = page.getByTestId("login-option").first();
+		const input = page.getByTestId("login-input");
+		if (await option.isVisible()) {
+			await option.click(); // a select frame (e.g. a region choice) — any option works for a dummy setup
+		} else if (await input.isVisible()) {
+			await input.fill(`e2e-dummy-${i}`);
+			await page.getByTestId("login-submit").click();
+		} else {
+			await page.waitForTimeout(200); // between frames — wait for the next prompt or the terminal state
+		}
+	}
+	await expect(page.getByTestId("login-success")).toBeVisible();
+	await page.getByTestId("login-close").click();
+	await expect(dialog).toHaveCount(0);
 
 	// The pane re-reads status → the provider now shows as a configured (Connected) row with a Sign-out.
 	const configuredRow = page.locator(
@@ -103,7 +120,7 @@ test("an API key can be added and removed in Settings (round-trips through the h
 	await expect(configuredRow).toBeVisible();
 
 	// Sign out removes the credential and re-reads → it's no longer configured.
-	await sel("provider-signout").click();
+	await page.locator(`[data-testid="provider-signout"][data-provider="${providerId}"]`).click();
 	await expect(configuredRow).toHaveCount(0);
 });
 

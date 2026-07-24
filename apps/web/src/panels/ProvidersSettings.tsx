@@ -58,35 +58,20 @@ export function ProvidersSettings() {
 		if (activeLogin?.status === "success") void load();
 	}, [activeLogin?.status, load]);
 
-	const startOAuth = useCallback(async (providerId: string) => {
+	// One starter for both auth types: OAuth and interactive API-key entry ride the same login channel
+	// (issue #97) — the LoginDialog renders whatever frames the provider-owned flow pushes.
+	const startLogin = useCallback(async (providerId: string, type: "oauth" | "api_key") => {
 		setBusyProvider(providerId);
 		try {
-			const { loginId } = await getTransport().request("provider.loginStart", { providerId });
+			const { loginId } = await getTransport().request("provider.loginStart", { providerId, type });
 			useAppStore.getState().beginLogin(loginId, providerId);
 		} catch (err) {
-			// loginStart failing (offline) leaves no dialog — surface why; the Sign-in button stays for a retry.
-			toast.error(errorText(err), "Couldn't start sign-in");
+			// loginStart failing (offline) leaves no dialog — surface why; the button stays for a retry.
+			toast.error(errorText(err), "Couldn't start the connection");
 		} finally {
 			setBusyProvider(null);
 		}
 	}, []);
-
-	const setApiKey = useCallback(
-		async (providerId: string, key: string) => {
-			setBusyProvider(providerId);
-			try {
-				await getTransport().request("provider.setApiKey", { providerId, key });
-			} catch (err) {
-				// Surface a rejected save (malformed key, disk write failed) so the user knows the key didn't take.
-				toast.error(errorText(err), "Couldn't save the API key");
-				return;
-			} finally {
-				setBusyProvider(null);
-			}
-			await load();
-		},
-		[load],
-	);
 
 	const logout = useCallback(
 		async (providerId: string) => {
@@ -112,8 +97,8 @@ export function ProvidersSettings() {
 	const apiKeyRows = unconfigured.filter((p) => p.canApiKey && !p.canOAuth);
 	const shownKeys = showAllKeys ? apiKeyRows : apiKeyRows.slice(0, API_KEY_VISIBLE);
 	const hiddenKeyCount = apiKeyRows.length - shownKeys.length;
-	// Neither in-app path applies (multi-field creds — bedrock/vertex/azure): a note, not a row.
-	const multiField = unconfigured.filter((p) => !p.canOAuth && !p.canApiKey);
+	// Neither in-app path applies (ambient-only auth — env vars / models.json customs): a note, not a row.
+	const noInApp = unconfigured.filter((p) => !p.canOAuth && !p.canApiKey);
 	const loginProviderName =
 		providers.find((p) => p.id === activeLogin?.providerId)?.name ?? activeLogin?.providerId ?? "";
 	// While a login is modal (one at a time), hold the other in-app actions.
@@ -180,8 +165,8 @@ export function ProvidersSettings() {
 										key={p.id}
 										provider={p}
 										busy={rowBusy(p.id)}
-										onSignIn={() => void startOAuth(p.id)}
-										onSaveKey={(key) => void setApiKey(p.id, key)}
+										onSignIn={() => void startLogin(p.id, "oauth")}
+										onApiKey={() => void startLogin(p.id, "api_key")}
 									/>
 								))}
 							</div>
@@ -202,8 +187,8 @@ export function ProvidersSettings() {
 									key={p.id}
 									provider={p}
 									busy={rowBusy(p.id)}
-									onSignIn={() => void startOAuth(p.id)}
-									onSaveKey={(key) => void setApiKey(p.id, key)}
+									onSignIn={() => void startLogin(p.id, "oauth")}
+									onApiKey={() => void startLogin(p.id, "api_key")}
 								/>
 							))}
 							{hiddenKeyCount > 0 ? (
@@ -220,14 +205,15 @@ export function ProvidersSettings() {
 						</Group>
 					) : null}
 
-					{multiField.length > 0 ? (
+					{noInApp.length > 0 ? (
 						<p data-testid="providers-more" className="text-hint text-xs">
-							{multiField.length} more need multi-field credentials (set up in a terminal):{" "}
-							{multiField
+							{noInApp.length} more are configured outside the app (environment variables or
+							models.json):{" "}
+							{noInApp
 								.slice(0, MAX_REST_NAMES)
 								.map((p) => p.name)
 								.join(", ")}
-							{multiField.length > MAX_REST_NAMES ? ", …" : ""}
+							{noInApp.length > MAX_REST_NAMES ? ", …" : ""}
 						</p>
 					) : null}
 				</>
@@ -329,28 +315,21 @@ function ConnectedCard({
 
 /**
  * An unconfigured provider offering in-app auth: a "Sign in" button (when `provider.canOAuth`) and/or an
- * inline API-key field (when `provider.canApiKey`) — a provider can offer both (anthropic: subscription or key).
+ * "API key" button (when `provider.canApiKey`) — a provider can offer both (anthropic: subscription or
+ * key). Both routes open the same LoginDialog; the API-key flow runs the provider's own prompts over
+ * the login channel (multi-prompt creds like azure/vertex included — issue #97), so no inline field.
  */
 function ProviderActionRow({
 	provider,
 	busy,
 	onSignIn,
-	onSaveKey,
+	onApiKey,
 }: {
 	provider: ProviderStatus;
 	busy: boolean;
 	onSignIn: () => void;
-	onSaveKey: (key: string) => void;
+	onApiKey: () => void;
 }) {
-	const [keyOpen, setKeyOpen] = useState(false);
-	const [key, setKey] = useState("");
-
-	const save = () => {
-		if (key.trim()) onSaveKey(key.trim());
-		setKey("");
-		setKeyOpen(false);
-	};
-
 	return (
 		<div
 			data-testid="provider-signin-row"
@@ -366,12 +345,12 @@ function ProviderActionRow({
 				<div className="flex shrink-0 items-center gap-xs">
 					{provider.canApiKey ? (
 						<Button
-							variant="ghost"
+							variant={provider.canOAuth ? "ghost" : "default"}
 							size="sm"
-							data-testid="provider-apikey-toggle"
+							data-testid="provider-apikey"
 							data-provider={provider.id}
-							aria-expanded={keyOpen}
-							onClick={() => setKeyOpen((v) => !v)}
+							disabled={busy}
+							onClick={onApiKey}
 						>
 							<KeyRound className="size-3.5" />
 							API key
@@ -391,38 +370,6 @@ function ProviderActionRow({
 					) : null}
 				</div>
 			</div>
-
-			{provider.canApiKey && keyOpen ? (
-				<div className="flex gap-sm pl-[calc(2rem+var(--space-sm))]">
-					<input
-						data-testid="provider-apikey-input"
-						data-provider={provider.id}
-						type="password"
-						// biome-ignore lint/a11y/noAutofocus: revealing the field should focus it for immediate entry.
-						autoFocus
-						value={key}
-						placeholder={`${provider.name} API key`}
-						disabled={busy}
-						onChange={(e) => setKey(e.target.value)}
-						onKeyDown={(e) => {
-							if (e.key === "Enter" && key.trim()) {
-								e.preventDefault();
-								save();
-							}
-						}}
-						className="min-w-0 flex-1 rounded-[var(--radius-md)] border border-border2 bg-bg px-sm py-xs text-sm text-text outline-none placeholder:text-hint focus:border-primary disabled:opacity-50"
-					/>
-					<Button
-						size="sm"
-						data-testid="provider-apikey-save"
-						data-provider={provider.id}
-						disabled={busy || !key.trim()}
-						onClick={save}
-					>
-						Save
-					</Button>
-				</div>
-			) : null}
 		</div>
 	);
 }

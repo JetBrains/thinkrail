@@ -183,6 +183,37 @@ function clearTurnStreaming(turns: ChatTurn[]): ChatTurn[] {
 	return turns.map((t) => (t.kind === "assistant" && t.streaming ? { ...t, streaming: false } : t));
 }
 
+type RetrySource = Extract<ChatTurn, { kind: "retry" }>["source"];
+
+/** Replace-or-append the one live retry countdown of a source (turn vs summarization flows overlap). */
+function appendRetryTurn(
+	rt: SessionRuntime,
+	source: RetrySource,
+	event: { attempt: number; maxAttempts: number; delayMs: number },
+): SessionRuntime {
+	return {
+		...rt,
+		turns: [
+			...rt.turns.filter((t) => !(t.kind === "retry" && t.source === source)),
+			{
+				kind: "retry",
+				id: crypto.randomUUID(),
+				source,
+				attempt: event.attempt,
+				maxAttempts: event.maxAttempts,
+				delayMs: event.delayMs,
+			},
+		],
+	};
+}
+
+/** Drop a source's retry countdown (its flow resolved); other sources' countdowns stay. */
+function clearRetryTurns(rt: SessionRuntime, source: RetrySource): SessionRuntime {
+	return rt.turns.some((t) => t.kind === "retry" && t.source === source)
+		? { ...rt, turns: rt.turns.filter((t) => !(t.kind === "retry" && t.source === source)) }
+		: rt;
+}
+
 /** Fold one pi event into a session's runtime. Pure — returns the same ref when nothing changes. */
 export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionRuntime {
 	switch (event.type) {
@@ -299,24 +330,17 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 		}
 		case "auto_retry_start":
 			// Show a live countdown over the back-off; cleared on auto_retry_end (or the final agent_end).
-			return {
-				...rt,
-				turns: [
-					...rt.turns,
-					{
-						kind: "retry",
-						id: crypto.randomUUID(),
-						attempt: event.attempt,
-						maxAttempts: event.maxAttempts,
-						delayMs: event.delayMs,
-					},
-				],
-			};
+			// Replace-or-append per source: the event fires once per attempt, and the two retry flows
+			// (turn vs summarization) may overlap — each keeps exactly one indicator.
+			return appendRetryTurn(rt, "turn", event);
 		case "auto_retry_end":
 			// The retry resolved → normal streaming/answer rendering replaces the indicator.
-			return rt.turns.some((t) => t.kind === "retry")
-				? { ...rt, turns: rt.turns.filter((t) => t.kind !== "retry") }
-				: rt;
+			return clearRetryTurns(rt, "turn");
+		case "summarization_retry_scheduled":
+			// A compaction / branch-summary LLM call is backing off (pi ≥0.81.1) — same countdown treatment.
+			return appendRetryTurn(rt, "summarization", event);
+		case "summarization_retry_finished":
+			return clearRetryTurns(rt, "summarization");
 		case "thinking_level_changed":
 			return { ...rt, thinkingLevel: event.level };
 		default:
@@ -594,6 +618,7 @@ function foldLoginFrame(state: LoginState, frame: LoginFrame): LoginState {
 					message: frame.message,
 					...(frame.placeholder ? { placeholder: frame.placeholder } : {}),
 					...(frame.allowEmpty ? { allowEmpty: true } : {}),
+					...(frame.secret ? { secret: true } : {}),
 				},
 			};
 		}

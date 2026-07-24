@@ -20,6 +20,18 @@ const retryStart = (attempt: number, maxAttempts: number, delayMs: number) =>
 		errorMessage: "rate limit",
 	}) as unknown as PiEvent;
 const retryEnd = { type: "auto_retry_end", success: true, attempt: 1 } as unknown as PiEvent;
+const summarizationScheduled = (
+	attempt: number,
+	maxAttempts: number,
+	delayMs: number,
+): PiEvent => ({
+	type: "summarization_retry_scheduled",
+	attempt,
+	maxAttempts,
+	delayMs,
+	errorMessage: "stream dropped",
+});
+const summarizationFinished: PiEvent = { type: "summarization_retry_finished" };
 // A turn that ends in a provider/model error: retries exhausted (or non-retryable), so `willRetry` is
 // false and the run's last assistant message carries `stopReason: "error"` + the provider's `errorMessage`
 // (this is what a bad model like a nonexistent "gpt-5.5" produces — a 404/model-not-found from the API).
@@ -244,12 +256,52 @@ test("auto-retry adds a countdown turn, and resolving it clears the indicator", 
 
 	store.handlePiEvent(retryStart(2, 3, 5_000), "a");
 	const retry = rt("a").turns.find((t) => t.kind === "retry");
+	expect(retry?.kind === "retry" && retry.source).toBe("turn");
 	expect(retry?.kind === "retry" && retry.attempt).toBe(2);
 	expect(retry?.kind === "retry" && retry.maxAttempts).toBe(3);
 	expect(retry?.kind === "retry" && retry.delayMs).toBe(5_000);
 
 	// auto_retry_end removes it — the retried attempt's streaming/answer takes over.
 	store.handlePiEvent(retryEnd, "a");
+	expect(rt("a").turns.some((t) => t.kind === "retry")).toBe(false);
+});
+
+test("summarization retries show their own countdown; re-scheduling replaces, finished clears", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+
+	store.handlePiEvent(summarizationScheduled(1, 3, 2_000), "a");
+	const first = rt("a").turns.find((t) => t.kind === "retry");
+	expect(first?.kind === "retry" && first.source).toBe("summarization");
+	expect(first?.kind === "retry" && first.attempt).toBe(1);
+
+	// The next attempt's back-off REPLACES the indicator — never stacks a second one.
+	store.handlePiEvent(summarizationScheduled(2, 3, 4_000), "a");
+	const retries = rt("a").turns.filter((t) => t.kind === "retry");
+	expect(retries.length).toBe(1);
+	expect(retries[0]?.kind === "retry" && retries[0].attempt).toBe(2);
+
+	store.handlePiEvent(summarizationFinished, "a");
+	expect(rt("a").turns.some((t) => t.kind === "retry")).toBe(false);
+});
+
+test("overlapping turn + summarization retries never clear each other", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+
+	// A threshold compaction can back off while the turn itself is also retrying.
+	store.handlePiEvent(retryStart(1, 3, 1_000), "a");
+	store.handlePiEvent(summarizationScheduled(1, 3, 2_000), "a");
+	expect(rt("a").turns.filter((t) => t.kind === "retry").length).toBe(2);
+
+	// The turn retry resolving leaves the summarization countdown alone…
+	store.handlePiEvent(retryEnd, "a");
+	const left = rt("a").turns.filter((t) => t.kind === "retry");
+	expect(left.length).toBe(1);
+	expect(left[0]?.kind === "retry" && left[0].source).toBe("summarization");
+
+	// …and vice versa: finishing summarization doesn't require a turn retry to exist.
+	store.handlePiEvent(summarizationFinished, "a");
 	expect(rt("a").turns.some((t) => t.kind === "retry")).toBe(false);
 });
 

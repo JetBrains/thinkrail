@@ -46,11 +46,15 @@ of the host.
     `off`-inclusive one);
   - the local render union **`PiEvent`** — the real superset `AgentSessionEvent` lives in the Node-only
     `pi-coding-agent`, so it's **mirrored** here (the `agent_end.willRetry` + `queue_update` /
-    `compaction_*` / `auto_retry_*` / `session_info_changed` / `thinking_level_changed` members);
+    `compaction_*` / `auto_retry_*` / `summarization_retry_*` / `session_info_changed` /
+    `thinking_level_changed` members, plus `bash_execution_update` — mirrored for union fidelity only;
+    the host never calls `executeBash`, so the UI never receives it);
   - **`SessionEventPayload`** (`{ sessionId, event: PiEvent }`) — the `pi.event` push frame.
   - the cheap-win mirrors (declared in the Node-only `pi-coding-agent`): **`SessionStats`** + **`ContextUsage`**
     (tokens/cost/context bar — display only) and **`SlashCommandInfo`** + **`SlashCommandSourceInfo`** (the
-    skill catalog).
+    command/skill autocomplete catalog, returned by live `session.getCommands` and skill-only pre-session
+    `skill.list`), and **`SkillCatalogEntry`** + **`SkillDecision`** (`load`/`untrusted`/`pending-ack`/
+    `disabled`) — the workspace Skills manager's `skills.state` rows.
   - **`SessionSummary`** — a chat session as the host reports it for hydration (read side); `live`
     distinguishes an in-memory session (auto-restored) from a disk-only one (surfaced in chat-history,
     re-opened on demand). `session.getMessages` returns `{ summary, messages }` (the transcript is
@@ -76,8 +80,13 @@ of the host.
     is a **host-owned pi custom tool** (server `agent/askUserQuestion` — see its SPEC for the design
     rationale); the chat renders the questionnaire **inline** and replies via `session.answerQuestion`
     (correlated by the tool call id; rejected loud when the call is unknown/answered/superseded).
-- **domain.ts** — app entities: `Project` (git repo + unique `slug`; "does it have specs?" is **not** a
-  field — it's the lazy `project.hasSpecs` query, since it's a full-tree walk), **`ProjectPathStatus`** (a
+- **domain.ts** — app entities: `Project` (git repo + unique `slug` + the skill-trust fields **`trusted`**
+  (the per-project grant), **`acknowledgedSkills`** (re-confirm-new — which committed aliases are OK'd) and
+  **`disabledSkills`** / **`disabledGroups`** (project-baseline per-skill and per-group off — a group is a
+  plugin, a source tier, or the special `@plugins`), which gate what its skills contribute; a workspace layers
+  **`Workspace.skillOverrides`** (per-skill on/off) over that baseline;
+  "does it have specs?" is **not** a field — it's the lazy `project.hasSpecs` query, since it's a full-tree
+  walk), **`ProjectPathStatus`** (a
   candidate path's kind — `repo` / `initable` / `missing` / `notDirectory` — so the UI opens, offers a
   `git init`, or shows an error), `Workspace` (git worktree; its
   optional **`renamed`** flag is the naming lifecycle — absent = **not yet locked** (either pristine
@@ -118,11 +127,24 @@ of the host.
   **`remove`**, the chat's per-session TODO plan (keyed by `workspaceId` + `sessionId`; `add` tags the
   item `origin:"user"`) / `terminal.*` / `model.list` / **`provider.status`**
 (the auth-provider status report; every read revalidates host-side) / the **`provider.*` in-app login**
-  (**`loginStart`** — mints a `loginId` and runs pi's OAuth flow **detached** (it can take minutes; it must
+  (**`loginStart`** — mints a `loginId` and runs pi's login flow **detached** (`type` `"oauth"` |
+  `"api_key"`, issue #97 — both auth routes ride one channel; a flow can take minutes and must
   not sit on the request nor block the WS pump) / **`loginReply`** — answers a live `select`/`prompt`,
-  correlated by `loginId` / **`loginCancel`** / **`setApiKey`** (single key → auth.json) / **`logout`** /
+  correlated by `loginId` / **`loginCancel`** / **`logout`** /
   the **JetBrains AI** trio **`jbcentralConnect`** (wire Claude+GPT via the jbcentral proxy → a
   `JbcentralConnectResult`) / **`jbcentralDisconnect`** / **`jbcentralLogin`** (launch `central login`)) /
+  **`project.setTrust`** (persist a project's trust grant → the updated `Project`; gates its committed
+  cross-agent skill aliases) /
+  **`skill.list`** (a pre-session, skill-only `SlashCommandInfo[]` preview for a `projectId`, resolved from
+  that project's current checkout with its **project-scoped aliases gated by trust**; the eventual worktree
+  session is authoritative) / the **Skills-manager set** — **`project.aliasSkills`** (present committed alias
+  names, for the presence-gated notice's count) / **`project.acknowledgeSkills`** (confirm skills that
+  appeared after trust) / **`project.setSkillEnabled`** (project baseline) / **`project.setGroupEnabled`**
+  (turn a plugin / source tier / `@plugins` on/off at the baseline) / **`workspace.setSkillOverride`**
+  (per-workspace on/off/clear → the `Workspace`) / **`skills.state`** (`SkillCatalogEntry[]` — full catalog +
+  per-skill `decision` + `group` — for a `workspaceId`) / **`project.skills`** (the same, project-scoped, for
+  the pre-session manager) / **`session.reloadResources`** (re-scan skills + rebuild the system prompt for one
+  running session; rejected while streaming) /
   `session.*` — `create`/`prompt`/`steer`/`followUp`/`abort`/`dispose`/`setModel`/
   `setThinkingLevel`/`compact`/`getStats`/`getCommands`/`extUiReply`/**`answerQuestion`** (the inline
   `ask_user_question` reply, correlated by tool call id)/**`list`**/**`getMessages`** (the
@@ -146,7 +168,7 @@ of the host.
 
 ## Get right
 
-- **Type-only, from the package roots, always** (verified vs 0.81.1: type-only imports are erased by
+- **Type-only, from the package roots, always** (verified vs 0.82.0: type-only imports are erased by
   `verbatimModuleSyntax`, so the web bundle stays provider-free; the pi-ai provider/API subpaths
   statically import the Node SDKs — never touch them). The `/base` entries existed only in 0.79.8–0.79.9.
 - `Model` is generic — expose as `Model<any>`.

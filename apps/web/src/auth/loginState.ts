@@ -11,6 +11,8 @@ export interface LoginInputPrompt {
 	placeholder?: string;
 	/** pi allows a blank answer here (e.g. Copilot's "blank for github.com") — the dialog may submit empty. */
 	allowEmpty?: boolean;
+	/** pi marked the prompt `secret` (an API key) — render a masked input. */
+	secret?: boolean;
 }
 export type LoginInput = LoginInputSelect | LoginInputPrompt;
 

@@ -1,8 +1,23 @@
-import type { BranchList, ThinkingLevel, WireModel, Workspace } from "@thinkrail/contracts";
-import { Box, Check, ChevronDown, GitBranch, RefreshCw } from "lucide-react";
+import type {
+	BranchList,
+	SlashCommandInfo,
+	ThinkingLevel,
+	WireModel,
+	Workspace,
+} from "@thinkrail/contracts";
+import { Box, Check, ChevronDown, GitBranch, RefreshCw, TriangleAlert } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { ModelSelector } from "@/chat/ModelSelector";
+import { SkillsButton } from "@/chat/SkillsButton";
+import { SkillsDialog } from "@/chat/SkillsDialog";
+import {
+	SlashCommandMenu,
+	selectedSlashCommandValue,
+	slashCommandCatalogOrEmpty,
+	useSlashCommandCompletion,
+} from "@/chat/SlashCommandCompletion";
 import { ThinkingSelector } from "@/chat/ThinkingSelector";
+import { Button } from "@/components/ui/button";
 import {
 	Command,
 	CommandEmpty,
@@ -58,13 +73,36 @@ export function NewWorkspaceDialog({
 	const [baseRef, setBaseRef] = useState<string>("");
 	const [refreshing, setRefreshing] = useState(false);
 	const [prompt, setPrompt] = useState("");
+	const [skillCommands, setSkillCommands] = useState<SlashCommandInfo[]>([]);
+	const [aliasSkills, setAliasSkills] = useState<string[]>([]);
 	const [model, setModel] = useState<WireModel | null>(null);
 	const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>("medium");
 	const [creating, setCreating] = useState(false);
+	const [trusting, setTrusting] = useState(false);
+	const [manageSkills, setManageSkills] = useState(false);
 	const promptRef = useRef<HTMLTextAreaElement>(null);
 	// The dialog content node — popovers portal into it so their lists stay scrollable under the Dialog's
 	// scroll lock (react-remove-scroll blocks wheel/trackpad on body-portaled content).
 	const [dialogEl, setDialogEl] = useState<HTMLElement | null>(null);
+
+	const focusPromptCaret = (position: number) => {
+		requestAnimationFrame(() => {
+			const input = promptRef.current;
+			if (!input) return;
+			input.focus();
+			input.setSelectionRange(position, position);
+		});
+	};
+
+	const slashCompletion = useSlashCommandCompletion({
+		value: prompt,
+		commands: skillCommands,
+		onSelect: (command) => {
+			const next = selectedSlashCommandValue(command);
+			setPrompt(next);
+			focusPromptCaret(next.length);
+		},
+	});
 
 	// Reset the form each time the dialog opens, anchored to the project the "+" was clicked on and any
 	// seed prompt (empty by default).
@@ -74,6 +112,39 @@ export function NewWorkspaceDialog({
 		setPrompt(initialPrompt ?? "");
 		setCreating(false);
 	}, [open, projectId, initialPrompt]);
+
+	// Skills are previewed from the selected project's current checkout; the created worktree/session is
+	// authoritative if its base ref differs. Autocomplete is an enhancement, so failure degrades to empty.
+	useEffect(() => {
+		if (!open) return;
+		let cancelled = false;
+		setSkillCommands([]);
+		void slashCommandCatalogOrEmpty(() =>
+			getTransport().request("skill.list", { projectId: selectedProjectId }),
+		).then((commands) => {
+			if (!cancelled) setSkillCommands(commands);
+		});
+		return () => {
+			cancelled = true;
+		};
+	}, [open, selectedProjectId]);
+
+	// Whether the selected project ships committed skills — a count, so the trust notice is presence-gated
+	// (hidden when there's nothing to trust) and never renders the skills' names before trust.
+	useEffect(() => {
+		if (!open) return;
+		let cancelled = false;
+		setAliasSkills([]);
+		getTransport()
+			.request("project.aliasSkills", { projectId: selectedProjectId })
+			.then((names) => {
+				if (!cancelled) setAliasSkills(names);
+			})
+			.catch(() => {});
+		return () => {
+			cancelled = true;
+		};
+	}, [open, selectedProjectId]);
 
 	// Models are global to the host — fetch once into the shared store; the picker reads them.
 	useEffect(() => {
@@ -208,6 +279,30 @@ export function NewWorkspaceDialog({
 		}
 	};
 
+	// Grant the project trust, then re-preview: the skill effect keys off open/project only, so a grant
+	// wouldn't otherwise refresh the catalog. The updated project is folded back into the store so the
+	// notice clears (trust rides `Project` through the wire).
+	const trustProject = async () => {
+		if (trusting) return;
+		setTrusting(true);
+		try {
+			const updated = await getTransport().request("project.setTrust", {
+				id: selectedProjectId,
+				trusted: true,
+			});
+			const store = useAppStore.getState();
+			store.setProjects(store.projects.map((p) => (p.id === updated.id ? updated : p)));
+			const commands = await slashCommandCatalogOrEmpty(() =>
+				getTransport().request("skill.list", { projectId: selectedProjectId }),
+			);
+			setSkillCommands(commands);
+		} catch (err) {
+			toast.error(errorText(err), "Couldn't trust project");
+		} finally {
+			setTrusting(false);
+		}
+	};
+
 	const selectedProject = projects.find((p) => p.id === selectedProjectId);
 
 	return (
@@ -217,6 +312,13 @@ export function NewWorkspaceDialog({
 				hideClose
 				data-testid="new-workspace-dialog"
 				className="max-w-[600px] gap-md p-md"
+				onEscapeKeyDown={(event) => {
+					// Radix handles Escape outside the textarea's React bubble path. Keep the parent dialog open
+					// while completion consumes Escape to dismiss only its menu (even if focus moved elsewhere).
+					if (!slashCompletion.open) return;
+					event.preventDefault();
+					slashCompletion.dismiss();
+				}}
 				onOpenAutoFocus={(e) => {
 					// Land focus on the prompt (the hero), not the first picker Radix would otherwise focus.
 					e.preventDefault();
@@ -247,10 +349,39 @@ export function NewWorkspaceDialog({
 						onSelect={selectBaseRef}
 						onRefresh={() => void refreshBranches()}
 					/>
+					<SkillsButton
+						onOpen={() => setManageSkills(true)}
+						testId="ws-manage-skills"
+						className="ml-auto"
+					/>
 				</div>
 
+				{/* Trust gate: a repo's committed skills (`.claude/skills` …) are attacker-controlled for a clone,
+				    so they load only after an explicit grant. Personal + bundled skills are always on. */}
+				{selectedProject && selectedProject.trusted !== true && aliasSkills.length > 0 ? (
+					<div
+						data-testid="ws-trust-notice"
+						className="flex w-full items-center gap-sm rounded-[var(--radius-md)] border border-border2 border-l-[3px] border-l-[var(--gold)] bg-[var(--gold-tint)] px-md py-sm text-left"
+					>
+						<TriangleAlert className="size-4 shrink-0 text-gold" />
+						<span className="min-w-0 flex-1 text-sm text-text">
+							This project ships {aliasSkills.length} skill{aliasSkills.length === 1 ? "" : "s"} —
+							off until you trust it. Your personal and ThinkRail's built-in skills are unaffected.
+						</span>
+						<Button
+							size="sm"
+							data-testid="ws-trust-project"
+							disabled={trusting}
+							onClick={() => void trustProject()}
+							className="shrink-0"
+						>
+							Trust project
+						</Button>
+					</div>
+				) : null}
+
 				{/* hero: the prompt */}
-				<div className="flex flex-col gap-xs">
+				<div className="relative">
 					<Textarea
 						ref={promptRef}
 						data-testid="ws-prompt"
@@ -261,6 +392,7 @@ export function NewWorkspaceDialog({
 						rows={6}
 						className="min-h-[160px]"
 						onKeyDown={(e) => {
+							if (slashCompletion.handleKeyDown(e)) return;
 							// Enter creates (matching the button's ↵ affordance); Shift+Enter inserts a newline.
 							if (e.key === "Enter" && !e.shiftKey) {
 								e.preventDefault();
@@ -268,11 +400,23 @@ export function NewWorkspaceDialog({
 							}
 						}}
 					/>
-					{prompt.trim() ? (
+					{slashCompletion.open ? (
+						<SlashCommandMenu
+							commands={slashCompletion.matches}
+							activeIndex={slashCompletion.activeIndex}
+							onSelect={slashCompletion.pick}
+							className="absolute top-full left-sm z-50 mt-xs"
+						/>
+					) : prompt.trim() ? (
 						<p data-testid="workspace-naming-hint" className="px-xs text-hint text-xs">
 							ThinkRail will name the workspace and branch from your request.
 						</p>
-					) : null}
+					) : (
+						<p className="mt-xs text-hint text-xs">
+							Type <span className="font-[var(--font-mono)]">/</span> for a project skill —
+							previewed from the current checkout; the created workspace's session is authoritative.
+						</p>
+					)}
 				</div>
 
 				{/* controls-bottom: model + effort (left), Create (right) */}
@@ -303,6 +447,11 @@ export function NewWorkspaceDialog({
 						</span>
 					</button>
 				</div>
+				<SkillsDialog
+					projectId={selectedProjectId}
+					open={manageSkills}
+					onOpenChange={setManageSkills}
+				/>
 			</DialogContent>
 		</Dialog>
 	);

@@ -12,23 +12,6 @@ import {
 import { getPiRuntime } from "../agent";
 
 /**
- * Providers whose api-key setup isn't a single string (AWS creds, GCP service account, Azure resource +
- * key) — `provider.setApiKey` posts one string, so the strip offers no inline key field for them. Since
- * pi 0.80.8 the provider-owned truth is public (`Provider.auth.apiKey.login` drives an interactive,
- * possibly multi-prompt flow — and `amazon-bedrock` now accepts a single API key that way); these sets
- * stay until the strip adopts that flow (tracked as a follow-up issue) because the inline field can only
- * answer a single secret prompt.
- */
-const MULTI_FIELD_PROVIDERS = new Set([
-	"amazon-bedrock",
-	"google-vertex",
-	"azure-openai-responses",
-]);
-
-/** OAuth-only providers (`Provider.auth` has no api-key login) — a raw api key is never the right entry. */
-const OAUTH_ONLY_PROVIDERS = new Set(["github-copilot"]);
-
-/**
  * The narrow slice of the pi runtime the report reads — extracted so `buildProviderReport` stays a pure
  * function unit-testable with fixture data (no auth/network/disk).
  */
@@ -121,13 +104,11 @@ export function buildProviderReport(sources: ProviderStatusSources): ProviderSta
 		const registryName = sources.displayName(id);
 		const name = registryName === id ? (oauthName.get(id) ?? registryName) : registryName;
 		const canOAuth = oauthIds.has(id);
-		// The inline key field: the provider must have models, pi must support api-key login for it, and it
-		// must not be excluded as multi-field / oauth-only (see the sets above — the field posts ONE string).
-		const canApiKey =
-			sources.modelProviders.has(id) &&
-			sources.apiKeyLogin(id) &&
-			!MULTI_FIELD_PROVIDERS.has(id) &&
-			!OAUTH_ONLY_PROVIDERS.has(id);
+		// Interactive API-key login (via the same login channel as OAuth) — pi's provider-owned truth,
+		// nothing else: `Provider.auth.apiKey.login` is absent exactly for ambient-only providers
+		// (openai-codex, env-driven customs). Multi-prompt providers (azure/vertex) work — the dialog
+		// carries the whole interaction, so no hand-maintained exclusion sets exist anymore (issue #97).
+		const canApiKey = sources.apiKeyLogin(id);
 		const login = {
 			...(canOAuth ? { canOAuth: true } : {}),
 			...(canApiKey ? { canApiKey: true } : {}),
@@ -164,16 +145,18 @@ export function buildProviderReport(sources: ProviderStatusSources): ProviderSta
 }
 
 /**
- * The `provider.status` read. **Revalidates on every call** — `runtime.reloadConfig()` reloads
- * models.json and recomposes providers (it does NOT touch auth.json itself), and its internal
- * availability refresh re-runs the per-provider auth checks against pi's credential store, which reads
- * auth.json fresh (under a lock) on every access — so a `pi` `/login` (or a terminal `central` re-wire)
- * shows up on the next read without restarting the host. (Accepted micro-risk: refreshing the shared
- * runtime concurrent with a streaming session — the same thing pi's TUI does on `/login`.)
+ * The `provider.status` read. **Revalidates on every call** — `runtime.refresh()` (pi 0.82 folded the
+ * old `reloadConfig()` into it) reloads models.json and recomposes providers (it does NOT touch
+ * auth.json itself), and its availability refresh re-runs the per-provider auth checks against pi's
+ * credential store, which reads auth.json fresh (under a lock) on every access — so a `pi` `/login`
+ * (or a terminal `central` re-wire) shows up on the next read without restarting the host. Called with
+ * no options so `allowNetwork` resolves to the runtime's ambient default — OFF (see `piRuntime`).
+ * (Accepted micro-risk: refreshing the shared runtime concurrent with a streaming session — the same
+ * thing pi's TUI does on `/login`.)
  */
 export async function getProviderStatus(): Promise<ProviderStatusReport> {
 	const runtime = await getPiRuntime();
-	await runtime.reloadConfig();
+	await runtime.refresh();
 
 	const modelProviders = new Map<string, string[]>();
 	for (const model of runtime.getModels()) {

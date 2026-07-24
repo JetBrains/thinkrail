@@ -12,6 +12,28 @@ export interface Project {
 	slug: string;
 	/** Epoch ms of last open, for sort order. */
 	lastOpened: number;
+	/**
+	 * Whether the user has engaged trust for this project — the gate on loading its **committed cross-agent
+	 * skill aliases** (`.claude/skills`, `.github/skills`, `.gemini/skills`), which are attacker-controlled
+	 * for a cloned repo and injected into the agent's system prompt. `undefined` = undecided (untrusted).
+	 * Personal (`~/.claude` …), pi-native, and ThinkRail-bundled skills load regardless.
+	 */
+	trusted?: boolean;
+	/**
+	 * Names of project-scoped alias skills the user has **acknowledged**. Granting trust acknowledges every
+	 * such skill present at that moment; a skill that appears later (a pull, or a branch that ships a new
+	 * one) is *not* here until confirmed — so trusting today's checkout can't silently admit tomorrow's
+	 * committed skill. A project-scoped skill loads only when `trusted` **and** its name is in this set.
+	 */
+	acknowledgedSkills?: string[];
+	/** Names disabled at the project baseline (any source), overridable per-workspace. */
+	disabledSkills?: string[];
+	/**
+	 * Group keys disabled at the project baseline — a plugin name or a source tier
+	 * (`project`/`personal`/`bundled`/`pi`), plus the special `@plugins` (all plugin skills). Turns a whole
+	 * plugin/source off in one toggle and keeps future skills in that group off; a per-skill toggle overrides.
+	 */
+	disabledGroups?: string[];
 }
 
 /**
@@ -49,6 +71,13 @@ export interface Workspace {
 	 */
 	renamed?: boolean;
 	diffStats?: DiffStats;
+	/**
+	 * Per-skill enable/disable **overrides** for this workspace, keyed by skill name — `"on"` forces an
+	 * admissible skill on (even if the project baseline disabled it), `"off"` forces it off. Absent → the
+	 * project baseline (`Project.disabledSkills`) applies. Never un-gates an untrusted/unacknowledged
+	 * project alias (admissibility is checked first).
+	 */
+	skillOverrides?: Record<string, "on" | "off">;
 }
 
 /**
@@ -194,7 +223,8 @@ export interface ProviderStatus {
 	detail?: string;
 	/** In-app OAuth login is available for this provider (`provider.loginStart`). */
 	canOAuth?: boolean;
-	/** In-app single-key API-key entry is available (`provider.setApiKey`) — false for multi-field creds. */
+	/** Interactive API-key login is available (`provider.loginStart` with `type: "api_key"`) — pi's
+	 * provider-owned truth (`Provider.auth.apiKey.login`), multi-prompt providers included. */
 	canApiKey?: boolean;
 	/** The provider has a removable `auth.json` credential (`provider.logout`) — false for env / central /
 	 * models.json auth, which the host can't unset (so the strip shows no Sign-out for those). */
@@ -250,7 +280,14 @@ export type LoginFrame =
 	| { kind: "authUrl"; url: string; instructions?: string }
 	| { kind: "deviceCode"; userCode: string; verificationUri: string; expiresInSeconds?: number }
 	| { kind: "select"; message: string; options: { id: string; label: string }[] }
-	| { kind: "prompt"; message: string; placeholder?: string; allowEmpty?: boolean }
+	| {
+			kind: "prompt";
+			message: string;
+			placeholder?: string;
+			allowEmpty?: boolean;
+			/** pi marked the prompt `secret` (an API key) — the dialog masks the input. */
+			secret?: boolean;
+	  }
 	| { kind: "progress"; message: string }
 	| { kind: "success" }
 	| { kind: "error"; message: string };

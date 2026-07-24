@@ -85,6 +85,17 @@ CTA that opens Settings → Providers (`store.openSettings("providers")`). It re
 provider is "connected" iff any `configured`) on mount and re-checks whenever the settings dialog toggles, so
 it disappears the moment the user connects one; a transport error degrades to *not* nagging (offline ≠ "no
 provider"). All provider **management** lives in Settings, not here (the always-on strip is gone).
+
+Beneath it, **`ProjectSkillsNotice`** is the pre-workspace trust surface (so trust is reachable with no
+workspace yet): **presence-gated** — renders nothing unless the selected project ships committed skills —
+showing a **count** ("ships N skills → *Trust project*"), a "N new → *Review & enable*" state for skills that
+appeared after trust (`project.acknowledgeSkills`), else a quiet "N trusted" line. It never renders the
+skills' (attacker-controlled) names before trust. The full manager (`chat/SkillsDialog` in **project mode**
+— trust + group/skill toggles, no session yet) is reached from **New Workspace**, whose opener is the shared
+`chat/SkillsButton` primitive (so it cannot drift from the chat header's Skills trigger). This is the
+pre-session half of the user's skill settings; the chat header opens the same dialog in workspace mode
+(with Reload).
+
 **`NewWorkspaceDialog`** is the create-and-kick-off surface. It names the operation visibly — title
 **“Create workspace”** — and states the model without adding a step: **“A separate checkout on its own new
 branch. Files, chats, changes, and terminals stay scoped to it.”** Its base-branch trigger reads **“From
@@ -96,7 +107,16 @@ a project picker, the prompt hero, and the reused
   `chat/ModelSelector`+`ThinkingSelector` in **pre-session** mode — preselected to the host's resolved
   default via `model.default` so the exact model shows (values held in dialog state, applied at create
   time). The pickers' popovers portal into the dialog node (so their lists scroll under the Dialog scroll
-  lock). In the prompt hero, **Enter creates** (matching the Create button's `↵` affordance) and
+  lock). On open and project-picker changes, the dialog reads **`skill.list({projectId})`** and feeds the
+  result to chat's shared slash-completion primitive: a leading `/` autocompletes skills from the selected
+  project's **current checkout** plus personal/bundled sources, selecting one inserts `/skill:<name> `;
+  failure degrades silently to no menu. Up/Down navigate, Enter/Tab select, Escape dismisses. A caption under
+  the prompt marks the preview as **from the current checkout** (the created worktree's session catalog is
+  authoritative if the selected base branch differs). When the selected project is **untrusted AND ships
+  committed skills** (a count from `project.aliasSkills`, never their names), a **trust notice** shows a
+  *Trust project* button — the repo's skills stay withheld until granted (`project.setTrust`, which folds the
+  updated project back into the store and re-previews); personal + bundled skills show regardless. When the menu is closed, **Enter creates** (matching the Create button's
+  `↵` affordance) and
   **Shift+Enter** inserts a newline. Create = `workspace.create({ projectId, baseRef })` → set active → (with a prompt) open a chat +
   `session.create({ model, thinkingLevel })` + fire-and-forget `prompt`; with an empty prompt it just
   creates the workspace. A **rejected** kick-off `prompt` (a bad model / missing API key — e.g. picking a
@@ -111,9 +131,11 @@ a project picker, the prompt hero, and the reused
   Welcome banner can open it deep-linked to a section. Live sections: **`ProvidersSettings`** (the in-app
   provider-auth surface — Connected cards each with a **Sign-out only when `canLogout`** (env / central /
   models.json auth shows a "Managed" tag instead, since the host can't unset it); a **"Sign in with a
-  subscription"** block of `canOAuth` providers → `provider.loginStart` → the store-driven `auth/LoginDialog`
-  (open the URL or paste the code, `provider.loginReply`); an **"Add an API key"** group of single-key
-  providers (`provider.setApiKey`, capped with a "Show N more" expander); a multi-field "N more" note; and
+  subscription"** block of `canOAuth` providers; an **"Add an API key"** group of `canApiKey`-only
+  providers (capped with a "Show N more" expander) — **both routes start `provider.loginStart`**
+  (`type` `"oauth"` / `"api_key"`, issue #97) into the same store-driven `auth/LoginDialog` (open the
+  URL / paste a code / answer the provider's own key prompts, `provider.loginReply` — no inline key
+  field); a "configured outside the app" note for rows with neither flag; and
   the **`JetBrainsAiCard`** — route Claude+GPT through your JetBrains subscription (the jbcentral proxy) — a
   state machine over `jbcentralWired`/`jbcentralInstalled` + `jbcentralInstall` (all from the same status
   read) + `provider.jbcentral*`:
