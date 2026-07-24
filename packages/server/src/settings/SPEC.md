@@ -17,10 +17,10 @@ theme manifests; settings stores only the selected string id.
 
 ## Boundary
 
-- **Owns:** the cached current `AppConfig` (lazy-loaded, so the per-connect `getConfig()` for
-  `server.welcome` doesn't hit disk each time); `getConfig()`, `updateConfig(partial)` (merge → persist →
-  broadcast), the `setSettingsPublisher` seam, and `resetConfigCache()` (the e2e reset).
-- **Public surface (barrel):** `getConfig`, `updateConfig`, `setSettingsPublisher`, `resetConfigCache`.
+- **Owns:** the current `AppConfig`; reads are per-request (no cache) — the same file-seeded isolation
+  doctrine as `projects.json`/`workspaces.json`. `getConfig()`, `updateConfig(partial)` (merge → persist →
+  broadcast), and the `setSettingsPublisher` seam.
+- **Public surface (barrel):** `getConfig`, `updateConfig`, `setSettingsPublisher`.
 - **Allowed deps:** `persistence` (`loadConfig`/`saveConfig`), `contracts` (`AppConfig`).
 - **Forbidden:** importing `host` or any other sibling; owning WS channels — it emits a domain value
   through the injected publisher; `host` maps it onto `settings.changed`.

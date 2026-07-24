@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DEFAULT_CONFIG } from "@thinkrail/contracts";
-import { getConfig, resetConfigCache, setSettingsPublisher, updateConfig } from "./settings";
+import { getConfig, setSettingsPublisher, updateConfig } from "./settings";
 
 let dataDir: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
@@ -11,12 +11,10 @@ const savedDataDir = process.env.THINKRAIL_DATA_DIR;
 beforeEach(() => {
 	dataDir = mkdtempSync(join(tmpdir(), "trpi-settings-test-"));
 	process.env.THINKRAIL_DATA_DIR = dataDir;
-	resetConfigCache(); // never carry a prior test's cache into this fresh data dir
 });
 
 afterEach(() => {
 	setSettingsPublisher(null); // never leak a test's publisher into the next
-	resetConfigCache();
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
@@ -33,7 +31,7 @@ test("updateConfig merges, persists an opaque theme id, and returns the merged c
 	// Persisted to disk without requiring a server-side theme catalog.
 	const onDisk = JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8"));
 	expect(onDisk.theme).toBe(opaqueTheme);
-	// Cached: a re-read reflects it without touching disk again.
+	// A re-read reflects it (from disk — reads are per-request).
 	expect(getConfig().theme).toBe(opaqueTheme);
 });
 
@@ -52,6 +50,11 @@ test("a null publisher makes updates silent no-ops (still persisted)", () => {
 
 test("loadConfig degrades a partial/corrupt file over DEFAULT_CONFIG", () => {
 	writeFileSync(join(dataDir, "config.json"), "{ not json");
-	resetConfigCache();
 	expect(getConfig()).toEqual(DEFAULT_CONFIG);
+});
+
+test("getConfig reads per-request: an out-of-band config.json write is visible immediately", () => {
+	expect(getConfig().theme).toBe("dark");
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ theme: "acme.seeded" }));
+	expect(getConfig().theme).toBe("acme.seeded"); // no cache to shadow the file (the e2e isolation doctrine)
 });

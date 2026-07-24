@@ -15,25 +15,19 @@ export function setSettingsPublisher(fn: SettingsPublisher | null): void {
 	publishSettings = fn;
 }
 
-// Lazily loaded + cached, so `getConfig()` (called for every `server.welcome`) doesn't hit disk each time.
-let cached: AppConfig | null = null;
-
-/** The current app config (cached; loaded from `config.json` on first read, merged over `DEFAULT_CONFIG`). */
+/**
+ * The current app config — read from `config.json` on every call (merged over `DEFAULT_CONFIG` by
+ * `loadConfig`). Per-request like `projects.json`/`workspaces.json`: file-seeded state is visible
+ * immediately, which is what keeps e2e tests isolated on one shared host. The read is one tiny JSON file.
+ */
 export function getConfig(): AppConfig {
-	cached ??= loadConfig();
-	return cached;
+	return loadConfig();
 }
 
 /** Merge a partial into the config, persist it, broadcast the new config, and return it. */
 export function updateConfig(partial: Partial<AppConfig>): AppConfig {
 	const next: AppConfig = { ...getConfig(), ...partial };
-	cached = next;
 	saveConfig(next);
 	publishSettings?.(next);
 	return next;
-}
-
-/** Drop the in-memory cache — the e2e reset seam, so a fresh data dir isn't shadowed by a stale config. */
-export function resetConfigCache(): void {
-	cached = null;
 }
