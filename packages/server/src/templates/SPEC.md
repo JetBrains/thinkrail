@@ -127,9 +127,14 @@ pi version bump.
   `template.save` overwrite it, so a checked-out repo could plant a link and turn a routine template
   edit into a file write outside the worktree. Cost: a legitimately symlinked individual template that
   pi's own `/` menu would offer doesn't appear in ThinkRail's — acceptable, and already the listing's
-  behavior before this gate existed. **Project-scope writes** additionally refuse to operate through a
-  symlinked `<cwd>/.pi` or `<cwd>/.pi/prompts` *directory* (the same escape one level up — the repo
-  controls those path components); the **global** dir is exempt on purpose: `~/.pi/agent/prompts` is
+  behavior before this gate existed. The same rule applies **one level up**: a symlinked `<cwd>/.pi` or
+  `<cwd>/.pi/prompts` *directory* (the repo controls those path components) makes the project dir
+  untraversable for **every** project-scope operation — `listTemplates`/`getTemplate` treat it as having
+  no templates (list and get share one predicate, `readableProjectDir`, so they can never disagree),
+  while `saveTemplate`/`deleteTemplate` refuse loudly (a write must fail visibly, never silently no-op).
+  Without the read half, `template.list`/`template.get` would still disclose the link target's `.md`
+  files over the wire — the same escape the file-level gate closes. The **global** dir is exempt on
+  purpose: `~/.pi/agent/prompts` is
   user-owned (an attacker writing there has already won) and dotfile managers routinely symlink it. The
   `lstat`-then-write gap is a TOCTOU race only a concurrent local process could exploit — out of scope
   for an owner-scoped host (such a process could write the target directly). Pinned by the symlink
