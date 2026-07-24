@@ -26,8 +26,10 @@ not here — `auth` stays presentational + types, so nothing here imports `store
     browser-vs-paste race), `status` goes `active → success/error`. **Types only** (like `chat/types`).
   - `LoginDialog` — **props-driven, no store/transport** (like the chat renderers): renders a `LoginState`
     (open-URL button + selectable URL; a device code with a **clickable verification link** that also
-    **auto-opens** in a new tab best-effort on arrival; a `select`/`prompt` input; progress/working spinner;
-    terminal success/error) and calls back `onReply(value)` / `onCancel()` / `onClose()`. Themed with token
+    **auto-opens** in a new tab best-effort on arrival; a `select`/`prompt` input — a `secret`-flagged
+    prompt renders **masked** (API keys, issue #97); progress/working spinner;
+    terminal success/error) and calls back `onReply(value)` / `onCancel()` / `onClose()`. Copy says
+    **"Connect"**, not "Sign in" — one dialog serves OAuth and API-key entry alike. Themed with token
     utilities only; `lucide-react` icons; shadcn `Dialog`/`Button`.
 - **Public surface (barrel `index.ts`):** `LoginDialog`; `LoginState`/`LoginInput*` (types).
 - **Allowed deps:** `components/ui` (`Dialog`/`Button`). (The state types need no imports.)
@@ -40,9 +42,10 @@ not here — `auth` stays presentational + types, so nothing here imports `store
   reducer (`foldLoginFrame`) — never under a session runtime (that path drops frames pre-session).
 - The **`provider.login` channel** is routed to `store.applyLoginFrame` in `transport/wireTransport`.
 - `panels/ProvidersSettings` (the Providers section of the Settings dialog) is the integration piece: it
-  starts a login (`provider.loginStart` → `store.beginLogin`), mounts `LoginDialog` from `store.activeLogin`,
+  starts a login (`provider.loginStart` with `type` `"oauth"` or `"api_key"` — both auth routes ride the
+  same channel, issue #97 — → `store.beginLogin`), mounts `LoginDialog` from `store.activeLogin`,
   wires `onReply`/`onCancel` to `provider.loginReply`/`loginCancel`, and re-fetches `provider.status` when a
-  login (or api-key/logout) settles. (The Welcome screen only carries `panels/ProviderWarningBanner`, which
+  login (or logout) settles. (The Welcome screen only carries `panels/ProviderWarningBanner`, which
   opens Settings → Providers when no provider is connected.)
 
 ## Get right

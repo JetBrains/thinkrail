@@ -12,9 +12,10 @@ tags: [v1, auth, pi]
 ## Responsibility
 
 Everything about **model-provider credentials**: the read side the Welcome strip renders
-(`provider.status`) and the write side that configures them from inside the app — OAuth sign-in, single
-API-key entry, and logout. All of it goes through the shared `ModelRuntime` (pi's model/auth facade);
-we never parse `auth.json` / `models.json` ourselves and never surface a credential value over the wire.
+(`provider.status`) and the write side that configures them from inside the app — OAuth sign-in,
+interactive API-key entry (both over the **same login channel**, issue #97), and logout. All of it goes
+through the shared `ModelRuntime` (pi's model/auth facade); we never parse `auth.json` / `models.json`
+ourselves and never surface a credential value over the wire.
 
 ## Boundary
 
@@ -37,24 +38,26 @@ we never parse `auth.json` / `models.json` ourselves and never surface a credent
       is present — an OAuth id can differ from any model-provider id (`openai-codex` ≠ `openai`), and a
       stored credential can outlive its models. `canOAuth` = the row's provider carries OAuth auth (so
       `provider.loginStart(row.id)` uses the credential id pi will actually store under); its row name
-      prefers `auth.oauth.name` (more specific for oauth-only rows). `canApiKey` = the row is a model
-      provider **whose `Provider.auth.apiKey.login` exists** (pi's public api-key-login truth —
-      `openai-codex` has model rows but no key auth), minus `MULTI_FIELD_PROVIDERS`
-      (`amazon-bedrock`/`google-vertex`/`azure-openai-responses`) and `OAUTH_ONLY_PROVIDERS`
-      (`github-copilot`): pi *can* drive those interactively (possibly multi-prompt), but our inline
-      field posts exactly **one** string — the sets stay until the strip drives api-key setup through
-      the interactive login channel (tracked as a follow-up issue). `canLogout` = the id has a stored
+      prefers `auth.oauth.name` (more specific for oauth-only rows). `canApiKey` =
+      **`Provider.auth.apiKey.login` exists** — pi's public api-key-login truth and *nothing else*
+      (issue #97: the interactive login channel parks every prompt the provider asks, so multi-prompt
+      creds — bedrock/vertex/azure — and OAuth+key providers — github-copilot — just work; the
+      hand-maintained exclusion sets are gone; `openai-codex` reports `false` because pi's provider has
+      no key auth, not because we said so). `canLogout` = the id has a stored
       **auth.json** credential (`credentialProviders`) — the only auth the host can remove; env / central
       (models.json) / models.json-keyed auth report `false` (Sign-out would no-op, so the strip hides it).
   - `providerLogin` — the in-app credential **writes**, session-less (a login runs on the Welcome screen
     before any session exists), so a `loginId`-keyed sibling of `agent/webUiContext`:
-    - `startLogin(providerId)` → `{ loginId }` **synchronously**; `runtime.login(id, "oauth",
-      interaction)` runs **detached** (an OAuth flow can take minutes — awaiting it would blow the client
-      request timeout and block the WS pump). pi's `AuthInteraction` is wired to `LoginFrame` pushes on
-      the `provider.login` channel: `notify` `auth_url`→`authUrl`, `device_code`→`deviceCode`,
+    - `startLogin(providerId, type = "oauth")` → `{ loginId }` **synchronously**; `runtime.login(id,
+      type, interaction)` runs **detached** (a flow can take minutes — awaiting it would blow the client
+      request timeout and block the WS pump). **One bridge, both auth types** (issue #97): `"oauth"` and
+      `"api_key"` (the provider-owned interactive key entry — one secret prompt for most providers,
+      multi-prompt for azure/vertex-style creds). pi's `AuthInteraction` is wired to `LoginFrame` pushes
+      on the `provider.login` channel: `notify` `auth_url`→`authUrl`, `device_code`→`deviceCode`,
       `progress`/`info`→`progress` (info links appended as plain URLs); `prompt`
       `select`→a parked `select` frame, `text`/`secret`/`manual_code`→a parked `prompt` frame awaiting a
-      reply. A prompt's own `signal` abort (pi cancelling the loser of its browser-vs-paste race) settles
+      reply (a `secret` prompt is flagged on the frame so the dialog masks the input). A prompt's own
+      `signal` abort (pi cancelling the loser of its browser-vs-paste race) settles
       the parked input — identity-guarded so a late abort can't clear a newer parked prompt. pi persists
       the credential **and refreshes availability inside `login()`**, so success just pushes `success`;
       on throw, `error`.
@@ -62,10 +65,9 @@ we never parse `auth.json` / `models.json` ourselves and never surface a credent
     - `cancelLogin(loginId)` — aborts the signal **and** settles the parked input with `undefined` (which
       makes the awaiting `prompt` throw), because the signal alone won't stop a provider's
       browser/callback-server wait; `cancelAllLogins()` sweeps them on host `stop()`.
-    - `setProviderApiKey(id, key)` — persists via `runtime.login(id, "api_key", <canned interaction>)`
-      answering the provider's single secret prompt with the key (`setRuntimeApiKey` is a
-      **non-persistent** overlay — never use it for this); only offered for single-key providers (see
-      `canApiKey`). `logoutProvider(id)` — `runtime.logout` (refreshes internally).
+    - `logoutProvider(id)` — `runtime.logout` (refreshes internally). (The old `setProviderApiKey` — a
+      canned interaction answering exactly one secret prompt — is gone with `provider.setApiKey`: the
+      dialog flow subsumes it and also serves multi-prompt providers.)
     - `setLoginPublisher(fn)` — the server→client push seam (defaults to a no-op).
   - `jbcentral` — the in-app **JetBrains AI** (jbcentral proxy) wiring, composing `@thinkrail/shared/jbcentral`
     (which owns the protocol) and adding the one live-runtime step the standalone CLI can't:
@@ -76,7 +78,7 @@ we never parse `auth.json` / `models.json` ourselves and never surface a credent
     one-liner, via `jbcentralInstall(process.platform)`) so the card knows its state — and shows the right
     command for the host's OS — from the one status read.
 - **Public surface (barrel):** `getProviderStatus`, `buildProviderReport` (+ `ProviderStatusSources`);
-  `startLogin`, `resolveLogin`, `cancelLogin`, `cancelAllLogins`, `setProviderApiKey`, `logoutProvider`,
+  `startLogin`, `resolveLogin`, `cancelLogin`, `cancelAllLogins`, `logoutProvider`,
   `setLoginPublisher`; `connectJbcentral`, `disconnectJbcentral`, `jbcentralLogin`.
 - **Allowed deps:** `contracts` (wire types); `shared/jbcentral`; the **`agent` barrel** for
   `getPiRuntime()` (the shared `ModelRuntime`); `@earendil-works/pi-ai` (auth interaction **types** only).
@@ -90,8 +92,9 @@ we never parse `auth.json` / `models.json` ourselves and never surface a credent
 - **Writes refresh themselves** (pi's `login`/`logout` refresh availability internally) — but the status
   read still `reloadConfig()`s, or external changes (a terminal `pi /login`, a `central` re-wire) stay
   invisible until restart.
-- **API keys persist only through `login(id, "api_key")`** — `setRuntimeApiKey` is a session-lifetime
-  overlay and would silently drop the key on host restart.
+- **API keys persist only through `login(id, "api_key", interaction)`** — `setRuntimeApiKey` is a
+  session-lifetime overlay and would silently drop the key on host restart. The interaction is the real
+  dialog bridge, never a canned auto-answer (a canned one can only serve single-prompt providers).
 - **Cancel settles the parked promise**, not just `abort()`.
 - Frames **accumulate** client-side (the `authUrl` + paste-`prompt` race), so a terminal `success`/`error`
   is what closes a flow — `terminate()` guarantees exactly one terminal outcome per `loginId`.

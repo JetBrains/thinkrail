@@ -1,12 +1,13 @@
-// In-app provider login: drives pi's OAuth flow (`ModelRuntime.login`) headless — the `AuthInteraction`
-// pi would hand a TUI is wired to WS frames instead. Session-less (a login runs on the Welcome screen
-// before any session exists), so this is the sibling of `webUiContext`: a `loginId`-keyed pending
-// registry, frames pushed on the `provider.login` channel, and a parked input promise that the browser's
-// `provider.loginReply` resolves. Also the API-key / logout mutators, each of which pi persists to
-// auth.json and follows with an internal availability refresh, so a following `provider.status` read
-// reflects it.
+// In-app provider login: drives pi's login flows (`ModelRuntime.login`) headless — the `AuthInteraction`
+// pi would hand a TUI is wired to WS frames instead. One bridge serves BOTH auth types: `"oauth"` and
+// `"api_key"` (the provider-owned interactive key entry — a single secret prompt for most, multi-prompt
+// for azure/vertex-style creds). Session-less (a login runs on the Welcome screen before any session
+// exists), so this is the sibling of `webUiContext`: a `loginId`-keyed pending registry, frames pushed
+// on the `provider.login` channel, and a parked input promise that the browser's `provider.loginReply`
+// resolves. Also the logout mutator; every write is persisted by pi to auth.json and followed by its
+// internal availability refresh, so a following `provider.status` read reflects it.
 
-import type { AuthInteraction, AuthPrompt } from "@earendil-works/pi-ai";
+import type { AuthInteraction, AuthPrompt, AuthType } from "@earendil-works/pi-ai";
 import type { LoginFrame, LoginPush, LoginReply } from "@thinkrail/contracts";
 import { getPiRuntime } from "../agent";
 
@@ -49,22 +50,27 @@ function frameForPrompt(prompt: AuthPrompt): LoginFrame {
 	}
 	// `text`, `secret`, and `manual_code` all collect one string (the paste-code race included). Only
 	// `text` prompts may be submitted blank — providers define empty semantics there (Copilot's GHE
-	// prompt treats blank as github.com), while an empty secret/auth-code is never meaningful.
+	// prompt treats blank as github.com), while an empty secret/auth-code is never meaningful. A `secret`
+	// prompt (an API key) is flagged so the dialog masks the input.
 	return {
 		kind: "prompt",
 		message: prompt.message,
 		...(prompt.placeholder ? { placeholder: prompt.placeholder } : {}),
 		...(prompt.type === "text" ? { allowEmpty: true } : {}),
+		...(prompt.type === "secret" ? { secret: true } : {}),
 	};
 }
 
 /**
  * Start a login and return its handle **immediately** — pi's `ModelRuntime.login()` is kicked off
- * *detached* (`void`, no `await`): an OAuth flow can take minutes of user interaction, so awaiting it here
- * would blow the client's request timeout and block the WS message pump. Frames arrive on the
- * `provider.login` channel; the terminal `success`/`error` frame lands whenever the detached flow settles.
+ * *detached* (`void`, no `await`): a flow can take minutes of user interaction (OAuth round-trips, or
+ * hunting down an API key to paste), so awaiting it here would blow the client's request timeout and
+ * block the WS message pump. Frames arrive on the `provider.login` channel; the terminal
+ * `success`/`error` frame lands whenever the detached flow settles. `type` picks the provider-owned
+ * flow: `"oauth"` (default) or `"api_key"` (interactive key entry — pi persists it to auth.json, unlike
+ * the non-persistent `setRuntimeApiKey` overlay).
  */
-export function startLogin(providerId: string): { loginId: string } {
+export function startLogin(providerId: string, type: AuthType = "oauth"): { loginId: string } {
 	const loginId = nextId();
 	const entry: Pending = { providerId, abort: new AbortController(), settled: false };
 	logins.set(loginId, entry);
@@ -138,7 +144,7 @@ export function startLogin(providerId: string): { loginId: string } {
 	// pi persists the credential and refreshes its availability snapshot inside `login()` — the freshly
 	// authed provider's models appear on the next `model.list`/`provider.status` read with no extra step.
 	void getPiRuntime()
-		.then((runtime) => runtime.login(providerId, "oauth", interaction))
+		.then((runtime) => runtime.login(providerId, type, interaction))
 		.then(() => {
 			if (terminate(loginId)) publishTerminal({ kind: "success" });
 		})
@@ -175,22 +181,6 @@ export function cancelLogin(loginId: string): void {
 /** Cancel every in-flight login (host shutdown) so no detached `login()` promise leaks past `stop()`. */
 export function cancelAllLogins(): void {
 	for (const loginId of [...logins.keys()]) cancelLogin(loginId);
-}
-
-/**
- * Store a single API key for a provider. pi 0.80.8+ persists api keys through the provider-owned login
- * flow (`login(id, "api_key", …)` → auth.json) — `setRuntimeApiKey` is a non-persistent overlay, NOT this.
- * The canned interaction answers the provider's single secret prompt with the key; the strip only offers
- * this field for single-key providers (see `MULTI_FIELD_PROVIDERS` in `providerStatus`).
- */
-export async function setProviderApiKey(providerId: string, key: string): Promise<void> {
-	const trimmed = key.trim();
-	if (!trimmed) throw new Error("API key must not be empty");
-	const runtime = await getPiRuntime();
-	await runtime.login(providerId, "api_key", {
-		prompt: async () => trimmed,
-		notify: () => {},
-	});
 }
 
 /** Remove a provider's stored credentials (auth.json); pi refreshes availability internally. */
