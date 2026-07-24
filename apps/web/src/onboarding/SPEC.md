@@ -86,24 +86,41 @@ vs dismissible review mode (re-opened from the left-panel help button). Changes:
 
 ## The game — five beats, ≤90s, skippable at every step
 
-Canned demo project (`guitar-tuner`) — deterministic, zero wire dependencies. Files wear the same
-status colors as the Changes panel: `src/app.ts` (committed), `src/tuner.ts` (committed, **modified
-since**), `README.md` (committed), `.env` (untracked), `notes.todo` (untracked), `node_modules/`
-(ignored). Every beat is **predict → reveal → one-line why**. Tone: never "Wrong!" — "Almost everyone
-expects this — here's the twist."
+Canned demo project (`guitar-tuner`) — deterministic, zero wire dependencies: `src/app.ts`
+(committed), `src/tuner.ts` (committed, **modified since**), `README.md` (committed), `.env`
+(untracked), `notes.todo` (untracked), `node_modules/` (ignored). **The game does not reuse the
+Changes panel's VCS decoration colors** (`statusNameClass`: untracked = muted green, per the VS Code
+convention) — those answer *"what changed vs base?"*, while the game asks *"will this travel?"*, and
+green on `.env` would say "included" when the lesson is the opposite. Instead: **status pills are
+neutral gray in the predict phase** (color would leak the answer), and **in the reveal, color encodes
+fate** — gold = *stays here*, green ✓ = *present in the new workspace*. Every beat is **predict →
+reveal → one-line why**. Tone: never "Wrong!" — "Almost everyone expects this — here's the twist."
 
-1. **What comes along?** — "You create workspace `fix-pitch-bug` from `main`. Tap every file you'll
-   find inside it." Reveal animates committed files across; `.env` / `notes.todo` / `node_modules`
-   visibly stay in the left folder; `tuner.ts` crosses **flagged "at its last commit — without your
-   edit"**. *"A workspace starts from a commit, not from your folder."*
-2. **Where does it live?** — three options → reveal the real model, **Default-aware** (#105): *"Your
-   **Default workspace** is the project folder itself. Every workspace you create is a fresh parallel
-   folder under `~/.thinkrail/worktrees/…` — the original stays exactly as you left it."* (Copy stays
-   true pre-#105; only the "Default" naming is #105-specific and lives in one string.)
+1. **What comes along?** — "You create workspace `fix-pitch-bug`, base: `main`. Tap every file
+   you'll find inside it." The setup states the **base-branch fact** (verified against
+   `workspaces.ts createWorkspace`): the base can be *any local or remote branch*; the workspace
+   always gets its **own fresh branch**, cut from the base exactly as it stands at its last commit —
+   it never checks an existing branch out as-is. Reveal animates **copies** of the committed files
+   flying from the project folder into the workspace — **the originals never move, dim, or get
+   struck out** (the left folder is explicitly labeled *untouched*; each original pulses briefly as
+   its copy departs, so provenance is visible); `.env` / `notes.todo` / `node_modules` wear gold
+   *stays here* tags; the `tuner.ts` copy is **flagged "at its last commit — without your edit"**.
+   *"A workspace starts from a commit, not from your folder."*
+2. **Where does it live?** — three options → reveal is a **filesystem tree view**: `~/projects/
+   guitar-tuner` (tagged *your project — untouched*) and `~/.thinkrail/worktrees/<slug>/<branch>`
+   (pointer: *your new workspace*) side by side in one tree, so the "different folder, original
+   intact" fact is *seen*, not told. Copy is **Default-aware** (#105): *"Your **Default workspace**
+   is the project folder itself; every workspace you create is a fresh parallel folder."* (True
+   pre-#105 too; the "Default" naming lives in one string.)
 3. **Will it run?** — "First `npm start` in the new workspace?" → reveal: fails — dependencies and
    secrets never travel. Pivot to the fix: *"That's why ThinkRail has setup hooks — declare
-   `npm install` + copy `.env` once; they run on every new workspace."* The CTA slot sits behind the
-   hooks-availability constant (generic copy until #93 lands, then links to the hooks dialog).
+   `npm install` + copy `.env` once; they run on every new workspace."* The reveal then plays the
+   **lifecycle mini-movie**: a CSS-only looping storyboard — *create → a fresh folder appears →
+   onCreate hooks set it up → you work → onDelete cleans up* — showing the original folder untouched
+   throughout (`prefers-reduced-motion` → the five frames render as a static storyboard). The same
+   loop doubles as ambient media in the overlay's worktrees feature card, behind the game CTA. The
+   hooks CTA slot sits behind the hooks-availability constant (generic copy until #93 lands, then
+   links to the hooks dialog).
 4. **One repo, many folders** — "You commit in the workspace; does your main folder's history have
    it?" → reveal: **yes** — one shared `.git`; branches and commits are shared, uncommitted mess never
    is.
