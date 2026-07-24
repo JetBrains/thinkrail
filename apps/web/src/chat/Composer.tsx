@@ -231,11 +231,20 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	// mention/plain-slash pick, `insertText`) — see `chat/SPEC.md`'s Template slots section.
 	const [slots, setSlots] = useState<TemplateSlot[] | null>(null);
 	const [slotIdx, setSlotIdx] = useState(0);
-	// The textarea's live scroll offset, mirrored onto the highlight backdrop's inner layer (see the
-	// `onScroll` handler below) so its tint spans stay pixel-aligned with the real text while scrolling.
-	// Tracked unconditionally (not gated on `slots !== null`) so the backdrop already has the right offset
-	// the instant a session starts, rather than flashing at `{0, 0}` for one frame.
-	const [scroll, setScroll] = useState({ left: 0, top: 0 });
+	// The highlight backdrop scroll-syncs to the textarea IMPERATIVELY — the textarea's `onScroll` copies
+	// its offsets onto the backdrop element (a programmatic scroll offset needs no styling, so the repo's
+	// token-utilities-only rule holds with zero exceptions — no state, no inline `style`, and no composer
+	// re-render per scrolled frame). The ref callback seeds the offsets at mount, so a session starting
+	// in an already-scrolled composer never paints even one frame misaligned.
+	const backdropRef = useRef<HTMLDivElement | null>(null);
+	const attachBackdrop = (el: HTMLDivElement | null) => {
+		backdropRef.current = el;
+		const textarea = ref.current;
+		if (el && textarea) {
+			el.scrollLeft = textarea.scrollLeft;
+			el.scrollTop = textarea.scrollTop;
+		}
+	};
 
 	const { token, start } = activeToken(value, caret);
 	const mentionQuery = token.startsWith("@") ? token.slice(1) : null;
@@ -613,6 +622,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				<div className="relative rounded-[var(--radius-md)] bg-[var(--input-bg)]">
 					{slots ? (
 						<div
+							ref={attachBackdrop}
 							data-testid="slot-backdrop"
 							aria-hidden
 							className="pointer-events-none absolute inset-0 overflow-hidden rounded-[var(--radius-md)]"
@@ -621,15 +631,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							 * font size/line-height, a transparent border of the same width so the content box
 							 * lines up) plus `whitespace-pre-wrap break-words` — a native textarea soft-wraps
 							 * this way by default (its own UA stylesheet), but a plain <div> does not, so this
-							 * has to be spelled out explicitly for the two to wrap identical text identically. */}
-							<div
-								className="w-full whitespace-pre-wrap break-words border border-transparent px-md py-sm text-sm"
-								// The one allowed inline style (chat/SPEC.md's styling rule): a computed pixel
-								// transform mirroring the textarea's own live scroll offset (updated by its
-								// `onScroll` handler below) — there is no token/utility for "translate by this
-								// frame's scroll position", it's inherently a runtime pixel value.
-								style={{ transform: `translate(${-scroll.left}px, ${-scroll.top}px)` }}
-							>
+							 * has to be spelled out explicitly for the two to wrap identical text identically.
+							 * The mirrored content overflows the `overflow-hidden` parent, whose scroll offsets
+							 * the textarea's `onScroll` sets imperatively (see `attachBackdrop`). */}
+							<div className="w-full whitespace-pre-wrap break-words border border-transparent px-md py-sm text-sm">
 								{withOffsets(highlightSegments(value, slots, slotIdx)).map((seg) => (
 									<span
 										key={seg.start}
@@ -647,9 +652,13 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 						ref={ref}
 						data-testid="chat-input"
 						value={value}
-						onScroll={(e) =>
-							setScroll({ left: e.currentTarget.scrollLeft, top: e.currentTarget.scrollTop })
-						}
+						onScroll={(e) => {
+							const backdrop = backdropRef.current;
+							if (backdrop) {
+								backdrop.scrollLeft = e.currentTarget.scrollLeft;
+								backdrop.scrollTop = e.currentTarget.scrollTop;
+							}
+						}}
 						onChange={(e) => {
 							const next = e.target.value;
 							const nextCaret = e.target.selectionStart;

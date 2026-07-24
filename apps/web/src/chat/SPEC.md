@@ -272,10 +272,12 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   (`data-testid="slot-highlight"` + `data-slot-state`, `rounded-[2px]` `bg-[var(--primary-20/40/10)]` for
   unfilled/active/filled, no tint for plain, every span `text-transparent` so only the real textarea text
   above shows through) lands exactly under its own characters. **Scroll sync**: the textarea's `onScroll`
-  tracks `{ scrollLeft, scrollTop }` in state, applied to the backdrop's inner div as
-  `translate(-scrollLeft, -scrollTop)` — the **one** inline `style` in the whole module (chat/SPEC.md's
-  Get-right styling rule is otherwise token-utilities-only), since a computed live pixel offset has no
-  token; the backdrop's outer layer is `overflow-hidden` so the translated content never spills past it.
+  copies its `scrollLeft`/`scrollTop` onto the backdrop's outer `overflow-hidden` layer **imperatively**
+  (a ref — no state, no inline `style`: a programmatic scroll offset needs no styling at all, so the
+  repo's token-utilities-only invariant holds with zero exceptions; an earlier version tracked the
+  offsets in state and applied a `translate(...)` inline style, which both violated the invariant and
+  re-rendered the composer on every scrolled frame). The backdrop's **ref callback** seeds the offsets at
+  mount, so a session starting in an already-scrolled composer never paints even one frame misaligned.
 - **Save-as-template + template management** (`TemplateEditorDialog.tsx`; `HistoryOverlay`'s save action;
   `panels/TemplatesSettings.tsx`) — one shared create/edit surface for prompt-template files, reused by two
   entry points that never talk to each other: the Settings → Templates panel (list + New/Edit/Delete, see
