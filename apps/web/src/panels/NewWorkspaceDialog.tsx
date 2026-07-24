@@ -1,5 +1,6 @@
 import type {
 	BranchList,
+	GitStatus,
 	SlashCommandInfo,
 	ThinkingLevel,
 	WireModel,
@@ -216,6 +217,26 @@ export function NewWorkspaceDialog({
 		};
 	}, [open, selectedProjectId]);
 
+	// Project-root dirty state for the "stays behind" echo. Non-blocking enhancement: a failed or slow
+	// fetch just leaves the static line — never a spinner, never a gate on Create.
+	const [rootStatus, setRootStatus] = useState<GitStatus | null>(null);
+	useEffect(() => {
+		if (!open || !selectedProjectId) {
+			setRootStatus(null);
+			return;
+		}
+		let cancelled = false;
+		getTransport()
+			.request("git.projectStatus", { projectId: selectedProjectId })
+			.then((status) => {
+				if (!cancelled) setRootStatus(status);
+			})
+			.catch(() => {});
+		return () => {
+			cancelled = true;
+		};
+	}, [open, selectedProjectId]);
+
 	const refreshBranches = async () => {
 		setRefreshing(true);
 		try {
@@ -305,6 +326,18 @@ export function NewWorkspaceDialog({
 
 	const selectedProject = projects.find((p) => p.id === selectedProjectId);
 
+	const dirtyCounts = rootStatus
+		? {
+				modified: rootStatus.changes.filter((c) => c.status !== "untracked").length,
+				untracked: rootStatus.changes.filter((c) => c.status === "untracked").length,
+			}
+		: null;
+	const hasDirty = dirtyCounts !== null && dirtyCounts.modified + dirtyCounts.untracked > 0;
+	const envStays =
+		rootStatus?.changes.some(
+			(c) => c.status === "untracked" && /(^|\/)\.env(\..+)?$|\.local$/.test(c.path),
+		) ?? false;
+
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent
@@ -355,6 +388,28 @@ export function NewWorkspaceDialog({
 						className="ml-auto"
 					/>
 				</div>
+
+				<p data-testid="stays-behind" className="text-hint text-xs">
+					Fresh branch cut from the base — uncommitted &amp; untracked files in your project folder
+					stay behind.
+					{hasDirty && dirtyCounts ? (
+						<span
+							data-testid="stays-behind-counts"
+							title={rootStatus?.changes
+								.slice(0, 8)
+								.map((c) => c.path)
+								.join("\n")}
+							className="ml-xs rounded-full bg-gold/15 px-sm text-gold"
+						>
+							right now: {dirtyCounts.modified} modified · {dirtyCounts.untracked} untracked
+						</span>
+					) : null}
+					{envStays ? (
+						<span data-testid="stays-behind-env" className="block text-primary">
+							.env won't travel — hooks can copy it
+						</span>
+					) : null}
+				</p>
 
 				{/* Trust gate: a repo's committed skills (`.claude/skills` …) are attacker-controlled for a clone,
 				    so they load only after an explicit grant. Personal + bundled skills are always on. */}

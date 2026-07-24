@@ -102,7 +102,8 @@ pre-session half of the user's skill settings; the chat header opens the same di
 **`NewWorkspaceDialog`** is the create-and-kick-off surface. It names the operation visibly — title
 **“Create workspace”** — and states the model without adding a step: **“A separate checkout on its own new
 branch. Files, chats, changes, and terminals stay scoped to it.”** Its base-branch trigger reads **“From
-{base}”**, not an unexplained ref. An optional **`initialPrompt`** seeds the prompt hero (still editable;
+{base}”**, not an unexplained ref. Beneath the pickers it renders the stays-behind echo (static always;
+live root-dirty counts via `git.projectStatus`, fail-soft). An optional **`initialPrompt`** seeds the prompt hero (still editable;
 empty by default); while the prompt is non-empty, a secondary hint says ThinkRail will name the workspace
 and branch from the request. The rest stays compact: the base-branch combobox (`git.listBranches`,
 degrading to local branches offline; a Refresh re-lists; `origin/HEAD` is filtered so no stray `origin`),
