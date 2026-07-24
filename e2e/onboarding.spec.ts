@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { openAppFresh } from "./fixtures/app";
+import { createWorkspaceViaDialog, openAppFresh, openFixtureProject } from "./fixtures/app";
 import { seedConfig } from "./fixtures/config";
 import { E2E_DATA_DIR } from "./fixtures/paths";
 
@@ -181,5 +181,34 @@ test.describe("worktree game", () => {
 		await expect(page.getByTestId("onboarding-feature-0")).toBeVisible();
 		await expect(page.getByTestId("lifecycle-loop")).toBeVisible();
 		await expect(page.getByTestId("onboarding")).toBeVisible();
+	});
+});
+
+test.describe("first-worktree banner", () => {
+	test("shows until dismissed; dismissal is host-persisted", async ({ page }) => {
+		await openFixtureProject(page);
+		// Intro seen, banner NOT yet dismissed — the one state the shared seed never exercises. Reseed +
+		// reload BEFORE creating the workspace: `appConfig` only refreshes on `server.welcome` (connect) or
+		// a `settings.changed` broadcast, so writing config.json without a reload would leave the
+		// already-connected client on the shared reset's (dismissed) snapshot.
+		seedConfig({ theme: "dark", onboarding: { introSeenAt: "2026-01-01T00:00:00.000Z" } });
+		await page.reload();
+		await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+		await expect(page.getByTestId("project-item").first()).toBeVisible();
+
+		await createWorkspaceViaDialog(page);
+		const banner = page.getByTestId("worktree-banner");
+		await expect(banner).toBeVisible();
+		await expect(banner).toContainText("worktrees");
+
+		await page.getByTestId("worktree-banner-how").click();
+		await expect(page.getByTestId("onboarding-game")).toBeVisible();
+		await page.keyboard.press("Escape"); // review mode dismisses
+
+		await page.getByTestId("worktree-banner-dismiss").click();
+		await expect(banner).toHaveCount(0);
+		await page.reload();
+		await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+		await expect(page.getByTestId("worktree-banner")).toHaveCount(0);
 	});
 });

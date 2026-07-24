@@ -51,7 +51,10 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   switching a flat list and a folder **`ChangesTree`**; clicking a file in either opens/focuses its
   **center Monaco diff tab**),
   `CenterTabs` + `FilePane` (+ its lazy `MonacoEditor` / `MarkdownPreview`) + `DiffPane` (+ its lazy
-  `MonacoDiff`), `TerminalsPanel` + lazy `TerminalInstance`. The Monaco plumbing both editors share —
+  `MonacoDiff`), `TerminalsPanel` + lazy `TerminalInstance`. **`WorktreeBanner`** is the first-worktree
+  cue the shell mounts above `CenterTabs` in the center column — gated on
+  `AppConfig.onboarding.workspaceBannerDismissedAt` (dismiss-once, host-persisted, cross-client) and
+  deep-linking the game (`store.openOnboarding("review", "game")`). The Monaco plumbing both editors share —
   worker wiring, the local loader, the token-driven `thinkrail` theme + the `[data-theme]` re-theme
   observer — lives once in `monacoSetup.ts`; the slim header view-toggle segment (`Preview|Source`,
   `Split|Inline`, `List|Tree`) is the shared `ToggleSegment`. The **file-style tree row** (chevron/spacer
@@ -176,7 +179,8 @@ a project picker, the prompt hero, and the reused
   Errors persist until dismissed; success/info time out. The **integration piece** — the primitives stay
   presentational.
 - **Public surface:** the top-level panels the shell mounts (`ProjectTree`, `WelcomePanel`, `CenterTabs`,
-  `RightPanel`, `TerminalsPanel`, `Toaster`), imported **per-file** (no barrel — keeps the lazy chunks split).
+  `RightPanel`, `TerminalsPanel`, `Toaster`, `WorktreeBanner`), imported **per-file** (no barrel — keeps the
+  lazy chunks split).
   (`WelcomePanel` and `CenterTabs`/`RightPanel`/`TerminalsPanel` are mutually exclusive — the shell mounts
   one set or the other on the active-workspace branch.)
 - **Allowed deps:** `store`, `transport`, `components/ui` (incl. `popover`/`command`/`textarea` for the

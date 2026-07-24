@@ -11,6 +11,7 @@ import { SettingsDialog } from "../panels/SettingsDialog";
 import { TerminalsPanel } from "../panels/TerminalsPanel";
 import { Toaster } from "../panels/Toaster";
 import { WelcomePanel } from "../panels/WelcomePanel";
+import { WorktreeBanner } from "../panels/WorktreeBanner";
 import { selectActiveWorkspace, selectContextProject, useAppStore } from "../store";
 import { applyTheme, writeThemeHint } from "../themes";
 import type { ConnectionStatus } from "../transport";
@@ -116,10 +117,20 @@ export function Shell() {
 					</ResizablePanel>
 					<ResizableHandle direction="horizontal" data-testid="resize-left" />
 					<ResizablePanel id="center" order={2} defaultSize={52} minSize={28}>
-						<main data-testid="center-tabs" className="h-full min-h-0 bg-surface-content">
-							<ErrorBoundary label="Editor" resetKeys={[activeWorkspaceId]}>
-								<CenterTabs />
-							</ErrorBoundary>
+						<main
+							data-testid="center-tabs"
+							className="flex h-full min-h-0 flex-col bg-surface-content"
+						>
+							{activeWorkspace ? <WorktreeBanner workspace={activeWorkspace} /> : null}
+							{/* The banner sits above the editor as a fixed-height flex row; this wrapper is what
+							    absorbs the remaining space — CenterTabs' own root still claims a plain h-full,
+							    and without a flex-1 sibling here it would overflow main's box by the banner's
+							    height and get clipped by the ResizablePanel's overflow:hidden. */}
+							<div className="min-h-0 flex-1">
+								<ErrorBoundary label="Editor" resetKeys={[activeWorkspaceId]}>
+									<CenterTabs />
+								</ErrorBoundary>
+							</div>
 						</main>
 					</ResizablePanel>
 					<ResizableHandle direction="horizontal" data-testid="resize-right" />
