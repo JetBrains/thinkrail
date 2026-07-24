@@ -1,5 +1,5 @@
 import type { SlashCommandInfo } from "@thinkrail/contracts";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 
 const MAX_MATCHES = 8;
@@ -80,14 +80,21 @@ export function useSlashCommandCompletion({
 	const [dismissed, setDismissed] = useState(false);
 	const query = slashCommandQuery(value);
 	const matches = matchSlashCommands(value, commands);
-	const open = !dismissed && query !== null && matches.length > 0;
-	const visibleActiveIndex = Math.min(activeIndex, Math.max(0, matches.length - 1));
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: command identity changing is the reset signal
-	useEffect(() => {
+	// Reset the highlight + dismissal whenever the query or the command set changes — done during render via
+	// a tracked signal (React's "adjust state on prop change" pattern) rather than an effect, so it needs no
+	// dependency-lint suppression. The signal keys off the command *names* (a stable content identity), so an
+	// unstable `commands` array reference can neither spuriously reset nor loop.
+	const resetSignal = JSON.stringify([query, commands.map((command) => command.name)]);
+	const [lastResetSignal, setLastResetSignal] = useState(resetSignal);
+	if (lastResetSignal !== resetSignal) {
+		setLastResetSignal(resetSignal);
 		setActiveIndex(0);
 		setDismissed(false);
-	}, [query, commands]);
+	}
+
+	const open = !dismissed && query !== null && matches.length > 0;
+	const visibleActiveIndex = Math.min(activeIndex, Math.max(0, matches.length - 1));
 
 	const dismiss = () => setDismissed(true);
 
