@@ -7,11 +7,12 @@
 // sign-in shipped broken (`Cannot find module './openai-codex.js' from '/$bunfs/...'`): the seam only
 // fails inside the artifact, where no from-source suite can see it.
 //
-// This gate catches the *next* one at the cheapest possible point — the pi version bump itself: scan the
-// pinned pi packages' `dist` for non-literal `import(...)` and require the findings to match the
-// allowlist below **exactly, per occurrence** (file + whitespace-normalized argument expression, as a
-// multiset — not per file, so a bump that adds a second opaque import to an already-known file, or
-// reshapes a known one, fails instead of hiding behind the file's existing entry).
+// This gate catches the *next* one at the cheapest possible point — the pi version bump itself: parse
+// the pinned pi packages' `dist` (a real TypeScript AST, so comments, strings, and multiline formatting
+// can't hide or fake a match) for dynamic `import(...)` whose specifier is not a constant string, and
+// require the findings to match the allowlist below **exactly, per occurrence** (file + normalized
+// specifier expression, as a multiset — not per file, so a bump that adds a second opaque import to an
+// already-known file, or reshapes a known one, fails instead of hiding behind the file's entry).
 //   - A NEW occurrence fails: verify it (register a static seam in `registerBundledRuntime`, or confirm
 //     it only ever receives `node:` builtin specifiers, which a compiled binary resolves at runtime),
 //     then allowlist it with that justification.
@@ -21,17 +22,18 @@
 // Known limitation (why the runtime layers still exist): this sees `import(...)` call sites, not data
 // flow — a new *call site* of an existing wrapper (e.g. `dynamicImport("./x.js")` in `env-api-keys.js`)
 // adds no `import(` occurrence. Reshaping the wrapper itself trips the exact match and forces
-// re-verification; what slips past a wrapper is the job of the behavioral artifact gates
+// re-verification; what flows through an unchanged wrapper is the job of the behavioral artifact gates
 // (`smoke:binary`'s real OAuth probe + `bun run e2e:binary`).
 //
-// Scope: `@earendil-works/pi-coding-agent` + its `@earendil-works/*` dependencies, resolved from the
-// server package's module context — exactly the instances the binary bundles.
+// Scope: `@earendil-works/pi-coding-agent` + its `@earendil-works/*` dependencies (transitively) —
+// resolved from the server package's module context, i.e. exactly the instances the binary bundles.
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
+import ts from "typescript";
 
 /**
- * Known bundler-opaque dynamic imports: file → the exact argument expressions (normalized) of every
+ * Known bundler-opaque dynamic imports: file → the exact specifier expressions (normalized) of every
  * opaque `import(...)` in it, plus the verified justification (see header for the update protocol).
  */
 const ALLOWLIST: Record<string, { reason: string; imports: string[] }> = {
@@ -57,12 +59,6 @@ const ALLOWLIST: Record<string, { reason: string; imports: string[] }> = {
 	},
 };
 
-/**
- * A non-literal dynamic import: `import(` whose argument does not start with a plain quote (so variable
- * specifiers AND template literals are flagged), excluding method calls like jiti's `.import(...)`.
- */
-const OPAQUE_IMPORT = /(?<![.\w$])import\s*\(\s*[^"'\s)]/g;
-
 /** The package root (`.../node_modules/@earendil-works/<name>`) an entry file resolved under. */
 function packageRoot(name: string, entry: string): string {
 	const marker = `${sep}@earendil-works${sep}${name}${sep}`;
@@ -82,56 +78,70 @@ function listJsFiles(dir: string): string[] {
 	return out;
 }
 
-/** The argument expression starting at `from` (just past `import(`), captured to its balanced `)`. */
-function captureArgument(line: string, from: number): string {
-	let depth = 1;
-	for (let i = from; i < line.length; i++) {
-		const ch = line[i];
-		if (ch === "(") depth++;
-		else if (ch === ")" && --depth === 0) return line.slice(from, i);
-	}
-	return line.slice(from); // unbalanced by line end — the truncated tail is still a stable fingerprint
-}
-
-/** Every opaque dynamic import's normalized argument expression on non-comment lines of `file`. */
-function opaqueImportsIn(file: string): string[] {
+/**
+ * Every opaque dynamic import's normalized specifier expression in `source`, from the AST: a call whose
+ * callee is the `import` keyword and whose specifier is not a constant string. A no-substitution
+ * template literal counts as constant (the bundler resolves it statically, like esbuild); a template
+ * *with* substitutions, or any other expression, is opaque.
+ */
+function opaqueImportsIn(fileName: string, source: string): string[] {
+	const sourceFile = ts.createSourceFile(
+		fileName,
+		source,
+		ts.ScriptTarget.Latest,
+		false,
+		ts.ScriptKind.JS,
+	);
 	const found: string[] = [];
-	for (const line of readFileSync(file, "utf8").split("\n")) {
-		const trimmed = line.trimStart();
-		if (trimmed.startsWith("*") || trimmed.startsWith("//") || trimmed.startsWith("/*")) continue;
-		for (const match of line.matchAll(OPAQUE_IMPORT)) {
-			const argStart = line.indexOf("(", match.index) + 1;
-			found.push(captureArgument(line, argStart).replace(/\s+/g, " ").trim());
+	const visit = (node: ts.Node): void => {
+		if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+			const specifier = node.arguments[0];
+			const isConstant =
+				specifier !== undefined &&
+				(ts.isStringLiteral(specifier) || ts.isNoSubstitutionTemplateLiteral(specifier));
+			if (!isConstant) {
+				found.push(
+					specifier ? specifier.getText(sourceFile).replace(/\s+/g, " ").trim() : "<no argument>",
+				);
+			}
 		}
-	}
+		ts.forEachChild(node, visit);
+	};
+	visit(sourceFile);
 	return found.sort();
 }
 
-// Resolve pi-coding-agent from the server package (the module context the binary bundles), then its
-// scoped deps from pi-coding-agent's own context — the very instances that end up inside the artifact.
-// `Bun.resolveSync`, not `createRequire().resolve`: pi's exports maps carry only `types`/`import`
-// conditions, so require-condition resolution is blocked.
+// Resolve pi-coding-agent from the server package (the module context the binary bundles), then walk
+// its `@earendil-works/*` dependency closure, each dep resolved from its dependent's own context — the
+// very instances that end up inside the artifact. `Bun.resolveSync`, not `createRequire().resolve`:
+// pi's exports maps carry only `types`/`import` conditions, so require-condition resolution is blocked.
 const repoRoot = resolve(import.meta.dir, "..");
-const codingAgentEntry = Bun.resolveSync(
-	"@earendil-works/pi-coding-agent",
-	join(repoRoot, "packages", "server"),
-);
-const codingAgentRoot = packageRoot("pi-coding-agent", codingAgentEntry);
-
-const roots = new Map<string, string>([["pi-coding-agent", codingAgentRoot]]);
-const codingAgentPkg = JSON.parse(readFileSync(join(codingAgentRoot, "package.json"), "utf8")) as {
-	dependencies?: Record<string, string>;
+const roots = new Map<string, string>();
+const queue: { name: string; root: string }[] = [];
+const enqueue = (name: string, resolveFrom: string): void => {
+	if (roots.has(name)) return;
+	const root = packageRoot(name, Bun.resolveSync(`@earendil-works/${name}`, resolveFrom));
+	roots.set(name, root);
+	queue.push({ name, root });
 };
-for (const dep of Object.keys(codingAgentPkg.dependencies ?? {})) {
-	if (!dep.startsWith("@earendil-works/")) continue;
-	const name = dep.slice("@earendil-works/".length);
-	roots.set(name, packageRoot(name, Bun.resolveSync(dep, codingAgentRoot)));
+enqueue("pi-coding-agent", join(repoRoot, "packages", "server"));
+for (let next = queue.shift(); next !== undefined; next = queue.shift()) {
+	const { root } = next;
+	const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
+		dependencies?: Record<string, string>;
+	};
+	for (const dep of Object.keys(pkg.dependencies ?? {})) {
+		if (dep.startsWith("@earendil-works/")) enqueue(dep.slice("@earendil-works/".length), root);
+	}
 }
 
 const found = new Map<string, string[]>();
 for (const [name, root] of roots) {
 	for (const file of listJsFiles(join(root, "dist"))) {
-		const imports = opaqueImportsIn(file);
+		const source = readFileSync(file, "utf8");
+		// Cheap pre-filter: only AST-parse files that mention a dynamic import at all.
+		if (!/\bimport\s*\(/.test(source)) continue;
+		const imports = opaqueImportsIn(file, source);
 		if (imports.length === 0) continue;
 		found.set(
 			`${name}/${file
