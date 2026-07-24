@@ -16,7 +16,7 @@ import { getTransport } from "../transport";
  */
 let writeChain: Promise<void> = Promise.resolve();
 
-function writeOnboarding(patch: Partial<OnboardingConfig>): void {
+function writeOnboarding(patch: Partial<OnboardingConfig>, onPersisted?: () => void): void {
 	writeChain = writeChain
 		.then(async () => {
 			const current = useAppStore.getState().appConfig?.onboarding;
@@ -25,13 +25,20 @@ function writeOnboarding(patch: Partial<OnboardingConfig>): void {
 			// Fold the authoritative result in immediately — don't wait for the settings.changed broadcast,
 			// so a chained write that reads store state cannot see a pre-write snapshot.
 			useAppStore.getState().applyConfig(next);
+			// Only now — the write has actually landed — run any cleanup that depends on it having landed.
+			onPersisted?.();
 		})
 		.catch(() => {});
 }
 
-/** Record that the intro overlay was completed or skipped (never auto-shown again, on any client). */
-export function markIntroSeen(): void {
-	writeOnboarding({ introSeenAt: new Date().toISOString() });
+/**
+ * Record that the intro overlay was completed or skipped (never auto-shown again, on any client).
+ * `onPersisted` runs inside the write chain, after this write's `applyConfig` fold — the migration
+ * branch uses it to clear the legacy localStorage flag only once the fold is durable, so a dropped
+ * write never destroys the one piece of evidence (`#113`'s flag) that would let the fold retry.
+ */
+export function markIntroSeen(onPersisted?: () => void): void {
+	writeOnboarding({ introSeenAt: new Date().toISOString() }, onPersisted);
 }
 
 /** Record that the first-worktree path banner was dismissed (cross-client). */

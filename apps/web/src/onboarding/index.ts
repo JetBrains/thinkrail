@@ -1,2 +1,2 @@
 export { Onboarding } from "./Onboarding";
-export { markBannerDismissed, markIntroSeen } from "./state";
+export { markBannerDismissed } from "./state";

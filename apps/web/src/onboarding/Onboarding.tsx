@@ -1,15 +1,14 @@
 import { ExternalLink } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../components/ui/dialog";
 import { useAppStore } from "../store";
+import { WORKTREES_ROOT } from "./content";
 import { LifecycleLoop } from "./LifecycleLoop";
 import { clearLegacySeen, readLegacySeen } from "./legacyStorage";
 import { markIntroSeen } from "./state";
 import { WorktreeGame } from "./WorktreeGame";
 
-/** Where worktrees live on disk. Mock (frontend-only) — the real path is host-owned; wired later. */
-const MOCK_ROOT = "~/.thinkrail/worktrees";
 /** Docs target — the project README on GitHub. */
 const DOCS_URL = "https://github.com/JetBrains/thinkrail/blob/main/README.md";
 /** How long each feature stays active during the one-time autoplay walkthrough. */
@@ -84,6 +83,19 @@ export function Onboarding() {
 	const [activeAuto, setActiveAuto] = useState<number | null>(null);
 	const [maxPlayed, setMaxPlayed] = useState(-1);
 
+	// Shared reset: return the overlay to a fresh screen 1, no game, autoplay unstarted — then close.
+	// `finish()` calls this after recording completion; the cross-client auto-dismiss effect below calls
+	// it directly (never markIntroSeen — the config change it reacts to is already the persisted evidence).
+	const resetAndClose = useCallback(() => {
+		setPage(0);
+		setSelected(0);
+		setStarted(false);
+		setActiveAuto(null);
+		setMaxPlayed(-1);
+		setOnboardingView("intro");
+		closeOnboarding();
+	}, [closeOnboarding, setOnboardingView]);
+
 	// Auto-open once, ever — decided only when config is known (after server.welcome). A device that saw
 	// #113's localStorage-era onboarding is folded into config instead of re-nagged. The ref guards
 	// against re-firing on unrelated config changes (e.g. a theme update) racing the settings broadcast.
@@ -93,12 +105,21 @@ export function Onboarding() {
 		autoOpenDecided.current = true;
 		if (appConfig.onboarding?.introSeenAt) return;
 		if (readLegacySeen()) {
-			markIntroSeen();
-			clearLegacySeen();
+			// Clear the legacy flag only once its fold into config is durable — never before, or a dropped
+			// write would lose the only evidence that lets the fold retry next launch (#113 re-nag).
+			markIntroSeen(clearLegacySeen);
 			return;
 		}
 		openOnboarding("first-run");
 	}, [appConfig, openOnboarding]);
+
+	// A second concurrent client (or our own folded write) completing first-run dismisses this one —
+	// reuse finish()'s reset path so no stale carousel/game state survives to the next open. Local
+	// finish() already closes before its own write folds back, so this never double-fires for our own
+	// completion (`mode` has already left "first-run" by the time introSeenAt reaches this effect).
+	useEffect(() => {
+		if (mode === "first-run" && appConfig?.onboarding?.introSeenAt) resetAndClose();
+	}, [mode, appConfig, resetAndClose]);
 
 	// Kick off the one-time autoplay the first time screen 2 is shown in this visit.
 	useEffect(() => {
@@ -136,13 +157,7 @@ export function Onboarding() {
 
 	const finish = () => {
 		if (firstRun) markIntroSeen();
-		setPage(0);
-		setSelected(0);
-		setStarted(false);
-		setActiveAuto(null);
-		setMaxPlayed(-1);
-		setOnboardingView("intro");
-		closeOnboarding();
+		resetAndClose();
 	};
 
 	return (
@@ -169,7 +184,16 @@ export function Onboarding() {
 				}}
 			>
 				{onboardingView === "game" ? (
-					<WorktreeGame onExit={() => setOnboardingView("intro")} onFinish={finish} />
+					<WorktreeGame
+						onExit={() => {
+							// Skip always lands back on the carousel (screen 2) — including when the game was
+							// opened via a deep link (the first-worktree banner's "How it works") that never
+							// visited screen 1, so `page` would otherwise still default to 0.
+							setOnboardingView("intro");
+							setPage(1);
+						}}
+						onFinish={finish}
+					/>
 				) : (
 					<div className="grid md:grid-cols-3 md:gap-x-[3rem]">
 						{/* Text column — left; 32px inset (the 48px column gap supplies the right separation). */}
@@ -250,7 +274,7 @@ export function Onboarding() {
 											data-testid="onboarding-root"
 											className="font-[var(--font-mono)] text-text"
 										>
-											{MOCK_ROOT}
+											{WORKTREES_ROOT}
 										</span>
 									</span>
 								) : selected === 0 ? (

@@ -45,7 +45,7 @@ export function FoldersBoard({ phase, picks, onToggle }: FoldersBoardProps) {
 								data-picked={picked}
 								disabled={phase === "reveal"}
 								onClick={() => onToggle(file.path)}
-								className={`my-xs flex w-full items-center gap-sm rounded-[var(--radius-sm)] border px-sm py-xs text-left font-[var(--font-mono)] text-sm text-text transition-colors ${
+								className={`my-xs flex min-h-11 w-full items-center gap-sm rounded-[var(--radius-sm)] border px-sm py-sm text-left font-[var(--font-mono)] text-sm text-text transition-colors ${
 									picked && phase === "predict"
 										? "border-primary bg-primary/10"
 										: "border-border2 bg-hover/40 hover:bg-hover"

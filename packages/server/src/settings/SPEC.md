@@ -27,8 +27,11 @@ theme manifests; settings stores only the selected string id.
 
 ## Get right
 
-- **Converge on the broadcast, no per-client optimism.** `updateConfig` persists then publishes; the
-  initiating client applies on the `settings.changed` push like everyone else (the workspace-lifecycle
-  pattern). `getConfig()` is the same value `server.welcome` seeds on connect.
+- **Converge on the broadcast, no per-client optimism — with one documented exception.** `updateConfig`
+  persists then publishes; the initiating client applies on the `settings.changed` push like everyone
+  else (the workspace-lifecycle pattern). The exception: `apps/web/src/onboarding/state.ts`'s writer
+  folds the `settings.update` response immediately, through its own serialized client-side write chain,
+  so a chained second write can't read a pre-write snapshot — every other writer still converges on the
+  push. `getConfig()` is the same value `server.welcome` seeds on connect.
 - Theme availability/labels/palettes are not server settings concerns. An id unknown to a given web client
   remains persisted unchanged; that client owns visual fallback.

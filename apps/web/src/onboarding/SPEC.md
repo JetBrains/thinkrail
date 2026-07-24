@@ -28,15 +28,18 @@ game never lectures about `node_modules`; it hands off to hooks.
 - **Owns:** overlay choreography (blocking `first-run` / dismissible `review` — #113's model,
   unchanged), the intro screens, the game (beat shell + five beats), `content.ts` (demo repo fixture +
   every copy string), the durable seen-state accessors, and the one-time localStorage→config migration.
-- **Public surface (barrel `index.ts`):** `<Onboarding />` (mounted once by `shell`) and the
-  content/testid constants tests need. Nothing else. Open/close travels through the store's existing
-  transient state (`onboarding: "first-run" | "review" | null`, `openOnboarding` / `closeOnboarding`)
-  — the same pattern as `settingsOpen`; callers (help button, echo banner) use the store action and
-  never import this module's internals.
+- **Public surface (barrel `index.ts`):** `<Onboarding />` (mounted once by `shell`) and
+  `markBannerDismissed` (the banner's dismiss writer; `panels/WorktreeBanner` is the one consumer).
+  Nothing else. Open/close travels through the store's existing transient state (`onboarding:
+  "first-run" | "review" | null`, `openOnboarding` / `closeOnboarding`) — the same pattern as
+  `settingsOpen`; callers (help button, echo banner) use the store action and never import this
+  module's internals.
 - **Allowed deps:** `components/ui`, `store`, `lib`, `contracts` (types), and the transport's public
-  `request` surface for `settings.update` — the established pattern (`AppearanceSettings`): fire the
-  update, converge on the `settings.changed` broadcast. **Forbidden:** transport internals, `panels`
-  internals, anything server-side.
+  `request` surface for `settings.update` — unlike `AppearanceSettings`'s fire-and-forget, the writer
+  (`state.ts`) folds the `settings.update` response immediately through its own serialized write chain
+  (so a chained second write can't read a pre-write snapshot); other clients still converge on the
+  `settings.changed` broadcast. **Forbidden:** transport internals, `panels` internals, anything
+  server-side.
 - **The whole module ships eagerly** — gate, intro screens, and the game alike; there is no
   `React.lazy` split here. Unlike `panels`' Monaco/shiki/xterm surfaces, nothing in this module pulls a
   heavy dependency (the game is Tailwind transitions + `lucide-react` only, per the implementation
@@ -59,8 +62,9 @@ onboarding?: {
 - **Host-synced on purpose.** First-run is *blocking* (per #113); a per-device flag would re-block
   every new browser — including the V2 phone. `AppConfig` rides the existing loop
   (`server.welcome` → `settings.update` → `settings.changed`), so no client ever re-nags and a second
-  concurrent client auto-dismisses. Timestamps, not booleans: same cost, better debugging, leaves room
-  for "re-show after a major change".
+  concurrent client auto-dismisses — the overlay watches `appConfig.onboarding.introSeenAt` while open
+  in first-run mode and closes itself the moment it's set. Timestamps, not booleans: same cost, better
+  debugging, leaves room for "re-show after a major change".
 - **Auto-open rule:** only after `server.welcome` is processed (config known) **and**
   `introSeenAt` is absent. Completing *or skipping* the intro sets it — never nag twice.
 - **Migration:** if config lacks `introSeenAt` but the legacy `thinkrail:onboardingSeen` localStorage
@@ -86,8 +90,8 @@ vs dismissible review mode (re-opened from the left-panel help button). Changes:
 - No separate replay surface: review mode (help button) and the echo banner's "How it works" are the
   re-entry points. (The earlier idea of a Welcome replay card is dropped — redundant with the help
   button.)
-- `MOCK_ROOT` stays a display-only constant in game copy; *real* paths appear only in the echoes,
-  which read them from workspace records.
+- `WORKTREES_ROOT` (`content.ts`) stays a display-only constant in game copy; *real* paths appear only
+  in the echoes, which read them from workspace records.
 
 ## The game — five beats, ≤90s, skippable at every step
 
@@ -124,8 +128,8 @@ reveal → one-line why**. Tone: never "Wrong!" — "Almost everyone expects thi
    onCreate hooks set it up → you work → onDelete cleans up* — showing the original folder untouched
    throughout (`prefers-reduced-motion` → the five frames render as a static storyboard). The same
    loop doubles as ambient media in the overlay's worktrees feature card, behind the game CTA. The
-   hooks CTA slot sits behind the hooks-availability constant (generic copy until #93 lands, then
-   links to the hooks dialog).
+   pivot's copy is generic until #93 lands — wiring it to the hooks dialog is the #93 integration
+   point, one future edit here.
 4. **One repo, many folders** — "You commit in the workspace; does your main folder's history have
    it?" → reveal: **yes** — one shared `.git`; branches and commits are shared, uncommitted mess never
    is.
@@ -139,17 +143,23 @@ single continue CTA. No score persistence — replay is always fresh.
 
 **Implementation constraints:** one shared beat shell (tap-select for beat 1, choice cards for 2–5);
 **no new dependencies** — Tailwind transitions only; `prefers-reduced-motion` → instant reveals;
-keyboard navigable; ≥44px tap targets; all copy centralized in `content.ts`; token utilities only
-(themeable), testids per element (`onboarding-game`, `game-beat-<n>`, `game-skip`, …).
+keyboard navigable; ≥44px tap targets; all narrative copy centralized in `content.ts` (generic control
+chrome stays in its component; the lifecycle loop's scene copy also lives in its component — it's
+storyboard, not teaching copy); token utilities only (themeable), testids per element
+(`onboarding-game`, `game-dot-<i>`, `game-skip`, …). Two clients writing near-simultaneously can still
+race: the later write's shallow-merge composes from its own last-known `onboarding` snapshot, so it can
+clobber a sibling flag set moments earlier elsewhere — accepted, since the only consequence is a single
+re-nag that the next write anywhere self-heals.
 
 ## Echoes (point-of-use; rendered in `panels/`, content owned here)
 
 - **Echo 1 — New Workspace dialog.** A permanent quiet line under the branch picker: *"Fresh checkout
   of `<baseRef>` — uncommitted & untracked files in your project folder stay behind."* On dialog open,
   `git.projectStatus` is fetched non-blocking; when dirty, the line gains real counts ("right now:
-  3 modified · 2 untracked"; tooltip lists up to 8 names), and env-looking files (`.env*`, `*.local`)
-  add a hooks nudge behind the same hooks constant. Fetch failure/slowness → static line only. Never a
-  spinner, never a blocker.
+  3 modified · 2 untracked"; tooltip lists up to 8 names), and whenever an untracked file looks env-ish
+  (`.env*`, `*.local`) a hooks nudge renders — generic copy until #93 lands, when wiring it to the hooks
+  dialog is the #93 integration point, one future edit here. Fetch failure/slowness → static line only.
+  Never a spinner, never a blocker.
 - **Echo 2 — first-worktree banner.** On every activation of a workspace with `kind !== "default"`
   (trivially true pre-#105, correct post-#105) **until dismissed once** (`workspaceBannerDismissedAt`
   absent): a slim banner above the center tabs — *"This workspace lives at `<path>` — a separate folder on branch `<branch>`."*

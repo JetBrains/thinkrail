@@ -82,7 +82,9 @@ export function WorktreeGame({ onExit, onFinish }: WorktreeGameProps) {
 					type="button"
 					data-testid="game-skip"
 					onClick={onExit}
-					className="text-hint text-xs hover:text-muted"
+					// ≥44px tap target (module SPEC): min-h-11 grows the hit area; inline-flex + items-center
+					// keeps the small label centered in it instead of pinned to the top.
+					className="inline-flex min-h-11 items-center px-sm text-hint text-xs hover:text-muted"
 				>
 					Skip ✕
 				</button>
@@ -121,7 +123,7 @@ export function WorktreeGame({ onExit, onFinish }: WorktreeGameProps) {
 							data-testid={`game-choice-${c.id}`}
 							data-selected={choice === c.id}
 							onClick={() => setChoice(c.id)}
-							className={`rounded-[var(--radius-md)] border p-md text-left text-sm text-text transition-colors ${choice === c.id ? "border-primary bg-primary/10" : "border-border2 bg-elevated hover:bg-hover"}`}
+							className={`min-h-11 rounded-[var(--radius-md)] border p-md text-left text-sm text-text transition-colors ${choice === c.id ? "border-primary bg-primary/10" : "border-border2 bg-elevated hover:bg-hover"}`}
 						>
 							{c.label}
 						</button>

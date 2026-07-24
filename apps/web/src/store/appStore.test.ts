@@ -67,6 +67,7 @@ beforeEach(() => {
 		settingsOpen: false,
 		settingsSection: "providers",
 		toasts: [],
+		appConfig: null,
 	});
 });
 

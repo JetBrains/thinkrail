@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { DEMO_PROJECT, DEMO_WORKSPACE } from "./content";
+import { DEMO_PROJECT, DEMO_WORKSPACE, WORKTREES_ROOT } from "./content";
 
 const SCENE_DELAYS = [
 	"[animation-delay:-12.5s]",
@@ -26,7 +26,7 @@ export function LifecycleLoop() {
 		<p key="folder" className="font-[var(--font-mono)] text-muted text-sm leading-6">
 			~/projects/{DEMO_PROJECT}/ <span className="text-green">untouched</span>
 			<br />
-			~/.thinkrail/worktrees/{DEMO_PROJECT}/
+			{WORKTREES_ROOT}/{DEMO_PROJECT}/
 			<span className="rounded-[var(--radius-sm)] bg-primary/20 px-xs text-text">
 				{DEMO_WORKSPACE}/
 			</span>{" "}
