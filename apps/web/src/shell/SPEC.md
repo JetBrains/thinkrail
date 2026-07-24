@@ -28,7 +28,7 @@ later, the mobile single-view-with-switcher).
   (`activeWorkspaceId == null` — fresh install / after archiving the last one) → the projects rail (kept
   resizable, `resize-left` preserved) beside the `panels/WelcomePanel`; the center/right/terminal surface
   is not mounted. The welcome-state group uses its own `autoSaveId` so it doesn't clobber the 3-column
-  layout's saved sizes. Mounts the `panels/Toaster` and `panels/Onboarding` once (outside both layout
+  layout's saved sizes. Mounts the `panels/Toaster` and the `onboarding` module's `Onboarding` once (outside both layout
   branches) so notifications and the first-run onboarding overlay show over either state.  `Onboarding`
   auto-opens once (guarded by a localStorage "seen" flag) and is re-opened from the projects-rail help
   button via `store.openOnboarding("review")`. **Owns the theme DOM side-effect** — the single place that applies the store's

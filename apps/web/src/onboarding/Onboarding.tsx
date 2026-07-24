@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../components/ui/dialog";
 import { useAppStore } from "../store";
-import { markOnboardingSeen, readOnboardingSeen } from "../store/onboardingStorage";
+import { markOnboardingSeen, readOnboardingSeen } from "./legacyStorage";
 
 /** Where worktrees live on disk. Mock (frontend-only) — the real path is host-owned; wired later. */
 const MOCK_ROOT = "~/.thinkrail/worktrees";

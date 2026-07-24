@@ -76,7 +76,7 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   **`setSettingsSection()`** — lives here so the top-bar gear AND the Welcome provider warning open Settings
   to a section without prop-drilling through the shell. The **onboarding overlay** open-state —
   **`onboarding: "first-run" | "review" | null`** with **`openOnboarding(mode)`** / **`closeOnboarding()`**
-  — is transient open-state only; the durable "seen" bit lives in `store/onboardingStorage` (a fail-soft
+  — is transient open-state only; the durable "seen" bit lives in `onboarding/legacyStorage` (a fail-soft
   localStorage mirror), not the store. The **theme** state — **`theme: ThemeId`** (the
   host-owned selected opaque id; the themes module resolves visual fallback) with **`applyConfig(config)`**
   (folds the server-synced `AppConfig` in from
