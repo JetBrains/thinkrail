@@ -932,28 +932,6 @@ p.hero-platforms {
 	background: color-mix(in srgb, var(--accent) 88%, black);
 }
 
-/* ── why.md ─────────────────────────────────────────────────────────────── */
-
-.beats {
-	display: flex;
-	flex-direction: column;
-	gap: 22px;
-	margin-top: 26px;
-}
-
-.beat {
-	border-left: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
-	padding-left: 18px;
-}
-
-.beat h3 {
-	font-size: 17px;
-}
-
-.beat p {
-	margin-bottom: 0;
-}
-
 /* ── features/editor.md ─────────────────────────────────────────────────── */
 
 .feature-grid {
@@ -1121,6 +1099,252 @@ html.anim .chat-demo [data-step].on {
 	border-radius: 8px;
 	background: var(--accent);
 	color: var(--on-accent);
+}
+
+/* ── Why chat: composer typing + metro map (static, themed) ────────────── */
+
+.why-chat .chat-msg.assistant strong {
+	color: var(--text);
+}
+
+.composer-typed {
+	color: var(--text);
+}
+
+.composer-caret {
+	display: inline-block;
+	width: 7px;
+	height: 15px;
+	background: var(--accent);
+	vertical-align: -2px;
+	margin-left: 1px;
+	animation: caret-blink 1.1s steps(1) infinite;
+}
+
+/* `display: inline-block` above would defeat the `hidden` attribute */
+.composer-caret[hidden] {
+	display: none;
+}
+
+.metro-frame {
+	position: relative;
+	border: 1px solid var(--border2);
+	border-radius: 8px;
+	outline: 2px solid color-mix(in srgb, var(--border2) 55%, transparent);
+	outline-offset: 3px;
+	margin: 6px 2px 12px;
+	background:
+		repeating-linear-gradient(
+			0deg,
+			transparent 0 39px,
+			color-mix(in srgb, var(--text) 4%, transparent) 39px 40px
+		),
+		repeating-linear-gradient(
+			90deg,
+			transparent 0 39px,
+			color-mix(in srgb, var(--text) 4%, transparent) 39px 40px
+		),
+		color-mix(in srgb, var(--elevated) 18%, var(--editor-bg));
+	overflow-x: auto;
+}
+
+.metro-frame svg {
+	display: block;
+	width: 100%;
+	height: auto;
+	min-width: 680px;
+}
+
+.map-cap-tl,
+.map-cap-br {
+	position: absolute;
+	font-family: var(--font-mono);
+	font-size: 10px;
+	letter-spacing: 0.12em;
+	color: var(--hint);
+	text-transform: uppercase;
+}
+
+.map-cap-tl {
+	top: 10px;
+	left: 14px;
+}
+
+.map-cap-br {
+	bottom: 8px;
+	right: 14px;
+}
+
+.metro-frame text {
+	user-select: none;
+}
+
+.stn-lbl {
+	font: 600 13px var(--font-sans);
+	fill: var(--text);
+}
+
+.badge-lbl {
+	font: 700 13px var(--font-sans);
+	letter-spacing: 0.02em;
+	fill: var(--editor-bg);
+}
+
+.cargo {
+	font: 500 10px var(--font-mono);
+	fill: var(--hint);
+}
+
+.orbit-lbl {
+	font: 600 10.5px var(--font-mono);
+	letter-spacing: 0.18em;
+	fill: var(--hint);
+}
+
+.soon-lbl {
+	font: 600 11px var(--font-sans);
+	fill: var(--accent);
+}
+
+.hub-sign-lbl {
+	font: 800 13px var(--font-display);
+	letter-spacing: 0.14em;
+	fill: var(--editor-bg);
+}
+
+.line-spec {
+	stroke: var(--blue);
+}
+.badge-spec {
+	fill: var(--blue);
+}
+.dot-spec {
+	stroke: var(--blue);
+}
+.line-work {
+	stroke: var(--accent);
+}
+.badge-work {
+	fill: var(--accent);
+}
+.dot-work {
+	stroke: var(--accent);
+}
+.line-eng {
+	stroke: var(--green);
+}
+.badge-eng {
+	fill: var(--green);
+}
+.dot-eng {
+	stroke: var(--green);
+}
+.line-ide {
+	stroke: var(--gold);
+}
+.badge-ide {
+	fill: var(--gold);
+}
+.dot-ide {
+	stroke: var(--gold);
+}
+.line-rail {
+	stroke: var(--red);
+}
+.badge-rail {
+	fill: var(--red);
+}
+.dot-rail {
+	stroke: var(--red);
+}
+.line-wire {
+	stroke: var(--hint);
+}
+.dot-wire {
+	stroke: var(--hint);
+}
+
+.rail,
+.stubrail {
+	fill: none;
+	stroke-width: 6;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.stubrail {
+	stroke-width: 5;
+}
+
+.stub-pill {
+	fill: none;
+	stroke: var(--accent);
+	stroke-width: 1.5;
+	stroke-dasharray: 5 4;
+}
+
+.orbit {
+	fill: none;
+	stroke-width: 4;
+	opacity: 0.8;
+}
+
+.dot {
+	fill: var(--editor-bg);
+	stroke-width: 2.5;
+}
+
+.metro-ink {
+	fill: var(--text);
+}
+
+.metro-paper {
+	fill: var(--editor-bg);
+}
+
+.hub-ring {
+	fill: var(--editor-bg);
+	stroke: var(--text);
+	stroke-width: 4;
+	transform-box: fill-box;
+	transform-origin: center;
+}
+
+.hub-dash {
+	fill: none;
+	stroke: var(--accent);
+	stroke-width: 2;
+}
+
+.train {
+	fill: var(--editor-bg);
+	stroke: var(--text);
+	stroke-width: 2.5;
+	offset-rotate: 0deg;
+}
+
+.t-spec {
+	offset-path: path("M523,287 L620,190 H790");
+}
+.t-work {
+	offset-path: path("M536,320 H790");
+}
+.t-ide {
+	offset-path: path("M523,353 L620,450 H790");
+}
+.t-eng {
+	offset-path: path("M457,287 L360,190 H190");
+}
+.t-rail {
+	offset-path: path("M444,320 H150");
+}
+.t-wire {
+	offset-path: path("M360,320 a130,105 0 1 0 260,0 a130,105 0 1 0 -260,0");
+}
+
+/* trains are motion decoration — parked trains would stack at the hub */
+html:not(.anim) .metro-trains {
+	display: none;
 }
 
 /* ── Spec tree ──────────────────────────────────────────────────────────── */
