@@ -1099,6 +1099,7 @@ html.anim .chat-demo [data-step].on {
 	border-radius: 8px;
 	background: var(--accent);
 	color: var(--on-accent);
+	transition: transform 150ms ease;
 }
 
 /* ── Why chat: composer typing + metro map (static, themed) ────────────── */
@@ -1345,6 +1346,152 @@ html.anim .chat-demo [data-step].on {
 /* trains are motion decoration — parked trains would stack at the hub */
 html:not(.anim) .metro-trains {
 	display: none;
+}
+
+/* ── Why chat: the build-up (exists only when JS armed the replay) ──────── */
+
+html.anim .why-chat.armed .ln .rail {
+	stroke-dasharray: 1;
+	stroke-dashoffset: 1;
+}
+
+html.anim .why-chat.armed .ln.built .rail {
+	stroke-dashoffset: 0;
+	transition: stroke-dashoffset 720ms ease-out 160ms;
+}
+
+html.anim .why-chat.armed .ln .dot,
+html.anim .why-chat.armed .ln text,
+html.anim .why-chat.armed .ln .badge-rect {
+	opacity: 0;
+}
+
+html.anim .why-chat.armed .ln.built .badge-rect,
+html.anim .why-chat.armed .ln.built .badge-lbl {
+	opacity: 1;
+	transition: opacity 260ms ease;
+}
+
+html.anim .why-chat.armed .ln.built .s1 {
+	opacity: 1;
+	transition: opacity 300ms ease 440ms;
+}
+
+html.anim .why-chat.armed .ln.built .s2 {
+	opacity: 1;
+	transition: opacity 300ms ease 660ms;
+}
+
+html.anim .why-chat.armed .ln.built .s3 {
+	opacity: 1;
+	transition: opacity 300ms ease 880ms;
+}
+
+html.anim .why-chat.armed .ln.built .cargo {
+	opacity: 1;
+	transition: opacity 300ms ease 1100ms;
+}
+
+.lng {
+	transform-box: fill-box;
+	transform-origin: center;
+}
+
+html.anim .why-chat.armed .lng {
+	opacity: 0;
+	transform: scale(0.96);
+}
+
+html.anim .why-chat.armed .lng.built {
+	opacity: 1;
+	transform: scale(1);
+	transition:
+		opacity 700ms ease,
+		transform 700ms ease;
+}
+
+html.anim .why-chat.armed .metro-trains {
+	opacity: 0;
+}
+
+html.anim .why-chat.armed .metro-trains.go {
+	opacity: 1;
+	transition: opacity 800ms ease;
+}
+
+.metro-hub {
+	transform-box: fill-box;
+	transform-origin: center;
+}
+
+html.anim .why-chat.armed .metro-hub {
+	opacity: 0;
+	transform: scale(0.7);
+}
+
+html.anim .why-chat.armed .metro-hub.in {
+	opacity: 1;
+	transform: scale(1);
+	transition:
+		opacity 420ms ease,
+		transform 560ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+html.anim .t-spec {
+	animation: metro-ride 8s linear infinite alternate;
+}
+
+html.anim .t-work {
+	animation: metro-ride 7s linear infinite alternate;
+	animation-delay: -2.8s;
+}
+
+html.anim .t-ide {
+	animation: metro-ride 8.5s linear infinite alternate;
+	animation-delay: -5s;
+}
+
+html.anim .t-eng {
+	animation: metro-ride 6.5s linear infinite alternate;
+	animation-delay: -1.4s;
+}
+
+html.anim .t-rail {
+	animation: metro-ride 6s linear infinite alternate;
+	animation-delay: -3.7s;
+}
+
+html.anim .t-wire {
+	animation: metro-ride 14s linear infinite;
+}
+
+@keyframes metro-ride {
+	from {
+		offset-distance: 0%;
+	}
+
+	to {
+		offset-distance: 100%;
+	}
+}
+
+html.anim .hub-ring {
+	animation: hub-pulse 3.5s ease-in-out infinite;
+}
+
+@keyframes hub-pulse {
+	0%,
+	100% {
+		transform: scale(1);
+	}
+
+	50% {
+		transform: scale(1.05);
+	}
+}
+
+.send-btn.pressed {
+	transform: scale(0.82);
 }
 
 /* ── Spec tree ──────────────────────────────────────────────────────────── */
@@ -1786,7 +1933,8 @@ html.anim .terminal.armed [data-out] {
 		transition: none;
 	}
 
-	.term-caret {
+	.term-caret,
+	.composer-caret {
 		animation: none;
 	}
 }

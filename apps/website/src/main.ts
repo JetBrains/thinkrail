@@ -90,25 +90,92 @@ if (motionOK && terminal && typeTarget) {
 	setTimeout(typeNext, 900);
 }
 
-/* ── Chat demo: replay the captured session when it scrolls into view ───── */
+/* ── Chat demos: replay when they scroll into view ──────────────────────── */
 
-const chat = document.getElementById("chat-demo");
-if (motionOK && chat) {
-	chat.classList.add("armed");
-	const steps = Array.from(chat.querySelectorAll<HTMLElement>("[data-step]"));
+function armOnView(el: HTMLElement, play: () => void): void {
+	el.classList.add("armed");
 	let played = false;
-	const player = new IntersectionObserver(
+	const observer = new IntersectionObserver(
 		(entries) => {
 			if (played || !entries.some((entry) => entry.isIntersecting)) return;
 			played = true;
-			player.disconnect();
-			steps.forEach((step, index) => {
-				setTimeout(() => step.classList.add("on"), 250 + index * 550);
-			});
+			observer.disconnect();
+			play();
 		},
 		{ root: editor, threshold: 0.35 },
 	);
-	player.observe(chat);
+	observer.observe(el);
+}
+
+const chat = document.getElementById("chat-demo");
+if (motionOK && chat) {
+	const steps = Array.from(chat.querySelectorAll<HTMLElement>("[data-step]"));
+	armOnView(chat, () => {
+		steps.forEach((step, index) => {
+			setTimeout(() => step.classList.add("on"), 250 + index * 550);
+		});
+	});
+}
+
+/* ── Why chat: typed question → send → the tab titles itself → the map builds
+   itself from YOU outward. Static HTML ships the finished state; this replay
+   exists only when motion is allowed. */
+
+const whyChat = document.getElementById("why-chat");
+const whyTyped = document.getElementById("why-typed");
+const whyCaret = document.getElementById("why-caret");
+const whyPlaceholder = document.getElementById("why-placeholder");
+const whyTabName = document.getElementById("why-tab-name");
+if (motionOK && whyChat && whyTyped && whyCaret && whyPlaceholder && whyTabName) {
+	const stepOn = (name: string) =>
+		whyChat.querySelector(`[data-step="${name}"]`)?.classList.add("on");
+	const build = (selector: string, cls: string) =>
+		whyChat.querySelector(selector)?.classList.add(cls);
+	const question = "Why ThinkRail? One map, please — not a wall of text.";
+
+	// pre-replay state: generic tab title, composer in typing mode
+	whyTabName.textContent = "chat";
+	whyPlaceholder.hidden = true;
+	whyTyped.hidden = false;
+	whyCaret.hidden = false;
+
+	armOnView(whyChat, () => {
+		let i = 0;
+		const typeNext = () => {
+			if (i <= question.length) {
+				whyTyped.textContent = question.slice(0, i);
+				i += 1;
+				setTimeout(typeNext, 16 + Math.random() * 30);
+				return;
+			}
+			setTimeout(() => {
+				const send = document.getElementById("why-send");
+				send?.classList.add("pressed");
+				setTimeout(() => send?.classList.remove("pressed"), 180);
+				whyTyped.textContent = "";
+				whyTyped.hidden = true;
+				whyCaret.hidden = true;
+				whyPlaceholder.hidden = false;
+				stepOn("user");
+				setTimeout(() => {
+					whyTabName.textContent = "Why ThinkRail?";
+				}, 500);
+				setTimeout(() => stepOn("act"), 800);
+				setTimeout(() => stepOn("line1"), 1500);
+				const T = 2100;
+				setTimeout(() => stepOn("map"), T);
+				setTimeout(() => build(".metro-hub", "in"), T + 260);
+				[".ln-spec", ".ln-work", ".ln-ide", ".ln-eng", ".ln-rail"].forEach((sel, k) => {
+					setTimeout(() => build(sel, "built"), T + 700 + k * 560);
+				});
+				setTimeout(() => build(".ln-orbit", "built"), T + 4600);
+				setTimeout(() => build(".ln-stub", "built"), T + 5350);
+				setTimeout(() => build(".metro-trains", "go"), T + 5750);
+				setTimeout(() => stepOn("done"), T + 6600);
+			}, 350);
+		};
+		setTimeout(typeNext, 600);
+	});
 }
 
 /* ── Theme dropdown: chip shows the current palette, menu picks one ─────── */
