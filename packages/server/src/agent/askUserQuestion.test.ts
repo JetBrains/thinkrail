@@ -1,5 +1,9 @@
 import { expect, test } from "bun:test";
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type {
+	ExtensionAPI,
+	ExtensionContext,
+	ToolDefinition,
+} from "@earendil-works/pi-coding-agent";
 import type {
 	AgentMessage,
 	AskUserQuestionArgs,
@@ -8,6 +12,7 @@ import type {
 import { ASK_USER_ANSWERS_CUSTOM_TYPE } from "@thinkrail/contracts";
 import {
 	ASK_ACK_TEXT,
+	askUserQuestionExtension,
 	assessAnswerability,
 	buildAnswersMessage,
 	buildQuestionnaireResponse,
@@ -126,6 +131,48 @@ test("validateQuestionnaire rejects empty, too-few-options, dupes, and reserved 
 	).toBe(false);
 });
 
+// The count/length limits moved out of the TypeBox schema (strict-mode providers reject `maxItems`/
+// `maxLength` keywords — strictTool strips them), so the pure validator owns them now.
+test("validateQuestionnaire enforces the former schema limits: option count and text lengths", () => {
+	const opt = (label: string) => ({ label, description: "d" });
+	const one = (over: Partial<AskUserQuestionArgs["questions"][number]>): AskUserQuestionArgs => ({
+		questions: [{ question: "q", header: "h", options: [opt("a"), opt("b")], ...over }],
+	});
+
+	// 5 options > MAX_OPTIONS(4)
+	expect(
+		validateQuestionnaire(one({ options: ["a", "b", "c", "d", "e"].map(opt) })).message,
+	).toContain("At most 4 options");
+	// header > 16 chars
+	expect(validateQuestionnaire(one({ header: "h".repeat(17) })).message).toContain("header");
+	// label > 60 chars
+	expect(
+		validateQuestionnaire(one({ options: [opt("x".repeat(61)), opt("b")] })).message,
+	).toContain("labels must be at most 60");
+	// recommendedReason > 160 chars
+	expect(
+		validateQuestionnaire(
+			one({
+				options: [{ label: "a", description: "d", recommendedReason: "r".repeat(161) }, opt("b")],
+			}),
+		).message,
+	).toContain("recommendedReason");
+	// …and the boundary values stay valid.
+	expect(
+		validateQuestionnaire(
+			one({
+				header: "h".repeat(16),
+				options: [
+					{ label: "x".repeat(60), description: "d", recommendedReason: "r".repeat(160) },
+					opt("b"),
+					opt("c"),
+					opt("d"),
+				],
+			}),
+		).ok,
+	).toBe(true);
+});
+
 // ---- the envelope (now the ask-user-answers message text; same wording as the blocking era) ----
 
 test("buildQuestionnaireResponse: cancelled → the canonical decline message", () => {
@@ -209,6 +256,41 @@ test("execute returns the no-UI error (non-terminating) when hasUI is false", as
 	expect(textOf(r)).toContain("UI not available");
 	expect((r.details as AskUserQuestionResult).cancelled).toBe(true);
 	expect((r as { terminate?: boolean }).terminate).toBeUndefined();
+});
+
+test("the extension registers the tool opted into strict sampling; nulls from strict models still ack", async () => {
+	const tools = new Map<string, ToolDefinition>();
+	askUserQuestionExtension({
+		registerTool(tool: ToolDefinition) {
+			tools.set(tool.name, tool);
+		},
+	} as unknown as ExtensionAPI);
+	const tool = tools.get("ask_user_question");
+	if (!tool) throw new Error("ask_user_question not registered");
+
+	expect(tool.constrainedSampling).toEqual({ type: "json_schema", strict: "prefer" });
+	// The registered (transformed) schema is all-required at the top object.
+	const params = tool.parameters as { required?: string[]; additionalProperties?: boolean };
+	expect(params.required).toEqual(["questions"]);
+	expect(params.additionalProperties).toBe(false);
+
+	// A strict model fills optionals with null — the wrapper strips them before validation logic runs.
+	const nulled = {
+		questions: [
+			{
+				question: "Which library?",
+				header: "Lib",
+				multiSelect: null,
+				options: [
+					{ label: "date-fns", description: "small", preview: null, recommendedReason: null },
+					{ label: "luxon", description: "rich", preview: null, recommendedReason: null },
+				],
+			},
+		],
+	};
+	const result = await tool.execute("tc-strict", nulled as never, undefined, undefined, ctx(true));
+	expect(textOf(result as never)).toBe(ASK_ACK_TEXT);
+	expect((result as { terminate?: boolean }).terminate).toBe(true);
 });
 
 test("execute returns a validation error (non-terminating) for a malformed questionnaire", async () => {
