@@ -28,6 +28,9 @@ jobs:
           restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
       - run: bun run check:deps
+      # Canary for the compiled-binary seam: fails when a pi bump introduces a new bundler-opaque
+      # dynamic import that registerBundledRuntime doesn't statically register (see the script header).
+      - run: bun run check:seams
       - run: bun run lint
       - run: bun run typecheck
 
@@ -77,7 +80,7 @@ jobs:
           retention-days: 7
 
   binary:
-    name: Binary smoke
+    name: Binary smoke & e2e
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -92,7 +95,20 @@ jobs:
           restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
       # Build the single-file binary for the runner's platform, then boot the artifact and assert it
-      # serves the staged UI + skills and shuts down cleanly — regressions in the extension/asset
-      # bundling only exist inside the compiled binary, so from-source suites can't catch them.
+      # serves the staged UI + skills, completes a real OAuth login up to its auth URL, and shuts down
+      # cleanly — regressions in the extension/asset/provider-flow bundling only exist inside the
+      # compiled binary, so from-source suites can't catch them.
       - run: bun run build:binary
       - run: bun run smoke:binary
+      - name: Install Playwright Chromium
+        run: bunx playwright install --with-deps chromium
+      # The whole no-agent e2e suite against the artifact (grep-inverts @dev-seam too — the fake login
+      # providers only exist in the dev boot): the broad net for works-from-source/broken-in-the-binary.
+      - run: bun run e2e:binary
+      - name: Upload Playwright report
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: playwright-report-binary
+          path: playwright-report-binary/
+          retention-days: 7

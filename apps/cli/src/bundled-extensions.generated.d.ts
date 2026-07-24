@@ -5,7 +5,7 @@
 
 import type { BundledExtensionFactory } from "@thinkrail/server";
 
-/** The four bundled pi extensions' default-export factories, value-imported, in load order. */
+/** The bundled pi extensions' default-export factories, value-imported, in load order. */
 export declare const bundledExtensionFactories: BundledExtensionFactory[];
 
 export interface EmbeddedSkillFile {

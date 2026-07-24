@@ -11,8 +11,9 @@
 //   `skills/` dirs, before the personal/project aliases so bundled skills outrank them (precedence in
 //   `resolveSkillInputs`).
 // - Compiled binary: the launcher injects the same five extensions as value-imported factories + a staged
-//   on-disk skills dir via `setBundledExtensions` (pi gives `extensionFactories` full API parity with
-//   path loading; pi reads skills via plain fs, so they must live on the real filesystem).
+//   on-disk skills dir via `registerBundledRuntime` (pi gives `extensionFactories` full API parity with
+//   path loading; pi reads skills via plain fs, so they must live on the real filesystem) — which also
+//   performs pi's binary-only provider registrations (OAuth flows + Bedrock, see below).
 
 import { createRequire } from "node:module";
 import { dirname, join, resolve, sep } from "node:path";
@@ -51,14 +52,30 @@ let bundled: BundledExtensions | undefined;
 /**
  * Compiled-binary seam: inject the bundled extensions as value-imported factories (+ a staged skills
  * dir) where path-loading is impossible — a `bun build --compile` binary has no `node_modules` to
- * resolve the extension entries or their deps from. Call before the first session is created.
+ * resolve the extension entries or their deps from — and perform pi's **binary-only registrations**.
+ * pi hides Node-only provider code behind bundler-opaque variable-specifier dynamic imports (so
+ * browser bundles can't reach its `node:http` OAuth servers / the AWS SDK); inside a single-file
+ * binary those imports can't resolve at runtime, so every OAuth sign-in died with `Cannot find module
+ * './openai-codex.js'` (and Bedrock streaming would die the same way). pi ships static registration
+ * seams for exactly this — mirror pi's own binary entry (`pi-coding-agent` `dist/bun/cli.js`): the
+ * bundled OAuth flows + the Bedrock provider module. The dynamic literal imports below are statically
+ * bundled by `bun build --compile`; dev never calls this seam, so it never loads the flow modules or
+ * the AWS SDK. Await before the first session or login can start.
  */
-export function setBundledExtensions(extensions: BundledExtensions): void {
+export async function registerBundledRuntime(extensions: BundledExtensions): Promise<void> {
 	bundled = extensions;
+	const [{ registerBunOAuthFlows }, { bedrockProviderModule }, { setBedrockProviderModule }] =
+		await Promise.all([
+			import("@earendil-works/pi-ai/bun-oauth"),
+			import("@earendil-works/pi-ai/bedrock-provider"),
+			import("@earendil-works/pi-ai/compat"),
+		]);
+	registerBunOAuthFlows();
+	setBedrockProviderModule(bedrockProviderModule);
 }
 
 /**
- * The run-from-source wiring: the four extension entries + the workspace packages' skills dirs, resolved
+ * The run-from-source wiring: the bundled extension entries + the workspace packages' skills dirs, resolved
  * out of `node_modules` on first use (memoized — module-load resolution would crash a compiled binary).
  */
 let devPaths: { extensionPaths: string[]; skillPaths: string[] } | undefined;

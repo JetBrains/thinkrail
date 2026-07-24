@@ -15,8 +15,12 @@ GitHub releases. It owns no product code — only workflows, composite actions, 
 
 ## CI vs release
 
-- **CI** (`ci.yml`, on PRs to `main`): lint+typecheck, unit tests, no-agent e2e, and a **host-target**
-  binary build+smoke. Fast, no provider auth. Gates merges.
+- **CI** (`ci.yml`, on PRs to `main`): lint+typecheck (incl. `check:seams` — the pi binary-seam canary,
+  see `scripts/check-binary-seams.ts`), unit tests, no-agent e2e, and a **host-target** binary
+  build+smoke+**e2e-vs-binary** (`bun run e2e:binary`: the same no-agent suite against the compiled
+  artifact, minus the `@dev-seam` fake-login specs — the regression class that only exists inside the
+  binary; ubuntu only by decision, see `task-artifact-verification`). Fast, no provider auth. Gates
+  merges.
 - **Release** (`nightly.yml` / `stable.yml` → `_release.yml` → `_build.yml`): trusts a green `main` (no
   test gate of its own) and produces published binaries + a GitHub release.
 

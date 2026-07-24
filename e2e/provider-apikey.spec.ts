@@ -2,7 +2,9 @@ import { expect, test } from "@playwright/test";
 import { openAppFresh } from "./fixtures/app";
 
 // The in-app API-key setup flow (issue #97), driven against a **fake native pi provider**
-// (`e2e-apikey`, registered in dev.ts behind THINKRAIL_E2E_FAKE_OAUTH). API-key entry rides the SAME
+// (`e2e-apikey`, registered in dev.ts behind THINKRAIL_E2E_FAKE_OAUTH). Tagged @dev-seam: the fakes
+// only exist in the dev boot (dev.ts never ships), so the binary suite (`e2e:binary`) grep-inverts
+// these specs. API-key entry rides the SAME
 // session-less login bridge as OAuth — provider.loginStart {type:"api_key"} (detached) → the
 // provider-owned secret prompt as a frame on `provider.login` → the dialog's masked input → loginReply →
 // pi persists to auth.json → success → status re-read — no inline key field, no provider-specific code.
@@ -11,9 +13,9 @@ const APIKEY_BTN = '[data-testid="provider-apikey"][data-provider="e2e-apikey"]'
 const CONFIGURED =
 	'[data-testid="provider-row"][data-provider="e2e-apikey"][data-configured="true"]';
 
-test("configures a provider by API key through the login dialog (secret prompt → success)", async ({
-	page,
-}) => {
+test("configures a provider by API key through the login dialog (secret prompt → success)", {
+	tag: "@dev-seam",
+}, async ({ page }) => {
 	await openAppFresh(page);
 	await page.getByTestId("open-settings").click();
 	await expect(page.getByTestId("settings-providers")).toBeVisible();
@@ -49,9 +51,9 @@ test("configures a provider by API key through the login dialog (secret prompt �
 	await expect(page.locator(APIKEY_BTN)).toBeVisible();
 });
 
-test("the OAuth-only fake offers no API-key entry (flags derive from Provider.auth alone)", async ({
-	page,
-}) => {
+test("the OAuth-only fake offers no API-key entry (flags derive from Provider.auth alone)", {
+	tag: "@dev-seam",
+}, async ({ page }) => {
 	await openAppFresh(page);
 	await page.getByTestId("open-settings").click();
 	await expect(page.getByTestId("settings-providers")).toBeVisible();

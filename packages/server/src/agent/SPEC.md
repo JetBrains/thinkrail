@@ -138,10 +138,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     unit-tested against `SessionManager.inMemory`.
   - `extensions` — Pi resource wiring. `buildResourceLoader(cwd, settingsManager, getAdmission)` starts
     with a `DefaultResourceLoader` (Pi's normal settings/package + `.pi` / `.agents` discovery), adds
-    automatic **portable cross-agent skill aliases**, then loads the four bundled extensions — **`pi-web-access`**
+    automatic **portable cross-agent skill aliases**, then loads the five bundled extensions — **`pi-web-access`**
     (`web_search` + `fetch_content`), **`pi-visualize`** (`visualize`), **`pi-spec-graph`** (the `spec_*`
-    tools + its `before_agent_start` rule), and **`pi-thinkrail-workflow`** (the workflow-router rule +
-    workflow skills). Existing personal aliases are Claude
+    tools + its `before_agent_start` rule), **`pi-thinkrail-workflow`** (the workflow-router rule +
+    workflow skills), and **`pi-todos`** (the `todo_*` tools + its skill). Existing personal aliases are Claude
     (`${CLAUDE_CONFIG_DIR:-~/.claude}/skills`), Codex (`${CODEX_HOME:-~/.codex}/skills`), Copilot
     (`~/.copilot/skills`), and Gemini (`${GEMINI_CLI_HOME:-~}/.gemini/skills`), **plus each installed Claude
     plugin's `skills/` dir** (read from `~/.claude/plugins/installed_plugins.json` — the resolved `installPath`,
@@ -182,13 +182,24 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
       entries (pi's loader jiti-loads them — no value-import into our typecheck graph), resolved
       **lazily on first use** (never at module load: the resolve requires `node_modules`, which a
       compiled binary lacks). The workspace packages' `pi.skills` manifests aren't auto-discovered for
-      file-path entries — their `skills/` dirs (`pi-spec-graph`, `pi-thinkrail-workflow`) are wired via
-      **`additionalSkillPaths`**.
-    - **Compiled binary:** the launcher calls the **`setBundledExtensions({ factories, skillsDir })`
-      seam** before the first session — the same four extensions as **value-imported default-export
+      file-path entries — their `skills/` dirs (`pi-spec-graph`, `pi-thinkrail-workflow`, `pi-todos`) are
+      wired via **`additionalSkillPaths`**.
+    - **Compiled binary:** the launcher awaits the **`registerBundledRuntime({ factories, skillsDir })`
+      seam** before the first session — the same bundled extensions as **value-imported default-export
       factories** (pi gives `extensionFactories` full API parity with path loading; what's lost —
-      file-relative `baseDir`, per-reload re-evaluation — none of the four use) plus a staged on-disk
-      skills dir (pi reads `SKILL.md` via plain fs, so skills must live on the real filesystem).
+      file-relative `baseDir`, per-reload re-evaluation — none of them use) plus a staged on-disk
+      skills dir (pi reads `SKILL.md` via plain fs, so skills must live on the real filesystem). The
+      seam also performs the **binary-only pi registrations**: pi hides Node-only provider code behind
+      bundler-opaque variable-specifier dynamic imports (so browser bundles can't reach `node:http`
+      OAuth servers / the AWS SDK), which a single-file binary can't resolve at runtime — every OAuth
+      sign-in died with `Cannot find module './openai-codex.js'`. pi ships static registration seams
+      for exactly this, and we mirror pi's own binary entry (`pi-coding-agent` `dist/bun/cli.js`):
+      **`registerBunOAuthFlows()`** (`@earendil-works/pi-ai/bun-oauth`) + **`setBedrockProviderModule(
+      bedrockProviderModule)`** (`…/compat` + `…/bedrock-provider`). Both load via **dynamic literal
+      imports inside the seam** — literal specifiers are statically bundled by `bun build --compile`,
+      while dev (which never calls the seam) never loads the flow modules or the AWS SDK. Registration
+      lands in the same `pi-ai` instance pi consults at login time because the catalog pins one exact
+      `pi-ai` version repo-wide (one store entry → one bundled module instance).
     Both modes append `extensionFactories`: a **headless-search policy** (a `tool_call` hook defaulting
     `web_search`'s `workflow` to `"none"`, since pi-web-access would otherwise open a browser curator our
     `rpc` host can't render) **and** `askUserQuestionExtension` (registers the `ask_user_question` tool).
@@ -204,11 +215,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   (unfiltered, the manager's `skills.state`) / `listProjectAliasSkillNames(cwd)` (present-alias count);
   `reloadSessionResources(sessionId)` (active-chat reload); the **`setSkillAdmissionResolver`** seam (host
   wires `workspaceId` → the admission context);
-  the compiled-binary extension seam (`setBundledExtensions` +
+  the compiled-binary seam (`registerBundledRuntime` +
   `BundledExtensions`/`BundledExtensionFactory`).
 - **Allowed deps:** `@earendil-works/pi-coding-agent` (runtime); `@earendil-works/pi-ai` (types + test
-  fixtures — dispatch goes through the shared `ModelRuntime`); `pi-web-access` + `pi-visualize` + `pi-spec-graph` +
-  `pi-thinkrail-workflow` (the bundled extensions — loaded by path, never value-imported here; the
+  fixtures — dispatch goes through the shared `ModelRuntime` — plus the `/bun-oauth` + `/bedrock-provider`
+  + `/compat` subpaths, value-imported **only** inside `registerBundledRuntime`'s dynamic imports); `pi-web-access` + `pi-visualize` + `pi-spec-graph` +
+  `pi-thinkrail-workflow` + `pi-todos` (the bundled extensions — loaded by path, never value-imported here; the
   compiled binary's value-imports live in `apps/cli`'s generated build module); `typebox` (the
   `ask_user_question` parameter schema);
   `contracts` (`PiEvent`/`Model`/`ThinkingLevel`/`ImageContent`/`SessionStats`/`SlashCommandInfo`/`ExtUi*`/
