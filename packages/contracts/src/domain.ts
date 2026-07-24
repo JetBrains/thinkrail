@@ -321,12 +321,25 @@ export interface GithubAuthStatus {
 export type ThemeId = string;
 
 /**
+ * First-run education flags (see `apps/web/src/onboarding/SPEC.md`). Absent field = not seen/dismissed.
+ * ISO-8601 timestamps rather than booleans: same cost, debuggable, leaves room for "re-show after a
+ * major change". These two fields are the sole spec'd exception to the no-onboarding-state principle.
+ */
+export interface OnboardingConfig {
+	/** Intro overlay completed or skipped. */
+	introSeenAt?: string;
+	/** First-worktree path banner dismissed. */
+	workspaceBannerDismissedAt?: string;
+}
+
+/**
  * Server-synced app settings — OUR config, persisted host-side as `config.json` under the data dir and
  * delivered to every client in `server.welcome`. A small, extensible bag (theme is the first member);
  * mutate a subset via `settings.update`, converge on the `settings.changed` broadcast.
  */
 export interface AppConfig {
 	theme: ThemeId;
+	onboarding?: OnboardingConfig;
 }
 
 /** The config a fresh host (no `config.json` yet) falls back to. */

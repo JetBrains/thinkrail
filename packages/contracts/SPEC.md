@@ -110,8 +110,10 @@ of the host.
   hint on this result));
   the **theme/config selection** — **`ThemeId`** is an open string on the wire, because the host persists
   an opaque selection while the independently shipped web client owns the available manifest catalog;
-  **`AppConfig`** (`{ theme }` — an extensible bag) carries it with the **`DEFAULT_CONFIG`** fallback
+  **`AppConfig`** (`{ theme, onboarding }` — an extensible bag) carries it with the **`DEFAULT_CONFIG`** fallback
   (persisted host-side as `config.json`, delivered in `server.welcome`, mutated via `settings.update`).
+  **`OnboardingConfig`** (the two onboarding flags; see `apps/web/src/onboarding/SPEC.md`): `introSeenAt` +
+  `workspaceBannerDismissedAt` (ISO-8601 timestamps, absent = not seen/dismissed).
   Contracts deliberately exports no theme enum/list/labels: a future manifest can mint an id unknown when
   the host was built, and a client missing it resolves its own bundled default;
   **`SpecGraphNode`/`SpecGraphSnapshot`** — the
@@ -122,7 +124,8 @@ of the host.
 - **wsProtocol.ts** — `WS_METHODS` (`project.*` — incl. **`project.inspect`** (classify a path) +
   **`project.init`** (`git init` + commit, then open) + **`project.hasSpecs`** (lazy per-project "has any
   registered spec?" for the Welcome screen — a full-tree walk, so requested only for the shown project,
-  never eagerly for every project) / `workspace.*` / `fs.*` / `git.*` / **`spec.graph`**
+  never eagerly for every project) / `workspace.*` / `fs.*` / `git.*` (incl. **`git.projectStatus`** — the
+  project root's dirty state vs HEAD, what stays behind at worktree create) / **`spec.graph`**
   (the Specs-viewer whole-graph read, per workspace) / **`todo.*`** — **`list`**/**`add`**/**`update`**/
   **`remove`**, the chat's per-session TODO plan (keyed by `workspaceId` + `sessionId`; `add` tags the
   item `origin:"user"`) / `terminal.*` / `model.list` / **`provider.status`**

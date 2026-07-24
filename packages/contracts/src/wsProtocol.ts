@@ -61,7 +61,10 @@ import type {
 // v14: group/source toggles + pre-session manager — `project.setGroupEnabled` (turn a plugin or source tier,
 // incl. `@plugins`, on/off at the project baseline) + `project.skills` (project-scoped catalog for Welcome /
 // New Workspace); `Project` gains `disabledGroups`, `SkillCatalogEntry` gains `group`.
-export const PROTOCOL_VERSION = 14;
+// v15: onboarding state + project root status — `AppConfig.onboarding` (`OnboardingConfig`: `introSeenAt` +
+// `workspaceBannerDismissedAt`), the wire method `git.projectStatus` (the project root's dirty state vs HEAD
+// — what stays behind at worktree create), and PROTOCOL_VERSION bump.
+export const PROTOCOL_VERSION = 15;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -134,6 +137,7 @@ export const WS_METHODS = {
 	todoUpdate: "todo.update",
 	todoRemove: "todo.remove",
 	gitStatus: "git.status",
+	gitProjectStatus: "git.projectStatus",
 	gitDiffFile: "git.diffFile",
 	terminalCreate: "terminal.create",
 	terminalWrite: "terminal.write",
@@ -340,6 +344,8 @@ export interface WsMethodMap {
 	};
 	"todo.remove": { params: { workspaceId: string; sessionId: string; id: string }; result: Ack };
 	"git.status": { params: { workspaceId: string }; result: GitStatus };
+	/** The PROJECT ROOT's dirty state (untracked + uncommitted vs HEAD) — what stays behind at create. */
+	"git.projectStatus": { params: { projectId: string }; result: GitStatus };
 	// One changed file, both sides: `original` = the file at the workspace's base branch (empty for
 	// untracked/added — and for a renamed file's new path, which degrades to an add-style diff),
 	// `modified` = the worktree content (empty when deleted). Feeds Monaco's diff editor, which needs
