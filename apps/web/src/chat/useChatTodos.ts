@@ -1,9 +1,9 @@
 import type { SessionEventPayload, TodoPlan } from "@thinkrail/contracts";
-import { WS_CHANNELS } from "@thinkrail/contracts";
+import { TODO_NUDGE_PREFIX, WS_CHANNELS } from "@thinkrail/contracts";
 import { useEffect, useState } from "react";
 import { useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
-import { messagesToRuntime, TODO_NUDGE_PREFIX } from "./hydrate";
+import { messagesToRuntime } from "./hydrate";
 import { planToMarkdown } from "./planMarkdown";
 
 export interface ChatTodos {

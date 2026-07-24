@@ -1,14 +1,12 @@
 // Seeds real, pi-parseable session JSONL files into the e2e host's isolated agent dir so `history.search`
-// has something to find. Reuses `writeFixtureSession`/`defaultSessionDirFor` from
-// `packages/server/src/history/testFixtures.ts` (a cross-package source import — this file runs under
-// node via Playwright's own TS loading, same as the rest of `global-setup.ts`, and `testFixtures.ts` only
-// imports `node:fs`/`node:path`, so this resolves cleanly with no bundler involved). Those two helpers are
-// pinned against pi's real `SessionManager` by `packages/server/src/history/testFixtures.test.ts` — if
-// pi's on-disk format or default-layout encoding ever shifts, that test fails, not this seeder silently.
-import {
-	defaultSessionDirFor,
-	writeFixtureSession,
-} from "../../packages/server/src/history/testFixtures";
+// has something to find. Reuses `writeFixtureSession`/`defaultSessionDirFor` via the server package's
+// declared test-only subpath export `@thinkrail/server/history-test-fixtures` (the sanctioned boundary —
+// same pattern as `@thinkrail/server/agent`; it maps to `testFixtures.ts`, which imports only
+// `node:crypto`/`node:fs`/`node:path`, so it resolves cleanly under Playwright's node TS loading and never
+// drags in the Bun-only host). Those two helpers are pinned against pi's real `SessionManager` by
+// `packages/server/src/history/testFixtures.test.ts` — if pi's on-disk format or default-layout encoding
+// ever shifts, that test fails, not this seeder silently.
+import { defaultSessionDirFor, writeFixtureSession } from "@thinkrail/server/history-test-fixtures";
 import { E2E_PI_AGENT_DIR } from "./paths";
 
 /** Deliberately **unmapped** cwd — no project/workspace record in the e2e fixtures maps to this path, so

@@ -16,8 +16,9 @@ import { join, resolve } from "node:path";
  * needs it to be deterministic (idempotent re-seeding across calls, or a test that asserts against the
  * literal id) — see e.g. `testFixtures.test.ts`'s pinning cases, which always pass one on purpose.
  *
- * Exported (not test-only in the barrel sense) so A5's e2e fixture seeder can reuse it against a real
- * on-disk sessions directory.
+ * Test-only. Not on the production `history` barrel (it writes to disk); the e2e fixture seeder reaches
+ * it through the server package's `@thinkrail/server/history-test-fixtures` subpath export, in-package
+ * tests import this module relatively.
  *
  * @returns the resolved `id` (generated or the one passed in) and the written file's `path` — callers
  * can `appendFileSync` more lines onto `path` directly (e.g. to exercise `HistoryIndex`'s mtime
@@ -98,8 +99,9 @@ export function writeFixtureSession(
  * Pinned by testFixtures.test.ts's "default layout" case against a real `SessionManager.list(cwd)` call;
  * re-verify against `dist/core/session-manager.js` on a pi version bump.
  *
- * Exported (not test-only in the barrel sense) so A5's e2e fixture seeder can compute the same directory
- * for an arbitrary cwd (`seedWorkspaceSession`) without duplicating the regex.
+ * Test-only, reached via the `@thinkrail/server/history-test-fixtures` subpath (see `writeFixtureSession`
+ * above) so A5's e2e fixture seeder can compute the same directory for an arbitrary cwd
+ * (`seedWorkspaceSession`) without duplicating the regex.
  */
 export function defaultSessionDirFor(agentDir: string, cwd: string): string {
 	const resolvedCwd = resolve(cwd);

@@ -1,9 +1,6 @@
 import type { AskUserAnswersDetails, TranscriptMessage, UserMessage } from "@thinkrail/contracts";
-import { isAskUserAnswersMessage } from "@thinkrail/contracts";
+import { isAskUserAnswersMessage, TODO_NUDGE_PREFIX } from "@thinkrail/contracts";
 import type { ChatTurn, ToolResultState } from "./types";
-
-/** Prefix on the wake-the-agent nudge sent when a TODO is added; hidden from the transcript (never appended live, skipped on hydrate). */
-export const TODO_NUDGE_PREFIX = "[thinkrail:todo-nudge] ";
 
 /** The leading text of a user message (string or text blocks). */
 function userText(content: UserMessage["content"]): string {

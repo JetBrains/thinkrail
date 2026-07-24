@@ -179,11 +179,22 @@ describe("HistoryIndex.search", () => {
 			})}\n`,
 		);
 
-		// Pass the 2000ms revalidation throttle so the next search re-lists and re-parses.
+		// Pass the 2000ms revalidation throttle so the next search triggers a re-list/re-parse.
 		await Bun.sleep(2100);
 
+		// Warm revalidation is non-blocking: this search kicks off the background refresh but returns the
+		// still-current index, so the freshly appended line hasn't landed yet.
 		const second = await index.search({ query: "prompt", filter: allowAll, labels: noLabels });
-		expect(second.prompts.map((p) => p.text)).toEqual(["fresh prompt two", "original prompt one"]);
+		expect(second.prompts.map((p) => p.text)).toEqual(["original prompt one"]);
+
+		// Once the background refresh settles, a follow-up search reflects the appended line. Poll rather
+		// than sleep a fixed amount, since the refresh completes off the search's critical path.
+		let third = second;
+		for (let i = 0; i < 100 && third.prompts.length < 2; i++) {
+			await Bun.sleep(20);
+			third = await index.search({ query: "prompt", filter: allowAll, labels: noLabels });
+		}
+		expect(third.prompts.map((p) => p.text)).toEqual(["fresh prompt two", "original prompt one"]);
 	});
 
 	test("(g) a user-text match produces a jumpable prompt hit (messageIndex + 120-char anchorText) and no message hit", async () => {
