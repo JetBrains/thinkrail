@@ -137,8 +137,16 @@ export function TemplateEditorDialog({
 
 	const save = async () => {
 		if (saving) return;
-		const trimmedName = name.trim();
-		if (!isValidTemplateName(trimmedName)) {
+		// Identity rule: an EDIT saves under `template.name` VERBATIM — never trimmed or normalized.
+		// Whitespace-bearing names are server-legal by design (pi derives a template's name from its
+		// filename verbatim, so a hand-created `report .md` lists as `report `), and trimming here wrote
+		// a NEW `report.md` while leaving the file being edited untouched (reviewer-flagged;
+		// `templates-manage.spec.ts` pins the round-trip). Only a NEW template's typed name is trimmed —
+		// deliberate form normalization, so an accidental "standup " can't mint a file that renders
+		// identically to "standup" in every listing. The Save button's emptiness gate below is
+		// new-mode-only for the same reason: a whitespace-only hand-created name is a legal edit identity.
+		const finalName = template ? template.name : name.trim();
+		if (!isValidTemplateName(finalName)) {
 			setError('Name can\'t be empty, start with ".", or contain "/", "\\", or a null byte.');
 			return;
 		}
@@ -152,7 +160,7 @@ export function TemplateEditorDialog({
 			await getTransport().request("template.save", {
 				...(workspaceId ? { workspaceId } : {}),
 				scope,
-				name: trimmedName,
+				name: finalName,
 				content: assembleTemplate(description, argumentHint, body),
 			});
 			useAppStore.getState().bumpTemplatesVersion();
@@ -267,7 +275,7 @@ export function TemplateEditorDialog({
 					</Button>
 					<Button
 						data-testid="template-save"
-						disabled={saving || loading || !name.trim()}
+						disabled={saving || loading || (!editing && !name.trim())}
 						onClick={() => void save()}
 					>
 						Save

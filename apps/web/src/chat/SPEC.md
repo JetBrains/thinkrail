@@ -327,7 +327,17 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   - **Editing an existing template locks its name + scope** (both fields disabled): `template.save` is
     create-or-overwrite keyed by `(scope, name)` with no rename/move primitive, so changing either while
     editing would silently orphan the old file on disk instead of renaming it. Creating new (including
-    save-as-template) leaves both fully editable.
+    save-as-template) leaves both fully editable. **An edit saves under `template.name` verbatim — never
+    trimmed or normalized**: whitespace-bearing names are server-legal *by design* (pi derives a
+    template's name from its filename verbatim, so a hand-created `report .md` lists as `report `;
+    `packages/server/src/templates/templates.ts`'s gate deliberately accepts every pi-listable name), and
+    trimming on save wrote a NEW `report.md` while leaving the file being edited untouched
+    (reviewer-flagged; `templates-manage.spec.ts` pins the round-trip). The Save button's emptiness gate
+    is new-mode-only for the same reason — a whitespace-only hand-created name is a legal edit identity.
+    Only a **new** template's typed name is trimmed before validation/save: deliberate form
+    normalization, so an accidental trailing space can't mint a file that renders identically to its
+    trimmed twin in every listing (the composer's `/` menu can *use* such hand-created names via click,
+    but a typed `/name` token can't carry a space — the UI shouldn't manufacture second-class names).
   - **Edit-open fetches the full template** via `template.get`, pinned to the row's exact `(scope,
     name)` — `template.list` is metadata-only by design (bounded head scans + a size cap, see
     `packages/server/src/templates/SPEC.md`), so the listing row can't provide the body, and — the part

@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { openWorkspaceChat } from "./fixtures/app";
@@ -442,6 +442,51 @@ test.describe("templates management", () => {
 			expect(onDisk).not.toContain("Original body");
 		} finally {
 			removeGlobalTemplates(["deep-meta"]);
+		}
+	});
+
+	// Reviewer-flagged identity regression: whitespace-bearing template names are server-legal BY DESIGN
+	// (pi derives a template's name from its filename verbatim, so a hand-created `report .md` lists as
+	// `report ` — the gate in `packages/server/src/templates/templates.ts` deliberately accepts every
+	// pi-listable name). The dialog used to trim the name on every save, so editing `report ` wrote a NEW
+	// `report.md` and left the file being edited untouched — the edit looked successful while the selected
+	// template never changed. An edit now saves under `template.name` verbatim; only new-template names
+	// are trimmed (deliberate form normalization).
+	test("editing a hand-created template with a whitespace-bearing name round-trips to the same file", async ({
+		page,
+	}) => {
+		const promptsDir = join(E2E_PI_AGENT_DIR, "prompts");
+		const filePath = join(promptsDir, "report .md");
+		writeFileSync(filePath, `---\ndescription: "Trailing-space name"\n---\nHand-created body\n`);
+		try {
+			await openWorkspaceChat(page);
+			await page.getByTestId("open-settings").click();
+			await page.getByTestId("settings-nav-templates").click();
+
+			const row = page.locator(
+				'[data-testid="template-row"][data-name="report "][data-scope="global"]',
+			);
+			await expect(row).toBeVisible();
+			await row.getByTestId("template-edit").click();
+			const editor = page.getByTestId("template-editor-dialog");
+			await expect(editor).toBeVisible();
+			await expect(page.getByTestId("template-name-input")).toHaveValue("report ");
+			await expect(page.getByTestId("template-body-input")).toHaveValue("Hand-created body");
+
+			// A body-only edit + save…
+			await page.getByTestId("template-body-input").fill("Edited body");
+			await page.getByTestId("template-save").click();
+			await expect(editor).toBeHidden();
+
+			// …must land in the file being edited…
+			const onDisk = readFileSync(filePath, "utf-8");
+			expect(onDisk).toContain("Edited body");
+			expect(onDisk).toContain('description: "Trailing-space name"');
+			// …and mint no trimmed twin (the regression: save used to write `report.md` instead).
+			expect(existsSync(join(promptsDir, "report.md"))).toBe(false);
+		} finally {
+			// "report" too: if the regression ever recurs, the minted twin must not leak into later tests.
+			removeGlobalTemplates(["report ", "report"]);
 		}
 	});
 });
