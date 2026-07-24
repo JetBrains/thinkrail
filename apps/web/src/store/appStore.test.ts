@@ -1,7 +1,7 @@
 import { beforeEach, expect, test } from "bun:test";
 import type { ExtUiRequest, PiEvent, SessionSummary, Workspace } from "@thinkrail/contracts";
 import { type SessionRuntime, toast, useAppStore } from "./appStore";
-import { selectSkillsStale } from "./selectors";
+import { selectSkillsStale, selectWorkspaceTick } from "./selectors";
 
 // Event fixtures — the reducer only reads the fields below, so casting minimal objects is safe here.
 const agentStart = { type: "agent_start" } as unknown as PiEvent;
@@ -953,7 +953,7 @@ test("skills badge: a skill-dir change flags the loaded session; reload clears i
 	expect(isStale("ws1", "a")).toBe(true);
 
 	// A successful reload anchors the session to now → cleared.
-	s().markSkillsSynced("ws1", "a");
+	s().markSkillsSynced("a", selectWorkspaceTick(s(), "ws1"));
 	expect(isStale("ws1", "a")).toBe(false);
 
 	// Later unrelated (non-skill) fs churn must not re-raise the badge — the core regression.
@@ -995,16 +995,29 @@ test("skills badge: per session — a chat opened after the change isn't flagged
 	expect(isStale("ws1", "b")).toBe(true);
 
 	// …and reloading one clears only that chat (reloadResources is per-session).
-	s().markSkillsSynced("ws1", "b");
+	s().markSkillsSynced("b", selectWorkspaceTick(s(), "ws1"));
 	expect(isStale("ws1", "a")).toBe(true);
 	expect(isStale("ws1", "b")).toBe(false);
+});
+
+test("skills badge: a skill change mid-reload stays flagged (baseline is captured at reload start)", () => {
+	const s = () => useAppStore.getState();
+	s().openChatSession("ws1", "a", null, "medium");
+	// The user starts a reload; the baseline is snapshot NOW (what the server will load).
+	const reloadBaseline = selectWorkspaceTick(s(), "ws1"); // 0
+	// While the reload request is in flight, a skill file changes and its fsChanged frame folds first.
+	s().noteFsChanged(skillFs("ws1", [".claude/skills/foo/SKILL.md"])); // tick 1
+	// The reload resolves and records the request-START baseline, not the now-newer tick.
+	s().markSkillsSynced("a", reloadBaseline);
+	// The mid-reload change (which the reload did not load) is preserved → still stale.
+	expect(isStale("ws1", "a")).toBe(true);
 });
 
 test("skills badge: closing a chat runtime drops its sync baseline (no leak)", () => {
 	const s = () => useAppStore.getState();
 	s().openChatSession("ws1", "a", null, "medium");
 	s().noteFsChanged(skillFs("ws1", [".claude/skills/foo/SKILL.md"]));
-	s().markSkillsSynced("ws1", "a");
+	s().markSkillsSynced("a", selectWorkspaceTick(s(), "ws1"));
 	expect(s().skillsSyncedTickBySession.a).toBeDefined();
 
 	s().closeChatRuntime("a");

@@ -98,8 +98,13 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   most recent *skill-relevant* batch (a `.claude|.github|.gemini|.pi|.agents/skills` path, via
   `isSkillPath`, or a truncated wildcard), *accumulated* so a later non-skill batch never clears it — and
   each chat records **`skillsSyncedTickBySession: Record<sessionId, tick>`** = the tick it loaded skills at
-  (set on `openChatSession`/`hydrateSession`, bumped by **`markSkillsSynced(workspaceId, sessionId)`** on a
-  successful reload; dropped with the runtime in `closeChatRuntime`/`clearWorkspaceTabs`). The selector
+  (set on `openChatSession`/`hydrateSession`, bumped by **`markSkillsSynced(sessionId, syncedTick)`** on a
+  successful reload; dropped with the runtime in `closeChatRuntime`/`clearWorkspaceTabs`). That
+  `syncedTick` is the workspace tick captured at the **start** of the skill-loading round-trip
+  (`selectWorkspaceTick`, snapshot by the caller before `session.create`/`reloadResources`/`getMessages`),
+  **not** at completion — so a skill change whose `fsChanged` frame folds while the load is in flight (which
+  the load did not see) stays past the baseline and keeps the badge lit rather than being silently absorbed.
+  The selector
   **`selectSkillsStale(state, workspaceId, sessionId)`** = `skillChangeTick > syncedTick` — store-derived
   (survives `ChatView`'s tab-switch remount) and per-session (a sibling/newer chat that loaded the current
   skills is not flagged; a reload clears only its own). Also **`updateFileTabContent(id, content,
@@ -123,8 +128,9 @@ The `EditorTab` (`FileTab` | `ChatTab` | `DocTab` | `DiffTab`) + `TerminalTab` +
   selectors in `selectors.ts` resolve the active `Workspace`, its owning project id, and the shell's context
   project from those canonical ids and collections; derived active-project state is never stored separately.
 - **Public surface (barrel):** `useAppStore`; `selectActiveWorkspace`,
-  `selectActiveWorkspaceProjectId`, `selectContextProject`, `selectSkillsStale` (+ the `isSkillPath` path
-  predicate it shares with `noteFsChanged`); `toast` (the fire-from-anywhere helper),
+  `selectActiveWorkspaceProjectId`, `selectContextProject`, `selectSkillsStale`, `selectWorkspaceTick` (the
+  sync-baseline snapshot; + the `isSkillPath` path predicate it shares with `noteFsChanged`); `toast` (the
+  fire-from-anywhere helper),
   `Toast` (type), `EditorTab` (`FileTab`/`ChatTab`/`DocTab`), `TerminalTab`, `ClosedChat`, `SessionRuntime` +
   `EMPTY_RUNTIME` (ChatView's pre-creation fallback), `reduceSessionEvent`.
 - **Allowed deps:** `contracts` (`Project`/`Workspace`/`Model`/`ThinkingLevel`/`SessionStats`/

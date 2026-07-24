@@ -36,6 +36,19 @@ export function isSkillPath(path: string): boolean {
 	return /(^|\/)\.(claude|github|gemini|pi|agents)\/skills(\/|$)/.test(path);
 }
 
+/**
+ * A workspace's current live-refresh tick (0 before any fs change). Snapshot it at the **start** of a
+ * skill-loading round-trip (session create / reload / hydrate) and record it as that session's sync
+ * baseline once the load resolves — so a skill change whose `fsChanged` frame folds *while the load is in
+ * flight* stays past the baseline and keeps the reload badge lit (the load saw the pre-change skills).
+ */
+export function selectWorkspaceTick(
+	state: { fsChangesByWorkspace: Record<string, { tick: number }> },
+	workspaceId: string,
+): number {
+	return state.fsChangesByWorkspace[workspaceId]?.tick ?? 0;
+}
+
 interface SkillsStaleState {
 	/** Per workspace, the fs tick of the most recent skill-relevant `fsChanged` batch (see `noteFsChanged`). */
 	skillChangeTickByWorkspace: Record<string, number>;

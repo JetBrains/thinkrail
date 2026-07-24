@@ -361,7 +361,8 @@ export default function ChatView({
 								sessionId,
 								streaming: isStreaming,
 								stale: skillsStale,
-								onReloaded: () => useAppStore.getState().markSkillsSynced(workspaceId, sessionId),
+								onReloaded: (syncedTick) =>
+									useAppStore.getState().markSkillsSynced(sessionId, syncedTick),
 							}}
 							open={skillsOpen}
 							onOpenChange={setSkillsOpen}
