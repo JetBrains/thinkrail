@@ -135,7 +135,7 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     the manager bullet above). Pure over pi's `SessionManager` (compaction-aware via
     `buildSessionContext`; idempotent; appends at the leaf, where orphans sit by construction) —
     unit-tested against `SessionManager.inMemory`.
-  - `extensions` — Pi resource wiring. `buildResourceLoader(cwd, settingsManager, admission)` starts
+  - `extensions` — Pi resource wiring. `buildResourceLoader(cwd, settingsManager, getAdmission)` starts
     with a `DefaultResourceLoader` (Pi's normal settings/package + `.pi` / `.agents` discovery), adds
     automatic **portable cross-agent skill aliases**, then loads the four bundled extensions — **`pi-web-access`**
     (`web_search` + `fetch_content`), **`pi-visualize`** (`visualize`), **`pi-spec-graph`** (the `spec_*`
@@ -161,7 +161,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `on` beats a group disable). `skillsGate` filters + relabels in one `skillsOverride`; only `load` skills
     reach the system prompt / `/skill:` list.
     The host resolves the context via the **`setSkillAdmissionResolver`** seam (keyed by `workspaceId`, fails
-    closed). Personal / bundled / pi-native resources are never trust-gated (only the enable/disable layer);
+    closed); `buildResourceLoader` takes the resolver as a thunk and `skillsGate` **re-reads it on every
+    `loader.reload()`**, so `session.reloadResources` picks up a mid-session trust grant or skill/group toggle
+    rather than re-applying the snapshot captured at session creation. Personal / bundled / pi-native resources are never trust-gated (only the enable/disable layer);
     the gate is scoped to the compatibility aliases (pi-native `.pi` / `.agents` project trust is unchanged).
     `listSkillCommands(cwd, admission)` reuses the same gated inputs through a short-lived skills-only
     `DefaultResourceLoader` (no model/session/transcript, no extension factories) for pre-workspace

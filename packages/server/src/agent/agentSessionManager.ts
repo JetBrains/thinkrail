@@ -198,9 +198,7 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
 		modelRuntime,
 		sessionManager: sessionManagerFactory(input.cwd),
 		settingsManager,
-		resourceLoader: await buildResourceLoader(
-			input.cwd,
-			settingsManager,
+		resourceLoader: await buildResourceLoader(input.cwd, settingsManager, () =>
 			skillAdmissionResolver(input.workspaceId),
 		),
 		// Re-resolve the wire ref to the real model (with baseUrl) host-side — never the client's baseUrl.
@@ -298,9 +296,7 @@ async function openDiskSession(sessionId: string, workspaceId: string, cwd: stri
 		modelRuntime,
 		sessionManager,
 		settingsManager,
-		resourceLoader: await buildResourceLoader(
-			cwd,
-			settingsManager,
+		resourceLoader: await buildResourceLoader(cwd, settingsManager, () =>
 			skillAdmissionResolver(workspaceId),
 		),
 	});

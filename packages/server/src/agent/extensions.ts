@@ -139,35 +139,40 @@ function skillGroup(
  * The combined skills override: relabel compatibility aliases' provenance AND apply the admission decision,
  * so a session only ever loads skills that resolve to `load` — untrusted / unacknowledged / disabled (per
  * skill or per group) ones never reach the system prompt or the `/skill:` list. `sources` + `bundledPaths`
- * classify each loaded skill (project alias? which group?); `ctx` carries the trust/acknowledge/disable state.
+ * classify each loaded skill (project alias? which group?); `getCtx` yields the current trust/acknowledge/
+ * disable state — **re-read on every invocation** so `session.reload()` picks up a mid-session trust grant
+ * or skill/group toggle instead of re-applying the snapshot captured at session creation.
  */
 function skillsGate(
 	sources: CompatibilitySkillSource[],
 	bundledPaths: string[],
-	ctx: SkillAdmissionContext,
+	getCtx: () => SkillAdmissionContext,
 ) {
 	const projectAliasPaths = sources.filter((s) => s.scope === "project").map((s) => s.path);
 	const isProjectAlias = (filePath: string) =>
 		projectAliasPaths.some((path) => isUnderPath(filePath, path));
-	return (current: { skills: Skill[]; diagnostics: ResourceDiagnostic[] }) => ({
-		...current,
-		skills: current.skills
-			.map((skill) => relabelAliasProvenance(skill, sources))
-			.filter((skill) => {
-				const { group, isPlugin } = skillGroup(skill.filePath, sources, bundledPaths);
-				return (
-					decideSkill(
-						{ name: skill.name, isProjectAlias: isProjectAlias(skill.filePath), group, isPlugin },
-						ctx,
-					) === "load"
-				);
-			}),
-	});
+	return (current: { skills: Skill[]; diagnostics: ResourceDiagnostic[] }) => {
+		const ctx = getCtx();
+		return {
+			...current,
+			skills: current.skills
+				.map((skill) => relabelAliasProvenance(skill, sources))
+				.filter((skill) => {
+					const { group, isPlugin } = skillGroup(skill.filePath, sources, bundledPaths);
+					return (
+						decideSkill(
+							{ name: skill.name, isProjectAlias: isProjectAlias(skill.filePath), group, isPlugin },
+							ctx,
+						) === "load"
+					);
+				}),
+		};
+	};
 }
 
 function resolveSkillInputs(
 	cwd: string,
-	ctx: SkillAdmissionContext,
+	getCtx: () => SkillAdmissionContext,
 ): {
 	additionalSkillPaths: string[];
 	skillsOverride: ReturnType<typeof skillsGate>;
@@ -185,7 +190,7 @@ function resolveSkillInputs(
 			...personal.map((source) => source.path),
 			...project.map((source) => source.path),
 		],
-		skillsOverride: skillsGate(discovered, bundledSkillPaths, ctx),
+		skillsOverride: skillsGate(discovered, bundledSkillPaths, getCtx),
 	};
 }
 
@@ -203,17 +208,18 @@ export function toSkillCommands(skills: readonly Skill[]): SlashCommandInfo[] {
  * A resource loader with `pi-web-access` + `pi-visualize` + `pi-spec-graph` (and its skill) +
  * `pi-thinkrail-workflow` (and its skills) + `pi-todos` (and its skill) (+ the headless-search policy),
  * our host-owned `ask_user_question` tool, and portable cross-agent skill aliases layered onto Pi's
- * default discovery. `admission` gates the skills (project-scoped aliases behind trust + acknowledgment,
- * plus the per-skill enable/disable layer) — pass the owning workspace's resolved context; fail closed
- * when it is unknown.
+ * default discovery. `getAdmission` gates the skills (project-scoped aliases behind trust + acknowledgment,
+ * plus the per-skill enable/disable layer) — pass a resolver for the owning workspace's context, **re-read
+ * on every `loader.reload()`** so a mid-session trust grant or skill/group toggle lands via
+ * `session.reload()`; fail closed when it is unknown.
  */
 export async function buildResourceLoader(
 	cwd: string,
 	settingsManager: SettingsManager,
-	admission: SkillAdmissionContext,
+	getAdmission: () => SkillAdmissionContext,
 ): Promise<ResourceLoader> {
 	const sharedFactories = [headlessSearchPolicy, askUserQuestionExtension];
-	const skillInputs = resolveSkillInputs(cwd, admission);
+	const skillInputs = resolveSkillInputs(cwd, getAdmission);
 	const common = {
 		cwd,
 		agentDir: getAgentDir(),
@@ -243,6 +249,7 @@ function admissionCacheKey(cwd: string, ctx: SkillAdmissionContext): string {
 		ctx.trusted,
 		[...ctx.acknowledged].sort(),
 		[...ctx.disabled].sort(),
+		[...ctx.disabledGroups].sort(),
 		Object.entries(ctx.overrides).sort(([a], [b]) => a.localeCompare(b)),
 	]);
 }
@@ -269,7 +276,7 @@ export async function listSkillCommands(
 		cwd,
 		agentDir: getAgentDir(),
 		settingsManager,
-		...resolveSkillInputs(cwd, admission),
+		...resolveSkillInputs(cwd, () => admission),
 		noExtensions: true,
 		noPromptTemplates: true,
 		noThemes: true,

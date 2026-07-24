@@ -2,12 +2,31 @@ import { describe, expect, it } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { listProjectAliasSkillNames, listSkillCommands } from "./extensions";
+import { SettingsManager } from "@earendil-works/pi-coding-agent";
+import { buildResourceLoader, listProjectAliasSkillNames, listSkillCommands } from "./extensions";
 import type { SkillAdmissionContext } from "./skillAdmission";
 
 /** A context with the given trust + acknowledged names, and no baseline disables / workspace overrides. */
 function ctx(trusted: boolean, acknowledged: string[] = []): SkillAdmissionContext {
 	return { trusted, acknowledged, disabled: [], disabledGroups: [], overrides: {} };
+}
+
+/** Stub the skill-discovery env at `home`/`agentDir`; returns a restorer. Mirrors the catalog tests. */
+function stubSkillEnv(home: string, agentDir: string): () => void {
+	const names = [
+		"HOME",
+		"PI_CODING_AGENT_DIR",
+		"CLAUDE_CONFIG_DIR",
+		"CODEX_HOME",
+		"GEMINI_CLI_HOME",
+	];
+	const original = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+	process.env.HOME = home;
+	process.env.PI_CODING_AGENT_DIR = agentDir;
+	delete process.env.CLAUDE_CONFIG_DIR;
+	delete process.env.CODEX_HOME;
+	delete process.env.GEMINI_CLI_HOME;
+	return () => restoreEnvironment(original);
 }
 
 function writeSkill(root: string, name: string, description: string): void {
@@ -176,6 +195,89 @@ describe("listSkillCommands", () => {
 			expect(trusted.some((command) => command.name === "skill:repo-alias")).toBe(true);
 		} finally {
 			restoreEnvironment(original);
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	// Regression: the short-lived cache is keyed on the admission context, and `disabledGroups` gates the
+	// catalog (`decideSkill`) — so a group toggle that changes only `disabledGroups` must not serve the
+	// previously-cached enabled catalog for the TTL window. Two calls differing only by `disabledGroups`
+	// must return different results.
+	it("does not serve a stale catalog when only disabledGroups differs", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-skill-groups-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		mkdirSync(project, { recursive: true });
+		mkdirSync(home, { recursive: true });
+		mkdirSync(agentDir, { recursive: true });
+		const restore = stubSkillEnv(home, agentDir);
+
+		try {
+			writeSkill(join(home, ".claude", "skills"), "personal-widget", "personal skill");
+
+			const enabled = await listSkillCommands(project, {
+				trusted: true,
+				acknowledged: [],
+				disabled: [],
+				disabledGroups: [],
+				overrides: {},
+			});
+			expect(enabled.some((command) => command.name === "skill:personal-widget")).toBe(true);
+
+			// Disabling the "personal" group is a distinct cache key — the toggle applies immediately.
+			const groupOff = await listSkillCommands(project, {
+				trusted: true,
+				acknowledged: [],
+				disabled: [],
+				disabledGroups: ["personal"],
+				overrides: {},
+			});
+			expect(groupOff.some((command) => command.name === "skill:personal-widget")).toBe(false);
+		} finally {
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+});
+
+describe("buildResourceLoader", () => {
+	// Regression: the admission gate is resolved through a thunk that `skillsGate` re-reads on every
+	// `loader.reload()`, so a mid-session trust/group/skill change lands via `session.reloadResources`
+	// instead of re-applying the snapshot captured when the session was created.
+	it("reload re-reads admission so a mid-session group toggle applies", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-skill-reload-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		mkdirSync(project, { recursive: true });
+		mkdirSync(home, { recursive: true });
+		mkdirSync(agentDir, { recursive: true });
+		const restore = stubSkillEnv(home, agentDir);
+
+		try {
+			writeSkill(join(home, ".claude", "skills"), "reload-widget", "personal skill");
+
+			let admission: SkillAdmissionContext = {
+				trusted: true,
+				acknowledged: [],
+				disabled: [],
+				disabledGroups: [],
+				overrides: {},
+			};
+			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
+			const loader = await buildResourceLoader(project, settingsManager, () => admission);
+			const hasWidget = () =>
+				loader.getSkills().skills.some((skill) => skill.name === "reload-widget");
+
+			expect(hasWidget()).toBe(true);
+
+			// Flip the group off, then reload the SAME loader — the gate must re-read the new admission.
+			admission = { ...admission, disabledGroups: ["personal"] };
+			await loader.reload();
+			expect(hasWidget()).toBe(false);
+		} finally {
+			restore();
 			rmSync(root, { recursive: true, force: true });
 		}
 	});
