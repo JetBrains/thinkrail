@@ -3,8 +3,17 @@
 // module owns the traversal gate (`isValidTemplateName`) that pi's own loader doesn't provide. `content`
 // is always the full file text (frontmatter + body) — the wire's `TemplateInfo.content` contract — never
 // pi's parsed/stripped body. See SPEC.md for the pinned pi facts and the freshness rationale.
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import {
+	existsSync,
+	lstatSync,
+	mkdirSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	type Stats,
+	writeFileSync,
+} from "node:fs";
+import { dirname, join } from "node:path";
 import { CONFIG_DIR_NAME, getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
 import type { TemplateInfo, TemplateScope } from "@thinkrail/contracts";
 
@@ -61,11 +70,46 @@ function dirForScope(dirs: TemplateDirs, scope: TemplateScope): string {
 	return dirs.globalDir;
 }
 
-/** Read + parse one template file from `dir`. `null` if it doesn't exist. Propagates a frontmatter
+/** `lstat` that never follows a symlink and never throws — `null` for a missing path. */
+function lstatOrNull(path: string): Stats | null {
+	try {
+		return lstatSync(path);
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * The **no-follow gate** (see SPEC.md): a directory entry named `<name>.md` that isn't a regular file —
+ * a symlink first of all — is *not a template*, for every by-name operation alike. pi's own read-only
+ * scanner deliberately follows file symlinks; this write-capable CRUD surface deliberately does not — a
+ * checked-out repo's `.pi/prompts/linked.md → ~/somewhere` must never be disclosed by `template.get` or
+ * overwritten by `template.save`. (`lstat`, never `stat`/`existsSync`, so the check itself can't follow.)
+ */
+function isRegularFile(path: string): boolean {
+	return lstatOrNull(path)?.isFile() ?? false;
+}
+
+/** The dir-level half of the no-follow gate, for **project-scope writes** only: the repo controls
+ * `<cwd>/.pi` and `<cwd>/.pi/prompts`, so a symlinked component there is the same escape one level up
+ * (`saveTemplate` would `mkdir`/write, `deleteTemplate` would `rm`, inside the link's target). The
+ * global dir is exempt on purpose — it's user-owned, and dotfile managers routinely symlink it. */
+function assertProjectWriteSafe(dirs: TemplateDirs, scope: TemplateScope): void {
+	if (scope !== "project" || !dirs.projectDir) return;
+	for (const dir of [dirname(dirs.projectDir), dirs.projectDir]) {
+		if (lstatOrNull(dir)?.isSymbolicLink()) {
+			throw new Error(`refusing to write templates through a symlinked directory: ${dir}`);
+		}
+	}
+}
+
+/** Read + parse one template file from `dir`. `null` if it doesn't exist — or exists but isn't a
+ * regular file (the no-follow gate above; a symlinked entry is absent to every by-name operation, the
+ * same way `listDir`'s dirent `isFile()` already hides it from listings). Propagates a frontmatter
  * parse failure — a directly-named lookup deserves to know the file itself is broken. */
 function readTemplateFile(dir: string, scope: TemplateScope, name: string): TemplateInfo | null {
 	const filePath = join(dir, `${name}.md`);
-	if (!existsSync(filePath)) return null;
+	if (!isRegularFile(filePath)) return null;
 	const content = readFileSync(filePath, "utf-8");
 	const { frontmatter } = parseFrontmatter(content);
 	const description =
@@ -171,8 +215,16 @@ export function saveTemplate(
 		throw new Error(`invalid frontmatter: ${message}`);
 	}
 	const dir = dirForScope(dirs, scope);
+	assertProjectWriteSafe(dirs, scope);
+	const filePath = join(dir, `${name}.md`);
+	// The file-level no-follow gate: `writeFileSync` follows an existing symlink, which would land the
+	// write on its target — refuse loudly instead of clobbering whatever a checked-out repo pointed at.
+	const existing = lstatOrNull(filePath);
+	if (existing && !existing.isFile()) {
+		throw new Error(`refusing to write through a non-regular file: ${name}.md`);
+	}
 	mkdirSync(dir, { recursive: true });
-	writeFileSync(join(dir, `${name}.md`), content, "utf-8");
+	writeFileSync(filePath, content, "utf-8");
 	const template = readTemplateFile(dir, scope, name);
 	if (!template) throw new Error(`failed to save template: ${name}`);
 	return template;
@@ -185,7 +237,10 @@ export function saveTemplate(
 export function deleteTemplate(dirs: TemplateDirs, scope: TemplateScope, name: string): void {
 	if (!isValidTemplateName(name)) throw new Error(`invalid template name: ${JSON.stringify(name)}`);
 	const dir = dirForScope(dirs, scope);
+	assertProjectWriteSafe(dirs, scope);
 	const filePath = join(dir, `${name}.md`);
-	if (!existsSync(filePath)) throw new Error(`template not found: ${name} (scope: ${scope})`);
+	// No-follow gate: a symlinked entry is not a template (never listed, never fetched), so a delete by
+	// its name is a not-found, same as get — not an action on the link.
+	if (!isRegularFile(filePath)) throw new Error(`template not found: ${name} (scope: ${scope})`);
 	rmSync(filePath);
 }

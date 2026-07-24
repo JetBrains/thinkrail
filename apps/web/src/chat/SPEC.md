@@ -281,7 +281,13 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   is therefore promoted to a **third** sanctioned store/transport-touching integration piece (see Boundary
   below), even though it isn't `ChatView` itself.
   - **`templateText.ts`** is the single shared frontmatter splitter/assembler — `stripFrontmatter`
-    (`ChatView.tsx`'s composer-pick path), `splitTemplate`/`assembleTemplate` (this dialog). Its boundary
+    (`ChatView.tsx`'s composer-pick path + this dialog's body field), `assembleTemplate` (this dialog's
+    save). It does **no YAML value parsing**: the dialog's description/argument-hint fields are populated
+    from the server-parsed `TemplateInfo` (pi's real YAML parser — full scalar-style fidelity, pinned in
+    `packages/server/src/templates/templates.test.ts`), never from a browser-side reimplementation (an
+    earlier `splitTemplate` here handled only bare/double-quoted scalars, so a pi-native
+    `description: 'single-quoted'` loaded into the form with literal quotes and saved back corrupted).
+    Its boundary
     rule is ported byte-for-byte from pi's own `extractFrontmatter` (`@earendil-works/pi-coding-agent`'s
     `dist/utils/frontmatter.js`, pinned against pi v0.80.6 — the same pin `packages/server/src/templates/
     SPEC.md` uses server-side; re-verify both on a pi version bump): the frontmatter block ends at the

@@ -114,6 +114,26 @@ pi version bump.
   name the gate rejects is invisible to `listTemplates` too, not just un-fetchable through it. (This
   filter was itself a fix: an earlier version listed every `.md` file unconditionally, so a hand-placed
   `.hidden.md` would show up in `template.list` and then 404 on `template.get`.)
+- **The no-follow gate (symlink containment):** the traversal gate above constrains the *name*; this one
+  constrains what the name may *resolve to*. Every by-name operation `lstat`s the target (never
+  following) and treats anything that isn't a regular file — a symlink first of all — as **not a
+  template**: `getTemplate` reports it absent, `saveTemplate` refuses to write through it (loud error,
+  nothing touched on disk), `deleteTemplate` reports it not-found; `listDir` already skips symlinks
+  structurally (a symlink dirent's `isFile()` is false, and no follow-up `stat` is taken). This is a
+  **deliberate divergence from pi's own scanner**, which explicitly follows a file symlink
+  (`loadTemplatesFromDir` stats it and loads a file target — "pi facts" above): pi's loader is a
+  read-only, local convenience, while this module is a *write-capable CRUD surface over the wire* —
+  following `.pi/prompts/linked.md → ~/somewhere` would let `template.get` disclose the target and
+  `template.save` overwrite it, so a checked-out repo could plant a link and turn a routine template
+  edit into a file write outside the worktree. Cost: a legitimately symlinked individual template that
+  pi's own `/` menu would offer doesn't appear in ThinkRail's — acceptable, and already the listing's
+  behavior before this gate existed. **Project-scope writes** additionally refuse to operate through a
+  symlinked `<cwd>/.pi` or `<cwd>/.pi/prompts` *directory* (the same escape one level up — the repo
+  controls those path components); the **global** dir is exempt on purpose: `~/.pi/agent/prompts` is
+  user-owned (an attacker writing there has already won) and dotfile managers routinely symlink it. The
+  `lstat`-then-write gap is a TOCTOU race only a concurrent local process could exploit — out of scope
+  for an owner-scoped host (such a process could write the target directly). Pinned by the symlink
+  cases in `templates.test.ts`.
 - Two layers of failure containment inside `listDir` (the directory scan `listTemplates` calls twice),
   each mirroring a different pi behavior at a different granularity: **(1)** a per-file read/parse
   failure (unreadable file, malformed YAML frontmatter) is caught and that one file is skipped — mirrors

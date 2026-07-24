@@ -12,9 +12,10 @@ import { openFileInTab } from "./openFile";
 
 /**
  * R4: verbatim starter-template content offered by `StarterTemplatesOffer` below (design doc "Amendments
- * (2026-07-22)" item 4). Bodies use pi's own `$1`/`${N:-default}` placeholder grammar — not a JS template
- * literal — so `${2:-the riskiest parts}` / `${1:-mine}` need a lint escape (see the two biome-ignores
- * below); `explain`/`tests` only ever use bare `$1`, which doesn't trip the rule.
+ * (2026-07-22)" item 4). Bodies use pi's own `$1`/`${N:-default}` placeholder grammar — not JS
+ * interpolation — so the two bodies containing `${…}` are written as template literals with the `\${`
+ * escape (a literal dollar-brace, never an embedded expression); `explain`/`tests` only ever use bare
+ * `$1`, which needs no escape.
  */
 const STARTER_TEMPLATES: ReadonlyArray<{
 	name: string;
@@ -26,8 +27,7 @@ const STARTER_TEMPLATES: ReadonlyArray<{
 		name: "review",
 		description: "Code review of a file or directory",
 		argumentHint: "[path] [focus]",
-		// biome-ignore lint/suspicious/noTemplateCurlyInString: literal pi prompt-template syntax, not a JS placeholder
-		body: "Review $1 for correctness, clarity, and maintainability, focusing on ${2:-the riskiest parts}.\nList concrete findings with file:line references, ordered by severity, then suggest fixes.",
+		body: `Review $1 for correctness, clarity, and maintainability, focusing on \${2:-the riskiest parts}.\nList concrete findings with file:line references, ordered by severity, then suggest fixes.`,
 	},
 	{
 		name: "explain",
@@ -45,8 +45,7 @@ const STARTER_TEMPLATES: ReadonlyArray<{
 		name: "standup",
 		description: "One-line standup update",
 		argumentHint: "[team]",
-		// biome-ignore lint/suspicious/noTemplateCurlyInString: literal pi prompt-template syntax, not a JS placeholder
-		body: "Write a one-line standup update for team ${1:-mine} based on this workspace's recent changes.\nReply with just that line.",
+		body: `Write a one-line standup update for team \${1:-mine} based on this workspace's recent changes.\nReply with just that line.`,
 	},
 ];
 
@@ -101,6 +100,58 @@ function StarterTemplatesOffer() {
 }
 
 /**
+ * One `template.list` fetch per `(enabled, workspaceId, templatesVersion)` generation, filtered to
+ * `scope`. The store's `templatesVersion` is recorded WITH the response, and only a current-generation
+ * list is returned — so a bump (a save/delete/seed from anywhere: this panel, the editor dialog,
+ * `HistoryOverlay`'s save-as-template) instantly invalidates the display while the refetch is in
+ * flight, and a response from a superseded generation can never be shown as fresh. Recording the
+ * generation is also what keeps the effect's dependency list honest: the version is a real input of
+ * the body, not a trigger-only extra dependency. `enabled: false` (no workspace for the project group)
+ * pins the result to `null` without issuing a request.
+ */
+function useTemplateList(
+	workspaceId: string | undefined,
+	scope: TemplateScope,
+	enabled: boolean,
+): { templates: TemplateInfo[] | null; failed: boolean } {
+	const templatesVersion = useAppStore((s) => s.templatesVersion);
+	const [fetched, setFetched] = useState<{ version: number; templates: TemplateInfo[] } | null>(
+		null,
+	);
+	const [failed, setFailed] = useState(false);
+
+	useEffect(() => {
+		if (!enabled) {
+			setFetched(null);
+			setFailed(false);
+			return;
+		}
+		let cancelled = false;
+		getTransport()
+			.request("template.list", workspaceId ? { workspaceId } : {})
+			.then((res) => {
+				if (cancelled) return;
+				setFetched({
+					version: templatesVersion,
+					templates: res.templates.filter((t) => t.scope === scope),
+				});
+				setFailed(false);
+			})
+			.catch(() => {
+				if (!cancelled) setFailed(true);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [enabled, workspaceId, scope, templatesVersion]);
+
+	return {
+		templates: fetched?.version === templatesVersion ? fetched.templates : null,
+		failed,
+	};
+}
+
+/**
  * The Settings → Templates panel: two groups — **Global** (always) and **This project** (only with an
  * active workspace) — each listing its prompt-template files with New/Edit/Delete, and (project rows
  * only) an Open-as-file shortcut. Fetches `template.list` **twice**, both refetched whenever the store's
@@ -120,61 +171,24 @@ function StarterTemplatesOffer() {
  */
 export function TemplatesSettings() {
 	const workspaceId = useAppStore((s) => s.activeWorkspaceId);
-	const templatesVersion = useAppStore((s) => s.templatesVersion);
-	const [globalTemplates, setGlobalTemplates] = useState<TemplateInfo[] | null>(null);
-	const [projectTemplates, setProjectTemplates] = useState<TemplateInfo[] | null>(null);
-	const [globalFailed, setGlobalFailed] = useState(false);
-	const [projectFailed, setProjectFailed] = useState(false);
 	const [editorOpen, setEditorOpen] = useState(false);
 	const [editing, setEditing] = useState<TemplateInfo | null>(null);
 	const [newScope, setNewScope] = useState<TemplateScope>("global");
 
 	// Global group: always unscoped — never the shadow-merged `{ workspaceId }` response (see doc above).
-	// biome-ignore lint/correctness/useExhaustiveDependencies: templatesVersion is the invalidation trigger, not a body input
-	useEffect(() => {
-		let cancelled = false;
-		getTransport()
-			.request("template.list", {})
-			.then((res) => {
-				if (!cancelled) {
-					setGlobalTemplates(res.templates.filter((t) => t.scope === "global"));
-					setGlobalFailed(false);
-				}
-			})
-			.catch(() => {
-				if (!cancelled) setGlobalFailed(true);
-			});
-		return () => {
-			cancelled = true;
-		};
-	}, [templatesVersion]);
-
+	const { templates: globalTemplates, failed: globalFailed } = useTemplateList(
+		undefined,
+		"global",
+		true,
+	);
 	// Project group: the workspace-scoped (shadow-merged) list, filtered down to the project-scoped
-	// entries. A separate failure flag from the global fetch above — two independent in-flight requests
-	// must never let one's success silently clear the other's already-reported failure.
-	// biome-ignore lint/correctness/useExhaustiveDependencies: templatesVersion is the invalidation trigger, not a body input
-	useEffect(() => {
-		if (!workspaceId) {
-			setProjectTemplates(null);
-			setProjectFailed(false);
-			return;
-		}
-		let cancelled = false;
-		getTransport()
-			.request("template.list", { workspaceId })
-			.then((res) => {
-				if (!cancelled) {
-					setProjectTemplates(res.templates.filter((t) => t.scope === "project"));
-					setProjectFailed(false);
-				}
-			})
-			.catch(() => {
-				if (!cancelled) setProjectFailed(true);
-			});
-		return () => {
-			cancelled = true;
-		};
-	}, [workspaceId, templatesVersion]);
+	// entries. A separate hook instance means a separate failure flag — two independent in-flight
+	// requests must never let one's success silently clear the other's already-reported failure.
+	const { templates: projectTemplates, failed: projectFailed } = useTemplateList(
+		workspaceId ?? undefined,
+		"project",
+		workspaceId != null,
+	);
 
 	const openNew = (scope: TemplateScope) => {
 		setEditing(null);
