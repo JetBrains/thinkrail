@@ -75,13 +75,19 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   **`openSettings(section?)`** (deep-links to a section, defaults to Providers) / **`closeSettings()`** /
   **`setSettingsSection()`** — lives here so the top-bar gear AND the Welcome provider warning open Settings
   to a section without prop-drilling through the shell. The **onboarding overlay** open-state —
-  **`onboarding: "first-run" | "review" | null`** with **`openOnboarding(mode)`** / **`closeOnboarding()`**
-  — is transient open-state only; the durable "seen" bit lives in `onboarding/legacyStorage` (a fail-soft
-  localStorage mirror), not the store. The **theme** state — **`theme: ThemeId`** (the
-  host-owned selected opaque id; the themes module resolves visual fallback) with **`applyConfig(config)`**
-  (folds the server-synced `AppConfig` in from
+  **`onboarding: "first-run" | "review" | null`** with **`openOnboarding(mode, view?)`** /
+  **`closeOnboarding()`**, plus **`onboardingView: "intro" | "game"`** (which sub-view the overlay
+  shows — the first-worktree banner deep-links straight to `"game"`) with **`setOnboardingView()`** —
+  both fields are transient open-state only; the durable flags live host-side in **`AppConfig.onboarding`**
+  (owned by the `onboarding` module — `onboarding/legacyStorage` is only the one-time shim migrating
+  #113's pre-config localStorage flag, not a durable store). The **theme** state — **`theme: ThemeId`**
+  (the host-owned selected opaque id; the themes module resolves visual fallback) and
+  **`appConfig: AppConfig | null`** (the full server-synced config bag the `onboarding` module reads its
+  flags from; `null` until the first welcome, so first-run gating never fires on unknown state) both fold
+  in via **`applyConfig(config)`**
+  (the server-synced `AppConfig` from
   `server.welcome` / the `settings.changed` broadcast) — lives here too; it's a **pure value only** (the
-  theme-application side-effect is the shell's, keyed off `theme`), and defaults to
+  theme-application side-effect is the shell's, keyed off `theme`), and `theme` defaults to
   `DEFAULT_CONFIG.theme` until the welcome arrives. The
   **toast queue** — **`toasts: Toast[]`** (oldest-first) with **`pushToast(toast) → id`** / **`dismissToast(id)`**
   and the ergonomic **`toast.error/success/info(message, title?)`** helper (wraps `pushToast` so a non-React

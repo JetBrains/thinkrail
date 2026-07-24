@@ -438,8 +438,8 @@ interface AppState {
 	 * provider warning) can open it to a section without prop-drilling through the shell. */
 	settingsOpen: boolean;
 	settingsSection: SettingsSection;
-	/** The onboarding overlay's transient open-state (which mode is showing), or null when closed. The
-	 * durable "seen" bit lives in localStorage (`onboardingStorage`), not here — this is open-state only. */
+	/** The onboarding overlay's transient open-state (which mode is showing), or null when closed. Durable
+	 * flags live in `AppConfig.onboarding` (host-synced) — this field is transient open-state only. */
 	onboarding: "first-run" | "review" | null;
 	/** Which view the overlay shows; the banner deep-links the game. */
 	onboardingView: "intro" | "game";

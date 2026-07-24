@@ -41,6 +41,8 @@ The shell is built first, `pi` connected last:
   spec-graph rendered as its `parent` tree, backed by the same `pi-spec-graph` core model host-side;
   opening a node opens the spec file as an editor tab. Viewer only — no editing, drift detection, or
   graph canvas.
+- First-run workspace education: the intro overlay hosts a 60-second worktree prediction game;
+  creation-dialog and first-worktree cues echo it (module spec: apps/web/src/onboarding/SPEC.md).
 - ThinkRail branding (violet `#8C81FF`, Darcula background, Geist / JetBrains Mono / Cabinet Grotesk).
 - On-disk state under `~/.thinkrail`.
 

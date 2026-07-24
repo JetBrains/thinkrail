@@ -163,7 +163,9 @@ a project picker, the prompt hero, and the reused
   creation/orientation receipt rather than a generic placeholder: **“Workspace ready”**, the display name,
   `branch · from baseBranch`, and **“Files, chats, changes, and terminals are scoped to this workspace,”**
   followed by the existing **New chat** action. It is neither one-time nor dismissible, so it also helps
-  after the last tab closes without introducing onboarding state. `CenterTabs` also renders ephemeral
+  after the last tab closes. Empty-state surfaces still introduce no onboarding state; the deliberate,
+  narrow exception is `AppConfig.onboarding`'s two flags (first-run intro; first-worktree banner), owned
+  by the `onboarding` module — nothing else may gate on them. `CenterTabs` also renders ephemeral
   **`doc`** tabs (`DocTab` — inline rendered markdown, no file on disk) via its own
   `DocPane`→`MarkdownPreview`; used for the plan-as-markdown snapshot (see the `chat` module). `CenterTabs`
   closing a chat tab routes to `store.closeChatToHistory` (keeps the session alive) and shows a

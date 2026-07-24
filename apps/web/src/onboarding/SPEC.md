@@ -1,7 +1,7 @@
 ---
 id: submodule-web-onboarding
 type: submodule-design
-status: draft
+status: active
 title: onboarding — first-run education: intro overlay + worktree game + echo hooks
 parent: module-web
 depends-on: [module-contracts]
@@ -28,7 +28,7 @@ game never lectures about `node_modules`; it hands off to hooks.
 - **Owns:** overlay choreography (blocking `first-run` / dismissible `review` — #113's model,
   unchanged), the intro screens, the game (beat shell + five beats), `content.ts` (demo repo fixture +
   every copy string), the durable seen-state accessors, and the one-time localStorage→config migration.
-- **Public surface (barrel `index.ts`):** `<OnboardingOverlay />` (mounted once by `shell`) and the
+- **Public surface (barrel `index.ts`):** `<Onboarding />` (mounted once by `shell`) and the
   content/testid constants tests need. Nothing else. Open/close travels through the store's existing
   transient state (`onboarding: "first-run" | "review" | null`, `openOnboarding` / `closeOnboarding`)
   — the same pattern as `settingsOpen`; callers (help button, echo banner) use the store action and
@@ -37,8 +37,12 @@ game never lectures about `node_modules`; it hands off to hooks.
   `request` surface for `settings.update` — the established pattern (`AppearanceSettings`): fire the
   update, converge on the `settings.changed` broadcast. **Forbidden:** transport internals, `panels`
   internals, anything server-side.
-- The gate is tiny and eagerly bundled; the screens/game lazy-load behind it (`React.lazy` inside the
-  module), so first paint pays nothing when onboarding is already seen.
+- **The whole module ships eagerly** — gate, intro screens, and the game alike; there is no
+  `React.lazy` split here. Unlike `panels`' Monaco/shiki/xterm surfaces, nothing in this module pulls a
+  heavy dependency (the game is Tailwind transitions + `lucide-react` only, per the implementation
+  constraints below), so a lazy/Suspense boundary would add ceremony without a real bundle-size win.
+  Code-splitting stays reserved for Monaco-scale payloads — the `panels` convention (`panels/SPEC.md`)
+  — and the overlay is small enough not to need it.
 
 ## Durable state (and the principle change)
 
@@ -61,7 +65,8 @@ onboarding?: {
   `introSeenAt` is absent. Completing *or skipping* the intro sets it — never nag twice.
 - **Migration:** if config lacks `introSeenAt` but the legacy `thinkrail:onboardingSeen` localStorage
   key (from #113) reads `"true"`, fold it into config via `settings.update` and do not show. #113's
-  `store/onboardingStorage.ts` is deleted; the legacy key is removed after folding.
+  original per-device storage module is deleted (its logic now lives in this module's
+  `legacyStorage.ts`/`state.ts`); the legacy key is removed after folding.
 - **Principle revision** (`panels/SPEC.md`): "empty-state surfaces work *without introducing
   onboarding state*" survives for empty states; these **two fields are the sole, spec'd exception**,
   and nothing else may gate on them.
@@ -159,7 +164,8 @@ keyboard navigable; ≥44px tap targets; all copy centralized in `content.ts`; t
   has no `baseBranch` — the question is "what stays behind", i.e. uncommitted work) plus untracked.
   Sibling of `git.listBranches` / `git.prefetch`, which already take `projectId` and operate on
   `Project.path`; reuses `GitFileChange`. Bump `PROTOCOL_VERSION`.
-- Server: `git` module gains `projectStatus`; `settings` is untouched (the bag extends).
+- Server: `git` module gains `projectStatus`; `settings` reads became per-request (cache removed) so
+  file-seeded config is visible immediately — the e2e isolation doctrine.
 
 ## Verification
 
@@ -196,11 +202,14 @@ keyboard navigable; ≥44px tap targets; all copy centralized in `content.ts`; t
 
 ## Integration deltas (sibling specs to update during implementation)
 
-- `apps/web/SPEC.md` — module graph: add `onboarding` node + edges (→ `components/ui`, `store`).
+- `apps/web/SPEC.md` — module graph: add the `onboarding` node + edges `shell → onboarding` (mount),
+  `panels → onboarding` (banner helpers via barrel), `onboarding → components/ui, store, transport`
+  (public `request`), `contracts` (types).
 - `apps/web/src/panels/SPEC.md` — the principle revision (narrow two-field exception); Echo 1 in
   `NewWorkspaceDialog`; Echo 2 banner; `Onboarding.tsx` re-homed out of panels.
-- `apps/web/src/store/SPEC.md` — transient open-state note stays; `onboardingStorage` removed.
-- `apps/web/src/shell/SPEC.md` — mounts `<OnboardingOverlay />` (from this module).
+- `apps/web/src/store/SPEC.md` — transient open-state note stays (plus the new `onboardingView` field);
+  the durable-state description now points at `AppConfig.onboarding`, not a storage mirror.
+- `apps/web/src/shell/SPEC.md` — mounts `<Onboarding />` (from this module).
 - `packages/contracts/SPEC.md` — `AppConfig.onboarding`, `git.projectStatus`, protocol bump.
 - `packages/server/src/git/SPEC.md` — `projectStatus`.
 - `goal-and-requirements.md` — one V1 scope line: first-run workspace education.

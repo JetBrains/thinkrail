@@ -62,7 +62,8 @@ function Pagination({ page, onSelect }: { page: number; onSelect: (page: number)
 
 /**
  * First-run onboarding overlay — a card floating over the still-visible IDE (the darkest surface at 80%
- * opacity dims it). Auto-opens once (guarded by the localStorage "seen" flag); re-openable from the
+ * opacity dims it). Auto-opens once, gated on the host-synced `AppConfig.onboarding` flags (decided only
+ * once config is known, after `server.welcome`); re-openable from the
  * left-panel help button in "review" mode. First-run is blocking; review mode is dismissible. Two screens
  * with copy + pagination on the **left** and the media + primary action on the **right**. Screen 2's
  * feature list runs a single autoplay walkthrough (each feature fills like a progress bar for 5s, then

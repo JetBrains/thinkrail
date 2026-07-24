@@ -24,14 +24,17 @@ later, the mobile single-view-with-switcher).
   It follows the existing workspace lifecycle snapshots, so auto-renames update live. Responsive
   degradation drops the base, then the project prefix, before it drops active workspace/branch identity.
   **Active workspace**
-  → the resizable 3 columns (projects | center | right-over-terminals). **No active workspace**
+  → the resizable 3 columns (projects | center | right-over-terminals), the center column also mounting
+  `panels/WorktreeBanner` above `CenterTabs` (gated on `AppConfig.onboarding.workspaceBannerDismissedAt`
+  and only rendered once `activeWorkspace` resolves — content/state owned by `panels`/`onboarding`, the
+  shell only positions it). **No active workspace**
   (`activeWorkspaceId == null` — fresh install / after archiving the last one) → the projects rail (kept
   resizable, `resize-left` preserved) beside the `panels/WelcomePanel`; the center/right/terminal surface
   is not mounted. The welcome-state group uses its own `autoSaveId` so it doesn't clobber the 3-column
   layout's saved sizes. Mounts the `panels/Toaster` and the `onboarding` module's `Onboarding` once (outside both layout
-  branches) so notifications and the first-run onboarding overlay show over either state.  `Onboarding`
-  auto-opens once (guarded by a localStorage "seen" flag) and is re-opened from the projects-rail help
-  button via `store.openOnboarding("review")`. **Owns the theme DOM side-effect** — the single place that applies the store's
+  branches) so notifications and the first-run onboarding overlay show over either state. `Onboarding`
+  auto-opens once, gated on the host-synced `AppConfig.onboarding` flags, and is re-opened from the
+  projects-rail help button via `store.openOnboarding("review")`. **Owns the theme DOM side-effect** — the single place that applies the store's
   (host-owned) opaque `theme` id: a `useEffect` on `store.theme` calls the `themes` module's atomic
   `applyTheme(theme)` + `writeThemeHint(theme)` (the localStorage first-paint cache). The value flows
   store ← transport (welcome /

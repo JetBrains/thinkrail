@@ -1,6 +1,7 @@
 /**
- * Every string and fact the worktree game shows. Copy centralized here per the module SPEC: the game
- * asks "will this travel?" — never reuse the Changes panel's VCS colors/status semantics for it.
+ * Every narrative string and fact the worktree game shows (generic control chrome — Reveal/Next/Skip —
+ * stays in components). Copy centralized here per the module SPEC: the game asks "will this travel?" —
+ * never reuse the Changes panel's VCS colors/status semantics for it.
  */
 export type DemoFileStatus = "committed" | "modified" | "untracked" | "ignored";
 
