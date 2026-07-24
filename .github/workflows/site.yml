@@ -1,0 +1,51 @@
+name: Website
+
+# Publishes apps/website (the project's landing page) to GitHub Pages whenever it changes on main.
+# One-time repo setting required: Settings → Pages → Source: "GitHub Actions".
+on:
+  push:
+    branches: [main]
+    paths: ["apps/website/**", ".github/workflows/site.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time; a newer push supersedes an in-flight one.
+concurrency:
+  group: site-deploy
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - name: Cache bun install
+        uses: actions/cache@v5
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+      - run: bun install --frozen-lockfile
+      - run: bun run --filter @thinkrail/website build
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: apps/website/dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
