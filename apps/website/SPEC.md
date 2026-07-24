@@ -2,7 +2,7 @@
 id: module-website
 type: module-design
 status: active
-title: Project website (thinkrail.github.io landing)
+title: Project website (thinkrail.ai landing)
 parent: architecture
 tags: [website, marketing]
 ---
@@ -38,7 +38,9 @@ binary.
 `.github/workflows/site.yml` builds (`bun run --filter @thinkrail/website build`) and publishes
 `apps/website/dist` to GitHub Pages on pushes to `main` that touch this module (plus manual dispatch).
 Vite `base: "./"` keeps the build servable at `/thinkrail/` and on any custom domain. One-time repo
-setting: Pages → Source: GitHub Actions.
+settings: Pages → Source: GitHub Actions, and Pages → Custom domain: `thinkrail.ai` — the public
+identity. Canonical/OG URLs in `index.html` (and the README website link) point at
+`https://thinkrail.ai/`, never the `jetbrains.github.io/thinkrail` address (which redirects there).
 
 ## Assets
 

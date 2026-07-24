@@ -7,7 +7,7 @@ coding agent. ThinkRail is a thin host that runs `pi` in-process and bridges it 
 UI — `pi` owns models, skills, compaction, cost, and session state; the app owns the workspace, the
 editor, and the wire.
 
-**Website:** [jetbrains.github.io/thinkrail](https://jetbrains.github.io/thinkrail/) — a landing
+**Website:** [thinkrail.ai](https://thinkrail.ai/) — a landing
 page that *is* the IDE (see [`apps/website`](apps/website)).
 
 **V1 is a Worktree IDE:** open a git repo as a project, spin up workspaces as `git worktree`s (each its
