@@ -90,6 +90,11 @@ interface ComposerProps {
 export interface ComposerHandle {
 	/** Replace the draft, focus the textarea, and place the caret at the end. */
 	insertText: (text: string) => void;
+	/** Replace the draft and send it through the composer's own submit seam — pending image attachments
+	 * travel with the text and are cleared with the draft, exactly like a keyboard send. This is the
+	 * history overlay's ⌘/Ctrl+Enter path; a caller-side `onSubmit` would strand the composer-private
+	 * `images` state (sent without them, stale thumbnails left attached to the next message). */
+	insertAndSubmit: (text: string, behavior: SubmitBehavior) => void;
 }
 
 /**
@@ -182,13 +187,29 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		[onChange, focusCaret],
 	);
 
-	useImperativeHandle(
-		handleRef,
-		() => ({
-			insertText: (text: string) => replaceDraft(text),
-		}),
-		[replaceDraft],
-	);
+	// The one submit seam — the composer's own send gestures (`submit` below) and the imperative
+	// `insertAndSubmit` both land here, so whatever initiated the send, pending images always travel
+	// with the text and are cleared with the draft in the same step. No-op when both the (trimmed)
+	// text and the image list are empty.
+	const submitText = (raw: string, behavior: SubmitBehavior) => {
+		const text = raw.trim();
+		if (!text && images.length === 0) return;
+		onSubmit(
+			text,
+			images.map((i) => i.content),
+			behavior,
+		);
+		onChange("");
+		setImages([]);
+		setRecallIdx(null);
+	};
+
+	// No dependency array: `submitText` closes over the live draft/images on purpose, so the handle is
+	// refreshed every render — memoizing it against stale closures is exactly the bug this avoids.
+	useImperativeHandle(handleRef, () => ({
+		insertText: (text: string) => replaceDraft(text),
+		insertAndSubmit: (text: string, behavior: SubmitBehavior) => submitText(text, behavior),
+	}));
 
 	const pickMention = (c: MentionCandidate) => {
 		const before = value.slice(0, start);
@@ -226,18 +247,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		]);
 	};
 
-	const submit = (behavior: SubmitBehavior) => {
-		const text = value.trim();
-		if (!text && images.length === 0) return;
-		onSubmit(
-			text,
-			images.map((i) => i.content),
-			behavior,
-		);
-		onChange("");
-		setImages([]);
-		setRecallIdx(null);
-	};
+	const submit = (behavior: SubmitBehavior) => submitText(value, behavior);
 
 	const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
 		// Ctrl+R opens history recall — guarded at the very top, before the mention/slash menu, and before

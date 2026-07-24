@@ -116,6 +116,79 @@ test("Ctrl+R opens history recall, cycles scope to all, zooms to messages, inser
 	).toBeVisible();
 });
 
+test("Cmd/Ctrl+Enter from the overlay sends pending image attachments with the recalled prompt and clears them", async ({
+	page,
+}) => {
+	// Regression (Air review): the overlay's insert-and-send used to call ChatView's `onSubmit` directly,
+	// bypassing the composer's own submit seam — the pending image was silently dropped from the send and
+	// its stale thumbnail stayed attached to the next message. Tap the app's WebSocket before it connects
+	// (the live-refresh spec's pattern, `framesent` side) so the assertion covers the actual wire payload
+	// — a `session.prompt` request carrying `images` — not just the thumbnails' visible state.
+	const sentFrames: string[] = [];
+	page.on("websocket", (ws) => {
+		ws.on("framesent", (frame) => {
+			sentFrames.push(typeof frame.payload === "string" ? frame.payload : frame.payload.toString());
+		});
+	});
+
+	await openWorkspaceChat(page);
+	seedExternalCwdSessions(); // re-seed after resetState — see the first test's note
+
+	const input = page.getByTestId("chat-input");
+	const overlay = page.getByTestId("history-overlay");
+	const query = page.getByTestId("history-query");
+	const thumbnails = page.getByTestId("composer-images");
+
+	// Attach an image the way a user does — paste. A constructed ClipboardEvent must be dispatched in
+	// page context (Playwright's keyboard can't carry files); React's onPaste reads `e.clipboardData`.
+	await input.evaluate((el) => {
+		const dt = new DataTransfer();
+		dt.items.add(
+			new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "pixel.png", { type: "image/png" }),
+		);
+		el.dispatchEvent(
+			new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }),
+		);
+	});
+	await expect(thumbnails).toBeVisible();
+	await expect(thumbnails).toContainText("image/png");
+
+	// Recall a prompt (same navigation as above: query "fix", cycle scope to `all`) and insert-and-send.
+	await input.press("Control+r");
+	await query.fill("fix");
+	await query.press("Control+r");
+	await query.press("Control+r");
+	await expect(
+		page
+			.locator('[data-testid="history-item"][data-kind="prompt"]')
+			.filter({ hasText: "fix the flaky watcher test" }),
+	).toBeVisible();
+	await query.press("ControlOrMeta+Enter");
+	await expect(overlay).toBeHidden();
+
+	// The send went through the composer's own seam: the text is in the transcript, the draft is empty,
+	// and the thumbnail strip is cleared with it — nothing stale left attached to the next message.
+	await expect(
+		page
+			.locator('[data-testid="chat-message"][data-role="user"]')
+			.filter({ hasText: "fix the flaky watcher test" }),
+	).toBeVisible();
+	await expect(input).toHaveValue("");
+	await expect(thumbnails).toBeHidden();
+
+	// And the wire request really carried the attachment (the frame may land a beat after the UI
+	// updates — poll). The request itself is rejected by the unauthenticated host, which is fine: the
+	// payload already proves the image went with the text.
+	await expect(() => {
+		const prompt = sentFrames.find(
+			(f) => f.includes('"session.prompt"') && f.includes("fix the flaky watcher test"),
+		);
+		expect(prompt).toBeDefined();
+		expect(prompt).toContain('"images"');
+		expect(prompt).toContain('"image/png"');
+	}).toPass({ timeout: 5000 });
+});
+
 test("empty query in chat scope shows the empty state for a session with no history yet", async ({
 	page,
 }) => {

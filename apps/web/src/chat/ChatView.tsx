@@ -313,11 +313,12 @@ export default function ChatView({
 		closeHistory();
 	};
 
-	// Cmd/Ctrl+Enter on a prompt hit: reuse the exact `onSubmit` path a normal composer send takes, then
-	// clear the draft the same way `Composer`'s own `submit()` does after sending.
+	// Cmd/Ctrl+Enter on a prompt hit: send through the composer's own submit seam (its imperative
+	// handle), never a ChatView-side `onSubmit` call — the composer privately holds pending image
+	// attachments, and only its own path sends them with the text and clears them with the draft
+	// (which also resets the store draft via the composer's `onChange("")`).
 	const onInsertAndSendHit = (hit: PromptHit) => {
-		onSubmit(hit.text, [], isStreaming ? "followUp" : "send");
-		useAppStore.getState().setChatDraft(sessionId, "");
+		composerRef.current?.insertAndSubmit(hit.text, isStreaming ? "followUp" : "send");
 		closeHistory();
 	};
 
