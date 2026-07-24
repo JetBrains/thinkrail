@@ -145,16 +145,18 @@ export function buildProviderReport(sources: ProviderStatusSources): ProviderSta
 }
 
 /**
- * The `provider.status` read. **Revalidates on every call** — `runtime.reloadConfig()` reloads
- * models.json and recomposes providers (it does NOT touch auth.json itself), and its internal
- * availability refresh re-runs the per-provider auth checks against pi's credential store, which reads
- * auth.json fresh (under a lock) on every access — so a `pi` `/login` (or a terminal `central` re-wire)
- * shows up on the next read without restarting the host. (Accepted micro-risk: refreshing the shared
- * runtime concurrent with a streaming session — the same thing pi's TUI does on `/login`.)
+ * The `provider.status` read. **Revalidates on every call** — `runtime.refresh()` (pi 0.82 folded the
+ * old `reloadConfig()` into it) reloads models.json and recomposes providers (it does NOT touch
+ * auth.json itself), and its availability refresh re-runs the per-provider auth checks against pi's
+ * credential store, which reads auth.json fresh (under a lock) on every access — so a `pi` `/login`
+ * (or a terminal `central` re-wire) shows up on the next read without restarting the host. Called with
+ * no options so `allowNetwork` resolves to the runtime's ambient default — OFF (see `piRuntime`).
+ * (Accepted micro-risk: refreshing the shared runtime concurrent with a streaming session — the same
+ * thing pi's TUI does on `/login`.)
  */
 export async function getProviderStatus(): Promise<ProviderStatusReport> {
 	const runtime = await getPiRuntime();
-	await runtime.reloadConfig();
+	await runtime.refresh();
 
 	const modelProviders = new Map<string, string[]>();
 	for (const model of runtime.getModels()) {

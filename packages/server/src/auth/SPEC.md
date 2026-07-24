@@ -23,8 +23,9 @@ ourselves and never surface a credential value over the wire.
   - `providerStatus` — `getProviderStatus()` → the wire `ProviderStatusReport`: per-provider `configured`
     (pi's `hasAuth`-family truth, so env-var auth counts) + auth `kind` (oauth / api-key / env /
     **central** / other) + display name + the in-app-login capability flags **`canOAuth`/`canApiKey`**,
-    configured-first. It **revalidates on every read**: `runtime.reloadConfig()` reloads models.json and
-    recomposes providers (it does **not** touch auth.json itself), and its internal availability refresh
+    configured-first. It **revalidates on every read**: a no-options `runtime.refresh()` (pi 0.82 folded
+    the old `reloadConfig()` into it; `allowNetwork` resolves to the runtime's ambient default — OFF)
+    reloads models.json and recomposes providers (it does **not** touch auth.json itself), and its availability refresh
     re-runs the per-provider auth checks against pi's credential store — which reads auth.json fresh
     (under a lock) on every access, so no separate credentials reload exists or is needed. A `pi`
     `/login` (or a terminal `central` re-wire) — or an in-app mutation below — thus shows up on the next
@@ -71,7 +72,7 @@ ourselves and never surface a credential value over the wire.
     - `setLoginPublisher(fn)` — the server→client push seam (defaults to a no-op).
   - `jbcentral` — the in-app **JetBrains AI** (jbcentral proxy) wiring, composing `@thinkrail/shared/jbcentral`
     (which owns the protocol) and adding the one live-runtime step the standalone CLI can't:
-    `connectJbcentral()` (`wireJbcentral` → on success `runtime.reloadConfig()` → a `JbcentralConnectResult`:
+    `connectJbcentral()` (`wireJbcentral` → on success a no-options `runtime.refresh()` → a `JbcentralConnectResult`:
     connected / needs-install / needs-login / error), `disconnectJbcentral()` (`unwireJbcentral` + refresh),
     `jbcentralLogin()` (best-effort `central login` browser launch). `providerStatus` also surfaces
     `jbcentralInstalled` (via `isJbcentralInstalled`) **and `jbcentralInstall`** (the host's per-OS install
@@ -90,8 +91,8 @@ ourselves and never surface a credential value over the wire.
 
 - **`loginStart` must not `await` the flow** — return the handle, run `login()` detached.
 - **Writes refresh themselves** (pi's `login`/`logout` refresh availability internally) — but the status
-  read still `reloadConfig()`s, or external changes (a terminal `pi /login`, a `central` re-wire) stay
-  invisible until restart.
+  read still `refresh()`es (which reloads models.json), or external changes (a terminal `pi /login`, a
+  `central` re-wire) stay invisible until restart.
 - **API keys persist only through `login(id, "api_key", interaction)`** — `setRuntimeApiKey` is a
   session-lifetime overlay and would silently drop the key on host restart. The interaction is the real
   dialog bridge, never a canned auto-answer (a canned one can only serve single-prompt providers).
