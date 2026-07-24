@@ -30,6 +30,7 @@ import { isSkillPath, SkillsDialog } from "./SkillsDialog";
 import { StreamIndicator, type StreamStatus, streamStatus } from "./StreamIndicator";
 import { parseTemplateSlots } from "./slotSession";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
+import { shouldApplyTemplatePick } from "./templatePick";
 import { stripFrontmatter } from "./templateText";
 import "./tools/register"; // side-effect: register the built-in pi tool renderers (bash/read/edit/write)
 import { ChatTurnView } from "./turns";
@@ -135,7 +136,6 @@ export default function ChatView({
 		lastSkillTick.current = fsSignal.tick;
 		if (fsSignal.truncated || fsSignal.paths.some(isSkillPath)) setSkillsStale(true);
 	}, [fsSignal]);
-	const templatesVersion = useAppStore((s) => s.templatesVersion);
 	const workspaceRoot = useAppStore((s) => {
 		for (const workspaces of Object.values(s.workspaces)) {
 			const workspace = workspaces.find((w) => w.id === workspaceId);
@@ -255,32 +255,30 @@ export default function ChatView({
 			.catch(() => {});
 	}, [sessionId]);
 
-	// Fresh prompt templates for the `/` menu merge (`mergedCommands` below) — fetched when the slash menu
-	// opens (`slashActive`, via `onSlashActive`), cached per `(workspaceId, templatesVersion)` pair so
-	// reopening the menu doesn't re-fetch until a `template.save`/`delete` bumps the store's
-	// `templatesVersion` counter (Task B6's Templates settings panel). This is what keeps this path fresh
-	// where the typed-through `/name args` expansion (pi's own session-create-time `commands` snapshot)
-	// is deliberately stale — see `chat/SPEC.md`'s Template slots section.
-	const templatesCacheKey = useRef<string | null>(null);
+	// Fresh prompt templates for the `/` menu merge (`mergedCommands` below) — fetched on EVERY menu-open
+	// transition (`slashActive` flipping true via `onSlashActive`; it stays true while the user keeps
+	// typing the query, so this never refires per keystroke). Deliberately uncached: prompt files change
+	// outside the app too (pi CLI, an editor, a git pull), which no in-app invalidation signal can see —
+	// an earlier `(workspaceId, templatesVersion)` cache here served those externally-changed files stale
+	// for the rest of the chat. The server intentionally re-reads its dirs per call for exactly this
+	// freshness (its SPEC calls the readdirs cheap), so the client simply asks each time the menu opens.
+	// This is what keeps this path fresh where the typed-through `/name args` expansion (pi's own
+	// session-create-time `commands` snapshot) is deliberately stale — see `chat/SPEC.md`'s Template
+	// slots section. The previous (possibly stale) list stays rendered until the fresh one lands — a
+	// same-open-transition flicker would be worse than a few-ms-stale row.
 	useEffect(() => {
 		if (!slashActive) return;
-		const key = `${workspaceId}:${templatesVersion}`;
-		if (templatesCacheKey.current === key) return;
 		let cancelled = false;
 		getTransport()
 			.request("template.list", { workspaceId })
 			.then((res) => {
-				if (cancelled) return;
-				// Only latch the cache key on SUCCESS — a failed/racing fetch must never latch an empty
-				// cache until the next `templatesVersion` bump. Reopening the menu after a failure retries.
-				templatesCacheKey.current = key;
-				setTemplates(res.templates);
+				if (!cancelled) setTemplates(res.templates);
 			})
 			.catch(() => {});
 		return () => {
 			cancelled = true;
 		};
-	}, [slashActive, workspaceId, templatesVersion]);
+	}, [slashActive, workspaceId]);
 
 	// The composer's `/` menu merge: pi's `commands` snapshot minus its now-stale `source === "prompt"`
 	// entries, plus the fresh template list mapped to the same `SlashCommandInfo` shape — one list,
@@ -399,18 +397,32 @@ export default function ChatView({
 	// the frontmatter (`templateText.ts`'s shared `stripFrontmatter` — pi's own parser is server-only, but
 	// the boundary rule is pinned to match it exactly), parse the body into slots, and hand the result to
 	// `Composer`'s `insertTemplate` — which starts (or skips, if there are no slots) a slot session,
-	// replacing the whole draft the way `pickSlash` does.
+	// replacing the whole draft the way a plain slash pick does. Applied only while the pick is still
+	// CURRENT: the fetch is async, so a slow response must never clobber what the user did in the
+	// meantime — typed a fresh draft, or picked another template whose response already landed. The
+	// staleness rules (newest pick wins + the draft is untouched since pick time) live in
+	// `templatePick.ts`'s `shouldApplyTemplatePick`, pure and unit-tested.
+	const pickGeneration = useRef(0);
 	const onPickTemplate = useCallback(
 		(name: string) => {
+			const generation = ++pickGeneration.current;
+			const draftAtPick = useAppStore.getState().sessions[sessionId]?.draft ?? "";
 			getTransport()
 				.request("template.get", { workspaceId, name })
 				.then((t) => {
+					const apply = shouldApplyTemplatePick({
+						generation,
+						latestGeneration: pickGeneration.current,
+						draftAtPick,
+						currentDraft: useAppStore.getState().sessions[sessionId]?.draft ?? "",
+					});
+					if (!apply) return;
 					const parsed = parseTemplateSlots(stripFrontmatter(t.content), t.argumentHint);
 					composerRef.current?.insertTemplate(parsed);
 				})
 				.catch(() => {});
 		},
-		[workspaceId],
+		[workspaceId, sessionId],
 	);
 
 	// Consume a `chatLocationRequest` targeting this session: resolve its `messageIndex` to a turn (via

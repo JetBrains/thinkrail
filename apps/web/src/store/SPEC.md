@@ -91,9 +91,11 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   complementing `appendErrorTurn` (which handles the in-chat case).
   The host-wide **`templatesVersion: number`** counter + **`bumpTemplatesVersion()`** (increment) is a bare
   invalidation signal, the same shape as `fsChangesByWorkspace`'s `tick` below — **`panels/TemplatesSettings.tsx`**
-  and **`chat/TemplateEditorDialog.tsx`** call it after a `template.save`/`delete`, and `chat/ChatView.tsx`'s
-  composer-`/`-menu template fetch keys off it to know its per-workspace cache is stale (see `chat/SPEC.md`'s
-  Save-as-template bullet); the store holds only the counter, never fetches. The **live-refresh signal** —
+  and **`chat/TemplateEditorDialog.tsx`** call it after a `template.save`/`delete`, and the Templates
+  settings panel's own lists refetch off it (its `useTemplateList` fetch generation). It is deliberately
+  NOT a freshness source for the composer's `/` menu — that fetch runs uncached on every menu open,
+  since files also change outside the app where no in-app counter can see (see `chat/SPEC.md`'s Template
+  slots section); the store holds only the counter, never fetches. The **live-refresh signal** —
   **`fsChangesByWorkspace: Record<workspaceId, { tick, paths, truncated }>`** with
   **`noteFsChanged(payload)`** (folds a `workspace.fsChanged` push: `tick` increments per frame;
   `paths`/`truncated` are the last batch) — panels select their workspace's entry and refetch on `tick`
