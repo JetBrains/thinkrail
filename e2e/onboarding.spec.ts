@@ -97,7 +97,7 @@ test.describe("onboarding review", () => {
 		await page.getByTestId("onboarding-next").click();
 		const media = page.getByTestId("onboarding-media");
 		await expect(page.getByTestId("onboarding-feature-0")).toHaveAttribute("data-active", "true");
-		await expect(media).toContainText("Isolated git worktrees");
+		await expect(page.getByTestId("lifecycle-loop")).toBeVisible();
 
 		await page.getByTestId("onboarding-feature-2").click();
 		await expect(page.getByTestId("onboarding-feature-2")).toHaveAttribute("data-active", "true");
@@ -161,6 +161,9 @@ test.describe("worktree game", () => {
 		for (const correct of ["own", "fails", "yes", "workspace"]) {
 			await page.getByTestId(`game-choice-${correct}`).click();
 			await page.getByTestId("game-reveal").click();
+			if (correct === "fails") {
+				await expect(page.getByTestId("lifecycle-loop")).toBeVisible();
+			}
 			await page.getByTestId("game-next").click();
 		}
 
@@ -176,6 +179,7 @@ test.describe("worktree game", () => {
 		await page.getByTestId("onboarding-play").click();
 		await page.getByTestId("game-skip").click();
 		await expect(page.getByTestId("onboarding-feature-0")).toBeVisible();
+		await expect(page.getByTestId("lifecycle-loop")).toBeVisible();
 		await expect(page.getByTestId("onboarding")).toBeVisible();
 	});
 });

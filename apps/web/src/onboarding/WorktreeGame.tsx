@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button } from "../components/ui/button";
 import { DEMO_BASE, DEMO_WORKSPACE, GAME_BEATS, PROMPT_FRAME, RECAP, scoreLine } from "./content";
 import { FoldersBoard } from "./FoldersBoard";
+import { LifecycleLoop } from "./LifecycleLoop";
 import { BeatReveal } from "./reveals";
 
 interface WorktreeGameProps {
@@ -127,7 +128,9 @@ export function WorktreeGame({ onExit, onFinish }: WorktreeGameProps) {
 					))}
 				</div>
 			) : (
-				<BeatReveal beat={beat} />
+				<BeatReveal beat={beat}>
+					<LifecycleLoop />
+				</BeatReveal>
 			)}
 
 			{phase === "reveal" ? (

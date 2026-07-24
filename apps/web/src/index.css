@@ -93,6 +93,28 @@
 		}
 	}
 
+	/* Lifecycle mini-movie: five scenes phase-shifted through one 12.5s loop via negative delays. */
+	--animate-lifecycle-scene: lifecycle-scene 12.5s linear infinite;
+	@keyframes lifecycle-scene {
+		0% {
+			opacity: 0;
+			transform: translateY(4px);
+		}
+		3% {
+			opacity: 1;
+			transform: none;
+		}
+		17% {
+			opacity: 1;
+		}
+		20% {
+			opacity: 0;
+		}
+		100% {
+			opacity: 0;
+		}
+	}
+
 	/* Toasts slide up in / down out of the bottom viewport (referenced by `components/ui/toast`). */
 	@keyframes toast-in {
 		from {

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../components/ui/dialog";
 import { useAppStore } from "../store";
+import { LifecycleLoop } from "./LifecycleLoop";
 import { clearLegacySeen, readLegacySeen } from "./legacyStorage";
 import { markIntroSeen } from "./state";
 import { WorktreeGame } from "./WorktreeGame";
@@ -251,6 +252,8 @@ export function Onboarding() {
 											{MOCK_ROOT}
 										</span>
 									</span>
+								) : selected === 0 ? (
+									<LifecycleLoop />
 								) : (
 									activeFeature.title
 								)}
