@@ -17,7 +17,9 @@ strict verdict model. Run on demand via `bun run test:workflows` (own Playwright
 isolated `PI_CODING_AGENT_DIR` + pinned model, which `env.ts` then clones **per worker process**
 (pid-suffixed, auth + settings copied in): workers must never share one agent dir — a dying worker's
 session dispose overlapping the next worker's newborn session in the shared `sessions/` tree turned
-one failure into an ENOENT cascade across every later live-session test). Needs pi auth and spends real provider tokens — never
+one failure into an ENOENT cascade across every later live-session test. `env.ts` also sets an isolated
+`HOME`/vendor-home set so portable skill discovery never reads a developer's personal libraries. Needs
+pi auth and spends real provider tokens — never
 part of `bun run test`, pre-commit, CI gates, or the browser `e2e`/`e2e:agent` scripts (the main
 config `testIgnore`s this directory).
 
@@ -35,7 +37,8 @@ Adding a workflow test = one `defineScenario` call: `{ name, skill, workspace, p
 user?, dialog?, stopWhen?, forbid?, watchdog?, expect, judge?, record? }`.
 
 - `session` — lifecycle over the production `@thinkrail/server/agent` barrel (`createSession` etc.);
-  sets `PI_CODING_AGENT_DIR` before the pi runtime initializes (`env.ts`, imported first); an abort
+  sets `PI_CODING_AGENT_DIR`, `HOME`, and supported vendor-home overrides before the pi runtime initializes
+  (`env.ts`, imported first); an abort
   from a stop-signal is an expected outcome — but only a *requested* one (`promptTurn` swallows an
   abort-shaped error solely when the caller confirms a signal/budget asked for it; an unrequested
   "aborted" is a provider/network crash and rethrows). Never `setModel`.

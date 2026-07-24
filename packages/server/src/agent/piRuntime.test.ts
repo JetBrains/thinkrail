@@ -42,25 +42,36 @@ function cleanup(agentDir: string): void {
 	rmSync(agentDir, { recursive: true, force: true });
 }
 
-test("reloadConfig() on the shared runtime never opts into the network (provider.status must not stall on pi.dev)", async () => {
+test("refresh() on the shared runtime never opts into the network (provider.status must not stall on pi.dev)", async () => {
 	const { runtime, agentDir } = await isolatedRuntime();
 	try {
 		// The scoped PI_OFFLINE used during construction must not leak into the process env…
 		expect(process.env.PI_OFFLINE).toBeUndefined();
 
-		// …and the constructed runtime resolves reloadConfig's refresh to allowNetwork:false.
-		const seen: (ModelsRefreshOptions | undefined)[] = [];
-		const originalRefresh = runtime.refresh.bind(runtime);
-		runtime.refresh = (options?: ModelsRefreshOptions): Promise<ModelsRefreshResult> => {
-			seen.push(options);
-			return Promise.resolve({ aborted: false, errors: new Map() });
-		};
+		// …and a no-options refresh() (what provider.status / jbcentral call — pi 0.82 folded the old
+		// reloadConfig() into it) resolves allowNetwork to the runtime's ambient default: OFF. That
+		// default is internal, so pin it at the boundary it protects — the network: pi's remote-catalog
+		// and availability paths ride global fetch, so a blocking spy proves no egress is attempted.
+		// Refresh only touches providers holding a credential, so seed one — that's also the production
+		// shape (a signed-in user whose provider.status reads must not stall on pi.dev).
+		await runtime.setRuntimeApiKey("anthropic", "sk-test-never-used", { allowNetwork: false });
+		const originalFetch = globalThis.fetch;
+		const fetched: string[] = [];
+		globalThis.fetch = ((input: string | URL | Request) => {
+			fetched.push(String(input instanceof Request ? input.url : input));
+			return Promise.reject(new Error("unit tests never touch the network"));
+		}) as typeof fetch;
 		try {
-			await runtime.reloadConfig();
-			expect(seen.length).toBe(1);
-			expect(seen[0]?.allowNetwork).toBe(false);
+			await runtime.refresh();
+			expect(fetched).toEqual([]);
+
+			// Positive control so the spy can't rot vacuous: an explicit network opt-in (force bypasses
+			// the freshness throttle) must attempt egress — the spy blocks it, and refresh() swallows
+			// the per-provider failures into its result.
+			await runtime.refresh({ allowNetwork: true, force: true });
+			expect(fetched.length).toBeGreaterThan(0);
 		} finally {
-			runtime.refresh = originalRefresh;
+			globalThis.fetch = originalFetch;
 		}
 	} finally {
 		cleanup(agentDir);

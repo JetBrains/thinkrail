@@ -20,8 +20,20 @@ export type ChatTurn =
 	| { kind: "system"; id: string; text: string; endedAt?: number }
 	/** A failure notice: the run ended in an error, or the host rejected a send. `text` is the reason. */
 	| { kind: "error"; id: string; text: string }
-	/** A live auto-retry countdown (shown during the back-off, cleared when the retry resolves). */
-	| { kind: "retry"; id: string; attempt: number; maxAttempts: number; delayMs: number };
+	/**
+	 * A live retry countdown (shown during the back-off, cleared when the retry resolves). `source`
+	 * separates the two flows that can overlap — a `turn` retry (pi `auto_retry_*`) and a `summarization`
+	 * retry (compaction / branch-summary, pi `summarization_retry_*`) — so one flow's end event never
+	 * clears the other's countdown.
+	 */
+	| {
+			kind: "retry";
+			id: string;
+			source: "turn" | "summarization";
+			attempt: number;
+			maxAttempts: number;
+			delayMs: number;
+	  };
 
 export type ToolStatus = "running" | "done" | "error";
 

@@ -66,6 +66,7 @@ apps/
   cli/        V1 entrypoint: boot host + open browser   (SPEC.md)
   web/        mobile-first UI client                    (SPEC.md)
   desktop/    Electrobun launcher — DEFERRED            (SPEC.md)
+  website/    public landing page (GitHub Pages)        (SPEC.md)
 packages/
   server/     createServer(): Bun.serve + AgentSessionManager  (SPEC.md)
   contracts/  the wire (types-only)                     (SPEC.md)

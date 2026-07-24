@@ -29,7 +29,11 @@ The shell is built first, `pi` connected last:
 - **Center**: a tabbed area — Monaco file tabs + (once `pi` lands) chat tabs.
 - **Right**: an All-files tree of the active worktree + a Changes (git diff) tab; terminals below,
   scoped to the worktree.
-- Cheap wins `pi` already emits: per-session model pick (#1), token/cost display (#3), skill catalog (#2).
+- Cheap wins `pi` already emits: per-session model pick (#1), token/cost display (#3), and skill
+  catalog/autocomplete (#2), including read-through reuse of portable Agent Skills a user already keeps
+  for major coding agents — Pi remains the parser/runtime; no copying or vendor-semantic emulation. A
+  repo's **committed** skill aliases load only after an explicit **per-project trust** grant (a clone's are
+  attacker-controlled); personal + bundled skills load regardless.
 - Multiple chat sessions per workspace, streaming concurrently (#5).
 - A bundled **spec-graph** pi extension (`pi-spec-graph`): the agent searches, navigates, and manages
   the project's specs via `spec_*` tools + a skill.

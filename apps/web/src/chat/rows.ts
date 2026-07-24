@@ -39,7 +39,14 @@ export type ChatRow =
 	| { kind: "user"; id: string; message: UserMessage }
 	| { kind: "system"; id: string; text: string }
 	| { kind: "error"; id: string; text: string }
-	| { kind: "retry"; id: string; attempt: number; maxAttempts: number; delayMs: number }
+	| {
+			kind: "retry";
+			id: string;
+			source: "turn" | "summarization";
+			attempt: number;
+			maxAttempts: number;
+			delayMs: number;
+	  }
 	| { kind: "markdown"; id: string; text: string }
 	| ({ kind: "tool"; id: string } & ToolCallData)
 	| {
@@ -131,6 +138,7 @@ export function deriveRows(
 					rows.push({
 						kind: "retry",
 						id: turn.id,
+						source: turn.source,
 						attempt: turn.attempt,
 						maxAttempts: turn.maxAttempts,
 						delayMs: turn.delayMs,

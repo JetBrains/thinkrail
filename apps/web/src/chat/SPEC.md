@@ -27,7 +27,11 @@ spans assistant-message boundaries (pi emits one assistant message per tool roun
 model can't group. The pure **`deriveRows(turns, toolResults, isStreaming)`** (`rows.ts`) walks blocks in
 order into rows; `ChatTurnView` dispatches on row kind:
 
-- `user` / `system` / `retry` — 1:1 renderers. **`ErrorTurn`** is a persistent tinted failure notice
+- `user` / `system` / `retry` — 1:1 renderers. The retry countdown carries a `source` (`turn` =
+  pi `auto_retry_*`; `summarization` = compaction/branch-summary `summarization_retry_*`, pi ≥0.81.1) —
+  the flows can overlap mid-run, each keeps exactly one indicator (re-scheduling replaces, each source's
+  end event clears only its own), and `RetryIndicator` labels them apart ("Retrying" vs "Retrying
+  summarization"). **`ErrorTurn`** is a persistent tinted failure notice
   (provider/model error, or a rejected send) — **never folded**, so a failed turn can't look like
   nothing happened.
 - `markdown` — a non-empty assistant text block (react-markdown + remark-gfm + shiki).
@@ -93,11 +97,23 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   become turns: known ones (`ask-user-answers`) index into `askAnswers`; unknown customTypes are
   ignored. No store/transport/shiki.
 - **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions, `/`
-  commands, image paste/drop), `ModelSelector` + `ThinkingSelector` (shared with `NewWorkspaceDialog`;
+  commands, image paste/drop) plus its props-driven **slash-completion primitive** (filter/menu/caret +
+  Up/Down, Enter/Tab, Escape), reused by `panels/NewWorkspaceDialog` so the two inputs cannot drift;
+  `ModelSelector` + `ThinkingSelector` (also shared with `NewWorkspaceDialog`;
   optional `container` prop portals their popovers into a host Dialog), `SessionStatsBar`, `ChatHeader`
-  (its `left` slot carries the plan strip), `ExtUiDialog`. All props-driven; behavior detail lives in the
-  components' jsdoc.
-- **Chat TODO plan** ([[design-todos]]) — the chat's `pi-todos` list surfaced **only in the chat**:
+  (its `left` slot carries the plan strip; its **Skills** button is the presentational **`SkillsButton`**
+  primitive — a `BookOpen` pill, badged when a skill dir changed on disk — also shared with
+  `NewWorkspaceDialog` so the two triggers cannot drift), `ExtUiDialog`, and **`SkillsDialog`** (the **Skills manager**: a catalog
+  grouped by source with **sticky section headers** — the first-party **ThinkRail** and **Pi** groups lead
+  (above the All-plugins master, which governs only the plugin groups), then Personal / **a group per
+  installed Claude plugin** / the repo's Project skills last — each with its admission verdict,
+  project-trust, re-confirm-new, a **per-group on/off** toggle + an **All-plugins** master, and per-skill
+  toggles. It runs in **two modes** via an optional `workspace` prop: chat (`skills.state`, per-workspace
+  skill overrides, + a **Reload** that applies changes to this chat's session via `session.reloadResources`,
+  disabled while streaming) or project (`project.skills`, per-project-baseline toggles, no session) — the
+  latter reused by `panels` pre-session). All props-driven; behavior detail lives in the components' jsdoc.
+- **Chat TODO plan** — the chat's `pi-todos` list surfaced **only in the chat** (engine:
+  [[module-pi-todos]]; host read/write: [[submodule-server-todos]]):
   `useChatTodos` (the `todo.*` data hook — fetch + live `pi.event` refetch + edits + the add-nudge + the
   `openMarkdown` snapshot action), `TodoList` (loose items + named groups, add-row + an "open as markdown"
   button), `planMarkdown` (a pure `plan → markdown` compiler), and `ChatPlan` (`ChatPlanStripContent` +
@@ -109,14 +125,16 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 
 ## Boundary
 
-- **Public surface:** the registry API (`toolRegistry`), the renderers (incl. the presentational
-  `Markdown` — GFM + shiki, no store/transport; the rendering is fixed but the **prose skin** is the
+- **Public surface:** the registry API (`toolRegistry`), the props-driven slash-completion primitive, and
+  the renderers (incl. the presentational `Markdown` — GFM + shiki, no store/transport; the rendering is fixed but the **prose skin** is the
   caller's via an optional `className` — chat uses a compact bubble skin, `panels/MarkdownPreview` a
   reading-optimized document skin; code blocks size in `em` so they scale with the skin; a caller may
   also **extend** the render with extra `remarkPlugins` + `components`, e.g. the file view's GitHub
   alert callouts), the view types
   (`types.ts`,
-  incl. `ToolResultState` + `ExtUiDialogRequest`), and `ChatView` (lazy-mounted by `panels/CenterTabs`).
+  incl. `ToolResultState` + `ExtUiDialogRequest`), and `ChatView` (lazy-mounted by `panels/CenterTabs`;
+  it wires `SkillsDialog` + the header Skills trigger, resolving the owning `projectId` from the store and
+  flagging staleness off the worktree `fsChanged` nudge via `SkillsDialog`'s exported `isSkillPath`).
   **No `index.ts` barrel** — chat pulls **shiki**, so per the code-splitting exception imports stay
   **per-file**; the registry is importable from `chat/toolRegistry` **without** pulling shiki.
 - **Allowed deps:** `contracts` (pi message/content-block types, **type-only**); `store` + `transport`

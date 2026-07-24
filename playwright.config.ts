@@ -3,6 +3,7 @@ import { defineConfig, devices } from "@playwright/test";
 import {
 	E2E_CENTRAL_STATE,
 	E2E_DATA_DIR,
+	E2E_HOME_DIR,
 	E2E_PI_AGENT_DIR,
 	E2E_PICK_DIR_POINTER,
 } from "./e2e/fixtures/paths";
@@ -55,6 +56,11 @@ export default defineConfig({
 			// Force the New-Workspace dialog's `gh` probe to "Not connected" so the suite is deterministic
 			// regardless of the dev machine's real `gh` auth — and exercises the offline/local-branch degrade path.
 			THINKRAIL_GH_OFFLINE: "1",
+			// Keep cross-agent personal skill aliases away from the developer's real homes/overrides.
+			HOME: E2E_HOME_DIR,
+			CLAUDE_CONFIG_DIR: `${E2E_HOME_DIR}/.claude`,
+			CODEX_HOME: `${E2E_HOME_DIR}/.codex`,
+			GEMINI_CLI_HOME: E2E_HOME_DIR,
 			// Point pi at an ISOLATED agent dir (seeded with a copy of the user's auth in globalSetup), so the
 			// @agent suite uses a real provider yet `setModel`/`setThinkingLevel` persist here — never the
 			// user's real `~/.pi/agent`. (Provider env vars in the inherited env still resolve auth too.)

@@ -6,6 +6,7 @@ import {
 	getSessionWorkspaceId,
 	setExtUiPublisher,
 	setSessionPublisher,
+	setSkillAdmissionResolver,
 } from "../agent";
 import { cancelAllLogins, setLoginPublisher } from "../auth";
 import { resolveWorktreeFile } from "../fs";
@@ -13,7 +14,7 @@ import { listProjects, openProject } from "../projects";
 import { getConfig, setSettingsPublisher } from "../settings";
 import { closeAllTerminals, setTerminalPublisher } from "../terminal";
 import { setWatchPublisher, stopAllWatches } from "../watch";
-import { setWorkspacePublisher } from "../workspaces";
+import { getWorkspace, setWorkspacePublisher } from "../workspaces";
 import {
 	isPromptCommitted,
 	isSettledTurn,
@@ -103,6 +104,25 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 	// Stream PTY output to every subscribed client over the terminal.data channel.
 	setTerminalPublisher((channel, data) => {
 		server.publish(channel, JSON.stringify({ channel, data }));
+	});
+
+	// Resolve a session's skill-admission context: map the workspace it belongs to back to its project's
+	// persisted trust + acknowledged set + baseline disables, plus that workspace's per-skill overrides.
+	// Fail closed on any lookup miss, so a stale/unknown id never loads an untrusted repo's skills.
+	setSkillAdmissionResolver((workspaceId) => {
+		try {
+			const { projectId, skillOverrides } = getWorkspace(workspaceId);
+			const project = listProjects().find((p) => p.id === projectId);
+			return {
+				trusted: project?.trusted === true,
+				acknowledged: project?.acknowledgedSkills ?? [],
+				disabled: project?.disabledSkills ?? [],
+				disabledGroups: project?.disabledGroups ?? [],
+				overrides: skillOverrides ?? {},
+			};
+		} catch {
+			return { trusted: false, acknowledged: [], disabled: [], disabledGroups: [], overrides: {} };
+		}
 	});
 
 	// Fan the `workspaces` module's lifecycle events out to every subscribed client, mapping each domain

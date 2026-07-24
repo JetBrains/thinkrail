@@ -40,7 +40,7 @@ export type WireModel = Pick<
 
 // The unified render union the UI switches on. The real superset (`AgentSessionEvent`) is declared in the
 // Node-only `pi-coding-agent` (it pulls node:fs), so it's MIRRORED here type-only, derived from the
-// imported `AgentEvent`. Keep in sync with @earendil-works/pi-coding-agent@0.81.1
+// imported `AgentEvent`. Keep in sync with @earendil-works/pi-coding-agent@0.82.0
 // (core/agent-session.d.ts) — the session-event members below are what `session.subscribe` emits.
 export type PiEvent =
 	| Exclude<AgentEvent, { type: "agent_end" }>
@@ -65,7 +65,27 @@ export type PiEvent =
 			delayMs: number;
 			errorMessage: string;
 	  }
-	| { type: "auto_retry_end"; success: boolean; attempt: number; finalError?: string };
+	| { type: "auto_retry_end"; success: boolean; attempt: number; finalError?: string }
+	// Compaction / branch-summary retry lifecycle (pi ≥0.81.1). The UI renders the countdown
+	// (`scheduled`) and the all-clear (`finished`); `attempt_start` is delivered but deliberately ignored
+	// (by the time an attempt starts, the countdown has drained — nothing new to show).
+	| {
+			type: "summarization_retry_scheduled";
+			attempt: number;
+			maxAttempts: number;
+			delayMs: number;
+			errorMessage: string;
+	  }
+	| { type: "summarization_retry_attempt_start"; source: "branchSummary" }
+	| {
+			type: "summarization_retry_attempt_start";
+			source: "compaction";
+			reason: "manual" | "threshold" | "overflow";
+	  }
+	| { type: "summarization_retry_finished" }
+	// Streamed output of `session.executeBash` (pi ≥0.82.0) — mirrored for union fidelity only: this host
+	// never calls `executeBash` (terminals are real PTYs), so the UI never receives it and ignores it.
+	| { type: "bash_execution_update"; id?: string; delta: string };
 
 /** The `pi.event` push frame: a session's event tagged with its id. */
 export interface SessionEventPayload {
@@ -74,7 +94,7 @@ export interface SessionEventPayload {
 }
 
 // The shapes below are declared in the Node-only `pi-coding-agent` (it pulls node:fs), so they're
-// MIRRORED here type-only for the wire. Keep in sync with @earendil-works/pi-coding-agent@0.81.1.
+// MIRRORED here type-only for the wire. Keep in sync with @earendil-works/pi-coding-agent@0.82.0.
 
 /** Context-window usage for the active model. `tokens`/`percent` are null when unknown (post-compaction). */
 export interface ContextUsage {
@@ -131,6 +151,29 @@ export interface SlashCommandInfo {
 	description?: string;
 	source: SlashCommandSource;
 	sourceInfo: SlashCommandSourceInfo;
+}
+
+/**
+ * Why a skill is or isn't loaded — the Skills manager renders all four so a hidden skill is never a silent
+ * mystery. `load` = in the agent's context; `untrusted` = a project alias under an untrusted project;
+ * `pending-ack` = a project alias that appeared after trust was granted (needs confirming); `disabled` =
+ * admissible but toggled off (workspace override, else project baseline).
+ */
+export type SkillDecision = "load" | "untrusted" | "pending-ack" | "disabled";
+
+/** One skill in the workspace Skills manager: its identity, provenance, and current admission verdict. */
+export interface SkillCatalogEntry {
+	/** Bare skill name — the key ack / enable-disable / override operations use. */
+	name: string;
+	description?: string;
+	sourceInfo: SlashCommandSourceInfo;
+	/** True for a committed project-scoped alias (the trust-gated class). */
+	gated: boolean;
+	/** The installing Claude plugin's name, when this skill came from one — lets the manager group by plugin. */
+	plugin?: string;
+	/** Canonical group key the skill toggles under: a plugin name, or `project`/`personal`/`bundled`/`pi`. */
+	group: string;
+	decision: SkillDecision;
 }
 
 // Extension-UI bridge frames — OUR wire shape for pi's in-process `uiContext` calls. The server pushes an
@@ -247,7 +290,7 @@ export interface AskUserAnswersDetails {
 
 /**
  * MIRROR of pi-coding-agent's `CustomMessage` (that package is Node-only, so the shape is re-declared
- * type-only for the wire — keep in sync with @earendil-works/pi-coding-agent@0.81.1 core/messages.d.ts):
+ * type-only for the wire — keep in sync with @earendil-works/pi-coding-agent@0.82.0 core/messages.d.ts):
  * an extension-injected transcript message (`sendCustomMessage`). Crosses the wire in
  * `session.getMessages` and inside `message_start`/`message_end` events; the LLM sees it as a user
  * message. The web renders only the `customType`s it knows (e.g. `ask-user-answers`) and ignores the rest.

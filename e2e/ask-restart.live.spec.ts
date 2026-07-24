@@ -21,6 +21,7 @@ const BASE = `http://localhost:${PORT}`;
 const DATA_DIR = join(tmpdir(), "thinkrail-e2e-restart");
 const REPO = join(DATA_DIR, "sample-project");
 const AGENT_DIR = join(DATA_DIR, "pi-agent");
+const HOME_DIR = join(DATA_DIR, "home");
 const PICK_POINTER = join(DATA_DIR, "pick-dir");
 // Outside DATA_DIR so a failed run's teardown doesn't destroy the post-mortem trail.
 const HOST_LOG = join(tmpdir(), "thinkrail-e2e-restart-host.log");
@@ -32,6 +33,7 @@ function seedState(): void {
 	rmSync(DATA_DIR, { recursive: true, force: true });
 	rmSync(HOST_LOG, { force: true });
 	mkdirSync(REPO, { recursive: true });
+	mkdirSync(HOME_DIR, { recursive: true });
 	const git = (...args: string[]) =>
 		execFileSync("git", ["-C", REPO, ...args], { stdio: "ignore" });
 	git("init", "-b", "main");
@@ -65,6 +67,10 @@ async function startHost(): Promise<void> {
 			THINKRAIL_DATA_DIR: DATA_DIR,
 			THINKRAIL_PICK_DIR: PICK_POINTER,
 			THINKRAIL_GH_OFFLINE: "1",
+			HOME: HOME_DIR,
+			CLAUDE_CONFIG_DIR: join(HOME_DIR, ".claude"),
+			CODEX_HOME: join(HOME_DIR, ".codex"),
+			GEMINI_CLI_HOME: HOME_DIR,
 			PI_CODING_AGENT_DIR: AGENT_DIR,
 		},
 	});

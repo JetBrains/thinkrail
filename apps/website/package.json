@@ -1,0 +1,16 @@
+{
+	"name": "@thinkrail/website",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "vite",
+		"build": "tsc --noEmit && vite build",
+		"typecheck": "tsc --noEmit",
+		"preview": "vite preview"
+	},
+	"devDependencies": {
+		"typescript": "catalog:",
+		"vite": "8.0.16"
+	}
+}

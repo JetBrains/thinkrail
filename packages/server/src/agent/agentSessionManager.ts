@@ -19,9 +19,10 @@ import type {
 	WireModel,
 } from "@thinkrail/contracts";
 import { ANSWERABILITY_ERRORS, assessAnswerability, buildAnswersMessage } from "./askUserQuestion";
-import { buildResourceLoader } from "./extensions";
+import { buildResourceLoader, toSkillCommands } from "./extensions";
 import { getPiRuntime, refreshCatalogsDetached } from "./piRuntime";
 import { repairDanglingToolCalls } from "./sessionRepair";
+import type { SkillAdmissionContext } from "./skillAdmission";
 import { cancelExtUiForSession, createWebUiContext, notifyExtUi } from "./webUiContext";
 
 interface Entry {
@@ -48,6 +49,26 @@ export function setSessionManagerFactory(factory: (cwd: string) => SessionManage
 	sessionManagerFactory = factory;
 }
 
+/**
+ * Host seam: resolve a workspace's **skill-admission context** — the owning project's trust + acknowledged
+ * set + baseline disables, plus that workspace's per-skill overrides. Gates which skills a session loads
+ * (see `buildResourceLoader` / `skillAdmission`). Keyed by `workspaceId`, the one id both the create and
+ * disk-restore paths hold. Fails closed (nothing trusted/acknowledged) until the host wires the real
+ * resolver at boot, so a mis-wire can never silently load an untrusted repo's skills.
+ */
+let skillAdmissionResolver: (workspaceId: string) => SkillAdmissionContext = () => ({
+	trusted: false,
+	acknowledged: [],
+	disabled: [],
+	disabledGroups: [],
+	overrides: {},
+});
+export function setSkillAdmissionResolver(
+	resolver: (workspaceId: string) => SkillAdmissionContext,
+): void {
+	skillAdmissionResolver = resolver;
+}
+
 function mustGet(sessionId: string): AgentSession {
 	const entry = sessions.get(sessionId);
 	if (!entry) throw new Error(`Unknown session: ${sessionId}`);
@@ -65,6 +86,22 @@ export function getSessionWorkspaceId(sessionId: string): string | undefined {
 }
 
 /**
+ * Re-scan skills/settings and rebuild the system prompt for a live session — the active-chat "Reload skills"
+ * path, so a trust grant or a worktree skill change lands without dropping the conversation. Refuses while
+ * the session is streaming (pi's reload rebuilds the runtime; mid-turn would desync) — the caller retries
+ * after the turn. Throws for an unknown session.
+ */
+export async function reloadSessionResources(sessionId: string): Promise<void> {
+	const session = mustGet(sessionId);
+	if (session.isStreaming) {
+		throw new Error(
+			"Can't reload skills while the session is streaming — try again after the turn.",
+		);
+	}
+	await session.reload();
+}
+
+/**
  * The pi settings a session runs with: the user's real settings **plus** an in-memory override turning
  * `images.autoResize` **off** (never persisted — `applyOverrides`, not `set…`+`save`). With it off, the
  * `read` tool sends image files to the model **raw** instead of routing them through pi's photon
@@ -72,10 +109,13 @@ export function getSessionWorkspaceId(sessionId: string): string | undefined {
  * wasm loads via a worker + `fs` path that a compiled binary can't satisfy), and the web UI downsizes
  * user-attached images itself — so we keep image-read working everywhere without depending on photon.
  * `SettingsManager.create(cwd)` defaults its agentDir to `getAgentDir()` (honors `PI_CODING_AGENT_DIR`),
- * matching the manager `createAgentSession` builds when we omit `settingsManager`.
+ * matching the manager `createAgentSession` builds when we omit `settingsManager`. `projectTrusted: true`
+ * here covers pi-**native** project resources (`.pi` / `.agents`, project settings) — unchanged behavior.
+ * The committed **cross-agent skill aliases** carry their own explicit admission gate
+ * (`buildResourceLoader`'s `admission` context / `setSkillAdmissionResolver`), not this flag.
  */
 export function buildSessionSettings(cwd: string): SettingsManager {
-	const settings = SettingsManager.create(cwd);
+	const settings = SettingsManager.create(cwd, undefined, { projectTrusted: true });
 	settings.applyOverrides({ images: { autoResize: false } });
 	return settings;
 }
@@ -158,7 +198,9 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
 		modelRuntime,
 		sessionManager: sessionManagerFactory(input.cwd),
 		settingsManager,
-		resourceLoader: await buildResourceLoader(input.cwd, settingsManager),
+		resourceLoader: await buildResourceLoader(input.cwd, settingsManager, () =>
+			skillAdmissionResolver(input.workspaceId),
+		),
 		// Re-resolve the wire ref to the real model (with baseUrl) host-side — never the client's baseUrl.
 		...(input.model ? { model: await resolveWireModel(input.model) } : {}),
 		...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
@@ -254,7 +296,9 @@ async function openDiskSession(sessionId: string, workspaceId: string, cwd: stri
 		modelRuntime,
 		sessionManager,
 		settingsManager,
-		resourceLoader: await buildResourceLoader(cwd, settingsManager),
+		resourceLoader: await buildResourceLoader(cwd, settingsManager, () =>
+			skillAdmissionResolver(workspaceId),
+		),
 	});
 	// Lost a race after the open — drop this duplicate rather than clobber the registered one.
 	if (sessions.has(sessionId)) {
@@ -383,7 +427,7 @@ export function getSessionStats(sessionId: string): SessionStats {
 }
 
 // Slash commands / skills available in the session — built from the same three sources pi's own rpc mode
-// uses. In sync with @earendil-works/pi-coding-agent@0.81.1 (modes/rpc get_commands).
+// uses. In sync with @earendil-works/pi-coding-agent@0.82.0 (modes/rpc get_commands).
 export function getSessionCommands(sessionId: string): SlashCommandInfo[] {
 	const session = mustGet(sessionId);
 	const extension = session.extensionRunner.getRegisteredCommands().map((c) => ({
@@ -398,12 +442,7 @@ export function getSessionCommands(sessionId: string): SlashCommandInfo[] {
 		source: "prompt" as const,
 		sourceInfo: t.sourceInfo,
 	}));
-	const skill = session.resourceLoader.getSkills().skills.map((k) => ({
-		name: `skill:${k.name}`,
-		description: k.description,
-		source: "skill" as const,
-		sourceInfo: k.sourceInfo,
-	}));
+	const skill = toSkillCommands(session.resourceLoader.getSkills().skills);
 	return [...extension, ...prompt, ...skill];
 }
 

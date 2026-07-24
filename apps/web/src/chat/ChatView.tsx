@@ -17,6 +17,7 @@ import { ChatPlanContent, ChatPlanStripContent } from "./ChatPlan";
 import { Composer, type MentionCandidate, type SubmitBehavior } from "./Composer";
 import { ExtUiDialog } from "./ExtUiDialog";
 import { type ChatRow, deriveRows } from "./rows";
+import { isSkillPath, SkillsDialog } from "./SkillsDialog";
 import { StreamIndicator, type StreamStatus, streamStatus } from "./StreamIndicator";
 import "./tools/register"; // side-effect: register the built-in pi tool renderers (bash/read/edit/write)
 import { ChatTurnView } from "./turns";
@@ -56,6 +57,24 @@ export default function ChatView({
 	// chat streaming into its own runtime never re-renders the foreground one.
 	const runtime = useAppStore((s) => s.sessions[sessionId]) ?? EMPTY_RUNTIME;
 	const models = useAppStore((s) => s.models);
+	// This chat's owning project (workspaces are keyed by project) — for the Skills manager's trust ops.
+	const projectId = useAppStore(
+		(s) =>
+			Object.values(s.workspaces)
+				.flat()
+				.find((w) => w.id === workspaceId)?.projectId ?? null,
+	);
+	const [skillsOpen, setSkillsOpen] = useState(false);
+	// Auto-detect: the worktree watcher's fs nudge flags skills stale (the session loaded an older set) when
+	// a skill dir changes on disk — a pull/branch/edit. Reload is manual, so this only prompts.
+	const fsSignal = useAppStore((s) => s.fsChangesByWorkspace[workspaceId]);
+	const [skillsStale, setSkillsStale] = useState(false);
+	const lastSkillTick = useRef(0);
+	useEffect(() => {
+		if (!fsSignal || fsSignal.tick === lastSkillTick.current) return;
+		lastSkillTick.current = fsSignal.tick;
+		if (fsSignal.truncated || fsSignal.paths.some(isSkillPath)) setSkillsStale(true);
+	}, [fsSignal]);
 	const workspaceRoot = useAppStore((s) => {
 		for (const workspaces of Object.values(s.workspaces)) {
 			const workspace = workspaces.find((w) => w.id === workspaceId);
@@ -97,7 +116,7 @@ export default function ChatView({
 
 	const [mentionQuery, setMentionQuery] = useState<string | null>(null);
 	const [mentionCandidates, setMentionCandidates] = useState<MentionCandidate[]>([]);
-	// The chat's TODO plan, surfaced inline via a header strip that opens a popup over the chat (design-todos).
+	// The chat's TODO plan, surfaced inline via a header strip that opens a popup over the chat (SPEC §Chat TODO plan).
 	const plan = useChatTodos(workspaceId, sessionId);
 	const [planOpen, setPlanOpen] = useState(false);
 
@@ -270,6 +289,8 @@ export default function ChatView({
 											</PopoverTrigger>
 										) : null
 									}
+									skillsStale={skillsStale}
+									{...(projectId ? { onOpenSkills: () => setSkillsOpen(true) } : {})}
 								/>
 							</div>
 						</PopoverAnchor>
@@ -337,6 +358,20 @@ export default function ChatView({
 					/>
 					{pendingExtUi ? (
 						<ExtUiDialog key={pendingExtUi.id} request={pendingExtUi} onReply={onExtUiReply} />
+					) : null}
+					{projectId ? (
+						<SkillsDialog
+							projectId={projectId}
+							workspace={{
+								workspaceId,
+								sessionId,
+								streaming: isStreaming,
+								stale: skillsStale,
+								onReloaded: () => setSkillsStale(false),
+							}}
+							open={skillsOpen}
+							onOpenChange={setSkillsOpen}
+						/>
 					) : null}
 				</div>
 			</AskStatesContext.Provider>

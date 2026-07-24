@@ -9,7 +9,6 @@ import {
 	logoutProvider,
 	resolveLogin,
 	setLoginPublisher,
-	setProviderApiKey,
 	startLogin,
 } from "./providerLogin";
 
@@ -284,20 +283,29 @@ describe("cancelLogin", () => {
 	});
 });
 
-describe("setProviderApiKey / logoutProvider", () => {
-	test("setProviderApiKey persists via login(id, 'api_key') answering the secret prompt with the key", async () => {
+describe("api-key login / logoutProvider", () => {
+	test("startLogin with type api_key drives the provider-owned key flow over the same bridge (#97)", async () => {
 		let stored: string | undefined;
 		const h = install(async (_id, i) => {
-			stored = await i.prompt({ type: "secret", message: "API key" });
+			// The provider-owned login asks for the key; the bridge parks it as a `prompt` frame.
+			stored = await i.prompt({ type: "secret", message: "Enter your OpenAI API key" });
 		});
-		await setProviderApiKey("openai", "  sk-abc  ");
-		expect(stored).toBe("sk-abc"); // trimmed
-		expect(h.loginCalls()).toEqual([["openai", "api_key"]]);
+		const { loginId } = startLogin("openai", "api_key");
+		await tick();
+		expect(h.loginCalls()).toEqual([["openai", "api_key"]]); // never setRuntimeApiKey — login() persists
+		expect(h.frames.at(-1)?.frame.kind).toBe("prompt");
+
+		resolveLogin({ loginId, value: "sk-abc" });
+		await tick();
+		expect(stored).toBe("sk-abc");
+		expect(h.frames.at(-1)?.frame.kind).toBe("success");
 	});
 
-	test("setProviderApiKey rejects an empty/blank key", async () => {
-		install(async () => {});
-		await expect(setProviderApiKey("openai", "   ")).rejects.toThrow(/must not be empty/);
+	test("startLogin defaults to the oauth flow when no type is given", async () => {
+		const h = install(async () => {});
+		startLogin("anthropic");
+		await tick();
+		expect(h.loginCalls()).toEqual([["anthropic", "oauth"]]);
 	});
 
 	test("logoutProvider removes the credential through the runtime", async () => {

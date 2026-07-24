@@ -121,11 +121,20 @@ describe("deriveRows grouping", () => {
 			user("u1"),
 			assistant("a1", [tc("t1")]),
 			{ kind: "error", id: "e1", text: "boom" },
-			{ kind: "retry", id: "r1", attempt: 1, maxAttempts: 3, delayMs: 500 },
+			{
+				kind: "retry",
+				id: "r1",
+				source: "summarization",
+				attempt: 1,
+				maxAttempts: 3,
+				delayMs: 500,
+			},
 			assistant("a2", [tc("t2")]),
 		];
 		const rows = deriveRows(turns, {}, true);
 		expect(kinds(rows)).toEqual(["user", "activity", "error", "retry", "activity"]);
+		// The retry row carries its source through — the renderer labels the two flows differently.
+		expect(rows[3]?.kind === "retry" && rows[3].source).toBe("summarization");
 		expect(rows[1]?.kind === "activity" && rows[1].steps.length).toBe(1);
 		expect(rows[4]?.kind === "activity" && rows[4].steps.length).toBe(1);
 	});

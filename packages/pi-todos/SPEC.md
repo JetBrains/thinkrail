@@ -5,15 +5,15 @@ status: draft
 title: pi-todos extension — the chat TODO list
 parent: architecture
 depends-on: []
-references: [design-todos, module-spec-graph]
+references: [module-spec-graph, submodule-web-chat]
 tags: [pi-extension, todos, v2]
 ---
 
 ## Responsibility
 
 `pi-todos` is a portable pi-package that gives the `pi` agent a **chat-scoped TODO list** — its working
-plan for the conversation, which the user can also add to. It is the *engine* behind [[design-todos]],
-modeled on [[module-spec-graph]]: a skill, five `todo_*` custom tools, and one `before_agent_start` rule.
+plan for the conversation, which the user can also add to. It is the *engine* behind the chat's TODO
+plan UX ([[submodule-web-chat]]'s "Chat TODO plan"), modeled on [[module-spec-graph]]: a skill, five `todo_*` custom tools, and one `before_agent_start` rule.
 
 - **`index.ts`** — an `ExtensionFactory` registering the five tools and one always-on `before_agent_start`
   rule. The rule is deliberately **short and byte-stable** — awareness that a shared list + `todo_*` tools
