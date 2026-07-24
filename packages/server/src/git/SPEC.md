@@ -31,8 +31,10 @@ warms a remote base ref off the workspace-create critical path.
   `origin/HEAD`→`origin/main`→repo `HEAD`); `prefetchBranch(projectId, ref)` — best-effort background
   `git fetch` of a remote ref (via `gitAsync`, branch passed after `--` so a `-`-prefixed name can't be
   parsed as a git option), so a later `createWorkspace` branches off a fresh tip without the network
-  round-trip on its critical path (non-`origin/` ref / offline → no-op).
-- **Public surface (barrel):** `git`, `gitAsync`, `gitStatus`, `gitDiffFile`, `listBranches`, `prefetchBranch`.
+  round-trip on its critical path (non-`origin/` ref / offline → no-op); `projectStatus(projectId)` —
+  project-root status vs `HEAD` (+ untracked) for the New-Workspace "stays behind" echo; shares
+  `collectChanges` with `gitStatus`.
+- **Public surface (barrel):** `git`, `gitAsync`, `gitStatus`, `projectStatus`, `gitDiffFile`, `listBranches`, `prefetchBranch`.
 - **Allowed deps:** `persistence` (workspace + project lookup); `contracts` (`Git*`/`BranchList` types);
   Bun (spawn).
 - **Forbidden:** `host`; sibling features.

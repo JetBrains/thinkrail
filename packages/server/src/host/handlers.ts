@@ -46,7 +46,7 @@ import {
 } from "../auth";
 import { selectDirectory } from "../dialog";
 import { readDir, readFile } from "../fs";
-import { gitDiffFile, gitStatus, listBranches, prefetchBranch } from "../git";
+import { gitDiffFile, gitStatus, listBranches, prefetchBranch, projectStatus } from "../git";
 import { githubAuthStatus, githubRefresh } from "../github";
 import {
 	acknowledgeProjectSkills,
@@ -144,6 +144,7 @@ const handlers: Record<string, Handler> = {
 	},
 	"workspace.diffStats": (params) => workspaceDiffStats((params as { id: string }).id),
 	"git.listBranches": (params) => listBranches((params as { projectId: string }).projectId),
+	"git.projectStatus": (params) => projectStatus((params as { projectId: string }).projectId),
 	"git.prefetch": (params) => {
 		const p = params as { projectId: string; ref: string };
 		return prefetchBranch(p.projectId, p.ref);

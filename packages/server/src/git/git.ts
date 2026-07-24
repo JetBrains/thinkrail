@@ -144,13 +144,12 @@ function untrackedAdded(worktreePath: string, path: string): number | undefined 
 	}
 }
 
-/** A worktree's changed files vs its base branch, plus any untracked files. Each carries `+/−` counts. */
-export function gitStatus(workspaceId: string): GitStatus {
-	const ws = workspace(workspaceId);
+/** Changed files vs `base` (with `+/−` counts) plus untracked — shared by workspace and project status. */
+function collectChanges(cwd: string, base: string): GitFileChange[] {
 	const changes: GitFileChange[] = [];
-	const counts = numstat(ws.worktreePath, ws.baseBranch);
+	const counts = numstat(cwd, base);
 
-	const tracked = git(ws.worktreePath, ["diff", "--name-status", ws.baseBranch]);
+	const tracked = git(cwd, ["diff", "--name-status", base]);
 	if (tracked.ok && tracked.out) {
 		for (const line of tracked.out.split("\n")) {
 			const parts = line.split("\t");
@@ -161,13 +160,11 @@ export function gitStatus(workspaceId: string): GitStatus {
 		}
 	}
 
-	const untracked = git(ws.worktreePath, ["ls-files", "--others", "--exclude-standard"]);
+	const untracked = git(cwd, ["ls-files", "--others", "--exclude-standard"]);
 	if (untracked.ok && untracked.out) {
 		for (const path of untracked.out.split("\n")) {
 			if (!path) continue;
-			const added = untrackedAdded(ws.worktreePath, path);
-			// Countable (small text) → whole content added, nothing removed. Binary/oversized → no counts at
-			// all, matching the tracked-binary rows `--numstat` drops (and satisfying `exactOptionalPropertyTypes`).
+			const added = untrackedAdded(cwd, path);
 			changes.push({
 				path,
 				status: "untracked",
@@ -177,7 +174,28 @@ export function gitStatus(workspaceId: string): GitStatus {
 	}
 
 	changes.sort((a, b) => a.path.localeCompare(b.path));
-	return { branch: ws.branch, changes };
+	return changes;
+}
+
+/** A worktree's changed files vs its base branch, plus any untracked files. Each carries `+/−` counts. */
+export function gitStatus(workspaceId: string): GitStatus {
+	const ws = workspace(workspaceId);
+	return { branch: ws.branch, changes: collectChanges(ws.worktreePath, ws.baseBranch) };
+}
+
+/**
+ * The PROJECT ROOT's dirty state (git's main working tree): uncommitted work vs `HEAD` plus untracked —
+ * the "what stays behind at workspace creation" read. A root folder has no `baseBranch`; `HEAD` is the
+ * right base because the question is "what has the user not committed".
+ */
+export function projectStatus(projectId: string): GitStatus {
+	const project = loadProjects().find((p) => p.id === projectId);
+	if (!project) throw new Error(`Unknown project: ${projectId}`);
+	const head = git(project.path, ["rev-parse", "--abbrev-ref", "HEAD"]);
+	return {
+		branch: head.ok && head.out ? head.out : "HEAD",
+		changes: collectChanges(project.path, "HEAD"),
+	};
 }
 
 /**

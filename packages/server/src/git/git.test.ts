@@ -2,7 +2,14 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { gitDiffFile, gitStatus, listBranches, numstatPath, prefetchBranch } from "./git";
+import {
+	gitDiffFile,
+	gitStatus,
+	listBranches,
+	numstatPath,
+	prefetchBranch,
+	projectStatus,
+} from "./git";
 
 let dataDir: string;
 let repo: string;
@@ -180,4 +187,23 @@ test("prefetchBranch fetches a remote ref and no-ops on a local ref or unknown p
 	// A local ref never touches the network; an unknown project can't fetch — both are quiet no-ops.
 	expect(await prefetchBranch("p1", "main")).toEqual({ ok: false });
 	expect(await prefetchBranch("nope", "origin/main")).toEqual({ ok: false });
+});
+
+test("projectStatus reports the project root's uncommitted work vs HEAD", () => {
+	writeFileSync(join(repo, "README.md"), "# repo\nedited\n");
+	writeFileSync(join(repo, ".env"), "SECRET=1\n");
+	const status = projectStatus("p1");
+	expect(status.branch).toBe("main");
+	expect(status.changes).toEqual([
+		{ path: ".env", status: "untracked", added: 1, removed: 0 },
+		{ path: "README.md", status: "modified", added: 1, removed: 0 },
+	]);
+});
+
+test("projectStatus on a clean repo returns no changes", () => {
+	expect(projectStatus("p1").changes).toEqual([]);
+});
+
+test("projectStatus throws on an unknown project", () => {
+	expect(() => projectStatus("nope")).toThrow("Unknown project");
 });
