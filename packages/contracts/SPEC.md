@@ -46,7 +46,9 @@ of the host.
     `off`-inclusive one);
   - the local render union **`PiEvent`** — the real superset `AgentSessionEvent` lives in the Node-only
     `pi-coding-agent`, so it's **mirrored** here (the `agent_end.willRetry` + `queue_update` /
-    `compaction_*` / `auto_retry_*` / `session_info_changed` / `thinking_level_changed` members);
+    `compaction_*` / `auto_retry_*` / `summarization_retry_*` / `session_info_changed` /
+    `thinking_level_changed` members, plus `bash_execution_update` — mirrored for union fidelity only;
+    the host never calls `executeBash`, so the UI never receives it);
   - **`SessionEventPayload`** (`{ sessionId, event: PiEvent }`) — the `pi.event` push frame.
   - the cheap-win mirrors (declared in the Node-only `pi-coding-agent`): **`SessionStats`** + **`ContextUsage`**
     (tokens/cost/context bar — display only) and **`SlashCommandInfo`** + **`SlashCommandSourceInfo`** (the
@@ -166,7 +168,7 @@ of the host.
 
 ## Get right
 
-- **Type-only, from the package roots, always** (verified vs 0.81.1: type-only imports are erased by
+- **Type-only, from the package roots, always** (verified vs 0.82.0: type-only imports are erased by
   `verbatimModuleSyntax`, so the web bundle stays provider-free; the pi-ai provider/API subpaths
   statically import the Node SDKs — never touch them). The `/base` entries existed only in 0.79.8–0.79.9.
 - `Model` is generic — expose as `Model<any>`.

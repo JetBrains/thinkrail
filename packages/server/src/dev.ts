@@ -38,7 +38,7 @@ if (process.env.THINKRAIL_E2E_FAKE_OAUTH === "1") {
 		},
 	};
 	// An extension provider on the shared runtime: pi keeps extension registrations across
-	// refresh()/reloadConfig() (they're a composed overlay), so no re-register hook is needed.
+	// refresh() (they're a composed overlay), so no re-register hook is needed.
 	(await getPiRuntime()).registerProvider("e2e-oauth", { oauth: fakeOauth });
 
 	// The API-key fake must be a NATIVE provider (pi 0.81 full provider extensions): only `Provider.auth`

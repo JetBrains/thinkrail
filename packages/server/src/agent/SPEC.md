@@ -28,7 +28,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     runtime's ambient-network default from that env at construction; the option now gates only the
     create-time refresh — in 0.80.x it fed both; the scoped value is restored immediately, a user-set
     one untouched — pinned by `piRuntime.test.ts`): catalog reads stay local (builtins + models.json +
-    the persisted models-store), because `reloadConfig()`/`refresh()` await remote pi.dev catalog
+    the persisted models-store), because a network-enabled `refresh()` (pi 0.82 folded the old
+    `reloadConfig()` into it) awaits remote pi.dev catalog
     checks with no timeout — on the `provider.status` and jbcentral-connect paths that stalls wherever
     egress is slow or blocked. The one deliberate opt-in to
     live catalogs is **`refreshCatalogsDetached(runtime)`** (issue #98, mirroring pi's own `/model`):
