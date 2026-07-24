@@ -1,24 +1,25 @@
 /**
- * Persisted "seen" flag for the first-run onboarding overlay. A best-effort localStorage mirror (matches
- * the fail-soft theme-hint pattern): the transient open-state lives in the store, only this durable bit
- * of "the user has seen onboarding" survives reloads. Any storage failure degrades to "not seen".
+ * PR #113 shipped the seen-flag as a per-device localStorage boolean before it moved into the
+ * host-synced `AppConfig`. This is the one-time migration shim: read the legacy key, fold it into
+ * config (`state.ts`), clear it. Delete this file when the legacy key has been out in the wild long
+ * enough to not matter.
  */
-const ONBOARDING_SEEN_KEY = "thinkrail:onboardingSeen";
+const LEGACY_KEY = "thinkrail:onboardingSeen";
 
-/** True once the user has completed (or dismissed) first-run onboarding. Fail-soft → false. */
-export function readOnboardingSeen(): boolean {
+/** True when this device carries #113's pre-config seen flag. Fail-soft → false. */
+export function readLegacySeen(): boolean {
 	try {
-		return localStorage.getItem(ONBOARDING_SEEN_KEY) === "true";
+		return localStorage.getItem(LEGACY_KEY) === "true";
 	} catch {
 		return false;
 	}
 }
 
-/** Record that onboarding has been seen. Best-effort; a storage failure is silently ignored. */
-export function markOnboardingSeen(): void {
+/** Remove the legacy flag once folded into config. Best-effort. */
+export function clearLegacySeen(): void {
 	try {
-		localStorage.setItem(ONBOARDING_SEEN_KEY, "true");
+		localStorage.removeItem(LEGACY_KEY);
 	} catch {
-		return;
+		// fail-soft: worst case the fold repeats, which is idempotent
 	}
 }

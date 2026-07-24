@@ -444,6 +444,9 @@ interface AppState {
 	/** The active UI theme (host-owned; `applyConfig` sets it from `server.welcome` / `settings.changed`).
 	 * The DOM side-effect (`applyTheme`) is the shell's job — this holds the value the UI reads. */
 	theme: ThemeId;
+	/** The server-synced app config as delivered by `server.welcome` / `settings.changed`; `null` until
+	 * the first welcome — first-run gating must never fire on unknown state. */
+	appConfig: AppConfig | null;
 	/** Transient notifications, oldest-first (the Toaster renders + times them out). At-most a handful live
 	 * at once; a failed wire call that has no better home (no chat tab to host an error turn) lands here. */
 	toasts: Toast[];
@@ -663,6 +666,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	settingsSection: SettingsSection.Providers,
 	onboarding: null,
 	theme: DEFAULT_CONFIG.theme,
+	appConfig: null,
 	toasts: [],
 	setStatus: (status) => set({ status }),
 	setWelcome: (protocolVersion) => set({ protocolVersion }),
@@ -1133,7 +1137,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	openOnboarding: (mode) => set({ onboarding: mode }),
 	closeOnboarding: () => set({ onboarding: null }),
 	setSettingsSection: (section) => set({ settingsSection: section }),
-	applyConfig: (config) => set({ theme: config.theme }),
+	applyConfig: (config) => set({ theme: config.theme, appConfig: config }),
 	requestChangesView: (workspaceId, path) => set({ changesRequest: { workspaceId, path } }),
 	pushToast: (toast) => {
 		const twin = get().toasts.find(

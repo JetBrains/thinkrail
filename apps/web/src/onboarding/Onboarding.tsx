@@ -1,9 +1,10 @@
 import { ExternalLink } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../components/ui/dialog";
 import { useAppStore } from "../store";
-import { markOnboardingSeen, readOnboardingSeen } from "./legacyStorage";
+import { clearLegacySeen, readLegacySeen } from "./legacyStorage";
+import { markIntroSeen } from "./state";
 
 /** Where worktrees live on disk. Mock (frontend-only) — the real path is host-owned; wired later. */
 const MOCK_ROOT = "~/.thinkrail/worktrees";
@@ -69,6 +70,7 @@ export function Onboarding() {
 	const mode = useAppStore((s) => s.onboarding);
 	const openOnboarding = useAppStore((s) => s.openOnboarding);
 	const closeOnboarding = useAppStore((s) => s.closeOnboarding);
+	const appConfig = useAppStore((s) => s.appConfig);
 	const [page, setPage] = useState(0);
 	const [selected, setSelected] = useState(0);
 	// Autoplay: `started` guards a single run per visit; `activeAuto` is the index currently filling (or
@@ -77,10 +79,21 @@ export function Onboarding() {
 	const [activeAuto, setActiveAuto] = useState<number | null>(null);
 	const [maxPlayed, setMaxPlayed] = useState(-1);
 
-	// Auto-open once, ever: only when the durable "seen" flag has not been set.
+	// Auto-open once, ever — decided only when config is known (after server.welcome). A device that saw
+	// #113's localStorage-era onboarding is folded into config instead of re-nagged. The ref guards
+	// against re-firing on unrelated config changes (e.g. a theme update) racing the settings broadcast.
+	const autoOpenDecided = useRef(false);
 	useEffect(() => {
-		if (!readOnboardingSeen()) openOnboarding("first-run");
-	}, [openOnboarding]);
+		if (!appConfig || autoOpenDecided.current) return;
+		autoOpenDecided.current = true;
+		if (appConfig.onboarding?.introSeenAt) return;
+		if (readLegacySeen()) {
+			markIntroSeen();
+			clearLegacySeen();
+			return;
+		}
+		openOnboarding("first-run");
+	}, [appConfig, openOnboarding]);
 
 	// Kick off the one-time autoplay the first time screen 2 is shown in this visit.
 	useEffect(() => {
@@ -117,7 +130,7 @@ export function Onboarding() {
 	};
 
 	const finish = () => {
-		if (firstRun) markOnboardingSeen();
+		if (firstRun) markIntroSeen();
 		setPage(0);
 		setSelected(0);
 		setStarted(false);

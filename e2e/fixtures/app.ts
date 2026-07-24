@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { Locator, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
 import type { Workspace } from "@thinkrail/contracts";
+import { seedConfig } from "./config";
 import {
 	E2E_DATA_DIR,
 	E2E_FIXTURE_REPO,
@@ -26,6 +27,9 @@ import { fixtureRepoHealthy, seedFixtureRepo } from "./repo";
  * the host aborts a rename whose record is already gone instead of resurrecting the file.
  */
 function resetState(): void {
+	// Canonical config every test (both onboarding flags pre-seen), undoing any onboarding-spec variant so
+	// a virgin/migration case can't poison a later spec — the host re-reads config.json per request.
+	seedConfig();
 	rmSync(join(E2E_DATA_DIR, "projects.json"), { force: true });
 	rmSync(join(E2E_DATA_DIR, "worktrees"), { recursive: true, force: true });
 	rmSync(join(E2E_PI_AGENT_DIR, "sessions"), { recursive: true, force: true });

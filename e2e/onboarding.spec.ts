@@ -1,35 +1,66 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { openAppFresh } from "./fixtures/app";
+import { seedConfig } from "./fixtures/config";
+import { E2E_DATA_DIR } from "./fixtures/paths";
 
 // The first-run onboarding overlay: a large card floating over the still-visible IDE. It auto-opens once
-// (guarded by a localStorage "seen" flag), blocks dismissal on first run, and is re-openable from the
-// left-panel help button in a dismissible "review" mode. The global storageState seeds "seen" so the
-// blocking overlay never covers the rest of the suite. Two screens: worktrees root → feature carousel.
+// (gated on the host-synced `AppConfig.onboarding.introSeenAt`), blocks dismissal on first run, and is
+// re-openable from the left-panel help button in a dismissible "review" mode. `resetState` seeds a
+// pre-seen config so the blocking overlay never covers the rest of the suite; the first-run tests below
+// flip the host to a virgin config (write `config.json` + reload) to exercise auto-open + legacy migration.
+
+function configOnDisk(): { onboarding?: { introSeenAt?: string } } {
+	return JSON.parse(readFileSync(join(E2E_DATA_DIR, "config.json"), "utf8"));
+}
+
+/** Reset, then flip the host to a virgin (never-onboarded) config and reload so welcome re-reads it. */
+async function openAppVirgin(page: import("@playwright/test").Page): Promise<void> {
+	await openAppFresh(page);
+	seedConfig({ theme: "dark" });
+	await page.reload();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+}
 
 test.describe("onboarding first run", () => {
-	// Override the global "seen" seed so the overlay auto-opens as a blocking first run.
-	test.use({ storageState: { cookies: [], origins: [] } });
-
-	test("auto-opens, blocks Escape, and confirms path → get started", async ({ page }) => {
-		await openAppFresh(page);
-
+	test("auto-opens on a virgin config, blocks Escape, and finishing persists host-side", async ({
+		page,
+	}) => {
+		await openAppVirgin(page);
 		const overlay = page.getByTestId("onboarding");
 		await expect(overlay).toBeVisible();
-
-		// The IDE stays visible beneath the overlay (this is a card, not a full-screen takeover).
 		await expect(page.getByTestId("shell")).toBeVisible();
-
-		// Screen 1 shows the worktrees root inside the media placeholder; Escape must NOT dismiss a
-		// blocking first run.
-		await expect(page.getByTestId("onboarding-root")).toContainText(".thinkrail/worktrees");
 		await page.keyboard.press("Escape");
 		await expect(overlay).toBeVisible();
 
-		// Confirm path advances to screen 2; Get started finishes.
 		await page.getByTestId("onboarding-next").click();
-		await expect(page.getByTestId("onboarding-feature-0")).toBeVisible();
 		await page.getByTestId("onboarding-done").click();
 		await expect(overlay).toBeHidden();
+
+		// The seen-flag landed in the HOST's config.json (not this device) …
+		await expect.poll(() => configOnDisk().onboarding?.introSeenAt).toBeTruthy();
+		// … so a reload (fresh client state) does not re-open the overlay.
+		await page.reload();
+		await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+		await expect(page.getByTestId("onboarding")).toHaveCount(0);
+	});
+
+	test("a device that saw the localStorage-era onboarding is migrated, not re-nagged", async ({
+		page,
+	}) => {
+		await openAppFresh(page);
+		await page.evaluate(() => localStorage.setItem("thinkrail:onboardingSeen", "true"));
+		seedConfig({ theme: "dark" });
+		await page.reload();
+		await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+
+		// No overlay — and the legacy flag folded into host config, then cleared from the device.
+		await expect(page.getByTestId("onboarding")).toHaveCount(0);
+		await expect.poll(() => configOnDisk().onboarding?.introSeenAt).toBeTruthy();
+		await expect
+			.poll(() => page.evaluate(() => localStorage.getItem("thinkrail:onboardingSeen")))
+			.toBeNull();
 	});
 });
 

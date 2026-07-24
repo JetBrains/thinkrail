@@ -880,6 +880,16 @@ test("the toast helper enqueues by variant and omits an absent title", () => {
 	expect(useAppStore.getState().toasts[0]).not.toHaveProperty("title");
 });
 
+test("applyConfig stores the whole server-synced config (onboarding gate reads it)", () => {
+	expect(useAppStore.getState().appConfig).toBeNull();
+	useAppStore
+		.getState()
+		.applyConfig({ theme: "dark", onboarding: { introSeenAt: "2026-01-01T00:00:00.000Z" } });
+	expect(useAppStore.getState().appConfig?.onboarding?.introSeenAt).toBe(
+		"2026-01-01T00:00:00.000Z",
+	);
+});
+
 test("applyConfig folds the server-synced app config in (theme is an opaque host-owned value)", () => {
 	// The themes module resolves/applies it; the store preserves exactly the id received from the host.
 	useAppStore.getState().applyConfig({ theme: "acme.solarized" });
