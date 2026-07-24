@@ -71,7 +71,7 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   `provider.login` frame (creating `activeLogin` if the frame arrived first; ignoring frames for a different
   live login), **`clearLoginInput()`** drops the live input the instant a reply is sent (no double-submit),
   and **`clearLogin()`** dismisses it. The **settings surface** state — **`settingsOpen`** +
-  **`settingsSection`** (a const-object enum: `Providers`/`Github`/`Appearance`) with
+  **`settingsSection`** (a const-object enum: `Providers`/`Github`/`Appearance`/`Templates`) with
   **`openSettings(section?)`** (deep-links to a section, defaults to Providers) / **`closeSettings()`** /
   **`setSettingsSection()`** — lives here so the top-bar gear AND the Welcome provider warning open Settings
   to a section without prop-drilling through the shell. The **theme** state — **`theme: ThemeId`** (the
@@ -88,7 +88,14 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   the existing id instead of stacking a twin) and **caps the queue at 5** (oldest drop — the viewport doesn't
   scroll, so the newest must stay visible).
   It's the home for a **rejected wire call with no better place to land** (no chat tab to host an error turn),
-  complementing `appendErrorTurn` (which handles the in-chat case). The **live-refresh signal** —
+  complementing `appendErrorTurn` (which handles the in-chat case).
+  The host-wide **`templatesVersion: number`** counter + **`bumpTemplatesVersion()`** (increment) is a bare
+  invalidation signal, the same shape as `fsChangesByWorkspace`'s `tick` below — **`panels/TemplatesSettings.tsx`**
+  and **`chat/TemplateEditorDialog.tsx`** call it after a `template.save`/`delete`, and the Templates
+  settings panel's own lists refetch off it (its `useTemplateList` fetch generation). It is deliberately
+  NOT a freshness source for the composer's `/` menu — that fetch runs uncached on every menu open,
+  since files also change outside the app where no in-app counter can see (see `chat/SPEC.md`'s Template
+  slots section); the store holds only the counter, never fetches. The **live-refresh signal** —
   **`fsChangesByWorkspace: Record<workspaceId, { tick, paths, truncated }>`** with
   **`noteFsChanged(payload)`** (folds a `workspace.fsChanged` push: `tick` increments per frame;
   `paths`/`truncated` are the last batch) — panels select their workspace's entry and refetch on `tick`

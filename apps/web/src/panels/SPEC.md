@@ -142,14 +142,39 @@ a project picker, the prompt hero, and the reused
   Connected (Disconnect) / ready (Connect) / not signed in (in-app `central login` + Retry) / not installed
   (the host's per-OS copyable install command — from `jbcentralInstall`, for the *host's* OS, never the
   browser's — + Recheck); each mutation re-reads `provider.status`) **`GithubSettings`** (the "Local GitHub" block — `github.authStatus()`
-  Connected + login / Not connected + Refresh); and **`AppearanceSettings`** (the **theme picker** — the
-  bundled catalog from `themes`, with the resolved active selection from `store.theme` marked;
-  clicking one fires `settings.update` and the UI **converges on the `settings.changed` broadcast** (no
-  optimistic apply), a rejected update raising a toast). The picker never owns a theme list — it renders
-  the catalog the glob discovered at build time. A single dimmed "General" nav item
-  ("Soon") still signals the shell is
-  built to grow. `ProvidersSettings`/`AppearanceSettings` are the **integration pieces** (store + transport);
-  the `LoginDialog` stays presentational (`auth` module).
+  Connected + login / Not connected + Refresh); **`AppearanceSettings`** (the **theme picker** — the
+  bundled catalog from `themes`, with the resolved active selection from `store.theme` marked; clicking
+  one fires `settings.update` and the UI **converges on the `settings.changed` broadcast** (no optimistic
+  apply), a rejected update raising a toast; the picker never owns a theme list — it renders the catalog
+  the glob discovered at build time); and **`TemplatesSettings`** — two groups, **Global** and **This
+  project** (the project group renders only with an active workspace), each a header with a **New**
+  button plus its rows, fetched via **two independent `template.list` calls** (both refetched whenever the
+  store's `templatesVersion` bumps, each with its own failure flag so one's success can never clobber the
+  other's still-real failure): unscoped (`{}`) for **Global**, and `{ workspaceId }` filtered to
+  `scope === "project"` for **This project**. The unscoped call matters specifically because the server's
+  `template.list { workspaceId }` response is **shadow-merged** (`templates.ts`'s `listTemplates`: a
+  project template wins over a same-named global one) — right for the composer's `/` menu, but if Settings
+  used that same workspace-scoped call for its Global group too, a shadowed global template would vanish
+  from view entirely with no way to find, edit, or delete it
+  (`data-testid="template-row"`: name + description, and — project rows only — an
+  **Open as file** action that opens `.pi/prompts/<name>.md` through the exact same `openFile.ts`
+  `openFileInTab` the file tree uses, then closes Settings, and an **Edit** action; a global template has
+  no worktree to open a file tab against, so global rows stay dialog-only). **New**/**Edit** open the shared
+  `chat/TemplateEditorDialog` (see `chat/SPEC.md`'s Save-as-template bullet — it lives in `chat/` because
+  `HistoryOverlay`'s save-as-template action needs the identical form, and `chat/` can't import
+  `panels/`). **Delete** is a `ConfirmPopover` on the row (the same anchored-confirm pattern
+  `ProjectTree.tsx`'s workspace-remove uses) calling `template.delete` directly — the dialog itself is
+  never involved in deletion. **R4 — starter-templates offer:** when the **Global** group's fetch has
+  resolved with zero rows and no error, its empty state swaps the bare "No templates yet." for that same
+  hint plus a button (`data-testid="template-starters"`) — clicking it `template.save`s four verbatim
+  starter templates (review/explain/tests/standup; scope `"global"`, body assembled client-side via
+  `chat/templateText.ts`'s `assembleTemplate`, the same helper `TemplateEditorDialog` uses) sequentially,
+  then bumps `templatesVersion` once, the same invalidation the row list already refetches on — the
+  offer disappears on its own next render once the list is non-empty, no dismiss state to track. **This
+  project**'s empty state is unchanged (still the bare text) — the offer is Global-only, since it only
+  ever seeds global files. No server change. A single dimmed "General" nav item ("Soon") still signals the shell is
+  built to grow. `ProvidersSettings`/`AppearanceSettings`/`TemplatesSettings` are the **integration pieces**
+  (store + transport); the `LoginDialog` stays presentational (`auth` module).
   Panels compose their own sub-panels
   (e.g. `RightPanel`→`FileTree`/`ChangesPanel`, `CenterTabs`→`FilePane`→`MonacoEditor`) — an internal hierarchy.
   When the active workspace has no open center tab, `CenterTabs` uses the empty surface as a persistent
@@ -182,7 +207,7 @@ a project picker, the prompt hero, and the reused
   one set or the other on the active-workspace branch.)
 - **Allowed deps:** `store`, `transport`, `components/ui` (incl. `popover`/`command`/`textarea` for the
   dialog), `chat` (`ModelSelector`/`ThinkingSelector`, reused by `NewWorkspaceDialog`; `Markdown`,
-  reused by `MarkdownPreview`), `lib`, `themes` (catalog + generic application contract),
+  reused by `MarkdownPreview`; `TemplateEditorDialog`, reused by `TemplatesSettings`), `lib`, `themes` (catalog + generic application contract),
   `contracts`; `lucide-react`; and the heavy libs each lazy panel owns (`monaco-editor`, `shiki`,
   `@xterm/*`) loaded via `import()`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `shell`; reaching across unrelated panels.

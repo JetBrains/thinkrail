@@ -2,6 +2,8 @@ import type {
 	AskUserQuestionResult,
 	ImageContent,
 	PromptHit,
+	SlashCommandInfo,
+	TemplateInfo,
 	ThinkingLevel,
 	WireModel,
 } from "@thinkrail/contracts";
@@ -26,6 +28,10 @@ import { HistoryOverlay } from "./HistoryOverlay";
 import { type ChatRow, deriveRows, rowIndexForTurn } from "./rows";
 import { isSkillPath, SkillsDialog } from "./SkillsDialog";
 import { StreamIndicator, type StreamStatus, streamStatus } from "./StreamIndicator";
+import { parseTemplateSlots } from "./slotSession";
+import { TemplateEditorDialog } from "./TemplateEditorDialog";
+import { shouldApplyTemplatePick } from "./templatePick";
+import { stripFrontmatter } from "./templateText";
 import "./tools/register"; // side-effect: register the built-in pi tool renderers (bash/read/edit/write)
 import { ChatTurnView } from "./turns";
 import type { ChatTurn } from "./types";
@@ -57,6 +63,25 @@ function turnAnchorText(turn: ChatTurn): string {
 			.join("\n");
 	}
 	return "";
+}
+
+/** A fresh `template.list` row, mapped to the shape the composer's `/` menu already renders
+ * (`Composer.tsx:246-261`, unchanged) — `sourceInfo` synthesized to match pi's own prompt-template
+ * convention exactly (`createSyntheticSourceInfo` in `@earendil-works/pi-coding-agent`'s
+ * `core/source-info.js`): `source: "local"`, `origin: "top-level"`, `scope` mapped from our
+ * "global"/"project" to pi's "user"/"project". */
+function templateToCommand(t: TemplateInfo): SlashCommandInfo {
+	return {
+		name: t.name,
+		...(t.description ? { description: t.description } : {}),
+		source: "prompt",
+		sourceInfo: {
+			path: t.filePath,
+			source: "local",
+			scope: t.scope === "global" ? "user" : "project",
+			origin: "top-level",
+		},
+	};
 }
 
 /** Context threaded to the Virtuoso footer so the streaming loader lives at the end of the conversation. */
@@ -180,6 +205,12 @@ export default function ChatView({
 	// The chat's TODO plan, surfaced inline via a header strip that opens a popup over the chat (SPEC §Chat TODO plan).
 	const plan = useChatTodos(workspaceId, sessionId);
 	const [planOpen, setPlanOpen] = useState(false);
+	const [slashActive, setSlashActive] = useState(false);
+	const [templates, setTemplates] = useState<TemplateInfo[]>([]);
+	// The history overlay's save-as-template dialog: non-null while open, carrying the prompt hit its body
+	// is prefilled from — `TemplateEditorDialog` itself is always mounted (controlled by `open` below), the
+	// same idiom `panels/TemplatesSettings.tsx` uses for its own New/Edit instance.
+	const [saveAsTemplateHit, setSaveAsTemplateHit] = useState<PromptHit | null>(null);
 
 	const virtuosoRef = useRef<VirtuosoHandle>(null);
 	const { followOutput, handleAtBottom, showScrollButton, scrollToBottom, containerProps } =
@@ -223,6 +254,39 @@ export default function ChatView({
 			.then((c) => useAppStore.getState().setCommands(sessionId, c))
 			.catch(() => {});
 	}, [sessionId]);
+
+	// Fresh prompt templates for the `/` menu merge (`mergedCommands` below) — fetched on EVERY menu-open
+	// transition (`slashActive` flipping true via `onSlashActive`; it stays true while the user keeps
+	// typing the query, so this never refires per keystroke). Deliberately uncached: prompt files change
+	// outside the app too (pi CLI, an editor, a git pull), which no in-app invalidation signal can see —
+	// an earlier `(workspaceId, templatesVersion)` cache here served those externally-changed files stale
+	// for the rest of the chat. The server intentionally re-reads its dirs per call for exactly this
+	// freshness (its SPEC calls the readdirs cheap), so the client simply asks each time the menu opens.
+	// This is what keeps this path fresh where the typed-through `/name args` expansion (pi's own
+	// session-create-time `commands` snapshot) is deliberately stale — see `chat/SPEC.md`'s Template
+	// slots section. The previous (possibly stale) list stays rendered until the fresh one lands — a
+	// same-open-transition flicker would be worse than a few-ms-stale row.
+	useEffect(() => {
+		if (!slashActive) return;
+		let cancelled = false;
+		getTransport()
+			.request("template.list", { workspaceId })
+			.then((res) => {
+				if (!cancelled) setTemplates(res.templates);
+			})
+			.catch(() => {});
+		return () => {
+			cancelled = true;
+		};
+	}, [slashActive, workspaceId]);
+
+	// The composer's `/` menu merge: pi's `commands` snapshot minus its now-stale `source === "prompt"`
+	// entries, plus the fresh template list mapped to the same `SlashCommandInfo` shape — one list,
+	// `Composer`'s rendering is unchanged (`Composer.tsx:246-261`).
+	const mergedCommands = useMemo(
+		() => [...commands.filter((c) => c.source !== "prompt"), ...templates.map(templateToCommand)],
+		[commands, templates],
+	);
 
 	// Refresh token/cost stats when a turn starts and ends (display only — `pi` owns the numbers).
 	// biome-ignore lint/correctness/useExhaustiveDependencies: `isStreaming` is the refetch trigger, not read
@@ -321,6 +385,45 @@ export default function ChatView({
 		composerRef.current?.insertAndSubmit(hit.text, isStreaming ? "followUp" : "send");
 		closeHistory();
 	};
+
+	// A prompt hit's save-as-template action (row button or Cmd/Ctrl+S): close the overlay and open the
+	// shared editor dialog, body-prefilled with the hit's text — the dialog owns naming/scope/save from here.
+	const onSaveAsTemplateHit = (hit: PromptHit) => {
+		closeHistory();
+		setSaveAsTemplateHit(hit);
+	};
+
+	// Picking a `source: "prompt"` row: fetch the real file (never `commands`' frozen snapshot), split off
+	// the frontmatter (`templateText.ts`'s shared `stripFrontmatter` — pi's own parser is server-only, but
+	// the boundary rule is pinned to match it exactly), parse the body into slots, and hand the result to
+	// `Composer`'s `insertTemplate` — which starts (or skips, if there are no slots) a slot session,
+	// replacing the whole draft the way a plain slash pick does. Applied only while the pick is still
+	// CURRENT: the fetch is async, so a slow response must never clobber what the user did in the
+	// meantime — typed a fresh draft, or picked another template whose response already landed. The
+	// staleness rules (newest pick wins + the draft is untouched since pick time) live in
+	// `templatePick.ts`'s `shouldApplyTemplatePick`, pure and unit-tested.
+	const pickGeneration = useRef(0);
+	const onPickTemplate = useCallback(
+		(name: string) => {
+			const generation = ++pickGeneration.current;
+			const draftAtPick = useAppStore.getState().sessions[sessionId]?.draft ?? "";
+			getTransport()
+				.request("template.get", { workspaceId, name })
+				.then((t) => {
+					const apply = shouldApplyTemplatePick({
+						generation,
+						latestGeneration: pickGeneration.current,
+						draftAtPick,
+						currentDraft: useAppStore.getState().sessions[sessionId]?.draft ?? "",
+					});
+					if (!apply) return;
+					const parsed = parseTemplateSlots(stripFrontmatter(t.content), t.argumentHint);
+					composerRef.current?.insertTemplate(parsed);
+				})
+				.catch(() => {});
+		},
+		[workspaceId, sessionId],
+	);
 
 	// Consume a `chatLocationRequest` targeting this session: resolve its `messageIndex` to a turn (via
 	// `turnIdByMessageIndex`, falling back to scanning by `anchorText` when the map entry is absent —
@@ -503,26 +606,37 @@ export default function ChatView({
 							onInsert={onInsertHit}
 							onInsertAndSend={onInsertAndSendHit}
 							onOpenMessage={openMessage}
+							onSaveAsTemplate={onSaveAsTemplateHit}
 						/>
 						<Composer
 							ref={composerRef}
 							value={draft}
 							onChange={(v) => useAppStore.getState().setChatDraft(sessionId, v)}
 							isStreaming={isStreaming}
-							commands={commands}
+							commands={mergedCommands}
 							mentionCandidates={mentionCandidates}
 							recentPrompts={recentPrompts}
 							models={models}
 							currentModel={currentModel}
 							thinkingLevel={thinkingLevel}
 							onMentionQuery={onMentionQuery}
+							onSlashActive={setSlashActive}
 							onSelectModel={onSelectModel}
 							onSelectThinking={onSelectThinking}
 							onSubmit={onSubmit}
 							onAbort={onAbort}
 							onHistoryOpen={onHistoryOpen}
+							onPickTemplate={onPickTemplate}
 						/>
 					</div>
+					<TemplateEditorDialog
+						open={saveAsTemplateHit != null}
+						onOpenChange={(open) => {
+							if (!open) setSaveAsTemplateHit(null);
+						}}
+						workspaceId={workspaceId}
+						initialBody={saveAsTemplateHit?.text ?? ""}
+					/>
 					{pendingExtUi ? (
 						<ExtUiDialog key={pendingExtUi.id} request={pendingExtUi} onReply={onExtUiReply} />
 					) : null}
