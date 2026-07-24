@@ -1,6 +1,6 @@
 import type { HistoryScope, MessageHit, PromptHit } from "@thinkrail/contracts";
 import { Check, CornerUpRight } from "lucide-react";
-import { type KeyboardEvent, useEffect, useRef } from "react";
+import { type KeyboardEvent, useEffect, useMemo, useRef } from "react";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -323,20 +323,30 @@ export function HistoryOverlay({
 		el.select();
 	}, [open]);
 
-	// Arrow-key navigation moves `selected` past the edge of what's currently scrolled into view — the
-	// container itself scrolls (mouse wheel, drag), but a keyboard-only selection change never does on its
-	// own. `block: "nearest"` is the minimal scroll: it only moves the container when the selected row is
-	// actually outside the visible range, never re-centers a row that's already visible. `selected`/
-	// `stage`/`result` are all trigger-only — the body reaches the selected row through the DOM (via
-	// `data-selected`), not through these values directly — but a stage toggle or a fresh result can change
-	// which row `selected`'s index now points at without the index itself changing, so all three must
-	// re-run the effect.
-	// biome-ignore lint/correctness/useExhaustiveDependencies: selected/stage/result are re-render triggers, not body inputs — the row is found via the DOM, not these values
+	// A stable identity for the currently-selected row, derived from stage/result/selected. It changes
+	// exactly when the selection lands on a different row — including when a stage toggle or a fresh result
+	// makes the same `selected` index point at a different hit (or none) — so the scroll effect below can
+	// depend on it alone and stay honestly exhaustive. `null` when nothing is selected.
+	const selectedKey = useMemo(() => {
+		const sel = resolveHistorySelection(stage, result, selected);
+		if (!sel) return null;
+		return sel.kind === "prompt"
+			? `p:${sel.hit.sessionId}:${sel.hit.messageIndex ?? sel.hit.timestamp}`
+			: `m:${sel.hit.sessionId}:${sel.hit.messageIndex}`;
+	}, [stage, result, selected]);
+
+	// Arrow-key navigation moves the selection past the edge of what's scrolled into view — the container
+	// itself scrolls (mouse wheel, drag), but a keyboard-only selection change never does on its own.
+	// `block: "nearest"` is the minimal scroll: it only moves the container when the selected row is
+	// actually outside the visible range, never re-centering a row that's already visible. The row is
+	// reached through the DOM (`data-selected`); `selectedKey` is the sole dependency because it's the
+	// thing that changes when "which row is selected" changes.
 	useEffect(() => {
+		if (selectedKey === null) return;
 		resultsRef.current
 			?.querySelector('[data-selected="true"]')
 			?.scrollIntoView({ block: "nearest" });
-	}, [selected, stage, result]);
+	}, [selectedKey]);
 
 	if (!open) return null;
 

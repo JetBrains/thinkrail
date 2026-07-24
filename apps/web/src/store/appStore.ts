@@ -122,7 +122,11 @@ export interface ClosedChat {
  * back if the live transcript drifted from the indexed hit (e.g. after compaction).
  */
 export interface ChatLocationRequest {
+	/** The workspace that owns the target chat. */
 	workspaceId: string;
+	/** The project that owns `workspaceId` — carried so a cross-project jump can activate both IDs
+	 * atomically (and load the destination project's workspaces first if it hasn't been opened yet). */
+	projectId: string;
 	sessionId: string;
 	messageIndex: number;
 	anchorText: string;
@@ -1163,8 +1167,16 @@ export const useAppStore = create<AppState>((set, get) => ({
 	setSettingsSection: (section) => set({ settingsSection: section }),
 	applyConfig: (config) => set({ theme: config.theme }),
 	requestChangesView: (workspaceId, path) => set({ changesRequest: { workspaceId, path } }),
+	// Activate project + workspace together (the same atomicity `activateWorkspace` upholds) so a jump into
+	// another project can never leave `selectedProjectId` on the source while `activeWorkspaceId` points
+	// elsewhere. The caller (`useHistorySearch.openMessage`) ensures the target project's workspaces are
+	// loaded first, so `selectActiveWorkspace` can resolve `activeWorkspaceId`.
 	requestChatLocation: (req) =>
-		set({ chatLocationRequest: req, activeWorkspaceId: req.workspaceId }),
+		set({
+			chatLocationRequest: req,
+			selectedProjectId: req.projectId,
+			activeWorkspaceId: req.workspaceId,
+		}),
 	clearChatLocation: () => set({ chatLocationRequest: null }),
 	pushToast: (toast) => {
 		const twin = get().toasts.find(

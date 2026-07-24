@@ -538,12 +538,13 @@ test("clearWorkspaceTabs drops both open and closed chat runtimes + clears histo
 	expect(st.tabsByWorkspace.ws1).toBeUndefined();
 });
 
-test("requestChatLocation sets the jump deep link AND switches the active workspace; clearChatLocation drops it", () => {
+test("requestChatLocation sets the jump deep link AND switches project+workspace atomically; clearChatLocation drops it", () => {
 	const store = useAppStore.getState();
-	useAppStore.setState({ activeWorkspaceId: "ws1" });
+	useAppStore.setState({ selectedProjectId: "p1", activeWorkspaceId: "ws1" });
 
 	store.requestChatLocation({
 		workspaceId: "ws2",
+		projectId: "p2",
 		sessionId: "s1",
 		messageIndex: 3,
 		anchorText: "deploy the docs",
@@ -551,16 +552,20 @@ test("requestChatLocation sets the jump deep link AND switches the active worksp
 	let st = useAppStore.getState();
 	expect(st.chatLocationRequest).toEqual({
 		workspaceId: "ws2",
+		projectId: "p2",
 		sessionId: "s1",
 		messageIndex: 3,
 		anchorText: "deploy the docs",
 	});
-	expect(st.activeWorkspaceId).toBe("ws2"); // the hit's chat can live in a different workspace
+	// A cross-project jump activates BOTH ids together — never leaving selectedProjectId on the source.
+	expect(st.activeWorkspaceId).toBe("ws2");
+	expect(st.selectedProjectId).toBe("p2");
 
 	store.clearChatLocation();
 	st = useAppStore.getState();
 	expect(st.chatLocationRequest).toBeNull();
-	expect(st.activeWorkspaceId).toBe("ws2"); // clearing the request never reverts the workspace switch
+	expect(st.activeWorkspaceId).toBe("ws2"); // clearing the request never reverts the navigation
+	expect(st.selectedProjectId).toBe("p2");
 });
 
 // ---- updateWorkspace: the workspace.updated push folds in without losing local computed state ----

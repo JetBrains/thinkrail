@@ -99,9 +99,14 @@ export function resolveHistorySelection(
  * three gate on the exact same rule and can never disagree on "is this jumpable."
  */
 export function jumpTarget(hit: PromptHit | MessageHit): ChatLocationRequest | null {
-	if (!hit.workspaceId || hit.messageIndex == null || hit.anchorText == null) return null;
+	// `workspaceId` and `projectId` are populated together by the host's `buildHistoryScope` labeler (both
+	// from the same registry entry), so an unmapped-cwd hit lacks both; gate on both to be explicit.
+	if (!hit.workspaceId || !hit.projectId || hit.messageIndex == null || hit.anchorText == null) {
+		return null;
+	}
 	return {
 		workspaceId: hit.workspaceId,
+		projectId: hit.projectId,
 		sessionId: hit.sessionId,
 		messageIndex: hit.messageIndex,
 		anchorText: hit.anchorText,
@@ -220,25 +225,41 @@ export function useHistorySearch(
 
 	const close = useCallback(() => setOpen(false), []);
 
-	const setQuery = useCallback((q: string) => {
-		setQueryState(q);
+	// A query or scope change makes the current result stale. Clear it — not just the selection — so
+	// nothing (Enter / Ctrl+Enter / a row click) can act on a hit that no longer matches what the input
+	// now shows, during the ~100ms debounce + request round-trip before fresh results land. Any prior
+	// error clears too, since a fresh request is on its way.
+	const resetForParamsChange = useCallback(() => {
 		setSelected(0);
+		setResult(null);
+		setError(false);
 	}, []);
+
+	const setQuery = useCallback(
+		(q: string) => {
+			setQueryState(q);
+			resetForParamsChange();
+		},
+		[resetForParamsChange],
+	);
 
 	const cycleScope = useCallback(() => {
 		// The modulo always lands in range given `k` is itself a SCOPE_ORDER member — `?? k` is just to
 		// satisfy noUncheckedIndexedAccess, never an actual fallback in practice.
 		setScopeKind((k) => SCOPE_ORDER[(SCOPE_ORDER.indexOf(k) + 1) % SCOPE_ORDER.length] ?? k);
-		setSelected(0);
-	}, []);
+		resetForParamsChange();
+	}, [resetForParamsChange]);
 
 	// R2's mouse path: the scope picker's dropdown items pick a scope directly rather than stepping
-	// through `cycleScope` — `Ctrl+R` keeps calling `cycleScope` above, unchanged. Resets `selected` the
-	// same way cycling does, for the same reason (a scope change reshapes the flat list under it).
-	const setScope = useCallback((kind: ScopeKind) => {
-		setScopeKind(kind);
-		setSelected(0);
-	}, []);
+	// through `cycleScope` — `Ctrl+R` keeps calling `cycleScope` above, unchanged. Clears the stale result
+	// the same way cycling does, for the same reason (a scope change reshapes the results under it).
+	const setScope = useCallback(
+		(kind: ScopeKind) => {
+			setScopeKind(kind);
+			resetForParamsChange();
+		},
+		[resetForParamsChange],
+	);
 
 	const toggleStage = useCallback(() => {
 		setStage((s) => (s === "compact" ? "zoomed" : "compact"));
@@ -258,10 +279,25 @@ export function useHistorySearch(
 	// Jump to an already-resolved target (see `jumpTarget` above) via the store's `chatLocationRequest`
 	// deep link (see `store/SPEC.md`), then close the overlay. Callers only ever pass a target `jumpTarget`
 	// produced, so there's nothing left to gate here — the "is this jumpable" check happened at the call
-	// site (the icon's render gate / `Shift+Enter` handler / message-hit click), belt-and-suspenders by
-	// construction rather than a redundant guard here.
+	// site (the icon's render gate / `Shift+Enter` handler / message-hit click).
+	//
+	// A jump can cross into a project the user hasn't opened this session, whose workspace list the store
+	// loads lazily (on project expansion). Fetch it first when absent so the atomic
+	// `requestChatLocation` below leaves a resolvable `activeWorkspaceId` — otherwise `selectActiveWorkspace`
+	// would return null and the destination would render blank. A failed fetch still records the request;
+	// `ChatView`'s consumer surfaces "couldn't locate" if the workspace truly can't be resolved.
 	const openMessage = useCallback(
-		(target: ChatLocationRequest) => {
+		async (target: ChatLocationRequest) => {
+			if (!useAppStore.getState().workspaces[target.projectId]?.length) {
+				try {
+					const list = await getTransport().request("workspace.list", {
+						projectId: target.projectId,
+					});
+					useAppStore.getState().setWorkspaces(target.projectId, list);
+				} catch {
+					// fall through — record the request anyway; the consumer handles an unresolved target
+				}
+			}
 			useAppStore.getState().requestChatLocation(target);
 			close();
 		},

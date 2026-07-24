@@ -335,10 +335,14 @@ export default function ChatView({
 		const prefix = anchorText.slice(0, 40);
 		const mappedId = runtime.turnIdByMessageIndex?.[messageIndex];
 		const mapped = mappedId ? turns.find((t) => t.id === mappedId) : undefined;
+		// Fall back to the NEWEST turn whose text matches the anchor (`findLast`, not `find`): a hit is
+		// deduped to its newest occurrence, so when there's no exact index map (a never-hydrated live chat)
+		// or the mapped turn's text no longer matches, the newest match is the right target — matching the
+		// oldest would jump repeated prompts to a stale earlier turn.
 		const target =
 			mapped && turnAnchorText(mapped).includes(prefix)
 				? mapped
-				: turns.find((t) => turnAnchorText(t).includes(prefix));
+				: turns.findLast((t) => turnAnchorText(t).includes(prefix));
 		const index = target ? rowIndexForTurn(rows, target.id) : -1;
 		if (index === -1) {
 			toast.error("couldn't locate the message — the session may have changed");
