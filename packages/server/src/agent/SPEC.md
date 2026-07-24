@@ -98,8 +98,25 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     round-trip to the browser, fire-and-forget methods push, TUI-only members inert); `setExtUiPublisher`
     (server→client push seam), `resolveExtUi` (browser reply), `cancelExtUiForSession` (on dispose),
     `notifyExtUi`.
+  - `strictSampling` — **`strictTool(definition)`**, the opt-in to pi ≥0.82 provider-side constrained
+    sampling (`{type:"json_schema", strict:"prefer"}`): transforms the tool's schema strict-conformant
+    (every object `additionalProperties:false`, all properties required, optionals → `T | null`
+    unions — OpenAI-style strict rejects anything less; pi sends schemas as-is), strips the keywords
+    strict-mode providers reject (`default`, `minItems`/`maxItems`, `maxLength`, `pattern`, … — limits
+    a tool relies on move into prose descriptions + its runtime validator), then insulates both
+    sides — `prepareArguments` null-fills omissions from non-strict models before pi validates,
+    `execute` deep-strips nulls so handlers keep the original schema's optionals (the transcript keeps
+    the model's raw nullable args; web renderers are audited null-tolerant). Record-style nodes
+    (`Type.Record` → patternProperties) are inexpressible under strict and left untouched — a tool
+    carrying one must not opt in. **Scope: `ask_user_question` only, by provider budget** — each
+    null-union costs one of Anthropic's **≤16 union-typed parameters per request** (counted across
+    ALL tools on the request; live 400 at 39 when every custom tool was wrapped). ask costs 3, pinned
+    by `strictSampling.test.ts`; opting in another tool means re-counting that shared budget (and the
+    extension packages would each need their own copy of the helper — they carry no workspace deps).
   - `askUserQuestion` — the host-owned **`ask_user_question`** pi custom tool (`createAskUserQuestionTool`,
-    registered on every session via the `askUserQuestionExtension` factory in `extensions`), designed
+    registered on every session via the `askUserQuestionExtension` factory in `extensions` — **wrapped
+    in `strictTool`** at that seam, so the questionnaire's nested schema is strict-sampled where the
+    model supports it while unit tests keep driving the raw tool), designed
     **ack + terminate** so a questionnaire survives host restarts: `execute` renders nothing and **awaits
     nothing** — it guards on `ctx.hasUI`, runs the pure `validateQuestionnaire`, then immediately returns
     the ack (`details {kind:"ack"}`) with **`terminate: true`**, ending the turn at the tool batch with no

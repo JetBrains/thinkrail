@@ -37,6 +37,7 @@ import type {
 } from "@thinkrail/contracts";
 import { ASK_USER_ANSWERS_CUSTOM_TYPE, isAskUserAnswersMessage } from "@thinkrail/contracts";
 import { type Static, Type } from "typebox";
+import { strictTool } from "./strictSampling";
 
 // ---- limits (mirrors the rpiv contract so the model behaves the same) ----
 export const MAX_QUESTIONS = 4;
@@ -145,6 +146,9 @@ export interface ValidationResult {
 /**
  * Pure runtime validator for the questionnaire args (everything except the `no_ui` guard, which depends
  * on `ctx.hasUI` and stays at the call site). `reserved_label` short-circuits before duplicate checks.
+ * Also owns the count/length limits the TypeBox schema used to carry as `minItems`/`maxItems`/
+ * `maxLength` — strict-mode providers reject those keywords, so `strictTool` strips them from the
+ * advertised schema and this validator is where they are enforced.
  */
 export function validateQuestionnaire(args: AskUserQuestionArgs): ValidationResult {
 	const questions = args.questions ?? [];
@@ -165,6 +169,16 @@ export function validateQuestionnaire(args: AskUserQuestionArgs): ValidationResu
 				ok: false,
 				message: `Error: Each question requires at least ${MIN_OPTIONS} options`,
 			};
+		if (q.options.length > MAX_OPTIONS)
+			return {
+				ok: false,
+				message: `Error: At most ${MAX_OPTIONS} options are allowed per question`,
+			};
+		if (q.header.length > MAX_HEADER_LENGTH)
+			return {
+				ok: false,
+				message: `Error: header must be at most ${MAX_HEADER_LENGTH} characters`,
+			};
 
 		const seenLabels = new Set<string>();
 		for (const o of q.options) {
@@ -176,6 +190,16 @@ export function validateQuestionnaire(args: AskUserQuestionArgs): ValidationResu
 			if (seenLabels.has(o.label))
 				return { ok: false, message: "Error: Option labels must be unique within a question" };
 			seenLabels.add(o.label);
+			if (o.label.length > MAX_LABEL_LENGTH)
+				return {
+					ok: false,
+					message: `Error: Option labels must be at most ${MAX_LABEL_LENGTH} characters`,
+				};
+			if ((o.recommendedReason?.length ?? 0) > MAX_RECOMMENDED_REASON_LENGTH)
+				return {
+					ok: false,
+					message: `Error: recommendedReason must be at most ${MAX_RECOMMENDED_REASON_LENGTH} characters`,
+				};
 		}
 	}
 	return { ok: true, message: "" };
@@ -381,7 +405,11 @@ export function createAskUserQuestionTool(): ToolDefinition<
 	};
 }
 
-/** Extension factory (mirrors `extensions`' pattern): registers the tool on each session's `pi`. */
+/**
+ * Extension factory (mirrors `extensions`' pattern): registers the tool on each session's `pi`,
+ * opted into strict sampling (`strictTool`) — the nested questionnaire schema is exactly where
+ * malformed args hurt. `createAskUserQuestionTool` stays unwrapped so unit tests drive the raw tool.
+ */
 export function askUserQuestionExtension(pi: ExtensionAPI): void {
-	pi.registerTool(createAskUserQuestionTool());
+	pi.registerTool(strictTool(createAskUserQuestionTool()));
 }
