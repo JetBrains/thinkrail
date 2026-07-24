@@ -145,15 +145,20 @@ pin a default mid-run.) Select suites by marker: `bun run e2e`
 runs the **no-agent** suite (`--grep-invert @agent`) — projects/workspaces/files/editor/changes/terminals,
 fast, no auth, run anytime; `bun run e2e:full` runs everything; `bun run e2e:agent` runs only the
 `@agent` specs (which need `pi` authenticated + more time). There is **no fake agent** — agent coverage
-runs against a real provider.
+runs against a real provider. **`bun run e2e:binary`** (after `bun run build:binary`) runs the no-agent
+suite against the **compiled single-file binary** instead of the dev host (skipping the `@dev-seam`
+fake-login specs — those fakes live only in the dev boot): the gate for the regression class that only
+exists inside the artifact (e.g. pi's dynamic imports resolving from `node_modules`), alongside the
+targeted probes in `smoke:binary`.
 
 Separate from the browser suite: `bun run test:workflows` — the headless **workflow-skill suite**
 (`e2e/workflows/`, own Playwright config, no browser/webServer; drives a real in-process pi agent
 through the workflow skills). On-demand only: needs pi auth and spends real provider tokens — never a
 commit/CI gate. Design: `e2e/workflows/SPEC.md`.
 
-Fast gates (also the husky pre-commit): `bun run check:deps` (dependency pins) + `bun run lint` (biome) +
-`bun run typecheck`. Unit tests:
+Fast gates (also the husky pre-commit): `bun run check:deps` (dependency pins) + `bun run check:seams`
+(the pi binary-seam canary — fails when a pi bump adds a bundler-opaque dynamic import that
+`registerBundledRuntime` doesn't statically register) + `bun run lint` (biome) + `bun run typecheck`. Unit tests:
 `bun run test` (bun test, per package). One-time setup for a fresh machine: `bunx playwright install chromium`.
 
 ## Handoff hygiene (before any commit, PR, or "done" summary)

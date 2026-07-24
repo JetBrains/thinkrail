@@ -4,9 +4,10 @@
 // binary are the web UI (a directory of files) and the bundled pi extensions' skills (pi reads SKILL.md
 // via plain fs). So we embed both (`web-assets.generated`, `bundled-extensions.generated`) and, on
 // startup, stage them to per-build cache dirs, point the host at them (`THINKRAIL_STATIC_DIR` + the
-// server's `setBundledExtensions` seam — which also injects the extensions themselves as value-imported
-// factories, since a binary has no `node_modules` to path-load them from), then hand off to the normal
-// bootstrap (`index.ts`).
+// server's `registerBundledRuntime` seam — which also injects the extensions themselves as value-imported
+// factories, since a binary has no `node_modules` to path-load them from, and registers pi's statically-
+// bundled provider flows: OAuth sign-in + Bedrock reach Node-only code through dynamic imports a compiled
+// binary can't resolve), then hand off to the normal bootstrap (`index.ts`).
 //
 // Run-from-source uses `index.ts` directly and never touches this file. (Image-read needs no photon wasm
 // here: the agent's read tool is configured to send images raw — see server `buildSessionSettings`.)
@@ -63,6 +64,6 @@ const staticDir = await stage("web", webAssetsVersion, embeddedWebAssets);
 const skillsDir = await stage("skills", bundledSkillsVersion, embeddedSkillFiles);
 // Respect an explicit override (e.g. pointing at a dev build); otherwise serve the staged UI.
 process.env.THINKRAIL_STATIC_DIR ??= staticDir;
-const { setBundledExtensions } = await import("@thinkrail/server");
-setBundledExtensions({ factories: bundledExtensionFactories, skillsDir });
+const { registerBundledRuntime } = await import("@thinkrail/server");
+await registerBundledRuntime({ factories: bundledExtensionFactories, skillsDir });
 await import("./index");

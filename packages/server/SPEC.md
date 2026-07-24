@@ -22,9 +22,11 @@ and runs the `pi` agent in-process via `createAgentSession`. Launched in-process
 - **Public surface:** `createServer(options) → RunningServer` (`{ port, stop }`) and `bootHost(options)
   → BootedHost` (the process-boot wrapper: resolves the login-shell PATH, picks the port per `portMode`,
   and installs SIGINT/SIGTERM graceful-shutdown handlers around `createServer`), both re-exported from
-  `host/`; plus `setBundledExtensions` (+ its types, re-exported from `agent/`) — the compiled-binary
+  `host/`; plus `registerBundledRuntime` (+ its types, re-exported from `agent/`) — the compiled-binary
   seam by which a launcher that cannot path-load the bundled pi extensions (no `node_modules` inside a
-  `bun build --compile` binary) injects them as value-imported factories + a staged skills dir. The
+  `bun build --compile` binary) injects them as value-imported factories + a staged skills dir, and
+  which registers pi's statically-bundled provider flows (the OAuth flows + the Bedrock module) that pi
+  otherwise reaches through binary-hostile variable-specifier dynamic imports (see the agent SPEC). The
   package also exposes the **`@thinkrail/server/agent` subpath export** (the `agent` barrel): the
   server-side session surface for the **headless workflow-test harness** (`e2e/workflows/`), which
   drives real in-process sessions through the production wiring without booting the HTTP host — a
@@ -59,7 +61,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `assist` | ad-hoc one-shot tasks (workspace naming, …) on a cheap model, best-effort | [assist/SPEC.md](src/assist/SPEC.md) |
 | `dialog` | the host's native folder picker | [dialog/SPEC.md](src/dialog/SPEC.md) |
 
-`src/index.ts` re-exports `host` + the `agent` barrel's `setBundledExtensions` seam; `src/dev.ts` boots
+`src/index.ts` re-exports `host` + the `agent` barrel's `registerBundledRuntime` seam; `src/dev.ts` boots
 the host from env via `bootHost` for dev/e2e.
 
 ## Internal dependency graph

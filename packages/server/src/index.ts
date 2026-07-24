@@ -3,6 +3,6 @@
 export {
 	type BundledExtensionFactory,
 	type BundledExtensions,
-	setBundledExtensions,
+	registerBundledRuntime,
 } from "./agent";
 export * from "./host";

@@ -70,11 +70,11 @@ extensions** (which the server path-loads out of `node_modules` in dev — impos
   when the `.ts` is absent:
   - `src/web-assets.generated.ts` — enumerates `apps/web/dist`: a Bun file-attribute import per asset +
     a `{ route, data }[]` manifest + a content-hash version.
-  - `src/bundled-extensions.generated.ts` — **value-imports the four bundled extension entries**
-    (`pi-web-access`, `pi-visualize`, `pi-spec-graph`, `pi-thinkrail-workflow`), resolved from the
+  - `src/bundled-extensions.generated.ts` — **value-imports the five bundled extension entries**
+    (`pi-web-access`, `pi-visualize`, `pi-spec-graph`, `pi-thinkrail-workflow`, `pi-todos`), resolved from the
     *server package's* module context (absolute paths — they aren't deps of `cli`), so Bun compiles the
     raw `.ts` and their real deps (`yaml`, `linkedom`, `unpdf`, …) into the binary; plus the
-    `pi-spec-graph`/`pi-thinkrail-workflow` `skills/` files embedded like web assets (matching what dev
+    `pi-spec-graph`/`pi-thinkrail-workflow`/`pi-todos` `skills/` files embedded like web assets (matching what dev
     wires via `additionalSkillPaths` — parity, not a superset). Its `.d.ts` types the factories via the
     server's exported `BundledExtensionFactory`, so `cli` still never imports
     `@earendil-works/pi-coding-agent`.
@@ -83,8 +83,10 @@ extensions** (which the server path-loads out of `node_modules` in dev — impos
   then a sibling `<dir>.complete` marker written **last** — readiness is gated on the marker, so a killed
   first run leaves an incomplete cache that's re-extracted next launch. **No stage-then-rename**: Bun's
   `renameSync` of a fresh non-empty dir `EPERM`s on Windows, so the marker replaces the directory-rename
-  publish), sets `THINKRAIL_STATIC_DIR`, registers the factories + staged skills dir via
-  the server's **`setBundledExtensions`** seam, then hands off to `index.ts`. (`bun-pty` self-extracts
+  publish), sets `THINKRAIL_STATIC_DIR`, then **awaits** the server's **`registerBundledRuntime`** seam — which
+  injects the factories + staged skills dir **and** performs pi's binary-only registrations (the
+  statically-bundled OAuth flows + the Bedrock provider module, replacing pi's binary-hostile dynamic
+  imports — see the server agent SPEC) — then hands off to `index.ts`. (`bun-pty` self-extracts
   automatically; **no photon wasm** — the agent's read tool is set to send images raw, server-side.
   Skills must be staged to the *real* filesystem: pi reads `SKILL.md` via plain fs and embeds the path in
   the system prompt.)
@@ -94,10 +96,18 @@ extensions** (which the server path-loads out of `node_modules` in dev — impos
   runtime — e.g. path-loading broke silently for every extension added after the binary build first landed.
   `scripts/smoke-binary.ts` (root: `bun run smoke:binary`, after `build:binary`) boots the built binary
   against throwaway data/agent/cache dirs and asserts: `/health` answers, `/` serves the staged UI, the
-  bundled skills staged to the cache dir, and SIGTERM exits 0. CI builds + smokes the binary on every PR
+  bundled skills staged to the cache dir, **an OAuth sign-in reaches its auth URL** (a WS
+  `provider.loginStart` for the Codex provider must answer the method select and push an `authUrl`
+  frame — offline and credential-free, since pi's flow only does PKCE + a local callback server before
+  notifying the URL; this pins the statically-registered OAuth flows, which can only break inside the
+  artifact — the frames are hand-rolled JSON, keeping `contracts` out of the cli), and SIGTERM exits 0. CI builds + smokes the binary on every PR
   (its host target — the generation/bundling/staging logic is platform-independent). What it can't cover
   without provider auth: the factories registering inside a live session (that's `e2e:agent` territory,
-  run-from-source).
+  run-from-source). The smoke's **broad-net sibling** is `bun run e2e:binary` (root
+  `playwright.binary.config.ts`): the whole no-agent e2e suite executed against this binary — also in CI
+  on every PR. And `bun run check:seams` (root `scripts/check-binary-seams.ts`) is the build-time canary
+  for the seam class: it fails when a pi bump introduces a new bundler-opaque dynamic import the server's
+  `registerBundledRuntime` doesn't statically register.
 
 ## Boundary
 
@@ -107,7 +117,7 @@ extensions** (which the server path-loads out of `node_modules` in dev — impos
   `src/web-assets.generated.*`, `src/bundled-extensions.generated.*`), `src/version.ts` (the release
   version stamped in at build time), `src/update.ts` (the `update` subcommand), and `src/jbcentral.ts` (the
   `jbcentral` subcommand — JetBrains Central CLI proxy wiring).
-- **Allowed deps:** `@thinkrail/server` (`createServer`, `setBundledExtensions`),
+- **Allowed deps:** `@thinkrail/server` (`createServer`, `registerBundledRuntime`),
   `@thinkrail/shared/shellEnv` (`resolveShellEnv`), Bun/Node; the generated build module may
   value-import the bundled extension packages' entries (resolved via the server package — build-time
   only, deleted after compile).
