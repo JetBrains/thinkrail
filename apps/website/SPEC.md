@@ -12,9 +12,13 @@ tags: [website, marketing]
 The project's public website — a single landing page whose creative conceit is that **the site IS the
 IDE**: a faithful HTML/CSS recreation of the ThinkRail shell (title bar, project rail, tab strip,
 files rail, terminal, status bar) whose center "editor" is the normally-scrolling page content. Each
-section poses as a file of a `website` workspace (`README.md`, `why.md`, `features/*.md`,
-`install.sh`, `CONTRIBUTING.md`); the chrome reacts to scroll (active tab,
-tree selection, status-bar line counter) like the editor is switching files.
+section poses as a file of a `website` workspace (`README.md`, `features/*.md`, `install.sh`,
+`CONTRIBUTING.md`) — except `#why`, which poses as a **chat tab** ("Why ThinkRail?") that replays a
+stylized session: the question is typed into the composer, the tab titles itself from it, and the
+answer is an animated metro map that builds itself outward from a YOU hub (five token-colored lines +
+a Comfort Circle). The chrome reacts to scroll (active tab, tree selection, status-bar line counter)
+like the editor is switching files; the why chat, being a chat and not a file, is deliberately absent
+from the files rail.
 
 Not part of the product: nothing in the app depends on it, and it ships to GitHub Pages, not in the
 binary.
@@ -47,3 +51,8 @@ identity. Canonical/OG URLs in `index.html` (and the README website link) point 
 `public/og.png` is a capture of the site's own hero. The transcript in the `features/agent-chat.md`
 section is from a real `pi` session captured in the app while it worked on this repo. Re-capture
 method lives in the task-spec that built this module.
+
+The `#why` chat is, by contrast, a hand-authored *simulation* (no captured session): its metro-map
+SVG is hand-drawn, colored entirely by theme tokens, and its replay/build animation is fully gated
+on `html.anim` (JS present + motion allowed) — the finished map is the static state, so the section
+reads complete with JS disabled and under `prefers-reduced-motion`.
