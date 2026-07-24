@@ -21,6 +21,7 @@ import {
 	type DocTab,
 	type EditorTab,
 	selectActiveWorkspace,
+	selectWorkspaceTick,
 	toast,
 	useAppStore,
 } from "../store";
@@ -132,7 +133,7 @@ export function CenterTabs() {
 							{ sessionId: summary.sessionId, workspaceId: activeWorkspaceId },
 						);
 						if (cancelled) return;
-						useAppStore.getState().hydrateSession(fresh, messagesToRuntime(messages));
+						useAppStore.getState().hydrateSession(fresh, messagesToRuntime(messages), false); // live restore: no reload → no baseline (stays conservatively stale; see hydrateSession)
 					} catch {
 						// Skip a session that failed to load; the others still hydrate.
 					}
@@ -157,12 +158,14 @@ export function CenterTabs() {
 			return;
 		}
 		if (!activeWorkspaceId) return;
+		// Snapshot the sync baseline before the fetch (see selectWorkspaceTick / hydrateSession).
+		const syncedTick = selectWorkspaceTick(useAppStore.getState(), activeWorkspaceId);
 		try {
 			const { summary, messages } = await getTransport().request("session.getMessages", {
 				sessionId,
 				workspaceId: activeWorkspaceId,
 			});
-			useAppStore.getState().hydrateSession(summary, messagesToRuntime(messages), true);
+			useAppStore.getState().hydrateSession(summary, messagesToRuntime(messages), true, syncedTick);
 		} catch (err) {
 			// The chat stays in history for a retry — but say why the click did nothing.
 			toast.error(errorText(err), "Couldn't reopen the chat");
@@ -171,11 +174,15 @@ export function CenterTabs() {
 
 	const startChat = async () => {
 		if (!activeWorkspaceId) return;
+		// Snapshot the sync baseline before the create round-trip (see selectWorkspaceTick / openChatSession).
+		const syncedTick = selectWorkspaceTick(useAppStore.getState(), activeWorkspaceId);
 		try {
 			const { sessionId, model, thinkingLevel } = await getTransport().request("session.create", {
 				workspaceId: activeWorkspaceId,
 			});
-			useAppStore.getState().openChatSession(activeWorkspaceId, sessionId, model, thinkingLevel);
+			useAppStore
+				.getState()
+				.openChatSession(activeWorkspaceId, sessionId, model, thinkingLevel, syncedTick);
 		} catch (err) {
 			// Without this, a failed create makes "+ New chat" do nothing, silently.
 			toast.error(errorText(err), "Couldn't start the chat");

@@ -21,6 +21,7 @@ import type { LoginState } from "../auth";
 import type { HydratedRuntime } from "../chat/hydrate";
 import type { ChatTurn, ExtUiDialogRequest, ToolResultState } from "../chat/types";
 import type { ConnectionStatus } from "../transport";
+import { isSkillPath, selectWorkspaceTick } from "./selectors";
 
 /** A center tab. File tabs (Monaco) and chat tabs share the strip, discriminated by `kind`. */
 export interface FileTab {
@@ -429,6 +430,20 @@ interface AppState {
 	 */
 	fsChangesByWorkspace: Record<string, { tick: number; paths: string[]; truncated: boolean }>;
 	/**
+	 * Per workspace, the `fsChangesByWorkspace` tick of the most recent *skill-relevant* batch — a change
+	 * under a `.claude|.github|.gemini|.pi|.agents/skills` dir, or a truncated wildcard we can't inspect.
+	 * Folded alongside the fs signal in `noteFsChanged`; compared against a session's
+	 * `skillsSyncedTickBySession` to derive the Skills-reload badge (`selectSkillsStale`). Accumulated (not
+	 * overwritten by a later non-skill batch), so a genuine pending skill change is never lost.
+	 */
+	skillChangeTickByWorkspace: Record<string, number>;
+	/**
+	 * Per session, the workspace fs tick it last loaded/reloaded its skills at — set when the runtime is
+	 * created (`openChatSession`/`hydrateSession`, anchored to *now* so only a later change flags it) and
+	 * bumped on a successful reload (`markSkillsSynced`). Drives `selectSkillsStale`.
+	 */
+	skillsSyncedTickBySession: Record<string, number>;
+	/**
 	 * The in-flight in-app OAuth login, if any (flat + session-less — a login runs on the Welcome screen
 	 * before any session exists, so it must NOT live under a session runtime, or its frames get dropped).
 	 * At most one at a time (the dialog is modal).
@@ -492,6 +507,12 @@ interface AppState {
 	setChangesView: (view: "list" | "tree") => void;
 	/** Fold a `workspace.fsChanged` push into the live-refresh signal (tick++, last batch replaces). */
 	noteFsChanged: (payload: WorkspaceFsChangedPayload) => void;
+	/**
+	 * Record a session's skills as synced to `syncedTick` — the workspace fs tick captured at the *start* of
+	 * the reload round-trip (`selectWorkspaceTick`), so a skill change folded while the reload was in flight
+	 * (which the reload did not load) stays past the baseline and keeps the badge lit.
+	 */
+	markSkillsSynced: (sessionId: string, syncedTick: number) => void;
 	/** Replace a file tab's content after a live re-read, recording the fs tick it was loaded at. The tab
 	 * is located across workspaces by its (globally unique) id; a closed tab is a no-op. */
 	updateFileTabContent: (id: string, content: string, tick: number) => void;
@@ -506,6 +527,9 @@ interface AppState {
 		sessionId: string,
 		model: WireModel | null,
 		thinkingLevel: ThinkingLevel,
+		/** Skills sync baseline — the workspace tick captured *before* `session.create` (see
+		 * `selectWorkspaceTick`); omit to anchor at call time (fine when there's no async load in between). */
+		syncedTick?: number,
 	) => void;
 	/** Drop a chat's runtime on tab close (the `AgentSession` is disposed over the wire by the caller). */
 	closeChatRuntime: (sessionId: string) => void;
@@ -523,7 +547,15 @@ interface AppState {
 	 * Drops the session from chat-history (it's open now). `activate` focuses the tab (a user-driven reopen);
 	 * otherwise it only takes focus if the workspace has none yet (auto-restore must not steal focus).
 	 */
-	hydrateSession: (summary: SessionSummary, hydrated: HydratedRuntime, activate?: boolean) => void;
+	hydrateSession: (
+		summary: SessionSummary,
+		hydrated: HydratedRuntime,
+		activate?: boolean,
+		/** Skills sync baseline — the workspace tick captured *before* `session.getMessages`, passed **only**
+		 * for a disk-only attach (which reloads resources against current disk). Omit for a live restore
+		 * (transcript only, no reload): the baseline is left unset so the chat stays conservatively stale. */
+		syncedTick?: number,
+	) => void;
 	appendUserMessage: (sessionId: string, text: string) => void;
 	/**
 	 * Surface a failed send as a visible error turn. The turn-driving wire calls (`session.prompt`/`steer`/
@@ -652,6 +684,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	changesRequest: null,
 	changesView: "list",
 	fsChangesByWorkspace: {},
+	skillChangeTickByWorkspace: {},
+	skillsSyncedTickBySession: {},
 	activeLogin: null,
 	settingsOpen: false,
 	settingsSection: SettingsSection.Providers,
@@ -709,7 +743,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 		// Drop the live-refresh signal too — a removed workspace's fs tick record must not linger.
 		set((state) => {
 			const { [workspaceId]: _gone, ...rest } = state.fsChangesByWorkspace;
-			return { fsChangesByWorkspace: rest };
+			const { [workspaceId]: _skillGone, ...skillRest } = state.skillChangeTickByWorkspace;
+			return { fsChangesByWorkspace: rest, skillChangeTickByWorkspace: skillRest };
 		});
 		if (wasActive) {
 			s.selectProject(projectId); // atomically fall back to the removed workspace's Project Home
@@ -804,15 +839,35 @@ export const useAppStore = create<AppState>((set, get) => ({
 	noteFsChanged: (payload) =>
 		set((s) => {
 			const prev = s.fsChangesByWorkspace[payload.workspaceId];
+			const tick = (prev?.tick ?? 0) + 1;
+			// A skill-dir change (or a truncated wildcard we can't inspect) advances the workspace's
+			// skill-change tick, flagging every session that loaded skills before it (selectSkillsStale).
+			const skillChanged = payload.truncated || payload.paths.some(isSkillPath);
 			return {
 				fsChangesByWorkspace: {
 					...s.fsChangesByWorkspace,
-					[payload.workspaceId]: {
-						tick: (prev?.tick ?? 0) + 1,
-						paths: payload.paths,
-						truncated: payload.truncated,
-					},
+					[payload.workspaceId]: { tick, paths: payload.paths, truncated: payload.truncated },
 				},
+				...(skillChanged
+					? {
+							skillChangeTickByWorkspace: {
+								...s.skillChangeTickByWorkspace,
+								[payload.workspaceId]: tick,
+							},
+						}
+					: {}),
+			};
+		}),
+	markSkillsSynced: (sessionId, syncedTick) =>
+		set((s) => {
+			// A reload can resolve after its chat was disposed (closeChatRuntime/clearWorkspaceTabs) — don't
+			// resurrect a dropped baseline for a session that no longer exists.
+			if (!s.sessions[sessionId]) return {};
+			// Monotonic: out-of-order reload completions (an older request landing last) must never move the
+			// baseline backward and re-light the badge — "synced up to at least tick X" only ever advances.
+			const synced = Math.max(s.skillsSyncedTickBySession[sessionId] ?? 0, syncedTick);
+			return {
+				skillsSyncedTickBySession: { ...s.skillsSyncedTickBySession, [sessionId]: synced },
 			};
 		}),
 	updateFileTabContent: (id, content, tick) =>
@@ -850,11 +905,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 			// Drop the runtimes of this workspace's chats — both open tabs and closed-to-history ones (their
 			// AgentSessions are freed on host shutdown).
 			const sessions = { ...s.sessions };
+			const skillsSyncedTickBySession = { ...s.skillsSyncedTickBySession };
 			for (const tab of s.tabsByWorkspace[workspaceId] ?? []) {
-				if (tab.kind === "chat") delete sessions[tab.sessionId];
+				if (tab.kind === "chat") {
+					delete sessions[tab.sessionId];
+					delete skillsSyncedTickBySession[tab.sessionId];
+				}
 			}
-			for (const closed of s.closedChatsByWorkspace[workspaceId] ?? [])
+			for (const closed of s.closedChatsByWorkspace[workspaceId] ?? []) {
 				delete sessions[closed.sessionId];
+				delete skillsSyncedTickBySession[closed.sessionId];
+			}
 			const { [workspaceId]: _tabs, ...tabsByWorkspace } = s.tabsByWorkspace;
 			const { [workspaceId]: _activeTab, ...activeTabByWorkspace } = s.activeTabByWorkspace;
 			const { [workspaceId]: _closed, ...closedChatsByWorkspace } = s.closedChatsByWorkspace;
@@ -869,6 +930,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				terminalsByWorkspace,
 				activeTerminalByWorkspace,
 				sessions,
+				skillsSyncedTickBySession,
 			};
 		}),
 	addTerminal: (workspaceId) =>
@@ -901,27 +963,40 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) => ({
 			activeTerminalByWorkspace: { ...s.activeTerminalByWorkspace, [workspaceId]: clientId },
 		})),
-	openChatSession: (workspaceId, sessionId, model, thinkingLevel) =>
+	openChatSession: (workspaceId, sessionId, model, thinkingLevel, syncedTick) =>
 		set((s) => {
 			const id = `${workspaceId}:${sessionId}`;
 			const tab: ChatTab = { kind: "chat", id, workspaceId, name: "Chat", sessionId };
 			const tabs = s.tabsByWorkspace[workspaceId] ?? [];
+			const fresh = !s.sessions[sessionId];
 			return {
 				tabsByWorkspace: tabs.some((t) => t.id === id)
 					? s.tabsByWorkspace
 					: { ...s.tabsByWorkspace, [workspaceId]: [...tabs, tab] },
 				activeTabByWorkspace: { ...s.activeTabByWorkspace, [workspaceId]: id },
 				// Keep any existing runtime (idempotent); otherwise start a fresh one.
-				sessions: s.sessions[sessionId]
-					? s.sessions
-					: { ...s.sessions, [sessionId]: newRuntime(model, thinkingLevel) },
+				sessions: fresh
+					? { ...s.sessions, [sessionId]: newRuntime(model, thinkingLevel) }
+					: s.sessions,
+				// A fresh session loads the current on-disk skills, so anchor its sync tick to the load's
+				// request-start (caller-captured; else now): only a *later* skill change flags it stale, and
+				// an idempotent re-open must not re-anchor an already-stale session.
+				...(fresh
+					? {
+							skillsSyncedTickBySession: {
+								...s.skillsSyncedTickBySession,
+								[sessionId]: syncedTick ?? selectWorkspaceTick(s, workspaceId),
+							},
+						}
+					: {}),
 			};
 		}),
 	closeChatRuntime: (sessionId) =>
 		set((s) => {
 			if (!s.sessions[sessionId]) return {};
 			const { [sessionId]: _drop, ...sessions } = s.sessions;
-			return { sessions };
+			const { [sessionId]: _syncDrop, ...skillsSyncedTickBySession } = s.skillsSyncedTickBySession;
+			return { sessions, skillsSyncedTickBySession };
 		}),
 	closeChatToHistory: (sessionId) =>
 		set((s) => {
@@ -989,7 +1064,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				},
 			};
 		}),
-	hydrateSession: (summary, hydrated, activate = false) =>
+	hydrateSession: (summary, hydrated, activate = false, syncedTick) =>
 		set((s) => {
 			if (s.sessions[summary.sessionId]) return {}; // a live/ahead runtime wins — never clobber it
 			const wsId = summary.workspaceId;
@@ -1013,6 +1088,20 @@ export const useAppStore = create<AppState>((set, get) => ({
 			const closed = s.closedChatsByWorkspace[wsId] ?? [];
 			return {
 				sessions: { ...s.sessions, [summary.sessionId]: runtime },
+				// Advance the sync baseline ONLY when this restore actually (re)loaded resources against current
+				// disk — a disk-only attach, where the caller passes its request-start tick. A LIVE restore
+				// reused the server session's already-loaded skills (`getMessages` returns only the transcript,
+				// no reload) and the client can't date them, so the caller passes no tick: leave the baseline
+				// unset → the chat stays conservatively stale if a skill change has been observed, never falsely
+				// clearing the badge for a live session that predates the change.
+				...(syncedTick !== undefined
+					? {
+							skillsSyncedTickBySession: {
+								...s.skillsSyncedTickBySession,
+								[summary.sessionId]: syncedTick,
+							},
+						}
+					: {}),
 				tabsByWorkspace: tabs.some((t) => t.id === id)
 					? s.tabsByWorkspace
 					: { ...s.tabsByWorkspace, [wsId]: [...tabs, tab] },

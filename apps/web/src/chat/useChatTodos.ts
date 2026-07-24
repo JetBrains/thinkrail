@@ -1,7 +1,7 @@
 import type { SessionEventPayload, TodoPlan } from "@thinkrail/contracts";
 import { WS_CHANNELS } from "@thinkrail/contracts";
 import { useEffect, useState } from "react";
-import { useAppStore } from "../store";
+import { selectWorkspaceTick, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { messagesToRuntime, TODO_NUDGE_PREFIX } from "./hydrate";
 import { planToMarkdown } from "./planMarkdown";
@@ -138,11 +138,14 @@ async function nudgeAgent(workspaceId: string, sessionId: string, title: string)
 		});
 	} catch {
 		try {
+			const syncedTick = selectWorkspaceTick(useAppStore.getState(), workspaceId);
 			const { summary, messages } = await getTransport().request("session.getMessages", {
 				sessionId,
 				workspaceId,
 			});
-			useAppStore.getState().hydrateSession(summary, messagesToRuntime(messages), false);
+			useAppStore
+				.getState()
+				.hydrateSession(summary, messagesToRuntime(messages), false, syncedTick);
 			await getTransport().request("session.prompt", { sessionId, text });
 		} catch (err) {
 			console.warn("todo nudge skipped:", errorText(err));

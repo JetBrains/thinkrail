@@ -1,6 +1,7 @@
 import { beforeEach, expect, test } from "bun:test";
 import type { ExtUiRequest, PiEvent, SessionSummary, Workspace } from "@thinkrail/contracts";
 import { type SessionRuntime, toast, useAppStore } from "./appStore";
+import { selectSkillsStale, selectWorkspaceTick } from "./selectors";
 
 // Event fixtures — the reducer only reads the fields below, so casting minimal objects is safe here.
 const agentStart = { type: "agent_start" } as unknown as PiEvent;
@@ -61,6 +62,9 @@ beforeEach(() => {
 		tabsByWorkspace: {},
 		activeTabByWorkspace: {},
 		closedChatsByWorkspace: {},
+		fsChangesByWorkspace: {},
+		skillChangeTickByWorkspace: {},
+		skillsSyncedTickBySession: {},
 		selectedProjectId: null,
 		activeWorkspaceId: null,
 		activeLogin: null,
@@ -923,4 +927,149 @@ test("diff tabs: openTab dedupes by id + activates; view + contents update in pl
 		expect(updated.modified).toBe("new2");
 		expect(updated.loadedTick).toBe(5);
 	}
+});
+
+// The Skills-reload badge (selectSkillsStale) is store-derived, so it must not depend on the ChatView
+// mount that reads it. These drive the real store actions end-to-end.
+const skillFs = (workspaceId: string, paths: string[], truncated = false) => ({
+	workspaceId,
+	paths,
+	truncated,
+});
+const isStale = (workspaceId: string, sessionId: string) =>
+	selectSkillsStale(useAppStore.getState(), workspaceId, sessionId);
+
+test("skills badge: a skill-dir change flags the loaded session; reload clears it for good", () => {
+	const s = () => useAppStore.getState();
+	s().openChatSession("ws1", "a", null, "medium");
+	expect(isStale("ws1", "a")).toBe(false); // nothing changed yet
+
+	// A skill file changes on disk → the session that loaded the older set is stale.
+	s().noteFsChanged(skillFs("ws1", [".claude/skills/foo/SKILL.md"]));
+	expect(isStale("ws1", "a")).toBe(true);
+
+	// The reported bug: re-reading the selector (what a tab-switch remount does — a fresh ChatView reads
+	// the same store) must NOT spuriously toggle it, and it stays stale until an actual reload.
+	expect(isStale("ws1", "a")).toBe(true);
+
+	// A successful reload anchors the session to now → cleared.
+	s().markSkillsSynced("a", selectWorkspaceTick(s(), "ws1"));
+	expect(isStale("ws1", "a")).toBe(false);
+
+	// Later unrelated (non-skill) fs churn must not re-raise the badge — the core regression.
+	s().noteFsChanged(skillFs("ws1", ["src/app.ts"]));
+	s().noteFsChanged(skillFs("ws1", ["README.md"]));
+	expect(isStale("ws1", "a")).toBe(false);
+});
+
+test("skills badge: the skill-change tick is accumulated, so a later non-skill batch can't lose it", () => {
+	const s = () => useAppStore.getState();
+	s().openChatSession("ws1", "a", null, "medium");
+
+	s().noteFsChanged(skillFs("ws1", [".claude/skills/foo/SKILL.md"])); // skill change
+	s().noteFsChanged(skillFs("ws1", ["src/app.ts"])); // later non-skill batch replaces `paths`
+	// Before the fix this false-negatived (the last batch wasn't a skill path); now it stays stale.
+	expect(isStale("ws1", "a")).toBe(true);
+});
+
+test("skills badge: a truncated wildcard batch flags stale even with no skill path", () => {
+	const s = () => useAppStore.getState();
+	s().openChatSession("ws1", "a", null, "medium");
+	s().noteFsChanged(skillFs("ws1", [], true));
+	expect(isStale("ws1", "a")).toBe(true);
+});
+
+test("skills badge: per session — a chat opened after the change isn't flagged; reload clears only its own", () => {
+	const s = () => useAppStore.getState();
+	s().openChatSession("ws1", "a", null, "medium"); // baseline tick 0
+
+	s().noteFsChanged(skillFs("ws1", [".claude/skills/foo/SKILL.md"])); // tick 1
+	// A chat created *now* loads the current skills → not stale, while the older one is.
+	s().openChatSession("ws1", "b", null, "medium");
+	expect(isStale("ws1", "a")).toBe(true);
+	expect(isStale("ws1", "b")).toBe(false);
+
+	// A fresh skill change makes both stale…
+	s().noteFsChanged(skillFs("ws1", [".claude/skills/foo/SKILL.md"])); // tick 2
+	expect(isStale("ws1", "a")).toBe(true);
+	expect(isStale("ws1", "b")).toBe(true);
+
+	// …and reloading one clears only that chat (reloadResources is per-session).
+	s().markSkillsSynced("b", selectWorkspaceTick(s(), "ws1"));
+	expect(isStale("ws1", "a")).toBe(true);
+	expect(isStale("ws1", "b")).toBe(false);
+});
+
+test("skills badge: a skill change mid-reload stays flagged (baseline is captured at reload start)", () => {
+	const s = () => useAppStore.getState();
+	s().openChatSession("ws1", "a", null, "medium");
+	// The user starts a reload; the baseline is snapshot NOW (what the server will load).
+	const reloadBaseline = selectWorkspaceTick(s(), "ws1"); // 0
+	// While the reload request is in flight, a skill file changes and its fsChanged frame folds first.
+	s().noteFsChanged(skillFs("ws1", [".claude/skills/foo/SKILL.md"])); // tick 1
+	// The reload resolves and records the request-START baseline, not the now-newer tick.
+	s().markSkillsSynced("a", reloadBaseline);
+	// The mid-reload change (which the reload did not load) is preserved → still stale.
+	expect(isStale("ws1", "a")).toBe(true);
+});
+
+test("skills badge: closing a chat runtime drops its sync baseline (no leak)", () => {
+	const s = () => useAppStore.getState();
+	s().openChatSession("ws1", "a", null, "medium");
+	s().noteFsChanged(skillFs("ws1", [".claude/skills/foo/SKILL.md"]));
+	s().markSkillsSynced("a", selectWorkspaceTick(s(), "ws1"));
+	expect(s().skillsSyncedTickBySession.a).toBeDefined();
+
+	s().closeChatRuntime("a");
+	expect(s().skillsSyncedTickBySession.a).toBeUndefined();
+});
+
+test("skills badge: markSkillsSynced is monotonic and ignores a disposed session", () => {
+	const s = () => useAppStore.getState();
+	s().openChatSession("ws1", "a", null, "medium");
+
+	// Out-of-order reload completions: a newer baseline lands, then an older request resolves last —
+	// the older tick must not move the baseline backward (which would falsely re-light the badge).
+	s().markSkillsSynced("a", 5);
+	s().markSkillsSynced("a", 2);
+	expect(s().skillsSyncedTickBySession.a).toBe(5);
+
+	// A completion after the runtime was disposed must not resurrect a dropped entry (leak).
+	s().closeChatRuntime("a");
+	s().markSkillsSynced("a", 9);
+	expect(s().skillsSyncedTickBySession.a).toBeUndefined();
+});
+
+const summaryFor = (sessionId: string, live: boolean): SessionSummary => ({
+	sessionId,
+	workspaceId: "ws1",
+	title: "Chat",
+	model: null,
+	thinkingLevel: "medium",
+	isStreaming: false,
+	messageCount: 0,
+	updatedAt: 0,
+	live,
+});
+
+test("skills badge: a LIVE restore stays conservatively stale; a disk attach anchors to its load tick", () => {
+	const s = () => useAppStore.getState();
+	// A skill change was already observed before this client hydrated these sessions.
+	s().noteFsChanged(skillFs("ws1", [".claude/skills/foo/SKILL.md"])); // tick 1
+
+	// A LIVE restore reused the server session's already-loaded (older) skills — no reload — so the caller
+	// passes no baseline: it must stay flagged (Air's finding — never falsely clear a live session that
+	// predates the change).
+	s().hydrateSession(summaryFor("live1", true), { turns: [], toolResults: {}, askAnswers: {} });
+	expect(isStale("ws1", "live1")).toBe(true);
+
+	// A disk-only attach reconstructs the loader against current disk → the caller passes the load's
+	// request-start tick, and the chat is correctly in sync.
+	s().hydrateSession(
+		summaryFor("disk1", false),
+		{ turns: [], toolResults: {}, askAnswers: {} },
+		false,
+		selectWorkspaceTick(s(), "ws1"),
+	);
+	expect(isStale("ws1", "disk1")).toBe(false);
 });
