@@ -138,3 +138,44 @@ test.describe("onboarding review", () => {
 		await expect(page.getByTestId("onboarding-feature-0")).toHaveAttribute("data-active", "false");
 	});
 });
+
+test.describe("worktree game", () => {
+	test("plays five beats deterministically to 5/5 and finishes", async ({ page }) => {
+		await page.emulateMedia({ reducedMotion: "reduce" }); // instant reveals — stable assertions
+		await openAppFresh(page);
+		await page.getByTestId("open-docs").click();
+		await page.getByTestId("onboarding-next").click();
+		await page.getByTestId("onboarding-play").click();
+		await expect(page.getByTestId("onboarding-game")).toBeVisible();
+
+		// Beat 1 (tap): exactly the committed files.
+		for (const path of ["src/app.ts", "src/tuner.ts", "README.md"]) {
+			await page.getByTestId(`game-chip-${path}`).click();
+		}
+		await page.getByTestId("game-reveal").click();
+		await expect(page.getByTestId("game-whyline")).toContainText("starts from a commit");
+		await expect(page.getByTestId(`game-chip-.env`)).toContainText("stays here");
+		await page.getByTestId("game-next").click();
+
+		// Beats 2-5 (choices): pick the correct answer each time.
+		for (const correct of ["own", "fails", "yes", "workspace"]) {
+			await page.getByTestId(`game-choice-${correct}`).click();
+			await page.getByTestId("game-reveal").click();
+			await page.getByTestId("game-next").click();
+		}
+
+		await expect(page.getByTestId("game-score")).toContainText("5 / 5");
+		await page.getByTestId("game-finish").click();
+		await expect(page.getByTestId("onboarding")).toBeHidden();
+	});
+
+	test("skip returns to the carousel, never dismissing the overlay", async ({ page }) => {
+		await openAppFresh(page);
+		await page.getByTestId("open-docs").click();
+		await page.getByTestId("onboarding-next").click();
+		await page.getByTestId("onboarding-play").click();
+		await page.getByTestId("game-skip").click();
+		await expect(page.getByTestId("onboarding-feature-0")).toBeVisible();
+		await expect(page.getByTestId("onboarding")).toBeVisible();
+	});
+});

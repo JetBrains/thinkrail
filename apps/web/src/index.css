@@ -66,6 +66,33 @@
 		}
 	}
 
+	/* Worktree-game beat-1 reveal: a copy of a committed file flies from the project folder into the
+	   workspace (originals never move)… */
+	--animate-chip-fly: chip-fly 600ms ease-out both;
+	@keyframes chip-fly {
+		from {
+			opacity: 0;
+			transform: translateX(-16rem);
+		}
+		to {
+			opacity: 1;
+			transform: none;
+		}
+	}
+	/* …while the original pulses once as its copy departs (provenance without removal). */
+	--animate-origin-pulse: origin-pulse 900ms ease both;
+	@keyframes origin-pulse {
+		0% {
+			box-shadow: none;
+		}
+		30% {
+			box-shadow: 0 0 0 2px var(--primary);
+		}
+		100% {
+			box-shadow: none;
+		}
+	}
+
 	/* Toasts slide up in / down out of the bottom viewport (referenced by `components/ui/toast`). */
 	@keyframes toast-in {
 		from {

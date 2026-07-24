@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../compon
 import { useAppStore } from "../store";
 import { clearLegacySeen, readLegacySeen } from "./legacyStorage";
 import { markIntroSeen } from "./state";
+import { WorktreeGame } from "./WorktreeGame";
 
 /** Where worktrees live on disk. Mock (frontend-only) — the real path is host-owned; wired later. */
 const MOCK_ROOT = "~/.thinkrail/worktrees";
@@ -70,6 +71,8 @@ export function Onboarding() {
 	const mode = useAppStore((s) => s.onboarding);
 	const openOnboarding = useAppStore((s) => s.openOnboarding);
 	const closeOnboarding = useAppStore((s) => s.closeOnboarding);
+	const onboardingView = useAppStore((s) => s.onboardingView);
+	const setOnboardingView = useAppStore((s) => s.setOnboardingView);
 	const appConfig = useAppStore((s) => s.appConfig);
 	const [page, setPage] = useState(0);
 	const [selected, setSelected] = useState(0);
@@ -136,6 +139,7 @@ export function Onboarding() {
 		setStarted(false);
 		setActiveAuto(null);
 		setMaxPlayed(-1);
+		setOnboardingView("intro");
 		closeOnboarding();
 	};
 
@@ -149,7 +153,10 @@ export function Onboarding() {
 		>
 			<DialogContent
 				data-testid="onboarding"
-				hideClose={firstRun}
+				// The game has its own top-right "Skip" (→ back to the carousel, never a full close) — the
+				// Dialog's built-in X would sit in the same corner and either intercept clicks or read as a
+				// second, differently-behaved close control. Escape/outside-click dismissal (below) is untouched.
+				hideClose={firstRun || onboardingView === "game"}
 				overlayClassName="bg-[color-mix(in_srgb,var(--bg-dark)_80%,transparent)]"
 				className="!max-w-none !gap-0 !rounded-[var(--radius-lg)] !border-border2 !bg-bg-dark !p-0 w-[calc(100vw-2rem)] overflow-hidden md:w-[calc(100vw-4rem)] lg:w-[55vw]"
 				onEscapeKeyDown={(e) => {
@@ -159,109 +166,127 @@ export function Onboarding() {
 					if (firstRun) e.preventDefault();
 				}}
 			>
-				<div className="grid md:grid-cols-3 md:gap-x-[3rem]">
-					{/* Text column — left; 32px inset (the 48px column gap supplies the right separation). */}
-					<div className="flex flex-col p-[2rem] md:col-span-1 md:pr-0">
-						<div className="flex-1">
-							{page === 0 ? (
-								<>
-									<DialogTitle className={TITLE}>Welcome to ThinkRail</DialogTitle>
-									<div className="mt-[2rem] flex flex-col gap-md">
-										<span className="text-sm text-muted">A spec-first way to build with AI.</span>
-										<DialogDescription className="max-w-[72ch] text-sm text-muted">
-											ThinkRail works in git-isolated workspaces, keeping your project's intent as a
-											connected spec graph that the agent reads, plans, and builds from.
-										</DialogDescription>
-										<a
-											data-testid="onboarding-docs"
-											href={DOCS_URL}
-											target="_blank"
-											rel="noreferrer"
-											className="inline-flex items-center gap-1 self-start text-primary text-sm no-underline outline-none transition-colors hover:text-muted focus-visible:ring-2 focus-visible:ring-primary"
-										>
-											Learn more in docs
-											<ExternalLink className="size-3.5 shrink-0" />
-										</a>
-									</div>
-								</>
-							) : (
-								<>
-									<DialogTitle className={TITLE}>Key features</DialogTitle>
-									<ul className="mt-[2rem] flex flex-col gap-[0.5rem]">
-										{FEATURES.map((f, i) => {
-											const isAuto = activeAuto === i;
-											const filled = i <= maxPlayed || (activeAuto === null && i === selected);
-											return (
-												<li key={f.title}>
-													<button
-														type="button"
-														data-testid={`onboarding-feature-${i}`}
-														data-active={i === selected}
-														onClick={() => selectFeature(i)}
-														className="relative w-full overflow-hidden rounded-[var(--radius-md)] px-[0.75rem] py-[0.5rem] text-left text-sm"
-													>
-														{isAuto ? (
-															<span
-																key={`fill-${f.title}`}
-																className={`absolute top-0 bottom-0 left-0 animate-fill ${NEUTRAL_SURFACE}`}
-															/>
-														) : filled ? (
-															<span className={`absolute inset-0 ${NEUTRAL_SURFACE}`} />
-														) : null}
-														<span
-															className={`relative ${i === selected ? "text-primary" : "text-text"}`}
+				{onboardingView === "game" ? (
+					<WorktreeGame onExit={() => setOnboardingView("intro")} onFinish={finish} />
+				) : (
+					<div className="grid md:grid-cols-3 md:gap-x-[3rem]">
+						{/* Text column — left; 32px inset (the 48px column gap supplies the right separation). */}
+						<div className="flex flex-col p-[2rem] md:col-span-1 md:pr-0">
+							<div className="flex-1">
+								{page === 0 ? (
+									<>
+										<DialogTitle className={TITLE}>Welcome to ThinkRail</DialogTitle>
+										<div className="mt-[2rem] flex flex-col gap-md">
+											<span className="text-sm text-muted">A spec-first way to build with AI.</span>
+											<DialogDescription className="max-w-[72ch] text-sm text-muted">
+												ThinkRail works in git-isolated workspaces, keeping your project's intent as
+												a connected spec graph that the agent reads, plans, and builds from.
+											</DialogDescription>
+											<a
+												data-testid="onboarding-docs"
+												href={DOCS_URL}
+												target="_blank"
+												rel="noreferrer"
+												className="inline-flex items-center gap-1 self-start text-primary text-sm no-underline outline-none transition-colors hover:text-muted focus-visible:ring-2 focus-visible:ring-primary"
+											>
+												Learn more in docs
+												<ExternalLink className="size-3.5 shrink-0" />
+											</a>
+										</div>
+									</>
+								) : (
+									<>
+										<DialogTitle className={TITLE}>Key features</DialogTitle>
+										<ul className="mt-[2rem] flex flex-col gap-[0.5rem]">
+											{FEATURES.map((f, i) => {
+												const isAuto = activeAuto === i;
+												const filled = i <= maxPlayed || (activeAuto === null && i === selected);
+												return (
+													<li key={f.title}>
+														<button
+															type="button"
+															data-testid={`onboarding-feature-${i}`}
+															data-active={i === selected}
+															onClick={() => selectFeature(i)}
+															className="relative w-full overflow-hidden rounded-[var(--radius-md)] px-[0.75rem] py-[0.5rem] text-left text-sm"
 														>
-															{f.title}
-														</span>
-													</button>
-												</li>
-											);
-										})}
-									</ul>
-								</>
-							)}
+															{isAuto ? (
+																<span
+																	key={`fill-${f.title}`}
+																	className={`absolute top-0 bottom-0 left-0 animate-fill ${NEUTRAL_SURFACE}`}
+																/>
+															) : filled ? (
+																<span className={`absolute inset-0 ${NEUTRAL_SURFACE}`} />
+															) : null}
+															<span
+																className={`relative ${i === selected ? "text-primary" : "text-text"}`}
+															>
+																{f.title}
+															</span>
+														</button>
+													</li>
+												);
+											})}
+										</ul>
+									</>
+								)}
+							</div>
+							{/* Pagination is fixed: always 96px below the content column, 32px above the card edge. */}
+							<div className="pt-24">
+								<Pagination page={page} onSelect={setPage} />
+							</div>
 						</div>
-						{/* Pagination is fixed: always 96px below the content column, 32px above the card edge. */}
-						<div className="pt-24">
-							<Pagination page={page} onSelect={setPage} />
-						</div>
-					</div>
 
-					{/* Media column — right; fills the full card height (top/right/bottom edges), fades into the
-					    card background near the bottom, and floats the primary action over that faded area. */}
-					<div className="relative self-start md:col-span-2">
-						<div data-testid="onboarding-media" className={MEDIA}>
-							{page === 0 ? (
-								<span className="flex flex-col items-center gap-xs">
-									<span className="text-muted">Worktrees are saved in</span>
-									<span data-testid="onboarding-root" className="font-[var(--font-mono)] text-text">
-										{MOCK_ROOT}
+						{/* Media column — right; fills the full card height (top/right/bottom edges), fades into the
+						    card background near the bottom, and floats the primary action over that faded area. */}
+						<div className="relative self-start md:col-span-2">
+							<div data-testid="onboarding-media" className={MEDIA}>
+								{page === 0 ? (
+									<span className="flex flex-col items-center gap-xs">
+										<span className="text-muted">Worktrees are saved in</span>
+										<span
+											data-testid="onboarding-root"
+											className="font-[var(--font-mono)] text-text"
+										>
+											{MOCK_ROOT}
+										</span>
 									</span>
-								</span>
-							) : (
-								activeFeature.title
-							)}
-						</div>
-						{/* Bottom fade: transparent → the exact card background (`--bg-dark`), reaching full opacity
-						    before the bottom so the button sits on a solid band. No blur, no hard divider. */}
-						<div className="pointer-events-none absolute inset-x-0 bottom-0 h-48 bg-[linear-gradient(to_bottom,transparent,var(--bg-dark)_60%)]" />
-						<div className="absolute right-[2rem] bottom-[2rem]">
-							{page === 0 ? (
-								<Button
-									className="text-bg"
-									data-testid="onboarding-next"
-									onClick={() => setPage(1)}
-								>
-									Confirm path
-								</Button>
-							) : (
-								<Button className="text-bg" data-testid="onboarding-done" onClick={finish}>
-									Get started
-								</Button>
-							)}
+								) : (
+									activeFeature.title
+								)}
+							</div>
+							{/* Bottom fade: transparent → the exact card background (`--bg-dark`), reaching full opacity
+							    before the bottom so the button sits on a solid band. No blur, no hard divider. */}
+							<div className="pointer-events-none absolute inset-x-0 bottom-0 h-48 bg-[linear-gradient(to_bottom,transparent,var(--bg-dark)_60%)]" />
+							<div className="absolute right-[2rem] bottom-[2rem] flex items-center gap-sm">
+								{page === 0 ? (
+									<Button
+										className="text-bg"
+										data-testid="onboarding-next"
+										onClick={() => setPage(1)}
+									>
+										Confirm path
+									</Button>
+								) : (
+									<>
+										{selected === 0 ? (
+											<Button
+												className="text-bg"
+												data-testid="onboarding-play"
+												onClick={() => setOnboardingView("game")}
+											>
+												Try it — the 60-second game ▸
+											</Button>
+										) : null}
+										<Button className="text-bg" data-testid="onboarding-done" onClick={finish}>
+											Get started
+										</Button>
+									</>
+								)}
+							</div>
 						</div>
 					</div>
-				</div>
+				)}
 			</DialogContent>
 		</Dialog>
 	);

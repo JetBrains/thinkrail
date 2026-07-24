@@ -441,6 +441,8 @@ interface AppState {
 	/** The onboarding overlay's transient open-state (which mode is showing), or null when closed. The
 	 * durable "seen" bit lives in localStorage (`onboardingStorage`), not here — this is open-state only. */
 	onboarding: "first-run" | "review" | null;
+	/** Which view the overlay shows; the banner deep-links the game. */
+	onboardingView: "intro" | "game";
 	/** The active UI theme (host-owned; `applyConfig` sets it from `server.welcome` / `settings.changed`).
 	 * The DOM side-effect (`applyTheme`) is the shell's job — this holds the value the UI reads. */
 	theme: ThemeId;
@@ -560,8 +562,10 @@ interface AppState {
 	openSettings: (section?: SettingsSection) => void;
 	closeSettings: () => void;
 	/** Open the onboarding overlay: "first-run" is blocking (auto-shown once), "review" is dismissible. */
-	openOnboarding: (mode: "first-run" | "review") => void;
+	openOnboarding: (mode: "first-run" | "review", view?: "intro" | "game") => void;
 	closeOnboarding: () => void;
+	/** Switch which view the overlay shows (the intro carousel vs the worktree game). */
+	setOnboardingView: (view: "intro" | "game") => void;
 	setSettingsSection: (section: SettingsSection) => void;
 	/** Fold the server-synced app config in (from `server.welcome` / the `settings.changed` broadcast). */
 	applyConfig: (config: AppConfig) => void;
@@ -665,6 +669,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	settingsOpen: false,
 	settingsSection: SettingsSection.Providers,
 	onboarding: null,
+	onboardingView: "intro",
 	theme: DEFAULT_CONFIG.theme,
 	appConfig: null,
 	toasts: [],
@@ -1134,8 +1139,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 	openSettings: (section = SettingsSection.Providers) =>
 		set({ settingsOpen: true, settingsSection: section }),
 	closeSettings: () => set({ settingsOpen: false }),
-	openOnboarding: (mode) => set({ onboarding: mode }),
+	openOnboarding: (mode, view = "intro") => set({ onboarding: mode, onboardingView: view }),
 	closeOnboarding: () => set({ onboarding: null }),
+	setOnboardingView: (view) => set({ onboardingView: view }),
 	setSettingsSection: (section) => set({ settingsSection: section }),
 	applyConfig: (config) => set({ theme: config.theme, appConfig: config }),
 	requestChangesView: (workspaceId, path) => set({ changesRequest: { workspaceId, path } }),
