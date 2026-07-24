@@ -5,6 +5,13 @@ import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// For assertions at the end of the fs-PROPAGATION chain (fs.watch → ≤ 1s debounce → WS push → panel
+// re-read → render): the default 5s window was observed flaking under full-suite load on macOS — where
+// recursive fs.watch rides FSEvents, whose delivery latency spikes under load — most readily against
+// the compiled binary (`e2e:binary`). A LOST frame still fails at 10s, so real notifier bugs stay
+// visible; only late delivery is absorbed. Mount-driven reads keep the ordinary `expect`.
+const fsExpect = expect.configure({ timeout: 10_000 });
+
 // Live refresh: the host watches the active worktree (recursive fs.watch → a debounced
 // `workspace.fsChanged` push) and the panels silently re-read — so files/specs/git changes made
 // OUTSIDE the app (Finder, a terminal, the agent) appear with no manual refresh anywhere. The watcher
@@ -23,16 +30,18 @@ test("worktree changes on disk appear live in Specs, All files, Changes, and an 
 		join(worktree, "module-live", "SPEC.md"),
 		"---\nid: sample-live\ntype: module-design\ntitle: Live Module\nparent: sample-root\n---\n\n## Responsibility\n\nWritten on disk mid-session by the e2e suite.\n",
 	);
-	await expect(page.locator('[data-testid="spec-node"][data-spec-id="sample-live"]')).toBeVisible();
+	await fsExpect(
+		page.locator('[data-testid="spec-node"][data-spec-id="sample-live"]'),
+	).toBeVisible();
 
 	// --- All files: an added file appears; a deleted one drops out.
 	await page.getByTestId("tab-files").click();
 	const freshFile = page.getByTestId("file-node").filter({ hasText: "fresh-file.txt" });
 	await expect(page.getByTestId("file-node").filter({ hasText: "README.md" })).toBeVisible();
 	writeFileSync(join(worktree, "fresh-file.txt"), "hello\n");
-	await expect(freshFile).toBeVisible();
+	await fsExpect(freshFile).toBeVisible();
 	rmSync(join(worktree, "fresh-file.txt"));
-	await expect(freshFile).toHaveCount(0);
+	await fsExpect(freshFile).toHaveCount(0);
 
 	// --- Changes: a tracked-file edit surfaces while the tab is open, and the open Monaco diff tab
 	// follows further edits (DiffPane re-reads both sides on the workspace's fs tick).
@@ -43,11 +52,11 @@ test("worktree changes on disk appear live in Specs, All files, Changes, and an 
 	).toBeVisible();
 	await expect(readmeRow).toHaveCount(0);
 	writeFileSync(join(worktree, "README.md"), "# sample-project\n\nedited live by e2e\n");
-	await expect(readmeRow).toHaveAttribute("data-status", "modified");
+	await fsExpect(readmeRow).toHaveAttribute("data-status", "modified");
 	await readmeRow.click();
 	await expect(page.getByTestId("diff-pane")).toContainText("edited live by e2e");
 	writeFileSync(join(worktree, "README.md"), "# sample-project\n\nedited twice by e2e\n");
-	await expect(page.getByTestId("diff-pane")).toContainText("edited twice by e2e");
+	await fsExpect(page.getByTestId("diff-pane")).toContainText("edited twice by e2e");
 
 	// --- Open file tab: the visible tab's content follows the disk (the viewer is read-only, so a
 	// silent swap is conflict-free).
@@ -55,8 +64,8 @@ test("worktree changes on disk appear live in Specs, All files, Changes, and an 
 	await page.getByTestId("file-node").filter({ hasText: "README.md" }).dblclick();
 	await expect(page.getByTestId("editor-pane")).toContainText("edited twice by e2e");
 	writeFileSync(join(worktree, "README.md"), "# sample-project\n\nlive tab reload\n");
-	await expect(page.getByTestId("editor-pane")).toContainText("live tab reload");
-	await expect(page.getByTestId("editor-pane")).not.toContainText("edited twice by e2e");
+	await fsExpect(page.getByTestId("editor-pane")).toContainText("live tab reload");
+	await fsExpect(page.getByTestId("editor-pane")).not.toContainText("edited twice by e2e");
 });
 
 // Performance canary: live refresh must never turn a write storm into a message/refetch storm. The

@@ -2,7 +2,10 @@ import { expect, test } from "@playwright/test";
 import { openAppFresh } from "./fixtures/app";
 
 // The in-app OAuth login flow, driven against a **fake pi OAuth provider** (`e2e-oauth`, registered in
-// dev.ts behind THINKRAIL_E2E_FAKE_OAUTH). This exercises the whole session-less login bridge end-to-end —
+// dev.ts behind THINKRAIL_E2E_FAKE_OAUTH). Tagged @dev-seam: the fake only exists in the dev boot
+// (dev.ts never ships), so the binary suite (`e2e:binary`) grep-inverts these — the artifact's login
+// path is covered by smoke-binary's real-provider probe instead.
+// This exercises the whole session-less login bridge end-to-end —
 // provider.loginStart (detached) → frames on the `provider.login` channel → the accumulating dialog → a
 // loginReply per select/prompt → success → status re-read — with no real provider or browser.
 
@@ -10,9 +13,9 @@ const SIGNIN = '[data-testid="provider-signin"][data-provider="e2e-oauth"]';
 const CONFIGURED =
 	'[data-testid="provider-row"][data-provider="e2e-oauth"][data-configured="true"]';
 
-test("signs in through the OAuth dialog (select → open-URL + paste → success), then signs out", async ({
-	page,
-}) => {
+test("signs in through the OAuth dialog (select → open-URL + paste → success), then signs out", {
+	tag: "@dev-seam",
+}, async ({ page }) => {
 	await openAppFresh(page);
 	await page.getByTestId("open-settings").click();
 	await expect(page.getByTestId("settings-providers")).toBeVisible();
@@ -48,9 +51,9 @@ test("signs in through the OAuth dialog (select → open-URL + paste → success
 	await expect(page.locator(CONFIGURED)).toHaveCount(0);
 });
 
-test("cancelling the OAuth dialog aborts the login and leaves the provider unconfigured", async ({
-	page,
-}) => {
+test("cancelling the OAuth dialog aborts the login and leaves the provider unconfigured", {
+	tag: "@dev-seam",
+}, async ({ page }) => {
 	await openAppFresh(page);
 	await page.getByTestId("open-settings").click();
 	await expect(page.getByTestId("settings-providers")).toBeVisible();

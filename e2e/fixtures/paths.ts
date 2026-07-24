@@ -11,6 +11,14 @@ export const E2E_HOME_DIR = join(E2E_DATA_DIR, "home");
 export const E2E_FIXTURE_REPO = join(E2E_DATA_DIR, "sample-project");
 
 /**
+ * The compiled binary's cache root (`XDG_CACHE_HOME`) for the `e2e:binary` suite, so its web/skills
+ * staging never touches the machine's real cache. Deliberately OUTSIDE `E2E_DATA_DIR`: staging happens
+ * at server boot, and this must not depend on the wipe-then-seed order between global setup and the
+ * webServer launch. Removed in global teardown instead, so every run still stages fresh.
+ */
+export const E2E_BINARY_CACHE = join(tmpdir(), "thinkrail-e2e-binary-cache");
+
+/**
  * A dev/e2e control file the stubbed directory picker (`THINKRAIL_PICK_DIR`) points at: `selectDirectory`
  * returns the path written here, re-read per call. Global setup seeds it with `E2E_FIXTURE_REPO`; a test
  * can rewrite it to hand the picker a different folder without restarting the shared host. Safe only

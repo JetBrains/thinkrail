@@ -98,6 +98,81 @@ function rpc(socket: WebSocket, method: string, params: unknown): Promise<unknow
 	});
 }
 
+/**
+ * Drive a real OAuth sign-in far enough to prove the flow module is inside the binary: start a Codex
+ * OAuth login, answer the login-method select over the push channel, and require the `authUrl` frame.
+ * This pins the seam that statically registers pi's OAuth flows (`registerBundledRuntime`) — pi
+ * otherwise loads them through bundler-opaque dynamic imports that resolve from `node_modules`, so
+ * **only the compiled artifact** can regress here (every OAuth sign-in dies with `Cannot find module
+ * './openai-codex.js'`). Offline + credential-free: pi's flow does PKCE + a local callback server
+ * before notifying the URL, and the login is cancelled right after. Frames are hand-rolled JSON — the
+ * cli module doesn't import `contracts` (its boundary); the shapes are pinned by the host's wire tests.
+ */
+async function assertOAuthLoginReachesAuthUrl(socket: WebSocket): Promise<void> {
+	let loginId: string | undefined;
+	const authUrl = new Promise<string>((resolve, reject) => {
+		const settle = (fn: () => void) => {
+			socket.removeEventListener("message", onPush);
+			fn();
+		};
+		const onPush = (event: MessageEvent) => {
+			if (typeof event.data !== "string") return;
+			const message = JSON.parse(event.data) as {
+				channel?: string;
+				data?: {
+					loginId?: string;
+					frame?: {
+						kind: string;
+						url?: string;
+						message?: string;
+						options?: { id: string; label: string }[];
+					};
+				};
+			};
+			if (message.channel !== "provider.login" || !message.data?.frame) return;
+			const { loginId: pushLoginId, frame } = message.data;
+			switch (frame.kind) {
+				case "select": {
+					// The Codex flow first asks browser-vs-device-code; pick the browser method (no network).
+					const browser = frame.options?.find((o) => /browser/i.test(`${o.id} ${o.label}`));
+					const optionId = browser?.id ?? frame.options?.[0]?.id;
+					if (!optionId || !pushLoginId) {
+						return settle(() =>
+							reject(new Error(`unanswerable select frame: ${JSON.stringify(frame)}`)),
+						);
+					}
+					rpc(socket, "provider.loginReply", { loginId: pushLoginId, value: optionId }).catch(
+						(err) => settle(() => reject(err instanceof Error ? err : new Error(String(err)))),
+					);
+					return;
+				}
+				case "authUrl":
+					return settle(() => resolve(frame.url ?? ""));
+				case "error":
+					// Pre-registration this is exactly "ResolveMessage: Cannot find module './openai-codex.js'".
+					return settle(() => reject(new Error(`login flow failed: ${frame.message}`)));
+				default:
+					return; // progress etc. — keep waiting
+			}
+		};
+		socket.addEventListener("message", onPush);
+		rpc(socket, "provider.loginStart", { providerId: "openai-codex" }).then(
+			(result) => {
+				loginId = (result as { loginId?: string }).loginId;
+			},
+			(err) => settle(() => reject(err instanceof Error ? err : new Error(String(err)))),
+		);
+	});
+
+	try {
+		const reached = await within(authUrl, 30_000, "Codex OAuth login did not reach its auth URL");
+		if (!reached.includes("auth.openai.com")) fail(`unexpected auth URL: ${reached}`);
+	} finally {
+		// Best-effort: unblocks pi's parked manual-code prompt; host shutdown cancels any stragglers.
+		if (loginId !== undefined) rpc(socket, "provider.loginCancel", { loginId }).catch(() => {});
+	}
+}
+
 /** The URL from the CLI's `thinkrail → http://…` line (it may scan past a busy port). */
 async function readServedUrl(): Promise<string> {
 	const decoder = new TextDecoder();
@@ -177,6 +252,10 @@ try {
 		fail("compiled skill.list did not load bundled workflow skills");
 	}
 
+	// A real OAuth sign-in must reach its auth URL — pi's statically-registered flows working inside
+	// the artifact (registerBundledRuntime), reusing the live RPC socket for the push-channel frames.
+	await assertOAuthLoginReachesAuthUrl(rpcSocket);
+
 	// The bundled extensions' skills must be staged to the real filesystem (pi reads SKILL.md via fs).
 	// Full inventory — pi-spec-graph's skill + the whole pi-thinkrail-workflow family (keep in sync with
 	// the family table in packages/pi-thinkrail-workflow/skills/SPEC.md). `choosing-a-workflow` matters
@@ -210,7 +289,7 @@ try {
 	}
 
 	console.log(
-		`smoke OK: ${binary} booted at ${url}, served the UI + staged skills, exited cleanly.`,
+		`smoke OK: ${binary} booted at ${url}, served the UI + staged skills + portable alias, OAuth reached its auth URL, exited cleanly.`,
 	);
 } catch (err) {
 	proc.kill("SIGKILL");

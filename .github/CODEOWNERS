@@ -1,0 +1,4 @@
+# Code owners — review from one of these is required to merge into main
+# (enforced by the "main" ruleset: pull_request.require_code_owner_review).
+
+* @rsolmano @danyaberezun @OLavrik

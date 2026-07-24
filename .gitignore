@@ -23,3 +23,5 @@ apps/cli/src/*.generated.ts
 .env
 .env.local
 .env.*.local
+test-results-binary/
+playwright-report-binary/

@@ -1,1 +1,1 @@
-bun run check:deps && bun run lint && bun run typecheck
+bun run check:deps && bun run check:seams && bun run lint && bun run typecheck

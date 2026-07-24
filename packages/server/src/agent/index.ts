@@ -8,7 +8,7 @@ export {
 	listProjectAliasSkillNames,
 	listSkillCatalog,
 	listSkillCommands,
-	setBundledExtensions,
+	registerBundledRuntime,
 } from "./extensions";
 export * from "./oneshot";
 export * from "./piRuntime";

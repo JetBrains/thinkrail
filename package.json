@@ -31,6 +31,7 @@
 		"format": "biome check --write .",
 		"prepare": "husky",
 		"e2e": "playwright test --grep-invert @agent",
+		"e2e:binary": "playwright test -c playwright.binary.config.ts",
 		"test:workflows": "playwright test -c playwright.workflows.config.ts",
 		"e2e:full": "playwright test",
 		"e2e:full:headed": "playwright test --headed",
@@ -38,7 +39,8 @@
 		"e2e:agent:headed": "playwright test --grep @agent --headed",
 		"e2e:headed": "playwright test --headed",
 		"e2e:ui": "playwright test --ui",
-		"check:deps": "bun scripts/check-catalog.ts"
+		"check:deps": "bun scripts/check-catalog.ts",
+		"check:seams": "bun scripts/check-binary-seams.ts"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.5.0",
