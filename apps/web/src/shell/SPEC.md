@@ -37,7 +37,7 @@ later, the mobile single-view-with-switcher).
   store ← transport (welcome /
   `settings.changed`); the shell just performs the swap, so no other component touches `[data-theme]`.
 - **Public surface:** `Shell`.
-- **Allowed deps:** `panels`, `store` (status + theme + project/workspace context), `transport` (`ConnectionStatus` type), `components/ui`
+- **Allowed deps:** `panels`, `onboarding`, `store` (status + theme + project/workspace context), `transport` (`ConnectionStatus` type), `components/ui`
   (resizable), `components/ErrorBoundary`, `constants` (branding), `themes` (`applyTheme`/`writeThemeHint`).
 - **Forbidden:** `server`/`shared`/`pi`; being imported by `panels`/`store`/`transport`.
 
