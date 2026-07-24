@@ -14,7 +14,9 @@ import { Popover, PopoverContent } from "@/components/ui/popover";
  * title + description (so screen readers announce it — `PopoverContent`, unlike `Dialog`, doesn't wire
  * this for us), Cancel comes first in the DOM so it takes the popover's initial focus (a destructive
  * action is never one stray Enter away), Esc + outside-click cancel (safe), and a `destructive` confirm
- * gets a warning glyph + red button so the weight of the action reads at a glance.
+ * gets a warning glyph + red button so the weight of the action reads at a glance. Only *deliberate*
+ * gestures dismiss it: a programmatic focus move (e.g. the xterm terminal grabbing focus when its async
+ * init lands) must not silently close a confirm the user just opened, so focus-outside is ignored.
  */
 export function ConfirmPopover({
 	open,
@@ -57,6 +59,7 @@ export function ConfirmPopover({
 				align={align}
 				className="flex w-72 flex-col gap-sm p-md"
 				data-testid="confirm-popover"
+				onFocusOutside={(e) => e.preventDefault()}
 			>
 				<div className="flex items-center gap-sm">
 					{destructive ? <TriangleAlert className="size-4 shrink-0 text-red" /> : null}

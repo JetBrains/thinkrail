@@ -41,6 +41,18 @@
 	--spacing-lg: var(--space-lg);
 	--spacing-xl: var(--space-xl);
 
+	/* Onboarding feature-carousel autoplay: the active item's background fills horizontally over 5s
+	   (`forwards` holds it full once complete). Referenced by `panels/Onboarding`. */
+	--animate-fill: fill 5000ms linear forwards;
+	@keyframes fill {
+		from {
+			width: 0%;
+		}
+		to {
+			width: 100%;
+		}
+	}
+
 	/* A block appearing in place (e.g. the ask-question card's atomic reveal once its args are final). */
 	--animate-reveal: reveal 150ms ease-out;
 	@keyframes reveal {

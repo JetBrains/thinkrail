@@ -1,0 +1,14 @@
+{
+	"cookies": [],
+	"origins": [
+		{
+			"origin": "http://localhost:24252",
+			"localStorage": [
+				{
+					"name": "thinkrail:onboardingSeen",
+					"value": "true"
+				}
+			]
+		}
+	]
+}

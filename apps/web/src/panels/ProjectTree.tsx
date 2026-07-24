@@ -1,5 +1,13 @@
 import type { Project, Workspace } from "@thinkrail/contracts";
-import { ChevronDown, ChevronRight, Folder, GitBranch, Plus, Trash2 } from "lucide-react";
+import {
+	ChevronDown,
+	ChevronRight,
+	Folder,
+	GitBranch,
+	HelpCircle,
+	Plus,
+	Trash2,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { PopoverTrigger } from "@/components/ui/popover";
@@ -93,7 +101,7 @@ export function ProjectTree() {
 	};
 
 	return (
-		<nav className="flex flex-col gap-sm">
+		<nav className="flex min-h-full flex-col gap-sm">
 			<header className="flex h-7 items-center justify-between pr-xs pl-sm">
 				<span className="text-xs uppercase tracking-wider text-muted">Projects</span>
 				<AddProjectMenu
@@ -161,6 +169,19 @@ export function ProjectTree() {
 			) : null}
 
 			{dialogs}
+
+			<footer className="mt-auto flex items-center justify-end pt-md">
+				<Button
+					variant="ghost"
+					size="icon"
+					data-testid="open-docs"
+					aria-label="Getting started"
+					title="Getting started"
+					onClick={() => useAppStore.getState().openOnboarding("review")}
+				>
+					<HelpCircle className="size-4" />
+				</Button>
+			</footer>
 		</nav>
 	);
 }

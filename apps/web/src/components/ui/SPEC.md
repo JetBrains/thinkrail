@@ -14,7 +14,7 @@ The shadcn/ui primitives (Radix), copied in and owned here, themed with our desi
 ## Boundary
 
 - **Owns:** `button` (`default`/`destructive`/`outline`/`ghost` variants — `destructive` is the red
-  confirm for irreversible actions), `dialog` (with an optional `hideClose` for chromeless dialogs), `dropdown-menu`,
+  confirm for irreversible actions), `dialog` (with an optional `hideClose` for chromeless dialogs and an optional `overlayClassName` to reskin the backdrop scrim), `dropdown-menu`,
   `popover` (with an optional `container` portal target — pass the host Dialog node so a popover inside a
   Dialog stays wheel-scrollable under its scroll lock), `command` (cmdk combobox body), `textarea`,
   `tooltip`, `resizable`, `toast` (Radix Toast primitives — `ToastProvider`/`Toast`/`ToastViewport`/`Title`/
