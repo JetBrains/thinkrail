@@ -5,7 +5,7 @@ status: active
 title: todos — a chat's per-session TODO plan (read/write)
 parent: module-server
 depends-on: [module-contracts, submodule-server-git]
-references: [module-pi-todos, design-todos]
+references: [module-pi-todos, submodule-web-chat]
 tags: [v2, todos]
 ---
 
@@ -24,7 +24,7 @@ UI path calls it — status stays agent-owned (see [[module-pi-todos]]).
 
 This module does **not** push: a user edit isn't broadcast to other clients. The acting client updates
 optimistically; a second viewer reconciles on the next `pi.event`-driven refetch. Fine for single-owner
-V1 (see [[design-todos]]).
+V1 (the chat-plan UX this feeds: [[submodule-web-chat]]'s "Chat TODO plan").
 
 **Change artifacts (`artifacts.ts`).** Status stays agent-owned, but the host *observes* the transitions
 to attach an item's code changes. `host/server.ts` tees `isTodoToolEnd` off the session event stream and

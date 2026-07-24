@@ -21,7 +21,7 @@ export interface ChatTodos {
 }
 
 /**
- * The chat's TODO list as shared state (design-todos): the single data source for the in-chat plan
+ * The chat's TODO list as shared state (SPEC §Chat TODO plan): the single data source for the in-chat plan
  * popup. Reads `todo.list` for `sessionId`, refetches live off that session's `pi.event`s (any tool end /
  * settled turn, debounced) so the agent's writes surface without a manual refresh, and exposes the user's
  * edit ops. Adding an item nudges the agent (see {@link nudgeAgent}).
