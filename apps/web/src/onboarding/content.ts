@@ -123,3 +123,61 @@ export function scoreLine(score: number): string {
 	if (score >= 4) return `${score} / 5 — most git veterans miss #3`;
 	return `${score} / 5 — almost everyone expects this to work differently`;
 }
+
+/** The "You create workspace <ws> [from <base>]. <prompt>" sentence scaffold every beat opens with. */
+export const PROMPT_FRAME = {
+	subject: "You create workspace",
+	base: "from",
+	glue: ".",
+};
+
+/**
+ * Beat 1's two-folder board (`FoldersBoard.tsx`): header lines for each folder in each phase, and the
+ * fate tags stamped on individual files during reveal. Never a color-only signal (see module SPEC).
+ */
+export const BOARD_COPY = {
+	projectHeader(phase: "predict" | "reveal"): string {
+		return phase === "reveal"
+			? `~/projects/${DEMO_PROJECT} — untouched: all six files still here`
+			: `~/projects/${DEMO_PROJECT} — your project folder`;
+	},
+	workspaceHeader(phase: "predict" | "reveal"): string {
+		return phase === "predict"
+			? `${WORKTREES_ROOT}/${DEMO_PROJECT}/${DEMO_WORKSPACE}`
+			: `${DEMO_WORKSPACE} — a fresh branch, cut from ${DEMO_BASE} at its last commit`;
+	},
+	/** Gold tag on untracked/ignored files left behind in the project folder. */
+	staysHereTag: "stays here",
+	/** Gold tag on the modified file's copy — it travels at its last commit, not its working-tree edit. */
+	staleCommitTag: "at its last commit — without your edit",
+};
+
+/**
+ * The reveal prose for beats 2–5 (`reveals.tsx`), keyed by `ChoiceBeat["reveal"]`. Multi-part beats
+ * (hooks/history) are split into the segments the JSX wraps in styled `<span>`s (bold/mono), so the
+ * component can compose them without owning any copy itself. `satisfies Record<...>` keeps this
+ * exhaustive over every reveal kind at compile time.
+ */
+export const REVEAL_COPY = {
+	tree: {
+		projectAnnotation: "your project — untouched",
+		workspaceAnnotation: "◀ your new workspace",
+	},
+	hooks: {
+		errorLine: "Error: Cannot find module — node_modules/ and .env never travel",
+		leadIn: "That's why ThinkRail has ",
+		setupHooksLabel: "setup hooks",
+		afterLabel: " — declare ",
+		npmInstall: "npm install",
+		copyGlue: " + copy ",
+		envFile: ".env",
+		tail: " once; they run on every new workspace.",
+	},
+	history: {
+		lead: "Yes — one shared ",
+		gitLabel: ".git",
+		tail: ": branches and commits are visible everywhere; only working files are separate.",
+	},
+	payoff:
+		"Another workspace: your mess stays exactly as-is, the fix ships in parallel, and the workspace is deleted after merge.",
+} satisfies Record<ChoiceBeat["reveal"], unknown>;

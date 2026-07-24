@@ -1,11 +1,4 @@
-import {
-	BASE_RULE_HINT,
-	DEMO_BASE,
-	DEMO_FILES,
-	DEMO_PROJECT,
-	DEMO_WORKSPACE,
-	WORKTREES_ROOT,
-} from "./content";
+import { BASE_RULE_HINT, BOARD_COPY, DEMO_BASE, DEMO_FILES } from "./content";
 
 interface FoldersBoardProps {
 	phase: "predict" | "reveal";
@@ -39,10 +32,7 @@ export function FoldersBoard({ phase, picks, onToggle }: FoldersBoardProps) {
 			<div className="flex items-stretch gap-md">
 				<div className="flex-1 rounded-[var(--radius-md)] border border-border2 bg-elevated p-md">
 					<p className="mb-sm font-[var(--font-mono)] text-hint text-xs">
-						~/projects/{DEMO_PROJECT}
-						{phase === "reveal"
-							? " — untouched: all six files still here"
-							: " — your project folder"}
+						{BOARD_COPY.projectHeader(phase)}
 					</p>
 					{DEMO_FILES.map((file) => {
 						const picked = picks.includes(file.path);
@@ -67,7 +57,7 @@ export function FoldersBoard({ phase, picks, onToggle }: FoldersBoardProps) {
 								) : null}
 								{phase === "reveal" && stays.includes(file) ? (
 									<span className="rounded-full bg-gold/15 px-sm text-gold text-xs">
-										stays here
+										{BOARD_COPY.staysHereTag}
 									</span>
 								) : null}
 							</button>
@@ -78,9 +68,7 @@ export function FoldersBoard({ phase, picks, onToggle }: FoldersBoardProps) {
 					className={`flex-1 rounded-[var(--radius-md)] border p-md ${phase === "predict" ? "border-dashed border-border2" : "border-border2 bg-elevated"}`}
 				>
 					<p className="mb-sm font-[var(--font-mono)] text-hint text-xs">
-						{phase === "predict"
-							? `${WORKTREES_ROOT}/${DEMO_PROJECT}/${DEMO_WORKSPACE}`
-							: `${DEMO_WORKSPACE} — a fresh branch, cut from ${DEMO_BASE} at its last commit`}
+						{BOARD_COPY.workspaceHeader(phase)}
 					</p>
 					{phase === "predict" ? (
 						<p className="mt-xl text-center text-hint text-lg">?</p>
@@ -93,7 +81,7 @@ export function FoldersBoard({ phase, picks, onToggle }: FoldersBoardProps) {
 								<span className="min-w-0 flex-1 truncate">{file.path}</span>
 								{file.status === "modified" ? (
 									<span className="rounded-full bg-gold/15 px-sm text-gold text-xs">
-										at its last commit — without your edit
+										{BOARD_COPY.staleCommitTag}
 									</span>
 								) : (
 									<span className="font-semibold text-green">✓</span>

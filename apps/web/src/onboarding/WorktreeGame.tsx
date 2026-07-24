@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button } from "../components/ui/button";
-import { DEMO_BASE, DEMO_WORKSPACE, GAME_BEATS, RECAP, scoreLine } from "./content";
+import { DEMO_BASE, DEMO_WORKSPACE, GAME_BEATS, PROMPT_FRAME, RECAP, scoreLine } from "./content";
 import { FoldersBoard } from "./FoldersBoard";
 import { BeatReveal } from "./reveals";
 
@@ -88,15 +88,18 @@ export function WorktreeGame({ onExit, onFinish }: WorktreeGameProps) {
 			</div>
 
 			<p className="font-semibold text-md text-text">
-				You create workspace{" "}
+				{PROMPT_FRAME.subject}{" "}
 				<span className="font-[var(--font-mono)] text-primary">{DEMO_WORKSPACE}</span>
 				{beat.kind === "tap" ? (
 					<>
 						{" "}
-						from <span className="font-[var(--font-mono)]">{DEMO_BASE}</span>. {beat.prompt}
+						{PROMPT_FRAME.base} <span className="font-[var(--font-mono)]">{DEMO_BASE}</span>
+						{PROMPT_FRAME.glue} {beat.prompt}
 					</>
 				) : (
-					<>. {beat.prompt}</>
+					<>
+						{PROMPT_FRAME.glue} {beat.prompt}
+					</>
 				)}
 			</p>
 
