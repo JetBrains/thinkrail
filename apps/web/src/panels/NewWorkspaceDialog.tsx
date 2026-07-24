@@ -221,10 +221,8 @@ export function NewWorkspaceDialog({
 	// fetch just leaves the static line — never a spinner, never a gate on Create.
 	const [rootStatus, setRootStatus] = useState<GitStatus | null>(null);
 	useEffect(() => {
-		if (!open || !selectedProjectId) {
-			setRootStatus(null);
-			return;
-		}
+		setRootStatus(null);
+		if (!open || !selectedProjectId) return;
 		let cancelled = false;
 		getTransport()
 			.request("git.projectStatus", { projectId: selectedProjectId })
