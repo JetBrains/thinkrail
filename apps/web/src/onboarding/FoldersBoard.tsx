@@ -76,7 +76,7 @@ export function FoldersBoard({ phase, picks, onToggle }: FoldersBoardProps) {
 						committed.map((file, i) => (
 							<div
 								key={file.path}
-								className={`my-xs flex items-center gap-sm rounded-[var(--radius-sm)] border border-border2 bg-hover/40 px-sm py-xs font-[var(--font-mono)] text-sm text-text animate-chip-fly motion-reduce:animate-none ${flyDelay[i] ?? ""}`}
+								className={`my-xs flex min-h-11 items-center gap-sm rounded-[var(--radius-sm)] border border-border2 bg-hover/40 px-sm py-sm font-[var(--font-mono)] text-sm text-text animate-chip-fly motion-reduce:animate-none ${flyDelay[i] ?? ""}`}
 							>
 								<span className="min-w-0 flex-1 truncate">{file.path}</span>
 								{file.status === "modified" ? (
