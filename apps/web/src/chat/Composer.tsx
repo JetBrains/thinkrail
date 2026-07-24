@@ -169,15 +169,25 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	/** Place a collapsed caret at `pos` (after the current commit — see `pendingCaret` above). */
 	const focusCaret = useCallback((pos: number) => setPendingCaret(pos), []);
 
+	// The single seam for replacing the draft programmatically (history recall, mention, slash). Sets the
+	// value, places the caret, and — crucially — exits any active `↑`-recall session: these paths set the
+	// controlled `value` directly (not via the textarea's `onChange`), so the diverging-edit reset there
+	// never fires, and a leftover `recallIdx` would let a subsequent `↓` overwrite what was just inserted.
+	const replaceDraft = useCallback(
+		(text: string, caret: number = text.length) => {
+			setRecallIdx(null);
+			onChange(text);
+			focusCaret(caret);
+		},
+		[onChange, focusCaret],
+	);
+
 	useImperativeHandle(
 		handleRef,
 		() => ({
-			insertText: (text: string) => {
-				onChange(text);
-				focusCaret(text.length);
-			},
+			insertText: (text: string) => replaceDraft(text),
 		}),
-		[onChange, focusCaret],
+		[replaceDraft],
 	);
 
 	const pickMention = (c: MentionCandidate) => {
@@ -185,19 +195,26 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		const after = value.slice(caret);
 		const insert = c.kind === "dir" ? `@${c.path}/` : `@${c.path}`;
 		const suffix = c.kind === "dir" ? "" : " ";
-		onChange(`${before}${insert}${suffix}${after}`);
-		focusCaret(before.length + insert.length + suffix.length);
+		replaceDraft(
+			`${before}${insert}${suffix}${after}`,
+			before.length + insert.length + suffix.length,
+		);
 	};
 
 	const slashCompletion = useSlashCommandCompletion({
 		value,
 		commands,
-		onSelect: (command) => {
-			const next = selectedSlashCommandValue(command);
-			onChange(next);
-			focusCaret(next.length);
-		},
+		onSelect: (command) => replaceDraft(selectedSlashCommandValue(command)),
 	});
+
+	// The single entry point to the history overlay — both the `Ctrl+R` chord and the always-rendered
+	// history button go through here, so both dismiss any open mention/slash menu first (the two floating
+	// panels share the composer's anchor rect; leaving one open would paint both at once).
+	const openHistory = () => {
+		setMentionDismissed(true);
+		slashCompletion.dismiss();
+		onHistoryOpen?.();
+	};
 
 	const addFiles = async (files: File[]) => {
 		const picked = files.filter((f) => f.type.startsWith("image/"));
@@ -230,9 +247,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		// both at once (mutual exclusion between the composer's floating panels).
 		if (e.key === "r" && e.ctrlKey && !e.metaKey && !e.altKey) {
 			e.preventDefault();
-			setMentionDismissed(true);
-			slashCompletion.dismiss();
-			onHistoryOpen?.();
+			openHistory();
 			return;
 		}
 		if (mentionOpen) {
@@ -409,7 +424,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							type="button"
 							data-testid="history-open"
 							aria-label="Search history"
-							onClick={() => onHistoryOpen?.()}
+							onClick={openHistory}
 							className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-border2 bg-elevated text-text hover:bg-hover"
 						>
 							<History className="size-3.5" />
