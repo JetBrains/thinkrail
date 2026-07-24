@@ -1,5 +1,8 @@
+import { rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { expect, type Locator, test } from "@playwright/test";
 import { openWorkspaceChat } from "./fixtures/app";
+import { E2E_PI_AGENT_DIR } from "./fixtures/paths";
 
 /** The textarea's own native selection — `readSelection` reads it straight off the DOM (not React state),
  * since a slot session places a real `setSelectionRange`, not just a caret. */
@@ -66,6 +69,37 @@ test.describe("prompt templates in the composer", () => {
 		await expect(bubble).toContainText("Review watcher.ts for issues, focusing on src/.");
 		await expect(bubble).not.toContainText("⟨");
 		await expect(hint).not.toBeVisible();
+	});
+
+	// Reviewer-flagged regression (freshness): the `/` menu's template list is fetched on every menu-open
+	// transition, never cached across opens — prompt files change outside the app too (pi CLI, an editor,
+	// a git pull), which no in-app invalidation signal can see. An earlier per-chat cache served such
+	// externally-changed files stale for the rest of the chat; this writes a file straight to the global
+	// prompts dir (bypassing the wire, exactly like an external tool) between two menu opens.
+	test("a template file added outside the app appears on the next menu open", async ({ page }) => {
+		await openWorkspaceChat(page);
+		const input = page.getByTestId("chat-input");
+		const rows = page.locator('[data-testid="slash-command"][data-source="prompt"]');
+		const freshFile = join(E2E_PI_AGENT_DIR, "prompts", "freshly-added.md");
+
+		try {
+			// First open: the externally-added template doesn't exist yet.
+			await input.fill("/rev");
+			await expect(rows.filter({ hasText: "/review" })).toBeVisible();
+			await input.fill("/freshly");
+			await expect(rows).toHaveCount(0);
+
+			// An "external tool" (here: the test itself, straight to disk) adds a template file.
+			writeFileSync(freshFile, "---\ndescription: Added outside the app\n---\nFresh body $1\n");
+
+			// Close the menu (empty draft) and reopen — the new file must be offered without any in-app
+			// save/delete having bumped an invalidation counter.
+			await input.fill("");
+			await input.fill("/freshly");
+			await expect(rows.filter({ hasText: "/freshly-added" })).toBeVisible();
+		} finally {
+			rmSync(freshFile, { force: true }); // never leak into other tests' template listings
+		}
 	});
 
 	// Reviewer-flagged regression (data loss): collapsing the marker's selection to its END (ArrowRight —

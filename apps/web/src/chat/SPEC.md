@@ -209,22 +209,28 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `source === "prompt"` entries, plus a fresh `template.list { workspaceId }` fetch mapped to
   `SlashCommandInfo` rows (`source: "prompt"`, `sourceInfo` synthesized to match pi's own prompt-template
   convention exactly: `{ path: filePath, source: "local", scope: scope === "global" ? "user" : "project",
-  origin: "top-level" }`) — one merged list, `Composer`'s rendering is unchanged. The fetch runs when the
-  slash menu opens (**`onSlashActive`**, a boolean prop mirroring `onMentionQuery`'s query signal), cached
-  per workspace (one `ChatView` instance never changes workspace) and invalidated by the store's
-  **`templatesVersion`** counter (see `store/SPEC.md`; bumped by `panels/TemplatesSettings.tsx` and
-  `TemplateEditorDialog.tsx` after a `template.save`/`delete` — see the Save-as-template bullet below) —
+  origin: "top-level" }`) — one merged list, `Composer`'s rendering is unchanged. The fetch runs on
+  **every** slash-menu-open transition (**`onSlashActive`**, a boolean prop mirroring `onMentionQuery`'s
+  query signal — it stays `true` while the user types the query, so no per-keystroke refires) and is
+  deliberately **uncached**: prompt files change outside the app too (pi CLI, an editor, a git pull),
+  which no in-app invalidation counter can see — an earlier `(workspaceId, templatesVersion)` cache here
+  served exactly those externally-changed files stale for the rest of the chat, and the server re-reads
+  its dirs per call precisely for this freshness (its SPEC calls the readdirs cheap) —
   this is what makes `packages/server/src/agent/SPEC.md`'s "the
   composer's `/` menu path is always fresh via `template.list`" claim true, unlike the typed-through
   `/name args` path's frozen create-time snapshot. **Picking a template** (`ChatView`'s `onPickTemplate`, a
-  `Composer` prop): instead of `pickSlash`'s plain `/name ` insert, fetches `template.get`, splits
+  `Composer` prop): instead of the plain `/name ` insert, fetches `template.get`, splits
   frontmatter client-side (`templateText.ts`'s shared `stripFrontmatter` — pi's own frontmatter parser is
   server-only, never reaches the browser bundle, but the boundary rule is pinned to match it exactly; see
   the Save-as-template bullet below), runs `parseTemplateSlots(body, argumentHint)`, and hands
   the result to `Composer` via a new **`ComposerHandle.insertTemplate`** method (alongside the existing
   `insertText`) — replaces the whole draft (like `pickSlash`, not `pickMention`: a slash command occupies
   the entire input) and, if the parse produced any slots, starts a **slot session** selecting slot 0; no
-  slots → a plain insert, caret at the end, no session. **The session** (`Composer`, local `useState`:
+  slots → a plain insert, caret at the end, no session. The async response is applied only while the pick
+  is still **current** — newest pick wins AND the draft is byte-identical to pick time — so a slow
+  response can never clobber a draft the user typed (or a second template they picked) in the meantime;
+  the rules are `templatePick.ts`'s `shouldApplyTemplatePick` (pure, unit-tested for delayed and
+  out-of-order responses). **The session** (`Composer`, local `useState`:
   `slots: TemplateSlot[] | null` + `slotIdx`, no store/transport): `Tab`/`Shift+Tab` step to the
   next/previous slot (wrap; `preventDefault`; a no-op while the mention/slash menu is open — checked at
   the top of `onKeyDown`, right after the `Ctrl+R` guard and before the menu's own key handling, so a real
