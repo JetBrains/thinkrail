@@ -79,6 +79,15 @@ export function TemplateEditorDialog({
 	// Reset the form on every open — seeded from the template being edited, or the New/save-as-template
 	// prefill. Depending on `template`/`initialScope`/`initialBody` (not just `open`) means a *second* New
 	// or Edit while the dialog stays mounted also reseeds correctly, not just the open transition.
+	// Editing fetches the BODY via `template.get` (`template.list` is metadata-only by design — the wire
+	// never ships every file's full text just to render a listing), pinned to the row's exact `scope` so
+	// editing a global template shadowed by a same-named project one fetches the right file. Until the
+	// body lands, `bodyLoading` gates Save — saving early would silently overwrite the file with an empty
+	// body; a failed fetch keeps Save gated for the same reason (the error is shown, retry by reopening).
+	// The metadata fields still come from the server-parsed listing row — pi's real YAML parser read
+	// them, so every scalar style (single-quoted, folded/block, …) arrives as its VALUE; the client-side
+	// `stripFrontmatter` locates the body only (a boundary rule, not YAML).
+	const [bodyLoading, setBodyLoading] = useState(false);
 	useEffect(() => {
 		if (!open) return;
 		setError(null);
@@ -86,21 +95,37 @@ export function TemplateEditorDialog({
 		if (template) {
 			setName(template.name);
 			setScope(template.scope);
-			// Field values come from the server-parsed `TemplateInfo` — pi's real YAML parser read them, so
-			// every scalar style (single-quoted, folded/block, …) arrives as its VALUE. The client-side
-			// helper is used only to locate the body (a boundary rule, not YAML) — hand-parsing values here
-			// once corrupted a pi-native `description: 'quoted'` into a form value with literal quotes.
 			setDescription(template.description ?? "");
 			setArgumentHint(template.argumentHint ?? "");
-			setBody(stripFrontmatter(template.content));
-		} else {
-			setName("");
-			setScope(initialScope);
-			setDescription("");
-			setArgumentHint("");
-			setBody(initialBody);
+			setBody("");
+			setBodyLoading(true);
+			let cancelled = false;
+			getTransport()
+				.request("template.get", {
+					...(workspaceId ? { workspaceId } : {}),
+					name: template.name,
+					scope: template.scope,
+				})
+				.then((t) => {
+					if (cancelled) return;
+					setBody(stripFrontmatter(t.content));
+					setBodyLoading(false);
+				})
+				.catch((err) => {
+					if (cancelled) return;
+					setError(errorText(err));
+				});
+			return () => {
+				cancelled = true;
+			};
 		}
-	}, [open, template, initialScope, initialBody]);
+		setName("");
+		setScope(initialScope);
+		setDescription("");
+		setArgumentHint("");
+		setBody(initialBody);
+		setBodyLoading(false);
+	}, [open, template, initialScope, initialBody, workspaceId]);
 
 	const save = async () => {
 		if (saving) return;
@@ -205,6 +230,7 @@ export function TemplateEditorDialog({
 						<Textarea
 							id="template-body"
 							data-testid="template-body-input"
+							disabled={bodyLoading}
 							value={body}
 							onChange={(e) => setBody(e.target.value)}
 							placeholder="Prompt body…"
@@ -231,7 +257,7 @@ export function TemplateEditorDialog({
 					</Button>
 					<Button
 						data-testid="template-save"
-						disabled={saving || !name.trim()}
+						disabled={saving || bodyLoading || !name.trim()}
 						onClick={() => void save()}
 					>
 						Save

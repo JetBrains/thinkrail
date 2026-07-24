@@ -15,6 +15,7 @@ import type {
 	ProjectPathStatus,
 	ProviderStatusReport,
 	SpecGraphSnapshot,
+	Template,
 	TemplateInfo,
 	TemplateScope,
 	TodoItem,
@@ -71,7 +72,9 @@ import type {
 // `PromptHit` carries optional `messageIndex`/`anchorText` so the prompt row itself is jumpable — the
 // location a dropped user-role message hit used to carry.
 // v16: prompt-template CRUD — template.* reads/writes pi's prompt dirs (global + project), so
-// templates stay pi-CLI-portable.
+// templates stay pi-CLI-portable. `template.list` is metadata-only (`TemplateInfo`, no `content` — the
+// host reads just each file's bounded frontmatter head); the full text travels solely on the by-name
+// `template.get`/`template.save` path (`Template`), both size-capped host-side.
 export const PROTOCOL_VERSION = 16;
 
 /**
@@ -457,13 +460,14 @@ export interface WsMethodMap {
 		params: { workspaceId?: string };
 		result: { templates: TemplateInfo[] };
 	};
-	// Fetch a single template by name. `scope` is optional (project wins over global when omitted).
-	// `workspaceId` is required only if the template may be project-scoped.
+	// Fetch a single template by name — the only read that carries the full `content` (list is
+	// metadata-only). `scope` is optional (project wins over global when omitted). `workspaceId` is
+	// required only if the template may be project-scoped.
 	"template.get": {
 		params: { workspaceId?: string; name: string; scope?: TemplateScope };
-		result: TemplateInfo;
+		result: Template;
 	};
-	// Save a template (creates or overwrites). Returns the persisted `TemplateInfo`.
+	// Save a template (creates or overwrites). Returns the persisted `Template`.
 	"template.save": {
 		params: {
 			workspaceId?: string;
@@ -471,7 +475,7 @@ export interface WsMethodMap {
 			name: string;
 			content: string;
 		};
-		result: TemplateInfo;
+		result: Template;
 	};
 	// Delete a template. Returns `Ack` on success.
 	"template.delete": {

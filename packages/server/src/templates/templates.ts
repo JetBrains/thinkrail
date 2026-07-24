@@ -4,18 +4,21 @@
 // is always the full file text (frontmatter + body) — the wire's `TemplateInfo.content` contract — never
 // pi's parsed/stripped body. See SPEC.md for the pinned pi facts and the freshness rationale.
 import {
+	closeSync,
 	existsSync,
 	lstatSync,
 	mkdirSync,
+	openSync,
 	readdirSync,
 	readFileSync,
+	readSync,
 	rmSync,
 	type Stats,
 	writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
 import { CONFIG_DIR_NAME, getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
-import type { TemplateInfo, TemplateScope } from "@thinkrail/contracts";
+import type { Template, TemplateInfo, TemplateScope } from "@thinkrail/contracts";
 
 /** The two sanctioned template directories. `projectDir` is absent whenever there's no workspace. */
 export interface TemplateDirs {
@@ -120,27 +123,73 @@ function readableProjectDir(dirs: TemplateDirs): string | undefined {
 	return dirs.projectDir && projectDirTraversable(dirs.projectDir) ? dirs.projectDir : undefined;
 }
 
-/** Read + parse one template file from `dir`. `null` if it doesn't exist — or exists but isn't a
- * regular file (the no-follow gate above; a symlinked entry is absent to every by-name operation, the
- * same way `listDir`'s dirent `isFile()` already hides it from listings). Propagates a frontmatter
- * parse failure — a directly-named lookup deserves to know the file itself is broken. */
-function readTemplateFile(dir: string, scope: TemplateScope, name: string): TemplateInfo | null {
-	const filePath = join(dir, `${name}.md`);
-	if (!isRegularFile(filePath)) return null;
-	const content = readFileSync(filePath, "utf-8");
-	const { frontmatter } = parseFrontmatter(content);
+/** Hard cap on a template file / `template.save` payload — prompts are text, so 1 MiB is already
+ * generous. A directly-named read or a save of anything larger fails LOUDLY; `listTemplates` simply
+ * skips oversized files (list/get parity: neither surfaces them). This is what keeps one huge
+ * checked-in `.pi/prompts/*.md` from blocking the shared in-process host or bloating a WS response. */
+export const MAX_TEMPLATE_BYTES = 1024 * 1024;
+
+/** How much of a file's head `readTemplateMeta` reads to find the frontmatter — pi's own convention
+ * puts the block first, and real frontmatter is two short lines; a block whose closing fence sits past
+ * this window degrades to "no metadata" (never an error, never a full-file read). */
+const FRONTMATTER_SCAN_BYTES = 8 * 1024;
+
+/** The first `bytes` of `filePath`, decoded as UTF-8. Callers lstat-gate first (see the no-follow
+ * gate); the open-then-read itself is the same bounded-head pattern pi's `readSessionHeader` uses. */
+function readHead(filePath: string, bytes: number): string {
+	const fd = openSync(filePath, "r");
+	try {
+		const buffer = Buffer.alloc(bytes);
+		const bytesRead = readSync(fd, buffer, 0, bytes, 0);
+		return buffer.toString("utf-8", 0, bytesRead);
+	} finally {
+		closeSync(fd);
+	}
+}
+
+/** The two optional metadata fields out of a file's frontmatter (full content or bounded head — pi's
+ * `extractFrontmatter` inside `parseFrontmatter` treats a truncated block with no closing fence as
+ * plain content, i.e. no frontmatter, so a head read degrades safely). */
+function frontmatterMeta(text: string): Pick<TemplateInfo, "description" | "argumentHint"> {
+	const { frontmatter } = parseFrontmatter(text);
 	const description =
 		typeof frontmatter.description === "string" ? frontmatter.description : undefined;
 	const argumentHint =
 		typeof frontmatter["argument-hint"] === "string" ? frontmatter["argument-hint"] : undefined;
 	return {
-		name,
 		...(description ? { description } : {}),
 		...(argumentHint ? { argumentHint } : {}),
-		content,
-		scope,
-		filePath,
 	};
+}
+
+/** Metadata-only read for `listTemplates` — never reads the full file (a listing must cost bounded
+ * work per file, whatever a checkout put in the dir): the no-follow lstat doubles as the size gate
+ * (oversized → `null`, skipped), then only `FRONTMATTER_SCAN_BYTES` of the head are read for the
+ * frontmatter. `null` for missing / non-regular / oversized entries. */
+function readTemplateMeta(dir: string, scope: TemplateScope, name: string): TemplateInfo | null {
+	const filePath = join(dir, `${name}.md`);
+	const stats = lstatOrNull(filePath);
+	if (!stats?.isFile() || stats.size > MAX_TEMPLATE_BYTES) return null;
+	const head = readHead(filePath, FRONTMATTER_SCAN_BYTES);
+	return { name, ...frontmatterMeta(head), scope, filePath };
+}
+
+/** Full read + parse of one template file from `dir`. `null` if it doesn't exist — or exists but isn't
+ * a regular file (the no-follow gate above; a symlinked entry is absent to every by-name operation, the
+ * same way `listDir`'s dirent `isFile()` already hides it from listings). An oversized file THROWS —
+ * unlike the listing's silent skip, a directly-named lookup deserves a loud answer (the same
+ * loud-vs-skip asymmetry as malformed frontmatter, which also propagates from here). */
+function readTemplateFile(dir: string, scope: TemplateScope, name: string): Template | null {
+	const filePath = join(dir, `${name}.md`);
+	const stats = lstatOrNull(filePath);
+	if (!stats?.isFile()) return null;
+	if (stats.size > MAX_TEMPLATE_BYTES) {
+		throw new Error(
+			`template file too large: ${name}.md (${stats.size} bytes, limit ${MAX_TEMPLATE_BYTES})`,
+		);
+	}
+	const content = readFileSync(filePath, "utf-8");
+	return { name, ...frontmatterMeta(content), content, scope, filePath };
 }
 
 /** Every `.md` file directly inside `dir` (non-recursive) whose derived name passes
@@ -151,6 +200,8 @@ function readTemplateFile(dir: string, scope: TemplateScope, name: string): Temp
  * scanner (`loadTemplatesFromDir`), which has no such filter — pi would happily list a hand-placed
  * `.hidden.md` — done in service of *our* parity invariant, not something pi does for us.
  *
+ * Metadata-only (`readTemplateMeta` — bounded head reads, oversized files skipped): a listing must cost
+ * bounded work per file whatever a checkout dropped in the dir, and neither list consumer renders a body.
  * A per-file read/parse failure (malformed frontmatter, unreadable file) is caught and that one file is
  * skipped, not fatal — one bad file must never blank the whole listing. The *directory scan itself*
  * (`readdirSync` and the loop around it) is wrapped too: an unreadable directory (EACCES, or — the
@@ -167,7 +218,7 @@ function listDir(dir: string | undefined, scope: TemplateScope): TemplateInfo[] 
 			const name = entry.name.replace(/\.md$/, "");
 			if (!isValidTemplateName(name)) continue;
 			try {
-				const template = readTemplateFile(dir, scope, name);
+				const template = readTemplateMeta(dir, scope, name);
 				if (template) templates.push(template);
 			} catch {
 				// Malformed frontmatter or an unreadable file — skip it, don't fail the whole list.
@@ -195,7 +246,7 @@ export function listTemplates(dirs: TemplateDirs): TemplateInfo[] {
 /** Fetch one template by name. `scope` omitted → project wins over global (same precedence as
  * `listTemplates`); an explicit `scope` reads exactly that dir. Throws if absent, if `name` is invalid,
  * or if `scope` is "project" with no workspace. */
-export function getTemplate(dirs: TemplateDirs, name: string, scope?: TemplateScope): TemplateInfo {
+export function getTemplate(dirs: TemplateDirs, name: string, scope?: TemplateScope): Template {
 	if (!isValidTemplateName(name)) throw new Error(`invalid template name: ${JSON.stringify(name)}`);
 	if (scope) {
 		// `dirForScope` first, for its own distinct error (project scope with no workspace at all);
@@ -229,8 +280,14 @@ export function saveTemplate(
 	scope: TemplateScope,
 	name: string,
 	content: string,
-): TemplateInfo {
+): Template {
 	if (!isValidTemplateName(name)) throw new Error(`invalid template name: ${JSON.stringify(name)}`);
+	// The same cap `getTemplate` enforces on reads, applied before anything touches disk — without it a
+	// single oversized save would create a file every later read refuses and every listing skips.
+	const size = Buffer.byteLength(content, "utf-8");
+	if (size > MAX_TEMPLATE_BYTES) {
+		throw new Error(`template too large: ${size} bytes (limit ${MAX_TEMPLATE_BYTES})`);
+	}
 	try {
 		parseFrontmatter(content);
 	} catch (err) {

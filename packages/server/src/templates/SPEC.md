@@ -72,7 +72,7 @@ pi version bump.
   second (`Map.set` on an existing key overwrites the value) — the mirror image of pi's own first-wins
   `dedupePrompts`, chosen deliberately because "more specific scope wins" is the behavior the product
   spec calls for, not because pi's internals resolve it that way for us.
-- **`stripFrontmatter` (also root-exported) is not used by this module.** `TemplateInfo.content` is "the
+- **`stripFrontmatter` (also root-exported) is not used by this module.** `Template.content` is "the
   full file text: frontmatter + body" (`contracts/domain.ts`), and design spec §2.4 confirms it end to
   end: "The client assembles the markdown (frontmatter + body); the server writes it verbatim." So
   `content` is always the raw `readFileSync` result — never pi's parsed/stripped `body` — and
@@ -139,6 +139,19 @@ pi version bump.
   `lstat`-then-write gap is a TOCTOU race only a concurrent local process could exploit — out of scope
   for an owner-scoped host (such a process could write the target directly). Pinned by the symlink
   cases in `templates.test.ts`.
+- **Bounded listing + the size cap:** `listTemplates` is **metadata-only** (`TemplateInfo`, no
+  `content`) and does bounded work per file regardless of what a checkout dropped in the dir:
+  `readTemplateMeta` reuses the no-follow `lstat` as a size gate (a file over **`MAX_TEMPLATE_BYTES`**,
+  1 MiB, is silently skipped — list/get parity: neither surfaces it usefully) and reads only the first
+  `FRONTMATTER_SCAN_BYTES` (8 KiB) of the head for the frontmatter — pi's `extractFrontmatter` treats a
+  truncated block with no closing fence as plain content, so a pathological >8 KiB frontmatter degrades
+  to "no metadata," never an error or a full-file read (the by-name path still sees such metadata — a
+  documented asymmetry of the bounded listing, pinned in tests). The **full text** travels only on the
+  by-name `template.get`/`template.save` path (`Template`), where an oversized file/payload fails
+  **loudly** (read: before `readFileSync`; save: before anything touches disk) — a directly-named
+  operation deserves a loud answer, the same loud-vs-skip asymmetry as malformed frontmatter. This is
+  what keeps one huge checked-in `.pi/prompts/*.md` from blocking the shared in-process host on every
+  `/`-menu open or bloating a single WS response with every file's body.
 - Two layers of failure containment inside `listDir` (the directory scan `listTemplates` calls twice),
   each mirroring a different pi behavior at a different granularity: **(1)** a per-file read/parse
   failure (unreadable file, malformed YAML frontmatter) is caught and that one file is skipped — mirrors

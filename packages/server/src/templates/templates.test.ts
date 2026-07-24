@@ -15,6 +15,7 @@ import {
 	getTemplate,
 	isValidTemplateName,
 	listTemplates,
+	MAX_TEMPLATE_BYTES,
 	saveTemplate,
 	type TemplateDirs,
 	templateDirs,
@@ -92,8 +93,10 @@ describe("saveTemplate -> listTemplates -> getTemplate", () => {
 			filePath: join(globalDir, "greet.md"),
 		});
 
-		const listed = listTemplates(dirs);
-		expect(listed).toEqual([saved]);
+		// The listing is metadata-only — the same fields as `saved` MINUS `content` (the full text travels
+		// only on the by-name get/save path; a listing never reads whole files).
+		const { content: _content, ...metadata } = saved;
+		expect(listTemplates(dirs)).toEqual([metadata]);
 
 		expect(getTemplate(dirs, "greet")).toEqual(saved);
 		expect(getTemplate(dirs, "greet", "global")).toEqual(saved);
@@ -164,7 +167,7 @@ describe("listTemplates precedence + freshness", () => {
 
 		expect(listed).toHaveLength(1);
 		expect(listed[0]?.scope).toBe("project");
-		expect(listed[0]?.content).toBe("project body");
+		expect(listed[0]?.filePath).toBe(join(projectDir, "dup.md"));
 	});
 
 	test("non-colliding entries from both dirs are all present, sorted by name", () => {
@@ -409,5 +412,49 @@ describe("frontmatter value fidelity (pi's real YAML parser)", () => {
 		expect(getTemplate(dirs, "folded", "global").description).toBe(
 			"folded description over two lines",
 		);
+	});
+});
+
+// The size cap + bounded metadata reads (the "one huge checked-in .md must not cost the host" rule):
+// a listing does bounded work per file whatever a checkout contains; the full-text path is capped loudly.
+describe("size cap + bounded metadata reads", () => {
+	test("saveTemplate rejects content over MAX_TEMPLATE_BYTES before writing anything", () => {
+		const huge = "x".repeat(MAX_TEMPLATE_BYTES + 1);
+
+		expect(() => saveTemplate(dirs, "global", "huge", huge)).toThrow(/too large/);
+		expect(existsSync(join(globalDir, "huge.md"))).toBe(false);
+	});
+
+	test("an oversized on-disk file: get throws loudly, list skips it silently (neither surfaces it)", () => {
+		mkdirSync(globalDir, { recursive: true });
+		writeFileSync(join(globalDir, "huge.md"), "y".repeat(MAX_TEMPLATE_BYTES + 1));
+		saveTemplate(dirs, "global", "ok", "a fine template");
+
+		expect(() => getTemplate(dirs, "huge", "global")).toThrow(/too large/);
+		expect(listTemplates(dirs).map((t) => t.name)).toEqual(["ok"]);
+	});
+
+	test("a large-but-capped file lists with its metadata via the bounded head read (never a full read)", () => {
+		mkdirSync(globalDir, { recursive: true });
+		const bigBody = "z".repeat(MAX_TEMPLATE_BYTES - 1024); // just under the cap, far past the scan window
+		writeFileSync(join(globalDir, "big.md"), `---\ndescription: Big but fine\n---\n${bigBody}`);
+
+		const listed = listTemplates(dirs);
+		expect(listed.map((t) => t.name)).toEqual(["big"]);
+		expect(listed[0]?.description).toBe("Big but fine");
+	});
+
+	test("a frontmatter block whose closing fence sits past the scan window degrades to no metadata, never an error", () => {
+		mkdirSync(globalDir, { recursive: true });
+		const hugeFrontmatter = `---\ndescription: buried\npadding: "${"p".repeat(16 * 1024)}"\n---\nBody`;
+		writeFileSync(join(globalDir, "deep.md"), hugeFrontmatter);
+
+		const listed = listTemplates(dirs);
+		expect(listed.map((t) => t.name)).toEqual(["deep"]);
+		// The head read never found the closing fence, so the block reads as plain content — no metadata.
+		expect(listed[0]?.description).toBeUndefined();
+		// The by-name path reads the whole (capped) file and DOES see the metadata — the asymmetry is the
+		// bounded-listing tradeoff, not a parity bug.
+		expect(getTemplate(dirs, "deep", "global").description).toBe("buried");
 	});
 });

@@ -3,6 +3,7 @@ export {
 	getTemplate,
 	isValidTemplateName,
 	listTemplates,
+	MAX_TEMPLATE_BYTES,
 	saveTemplate,
 	type TemplateDirs,
 	templateDirs,

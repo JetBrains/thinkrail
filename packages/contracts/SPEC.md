@@ -127,8 +127,10 @@ of the host.
   `session.getMessages` order, `anchorText` makes the anchor drift-tolerant), and
   **`HistorySearchResult`** (the prompts + full-text messages sections, with totals and indexing status);
   **prompt-template DTOs** — **`TemplateScope`** (`"global"` | `"project"` — where a template lives),
-  and **`TemplateInfo`** (name, optional `description`/`argumentHint`, full `content` — frontmatter +
-  body — `scope`, and `filePath` for breadcrumbing).
+  **`TemplateInfo`** (metadata only: name, optional `description`/`argumentHint`, `scope`, `filePath` —
+  what `template.list` returns; deliberately body-free so a listing never ships every file's full text),
+  and **`Template`** (`TemplateInfo` + full `content` — frontmatter + body — the by-name
+  `template.get`/`template.save` shape).
 - **wsProtocol.ts** — `WS_METHODS` (`project.*` — incl. **`project.inspect`** (classify a path) +
   **`project.init`** (`git init` + commit, then open) + **`project.hasSpecs`** (lazy per-project "has any
   registered spec?" for the Welcome screen — a full-tree walk, so requested only for the shown project,
