@@ -291,7 +291,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   - **`templateText.ts`** is the single shared frontmatter splitter/assembler — `stripFrontmatter`
     (`ChatView.tsx`'s composer-pick path + this dialog's body field), `assembleTemplate` (this dialog's
     save). It does **no YAML value parsing**: the dialog's description/argument-hint fields are populated
-    from the server-parsed `TemplateInfo` (pi's real YAML parser — full scalar-style fidelity, pinned in
+    from the server-parsed `template.get` response (`Template` — pi's real YAML parser over the **full
+    file**, full scalar-style fidelity, pinned in
     `packages/server/src/templates/templates.test.ts`), never from a browser-side reimplementation (an
     earlier `splitTemplate` here handled only bare/double-quoted scalars, so a pi-native
     `description: 'single-quoted'` loaded into the form with literal quotes and saved back corrupted).
@@ -327,6 +328,19 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
     create-or-overwrite keyed by `(scope, name)` with no rename/move primitive, so changing either while
     editing would silently orphan the old file on disk instead of renaming it. Creating new (including
     save-as-template) leaves both fully editable.
+  - **Edit-open fetches the full template** via `template.get`, pinned to the row's exact `(scope,
+    name)` — `template.list` is metadata-only by design (bounded head scans + a size cap, see
+    `packages/server/src/templates/SPEC.md`), so the listing row can't provide the body, and — the part
+    that bit — can't be trusted for metadata either: a file whose frontmatter closing fence sits past the
+    listing's scan window *legitimately* lists with **no** description/argument-hint. The `get` response
+    is therefore **authoritative for every field**: body via `stripFrontmatter(content)`, and
+    description/argument-hint from its full-file parse, replacing the listing-row values that only *seed*
+    the form for instant paint. (Reviewer-flagged data loss otherwise: seeding from the degraded row and
+    writing those fields back on Save meant a body-only edit silently deleted the file's real
+    description — `templates-manage.spec.ts` pins the round-trip.) Until the fetch resolves, the
+    description/argument-hint/body inputs are disabled and Save is gated (`loading`) — an early save
+    would overwrite the file with the degraded seed; a failed fetch keeps Save gated for the same reason
+    (error shown inline, retry by reopening).
   - **Save** calls `template.save` then the store's `bumpTemplatesVersion()`; a rejected save renders its
     message inline via `data-testid="template-error"` (never a toast — the dialog stays open so the error
     is fixable in place). **Delete has no dialog involvement at all** — `panels/TemplatesSettings.tsx`'s

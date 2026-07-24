@@ -79,15 +79,21 @@ export function TemplateEditorDialog({
 	// Reset the form on every open — seeded from the template being edited, or the New/save-as-template
 	// prefill. Depending on `template`/`initialScope`/`initialBody` (not just `open`) means a *second* New
 	// or Edit while the dialog stays mounted also reseeds correctly, not just the open transition.
-	// Editing fetches the BODY via `template.get` (`template.list` is metadata-only by design — the wire
-	// never ships every file's full text just to render a listing), pinned to the row's exact `scope` so
-	// editing a global template shadowed by a same-named project one fetches the right file. Until the
-	// body lands, `bodyLoading` gates Save — saving early would silently overwrite the file with an empty
-	// body; a failed fetch keeps Save gated for the same reason (the error is shown, retry by reopening).
-	// The metadata fields still come from the server-parsed listing row — pi's real YAML parser read
-	// them, so every scalar style (single-quoted, folded/block, …) arrives as its VALUE; the client-side
-	// `stripFrontmatter` locates the body only (a boundary rule, not YAML).
-	const [bodyLoading, setBodyLoading] = useState(false);
+	// Editing fetches the FULL template via `template.get`, pinned to the row's exact `scope` so editing
+	// a global template shadowed by a same-named project one fetches the right file. The response is
+	// authoritative for EVERY field, not just the body: `template.list` is metadata-only with a bounded
+	// frontmatter head-scan (`packages/server/src/templates/templates.ts`), so a file whose closing fence
+	// sits past that window legitimately lists with NO description/argument-hint — seeding those fields
+	// from the row and writing them back on Save silently deleted the file's real metadata on a body-only
+	// edit (reviewer-flagged; `templates-manage.spec.ts` pins the round-trip). The listing row still
+	// seeds the form (instant paint, identical in the common case), but the resolve replaces it with the
+	// full-file parse — pi's real YAML parser, so every scalar style (single-quoted, folded/block, …)
+	// arrives as its VALUE; the client-side `stripFrontmatter` locates the body only (a boundary rule,
+	// not YAML). Until the fetch lands, `loading` disables the three content fields and gates Save — an
+	// early save would overwrite the file with the degraded seed and an empty body, and the resolve
+	// must never clobber text the user has started typing; a failed fetch keeps Save gated for the same
+	// reason (the error is shown, retry by reopening).
+	const [loading, setLoading] = useState(false);
 	useEffect(() => {
 		if (!open) return;
 		setError(null);
@@ -98,7 +104,7 @@ export function TemplateEditorDialog({
 			setDescription(template.description ?? "");
 			setArgumentHint(template.argumentHint ?? "");
 			setBody("");
-			setBodyLoading(true);
+			setLoading(true);
 			let cancelled = false;
 			getTransport()
 				.request("template.get", {
@@ -108,8 +114,10 @@ export function TemplateEditorDialog({
 				})
 				.then((t) => {
 					if (cancelled) return;
+					setDescription(t.description ?? "");
+					setArgumentHint(t.argumentHint ?? "");
 					setBody(stripFrontmatter(t.content));
-					setBodyLoading(false);
+					setLoading(false);
 				})
 				.catch((err) => {
 					if (cancelled) return;
@@ -124,7 +132,7 @@ export function TemplateEditorDialog({
 		setDescription("");
 		setArgumentHint("");
 		setBody(initialBody);
-		setBodyLoading(false);
+		setLoading(false);
 	}, [open, template, initialScope, initialBody, workspaceId]);
 
 	const save = async () => {
@@ -206,6 +214,7 @@ export function TemplateEditorDialog({
 						<input
 							id="template-description"
 							data-testid="template-description-input"
+							disabled={loading}
 							value={description}
 							onChange={(e) => setDescription(e.target.value)}
 							placeholder="What this template is for"
@@ -218,6 +227,7 @@ export function TemplateEditorDialog({
 						<input
 							id="template-argument-hint"
 							data-testid="template-argument-hint-input"
+							disabled={loading}
 							value={argumentHint}
 							onChange={(e) => setArgumentHint(e.target.value)}
 							placeholder="[file] [scope]"
@@ -230,7 +240,7 @@ export function TemplateEditorDialog({
 						<Textarea
 							id="template-body"
 							data-testid="template-body-input"
-							disabled={bodyLoading}
+							disabled={loading}
 							value={body}
 							onChange={(e) => setBody(e.target.value)}
 							placeholder="Prompt body…"
@@ -257,7 +267,7 @@ export function TemplateEditorDialog({
 					</Button>
 					<Button
 						data-testid="template-save"
-						disabled={saving || bodyLoading || !name.trim()}
+						disabled={saving || loading || !name.trim()}
 						onClick={() => void save()}
 					>
 						Save

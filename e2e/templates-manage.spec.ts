@@ -1,5 +1,8 @@
+import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { openWorkspaceChat } from "./fixtures/app";
+import { E2E_PI_AGENT_DIR } from "./fixtures/paths";
 import { seedExternalCwdSessions } from "./fixtures/sessions";
 import {
 	clearTemplateFixtures,
@@ -381,5 +384,64 @@ test.describe("templates management", () => {
 		await expect(globalRow).toContainText("Global foo, revised");
 		await expect(projectRow).toContainText("Project foo");
 		await expect(projectRow).not.toContainText("revised");
+	});
+
+	// Reviewer-flagged data-loss regression: `template.list` is metadata-only with a BOUNDED frontmatter
+	// head-scan (`packages/server/src/templates/templates.ts` — the whole point is that a listing never
+	// does full-file reads), so a file whose closing fence sits past that window legitimately lists with
+	// NO description/argument-hint. The edit dialog used to seed its metadata fields from that degraded
+	// listing row and write them back on Save — a body-only edit silently deleted the file's real
+	// frontmatter. Now the `template.get` response (a full-file parse) is authoritative for every field:
+	// its metadata replaces the listing seed when it resolves, and the fields + Save stay disabled until
+	// then, so what gets written back is what the file actually said.
+	test("editing a template whose frontmatter fence is past the listing scan window keeps its metadata", async ({
+		page,
+	}) => {
+		// 16 KiB of hint pushes the closing fence well past the 8 KiB scan window — the same construction
+		// the server suite pins the list/get asymmetry with (`templates.test.ts`). The description itself
+		// is short, but a truncated block with no closing fence in view parses as "no frontmatter at all",
+		// so the listing drops EVERY field, not just the ones past the window.
+		const hugeHint = "p".repeat(16 * 1024);
+		const filePath = join(E2E_PI_AGENT_DIR, "prompts", "deep-meta.md");
+		writeFileSync(
+			filePath,
+			`---\ndescription: "buried description"\nargument-hint: "${hugeHint}"\n---\nOriginal body\n`,
+		);
+		try {
+			await openWorkspaceChat(page);
+			await page.getByTestId("open-settings").click();
+			await page.getByTestId("settings-nav-templates").click();
+
+			// The listing row really is degraded — the name lists, the description doesn't.
+			const row = page.locator(
+				'[data-testid="template-row"][data-name="deep-meta"][data-scope="global"]',
+			);
+			await expect(row).toBeVisible();
+			await expect(row).not.toContainText("buried description");
+
+			// Edit-open: once `template.get` resolves, the full-file parse's metadata has replaced the
+			// degraded listing seed in the form.
+			await row.getByTestId("template-edit").click();
+			const editor = page.getByTestId("template-editor-dialog");
+			await expect(editor).toBeVisible();
+			await expect(page.getByTestId("template-description-input")).toHaveValue(
+				"buried description",
+			);
+			await expect(page.getByTestId("template-body-input")).toHaveValue("Original body");
+
+			// A body-only edit + save…
+			await page.getByTestId("template-body-input").fill("Edited body");
+			await page.getByTestId("template-save").click();
+			await expect(editor).toBeHidden();
+
+			// …must not have touched the metadata on disk.
+			const onDisk = readFileSync(filePath, "utf-8");
+			expect(onDisk).toContain('description: "buried description"');
+			expect(onDisk).toContain(`argument-hint: "${hugeHint}"`);
+			expect(onDisk).toContain("Edited body");
+			expect(onDisk).not.toContain("Original body");
+		} finally {
+			removeGlobalTemplates(["deep-meta"]);
+		}
 	});
 });
