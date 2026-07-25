@@ -35,8 +35,9 @@ of the host.
   - `@earendil-works/pi-ai`: `Model`, `Message`, `UserMessage`, `AssistantMessage`,
     `ToolResultMessage`, `TextContent`, `ThinkingContent`, `ImageContent`, `ToolCall`,
     `AssistantMessageEvent`, `Usage`, `StopReason`;
-  - **`WireModel`** = `Pick<Model<string>, "id"|"name"|"provider"|"contextWindow"|"reasoning">` — the shape a
-    model takes **on the wire** (`model.list`/`model.default`, the `session.create` result + params,
+  - **`WireModel`** = `Pick<Model<string>, "id"|"name"|"provider"|"contextWindow"|"reasoning">` **+ the one
+    computed field `thinkingLevels`** (pi-ai `getSupportedThinkingLevels`, mapped host-side in `toWireModel`;
+    client→host params carry it inert) — the shape a model takes **on the wire** (`model.list`/`model.default`, the `session.create` result + params,
     `session.setModel` params, `SessionSummary.model`). An **allowlist** of exactly what the UI renders, *not*
     an `Omit`: `Model.baseUrl` carries the jbcentral proxy secret (`.../wire/<SECRET>/...`) when JetBrains AI
     is wired and `headers` can carry auth, and an allowlist **fails closed** — a future `Model` field (secret

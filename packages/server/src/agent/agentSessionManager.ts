@@ -1,4 +1,7 @@
 import { rmSync } from "node:fs";
+// Value import of a PURE catalog helper (data-only projection over `Model`) — the one root value-import
+// the module boundary allows; dispatch stays on the shared `ModelRuntime` (see SPEC §Allowed deps).
+import { getSupportedThinkingLevels } from "@earendil-works/pi-ai";
 import {
 	type AgentSession,
 	createAgentSession,
@@ -152,6 +155,9 @@ export function toWireModel(model: Model<string>): WireModel {
 		provider: model.provider,
 		contextWindow: model.contextWindow,
 		reasoning: model.reasoning,
+		// Computed, not picked: pi's per-model effort-level truth (reasoning + thinkingLevelMap), so the
+		// picker disables unsupported levels instead of relying on pi's silent clamp.
+		thinkingLevels: getSupportedThinkingLevels(model),
 	};
 }
 

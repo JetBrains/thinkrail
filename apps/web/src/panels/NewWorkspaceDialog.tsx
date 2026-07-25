@@ -16,7 +16,7 @@ import {
 	slashCommandCatalogOrEmpty,
 	useSlashCommandCompletion,
 } from "@/chat/SlashCommandCompletion";
-import { ThinkingSelector } from "@/chat/ThinkingSelector";
+import { snapThinkingLevel, ThinkingSelector } from "@/chat/ThinkingSelector";
 import { Button } from "@/components/ui/button";
 import {
 	Command,
@@ -434,10 +434,15 @@ export function NewWorkspaceDialog({
 							models={models}
 							current={model}
 							container={dialogEl}
-							onSelect={setModel}
+							onSelect={(m) => {
+								setModel(m);
+								// Pre-session there is no pi to clamp — snap the effort onto the new model's set.
+								setThinkingLevel((lvl) => snapThinkingLevel(m.thinkingLevels, lvl));
+							}}
 						/>
 						<ThinkingSelector
 							level={thinkingLevel}
+							supportedLevels={model?.thinkingLevels}
 							container={dialogEl}
 							onSelect={setThinkingLevel}
 						/>

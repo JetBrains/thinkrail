@@ -218,7 +218,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   the compiled-binary seam (`registerBundledRuntime` +
   `BundledExtensions`/`BundledExtensionFactory`).
 - **Allowed deps:** `@earendil-works/pi-coding-agent` (runtime); `@earendil-works/pi-ai` (types + test
-  fixtures — dispatch goes through the shared `ModelRuntime` — plus the `/bun-oauth` + `/bedrock-provider`
+  fixtures + **pure catalog helpers value-imported from the package root** — today exactly
+  `getSupportedThinkingLevels`, a data-only projection over `Model`; *dispatch* still goes through the
+  shared `ModelRuntime`, never pi-ai's stream/complete — plus the `/bun-oauth` + `/bedrock-provider`
   + `/compat` subpaths, value-imported **only** inside `registerBundledRuntime`'s dynamic imports); `pi-web-access` + `pi-visualize` + `pi-spec-graph` +
   `pi-thinkrail-workflow` + `pi-todos` (the bundled extensions — loaded by path, never value-imported here; the
   compiled binary's value-imports live in `apps/cli`'s generated build module); `typebox` (the
@@ -244,8 +246,11 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   `headers` can carry auth). Every model-bearing frame (`model.list`/`model.default`, the `session.create`
   result, `SessionSummary.model`) goes through `toWireModel`; every inbound model ref (`session.create` /
   `session.setModel`) is **re-resolved** host-side by `{provider,id}` (`resolveWireModel`), never trusted.
-  The wire type `WireModel = Pick<Model, id|name|provider|contextWindow|reasoning>` is an **allowlist** — it
-  fails closed, so a future `Model` field can't leak by default (a unit test pins the exact key set).
+  The wire type `WireModel = Pick<Model, id|name|provider|contextWindow|reasoning> + thinkingLevels` is an
+  **allowlist** — it fails closed, so a future `Model` field can't leak by default (a unit test pins the
+  exact key set). `thinkingLevels` is the one computed field: pi-ai's `getSupportedThinkingLevels(model)`
+  mapped at the same choke point, so the effort picker renders pi's per-model support truth without the
+  client re-deriving it.
 - A live slash-command list is derived from the **same three sources Pi's rpc mode uses**
   (`extensionRunner.getRegisteredCommands()` + `promptTemplates` + `resourceLoader.getSkills()`). The
   pre-session catalog maps only `resourceLoader.getSkills()` through the same skill→command helper and

@@ -238,7 +238,16 @@ test("wire models expose only the allowlisted fields (no baseUrl/headers/other M
 	const models = await listAvailableModels();
 	expect(models.length).toBeGreaterThan(0);
 	for (const m of models) {
-		expect(Object.keys(m).sort()).toEqual(["contextWindow", "id", "name", "provider", "reasoning"]);
+		expect(Object.keys(m).sort()).toEqual([
+			"contextWindow",
+			"id",
+			"name",
+			"provider",
+			"reasoning",
+			"thinkingLevels",
+		]);
+		// Faux models declare `reasoning: false` — pi's support truth for those is exactly ["off"].
+		expect(m.thinkingLevels).toEqual(["off"]);
 	}
 });
 

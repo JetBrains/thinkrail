@@ -123,7 +123,11 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   template** action on the selected prompt row — see the Save-as-template bullet below, and a
   **zoomed-stage preview pane** + **scope picker** — see the next bullet),
   `ModelSelector` + `ThinkingSelector` (also shared with `NewWorkspaceDialog`;
-  optional `container` prop portals their popovers into a host Dialog), `SessionStatsBar`, `ChatHeader`
+  optional `container` prop portals their popovers into a host Dialog; `ThinkingSelector` additionally
+  takes optional `supportedLevels` — `WireModel.thinkingLevels`, the host-computed pi support truth —
+  rendering unlisted levels disabled, and exports `snapThinkingLevel`, the pre-session mirror of pi's
+  clamp direction used by `NewWorkspaceDialog` on model switch; live sessions instead let pi clamp and
+  report `thinking_level_changed`), `SessionStatsBar`, `ChatHeader`
   (its `left` slot carries the plan strip; its **Skills** button is the presentational **`SkillsButton`**
   primitive — a `BookOpen` pill, badged when a skill dir changed on disk — also shared with
   `NewWorkspaceDialog` so the two triggers cannot drift), `ExtUiDialog`, and **`SkillsDialog`** (the **Skills manager**: a catalog

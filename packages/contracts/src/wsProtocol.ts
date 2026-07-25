@@ -75,7 +75,9 @@ import type {
 // templates stay pi-CLI-portable. `template.list` is metadata-only (`TemplateInfo`, no `content` — the
 // host reads just each file's bounded frontmatter head); the full text travels solely on the by-name
 // `template.get`/`template.save` path (`Template`), both size-capped host-side.
-export const PROTOCOL_VERSION = 16;
+// v17: `WireModel` gains `thinkingLevels` (pi's per-model supported effort levels, host-computed via
+// pi-ai `getSupportedThinkingLevels`) so the effort picker disables what the active model can't do.
+export const PROTOCOL_VERSION = 17;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a

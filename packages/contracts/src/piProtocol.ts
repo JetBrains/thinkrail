@@ -32,11 +32,19 @@ import type { ImageContent, Message, Model, TextContent } from "@earendil-works/
  * real `Model` (with `baseUrl`) from its own registry, so a client can neither read the secret nor inject a
  * `baseUrl` for the agent to call. (Widen this set only for a field the UI truly renders — never a
  * credential-bearing one.)
+ *
+ * `thinkingLevels` is the one **computed** field: pi's per-model supported effort levels
+ * (pi-ai `getSupportedThinkingLevels`, from `reasoning` + `thinkingLevelMap`), mapped by the host in
+ * `toWireModel` so the client never re-derives pi's support policy. Client→host `WireModel` params carry
+ * it back inert — the host re-resolves the real model by `{provider,id}` and ignores the rest.
  */
 export type WireModel = Pick<
 	Model<string>,
 	"id" | "name" | "provider" | "contextWindow" | "reasoning"
->;
+> & {
+	/** Selectable effort levels for this model — the picker disables levels not listed. */
+	thinkingLevels: ThinkingLevel[];
+};
 
 // The unified render union the UI switches on. The real superset (`AgentSessionEvent`) is declared in the
 // Node-only `pi-coding-agent` (it pulls node:fs), so it's MIRRORED here type-only, derived from the
