@@ -19,17 +19,16 @@ export type AnalyticsEvent =
 	| { name: "provider_login"; params: { provider: string; method: LoginMethod } };
 
 /**
- * Every param key that may ever appear on an outgoing event — env metadata + GA4 plumbing + the
- * closed per-event params. The service filters against this set at runtime; the unit test asserts
- * every event variant's payload is a subset. Extend it only alongside a spec'd event change.
+ * Every param key that may ever appear on an outgoing event — env metadata + the closed per-event
+ * params. The service filters against this set at runtime; the unit test asserts every event
+ * variant's payload is a subset. (Transport framing — the sink's `$`-prefixed PostHog flags — is the
+ * sink's own, never an event param.) Extend it only alongside a spec'd event change.
  */
 export const PARAM_ALLOWLIST: ReadonlySet<string> = new Set([
 	"app_version",
 	"channel",
 	"os",
 	"arch",
-	"session_id",
-	"engagement_time_msec",
 	"provider",
 	"model",
 	"method",

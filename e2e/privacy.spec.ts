@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 // The Privacy settings section: the anonymous-usage-analytics toggle. The flag is SERVER-SYNCED
 // (AppConfig.analyticsEnabled in config.json, converged via the settings.changed broadcast — no
 // optimistic apply), so a flip survives a reload. The e2e host never actually sends anything
-// regardless of the flag: it runs from source (no baked GA4 keys ⇒ noop sink) on the dev channel.
+// regardless of the flag: it runs from source (no baked PostHog key ⇒ noop sink) on the dev channel.
 // This test leaves the flag back ON so the shared e2e data dir stays in its default state.
 test("privacy section toggles analytics off and the choice persists across a reload", async ({
 	page,

@@ -1,9 +1,10 @@
 // The delivery backend, hidden behind `AnalyticsSink` — swapping vendors is implementing a new sink,
-// nothing else in the module (or the host) moves. The first real sink is GA4's Measurement Protocol
-// (Firebase Analytics IS GA4; there is no server-side Firebase SDK, MP is the ingestion path): a plain
-// fire-and-forget `fetch` POST, no dependencies, no retries, errors swallowed (debug-logged on demand).
+// nothing else in the module (or the host) moves (proven once: the first sink was GA4's Measurement
+// Protocol, replaced by PostHog before ever shipping). The current sink is PostHog's capture API: a
+// plain fire-and-forget `fetch` POST, no dependencies, no retries, errors swallowed (debug-logged on
+// demand). Every outgoing event is personless and GeoIP-free — see `createPostHogSink`.
 
-/** One event as GA4's `/mp/collect` expects it inside `events[]`. */
+/** One event as the service hands it to a sink: a name + the allowlist-filtered params. */
 export interface OutgoingEvent {
 	name: string;
 	params: Record<string, string | number>;
@@ -21,31 +22,44 @@ export const noopSink: AnalyticsSink = {
 	},
 };
 
-export interface Ga4SinkOptions {
-	measurementId: string;
-	apiSecret: string;
+export interface PostHogSinkOptions {
+	/** The PostHog project API key (`phc_…`) — public by design, like any client-side analytics key. */
+	apiKey: string;
+	/** Instance origin; defaults to EU cloud. The future self-host seam. */
+	host?: string;
 	/** Test seam — capture the POST instead of hitting the network. */
 	fetchImpl?: typeof fetch;
-	/** Test/override seam for the collect endpoint. */
-	endpoint?: string;
 }
 
-const GA4_ENDPOINT = "https://www.google-analytics.com/mp/collect";
+export const POSTHOG_EU_HOST = "https://eu.i.posthog.com";
 
 /**
- * The GA4 Measurement Protocol sink. `client_id` is the anonymous per-install id; events must carry
- * `session_id` + `engagement_time_msec` params (the service adds them) or GA4 won't count active users.
+ * The PostHog capture sink (`POST {host}/batch/`). `distinct_id` is the anonymous per-install id.
+ * Every event carries `$process_person_profile: false` (personless — PostHog builds no person
+ * profiles; unique users still count by distinct_id) and `$geoip_disable: true` (no IP-derived
+ * fields, enforced sender-side — the module's privacy contract, not just a project setting).
  */
-export function createGa4Sink(options: Ga4SinkOptions): AnalyticsSink {
+export function createPostHogSink(options: PostHogSinkOptions): AnalyticsSink {
 	const fetchFn = options.fetchImpl ?? fetch;
-	const endpoint = options.endpoint ?? GA4_ENDPOINT;
-	const url = `${endpoint}?measurement_id=${encodeURIComponent(options.measurementId)}&api_secret=${encodeURIComponent(options.apiSecret)}`;
+	const url = `${(options.host ?? POSTHOG_EU_HOST).replace(/\/+$/, "")}/batch/`;
 	return {
 		send(clientId, events) {
 			try {
 				fetchFn(url, {
 					method: "POST",
-					body: JSON.stringify({ client_id: clientId, events }),
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						api_key: options.apiKey,
+						batch: events.map((event) => ({
+							event: event.name,
+							distinct_id: clientId,
+							properties: {
+								...event.params,
+								$process_person_profile: false,
+								$geoip_disable: true,
+							},
+						})),
+					}),
 				}).catch((error) => debugLog(error));
 			} catch (error) {
 				debugLog(error);

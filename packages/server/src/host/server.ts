@@ -40,10 +40,10 @@ export interface CreateServerOptions {
 	/** The launcher's baked release version, echoed in the `server.welcome` push (undefined from source). */
 	appVersion?: string;
 	/**
-	 * Anonymous-analytics wiring from the launcher: release channel + the GA4 keys baked at release +
-	 * the `--no-analytics` per-run mute. Absent (dev/e2e/source runs) ⇒ the noop sink — never sends.
+	 * Anonymous-analytics wiring from the launcher: release channel + the PostHog key baked at release
+	 * + the `--no-analytics` per-run mute. Absent (dev/e2e/source runs) ⇒ the noop sink — never sends.
 	 */
-	analytics?: Pick<AnalyticsOptions, "channel" | "measurementId" | "apiSecret" | "mute">;
+	analytics?: Pick<AnalyticsOptions, "channel" | "posthogApiKey" | "posthogHost" | "mute">;
 }
 
 export interface RunningServer {

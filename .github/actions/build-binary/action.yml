@@ -14,12 +14,8 @@ inputs:
   target:
     description: "Bun compile target for this runner (e.g. bun-darwin-arm64 / bun-windows-x64)"
     required: true
-  ga4-measurement-id:
-    description: "GA4 measurement id for anonymous usage analytics (empty: keys stay unbaked — noop sink)"
-    required: false
-    default: ""
-  ga4-api-secret:
-    description: "GA4 Measurement Protocol api_secret (empty: keys stay unbaked — noop sink)"
+  posthog-api-key:
+    description: "PostHog project API key for anonymous usage analytics (empty: key stays unbaked — noop sink)"
     required: false
     default: ""
 
@@ -55,23 +51,21 @@ runs:
         echo "Stamped apps/cli/src/version.ts:"
         cat apps/cli/src/version.ts
 
-    # Same seam as version.ts: bake the GA4 keys into the throwaway checkout before compiling. Skipped
-    # when the secrets are absent (forks, PR CI) — the committed empty defaults stay, the binary's host
-    # lands on the noop sink and never sends (see packages/server/src/analytics/SPEC.md).
-    - name: Stamp analytics keys into the CLI
-      if: inputs.ga4-measurement-id != '' && inputs.ga4-api-secret != ''
+    # Same seam as version.ts: bake the PostHog key into the throwaway checkout before compiling.
+    # Skipped when the secret is absent (forks, PR CI) — the committed empty default stays, the
+    # binary's host lands on the noop sink and never sends (see packages/server/src/analytics/SPEC.md).
+    - name: Stamp analytics key into the CLI
+      if: inputs.posthog-api-key != ''
       shell: bash
       env:
-        GA4_MEASUREMENT_ID: ${{ inputs.ga4-measurement-id }}
-        GA4_API_SECRET: ${{ inputs.ga4-api-secret }}
+        POSTHOG_API_KEY: ${{ inputs.posthog-api-key }}
       run: |
         set -eu
         cat > apps/cli/src/analytics-keys.ts <<EOF
         // Stamped at release time by .github/actions/build-binary. Do not commit this edit.
-        export const ga4MeasurementId = "${GA4_MEASUREMENT_ID}";
-        export const ga4ApiSecret = "${GA4_API_SECRET}";
+        export const posthogApiKey = "${POSTHOG_API_KEY}";
         EOF
-        echo "Stamped apps/cli/src/analytics-keys.ts (values withheld)"
+        echo "Stamped apps/cli/src/analytics-keys.ts (value withheld)"
 
     - name: Compile single-file binary
       shell: bash
