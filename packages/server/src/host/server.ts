@@ -10,10 +10,9 @@ import {
 } from "../agent";
 import {
 	type AnalyticsOptions,
-	bucketProvider,
 	initializeAnalytics,
 	setAnalyticsSending,
-	track,
+	shutdownAnalytics,
 } from "../analytics";
 import { cancelAllLogins, setLoginPublisher } from "../auth";
 import { resolveWorktreeFile } from "../fs";
@@ -29,6 +28,7 @@ import {
 	maybeNaiveNameWorkspace,
 } from "./autoRename";
 import { handleRequest } from "./handlers";
+import { trackLoginOutcome } from "./loginAnalytics";
 
 export interface CreateServerOptions {
 	port?: number;
@@ -211,20 +211,16 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 	});
 
 	// Push in-app login flow frames (the session-less `authStorage.login` bridge) over the provider.login
-	// channel. A terminal `success` frame doubles as the `provider_login` analytics moment for OAuth flows
-	// (api-key / jbcentral successes are tracked in their handlers) — the provider id is bucketed, so a
-	// custom provider name never leaves the process.
+	// channel. A terminal `success` frame doubles as the `provider_login` analytics moment — the method
+	// (`oauth`/`api-key`) comes from `loginAnalytics`'s loginId→method map (recorded by the
+	// `provider.loginStart` handler), the provider id is bucketed, so a custom provider name never
+	// leaves the process. (jbcentral's `central` method is tracked in its own connect handler.)
 	setLoginPublisher((push) => {
 		server.publish(
 			WS_CHANNELS.providerLogin,
 			JSON.stringify({ channel: WS_CHANNELS.providerLogin, data: push }),
 		);
-		if (push.frame.kind === "success") {
-			track({
-				name: "provider_login",
-				params: { provider: bucketProvider(push.providerId), method: "oauth" },
-			});
-		}
+		trackLoginOutcome(push);
 	});
 
 	// Boot analytics before any trackable action can occur (fire-and-forget by contract — a failure in
@@ -254,7 +250,9 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		},
 		stop() {
 			// Symmetric teardown: settle in-flight logins (so no detached `login()` promise leaks), dispose
-			// in-process agent sessions + PTYs, then close the socket.
+			// in-process agent sessions + PTYs, then close the socket. Analytics drains first, fire-and-forget
+			// (best-effort by contract — stop never waits on the network).
+			void shutdownAnalytics();
 			cancelAllLogins();
 			stopAllWatches();
 			disposeAllSessions();

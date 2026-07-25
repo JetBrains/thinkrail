@@ -93,6 +93,7 @@ import {
 } from "../workspaces";
 import { ackSend } from "./ackSend";
 import { buildHistoryScope } from "./historyScope";
+import { dropLogin, recordLoginStart } from "./loginAnalytics";
 
 type Handler = (params: unknown) => unknown | Promise<unknown>;
 
@@ -394,14 +395,21 @@ const handlers: Record<string, Handler> = {
 	// `loginReply` answers a live select/prompt frame.
 	"provider.loginStart": (params) => {
 		const p = params as { providerId: string; type?: "oauth" | "api_key" };
-		return startLogin(p.providerId, p.type ?? "oauth");
+		const type = p.type ?? "oauth";
+		const handle = startLogin(p.providerId, type);
+		// Analytics: remember the flow's method so the login channel's terminal `success` frame can carry
+		// it (the tee in `createServer` looks it up — see loginAnalytics.ts).
+		recordLoginStart(handle.loginId, type);
+		return handle;
 	},
 	"provider.loginReply": (params) => {
 		resolveLogin(params as LoginReply);
 		return { ok: true } as const;
 	},
 	"provider.loginCancel": (params) => {
-		cancelLogin((params as { loginId: string }).loginId);
+		const { loginId } = params as { loginId: string };
+		cancelLogin(loginId);
+		dropLogin(loginId);
 		return { ok: true } as const;
 	},
 	"provider.logout": async (params) => {
