@@ -81,13 +81,15 @@ export type EditorTab = FileTab | ChatTab | DocTab | DiffTab;
 
 /**
  * A section of the settings dialog (a const-object "enum", the codebase convention). Extensible — the live
- * sections are providers, github, appearance (the theme picker), and templates (prompt-template manager).
+ * sections are providers, github, appearance (the theme picker), templates (prompt-template manager),
+ * and privacy (the analytics toggle).
  */
 export const SettingsSection = {
 	Providers: "providers",
 	Github: "github",
 	Appearance: "appearance",
 	Templates: "templates",
+	Privacy: "privacy",
 } as const;
 export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSection];
 
@@ -499,6 +501,9 @@ interface AppState {
 	/** The active UI theme (host-owned; `applyConfig` sets it from `server.welcome` / `settings.changed`).
 	 * The DOM side-effect (`applyTheme`) is the shell's job — this holds the value the UI reads. */
 	theme: ThemeId;
+	/** Anonymous-usage-analytics switch (host-owned, same `applyConfig` fold as `theme`). Only this boolean
+	 * ever reaches a client — events are emitted host-side and the install id never crosses the wire. */
+	analyticsEnabled: boolean;
 	/** Transient notifications, oldest-first (the Toaster renders + times them out). At-most a handful live
 	 * at once; a failed wire call that has no better home (no chat tab to host an error turn) lands here. */
 	toasts: Toast[];
@@ -752,6 +757,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	settingsOpen: false,
 	settingsSection: SettingsSection.Providers,
 	theme: DEFAULT_CONFIG.theme,
+	analyticsEnabled: DEFAULT_CONFIG.analyticsEnabled,
 	toasts: [],
 	setStatus: (status) => set({ status }),
 	setWelcome: (protocolVersion) => set({ protocolVersion }),
@@ -1279,7 +1285,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set({ settingsOpen: true, settingsSection: section }),
 	closeSettings: () => set({ settingsOpen: false }),
 	setSettingsSection: (section) => set({ settingsSection: section }),
-	applyConfig: (config) => set({ theme: config.theme }),
+	applyConfig: (config) => set({ theme: config.theme, analyticsEnabled: config.analyticsEnabled }),
 	requestChangesView: (workspaceId, path) => set({ changesRequest: { workspaceId, path } }),
 	// Activate project + workspace together (the same atomicity `activateWorkspace` upholds) so a jump into
 	// another project can never leave `selectedProjectId` on the source while `activeWorkspaceId` points

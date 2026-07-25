@@ -110,7 +110,10 @@ of the host.
   hint on this result));
   the **theme/config selection** — **`ThemeId`** is an open string on the wire, because the host persists
   an opaque selection while the independently shipped web client owns the available manifest catalog;
-  **`AppConfig`** (`{ theme }` — an extensible bag) carries it with the **`DEFAULT_CONFIG`** fallback
+  **`AppConfig`** (`{ theme, analyticsEnabled }` — an extensible bag; `analyticsEnabled` is the
+  anonymous-usage-analytics switch, default `true` — it is the **only** analytics fact on the wire:
+  the installation id stays server-side by design, see `submodule-server-analytics`) carries it with the
+  **`DEFAULT_CONFIG`** fallback
   (persisted host-side as `config.json`, delivered in `server.welcome`, mutated via `settings.update`).
   Contracts deliberately exports no theme enum/list/labels: a future manifest can mint an id unknown when
   the host was built, and a client missing it resolves its own bundled default;

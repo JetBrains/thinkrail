@@ -53,6 +53,9 @@ jobs:
           version: ${{ inputs.version }}
           channel: ${{ inputs.channel }}
           target: ${{ matrix.target }}
+          # Absent on forks/PRs → the action skips the stamp and the committed empty keys stay (noop sink).
+          ga4-measurement-id: ${{ secrets.THINKRAIL_GA4_MEASUREMENT_ID }}
+          ga4-api-secret: ${{ secrets.THINKRAIL_GA4_API_SECRET }}
 
       - uses: actions/upload-artifact@v5
         with:

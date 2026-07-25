@@ -5,9 +5,10 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { bootHost } from "@thinkrail/server";
+import { ga4ApiSecret, ga4MeasurementId } from "./analytics-keys";
 import { type CliOptions, parseArgs, USAGE } from "./args";
 import { runUpdate } from "./update";
-import { version } from "./version";
+import { channel, version } from "./version";
 
 /** The built web app shipped with the bin, relative to this file (src in dev, dist when bundled). */
 const DEFAULT_STATIC_DIR = resolve(import.meta.dir, "../../web/dist");
@@ -66,6 +67,15 @@ async function bootstrap(): Promise<void> {
 		portMode: "free",
 		staticDir,
 		appVersion: version,
+		// Anonymous usage analytics: channel + the release-baked GA4 keys (empty from source → the host
+		// lands on the noop sink) + the per-run `--no-analytics` mute. The durable on/off switch is the
+		// app's Settings → Privacy toggle (`AppConfig.analyticsEnabled`), host-side.
+		analytics: {
+			channel,
+			measurementId: ga4MeasurementId,
+			apiSecret: ga4ApiSecret,
+			mute: options.noAnalytics,
+		},
 		...(options.projectDir ? { projectPath: resolve(process.cwd(), options.projectDir) } : {}),
 	});
 	if (port !== requested) {

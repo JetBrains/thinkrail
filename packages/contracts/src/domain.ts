@@ -327,10 +327,17 @@ export type ThemeId = string;
  */
 export interface AppConfig {
 	theme: ThemeId;
+	/**
+	 * Anonymous usage analytics on/off (default on — the opt-out posture; a first-run notice + this
+	 * switch are the transparency half). This boolean is the ONLY analytics fact on the wire: events
+	 * are emitted host-side and the per-install id never leaves the host (it lives in the server-only
+	 * `installation.json`, deliberately not in this broadcast bag).
+	 */
+	analyticsEnabled: boolean;
 }
 
 /** The config a fresh host (no `config.json` yet) falls back to. */
-export const DEFAULT_CONFIG: AppConfig = { theme: "dark" };
+export const DEFAULT_CONFIG: AppConfig = { theme: "dark", analyticsEnabled: true };
 
 /**
  * Prefix on the internal "wake the agent" nudge the client sends when a TODO is added. It is control

@@ -33,9 +33,11 @@ its URL. It is a thin launcher — all engine logic lives in `packages/server`.
 **subcommand** (`thinkrail update [--channel stable|nightly] [--version X.Y.Z]`) intercepted before the
 launch flags — see *Self-update* below. Otherwise the launch args: `--port` (stable default 24242,
 scans upward to the next free port on collision), `--host` (default `localhost`), `--no-open`,
+`--no-analytics` (**per-run mute** for anonymous usage analytics — this run sends nothing; the
+durable switch is the app's Settings → Privacy toggle, see `submodule-server-analytics`),
 `-v`/`--version` (print the baked version and exit), `-h`/`--help`, and one positional `project-dir` (a
 git repo to open as a project on boot, best-effort). Env defaults: `THINKRAIL_PORT` / `THINKRAIL_HOST` /
-`THINKRAIL_STATIC_DIR` (flag > env > default).
+`THINKRAIL_STATIC_DIR` / `THINKRAIL_NO_ANALYTICS` (flag > env > default).
 
 ## Self-update (`thinkrail update`)
 
@@ -53,7 +55,12 @@ resolution are pure (`parseUpdateArgs` / `resolveUpdatePlan`, unit-tested); only
 `src/version.ts` exports `{ version, channel, commit }` with a from-source default (`0.0.0-dev`). Unlike
 the transient `*.generated.ts`, it's a **permanent committed module** so `--version` + `tsc` work from
 source. The release pipeline (`module-ci-release`) overwrites it in the throwaway CI checkout before
-`build:binary`, baking the real release identity into the binary. `index.ts` reads it, prints it for
+`build:binary`, baking the real release identity into the binary. **`src/analytics-keys.ts` is the
+same seam for the GA4 credentials**: committed with empty-string defaults (so source/dev/e2e builds
+have no keys — the noop sink, see `submodule-server-analytics`), overwritten by the release pipeline
+from CI secrets; `THINKRAIL_GA4_MEASUREMENT_ID` / `THINKRAIL_GA4_API_SECRET` env vars override at
+runtime for deliberate pipeline testing. `index.ts` threads `{ channel, keys, mute }` into `bootHost`
+as the `analytics` option. `index.ts` reads it, prints it for
 `--version`, and passes `appVersion` into `bootHost` — so the host echoes it in `server.welcome`
 (`ServerWelcome.appVersion`), letting a client report host version alongside the protocol-drift check.
 
