@@ -1,7 +1,7 @@
 import { rmSync } from "node:fs";
-// Value import of a PURE catalog helper (data-only projection over `Model`) — the one root value-import
-// the module boundary allows; dispatch stays on the shared `ModelRuntime` (see SPEC §Allowed deps).
-import { getSupportedThinkingLevels } from "@earendil-works/pi-ai";
+// Value imports of PURE catalog helpers (data-only projections over `Model`) — the only root
+// value-imports the module boundary allows; dispatch stays on the shared `ModelRuntime` (SPEC §Allowed deps).
+import { clampThinkingLevel, getSupportedThinkingLevels } from "@earendil-works/pi-ai";
 import {
 	type AgentSession,
 	createAgentSession,
@@ -474,6 +474,11 @@ export interface DefaultModelResult {
  * pre-session (not a "Default" placeholder). Mirrors pi's resolution for a fresh session: the settings
  * default (if it's available), else the first available model. Passing it back to `session.create` is a
  * no-op vs. omitting it, so an `@agent` test that doesn't touch the picker still lands on the pinned model.
+ *
+ * The result is **self-consistent**: the settings' thinking level is clamped (pi's own
+ * `clampThinkingLevel`) onto the resolved model's supported set, so the dialog never shows a level the
+ * model can't do as selected (e.g. a `high` saved from a reasoning model while the default is a
+ * non-reasoning one — pi would silently clamp the created session to `off` otherwise).
  */
 export async function getDefaultModel(): Promise<DefaultModelResult> {
 	const available = await (await getPiRuntime()).getAvailable();
@@ -485,7 +490,8 @@ export async function getDefaultModel(): Promise<DefaultModelResult> {
 			? available.find((m) => m.provider === provider && m.id === modelId)
 			: undefined;
 	const resolved = (pinned ?? available[0] ?? null) as Model<string> | null;
-	const thinkingLevel = settings.getDefaultThinkingLevel() ?? "medium";
+	const saved = settings.getDefaultThinkingLevel() ?? "medium";
+	const thinkingLevel = resolved ? clampThinkingLevel(resolved, saved) : saved;
 	return { model: resolved ? toWireModel(resolved) : null, thinkingLevel };
 }
 

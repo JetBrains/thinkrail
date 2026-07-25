@@ -165,6 +165,9 @@ export function NewWorkspaceDialog({
 			.then((d) => {
 				if (cancelled) return;
 				setModel(d.model);
+				// No snap needed here: `model.default` is self-consistent — the host already clamped the
+				// saved level onto this model's set (pi's clampThinkingLevel; pinned host-side). Snapping
+				// stays only on explicit model switches below, where no host round-trip exists.
 				setThinkingLevel(d.thinkingLevel);
 			})
 			.catch(() => {});

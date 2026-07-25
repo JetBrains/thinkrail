@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore, type ModelsRefreshResult } from "@earendil-works/pi-ai";
@@ -10,6 +10,7 @@ import {
 	buildSessionSettings,
 	createSession,
 	disposeAllSessions,
+	getDefaultModel,
 	getSessionCommands,
 	getSessionMessages,
 	getSessionStats,
@@ -248,6 +249,23 @@ test("wire models expose only the allowlisted fields (no baseUrl/headers/other M
 		]);
 		// Faux models declare `reasoning: false` — pi's support truth for those is exactly ["off"].
 		expect(m.thinkingLevels).toEqual(["off"]);
+	}
+});
+
+test("model.default clamps the saved thinking level onto the resolved model's support set", async () => {
+	// A `high` saved from a reasoning model plus a non-reasoning default model must not surface as a
+	// disabled-but-selected level — the host returns a self-consistent pair, clamped with pi's own
+	// `clampThinkingLevel` (faux models don't reason → exactly ["off"]).
+	const agentDir = process.env.PI_CODING_AGENT_DIR;
+	if (!agentDir) throw new Error("agent dir not isolated");
+	const settingsPath = join(agentDir, "settings.json");
+	writeFileSync(settingsPath, `${JSON.stringify({ defaultThinkingLevel: "high" })}\n`);
+	try {
+		const d = await getDefaultModel();
+		expect(d.model?.thinkingLevels).toEqual(["off"]);
+		expect(d.thinkingLevel).toBe("off");
+	} finally {
+		rmSync(settingsPath, { force: true });
 	}
 });
 
