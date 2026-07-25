@@ -108,11 +108,16 @@ a project picker, the prompt hero, and the reused
   Connected (Disconnect) / ready (Connect) / not signed in (in-app `central login` + Retry) / not installed
   (the host's per-OS copyable install command — from `jbcentralInstall`, for the *host's* OS, never the
   browser's — + Recheck); each mutation re-reads `provider.status`) **`GithubSettings`** (the "Local GitHub" block — `github.authStatus()`
-  Connected + login / Not connected + Refresh); and **`AppearanceSettings`** (the **theme picker** — a
+  Connected + login / Not connected + Refresh); **`AppearanceSettings`** (the **theme picker** — a
   labelled list of `utils/theme`'s `THEMES`, the active one from `store.theme` marked; clicking one fires
   `settings.update` and the UI **converges on the `settings.changed` broadcast** (no optimistic apply), a
-  rejected update raising a toast). A single dimmed "General" nav item ("Soon") still signals the shell is
-  built to grow. `ProvidersSettings`/`AppearanceSettings` are the **integration pieces** (store + transport);
+  rejected update raising a toast); and **`PrivacySettings`** (the **anonymous-usage-analytics toggle** —
+  a switch over `store.analyticsEnabled`, fired via `settings.update { analyticsEnabled }` with the same
+  converge-on-broadcast pattern as the theme, plus the what-is/isn't-collected copy — only the boolean
+  ever crosses the wire, see `submodule-server-analytics`). A single dimmed "General" nav item ("Soon")
+  still signals the shell is
+  built to grow. `ProvidersSettings`/`AppearanceSettings`/`PrivacySettings` are the **integration pieces**
+  (store + transport);
   the `LoginDialog` stays presentational (`auth` module).
   Panels compose their own sub-panels
   (e.g. `RightPanel`→`FileTree`/`ChangesPanel`, `CenterTabs`→`FilePane`→`MonacoEditor`) — an internal hierarchy.

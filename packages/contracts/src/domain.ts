@@ -259,7 +259,14 @@ export const THEME_IDS: readonly ThemeId[] = Object.values(Theme);
  */
 export interface AppConfig {
 	theme: ThemeId;
+	/**
+	 * Anonymous usage analytics on/off (default on — the opt-out posture; a first-run notice + this
+	 * switch are the transparency half). This boolean is the ONLY analytics fact on the wire: events
+	 * are emitted host-side and the per-install id never leaves the host (it lives in the server-only
+	 * `installation.json`, deliberately not in this broadcast bag).
+	 */
+	analyticsEnabled: boolean;
 }
 
 /** The config a fresh host (no `config.json` yet) falls back to. */
-export const DEFAULT_CONFIG: AppConfig = { theme: Theme.Dark };
+export const DEFAULT_CONFIG: AppConfig = { theme: Theme.Dark, analyticsEnabled: true };

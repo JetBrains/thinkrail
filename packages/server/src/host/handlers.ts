@@ -29,6 +29,7 @@ import {
 	setSessionThinkingLevel,
 	steerSession,
 } from "../agent";
+import { bucketProvider, bucketProviderModel, track } from "../analytics";
 import {
 	cancelLogin,
 	connectJbcentral,
@@ -182,12 +183,21 @@ const handlers: Record<string, Handler> = {
 			thinkingLevel?: ThinkingLevel;
 		};
 		const ws = getWorkspace(p.workspaceId);
-		return createSession({
+		const created = await createSession({
 			cwd: ws.worktreePath,
 			workspaceId: p.workspaceId,
 			...(p.model ? { model: p.model } : {}),
 			...(p.thinkingLevel ? { thinkingLevel: p.thinkingLevel } : {}),
 		});
+		// Analytics: a NEW chat only (disk re-opens via session.getMessages never land here). Identity is
+		// bucketed against pi's built-in catalog — a custom provider/model name never leaves the process.
+		if (created.model) {
+			track({
+				name: "chat_started",
+				params: bucketProviderModel(created.model.provider, created.model.id),
+			});
+		}
+		return created;
 	},
 	// Sends are acked when ACCEPTED, not when the turn ends — see `ackSend` (a turn can outlive the
 	// client's request timeout; long tool rounds are routine).
@@ -273,6 +283,11 @@ const handlers: Record<string, Handler> = {
 	"provider.setApiKey": (params) => {
 		const p = params as { providerId: string; key: string };
 		setProviderApiKey(p.providerId, p.key);
+		// Analytics: an api-key auth landed (the key itself never goes anywhere near an event).
+		track({
+			name: "provider_login",
+			params: { provider: bucketProvider(p.providerId), method: "api-key" },
+		});
 		return { ok: true } as const;
 	},
 	"provider.logout": (params) => {
@@ -281,7 +296,15 @@ const handlers: Record<string, Handler> = {
 	},
 	// JetBrains AI (jbcentral proxy): connect/disconnect write models.json + refresh the registry; login
 	// launches `central login` (browser) on the host.
-	"provider.jbcentralConnect": () => connectJbcentral(),
+	"provider.jbcentralConnect": async () => {
+		const result = await connectJbcentral();
+		// Analytics: only an actual connect counts (needs-install / needs-login / error don't). `jbcentral`
+		// is our own constant, not user input — no bucketing needed.
+		if (result.outcome === "connected") {
+			track({ name: "provider_login", params: { provider: "jbcentral", method: "central" } });
+		}
+		return result;
+	},
 	"provider.jbcentralDisconnect": async () => {
 		await disconnectJbcentral();
 		return { ok: true } as const;

@@ -7,11 +7,18 @@ describe("parseArgs", () => {
 			port: DEFAULT_PORT,
 			host: DEFAULT_HOST,
 			open: true,
+			noAnalytics: false,
 			staticDir: undefined,
 			projectDir: undefined,
 			help: false,
 			version: false,
 		});
+	});
+
+	test("--no-analytics mutes for the run; THINKRAIL_NO_ANALYTICS is the env spelling", () => {
+		expect(parseArgs(["--no-analytics"], {}).noAnalytics).toBe(true);
+		expect(parseArgs([], { THINKRAIL_NO_ANALYTICS: "1" }).noAnalytics).toBe(true);
+		expect(parseArgs([], {}).noAnalytics).toBe(false);
 	});
 
 	test("flags win over env over defaults", () => {

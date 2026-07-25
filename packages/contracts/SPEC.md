@@ -103,7 +103,10 @@ what lets the UI ship independently of the host.
   `Dark`/`Light`/`Darcula`/`Gruvbox`/`HighContrast`;
   adding a value is wire-compatible — an older client falls back to Dark's `:root` tokens), its derived
   **`ThemeId`** type + runtime-iterable **`THEME_IDS`** (the picker source), and the server-synced
-  **`AppConfig`** (`{ theme }` — an extensible bag) with its **`DEFAULT_CONFIG`** fallback (persisted host-side
+  **`AppConfig`** (`{ theme, analyticsEnabled }` — an extensible bag; `analyticsEnabled` is the
+  anonymous-usage-analytics switch, default `true` — it is the **only** analytics fact on the wire:
+  the installation id stays server-side by design, see `submodule-server-analytics`) with its
+  **`DEFAULT_CONFIG`** fallback (persisted host-side
   as `config.json`, delivered in `server.welcome`, mutated via `settings.update`);
   **`SpecGraphNode`/`SpecGraphSnapshot`** — the
   Specs-viewer read DTOs, **mirrored** (like `PiEvent`), never imported from `pi-spec-graph` — the wire

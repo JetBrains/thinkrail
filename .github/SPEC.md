@@ -62,12 +62,16 @@ module whose from-source default is `0.0.0-dev`) in the throwaway CI checkout be
 the compiled binary reports the real `{version, channel, commit}`. It surfaces via `thinkrail --version`
 and, threaded `apps/cli` → `bootHost` → `createServer`, in the `server.welcome` push
 (`ServerWelcome.appVersion`, an optional field — non-breaking, no `PROTOCOL_VERSION` bump). See
-`module-cli`.
+`module-cli`. **`apps/cli/src/analytics-keys.ts` rides the same seam**: stamped from the
+`THINKRAIL_GA4_MEASUREMENT_ID` / `THINKRAIL_GA4_API_SECRET` repo secrets (passed by `_build.yml`,
+skipped when absent — forks/PR builds keep the committed empty keys, so their binaries never send;
+see `submodule-server-analytics`).
 
 ## Parts
 
 - `scripts/next-version.sh` — channel-aware semver from tags; carries a `--tags=` override for testing.
-- `actions/build-binary` — the release build step: `build:web` → stamp `version.ts` → `build-binary.ts
+- `actions/build-binary` — the release build step: `build:web` → stamp `version.ts` (+
+  `analytics-keys.ts` when the GA4 secrets are provided) → `build-binary.ts
   --target` → resolve artifact path → native `smoke:binary`. (The Bun replacement for the old repo's
   PyInstaller action.)
 - `actions/make-checksums` — writes `SHA256SUMS` over the release artifacts.

@@ -1,7 +1,7 @@
 import { findFreePort } from "@thinkrail/shared/freePort";
 import { resolveShellEnv } from "@thinkrail/shared/shellEnv";
 import { settleSessionsForShutdown } from "../agent";
-import { createServer, type RunningServer } from "./server";
+import { type CreateServerOptions, createServer, type RunningServer } from "./server";
 
 export interface BootHostOptions {
 	/** Requested listen port. */
@@ -20,6 +20,8 @@ export interface BootHostOptions {
 	projectPath?: string;
 	/** The launcher's baked release version, forwarded onto the `server.welcome` push. */
 	appVersion?: string;
+	/** Anonymous-analytics wiring (channel + baked GA4 keys + `--no-analytics` mute), forwarded verbatim. */
+	analytics?: CreateServerOptions["analytics"];
 }
 
 export interface BootedHost {
@@ -50,6 +52,7 @@ export async function bootHost(options: BootHostOptions): Promise<BootedHost> {
 		...(options.staticDir ? { staticDir: options.staticDir } : {}),
 		...(options.projectPath ? { projectPath: options.projectPath } : {}),
 		...(options.appVersion ? { appVersion: options.appVersion } : {}),
+		...(options.analytics ? { analytics: options.analytics } : {}),
 	});
 
 	let stopping = false;

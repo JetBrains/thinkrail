@@ -56,6 +56,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `agent` | in-process pi `AgentSession`s + the shared pi runtime + one-shot completions | [agent/SPEC.md](src/agent/SPEC.md) |
 | `auth` | provider status (`provider.status`) + in-app login (OAuth / API key / logout) | [auth/SPEC.md](src/auth/SPEC.md) |
 | `assist` | ad-hoc one-shot tasks (workspace naming, …) on a cheap model, best-effort | [assist/SPEC.md](src/assist/SPEC.md) |
+| `analytics` | anonymous usage analytics: closed event set → GA4 sink (privacy contract in its spec) | [analytics/SPEC.md](src/analytics/SPEC.md) |
 | `dialog` | the host's native folder picker | [dialog/SPEC.md](src/dialog/SPEC.md) |
 
 `src/index.ts` re-exports `host` + the `agent` barrel's `setBundledExtensions` seam; `src/dev.ts` boots
@@ -65,10 +66,10 @@ the host from env via `bootHost` for dev/e2e.
 
 `host` is the **only composition root** — it wires each feature's handlers into the WS registry.
 
-- `host` → `projects`, `workspaces`, `git`, `github`, `fs`, `spec`, `watch`, `terminal`, `dialog`, `agent`, `auth`, `assist`, `settings`
+- `host` → `projects`, `workspaces`, `git`, `github`, `fs`, `spec`, `watch`, `terminal`, `dialog`, `agent`, `auth`, `assist`, `settings`, `analytics`
 - `workspaces` → `projects`, `git`, `persistence`
 - `projects` → `git` (shared runner), `persistence`
-- `git`, `fs`, `spec`, `watch`, `terminal`, `settings` → `persistence` (`spec` also → `pi-spec-graph/core`, external)
+- `git`, `fs`, `spec`, `watch`, `terminal`, `settings`, `analytics` → `persistence` (`spec` also → `pi-spec-graph/core`, external; `analytics` also → `@earendil-works/pi-ai/compat`, external — the built-in model catalog its identity bucketing checks against)
 - `assist` → `agent` (the one-shot completion primitive)
 - `auth` → `agent` (`getPiRuntime` — the shared `AuthStorage` + `ModelRegistry`; one-way, `agent` never imports `auth`)
 - `agent` → (no internal deps — only the pi runtime)
@@ -80,6 +81,9 @@ own never import `host` either: they expose a **publisher-injection seam** (`set
 `setSessionPublisher`, `setLoginPublisher`, `workspaces`' `setWorkspacePublisher` for the
 `workspace.created`/`updated`/`removed` lifecycle trio, and `settings`' `setSettingsPublisher` for
 `settings.changed`) that `host` installs at `createServer` — so the channel wiring lives only in `host`.
+Analytics is host-mediated the same way: **every `track()` call site lives in `host`** (boot,
+session-create, login-success observation), and `host` syncs `setAnalyticsSending` off the settings
+broadcast — `analytics` has no `settings` edge and no feature module knows analytics exists.
 
 ## Get right
 

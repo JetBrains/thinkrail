@@ -1,9 +1,17 @@
-import { GitBranch, KeyRound, type LucideIcon, Palette, SlidersHorizontal } from "lucide-react";
+import {
+	GitBranch,
+	KeyRound,
+	type LucideIcon,
+	Palette,
+	ShieldCheck,
+	SlidersHorizontal,
+} from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib";
 import { SettingsSection, useAppStore } from "@/store";
 import { AppearanceSettings } from "./AppearanceSettings";
 import { GithubSettings } from "./GithubSettings";
+import { PrivacySettings } from "./PrivacySettings";
 import { ProvidersSettings } from "./ProvidersSettings";
 
 /** The live settings sections, in nav order. */
@@ -11,6 +19,7 @@ const SECTIONS: { id: SettingsSection; label: string; icon: LucideIcon }[] = [
 	{ id: SettingsSection.Providers, label: "Providers", icon: KeyRound },
 	{ id: SettingsSection.Github, label: "GitHub", icon: GitBranch },
 	{ id: SettingsSection.Appearance, label: "Appearance", icon: Palette },
+	{ id: SettingsSection.Privacy, label: "Privacy", icon: ShieldCheck },
 ];
 /** Placeholder sections — shown dimmed so the shell reads as built-to-grow (not yet wired). */
 const SOON: { label: string; icon: LucideIcon }[] = [{ label: "General", icon: SlidersHorizontal }];
@@ -84,6 +93,8 @@ export function SettingsDialog() {
 							<ProvidersSettings />
 						) : section === SettingsSection.Github ? (
 							<GithubSettings />
+						) : section === SettingsSection.Privacy ? (
+							<PrivacySettings />
 						) : (
 							<AppearanceSettings />
 						)}
