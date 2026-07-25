@@ -13,5 +13,6 @@ export {
 	initializeAnalytics,
 	resetAnalyticsForTests,
 	setAnalyticsSending,
+	shutdownAnalytics,
 	track,
 } from "./service";

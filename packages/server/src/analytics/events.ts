@@ -1,7 +1,7 @@
 // The closed analytics event model — the privacy contract's data half (see SPEC.md). Every event a
-// host can emit is a member of `AnalyticsEvent`; every param key it may carry is in `PARAM_ALLOWLIST`.
-// The service drops any key outside the allowlist at runtime (fails closed) and the unit test pins the
-// exact payload of every variant, so a content-leaking field can neither ship nor land silently in CI.
+// host can emit is a member of `AnalyticsEvent`, and the unit tests pin the exact outgoing payload of
+// every variant — a content-leaking field fails CI. (No runtime allowlist filter: the union is closed
+// and we control every call site.)
 import { getBuiltinModels, getBuiltinProviders } from "@earendil-works/pi-ai/providers/all";
 
 /** How a provider credential was configured in-app. A closed vocabulary, never user input. */
@@ -17,22 +17,6 @@ export type AnalyticsEvent =
 	| { name: "app_started" }
 	| { name: "chat_started"; params: { provider: string; model: string } }
 	| { name: "provider_login"; params: { provider: string; method: LoginMethod } };
-
-/**
- * Every param key that may ever appear on an outgoing event — env metadata + the closed per-event
- * params. The service filters against this set at runtime; the unit test asserts every event
- * variant's payload is a subset. (Transport framing — the sink's `$`-prefixed PostHog flags — is the
- * sink's own, never an event param.) Extend it only alongside a spec'd event change.
- */
-export const PARAM_ALLOWLIST: ReadonlySet<string> = new Set([
-	"app_version",
-	"channel",
-	"os",
-	"arch",
-	"provider",
-	"model",
-	"method",
-]);
 
 /** The bucket a user-configured (non-built-in) provider or model id collapses to. */
 export const CUSTOM_BUCKET = "custom";

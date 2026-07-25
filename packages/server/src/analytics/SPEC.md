@@ -10,58 +10,69 @@ tags: [v1, analytics, privacy]
 
 ## Responsibility
 
-Anonymous, no-personal-data usage analytics, emitted **host-side only** (design + privacy rationale:
-`task-analytics` while it lives; the invariants below are the durable contract). Answers product
-questions — unique users, version/platform, model preference, provider auth — via a **closed event
-set** delivered to **PostHog (EU cloud)** over its capture API (a plain `fetch` POST — no vendor
-SDK; none of the major backends need one server-side). The delivery backend hides behind the
-`AnalyticsSink` interface — swapping vendors is implementing a new sink, nothing else moves
-(exercised for real once already: the first sink was GA4's Measurement Protocol, replaced pre-ship
-by user decision — PostHog's free tier, EU residency, and self-host path won).
+Anonymous, no-personal-data usage analytics, emitted **host-side only**. Answers product questions —
+unique users, version/platform, model preference, provider auth — via a **closed event set** delivered
+to **PostHog (EU cloud)** through the official `posthog-node` SDK. The SDK is an implementation detail
+**inside** the sink: the delivery backend hides behind the `AnalyticsSink` interface — swapping vendors
+is implementing a new sink, nothing else moves (exercised for real twice: GA4's Measurement Protocol →
+a hand-rolled PostHog capture POST → `posthog-node`, each swap contained to `sink.ts` + the key seam;
+PostHog won on free tier, EU residency, and a self-host path).
 
 ## Boundary
 
 - **Owns:**
   - `events.ts` — the closed `AnalyticsEvent` union (`app_installed` / `app_started` /
-    `chat_started {provider, model}` / `provider_login {provider, method}`), the
-    **`PARAM_ALLOWLIST`** (the machine-checked privacy invariant — a param key outside it fails the
-    unit test), and `bucketProviderModel()`: identity passes raw **only** when it matches pi's
-    built-in catalog (`getProviders()` / `getModels()` from `@earendil-works/pi-ai/compat`); a
-    custom provider — or a custom model id on a known provider — becomes `"custom"`. Fails closed.
-  - `sink.ts` — `AnalyticsSink { send(events) }`; `createPostHogSink({ apiKey, host?, fetchImpl? })`
-    (fire-and-forget POST to `{host}/batch/`, EU cloud by default; errors swallowed + debug-logged,
-    no retries) and `noopSink`. Every outgoing event is **personless**
+    `chat_started {provider, model}` / `provider_login {provider, method}`) and
+    `bucketProvider()` / `bucketProviderModel()`: identity passes raw **only** when it matches pi's
+    built-in catalog (`getBuiltinProviders()` / `getBuiltinModels()`); a custom provider — or a custom
+    model id on a known provider — becomes `"custom"`. Fails closed. The machine-checked privacy pin is
+    the **unit tests**: they assert every event variant's exact outgoing properties — there is
+    deliberately no runtime allowlist filter (the union is closed and we control every call site; a
+    content-leaking field fails CI, and runtime filtering was judged over-engineering).
+  - `sink.ts` — `AnalyticsSink { send(clientId, events); shutdown?() }`; `createPostHogSink({ apiKey,
+    host?, fetchImpl? })` wraps `posthog-node` (EU cloud by default): `flushAt: 1` (a handful of events
+    per run — dispatch each capture immediately; the SDK still retries failed sends), `disableGeoip:
+    true` (explicit even though it is the SDK default — the "no IP-derived fields" invariant enforced
+    sender-side), `disableCompression: true` (tiny payloads; keeps the wire inspectable for the test
+    seam and debugging), a custom `fetch` as the injected test seam, SDK errors swallowed to the debug
+    log (`on("error")` — never a user-facing warn). Every outgoing event is **personless**
     (`$process_person_profile: false` — no person profiles server-side; unique users still count by
-    `distinct_id` = the install id) and carries **`$geoip_disable: true`** (the "no IP-derived
-    fields" invariant enforced sender-side, belt to the project-level GeoIP-off braces).
+    `distinct_id` = the install id). `shutdown()` drains the queue (bounded, 2s) for graceful stops.
+    Plus `noopSink` (disabled/dev: events vanish).
   - `service.ts` — the facade: `initializeAnalytics(opts)` (installation record via `persistence`,
     sink selection, env stamping, first-run notice + `app_installed` announce, `app_started`),
-    `track(event)`, `setAnalyticsSending(enabled)`, `resetAnalyticsForTests()`.
+    `track(event)`, `setAnalyticsSending(enabled)`, `shutdownAnalytics()` (best-effort flush — the
+    host's `stop()` fires it without awaiting), `resetAnalyticsForTests()`.
 - **Public surface (barrel):** `initializeAnalytics`, `track`, `setAnalyticsSending`,
-  `resetAnalyticsForTests`, the event types.
+  `shutdownAnalytics`, `resetAnalyticsForTests`, the event types + bucket helpers.
 - **Allowed deps:** `persistence` (installation record + data dir), `contracts` (types),
-  `@earendil-works/pi-ai/compat` (the built-in catalog — server-side value import), Node
-  `crypto`/`process`.
+  `@earendil-works/pi-ai` (the built-in catalog — server-side value import), `posthog-node` (the
+  delivery SDK — value-imported **only** in `sink.ts`), Node `crypto`/`process`.
 - **Forbidden:** importing `host` or any other sibling; being imported by anything but `host` (all
-  `track()` call sites live in `host` — feature modules stay analytics-free); putting the
+  `track()` call sites live in `host` — feature modules stay analytics-free; `provider_login` method
+  attribution is host's `loginAnalytics` correlation, see `submodule-server-host`); putting the
   installation id on the wire in any form.
 
 ## Get right (the privacy contract)
 
 - **The only stable identifier** is the per-install uuid4 in `persistence`'s server-only
-  `installation.json` — minted once, **never rotated** (deliberate divergence from thinkrail-v1's
-  fresh-id-on-re-enable; the user chose id continuity), never crossing the wire (deliberately not in
-  the broadcast `config.json`).
+  `installation.json` — minted once, **never rotated** (id continuity across opt-out/opt-in is the
+  chosen posture: a returning opt-in is the same install, not a fresh cohort), never crossing the wire
+  (deliberately not in the broadcast `config.json`).
 - **The flag only gates sending:** `AppConfig.analyticsEnabled` (host-mediated — `host` syncs
-  `setAnalyticsSending` on every settings change; this module has no `settings` edge). Disabled ⇒
-  zero network. `app_installed` fires at most once per install (the `announced` bit), on the first
+  `setAnalyticsSending` on every settings change; this module has no `settings` edge). Disabled ⇒ zero
+  network. `app_installed` fires at most once per install (the `announced` bit), on the first
   sending-enabled boot, together with the first-run notice.
 - **Dev runs never send:** a baked key is refused when `channel === "dev"`; source builds have no
   baked key anyway (double gate — e2e inherits the silence). Only the explicit
   `THINKRAIL_POSTHOG_API_KEY` env override can send from a dev run, and those events still carry
   `channel: "dev"` (`THINKRAIL_POSTHOG_HOST` retargets the endpoint — the future self-host seam).
 - **Never sent:** paths, file/spec names, prompts, code, transcripts, token counts, hostnames,
-  usernames, IP-derived fields, or any free-form user string. Params on every event:
-  `app_version`, `channel`, `os`, `arch` — nothing else outside the per-event params above
-  (transport framing like the two `$`-flags is the sink's, not the event model's).
+  usernames, IP-derived fields, or any free-form user string. Params on every event: `app_version`,
+  `channel`, `os`, `arch` — plus only the closed per-event params above; the unit tests pin each
+  variant's exact non-`$` properties (transport framing — the SDK's `$lib*` fields, `$geoip_disable`,
+  and the personless flag — is the sink's, never an event param).
 - **Fire-and-forget:** `track`/`initializeAnalytics` never throw into callers and never block boot.
+  `shutdownAnalytics` is best-effort: a graceful stop drains the queue; an abrupt exit may drop the
+  final instants' events — accepted (with `flushAt: 1` anything older than the last moment is already
+  dispatched).

@@ -74,7 +74,7 @@ the host from env via `bootHost` for dev/e2e.
 - `host` → `projects`, `workspaces`, `git`, `github`, `fs`, `spec`, `todos`, `watch`, `terminal`, `dialog`, `agent`, `auth`, `assist`, `settings`, `history`, `templates`, `analytics`
 - `workspaces` → `projects`, `git`, `persistence`
 - `projects` → `git` (shared runner), `persistence`
-- `git`, `fs`, `spec`, `watch`, `terminal`, `settings`, `analytics` → `persistence` (`spec` also → `pi-spec-graph/core`, external; `analytics` also → the pi-ai built-in provider/model catalog, external — what its identity bucketing checks against)
+- `git`, `fs`, `spec`, `watch`, `terminal`, `settings`, `analytics` → `persistence` (`spec` also → `pi-spec-graph/core`, external; `analytics` also → the pi-ai built-in provider/model catalog + `posthog-node`, external — the identity-bucketing vocabulary and the delivery SDK)
 - `todos` → `workspaces` (worktree path lookup) + `pi-todos/core` (external, value-imported, pi-free)
 - `assist` → `agent` (the one-shot completion primitive)
 - `auth` → `agent` (`getPiRuntime` — the shared `AuthStorage` + `ModelRegistry`; one-way, `agent` never imports `auth`)

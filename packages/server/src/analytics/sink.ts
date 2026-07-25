@@ -1,10 +1,11 @@
 // The delivery backend, hidden behind `AnalyticsSink` — swapping vendors is implementing a new sink,
-// nothing else in the module (or the host) moves (proven once: the first sink was GA4's Measurement
-// Protocol, replaced by PostHog before ever shipping). The current sink is PostHog's capture API: a
-// plain fire-and-forget `fetch` POST, no dependencies, no retries, errors swallowed (debug-logged on
-// demand). Every outgoing event is personless and GeoIP-free — see `createPostHogSink`.
+// nothing else in the module (or the host) moves (proven twice: GA4's Measurement Protocol → a
+// hand-rolled PostHog capture POST → the official `posthog-node` SDK). The SDK is value-imported here
+// and nowhere else; its queue/retry machinery stays an implementation detail behind `send`/`shutdown`.
+// Errors are swallowed and debug-logged on demand — analytics failures are never user-facing.
+import { PostHog } from "posthog-node";
 
-/** One event as the service hands it to a sink: a name + the allowlist-filtered params. */
+/** One event as the service hands it to a sink: a name + the stamped event params. */
 export interface OutgoingEvent {
 	name: string;
 	params: Record<string, string | number>;
@@ -13,6 +14,8 @@ export interface OutgoingEvent {
 export interface AnalyticsSink {
 	/** Fire-and-forget delivery. Must never throw and never return a promise the caller must await. */
 	send(clientId: string, events: OutgoingEvent[]): void;
+	/** Drain queued/in-flight deliveries, bounded — a graceful-stop courtesy, never required. */
+	shutdown?(): Promise<void>;
 }
 
 /** The disabled/dev sink: events vanish. */
@@ -33,34 +36,44 @@ export interface PostHogSinkOptions {
 
 export const POSTHOG_EU_HOST = "https://eu.i.posthog.com";
 
+/** How long a graceful stop waits for the SDK to drain its queue before giving up. */
+const SHUTDOWN_TIMEOUT_MS = 2_000;
+
 /**
- * The PostHog capture sink (`POST {host}/batch/`). `distinct_id` is the anonymous per-install id.
- * Every event carries `$process_person_profile: false` (personless — PostHog builds no person
- * profiles; unique users still count by distinct_id) and `$geoip_disable: true` (no IP-derived
- * fields, enforced sender-side — the module's privacy contract, not just a project setting).
+ * The PostHog sink: `posthog-node` configured for our shape — `flushAt: 1` (a handful of events per
+ * run; dispatch each capture immediately, the SDK still retries failed sends), `disableGeoip: true`
+ * (no IP-derived fields, enforced sender-side — the module's privacy contract, not just a project
+ * setting), `disableCompression: true` (tiny payloads; keeps the wire inspectable for tests and
+ * debugging). `distinct_id` is the anonymous per-install id, and every event is sent **personless**
+ * (`$process_person_profile: false` — PostHog builds no person profiles; unique users still count by
+ * distinct_id).
  */
 export function createPostHogSink(options: PostHogSinkOptions): AnalyticsSink {
-	const fetchFn = options.fetchImpl ?? fetch;
-	const url = `${(options.host ?? POSTHOG_EU_HOST).replace(/\/+$/, "")}/batch/`;
+	const client = new PostHog(options.apiKey, {
+		host: (options.host ?? POSTHOG_EU_HOST).replace(/\/+$/, ""),
+		flushAt: 1,
+		disableGeoip: true,
+		disableCompression: true,
+		...(options.fetchImpl ? { fetch: options.fetchImpl } : {}),
+	});
+	client.on("error", (error) => debugLog(error));
 	return {
 		send(clientId, events) {
 			try {
-				fetchFn(url, {
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({
-						api_key: options.apiKey,
-						batch: events.map((event) => ({
-							event: event.name,
-							distinct_id: clientId,
-							properties: {
-								...event.params,
-								$process_person_profile: false,
-								$geoip_disable: true,
-							},
-						})),
-					}),
-				}).catch((error) => debugLog(error));
+				for (const event of events) {
+					client.capture({
+						distinctId: clientId,
+						event: event.name,
+						properties: { ...event.params, $process_person_profile: false },
+					});
+				}
+			} catch (error) {
+				debugLog(error);
+			}
+		},
+		async shutdown() {
+			try {
+				await client.shutdown(SHUTDOWN_TIMEOUT_MS);
 			} catch (error) {
 				debugLog(error);
 			}

@@ -3,7 +3,7 @@
 // block boot. The privacy contract (single anonymous id, closed events, dev-run silence) is SPEC.md's
 // "Get right" section; this file is its runtime half.
 import { ensureInstallation, saveInstallation } from "../persistence";
-import { type AnalyticsEvent, PARAM_ALLOWLIST } from "./events";
+import type { AnalyticsEvent } from "./events";
 import { type AnalyticsSink, createPostHogSink, noopSink, type OutgoingEvent } from "./sink";
 
 export interface AnalyticsOptions {
@@ -95,8 +95,8 @@ export function initializeAnalytics(options: AnalyticsOptions): void {
 
 /**
  * Emit one event, fire-and-forget. No-ops unless every gate is open; never throws into the caller.
- * Params are stamped (env) and filtered against `PARAM_ALLOWLIST` — an off-list key is
- * dropped here, so a content leak cannot leave the process even if the event model grows a bug.
+ * Params are the env stamp + the event's own closed params — the union is closed and the unit tests
+ * pin every variant's exact payload, so a content-leaking field fails CI rather than being filtered.
  */
 export function track(event: AnalyticsEvent): void {
 	const s = state;
@@ -126,9 +126,25 @@ export function setAnalyticsSending(enabled: boolean): void {
 	}
 }
 
-/** Drop the singleton state — unit-test isolation only. */
+/**
+ * Drain the sink's queued/in-flight deliveries — the host's `stop()` fires this without awaiting
+ * (best-effort by contract; bounded inside the sink). Never throws.
+ */
+export async function shutdownAnalytics(): Promise<void> {
+	const s = state;
+	if (!s?.realSink) return;
+	try {
+		await s.sink.shutdown?.();
+	} catch (error) {
+		debugLog(error);
+	}
+}
+
+/** Drop the singleton state (draining any real sink, fire-and-forget) — unit-test isolation only. */
 export function resetAnalyticsForTests(): void {
+	const s = state;
 	state = null;
+	if (s?.realSink) void s.sink.shutdown?.();
 }
 
 function announceInstall(s: AnalyticsState): void {
@@ -141,13 +157,10 @@ function announceInstall(s: AnalyticsState): void {
 }
 
 function toOutgoingEvent(event: AnalyticsEvent, s: AnalyticsState): OutgoingEvent {
-	const params: Record<string, string | number> = { ...s.env };
-	if ("params" in event) {
-		for (const [key, value] of Object.entries(event.params)) {
-			if (PARAM_ALLOWLIST.has(key)) params[key] = value;
-		}
-	}
-	return { name: event.name, params };
+	return {
+		name: event.name,
+		params: { ...s.env, ...("params" in event ? event.params : {}) },
+	};
 }
 
 function debugLog(error: unknown): void {
