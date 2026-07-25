@@ -4,27 +4,28 @@
 // "Get right" section; this file is its runtime half.
 import { ensureInstallation, saveInstallation } from "../persistence";
 import { type AnalyticsEvent, PARAM_ALLOWLIST } from "./events";
-import { type AnalyticsSink, createGa4Sink, noopSink, type OutgoingEvent } from "./sink";
+import { type AnalyticsSink, createPostHogSink, noopSink, type OutgoingEvent } from "./sink";
 
 export interface AnalyticsOptions {
 	/** The launcher's baked release version (absent from source — stamped like `appVersion`). */
 	appVersion?: string;
-	/** Release channel (`stable` / `nightly`); defaults to `dev`, which refuses baked keys. */
+	/** Release channel (`stable` / `nightly`); defaults to `dev`, which refuses a baked key. */
 	channel?: string;
-	/** GA4 keys baked by the release pipeline (empty/absent from source ⇒ noop sink). */
-	measurementId?: string;
-	apiSecret?: string;
+	/** PostHog project API key baked by the release pipeline (empty/absent from source ⇒ noop sink). */
+	posthogApiKey?: string;
+	/** PostHog instance origin override (defaults to EU cloud) — the self-host seam. */
+	posthogHost?: string;
 	/** `--no-analytics`: mute this run without touching the persisted flag. */
 	mute?: boolean;
 	/** The persisted `AppConfig.analyticsEnabled` at boot. */
 	enabled: boolean;
-	/** Test seam, threaded into the GA4 sink. */
+	/** Test seam, threaded into the sink. */
 	fetchImpl?: typeof fetch;
 }
 
 interface AnalyticsState {
 	sink: AnalyticsSink;
-	/** The anonymous per-install id (GA4 `client_id`) — never crosses the wire. */
+	/** The anonymous per-install id (PostHog `distinct_id`) — never crosses the wire. */
 	clientId: string;
 	/** All gates folded: config flag AND not muted AND a real sink. */
 	sending: boolean;
@@ -32,8 +33,6 @@ interface AnalyticsState {
 	realSink: boolean;
 	announced: boolean;
 	env: { app_version: string; channel: string; os: string; arch: string };
-	/** Per-boot GA4 session id — without it (+ engagement time) GA4 doesn't count active users. */
-	sessionId: string;
 }
 
 let state: AnalyticsState | null = null;
@@ -46,28 +45,24 @@ function detectOs(): string {
 
 /**
  * Boot the analytics service (called once from `createServer`). Mints/loads the installation record,
- * picks the sink — env-override keys always win (deliberate pipeline testing); baked keys are refused
- * on the `dev` channel (dev runs never send); otherwise noop — and emits the lifecycle events. On the
- * first sending-enabled boot ever it prints the first-run notice and sends the one-shot `app_installed`.
+ * picks the sink — an env-override key always wins (deliberate pipeline testing); the baked key is
+ * refused on the `dev` channel (dev runs never send); otherwise noop — and emits the lifecycle
+ * events. On the first sending-enabled boot ever it prints the first-run notice and sends the
+ * one-shot `app_installed`.
  */
 export function initializeAnalytics(options: AnalyticsOptions): void {
 	try {
 		const record = ensureInstallation();
 		const channel = options.channel ?? "dev";
-		const envMeasurementId = process.env.THINKRAIL_GA4_MEASUREMENT_ID;
-		const envApiSecret = process.env.THINKRAIL_GA4_API_SECRET;
+		const envApiKey = process.env.THINKRAIL_POSTHOG_API_KEY;
+		const host = process.env.THINKRAIL_POSTHOG_HOST ?? options.posthogHost;
 
 		let sink = noopSink;
-		if (envMeasurementId && envApiSecret) {
-			sink = createGa4Sink({
-				measurementId: envMeasurementId,
-				apiSecret: envApiSecret,
-				...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
-			});
-		} else if (options.measurementId && options.apiSecret && channel !== "dev") {
-			sink = createGa4Sink({
-				measurementId: options.measurementId,
-				apiSecret: options.apiSecret,
+		const apiKey = envApiKey || (channel !== "dev" ? options.posthogApiKey : undefined);
+		if (apiKey) {
+			sink = createPostHogSink({
+				apiKey,
+				...(host ? { host } : {}),
 				...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
 			});
 		}
@@ -87,7 +82,6 @@ export function initializeAnalytics(options: AnalyticsOptions): void {
 				os: detectOs(),
 				arch: process.arch,
 			},
-			sessionId: String(Date.now()),
 		};
 
 		if (state.sending) {
@@ -101,7 +95,7 @@ export function initializeAnalytics(options: AnalyticsOptions): void {
 
 /**
  * Emit one event, fire-and-forget. No-ops unless every gate is open; never throws into the caller.
- * Params are stamped (env + GA4 plumbing) and filtered against `PARAM_ALLOWLIST` — an off-list key is
+ * Params are stamped (env) and filtered against `PARAM_ALLOWLIST` — an off-list key is
  * dropped here, so a content leak cannot leave the process even if the event model grows a bug.
  */
 export function track(event: AnalyticsEvent): void {
@@ -147,11 +141,7 @@ function announceInstall(s: AnalyticsState): void {
 }
 
 function toOutgoingEvent(event: AnalyticsEvent, s: AnalyticsState): OutgoingEvent {
-	const params: Record<string, string | number> = {
-		...s.env,
-		session_id: s.sessionId,
-		engagement_time_msec: 1,
-	};
+	const params: Record<string, string | number> = { ...s.env };
 	if ("params" in event) {
 		for (const [key, value] of Object.entries(event.params)) {
 			if (PARAM_ALLOWLIST.has(key)) params[key] = value;

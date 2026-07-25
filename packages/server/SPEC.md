@@ -56,7 +56,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `agent` | in-process pi `AgentSession`s + the shared pi runtime + one-shot completions | [agent/SPEC.md](src/agent/SPEC.md) |
 | `auth` | provider status (`provider.status`) + in-app login (OAuth / API key / logout) | [auth/SPEC.md](src/auth/SPEC.md) |
 | `assist` | ad-hoc one-shot tasks (workspace naming, …) on a cheap model, best-effort | [assist/SPEC.md](src/assist/SPEC.md) |
-| `analytics` | anonymous usage analytics: closed event set → GA4 sink (privacy contract in its spec) | [analytics/SPEC.md](src/analytics/SPEC.md) |
+| `analytics` | anonymous usage analytics: closed event set → PostHog sink (privacy contract in its spec) | [analytics/SPEC.md](src/analytics/SPEC.md) |
 | `dialog` | the host's native folder picker | [dialog/SPEC.md](src/dialog/SPEC.md) |
 
 `src/index.ts` re-exports `host` + the `agent` barrel's `setBundledExtensions` seam; `src/dev.ts` boots

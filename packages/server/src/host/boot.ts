@@ -20,7 +20,7 @@ export interface BootHostOptions {
 	projectPath?: string;
 	/** The launcher's baked release version, forwarded onto the `server.welcome` push. */
 	appVersion?: string;
-	/** Anonymous-analytics wiring (channel + baked GA4 keys + `--no-analytics` mute), forwarded verbatim. */
+	/** Anonymous-analytics wiring (channel + the baked PostHog key + `--no-analytics` mute), forwarded verbatim. */
 	analytics?: CreateServerOptions["analytics"];
 }
 

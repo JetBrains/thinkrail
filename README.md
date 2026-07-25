@@ -127,21 +127,22 @@ spec in the same change. See [`AGENTS.md`](AGENTS.md) for the spec workflow.
 
 ## Analytics & Privacy
 
-Released ThinkRail builds send **anonymous usage analytics** (on by default; a notice is printed the
-first time anything is sent). The data answers product questions — how many installs are active, on
-which versions/platforms, which models and providers get used, and which features matter — and
-nothing more.
+Released ThinkRail builds send **anonymous usage analytics** to [PostHog](https://posthog.com) (EU
+cloud; on by default; a notice is printed the first time anything is sent). The data answers product
+questions — how many installs are active, on which versions/platforms, which models and providers
+get used, and which features matter — and nothing more.
 
 **The only stable identifier** is a random per-install id (a `uuid4`) minted on your machine and
 stored in `~/.thinkrail/installation.json`; it never leaves the host except as the anonymous
-`client_id` on events. Events additionally carry only low-cardinality, non-personal metadata: app
+`distinct_id` on events. Events additionally carry only low-cardinality, non-personal metadata: app
 version, release channel (`stable`/`nightly`), OS (`macos`/`linux`/`windows`), architecture
 (`x64`/`arm64`), and — on chat/login events — the model/provider name **only if it is a pi built-in**
-(anything user-configured is reported as `custom`).
+(anything user-configured is reported as `custom`). Events are sent **personless** (no person
+profiles are ever built) and with **GeoIP lookup disabled**.
 
 **Never collected:** file paths or names, prompts, code, chat transcripts, API keys, token counts,
 hostnames, usernames, or IP-derived fields. Development builds (`bun run dev`, from-source runs, e2e)
-never send anything — they carry no analytics keys and the `dev` channel refuses baked keys outright.
+never send anything — they carry no analytics key and the `dev` channel refuses a baked key outright.
 
 Turn it off any time:
 

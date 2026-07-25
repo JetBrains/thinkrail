@@ -15,16 +15,16 @@ import { initializeAnalytics, resetAnalyticsForTests, setAnalyticsSending, track
 
 let dataDir: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
-const savedEnvKeys = {
-	id: process.env.THINKRAIL_GA4_MEASUREMENT_ID,
-	secret: process.env.THINKRAIL_GA4_API_SECRET,
+const savedEnv = {
+	key: process.env.THINKRAIL_POSTHOG_API_KEY,
+	host: process.env.THINKRAIL_POSTHOG_HOST,
 };
 
 beforeEach(() => {
 	dataDir = mkdtempSync(join(tmpdir(), "trpi-analytics-test-"));
 	process.env.THINKRAIL_DATA_DIR = dataDir;
-	delete process.env.THINKRAIL_GA4_MEASUREMENT_ID;
-	delete process.env.THINKRAIL_GA4_API_SECRET;
+	delete process.env.THINKRAIL_POSTHOG_API_KEY;
+	delete process.env.THINKRAIL_POSTHOG_HOST;
 	resetAnalyticsForTests();
 });
 
@@ -33,17 +33,23 @@ afterEach(() => {
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
-	if (savedEnvKeys.id === undefined) delete process.env.THINKRAIL_GA4_MEASUREMENT_ID;
-	else process.env.THINKRAIL_GA4_MEASUREMENT_ID = savedEnvKeys.id;
-	if (savedEnvKeys.secret === undefined) delete process.env.THINKRAIL_GA4_API_SECRET;
-	else process.env.THINKRAIL_GA4_API_SECRET = savedEnvKeys.secret;
+	if (savedEnv.key === undefined) delete process.env.THINKRAIL_POSTHOG_API_KEY;
+	else process.env.THINKRAIL_POSTHOG_API_KEY = savedEnv.key;
+	if (savedEnv.host === undefined) delete process.env.THINKRAIL_POSTHOG_HOST;
+	else process.env.THINKRAIL_POSTHOG_HOST = savedEnv.host;
 });
 
 // ── test fetch (the sink's injected seam) ──────────────────────────────
 
+interface BatchEntry {
+	event: string;
+	distinct_id: string;
+	properties: Record<string, unknown>;
+}
+
 interface SentPayload {
 	url: string;
-	body: { client_id: string; events: { name: string; params: Record<string, unknown> }[] };
+	body: { api_key: string; batch: BatchEntry[] };
 }
 
 function makeFetch(sent: SentPayload[]): typeof fetch {
@@ -53,7 +59,7 @@ function makeFetch(sent: SentPayload[]): typeof fetch {
 	}) as typeof fetch;
 }
 
-/** Boot the service on the baked-keys path (release-like: keys + a non-dev channel). */
+/** Boot the service on the baked-key path (release-like: key + a non-dev channel). */
 function bootReleaseLike(
 	sent: SentPayload[],
 	overrides: Partial<Parameters<typeof initializeAnalytics>[0]> = {},
@@ -61,19 +67,23 @@ function bootReleaseLike(
 	initializeAnalytics({
 		appVersion: "1.2.3",
 		channel: "stable",
-		measurementId: "G-TEST",
-		apiSecret: "s3cret",
+		posthogApiKey: "phc_TEST",
 		enabled: true,
 		fetchImpl: makeFetch(sent),
 		...overrides,
 	});
 }
 
+/** Every batch entry across every captured payload. */
+function allEntries(sent: SentPayload[]): BatchEntry[] {
+	return sent.flatMap((p) => p.body.batch);
+}
+
 // ── the machine-checked privacy invariant ──────────────────────────────
 
 // One fully-populated sample per event variant. The `satisfies` map is EXHAUSTIVE over the union's
 // names — adding a new event variant without a sample here is a compile error, so the allowlist
-// assertions below always cover the whole event model (the v1 allowlist test, in TS).
+// assertions below always cover the whole event model (thinkrail-v1's allowlist test, in TS).
 const EVENT_SAMPLES = {
 	app_installed: { name: "app_installed" },
 	app_started: { name: "app_started" },
@@ -81,17 +91,19 @@ const EVENT_SAMPLES = {
 	provider_login: { name: "provider_login", params: { provider: "openai", method: "oauth" } },
 } as const satisfies { [K in AnalyticsEvent["name"]]: Extract<AnalyticsEvent, { name: K }> };
 
-test("every event's outgoing params are a subset of PARAM_ALLOWLIST (privacy invariant)", () => {
+test("every event's outgoing properties are allowlist params + the two $ transport flags only", () => {
 	const sent: SentPayload[] = [];
 	bootReleaseLike(sent);
 	for (const event of Object.values(EVENT_SAMPLES)) track(event);
 	expect(sent.length).toBeGreaterThanOrEqual(Object.keys(EVENT_SAMPLES).length);
-	for (const payload of sent) {
-		for (const event of payload.body.events) {
-			for (const key of Object.keys(event.params)) {
-				expect(PARAM_ALLOWLIST.has(key)).toBe(true);
-			}
+	for (const entry of allEntries(sent)) {
+		for (const key of Object.keys(entry.properties)) {
+			if (key.startsWith("$")) continue; // transport framing, asserted below
+			expect(PARAM_ALLOWLIST.has(key)).toBe(true);
 		}
+		// PostHog framing: personless (no person profiles) + GeoIP disabled — on EVERY event.
+		expect(entry.properties.$process_person_profile).toBe(false);
+		expect(entry.properties.$geoip_disable).toBe(true);
 	}
 });
 
@@ -104,52 +116,59 @@ test("an off-allowlist param is dropped at runtime (fails closed even past the t
 		name: "chat_started",
 		params: { provider: "anthropic", model: "m", leak: "/Users/me/secret-project" },
 	} as unknown as AnalyticsEvent);
-	expect(sent).toHaveLength(1);
-	const params = sent[0]?.body.events[0]?.params ?? {};
-	expect(params.leak).toBeUndefined();
-	expect(params.provider).toBe("anthropic");
+	const entry = allEntries(sent)[0];
+	expect(entry).toBeDefined();
+	expect(entry?.properties.leak).toBeUndefined();
+	expect(entry?.properties.provider).toBe("anthropic");
 });
 
-test("every event is stamped with env metadata + the GA4 user-counting plumbing", () => {
+test("every event is stamped with the env metadata", () => {
 	const sent: SentPayload[] = [];
 	bootReleaseLike(sent);
 	track({ name: "app_started" });
-	const last = sent.at(-1);
-	expect(last?.body.events[0]?.params).toMatchObject({
-		app_version: "1.2.3",
-		channel: "stable",
-		engagement_time_msec: 1,
-	});
-	expect(last?.body.events[0]?.params.os).toBeString();
-	expect(last?.body.events[0]?.params.arch).toBeString();
-	expect(last?.body.events[0]?.params.session_id).toBeString();
+	const entry = allEntries(sent).at(-1);
+	expect(entry?.properties).toMatchObject({ app_version: "1.2.3", channel: "stable" });
+	expect(entry?.properties.os).toBeString();
+	expect(entry?.properties.arch).toBeString();
+});
+
+test("the batch goes to the EU cloud by default; THINKRAIL_POSTHOG_HOST retargets it", () => {
+	const sent: SentPayload[] = [];
+	bootReleaseLike(sent);
+	expect(sent[0]?.url).toBe("https://eu.i.posthog.com/batch/");
+
+	resetAnalyticsForTests();
+	process.env.THINKRAIL_POSTHOG_HOST = "https://ph.example.test/";
+	const retargeted: SentPayload[] = [];
+	bootReleaseLike(retargeted);
+	expect(retargeted[0]?.url).toBe("https://ph.example.test/batch/");
 });
 
 // ── installation identity ──────────────────────────────────────────────
 
-test("the install id is minted once, used as client_id, and NEVER rotated by toggles", () => {
+test("the install id is minted once, used as distinct_id, and NEVER rotated by toggles", () => {
 	const sent: SentPayload[] = [];
 	bootReleaseLike(sent);
 	const id = ensureInstallation().id;
-	expect(sent[0]?.body.client_id).toBe(id);
+	expect(allEntries(sent)[0]?.distinct_id).toBe(id);
 
 	setAnalyticsSending(false);
 	setAnalyticsSending(true);
 	track({ name: "app_started" });
-	expect(sent.at(-1)?.body.client_id).toBe(id);
+	expect(allEntries(sent).at(-1)?.distinct_id).toBe(id);
 	expect(ensureInstallation().id).toBe(id); // unchanged on disk too
 });
 
 test("app_installed fires exactly once per install (announced bit survives restarts)", () => {
 	const sent: SentPayload[] = [];
 	bootReleaseLike(sent);
-	expect(sent.map((p) => p.body.events[0]?.name)).toEqual(["app_installed", "app_started"]);
+	expect(allEntries(sent).map((e) => e.event)).toEqual(["app_installed", "app_started"]);
 
 	// Simulated restart: same data dir, fresh in-memory state.
 	resetAnalyticsForTests();
 	const sentAfterRestart: SentPayload[] = [];
 	bootReleaseLike(sentAfterRestart);
-	expect(sentAfterRestart.map((p) => p.body.events[0]?.name)).toEqual(["app_started"]);
+	expect(allEntries(sentAfterRestart).map((e) => e.event)).toEqual(["app_started"]);
 });
 
 test("a disabled boot mints the id but sends nothing; enabling later announces once", () => {
@@ -159,31 +178,30 @@ test("a disabled boot mints the id but sends nothing; enabling later announces o
 	expect(readFileSync(join(dataDir, "installation.json"), "utf8")).toContain('"announced": false');
 
 	setAnalyticsSending(true);
-	expect(sent.map((p) => p.body.events[0]?.name)).toEqual(["app_installed"]);
+	expect(allEntries(sent).map((e) => e.event)).toEqual(["app_installed"]);
 	setAnalyticsSending(true); // idempotent — no second announce
-	expect(sent).toHaveLength(1);
+	expect(allEntries(sent)).toHaveLength(1);
 });
 
 // ── gates ──────────────────────────────────────────────────────────────
 
-test("the dev channel refuses baked keys — a dev run never sends", () => {
+test("the dev channel refuses a baked key — a dev run never sends", () => {
 	const sent: SentPayload[] = [];
 	bootReleaseLike(sent, { channel: "dev" });
 	track({ name: "app_started" });
 	expect(sent).toHaveLength(0);
 });
 
-test("explicit THINKRAIL_GA4_* env keys send even on the dev channel (pipeline testing)", () => {
-	process.env.THINKRAIL_GA4_MEASUREMENT_ID = "G-ENV";
-	process.env.THINKRAIL_GA4_API_SECRET = "env-secret";
+test("an explicit THINKRAIL_POSTHOG_API_KEY env key sends even on the dev channel (pipeline testing)", () => {
+	process.env.THINKRAIL_POSTHOG_API_KEY = "phc_ENV";
 	const sent: SentPayload[] = [];
 	initializeAnalytics({ channel: "dev", enabled: true, fetchImpl: makeFetch(sent) });
 	expect(sent.length).toBeGreaterThan(0);
-	expect(sent[0]?.url).toContain("measurement_id=G-ENV");
-	expect(sent[0]?.body.events[0]?.params.channel).toBe("dev"); // still excludable in reports
+	expect(sent[0]?.body.api_key).toBe("phc_ENV");
+	expect(allEntries(sent)[0]?.properties.channel).toBe("dev"); // still excludable in insights
 });
 
-test("--no-analytics (mute) silences the run even when keys + config say send", () => {
+test("--no-analytics (mute) silences the run even when key + config say send", () => {
 	const sent: SentPayload[] = [];
 	bootReleaseLike(sent, { mute: true });
 	track({ name: "app_started" });
@@ -204,8 +222,7 @@ test("setAnalyticsSending(false) stops sending immediately", () => {
 test("track never throws into the caller, even when the transport does", () => {
 	initializeAnalytics({
 		channel: "stable",
-		measurementId: "G-TEST",
-		apiSecret: "s",
+		posthogApiKey: "phc_TEST",
 		enabled: true,
 		fetchImpl: (() => {
 			throw new Error("boom");
