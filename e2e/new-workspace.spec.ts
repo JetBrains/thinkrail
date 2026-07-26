@@ -45,13 +45,16 @@ test("the dialog lists local branches (no stray origin) and creates a worktree",
 	await expect(mainOption).toBeVisible();
 	await page.keyboard.press("Escape"); // close the branch popover
 
-	// The effort picker is a pill+popover (same shape as the model picker): open it, pick a level, and the
-	// pill reflects the choice.
+	// The effort pill offers exactly the levels the resolved model supports, so it is interactive only
+	// once a model has resolved — which needs provider auth this suite deliberately does not require.
+	// Assert the invariant that holds either way; picking a level lives in new-workspace.live.spec.ts.
 	const effort = dialog.getByTestId("thinking-selector");
-	await effort.click();
-	await expect(page.getByTestId("thinking-option")).toHaveCount(7);
-	await page.locator('[data-testid="thinking-option"][data-level="minimal"]').click();
-	await expect(effort).toContainText("minimal");
+	await expect(effort).toBeVisible();
+	const modelResolved = !(await dialog.getByTestId("model-selector").textContent())?.includes(
+		"Select model",
+	);
+	if (modelResolved) await expect(effort).toBeEnabled();
+	else await expect(effort).toBeDisabled();
 
 	// Dismissing the dialog (Escape) creates nothing.
 	await page.keyboard.press("Escape");

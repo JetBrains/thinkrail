@@ -53,10 +53,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     the web UI downsizes user-attached images itself); a shared `registerSession` forwards each event tagged with its id +
     `bindExtensions({ mode:'rpc', uiContext })`; `prompt`/`steer`/`followUp` (with images) / `abort` /
     `setModel` / `setThinkingLevel` / `compact` / `getSessionStats` (+ contextUsage) / `getSessionCommands` /
-    `listAvailableModels` / `getDefaultModel` (the model + thinking a fresh session resolves to — settings
+    `listAvailableModels` / **`clampThinkingForModel`** (pi's `clampThinkingLevel` for a `{model, level}`
+    pair — `model.clampThinking`; the host owns it so the pre-session picker, `getDefaultModel`, and a live
+    session all adjust effort identically) / `getDefaultModel` (the model + thinking a fresh session resolves to — settings
     default if available, else first available — so the New-Workspace dialog shows the exact pre-session
     model). **Models cross the wire as `WireModel` (never pi's raw `Model`):** `toWireModel` projects a
-    `Model` onto the wire's **allowlist** (id/name/provider/contextWindow/reasoning) — so `baseUrl` (the
+    `Model` onto the wire's **allowlist** (see `WireModel`) — so `baseUrl` (the
     jbcentral proxy secret when JetBrains AI is wired), `headers`, and any other field are excluded by
     default — and the inbound side (`createSession`/`setModel`) **re-resolves** the ref by `{provider,id}`
     via `resolveWireModel` against `getAvailable()` — pi uses `Model.baseUrl` verbatim, so a client's baseUrl

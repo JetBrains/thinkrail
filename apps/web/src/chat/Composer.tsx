@@ -791,7 +791,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 						<ModelSelector models={models} current={currentModel} onSelect={onSelectModel} />
 						<ThinkingSelector
 							level={thinkingLevel}
-							supportedLevels={currentModel?.thinkingLevels}
+							levels={currentModel?.thinkingLevels ?? []}
 							onSelect={onSelectThinking}
 						/>
 					</div>

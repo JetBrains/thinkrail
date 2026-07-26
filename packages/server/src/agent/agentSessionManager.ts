@@ -470,6 +470,20 @@ export interface DefaultModelResult {
 }
 
 /**
+ * pi's own clamp for a `{model, desired-level}` pair — `model.clampThinking`. The pre-session picker has
+ * no session to ask, so without this it would need a policy of its own, and that path would then adjust
+ * effort differently from `model.default` (which clamps just below) and from a live session (which gets
+ * pi's answer via `thinking_level_changed`). Re-resolves the ref host-side like every other inbound
+ * model ref, so an unavailable one throws rather than being guessed at.
+ */
+export async function clampThinkingForModel(
+	ref: Pick<WireModel, "provider" | "id">,
+	level: ThinkingLevel,
+): Promise<ThinkingLevel> {
+	return clampThinkingLevel(await resolveWireModel(ref), level);
+}
+
+/**
  * The default the *next* session would start with — so the New-Workspace dialog can show the exact model
  * pre-session (not a "Default" placeholder). Mirrors pi's resolution for a fresh session: the settings
  * default (if it's available), else the first available model. Passing it back to `session.create` is a

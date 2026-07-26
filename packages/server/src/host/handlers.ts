@@ -14,6 +14,7 @@ import type {
 import {
 	abortSession,
 	answerQuestion,
+	clampThinkingForModel,
 	compactSession,
 	createSession,
 	followUpSession,
@@ -388,6 +389,10 @@ const handlers: Record<string, Handler> = {
 		return { ok: true } as const;
 	},
 	"model.list": () => listAvailableModels(),
+	"model.clampThinking": async (params) => {
+		const p = params as { provider: string; id: string; level: ThinkingLevel };
+		return { level: await clampThinkingForModel({ provider: p.provider, id: p.id }, p.level) };
+	},
 	"model.default": () => getDefaultModel(),
 	"provider.status": () => getProviderStatus(),
 	// In-app login (OAuth or interactive API-key entry, per `type`). `loginStart` returns its handle at
