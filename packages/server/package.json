@@ -20,10 +20,11 @@
 		"@thinkrail/shared": "workspace:*",
 		"bun-pty": "0.4.10",
 		"pi-spec-graph": "workspace:*",
-		"pi-todos": "workspace:*",
 		"pi-thinkrail-workflow": "workspace:*",
+		"pi-todos": "workspace:*",
 		"pi-visualize": "workspace:*",
 		"pi-web-access": "0.13.0",
+		"posthog-node": "5.46.1",
 		"typebox": "catalog:"
 	},
 	"devDependencies": {

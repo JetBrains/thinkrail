@@ -26,13 +26,23 @@ channel fan-out, and the process-boot wrapper both launchers share.
   workspace-read handlers (`fs.*`, `git.status`/`git.diffFile`, `spec.graph`) — a read is the "a client is
   looking" signal; `stopWatch` in `workspace.remove`'s fast path beside `evictSpecIndex`;
   `stopAllWatches()` in `stop()`), `cancelAllLogins()` in `stop()` before the socket close,
-  an optional boot-time `openProject(projectPath)` (best-effort — a launcher convenience), and
+  an optional boot-time `openProject(projectPath)` (best-effort — a launcher convenience), the
+  **analytics wiring** (`initializeAnalytics` at boot from the launcher-threaded `analytics` option —
+  keys/channel/mute + the initial `getConfig().analyticsEnabled`; a `setAnalyticsSending` sync teed
+  off the settings publisher; a fire-and-forget `shutdownAnalytics()` in `stop()` — best-effort queue
+  drain; and every `track()` call site: `chat_started` in `session.create`, `provider_login` from the
+  login-publisher tee's terminal `success` frames with the method (`oauth`/`api-key`) looked up from
+  `loginAnalytics.ts` — the loginId→method map the `provider.loginStart` handler records (and
+  `provider.loginCancel` clears; an unknown loginId tracks nothing, fails closed) — +
+  `provider.jbcentralConnect`→connected (central) — per `submodule-server-analytics`,
+  feature modules never track), and
   `stop()` → agent-session + terminal cleanup then socket close); `boot.ts` (`bootHost` → resolve the
   login-shell PATH, pick the port per `portMode` (`"exact"` vs `"free"`), start `createServer`, and
   install SIGINT/SIGTERM handlers that **settle before exit**: `settleSessionsForShutdown()` — abort
   streaming sessions and wait bounded, so pi persists their "Operation aborted" tool results and
-  transcripts land paired — then `stop()` + exit; an immediate exit would strand mid-tool transcripts on
-  the restart repair); `handlers.ts` (the WS method→handler registry, including the **Skills-manager set**:
+  transcripts land paired — concurrently with an awaited `shutdownAnalytics()` (bounded queue drain;
+  the same memoized drain `stop()` fires sync/best-effort) — then `stop()` + exit; an immediate exit
+  would strand mid-tool transcripts on the restart repair); `handlers.ts` (the WS method→handler registry, including the **Skills-manager set**:
   `skill.list` / `skills.state` / `project.skills` build the admission context from `projects` (+ the
   workspace's `skillOverrides` when workspace-scoped) and pass it into agent's `listSkillCommands`/
   `listSkillCatalog`; `project.setTrust` acknowledges the aliases present at grant via agent's

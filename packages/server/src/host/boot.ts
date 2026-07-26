@@ -1,7 +1,8 @@
 import { findFreePort } from "@thinkrail/shared/freePort";
 import { resolveShellEnv } from "@thinkrail/shared/shellEnv";
 import { settleSessionsForShutdown } from "../agent";
-import { createServer, type RunningServer } from "./server";
+import { shutdownAnalytics } from "../analytics";
+import { type CreateServerOptions, createServer, type RunningServer } from "./server";
 
 export interface BootHostOptions {
 	/** Requested listen port. */
@@ -20,6 +21,8 @@ export interface BootHostOptions {
 	projectPath?: string;
 	/** The launcher's baked release version, forwarded onto the `server.welcome` push. */
 	appVersion?: string;
+	/** Anonymous-analytics wiring (channel + the baked PostHog key + `--no-analytics` mute), forwarded verbatim. */
+	analytics?: CreateServerOptions["analytics"];
 }
 
 export interface BootedHost {
@@ -50,6 +53,7 @@ export async function bootHost(options: BootHostOptions): Promise<BootedHost> {
 		...(options.staticDir ? { staticDir: options.staticDir } : {}),
 		...(options.projectPath ? { projectPath: options.projectPath } : {}),
 		...(options.appVersion ? { appVersion: options.appVersion } : {}),
+		...(options.analytics ? { analytics: options.analytics } : {}),
 	});
 
 	let stopping = false;
@@ -60,9 +64,11 @@ export async function bootHost(options: BootHostOptions): Promise<BootedHost> {
 		// "Operation aborted" tool results — an immediate `process.exit` here would strand mid-tool
 		// transcripts (an open `ask_user_question` made that deterministic before the ack+terminate
 		// redesign) and lean on the restart repair for what a polite shutdown can persist cleanly.
+		// Concurrently, drain the analytics queue (bounded, idempotent — `stop()`'s own fire-and-forget
+		// call reuses the same drain) so a capture moments before Ctrl-C still lands.
 		void (async () => {
 			try {
-				await settleSessionsForShutdown();
+				await Promise.allSettled([settleSessionsForShutdown(), shutdownAnalytics()]);
 			} finally {
 				server.stop();
 				process.exit(0);

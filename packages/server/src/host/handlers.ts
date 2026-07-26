@@ -36,6 +36,7 @@ import {
 	setSessionThinkingLevel,
 	steerSession,
 } from "../agent";
+import { bucketProviderModel, track } from "../analytics";
 import {
 	cancelLogin,
 	connectJbcentral,
@@ -92,6 +93,7 @@ import {
 } from "../workspaces";
 import { ackSend } from "./ackSend";
 import { buildHistoryScope } from "./historyScope";
+import { dropLogin, recordLoginStart } from "./loginAnalytics";
 
 type Handler = (params: unknown) => unknown | Promise<unknown>;
 
@@ -302,12 +304,21 @@ const handlers: Record<string, Handler> = {
 			thinkingLevel?: ThinkingLevel;
 		};
 		const ws = getWorkspace(p.workspaceId);
-		return createSession({
+		const created = await createSession({
 			cwd: ws.worktreePath,
 			workspaceId: p.workspaceId,
 			...(p.model ? { model: p.model } : {}),
 			...(p.thinkingLevel ? { thinkingLevel: p.thinkingLevel } : {}),
 		});
+		// Analytics: a NEW chat only (disk re-opens via session.getMessages never land here). Identity is
+		// bucketed against pi's built-in catalog — a custom provider/model name never leaves the process.
+		if (created.model) {
+			track({
+				name: "chat_started",
+				params: bucketProviderModel(created.model.provider, created.model.id),
+			});
+		}
+		return created;
 	},
 	// Sends are acked when ACCEPTED, not when the turn ends — see `ackSend` (a turn can outlive the
 	// client's request timeout; long tool rounds are routine).
@@ -384,14 +395,21 @@ const handlers: Record<string, Handler> = {
 	// `loginReply` answers a live select/prompt frame.
 	"provider.loginStart": (params) => {
 		const p = params as { providerId: string; type?: "oauth" | "api_key" };
-		return startLogin(p.providerId, p.type ?? "oauth");
+		const type = p.type ?? "oauth";
+		const handle = startLogin(p.providerId, type);
+		// Analytics: remember the flow's method so the login channel's terminal `success` frame can carry
+		// it (the tee in `createServer` looks it up — see loginAnalytics.ts).
+		recordLoginStart(handle.loginId, type);
+		return handle;
 	},
 	"provider.loginReply": (params) => {
 		resolveLogin(params as LoginReply);
 		return { ok: true } as const;
 	},
 	"provider.loginCancel": (params) => {
-		cancelLogin((params as { loginId: string }).loginId);
+		const { loginId } = params as { loginId: string };
+		cancelLogin(loginId);
+		dropLogin(loginId);
 		return { ok: true } as const;
 	},
 	"provider.logout": async (params) => {
@@ -400,7 +418,15 @@ const handlers: Record<string, Handler> = {
 	},
 	// JetBrains AI (jbcentral proxy): connect/disconnect write models.json + reload the runtime config; login
 	// launches `central login` (browser) on the host.
-	"provider.jbcentralConnect": () => connectJbcentral(),
+	"provider.jbcentralConnect": async () => {
+		const result = await connectJbcentral();
+		// Analytics: only an actual connect counts (needs-install / needs-login / error don't). `jbcentral`
+		// is our own constant, not user input — no bucketing needed.
+		if (result.outcome === "connected") {
+			track({ name: "provider_login", params: { provider: "jbcentral", method: "central" } });
+		}
+		return result;
+	},
 	"provider.jbcentralDisconnect": async () => {
 		await disconnectJbcentral();
 		return { ok: true } as const;

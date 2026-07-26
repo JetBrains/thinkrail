@@ -71,7 +71,7 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   `provider.login` frame (creating `activeLogin` if the frame arrived first; ignoring frames for a different
   live login), **`clearLoginInput()`** drops the live input the instant a reply is sent (no double-submit),
   and **`clearLogin()`** dismisses it. The **settings surface** state — **`settingsOpen`** +
-  **`settingsSection`** (a const-object enum: `Providers`/`Github`/`Appearance`/`Templates`) with
+  **`settingsSection`** (a const-object enum: `Providers`/`Github`/`Appearance`/`Templates`/`Privacy`) with
   **`openSettings(section?)`** (deep-links to a section, defaults to Providers) / **`closeSettings()`** /
   **`setSettingsSection()`** — lives here so the top-bar gear AND the Welcome provider warning open Settings
   to a section without prop-drilling through the shell. The **theme** state — **`theme: ThemeId`** (the
@@ -79,7 +79,9 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   (folds the server-synced `AppConfig` in from
   `server.welcome` / the `settings.changed` broadcast) — lives here too; it's a **pure value only** (the
   theme-application side-effect is the shell's, keyed off `theme`), and defaults to
-  `DEFAULT_CONFIG.theme` until the welcome arrives. The
+  `DEFAULT_CONFIG.theme` until the welcome arrives. **`analyticsEnabled: boolean`** rides the same
+  `applyConfig` fold (host-owned, defaults to `DEFAULT_CONFIG.analyticsEnabled` until the welcome
+  arrives) — the Privacy toggle's read side. The
   **toast queue** — **`toasts: Toast[]`** (oldest-first) with **`pushToast(toast) → id`** / **`dismissToast(id)`**
   and the ergonomic **`toast.error/success/info(message, title?)`** helper (wraps `pushToast` so a non-React
   call site — a `.catch` in a fire-and-forget wire call — can fire one) — lives here so any surface can raise

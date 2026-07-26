@@ -33,27 +33,44 @@ its URL. It is a thin launcher — all engine logic lives in `packages/server`.
 **subcommand** (`thinkrail update [--channel stable|nightly] [--version X.Y.Z]`) intercepted before the
 launch flags — see *Self-update* below. Otherwise the launch args: `--port` (stable default 24242,
 scans upward to the next free port on collision), `--host` (default `localhost`), `--no-open`,
+`--no-analytics` (**per-run mute** for anonymous usage analytics — this run sends nothing; the
+durable switch is the app's Settings → Privacy toggle, see `submodule-server-analytics`),
 `-v`/`--version` (print the baked version and exit), `-h`/`--help`, and one positional `project-dir` (a
 git repo to open as a project on boot, best-effort). Env defaults: `THINKRAIL_PORT` / `THINKRAIL_HOST` /
-`THINKRAIL_STATIC_DIR` (flag > env > default).
+`THINKRAIL_STATIC_DIR` / `THINKRAIL_NO_ANALYTICS` (flag > env > default).
 
 ## Self-update (`thinkrail update`)
 
 `src/update.ts` ports the old repo's `thinkrail upgrade` (renamed): it re-invokes the published
 `install.sh` for the binary's channel, so the installer stays the single source of the download →
 checksum → replace → PATH logic. Channel/prefix resolve as flag > `~/.config/thinkrail/install.json` >
-baked channel (from `version.ts`; `dev` → `stable`) / `~/.local`. Unix-only (replacing a running `.exe`
-in place isn't possible on Windows → points to the releases page). The arg parse + channel/prefix
-resolution are pure (`parseUpdateArgs` / `resolveUpdatePlan`, unit-tested); only fetch (`curl`) + run
-(`bash -s`) touch IO. `THINKRAIL_INSTALL_SCRIPT_URL` overrides the installer URL (testing / forks). See
-`module-ci-release` for the installer itself.
+baked channel (from `version.ts`; `dev` → `stable`) / `~/.local`. Unix-only execution (in-place
+self-replace on Windows is deferred → prints the `install.ps1` command, with the releases page as the
+manual fallback). The Windows message resolves the **same** channel + prefix the Unix plan would, then
+spells the command out **per shell** (`windowsUpdateMessage`): cmd's `set "X=v" &&` and PowerShell's
+`$env:X='v';` are not interchangeable — one shell's syntax shown to the other silently re-installs the
+wrong build, and a dropped `THINKRAIL_PREFIX` would put a second copy under `.local` while the
+PATH-resolved exe stays stale. `resolveWindowsPrefix` owns that seam: it omits the installer's own
+default, and refuses a metadata prefix that isn't a rooted Windows path or can't be safely quoted
+(Windows needs its own charset — `PREFIX_FORBIDDEN_RE` rejects the backslash every Windows path is made
+of). The arg parse + channel/prefix resolution are pure (`parseUpdateArgs` / `resolveUpdateChannel` /
+`resolveWindowsPrefix` / `resolveUpdatePlan`, unit-tested); only fetch (`curl`) + run (`bash -s`) touch
+IO.
+`THINKRAIL_INSTALL_SCRIPT_URL` overrides the installer URL (testing / forks). See `module-ci-release`
+for the installer itself.
 
 ## Version stamping (release seam)
 
 `src/version.ts` exports `{ version, channel, commit }` with a from-source default (`0.0.0-dev`). Unlike
 the transient `*.generated.ts`, it's a **permanent committed module** so `--version` + `tsc` work from
 source. The release pipeline (`module-ci-release`) overwrites it in the throwaway CI checkout before
-`build:binary`, baking the real release identity into the binary. `index.ts` reads it, prints it for
+`build:binary`, baking the real release identity into the binary. **`src/analytics-keys.ts` is the
+same seam for the PostHog project API key**: committed with an empty-string default (so
+source/dev/e2e builds have no key — the noop sink, see `submodule-server-analytics`), overwritten by
+the release pipeline from the CI secret. The baked key is the **only** key source — there is no
+runtime env-var key override, so only stable/nightly release builds can ever send (see
+`submodule-server-analytics`). `index.ts` threads
+`{ channel, key, mute }` into `bootHost` as the `analytics` option. `index.ts` reads it, prints it for
 `--version`, and passes `appVersion` into `bootHost` — so the host echoes it in `server.welcome`
 (`ServerWelcome.appVersion`), letting a client report host version alongside the protocol-drift check.
 

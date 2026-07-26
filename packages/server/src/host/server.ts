@@ -8,6 +8,12 @@ import {
 	setSessionPublisher,
 	setSkillAdmissionResolver,
 } from "../agent";
+import {
+	type AnalyticsOptions,
+	initializeAnalytics,
+	setAnalyticsSending,
+	shutdownAnalytics,
+} from "../analytics";
 import { cancelAllLogins, setLoginPublisher } from "../auth";
 import { resolveWorktreeFile } from "../fs";
 import { listProjects, openProject } from "../projects";
@@ -22,6 +28,7 @@ import {
 	maybeNaiveNameWorkspace,
 } from "./autoRename";
 import { handleRequest } from "./handlers";
+import { trackLoginOutcome } from "./loginAnalytics";
 
 export interface CreateServerOptions {
 	port?: number;
@@ -32,6 +39,11 @@ export interface CreateServerOptions {
 	projectPath?: string;
 	/** The launcher's baked release version, echoed in the `server.welcome` push (undefined from source). */
 	appVersion?: string;
+	/**
+	 * Anonymous-analytics wiring from the launcher: release channel + the PostHog key baked at release
+	 * + the `--no-analytics` per-run mute. Absent (dev/e2e/source runs) ⇒ the noop sink — never sends.
+	 */
+	analytics?: Pick<AnalyticsOptions, "channel" | "posthogApiKey" | "posthogHost" | "mute">;
 }
 
 export interface RunningServer {
@@ -41,7 +53,14 @@ export interface RunningServer {
 
 /** Boot the engine host: Bun.serve HTTP+WS, /health, optional static SPA, and the server.welcome push. */
 export function createServer(options: CreateServerOptions = {}): RunningServer {
-	const { port = 24242, host = "localhost", staticDir, projectPath, appVersion } = options;
+	const {
+		port = 24242,
+		host = "localhost",
+		staticDir,
+		projectPath,
+		appVersion,
+		analytics,
+	} = options;
 
 	const server = Bun.serve({
 		port,
@@ -152,12 +171,15 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 	});
 
 	// Broadcast a server-synced settings change (the full `AppConfig`) to every client so they converge —
-	// the initiator applies on this push too, never optimistically (the workspace-lifecycle pattern).
+	// the initiator applies on this push too, never optimistically (the workspace-lifecycle pattern). The
+	// analytics service syncs off the same tee (host-mediated — `analytics` has no `settings` edge), so
+	// the Privacy toggle takes effect the moment the new config is persisted.
 	setSettingsPublisher((config) => {
 		server.publish(
 			WS_CHANNELS.settingsChanged,
 			JSON.stringify({ channel: WS_CHANNELS.settingsChanged, data: config }),
 		);
+		setAnalyticsSending(config.analyticsEnabled);
 	});
 
 	// Stream each in-process AgentSession's events to subscribed clients over the pi.event channel, and
@@ -188,12 +210,26 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		);
 	});
 
-	// Push in-app login flow frames (the session-less `authStorage.login` bridge) over the provider.login channel.
+	// Push in-app login flow frames (the session-less `authStorage.login` bridge) over the provider.login
+	// channel. A terminal `success` frame doubles as the `provider_login` analytics moment — the method
+	// (`oauth`/`api-key`) comes from `loginAnalytics`'s loginId→method map (recorded by the
+	// `provider.loginStart` handler), the provider id is bucketed, so a custom provider name never
+	// leaves the process. (jbcentral's `central` method is tracked in its own connect handler.)
 	setLoginPublisher((push) => {
 		server.publish(
 			WS_CHANNELS.providerLogin,
 			JSON.stringify({ channel: WS_CHANNELS.providerLogin, data: push }),
 		);
+		trackLoginOutcome(push);
+	});
+
+	// Boot analytics before any trackable action can occur (fire-and-forget by contract — a failure in
+	// here can never block or crash the host). The persisted flag gates sending; dev/source runs have no
+	// keys and land on the noop sink.
+	initializeAnalytics({
+		...(appVersion ? { appVersion } : {}),
+		...(analytics ?? {}),
+		enabled: getConfig().analyticsEnabled,
 	});
 
 	// Open a project on boot if the launcher passed one (e.g. `thinkrail /path/to/repo`). Best-effort:
@@ -214,7 +250,9 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		},
 		stop() {
 			// Symmetric teardown: settle in-flight logins (so no detached `login()` promise leaks), dispose
-			// in-process agent sessions + PTYs, then close the socket.
+			// in-process agent sessions + PTYs, then close the socket. Analytics drains first, fire-and-forget
+			// (best-effort by contract — stop never waits on the network).
+			void shutdownAnalytics();
 			cancelAllLogins();
 			stopAllWatches();
 			disposeAllSessions();

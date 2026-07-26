@@ -17,22 +17,37 @@ spec-graph viewer, and multiple concurrent `pi` chat sessions — all scoped to 
 ## Install
 
 ThinkRail ships as a single self-contained executable per platform. The installer downloads the right
-build from the GitHub releases, verifies its SHA-256 checksum, and puts `thinkrail` on your PATH:
+build from the GitHub releases, verifies its SHA-256 checksum, and puts `thinkrail` on your PATH.
+
+**macOS / Linux** (also Windows under Git Bash):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash
 ```
 
+**Windows** — the same command works from cmd and PowerShell:
+
+```powershell
+powershell -c "irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex"
+```
+
 Nightly builds and pinned versions:
 
 ```bash
+# macOS / Linux
 curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash -s -- --channel nightly
 curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash -s -- --version 0.2.0
 ```
 
+```powershell
+# Windows — options are env vars (THINKRAIL_CHANNEL, THINKRAIL_VERSION, THINKRAIL_PREFIX, THINKRAIL_NO_MODIFY_PATH)
+$env:THINKRAIL_CHANNEL='nightly'; irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex   # PowerShell
+set "THINKRAIL_VERSION=0.2.0" && powershell -c "irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex"   # cmd
+```
+
 Then run `thinkrail` (add a git repo path to open it as a project: `thinkrail ~/code/my-repo`). To update
 later, run `thinkrail update` (re-installs the latest build for your channel; macOS/Linux only — on
-Windows, re-download from releases). `thinkrail --help` lists the flags; `thinkrail --version` prints the
+Windows, re-run the installer). `thinkrail --help` lists the flags; `thinkrail --version` prints the
 build.
 
 **Prebuilt platforms:** macOS (Apple Silicon), Linux arm64 + x64, Windows x64 (`.exe`). Intel macOS isn't
@@ -128,6 +143,36 @@ ThinkRail is developed spec-first: hierarchical, interconnected specs live in th
 code — top-level specs at the root (`goal-and-requirements.md`, `architecture.md`) and a co-located
 `SPEC.md` for every module. When you change a boundary, contract, or decision, update the corresponding
 spec in the same change. See [`AGENTS.md`](AGENTS.md) for the spec workflow.
+
+## Analytics & Privacy
+
+Released ThinkRail builds send **anonymous usage analytics** to [PostHog](https://posthog.com) (EU
+cloud; on by default; a notice is printed the first time anything is sent). The data answers product
+questions — how many installs are active, on which versions/platforms, which models and providers
+get used, and which features matter — and nothing more.
+
+**The only stable identifier** is a random per-install id (a `uuid4`) minted on your machine and
+stored in `~/.thinkrail/installation.json`; it never leaves the host except as the anonymous
+`distinct_id` on events. Events additionally carry only low-cardinality, non-personal metadata: app
+version, release channel (`stable`/`nightly`), OS (`macos`/`linux`/`windows`), architecture
+(`x64`/`arm64`), and — on chat/login events — the model/provider name **only if it is a pi built-in**
+(anything user-configured is reported as `custom`). Events are sent **personless** (no person
+profiles are ever built) and with **GeoIP lookup disabled**.
+
+**Never collected:** file paths or names, prompts, code, chat transcripts, API keys, token counts,
+hostnames, usernames, or IP-derived fields. **Only stable and nightly release builds ever send**:
+development builds (`bun run dev`, from-source runs, e2e) carry no analytics key, and analytics
+activates exclusively on the `stable`/`nightly` release channels — there is no way (not even an
+environment variable) to make a dev run emit events.
+
+Turn it off any time:
+
+- **In-app:** Settings → **Privacy** → toggle off (saved on the host, synced to every client).
+- **Per run:** `thinkrail --no-analytics` (or `THINKRAIL_NO_ANALYTICS=1`) — mutes that run without
+  touching the saved setting.
+
+Turning analytics off stops all sending immediately; the install id is kept (never rotated) and simply
+goes unused until you turn it back on.
 
 ## Contributing
 

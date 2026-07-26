@@ -10,6 +10,8 @@ export interface CliOptions {
 	host: string;
 	/** Open the browser at the resolved URL on boot. */
 	open: boolean;
+	/** `--no-analytics` / `THINKRAIL_NO_ANALYTICS`: mute anonymous usage analytics for this run. */
+	noAnalytics: boolean;
 	/** Static SPA dir override (`THINKRAIL_STATIC_DIR`); when unset the bin derives a default. */
 	staticDir: string | undefined;
 	/** A git repo to open as a project on boot (the positional arg), or undefined. */
@@ -32,6 +34,8 @@ Options:
   --port <n>     Listen port (default ${DEFAULT_PORT}; falls back to a free port if taken).
   --host <h>     Bind host (default ${DEFAULT_HOST}).
   --no-open      Don't open the browser (e.g. headless / remote host).
+  --no-analytics Don't send anonymous usage analytics this run (the durable switch
+                 lives in the app: Settings → Privacy).
   -v, --version  Print the version and exit.
   -h, --help     Show this help.
 
@@ -40,7 +44,8 @@ Arguments:
 
 Env:
   THINKRAIL_PORT / THINKRAIL_HOST   Defaults for --port / --host.
-  THINKRAIL_STATIC_DIR                 Override the built web app served by the host.`;
+  THINKRAIL_STATIC_DIR                 Override the built web app served by the host.
+  THINKRAIL_NO_ANALYTICS               Same as --no-analytics (any non-empty value).`;
 
 /** Read a flag's value from either `--flag value` or `--flag=value`; returns the value + how many argv slots it consumed. */
 function readFlagValue(arg: string, next: string | undefined): { value: string; consumed: number } {
@@ -59,6 +64,7 @@ export function parseArgs(argv: readonly string[], env: ParseEnv = {}): CliOptio
 	let port: number | undefined;
 	let host: string | undefined;
 	let open = true;
+	let noAnalytics = false;
 	let help = false;
 	let version = false;
 	let projectDir: string | undefined;
@@ -67,6 +73,8 @@ export function parseArgs(argv: readonly string[], env: ParseEnv = {}): CliOptio
 		const arg = argv[i] as string;
 		if (arg === "--no-open") {
 			open = false;
+		} else if (arg === "--no-analytics") {
+			noAnalytics = true;
 		} else if (arg === "-h" || arg === "--help") {
 			help = true;
 		} else if (arg === "-v" || arg === "--version") {
@@ -100,6 +108,7 @@ export function parseArgs(argv: readonly string[], env: ParseEnv = {}): CliOptio
 		port: resolvedPort,
 		host: host ?? env.THINKRAIL_HOST ?? DEFAULT_HOST,
 		open,
+		noAnalytics: noAnalytics || Boolean(env.THINKRAIL_NO_ANALYTICS),
 		staticDir: env.THINKRAIL_STATIC_DIR,
 		projectDir,
 		help,

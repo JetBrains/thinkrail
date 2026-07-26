@@ -1,5 +1,6 @@
 // App state under the data dir (THINKRAIL_DATA_DIR for dev/e2e isolation, else ~/.thinkrail).
 // This is OUR state, never the agent's — pi's own session files live under ~/.pi/agent.
+import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -45,4 +46,30 @@ export function loadConfig(): AppConfig {
 
 export function saveConfig(config: AppConfig): void {
 	writeJson("config.json", config);
+}
+
+/**
+ * The install identity for anonymous analytics — SERVER-ONLY by design: it must never ride the
+ * wire-broadcast `config.json` (see `submodule-server-analytics`). `id` is minted once per install
+ * and never rotated (turning analytics off only stops sending); `announced` records that the one-shot
+ * `app_installed` event was sent.
+ */
+export interface InstallationRecord {
+	id: string;
+	announced: boolean;
+}
+
+/** Load `installation.json`, minting (and persisting) a fresh record on first read or corrupt file. */
+export function ensureInstallation(): InstallationRecord {
+	const raw = readJson<Partial<InstallationRecord>>("installation.json", {});
+	if (typeof raw.id === "string" && raw.id.length > 0) {
+		return { id: raw.id, announced: raw.announced === true };
+	}
+	const record: InstallationRecord = { id: randomUUID(), announced: false };
+	saveInstallation(record);
+	return record;
+}
+
+export function saveInstallation(record: InstallationRecord): void {
+	writeJson("installation.json", record);
 }
