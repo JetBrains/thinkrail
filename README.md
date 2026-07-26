@@ -145,8 +145,10 @@ version, release channel (`stable`/`nightly`), OS (`macos`/`linux`/`windows`), a
 profiles are ever built) and with **GeoIP lookup disabled**.
 
 **Never collected:** file paths or names, prompts, code, chat transcripts, API keys, token counts,
-hostnames, usernames, or IP-derived fields. Development builds (`bun run dev`, from-source runs, e2e)
-never send anything — they carry no analytics key and the `dev` channel refuses a baked key outright.
+hostnames, usernames, or IP-derived fields. **Only stable and nightly release builds ever send**:
+development builds (`bun run dev`, from-source runs, e2e) carry no analytics key, and analytics
+activates exclusively on the `stable`/`nightly` release channels — there is no way (not even an
+environment variable) to make a dev run emit events.
 
 Turn it off any time:
 

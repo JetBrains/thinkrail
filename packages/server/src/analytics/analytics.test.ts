@@ -228,13 +228,26 @@ test("the dev channel refuses a baked key — a dev run never sends", async () =
 	expect(sent).toHaveLength(0);
 });
 
-test("an explicit THINKRAIL_POSTHOG_API_KEY env key sends even on the dev channel (pipeline testing)", async () => {
+test("a THINKRAIL_POSTHOG_API_KEY env var is IGNORED — a dev run has no path to the network", async () => {
 	process.env.THINKRAIL_POSTHOG_API_KEY = "phc_ENV";
 	const sent: SentPayload[] = [];
 	initializeAnalytics({ channel: "dev", enabled: true, fetchImpl: makeFetch(sent) });
-	await drained(sent, 1);
-	expect(sent[0]?.body.api_key).toBe("phc_ENV");
-	expect(allEntries(sent)[0]?.properties.channel).toBe("dev"); // still excludable in insights
+	track({ name: "app_started" });
+	await settled();
+	expect(sent).toHaveLength(0);
+});
+
+test("an unknown channel fails closed — only stable/nightly ever send", async () => {
+	const sent: SentPayload[] = [];
+	bootReleaseLike(sent, { channel: "beta" });
+	track({ name: "app_started" });
+	await settled();
+	expect(sent).toHaveLength(0);
+
+	resetAnalyticsForTests();
+	const nightly: SentPayload[] = [];
+	bootReleaseLike(nightly, { channel: "nightly" });
+	await drained(nightly, 2); // nightly is a release channel — it sends
 });
 
 test("--no-analytics (mute) silences the run even when key + config say send", async () => {

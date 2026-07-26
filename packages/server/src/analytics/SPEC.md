@@ -63,10 +63,13 @@ PostHog won on free tier, EU residency, and a self-host path).
   `setAnalyticsSending` on every settings change; this module has no `settings` edge). Disabled ⇒ zero
   network. `app_installed` fires at most once per install (the `announced` bit), on the first
   sending-enabled boot, together with the first-run notice.
-- **Dev runs never send:** a baked key is refused when `channel === "dev"`; source builds have no
-  baked key anyway (double gate — e2e inherits the silence). Only the explicit
-  `THINKRAIL_POSTHOG_API_KEY` env override can send from a dev run, and those events still carry
-  `channel: "dev"` (`THINKRAIL_POSTHOG_HOST` retargets the endpoint — the future self-host seam).
+- **Only stable/nightly releases send — ever:** the sink is real only when `channel` is in the
+  release allowlist (`stable` / `nightly`) AND a baked key is present; anything else (dev, source,
+  e2e, an unknown channel) fails closed to the noop sink. There is deliberately **no env-var key
+  override** — a dev run has no path to the network at all (pipeline verification happens by calling
+  `initializeAnalytics` directly with a release-like channel, or on a real nightly).
+  `THINKRAIL_POSTHOG_HOST` still retargets the endpoint of a *sending* (release) build — the future
+  self-host seam.
 - **Never sent:** paths, file/spec names, prompts, code, transcripts, token counts, hostnames,
   usernames, IP-derived fields, or any free-form user string. Params on every event: `app_version`,
   `channel`, `os`, `arch` — plus only the closed per-event params above; the unit tests pin each

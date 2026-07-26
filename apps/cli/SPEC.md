@@ -58,8 +58,9 @@ source. The release pipeline (`module-ci-release`) overwrites it in the throwawa
 `build:binary`, baking the real release identity into the binary. **`src/analytics-keys.ts` is the
 same seam for the PostHog project API key**: committed with an empty-string default (so
 source/dev/e2e builds have no key — the noop sink, see `submodule-server-analytics`), overwritten by
-the release pipeline from the CI secret; `THINKRAIL_POSTHOG_API_KEY` (+ `THINKRAIL_POSTHOG_HOST`)
-env vars override at runtime for deliberate pipeline testing. `index.ts` threads
+the release pipeline from the CI secret. The baked key is the **only** key source — there is no
+runtime env-var key override, so only stable/nightly release builds can ever send (see
+`submodule-server-analytics`). `index.ts` threads
 `{ channel, key, mute }` into `bootHost` as the `analytics` option. `index.ts` reads it, prints it for
 `--version`, and passes `appVersion` into `bootHost` — so the host echoes it in `server.welcome`
 (`ServerWelcome.appVersion`), letting a client report host version alongside the protocol-drift check.

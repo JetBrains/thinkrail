@@ -1,7 +1,7 @@
 // The analytics facade: initialize once at host boot, `track()` from host call sites, sync the config
 // flag via `setAnalyticsSending`. Fire-and-forget end to end — nothing here may throw into a caller or
-// block boot. The privacy contract (single anonymous id, closed events, dev-run silence) is SPEC.md's
-// "Get right" section; this file is its runtime half.
+// block boot. The privacy contract (single anonymous id, closed events, release-only sending) is
+// SPEC.md's "Get right" section; this file is its runtime half.
 import { ensureInstallation, saveInstallation } from "../persistence";
 import type { AnalyticsEvent } from "./events";
 import { type AnalyticsSink, createPostHogSink, noopSink, type OutgoingEvent } from "./sink";
@@ -9,7 +9,7 @@ import { type AnalyticsSink, createPostHogSink, noopSink, type OutgoingEvent } f
 export interface AnalyticsOptions {
 	/** The launcher's baked release version (absent from source — stamped like `appVersion`). */
 	appVersion?: string;
-	/** Release channel (`stable` / `nightly`); defaults to `dev`, which refuses a baked key. */
+	/** Release channel; only `stable` / `nightly` ever send — anything else lands on the noop sink. */
 	channel?: string;
 	/** PostHog project API key baked by the release pipeline (empty/absent from source ⇒ noop sink). */
 	posthogApiKey?: string;
@@ -37,6 +37,9 @@ interface AnalyticsState {
 
 let state: AnalyticsState | null = null;
 
+/** The ONLY channels that ever get a real sink — everything else fails closed to noop. */
+const SENDING_CHANNELS: ReadonlySet<string> = new Set(["stable", "nightly"]);
+
 function detectOs(): string {
 	if (process.platform === "darwin") return "macos";
 	if (process.platform === "win32") return "windows";
@@ -45,20 +48,19 @@ function detectOs(): string {
 
 /**
  * Boot the analytics service (called once from `createServer`). Mints/loads the installation record,
- * picks the sink — an env-override key always wins (deliberate pipeline testing); the baked key is
- * refused on the `dev` channel (dev runs never send); otherwise noop — and emits the lifecycle
- * events. On the first sending-enabled boot ever it prints the first-run notice and sends the
- * one-shot `app_installed`.
+ * picks the sink — the release-baked key on a `stable`/`nightly` channel; anything else (dev, source,
+ * e2e, unknown channels) fails closed to noop, with deliberately **no env-var key override** — and
+ * emits the lifecycle events. On the first sending-enabled boot ever it prints the first-run notice
+ * and sends the one-shot `app_installed`.
  */
 export function initializeAnalytics(options: AnalyticsOptions): void {
 	try {
 		const record = ensureInstallation();
 		const channel = options.channel ?? "dev";
-		const envApiKey = process.env.THINKRAIL_POSTHOG_API_KEY;
 		const host = process.env.THINKRAIL_POSTHOG_HOST ?? options.posthogHost;
 
 		let sink = noopSink;
-		const apiKey = envApiKey || (channel !== "dev" ? options.posthogApiKey : undefined);
+		const apiKey = SENDING_CHANNELS.has(channel) ? options.posthogApiKey : undefined;
 		if (apiKey) {
 			sink = createPostHogSink({
 				apiKey,
