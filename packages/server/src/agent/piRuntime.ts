@@ -62,31 +62,65 @@ export type CatalogRefreshRuntime = Pick<ModelRuntime, "refresh">;
 
 // One in-flight refresh per runtime instance: pi's `refresh()` does NOT single-flight itself (verified
 // only the availability sub-refresh is queued), and each picker open triggers us again.
-const inflightCatalogRefresh = new WeakMap<CatalogRefreshRuntime, Promise<void>>();
+// `force` is tracked alongside the task because the two kinds are not interchangeable: a throttled pass
+// cannot satisfy a caller that asked to bypass the throttle.
+const inflightCatalogRefresh = new WeakMap<
+	CatalogRefreshRuntime,
+	{ task: Promise<void>; force: boolean }
+>();
 
 // pi's own model-selector refresh budget. With single-flight, a hung refresh must self-expire or it
 // would block every future refresh for the host's lifetime.
 const CATALOG_REFRESH_TIMEOUT_MS = 15_000;
 
 /**
- * Fire-and-forget model-catalog refresh (issue #98) — the deliberate, detached opt-in to live catalogs
- * over the shared ambient-network-OFF runtime (the per-call `allowNetwork: true` overrides its default).
- * Triggered by `model.list` (the picker read) and nothing else — the caller returns the current
- * snapshot immediately; a later read picks up whatever landed. Mirrors pi's own `/model`.
+ * The model-catalog refresh (issue #98) — the deliberate opt-in to live catalogs over the shared
+ * ambient-network-OFF runtime (the per-call `allowNetwork: true` overrides its default). Mirrors pi's
+ * own `/model`. Two kinds of caller:
  *
- * Never awaited, never throws: pi's provider freshness throttle decides whether anything is fetched
- * (no `force`), failures are logged and swallowed, and `PI_OFFLINE` (pi's env convention, also set by
- * the e2e harness for hermeticity) disables it entirely.
+ * - **throttled** (default): pi's provider freshness window decides whether anything is fetched. pi
+ *   returns early inside that window — *before* its `If-None-Match` revalidation — so an implicit
+ *   trigger (`model.list`, opening the picker) costs nothing and usually changes nothing.
+ * - **`force`**: bypasses that window, so a user-initiated refresh actually reaches pi.dev (one
+ *   conditional request per credentialed provider; a 304 is the common answer).
+ *
+ * **Single-flighted per runtime**, tracked with the kind: a forced caller never joins a throttled pass
+ * (it would silently inherit the no-op), it queues behind it and then fetches for real.
+ *
+ * Never throws: failures are logged and swallowed (an awaiting caller still gets a resolution — it then
+ * serves whatever the registry holds), and `PI_OFFLINE` (pi's env convention, also set by the e2e
+ * harness for hermeticity) disables it entirely (resolves immediately).
  */
-export function refreshCatalogsDetached(runtime: CatalogRefreshRuntime): void {
-	if (process.env.PI_OFFLINE) return;
-	if (inflightCatalogRefresh.has(runtime)) return;
+export function refreshCatalogs(
+	runtime: CatalogRefreshRuntime,
+	{ force = false }: { force?: boolean } = {},
+): Promise<void> {
+	if (process.env.PI_OFFLINE) return Promise.resolve();
+	const existing = inflightCatalogRefresh.get(runtime);
+	if (existing && (existing.force || !force)) return existing.task;
+	// Free slot ⇒ start now (an implicit trigger must reach pi in the same tick it fires). Otherwise
+	// this is a forced caller behind a throttled pass: queue, so pi's own per-provider in-flight dedupe
+	// has cleared by the time the forced fetch runs.
+	const started = existing
+		? existing.task.then(() => runCatalogRefresh(runtime, force))
+		: runCatalogRefresh(runtime, force);
+	const task: Promise<void> = started.finally(() => {
+		if (inflightCatalogRefresh.get(runtime)?.task === task) {
+			inflightCatalogRefresh.delete(runtime);
+		}
+	});
+	inflightCatalogRefresh.set(runtime, { task, force });
+	return task;
+}
+
+/** One refresh pass against pi, with the abort budget applied. Resolves even on failure. */
+function runCatalogRefresh(runtime: CatalogRefreshRuntime, force: boolean): Promise<void> {
 	const controller = new AbortController();
 	const timer = setTimeout(() => controller.abort(), CATALOG_REFRESH_TIMEOUT_MS);
 	// The pending abort timer must keep neither a shutting-down host nor a test process alive.
 	timer.unref?.();
-	const task = runtime
-		.refresh({ allowNetwork: true, signal: controller.signal })
+	return runtime
+		.refresh({ allowNetwork: true, force, signal: controller.signal })
 		.then((result) => {
 			if (result.aborted) {
 				// Only our own timeout aborts this signal — say so, or a stuck egress looks like "all fresh".
@@ -102,9 +136,11 @@ export function refreshCatalogsDetached(runtime: CatalogRefreshRuntime): void {
 		.catch((err) => {
 			console.warn(`model catalog refresh failed: ${err}`);
 		})
-		.finally(() => {
-			clearTimeout(timer);
-			inflightCatalogRefresh.delete(runtime);
-		});
-	inflightCatalogRefresh.set(runtime, task);
+		.finally(() => clearTimeout(timer));
+}
+
+/** Fire-and-forget wrapper over `refreshCatalogs` — the `model.list` trigger (issue #98): the caller
+ * returns the current snapshot immediately; a later read picks up whatever the refresh landed. */
+export function refreshCatalogsDetached(runtime: CatalogRefreshRuntime): void {
+	void refreshCatalogs(runtime);
 }

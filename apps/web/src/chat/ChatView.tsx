@@ -14,6 +14,7 @@ import { Popover, PopoverAnchor, PopoverTrigger } from "@/components/ui/popover"
 import {
 	EMPTY_RUNTIME,
 	SettingsSection,
+	selectCatalogModel,
 	selectSkillsStale,
 	selectWorkspaceById,
 	specPathMatcher,
@@ -40,6 +41,7 @@ import { parseTemplateSlots } from "./slotSession";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
 import { shouldApplyTemplatePick } from "./templatePick";
 import { stripFrontmatter } from "./templateText";
+import { useModelCatalog } from "./useModelCatalog";
 import "./tools/register"; // side-effect: register the built-in pi tool renderers (bash/read/edit/write)
 import { ChatTurnView } from "./turns";
 import type { ChatTurn } from "./types";
@@ -124,7 +126,7 @@ export default function ChatView({
 	// This tab's runtime — zustand only re-renders when *this* session's slice ref changes, so a background
 	// chat streaming into its own runtime never re-renders the foreground one.
 	const runtime = useAppStore((s) => s.sessions[sessionId]) ?? EMPTY_RUNTIME;
-	const models = useAppStore((s) => s.models);
+	const { models, refreshing: modelsRefreshing, refresh: onRefreshModels } = useModelCatalog();
 	// This chat's owning project (workspaces are keyed by project) — for the Skills manager's trust ops
 	// and the "project" / "all" history-search scopes.
 	const projectId = useAppStore(
@@ -169,9 +171,15 @@ export default function ChatView({
 		pendingExtUi,
 		extUiStatus,
 		extUiWidget,
-		model: currentModel,
+		model: sessionModel,
 		thinkingLevel,
 	} = runtime;
+
+	// The session's `model` is the snapshot it was created with; `models` is refreshed live. Show the
+	// catalog's entry for the same `{provider,id}` so host-computed facts on it — today `thinkingLevels`,
+	// which decides the effort picker's disabled rows — track a `model.refresh`. Falls back to the
+	// snapshot while the ref is missing from the catalog (not yet loaded, or dropped upstream).
+	const currentModel = selectCatalogModel(models, sessionModel) ?? sessionModel;
 
 	// The transcript renders derived rows, not raw turns: routine activity folds across assistant-message
 	// boundaries, so the row model is re-derived per snapshot (pure + memoized; stable row ids keep
@@ -244,15 +252,6 @@ export default function ChatView({
 	// effect's jsdoc).
 	const chatLocationRequest = useAppStore((s) => s.chatLocationRequest);
 	const [flashRowId, setFlashRowId] = useState<string | null>(null);
-
-	// Models are global to the host — fetch once, then every chat's picker shares them.
-	useEffect(() => {
-		if (models.length > 0) return;
-		getTransport()
-			.request("model.list", {})
-			.then((m) => useAppStore.getState().setModels(m))
-			.catch(() => {});
-	}, [models.length]);
 
 	// The skill catalog is per-session; load it when the chat opens.
 	useEffect(() => {
@@ -680,6 +679,8 @@ export default function ChatView({
 							mentionCandidates={mentionCandidates}
 							recentPrompts={recentPrompts}
 							models={models}
+							modelsRefreshing={modelsRefreshing}
+							onRefreshModels={onRefreshModels}
 							currentModel={currentModel}
 							thinkingLevel={thinkingLevel}
 							onMentionQuery={onMentionQuery}

@@ -32,13 +32,20 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `reloadConfig()` into it) awaits remote pi.dev catalog
     checks with no timeout — on the `provider.status` and jbcentral-connect paths that stalls wherever
     egress is slow or blocked. The one deliberate opt-in to
-    live catalogs is **`refreshCatalogsDetached(runtime)`** (issue #98, mirroring pi's own `/model`):
-    **triggered by `model.list` only** (`listAvailableModels` fires it, then serves the current snapshot
-    — the picker read never awaits the network; a later read picks up what landed; broader triggers —
-    `model.default`, host boot — were considered and declined). Fire-and-forget semantics: per-call
-    `refresh({ allowNetwork: true })` — **no `force`**, so pi's provider freshness throttle decides
-    whether anything is fetched; **single-flight per runtime instance** (pi's `refresh()` doesn't dedupe
-    concurrent calls) with a **15s abort** (pi's model-selector budget — a hung refresh must self-expire
+    live catalogs is the single-flighted **`refreshCatalogs(runtime)`** (issue #98, mirroring pi's own
+    `/model`) behind two triggers: **detached** via `refreshCatalogsDetached` from `model.list` only
+    (`listAvailableModels` fires it, then serves the current snapshot — the picker read never awaits the
+    network; broader triggers — `model.default`, host boot — were considered and declined) and
+    **awaited** via `model.refresh` (`refreshAvailableModels`, the picker's freshness affordance: await
+    the refresh, then serve the post-refresh snapshot). Per-call `refresh({ allowNetwork: true, force })`,
+    where **`force` is the caller's intent, not a constant**: an *implicit* trigger (`model.list`, opening
+    the picker) leaves it off and pi's **4h provider freshness throttle** decides whether anything is
+    fetched, while a *user-initiated* refresh (the picker's Refresh row → `model.refresh({force:true})`)
+    bypasses it — pi returns early inside that window **before** its `If-None-Match` revalidation, so an
+    unforced explicit refresh would fetch nothing at all. **Single-flight per runtime instance** (pi's
+    `refresh()` doesn't dedupe concurrent calls) **keyed with the kind**: an implicit caller joins any
+    pass, a forced caller never joins a throttled one (it would inherit the no-op) and instead queues
+    behind it. A **15s abort** (pi's model-selector budget — a hung refresh must self-expire
     or single-flight would wedge) on an **unref'd** timer (must not hold a shutting-down host or a test
     process open); failures `console.warn` + swallowed, never the picker's problem; **`PI_OFFLINE`**
     (pi's env convention) disables it — the e2e webServer env and the manager's unit suite set it for
@@ -245,8 +252,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
 - Share one `ModelRuntime` (each session gets it as `createAgentSession`'s `modelRuntime`); give each
   session its own `SessionManager`; `dispose()` on removal.
 - **A `pi` `Model` must never cross the wire raw** — its `baseUrl` carries the jbcentral proxy secret (and
-  `headers` can carry auth). Every model-bearing frame (`model.list`/`model.default`, the `session.create`
-  result, `SessionSummary.model`) goes through `toWireModel`; every inbound model ref (`session.create` /
+  `headers` can carry auth). Every model-bearing frame (`model.list`/`model.refresh`/`model.default`, the
+  `session.create` result, `SessionSummary.model`) goes through `toWireModel` — the list paths share the
+  one `readAvailableWireModels` read so the projection can't be bypassed by adding a caller; every inbound
+  model ref (`session.create` /
   `session.setModel`) is **re-resolved** host-side by `{provider,id}` (`resolveWireModel`), never trusted.
   The wire type `WireModel = Pick<Model, id|name|provider|contextWindow|reasoning> + thinkingLevels` is an
   **allowlist** — it fails closed, so a future `Model` field can't leak by default (a unit test pins the

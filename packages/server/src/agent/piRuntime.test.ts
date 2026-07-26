@@ -7,6 +7,7 @@ import {
 	type CatalogRefreshRuntime,
 	configurePiRuntime,
 	getPiRuntime,
+	refreshCatalogs,
 	refreshCatalogsDetached,
 } from "./piRuntime";
 
@@ -115,14 +116,43 @@ function fakeRuntime() {
 /** Let the refresh task's `.then/.catch/.finally` chain run (microtasks only — nothing sleeps). */
 const settled = () => new Promise<void>((r) => setTimeout(r, 0));
 
-test("opts into the network per-call but never forces past pi's freshness throttle", () => {
+test("an implicit trigger opts into the network per-call but stays behind pi's freshness throttle", () => {
 	const { runtime, calls } = fakeRuntime();
 	refreshCatalogsDetached(runtime);
 	expect(calls.length).toBe(1);
 	const options = calls[0];
 	expect(options?.allowNetwork).toBe(true);
-	expect(options?.force).toBeUndefined();
+	expect(options?.force).toBe(false);
 	expect(options?.signal).toBeInstanceOf(AbortSignal);
+});
+
+// pi returns early inside its 4h freshness window *before* the If-None-Match revalidation, so without
+// `force` a user-initiated "Refresh catalog" fetches nothing at all. These pin the bypass reaching pi.
+test("an explicit refresh forces past the freshness throttle", () => {
+	const { runtime, calls } = fakeRuntime();
+	void refreshCatalogs(runtime, { force: true });
+	expect(calls[0]?.force).toBe(true);
+});
+
+test("a forced refresh does not settle for an in-flight throttled pass — it queues behind it", async () => {
+	const { runtime, calls, resolve } = fakeRuntime();
+	refreshCatalogsDetached(runtime); // throttled pass in flight
+	const forced = refreshCatalogs(runtime, { force: true });
+	expect(calls.length).toBe(1); // not started yet — one refresh at a time
+
+	resolve(); // the throttled pass lands; the forced one now runs for real
+	await settled();
+	expect(calls.length).toBe(2);
+	expect(calls[1]?.force).toBe(true);
+	resolve();
+	await forced;
+});
+
+test("an implicit trigger joins an in-flight forced pass (a forced result satisfies it)", () => {
+	const { runtime, calls } = fakeRuntime();
+	void refreshCatalogs(runtime, { force: true });
+	refreshCatalogsDetached(runtime);
+	expect(calls.length).toBe(1);
 });
 
 test("single-flight: repeated triggers while one refresh is pending don't stack network tasks", async () => {
@@ -166,6 +196,39 @@ test("per-provider failures in a completed refresh are tolerated (result is only
 
 	refreshCatalogsDetached(runtime);
 	expect(calls.length).toBe(2);
+});
+
+// ---- refreshCatalogs (the awaited variant behind `model.refresh`) ----
+
+test("awaited refresh shares the single-flight slot with a detached trigger", async () => {
+	const { runtime, calls, resolve } = fakeRuntime();
+	refreshCatalogsDetached(runtime); // e.g. a concurrent model.list
+	const awaited = refreshCatalogs(runtime); // model.refresh joins the SAME task
+	expect(calls.length).toBe(1);
+
+	let done = false;
+	void awaited.then(() => {
+		done = true;
+	});
+	await settled();
+	expect(done).toBe(false); // resolves with the refresh, not before
+	resolve();
+	await awaited;
+	expect(calls.length).toBe(1);
+});
+
+test("awaited refresh RESOLVES on a failed refresh (caller then serves the current snapshot)", async () => {
+	const { runtime, reject } = fakeRuntime();
+	const awaited = refreshCatalogs(runtime);
+	reject(new Error("pi.dev unreachable"));
+	await awaited; // must not throw — failures are logged host-side, the wire still answers
+});
+
+test("awaited refresh under PI_OFFLINE resolves immediately without a network task", async () => {
+	process.env.PI_OFFLINE = "1";
+	const { runtime, calls } = fakeRuntime();
+	await refreshCatalogs(runtime);
+	expect(calls.length).toBe(0);
 });
 
 test("PI_OFFLINE disables the refresh entirely", () => {

@@ -449,6 +449,9 @@ interface AppState {
 	 * Templates settings panel (Task B6) bumps it after a `template.save`/`delete`; the store holds only
 	 * the counter, never fetches (see `chat/SPEC.md`'s Template slots bullet). */
 	templatesVersion: number;
+	/** An awaited `model.refresh` is in flight (the picker's freshness affordance) — guards re-entry
+	 * and spins the picker's refresh row. */
+	modelsRefreshing: boolean;
 	/**
 	 * Which right-panel view to show, when something outside it asks (a chat turn-divider chip). The panel
 	 * watches this ONE field, so "flip to a view" is a single concept rather than a side effect read off
@@ -643,6 +646,10 @@ interface AppState {
 	handlePiEvent: (event: PiEvent, sessionId: string) => void;
 	setModels: (models: WireModel[]) => void;
 	bumpTemplatesVersion: () => void;
+	/** Atomic begin/finish of the awaited catalog refresh — `finish` lands the new list (null = failed
+	 * refresh: keep the current list) and clears the flag in ONE write. */
+	beginModelsRefresh: () => void;
+	finishModelsRefresh: (models: WireModel[] | null) => void;
 	setCurrentModel: (sessionId: string, model: WireModel) => void;
 	setThinkingLevel: (sessionId: string, level: ThinkingLevel) => void;
 	setStats: (sessionId: string, stats: SessionStats) => void;
@@ -826,6 +833,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	models: [],
 	templatesVersion: 0,
 	rightTabRequest: null,
+	modelsRefreshing: false,
 	changesRequest: null,
 	specRequest: null,
 	specsByWorkspace: {},
@@ -1298,6 +1306,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) => withRuntime(s, sessionId, (rt) => reduceSessionEvent(rt, event))),
 	setModels: (models) => set({ models }),
 	bumpTemplatesVersion: () => set((s) => ({ templatesVersion: s.templatesVersion + 1 })),
+	beginModelsRefresh: () => set({ modelsRefreshing: true }),
+	finishModelsRefresh: (models) =>
+		set((s) => ({ modelsRefreshing: false, models: models ?? s.models })),
 	setCurrentModel: (sessionId, model) =>
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, model }))),
 	setThinkingLevel: (sessionId, level) =>

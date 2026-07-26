@@ -73,6 +73,17 @@ test("the dialog lists local branches (no stray origin) and creates a worktree",
 	if (modelResolved) await expect(effort).toBeEnabled();
 	else await expect(effort).toBeDisabled();
 
+	// The model picker opens regardless of whether the catalog has anything in it (this suite needs no
+	// auth), and always offers the catalog Refresh row. Clicking it runs the awaited refresh end to end —
+	// a no-op under the host's PI_OFFLINE, so it stays hermetic — and settles the row back to idle.
+	await dialog.getByTestId("model-selector").click();
+	const refresh = page.getByTestId("model-refresh");
+	await expect(refresh).toBeVisible();
+	await refresh.click();
+	await expect(refresh).toHaveAttribute("data-refreshing", "false");
+	await expect(refresh).toBeEnabled();
+	await page.keyboard.press("Escape"); // close WITHOUT picking — a pick is the @agent suite's business
+
 	// Dismissing the dialog (Escape) creates nothing (only the built-in Default row is present).
 	await page.keyboard.press("Escape");
 	await expect(dialog).toBeHidden();

@@ -23,7 +23,7 @@ import type {
 } from "@thinkrail/contracts";
 import { ANSWERABILITY_ERRORS, assessAnswerability, buildAnswersMessage } from "./askUserQuestion";
 import { buildResourceLoader, toSkillCommands } from "./extensions";
-import { getPiRuntime, refreshCatalogsDetached } from "./piRuntime";
+import { getPiRuntime, refreshCatalogs, refreshCatalogsDetached } from "./piRuntime";
 import { repairDanglingToolCalls } from "./sessionRepair";
 import type { SkillAdmissionContext } from "./skillAdmission";
 import { cancelExtUiForSession, createWebUiContext, notifyExtUi } from "./webUiContext";
@@ -459,6 +459,24 @@ export function getSessionCommands(sessionId: string): SlashCommandInfo[] {
 export async function listAvailableModels(): Promise<WireModel[]> {
 	const runtime = await getPiRuntime();
 	refreshCatalogsDetached(runtime);
+	return readAvailableWireModels(runtime);
+}
+
+/** `model.refresh` (the picker's freshness affordance): AWAIT the catalog refresh, then serve the
+ * post-refresh snapshot. Same redaction, same universe as `listAvailableModels`; refresh failures
+ * resolve (logged in piRuntime), so the caller always gets the registry's current truth. `force`
+ * bypasses pi's freshness throttle — pass it for a user-initiated refresh, omit it for an implicit
+ * one, which then shares the single-flight slot with any in-flight detached trigger. */
+export async function refreshAvailableModels(force = false): Promise<WireModel[]> {
+	const runtime = await getPiRuntime();
+	await refreshCatalogs(runtime, { force });
+	return readAvailableWireModels(runtime);
+}
+
+/** The one snapshot→wire read both list paths share (redaction happens here, in `toWireModel`). */
+async function readAvailableWireModels(
+	runtime: Awaited<ReturnType<typeof getPiRuntime>>,
+): Promise<WireModel[]> {
 	const available = await runtime.getAvailable();
 	return available.map((m) => toWireModel(m as unknown as Model<string>));
 }

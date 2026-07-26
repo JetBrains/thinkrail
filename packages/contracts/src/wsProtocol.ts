@@ -82,7 +82,10 @@ import type {
 // v18: the built-in Default workspace — `Workspace.kind: "default"` marks the project folder itself as
 // a per-project, non-removable, non-renamable workspace, ensured lazily and pinned first in
 // `workspace.list`; `workspace.remove` rejects it.
-export const PROTOCOL_VERSION = 18;
+// v19: `model.refresh` awaits the host's single-flighted catalog refresh and returns the
+// post-refresh list (the picker's freshness affordance), with `force` bypassing pi's 4h
+// provider freshness throttle.
+export const PROTOCOL_VERSION = 19;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -189,6 +192,10 @@ export const WS_METHODS = {
 	sessionList: "session.list",
 	sessionGetMessages: "session.getMessages",
 	modelList: "model.list",
+	// Awaited catalog refresh (the picker's freshness affordance): resolves when the pi.dev catalog pass
+	// lands, returning the post-refresh list. `force` bypasses pi's 4h provider freshness throttle — set
+	// it for a user-initiated refresh, leave it off for an implicit one (picker open).
+	modelRefresh: "model.refresh",
 	modelDefault: "model.default",
 	// pi's own clamp for a `{model, desired-level}` pair. The pre-session picker has no session to ask,
 	// and re-deriving pi's clamp client-side would give that one path a policy of its own.
@@ -437,6 +444,11 @@ export interface WsMethodMap {
 		params: { provider: string; id: string; level: ThinkingLevel };
 		result: { level: ThinkingLevel };
 	};
+	// `model.list` serves the current snapshot (its refresh is detached); this AWAITS the single-flighted
+	// refresh and serves the post-refresh snapshot — refresh failures still resolve with the current list.
+	// `force` bypasses pi's 4h provider freshness throttle, so a user-initiated refresh actually fetches;
+	// without it the pass is a no-op inside that window.
+	"model.refresh": { params: { force?: boolean }; result: WireModel[] };
 	// The model/thinking a fresh session resolves to (settings default, else first available) — so the
 	// New-Workspace dialog shows the exact pre-session model, not a placeholder.
 	"model.default": {

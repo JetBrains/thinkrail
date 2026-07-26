@@ -27,6 +27,7 @@ import {
 	useSlashCommandCompletion,
 } from "@/chat/SlashCommandCompletion";
 import { ThinkingSelector } from "@/chat/ThinkingSelector";
+import { useModelCatalog } from "@/chat/useModelCatalog";
 import { Button } from "@/components/ui/button";
 import {
 	Command,
@@ -46,12 +47,38 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { selectWorkspaceTick, toast, useAppStore } from "@/store";
+import { selectCatalogModel, selectWorkspaceTick, toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { enterDefaultWorkspace } from "./defaultWorkspace";
 
 /** Where the work runs: cut an isolated worktree, or enter the project folder (Default workspace). */
 type WorkspaceTarget = "worktree" | "default";
+
+/**
+ * Reconcile the held pre-session model against the catalog: re-point to the same `{provider,id}` entry
+ * (the refreshed object, whose `thinkingLevels` may differ). Null means "change nothing".
+ *
+ * Whether a model the catalog *lacks* may be replaced turns on whether that catalog is authoritative for
+ * the question, which is what `catalogFresh` says:
+ *
+ * - **fresh** — the installed result of an awaited forced refresh. `model.refresh` and the host's
+ *   `resolveWireModel` read the same registry, and that refresh has finished, so a missing model really
+ *   is gone: falling back to the first entry beats letting Create fail.
+ * - **not fresh** — the app-wide store copy, including anything `model.list` returned (its handler starts
+ *   a detached refresh and answers from before it, so the registry can move underneath the reply).
+ *   Substituting on that basis would replace a valid host-resolved default with a stale local entry, so
+ *   an unconfirmable model is kept until a real refresh settles it.
+ *
+ * Effort is deliberately not decided here — one effect asks the host for pi's clamp instead, so no path
+ * invents an effort policy of its own.
+ */
+export function reconcileModel(
+	models: readonly WireModel[],
+	model: WireModel,
+	catalogFresh: boolean,
+): WireModel | null {
+	return selectCatalogModel(models, model) ?? (catalogFresh ? (models[0] ?? null) : null);
+}
 
 /** A shared pill-trigger look for the project + branch pickers (mockup `.pill`). */
 const PILL =
@@ -90,7 +117,6 @@ export function NewWorkspaceDialog({
 	onCreated: (workspace: Workspace) => void;
 }) {
 	const projects = useAppStore((s) => s.projects);
-	const models = useAppStore((s) => s.models);
 
 	const [selectedProjectId, setSelectedProjectId] = useState(projectId);
 	// Every opener starts on the isolated-worktree side (task-welcome-trim made the entry points
@@ -176,14 +202,26 @@ export function NewWorkspaceDialog({
 		};
 	}, [open, selectedProjectId]);
 
-	// Models are global to the host — fetch once into the shared store; the picker reads them.
+	// Models are global to the host — the shared catalog hook re-reads them for this opening (`fresh`)
+	// and wires the refresh flow.
+	const {
+		models,
+		refreshing: modelsRefreshing,
+		refresh: onRefreshModels,
+		fresh: catalogFresh,
+	} = useModelCatalog(open);
+
+	// The stored selection tracks the catalog, so a refresh that changes a model's `thinkingLevels`
+	// can't leave the UI and pi's clamp disagreeing, and a model this opening's own snapshot says is
+	// gone is replaced rather than left for `create()` to fail on. `catalogFresh` is what separates
+	// those two cases from a stale shared copy — see `reconcileModel`. Converges: the reconciled object
+	// comes FROM `models`, so the second pass is a no-op. The effort follows separately, via the host's
+	// clamp.
 	useEffect(() => {
-		if (!open || models.length > 0) return;
-		getTransport()
-			.request("model.list", {})
-			.then((m) => useAppStore.getState().setModels(m))
-			.catch(() => {});
-	}, [open, models.length]);
+		if (!open || !model) return;
+		const next = reconcileModel(models, model, catalogFresh);
+		if (next && next !== model) setModel(next);
+	}, [open, models, model, catalogFresh]);
 
 	// Preselect the exact model + effort a fresh session would resolve to (so the picker shows the real
 	// model, not a placeholder). Passing it back at create time is a no-op vs. the host default.
@@ -545,6 +583,8 @@ export function NewWorkspaceDialog({
 						<ModelSelector
 							models={models}
 							current={model}
+							refreshing={modelsRefreshing}
+							onRefresh={onRefreshModels}
 							container={dialogEl}
 							onSelect={(m) => {
 								setModel(m);

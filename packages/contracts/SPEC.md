@@ -37,7 +37,8 @@ of the host.
     `AssistantMessageEvent`, `Usage`, `StopReason`;
   - **`WireModel`** = `Pick<Model<string>, "id"|"name"|"provider"|"contextWindow"|"reasoning">` **+ the one
     computed field `thinkingLevels`** (pi-ai `getSupportedThinkingLevels`, mapped host-side in `toWireModel`;
-    client→host params carry it inert) — the shape a model takes **on the wire** (`model.list`/`model.default`, the `session.create` result + params,
+    client→host params carry it inert) — the shape a model takes **on the wire**
+    (`model.list`/`model.refresh`/`model.default`, the `session.create` result + params,
     `session.setModel` params, `SessionSummary.model`). An **allowlist** of exactly what the UI renders, *not*
     an `Omit`: `Model.baseUrl` carries the jbcentral proxy secret (`.../wire/<SECRET>/...`) when JetBrains AI
     is wired and `headers` can carry auth, and an allowlist **fails closed** — a future `Model` field (secret
@@ -144,9 +145,11 @@ of the host.
   never eagerly for every project) / `workspace.*` / `fs.*` / `git.*` / **`spec.graph`**
   (the Specs-viewer whole-graph read, per workspace) / **`todo.*`** — **`list`**/**`add`**/**`update`**/
   **`remove`**, the chat's per-session TODO plan (keyed by `workspaceId` + `sessionId`; `add` tags the
-  item `origin:"user"`) / `terminal.*` / `model.list` / **`model.clampThinking`** (pi's `clampThinkingLevel` for a
-  `{model, level}` pair — the pre-session picker's effort adjustment, so no client re-derives pi's
-  policy) / **`provider.status`**
+  item `origin:"user"`) / `terminal.*` / `model.list` + **`model.refresh`** (awaits the host's
+  single-flighted catalog refresh, returns the post-refresh list; `force` bypasses pi's 4h freshness
+  throttle, so a user-initiated refresh actually fetches) / **`model.clampThinking`** (pi's
+  `clampThinkingLevel` for a `{model, level}` pair — the pre-session picker's effort adjustment, so no
+  client re-derives pi's policy) / **`provider.status`**
 (the auth-provider status report; every read revalidates host-side) / the **`provider.*` in-app login**
   (**`loginStart`** — mints a `loginId` and runs pi's login flow **detached** (`type` `"oauth"` |
   `"api_key"`, issue #97 — both auth routes ride one channel; a flow can take minutes and must

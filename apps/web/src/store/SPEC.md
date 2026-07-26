@@ -62,7 +62,11 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   chat is never clobbered. The
   pure **`reduceSessionEvent`** folds a `PiEvent` into a runtime; **`handlePiEvent(event,
   sessionId)`** and **`applyExtUi(request)`** route by id via the `withRuntime` helper (a no-op for an
-  unknown session). The host-wide **`models`** list stays global (not per session). The **in-app login** state
+  unknown session). The host-wide **`models`** list stays global (not per session), plus
+  **`modelsRefreshing`** — the awaited `model.refresh` in-flight flag; `beginModelsRefresh` /
+  `finishModelsRefresh(models|null)` are the atomic pair (finish lands the list + clears the flag in one
+  write; `null` = failed refresh, keep the current list). The transport work lives in
+  `chat/useModelCatalog`, not here (the store→transport edge stays type-only). The **in-app login** state
   **`activeLogin: LoginState | null`** (type from `auth`) is **flat + session-less** (a login runs on the
   Welcome screen before any session exists — routing it through a session runtime would drop its frames):
   the pure **`foldLoginFrame`** reducer lives here (as `reduceExtUi`/`reduceSessionEvent` do — `auth` stays
@@ -187,8 +191,11 @@ paths only; opened by `ChangesPanel`). The transient **`chatLocationRequest`** �
   one; shared by the Changes deep link and the spec classifier. The suffix rule is for **absolute reports
   only** and is anchored at a separator: unanchored, `/wt/src/a-foo.ts` would match `src/foo.ts`; applied to
   relative reports, `module-b/SPEC.md` would match the *root* `SPEC.md`) + `specPathMatcher` (is a written
-  path a spec-graph node?); `toast` (the
-  fire-from-anywhere helper),
+  path a spec-graph node?);
+  `selectCatalogModel` (a model ref resolved against the **live** `models` list — a session's own `model`
+  is the snapshot it was created with, so host-computed facts on it, today `thinkingLevels`, are read
+  through this; callers fall back to the snapshot when the ref has left the catalog);
+  `toast` (the fire-from-anywhere helper),
   `Toast` (type), `EditorTab` (`FileTab`/`ChatTab`/`DocTab`), `TerminalTab`, `ClosedChat`, `SessionRuntime` +
   `EMPTY_RUNTIME` (ChatView's pre-creation fallback), `ChatLocationRequest` (type), `reduceSessionEvent`.
 - **Allowed deps:** `contracts` (`Project`/`Workspace`/`Model`/`ThinkingLevel`/`SessionStats`/

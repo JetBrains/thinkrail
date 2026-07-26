@@ -29,6 +29,7 @@ import {
 	listSkillCatalog,
 	listSkillCommands,
 	promptSession,
+	refreshAvailableModels,
 	reloadSessionResources,
 	removeSession,
 	removeWorkspaceSessions,
@@ -396,6 +397,10 @@ const handlers: Record<string, Handler> = {
 	"model.clampThinking": async (params) => {
 		const p = params as { provider: string; id: string; level: ThinkingLevel };
 		return { level: await clampThinkingForModel({ provider: p.provider, id: p.id }, p.level) };
+	},
+	"model.refresh": (params) => {
+		const p = params as { force?: boolean };
+		return refreshAvailableModels(p.force === true);
 	},
 	"model.default": () => getDefaultModel(),
 	"provider.status": () => getProviderStatus(),
