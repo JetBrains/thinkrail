@@ -1,12 +1,13 @@
 import type { Workspace } from "@thinkrail/contracts";
-import { Folder, FolderOpen, type LucideIcon, Rocket, Sparkles } from "lucide-react";
+import { Folder, FolderOpen, House, type LucideIcon, Rocket, Sparkles } from "lucide-react";
 import { type ComponentPropsWithoutRef, forwardRef, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { PRODUCT_NAME } from "../constants/branding";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
-import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
+import { resolveDefaultWorkspace } from "./defaultWorkspace";
+import { NewWorkspaceDialog, type WorkspaceTarget } from "./NewWorkspaceDialog";
 import { ProjectSkillsNotice } from "./ProjectSkillsNotice";
 import { ProviderWarningBanner } from "./ProviderWarningBanner";
 import { useOpenProject } from "./useOpenProject";
@@ -25,20 +26,23 @@ const SETUP_NOTE =
 
 /**
  * The first-touch surface the shell mounts (centered, beside the projects rail) whenever no workspace is
- * active. The ThinkRail wordmark (topbar brand styling, scaled up) over a state-driven pitch and up-to-two
+ * active. The ThinkRail wordmark (topbar brand styling, scaled up) over a state-driven pitch and up-to-four
  * cards, adaptive across three states: no projects → "Open project"; a project with specs → "Start
- * building"; a project without a goal-and-requirements.md → a spec-first "Set up project". "Start
- * building" is the intent-first framing of creating a worktree-isolated workspace + kicking off a chat
- * (workspace is the mechanism, not the label).
+ * building"; a project without a goal-and-requirements.md → a spec-first "Set up project". With a
+ * project shown, Welcome is **the mode fork**: "Start building" (an isolated worktree — the intent-first
+ * framing of create + kick off a chat) always sits beside "Work in project folder" (direct-enters the
+ * built-in Default workspace), so the two working modes are a visible choice, not a hidden default.
  */
 export function WelcomePanel() {
 	const projects = useAppStore((s) => s.projects);
 	const selectedProjectId = useAppStore((s) => s.selectedProjectId);
-	// The New-Workspace dialog opener state (null = closed). `prompt` seeds the hero — "" for a plain
-	// create, the setup command for "Set up project", which also carries the explanatory `note`.
+	// The New-Workspace dialog opener state (null = closed). `prompt` seeds the hero ("" for a plain
+	// create; the setup command for "Set up project", which also carries the explanatory `note` and
+	// preselects the project-folder target — specs are ground truth, they belong in place).
 	const [dialog, setDialog] = useState<{
 		projectId: string;
 		prompt: string;
+		target: WorkspaceTarget;
 		note?: string;
 	} | null>(null);
 	// Whether the shown project has any registered spec, fetched lazily (a full-tree walk — so it's
@@ -90,7 +94,25 @@ export function WelcomePanel() {
 			);
 	};
 
+	// The Welcome fork's "no isolation" side: direct-enter the project's built-in Default workspace —
+	// no dialog (it's navigation; the Default receipt + New chat cover kick-off). Degrades to the
+	// helper's error toast on an older host with no Default.
+	const enterProjectFolder = async (projectId: string) => {
+		const def = await resolveDefaultWorkspace(projectId);
+		if (def) useAppStore.getState().activateWorkspace(def);
+	};
+
 	const noProjects = project == null;
+
+	// The fork's "no isolation" card — identical in both project states, so it's built once.
+	const projectFolderCard = (projectId: string) => (
+		<Card
+			icon={House}
+			title="Work in project folder"
+			subtitle="Chats, changes, and terminals run directly in your project folder — no isolation."
+			onClick={() => void enterProjectFolder(projectId)}
+		/>
+	);
 
 	// The "Open project" card triggers the same dropdown as the projects-rail "+".
 	const openProjectCard = ({
@@ -151,8 +173,9 @@ export function WelcomePanel() {
 							icon={Rocket}
 							title="Start building"
 							subtitle="Cut an isolated worktree + branch, then pair with the agent to build it."
-							onClick={() => setDialog({ projectId: project.id, prompt: "" })}
+							onClick={() => setDialog({ projectId: project.id, prompt: "", target: "worktree" })}
 						/>
+						{projectFolderCard(project.id)}
 						{openProjectCard({ subtitle: "Add another local git repository." })}
 					</>
 				) : (
@@ -165,15 +188,21 @@ export function WelcomePanel() {
 							tag="spec-first"
 							subtitle="Draft the project's specs with the agent first — goal, architecture, modules — before building."
 							onClick={() =>
-								setDialog({ projectId: project.id, prompt: SETUP_PROMPT, note: SETUP_NOTE })
+								setDialog({
+									projectId: project.id,
+									prompt: SETUP_PROMPT,
+									target: "default",
+									note: SETUP_NOTE,
+								})
 							}
 						/>
 						<Card
 							icon={Rocket}
 							title="Start building"
 							subtitle="Cut an isolated worktree + branch and pair with the agent."
-							onClick={() => setDialog({ projectId: project.id, prompt: "" })}
+							onClick={() => setDialog({ projectId: project.id, prompt: "", target: "worktree" })}
 						/>
+						{projectFolderCard(project.id)}
 						{openProjectCard({ subtitle: "Add another local git repository." })}
 					</>
 				)}
@@ -184,6 +213,7 @@ export function WelcomePanel() {
 					open
 					projectId={dialog.projectId}
 					initialPrompt={dialog.prompt}
+					initialTarget={dialog.target}
 					{...(dialog.note !== undefined ? { promptNote: dialog.note } : {})}
 					onOpenChange={(o) => {
 						if (!o) setDialog(null);

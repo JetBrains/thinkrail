@@ -121,15 +121,27 @@ export async function openAppFresh(page: Page): Promise<void> {
 
 /**
  * Reset state, then open the fixture repo as a project via the (stubbed) picker; auto-selects + expands
- * — and, per the open flow, **auto-enters the project's built-in Default workspace** (the project folder
- * itself), so the page lands on the IDE surface, not the Welcome screen.
+ * — landing on the project's **Welcome screen** (the mode fork: isolated worktree vs project folder).
+ * Deliberately no workspace is auto-entered; the rail lists the built-in Default row (the list ensures
+ * it host-side).
  */
 export async function openFixtureProject(page: Page): Promise<void> {
 	await openAppFresh(page);
 	await page.getByTestId("add-project-menu").click();
 	await page.getByTestId("menu-open-project").click();
 	await expect(page.getByTestId("project-item").first()).toBeVisible();
+	await expect(page.getByTestId("welcome")).toBeVisible();
+	await expect(defaultWorkspaceRow(page)).toBeVisible();
+}
+
+/**
+ * From the project's Welcome, take the "Work in project folder" fork card — direct-enters the built-in
+ * Default workspace (the project folder itself) and lands on the IDE surface.
+ */
+export async function enterDefaultWorkspace(page: Page): Promise<void> {
+	await page.getByTestId("welcome-action").filter({ hasText: "Work in project folder" }).click();
 	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("center-tabs")).toBeVisible();
 }
 
 /** The built-in Default workspace's row (exactly one per open project in the rail). */
@@ -156,14 +168,14 @@ export async function goProjectHome(page: Page): Promise<void> {
  */
 export async function openWorkspaceChat(page: Page): Promise<void> {
 	await openFixtureProject(page);
-	// Chat in a *worktree* workspace, not the auto-entered Default (the fixture repo itself): agent specs
-	// run bash/edits in the workspace cwd, and worktree isolation is what keeps them off the shared repo.
+	// Chat in a *worktree* workspace, never the project-folder Default (the shared fixture repo itself):
+	// agent specs run bash/edits in the workspace cwd, and worktree isolation keeps them off the repo.
 	await expect(async () => {
 		if ((await worktreeRows(page).count()) === 0) {
 			await createWorkspaceViaDialog(page);
 		}
-		// Activate it explicitly (a no-op when the dialog's create already did) — the auto-entered Default
-		// must not stay active, and a lost activation would otherwise never self-heal.
+		// Activate it explicitly (a no-op when the dialog's create already did) — a lost activation would
+		// otherwise never self-heal.
 		await worktreeRows(page).first().getByRole("button").first().click();
 		await expect(
 			page.locator('[data-testid="workspace-item"][data-active="true"]:not([data-kind="default"])'),

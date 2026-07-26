@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import {
 	createWorkspaceViaDialog,
 	defaultWorkspaceRow,
+	enterDefaultWorkspace,
 	goProjectHome,
 	openFixtureProject,
 	runInTerminal,
@@ -13,13 +14,18 @@ import {
 // The built-in Default workspace: every project carries exactly one (kind: "default") whose cwd is the
 // project folder itself. It appears as soon as the project opens, is pinned first, and is non-removable
 // and non-renamable — the "just work in my project folder" anchor for people lost in the worktree model.
+// Opening a project deliberately does NOT auto-enter it: the Welcome screen is the fork where working
+// in the project folder is an explicit choice beside cutting an isolated worktree.
 
-test("opening a project auto-enters its Default workspace — the project folder itself", async ({
+test("the Welcome fork's “Work in project folder” enters the Default workspace — the project folder itself", async ({
 	page,
 }) => {
-	await openFixtureProject(page); // asserts the Default row is active (the auto-enter)
+	await openFixtureProject(page); // lands on the project's Welcome — nothing auto-entered
 
-	// The IDE surface is mounted (not the Welcome screen), scoped to the Default workspace on `main`.
+	// The fork card direct-enters the built-in Default workspace (no dialog).
+	await enterDefaultWorkspace(page);
+
+	// The IDE surface is mounted, scoped to the Default workspace on `main`.
 	await expect(page.getByTestId("center-tabs")).toBeVisible();
 	await expect(page.getByTestId("scope-name")).toHaveText("Default");
 	await expect(page.getByTestId("scope-branch")).toHaveText("main");
@@ -64,16 +70,18 @@ test("the Default workspace is non-removable and unique; project home stays reac
 	await worktreeRows(page).first().hover();
 	await expect(worktreeRows(page).first().getByTestId("workspace-remove")).toBeVisible();
 
-	// Re-opening the same project (the picker points at the same repo) does not duplicate the Default.
+	// Re-opening the same project (the picker points at the same repo) does not duplicate the Default,
+	// and lands back on the Welcome fork (deselecting the active workspace — the project-home surface).
 	await page.getByTestId("add-project-menu").click();
 	await page.getByTestId("menu-open-project").click();
-	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("welcome")).toBeVisible();
 	await expect(defaultWorkspaceRow(page)).toHaveCount(1);
 
-	// The project-home gesture still works: click the project row → Welcome; click Default → back in.
-	await goProjectHome(page);
-	await expect(page.getByTestId("center-tabs")).toHaveCount(0);
+	// The Default stays one click away in the rail: click its row → the IDE surface; the project-home
+	// gesture then returns to Welcome.
 	await defaultWorkspaceRow(page).getByRole("button").first().click();
 	await expect(page.getByTestId("center-tabs")).toBeVisible();
 	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "true");
+	await goProjectHome(page);
+	await expect(page.getByTestId("center-tabs")).toHaveCount(0);
 });
