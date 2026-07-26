@@ -48,6 +48,8 @@ writeFileSync(
 const gitInit = Bun.spawnSync(["git", "-C", projectDir, "init", "-b", "main"]);
 if (gitInit.exitCode !== 0) fail("could not initialise the portable-skill smoke project");
 
+// 24262 is only the scan start: the CLI free-picks past a taken port and we read the actually served
+// URL from stdout below — so concurrent runs (other worktrees, dev hosts, e2e suites) never collide.
 const proc = Bun.spawn([binary, "--no-open", "--port", "24262"], {
 	env: {
 		...process.env,

@@ -1,10 +1,14 @@
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, openSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
-import { E2E_PI_AGENT_DIR } from "./fixtures/paths";
+import {
+	E2E_PI_AGENT_DIR,
+	E2E_RESTART_DATA_DIR,
+	E2E_RESTART_HOST_LOG,
+	E2E_RESTART_PORT,
+} from "./fixtures/paths";
 
 // Tagged @agent: drives a real pi agent. THE restart test — the one scenario the shared-host suite
 // structurally cannot cover (Playwright's webServer owns that host for the whole run): a questionnaire is
@@ -13,18 +17,18 @@ import { E2E_PI_AGENT_DIR } from "./fixtures/paths";
 // the agent replies. This is the end-to-end proof of the ack + terminate design (see the server
 // `agent/askUserQuestion` SPEC): nothing about a pending question lives in host memory, so a restart
 // costs nothing. Everything here is self-contained: a dedicated port, data dir, fixture repo, and pi
-// agent dir (copied from the suite's seeded one, so the same auth + pinned model apply); the shared host
-// on 24252 keeps running untouched.
+// agent dir (copied from the suite's seeded one, so the same auth + pinned model apply); the shared
+// e2e host keeps running untouched.
 
-const PORT = 24254; // dev 24242, shared e2e host 24252 — this suite's private host lives here
+const PORT = E2E_RESTART_PORT; // its own slot in the per-worktree port block (e2e/fixtures/paths.ts)
 const BASE = `http://localhost:${PORT}`;
-const DATA_DIR = join(tmpdir(), "thinkrail-e2e-restart");
+const DATA_DIR = E2E_RESTART_DATA_DIR;
 const REPO = join(DATA_DIR, "sample-project");
 const AGENT_DIR = join(DATA_DIR, "pi-agent");
 const HOME_DIR = join(DATA_DIR, "home");
 const PICK_POINTER = join(DATA_DIR, "pick-dir");
 // Outside DATA_DIR so a failed run's teardown doesn't destroy the post-mortem trail.
-const HOST_LOG = join(tmpdir(), "thinkrail-e2e-restart-host.log");
+const HOST_LOG = E2E_RESTART_HOST_LOG;
 const rootDir = fileURLToPath(new URL("..", import.meta.url));
 const staticDir = join(rootDir, "apps", "web", "dist");
 

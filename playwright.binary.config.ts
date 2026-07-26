@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { defineConfig, devices } from "@playwright/test";
 import {
 	E2E_BINARY_CACHE,
+	E2E_BINARY_PORT,
 	E2E_CENTRAL_STATE,
 	E2E_DATA_DIR,
 	E2E_HOME_DIR,
@@ -22,8 +23,10 @@ import {
 // providers are registered by `packages/server/src/dev.ts`, which deliberately never ships — the
 // artifact's login path is covered by smoke-binary's real-provider probe instead).
 //
-// Not concurrent-safe with `bun run e2e` (both own E2E_DATA_DIR); run them sequentially. Unix-only for
-// now, like the main config's PATH stub wiring (`:` separator, `#!/bin/sh` central stub).
+// Not concurrent-safe with `bun run e2e` in the SAME worktree (both own that worktree's
+// E2E_DATA_DIR); run them sequentially. Parallel runs from DIFFERENT worktrees are isolated —
+// per-worktree state dirs + ports, see e2e/fixtures/paths.ts. Unix-only for now, like the main
+// config's PATH stub wiring (`:` separator, `#!/bin/sh` central stub).
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
 const binary =
@@ -32,7 +35,9 @@ const binary =
 if (!existsSync(binary)) {
 	throw new Error(`binary not found at ${binary} — run \`bun run build:binary\` first.`);
 }
-const PORT = 24272; // dev 24242 · e2e 24252 · smoke 24262 · e2e:binary 24272 — never collide
+// Per-worktree block (e2e/fixtures/paths.ts): main e2e +0 · this suite +2 · restart spec +4; the dev
+// host (24242) and smoke:binary (24262, free-scans + reads the served URL) stay clear of the block.
+const PORT = E2E_BINARY_PORT;
 const fakeBinDir = fileURLToPath(new URL("./e2e/fixtures/bin", import.meta.url));
 
 export default defineConfig({

@@ -128,11 +128,13 @@ reusable by any pi UI (extraction-ready as a future `packages/chat-ui`).
 ## Verification (run for every app-affecting change)
 
 Every change that touches the app is verified by the **e2e suite** before it's considered done.
-`bun run e2e` is **fully self-contained**: it builds the web app, boots the host on a dedicated port
-(24252) with an **isolated state dir** (never touches `~/.thinkrail`), seeds fixtures (Playwright
-`globalSetup`), runs the suite headless against the real web UI, then tears the host down and cleans up
-(`globalTeardown`). Tests live in `e2e/` and assert via `data-testid` / `data-status` hooks. When
-Electrobun lands, the same suite runs against the desktop app too.
+`bun run e2e` is **fully self-contained**: it builds the web app, boots the host on a **per-worktree
+derived port with an isolated, per-worktree state dir** (both derived in `e2e/fixtures/paths.ts` — never
+touches `~/.thinkrail`, and parallel runs from *different* worktrees never collide; within one worktree
+the suites still share state and run sequentially), seeds fixtures (Playwright `globalSetup`), runs the
+suite headless against the real web UI, then tears the host down and cleans up (`globalTeardown`).
+Tests live in `e2e/` and assert via `data-testid` / `data-status` hooks. When Electrobun lands, the
+same suite runs against the desktop app too.
 
 **Agent tests are tagged, not faked.** Specs that drive a real `pi` agent are tagged `@agent` (Playwright
 `{ tag: "@agent" }`). The host runs against an **isolated pi agent dir** (`PI_CODING_AGENT_DIR` → a
