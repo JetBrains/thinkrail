@@ -1,5 +1,12 @@
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject, openWorkspaceChat } from "./fixtures/app";
+import {
+	createWorkspaceViaDialog,
+	openFixtureProject,
+	openTerminal,
+	openWorkspaceChat,
+	visibleTerminal,
+	visibleTerminalScreen,
+} from "./fixtures/app";
 import { seedExternalCwdSessions, seedWorkspaceSession } from "./fixtures/sessions";
 
 // No-agent (see composer.live.spec.ts for the @agent-tagged composer suite): the Ctrl+R history-recall
@@ -692,4 +699,106 @@ test("the scope badge opens a picker that selects a scope directly without distu
 	// Ctrl+R still cycles after the mouse pick — from "all" it wraps forward to "chat".
 	await query.press("Control+r");
 	await expect(scopeBadge).toHaveAttribute("data-scope", "chat");
+});
+
+// The chord and the dismissal both had exactly one handler, and both were bound to a single element —
+// `Ctrl+R` to the composer textarea, `Escape` to the overlay's query input. So with focus anywhere else
+// the browser reloaded the page on Ctrl+R, and an overlay whose input had lost focus (a click back into
+// the composer, an errant click on the page) could not be dismissed by keyboard at all. Both are now
+// owned centrally: `shell/useGlobalHotkeys` swallows Ctrl+R app-wide and routes it, and the overlay
+// registers a window-level Escape while it is open.
+//
+// One caveat this suite cannot assert: that the *browser* no longer reloads. Playwright's synthetic
+// key events are delivered to the renderer and never reach Chromium's own shortcut layer, so Ctrl+R in a
+// test never reloaded in the first place. What is covered here is the functional half — the chord being
+// seen, and acted on, from outside the composer.
+test("Ctrl+R and Escape are owned app-wide: both work with focus outside the composer", async ({
+	page,
+}) => {
+	await openWorkspaceChat(page);
+	seedExternalCwdSessions();
+
+	const input = page.getByTestId("chat-input");
+	const overlay = page.getByTestId("history-overlay");
+	const query = page.getByTestId("history-query");
+	const scopeBadge = page.getByTestId("history-scope");
+	// An inert bit of the topbar — clicking it parks focus well outside the chat subtree without
+	// triggering anything.
+	const outside = page.getByTestId("scope-context");
+
+	// Ctrl+R with focus outside the chat opens the overlay and focuses its query, exactly as the chord
+	// from inside the composer does.
+	await outside.click();
+	await page.keyboard.press("Control+r");
+	await expect(overlay).toBeVisible();
+	await expect(query).toBeFocused();
+
+	// Escape with focus back in the composer — the reported bug: the overlay used to stay open forever.
+	await input.click();
+	await page.keyboard.press("Escape");
+	await expect(overlay).toBeHidden();
+
+	// Escape with focus nowhere in particular closes it too — and lands focus back in the prompt field,
+	// so typing just continues. (Without the refocus, closing unmounts the query input and focus falls to
+	// `<body>`: the overlay is gone but every keystroke after it is silently dropped.)
+	await page.keyboard.press("Control+r");
+	await expect(overlay).toBeVisible();
+	await outside.click();
+	await page.keyboard.press("Escape");
+	await expect(overlay).toBeHidden();
+	await expect(input).toBeFocused();
+	await page.keyboard.type("still typing");
+	await expect(input).toHaveValue("still typing");
+
+	// …and the caret comes back where it was, not at the end: park it mid-draft, round-trip the overlay,
+	// and the next keystrokes land at that same spot.
+	await input.click();
+	await page.keyboard.press("Home");
+	await page.keyboard.press("Control+r");
+	await expect(overlay).toBeVisible();
+	await page.keyboard.press("Escape");
+	await expect(input).toBeFocused();
+	await page.keyboard.type("i am ");
+	await expect(input).toHaveValue("i am still typing");
+	await input.fill("");
+
+	// While the overlay is open, Ctrl+R still means "cycle the scope" — including from outside it, since
+	// the chord no longer depends on the query input holding focus.
+	await page.keyboard.press("Control+r");
+	await expect(scopeBadge).toHaveAttribute("data-scope", "workspace");
+	await outside.click();
+	await page.keyboard.press("Control+r");
+	await expect(scopeBadge).toHaveAttribute("data-scope", "project");
+
+	// Escape dismisses the INNERMOST layer: with the scope picker open it closes just the menu, leaving
+	// the overlay up. The window-level handler stands down while that menu is open, so Radix's own
+	// Escape is the only one that fires.
+	await scopeBadge.click();
+	await expect(page.getByTestId("history-scope-option")).toHaveCount(4);
+	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("history-scope-option")).toHaveCount(0);
+	await expect(overlay).toBeVisible();
+	// The next Escape closes the overlay itself.
+	await page.keyboard.press("Escape");
+	await expect(overlay).toBeHidden();
+});
+
+// The one deliberate hole in the app-wide Ctrl+R swallow: inside a terminal the chord is the shell's
+// reverse-i-search and belongs to the PTY, so the global handler passes it straight through. The chat
+// tab is still the active center tab throughout (terminals are their own panel), so this is exactly the
+// case where the exclusion has to hold rather than a case where routing had nothing to do anyway.
+test("Ctrl+R inside a terminal belongs to the shell, not to history search", async ({ page }) => {
+	await openWorkspaceChat(page);
+	seedExternalCwdSessions();
+
+	await openTerminal(page);
+	await visibleTerminal(page).locator(".xterm-helper-textarea").focus();
+	await page.keyboard.press("Control+r");
+
+	// No overlay — and the byte really reached the PTY: depending on what the CI/dev machine's login
+	// shell binds `^R` to, the screen shows either its reverse-search prompt (`bck-i-search`/
+	// `reverse-i-search`) or the literal `^R` echo. Either way the keystroke was the shell's, not ours;
+	// asserting only "no overlay" would also pass if the chord had been swallowed and dropped.
+	await expect(page.getByTestId("history-overlay")).toBeHidden();
+	await expect(visibleTerminalScreen(page)).toContainText(/i-search|\^R/i);
 });

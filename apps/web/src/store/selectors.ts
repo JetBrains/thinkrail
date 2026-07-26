@@ -1,4 +1,5 @@
 import type { Project, Workspace } from "@thinkrail/contracts";
+import type { EditorTab } from "./appStore";
 
 interface ActiveWorkspaceState {
 	activeWorkspaceId: string | null;
@@ -29,6 +30,24 @@ export function selectActiveWorkspaceProjectId(state: ActiveWorkspaceState): str
 export function selectContextProject(state: ProjectContextState): Project | null {
 	const projectId = selectActiveWorkspace(state)?.projectId ?? state.selectedProjectId;
 	return state.projects.find((project) => project.id === projectId) ?? null;
+}
+
+/**
+ * The session id of the chat currently rendered in the center pane, or null when the active tab is a
+ * file/diff/doc (or there is none). `CenterTabs` mounts exactly one tab body at a time, so this is also
+ * "the one `ChatView` that exists" — which is what the shell's global `Ctrl+R` routes its history-open
+ * request to.
+ */
+export function selectActiveChatSessionId(state: {
+	activeWorkspaceId: string | null;
+	tabsByWorkspace: Record<string, EditorTab[]>;
+	activeTabByWorkspace: Record<string, string | null>;
+}): string | null {
+	const workspaceId = state.activeWorkspaceId;
+	if (!workspaceId) return null;
+	const activeTabId = state.activeTabByWorkspace[workspaceId] ?? null;
+	const tab = (state.tabsByWorkspace[workspaceId] ?? []).find((t) => t.id === activeTabId);
+	return tab?.kind === "chat" ? tab.sessionId : null;
 }
 
 /** Whether a worktree-relative path is inside a skill directory — the auto-detect trigger for a reload. */

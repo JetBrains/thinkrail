@@ -4,7 +4,7 @@ import type {
 	ThinkingLevel,
 	WireModel,
 } from "@thinkrail/contracts";
-import { ArrowUp, FileIcon, FolderIcon, History, Square, X } from "lucide-react";
+import { ArrowUp, FileIcon, FolderIcon, History, Sparkles, Square, X } from "lucide-react";
 import {
 	type ClipboardEvent,
 	type DragEvent,
@@ -160,13 +160,17 @@ interface ComposerProps {
 	onSelectThinking: (level: ThinkingLevel) => void;
 	onSubmit: (text: string, images: ImageContent[], behavior: SubmitBehavior) => void;
 	onAbort: () => void;
-	/** `Ctrl+R` — opens the history-recall overlay (`ChatView` seeds it with the current draft). Optional
-	 * so a standalone/storybook-style render of `Composer` doesn't need to wire it. */
+	/** Opens the history-recall overlay (`ChatView` seeds it with the current draft) — the history button
+	 * and the shell's global `Ctrl+R`, via the `openHistory` handle. Optional so a standalone/storybook-style
+	 * render of `Composer` doesn't need to wire it. */
 	onHistoryOpen?: () => void;
 	/** Picking a `source: "prompt"` row: `ChatView` fetches + parses the template and replies via
 	 * `insertTemplate`, instead of the slash completion's plain `/name ` insert. Optional so a standalone
 	 * render of `Composer` still works — those rows just fall back to the plain insert. */
 	onPickTemplate?: (name: string) => void;
+	/** Open the Templates manager (Settings → Templates). Wired by `ChatView` (the store lives there, not
+	 * here) to back the `/` menu's "no prompt templates yet" nudge; without it the nudge isn't rendered. */
+	onManageTemplates?: () => void;
 }
 
 /** Imperative handle so `ChatView` can insert a recalled prompt (or a parsed template) without reaching
@@ -182,6 +186,15 @@ export interface ComposerHandle {
 	/** Replace the draft with a parsed template's expansion; if it produced any slots, start a slot
 	 * session selecting slot 0 (else behaves like `insertText`: caret at the end, no session). */
 	insertTemplate: (parsed: ParsedTemplate) => void;
+	/** Open the history overlay the way the composer's own history button does — dismissing any open
+	 * mention/slash menu first. The seam the shell's global `Ctrl+R` reaches, via `ChatView`. */
+	openHistory: () => void;
+	/** Return focus to the prompt field without touching the draft, so typing resumes exactly where it
+	 * left off: the caret goes back where it was (tracked on every click/keyup/change), or, with a slot
+	 * session live, back onto the current slot's marker selection. `ChatView` calls this when the history
+	 * overlay is *dismissed* — the overlay took focus on open, and Escape would otherwise strand it on
+	 * `<body>`. */
+	refocus: () => void;
 }
 
 /**
@@ -190,7 +203,8 @@ export interface ComposerHandle {
  * the row under the tall prompt field, mirroring the New-Workspace dialog's layout. `@` opens worktree
  * file completion, a leading `/` opens the skill/command menu (picking a `source: "prompt"` row starts a
  * **slot session** — see `insertTemplate`/`stepSlot` — instead of the plain `/name ` insert every other
- * row gets), `Ctrl+R` opens history recall (also reachable via the always-rendered `history-open` button),
+ * row gets), the always-rendered `history-open` button opens history recall (as does the shell's global
+ * `Ctrl+R`, which arrives through the `openHistory` handle rather than a key handler here),
  * plain `↑`/`↓` recall step through `recentPrompts` when the field is empty or a recall session is already
  * active, and images can be pasted or dropped in.
  */
@@ -213,6 +227,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		onAbort,
 		onHistoryOpen,
 		onPickTemplate,
+		onManageTemplates,
 	},
 	handleRef,
 ) {
@@ -327,29 +342,6 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		setSlots(null);
 	};
 
-	// No dependency array: `submitText` closes over the live draft/images on purpose, so the handle is
-	// refreshed every render — memoizing it against stale closures is exactly the bug this avoids.
-	useImperativeHandle(handleRef, () => ({
-		insertText: (text: string) => replaceDraft(text),
-		insertAndSubmit: (text: string, behavior: SubmitBehavior) => submitText(text, behavior),
-		insertTemplate: (parsed: ParsedTemplate) => {
-			const first = parsed.slots[0];
-			if (!first) {
-				// No slots — behaves exactly like `insertText` (and picks up its recall/slot resets).
-				replaceDraft(parsed.text);
-				return;
-			}
-			// A slotted insert is the one programmatic mutation that STARTS a slot session instead of
-			// ending one — but it must still exit any `↑`-recall session the way `replaceDraft` does
-			// (this path sets `value` directly, so the textarea's diverging-edit reset never fires).
-			setRecallIdx(null);
-			onChange(parsed.text);
-			setSlots(parsed.slots);
-			setSlotIdx(0);
-			focusSelection(first.start, first.end);
-		},
-	}));
-
 	const pickMention = (c: MentionCandidate) => {
 		const before = value.slice(0, start);
 		const after = value.slice(caret);
@@ -377,14 +369,54 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	// one is open (all the composer's floating panels share the same anchor rect).
 	const menuOpen = mentionOpen || slashCompletion.open;
 
-	// The single entry point to the history overlay — both the `Ctrl+R` chord and the always-rendered
-	// history button go through here, so both dismiss any open mention/slash menu first (the two floating
-	// panels share the composer's anchor rect; leaving one open would paint both at once).
+	// Whether ANY prompt template exists (not: any that matches the current query) — the `/` menu's
+	// empty-state nudge is about having none at all, so a query that simply misses must not raise it.
+	// `commands` is the merged list `ChatView` builds, so a fresh `template.list` clears this the moment
+	// the first template lands.
+	const hasTemplates = commands.some((c) => c.source === "prompt");
+
+	// The single entry point to the history overlay — the always-rendered history button and the shell's
+	// global `Ctrl+R` (via the handle below) both go through here, so both dismiss any open mention/slash
+	// menu first (the two floating panels share the composer's anchor rect; leaving one open would paint
+	// both at once).
 	const openHistory = () => {
 		setMentionDismissed(true);
 		slashCompletion.dismiss();
 		onHistoryOpen?.();
 	};
+
+	// No dependency array: `submitText` closes over the live draft/images on purpose, so the handle is
+	// refreshed every render — memoizing it against stale closures is exactly the bug this avoids. Declared
+	// after `openHistory`/`slashCompletion` so nothing here forward-references a later binding.
+	useImperativeHandle(handleRef, () => ({
+		insertText: (text: string) => replaceDraft(text),
+		insertAndSubmit: (text: string, behavior: SubmitBehavior) => submitText(text, behavior),
+		insertTemplate: (parsed: ParsedTemplate) => {
+			const first = parsed.slots[0];
+			if (!first) {
+				// No slots — behaves exactly like `insertText` (and picks up its recall/slot resets).
+				replaceDraft(parsed.text);
+				return;
+			}
+			// A slotted insert is the one programmatic mutation that STARTS a slot session instead of
+			// ending one — but it must still exit any `↑`-recall session the way `replaceDraft` does
+			// (this path sets `value` directly, so the textarea's diverging-edit reset never fires).
+			setRecallIdx(null);
+			onChange(parsed.text);
+			setSlots(parsed.slots);
+			setSlotIdx(0);
+			focusSelection(first.start, first.end);
+		},
+		openHistory,
+		refocus: () => {
+			// A live slot session gets its marker re-selected rather than a collapsed caret: the session
+			// survives the overlay (Escape closes the topmost panel only), so "where the user was" is the
+			// slot they were filling, and typing must still replace the whole marker.
+			const slot = slots?.[slotIdx];
+			if (slot) focusSelection(slot.start, slot.end);
+			else focusSelection(caret);
+		},
+	}));
 
 	const addFiles = async (files: File[]) => {
 		const picked = files.filter((f) => f.type.startsWith("image/"));
@@ -440,17 +472,13 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	};
 
 	const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-		// Ctrl+R opens history recall — guarded at the very top, before the mention/slash menu, and before
-		// Enter-to-send. Ctrl+R is the browser-reload chord on Windows/Linux, so this must preventDefault
-		// unconditionally; Cmd+R (mac reload) and Alt+R are left alone. Dismiss any open mention/slash menu
-		// first — the two floating panels share the same anchor rect, so leaving the menu open would paint
-		// both at once (mutual exclusion between the composer's floating panels).
-		if (e.key === "r" && e.ctrlKey && !e.metaKey && !e.altKey) {
-			e.preventDefault();
-			openHistory();
-			return;
-		}
-		// A slot session's own keys — checked right after the Ctrl+R guard and before the mention/slash
+		// There is deliberately no Ctrl+R branch here: the chord is owned app-wide by
+		// `shell/useGlobalHotkeys`, which swallows the browser's reload wherever focus sits and routes back
+		// into this composer through `ChatView` (the `openHistory` handle above). A textarea-local handler
+		// only ever covered focus-in-composer — the reload it was written to prevent still fired everywhere
+		// else.
+		//
+		// A slot session's own keys — checked first, before the mention/slash
 		// menu's key handling, and skipped outright while a menu IS open, so a real Tab-to-pick-a-menu-item
 		// (or an Escape that should dismiss the menu) is unaffected; the hint chip and the menus are mutually
 		// exclusive anyway (see the hint's render gate below), so the floating UIs never fight over the
@@ -580,6 +608,29 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					activeIndex={slashCompletion.activeIndex}
 					onSelect={slashCompletion.pick}
 					className="absolute bottom-full left-sm mb-xs"
+					footer={
+						!hasTemplates && onManageTemplates ? (
+							<button
+								type="button"
+								data-testid="slash-templates-empty"
+								// Clears the slash query as it navigates: this row is a way OUT of the menu, not a
+								// completion, so leaving `/…` in the draft would keep the (now-answered) nudge on
+								// screen behind the dialog. It also matters for freshness — the template list is
+								// fetched per menu-OPEN transition, so the menu has to actually close for the
+								// templates the user is about to add to show up when they come back.
+								onClick={() => {
+									replaceDraft("");
+									onManageTemplates();
+								}}
+								className="flex w-full items-center gap-sm rounded-[var(--radius-sm)] border-border2 border-t px-sm py-xs text-left text-hint text-xs hover:bg-hover hover:text-text"
+							>
+								<Sparkles className="size-3 shrink-0" />
+								<span className="truncate">
+									No prompt templates yet — add starters in Settings → Templates
+								</span>
+							</button>
+						) : null
+					}
 				/>
 			) : null}
 

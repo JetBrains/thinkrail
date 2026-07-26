@@ -417,4 +417,49 @@ test.describe("prompt templates in the composer", () => {
 		await expect(bubble).toBeVisible();
 		expect(await bubble.textContent()).toBe("Review for issues, focusing on src/.");
 	});
+
+	// Escape means "close the topmost floating panel", not "reset everything the composer is doing". The
+	// history overlay's dismissal is a window-level capture handler that `stopPropagation`s (it has to be
+	// window-level — focus is rarely on its query input by then; see `chat/SPEC.md`'s chord-ownership
+	// bullet), so this pins the other half of that contract: the keystroke that closes the overlay must
+	// not also reach the composer's own Escape branch and tear down an active slot session.
+	test("Escape closes the history overlay without ending an active slot session", async ({
+		page,
+	}) => {
+		await openWorkspaceChat(page);
+		const input = page.getByTestId("chat-input");
+
+		await input.fill("/rev");
+		await page.locator('[data-testid="slash-command"][data-source="prompt"]').first().click();
+		const hint = page.getByTestId("slot-hint");
+		await expect(hint).toContainText("slot 1/2");
+		const draft = await input.inputValue();
+
+		// Ctrl+R over the live slot session, then Escape.
+		await page.keyboard.press("Control+r");
+		const overlay = page.getByTestId("history-overlay");
+		await expect(overlay).toBeVisible();
+		await page.keyboard.press("Escape");
+		await expect(overlay).toBeHidden();
+
+		// Overlay gone, slot session intact (draft untouched, still on slot 1/2) — and the dismissal handed
+		// focus back to the prompt field with the slot's MARKER re-selected, not a collapsed caret: typing
+		// still replaces the whole `⟨file⟩`, exactly as it would have before the overlay interrupted.
+		await expect(input).toHaveValue(draft);
+		await expect(hint).toContainText("slot 1/2");
+		await expect(input).toBeFocused();
+		const restored = await readSelection(input);
+		expect(restored.value.slice(restored.start, restored.end)).toBe("⟨file⟩");
+		await page.keyboard.type("watcher.ts");
+		await expect(input).toHaveValue(/^Review watcher\.ts for issues, focusing on src\/\.\s*$/);
+
+		// Tab still steps the session.
+		await input.press("Tab");
+		await expect(hint).toContainText("slot 2/2");
+
+		// A second Escape — now with no overlay above it — is the composer's own, and ends the session.
+		await input.press("Escape");
+		await expect(hint).toHaveCount(0);
+		await input.fill("");
+	});
 });

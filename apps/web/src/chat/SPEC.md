@@ -116,7 +116,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   the request — `ChatView` is its only consumer, so an unresolved request must never linger.
 - **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions, `/`
   commands + template **slot sessions** (Tab-through placeholders — see the Template slots bullet
-  below), image paste/drop, `Ctrl+R` → `onHistoryOpen`) plus its props-driven **slash-completion
+  below), image paste/drop, `openHistory` on its imperative handle → `onHistoryOpen`) plus its props-driven **slash-completion
   primitive** (filter/menu/caret + Up/Down, Enter/Tab, Escape), reused by `panels/NewWorkspaceDialog` so
   the two inputs cannot drift; `HistoryOverlay` (the history-recall/search overlay `Composer` opens —
   presentational, driven entirely by `useHistorySearch.ts`'s state + callbacks, plus a **Save as
@@ -160,14 +160,41 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   (`data-testid="history-scope-option"` + `data-scope`, fuller labels than the badge itself — "This
   chat" / "Workspace" / "Project" / "Everywhere" — with the current one check-marked). Picking one
   calls `useHistorySearch.ts`'s new `setScope(kind)`, which resets the results selection exactly like
-  `cycleScope` — the unchanged `Ctrl+R` keyboard path, since both just set the same underlying scope
+  `cycleScope` — the `Ctrl+R` keyboard path (see the chord-ownership bullet below), since both just set
+  the same underlying scope
   state. Radix's default on close is to return focus to the trigger; `onCloseAutoFocus` is overridden
   (`preventDefault` + focus the query input) so a mouse pick hands focus back to the query input
-  instead — typing (and `Ctrl+R` cycling) resumes immediately, no extra click needed. The menu never
+  instead — typing resumes immediately, no extra click needed. The menu is a **controlled** Radix menu
+  (`scopeMenuOpen`) for one reason: the overlay's window-level `Escape` stands down while it is open, so
+  Escape dismisses the innermost layer. The menu never
   fights the overlay's own `ArrowUp`/`ArrowDown`/`Enter` handling: that handler is bound to the query
   `<input>` element itself, and Radix's portaled dropdown content is a **sibling** subtree — never a
   descendant of the input — so a keydown while the menu holds focus cannot reach the input's handler by
   construction, not by a case-by-case guard.
+- **Chord ownership: `Ctrl+R` and `Escape` are not element-local.** Both used to be single-element key
+  handlers — `Ctrl+R` on the composer textarea, `Escape` on the overlay's query `<input>` — and both were
+  wrong for the same reason: they only fired while that one element held focus. Outside it, `Ctrl+R`
+  reached the browser and **reloaded the app**, and an overlay whose input had lost focus (a click back
+  into the composer, a row's icon button) had *no* keyboard dismissal at all. Now:
+  - **`Ctrl+R`** is owned by `shell/useGlobalHotkeys` — a window capture-phase listener that swallows the
+    chord app-wide (`preventDefault` + `stopPropagation`, so it has exactly one handler) and routes it via
+    `store.requestHistoryOpen(sessionId)` to the one mounted `ChatView` (`selectActiveChatSessionId`).
+    `ChatView` translates it: overlay closed → `composerRef.openHistory()` (identical path to the history
+    button — menus dismissed, draft-seeded); overlay open → `cycleScope()`. Neither `Composer` nor
+    `HistoryOverlay` carries a `Ctrl+R` branch any more. Deliberate exclusions: a keydown from inside a
+    terminal (`.xterm`) passes through untouched (reverse-i-search belongs to the PTY), and
+    `Ctrl+Shift+R` / `Cmd+R` are left alone so a keyboard reload stays possible.
+  - **`Escape`** is owned by `HistoryOverlay`'s own window capture-phase listener, registered only while
+    it is open. Capture + `stopPropagation` encodes "the topmost floating panel closes first" (a composer
+    slot session survives the dismissal rather than being cleared by the same keystroke). It stands down
+    while the scope picker is open — see the controlled `scopeMenuOpen` note above — so Radix's own
+    Escape closes just that menu. There is deliberately **no** click-outside dismissal.
+  - **Dismissal returns focus to the prompt field** (`ChatView.onDismissHistory` → the composer's
+    `refocus` handle): opening moved focus into the overlay's query input, and closing unmounts it, so
+    without this every post-Escape keystroke would land on `<body>` and be lost. The caret goes back where
+    it was (`Composer` tracks it on click/keyup/change), or onto the current slot's marker when a slot
+    session is live. Dismissal is the *only* close that routes through `onClose` — insert, jump, and
+    save-as-template each own where focus goes next (the composer, another chat, a dialog).
 - **History overlay: assistant-only messages + jumpable prompts** (`HistoryOverlay.tsx`,
   `useHistorySearch.ts` — R3) — `MESSAGES` now only ever contains assistant-role hits (the server
   filters; see `packages/server/src/history/SPEC.md`): a user-role hit is always a textual duplicate of
@@ -209,7 +236,13 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `source === "prompt"` entries, plus a fresh `template.list { workspaceId }` fetch mapped to
   `SlashCommandInfo` rows (`source: "prompt"`, `sourceInfo` synthesized to match pi's own prompt-template
   convention exactly: `{ path: filePath, source: "local", scope: scope === "global" ? "user" : "project",
-  origin: "top-level" }`) — one merged list, `Composer`'s rendering is unchanged. The fetch runs on
+  origin: "top-level" }`) — one merged list. When that merged list holds **no** `source === "prompt"` row
+  at all, `SlashCommandMenu` renders a `footer` nudge (`data-testid="slash-templates-empty"`) that
+  deep-links to Settings → Templates via `ChatView`'s `onManageTemplates` — the discoverability half of
+  the starter-templates offer (`panels/SPEC.md`), since a fresh install has an empty global prompts dir
+  and the manager is otherwise two clicks deep in a dialog. Gated on "no templates exist", never on "the
+  current query matched none", so a query that simply misses doesn't raise it; `footer` is optional, so
+  `NewWorkspaceDialog`'s reuse of the same menu is unaffected. The fetch runs on
   **every** slash-menu-open transition (**`onSlashActive`**, a boolean prop mirroring `onMentionQuery`'s
   query signal — it stays `true` while the user types the query, so no per-keystroke refires) and is
   deliberately **uncached**: prompt files change outside the app too (pi CLI, an editor, a git pull),
@@ -233,7 +266,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   out-of-order responses). **The session** (`Composer`, local `useState`:
   `slots: TemplateSlot[] | null` + `slotIdx`, no store/transport): `Tab`/`Shift+Tab` step to the
   next/previous slot (wrap; `preventDefault`; a no-op while the mention/slash menu is open — checked at
-  the top of `onKeyDown`, right after the `Ctrl+R` guard and before the menu's own key handling, so a real
+  the top of `onKeyDown`, before the menu's own key handling, so a real
   Tab-to-pick-a-menu-item is unaffected, and symmetrically an `Escape` while the menu is also open lets the
   menu's own dismiss win first). Stepping **out** of a *user-edited* slot (one whose text the
   user actually changed — not an untouched marker, and crucially not an untouched `${N:-default}` either)
@@ -387,8 +420,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   **empty** or a recall is already active (older → higher index), `↓` steps newer (past the newest
   restores `""`), any diverging edit or a submit exits the session, and the recalled text lands with the
   caret at its end. A `History`-icon button (`data-testid="history-open"`, `aria-label="Search history"`,
-  always rendered next to send) calls the same `onHistoryOpen` as `Ctrl+R` — the tap path on mobile, a
-  discoverability affordance on desktop.
+  always rendered next to send) calls the same `openHistory` the global `Ctrl+R` reaches — the tap path
+  on mobile, a discoverability affordance on desktop.
 - **Chat TODO plan** — the chat's `pi-todos` list surfaced **only in the chat** (engine:
   [[module-pi-todos]]; host read/write: [[submodule-server-todos]]):
   `useChatTodos` (the `todo.*` data hook — fetch + live `pi.event` refetch + edits + the add-nudge + the

@@ -143,12 +143,18 @@ paths only; opened by `ChangesPanel`). The transient **`chatLocationRequest`** �
   can live in a different project/workspace than the one the search ran from — the caller
   `useHistorySearch.openMessage` loads the destination project's workspaces first when absent) and cleared
   by **`clearChatLocation()`**; the target's anchor resolves against the runtime's `turnIdByMessageIndex`
-  (see `chat/SPEC.md`'s hydration bullet), falling back to the newest `anchorText` match when absent. The `EditorTab` (`FileTab` | `ChatTab` | `DocTab` | `DiffTab`) + `TerminalTab` + `ClosedChat` +
+  (see `chat/SPEC.md`'s hydration bullet), falling back to the newest `anchorText` match when absent.
+  The sibling transient **`historyOpenRequest { sessionId }`** — set by **`requestHistoryOpen(sessionId)`**,
+  cleared by **`clearHistoryOpen()`** — carries the shell's app-wide `Ctrl+R` to the on-screen chat, which
+  opens (or, when already open, re-scopes) its history overlay; it goes through the store precisely because
+  the chord fires outside the chat subtree entirely (see `shell/SPEC.md`'s "Global chords"). The `EditorTab` (`FileTab` | `ChatTab` | `DocTab` | `DiffTab`) + `TerminalTab` + `ClosedChat` +
   `SessionRuntime` types. (Chat *render* types + renderers live in the `chat` module.) The pure context
   selectors in `selectors.ts` resolve the active `Workspace`, its owning project id, and the shell's context
   project from those canonical ids and collections; derived active-project state is never stored separately.
 - **Public surface (barrel):** `useAppStore`; `selectActiveWorkspace`,
-  `selectActiveWorkspaceProjectId`, `selectContextProject`, `selectSkillsStale`, `selectWorkspaceTick` (the
+  `selectActiveWorkspaceProjectId`, `selectActiveChatSessionId` (the on-screen chat's session id, or null
+  when a file/diff/doc tab is active — the shell's `Ctrl+R` routing target),
+  `selectContextProject`, `selectSkillsStale`, `selectWorkspaceTick` (the
   sync-baseline snapshot; + the `isSkillPath` path predicate it shares with `noteFsChanged`); `toast` (the
   fire-from-anywhere helper),
   `Toast` (type), `EditorTab` (`FileTab`/`ChatTab`/`DocTab`), `TerminalTab`, `ClosedChat`, `SessionRuntime` +

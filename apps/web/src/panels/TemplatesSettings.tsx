@@ -14,8 +14,13 @@ import { openFileInTab } from "./openFile";
  * R4: verbatim starter-template content offered by `StarterTemplatesOffer` below (design doc "Amendments
  * (2026-07-22)" item 4). Bodies use pi's own `$1`/`${N:-default}` placeholder grammar — not JS
  * interpolation — so the two bodies containing `${…}` are written as template literals with the `\${`
- * escape (a literal dollar-brace, never an embedded expression); `explain`/`tests` only ever use bare
- * `$1`, which needs no escape.
+ * escape (a literal dollar-brace, never an embedded expression); the rest only use bare `$1`/`$2`, which
+ * need no escape.
+ *
+ * These are the **same five** this repo checks into its own `.pi/prompts/` — the set a ThinkRail checkout
+ * gets for free at project scope, which an install working on any *other* project would otherwise never
+ * see. Keeping the two in sync is deliberate: "the templates ThinkRail ships" should mean one thing, not
+ * two. Change one, change the other.
  */
 const STARTER_TEMPLATES: ReadonlyArray<{
 	name: string;
@@ -27,30 +32,36 @@ const STARTER_TEMPLATES: ReadonlyArray<{
 		name: "review",
 		description: "Code review of a file or directory",
 		argumentHint: "[path] [focus]",
-		body: `Review $1 for correctness, clarity, and maintainability, focusing on \${2:-the riskiest parts}.\nList concrete findings with file:line references, ordered by severity, then suggest fixes.`,
+		body: `Review $1 for correctness, clarity, and maintainability, focusing on \${2:-the riskiest parts}.\nList concrete findings with \`file:line\` references, ordered by severity, and propose a fix for each.`,
 	},
 	{
 		name: "explain",
-		description: "Explain how something works",
+		description: "Explain how something works in this codebase",
 		argumentHint: "[path-or-topic]",
-		body: "Explain how $1 works in this codebase: its purpose, the key control/data flow, and what depends on\nit. Keep it concise and point to the load-bearing files and lines.",
+		body: "Explain how $1 works in this codebase: its purpose, the key control and data flow, and what depends on it.\nKeep it concise and point to the load-bearing files and `file:line` locations.",
 	},
 	{
 		name: "tests",
 		description: "Write tests for a target",
 		argumentHint: "[path]",
-		body: "Write tests for $1. Cover the main behavior, the edge cases, and one failure path. Match the\nproject's existing test conventions and runner, and run the tests after writing them.",
+		body: "Write tests for $1. Cover the main behavior, the important edge cases, and one failure path.\nMatch the project's existing test conventions and runner, then run them and report the result.",
 	},
 	{
-		name: "standup",
-		description: "One-line standup update",
-		argumentHint: "[team]",
-		body: `Write a one-line standup update for team \${1:-mine} based on this workspace's recent changes.\nReply with just that line.`,
+		name: "commit",
+		description: "Write a Conventional Commit message from the staged diff",
+		argumentHint: "[scope]",
+		body: `Read the staged changes (\`git diff --cached\`) and write a Conventional Commits message.\nUse the type that fits (feat/fix/refactor/docs/test/chore) with scope \${1:-infer it from the files},\nan imperative subject under 72 chars, and a short body explaining the why when it isn't obvious.\nReply with only the commit message.`,
+	},
+	{
+		name: "rename",
+		description: "Rename a symbol everywhere (demoes repeated-slot mirroring)",
+		argumentHint: "[old] [new]",
+		body: "Rename `$1` to `$2` across the codebase: update every definition, reference, and import of `$1`,\nplus any docs or comments that mention `$1`. Keep `$2` consistent everywhere and run the type-checker after.",
 	},
 ];
 
 /**
- * R4: the Global group's empty-state nudge — one click seeds the four `STARTER_TEMPLATES` above via the
+ * R4: the Global group's empty-state nudge — one click seeds the five `STARTER_TEMPLATES` above via the
  * same `template.save` wire call `TemplateEditorDialog` uses (scope `"global"`, body assembled by the same
  * `assembleTemplate` helper), sequentially, then bumps `templatesVersion` once so both this panel and the
  * composer's `/` menu cache pick them up. No dismiss state to track: once the list is non-empty,

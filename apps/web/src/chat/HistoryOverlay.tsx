@@ -1,6 +1,6 @@
 import type { HistoryScope, MessageHit, PromptHit } from "@thinkrail/contracts";
 import { Check, CornerUpRight, Save } from "lucide-react";
-import { type KeyboardEvent, useEffect, useMemo, useRef } from "react";
+import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -308,9 +308,11 @@ export interface HistoryOverlayProps {
 	 * workspace chip can show a human label without this presentational component touching the store. */
 	workspaceNames: Record<string, string>;
 	onQueryChange: (query: string) => void;
-	onCycleScope: () => void;
 	onToggleStage: () => void;
 	onMoveSelection: (delta: number) => void;
+	/** **Dismissal** — Escape, the overlay's only "close and do nothing else" exit (every other close is a
+	 * side effect of insert/jump/save, which the respective callback owns). The caller both closes the
+	 * overlay and hands focus back to the composer; this component never decides where focus lands next. */
 	onClose: () => void;
 	/** Enter on a prompt hit — replace the draft, focus, caret at end, close. */
 	onInsert: (hit: PromptHit) => void;
@@ -326,9 +328,10 @@ export interface HistoryOverlayProps {
 	 * Cmd/Ctrl+S while that row is the keyboard selection. Opens `TemplateEditorDialog` body-prefilled;
 	 * `ChatView` owns the dialog, this overlay only reports the hit. */
 	onSaveAsTemplate: (hit: PromptHit) => void;
-	/** R2's mouse path: a direct scope pick from the badge's dropdown menu. `onCycleScope` stays the
-	 * `Ctrl+R` keyboard path, unaffected — both just set the same underlying scope state
-	 * (`useHistorySearch.ts`'s `setScope`/`cycleScope` reset the results selection identically). */
+	/** R2's mouse path: a direct scope pick from the badge's dropdown menu. The `Ctrl+R` keyboard path
+	 * (`cycleScope`, routed from the shell through `ChatView`) is unaffected — both just set the same
+	 * underlying scope state (`useHistorySearch.ts`'s `setScope`/`cycleScope` reset the results selection
+	 * identically). */
 	onSetScope: (kind: HistoryScope["kind"]) => void;
 }
 
@@ -341,7 +344,6 @@ export function HistoryOverlay({
 	state,
 	workspaceNames,
 	onQueryChange,
-	onCycleScope,
 	onToggleStage,
 	onMoveSelection,
 	onClose,
@@ -354,6 +356,9 @@ export function HistoryOverlay({
 	const { open, stage, query, scope, result, selected, error } = state;
 	const inputRef = useRef<HTMLInputElement>(null);
 	const resultsRef = useRef<HTMLDivElement>(null);
+	// The scope picker is a CONTROLLED Radix menu purely so the Escape handler below can stand down while
+	// it is open — Escape must dismiss the innermost layer (the menu), not the overlay under it.
+	const [scopeMenuOpen, setScopeMenuOpen] = useState(false);
 
 	// Auto-focus with the seeded text selected, the instant the overlay opens — not on every keystroke.
 	useEffect(() => {
@@ -363,6 +368,26 @@ export function HistoryOverlay({
 		el.focus();
 		el.select();
 	}, [open]);
+
+	// Escape dismisses the overlay from ANYWHERE, not just the query input. Focus routinely leaves that
+	// input while the overlay is up — a click back into the composer, a row's icon button, an errant click
+	// on the page — and an input-local handler was the only way out, so the panel got stuck open with no
+	// keyboard dismissal at all. Window + **capture** phase, so it wins over anything downstream that also
+	// treats Escape as its own (the composer's slot session, which must survive the dismissal); the
+	// `stopPropagation` is what enforces that "topmost floating panel closes first" ordering. Registered
+	// only while `open`, and stood down while the scope menu is up so Radix's own Escape (a document-level
+	// capture listener, which would otherwise fire in the same keystroke) closes just that menu.
+	useEffect(() => {
+		if (!open || scopeMenuOpen) return;
+		const onWindowKeyDown = (e: globalThis.KeyboardEvent) => {
+			if (e.key !== "Escape") return;
+			e.preventDefault();
+			e.stopPropagation();
+			onClose();
+		};
+		window.addEventListener("keydown", onWindowKeyDown, true);
+		return () => window.removeEventListener("keydown", onWindowKeyDown, true);
+	}, [open, scopeMenuOpen, onClose]);
 
 	// A stable identity for the currently-selected row, derived from stage/result/selected. It changes
 	// exactly when the selection lands on a different row — including when a stage toggle or a fresh result
@@ -391,12 +416,10 @@ export function HistoryOverlay({
 
 	if (!open) return null;
 
+	// No Ctrl+R or Escape branch here: both chords are owned outside this input, because both must work
+	// with focus anywhere — `Ctrl+R` by `shell/useGlobalHotkeys` (which routes a scope cycle back through
+	// `ChatView` while the overlay is open), Escape by the window listener above.
 	const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-		if (e.key === "r" && e.ctrlKey && !e.metaKey && !e.altKey) {
-			e.preventDefault();
-			onCycleScope();
-			return;
-		}
 		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
 			// Always swallow — Cmd/Ctrl+S is the browser's own "save page" shortcut. Only a prompt row
 			// selection actually opens the save-as-template dialog; on a message hit (or none) this is a
@@ -419,11 +442,6 @@ export function HistoryOverlay({
 		if (e.key === "Tab") {
 			e.preventDefault();
 			onToggleStage();
-			return;
-		}
-		if (e.key === "Escape") {
-			e.preventDefault();
-			onClose();
 			return;
 		}
 		if (e.key === "Enter") {
@@ -547,7 +565,7 @@ export function HistoryOverlay({
 					placeholder="Search prompts and conversations…"
 					className="min-w-0 flex-1 bg-transparent text-sm text-text outline-none placeholder:text-hint"
 				/>
-				<DropdownMenu>
+				<DropdownMenu open={scopeMenuOpen} onOpenChange={setScopeMenuOpen}>
 					<DropdownMenuTrigger
 						data-testid="history-scope"
 						data-scope={scope.kind}

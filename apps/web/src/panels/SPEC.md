@@ -166,11 +166,16 @@ a project picker, the prompt hero, and the reused
   `ProjectTree.tsx`'s workspace-remove uses) calling `template.delete` directly — the dialog itself is
   never involved in deletion. **R4 — starter-templates offer:** when the **Global** group's fetch has
   resolved with zero rows and no error, its empty state swaps the bare "No templates yet." for that same
-  hint plus a button (`data-testid="template-starters"`) — clicking it `template.save`s four verbatim
-  starter templates (review/explain/tests/standup; scope `"global"`, body assembled client-side via
+  hint plus a button (`data-testid="template-starters"`) — clicking it `template.save`s five verbatim
+  starter templates (scope `"global"`, body assembled client-side via
   `chat/templateText.ts`'s `assembleTemplate`, the same helper `TemplateEditorDialog` uses) sequentially,
   then bumps `templatesVersion` once, the same invalidation the row list already refetches on — the
-  offer disappears on its own next render once the list is non-empty, no dismiss state to track. **This
+  offer disappears on its own next render once the list is non-empty, no dismiss state to track. The five
+  (review/explain/tests/commit/rename) are **the same set this repo checks into its own `.pi/prompts/`**:
+  those ship at *project* scope, so only a ThinkRail checkout ever sees them, and "the templates ThinkRail
+  ships" must mean one thing rather than two — change one, change the other. The composer's `/` menu
+  carries the discoverability half (`chat/SPEC.md`: a `slash-templates-empty` footer nudge deep-linking
+  here when no template exists anywhere), since this offer is otherwise two clicks deep in a dialog. **This
   project**'s empty state is unchanged (still the bare text) — the offer is Global-only, since it only
   ever seeds global files. No server change. A single dimmed "General" nav item ("Soon") still signals the shell is
   built to grow. `ProvidersSettings`/`AppearanceSettings`/`TemplatesSettings` are the **integration pieces**

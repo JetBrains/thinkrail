@@ -18,14 +18,17 @@ import {
 // invalidates `ChatView`'s cached fetch rather than just exercising the settings panel in isolation.
 test.describe("templates management", () => {
 	// R4 (design doc "Amendments (2026-07-22)" item 4): when the Global group's list is empty, the panel
-	// offers to seed four starter templates instead of the bare "No templates yet." — one click creates
-	// all four, sequentially, via the same `template.save` wire call the editor dialog uses.
+	// offers to seed the starter templates instead of the bare "No templates yet." — one click creates
+	// them all, sequentially, via the same `template.save` wire call the editor dialog uses. The set is
+	// the same five this repo checks into its own `.pi/prompts/` (see `STARTER_TEMPLATES`), so an install
+	// working on any other project gets what a ThinkRail checkout gets for free at project scope.
 	//
 	// Deliberately the FIRST test in this file: Playwright preserves declaration order within a file
 	// (`fullyParallel: false`, `workers: 1`, see playwright.config.ts), and this file is the only place
 	// anything ever adds to the Global group (`templates-compose.spec.ts` only reads the fixtures below;
 	// no other spec touches templates at all) — so running first guarantees neither "standup" (created and
-	// deleted by the test below) nor "foo" (created, and left, by the shadowing test below) exists yet.
+	// deleted by the test below; deliberately NOT one of the starters, so the two can't collide) nor "foo"
+	// (created, and left, by the shadowing test below) exists yet.
 	// `globalSetup` seeds four Global fixtures once for the whole run and `resetState` never wipes
 	// `prompts/` (see `fixtures/templates.ts`), so the Global group is otherwise never empty during the
 	// suite — manufacturing that condition means removing those four ourselves first. Restores them (and
@@ -45,8 +48,17 @@ test.describe("templates management", () => {
 		// content — a thrown assertion between the clear above and the restore below would otherwise leave
 		// the shared `prompts/` dir permanently short those fixtures for every test that runs after this one.
 		try {
-			await page.getByTestId("open-settings").click();
-			await page.getByTestId("settings-nav-templates").click();
+			// The `/` menu's own empty-state nudge — the discoverability half of the same problem the
+			// starter offer solves: with no templates anywhere, the manager is two clicks deep in Settings
+			// and nothing in the composer says it exists. Doubles as this test's way IN to the Templates
+			// panel (one gesture instead of the gear + nav clicks), which also pins that it deep-links to
+			// the right section.
+			const input = page.getByTestId("chat-input");
+			await input.fill("/");
+			const nudge = page.getByTestId("slash-templates-empty");
+			await expect(nudge).toBeVisible();
+			await nudge.click();
+
 			const settingsDialog = page.getByTestId("settings-dialog");
 			await expect(settingsDialog).toContainText("Prompt templates");
 
@@ -56,8 +68,8 @@ test.describe("templates management", () => {
 			await expect(offer).toBeVisible();
 
 			await offer.click();
-			await expect(globalRows).toHaveCount(4);
-			for (const name of ["review", "explain", "tests", "standup"]) {
+			await expect(globalRows).toHaveCount(5);
+			for (const name of ["review", "explain", "tests", "commit", "rename"]) {
 				await expect(
 					page.locator(`[data-testid="template-row"][data-name="${name}"][data-scope="global"]`),
 				).toBeVisible();
@@ -70,18 +82,19 @@ test.describe("templates management", () => {
 
 			// The freshly-added "review" starter (not the fixture of the same name — that one was removed
 			// above) shows up in the composer's `/` menu, same as any other template would.
-			const input = page.getByTestId("chat-input");
 			await input.fill("/rev");
 			await expect(
 				page
 					.locator('[data-testid="slash-command"][data-source="prompt"]')
 					.filter({ hasText: "review" }),
 			).toHaveCount(1);
+			// …and the nudge is gone with it — a menu that has templates to offer never shows it.
+			await expect(nudge).toHaveCount(0);
 			await input.fill("");
 		} finally {
-			// Restore: remove the four starters this test added, then put the original four fixtures
+			// Restore: remove the five starters this test added, then put the original four fixtures
 			// back — always, even if an assertion above threw.
-			removeGlobalTemplates(["review", "explain", "tests", "standup"]);
+			removeGlobalTemplates(["review", "explain", "tests", "commit", "rename"]);
 			seedTemplateFixtures();
 		}
 	});

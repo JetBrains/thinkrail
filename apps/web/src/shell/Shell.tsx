@@ -13,6 +13,7 @@ import { WelcomePanel } from "../panels/WelcomePanel";
 import { selectActiveWorkspace, selectContextProject, useAppStore } from "../store";
 import { applyTheme, writeThemeHint } from "../themes";
 import type { ConnectionStatus } from "../transport";
+import { useGlobalHotkeys } from "./useGlobalHotkeys";
 
 const STATUS_LABEL: Record<ConnectionStatus, string> = {
 	connected: "Connected",
@@ -39,6 +40,8 @@ export function Shell() {
 		applyTheme(theme);
 		writeThemeHint(theme);
 	}, [theme]);
+	// App-wide chords the browser would otherwise take (`Ctrl+R` → history search, not a reload).
+	useGlobalHotkeys();
 	return (
 		<div data-testid="shell" className="grid h-full grid-rows-[auto_1fr]">
 			<header className="flex items-center justify-between border-b border-border2 bg-bg-dark px-lg py-sm">

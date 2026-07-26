@@ -1,7 +1,9 @@
 import { expect, test } from "bun:test";
 import type { Project, Workspace } from "@thinkrail/contracts";
+import type { EditorTab } from "./appStore";
 import {
 	isSkillPath,
+	selectActiveChatSessionId,
 	selectActiveWorkspace,
 	selectActiveWorkspaceProjectId,
 	selectContextProject,
@@ -96,4 +98,64 @@ test("selectSkillsStale is a strict tick comparison, defaulting missing ticks to
 	expect(
 		selectSkillsStale({ skillChangeTickByWorkspace: {}, skillsSyncedTickBySession: {} }, "w", "s"),
 	).toBe(false);
+});
+
+// The shell's global Ctrl+R routes its history-open request by session id, so "which chat is on screen"
+// has to be answerable from store state alone — a file/diff/doc tab (or none) must resolve to null rather
+// than to some other workspace's chat.
+test("selectActiveChatSessionId names the on-screen chat, and only a chat", () => {
+	const chat: EditorTab = {
+		kind: "chat",
+		id: "w2:s1",
+		workspaceId: "w2",
+		name: "Chat",
+		sessionId: "s1",
+	};
+	const file: EditorTab = {
+		kind: "file",
+		id: "w2:src/a.ts",
+		workspaceId: "w2",
+		name: "a.ts",
+		path: "src/a.ts",
+	};
+	const tabsByWorkspace = { w2: [chat, file] };
+
+	expect(
+		selectActiveChatSessionId({
+			activeWorkspaceId: "w2",
+			tabsByWorkspace,
+			activeTabByWorkspace: { w2: "w2:s1" },
+		}),
+	).toBe("s1");
+	// A file tab is active → no chat on screen.
+	expect(
+		selectActiveChatSessionId({
+			activeWorkspaceId: "w2",
+			tabsByWorkspace,
+			activeTabByWorkspace: { w2: "w2:src/a.ts" },
+		}),
+	).toBeNull();
+	// No active tab, and no active workspace at all.
+	expect(
+		selectActiveChatSessionId({
+			activeWorkspaceId: "w2",
+			tabsByWorkspace,
+			activeTabByWorkspace: { w2: null },
+		}),
+	).toBeNull();
+	expect(
+		selectActiveChatSessionId({
+			activeWorkspaceId: null,
+			tabsByWorkspace,
+			activeTabByWorkspace: { w2: "w2:s1" },
+		}),
+	).toBeNull();
+	// The active tab belongs to another workspace's list — never reachable through the active one.
+	expect(
+		selectActiveChatSessionId({
+			activeWorkspaceId: "w1",
+			tabsByWorkspace,
+			activeTabByWorkspace: { w1: "w2:s1" },
+		}),
+	).toBeNull();
 });
