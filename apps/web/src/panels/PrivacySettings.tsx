@@ -69,11 +69,6 @@ export function PrivacySettings() {
 					prompts, code, chat transcripts, API keys, hostnames, usernames, or anything typed into
 					the app.
 				</p>
-				<p className="text-hint">
-					You can also launch with <code className="font-[var(--font-mono)]">--no-analytics</code>{" "}
-					to mute a single run. See the README’s “Analytics &amp; Privacy” section for the full
-					policy.
-				</p>
 			</div>
 		</section>
 	);
