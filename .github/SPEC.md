@@ -84,15 +84,36 @@ builds keep the committed empty key, so their binaries never send; see
 - `actions/codesign` — JetBrains CodeSign client wrapper; **wired but disabled** (`_release.yml`'s `sign`
   job is `if: false`). Binaries ship unsigned until secrets + a signing runner are provided.
 
-## Install side (`/install.sh`)
+## Install side (`/install.sh` + `/install.ps1`)
 
-The repo-root `install.sh` is the **consumer** of the release: it resolves the latest tag for a channel,
-downloads the platform asset + `SHA256SUMS`, verifies, and drops `thinkrail` on PATH. It therefore
-depends on the **artifact-name contract** this module produces (`thinkrail-<os>-<arch>` with `os` ∈
+Two repo-root installers are the **consumers** of the release — both resolve the latest tag for a
+channel, download the platform asset + `SHA256SUMS`, verify the checksum, and drop `thinkrail` on PATH:
+
+- **`install.sh`** — bash: macOS/Linux, plus Windows under Git Bash/MSYS (`curl -fsSL … | bash`).
+- **`install.ps1`** — Windows-native, one script for **both cmd and PowerShell** (Windows PowerShell
+  5.1-compatible): `powershell -c "irm …/install.ps1 | iex"`. Options travel as env vars
+  (`THINKRAIL_CHANNEL` / `THINKRAIL_VERSION` / `THINKRAIL_PREFIX` / `THINKRAIL_NO_MODIFY_PATH`) — the
+  only syntax both shells share — with mirroring params for a saved copy. It installs to
+  `%USERPROFILE%\.local\bin` (same default prefix as `install.sh`, so a Git Bash install and a native
+  install coincide), writes the same `~/.config/thinkrail/install.json`, appends the bin dir to the
+  **user** PATH via `HKCU\Environment` (idempotent, `REG_EXPAND_SZ`-preserving, `WM_SETTINGCHANGE`
+  broadcast; `-NoModifyPath` opts out). **Idempotence is judged against the *persistent* PATH only** —
+  the HKCU + machine registry values, never `$env:Path`: a session-only `$env:Path +=` must not be
+  mistaken for an install, or the registry write is skipped and `thinkrail` is gone from the next
+  terminal. **Replacing the binary never risks the installed one**: the verified download is staged
+  *inside* the bin dir first (so a cross-volume or out-of-space failure strikes before anything
+  installed is touched), then swapped in by same-volume rename; a locked running exe is renamed aside
+  (`thinkrail.exe.*.old`, cleaned up by the next install alongside stale `.new` stages) and restored if
+  the swap then fails. A first-move failure with **no** `thinkrail.exe` present is rethrown as-is, not
+  mistaken for a lock.
+
+Both depend on the **artifact-name contract** this module produces (`thinkrail-<os>-<arch>` with `os` ∈
 {`linux`,`darwin`,`windows`}, `arch` ∈ {`x64`,`arm64`}, `.exe` on Windows) and the `SHA256SUMS` file —
-change the asset names in `_build.yml`/`build-binary` and `install.sh` must change in lockstep. The
-README documents the user-facing install. `thinkrail update` (the CLI's self-update, see `module-cli`)
-re-invokes this same script, so `install.sh` is the one place the download/verify/PATH logic lives.
+change the asset names in `_build.yml`/`build-binary` and **both installers** must change in lockstep.
+The README documents the user-facing install. `thinkrail update` (the CLI's self-update, see
+`module-cli`) re-invokes `install.sh` on macOS/Linux — the installers stay the one place the
+download/verify/PATH logic lives; on Windows it prints the `install.ps1` one-liner instead of updating
+in place.
 
 ## Boundary
 

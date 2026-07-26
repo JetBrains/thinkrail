@@ -17,22 +17,37 @@ spec-graph viewer, and multiple concurrent `pi` chat sessions — all scoped to 
 ## Install
 
 ThinkRail ships as a single self-contained executable per platform. The installer downloads the right
-build from the GitHub releases, verifies its SHA-256 checksum, and puts `thinkrail` on your PATH:
+build from the GitHub releases, verifies its SHA-256 checksum, and puts `thinkrail` on your PATH.
+
+**macOS / Linux** (also Windows under Git Bash):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash
 ```
 
+**Windows** — the same command works from cmd and PowerShell:
+
+```powershell
+powershell -c "irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex"
+```
+
 Nightly builds and pinned versions:
 
 ```bash
+# macOS / Linux
 curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash -s -- --channel nightly
 curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash -s -- --version 0.2.0
 ```
 
+```powershell
+# Windows — options are env vars (THINKRAIL_CHANNEL, THINKRAIL_VERSION, THINKRAIL_PREFIX, THINKRAIL_NO_MODIFY_PATH)
+$env:THINKRAIL_CHANNEL='nightly'; irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex   # PowerShell
+set "THINKRAIL_VERSION=0.2.0" && powershell -c "irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex"   # cmd
+```
+
 Then run `thinkrail` (add a git repo path to open it as a project: `thinkrail ~/code/my-repo`). To update
 later, run `thinkrail update` (re-installs the latest build for your channel; macOS/Linux only — on
-Windows, re-download from releases). `thinkrail --help` lists the flags; `thinkrail --version` prints the
+Windows, re-run the installer). `thinkrail --help` lists the flags; `thinkrail --version` prints the
 build.
 
 **Prebuilt platforms:** macOS (Apple Silicon), Linux arm64 + x64, Windows x64 (`.exe`). Intel macOS isn't
