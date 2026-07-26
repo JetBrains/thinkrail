@@ -260,19 +260,6 @@
 										<svg class="i" aria-hidden="true"><use href="#i-copy" /></svg>
 										<svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg>
 									</button>
-									<div class="install-hint" id="install-hint" role="status">
-										<div class="hint-chat">
-											<span class="hint-q" data-step="q">Can I click that?</span>
-											<span class="hint-typing" data-step="typing" aria-hidden="true"><i></i><i></i><i></i></span>
-											<span class="hint-a" data-step="a"><span class="hint-text">Not here — INSTALL NOW!</span></span>
-										</div>
-										<div class="hint-arrows" data-step="arrows" aria-hidden="true">
-											<svg viewBox="0 0 24 40" aria-hidden="true"><path d="m4 6 8 9 8-9" /><path d="m4 20 8 9 8-9" /></svg>
-											<svg viewBox="0 0 24 40" aria-hidden="true"><path d="m4 6 8 9 8-9" /><path d="m4 20 8 9 8-9" /></svg>
-											<svg viewBox="0 0 24 40" aria-hidden="true"><path d="m4 6 8 9 8-9" /><path d="m4 20 8 9 8-9" /></svg>
-											<svg viewBox="0 0 24 40" aria-hidden="true"><path d="m4 6 8 9 8-9" /><path d="m4 20 8 9 8-9" /></svg>
-										</div>
-									</div>
 								</div>
 								<p class="hero-platforms">
 									One self-contained binary. macOS (Apple Silicon) · Linux arm64 / x64 · Windows x64.
@@ -577,16 +564,31 @@
 							<section class="file-section" id="install" data-file="install.sh">
 								<p class="file-comment"># install.sh</p>
 								<h2>Install</h2>
-								<pre class="code-block install-block"><code><span class="sx-cm"># one line: downloads the right build, verifies its SHA-256, puts `thinkrail` on your PATH</span>
-<span class="line-copy" data-copy="curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash"><span class="sx-fn">curl</span> -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | <span class="sx-fn">bash</span></span>
+								<div class="install-target">
+									<pre class="code-block install-block"><code><span class="sx-cm"># one line: downloads the right build, verifies SHA-256, puts `thinkrail` on PATH</span>
+<span class="line-copy line-primary" data-copy="curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash"><span class="sx-fn">curl</span> -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | <span class="sx-fn">bash</span><button type="button" class="line-btn" aria-label="Copy the install command"><svg class="i" aria-hidden="true"><use href="#i-copy" /></svg><svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg></button></span>
 
 <span class="sx-cm"># nightly channel, or pin a version</span>
-<span class="line-copy" data-copy="curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash -s -- --channel nightly"><span class="sx-fn">curl</span> -fsSL … | <span class="sx-fn">bash</span> -s -- <span class="sx-str">--channel nightly</span></span>
-<span class="line-copy" data-copy="curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash -s -- --version 0.2.0"><span class="sx-fn">curl</span> -fsSL … | <span class="sx-fn">bash</span> -s -- <span class="sx-str">--version 0.2.0</span></span>
+<span class="line-copy" data-copy="curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash -s -- --channel nightly"><span class="sx-fn">curl</span> -fsSL … | <span class="sx-fn">bash</span> -s -- <span class="sx-str">--channel nightly</span><button type="button" class="line-btn" aria-label="Copy the nightly-channel command"><svg class="i" aria-hidden="true"><use href="#i-copy" /></svg><svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg></button></span>
+<span class="line-copy" data-copy="curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash -s -- --version 0.2.0"><span class="sx-fn">curl</span> -fsSL … | <span class="sx-fn">bash</span> -s -- <span class="sx-str">--version 0.2.0</span><button type="button" class="line-btn" aria-label="Copy the pinned-version command"><svg class="i" aria-hidden="true"><use href="#i-copy" /></svg><svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg></button></span>
 
 <span class="sx-cm"># then</span>
-<span class="line-copy" data-copy="thinkrail"><span class="sx-fn">thinkrail</span>         <span class="sx-cm"># launch — opens the IDE in your browser</span></span>
-<span class="line-copy" data-copy="thinkrail update"><span class="sx-fn">thinkrail</span> update  <span class="sx-cm"># grab the latest build later</span></span></code></pre>
+<span class="line-copy" data-copy="thinkrail"><span class="sx-fn">thinkrail</span>         <span class="sx-cm"># launch — opens the IDE in your browser</span><button type="button" class="line-btn" aria-label="Copy the launch command"><svg class="i" aria-hidden="true"><use href="#i-copy" /></svg><svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg></button></span>
+<span class="line-copy" data-copy="thinkrail update"><span class="sx-fn">thinkrail</span> update  <span class="sx-cm"># grab the latest build later</span><button type="button" class="line-btn" aria-label="Copy the update command"><svg class="i" aria-hidden="true"><use href="#i-copy" /></svg><svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg></button></span></code></pre>
+									<div class="install-hint" id="install-hint" role="status">
+										<div class="hint-arrows" data-step="arrows" aria-hidden="true">
+											<svg viewBox="0 0 24 40" aria-hidden="true"><path d="m4 15 8-9 8 9" /><path d="m4 29 8-9 8 9" /></svg>
+											<svg viewBox="0 0 24 40" aria-hidden="true"><path d="m4 15 8-9 8 9" /><path d="m4 29 8-9 8 9" /></svg>
+											<svg viewBox="0 0 24 40" aria-hidden="true"><path d="m4 15 8-9 8 9" /><path d="m4 29 8-9 8 9" /></svg>
+											<svg viewBox="0 0 24 40" aria-hidden="true"><path d="m4 15 8-9 8 9" /><path d="m4 29 8-9 8 9" /></svg>
+										</div>
+										<div class="hint-chat">
+											<span class="hint-q" data-step="q">Can I click that?</span>
+											<span class="hint-typing" data-step="typing" aria-hidden="true"><i></i><i></i><i></i></span>
+											<span class="hint-a" data-step="a"><span class="hint-text">Not here — INSTALL NOW!</span></span>
+										</div>
+									</div>
+								</div>
 								<ul>
 									<li><strong>Prebuilt:</strong> macOS (Apple Silicon), Linux arm64 + x64, Windows x64.</li>
 									<li><strong>Needs:</strong> <code>git</code> on PATH and an authenticated <code>pi</code> provider — the agent runs against your real credentials.</li>

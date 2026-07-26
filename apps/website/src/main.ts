@@ -369,9 +369,9 @@ if (navToggle && railRight && backdrop) {
 
 /* ── Decoys: every fake control sells the install ────────────────────────── */
 
-const installLine = document.querySelector<HTMLElement>(".install-line");
+const installTarget = document.querySelector<HTMLElement>(".install-target");
 const installHint = document.getElementById("install-hint");
-if (installLine && installHint) {
+if (installTarget && installHint) {
 	const HINT_MS = 9600; // the staged reveal eats ~2s of this before the answer is up
 	const hintSteps = Array.from(installHint.querySelectorAll<HTMLElement>("[data-step]"));
 	const typing = installHint.querySelector<HTMLElement>(".hint-typing");
@@ -381,6 +381,25 @@ if (installLine && installHint) {
 		installHint.querySelector(`[data-step="${name}"]`)?.classList.add("on");
 
 	/**
+	 * Put the block *and* its callout on screen. `scrollIntoView` can only ever see the block: the
+	 * callout is absolutely positioned, so it contributes no height to scroll against, and on a short
+	 * window its tail fell past the fold. So align the tile as usual, then work out where the callout
+	 * would land after that scroll and go further by the shortfall — one deterministic move rather
+	 * than two smooth ones racing each other.
+	 */
+	const revealPitch = (): void => {
+		const section = document.getElementById("install");
+		if (!editor || !section) {
+			section?.scrollIntoView();
+			return;
+		}
+		const pane = editor.getBoundingClientRect();
+		const align = section.getBoundingClientRect().top - pane.top;
+		const shortfall = installHint.getBoundingClientRect().bottom - align - pane.bottom;
+		editor.scrollTo({ top: editor.scrollTop + align + Math.max(0, shortfall) });
+	};
+
+	/**
 	 * Take the whole thing down: pending beats, the callout, the spotlight, and the listeners that
 	 * watch for the interruption. Doubles as the dismiss handler, so the next click or key ends it —
 	 * an 8-second overlay you cannot get out of is worse than one you miss.
@@ -388,7 +407,7 @@ if (installLine && installHint) {
 	const hide = (): void => {
 		for (const timer of timers) clearTimeout(timer);
 		timers = [];
-		installLine.classList.remove("nudge");
+		installTarget.classList.remove("nudge");
 		installHint.classList.remove("on");
 		document.documentElement.classList.remove("hint-on");
 		document.removeEventListener("click", hide);
@@ -405,11 +424,12 @@ if (installLine && installHint) {
 		// replay it just asked for — a removed listener is skipped for the event already in flight.
 		hide();
 		closeRail();
-		document.getElementById("readme")?.scrollIntoView();
+		// install.sh, not the hero: the pitch should land on the command block it is pointing at.
+		revealPitch();
 		installHint.classList.add("on");
 		document.documentElement.classList.add("hint-on"); // spotlight: dim the rest of the shell
 		// Re-arm across a frame so a second click replays the sweep instead of doing nothing.
-		requestAnimationFrame(() => installLine.classList.add("nudge"));
+		requestAnimationFrame(() => installTarget.classList.add("nudge"));
 
 		if (motionOK) {
 			// The exchange plays out: question, the agent thinking, the answer, then the arrows. Without

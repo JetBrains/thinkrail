@@ -48,6 +48,10 @@
 	--sx-punct: #e6edf3;
 
 	--shadow: 0 24px 80px rgb(0 0 0 / 0.55);
+	/* Pitch spotlight. Enough to push the shell back, not enough to blank it — the visitor should
+	   still see the page they are being sold. Dark palettes need a heavier veil: the same alpha over
+	   near-black moves a handful of RGB steps and reads as no dim at all. */
+	--scrim: rgb(0 0 0 / 0.5);
 	color-scheme: dark;
 }
 
@@ -89,6 +93,7 @@
 	--gold: #946300;
 	--red: #d02533;
 	--blue: #2265cf;
+	--scrim: rgb(0 0 0 / 0.25);
 	--sx-kw: #cf222e;
 	--sx-str: #0a3069;
 	--sx-num: #0550ae;
@@ -172,6 +177,7 @@
 	--gold: #855900;
 	--red: #b5200d;
 	--blue: #006bbd;
+	--scrim: rgb(0 0 0 / 0.25);
 	--sx-kw: #a0111f;
 	--sx-str: #032563;
 	--sx-num: #023b95;
@@ -881,6 +887,22 @@ code {
 	margin: 18px 0;
 }
 
+/* install.sh wraps where the other code blocks scroll. Two reasons, both because these commands are
+   the point of the page: the tail of `curl … | bash` was cut off at every width under ~1500px and you
+   had to discover a sideways scroll to read it, and a per-line copy button can only stay on screen in
+   a scrolling line by pinning over the very text it sits beside. Wrapping costs a mid-URL break on
+   phones and buys a block that is complete at every width.
+
+   The size shrinks with the viewport for the same reason: wrapping costs rows, and on a phone those
+   rows pushed the tile past the pane. `clamp` rather than a breakpoint keeps this with the rule it
+   belongs to — a bare `.install-block` down in the media-query block would land after the pitch's
+   `.install-target.nudge > .install-block` and read as descending specificity. */
+.install-block {
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
+	font-size: clamp(12px, 2.3vw, 13px);
+}
+
 .sx-kw {
 	color: var(--sx-kw);
 }
@@ -1009,7 +1031,6 @@ p.hero-lede {
 }
 
 .install-line {
-	position: relative; /* anchors the decoy hint above the command */
 	display: flex;
 	align-items: center;
 	gap: 8px;
@@ -1021,7 +1042,7 @@ p.hero-lede {
 	position: absolute;
 	inset: 0;
 	z-index: 90;
-	background: rgb(0 0 0 / 0.55);
+	background: var(--scrim);
 	opacity: 0;
 	visibility: hidden;
 	pointer-events: none;
@@ -1037,24 +1058,30 @@ html.hint-on .dim-scrim {
 
 /* ── Decoys: the chrome that only looks wired up ─────────────────────────────
    The rails, tabs, folders, terminal, composers and status widgets are a drawing of the app. Clicking
-   any of them lands here: the page returns to README.md, the install command lights up, and this says
+   any of them lands here: the page goes to install.sh, the install block lights up, and this says
    why. Anything genuinely wired (the file links, copy buttons, theme menu, GitHub) is left unmarked. */
 
 [data-demo] {
 	cursor: pointer;
 }
 
-.install-line.nudge {
+/* Anchors the callout above the block and, once nudged, lifts block + callout over the scrim as one
+   thing — containment is what defines the lit set, so the markup inside can change freely. */
+.install-target {
+	position: relative;
+}
+
+.install-target.nudge {
 	z-index: 100; /* above the scrim — the command is the other half of the message */
 }
 
-.install-line.nudge > code {
+.install-target.nudge > .install-block {
 	border-color: var(--gold);
 	box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 26%, transparent);
 }
 
 /* The sweep is the decoration; the ring above is the part that survives reduced motion. */
-html.anim .install-line.nudge > code {
+html.anim .install-target.nudge > .install-block {
 	background-image: linear-gradient(
 		100deg,
 		transparent 30%,
@@ -1079,7 +1106,7 @@ html.anim .install-line.nudge > code {
 .install-hint {
 	position: absolute;
 	left: 0;
-	bottom: calc(100% + 2px);
+	top: calc(100% + 2px);
 	z-index: 10;
 	display: flex;
 	flex-direction: column;
@@ -1088,7 +1115,7 @@ html.anim .install-line.nudge > code {
 	pointer-events: none;
 	opacity: 0;
 	visibility: hidden;
-	transform: translateY(6px);
+	transform: translateY(-6px);
 	transition:
 		opacity 200ms ease,
 		transform 200ms ease,
@@ -1219,7 +1246,7 @@ html.anim .hint-typing i {
 .hint-arrows {
 	display: flex;
 	gap: 78px;
-	margin: 12px 0 0 30px;
+	margin: 0 0 12px 30px;
 }
 
 .hint-arrows svg {
@@ -2022,6 +2049,56 @@ html.anim .hub-ring {
 
 .install-block .line-copy:hover {
 	background: var(--hover);
+}
+
+/* Every command carries its own copy button. The line was always click-to-copy, but the only tell was
+   a cursor change and a hover tint — and a span with a click handler is not reachable by keyboard at
+   all, which a real <button> fixes. It has no `data-copy` of its own: the click bubbles to the line,
+   so there is still exactly one copy target per command and one place holding the text.
+   It sits inline at the end of its command, which only works because the block wraps — see above. */
+.line-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 19px;
+	margin-left: 10px;
+	padding: 0;
+	vertical-align: -3px;
+	border: 1px solid var(--border2);
+	border-radius: 5px;
+	background: var(--elevated);
+	color: var(--muted);
+	cursor: pointer;
+	font-size: 11px;
+}
+
+.line-btn:hover {
+	color: var(--text);
+	background: var(--hover);
+}
+
+.line-btn .i-done {
+	display: none;
+	color: var(--green);
+}
+
+.line-copy.copied .line-btn .i-done {
+	display: inline-flex;
+}
+
+.line-copy.copied .line-btn .i:not(.i-done) {
+	display: none;
+}
+
+/* The pitch's second level of aim. The ring says "this block"; this says which of its five commands
+   actually installs the thing — a visitor just told to INSTALL NOW should not have to pick. Sits
+   between `:hover` and `.copied` at equal specificity, so source order alone keeps copy feedback on
+   top; today any click also dismisses the pitch, so the two cannot overlap, but the order means that
+   staying true is not a condition of this rule. */
+.install-target.nudge .line-primary {
+	background: color-mix(in srgb, var(--gold) 22%, transparent);
+	box-shadow: 0 0 0 2px color-mix(in srgb, var(--gold) 60%, transparent);
 }
 
 .install-block .line-copy.copied {

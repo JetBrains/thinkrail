@@ -99,9 +99,15 @@ binary.
 Most of the shell is a *drawing* of the app: the projects rail, the Specs/Changes tabs, the collapsible
 folders, the terminal chrome, the why chat's composer, the status-bar widgets, the tab close glyphs. A
 visitor will click them. Every one is marked **`data-demo`** in the markup and handled by a single
-delegated listener that turns the dead end into the pitch: return to `README.md`, ring + shimmer the
-install command, and raise a callout above it — for ~8s, with the rest of the shell dimmed behind a
-scrim. A second click replays it rather than doing nothing.
+delegated listener that turns the dead end into the pitch: go to `install.sh`, ring + shimmer the
+install block, and hang a callout off it — for ~8s, with the rest of the shell behind a scrim. A
+second click replays it rather than doing nothing.
+
+**The pitch targets `install.sh`, not the hero.** Both carry the same `curl … | bash`, but the hero's
+copy is one line inside a page selling the product, while the `install.sh` tile *is* the instruction —
+landing there answers "so how do I get it?" in the place that also shows the nightly channel, version
+pinning and the launch command. The hero keeps its install line as hero copy; it is no longer wired to
+anything.
 
 - **The callout is a two-message exchange**, in the site's own chat vocabulary: the visitor's implied
   question right-aligned in a small bubble, the agent's answer left-aligned in a large round one, both
@@ -121,6 +127,17 @@ scrim. A second click replays it rather than doing nothing.
   a stray mark. They shimmer on the same 1.6s period as the text and the command, staggered left to
   right. The pulse animates the *stroke colour*, not opacity: the arrows lie over page text, and
   anything translucent lets that text bleed through and read as if it were in front of them.
+- **The aim has two levels: the ring, then the line.** `install.sh` shows five commands — nightly,
+  version pin, launch, update — so ringing the block alone leaves a visitor who has just been told to
+  INSTALL NOW to work out which one installs. `.line-primary` marks the real `curl … | bash` in the
+  markup and the pitch gives it a gold band and outline inside the ringed block. The marker is a
+  class, not `:first-of-type`: the block's first child span is the comment above the command, so
+  position-based selection would have highlighted the wrong line.
+- **The callout hangs below the block and the chevrons point up at it.** Above was the hero's
+  geometry; on the `install.sh` tile the block sits high, so a callout above it was cut off by the tab
+  strip (42px at 1440×900, 136px at 1280×800). There is consistently more room below — 321px against
+  207px at 1440 — so the callout moved under the block and the arrows flipped, leading the panel so
+  they stay against the thing they point at.
 - **Gold (`--gold`), not the accent.** The page is already accent-coloured throughout, so the one
   element asking to be noticed borrows the theme's warning hue; the command's ring and sweep turn gold
   with it, so callout and target read as one thing. Every bundled palette defines `--gold`, so it
@@ -128,9 +145,21 @@ scrim. A second click replays it rather than doing nothing.
 - The panel is **opaque** by construction (`color-mix(--gold, --editor-bg)`), which is also what
   clears the lede: display type printed straight over running copy leaves both unreadable.
 - **The spotlight is a scrim, not opacity on the shell.** `html.hint-on` fades in `.dim-scrim` (an
-  absolute child of the fixed `.window`), and `.install-line.nudge` takes `z-index: 100` to sit above
-  it. That works because nothing between them — `.pane` is `position: relative` with `z-index: auto` —
-  opens a stacking context that would trap the command underneath.
+  absolute child of the fixed `.window`), and `.install-target.nudge` takes `z-index: 100` to sit
+  above it. That works because nothing between them — `.pane` is `position: relative` with `z-index:
+  auto` — opens a stacking context that would trap the block underneath. The block and the callout
+  ride up together because both are inside `.install-target`; that containment, not a list of
+  selectors, is what defines the lit set.
+- **The scroll has to account for the callout, and `scrollIntoView` cannot.** The callout is
+  absolutely positioned, so it adds no height for the browser to scroll against — aligning the tile
+  left its tail past the fold on short windows. `revealPitch()` therefore computes the tile-aligning
+  scroll, works out where the callout would land after it, and adds the shortfall: one deterministic
+  move, rather than a second smooth scroll racing the first with mid-flight geometry.
+- **The veil is `--scrim`, and it is per-theme.** It has to push the shell back without blanking it —
+  the visitor should still see the page being sold — so on the light palettes it is `rgb(0 0 0 /
+  0.25)`, leaving them at ~77% of resting brightness. Dark palettes keep `0.5`: the same alpha over
+  near-black moves a handful of RGB steps and reads as no dim at all, so equal alpha would not mean
+  equal effect. Judge this by measuring rendered brightness, not by eye on a screenshot.
 - The message shimmers with the same sweep as the command, painted through the glyphs via
   `background-clip: text` on an inner span — the box needs its own background, and `background-clip:
   text` would clip that too. The gradient spans the whole run, so the text stays legible wherever the
@@ -148,6 +177,23 @@ scrim. A second click replays it rather than doing nothing.
   thing it just pointed at. That is why the drawer's three state writes are behind one `closeRail()`.
 - The shimmer is gated on `html.anim`; the ring and the hint are not — they are the message, not the
   decoration.
+
+## install.sh
+
+Every command line carries its own copy button. The line itself has been click-to-copy from the
+start, but the only tell was a cursor change and a hover tint — and a `<span>` with a click handler is
+not reachable by keyboard at all, which a real `<button>` fixes. The buttons carry no `data-copy` of
+their own: the click bubbles to the line, so there stays exactly one copy target per command and one
+place holding the text.
+
+**This block wraps where every other code block scrolls**, and that follows from the buttons. A
+per-line button in a horizontally scrolling line can only stay on screen by pinning over the text it
+sits beside — sticky positioning put it squarely on top of `| bash`. The same scroll was already
+hiding that tail at any width under ~1500px. Wrapping costs a mid-URL break on phones and buys a block
+that is complete, and copyable, at every width. Wrapping also costs rows, which pushed the tile past
+the pane on a phone, so the block's type size is a `clamp` on the viewport; that stays a `clamp`
+rather than a breakpoint because a bare `.install-block` in the bottom media-query cluster would land
+after the pitch's `.install-target.nudge > .install-block` and read as descending specificity.
 
 ## Deploy
 
