@@ -33,6 +33,26 @@ binary.
   streaming replay, theme switcher, copy buttons, star count). The page must read complete with JS
   disabled, and animations are skipped under `prefers-reduced-motion`.
 
+## Analytics
+
+PostHog (the team's existing project, **EU** cloud). Loaded as **progressive enhancement, production
+only**: `src/analytics.ts` injects PostHog's `array.js` from `eu-assets.i.posthog.com` at runtime and
+calls `posthog.init()` **only when `location.hostname === "thinkrail.ai"`** — localhost, `vite dev`,
+`preview`, and the `jetbrains.github.io` apex send nothing.
+
+- **No npm dep.** We inject the CDN script at runtime rather than importing `posthog-js`, so the
+  no-runtime-deps boundary holds. We also do **not** paste PostHog's minified bootstrap snippet: Biome
+  lints JS inside `<script>` and the snippet trips it (`noCommaOperator`, `noAssignInExpressions`, …),
+  which would force a forbidden `biome-ignore`. A clean typed loader avoids both. Safe because
+  `array.js` self-assigns `window.posthog` on load (its stub-queue replay is guarded), so `init()` in
+  the load handler needs no bootstrap stub.
+- **Cookieless, no consent banner.** `persistence: "localStorage"` (first-party id, **no tracking
+  cookie**), `respect_dnt: true`, `disable_session_recording: true`. Autocapture + pageviews stay on
+  (no PII, no cookie). `person_profiles: "identified_only"` — the site never identifies anyone, so
+  every visit is a cheaper anonymous event and no dead-end person profiles accrue.
+- The `phc_…` project key is **public/client-safe** by design (meant to ship in browser code) — not a
+  secret, so embedding it in the static build is expected.
+
 ## Deploy
 
 `.github/workflows/site.yml` builds (`bun run --filter @thinkrail/website build`) and publishes

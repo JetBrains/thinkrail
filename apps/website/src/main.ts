@@ -1,6 +1,11 @@
 // Progressive enhancement for the IDE-site. Everything here is optional garnish: the page reads
 // complete with JS disabled, and every animation is gated on prefers-reduced-motion.
 
+import { initAnalytics } from "./analytics";
+
+// Production-only, cookieless PostHog (self-gates on hostname). See src/analytics.ts.
+initAnalytics();
+
 const motionOK = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 if (motionOK) document.documentElement.classList.add("anim");
 
