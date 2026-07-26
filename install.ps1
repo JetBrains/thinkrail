@@ -52,12 +52,42 @@ function Resolve-ThinkRailTag {
     return $null
 }
 
+function Get-ThinkRailPersistentPath {
+    # Raw (unexpanded) entries of the *persistent* PATH: the per-user value in HKCU\Environment plus the
+    # machine value (readable without admin). Deliberately NOT $env:Path -- the live process PATH also
+    # carries session-only edits (`$env:Path += ...`, a parent script, an earlier -NoModifyPath run whose
+    # advice the user followed by hand), and taking those as proof of installation would skip the
+    # registry write and leave thinkrail off PATH in the next terminal. An unreadable hive contributes
+    # nothing, which at worst re-adds an entry that was already there.
+    $entries = @()
+    foreach ($scope in @('User', 'Machine')) {
+        $key = $null
+        try {
+            # Resolved inside the try on purpose: this runs *after* the binary is in place, so no
+            # registry mishap may throw out of here and abort an otherwise finished install.
+            $key = if ($scope -eq 'User') {
+                [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment')
+            } else {
+                [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey('SYSTEM\CurrentControlSet\Control\Session Manager\Environment')
+            }
+            if ($key) {
+                $entries += ([string]$key.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)) -split ';'
+            }
+        } catch {
+            # Hive not readable -- treat as "no entries" rather than failing the install.
+        } finally {
+            if ($key) { $key.Dispose() }
+        }
+    }
+    # `,` keeps an empty result an empty array instead of $null (PowerShell unrolls a bare @() on return).
+    return , $entries
+}
+
 function Test-ThinkRailOnPath {
-    # Is $Dir already reachable: on the live process PATH (covers the system PATH) or among the given
-    # raw user-PATH entries (compared unexpanded and %VAR%-expanded, case-insensitively)?
-    param([string]$Dir, [string[]]$RawUserPath)
+    # Is $Dir among these PATH entries (compared unexpanded and %VAR%-expanded, case-insensitively)?
+    param([string]$Dir, [string[]]$PathEntries)
     $norm = $Dir.TrimEnd('\')
-    foreach ($entry in (@($env:Path -split ';') + $RawUserPath)) {
+    foreach ($entry in $PathEntries) {
         if (-not $entry) { continue }
         $e = $entry.Trim().TrimEnd('\')
         if (-not $e) { continue }
@@ -82,7 +112,7 @@ function Add-ThinkRailToUserPath {
             $kind = $key.GetValueKind('Path')
             $raw = [string]$key.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
         }
-        if (Test-ThinkRailOnPath -Dir $Dir -RawUserPath ($raw -split ';')) { return 'already' }
+        if (Test-ThinkRailOnPath -Dir $Dir -PathEntries (Get-ThinkRailPersistentPath)) { return 'already' }
         $newRaw = if ($raw -and -not $raw.EndsWith(';')) { "$raw;$Dir" } elseif ($raw) { "$raw$Dir" } else { $Dir }
         $key.SetValue('Path', $newRaw, $kind)
         return 'added'
@@ -225,21 +255,26 @@ function Install-ThinkRail {
 
     $pathAdvice = $null
     if ($NoModifyPath) {
-        if (Test-ThinkRailOnPath -Dir $binDir -RawUserPath @()) {
+        if (Test-ThinkRailOnPath -Dir $binDir -PathEntries (Get-ThinkRailPersistentPath)) {
             Write-Host 'PATH:           already configured'
         } else {
             $pathAdvice = "$binDir (skipped: -NoModifyPath)"
         }
     } else {
-        switch (Add-ThinkRailToUserPath -Dir $binDir) {
+        $pathStatus = Add-ThinkRailToUserPath -Dir $binDir
+        switch ($pathStatus) {
             'already' { Write-Host 'PATH:           already configured' }
             'added' {
                 Send-ThinkRailSettingChange
-                $env:Path = "$env:Path;$binDir"
                 Write-Host "PATH:           added $binDir to your user PATH"
                 Write-Host '                open a new terminal to pick it up'
             }
             'failed' { $pathAdvice = "$binDir (could not update the registry)" }
+        }
+        # Persisted -- also make `thinkrail` runnable in *this* session (a saved-copy run in an
+        # interactive shell), without duplicating an entry the process PATH already carries.
+        if ($pathStatus -ne 'failed' -and -not (Test-ThinkRailOnPath -Dir $binDir -PathEntries ($env:Path -split ';'))) {
+            $env:Path = "$env:Path;$binDir"
         }
     }
     if ($pathAdvice) { Write-Host "Add to PATH:    $pathAdvice" }

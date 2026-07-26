@@ -43,11 +43,14 @@ git repo to open as a project on boot, best-effort). Env defaults: `THINKRAIL_PO
 `install.sh` for the binary's channel, so the installer stays the single source of the download →
 checksum → replace → PATH logic. Channel/prefix resolve as flag > `~/.config/thinkrail/install.json` >
 baked channel (from `version.ts`; `dev` → `stable`) / `~/.local`. Unix-only execution (in-place
-self-replace on Windows is deferred → prints the `install.ps1` one-liner — works from cmd and
-PowerShell — with the releases page as the manual fallback). The arg parse + channel/prefix
-resolution are pure (`parseUpdateArgs` / `resolveUpdatePlan`, unit-tested); only fetch (`curl`) + run
-(`bash -s`) touch IO. `THINKRAIL_INSTALL_SCRIPT_URL` overrides the installer URL (testing / forks). See
-`module-ci-release` for the installer itself.
+self-replace on Windows is deferred → prints the `install.ps1` command, with the releases page as the
+manual fallback). The Windows message resolves the **same** channel first and spells the command out
+**per shell** (`windowsUpdateMessage`): cmd's `set "X=v" &&` and PowerShell's `$env:X='v';` are not
+interchangeable — one shell's syntax shown to the other silently re-installs the wrong channel. The
+arg parse + channel/prefix resolution are pure (`parseUpdateArgs` / `resolveUpdateChannel` /
+`resolveUpdatePlan`, unit-tested); only fetch (`curl`) + run (`bash -s`) touch IO.
+`THINKRAIL_INSTALL_SCRIPT_URL` overrides the installer URL (testing / forks). See `module-ci-release`
+for the installer itself.
 
 ## Version stamping (release seam)
 

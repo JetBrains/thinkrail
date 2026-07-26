@@ -2,8 +2,8 @@
 // (the Bun-native port of the old repo's `thinkrail upgrade`, renamed). The installer owns the
 // download → checksum → replace → PATH logic; update just fetches it and feeds it the resolved
 // channel/prefix (from `~/.config/thinkrail/install.json`, else the baked channel + `~/.local`). Unix
-// only — in-place self-replace on Windows is deferred, so we point there at the install.ps1 one-liner
-// (which handles a locked running exe) with the releases page as the manual fallback.
+// only — in-place self-replace on Windows is deferred, so we point there at the install.ps1 command
+// (which handles a locked running exe), spelled out per shell, with the releases page as the fallback.
 
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -79,16 +79,28 @@ export interface UpdatePlan {
 }
 
 /**
- * Resolve which channel + prefix the re-install should target: an explicit flag wins, else the install
- * metadata, else the baked channel (falling back to `stable` for a from-source `dev` build); the prefix
- * comes from the metadata, else `~/.local`. Throws on an unsafe prefix.
+ * Which channel a re-install targets: an explicit flag wins, else the install metadata, else the baked
+ * channel (falling back to `stable` for a from-source `dev` build). Shared by the Unix plan and the
+ * Windows advice, so both name the same channel.
+ */
+export function resolveUpdateChannel(
+	args: UpdateArgs,
+	metaChannel: unknown,
+	baked: string,
+): "stable" | "nightly" {
+	return (
+		args.channel ??
+		(metaChannel === "stable" || metaChannel === "nightly" ? metaChannel : undefined) ??
+		(baked === "stable" || baked === "nightly" ? baked : "stable")
+	);
+}
+
+/**
+ * Resolve which channel + prefix the re-install should target: channel per `resolveUpdateChannel`; the
+ * prefix comes from the metadata, else `~/.local`. Throws on an unsafe prefix.
  */
 export function resolveUpdatePlan(input: ResolveUpdateInput): UpdatePlan {
-	const metaChannel = input.installMeta.channel;
-	const channel: "stable" | "nightly" =
-		input.args.channel ??
-		(metaChannel === "stable" || metaChannel === "nightly" ? metaChannel : undefined) ??
-		(input.baked === "stable" || input.baked === "nightly" ? input.baked : "stable");
+	const channel = resolveUpdateChannel(input.args, input.installMeta.channel, input.baked);
 
 	const metaPrefix = input.installMeta.prefix;
 	const prefix =
@@ -100,6 +112,33 @@ export function resolveUpdatePlan(input: ResolveUpdateInput): UpdatePlan {
 	const bashArgs = ["-s", "--", "--channel", channel, "--prefix", prefix];
 	if (input.args.version !== "latest") bashArgs.push("--version", input.args.version);
 	return { channel, prefix, bashArgs };
+}
+
+const INSTALL_PS1_URL = "https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1";
+
+/**
+ * What to print instead of self-updating on Windows: the `install.ps1` one-liner, spelled out **per
+ * shell** — cmd's `set "X=v" &&` and PowerShell's `$env:X='v';` are not interchangeable, and a
+ * PowerShell user pasting the cmd form would silently re-install the wrong channel/version (`set` there
+ * is `Set-Variable`, which never reaches the child process). Env vars appear only when they'd change
+ * the outcome, so the common stable/latest case stays a single copyable command.
+ */
+export function windowsUpdateMessage(channel: "stable" | "nightly", version: string): string {
+	const vars: Array<[string, string]> = [];
+	if (channel !== "stable") vars.push(["THINKRAIL_CHANNEL", channel]);
+	if (version !== "latest") vars.push(["THINKRAIL_VERSION", version]);
+	const psPrefix = vars.map(([k, v]) => `$env:${k}='${v}'; `).join("");
+	const cmdPrefix = vars.map(([k, v]) => `set "${k}=${v}" && `).join("");
+	const what =
+		version === "latest" ? `the latest ${channel} build` : `ThinkRail ${version} (${channel})`;
+	// ASCII only: a legacy conhost code page would garble a dash/ellipsis in the copyable block.
+	return [
+		"Automatic in-place update isn't supported on Windows yet.",
+		`Re-run the installer to get ${what}. Pick the line for your shell:`,
+		`  PowerShell:  ${psPrefix}irm ${INSTALL_PS1_URL} | iex`,
+		`  cmd:         ${cmdPrefix}powershell -c "irm ${INSTALL_PS1_URL} | iex"`,
+		"Or download manually: https://github.com/JetBrains/thinkrail/releases",
+	].join("\n");
 }
 
 function readInstallMeta(home: string): { channel?: unknown; prefix?: unknown } {
@@ -119,29 +158,19 @@ export async function runUpdate(
 		console.log(UPDATE_USAGE);
 		return 0;
 	}
-	if (process.platform === "win32") {
-		console.error(
-			[
-				"Automatic in-place update isn't supported on Windows yet.",
-				"Re-run the installer to get the latest build (works from cmd and PowerShell):",
-				'  powershell -c "irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex"',
-				'(on the nightly channel, run  set "THINKRAIL_CHANNEL=nightly"  first)',
-				"Or download manually: https://github.com/JetBrains/thinkrail/releases",
-			].join("\n"),
-		);
-		return 1;
-	}
-
 	let plan: UpdatePlan;
 	try {
 		const args = parseUpdateArgs(argv);
 		const home = homedir();
-		plan = resolveUpdatePlan({
-			args,
-			installMeta: readInstallMeta(home),
-			baked: bakedChannel,
-			home,
-		});
+		const installMeta = readInstallMeta(home);
+		if (process.platform === "win32") {
+			// Resolve the channel the same way the Unix path does, so the printed command re-installs what
+			// the user already has (or asked for) instead of silently dropping them onto stable.
+			const channel = resolveUpdateChannel(args, installMeta.channel, bakedChannel);
+			console.error(windowsUpdateMessage(channel, args.version));
+			return 1;
+		}
+		plan = resolveUpdatePlan({ args, installMeta, baked: bakedChannel, home });
 	} catch (err) {
 		console.error(err instanceof Error ? err.message : String(err));
 		console.error(`\n${UPDATE_USAGE}`);

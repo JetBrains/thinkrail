@@ -93,8 +93,11 @@ channel, download the platform asset + `SHA256SUMS`, verify the checksum, and dr
   `%USERPROFILE%\.local\bin` (same default prefix as `install.sh`, so a Git Bash install and a native
   install coincide), writes the same `~/.config/thinkrail/install.json`, appends the bin dir to the
   **user** PATH via `HKCU\Environment` (idempotent, `REG_EXPAND_SZ`-preserving, `WM_SETTINGCHANGE`
-  broadcast; `-NoModifyPath` opts out), and survives a locked running exe by renaming it aside
-  (`thinkrail.exe.*.old`, cleaned up by the next install) before replacing.
+  broadcast; `-NoModifyPath` opts out). **Idempotence is judged against the *persistent* PATH only** —
+  the HKCU + machine registry values, never `$env:Path`: a session-only `$env:Path +=` must not be
+  mistaken for an install, or the registry write is skipped and `thinkrail` is gone from the next
+  terminal. It survives a locked running exe by renaming it aside (`thinkrail.exe.*.old`, cleaned up
+  by the next install) before replacing.
 
 Both depend on the **artifact-name contract** this module produces (`thinkrail-<os>-<arch>` with `os` ∈
 {`linux`,`darwin`,`windows`}, `arch` ∈ {`x64`,`arm64`}, `.exe` on Windows) and the `SHA256SUMS` file —
