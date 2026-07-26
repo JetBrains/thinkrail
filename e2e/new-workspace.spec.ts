@@ -16,12 +16,27 @@ test("the dialog lists local branches (no stray origin) and creates a worktree",
 	await expect(dialog).toBeVisible();
 
 	// The operation and its scope are explicit before any controls: this is a separate checkout/branch,
-	// and the IDE surfaces the user is about to enter are all scoped to it.
+	// and the IDE surfaces the user is about to enter are all scoped to it. The rail's "+" preselects the
+	// isolated-workspace target.
 	await expect(dialog.getByRole("heading", { name: "Create workspace" })).toBeVisible();
 	await expect(dialog).toContainText("A separate checkout on its own new branch");
 	// The note strip belongs to openers that seed a command (Welcome's "Set up project") — not the rail "+".
 	await expect(dialog.getByTestId("ws-prompt-note")).toHaveCount(0);
 	await expect(dialog).toContainText("Files, chats, changes, and terminals stay scoped to it");
+	await expect(dialog.getByTestId("ws-target-worktree")).toHaveAttribute("data-active", "true");
+
+	// The target control makes the two working modes one visible choice: toggling to "Project folder"
+	// swaps the header to the truthful no-isolation copy, hides the base-branch picker (nothing gets
+	// created), and relabels the submit — and toggling back restores the worktree form.
+	await dialog.getByTestId("ws-target-default").click();
+	await expect(dialog.getByRole("heading", { name: "Work in project folder" })).toBeVisible();
+	await expect(dialog).toContainText("no isolation");
+	await expect(dialog.getByTestId("ws-branch-picker")).toHaveCount(0);
+	await expect(page.getByTestId("create-workspace")).toHaveText(/Start/);
+	await dialog.getByTestId("ws-target-worktree").click();
+	await expect(dialog.getByRole("heading", { name: "Create workspace" })).toBeVisible();
+	await expect(dialog.getByTestId("ws-branch-picker")).toBeVisible();
+	await expect(page.getByTestId("create-workspace")).toHaveText(/Create/);
 
 	// Project picker defaults to the project the "+" was clicked on.
 	await expect(dialog.getByTestId("ws-project-picker")).toContainText("sample-project");

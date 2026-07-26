@@ -10,6 +10,8 @@ import {
 	Check,
 	ChevronDown,
 	GitBranch,
+	House,
+	type LucideIcon,
 	RefreshCw,
 	Sparkles,
 	TriangleAlert,
@@ -43,17 +45,25 @@ import {
 } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 import { selectWorkspaceTick, toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
+import { resolveDefaultWorkspace } from "./defaultWorkspace";
+
+/** Where the work runs: cut an isolated worktree, or enter the project folder (Default workspace). */
+export type WorkspaceTarget = "worktree" | "default";
 
 /** A shared pill-trigger look for the project + branch pickers (mockup `.pill`). */
 const PILL =
 	"flex h-8 min-w-0 items-center gap-sm rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-sm text-sm text-text outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-[var(--primary-60)] data-[open=true]:bg-hover";
 
 /**
- * The New-Workspace "create + kick-off" surface: pick a base branch, say what to work on, pick a
- * model + effort, then Create → cut a worktree from that base, open a chat in it, and send the prompt.
- * With an empty prompt it just creates the workspace (no chat) — the fast path for poking at files.
+ * The start-working surface: a **target control** chooses where the work runs — an isolated worktree
+ * ("Create workspace": pick a base branch, cut a worktree from it) or the project folder itself ("Work
+ * in project folder": nothing is created, submit enters the built-in Default workspace). Either way:
+ * say what to work on, pick a model + effort, submit → enter the target and (with a prompt) open a chat
+ * there and send it. With an empty prompt it just creates/enters the target — the fast path for poking
+ * at files. The header is mode-aware so it always names the operation truthfully.
  *
  * The only app-integration piece here: it wires the store + transport. `onCreated(ws)` lets the parent
  * (ProjectTree) expand + reload its list; the dialog itself sets the active workspace + kicks off the chat.
@@ -62,6 +72,7 @@ export function NewWorkspaceDialog({
 	open,
 	projectId,
 	initialPrompt,
+	initialTarget,
 	promptNote,
 	onOpenChange,
 	onCreated,
@@ -71,6 +82,8 @@ export function NewWorkspaceDialog({
 	projectId: string;
 	/** Optional seed for the prompt hero (still fully editable) — e.g. Welcome's "Set up project". */
 	initialPrompt?: string;
+	/** The preselected target (the control stays visible either way). Defaults to "worktree". */
+	initialTarget?: WorkspaceTarget;
 	/** Optional info strip above the prompt — e.g. what a seeded skill command does (copy owned by the opener). */
 	promptNote?: string;
 	onOpenChange: (open: boolean) => void;
@@ -80,6 +93,7 @@ export function NewWorkspaceDialog({
 	const models = useAppStore((s) => s.models);
 
 	const [selectedProjectId, setSelectedProjectId] = useState(projectId);
+	const [target, setTarget] = useState<WorkspaceTarget>(initialTarget ?? "worktree");
 	const [branches, setBranches] = useState<BranchList | null>(null);
 	const [baseRef, setBaseRef] = useState<string>("");
 	const [refreshing, setRefreshing] = useState(false);
@@ -115,14 +129,15 @@ export function NewWorkspaceDialog({
 		},
 	});
 
-	// Reset the form each time the dialog opens, anchored to the project the "+" was clicked on and any
-	// seed prompt (empty by default).
+	// Reset the form each time the dialog opens, anchored to the project the "+" was clicked on, any
+	// seed prompt (empty by default), and the opener's preselected target.
 	useEffect(() => {
 		if (!open) return;
 		setSelectedProjectId(projectId);
 		setPrompt(initialPrompt ?? "");
+		setTarget(initialTarget ?? "worktree");
 		setCreating(false);
-	}, [open, projectId, initialPrompt]);
+	}, [open, projectId, initialPrompt, initialTarget]);
 
 	// Skills are previewed from the selected project's current checkout; the created worktree/session is
 	// authoritative if its base ref differs. Autocomplete is an enhancement, so failure degrades to empty.
@@ -245,20 +260,31 @@ export function NewWorkspaceDialog({
 		if (creating) return;
 		setCreating(true);
 		let workspace: Workspace;
-		try {
-			workspace = await getTransport().request("workspace.create", {
-				projectId: selectedProjectId,
-				...(baseRef ? { baseRef } : {}),
-			});
-		} catch (err) {
-			// Worktree creation failed (bad ref, etc.) — keep the dialog open so the user can retry/adjust,
-			// and surface the reason (it's otherwise invisible — the dialog just refuses to close).
-			toast.error(errorText(err), "Couldn't create workspace");
-			setCreating(false);
-			return;
+		if (target === "default") {
+			// Folder mode: nothing is created — resolve + enter the project's built-in Default workspace
+			// (the shared helper folds the fresh list into the store and toasts on failure).
+			const def = await resolveDefaultWorkspace(selectedProjectId);
+			if (!def) {
+				setCreating(false);
+				return;
+			}
+			workspace = def;
+		} else {
+			try {
+				workspace = await getTransport().request("workspace.create", {
+					projectId: selectedProjectId,
+					...(baseRef ? { baseRef } : {}),
+				});
+			} catch (err) {
+				// Worktree creation failed (bad ref, etc.) — keep the dialog open so the user can retry/adjust,
+				// and surface the reason (it's otherwise invisible — the dialog just refuses to close).
+				toast.error(errorText(err), "Couldn't create workspace");
+				setCreating(false);
+				return;
+			}
 		}
 
-		// The worktree exists — the "new workspace" intent is fulfilled, so close the dialog *now* and run the
+		// The target exists — the intent is fulfilled, so close the dialog *now* and run the
 		// (slower, optional) chat kick-off in the background. This keeps the dialog from lingering while pi
 		// spins up a session, and a kick-off failure can't strand the dialog open.
 		const store = useAppStore.getState();
@@ -323,6 +349,7 @@ export function NewWorkspaceDialog({
 	};
 
 	const selectedProject = projects.find((p) => p.id === selectedProjectId);
+	const isolated = target === "worktree";
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
@@ -345,14 +372,36 @@ export function NewWorkspaceDialog({
 				}}
 			>
 				<DialogHeader>
-					<DialogTitle>Create workspace</DialogTitle>
+					<DialogTitle>{isolated ? "Create workspace" : "Work in project folder"}</DialogTitle>
 					<DialogDescription>
-						A separate checkout on its own new branch. Files, chats, changes, and terminals stay
-						scoped to it.
+						{isolated
+							? "A separate checkout on its own new branch. Files, chats, changes, and terminals stay scoped to it."
+							: "Runs directly in your project folder — no isolation. Changes land on the current branch."}
 					</DialogDescription>
 				</DialogHeader>
 
-				{/* controls-top: project + base-branch pickers */}
+				{/* where: the target control — both modes always visible, the two-mode model in one glance */}
+				<div
+					data-testid="ws-target"
+					className="flex w-fit items-center gap-0.5 rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] p-0.5"
+				>
+					<TargetButton
+						icon={GitBranch}
+						label="Isolated workspace"
+						active={isolated}
+						testid="ws-target-worktree"
+						onClick={() => setTarget("worktree")}
+					/>
+					<TargetButton
+						icon={House}
+						label="Project folder"
+						active={!isolated}
+						testid="ws-target-default"
+						onClick={() => setTarget("default")}
+					/>
+				</div>
+
+				{/* controls-top: project + (worktree mode) base-branch pickers */}
 				<div className="flex flex-wrap items-center gap-sm">
 					<ProjectPicker
 						projects={projects}
@@ -360,14 +409,16 @@ export function NewWorkspaceDialog({
 						container={dialogEl}
 						onSelect={setSelectedProjectId}
 					/>
-					<BranchPicker
-						branches={branches}
-						baseRef={baseRef}
-						refreshing={refreshing}
-						container={dialogEl}
-						onSelect={selectBaseRef}
-						onRefresh={() => void refreshBranches()}
-					/>
+					{isolated ? (
+						<BranchPicker
+							branches={branches}
+							baseRef={baseRef}
+							refreshing={refreshing}
+							container={dialogEl}
+							onSelect={selectBaseRef}
+							onRefresh={() => void refreshBranches()}
+						/>
+					) : null}
 					<SkillsButton
 						onOpen={() => setManageSkills(true)}
 						testId="ws-manage-skills"
@@ -435,7 +486,7 @@ export function NewWorkspaceDialog({
 							onSelect={slashCompletion.pick}
 							className="absolute top-full left-sm z-50 mt-xs"
 						/>
-					) : prompt.trim() ? (
+					) : prompt.trim() && isolated ? (
 						<p data-testid="workspace-naming-hint" className="px-xs text-hint text-xs">
 							ThinkRail will name the workspace and branch from your request.
 						</p>
@@ -469,7 +520,7 @@ export function NewWorkspaceDialog({
 						onClick={() => void create()}
 						className="flex h-8 shrink-0 items-center gap-sm rounded-[var(--radius-md)] bg-primary px-md font-medium text-on-accent text-sm outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
 					>
-						Create
+						{isolated ? "Create" : "Start"}
 						<span className="inline-flex h-4 min-w-4 items-center justify-center rounded-[3px] bg-[var(--on-accent-16)] px-1 font-[var(--font-mono)] text-xs">
 							↵
 						</span>
@@ -482,6 +533,38 @@ export function NewWorkspaceDialog({
 				/>
 			</DialogContent>
 		</Dialog>
+	);
+}
+
+/** One option of the target control — a toggle button styled like the app's active-nav pattern. */
+function TargetButton({
+	icon: Icon,
+	label,
+	active,
+	testid,
+	onClick,
+}: {
+	icon: LucideIcon;
+	label: string;
+	active: boolean;
+	testid: string;
+	onClick: () => void;
+}) {
+	return (
+		<button
+			type="button"
+			aria-pressed={active}
+			data-testid={testid}
+			data-active={active}
+			onClick={onClick}
+			className={cn(
+				"flex h-7 items-center gap-sm rounded-[7px] px-md text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
+				active ? "bg-[var(--primary-10)] font-medium text-primary" : "text-muted hover:text-text",
+			)}
+		>
+			<Icon className="size-3.5 shrink-0" />
+			{label}
+		</button>
 	);
 }
 

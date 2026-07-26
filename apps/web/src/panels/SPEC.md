@@ -37,12 +37,10 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   same-project workspace switches do not force it open again. Workspace creation expands its project
   explicitly. Selecting or creating a workspace also selects its owning project, keeping project-home and
   active-workspace context coherent even when the create dialog's project picker targets another project.
-  **Opening a project** ends by **auto-entering that project's Default workspace**: after a successful
-  open the hook lists the project's workspaces and activates the `kind === "default"` row (store's
-  existing activate action), so the user lands in the IDE view — files, changes, terminals — of their
-  project folder, not on Welcome. (No Default in the list — an older host — degrades to the previous
-  select-project behavior.) Clicking an already-listed **project row** keeps the "project home" gesture
-  below — Welcome, with the spec-first cards, stays one click away. Opening goes through the shared
+  **Opening a project lands on that project's Welcome** — deliberately **no auto-enter** into any
+  workspace: Welcome is the fork where the two working modes (isolated worktree vs the project folder's
+  Default workspace) are presented as an explicit choice (see `WelcomePanel`), so opening and the
+  "project home" gesture converge on the same surface. Opening goes through the shared
   **`useOpenProject`** hook (reused by `ProjectTree` **and**
   `WelcomePanel`, so the flow is identical in the rail and the Welcome screen): `project.open`, and on
   failure `project.inspect` → either offers to bootstrap the folder into a repo — a modal **`ConfirmDialog`**
@@ -71,22 +69,31 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
 workspace is active. The `PRODUCT_NAME` wordmark as the hero (the topbar's brand styling — accent font,
 `text-primary` — enlarged), with the **active project's name as a small eyebrow** (folder icon) above it
 once a project is selected, over a **constant** spec-first pitch (not spec-conditional) and
-**one-to-three cards** (Conductor-inspired: icon top-left, label + explainer
+**one-to-four cards** (Conductor-inspired: icon top-left, label + explainer
 bottom-left; the primary is a filled-violet card carrying the stable `welcome-cta` hook, others quiet
-`welcome-action`s). The cards by state: **no projects** → **"Open project"** (one card); **project +
-`hasSpecs`** → **"Start building"** (primary) + "Open project"; **project + no specs** → a spec-first
-**"Set up project"** (primary) + "Start building" + "Open project". The **"Open project"** card hangs the shared
+`welcome-action`s). Welcome is **the mode fork**: with a project shown it always pairs **"Start
+building"** (isolated worktree) with **"Work in project folder"** (the Default workspace) so the two
+working modes are a visible choice, not a hidden default. The cards by state: **no projects** → **"Open
+project"** (one card); **project + `hasSpecs`** → **"Start building"** (primary) + "Work in project
+folder" + "Open project"; **project + no specs** → a spec-first **"Set up project"** (primary) + "Start
+building" + "Work in project folder" + "Open project". The **"Open project"** card hangs the shared
 **`AddProjectMenu`** dropdown off it (same menu as the projects-rail "+": Open project / Open GitHub (soon)
-/ Recents), so `Card` is a `forwardRef` usable as a Radix `asChild` trigger. **"Start building"** is the
-intent-first framing of the create-and-kick-off flow — it opens `NewWorkspaceDialog` (which cuts a
-worktree-isolated workspace + starts a chat); *workspace* is the mechanism, not the label. **"Set up
+/ Recents), so `Card` is a `forwardRef` usable as a Radix `asChild` trigger. **"Work in project folder"**
+(`House` icon, matching the rail's Default row) **direct-enters** the Default workspace — no dialog: it
+lists the project's workspaces, stores them, and activates the `kind === "default"` row; an older host
+with no Default row degrades to an error toast. **"Start building"** is the
+intent-first framing of the create-and-kick-off flow — it opens `NewWorkspaceDialog` preselected to the
+**Isolated workspace** target; *workspace* is the mechanism, not the label. **"Set up
 project"** opens the same dialog with an `initialPrompt` seed **and a `promptNote`** — the note is the
 card's own copy (the dialog stays skill-agnostic), saying what the seeded command does: the agent drafts
 the project's specs (goal, architecture, modules) before building. The seed is the
 `/skill:setting-up-a-project` command,
 which **forces** the setting-up-a-project dispatcher skill to load (pi's skill-command syntax; expanded on the
 `session.prompt` path) rather than hoping the model auto-matches it; the dispatcher then detects
-new-vs-existing and drafts the specs accordingly (see [[module-thinkrail-workflow]]). Which
+new-vs-existing and drafts the specs accordingly (see [[module-thinkrail-workflow]]) — plus a
+**`promptNote`** ("Runs the setting-up-a-project skill — the agent drafts your project's specs…", copy
+owned here so the dialog stays skill-agnostic) and the **Project folder** target preselected (specs are
+ground truth — they land in place, no merge-back; the worktree alternative stays one click away). Which
 project drives the has-specs states = `selectedProjectId ?? projects[0]`, read reactively (so the visible
 nav's selection updates it). Its `hasSpecs` is **fetched lazily** via `project.hasSpecs` for that one
 project (a full-tree walk, kept off the connect handshake) — pending until it resolves, so the cards wait
@@ -109,13 +116,24 @@ skills' (attacker-controlled) names before trust. The full manager (`chat/Skills
 pre-session half of the user's skill settings; the chat header opens the same dialog in workspace mode
 (with Reload).
 
-**`NewWorkspaceDialog`** is the create-and-kick-off surface. It names the operation visibly — title
-**“Create workspace”** — and states the model without adding a step: **“A separate checkout on its own new
-branch. Files, chats, changes, and terminals stay scoped to it.”** Its base-branch trigger reads **“From
+**`NewWorkspaceDialog`** is the start-working surface: **a target control** (a two-option segment, both
+always visible — the two-mode model in one glance) chooses **where** the work runs, and the header is
+**mode-aware** so it always names the operation truthfully: **Isolated workspace** → title **“Create
+workspace”**, description **“A separate checkout on its own new branch. Files, chats, changes, and
+terminals stay scoped to it.”**; **Project folder** → title **“Work in project folder”**, description
+**“Runs directly in your project folder — no isolation. Changes land on the current branch.”** In folder
+mode the base-branch picker and the naming hint are hidden (nothing is created — submit **enters** the
+project's Default workspace via the shared **`resolveDefaultWorkspace`** helper (`defaultWorkspace.ts`:
+`workspace.list` → fold into the store → the `kind === "default"` row; error toast + null if an older
+host has none — the same helper behind the Welcome fork card, so the resolve + degrade path lives once))
+and the submit button reads **Start** instead of **Create**; the branch-list fetch + background base
+prefetch still run (fire-and-forget, keeps a toggle back to worktree instant); the optional chat
+kick-off tail is identical in both modes. Openers preselect the target (rail "+" / "Start building" →
+worktree; "Set up project" → folder). An optional **`promptNote`** renders as a small info strip above
+the prompt (used by "Set up project" to say what the seeded skill command does). The worktree mode's
+base-branch trigger reads **“From
 {base}”**, not an unexplained ref. An optional **`initialPrompt`** seeds the prompt hero (still editable;
-empty by default) and an optional **`promptNote`** renders as a small info strip above it
-(`ws-prompt-note`) — the opener's chance to explain a seeded command, since the dialog's own header only
-ever describes creating a workspace; while the prompt is non-empty, a secondary hint says ThinkRail will name the workspace
+empty by default); while the prompt is non-empty (worktree mode), a secondary hint says ThinkRail will name the workspace
 and branch from the request. The rest stays compact: the base-branch combobox (`git.listBranches`,
 degrading to local branches offline; a Refresh re-lists; `origin/HEAD` is filtered so no stray `origin`),
 a project picker, the prompt hero, and the reused
@@ -130,11 +148,11 @@ a project picker, the prompt hero, and the reused
   authoritative if the selected base branch differs). When the selected project is **untrusted AND ships
   committed skills** (a count from `project.aliasSkills`, never their names), a **trust notice** shows a
   *Trust project* button — the repo's skills stay withheld until granted (`project.setTrust`, which folds the
-  updated project back into the store and re-previews); personal + bundled skills show regardless. When the menu is closed, **Enter creates** (matching the Create button's
+  updated project back into the store and re-previews); personal + bundled skills show regardless. When the menu is closed, **Enter submits** (matching the submit button's
   `↵` affordance) and
-  **Shift+Enter** inserts a newline. Create = `workspace.create({ projectId, baseRef })` → set active → (with a prompt) open a chat +
+  **Shift+Enter** inserts a newline. Worktree-mode submit = `workspace.create({ projectId, baseRef })` → set active → (with a prompt) open a chat +
   `session.create({ model, thinkingLevel })` + fire-and-forget `prompt`; with an empty prompt it just
-  creates the workspace. A **rejected** kick-off `prompt` (a bad model / missing API key — e.g. picking a
+  creates the workspace (folder mode: just enters Default). A **rejected** kick-off `prompt` (a bad model / missing API key — e.g. picking a
   nonexistent model) surfaces as an `error` turn in the just-opened chat via `store.appendErrorTurn` (with
   `transport`'s `errorText`) rather than vanishing. The two rejections with **no chat to host a turn** raise a
   `store.toast.error` instead: a failed **`workspace.create`** (keeps the dialog open to retry) and a failed
