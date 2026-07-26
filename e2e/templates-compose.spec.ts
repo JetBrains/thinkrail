@@ -232,6 +232,65 @@ test.describe("prompt templates in the composer", () => {
 		await expect(bubble).not.toContainText("⟨");
 	});
 
+	// Air-review regression (data corruption): `defaults.md` is `${1:-foo} versus ${1:-bar}` — one argument
+	// with two DIFFERENT per-occurrence defaults (same `group`, both born `filled` but not `edited`). Group
+	// mirroring keyed on `filled` collapsed this to "foo versus foo" on Tab or a direct Send; keyed on
+	// `edited`, an untouched default is never a mirror source, so the two stay independent unless the user
+	// edits one — matching pi's own expansion (unprovided `${1:-foo}`/`${1:-bar}` yield "foo"/"bar"). See
+	// `slotSession.ts`'s `edited` doc.
+	test("differing per-occurrence defaults stay independent through Tab and a direct Send (no edit)", async ({
+		page,
+	}) => {
+		await openWorkspaceChat(page);
+		const input = page.getByTestId("chat-input");
+
+		await input.fill("/def");
+		const rows = page.locator('[data-testid="slash-command"][data-source="prompt"]');
+		await expect(rows).toHaveCount(1);
+		await expect(rows.first()).toContainText("/defaults");
+
+		await rows.first().click();
+		await expect(input).toHaveValue(/^foo versus bar\s*$/);
+		const hint = page.getByTestId("slot-hint");
+		await expect(hint).toContainText("slot 1/2");
+
+		// Tab across both defaults WITHOUT typing — an untouched default must never mirror over its sibling.
+		await input.press("Tab");
+		await expect(hint).toContainText("slot 2/2");
+		await expect(input).toHaveValue(/^foo versus bar\s*$/);
+
+		// Direct Send: still "foo versus bar", never the "foo versus foo" the filled-keyed bug produced.
+		await page.getByTestId("chat-send").click();
+		const bubble = page.locator('[data-testid="chat-message"][data-role="user"]').first();
+		await expect(bubble).toContainText("foo versus bar");
+		await expect(bubble).not.toContainText("foo versus foo");
+	});
+
+	test("editing one default occurrence provides the argument and mirrors it into the group-mate on Tab", async ({
+		page,
+	}) => {
+		await openWorkspaceChat(page);
+		const input = page.getByTestId("chat-input");
+
+		await input.fill("/def");
+		await page.locator('[data-testid="slash-command"][data-source="prompt"]').first().click();
+		await expect(input).toHaveValue(/^foo versus bar\s*$/);
+
+		// The first default "foo" is selected whole on session start — type over it to "provide argument 1".
+		const sel = await readSelection(input);
+		expect(sel.value.slice(sel.start, sel.end)).toBe("foo");
+		await page.keyboard.type("cats");
+		await expect(input).toHaveValue(/^cats versus bar\s*$/);
+
+		// Tab out of the now-edited slot mirrors "cats" into the second occurrence, replacing its "bar".
+		await input.press("Tab");
+		await expect(input).toHaveValue(/^cats versus cats\s*$/);
+
+		await page.getByTestId("chat-send").click();
+		const bubble = page.locator('[data-testid="chat-message"][data-role="user"]').first();
+		await expect(bubble).toContainText("cats versus cats");
+	});
+
 	test("Escape ends the session and leaves the text as-is", async ({ page }) => {
 		await openWorkspaceChat(page);
 		const input = page.getByTestId("chat-input");

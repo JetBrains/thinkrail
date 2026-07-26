@@ -399,11 +399,12 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const submit = (behavior: SubmitBehavior) => {
 		// An active session's text is sent stripped of any untouched marker slots — sent *or* queued
 		// (steer/followUp), same rule; either way, the session always ends here (`submitText` resets it).
-		// Mirroring runs first: Tab (`stepSlot` below) mirrors a filled slot's text into its same-group
+		// Mirroring runs first: Tab (`stepSlot` below) mirrors a user-edited slot's text into its same-group
 		// siblings on exit, but a direct Send can fire before ever tabbing out of the slot that was actually
-		// filled — e.g. filling slot 1 of a repeated-group template and clicking Send without Tab. Without
+		// edited — e.g. filling slot 1 of a repeated-group template and clicking Send without Tab. Without
 		// this, `stripUntouchedSlots` would strip the sibling as "untouched" and the group's mirrored value
-		// would silently never reach it.
+		// would silently never reach it. Only user-`edited` slots mirror, so an untouched `${N:-default}`
+		// never overwrites a differently-defaulted group-mate (`mirrorAllGroups`, see `slotSession.ts`).
 		let text = value;
 		if (slots) {
 			const mirrored = mirrorAllGroups(value, slots);
@@ -413,17 +414,19 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	};
 
 	/** Tab/Shift+Tab (and the hint chip's tap): move to the next/previous slot (wrap), and — when the slot
-	 * being left is `filled` (real content, not an untouched marker) — mirror its current text into every
-	 * OTHER slot sharing its `group` whose text differs (repeated placeholder occurrences propagate on
-	 * exit, not per keystroke). `mirrorSlotGroup` (shared with `submit`'s own mirror-on-send path above)
-	 * re-tracks each splice via `shiftSlots` before the next one, so later offsets in the same step stay
-	 * correct even when more than one sibling needs the mirror. */
+	 * being left has been `edited` by the user (not an untouched marker, and crucially not an untouched
+	 * `${N:-default}` either — an untouched default must stay independent from a differently-defaulted
+	 * group-mate, see `slotSession.ts`'s `edited` doc) — mirror its current text into every OTHER slot
+	 * sharing its `group` whose text differs (repeated placeholder occurrences propagate on exit, not per
+	 * keystroke). `mirrorSlotGroup` (shared with `submit`'s own mirror-on-send path above) re-tracks each
+	 * splice via `shiftSlots` before the next one, so later offsets in the same step stay correct even when
+	 * more than one sibling needs the mirror. */
 	const stepSlot = (dir: 1 | -1) => {
 		if (!slots || slots.length === 0) return;
 		const cur = slots[slotIdx];
 		if (!cur) return;
 
-		const { value: nextValue, slots: nextSlots } = cur.filled
+		const { value: nextValue, slots: nextSlots } = cur.edited
 			? mirrorSlotGroup(value, slots, slotIdx)
 			: { value, slots };
 
@@ -681,12 +684,15 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 									// slot's `end` as landing just *after* it (the right default in general — text typed
 									// after a filled value shouldn't retroactively join it), which would otherwise
 									// truncate a multi-character fill to whatever was typed in the very first keystroke.
-									// Growing IS filling: the extension is user-typed content, so `filled` is set here
-									// too — the `touches` check below can't do it (a zero-width insert at `end` doesn't
-									// overlap the range), and without it the FIRST keystroke into an untouched slot at
-									// its end boundary (ArrowRight collapses the marker selection exactly there, then
-									// the user types) would leave `filled: false` — `stripUntouchedSlots` would then
-									// delete the marker together with everything typed into it on send.
+									// Growing IS filling (and editing): the extension is user-typed content, so `filled`
+									// AND `edited` are set here too — the `touches` check below can't do it (a
+									// zero-width insert at `end` doesn't overlap the range), and without it the FIRST
+									// keystroke into an untouched slot at its end boundary (ArrowRight collapses the
+									// marker selection exactly there, then the user types) would leave the slot
+									// untouched — `stripUntouchedSlots` would then delete the marker together with
+									// everything typed into it on send. `edited: true` (never set by the parser) is
+									// what makes this slot a mirror source, so a user fill propagates to its group-mates
+									// while an untouched `${N:-default}` stays independent (see `slotSession.ts`).
 									const growing =
 										removedLen === 0 &&
 										insertedLen > 0 &&
@@ -696,11 +702,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 										(slot, i) => {
 											const grown =
 												growing && i === slotIdx
-													? { ...slot, end: slot.end + insertedLen, filled: true }
+													? { ...slot, end: slot.end + insertedLen, filled: true, edited: true }
 													: slot;
 											const original = slots[i];
 											return original && touches(original, editStart, editEnd)
-												? { ...grown, filled: true }
+												? { ...grown, filled: true, edited: true }
 												: grown;
 										},
 									);

@@ -26,6 +26,12 @@ import { E2E_PI_AGENT_DIR } from "./paths";
  * `mapOffset` doc): filling slot 1 with more than one keystroke used to corrupt slot 2's `start`, one
  * character at a time, because a zero-width insert landing exactly on `slots[0].end === slots[1].start`
  * was silently absorbed into the following slot instead of pushing it along.
+ *
+ * A fourth template (`defaults.md`) repeats argument 1 with **different** per-occurrence defaults —
+ * `${1:-foo} versus ${1:-bar}` — the shape the Air review's `filled`/`edited` bug needed: both slots share
+ * one group and are born `filled` (real defaults) but not `edited`, so Tab/Send must keep "foo versus bar"
+ * independent (mirroring keyed on `filled` used to collapse it to "foo versus foo"); editing one occurrence
+ * provides the argument and then mirrors. See `slotSession.ts`'s `edited` doc.
  */
 export function seedTemplateFixtures(agentDir: string = E2E_PI_AGENT_DIR): void {
 	const dir = join(agentDir, "prompts");
@@ -56,6 +62,14 @@ description: Two zero-gap adjacent slots (regression fixture)
 $1$2
 `,
 	);
+	writeFileSync(
+		join(dir, "defaults.md"),
+		`---
+description: One argument, two different per-occurrence defaults (regression fixture)
+---
+\${1:-foo} versus \${1:-bar}
+`,
+	);
 }
 
 /**
@@ -71,7 +85,7 @@ export function removeGlobalTemplates(names: string[], agentDir: string = E2E_PI
 }
 
 /**
- * Removes just the three `seedTemplateFixtures` files. `globalSetup` seeds them once for the whole run
+ * Removes just the four `seedTemplateFixtures` files. `globalSetup` seeds them once for the whole run
  * and `resetState` never wipes `prompts/` (see this file's header), so the Global templates group is
  * otherwise never empty during the suite — a test of the empty-state starter-templates offer (R3+R4
  * brief, `templates-manage.spec.ts`) has to manufacture that condition itself. Paired with a re-call of
@@ -79,5 +93,5 @@ export function removeGlobalTemplates(names: string[], agentDir: string = E2E_PI
  * the same three fixtures regardless of run order.
  */
 export function clearTemplateFixtures(agentDir: string = E2E_PI_AGENT_DIR): void {
-	removeGlobalTemplates(["review", "rename", "adjacent"], agentDir);
+	removeGlobalTemplates(["review", "rename", "adjacent", "defaults"], agentDir);
 }

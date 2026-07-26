@@ -297,12 +297,13 @@ test("shiftSlots composes with the composer's own active-slot growth to stay non
 // unfilled (or differently-filled) group-mates. `stepSlot` (Tab-out) and `submit()` (direct Send) both
 // need this; these functions are the pure, shared core both call into (see Composer.tsx).
 
-const gslot = (start: number, end: number, group: number, filled: boolean): TemplateSlot => ({
-	start,
-	end,
-	group,
-	filled,
-});
+const gslot = (
+	start: number,
+	end: number,
+	group: number,
+	filled: boolean,
+	edited = false,
+): TemplateSlot => ({ start, end, group, filled, ...(edited ? { edited: true } : {}) });
 
 test("mirrorSlotGroup propagates the source's text into a differing same-group sibling, marking it filled", () => {
 	const value = "a=X b=Y";
@@ -348,22 +349,62 @@ test("mirrorSlotGroup propagates a MULTI-WORD value into every same-group siblin
 	for (const s of out) expect(next.slice(s.start, s.end)).toBe(filled);
 });
 
-test("mirrorAllGroups propagates every already-filled slot's text into its own group's unfilled siblings, and never touches a different group", () => {
+test("mirrorAllGroups propagates every user-edited slot's text into its own group's siblings, and never touches a different group", () => {
 	const value = "W.m.M";
-	const slots = [gslot(0, 1, 0, true), gslot(2, 3, 1, false), gslot(4, 5, 0, false)];
+	// slot 0 is edited (a mirror source); slot 2 shares its group but is only mirrored INTO — it becomes
+	// filled, never `edited` (a mirrored value isn't a user edit). slot 1 is a different group, untouched.
+	const slots = [gslot(0, 1, 0, true, true), gslot(2, 3, 1, false), gslot(4, 5, 0, false)];
 	const { value: next, slots: nextSlots } = mirrorAllGroups(value, slots);
 	expect(next).toBe("W.m.W");
-	expect(nextSlots[0]).toEqual({ start: 0, end: 1, group: 0, filled: true });
+	expect(nextSlots[0]).toEqual({ start: 0, end: 1, group: 0, filled: true, edited: true });
 	expect(nextSlots[1]).toEqual({ start: 2, end: 3, group: 1, filled: false });
 	expect(nextSlots[2]).toEqual({ start: 4, end: 5, group: 0, filled: true });
 });
 
-test("mirrorAllGroups: when two siblings are independently filled with different text, the earliest in array order wins", () => {
+test("mirrorAllGroups: when two siblings are independently EDITED with different text, the earliest in array order wins", () => {
 	const value = "a=X b=Y";
-	const slots = [gslot(2, 3, 0, true), gslot(6, 7, 0, true)];
+	const slots = [gslot(2, 3, 0, true, true), gslot(6, 7, 0, true, true)];
 	const { value: next, slots: nextSlots } = mirrorAllGroups(value, slots);
 	expect(next).toBe("a=X b=X");
 	expect(nextSlots.every((s) => s.filled)).toBe(true);
+});
+
+// ---- regression (Air review): filled ≠ edited — differing `${N:-default}` occurrences ----
+// `${1:-foo} … ${1:-bar}` share one group and are both born `filled` (real defaults) but NOT `edited`.
+// Mirroring keyed on `filled` used to collapse "foo … bar" to "foo … foo" on a plain Send, unlike pi's own
+// expansion (unprovided `${1:-foo}`/`${1:-bar}` yield "foo"/"bar"). Keyed on `edited`, an untouched default
+// is never a mirror source; editing one occurrence (providing the argument) is what starts the mirror.
+
+test(`parseTemplateSlots marks a \${N:-default} filled but NOT edited`, () => {
+	const { slots } = parseTemplateSlots(`copy to \${2:-src/}`);
+	expect(slots).toHaveLength(1);
+	expect(slots[0]?.filled).toBe(true);
+	expect(slots[0]?.edited).toBeUndefined();
+});
+
+test("mirrorAllGroups leaves two differing UNTOUCHED defaults independent — no edit means no mirror", () => {
+	const { text, slots } = parseTemplateSlots(`\${1:-foo} versus \${1:-bar}`);
+	expect(text).toBe("foo versus bar");
+	expect(slots).toHaveLength(2);
+	expect(slots[0]?.group).toBe(slots[1]?.group); // one argument, one group
+	expect(slots.every((s) => s.filled && !s.edited)).toBe(true); // real defaults, none edited
+	const { value: next, slots: nextSlots } = mirrorAllGroups(text, slots);
+	expect(next).toBe("foo versus bar"); // the bug produced "foo versus foo"
+	expect(nextSlots).toBe(slots); // nothing edited ⇒ nothing to mirror ⇒ same references (cheap no-op)
+});
+
+test("mirrorAllGroups mirrors from an EDITED default into its group-mate (the user provided the argument)", () => {
+	const { slots } = parseTemplateSlots(`\${1:-foo} versus \${1:-bar}`);
+	// Simulate the user replacing the first default "foo" with "cats" — the composer marks it filled+edited.
+	const s0 = slots[0];
+	if (!s0) throw new Error("expected a first slot");
+	const typed = "cats";
+	const value = `${typed} versus bar`;
+	const editedSlots = shiftSlots(slots, s0.start, s0.end - s0.start, typed.length).map((s, i) =>
+		i === 0 ? { ...s, filled: true, edited: true } : s,
+	);
+	const { value: next } = mirrorAllGroups(value, editedSlots);
+	expect(next).toBe("cats versus cats");
 });
 
 // ---- highlightSegments ----

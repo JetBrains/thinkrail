@@ -26,23 +26,24 @@ test.describe("templates management", () => {
 	// anything ever adds to the Global group (`templates-compose.spec.ts` only reads the fixtures below;
 	// no other spec touches templates at all) — so running first guarantees neither "standup" (created and
 	// deleted by the test below) nor "foo" (created, and left, by the shadowing test below) exists yet.
-	// `globalSetup` seeds three Global fixtures once for the whole run and `resetState` never wipes
+	// `globalSetup` seeds four Global fixtures once for the whole run and `resetState` never wipes
 	// `prompts/` (see `fixtures/templates.ts`), so the Global group is otherwise never empty during the
-	// suite — manufacturing that condition means removing those three ourselves first. Restores them (and
+	// suite — manufacturing that condition means removing those four ourselves first. Restores them (and
 	// removes the four starters this test adds) at the end, so every test/file that runs after — including
-	// this file's own later tests, and `templates-compose.spec.ts`, which depends on `review`/`rename`/
-	// `adjacent`'s exact original content — sees the world exactly as it was before this test ran.
+	// this file's own later tests, and `templates-compose.spec.ts`, which depends on
+	// `review`/`rename`/`adjacent`/`defaults`'s exact original content — sees the world exactly as it was
+	// before this test ran.
 	test("Global empty state offers starter templates; adding them fills the composer's / menu", async ({
 		page,
 	}) => {
 		await openWorkspaceChat(page);
 		clearTemplateFixtures();
 
-		// Everything from here on must restore the three original fixtures no matter how the test body
+		// Everything from here on must restore the four original fixtures no matter how the test body
 		// exits: this is a serial suite (one shared host, `workers: 1`), there's no `afterEach`, and
-		// `templates-compose.spec.ts` depends on `review`/`rename`/`adjacent`'s exact original content — a
-		// thrown assertion between the clear above and the restore below would otherwise leave the shared
-		// `prompts/` dir permanently short those three fixtures for every test that runs after this one.
+		// `templates-compose.spec.ts` depends on `review`/`rename`/`adjacent`/`defaults`'s exact original
+		// content — a thrown assertion between the clear above and the restore below would otherwise leave
+		// the shared `prompts/` dir permanently short those fixtures for every test that runs after this one.
 		try {
 			await page.getByTestId("open-settings").click();
 			await page.getByTestId("settings-nav-templates").click();
@@ -78,7 +79,7 @@ test.describe("templates management", () => {
 			).toHaveCount(1);
 			await input.fill("");
 		} finally {
-			// Restore: remove the four starters this test added, then put the original three fixtures
+			// Restore: remove the four starters this test added, then put the original four fixtures
 			// back — always, even if an assertion above threw.
 			removeGlobalTemplates(["review", "explain", "tests", "standup"]);
 			seedTemplateFixtures();

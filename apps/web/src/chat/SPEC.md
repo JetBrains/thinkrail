@@ -235,20 +235,27 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   next/previous slot (wrap; `preventDefault`; a no-op while the mention/slash menu is open — checked at
   the top of `onKeyDown`, right after the `Ctrl+R` guard and before the menu's own key handling, so a real
   Tab-to-pick-a-menu-item is unaffected, and symmetrically an `Escape` while the menu is also open lets the
-  menu's own dismiss win first). Stepping **out** of a *filled* slot (real content, not an untouched
-  marker) splices its current text into every other slot sharing its `group` whose text differs (group
+  menu's own dismiss win first). Stepping **out** of a *user-edited* slot (one whose text the
+  user actually changed — not an untouched marker, and crucially not an untouched `${N:-default}` either)
+  splices its current text into every other slot sharing its `group` whose text differs (group
   mirroring — repeated `$N`/`${...}` occurrences propagate on slot exit, not per keystroke), each splice
-  re-tracked via `shiftSlots` (`mirrorSlotGroup` in `slotSession.ts`). `Escape` ends the session
+  re-tracked via `shiftSlots` (`mirrorSlotGroup` in `slotSession.ts`). A slot carries two independent
+  bits: **`filled`** (a parse-time property — has real content: a `${N:-default}`'s default, or a marker
+  typed into — drives strip-on-send + the tint) and **`edited`** (session runtime state — the user
+  changed it — the sole mirror-*source* gate). They are deliberately distinct: `${1:-foo} … ${1:-bar}` is
+  born `filled` but not `edited`, so its two differing per-occurrence defaults stay independent until the
+  user provides the argument by editing one — matching pi's own expansion, which never rewrites
+  "foo … bar" to "foo … foo". `Escape` ends the session
   (`setSlots(null)`), leaving the text as-is. A genuine text edit (the textarea's own `onChange` — never a
   programmatic `onChange(text)` call; those end the session outright instead, since none of
   `pickMention`/`pickSlash`/arrow-recall/`insertText` participate in slot tracking) diffs the old/new value
   around the post-edit `selectionStart` (a common-prefix/suffix scan) into `(editStart, removedLen,
   insertedLen)`, re-tracks every slot via `shiftSlots`, and flags the slot the edit landed in
-  `filled: true`; an edit that consumes the **entire** prior value (a select-all-and-type/delete) ends the
-  session instead of re-tracking a now-meaningless collapsed range set. On send, `submit()` runs the same
-  group-mirroring pass over **every already-filled slot**, not just the one most recently Tab-exited
-  (`mirrorAllGroups` — a direct Send never has to go through Tab first for its mirroring to take effect),
-  propagating each into its unfilled same-group siblings; only **then** does it strip whatever markers are
+  `filled: true` **and** `edited: true`; an edit that consumes the **entire** prior value (a
+  select-all-and-type/delete) ends the session instead of re-tracking a now-meaningless collapsed range
+  set. On send, `submit()` runs the same group-mirroring pass over **every user-edited slot**, not just
+  the one most recently Tab-exited (`mirrorAllGroups` — a direct Send never has to go through Tab first for
+  its mirroring to take effect), propagating each into its same-group siblings; only **then** does it strip whatever markers are
   still untouched (`stripUntouchedSlots`), and always clears the session — sent **or** queued
   (steer/followUp), same rule. Switching tabs needs no
   explicit cleanup: `panels/CenterTabs.tsx` mounts only the active tab's component, so leaving a chat tab

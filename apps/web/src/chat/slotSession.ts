@@ -36,8 +36,23 @@ export interface TemplateSlot {
 	start: number;
 	end: number;
 	group: number;
-	/** shown marker or prefilled default */
+	/** Has real content now — a `${N:-default}`'s prefilled default text, or a marker the user typed into.
+	 * A **parse-time property of the placeholder form**: `${N:-default}` is born `filled` (its default is
+	 * real content), every marker (`$N`, `$@`, `${@:N}`, …) is born unfilled. Drives strip-on-send
+	 * (`stripUntouchedSlots` keeps filled ranges, drops untouched markers) and the highlight tint
+	 * (`highlightSegments`). Distinct from `edited` — see below. */
 	filled: boolean;
+	/** The user actually changed this slot's text. **Session runtime state** the composer sets on a real
+	 * edit (`Composer`'s `onChange`); `parseTemplateSlots` never emits it (a freshly parsed template has
+	 * been edited nowhere), so absent ⇒ never edited. Gates mirror-*source* eligibility: only an edited
+	 * slot propagates its text to its group-mates (`mirrorAllGroups`, and `Composer`'s Tab-out `stepSlot`).
+	 * Deliberately **separate from `filled`**: a `${1:-foo} … ${1:-bar}` pair is born `filled` (two real
+	 * defaults) but NOT `edited`, so its two per-occurrence defaults stay independent until the user
+	 * provides argument 1 by editing one of them — matching pi's own expansion (unprovided `${1:-foo}` and
+	 * `${1:-bar}` yield "foo" and "bar", not "foo" twice). Conflating the two would silently rewrite
+	 * "foo … bar" to "foo … foo" on Tab or Send. A slot mirrored *into* becomes `filled` but stays
+	 * un-`edited` — it holds a mirrored value, not a user edit, so it never re-sources. */
+	edited?: boolean;
 }
 
 /**
@@ -230,13 +245,16 @@ export function shiftSlots(
 }
 
 /**
- * Propagate slot `sourceIdx`'s current text into every OTHER slot sharing its `group`, marking each one
- * `filled: true` as it's overwritten — the same mirroring rule {@link TemplateSlot}'s `group` doc
- * documents (siblings are one conceptual argument; pi would expand them from the same value). A sibling
- * whose text already matches is left untouched — including its `filled` flag, so a sibling a user
- * independently typed the same text into isn't retroactively relabeled "just mirrored." Skips `sourceIdx`
- * itself. Purely geometric composition of `shiftSlots`, one sibling at a time, left to right — safe
- * because mirroring never changes which offsets are `group`-equal, only their text/`filled`.
+ * Propagate slot `sourceIdx`'s current text into every OTHER slot sharing its `group`, marking each
+ * overwritten one `filled: true` (but never `edited` — a mirrored value isn't a user edit, so it never
+ * becomes a mirror source itself) — the same mirroring rule {@link TemplateSlot}'s `group` doc documents
+ * (siblings are one conceptual argument; pi would expand them from the same value). The caller picks the
+ * source, always a user-`edited` slot (`mirrorAllGroups` / `Composer`'s `stepSlot`) — that `edited` gate,
+ * not `filled`, is what keeps a `${1:-foo} … ${1:-bar}` pair's untouched defaults from mirroring over each
+ * other. A sibling whose text already matches is left untouched — including its `filled` flag, so a
+ * sibling a user independently typed the same text into isn't retroactively relabeled "just mirrored."
+ * Skips `sourceIdx` itself. Purely geometric composition of `shiftSlots`, one sibling at a time, left to
+ * right — safe because mirroring never changes which offsets are `group`-equal, only their text/`filled`.
  *
  * Returns `{ value, slots }` unchanged (same references) when there's nothing to mirror — no group-mate,
  * or every group-mate already agrees — so a caller can cheaply skip the `onChange`/`setSlots` it would
@@ -318,18 +336,23 @@ export function highlightSegments(
 }
 
 /**
- * `mirrorSlotGroup` for every already-`filled` slot, in array order — the composer's send path has no
+ * `mirrorSlotGroup` for every user-`edited` slot, in array order — the composer's send path has no
  * single "slot the user just left" the way Tab-stepping does (`Composer.tsx`'s `stepSlot`, the sole other
- * caller of `mirrorSlotGroup`): a direct Send can happen with any subset of slots filled, in any order, so
- * every filled slot needs to propagate to its unfilled group-mates, not just the most recently edited one.
+ * caller of `mirrorSlotGroup`): a direct Send can happen with any subset of slots edited, in any order, so
+ * every edited slot needs to propagate to its group-mates, not just the most recently edited one.
  *
- * When two group-mates are BOTH already filled and disagree (each independently typed into, never
- * mirrored against each other — Tab-stepping's own mirroring would normally prevent this, but a direct
- * Send can still reach it, e.g. pasting into a later slot without ever tabbing back through an earlier
- * one), the earliest one in array order wins: later iterations see the earlier slot's mirrored text
- * already sitting at that group's shared offsets and treat it as agreement, same as any other
- * already-matching sibling. Which literal value "wins" here is inherently arbitrary — the two disagreeing
- * values can't both survive — earliest-wins is just a deterministic, easy-to-explain tie-break.
+ * The source gate is `edited`, **not** `filled`: an untouched `${N:-default}` is born `filled` (real
+ * default content) but not `edited`, so it must never mirror — `${1:-foo} … ${1:-bar}` has to stay
+ * "foo … bar", not collapse to "foo … foo" (see {@link TemplateSlot}'s `edited` doc). A default only
+ * starts mirroring once the user edits one of its occurrences, i.e. actually provides that argument.
+ *
+ * When two group-mates are BOTH edited and disagree (each independently typed into, never mirrored
+ * against each other — Tab-stepping's own mirroring would normally prevent this, but a direct Send can
+ * still reach it, e.g. pasting into a later slot without ever tabbing back through an earlier one), the
+ * earliest one in array order wins: later iterations see the earlier slot's mirrored text already sitting
+ * at that group's shared offsets and treat it as agreement, same as any other already-matching sibling.
+ * Which literal value "wins" here is inherently arbitrary — the two disagreeing values can't both
+ * survive — earliest-wins is just a deterministic, easy-to-explain tie-break.
  */
 export function mirrorAllGroups(
 	value: string,
@@ -338,7 +361,7 @@ export function mirrorAllGroups(
 	let nextValue = value;
 	let nextSlots = slots;
 	for (let i = 0; i < nextSlots.length; i++) {
-		if (nextSlots[i]?.filled) {
+		if (nextSlots[i]?.edited) {
 			({ value: nextValue, slots: nextSlots } = mirrorSlotGroup(nextValue, nextSlots, i));
 		}
 	}
