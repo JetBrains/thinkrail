@@ -1,5 +1,13 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	utimesSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
@@ -8,6 +16,7 @@ import {
 	PORT_BLOCK_BASE,
 	PORT_BLOCK_SLOTS,
 	PORT_BLOCK_STRIDE,
+	tryBreakLock,
 } from "./fixtures/portBlock";
 
 // Pins the atomic port-block claim contract (fixtures/portBlock.ts) — the arbiter that keeps two
@@ -107,6 +116,34 @@ test("a live holder is never usurped — the claim times out loudly instead", ()
 	const { registry, rootA } = setup();
 	plantLock(registry, JSON.stringify({ pid: process.pid, nonce: "held" })); // us: alive by definition
 	expect(() => claimPortBlock(rootA, 1, registry, 50)).toThrow(/held by live pid/);
+});
+
+test("breaking is serialized: a foreign break-token blocks the break until it ages out", () => {
+	const { registry, rootA } = setup();
+	const deadPid = spawnSync(process.execPath, ["-e", "0"]).pid;
+	const lock = plantLock(registry, JSON.stringify({ pid: deadPid, nonce: "gone" }));
+	const token = join(registry, ".lock.break");
+	mkdirSync(token); // another breaker mid-flight — breaking must wait, not proceed unserialized
+	expect(() => claimPortBlock(rootA, 1, registry, 50)).toThrow(/port-block registry lock/);
+	expect(existsSync(lock)).toBe(true); // the dead lock was NOT touched while the token was held
+	const old = (Date.now() - 60_000) / 1000;
+	utimesSync(token, old, old); // the other breaker is long gone — a stale token only ever blocks
+	expect(claimPortBlock(rootA, 1, registry)).toBe(base(1));
+});
+
+test("forced two-reclaimer interleaving: a stale break decision cannot delete a successor's lock", () => {
+	// Review round 4's exact scenario, driven through the real break routine: reclaimers A and B both
+	// observed a dead owner; A breaks the lock and a successor installs a fresh one; B's break —
+	// executing its stale decision — must re-verify under the token and leave the successor alone.
+	const { registry, rootB } = setup();
+	const deadPid = spawnSync(process.execPath, ["-e", "0"]).pid;
+	const lock = plantLock(registry, JSON.stringify({ pid: deadPid, nonce: "gone" })); // both read this
+	tryBreakLock(lock); // reclaimer A acts: the dead lock is gone
+	expect(existsSync(lock)).toBe(false);
+	plantLock(registry, JSON.stringify({ pid: process.pid, nonce: "successor" })); // successor installs
+	tryBreakLock(lock); // reclaimer B acts on its STALE decision
+	expect(readFileSync(join(lock, "owner"), "utf8")).toContain('"successor"'); // untouched
+	expect(() => claimPortBlock(rootB, 1, registry, 50)).toThrow(/held by live pid/); // still exclusive
 });
 
 test("a garbled lock (unreadable owner) is broken only once it is old", () => {

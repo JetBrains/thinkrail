@@ -37,6 +37,21 @@ import { join } from "node:path";
 //   owner, which the protocol itself can never produce.
 // - Release is fenced by the nonce: a process only removes the lock if it still owns it, so no
 //   resume-after-suspension interleaving can delete a successor's mutex.
+// - Breaking is itself serialized and re-verified (review round 4: dead-owner reclamation was a
+//   check-then-delete — two waiters could both read one dead owner, and the slower `rm`, acting on
+//   its stale decision, deleted the faster one's freshly installed lock). A breaker must first win
+//   an exclusive break-token (`mkdir`), then re-read the lock's owner UNDER the token — the kill
+//   decision is always made on fresh state, so a successor's live lock is never removed. A stale
+//   token can only BLOCK breaking (never corrupt), so the crude age rule is safe for tokens.
+// - Belt over the whole protocol: after releasing the lock, the claimant re-reads its slot and
+//   retries the transaction if the claim was overwritten — even a hypothetical residual mutex
+//   failure self-heals at the layer that matters instead of yielding two worktrees on one block.
+//
+// Residual floor, stated honestly: node/bun expose no OS-death-released lock (`flock`) without
+// native deps. What remains after the layers above requires a process SIGSTOP'd inside a
+// sub-millisecond window for >10s, resumed at exactly the wrong instant, TWICE in independent
+// windows (breaker + claimant), on one machine's own worktrees — and the blast radius is a dev
+// test-suite port clash, loud in the main suite.
 //
 // Allocation under the lock is two-pass: an existing claim for this worktree wins over everything
 // (assignments are sticky — a freed lower slot is never migrated to, so a displaced worktree can't
@@ -53,8 +68,8 @@ export const PORT_BLOCK_SLOTS = 500;
 /** Machine-local registry of claimed slots (one file per slot, content = owner repo root). */
 export const PORT_BLOCK_REGISTRY = join(tmpdir(), "thinkrail-e2e-port-blocks");
 
-/** Fallback for a garbled lock only (no readable owner): older than this ⇒ break. A lock with a
- * readable owner is arbitrated by pid liveness, never by age. */
+/** Age fallback: a garbled lock (no readable owner) or a leftover break-token older than this is
+ * removable. A lock with a readable owner is arbitrated by pid liveness, never by age. */
 const STALE_LOCK_MS = 10_000;
 
 function slotBase(slot: number): number {
@@ -106,11 +121,55 @@ function pidAlive(pid: number): boolean {
 	}
 }
 
+/** Remove `path` if its recorded mtime is older than STALE_LOCK_MS; `true` if it was removed.
+ * (Missing/vanished paths report `false` — the caller just retries its loop.) */
+function removeIfAged(path: string): boolean {
+	let ageMs = Number.NaN;
+	try {
+		ageMs = Date.now() - statSync(path).mtimeMs;
+	} catch {
+		return false; // vanished — nothing to remove
+	}
+	if (ageMs > STALE_LOCK_MS) {
+		rmSync(path, { recursive: true, force: true });
+		return true;
+	}
+	return false;
+}
+
+/**
+ * Try to break a dead or garbled lock — the ONLY code path that may remove a lock it does not own.
+ * Serialized by an exclusive break-token (`mkdir` — single winner), and the removal decision is
+ * re-made on freshly read state UNDER the token, so a waiter's earlier, stale "it is dead" reading
+ * can never delete a successor's live lock (review round 4). Exported for the forced two-reclaimer
+ * interleaving test. A leftover token (crashed breaker) only blocks breaking, so aging it out is
+ * safe.
+ */
+export function tryBreakLock(lockPath: string): void {
+	const tokenPath = `${lockPath}.break`;
+	try {
+		mkdirSync(tokenPath); // exclusive: one breaker at a time
+	} catch {
+		removeIfAged(tokenPath); // a live breaker is at work, or a crashed one left this behind
+		return;
+	}
+	try {
+		const owner = readLockOwner(lockPath);
+		if (owner !== undefined) {
+			if (!pidAlive(owner.pid)) rmSync(lockPath, { recursive: true, force: true }); // provably dead
+			return; // alive — never usurped
+		}
+		removeIfAged(lockPath); // garbled (ownerless) — the protocol can't produce this; age it out
+	} finally {
+		rmSync(tokenPath, { recursive: true, force: true });
+	}
+}
+
 /**
  * Take the registry's exclusive lock. The lock is a `.lock` dir carrying its owner record, moved
- * into place with `rename` (atomic; refuses to replace a non-empty dir). Breaking rules: recorded
- * owner provably dead ⇒ break now; owner alive ⇒ wait, then throw loudly at `timeoutMs`; no
- * readable owner ⇒ break only past STALE_LOCK_MS.
+ * into place with `rename` (atomic; refuses to replace a non-empty dir). Breaking is delegated to
+ * `tryBreakLock` (dead owner ⇒ broken now; live owner ⇒ wait, then throw loudly at `timeoutMs`;
+ * garbled ⇒ broken only past STALE_LOCK_MS).
  */
 function acquireRegistryLock(
 	registryDir: string,
@@ -128,25 +187,9 @@ function acquireRegistryLock(
 				renameSync(prepPath, lockPath);
 				return { lockPath, nonce };
 			} catch {
-				const owner = readLockOwner(lockPath);
-				if (owner !== undefined) {
-					if (!pidAlive(owner.pid)) {
-						rmSync(lockPath, { recursive: true, force: true }); // crashed holder — break now
-						continue;
-					}
-				} else {
-					let ageMs = Number.NaN;
-					try {
-						ageMs = Date.now() - statSync(lockPath).mtimeMs;
-					} catch {
-						continue; // lock vanished between rename and stat — retry immediately
-					}
-					if (ageMs > STALE_LOCK_MS) {
-						rmSync(lockPath, { recursive: true, force: true }); // garbled and old — break
-						continue;
-					}
-				}
+				tryBreakLock(lockPath);
 				if (Date.now() >= deadline) {
+					const owner = readLockOwner(lockPath);
 					throw new Error(
 						`timed out acquiring the e2e port-block registry lock at ${lockPath}` +
 							` (held by ${owner === undefined ? "an unreadable owner" : `live pid ${owner.pid}`})`,
@@ -177,19 +220,13 @@ function claimedSlots(registryDir: string): number[] {
 		.sort((a, b) => a - b);
 }
 
-/**
- * Claim a port block for `repoRoot` and return its base port. An existing claim for `repoRoot`
- * always wins (sticky); otherwise the scan starts at `preferredSlot` (its path hash) and takes the
- * first slot that is unclaimed or whose claim is stale. Throws only when every slot is owned by a
- * live worktree (practically impossible) or the registry lock cannot be acquired.
- */
-export function claimPortBlock(
+/** One locked claim transaction; returns the slot. (See `claimPortBlock` for the semantics.) */
+function claimSlotOnce(
 	repoRoot: string,
 	preferredSlot: number,
-	registryDir: string = PORT_BLOCK_REGISTRY,
-	lockTimeoutMs = 15_000,
+	registryDir: string,
+	lockTimeoutMs: number,
 ): number {
-	mkdirSync(registryDir, { recursive: true });
 	const lock = acquireRegistryLock(registryDir, lockTimeoutMs);
 	try {
 		// Pass 1: this worktree's existing claim wins over everything — even a now-free lower slot —
@@ -199,7 +236,7 @@ export function claimPortBlock(
 		);
 		if (mine !== undefined) {
 			for (const extra of duplicates) rmSync(join(registryDir, String(extra)), { force: true });
-			return slotBase(mine);
+			return mine;
 		}
 
 		// Pass 2: allocate — first slot from `preferredSlot` that is free, or stale (its recorded
@@ -210,7 +247,7 @@ export function claimPortBlock(
 			const owner = readClaim(claimPath);
 			if (owner !== undefined && existsSync(owner)) continue; // live claim by another worktree
 			writeFileSync(claimPath, repoRoot);
-			return slotBase(slot);
+			return slot;
 		}
 		throw new Error(
 			`no free e2e port block (${PORT_BLOCK_SLOTS} slots all claimed by live worktrees) — inspect ${registryDir}`,
@@ -218,4 +255,28 @@ export function claimPortBlock(
 	} finally {
 		releaseRegistryLock(lock.lockPath, lock.nonce);
 	}
+}
+
+/**
+ * Claim a port block for `repoRoot` and return its base port. An existing claim for `repoRoot`
+ * always wins (sticky); otherwise the scan starts at `preferredSlot` (its path hash) and takes the
+ * first slot that is unclaimed or whose claim is stale. After the lock is released the claim is
+ * re-read and the transaction retried if it was overwritten (the belt over the lock protocol — see
+ * the header). Throws only when every slot is owned by a live worktree (practically impossible),
+ * the registry lock cannot be acquired, or the claim will not settle.
+ */
+export function claimPortBlock(
+	repoRoot: string,
+	preferredSlot: number,
+	registryDir: string = PORT_BLOCK_REGISTRY,
+	lockTimeoutMs = 15_000,
+): number {
+	mkdirSync(registryDir, { recursive: true });
+	for (let round = 0; round < 5; round++) {
+		const slot = claimSlotOnce(repoRoot, preferredSlot, registryDir, lockTimeoutMs);
+		if (readClaim(join(registryDir, String(slot))) === repoRoot) return slotBase(slot);
+	}
+	throw new Error(
+		`e2e port-block claim did not settle after 5 rounds (mutual-exclusion failure?) — inspect ${registryDir}`,
+	);
 }
