@@ -41,17 +41,23 @@ import { join } from "node:path";
 //   check-then-delete — two waiters could both read one dead owner, and the slower `rm`, acting on
 //   its stale decision, deleted the faster one's freshly installed lock). A breaker must first win
 //   an exclusive break-token (`mkdir`), then re-read the lock's owner UNDER the token — the kill
-//   decision is always made on fresh state, so a successor's live lock is never removed. A stale
-//   token can only BLOCK breaking (never corrupt), so the crude age rule is safe for tokens.
+//   decision is always made on fresh state, so a successor's live lock is never removed.
+// - Break-tokens are NEVER auto-reclaimed (review round 5: aging a token out was itself a
+//   stat-then-delete on a mutable path — the same class one level down — and any reclamation
+//   primitive would just recurse the problem). This terminates the regress: a token exists for
+//   microseconds and is orphaned only by a kill inside that window; an orphaned token only ever
+//   BLOCKS breaking (installs don't consult it), and because the token holder keeps the sole break
+//   right until its own `rm` fires, a pending removal can only ever hit the dead lock it verified
+//   — never a successor's. The degraded case is a LOUD acquire timeout naming the registry for a
+//   one-time manual cleanup, never corruption.
 // - Belt over the whole protocol: after releasing the lock, the claimant re-reads its slot and
-//   retries the transaction if the claim was overwritten — even a hypothetical residual mutex
-//   failure self-heals at the layer that matters instead of yielding two worktrees on one block.
+//   retries the transaction if the claim was overwritten — anything unmodeled self-heals at the
+//   layer that matters instead of yielding two worktrees on one block.
 //
 // Residual floor, stated honestly: node/bun expose no OS-death-released lock (`flock`) without
-// native deps. What remains after the layers above requires a process SIGSTOP'd inside a
-// sub-millisecond window for >10s, resumed at exactly the wrong instant, TWICE in independent
-// windows (breaker + claimant), on one machine's own worktrees — and the blast radius is a dev
-// test-suite port clash, loud in the main suite.
+// native deps. What remains is availability-shaped, not correctness-shaped: a pid-reuse or
+// orphaned-token wedge parks claims behind a loud, self-describing timeout until a human removes
+// the registry dir once.
 //
 // Allocation under the lock is two-pass: an existing claim for this worktree wins over everything
 // (assignments are sticky — a freed lower slot is never migrated to, so a displaced worktree can't
@@ -68,8 +74,9 @@ export const PORT_BLOCK_SLOTS = 500;
 /** Machine-local registry of claimed slots (one file per slot, content = owner repo root). */
 export const PORT_BLOCK_REGISTRY = join(tmpdir(), "thinkrail-e2e-port-blocks");
 
-/** Age fallback: a garbled lock (no readable owner) or a leftover break-token older than this is
- * removable. A lock with a readable owner is arbitrated by pid liveness, never by age. */
+/** Age fallback for a garbled lock only (no readable owner — a state the protocol itself cannot
+ * produce). Locks with a readable owner are arbitrated by pid liveness; break-tokens are never
+ * reclaimed at all (see header). */
 const STALE_LOCK_MS = 10_000;
 
 function slotBase(slot: number): number {
@@ -141,17 +148,16 @@ function removeIfAged(path: string): boolean {
  * Try to break a dead or garbled lock — the ONLY code path that may remove a lock it does not own.
  * Serialized by an exclusive break-token (`mkdir` — single winner), and the removal decision is
  * re-made on freshly read state UNDER the token, so a waiter's earlier, stale "it is dead" reading
- * can never delete a successor's live lock (review round 4). Exported for the forced two-reclaimer
- * interleaving test. A leftover token (crashed breaker) only blocks breaking, so aging it out is
- * safe.
+ * can never delete a successor's live lock (review round 4). Tokens are never reclaimed — an
+ * orphaned one wedges breaking into the acquire timeout's loud manual-cleanup path rather than
+ * reopening a reclamation race (round 5). Exported for the forced interleaving tests.
  */
 export function tryBreakLock(lockPath: string): void {
 	const tokenPath = `${lockPath}.break`;
 	try {
 		mkdirSync(tokenPath); // exclusive: one breaker at a time
 	} catch {
-		removeIfAged(tokenPath); // a live breaker is at work, or a crashed one left this behind
-		return;
+		return; // a breaker is at work (or an orphaned token wedges us — surfaced at acquire timeout)
 	}
 	try {
 		const owner = readLockOwner(lockPath);
@@ -190,9 +196,15 @@ function acquireRegistryLock(
 				tryBreakLock(lockPath);
 				if (Date.now() >= deadline) {
 					const owner = readLockOwner(lockPath);
+					const holder =
+						owner === undefined
+							? "an unreadable owner"
+							: pidAlive(owner.pid)
+								? `live pid ${owner.pid}`
+								: `dead pid ${owner.pid}; breaking is wedged — likely an orphaned break-token`;
 					throw new Error(
-						`timed out acquiring the e2e port-block registry lock at ${lockPath}` +
-							` (held by ${owner === undefined ? "an unreadable owner" : `live pid ${owner.pid}`})`,
+						`timed out acquiring the e2e port-block registry lock at ${lockPath} (held by ${holder});` +
+							` if no e2e run is active, remove ${registryDir} and retry`,
 					);
 				}
 				spinFor(10);

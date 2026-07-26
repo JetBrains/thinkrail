@@ -118,16 +118,20 @@ test("a live holder is never usurped — the claim times out loudly instead", ()
 	expect(() => claimPortBlock(rootA, 1, registry, 50)).toThrow(/held by live pid/);
 });
 
-test("breaking is serialized: a foreign break-token blocks the break until it ages out", () => {
+test("breaking is serialized: a foreign break-token wedges breaking into the loud timeout", () => {
 	const { registry, rootA } = setup();
 	const deadPid = spawnSync(process.execPath, ["-e", "0"]).pid;
 	const lock = plantLock(registry, JSON.stringify({ pid: deadPid, nonce: "gone" }));
 	const token = join(registry, ".lock.break");
 	mkdirSync(token); // another breaker mid-flight — breaking must wait, not proceed unserialized
-	expect(() => claimPortBlock(rootA, 1, registry, 50)).toThrow(/port-block registry lock/);
-	expect(existsSync(lock)).toBe(true); // the dead lock was NOT touched while the token was held
+	expect(() => claimPortBlock(rootA, 1, registry, 50)).toThrow(/remove .* and retry/);
+	expect(existsSync(lock)).toBe(true); // the dead lock was NOT touched while the token existed
 	const old = (Date.now() - 60_000) / 1000;
-	utimesSync(token, old, old); // the other breaker is long gone — a stale token only ever blocks
+	utimesSync(token, old, old);
+	// Even an ancient orphaned token is never auto-reclaimed (round 5: reclamation is itself a race)
+	// — the wedge stays loud and self-describing until the documented manual cleanup.
+	expect(() => claimPortBlock(rootA, 1, registry, 50)).toThrow(/orphaned break-token/);
+	rmSync(token, { recursive: true, force: true }); // the manual cleanup the error names
 	expect(claimPortBlock(rootA, 1, registry)).toBe(base(1));
 });
 
