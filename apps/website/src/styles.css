@@ -11,7 +11,12 @@
 	--font-mono: "JetBrains Mono", "Fira Code", "SF Mono", "Cascadia Code", monospace;
 	--font-display: "Cabinet Grotesk", var(--font-sans);
 
-	/* dark (the app's default) */
+	/* Layout metrics read by more than one rule. */
+	--peek: clamp(44px, 7vh, 72px); /* sliver of the next tab the fold cuts */
+	--ruler-w: 16px;
+
+	/* dark — the base every `[data-theme]` block below layers onto (the dark ones override only what
+	   differs). It is the app's default; the site itself opens on light, set on `<html>`. */
 	--chrome: #171719;
 	--editor-bg: #171719;
 	--elevated: #2b2d30;
@@ -118,6 +123,62 @@
 	--sx-cm: #928374;
 	--sx-prop: #83a598;
 	--sx-punct: #a89984;
+}
+
+/* The app's two `contrast: high` palettes: one border colour on pure black/white, and every border
+   drawn — so `--border` and `--border2` deliberately land on the same visible hue. */
+[data-theme="high-contrast"] {
+	--chrome: #000000;
+	--editor-bg: #000000;
+	--elevated: #000000;
+	--hover: #1f1f1f;
+	--input: #000000;
+	--border: #6fc3df;
+	--border2: #6fc3df;
+	--text: #ffffff;
+	--muted: #d0d0d0;
+	--hint: #a6a6a6;
+	--accent: #f38518;
+	--on-accent: #000000;
+	--bubble: #f38518;
+	--sx-kw: #569cd6;
+	--sx-str: #ce9178;
+	--sx-num: #ffffff;
+	--sx-fn: #dcdcaa;
+	--sx-type: #3dc9b0;
+	--sx-cm: #7ca668;
+	--sx-prop: #9cdcfe;
+	--sx-punct: #ffffff;
+}
+
+[data-theme="high-contrast-light"] {
+	--chrome: #ffffff;
+	--editor-bg: #ffffff;
+	--elevated: #ffffff;
+	--hover: #e7e7e7;
+	--input: #ffffff;
+	--border: #0f4a85;
+	--border2: #0f4a85;
+	--text: #292929;
+	--muted: #515151;
+	--hint: #737373;
+	--accent: #0f4a85;
+	--on-accent: #ffffff;
+	--bubble: #0f4a85;
+	--green: #116329;
+	--gold: #855900;
+	--red: #b5200d;
+	--blue: #006bbd;
+	--sx-kw: #a0111f;
+	--sx-str: #032563;
+	--sx-num: #023b95;
+	--sx-fn: #622cbc;
+	--sx-type: #702c00;
+	--sx-cm: #515151;
+	--sx-prop: #023b95;
+	--sx-punct: #292929;
+	--shadow: 0 24px 80px rgb(15 20 40 / 0.18);
+	color-scheme: light;
 }
 
 /* ── Reset & base ───────────────────────────────────────────────────────── */
@@ -393,6 +454,14 @@ code {
 	background: linear-gradient(135deg, #282828 50%, #fe8019 50%);
 }
 
+[data-swatch="high-contrast"] {
+	background: linear-gradient(135deg, #000000 50%, #f38518 50%);
+}
+
+[data-swatch="high-contrast-light"] {
+	background: linear-gradient(135deg, #ffffff 50%, #0f4a85 50%);
+}
+
 .theme-menu {
 	position: absolute;
 	top: calc(100% + 6px);
@@ -426,6 +495,7 @@ code {
 	font: inherit;
 	font-size: 12.5px;
 	text-align: left;
+	white-space: nowrap; /* the menu grows to the longest name instead of wrapping it */
 	cursor: pointer;
 }
 
@@ -585,6 +655,16 @@ code {
 	border-right: 1px solid var(--border);
 	white-space: nowrap;
 	position: relative;
+	/* Like a real IDE: tabs hold their natural width while the strip has room, then shrink together
+	   down to a floor where the name is still recognisable. The floor tracks the window so all eight
+	   keep fitting as it narrows; below roughly 670px even the floor can't, and the strip scrolls. */
+	flex: 0 1 auto;
+	min-width: clamp(84px, 9vw, 104px);
+}
+
+.tab-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .tab:hover {
@@ -594,6 +674,7 @@ code {
 }
 
 .tab .i {
+	flex: none;
 	color: var(--hint);
 	font-size: 12px;
 }
@@ -615,10 +696,14 @@ code {
 	color: var(--accent);
 }
 
+/* Taken out of flow: a close glyph that only appears on hover shouldn't cost every tab 15px of name
+   the whole time. It overlays the truncated tail, the way an IDE's does. */
 .tab-x {
+	position: absolute;
+	right: 7px;
+	top: calc(50% - 4px);
 	width: 8px;
 	height: 8px;
-	position: relative;
 	opacity: 0;
 }
 
@@ -647,8 +732,18 @@ code {
 
 /* The scrolling editor pane */
 
+/* The editor and the overview ruler share a row, so the ruler needs no magic offset and the editor's
+   width accounts for it. */
+.pane {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	position: relative; /* the scroll cue is pinned to this, not to the scrolling editor */
+}
+
 .editor {
 	flex: 1;
+	min-width: 0;
 	min-height: 0;
 	overflow-y: auto;
 	background: var(--editor-bg);
@@ -665,13 +760,46 @@ code {
 	outline-offset: -2px;
 }
 
+/* Overview ruler — the app's editor gutter map: one tick per tab, the one you're on lit. It shows the
+   document's depth at rest, which the OS overlay scrollbar only does once you're already scrolling. */
+.ruler {
+	flex: none;
+	width: var(--ruler-w);
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 3px;
+	background: var(--chrome);
+	border-left: 1px solid var(--border);
+}
+
+.ruler-tick {
+	flex: 1;
+	border-radius: 2px;
+	background: color-mix(in srgb, var(--muted) 26%, transparent);
+}
+
+.ruler-tick:hover {
+	background: color-mix(in srgb, var(--muted) 55%, transparent);
+}
+
+.ruler-tick.active {
+	background: var(--accent);
+}
+
 /* ── Sections: files ────────────────────────────────────────────────────── */
 
 .file-section {
 	max-width: 860px;
 	margin: 0 auto;
-	padding: clamp(40px, 7vh, 84px) clamp(20px, 5vw, 56px);
+	padding: clamp(28px, 4.5vh, 72px) clamp(20px, 5vw, 56px);
 	scroll-margin-top: 8px;
+	/* One tab, ~one screen: a tile fills the pane bar a sliver, so the fold always cuts into the next
+	   tab instead of landing on its edge — the cue that the page scrolls at all. Its content rides
+	   centred in whatever room is left; `align-content` keeps this a block box, where switching to flex
+	   or grid would stop margins collapsing and double every gap between paragraphs and code blocks. */
+	min-height: calc(100% - var(--peek));
+	align-content: center;
 }
 
 .file-section + .file-section {
@@ -789,6 +917,46 @@ code {
 	padding-bottom: clamp(48px, 9vh, 100px);
 }
 
+/* Scroll cue: chrome, not content — pinned over the pane so it holds its place while the tabs scroll
+   underneath, and sitting just above the fold-cut its chevron points at. Outside `.editor` on purpose:
+   an absolute child of a scroll container still scrolls with the content. */
+.scroll-cue {
+	position: absolute;
+	left: 0;
+	right: var(--ruler-w);
+	bottom: 14px;
+	display: flex;
+	justify-content: center;
+	pointer-events: none;
+	transition: opacity 200ms ease;
+}
+
+html.at-end .scroll-cue {
+	opacity: 0;
+}
+
+/* A chip, not bare text: pinned over the page it has to read as chrome floating above the content,
+   or it gets mistaken for part of whatever it happens to be sitting on (the chat composer, mostly). */
+.cue-pill {
+	display: inline-block;
+	padding: 5px 12px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--chrome) 88%, transparent);
+	backdrop-filter: blur(6px);
+	font-family: var(--font-mono);
+	font-size: 11.5px;
+	letter-spacing: 0.06em;
+	color: var(--hint);
+}
+
+/* No keyboard to press ↑↓ with. */
+@media (hover: none) {
+	.cue-keys {
+		display: none;
+	}
+}
+
 .hero-kicker {
 	display: flex;
 	flex-wrap: wrap;
@@ -838,11 +1006,271 @@ p.hero-lede {
 }
 
 .install-line {
+	position: relative; /* anchors the decoy hint above the command */
 	display: flex;
 	align-items: center;
 	gap: 8px;
 	margin: 26px 0 10px;
 	max-width: 100%;
+}
+
+.dim-scrim {
+	position: absolute;
+	inset: 0;
+	z-index: 90;
+	background: rgb(0 0 0 / 0.55);
+	opacity: 0;
+	visibility: hidden;
+	pointer-events: none;
+	transition:
+		opacity 220ms ease,
+		visibility 220ms;
+}
+
+html.hint-on .dim-scrim {
+	opacity: 1;
+	visibility: visible;
+}
+
+/* ── Decoys: the chrome that only looks wired up ─────────────────────────────
+   The rails, tabs, folders, terminal, composers and status widgets are a drawing of the app. Clicking
+   any of them lands here: the page returns to README.md, the install command lights up, and this says
+   why. Anything genuinely wired (the file links, copy buttons, theme menu, GitHub) is left unmarked. */
+
+[data-demo] {
+	cursor: pointer;
+}
+
+.install-line.nudge {
+	z-index: 100; /* above the scrim — the command is the other half of the message */
+}
+
+.install-line.nudge > code {
+	border-color: var(--gold);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 26%, transparent);
+}
+
+/* The sweep is the decoration; the ring above is the part that survives reduced motion. */
+html.anim .install-line.nudge > code {
+	background-image: linear-gradient(
+		100deg,
+		transparent 30%,
+		color-mix(in srgb, var(--gold) 28%, transparent) 50%,
+		transparent 70%
+	);
+	background-size: 250% 100%;
+	animation: install-shimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes install-shimmer {
+	from {
+		background-position: 140% 0;
+	}
+	to {
+		background-position: -40% 0;
+	}
+}
+
+/* An annotation, not a tooltip: display-sized text above the command with a long thin arrow drawn down
+   to it. `pointer-events: none` because it floats over the lede while it is up. */
+.install-hint {
+	position: absolute;
+	left: 0;
+	bottom: calc(100% + 2px);
+	z-index: 10;
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	max-width: 100%;
+	pointer-events: none;
+	opacity: 0;
+	visibility: hidden;
+	transform: translateY(6px);
+	transition:
+		opacity 200ms ease,
+		transform 200ms ease,
+		visibility 200ms;
+}
+
+.install-hint.on {
+	opacity: 1;
+	visibility: visible;
+	transform: none;
+}
+
+/* The callout is a two-message exchange in the site's own chat vocabulary — the visitor's implied
+   question, then the agent's answer — so a dead click reads as the agent replying rather than as a
+   tooltip appearing. The panel is opaque, which is also what clears the lede underneath: display-sized
+   type printed straight over running copy leaves both unreadable. Gold rather than accent, because
+   the page is already accent-coloured and the one thing asking to be noticed needs a hue of its own. */
+.hint-chat {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding: 18px 20px;
+	border: 1px solid color-mix(in srgb, var(--gold) 45%, transparent);
+	border-radius: 18px;
+	background: color-mix(in srgb, var(--gold) 9%, var(--editor-bg));
+	box-shadow: 0 14px 36px color-mix(in srgb, var(--gold) 26%, transparent);
+}
+
+/* User right, agent left — the same sides the chat demos use. */
+.hint-q {
+	align-self: flex-end;
+	padding: 9px 18px;
+	border: 1px solid color-mix(in srgb, var(--gold) 40%, transparent);
+	border-radius: 18px 18px 5px 18px;
+	background: color-mix(in srgb, var(--gold) 16%, transparent);
+	font-size: 18px;
+	color: var(--text);
+}
+
+.hint-a {
+	align-self: flex-start;
+	padding: 14px 28px;
+	border: 2px solid var(--gold);
+	border-radius: 28px 28px 28px 8px;
+	background: color-mix(in srgb, var(--gold) 16%, var(--editor-bg));
+	box-shadow: 0 10px 26px color-mix(in srgb, var(--gold) 26%, transparent);
+}
+
+.hint-text {
+	position: relative;
+	z-index: 1; /* the bumps are positioned too; keep the words on top of them */
+	font-family: var(--font-display);
+	font-weight: 700;
+	font-size: clamp(24px, 3.6vw, 40px);
+	line-height: 1.2;
+	letter-spacing: 0.2px;
+	color: var(--gold);
+}
+
+/* Same sweep as the command, painted through the glyphs. The gradient covers the whole run, so the
+   text stays legible wherever the animation happens to stop. */
+html.anim .hint-text {
+	background-image: linear-gradient(
+		100deg,
+		var(--gold) 35%,
+		color-mix(in srgb, var(--gold) 45%, var(--text)) 50%,
+		var(--gold) 65%
+	);
+	background-size: 250% 100%;
+	background-clip: text;
+	color: transparent;
+}
+
+html.anim .install-hint.on .hint-text {
+	animation: install-shimmer 1.6s ease-in-out infinite;
+}
+
+/* A "typing…" beat between the question and the answer, so the exchange plays rather than appears. */
+.hint-typing {
+	display: none;
+	align-self: flex-start;
+	align-items: center;
+	gap: 6px;
+	padding: 13px 20px;
+	border: 1px solid color-mix(in srgb, var(--gold) 40%, transparent);
+	border-radius: 18px 18px 18px 5px;
+	background: color-mix(in srgb, var(--gold) 12%, transparent);
+}
+
+/* Only ever shown mid-replay: without motion the whole exchange is on screen from the start. */
+html.anim .hint-typing:not(.gone) {
+	display: inline-flex;
+}
+
+.hint-typing i {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--gold);
+}
+
+html.anim .hint-typing i {
+	animation: hint-dot 1.1s ease-in-out infinite;
+}
+
+.hint-typing i:nth-child(2) {
+	animation-delay: 0.15s;
+}
+
+.hint-typing i:nth-child(3) {
+	animation-delay: 0.3s;
+}
+
+@keyframes hint-dot {
+	0%,
+	100% {
+		opacity: 0.3;
+		transform: translateY(0);
+	}
+	50% {
+		opacity: 1;
+		transform: translateY(-3px);
+	}
+}
+
+/* A row of thick double chevrons rather than one thin arrow: at this size a single hairline reads as
+   a stray mark, four of them read as a current running down to the command. */
+.hint-arrows {
+	display: flex;
+	gap: 78px;
+	margin: 12px 0 0 30px;
+}
+
+.hint-arrows svg {
+	width: 34px;
+	height: 56px;
+	fill: none;
+	stroke: var(--gold);
+	stroke-width: 3.4;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+/* The staggered delays make the same left-to-right sweep the text and the command are running. */
+.hint-arrows svg:nth-child(2) {
+	animation-delay: 0.13s;
+}
+
+.hint-arrows svg:nth-child(3) {
+	animation-delay: 0.26s;
+}
+
+.hint-arrows svg:nth-child(4) {
+	animation-delay: 0.39s;
+}
+
+html.anim .hint-arrows.on svg {
+	animation: arrow-pulse 1.6s ease-in-out infinite;
+}
+
+/* Shifts the stroke colour rather than the opacity: the arrows lie over page text, and anything
+   translucent lets that text bleed through and read as if it were in front of them. */
+@keyframes arrow-pulse {
+	0%,
+	100% {
+		stroke: color-mix(in srgb, var(--gold) 55%, var(--editor-bg));
+	}
+	45% {
+		stroke: var(--gold);
+	}
+}
+
+/* The exchange plays in beats; each part is hidden until its turn. Gated on `html.anim`, so a
+   reduced-motion visitor gets the finished conversation instead of an empty panel. */
+html.anim .install-hint [data-step] {
+	opacity: 0;
+	transform: translateY(8px);
+	transition:
+		opacity 260ms ease,
+		transform 260ms ease;
+}
+
+html.anim .install-hint [data-step].on {
+	opacity: 1;
+	transform: none;
 }
 
 .install-line > code {
@@ -1103,6 +1531,12 @@ html.anim .chat-demo [data-step].on {
 }
 
 /* ── Why chat: composer typing + metro map (static, themed) ────────────── */
+
+/* A chat opens straight on its heading — no `# file` comment line to lead in — so it takes a
+   tighter top than a file section. */
+.chat-section {
+	padding-top: clamp(22px, 3.5vh, 44px);
+}
 
 .why-chat .chat-msg.assistant strong {
 	color: var(--text);
@@ -1930,6 +2364,15 @@ html.anim .terminal.armed [data-out] {
 	}
 
 	.skip-link {
+		transition: none;
+	}
+
+	.scroll-cue {
+		transition: none;
+	}
+
+	.install-hint,
+	.dim-scrim {
 		transition: none;
 	}
 

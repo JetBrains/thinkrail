@@ -11,18 +11,32 @@ const editor = document.getElementById("editor-scroll");
 const sections = Array.from(document.querySelectorAll<HTMLElement>(".file-section"));
 const tabs = Array.from(document.querySelectorAll<HTMLAnchorElement>(".tabstrip .tab"));
 const treeRows = Array.from(document.querySelectorAll<HTMLAnchorElement>(".filetree a.ft-row"));
+const rulerTicks = Array.from(document.querySelectorAll<HTMLAnchorElement>(".ruler .ruler-tick"));
+// Every affordance that highlights with the section in view: tab strip, files rail, overview ruler.
+const navLinks = [...tabs, ...treeRows, ...rulerTicks];
+
+// A section's one-shot replay, played the moment that section becomes the one in view. The spy is the
+// single owner of "what's on screen" — demos hang off it rather than each running its own observer.
+const replays = new Map<string, () => void>();
+let spyRunning = false;
 
 function setActive(id: string): void {
-	for (const el of [...tabs, ...treeRows]) {
+	for (const el of navLinks) {
 		const active = el.getAttribute("href") === `#${id}`;
 		el.classList.toggle("active", active);
 		if (active && el.classList.contains("tab")) {
 			el.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "auto" });
 		}
 	}
+	const replay = replays.get(id);
+	if (replay) {
+		replays.delete(id); // one-shot: scrolling back past a demo doesn't restart it
+		replay();
+	}
 }
 
 if (editor && sections.length > 0) {
+	spyRunning = true;
 	const visible = new Map<string, number>();
 	const spy = new IntersectionObserver(
 		(entries) => {
@@ -40,17 +54,69 @@ if (editor && sections.length > 0) {
 	for (const section of sections) spy.observe(section);
 }
 
-/* ── Status bar: a line counter that tracks scroll like a cursor ────────── */
+/* ── Keyboard: ↑/↓ step the editor through the sections, tile by tile ───── */
+
+if (editor && sections.length > 0) {
+	const EPS = 4; // a stop we're already parked on must not count as "the next one"
+
+	/**
+	 * Every position ↑/↓ can land on, in scroll order: each section's top, plus a second stop for any
+	 * section taller than the pane (its end, aligned to the bottom) so a tall tile is never half-read.
+	 * A tile only earns that second stop when what it hides is more than its own bottom padding —
+	 * otherwise the extra stop is a few dead pixels and the key looks broken.
+	 */
+	const stops = (): number[] => {
+		const paneTop = editor.getBoundingClientRect().top;
+		const max = editor.scrollHeight - editor.clientHeight;
+		const clamp = (n: number) => Math.min(Math.max(Math.round(n), 0), max);
+		const set = new Set<number>();
+		for (const section of sections) {
+			const rect = section.getBoundingClientRect();
+			const top = rect.top - paneTop + editor.scrollTop;
+			const end = top + rect.height - editor.clientHeight;
+			const padding = Number.parseFloat(getComputedStyle(section).paddingBottom) || 0;
+			set.add(clamp(top));
+			if (end - top > padding) set.add(clamp(end));
+		}
+		return [...set].sort((a, b) => a - b);
+	};
+
+	/** Move one stop in `dir`; false when there is none (so the key keeps its default behaviour). */
+	const step = (dir: 1 | -1): boolean => {
+		const at = editor.scrollTop;
+		const list = stops();
+		const target =
+			dir === 1
+				? list.find((stop) => stop > at + EPS)
+				: list.reverse().find((stop) => stop < at - EPS);
+		if (target === undefined) return false;
+		editor.scrollTo({ top: target }); // CSS owns the easing (`scroll-behavior`, off under reduced motion)
+		return true;
+	};
+
+	document.addEventListener("keydown", (event) => {
+		if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+		if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+		// The theme menu owns ↑/↓ for moving between its items.
+		if (event.target instanceof Element && event.target.closest('[role="menu"]')) return;
+		if (step(event.key === "ArrowDown" ? 1 : -1)) event.preventDefault();
+	});
+}
+
+/* ── Scroll position: the status bar's cursor-like line counter, and retiring
+   the scroll cue at the end of the document. One listener, one rAF. ─────── */
 
 const TOTAL_LINES = 2431;
 const lnEl = document.getElementById("sb-ln");
-if (editor && lnEl) {
+if (editor) {
 	let ticking = false;
 	const update = () => {
 		ticking = false;
 		const range = editor.scrollHeight - editor.clientHeight;
 		const ratio = range > 0 ? editor.scrollTop / range : 0;
-		lnEl.textContent = `Ln ${Math.max(1, Math.round(ratio * TOTAL_LINES))}, Col 1`;
+		if (lnEl) lnEl.textContent = `Ln ${Math.max(1, Math.round(ratio * TOTAL_LINES))}, Col 1`;
+		// The cue's chevron promises more below — take it back once there isn't any.
+		document.documentElement.classList.toggle("at-end", ratio > 0.995);
 	};
 	editor.addEventListener("scroll", () => {
 		if (!ticking) {
@@ -90,27 +156,25 @@ if (motionOK && terminal && typeTarget) {
 	setTimeout(typeNext, 900);
 }
 
-/* ── Chat demos: replay when they scroll into view ──────────────────────── */
+/* ── Chat demos: replay when their section is the one you're looking at ──── */
 
-function armOnView(el: HTMLElement, play: () => void): void {
+/**
+ * Hide a demo's steps and hand its replay to the scroll-spy, which plays it once its section becomes
+ * the section in view. Returns whether it armed — without the spy nothing is hidden, so the finished
+ * state stays on screen (the same state a JS-less visitor gets).
+ */
+function armOnFocus(el: HTMLElement, play: () => void): boolean {
+	const sectionId = el.closest<HTMLElement>(".file-section")?.id;
+	if (!spyRunning || !sectionId) return false;
 	el.classList.add("armed");
-	let played = false;
-	const observer = new IntersectionObserver(
-		(entries) => {
-			if (played || !entries.some((entry) => entry.isIntersecting)) return;
-			played = true;
-			observer.disconnect();
-			play();
-		},
-		{ root: editor, threshold: 0.35 },
-	);
-	observer.observe(el);
+	replays.set(sectionId, play);
+	return true;
 }
 
 const chat = document.getElementById("chat-demo");
 if (motionOK && chat) {
 	const steps = Array.from(chat.querySelectorAll<HTMLElement>("[data-step]"));
-	armOnView(chat, () => {
+	armOnFocus(chat, () => {
 		steps.forEach((step, index) => {
 			setTimeout(() => step.classList.add("on"), 250 + index * 550);
 		});
@@ -125,21 +189,19 @@ const whyChat = document.getElementById("why-chat");
 const whyTyped = document.getElementById("why-typed");
 const whyCaret = document.getElementById("why-caret");
 const whyPlaceholder = document.getElementById("why-placeholder");
-const whyTabName = document.getElementById("why-tab-name");
-if (motionOK && whyChat && whyTyped && whyCaret && whyPlaceholder && whyTabName) {
+// The tab and its files-rail row carry the same name, so the self-titling renames both at once.
+const whyNames = Array.from(document.querySelectorAll<HTMLElement>(".why-name"));
+if (motionOK && whyChat && whyTyped && whyCaret && whyPlaceholder && whyNames.length > 0) {
+	const setWhyName = (name: string) => {
+		for (const el of whyNames) el.textContent = name;
+	};
 	const stepOn = (name: string) =>
 		whyChat.querySelector(`[data-step="${name}"]`)?.classList.add("on");
 	const build = (selector: string, cls: string) =>
 		whyChat.querySelector(selector)?.classList.add(cls);
 	const question = "Why ThinkRail? One map, please — not a wall of text.";
 
-	// pre-replay state: generic tab title, composer in typing mode
-	whyTabName.textContent = "chat";
-	whyPlaceholder.hidden = true;
-	whyTyped.hidden = false;
-	whyCaret.hidden = false;
-
-	armOnView(whyChat, () => {
+	const armed = armOnFocus(whyChat, () => {
 		let i = 0;
 		const typeNext = () => {
 			if (i <= question.length) {
@@ -157,9 +219,7 @@ if (motionOK && whyChat && whyTyped && whyCaret && whyPlaceholder && whyTabName)
 				whyCaret.hidden = true;
 				whyPlaceholder.hidden = false;
 				stepOn("user");
-				setTimeout(() => {
-					whyTabName.textContent = "Why ThinkRail?";
-				}, 500);
+				setTimeout(() => setWhyName("Why ThinkRail?"), 500);
 				setTimeout(() => stepOn("act"), 800);
 				setTimeout(() => stepOn("line1"), 1500);
 				const T = 2100;
@@ -176,6 +236,15 @@ if (motionOK && whyChat && whyTyped && whyCaret && whyPlaceholder && whyTabName)
 		};
 		setTimeout(typeNext, 600);
 	});
+
+	// Rewind to the pre-replay state — but only once the replay is guaranteed to run, so a missing
+	// spy leaves the finished chat (named tab, idle composer) rather than a permanently blank one.
+	if (armed) {
+		setWhyName("chat");
+		whyPlaceholder.hidden = true;
+		whyTyped.hidden = false;
+		whyCaret.hidden = false;
+	}
 }
 
 /* ── Theme dropdown: chip shows the current palette, menu picks one ─────── */
@@ -221,7 +290,7 @@ if (themeTrigger && themeMenu) {
 	};
 	const isOpen = () => themeTrigger.getAttribute("aria-expanded") === "true";
 
-	apply(document.documentElement.getAttribute("data-theme") ?? "dark");
+	apply(document.documentElement.getAttribute("data-theme") ?? "light");
 
 	themeTrigger.addEventListener("click", () => {
 		const opening = !isOpen();
@@ -230,7 +299,7 @@ if (themeTrigger && themeMenu) {
 	});
 	for (const item of items) {
 		item.addEventListener("click", () => {
-			apply(item.dataset.themeId ?? "dark");
+			apply(item.dataset.themeId ?? "light");
 			setOpen(false);
 			themeTrigger.focus();
 		});
@@ -276,18 +345,88 @@ for (const el of document.querySelectorAll<HTMLElement>("[data-copy]")) {
 const navToggle = document.getElementById("nav-toggle");
 const railRight = document.getElementById("rail-right");
 const backdrop = document.getElementById("rail-backdrop");
+// The drawer's three state writes always travel together, so closing it is one call — the decoy
+// handler below needs it too (tapping a fake control inside the drawer must reveal what it points at).
+let closeRail = (): void => {};
 if (navToggle && railRight && backdrop) {
 	const setOpen = (open: boolean) => {
 		railRight.classList.toggle("open", open);
 		backdrop.hidden = !open;
 		navToggle.setAttribute("aria-expanded", String(open));
 	};
+	closeRail = () => setOpen(false);
 	navToggle.addEventListener("click", () => setOpen(!railRight.classList.contains("open")));
 	backdrop.addEventListener("click", () => setOpen(false));
 	document.addEventListener("keydown", (event) => {
 		if (event.key === "Escape") setOpen(false);
 	});
 	for (const row of treeRows) row.addEventListener("click", () => setOpen(false));
+}
+
+/* ── Decoys: every fake control sells the install ────────────────────────── */
+
+const installLine = document.querySelector<HTMLElement>(".install-line");
+const installHint = document.getElementById("install-hint");
+if (installLine && installHint) {
+	const HINT_MS = 9600; // the staged reveal eats ~2s of this before the answer is up
+	const hintSteps = Array.from(installHint.querySelectorAll<HTMLElement>("[data-step]"));
+	const typing = installHint.querySelector<HTMLElement>(".hint-typing");
+	let timers: number[] = [];
+	const after = (ms: number, run: () => void) => timers.push(window.setTimeout(run, ms));
+	const stepOn = (name: string) =>
+		installHint.querySelector(`[data-step="${name}"]`)?.classList.add("on");
+
+	/**
+	 * Take the whole thing down: pending beats, the callout, the spotlight, and the listeners that
+	 * watch for the interruption. Doubles as the dismiss handler, so the next click or key ends it —
+	 * an 8-second overlay you cannot get out of is worse than one you miss.
+	 */
+	const hide = (): void => {
+		for (const timer of timers) clearTimeout(timer);
+		timers = [];
+		installLine.classList.remove("nudge");
+		installHint.classList.remove("on");
+		document.documentElement.classList.remove("hint-on");
+		document.removeEventListener("click", hide);
+		document.removeEventListener("keydown", hide);
+	};
+
+	// One delegated listener rather than a handler per decoy — the marked set is `[data-demo]` in the
+	// markup, so adding a fake control never means remembering to wire it here.
+	document.addEventListener("click", (event) => {
+		if (!(event.target instanceof Element)) return;
+		if (!event.target.closest("[data-demo]")) return;
+		event.preventDefault(); // some decoys sit inside a real link (the tab close glyphs)
+		// Clearing first also detaches the dismiss listeners, so this very click can't cut short the
+		// replay it just asked for — a removed listener is skipped for the event already in flight.
+		hide();
+		closeRail();
+		document.getElementById("readme")?.scrollIntoView();
+		installHint.classList.add("on");
+		document.documentElement.classList.add("hint-on"); // spotlight: dim the rest of the shell
+		// Re-arm across a frame so a second click replays the sweep instead of doing nothing.
+		requestAnimationFrame(() => installLine.classList.add("nudge"));
+
+		if (motionOK) {
+			// The exchange plays out: question, the agent thinking, the answer, then the arrows. Without
+			// motion the CSS never hid any of it, so there is nothing to stage.
+			for (const step of hintSteps) step.classList.remove("on");
+			typing?.classList.remove("gone");
+			after(250, () => stepOn("q"));
+			after(800, () => stepOn("typing"));
+			after(1800, () => {
+				typing?.classList.add("gone");
+				stepOn("a");
+			});
+			after(2300, () => stepOn("arrows"));
+		}
+		// Armed a tick later so the opening click is long past before anything listens for the next one.
+		after(0, () => {
+			document.addEventListener("click", hide);
+			document.addEventListener("keydown", hide);
+		});
+		after(HINT_MS, hide);
+	});
 }
 
 /* ── GitHub stars (best effort) ─────────────────────────────────────────── */
