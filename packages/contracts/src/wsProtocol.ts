@@ -7,12 +7,17 @@ import type {
 	FileNode,
 	GithubAuthStatus,
 	GitStatus,
+	HistoryScope,
+	HistorySearchResult,
 	JbcentralConnectResult,
 	LoginReply,
 	Project,
 	ProjectPathStatus,
 	ProviderStatusReport,
 	SpecGraphSnapshot,
+	Template,
+	TemplateInfo,
+	TemplateScope,
 	TodoItem,
 	TodoPlan,
 	TodoStatus,
@@ -61,7 +66,16 @@ import type {
 // v14: group/source toggles + pre-session manager — `project.setGroupEnabled` (turn a plugin or source tier,
 // incl. `@plugins`, on/off at the project baseline) + `project.skills` (project-scoped catalog for Welcome /
 // New Workspace); `Project` gains `disabledGroups`, `SkillCatalogEntry` gains `group`.
-export const PROTOCOL_VERSION = 14;
+// v15: chat-history search — `history.search` reads a lazy in-memory index over pi's session files
+// (prompt recall + full-conversation matches, scoped chat/workspace/project/all, recency-ordered). The
+// messages section is assistant-only (a user-role hit only ever duplicates its own prompt's text);
+// `PromptHit` carries optional `messageIndex`/`anchorText` so the prompt row itself is jumpable — the
+// location a dropped user-role message hit used to carry.
+// v16: prompt-template CRUD — template.* reads/writes pi's prompt dirs (global + project), so
+// templates stay pi-CLI-portable. `template.list` is metadata-only (`TemplateInfo`, no `content` — the
+// host reads just each file's bounded frontmatter head); the full text travels solely on the by-name
+// `template.get`/`template.save` path (`Template`), both size-capped host-side.
+export const PROTOCOL_VERSION = 16;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -189,6 +203,12 @@ export const WS_METHODS = {
 	// Persist a partial change to the server-synced app settings (e.g. the theme). The host merges, saves
 	// `config.json`, and broadcasts `settings.changed` — the caller converges on that push, not optimism.
 	settingsUpdate: "settings.update",
+	historySearch: "history.search",
+	// Prompt-template CRUD: list/read/write/delete pi's global + project-scoped templates.
+	templateList: "template.list",
+	templateGet: "template.get",
+	templateSave: "template.save",
+	templateDelete: "template.delete",
 } as const;
 
 /** Server→client push channels. */
@@ -428,6 +448,40 @@ export interface WsMethodMap {
 	// Merge a partial into the server-synced app settings, persist it, and broadcast `settings.changed`.
 	// Returns the merged, persisted `AppConfig`.
 	"settings.update": { params: { config: Partial<AppConfig> }; result: AppConfig };
+	// Prompt recall + full-text conversation search over pi's persisted sessions (and live ones — pi
+	// appends as messages complete). Server-side index; results capped (default 50/section), true totals.
+	"history.search": {
+		params: { query: string; scope: HistoryScope; limit?: number };
+		result: HistorySearchResult;
+	};
+	// List all templates (global + project-scoped). `workspaceId` needed to resolve the project dir;
+	// omitted → global templates only.
+	"template.list": {
+		params: { workspaceId?: string };
+		result: { templates: TemplateInfo[] };
+	};
+	// Fetch a single template by name — the only read that carries the full `content` (list is
+	// metadata-only). `scope` is optional (project wins over global when omitted). `workspaceId` is
+	// required only if the template may be project-scoped.
+	"template.get": {
+		params: { workspaceId?: string; name: string; scope?: TemplateScope };
+		result: Template;
+	};
+	// Save a template (creates or overwrites). Returns the persisted `Template`.
+	"template.save": {
+		params: {
+			workspaceId?: string;
+			scope: TemplateScope;
+			name: string;
+			content: string;
+		};
+		result: Template;
+	};
+	// Delete a template. Returns `Ack` on success.
+	"template.delete": {
+		params: { workspaceId?: string; scope: TemplateScope; name: string };
+		result: Ack;
+	};
 }
 
 export type WsMethodName = keyof WsMethodMap;

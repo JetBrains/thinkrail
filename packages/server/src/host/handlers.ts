@@ -2,8 +2,10 @@ import type {
 	AppConfig,
 	AskUserQuestionResult,
 	ExtUiResponse,
+	HistoryScope,
 	ImageContent,
 	LoginReply,
+	TemplateScope,
 	ThinkingLevel,
 	TodoStatus,
 	WireModel,
@@ -48,6 +50,7 @@ import { selectDirectory } from "../dialog";
 import { readDir, readFile } from "../fs";
 import { gitDiffFile, gitStatus, listBranches, prefetchBranch } from "../git";
 import { githubAuthStatus, githubRefresh } from "../github";
+import { clampLimit, getHistoryIndex } from "../history";
 import {
 	acknowledgeProjectSkills,
 	closeProject,
@@ -62,6 +65,13 @@ import {
 import { updateConfig } from "../settings";
 import { evictSpecIndex, projectHasSpecs, specGraph } from "../spec";
 import {
+	deleteTemplate,
+	getTemplate,
+	listTemplates,
+	saveTemplate,
+	templateDirs,
+} from "../templates";
+import {
 	closeTerminal,
 	closeWorkspaceTerminals,
 	createTerminal,
@@ -74,12 +84,14 @@ import {
 	createWorkspace,
 	forgetWorkspace,
 	getWorkspace,
+	listWorkspaceRecords,
 	listWorkspaces,
 	reclaimWorktree,
 	setWorkspaceSkillOverride,
 	workspaceDiffStats,
 } from "../workspaces";
 import { ackSend } from "./ackSend";
+import { buildHistoryScope } from "./historyScope";
 
 type Handler = (params: unknown) => unknown | Promise<unknown>;
 
@@ -397,6 +409,51 @@ const handlers: Record<string, Handler> = {
 	// Merge + persist a partial into the server-synced app config (theme, …); the broadcast is fired by
 	// `updateConfig`'s injected publisher (wired in `createServer`), so every client converges.
 	"settings.update": (params) => updateConfig((params as { config: Partial<AppConfig> }).config),
+	// Prompt recall + conversation search over pi's session files. Scope mapping is resolved here (host
+	// owns the registries); the index itself stays registry-free (see history/SPEC.md).
+	// Uses listWorkspaceRecords (diffStats-free registry read) to avoid blocking on git per keystroke.
+	"history.search": (params) => {
+		const p = params as { query: string; scope: HistoryScope; limit?: number };
+		const { filter, labels } = buildHistoryScope(p.scope, listProjects(), (projectId) =>
+			listWorkspaceRecords(projectId),
+		);
+		// Clamp the client-controlled limit at the boundary (defense in depth; `search()` clamps too).
+		return getHistoryIndex().search({
+			query: p.query,
+			filter,
+			labels,
+			limit: clampLimit(p.limit),
+		});
+	},
+	// Prompt-template CRUD: list/read/write/delete pi's global + project-scoped templates. The
+	// template.* handlers resolve workspaceId → cwd via getWorkspace, then delegate to the templates
+	// module (which stays registry-free: it only takes a cwd, never a workspaceId).
+	"template.list": (params) => {
+		const p = params as { workspaceId?: string };
+		const dirs = templateDirs(p.workspaceId ? getWorkspace(p.workspaceId).worktreePath : undefined);
+		return { templates: listTemplates(dirs) };
+	},
+	"template.get": (params) => {
+		const p = params as { workspaceId?: string; name: string; scope?: TemplateScope };
+		const dirs = templateDirs(p.workspaceId ? getWorkspace(p.workspaceId).worktreePath : undefined);
+		return getTemplate(dirs, p.name, p.scope);
+	},
+	"template.save": (params) => {
+		const p = params as {
+			workspaceId?: string;
+			scope: TemplateScope;
+			name: string;
+			content: string;
+		};
+		const dirs = templateDirs(p.workspaceId ? getWorkspace(p.workspaceId).worktreePath : undefined);
+		return saveTemplate(dirs, p.scope, p.name, p.content);
+	},
+	"template.delete": (params) => {
+		const p = params as { workspaceId?: string; scope: TemplateScope; name: string };
+		const dirs = templateDirs(p.workspaceId ? getWorkspace(p.workspaceId).worktreePath : undefined);
+		deleteTemplate(dirs, p.scope, p.name);
+		return { ok: true } as const;
+	},
 };
 
 /** Route a WS request to its handler. Throws on unknown method (→ a `{ ok:false }` WS response). */

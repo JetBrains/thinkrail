@@ -1,5 +1,5 @@
 import type { SlashCommandInfo } from "@thinkrail/contracts";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { cn } from "@/lib/utils";
 
 const MAX_MATCHES = 8;
@@ -120,17 +120,23 @@ export function useSlashCommandCompletion({
 	return { activeIndex: visibleActiveIndex, dismiss, handleKeyDown, matches, open, pick };
 }
 
-/** Presentational command list shared by the chat composer and New Workspace prompt. */
+/**
+ * Presentational command list shared by the chat composer and New Workspace prompt. `footer` renders
+ * under the rows for owner-specific affordances the list itself knows nothing about (the composer's
+ * "no prompt templates yet" nudge); the New Workspace prompt passes none.
+ */
 export function SlashCommandMenu({
 	commands,
 	activeIndex,
 	onSelect,
 	className,
+	footer,
 }: {
 	commands: readonly SlashCommandInfo[];
 	activeIndex: number;
 	onSelect: (command: SlashCommandInfo) => void;
 	className?: string;
+	footer?: ReactNode;
 }) {
 	return (
 		<div
@@ -161,6 +167,7 @@ export function SlashCommandMenu({
 					</span>
 				</button>
 			))}
+			{footer}
 		</div>
 	);
 }

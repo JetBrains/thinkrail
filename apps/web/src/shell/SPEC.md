@@ -34,8 +34,11 @@ later, the mobile single-view-with-switcher).
   `applyTheme(theme)` + `writeThemeHint(theme)` (the localStorage first-paint cache). The value flows
   store ← transport (welcome /
   `settings.changed`); the shell just performs the swap, so no other component touches `[data-theme]`.
+  **Owns the app-wide keyboard chords** — `useGlobalHotkeys.ts`, mounted once by `Shell`. See
+  "Global chords" below.
 - **Public surface:** `Shell`.
-- **Allowed deps:** `panels`, `store` (status + theme + project/workspace context), `transport` (`ConnectionStatus` type), `components/ui`
+- **Allowed deps:** `panels`, `store` (status + theme + project/workspace context + the active-chat
+  selector and `requestHistoryOpen`), `transport` (`ConnectionStatus` type), `components/ui`
   (resizable), `components/ErrorBoundary`, `constants` (branding), `themes` (`applyTheme`/`writeThemeHint`).
 - **Forbidden:** `server`/`shared`/`pi`; being imported by `panels`/`store`/`transport`.
 
@@ -50,3 +53,34 @@ clears a stuck error. A **last-resort boundary wraps `<Shell />` in `main.tsx`**
 per-tab boundary (`resetKeys={[active.id]}`) so one bad tab keeps the tab strip usable. The boundary
 detects failed dynamic imports (`isChunkLoadError`) and steers those to a page **reload** (re-fetches
 the chunk) rather than an in-place retry. Each region degrades independently — never the whole app.
+
+## Global chords (why a key handler lives this high up)
+
+A chord that must work "wherever the user is" cannot be an element's `onKeyDown` — that only fires while
+that element holds focus, and outside it the *browser* gets the keystroke. `useGlobalHotkeys` is the one
+place that owns such chords: a single window listener in the **capture** phase, so it sees the keystroke
+before any component does and can both `preventDefault` (deny the browser) and `stopPropagation` (deny
+duplicate handling downstream).
+
+Today that's **`Ctrl+R` → chat history search**. Previously handled only on the composer textarea, so
+with focus anywhere else — the file tree, Monaco, a diff, the transcript, bare `<body>` — the browser
+reloaded the app instead. It is deliberately *not* a browser-reserved chord (unlike `Ctrl+T`/`Ctrl+W`/
+`Ctrl+N`), so swallowing it works. Routing goes through the store (`selectHistoryTarget` →
+`requestHistoryOpen`), never a ref: the chord fires far outside the chat subtree entirely.
+
+Because `CenterTabs` mounts one tab body at a time, "which chat" and "is it even mounted" are the same
+question. `selectHistoryTarget` answers it: the active tab when that's a chat, else the workspace's most
+recently opened one — and `requestHistoryOpen` **activates that tab atomically with the request**, so the
+`ChatView` that mounts is the one that consumes it. Resolving to "no target" over a file/diff tab would
+have been worse than the bug: the chord is swallowed there too, so it would silently do *nothing* over
+Monaco, a diff, or the file tree — the very places this handler exists for. Only a workspace with **no**
+chat tab at all has nothing to open; there the chord is purely swallowed (still never a reload).
+
+Two carve-outs, both load-bearing:
+- **Terminals.** A keydown from inside `.xterm` passes straight through — `Ctrl+R` there is the shell's
+  reverse-i-search and belongs to the PTY. (`.xterm` is xterm's own root class, not a hook of ours.)
+- **Reload stays reachable.** `Ctrl+Shift+R` (hard reload), `Cmd+R` (macOS), `F5` and the browser's own
+  reload button are all untouched. Swallowing a reload chord is only acceptable while another one works.
+
+The shell is the natural owner: it is the composition root, mounted exactly once for the app's lifetime,
+and it already owns the other app-scoped DOM side-effect (the theme).

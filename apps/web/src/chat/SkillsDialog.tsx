@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { toast, useAppStore } from "@/store";
+import { selectWorkspaceTick, toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 
 /**
@@ -63,11 +63,6 @@ function isWorkspace(result: Project | Workspace): result is Workspace {
 	return "projectId" in result;
 }
 
-/** Whether a worktree-relative path is inside a skill directory — the auto-detect trigger for a reload. */
-export function isSkillPath(path: string): boolean {
-	return /(^|\/)\.(claude|github|gemini|pi|agents)\/skills(\/|$)/.test(path);
-}
-
 /** Chat-mode extras: a live session to reload after changes. Absent in project mode (pre-session). */
 export interface SkillsWorkspaceContext {
 	workspaceId: string;
@@ -75,8 +70,9 @@ export interface SkillsWorkspaceContext {
 	streaming: boolean;
 	/** Skills changed on disk since the session loaded — prompt a reload. */
 	stale?: boolean;
-	/** Fired after a successful reload so the caller can clear its stale flag. */
-	onReloaded?: () => void;
+	/** Fired after a successful reload with the workspace tick captured at reload-*start*, so the caller
+	 * anchors the sync baseline to what the reload actually loaded (a change mid-reload stays flagged). */
+	onReloaded?: (syncedTick: number) => void;
 }
 
 export function SkillsDialog({
@@ -135,9 +131,12 @@ export function SkillsDialog({
 	const reload = async () => {
 		if (busy || !workspace) return;
 		setBusy(true);
+		// Capture the sync baseline BEFORE the load: the server scans skills as of now, so a change whose
+		// fsChanged frame folds while this request is in flight must stay flagged (it wasn't loaded).
+		const syncedTick = selectWorkspaceTick(useAppStore.getState(), workspace.workspaceId);
 		try {
 			await getTransport().request("session.reloadResources", { sessionId: workspace.sessionId });
-			workspace.onReloaded?.();
+			workspace.onReloaded?.(syncedTick);
 			toast.success("This chat now uses the updated skills.", "Skills reloaded");
 		} catch (err) {
 			toast.error(errorText(err), "Couldn't reload skills");

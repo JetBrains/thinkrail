@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
-import { toast, useAppStore } from "@/store";
+import { selectWorkspaceTick, toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 
 /** A shared pill-trigger look for the project + branch pickers (mockup `.pill`). */
@@ -257,13 +257,21 @@ export function NewWorkspaceDialog({
 
 		const text = prompt.trim();
 		if (!text) return;
+		// Snapshot the sync baseline before the create round-trip (see selectWorkspaceTick / openChatSession).
+		const syncedTick = selectWorkspaceTick(useAppStore.getState(), workspace.id);
 		try {
 			const session = await getTransport().request("session.create", {
 				workspaceId: workspace.id,
 				...(model ? { model } : {}),
 				thinkingLevel,
 			});
-			store.openChatSession(workspace.id, session.sessionId, session.model, session.thinkingLevel);
+			store.openChatSession(
+				workspace.id,
+				session.sessionId,
+				session.model,
+				session.thinkingLevel,
+				syncedTick,
+			);
 			store.appendUserMessage(session.sessionId, text);
 			// Fire-and-forget the turn (it resolves only when the turn ends); the now-open chat tab streams it.
 			// A rejected send (bad model / no API key) surfaces as an error turn in the just-opened chat rather

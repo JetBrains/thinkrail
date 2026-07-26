@@ -1,6 +1,9 @@
 import type {
 	AskUserQuestionResult,
 	ImageContent,
+	PromptHit,
+	SlashCommandInfo,
+	TemplateInfo,
 	ThinkingLevel,
 	WireModel,
 } from "@thinkrail/contracts";
@@ -8,21 +11,78 @@ import { ArrowDown } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { Popover, PopoverAnchor, PopoverTrigger } from "@/components/ui/popover";
-import { EMPTY_RUNTIME, useAppStore } from "@/store";
+import { EMPTY_RUNTIME, SettingsSection, selectSkillsStale, toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { AskStatesContext, deriveAskStates } from "./askState";
 import { type ChatActions, ChatActionsContext } from "./ChatActions";
 import { ChatHeader } from "./ChatHeader";
 import { ChatPlanContent, ChatPlanStripContent } from "./ChatPlan";
-import { Composer, type MentionCandidate, type SubmitBehavior } from "./Composer";
+import {
+	Composer,
+	type ComposerHandle,
+	type MentionCandidate,
+	type SubmitBehavior,
+} from "./Composer";
 import { ExtUiDialog } from "./ExtUiDialog";
-import { type ChatRow, deriveRows } from "./rows";
-import { isSkillPath, SkillsDialog } from "./SkillsDialog";
+import { HistoryOverlay } from "./HistoryOverlay";
+import { type ChatRow, deriveRows, rowIndexForTurn } from "./rows";
+import { SkillsDialog } from "./SkillsDialog";
 import { StreamIndicator, type StreamStatus, streamStatus } from "./StreamIndicator";
+import { parseTemplateSlots } from "./slotSession";
+import { TemplateEditorDialog } from "./TemplateEditorDialog";
+import { shouldApplyTemplatePick } from "./templatePick";
+import { stripFrontmatter } from "./templateText";
 import "./tools/register"; // side-effect: register the built-in pi tool renderers (bash/read/edit/write)
 import { ChatTurnView } from "./turns";
+import type { ChatTurn } from "./types";
 import { useChatScroll } from "./useChatScroll";
 import { useChatTodos } from "./useChatTodos";
+import { useHistorySearch } from "./useHistorySearch";
+
+/**
+ * Best-effort plain text for a turn — user: `message.content` (a plain string, or text/image blocks);
+ * assistant: joined text blocks. `system`/`error`/`retry` turns fall through to `""`. Two consumers:
+ * anchor-matching a `chatLocationRequest` jump target (`turnIdByMessageIndex` only maps user/assistant
+ * messages, so a non-anchor turn's `""` never matches and is never wrongly selected by the fallback scan),
+ * and `recentPrompts` below (user turns only, so the assistant/`""` branches never surface there).
+ */
+function turnAnchorText(turn: ChatTurn): string {
+	if (turn.kind === "user") {
+		const { content } = turn.message;
+		return typeof content === "string"
+			? content
+			: content
+					.filter((b) => b.type === "text")
+					.map((b) => b.text)
+					.join("\n");
+	}
+	if (turn.kind === "assistant") {
+		return turn.message.content
+			.filter((b) => b.type === "text")
+			.map((b) => b.text)
+			.join("\n");
+	}
+	return "";
+}
+
+/** A fresh `template.list` row, mapped to the shape the composer's `/` menu already renders
+ * (`Composer.tsx:246-261`, unchanged) — `sourceInfo` synthesized to match pi's own prompt-template
+ * convention exactly (`createSyntheticSourceInfo` in `@earendil-works/pi-coding-agent`'s
+ * `core/source-info.js`): `source: "local"`, `origin: "top-level"`, `scope` mapped from our
+ * "global"/"project" to pi's "user"/"project". */
+function templateToCommand(t: TemplateInfo): SlashCommandInfo {
+	return {
+		name: t.name,
+		...(t.description ? { description: t.description } : {}),
+		source: "prompt",
+		sourceInfo: {
+			path: t.filePath,
+			source: "local",
+			scope: t.scope === "global" ? "user" : "project",
+			origin: "top-level",
+		},
+	};
+}
 
 /** Context threaded to the Virtuoso footer so the streaming loader lives at the end of the conversation. */
 type ChatListContext = { status: StreamStatus | null };
@@ -57,24 +117,19 @@ export default function ChatView({
 	// chat streaming into its own runtime never re-renders the foreground one.
 	const runtime = useAppStore((s) => s.sessions[sessionId]) ?? EMPTY_RUNTIME;
 	const models = useAppStore((s) => s.models);
-	// This chat's owning project (workspaces are keyed by project) — for the Skills manager's trust ops.
+	// This chat's owning project (workspaces are keyed by project) — for the Skills manager's trust ops
+	// and the "project" / "all" history-search scopes.
 	const projectId = useAppStore(
 		(s) =>
 			Object.values(s.workspaces)
 				.flat()
-				.find((w) => w.id === workspaceId)?.projectId ?? null,
+				.find((w) => w.id === workspaceId)?.projectId,
 	);
 	const [skillsOpen, setSkillsOpen] = useState(false);
-	// Auto-detect: the worktree watcher's fs nudge flags skills stale (the session loaded an older set) when
-	// a skill dir changes on disk — a pull/branch/edit. Reload is manual, so this only prompts.
-	const fsSignal = useAppStore((s) => s.fsChangesByWorkspace[workspaceId]);
-	const [skillsStale, setSkillsStale] = useState(false);
-	const lastSkillTick = useRef(0);
-	useEffect(() => {
-		if (!fsSignal || fsSignal.tick === lastSkillTick.current) return;
-		lastSkillTick.current = fsSignal.tick;
-		if (fsSignal.truncated || fsSignal.paths.some(isSkillPath)) setSkillsStale(true);
-	}, [fsSignal]);
+	// Auto-detect: a skill dir changed on disk (pull/branch/edit) after this session loaded — flag a manual
+	// reload. Store-derived per session, so the badge survives tab-switch remounts (a fresh ChatView reads
+	// the same store state) and a reload clears only this chat (see selectSkillsStale / markSkillsSynced).
+	const skillsStale = useAppStore((s) => selectSkillsStale(s, workspaceId, sessionId));
 	const workspaceRoot = useAppStore((s) => {
 		for (const workspaces of Object.values(s.workspaces)) {
 			const workspace = workspaces.find((w) => w.id === workspaceId);
@@ -82,6 +137,17 @@ export default function ChatView({
 		}
 		return undefined;
 	});
+	// The raw record is a stable reference from zustand's perspective (unlike a fresh object/array
+	// literal, which would re-render this view on every unrelated store update); the workspaceId →
+	// display-name map the history overlay's cross-workspace chip needs is derived below in a `useMemo`.
+	const workspaces = useAppStore((s) => s.workspaces);
+	const workspaceNames = useMemo(() => {
+		const map: Record<string, string> = {};
+		for (const list of Object.values(workspaces)) {
+			for (const w of list) map[w.id] = w.name;
+		}
+		return map;
+	}, [workspaces]);
 	const {
 		turns,
 		toolResults,
@@ -114,15 +180,60 @@ export default function ChatView({
 		return { status };
 	}, [turns, isStreaming, currentAssistantId]);
 
+	// The plain `↑`-recall list (`Composer`'s `recentPrompts` prop): this chat's own user-turn texts,
+	// newest first, deduped keeping the NEWEST occurrence — the same recency-first ranking rule as the
+	// server history index (and the atuin/fzf convention it follows). Reuses `turnAnchorText`'s
+	// user-content extraction (string, or joined text blocks) rather than re-deriving it. Reverse to
+	// newest→oldest *before* deduping: `Set` keeps each string's first-seen entry, so reversing first
+	// makes that first-seen entry the newest one, not the oldest (see `chat/SPEC.md`).
+	const recentPrompts = useMemo(() => {
+		const texts = turns
+			.filter((t) => t.kind === "user")
+			.map((t) => turnAnchorText(t))
+			.filter(Boolean);
+		return [...new Set(texts.reverse())];
+	}, [turns]);
+
 	const [mentionQuery, setMentionQuery] = useState<string | null>(null);
 	const [mentionCandidates, setMentionCandidates] = useState<MentionCandidate[]>([]);
 	// The chat's TODO plan, surfaced inline via a header strip that opens a popup over the chat (SPEC §Chat TODO plan).
 	const plan = useChatTodos(workspaceId, sessionId);
 	const [planOpen, setPlanOpen] = useState(false);
+	const [slashActive, setSlashActive] = useState(false);
+	const [templates, setTemplates] = useState<TemplateInfo[]>([]);
+	// "A `template.list` response came back and it was empty" — never "we haven't asked yet" or "the ask
+	// failed". See the fetch effect below for why the distinction matters.
+	const [templatesEmpty, setTemplatesEmpty] = useState(false);
+	// The history overlay's save-as-template dialog: non-null while open, carrying the prompt hit its body
+	// is prefilled from — `TemplateEditorDialog` itself is always mounted (controlled by `open` below), the
+	// same idiom `panels/TemplatesSettings.tsx` uses for its own New/Edit instance.
+	const [saveAsTemplateHit, setSaveAsTemplateHit] = useState<PromptHit | null>(null);
 
 	const virtuosoRef = useRef<VirtuosoHandle>(null);
 	const { followOutput, handleAtBottom, showScrollButton, scrollToBottom, containerProps } =
 		useChatScroll(virtuosoRef);
+	const composerRef = useRef<ComposerHandle>(null);
+
+	// The Ctrl+R history-recall overlay's integration edge (store/transport) — see `chat/SPEC.md`'s
+	// boundary section for why this hook, not this component's body, owns that edge.
+	const {
+		state: historyState,
+		openOverlay,
+		close: closeHistory,
+		setQuery,
+		cycleScope,
+		setScope,
+		toggleStage,
+		moveSelection,
+		openMessage,
+	} = useHistorySearch(sessionId, workspaceId, projectId);
+
+	// The history-search "jump to message" deep link this session is the target of, if any — cleared by
+	// this effect below once it has resolved (or failed to resolve) a row to scroll to. `CenterTabs` is the
+	// other consumer: it opens/hydrates the target chat's tab but never clears the request (see its own
+	// effect's jsdoc).
+	const chatLocationRequest = useAppStore((s) => s.chatLocationRequest);
+	const [flashRowId, setFlashRowId] = useState<string | null>(null);
 
 	// Models are global to the host — fetch once, then every chat's picker shares them.
 	useEffect(() => {
@@ -140,6 +251,46 @@ export default function ChatView({
 			.then((c) => useAppStore.getState().setCommands(sessionId, c))
 			.catch(() => {});
 	}, [sessionId]);
+
+	// Fresh prompt templates for the `/` menu merge (`mergedCommands` below) — fetched on EVERY menu-open
+	// transition (`slashActive` flipping true via `onSlashActive`; it stays true while the user keeps
+	// typing the query, so this never refires per keystroke). Deliberately uncached: prompt files change
+	// outside the app too (pi CLI, an editor, a git pull), which no in-app invalidation signal can see —
+	// an earlier `(workspaceId, templatesVersion)` cache here served those externally-changed files stale
+	// for the rest of the chat. The server intentionally re-reads its dirs per call for exactly this
+	// freshness (its SPEC calls the readdirs cheap), so the client simply asks each time the menu opens.
+	// This is what keeps this path fresh where the typed-through `/name args` expansion (pi's own
+	// session-create-time `commands` snapshot) is deliberately stale — see `chat/SPEC.md`'s Template
+	// slots section. The previous (possibly stale) list stays rendered until the fresh one lands — a
+	// same-open-transition flicker would be worse than a few-ms-stale row.
+	// `templatesEmpty` is what gates the menu's "no templates yet" nudge, and it is deliberately NOT
+	// `templates.length === 0`: that list starts empty and stays empty when a request fails (the catch is
+	// silent by design — a failed listing must not break the menu), so deriving emptiness from it would
+	// claim "you have no templates" during the first fetch of every chat and permanently after a failure.
+	// Only a resolved response can answer the question, so only a resolved response sets this.
+	useEffect(() => {
+		if (!slashActive) return;
+		let cancelled = false;
+		getTransport()
+			.request("template.list", { workspaceId })
+			.then((res) => {
+				if (cancelled) return;
+				setTemplates(res.templates);
+				setTemplatesEmpty(res.templates.length === 0);
+			})
+			.catch(() => {});
+		return () => {
+			cancelled = true;
+		};
+	}, [slashActive, workspaceId]);
+
+	// The composer's `/` menu merge: pi's `commands` snapshot minus its now-stale `source === "prompt"`
+	// entries, plus the fresh template list mapped to the same `SlashCommandInfo` shape — one list,
+	// `Composer`'s rendering is unchanged (`Composer.tsx:246-261`).
+	const mergedCommands = useMemo(
+		() => [...commands.filter((c) => c.source !== "prompt"), ...templates.map(templateToCommand)],
+		[commands, templates],
+	);
 
 	// Refresh token/cost stats when a turn starts and ends (display only — `pi` owns the numbers).
 	// biome-ignore lint/correctness/useExhaustiveDependencies: `isStreaming` is the refetch trigger, not read
@@ -219,6 +370,137 @@ export default function ChatView({
 			.request("session.abort", { sessionId })
 			.catch(() => {});
 	};
+
+	// Opening history recall seeds the overlay with the current draft (never a stale store value) —
+	// `useHistorySearch` owns everything from here (debounce, scope cycling, stale-response drop).
+	const onHistoryOpen = () => openOverlay(draft);
+
+	// Open the Templates manager — what the `/` menu's empty-state nudge does. The store edge lives here,
+	// not in the presentational `Composer`.
+	const onManageTemplates = () => useAppStore.getState().openSettings(SettingsSection.Templates);
+
+	// Dismissing the overlay (Escape) hands focus BACK to the prompt field, caret where it was, so the
+	// user can keep typing the draft they interrupted. Opening the overlay moved focus into its query
+	// input; closing unmounts that input, which would otherwise strand focus on `<body>` — every
+	// subsequent keystroke lost. This is the dismiss path only: the *other* ways the overlay closes each
+	// own where focus goes next (an insert focuses the composer itself, a jump scrolls another chat into
+	// view, save-as-template hands off to a dialog), so none of them route through here.
+	const onDismissHistory = () => {
+		closeHistory();
+		composerRef.current?.refocus();
+	};
+
+	// Enter on a prompt hit: replace the draft, focus, caret at end, close — no submit.
+	const onInsertHit = (hit: PromptHit) => {
+		composerRef.current?.insertText(hit.text);
+		closeHistory();
+	};
+
+	// Cmd/Ctrl+Enter on a prompt hit: send through the composer's own submit seam (its imperative
+	// handle), never a ChatView-side `onSubmit` call — the composer privately holds pending image
+	// attachments, and only its own path sends them with the text and clears them with the draft
+	// (which also resets the store draft via the composer's `onChange("")`).
+	const onInsertAndSendHit = (hit: PromptHit) => {
+		composerRef.current?.insertAndSubmit(hit.text, isStreaming ? "followUp" : "send");
+		closeHistory();
+	};
+
+	// A prompt hit's save-as-template action (row button or Cmd/Ctrl+S): close the overlay and open the
+	// shared editor dialog, body-prefilled with the hit's text — the dialog owns naming/scope/save from here.
+	const onSaveAsTemplateHit = (hit: PromptHit) => {
+		closeHistory();
+		setSaveAsTemplateHit(hit);
+	};
+
+	// Picking a `source: "prompt"` row: fetch the real file (never `commands`' frozen snapshot), split off
+	// the frontmatter (`templateText.ts`'s shared `stripFrontmatter` — pi's own parser is server-only, but
+	// the boundary rule is pinned to match it exactly), parse the body into slots, and hand the result to
+	// `Composer`'s `insertTemplate` — which starts (or skips, if there are no slots) a slot session,
+	// replacing the whole draft the way a plain slash pick does. Applied only while the pick is still
+	// CURRENT: the fetch is async, so a slow response must never clobber what the user did in the
+	// meantime — typed a fresh draft, or picked another template whose response already landed. The
+	// staleness rules (newest pick wins + the draft is untouched since pick time) live in
+	// `templatePick.ts`'s `shouldApplyTemplatePick`, pure and unit-tested.
+	const pickGeneration = useRef(0);
+	const onPickTemplate = useCallback(
+		(name: string) => {
+			const generation = ++pickGeneration.current;
+			const draftAtPick = useAppStore.getState().sessions[sessionId]?.draft ?? "";
+			getTransport()
+				.request("template.get", { workspaceId, name })
+				.then((t) => {
+					const apply = shouldApplyTemplatePick({
+						generation,
+						latestGeneration: pickGeneration.current,
+						draftAtPick,
+						currentDraft: useAppStore.getState().sessions[sessionId]?.draft ?? "",
+					});
+					if (!apply) return;
+					const parsed = parseTemplateSlots(stripFrontmatter(t.content), t.argumentHint);
+					composerRef.current?.insertTemplate(parsed);
+				})
+				.catch(() => {});
+		},
+		[workspaceId, sessionId],
+	);
+
+	// Consume a `chatLocationRequest` targeting this session: resolve its `messageIndex` to a turn (via
+	// `turnIdByMessageIndex`, falling back to scanning by `anchorText` when the map entry is absent —
+	// e.g. this runtime came from an already-live `hydrateSession` no-op, or the index is stale after
+	// compaction — or when the mapped turn's own text no longer contains the anchor), scroll its row into
+	// view, and flash it briefly. `rows.length > 0` guards against running before the transcript is ready
+	// (a fresh tab renders zero rows for one tick). Always clears the request — this is its only consumer.
+	useEffect(() => {
+		if (!chatLocationRequest || chatLocationRequest.sessionId !== sessionId || rows.length === 0) {
+			return;
+		}
+		const { messageIndex, anchorText } = chatLocationRequest;
+		const prefix = anchorText.slice(0, 40);
+		const mappedId = runtime.turnIdByMessageIndex?.[messageIndex];
+		const mapped = mappedId ? turns.find((t) => t.id === mappedId) : undefined;
+		// Fall back to the NEWEST turn whose text matches the anchor (`findLast`, not `find`): a hit is
+		// deduped to its newest occurrence, so when there's no exact index map (a never-hydrated live chat)
+		// or the mapped turn's text no longer matches, the newest match is the right target — matching the
+		// oldest would jump repeated prompts to a stale earlier turn.
+		const target =
+			mapped && turnAnchorText(mapped).includes(prefix)
+				? mapped
+				: turns.findLast((t) => turnAnchorText(t).includes(prefix));
+		const index = target ? rowIndexForTurn(rows, target.id) : -1;
+		if (index === -1) {
+			toast.error("couldn't locate the message — the session may have changed");
+			useAppStore.getState().clearChatLocation();
+			return;
+		}
+		virtuosoRef.current?.scrollToIndex({ index, align: "center" });
+		setFlashRowId(rows[index]?.id ?? null);
+		useAppStore.getState().clearChatLocation();
+	}, [chatLocationRequest, sessionId, rows, runtime.turnIdByMessageIndex, turns]);
+
+	// Consume the shell's global `Ctrl+R` (`store.historyOpenRequest`), the chord's only handler app-wide —
+	// it fires with focus anywhere, so it can't be a key handler in the composer or the overlay. Already
+	// open → cycle the scope (what the chord means once the overlay has focus); otherwise open it through
+	// the composer's `openHistory` handle, so the chord and the composer's own history button take the
+	// identical path (menus dismissed, draft-seeded).
+	const historyOpenRequest = useAppStore((s) => s.historyOpenRequest);
+	const historyOverlayOpen = historyState.open;
+	useEffect(() => {
+		if (historyOpenRequest?.sessionId !== sessionId) return;
+		useAppStore.getState().clearHistoryOpen();
+		if (historyOverlayOpen) cycleScope();
+		else composerRef.current?.openHistory();
+	}, [historyOpenRequest, sessionId, historyOverlayOpen, cycleScope]);
+
+	// Auto-clear the flash, decoupled from the effect above: `clearChatLocation()` there flips
+	// `chatLocationRequest` to null, which is one of that effect's own deps — if the timeout lived there,
+	// the re-run's cleanup would cancel it (and the re-run bails on `!chatLocationRequest` before
+	// scheduling a replacement), so `flashRowId` would never reset. Keying solely on `flashRowId` avoids
+	// that churn: this effect only fires when a flash actually starts or ends.
+	useEffect(() => {
+		if (flashRowId === null) return;
+		const timer = setTimeout(() => setFlashRowId(null), 1600);
+		return () => clearTimeout(timer);
+	}, [flashRowId]);
 
 	// A turn-divider's "files changed" chip → deep-link the right panel to the first changed file (flip to
 	// Changes + highlight its row; the diff opens only on an explicit click). This is the one chat touch of
@@ -313,7 +595,10 @@ export default function ChatView({
 							// Row ids are stable across streaming snapshots (rows.ts), so items never remount mid-stream.
 							computeItemKey={(_, row) => row.id}
 							itemContent={(_, row) => (
-								<div className="mx-auto max-w-3xl px-md py-xs">
+								<div
+									data-flash={row.id === flashRowId || undefined}
+									className="mx-auto max-w-3xl rounded-[var(--radius-md)] px-md py-xs transition-colors data-[flash]:bg-[var(--primary-10)]"
+								>
 									<ChatTurnView
 										row={row}
 										workspaceRoot={workspaceRoot}
@@ -341,20 +626,50 @@ export default function ChatView({
 							))}
 						</div>
 					) : null}
-					<Composer
-						value={draft}
-						onChange={(v) => useAppStore.getState().setChatDraft(sessionId, v)}
-						isStreaming={isStreaming}
-						commands={commands}
-						mentionCandidates={mentionCandidates}
-						models={models}
-						currentModel={currentModel}
-						thinkingLevel={thinkingLevel}
-						onMentionQuery={onMentionQuery}
-						onSelectModel={onSelectModel}
-						onSelectThinking={onSelectThinking}
-						onSubmit={onSubmit}
-						onAbort={onAbort}
+					<div className="relative shrink-0">
+						<HistoryOverlay
+							state={historyState}
+							workspaceNames={workspaceNames}
+							onQueryChange={setQuery}
+							onSetScope={setScope}
+							onToggleStage={toggleStage}
+							onMoveSelection={moveSelection}
+							onClose={onDismissHistory}
+							onInsert={onInsertHit}
+							onInsertAndSend={onInsertAndSendHit}
+							onOpenMessage={openMessage}
+							onSaveAsTemplate={onSaveAsTemplateHit}
+						/>
+						<Composer
+							ref={composerRef}
+							value={draft}
+							onChange={(v) => useAppStore.getState().setChatDraft(sessionId, v)}
+							isStreaming={isStreaming}
+							commands={mergedCommands}
+							mentionCandidates={mentionCandidates}
+							recentPrompts={recentPrompts}
+							models={models}
+							currentModel={currentModel}
+							thinkingLevel={thinkingLevel}
+							onMentionQuery={onMentionQuery}
+							onSlashActive={setSlashActive}
+							onSelectModel={onSelectModel}
+							onSelectThinking={onSelectThinking}
+							onSubmit={onSubmit}
+							onAbort={onAbort}
+							onHistoryOpen={onHistoryOpen}
+							onPickTemplate={onPickTemplate}
+							onManageTemplates={onManageTemplates}
+							templatesEmpty={templatesEmpty}
+						/>
+					</div>
+					<TemplateEditorDialog
+						open={saveAsTemplateHit != null}
+						onOpenChange={(open) => {
+							if (!open) setSaveAsTemplateHit(null);
+						}}
+						workspaceId={workspaceId}
+						initialBody={saveAsTemplateHit?.text ?? ""}
 					/>
 					{pendingExtUi ? (
 						<ExtUiDialog key={pendingExtUi.id} request={pendingExtUi} onReply={onExtUiReply} />
@@ -367,7 +682,8 @@ export default function ChatView({
 								sessionId,
 								streaming: isStreaming,
 								stale: skillsStale,
-								onReloaded: () => setSkillsStale(false),
+								onReloaded: (syncedTick) =>
+									useAppStore.getState().markSkillsSynced(sessionId, syncedTick),
 							}}
 							open={skillsOpen}
 							onOpenChange={setSkillsOpen}

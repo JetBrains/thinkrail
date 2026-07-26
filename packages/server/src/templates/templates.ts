@@ -1,0 +1,326 @@
+// File CRUD over pi's two sanctioned prompt-template directories (global + project-scoped). Frontmatter
+// is pi's own convention (`description` / `argument-hint`, pinned in SPEC.md against pi v0.80.6); this
+// module owns the traversal gate (`isValidTemplateName`) that pi's own loader doesn't provide. `content`
+// is always the full file text (frontmatter + body) — the wire's `TemplateInfo.content` contract — never
+// pi's parsed/stripped body. See SPEC.md for the pinned pi facts and the freshness rationale.
+import {
+	closeSync,
+	existsSync,
+	lstatSync,
+	mkdirSync,
+	openSync,
+	readdirSync,
+	readFileSync,
+	readSync,
+	rmSync,
+	type Stats,
+	writeFileSync,
+} from "node:fs";
+import { dirname, join } from "node:path";
+import { CONFIG_DIR_NAME, getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
+import type { Template, TemplateInfo, TemplateScope } from "@thinkrail/contracts";
+
+/** The two sanctioned template directories. `projectDir` is absent whenever there's no workspace. */
+export interface TemplateDirs {
+	globalDir: string;
+	projectDir?: string;
+}
+
+/**
+ * The traversal gate: every caller-supplied name is checked against this before it's used to build a
+ * path (`${name}.md` under one of the sanctioned dirs). This is a **path-traversal safety check, not a
+ * naming-style rule** — pi's own loader derives a template's name from the filename alone
+ * (`basename(filePath).replace(/\.md$/, "")`, with no sanitization at all — see SPEC.md's pinned pi
+ * facts), so this gate must accept every name pi could legally list, or `listTemplates` and the by-name
+ * operations fall out of parity: a name that shows up in a listing but can't be fetched, overwritten, or
+ * deleted by that same name is a user-visible bug, not a safety win. (An earlier version of this gate
+ * used an `/^[a-z0-9][a-z0-9-_]*$/i` allowlist regex — safe, but over-restrictive: it rejected any name
+ * with an interior dot, e.g. "foo.bar", which pi itself lists without complaint.)
+ *
+ * Rejected — exactly the shapes that are unsafe as a single filename segment:
+ * - empty string
+ * - a leading "." (covers ".", "..", and dotfiles like ".hidden" with one rule)
+ * - a path separator anywhere in the name ("/" or "\" — blocks "a/b", "../x", absolute paths, and
+ *   Windows-style separators)
+ * - an embedded NUL byte
+ *
+ * Everything else — interior dots, uppercase, spaces, unicode — is accepted.
+ */
+export function isValidTemplateName(name: string): boolean {
+	if (name.length === 0) return false;
+	if (name.startsWith(".")) return false;
+	return !name.includes("/") && !name.includes("\\") && !name.includes("\0");
+}
+
+/** The global + (if `cwd` is given) project prompt directories, pi's own layout: `<agentDir>/prompts`
+ * and `<cwd>/.pi/prompts`. Pure path arithmetic — no filesystem access. `agentDir`'s default is a
+ * call-time expression (not a cached module-level constant): `getAgentDir()` reads
+ * `PI_CODING_AGENT_DIR` live, so a test that sets the env var right before calling this must see it. */
+export function templateDirs(cwd?: string, agentDir: string = getAgentDir()): TemplateDirs {
+	return {
+		globalDir: join(agentDir, "prompts"),
+		...(cwd ? { projectDir: join(cwd, CONFIG_DIR_NAME, "prompts") } : {}),
+	};
+}
+
+/** The directory for `scope`. Throws for "project" when no workspace is available. */
+function dirForScope(dirs: TemplateDirs, scope: TemplateScope): string {
+	if (scope === "project") {
+		if (!dirs.projectDir)
+			throw new Error('template scope "project" requires a workspace (projectDir)');
+		return dirs.projectDir;
+	}
+	return dirs.globalDir;
+}
+
+/** `lstat` that never follows a symlink and never throws — `null` for a missing path. */
+function lstatOrNull(path: string): Stats | null {
+	try {
+		return lstatSync(path);
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * The **no-follow gate** (see SPEC.md): a directory entry named `<name>.md` that isn't a regular file —
+ * a symlink first of all — is *not a template*, for every by-name operation alike. pi's own read-only
+ * scanner deliberately follows file symlinks; this write-capable CRUD surface deliberately does not — a
+ * checked-out repo's `.pi/prompts/linked.md → ~/somewhere` must never be disclosed by `template.get` or
+ * overwritten by `template.save`. (`lstat`, never `stat`/`existsSync`, so the check itself can't follow.)
+ */
+function isRegularFile(path: string): boolean {
+	return lstatOrNull(path)?.isFile() ?? false;
+}
+
+/** The dir-level half of the no-follow gate: the repo controls `<cwd>/.pi` and `<cwd>/.pi/prompts`, so
+ * a symlinked component there is the same escape one level up — `template.list`/`template.get` would
+ * disclose the link target's `.md` files over the wire, `saveTemplate` would `mkdir`/write and
+ * `deleteTemplate` would `rm` inside it. Every project-scope operation checks this: reads treat an
+ * untraversable project dir as having no templates (same "absent, not followed" posture as the
+ * file-level gate), writes refuse loudly via {@link assertProjectWriteSafe}. The global dir is exempt
+ * on purpose — it's user-owned, and dotfile managers routinely symlink it. */
+function projectDirTraversable(projectDir: string): boolean {
+	return ![dirname(projectDir), projectDir].some(
+		(dir) => lstatOrNull(dir)?.isSymbolicLink() ?? false,
+	);
+}
+
+/** The loud (write-path) form of {@link projectDirTraversable} — a save/delete aimed through a
+ * symlinked project dir must fail visibly, never silently no-op. */
+function assertProjectWriteSafe(dirs: TemplateDirs, scope: TemplateScope): void {
+	if (scope !== "project" || !dirs.projectDir) return;
+	if (!projectDirTraversable(dirs.projectDir)) {
+		throw new Error(
+			`refusing to write templates through a symlinked directory: ${dirs.projectDir}`,
+		);
+	}
+}
+
+/** `dirs.projectDir`, or `undefined` when it's absent OR untraversable (dir-level no-follow gate) —
+ * the single predicate every project-scope READ goes through, so list and get can never disagree. */
+function readableProjectDir(dirs: TemplateDirs): string | undefined {
+	return dirs.projectDir && projectDirTraversable(dirs.projectDir) ? dirs.projectDir : undefined;
+}
+
+/** Hard cap on a template file / `template.save` payload — prompts are text, so 1 MiB is already
+ * generous. A directly-named read or a save of anything larger fails LOUDLY; `listTemplates` simply
+ * skips oversized files (list/get parity: neither surfaces them). This is what keeps one huge
+ * checked-in `.pi/prompts/*.md` from blocking the shared in-process host or bloating a WS response. */
+export const MAX_TEMPLATE_BYTES = 1024 * 1024;
+
+/** How much of a file's head `readTemplateMeta` reads to find the frontmatter — pi's own convention
+ * puts the block first, and real frontmatter is two short lines; a block whose closing fence sits past
+ * this window degrades to "no metadata" (never an error, never a full-file read). */
+const FRONTMATTER_SCAN_BYTES = 8 * 1024;
+
+/** The first `bytes` of `filePath`, decoded as UTF-8. Callers lstat-gate first (see the no-follow
+ * gate); the open-then-read itself is the same bounded-head pattern pi's `readSessionHeader` uses. */
+function readHead(filePath: string, bytes: number): string {
+	const fd = openSync(filePath, "r");
+	try {
+		const buffer = Buffer.alloc(bytes);
+		const bytesRead = readSync(fd, buffer, 0, bytes, 0);
+		return buffer.toString("utf-8", 0, bytesRead);
+	} finally {
+		closeSync(fd);
+	}
+}
+
+/** The two optional metadata fields out of a file's frontmatter (full content or bounded head — pi's
+ * `extractFrontmatter` inside `parseFrontmatter` treats a truncated block with no closing fence as
+ * plain content, i.e. no frontmatter, so a head read degrades safely). */
+function frontmatterMeta(text: string): Pick<TemplateInfo, "description" | "argumentHint"> {
+	const { frontmatter } = parseFrontmatter(text);
+	const description =
+		typeof frontmatter.description === "string" ? frontmatter.description : undefined;
+	const argumentHint =
+		typeof frontmatter["argument-hint"] === "string" ? frontmatter["argument-hint"] : undefined;
+	return {
+		...(description ? { description } : {}),
+		...(argumentHint ? { argumentHint } : {}),
+	};
+}
+
+/** Metadata-only read for `listTemplates` — never reads the full file (a listing must cost bounded
+ * work per file, whatever a checkout put in the dir): the no-follow lstat doubles as the size gate
+ * (oversized → `null`, skipped), then only `FRONTMATTER_SCAN_BYTES` of the head are read for the
+ * frontmatter. `null` for missing / non-regular / oversized entries. */
+function readTemplateMeta(dir: string, scope: TemplateScope, name: string): TemplateInfo | null {
+	const filePath = join(dir, `${name}.md`);
+	const stats = lstatOrNull(filePath);
+	if (!stats?.isFile() || stats.size > MAX_TEMPLATE_BYTES) return null;
+	const head = readHead(filePath, FRONTMATTER_SCAN_BYTES);
+	return { name, ...frontmatterMeta(head), scope, filePath };
+}
+
+/** Full read + parse of one template file from `dir`. `null` if it doesn't exist — or exists but isn't
+ * a regular file (the no-follow gate above; a symlinked entry is absent to every by-name operation, the
+ * same way `listDir`'s dirent `isFile()` already hides it from listings). An oversized file THROWS —
+ * unlike the listing's silent skip, a directly-named lookup deserves a loud answer (the same
+ * loud-vs-skip asymmetry as malformed frontmatter, which also propagates from here). */
+function readTemplateFile(dir: string, scope: TemplateScope, name: string): Template | null {
+	const filePath = join(dir, `${name}.md`);
+	const stats = lstatOrNull(filePath);
+	if (!stats?.isFile()) return null;
+	if (stats.size > MAX_TEMPLATE_BYTES) {
+		throw new Error(
+			`template file too large: ${name}.md (${stats.size} bytes, limit ${MAX_TEMPLATE_BYTES})`,
+		);
+	}
+	const content = readFileSync(filePath, "utf-8");
+	return { name, ...frontmatterMeta(content), content, scope, filePath };
+}
+
+/** Every `.md` file directly inside `dir` (non-recursive) whose derived name passes
+ * `isValidTemplateName`, as `TemplateInfo`s. Reusing that exact gate (not a hand-rolled dot check) is
+ * what makes list/get parity structurally guaranteed rather than true by coincidence: whatever this
+ * lists, `getTemplate`/`saveTemplate`/`deleteTemplate` can always act on by that same name, and the two
+ * can never drift apart since they share one predicate. This is a deliberate divergence from pi's own
+ * scanner (`loadTemplatesFromDir`), which has no such filter — pi would happily list a hand-placed
+ * `.hidden.md` — done in service of *our* parity invariant, not something pi does for us.
+ *
+ * Metadata-only (`readTemplateMeta` — bounded head reads, oversized files skipped): a listing must cost
+ * bounded work per file whatever a checkout dropped in the dir, and neither list consumer renders a body.
+ * A per-file read/parse failure (malformed frontmatter, unreadable file) is caught and that one file is
+ * skipped, not fatal — one bad file must never blank the whole listing. The *directory scan itself*
+ * (`readdirSync` and the loop around it) is wrapped too: an unreadable directory (EACCES, or — the
+ * deterministic case exercised in tests — a path that isn't actually a directory) is treated the same
+ * way, mirroring pi's own `loadTemplatesFromDir`'s try/catch-the-whole-scan shape (distinct from
+ * `loadTemplateFromFile`'s narrower per-file catch, which guards a different failure — see SPEC.md).
+ * Missing/absent `dir` → empty, checked before any of this. */
+function listDir(dir: string | undefined, scope: TemplateScope): TemplateInfo[] {
+	if (!dir || !existsSync(dir)) return [];
+	const templates: TemplateInfo[] = [];
+	try {
+		for (const entry of readdirSync(dir, { withFileTypes: true })) {
+			if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+			const name = entry.name.replace(/\.md$/, "");
+			if (!isValidTemplateName(name)) continue;
+			try {
+				const template = readTemplateMeta(dir, scope, name);
+				if (template) templates.push(template);
+			} catch {
+				// Malformed frontmatter or an unreadable file — skip it, don't fail the whole list.
+			}
+		}
+	} catch {
+		// The directory itself couldn't be scanned — same "one bad thing never blanks everything" policy,
+		// one level up: return whatever's already been collected (nothing, in practice, since a failing
+		// readdirSync throws before yielding any entry).
+	}
+	return templates;
+}
+
+/** All templates from both dirs, project entries shadowing same-named global ones (design spec §2.2 —
+ * this is a product decision, not something pi's own loader resolves for us; see SPEC.md). Always a
+ * fresh `readdir` — never cached (the "/ menu freshness" rule, SPEC.md). Sorted by name. */
+export function listTemplates(dirs: TemplateDirs): TemplateInfo[] {
+	const byName = new Map<string, TemplateInfo>();
+	for (const template of listDir(dirs.globalDir, "global")) byName.set(template.name, template);
+	for (const template of listDir(readableProjectDir(dirs), "project"))
+		byName.set(template.name, template);
+	return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Fetch one template by name. `scope` omitted → project wins over global (same precedence as
+ * `listTemplates`); an explicit `scope` reads exactly that dir. Throws if absent, if `name` is invalid,
+ * or if `scope` is "project" with no workspace. */
+export function getTemplate(dirs: TemplateDirs, name: string, scope?: TemplateScope): Template {
+	if (!isValidTemplateName(name)) throw new Error(`invalid template name: ${JSON.stringify(name)}`);
+	if (scope) {
+		// `dirForScope` first, for its own distinct error (project scope with no workspace at all);
+		// past that, an untraversable project dir reads as "absent" — the dir-level no-follow gate.
+		const scopeDir = dirForScope(dirs, scope);
+		const dir = scope === "project" ? readableProjectDir(dirs) : scopeDir;
+		const template = dir ? readTemplateFile(dir, scope, name) : null;
+		if (!template) throw new Error(`template not found: ${name} (scope: ${scope})`);
+		return template;
+	}
+	const projectDir = readableProjectDir(dirs);
+	if (projectDir) {
+		const projectTemplate = readTemplateFile(projectDir, "project", name);
+		if (projectTemplate) return projectTemplate;
+	}
+	const globalTemplate = readTemplateFile(dirs.globalDir, "global", name);
+	if (globalTemplate) return globalTemplate;
+	throw new Error(`template not found: ${name}`);
+}
+
+/** Create or overwrite a template. Writes `content` verbatim (the caller assembles frontmatter + body;
+ * this module never rewrites it) and creates the scope's dir if missing. Throws on an invalid `name`, a
+ * "project" scope with no workspace, or — checked BEFORE anything touches disk — malformed frontmatter in
+ * `content` (an unparseable `---`-fenced block throws inside `parseFrontmatter`; validating first means a
+ * rejected save writes nothing, instead of landing an orphan file that's invisible to `listTemplates`
+ * (swallowed there) and un-`get`-able (throws there) once it exists). After a successful write, the
+ * read-back used to build the return value can in principle still fail, but only for a filesystem race,
+ * not a content problem — an acceptable residual this function doesn't try to eliminate. */
+export function saveTemplate(
+	dirs: TemplateDirs,
+	scope: TemplateScope,
+	name: string,
+	content: string,
+): Template {
+	if (!isValidTemplateName(name)) throw new Error(`invalid template name: ${JSON.stringify(name)}`);
+	// The same cap `getTemplate` enforces on reads, applied before anything touches disk — without it a
+	// single oversized save would create a file every later read refuses and every listing skips.
+	const size = Buffer.byteLength(content, "utf-8");
+	if (size > MAX_TEMPLATE_BYTES) {
+		throw new Error(`template too large: ${size} bytes (limit ${MAX_TEMPLATE_BYTES})`);
+	}
+	try {
+		parseFrontmatter(content);
+	} catch (err) {
+		const message = err instanceof Error ? err.message : String(err);
+		throw new Error(`invalid frontmatter: ${message}`);
+	}
+	const dir = dirForScope(dirs, scope);
+	assertProjectWriteSafe(dirs, scope);
+	const filePath = join(dir, `${name}.md`);
+	// The file-level no-follow gate: `writeFileSync` follows an existing symlink, which would land the
+	// write on its target — refuse loudly instead of clobbering whatever a checked-out repo pointed at.
+	const existing = lstatOrNull(filePath);
+	if (existing && !existing.isFile()) {
+		throw new Error(`refusing to write through a non-regular file: ${name}.md`);
+	}
+	mkdirSync(dir, { recursive: true });
+	writeFileSync(filePath, content, "utf-8");
+	const template = readTemplateFile(dir, scope, name);
+	if (!template) throw new Error(`failed to save template: ${name}`);
+	return template;
+}
+
+/** Delete a template. Throws on an invalid `name`, a "project" scope with no workspace, or if the
+ * template doesn't exist — a missing file is treated as an error, not a silent no-op, since a delete
+ * request implies the caller's view already named a specific file; loud beats silent for a UI that might
+ * be looking at a stale list (see SPEC.md's "Get right"). */
+export function deleteTemplate(dirs: TemplateDirs, scope: TemplateScope, name: string): void {
+	if (!isValidTemplateName(name)) throw new Error(`invalid template name: ${JSON.stringify(name)}`);
+	const dir = dirForScope(dirs, scope);
+	assertProjectWriteSafe(dirs, scope);
+	const filePath = join(dir, `${name}.md`);
+	// No-follow gate: a symlinked entry is not a template (never listed, never fetched), so a delete by
+	// its name is a not-found, same as get — not an action on the link.
+	if (!isRegularFile(filePath)) throw new Error(`template not found: ${name} (scope: ${scope})`);
+	rmSync(filePath);
+}

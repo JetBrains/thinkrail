@@ -71,7 +71,7 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   `provider.login` frame (creating `activeLogin` if the frame arrived first; ignoring frames for a different
   live login), **`clearLoginInput()`** drops the live input the instant a reply is sent (no double-submit),
   and **`clearLogin()`** dismisses it. The **settings surface** state — **`settingsOpen`** +
-  **`settingsSection`** (a const-object enum: `Providers`/`Github`/`Appearance`) with
+  **`settingsSection`** (a const-object enum: `Providers`/`Github`/`Appearance`/`Templates`) with
   **`openSettings(section?)`** (deep-links to a section, defaults to Providers) / **`closeSettings()`** /
   **`setSettingsSection()`** — lives here so the top-bar gear AND the Welcome provider warning open Settings
   to a section without prop-drilling through the shell. The **theme** state — **`theme: ThemeId`** (the
@@ -88,12 +88,39 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   the existing id instead of stacking a twin) and **caps the queue at 5** (oldest drop — the viewport doesn't
   scroll, so the newest must stay visible).
   It's the home for a **rejected wire call with no better place to land** (no chat tab to host an error turn),
-  complementing `appendErrorTurn` (which handles the in-chat case). The **live-refresh signal** —
+  complementing `appendErrorTurn` (which handles the in-chat case).
+  The host-wide **`templatesVersion: number`** counter + **`bumpTemplatesVersion()`** (increment) is a bare
+  invalidation signal, the same shape as `fsChangesByWorkspace`'s `tick` below — **`panels/TemplatesSettings.tsx`**
+  and **`chat/TemplateEditorDialog.tsx`** call it after a `template.save`/`delete`, and the Templates
+  settings panel's own lists refetch off it (its `useTemplateList` fetch generation). It is deliberately
+  NOT a freshness source for the composer's `/` menu — that fetch runs uncached on every menu open,
+  since files also change outside the app where no in-app counter can see (see `chat/SPEC.md`'s Template
+  slots section); the store holds only the counter, never fetches. The **live-refresh signal** —
   **`fsChangesByWorkspace: Record<workspaceId, { tick, paths, truncated }>`** with
   **`noteFsChanged(payload)`** (folds a `workspace.fsChanged` push: `tick` increments per frame;
   `paths`/`truncated` are the last batch) — panels select their workspace's entry and refetch on `tick`
   change (the store holds only the signal, never fetches; `applyWorkspaceRemoved` drops a removed
-  workspace's entry); and **`updateFileTabContent(id, content,
+  workspace's entry). The **Skills-reload badge** rides the same tick without a separate signal:
+  `noteFsChanged` also folds **`skillChangeTickByWorkspace: Record<workspaceId, tick>`** — the tick of the
+  most recent *skill-relevant* batch (a `.claude|.github|.gemini|.pi|.agents/skills` path, via
+  `isSkillPath`, or a truncated wildcard), *accumulated* so a later non-skill batch never clears it — and
+  each chat records **`skillsSyncedTickBySession: Record<sessionId, tick>`** = the tick it loaded skills at.
+  It advances **only when resources are actually (re)loaded against current disk**: a fresh
+  `openChatSession`, a disk-only `hydrateSession` attach, and **`markSkillsSynced(sessionId, syncedTick)`** on
+  a successful reload (`markSkillsSynced` is **monotonic** — `Math.max`, so an out-of-order reload completion
+  can't move the baseline backward — and a **no-op for a disposed session**, so a late completion can't
+  resurrect an entry dropped by `closeChatRuntime`/`clearWorkspaceTabs`). A **live** `hydrateSession` restore
+  reuses the server session's already-loaded skills (`getMessages` returns only the transcript, no reload)
+  which the client can't date, so it advances **nothing** — the chat stays *conservatively stale* if a skill
+  change has been observed, never falsely clearing. That
+  `syncedTick` is the workspace tick captured at the **start** of the skill-loading round-trip
+  (`selectWorkspaceTick`, snapshot by the caller before `session.create`/`reloadResources`/`getMessages`),
+  **not** at completion — so a skill change whose `fsChanged` frame folds while the load is in flight (which
+  the load did not see) stays past the baseline and keeps the badge lit rather than being silently absorbed.
+  The selector
+  **`selectSkillsStale(state, workspaceId, sessionId)`** = `skillChangeTick > syncedTick` — store-derived
+  (survives `ChatView`'s tab-switch remount) and per-session (a sibling/newer chat that loaded the current
+  skills is not flagged; a reload clears only its own). Also **`updateFileTabContent(id, content,
   tick)`** — a `FileTab` carries the `tick` its content was loaded at, so `FilePane` detects staleness
   (`workspaceTick > tab.loadedTick`) across tab switches, and its diff twin
   **`updateDiffTabContent(id, original, modified, tick)`** — a `DiffTab` follows the same staleness
@@ -108,15 +135,33 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
 changed file vs the workspace's base branch (id `${workspaceId}:diff:${path}` — one tab per file;
 `view` split|inline via **`setDiffTabView`**, split the default; a markdown diff's `rendered` flag via
 **`setDiffTabRendered`** swaps raw lines for compiled documents — `DiffPane` offers it for markdown
-paths only; opened by `ChangesPanel`).
-The `EditorTab` (`FileTab` | `ChatTab` | `DocTab` | `DiffTab`) + `TerminalTab` + `ClosedChat` +
+paths only; opened by `ChangesPanel`). The transient **`chatLocationRequest`** — the history-search jump
+  deep link; the requester activates the target project+workspace, `CenterTabs` opens/hydrates the target
+  chat, `ChatView` consumes + clears — is **`ChatLocationRequest { workspaceId, projectId, sessionId,
+  messageIndex, anchorText }`**, set by **`requestChatLocation(req)`** (which sets `selectedProjectId` +
+  `activeWorkspaceId` **atomically**, the same invariant `activateWorkspace` upholds, since the target chat
+  can live in a different project/workspace than the one the search ran from — the caller
+  `useHistorySearch.openMessage` loads the destination project's workspaces first when absent) and cleared
+  by **`clearChatLocation()`**; the target's anchor resolves against the runtime's `turnIdByMessageIndex`
+  (see `chat/SPEC.md`'s hydration bullet), falling back to the newest `anchorText` match when absent.
+  The sibling transient **`historyOpenRequest { sessionId }`** — set by **`requestHistoryOpen(target)`**,
+  cleared by **`clearHistoryOpen()`** — carries the shell's app-wide `Ctrl+R` to a chat, which opens (or,
+  when already open, re-scopes) its history overlay; it goes through the store precisely because the chord
+  fires outside the chat subtree entirely (see `shell/SPEC.md`'s "Global chords"). The target comes from
+  **`selectHistoryTarget`** (active chat tab, else the workspace's newest chat) and the action **activates
+  that tab atomically** with the request — one `set`, because `CenterTabs` mounts one tab body at a time,
+  so a request for an off-screen chat would never be consumed. The `EditorTab` (`FileTab` | `ChatTab` | `DocTab` | `DiffTab`) + `TerminalTab` + `ClosedChat` +
   `SessionRuntime` types. (Chat *render* types + renderers live in the `chat` module.) The pure context
   selectors in `selectors.ts` resolve the active `Workspace`, its owning project id, and the shell's context
   project from those canonical ids and collections; derived active-project state is never stored separately.
 - **Public surface (barrel):** `useAppStore`; `selectActiveWorkspace`,
-  `selectActiveWorkspaceProjectId`, and `selectContextProject`; `toast` (the fire-from-anywhere helper),
+  `selectActiveWorkspaceProjectId`, `selectHistoryTarget` + `HistoryTarget` (the shell's `Ctrl+R` routing
+  target: the active chat tab, or the workspace's newest chat when a file/diff/doc tab is active),
+  `selectContextProject`, `selectSkillsStale`, `selectWorkspaceTick` (the
+  sync-baseline snapshot; + the `isSkillPath` path predicate it shares with `noteFsChanged`); `toast` (the
+  fire-from-anywhere helper),
   `Toast` (type), `EditorTab` (`FileTab`/`ChatTab`/`DocTab`), `TerminalTab`, `ClosedChat`, `SessionRuntime` +
-  `EMPTY_RUNTIME` (ChatView's pre-creation fallback), `reduceSessionEvent`.
+  `EMPTY_RUNTIME` (ChatView's pre-creation fallback), `ChatLocationRequest` (type), `reduceSessionEvent`.
 - **Allowed deps:** `contracts` (`Project`/`Workspace`/`Model`/`ThinkingLevel`/`SessionStats`/
   `SlashCommandInfo`/`ExtUiRequest`/`LoginPush`/`WorkspaceFsChangedPayload`/`AppConfig`/`ThemeId`;
   `DEFAULT_CONFIG` for the pre-welcome default; `PiEvent`/`LoginFrame`, **type-only**); `chat`

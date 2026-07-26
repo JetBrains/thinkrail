@@ -10,6 +10,8 @@ import {
 	E2E_PICK_DIR_POINTER,
 } from "./fixtures/paths";
 import { seedFixtureRepo } from "./fixtures/repo";
+import { seedExternalCwdSessions } from "./fixtures/sessions";
+import { seedTemplateFixtures } from "./fixtures/templates";
 
 /** Fresh, isolated state dir + a throwaway git repo to open as a project. (Runs under node, not bun.) */
 export default function globalSetup(): void {
@@ -43,6 +45,16 @@ export default function globalSetup(): void {
 		join(E2E_PI_AGENT_DIR, "settings.json"),
 		`${JSON.stringify({ defaultProvider: provider, defaultModel: idParts.join("/"), defaultThinkingLevel: "low" }, null, 2)}\n`,
 	);
+
+	// Seed two deterministic pi sessions for a deliberately unmapped cwd, under the SAME default per-cwd
+	// layout production `HistoryIndex` discovers (see fixtures/sessions.ts + history/SPEC.md's "pi file
+	// format" section) — so `history.search` has real, searchable history the moment the host boots.
+	seedExternalCwdSessions();
+
+	// Seed a global-scope prompt template (`prompts/review.md`) so `template.list`/`template.get` — and the
+	// composer's `/` menu (Task B5) — have something real to discover. `resetState` never wipes
+	// `pi-agent/prompts/`, so one seed here covers the whole suite (see fixtures/templates.ts).
+	seedTemplateFixtures();
 
 	// Seed the shared fixture repo (git init + seed files + commit). Shared with per-test `resetState`, which
 	// re-seeds it if a flaky @agent spec damages the repo (see fixtures/repo.ts).

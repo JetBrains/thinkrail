@@ -21,6 +21,7 @@ import {
 	type DocTab,
 	type EditorTab,
 	selectActiveWorkspace,
+	selectWorkspaceTick,
 	toast,
 	useAppStore,
 } from "../store";
@@ -97,6 +98,7 @@ export function CenterTabs() {
 	const tabsByWorkspace = useAppStore((s) => s.tabsByWorkspace);
 	const activeTabByWorkspace = useAppStore((s) => s.activeTabByWorkspace);
 	const closedChatsByWorkspace = useAppStore((s) => s.closedChatsByWorkspace);
+	const chatLocationRequest = useAppStore((s) => s.chatLocationRequest);
 	const setActiveTab = useAppStore((s) => s.setActiveTab);
 	const closeTab = useAppStore((s) => s.closeTab);
 
@@ -132,7 +134,7 @@ export function CenterTabs() {
 							{ sessionId: summary.sessionId, workspaceId: activeWorkspaceId },
 						);
 						if (cancelled) return;
-						useAppStore.getState().hydrateSession(fresh, messagesToRuntime(messages));
+						useAppStore.getState().hydrateSession(fresh, messagesToRuntime(messages), false); // live restore: no reload → no baseline (stays conservatively stale; see hydrateSession)
 					} catch {
 						// Skip a session that failed to load; the others still hydrate.
 					}
@@ -147,6 +149,47 @@ export function CenterTabs() {
 		};
 	}, [activeWorkspaceId]);
 
+	// Jump-to-message deep link from history search (`chatLocationRequest`, see `store/SPEC.md`): open,
+	// reopen, or activate the target chat in this workspace. `requestChatLocation` already set
+	// `activeWorkspaceId` to the request's own workspace, so this only has to place/focus the tab; it
+	// deliberately never clears the request — `ChatView` (mounted once its tab is active) consumes it to
+	// scroll + flash, and clears it once it has resolved a row (or given up and toasted).
+	useEffect(() => {
+		if (!chatLocationRequest || chatLocationRequest.workspaceId !== activeWorkspaceId) return;
+		const { sessionId } = chatLocationRequest;
+		// (a) Already open in a tab — just focus it, the exact action its own tab button calls.
+		const tab = openTabs.find((t) => t.kind === "chat" && t.sessionId === sessionId);
+		if (tab) {
+			setActiveTab(tab.id);
+			return;
+		}
+		const store = useAppStore.getState();
+		// (b) Closed to history but its runtime is still live (`closeChatToHistory`, not a restart) —
+		// `reopenChat` just re-attaches the tab; no fetch needed.
+		if (store.sessions[sessionId]) {
+			store.reopenChat(sessionId);
+			return;
+		}
+		// (c) Neither — the same fetch + hydrate `onReopenChat` below does for a disk-only history entry.
+		let cancelled = false;
+		void getTransport()
+			.request("session.getMessages", { sessionId, workspaceId: chatLocationRequest.workspaceId })
+			.then(({ summary, messages }) => {
+				if (cancelled) return;
+				useAppStore.getState().hydrateSession(summary, messagesToRuntime(messages), true);
+			})
+			.catch((err) => {
+				if (cancelled) return;
+				// The request would otherwise sit unconsumed forever (its only other consumer, `ChatView`,
+				// never mounts for a session whose tab never opens) — say why the jump did nothing.
+				toast.error(errorText(err), "Couldn't open the chat");
+				useAppStore.getState().clearChatLocation();
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [chatLocationRequest, activeWorkspaceId, openTabs, setActiveTab]);
+
 	// Reopen a chat from history: a live runtime just restores its tab; a disk-only one is re-opened on the
 	// host, its transcript fetched, then hydrated + focused (hydrateSession drops it from history, keyed to
 	// the session's own workspace — robust to a workspace switch during the fetch).
@@ -157,12 +200,14 @@ export function CenterTabs() {
 			return;
 		}
 		if (!activeWorkspaceId) return;
+		// Snapshot the sync baseline before the fetch (see selectWorkspaceTick / hydrateSession).
+		const syncedTick = selectWorkspaceTick(useAppStore.getState(), activeWorkspaceId);
 		try {
 			const { summary, messages } = await getTransport().request("session.getMessages", {
 				sessionId,
 				workspaceId: activeWorkspaceId,
 			});
-			useAppStore.getState().hydrateSession(summary, messagesToRuntime(messages), true);
+			useAppStore.getState().hydrateSession(summary, messagesToRuntime(messages), true, syncedTick);
 		} catch (err) {
 			// The chat stays in history for a retry — but say why the click did nothing.
 			toast.error(errorText(err), "Couldn't reopen the chat");
@@ -171,11 +216,15 @@ export function CenterTabs() {
 
 	const startChat = async () => {
 		if (!activeWorkspaceId) return;
+		// Snapshot the sync baseline before the create round-trip (see selectWorkspaceTick / openChatSession).
+		const syncedTick = selectWorkspaceTick(useAppStore.getState(), activeWorkspaceId);
 		try {
 			const { sessionId, model, thinkingLevel } = await getTransport().request("session.create", {
 				workspaceId: activeWorkspaceId,
 			});
-			useAppStore.getState().openChatSession(activeWorkspaceId, sessionId, model, thinkingLevel);
+			useAppStore
+				.getState()
+				.openChatSession(activeWorkspaceId, sessionId, model, thinkingLevel, syncedTick);
 		} catch (err) {
 			// Without this, a failed create makes "+ New chat" do nothing, silently.
 			toast.error(errorText(err), "Couldn't start the chat");
