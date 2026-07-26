@@ -110,7 +110,10 @@ of the host.
   hint on this result));
   the **theme/config selection** — **`ThemeId`** is an open string on the wire, because the host persists
   an opaque selection while the independently shipped web client owns the available manifest catalog;
-  **`AppConfig`** (`{ theme }` — an extensible bag) carries it with the **`DEFAULT_CONFIG`** fallback
+  **`AppConfig`** (`{ theme, analyticsEnabled }` — an extensible bag; `analyticsEnabled` is the
+  anonymous-usage-analytics switch, default `true` — it is the **only** analytics fact on the wire:
+  the installation id stays server-side by design, see `submodule-server-analytics`) carries it with the
+  **`DEFAULT_CONFIG`** fallback
   (persisted host-side as `config.json`, delivered in `server.welcome`, mutated via `settings.update`).
   Contracts deliberately exports no theme enum/list/labels: a future manifest can mint an id unknown when
   the host was built, and a client missing it resolves its own bundled default;
@@ -186,7 +189,13 @@ of the host.
 
 ## Get right
 
-- **Type-only, from the package roots, always** (verified vs 0.82.0: type-only imports are erased by
+- **Mirrors are not version-pinned in comments.** A shape re-declared here because its real home is
+  Node-only carries *what* it mirrors, never *which pi version it was last checked against*: those
+  markers had to be hand-edited across several files on every bump, nothing verified them, and they
+  missed real drift anyway — **`PiEvent` is not exhaustive** (`agent_settled`, `entry_appended`), and the
+  host's relay cast means those still reach clients. Re-audit a mirror when a bump's changelog touches
+  it, not because a comment names a version.
+- **Type-only, from the package roots, always** (type-only imports are erased by
   `verbatimModuleSyntax`, so the web bundle stays provider-free; the pi-ai provider/API subpaths
   statically import the Node SDKs — never touch them). The `/base` entries existed only in 0.79.8–0.79.9.
 - `Model` is generic — expose as `Model<any>`.

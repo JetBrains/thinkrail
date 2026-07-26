@@ -177,9 +177,14 @@ a project picker, the prompt hero, and the reused
   carries the discoverability half (`chat/SPEC.md`: a `slash-templates-empty` footer nudge deep-linking
   here when no template exists anywhere), since this offer is otherwise two clicks deep in a dialog. **This
   project**'s empty state is unchanged (still the bare text) — the offer is Global-only, since it only
-  ever seeds global files. No server change. A single dimmed "General" nav item ("Soon") still signals the shell is
-  built to grow. `ProvidersSettings`/`AppearanceSettings`/`TemplatesSettings` are the **integration pieces**
+  ever seeds global files. No server change. **`PrivacySettings`** is the **anonymous-usage-analytics
+  toggle** — a switch over `store.analyticsEnabled`, fired via `settings.update { analyticsEnabled }`
+  with the same converge-on-broadcast pattern as the theme, plus the what-is/isn't-collected copy; only
+  the boolean ever crosses the wire, see `submodule-server-analytics`. A single dimmed "General" nav item ("Soon") still signals the shell is
+  built to grow. `ProvidersSettings`/`AppearanceSettings`/`TemplatesSettings`/`PrivacySettings` are the
+  **integration pieces**
   (store + transport); the `LoginDialog` stays presentational (`auth` module).
+
   Panels compose their own sub-panels
   (e.g. `RightPanel`→`FileTree`/`ChangesPanel`, `CenterTabs`→`FilePane`→`MonacoEditor`) — an internal hierarchy.
   When the active workspace has no open center tab, `CenterTabs` uses the empty surface as a persistent

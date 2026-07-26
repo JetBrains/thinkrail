@@ -59,6 +59,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `agent` | in-process pi `AgentSession`s + the shared pi runtime + one-shot completions | [agent/SPEC.md](src/agent/SPEC.md) |
 | `auth` | provider status (`provider.status`) + in-app login (OAuth / API key / logout) | [auth/SPEC.md](src/auth/SPEC.md) |
 | `assist` | ad-hoc one-shot tasks (workspace naming, …) on a cheap model, best-effort | [assist/SPEC.md](src/assist/SPEC.md) |
+| `analytics` | anonymous usage analytics: closed event set → PostHog sink (privacy contract in its spec) | [analytics/SPEC.md](src/analytics/SPEC.md) |
 | `dialog` | the host's native folder picker | [dialog/SPEC.md](src/dialog/SPEC.md) |
 | `history` | prompt recall + conversation search over pi's session files | [history/SPEC.md](src/history/SPEC.md) |
 | `templates` | file CRUD over pi's prompt-template dirs (global + project scoped) | [templates/SPEC.md](src/templates/SPEC.md) |
@@ -70,10 +71,10 @@ the host from env via `bootHost` for dev/e2e.
 
 `host` is the **only composition root** — it wires each feature's handlers into the WS registry.
 
-- `host` → `projects`, `workspaces`, `git`, `github`, `fs`, `spec`, `todos`, `watch`, `terminal`, `dialog`, `agent`, `auth`, `assist`, `settings`, `history`, `templates`
+- `host` → `projects`, `workspaces`, `git`, `github`, `fs`, `spec`, `todos`, `watch`, `terminal`, `dialog`, `agent`, `auth`, `assist`, `settings`, `history`, `templates`, `analytics`
 - `workspaces` → `projects`, `git`, `persistence`
 - `projects` → `git` (shared runner), `persistence`
-- `git`, `fs`, `spec`, `watch`, `terminal`, `settings` → `persistence` (`spec` also → `pi-spec-graph/core`, external)
+- `git`, `fs`, `spec`, `watch`, `terminal`, `settings`, `analytics` → `persistence` (`spec` also → `pi-spec-graph/core`, external; `analytics` also → the pi-ai built-in provider/model catalog + `posthog-node`, external — the identity-bucketing vocabulary and the delivery SDK)
 - `todos` → `workspaces` (worktree path lookup) + `pi-todos/core` (external, value-imported, pi-free)
 - `assist` → `agent` (the one-shot completion primitive)
 - `auth` → `agent` (`getPiRuntime` — the shared `AuthStorage` + `ModelRegistry`; one-way, `agent` never imports `auth`)
@@ -90,6 +91,10 @@ own never import `host` either: they expose a **publisher-injection seam** (`set
 + labels from the registries at the handler layer (`history.search` handler). `templates` stays
 registry-free too — it takes a plain `cwd`, never a `workspaceId`; the `template.*` handler resolves
 `workspaceId` → `cwd` via `workspaces` before calling into `templates`.
+
+Analytics is host-mediated the same way: **every `track()` call site lives in `host`** (boot,
+session-create, login-success observation), and `host` syncs `setAnalyticsSending` off the settings
+broadcast — `analytics` has no `settings` edge and no feature module knows analytics exists.
 
 ## Get right
 

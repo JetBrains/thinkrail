@@ -10,7 +10,9 @@ import {
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
 const staticDir = fileURLToPath(new URL("./apps/web/dist", import.meta.url));
-const PORT = 24252; // dedicated e2e port — never collides with dev:server (24242)
+// Dedicated e2e port — never collides with dev:server (24242). Overridable so PARALLEL WORKTREES
+// (this product's own working model) can run their suites concurrently without fighting over one port.
+const PORT = Number(process.env.THINKRAIL_E2E_PORT ?? 24252);
 // A stub `central` (JetBrains Central CLI) on the host's PATH so the JetBrains AI flow is drivable
 // deterministically — no real CLI, network, or JetBrains auth. Prepended so it wins over any real install.
 const fakeBinDir = fileURLToPath(new URL("./e2e/fixtures/bin", import.meta.url));
