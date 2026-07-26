@@ -129,10 +129,13 @@ if (editor) {
 /* ── Terminal: type the install command, then reveal the output ─────────── */
 
 const terminal = document.querySelector<HTMLElement>(".terminal");
-const typeTarget = document.querySelector<HTMLElement>(".term-cmd[data-type]");
+const typeTarget = document.querySelector<HTMLElement>(".term-cmd");
 if (motionOK && terminal && typeTarget) {
 	terminal.classList.add("armed");
-	const text = typeTarget.dataset.type ?? "";
+	// The command ships in the markup — a JS-less (or reduced-motion) visitor must not get output
+	// under a bare prompt. Reading it back and clearing is what makes the typing a pure enhancement.
+	const text = typeTarget.textContent ?? "";
+	typeTarget.textContent = "";
 	const outs = Array.from(terminal.querySelectorAll<HTMLElement>("[data-out]"));
 	const caret = terminal.querySelector<HTMLElement>(".term-caret");
 	let i = 0;

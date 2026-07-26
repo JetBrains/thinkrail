@@ -478,13 +478,11 @@
 								<p class="file-comment">&lt;!-- features/agent-chat.md --&gt;</p>
 								<h2>Chats that stream like the engine thinks</h2>
 								<p>
-									This transcript is a real <code>pi</code> session, captured in ThinkRail while it
-									worked on its own repo:
+									A real <code>pi</code> session, captured in ThinkRail while it worked on this repo:
 								</p>
 								<div class="chat-demo" id="chat-demo">
 									<div class="chat-msg user" data-step>
-										Quick tour: what is ThinkRail, and what are the three rings of its architecture?
-										Keep it brief.
+										What is ThinkRail, and what are its three rings? Keep it brief.
 									</div>
 									<div class="chat-activity" data-step>
 										<svg class="i" aria-hidden="true"><use href="#i-check" /></svg>
@@ -492,24 +490,23 @@
 									</div>
 									<div class="chat-msg assistant">
 										<p data-step>
-											ThinkRail is a desktop-and-mobile client for the <code>pi</code> coding agent —
-											a thin host that runs <code>pi</code> in-process and bridges it to a rich UI,
-											while <code>pi</code> owns models, skills, compaction, cost, and session state.
+											A thin desktop-and-mobile host for the <code>pi</code> coding agent: it runs
+											<code>pi</code> in-process and bridges it to a rich UI, while <code>pi</code> owns
+											models, skills, cost, and session state.
 										</p>
 										<p data-step>The <strong>three rings</strong>:</p>
 										<ol>
 											<li data-step>
-												<strong>Engine host</strong> (<code>packages/server</code>) —
-												<code>createServer()</code> runs an HTTP+WS host plus an
-												<code>AgentSessionManager</code>: one in-process <code>pi</code> session per tab.
+												<strong>Engine host</strong> (<code>packages/server</code>) — an HTTP+WS host,
+												one in-process <code>pi</code> session per tab.
 											</li>
 											<li data-step>
-												<strong>The wire</strong> (<code>packages/contracts</code>) — the typed,
-												versioned protocol between host and UI. Types only.
+												<strong>The wire</strong> (<code>packages/contracts</code>) — the typed, versioned
+												host↔UI protocol. Types only.
 											</li>
 											<li data-step>
-												<strong>UI client</strong> (<code>apps/web</code>) — mobile-first React that
-												ships independently and dials any host over the wire.
+												<strong>UI client</strong> (<code>apps/web</code>) — mobile-first React, ships
+												independently, dials any host.
 											</li>
 										</ol>
 									</div>
@@ -517,20 +514,12 @@
 										<span><svg class="i" aria-hidden="true"><use href="#i-check" /></svg> Done</span>
 										<span>5s · 25.9k tok · $0.17</span>
 									</div>
-									<div class="chat-composer" data-demo aria-hidden="true">
-										<div class="composer-box">Message the agent… (@ files · / commands · Enter to send)</div>
-										<div class="composer-row">
-											<span class="chip">Claude Opus 4.8 <svg class="i" aria-hidden="true"><use href="#i-chevron-down" /></svg></span>
-											<span class="chip chip-dim">EFFORT&nbsp;<b>Low</b></span>
-											<span class="send-btn"><svg class="i" aria-hidden="true"><use href="#i-arrow-up" /></svg></span>
-										</div>
-									</div>
 								</div>
 								<ul>
 									<li>Several sessions per workspace, streaming concurrently.</li>
-									<li>Pick the model per session; tokens and cost tick live in the header.</li>
-									<li>Steer a running turn or queue a follow-up — no waiting for the agent to finish.</li>
-									<li>Interactive tools: the agent can ask structured questions back, right in the chat.</li>
+									<li>Pick the model per session; cost ticks live in the header.</li>
+									<li>Steer a running turn or queue a follow-up — no waiting.</li>
+									<li>Interactive tools: the agent asks structured questions back.</li>
 								</ul>
 							</section>
 
@@ -678,7 +667,7 @@
 								<svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg>
 							</button>
 						</div>
-						<pre class="term-screen" id="term-screen"><span class="term-line"><span class="term-prompt">❯</span> <span class="term-cmd" data-type="curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash"></span><span class="term-caret"></span></span><span class="term-out" data-out>⬇ thinkrail latest (macos-arm64) · sha256 verified ✓
+						<pre class="term-screen" id="term-screen"><span class="term-line"><span class="term-prompt">❯</span> <span class="term-cmd">curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash</span><span class="term-caret"></span></span><span class="term-out" data-out>⬇ thinkrail latest (macos-arm64) · sha256 verified ✓
 ✓ installed: ~/.local/bin/thinkrail</span><span class="term-line" data-out><span class="term-prompt">❯</span> <span class="term-cmd2">thinkrail</span></span><span class="term-out" data-out>opening http://localhost:24242 …</span></pre>
 					</div>
 				</aside>

@@ -55,8 +55,14 @@ binary.
   so it costs no width. *Tiles*: `min-height: 100%` + `align-content: center` makes every section at
   least one pane tall with its content centred in the leftover space. `align-content` (not flex/grid)
   is deliberate — it keeps the section a block box, so margins still collapse and the gaps between
-  paragraphs, lists and code blocks don't double. A few tiles still exceed one screen on short windows
-  (the transcript most of all); ↑/↓ covers them with a second stop.
+  paragraphs, lists and code blocks don't double. **A tile's copy is budgeted against the peek floor**
+  (`pane − peek`, 720px at 1440×900) — that is the height five of the eight tiles already sit at, and a
+  tile that outgrows it eats the sliver that advertises the scroll. `features/agent-chat.md` was the
+  one that had: its transcript is the section's whole proof, so the trim came out of everything around
+  it — a one-line question (the visitor asks for brief, so the question is), one line per ring, and no
+  composer, since a transcript closed by a Done row does not imply a place to type and the why chat
+  still shows a live one. Below 1440 several tiles do still exceed the pane, the transcript most of
+  all; ↑/↓ covers them with a second stop.
 - **Three affordances say "this scrolls", because one wasn't saying it.** The pane's scrollbar is an
   OS *overlay* (`offsetWidth - clientHeight` gutter measures 0), so it only appears once you are
   already scrolling — and a tile that filled the pane exactly left the fold on a clean edge with
@@ -91,7 +97,7 @@ binary.
 ## Decoy controls
 
 Most of the shell is a *drawing* of the app: the projects rail, the Specs/Changes tabs, the collapsible
-folders, the terminal chrome, the chat composers, the status-bar widgets, the tab close glyphs. A
+folders, the terminal chrome, the why chat's composer, the status-bar widgets, the tab close glyphs. A
 visitor will click them. Every one is marked **`data-demo`** in the markup and handled by a single
 delegated listener that turns the dead end into the pitch: return to `README.md`, ring + shimmer the
 install command, and raise a callout above it — for ~8s, with the rest of the shell dimmed behind a
@@ -154,9 +160,17 @@ identity. Canonical/OG URLs in `index.html` (and the README website link) point 
 
 ## Assets
 
-`public/og.png` is a capture of the site's own hero. The transcript in the `features/agent-chat.md`
-section is from a real `pi` session captured in the app while it worked on this repo. Re-capture
-method lives in the task-spec that built this module.
+`public/og.png` is a capture of the site's own hero, which means **it goes stale whenever the shell
+or the default theme does** — it is a screenshot, not a rendering the build regenerates. Re-capture
+it by loading the dev server at **1520×798** (the 1200:630 ratio exactly, so the downscale crops
+nothing) with `deviceScaleFactor: 2` and `reducedMotion: "reduce"`, then resizing to 1200×630.
+Reduced motion is what makes the capture reproducible: it is the finished static state, so the tab
+reads "Why ThinkRail?" instead of the mid-replay "chat", and no step is caught half-animated. 1520
+rather than the target width is a two-way fit — narrower and the pinned scroll cue lands on the CTA
+row, wider and the hero type is too small to read at feed size.
+
+The transcript in the `features/agent-chat.md` section is from a real `pi` session captured in the
+app while it worked on this repo.
 
 The `#why` chat is, by contrast, a hand-authored *simulation* (no captured session): its metro-map
 SVG is hand-drawn, colored entirely by theme tokens, and its replay/build animation is fully gated
