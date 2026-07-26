@@ -13,8 +13,9 @@ const rootDir = fileURLToPath(new URL(".", import.meta.url));
 const staticDir = fileURLToPath(new URL("./apps/web/dist", import.meta.url));
 // Per-worktree derived port (e2e/fixtures/paths.ts) — parallel worktrees (this product's own working
 // model) run their suites concurrently without fighting over one port, zero config; the dev host
-// (24242) stays clear. Supersedes the manual THINKRAIL_E2E_PORT knob (THINKRAIL_E2E_PORT_BASE moves
-// the whole per-worktree block instead, should a derived slot ever clash).
+// (24242) stays clear. Slot clashes are auto-arbitrated by an atomic claim registry
+// (e2e/fixtures/portBlock.ts). Supersedes the manual THINKRAIL_E2E_PORT knob
+// (THINKRAIL_E2E_PORT_BASE pins the whole per-worktree block explicitly when ever needed).
 const PORT = E2E_PORT;
 // A stub `central` (JetBrains Central CLI) on the host's PATH so the JetBrains AI flow is drivable
 // deterministically — no real CLI, network, or JetBrains auth. Prepended so it wins over any real install.

@@ -3,6 +3,7 @@ import { realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { claimPortBlock, PORT_BLOCK_SLOTS } from "./portBlock";
 
 // ─── Per-worktree isolation ─────────────────────────────────────────────────────────────────────
 // Every machine-global name the suites touch (tmp state dirs, listen ports) derives here from a
@@ -11,7 +12,9 @@ import { fileURLToPath } from "node:url";
 // sibling run's live host state. Within ONE worktree the suites still share these paths and stay
 // sequential (see playwright.binary.config.ts). The key is deterministic (path-derived, never
 // random) because the Playwright runner, its workers, and global setup each evaluate this module
-// independently and must all agree on the same paths and ports.
+// independently and must all agree on the same paths and ports; the port block additionally rides
+// a persistent atomic claim (portBlock.ts), which is stable across processes AND runs for the
+// same worktree while guaranteeing distinct blocks for distinct live worktrees.
 
 /** This worktree's repo root (this file lives at `<root>/e2e/fixtures/`). */
 const repoRoot = realpathSync(dirname(dirname(dirname(fileURLToPath(import.meta.url)))));
@@ -21,10 +24,12 @@ const rootHash = createHash("sha256").update(repoRoot).digest("hex");
 const WORKTREE_KEY = `${basename(repoRoot).replace(/[^A-Za-z0-9._-]+/g, "-")}-${rootHash.slice(0, 8)}`;
 
 /**
- * Per-worktree port block: `25000 + (hash % 500) * 10` → [25000, 29990], clear of the dev host's
- * 24242 and the OS-ephemeral range. The offsets below keep one worktree's suites apart; two
- * worktrees landing on the same slot is ~1/500 per pair — set THINKRAIL_E2E_PORT_BASE to move one
- * of them if it ever bites (invalid values throw: loud beats silently colliding).
+ * Per-worktree port block, [25000, 29990] — clear of the dev host's 24242 and the OS-ephemeral
+ * range. The path hash picks the *preferred* slot; actual ownership is arbitrated by the atomic
+ * claim registry (see portBlock.ts), so two worktrees whose hashes collide still get distinct
+ * blocks — no manual coordination. THINKRAIL_E2E_PORT_BASE bypasses the registry and pins the
+ * block explicitly (invalid values throw: loud beats silently colliding). The offsets below keep
+ * one worktree's suites apart within its block.
  */
 function resolvePortBase(): number {
 	const env = process.env.THINKRAIL_E2E_PORT_BASE;
@@ -37,7 +42,7 @@ function resolvePortBase(): number {
 		}
 		return base;
 	}
-	return 25000 + (Number.parseInt(rootHash.slice(0, 8), 16) % 500) * 10;
+	return claimPortBlock(repoRoot, Number.parseInt(rootHash.slice(0, 8), 16) % PORT_BLOCK_SLOTS);
 }
 const PORT_BASE = resolvePortBase();
 
