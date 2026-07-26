@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -86,17 +87,33 @@ test("a missing registry dir is created on first claim", () => {
 	expect(claimPortBlock(rootA, 0, nested)).toBe(PORT_BLOCK_BASE);
 });
 
-test("a stale registry lock (crashed holder) is broken, not waited out", () => {
-	const { registry, rootA } = setup();
+/** A lock dir as the protocol creates it: non-empty, carrying an owner record. */
+function plantLock(registry: string, owner: string): string {
 	const lock = join(registry, ".lock");
 	mkdirSync(lock);
-	const old = (Date.now() - 60_000) / 1000; // held for a minute — far beyond any live transaction
-	utimesSync(lock, old, old);
-	expect(claimPortBlock(rootA, 1, registry)).toBe(base(1));
+	writeFileSync(join(lock, "owner"), owner);
+	return lock;
+}
+
+test("a crashed holder's lock (dead pid) is broken immediately, not waited out", () => {
+	const { registry, rootA } = setup();
+	// A real pid that is provably dead: spawn a no-op child and wait for it to exit.
+	const deadPid = spawnSync(process.execPath, ["-e", "0"]).pid;
+	plantLock(registry, JSON.stringify({ pid: deadPid, nonce: "gone" }));
+	expect(claimPortBlock(rootA, 1, registry, 1_000)).toBe(base(1)); // far under the age fallback
 });
 
-test("a fresh registry lock blocks the claim until the timeout, then throws loudly", () => {
+test("a live holder is never usurped — the claim times out loudly instead", () => {
 	const { registry, rootA } = setup();
-	mkdirSync(join(registry, ".lock")); // a live holder that never releases
-	expect(() => claimPortBlock(rootA, 1, registry, 50)).toThrow(/port-block registry lock/);
+	plantLock(registry, JSON.stringify({ pid: process.pid, nonce: "held" })); // us: alive by definition
+	expect(() => claimPortBlock(rootA, 1, registry, 50)).toThrow(/held by live pid/);
+});
+
+test("a garbled lock (unreadable owner) is broken only once it is old", () => {
+	const { registry, rootA } = setup();
+	const lock = plantLock(registry, "not json at all");
+	expect(() => claimPortBlock(rootA, 1, registry, 50)).toThrow(/unreadable owner/); // fresh: wait, then loud
+	const old = (Date.now() - 60_000) / 1000; // far beyond any live transaction
+	utimesSync(lock, old, old);
+	expect(claimPortBlock(rootA, 1, registry)).toBe(base(1)); // old: the age fallback breaks it
 });
