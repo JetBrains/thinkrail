@@ -115,19 +115,53 @@ export function resolveUpdatePlan(input: ResolveUpdateInput): UpdatePlan {
 }
 
 const INSTALL_PS1_URL = "https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1";
+/** Rooted Windows path — `X:\…` or a UNC `\\server\share\…`; mirrors install.ps1's `IsPathRooted` gate. */
+const WINDOWS_ROOTED_RE = /^(?:[A-Za-z]:[\\/]|\\\\[^\\/]+[\\/])/;
+/**
+ * Chars that make a prefix unsafe to print inside cmd's `set "X=…"` or PowerShell's `'…'`: a double
+ * quote closes cmd's quoting, `%` is expanded by cmd before the installer ever sees it, and `;`/newlines
+ * would break the `;`-delimited PATH value install.ps1 writes (it rejects those too). `&`/`|`/`<`/`>`/`^`
+ * are literal inside both quotings, so a legitimate `C:\R&D\tools` still works. Windows needs its own
+ * list: `PREFIX_FORBIDDEN_RE` rejects the backslash every Windows path is made of.
+ */
+const WINDOWS_PREFIX_FORBIDDEN_RE = /["%;\n\r]/;
+
+/**
+ * The `THINKRAIL_PREFIX` the printed command needs, or `undefined` when the recorded prefix is already
+ * the installer's own default (`<home>\.local`) and the var would be noise. Without this, a user who
+ * installed under `D:\tools` would follow the command and get a *second* copy under `.local` while the
+ * `thinkrail.exe` their PATH resolves stays on the old build. Throws on a prefix that isn't a rooted
+ * Windows path or can't be safely quoted — a tampered `install.json` must not shape a command we hand
+ * the user to paste (the Unix path refuses the same way).
+ */
+export function resolveWindowsPrefix(metaPrefix: unknown, home: string): string | undefined {
+	if (typeof metaPrefix !== "string" || !metaPrefix) return undefined;
+	if (!WINDOWS_ROOTED_RE.test(metaPrefix) || WINDOWS_PREFIX_FORBIDDEN_RE.test(metaPrefix)) {
+		throw new Error(`Refusing suspicious install prefix from metadata: ${metaPrefix}`);
+	}
+	const norm = (p: string) => p.replace(/\//g, "\\").replace(/\\+$/, "").toLowerCase();
+	return norm(metaPrefix) === norm(`${home}\\.local`) ? undefined : metaPrefix;
+}
 
 /**
  * What to print instead of self-updating on Windows: the `install.ps1` one-liner, spelled out **per
  * shell** — cmd's `set "X=v" &&` and PowerShell's `$env:X='v';` are not interchangeable, and a
  * PowerShell user pasting the cmd form would silently re-install the wrong channel/version (`set` there
- * is `Set-Variable`, which never reaches the child process). Env vars appear only when they'd change
- * the outcome, so the common stable/latest case stays a single copyable command.
+ * is `Set-Variable`, which never reaches the child process). Carries every option that would otherwise
+ * be lost, so re-running the installer reproduces *this* install rather than a default one. Env vars
+ * appear only when they'd change the outcome, so the common case stays a single copyable command.
  */
-export function windowsUpdateMessage(channel: "stable" | "nightly", version: string): string {
+export function windowsUpdateMessage(
+	channel: "stable" | "nightly",
+	version: string,
+	prefix?: string,
+): string {
 	const vars: Array<[string, string]> = [];
 	if (channel !== "stable") vars.push(["THINKRAIL_CHANNEL", channel]);
 	if (version !== "latest") vars.push(["THINKRAIL_VERSION", version]);
-	const psPrefix = vars.map(([k, v]) => `$env:${k}='${v}'; `).join("");
+	if (prefix) vars.push(["THINKRAIL_PREFIX", prefix]);
+	// PowerShell's single quotes are literal except for `'` itself, which doubles to escape.
+	const psPrefix = vars.map(([k, v]) => `$env:${k}='${v.replace(/'/g, "''")}'; `).join("");
 	const cmdPrefix = vars.map(([k, v]) => `set "${k}=${v}" && `).join("");
 	const what =
 		version === "latest" ? `the latest ${channel} build` : `ThinkRail ${version} (${channel})`;
@@ -164,10 +198,11 @@ export async function runUpdate(
 		const home = homedir();
 		const installMeta = readInstallMeta(home);
 		if (process.platform === "win32") {
-			// Resolve the channel the same way the Unix path does, so the printed command re-installs what
-			// the user already has (or asked for) instead of silently dropping them onto stable.
+			// Resolve channel + prefix the same way the Unix plan does, so the printed command re-installs
+			// *this* install instead of silently dropping the user onto stable under the default prefix.
 			const channel = resolveUpdateChannel(args, installMeta.channel, bakedChannel);
-			console.error(windowsUpdateMessage(channel, args.version));
+			const prefix = resolveWindowsPrefix(installMeta.prefix, home);
+			console.error(windowsUpdateMessage(channel, args.version, prefix));
 			return 1;
 		}
 		plan = resolveUpdatePlan({ args, installMeta, baked: bakedChannel, home });
