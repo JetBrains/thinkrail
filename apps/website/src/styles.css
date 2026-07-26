@@ -34,6 +34,9 @@
 	--gold: #ffd54b;
 	--red: #ff4b75;
 	--blue: #6ac8ff;
+	/* Derived, not copied: the Comfort Circle's sea-green. Mixed from two palette hues rather than
+	   picked, so it follows every `[data-theme]` swap without a per-theme entry. */
+	--comfort: color-mix(in srgb, var(--blue) 62%, var(--green));
 
 	--sx-kw: #ff7b72;
 	--sx-str: #a5d6ff;
@@ -1590,24 +1593,15 @@ html.anim .chat-demo [data-step].on {
 	min-width: 680px;
 }
 
-.map-cap-tl,
-.map-cap-br {
+.map-cap-tl {
 	position: absolute;
+	top: 10px;
+	left: 14px;
 	font-family: var(--font-mono);
 	font-size: 10px;
 	letter-spacing: 0.12em;
 	color: var(--hint);
 	text-transform: uppercase;
-}
-
-.map-cap-tl {
-	top: 10px;
-	left: 14px;
-}
-
-.map-cap-br {
-	bottom: 8px;
-	right: 14px;
 }
 
 .metro-frame text {
@@ -1630,10 +1624,12 @@ html.anim .chat-demo [data-step].on {
 	fill: var(--hint);
 }
 
+/* The ring's stand-in for a badge: coloured like the line it names, with its cargo left grey below —
+   the same pairing every spoke uses. */
 .orbit-lbl {
 	font: 600 10.5px var(--font-mono);
 	letter-spacing: 0.18em;
-	fill: var(--hint);
+	fill: var(--comfort);
 }
 
 .soon-lbl {
@@ -1692,11 +1688,25 @@ html.anim .chat-demo [data-step].on {
 .dot-rail {
 	stroke: var(--red);
 }
+/* The sixth spoke takes the ink colour — the palette's five accents are spent, and a black/white
+   line is real metro vocabulary (the Northern line). It is also the one hue every theme is
+   guaranteed to render at full contrast, which suits the line that says "nothing is hidden". */
+.line-open {
+	stroke: var(--text);
+}
+.badge-open {
+	fill: var(--text);
+}
+.dot-open {
+	stroke: var(--text);
+}
+/* The ring is the one "line" that is a promise rather than a feature, so it reads calm rather than
+   neutral — grey made it look like a dropped rail. */
 .line-wire {
-	stroke: var(--hint);
+	stroke: var(--comfort);
 }
 .dot-wire {
-	stroke: var(--hint);
+	stroke: var(--comfort);
 }
 
 .rail,
@@ -1772,6 +1782,9 @@ html.anim .chat-demo [data-step].on {
 }
 .t-rail {
 	offset-path: path("M444,320 H150");
+}
+.t-open {
+	offset-path: path("M457,353 L360,450 H190");
 }
 .t-wire {
 	offset-path: path("M360,320 a130,105 0 1 0 260,0 a130,105 0 1 0 -260,0");
@@ -1893,6 +1906,11 @@ html.anim .t-eng {
 html.anim .t-rail {
 	animation: metro-ride 6s linear infinite alternate;
 	animation-delay: -3.7s;
+}
+
+html.anim .t-open {
+	animation: metro-ride 7.5s linear infinite alternate;
+	animation-delay: -0.9s;
 }
 
 html.anim .t-wire {

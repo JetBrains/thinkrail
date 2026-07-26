@@ -15,7 +15,7 @@ files rail, terminal, status bar) whose center "editor" is the normally-scrollin
 section poses as a file of a `website` workspace (`README.md`, `features/*.md`, `install.sh`,
 `CONTRIBUTING.md`) — except `#why`, which poses as a **chat tab** ("Why ThinkRail?") that replays a
 stylized session: the question is typed into the composer, the tab titles itself from it, and the
-answer is an animated metro map that builds itself outward from a YOU hub (five token-colored lines +
+answer is an animated metro map that builds itself outward from a YOU hub (six token-colored lines +
 a Comfort Circle). The chrome reacts to scroll (active tab, tree selection, status-bar line counter)
 like the editor is switching files.
 
@@ -162,3 +162,21 @@ The `#why` chat is, by contrast, a hand-authored *simulation* (no captured sessi
 SVG is hand-drawn, colored entirely by theme tokens, and its replay/build animation is fully gated
 on `html.anim` (JS present + motion allowed) — the finished map is the static state, so the section
 reads complete with JS disabled and under `prefers-reduced-motion`.
+
+**The map's six spokes are the six compass points around the hub**, so a new line means claiming an
+empty quadrant, not squeezing one in: Spec/Worktree/IDE fan out to the right, Engine/Rails/Open
+Source to the left, each an exact mirror of its opposite (path, station spacing, label offsets). The
+Open Source Line took the last free one, bottom-left, which is why the Comfort Circle's caption moved
+out from under it to the centre bottom, hanging off the ring's own six-o'clock dot. Its color is
+**`--text`**, the ink: the palette's five accents were already spent one per line, `--bubble`
+collapses onto `--accent` in three of the six themes, and a black (or, on dark, silver) line is real
+metro vocabulary. It is also the one token guaranteed maximum contrast in every theme, which suits
+the line whose claim is that nothing is hidden. The hub's caption plate crosses both bottom diagonals
+symmetrically — that is the label sitting over the junction, as on a real map, not a broken rail.
+
+The Comfort Circle is drawn in **`--comfort`**, the one *derived* token on the page: a sea-green
+`color-mix` of `--blue` and `--green` rather than a per-theme literal, so it follows a theme swap for
+free and never becomes a seventh palette entry to keep in sync. It is deliberately not grey — the
+ring is the map's only promise rather than a feature, and `--hint` made it read as a dropped rail
+next to six live ones. The ring, its two dots and its label take the color; the cargo captions below
+stay grey, which is the badge/cargo pairing every spoke already uses.

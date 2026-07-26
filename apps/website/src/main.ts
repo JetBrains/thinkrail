@@ -225,7 +225,8 @@ if (motionOK && whyChat && whyTyped && whyCaret && whyPlaceholder && whyNames.le
 				const T = 2100;
 				setTimeout(() => stepOn("map"), T);
 				setTimeout(() => build(".metro-hub", "in"), T + 260);
-				[".ln-spec", ".ln-work", ".ln-ide", ".ln-eng", ".ln-rail"].forEach((sel, k) => {
+				// Right side top-to-bottom, then left side top-to-bottom.
+				[".ln-spec", ".ln-work", ".ln-ide", ".ln-eng", ".ln-rail", ".ln-open"].forEach((sel, k) => {
 					setTimeout(() => build(sel, "built"), T + 700 + k * 560);
 				});
 				setTimeout(() => build(".ln-orbit", "built"), T + 4600);
