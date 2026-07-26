@@ -61,7 +61,7 @@ export function getPiRuntime(): Promise<ModelRuntime> {
 export type CatalogRefreshRuntime = Pick<ModelRuntime, "refresh">;
 
 // One in-flight refresh per runtime instance: pi's `refresh()` does NOT single-flight itself (verified
-// vs 0.82.0 — only the availability sub-refresh is queued), and each picker open triggers us again.
+// only the availability sub-refresh is queued), and each picker open triggers us again.
 const inflightCatalogRefresh = new WeakMap<CatalogRefreshRuntime, Promise<void>>();
 
 // pi's own model-selector refresh budget. With single-flight, a hung refresh must self-expire or it

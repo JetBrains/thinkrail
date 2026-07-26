@@ -186,7 +186,13 @@ of the host.
 
 ## Get right
 
-- **Type-only, from the package roots, always** (verified vs 0.82.0: type-only imports are erased by
+- **Mirrors are not version-pinned in comments.** A shape re-declared here because its real home is
+  Node-only carries *what* it mirrors, never *which pi version it was last checked against*: those
+  markers had to be hand-edited across several files on every bump, nothing verified them, and they
+  missed real drift anyway — **`PiEvent` is not exhaustive** (`agent_settled`, `entry_appended`), and the
+  host's relay cast means those still reach clients. Re-audit a mirror when a bump's changelog touches
+  it, not because a comment names a version.
+- **Type-only, from the package roots, always** (type-only imports are erased by
   `verbatimModuleSyntax`, so the web bundle stays provider-free; the pi-ai provider/API subpaths
   statically import the Node SDKs — never touch them). The `/base` entries existed only in 0.79.8–0.79.9.
 - `Model` is generic — expose as `Model<any>`.
