@@ -158,17 +158,51 @@ test("the batch goes to the EU cloud by default; THINKRAIL_POSTHOG_HOST retarget
 	expect(retargeted[0]?.url).toBe("https://ph.example.test/batch/");
 });
 
-test("shutdownAnalytics drains the queue and never throws", async () => {
+test("shutdownAnalytics genuinely awaits the drain (slow transport, no polling) and never throws", async () => {
 	const sent: SentPayload[] = [];
-	bootReleaseLike(sent);
+	const slowFetch: typeof fetch = (async (url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+		await Bun.sleep(50); // a real network-ish delay — an unawaited drain could not see this land
+		sent.push({ url: String(url), body: JSON.parse(String(init?.body)) });
+		return new Response("{}", { status: 200 });
+	}) as typeof fetch;
+	bootReleaseLike(sent, { fetchImpl: slowFetch });
 	track({ name: "chat_started", params: { provider: "anthropic", model: "m" } });
 	await shutdownAnalytics();
+	// Asserted immediately after the await — deliverable only because shutdown really waited.
 	expect(allEntries(sent).map((e) => e.event)).toEqual([
 		"app_installed",
 		"app_started",
 		"chat_started",
 	]);
-	await shutdownAnalytics(); // idempotent, still never throws
+	await shutdownAnalytics(); // idempotent (memoized), still never throws
+});
+
+test("toggle-off silences events already queued inside the SDK — the transport gate", async () => {
+	const delivered: SentPayload[] = [];
+	let started = 0;
+	const slowFetch: typeof fetch = (async (url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+		started++;
+		await Bun.sleep(100); // keep this request in-flight while the next event queues behind it
+		delivered.push({ url: String(url), body: JSON.parse(String(init?.body)) });
+		return new Response("{}", { status: 200 });
+	}) as typeof fetch;
+	bootReleaseLike(delivered, { fetchImpl: slowFetch });
+	await drained(delivered, 2); // boot lifecycle out of the way
+
+	const startedBefore = started;
+	track({ name: "chat_started", params: { provider: "anthropic", model: "m" } });
+	const deadline = Date.now() + 2_000;
+	while (started === startedBefore && Date.now() < deadline) await Bun.sleep(5);
+	expect(started).toBeGreaterThan(startedBefore); // chat_started is genuinely ON the wire…
+
+	track({ name: "provider_login", params: { provider: "openai", method: "oauth" } }); // …this one queues behind it
+	setAnalyticsSending(false); // consent off while one is in-flight and one is queued
+	await shutdownAnalytics(); // drains the queue — into the closed gate
+	await Bun.sleep(150); // let the in-flight request finish
+
+	const events = allEntries(delivered).map((e) => e.event);
+	expect(events).toContain("chat_started"); // already on the wire — cannot be recalled
+	expect(events).not.toContain("provider_login"); // queued — died at the gate, zero network
 });
 
 // ── installation identity ──────────────────────────────────────────────

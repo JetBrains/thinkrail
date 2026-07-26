@@ -29,16 +29,20 @@ PostHog won on free tier, EU residency, and a self-host path).
     the **unit tests**: they assert every event variant's exact outgoing properties — there is
     deliberately no runtime allowlist filter (the union is closed and we control every call site; a
     content-leaking field fails CI, and runtime filtering was judged over-engineering).
-  - `sink.ts` — `AnalyticsSink { send(clientId, events); shutdown?() }`; `createPostHogSink({ apiKey,
-    host?, fetchImpl? })` wraps `posthog-node` (EU cloud by default): `flushAt: 1` (a handful of events
-    per run — dispatch each capture immediately; the SDK still retries failed sends), `disableGeoip:
-    true` (explicit even though it is the SDK default — the "no IP-derived fields" invariant enforced
-    sender-side), `disableCompression: true` (tiny payloads; keeps the wire inspectable for the test
-    seam and debugging), a custom `fetch` as the injected test seam, SDK errors swallowed to the debug
-    log (`on("error")` — never a user-facing warn). Every outgoing event is **personless**
-    (`$process_person_profile: false` — no person profiles server-side; unique users still count by
-    `distinct_id` = the install id). `shutdown()` drains the queue (bounded, 2s) for graceful stops.
-    Plus `noopSink` (disabled/dev: events vanish).
+  - `sink.ts` — `AnalyticsSink { send(clientId, events); setSending?(enabled); shutdown?() }`;
+    `createPostHogSink({ apiKey, host?, fetchImpl? })` wraps `posthog-node` (EU cloud by default):
+    `flushAt: 1` (a handful of events per run — dispatch each capture immediately; the SDK still
+    retries failed sends), `disableGeoip: true` (explicit even though it is the SDK default — the "no
+    IP-derived fields" invariant enforced sender-side), `disableCompression: true` (tiny payloads;
+    keeps the wire inspectable for the test seam and debugging), a custom `fetch` as the injected test
+    seam, SDK errors swallowed to the debug log (`on("error")` — never a user-facing warn). Every
+    outgoing event is **personless** (`$process_person_profile: false` — no person profiles
+    server-side; unique users still count by `distinct_id` = the install id). **`setSending(false)` is
+    a transport-level gate on the very `fetch` the SDK is handed** — every subsequent SDK request
+    (queued flushes AND the retry loop of an already-failed send) dies at the gate with a synthetic
+    200, zero network; this is deliberately NOT the SDK's `disable()`, which only stops new enqueues
+    (`optedOut` is never checked in its flush/retry paths). `shutdown()` drains the queue (bounded,
+    2s) for graceful stops. Plus `noopSink` (disabled/dev: events vanish).
   - `service.ts` — the facade: `initializeAnalytics(opts)` (installation record via `persistence`,
     sink selection, env stamping, first-run notice + `app_installed` announce, `app_started`),
     `track(event)`, `setAnalyticsSending(enabled)`, `shutdownAnalytics()` (best-effort flush — the
@@ -61,7 +65,10 @@ PostHog won on free tier, EU residency, and a self-host path).
   (deliberately not in the broadcast `config.json`).
 - **The flag only gates sending:** `AppConfig.analyticsEnabled` (host-mediated — `host` syncs
   `setAnalyticsSending` on every settings change; this module has no `settings` edge). Disabled ⇒ zero
-  network. `app_installed` fires at most once per install (the `announced` bit), on the first
+  network **from that instant**: the service stops emitting AND propagates the flip into the sink's
+  transport gate, so events already queued inside the SDK — and retries of an already-failed send —
+  are dropped client-side (an HTTP request already on the wire cannot be recalled; everything after it
+  can, and is). `app_installed` fires at most once per install (the `announced` bit), on the first
   sending-enabled boot, together with the first-run notice.
 - **Only stable/nightly releases send — ever:** the sink is real only when `channel` is in the
   release allowlist (`stable` / `nightly`) AND a baked key is present; anything else (dev, source,
@@ -76,6 +83,8 @@ PostHog won on free tier, EU residency, and a self-host path).
   variant's exact non-`$` properties (transport framing — the SDK's `$lib*` fields, `$geoip_disable`,
   and the personless flag — is the sink's, never an event param).
 - **Fire-and-forget:** `track`/`initializeAnalytics` never throw into callers and never block boot.
-  `shutdownAnalytics` is best-effort: a graceful stop drains the queue; an abrupt exit may drop the
-  final instants' events — accepted (with `flushAt: 1` anything older than the last moment is already
-  dispatched).
+  `shutdownAnalytics` is **idempotent** (one drain, memoized) and awaited where awaiting is possible:
+  `bootHost`'s SIGINT/SIGTERM handler drains it (bounded, concurrent with session settling) before
+  `process.exit`; the sync `server.stop()` fires the same memoized drain best-effort. An abrupt kill
+  may still drop the final instants' events — accepted (with `flushAt: 1` anything older than the
+  last moment is already dispatched).

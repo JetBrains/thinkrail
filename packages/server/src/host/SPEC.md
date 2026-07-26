@@ -40,8 +40,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   login-shell PATH, pick the port per `portMode` (`"exact"` vs `"free"`), start `createServer`, and
   install SIGINT/SIGTERM handlers that **settle before exit**: `settleSessionsForShutdown()` — abort
   streaming sessions and wait bounded, so pi persists their "Operation aborted" tool results and
-  transcripts land paired — then `stop()` + exit; an immediate exit would strand mid-tool transcripts on
-  the restart repair); `handlers.ts` (the WS method→handler registry, including the **Skills-manager set**:
+  transcripts land paired — concurrently with an awaited `shutdownAnalytics()` (bounded queue drain;
+  the same memoized drain `stop()` fires sync/best-effort) — then `stop()` + exit; an immediate exit
+  would strand mid-tool transcripts on the restart repair); `handlers.ts` (the WS method→handler registry, including the **Skills-manager set**:
   `skill.list` / `skills.state` / `project.skills` build the admission context from `projects` (+ the
   workspace's `skillOverrides` when workspace-scoped) and pass it into agent's `listSkillCommands`/
   `listSkillCatalog`; `project.setTrust` acknowledges the aliases present at grant via agent's

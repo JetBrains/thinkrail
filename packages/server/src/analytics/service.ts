@@ -32,6 +32,8 @@ interface AnalyticsState {
 	mute: boolean;
 	realSink: boolean;
 	announced: boolean;
+	/** Memoized drain — `shutdownAnalytics` is idempotent (boot's awaited call and stop's void call share it). */
+	shutdownPromise?: Promise<void>;
 	env: { app_version: string; channel: string; os: string; arch: string };
 }
 
@@ -71,6 +73,7 @@ export function initializeAnalytics(options: AnalyticsOptions): void {
 
 		const realSink = sink !== noopSink;
 		const mute = options.mute === true;
+		sink.setSending?.(options.enabled && !mute);
 		state = {
 			sink,
 			clientId: record.id,
@@ -112,14 +115,17 @@ export function track(event: AnalyticsEvent): void {
 
 /**
  * Sync the persisted `AppConfig.analyticsEnabled` flag into the live service — the host calls this off
- * the settings broadcast. Flipping to enabled runs the pending install announce (notice + one-shot
- * `app_installed`) if this install has never sent one. The id is deliberately NOT rotated on toggles.
+ * the settings broadcast. The flip propagates into the sink's transport gate too, so turning off also
+ * silences events already queued inside the SDK and retries of a failed send — zero network from this
+ * instant. Flipping to enabled runs the pending install announce (notice + one-shot `app_installed`)
+ * if this install has never sent one. The id is deliberately NOT rotated on toggles.
  */
 export function setAnalyticsSending(enabled: boolean): void {
 	const s = state;
 	if (!s) return;
 	try {
 		s.sending = enabled && !s.mute && s.realSink;
+		s.sink.setSending?.(s.sending);
 		if (s.sending) {
 			if (!s.announced) announceInstall(s);
 		}
@@ -129,17 +135,21 @@ export function setAnalyticsSending(enabled: boolean): void {
 }
 
 /**
- * Drain the sink's queued/in-flight deliveries — the host's `stop()` fires this without awaiting
- * (best-effort by contract; bounded inside the sink). Never throws.
+ * Drain the sink's queued/in-flight deliveries — bounded inside the sink, idempotent (memoized), and
+ * it never throws. `bootHost`'s signal handler AWAITS it before `process.exit`; the sync
+ * `server.stop()` fires the same memoized drain without awaiting (best-effort by contract).
  */
-export async function shutdownAnalytics(): Promise<void> {
+export function shutdownAnalytics(): Promise<void> {
 	const s = state;
-	if (!s?.realSink) return;
-	try {
-		await s.sink.shutdown?.();
-	} catch (error) {
-		debugLog(error);
-	}
+	if (!s?.realSink) return Promise.resolve();
+	s.shutdownPromise ??= (async () => {
+		try {
+			await s.sink.shutdown?.();
+		} catch (error) {
+			debugLog(error);
+		}
+	})();
+	return s.shutdownPromise;
 }
 
 /** Drop the singleton state (draining any real sink, fire-and-forget) — unit-test isolation only. */

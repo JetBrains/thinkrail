@@ -14,6 +14,11 @@ export interface OutgoingEvent {
 export interface AnalyticsSink {
 	/** Fire-and-forget delivery. Must never throw and never return a promise the caller must await. */
 	send(clientId: string, events: OutgoingEvent[]): void;
+	/**
+	 * Flip the transport gate. `false` ⇒ zero network from this instant — including events already
+	 * queued inside the vendor SDK and retries of an already-failed send (they die at the gate).
+	 */
+	setSending?(enabled: boolean): void;
 	/** Drain queued/in-flight deliveries, bounded — a graceful-stop courtesy, never required. */
 	shutdown?(): Promise<void>;
 }
@@ -49,12 +54,22 @@ const SHUTDOWN_TIMEOUT_MS = 2_000;
  * distinct_id).
  */
 export function createPostHogSink(options: PostHogSinkOptions): AnalyticsSink {
+	// The transport gate: the SDK only ever talks to the network through THIS fetch, so flipping
+	// `sending` silences everything downstream of it — queued flushes and the retry loop of a failed
+	// send included. (The SDK's own `disable()` can't do this: it only stops new enqueues — its
+	// flush/retry paths never re-check it.) The synthetic 200 reads as success, so retry loops end.
+	let sending = true;
+	const realFetch = options.fetchImpl ?? fetch;
+	const gatedFetch = (url: Parameters<typeof fetch>[0], init?: RequestInit): Promise<Response> => {
+		if (!sending) return Promise.resolve(new Response('{"status":"dropped client-side"}'));
+		return realFetch(url, init);
+	};
 	const client = new PostHog(options.apiKey, {
 		host: (options.host ?? POSTHOG_EU_HOST).replace(/\/+$/, ""),
 		flushAt: 1,
 		disableGeoip: true,
 		disableCompression: true,
-		...(options.fetchImpl ? { fetch: options.fetchImpl } : {}),
+		fetch: gatedFetch,
 	});
 	client.on("error", (error) => debugLog(error));
 	return {
@@ -70,6 +85,9 @@ export function createPostHogSink(options: PostHogSinkOptions): AnalyticsSink {
 			} catch (error) {
 				debugLog(error);
 			}
+		},
+		setSending(enabled) {
+			sending = enabled;
 		},
 		async shutdown() {
 			try {
