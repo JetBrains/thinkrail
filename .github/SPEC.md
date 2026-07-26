@@ -96,8 +96,12 @@ channel, download the platform asset + `SHA256SUMS`, verify the checksum, and dr
   broadcast; `-NoModifyPath` opts out). **Idempotence is judged against the *persistent* PATH only** —
   the HKCU + machine registry values, never `$env:Path`: a session-only `$env:Path +=` must not be
   mistaken for an install, or the registry write is skipped and `thinkrail` is gone from the next
-  terminal. It survives a locked running exe by renaming it aside (`thinkrail.exe.*.old`, cleaned up
-  by the next install) before replacing.
+  terminal. **Replacing the binary never risks the installed one**: the verified download is staged
+  *inside* the bin dir first (so a cross-volume or out-of-space failure strikes before anything
+  installed is touched), then swapped in by same-volume rename; a locked running exe is renamed aside
+  (`thinkrail.exe.*.old`, cleaned up by the next install alongside stale `.new` stages) and restored if
+  the swap then fails. A first-move failure with **no** `thinkrail.exe` present is rethrown as-is, not
+  mistaken for a lock.
 
 Both depend on the **artifact-name contract** this module produces (`thinkrail-<os>-<arch>` with `os` ∈
 {`linux`,`darwin`,`windows`}, `arch` ∈ {`x64`,`arm64`}, `.exe` on Windows) and the `SHA256SUMS` file —

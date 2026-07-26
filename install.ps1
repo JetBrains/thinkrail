@@ -141,6 +141,39 @@ public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, UIntPtr wP
     }
 }
 
+function Install-ThinkRailBinary {
+    # Put the verified download at $Dest so that no failure can leave the user without a working exe:
+    #   1. Stage the asset *inside* $Dest's own directory first. Crossing volumes (a custom prefix on
+    #      another drive) and running out of space happen here -- before anything installed is touched.
+    #   2. Swap it in. From here every step is a same-volume rename: it either succeeds or changes
+    #      nothing, so it cannot half-fail with the old binary already moved away.
+    #   3. Only if $Dest exists and refuses to be overwritten is it locked (thinkrail is running).
+    #      Renaming a running exe IS allowed: move it aside, drop the new one in, leave the `.old` for
+    #      the next install to clean. If $Dest does *not* exist the first failure was something else
+    #      (permissions, AV, full disk) -- rethrow it rather than masking it with a bogus rename.
+    #   4. If the swap still fails after the rename-aside, put the old binary back before rethrowing.
+    param([string]$Source, [string]$Dest)
+    $staged = "$Dest." + [System.IO.Path]::GetRandomFileName() + '.new'
+    Move-Item -LiteralPath $Source -Destination $staged -Force
+    $aside = $null
+    try {
+        try {
+            Move-Item -LiteralPath $staged -Destination $Dest -Force
+        } catch {
+            if (-not (Test-Path -LiteralPath $Dest)) { throw }
+            $aside = "$Dest." + [System.IO.Path]::GetRandomFileName() + '.old'
+            Move-Item -LiteralPath $Dest -Destination $aside -Force
+            Move-Item -LiteralPath $staged -Destination $Dest -Force
+        }
+    } catch {
+        if ($aside -and (Test-Path -LiteralPath $aside) -and -not (Test-Path -LiteralPath $Dest)) {
+            Move-Item -LiteralPath $aside -Destination $Dest -Force -ErrorAction SilentlyContinue
+        }
+        Remove-Item -LiteralPath $staged -Force -ErrorAction SilentlyContinue
+        throw
+    }
+}
+
 function Install-ThinkRail {
     param([string]$Channel, [string]$Version, [string]$Prefix, [switch]$NoModifyPath)
 
@@ -219,18 +252,12 @@ function Install-ThinkRail {
         Write-Host '  -> ok'
 
         New-Item -ItemType Directory -Path $binDir -Force | Out-Null
-        # Clean renamed-aside binaries left by earlier update-while-running installs (best-effort).
-        Get-ChildItem -Path $binDir -Filter 'thinkrail.exe*.old' -ErrorAction SilentlyContinue |
+        # Leftovers from earlier installs: `.old` (a renamed-aside running exe) and `.new` (a staged
+        # download whose swap was interrupted). Best-effort -- an `.old` may still be running.
+        Get-ChildItem -Path $binDir -Filter 'thinkrail.exe.*' -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -like '*.old' -or $_.Name -like '*.new' } |
             Remove-Item -Force -ErrorAction SilentlyContinue
-        try {
-            Move-Item -Path $assetPath -Destination $dest -Force
-        } catch {
-            # The existing exe is locked (thinkrail is running). Renaming a running exe IS allowed:
-            # move it aside, drop the new one in, and let the next install clean up the .old.
-            $aside = "$dest." + [System.IO.Path]::GetRandomFileName() + '.old'
-            Move-Item -Path $dest -Destination $aside -Force
-            Move-Item -Path $assetPath -Destination $dest -Force
-        }
+        Install-ThinkRailBinary -Source $assetPath -Dest $dest
         Write-Host "Installed -> $dest"
     } finally {
         Remove-Item -Recurse -Force -Path $tmp -ErrorAction SilentlyContinue
