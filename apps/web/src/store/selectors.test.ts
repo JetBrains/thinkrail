@@ -3,10 +3,10 @@ import type { Project, Workspace } from "@thinkrail/contracts";
 import type { EditorTab } from "./appStore";
 import {
 	isSkillPath,
-	selectActiveChatSessionId,
 	selectActiveWorkspace,
 	selectActiveWorkspaceProjectId,
 	selectContextProject,
+	selectHistoryTarget,
 	selectSkillsStale,
 } from "./selectors";
 
@@ -100,61 +100,77 @@ test("selectSkillsStale is a strict tick comparison, defaulting missing ticks to
 	).toBe(false);
 });
 
-// The shell's global Ctrl+R routes its history-open request by session id, so "which chat is on screen"
-// has to be answerable from store state alone — a file/diff/doc tab (or none) must resolve to null rather
-// than to some other workspace's chat.
-test("selectActiveChatSessionId names the on-screen chat, and only a chat", () => {
-	const chat: EditorTab = {
-		kind: "chat",
-		id: "w2:s1",
-		workspaceId: "w2",
-		name: "Chat",
-		sessionId: "s1",
-	};
-	const file: EditorTab = {
-		kind: "file",
-		id: "w2:src/a.ts",
-		workspaceId: "w2",
-		name: "a.ts",
-		path: "src/a.ts",
-	};
-	const tabsByWorkspace = { w2: [chat, file] };
+// The shell swallows Ctrl+R app-wide, so "which chat did that mean" has to be answerable from store state
+// alone — and must resolve to SOMETHING whenever the workspace has a chat at all, or the chord silently
+// dies over a file/diff tab.
+const chat1: EditorTab = {
+	kind: "chat",
+	id: "w2:s1",
+	workspaceId: "w2",
+	name: "One",
+	sessionId: "s1",
+};
+const chat2: EditorTab = {
+	kind: "chat",
+	id: "w2:s2",
+	workspaceId: "w2",
+	name: "Two",
+	sessionId: "s2",
+};
+const fileTab: EditorTab = {
+	kind: "file",
+	id: "w2:src/a.ts",
+	workspaceId: "w2",
+	name: "a.ts",
+	path: "src/a.ts",
+};
 
+test("selectHistoryTarget prefers the active chat tab", () => {
 	expect(
-		selectActiveChatSessionId({
+		selectHistoryTarget({
 			activeWorkspaceId: "w2",
-			tabsByWorkspace,
+			tabsByWorkspace: { w2: [chat1, chat2, fileTab] },
 			activeTabByWorkspace: { w2: "w2:s1" },
 		}),
-	).toBe("s1");
-	// A file tab is active → no chat on screen.
+	).toEqual({ workspaceId: "w2", tabId: "w2:s1", sessionId: "s1" });
+});
+
+test("selectHistoryTarget falls back to the newest chat tab when a non-chat tab is active", () => {
+	// The regression this guards: returning null here made Ctrl+R a silent no-op over Monaco/diffs —
+	// exactly the tabs the app-wide swallow exists to cover. `chat2` is last in open order, so it wins.
+	for (const activeTabId of ["w2:src/a.ts", null]) {
+		expect(
+			selectHistoryTarget({
+				activeWorkspaceId: "w2",
+				tabsByWorkspace: { w2: [chat1, chat2, fileTab] },
+				activeTabByWorkspace: { w2: activeTabId },
+			}),
+		).toEqual({ workspaceId: "w2", tabId: "w2:s2", sessionId: "s2" });
+	}
+});
+
+test("selectHistoryTarget is null only with no chat to open", () => {
+	// No chat tab in the workspace at all.
 	expect(
-		selectActiveChatSessionId({
+		selectHistoryTarget({
 			activeWorkspaceId: "w2",
-			tabsByWorkspace,
+			tabsByWorkspace: { w2: [fileTab] },
 			activeTabByWorkspace: { w2: "w2:src/a.ts" },
 		}),
 	).toBeNull();
-	// No active tab, and no active workspace at all.
+	// No active workspace.
 	expect(
-		selectActiveChatSessionId({
-			activeWorkspaceId: "w2",
-			tabsByWorkspace,
-			activeTabByWorkspace: { w2: null },
-		}),
-	).toBeNull();
-	expect(
-		selectActiveChatSessionId({
+		selectHistoryTarget({
 			activeWorkspaceId: null,
-			tabsByWorkspace,
+			tabsByWorkspace: { w2: [chat1] },
 			activeTabByWorkspace: { w2: "w2:s1" },
 		}),
 	).toBeNull();
-	// The active tab belongs to another workspace's list — never reachable through the active one.
+	// Another workspace's chats are never reachable through the active one.
 	expect(
-		selectActiveChatSessionId({
+		selectHistoryTarget({
 			activeWorkspaceId: "w1",
-			tabsByWorkspace,
+			tabsByWorkspace: { w2: [chat1] },
 			activeTabByWorkspace: { w1: "w2:s1" },
 		}),
 	).toBeNull();

@@ -171,6 +171,11 @@ interface ComposerProps {
 	/** Open the Templates manager (Settings → Templates). Wired by `ChatView` (the store lives there, not
 	 * here) to back the `/` menu's "no prompt templates yet" nudge; without it the nudge isn't rendered. */
 	onManageTemplates?: () => void;
+	/** Whether a `template.list` response has come back **empty** — the nudge's gate. Not derivable from
+	 * `commands`: that list is equally empty before the first fetch resolves and after one fails, so
+	 * reading emptiness off it would flash (or strand) a nudge that contradicts the templates the user
+	 * actually has. Only the owner of the request knows, so only it can say. */
+	templatesEmpty?: boolean;
 }
 
 /** Imperative handle so `ChatView` can insert a recalled prompt (or a parsed template) without reaching
@@ -228,6 +233,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		onHistoryOpen,
 		onPickTemplate,
 		onManageTemplates,
+		templatesEmpty,
 	},
 	handleRef,
 ) {
@@ -368,12 +374,6 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	// Either floating completion panel — the slot-session keys and the hint chip both stand down while
 	// one is open (all the composer's floating panels share the same anchor rect).
 	const menuOpen = mentionOpen || slashCompletion.open;
-
-	// Whether ANY prompt template exists (not: any that matches the current query) — the `/` menu's
-	// empty-state nudge is about having none at all, so a query that simply misses must not raise it.
-	// `commands` is the merged list `ChatView` builds, so a fresh `template.list` clears this the moment
-	// the first template lands.
-	const hasTemplates = commands.some((c) => c.source === "prompt");
 
 	// The single entry point to the history overlay — the always-rendered history button and the shell's
 	// global `Ctrl+R` (via the handle below) both go through here, so both dismiss any open mention/slash
@@ -608,8 +608,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					activeIndex={slashCompletion.activeIndex}
 					onSelect={slashCompletion.pick}
 					className="absolute bottom-full left-sm mb-xs"
+					// The nudge is about having NO templates at all — never about the current query matching
+					// none — so it keys on the owner's confirmed-empty listing, not on the visible matches.
 					footer={
-						!hasTemplates && onManageTemplates ? (
+						templatesEmpty && onManageTemplates ? (
 							<button
 								type="button"
 								data-testid="slash-templates-empty"

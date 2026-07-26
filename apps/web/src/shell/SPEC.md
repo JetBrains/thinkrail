@@ -65,10 +65,16 @@ duplicate handling downstream).
 Today that's **`Ctrl+R` → chat history search**. Previously handled only on the composer textarea, so
 with focus anywhere else — the file tree, Monaco, a diff, the transcript, bare `<body>` — the browser
 reloaded the app instead. It is deliberately *not* a browser-reserved chord (unlike `Ctrl+T`/`Ctrl+W`/
-`Ctrl+N`), so swallowing it works. Routing goes through the store (`selectActiveChatSessionId` →
-`requestHistoryOpen`), never a ref: the chord fires far outside the chat subtree, and `CenterTabs` mounts
-one tab body at a time, so the selector names the only `ChatView` there is. With a file tab active there
-is nothing to open and the chord is *only* swallowed.
+`Ctrl+N`), so swallowing it works. Routing goes through the store (`selectHistoryTarget` →
+`requestHistoryOpen`), never a ref: the chord fires far outside the chat subtree entirely.
+
+Because `CenterTabs` mounts one tab body at a time, "which chat" and "is it even mounted" are the same
+question. `selectHistoryTarget` answers it: the active tab when that's a chat, else the workspace's most
+recently opened one — and `requestHistoryOpen` **activates that tab atomically with the request**, so the
+`ChatView` that mounts is the one that consumes it. Resolving to "no target" over a file/diff tab would
+have been worse than the bug: the chord is swallowed there too, so it would silently do *nothing* over
+Monaco, a diff, or the file tree — the very places this handler exists for. Only a workspace with **no**
+chat tab at all has nothing to open; there the chord is purely swallowed (still never a reload).
 
 Two carve-outs, both load-bearing:
 - **Terminals.** A keydown from inside `.xterm` passes straight through — `Ctrl+R` there is the shell's

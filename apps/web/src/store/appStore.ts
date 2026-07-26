@@ -21,7 +21,7 @@ import type { LoginState } from "../auth";
 import type { HydratedRuntime } from "../chat/hydrate";
 import type { ChatTurn, ExtUiDialogRequest, ToolResultState } from "../chat/types";
 import type { ConnectionStatus } from "../transport";
-import { isSkillPath, selectWorkspaceTick } from "./selectors";
+import { type HistoryTarget, isSkillPath, selectWorkspaceTick } from "./selectors";
 
 /** A center tab. File tabs (Monaco) and chat tabs share the strip, discriminated by `kind`. */
 export interface FileTab {
@@ -641,8 +641,12 @@ interface AppState {
 	requestChatLocation: (req: ChatLocationRequest) => void;
 	/** Dismiss the jump deep link once `ChatView` has consumed it (scrolled to the anchored turn). */
 	clearChatLocation: () => void;
-	/** Ask `sessionId`'s chat to open its history-search overlay (the shell's global `Ctrl+R`). */
-	requestHistoryOpen: (sessionId: string) => void;
+	/**
+	 * Ask a chat to open its history-search overlay (the shell's global `Ctrl+R`). Activates the target
+	 * tab **atomically** with the request: the chord fires over any tab, and `CenterTabs` mounts one tab
+	 * body at a time, so a request for a chat that isn't on screen would never be consumed.
+	 */
+	requestHistoryOpen: (target: HistoryTarget) => void;
 	/** Dismiss the history-open request once `ChatView` has acted on it. */
 	clearHistoryOpen: () => void;
 	/** Enqueue a toast; returns its id so a caller can dismiss it early. An identical live toast (same
@@ -1288,7 +1292,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 			activeWorkspaceId: req.workspaceId,
 		}),
 	clearChatLocation: () => set({ chatLocationRequest: null }),
-	requestHistoryOpen: (sessionId) => set({ historyOpenRequest: { sessionId } }),
+	requestHistoryOpen: (target) =>
+		set((s) => ({
+			historyOpenRequest: { sessionId: target.sessionId },
+			activeTabByWorkspace: { ...s.activeTabByWorkspace, [target.workspaceId]: target.tabId },
+		})),
 	clearHistoryOpen: () => set({ historyOpenRequest: null }),
 	pushToast: (toast) => {
 		const twin = get().toasts.find(

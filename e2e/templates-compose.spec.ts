@@ -38,6 +38,10 @@ test.describe("prompt templates in the composer", () => {
 		const rows = page.locator('[data-testid="slash-command"][data-source="prompt"]');
 		await expect(rows).toHaveCount(1);
 		await expect(rows.first()).toContainText("/review");
+		// Air review: the "no templates yet" nudge must never appear on this — the very first `/` open of a
+		// chat that HAS templates. It keys on a resolved-empty `template.list`, not on the merged command
+		// list, which is equally empty before that first response lands (and after a failed one).
+		await expect(page.getByTestId("slash-templates-empty")).toHaveCount(0);
 
 		// Picking replaces the draft with the expanded body — the unfilled `$1` became a visible `⟨file⟩`
 		// marker, `${2:-src/}` became its own default text "src/" — and starts a slot session on slot 1/2.

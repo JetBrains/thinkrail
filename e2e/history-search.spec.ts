@@ -802,3 +802,35 @@ test("Ctrl+R inside a terminal belongs to the shell, not to history search", asy
 	await expect(page.getByTestId("history-overlay")).toBeHidden();
 	await expect(visibleTerminalScreen(page)).toContainText(/i-search|\^R/i);
 });
+
+// The Air review's blocking finding: routing that resolves only "the active tab, if it's a chat" makes the
+// app-wide swallow *worse* than the bug it fixes over a file/diff tab — Ctrl+R is prevented, nothing opens,
+// and the shortcut silently dies exactly where Monaco and diffs live. The target now falls back to the
+// workspace's most recently opened chat and the request activates that tab atomically with itself.
+test("Ctrl+R from an active file tab switches to the chat and opens history search", async ({
+	page,
+}) => {
+	await openWorkspaceChat(page);
+	seedExternalCwdSessions();
+
+	// Open a file tab on top of the chat, so the center pane is Monaco/preview and no ChatView is mounted.
+	await page.getByTestId("tab-files").click();
+	const readme = page.getByTestId("file-node").filter({ hasText: "README.md" });
+	await expect(readme).toBeVisible();
+	await readme.dblclick();
+	const fileTab = page.getByTestId("editor-tab").filter({ hasText: "README.md" });
+	await expect(fileTab).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("chat-input")).toHaveCount(0);
+
+	// Ctrl+R with the file tab active (focus in the editor pane, not any chat surface).
+	await page.getByTestId("editor-pane").click();
+	await page.keyboard.press("Control+r");
+
+	// The chat tab is active again and its overlay is up, focused and ready to type.
+	await expect(page.getByTestId("editor-tab").filter({ hasText: "README.md" })).toHaveAttribute(
+		"data-active",
+		"false",
+	);
+	await expect(page.getByTestId("history-overlay")).toBeVisible();
+	await expect(page.getByTestId("history-query")).toBeFocused();
+});

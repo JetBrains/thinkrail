@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { selectActiveChatSessionId, useAppStore } from "../store";
+import { selectHistoryTarget, useAppStore } from "../store";
 
 /**
  * xterm's own DOM root. Everything the terminal renders (including the offscreen helper textarea that
@@ -30,9 +30,12 @@ function isInTerminal(target: EventTarget | null): boolean {
  *   by keyboard is always still possible — alongside `F5` and the browser's own reload button.
  *
  * Routing: the request goes through the store rather than a ref, because the chord fires far outside the
- * chat subtree. `CenterTabs` mounts one tab body at a time, so `selectActiveChatSessionId` names the only
- * `ChatView` that exists; with a file tab active there is nothing to open and the chord is *only*
- * swallowed (never a reload, never a stray overlay on a hidden chat).
+ * chat subtree. `selectHistoryTarget` resolves which chat it means — the active tab when that's a chat,
+ * else the workspace's most recently opened one — and `requestHistoryOpen` activates that tab atomically
+ * with the request, since `CenterTabs` mounts one tab body at a time and a request for an off-screen chat
+ * would never be consumed. So the chord works over Monaco, a diff, or the file tree, not just over a
+ * chat. Only a workspace with **no** chat tab at all has nothing to open; there the chord is purely
+ * swallowed (never a reload).
  */
 export function useGlobalHotkeys(): void {
 	useEffect(() => {
@@ -41,8 +44,8 @@ export function useGlobalHotkeys(): void {
 			if (isInTerminal(e.target)) return;
 			e.preventDefault();
 			e.stopPropagation();
-			const sessionId = selectActiveChatSessionId(useAppStore.getState());
-			if (sessionId) useAppStore.getState().requestHistoryOpen(sessionId);
+			const target = selectHistoryTarget(useAppStore.getState());
+			if (target) useAppStore.getState().requestHistoryOpen(target);
 		};
 		window.addEventListener("keydown", onKeyDown, true);
 		return () => window.removeEventListener("keydown", onKeyDown, true);

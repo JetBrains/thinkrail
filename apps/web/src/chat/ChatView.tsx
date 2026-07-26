@@ -201,6 +201,9 @@ export default function ChatView({
 	const [planOpen, setPlanOpen] = useState(false);
 	const [slashActive, setSlashActive] = useState(false);
 	const [templates, setTemplates] = useState<TemplateInfo[]>([]);
+	// "A `template.list` response came back and it was empty" — never "we haven't asked yet" or "the ask
+	// failed". See the fetch effect below for why the distinction matters.
+	const [templatesEmpty, setTemplatesEmpty] = useState(false);
 	// The history overlay's save-as-template dialog: non-null while open, carrying the prompt hit its body
 	// is prefilled from — `TemplateEditorDialog` itself is always mounted (controlled by `open` below), the
 	// same idiom `panels/TemplatesSettings.tsx` uses for its own New/Edit instance.
@@ -260,13 +263,20 @@ export default function ChatView({
 	// session-create-time `commands` snapshot) is deliberately stale — see `chat/SPEC.md`'s Template
 	// slots section. The previous (possibly stale) list stays rendered until the fresh one lands — a
 	// same-open-transition flicker would be worse than a few-ms-stale row.
+	// `templatesEmpty` is what gates the menu's "no templates yet" nudge, and it is deliberately NOT
+	// `templates.length === 0`: that list starts empty and stays empty when a request fails (the catch is
+	// silent by design — a failed listing must not break the menu), so deriving emptiness from it would
+	// claim "you have no templates" during the first fetch of every chat and permanently after a failure.
+	// Only a resolved response can answer the question, so only a resolved response sets this.
 	useEffect(() => {
 		if (!slashActive) return;
 		let cancelled = false;
 		getTransport()
 			.request("template.list", { workspaceId })
 			.then((res) => {
-				if (!cancelled) setTemplates(res.templates);
+				if (cancelled) return;
+				setTemplates(res.templates);
+				setTemplatesEmpty(res.templates.length === 0);
 			})
 			.catch(() => {});
 		return () => {
@@ -650,6 +660,7 @@ export default function ChatView({
 							onHistoryOpen={onHistoryOpen}
 							onPickTemplate={onPickTemplate}
 							onManageTemplates={onManageTemplates}
+							templatesEmpty={templatesEmpty}
 						/>
 					</div>
 					<TemplateEditorDialog

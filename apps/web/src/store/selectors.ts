@@ -32,22 +32,39 @@ export function selectContextProject(state: ProjectContextState): Project | null
 	return state.projects.find((project) => project.id === projectId) ?? null;
 }
 
+/** Where the shell's global `Ctrl+R` sends its history-open request — see `selectHistoryTarget`. */
+export interface HistoryTarget {
+	workspaceId: string;
+	/** The chat tab to make active (already active in the common case). */
+	tabId: string;
+	sessionId: string;
+}
+
 /**
- * The session id of the chat currently rendered in the center pane, or null when the active tab is a
- * file/diff/doc (or there is none). `CenterTabs` mounts exactly one tab body at a time, so this is also
- * "the one `ChatView` that exists" — which is what the shell's global `Ctrl+R` routes its history-open
- * request to.
+ * The chat the active workspace's history search belongs to: the active tab when it *is* a chat,
+ * otherwise the workspace's most recently opened one. Null only when the workspace has no chat tab at
+ * all (or there's no active workspace) — the one case where `Ctrl+R` has nothing to open.
+ *
+ * The fallback is the point. `CenterTabs` mounts one tab body at a time, so with a file/diff/doc tab
+ * active there is no `ChatView` to route to — and since the chord is swallowed app-wide, resolving to
+ * "no target" there would make `Ctrl+R` silently do *nothing* over Monaco, a diff, or the file tree:
+ * precisely the places the global handler exists to cover. Returning the chat tab (which the caller
+ * activates, atomically with the request) means the chord always lands somewhere.
  */
-export function selectActiveChatSessionId(state: {
+export function selectHistoryTarget(state: {
 	activeWorkspaceId: string | null;
 	tabsByWorkspace: Record<string, EditorTab[]>;
 	activeTabByWorkspace: Record<string, string | null>;
-}): string | null {
+}): HistoryTarget | null {
 	const workspaceId = state.activeWorkspaceId;
 	if (!workspaceId) return null;
+	const tabs = state.tabsByWorkspace[workspaceId] ?? [];
 	const activeTabId = state.activeTabByWorkspace[workspaceId] ?? null;
-	const tab = (state.tabsByWorkspace[workspaceId] ?? []).find((t) => t.id === activeTabId);
-	return tab?.kind === "chat" ? tab.sessionId : null;
+	const active = tabs.find((t) => t.id === activeTabId);
+	// `findLast`, not `find`: tabs are appended in open order, so the last chat tab is the most recently
+	// opened one — the best "which chat did they mean" answer available without an MRU we don't track.
+	const chat = active?.kind === "chat" ? active : tabs.findLast((t) => t.kind === "chat");
+	return chat ? { workspaceId, tabId: chat.id, sessionId: chat.sessionId } : null;
 }
 
 /** Whether a worktree-relative path is inside a skill directory — the auto-detect trigger for a reload. */

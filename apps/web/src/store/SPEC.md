@@ -144,16 +144,19 @@ paths only; opened by `ChangesPanel`). The transient **`chatLocationRequest`** �
   `useHistorySearch.openMessage` loads the destination project's workspaces first when absent) and cleared
   by **`clearChatLocation()`**; the target's anchor resolves against the runtime's `turnIdByMessageIndex`
   (see `chat/SPEC.md`'s hydration bullet), falling back to the newest `anchorText` match when absent.
-  The sibling transient **`historyOpenRequest { sessionId }`** — set by **`requestHistoryOpen(sessionId)`**,
-  cleared by **`clearHistoryOpen()`** — carries the shell's app-wide `Ctrl+R` to the on-screen chat, which
-  opens (or, when already open, re-scopes) its history overlay; it goes through the store precisely because
-  the chord fires outside the chat subtree entirely (see `shell/SPEC.md`'s "Global chords"). The `EditorTab` (`FileTab` | `ChatTab` | `DocTab` | `DiffTab`) + `TerminalTab` + `ClosedChat` +
+  The sibling transient **`historyOpenRequest { sessionId }`** — set by **`requestHistoryOpen(target)`**,
+  cleared by **`clearHistoryOpen()`** — carries the shell's app-wide `Ctrl+R` to a chat, which opens (or,
+  when already open, re-scopes) its history overlay; it goes through the store precisely because the chord
+  fires outside the chat subtree entirely (see `shell/SPEC.md`'s "Global chords"). The target comes from
+  **`selectHistoryTarget`** (active chat tab, else the workspace's newest chat) and the action **activates
+  that tab atomically** with the request — one `set`, because `CenterTabs` mounts one tab body at a time,
+  so a request for an off-screen chat would never be consumed. The `EditorTab` (`FileTab` | `ChatTab` | `DocTab` | `DiffTab`) + `TerminalTab` + `ClosedChat` +
   `SessionRuntime` types. (Chat *render* types + renderers live in the `chat` module.) The pure context
   selectors in `selectors.ts` resolve the active `Workspace`, its owning project id, and the shell's context
   project from those canonical ids and collections; derived active-project state is never stored separately.
 - **Public surface (barrel):** `useAppStore`; `selectActiveWorkspace`,
-  `selectActiveWorkspaceProjectId`, `selectActiveChatSessionId` (the on-screen chat's session id, or null
-  when a file/diff/doc tab is active — the shell's `Ctrl+R` routing target),
+  `selectActiveWorkspaceProjectId`, `selectHistoryTarget` + `HistoryTarget` (the shell's `Ctrl+R` routing
+  target: the active chat tab, or the workspace's newest chat when a file/diff/doc tab is active),
   `selectContextProject`, `selectSkillsStale`, `selectWorkspaceTick` (the
   sync-baseline snapshot; + the `isSkillPath` path predicate it shares with `noteFsChanged`); `toast` (the
   fire-from-anywhere helper),

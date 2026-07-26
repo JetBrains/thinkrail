@@ -236,13 +236,18 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `source === "prompt"` entries, plus a fresh `template.list { workspaceId }` fetch mapped to
   `SlashCommandInfo` rows (`source: "prompt"`, `sourceInfo` synthesized to match pi's own prompt-template
   convention exactly: `{ path: filePath, source: "local", scope: scope === "global" ? "user" : "project",
-  origin: "top-level" }`) — one merged list. When that merged list holds **no** `source === "prompt"` row
-  at all, `SlashCommandMenu` renders a `footer` nudge (`data-testid="slash-templates-empty"`) that
+  origin: "top-level" }`) — one merged list. When a `template.list` response comes back **empty**,
+  `SlashCommandMenu` renders a `footer` nudge (`data-testid="slash-templates-empty"`) that
   deep-links to Settings → Templates via `ChatView`'s `onManageTemplates` — the discoverability half of
   the starter-templates offer (`panels/SPEC.md`), since a fresh install has an empty global prompts dir
   and the manager is otherwise two clicks deep in a dialog. Gated on "no templates exist", never on "the
   current query matched none", so a query that simply misses doesn't raise it; `footer` is optional, so
-  `NewWorkspaceDialog`'s reuse of the same menu is unaffected. The fetch runs on
+  `NewWorkspaceDialog`'s reuse of the same menu is unaffected. **The gate is `ChatView`'s explicit
+  `templatesEmpty` prop — a resolved, empty listing — never `commands` having no `source === "prompt"`
+  row.** The merged list is equally empty *before* the first fetch resolves and *after* one fails (that
+  `.catch` is silent by design — a failed listing must not break the menu), so reading emptiness off it
+  would flash "you have no templates" on every chat's first `/` and strand that claim permanently after a
+  failed listing — over a row whose click also clears the user's slash draft. The fetch runs on
   **every** slash-menu-open transition (**`onSlashActive`**, a boolean prop mirroring `onMentionQuery`'s
   query signal — it stays `true` while the user types the query, so no per-keystroke refires) and is
   deliberately **uncached**: prompt files change outside the app too (pi CLI, an editor, a git pull),
