@@ -36,7 +36,9 @@ folder" anchor, ensured lazily, **non-removable and non-renamable**.
   [[submodule-workflow-skills]]'s artifacts rules); a **user-supplied name is the display name** (casing +
   punctuation preserved via `toDisplayName`; the branch is derived from it) and **sets `renamed: true`** at
   create — the user already chose, so the auto-namer never touches it; auto-`workspace-N` leaves it unset,
-  where `name === branch`),
+  where `name === branch`; **re-reads the registry after the awaited fallback fetch** before appending —
+  the pre-await snapshot is stale by then, and saving it would clobber a concurrent list's Default-ensure
+  (same discipline as `renameWorkspace`'s re-load after its git subprocess)),
   `renameWorkspace` (**sync**; sets the **display `name`** (sanitized, casing preserved) and derives the
   **git branch** from it via `toBranch`, uniqued against refs + worktree dirs, `git branch -m` from the
   project repo — the branch ref moves and the worktree's HEAD follows, but the **worktree dir never moves**
@@ -58,19 +60,30 @@ folder" anchor, ensured lazily, **non-removable and non-renamable**.
   and the slow git reclaim are separable (the host archives off the request's critical path):
   `forgetWorkspace(id)` (drop the persistence record, return the removed record or `null` — gone from
   `listWorkspaces` immediately), `reclaimWorktree(ws)` (the slow half — `git worktree remove --force`,
-  keeps the branch; hardened: rm + `prune` if git fails), and `removeWorkspace(id)` (the synchronous
+  keeps the branch; hardened: rm + `prune` if git fails; **refuses the Default and, defense-in-depth,
+  any record whose `worktreePath` resolves to the project folder** — the rm-fallback must never see the
+  user's repo, however a corrupt/hand-edited record got there), and `removeWorkspace(id)` (the synchronous
   composition of the two, kept for callers/tests that want the whole archive in one call).
 - **Default workspace (`kind: "default"`):** exactly one per project. `listWorkspaces` **ensures** it
   — find-or-create by `projectId`+`kind` (id a plain `randomUUID`; the `kind` field is the marker,
   never an id convention), **collapsing duplicates** defensively if out-of-band state churn ever
-  produced two — and returns it **pinned first**. No `git worktree add` (the folder already is the
+  produced two — and returns it **pinned first**. The in-list ensure is a **deliberate CQS exception**:
+  the query performs a registry write + lifecycle emit so that *any* caller self-heals out-of-band state
+  churn (backfills projects opened before the feature; the e2e reset rewrites `workspaces.json` mid-run)
+  — the write is to the app's registry under the data dir, never into the user's repo. No `git worktree
+  add` (the folder already is the
   main working tree) and **no scratch-dir seeding at ensure** — merely listing a project must never
-  write into the user's repo (see `ensureWorkspaceScratchDir`). Fields are folder-truth, refreshed
-  quietly at list time when drifted (no lifecycle event — membership didn't change): `branch` = the
+  write into the user's repo (see `ensureWorkspaceScratchDir`). Fields are folder-truth, refreshed at
+  list time when drifted — **emitting `updated`** so every client's rail converges instead of one tab
+  staying stale after a terminal `git checkout` (`renameWorkspace` uses the same channel for the same
+  fields; the store's merge triggers no re-list, so there's no feedback loop): `branch` = the
   folder's current HEAD (`symbolic-ref --short`, unborn-safe; detached → literal `HEAD`), `baseBranch`
-  = the repo's default branch via `git`'s `resolveDefaultBranch` — so Default's Changes measure like
+  = the repo's default branch via `git`'s `resolveDefaultBranch` (unborn-safe — its last fallback is
+  `currentBranch`, so the literal `"HEAD"` never persists) — so Default's Changes measure like
   any workspace, degenerating to uncommitted work when the folder sits on the default branch itself.
-  First materialization emits `created` (idempotent for stores). **Non-removable + non-renamable,
+  First materialization emits `created` (idempotent for stores); a drift-free list emits nothing. Every
+  ensure emit — `created`, `updated`, the collapse's `removed`s — happens **after** the save, matching
+  the module's persist-then-publish order everywhere else. **Non-removable + non-renamable,
   enforced here, not just hidden in the UI:** `forgetWorkspace` and `renameWorkspace` **throw** on
   `kind: "default"` — forget would hand the archive teardown's `rm -rf` fallback the project folder,
   rename would `git branch -m` the user's real branch; the record carries `renamed: true` so both
@@ -79,10 +92,14 @@ folder" anchor, ensured lazily, **non-removable and non-renamable**.
   scratch dir (mkdir + self-ignoring `*` `.gitignore`); the host calls it on **session create** for
   every workspace, so the Default workspace writes into the user's repo only when a chat actually
   starts there (worktree creation still seeds eagerly at create; this also self-heals a worktree
-  whose scratch dir was deleted). The `.gitignore` write is **non-clobbering — only when the file is
-  absent**: in the Default workspace that path is inside the user's own repo, where an existing
-  (possibly tracked, possibly customized) file is theirs to keep; seeding fills the gap, never
-  overwrites (pinned by a regression test).
+  whose scratch dir was deleted). Hardened, because in the Default workspace it runs against
+  **repository-controlled content**: it **throws when the workspace root is missing** (an externally
+  deleted worktree must fail the session loudly, not be resurrected as an empty non-git dir); it
+  **refuses symlinked path components** (`lstat`, never followed — a malicious checkout can't redirect
+  the seed outside the workspace); and the `.gitignore` write is **exclusive-create (`wx`) — only when
+  the file is absent**: in the Default workspace that path is inside the user's own repo, where an
+  existing (possibly tracked, possibly customized) file is theirs to keep, and `O_EXCL` never follows
+  a (possibly dangling) symlink; seeding fills the gap, never overwrites (pinned by regression tests).
 - **Lifecycle events:** every membership mutation — `createWorkspace` (`created`), `renameWorkspace`
   (`updated`, both the naive and agentic auto-rename passes since both go through it), `forgetWorkspace`
   (`removed`) — emits a `WorkspaceLifecycleEvent` through an **injected publisher** (`setWorkspacePublisher`,

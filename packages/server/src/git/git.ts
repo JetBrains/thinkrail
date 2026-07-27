@@ -57,8 +57,9 @@ export function resolveDefaultBranch(repoPath: string): string {
 	if (head.ok && head.out) return head.out;
 	if (git(repoPath, ["rev-parse", "--verify", "--quiet", "refs/remotes/origin/main"]).ok)
 		return "origin/main";
-	const repoHead = git(repoPath, ["rev-parse", "--abbrev-ref", "HEAD"]);
-	return repoHead.ok && repoHead.out ? repoHead.out : "HEAD";
+	// Last resort: the checkout's own branch. `currentBranch` answers even on an unborn HEAD (a repo
+	// with no commits yet), so the literal "HEAD" never leaks into a persisted, user-visible baseBranch.
+	return currentBranch(repoPath);
 }
 
 /**

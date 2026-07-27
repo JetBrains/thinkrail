@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	symlinkSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -317,11 +325,23 @@ test("the Default workspace's branch and base refresh from the folder on each li
 
 	expect(listWorkspaces("p1")[0]?.baseBranch).toBe("origin/main");
 
-	// The user switches branches in a terminal — the next list reflects the folder, quietly.
+	// The user switches branches in a terminal — the next list reflects the folder and broadcasts
+	// `updated` so every other client's rail converges (rename uses the same channel).
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((e) => events.push(e));
 	git(repo, "switch", "-c", "feature/x");
 	const def = listWorkspaces("p1")[0];
 	expect(def?.branch).toBe("feature/x");
 	expect(def?.baseBranch).toBe("origin/main");
+	expect(events).toHaveLength(1);
+	expect(events[0]).toMatchObject({
+		kind: "updated",
+		workspace: { branch: "feature/x", kind: "default" },
+	});
+
+	// A drift-free list emits nothing further.
+	listWorkspaces("p1");
+	expect(events).toHaveLength(1);
 
 	// Committed work on the branch counts against the default branch (the Changes semantics).
 	writeFileSync(join(repo, "new.txt"), "one\ntwo\n");
@@ -361,6 +381,85 @@ test("duplicate Default records (out-of-band corruption) collapse to the oldest"
 	expect(rows.filter((w) => w.kind === "default")).toHaveLength(1);
 	expect(rows[0]?.id).toBe(def.id); // the oldest record wins
 	expect(events).toEqual([{ kind: "removed", projectId: "p1", id: "dupe" }]);
+});
+
+test("a concurrent list's Default-ensure survives createWorkspace's awaited fallback fetch", async () => {
+	// A remote branch that exists on origin but has no local remote-tracking ref — createWorkspace must
+	// take the awaited-fetch fallback path (its only await, where a concurrent write can interleave).
+	const remoteRepo = join(dataDir, "remote.git");
+	git(repo, "init", "--bare", remoteRepo);
+	git(repo, "remote", "add", "origin", remoteRepo);
+	git(repo, "push", "origin", "main");
+	git(repo, "push", "origin", "main:feature-x");
+	git(repo, "update-ref", "-d", "refs/remotes/origin/feature-x"); // push updated it — drop it again
+
+	const pending = createWorkspace("p1", undefined, "origin/feature-x"); // parked at the fetch await
+	const def = listWorkspaces("p1")[0]; // materializes the Default while the create is in flight
+	expect(def?.kind).toBe("default");
+
+	const ws = await pending;
+	expect(ws.baseBranch).toBe("origin/feature-x");
+	// The Default survived with its original id — the create re-read the registry after its await
+	// instead of saving a stale pre-await snapshot (which would re-mint the Default with a new id).
+	const rows = listWorkspaces("p1");
+	expect(rows.filter((w) => w.kind === "default")).toHaveLength(1);
+	expect(rows[0]?.id).toBe(def?.id);
+	expect(rows).toHaveLength(2);
+});
+
+test("ensureWorkspaceScratchDir refuses a missing workspace root instead of resurrecting it", async () => {
+	const ws = await createWorkspace("p1");
+	rmSync(ws.worktreePath, { recursive: true, force: true });
+	// An externally-deleted worktree must fail the session loudly — not come back as an empty non-git
+	// dir the agent then silently works in.
+	expect(() => ensureWorkspaceScratchDir(ws)).toThrow("Workspace directory is missing");
+	expect(existsSync(ws.worktreePath)).toBe(false);
+});
+
+test("ensureWorkspaceScratchDir never follows symlinks — the checkout controls these paths", () => {
+	const def = listWorkspaces("p1")[0];
+	if (!def) throw new Error("expected the ensured Default workspace");
+	const outside = join(dataDir, "outside");
+	mkdirSync(outside);
+
+	// A symlinked owned component is refused outright — nothing is created through the link.
+	symlinkSync(outside, join(repo, ".thinkrail"));
+	expect(() => ensureWorkspaceScratchDir(def)).toThrow("not a real directory");
+	expect(existsSync(join(outside, "context"))).toBe(false);
+	rmSync(join(repo, ".thinkrail"));
+
+	// A dangling symlink where .gitignore belongs is not followed into a file-create: the exclusive
+	// (`wx`) open refuses symlinks, and the resulting EEXIST is treated as "already seeded".
+	mkdirSync(join(repo, ".thinkrail", "context"), { recursive: true });
+	const planted = join(outside, "planted");
+	symlinkSync(planted, join(repo, ".thinkrail", "context", ".gitignore"));
+	expect(() => ensureWorkspaceScratchDir(def)).not.toThrow();
+	expect(existsSync(planted)).toBe(false);
+});
+
+test("reclaimWorktree refuses a record pointing at the project folder even without the kind flag", () => {
+	const def = listWorkspaces("p1")[0];
+	if (!def) throw new Error("expected the ensured Default workspace");
+	// A corrupt/hand-edited registry record: the `kind` marker lost, the path still the user's repo.
+	// The path-equality guard (not just the flag) must keep the rm-fallback off the project folder.
+	const { kind: _dropped, ...corrupt } = def;
+	reclaimWorktree(corrupt);
+	expect(existsSync(join(repo, "README.md"))).toBe(true);
+});
+
+test("an unborn repo's Default never persists the literal HEAD as its base", () => {
+	// A project whose repo has no commits yet (init'd elsewhere — project.init would commit): the
+	// unborn symbolic-ref still names the branch-to-be, and baseBranch must fall back to it.
+	const bare = join(dataDir, "unborn");
+	mkdirSync(bare);
+	git(bare, "init", "-b", "main");
+	const projects = JSON.parse(readFileSync(join(dataDir, "projects.json"), "utf8"));
+	projects.push({ id: "p2", name: "unborn", path: bare, slug: "unborn", lastOpened: 1 });
+	writeFileSync(join(dataDir, "projects.json"), JSON.stringify(projects));
+
+	const def = listWorkspaces("p2")[0];
+	expect(def?.branch).toBe("main");
+	expect(def?.baseBranch).toBe("main"); // not "HEAD"
 });
 
 test("ensuring the Default emits created once; listing never writes into the project folder", () => {

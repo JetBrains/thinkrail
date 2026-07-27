@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, lstatSync, mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import type { DiffStats, Project, Workspace } from "@thinkrail/contracts";
 import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
 import { currentBranch, git, gitAsync, resolveDefaultBranch } from "../git";
@@ -114,7 +114,6 @@ export async function createWorkspace(
 	const project = getProjects().find((p) => p.id === projectId);
 	if (!project) throw new Error(`Unknown project: ${projectId}`);
 
-	const all = loadWorkspaces();
 	// A user-supplied name is the display name (casing/punctuation preserved); the branch is derived from
 	// it. Omitted (or unusable) → the auto `workspace-N` placeholder, where name === branch.
 	const displayName = name ? toDisplayName(name) : null;
@@ -159,6 +158,10 @@ export async function createWorkspace(
 		...(displayName ? { renamed: true } : {}),
 	};
 	ensureWorkspaceScratchDir(workspace);
+	// Load the registry only now — after the awaited fallback fetch. A concurrent `workspace.list` may
+	// have written meanwhile (materializing/refreshing the Default); appending to a pre-await snapshot
+	// would clobber that write (same discipline as renameWorkspace's re-load after its git subprocess).
+	const all = loadWorkspaces();
 	all.push(workspace);
 	saveWorkspaces(all);
 	emit({ kind: "created", workspace });
@@ -173,15 +176,32 @@ export async function createWorkspace(
  * calls this on session create, which is what seeds the **Default** workspace — merely listing or
  * entering it must never write into the user's repo, starting a chat there may.
  *
- * The `.gitignore` is written **only when absent**: in the Default workspace this path lives inside the
- * user's own repo, where a pre-existing (possibly tracked, possibly customized) file is theirs — we
- * never clobber it, we only fill the gap.
+ * Hardened — in the Default workspace this runs against **repository-controlled content** inside the
+ * user's own repo:
+ * - The workspace root must already exist: an externally-deleted worktree must fail the session loudly,
+ *   not be silently resurrected as an empty non-git directory.
+ * - Owned path components are walked with `lstat` (never followed) — a malicious checkout can't symlink
+ *   `.thinkrail`/`context` and redirect the seed outside the workspace.
+ * - The `.gitignore` is an **exclusive create** (`wx`): a pre-existing (possibly tracked, possibly
+ *   customized) file is the user's — never clobbered — and `O_EXCL` refuses to follow a (possibly
+ *   dangling) symlink, so the file lands only on a truly vacant path.
  */
 export function ensureWorkspaceScratchDir(ws: Workspace): void {
-	const contextDir = join(ws.worktreePath, WORKSPACE_CONTEXT_DIR);
-	mkdirSync(contextDir, { recursive: true });
-	const ignoreFile = join(contextDir, ".gitignore");
-	if (!existsSync(ignoreFile)) writeFileSync(ignoreFile, "*\n");
+	if (!statSync(ws.worktreePath, { throwIfNoEntry: false })?.isDirectory())
+		throw new Error(`Workspace directory is missing: ${ws.worktreePath}`);
+	let dir = ws.worktreePath;
+	for (const part of WORKSPACE_CONTEXT_DIR.split("/")) {
+		dir = join(dir, part);
+		const entry = lstatSync(dir, { throwIfNoEntry: false });
+		if (!entry) mkdirSync(dir);
+		else if (!entry.isDirectory())
+			throw new Error(`Refusing to seed the scratch dir: not a real directory: ${dir}`);
+	}
+	try {
+		writeFileSync(join(dir, ".gitignore"), "*\n", { flag: "wx" });
+	} catch (err) {
+		if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+	}
 }
 
 /**
@@ -193,8 +213,11 @@ export function ensureWorkspaceScratchDir(ws: Workspace): void {
  * already is a working tree) and no scratch-dir seeding (see `ensureWorkspaceScratchDir`).
  *
  * Fields are folder-truth: `branch` = whatever the folder has checked out, `baseBranch` = the repo's
- * default branch — both refreshed **quietly** when they drifted out-of-band (no lifecycle event;
- * membership didn't change). `renamed: true` keeps the auto-rename passes away, belt-and-suspenders on
+ * default branch — both refreshed when they drifted out-of-band, **emitting `updated`** so every
+ * client's rail converges (a terminal `git checkout` must not leave another tab stale; rename uses the
+ * same channel for the same fields, and the store's merge triggers no re-list, so no feedback loop).
+ * Every emit happens **after** the save — persist-then-publish, like every other mutation path.
+ * `renamed: true` keeps the auto-rename passes away, belt-and-suspenders on
  * top of the hard guards in `renameWorkspace`/`forgetWorkspace`.
  */
 function ensureDefaultWorkspace(project: Project): Workspace {
@@ -205,22 +228,22 @@ function ensureDefaultWorkspace(project: Project): Workspace {
 
 	const existing = defaults[0];
 	if (existing) {
-		let dirty = false;
-		if (defaults.length > 1) {
+		const extras = defaults.slice(1);
+		if (extras.length > 0) {
 			// Duplicates are corruption (the ensure is the only writer) — collapse to the oldest record.
-			const extras = defaults.slice(1);
 			const keep = all.filter((w) => !extras.includes(w));
 			all.length = 0;
 			all.push(...keep);
-			dirty = true;
-			for (const extra of extras) emit({ kind: "removed", projectId: project.id, id: extra.id });
 		}
-		if (existing.branch !== branch || existing.baseBranch !== baseBranch) {
+		const drifted = existing.branch !== branch || existing.baseBranch !== baseBranch;
+		if (drifted) {
 			existing.branch = branch;
 			existing.baseBranch = baseBranch;
-			dirty = true;
 		}
-		if (dirty) saveWorkspaces(all);
+		if (extras.length > 0 || drifted) saveWorkspaces(all);
+		// Persist-then-publish: a failed save must not tear down (or update) records still on disk.
+		for (const extra of extras) emit({ kind: "removed", projectId: project.id, id: extra.id });
+		if (drifted) emit({ kind: "updated", workspace: existing });
 		return existing;
 	}
 
@@ -366,6 +389,9 @@ export function reclaimWorktree(ws: Workspace): void {
 	if (ws.kind === "default") return;
 	const project = loadProjects().find((p) => p.id === ws.projectId);
 	if (!project) return;
+	// Defense in depth: never reclaim the repo's main working tree, however the record got here (a
+	// corrupt or hand-edited registry) — git would refuse it, but the rm-fallback below would not.
+	if (resolve(ws.worktreePath) === resolve(project.path)) return;
 	const removed = git(project.path, ["worktree", "remove", "--force", ws.worktreePath]);
 	if (!removed.ok) {
 		rmSync(ws.worktreePath, { recursive: true, force: true });
