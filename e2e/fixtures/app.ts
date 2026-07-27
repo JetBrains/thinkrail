@@ -46,6 +46,22 @@ function resetState(): void {
 	// the blast radius stays that one spec.
 	if (!fixtureRepoHealthy()) seedFixtureRepo();
 
+	// A test can leave the shared repo on another branch (a terminal `git switch` — see
+	// default-workspace.spec.ts). Restore `main` first: a checked-out branch can't be deleted by the sweep
+	// below, so every later test would inherit both the branch and any dirt on it. Guarded by the branch
+	// check — an unconditional `checkout -f` would also resurrect files a test deliberately deleted from
+	// the fixture *on main* (welcome.spec.ts strips the seed specs, then re-opens the project).
+	try {
+		const head = execFileSync("git", ["-C", E2E_FIXTURE_REPO, "symbolic-ref", "--short", "HEAD"], {
+			encoding: "utf8",
+		}).trim();
+		if (head !== "main") {
+			execFileSync("git", ["-C", E2E_FIXTURE_REPO, "checkout", "-f", "main"], { stdio: "ignore" });
+		}
+	} catch {
+		// Unreadable HEAD (detached / mid-operation) — the branch sweep below is the backstop.
+	}
+
 	execFileSync("git", ["-C", E2E_FIXTURE_REPO, "worktree", "prune"]);
 	for (let sweep = 0; sweep < 2; sweep += 1) {
 		const branches = execFileSync(

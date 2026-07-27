@@ -14,8 +14,10 @@ import {
 	createWorkspace,
 	ensureWorkspaceScratchDir,
 	forgetWorkspace,
+	listWorkspaceRecords,
 	listWorkspaces,
 	reclaimWorktree,
+	refreshDefaultWorkspace,
 	removeWorkspace,
 	renameWorkspace,
 	setWorkspacePublisher,
@@ -348,6 +350,33 @@ test("the Default workspace's branch and base refresh from the folder on each li
 	git(repo, "add", "-A");
 	git(repo, "commit", "-m", "feature work");
 	expect(listWorkspaces("p1")[0]?.diffStats?.added).toBe(2);
+});
+
+test("refreshDefaultWorkspace re-syncs and publishes Default drift off the list path", async () => {
+	listWorkspaces("p1"); // ensures the Default
+	const def = listWorkspaceRecords("p1").find((w) => w.kind === "default");
+	if (!def) throw new Error("expected the ensured Default workspace");
+	const worktree = await createWorkspace("p1", "Iso");
+
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((e) => events.push(e));
+
+	// No drift → no save, no emit (the live path runs on every worktree-change batch: it must be quiet).
+	refreshDefaultWorkspace(def.id);
+	expect(events).toHaveLength(0);
+
+	// A terminal `git checkout` in the project folder converges without any `workspace.list`.
+	git(repo, "switch", "-c", "feature/live");
+	refreshDefaultWorkspace(def.id);
+	expect(events).toEqual([
+		{ kind: "updated", workspace: { ...def, branch: "feature/live", baseBranch: "feature/live" } },
+	]);
+	expect(listWorkspaceRecords("p1").find((w) => w.id === def.id)?.branch).toBe("feature/live");
+
+	// A worktree workspace's branch is pinned — and an unknown id is a no-op, never a throw.
+	refreshDefaultWorkspace(worktree.id);
+	refreshDefaultWorkspace("nope");
+	expect(events).toHaveLength(1);
 });
 
 test("the Default workspace is non-removable and non-renamable — loud server-side guards", () => {

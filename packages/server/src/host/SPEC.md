@@ -22,7 +22,11 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `index.html` fallback, the `server.welcome` push, `terminal.data` topic subscribe + `server.publish`,
   the **`provider.login`** channel publish (the `auth` module's session-less login-frame bridge, wired like
   `pi.extensionUi`) and the `provider.*` login handlers, the **`watch` wiring** (inject the
-  `workspace.fsChanged` publish callback into `watch`; call `ensureWatch(workspaceId)` from the
+  `workspace.fsChanged` publish callback into `watch`, plus its **repo-metadata** callback
+  (`setRepoMetaPublisher` → `refreshDefaultWorkspace`) so a `.git` write in a watched worktree **re-syncs a
+  Default workspace's folder-truth branch** — host-mediated, since `watch` has no `workspaces` edge, and
+  self-publishing through the workspace-lifecycle tee; call
+  `ensureWatch(workspaceId)` from the
   workspace-read handlers (`fs.*`, `git.status`/`git.diffFile`, `spec.graph`) — a read is the "a client is
   looking" signal; `stopWatch` in `workspace.remove`'s fast path beside `evictSpecIndex`;
   `stopAllWatches()` in `stop()`), `cancelAllLogins()` in `stop()` before the socket close,

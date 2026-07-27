@@ -86,6 +86,24 @@ function nextAutoBranch(project: Project): string {
 	return `workspace-${n}`;
 }
 
+/**
+ * The **Default workspace's** folder-truth fields, read from the project folder itself: `branch` = what it
+ * has checked out, `baseBranch` = the repo's default branch. Both move out-of-band (a terminal `git
+ * switch`), so they are re-read — never trusted from the record — by both sync paths below. Two sync git
+ * spawns: callers read them BEFORE loading the registry snapshot they intend to save (see the call sites).
+ */
+function folderTruth(repoPath: string): { branch: string; baseBranch: string } {
+	return { branch: currentBranch(repoPath), baseBranch: resolveDefaultBranch(repoPath) };
+}
+
+/** Write folder-truth onto a record; `true` when it actually drifted (i.e. a save + `updated` is due). */
+function applyFolderTruth(ws: Workspace, truth: { branch: string; baseBranch: string }): boolean {
+	if (ws.branch === truth.branch && ws.baseBranch === truth.baseBranch) return false;
+	ws.branch = truth.branch;
+	ws.baseBranch = truth.baseBranch;
+	return true;
+}
+
 /** Working-tree changes of a worktree vs its base branch. */
 function diffStats(worktreePath: string, baseBranch: string): DiffStats {
 	const result = git(worktreePath, ["diff", "--shortstat", baseBranch]);
@@ -221,10 +239,13 @@ export function ensureWorkspaceScratchDir(ws: Workspace): void {
  * top of the hard guards in `renameWorkspace`/`forgetWorkspace`.
  */
 function ensureDefaultWorkspace(project: Project): Workspace {
+	// Folder-truth FIRST: these are sync git spawns that block the JS thread, and another process can
+	// rewrite workspaces.json while we sit in them (see `renameWorkspace` below — the e2e reset does
+	// exactly that). Loading after them keeps load→mutate→save one uninterrupted synchronous block.
+	const truth = folderTruth(project.path);
+	const { branch, baseBranch } = truth;
 	const all = loadWorkspaces();
 	const defaults = all.filter((w) => w.projectId === project.id && w.kind === "default");
-	const branch = currentBranch(project.path);
-	const baseBranch = resolveDefaultBranch(project.path);
 
 	const existing = defaults[0];
 	if (existing) {
@@ -235,11 +256,7 @@ function ensureDefaultWorkspace(project: Project): Workspace {
 			all.length = 0;
 			all.push(...keep);
 		}
-		const drifted = existing.branch !== branch || existing.baseBranch !== baseBranch;
-		if (drifted) {
-			existing.branch = branch;
-			existing.baseBranch = baseBranch;
-		}
+		const drifted = applyFolderTruth(existing, truth);
 		if (extras.length > 0 || drifted) saveWorkspaces(all);
 		// Persist-then-publish: a failed save must not tear down (or update) records still on disk.
 		for (const extra of extras) emit({ kind: "removed", projectId: project.id, id: extra.id });
@@ -261,6 +278,30 @@ function ensureDefaultWorkspace(project: Project): Workspace {
 	saveWorkspaces(all);
 	emit({ kind: "created", workspace });
 	return workspace;
+}
+
+/**
+ * Re-sync one **Default workspace** record against folder-truth and publish it when it drifted — the
+ * *live* half of the ensure above, off the `workspace.list` path: cheap (two `symbolic-ref`-class git
+ * reads, **no** diff-stat listing) so the host can call it on `watch`'s debounced **repo-metadata nudge**
+ * (a `.git` write in the worktree). A `git switch` in the Default terminal therefore converges the rail,
+ * the top bar and the empty receipt in every client — including a switch that leaves the working tree
+ * byte-identical — instead of leaving them on the old branch until a manual project reload.
+ * Unknown id / a worktree workspace (its branch is pinned) / no drift → a no-op, no save, no emit.
+ */
+export function refreshDefaultWorkspace(workspaceId: string): void {
+	// A peek decides whether this id is even a Default (only those drift) — nothing is mutated from it.
+	const peek = loadWorkspaces().find((w) => w.id === workspaceId);
+	if (peek?.kind !== "default") return;
+	// Folder-truth, THEN the snapshot we mutate: the git reads block the JS thread and another process can
+	// rewrite workspaces.json meanwhile, so load→mutate→save stays one uninterrupted block (as above).
+	const truth = folderTruth(peek.worktreePath);
+	const all = loadWorkspaces();
+	const ws = all.find((w) => w.id === workspaceId);
+	if (ws?.kind !== "default") return;
+	if (!applyFolderTruth(ws, truth)) return;
+	saveWorkspaces(all);
+	emit({ kind: "updated", workspace: ws });
 }
 
 /**

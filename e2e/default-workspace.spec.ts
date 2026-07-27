@@ -60,6 +60,28 @@ test("the Welcome fork's “Work in project folder” enters the Default workspa
 	await expect(visibleTerminalScreen(page)).toContainText("sample-project");
 });
 
+test("a terminal branch switch converges every Default branch label live", async ({ page }) => {
+	// The Default workspace's branch is folder-truth that moves out-of-band: it is the one workspace whose
+	// branch a user can change from under the app (`git switch` in its own terminal). Every label reading it
+	// must converge on the push — no manual project reload.
+	await openFixtureProject(page);
+	await enterDefaultWorkspace(page);
+
+	const row = defaultWorkspaceRow(page);
+	await expect(page.getByTestId("scope-branch")).toHaveText("main");
+	await expect(row.getByTestId("workspace-branch")).toHaveText("main");
+
+	// A *content-identical* switch: nothing in the worktree changes, so only `.git/HEAD` moves — the
+	// narrowest case the live path has to catch.
+	await waitTerminalReady(page);
+	await runInTerminal(page, "git switch -c live-branch");
+
+	// The rail row, the top-bar spine and the empty-center receipt all follow the folder.
+	await expect(row.getByTestId("workspace-branch")).toHaveText("live-branch");
+	await expect(page.getByTestId("scope-branch")).toHaveText("live-branch");
+	await expect(page.getByTestId("workspace-ready")).toContainText("on live-branch");
+});
+
 test("the Default workspace is non-removable and unique; project home stays reachable", async ({
 	page,
 }) => {

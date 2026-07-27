@@ -32,6 +32,14 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   nudge** — a fresh watcher publishes one synthetic wildcard batch after the platform stream's
   registration window (~750ms), because a write landing inside that window is otherwise lost forever
   (an invalidation nudge is idempotent, so the cost is one cheap no-op refetch).
+- **Repo-metadata nudge (second seam):** a `.git` write is *metadata, not content*, so it never becomes
+  an `fsChanged` path (the blackout stands — plumbing storms must not turn into frames). It instead arms a
+  separately debounced (300ms), **pathless** `setRepoMetaPublisher(workspaceId)` nudge, which `host` wires
+  to `refreshDefaultWorkspace` so a **Default** workspace's branch labels converge live. This is the only
+  signal for a change that leaves the working tree byte-identical — `git switch -c <new-branch>` writes
+  nothing outside `.git` — and it is deliberately **not** matched on specific paths (`.git/HEAD`,
+  `.git/logs/HEAD`, …): the platform streams coalesce and report *a* representative path per burst, so
+  which git-internal path surfaces is not reliable. A wildcard event (null filename) nudges it too.
 - **Publish seam:** never imports `host` — `host` injects the publish callback at wiring time (the
   session-publisher tee pattern).
 - **Self-healing per read (out-of-band worktree churn is normal — e2e resets, `rm -rf` in a terminal):**
@@ -42,7 +50,7 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   marker). A watcher that errors mid-flight (ENOSPC, root deleted) is `console.warn`ed and dropped —
   panels fall back to read-on-demand until a later read re-creates it. No idle-stop in V1 (bounded by
   workspaces actually visited).
-- **Public surface (barrel):** `ensureWatch`, `stopWatch`, `stopAllWatches` (+ the publish-callback
-  setter/factory as implemented).
+- **Public surface (barrel):** `ensureWatch`, `stopWatch`, `stopAllWatches`, `setWatchPublisher`,
+  `setRepoMetaPublisher`.
 - **Allowed deps:** `persistence` (workspace lookup); `contracts` (payload type); Bun/Node.
 - **Forbidden:** `host`; sibling features; any pi package.

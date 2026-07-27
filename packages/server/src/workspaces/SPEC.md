@@ -81,6 +81,14 @@ folder" anchor, ensured lazily, **non-removable and non-renamable**.
   = the repo's default branch via `git`'s `resolveDefaultBranch` (unborn-safe — its last fallback is
   `currentBranch`, so the literal `"HEAD"` never persists) — so Default's Changes measure like
   any workspace, degenerating to uncommitted work when the folder sits on the default branch itself.
+  Drift is **not** only a list-time discovery: `refreshDefaultWorkspace(workspaceId)` is the same
+  re-sync **without** the diff-stat listing (two cheap git reads; unknown id / a worktree workspace /
+  no drift → no save, no emit), which the host wires to `watch`'s **repo-metadata nudge** (host-mediated,
+  `watch` has no `workspaces` edge — see [[submodule-server-watch]]). So a `git switch` in the Default
+  workspace's terminal converges the rail, the top bar and the empty receipt live, instead of leaving
+  them on the old branch until a manual project reload — including a switch that leaves the working tree
+  byte-identical (`git switch -c`), which writes nothing outside `.git` (`gitStatus` reads its header branch live for
+  the same reason — see [[submodule-server-git]]).
   First materialization emits `created` (idempotent for stores); a drift-free list emits nothing. Every
   ensure emit — `created`, `updated`, the collapse's `removed`s — happens **after** the save, matching
   the module's persist-then-publish order everywhere else. **Non-removable + non-renamable,
@@ -110,7 +118,7 @@ folder" anchor, ensured lazily, **non-removable and non-renamable**.
   self-publishes), so registry membership stays shared domain state across every client (architecture #9).
 - **Public surface (barrel):** `createWorkspace`, `listWorkspaces`, `listWorkspaceRecords`, `forgetWorkspace`,
   `reclaimWorktree`, `removeWorkspace`, `workspaceDiffStats`, `getWorkspace`, `renameWorkspace`,
-  `ensureWorkspaceScratchDir`,
+  `refreshDefaultWorkspace`, `ensureWorkspaceScratchDir`,
   `setWorkspacePublisher`, `WorkspaceLifecycleEvent`.
 - **Allowed deps:** `projects` (repo lookup), `git` (the runner), `persistence`; `contracts`;
   `@thinkrail/shared/paths` (the scratch-dir path convention); Node.
