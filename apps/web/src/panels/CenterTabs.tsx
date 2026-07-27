@@ -20,6 +20,7 @@ import {
 	type ClosedChat,
 	type DocTab,
 	type EditorTab,
+	isDefaultWorkspace,
 	selectActiveWorkspace,
 	selectContextProject,
 	selectWorkspaceTick,
@@ -242,7 +243,7 @@ export function CenterTabs() {
 
 	// The Default workspace is the project folder itself — its receipt must tell the truth ("runs
 	// directly in your project folder") instead of promising worktree isolation.
-	const isDefaultWorkspace = activeWorkspace?.kind === "default";
+	const isDefault = activeWorkspace != null && isDefaultWorkspace(activeWorkspace);
 	const placeholder = (
 		<div className="flex h-full flex-col items-center justify-center gap-md px-lg text-center text-hint">
 			{activeWorkspace ? (
@@ -251,16 +252,14 @@ export function CenterTabs() {
 					className="flex max-w-[440px] flex-col items-center gap-xs"
 				>
 					<span className="font-medium text-hint text-xs uppercase tracking-wider">
-						{isDefaultWorkspace ? "Default workspace" : "Workspace ready"}
+						{isDefault ? "Default workspace" : "Workspace ready"}
 					</span>
 					<h2 className="max-w-full truncate font-medium text-md text-text">
-						{isDefaultWorkspace
-							? (contextProject?.name ?? activeWorkspace.name)
-							: activeWorkspace.name}
+						{isDefault ? (contextProject?.name ?? activeWorkspace.name) : activeWorkspace.name}
 					</h2>
 					<p className="flex max-w-full items-center gap-xs font-[var(--font-mono)] text-muted text-xs">
 						<GitBranch className="size-3.5 shrink-0" />
-						{isDefaultWorkspace ? (
+						{isDefault ? (
 							<span className="truncate">on {activeWorkspace.branch}</span>
 						) : (
 							<>
@@ -270,7 +269,7 @@ export function CenterTabs() {
 						)}
 					</p>
 					<p className="mt-xs text-muted text-sm">
-						{isDefaultWorkspace
+						{isDefault
 							? "Chats, changes, and terminals run directly in your project folder."
 							: "Files, chats, changes, and terminals are scoped to this workspace."}
 					</p>

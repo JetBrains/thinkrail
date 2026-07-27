@@ -82,9 +82,9 @@ only possible action; once a project is shown, opening another is the projects-r
 dropdown), so Welcome stays the *work-in-this-project* surface. That card hangs the shared
 **`AddProjectMenu`** dropdown off it (same menu as the projects-rail "+": Open project / Open GitHub (soon)
 / Recents), so `Card` is a `forwardRef` usable as a Radix `asChild` trigger. **"Work in project folder"**
-(`House` icon, matching the rail's Default row) **direct-enters** the Default workspace — no dialog: it
-lists the project's workspaces, stores them, and activates the `kind === "default"` row; an older host
-with no Default row degrades to an error toast. **"Start building"** is the
+(`House` icon, matching the rail's Default row) **direct-enters** the Default workspace — no dialog: the
+shared `enterDefaultWorkspace` helper lists the project's workspaces, stores them, and activates the
+`kind === "default"` row; an older host with no Default row degrades to an error toast. **"Start building"** is the
 intent-first framing of the create-and-kick-off flow — it opens `NewWorkspaceDialog` preselected to the
 **Isolated workspace** target; *workspace* is the mechanism, not the label. **"Set up
 project"** opens the same dialog with an `initialPrompt` seed **and a `promptNote`** — the note is the
@@ -98,11 +98,11 @@ slash-command completion writes (`chat`'s `selectedSlashCommandValue`), so the s
 *completed* command and the completion menu stays closed over it (pi's parser treats the arg tail as
 optional). The command **forces** the setting-up-a-project dispatcher skill to load (pi's skill-command
 syntax; expanded on the `session.prompt` path) rather than hoping the model auto-matches it; the dispatcher then detects
-new-vs-existing and drafts the specs accordingly (see [[module-thinkrail-workflow]]) — plus a
-**`promptNote`** ("Runs the setting-up-a-project skill — the agent drafts your project's specs…", copy
-owned here so the dialog stays skill-agnostic). **Every Welcome entry point preselects the Isolated
+new-vs-existing and drafts the specs accordingly (see [[module-thinkrail-workflow]]). **Every Welcome entry point preselects the Isolated
 workspace target** — setup included, so spec drafting is reviewable on its own branch like any other work
-and the mode story stays uniform; the Project-folder alternative stays one click away in the dialog. Which
+and the mode story stays uniform; the Project-folder alternative stays one click away in the dialog.
+(Uniformity made an opener-chosen target dead API — the dialog owns its target state and always opens
+on the worktree side; there is no `initialTarget` prop.) Which
 project drives the has-specs states = `selectedProjectId ?? projects[0]`, read reactively (so the visible
 nav's selection updates it). Its `hasSpecs` is **fetched lazily** via `project.hasSpecs` for that one
 project (a full-tree walk, kept off the connect handshake) — pending until it resolves, so the cards wait
@@ -125,20 +125,22 @@ skills' (attacker-controlled) names before trust. The full manager (`chat/Skills
 pre-session half of the user's skill settings; the chat header opens the same dialog in workspace mode
 (with Reload).
 
-**`NewWorkspaceDialog`** is the start-working surface: **a target control** (a two-option segment, both
-always visible — the two-mode model in one glance) chooses **where** the work runs, and the header is
+**`NewWorkspaceDialog`** is the start-working surface: **a target control** (a two-option segment — a
+native radio group, `fieldset` + sr-only `legend` over visually-hidden radio inputs, so assistive tech
+hears one mutually-exclusive choice — both always visible: the two-mode model in one glance) chooses **where** the work runs, and the header is
 **mode-aware** so it always names the operation truthfully: **Isolated workspace** → title **“Create
 workspace”**, description **“A separate checkout on its own new branch. Files, chats, changes, and
 terminals stay scoped to it.”**; **Project folder** → title **“Work in project folder”**, description
 **“Runs directly in your project folder — no isolation. Changes land on the current branch.”** In folder
 mode the base-branch picker and the naming hint are hidden (nothing is created — submit **enters** the
-project's Default workspace via the shared **`resolveDefaultWorkspace`** helper (`defaultWorkspace.ts`:
-`workspace.list` → fold into the store → the `kind === "default"` row; error toast + null if an older
-host has none — the same helper behind the Welcome fork card, so the resolve + degrade path lives once))
+project's Default workspace via the shared **`enterDefaultWorkspace`** helper (`defaultWorkspace.ts`:
+`workspace.list` → fold into the store → activate the `kind === "default"` row, one atomic entry — the
+rail's auto-expand follows activation; error toast + `null` if an older host has none — the same helper
+behind the Welcome fork card, so the enter + degrade path lives once; **`onCreated` does not fire** —
+nothing was created and the helper's list is already fresh))
 and the submit button reads **Start** instead of **Create**; the branch-list fetch + background base
 prefetch still run (fire-and-forget, keeps a toggle back to worktree instant); the optional chat
-kick-off tail is identical in both modes. Openers preselect the target (rail "+" / "Start building" →
-worktree; "Set up project" → folder). An optional **`promptNote`** renders as a small info strip above
+kick-off tail is identical in both modes. An optional **`promptNote`** renders as a small info strip above
 the prompt (used by "Set up project" to say what the seeded skill command does). The worktree mode's
 base-branch trigger reads **“From
 {base}”**, not an unexplained ref. An optional **`initialPrompt`** seeds the prompt hero (still editable;

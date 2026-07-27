@@ -3,7 +3,7 @@ import { ChevronDown, ChevronRight, Folder, GitBranch, House, Plus, Trash2 } fro
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { PopoverTrigger } from "@/components/ui/popover";
-import { selectActiveWorkspaceProjectId, toast, useAppStore } from "../store";
+import { isDefaultWorkspace, selectActiveWorkspaceProjectId, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
 import { ConfirmPopover } from "./ConfirmPopover";
@@ -115,33 +115,33 @@ export function ProjectTree() {
 			<ul className="flex flex-col">
 				{projects.map((project) => {
 					const isExpanded = expanded.has(project.id);
-					const list = workspaces[project.id] ?? [];
+					// `undefined` = not fetched yet (render nothing — once fetched the list always holds at
+					// least the ensured Default row, so there is no persistent "empty" state to name).
+					const list = workspaces[project.id];
 					return (
 						<li key={project.id}>
 							<ProjectRow
 								project={project}
 								isSelected={selectedProjectId === project.id}
 								isExpanded={isExpanded}
-								workspaceCount={list.length}
+								// Worktrees only: the always-present Default would make the badge a constant "≥1",
+								// destroying its meaning ("you have N workspaces here").
+								workspaceCount={(list ?? []).filter((w) => !isDefaultWorkspace(w)).length}
 								onToggle={() => toggleExpand(project.id)}
 								onSelect={() => void selectProject(project.id)}
 								onAddWorkspace={() => setDialogProjectId(project.id)}
 							/>
-							{isExpanded && (
+							{isExpanded && list !== undefined && (
 								<ul className="flex flex-col">
-									{list.length === 0 ? (
-										<li className="py-xs pr-sm pl-xl text-xs text-hint">No workspaces yet</li>
-									) : (
-										list.map((ws) => (
-											<WorkspaceRow
-												key={ws.id}
-												workspace={ws}
-												isActive={activeWorkspaceId === ws.id}
-												onSelect={() => selectWorkspace(ws)}
-												onRemove={() => removeWorkspace(ws.id)}
-											/>
-										))
-									)}
+									{list.map((ws) => (
+										<WorkspaceRow
+											key={ws.id}
+											workspace={ws}
+											isActive={activeWorkspaceId === ws.id}
+											onSelect={() => selectWorkspace(ws)}
+											onRemove={() => removeWorkspace(ws.id)}
+										/>
+									))}
 								</ul>
 							)}
 						</li>
@@ -238,7 +238,7 @@ function WorkspaceRow({
 	const stats = workspace.diffStats;
 	// The built-in Default workspace (the project folder itself) is non-removable — the server enforces
 	// it; the UI simply offers nothing. It wears a House icon in place of the branch glyph.
-	const isDefault = workspace.kind === "default";
+	const isDefault = isDefaultWorkspace(workspace);
 	const Icon = isDefault ? House : GitBranch;
 	// Confirm-before-remove lives on the row so the popover anchors right beneath it (contextual to the
 	// workspace being removed) rather than as a centered modal.

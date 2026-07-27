@@ -11,6 +11,14 @@ interface ProjectContextState extends ActiveWorkspaceState {
 	projects: Project[];
 }
 
+/**
+ * The built-in Default workspace — the project folder itself. Clients key off the wire's `kind` field
+ * only; this predicate is the single place it's read (rail row, receipt, scope spine, folder-mode entry).
+ */
+export function isDefaultWorkspace(workspace: Pick<Workspace, "kind">): boolean {
+	return workspace.kind === "default";
+}
+
 /** Resolve the active workspace from the project-grouped collection without duplicating it in state. */
 export function selectActiveWorkspace(state: ActiveWorkspaceState): Workspace | null {
 	if (!state.activeWorkspaceId) return null;

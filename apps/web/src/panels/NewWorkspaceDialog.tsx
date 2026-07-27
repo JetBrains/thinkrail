@@ -16,7 +16,7 @@ import {
 	Sparkles,
 	TriangleAlert,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { ModelSelector } from "@/chat/ModelSelector";
 import { SkillsButton } from "@/chat/SkillsButton";
 import { SkillsDialog } from "@/chat/SkillsDialog";
@@ -48,10 +48,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { selectWorkspaceTick, toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
-import { resolveDefaultWorkspace } from "./defaultWorkspace";
+import { enterDefaultWorkspace } from "./defaultWorkspace";
 
 /** Where the work runs: cut an isolated worktree, or enter the project folder (Default workspace). */
-export type WorkspaceTarget = "worktree" | "default";
+type WorkspaceTarget = "worktree" | "default";
 
 /** A shared pill-trigger look for the project + branch pickers (mockup `.pill`). */
 const PILL =
@@ -65,14 +65,15 @@ const PILL =
  * there and send it. With an empty prompt it just creates/enters the target — the fast path for poking
  * at files. The header is mode-aware so it always names the operation truthfully.
  *
- * The only app-integration piece here: it wires the store + transport. `onCreated(ws)` lets the parent
- * (ProjectTree) expand + reload its list; the dialog itself sets the active workspace + kicks off the chat.
+ * The only app-integration piece here: it wires the store + transport. `onCreated(ws)` fires **only when
+ * a worktree was created** (folder mode creates nothing — it enters via `enterDefaultWorkspace`, whose
+ * list is already fresh and whose activation drives the rail's auto-expand); it lets the parent
+ * (ProjectTree) reload its list. The dialog itself kicks off the optional chat.
  */
 export function NewWorkspaceDialog({
 	open,
 	projectId,
 	initialPrompt,
-	initialTarget,
 	promptNote,
 	onOpenChange,
 	onCreated,
@@ -82,8 +83,6 @@ export function NewWorkspaceDialog({
 	projectId: string;
 	/** Optional seed for the prompt hero (still fully editable) — e.g. Welcome's "Set up project". */
 	initialPrompt?: string;
-	/** The preselected target (the control stays visible either way). Defaults to "worktree". */
-	initialTarget?: WorkspaceTarget;
 	/** Optional info strip above the prompt — e.g. what a seeded skill command does (copy owned by the opener). */
 	promptNote?: string;
 	onOpenChange: (open: boolean) => void;
@@ -93,7 +92,9 @@ export function NewWorkspaceDialog({
 	const models = useAppStore((s) => s.models);
 
 	const [selectedProjectId, setSelectedProjectId] = useState(projectId);
-	const [target, setTarget] = useState<WorkspaceTarget>(initialTarget ?? "worktree");
+	// Every opener starts on the isolated-worktree side (task-welcome-trim made the entry points
+	// uniform — no opener-chosen target exists); the folder alternative is the in-dialog toggle.
+	const [target, setTarget] = useState<WorkspaceTarget>("worktree");
 	const [branches, setBranches] = useState<BranchList | null>(null);
 	const [baseRef, setBaseRef] = useState<string>("");
 	const [refreshing, setRefreshing] = useState(false);
@@ -106,6 +107,8 @@ export function NewWorkspaceDialog({
 	const [trusting, setTrusting] = useState(false);
 	const [manageSkills, setManageSkills] = useState(false);
 	const promptRef = useRef<HTMLTextAreaElement>(null);
+	// Ties the two target radios into one native group, unique per dialog instance.
+	const targetGroupName = useId();
 	// The dialog content node — popovers portal into it so their lists stay scrollable under the Dialog's
 	// scroll lock (react-remove-scroll blocks wheel/trackpad on body-portaled content).
 	const [dialogEl, setDialogEl] = useState<HTMLElement | null>(null);
@@ -129,15 +132,15 @@ export function NewWorkspaceDialog({
 		},
 	});
 
-	// Reset the form each time the dialog opens, anchored to the project the "+" was clicked on, any
-	// seed prompt (empty by default), and the opener's preselected target.
+	// Reset the form each time the dialog opens, anchored to the project the "+" was clicked on and any
+	// seed prompt (empty by default).
 	useEffect(() => {
 		if (!open) return;
 		setSelectedProjectId(projectId);
 		setPrompt(initialPrompt ?? "");
-		setTarget(initialTarget ?? "worktree");
+		setTarget("worktree");
 		setCreating(false);
-	}, [open, projectId, initialPrompt, initialTarget]);
+	}, [open, projectId, initialPrompt]);
 
 	// Skills are previewed from the selected project's current checkout; the created worktree/session is
 	// authoritative if its base ref differs. Autocomplete is an enhancement, so failure degrades to empty.
@@ -288,9 +291,9 @@ export function NewWorkspaceDialog({
 		setCreating(true);
 		let workspace: Workspace;
 		if (target === "default") {
-			// Folder mode: nothing is created — resolve + enter the project's built-in Default workspace
-			// (the shared helper folds the fresh list into the store and toasts on failure).
-			const def = await resolveDefaultWorkspace(selectedProjectId);
+			// Folder mode: nothing is created — the shared helper lists, stores, and activates the project's
+			// built-in Default workspace in one atomic entry (and toasts + returns null on failure).
+			const def = await enterDefaultWorkspace(selectedProjectId);
 			if (!def) {
 				setCreating(false);
 				return;
@@ -315,8 +318,12 @@ export function NewWorkspaceDialog({
 		// (slower, optional) chat kick-off in the background. This keeps the dialog from lingering while pi
 		// spins up a session, and a kick-off failure can't strand the dialog open.
 		const store = useAppStore.getState();
-		onCreated(workspace);
-		store.activateWorkspace(workspace);
+		if (target === "worktree") {
+			// Only a real create notifies the parent + activates here — folder mode already entered via the
+			// helper (its list is fresh; a re-list would just repeat the host's git work).
+			onCreated(workspace);
+			store.activateWorkspace(workspace);
+		}
 		onOpenChange(false);
 
 		const text = prompt.trim();
@@ -408,25 +415,28 @@ export function NewWorkspaceDialog({
 				</DialogHeader>
 
 				{/* where: the target control — both modes always visible, the two-mode model in one glance */}
-				<div
+				<fieldset
 					data-testid="ws-target"
 					className="flex w-fit items-center gap-0.5 rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] p-0.5"
 				>
-					<TargetButton
+					<legend className="sr-only">Where the work runs</legend>
+					<TargetOption
 						icon={GitBranch}
 						label="Isolated workspace"
+						name={targetGroupName}
 						active={isolated}
 						testid="ws-target-worktree"
-						onClick={() => setTarget("worktree")}
+						onSelect={() => setTarget("worktree")}
 					/>
-					<TargetButton
+					<TargetOption
 						icon={House}
 						label="Project folder"
+						name={targetGroupName}
 						active={!isolated}
 						testid="ws-target-default"
-						onClick={() => setTarget("default")}
+						onSelect={() => setTarget("default")}
 					/>
-				</div>
+				</fieldset>
 
 				{/* controls-top: project + (worktree mode) base-branch pickers */}
 				<div className="flex flex-wrap items-center gap-sm">
@@ -567,35 +577,41 @@ export function NewWorkspaceDialog({
 	);
 }
 
-/** One option of the target control — a toggle button styled like the app's active-nav pattern. */
-function TargetButton({
+/**
+ * One option of the target control — a **native radio** (the two choices are one mutually-exclusive
+ * group, which independent toggle buttons would misrepresent to assistive tech), its input visually
+ * hidden and the wrapping label wearing the app's active-nav styling. The testid + `data-active` hooks
+ * stay on the clickable label; keyboard follows native radio-group behavior.
+ */
+function TargetOption({
 	icon: Icon,
 	label,
+	name,
 	active,
 	testid,
-	onClick,
+	onSelect,
 }: {
 	icon: LucideIcon;
 	label: string;
+	/** The radio group name tying the options together (unique per dialog instance). */
+	name: string;
 	active: boolean;
 	testid: string;
-	onClick: () => void;
+	onSelect: () => void;
 }) {
 	return (
-		<button
-			type="button"
-			aria-pressed={active}
+		<label
 			data-testid={testid}
 			data-active={active}
-			onClick={onClick}
 			className={cn(
-				"flex h-7 items-center gap-sm rounded-[7px] px-md text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
+				"flex h-7 cursor-pointer items-center gap-sm rounded-[7px] px-md text-sm transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary",
 				active ? "bg-[var(--primary-10)] font-medium text-primary" : "text-muted hover:text-text",
 			)}
 		>
+			<input type="radio" name={name} className="sr-only" checked={active} onChange={onSelect} />
 			<Icon className="size-3.5 shrink-0" />
 			{label}
-		</button>
+		</label>
 	);
 }
 

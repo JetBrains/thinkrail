@@ -6,8 +6,8 @@ import { PRODUCT_NAME } from "../constants/branding";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
-import { resolveDefaultWorkspace } from "./defaultWorkspace";
-import { NewWorkspaceDialog, type WorkspaceTarget } from "./NewWorkspaceDialog";
+import { enterDefaultWorkspace } from "./defaultWorkspace";
+import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { ProjectSkillsNotice } from "./ProjectSkillsNotice";
 import { ProviderWarningBanner } from "./ProviderWarningBanner";
 import { useOpenProject } from "./useOpenProject";
@@ -44,13 +44,11 @@ export function WelcomePanel() {
 	const projects = useAppStore((s) => s.projects);
 	const selectedProjectId = useAppStore((s) => s.selectedProjectId);
 	// The New-Workspace dialog opener state (null = closed). `prompt` seeds the hero ("" for a plain
-	// create; the setup command for "Set up project", which also carries the explanatory `note`). Every
-	// Welcome entry point preselects the isolated-worktree target; the dialog keeps the folder alternative
-	// one click away.
+	// create; the setup command for "Set up project", which also carries the explanatory `note`). The
+	// dialog always opens on the isolated-worktree target and keeps the folder alternative one click away.
 	const [dialog, setDialog] = useState<{
 		projectId: string;
 		prompt: string;
-		target: WorkspaceTarget;
 		note?: string;
 	} | null>(null);
 	// Whether the shown project has any registered spec, fetched lazily (a full-tree walk — so it's
@@ -102,23 +100,18 @@ export function WelcomePanel() {
 			);
 	};
 
-	// The Welcome fork's "no isolation" side: direct-enter the project's built-in Default workspace —
-	// no dialog (it's navigation; the Default receipt + New chat cover kick-off). Degrades to the
-	// helper's error toast on an older host with no Default.
-	const enterProjectFolder = async (projectId: string) => {
-		const def = await resolveDefaultWorkspace(projectId);
-		if (def) useAppStore.getState().activateWorkspace(def);
-	};
-
 	const noProjects = project == null;
 
-	// The fork's "no isolation" card — identical in both project states, so it's built once.
+	// The fork's "no isolation" card — identical in both project states, so it's built once. It
+	// direct-enters the project's built-in Default workspace, no dialog (it's navigation; the Default
+	// receipt + New chat cover kick-off): the shared helper lists, stores, and activates in one step,
+	// degrading to its error toast on an older host with no Default.
 	const projectFolderCard = (projectId: string) => (
 		<Card
 			icon={House}
 			title="Work in project folder"
 			subtitle="Chats, changes, and terminals run directly in your project folder — no isolation."
-			onClick={() => void enterProjectFolder(projectId)}
+			onClick={() => void enterDefaultWorkspace(projectId)}
 		/>
 	);
 
@@ -167,7 +160,7 @@ export function WelcomePanel() {
 							icon={Rocket}
 							title="Start building"
 							subtitle="Cut an isolated worktree + branch, then pair with the agent to build it."
-							onClick={() => setDialog({ projectId: project.id, prompt: "", target: "worktree" })}
+							onClick={() => setDialog({ projectId: project.id, prompt: "" })}
 						/>
 						{projectFolderCard(project.id)}
 					</>
@@ -184,7 +177,6 @@ export function WelcomePanel() {
 								setDialog({
 									projectId: project.id,
 									prompt: SETUP_PROMPT,
-									target: "worktree",
 									note: SETUP_NOTE,
 								})
 							}
@@ -193,7 +185,7 @@ export function WelcomePanel() {
 							icon={Rocket}
 							title="Start building"
 							subtitle="Cut an isolated worktree + branch and pair with the agent."
-							onClick={() => setDialog({ projectId: project.id, prompt: "", target: "worktree" })}
+							onClick={() => setDialog({ projectId: project.id, prompt: "" })}
 						/>
 						{projectFolderCard(project.id)}
 					</>
@@ -205,7 +197,6 @@ export function WelcomePanel() {
 					open
 					projectId={dialog.projectId}
 					initialPrompt={dialog.prompt}
-					initialTarget={dialog.target}
 					{...(dialog.note !== undefined ? { promptNote: dialog.note } : {})}
 					onOpenChange={(o) => {
 						if (!o) setDialog(null);
