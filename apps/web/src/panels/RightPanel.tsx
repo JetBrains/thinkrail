@@ -4,6 +4,7 @@ import { useAppStore } from "../store";
 import { ChangesPanel } from "./ChangesPanel";
 import { FileTree } from "./FileTree";
 import { SpecsPanel } from "./SpecsPanel";
+import { useWorkspaceSpecs } from "./useWorkspaceSpecs";
 
 type RightTab = "specs" | "files" | "changes";
 
@@ -11,13 +12,22 @@ type RightTab = "specs" | "files" | "changes";
 export function RightPanel() {
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
 	const changesRequest = useAppStore((s) => s.changesRequest);
+	const specRequest = useAppStore((s) => s.specRequest);
 	const [tab, setTab] = useState<RightTab>("specs");
 	const [specsRefresh, setSpecsRefresh] = useState(0);
+	// Owned here, not in the tab body: the spec graph is app-wide state (the chat classifies its artifacts
+	// with it), and this panel outlives any one tab. See `useWorkspaceSpecs`.
+	const specsFailed = useWorkspaceSpecs(activeWorkspaceId, specsRefresh);
 
-	// A deep-link from chat (turn-divider chip) targeting this workspace flips us to the Changes view.
+	// A deep-link from chat (a turn-divider chip) targeting this workspace flips us to the view that owns the
+	// artifact: the "files changed" chip to Changes, the "specs" chip to Specs. Two effects, not one, so a
+	// stale request of the other kind can never win the flip.
 	useEffect(() => {
 		if (changesRequest?.workspaceId === activeWorkspaceId) setTab("changes");
 	}, [changesRequest, activeWorkspaceId]);
+	useEffect(() => {
+		if (specRequest?.workspaceId === activeWorkspaceId) setTab("specs");
+	}, [specRequest, activeWorkspaceId]);
 
 	return (
 		<div className="flex h-full min-h-0 flex-col">
@@ -53,7 +63,7 @@ export function RightPanel() {
 					<p className="p-sm text-xs text-hint">Select a workspace to browse files.</p>
 				) : tab === "specs" ? (
 					<div className="p-xs">
-						<SpecsPanel workspaceId={activeWorkspaceId} refreshToken={specsRefresh} />
+						<SpecsPanel workspaceId={activeWorkspaceId} failed={specsFailed} />
 					</div>
 				) : tab === "files" ? (
 					<div className="p-xs">

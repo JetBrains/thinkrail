@@ -1,5 +1,11 @@
 import { beforeEach, expect, test } from "bun:test";
-import type { ExtUiRequest, PiEvent, SessionSummary, Workspace } from "@thinkrail/contracts";
+import type {
+	ExtUiRequest,
+	PiEvent,
+	SessionSummary,
+	SpecGraphNode,
+	Workspace,
+} from "@thinkrail/contracts";
 import { type SessionRuntime, toast, useAppStore } from "./appStore";
 import { selectSkillsStale, selectWorkspaceTick } from "./selectors";
 
@@ -714,6 +720,106 @@ test("applyWorkspaceRemoved on a non-active workspace drops the row silently (no
 	expect(s.workspaces.p1?.map((w) => w.id)).toEqual(["other"]);
 	expect(s.activeWorkspaceId).toBe("other"); // a background removal doesn't move the client
 	expect(s.toasts).toHaveLength(0);
+});
+
+test("applyWorkspaceRemoved drops the removed workspace's cached spec graph", () => {
+	const keep = pushedWorkspace({ id: "other", name: "workspace-2", branch: "workspace-2" });
+	useAppStore.setState({
+		workspaces: { p1: [pushedWorkspace(), keep] },
+		activeWorkspaceId: "other",
+		specsByWorkspace: { w1: [], other: [] },
+		toasts: [],
+	});
+
+	useAppStore.getState().applyWorkspaceRemoved("p1", "w1");
+
+	const s = useAppStore.getState();
+	expect(s.specsByWorkspace.w1).toBeUndefined(); // the worktree is gone; its graph must not linger
+	expect(s.specsByWorkspace.other).toEqual([]); // a sibling's snapshot is untouched
+});
+
+// --- the right-panel deep links (chat turn-divider chips) ------------------------------------------
+
+test("requestChangesView / requestSpecView are independent, workspace-scoped intents", () => {
+	useAppStore.setState({ changesRequest: null, specRequest: null });
+
+	useAppStore.getState().requestChangesView("w1", "src/a.ts");
+	useAppStore.getState().requestSpecView("w1", ".thinkrail/context/TASK-x.md");
+
+	const s = useAppStore.getState();
+	expect(s.changesRequest).toEqual({ workspaceId: "w1", path: "src/a.ts" });
+	// The spec intent is a separate field, so a spec chip can never be mistaken for a changes chip (which
+	// would flip the right panel to a view that can't show a gitignored spec).
+	expect(s.specRequest).toEqual({ workspaceId: "w1", path: ".thinkrail/context/TASK-x.md" });
+
+	// A fresh object each call, so re-clicking the same chip re-fires the watching effects.
+	const first = useAppStore.getState().specRequest;
+	useAppStore.getState().requestSpecView("w1", ".thinkrail/context/TASK-x.md");
+	expect(useAppStore.getState().specRequest).not.toBe(first);
+	expect(useAppStore.getState().specRequest).toEqual(first);
+});
+
+test("clearSpecRequest consumes the spec intent once — it opens a tab, so it must not replay", () => {
+	useAppStore.setState({ specRequest: null, changesRequest: null });
+	useAppStore.getState().requestSpecView("w1", "docs/SPEC.md");
+
+	useAppStore.getState().clearSpecRequest();
+
+	expect(useAppStore.getState().specRequest).toBeNull();
+	// Idempotent: a second consume (a remount racing the first) is a no-op, not a resurrect.
+	useAppStore.getState().clearSpecRequest();
+	expect(useAppStore.getState().specRequest).toBeNull();
+	// It clears only its own intent — the Changes deep link is a separate, non-consuming field.
+	useAppStore.getState().requestChangesView("w1", "src/a.ts");
+	useAppStore.getState().clearSpecRequest();
+	expect(useAppStore.getState().changesRequest).toEqual({ workspaceId: "w1", path: "src/a.ts" });
+});
+
+const specNode = (over: Partial<SpecGraphNode> = {}): SpecGraphNode => ({
+	id: "task-x",
+	type: "task-spec",
+	title: "X",
+	path: ".thinkrail/context/TASK-x.md",
+	dependsOn: [],
+	references: [],
+	implements: [],
+	tags: [],
+	...over,
+});
+
+test("setWorkspaceSpecs records a snapshot per workspace without touching its siblings", () => {
+	const node = specNode();
+	useAppStore.setState({ specsByWorkspace: { other: [] } });
+
+	useAppStore.getState().setWorkspaceSpecs("w1", [node]);
+
+	const s = useAppStore.getState();
+	expect(s.specsByWorkspace.w1).toEqual([node]);
+	expect(s.specsByWorkspace.other).toEqual([]);
+});
+
+test("setWorkspaceSpecs keeps the previous array identity when the re-read found no change", () => {
+	// The Specs read refetches on every worktree fs tick and most ticks touch no spec. A new array identity
+	// would invalidate ChatView's `isSpec` memo and re-derive every open chat's whole transcript, ~1/s.
+	useAppStore.setState({ specsByWorkspace: {} });
+	useAppStore.getState().setWorkspaceSpecs("w1", [specNode()]);
+	const first = useAppStore.getState().specsByWorkspace.w1;
+
+	useAppStore.getState().setWorkspaceSpecs("w1", [specNode()]); // equal, freshly-allocated wire objects
+	expect(useAppStore.getState().specsByWorkspace.w1).toBe(first);
+
+	// Any field the DTO carries counts as a change — including the link lists the tree doesn't render yet,
+	// so a stale snapshot can never survive here.
+	useAppStore.getState().setWorkspaceSpecs("w1", [specNode({ status: "active" })]);
+	expect(useAppStore.getState().specsByWorkspace.w1).not.toBe(first);
+
+	const withStatus = useAppStore.getState().specsByWorkspace.w1;
+	useAppStore.getState().setWorkspaceSpecs("w1", [specNode({ status: "active", tags: ["v1"] })]);
+	expect(useAppStore.getState().specsByWorkspace.w1).not.toBe(withStatus);
+
+	// A shorter/longer graph is a change too (a spec was deleted or added).
+	useAppStore.getState().setWorkspaceSpecs("w1", []);
+	expect(useAppStore.getState().specsByWorkspace.w1).toEqual([]);
 });
 
 // --- in-app login (flat, session-less) -------------------------------------------------------------

@@ -1,4 +1,3 @@
-import type { SpecGraphNode } from "@thinkrail/contracts";
 import {
 	BookOpen,
 	Box,
@@ -9,66 +8,54 @@ import {
 	ListChecks,
 	Network,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { cn } from "../lib";
-import { useAppStore } from "../store";
-import { getTransport } from "../transport";
+import { matchesWorktreePath, useAppStore } from "../store";
 import { openFileInTab } from "./openFile";
 import { buildSpecTree, type SpecTreeNode, specRoleLabel, specRoleTag } from "./specTree";
 
 /**
  * Read-only spec-graph viewer for the active worktree, rendered as a compact document-first `parent`
- * tree. Fetches `spec.graph` on mount and re-fetches WITHOUT remounting on the store's per-workspace
- * fs tick (the host's `workspace.fsChanged` nudge) and on the header Refresh button (`refreshToken`
- * from `RightPanel`) — rows are keyed by spec id, so expansion state survives a silent refresh. A
- * refetch failure keeps the last good tree; the error hint shows only when there is nothing to show.
- * The chevron expands children and one click on the document row opens its rendered spec.
+ * tree — a pure reader of the store snapshot that `useWorkspaceSpecs` (owned by `RightPanel`, so it
+ * outlives this tab) keeps current. Rows are keyed by spec id, so expansion state survives a silent
+ * refresh; a failed re-read keeps the last good tree and `failed` renders the hint only when there is
+ * nothing to show. The chevron expands children and one click on the document row opens its rendered spec.
+ *
+ * Being keyed per workspace, a switch shows that workspace's last known tree while the re-read is in
+ * flight — there is nothing to reset. A `specRequest` deep link (the divider's "N specs" chip) opens the
+ * rendered spec and is **consumed**: it opens a center tab, so replaying it on a remount or a refetch would
+ * yank the user's tab back. The row lights up on its own, since rows key off the active tab id.
  */
 export function SpecsPanel({
 	workspaceId,
-	refreshToken = 0,
+	failed = false,
 }: {
 	workspaceId: string;
-	refreshToken?: number;
+	/** The current workspace's spec read failed (from `useWorkspaceSpecs`, which owns the fetch). */
+	failed?: boolean;
 }) {
-	const [nodes, setNodes] = useState<SpecGraphNode[] | null>(null);
-	const [failed, setFailed] = useState(false);
+	const nodes = useAppStore((s) => s.specsByWorkspace[workspaceId]) ?? null;
 	const activeTabId = useAppStore((state) => state.activeTabByWorkspace[workspaceId] ?? null);
-	const fsTick = useAppStore((s) => s.fsChangesByWorkspace[workspaceId]?.tick ?? 0);
-	// Mirrors `nodes` so the async catch can tell "nothing loaded yet" without re-running the effect.
-	const nodesRef = useRef<SpecGraphNode[] | null>(null);
+	const specRequest = useAppStore((s) => s.specRequest);
 
-	// Hard reset only on workspace switch — tick/Refresh refetches keep the old tree until the read lands.
-	// biome-ignore lint/correctness/useExhaustiveDependencies: workspaceId is the trigger (reset-on-switch), not a body input
+	// A chat deep-link targeting this workspace: open the requested spec as a rendered doc tab, then clear
+	// the request. The path arrives as pi reported it (possibly absolute), so it resolves through the graph
+	// to the worktree-relative path the fs read wants — read via `getState` rather than the subscribed
+	// `nodes`, keeping the graph out of the deps so a refetch can't re-fire the open.
 	useEffect(() => {
-		setNodes(null);
-		nodesRef.current = null;
-		setFailed(false);
-	}, [workspaceId]);
-
-	// biome-ignore lint/correctness/useExhaustiveDependencies: fsTick + refreshToken are refetch triggers, not body inputs
-	useEffect(() => {
-		let cancelled = false;
-		getTransport()
-			.request("spec.graph", { workspaceId })
-			.then((result) => {
-				if (cancelled) return;
-				nodesRef.current = result.nodes;
-				setNodes(result.nodes);
-				setFailed(false);
-			})
-			.catch(() => {
-				// Keep a previously-loaded tree on a failed refresh; only an empty panel shows the hint.
-				if (!cancelled && nodesRef.current === null) setFailed(true);
-			});
-		return () => {
-			cancelled = true;
-		};
-	}, [workspaceId, fsTick, refreshToken]);
+		if (specRequest?.workspaceId !== workspaceId) return;
+		const want = specRequest.path;
+		const store = useAppStore.getState();
+		const known = store.specsByWorkspace[workspaceId]?.find((node) =>
+			matchesWorktreePath(want, node.path),
+		);
+		void openFileInTab(workspaceId, known?.path ?? want);
+		store.clearSpecRequest();
+	}, [specRequest, workspaceId]);
 
 	const roots = useMemo(() => (nodes ? buildSpecTree(nodes) : null), [nodes]);
 
-	if (failed)
+	if (failed && !nodes)
 		return (
 			<p data-testid="specs-error" className="px-xs py-xs text-xs text-hint">
 				Couldn't load specs — Refresh to retry.

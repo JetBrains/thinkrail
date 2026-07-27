@@ -336,6 +336,70 @@ test("turnDivider reports no changed files / zero tools for a plain Q&A round", 
 	const turns: ChatTurn[] = [user("u1", 0), assistantWithPaths("a1", [], 2_000), done("s1", 2_000)];
 	const d = turnDivider(turns, 2);
 	expect(d?.toolCount).toBe(0);
+	expect(d?.specs).toEqual([]);
 	expect(d?.changedFiles).toEqual([]);
 	expect(d?.elapsedMs).toBe(2_000);
+});
+
+// ---- the spec / code partition (the two divider chips) ----
+
+test("turnDivider splits specs from code changes via isSpec, each path on exactly one side", () => {
+	const turns: ChatTurn[] = [
+		user("u1", 0),
+		assistantWithPaths("a1", [
+			{ name: "write", path: "packages/pi-todos/SPEC.md" },
+			{ name: "edit", path: "packages/pi-todos/core/store.ts" },
+		]),
+		done("s1", 5_000),
+	];
+	const d = turnDivider(turns, 2, (p) => p.endsWith("SPEC.md"));
+	expect(d?.specs).toEqual(["packages/pi-todos/SPEC.md"]);
+	expect(d?.changedFiles).toEqual(["packages/pi-todos/core/store.ts"]);
+});
+
+test("turnDivider counts a gitignored scratch spec as a spec, not as a (never-visible) change", () => {
+	// The reported bug: a `.thinkrail/context/` task-spec has zero git footprint, so a "files changed"
+	// chip pointing at it deep-linked to an empty Changes view. It belongs on the Specs side.
+	const path = ".thinkrail/context/TASK-todo-linear-groups.md";
+	const turns: ChatTurn[] = [
+		user("u1", 0),
+		assistantWithPaths("a1", [
+			{ name: "spec_create", path },
+			{ name: "write", path },
+			{ name: "edit", path },
+		]),
+		done("s1", 5_000),
+	];
+	const d = turnDivider(turns, 2, () => false); // graph snapshot hasn't caught up yet
+	expect(d?.toolCount).toBe(3);
+	expect(d?.specs).toEqual([path]); // spec_create's target is a spec by construction
+	expect(d?.changedFiles).toEqual([]);
+});
+
+test("turnDivider lets the spec side win a tie — a path reached by both routes is never double-counted", () => {
+	// `edit` lands first (classified as code by a stale snapshot), then `spec_create` claims the same path.
+	const path = "docs/SPEC.md";
+	const turns: ChatTurn[] = [
+		user("u1", 0),
+		assistantWithPaths("a1", [
+			{ name: "edit", path },
+			{ name: "spec_create", path },
+		]),
+		done("s1", 5_000),
+	];
+	const d = turnDivider(turns, 2);
+	expect(d?.specs).toEqual([path]);
+	expect(d?.changedFiles).toEqual([]);
+});
+
+test("turnDivider treats every written file as a change when no classifier is supplied", () => {
+	// The presentational default: without a spec graph, the divider degrades to the old single-chip behavior.
+	const turns: ChatTurn[] = [
+		user("u1", 0),
+		assistantWithPaths("a1", [{ name: "write", path: "SPEC.md" }]),
+		done("s1", 5_000),
+	];
+	const d = turnDivider(turns, 2);
+	expect(d?.specs).toEqual([]);
+	expect(d?.changedFiles).toEqual(["SPEC.md"]);
 });

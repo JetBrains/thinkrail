@@ -5,6 +5,8 @@ import { openWorkspaceChat, waitForDone } from "./fixtures/app";
 // chat turn-divider (Task 9) — it appears the instant the turn ends (no follow-up needed), and its "files
 // changed" chip deep-links the right panel's Changes view, highlighting the edited file's row (the diff
 // itself opens only on an explicit click — the chip never steals the center area; see panels/SPEC.md).
+// The second spec covers the divider's OTHER chip: a written spec is counted and routed as a spec, never as
+// a change — the two chips mirror the Specs/Changes tab split.
 
 test("turn-divider files-changed chip highlights the file's row in the Changes panel", {
 	tag: "@agent",
@@ -42,4 +44,130 @@ test("turn-divider files-changed chip highlights the file's row in the Changes p
 	await expect(row).toBeVisible();
 	await expect(row).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("diff-pane")).toHaveCount(0);
+});
+
+test("turn-divider counts a scratch task-spec as a spec and opens it from the Specs panel", {
+	tag: "@agent",
+}, async ({ page }) => {
+	test.setTimeout(150_000);
+	await openWorkspaceChat(page);
+
+	// A task-spec in the workspace's gitignored scratch dir: real work, zero git footprint. This is the
+	// regression — it used to be reported as a "changed file", deep-linking to a Changes view that
+	// structurally cannot show it (`.thinkrail/context/.gitignore` is a lone `*`).
+	await page
+		.getByTestId("chat-input")
+		.fill(
+			"Use the spec_create tool to create a spec at path .thinkrail/context/TASK-divider-demo.md " +
+				"with id task-divider-demo, type task-spec, title Divider demo, status draft. " +
+				"Then stop — do not edit any other file.",
+		);
+	await page.getByTestId("chat-send").click();
+	await expect(
+		page
+			.locator('[data-testid="activity-group"], [data-testid="activity-step"]')
+			.filter({ hasText: "spec_create" })
+			.first(),
+	).toBeVisible({ timeout: 90_000 });
+	await waitForDone(page);
+
+	// The round reports a spec — and NO changed file, since the scratch dir has no git footprint.
+	const specChip = page.getByTestId("turn-divider-specs").first();
+	await expect(specChip).toBeVisible({ timeout: 30_000 });
+	await expect(specChip).toContainText("1 spec");
+	await expect(page.getByTestId("turn-divider-files")).toHaveCount(0);
+
+	// Clicking it flips to Specs and opens the rendered spec (the stronger deep link: a spec doc has nothing
+	// to preview short of its content), and the tree row marks the location.
+	await specChip.click();
+	await expect(page.getByTestId("tab-specs")).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("editor-pane")).toContainText("Divider demo");
+	await expect(
+		page.locator('[data-testid="spec-node"][data-spec-id="task-divider-demo"]'),
+	).toHaveAttribute("data-active", "true");
+});
+
+test("a multi-artifact chip expands into the round's list instead of guessing which one to open", {
+	tag: "@agent",
+}, async ({ page }) => {
+	test.setTimeout(150_000);
+	await openWorkspaceChat(page);
+
+	// Two written files in one round: the chip can no longer stand for a single deep link.
+	await page
+		.getByTestId("chat-input")
+		.fill(
+			"Use the write tool twice: create alpha.txt containing the single line alpha, then create " +
+				"beta.txt containing the single line beta. Then stop.",
+		);
+	await page.getByTestId("chat-send").click();
+	await waitForDone(page);
+
+	const chip = page.getByTestId("turn-divider-files").first();
+	await expect(chip).toBeVisible({ timeout: 30_000 });
+	await expect(chip).toContainText("2 files changed");
+
+	// Collapsed by default, and clicking discloses the set rather than deep-linking the first path — the
+	// right panel stays put (the chip never steals the center area or picks for the user).
+	await expect(page.getByTestId("turn-divider-files-list")).toHaveCount(0);
+	await chip.click();
+	const list = page.getByTestId("turn-divider-files-list");
+	await expect(list).toBeVisible();
+	await expect(list.getByTestId("turn-divider-files-list-item")).toHaveCount(2);
+	await expect(page.getByTestId("tab-changes")).not.toHaveAttribute("data-active", "true");
+
+	// A row is the deep link: it flips to Changes and highlights that file — the one the user picked.
+	await list.getByTestId("turn-divider-files-list-item").filter({ hasText: "beta.txt" }).click();
+	await expect(page.getByTestId("tab-changes")).toHaveAttribute("data-active", "true");
+	const row = page.getByTestId("change-item").filter({ hasText: "beta.txt" });
+	await expect(row).toHaveAttribute("data-active", "true");
+	await expect(
+		page.getByTestId("change-item").filter({ hasText: "alpha.txt" }),
+	).not.toHaveAttribute("data-active", "true");
+});
+
+test("a spec written while the Specs tab is closed still counts as a spec", {
+	tag: "@agent",
+}, async ({ page }) => {
+	test.setTimeout(150_000);
+	await openWorkspaceChat(page);
+
+	// Park the right panel on Changes, so the Specs tab body is UNMOUNTED for the whole round. The graph
+	// that classifies the round's artifacts has to keep tracking the worktree anyway (the read is owned by
+	// the always-mounted panel — see panels/useWorkspaceSpecs); if it stopped at the tab, a user who lives
+	// in Changes would get every spec counted as a changed file, silently undoing the split.
+	await page.getByTestId("tab-changes").click();
+	await expect(page.getByTestId("tab-changes")).toHaveAttribute("data-active", "true");
+
+	// Written with `write` — NOT `spec_create`, whose target counts as a spec by tool name alone — so fresh
+	// graph membership is the only thing that can classify it: the snapshot has to refresh while the panel
+	// rendering it is off screen.
+	await page
+		.getByTestId("chat-input")
+		.fill(
+			"Use the write tool once to create module-b/SPEC.md with exactly this content:\n" +
+				"---\nid: sample-module-b\ntype: module-design\ntitle: Sample Module B\nparent: sample-root\n---\n\n" +
+				"## Responsibility\n\nA second fixture module spec.\n" +
+				"Do NOT use the spec_create tool — use write. Then stop.",
+		);
+	await page.getByTestId("chat-send").click();
+	// Pin the tool actually used: if the agent reached for `spec_create`, the classification would come from
+	// the tool name and this spec would pass without ever exercising the graph refresh it exists to cover.
+	await expect(
+		page
+			.locator('[data-testid="activity-group"], [data-testid="activity-step"]')
+			.filter({ hasText: "write" })
+			.first(),
+	).toBeVisible({ timeout: 90_000 });
+	await expect(
+		page.locator('[data-testid="activity-group"], [data-testid="activity-step"]').filter({
+			hasText: "spec_create",
+		}),
+	).toHaveCount(0);
+	await waitForDone(page);
+
+	const specChip = page.getByTestId("turn-divider-specs").first();
+	await expect(specChip).toBeVisible({ timeout: 30_000 });
+	await expect(specChip).toContainText("1 spec");
+	await expect(page.getByTestId("turn-divider-files")).toHaveCount(0);
 });

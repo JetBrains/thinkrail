@@ -1,6 +1,6 @@
 import type { GitStatus } from "@thinkrail/contracts";
 import { useEffect, useState } from "react";
-import { useAppStore } from "../store";
+import { matchesWorktreePath, useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { ChangesTree } from "./ChangesTree";
 import { diffTabId, isDiffTabId, statusNameClass } from "./changesModel";
@@ -75,14 +75,12 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	};
 
 	// A chat deep-link (turn-divider chip) targeting this workspace: highlight the requested row once the
-	// status list is loaded — the diff opens only on the user's explicit click. Match by suffix so an
-	// absolute pi path still resolves to the relative entry.
+	// status list is loaded — the diff opens only on the user's explicit click. `matchesWorktreePath` resolves
+	// an absolute pi path to its relative entry (the same helper the spec classifier uses).
 	useEffect(() => {
 		if (!status || changesRequest?.workspaceId !== workspaceId) return;
 		const want = changesRequest.path;
-		// Anchor the suffix at a path separator so an absolute pi path resolves to its relative entry
-		// without `a-foo.ts` spuriously matching the entry `foo.ts`.
-		const match = status.changes.find((c) => c.path === want || want.endsWith(`/${c.path}`));
+		const match = status.changes.find((c) => matchesWorktreePath(want, c.path));
 		setHighlighted(match ? match.path : want);
 	}, [changesRequest, status, workspaceId]);
 

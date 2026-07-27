@@ -3,11 +3,13 @@ import type { Project, Workspace } from "@thinkrail/contracts";
 import type { EditorTab } from "./appStore";
 import {
 	isSkillPath,
+	matchesWorktreePath,
 	selectActiveWorkspace,
 	selectActiveWorkspaceProjectId,
 	selectContextProject,
 	selectHistoryTarget,
 	selectSkillsStale,
+	specPathMatcher,
 } from "./selectors";
 
 const projects: Project[] = [
@@ -174,4 +176,44 @@ test("selectHistoryTarget is null only with no chat to open", () => {
 			activeTabByWorkspace: { w1: "w2:s1" },
 		}),
 	).toBeNull();
+});
+
+test("matchesWorktreePath accepts the relative form and an absolute report, anchored at a separator", () => {
+	expect(matchesWorktreePath("src/foo.ts", "src/foo.ts")).toBe(true);
+	expect(matchesWorktreePath("/wt/src/foo.ts", "src/foo.ts")).toBe(true);
+	expect(matchesWorktreePath("C:\\wt\\src/foo.ts", "src/foo.ts")).toBe(true);
+	// Anchored: a sibling whose name merely ends with the entry must not match.
+	expect(matchesWorktreePath("/wt/src/a-foo.ts", "src/foo.ts")).toBe(false);
+	expect(matchesWorktreePath("src/other.ts", "src/foo.ts")).toBe(false);
+});
+
+test("matchesWorktreePath does not let a RELATIVE report match a shorter entry by suffix", () => {
+	// The suffix rule exists to absorb an absolute report; letting it apply to relative ones made every
+	// `<module>/SPEC.md` in a repo match the ROOT `SPEC.md` entry — one spec impersonating all of them.
+	expect(matchesWorktreePath("module-b/SPEC.md", "SPEC.md")).toBe(false);
+	expect(matchesWorktreePath("packages/server/SPEC.md", "SPEC.md")).toBe(false);
+	// The absolute form of the same pair still resolves, since there the prefix IS the worktree root.
+	expect(matchesWorktreePath("/wt/ws/SPEC.md", "SPEC.md")).toBe(true);
+});
+
+test("specPathMatcher recognizes a spec by graph membership, in either reported form", () => {
+	const nodes = [
+		{
+			id: "task-x",
+			type: "task-spec",
+			title: "X",
+			path: ".thinkrail/context/TASK-x.md",
+			dependsOn: [],
+			references: [],
+			implements: [],
+			tags: [],
+		},
+	];
+	const isSpec = specPathMatcher(nodes);
+
+	expect(isSpec(".thinkrail/context/TASK-x.md")).toBe(true);
+	expect(isSpec("/wt/ws/.thinkrail/context/TASK-x.md")).toBe(true);
+	expect(isSpec("packages/server/src/todos/todos.ts")).toBe(false);
+	// An empty graph (never fetched) classifies nothing as a spec — the single-chip fallback.
+	expect(specPathMatcher([])(".thinkrail/context/TASK-x.md")).toBe(false);
 });

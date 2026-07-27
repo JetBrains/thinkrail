@@ -300,8 +300,16 @@ a project picker, the prompt hero, and the reused
   so scoping is natural; a degraded watcher just means back to read-on-demand. Deliberately **not**
   live (deferred): the project-rail workspace diffStats badges; editable-file conflict handling waits
   for `fs.writeFile` (the viewer is read-only today).
-- `SpecsPanel` is the read-only spec-graph viewer: one `spec.graph` fetch per workspace-activation /
-  tab-visit, refetched on the fs tick, plus a header **Refresh** button re-fetching on demand (the
+- **`useWorkspaceSpecs` owns the `spec.graph` read** (one fetcher, one definition of "this file is a spec"):
+  the snapshot lands in the store (`specsByWorkspace`), not panel state, because the chat's turn divider
+  needs the same answer to route its chips. It is called by **`RightPanel`**, not by `SpecsPanel` — the
+  panel body only exists while its tab is showing, so owning the read there would mean a user sitting on
+  Changes stops the graph tracking the worktree, and every spec the agent writes gets counted as a changed
+  file (the split silently undone by a tab selection). Being keyed per workspace, a switch shows that
+  workspace's last known tree while the re-read is in flight (there is nothing to reset), and the failed-read
+  flag is workspace-scoped so it can't leak a hint over a sibling's good tree.
+- `SpecsPanel` is the read-only spec-graph viewer — a pure reader of that snapshot. One fetch per
+  workspace-activation, refetched on the fs tick, plus a header **Refresh** button re-fetching on demand (the
   manual escape hatch if the host's watcher degraded; the host side revalidates per read), rendered as
   the **`parent` tree** (roots = no/dangling parent; default-expanded). A fetch **failure renders a distinct error hint** (pointing at Refresh), never the
   "No specs" empty state — offline and empty are different answers. The tree build (`specTree.ts`)
@@ -322,11 +330,23 @@ a project picker, the prompt hero, and the reused
   feature, not speculative dots or reused status chrome. This remains a restrained hierarchy — no hero,
   duplicate root, preview, or graph canvas. `FileTree` keeps its own gesture model (whole-row click
   toggles dirs — no collision there).
-- `RightPanel`/`ChangesPanel` watch the store's `changesRequest` deep-link (set by a chat turn-divider's
-  "files changed" chip): when it targets the active workspace, `RightPanel` flips to the Changes tab and
-  `ChangesPanel` **highlights** the requested file's row (matched by path suffix against `git.status`) —
-  deliberately without opening its diff tab; the diff opens only on the user's explicit click, so a chat
-  chip never steals the center area.
+- **The two chat deep-links mirror the tab split.** `RightPanel`/`ChangesPanel` watch the store's
+  `changesRequest` (set by a chat turn-divider's "files changed" chip): when it targets the active workspace,
+  `RightPanel` flips to the Changes tab and `ChangesPanel` **highlights** the requested file's row (resolved
+  with `matchesWorktreePath` against `git.status`) — deliberately without opening its diff tab; the diff
+  opens only on the user's explicit click, so a chat chip never steals the center area.
+  `RightPanel`/`SpecsPanel` watch **`specRequest`** (the "N specs" chip) the same way, but flip to **Specs**
+  and **open the rendered spec** (`openFileInTab`, resolving the reported path through the graph, falling
+  back to the raw request for a spec created seconds ago) — a spec has nothing to preview short of its
+  content, and the tree row lights up on its own since rows key off the active tab id. That intent is
+  **consumed** (`clearSpecRequest`) once handled: unlike the highlight-only Changes link, it opens a center
+  tab, so replaying it on a remount or a graph refetch would yank the user's tab back mid-edit. Two intents, two
+  effects: a spec chip must never land in the git-derived Changes view, which structurally cannot show a
+  gitignored `.thinkrail/context/` scratch spec — the empty-Changes bug that motivated the split.
+  Both intents carry **exactly one path**: a round that wrote several artifacts resolves the ambiguity in the
+  chat (the chip expands into a list there — see chat/SPEC.md), so no panel ever has to mark a *set*. That is
+  deliberate — a second, round-scoped marking vocabulary over these workspace-scoped trees would reintroduce
+  the two-rows-read-as-selected ambiguity the single-selection rule above exists to prevent.
 - **The diff is a center tab, not a rail inset.** Clicking a Changes row fetches `git.diffFile` (both
   sides: base branch vs worktree) and opens a **`DiffTab`** (`${workspaceId}:diff:${path}` — one tab per
   file; a re-click focuses the existing tab). `DiffPane` renders a slim header (the path + a per-tab

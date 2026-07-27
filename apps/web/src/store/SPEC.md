@@ -129,7 +129,20 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   contract in `DiffPane`. The transient **`changesRequest`** +
   **`requestChangesView(workspaceId, path)`** are a UI deep-link intent (a chat turn-divider asking the
   right panel to surface a file in its Changes view — flip to the tab and **highlight the row**, without
-  opening the diff; that waits for an explicit click); the panels watch it, scoped by workspace.
+  opening the diff; that waits for an explicit click); the panels watch it, scoped by workspace. Its Specs
+  twin **`specRequest`** + **`requestSpecView(workspaceId, path)`** flips to the Specs tab and **opens the
+  rendered spec** — the stronger treatment, because a spec doc has nothing to preview short of its content.
+  Two separate fields, never one: the panel that can show a *gitignored* spec is not the git-derived one, and
+  that confusion is exactly the bug the split fixes. The spec intent is additionally **consumed**
+  (**`clearSpecRequest`**) by whoever handles it — it opens a center tab, so a replay would steal the user's
+  tab; the Changes intent only highlights, so it stays fire-and-forget. **`specsByWorkspace`** +
+  **`setWorkspaceSpecs`** hold each workspace's `spec.graph` snapshot (fetched by `panels`'
+  `useWorkspaceSpecs`, kept fresh on the workspace fs tick) so
+  the chat's turn divider can classify a written path as a spec off the very snapshot the Specs panel
+  renders — one definition of "this file is a spec", via the **`specPathMatcher(nodes)`** selector; dropped
+  with the workspace in `applyWorkspaceRemoved`. `setWorkspaceSpecs` **keeps the previous array identity when
+  the re-read found no change** — most fs ticks touch no spec, and a fresh identity would invalidate
+  `ChatView`'s matcher memo and re-derive every open chat's whole transcript about once a second.
   **`openDoc(tab)`** opens
   (or refreshes + focuses) an ephemeral **`DocTab`** — inline rendered-markdown content, never backed by a
   file on disk (no fs re-read / source toggle) — used for on-demand snapshots like the plan-as-markdown
@@ -160,7 +173,12 @@ paths only; opened by `ChangesPanel`). The transient **`chatLocationRequest`** �
   `selectActiveWorkspaceProjectId`, `selectHistoryTarget` + `HistoryTarget` (the shell's `Ctrl+R` routing
   target: the active chat tab, or the workspace's newest chat when a file/diff/doc tab is active),
   `selectContextProject`, `selectSkillsStale`, `selectWorkspaceTick` (the
-  sync-baseline snapshot; + the `isSkillPath` path predicate it shares with `noteFsChanged`); `toast` (the
+  sync-baseline snapshot; + the `isSkillPath` path predicate it shares with `noteFsChanged`);
+  `matchesWorktreePath` (line an agent-reported path — relative or absolute — up against a worktree-relative
+  one; shared by the Changes deep link and the spec classifier. The suffix rule is for **absolute reports
+  only** and is anchored at a separator: unanchored, `/wt/src/a-foo.ts` would match `src/foo.ts`; applied to
+  relative reports, `module-b/SPEC.md` would match the *root* `SPEC.md`) + `specPathMatcher` (is a written
+  path a spec-graph node?); `toast` (the
   fire-from-anywhere helper),
   `Toast` (type), `EditorTab` (`FileTab`/`ChatTab`/`DocTab`), `TerminalTab`, `ClosedChat`, `SessionRuntime` +
   `EMPTY_RUNTIME` (ChatView's pre-creation fallback), `ChatLocationRequest` (type), `reduceSessionEvent`.

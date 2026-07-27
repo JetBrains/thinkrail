@@ -9,6 +9,7 @@ import type {
 	SessionStats,
 	SessionSummary,
 	SlashCommandInfo,
+	SpecGraphNode,
 	ThemeId,
 	ThinkingLevel,
 	WireModel,
@@ -468,6 +469,21 @@ interface AppState {
 	 */
 	historyOpenRequest: { sessionId: string } | null;
 	/**
+	 * A request to surface a spec in the right-panel Specs view (e.g. a chat turn-divider's "specs" chip).
+	 * The panels watch it and, when it targets the active workspace, switch to the Specs tab and **open the
+	 * rendered spec** — unlike a diff, a spec doc has nothing to preview short of opening it, and the tree
+	 * row lights up on its own (rows key off the active tab id). A fresh object each call so identical
+	 * re-requests still fire.
+	 */
+	specRequest: { workspaceId: string; path: string } | null;
+	/**
+	 * Each workspace's spec-graph snapshot (`spec.graph`), fetched by the Specs panel and kept here so the
+	 * chat can classify a written path as a spec without a second read — the ONE definition of "this file is
+	 * a spec", shared by the panel that lists them and the turn divider that counts them. Absent until the
+	 * first fetch lands; the panel refetches on the workspace fs tick, so it tracks the filesystem.
+	 */
+	specsByWorkspace: Record<string, SpecGraphNode[]>;
+	/**
 	 * The live-refresh signal, per workspace: `tick` increments on every `workspace.fsChanged` push (the
 	 * host's debounced worktree change notifier); `paths`/`truncated` are the LAST batch only. Panels
 	 * select their workspace's entry and silently refetch on `tick` change — the store holds only the
@@ -654,12 +670,50 @@ interface AppState {
 	requestHistoryOpen: (target: HistoryTarget) => void;
 	/** Dismiss the history-open request once `ChatView` has acted on it. */
 	clearHistoryOpen: () => void;
+	/** Ask the right panel to open `path` in its Specs view (deep-link from chat). */
+	requestSpecView: (workspaceId: string, path: string) => void;
+	/** Drop the spec deep-link once a panel has acted on it (it opens a tab — it must fire exactly once). */
+	clearSpecRequest: () => void;
+	/** Record a workspace's fetched spec-graph snapshot (`useWorkspaceSpecs`' read lands here). */
+	setWorkspaceSpecs: (workspaceId: string, nodes: SpecGraphNode[]) => void;
 	/** Enqueue a toast; returns its id so a caller can dismiss it early. An identical live toast (same
 	 * variant/title/message — e.g. a retried failure) coalesces: no twin is added, the existing id returns.
 	 * The queue caps at `MAX_TOASTS` (oldest drop). Prefer the `toast` helper. */
 	pushToast: (toast: Omit<Toast, "id">) => string;
 	/** Drop a toast (user dismiss or the Toaster's auto-timeout). A missing id is a no-op. */
 	dismissToast: (id: string) => void;
+}
+
+/** Field-wise equality of two spec-graph nodes — every field the DTO carries, so "unchanged" is honest. */
+function sameSpecNode(a: SpecGraphNode, b: SpecGraphNode): boolean {
+	const sameList = (x: string[], y: string[]) =>
+		x.length === y.length && x.every((item, i) => item === y[i]);
+	return (
+		a.id === b.id &&
+		a.type === b.type &&
+		a.title === b.title &&
+		a.status === b.status &&
+		a.path === b.path &&
+		a.parent === b.parent &&
+		sameList(a.dependsOn, b.dependsOn) &&
+		sameList(a.references, b.references) &&
+		sameList(a.implements, b.implements) &&
+		sameList(a.tags, b.tags)
+	);
+}
+
+/**
+ * Whether a re-read produced the same graph. The Specs read refetches on every worktree fs tick, and most
+ * ticks change no spec at all — keeping the previous array identity on those makes the refetch free for
+ * `ChatView`, whose `isSpec` memo (and with it `deriveRows` over the whole transcript, for every open chat)
+ * would otherwise be invalidated about once a second during any file activity.
+ */
+function sameSpecGraph(prev: SpecGraphNode[] | undefined, next: SpecGraphNode[]): boolean {
+	if (!prev || prev.length !== next.length) return false;
+	return prev.every((node, i) => {
+		const candidate = next[i];
+		return candidate !== undefined && sameSpecNode(node, candidate);
+	});
 }
 
 /** Apply an immutable update to one session's runtime; a no-op (and no new `sessions` object) if it's gone. */
@@ -747,6 +801,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	models: [],
 	templatesVersion: 0,
 	changesRequest: null,
+	specRequest: null,
+	specsByWorkspace: {},
 	changesView: "list",
 	chatLocationRequest: null,
 	historyOpenRequest: null,
@@ -808,11 +864,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 		const name = s.workspaces[projectId]?.find((w) => w.id === workspaceId)?.name;
 		s.removeWorkspace(projectId, workspaceId);
 		s.clearWorkspaceTabs(workspaceId); // drops the row's tabs + terminals + chat runtimes
-		// Drop the live-refresh signal too — a removed workspace's fs tick record must not linger.
+		// Drop the live-refresh signal + the cached spec graph too — a removed workspace's records must not
+		// linger (the worktree is gone; a same-id workspace can never come back).
 		set((state) => {
 			const { [workspaceId]: _gone, ...rest } = state.fsChangesByWorkspace;
 			const { [workspaceId]: _skillGone, ...skillRest } = state.skillChangeTickByWorkspace;
-			return { fsChangesByWorkspace: rest, skillChangeTickByWorkspace: skillRest };
+			const { [workspaceId]: _specsGone, ...specsRest } = state.specsByWorkspace;
+			return {
+				fsChangesByWorkspace: rest,
+				skillChangeTickByWorkspace: skillRest,
+				specsByWorkspace: specsRest,
+			};
 		});
 		if (wasActive) {
 			s.selectProject(projectId); // atomically fall back to the removed workspace's Project Home
@@ -1304,6 +1366,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 			activeTabByWorkspace: { ...s.activeTabByWorkspace, [target.workspaceId]: target.tabId },
 		})),
 	clearHistoryOpen: () => set({ historyOpenRequest: null }),
+	requestSpecView: (workspaceId, path) => set({ specRequest: { workspaceId, path } }),
+	clearSpecRequest: () => set({ specRequest: null }),
+	setWorkspaceSpecs: (workspaceId, nodes) =>
+		set((s) =>
+			sameSpecGraph(s.specsByWorkspace[workspaceId], nodes)
+				? {}
+				: { specsByWorkspace: { ...s.specsByWorkspace, [workspaceId]: nodes } },
+		),
 	pushToast: (toast) => {
 		const twin = get().toasts.find(
 			(t) => t.variant === toast.variant && t.title === toast.title && t.message === toast.message,
