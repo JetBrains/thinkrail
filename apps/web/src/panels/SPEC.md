@@ -70,7 +70,10 @@ bottom-left; the primary is a filled-violet card carrying the stable `welcome-ct
 / Recents), so `Card` is a `forwardRef` usable as a Radix `asChild` trigger. **"Start building"** is the
 intent-first framing of the create-and-kick-off flow — it opens `NewWorkspaceDialog` (which cuts a
 worktree-isolated workspace + starts a chat); *workspace* is the mechanism, not the label. **"Set up
-project"** opens the same dialog with an `initialPrompt` seed — the `/skill:setting-up-a-project` command,
+project"** opens the same dialog with an `initialPrompt` seed **and a `promptNote`** — the note is the
+card's own copy (the dialog stays skill-agnostic), saying what the seeded command does: the agent drafts
+the project's specs (goal, architecture, modules) before building. The seed is the
+`/skill:setting-up-a-project` command,
 which **forces** the setting-up-a-project dispatcher skill to load (pi's skill-command syntax; expanded on the
 `session.prompt` path) rather than hoping the model auto-matches it; the dispatcher then detects
 new-vs-existing and drafts the specs accordingly (see [[module-thinkrail-workflow]]). Which
@@ -100,7 +103,9 @@ pre-session half of the user's skill settings; the chat header opens the same di
 **“Create workspace”** — and states the model without adding a step: **“A separate checkout on its own new
 branch. Files, chats, changes, and terminals stay scoped to it.”** Its base-branch trigger reads **“From
 {base}”**, not an unexplained ref. An optional **`initialPrompt`** seeds the prompt hero (still editable;
-empty by default); while the prompt is non-empty, a secondary hint says ThinkRail will name the workspace
+empty by default) and an optional **`promptNote`** renders as a small info strip above it
+(`ws-prompt-note`) — the opener's chance to explain a seeded command, since the dialog's own header only
+ever describes creating a workspace; while the prompt is non-empty, a secondary hint says ThinkRail will name the workspace
 and branch from the request. The rest stays compact: the base-branch combobox (`git.listBranches`,
 degrading to local branches offline; a Refresh re-lists; `origin/HEAD` is filtered so no stray `origin`),
 a project picker, the prompt hero, and the reused

@@ -19,6 +19,8 @@ test("the dialog lists local branches (no stray origin) and creates a worktree",
 	// and the IDE surfaces the user is about to enter are all scoped to it.
 	await expect(dialog.getByRole("heading", { name: "Create workspace" })).toBeVisible();
 	await expect(dialog).toContainText("A separate checkout on its own new branch");
+	// The note strip belongs to openers that seed a command (Welcome's "Set up project") — not the rail "+".
+	await expect(dialog.getByTestId("ws-prompt-note")).toHaveCount(0);
 	await expect(dialog).toContainText("Files, chats, changes, and terminals stay scoped to it");
 
 	// Project picker defaults to the project the "+" was clicked on.
