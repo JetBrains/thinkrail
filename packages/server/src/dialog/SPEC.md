@@ -25,6 +25,7 @@ The host's native directory picker, so the browser "Open project" gets a real OS
   *file*, the returned path is that file's trimmed contents, **re-read per call** — so one shared e2e host
   can hand different folders to different tests by rewriting the pointer (a directory value is returned
   as-is).
-- **Public surface (barrel):** `selectDirectory` (+ `pickersFor` / `Picker`, exposed for unit tests).
+- **Public surface (barrel):** `selectDirectory` (+ `pickersFor` / `Picker` and the two message builders
+  `pickerFailure` / `noPickerMessage`, exposed for unit tests).
 - **Allowed deps:** Bun (spawn), `process.env`.
 - **Forbidden:** `host`; sibling features; `contracts` (none needed).

@@ -69,8 +69,9 @@ export function pickersFor(platform: NodeJS.Platform): Picker[] {
 				},
 			];
 		case "win32":
-			// The same two hosts (and order) `apps/cli/src/powershell.ts` uses, and `-Sta` because a WinForms
-			// dialog needs a single-threaded apartment — the default for `powershell.exe`, *not* for `pwsh`.
+			// The same two hosts (and order) `apps/cli/src/powershell.ts` uses. `-Sta` because a WinForms
+			// dialog needs a single-threaded apartment: both hosts already default to STA on Windows, so this
+			// only pins the requirement at the spawn site.
 			return ["powershell.exe", "pwsh.exe"].map((shell) => ({
 				cmd: [shell, "-NoProfile", "-Sta", "-Command", WINDOWS_PICKER],
 				parse: toPath,
@@ -100,6 +101,22 @@ function resolveOverride(): string | null {
 }
 
 /**
+ * Why a picker that *ran* failed, for the notice the user sees: its first stderr line, else the exit code
+ * (a killed picker writes nothing). PowerShell's CRLF output would otherwise leave a trailing `\r`.
+ */
+export function pickerFailure(stderr: string, code: number): string {
+	const firstLine = stderr.replaceAll("\r", "").trim().split("\n")[0];
+	return `The folder picker failed: ${firstLine || `exit ${code}`}`;
+}
+
+/** Why we couldn't even start a picker — phrased so the user can act on it. */
+export function noPickerMessage(platform: NodeJS.Platform): string {
+	return platform === "linux"
+		? "No folder picker on this host — install zenity or kdialog."
+		: `No native folder picker is available on this host (${platform}).`;
+}
+
+/**
  * Pop the host's native folder picker and return the chosen path (`null` when the user cancelled).
  * A missing binary falls through to the next candidate; **throws** when a picker failed or none could
  * run at all — the picker is the only way to add a project, so a silent `null` is a dead button.
@@ -124,11 +141,7 @@ export async function selectDirectory(): Promise<{ path: string | null }> {
 		}
 		if (code === 0) return { path: picker.parse(out) };
 		if (picker.nonZeroExit === "cancel") return { path: null };
-		throw new Error(`The folder picker failed: ${err.trim().split("\n")[0] ?? `exit ${code}`}`);
+		throw new Error(pickerFailure(err, code));
 	}
-	throw new Error(
-		process.platform === "linux"
-			? "No folder picker on this host — install zenity or kdialog."
-			: `No native folder picker is available on this host (${process.platform}).`,
-	);
+	throw new Error(noPickerMessage(process.platform));
 }

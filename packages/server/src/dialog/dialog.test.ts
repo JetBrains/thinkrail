@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { pickersFor, selectDirectory } from "./dialog";
+import { noPickerMessage, pickerFailure, pickersFor, selectDirectory } from "./dialog";
 
 test("macOS picker uses osascript 'choose folder'", () => {
 	const pickers = pickersFor("darwin");
@@ -38,6 +38,20 @@ test("only PowerShell reads a non-zero exit as a failure — the others cancel",
 
 test("unknown platform has no native picker", () => {
 	expect(pickersFor("sunos" as NodeJS.Platform)).toEqual([]);
+});
+
+test("a failed picker names a cause — never an empty message, never a stray CR", () => {
+	expect(pickerFailure("Add-Type : Cannot load assembly\r\n  At line:1\r\n", 1)).toBe(
+		"The folder picker failed: Add-Type : Cannot load assembly",
+	);
+	// A killed picker writes nothing to stderr — the exit code is all we have to show.
+	expect(pickerFailure("", 137)).toBe("The folder picker failed: exit 137");
+	expect(pickerFailure("   \r\n \n", 1)).toBe("The folder picker failed: exit 1");
+});
+
+test("no runnable picker points at the fix on Linux, names the platform elsewhere", () => {
+	expect(noPickerMessage("linux")).toContain("install zenity or kdialog");
+	expect(noPickerMessage("sunos" as NodeJS.Platform)).toContain("(sunos)");
 });
 
 test("picker output is trimmed, trailing separators dropped, empty → null", () => {

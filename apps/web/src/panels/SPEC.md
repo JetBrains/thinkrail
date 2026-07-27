@@ -45,7 +45,9 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   `WelcomePanel`, so the flow is identical in the rail and the Welcome screen): `project.open`, and on
   failure `project.inspect` → either offers to bootstrap the folder into a repo — a modal **`ConfirmDialog`**
   (confirm → `project.init`) — when it's `initable`, or surfaces the error in a **`NoticeDialog`** — so a
-  non-git folder is never a silent no-op. Both are modals on `components/ui/dialog` (the init offer has no
+  non-git folder is never a silent no-op — and neither is a host that couldn't *show* a folder dialog (that
+  throws; the notice carries the reason, and the request runs on a raised `timeoutMs` since the picker waits
+  on a human). Both are modals on `components/ui/dialog` (the init offer has no
   on-screen anchor, unlike the Remove popover); `NoticeDialog` is a single-button info modal for failures
   with no yes/no follow-up. The hook returns a `dialogs` node each consumer renders. **Selecting a
   project** (clicking its row — the chevron expands/collapses separately) **deselects any active
