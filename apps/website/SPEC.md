@@ -36,7 +36,7 @@ binary.
 ## Analytics
 
 PostHog (the team's existing project, **EU** cloud). Loaded as **progressive enhancement, production
-only**: `src/analytics.ts` injects PostHog's `array.js` from `eu-assets.i.posthog.com` at runtime and
+only**: `src/analytics.ts` injects PostHog's `array.js` from the first-party proxy at runtime and
 calls `posthog.init()` **only when `location.hostname === "thinkrail.ai"`** — localhost, `vite dev`,
 `preview`, and the `jetbrains.github.io` apex send nothing. The prod gate + config are a pure
 `analyticsConfig(hostname)` function, unit-tested in `src/analytics.test.ts` (`bun:test`, no browser).
@@ -57,6 +57,21 @@ calls `posthog.init()` **only when `location.hostname === "thinkrail.ai"`** — 
     project settings** (Project Settings → Web analytics). If it is off, cookieless events are dropped.
   - Trade-off: the daily salt makes cross-day identity coarse (a visitor returning on a later day
     counts as new); pageview counts stay accurate, unique-visitor counts are approximate.
+- **First-party ingest via PostHog's managed reverse proxy** — `p.thinkrail.ai`, so ad blockers (which
+  match on `*.posthog.com`) don't drop the beacon. One host covers both PostHog EU origins: the proxy
+  routes `/static/*` + `/array/*` to `eu-assets.i.posthog.com` and everything else to
+  `eu.i.posthog.com`, so `api_host` **and** the injected `array.js` URL are the proxy. `ui_host:
+  "https://eu.posthog.com"` stays PostHog's real app origin — mandatory with a proxy, or in-app links
+  and the toolbar point at the proxy. Both are pinned in `analytics.test.ts`.
+  - **Managed, not self-hosted:** PostHog operates it (DNS `CNAME` → their Cloudflare edge; SSL +
+    routing theirs). Consequence: traffic also transits **Cloudflare**, a PostHog
+    [subprocessor](https://posthog.com/subprocessors) under their DPA — no new controller, still EU.
+    We run no proxy infrastructure; the site stays static on GitHub Pages.
+  - Cookieless server-hash identity is unaffected: the proxy forwards `X-Forwarded-For`, so the
+    daily-salt hash still sees the real client IP.
+  - **The host-side sink is deliberately NOT proxied** (`packages/server/src/analytics` keeps
+    `eu.i.posthog.com`): `posthog-node` runs in our own process, where no ad blocker exists — a proxy
+    would add a hop and a subprocessor for nothing.
 - The `phc_…` project key is **public/client-safe** by design (meant to ship in browser code) — not a
   secret, so embedding it in the static build is expected.
 

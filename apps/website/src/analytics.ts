@@ -14,8 +14,12 @@
 // apps/website/SPEC.md.
 
 const PROD_HOST = "thinkrail.ai";
-const API_HOST = "https://eu.i.posthog.com";
-const ASSET_HOST = "https://eu-assets.i.posthog.com";
+// PostHog's MANAGED reverse proxy on our own domain (first-party, so ad blockers don't drop it). It
+// fronts both PostHog EU origins: `/static/*` + `/array/*` → eu-assets.i.posthog.com, everything else
+// → eu.i.posthog.com. Hence one host for ingest and assets. `ui_host` must stay the real PostHog app
+// origin so links/toolbar resolve. See apps/website/SPEC.md.
+const PROXY_HOST = "https://p.thinkrail.ai";
+const UI_HOST = "https://eu.posthog.com";
 const PROJECT_KEY = "phc_AFJBcKraEUrfpTrSSMjBGXMHTusYudtFfxWqdevchy8X"; // public/client-safe key
 
 interface PostHogLike {
@@ -41,7 +45,8 @@ export function analyticsConfig(hostname: string): AnalyticsInit | null {
 	return {
 		key: PROJECT_KEY,
 		config: {
-			api_host: API_HOST,
+			api_host: PROXY_HOST,
+			ui_host: UI_HOST,
 			defaults: "2026-05-30",
 			person_profiles: "identified_only",
 			cookieless_mode: "always", // no cookie / local / session storage — identity is a server-side hash
@@ -56,7 +61,7 @@ export function initAnalytics(): void {
 	if (settings === null) return;
 
 	const script = document.createElement("script");
-	script.src = `${ASSET_HOST}/static/array.js`;
+	script.src = `${PROXY_HOST}/static/array.js`;
 	script.async = true;
 	script.crossOrigin = "anonymous";
 	script.addEventListener("load", () => {

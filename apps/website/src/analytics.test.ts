@@ -21,4 +21,12 @@ describe("analyticsConfig", () => {
 		expect(config.disable_session_recording).toBe(true);
 		expect(settings?.key.startsWith("phc_")).toBe(true);
 	});
+
+	test("ingests through the first-party managed proxy, with ui_host still PostHog's app origin", () => {
+		const config = analyticsConfig("thinkrail.ai")?.config ?? {};
+		// A blocker-resistant first-party host: never a *.posthog.com ingest endpoint.
+		expect(config.api_host).toBe("https://p.thinkrail.ai");
+		// Required with a proxy: without it, in-app links/toolbar point at the proxy and break.
+		expect(config.ui_host).toBe("https://eu.posthog.com");
+	});
 });
