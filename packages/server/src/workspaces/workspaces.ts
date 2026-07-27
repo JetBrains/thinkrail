@@ -172,11 +172,16 @@ export async function createWorkspace(
  * only node_modules/.git/dist/build, not .gitignore). Worktree creation seeds eagerly; the host also
  * calls this on session create, which is what seeds the **Default** workspace — merely listing or
  * entering it must never write into the user's repo, starting a chat there may.
+ *
+ * The `.gitignore` is written **only when absent**: in the Default workspace this path lives inside the
+ * user's own repo, where a pre-existing (possibly tracked, possibly customized) file is theirs — we
+ * never clobber it, we only fill the gap.
  */
 export function ensureWorkspaceScratchDir(ws: Workspace): void {
 	const contextDir = join(ws.worktreePath, WORKSPACE_CONTEXT_DIR);
 	mkdirSync(contextDir, { recursive: true });
-	writeFileSync(join(contextDir, ".gitignore"), "*\n");
+	const ignoreFile = join(contextDir, ".gitignore");
+	if (!existsSync(ignoreFile)) writeFileSync(ignoreFile, "*\n");
 }
 
 /**

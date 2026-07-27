@@ -79,7 +79,10 @@ folder" anchor, ensured lazily, **non-removable and non-renamable**.
   scratch dir (mkdir + self-ignoring `*` `.gitignore`); the host calls it on **session create** for
   every workspace, so the Default workspace writes into the user's repo only when a chat actually
   starts there (worktree creation still seeds eagerly at create; this also self-heals a worktree
-  whose scratch dir was deleted).
+  whose scratch dir was deleted). The `.gitignore` write is **non-clobbering — only when the file is
+  absent**: in the Default workspace that path is inside the user's own repo, where an existing
+  (possibly tracked, possibly customized) file is theirs to keep; seeding fills the gap, never
+  overwrites (pinned by a regression test).
 - **Lifecycle events:** every membership mutation — `createWorkspace` (`created`), `renameWorkspace`
   (`updated`, both the naive and agentic auto-rename passes since both go through it), `forgetWorkspace`
   (`removed`) — emits a `WorkspaceLifecycleEvent` through an **injected publisher** (`setWorkspacePublisher`,

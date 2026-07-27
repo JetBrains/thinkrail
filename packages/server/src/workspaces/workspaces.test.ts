@@ -108,6 +108,27 @@ test("createWorkspace seeds a self-ignoring .thinkrail/context scratch dir kept 
 	expect(gitOut(ws.worktreePath, "status", "--porcelain")).not.toContain(".thinkrail");
 });
 
+test("ensureWorkspaceScratchDir never clobbers an existing .gitignore (the Default workspace is the user's repo)", async () => {
+	// The Default workspace's scratch dir lives inside the user's own project folder, where a
+	// pre-existing (possibly tracked, possibly customized) .thinkrail/context/.gitignore is theirs.
+	const contextDir = join(repo, ".thinkrail", "context");
+	mkdirSync(contextDir, { recursive: true });
+	const gitignore = join(contextDir, ".gitignore");
+	writeFileSync(gitignore, "# mine\n!keep.md\n");
+
+	const def = (await listWorkspaces("p1")).find((w) => w.kind === "default");
+	expect(def?.worktreePath).toBe(repo);
+	if (def) ensureWorkspaceScratchDir(def);
+
+	// Preserved byte for byte — seeding only fills the gap, it never overwrites.
+	expect(readFileSync(gitignore, "utf8")).toBe("# mine\n!keep.md\n");
+
+	// And with the file absent, seeding still writes the self-ignoring default.
+	rmSync(gitignore);
+	if (def) ensureWorkspaceScratchDir(def);
+	expect(readFileSync(gitignore, "utf8")).toBe("*\n");
+});
+
 test("createWorkspace marks a user-named workspace renamed; an auto-named one stays eligible", async () => {
 	const auto = await createWorkspace("p1");
 	expect(auto.name).toBe("workspace-1");
