@@ -33,6 +33,7 @@ import {
 } from "./Composer";
 import { ExtUiDialog } from "./ExtUiDialog";
 import { HistoryOverlay } from "./HistoryOverlay";
+import { planGlance } from "./planView";
 import { type ChatRow, deriveRows, rowIndexForTurn } from "./rows";
 import { SkillsDialog } from "./SkillsDialog";
 import { StreamIndicator, type StreamStatus, streamStatus } from "./StreamIndicator";
@@ -550,6 +551,14 @@ export default function ChatView({
 		[runtime.turns, runtime.askAnswers],
 	);
 
+	// The plan's glance state — "working or waiting on you?" — derived from session state (streaming +
+	// any awaiting questionnaire), never stored, so the TODO strip can't claim "in work" while the
+	// system waits (see planView.ts).
+	const planGlanceState = useMemo(
+		() => planGlance(isStreaming, askStates),
+		[isStreaming, askStates],
+	);
+
 	// Interactive tool renderers reach the agent through this context (kept out of the presentational
 	// renderers). Currently: the inline `ask_user_question` card sending its reply. The promise is handed
 	// to the caller — the card owns the failure UX (it un-latches its "sent" state).
@@ -595,7 +604,11 @@ export default function ChatView({
 													data-open={planOpen}
 													className="flex min-w-0 items-center gap-xs text-muted text-xs hover:text-text"
 												>
-													<ChatPlanStripContent plan={plan} open={planOpen} />
+													<ChatPlanStripContent
+														plan={plan}
+														open={planOpen}
+														glance={planGlanceState}
+													/>
 												</button>
 											</PopoverTrigger>
 										) : null
@@ -605,7 +618,7 @@ export default function ChatView({
 								/>
 							</div>
 						</PopoverAnchor>
-						<ChatPlanContent plan={plan} />
+						<ChatPlanContent plan={plan} glance={planGlanceState} />
 					</Popover>
 					<div
 						data-testid="chat-scroll"

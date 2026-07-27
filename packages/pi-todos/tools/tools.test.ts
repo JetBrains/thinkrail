@@ -63,16 +63,20 @@ test("finite-vocabulary param schemas derive their enum from the core tuples", (
 test("add → list → update → remove round-trips through the store", async () => {
 	const cwd = mkdtempSync(join(tmpdir(), "pi-todos-tools-"));
 	try {
-		const added = (await run("todo_add", { title: "Ship it" }, cwd)) as AgentToolResult<{
+		const added = (await run(
+			"todo_add",
+			{ title: "Ship it", group: "Task" },
+			cwd,
+		)) as AgentToolResult<{
 			todo: { id: string; status: string };
 		}>;
 		const id = added.details.todo.id;
 		expect(added.details.todo.status).toBe("pending");
 
 		const listed = (await run("todo_list", {}, cwd)) as AgentToolResult<{
-			plan: { todos: unknown[] };
+			plan: { groups: { todos: unknown[] }[] };
 		}>;
-		expect(listed.details.plan.todos).toHaveLength(1);
+		expect(listed.details.plan.groups[0]?.todos).toHaveLength(1);
 
 		const updated = (await run("todo_update", { id, status: "done" }, cwd)) as AgentToolResult<{
 			todo: { status: string };
@@ -82,9 +86,10 @@ test("add → list → update → remove round-trips through the store", async (
 		const removed = await run("todo_remove", { id }, cwd);
 		expect(isError(removed)).toBe(false);
 		const listedAfter = (await run("todo_list", {}, cwd)) as AgentToolResult<{
-			plan: { todos: unknown[] };
+			plan: { todos: unknown[]; groups: unknown[] };
 		}>;
 		expect(listedAfter.details.plan.todos).toHaveLength(0);
+		expect(listedAfter.details.plan.groups).toHaveLength(0);
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });
 	}
@@ -100,25 +105,121 @@ test("todo_update on an unknown id returns an error result", async () => {
 	}
 });
 
-test("todo_write replaces the plan with loose items + named groups", async () => {
+test("todo_write lays out a groups-only plan (no loose lane for the agent)", async () => {
 	const cwd = mkdtempSync(join(tmpdir(), "pi-todos-tools-"));
 	try {
-		await run("todo_add", { title: "old item" }, cwd);
+		await run("todo_add", { title: "old item", group: "Old" }, cwd);
 		const written = (await run(
 			"todo_write",
 			{
-				todos: [{ title: "a", status: "in_progress" }, { title: "b" }],
-				groups: [{ title: "Import", todos: [{ title: "parse" }] }],
+				groups: [
+					{ title: "Import", todos: [{ title: "parse", status: "in_progress" }] },
+					{ title: "Export", todos: [{ title: "serialize" }] },
+				],
 			},
 			cwd,
-		)) as AgentToolResult<{ plan: { todos: { title: string }[]; groups: { title: string }[] } }>;
-		expect(written.details.plan.todos.map((t) => t.title)).toEqual(["a", "b"]);
-		expect(written.details.plan.groups.map((g) => g.title)).toEqual(["Import"]);
-		const listed = (await run("todo_list", {}, cwd)) as AgentToolResult<{
-			plan: { todos: { title: string }[]; groups: { title: string; todos: { title: string }[] }[] };
+		)) as AgentToolResult<{ plan: { todos: unknown[]; groups: { title: string }[] } }>;
+		expect(written.details.plan.todos).toHaveLength(0);
+		expect(written.details.plan.groups.map((g) => g.title)).toEqual(["Import", "Export"]);
+		// The schema no longer offers a loose `todos` param at all.
+		const schema = tools.get("todo_write")?.parameters as { properties?: Record<string, unknown> };
+		expect(Object.keys(schema.properties ?? {})).toEqual(["groups"]);
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
+test("todo_add requires group or after — the agent cannot author loose items", async () => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-todos-tools-"));
+	try {
+		expect(isError(await run("todo_add", { title: "loose?" }, cwd))).toBe(true);
+		expect(isError(await run("todo_add", { title: "orphan", after: "t_nope" }, cwd))).toBe(true);
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
+test("todo_add with after inserts mid-group (after wins over group)", async () => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-todos-tools-"));
+	try {
+		const first = (await run("todo_add", { title: "one", group: "Task" }, cwd)) as AgentToolResult<{
+			todo: { id: string };
 		}>;
-		expect(listed.details.plan.todos.map((t) => t.title)).toEqual(["a", "b"]);
-		expect(listed.details.plan.groups[0]?.todos.map((t) => t.title)).toEqual(["parse"]);
+		await run("todo_add", { title: "three", group: "Task" }, cwd);
+		await run("todo_add", { title: "two", after: first.details.todo.id, group: "Elsewhere" }, cwd);
+		const listed = (await run("todo_list", {}, cwd)) as AgentToolResult<{
+			plan: { groups: { title: string; todos: { title: string }[] }[] };
+		}>;
+		expect(listed.details.plan.groups.map((g) => g.title)).toEqual(["Task"]);
+		expect(listed.details.plan.groups[0]?.todos.map((t) => t.title)).toEqual([
+			"one",
+			"two",
+			"three",
+		]);
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
+function resultText(result: AgentToolResult<unknown>): string {
+	return result.content
+		.map((c) => (c.type === "text" ? c.text : ""))
+		.filter(Boolean)
+		.join("\n");
+}
+
+test("todo_update reports paused items and suggests the next step after done", async () => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-todos-tools-"));
+	try {
+		const a = (await run("todo_add", { title: "step a", group: "Task" }, cwd)) as AgentToolResult<{
+			todo: { id: string };
+		}>;
+		const b = (await run("todo_add", { title: "step b", group: "Task" }, cwd)) as AgentToolResult<{
+			todo: { id: string };
+		}>;
+		await run("todo_update", { id: a.details.todo.id, status: "in_progress" }, cwd);
+
+		// Flipping b to in_progress pauses a — and says so.
+		const flipped = (await run(
+			"todo_update",
+			{ id: b.details.todo.id, status: "in_progress" },
+			cwd,
+		)) as AgentToolResult<{ paused: { id: string }[] }>;
+		expect(flipped.details.paused.map((t) => t.id)).toEqual([a.details.todo.id]);
+		expect(resultText(flipped)).toContain("paused:");
+
+		// Marking b done suggests the next open step (a).
+		const done = await run("todo_update", { id: b.details.todo.id, status: "done" }, cwd);
+		expect(resultText(done)).toContain(`next: ${a.details.todo.id}`);
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
+test("todo_list renders group-first with derived status + progress, and nudges when nothing is in progress", async () => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-todos-tools-"));
+	try {
+		const a = (await run(
+			"todo_add",
+			{ title: "step a", group: "Fix login" },
+			cwd,
+		)) as AgentToolResult<{
+			todo: { id: string };
+		}>;
+		await run("todo_add", { title: "step b", group: "Fix login" }, cwd);
+
+		const idle = await run("todo_list", {}, cwd);
+		expect(resultText(idle)).toContain("▸ Fix login [pending 0/2]");
+		expect(resultText(idle)).toContain("nothing is in_progress");
+
+		await run("todo_update", { id: a.details.todo.id, status: "in_progress" }, cwd);
+		const active = await run("todo_list", {}, cwd);
+		expect(resultText(active)).toContain("▸ Fix login [active 0/2]");
+		expect(resultText(active)).not.toContain("nothing is in_progress");
+
+		await run("todo_update", { id: a.details.todo.id, status: "done" }, cwd);
+		const half = await run("todo_list", {}, cwd);
+		expect(resultText(half)).toContain("▸ Fix login [pending 1/2]");
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });
 	}

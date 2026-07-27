@@ -460,13 +460,25 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 - **Chat TODO plan** — the chat's `pi-todos` list surfaced **only in the chat** (engine:
   [[module-pi-todos]]; host read/write: [[submodule-server-todos]]):
   `useChatTodos` (the `todo.*` data hook — fetch + live `pi.event` refetch + edits + the add-nudge + the
-  `openMarkdown` snapshot action), `TodoList` (loose items + named groups, add-row + an "open as markdown"
-  button), `planMarkdown` (a pure `plan → markdown` compiler), and `ChatPlan` (`ChatPlanStripContent` +
+  `openMarkdown` snapshot action), `planView` (pure derivations: `groupStatus` — **a mirror of
+  `pi-todos/core`'s helper**, since this app may import `contracts` only — plus `groupProgress`,
+  `planSummary`, and `planGlance`), `TodoList` (the **group-first** rendering — group = task: the loose
+  lane — the user's items — first, then groups in plan order, each under a header row with the derived
+  status icon + a done/total badge, the `active` group emphasized; a fully-done group folds into one
+  expandable row; plus the add-row + an "open as markdown" button), `planMarkdown` (a pure `plan →
+  markdown` compiler, `## <group> — n/m` sections), and `ChatPlan` (`ChatPlanStripContent` +
   `ChatPlanContent` — a header strip that opens the plan in a `Popover` over the chat; `ChatView` composes
   the `Popover` anchored to the header, so the popup hangs flush under it at the chat's left edge). There
   is no right-panel Todo tab — the plan lives in the conversation. The "open as markdown" action compiles
   the current plan and opens it as an ephemeral `doc` tab (`store.openDoc`), rendered by the panels'
   `MarkdownPreview` — no file is written to disk.
+  **The glance state** keeps the plan honest as the user's status window: `planGlance(isStreaming,
+  askStates)` — derived from session state in `ChatView`, **never stored**, so the agent can't make it
+  lie — renders the `in_progress` step as working (dot), **waiting for your answer** (`CircleHelp`,
+  when the agent stopped with an awaiting `ask_user_question`), or **paused — waiting for you**
+  (`CirclePause`, any other stop: turn ended, error). The strip shows the same glyph + a short waiting
+  label before the current title; `TodoList` stays props-driven — it receives the resolved glance,
+  never reads the transport.
 
 ## Boundary
 

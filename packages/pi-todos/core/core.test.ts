@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { storeRel, TodoStore } from "./index.ts";
+import { groupStatus, storeRel, type TodoGroup, TodoStore } from "./index.ts";
 
 const SESSION = "sess-test";
 
@@ -55,7 +55,7 @@ test("update flips status and returns undefined for an unknown id", () => {
 	try {
 		const s = store(root);
 		const todo = s.add({ title: "Do a thing" });
-		expect(s.update(todo.id, { status: "in_progress" })?.status).toBe("in_progress");
+		expect(s.update(todo.id, { status: "in_progress" })?.todo.status).toBe("in_progress");
 		expect(s.update("nope", { status: "done" })).toBeUndefined();
 	} finally {
 		rmSync(root, { recursive: true, force: true });
@@ -191,7 +191,7 @@ test("user-authored text is stored verbatim — \\uXXXX is NOT decoded for user 
 		expect(todo.title).toBe("about \\u0041");
 		expect(todo.note).toBe("\\u0042");
 		// A user-origin title stays verbatim through an update too.
-		expect(s.update(todo.id, { title: "still \\u0043" })?.title).toBe("still \\u0043");
+		expect(s.update(todo.id, { title: "still \\u0043" })?.todo.title).toBe("still \\u0043");
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
@@ -203,7 +203,7 @@ test("an empty-string note clears the note", () => {
 		const s = store(root);
 		const todo = s.add({ title: "task", note: "context" });
 		expect(todo.note).toBe("context");
-		expect(s.update(todo.id, { note: "" })?.note).toBeUndefined();
+		expect(s.update(todo.id, { note: "" })?.todo.note).toBeUndefined();
 		expect(store(root).get(todo.id)?.note).toBeUndefined();
 	} finally {
 		rmSync(root, { recursive: true, force: true });
@@ -273,7 +273,7 @@ test("update/remove find items inside a group by id", () => {
 		const s = store(root);
 		const todo = s.add({ title: "grouped", group: "Auth" });
 		expect(s.get(todo.id)?.title).toBe("grouped");
-		expect(s.update(todo.id, { status: "in_progress" })?.status).toBe("in_progress");
+		expect(s.update(todo.id, { status: "in_progress" })?.todo.status).toBe("in_progress");
 		expect(s.remove(todo.id)).toBe(true);
 		expect(s.read().groups).toHaveLength(0); // the emptied group is pruned
 	} finally {
@@ -328,6 +328,114 @@ test("invalid items are dropped and unknown status coerces to pending", () => {
 		const plan = store(root).read();
 		expect(plan.todos).toHaveLength(1);
 		expect(plan.todos[0]?.status).toBe("pending");
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("groupStatus derives the task lifecycle from the steps", () => {
+	const root = tempRoot();
+	try {
+		const s = store(root);
+		const a = s.add({ title: "step 1", group: "Task" });
+		s.add({ title: "step 2", group: "Task" });
+		const g = (): TodoGroup => {
+			const grp = s.read().groups[0];
+			if (!grp) throw new Error("group missing");
+			return grp;
+		};
+		expect(groupStatus(g())).toBe("pending");
+		s.update(a.id, { status: "in_progress" });
+		expect(groupStatus(g())).toBe("active");
+		s.update(a.id, { status: "done" });
+		expect(groupStatus(g())).toBe("pending"); // one done, one pending — not active
+		for (const t of g().todos) s.update(t.id, { status: "done" });
+		expect(groupStatus(g())).toBe("done");
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("add with after inserts right after that item, inheriting its lane", () => {
+	const root = tempRoot();
+	try {
+		const s = store(root);
+		const g1 = s.add({ title: "one", group: "Task" });
+		s.add({ title: "three", group: "Task" });
+		const mid = s.add({ title: "two", after: g1.id, group: "ignored — after wins" });
+		const group = s.read().groups[0];
+		expect(group?.title).toBe("Task");
+		expect(group?.todos.map((t) => t.title)).toEqual(["one", "two", "three"]);
+		expect(mid.status).toBe("pending");
+
+		// Loose lane: after a loose item stays loose.
+		const l1 = s.add({ title: "loose-a", origin: "user" });
+		s.add({ title: "loose-c", origin: "user" });
+		s.add({ title: "loose-b", after: l1.id });
+		expect(s.read().todos.map((t) => t.title)).toEqual(["loose-a", "loose-b", "loose-c"]);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("add with an unknown after id throws (nothing written)", () => {
+	const root = tempRoot();
+	try {
+		const s = store(root);
+		s.add({ title: "existing", group: "Task" });
+		expect(() => s.add({ title: "orphan", after: "t_nope" })).toThrow('No TODO with id "t_nope"');
+		expect(s.list()).toHaveLength(1);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("setting in_progress auto-demotes the previous in_progress and reports it as paused", () => {
+	const root = tempRoot();
+	try {
+		const s = store(root);
+		const a = s.add({ title: "step a", group: "Task" });
+		const b = s.add({ title: "step b", group: "Task" });
+		const loose = s.add({ title: "user ask", origin: "user" });
+		s.update(a.id, { status: "in_progress" });
+
+		const result = s.update(b.id, { status: "in_progress" });
+		expect(result?.todo.status).toBe("in_progress");
+		expect(result?.paused.map((t) => t.id)).toEqual([a.id]);
+		expect(s.get(a.id)?.status).toBe("pending");
+
+		// Demotion spans lanes: a loose in_progress pauses too.
+		s.update(loose.id, { status: "in_progress" });
+		const again = s.update(a.id, { status: "in_progress" });
+		expect(again?.paused.map((t) => t.id)).toEqual([loose.id]);
+
+		// Non-status updates never demote.
+		const rename = s.update(b.id, { title: "step b2" });
+		expect(rename?.paused).toEqual([]);
+		expect(s.get(a.id)?.status).toBe("in_progress");
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("replaceAll keeps only the first in_progress of a fresh plan", () => {
+	const root = tempRoot();
+	try {
+		const s = store(root);
+		const plan = s.replaceAll({
+			todos: [{ title: "loose", status: "in_progress" }],
+			groups: [
+				{
+					title: "Task",
+					todos: [
+						{ title: "one", status: "in_progress" },
+						{ title: "two", status: "in_progress" },
+					],
+				},
+			],
+		});
+		const statuses = [...plan.todos, ...plan.groups.flatMap((g) => g.todos)].map((t) => t.status);
+		expect(statuses).toEqual(["in_progress", "pending", "pending"]);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}

@@ -1,6 +1,8 @@
-import { ChevronDown, ChevronRight, CircleDot } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { PopoverContent } from "@/components/ui/popover";
-import { planSummary, TodoAddRow, TodoRows } from "./TodoList";
+import { cn } from "../lib";
+import { type PlanGlance, planSummary } from "./planView";
+import { glanceIcon, TodoAddRow, TodoRows } from "./TodoList";
 import type { ChatTodos } from "./useChatTodos";
 
 // The chat's TODO plan surfaced inline (SPEC §Chat TODO plan): a strip in the chat header (progress + what's
@@ -10,11 +12,24 @@ import type { ChatTodos } from "./useChatTodos";
 // left edge sits at the chat's left edge and its top hangs flush under the header (see ChatView). These
 // two pieces are the trigger's contents and the popup body.
 
-/** The strip's contents (chevron + "TODO list" + progress + current item). Wrapped by a PopoverTrigger. */
-export function ChatPlanStripContent({ plan, open }: { plan: ChatTodos; open: boolean }) {
+/**
+ * The strip's contents (chevron + "TODO list" + progress + current item). Wrapped by a PopoverTrigger.
+ * The current item follows the glance: working → dot + title; stopped → the waiting glyph + a short
+ * "waiting" label before the title — so the strip says the system waits without opening the chat.
+ */
+export function ChatPlanStripContent({
+	plan,
+	open,
+	glance,
+}: {
+	plan: ChatTodos;
+	open: boolean;
+	glance: PlanGlance;
+}) {
 	if (plan.data === null) return null;
 	const { done, total, current } = planSummary(plan.data);
 	const Chevron = open ? ChevronDown : ChevronRight;
+	const { Icon, label, className } = glanceIcon(glance);
 	return (
 		<>
 			<Chevron className="size-3.5 shrink-0" />
@@ -23,8 +38,13 @@ export function ChatPlanStripContent({ plan, open }: { plan: ChatTodos; open: bo
 				{done}/{total}
 			</span>
 			{current ? (
-				<span className="flex min-w-0 items-center gap-xs text-primary">
-					<CircleDot className="size-3 shrink-0" />
+				<span
+					data-testid="chat-plan-current"
+					data-glance={glance}
+					className={cn("flex min-w-0 items-center gap-xs", className)}
+				>
+					<Icon className="size-3 shrink-0" />
+					{glance !== "working" ? <span className="shrink-0">{label} ·</span> : null}
 					<span className="truncate">{current.title}</span>
 				</span>
 			) : null}
@@ -33,7 +53,7 @@ export function ChatPlanStripContent({ plan, open }: { plan: ChatTodos; open: bo
 }
 
 /** The popup body — the add-row + the plan. Anchored (in ChatView) to the header: flush-left, under it. */
-export function ChatPlanContent({ plan }: { plan: ChatTodos }) {
+export function ChatPlanContent({ plan, glance }: { plan: ChatTodos; glance: PlanGlance }) {
 	if (plan.data === null) return null;
 	const empty = plan.data.todos.length === 0 && plan.data.groups.length === 0;
 	return (
@@ -58,7 +78,7 @@ export function ChatPlanContent({ plan }: { plan: ChatTodos }) {
 						No TODOs yet — the agent adds its plan here, or add one above.
 					</p>
 				) : (
-					<TodoRows plan={plan.data} onRemove={plan.remove} />
+					<TodoRows plan={plan.data} onRemove={plan.remove} glance={glance} />
 				)}
 			</div>
 		</PopoverContent>

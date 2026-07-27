@@ -24,15 +24,28 @@ agent (a `spec` naturally from `spec_create`'s `{path,id}`); `change` artifacts 
 when an item reaches `done` (see `server/src/todos` — the store stays git-free). The on-disk `version` is
 `3`; a `version: 2` file (no `artifacts`) reads cleanly and is upgraded on the next write.
 
+**Group = task.** A group models one user ask; its items are the steps. A group's lifecycle is
+**derived, never stored**: `groupStatus(group)` — all done → `done`, any in_progress → `active`, else
+`pending` — so it can't drift from the steps. The derivation is **mirrored** (not imported) by
+`apps/web`'s `chat/planView.ts` (the web app may import `contracts` only); keep the two in step.
+
+**Linearity invariants** (held structurally): `update` setting `in_progress` auto-demotes every other
+`in_progress` item back to `pending` in the same write and returns them (`TodoUpdateResult.paused`) so
+the change stays visible; `replaceAll` keeps only the **first** `in_progress` of a fresh plan. `add`
+takes `after` (an existing item id) to insert right after that item, **inheriting its lane** — the
+surgical mid-plan insert (`after` wins over `group`; an unknown id throws).
+
 ## Public surface
 
 The `index.ts` barrel:
 - `TodoStore` (constructed per `(root, sessionId)`), `STORE_DIR` / `storeRel`, and the `countItems(plan)`
-  helper.
-- The model types: `Todo`, `TodoGroup`, `TodoPlan`, `TodoFile`, `TodoInput`, `TodoPatch`, `WriteItem`,
-  `WritePlan`, `TodoArtifact`, and the `TodoStatus` / `TodoOrigin` / `TodoArtifactKind` aliases.
-- The `TODO_STATUSES` (`pending | in_progress | done`) and `TODO_ORIGINS` (`agent | user`) tuples — the
-  single source for the tools' param enums. (There is **no** priority concept; priorities were dropped.)
+  + `groupStatus(group)` helpers.
+- The model types: `Todo`, `TodoGroup`, `TodoPlan`, `TodoFile`, `TodoInput`, `TodoPatch`,
+  `TodoUpdateResult`, `WriteItem`, `WritePlan`, `TodoArtifact`, and the `TodoStatus` / `TodoOrigin` /
+  `TodoGroupStatus` / `TodoArtifactKind` aliases.
+- The `TODO_STATUSES` (`pending | in_progress | done`), `TODO_ORIGINS` (`agent | user`), and
+  `TODO_GROUP_STATUSES` (`pending | active | done`, derived-only) tuples — the single source for the
+  tools' param enums. (There is **no** priority concept; priorities were dropped.)
 
 Writes are atomic (temp file + `rename`); a session id is validated as a safe path segment before it
 becomes a filename, and `\uXXXX` escape-decoding is applied to **agent-authored** text only, never the

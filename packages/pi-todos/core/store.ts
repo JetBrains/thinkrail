@@ -20,11 +20,13 @@ import {
 	type TodoArtifact,
 	type TodoFile,
 	type TodoGroup,
+	type TodoGroupStatus,
 	type TodoInput,
 	type TodoOrigin,
 	type TodoPatch,
 	type TodoPlan,
 	type TodoStatus,
+	type TodoUpdateResult,
 	type WritePlan,
 } from "./types.ts";
 
@@ -56,6 +58,17 @@ export function storeRel(sessionId: string): string {
 /** Total item count across loose items + every group. */
 export function countItems(plan: TodoPlan): number {
 	return plan.todos.length + plan.groups.reduce((n, g) => n + g.todos.length, 0);
+}
+
+/**
+ * A group's derived task status — never stored, so it can't drift from the steps: `done` when every
+ * item is done, `active` when any item is in_progress, else `pending`. Mirrored (not imported) by
+ * `apps/web`'s selectors — the web app may depend on `packages/contracts` only; keep the two in step.
+ */
+export function groupStatus(group: TodoGroup): TodoGroupStatus {
+	if (group.todos.length > 0 && group.todos.every((t) => t.status === "done")) return "done";
+	if (group.todos.some((t) => t.status === "in_progress")) return "active";
+	return "pending";
 }
 
 const CURRENT_VERSION = 3 as const;
@@ -230,8 +243,10 @@ export class TodoStore {
 	}
 
 	/**
-	 * Add one item; returns the created Todo. `input.group` (a title) places it in that named group —
-	 * created if new — otherwise it's appended loose.
+	 * Add one item; returns the created Todo. `input.after` (an existing item id) inserts the new item
+	 * right after that item, inheriting its lane (that group, or loose) — the surgical mid-plan insert;
+	 * an unknown id throws. Otherwise `input.group` (a title) places it in that named group — created if
+	 * new — and with neither, it's appended loose.
 	 */
 	add(input: TodoInput): Todo {
 		const todo = makeTodo(
@@ -242,6 +257,15 @@ export class TodoStore {
 			input.artifacts,
 		);
 		const plan = this.read();
+		if (input.after !== undefined) {
+			const lane = [plan.todos, ...plan.groups.map((g) => g.todos)].find((items) =>
+				items.some((t) => t.id === input.after),
+			);
+			if (!lane) throw new Error(`No TODO with id "${input.after}" to insert after.`);
+			lane.splice(lane.findIndex((t) => t.id === input.after) + 1, 0, todo);
+			this.write(plan);
+			return todo;
+		}
 		const groupTitle = input.group ? decodeEscapes(input.group) : undefined;
 		if (groupTitle) {
 			let group = plan.groups.find((g) => g.title === groupTitle);
@@ -257,13 +281,31 @@ export class TodoStore {
 		return todo;
 	}
 
-	/** Apply a partial change to an item; returns the updated Todo, or undefined if the id is unknown. */
-	update(id: string, patch: TodoPatch): Todo | undefined {
+	/**
+	 * Apply a partial change to an item; returns the updated Todo plus any auto-demoted items, or
+	 * undefined if the id is unknown. Setting `in_progress` demotes every *other* in_progress item back
+	 * to `pending` in the same write — the "exactly one in_progress across the plan" invariant is held
+	 * structurally, and the demoted items are returned (`paused`) so the change stays visible.
+	 */
+	update(id: string, patch: TodoPatch): TodoUpdateResult | undefined {
 		const plan = this.read();
-		const todo = [...plan.todos, ...plan.groups.flatMap((g) => g.todos)].find((t) => t.id === id);
+		const all = [...plan.todos, ...plan.groups.flatMap((g) => g.todos)];
+		const todo = all.find((t) => t.id === id);
 		if (!todo) return undefined;
+		const paused: Todo[] = [];
 		if (patch.title !== undefined) todo.title = decodeIfAgent(patch.title, todo.origin);
-		if (patch.status !== undefined) todo.status = patch.status;
+		if (patch.status !== undefined) {
+			todo.status = patch.status;
+			if (patch.status === "in_progress") {
+				for (const other of all) {
+					if (other.id !== id && other.status === "in_progress") {
+						other.status = "pending";
+						other.updatedAt = nowIso();
+						paused.push(other);
+					}
+				}
+			}
+		}
 		if (patch.note !== undefined) {
 			if (patch.note) todo.note = decodeIfAgent(patch.note, todo.origin);
 			else delete todo.note;
@@ -275,7 +317,7 @@ export class TodoStore {
 		}
 		todo.updatedAt = nowIso();
 		this.write(plan);
-		return todo;
+		return { todo, paused };
 	}
 
 	/** Remove an item (loose or grouped); returns whether it existed. Empties out a group left blank. */
@@ -307,6 +349,14 @@ export class TodoStore {
 				makeTodo(w.title, w.status ?? "pending", "agent", w.note, w.artifacts),
 			),
 		}));
+		// Normalize: at most one in_progress in a fresh plan — the first (in loose-then-groups order)
+		// wins, the rest demote to pending, so the invariant holds from the very first write.
+		let seenInProgress = false;
+		for (const t of [...freshLoose, ...freshGroups.flatMap((g) => g.todos)]) {
+			if (t.status !== "in_progress") continue;
+			if (seenInProgress) t.status = "pending";
+			seenInProgress = true;
+		}
 
 		const current = this.read();
 		const keptLoose = current.todos.filter((t) => t.origin === "user" || t.status === "done");

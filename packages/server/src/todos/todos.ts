@@ -51,9 +51,11 @@ export function updateTodo(params: {
 	if (params.status !== undefined) patch.status = params.status;
 	if (params.title !== undefined) patch.title = params.title;
 	if (params.note !== undefined) patch.note = params.note;
-	const todo = storeFor(params.workspaceId, params.sessionId).update(params.id, patch);
-	if (!todo) throw new Error(`No TODO with id "${params.id}".`);
-	return todo;
+	// `update` also returns any auto-demoted (`paused`) items; the wire response stays a bare TodoItem —
+	// the UI re-reads the whole plan on change, so the demotions arrive with the next `todo.list`.
+	const result = storeFor(params.workspaceId, params.sessionId).update(params.id, patch);
+	if (!result) throw new Error(`No TODO with id "${params.id}".`);
+	return result.todo;
 }
 
 /** Remove an item (idempotent — removing an absent id is not an error). */

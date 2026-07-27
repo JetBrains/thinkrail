@@ -20,7 +20,10 @@ converge on the same file with no staleness window.
 Unlike the agent's own tools (which own status), the host's write surface is the **user's** edit lever:
 `todo.add` tags new items `origin: "user"` so the agent's `todo_write` re-plans never drop them, and
 `todo.remove` deletes by id. `todo.update` exists on the wire (accepts status/title/note) but no current
-UI path calls it — status stays agent-owned (see [[module-pi-todos]]).
+UI path calls it — status stays agent-owned (see [[module-pi-todos]]). `updateTodo` unwraps the store's
+`TodoUpdateResult` (`{ todo, paused }` — `paused` = items auto-demoted to keep one `in_progress`); the
+wire response stays a bare `TodoItem` — the UI re-reads the whole plan on change, so demotions arrive
+with the next `todo.list`.
 
 This module does **not** push: a user edit isn't broadcast to other clients. The acting client updates
 optimistically; a second viewer reconciles on the next `pi.event`-driven refetch. Fine for single-owner

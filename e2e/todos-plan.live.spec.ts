@@ -16,18 +16,22 @@ test("the agent maintains the chat's TODO plan live, and picks up a user-added i
 	await page
 		.getByTestId("chat-input")
 		.fill(
-			'Use todo_write to create a TODO plan with exactly two items titled "Alpha" and "Beta". Then do no other work — just mark both done with todo_update.',
+			'Use todo_write to create a TODO plan with one group titled "Demo" containing exactly two items titled "Alpha" and "Beta". Then do no other work — just mark both done with todo_update.',
 		);
 	await page.getByTestId("chat-send").click();
 	await waitForDone(page, 150_000);
 
-	// Open the in-chat plan popup; both items show and reach done on their own (live, no manual refresh).
+	// Open the in-chat plan popup. The plan renders group-first (group = task); once every step is done
+	// the group folds into a single expandable done-row (live, no manual refresh) — expand it to see the
+	// steps.
 	await page.getByTestId("chat-plan-toggle").click();
 	const popover = page.getByTestId("chat-plan-popover");
+	const doneGroup = popover.getByTestId("todo-group-done").filter({ hasText: "Demo" });
+	await expect(doneGroup).toBeVisible({ timeout: 15_000 });
+	await doneGroup.click();
 	await expect(popover.getByTestId("todo-row").filter({ hasText: "Alpha" })).toHaveAttribute(
 		"data-status",
 		"done",
-		{ timeout: 15_000 },
 	);
 	await expect(popover.getByTestId("todo-row").filter({ hasText: "Beta" })).toHaveAttribute(
 		"data-status",
