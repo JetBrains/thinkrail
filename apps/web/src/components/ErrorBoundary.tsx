@@ -40,7 +40,7 @@ export class ErrorBoundary extends Component<Props, State> {
 	}
 
 	override componentDidUpdate(prev: Props): void {
-		if (this.state.error && !keysEqual(prev.resetKeys, this.props.resetKeys)) {
+		if (this.state.error && !shallowEqualArrays(prev.resetKeys, this.props.resetKeys)) {
 			this.reset();
 		}
 	}
@@ -62,9 +62,6 @@ export class ErrorBoundary extends Component<Props, State> {
 		);
 	}
 }
-
-/** Shallow (`Object.is`) equality of two `resetKeys` arrays — a caught error clears only when this returns false. */
-export const keysEqual = shallowEqualArrays;
 
 /** Themed, self-contained fallback — token utilities only, so it wears any theme. */
 function PanelErrorFallback({

@@ -129,7 +129,8 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   contract in `DiffPane`. The transient **`rightTabRequest`** +
   **`requestRightTab(workspaceId, tab)`** are the ONE intent for "show a right-panel view" (`RightPanelTab`
   lives here, since the intent does): `RightPanel` watches that single field instead of inferring a flip from
-  each path request, which is what lets a divider chip reveal a view while merely expanding its own artifact
+  each path request, and **consumes** it (`clearRightTabRequest`) — an unconsumed flip would re-fire on every
+  re-activation of the workspace, moving the tab the user has since chosen; which is what lets a divider chip reveal a view while merely expanding its own artifact
   list — no path picked yet. The transient **`changesRequest`** +
   **`requestChangesView(workspaceId, path)`** are a UI deep-link intent (a chat turn-divider asking the
   right panel to surface a file in its Changes view — **highlight the row**, without
@@ -175,7 +176,9 @@ paths only; opened by `ChangesPanel`). The transient **`chatLocationRequest`** �
   `SessionRuntime` types. (Chat *render* types + renderers live in the `chat` module.) The pure context
   selectors in `selectors.ts` resolve the active `Workspace`, its owning project id, and the shell's context
   project from those canonical ids and collections; derived active-project state is never stored separately.
-- **Public surface (barrel):** `useAppStore`; `selectActiveWorkspace`,
+- **Public surface (barrel):** `useAppStore`; `selectActiveWorkspace`, `selectWorkspaceById` (the
+  one lookup for "the workspace with this id" — `selectActiveWorkspace` is it applied to the active id, and
+  `openFileInTab`/`ChatView` read the worktree root through it),
   `selectActiveWorkspaceProjectId`, `selectHistoryTarget` + `HistoryTarget` (the shell's `Ctrl+R` routing
   target: the active chat tab, or the workspace's newest chat when a file/diff/doc tab is active),
   `selectContextProject`, `selectSkillsStale`, `selectWorkspaceTick` (the

@@ -1,7 +1,8 @@
 import { Pencil } from "lucide-react";
+import { projectRelativePath } from "@/lib";
 import type { ToolRenderProps } from "../toolRegistry";
 import { Collapsible } from "./Collapsible";
-import { projectRelativePath, resultText, strArg } from "./toolHelpers";
+import { resultText, strArg } from "./toolHelpers";
 
 /** Body for the `edit` tool: a simple removed/added line diff. */
 export function EditCard({ args, result, status, workspaceRoot }: ToolRenderProps) {

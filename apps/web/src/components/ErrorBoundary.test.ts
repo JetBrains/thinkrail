@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { isChunkLoadError, keysEqual } from "./ErrorBoundary";
+import { shallowEqualArrays } from "../lib";
+import { isChunkLoadError } from "./ErrorBoundary";
 
 test("classifies failed dynamic imports (stale Vite chunk / 504) as chunk-load errors", () => {
 	expect(
@@ -25,25 +26,14 @@ test("tolerates non-Error throwables", () => {
 	expect(isChunkLoadError(undefined)).toBe(false);
 });
 
-// `keysEqual` gates auto-recovery: a caught error clears only when the resetKeys array changes
-// (wired to workspace/tab id), so a stale key must read as equal and a changed one as unequal.
+// `resetKeys` gate auto-recovery: a caught error clears only when the array changes (it is wired to the
+// workspace/tab id), so a stale key must keep the fallback up and a changed one must drop it. The
+// comparison itself is `lib`'s `shallowEqualArrays`, tested there — this pins the boundary's *use* of it.
 test("resetKeys recovery: equal keys keep the error, a changed key clears it", () => {
-	// A changed value in the array → not equal → boundary resets and re-renders children.
-	expect(keysEqual(["ws-1"], ["ws-2"])).toBe(false);
-	expect(keysEqual([1, "tab-a"], [1, "tab-b"])).toBe(false);
-	// Same values (even across distinct array instances) → equal → error stays until identity changes.
-	expect(keysEqual(["ws-1"], ["ws-1"])).toBe(true);
-	const same: readonly unknown[] = ["ws-1"];
-	expect(keysEqual(same, same)).toBe(true);
-});
-
-test("resetKeys recovery: undefined and length changes are handled", () => {
-	expect(keysEqual(undefined, undefined)).toBe(true); // no resetKeys on either side → never auto-resets
-	expect(keysEqual(undefined, ["ws-1"])).toBe(false);
-	expect(keysEqual(["ws-1"], undefined)).toBe(false);
-	expect(keysEqual([], [])).toBe(true);
-	expect(keysEqual(["ws-1"], ["ws-1", "ws-2"])).toBe(false);
-	// `Object.is` semantics: NaN equals NaN, +0 ≠ -0.
-	expect(keysEqual([Number.NaN], [Number.NaN])).toBe(true);
-	expect(keysEqual([0], [-0])).toBe(false);
+	expect(shallowEqualArrays(["ws-1"], ["ws-2"])).toBe(false); // navigated → reset and re-render children
+	expect(shallowEqualArrays([1, "tab-a"], [1, "tab-b"])).toBe(false);
+	// Same values across distinct array instances → equal → the error stays until the id really changes.
+	expect(shallowEqualArrays(["ws-1"], ["ws-1"])).toBe(true);
+	// A boundary mounted without `resetKeys` never auto-resets.
+	expect(shallowEqualArrays(undefined, undefined)).toBe(true);
 });

@@ -1,8 +1,9 @@
 import { FileText } from "lucide-react";
+import { projectRelativePath } from "@/lib";
 import type { ToolRenderProps } from "../toolRegistry";
 import { CodeBlock } from "./CodeBlock";
 import { Collapsible, countLines } from "./Collapsible";
-import { languageFromPath, numArg, projectRelativePath, resultText, strArg } from "./toolHelpers";
+import { languageFromPath, numArg, resultText, strArg } from "./toolHelpers";
 
 /** Body for the `read` tool: file path + optional line range + highlighted content. */
 export function ReadCard({ args, result, status, workspaceRoot }: ToolRenderProps) {

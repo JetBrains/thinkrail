@@ -1,9 +1,7 @@
 // Pure helpers shared by the built-in tool renderers: pull text out of an `unknown` tool result, read
 // args defensively, and infer a shiki language from a file path. Kept tiny + side-effect-free so the
-// renderers stay small and these are unit-testable on their own. Path *primitives* (normalize, absolute?)
-// come from `lib`, which is where every module's path predicates share one definition.
-
-import { isAbsolutePath, normalizePath } from "@/lib";
+// renderers stay small and these are unit-testable on their own. Path helpers (normalize, absolute?,
+// worktree-relative display) live in `lib` — one definition for every module that touches a path.
 
 /** Best-effort plain text from a tool's `result` (an AgentToolResult-shaped value, typed `unknown`). */
 export function resultText(result: unknown): string {
@@ -38,32 +36,6 @@ export function strArg(args: Record<string, unknown>, key: string): string {
 export function numArg(args: Record<string, unknown>, key: string): number | null {
 	const v = args[key];
 	return typeof v === "number" ? v : null;
-}
-
-/** The last path segment, e.g. "/a/b/App.tsx" -> "App.tsx". */
-function fileName(path: string): string {
-	const parts = normalizePath(path).split("/").filter(Boolean);
-	return parts.at(-1) ?? path;
-}
-
-function trimTrailingSlashes(path: string): string {
-	return path.replace(/\/+$/, "");
-}
-
-/**
- * Display a file path relative to the workspace/project root when possible. Tool args may already be
- * relative; absolute paths are trimmed only when the host-provided root matches.
- */
-export function projectRelativePath(path: string, workspaceRoot?: string | undefined): string {
-	const normalized = normalizePath(path).replace(/^\.\/+/, "");
-	if (!normalized || !isAbsolutePath(normalized)) return normalized;
-
-	const root = workspaceRoot ? trimTrailingSlashes(normalizePath(workspaceRoot)) : "";
-	if (root && (normalized === root || normalized.startsWith(`${root}/`))) {
-		return normalized.slice(root.length).replace(/^\/+/, "") || fileName(normalized);
-	}
-
-	return normalized;
 }
 
 /** A shiki language id inferred from a file extension (falls back to "" -> plain text). */

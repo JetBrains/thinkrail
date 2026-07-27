@@ -454,7 +454,9 @@ interface AppState {
 	 * watches this ONE field, so "flip to a view" is a single concept rather than a side effect read off
 	 * each path intent below — a chip that only *reveals* a view (expanding its artifact list) needs no path
 	 * at all. Workspace-scoped, so a request from another workspace's chat can't move the active panel; a
-	 * fresh object each call so identical re-requests still fire.
+	 * fresh object each call so identical re-requests still fire, and **consumed** by the panel that obeys it
+	 * (`clearRightTabRequest`) — an unconsumed flip would re-fire whenever the workspace is re-activated,
+	 * moving the tab the user has since chosen.
 	 */
 	rightTabRequest: { workspaceId: string; tab: RightPanelTab } | null;
 	/**
@@ -687,6 +689,8 @@ interface AppState {
 	requestSpecView: (workspaceId: string, path: string) => void;
 	/** Drop the spec deep-link once a panel has acted on it (it opens a tab — it must fire exactly once). */
 	clearSpecRequest: () => void;
+	/** Drop the view request once the panel has flipped, so re-activating a workspace can't replay it. */
+	clearRightTabRequest: () => void;
 	/** Record a workspace's fetched spec-graph snapshot (`useWorkspaceSpecs`' read lands here). */
 	setWorkspaceSpecs: (workspaceId: string, nodes: SpecGraphNode[]) => void;
 	/** Enqueue a toast; returns its id so a caller can dismiss it early. An identical live toast (same
@@ -1387,6 +1391,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	requestSpecView: (workspaceId, path) =>
 		set({ specRequest: { workspaceId, path }, rightTabRequest: { workspaceId, tab: "specs" } }),
 	clearSpecRequest: () => set({ specRequest: null }),
+	clearRightTabRequest: () => set({ rightTabRequest: null }),
 	setWorkspaceSpecs: (workspaceId, nodes) =>
 		set((s) =>
 			sameSpecGraph(s.specsByWorkspace[workspaceId], nodes)

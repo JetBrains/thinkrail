@@ -19,7 +19,9 @@ export function RightPanel() {
 	// by the chat deep-links too), so the flip is decided in a single place rather than inferred from each
 	// path request — and a chip that only reveals its own artifact list needs no path to do it.
 	useEffect(() => {
-		if (rightTabRequest?.workspaceId === activeWorkspaceId) setTab(rightTabRequest.tab);
+		if (rightTabRequest?.workspaceId !== activeWorkspaceId) return;
+		setTab(rightTabRequest.tab);
+		useAppStore.getState().clearRightTabRequest(); // one flip per request; never replayed on re-activation
 	}, [rightTabRequest, activeWorkspaceId]);
 
 	return (

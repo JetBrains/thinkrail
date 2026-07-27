@@ -1,5 +1,5 @@
 import type { Project, SpecGraphNode, Workspace } from "@thinkrail/contracts";
-import { isAbsolutePath, normalizePath } from "@/lib";
+import { isAbsolutePath, normalizePath } from "../lib";
 import type { EditorTab } from "./appStore";
 
 interface ActiveWorkspaceState {
@@ -22,9 +22,16 @@ export function isDefaultWorkspace(workspace: Pick<Workspace, "kind">): boolean 
 
 /** Resolve the active workspace from the project-grouped collection without duplicating it in state. */
 export function selectActiveWorkspace(state: ActiveWorkspaceState): Workspace | null {
-	if (!state.activeWorkspaceId) return null;
+	return state.activeWorkspaceId ? selectWorkspaceById(state, state.activeWorkspaceId) : null;
+}
+
+/** The workspace with this id, wherever it sits in the project-grouped collection. */
+export function selectWorkspaceById(
+	state: ActiveWorkspaceState,
+	workspaceId: string,
+): Workspace | null {
 	for (const workspaces of Object.values(state.workspaces)) {
-		const workspace = workspaces.find((candidate) => candidate.id === state.activeWorkspaceId);
+		const workspace = workspaces.find((candidate) => candidate.id === workspaceId);
 		if (workspace) return workspace;
 	}
 	return null;

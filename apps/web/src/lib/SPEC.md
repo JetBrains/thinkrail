@@ -28,7 +28,7 @@ Tiny UI helpers shared across components.
   CSS-variable registration. It is imported per-file (`@/lib/highlighter`) from lazy chunks only; theme
   identity/palettes never live in `lib`.
 - **Public surface (barrel):** `cn`, `isMarkdownPath`, `stripFrontmatter`, `cssColorToHex`,
-  `normalizePath`, `isAbsolutePath`, `shallowEqualArrays`.
+  `normalizePath`, `isAbsolutePath`, `projectRelativePath`, `shallowEqualArrays`.
 - **Allowed deps:** `clsx`, `tailwind-merge`; `shiki`/`@shikijs/*` (the per-file shiki modules only —
   never reachable through the barrel).
 - **Forbidden:** every app-internal module — this is a leaf.

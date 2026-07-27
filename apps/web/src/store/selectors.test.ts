@@ -185,6 +185,9 @@ test("matchesWorktreePath accepts the relative form and an absolute report, anch
 	// Anchored: a sibling whose name merely ends with the entry must not match.
 	expect(matchesWorktreePath("/wt/src/a-foo.ts", "src/foo.ts")).toBe(false);
 	expect(matchesWorktreePath("src/other.ts", "src/foo.ts")).toBe(false);
+	// A `./`-prefixed report is the same file (the old suffix rule absorbed the prefix by accident; the
+	// anchored rule would drop it, so `normalizePath` strips it for every predicate).
+	expect(matchesWorktreePath("./src/foo.ts", "src/foo.ts")).toBe(true);
 });
 
 test("matchesWorktreePath does not let a RELATIVE report match a shorter entry by suffix", () => {

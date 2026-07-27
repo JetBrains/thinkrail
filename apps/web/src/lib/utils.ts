@@ -12,12 +12,14 @@ export function isMarkdownPath(path: string): boolean {
 }
 
 /**
- * Path separators as one form (`/`). Every path the app compares or displays arrives from a pi tool call or
- * the host, either of which may use the platform's separator — so normalizing is the first step of any path
- * predicate here, and it lives once for all of them.
+ * One canonical form for a path: `/` separators and no leading `./`. Every path the app compares or displays
+ * arrives from a pi tool call or the host, either of which may use the platform's separator and may prefix a
+ * relative path with `./` — so normalizing is the first step of any path predicate here, and it lives once
+ * for all of them. The `./` strip matters to *comparison*, not just display: without it a reported
+ * `./src/foo.ts` matches neither the entry `src/foo.ts` nor any spec-graph node.
  */
 export function normalizePath(path: string): string {
-	return path.replaceAll("\\", "/");
+	return path.replaceAll("\\", "/").replace(/^\.\/+/, "");
 }
 
 /** Posix or Windows absolute path — the two forms a tool call's `path` argument can arrive in. */
@@ -38,6 +40,37 @@ export function shallowEqualArrays(
 	if (a === b) return true;
 	if (!a || !b || a.length !== b.length) return false;
 	return a.every((value, i) => Object.is(value, b[i]));
+}
+
+/** The last path segment, e.g. "/a/b/App.tsx" -> "App.tsx". */
+function fileName(path: string): string {
+	const parts = normalizePath(path).split("/").filter(Boolean);
+	return parts.at(-1) ?? path;
+}
+
+function trimTrailingSlashes(path: string): string {
+	return path.replace(/\/+$/, "");
+}
+
+/**
+ * A file path as the app addresses it: **worktree-relative** when the given root matches, else the
+ * normalized input. Tool args may already be relative; absolute ones are trimmed only when the
+ * host-provided root prefixes them.
+ *
+ * This is both the display form (tool cards, the turn divider's artifact list) and the **tab identity**
+ * (`openFileInTab` keys tabs by it), so one file can never end up under two ids — which is why it belongs
+ * here rather than in any one consumer.
+ */
+export function projectRelativePath(path: string, workspaceRoot?: string | undefined): string {
+	const normalized = normalizePath(path); // already strips a leading `./`
+	if (!normalized || !isAbsolutePath(normalized)) return normalized;
+
+	const root = workspaceRoot ? trimTrailingSlashes(normalizePath(workspaceRoot)) : "";
+	if (root && (normalized === root || normalized.startsWith(`${root}/`))) {
+		return normalized.slice(root.length).replace(/^\/+/, "") || fileName(normalized);
+	}
+
+	return normalized;
 }
 
 let colorCanvas: CanvasRenderingContext2D | null | undefined;

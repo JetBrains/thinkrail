@@ -10,14 +10,13 @@ import {
 	Wrench,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { cn } from "@/lib";
+import { cn, projectRelativePath } from "@/lib";
 import { ActivityGroup } from "./ActivityGroup";
 import { useSelection } from "./foldState";
 import { Markdown } from "./Markdown";
 import type { ChatRow, TurnDividerData } from "./rows";
 import { ToolCard } from "./ToolCard";
 import { getToolChrome, getToolRenderer } from "./toolRegistry";
-import { projectRelativePath } from "./tools/toolHelpers";
 
 /**
  * Render one derived chat row (see `rows.ts` — the transcript renders rows, not raw turns, so routine
@@ -233,8 +232,8 @@ function formatElapsed(ms: number): string {
  * described once instead of being spelled out in parallel across chip and list.
  */
 interface ArtifactGroup {
-	/** Selection key — also the chip's testid, and what makes the two sides mutually exclusive. */
-	testid: string;
+	/** Which side this is: the selection key, and the stem of the chip's testid + the list's element id. */
+	id: "specs" | "files";
 	icon: typeof FileText;
 	paths: string[];
 	/** Chip text for a count — each group owns its own singular/plural. */
@@ -260,16 +259,26 @@ interface ArtifactGroup {
  * can't silently surface just the first one. Selection rides `useSelection`, so it survives virtualization
  * and streaming re-derivation like every other fold in the transcript.
  */
-function ArtifactChip({ group, onSelect }: { group: ArtifactGroup; onSelect: () => void }) {
-	const { testid, icon: Icon, paths, label, expanded, onOpen, reveal } = group;
+function ArtifactChip({
+	group,
+	listId,
+	onSelect,
+}: {
+	group: ArtifactGroup;
+	/** The list this chip discloses, so assistive tech can follow the pair. */
+	listId: string;
+	onSelect: () => void;
+}) {
+	const { id, icon: Icon, paths, label, expanded, onOpen, reveal } = group;
 	const many = paths.length > 1;
 	const first = paths[0];
 	return (
 		<button
 			type="button"
-			data-testid={testid}
+			data-testid={`turn-divider-${id}`}
 			data-expanded={many && expanded ? true : undefined}
 			aria-expanded={many ? expanded : undefined}
+			aria-controls={many && expanded ? listId : undefined}
 			onClick={() => {
 				if (!many) {
 					if (first) onOpen(first); // its own deep link already reveals the owning view
@@ -304,14 +313,17 @@ function ArtifactChip({ group, onSelect }: { group: ArtifactGroup; onSelect: () 
  */
 function ArtifactList({
 	group,
+	listId,
 	workspaceRoot,
 }: {
 	group: ArtifactGroup;
+	listId: string;
 	workspaceRoot?: string | undefined;
 }) {
-	const { testid, icon: Icon, paths, onOpen } = group;
+	const { id, icon: Icon, paths, onOpen } = group;
+	const testid = `turn-divider-${id}`;
 	return (
-		<ul data-testid={`${testid}-list`} className="flex flex-col">
+		<ul id={listId} data-testid={`${testid}-list`} className="flex flex-col">
 			{paths.map((path) => (
 				<li key={path}>
 					<button
@@ -365,20 +377,20 @@ export function TurnDivider({
 	const [selected, select] = useSelection(`${id}:artifacts`);
 	const sides: ArtifactGroup[] = [
 		{
-			testid: "turn-divider-specs",
+			id: "specs",
 			icon: FileText,
 			paths: specs,
 			label: (n) => `${n} ${n === 1 ? "spec" : "specs"}`,
-			expanded: selected === "turn-divider-specs",
+			expanded: selected === "specs",
 			onOpen: onOpenSpec,
 			reveal: () => onReveal("specs"),
 		},
 		{
-			testid: "turn-divider-files",
+			id: "files",
 			icon: FileDiff,
 			paths: changedFiles,
 			label: (n) => `${n} ${n === 1 ? "file changed" : "files changed"}`,
-			expanded: selected === "turn-divider-files",
+			expanded: selected === "files",
 			onOpen: onOpenChange,
 			reveal: () => onReveal("changes"),
 		},
@@ -400,7 +412,12 @@ export function TurnDivider({
 					</span>
 				) : null}
 				{groups.map((group) => (
-					<ArtifactChip key={group.testid} group={group} onSelect={() => select(group.testid)} />
+					<ArtifactChip
+						key={group.id}
+						group={group}
+						listId={`${id}-${group.id}-list`}
+						onSelect={() => select(group.id)}
+					/>
 				))}
 				{elapsedMs != null && elapsedMs >= 1000 ? (
 					<span className="flex items-center gap-xs">
@@ -413,7 +430,12 @@ export function TurnDivider({
 			{groups
 				.filter((group) => group.paths.length > 1 && group.expanded)
 				.map((group) => (
-					<ArtifactList key={group.testid} group={group} workspaceRoot={workspaceRoot} />
+					<ArtifactList
+						key={group.id}
+						group={group}
+						listId={`${id}-${group.id}-list`}
+						workspaceRoot={workspaceRoot}
+					/>
 				))}
 		</div>
 	);

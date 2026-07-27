@@ -352,8 +352,10 @@ a project picker, the prompt hero, and the reused
   file's row (resolved with `matchesWorktreePath` against `git.status`) — deliberately without opening its
   diff tab; the diff opens only on the user's explicit click, so a chat chip never steals the center area.
   `SpecsPanel` watches **`specRequest`** (the "N specs" chip) and **opens the rendered spec**
-  (`openFileInTab`, resolving the reported path through the graph, falling
-  back to the raw request for a spec created seconds ago) — a spec has nothing to preview short of its
+  (`openFileInTab`, which canonicalizes the reported path — pi may report it absolute or `./`-prefixed — to
+  the worktree-relative **tab identity**, so a deep link can never open a second tab for a file already open
+  under its relative path; that lives in the choke point, not in each caller, and it means a spec created
+  seconds ago and not yet in the graph opens just the same) — a spec has nothing to preview short of its
   content, and the tree row lights up on its own since rows key off the active tab id. That intent is
   **consumed** (`clearSpecRequest`) once handled: unlike the highlight-only Changes link, it opens a center
   tab, so replaying it on a remount or a graph refetch would yank the user's tab back mid-edit. Two intents, two

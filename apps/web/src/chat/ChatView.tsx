@@ -15,6 +15,7 @@ import {
 	EMPTY_RUNTIME,
 	SettingsSection,
 	selectSkillsStale,
+	selectWorkspaceById,
 	specPathMatcher,
 	toast,
 	useAppStore,
@@ -137,13 +138,9 @@ export default function ChatView({
 	// reload. Store-derived per session, so the badge survives tab-switch remounts (a fresh ChatView reads
 	// the same store state) and a reload clears only this chat (see selectSkillsStale / markSkillsSynced).
 	const skillsStale = useAppStore((s) => selectSkillsStale(s, workspaceId, sessionId));
-	const workspaceRoot = useAppStore((s) => {
-		for (const workspaces of Object.values(s.workspaces)) {
-			const workspace = workspaces.find((w) => w.id === workspaceId);
-			if (workspace) return workspace.worktreePath;
-		}
-		return undefined;
-	});
+	const workspaceRoot = useAppStore(
+		(s) => selectWorkspaceById(s, workspaceId)?.worktreePath ?? undefined,
+	);
 	// The raw record is a stable reference from zustand's perspective (unlike a fresh object/array
 	// literal, which would re-render this view on every unrelated store update); the workspaceId →
 	// display-name map the history overlay's cross-workspace chip needs is derived below in a `useMemo`.

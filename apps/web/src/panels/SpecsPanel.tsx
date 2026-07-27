@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "../lib";
-import { matchesWorktreePath, useAppStore } from "../store";
+import { useAppStore } from "../store";
 import { openFileInTab } from "./openFile";
 import { buildSpecTree, type SpecTreeNode, specRoleLabel, specRoleTag } from "./specTree";
 
@@ -39,18 +39,13 @@ export function SpecsPanel({
 	const specRequest = useAppStore((s) => s.specRequest);
 
 	// A chat deep-link targeting this workspace: open the requested spec as a rendered doc tab, then clear
-	// the request. The path arrives as pi reported it (possibly absolute), so it resolves through the graph
-	// to the worktree-relative path the fs read wants — read via `getState` rather than the subscribed
-	// `nodes`, keeping the graph out of the deps so a refetch can't re-fire the open.
+	// the request. The path arrives as pi reported it (possibly absolute) — `openFileInTab` canonicalizes it
+	// to the worktree-relative tab identity, so no graph lookup is needed here (and a spec created seconds
+	// ago, not yet in the snapshot, opens just the same).
 	useEffect(() => {
 		if (specRequest?.workspaceId !== workspaceId) return;
-		const want = specRequest.path;
-		const store = useAppStore.getState();
-		const known = store.specsByWorkspace[workspaceId]?.find((node) =>
-			matchesWorktreePath(want, node.path),
-		);
-		void openFileInTab(workspaceId, known?.path ?? want);
-		store.clearSpecRequest();
+		void openFileInTab(workspaceId, specRequest.path);
+		useAppStore.getState().clearSpecRequest();
 	}, [specRequest, workspaceId]);
 
 	const roots = useMemo(() => (nodes ? buildSpecTree(nodes) : null), [nodes]);
