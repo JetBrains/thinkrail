@@ -1,11 +1,12 @@
 import type { GitStatus } from "@thinkrail/contracts";
 import { useEffect, useState } from "react";
-import { matchesWorktreePath, useAppStore } from "../store";
+import { matchesWorktreePath, selectWorkspaceTick, useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { ChangesTree } from "./ChangesTree";
 import { diffTabId, isDiffTabId, statusNameClass } from "./changesModel";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { ToggleSegment } from "./ToggleSegment";
+import { useWorkspaceRead } from "./useWorkspaceRead";
 
 /**
  * Changes for the active worktree: the changed-file list (vs base). Clicking a file opens (or focuses)
@@ -22,31 +23,18 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	const changesRequest = useAppStore((s) => s.changesRequest);
 	const changesView = useAppStore((s) => s.changesView);
 	const setChangesView = useAppStore((s) => s.setChangesView);
-	const fsTick = useAppStore((s) => s.fsChangesByWorkspace[workspaceId]?.tick ?? 0);
 	const activeTabId = useAppStore((s) => s.activeTabByWorkspace[workspaceId] ?? null);
 
-	// Hard reset only on workspace switch — a tick refresh keeps the old list until the re-read lands.
-	// biome-ignore lint/correctness/useExhaustiveDependencies: workspaceId is the trigger (reset-on-switch), not a body input
-	useEffect(() => {
-		setStatus(null);
-		setHighlighted(null);
-	}, [workspaceId]);
-
-	// biome-ignore lint/correctness/useExhaustiveDependencies: fsTick is the live-refresh trigger, not a body input
-	useEffect(() => {
-		let cancelled = false;
-		getTransport()
-			.request("git.status", { workspaceId })
-			.then((s) => {
-				if (!cancelled) setStatus(s);
-			})
-			.catch(() => {
-				if (!cancelled) setStatus((prev) => prev ?? { branch: "", changes: [] });
-			});
-		return () => {
-			cancelled = true;
-		};
-	}, [workspaceId, fsTick]);
+	// The changed-file list, re-read on the workspace's fs tick; a switch clears the list and its deep-link
+	// highlight, a failed re-read keeps the last good list (a failed first read reads as "no changes").
+	useWorkspaceRead(workspaceId, (id) => getTransport().request("git.status", { workspaceId: id }), {
+		onResult: (result) => setStatus(result),
+		onFailure: () => setStatus((prev) => prev ?? { branch: "", changes: [] }),
+		onSwitch: () => {
+			setStatus(null);
+			setHighlighted(null);
+		},
+	});
 
 	// Open (or focus) the file's Monaco diff tab in the center.
 	const openDiff = async (path: string) => {
@@ -65,7 +53,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 			const name = path.split("/").pop() || path;
 			// Stamp the workspace's current fs tick: the contents are fresh as of now, so DiffPane's live
 			// re-read only fires for ticks arriving AFTER this open.
-			const loadedTick = useAppStore.getState().fsChangesByWorkspace[workspaceId]?.tick ?? 0;
+			const loadedTick = selectWorkspaceTick(useAppStore.getState(), workspaceId);
 			useAppStore
 				.getState()
 				.openTab({ kind: "diff", id, workspaceId, path, name, original, modified, loadedTick });

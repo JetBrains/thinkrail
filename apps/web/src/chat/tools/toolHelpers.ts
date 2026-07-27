@@ -1,6 +1,9 @@
 // Pure helpers shared by the built-in tool renderers: pull text out of an `unknown` tool result, read
 // args defensively, and infer a shiki language from a file path. Kept tiny + side-effect-free so the
-// renderers stay small and these are unit-testable on their own.
+// renderers stay small and these are unit-testable on their own. Path *primitives* (normalize, absolute?)
+// come from `lib`, which is where every module's path predicates share one definition.
+
+import { isAbsolutePath, normalizePath } from "@/lib";
 
 /** Best-effort plain text from a tool's `result` (an AgentToolResult-shaped value, typed `unknown`). */
 export function resultText(result: unknown): string {
@@ -37,10 +40,6 @@ export function numArg(args: Record<string, unknown>, key: string): number | nul
 	return typeof v === "number" ? v : null;
 }
 
-function normalizePath(path: string): string {
-	return path.replaceAll("\\", "/");
-}
-
 /** The last path segment, e.g. "/a/b/App.tsx" -> "App.tsx". */
 function fileName(path: string): string {
 	const parts = normalizePath(path).split("/").filter(Boolean);
@@ -49,10 +48,6 @@ function fileName(path: string): string {
 
 function trimTrailingSlashes(path: string): string {
 	return path.replace(/\/+$/, "");
-}
-
-function isAbsolutePath(path: string): boolean {
-	return path.startsWith("/") || /^[A-Za-z]:\//.test(path);
 }
 
 /**

@@ -282,11 +282,23 @@ a project picker, the prompt hero, and the reused
 
 - `RightPanel` tabs are **Specs | All files | Changes** (Specs leftmost and the **default** — specs are
   the project's ground truth, so the rail leads with them).
-- **Live refresh (the worktree panels follow the disk).** `FileTree` / `ChangesPanel` / `SpecsPanel` /
-  `FilePane` watch the store's `fsChangesByWorkspace` tick for their workspace (fed by the host's
-  debounced `workspace.fsChanged` push — see [[submodule-server-watch]]) and silently refetch through
-  the same read methods they mount with — agent edits, terminal commands, and Finder changes all land
-  without a manual step. Refetches **preserve view state**: `FileTree` re-reads the root + every
+- **Live refresh (the worktree panels follow the disk).** Every workspace-scoped read goes through one
+  hook — **`useWorkspaceRead(workspaceId, read, handlers) → { reload }`** — which owns *when* to read
+  (workspace change, that workspace's `fsChangesByWorkspace` tick, or `reload()` for a manual Refresh) while
+  the caller owns *what to do* with the outcome (`onResult` / `onFailure` / `onSwitch`). Centralized because
+  each site was otherwise re-implementing the **stale-response guard**: an answer in flight when the caller
+  moves on must not land in the new workspace's view (reads are generation-stamped — latest wins, abandoned
+  ones stay silent). A `null` workspaceId reads nothing, which is also how a *paused* read is expressed (a
+  collapsed `FileTree` dir), so no tick has to be threaded down as a prop.
+  Its users — `FileTree` (root + each expanded dir), `ChangesPanel` (`git.status`), `useWorkspaceSpecs`
+  (`spec.graph`) — plus `FilePane`/`DiffPane`, which follow the same tick contract per open tab. Agent edits,
+  terminal commands, and Finder changes all land without a manual step.
+  Three shapes keep its effect's dependency list **honest** (no exhaustive-deps exemption anywhere in it):
+  the fs tick is consumed as an **event** (`useAppStore.subscribe`) rather than selected into the component —
+  so it triggers a re-read without being a render input, and consumers stop re-rendering on unrelated
+  worktree churn; the **reset is the effect's cleanup**, which closes over the workspace being *left* (the id
+  a reset actually needs — a plain effect keyed on `workspaceId` runs with the *new* id already in scope);
+  and a manual refresh is an **imperative `reload()`**, not a nonce dependency. Refetches **preserve view state**: `FileTree` re-reads the root + every
   expanded dir (rows keyed by path; vanished dirs drop out via their parent), `ChangesPanel` re-reads
   `git.status` (list-only — the diff renders in the center tab, not under the list), `SpecsPanel`
   refetches without remounting (expansion survives), and `FilePane`/`DiffPane` re-read an
@@ -307,7 +319,8 @@ a project picker, the prompt hero, and the reused
   Changes stops the graph tracking the worktree, and every spec the agent writes gets counted as a changed
   file (the split silently undone by a tab selection). Being keyed per workspace, a switch shows that
   workspace's last known tree while the re-read is in flight (there is nothing to reset), and the failed-read
-  flag is workspace-scoped so it can't leak a hint over a sibling's good tree.
+  flag is workspace-scoped so it can't leak a hint over a sibling's good tree. It returns `{ failed, reload }`
+  — the header's Refresh calls `reload` directly, so no refresh counter has to be held in panel state.
 - `SpecsPanel` is the read-only spec-graph viewer — a pure reader of that snapshot. One fetch per
   workspace-activation, refetched on the fs tick, plus a header **Refresh** button re-fetching on demand (the
   manual escape hatch if the host's watcher degraded; the host side revalidates per read), rendered as

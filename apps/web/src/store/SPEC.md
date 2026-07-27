@@ -190,7 +190,9 @@ paths only; opened by `ChangesPanel`). The transient **`chatLocationRequest`** â
   `EMPTY_RUNTIME` (ChatView's pre-creation fallback), `ChatLocationRequest` (type), `reduceSessionEvent`.
 - **Allowed deps:** `contracts` (`Project`/`Workspace`/`Model`/`ThinkingLevel`/`SessionStats`/
   `SlashCommandInfo`/`ExtUiRequest`/`LoginPush`/`WorkspaceFsChangedPayload`/`AppConfig`/`ThemeId`;
-  `DEFAULT_CONFIG` for the pre-welcome default; `PiEvent`/`LoginFrame`, **type-only**); `chat`
+  `DEFAULT_CONFIG` for the pre-welcome default; `PiEvent`/`LoginFrame`, **type-only**); `lib` (the shared
+  path + array primitives â€” `normalizePath`/`isAbsolutePath` for `matchesWorktreePath`, `shallowEqualArrays`
+  for the snapshot-identity guard; a leaf, so the edge adds no cycle); `chat`
   (`ChatTurn`/`ToolResultState`, **type-only**); `auth` (`LoginState`, **type-only**); `transport`
   (`ConnectionStatus`, **type-only**); `zustand`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `panels`/`shell` or transport runtime.

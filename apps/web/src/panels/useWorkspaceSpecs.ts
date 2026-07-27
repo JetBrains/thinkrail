@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
+import { useWorkspaceRead } from "./useWorkspaceRead";
 
 /**
- * Own the active workspace's `spec.graph` snapshot in the store: read it on workspace change, re-read on the
- * workspace's fs tick (the host's debounced `workspace.fsChanged` nudge) and on an explicit `refreshToken`
- * bump (the panel header's Refresh — the escape hatch if the watcher degraded).
+ * Own the active workspace's `spec.graph` snapshot in the store, kept current by `useWorkspaceRead` (so the
+ * re-read triggers and the stale-response guard are the shared ones, not a third copy).
  *
  * It lives in a hook called by the always-mounted `RightPanel`, NOT inside `SpecsPanel`, because the
  * snapshot is app-wide: the chat's turn divider classifies a round's written files as specs with it
@@ -15,33 +15,27 @@ import { getTransport } from "../transport";
  * That is the exact bug the specs/changes split exists to fix, so the fetch has to outlive the tab.
  *
  * Returns whether **this** workspace's read failed — scoped to the id, so a failure can never leak a
- * "couldn't load" hint over a sibling workspace's tree. A failed re-read keeps the last good snapshot; the
- * caller shows the hint only when there is nothing to show.
+ * "couldn't load" hint over a sibling workspace's tree — plus the `reload` behind the panel header's
+ * Refresh. A failed re-read keeps the last good snapshot (the store holds it per workspace, so there is
+ * nothing to reset on a switch); the caller shows the hint only when there is nothing to show.
  */
-export function useWorkspaceSpecs(workspaceId: string | null, refreshToken = 0): boolean {
+export function useWorkspaceSpecs(workspaceId: string | null): {
+	failed: boolean;
+	reload: () => void;
+} {
 	const [failedFor, setFailedFor] = useState<string | null>(null);
-	const fsTick = useAppStore(
-		(s) => (workspaceId ? s.fsChangesByWorkspace[workspaceId]?.tick : 0) ?? 0,
+
+	const { reload } = useWorkspaceRead(
+		workspaceId,
+		(id) => getTransport().request("spec.graph", { workspaceId: id }),
+		{
+			onResult: (result, id) => {
+				useAppStore.getState().setWorkspaceSpecs(id, result.nodes);
+				setFailedFor(null);
+			},
+			onFailure: (id) => setFailedFor(id),
+		},
 	);
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: fsTick + refreshToken are refetch triggers, not body inputs
-	useEffect(() => {
-		if (!workspaceId) return;
-		let cancelled = false;
-		getTransport()
-			.request("spec.graph", { workspaceId })
-			.then((result) => {
-				if (cancelled) return;
-				useAppStore.getState().setWorkspaceSpecs(workspaceId, result.nodes);
-				setFailedFor(null);
-			})
-			.catch(() => {
-				if (!cancelled) setFailedFor(workspaceId);
-			});
-		return () => {
-			cancelled = true;
-		};
-	}, [workspaceId, fsTick, refreshToken]);
-
-	return failedFor !== null && failedFor === workspaceId;
+	return { failed: failedFor !== null && failedFor === workspaceId, reload };
 }

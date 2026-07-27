@@ -11,6 +11,35 @@ export function isMarkdownPath(path: string): boolean {
 	return /\.(md|markdown)$/i.test(path);
 }
 
+/**
+ * Path separators as one form (`/`). Every path the app compares or displays arrives from a pi tool call or
+ * the host, either of which may use the platform's separator — so normalizing is the first step of any path
+ * predicate here, and it lives once for all of them.
+ */
+export function normalizePath(path: string): string {
+	return path.replaceAll("\\", "/");
+}
+
+/** Posix or Windows absolute path — the two forms a tool call's `path` argument can arrive in. */
+export function isAbsolutePath(path: string): boolean {
+	const normalized = normalizePath(path);
+	return normalized.startsWith("/") || /^[A-Za-z]:\//.test(normalized);
+}
+
+/**
+ * Element-wise (`Object.is`) equality of two arrays — the "did this really change?" test shared by the
+ * places that must not treat an equal-but-new array as a change (a re-read's snapshot, an `ErrorBoundary`'s
+ * reset keys). `Object.is` rather than `===` so `NaN` keys compare equal to themselves.
+ */
+export function shallowEqualArrays(
+	a: readonly unknown[] | undefined,
+	b: readonly unknown[] | undefined,
+): boolean {
+	if (a === b) return true;
+	if (!a || !b || a.length !== b.length) return false;
+	return a.every((value, i) => Object.is(value, b[i]));
+}
+
 let colorCanvas: CanvasRenderingContext2D | null | undefined;
 
 function canvasNormalize(color: string): string {

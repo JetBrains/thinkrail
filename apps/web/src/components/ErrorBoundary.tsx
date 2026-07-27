@@ -1,5 +1,6 @@
 import { AlertTriangle, RefreshCw, RotateCcw } from "lucide-react";
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { shallowEqualArrays } from "../lib";
 
 // Our single boundary primitive: contains a panel's render/lazy-import crash to that region instead of unmounting the root (bare gray `--bg-dark`); a rejected lazy `import()` (stale Vite chunk → 504) throws through Suspense into here, and we steer that case to a reload.
 
@@ -62,15 +63,8 @@ export class ErrorBoundary extends Component<Props, State> {
 	}
 }
 
-/** Shallow (`Object.is`) equality of two `resetKeys` arrays — a caught error clears only when this returns false. Pure so it's unit-testable. */
-export function keysEqual(
-	a: readonly unknown[] | undefined,
-	b: readonly unknown[] | undefined,
-): boolean {
-	if (a === b) return true;
-	if (!a || !b || a.length !== b.length) return false;
-	return a.every((value, i) => Object.is(value, b[i]));
-}
+/** Shallow (`Object.is`) equality of two `resetKeys` arrays — a caught error clears only when this returns false. */
+export const keysEqual = shallowEqualArrays;
 
 /** Themed, self-contained fallback — token utilities only, so it wears any theme. */
 function PanelErrorFallback({

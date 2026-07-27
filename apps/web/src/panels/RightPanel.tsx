@@ -11,10 +11,9 @@ export function RightPanel() {
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
 	const rightTabRequest = useAppStore((s) => s.rightTabRequest);
 	const [tab, setTab] = useState<RightPanelTab>("specs");
-	const [specsRefresh, setSpecsRefresh] = useState(0);
 	// Owned here, not in the tab body: the spec graph is app-wide state (the chat classifies its artifacts
 	// with it), and this panel outlives any one tab. See `useWorkspaceSpecs`.
-	const specsFailed = useWorkspaceSpecs(activeWorkspaceId, specsRefresh);
+	const { failed: specsFailed, reload: reloadSpecs } = useWorkspaceSpecs(activeWorkspaceId);
 
 	// Anything outside the panel that wants a view shown raises one intent (`requestRightTab`, carried along
 	// by the chat deep-links too), so the flip is decided in a single place rather than inferred from each
@@ -45,7 +44,7 @@ export function RightPanel() {
 						data-testid="specs-refresh"
 						aria-label="Refresh specs"
 						title="Refresh specs"
-						onClick={() => setSpecsRefresh((n) => n + 1)}
+						onClick={reloadSpecs}
 						className="ml-auto text-hint hover:text-muted"
 					>
 						<RefreshCw className="size-3.5" />

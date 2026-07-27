@@ -1,9 +1,9 @@
 import type { FileNode } from "@thinkrail/contracts";
-import { useEffect, useState } from "react";
-import { useAppStore } from "../store";
+import { useState } from "react";
 import { getTransport } from "../transport";
 import { openFileInTab } from "./openFile";
 import { TreeRow } from "./TreeRow";
+import { useWorkspaceRead } from "./useWorkspaceRead";
 
 /**
  * Lazy file tree of the active worktree. Double-click a file to open it as a center editor tab.
@@ -13,72 +13,47 @@ import { TreeRow } from "./TreeRow";
  */
 export function FileTree({ workspaceId }: { workspaceId: string }) {
 	const [nodes, setNodes] = useState<FileNode[] | null>(null);
-	const fsTick = useAppStore((s) => s.fsChangesByWorkspace[workspaceId]?.tick ?? 0);
 
-	// Hard reset only on workspace switch — a tick refresh keeps the old tree until the re-read lands.
-	// biome-ignore lint/correctness/useExhaustiveDependencies: workspaceId is the trigger (reset-on-switch), not a body input
-	useEffect(() => {
-		setNodes(null);
-	}, [workspaceId]);
-
-	// biome-ignore lint/correctness/useExhaustiveDependencies: fsTick is the live-refresh trigger, not a body input
-	useEffect(() => {
-		let cancelled = false;
-		getTransport()
-			.request("fs.readDir", { workspaceId, path: "." })
-			.then((result) => {
-				if (!cancelled) setNodes(result);
-			})
-			.catch(() => {
-				if (!cancelled) setNodes((prev) => prev ?? []);
-			});
-		return () => {
-			cancelled = true;
-		};
-	}, [workspaceId, fsTick]);
+	// The root listing, re-read on the workspace's fs tick; a switch clears the old tree, a failed re-read
+	// keeps it (and a failed *first* read shows an empty tree rather than a permanent "Loading…").
+	useWorkspaceRead(
+		workspaceId,
+		(id) => getTransport().request("fs.readDir", { workspaceId: id, path: "." }),
+		{
+			onResult: (result) => setNodes(result),
+			onFailure: () => setNodes((prev) => prev ?? []),
+			onSwitch: () => setNodes(null),
+		},
+	);
 
 	if (nodes === null) return <p className="px-xs py-xs text-xs text-hint">Loading…</p>;
 	if (nodes.length === 0) return <p className="px-xs py-xs text-xs text-hint">Empty</p>;
 	return (
 		<ul className="flex flex-col">
 			{nodes.map((node) => (
-				<FileNodeRow key={node.path} node={node} workspaceId={workspaceId} fsTick={fsTick} />
+				<FileNodeRow key={node.path} node={node} workspaceId={workspaceId} />
 			))}
 		</ul>
 	);
 }
 
-function FileNodeRow({
-	node,
-	workspaceId,
-	fsTick,
-}: {
-	node: FileNode;
-	workspaceId: string;
-	fsTick: number;
-}) {
+function FileNodeRow({ node, workspaceId }: { node: FileNode; workspaceId: string }) {
 	const isDir = node.kind === "dir";
 	const [expanded, setExpanded] = useState(false);
 	const [children, setChildren] = useState<FileNode[] | null>(null);
 
-	// An expanded dir (re-)fetches its listing on expansion AND on every fs tick, silently keeping the
-	// previous children on failure (e.g. the dir vanished — the parent's own refetch drops this row).
-	// biome-ignore lint/correctness/useExhaustiveDependencies: fsTick is the live-refresh trigger, not a body input
-	useEffect(() => {
-		if (!isDir || !expanded) return;
-		let cancelled = false;
-		getTransport()
-			.request("fs.readDir", { workspaceId, path: node.path })
-			.then((result) => {
-				if (!cancelled) setChildren(result);
-			})
-			.catch(() => {
-				if (!cancelled) setChildren((prev) => prev ?? []);
-			});
-		return () => {
-			cancelled = true;
-		};
-	}, [isDir, expanded, workspaceId, node.path, fsTick]);
+	// An expanded dir (re-)reads its listing on expansion AND on every fs tick, silently keeping the
+	// previous children on failure (e.g. the dir vanished — the parent's own re-read drops this row).
+	// Collapsed reads nothing: `null` is the shared hook's "no workspace to read for", which is exactly the
+	// paused state here — so the row needs no tick prop threaded down from the tree.
+	useWorkspaceRead(
+		isDir && expanded ? workspaceId : null,
+		(id) => getTransport().request("fs.readDir", { workspaceId: id, path: node.path }),
+		{
+			onResult: (result) => setChildren(result),
+			onFailure: () => setChildren((prev) => prev ?? []),
+		},
+	);
 
 	const open = () => void openFileInTab(workspaceId, node.path);
 
@@ -95,7 +70,7 @@ function FileNodeRow({
 			{isDir && expanded && children && (
 				<ul className="flex flex-col pl-md">
 					{children.map((child) => (
-						<FileNodeRow key={child.path} node={child} workspaceId={workspaceId} fsTick={fsTick} />
+						<FileNodeRow key={child.path} node={child} workspaceId={workspaceId} />
 					))}
 				</ul>
 			)}

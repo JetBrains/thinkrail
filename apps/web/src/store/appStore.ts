@@ -21,6 +21,7 @@ import { create } from "zustand";
 import type { LoginState } from "../auth";
 import type { HydratedRuntime } from "../chat/hydrate";
 import type { ChatTurn, ExtUiDialogRequest, ToolResultState } from "../chat/types";
+import { shallowEqualArrays } from "../lib";
 import type { ConnectionStatus } from "../transport";
 import { type HistoryTarget, isSkillPath, selectWorkspaceTick } from "./selectors";
 
@@ -411,17 +412,13 @@ function reduceExtUi(
 				turns: [...rt.turns, { kind: "system", id: crypto.randomUUID(), text: request.message }],
 			};
 		case "setStatus": {
-			if (request.text === null) {
-				const { [request.key]: _drop, ...extUiStatus } = rt.extUiStatus;
-				return { ...rt, extUiStatus };
-			}
+			if (request.text === null)
+				return { ...rt, extUiStatus: omitKey(rt.extUiStatus, request.key) };
 			return { ...rt, extUiStatus: { ...rt.extUiStatus, [request.key]: request.text } };
 		}
 		case "setWidget": {
-			if (request.content === null) {
-				const { [request.key]: _drop, ...extUiWidget } = rt.extUiWidget;
-				return { ...rt, extUiWidget };
-			}
+			if (request.content === null)
+				return { ...rt, extUiWidget: omitKey(rt.extUiWidget, request.key) };
 			return { ...rt, extUiWidget: { ...rt.extUiWidget, [request.key]: request.content } };
 		}
 		default:
@@ -700,10 +697,18 @@ interface AppState {
 	dismissToast: (id: string) => void;
 }
 
+/**
+ * A record without `key` — the immutable delete behind every per-workspace / per-session cleanup here
+ * (`applyWorkspaceRemoved`, `clearWorkspaceTabs`, `closeSession`, the ext-UI request drops). One helper so a
+ * new keyed map added to the state can be cleaned up with a single readable line.
+ */
+function omitKey<T>(record: Record<string, T>, key: string): Record<string, T> {
+	const { [key]: _dropped, ...rest } = record;
+	return rest;
+}
+
 /** Field-wise equality of two spec-graph nodes — every field the DTO carries, so "unchanged" is honest. */
 function sameSpecNode(a: SpecGraphNode, b: SpecGraphNode): boolean {
-	const sameList = (x: string[], y: string[]) =>
-		x.length === y.length && x.every((item, i) => item === y[i]);
 	return (
 		a.id === b.id &&
 		a.type === b.type &&
@@ -711,10 +716,10 @@ function sameSpecNode(a: SpecGraphNode, b: SpecGraphNode): boolean {
 		a.status === b.status &&
 		a.path === b.path &&
 		a.parent === b.parent &&
-		sameList(a.dependsOn, b.dependsOn) &&
-		sameList(a.references, b.references) &&
-		sameList(a.implements, b.implements) &&
-		sameList(a.tags, b.tags)
+		shallowEqualArrays(a.dependsOn, b.dependsOn) &&
+		shallowEqualArrays(a.references, b.references) &&
+		shallowEqualArrays(a.implements, b.implements) &&
+		shallowEqualArrays(a.tags, b.tags)
 	);
 }
 
@@ -883,16 +888,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 		s.clearWorkspaceTabs(workspaceId); // drops the row's tabs + terminals + chat runtimes
 		// Drop the live-refresh signal + the cached spec graph too — a removed workspace's records must not
 		// linger (the worktree is gone; a same-id workspace can never come back).
-		set((state) => {
-			const { [workspaceId]: _gone, ...rest } = state.fsChangesByWorkspace;
-			const { [workspaceId]: _skillGone, ...skillRest } = state.skillChangeTickByWorkspace;
-			const { [workspaceId]: _specsGone, ...specsRest } = state.specsByWorkspace;
-			return {
-				fsChangesByWorkspace: rest,
-				skillChangeTickByWorkspace: skillRest,
-				specsByWorkspace: specsRest,
-			};
-		});
+		set((state) => ({
+			fsChangesByWorkspace: omitKey(state.fsChangesByWorkspace, workspaceId),
+			skillChangeTickByWorkspace: omitKey(state.skillChangeTickByWorkspace, workspaceId),
+			specsByWorkspace: omitKey(state.specsByWorkspace, workspaceId),
+		}));
 		if (wasActive) {
 			s.selectProject(projectId); // atomically fall back to the removed workspace's Project Home
 			toast.info(`Workspace "${name ?? "?"}" was removed`);
@@ -1063,19 +1063,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 				delete sessions[closed.sessionId];
 				delete skillsSyncedTickBySession[closed.sessionId];
 			}
-			const { [workspaceId]: _tabs, ...tabsByWorkspace } = s.tabsByWorkspace;
-			const { [workspaceId]: _activeTab, ...activeTabByWorkspace } = s.activeTabByWorkspace;
-			const { [workspaceId]: _closed, ...closedChatsByWorkspace } = s.closedChatsByWorkspace;
-			// Dropping the terminals unmounts their instances, which close the PTYs server-side.
-			const { [workspaceId]: _terms, ...terminalsByWorkspace } = s.terminalsByWorkspace;
-			const { [workspaceId]: _activeTerm, ...activeTerminalByWorkspace } =
-				s.activeTerminalByWorkspace;
 			return {
-				tabsByWorkspace,
-				activeTabByWorkspace,
-				closedChatsByWorkspace,
-				terminalsByWorkspace,
-				activeTerminalByWorkspace,
+				tabsByWorkspace: omitKey(s.tabsByWorkspace, workspaceId),
+				activeTabByWorkspace: omitKey(s.activeTabByWorkspace, workspaceId),
+				closedChatsByWorkspace: omitKey(s.closedChatsByWorkspace, workspaceId),
+				// Dropping the terminals unmounts their instances, which close the PTYs server-side.
+				terminalsByWorkspace: omitKey(s.terminalsByWorkspace, workspaceId),
+				activeTerminalByWorkspace: omitKey(s.activeTerminalByWorkspace, workspaceId),
 				sessions,
 				skillsSyncedTickBySession,
 			};
@@ -1141,9 +1135,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 	closeChatRuntime: (sessionId) =>
 		set((s) => {
 			if (!s.sessions[sessionId]) return {};
-			const { [sessionId]: _drop, ...sessions } = s.sessions;
-			const { [sessionId]: _syncDrop, ...skillsSyncedTickBySession } = s.skillsSyncedTickBySession;
-			return { sessions, skillsSyncedTickBySession };
+			return {
+				sessions: omitKey(s.sessions, sessionId),
+				skillsSyncedTickBySession: omitKey(s.skillsSyncedTickBySession, sessionId),
+			};
 		}),
 	closeChatToHistory: (sessionId) =>
 		set((s) => {

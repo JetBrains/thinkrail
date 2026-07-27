@@ -1,4 +1,5 @@
 import type { Project, SpecGraphNode, Workspace } from "@thinkrail/contracts";
+import { isAbsolutePath, normalizePath } from "@/lib";
 import type { EditorTab } from "./appStore";
 
 interface ActiveWorkspaceState {
@@ -92,16 +93,9 @@ export function isSkillPath(path: string): boolean {
  * root one, and every nested file into whatever short entry it happens to end with.
  */
 export function matchesWorktreePath(reported: string, rel: string): boolean {
-	// Separators normalized first, then the absolute check — the same shape as `chat/tools/toolHelpers`
-	// (re-stated rather than imported: the store may not depend on `chat` beyond types).
-	const path = reported.replaceAll("\\", "/");
+	const path = normalizePath(reported);
 	if (path === rel) return true;
 	return isAbsolutePath(path) && path.endsWith(`/${rel}`);
-}
-
-/** Posix or Windows absolute path — the two forms a pi tool call's `path` can arrive in. */
-function isAbsolutePath(path: string): boolean {
-	return path.startsWith("/") || /^[A-Za-z]:\//.test(path);
 }
 
 /**
