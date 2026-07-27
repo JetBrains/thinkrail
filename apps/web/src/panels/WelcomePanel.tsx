@@ -156,7 +156,7 @@ export function WelcomePanel() {
 			<p className="mt-lg max-w-[440px] text-md text-muted">
 				A spec-first way to build with AI. ThinkRail keeps your project's intent as a{" "}
 				<span className="text-text">connected spec graph</span> that the agent reads, plans, and
-				builds from — each task in its own isolated git worktree.
+				builds from — in your project folder, or an isolated git worktree per task.
 			</p>
 
 			<ProviderWarningBanner />
