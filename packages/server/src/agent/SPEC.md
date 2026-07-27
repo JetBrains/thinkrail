@@ -53,10 +53,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     the web UI downsizes user-attached images itself); a shared `registerSession` forwards each event tagged with its id +
     `bindExtensions({ mode:'rpc', uiContext })`; `prompt`/`steer`/`followUp` (with images) / `abort` /
     `setModel` / `setThinkingLevel` / `compact` / `getSessionStats` (+ contextUsage) / `getSessionCommands` /
-    `listAvailableModels` / `getDefaultModel` (the model + thinking a fresh session resolves to — settings
+    `listAvailableModels` / **`clampThinkingForModel`** (pi's `clampThinkingLevel` for a `{model, level}`
+    pair — `model.clampThinking`; the host owns it so the pre-session picker, `getDefaultModel`, and a live
+    session all adjust effort identically) / `getDefaultModel` (the model + thinking a fresh session resolves to — settings
     default if available, else first available — so the New-Workspace dialog shows the exact pre-session
     model). **Models cross the wire as `WireModel` (never pi's raw `Model`):** `toWireModel` projects a
-    `Model` onto the wire's **allowlist** (id/name/provider/contextWindow/reasoning) — so `baseUrl` (the
+    `Model` onto the wire's **allowlist** (see `WireModel`) — so `baseUrl` (the
     jbcentral proxy secret when JetBrains AI is wired), `headers`, and any other field are excluded by
     default — and the inbound side (`createSession`/`setModel`) **re-resolves** the ref by `{provider,id}`
     via `resolveWireModel` against `getAvailable()` — pi uses `Model.baseUrl` verbatim, so a client's baseUrl
@@ -218,7 +220,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   the compiled-binary seam (`registerBundledRuntime` +
   `BundledExtensions`/`BundledExtensionFactory`).
 - **Allowed deps:** `@earendil-works/pi-coding-agent` (runtime); `@earendil-works/pi-ai` (types + test
-  fixtures — dispatch goes through the shared `ModelRuntime` — plus the `/bun-oauth` + `/bedrock-provider`
+  fixtures + **pure catalog helpers value-imported from the package root** — today exactly
+  `getSupportedThinkingLevels` + `clampThinkingLevel`, data-only projections over `Model`; *dispatch*
+  still goes through the shared `ModelRuntime`, never pi-ai's stream/complete — plus the `/bun-oauth` + `/bedrock-provider`
   + `/compat` subpaths, value-imported **only** inside `registerBundledRuntime`'s dynamic imports); `pi-web-access` + `pi-visualize` + `pi-spec-graph` +
   `pi-thinkrail-workflow` + `pi-todos` (the bundled extensions — loaded by path, never value-imported here; the
   compiled binary's value-imports live in `apps/cli`'s generated build module); `typebox` (the
@@ -244,8 +248,11 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   `headers` can carry auth). Every model-bearing frame (`model.list`/`model.default`, the `session.create`
   result, `SessionSummary.model`) goes through `toWireModel`; every inbound model ref (`session.create` /
   `session.setModel`) is **re-resolved** host-side by `{provider,id}` (`resolveWireModel`), never trusted.
-  The wire type `WireModel = Pick<Model, id|name|provider|contextWindow|reasoning>` is an **allowlist** — it
-  fails closed, so a future `Model` field can't leak by default (a unit test pins the exact key set).
+  The wire type `WireModel = Pick<Model, id|name|provider|contextWindow|reasoning> + thinkingLevels` is an
+  **allowlist** — it fails closed, so a future `Model` field can't leak by default (a unit test pins the
+  exact key set). `thinkingLevels` is the one computed field: pi-ai's `getSupportedThinkingLevels(model)`
+  mapped at the same choke point, so the effort picker renders pi's per-model support truth without the
+  client re-deriving it.
 - A live slash-command list is derived from the **same three sources Pi's rpc mode uses**
   (`extensionRunner.getRegisteredCommands()` + `promptTemplates` + `resourceLoader.getSkills()`). The
   pre-session catalog maps only `resourceLoader.getSkills()` through the same skill→command helper and

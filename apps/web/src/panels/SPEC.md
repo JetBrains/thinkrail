@@ -107,7 +107,12 @@ a project picker, the prompt hero, and the reused
   `chat/ModelSelector`+`ThinkingSelector` in **pre-session** mode — preselected to the host's resolved
   default via `model.default` so the exact model shows (values held in dialog state, applied at create
   time). The pickers' popovers portal into the dialog node (so their lists scroll under the Dialog scroll
-  lock). On open and project-picker changes, the dialog reads **`skill.list({projectId})`** and feeds the
+  lock). Pre-session there is no pi to clamp the effort, so an explicit model switch moves it onto the
+  new model's own set by asking the host for pi's clamp (**`model.clampThinking`**) rather than deciding
+  locally — one effect owns "the held effort must be runnable by the held model", so an explicit switch
+  and a catalog refresh that shrank a model's set both resolve the same way pi would. `model.default` needs no adjustment: the host
+  already returns a self-consistent pair.
+  On open and project-picker changes, the dialog reads **`skill.list({projectId})`** and feeds the
   result to chat's shared slash-completion primitive: a leading `/` autocompletes skills from the selected
   project's **current checkout** plus personal/bundled sources, selecting one inserts `/skill:<name> `;
   failure degrades silently to no menu. Up/Down navigate, Enter/Tab select, Escape dismisses. A caption under

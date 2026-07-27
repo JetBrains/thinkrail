@@ -4,5 +4,8 @@
 		"noEmit": true,
 		"lib": ["ES2023", "DOM", "DOM.Iterable"]
 	},
-	"include": ["src", "vite.config.ts"]
+	"include": ["src", "vite.config.ts"],
+	// Tests run under `bun test` (which provides `bun:test` natively); keep them out of the browser
+	// `tsc` build so this DOM-typed project doesn't need Bun types.
+	"exclude": ["src/**/*.test.ts"]
 }

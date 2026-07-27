@@ -165,6 +165,8 @@ export function NewWorkspaceDialog({
 			.then((d) => {
 				if (cancelled) return;
 				setModel(d.model);
+				// Already self-consistent: the host clamped the saved level onto this model (same
+				// `clampThinkingLevel` the effect below asks for), so it needs no adjustment here.
 				setThinkingLevel(d.thinkingLevel);
 			})
 			.catch(() => {});
@@ -172,6 +174,31 @@ export function NewWorkspaceDialog({
 			cancelled = true;
 		};
 	}, [open]);
+
+	// Keep the held effort runnable by the held model. Whenever the two disagree — an explicit model
+	// switch, or a catalog refresh that changed what the model supports — ask the host for pi's own
+	// `clampThinkingLevel` answer rather than deciding here: `model.default` clamps the same way and a
+	// live session gets it from pi directly, so a third, client-side policy would make this the one path
+	// that adjusts effort differently. Converges: the clamped level is in the model's set, so the guard
+	// then holds. A failed request leaves the level alone; `create()` surfaces the host's error.
+	useEffect(() => {
+		if (!open || !model) return;
+		if (model.thinkingLevels.includes(thinkingLevel)) return;
+		let cancelled = false;
+		getTransport()
+			.request("model.clampThinking", {
+				provider: model.provider,
+				id: model.id,
+				level: thinkingLevel,
+			})
+			.then((r) => {
+				if (!cancelled) setThinkingLevel(r.level);
+			})
+			.catch(() => {});
+		return () => {
+			cancelled = true;
+		};
+	}, [open, model, thinkingLevel]);
 
 	// Warm a remote base ref in the background so `workspace.create` branches off a fresh tip without
 	// paying the ~2s `git fetch` on the create path. Fire-and-forget: it overlaps branch-picking / typing,
@@ -434,10 +461,14 @@ export function NewWorkspaceDialog({
 							models={models}
 							current={model}
 							container={dialogEl}
-							onSelect={setModel}
+							onSelect={(m) => {
+								setModel(m);
+								// Pre-session there is no pi to clamp — snap the effort onto the new model's set.
+							}}
 						/>
 						<ThinkingSelector
 							level={thinkingLevel}
+							levels={model?.thinkingLevels ?? []}
 							container={dialogEl}
 							onSelect={setThinkingLevel}
 						/>

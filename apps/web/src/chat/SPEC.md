@@ -123,7 +123,14 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   template** action on the selected prompt row — see the Save-as-template bullet below, and a
   **zoomed-stage preview pane** + **scope picker** — see the next bullet),
   `ModelSelector` + `ThinkingSelector` (also shared with `NewWorkspaceDialog`;
-  optional `container` prop portals their popovers into a host Dialog), `SessionStatsBar`, `ChatHeader`
+  optional `container` prop portals their popovers into a host Dialog; `ThinkingSelector` takes
+  **`levels`** — `WireModel.thinkingLevels` verbatim, the host-computed support truth, already in pi's
+  escalation order — and its rows **are** that list. The web keeps no enumeration of the level
+  vocabulary: pi owns it, the host projects the per-model slice, and an empty list (no model resolved
+  yet) disables the trigger. It holds **no effort policy of its own**: when a held level isn't one the
+  held model can run, the consumer asks the host for pi's `clampThinkingLevel` answer
+  (`model.clampThinking`) — `model.default` clamps the same way, and a live session gets pi's answer
+  directly via `thinking_level_changed`), `SessionStatsBar`, `ChatHeader`
   (its `left` slot carries the plan strip; its **Skills** button is the presentational **`SkillsButton`**
   primitive — a `BookOpen` pill, badged when a skill dir changed on disk — also shared with
   `NewWorkspaceDialog` so the two triggers cannot drift), `ExtUiDialog`, and **`SkillsDialog`** (the **Skills manager**: a catalog
