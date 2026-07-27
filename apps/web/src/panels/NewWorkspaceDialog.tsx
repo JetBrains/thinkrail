@@ -5,7 +5,15 @@ import type {
 	WireModel,
 	Workspace,
 } from "@thinkrail/contracts";
-import { Box, Check, ChevronDown, GitBranch, RefreshCw, TriangleAlert } from "lucide-react";
+import {
+	Box,
+	Check,
+	ChevronDown,
+	GitBranch,
+	RefreshCw,
+	Sparkles,
+	TriangleAlert,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { ModelSelector } from "@/chat/ModelSelector";
 import { SkillsButton } from "@/chat/SkillsButton";
@@ -54,6 +62,7 @@ export function NewWorkspaceDialog({
 	open,
 	projectId,
 	initialPrompt,
+	promptNote,
 	onOpenChange,
 	onCreated,
 }: {
@@ -62,6 +71,8 @@ export function NewWorkspaceDialog({
 	projectId: string;
 	/** Optional seed for the prompt hero (still fully editable) — e.g. Welcome's "Set up project". */
 	initialPrompt?: string;
+	/** Optional info strip above the prompt — e.g. what a seeded skill command does (copy owned by the opener). */
+	promptNote?: string;
 	onOpenChange: (open: boolean) => void;
 	onCreated: (workspace: Workspace) => void;
 }) {
@@ -417,6 +428,15 @@ export function NewWorkspaceDialog({
 
 				{/* hero: the prompt */}
 				<div className="relative">
+					{promptNote ? (
+						<p
+							data-testid="ws-prompt-note"
+							className="mb-xs flex items-start gap-sm rounded-[var(--radius-md)] border border-[var(--primary-40)] bg-[var(--primary-10)] px-md py-sm text-left text-muted text-xs leading-snug"
+						>
+							<Sparkles className="mt-0.5 size-3.5 shrink-0 text-primary" />
+							<span>{promptNote}</span>
+						</p>
+					) : null}
 					<Textarea
 						ref={promptRef}
 						data-testid="ws-prompt"

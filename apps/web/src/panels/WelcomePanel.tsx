@@ -17,6 +17,12 @@ import { useOpenProject } from "./useOpenProject";
 // importing-a-codebase. Still editable in the dialog.
 const SETUP_PROMPT = "/skill:setting-up-a-project";
 
+// The dialog's info strip for "Set up project" — says what the seeded command actually does (the card
+// alone can't: the dialog it opens is the generic create surface). The copy lives here, with the card
+// that seeds it, so the dialog stays skill-agnostic.
+const SETUP_NOTE =
+	"Runs the setting-up-a-project skill — the agent drafts your project's specs (goal, architecture, modules) before building.";
+
 /**
  * The first-touch surface the shell mounts (centered, beside the projects rail) whenever no workspace is
  * active. The ThinkRail wordmark (topbar brand styling, scaled up) over a state-driven pitch and up-to-two
@@ -28,9 +34,13 @@ const SETUP_PROMPT = "/skill:setting-up-a-project";
 export function WelcomePanel() {
 	const projects = useAppStore((s) => s.projects);
 	const selectedProjectId = useAppStore((s) => s.selectedProjectId);
-	// The New-Workspace dialog target (null = closed). `prompt` seeds the hero — "" for a plain create,
-	// the setup text for "Set up project".
-	const [dialog, setDialog] = useState<{ projectId: string; prompt: string } | null>(null);
+	// The New-Workspace dialog opener state (null = closed). `prompt` seeds the hero — "" for a plain
+	// create, the setup command for "Set up project", which also carries the explanatory `note`.
+	const [dialog, setDialog] = useState<{
+		projectId: string;
+		prompt: string;
+		note?: string;
+	} | null>(null);
 	// Whether the shown project has any registered spec, fetched lazily (a full-tree walk — so it's
 	// requested only for this one project, on demand, never eagerly for every project on connect).
 	// null = pending/unknown (cards wait for it).
@@ -124,7 +134,7 @@ export function WelcomePanel() {
 			<p className="mt-lg max-w-[440px] text-md text-muted">
 				A spec-first way to build with AI. ThinkRail keeps your project's intent as a{" "}
 				<span className="text-text">connected spec graph</span> that the agent reads, plans, and
-				builds from, all in git worktree isolated workspaces.
+				builds from — each task in its own isolated git worktree.
 			</p>
 
 			<ProviderWarningBanner />
@@ -153,8 +163,10 @@ export function WelcomePanel() {
 							icon={Sparkles}
 							title="Set up project"
 							tag="spec-first"
-							subtitle="Prepare the specifications first with the agent before building."
-							onClick={() => setDialog({ projectId: project.id, prompt: SETUP_PROMPT })}
+							subtitle="Draft the project's specs with the agent first — goal, architecture, modules — before building."
+							onClick={() =>
+								setDialog({ projectId: project.id, prompt: SETUP_PROMPT, note: SETUP_NOTE })
+							}
 						/>
 						<Card
 							icon={Rocket}
@@ -172,6 +184,7 @@ export function WelcomePanel() {
 					open
 					projectId={dialog.projectId}
 					initialPrompt={dialog.prompt}
+					{...(dialog.note !== undefined ? { promptNote: dialog.note } : {})}
 					onOpenChange={(o) => {
 						if (!o) setDialog(null);
 					}}

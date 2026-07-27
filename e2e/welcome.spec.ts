@@ -207,11 +207,13 @@ test("a project without specs suggests setting it up", async ({ page }) => {
 			page.getByTestId("welcome-action").filter({ hasText: "Open project" }),
 		).toBeVisible();
 
-		// "Set up project" opens the New-Workspace dialog with the prompt hero pre-seeded.
+		// "Set up project" opens the New-Workspace dialog with the prompt hero pre-seeded, and the note
+		// strip explains what the seeded command will do (the dialog header only names the create op).
 		await page.getByTestId("welcome-cta").click();
 		const dialog = page.getByTestId("new-workspace-dialog");
 		await expect(dialog).toBeVisible();
 		await expect(dialog.getByTestId("ws-prompt")).toHaveValue(/^\/skill:setting-up-a-project\b/);
+		await expect(dialog.getByTestId("ws-prompt-note")).toContainText("setting-up-a-project skill");
 
 		// Clear the seed (no agent kick-off — keeps this in the no-agent suite) and create the worktree; it
 		// becomes active → the welcome unmounts and the full 3-column surface appears.
