@@ -16,7 +16,12 @@ import { useOpenProject } from "./useOpenProject";
 // which FORCES the setting-up-a-project dispatcher to load (vs. hoping the model auto-matches its
 // description). The dispatcher then detects new-vs-existing and routes to starting-a-new-project /
 // importing-a-codebase. Still editable in the dialog.
-const SETUP_PROMPT = "/skill:setting-up-a-project";
+//
+// The **trailing space** is load-bearing: it's the same insertion format the slash-command completion
+// produces (`selectedSlashCommandValue`), so the seeded value reads as a *completed* command — the
+// completion popup stays closed over the seeded hero instead of opening on a bare `/skill:…` query.
+// pi's command parser tolerates it (the arg tail is optional).
+const SETUP_PROMPT = "/skill:setting-up-a-project ";
 
 // The dialog's info strip for "Set up project" — says what the seeded command actually does (the card
 // alone can't: the dialog it opens is the generic create surface). The copy lives here, with the card

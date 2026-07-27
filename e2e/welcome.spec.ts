@@ -222,7 +222,10 @@ test("a project without specs suggests setting it up", async ({ page }) => {
 		await page.getByTestId("welcome-cta").click();
 		const dialog = page.getByTestId("new-workspace-dialog");
 		await expect(dialog).toBeVisible();
-		await expect(dialog.getByTestId("ws-prompt")).toHaveValue(/^\/skill:setting-up-a-project\b/);
+		// The seed is a *completed* command (trailing space, the completion's own insertion format), so the
+		// slash-command menu doesn't pop open over the seeded hero.
+		await expect(dialog.getByTestId("ws-prompt")).toHaveValue("/skill:setting-up-a-project ");
+		await expect(dialog.getByTestId("slash-menu")).toHaveCount(0);
 		await expect(dialog.getByTestId("ws-target-worktree")).toHaveAttribute("data-active", "true");
 		await expect(dialog.getByRole("heading", { name: "Create workspace" })).toBeVisible();
 		await expect(dialog.getByTestId("ws-branch-picker")).toBeVisible();

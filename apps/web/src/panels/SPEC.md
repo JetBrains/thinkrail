@@ -93,9 +93,11 @@ the project's specs, starting from its goal, before building — deliberately **
 artifacts, since the dispatcher's routes differ (starting-a-new-project stops at goal-and-requirements;
 only importing-a-codebase drafts architecture + module SPECs) and the card can't know the route up
 front. The seed is the
-`/skill:setting-up-a-project` command,
-which **forces** the setting-up-a-project dispatcher skill to load (pi's skill-command syntax; expanded on the
-`session.prompt` path) rather than hoping the model auto-matches it; the dispatcher then detects
+`/skill:setting-up-a-project` command **with a trailing space** — the same insertion format the
+slash-command completion writes (`chat`'s `selectedSlashCommandValue`), so the seeded hero reads as a
+*completed* command and the completion menu stays closed over it (pi's parser treats the arg tail as
+optional). The command **forces** the setting-up-a-project dispatcher skill to load (pi's skill-command
+syntax; expanded on the `session.prompt` path) rather than hoping the model auto-matches it; the dispatcher then detects
 new-vs-existing and drafts the specs accordingly (see [[module-thinkrail-workflow]]) — plus a
 **`promptNote`** ("Runs the setting-up-a-project skill — the agent drafts your project's specs…", copy
 owned here so the dialog stays skill-agnostic). **Every Welcome entry point preselects the Isolated
