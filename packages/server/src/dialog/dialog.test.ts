@@ -34,6 +34,12 @@ test("Windows picker: a PowerShell FolderBrowserDialog, -Sta, owned by a top-mos
 		// …and top-most alone leaves the browser active, so the dialog would open without the keyboard.
 		expect(script).toContain("AttachThreadInput");
 		expect(script).toContain("SetForegroundWindow($owner.Handle)");
+		// Attach and detach in pairs: leaving our input thread joined to another process' would make that
+		// app's keyboard state ours for as long as the picker lives.
+		expect(script).toContain("AttachThreadInput($me, $fg, $true)");
+		expect(script).toContain("AttachThreadInput($me, $fg, $false)");
+		// The grab is best-effort — a host that can't compile the P/Invoke still gets a dialog.
+		expect(script).toContain("} catch { }");
 	}
 });
 
