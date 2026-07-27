@@ -33,6 +33,33 @@ binary.
   streaming replay, theme switcher, copy buttons, star count). The page must read complete with JS
   disabled, and animations are skipped under `prefers-reduced-motion`.
 
+## Analytics
+
+PostHog (the team's existing project, **EU** cloud). Loaded as **progressive enhancement, production
+only**: `src/analytics.ts` injects PostHog's `array.js` from `eu-assets.i.posthog.com` at runtime and
+calls `posthog.init()` **only when `location.hostname === "thinkrail.ai"`** — localhost, `vite dev`,
+`preview`, and the `jetbrains.github.io` apex send nothing. The prod gate + config are a pure
+`analyticsConfig(hostname)` function, unit-tested in `src/analytics.test.ts` (`bun:test`, no browser).
+
+- **No npm dep.** We inject the CDN script at runtime rather than importing `posthog-js`, so the
+  no-runtime-deps boundary holds. We also do **not** paste PostHog's minified bootstrap snippet: Biome
+  lints JS inside `<script>` and the snippet trips it (`noCommaOperator`, `noAssignInExpressions`, …),
+  which would force a forbidden `biome-ignore`. A clean typed loader avoids both. Safe because
+  `array.js` self-assigns `window.posthog` on load (its stub-queue replay is guarded), so `init()` in
+  the load handler needs no bootstrap stub.
+- **Genuinely cookieless — stores nothing on the device.** `cookieless_mode: "always"`: PostHog sets
+  **no cookie and no local/session storage**; visitor identity is a privacy-preserving hash computed
+  server-side from a daily-rotating salt + IP + host + user-agent. Nothing persistent lands in the
+  browser, so **no consent banner is required** under GDPR/ePrivacy. Also `respect_dnt: true`,
+  `disable_session_recording: true`; autocapture + pageviews stay on. `person_profiles:
+  "identified_only"` — the site never calls `identify()` (cookieless mode forbids it anyway).
+  - **Operational dependency:** requires **"Cookieless server hash mode" enabled in the PostHog
+    project settings** (Project Settings → Web analytics). If it is off, cookieless events are dropped.
+  - Trade-off: the daily salt makes cross-day identity coarse (a visitor returning on a later day
+    counts as new); pageview counts stay accurate, unique-visitor counts are approximate.
+- The `phc_…` project key is **public/client-safe** by design (meant to ship in browser code) — not a
+  secret, so embedding it in the static build is expected.
+
 ## Deploy
 
 `.github/workflows/site.yml` builds (`bun run --filter @thinkrail/website build`) and publishes
