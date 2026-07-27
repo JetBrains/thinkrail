@@ -86,7 +86,10 @@ intent-first framing of the create-and-kick-off flow — it opens `NewWorkspaceD
 **Isolated workspace** target; *workspace* is the mechanism, not the label. **"Set up
 project"** opens the same dialog with an `initialPrompt` seed **and a `promptNote`** — the note is the
 card's own copy (the dialog stays skill-agnostic), saying what the seeded command does: the agent drafts
-the project's specs (goal, architecture, modules) before building. The seed is the
+the project's specs, starting from its goal, before building — deliberately **not** an enumeration of
+artifacts, since the dispatcher's routes differ (starting-a-new-project stops at goal-and-requirements;
+only importing-a-codebase drafts architecture + module SPECs) and the card can't know the route up
+front. The seed is the
 `/skill:setting-up-a-project` command,
 which **forces** the setting-up-a-project dispatcher skill to load (pi's skill-command syntax; expanded on the
 `session.prompt` path) rather than hoping the model auto-matches it; the dispatcher then detects

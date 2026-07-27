@@ -22,7 +22,7 @@ const SETUP_PROMPT = "/skill:setting-up-a-project";
 // alone can't: the dialog it opens is the generic create surface). The copy lives here, with the card
 // that seeds it, so the dialog stays skill-agnostic.
 const SETUP_NOTE =
-	"Runs the setting-up-a-project skill — the agent drafts your project's specs (goal, architecture, modules) before building.";
+	"Runs the setting-up-a-project skill — the agent drafts your project's specs, starting from its goal, before building.";
 
 /**
  * The first-touch surface the shell mounts (centered, beside the projects rail) whenever no workspace is
@@ -186,7 +186,7 @@ export function WelcomePanel() {
 							icon={Sparkles}
 							title="Set up project"
 							tag="spec-first"
-							subtitle="Draft the project's specs with the agent first — goal, architecture, modules — before building."
+							subtitle="Draft the project's specs with the agent before building, starting from its goal."
 							onClick={() =>
 								setDialog({
 									projectId: project.id,
