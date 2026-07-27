@@ -58,9 +58,7 @@ export function ModelSelector({
 				disabled={models.length === 0}
 				className="flex h-8 max-w-[220px] items-center gap-sm rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-sm text-sm text-text outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 data-[open=true]:border-[var(--primary-60)] data-[open=true]:bg-hover"
 			>
-				<span className="truncate font-[var(--font-mono)] text-muted text-xs">
-					{current?.name ?? "Select model"}
-				</span>
+				<span className="truncate text-muted text-xs">{current?.name ?? "Select model"}</span>
 				<ChevronDown className="size-3 shrink-0 text-hint" />
 			</PopoverTrigger>
 			<PopoverContent align="start" container={container} className="w-[320px] p-0">
@@ -89,9 +87,7 @@ export function ModelSelector({
 													<span className="truncate">{m.name}</span>
 													<span className="truncate text-hint text-xs">{subLine(m)}</span>
 												</span>
-												<span className="ml-auto shrink-0 font-[var(--font-mono)] text-hint text-xs">
-													{m.id}
-												</span>
+												<span className="ml-auto shrink-0 text-hint text-xs">{m.id}</span>
 											</CommandItem>
 										);
 									})}

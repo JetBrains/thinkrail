@@ -68,7 +68,7 @@ export function SettingsDialog() {
 									className={cn(
 										"flex shrink-0 items-center gap-sm rounded-[var(--radius-md)] px-md py-sm text-left text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
 										active
-											? "bg-[var(--primary-10)] font-medium text-primary"
+											? "bg-[var(--primary-10)] text-primary"
 											: "text-muted hover:bg-hover hover:text-text",
 									)}
 								>
@@ -84,7 +84,7 @@ export function SettingsDialog() {
 							>
 								<Icon className="size-4 shrink-0" />
 								{label}
-								<span className="ml-auto rounded-full border border-border2 px-xs py-0.5 font-[var(--font-mono)] text-[10px] text-hint uppercase">
+								<span className="ml-auto rounded-full border border-border2 px-xs py-0.5 text-mono text-hint uppercase">
 									Soon
 								</span>
 							</span>

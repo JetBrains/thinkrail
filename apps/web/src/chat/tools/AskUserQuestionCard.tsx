@@ -646,7 +646,7 @@ function OptionRow({
 			<Indicator selected={selected} multi={multi} />
 			<span className="flex min-w-0 flex-col gap-0.5">
 				<span className="flex items-center gap-xs">
-					<span data-testid="ask-option-label" className="font-medium text-sm text-text">
+					<span data-testid="ask-option-label" className="text-sm text-text">
 						{text}
 					</span>
 					{recommended ? <RecommendedBadge /> : null}
@@ -713,7 +713,7 @@ function OtherOptionRow({
 			) : (
 				<Indicator selected={active} multi={false} className="mt-0" />
 			)}
-			<span className="font-medium text-sm text-text">Other</span>
+			<span className="text-sm text-text">Other</span>
 			<input
 				data-testid="ask-custom"
 				value={text}
@@ -879,7 +879,7 @@ function QuestionRecap({
 				<MessageCircleQuestion className="mt-0.5 size-3.5 shrink-0 text-hint" />
 				<p
 					data-testid={reviewing ? "ask-review-question" : undefined}
-					className={cn("text-sm", reviewing ? "font-medium text-text" : "text-muted")}
+					className={cn("text-sm", reviewing ? "text-text" : "text-muted")}
 				>
 					{question.question}
 				</p>

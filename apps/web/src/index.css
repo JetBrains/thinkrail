@@ -32,6 +32,9 @@
 
 	--text-xs: var(--font-xs);
 	--text-sm: var(--font-sm);
+	/* Reading tier: chat messages, markdown, page-level supporting copy — never UI controls. Same value
+	   as `text-md` (the heading size) on purpose; the two names carry different semantic roles. */
+	--text-base: var(--font-md);
 	--text-md: var(--font-md);
 	--text-lg: var(--font-lg);
 
@@ -75,4 +78,24 @@
 			transform: translateY(12px);
 		}
 	}
+}
+
+/* The dense technical tier (11px): terminal, fenced code, tool output, diffs, technical badges, keycaps. */
+@utility text-mono {
+	font-family: var(--font-mono);
+	font-size: var(--font-mono-size);
+}
+
+/* The long-form inline-code tier (13px): ONLY inline code inside `text-base` reading content. */
+@utility text-base-mono {
+	font-family: var(--font-mono);
+	font-size: var(--font-body);
+}
+
+/* The canonical ThinkRail brand display style — family/weight/tracking ONLY; each usage sets its own
+ * size + line-height (header wordmark: text-lg; welcome hero: text-[44px] leading-tight). */
+@utility text-brand {
+	font-family: var(--font-accent);
+	font-weight: 800;
+	letter-spacing: 0.5px;
 }

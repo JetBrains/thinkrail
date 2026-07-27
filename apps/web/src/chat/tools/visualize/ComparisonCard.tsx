@@ -28,7 +28,7 @@ export function ComparisonCard({ args }: ToolRenderProps) {
 						}`}
 					>
 						<div className="flex items-center gap-xs">
-							<span className="font-medium text-sm text-text">{opt.name}</span>
+							<span className="text-sm text-text">{opt.name}</span>
 							{opt.recommended ? (
 								<span className="rounded-[var(--radius-sm)] bg-primary px-1.5 py-0.5 text-[10px] text-on-accent">
 									Recommended

@@ -105,7 +105,7 @@ export function LoginDialog({
 									<ExternalLink className="size-4" />
 									Open sign-in page
 								</Button>
-								<code className="select-all break-all rounded-[var(--radius-sm)] bg-[var(--input-bg)] px-sm py-xs font-[var(--font-mono)] text-hint text-xs">
+								<code className="select-all break-all rounded-[var(--radius-sm)] bg-[var(--input-bg)] px-sm py-xs text-mono text-hint">
 									{state.url}
 								</code>
 							</div>

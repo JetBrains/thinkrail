@@ -123,7 +123,7 @@ export function JetBrainsAiCard({
 					<Zap className="size-4" />
 				</span>
 				<div className="flex min-w-0 flex-col">
-					<span className="font-medium text-sm text-text">JetBrains AI</span>
+					<span className="text-sm text-text">JetBrains AI</span>
 					<span className="truncate text-hint text-xs">
 						Route Claude + GPT through your JetBrains subscription.
 					</span>
@@ -254,9 +254,7 @@ function CopyableCommand({ command }: { command: string }) {
 	};
 	return (
 		<div className="flex items-center gap-sm rounded-[var(--radius-md)] border border-border2 bg-bg px-sm py-xs">
-			<code className="min-w-0 flex-1 select-all break-all font-[var(--font-mono)] text-text text-xs">
-				{command}
-			</code>
+			<code className="min-w-0 flex-1 select-all break-all text-mono text-text">{command}</code>
 			<button
 				type="button"
 				data-testid="jetbrains-copy-cmd"

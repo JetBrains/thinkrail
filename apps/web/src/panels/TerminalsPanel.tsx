@@ -93,7 +93,7 @@ function TerminalTabButton({
 }) {
 	return (
 		<div
-			className={`group flex shrink-0 items-center gap-xs rounded-[var(--radius-sm)] pr-xs pl-sm text-xs ${
+			className={`group flex shrink-0 items-center gap-xs rounded-[var(--radius-sm)] pr-xs pl-sm text-sm ${
 				active ? "bg-hover text-text" : "text-muted hover:bg-hover"
 			}`}
 		>

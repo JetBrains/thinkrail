@@ -30,7 +30,7 @@ export function EditCard({ args, result, status, workspaceRoot }: ToolRenderProp
 				lines={oldLines.length + newLines.length}
 				fadeClass="bg-[linear-gradient(to_top,var(--elevated),transparent)]"
 			>
-				<div className="overflow-auto rounded-[var(--radius-sm)] border border-border2 font-[var(--font-mono)] text-xs leading-relaxed">
+				<div className="overflow-auto rounded-[var(--radius-sm)] border border-border2 text-mono leading-relaxed">
 					{oldLines.map((line, i) => {
 						// Diff lines are render-order-stable (never reordered), so the index is a correct key.
 						const key = `old-${i}`;

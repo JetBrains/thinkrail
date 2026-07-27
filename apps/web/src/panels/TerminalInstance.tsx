@@ -93,7 +93,8 @@ export default function TerminalInstance({ clientId, workspaceId, visible }: Pro
 		const term = new XTerm({
 			allowProposedApi: true,
 			cursorBlink: true,
-			fontSize: 12,
+			// Parity with the `text-mono` tier: size from `--font-mono-size`, face from `--font-mono`.
+			fontSize: Number.parseFloat(cssVar("--font-mono-size") ?? "") || 11,
 			fontFamily: cssVar("--font-mono") ?? "monospace",
 			theme: readTheme(),
 			scrollback: 5000,

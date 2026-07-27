@@ -80,7 +80,7 @@ export function ExtUiDialog({
 						value={text}
 						rows={8}
 						onChange={(e) => setText(e.target.value)}
-						className="resize-none rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-sm py-xs font-mono text-sm text-text outline-none focus:border-primary"
+						className="resize-none rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-sm py-xs text-mono text-text outline-none focus:border-primary"
 					/>
 				) : null}
 

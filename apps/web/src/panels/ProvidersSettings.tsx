@@ -251,7 +251,7 @@ export function ProvidersSettings() {
 function Group({ title, children }: { title: string; children: ReactNode }) {
 	return (
 		<section className="flex flex-col gap-sm">
-			<h4 className="font-medium text-muted text-xs uppercase tracking-wider">{title}</h4>
+			<h4 className="text-muted text-xs uppercase tracking-wider">{title}</h4>
 			<div className="flex flex-col gap-xs">{children}</div>
 		</section>
 	);
@@ -279,7 +279,7 @@ function ConnectedCard({
 				<Check className="size-4" />
 			</span>
 			<div className="flex min-w-0 flex-col">
-				<span className="truncate font-medium text-sm text-text">{provider.name}</span>
+				<span className="truncate text-sm text-text">{provider.name}</span>
 				<span className="truncate text-hint text-xs">
 					{label}
 					{provider.detail ? ` · ${provider.detail}` : ""}

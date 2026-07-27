@@ -178,7 +178,7 @@ function SpecNodeRow({
 					<span
 						className={cn(
 							"min-w-0 flex-1 truncate text-sm transition-colors",
-							isActive ? "font-medium text-text" : "text-muted group-hover:text-text",
+							isActive ? "text-text" : "text-muted group-hover:text-text",
 						)}
 					>
 						{node.title}
@@ -187,7 +187,7 @@ function SpecNodeRow({
 						data-testid="spec-role"
 						className={cn(
 							"max-w-16 shrink-0 truncate text-right text-[9px] uppercase tracking-wider",
-							isMainSpec || isActive ? "font-medium text-primary" : "text-hint",
+							isMainSpec || isActive ? "text-primary" : "text-hint",
 						)}
 					>
 						{trailingRole}
