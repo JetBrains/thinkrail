@@ -64,12 +64,16 @@ export function useOpenProject(onOpened: (project: Project) => void | Promise<vo
 
 	/** Ask the host for a directory via its native picker, then open it. */
 	const pickAndOpen = async () => {
+		let path: string | null;
 		try {
-			const { path } = await getTransport().request("dialog.selectDirectory", {});
-			if (path) await openProject(path);
-		} catch {
-			// Cancelled / unavailable — nothing to do.
+			({ path } = await getTransport().request("dialog.selectDirectory", {}));
+		} catch (err) {
+			// A cancel is a null path; a throw means the host couldn't *show* a dialog — surface it, or the
+			// only way to add a project reads as a dead button.
+			setOpenError(errorText(err, "Couldn't open the folder picker on the host."));
+			return;
 		}
+		if (path) await openProject(path);
 	};
 
 	const dialogs = (

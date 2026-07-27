@@ -18,11 +18,22 @@ test("Linux picker tries zenity then kdialog, both as directory pickers", () => 
 	expect(pickers[1]?.cmd).toContain("--getexistingdirectory");
 });
 
-test("Windows picker uses a PowerShell FolderBrowserDialog", () => {
+test("Windows picker: a PowerShell FolderBrowserDialog, -Sta, owned by a top-most form", () => {
 	const pickers = pickersFor("win32");
-	expect(pickers).toHaveLength(1);
-	expect(pickers[0]?.cmd[0]).toBe("powershell");
-	expect(pickers[0]?.cmd.join(" ")).toContain("FolderBrowserDialog");
+	expect(pickers.map((p) => p.cmd[0])).toEqual(["powershell.exe", "pwsh.exe"]);
+	for (const picker of pickers) {
+		expect(picker.cmd).toContain("-Sta");
+		expect(picker.cmd.join(" ")).toContain("FolderBrowserDialog");
+		// Owned by a top-most form, or the dialog opens behind the browser and reads as a dead button.
+		expect(picker.cmd.join(" ")).toContain("$owner.TopMost = $true");
+		expect(picker.cmd.join(" ")).toContain("$d.ShowDialog($owner)");
+	}
+});
+
+test("only PowerShell reads a non-zero exit as a failure — the others cancel", () => {
+	expect(pickersFor("darwin").map((p) => p.nonZeroExit)).toEqual(["cancel"]);
+	expect(pickersFor("linux").map((p) => p.nonZeroExit)).toEqual(["cancel", "cancel"]);
+	expect(pickersFor("win32").map((p) => p.nonZeroExit)).toEqual(["error", "error"]);
 });
 
 test("unknown platform has no native picker", () => {
