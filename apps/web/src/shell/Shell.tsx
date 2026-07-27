@@ -46,31 +46,26 @@ export function Shell() {
 		<div data-testid="shell" className="grid h-full grid-rows-[auto_1fr]">
 			<header className="flex items-center justify-between border-b border-border2 bg-bg-dark px-lg py-sm">
 				<div className="flex min-w-0 items-center gap-md">
-					<span className="shrink-0 font-[var(--font-accent)] text-lg font-extrabold tracking-[0.5px] text-primary">
-						{PRODUCT_NAME}
-					</span>
+					<span className="shrink-0 text-brand text-lg text-primary">{PRODUCT_NAME}</span>
 					{contextProject ? (
 						<div
 							data-testid="scope-context"
 							data-context={activeWorkspace ? "workspace" : "project-home"}
 							className="min-w-0 border-border2 border-l pl-md leading-tight"
 						>
-							<div className="flex min-w-0 items-center gap-xs text-xs">
+							<div className="flex min-w-0 items-center gap-xs text-sm">
 								<span className="hidden min-w-0 items-center gap-xs sm:flex">
 									<span data-testid="scope-project" className="max-w-[160px] truncate text-muted">
 										{contextProject.name}
 									</span>
 									<ChevronRight className="size-3 shrink-0 text-hint" />
 								</span>
-								<span
-									data-testid="scope-name"
-									className="max-w-[220px] truncate font-medium text-text"
-								>
+								<span data-testid="scope-name" className="max-w-[220px] truncate text-text">
 									{activeWorkspace?.name ?? "Project home"}
 								</span>
 							</div>
 							{activeWorkspace ? (
-								<div className="mt-0.5 flex min-w-0 items-center gap-xs font-[var(--font-mono)] text-[10px] text-hint">
+								<div className="mt-0.5 flex min-w-0 items-center gap-xs text-hint text-xs">
 									<GitBranch className="size-3 shrink-0" />
 									<span data-testid="scope-branch" className="truncate">
 										{activeWorkspace.branch}

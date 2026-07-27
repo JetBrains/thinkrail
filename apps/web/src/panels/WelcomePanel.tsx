@@ -117,13 +117,11 @@ export function WelcomePanel() {
 					<span className="truncate font-[var(--font-mono)]">{project.name}</span>
 				</p>
 			) : null}
-			<h1 className="font-[var(--font-accent)] font-extrabold text-[44px] text-primary leading-tight tracking-[0.5px]">
-				{PRODUCT_NAME}
-			</h1>
+			<h1 className="text-brand text-[44px] text-primary leading-tight">{PRODUCT_NAME}</h1>
 
-			<p className="mt-lg max-w-[440px] text-md text-muted">
+			<p className="mt-lg max-w-[440px] text-base text-text">
 				A spec-first way to build with AI. ThinkRail keeps your project's intent as a{" "}
-				<span className="text-text">connected spec graph</span> that the agent reads, plans, and
+				<span className="font-medium">connected spec graph</span> that the agent reads, plans, and
 				builds from, all in git worktree isolated workspaces.
 			</p>
 
