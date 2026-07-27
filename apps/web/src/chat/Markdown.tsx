@@ -6,7 +6,7 @@ import { highlightCode } from "@/lib/highlighter";
 /** The default "prose skin": compact spacing tuned for a chat bubble. Callers (e.g. the file-tab
  * `MarkdownPreview`) pass their own `className` for a document skin. */
 const CHAT_PROSE =
-	"max-w-none break-words [&_a]:text-primary [&_a]:underline [&_h1]:font-semibold [&_h2]:font-semibold [&_li]:my-0.5 [&_ol]:my-sm [&_ol]:list-decimal [&_ol]:pl-lg [&_p]:my-sm [&_ul]:my-sm [&_ul]:list-disc [&_ul]:pl-lg";
+	"max-w-none break-words [&_a]:text-primary [&_a]:underline [&_h1]:font-semibold [&_h2]:font-semibold [&_li]:my-0.5 [&_ol]:my-sm [&_ol]:list-decimal [&_ol]:pl-lg [&_p]:my-sm [&_strong]:font-medium [&_ul]:my-sm [&_ul]:list-disc [&_ul]:pl-lg";
 
 /**
  * Render GFM markdown with shiki-highlighted fenced code blocks. Presentational — no app/store deps.
@@ -59,7 +59,7 @@ function CodeBlock({
 	if (!lang) {
 		if (!code.includes("\n")) {
 			return (
-				<code className="rounded-[var(--radius-sm)] bg-elevated px-1 py-0.5 font-[var(--font-mono)] text-[0.85em]">
+				<code className="rounded-[var(--radius-sm)] bg-elevated px-1 py-0.5 text-base-mono">
 					{children}
 				</code>
 			);

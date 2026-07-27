@@ -158,7 +158,7 @@ export function SlashCommandMenu({
 						index === activeIndex ? "bg-hover text-text" : "text-muted",
 					)}
 				>
-					<span className="font-mono text-text">/{command.name}</span>
+					<span className="text-mono text-text">/{command.name}</span>
 					{command.description ? (
 						<span className="truncate text-xs">{command.description}</span>
 					) : null}

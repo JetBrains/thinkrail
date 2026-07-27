@@ -49,7 +49,7 @@ export function GithubSettings() {
 				<span
 					data-testid="settings-gh-status"
 					data-connected={connected}
-					className={`inline-flex items-center gap-xs font-medium text-sm ${
+					className={`inline-flex items-center gap-xs text-sm ${
 						connected ? "text-green" : "text-hint"
 					}`}
 				>
@@ -72,9 +72,9 @@ export function GithubSettings() {
 				</Button>
 			</div>
 			<p className="text-hint text-xs">
-				The GitHub CLI (<code className="font-[var(--font-mono)]">gh</code>) is read locally on the
-				host. Authenticate with <code className="font-[var(--font-mono)]">gh auth login</code> to
-				enable creating workspaces from remote branches.
+				The GitHub CLI (<code className="text-mono">gh</code>) is read locally on the host.
+				Authenticate with <code className="text-mono">gh auth login</code> to enable creating
+				workspaces from remote branches.
 			</p>
 		</section>
 	);
