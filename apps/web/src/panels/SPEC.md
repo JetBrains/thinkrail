@@ -66,17 +66,20 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   per-folder counts. `ChangesTree`'s tree build + `+/−` aggregation + shared status glyphs live in the pure
   **`changesModel.ts`** (unit-tested; no store/transport — `ChangesTree` is presentational, fed `changes` +
   `onOpen`/`isActive` by `ChangesPanel`). **`WelcomePanel`** is the first-touch surface the shell mounts (centered, left-nav beside it) whenever no
-workspace is active. The `PRODUCT_NAME` wordmark as the hero (the topbar's brand styling — accent font,
-`text-primary` — enlarged), with the **active project's name as a small eyebrow** (folder icon) above it
-once a project is selected, over a **constant** spec-first pitch (not spec-conditional) and
-**one-to-four cards** (Conductor-inspired: icon top-left, label + explainer
-bottom-left; the primary is a filled-violet card carrying the stable `welcome-cta` hook, others quiet
-`welcome-action`s). Welcome is **the mode fork**: with a project shown it always pairs **"Start
-building"** (isolated worktree) with **"Work in project folder"** (the Default workspace) so the two
-working modes are a visible choice, not a hidden default. The cards by state: **no projects** → **"Open
-project"** (one card); **project + `hasSpecs`** → **"Start building"** (primary) + "Work in project
-folder" + "Open project"; **project + no specs** → a spec-first **"Set up project"** (primary) + "Start
-building" + "Work in project folder" + "Open project". The **"Open project"** card hangs the shared
+workspace is active. **One hero heading** (`welcome-title`, the topbar's brand styling — accent font,
+`text-primary` — enlarged): the **shown project's name**, or `PRODUCT_NAME` when no project is shown —
+the wordmark is the empty-state identity, a project's own name is the identity once one is open (so no
+separate project eyebrow). **No pitch prose in any state** — the marketing paragraph was removed as
+unread; the screen is heading → banners → **one-to-three cards** (Conductor-inspired: icon top-left,
+label + explainer bottom-left; the primary is a filled-violet card carrying the stable `welcome-cta`
+hook, others quiet `welcome-action`s). Welcome is **the mode fork**: with a project shown it always pairs
+**"Start building"** (isolated worktree) with **"Work in project folder"** (the Default workspace) so the
+two working modes are a visible choice, not a hidden default. The cards by state: **no projects** →
+**"Open project"** (one card); **project + `hasSpecs`** → **"Start building"** (primary) + "Work in
+project folder"; **project + no specs** → a spec-first **"Set up project"** (primary) + "Start building"
++ "Work in project folder". **"Open project" appears only in the no-projects state** — where it's the
+only possible action; once a project is shown, opening another is the projects-rail **"+"** (the same
+dropdown), so Welcome stays the *work-in-this-project* surface. That card hangs the shared
 **`AddProjectMenu`** dropdown off it (same menu as the projects-rail "+": Open project / Open GitHub (soon)
 / Recents), so `Card` is a `forwardRef` usable as a Radix `asChild` trigger. **"Work in project folder"**
 (`House` icon, matching the rail's Default row) **direct-enters** the Default workspace — no dialog: it
@@ -95,8 +98,9 @@ which **forces** the setting-up-a-project dispatcher skill to load (pi's skill-c
 `session.prompt` path) rather than hoping the model auto-matches it; the dispatcher then detects
 new-vs-existing and drafts the specs accordingly (see [[module-thinkrail-workflow]]) — plus a
 **`promptNote`** ("Runs the setting-up-a-project skill — the agent drafts your project's specs…", copy
-owned here so the dialog stays skill-agnostic) and the **Project folder** target preselected (specs are
-ground truth — they land in place, no merge-back; the worktree alternative stays one click away). Which
+owned here so the dialog stays skill-agnostic). **Every Welcome entry point preselects the Isolated
+workspace target** — setup included, so spec drafting is reviewable on its own branch like any other work
+and the mode story stays uniform; the Project-folder alternative stays one click away in the dialog. Which
 project drives the has-specs states = `selectedProjectId ?? projects[0]`, read reactively (so the visible
 nav's selection updates it). Its `hasSpecs` is **fetched lazily** via `project.hasSpecs` for that one
 project (a full-tree walk, kept off the connect handshake) — pending until it resolves, so the cards wait

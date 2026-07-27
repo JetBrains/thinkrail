@@ -1,5 +1,5 @@
 import type { Workspace } from "@thinkrail/contracts";
-import { Folder, FolderOpen, House, type LucideIcon, Rocket, Sparkles } from "lucide-react";
+import { FolderOpen, House, type LucideIcon, Rocket, Sparkles } from "lucide-react";
 import { type ComponentPropsWithoutRef, forwardRef, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { PRODUCT_NAME } from "../constants/branding";
@@ -26,9 +26,11 @@ const SETUP_NOTE =
 
 /**
  * The first-touch surface the shell mounts (centered, beside the projects rail) whenever no workspace is
- * active. The ThinkRail wordmark (topbar brand styling, scaled up) over a state-driven pitch and up-to-four
- * cards, adaptive across three states: no projects → "Open project"; a project with specs → "Start
- * building"; a project without a goal-and-requirements.md → a spec-first "Set up project". With a
+ * active. A single hero heading — the shown project's name, or the ThinkRail wordmark with no project
+ * (topbar brand styling, scaled up) — over one-to-three cards, no pitch prose: adaptive across three
+ * states: no projects → "Open project" (the only card, and the only state that carries it — with a
+ * project shown, opening another lives on the projects-rail "+"); a project with specs → "Start
+ * building"; a project without any registered spec → a spec-first "Set up project". With a
  * project shown, Welcome is **the mode fork**: "Start building" (an isolated worktree — the intent-first
  * framing of create + kick off a chat) always sits beside "Work in project folder" (direct-enters the
  * built-in Default workspace), so the two working modes are a visible choice, not a hidden default.
@@ -37,8 +39,9 @@ export function WelcomePanel() {
 	const projects = useAppStore((s) => s.projects);
 	const selectedProjectId = useAppStore((s) => s.selectedProjectId);
 	// The New-Workspace dialog opener state (null = closed). `prompt` seeds the hero ("" for a plain
-	// create; the setup command for "Set up project", which also carries the explanatory `note` and
-	// preselects the project-folder target — specs are ground truth, they belong in place).
+	// create; the setup command for "Set up project", which also carries the explanatory `note`). Every
+	// Welcome entry point preselects the isolated-worktree target; the dialog keeps the folder alternative
+	// one click away.
 	const [dialog, setDialog] = useState<{
 		projectId: string;
 		prompt: string;
@@ -114,14 +117,9 @@ export function WelcomePanel() {
 		/>
 	);
 
-	// The "Open project" card triggers the same dropdown as the projects-rail "+".
-	const openProjectCard = ({
-		primary = false,
-		subtitle,
-	}: {
-		primary?: boolean;
-		subtitle: string;
-	}) => (
+	// The "Open project" card — only rendered in the no-projects state (with a project shown, the
+	// projects-rail "+" carries this same dropdown). Triggers the same menu as that "+".
+	const openProjectCard = () => (
 		<AddProjectMenu
 			projects={projects}
 			onOpen={() => void pickAndOpen()}
@@ -129,11 +127,11 @@ export function WelcomePanel() {
 			align="start"
 		>
 			<Card
-				cta={primary}
-				primary={primary}
+				cta
+				primary
 				icon={FolderOpen}
 				title="Open project"
-				subtitle={subtitle}
+				subtitle="Choose a local git repository to work in."
 			/>
 		</AddProjectMenu>
 	);
@@ -143,28 +141,19 @@ export function WelcomePanel() {
 			data-testid="welcome"
 			className="flex h-full min-h-0 flex-col items-center justify-center overflow-auto px-xl py-xl text-center"
 		>
-			{project ? (
-				<p className="mb-sm flex max-w-full items-center gap-xs px-md text-muted text-sm">
-					<Folder className="size-3.5 shrink-0 text-hint" />
-					<span className="truncate font-[var(--font-mono)]">{project.name}</span>
-				</p>
-			) : null}
-			<h1 className="font-[var(--font-accent)] font-extrabold text-[44px] text-primary leading-tight tracking-[0.5px]">
-				{PRODUCT_NAME}
+			<h1
+				data-testid="welcome-title"
+				className="max-w-[640px] break-words font-[var(--font-accent)] font-extrabold text-[44px] text-primary leading-tight tracking-[0.5px]"
+			>
+				{project ? project.name : PRODUCT_NAME}
 			</h1>
-
-			<p className="mt-lg max-w-[440px] text-md text-muted">
-				A spec-first way to build with AI. ThinkRail keeps your project's intent as a{" "}
-				<span className="text-text">connected spec graph</span> that the agent reads, plans, and
-				builds from — in your project folder, or an isolated git worktree per task.
-			</p>
 
 			<ProviderWarningBanner />
 			{project ? <ProjectSkillsNotice projectId={project.id} /> : null}
 
 			<div className="mt-xl flex flex-wrap justify-center gap-md">
 				{noProjects ? (
-					openProjectCard({ primary: true, subtitle: "Choose a local git repository to work in." })
+					openProjectCard()
 				) : hasSpecs === null ? null : hasSpecs ? (
 					<>
 						<Card
@@ -176,7 +165,6 @@ export function WelcomePanel() {
 							onClick={() => setDialog({ projectId: project.id, prompt: "", target: "worktree" })}
 						/>
 						{projectFolderCard(project.id)}
-						{openProjectCard({ subtitle: "Add another local git repository." })}
 					</>
 				) : (
 					<>
@@ -191,7 +179,7 @@ export function WelcomePanel() {
 								setDialog({
 									projectId: project.id,
 									prompt: SETUP_PROMPT,
-									target: "default",
+									target: "worktree",
 									note: SETUP_NOTE,
 								})
 							}
@@ -203,7 +191,6 @@ export function WelcomePanel() {
 							onClick={() => setDialog({ projectId: project.id, prompt: "", target: "worktree" })}
 						/>
 						{projectFolderCard(project.id)}
-						{openProjectCard({ subtitle: "Add another local git repository." })}
 					</>
 				)}
 			</div>
