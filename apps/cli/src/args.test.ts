@@ -1,5 +1,24 @@
 import { describe, expect, test } from "bun:test";
-import { DEFAULT_HOST, DEFAULT_PORT, parseArgs } from "./args";
+import { DEFAULT_HOST, DEFAULT_PORT, parseArgs, parseSubcommand } from "./args";
+
+describe("parseSubcommand", () => {
+	test("only a leading, exact subcommand counts", () => {
+		expect(parseSubcommand(["update"])).toBe("update");
+		expect(parseSubcommand(["uninstall", "--yes"])).toBe("uninstall");
+		expect(parseSubcommand([])).toBeUndefined();
+		expect(parseSubcommand(["--no-open"])).toBeUndefined();
+		// A repo that happens to be named after a subcommand is a project dir, not a command.
+		expect(parseSubcommand(["./update"])).toBeUndefined();
+		expect(parseSubcommand(["--port", "80", "update"])).toBeUndefined();
+	});
+
+	test("a launch is not a subcommand — the host boot path must stay reachable", () => {
+		// `compiled-entry` skips asset staging on a subcommand, so a false positive here would boot a
+		// host with no UI staged.
+		expect(parseSubcommand(["/home/u/code/repo"])).toBeUndefined();
+		expect(parseSubcommand(["--version"])).toBeUndefined();
+	});
+});
 
 describe("parseArgs", () => {
 	test("defaults when no args or env", () => {

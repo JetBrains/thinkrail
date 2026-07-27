@@ -15,8 +15,8 @@
 #
 # A saved copy also takes params: .\install.ps1 -Channel nightly -Version 0.2.0 -Prefix D:\tools -NoModifyPath
 #
-# After install, run `thinkrail`. To update later, re-run this installer (`thinkrail update` is
-# macOS/Linux-only for now).
+# After install, run `thinkrail`. To update later, run `thinkrail update` (it re-runs this installer for
+# you, replacing the running exe); to remove it, run `thinkrail uninstall`.
 #
 # Kept ASCII-only on purpose: Windows PowerShell 5.1 parses a saved UTF-8 file without BOM as ANSI,
 # which would garble any non-ASCII character. Errors `throw` (never `exit`): under `irm | iex` the
@@ -306,7 +306,8 @@ function Install-ThinkRail {
     }
     if ($pathAdvice) { Write-Host "Add to PATH:    $pathAdvice" }
     Write-Host 'Run:            thinkrail'
-    Write-Host 'Update later:   re-run this installer'
+    Write-Host 'Update later:   thinkrail update'
+    Write-Host 'Uninstall:      thinkrail uninstall'
 }
 
 Install-ThinkRail -Channel $Channel -Version $Version -Prefix $Prefix -NoModifyPath:$NoModifyPath

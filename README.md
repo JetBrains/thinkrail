@@ -46,9 +46,11 @@ set "THINKRAIL_VERSION=0.2.0" && powershell -c "irm https://raw.githubuserconten
 ```
 
 Then run `thinkrail` (add a git repo path to open it as a project: `thinkrail ~/code/my-repo`). To update
-later, run `thinkrail update` (re-installs the latest build for your channel; macOS/Linux only — on
-Windows, re-run the installer). `thinkrail --help` lists the flags; `thinkrail --version` prints the
-build.
+later, run `thinkrail update` on any platform — it re-runs the installer for your channel (on Windows it
+replaces the running `thinkrail.exe` in place). To remove it, run `thinkrail uninstall`: it takes out the
+executable, the PATH entry the installer added, and the install metadata, and asks whether to delete your
+`~/.thinkrail` app state (kept by default — pass `--remove-data` to delete it, `-y` to skip the
+questions). `thinkrail --help` lists the flags; `thinkrail --version` prints the build.
 
 **Prebuilt platforms:** macOS (Apple Silicon), Linux arm64 + x64, Windows x64 (`.exe`). Intel macOS isn't
 prebuilt — use Apple Silicon or build from source.

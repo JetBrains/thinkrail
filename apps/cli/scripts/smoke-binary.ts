@@ -39,6 +39,26 @@ function within<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
 }
 
 mkdirSync(homeDir, { recursive: true });
+
+// The install-management subcommands must run *without* the boot path: they never serve the UI or open a
+// session, and `uninstall` deleting the very cache it had just re-extracted would be a nasty surprise. Only
+// the artifact can show this (the branch lives in `compiled-entry`), and `--help` touches nothing on disk.
+{
+	const subCache = join(tmp, "subcommand-cache");
+	const run = Bun.spawnSync([binary, "uninstall", "--help"], {
+		env: { ...process.env, XDG_CACHE_HOME: subCache, HOME: homeDir },
+		stdout: "pipe",
+		stderr: "inherit",
+	});
+	if (run.exitCode !== 0) fail(`\`uninstall --help\` exited ${run.exitCode}`);
+	if (!run.stdout.toString().includes("thinkrail uninstall")) {
+		fail("`uninstall --help` printed no usage");
+	}
+	if (existsSync(join(subCache, "thinkrail"))) {
+		fail("a subcommand staged the embedded assets — compiled-entry should skip staging for it");
+	}
+}
+
 const skillDir = join(projectDir, ".claude", "skills", "compiled-portable");
 mkdirSync(skillDir, { recursive: true });
 writeFileSync(
