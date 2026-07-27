@@ -44,16 +44,33 @@ export function listBranches(projectId: string): BranchList {
 		.map((parts) => parts[0] ?? "")
 		.filter(Boolean);
 
-	let defaultBranch: string;
-	const head = git(repo, ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]);
-	if (head.ok && head.out) defaultBranch = head.out;
-	else if (remote.includes("origin/main")) defaultBranch = "origin/main";
-	else {
-		const repoHead = git(repo, ["rev-parse", "--abbrev-ref", "HEAD"]);
-		defaultBranch = repoHead.ok && repoHead.out ? repoHead.out : "HEAD";
-	}
+	return { local, remote, defaultBranch: resolveDefaultBranch(repo) };
+}
 
-	return { local, remote, defaultBranch };
+/**
+ * The repo's default branch, resolved from what git knows locally: `origin/HEAD`'s target →
+ * `origin/main` → the repo's current `HEAD` branch. Named once — shared by `listBranches` (the base
+ * picker's preselection) and the `workspaces` module's Default-workspace ensure (its `baseBranch`).
+ */
+export function resolveDefaultBranch(repoPath: string): string {
+	const head = git(repoPath, ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]);
+	if (head.ok && head.out) return head.out;
+	if (git(repoPath, ["rev-parse", "--verify", "--quiet", "refs/remotes/origin/main"]).ok)
+		return "origin/main";
+	// Last resort: the checkout's own branch. `currentBranch` answers even on an unborn HEAD (a repo
+	// with no commits yet), so the literal "HEAD" never leaks into a persisted, user-visible baseBranch.
+	return currentBranch(repoPath);
+}
+
+/**
+ * The branch a checkout currently has out — `symbolic-ref --short HEAD`, which (unlike `rev-parse
+ * --abbrev-ref`) also answers on an unborn HEAD (a repo with no commits yet). Detached HEAD → the
+ * literal `"HEAD"`. Used for the Default workspace, whose branch is whatever the project folder has
+ * checked out (it moves out-of-band — a terminal `git checkout` — unlike a worktree's pinned branch).
+ */
+export function currentBranch(repoPath: string): string {
+	const head = git(repoPath, ["symbolic-ref", "--short", "HEAD"]);
+	return head.ok && head.out ? head.out : "HEAD";
 }
 
 /**
@@ -177,7 +194,9 @@ export function gitStatus(workspaceId: string): GitStatus {
 	}
 
 	changes.sort((a, b) => a.path.localeCompare(b.path));
-	return { branch: ws.branch, changes };
+	// The Default workspace's branch is folder-truth that moves out-of-band (a terminal `git checkout`);
+	// the persisted snapshot self-heals only at list time, so the Changes header reads it live.
+	return { branch: ws.kind === "default" ? currentBranch(ws.worktreePath) : ws.branch, changes };
 }
 
 /**

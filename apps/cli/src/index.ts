@@ -6,7 +6,8 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { bootHost } from "@thinkrail/server";
 import { posthogApiKey } from "./analytics-keys";
-import { type CliOptions, parseArgs, USAGE } from "./args";
+import { type CliOptions, parseArgs, parseSubcommand, USAGE } from "./args";
+import { runUninstall } from "./uninstall";
 import { runUpdate } from "./update";
 import { channel, version } from "./version";
 
@@ -30,9 +31,11 @@ function openBrowser(url: string): void {
 
 async function bootstrap(): Promise<void> {
 	const argv = Bun.argv.slice(2);
-	// `update` is a subcommand, not a launch flag: re-install the latest build, then exit.
-	if (argv[0] === "update") {
-		process.exit(await runUpdate(argv.slice(1), process.env));
+	// Subcommands, not launch flags: install-management commands that run and exit without a host.
+	const subcommand = parseSubcommand(argv);
+	if (subcommand) {
+		const run = subcommand === "update" ? runUpdate : runUninstall;
+		process.exit(await run(argv.slice(1), process.env));
 	}
 
 	let options: CliOptions;

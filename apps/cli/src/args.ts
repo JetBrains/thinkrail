@@ -24,11 +24,28 @@ export interface CliOptions {
 
 export type ParseEnv = Record<string, string | undefined>;
 
+/**
+ * Positionals intercepted *before* the launch flags: each is its own command with its own arg parser, and
+ * none of them boots the host. Named here because the compiled entry needs the set too — a subcommand
+ * must not pay for staging the embedded assets (and `uninstall` would be re-creating the cache it deletes).
+ */
+const SUBCOMMANDS = ["update", "uninstall"] as const;
+
+export type Subcommand = (typeof SUBCOMMANDS)[number];
+
+/** The leading subcommand of `argv` (the slice after the runtime + script), or `undefined` for a launch. */
+export function parseSubcommand(argv: readonly string[]): Subcommand | undefined {
+	return SUBCOMMANDS.find((name) => name === argv[0]);
+}
+
 export const USAGE = `Usage: thinkrail [options] [project-dir]
        thinkrail update [--channel stable|nightly] [--version X.Y.Z]
+       thinkrail uninstall [--remove-data|--keep-data] [-y]
 
 Boots the ThinkRail engine host in-process and opens the browser to the app.
-The \`update\` subcommand re-downloads + installs the latest build for your channel.
+The \`update\` subcommand re-downloads + installs the latest build for your channel;
+\`uninstall\` removes ThinkRail from this machine (your ~/.thinkrail app state is kept
+unless you ask for it to go). Both take \`--help\`.
 
 Options:
   --port <n>     Listen port (default ${DEFAULT_PORT}; falls back to a free port if taken).

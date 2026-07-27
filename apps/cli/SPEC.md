@@ -29,9 +29,12 @@ its URL. It is a thin launcher — all engine logic lives in `packages/server`.
 
 ## Interface
 
-`bin` = `./src/index.ts` (bun runs the TS source directly). A leading `update` positional is a
-**subcommand** (`thinkrail update [--channel stable|nightly] [--version X.Y.Z]`) intercepted before the
-launch flags — see *Self-update* below. Otherwise the launch args: `--port` (stable default 24242,
+`bin` = `./src/index.ts` (bun runs the TS source directly). A leading `update` or `uninstall` positional
+is a **subcommand** (`thinkrail update [--channel stable|nightly] [--version X.Y.Z]`,
+`thinkrail uninstall [--remove-data|--keep-data] [-y]`) intercepted before the launch flags — see
+*Self-update* / *Uninstall* below. The set lives in `args.ts` (`parseSubcommand`) because the compiled
+entry needs it too: a subcommand never boots the host, so it must not pay for (or, in `uninstall`'s case,
+re-create) the staged asset cache. Otherwise the launch args: `--port` (stable default 24242,
 scans upward to the next free port on collision), `--host` (default `localhost`), `--no-open`,
 `--no-analytics` (**per-run mute** for anonymous usage analytics — this run sends nothing; the
 durable switch is the app's Settings → Privacy toggle, see `submodule-server-analytics`),
@@ -41,23 +44,79 @@ git repo to open as a project on boot, best-effort). Env defaults: `THINKRAIL_PO
 
 ## Self-update (`thinkrail update`)
 
-`src/update.ts` ports the old repo's `thinkrail upgrade` (renamed): it re-invokes the published
-`install.sh` for the binary's channel, so the installer stays the single source of the download →
-checksum → replace → PATH logic. Channel/prefix resolve as flag > `~/.config/thinkrail/install.json` >
-baked channel (from `version.ts`; `dev` → `stable`) / `~/.local`. Unix-only execution (in-place
-self-replace on Windows is deferred → prints the `install.ps1` command, with the releases page as the
-manual fallback). The Windows message resolves the **same** channel + prefix the Unix plan would, then
-spells the command out **per shell** (`windowsUpdateMessage`): cmd's `set "X=v" &&` and PowerShell's
-`$env:X='v';` are not interchangeable — one shell's syntax shown to the other silently re-installs the
-wrong build, and a dropped `THINKRAIL_PREFIX` would put a second copy under `.local` while the
-PATH-resolved exe stays stale. `resolveWindowsPrefix` owns that seam: it omits the installer's own
-default, and refuses a metadata prefix that isn't a rooted Windows path or can't be safely quoted
-(Windows needs its own charset — `PREFIX_FORBIDDEN_RE` rejects the backslash every Windows path is made
-of). The arg parse + channel/prefix resolution are pure (`parseUpdateArgs` / `resolveUpdateChannel` /
-`resolveWindowsPrefix` / `resolveUpdatePlan`, unit-tested); only fetch (`curl`) + run (`bash -s`) touch
-IO.
-`THINKRAIL_INSTALL_SCRIPT_URL` overrides the installer URL (testing / forks). See `module-ci-release`
-for the installer itself.
+`src/update.ts` ports the old repo's `thinkrail upgrade` (renamed): it re-invokes the **published
+installer** for the binary's channel — `install.sh` on macOS/Linux, `install.ps1` on Windows — so the
+installer stays the single source of the download → checksum → replace → PATH logic. Channel/prefix
+resolve the same way on both: flag > `~/.config/thinkrail/install.json` > baked channel (from
+`version.ts`; `dev` → `stable`) / `~/.local`.
+
+- **Unix:** `curl` the script, feed it to `bash -s -- --channel … --prefix … [--version …]`.
+- **Windows:** fetch `install.ps1`, write it to a temp `.ps1`, and run it through the first available
+  PowerShell host (`powershell.exe`, else `pwsh.exe`) as
+  `-NoProfile -NonInteractive -ExecutionPolicy Bypass -File <tmp> -Channel … -Version … -Prefix …`.
+  `-File` (not `irm | iex`, which needs a shell to pipe through, and not `-Command`, whose quoting is a
+  minefield) hands the installer's own params through argv. All three params are passed **always**,
+  including `-Version latest`: install.ps1's params *default from the `THINKRAIL_*` env vars*, which the
+  child would inherit, so being explicit is what makes an update deterministic for a user who has one
+  set. Replacing the *running* exe works because install.ps1's `Install-ThinkRailBinary` renames a locked
+  `thinkrail.exe` aside to `thinkrail.exe.<rand>.old` (Windows refuses to *delete* a running image but
+  permits *renaming* it) and drops the fresh one in; the next install sweeps the leftover.
+
+Any Windows failure (fetch, no PowerShell host, installer non-zero) falls back to *printing* the manual
+per-shell command (`windowsManualUpdateMessage`) with the releases page under it: cmd's `set "X=v" &&`
+and PowerShell's `$env:X='v';` are not interchangeable — one shell's syntax shown to the other silently
+re-installs the wrong build, and a dropped `THINKRAIL_PREFIX` would put a second copy under `.local`
+while the PATH-resolved exe stays stale. `resolveWindowsPrefix` owns that seam for the message (it omits
+the installer's own default as noise); `resolveWindowsInstallPrefix` is the same validation for the
+executed plan, and both refuse a metadata prefix that isn't a rooted Windows path or can't be safely
+quoted (Windows needs its own charset — `PREFIX_FORBIDDEN_RE` rejects the backslash every Windows path is
+made of). The arg parse + channel/prefix resolution are pure (`parseUpdateArgs` / `resolveUpdateChannel` /
+`resolveWindowsPrefix` / `resolveUpdatePlan` / `resolveWindowsUpdatePlan`, unit-tested); only fetch
+(`curl` / `fetch`) + run (`bash -s` / `powershell -File`) touch IO.
+`THINKRAIL_INSTALL_SCRIPT_URL` / `THINKRAIL_INSTALL_PS1_URL` override the installer URLs (testing /
+forks). See `module-ci-release` for the installers themselves.
+
+## Uninstall (`thinkrail uninstall`)
+
+`src/uninstall.ts` is the inverse of the installers, and only of them: it removes **the executable, the
+PATH edit the installer made, `install.json`, and the binary's staging cache** — then *asks* about the
+user's app state (the data dir), which is **kept by default** because it holds the workspace git
+worktrees and any uncommitted work in them. pi's own state (`~/.pi`) is never touched: it is not ours.
+
+- **Plan, then confirm, then act.** `resolveUninstallTargets` is pure (platform + home + install
+  metadata + `process.execPath` → the paths); an inspection pass narrows it to what actually exists (and
+  which rc files really carry the installer's block) so the printed plan is *true*; then the prompts;
+  then the removals, each reported as `removed` / `kept` / `not found` / `failed` (any `failed` → exit 1).
+- **Prompts** (`node:readline/promises`): the data-dir question (default *keep*), then a final confirm.
+  `-y`/`--yes` skips both and `--keep-data`/`--remove-data` answers the first one non-interactively; with
+  no TTY and no `--yes` the command refuses rather than guessing.
+- **Which executables:** `<prefix>/bin/thinkrail[.exe]` from the install metadata (else the installers'
+  `~/.local` default) **plus `process.execPath` when it is itself a `thinkrail` binary** — that covers a
+  custom prefix whose `install.json` is gone. Nothing else is ever deleted, whatever the metadata says.
+- **The PATH edit, per platform seam:** on Unix the installer's block is *self-identifying*
+  (`# >>> thinkrail PATH >>>` … `# <<< thinkrail PATH <<<`), so `stripRcPathBlock` removes it from every
+  candidate rc file that carries it (bash/zsh/`$ZDOTDIR`/`.profile`, and the fish `conf.d` file is
+  deleted when nothing but the block was in it) — and refuses to touch a file whose block has no end
+  marker rather than truncating it. On Windows the registry entry is *opaque* (nothing marks it as ours),
+  so install.ps1 **records whether it added the entry** (`install.json`'s `path_entry_added`, sticky across
+  re-installs of the same prefix — an update sees `already` precisely because an earlier run of ours added
+  it) and the uninstaller removes it **only for that flag, and only for the prefix it was recorded
+  against**. Being installed is not the same as having added the entry: `-NoModifyPath`, an entry that was
+  already present, a failed registry write and a Git-Bash `install.sh` install all record an install
+  without touching the Windows PATH, and legacy metadata predates the flag — all of those are *not ours*,
+  so the PATH is left alone and the user is told which dir to check. The edit itself runs as an embedded PowerShell script —
+  the exact inverse of install.ps1's `Add-ThinkRailToUserPath` (same `HKCU\Environment` handling,
+  preserving the value's `REG_EXPAND_SZ` kind, comparing entries raw *and* `%VAR%`-expanded, then
+  broadcasting `WM_SETTINGCHANGE`) — because round-tripping a raw PATH value through a pipe would risk
+  mangling non-ASCII entries in the console code page.
+- **Deleting the running program:** Unix unlinks a running binary happily. Windows cannot, so the exe is
+  renamed to the same `thinkrail.exe.<rand>.old` name install.ps1's cleanup already recognizes, and a
+  detached PowerShell retries the delete for a few seconds after we exit; the report says which happened.
+  Stale `.old`/`.new` leftovers in the bin dir are swept too.
+- `src/powershell.ts` is the shared seam for both Windows paths (find a host, run a script text through
+  it, `psQuote` a value into a single-quoted literal). `src/paths.ts` owns the *installed* layout —
+  `install.json` (read by `update` + `uninstall`) and the staging cache root (written by
+  `compiled-entry`, deleted by `uninstall`) — so those three agree by construction.
 
 ## Version stamping (release seam)
 
@@ -128,13 +187,16 @@ extensions** (which the server path-loads out of `node_modules` in dev — impos
 
 ## Boundary
 
-- **Owns:** `src/args.ts` (pure `parseArgs(argv, env) → CliOptions` + `USAGE`), `src/index.ts` (the
-  run-from-source `bootstrap()`: shell env → server → browser open → signal handlers), and the binary build
-  + its boot smoke (`scripts/build-binary.ts`, `scripts/smoke-binary.ts`, `src/compiled-entry.ts`,
-  `src/web-assets.generated.*`, `src/bundled-extensions.generated.*`), `src/version.ts` (the release
-  version stamped in at build time), `src/update.ts` (the `update` subcommand), and `src/jbcentral.ts` (the
-  `jbcentral` subcommand — JetBrains Central CLI proxy wiring).
-- **Allowed deps:** `@thinkrail/server` (`createServer`, `registerBundledRuntime`),
+- **Owns:** `src/args.ts` (pure `parseArgs(argv, env) → CliOptions` + `parseSubcommand` + `USAGE`),
+  `src/index.ts` (the run-from-source `bootstrap()`: shell env → server → browser open → signal handlers),
+  and the binary build + its boot smoke (`scripts/build-binary.ts`, `scripts/smoke-binary.ts`,
+  `src/compiled-entry.ts`, `src/web-assets.generated.*`, `src/bundled-extensions.generated.*`),
+  `src/version.ts` (the release version stamped in at build time), `src/update.ts` (the `update`
+  subcommand), `src/uninstall.ts` (the `uninstall` subcommand), `src/paths.ts` (the installed layout:
+  `install.json` + the staging cache root), `src/powershell.ts` (the Windows PowerShell seam), and
+  `src/jbcentral.ts` (the `jbcentral` subcommand — JetBrains Central CLI proxy wiring).
+- **Allowed deps:** `@thinkrail/server` (`createServer`, `registerBundledRuntime`, `dataDir` — the
+  uninstaller has to name the app state dir, and must name the *same* one the host uses),
   `@thinkrail/shared/shellEnv` (`resolveShellEnv`), Bun/Node; the generated build module may
   value-import the bundled extension packages' entries (resolved via the server package — build-time
   only, deleted after compile).

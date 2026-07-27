@@ -1,11 +1,12 @@
 import type { Workspace } from "@thinkrail/contracts";
-import { Folder, FolderOpen, type LucideIcon, Rocket, Sparkles } from "lucide-react";
+import { FolderOpen, House, type LucideIcon, Rocket, Sparkles } from "lucide-react";
 import { type ComponentPropsWithoutRef, forwardRef, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { PRODUCT_NAME } from "../constants/branding";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
+import { enterDefaultWorkspace } from "./defaultWorkspace";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { ProjectSkillsNotice } from "./ProjectSkillsNotice";
 import { ProviderWarningBanner } from "./ProviderWarningBanner";
@@ -15,22 +16,41 @@ import { useOpenProject } from "./useOpenProject";
 // which FORCES the setting-up-a-project dispatcher to load (vs. hoping the model auto-matches its
 // description). The dispatcher then detects new-vs-existing and routes to starting-a-new-project /
 // importing-a-codebase. Still editable in the dialog.
-const SETUP_PROMPT = "/skill:setting-up-a-project";
+//
+// The **trailing space** is load-bearing: it's the same insertion format the slash-command completion
+// produces (`selectedSlashCommandValue`), so the seeded value reads as a *completed* command — the
+// completion popup stays closed over the seeded hero instead of opening on a bare `/skill:…` query.
+// pi's command parser tolerates it (the arg tail is optional).
+const SETUP_PROMPT = "/skill:setting-up-a-project ";
+
+// The dialog's info strip for "Set up project" — says what the seeded command actually does (the card
+// alone can't: the dialog it opens is the generic create surface). The copy lives here, with the card
+// that seeds it, so the dialog stays skill-agnostic.
+const SETUP_NOTE =
+	"Runs the setting-up-a-project skill — the agent drafts your project's specs, starting from its goal, before building.";
 
 /**
  * The first-touch surface the shell mounts (centered, beside the projects rail) whenever no workspace is
- * active. The ThinkRail wordmark (topbar brand styling, scaled up) over a state-driven pitch and up-to-two
- * cards, adaptive across three states: no projects → "Open project"; a project with specs → "Start
- * building"; a project without a goal-and-requirements.md → a spec-first "Set up project". "Start
- * building" is the intent-first framing of creating a worktree-isolated workspace + kicking off a chat
- * (workspace is the mechanism, not the label).
+ * active. A single hero heading — the shown project's name, or the ThinkRail wordmark with no project
+ * (topbar brand styling, scaled up) — over one-to-three cards, no pitch prose: adaptive across three
+ * states: no projects → "Open project" (the only card, and the only state that carries it — with a
+ * project shown, opening another lives on the projects-rail "+"); a project with specs → "Start
+ * building"; a project without any registered spec → a spec-first "Set up project". With a
+ * project shown, Welcome is **the mode fork**: "Start building" (an isolated worktree — the intent-first
+ * framing of create + kick off a chat) always sits beside "Work in project folder" (direct-enters the
+ * built-in Default workspace), so the two working modes are a visible choice, not a hidden default.
  */
 export function WelcomePanel() {
 	const projects = useAppStore((s) => s.projects);
 	const selectedProjectId = useAppStore((s) => s.selectedProjectId);
-	// The New-Workspace dialog target (null = closed). `prompt` seeds the hero — "" for a plain create,
-	// the setup text for "Set up project".
-	const [dialog, setDialog] = useState<{ projectId: string; prompt: string } | null>(null);
+	// The New-Workspace dialog opener state (null = closed). `prompt` seeds the hero ("" for a plain
+	// create; the setup command for "Set up project", which also carries the explanatory `note`). The
+	// dialog always opens on the isolated-worktree target and keeps the folder alternative one click away.
+	const [dialog, setDialog] = useState<{
+		projectId: string;
+		prompt: string;
+		note?: string;
+	} | null>(null);
 	// Whether the shown project has any registered spec, fetched lazily (a full-tree walk — so it's
 	// requested only for this one project, on demand, never eagerly for every project on connect).
 	// null = pending/unknown (cards wait for it).
@@ -82,14 +102,22 @@ export function WelcomePanel() {
 
 	const noProjects = project == null;
 
-	// The "Open project" card triggers the same dropdown as the projects-rail "+".
-	const openProjectCard = ({
-		primary = false,
-		subtitle,
-	}: {
-		primary?: boolean;
-		subtitle: string;
-	}) => (
+	// The fork's "no isolation" card — identical in both project states, so it's built once. It
+	// direct-enters the project's built-in Default workspace, no dialog (it's navigation; the Default
+	// receipt + New chat cover kick-off): the shared helper lists, stores, and activates in one step,
+	// degrading to its error toast on an older host with no Default.
+	const projectFolderCard = (projectId: string) => (
+		<Card
+			icon={House}
+			title="Work in project folder"
+			subtitle="Chats, changes, and terminals run directly in your project folder — no isolation."
+			onClick={() => void enterDefaultWorkspace(projectId)}
+		/>
+	);
+
+	// The "Open project" card — only rendered in the no-projects state (with a project shown, the
+	// projects-rail "+" carries this same dropdown). Triggers the same menu as that "+".
+	const openProjectCard = () => (
 		<AddProjectMenu
 			projects={projects}
 			onOpen={() => void pickAndOpen()}
@@ -97,11 +125,11 @@ export function WelcomePanel() {
 			align="start"
 		>
 			<Card
-				cta={primary}
-				primary={primary}
+				cta
+				primary
 				icon={FolderOpen}
 				title="Open project"
-				subtitle={subtitle}
+				subtitle="Choose a local git repository to work in."
 			/>
 		</AddProjectMenu>
 	);
@@ -111,28 +139,19 @@ export function WelcomePanel() {
 			data-testid="welcome"
 			className="flex h-full min-h-0 flex-col items-center justify-center overflow-auto px-xl py-xl text-center"
 		>
-			{project ? (
-				<p className="mb-sm flex max-w-full items-center gap-xs px-md text-muted text-sm">
-					<Folder className="size-3.5 shrink-0 text-hint" />
-					<span className="truncate font-[var(--font-mono)]">{project.name}</span>
-				</p>
-			) : null}
-			<h1 className="font-[var(--font-accent)] font-extrabold text-[44px] text-primary leading-tight tracking-[0.5px]">
-				{PRODUCT_NAME}
+			<h1
+				data-testid="welcome-title"
+				className="max-w-[640px] break-words font-[var(--font-accent)] font-extrabold text-[44px] text-primary leading-tight tracking-[0.5px]"
+			>
+				{project ? project.name : PRODUCT_NAME}
 			</h1>
-
-			<p className="mt-lg max-w-[440px] text-md text-muted">
-				A spec-first way to build with AI. ThinkRail keeps your project's intent as a{" "}
-				<span className="text-text">connected spec graph</span> that the agent reads, plans, and
-				builds from, all in git worktree isolated workspaces.
-			</p>
 
 			<ProviderWarningBanner />
 			{project ? <ProjectSkillsNotice projectId={project.id} /> : null}
 
 			<div className="mt-xl flex flex-wrap justify-center gap-md">
 				{noProjects ? (
-					openProjectCard({ primary: true, subtitle: "Choose a local git repository to work in." })
+					openProjectCard()
 				) : hasSpecs === null ? null : hasSpecs ? (
 					<>
 						<Card
@@ -143,7 +162,7 @@ export function WelcomePanel() {
 							subtitle="Cut an isolated worktree + branch, then pair with the agent to build it."
 							onClick={() => setDialog({ projectId: project.id, prompt: "" })}
 						/>
-						{openProjectCard({ subtitle: "Add another local git repository." })}
+						{projectFolderCard(project.id)}
 					</>
 				) : (
 					<>
@@ -153,8 +172,14 @@ export function WelcomePanel() {
 							icon={Sparkles}
 							title="Set up project"
 							tag="spec-first"
-							subtitle="Prepare the specifications first with the agent before building."
-							onClick={() => setDialog({ projectId: project.id, prompt: SETUP_PROMPT })}
+							subtitle="Draft the project's specs with the agent before building, starting from its goal."
+							onClick={() =>
+								setDialog({
+									projectId: project.id,
+									prompt: SETUP_PROMPT,
+									note: SETUP_NOTE,
+								})
+							}
 						/>
 						<Card
 							icon={Rocket}
@@ -162,7 +187,7 @@ export function WelcomePanel() {
 							subtitle="Cut an isolated worktree + branch and pair with the agent."
 							onClick={() => setDialog({ projectId: project.id, prompt: "" })}
 						/>
-						{openProjectCard({ subtitle: "Add another local git repository." })}
+						{projectFolderCard(project.id)}
 					</>
 				)}
 			</div>
@@ -172,6 +197,7 @@ export function WelcomePanel() {
 					open
 					projectId={dialog.projectId}
 					initialPrompt={dialog.prompt}
+					{...(dialog.note !== undefined ? { promptNote: dialog.note } : {})}
 					onOpenChange={(o) => {
 						if (!o) setDialog(null);
 					}}

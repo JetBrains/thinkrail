@@ -26,6 +26,9 @@ export function useOpenProject(onOpened: (project: Project) => void | Promise<vo
 	const [openError, setOpenError] = useState<string | null>(null);
 
 	// Refresh the store's project list, then let the caller adopt (select/expand) the opened project.
+	// Deliberately NO auto-enter into any workspace: opening lands on the project's Welcome — the fork
+	// where the two working modes (isolated worktree vs the project folder's Default workspace) are an
+	// explicit choice (see task-workspace-mode-clarity).
 	const adopt = async (project: Project) => {
 		useAppStore.getState().setProjects(await getTransport().request("project.list", {}));
 		await onOpened(project);

@@ -19,8 +19,8 @@ import { resolveWorktreeFile } from "../fs";
 import { listProjects, openProject } from "../projects";
 import { getConfig, setSettingsPublisher } from "../settings";
 import { closeAllTerminals, setTerminalPublisher } from "../terminal";
-import { setWatchPublisher, stopAllWatches } from "../watch";
-import { getWorkspace, setWorkspacePublisher } from "../workspaces";
+import { setRepoMetaPublisher, setWatchPublisher, stopAllWatches } from "../watch";
+import { getWorkspace, refreshDefaultWorkspace, setWorkspacePublisher } from "../workspaces";
 import {
 	isPromptCommitted,
 	isSettledTurn,
@@ -169,6 +169,14 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 			JSON.stringify({ channel: WS_CHANNELS.workspaceFsChanged, data: payload }),
 		);
 	});
+
+	// The notifier's second seam, host-mediated (`watch` has no `workspaces` edge): a `.git` write in a
+	// watched worktree re-syncs a **Default** workspace's folder-truth branch, so a `git switch` in its
+	// terminal converges the rail, the top bar and the receipt live instead of only at the next
+	// `workspace.list` — including a branch switch that leaves the working tree byte-identical, which
+	// produces no `fsChanged` frame at all. Cheap and self-publishing (`refreshDefaultWorkspace` emits
+	// `workspace.updated` through the lifecycle tee above); a no-op for worktree workspaces (pinned branch).
+	setRepoMetaPublisher(refreshDefaultWorkspace);
 
 	// Broadcast a server-synced settings change (the full `AppConfig`) to every client so they converge —
 	// the initiator applies on this push too, never optimistically (the workspace-lifecycle pattern). The

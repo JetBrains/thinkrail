@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
+import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
 
 // Tagged @agent (see agent.live.spec.ts): runs a REAL pi agent. Proves several chats in one
 // workspace, each its own runtime, streaming concurrently; switching is an instant swap; closing one
@@ -10,7 +10,7 @@ test("two chats in one workspace stream independently; closing one keeps the oth
 	test.setTimeout(120_000);
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
-	await expect(page.getByTestId("workspace-item").first()).toHaveAttribute("data-active", "true");
+	await expect(worktreeRows(page).first()).toHaveAttribute("data-active", "true");
 
 	const chatTabs = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
 	const doneNotice = page
@@ -18,7 +18,6 @@ test("two chats in one workspace stream independently; closing one keeps the oth
 		.filter({ hasText: "Done" });
 
 	// Chat A — start a turn…
-	await page.getByTestId("start-chat").click();
 	await expect(chatTabs).toHaveCount(1);
 	await page.getByTestId("chat-input").fill("Reply with the single word: alpha");
 	await page.getByTestId("chat-send").click();

@@ -2,8 +2,10 @@ import { describe, expect, test } from "bun:test";
 import {
 	parseUpdateArgs,
 	resolveUpdatePlan,
+	resolveWindowsInstallPrefix,
 	resolveWindowsPrefix,
-	windowsUpdateMessage,
+	resolveWindowsUpdatePlan,
+	windowsManualUpdateMessage,
 } from "./update";
 
 describe("parseUpdateArgs", () => {
@@ -113,12 +115,87 @@ describe("resolveUpdatePlan", () => {
 	});
 });
 
-describe("windowsUpdateMessage", () => {
+describe("resolveWindowsUpdatePlan", () => {
+	const home = "C:\\Users\\u";
+
+	test("passes channel, version and prefix to install.ps1 — always all three", () => {
+		// install.ps1's params default from THINKRAIL_* env vars the child inherits, so an update that
+		// omitted one would silently obey a stray var instead of this install.
+		const plan = resolveWindowsUpdatePlan({
+			args: { version: "latest" },
+			installMeta: { channel: "nightly", prefix: "D:\\tools" },
+			baked: "stable",
+			home,
+		});
+		expect(plan.channel).toBe("nightly");
+		expect(plan.prefix).toBe("D:\\tools");
+		expect(plan.psArgs).toEqual([
+			"-Channel",
+			"nightly",
+			"-Version",
+			"latest",
+			"-Prefix",
+			"D:\\tools",
+		]);
+		// The fallback command must name the same custom prefix the attempt used.
+		expect(plan.manualPrefix).toBe("D:\\tools");
+	});
+
+	test("resolves the channel exactly like the Unix plan, and defaults the prefix", () => {
+		const plan = resolveWindowsUpdatePlan({
+			args: { channel: "stable", version: "0.3.0" },
+			installMeta: { channel: "nightly" },
+			baked: "nightly",
+			home,
+		});
+		expect(plan.channel).toBe("stable");
+		expect(plan.psArgs).toEqual([
+			"-Channel",
+			"stable",
+			"-Version",
+			"0.3.0",
+			"-Prefix",
+			"C:\\Users\\u\\.local",
+		]);
+		// …and stays out of the fallback command when it is the installer's own default.
+		expect(plan.manualPrefix).toBeUndefined();
+	});
+
+	test("refuses to install anywhere a tampered install.json points", () => {
+		expect(() =>
+			resolveWindowsUpdatePlan({
+				args: { version: "latest" },
+				installMeta: { prefix: 'D:\\a" && del /f /q C:\\Windows\\System32 && set "X=' },
+				baked: "stable",
+				home,
+			}),
+		).toThrow("suspicious install prefix");
+	});
+});
+
+describe("resolveWindowsInstallPrefix", () => {
+	const home = "C:\\Users\\u";
+
+	test("falls back to the installer's own default", () => {
+		expect(resolveWindowsInstallPrefix(undefined, home)).toBe("C:\\Users\\u\\.local");
+		expect(resolveWindowsInstallPrefix("", home)).toBe("C:\\Users\\u\\.local");
+		expect(resolveWindowsInstallPrefix(42, home)).toBe("C:\\Users\\u\\.local");
+	});
+
+	test("keeps a recorded prefix, refuses an unusable one", () => {
+		expect(resolveWindowsInstallPrefix("D:\\tools", home)).toBe("D:\\tools");
+		expect(() => resolveWindowsInstallPrefix("relative\\dir", home)).toThrow(
+			"suspicious install prefix",
+		);
+	});
+});
+
+describe("windowsManualUpdateMessage", () => {
 	const psLine = (msg: string) => msg.split("\n").find((l) => l.includes("PowerShell:")) ?? "";
 	const cmdLine = (msg: string) => msg.split("\n").find((l) => l.includes("cmd:")) ?? "";
 
 	test("stable/latest is one bare command per shell", () => {
-		const msg = windowsUpdateMessage("stable", "latest");
+		const msg = windowsManualUpdateMessage("stable", "latest");
 		expect(psLine(msg)).toContain(
 			"irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex",
 		);
@@ -128,7 +205,7 @@ describe("windowsUpdateMessage", () => {
 	});
 
 	test("carries the channel in each shell's own env syntax", () => {
-		const msg = windowsUpdateMessage("nightly", "latest");
+		const msg = windowsManualUpdateMessage("nightly", "latest");
 		// The bug this pins: a single cmd-syntax `set "X=v"` shown to PowerShell users, where `set` is
 		// Set-Variable and never reaches the child process -> a silent downgrade to stable.
 		expect(psLine(msg)).toContain("$env:THINKRAIL_CHANNEL='nightly';");
@@ -138,7 +215,7 @@ describe("windowsUpdateMessage", () => {
 	});
 
 	test("carries a pinned version too", () => {
-		const msg = windowsUpdateMessage("nightly", "0.2.0");
+		const msg = windowsManualUpdateMessage("nightly", "0.2.0");
 		expect(psLine(msg)).toContain(
 			"$env:THINKRAIL_CHANNEL='nightly'; $env:THINKRAIL_VERSION='0.2.0';",
 		);
@@ -150,20 +227,20 @@ describe("windowsUpdateMessage", () => {
 	test("carries a custom prefix, so the re-install lands where this one did", () => {
 		// Without it the user re-installs under the default `.local` while the PATH-resolved
 		// D:\tools\bin\thinkrail.exe stays on the old build.
-		const msg = windowsUpdateMessage("stable", "latest", "D:\\tools");
+		const msg = windowsManualUpdateMessage("stable", "latest", "D:\\tools");
 		expect(psLine(msg)).toContain("$env:THINKRAIL_PREFIX='D:\\tools';");
 		expect(cmdLine(msg)).toContain('set "THINKRAIL_PREFIX=D:\\tools" &&');
 	});
 
 	test("escapes a quote-bearing prefix for PowerShell", () => {
-		const msg = windowsUpdateMessage("stable", "latest", "D:\\o'brien\\tools");
+		const msg = windowsManualUpdateMessage("stable", "latest", "D:\\o'brien\\tools");
 		expect(psLine(msg)).toContain("$env:THINKRAIL_PREFIX='D:\\o''brien\\tools';");
 		expect(cmdLine(msg)).toContain('set "THINKRAIL_PREFIX=D:\\o\'brien\\tools" &&');
 	});
 
 	test("stays ASCII (legacy conhost code pages garble anything else)", () => {
 		for (const channel of ["stable", "nightly"] as const) {
-			const msg = windowsUpdateMessage(channel, "1.2.3", "D:\\tools");
+			const msg = windowsManualUpdateMessage(channel, "1.2.3", "D:\\tools");
 			// One UTF-8 byte per char <=> every char is ASCII.
 			expect(Buffer.byteLength(msg, "utf8")).toBe(msg.length);
 		}

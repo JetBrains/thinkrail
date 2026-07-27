@@ -1,13 +1,15 @@
-// `thinkrail update` — self-update by re-running the published install.sh for the binary's channel
-// (the Bun-native port of the old repo's `thinkrail upgrade`, renamed). The installer owns the
-// download → checksum → replace → PATH logic; update just fetches it and feeds it the resolved
-// channel/prefix (from `~/.config/thinkrail/install.json`, else the baked channel + `~/.local`). Unix
-// only — in-place self-replace on Windows is deferred, so we point there at the install.ps1 command
-// (which handles a locked running exe), spelled out per shell, with the releases page as the fallback.
+// `thinkrail update` — self-update by re-running the published installer for the binary's channel (the
+// Bun-native port of the old repo's `thinkrail upgrade`, renamed): `install.sh` through `bash -s` on
+// macOS/Linux, `install.ps1` through `powershell -File` on Windows. The installer owns the download →
+// checksum → replace → PATH logic; update just fetches it and feeds it the resolved channel/prefix (from
+// `~/.config/thinkrail/install.json`, else the baked channel + `~/.local`). Replacing the *running*
+// Windows exe is install.ps1's job too — it renames a locked `thinkrail.exe` aside and drops the new one
+// in. If any of that fails we fall back to printing the manual per-shell command.
 
-import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
+import { type InstallMeta, readInstallMeta } from "./paths";
+import { psQuote, runPowerShellScript } from "./powershell";
 import { channel as bakedChannel, version } from "./version";
 
 const DEFAULT_INSTALL_SCRIPT_URL =
@@ -65,7 +67,7 @@ export function parseUpdateArgs(argv: readonly string[]): UpdateArgs {
 export interface ResolveUpdateInput {
 	args: UpdateArgs;
 	/** Parsed `~/.config/thinkrail/install.json` (or `{}` when absent/unreadable). */
-	installMeta: { channel?: unknown; prefix?: unknown };
+	installMeta: InstallMeta;
 	/** The version module's baked channel (`stable` / `nightly` / `dev`). */
 	baked: string;
 	home: string;
@@ -114,7 +116,8 @@ export function resolveUpdatePlan(input: ResolveUpdateInput): UpdatePlan {
 	return { channel, prefix, bashArgs };
 }
 
-const INSTALL_PS1_URL = "https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1";
+const DEFAULT_INSTALL_PS1_URL =
+	"https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1";
 /** Rooted Windows path — `X:\…` or a UNC `\\server\share\…`; mirrors install.ps1's `IsPathRooted` gate. */
 const WINDOWS_ROOTED_RE = /^(?:[A-Za-z]:[\\/]|\\\\[^\\/]+[\\/])/;
 /**
@@ -126,32 +129,80 @@ const WINDOWS_ROOTED_RE = /^(?:[A-Za-z]:[\\/]|\\\\[^\\/]+[\\/])/;
  */
 const WINDOWS_PREFIX_FORBIDDEN_RE = /["%;\n\r]/;
 
-/**
- * The `THINKRAIL_PREFIX` the printed command needs, or `undefined` when the recorded prefix is already
- * the installer's own default (`<home>\.local`) and the var would be noise. Without this, a user who
- * installed under `D:\tools` would follow the command and get a *second* copy under `.local` while the
- * `thinkrail.exe` their PATH resolves stays on the old build. Throws on a prefix that isn't a rooted
- * Windows path or can't be safely quoted — a tampered `install.json` must not shape a command we hand
- * the user to paste (the Unix path refuses the same way).
- */
-export function resolveWindowsPrefix(metaPrefix: unknown, home: string): string | undefined {
-	if (typeof metaPrefix !== "string" || !metaPrefix) return undefined;
-	if (!WINDOWS_ROOTED_RE.test(metaPrefix) || WINDOWS_PREFIX_FORBIDDEN_RE.test(metaPrefix)) {
-		throw new Error(`Refusing suspicious install prefix from metadata: ${metaPrefix}`);
-	}
+/** Compare two Windows paths the way the filesystem does: separator- and case-insensitive, no trailing `\`. */
+function sameWindowsPath(a: string, b: string): boolean {
 	const norm = (p: string) => p.replace(/\//g, "\\").replace(/\\+$/, "").toLowerCase();
-	return norm(metaPrefix) === norm(`${home}\\.local`) ? undefined : metaPrefix;
+	return norm(a) === norm(b);
 }
 
 /**
- * What to print instead of self-updating on Windows: the `install.ps1` one-liner, spelled out **per
- * shell** — cmd's `set "X=v" &&` and PowerShell's `$env:X='v';` are not interchangeable, and a
- * PowerShell user pasting the cmd form would silently re-install the wrong channel/version (`set` there
- * is `Set-Variable`, which never reaches the child process). Carries every option that would otherwise
- * be lost, so re-running the installer reproduces *this* install rather than a default one. Env vars
- * appear only when they'd change the outcome, so the common case stays a single copyable command.
+ * The prefix a Windows re-install must target: the recorded one, else the installer's own default
+ * (`<home>\.local`). Throws on a prefix that isn't a rooted Windows path or can't be safely quoted — a
+ * tampered `install.json` must not steer where we install or shape a command we hand the user to paste
+ * (the Unix path refuses the same way).
  */
-export function windowsUpdateMessage(
+export function resolveWindowsInstallPrefix(metaPrefix: unknown, home: string): string {
+	const prefix = typeof metaPrefix === "string" && metaPrefix ? metaPrefix : `${home}\\.local`;
+	if (!WINDOWS_ROOTED_RE.test(prefix) || WINDOWS_PREFIX_FORBIDDEN_RE.test(prefix)) {
+		throw new Error(`Refusing suspicious install prefix from metadata: ${prefix}`);
+	}
+	return prefix;
+}
+
+/**
+ * The same prefix for the *printed* fallback command, or `undefined` when it is already the installer's
+ * own default and the `THINKRAIL_PREFIX` var would be noise. Without it, a user who installed under
+ * `D:\tools` would follow the command and get a *second* copy under `.local` while the `thinkrail.exe`
+ * their PATH resolves stays on the old build.
+ */
+export function resolveWindowsPrefix(metaPrefix: unknown, home: string): string | undefined {
+	const prefix = resolveWindowsInstallPrefix(metaPrefix, home);
+	return sameWindowsPath(prefix, `${home}\\.local`) ? undefined : prefix;
+}
+
+export interface WindowsUpdatePlan {
+	channel: "stable" | "nightly";
+	version: string;
+	prefix: string;
+	/** Params for `powershell -File install.ps1` — the installer's own `param()` block. */
+	psArgs: string[];
+	/**
+	 * The prefix the manual-fallback command has to name if this plan fails — `undefined` when it is the
+	 * installer's own default. Resolved here, next to the prefix it mirrors, so the printed command and
+	 * the attempted install can't disagree about where this install lives.
+	 */
+	manualPrefix: string | undefined;
+}
+
+/**
+ * Resolve the Windows re-install the same way `resolveUpdatePlan` resolves the Unix one. All three params
+ * are passed **always**, `-Version latest` included: install.ps1's params default from the `THINKRAIL_*`
+ * env vars, which the child inherits from us, so only being explicit makes the update deterministic for a
+ * user who happens to have one set.
+ */
+export function resolveWindowsUpdatePlan(input: ResolveUpdateInput): WindowsUpdatePlan {
+	const channel = resolveUpdateChannel(input.args, input.installMeta.channel, input.baked);
+	const prefix = resolveWindowsInstallPrefix(input.installMeta.prefix, input.home);
+	const version = input.args.version;
+	return {
+		channel,
+		version,
+		prefix,
+		psArgs: ["-Channel", channel, "-Version", version, "-Prefix", prefix],
+		manualPrefix: resolveWindowsPrefix(input.installMeta.prefix, input.home),
+	};
+}
+
+/**
+ * What to print when the Windows self-update can't run (or ran and failed): the `install.ps1` one-liner,
+ * spelled out **per shell** — cmd's `set "X=v" &&` and PowerShell's `$env:X='v';` are not
+ * interchangeable, and a PowerShell user pasting the cmd form would silently re-install the wrong
+ * channel/version (`set` there is `Set-Variable`, which never reaches the child process). Carries every
+ * option that would otherwise be lost, so re-running the installer reproduces *this* install rather than
+ * a default one. Env vars appear only when they'd change the outcome, so the common case stays a single
+ * copyable command.
+ */
+export function windowsManualUpdateMessage(
 	channel: "stable" | "nightly",
 	version: string,
 	prefix?: string,
@@ -160,27 +211,66 @@ export function windowsUpdateMessage(
 	if (channel !== "stable") vars.push(["THINKRAIL_CHANNEL", channel]);
 	if (version !== "latest") vars.push(["THINKRAIL_VERSION", version]);
 	if (prefix) vars.push(["THINKRAIL_PREFIX", prefix]);
-	// PowerShell's single quotes are literal except for `'` itself, which doubles to escape.
-	const psPrefix = vars.map(([k, v]) => `$env:${k}='${v.replace(/'/g, "''")}'; `).join("");
+	const psPrefix = vars.map(([k, v]) => `$env:${k}=${psQuote(v)}; `).join("");
 	const cmdPrefix = vars.map(([k, v]) => `set "${k}=${v}" && `).join("");
 	const what =
 		version === "latest" ? `the latest ${channel} build` : `ThinkRail ${version} (${channel})`;
 	// ASCII only: a legacy conhost code page would garble a dash/ellipsis in the copyable block.
 	return [
-		"Automatic in-place update isn't supported on Windows yet.",
-		`Re-run the installer to get ${what}. Pick the line for your shell:`,
-		`  PowerShell:  ${psPrefix}irm ${INSTALL_PS1_URL} | iex`,
-		`  cmd:         ${cmdPrefix}powershell -c "irm ${INSTALL_PS1_URL} | iex"`,
+		`Re-run the installer by hand to get ${what}. Pick the line for your shell:`,
+		`  PowerShell:  ${psPrefix}irm ${DEFAULT_INSTALL_PS1_URL} | iex`,
+		`  cmd:         ${cmdPrefix}powershell -c "irm ${DEFAULT_INSTALL_PS1_URL} | iex"`,
 		"Or download manually: https://github.com/JetBrains/thinkrail/releases",
 	].join("\n");
 }
 
-function readInstallMeta(home: string): { channel?: unknown; prefix?: unknown } {
+/**
+ * Fetch an installer script, or `undefined` (after reporting why) when it can't be had. `fetch`, not the
+ * Unix path's `curl`: Windows has no guaranteed `curl.exe`, and `-File` needs the script as text anyway.
+ */
+async function fetchInstaller(url: string): Promise<string | undefined> {
 	try {
-		return JSON.parse(readFileSync(join(home, ".config", "thinkrail", "install.json"), "utf8"));
-	} catch {
-		return {};
+		const response = await fetch(url);
+		if (!response.ok) throw new Error(`HTTP ${response.status}`);
+		const script = await response.text();
+		if (!script.trim()) throw new Error("empty response");
+		return script;
+	} catch (err) {
+		console.error(
+			`error: failed to fetch the installer (${err instanceof Error ? err.message : String(err)})`,
+		);
+		return undefined;
 	}
+}
+
+/**
+ * Windows self-update: run the published `install.ps1` with the resolved params. Every failure path ends
+ * at the manual command, so the user is never left with just an error.
+ */
+async function runWindowsUpdate(
+	plan: WindowsUpdatePlan,
+	env: Record<string, string | undefined>,
+): Promise<number> {
+	const manual = () => {
+		console.error(`\n${windowsManualUpdateMessage(plan.channel, plan.version, plan.manualPrefix)}`);
+	};
+	const script = await fetchInstaller(env.THINKRAIL_INSTALL_PS1_URL ?? DEFAULT_INSTALL_PS1_URL);
+	if (script === undefined) {
+		manual();
+		return 1;
+	}
+	const run = await runPowerShellScript(script, plan.psArgs, { env });
+	if (run === undefined) {
+		console.error("error: no PowerShell found (looked for powershell.exe, then pwsh.exe)");
+		manual();
+		return 1;
+	}
+	if (run.exitCode !== 0) {
+		console.error(`error: the installer exited with code ${run.exitCode}`);
+		manual();
+		return run.exitCode;
+	}
+	return 0;
 }
 
 /** Run the `update` subcommand. Returns a process exit code. */
@@ -192,20 +282,17 @@ export async function runUpdate(
 		console.log(UPDATE_USAGE);
 		return 0;
 	}
-	let plan: UpdatePlan;
+	const home = homedir();
+	let plan: UpdatePlan | WindowsUpdatePlan;
 	try {
-		const args = parseUpdateArgs(argv);
-		const home = homedir();
-		const installMeta = readInstallMeta(home);
-		if (process.platform === "win32") {
-			// Resolve channel + prefix the same way the Unix plan does, so the printed command re-installs
-			// *this* install instead of silently dropping the user onto stable under the default prefix.
-			const channel = resolveUpdateChannel(args, installMeta.channel, bakedChannel);
-			const prefix = resolveWindowsPrefix(installMeta.prefix, home);
-			console.error(windowsUpdateMessage(channel, args.version, prefix));
-			return 1;
-		}
-		plan = resolveUpdatePlan({ args, installMeta, baked: bakedChannel, home });
+		const input = {
+			args: parseUpdateArgs(argv),
+			installMeta: readInstallMeta(home),
+			baked: bakedChannel,
+			home,
+		};
+		plan =
+			process.platform === "win32" ? resolveWindowsUpdatePlan(input) : resolveUpdatePlan(input);
 	} catch (err) {
 		console.error(err instanceof Error ? err.message : String(err));
 		console.error(`\n${UPDATE_USAGE}`);
@@ -213,6 +300,8 @@ export async function runUpdate(
 	}
 
 	console.log(`Updating ThinkRail (current: ${version}, channel: ${plan.channel}) …`);
+
+	if ("psArgs" in plan) return await runWindowsUpdate(plan, env);
 
 	const url = env.THINKRAIL_INSTALL_SCRIPT_URL ?? DEFAULT_INSTALL_SCRIPT_URL;
 	const fetched = Bun.spawnSync(["curl", "-fsSL", url], { stdout: "pipe", stderr: "inherit" });

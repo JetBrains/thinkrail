@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openFixtureProject } from "./fixtures/app";
+import { openFixtureProject, worktreeRows } from "./fixtures/app";
 
 // The New-Workspace dialog, no agent required: project + base-branch pickers, the effort picker, and
 // the bare-create flow. The agent kick-off (Create with a prompt → streaming chat) and the model-list
@@ -16,10 +16,27 @@ test("the dialog lists local branches (no stray origin) and creates a worktree",
 	await expect(dialog).toBeVisible();
 
 	// The operation and its scope are explicit before any controls: this is a separate checkout/branch,
-	// and the IDE surfaces the user is about to enter are all scoped to it.
+	// and the IDE surfaces the user is about to enter are all scoped to it. The rail's "+" preselects the
+	// isolated-workspace target.
 	await expect(dialog.getByRole("heading", { name: "Create workspace" })).toBeVisible();
 	await expect(dialog).toContainText("A separate checkout on its own new branch");
+	// The note strip belongs to openers that seed a command (Welcome's "Set up project") — not the rail "+".
+	await expect(dialog.getByTestId("ws-prompt-note")).toHaveCount(0);
 	await expect(dialog).toContainText("Files, chats, changes, and terminals stay scoped to it");
+	await expect(dialog.getByTestId("ws-target-worktree")).toHaveAttribute("data-active", "true");
+
+	// The target control makes the two working modes one visible choice: toggling to "Project folder"
+	// swaps the header to the truthful no-isolation copy, hides the base-branch picker (nothing gets
+	// created), and relabels the submit — and toggling back restores the worktree form.
+	await dialog.getByTestId("ws-target-default").click();
+	await expect(dialog.getByRole("heading", { name: "Work in project folder" })).toBeVisible();
+	await expect(dialog).toContainText("no isolation");
+	await expect(dialog.getByTestId("ws-branch-picker")).toHaveCount(0);
+	await expect(page.getByTestId("create-workspace")).toHaveText(/Start/);
+	await dialog.getByTestId("ws-target-worktree").click();
+	await expect(dialog.getByRole("heading", { name: "Create workspace" })).toBeVisible();
+	await expect(dialog.getByTestId("ws-branch-picker")).toBeVisible();
+	await expect(page.getByTestId("create-workspace")).toHaveText(/Create/);
 
 	// Project picker defaults to the project the "+" was clicked on.
 	await expect(dialog.getByTestId("ws-project-picker")).toContainText("sample-project");
@@ -56,34 +73,52 @@ test("the dialog lists local branches (no stray origin) and creates a worktree",
 	if (modelResolved) await expect(effort).toBeEnabled();
 	else await expect(effort).toBeDisabled();
 
-	// Dismissing the dialog (Escape) creates nothing.
+	// Dismissing the dialog (Escape) creates nothing (only the built-in Default row is present).
 	await page.keyboard.press("Escape");
 	await expect(dialog).toBeHidden();
-	await expect(page.getByTestId("workspace-item")).toHaveCount(0);
+	await expect(worktreeRows(page)).toHaveCount(0);
 
-	// Reopen and Create with an empty prompt → a worktree is created (no chat), and it becomes active.
+	// Reopen and Create with an empty prompt → a worktree is created and becomes active — and submit
+	// still lands in a fresh chat with a ready composer (nothing sent; the prompt was empty).
 	await page.getByTestId("add-workspace").first().click();
 	await expect(dialog).toBeVisible();
 	await page.getByTestId("create-workspace").click();
 	await expect(dialog).toBeHidden();
-	await expect(page.getByTestId("workspace-item")).toHaveCount(1);
-	await expect(page.getByTestId("workspace-item").first()).toHaveAttribute("data-active", "true");
+	await expect(worktreeRows(page)).toHaveCount(1);
+	await expect(worktreeRows(page).first()).toHaveAttribute("data-active", "true");
 
 	// The active scope stays visible after the Welcome → IDE remount, both in the tree and the global
-	// context spine. The empty center is a persistent receipt, not a generic blank-state prompt.
+	// context spine.
 	const scope = page.getByTestId("scope-context");
 	await expect(scope).toHaveAttribute("data-context", "workspace");
 	await expect(scope).toContainText("sample-project");
 	await expect(scope).toContainText("workspace-1");
 	await expect(scope).toContainText("from main");
-	const ready = page.getByTestId("workspace-ready");
-	await expect(ready).toContainText("Workspace ready");
-	await expect(ready).toContainText("workspace-1");
-	await expect(ready).toContainText("from main");
-	await expect(ready).toContainText("Files, chats, changes, and terminals are scoped");
 
-	// No prompt → no chat tab was opened.
-	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(0);
+	// Submitting the start-working surface always lands in a chat: one fresh tab, composer ready,
+	// and no user turn (the empty prompt sent nothing).
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
+	await expect(page.getByTestId("chat-input")).toBeVisible();
+	await expect(page.locator('[data-testid="chat-message"][data-role="user"]')).toHaveCount(0);
+});
+
+test("folder-mode Start with an empty prompt lands in a fresh chat in the Default workspace", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await page.getByTestId("add-workspace").first().click();
+	const dialog = page.getByTestId("new-workspace-dialog");
+	await expect(dialog).toBeVisible();
+	await dialog.getByTestId("ws-target-default").click();
+	await page.getByTestId("create-workspace").click();
+	await expect(dialog).toBeHidden();
+
+	// Entered the Default (nothing was created) — and submit still lands in a ready chat there.
+	await expect(page.getByTestId("scope-name")).toHaveText("Default");
+	await expect(worktreeRows(page)).toHaveCount(0);
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
+	await expect(page.getByTestId("chat-input")).toBeVisible();
+	await expect(page.locator('[data-testid="chat-message"][data-role="user"]')).toHaveCount(0);
 });
 
 test("a project's committed skills are gated behind trust, then autocomplete", async ({ page }) => {
@@ -119,7 +154,8 @@ test("a project's committed skills are gated behind trust, then autocomplete", a
 	await prompt.press("Enter");
 	await expect(prompt).toHaveValue("/skill:e2e-portable ");
 	await expect(dialog).toBeVisible();
-	await expect(page.getByTestId("workspace-item")).toHaveCount(0);
+	// Nothing was created — only the project's built-in Default row exists.
+	await expect(worktreeRows(page)).toHaveCount(0);
 });
 
 test("Enter in the prompt creates; Shift+Enter inserts a newline", async ({ page }) => {
@@ -140,15 +176,17 @@ test("Enter in the prompt creates; Shift+Enter inserts a newline", async ({ page
 	await prompt.pressSequentially("second line");
 	await expect(prompt).toHaveValue("first line\nsecond line");
 	await expect(dialog).toBeVisible();
-	await expect(page.getByTestId("workspace-item")).toHaveCount(0);
+	await expect(worktreeRows(page)).toHaveCount(0);
 
 	// Plain Enter submits, matching the Create button's ↵ affordance. Clearing the prompt first keeps this
-	// in the no-agent suite (an empty prompt creates a bare worktree with no chat kick-off) while still
+	// in the no-agent suite (an empty prompt opens the fresh chat but sends nothing) while still
 	// exercising the same keydown→create() path the bug lived in.
 	await prompt.fill("");
 	await expect(dialog.getByTestId("workspace-naming-hint")).toHaveCount(0);
 	await prompt.press("Enter");
 	await expect(dialog).toBeHidden();
-	await expect(page.getByTestId("workspace-item")).toHaveCount(1);
-	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(0);
+	await expect(worktreeRows(page)).toHaveCount(1);
+	// Enter-submit lands in the fresh chat like the button does — the tab arrives async, so wait for it.
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
+	await expect(page.locator('[data-testid="chat-message"][data-role="user"]')).toHaveCount(0);
 });

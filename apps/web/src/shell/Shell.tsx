@@ -10,7 +10,12 @@ import { SettingsDialog } from "../panels/SettingsDialog";
 import { TerminalsPanel } from "../panels/TerminalsPanel";
 import { Toaster } from "../panels/Toaster";
 import { WelcomePanel } from "../panels/WelcomePanel";
-import { selectActiveWorkspace, selectContextProject, useAppStore } from "../store";
+import {
+	isDefaultWorkspace,
+	selectActiveWorkspace,
+	selectContextProject,
+	useAppStore,
+} from "../store";
 import { applyTheme, writeThemeHint } from "../themes";
 import type { ConnectionStatus } from "../transport";
 import { useGlobalHotkeys } from "./useGlobalHotkeys";
@@ -75,9 +80,14 @@ export function Shell() {
 									<span data-testid="scope-branch" className="truncate">
 										{activeWorkspace.branch}
 									</span>
-									<span data-testid="scope-base" className="hidden shrink-0 md:inline">
-										· from {activeWorkspace.baseBranch}
-									</span>
+									{/* The Default workspace has no isolation base — "from <base>" would promise one
+									    (and read "main · from main" on the default branch), so the spine shows only the
+									    live branch, matching the CenterTabs receipt. */}
+									{isDefaultWorkspace(activeWorkspace) ? null : (
+										<span data-testid="scope-base" className="hidden shrink-0 md:inline">
+											· from {activeWorkspace.baseBranch}
+										</span>
+									)}
 								</div>
 							) : null}
 						</div>

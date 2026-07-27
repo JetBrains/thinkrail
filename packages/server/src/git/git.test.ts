@@ -181,3 +181,24 @@ test("prefetchBranch fetches a remote ref and no-ops on a local ref or unknown p
 	expect(await prefetchBranch("p1", "main")).toEqual({ ok: false });
 	expect(await prefetchBranch("nope", "origin/main")).toEqual({ ok: false });
 });
+
+test("gitStatus reads the Default workspace's branch live, not the persisted snapshot", () => {
+	// A default-kind record whose persisted branch is already stale (the folder moved on).
+	writeFileSync(
+		join(dataDir, "workspaces.json"),
+		JSON.stringify([
+			{
+				id: "w-default",
+				projectId: "p1",
+				kind: "default",
+				name: "Default",
+				branch: "main", // stale — the checkout below moves to feature/live
+				worktreePath: repo,
+				baseBranch: "main",
+				renamed: true,
+			},
+		]),
+	);
+	git(repo, "switch", "-c", "feature/live");
+	expect(gitStatus("w-default").branch).toBe("feature/live");
+});
