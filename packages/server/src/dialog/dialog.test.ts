@@ -23,10 +23,17 @@ test("Windows picker: a PowerShell FolderBrowserDialog, -Sta, owned by a top-mos
 	expect(pickers.map((p) => p.cmd[0])).toEqual(["powershell.exe", "pwsh.exe"]);
 	for (const picker of pickers) {
 		expect(picker.cmd).toContain("-Sta");
-		expect(picker.cmd.join(" ")).toContain("FolderBrowserDialog");
-		// Owned by a top-most form, or the dialog opens behind the browser and reads as a dead button.
-		expect(picker.cmd.join(" ")).toContain("$owner.TopMost = $true");
-		expect(picker.cmd.join(" ")).toContain("$d.ShowDialog($owner)");
+		// The script travels base64 UTF-16LE (`-EncodedCommand`), so its C# survives the command line.
+		const flag = picker.cmd.indexOf("-EncodedCommand");
+		expect(flag).toBeGreaterThan(-1);
+		const script = Buffer.from(picker.cmd[flag + 1] ?? "", "base64").toString("utf16le");
+		expect(script).toContain("FolderBrowserDialog");
+		// Owned by a top-most form, or the dialog opens behind the browser and reads as a dead button…
+		expect(script).toContain("$owner.TopMost = $true");
+		expect(script).toContain("$d.ShowDialog($owner)");
+		// …and top-most alone leaves the browser active, so the dialog would open without the keyboard.
+		expect(script).toContain("AttachThreadInput");
+		expect(script).toContain("SetForegroundWindow($owner.Handle)");
 	}
 });
 

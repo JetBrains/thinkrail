@@ -23,9 +23,14 @@ const toPath = (stdout: string): string | null => stdout.trim().replace(/[/\\]+$
 // PowerShell folder picker: a WinForms FolderBrowserDialog; prints the path on OK, nothing on cancel.
 // The dialog is **owned by an invisible top-most form**: we spawn it from a background process, which
 // Windows forbids from taking the foreground, so an unowned dialog opens *behind* the browser the user
-// is looking at — indistinguishable from "the button does nothing". `$ErrorActionPreference = 'Stop'`
-// turns a blocked `Add-Type`/`New-Object` (ConstrainedLanguage mode on a locked-down host) into a
-// non-zero exit with a real message on stderr, instead of printing nothing and looking like a cancel.
+// is looking at — indistinguishable from "the button does nothing". Top-most alone only wins the
+// z-order, though: the browser stays the *active* window, so the dialog opens without the keyboard.
+// `SetForegroundWindow` is subject to the same foreground lock — unless our input thread is attached
+// to the current foreground one first, which is what the P/Invoke block does. Best-effort: a host that
+// can't compile it still gets the top-most dialog, just unfocused, rather than no dialog at all.
+// `$ErrorActionPreference = 'Stop'` turns a blocked `Add-Type`/`New-Object` (ConstrainedLanguage mode on
+// a locked-down host) into a non-zero exit with a real message on stderr, instead of printing nothing
+// and looking like a cancel.
 const WINDOWS_PICKER = [
 	"$ErrorActionPreference = 'Stop'",
 	"Add-Type -AssemblyName System.Windows.Forms",
@@ -34,12 +39,35 @@ const WINDOWS_PICKER = [
 	"$owner.ShowInTaskbar = $false",
 	"$owner.Opacity = 0",
 	"$owner.Show()",
+	"try {",
+	"  Add-Type -Namespace ThinkRail -Name Fg -MemberDefinition '",
+	'    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();',
+	'    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr w, IntPtr p);',
+	'    [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint a, uint b, bool join);',
+	'    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr w);',
+	'    [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();\'',
+	// A null `lpdwProcessId` is allowed, so `IntPtr` spares us an out-param marshal; a zero thread id
+	// (no foreground window at all) just makes the attach a harmless no-op.
+	"  $fg = [ThinkRail.Fg]::GetWindowThreadProcessId([ThinkRail.Fg]::GetForegroundWindow(), [IntPtr]::Zero)",
+	"  $me = [ThinkRail.Fg]::GetCurrentThreadId()",
+	"  [void][ThinkRail.Fg]::AttachThreadInput($me, $fg, $true)",
+	"  [void][ThinkRail.Fg]::SetForegroundWindow($owner.Handle)",
+	"  [void][ThinkRail.Fg]::AttachThreadInput($me, $fg, $false)",
+	"} catch { }",
 	"$d = New-Object System.Windows.Forms.FolderBrowserDialog",
 	"$d.Description = 'Open project'",
 	"$ok = $d.ShowDialog($owner) -eq [System.Windows.Forms.DialogResult]::OK",
 	"$owner.Close()",
 	"if ($ok) { Write-Output $d.SelectedPath }",
-].join("; ");
+].join("\n");
+
+/**
+ * The picker as `-EncodedCommand` payload (base64 UTF-16LE, what PowerShell expects). Not `-Command`:
+ * the script carries C# string literals, and quoting embedded double quotes through a Windows command
+ * line into PowerShell's own parser is a known minefield — `apps/cli/src/powershell.ts` sidesteps the
+ * same problem with a temp `.ps1` file. Encoding keeps it a single, quote-proof argv element.
+ */
+const ENCODED_WINDOWS_PICKER = Buffer.from(WINDOWS_PICKER, "utf16le").toString("base64");
 
 /**
  * The ordered native pickers to try for a platform. Multiple entries are fallbacks tried only when the
@@ -73,7 +101,7 @@ export function pickersFor(platform: NodeJS.Platform): Picker[] {
 			// dialog needs a single-threaded apartment: both hosts already default to STA on Windows, so this
 			// only pins the requirement at the spawn site.
 			return ["powershell.exe", "pwsh.exe"].map((shell) => ({
-				cmd: [shell, "-NoProfile", "-Sta", "-Command", WINDOWS_PICKER],
+				cmd: [shell, "-NoProfile", "-Sta", "-EncodedCommand", ENCODED_WINDOWS_PICKER],
 				parse: toPath,
 				nonZeroExit: "error" as const,
 			}));
