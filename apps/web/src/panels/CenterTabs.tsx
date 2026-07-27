@@ -251,20 +251,22 @@ export function CenterTabs() {
 					data-testid="workspace-ready"
 					className="flex max-w-[440px] flex-col items-center gap-xs"
 				>
-					<span className="font-medium text-hint text-xs uppercase tracking-wider">
+					{/* A neutral status label: plain secondary text, sentence case — not an eyebrow. */}
+					<span className="text-muted text-sm">
 						{isDefault ? "Default workspace" : "Workspace ready"}
 					</span>
-					<h2 className="max-w-full truncate font-medium text-md text-text">
+					<h2 className="max-w-full truncate text-md text-text">
 						{isDefault ? (contextProject?.name ?? activeWorkspace.name) : activeWorkspace.name}
 					</h2>
-					<p className="flex max-w-full items-center gap-xs font-[var(--font-mono)] text-muted text-xs">
+					{/* Branch = metadata, never an entity name: proportional text-xs text-hint end to end. */}
+					<p className="flex max-w-full items-center gap-xs text-hint text-xs">
 						<GitBranch className="size-3.5 shrink-0" />
 						{isDefault ? (
 							<span className="truncate">on {activeWorkspace.branch}</span>
 						) : (
 							<>
 								<span className="truncate">{activeWorkspace.branch}</span>
-								<span className="shrink-0 text-hint">· from {activeWorkspace.baseBranch}</span>
+								<span className="shrink-0">· from {activeWorkspace.baseBranch}</span>
 							</>
 						)}
 					</p>

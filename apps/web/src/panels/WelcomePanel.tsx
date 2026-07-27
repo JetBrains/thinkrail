@@ -210,8 +210,9 @@ export function WelcomePanel() {
 }
 
 /**
- * One welcome card (Conductor-style: icon top-left, label + explainer bottom-left). The state's primary
- * is a filled-violet card carrying the stable `welcome-cta` hook; others are quiet outlined
+ * One welcome card: a chipless icon, then a top-anchored text block (title in the exact dialog-title
+ * style, muted text-base subtitle). The state's primary is a violet-tinted card carrying the stable
+ * `welcome-cta` hook; others are quiet outlined
  * `welcome-action`s. A `forwardRef` so it can serve as a Radix `asChild` trigger (the "Open project" card
  * hangs the `AddProjectMenu` dropdown off it).
  */
@@ -235,7 +236,9 @@ const Card = forwardRef<HTMLButtonElement, CardProps>(function Card(
 			data-testid={cta ? "welcome-cta" : "welcome-action"}
 			{...rest}
 			className={cn(
-				"relative flex h-[150px] w-[220px] flex-col items-start justify-between rounded-[var(--radius-lg)] border p-lg text-left transition-colors",
+				// gap-md without justify-between: the text block is top-anchored after the icon, so titles
+				// share the same start line regardless of subtitle length.
+				"relative flex min-h-[150px] w-[220px] flex-col items-start gap-md rounded-[var(--radius-lg)] border p-lg text-left transition-colors",
 				primary
 					? "border-[var(--primary-40)] bg-[var(--primary-10)] hover:bg-[var(--primary-20)]"
 					: "border-border2 bg-bg hover:border-[var(--primary-40)] hover:bg-elevated",
@@ -243,21 +246,16 @@ const Card = forwardRef<HTMLButtonElement, CardProps>(function Card(
 			)}
 		>
 			{tag ? (
-				<span className="absolute top-md right-md rounded-full border border-[var(--primary-40)] bg-[var(--primary-10)] px-sm py-0.5 font-[var(--font-mono)] text-[10px] text-primary uppercase tracking-wide">
+				<span className="absolute top-md right-md rounded-full border border-[var(--primary-40)] bg-[var(--primary-10)] px-sm py-0.5 text-mono text-primary uppercase tracking-wide">
 					{tag}
 				</span>
 			) : null}
-			<span
-				className={cn(
-					"flex size-9 items-center justify-center rounded-[10px]",
-					primary ? "bg-primary text-on-accent" : "bg-hover text-muted",
-				)}
-			>
-				<Icon className="size-4" />
-			</span>
+			{/* Icons render directly on the card surface — no background chips. */}
+			<Icon className={cn("size-4 shrink-0", primary ? "text-primary" : "text-muted")} />
 			<span className="w-full">
-				<span className="block font-medium text-sm text-text">{title}</span>
-				<span className="mt-0.5 block text-muted text-xs leading-snug">{subtitle}</span>
+				{/* Exact dialog-title style, so card titles and DialogTitle can't drift. */}
+				<span className="block font-semibold text-md text-text leading-none">{title}</span>
+				<span className="mt-xs block text-base text-muted leading-snug">{subtitle}</span>
 			</span>
 		</button>
 	);
