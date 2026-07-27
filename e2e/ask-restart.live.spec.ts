@@ -3,13 +3,13 @@ import { copyFileSync, existsSync, mkdirSync, openSync, rmSync, writeFileSync } 
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
+import { worktreeRows } from "./fixtures/app";
 import {
 	E2E_PI_AGENT_DIR,
 	E2E_RESTART_DATA_DIR,
 	E2E_RESTART_HOST_LOG,
 	E2E_RESTART_PORT,
 } from "./fixtures/paths";
-import { worktreeRows } from "./fixtures/app";
 
 // Tagged @agent: drives a real pi agent. THE restart test — the one scenario the shared-host suite
 // structurally cannot cover (Playwright's webServer owns that host for the whole run): a questionnaire is
