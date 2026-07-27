@@ -204,7 +204,7 @@ function ProjectRow({
 				className="flex min-w-0 flex-1 items-center gap-sm text-left"
 			>
 				<Folder className={`size-4 shrink-0 ${isSelected ? "text-primary" : "text-muted"}`} />
-				<span className={`truncate text-sm ${isSelected ? "font-medium text-text" : "text-muted"}`}>
+				<span className={`truncate text-sm ${isSelected ? "text-text" : "text-muted"}`}>
 					{project.name}
 				</span>
 			</button>
@@ -276,7 +276,7 @@ function WorkspaceRow({
 					<span className="flex min-w-0 flex-1 flex-col">
 						<span
 							data-testid="workspace-name"
-							className={`truncate text-sm leading-tight ${isActive ? "font-medium text-primary" : "text-muted"}`}
+							className={`truncate text-sm leading-tight ${isActive ? "text-primary" : "text-muted"}`}
 						>
 							{workspace.name}
 						</span>

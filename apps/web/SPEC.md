@@ -102,7 +102,12 @@ The module set: `transport` / `store` / branded `shell`; `ProjectTree`; `FileTre
   contrast floor (body/muted ≥ 4.5:1 and hint ≥ 3:1 on the primary declared surfaces) for every discovered
   manifest.
 - Token names that collide with Tailwind namespaces (`--font-mono`, `--font-accent`, `--radius-*`) are
-  used as token arbitrary values (`font-[var(--font-accent)]`), not `@theme` mappings.
+  used as token arbitrary values (`rounded-[var(--radius-md)]`), not `@theme` mappings — except the
+  named `@utility` rules `text-mono` / `text-base-mono` / `text-brand`, which package the mono/accent
+  faces with their sanctioned sizes/weight.
+- **The typography system — type-scale tiers, the 400/500/600 weight policy, mono usage, and entity/
+  metadata/status text presentation — is specced in [src/styles/TYPOGRAPHY.md](src/styles/TYPOGRAPHY.md)**
+  (`web-typography`); check changes against it.
 - **Icons: `lucide-react`. Components: shadcn/ui** (Radix primitives), copy-in under `src/components/ui/`
   and themed with our token utilities (`cn()` in `src/lib/utils.ts`) — never shadcn's default oklch
   palette. Use these for accessible menus / dialogs / tooltips.

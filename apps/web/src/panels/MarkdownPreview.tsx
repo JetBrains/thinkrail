@@ -26,7 +26,7 @@ const DOCUMENT_PROSE = [
 	"[&_h5]:mt-md [&_h5]:mb-xs [&_h5]:font-semibold [&_h5]:text-[0.875em]",
 	"[&_h6]:mt-md [&_h6]:mb-xs [&_h6]:font-semibold [&_h6]:text-[0.85em] [&_h6]:text-muted",
 	// Body text + inline emphasis.
-	"[&_p]:my-md [&_strong]:font-semibold [&_strong]:text-text",
+	"[&_p]:my-md [&_strong]:font-medium [&_strong]:text-text",
 	"[&_a]:text-primary [&_a]:underline [&_a]:underline-offset-2 [&_a]:decoration-primary/40 hover:[&_a]:decoration-primary",
 	// Lists — GitHub's ~2em indent + tight item spacing; nested lists tighten further.
 	"[&_ul]:my-md [&_ul]:list-disc [&_ul]:pl-[1.6em] [&_ol]:my-md [&_ol]:list-decimal [&_ol]:pl-[1.6em] [&_li]:my-1",

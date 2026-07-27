@@ -52,7 +52,7 @@ export function AppearanceSettings() {
 									: "border-border2 text-muted hover:bg-hover hover:text-text",
 							)}
 						>
-							<span className="flex-1 font-medium">{label}</span>
+							<span className="flex-1">{label}</span>
 							{active ? <Check className="size-4 shrink-0 text-primary" /> : null}
 						</button>
 					);
