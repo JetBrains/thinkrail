@@ -121,14 +121,36 @@ describe("resolveUninstallTargets", () => {
 		expect(targets.fishFile).toBe("");
 	});
 
-	test("metaFound is the Windows PATH-edit gate: no install.json, no registry write", () => {
-		expect(resolveUninstallTargets({ ...base, platform: "win32", installMeta: {} }).metaFound).toBe(
-			false,
-		);
+	test("the Windows PATH edit is licensed only by install.ps1's own ownership flag", () => {
+		const owned = (installMeta: Record<string, unknown>) =>
+			resolveUninstallTargets({
+				...base,
+				platform: "win32",
+				home: "C:\\Users\\u",
+				installMeta,
+			}).pathEntryOwned;
+		expect(owned({ prefix: "D:\\tools", path_entry_added: true })).toBe(true);
+		// Being installed is not adding the entry: -NoModifyPath, an entry that was already there, a failed
+		// registry write and a Git-Bash install.sh install all write metadata without touching the PATH.
+		expect(owned({ prefix: "D:\\tools", path_entry_added: false })).toBe(false);
+		// Legacy metadata (written before the flag existed) counts as not ours.
+		expect(owned({ prefix: "D:\\tools" })).toBe(false);
+		expect(owned({})).toBe(false);
+		// A flag we can't tie to the prefix we're acting on proves nothing.
+		expect(owned({ prefix: "relative\\dir", path_entry_added: true })).toBe(false);
+		expect(owned({ path_entry_added: true })).toBe(false);
+		// Truthy-but-not-true JSON is not a yes.
+		expect(owned({ prefix: "D:\\tools", path_entry_added: "yes" })).toBe(false);
+	});
+
+	test("Unix never consults the flag — the rc block is its own proof", () => {
 		expect(
-			resolveUninstallTargets({ ...base, platform: "win32", installMeta: { channel: "stable" } })
-				.metaFound,
-		).toBe(true);
+			resolveUninstallTargets({
+				...base,
+				platform: "linux",
+				installMeta: { prefix: "/opt/tools", path_entry_added: true },
+			}).pathEntryOwned,
+		).toBe(false);
 	});
 
 	test("scans every rc file install.sh could have written, plus $ZDOTDIR", () => {

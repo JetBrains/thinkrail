@@ -98,8 +98,13 @@ worktrees and any uncommitted work in them. pi's own state (`~/.pi`) is never to
   candidate rc file that carries it (bash/zsh/`$ZDOTDIR`/`.profile`, and the fish `conf.d` file is
   deleted when nothing but the block was in it) — and refuses to touch a file whose block has no end
   marker rather than truncating it. On Windows the registry entry is *opaque* (nothing marks it as ours),
-  so it is removed **only when `install.json` proves we installed here**; otherwise the PATH is left
-  alone and the user is told which dir to check. The edit itself runs as an embedded PowerShell script —
+  so install.ps1 **records whether it added the entry** (`install.json`'s `path_entry_added`, sticky across
+  re-installs of the same prefix — an update sees `already` precisely because an earlier run of ours added
+  it) and the uninstaller removes it **only for that flag, and only for the prefix it was recorded
+  against**. Being installed is not the same as having added the entry: `-NoModifyPath`, an entry that was
+  already present, a failed registry write and a Git-Bash `install.sh` install all record an install
+  without touching the Windows PATH, and legacy metadata predates the flag — all of those are *not ours*,
+  so the PATH is left alone and the user is told which dir to check. The edit itself runs as an embedded PowerShell script —
   the exact inverse of install.ps1's `Add-ThinkRailToUserPath` (same `HKCU\Environment` handling,
   preserving the value's `REG_EXPAND_SZ` kind, comparing entries raw *and* `%VAR%`-expanded, then
   broadcasting `WM_SETTINGCHANGE`) — because round-tripping a raw PATH value through a pipe would risk

@@ -115,10 +115,13 @@ async function askYesNo(
 export interface UninstallTargets {
 	/** Executables to remove: the recorded install, plus our own binary when it is one. Deduped. */
 	binaries: string[];
-	/** `<prefix>/bin` — the dir the installer put on PATH. */
+	/** `<prefix>/bin` — the dir the installer puts on PATH. */
 	binDir: string;
-	/** Whether `install.json` was found: on Windows it's the proof that we may edit the user PATH. */
-	metaFound: boolean;
+	/**
+	 * Windows: did *our* installer put `binDir` on the user PATH (`install.json`'s `path_entry_added`, for
+	 * this same prefix)? The only thing that licenses a registry PATH edit — see `removeWindowsPathEntry`.
+	 */
+	pathEntryOwned: boolean;
 	/** Shell rc files that may carry the installer's block (Unix). */
 	rcFiles: string[];
 	/** The fish `conf.d` snippet install.sh creates — deleted outright once only the block is left. */
@@ -158,6 +161,11 @@ export function resolveUninstallTargets(input: ResolveUninstallInput): Uninstall
 			: join(input.home, ".local");
 	const binDir = join(prefix, "bin");
 
+	// Only the recorded flag proves the entry is ours, and only for the prefix it was recorded against: a
+	// fallback prefix means we are not looking at the install that flag describes.
+	const pathEntryOwned =
+		windows && prefix === recordedPrefix && input.installMeta.path_entry_added === true;
+
 	const binaries = [join(binDir, exeName)];
 	if (basename(input.execPath) === exeName && !binaries.includes(input.execPath)) {
 		binaries.push(input.execPath);
@@ -182,7 +190,7 @@ export function resolveUninstallTargets(input: ResolveUninstallInput): Uninstall
 	return {
 		binaries,
 		binDir,
-		metaFound: Object.keys(input.installMeta).length > 0,
+		pathEntryOwned,
 		rcFiles,
 		fishFile: windows ? "" : join(input.home, ".config", "fish", "conf.d", "thinkrail.fish"),
 		installMetaFile: installMetaFile(input.home),
@@ -431,17 +439,20 @@ function removeRcBlocks(targets: UninstallTargets): Step[] {
 }
 
 /**
- * Remove `<prefix>\bin` from the user PATH (Windows). Gated on `install.json`: unlike install.sh's marker
- * block, a registry PATH entry carries no proof that *we* added it, and a user who already had that dir on
- * PATH for other tools must not lose it because ThinkRail happened to be installed there too.
+ * Remove `<prefix>\bin` from the user PATH (Windows). Gated on install.ps1 having *recorded that it added
+ * that entry*: unlike install.sh's marker block, a registry PATH entry carries nothing that says it is
+ * ours, and a user who already had that dir on PATH for other tools must not lose it because ThinkRail
+ * happened to be installed there too. Being installed is not the same as having added the entry —
+ * `-NoModifyPath`, an entry that was already present, a failed registry write and a Git-Bash install.sh
+ * install all record an install without touching the Windows PATH, and legacy metadata predates the flag.
  */
 async function removeWindowsPathEntry(targets: UninstallTargets): Promise<Step> {
-	if (!targets.metaFound) {
+	if (!targets.pathEntryOwned) {
 		return step(
 			"PATH entry",
 			targets.binDir,
 			"kept",
-			"no install.json, so nothing proves we added it — check your PATH by hand",
+			"the installer never added it (or can't prove it did) — check your PATH by hand",
 		);
 	}
 	const run = await runPowerShellScript(REMOVE_FROM_USER_PATH_PS1, ["-Dir", targets.binDir], {
@@ -494,7 +505,7 @@ function rcCandidates(targets: UninstallTargets): string[] {
 
 /** Which of the plan's PATH edits are really there: an rc file carrying the block, or the Windows entry. */
 function findPathEdits(targets: UninstallTargets): string[] {
-	if (process.platform === "win32") return targets.metaFound ? [targets.binDir] : [];
+	if (process.platform === "win32") return targets.pathEntryOwned ? [targets.binDir] : [];
 	return rcCandidates(targets).filter((file) => {
 		try {
 			return readFileSync(file, "utf8").includes(RC_BLOCK_BEGIN);

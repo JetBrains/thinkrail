@@ -18,6 +18,13 @@ export interface InstallMeta {
 	version?: unknown;
 	tag?: unknown;
 	prefix?: unknown;
+	/**
+	 * Windows only: did *that* install put `<prefix>\bin` on the user PATH? Written by install.ps1 (sticky
+	 * across re-installs of the same prefix) and read only by `uninstall`, which will not remove a registry
+	 * PATH entry it can't prove is ours. Absent — legacy metadata, or an install.sh/Git-Bash install, which
+	 * never touches the Windows PATH — means **not ours**.
+	 */
+	path_entry_added?: unknown;
 }
 
 /** `<home>/.config/thinkrail` — where both installers record the install. */
