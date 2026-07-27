@@ -179,12 +179,14 @@ test("Enter in the prompt creates; Shift+Enter inserts a newline", async ({ page
 	await expect(worktreeRows(page)).toHaveCount(0);
 
 	// Plain Enter submits, matching the Create button's ↵ affordance. Clearing the prompt first keeps this
-	// in the no-agent suite (an empty prompt creates a bare worktree with no chat kick-off) while still
+	// in the no-agent suite (an empty prompt opens the fresh chat but sends nothing) while still
 	// exercising the same keydown→create() path the bug lived in.
 	await prompt.fill("");
 	await expect(dialog.getByTestId("workspace-naming-hint")).toHaveCount(0);
 	await prompt.press("Enter");
 	await expect(dialog).toBeHidden();
 	await expect(worktreeRows(page)).toHaveCount(1);
-	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(0);
+	// Enter-submit lands in the fresh chat like the button does — the tab arrives async, so wait for it.
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
+	await expect(page.locator('[data-testid="chat-message"][data-role="user"]')).toHaveCount(0);
 });

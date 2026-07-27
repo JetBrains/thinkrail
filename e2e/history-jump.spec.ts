@@ -139,9 +139,10 @@ test("selecting a cross-workspace message hit switches the active workspace and 
 	// Active workspace switched from B (index 1) to A (index 0).
 	await expect(workspaces.nth(0)).toHaveAttribute("data-active", "true");
 	await expect(workspaces.nth(1)).not.toHaveAttribute("data-active", "true");
-	// Workspace A's tab strip now shows only the just-opened seeded chat (B's own started-but-empty chat is
-	// a different workspace's tab list, hidden now that A is active).
-	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
+	// Workspace A's tab strip settles on two chats: its own auto-opened one (created with A, restored
+	// live from the host on entering A) plus the just-opened seeded chat. B's own chat belongs to a
+	// different workspace's tab list, hidden now that A is active.
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(2);
 	const flashRow = page.locator("[data-flash]");
 	await expect(flashRow).toBeVisible();
 	await expect(flashRow).toContainText("migration notes");
