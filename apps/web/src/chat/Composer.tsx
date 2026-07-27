@@ -789,7 +789,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				<div className="flex flex-wrap items-center gap-sm">
 					<div className="flex min-w-0 flex-1 flex-wrap items-center gap-sm">
 						<ModelSelector models={models} current={currentModel} onSelect={onSelectModel} />
-						<ThinkingSelector level={thinkingLevel} onSelect={onSelectThinking} />
+						<ThinkingSelector
+							level={thinkingLevel}
+							levels={currentModel?.thinkingLevels ?? []}
+							onSelect={onSelectThinking}
+						/>
 					</div>
 					<div className="flex shrink-0 items-center gap-sm">
 						{/* Always rendered — the tap path to history recall on mobile, and a discoverability

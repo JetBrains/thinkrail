@@ -75,7 +75,11 @@ import type {
 // templates stay pi-CLI-portable. `template.list` is metadata-only (`TemplateInfo`, no `content` — the
 // host reads just each file's bounded frontmatter head); the full text travels solely on the by-name
 // `template.get`/`template.save` path (`Template`), both size-capped host-side.
-export const PROTOCOL_VERSION = 16;
+// v17: `WireModel` gains `thinkingLevels` (pi's per-model supported effort levels, host-computed via
+// pi-ai `getSupportedThinkingLevels`) so the effort picker offers only what the active model can do;
+// `model.clampThinking` exposes pi's own `clampThinkingLevel` for a `{model, level}` pair, so the
+// pre-session picker adjusts effort the same way `model.default` and live sessions already do.
+export const PROTOCOL_VERSION = 17;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -183,6 +187,9 @@ export const WS_METHODS = {
 	sessionGetMessages: "session.getMessages",
 	modelList: "model.list",
 	modelDefault: "model.default",
+	// pi's own clamp for a `{model, desired-level}` pair. The pre-session picker has no session to ask,
+	// and re-deriving pi's clamp client-side would give that one path a policy of its own.
+	modelClampThinking: "model.clampThinking",
 	// Auth-provider status (the Welcome strip): per-provider configured + auth kind, jbcentral wiring.
 	// Every read revalidates host-side (auth + registry reload), so a Refresh is just a re-request.
 	providerStatus: "provider.status",
@@ -420,6 +427,13 @@ export interface WsMethodMap {
 		result: { summary: SessionSummary; messages: TranscriptMessage[] };
 	};
 	"model.list": { params: Record<string, never>; result: WireModel[] };
+	// pi's `clampThinkingLevel` for a model the client is about to select, by `{provider,id}` ref. The
+	// host owns this so every path agrees: `model.default` clamps the same way, and a live session gets
+	// it from pi directly via `thinking_level_changed`. Throws if the ref isn't an available model.
+	"model.clampThinking": {
+		params: { provider: string; id: string; level: ThinkingLevel };
+		result: { level: ThinkingLevel };
+	};
 	// The model/thinking a fresh session resolves to (settings default, else first available) — so the
 	// New-Workspace dialog shows the exact pre-session model, not a placeholder.
 	"model.default": {

@@ -40,6 +40,19 @@ test("the dialog shows the exact default model and its picker scrolls inside the
 	await list.hover();
 	await page.mouse.wheel(0, 600);
 	await expect.poll(() => list.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+	await page.keyboard.press("Escape"); // close WITHOUT picking — a pick would pin a default model
+
+	// #3 — the effort pill offers exactly what the resolved model supports (never a fixed seven), and
+	// picking one is reflected. Which levels those are depends on the pinned model, so read one off the
+	// list rather than naming a level.
+	const effort = dialog.getByTestId("thinking-selector");
+	await expect(effort).toBeEnabled();
+	await effort.click();
+	const options = page.getByTestId("thinking-option");
+	expect(await options.count()).toBeGreaterThan(0);
+	const level = await options.last().getAttribute("data-level");
+	await options.last().click();
+	await expect(effort).toContainText(String(level));
 });
 
 test("Create with a prompt cuts a worktree and streams the answer in a new chat", {

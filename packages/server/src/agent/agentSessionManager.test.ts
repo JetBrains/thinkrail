@@ -1,15 +1,21 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { InMemoryCredentialStore, type ModelsRefreshResult } from "@earendil-works/pi-ai";
+import {
+	InMemoryCredentialStore,
+	type Model,
+	type ModelsRefreshResult,
+} from "@earendil-works/pi-ai";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type { ExtUiRequest } from "@thinkrail/contracts";
 import {
 	buildSessionSettings,
+	clampThinkingForModel,
 	createSession,
 	disposeAllSessions,
+	getDefaultModel,
 	getSessionCommands,
 	getSessionMessages,
 	getSessionStats,
@@ -21,6 +27,7 @@ import {
 	removeWorkspaceSessions,
 	setSessionManagerFactory,
 	setSessionPublisher,
+	toWireModel,
 } from "./agentSessionManager";
 import { configurePiRuntime } from "./piRuntime";
 import {
@@ -238,7 +245,95 @@ test("wire models expose only the allowlisted fields (no baseUrl/headers/other M
 	const models = await listAvailableModels();
 	expect(models.length).toBeGreaterThan(0);
 	for (const m of models) {
-		expect(Object.keys(m).sort()).toEqual(["contextWindow", "id", "name", "provider", "reasoning"]);
+		expect(Object.keys(m).sort()).toEqual([
+			"contextWindow",
+			"id",
+			"name",
+			"provider",
+			"reasoning",
+			"thinkingLevels",
+		]);
+		// Faux models declare `reasoning: false` — pi's support truth for those is exactly ["off"].
+		expect(m.thinkingLevels).toEqual(["off"]);
+	}
+});
+
+test("thinkingLevels is pi's per-model support truth, not a reasoning boolean widened to all seven", () => {
+	// Every registered faux model is non-reasoning, so `["off"]` alone can be satisfied by a constant.
+	// `toWireModel` is a pure projection, so pin the interesting half directly: a reasoning model exposes
+	// the escalation ladder, and `xhigh`/`max` appear ONLY when `thinkingLevelMap` maps them.
+	const reasoner: Model<string> = {
+		...modelDef("reasoner"),
+		provider: "fauxa",
+		api: "fauxa",
+		baseUrl: "http://faux.local",
+		reasoning: true,
+		thinkingLevelMap: { xhigh: "xhigh" },
+	};
+	expect(toWireModel(reasoner).thinkingLevels).toEqual([
+		"off",
+		"minimal",
+		"low",
+		"medium",
+		"high",
+		"xhigh",
+	]);
+
+	// A level the model explicitly cannot do is dropped, even on a reasoning model.
+	const alwaysThinks: Model<string> = { ...reasoner, thinkingLevelMap: { off: null } };
+	expect(toWireModel(alwaysThinks).thinkingLevels).not.toContain("off");
+});
+
+test("model.clampThinking answers with pi's clamp, not a plausible client-side policy", async () => {
+	// Review finding on the pre-session picker: any rule invented client-side diverges from pi. These are
+	// the two shapes that separate pi's upward-then-downward clamp from the likely local heuristics — a
+	// midpoint would say `medium` then `high`; "nearest below" would say `xhigh` then nothing.
+	// A reasoning provider has to be registered for this: `clampThinkingForModel` re-resolves the ref,
+	// and every other faux model is non-reasoning (supported set exactly `["off"]`, which every policy
+	// agrees on and so proves nothing).
+	const reasoning = (id: string, map: Record<string, string | null>) => ({
+		...cfg(fauxA, id),
+		models: [{ ...modelDef(id), api: fauxA.api, reasoning: true, thinkingLevelMap: map }],
+	});
+
+	runtime.registerProvider("clamp5", reasoning("clamp5", { xhigh: "xhigh" }));
+	runtime.registerProvider(
+		"clamp2",
+		reasoning("clamp2", { off: null, minimal: null, medium: null }),
+	);
+	try {
+		// `[off, minimal, low, medium, high, xhigh]` — `max` is unmapped, so upward is exhausted.
+		expect(await clampThinkingForModel({ provider: "clamp5", id: "clamp5" }, "max")).toBe("xhigh");
+		// `[low, high]` — nothing below `off`, so pi goes upward instead.
+		expect(await clampThinkingForModel({ provider: "clamp2", id: "clamp2" }, "off")).toBe("low");
+		// A level the model does support is returned untouched.
+		expect(await clampThinkingForModel({ provider: "clamp2", id: "clamp2" }, "high")).toBe("high");
+	} finally {
+		runtime.unregisterProvider("clamp5");
+		runtime.unregisterProvider("clamp2");
+	}
+});
+
+test("model.clampThinking refuses a model ref the host can't resolve", async () => {
+	await expect(clampThinkingForModel({ provider: "nope", id: "nope" }, "high")).rejects.toThrow(
+		/Unknown or unavailable model/,
+	);
+});
+
+test("model.default clamps the saved thinking level onto the resolved model's support set", async () => {
+	// A `high` saved from a reasoning model plus a non-reasoning default model must not surface as a
+	// disabled-but-selected level — the host returns a self-consistent pair, clamped with pi's own
+	// `clampThinkingLevel` (faux models don't reason → exactly ["off"]).
+	const agentDir = process.env.PI_CODING_AGENT_DIR;
+	if (!agentDir) throw new Error("agent dir not isolated");
+	const settingsPath = join(agentDir, "settings.json");
+	writeFileSync(settingsPath, `${JSON.stringify({ defaultThinkingLevel: "high" })}\n`);
+	try {
+		const d = await getDefaultModel();
+		expect(d.model?.thinkingLevels).toEqual(["off"]);
+		expect(d.thinkingLevel).toBe("off");
+	} finally {
+		rmSync(settingsPath, { force: true });
 	}
 });
 
