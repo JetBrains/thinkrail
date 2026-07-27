@@ -78,7 +78,8 @@ test("the dialog lists local branches (no stray origin) and creates a worktree",
 	await expect(dialog).toBeHidden();
 	await expect(worktreeRows(page)).toHaveCount(0);
 
-	// Reopen and Create with an empty prompt → a worktree is created (no chat), and it becomes active.
+	// Reopen and Create with an empty prompt → a worktree is created and becomes active — and submit
+	// still lands in a fresh chat with a ready composer (nothing sent; the prompt was empty).
 	await page.getByTestId("add-workspace").first().click();
 	await expect(dialog).toBeVisible();
 	await page.getByTestId("create-workspace").click();
@@ -87,20 +88,37 @@ test("the dialog lists local branches (no stray origin) and creates a worktree",
 	await expect(worktreeRows(page).first()).toHaveAttribute("data-active", "true");
 
 	// The active scope stays visible after the Welcome → IDE remount, both in the tree and the global
-	// context spine. The empty center is a persistent receipt, not a generic blank-state prompt.
+	// context spine.
 	const scope = page.getByTestId("scope-context");
 	await expect(scope).toHaveAttribute("data-context", "workspace");
 	await expect(scope).toContainText("sample-project");
 	await expect(scope).toContainText("workspace-1");
 	await expect(scope).toContainText("from main");
-	const ready = page.getByTestId("workspace-ready");
-	await expect(ready).toContainText("Workspace ready");
-	await expect(ready).toContainText("workspace-1");
-	await expect(ready).toContainText("from main");
-	await expect(ready).toContainText("Files, chats, changes, and terminals are scoped");
 
-	// No prompt → no chat tab was opened.
-	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(0);
+	// Submitting the start-working surface always lands in a chat: one fresh tab, composer ready,
+	// and no user turn (the empty prompt sent nothing).
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
+	await expect(page.getByTestId("chat-input")).toBeVisible();
+	await expect(page.locator('[data-testid="chat-message"][data-role="user"]')).toHaveCount(0);
+});
+
+test("folder-mode Start with an empty prompt lands in a fresh chat in the Default workspace", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await page.getByTestId("add-workspace").first().click();
+	const dialog = page.getByTestId("new-workspace-dialog");
+	await expect(dialog).toBeVisible();
+	await dialog.getByTestId("ws-target-default").click();
+	await page.getByTestId("create-workspace").click();
+	await expect(dialog).toBeHidden();
+
+	// Entered the Default (nothing was created) — and submit still lands in a ready chat there.
+	await expect(page.getByTestId("scope-name")).toHaveText("Default");
+	await expect(worktreeRows(page)).toHaveCount(0);
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
+	await expect(page.getByTestId("chat-input")).toBeVisible();
+	await expect(page.locator('[data-testid="chat-message"][data-role="user"]')).toHaveCount(0);
 });
 
 test("a project's committed skills are gated behind trust, then autocomplete", async ({ page }) => {

@@ -18,8 +18,7 @@ test("a closed chat reopens from history with its transcript intact", { tag: "@a
 		.locator('[data-testid="chat-message"][data-role="user"]')
 		.filter({ hasText: "pong" });
 
-	// Start a chat and run a turn so it has content worth restoring.
-	await page.getByTestId("start-chat").click();
+	// The create landed in a fresh chat; run a turn so it has content worth restoring.
 	await expect(chatTabs).toHaveCount(1);
 	await page.getByTestId("chat-input").fill("Reply with the single word: pong");
 	await page.getByTestId("chat-send").click();

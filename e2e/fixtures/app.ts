@@ -107,6 +107,10 @@ export async function createWorkspaceViaDialog(page: Page): Promise<Workspace> {
 	}).toPass({ timeout: 30_000 });
 	await page.getByTestId("create-workspace").click();
 	await expect(dialog).toBeHidden();
+	// Submitting the dialog always lands in a fresh chat (empty prompt → ready composer). Wait for the
+	// auto-opened tab before returning so every caller sees a settled center — the async session.create
+	// must not activate a chat tab mid-assertion later in a spec.
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]').first()).toBeVisible();
 	// Never the Default: the ensure can materialize its record mid-operation, and callers expect the
 	// created *worktree*, not the project folder.
 	const created = loadPersistedWorkspaces().find((w) => !before.has(w.id) && w.kind !== "default");
@@ -168,8 +172,9 @@ export async function goProjectHome(page: Page): Promise<void> {
 }
 
 /**
- * Open the fixture project, create a workspace, and start a chat — leaving the composer ready. Creation
- * is retried: when the `@agent` suite shares one host under load, an `add-workspace` click can
+ * Open the fixture project and create a workspace — leaving the dialog's auto-opened chat with its
+ * composer ready (submitting the dialog always lands in a fresh chat; no separate start-chat step).
+ * Creation is retried: when the `@agent` suite shares one host under load, an `add-workspace` click can
  * occasionally not register, so we re-click until a workspace becomes active (re-clicking only while none
  * exists, so we never spawn duplicates). Use this for any chat-driven spec.
  */
@@ -188,7 +193,6 @@ export async function openWorkspaceChat(page: Page): Promise<void> {
 			timeout: 5_000,
 		});
 	}).toPass({ timeout: 30_000 });
-	await page.getByTestId("start-chat").click();
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 	await expect(page.getByTestId("chat-input")).toBeVisible();
 }

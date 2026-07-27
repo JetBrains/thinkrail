@@ -15,7 +15,6 @@ test("a second tab hydrates the same workspace's chats and then sees live update
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
 	await expect(worktreeRows(page).first()).toHaveAttribute("data-active", "true");
-	await page.getByTestId("start-chat").click();
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 	await page.getByTestId("chat-input").fill("Reply with the single word: alpha");
 	await page.getByTestId("chat-send").click();

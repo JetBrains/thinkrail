@@ -17,7 +17,6 @@ async function openChat(page: import("@playwright/test").Page): Promise<void> {
 	await expect(trustDialog.getByTestId("ws-trust-notice")).toBeHidden();
 	await createWorkspaceViaDialog(page);
 	await expect(worktreeRows(page).first()).toHaveAttribute("data-active", "true");
-	await page.getByTestId("start-chat").click();
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 	await expect(page.getByTestId("chat-input")).toBeVisible();
 }

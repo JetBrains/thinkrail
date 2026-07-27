@@ -61,9 +61,10 @@ const PILL =
  * The start-working surface: a **target control** chooses where the work runs — an isolated worktree
  * ("Create workspace": pick a base branch, cut a worktree from it) or the project folder itself ("Work
  * in project folder": nothing is created, submit enters the built-in Default workspace). Either way:
- * say what to work on, pick a model + effort, submit → enter the target and (with a prompt) open a chat
- * there and send it. With an empty prompt it just creates/enters the target — the fast path for poking
- * at files. The header is mode-aware so it always names the operation truthfully.
+ * say what to work on, pick a model + effort, submit → enter the target and **open a fresh chat there**
+ * — a typed prompt is sent as its first message, an empty one leaves the composer ready (submitting the
+ * start-working surface always lands in a chat, never on a bare receipt). The header is mode-aware so
+ * it always names the operation truthfully.
  *
  * The only app-integration piece here: it wires the store + transport. `onCreated(ws)` fires **only when
  * a worktree was created** (folder mode creates nothing — it enters via `enterDefaultWorkspace`, whose
@@ -314,8 +315,8 @@ export function NewWorkspaceDialog({
 			}
 		}
 
-		// The target exists — the intent is fulfilled, so close the dialog *now* and run the
-		// (slower, optional) chat kick-off in the background. This keeps the dialog from lingering while pi
+		// The target exists — the intent is fulfilled, so close the dialog *now* and run the (slower)
+		// chat kick-off in the background. This keeps the dialog from lingering while pi
 		// spins up a session, and a kick-off failure can't strand the dialog open.
 		const store = useAppStore.getState();
 		if (target === "worktree") {
@@ -326,8 +327,10 @@ export function NewWorkspaceDialog({
 		}
 		onOpenChange(false);
 
+		// Submitting the start-working surface always lands in a ready chat: create the session (the
+		// picked model + effort apply even without a prompt) and open its tab; a typed prompt is
+		// additionally sent as the first message — an empty one just leaves the composer focused.
 		const text = prompt.trim();
-		if (!text) return;
 		// Snapshot the sync baseline before the create round-trip (see selectWorkspaceTick / openChatSession).
 		const syncedTick = selectWorkspaceTick(useAppStore.getState(), workspace.id);
 		try {
@@ -343,6 +346,7 @@ export function NewWorkspaceDialog({
 				session.thinkingLevel,
 				syncedTick,
 			);
+			if (!text) return;
 			store.appendUserMessage(session.sessionId, text);
 			// Fire-and-forget the turn (it resolves only when the turn ends); the now-open chat tab streams it.
 			// A rejected send (bad model / no API key) surfaces as an error turn in the just-opened chat rather

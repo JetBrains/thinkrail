@@ -12,8 +12,7 @@ test("streams an assistant reply from a real provider", { tag: "@agent" }, async
 	await createWorkspaceViaDialog(page);
 	await expect(worktreeRows(page).first()).toHaveAttribute("data-active", "true");
 
-	// Start a chat from the empty-state button, then send a tiny prompt.
-	await page.getByTestId("start-chat").click();
+	// The create landed in a fresh chat (empty prompt → ready composer); send a tiny prompt.
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 	await page.getByTestId("chat-input").fill("Reply with the single word: pong");
 	await page.getByTestId("chat-send").click();

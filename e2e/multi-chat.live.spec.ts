@@ -18,7 +18,6 @@ test("two chats in one workspace stream independently; closing one keeps the oth
 		.filter({ hasText: "Done" });
 
 	// Chat A — start a turn…
-	await page.getByTestId("start-chat").click();
 	await expect(chatTabs).toHaveCount(1);
 	await page.getByTestId("chat-input").fill("Reply with the single word: alpha");
 	await page.getByTestId("chat-send").click();

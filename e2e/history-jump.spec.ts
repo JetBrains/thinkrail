@@ -58,9 +58,9 @@ test("selecting a same-workspace message hit opens the chat and flashes the matc
 	await worktreeRows(page).first().click();
 	await expect(activeWorktreeRow(page)).toHaveCount(1);
 
-	// A fresh chat (not the seeded one) so a composer exists; the seeded session stays unopened — jumping
-	// to it must open a *second* tab, not reuse this one.
-	await page.getByTestId("start-chat").click();
+	// The create's auto-opened chat (still live in the host) auto-restores after the reload — a composer
+	// exists without any start-chat step; the seeded session stays unopened, so jumping to it must open a
+	// *second* tab, not reuse this one.
 	await expect(page.getByTestId("chat-input")).toBeVisible();
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
@@ -115,7 +115,6 @@ test("selecting a cross-workspace message hit switches the active workspace and 
 	await createWorkspaceViaDialog(page);
 	const workspaces = worktreeRows(page);
 	await expect(workspaces.nth(1)).toHaveAttribute("data-active", "true");
-	await page.getByTestId("start-chat").click();
 	await expect(page.getByTestId("chat-input")).toBeVisible();
 
 	await page.getByTestId("chat-input").press("Control+r");
@@ -159,7 +158,6 @@ test("an unmapped message hit is a no-op — the overlay stays open and the acti
 	seedExternalCwdSessions();
 	await page.waitForTimeout(2_100);
 
-	await page.getByTestId("start-chat").click();
 	await expect(page.getByTestId("chat-input")).toBeVisible();
 
 	await page.getByTestId("chat-input").press("Control+r");
@@ -215,7 +213,6 @@ test("searching a prompt's own words that an assistant reply also echoes shows o
 	});
 	await page.waitForTimeout(2_100);
 
-	await page.getByTestId("start-chat").click();
 	await expect(page.getByTestId("chat-input")).toBeVisible();
 
 	await page.getByTestId("chat-input").press("Control+r");
@@ -264,7 +261,6 @@ test("Shift+Enter on the selected prompt row jumps to the chat and flashes the m
 	});
 	await page.waitForTimeout(2_100);
 
-	await page.getByTestId("start-chat").click();
 	await expect(page.getByTestId("chat-input")).toBeVisible();
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
@@ -311,7 +307,6 @@ test("an unmapped prompt hit shows no jump icon, and Shift+Enter on it is a no-o
 	seedExternalCwdSessions();
 	await page.waitForTimeout(2_100);
 
-	await page.getByTestId("start-chat").click();
 	await expect(page.getByTestId("chat-input")).toBeVisible();
 
 	await page.getByTestId("chat-input").press("Control+r");

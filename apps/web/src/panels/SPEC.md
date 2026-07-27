@@ -139,7 +139,7 @@ rail's auto-expand follows activation; error toast + `null` if an older host has
 behind the Welcome fork card, so the enter + degrade path lives once; **`onCreated` does not fire** —
 nothing was created and the helper's list is already fresh))
 and the submit button reads **Start** instead of **Create**; the branch-list fetch + background base
-prefetch still run (fire-and-forget, keeps a toggle back to worktree instant); the optional chat
+prefetch still run (fire-and-forget, keeps a toggle back to worktree instant); the chat
 kick-off tail is identical in both modes. An optional **`promptNote`** renders as a small info strip above
 the prompt (used by "Set up project" to say what the seeded skill command does). The worktree mode's
 base-branch trigger reads **“From
@@ -166,9 +166,12 @@ a project picker, the prompt hero, and the reused
   *Trust project* button — the repo's skills stay withheld until granted (`project.setTrust`, which folds the
   updated project back into the store and re-previews); personal + bundled skills show regardless. When the menu is closed, **Enter submits** (matching the submit button's
   `↵` affordance) and
-  **Shift+Enter** inserts a newline. Worktree-mode submit = `workspace.create({ projectId, baseRef })` → set active → (with a prompt) open a chat +
-  `session.create({ model, thinkingLevel })` + fire-and-forget `prompt`; with an empty prompt it just
-  creates the workspace (folder mode: just enters Default). A **rejected** kick-off `prompt` (a bad model / missing API key — e.g. picking a
+  **Shift+Enter** inserts a newline. Worktree-mode submit = `workspace.create({ projectId, baseRef })` → set active → **always open a
+  fresh chat** (`session.create({ model, thinkingLevel })` — the picked model + effort apply even
+  without a prompt) → a typed prompt is additionally sent as the first message (fire-and-forget
+  `prompt`); an **empty prompt leaves the just-opened composer ready** — submitting the start-working
+  surface always lands the user in a chat, never on a bare receipt (folder mode: the same tail after
+  entering Default). A **rejected** kick-off `prompt` (a bad model / missing API key — e.g. picking a
   nonexistent model) surfaces as an `error` turn in the just-opened chat via `store.appendErrorTurn` (with
   `transport`'s `errorText`) rather than vanishing. The two rejections with **no chat to host a turn** raise a
   `store.toast.error` instead: a failed **`workspace.create`** (keeps the dialog open to retry) and a failed

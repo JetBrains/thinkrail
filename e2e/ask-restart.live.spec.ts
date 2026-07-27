@@ -130,7 +130,6 @@ test("a pending questionnaire survives a host kill -9: reboot, reopen, answer, a
 	await expect(page.locator('[data-testid="workspace-item"][data-active="true"]')).toHaveCount(1, {
 		timeout: 20_000,
 	});
-	await page.getByTestId("start-chat").click();
 	await expect(page.getByTestId("chat-input")).toBeVisible();
 
 	await page
