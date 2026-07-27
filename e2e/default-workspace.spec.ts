@@ -29,6 +29,9 @@ test("the Welcome fork's “Work in project folder” enters the Default workspa
 	await expect(page.getByTestId("center-tabs")).toBeVisible();
 	await expect(page.getByTestId("scope-name")).toHaveText("Default");
 	await expect(page.getByTestId("scope-branch")).toHaveText("main");
+	// No isolation base to promise: the spine must not render "· from <base>" for the Default
+	// (it would read "main · from main" here), matching the receipt's truthful framing.
+	await expect(page.getByTestId("scope-base")).toHaveCount(0);
 
 	// Pinned first, labeled Default, with the folder's real branch on the second line.
 	const row = defaultWorkspaceRow(page);

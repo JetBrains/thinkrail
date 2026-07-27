@@ -107,7 +107,9 @@ export async function createWorkspaceViaDialog(page: Page): Promise<Workspace> {
 	}).toPass({ timeout: 30_000 });
 	await page.getByTestId("create-workspace").click();
 	await expect(dialog).toBeHidden();
-	const created = loadPersistedWorkspaces().find((w) => !before.has(w.id));
+	// Never the Default: the ensure can materialize its record mid-operation, and callers expect the
+	// created *worktree*, not the project folder.
+	const created = loadPersistedWorkspaces().find((w) => !before.has(w.id) && w.kind !== "default");
 	if (!created) throw new Error("Workspace was not persisted after creation");
 	return created;
 }
@@ -154,6 +156,11 @@ export function worktreeRows(page: Page): Locator {
 	return page.locator('[data-testid="workspace-item"]:not([data-kind="default"])');
 }
 
+/** The *active* worktree row — the active workspace, excluding the always-present Default. */
+export function activeWorktreeRow(page: Page): Locator {
+	return worktreeRows(page).and(page.locator('[data-active="true"]'));
+}
+
 /** The "project home" gesture: click the project row to deselect the workspace → its Welcome screen. */
 export async function goProjectHome(page: Page): Promise<void> {
 	await page.getByTestId("project-item").first().getByText("sample-project").click();
@@ -177,9 +184,7 @@ export async function openWorkspaceChat(page: Page): Promise<void> {
 		// Activate it explicitly (a no-op when the dialog's create already did) — a lost activation would
 		// otherwise never self-heal.
 		await worktreeRows(page).first().getByRole("button").first().click();
-		await expect(
-			page.locator('[data-testid="workspace-item"][data-active="true"]:not([data-kind="default"])'),
-		).toHaveCount(1, {
+		await expect(activeWorktreeRow(page)).toHaveCount(1, {
 			timeout: 5_000,
 		});
 	}).toPass({ timeout: 30_000 });

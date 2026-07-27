@@ -1,6 +1,6 @@
 import { basename } from "node:path";
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, stagePlainFolder } from "./fixtures/app";
+import { createWorkspaceViaDialog, stagePlainFolder, worktreeRows } from "./fixtures/app";
 import { E2E_FIXTURE_REPO, E2E_PLAIN_DIR } from "./fixtures/paths";
 
 test("opens a git repo as a project via the directory picker", async ({ page }) => {
@@ -39,5 +39,7 @@ test("opening a non-git folder offers to initialise a repo, then opens it end-to
 	// …and it's usable end-to-end: a workspace (git worktree) can be created, which needs the HEAD the
 	// initial commit gave the fresh repo.
 	await createWorkspaceViaDialog(page);
-	await expect(page.getByTestId("workspace-item").first()).toBeVisible();
+	// The created *worktree* row — `.first()` of all rows would match the pinned Default and pass
+	// even if the new workspace never rendered.
+	await expect(worktreeRows(page).first()).toBeVisible();
 });

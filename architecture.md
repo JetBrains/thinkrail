@@ -59,8 +59,9 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
 6. **Workspaces are git worktrees (V1).** project (git repo) → workspace (`git worktree` on its own
    branch/cwd, under `~/.thinkrail/worktrees`) → {chats, files, terminals}. **One deliberate
    exception:** every project carries exactly one built-in **Default workspace** (`kind: "default"`)
-   whose cwd is the project folder itself (git's *main working tree*) — auto-entered on open,
-   non-removable, non-renamable — the "just work in my project folder" anchor for users lost in the
+   whose cwd is the project folder itself (git's *main working tree*) — non-removable, non-renamable,
+   and entered explicitly from the project's Welcome fork ("Work in project folder"), never
+   auto-entered — the "just work in my project folder" anchor for users lost in the
    worktree model (see [[submodule-server-workspaces]]). The shell is built first,
    `pi` connected last. Real PR / Checks / Review stay V2.
 7. **Auth is external.** Tailscale ACLs / device identity are the auth; the app carries an `owner` field,

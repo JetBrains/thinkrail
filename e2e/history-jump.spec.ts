@@ -1,5 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
+import {
+	activeWorktreeRow,
+	createWorkspaceViaDialog,
+	openFixtureProject,
+	worktreeRows,
+} from "./fixtures/app";
 import { seedExternalCwdSessions, seedWorkspaceSession } from "./fixtures/sessions";
 
 // Selecting a message hit in the Ctrl+R history overlay (A7) jumps to it: `useHistorySearch`'s
@@ -51,9 +56,7 @@ test("selecting a same-workspace message hit opens the chat and flashes the matc
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await page.getByTestId("project-item").first().click();
 	await worktreeRows(page).first().click();
-	await expect(
-		page.locator('[data-testid="workspace-item"][data-active="true"]:not([data-kind="default"])'),
-	).toHaveCount(1);
+	await expect(activeWorktreeRow(page)).toHaveCount(1);
 
 	// A fresh chat (not the seeded one) so a composer exists; the seeded session stays unopened — jumping
 	// to it must open a *second* tab, not reuse this one.

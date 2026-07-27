@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openWorkspaceChat, waitForDone, worktreeRows } from "./fixtures/app";
+import { activeWorktreeRow, openWorkspaceChat, waitForDone, worktreeRows } from "./fixtures/app";
 
 // Tagged @agent (see agent.live.spec.ts): drives a REAL pi agent against the seeded prompt-template
 // fixtures (`e2e/fixtures/templates.ts`). The no-agent `templates-compose.spec.ts` already covers the
@@ -86,9 +86,7 @@ test("a typed-through /name command is expanded by pi itself, not the composer's
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await page.getByTestId("project-item").first().click();
 	await worktreeRows(page).first().click();
-	await expect(
-		page.locator('[data-testid="workspace-item"][data-active="true"]:not([data-kind="default"])'),
-	).toHaveCount(1);
+	await expect(activeWorktreeRow(page)).toHaveCount(1);
 
 	// The session is still live in the host's memory (never closed), so it auto-restores as the active
 	// tab — no history entry to reopen from.

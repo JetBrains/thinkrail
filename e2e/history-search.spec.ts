@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import {
+	activeWorktreeRow,
 	createWorkspaceViaDialog,
 	openFixtureProject,
 	openTerminal,
@@ -282,9 +283,7 @@ test("plain ArrowUp/ArrowDown recall steps through this chat's own prior prompts
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await page.getByTestId("project-item").first().click();
 	await worktreeRows(page).first().click();
-	await expect(
-		page.locator('[data-testid="workspace-item"][data-active="true"]:not([data-kind="default"])'),
-	).toHaveCount(1);
+	await expect(activeWorktreeRow(page)).toHaveCount(1);
 
 	await page.getByTestId("chat-history").click();
 	await page.getByTestId("closed-chat-item").first().click();
@@ -363,9 +362,7 @@ test("a recall step immediately followed by a full-value replace never doubles t
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await page.getByTestId("project-item").first().click();
 	await worktreeRows(page).first().click();
-	await expect(
-		page.locator('[data-testid="workspace-item"][data-active="true"]:not([data-kind="default"])'),
-	).toHaveCount(1);
+	await expect(activeWorktreeRow(page)).toHaveCount(1);
 
 	await page.getByTestId("chat-history").click();
 	await page.getByTestId("closed-chat-item").first().click();
@@ -420,9 +417,7 @@ test("a prompt repeated earlier in the chat recalls at its most recent position,
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await page.getByTestId("project-item").first().click();
 	await worktreeRows(page).first().click();
-	await expect(
-		page.locator('[data-testid="workspace-item"][data-active="true"]:not([data-kind="default"])'),
-	).toHaveCount(1);
+	await expect(activeWorktreeRow(page)).toHaveCount(1);
 
 	await page.getByTestId("chat-history").click();
 	await page.getByTestId("closed-chat-item").first().click();
