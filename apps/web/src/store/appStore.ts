@@ -94,6 +94,12 @@ export const SettingsSection = {
 } as const;
 export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSection];
 
+/**
+ * The right panel's views. The id lives here, not in `panels`, because the *intent* to show one is store
+ * state (`rightTabRequest`) that chat raises and the panel obeys — `RightPanel` reads the union back.
+ */
+export type RightPanelTab = "specs" | "files" | "changes";
+
 /** A transient notification. `error` persists until dismissed; `success`/`info` auto-dismiss (the Toaster
  * owns the timer). `title` is optional — a bare `message` is the common case. */
 export interface Toast {
@@ -447,10 +453,18 @@ interface AppState {
 	 * the counter, never fetches (see `chat/SPEC.md`'s Template slots bullet). */
 	templatesVersion: number;
 	/**
+	 * Which right-panel view to show, when something outside it asks (a chat turn-divider chip). The panel
+	 * watches this ONE field, so "flip to a view" is a single concept rather than a side effect read off
+	 * each path intent below — a chip that only *reveals* a view (expanding its artifact list) needs no path
+	 * at all. Workspace-scoped, so a request from another workspace's chat can't move the active panel; a
+	 * fresh object each call so identical re-requests still fire.
+	 */
+	rightTabRequest: { workspaceId: string; tab: RightPanelTab } | null;
+	/**
 	 * A request to surface a file in the right-panel Changes view (e.g. a chat turn-divider's "files
-	 * changed" chip). The panels watch it and, when it targets the active workspace, switch to the Changes
-	 * tab and **highlight** the file's row — the diff opens only on an explicit click. A fresh object each
-	 * call so identical re-requests still fire.
+	 * changed" chip). The panels watch it and **highlight** the file's row — the diff opens only on an
+	 * explicit click. Travels with a `rightTabRequest` for the flip. A fresh object each call so identical
+	 * re-requests still fire.
 	 */
 	changesRequest: { workspaceId: string; path: string } | null;
 	/**
@@ -470,10 +484,10 @@ interface AppState {
 	historyOpenRequest: { sessionId: string } | null;
 	/**
 	 * A request to surface a spec in the right-panel Specs view (e.g. a chat turn-divider's "specs" chip).
-	 * The panels watch it and, when it targets the active workspace, switch to the Specs tab and **open the
-	 * rendered spec** — unlike a diff, a spec doc has nothing to preview short of opening it, and the tree
-	 * row lights up on its own (rows key off the active tab id). A fresh object each call so identical
-	 * re-requests still fire.
+	 * The panels watch it and **open the rendered spec** — unlike a diff, a spec doc has nothing to preview
+	 * short of opening it, and the tree row lights up on its own (rows key off the active tab id). Travels
+	 * with a `rightTabRequest` for the flip, and is **consumed** once handled (it opens a center tab, so a
+	 * replay would steal the user's tab). A fresh object each call so identical re-requests still fire.
 	 */
 	specRequest: { workspaceId: string; path: string } | null;
 	/**
@@ -653,7 +667,9 @@ interface AppState {
 	setSettingsSection: (section: SettingsSection) => void;
 	/** Fold the server-synced app config in (from `server.welcome` / the `settings.changed` broadcast). */
 	applyConfig: (config: AppConfig) => void;
-	/** Ask the right panel to open `path`'s diff in its Changes view (deep-link from chat). */
+	/** Ask the right panel to show one of its views — no path, just the flip (a chip revealing its list). */
+	requestRightTab: (workspaceId: string, tab: RightPanelTab) => void;
+	/** Ask the right panel to surface `path` in its Changes view (deep-link from chat); flips to it too. */
 	requestChangesView: (workspaceId: string, path: string) => void;
 	/**
 	 * Open a history-search hit: sets `chatLocationRequest` AND switches `activeWorkspaceId` (the hit's
@@ -670,7 +686,7 @@ interface AppState {
 	requestHistoryOpen: (target: HistoryTarget) => void;
 	/** Dismiss the history-open request once `ChatView` has acted on it. */
 	clearHistoryOpen: () => void;
-	/** Ask the right panel to open `path` in its Specs view (deep-link from chat). */
+	/** Ask the right panel to open `path` in its Specs view (deep-link from chat); flips to it too. */
 	requestSpecView: (workspaceId: string, path: string) => void;
 	/** Drop the spec deep-link once a panel has acted on it (it opens a tab — it must fire exactly once). */
 	clearSpecRequest: () => void;
@@ -800,6 +816,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	sessions: {},
 	models: [],
 	templatesVersion: 0,
+	rightTabRequest: null,
 	changesRequest: null,
 	specRequest: null,
 	specsByWorkspace: {},
@@ -1348,7 +1365,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 	closeSettings: () => set({ settingsOpen: false }),
 	setSettingsSection: (section) => set({ settingsSection: section }),
 	applyConfig: (config) => set({ theme: config.theme, analyticsEnabled: config.analyticsEnabled }),
-	requestChangesView: (workspaceId, path) => set({ changesRequest: { workspaceId, path } }),
+	requestRightTab: (workspaceId, tab) => set({ rightTabRequest: { workspaceId, tab } }),
+	// The path intent and the flip always travel together — one action, so no call site can send half of it.
+	requestChangesView: (workspaceId, path) =>
+		set({
+			changesRequest: { workspaceId, path },
+			rightTabRequest: { workspaceId, tab: "changes" },
+		}),
 	// Activate project + workspace together (the same atomicity `activateWorkspace` upholds) so a jump into
 	// another project can never leave `selectedProjectId` on the source while `activeWorkspaceId` points
 	// elsewhere. The caller (`useHistorySearch.openMessage`) ensures the target project's workspaces are
@@ -1366,7 +1389,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 			activeTabByWorkspace: { ...s.activeTabByWorkspace, [target.workspaceId]: target.tabId },
 		})),
 	clearHistoryOpen: () => set({ historyOpenRequest: null }),
-	requestSpecView: (workspaceId, path) => set({ specRequest: { workspaceId, path } }),
+	requestSpecView: (workspaceId, path) =>
+		set({ specRequest: { workspaceId, path }, rightTabRequest: { workspaceId, tab: "specs" } }),
 	clearSpecRequest: () => set({ specRequest: null }),
 	setWorkspaceSpecs: (workspaceId, nodes) =>
 		set((s) =>

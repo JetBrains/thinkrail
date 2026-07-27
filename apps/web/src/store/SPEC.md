@@ -126,12 +126,18 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   tick)`** — a `FileTab` carries the `tick` its content was loaded at, so `FilePane` detects staleness
   (`workspaceTick > tab.loadedTick`) across tab switches, and its diff twin
   **`updateDiffTabContent(id, original, modified, tick)`** — a `DiffTab` follows the same staleness
-  contract in `DiffPane`. The transient **`changesRequest`** +
+  contract in `DiffPane`. The transient **`rightTabRequest`** +
+  **`requestRightTab(workspaceId, tab)`** are the ONE intent for "show a right-panel view" (`RightPanelTab`
+  lives here, since the intent does): `RightPanel` watches that single field instead of inferring a flip from
+  each path request, which is what lets a divider chip reveal a view while merely expanding its own artifact
+  list — no path picked yet. The transient **`changesRequest`** +
   **`requestChangesView(workspaceId, path)`** are a UI deep-link intent (a chat turn-divider asking the
-  right panel to surface a file in its Changes view — flip to the tab and **highlight the row**, without
+  right panel to surface a file in its Changes view — **highlight the row**, without
   opening the diff; that waits for an explicit click); the panels watch it, scoped by workspace. Its Specs
-  twin **`specRequest`** + **`requestSpecView(workspaceId, path)`** flips to the Specs tab and **opens the
+  twin **`specRequest`** + **`requestSpecView(workspaceId, path)`** **opens the
   rendered spec** — the stronger treatment, because a spec doc has nothing to preview short of its content.
+  Both path intents set `rightTabRequest` **in the same action**: the panel is never asked to surface a path
+  in a view it was not also told to show.
   Two separate fields, never one: the panel that can show a *gitignored* spec is not the git-derived one, and
   that confusion is exactly the bug the split fixes. The spec intent is additionally **consumed**
   (**`clearSpecRequest`**) by whoever handles it — it opens a center tab, so a replay would steal the user's

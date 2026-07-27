@@ -741,9 +741,10 @@ test("applyWorkspaceRemoved drops the removed workspace's cached spec graph", ()
 // --- the right-panel deep links (chat turn-divider chips) ------------------------------------------
 
 test("requestChangesView / requestSpecView are independent, workspace-scoped intents", () => {
-	useAppStore.setState({ changesRequest: null, specRequest: null });
+	useAppStore.setState({ changesRequest: null, specRequest: null, rightTabRequest: null });
 
 	useAppStore.getState().requestChangesView("w1", "src/a.ts");
+	expect(useAppStore.getState().rightTabRequest).toEqual({ workspaceId: "w1", tab: "changes" });
 	useAppStore.getState().requestSpecView("w1", ".thinkrail/context/TASK-x.md");
 
 	const s = useAppStore.getState();
@@ -751,12 +752,34 @@ test("requestChangesView / requestSpecView are independent, workspace-scoped int
 	// The spec intent is a separate field, so a spec chip can never be mistaken for a changes chip (which
 	// would flip the right panel to a view that can't show a gitignored spec).
 	expect(s.specRequest).toEqual({ workspaceId: "w1", path: ".thinkrail/context/TASK-x.md" });
+	// The path intent and the flip are one action: the panel is never asked to surface a path in a view it
+	// was not also told to show.
+	expect(s.rightTabRequest).toEqual({ workspaceId: "w1", tab: "specs" });
 
 	// A fresh object each call, so re-clicking the same chip re-fires the watching effects.
 	const first = useAppStore.getState().specRequest;
 	useAppStore.getState().requestSpecView("w1", ".thinkrail/context/TASK-x.md");
 	expect(useAppStore.getState().specRequest).not.toBe(first);
 	expect(useAppStore.getState().specRequest).toEqual(first);
+});
+
+test("requestRightTab flips a view without surfacing any path", () => {
+	// The divider's chips use this when they expand their own list: the panel follows the side the user
+	// chose, but nothing is opened or highlighted (no path was picked yet).
+	useAppStore.setState({ rightTabRequest: null, changesRequest: null, specRequest: null });
+
+	useAppStore.getState().requestRightTab("w1", "specs");
+
+	const s = useAppStore.getState();
+	expect(s.rightTabRequest).toEqual({ workspaceId: "w1", tab: "specs" });
+	expect(s.specRequest).toBeNull();
+	expect(s.changesRequest).toBeNull();
+
+	// A fresh object each call, so re-choosing the same side after a manual tab switch still flips back.
+	const first = s.rightTabRequest;
+	useAppStore.getState().requestRightTab("w1", "specs");
+	expect(useAppStore.getState().rightTabRequest).not.toBe(first);
+	expect(useAppStore.getState().rightTabRequest).toEqual(first);
 });
 
 test("clearSpecRequest consumes the spec intent once — it opens a tab, so it must not replay", () => {

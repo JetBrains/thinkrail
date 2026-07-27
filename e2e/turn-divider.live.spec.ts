@@ -107,14 +107,20 @@ test("a multi-artifact chip expands into the round's list instead of guessing wh
 	await expect(chip).toBeVisible({ timeout: 30_000 });
 	await expect(chip).toContainText("2 files changed");
 
-	// Collapsed by default, and clicking discloses the set rather than deep-linking the first path — the
-	// right panel stays put (the chip never steals the center area or picks for the user).
+	// Collapsed by default, and clicking discloses the set rather than deep-linking the first path. The
+	// owning view is revealed alongside (that is what makes the chips read as a switch), but nothing is
+	// surfaced in it yet: no diff tab, no highlighted row — the chip never picks a file for the user.
 	await expect(page.getByTestId("turn-divider-files-list")).toHaveCount(0);
 	await chip.click();
 	const list = page.getByTestId("turn-divider-files-list");
 	await expect(list).toBeVisible();
 	await expect(list.getByTestId("turn-divider-files-list-item")).toHaveCount(2);
-	await expect(page.getByTestId("tab-changes")).not.toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("tab-changes")).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("diff-pane")).toHaveCount(0);
+	await expect(page.getByTestId("change-item").filter({ hasText: "beta.txt" })).not.toHaveAttribute(
+		"data-active",
+		"true",
+	);
 
 	// A row is the deep link: it flips to Changes and highlights that file — the one the user picked.
 	await list.getByTestId("turn-divider-files-list-item").filter({ hasText: "beta.txt" }).click();
@@ -170,4 +176,50 @@ test("a spec written while the Specs tab is closed still counts as a spec", {
 	await expect(specChip).toBeVisible({ timeout: 30_000 });
 	await expect(specChip).toContainText("1 spec");
 	await expect(page.getByTestId("turn-divider-files")).toHaveCount(0);
+});
+
+test("the two artifact chips are a switch: one list at a time, and re-clicking clears the selection", {
+	tag: "@agent",
+}, async ({ page }) => {
+	test.setTimeout(180_000);
+	await openWorkspaceChat(page);
+
+	// A round with several artifacts on BOTH sides, so the two chips are genuine alternatives.
+	await page
+		.getByTestId("chat-input")
+		.fill(
+			"Use the write tool four times, then stop. 1) alpha.txt containing: alpha. 2) beta.txt " +
+				"containing: beta. 3) docs/one/SPEC.md containing:\n" +
+				"---\nid: sample-doc-one\ntype: module-design\ntitle: Doc One\nparent: sample-root\n---\n\n## Responsibility\n\nOne.\n" +
+				"4) docs/two/SPEC.md containing:\n" +
+				"---\nid: sample-doc-two\ntype: module-design\ntitle: Doc Two\nparent: sample-root\n---\n\n## Responsibility\n\nTwo.\n",
+		);
+	await page.getByTestId("chat-send").click();
+	await waitForDone(page);
+
+	const specsChip = page.getByTestId("turn-divider-specs").first();
+	const filesChip = page.getByTestId("turn-divider-files").first();
+	await expect(specsChip).toContainText("2 specs", { timeout: 30_000 });
+	await expect(filesChip).toContainText("2 files changed");
+	const specsList = page.getByTestId("turn-divider-specs-list");
+	const filesList = page.getByTestId("turn-divider-files-list");
+
+	// Choosing the specs side opens its list and reveals Specs.
+	await specsChip.click();
+	await expect(specsList).toBeVisible();
+	await expect(filesList).toHaveCount(0);
+	await expect(page.getByTestId("tab-specs")).toHaveAttribute("data-active", "true");
+
+	// Choosing the other side REPLACES the open list (never two at once) and follows with its own view.
+	await filesChip.click();
+	await expect(filesList).toBeVisible();
+	await expect(specsList).toHaveCount(0);
+	await expect(page.getByTestId("tab-changes")).toHaveAttribute("data-active", "true");
+
+	// Re-clicking the chosen side clears the selection: nothing expanded, and the panel is left where the
+	// user last sent it (a close is "never mind", not another navigation).
+	await filesChip.click();
+	await expect(filesList).toHaveCount(0);
+	await expect(specsList).toHaveCount(0);
+	await expect(page.getByTestId("tab-changes")).toHaveAttribute("data-active", "true");
 });

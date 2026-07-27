@@ -10,8 +10,9 @@ import {
 	Wrench,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { cn } from "@/lib";
 import { ActivityGroup } from "./ActivityGroup";
-import { useFold } from "./foldState";
+import { useSelection } from "./foldState";
 import { Markdown } from "./Markdown";
 import type { ChatRow, TurnDividerData } from "./rows";
 import { ToolCard } from "./ToolCard";
@@ -23,19 +24,22 @@ import { projectRelativePath } from "./tools/toolHelpers";
  * activity can fold across assistant-message boundaries). Presentational + props-driven (no
  * store/transport) so the renderers stay reusable; `ChatView` derives the rows from the store and feeds
  * them here. `onOpenSpec` / `onOpenChange` are the divider's two deep links ("N specs" → the Specs panel,
- * "N files changed" → the Changes panel), each taking the ONE path the user picked — supplied by the
- * integration layer, no-op defaults keep the primitives standalone.
+ * "N files changed" → the Changes panel), each taking the ONE path the user picked; `onReveal` just shows a
+ * view (a chip expanding its list) — supplied by the integration layer, no-op defaults keep the primitives
+ * standalone.
  */
 export function ChatTurnView({
 	row,
 	workspaceRoot,
 	onOpenSpec,
 	onOpenChange,
+	onReveal,
 }: {
 	row: ChatRow;
 	workspaceRoot?: string | undefined;
 	onOpenSpec?: ((path: string) => void) | undefined;
 	onOpenChange?: ((path: string) => void) | undefined;
+	onReveal?: ((tab: "specs" | "changes") => void) | undefined;
 }) {
 	switch (row.kind) {
 		case "user":
@@ -78,6 +82,7 @@ export function ChatTurnView({
 					workspaceRoot={workspaceRoot}
 					onOpenSpec={onOpenSpec ?? (() => {})}
 					onOpenChange={onOpenChange ?? (() => {})}
+					onReveal={onReveal ?? (() => {})}
 				/>
 			);
 		default:
@@ -223,33 +228,40 @@ function formatElapsed(ms: number): string {
 }
 
 /**
- * One kind of artifact a round produced: the paths, how to name them, and where a click sends the user.
- * `TurnDivider` builds one per side (specs / changed files) so the two are described once instead of being
- * spelled out in parallel across chip and list.
+ * One kind of artifact a round produced: the paths, how to name them, which right-panel view owns them, and
+ * where a click sends the user. `TurnDivider` builds one per side (specs / changed files) so the two are
+ * described once instead of being spelled out in parallel across chip and list.
  */
 interface ArtifactGroup {
+	/** Selection key — also the chip's testid, and what makes the two sides mutually exclusive. */
 	testid: string;
 	icon: typeof FileText;
 	paths: string[];
 	/** Chip text for a count — each group owns its own singular/plural. */
 	label: (count: number) => string;
 	expanded: boolean;
-	toggle: () => void;
 	onOpen: (path: string) => void;
+	/** Show the right-panel view that owns this kind (the flip that rides along with expanding). */
+	reveal: () => void;
 }
 
 /**
  * One artifact chip of the round-end divider. A **single** artifact is an immediate deep link — one click
  * lands on the file, which is the common case and the whole point of the chip. **Several** turn it into a
- * disclosure instead: the round's set expands as a list right here in the transcript, and each row is the
- * same deep link. Why in the chat and not as a highlight over the panels: the set belongs to *this round*,
+ * disclosure: the round's set expands as a list right here in the transcript, each row the same deep link.
+ * The two chips are **alternatives, not independent folds** — opening one closes the other, and clicking the
+ * open one closes it (nothing selected), so the divider never grows two lists at once. Expanding also
+ * reveals the right-panel view that owns the kind, which is what makes the chip read as a switch between
+ * Specs and Changes rather than two unrelated toggles.
+ *
+ * Why the list lives in the chat and not as a highlight over the panels: the set belongs to *this round*,
  * while the panels show *now* — a round from days ago would frame rows that have since moved on (or, for
  * Changes, are no longer in the diff at all). It also keeps the count honest — clicking "5 files changed"
- * can't silently surface just the first one. Fold state rides `useFold`, so it survives virtualization and
- * streaming re-derivation like every other fold in the transcript.
+ * can't silently surface just the first one. Selection rides `useSelection`, so it survives virtualization
+ * and streaming re-derivation like every other fold in the transcript.
  */
-function ArtifactChip({ group }: { group: ArtifactGroup }) {
-	const { testid, icon: Icon, paths, label, expanded, toggle, onOpen } = group;
+function ArtifactChip({ group, onSelect }: { group: ArtifactGroup; onSelect: () => void }) {
+	const { testid, icon: Icon, paths, label, expanded, onOpen, reveal } = group;
 	const many = paths.length > 1;
 	const first = paths[0];
 	return (
@@ -259,10 +271,18 @@ function ArtifactChip({ group }: { group: ArtifactGroup }) {
 			data-expanded={many && expanded ? true : undefined}
 			aria-expanded={many ? expanded : undefined}
 			onClick={() => {
-				if (many) toggle();
-				else if (first) onOpen(first);
+				if (!many) {
+					if (first) onOpen(first); // its own deep link already reveals the owning view
+					return;
+				}
+				// Reveal the owning view when opening; a close is "never mind" and leaves the panel alone.
+				if (!expanded) reveal();
+				onSelect();
 			}}
-			className="flex items-center gap-xs rounded-[var(--radius-sm)] px-xs text-primary hover:bg-hover"
+			className={cn(
+				"flex items-center gap-xs rounded-[var(--radius-sm)] px-xs text-primary hover:bg-hover",
+				many && expanded && "bg-hover",
+			)}
 		>
 			<Icon className="size-3 shrink-0" />
 			{label(paths.length)}
@@ -317,10 +337,11 @@ function ArtifactList({
  * count, then the round's written artifacts as **two chips split the way the right panel is** — "N specs"
  * (deep-links the Specs panel, opening the rendered spec — via `onOpenSpec`) and "N files changed"
  * (deep-links the Changes panel to the file: flips to the tab and highlights its row, leaving the diff to an
- * explicit click — via `onOpenChange`) — and elapsed wall-clock. Each chip deep-links directly for a single
- * artifact and expands into a list for several (see `ArtifactChip`); `id` (the divider row's id) keys that
- * fold. Presentational — the store touches live in `ChatView`, which supplies both handlers. The data comes
- * from the pure `turnDivider` deriver in `rows.ts`, which owns the spec/code partition.
+ * explicit click — via `onOpenChange`) — and elapsed wall-clock. A single artifact deep-links outright;
+ * several make the chip a **single-choice** disclosure (see `ArtifactChip`) whose list replaces the other
+ * side's rather than joining it, keyed off `id` (the divider row's id). Presentational — the store touches
+ * live in `ChatView`, which supplies the open + reveal handlers. The data comes from the pure `turnDivider`
+ * deriver in `rows.ts`, which owns the spec/code partition.
  */
 export function TurnDivider({
 	id,
@@ -328,36 +349,38 @@ export function TurnDivider({
 	workspaceRoot,
 	onOpenSpec,
 	onOpenChange,
+	onReveal,
 }: {
 	id: string;
 	data: TurnDividerData;
 	workspaceRoot?: string | undefined;
 	onOpenSpec: (path: string) => void;
 	onOpenChange: (path: string) => void;
+	/** Show the right-panel view that owns a side, without surfacing any particular path. */
+	onReveal: (tab: "specs" | "changes") => void;
 }) {
 	const { elapsedMs, toolCount, specs, changedFiles } = data;
-	// One fold per side, keyed off the divider row id — both called unconditionally (hook order) even when
-	// the round wrote nothing of that kind.
-	const [specsOpen, toggleSpecs] = useFold(`${id}:specs`);
-	const [filesOpen, toggleFiles] = useFold(`${id}:files`);
+	// ONE selection per divider, not a fold per side: the two lists are alternatives, so "at most one open"
+	// is structural — there is no state where both are expanded.
+	const [selected, select] = useSelection(`${id}:artifacts`);
 	const sides: ArtifactGroup[] = [
 		{
 			testid: "turn-divider-specs",
 			icon: FileText,
 			paths: specs,
 			label: (n) => `${n} ${n === 1 ? "spec" : "specs"}`,
-			expanded: specsOpen,
-			toggle: toggleSpecs,
+			expanded: selected === "turn-divider-specs",
 			onOpen: onOpenSpec,
+			reveal: () => onReveal("specs"),
 		},
 		{
 			testid: "turn-divider-files",
 			icon: FileDiff,
 			paths: changedFiles,
 			label: (n) => `${n} ${n === 1 ? "file changed" : "files changed"}`,
-			expanded: filesOpen,
-			toggle: toggleFiles,
+			expanded: selected === "turn-divider-files",
 			onOpen: onOpenChange,
+			reveal: () => onReveal("changes"),
 		},
 	];
 	const groups = sides.filter((group) => group.paths.length > 0);
@@ -377,7 +400,7 @@ export function TurnDivider({
 					</span>
 				) : null}
 				{groups.map((group) => (
-					<ArtifactChip key={group.testid} group={group} />
+					<ArtifactChip key={group.testid} group={group} onSelect={() => select(group.testid)} />
 				))}
 				{elapsedMs != null && elapsedMs >= 1000 ? (
 					<span className="flex items-center gap-xs">

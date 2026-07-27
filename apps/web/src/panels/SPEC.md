@@ -330,13 +330,16 @@ a project picker, the prompt hero, and the reused
   feature, not speculative dots or reused status chrome. This remains a restrained hierarchy — no hero,
   duplicate root, preview, or graph canvas. `FileTree` keeps its own gesture model (whole-row click
   toggles dirs — no collision there).
-- **The two chat deep-links mirror the tab split.** `RightPanel`/`ChangesPanel` watch the store's
-  `changesRequest` (set by a chat turn-divider's "files changed" chip): when it targets the active workspace,
-  `RightPanel` flips to the Changes tab and `ChangesPanel` **highlights** the requested file's row (resolved
-  with `matchesWorktreePath` against `git.status`) — deliberately without opening its diff tab; the diff
-  opens only on the user's explicit click, so a chat chip never steals the center area.
-  `RightPanel`/`SpecsPanel` watch **`specRequest`** (the "N specs" chip) the same way, but flip to **Specs**
-  and **open the rendered spec** (`openFileInTab`, resolving the reported path through the graph, falling
+- **The chat deep-links mirror the tab split.** `RightPanel` decides *which view is showing* from exactly one
+  store field — **`rightTabRequest`** (`requestRightTab`, which both path intents below set in the same
+  action) — so the flip is one concept rather than something re-derived per request type, and a divider chip
+  that only reveals a view (expanding its artifact list, no path picked) needs no path to do it.
+  `ChangesPanel` watches
+  `changesRequest` (set by a chat turn-divider's "files changed" chip) and **highlights** the requested
+  file's row (resolved with `matchesWorktreePath` against `git.status`) — deliberately without opening its
+  diff tab; the diff opens only on the user's explicit click, so a chat chip never steals the center area.
+  `SpecsPanel` watches **`specRequest`** (the "N specs" chip) and **opens the rendered spec**
+  (`openFileInTab`, resolving the reported path through the graph, falling
   back to the raw request for a spec created seconds ago) — a spec has nothing to preview short of its
   content, and the tree row lights up on its own since rows key off the active tab id. That intent is
   **consumed** (`clearSpecRequest`) once handled: unlike the highlight-only Changes link, it opens a center

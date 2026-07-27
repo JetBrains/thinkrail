@@ -62,12 +62,20 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   for Changes, are no longer in the diff at all). It also keeps the count honest: clicking "5 files changed"
   can never quietly surface just the first one, and the handlers take exactly ONE path, so nothing
   downstream has to guess which of several the user meant.
+- The two chips are a **switch, not two independent folds**: at most one list is open, choosing the other
+  side replaces it, and re-choosing the open one clears the selection. That invariant is *structural* — the
+  divider stores the **selected key** (`useSelection`, one entry per divider row), so no state exists in
+  which both are expanded. Expanding also **reveals the owning right-panel view** (`onReveal` →
+  `requestRightTab`) without surfacing any path, which is what makes the pair read as switching between
+  Specs and Changes; closing is "never mind" and leaves the panel where the user last sent it.
 
 Row/step ids are stable across streaming snapshots (first step's `toolCallId`, or message-anchored index —
 pi appends, never reorders), so fold state survives re-derivation and virtualization: **every fold surface
 (activity groups, step rows, `ToolCard`, the divider's multi-artifact chips) records manual toggles in the
 shared `foldState` cache**
-(`foldState.ts`, keyed by row/step id — the divider's two chips key off `${rowId}:specs` / `${rowId}:files`;
+(`foldState.ts`, keyed by row/step id. Two hooks over that module: **`useFold`** for independent booleans,
+and **`useSelection`** for a single-choice group — the divider's chips, which store the *selected key* under
+`${rowId}:artifacts` rather than a boolean per side, so "only one list open" cannot be violated;
 the `AskUserQuestionCard` pattern, see tools/SPEC.md; deliberately
 never evicted — growth is bounded by manual toggles). A manual toggle always wins — over auto-expand
 defaults *and* over a virtualization remount.
@@ -486,7 +494,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 - **`ChatView`** is the primary app-integration file: wires this session's runtime
   (`store.sessions[sessionId]`), the transport calls, the `ChatActions` + `AskStates` contexts, the
   divider's deep links (`onOpenChange` → `requestChangesView`, `onOpenSpec` → `requestSpecView`; each
-  receives the single path the user picked), and the
+  receives the single path the user picked) plus its view switch (`onReveal` → `requestRightTab`), and the
   `isSpec` classifier it builds from the store's `specsByWorkspace` snapshot (subscribed as the stored array
   — a stable ref — and memoized into a matcher here, never a fresh Set inside the selector) — together with
   **`useHistorySearch.ts`** (the Ctrl+R history-recall overlay's store/transport edge) and

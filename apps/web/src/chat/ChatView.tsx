@@ -537,6 +537,15 @@ export default function ChatView({
 		[workspaceId],
 	);
 
+	// A chip expanding its artifact list asks for the owning view alongside — no path, so nothing is opened
+	// or highlighted: the user is choosing which side of the round to look at, and the panel follows.
+	const onReveal = useCallback(
+		(tab: "specs" | "changes") => {
+			useAppStore.getState().requestRightTab(workspaceId, tab);
+		},
+		[workspaceId],
+	);
+
 	// The questionnaire cards' transcript-derived lifecycle (awaiting / answered / superseded) — provided
 	// as context so the presentational card stays store-free (see askState.ts).
 	const askStates = useMemo(
@@ -627,6 +636,7 @@ export default function ChatView({
 										workspaceRoot={workspaceRoot}
 										onOpenSpec={onOpenSpec}
 										onOpenChange={onOpenChange}
+										onReveal={onReveal}
 									/>
 								</div>
 							)}

@@ -1,33 +1,27 @@
 import { RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useAppStore } from "../store";
+import { type RightPanelTab, useAppStore } from "../store";
 import { ChangesPanel } from "./ChangesPanel";
 import { FileTree } from "./FileTree";
 import { SpecsPanel } from "./SpecsPanel";
 import { useWorkspaceSpecs } from "./useWorkspaceSpecs";
 
-type RightTab = "specs" | "files" | "changes";
-
 /** Right panel for the active worktree: Specs (read-only spec-graph tree), All-files tree, and Changes (git diff vs base). Checks/Review = V2. */
 export function RightPanel() {
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
-	const changesRequest = useAppStore((s) => s.changesRequest);
-	const specRequest = useAppStore((s) => s.specRequest);
-	const [tab, setTab] = useState<RightTab>("specs");
+	const rightTabRequest = useAppStore((s) => s.rightTabRequest);
+	const [tab, setTab] = useState<RightPanelTab>("specs");
 	const [specsRefresh, setSpecsRefresh] = useState(0);
 	// Owned here, not in the tab body: the spec graph is app-wide state (the chat classifies its artifacts
 	// with it), and this panel outlives any one tab. See `useWorkspaceSpecs`.
 	const specsFailed = useWorkspaceSpecs(activeWorkspaceId, specsRefresh);
 
-	// A deep-link from chat (a turn-divider chip) targeting this workspace flips us to the view that owns the
-	// artifact: the "files changed" chip to Changes, the "specs" chip to Specs. Two effects, not one, so a
-	// stale request of the other kind can never win the flip.
+	// Anything outside the panel that wants a view shown raises one intent (`requestRightTab`, carried along
+	// by the chat deep-links too), so the flip is decided in a single place rather than inferred from each
+	// path request — and a chip that only reveals its own artifact list needs no path to do it.
 	useEffect(() => {
-		if (changesRequest?.workspaceId === activeWorkspaceId) setTab("changes");
-	}, [changesRequest, activeWorkspaceId]);
-	useEffect(() => {
-		if (specRequest?.workspaceId === activeWorkspaceId) setTab("specs");
-	}, [specRequest, activeWorkspaceId]);
+		if (rightTabRequest?.workspaceId === activeWorkspaceId) setTab(rightTabRequest.tab);
+	}, [rightTabRequest, activeWorkspaceId]);
 
 	return (
 		<div className="flex h-full min-h-0 flex-col">
