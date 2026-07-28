@@ -14,16 +14,17 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "../lib";
-import { groupProgress, groupStatus, type PlanGlance } from "./planView";
+import { groupProgress, groupStatus, type PlanGlance, planSections } from "./planView";
 
 // Presentational TODO rendering for the in-chat plan popup (SPEC §Chat TODO plan). Props-driven (no transport) —
 // the caller supplies the plan + edit callbacks (see `useChatTodos`) and the glance state (see
-// `planView.ts`). The plan renders **group-first** — group = task: the loose lane (the user's own items)
-// first, then the groups in plan order, each under a header row (derived status + title + done/total
-// badge); a fully-done group folds into one expandable row. The in_progress step's icon follows the
-// glance: working → dot, stopped on a question → `?`, stopped otherwise → pause — so the list never
-// claims "in work" while the system waits. Status is read-only (agent-owned); the user's edit surface is
-// add + remove.
+// `planView.ts`). The plan reads as a **status flow, group-first** (`planSections`): the **in-progress**
+// task (its whole group) on top with no header, then a **To do** section (pending groups, then the
+// user's pending loose items), then a single titled, collapsed **Done** section at the very bottom
+// (fully-done groups + done loose items). Finished *steps* stay inline in their group; only whole done
+// tasks move to Done. The in_progress step's icon follows the glance: working → dot, stopped on a
+// question → `?`, stopped otherwise → pause — so the list never claims "in work" while the system waits.
+// Status is read-only (agent-owned); the user's edit surface is add + remove.
 
 const STATUS_LABEL: Record<TodoStatus, string> = {
 	in_progress: "In progress",
@@ -106,13 +107,81 @@ export function TodoAddRow({
 	);
 }
 
+/** A non-done task group (active or pending): a header row (status icon + title + done/total) with its
+ * steps indented — finished steps stay inline (checked + struck through). */
+function GroupBlock({
+	group,
+	glance,
+	onRemove,
+}: {
+	group: TodoGroupItem;
+	glance: PlanGlance;
+	onRemove: (id: string) => void;
+}) {
+	const status = groupStatus(group);
+	const { done, total } = groupProgress(group);
+	return (
+		<div className="mb-sm" data-testid="todo-group" data-status={status}>
+			<div className="flex items-center gap-sm px-xs py-xs">
+				{status === "active" ? (
+					<StatusIcon status="in_progress" glance={glance} />
+				) : (
+					<Circle className="size-4 shrink-0 text-hint" />
+				)}
+				<span
+					className={cn(
+						"min-w-0 flex-1 truncate text-sm",
+						status === "active" ? "font-medium text-text" : "text-muted",
+					)}
+				>
+					{group.title}
+				</span>
+				<span
+					data-testid="todo-group-progress"
+					className="shrink-0 text-[10px] text-hint uppercase tracking-wider"
+				>
+					{done}/{total}
+				</span>
+			</div>
+			<ul className="ml-md flex flex-col border-border2 border-l pl-sm">
+				{group.todos.map((todo) => (
+					<TodoRow key={todo.id} todo={todo} glance={glance} onRemove={() => onRemove(todo.id)} />
+				))}
+			</ul>
+		</div>
+	);
+}
+
+/** A flat list of loose items (the user's own adds) as rows — each carries the `user` badge. */
+function LooseList({
+	items,
+	glance,
+	onRemove,
+}: {
+	items: TodoItem[];
+	glance: PlanGlance;
+	onRemove: (id: string) => void;
+}) {
+	if (items.length === 0) return null;
+	return (
+		<ul className="flex flex-col">
+			{items.map((todo) => (
+				<TodoRow key={todo.id} todo={todo} glance={glance} onRemove={() => onRemove(todo.id)} />
+			))}
+		</ul>
+	);
+}
+
+/** A section header (`To do`), the quiet uppercase label shared by the status sections. */
+function SectionLabel({ label }: { label: string }) {
+	return <div className="px-xs py-xs text-[10px] text-hint uppercase tracking-wider">{label}</div>;
+}
+
 /**
- * The plan, **group-first** (group = task): each group in plan order under a header row (derived status
- * icon + title + done/total badge), then the loose lane — the user's own items — **last** under a "Your
- * requests" header. The user's lane sits at the end on purpose (mirrors `pi-todos`'s `formatPlan` and the
- * markdown snapshot): a request added mid-task queues *after* the agent's current work, not above it.
- * The `active` group's header is emphasized; a fully-**done** group doesn't list its items — it folds
- * into a single expandable `DoneGroup` row (finished task grouped away but reachable). Empty: the caller.
+ * The plan as a **status flow** (`planSections`): the in-progress task (its whole group) first with no
+ * header, then a **To do** section (pending groups, then the user's pending loose items), then the
+ * collapsed **Done** section at the very bottom. Finished steps stay inline in their group. Empty: the
+ * caller renders the placeholder.
  */
 export function TodoRows({
 	plan,
@@ -123,109 +192,86 @@ export function TodoRows({
 	onRemove: (id: string) => void;
 	glance?: PlanGlance;
 }) {
+	const s = planSections(plan);
+	const hasTodo = s.pendingGroups.length > 0 || s.pendingLoose.length > 0;
+	const hasDone = s.doneGroups.length > 0 || s.doneLoose.length > 0;
 	return (
 		<>
-			{plan.groups.map((group) => {
-				const status = groupStatus(group);
-				if (status === "done")
-					return <DoneGroup key={group.id} group={group} glance={glance} onRemove={onRemove} />;
-				const { done, total } = groupProgress(group);
-				return (
-					<div key={group.id} className="mb-sm" data-testid="todo-group" data-status={status}>
-						<div className="flex items-center gap-sm px-xs py-xs">
-							{status === "active" ? (
-								<StatusIcon status="in_progress" glance={glance} />
-							) : (
-								<Circle className="size-4 shrink-0 text-hint" />
-							)}
-							<span
-								className={cn(
-									"min-w-0 flex-1 truncate text-sm",
-									status === "active" ? "font-medium text-text" : "text-muted",
-								)}
-							>
-								{group.title}
-							</span>
-							<span
-								data-testid="todo-group-progress"
-								className="shrink-0 text-[10px] text-hint uppercase tracking-wider"
-							>
-								{done}/{total}
-							</span>
-						</div>
-						<ul className="ml-md flex flex-col border-border2 border-l pl-sm">
-							{group.todos.map((todo) => (
-								<TodoRow
-									key={todo.id}
-									todo={todo}
-									glance={glance}
-									onRemove={() => onRemove(todo.id)}
-								/>
-							))}
-						</ul>
-					</div>
-				);
-			})}
-			{plan.todos.length > 0 ? (
-				<div className="mb-sm">
-					<div className="px-xs py-xs text-[10px] text-hint uppercase tracking-wider">
-						Your requests · {plan.todos.length}
-					</div>
-					<ul className="flex flex-col">
-						{plan.todos.map((todo) => (
-							<TodoRow
-								key={todo.id}
-								todo={todo}
-								glance={glance}
-								onRemove={() => onRemove(todo.id)}
-							/>
-						))}
-					</ul>
-				</div>
+			{s.activeGroups.map((group) => (
+				<GroupBlock key={group.id} group={group} glance={glance} onRemove={onRemove} />
+			))}
+			<LooseList items={s.activeLoose} glance={glance} onRemove={onRemove} />
+			{hasTodo ? <SectionLabel label="To do" /> : null}
+			{s.pendingGroups.map((group) => (
+				<GroupBlock key={group.id} group={group} glance={glance} onRemove={onRemove} />
+			))}
+			<LooseList items={s.pendingLoose} glance={glance} onRemove={onRemove} />
+			{hasDone ? (
+				<DoneSection
+					groups={s.doneGroups}
+					loose={s.doneLoose}
+					glance={glance}
+					onRemove={onRemove}
+				/>
 			) : null}
 		</>
 	);
 }
 
 /**
- * A fully-completed group, folded into one expandable row (collapsed by default) sunk to the bottom — a
- * finished thread out of the way but reachable. Expands to its items (a plain glyph list).
+ * The single titled, collapsed **Done** section at the bottom — finished tasks and done loose items,
+ * out of the way but reachable. Collapsed by default; expands to the done groups (each under its struck
+ * title) then the done loose items. Count = total done steps across them.
  */
-function DoneGroup({
-	group,
+function DoneSection({
+	groups,
+	loose,
 	glance,
 	onRemove,
 }: {
-	group: TodoGroupItem;
+	groups: TodoGroupItem[];
+	loose: TodoItem[];
 	glance: PlanGlance;
 	onRemove: (id: string) => void;
 }) {
 	const [expanded, setExpanded] = useState(false);
 	const Chevron = expanded ? ChevronDown : ChevronRight;
+	const count = groups.reduce((n, g) => n + g.todos.length, 0) + loose.length;
 	return (
 		<div className="mb-sm">
 			<button
 				type="button"
-				data-testid="todo-group-done"
+				data-testid="todo-done-section"
 				data-expanded={expanded}
 				onClick={() => setExpanded((v) => !v)}
 				className="flex w-full items-center gap-sm rounded-[var(--radius-sm)] px-xs py-xs text-left hover:bg-hover"
 			>
 				<Chevron className="size-3.5 shrink-0 text-hint" />
 				<Check className="size-4 shrink-0 text-primary" />
-				<span className="min-w-0 flex-1 truncate font-medium text-hint text-sm line-through">
-					{group.title}
-				</span>
-				<span className="shrink-0 text-[10px] text-hint uppercase tracking-wider">
-					{group.todos.length} done
-				</span>
+				<span className="min-w-0 flex-1 truncate font-medium text-hint text-sm">Done</span>
+				<span className="shrink-0 text-[10px] text-hint uppercase tracking-wider">{count}</span>
 			</button>
 			{expanded ? (
-				<ul className="ml-md flex flex-col border-border2 border-l pl-sm">
-					{group.todos.map((todo) => (
-						<TodoRow key={todo.id} todo={todo} glance={glance} onRemove={() => onRemove(todo.id)} />
+				<div className="ml-md flex flex-col border-border2 border-l pl-sm">
+					{groups.map((group) => (
+						<div key={group.id} data-testid="todo-group-done" className="mb-sm">
+							<div className="truncate px-xs py-xs text-hint text-sm line-through">
+								{group.title}
+							</div>
+							<ul className="flex flex-col">
+								{group.todos.map((todo) => (
+									<TodoRow
+										key={todo.id}
+										todo={todo}
+										glance={glance}
+										onRemove={() => onRemove(todo.id)}
+									/>
+								))}
+							</ul>
+						</div>
 					))}
-				</ul>
+					<LooseList items={loose} glance={glance} onRemove={onRemove} />
+				</div>
 			) : null}
 		</div>
 	);

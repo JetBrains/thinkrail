@@ -21,14 +21,15 @@ test("the agent maintains the chat's TODO plan live, and picks up a user-added i
 	await page.getByTestId("chat-send").click();
 	await waitForDone(page, 150_000);
 
-	// Open the in-chat plan popup. The plan renders group-first (group = task); once every step is done
-	// the group folds into a single expandable done-row (live, no manual refresh) — expand it to see the
-	// steps.
+	// Open the in-chat plan popup. The plan reads as a status flow; once every step is done the whole
+	// task drops into the single collapsed "Done" section at the bottom (live, no manual refresh) —
+	// expand it to see the finished task and its steps.
 	await page.getByTestId("chat-plan-toggle").click();
 	const popover = page.getByTestId("chat-plan-popover");
-	const doneGroup = popover.getByTestId("todo-group-done").filter({ hasText: "Demo" });
-	await expect(doneGroup).toBeVisible({ timeout: 15_000 });
-	await doneGroup.click();
+	const doneSection = popover.getByTestId("todo-done-section");
+	await expect(doneSection).toBeVisible({ timeout: 15_000 });
+	await doneSection.click();
+	await expect(popover.getByTestId("todo-group-done").filter({ hasText: "Demo" })).toBeVisible();
 	await expect(popover.getByTestId("todo-row").filter({ hasText: "Alpha" })).toHaveAttribute(
 		"data-status",
 		"done",
@@ -39,7 +40,8 @@ test("the agent maintains the chat's TODO plan live, and picks up a user-added i
 	);
 
 	// The user adds an item in the popup. The add nudges the agent (no manual chat message), and the agent
-	// works it to done…
+	// works it to done. A finished user item also drops into the (already-expanded) Done section, so we
+	// assert it reaches done there.
 	await popover.getByTestId("todo-add-input").fill("Reply with the single word ACK");
 	await popover.getByTestId("todo-add-input").press("Enter");
 	await expect(popover.getByTestId("todo-row").filter({ hasText: "ACK" })).toHaveAttribute(

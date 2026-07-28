@@ -6,6 +6,7 @@ import {
 	groupProgress,
 	groupStatus,
 	planGlance,
+	planSections,
 	planSummary,
 	sessionGlance,
 	shouldNudgeOnAdd,
@@ -50,6 +51,23 @@ test("flatItems orders the groups first, the loose lane (user adds) last", () =>
 			groups: [group("t", [item("a"), item("b")])],
 		}).map((t) => t.title),
 	).toEqual(["a", "b", "loose"]);
+});
+
+test("planSections buckets groups by derived status and loose items by their own status", () => {
+	const sections = planSections({
+		todos: [item("loose-todo"), item("loose-done", "done")],
+		groups: [
+			group("Active", [item("a", "in_progress"), item("b")]),
+			group("Pending", [item("c"), item("d", "done")]), // some done steps, but no in_progress
+			group("Finished", [item("e", "done")]),
+		],
+	});
+	expect(sections.activeGroups.map((g) => g.title)).toEqual(["Active"]);
+	expect(sections.pendingGroups.map((g) => g.title)).toEqual(["Pending"]); // stays whole, done step inline
+	expect(sections.doneGroups.map((g) => g.title)).toEqual(["Finished"]);
+	expect(sections.pendingLoose.map((t) => t.title)).toEqual(["loose-todo"]);
+	expect(sections.doneLoose.map((t) => t.title)).toEqual(["loose-done"]);
+	expect(sections.activeLoose).toEqual([]);
 });
 
 test("planSummary spans loose + groups and surfaces the current step", () => {

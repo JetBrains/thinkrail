@@ -54,6 +54,45 @@ export function planSummary(plan: TodoPlan): {
 }
 
 /**
+ * The panel's status-ordered sections (SPEC §Chat TODO plan): the plan is read top-to-bottom as a
+ * status flow — **in progress**, then **to do**, then **done** — while keeping the task groups whole.
+ * `groups` are bucketed by their derived {@link groupStatus}; loose items (the user's own adds) by
+ * their own `status`. Finished *steps* stay inline in their (active/pending) group — only fully-`done`
+ * groups and `done` loose items land in `done`. Pure; `TodoList` just renders what this returns.
+ */
+export interface PlanSections {
+	activeGroups: TodoGroupItem[];
+	activeLoose: TodoItem[];
+	pendingGroups: TodoGroupItem[];
+	pendingLoose: TodoItem[];
+	doneGroups: TodoGroupItem[];
+	doneLoose: TodoItem[];
+}
+
+export function planSections(plan: TodoPlan): PlanSections {
+	const s: PlanSections = {
+		activeGroups: [],
+		activeLoose: [],
+		pendingGroups: [],
+		pendingLoose: [],
+		doneGroups: [],
+		doneLoose: [],
+	};
+	for (const group of plan.groups) {
+		const status = groupStatus(group);
+		if (status === "active") s.activeGroups.push(group);
+		else if (status === "done") s.doneGroups.push(group);
+		else s.pendingGroups.push(group);
+	}
+	for (const todo of plan.todos) {
+		if (todo.status === "in_progress") s.activeLoose.push(todo);
+		else if (todo.status === "done") s.doneLoose.push(todo);
+		else s.pendingLoose.push(todo);
+	}
+	return s;
+}
+
+/**
  * Whether the system is working or waiting on the user — the glance state that keeps an `in_progress`
  * item from lying when the agent has stopped. **Derived from session state, never stored**: the agent
  * sets nothing here, so it can't drift — any stop shows as waiting, whether or not the agent knew it

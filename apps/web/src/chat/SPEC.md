@@ -462,12 +462,16 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `useChatTodos` (the `todo.*` data hook — fetch + live `pi.event` refetch + edits + the add-nudge + the
   `openMarkdown` snapshot action), `planView` (pure derivations: `groupStatus` — **a mirror of
   `pi-todos/core`'s helper**, since this app may import `contracts` only — plus `groupProgress`,
-  `planSummary`, `planGlance`/`sessionGlance`, and `shouldNudgeOnAdd`), `TodoList` (the **group-first** rendering — group = task: the
-  groups in plan order first, then the loose lane — the user's items — **last** (so a request added
-  mid-task queues *after* the agent's current work, matching `pi-todos`'s `formatPlan`/the markdown
-  snapshot, not above it), each under a header row with the derived
-  status icon + a done/total badge, the `active` group emphasized; a fully-done group folds into one
-  expandable row; plus the add-row + an "open as markdown" button), `planMarkdown` (a pure `plan →
+  `planSummary`, `planGlance`/`sessionGlance`, `planSections`, and `shouldNudgeOnAdd`), `TodoList` (the
+  **status-ordered, group-first** rendering (`planSections`) — group = task: the **in-progress** task
+  (its whole group) on top with **no section header**, then a **To do** section (the pending groups,
+  then the user's pending loose items), then a single **titled, collapsed "Done" section** at the very
+  bottom (fully-done groups + done loose items). Finished *steps* stay inline in their (active/pending)
+  group; only whole done tasks move to Done. Each group is a header row (derived status icon + title +
+  done/total badge), the `active` group emphasized; the user's loose items carry a per-row `user` badge
+  (no separate "Your requests" header — they're placed by status). Plus the add-row + an "open as
+  markdown" button. **Status ordering is UI-only** — the agent's `formatPlan` stays plan-order so its
+  "work in order" discipline is unaffected), `planMarkdown` (a pure `plan →
   markdown` compiler, `## <group> — n/m` sections), and `ChatPlan` (`ChatPlanStripContent` +
   `ChatPlanContent` — a header strip that opens the plan in a `Popover` over the chat; `ChatView` composes
   the `Popover` anchored to the header, so the popup hangs flush under it at the chat's left edge). There
