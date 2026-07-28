@@ -31,8 +31,13 @@ test("grouped items count alongside loose ones", () => {
 	const p = plan(
 		[item("done")],
 		[
-			{ id: "g-a", title: "task A", todos: [item("pending"), item("done")] },
-			{ id: "g-b", title: "task B", todos: [item("in_progress")] },
+			{
+				id: "g-a",
+				title: "task A",
+				status: "pending",
+				todos: [item("pending"), item("done")],
+			},
+			{ id: "g-b", title: "task B", status: "active", todos: [item("in_progress")] },
 		],
 	);
 	expect(openTodoCount(p)).toBe(2);
@@ -40,6 +45,8 @@ test("grouped items count alongside loose ones", () => {
 
 test("an all-done plan counts 0", () => {
 	expect(
-		openTodoCount(plan([item("done")], [{ id: "g", title: "task", todos: [item("done")] }])),
+		openTodoCount(
+			plan([item("done")], [{ id: "g", title: "task", status: "done", todos: [item("done")] }]),
+		),
 	).toBe(0);
 });

@@ -4,7 +4,6 @@ import type { AskState } from "./askState";
 import {
 	flatItems,
 	groupProgress,
-	groupStatus,
 	planGlance,
 	planSections,
 	planSummary,
@@ -23,19 +22,16 @@ const item = (title: string, status: TodoItem["status"] = "pending"): TodoItem =
 	updatedAt: "",
 });
 
-const group = (title: string, todos: TodoItem[]): TodoGroupItem => ({
+/** A group as the wire delivers it: `status` is host-derived (`pi-todos`' `groupStatus`, tested there). */
+const group = (
+	title: string,
+	todos: TodoItem[],
+	status: TodoGroupItem["status"] = "pending",
+): TodoGroupItem => ({
 	id: `g_${title}`,
 	title,
 	todos,
-});
-
-// Mirrors pi-todos/core's groupStatus — the truth table must match (see planView.ts).
-test("groupStatus derives the task lifecycle from the steps", () => {
-	expect(groupStatus(group("t", [item("a"), item("b")]))).toBe("pending");
-	expect(groupStatus(group("t", [item("a", "in_progress"), item("b")]))).toBe("active");
-	expect(groupStatus(group("t", [item("a", "done"), item("b")]))).toBe("pending");
-	expect(groupStatus(group("t", [item("a", "done"), item("b", "done")]))).toBe("done");
-	expect(groupStatus(group("t", []))).toBe("pending"); // empty is never "done"
+	status,
 });
 
 test("groupProgress counts done/total for the header badge", () => {
@@ -54,13 +50,13 @@ test("flatItems orders the groups first, the loose lane (user adds) last", () =>
 	).toEqual(["a", "b", "loose"]);
 });
 
-test("planSections buckets groups by derived status and loose items by their own status", () => {
+test("planSections buckets groups by the host-derived status and loose items by their own status", () => {
 	const sections = planSections({
 		todos: [item("loose-todo"), item("loose-done", "done")],
 		groups: [
-			group("Active", [item("a", "in_progress"), item("b")]),
-			group("Pending", [item("c"), item("d", "done")]), // some done steps, but no in_progress
-			group("Finished", [item("e", "done")]),
+			group("Active", [item("a", "in_progress"), item("b")], "active"),
+			group("Pending", [item("c"), item("d", "done")]),
+			group("Finished", [item("e", "done")], "done"),
 		],
 	});
 	expect(sections.activeGroups.map((g) => g.title)).toEqual(["Active"]);

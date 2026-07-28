@@ -11,19 +11,6 @@ import type { ChatTurn } from "./types";
 // (group = one user ask, items = its steps) and the glance state ("is the system working or waiting on
 // me?"). Presentational modules consume these via props; nothing here touches the store or transport.
 
-/**
- * A group's derived task status — **a mirror of `pi-todos/core`'s `groupStatus`** (the web app may
- * import `@thinkrail/contracts` only, never `pi-todos`), the same way the DTOs themselves mirror the
- * extension's model. Keep the two in step. Never stored, so it can't drift from the steps.
- */
-export type TodoGroupStatus = "pending" | "active" | "done";
-
-export function groupStatus(group: TodoGroupItem): TodoGroupStatus {
-	if (group.todos.length > 0 && group.todos.every((t) => t.status === "done")) return "done";
-	if (group.todos.some((t) => t.status === "in_progress")) return "active";
-	return "pending";
-}
-
 /** done / total across a group's steps — the header badge ("2/3"). */
 export function groupProgress(group: TodoGroupItem): { done: number; total: number } {
 	return {
@@ -32,9 +19,10 @@ export function groupProgress(group: TodoGroupItem): { done: number; total: numb
 	};
 }
 
-/** Every item in display order: the groups (the agent's tasks) first, then the loose lane (the user's
- * own adds) **last** — **a mirror of `pi-todos/core`'s `flatItems`** (this app may import `contracts`
- * only), the same way `groupStatus` mirrors the extension's helper. Keep the two in step. */
+/** Every item of a plan, flattened for counting and for finding the current step — groups first, the
+ * user's loose lane last (the order the panel and the agent's text plan read in). Order is incidental to
+ * this app's uses; where it is load-bearing is `pi-todos`, whose `replaceAll` uses it to decide which
+ * `in_progress` survives. */
 export function flatItems(plan: TodoPlan): TodoItem[] {
 	return [...plan.groups.flatMap((g) => g.todos), ...plan.todos];
 }
@@ -101,9 +89,8 @@ export function planSections(plan: TodoPlan): PlanSections {
 		doneLoose: [],
 	};
 	for (const group of plan.groups) {
-		const status = groupStatus(group);
-		if (status === "active") s.activeGroups.push(group);
-		else if (status === "done") s.doneGroups.push(group);
+		if (group.status === "active") s.activeGroups.push(group);
+		else if (group.status === "done") s.doneGroups.push(group);
 		else s.pendingGroups.push(group);
 	}
 	for (const todo of plan.todos) {

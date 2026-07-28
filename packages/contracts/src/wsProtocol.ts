@@ -82,7 +82,10 @@ import type {
 // v18: the built-in Default workspace — `Workspace.kind: "default"` marks the project folder itself as
 // a per-project, non-removable, non-renamable workspace, ensured lazily and pinned first in
 // `workspace.list`; `workspace.remove` rejects it.
-export const PROTOCOL_VERSION = 18;
+// v19: `TodoGroupItem.status` — a group's derived task lifecycle (`pending|active|done`), computed by the
+// host from the steps and **required** on the DTO; clients render it instead of deriving it, so an older
+// host would leave a newer UI bucketing every group as `pending`.
+export const PROTOCOL_VERSION = 19;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a

@@ -243,3 +243,30 @@ test("todo_list renders group-first with derived status + progress, and nudges w
 		rmSync(cwd, { recursive: true, force: true });
 	}
 });
+
+test("todo_add refuses an `after` anchor in the user's lane, and a re-plan keeps that lane intact", async () => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-todos-tools-"));
+	try {
+		// The user's own item lives loose. Anchoring a step to it would splice an agent-origin item into
+		// that lane — which `todo_write` then drops (it keeps only user or done items there), so the step
+		// would appear in the user's requests and silently vanish on the next re-plan.
+		const mine = new TodoStore(cwd, "sess-test").add({ title: "user ask", origin: "user" });
+		const rejected = await run("todo_add", { title: "related step", after: mine.id }, cwd);
+		expect(isError(rejected)).toBe(true);
+		expect(resultText(rejected)).toContain("group");
+
+		// Nothing was written: the user's lane still holds exactly their own item.
+		const plan = new TodoStore(cwd, "sess-test").read();
+		expect(plan.todos.map((t) => t.title)).toEqual(["user ask"]);
+		expect(plan.groups).toHaveLength(0);
+
+		// And the lane keeps its meaning across a re-plan: the user's item survives, agent steps are the
+		// ones replaced.
+		await run("todo_write", { groups: [{ title: "Task", todos: [{ title: "step" }] }] }, cwd);
+		const after = new TodoStore(cwd, "sess-test").read();
+		expect(after.todos.map((t) => t.title)).toEqual(["user ask"]);
+		expect(after.groups[0]?.todos.map((t) => t.title)).toEqual(["step"]);
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});

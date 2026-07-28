@@ -129,6 +129,9 @@ of the host.
   carries only what the panel renders (`type`/`status` stay `string`: tolerate whatever is on disk);
   **`TodoItem`/`TodoGroupItem`/`TodoPlan`** + the **`TodoStatus`/`TodoOrigin`** unions — the in-chat plan
   DTOs, **mirrored** from `pi-todos/core` (never imported), carrying the chat's per-session TODO list.
+  `TodoGroupItem` additionally carries **`status: TodoGroupStatus`** — the group's *task* lifecycle
+  (`pending`/`active`/`done`), **derived by the host** from the steps (`pi-todos`' `groupStatus`) rather than
+  stored: shipping it means the truth table has one home and no client re-derives it.
   **history-search read DTOs** — **`HistoryScope`** (the overlay's cycle: this chat → workspace →
   project → everywhere); **`PromptHit`** (a recalled prompt; carries optional `messageIndex` +
   `anchorText` — the kept-newest occurrence's jump anchor) and **`MessageHit`** (a full-text

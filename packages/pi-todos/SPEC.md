@@ -42,7 +42,9 @@ plan UX ([[submodule-web-chat]]'s "Chat TODO plan"), modeled on [[module-spec-gr
 
 **Group = task.** The plan's model is two-level: a group is one user ask (title = the outcome), its
 items are the steps. A group's own status is **derived, never stored** (`groupStatus` in `core/`:
-all done → `done`, any in_progress → `active`, else `pending`), so it can't drift from the steps.
+all done → `done`, any in_progress → `active`, else `pending`), so it can't drift from the steps. The host
+reads it through this helper and ships it on the wire DTO (`TodoGroupItem.status`), so no client re-derives
+it — one truth table, one home.
 Two invariants are held structurally, not by model memory: **exactly one `in_progress` across the
 plan** (setting it auto-demotes the previous one back to `pending` — reported in the result as
 "paused"), and **the agent never authors loose items** (the tools require `group`/`after`; loose is

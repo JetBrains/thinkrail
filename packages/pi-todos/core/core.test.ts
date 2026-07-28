@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { groupStatus, storeRel, type TodoGroup, TodoStore } from "./index.ts";
+import { flatItems, groupStatus, storeRel, type TodoGroup, TodoStore } from "./index.ts";
 
 const SESSION = "sess-test";
 
@@ -421,7 +421,32 @@ test("setting in_progress auto-demotes the previous in_progress and reports it a
 	}
 });
 
-test("replaceAll keeps only the first in_progress of a fresh plan", () => {
+test("replaceAll re-establishes one in_progress across the MERGED plan, not just the fresh part", () => {
+	const root = tempRoot();
+	try {
+		const s = store(root);
+		// The user's own item is the one in progress (the agent may flip it — the skill tells it to work
+		// that lane, and `update` has no origin restriction).
+		const mine = s.add({ title: "user ask", origin: "user" });
+		s.update(mine.id, { status: "in_progress" });
+
+		// The agent then re-plans with a step already in_progress. A fresh-only normalization would leave
+		// two items in_progress at once — the invariant `update` upholds, broken by the next re-plan.
+		s.replaceAll({
+			groups: [{ title: "Task", todos: [{ title: "step", status: "in_progress" }] }],
+		});
+
+		const inProgress = flatItems(s.read()).filter((t) => t.status === "in_progress");
+		expect(inProgress).toHaveLength(1);
+		// Display order decides the survivor: the group's step (groups lead), the user's item pauses.
+		expect(inProgress[0]?.title).toBe("step");
+		expect(s.get(mine.id)?.status).toBe("pending");
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("replaceAll keeps only the first in_progress of a fresh plan (direct API: `todo_write` sends groups only)", () => {
 	const root = tempRoot();
 	try {
 		const s = store(root);
@@ -437,8 +462,12 @@ test("replaceAll keeps only the first in_progress of a fresh plan", () => {
 				},
 			],
 		});
-		const statuses = [...plan.todos, ...plan.groups.flatMap((g) => g.todos)].map((t) => t.status);
+		// Asserted in DISPLAY order (`flatItems`: groups lead, the user's lane last) — the same order the
+		// normalization walks, so the survivor is the first *displayed* in_progress rather than whichever
+		// lane happened to be iterated first.
+		const statuses = flatItems(plan).map((t) => t.status);
 		expect(statuses).toEqual(["in_progress", "pending", "pending"]);
+		expect(flatItems(plan)[0]?.title).toBe("one");
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}

@@ -56,7 +56,7 @@ Steps are **verifiable** and ≈ commit-sized: "easy to check off as you go", no
      `in_progress` they remind you to flip the step you're on. Act on those nudges.
 3. **A new ask mid-session = a new group appended** (`todo_add` with `group:`, one per step — or lay
    out the new task's steps with several `todo_add` calls). Never mix a new ask's steps into the
-   current group. **A step you discover mid-task** slots in with `todo_add after: <current step id>` —
+   current group. **A step you discover mid-task** slots in with `todo_add after: <current step id>` (anchor to one of *your* steps — anchoring to one of the user's own items is rejected, since your items never live in their lane) —
    don't rebuild the plan with `todo_write` for that.
 4. **Reconcile before you finish.** At the end of a turn, `todo_list` once more. If open steps remain
    (including items the user just added), either do them or clearly say what's left and why — don't go

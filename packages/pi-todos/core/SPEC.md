@@ -26,12 +26,15 @@ when an item reaches `done` (see `server/src/todos` — the store stays git-free
 
 **Group = task.** A group models one user ask; its items are the steps. A group's lifecycle is
 **derived, never stored**: `groupStatus(group)` — all done → `done`, any in_progress → `active`, else
-`pending` — so it can't drift from the steps. The derivation is **mirrored** (not imported) by
-`apps/web`'s `chat/planView.ts` (the web app may import `contracts` only); keep the two in step.
+`pending` — so it can't drift from the steps. It has **one home**: the host reads it through this helper and
+ships the result on the wire DTO (`TodoGroupItem.status`, see [[submodule-server-todos]]), so `apps/web` —
+which may import `contracts` only — renders it rather than keeping a second copy of the truth table.
 
 **Linearity invariants** (held structurally): `update` setting `in_progress` auto-demotes every other
 `in_progress` item back to `pending` in the same write and returns them (`TodoUpdateResult.paused`) so
-the change stays visible; `replaceAll` keeps only the **first** `in_progress` of a fresh plan. `add`
+the change stays visible; `replaceAll` re-establishes it over its **merged** result (fresh plan + the kept
+user/done items), in display order — normalizing only the fresh half would leave a kept user item that is
+`in_progress` beside a fresh `in_progress` step, i.e. two at once. `add`
 takes `after` (an existing item id) to insert right after that item, **inheriting its lane** — the
 surgical mid-plan insert (`after` wins over `group`; an unknown id throws).
 

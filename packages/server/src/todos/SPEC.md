@@ -15,7 +15,10 @@ Serve the in-chat TODO plan for a chat session, mapped to the wire DTOs. The lis
 `sessionId`** (one JSON file per session under the workspace's worktree, in the ephemeral context scratch
 dir `.thinkrail/context/todos/<sessionId>.json`), not the worktree. Read-modify-write on demand: every call re-reads
 through `pi-todos`' pi-free `TodoStore`, so the agent's in-session `todo_*` writes and the user's UI edits
-converge on the same file with no staleness window.
+converge on the same file with no staleness window. `listTodos` also **decorates each group with its
+derived `status`** (`pi-todos`' `groupStatus`) on the way out: the rule belongs to the package that owns plan
+semantics, and shipping the result keeps `apps/web` — which may import `contracts` only — from carrying a
+second copy of it.
 
 Unlike the agent's own tools (which own status), the host's write surface is the **user's** edit lever:
 `todo.add` tags new items `origin: "user"` so the agent's `todo_write` re-plans never drop them, and

@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "../lib";
-import { groupProgress, groupStatus, type PlanGlance, planSections } from "./planView";
+import { groupProgress, type PlanGlance, planSections } from "./planView";
 
 // Presentational TODO rendering for the in-chat plan popup (SPEC §Chat TODO plan). Props-driven (no transport) —
 // the caller supplies the plan + edit callbacks (see `useChatTodos`) and the glance state (see
@@ -124,7 +124,7 @@ function GroupBlock({
 	glance: PlanGlance;
 	onRemove: (id: string) => void;
 }) {
-	const status = groupStatus(group);
+	const status = group.status;
 	const { done, total } = groupProgress(group);
 	return (
 		<div className="mb-sm" data-testid="todo-group" data-status={status}>

@@ -19,7 +19,12 @@ The finite-vocabulary `status` param derives its enum from the `core/` tuple via
 **This layer is where the agent-facing constraints live** (core stays permissive — the user lane and
 the host wire still use loose items):
 - **No loose authoring:** `todo_write`'s schema offers `groups` only; `todo_add` errors unless `group`
-  or `after` is given (`after` = insert after that item, in its lane; wins over `group`).
+  or `after` is given (`after` = insert after that step, in its group; wins over `group`). An `after`
+  anchored to one of the **user's** loose items is **rejected**: the insert inherits the anchor's lane, so it
+  would place an agent-origin open item in the user's lane — which `todo_write` drops (loose keeps only user
+  or done items), making the step appear among the user's requests and then vanish on the next re-plan. The
+  policy lives here, not in `core`: `TodoStore.add` stays permissive because the host writes the user's own
+  lane through it.
 - **In-band nudges** (the status-discipline feedback): every mutating/list result appends
   `consistencyNudge` when open items exist but none is `in_progress`; a `todo_update` → `done` names
   the group's next open step instead (suggest-only, never auto-started); auto-demoted items are

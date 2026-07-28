@@ -84,6 +84,22 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		void nudgeAgent(workspaceId, sessionId, title);
 	};
 
+	/**
+	 * Re-read the plan from the host after a user edit. Necessary because a group carries a **host-derived**
+	 * `status` (contracts' `TodoGroupStatus`) that this app deliberately can't recompute: a locally patched
+	 * plan would keep the pre-edit status — remove a group's last open step and it would sit under "To do"
+	 * reading `1/1`, or keep an active spinner, until some unrelated `pi.event` refetch happened to land.
+	 * A failed re-read leaves the optimistic view in place; the live refetch reconciles it later.
+	 */
+	const reloadPlan = async () => {
+		try {
+			const plan = await getTransport().request("todo.list", { workspaceId, sessionId });
+			setData(plan);
+		} catch {
+			// keep what's on screen — the next pi.event-driven refetch will reconcile
+		}
+	};
+
 	const remove = async (id: string) => {
 		let prev: TodoPlan | null = null;
 		setData((current) => {
@@ -99,6 +115,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		});
 		try {
 			await getTransport().request("todo.remove", { workspaceId, sessionId, id });
+			await reloadPlan(); // the surviving groups' derived status is the host's to recompute
 		} catch (err) {
 			// Roll the optimistic removal back so the UI doesn't diverge from disk on a failed request.
 			setData(prev);

@@ -466,9 +466,10 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 - **Chat TODO plan** — the chat's `pi-todos` list surfaced **only in the chat** (engine:
   [[module-pi-todos]]; host read/write: [[submodule-server-todos]]):
   `useChatTodos` (the `todo.*` data hook — fetch + live `pi.event` refetch + edits + the add-nudge + the
-  `openMarkdown` snapshot action), `planView` (pure derivations: `groupStatus` — **a mirror of
-  `pi-todos/core`'s helper**, since this app may import `contracts` only — plus `groupProgress`,
-  `planSummary`, `planGlance`/`sessionGlance`, `planSections`, and `shouldNudgeOnAdd`), `TodoList` (the
+  `openMarkdown` snapshot action), `planView` (pure derivations over the DTO: `groupProgress`,
+  `planSummary`, `planGlance`/`sessionGlance`, `planSections`, and `shouldNudgeOnAdd`. A group's *status* is
+  **not** derived here — the host computes it and ships it on `TodoGroupItem.status`, so the rule has one
+  home; a user edit therefore re-reads the plan rather than patching it locally, see `useChatTodos`), `TodoList` (the
   **status-ordered, group-first** rendering (`planSections`) — group = task: the **in-progress** task
   (its whole group) on top with **no section header**, then a **To do** section (the pending groups,
   then the user's pending loose items), then a **"Done" label** at the very bottom under which **each

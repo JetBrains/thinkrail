@@ -255,10 +255,16 @@ a project picker, the prompt hero, and the reused
   workspace-activate it **hydrates**: `session.list` → **live** sessions auto-restore as tabs
   (`session.getMessages` → `messagesToRuntime` → `store.hydrateSession`), and so do **disk-only sessions
   carrying unfinished TODOs** (`SessionSummary.openTodos > 0` — work in progress survives a host restart
-  as open tabs, hydrated with the disk-attach tick baseline); the remaining **disk-only** ones go to
+  as open tabs, hydrated with the disk-attach tick baseline), **capped at the newest `AUTO_OPEN_LIMIT`**:
+  a long-lived workspace can hold a dozen half-finished chats, and opening every one would bury the tab
+  strip and pull every transcript into memory, so past the cap they stay one click away in history. The
+  remaining **disk-only** ones go to
   history via `store.noteClosedChats`. Two guarantees ride that pass: **never-empty** — when nothing
-  opened (and no session in the store was deliberately closed to history), the most recent disk chat
-  auto-opens as a fallback; **most-recent focus** — sessions hydrate newest-first (`updatedAt` desc) and
+  opened (and no session in *this client's* store was closed to history, which is what vetoes the
+  fallback; closes aren't persisted, so after a reload a closed chat is indistinguishable from any other
+  disk chat and may reopen), the most recent disk chat
+  auto-opens as a fallback; **most-recent focus** — the newest (`updatedAt` desc) hydrates first and alone,
+  the rest then load in parallel, and
   `hydrateSession` only takes focus while the workspace has no active tab, so the latest auto-opened chat
   lands focused without ever stealing an existing selection (e2e: `auto-open-chats.spec.ts`). Reopening restores a live runtime's tab, or for a disk-only chat re-opens it
   on the host (`getMessages`) + hydrates — so a reload, a second tab, or a host restart all rebuild from the
