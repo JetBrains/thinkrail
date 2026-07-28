@@ -483,9 +483,12 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   askStates)` — derived from session state in `ChatView`, **never stored**, so the agent can't make it
   lie — renders the `in_progress` step as working (dot), **waiting for your answer** (`CircleHelp`,
   when the agent stopped with an awaiting `ask_user_question`), or **paused — waiting for you**
-  (`CirclePause`, any other stop: turn ended, error). The strip shows the same glyph + a short waiting
-  label before the current title; `TodoList` stays props-driven — it receives the resolved glance,
-  never reads the transport.
+  (`CirclePause`, any other stop: turn ended, error). **The header strip reflects the agent's state,
+  not the checkboxes** (`stripStatus`, decoupled from the `in_progress` step): it shows "waiting for
+  your answer" **even when every item is done** (the earlier strip hid it whenever there was no
+  in-progress step, so an agent blocked on a question read as "finished"); "working" while it runs;
+  "paused" only when it stopped with open steps left; and nothing extra on a clean finish (all done,
+  idle). `TodoList` stays props-driven — it receives the resolved glance, never reads the transport.
   **The add-nudge respects that waiting state.** A user add always stores the item (loose, at the end),
   but `nudgeAgent` **only wakes the agent when it isn't waiting on the user** (`shouldNudgeOnAdd` —
   skip iff the glance is `waiting_question`): waking an agent that stopped on an `ask_user_question`

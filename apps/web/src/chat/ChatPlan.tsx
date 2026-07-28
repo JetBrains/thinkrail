@@ -1,7 +1,7 @@
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { PopoverContent } from "@/components/ui/popover";
 import { cn } from "../lib";
-import { type PlanGlance, planSummary } from "./planView";
+import { type PlanGlance, planSummary, stripStatus } from "./planView";
 import { glanceIcon, TodoAddRow, TodoRows } from "./TodoList";
 import type { ChatTodos } from "./useChatTodos";
 
@@ -13,9 +13,12 @@ import type { ChatTodos } from "./useChatTodos";
 // two pieces are the trigger's contents and the popup body.
 
 /**
- * The strip's contents (chevron + "TODO list" + progress + current item). Wrapped by a PopoverTrigger.
- * The current item follows the glance: working → dot + title; stopped → the waiting glyph + a short
- * "waiting" label before the title — so the strip says the system waits without opening the chat.
+ * The strip's contents (chevron + "TODO list" + progress + a live status). Wrapped by a PopoverTrigger.
+ * The status reflects the **agent's state, not the checkboxes** (`stripStatus`): working → dot (+ the
+ * current step's title, or an "In progress" label if none); waiting on a question → the `?` glyph +
+ * "Waiting for your answer" **even when everything is done**; stopped mid-plan → pause + "Paused"; a
+ * clean finish (all done, idle) → nothing extra. So the strip never reads "finished" while the agent is
+ * actually blocked on the user — without opening the chat.
  */
 export function ChatPlanStripContent({
 	plan,
@@ -27,7 +30,9 @@ export function ChatPlanStripContent({
 	glance: PlanGlance;
 }) {
 	if (plan.data === null) return null;
-	const { done, total, current } = planSummary(plan.data);
+	const summary = planSummary(plan.data);
+	const { done, total } = summary;
+	const status = stripStatus(glance, summary);
 	const Chevron = open ? ChevronDown : ChevronRight;
 	const { Icon, label, className } = glanceIcon(glance);
 	return (
@@ -37,15 +42,20 @@ export function ChatPlanStripContent({
 			<span className="shrink-0">
 				{done}/{total}
 			</span>
-			{current ? (
+			{status.show ? (
 				<span
-					data-testid="chat-plan-current"
+					data-testid="chat-plan-status"
 					data-glance={glance}
 					className={cn("flex min-w-0 items-center gap-xs", className)}
 				>
 					<Icon className="size-3 shrink-0" />
-					{glance !== "working" ? <span className="shrink-0">{label} ·</span> : null}
-					<span className="truncate">{current.title}</span>
+					{status.showLabel ? (
+						<span className="shrink-0">
+							{label}
+							{status.title ? " ·" : ""}
+						</span>
+					) : null}
+					{status.title ? <span className="truncate">{status.title}</span> : null}
 				</span>
 			) : null}
 		</>

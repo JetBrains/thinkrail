@@ -54,6 +54,28 @@ export function planSummary(plan: TodoPlan): {
 }
 
 /**
+ * The header strip's live status — **the agent's state, decoupled from the checkboxes** (SPEC §Chat TODO
+ * plan). The old strip only showed status through the `in_progress` step, so an agent that was
+ * `waiting_question` with everything `done` read as "finished". Here the rule is on the glance:
+ * - `working` / `waiting_question` → always `show` (the agent is doing / needs you, regardless of boxes);
+ * - `waiting` (stopped, no pending question) → `show` only when open steps remain (stopped mid-plan =
+ *   "Paused"); on a clean finish (all done / empty, idle) `show` is false — don't cry "paused".
+ * `showLabel` hides the label only for `working` *with* a current step (its title conveys it); `title` is
+ * the current step's title when there is one. Pure; the strip just renders this.
+ */
+export function stripStatus(
+	glance: PlanGlance,
+	summary: { done: number; total: number; current: TodoItem | undefined },
+): { show: boolean; showLabel: boolean; title?: string } {
+	const openLeft = summary.total - summary.done > 0;
+	return {
+		show: glance !== "waiting" || openLeft,
+		showLabel: glance !== "working" || !summary.current,
+		...(summary.current ? { title: summary.current.title } : {}),
+	};
+}
+
+/**
  * The panel's status-ordered sections (SPEC §Chat TODO plan): the plan is read top-to-bottom as a
  * status flow — **in progress**, then **to do**, then **done** — while keeping the task groups whole.
  * `groups` are bucketed by their derived {@link groupStatus}; loose items (the user's own adds) by

@@ -10,6 +10,7 @@ import {
 	planSummary,
 	sessionGlance,
 	shouldNudgeOnAdd,
+	stripStatus,
 } from "./planView";
 import type { ChatTurn } from "./types";
 
@@ -68,6 +69,29 @@ test("planSections buckets groups by derived status and loose items by their own
 	expect(sections.pendingLoose.map((t) => t.title)).toEqual(["loose-todo"]);
 	expect(sections.doneLoose.map((t) => t.title)).toEqual(["loose-done"]);
 	expect(sections.activeLoose).toEqual([]);
+});
+
+test("stripStatus reflects the agent's state, not the checkboxes", () => {
+	const current = item("a", "in_progress");
+	const active = { done: 1, total: 3, current };
+	const allDone = { done: 3, total: 3, current: undefined };
+	const openIdle = { done: 1, total: 3, current: undefined }; // open steps, none in_progress
+
+	// working: always shown; label hidden when a current step's title carries it, shown when title-less.
+	expect(stripStatus("working", active)).toEqual({ show: true, showLabel: false, title: "a" });
+	expect(stripStatus("working", allDone)).toEqual({ show: true, showLabel: true });
+
+	// waiting_question: shown even when everything is done — the reported bug.
+	expect(stripStatus("waiting_question", allDone)).toEqual({ show: true, showLabel: true });
+	expect(stripStatus("waiting_question", active)).toEqual({
+		show: true,
+		showLabel: true,
+		title: "a",
+	});
+
+	// waiting (stopped, no question): 'Paused' only while open steps remain; clean finish shows nothing.
+	expect(stripStatus("waiting", openIdle)).toEqual({ show: true, showLabel: true });
+	expect(stripStatus("waiting", allDone)).toEqual({ show: false, showLabel: true });
 });
 
 test("planSummary spans loose + groups and surfaces the current step", () => {
