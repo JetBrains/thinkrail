@@ -1,5 +1,11 @@
-import type { TodoGroupItem, TodoItem, TodoPlan } from "@thinkrail/contracts";
-import type { AskState } from "./askState";
+import type {
+	AskUserQuestionResult,
+	TodoGroupItem,
+	TodoItem,
+	TodoPlan,
+} from "@thinkrail/contracts";
+import { type AskState, deriveAskStates } from "./askState";
+import type { ChatTurn } from "./types";
 
 // Pure derivations for the chat TODO plan's rendering (SPEC §Chat TODO plan): the group-as-task view
 // (group = one user ask, items = its steps) and the glance state ("is the system working or waiting on
@@ -57,4 +63,26 @@ export function planGlance(isStreaming: boolean, askStates: Record<string, AskSt
 	if (isStreaming) return "working";
 	const awaiting = Object.values(askStates).some((s) => !s.answer && !s.superseded);
 	return awaiting ? "waiting_question" : "waiting";
+}
+
+/** A session runtime's glance, composing {@link deriveAskStates} + {@link planGlance} — the one place
+ * that derives it straight from a runtime, for callers (e.g. the add-nudge) that don't already hold the
+ * ask states the way `ChatView` does. */
+export function sessionGlance(rt: {
+	isStreaming: boolean;
+	turns: ChatTurn[];
+	askAnswers: Record<string, AskUserQuestionResult>;
+}): PlanGlance {
+	return planGlance(rt.isStreaming, deriveAskStates(rt.turns, rt.askAnswers));
+}
+
+/**
+ * Should a user's just-added item **wake** the agent? No while it's `waiting_question` — an
+ * `ask_user_question` is pending, so waking it would make it go work the new item and forget to come
+ * back to its own question; the item just queues at the end (loose) and is picked up on the agent's next
+ * natural turn (when the user answers, or a later idle nudge). Yes when `working` (a `followUp` rides the
+ * live turn) or plain `waiting`/idle (a `prompt` wakes it) — "disturb it only when it isn't waiting."
+ */
+export function shouldNudgeOnAdd(glance: PlanGlance): boolean {
+	return glance !== "waiting_question";
 }

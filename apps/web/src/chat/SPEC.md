@@ -462,7 +462,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `useChatTodos` (the `todo.*` data hook — fetch + live `pi.event` refetch + edits + the add-nudge + the
   `openMarkdown` snapshot action), `planView` (pure derivations: `groupStatus` — **a mirror of
   `pi-todos/core`'s helper**, since this app may import `contracts` only — plus `groupProgress`,
-  `planSummary`, and `planGlance`), `TodoList` (the **group-first** rendering — group = task: the loose
+  `planSummary`, `planGlance`/`sessionGlance`, and `shouldNudgeOnAdd`), `TodoList` (the **group-first** rendering — group = task: the loose
   lane — the user's items — first, then groups in plan order, each under a header row with the derived
   status icon + a done/total badge, the `active` group emphasized; a fully-done group folds into one
   expandable row; plus the add-row + an "open as markdown" button), `planMarkdown` (a pure `plan →
@@ -479,6 +479,12 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   (`CirclePause`, any other stop: turn ended, error). The strip shows the same glyph + a short waiting
   label before the current title; `TodoList` stays props-driven — it receives the resolved glance,
   never reads the transport.
+  **The add-nudge respects that waiting state.** A user add always stores the item (loose, at the end),
+  but `nudgeAgent` **only wakes the agent when it isn't waiting on the user** (`shouldNudgeOnAdd` —
+  skip iff the glance is `waiting_question`): waking an agent that stopped on an `ask_user_question`
+  would send it off to work the new item and forget to return to its own question, so instead the item
+  just queues and is picked up on the agent's next natural turn (when the user answers, or a later idle
+  nudge). `working` rides a `followUp`, plain `waiting`/idle a `prompt`, unchanged.
 
 ## Boundary
 
