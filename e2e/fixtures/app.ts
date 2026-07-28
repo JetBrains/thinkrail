@@ -40,6 +40,19 @@ function resetState(): void {
 	else rmSync(modelsPath, { force: true });
 	rmSync(`${modelsPath}.bak`, { force: true });
 
+	// Drop any `enabledModels` allowlist a Settings → Models test wrote (`models.spec.ts`). It lives in the
+	// same pi settings.json that pins the suite's deterministic default model, and the host resolves that
+	// default *through* the allowlist — so a leftover list from a failed test would silently change which
+	// model a later @agent spec runs. Everything else in the file (the pinned default) is preserved.
+	const settingsPath = join(E2E_PI_AGENT_DIR, "settings.json");
+	if (existsSync(settingsPath)) {
+		const settings = JSON.parse(readFileSync(settingsPath, "utf8")) as Record<string, unknown>;
+		if ("enabledModels" in settings) {
+			delete settings.enabledModels;
+			writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
+		}
+	}
+
 	// Self-heal the shared fixture repo before pruning it. An @agent spec drives a real agent with `bash` in
 	// a worktree of this repo, so a stray destructive command can remove it out from under every later test
 	// (a single flaky run would otherwise cascade into the whole suite). Re-seed it when it's gone/damaged so

@@ -22,13 +22,15 @@ Tiny UI helpers shared across components.
   host may use either separator and may be relative or absolute — every path predicate in the app starts
   from these, so `chat`'s display helpers and `store`'s worktree matcher share one definition) and
   **`shallowEqualArrays()`** (element-wise `Object.is` — the "did this really change?" test behind the
-  store's snapshot-identity guard and `ErrorBoundary`'s reset keys). Also the shared
+  store's snapshot-identity guard and `ErrorBoundary`'s reset keys) and **`formatContextWindow()`** (a
+  model's context window as `1M`/`200K` — shared by `chat`'s model picker and `panels`' Settings → Models
+  so the two model lists render the same number the same way). Also the shared
   Shiki highlighter, **kept out of the barrel** so the eager `@/lib` import stays shiki-free:
   `highlighter.ts` loads the curated grammars + JS regex engine and renders with `themes`' one generic
   CSS-variable registration. It is imported per-file (`@/lib/highlighter`) from lazy chunks only; theme
   identity/palettes never live in `lib`.
 - **Public surface (barrel):** `cn`, `isMarkdownPath`, `stripFrontmatter`, `cssColorToHex`,
-  `normalizePath`, `isAbsolutePath`, `projectRelativePath`, `shallowEqualArrays`.
+  `normalizePath`, `isAbsolutePath`, `projectRelativePath`, `shallowEqualArrays`, `formatContextWindow`.
 - **Allowed deps:** `clsx`, `tailwind-merge`; `shiki`/`@shikijs/*` (the per-file shiki modules only —
   never reachable through the barrel).
 - **Forbidden:** every app-internal module — this is a leaf.

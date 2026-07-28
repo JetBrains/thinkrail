@@ -2,6 +2,7 @@ import type {
 	AppConfig,
 	ExtUiRequest,
 	LoginPush,
+	ModelCatalogEntry,
 	ServerWelcome,
 	SessionEventPayload,
 	Workspace,
@@ -73,6 +74,12 @@ export function initTransport(): WsTransport {
 	// one that made the change (no optimistic apply).
 	transport.subscribe(WS_CHANNELS.settingsChanged, (data) => {
 		useAppStore.getState().applyConfig(data as AppConfig);
+	});
+
+	// The model catalog after an allowlist write (Settings → Models) — same converge-on-broadcast contract:
+	// the toggling client repaints from this frame, not from a local guess about what it just saved.
+	transport.subscribe(WS_CHANNELS.modelCatalogChanged, (data) => {
+		useAppStore.getState().setModelCatalog(data as ModelCatalogEntry[]);
 	});
 
 	transport.connect();

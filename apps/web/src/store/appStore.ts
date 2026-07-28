@@ -4,6 +4,7 @@ import type {
 	ExtUiRequest,
 	LoginFrame,
 	LoginPush,
+	ModelCatalogEntry,
 	PiEvent,
 	Project,
 	SessionStats,
@@ -83,11 +84,12 @@ export type EditorTab = FileTab | ChatTab | DocTab | DiffTab;
 
 /**
  * A section of the settings dialog (a const-object "enum", the codebase convention). Extensible — the live
- * sections are providers, github, appearance (the theme picker), templates (prompt-template manager),
- * and privacy (the analytics toggle).
+ * sections are providers, models (pi's `enabledModels` allowlist), github, appearance (the theme picker),
+ * templates (prompt-template manager), and privacy (the analytics toggle).
  */
 export const SettingsSection = {
 	Providers: "providers",
+	Models: "models",
 	Github: "github",
 	Appearance: "appearance",
 	Templates: "templates",
@@ -443,8 +445,13 @@ interface AppState {
 	activeTerminalByWorkspace: Record<string, string | null>;
 	/** One runtime per live chat (keyed by `sessionId`) — many can stream at once; switching is a swap. */
 	sessions: Record<string, SessionRuntime>;
-	/** Models with configured auth (cheap win #1) — fetched once, shared by every chat's picker. */
-	models: WireModel[];
+	/**
+	 * The host's model catalog (cheap win #1) — every model with configured auth, in the host's order
+	 * (newest-first per provider) with its `enabled`/`collapsed` flags. Fetched once and refreshed by the
+	 * `model.catalogChanged` broadcast; shared by every chat's picker AND Settings → Models. Split into the
+	 * picker's tiers by `selectPickerTiers` — never re-derived in a component.
+	 */
+	modelCatalog: ModelCatalogEntry[];
 	/** Bare invalidation counter for the composer's `/`-menu template cache (`chat/ChatView.tsx`) — the
 	 * Templates settings panel (Task B6) bumps it after a `template.save`/`delete`; the store holds only
 	 * the counter, never fetches (see `chat/SPEC.md`'s Template slots bullet). */
@@ -641,7 +648,7 @@ interface AppState {
 	 */
 	appendErrorTurn: (sessionId: string, text: string) => void;
 	handlePiEvent: (event: PiEvent, sessionId: string) => void;
-	setModels: (models: WireModel[]) => void;
+	setModelCatalog: (catalog: ModelCatalogEntry[]) => void;
 	bumpTemplatesVersion: () => void;
 	setCurrentModel: (sessionId: string, model: WireModel) => void;
 	setThinkingLevel: (sessionId: string, level: ThinkingLevel) => void;
@@ -823,7 +830,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	terminalsByWorkspace: {},
 	activeTerminalByWorkspace: {},
 	sessions: {},
-	models: [],
+	modelCatalog: [],
 	templatesVersion: 0,
 	rightTabRequest: null,
 	changesRequest: null,
@@ -1296,7 +1303,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	// The event→store dispatcher: route each pi event to its session's runtime, so chats stream independently.
 	handlePiEvent: (event, sessionId) =>
 		set((s) => withRuntime(s, sessionId, (rt) => reduceSessionEvent(rt, event))),
-	setModels: (models) => set({ models }),
+	setModelCatalog: (catalog) => set({ modelCatalog: catalog }),
 	bumpTemplatesVersion: () => set((s) => ({ templatesVersion: s.templatesVersion + 1 })),
 	setCurrentModel: (sessionId, model) =>
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, model }))),

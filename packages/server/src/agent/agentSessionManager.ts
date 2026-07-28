@@ -1,7 +1,4 @@
 import { rmSync } from "node:fs";
-// Value imports of PURE catalog helpers (data-only projections over `Model`) — the only root
-// value-imports the module boundary allows; dispatch stays on the shared `ModelRuntime` (SPEC §Allowed deps).
-import { clampThinkingLevel, getSupportedThinkingLevels } from "@earendil-works/pi-ai";
 import {
 	type AgentSession,
 	createAgentSession,
@@ -23,7 +20,10 @@ import type {
 } from "@thinkrail/contracts";
 import { ANSWERABILITY_ERRORS, assessAnswerability, buildAnswersMessage } from "./askUserQuestion";
 import { buildResourceLoader, toSkillCommands } from "./extensions";
-import { getPiRuntime, refreshCatalogsDetached } from "./piRuntime";
+// Everything model-shaped (the wire projection, inbound ref re-resolution, ordering, the allowlist) lives
+// in the `modelCatalog` sibling — a one-way edge: it never reaches back into session lifecycle.
+import { resolveWireModel, toWireModel } from "./modelCatalog";
+import { getPiRuntime } from "./piRuntime";
 import { repairDanglingToolCalls } from "./sessionRepair";
 import type { SkillAdmissionContext } from "./skillAdmission";
 import { cancelExtUiForSession, createWebUiContext, notifyExtUi } from "./webUiContext";
@@ -138,40 +138,6 @@ export interface CreateSessionResult {
 	sessionId: string;
 	model: WireModel | null;
 	thinkingLevel: ThinkingLevel;
-}
-
-/**
- * Project a `pi` `Model` down to the wire's **allowlist** (`WireModel`) — exactly the fields the UI renders.
- * An explicit projection (not a `{...rest}` denylist), so `baseUrl` (the jbcentral proxy secret when wired)
- * and `headers` (can carry auth) — and any future `Model` field — are excluded by default. The UI refers a
- * model back by `{provider,id}`, which the host re-resolves via `resolveWireModel`. This is the single choke
- * point that keeps secrets off every model-bearing wire frame (model.list/default, session.create result,
- * SessionSummary).
- */
-export function toWireModel(model: Model<string>): WireModel {
-	return {
-		id: model.id,
-		name: model.name,
-		provider: model.provider,
-		contextWindow: model.contextWindow,
-		reasoning: model.reasoning,
-		// Computed, not picked: pi's per-model effort-level truth (reasoning + thinkingLevelMap), so the
-		// picker disables unsupported levels instead of relying on pi's silent clamp.
-		thinkingLevels: getSupportedThinkingLevels(model),
-	};
-}
-
-/**
- * Re-resolve a wire model reference back to the real `Model` (with its `baseUrl`) from the registry, matching
- * the picker's universe (`getAvailable()`). **Never trust a client-supplied `baseUrl`** — pi's `setModel` /
- * `createAgentSession` use it verbatim, so accepting it would let a client (esp. a remote V2 one) point the
- * agent's model traffic at an arbitrary URL. Throws if the ref isn't an available model.
- */
-async function resolveWireModel(ref: Pick<WireModel, "provider" | "id">): Promise<Model<string>> {
-	const available = await (await getPiRuntime()).getAvailable();
-	const match = available.find((m) => m.provider === ref.provider && m.id === ref.id);
-	if (!match) throw new Error(`Unknown or unavailable model: ${ref.provider}/${ref.id}`);
-	return match as unknown as Model<string>;
 }
 
 /** Wire a freshly-created/opened session into the manager: forward its events + bind the extension-UI bridge. */
@@ -450,63 +416,6 @@ export function getSessionCommands(sessionId: string): SlashCommandInfo[] {
 	}));
 	const skill = toSkillCommands(session.resourceLoader.getSkills().skills);
 	return [...extension, ...prompt, ...skill];
-}
-
-/** Models with configured auth, for the model picker (cheap win #1). Redacted to `WireModel` — the raw
- * `Model.baseUrl` carries the jbcentral proxy secret when wired, and the picker only reads id/name/provider.
- * Also fires the detached catalog refresh (issue #98): the read below returns the current snapshot
- * immediately — never awaiting the network — and a later `model.list` picks up whatever the refresh landed. */
-export async function listAvailableModels(): Promise<WireModel[]> {
-	const runtime = await getPiRuntime();
-	refreshCatalogsDetached(runtime);
-	const available = await runtime.getAvailable();
-	return available.map((m) => toWireModel(m as unknown as Model<string>));
-}
-
-/** The model + thinking level a new session resolves to (settings default if available, else first available). */
-export interface DefaultModelResult {
-	model: WireModel | null;
-	thinkingLevel: ThinkingLevel;
-}
-
-/**
- * pi's own clamp for a `{model, desired-level}` pair — `model.clampThinking`. The pre-session picker has
- * no session to ask, so without this it would need a policy of its own, and that path would then adjust
- * effort differently from `model.default` (which clamps just below) and from a live session (which gets
- * pi's answer via `thinking_level_changed`). Re-resolves the ref host-side like every other inbound
- * model ref, so an unavailable one throws rather than being guessed at.
- */
-export async function clampThinkingForModel(
-	ref: Pick<WireModel, "provider" | "id">,
-	level: ThinkingLevel,
-): Promise<ThinkingLevel> {
-	return clampThinkingLevel(await resolveWireModel(ref), level);
-}
-
-/**
- * The default the *next* session would start with — so the New-Workspace dialog can show the exact model
- * pre-session (not a "Default" placeholder). Mirrors pi's resolution for a fresh session: the settings
- * default (if it's available), else the first available model. Passing it back to `session.create` is a
- * no-op vs. omitting it, so an `@agent` test that doesn't touch the picker still lands on the pinned model.
- *
- * The result is **self-consistent**: the settings' thinking level is clamped (pi's own
- * `clampThinkingLevel`) onto the resolved model's supported set, so the dialog never shows a level the
- * model can't do as selected (e.g. a `high` saved from a reasoning model while the default is a
- * non-reasoning one — pi would silently clamp the created session to `off` otherwise).
- */
-export async function getDefaultModel(): Promise<DefaultModelResult> {
-	const available = await (await getPiRuntime()).getAvailable();
-	const settings = SettingsManager.create(process.cwd());
-	const provider = settings.getDefaultProvider();
-	const modelId = settings.getDefaultModel();
-	const pinned =
-		provider && modelId
-			? available.find((m) => m.provider === provider && m.id === modelId)
-			: undefined;
-	const resolved = (pinned ?? available[0] ?? null) as Model<string> | null;
-	const saved = settings.getDefaultThinkingLevel() ?? "medium";
-	const thinkingLevel = resolved ? clampThinkingLevel(resolved, saved) : saved;
-	return { model: resolved ? toWireModel(resolved) : null, thinkingLevel };
 }
 
 export function isSessionStreaming(sessionId: string): boolean {

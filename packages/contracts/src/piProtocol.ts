@@ -46,6 +46,39 @@ export type WireModel = Pick<
 	thinkingLevels: ThinkingLevel[];
 };
 
+/**
+ * One row of the model picker's catalog (`model.list`): pi's model **plus the host's two presentation
+ * facts**. The flags deliberately do NOT live on `WireModel` — that type also rides `session.create` /
+ * `session.setModel` / `SessionSummary`, where allowlist membership is meaningless. Catalog identity and
+ * user preference are separate facts.
+ *
+ * pi's `Model` carries no release date and no deprecation flag, and `getAvailable()` filters only by
+ * provider — so both facts below are computed host-side (see the `agent` module SPEC): the order of the
+ * array is the host's (newest-first per provider), `enabled` mirrors pi's own `settings.json`
+ * `enabledModels` allowlist, and `collapsed` folds a dated snapshot under its alias.
+ */
+export interface ModelCatalogEntry {
+	model: WireModel;
+	/** In the user's pi `enabledModels` allowlist — all `true` when that setting is unset. */
+	enabled: boolean;
+	/**
+	 * A dated snapshot (`claude-opus-4-5-20251101`) whose alias (`claude-opus-4-5`) is also listed, so the
+	 * picker hides it from its default tier. Always `false` once an allowlist is set — an explicit list is
+	 * the curation, and the host never second-guesses it.
+	 */
+	collapsed: boolean;
+}
+
+/**
+ * A model's canonical `"provider/id"` reference — the format **pi itself** stores in `enabledModels` and
+ * accepts in `--models`. It lives on the wire (not on either end) because both ends produce it: the host
+ * writes these refs into pi's settings, the client sends the list it wants enabled, and a second
+ * hand-rolled `${provider}/${id}` anywhere would be a silent way for the two to drift.
+ */
+export function modelRef(model: Pick<WireModel, "provider" | "id">): string {
+	return `${model.provider}/${model.id}`;
+}
+
 // The unified render union the UI switches on. The real superset (`AgentSessionEvent`) is declared in the
 // Node-only `pi-coding-agent` (it pulls node:fs), so it's MIRRORED here type-only, derived from the
 // imported `AgentEvent`. The members below are what `session.subscribe` emits. The mirror is NOT

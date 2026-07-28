@@ -1,34 +1,27 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-	InMemoryCredentialStore,
-	type Model,
-	type ModelsRefreshResult,
-} from "@earendil-works/pi-ai";
+import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type { ExtUiRequest } from "@thinkrail/contracts";
 import {
 	buildSessionSettings,
-	clampThinkingForModel,
 	createSession,
 	disposeAllSessions,
-	getDefaultModel,
 	getSessionCommands,
 	getSessionMessages,
 	getSessionStats,
 	hasSession,
-	listAvailableModels,
 	listSessions,
 	promptSession,
 	removeSession,
 	removeWorkspaceSessions,
 	setSessionManagerFactory,
 	setSessionPublisher,
-	toWireModel,
 } from "./agentSessionManager";
+import { listModelCatalog } from "./modelCatalog";
 import { configurePiRuntime } from "./piRuntime";
 import {
 	cancelExtUiForSession,
@@ -63,13 +56,6 @@ const fauxB = createFauxCore({
 	models: [modelDef("fauxb")],
 	tokensPerSecond: 2000,
 });
-// Registered only DURING the catalog-refresh test below — the "newly shipped" model a refresh delivers.
-const fauxC = createFauxCore({
-	provider: "fauxc",
-	api: "fauxc",
-	models: [modelDef("fauxc")],
-	tokensPerSecond: 2000,
-});
 
 /** Provider config for `registerProvider` (baseUrl + apiKey are required when models are defined). */
 const cfg = (faux: typeof fauxA, id: string) => ({
@@ -99,8 +85,8 @@ beforeAll(async () => {
 	priorAgentDir = process.env.PI_CODING_AGENT_DIR;
 	process.env.PI_CODING_AGENT_DIR = tmpCwd("trpi-agentdir-");
 
-	// `listAvailableModels` fires a detached network catalog refresh (issue #98) — keep this suite
-	// hermetic the same way e2e is, via pi's own PI_OFFLINE convention. The refresh tests lift it locally.
+	// `listModelCatalog` fires a detached network catalog refresh (issue #98) — keep this suite hermetic
+	// the same way e2e is, via pi's own PI_OFFLINE convention (the refresh cases live in modelCatalog.test.ts).
 	priorOffline = process.env.PI_OFFLINE;
 	process.env.PI_OFFLINE = "1";
 
@@ -173,173 +159,9 @@ test("buildSessionSettings disables image autoResize (in-memory, so the read too
 	expect(buildSessionSettings(tmpCwd("trpi-settings-")).getImageAutoResize()).toBe(false);
 });
 
-test("listAvailableModels returns the configured (faux) models", async () => {
-	const ids = (await listAvailableModels()).map((m) => m.id);
-	expect(ids).toContain("fauxa");
-	expect(ids).toContain("fauxb");
-});
-
-/** Let a detached refresh task's `.then/.finally` chain settle (macrotask — nothing sleeps). */
-const refreshSettled = () => new Promise<void>((r) => setTimeout(r, 0));
-
-test("model.list is never blocked by a hanging catalog refresh (fire-and-forget, issue #98)", async () => {
-	delete process.env.PI_OFFLINE;
-	const originalRefresh = runtime.refresh.bind(runtime);
-	let releaseHang = () => {};
-	try {
-		runtime.refresh = () =>
-			new Promise<ModelsRefreshResult>((resolve) => {
-				releaseHang = () => resolve({ aborted: false, errors: new Map() });
-			});
-		// Resolves immediately from the snapshot while the "network" refresh hangs unresolved.
-		const ids = (await listAvailableModels()).map((m) => m.id);
-		expect(ids).toContain("fauxa");
-	} finally {
-		releaseHang(); // frees the single-flight slot so this test leaves no pending state behind
-		await refreshSettled();
-		runtime.refresh = originalRefresh;
-		process.env.PI_OFFLINE = "1";
-	}
-});
-
-test("a newly-shipped catalog model appears on a later model.list without a restart (issue #98)", async () => {
-	delete process.env.PI_OFFLINE;
-	const originalRefresh = runtime.refresh.bind(runtime);
-	let landRefresh = () => {};
-	let refreshCalls = 0;
-	try {
-		// The first "network" refresh delivers a new provider+model when it lands — deferred, so the first
-		// read provably serves the pre-refresh snapshot. Any later trigger settles instantly and delivers
-		// nothing, mirroring pi's freshness throttle.
-		runtime.refresh = () => {
-			refreshCalls += 1;
-			if (refreshCalls > 1) return Promise.resolve({ aborted: false, errors: new Map() });
-			return new Promise<ModelsRefreshResult>((resolve) => {
-				landRefresh = () => {
-					runtime.registerProvider("fauxc", cfg(fauxC, "fauxc"));
-					resolve({ aborted: false, errors: new Map() });
-				};
-			});
-		};
-
-		const before = (await listAvailableModels()).map((m) => m.id); // triggers the detached refresh
-		expect(before).not.toContain("fauxc");
-
-		landRefresh();
-		await refreshSettled();
-
-		const after = (await listAvailableModels()).map((m) => m.id);
-		expect(after).toContain("fauxc");
-	} finally {
-		await refreshSettled(); // let the second trigger's instant refresh settle before restoring
-		runtime.unregisterProvider("fauxc");
-		runtime.refresh = originalRefresh;
-		process.env.PI_OFFLINE = "1";
-	}
-});
-
-test("wire models expose only the allowlisted fields (no baseUrl/headers/other Model fields)", async () => {
-	// The faux providers register with baseUrl "http://faux.local"; when JetBrains AI is wired the real
-	// baseUrl is `.../wire/<SECRET>/...`. `toWireModel` is an allowlist projection, so a wire model carries
-	// EXACTLY these keys — this pins the DTO shut (widening it, incl. re-adding a secret field, fails here).
-	const models = await listAvailableModels();
-	expect(models.length).toBeGreaterThan(0);
-	for (const m of models) {
-		expect(Object.keys(m).sort()).toEqual([
-			"contextWindow",
-			"id",
-			"name",
-			"provider",
-			"reasoning",
-			"thinkingLevels",
-		]);
-		// Faux models declare `reasoning: false` — pi's support truth for those is exactly ["off"].
-		expect(m.thinkingLevels).toEqual(["off"]);
-	}
-});
-
-test("thinkingLevels is pi's per-model support truth, not a reasoning boolean widened to all seven", () => {
-	// Every registered faux model is non-reasoning, so `["off"]` alone can be satisfied by a constant.
-	// `toWireModel` is a pure projection, so pin the interesting half directly: a reasoning model exposes
-	// the escalation ladder, and `xhigh`/`max` appear ONLY when `thinkingLevelMap` maps them.
-	const reasoner: Model<string> = {
-		...modelDef("reasoner"),
-		provider: "fauxa",
-		api: "fauxa",
-		baseUrl: "http://faux.local",
-		reasoning: true,
-		thinkingLevelMap: { xhigh: "xhigh" },
-	};
-	expect(toWireModel(reasoner).thinkingLevels).toEqual([
-		"off",
-		"minimal",
-		"low",
-		"medium",
-		"high",
-		"xhigh",
-	]);
-
-	// A level the model explicitly cannot do is dropped, even on a reasoning model.
-	const alwaysThinks: Model<string> = { ...reasoner, thinkingLevelMap: { off: null } };
-	expect(toWireModel(alwaysThinks).thinkingLevels).not.toContain("off");
-});
-
-test("model.clampThinking answers with pi's clamp, not a plausible client-side policy", async () => {
-	// Review finding on the pre-session picker: any rule invented client-side diverges from pi. These are
-	// the two shapes that separate pi's upward-then-downward clamp from the likely local heuristics — a
-	// midpoint would say `medium` then `high`; "nearest below" would say `xhigh` then nothing.
-	// A reasoning provider has to be registered for this: `clampThinkingForModel` re-resolves the ref,
-	// and every other faux model is non-reasoning (supported set exactly `["off"]`, which every policy
-	// agrees on and so proves nothing).
-	const reasoning = (id: string, map: Record<string, string | null>) => ({
-		...cfg(fauxA, id),
-		models: [{ ...modelDef(id), api: fauxA.api, reasoning: true, thinkingLevelMap: map }],
-	});
-
-	runtime.registerProvider("clamp5", reasoning("clamp5", { xhigh: "xhigh" }));
-	runtime.registerProvider(
-		"clamp2",
-		reasoning("clamp2", { off: null, minimal: null, medium: null }),
-	);
-	try {
-		// `[off, minimal, low, medium, high, xhigh]` — `max` is unmapped, so upward is exhausted.
-		expect(await clampThinkingForModel({ provider: "clamp5", id: "clamp5" }, "max")).toBe("xhigh");
-		// `[low, high]` — nothing below `off`, so pi goes upward instead.
-		expect(await clampThinkingForModel({ provider: "clamp2", id: "clamp2" }, "off")).toBe("low");
-		// A level the model does support is returned untouched.
-		expect(await clampThinkingForModel({ provider: "clamp2", id: "clamp2" }, "high")).toBe("high");
-	} finally {
-		runtime.unregisterProvider("clamp5");
-		runtime.unregisterProvider("clamp2");
-	}
-});
-
-test("model.clampThinking refuses a model ref the host can't resolve", async () => {
-	await expect(clampThinkingForModel({ provider: "nope", id: "nope" }, "high")).rejects.toThrow(
-		/Unknown or unavailable model/,
-	);
-});
-
-test("model.default clamps the saved thinking level onto the resolved model's support set", async () => {
-	// A `high` saved from a reasoning model plus a non-reasoning default model must not surface as a
-	// disabled-but-selected level — the host returns a self-consistent pair, clamped with pi's own
-	// `clampThinkingLevel` (faux models don't reason → exactly ["off"]).
-	const agentDir = process.env.PI_CODING_AGENT_DIR;
-	if (!agentDir) throw new Error("agent dir not isolated");
-	const settingsPath = join(agentDir, "settings.json");
-	writeFileSync(settingsPath, `${JSON.stringify({ defaultThinkingLevel: "high" })}\n`);
-	try {
-		const d = await getDefaultModel();
-		expect(d.model?.thinkingLevels).toEqual(["off"]);
-		expect(d.thinkingLevel).toBe("off");
-	} finally {
-		rmSync(settingsPath, { force: true });
-	}
-});
-
 test("createSession re-resolves a wire model ref by {provider,id}, never trusting a client baseUrl", async () => {
 	fauxA.setResponses([fauxAssistantMessage("RESOLVED_REPLY")]);
-	const ref = (await listAvailableModels()).find((m) => m.id === "fauxa");
+	const ref = (await listModelCatalog()).find((e) => e.model.id === "fauxa")?.model;
 	if (!ref) throw new Error("faux model missing");
 	// `ref` has NO baseUrl — only host-side re-resolution against the registry can reach the faux provider.
 	const s = await createSession({
@@ -356,7 +178,7 @@ test("createSession re-resolves a wire model ref by {provider,id}, never trustin
 });
 
 test("createSession rejects an unknown/unavailable model ref (no arbitrary baseUrl injection)", async () => {
-	const ref = (await listAvailableModels()).find((m) => m.id === "fauxa");
+	const ref = (await listModelCatalog()).find((e) => e.model.id === "fauxa")?.model;
 	if (!ref) throw new Error("faux model missing");
 	// A client points provider/id at something not in the registry — the host refuses rather than call it.
 	const bogus = { ...ref, provider: "attacker", id: "evil" };

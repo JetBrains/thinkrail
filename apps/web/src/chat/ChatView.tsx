@@ -14,6 +14,7 @@ import { Popover, PopoverAnchor, PopoverTrigger } from "@/components/ui/popover"
 import {
 	EMPTY_RUNTIME,
 	SettingsSection,
+	selectPickerTiers,
 	selectSkillsStale,
 	selectWorkspaceById,
 	specPathMatcher,
@@ -124,7 +125,8 @@ export default function ChatView({
 	// This tab's runtime — zustand only re-renders when *this* session's slice ref changes, so a background
 	// chat streaming into its own runtime never re-renders the foreground one.
 	const runtime = useAppStore((s) => s.sessions[sessionId]) ?? EMPTY_RUNTIME;
-	const models = useAppStore((s) => s.models);
+	const catalogSize = useAppStore((s) => s.modelCatalog.length);
+	const { primary: models, extra: extraModels } = useAppStore(selectPickerTiers);
 	// This chat's owning project (workspaces are keyed by project) — for the Skills manager's trust ops
 	// and the "project" / "all" history-search scopes.
 	const projectId = useAppStore(
@@ -245,14 +247,15 @@ export default function ChatView({
 	const chatLocationRequest = useAppStore((s) => s.chatLocationRequest);
 	const [flashRowId, setFlashRowId] = useState<string | null>(null);
 
-	// Models are global to the host — fetch once, then every chat's picker shares them.
+	// The catalog is global to the host — fetch once, then every chat's picker shares it (later writes
+	// arrive on the `model.catalogChanged` broadcast).
 	useEffect(() => {
-		if (models.length > 0) return;
+		if (catalogSize > 0) return;
 		getTransport()
 			.request("model.list", {})
-			.then((m) => useAppStore.getState().setModels(m))
+			.then((catalog) => useAppStore.getState().setModelCatalog(catalog))
 			.catch(() => {});
-	}, [models.length]);
+	}, [catalogSize]);
 
 	// The skill catalog is per-session; load it when the chat opens.
 	useEffect(() => {
@@ -680,6 +683,7 @@ export default function ChatView({
 							mentionCandidates={mentionCandidates}
 							recentPrompts={recentPrompts}
 							models={models}
+							extraModels={extraModels}
 							currentModel={currentModel}
 							thinkingLevel={thinkingLevel}
 							onMentionQuery={onMentionQuery}

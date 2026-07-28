@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import {
 	cssColorToHex,
+	formatContextWindow,
 	isAbsolutePath,
 	isMarkdownPath,
 	normalizePath,
@@ -97,4 +98,12 @@ test("shallowEqualArrays compares element-wise and treats absent as unequal", ()
 	expect(shallowEqualArrays([Number.NaN], [Number.NaN])).toBe(true);
 	expect(shallowEqualArrays(undefined, [])).toBe(false);
 	expect(shallowEqualArrays(undefined, undefined)).toBe(true);
+});
+
+test("formatContextWindow compacts a context window the way both model surfaces render it", () => {
+	expect(formatContextWindow(1_000_000)).toBe("1M");
+	expect(formatContextWindow(1_047_576)).toBe("1M"); // gpt-4.1's odd window rounds, never "1.0M"
+	expect(formatContextWindow(1_050_000)).toBe("1.1M");
+	expect(formatContextWindow(200_000)).toBe("200K");
+	expect(formatContextWindow(999)).toBe("999");
 });

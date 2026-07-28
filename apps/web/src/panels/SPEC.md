@@ -234,8 +234,18 @@ a project picker, the prompt hero, and the reused
   ever seeds global files. No server change. **`PrivacySettings`** is the **anonymous-usage-analytics
   toggle** — a switch over `store.analyticsEnabled`, fired via `settings.update { analyticsEnabled }`
   with the same converge-on-broadcast pattern as the theme, plus the what-is/isn't-collected copy; only
-  the boolean ever crosses the wire, see `submodule-server-analytics`. A single dimmed "General" nav item ("Soon") still signals the shell is
-  built to grow. `ProvidersSettings`/`AppearanceSettings`/`TemplatesSettings`/`PrivacySettings` are the
+  the boolean ever crosses the wire, see `submodule-server-analytics`. **`ModelsSettings`** is the
+  **enabled-models manager**: every model the host reports (`store.modelCatalog`, already ordered
+  newest-first per provider) grouped by provider with an on/off pill per row (the `SkillsDialog` toggle
+  idiom, not a new primitive), a header state ("All models available" vs "N of M enabled"), and an
+  **Enable all** action. Each toggle fires
+  `model.setEnabled` with the **full** ref list and the UI converges on the `model.catalogChanged`
+  broadcast — no dirty state, no Save button, same pattern as the theme. Copy names the underlying
+  truth: this writes pi's own `settings.json` `enabledModels`, so the pi CLI honors it too, hand-written
+  globs are expanded to explicit ids on save, and turning everything off means "all models available"
+  (pi's semantics). This is the **only** entry point to the allowlist — the picker's "Show all" tier is an
+  escape hatch for one-off use, not a second editor. A single dimmed "General" nav item ("Soon") still signals the shell is
+  built to grow. `ProvidersSettings`/`AppearanceSettings`/`TemplatesSettings`/`PrivacySettings`/`ModelsSettings` are the
   **integration pieces**
   (store + transport); the `LoginDialog` stays presentational (`auth` module).
 

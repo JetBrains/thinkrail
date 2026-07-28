@@ -146,7 +146,13 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   template** action on the selected prompt row — see the Save-as-template bullet below, and a
   **zoomed-stage preview pane** + **scope picker** — see the next bullet),
   `ModelSelector` + `ThinkingSelector` (also shared with `NewWorkspaceDialog`;
-  optional `container` prop portals their popovers into a host Dialog; `ThinkingSelector` takes
+  optional `container` prop portals their popovers into a host Dialog; `ModelSelector` renders **two
+  host-decided tiers** — `models` (the everyday rows: enabled, duplicates collapsed) and `extra`
+  (everything else, revealed by a **"Show all N models"** footer row). It decides neither tier: the split
+  is `store/selectors`' `selectPickerTiers` over the host's `enabled`/`collapsed` flags. A **non-empty
+  search query searches both tiers** (extras under a muted "More models" heading), so a legacy or pinned
+  model is always findable by name without leaving the picker; curating the everyday tier lives in
+  Settings → Models, never here. `ThinkingSelector` takes
   **`levels`** — `WireModel.thinkingLevels` verbatim, the host-computed support truth, already in pi's
   escalation order — and its rows **are** that list. The web keeps no enumeration of the level
   vocabulary: pi owns it, the host projects the per-model slice, and an empty list (no model resolved

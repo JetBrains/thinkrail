@@ -33,7 +33,7 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     checks with no timeout — on the `provider.status` and jbcentral-connect paths that stalls wherever
     egress is slow or blocked. The one deliberate opt-in to
     live catalogs is **`refreshCatalogsDetached(runtime)`** (issue #98, mirroring pi's own `/model`):
-    **triggered by `model.list` only** (`listAvailableModels` fires it, then serves the current snapshot
+    **triggered by `model.list` only** (`listModelCatalog` fires it, then serves the current snapshot
     — the picker read never awaits the network; a later read picks up what landed; broader triggers —
     `model.default`, host boot — were considered and declined). Fire-and-forget semantics: per-call
     `refresh({ allowNetwork: true })` — **no `force`**, so pi's provider freshness throttle decides
@@ -53,11 +53,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     the web UI downsizes user-attached images itself); a shared `registerSession` forwards each event tagged with its id +
     `bindExtensions({ mode:'rpc', uiContext })`; `prompt`/`steer`/`followUp` (with images) / `abort` /
     `setModel` / `setThinkingLevel` / `compact` / `getSessionStats` (+ contextUsage) / `getSessionCommands` /
-    `listAvailableModels` / **`clampThinkingForModel`** (pi's `clampThinkingLevel` for a `{model, level}`
+    **`clampThinkingForModel`** (pi's `clampThinkingLevel` for a `{model, level}`
     pair — `model.clampThinking`; the host owns it so the pre-session picker, `getDefaultModel`, and a live
-    session all adjust effort identically) / `getDefaultModel` (the model + thinking a fresh session resolves to — settings
-    default if available, else first available — so the New-Workspace dialog shows the exact pre-session
-    model). **Models cross the wire as `WireModel` (never pi's raw `Model`):** `toWireModel` projects a
+    session all adjust effort identically) / `getDefaultModel` (the model + thinking a fresh session resolves
+    to — the settings default when it is available **and enabled**, else the first **enabled** model, else the
+    first available (all three read the `modelCatalog` order) — so the New-Workspace dialog shows the exact
+    pre-session model, and a model the user disabled is never preselected). **Models cross the wire as `WireModel` (never pi's raw `Model`):** `toWireModel` projects a
     `Model` onto the wire's **allowlist** (see `WireModel`) — so `baseUrl` (the
     jbcentral proxy secret when JetBrains AI is wired), `headers`, and any other field are excluded by
     default — and the inbound side (`createSession`/`setModel`) **re-resolves** the ref by `{provider,id}`
@@ -88,6 +89,31 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     whose recorded `cwd` matches, never `rm -rf` the encoded dir since pi's cwd→dir encoding can alias
     distinct cwds; `cwd` omitted on a double-archive skips only the disk purge);
     `setSessionPublisher` + `setSessionManagerFactory` seams.
+  - `modelCatalog` — **everything model-shaped**, so session lifecycle holds no model policy:
+    `toWireModel` (the wire projection / secret choke point), `resolveWireModel` (inbound ref
+    re-resolution), `clampThinkingForModel` (pi's clamp for a `{model, level}` pair — `model.clampThinking`;
+    the host owns it so the pre-session picker, `getDefaultModel` and a live session adjust effort
+    identically), `getDefaultModel` (see below), plus the **picker's projection**: `listModelCatalog()`
+    (the `model.list` read) and `setEnabledModels(refs)` (the Settings → Models write, fanned out through
+    the **`setModelCatalogPublisher`** seam → `model.catalogChanged`). `agentSessionManager` imports from
+    here; the edge is **one-way** (this module never reaches back into session lifecycle). It holds no
+    presentation policy of its own beyond ordering: **order** = provider asc, then within a
+    provider `(version vector desc, dated-suffix below its alias, id asc)` — pi's `Model` carries no
+    release date or deprecation flag (verified against 0.82.1), so recency can only come from the id's
+    version digits; **enabled** = pi's own `settings.json` `enabledModels` allowlist, read merged
+    (global+project) via `SettingsManager.getEnabledModels()` at `process.cwd()` and resolved through pi's
+    **`resolveModelScopeWithDiagnostics`** (globs, dedupe, alias-over-dated), so the app and the pi
+    CLI/TUI share one setting; **collapsed** = a dated snapshot whose alias is also listed
+    (`claude-opus-4-5-20251101` under `claude-opus-4-5`), computed **only when no allowlist is set**.
+    Writes go to pi's **global** settings and persist `undefined` for "everything enabled" (`null`, `[]`,
+    and the full set all mean no filter — pi's semantics, matching its own `/models` manager).
+    Sessions are deliberately **not** scoped: we never pass `scopedModels` to `createAgentSession`, so pi's
+    per-session Ctrl+P cycling and its `scoped[0]`-beats-saved-default rule stay out of the host.
+    **Tradeoff, taken knowingly (pi-parity):** a write persists the client's list verbatim, so a provider
+    that is signed out (its models absent from `getAvailable()`) drops out of the stored list, and a
+    newly-authenticated provider's models start disabled while a list is set. Merge semantics (preserving
+    refs the client couldn't see) were considered and rejected: a preserved glob would silently
+    re-enable the very model the user had just switched off.
   - `oneshot` — one-shot LLM completions **without** an `AgentSession` (no tools/extensions/disk):
     `completeOnce(request)` picks a model from the shared runtime's authenticated set and dispatches a
     single `runtime.completeSimple()` — pi's canonical provider-agnostic request path, which resolves
@@ -218,10 +244,15 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   `reloadSessionResources(sessionId)` (active-chat reload); the **`setSkillAdmissionResolver`** seam (host
   wires `workspaceId` → the admission context);
   the compiled-binary seam (`registerBundledRuntime` +
-  `BundledExtensions`/`BundledExtensionFactory`).
+  `BundledExtensions`/`BundledExtensionFactory`); the `modelCatalog` surface — `listModelCatalog` /
+  `setEnabledModels` / `setModelCatalogPublisher` / `getDefaultModel` / `clampThinkingForModel` /
+  `toWireModel` / `resolveWireModel` (+ the pure `orderModels` / `collapsedRefs` / `parseModelSortKey`,
+  exported for the unit suite that pins the ordering rule).
 - **Allowed deps:** `@earendil-works/pi-coding-agent` (runtime); `@earendil-works/pi-ai` (types + test
   fixtures + **pure catalog helpers value-imported from the package root** — today exactly
-  `getSupportedThinkingLevels` + `clampThinkingLevel`, data-only projections over `Model`; *dispatch*
+  `getSupportedThinkingLevels` + `clampThinkingLevel`, data-only projections over `Model`, plus
+  pi-coding-agent's **`resolveModelScopeWithDiagnostics`** — pi's own `enabledModels`/`--models` resolver,
+  so a stored pattern means the same thing here as in the pi CLI; *dispatch*
   still goes through the shared `ModelRuntime`, never pi-ai's stream/complete — plus the `/bun-oauth` + `/bedrock-provider`
   + `/compat` subpaths, value-imported **only** inside `registerBundledRuntime`'s dynamic imports); `pi-web-access` + `pi-visualize` + `pi-spec-graph` +
   `pi-thinkrail-workflow` + `pi-todos` (the bundled extensions — loaded by path, never value-imported here; the
@@ -244,6 +275,11 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   loud.
 - Share one `ModelRuntime` (each session gets it as `createAgentSession`'s `modelRuntime`); give each
   session its own `SessionManager`; `dispose()` on removal.
+- **The catalog projection fails open.** A stale/unmatched `enabledModels` pattern is a `console.warn`
+  (pi returns them as `diagnostics`, not throws) and never empties the picker; ordering and collapsing are
+  pure functions over the available list, so they cannot fail on a catalog shape we haven't seen. The
+  picker's escape hatch ("Show all") is a *client tier*, not a second host read: one `model.list` carries
+  every available model with its `enabled`/`collapsed` flags.
 - **A `pi` `Model` must never cross the wire raw** — its `baseUrl` carries the jbcentral proxy secret (and
   `headers` can carry auth). Every model-bearing frame (`model.list`/`model.default`, the `session.create`
   result, `SessionSummary.model`) goes through `toWireModel`; every inbound model ref (`session.create` /

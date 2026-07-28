@@ -118,3 +118,13 @@ export function stripFrontmatter(text: string): string {
 	const match = /^---[ \t]*\r?\n([\s\S]*?)\r?\n(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/.exec(text);
 	return match ? text.slice(match[0].length) : text;
 }
+
+/**
+ * A model's context window as a compact label: 1_000_000 → "1M", 200_000 → "200K". Shared by every
+ * surface that lists models (the picker's tiers, the Settings → Models manager) so the two can't drift.
+ */
+export function formatContextWindow(tokens: number): string {
+	if (tokens >= 1_000_000) return `${Math.round(tokens / 100_000) / 10}M`.replace(".0", "");
+	if (tokens >= 1_000) return `${Math.round(tokens / 1_000)}K`;
+	return String(tokens);
+}
