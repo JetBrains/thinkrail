@@ -32,9 +32,11 @@ export function groupProgress(group: TodoGroupItem): { done: number; total: numb
 	};
 }
 
-/** Every item across loose + groups, in display order. */
+/** Every item in display order: the groups (the agent's tasks) first, then the loose lane (the user's
+ * own adds) **last** — **a mirror of `pi-todos/core`'s `flatItems`** (this app may import `contracts`
+ * only), the same way `groupStatus` mirrors the extension's helper. Keep the two in step. */
 export function flatItems(plan: TodoPlan): TodoItem[] {
-	return [...plan.todos, ...plan.groups.flatMap((g) => g.todos)];
+	return [...plan.groups.flatMap((g) => g.todos), ...plan.todos];
 }
 
 /** done / total and the current in-progress item — the "what's happening now" glance. */

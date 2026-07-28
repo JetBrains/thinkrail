@@ -13,9 +13,13 @@ description: "This chat has a shared, live TODO plan — your tasks for the conv
   redirect"), not the process. The steps inside are the items — each has a **title**, a **status**
   (`pending` → `in_progress` → `done`), and an optional **note** (put the done-criterion there, e.g.
   "login e2e green"). A task's own status is never stored — it derives from its steps.
-- **Loose items are the user's lane.** They hold what the **user** adds from the UI — you work them,
-  but never group, rewrite, or drop them. You don't author loose items (the tools require a `group`
-  or an `after` anchor); a tiny ask is a small group (1–2 steps is fine), or no list at all.
+- **Loose items are the user's lane — and they sit at the END of the plan.** They hold what the
+  **user** adds from the UI; you work them, but never group, rewrite, or drop them. `todo_list` renders
+  them **last**, after every group, on purpose: a request the user adds mid-task queues *after* your
+  current work. So **finish (or resume) the task you're on before you pick up a loose item** — don't
+  jump to a freshly-added user item and abandon a step you had in progress. You don't author loose
+  items (the tools require a `group` or an `after` anchor); a tiny ask is a small group (1–2 steps is
+  fine), or no list at all.
 - It is **shared and live**: you maintain it, and the **user edits it while you work** — adding tasks,
   removing ones they've dropped. The stored list is the **source of truth**; what you remember is only
   a snapshot. **Re-read it (`todo_list`)** to stay in sync, don't trust your memory of it.
@@ -44,8 +48,10 @@ Steps are **verifiable** and ≈ commit-sized: "easy to check off as you go", no
      or the previous step visibly falls back to open.
    - Don't start the next group while the current one has open steps. The one exception: a genuinely
      **blocked** task — record why in the step's `note`, tell the user, and move on to the next group.
-   - **Before each next step, `todo_list` again.** The user may have edited mid-work: pick up anything
-     new, and if an item you planned is gone, they dropped it — **skip it, don't re-add it**.
+   - **Before each next step, `todo_list` again.** The user may have edited mid-work: note anything
+     new (it's appended in the user's lane at the **end** — take it up *after* the step you're on, don't
+     preempt in-progress work), and if an item you planned is gone, they dropped it — **skip it, don't
+     re-add it**.
    - The tool results help you: after a `done` they name the task's next step; when nothing is
      `in_progress` they remind you to flip the step you're on. Act on those nudges.
 3. **A new ask mid-session = a new group appended** (`todo_add` with `group:`, one per step — or lay

@@ -462,8 +462,10 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `useChatTodos` (the `todo.*` data hook — fetch + live `pi.event` refetch + edits + the add-nudge + the
   `openMarkdown` snapshot action), `planView` (pure derivations: `groupStatus` — **a mirror of
   `pi-todos/core`'s helper**, since this app may import `contracts` only — plus `groupProgress`,
-  `planSummary`, `planGlance`/`sessionGlance`, and `shouldNudgeOnAdd`), `TodoList` (the **group-first** rendering — group = task: the loose
-  lane — the user's items — first, then groups in plan order, each under a header row with the derived
+  `planSummary`, `planGlance`/`sessionGlance`, and `shouldNudgeOnAdd`), `TodoList` (the **group-first** rendering — group = task: the
+  groups in plan order first, then the loose lane — the user's items — **last** (so a request added
+  mid-task queues *after* the agent's current work, matching `pi-todos`'s `formatPlan`/the markdown
+  snapshot, not above it), each under a header row with the derived
   status icon + a done/total badge, the `active` group emphasized; a fully-done group folds into one
   expandable row; plus the add-row + an "open as markdown" button), `planMarkdown` (a pure `plan →
   markdown` compiler, `## <group> — n/m` sections), and `ChatPlan` (`ChatPlanStripContent` +

@@ -8,7 +8,7 @@ import type {
 	ExtensionContext,
 	ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
-import { TODO_STATUSES } from "../core/index.ts";
+import { TODO_STATUSES, TodoStore } from "../core/index.ts";
 import { registerTodoTools } from "./index.ts";
 
 // Capture the registered tool defs via a minimal fake ExtensionAPI, then drive their `execute` against a
@@ -191,6 +191,25 @@ test("todo_update reports paused items and suggests the next step after done", a
 		// Marking b done suggests the next open step (a).
 		const done = await run("todo_update", { id: b.details.todo.id, status: "done" }, cwd);
 		expect(resultText(done)).toContain(`next: ${a.details.todo.id}`);
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
+test("todo_list renders groups first, then the user's loose lane last (a mid-task add queues after the current work)", async () => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-todos-tools-"));
+	try {
+		await run("todo_add", { title: "agent step", group: "Refactor" }, cwd);
+		// A user add (loose) comes through the host store, not the agent tools.
+		new TodoStore(cwd, "sess-test").add({ title: "user ask", origin: "user" });
+
+		const text = resultText(await run("todo_list", {}, cwd));
+		const groupAt = text.indexOf("▸ Refactor");
+		const headerAt = text.indexOf("Your requests:");
+		const looseAt = text.indexOf("user ask");
+		expect(groupAt).toBeGreaterThanOrEqual(0);
+		expect(headerAt).toBeGreaterThan(groupAt); // the user's lane is rendered after the groups
+		expect(looseAt).toBeGreaterThan(headerAt);
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });
 	}

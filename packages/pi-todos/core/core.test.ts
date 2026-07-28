@@ -138,6 +138,9 @@ test("add places an item into a named group (created if new) or loose", () => {
 		expect(plan.groups[0]?.title).toBe("Auth");
 		expect(plan.groups[0]?.todos).toHaveLength(2);
 		expect(s.list()).toHaveLength(3); // flat across loose + groups
+		// Display order (flat/list): the groups' steps first, the loose lane (user adds) LAST — so a
+		// mid-task user add is read after the agent's current work, never before it.
+		expect(s.list().map((t) => t.title)).toEqual(["grouped", "grouped 2", "loose"]);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}

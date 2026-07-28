@@ -24,9 +24,11 @@ the host wire still use loose items):
   `consistencyNudge` when open items exist but none is `in_progress`; a `todo_update` → `done` names
   the group's next open step instead (suggest-only, never auto-started); auto-demoted items are
   reported as `(paused: …)`.
-- **Group-first output:** `formatPlan` renders loose items first, then each group under
-  `formatGroupHeader` — `▸ <title> [<derived status> <done>/<total>]` — with its steps indented, so
-  the agent reads the same two-level task view the user sees.
+- **Group-first output:** `formatPlan` renders each group under `formatGroupHeader` — `▸ <title>
+  [<derived status> <done>/<total>]` — with its steps indented, **then the loose lane (the user's own
+  adds) last** under a `Your requests:` header. The user's lane is last on purpose: a request added
+  mid-task queues *after* the agent's current work, so reading top-to-bottom resumes/finishes the
+  active task first. Same two-level order the user sees (`TodoList`) and `flat()`/`list()` return.
 
 `shared.ts` holds `storeFor(ctx)` (a fresh `TodoStore` for the active `(ctx.cwd, sessionId)` — the store
 is stateless, so there is no cache), the result helpers, `formatTodo`/`formatGroupHeader`/`formatPlan`

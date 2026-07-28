@@ -107,10 +107,12 @@ export function TodoAddRow({
 }
 
 /**
- * The plan, **group-first** (group = task): the loose lane — the user's own items — first, then each
- * group in plan order under a header row (derived status icon + title + done/total badge). The `active`
- * group's header is emphasized; a fully-**done** group doesn't list its items — it folds into a single
- * expandable `DoneGroup` row (finished task grouped away but reachable). Empty state: the caller.
+ * The plan, **group-first** (group = task): each group in plan order under a header row (derived status
+ * icon + title + done/total badge), then the loose lane — the user's own items — **last** under a "Your
+ * requests" header. The user's lane sits at the end on purpose (mirrors `pi-todos`'s `formatPlan` and the
+ * markdown snapshot): a request added mid-task queues *after* the agent's current work, not above it.
+ * The `active` group's header is emphasized; a fully-**done** group doesn't list its items — it folds
+ * into a single expandable `DoneGroup` row (finished task grouped away but reachable). Empty: the caller.
  */
 export function TodoRows({
 	plan,
@@ -123,23 +125,6 @@ export function TodoRows({
 }) {
 	return (
 		<>
-			{plan.todos.length > 0 ? (
-				<div className="mb-sm">
-					<div className="px-xs py-xs text-[10px] text-hint uppercase tracking-wider">
-						Your requests · {plan.todos.length}
-					</div>
-					<ul className="flex flex-col">
-						{plan.todos.map((todo) => (
-							<TodoRow
-								key={todo.id}
-								todo={todo}
-								glance={glance}
-								onRemove={() => onRemove(todo.id)}
-							/>
-						))}
-					</ul>
-				</div>
-			) : null}
 			{plan.groups.map((group) => {
 				const status = groupStatus(group);
 				if (status === "done")
@@ -181,6 +166,23 @@ export function TodoRows({
 					</div>
 				);
 			})}
+			{plan.todos.length > 0 ? (
+				<div className="mb-sm">
+					<div className="px-xs py-xs text-[10px] text-hint uppercase tracking-wider">
+						Your requests · {plan.todos.length}
+					</div>
+					<ul className="flex flex-col">
+						{plan.todos.map((todo) => (
+							<TodoRow
+								key={todo.id}
+								todo={todo}
+								glance={glance}
+								onRemove={() => onRemove(todo.id)}
+							/>
+						))}
+					</ul>
+				</div>
+			) : null}
 		</>
 	);
 }

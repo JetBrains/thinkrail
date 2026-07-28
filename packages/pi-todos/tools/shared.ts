@@ -2,7 +2,14 @@
 // `core/` — this is where the tools reach the filesystem (through `TodoStore`).
 
 import type { AgentToolResult, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { groupStatus, type Todo, type TodoGroup, type TodoPlan, TodoStore } from "../core/index.ts";
+import {
+	flatItems,
+	groupStatus,
+	type Todo,
+	type TodoGroup,
+	type TodoPlan,
+	TodoStore,
+} from "../core/index.ts";
 
 /**
  * The store for the tool's active chat session — the TODO list is chat-scoped. The session id comes from
@@ -42,14 +49,21 @@ export function formatGroupHeader(group: TodoGroup): string {
 }
 
 /**
- * The whole plan as text, group-first: loose items (the user's lane) first, then each group — a task —
- * under its status/progress header with its steps indented. The same two-level view the user sees.
+ * The whole plan as text, group-first: each group — a task — under its status/progress header with its
+ * steps indented, then the loose lane (the user's own adds) **last** under a `Your requests:` header.
+ * The user's lane sits at the end on purpose: a request added mid-task queues *after* the agent's
+ * current work, so reading the plan top-to-bottom resumes/finishes the active task before those items.
+ * The same two-level order the user sees (`TodoList`) and the markdown snapshot (`planMarkdown`) use.
  */
 export function formatPlan(plan: TodoPlan): string {
-	const lines = plan.todos.map(formatTodo);
+	const lines: string[] = [];
 	for (const group of plan.groups) {
 		lines.push(formatGroupHeader(group));
 		for (const todo of group.todos) lines.push(`  ${formatTodo(todo)}`);
+	}
+	if (plan.todos.length > 0) {
+		if (plan.groups.length > 0) lines.push("Your requests:");
+		for (const todo of plan.todos) lines.push(formatTodo(todo));
 	}
 	return lines.join("\n");
 }
@@ -60,8 +74,7 @@ export function formatPlan(plan: TodoPlan): string {
  * the agent touches the list, instead of relying on model memory. Undefined when the state is fine.
  */
 export function consistencyNudge(plan: TodoPlan): string | undefined {
-	const all = [...plan.todos, ...plan.groups.flatMap((g) => g.todos)];
-	const open = all.filter((t) => t.status !== "done");
+	const open = flatItems(plan).filter((t) => t.status !== "done");
 	if (open.length === 0 || open.some((t) => t.status === "in_progress")) return undefined;
 	return "note: nothing is in_progress — flip the step you're working on.";
 }

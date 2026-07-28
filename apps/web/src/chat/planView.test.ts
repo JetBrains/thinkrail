@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import type { AssistantMessage, TodoGroupItem, TodoItem } from "@thinkrail/contracts";
 import type { AskState } from "./askState";
 import {
+	flatItems,
 	groupProgress,
 	groupStatus,
 	planGlance,
@@ -40,6 +41,15 @@ test("groupProgress counts done/total for the header badge", () => {
 		done: 1,
 		total: 2,
 	});
+});
+
+test("flatItems orders the groups first, the loose lane (user adds) last", () => {
+	expect(
+		flatItems({
+			todos: [item("loose")],
+			groups: [group("t", [item("a"), item("b")])],
+		}).map((t) => t.title),
+	).toEqual(["a", "b", "loose"]);
 });
 
 test("planSummary spans loose + groups and surfaces the current step", () => {

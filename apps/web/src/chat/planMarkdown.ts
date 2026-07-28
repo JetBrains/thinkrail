@@ -1,5 +1,5 @@
 import type { TodoItem, TodoPlan } from "@thinkrail/contracts";
-import { groupProgress } from "./planView";
+import { flatItems, groupProgress } from "./planView";
 
 // Compile a chat's TODO plan to a temporary, human-readable markdown snapshot (SPEC §Chat TODO plan) — the
 // "Open as markdown" action in the plan popup. Pure + presentational-adjacent (no store/transport): it
@@ -24,7 +24,7 @@ function line(item: TodoItem): string {
  * listed directly. Trailing newline so it reads clean in the rendered view.
  */
 export function planToMarkdown(plan: TodoPlan, title: string): string {
-	const all = [...plan.todos, ...plan.groups.flatMap((g) => g.todos)];
+	const all = flatItems(plan);
 	const done = all.filter((t) => t.status === "done").length;
 	const lines: string[] = [`# TODO — ${title}`, "", `Progress: ${done}/${all.length}`];
 

@@ -61,6 +61,16 @@ export function countItems(plan: TodoPlan): number {
 }
 
 /**
+ * Every item in display order: the groups' steps (the agent's tasks) first, then the loose lane (the
+ * user's own adds) **last** — the single flatten used across reads, updates, and rendering, so the order
+ * lives in one place. Returns the stored objects by reference (callers may mutate in place before a
+ * `write`). Mirrored by `apps/web`'s `planView.flatItems` (the web app can't import this package).
+ */
+export function flatItems(plan: TodoPlan): Todo[] {
+	return [...plan.groups.flatMap((g) => g.todos), ...plan.todos];
+}
+
+/**
  * A group's derived task status — never stored, so it can't drift from the steps: `done` when every
  * item is done, `active` when any item is in_progress, else `pending`. Mirrored (not imported) by
  * `apps/web`'s selectors — the web app may depend on `packages/contracts` only; keep the two in step.
@@ -225,10 +235,9 @@ export class TodoStore {
 		return { todos, groups };
 	}
 
-	/** Every item across loose + groups, in display order. */
+	/** Every item in display order (groups first, the user's loose lane last) — see {@link flatItems}. */
 	flat(): Todo[] {
-		const plan = this.read();
-		return [...plan.todos, ...plan.groups.flatMap((g) => g.todos)];
+		return flatItems(this.read());
 	}
 
 	/** Items, optionally filtered by status (flattened across loose + groups). */
@@ -289,7 +298,7 @@ export class TodoStore {
 	 */
 	update(id: string, patch: TodoPatch): TodoUpdateResult | undefined {
 		const plan = this.read();
-		const all = [...plan.todos, ...plan.groups.flatMap((g) => g.todos)];
+		const all = flatItems(plan);
 		const todo = all.find((t) => t.id === id);
 		if (!todo) return undefined;
 		const paused: Todo[] = [];

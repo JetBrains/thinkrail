@@ -39,7 +39,8 @@ surgical mid-plan insert (`after` wins over `group`; an unknown id throws).
 
 The `index.ts` barrel:
 - `TodoStore` (constructed per `(root, sessionId)`), `STORE_DIR` / `storeRel`, and the `countItems(plan)`
-  + `groupStatus(group)` helpers.
+  + `flatItems(plan)` (every item in display order: groups first, the user's loose lane last — the one
+  flatten reused by reads/updates/rendering) + `groupStatus(group)` helpers.
 - The model types: `Todo`, `TodoGroup`, `TodoPlan`, `TodoFile`, `TodoInput`, `TodoPatch`,
   `TodoUpdateResult`, `WriteItem`, `WritePlan`, `TodoArtifact`, and the `TodoStatus` / `TodoOrigin` /
   `TodoGroupStatus` / `TodoArtifactKind` aliases.
