@@ -52,14 +52,31 @@ Tailwind mapping (`src/index.css` `@theme inline`):
 - `text-brand` = `--font-accent`, weight 800, 0.5px tracking: the canonical ThinkRail brand display
   style. Carries family/weight/tracking ONLY; each usage sets its own size + line-height — the Shell
   header wordmark (`text-brand text-lg text-primary`) and the Welcome hero (`text-brand text-[44px]
-  leading-tight text-primary`). No other composed accent-font treatments may exist.
+  leading-tight text-primary`, whose text is the shown project's name or `PRODUCT_NAME`). No other
+  composed accent-font treatments may exist.
 
 ## Fonts
 
-- `--font`: "Geist" — the only proportional face. Emphasis inside sentences changes **weight**, never
-  family.
-- `--font-mono`: "JetBrains Mono".
-- `--font-accent`: "Cabinet Grotesk" — brand only; known unloaded fallback, left as-is.
+**Self-hosted and bundled** — `styles/fonts.css` imports the fontsource packages, vite fingerprints the
+woff2 files into `dist/assets`, and the CLI embeds that output. There is **no font CDN**: the app runs
+locally and often offline, and a `<link>` to fonts.googleapis.com meant an air-gapped host silently fell
+back to system faces (`document.fonts` came back *empty*), first paint waited on a third party, and
+every load contacted Google despite the analytics opt-out. Pinned by `e2e/fonts.spec.ts`.
+
+Both faces are **variable**, which is what makes the weight policy honest — 800 and italics are real
+faces, not the browser's synthetic bold/oblique:
+
+- `--font`: "Geist Variable" (`wght` 100–900 + italic) — the only proportional face. Emphasis inside
+  sentences changes **weight**, never family.
+- `--font-mono`: "JetBrains Mono Variable" (`wght` 100–800 + italic).
+- `--font-accent`: `var(--font)` — brand only, kept as a named role so a licensed display face can be
+  dropped in at this one line. It named "Cabinet Grotesk" until that face was retired: it was never
+  loaded, so the moment the accent class actually applied, the wordmark and hero rendered in generic
+  `sans-serif`. Each stack keeps the static family name ("Geist", "JetBrains Mono") next, so a host with
+  the font installed still matches before the generic fallbacks.
+
+The static-name fallbacks are the only reason a size looks stable across hosts; never assume a face is
+available because a family is *named* — assert it (`document.fonts`), as the e2e spec does.
 
 ## Weights
 
@@ -98,13 +115,30 @@ Mono is strictly for code/terminal/output/technical badges/keycaps. Branches, pr
 names, model names/ids are proportional — mono had leaked into identity text. Sanctioned exceptions
 and survivors:
 
-- Login OTP code: `font-[var(--font-mono)] text-lg tracking-widest` — intentional emphasis.
-- Markdown **fenced** code blocks: `font-[var(--font-mono)] text-[0.85em]` — document content that
-  scales with the prose skin, deliberately NOT the fixed `text-mono` tier (user-confirmed).
+- Login OTP code: `font-(family-name:--font-mono) text-lg tracking-widest` — intentional emphasis.
+- Markdown **fenced** code blocks: `font-(family-name:--font-mono) text-[0.85em]` — document content
+  that scales with the prose skin, deliberately NOT the fixed `text-mono` tier (user-confirmed).
 - Composer slash-command names and the ExtUiDialog JSON editor: `text-mono` — command syntax and a
   code-editing surface (user-confirmed exceptions to the "no mono for names" rule).
-- Known unswept survivors, do not "fix": the rail workspace-branch sub-line (`ProjectTree`) and the
-  branch-picker refs (`NewWorkspaceDialog`).
+- Sanctioned mono outside the fixed tier, each keeping its own size: the rail workspace-branch sub-line
+  (`ProjectTree`), the branch-picker refs (`NewWorkspaceDialog`), the editor tab-path line
+  (`CenterTabs`), the diff header path (`DiffPane`), TODO notes (`TodoList`), skill names
+  (`SkillsDialog`), the Welcome "spec-first" badge.
+
+### Naming a font family (the form that silently fails)
+
+Use `font-(family-name:--font-mono)`, or a `text-mono` / `text-base-mono` / `text-brand` utility.
+**Never** the bare `font-[var(--font-mono)]`: that arbitrary value is ambiguous and Tailwind compiles it
+as a *weight* — `font-weight: var(--font-mono)` — which the browser drops, leaving the element in the
+inherited proportional face while the class list claims otherwise. It went unnoticed in 28 call sites
+(tool cards, keycaps, the header branch line, the brand wordmark), which is why several "mono" surfaces
+were never monospace and the brand face never applied. `styles/fontClasses.test.ts` fails on the bare
+form.
+
+**Open tension** (deliberately not settled here): the roles table below calls a branch *metadata*
+everywhere and the header branch line is proportional, yet the rail's branch sub-line is sanctioned mono
+above. Repairing the dead classes made that visible instead of hiding it behind CSS that did nothing —
+unifying the two is the entity-consistency pass's call.
 
 ## Typographic roles
 

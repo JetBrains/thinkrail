@@ -257,7 +257,7 @@ export function CenterTabs() {
 					<h2 className="max-w-full truncate font-medium text-md text-text">
 						{isDefault ? (contextProject?.name ?? activeWorkspace.name) : activeWorkspace.name}
 					</h2>
-					<p className="flex max-w-full items-center gap-xs font-[var(--font-mono)] text-muted text-xs">
+					<p className="flex max-w-full items-center gap-xs font-(family-name:--font-mono) text-muted text-xs">
 						<GitBranch className="size-3.5 shrink-0" />
 						{isDefault ? (
 							<span className="truncate">on {activeWorkspace.branch}</span>

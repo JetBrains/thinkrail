@@ -83,7 +83,7 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 				aria-label="Diff view mode"
 				className="flex h-8 shrink-0 items-center gap-xs border-border2 border-b bg-bg-dark px-sm"
 			>
-				<span className="mr-auto truncate font-[var(--font-mono)] text-hint text-xs">
+				<span className="mr-auto truncate font-(family-name:--font-mono) text-hint text-xs">
 					{tab.path}
 				</span>
 				{toggles}

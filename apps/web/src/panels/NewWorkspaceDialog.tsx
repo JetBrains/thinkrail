@@ -533,7 +533,7 @@ export function NewWorkspaceDialog({
 						</p>
 					) : (
 						<p className="mt-xs text-hint text-xs">
-							Type <span className="font-[var(--font-mono)]">/</span> for a project skill —
+							Type <span className="font-(family-name:--font-mono)">/</span> for a project skill —
 							previewed from the current checkout; the created workspace's session is authoritative.
 						</p>
 					)}
@@ -709,9 +709,11 @@ function BranchPicker({
 				{ref === baseRef ? <Check className="size-3.5 text-primary" /> : null}
 			</span>
 			<GitBranch className="size-3.5 shrink-0 text-hint" />
-			<span className="truncate font-[var(--font-mono)] text-xs">{ref}</span>
+			<span className="truncate font-(family-name:--font-mono) text-xs">{ref}</span>
 			{ref === defaultBranch ? (
-				<span className="ml-auto shrink-0 font-[var(--font-mono)] text-hint text-xs">default</span>
+				<span className="ml-auto shrink-0 font-(family-name:--font-mono) text-hint text-xs">
+					default
+				</span>
 			) : null}
 		</CommandItem>
 	);
@@ -725,7 +727,7 @@ function BranchPicker({
 			>
 				<GitBranch className="size-3.5 shrink-0 text-muted" />
 				<span className="shrink-0 text-hint text-xs">From</span>
-				<span className="truncate font-[var(--font-mono)] text-muted text-xs">
+				<span className="truncate font-(family-name:--font-mono) text-muted text-xs">
 					{baseRef || "branch"}
 				</span>
 				<ChevronDown className="size-3 shrink-0 text-hint" />

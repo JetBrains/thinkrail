@@ -391,7 +391,9 @@ function SkillRow({
 			className="flex items-center gap-sm py-1.5 pr-sm pl-md hover:bg-hover"
 		>
 			<span className="flex min-w-0 flex-1 flex-col">
-				<span className="truncate font-[var(--font-mono)] text-sm text-text">{entry.name}</span>
+				<span className="truncate font-(family-name:--font-mono) text-sm text-text">
+					{entry.name}
+				</span>
 				{entry.description ? (
 					<span className="truncate text-hint text-xs">{entry.description}</span>
 				) : null}

@@ -105,6 +105,16 @@ The module set: `transport` / `store` / branded `shell`; `ProjectTree`; `FileTre
   used as token arbitrary values (`rounded-[var(--radius-md)]`), not `@theme` mappings — except the
   named `@utility` rules `text-mono` / `text-base-mono` / `text-brand`, which package the mono/accent
   faces with their sanctioned sizes/weight.
+- **A font family is never referenced as a bare arbitrary value.** `font-[var(--font-mono)]` is
+  ambiguous and Tailwind compiles it to an invalid `font-weight`, so it silently does nothing; use
+  `font-(family-name:--font-mono)` or one of the utilities above (`styles/fontClasses.test.ts` fails on
+  the bare form).
+- **Fonts ship inside the artifact.** `styles/fonts.css` imports self-hosted variable faces
+  (fontsource; Geist Variable + JetBrains Mono Variable, both with real italics), vite emits the woff2
+  files into `dist/assets`, and `apps/cli` embeds them. No font CDN — the host is local and often
+  offline, and an external `<link>` also put first paint behind a third party and contacted it on every
+  load despite the analytics opt-out. `e2e/fonts.spec.ts` pins both halves (no CDN request; the real
+  faces present).
 - **The typography system — type-scale tiers, the 400/500/600 weight policy, mono usage, and entity/
   metadata/status text presentation — is specced in [src/styles/TYPOGRAPHY.md](src/styles/TYPOGRAPHY.md)**
   (`web-typography`); check changes against it.

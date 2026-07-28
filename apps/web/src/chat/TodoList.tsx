@@ -204,7 +204,9 @@ function TodoRow({ todo, onRemove }: { todo: TodoItem; onRemove: () => void }) {
 					{todo.title}
 				</div>
 				{todo.note ? (
-					<div className="truncate font-[var(--font-mono)] text-[10px] text-hint">{todo.note}</div>
+					<div className="truncate font-(family-name:--font-mono) text-[10px] text-hint">
+						{todo.note}
+					</div>
 				) : null}
 			</div>
 			{todo.origin === "user" ? (
