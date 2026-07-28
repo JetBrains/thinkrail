@@ -85,9 +85,19 @@ available because a family is *named* — assert it (`document.fonts`), as the e
 - **500** — buttons; in-page panel/section headings (`text-md`); settings sub-headings; toast/confirm
   (compact) titles; inline sentence emphasis; markdown `<strong>` (both prose skins carry an explicit
   `[&_strong]:font-medium` to beat preflight).
-- **600** — dialog titles (shadcn `DialogTitle`); Welcome card titles (the exact dialog-title style);
-  markdown h1–h6 + table `th`; alert titles. The `ask_user_question` card's question titles are
-  dialog-title analogs and keep 600 (user-confirmed).
+- **600** — dialog titles (shadcn `DialogTitle`, `text-md leading-none`); Welcome card titles (the
+  dialog-title *weight* at the card's own `text-sm` — `main`'s card rewrite made them smaller than a
+  dialog title, and matching the weight is what makes them read as titles); markdown h1–h6 + table
+  `th`; alert titles. The `ask_user_question` card's question titles are dialog-title analogs and keep
+  600 (user-confirmed).
+
+Surfaces `main` added or rewrote after this branch opened were swept to match on merge: the
+empty-workspace screen's eyebrow + entity heading (`CenterTabs`), the skills-dialog eyebrows, the
+template-settings eyebrow + template names, and the new-workspace project row's active state.
+**Remaining 500s, deliberately untouched** — not sanctioned, just out of this PR's scope: form-field
+labels (`TemplateEditorDialog`), the privacy toggle's row label, the chat plan strip label, and the
+completed-todo group title (`TodoList`, where 500 marks a *done* row — the odd one). The
+entity-consistency pass should rule on them.
 - **800** — `text-brand` only.
 
 Disabled = `opacity-50`, no token.
@@ -148,7 +158,7 @@ call.
 |---|---|---|
 | Page/brand heading | `text-brand` + per-usage size | header wordmark, welcome hero |
 | Dialog title | `text-md` 600 `leading-none text-text` | all dialogs (shadcn `DialogTitle`) |
-| Card title | = dialog title | welcome cards |
+| Card title | `text-sm` 600 `text-text` (dialog-title weight, card size) | welcome cards |
 | Panel/section title | `text-md` 500 `text-text` | settings `<h3>`s (600 = modal, 500 = in-page) |
 | Compact title | `text-sm` 500 | toasts, confirm popover |
 | Entity name | `text-sm` 400 | all entity rows/labels (colors per the entity-consistency spec work) |

@@ -609,7 +609,7 @@ function TargetOption({
 			data-active={active}
 			className={cn(
 				"flex h-7 cursor-pointer items-center gap-sm rounded-[7px] px-md text-sm transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary",
-				active ? "bg-[var(--primary-10)] font-medium text-primary" : "text-muted hover:text-text",
+				active ? "bg-[var(--primary-10)] text-primary" : "text-muted hover:text-text",
 			)}
 		>
 			<input type="radio" name={name} className="sr-only" checked={active} onChange={onSelect} />

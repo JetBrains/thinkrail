@@ -194,9 +194,7 @@ export function SkillsDialog({
 					)}
 				>
 					{group.isPlugin ? <Puzzle className="size-3.5 shrink-0 text-hint" aria-hidden /> : null}
-					<span className="font-medium text-text text-xs uppercase tracking-wide">
-						{group.label}
-					</span>
+					<span className="text-text text-xs uppercase tracking-wide">{group.label}</span>
 					<span className="min-w-0 flex-1 truncate text-hint text-xs">{group.hint}</span>
 					<span className="shrink-0 rounded-full bg-hover px-1.5 text-hint text-xs">
 						{group.items.length}
@@ -310,7 +308,7 @@ export function SkillsDialog({
 									data-testid="skills-all-plugins"
 									className="sticky top-0 z-20 flex h-8 items-center gap-sm border-border2 border-y bg-bg-dark px-sm"
 								>
-									<span className="min-w-0 flex-1 font-medium text-text text-xs uppercase tracking-wide">
+									<span className="min-w-0 flex-1 text-text text-xs uppercase tracking-wide">
 										All plugins
 									</span>
 									<Toggle

@@ -251,10 +251,10 @@ export function CenterTabs() {
 					data-testid="workspace-ready"
 					className="flex max-w-[440px] flex-col items-center gap-xs"
 				>
-					<span className="font-medium text-hint text-xs uppercase tracking-wider">
+					<span className="text-hint text-xs uppercase tracking-wider">
 						{isDefault ? "Default workspace" : "Workspace ready"}
 					</span>
-					<h2 className="max-w-full truncate font-medium text-md text-text">
+					<h2 className="max-w-full truncate text-md text-text">
 						{isDefault ? (contextProject?.name ?? activeWorkspace.name) : activeWorkspace.name}
 					</h2>
 					<p className="flex max-w-full items-center gap-xs font-(family-name:--font-mono) text-muted text-xs">
