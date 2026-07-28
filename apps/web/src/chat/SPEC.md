@@ -481,8 +481,9 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `MarkdownPreview` — no file is written to disk.
   **The glance state** keeps the plan honest as the user's status window: `planGlance(isStreaming,
   askStates)` — derived from session state in `ChatView`, **never stored**, so the agent can't make it
-  lie — renders the `in_progress` step as working (dot), **waiting for your answer** (`CircleHelp`,
-  when the agent stopped with an awaiting `ask_user_question`), or **paused — waiting for you**
+  lie — renders the `in_progress` step as working (dot), **waiting for your answer**
+  (`MessageCircleQuestion` — the same glyph as the `ask_user_question` card, when the agent stopped with
+  an awaiting question), or **paused — waiting for you**
   (`CirclePause`, any other stop: turn ended, error). **The header strip reflects the agent's state,
   not the checkboxes** (`stripStatus`, decoupled from the `in_progress` step): it shows "waiting for
   your answer" **even when every item is done** (the earlier strip hid it whenever there was no

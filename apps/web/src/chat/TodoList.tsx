@@ -5,9 +5,9 @@ import {
 	ChevronRight,
 	Circle,
 	CircleDot,
-	CircleHelp,
 	CirclePause,
 	FileText,
+	MessageCircleQuestion,
 	Plus,
 	Trash2,
 	UserRound,
@@ -38,8 +38,14 @@ export function glanceIcon(glance: PlanGlance): {
 	label: string;
 	className: string;
 } {
+	// Same glyph as the `ask_user_question` panel (`MessageCircleQuestion`), so "the agent is asking you"
+	// reads identically in the strip and in the questionnaire card.
 	if (glance === "waiting_question")
-		return { Icon: CircleHelp, label: "Waiting for your answer", className: "text-primary" };
+		return {
+			Icon: MessageCircleQuestion,
+			label: "Waiting for your answer",
+			className: "text-primary",
+		};
 	if (glance === "waiting")
 		return { Icon: CirclePause, label: "Paused — waiting for you", className: "text-hint" };
 	return { Icon: CircleDot, label: STATUS_LABEL.in_progress, className: "text-primary" };
