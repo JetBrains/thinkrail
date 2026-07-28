@@ -453,6 +453,18 @@ interface AppState {
 	 * and spins the picker's refresh row. */
 	modelsRefreshing: boolean;
 	/**
+	 * Provenance of the `models` list above: true only while it holds the installed result of an awaited
+	 * forced `model.refresh` — the one read whose catalog pass had finished when the host answered.
+	 *
+	 * It lives HERE, beside the list it describes, because `models` is app-wide: a `model.list` install
+	 * from any consumer (a picker open, another chat mounting) replaces the list, and authority has to
+	 * fall with it. Held as a consumer's local flag instead, it would outlive the list it was about and a
+	 * removed model would get confirmed as present, then rejected by `create()`. `model.list` can never
+	 * set it — its handler starts a *detached* refresh and answers from before it, so the registry can
+	 * move underneath the reply with the client none the wiser.
+	 */
+	modelsFresh: boolean;
+	/**
 	 * Which right-panel view to show, when something outside it asks (a chat turn-divider chip). The panel
 	 * watches this ONE field, so "flip to a view" is a single concept rather than a side effect read off
 	 * each path intent below — a chip that only *reveals* a view (expanding its artifact list) needs no path
@@ -647,7 +659,7 @@ interface AppState {
 	setModels: (models: WireModel[]) => void;
 	bumpTemplatesVersion: () => void;
 	/** Atomic begin/finish of the awaited catalog refresh — `finish` lands the new list (null = failed
-	 * refresh: keep the current list) and clears the flag in ONE write. */
+	 * refresh: keep the current list, and with it its provenance) and clears the flag in ONE write. */
 	beginModelsRefresh: () => void;
 	finishModelsRefresh: (models: WireModel[] | null) => void;
 	setCurrentModel: (sessionId: string, model: WireModel) => void;
@@ -834,6 +846,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	templatesVersion: 0,
 	rightTabRequest: null,
 	modelsRefreshing: false,
+	modelsFresh: false,
 	changesRequest: null,
 	specRequest: null,
 	specsByWorkspace: {},
@@ -1304,11 +1317,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 	// The event→store dispatcher: route each pi event to its session's runtime, so chats stream independently.
 	handlePiEvent: (event, sessionId) =>
 		set((s) => withRuntime(s, sessionId, (rt) => reduceSessionEvent(rt, event))),
-	setModels: (models) => set({ models }),
+	// A `model.list` snapshot: current, but never authoritative — installing it drops `modelsFresh`.
+	setModels: (models) => set({ models, modelsFresh: false }),
 	bumpTemplatesVersion: () => set((s) => ({ templatesVersion: s.templatesVersion + 1 })),
 	beginModelsRefresh: () => set({ modelsRefreshing: true }),
+	// The only writer of `modelsFresh: true` — and only for a list that actually arrived.
 	finishModelsRefresh: (models) =>
-		set((s) => ({ modelsRefreshing: false, models: models ?? s.models })),
+		set((s) => ({
+			modelsRefreshing: false,
+			models: models ?? s.models,
+			modelsFresh: models ? true : s.modelsFresh,
+		})),
 	setCurrentModel: (sessionId, model) =>
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, model }))),
 	setThinkingLevel: (sessionId, level) =>

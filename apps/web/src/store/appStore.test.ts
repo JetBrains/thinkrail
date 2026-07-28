@@ -4,6 +4,7 @@ import type {
 	PiEvent,
 	SessionSummary,
 	SpecGraphNode,
+	WireModel,
 	Workspace,
 } from "@thinkrail/contracts";
 import { type SessionRuntime, toast, useAppStore } from "./appStore";
@@ -1237,4 +1238,36 @@ test("skills badge: a LIVE restore stays conservatively stale; a disk attach anc
 		selectWorkspaceTick(s(), "ws1"),
 	);
 	expect(isStale("ws1", "disk1")).toBe(false);
+});
+
+test("catalog authority falls with the list it describes — only an awaited refresh sets it", () => {
+	const s = () => useAppStore.getState();
+	const listed = [{ id: "opus-5", name: "opus-5", provider: "anthropic" }] as WireModel[];
+	const refreshed = [{ id: "opus-6", name: "opus-6", provider: "anthropic" }] as WireModel[];
+
+	// A `model.list` snapshot is current but never authoritative (its handler answers from before the
+	// detached refresh it starts).
+	s().setModels(listed);
+	expect(s().modelsFresh).toBe(false);
+
+	// The installed result of an awaited forced refresh is.
+	s().beginModelsRefresh();
+	s().finishModelsRefresh(refreshed);
+	expect(s().models).toBe(refreshed);
+	expect(s().modelsRefreshing).toBe(false);
+	expect(s().modelsFresh).toBe(true);
+
+	// The finding this pins: authority is a property of the SHARED list, so the next `model.list` install
+	// — this picker reopening, or any other consumer mounting — drops it in the same write. Held as a
+	// consumer's local flag, it outlived the list and a removed model reached `create()`.
+	s().setModels(listed);
+	expect(s().models).toBe(listed);
+	expect(s().modelsFresh).toBe(false);
+
+	// A FAILED refresh installs nothing, so it changes neither the list nor its provenance.
+	s().finishModelsRefresh(refreshed);
+	s().beginModelsRefresh();
+	s().finishModelsRefresh(null);
+	expect(s().models).toBe(refreshed);
+	expect(s().modelsFresh).toBe(true);
 });

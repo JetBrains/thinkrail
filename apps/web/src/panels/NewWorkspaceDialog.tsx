@@ -61,9 +61,11 @@ type WorkspaceTarget = "worktree" | "default";
  * Whether a model the catalog *lacks* may be replaced turns on whether that catalog is authoritative for
  * the question, which is what `catalogFresh` says:
  *
- * - **fresh** — the installed result of an awaited forced refresh. `model.refresh` and the host's
- *   `resolveWireModel` read the same registry, and that refresh has finished, so a missing model really
- *   is gone: falling back to the first entry beats letting Create fail.
+ * - **fresh** — the list *currently held* is the installed result of an awaited forced refresh.
+ *   `model.refresh` and the host's `resolveWireModel` read the same registry, and that refresh has
+ *   finished, so a missing model really is gone: falling back to the first entry beats letting Create
+ *   fail. (Provenance lives on the store beside `models` — so the next `model.list` install, from this
+ *   dialog or any other consumer, drops it along with the list it described.)
  * - **not fresh** — the app-wide store copy, including anything `model.list` returned (its handler starts
  *   a detached refresh and answers from before it, so the registry can move underneath the reply).
  *   Substituting on that basis would replace a valid host-resolved default with a stale local entry, so

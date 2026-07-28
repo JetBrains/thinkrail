@@ -156,10 +156,11 @@ a project picker, the prompt hero, and the reused
   lock). Their catalog is the shared one — `chat/useModelCatalog`, so the dialog and the chat composer
   cannot drift — which means it is **live**: the picker's Refresh row can replace the list underneath a
   held selection. The dialog therefore reconciles the held model against it on every change via the pure
-  **`reconcileSelection`**: re-point to the same `{provider,id}` (the refreshed object, whose
-  `thinkingLevels` may differ). What it does when the catalog has no such model turns on
-  **`catalogFresh`** — true only for the installed result of an awaited forced refresh, never for a
-  `model.list` snapshot (whose handler answers from before the detached refresh it starts). Effort is a separate concern: one effect keeps the held level
+  **`reconcileModel`** (model only — effort is decided by the host's clamp, below): re-point to the same
+  `{provider,id}` (the refreshed object, whose `thinkingLevels` may differ). What it does when the catalog
+  has no such model turns on **`catalogFresh`** — the store's `modelsFresh`, true only for the installed
+  result of an awaited forced refresh and dropped by the next `model.list` install from any consumer
+  (whose handler answers from before the detached refresh it starts). Effort is a separate concern: one effect keeps the held level
   runnable by the held model by asking the host for pi's clamp (**`model.clampThinking`**) rather than
   deciding locally, so an explicit switch and a refresh that shrank a model's set resolve the same way
   pi would. `model.default` needs no adjustment: the host already returns a self-consistent pair.
@@ -277,8 +278,8 @@ a project picker, the prompt hero, and the reused
   (`WelcomePanel` and `CenterTabs`/`RightPanel`/`TerminalsPanel` are mutually exclusive — the shell mounts
   one set or the other on the active-workspace branch.)
 - **Allowed deps:** `store`, `transport`, `components/ui` (incl. `popover`/`command`/`textarea` for the
-  dialog), `chat` (`ModelSelector`/`ThinkingSelector` + the `useModelCatalog` hook and
-  `effortForModel` that feed them, reused by `NewWorkspaceDialog`; `Markdown`,
+  dialog), `chat` (`ModelSelector`/`ThinkingSelector` + the `useModelCatalog` hook that feeds them,
+  reused by `NewWorkspaceDialog`; `Markdown`,
   reused by `MarkdownPreview`; `TemplateEditorDialog`, reused by `TemplatesSettings`), `lib`, `themes` (catalog + generic application contract),
   `contracts`; `lucide-react`; and the heavy libs each lazy panel owns (`monaco-editor`, `shiki`,
   `@xterm/*`) loaded via `import()`.

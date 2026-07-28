@@ -63,9 +63,16 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   pure **`reduceSessionEvent`** folds a `PiEvent` into a runtime; **`handlePiEvent(event,
   sessionId)`** and **`applyExtUi(request)`** route by id via the `withRuntime` helper (a no-op for an
   unknown session). The host-wide **`models`** list stays global (not per session), plus
-  **`modelsRefreshing`** — the awaited `model.refresh` in-flight flag; `beginModelsRefresh` /
-  `finishModelsRefresh(models|null)` are the atomic pair (finish lands the list + clears the flag in one
-  write; `null` = failed refresh, keep the current list). The transport work lives in
+  **`modelsRefreshing`** — the awaited `model.refresh` in-flight flag — and **`modelsFresh`**, the
+  *provenance* of that list: true only while it holds the installed result of an awaited forced refresh,
+  which `NewWorkspaceDialog` needs before it may substitute a model the catalog lacks. It lives here,
+  beside the list, precisely **because `models` is app-wide**: `setModels` (a `model.list` snapshot, whose
+  handler answers from before the detached refresh it starts) **drops** it in the same write, so authority
+  falls with the list any consumer replaced — held as one consumer's local flag it would outlive its
+  subject and confirm a removed model that `create()` then rejects. `beginModelsRefresh` /
+  `finishModelsRefresh(models|null)` are the atomic pair (finish lands the list, sets provenance, and
+  clears the in-flight flag in one write; `null` = failed refresh — keep the current list *and* its
+  provenance, since nothing was installed). The transport work lives in
   `chat/useModelCatalog`, not here (the store→transport edge stays type-only). The **in-app login** state
   **`activeLogin: LoginState | null`** (type from `auth`) is **flat + session-less** (a login runs on the
   Welcome screen before any session exists — routing it through a session runtime would drop its frames):

@@ -500,8 +500,11 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `useModelCatalog.ts`, `SkillsDialog.tsx`, `TemplateEditorDialog.tsx`. `useModelCatalog` is the shared
   models-catalog seam `panels/NewWorkspaceDialog` also imports per-file, so the two pickers cannot
   drift; it re-reads `model.list` whenever a consumer activates to keep the list current, and reports
-  **`fresh`** only for the installed result of an awaited forced refresh — `model.list` answers from
-  *before* the detached refresh it triggers, so it is never a basis for concluding a model is gone); `react-markdown` / `remark-gfm` / `shiki` (via `lib/highlighter`); `mermaid`
+  **`fresh`** — read straight off the store's `modelsFresh`, because catalog authority belongs to the
+  **shared list**, not to a consumer: true only for the installed result of an awaited forced refresh, and
+  dropped by the next `model.list` install from *any* consumer. `model.list` answers from *before* the
+  detached refresh it triggers, so it is never a basis for concluding a model is gone);
+  `react-markdown` / `remark-gfm` / `shiki` (via `lib/highlighter`); `mermaid`
   (**lazy, `tools/visualize` only**); `react-virtuoso`; `lucide-react`; `components/ui`; `lib`.
 - **Forbidden:** value-importing any `pi` package; a **presentational** renderer importing
   `store`/`transport` (only `ChatView`, its integration hooks, and `TemplateEditorDialog` may — keep the

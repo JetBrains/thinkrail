@@ -1,5 +1,5 @@
 import type { WireModel } from "@thinkrail/contracts";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect } from "react";
 import { useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 
@@ -19,22 +19,16 @@ export function useModelCatalog(active = true): {
 	const models = useAppStore((s) => s.models);
 	const refreshing = useAppStore((s) => s.modelsRefreshing);
 	/**
-	 * Whether `models` holds a result a caller may treat as the host's settled truth — set **only** by an
-	 * awaited forced refresh.
-	 *
-	 * `model.list` deliberately does not qualify, however recently it ran: its handler starts a *detached*
-	 * catalog refresh and then returns the pre-refresh snapshot, so the registry can change moments after
-	 * the response lands and the client would never hear about it. Treating that as authoritative is how a
-	 * removed model gets confirmed as "still there" and reaches `create()`. Only `model.refresh` awaits the
-	 * pass it triggered, so only its result describes a registry that has stopped moving.
+	 * Whether `models` holds a result a caller may treat as the host's settled truth. Read straight off the
+	 * store, because it is a property of the **shared list** rather than of this consumer: `models` is
+	 * app-wide, so a `model.list` install from anywhere — this picker reopening, another chat mounting —
+	 * replaces the list and drops its authority in the same write. See `store`'s `modelsFresh` for why
+	 * `model.list` can never establish it.
 	 */
-	const [fresh, setFresh] = useState(false);
+	const fresh = useAppStore((s) => s.modelsFresh);
 
 	useEffect(() => {
-		if (!active) {
-			setFresh(false);
-			return;
-		}
+		if (!active) return;
 		void readModels();
 	}, [active]);
 
@@ -46,8 +40,8 @@ export function useModelCatalog(active = true): {
 	 * for as long as the slowest configured provider takes, up to the host's 15s abort, on every open.
 	 *
 	 * `force: true` (the Refresh row) is the deliberate one: await the host's forced refresh — the only
-	 * path past pi's 4h throttle — spin while it runs, and mark the installed result authoritative. A
-	 * failure keeps the current list and leaves `fresh` alone; the host already logged why.
+	 * path past pi's 4h throttle — spin while it runs, and install the result as authoritative. A failure
+	 * keeps the current list, and with it whatever provenance it had; the host already logged why.
 	 */
 	const refresh = useCallback((force: boolean) => {
 		if (!force) {
@@ -59,10 +53,7 @@ export function useModelCatalog(active = true): {
 		state.beginModelsRefresh();
 		getTransport()
 			.request("model.refresh", { force: true })
-			.then((m) => {
-				useAppStore.getState().finishModelsRefresh(m);
-				setFresh(true);
-			})
+			.then((m) => useAppStore.getState().finishModelsRefresh(m))
 			.catch(() => useAppStore.getState().finishModelsRefresh(null));
 	}, []);
 
