@@ -465,8 +465,9 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `planSummary`, `planGlance`/`sessionGlance`, `planSections`, and `shouldNudgeOnAdd`), `TodoList` (the
   **status-ordered, group-first** rendering (`planSections`) — group = task: the **in-progress** task
   (its whole group) on top with **no section header**, then a **To do** section (the pending groups,
-  then the user's pending loose items), then a single **titled, collapsed "Done" section** at the very
-  bottom (fully-done groups + done loose items). Finished *steps* stay inline in their (active/pending)
+  then the user's pending loose items), then a **"Done" label** at the very bottom under which **each
+  finished task is its own foldable row** (collapsed — title + `N done`) plus the done loose items (not
+  one collapse over all of Done). Finished *steps* stay inline in their (active/pending)
   group; only whole done tasks move to Done. Each group is a header row (derived status icon + title +
   done/total badge), the `active` group emphasized; the user's loose items carry a per-row `user` badge
   (no separate "Your requests" header — they're placed by status). Plus the add-row + an "open as
