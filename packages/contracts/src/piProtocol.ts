@@ -141,6 +141,12 @@ export interface SessionSummary {
 	 * are placeholders for a disk session until it's opened.
 	 */
 	live: boolean;
+	/**
+	 * Count of unfinished TODO items (any status but `done`, loose + grouped) in the session's plan.
+	 * Populated only by `session.list` (the host decorates via the todos module — a hydration hint so a
+	 * client can auto-open chats with work in progress); absent elsewhere = unknown, treat as 0.
+	 */
+	openTodos?: number;
 }
 
 export type SlashCommandSource = "extension" | "prompt" | "skill";

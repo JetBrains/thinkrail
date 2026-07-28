@@ -12,6 +12,7 @@
         "@thinkrail/server": "workspace:*",
         "@thinkrail/shared": "workspace:*",
         "husky": "9.1.7",
+        "pi-todos": "workspace:*",
         "turbo": "2.9.18",
         "typescript": "catalog:",
       },

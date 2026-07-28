@@ -80,7 +80,7 @@ import {
 	resizeTerminal,
 	writeTerminal,
 } from "../terminal";
-import { addTodo, listTodos, removeTodo, updateTodo } from "../todos";
+import { addTodo, countOpenTodos, listTodos, removeTodo, updateTodo } from "../todos";
 import { ensureWatch, stopWatch } from "../watch";
 import {
 	createWorkspace,
@@ -368,9 +368,21 @@ const handlers: Record<string, Handler> = {
 	"session.getStats": (params) => getSessionStats((params as { sessionId: string }).sessionId),
 	"session.getCommands": (params) =>
 		getSessionCommands((params as { sessionId: string }).sessionId),
-	"session.list": (params) => {
+	"session.list": async (params) => {
 		const { workspaceId } = params as { workspaceId: string };
-		return listSessions(workspaceId, getWorkspace(workspaceId).worktreePath);
+		const summaries = await listSessions(workspaceId, getWorkspace(workspaceId).worktreePath);
+		// Decorate with each chat's unfinished-TODO count (agent stays todos-free — host composes, the
+		// same pattern as history + scope). A single failed count omits the field, never fails the list.
+		return summaries.map((summary) => {
+			try {
+				return {
+					...summary,
+					openTodos: countOpenTodos({ workspaceId, sessionId: summary.sessionId }),
+				};
+			} catch {
+				return summary;
+			}
+		});
 	},
 	"session.getMessages": (params) => {
 		const p = params as { sessionId: string; workspaceId: string };

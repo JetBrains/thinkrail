@@ -45,6 +45,10 @@ agent attaches `file`/`spec` artifacts itself through the `todo_*` tools (see [[
 ## Boundary
 
 - **Owns / public surface (barrel):** `listTodos({workspaceId, sessionId}) → TodoPlan`,
+  `countOpenTodos({workspaceId, sessionId}) → number` + its pure rule `openTodoCount(plan)` (unfinished =
+  any status but `done`, loose + grouped — the `SessionSummary.openTodos` decoration the host's
+  `session.list` handler attaches so a client can auto-open chats with work in progress; a session with
+  no todo file counts 0),
   `addTodo(...) → TodoItem` (validates a non-empty title; tags `origin: "user"`),
   `updateTodo(...) → TodoItem` (throws on unknown id → a `{ ok:false }` WS response),
   `removeTodo(...) → { ok:true }` (idempotent). **Mapping only** — no plan logic; `TodoStore` owns disk.

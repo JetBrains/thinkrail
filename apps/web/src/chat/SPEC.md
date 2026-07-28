@@ -137,6 +137,12 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `data-flash` + a `bg-[var(--primary-10)]` transition on the row wrapper, cleared after 1600ms) draw the
   eye to it. Either resolving a row or giving up (toasted as "couldn't locate the message") always clears
   the request — `ChatView` is its only consumer, so an unresolved request must never linger.
+- **Open at the latest message** — the chat `Virtuoso` mounts with `initialTopMostItemIndex = { index:
+  last row, align: "end" }`, so every freshly shown transcript (new tab, reopen from history, auto-open,
+  reload) starts at the bottom instead of mid-scroll; jump-to-message (above) runs post-mount and
+  overrides with its centered `scrollToIndex`. Streaming follow stays `useChatScroll`'s job
+  (pointer-aware `followOutput` — unchanged). E2e: `auto-open-chats.spec.ts` asserts a long seeded
+  transcript's last message is in view without scrolling.
 - **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions, `/`
   commands + template **slot sessions** (Tab-through placeholders — see the Template slots bullet
   below), image paste/drop, `openHistory` on its imperative handle → `onHistoryOpen`) plus its props-driven **slash-completion

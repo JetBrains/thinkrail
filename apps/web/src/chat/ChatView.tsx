@@ -631,6 +631,9 @@ export default function ChatView({
 							context={listContext}
 							components={CHAT_LIST_COMPONENTS}
 							className="min-h-0 flex-1"
+							// Any chat opens at the latest message (a fresh mount would otherwise land mid-transcript);
+							// the jump-to-message deep link overrides post-mount with its centered scrollToIndex.
+							initialTopMostItemIndex={{ index: Math.max(rows.length - 1, 0), align: "end" }}
 							followOutput={followOutput}
 							atBottomStateChange={handleAtBottom}
 							atBottomThreshold={50}

@@ -19,6 +19,22 @@ export function listTodos(params: { workspaceId: string; sessionId: string }): T
 	return storeFor(params.workspaceId, params.sessionId).read();
 }
 
+/**
+ * How many items in the chat's plan are unfinished (any status but `done`), loose + grouped. The
+ * counting rule lives here (todos owns plan semantics); `session.list`'s handler uses it to decorate
+ * `SessionSummary.openTodos` so a client can auto-open chats with work in progress. A session with no
+ * todo file reads as an empty plan → 0.
+ */
+export function countOpenTodos(params: { workspaceId: string; sessionId: string }): number {
+	return openTodoCount(listTodos(params));
+}
+
+/** The pure counting rule behind {@link countOpenTodos}: unfinished = any status but `done`. */
+export function openTodoCount(plan: TodoPlan): number {
+	const open = (items: { status: TodoStatus }[]) => items.filter((t) => t.status !== "done").length;
+	return open(plan.todos) + plan.groups.reduce((sum, g) => sum + open(g.todos), 0);
+}
+
 /** Append one item to the chat's list. */
 export function addTodo(params: {
 	workspaceId: string;

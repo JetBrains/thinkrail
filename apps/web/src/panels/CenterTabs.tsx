@@ -111,39 +111,73 @@ export function CenterTabs() {
 		? (closedChatsByWorkspace[activeWorkspaceId] ?? NO_CLOSED)
 		: NO_CLOSED;
 	// Hydrate-on-connect: when a workspace becomes active, pull its sessions from the host. Live ones (still
-	// in host memory) auto-restore as tabs; disk-only ones (survived a host restart) go to chat-history to
-	// reopen on demand. So a reload, a second tab, or a restart all rebuild from the host.
+	// in host memory) auto-restore as tabs, and so do disk-only ones carrying unfinished TODOs (work in
+	// progress must survive a host restart as open tabs, not history entries); the remaining disk-only ones
+	// go to chat-history to reopen on demand. If nothing opened at all, the most recent disk chat opens as a
+	// fallback — the center is never empty when the workspace has any chat. So a reload, a second tab, or a
+	// restart all rebuild from the host. Focus lands on the most recently active auto-opened chat: sessions
+	// hydrate newest-first and `hydrateSession` only takes focus while the workspace has no active tab.
 	useEffect(() => {
 		if (!activeWorkspaceId) return;
+		const workspaceId = activeWorkspaceId;
 		let cancelled = false;
+		// Sync baseline for disk-only attaches, snapshotted before the fetches (see selectWorkspaceTick).
+		const syncedTick = selectWorkspaceTick(useAppStore.getState(), workspaceId);
+		const hydrateFromHost = async (sessionId: string, live: boolean) => {
+			try {
+				const { summary: fresh, messages } = await getTransport().request("session.getMessages", {
+					sessionId,
+					workspaceId,
+				});
+				if (cancelled) return;
+				// A live restore reused the server's already-loaded resources → no baseline (stays
+				// conservatively stale); a disk attach reloaded against current disk → the pre-fetch tick.
+				const tick = live ? undefined : syncedTick;
+				useAppStore.getState().hydrateSession(fresh, messagesToRuntime(messages), false, tick);
+			} catch {
+				// Skip a session that failed to load; the others still hydrate.
+			}
+		};
 		void getTransport()
-			.request("session.list", { workspaceId: activeWorkspaceId })
+			.request("session.list", { workspaceId })
 			.then(async (summaries) => {
-				const diskOnly: ClosedChat[] = [];
-				for (const summary of summaries) {
+				const diskOnly: typeof summaries = [];
+				// A session already in the store but without a tab was deliberately closed to history — its
+				// presence vetoes the open-something fallback below (never undo the user's close).
+				let sawKnown = false;
+				// Newest-first, so the most recently active chat hydrates (and takes focus) first.
+				const ordered = [...summaries].sort((a, b) => b.updatedAt - a.updatedAt);
+				for (const summary of ordered) {
 					if (cancelled) return;
-					if (useAppStore.getState().sessions[summary.sessionId]) continue; // already hydrated/live here
-					if (!summary.live) {
-						diskOnly.push({
-							sessionId: summary.sessionId,
-							title: summary.title,
-							closedAt: summary.updatedAt,
-						});
+					if (useAppStore.getState().sessions[summary.sessionId]) {
+						sawKnown = true; // already hydrated/live here
 						continue;
 					}
-					try {
-						const { summary: fresh, messages } = await getTransport().request(
-							"session.getMessages",
-							{ sessionId: summary.sessionId, workspaceId: activeWorkspaceId },
-						);
-						if (cancelled) return;
-						useAppStore.getState().hydrateSession(fresh, messagesToRuntime(messages), false); // live restore: no reload → no baseline (stays conservatively stale; see hydrateSession)
-					} catch {
-						// Skip a session that failed to load; the others still hydrate.
+					if (!summary.live && (summary.openTodos ?? 0) === 0) {
+						diskOnly.push(summary);
+						continue;
 					}
+					await hydrateFromHost(summary.sessionId, summary.live);
+				}
+				if (cancelled) return;
+				// Fallback: nothing opened (and nothing was deliberately closed) → open the newest disk chat.
+				const state = useAppStore.getState();
+				const hasChatTab = (state.tabsByWorkspace[workspaceId] ?? []).some(
+					(t) => t.kind === "chat",
+				);
+				if (!hasChatTab && !sawKnown && diskOnly.length > 0) {
+					const newest = diskOnly.shift(); // `ordered` kept them newest-first
+					if (newest) await hydrateFromHost(newest.sessionId, false);
 				}
 				if (!cancelled && diskOnly.length > 0) {
-					useAppStore.getState().noteClosedChats(activeWorkspaceId, diskOnly);
+					useAppStore.getState().noteClosedChats(
+						workspaceId,
+						diskOnly.map((s) => ({
+							sessionId: s.sessionId,
+							title: s.title,
+							closedAt: s.updatedAt,
+						})),
+					);
 				}
 			})
 			.catch(() => {});
