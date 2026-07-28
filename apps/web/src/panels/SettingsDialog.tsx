@@ -1,4 +1,5 @@
 import {
+	Cpu,
 	GitBranch,
 	KeyRound,
 	LayoutTemplate,
@@ -12,6 +13,7 @@ import { cn } from "@/lib";
 import { SettingsSection, useAppStore } from "@/store";
 import { AppearanceSettings } from "./AppearanceSettings";
 import { GithubSettings } from "./GithubSettings";
+import { ModelsSettings } from "./ModelsSettings";
 import { PrivacySettings } from "./PrivacySettings";
 import { ProvidersSettings } from "./ProvidersSettings";
 import { TemplatesSettings } from "./TemplatesSettings";
@@ -19,6 +21,7 @@ import { TemplatesSettings } from "./TemplatesSettings";
 /** The live settings sections, in nav order. */
 const SECTIONS: { id: SettingsSection; label: string; icon: LucideIcon }[] = [
 	{ id: SettingsSection.Providers, label: "Providers", icon: KeyRound },
+	{ id: SettingsSection.Models, label: "Models", icon: Cpu },
 	{ id: SettingsSection.Github, label: "GitHub", icon: GitBranch },
 	{ id: SettingsSection.Appearance, label: "Appearance", icon: Palette },
 	{ id: SettingsSection.Templates, label: "Templates", icon: LayoutTemplate },
@@ -94,6 +97,8 @@ export function SettingsDialog() {
 					<div className="min-h-0 flex-1 overflow-y-auto p-lg">
 						{section === SettingsSection.Providers ? (
 							<ProvidersSettings />
+						) : section === SettingsSection.Models ? (
+							<ModelsSettings />
 						) : section === SettingsSection.Github ? (
 							<GithubSettings />
 						) : section === SettingsSection.Templates ? (

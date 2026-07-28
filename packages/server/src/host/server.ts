@@ -5,6 +5,7 @@ import {
 	disposeAllSessions,
 	getSessionWorkspaceId,
 	setExtUiPublisher,
+	setModelCatalogPublisher,
 	setSessionPublisher,
 	setSkillAdmissionResolver,
 } from "../agent";
@@ -92,6 +93,7 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 				ws.subscribe(WS_CHANNELS.workspaceRemoved);
 				ws.subscribe(WS_CHANNELS.workspaceFsChanged);
 				ws.subscribe(WS_CHANNELS.settingsChanged);
+				ws.subscribe(WS_CHANNELS.modelCatalogChanged);
 				const welcome: ServerWelcome = {
 					protocolVersion: PROTOCOL_VERSION,
 					projects: listProjects(),
@@ -188,6 +190,16 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 			JSON.stringify({ channel: WS_CHANNELS.settingsChanged, data: config }),
 		);
 		setAnalyticsSending(config.analyticsEnabled);
+	});
+
+	// Broadcast the model catalog after a `model.setEnabled` write, for the same reason as the settings
+	// push: the allowlist is shared domain state (it lives in pi's own settings), so every client — the
+	// initiator included — converges on this frame instead of mutating optimistically.
+	setModelCatalogPublisher((entries) => {
+		server.publish(
+			WS_CHANNELS.modelCatalogChanged,
+			JSON.stringify({ channel: WS_CHANNELS.modelCatalogChanged, data: entries }),
+		);
 	});
 
 	// Stream each in-process AgentSession's events to subscribed clients over the pi.event channel, and

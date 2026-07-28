@@ -11,8 +11,9 @@ tags: [v1, wire]
 ## Responsibility
 
 The browser↔host wire spine: the single source of truth for the protocol. Types-only, with the only
-runtime exports being the WS method/channel constants, the protocol version, and the small config default
-(`DEFAULT_CONFIG`). The one package `apps/web` may depend on—which is what lets the UI ship independently
+runtime exports being the WS method/channel constants, the protocol version, the small config default
+(`DEFAULT_CONFIG`), and **`modelRef`** — the one-line `"provider/id"` formatter *both* ends must produce
+identically (the host writes those refs into pi's settings; the client sends the list it wants enabled). The one package `apps/web` may depend on—which is what lets the UI ship independently
 of the host.
 
 ## Boundary
@@ -20,7 +21,7 @@ of the host.
 - **Owns:** the wire — entity types, the `pi` event/message types (re-exported), the WS method & channel
   registries, and the protocol version.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain`; the value re-exports
-  `DEFAULT_CONFIG` from `domain`; `export *` (value) of `wsProtocol`
+  `DEFAULT_CONFIG` from `domain` + `modelRef` from `piProtocol`; `export *` (value) of `wsProtocol`
   (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`).
 - **Allowed deps:** none at runtime. **Type-only** devDeps on `@earendil-works/pi-ai` +
   `@earendil-works/pi-agent-core`, imported **from their package roots** (type-only → erased at build).
@@ -43,6 +44,13 @@ of the host.
     is wired and `headers` can carry auth, and an allowlist **fails closed** — a future `Model` field (secret
     or not) is excluded by default. The host re-resolves the real `Model` from `{provider,id}` — so a client
     can neither read the secret nor inject a `baseUrl` for the agent to call (see the `agent` module SPEC);
+  - **`ModelCatalogEntry`** = `{ model: WireModel; enabled: boolean; collapsed: boolean }` — one row of
+    `model.list`, i.e. pi's model **plus the host's two presentation facts**: `enabled` (in the user's pi
+    `enabledModels` allowlist — all `true` when the setting is unset) and `collapsed` (a dated snapshot
+    hidden under its alias; always `false` once an allowlist is set, since an explicit list *is* the
+    curation). The flags stay **off `WireModel`** on purpose: that type also rides `session.create` /
+    `session.setModel` / `SessionSummary`, where allowlist membership is meaningless — catalog identity and
+    user preference are separate facts;
   - `@earendil-works/pi-agent-core`: `AgentEvent`, `AgentMessage`, `ThinkingLevel` (the
     `off`-inclusive one);
   - the local render union **`PiEvent`** — the real superset `AgentSessionEvent` lives in the Node-only
@@ -144,7 +152,11 @@ of the host.
   never eagerly for every project) / `workspace.*` / `fs.*` / `git.*` / **`spec.graph`**
   (the Specs-viewer whole-graph read, per workspace) / **`todo.*`** — **`list`**/**`add`**/**`update`**/
   **`remove`**, the chat's per-session TODO plan (keyed by `workspaceId` + `sessionId`; `add` tags the
-  item `origin:"user"`) / `terminal.*` / `model.list` / **`model.clampThinking`** (pi's `clampThinkingLevel` for a
+  item `origin:"user"`) / `terminal.*` / **`model.list`** (the ordered **`ModelCatalogEntry[]`** catalog — every
+  available model, newest-first per provider, each tagged `enabled`/`collapsed`, so the picker's default
+  tier and its "Show all" tier come from one read) / **`model.setEnabled`** (`{ enabled: string[] | null }` —
+  `"provider/id"` refs written into pi's own `settings.json` `enabledModels`; `null` clears the allowlist) /
+  **`model.clampThinking`** (pi's `clampThinkingLevel` for a
   `{model, level}` pair — the pre-session picker's effort adjustment, so no client re-derives pi's
   policy) / **`provider.status`**
 (the auth-provider status report; every read revalidates host-side) / the **`provider.*` in-app login**
@@ -178,7 +190,9 @@ of the host.
   read/write pi's prompt dirs (global + project), so templates stay CLI-portable,
   `WS_CHANNELS` (`server.welcome` — which carries the initial `config: AppConfig` alongside `projects` /
   `pi.event` / `pi.extensionUi` / **`settings.changed`** (the full `AppConfig`, broadcast so every client
-  converges) / **`provider.login`** — the session-less in-app login stream (a `LoginPush`
+  converges) / **`model.catalogChanged`** (the full `ModelCatalogEntry[]` after a `model.setEnabled`,
+  broadcast for the same reason — the initiating client converges on the push, never on optimism) /
+  **`provider.login`** — the session-less in-app login stream (a `LoginPush`
   per frame, keyed by `loginId`; the sibling of `pi.extensionUi`, since a login runs on the Welcome screen
   before any session exists) / `terminal.data` / the **workspace lifecycle trio** — **`workspace.created`**
   / **`workspace.updated`** / **`workspace.removed`** — registry membership changes fanned out to every

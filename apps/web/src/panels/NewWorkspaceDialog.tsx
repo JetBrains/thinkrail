@@ -46,7 +46,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { selectWorkspaceTick, toast, useAppStore } from "@/store";
+import { selectPickerTiers, selectWorkspaceTick, toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { enterDefaultWorkspace } from "./defaultWorkspace";
 
@@ -90,7 +90,8 @@ export function NewWorkspaceDialog({
 	onCreated: (workspace: Workspace) => void;
 }) {
 	const projects = useAppStore((s) => s.projects);
-	const models = useAppStore((s) => s.models);
+	const catalogSize = useAppStore((s) => s.modelCatalog.length);
+	const { primary: models, extra: extraModels } = useAppStore(selectPickerTiers);
 
 	const [selectedProjectId, setSelectedProjectId] = useState(projectId);
 	// Every opener starts on the isolated-worktree side (task-welcome-trim made the entry points
@@ -176,14 +177,14 @@ export function NewWorkspaceDialog({
 		};
 	}, [open, selectedProjectId]);
 
-	// Models are global to the host — fetch once into the shared store; the picker reads them.
+	// The catalog is global to the host — fetch once into the shared store; the picker reads its tiers.
 	useEffect(() => {
-		if (!open || models.length > 0) return;
+		if (!open || catalogSize > 0) return;
 		getTransport()
 			.request("model.list", {})
-			.then((m) => useAppStore.getState().setModels(m))
+			.then((catalog) => useAppStore.getState().setModelCatalog(catalog))
 			.catch(() => {});
-	}, [open, models.length]);
+	}, [open, catalogSize]);
 
 	// Preselect the exact model + effort a fresh session would resolve to (so the picker shows the real
 	// model, not a placeholder). Passing it back at create time is a no-op vs. the host default.
@@ -544,6 +545,7 @@ export function NewWorkspaceDialog({
 					<div className="flex min-w-0 flex-1 flex-wrap items-center gap-sm">
 						<ModelSelector
 							models={models}
+							extra={extraModels}
 							current={model}
 							container={dialogEl}
 							onSelect={(m) => {

@@ -1,13 +1,15 @@
 import { expect, test } from "bun:test";
-import type { Project, Workspace } from "@thinkrail/contracts";
+import type { ModelCatalogEntry, Project, WireModel, Workspace } from "@thinkrail/contracts";
 import type { EditorTab } from "./appStore";
 import {
 	isSkillPath,
 	matchesWorktreePath,
 	selectActiveWorkspace,
 	selectActiveWorkspaceProjectId,
+	selectAllModels,
 	selectContextProject,
 	selectHistoryTarget,
+	selectPickerTiers,
 	selectSkillsStale,
 	specPathMatcher,
 } from "./selectors";
@@ -219,4 +221,50 @@ test("specPathMatcher recognizes a spec by graph membership, in either reported 
 	expect(isSpec("packages/server/src/todos/todos.ts")).toBe(false);
 	// An empty graph (never fetched) classifies nothing as a spec — the single-chip fallback.
 	expect(specPathMatcher([])(".thinkrail/context/TASK-x.md")).toBe(false);
+});
+
+/** A catalog entry for the tier tests — only the fields the split reads. */
+function entry(
+	id: string,
+	flags: { enabled?: boolean; collapsed?: boolean } = {},
+): ModelCatalogEntry {
+	const model: WireModel = {
+		id,
+		name: id,
+		provider: "acme",
+		contextWindow: 200_000,
+		reasoning: false,
+		thinkingLevels: ["off"],
+	};
+	return { model, enabled: flags.enabled ?? true, collapsed: flags.collapsed ?? false };
+}
+
+test("selectPickerTiers keeps the host's order and sends out-of-list + collapsed models to the extra tier", () => {
+	const modelCatalog = [
+		entry("keep-2"),
+		entry("pinned-2-20251101", { collapsed: true }),
+		entry("disabled-1", { enabled: false }),
+		entry("keep-1"),
+	];
+
+	const { primary, extra } = selectPickerTiers({ modelCatalog });
+
+	// Primary = what the picker shows by default, in catalog order (the host already ordered it).
+	expect(primary.map((m) => m.id)).toEqual(["keep-2", "keep-1"]);
+	// Extra = the "Show all" tier: both reasons for hiding a row land here, and nothing is dropped.
+	expect(extra.map((m) => m.id)).toEqual(["pinned-2-20251101", "disabled-1"]);
+	expect(primary.length + extra.length).toBe(modelCatalog.length);
+});
+
+test("selectPickerTiers/selectAllModels return stable references per catalog (a store selector must not churn)", () => {
+	// Returned fresh each call, these would re-render every picker on ANY unrelated store write (a
+	// streaming chat writes constantly). Same catalog in → same object out; a new catalog invalidates it.
+	const modelCatalog = [entry("a"), entry("b", { enabled: false })];
+
+	expect(selectPickerTiers({ modelCatalog })).toBe(selectPickerTiers({ modelCatalog }));
+	expect(selectAllModels({ modelCatalog })).toBe(selectAllModels({ modelCatalog }));
+	expect(selectAllModels({ modelCatalog }).map((m) => m.id)).toEqual(["a", "b"]);
+	expect(selectPickerTiers({ modelCatalog: [...modelCatalog] })).not.toBe(
+		selectPickerTiers({ modelCatalog }),
+	);
 });

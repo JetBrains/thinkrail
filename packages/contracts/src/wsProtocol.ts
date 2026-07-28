@@ -28,6 +28,7 @@ import type {
 	AskUserQuestionResult,
 	ExtUiResponse,
 	ImageContent,
+	ModelCatalogEntry,
 	SessionStats,
 	SessionSummary,
 	SkillCatalogEntry,
@@ -82,7 +83,11 @@ import type {
 // v18: the built-in Default workspace — `Workspace.kind: "default"` marks the project folder itself as
 // a per-project, non-removable, non-renamable workspace, ensured lazily and pinned first in
 // `workspace.list`; `workspace.remove` rejects it.
-export const PROTOCOL_VERSION = 18;
+// v19: the model catalog — `model.list` now returns `ModelCatalogEntry[]` (pi's models in the host's
+// order, newest-first per provider, each tagged `enabled`/`collapsed`) instead of a bare `WireModel[]`,
+// `model.setEnabled` writes pi's own `settings.json` `enabledModels` allowlist, and
+// `model.catalogChanged` broadcasts the fresh catalog so every client converges.
+export const PROTOCOL_VERSION = 19;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -189,6 +194,9 @@ export const WS_METHODS = {
 	sessionList: "session.list",
 	sessionGetMessages: "session.getMessages",
 	modelList: "model.list",
+	// Write pi's `enabledModels` allowlist (the Settings → Models manager). Broadcasts
+	// `model.catalogChanged`; the caller converges on that push, not on optimism.
+	modelSetEnabled: "model.setEnabled",
 	modelDefault: "model.default",
 	// pi's own clamp for a `{model, desired-level}` pair. The pre-session picker has no session to ask,
 	// and re-deriving pi's clamp client-side would give that one path a policy of its own.
@@ -245,6 +253,9 @@ export const WS_CHANNELS = {
 	// The server-synced app settings changed (carries the full `AppConfig`), broadcast to every client so
 	// they converge — the initiator applies on this push too, never optimistically.
 	settingsChanged: "settings.changed",
+	// The model catalog changed (carries the full `ModelCatalogEntry[]`), broadcast to every client after a
+	// `model.setEnabled` — same converge-on-broadcast contract as `settings.changed`.
+	modelCatalogChanged: "model.catalogChanged",
 } as const;
 
 export type WsMethod = (typeof WS_METHODS)[keyof typeof WS_METHODS];
@@ -429,7 +440,13 @@ export interface WsMethodMap {
 		params: { sessionId: string; workspaceId: string };
 		result: { summary: SessionSummary; messages: TranscriptMessage[] };
 	};
-	"model.list": { params: Record<string, never>; result: WireModel[] };
+	// The model picker's catalog: every available model in the host's order (newest-first per provider),
+	// each tagged `enabled` (in pi's `enabledModels` allowlist) / `collapsed` (a dated snapshot hidden
+	// under its alias). One read serves both picker tiers AND the Settings → Models manager.
+	"model.list": { params: Record<string, never>; result: ModelCatalogEntry[] };
+	// Replace pi's `enabledModels` allowlist with these `"provider/id"` refs (`null` = clear it, i.e. every
+	// model available). Writes pi's own global settings, so the pi CLI/TUI honors the same list.
+	"model.setEnabled": { params: { enabled: string[] | null }; result: Ack };
 	// pi's `clampThinkingLevel` for a model the client is about to select, by `{provider,id}` ref. The
 	// host owns this so every path agrees: `model.default` clamps the same way, and a live session gets
 	// it from pi directly via `thinking_level_changed`. Throws if the ref isn't an available model.
@@ -437,8 +454,9 @@ export interface WsMethodMap {
 		params: { provider: string; id: string; level: ThinkingLevel };
 		result: { level: ThinkingLevel };
 	};
-	// The model/thinking a fresh session resolves to (settings default, else first available) — so the
-	// New-Workspace dialog shows the exact pre-session model, not a placeholder.
+	// The model/thinking a fresh session resolves to (settings default when available AND enabled, else
+	// the first enabled model, else the first available) — so the New-Workspace dialog shows the exact
+	// pre-session model, not a placeholder.
 	"model.default": {
 		params: Record<string, never>;
 		result: { model: WireModel | null; thinkingLevel: ThinkingLevel };

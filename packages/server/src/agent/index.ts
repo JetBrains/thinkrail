@@ -10,6 +10,7 @@ export {
 	listSkillCommands,
 	registerBundledRuntime,
 } from "./extensions";
+export * from "./modelCatalog";
 export * from "./oneshot";
 export * from "./piRuntime";
 export * from "./sessionRepair";

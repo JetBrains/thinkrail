@@ -62,7 +62,15 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   chat is never clobbered. The
   pure **`reduceSessionEvent`** folds a `PiEvent` into a runtime; **`handlePiEvent(event,
   sessionId)`** and **`applyExtUi(request)`** route by id via the `withRuntime` helper (a no-op for an
-  unknown session). The host-wide **`models`** list stays global (not per session). The **in-app login** state
+  unknown session). The host-wide **`modelCatalog`** (`ModelCatalogEntry[]` — pi's models in the
+  host's order, each tagged `enabled`/`collapsed`) stays global (not per session) and is replaced wholesale
+  by `setModelCatalog`, both on the `model.list` read and on the `model.catalogChanged` broadcast. Its two
+  derivations live in `selectors.ts` and nowhere else: **`selectPickerTiers`** (`primary` = `enabled &&
+  !collapsed`, `extra` = the rest — the picker's default rows vs its "Show all" tier) and
+  **`selectAllModels`** (the flat `WireModel[]` for ref lookups). Both **memoize on the catalog array's
+  identity** (a `WeakMap`): they build new arrays, and a selector that returns a fresh reference re-renders
+  its subscriber on every unrelated store write — which, with a chat streaming deltas, is constant. The
+  cache belongs here rather than as a `useMemo` at each call site. The **in-app login** state
   **`activeLogin: LoginState | null`** (type from `auth`) is **flat + session-less** (a login runs on the
   Welcome screen before any session exists — routing it through a session runtime would drop its frames):
   the pure **`foldLoginFrame`** reducer lives here (as `reduceExtUi`/`reduceSessionEvent` do — `auth` stays

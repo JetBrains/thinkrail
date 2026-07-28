@@ -23,7 +23,7 @@ import {
 	getSessionMessages,
 	getSessionStats,
 	hasSession,
-	listAvailableModels,
+	listModelCatalog,
 	listProjectAliasSkillNames,
 	listSessions,
 	listSkillCatalog,
@@ -33,6 +33,7 @@ import {
 	removeSession,
 	removeWorkspaceSessions,
 	resolveExtUi,
+	setEnabledModels,
 	setSessionModel,
 	setSessionThinkingLevel,
 	steerSession,
@@ -392,7 +393,13 @@ const handlers: Record<string, Handler> = {
 		await ackSend(answerQuestion(p.sessionId, p.toolCallId, p.result));
 		return { ok: true } as const;
 	},
-	"model.list": () => listAvailableModels(),
+	"model.list": () => listModelCatalog(),
+	// Settings → Models: replace pi's `enabledModels` allowlist. The fresh catalog reaches every client on
+	// the `model.catalogChanged` broadcast (see `setModelCatalogPublisher`), so the caller never guesses.
+	"model.setEnabled": async (params) => {
+		await setEnabledModels((params as { enabled: string[] | null }).enabled);
+		return { ok: true } as const;
+	},
 	"model.clampThinking": async (params) => {
 		const p = params as { provider: string; id: string; level: ThinkingLevel };
 		return { level: await clampThinkingForModel({ provider: p.provider, id: p.id }, p.level) };

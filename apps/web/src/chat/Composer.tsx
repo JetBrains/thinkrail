@@ -150,6 +150,8 @@ interface ComposerProps {
 	 * below; `ChatView` derives it from `turns` via `turnAnchorText`. */
 	recentPrompts: string[];
 	models: WireModel[];
+	/** The picker's second tier (out-of-allowlist + collapsed duplicates) — passed straight through. */
+	extraModels: WireModel[];
 	currentModel: WireModel | null;
 	thinkingLevel: ThinkingLevel;
 	onMentionQuery: (query: string | null) => void;
@@ -222,6 +224,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		mentionCandidates,
 		recentPrompts,
 		models,
+		extraModels,
 		currentModel,
 		thinkingLevel,
 		onMentionQuery,
@@ -788,7 +791,12 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				</div>
 				<div className="flex flex-wrap items-center gap-sm">
 					<div className="flex min-w-0 flex-1 flex-wrap items-center gap-sm">
-						<ModelSelector models={models} current={currentModel} onSelect={onSelectModel} />
+						<ModelSelector
+							models={models}
+							extra={extraModels}
+							current={currentModel}
+							onSelect={onSelectModel}
+						/>
 						<ThinkingSelector
 							level={thinkingLevel}
 							levels={currentModel?.thinkingLevels ?? []}

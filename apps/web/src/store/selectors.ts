@@ -1,4 +1,10 @@
-import type { Project, SpecGraphNode, Workspace } from "@thinkrail/contracts";
+import type {
+	ModelCatalogEntry,
+	Project,
+	SpecGraphNode,
+	WireModel,
+	Workspace,
+} from "@thinkrail/contracts";
 import { isAbsolutePath, normalizePath } from "../lib";
 import type { EditorTab } from "./appStore";
 
@@ -151,4 +157,51 @@ export function selectSkillsStale(
 		(state.skillChangeTickByWorkspace[workspaceId] ?? 0) >
 		(state.skillsSyncedTickBySession[sessionId] ?? 0)
 	);
+}
+
+interface ModelCatalogState {
+	modelCatalog: ModelCatalogEntry[];
+}
+
+/** The model picker's two tiers, in the host's order. */
+export interface PickerTiers {
+	/** The everyday rows: enabled by the user's allowlist, dated duplicates folded away. */
+	primary: WireModel[];
+	/** Everything else — revealed by the picker's "Show all" row (and always searchable). */
+	extra: WireModel[];
+}
+
+// Derived-per-catalog caches. A zustand selector must return a **stable reference** or its subscriber
+// re-renders on every unrelated store write (a streaming chat writes constantly) — and these two build new
+// arrays. Keying the result on the catalog array's identity (it is replaced wholesale by `setModelCatalog`)
+// keeps the derivation here, in the selector, instead of pushing a `useMemo` onto every call site.
+const tiersCache = new WeakMap<ModelCatalogEntry[], PickerTiers>();
+const allModelsCache = new WeakMap<ModelCatalogEntry[], WireModel[]>();
+
+/**
+ * Split the host's catalog into the picker's tiers. Both facts are the **host's** (`enabled` mirrors pi's
+ * `enabledModels`, `collapsed` folds a dated snapshot under its alias) — this is the one place they're read,
+ * so the chat header, the New-Workspace dialog and any future picker cannot disagree about what "the
+ * everyday list" means.
+ */
+export function selectPickerTiers(state: ModelCatalogState): PickerTiers {
+	const cached = tiersCache.get(state.modelCatalog);
+	if (cached) return cached;
+	const primary: WireModel[] = [];
+	const extra: WireModel[] = [];
+	for (const entry of state.modelCatalog) {
+		(entry.enabled && !entry.collapsed ? primary : extra).push(entry.model);
+	}
+	const tiers = { primary, extra };
+	tiersCache.set(state.modelCatalog, tiers);
+	return tiers;
+}
+
+/** Every model the host reports, flat and in its order — for ref lookups (e.g. "is this model still there?"). */
+export function selectAllModels(state: ModelCatalogState): WireModel[] {
+	const cached = allModelsCache.get(state.modelCatalog);
+	if (cached) return cached;
+	const models = state.modelCatalog.map((entry) => entry.model);
+	allModelsCache.set(state.modelCatalog, models);
+	return models;
 }
