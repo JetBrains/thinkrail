@@ -126,10 +126,30 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   tick)`** — a `FileTab` carries the `tick` its content was loaded at, so `FilePane` detects staleness
   (`workspaceTick > tab.loadedTick`) across tab switches, and its diff twin
   **`updateDiffTabContent(id, original, modified, tick)`** — a `DiffTab` follows the same staleness
-  contract in `DiffPane`. The transient **`changesRequest`** +
+  contract in `DiffPane`. The transient **`rightTabRequest`** +
+  **`requestRightTab(workspaceId, tab)`** are the ONE intent for "show a right-panel view" (`RightPanelTab`
+  lives here, since the intent does): `RightPanel` watches that single field instead of inferring a flip from
+  each path request, and **consumes** it (`clearRightTabRequest`) — an unconsumed flip would re-fire on every
+  re-activation of the workspace, moving the tab the user has since chosen; which is what lets a divider chip reveal a view while merely expanding its own artifact
+  list — no path picked yet. The transient **`changesRequest`** +
   **`requestChangesView(workspaceId, path)`** are a UI deep-link intent (a chat turn-divider asking the
-  right panel to surface a file in its Changes view — flip to the tab and **highlight the row**, without
-  opening the diff; that waits for an explicit click); the panels watch it, scoped by workspace.
+  right panel to surface a file in its Changes view — **highlight the row**, without
+  opening the diff; that waits for an explicit click); the panels watch it, scoped by workspace. Its Specs
+  twin **`specRequest`** + **`requestSpecView(workspaceId, path)`** **opens the
+  rendered spec** — the stronger treatment, because a spec doc has nothing to preview short of its content.
+  Both path intents set `rightTabRequest` **in the same action**: the panel is never asked to surface a path
+  in a view it was not also told to show.
+  Two separate fields, never one: the panel that can show a *gitignored* spec is not the git-derived one, and
+  that confusion is exactly the bug the split fixes. The spec intent is additionally **consumed**
+  (**`clearSpecRequest`**) by whoever handles it — it opens a center tab, so a replay would steal the user's
+  tab; the Changes intent only highlights, so it stays fire-and-forget. **`specsByWorkspace`** +
+  **`setWorkspaceSpecs`** hold each workspace's `spec.graph` snapshot (fetched by `panels`'
+  `useWorkspaceSpecs`, kept fresh on the workspace fs tick) so
+  the chat's turn divider can classify a written path as a spec off the very snapshot the Specs panel
+  renders — one definition of "this file is a spec", via the **`specPathMatcher(nodes)`** selector; dropped
+  with the workspace in `applyWorkspaceRemoved`. `setWorkspaceSpecs` **keeps the previous array identity when
+  the re-read found no change** — most fs ticks touch no spec, and a fresh identity would invalidate
+  `ChatView`'s matcher memo and re-derive every open chat's whole transcript about once a second.
   **`openDoc(tab)`** opens
   (or refreshes + focuses) an ephemeral **`DocTab`** — inline rendered-markdown content, never backed by a
   file on disk (no fs re-read / source toggle) — used for on-demand snapshots like the plan-as-markdown
@@ -156,17 +176,26 @@ paths only; opened by `ChangesPanel`). The transient **`chatLocationRequest`** �
   `SessionRuntime` types. (Chat *render* types + renderers live in the `chat` module.) The pure context
   selectors in `selectors.ts` resolve the active `Workspace`, its owning project id, and the shell's context
   project from those canonical ids and collections; derived active-project state is never stored separately.
-- **Public surface (barrel):** `useAppStore`; `selectActiveWorkspace`,
+- **Public surface (barrel):** `useAppStore`; `selectActiveWorkspace`, `selectWorkspaceById` (the
+  one lookup for "the workspace with this id" — `selectActiveWorkspace` is it applied to the active id, and
+  `openFileInTab`/`ChatView` read the worktree root through it),
   `selectActiveWorkspaceProjectId`, `selectHistoryTarget` + `HistoryTarget` (the shell's `Ctrl+R` routing
   target: the active chat tab, or the workspace's newest chat when a file/diff/doc tab is active),
   `selectContextProject`, `selectSkillsStale`, `selectWorkspaceTick` (the
-  sync-baseline snapshot; + the `isSkillPath` path predicate it shares with `noteFsChanged`); `toast` (the
+  sync-baseline snapshot; + the `isSkillPath` path predicate it shares with `noteFsChanged`);
+  `matchesWorktreePath` (line an agent-reported path — relative or absolute — up against a worktree-relative
+  one; shared by the Changes deep link and the spec classifier. The suffix rule is for **absolute reports
+  only** and is anchored at a separator: unanchored, `/wt/src/a-foo.ts` would match `src/foo.ts`; applied to
+  relative reports, `module-b/SPEC.md` would match the *root* `SPEC.md`) + `specPathMatcher` (is a written
+  path a spec-graph node?); `toast` (the
   fire-from-anywhere helper),
   `Toast` (type), `EditorTab` (`FileTab`/`ChatTab`/`DocTab`), `TerminalTab`, `ClosedChat`, `SessionRuntime` +
   `EMPTY_RUNTIME` (ChatView's pre-creation fallback), `ChatLocationRequest` (type), `reduceSessionEvent`.
 - **Allowed deps:** `contracts` (`Project`/`Workspace`/`Model`/`ThinkingLevel`/`SessionStats`/
   `SlashCommandInfo`/`ExtUiRequest`/`LoginPush`/`WorkspaceFsChangedPayload`/`AppConfig`/`ThemeId`;
-  `DEFAULT_CONFIG` for the pre-welcome default; `PiEvent`/`LoginFrame`, **type-only**); `chat`
+  `DEFAULT_CONFIG` for the pre-welcome default; `PiEvent`/`LoginFrame`, **type-only**); `lib` (the shared
+  path + array primitives — `normalizePath`/`isAbsolutePath` for `matchesWorktreePath`, `shallowEqualArrays`
+  for the snapshot-identity guard; a leaf, so the edge adds no cycle); `chat`
   (`ChatTurn`/`ToolResultState`, **type-only**); `auth` (`LoginState`, **type-only**); `transport`
   (`ConnectionStatus`, **type-only**); `zustand`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `panels`/`shell` or transport runtime.

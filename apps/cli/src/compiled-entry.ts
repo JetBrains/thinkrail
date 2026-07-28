@@ -7,31 +7,25 @@
 // server's `registerBundledRuntime` seam — which also injects the extensions themselves as value-imported
 // factories, since a binary has no `node_modules` to path-load them from, and registers pi's statically-
 // bundled provider flows: OAuth sign-in + Bedrock reach Node-only code through dynamic imports a compiled
-// binary can't resolve), then hand off to the normal bootstrap (`index.ts`).
+// binary can't resolve), then hand off to the normal bootstrap (`index.ts`). An install-management
+// subcommand skips all of that and hands off straight away — see the branch at the bottom.
 //
 // Run-from-source uses `index.ts` directly and never touches this file. (Image-read needs no photon wasm
 // here: the agent's read tool is configured to send images raw — see server `buildSessionSettings`.)
 
 import { existsSync, mkdirSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { parseSubcommand } from "./args";
 import {
 	bundledExtensionFactories,
 	bundledSkillsVersion,
 	embeddedSkillFiles,
 } from "./bundled-extensions.generated";
+import { stagingRoot } from "./paths";
 import { embeddedWebAssets, webAssetsVersion } from "./web-assets.generated";
 
-/** A writable cache root: `$XDG_CACHE_HOME`, else `~/.cache`, else the OS temp dir. */
-function cacheRoot(): string {
-	const xdg = process.env.XDG_CACHE_HOME;
-	if (xdg) return xdg;
-	const home = homedir();
-	return home ? join(home, ".cache") : tmpdir();
-}
-
 /**
- * Stage embedded files to `<cacheRoot>/thinkrail/<kind>/<version>` (idempotent). Files are written
+ * Stage embedded files to `<stagingRoot>/<kind>/<version>` (idempotent). Files are written
  * straight into the versioned dir and a sibling `<dir>.complete` marker is written **last**; readiness
  * is gated on the marker, not mere dir existence — so an interrupted extraction (partial dir, no marker)
  * is simply re-extracted on the next launch instead of being trusted. Returns the dir.
@@ -46,7 +40,7 @@ async function stage(
 	version: string,
 	files: { route: string; data: string }[],
 ): Promise<string> {
-	const dir = join(cacheRoot(), "thinkrail", kind, version);
+	const dir = join(stagingRoot(), kind, version);
 	const marker = `${dir}.complete`;
 	if (existsSync(marker)) return dir;
 	await Promise.all(
@@ -60,10 +54,15 @@ async function stage(
 	return dir;
 }
 
-const staticDir = await stage("web", webAssetsVersion, embeddedWebAssets);
-const skillsDir = await stage("skills", bundledSkillsVersion, embeddedSkillFiles);
-// Respect an explicit override (e.g. pointing at a dev build); otherwise serve the staged UI.
-process.env.THINKRAIL_STATIC_DIR ??= staticDir;
-const { registerBundledRuntime } = await import("@thinkrail/server");
-await registerBundledRuntime({ factories: bundledExtensionFactories, skillsDir });
+// An install-management subcommand (`update` / `uninstall`) never boots a host or a session, so it needs
+// neither the staged assets nor the pi registrations — and `uninstall` would otherwise re-extract the very
+// cache dir it is about to delete. Hand straight off to the normal bootstrap.
+if (parseSubcommand(Bun.argv.slice(2)) === undefined) {
+	const staticDir = await stage("web", webAssetsVersion, embeddedWebAssets);
+	const skillsDir = await stage("skills", bundledSkillsVersion, embeddedSkillFiles);
+	// Respect an explicit override (e.g. pointing at a dev build); otherwise serve the staged UI.
+	process.env.THINKRAIL_STATIC_DIR ??= staticDir;
+	const { registerBundledRuntime } = await import("@thinkrail/server");
+	await registerBundledRuntime({ factories: bundledExtensionFactories, skillsDir });
+}
 await import("./index");

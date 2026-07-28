@@ -7,14 +7,20 @@ import {
 	openAppFresh,
 	openFixtureProject,
 	stagePlainFolder,
+	worktreeRows,
 } from "./fixtures/app";
 import { E2E_FIXTURE_REPO, E2E_PLAIN_DIR } from "./fixtures/paths";
 
 // The first-touch Welcome screen. It replaces the center/right/terminal surface until a workspace is
-// active, and its cards adapt across three states:
+// active — and with a project shown it is THE MODE FORK: "Start building" (isolated worktree) always
+// sits beside "Work in project folder" (the built-in Default workspace), so the two working modes are a
+// visible choice, not a hidden default. Opening a project lands here (no auto-enter). The hero heading is
+// the shown project's name (the ThinkRail wordmark only with no project), and there is no pitch prose.
+// Cards by state:
 //   1. no projects        → one "Open project" card (opens the same dropdown as the projects-rail "+")
-//   2. project, has specs → "Start building" + "Open project"
-//   3. project, no specs  → spec-first "Set up project" + "Start building" + "Open project"
+//   2. project, has specs → "Start building" + "Work in project folder"
+//   3. project, no specs  → spec-first "Set up project" + "Start building" + "Work in project folder"
+// "Open project" is NOT offered once a project is shown — that gesture lives on the projects-rail "+".
 // "Has specs" = the repo has ANY registered spec (a file with id+type frontmatter), via the spec index —
 // not a lowercased goal-and-requirements.md filename. The fixture ships SPEC.md files, so it's "has specs"
 // by default; state 3 is exercised by stripping those specs for the duration of one test.
@@ -31,7 +37,8 @@ test("opens a clean ThinkRail with no projects imported", async ({ page }) => {
 	await expect(page.getByTestId("right-panel")).toHaveCount(0);
 	await expect(page.getByTestId("terminal-panel")).toHaveCount(0);
 
-	// State 1: a single "Open project" card, and no project eyebrow (no project selected yet).
+	// State 1: the wordmark hero (no project) and a single "Open project" card.
+	await expect(page.getByTestId("welcome-title")).toHaveText("ThinkRail");
 	await expect(page.getByTestId("welcome-cta")).toContainText("Open project");
 	await expect(page.getByTestId("welcome-action")).toHaveCount(0);
 
@@ -168,25 +175,28 @@ test("Settings → Providers offers JetBrains AI, guiding install when the centr
 	}
 });
 
-test("a project with specs offers Start building over Set up", async ({ page }) => {
-	// The fixture repo already carries SPEC.md files → the host reports it has specs.
+test("a project with specs offers Start building over Set up, beside the project-folder fork", async ({
+	page,
+}) => {
+	// The fixture repo already carries SPEC.md files → the host reports it has specs. Opening lands
+	// directly on the project's Welcome — the fork surface (no auto-enter).
 	await openFixtureProject(page);
-
-	await expect(page.getByTestId("welcome")).toBeVisible();
-	// The active project's name shows as the eyebrow above the wordmark.
-	await expect(page.getByTestId("welcome")).toContainText("sample-project");
-	// The global context makes the selected-but-not-active state explicit instead of making a project-row
-	// click look like the workspace silently disappeared.
+	// The active project's name IS the hero heading (the wordmark only shows with no project).
+	await expect(page.getByTestId("welcome-title")).toHaveText("sample-project");
+	// The global context makes the selected-but-not-active state explicit.
 	const scope = page.getByTestId("scope-context");
 	await expect(scope).toHaveAttribute("data-context", "project-home");
 	await expect(scope).toContainText("sample-project");
 	await expect(scope).toContainText("Project home");
-	// Two cards: Start building (primary) + Open project — and no "Set up project".
+	// Two cards: Start building (primary) + the project-folder fork — no "Set up project", and no "Open
+	// project" (that gesture is the projects-rail "+" once a project is shown).
 	await expect(page.getByTestId("welcome-cta")).toContainText("Start building");
+	await expect(page.getByTestId("welcome-action")).toHaveCount(1);
 	await expect(
-		page.getByTestId("welcome-action").filter({ hasText: "Open project" }),
+		page.getByTestId("welcome-action").filter({ hasText: "Work in project folder" }),
 	).toBeVisible();
 	await expect(page.getByText("Set up project")).toHaveCount(0);
+	await expect(page.getByTestId("welcome").getByText("Open project")).toHaveCount(0);
 });
 
 test("a project without specs suggests setting it up", async ({ page }) => {
@@ -194,34 +204,55 @@ test("a project without specs suggests setting it up", async ({ page }) => {
 	// serial — workers: 1 — so this can't race, and git restores the exact committed content).
 	for (const spec of FIXTURE_SPECS) rmSync(join(E2E_FIXTURE_REPO, spec), { force: true });
 	try {
-		await openFixtureProject(page);
-
-		await expect(page.getByTestId("welcome")).toBeVisible();
-		await expect(page.getByTestId("welcome")).toContainText("sample-project");
-		// Three cards: Set up project (primary) + Start building + Open project.
+		await openFixtureProject(page); // lands on the project's Welcome — the spec-first cards
+		await expect(page.getByTestId("welcome-title")).toHaveText("sample-project");
+		// Three cards: Set up project (primary) + Start building + the project-folder fork (no "Open project").
 		await expect(page.getByTestId("welcome-cta")).toContainText("Set up project");
+		await expect(page.getByTestId("welcome-action")).toHaveCount(2);
 		await expect(
 			page.getByTestId("welcome-action").filter({ hasText: "Start building" }),
 		).toBeVisible();
 		await expect(
-			page.getByTestId("welcome-action").filter({ hasText: "Open project" }),
+			page.getByTestId("welcome-action").filter({ hasText: "Work in project folder" }),
 		).toBeVisible();
 
-		// "Set up project" opens the New-Workspace dialog with the prompt hero pre-seeded.
+		// "Set up project" opens the dialog pre-seeded with the skill command, preselected to the
+		// isolated-worktree target (like every other Welcome entry point) with its base-branch picker, plus
+		// the explanatory note (the header only names the create op).
 		await page.getByTestId("welcome-cta").click();
 		const dialog = page.getByTestId("new-workspace-dialog");
 		await expect(dialog).toBeVisible();
-		await expect(dialog.getByTestId("ws-prompt")).toHaveValue(/^\/skill:setting-up-a-project\b/);
+		// The seed is a *completed* command (trailing space, the completion's own insertion format), so the
+		// slash-command menu doesn't pop open over the seeded hero.
+		await expect(dialog.getByTestId("ws-prompt")).toHaveValue("/skill:setting-up-a-project ");
+		await expect(dialog.getByTestId("slash-menu")).toHaveCount(0);
+		await expect(dialog.getByTestId("ws-target-worktree")).toHaveAttribute("data-active", "true");
+		await expect(dialog.getByRole("heading", { name: "Create workspace" })).toBeVisible();
+		await expect(dialog.getByTestId("ws-branch-picker")).toBeVisible();
+		await expect(dialog.getByTestId("ws-prompt-note")).toContainText("setting-up-a-project skill");
 
-		// Clear the seed (no agent kick-off — keeps this in the no-agent suite) and create the worktree; it
-		// becomes active → the welcome unmounts and the full 3-column surface appears.
+		// The folder alternative stays one click away: switching to Project folder swaps the header and
+		// hides the branch picker (nothing gets created in that mode).
+		await dialog.getByTestId("ws-target-default").click();
+		await expect(dialog.getByRole("heading", { name: "Work in project folder" })).toBeVisible();
+		await expect(dialog).toContainText("no isolation");
+		await expect(dialog.getByTestId("ws-branch-picker")).toHaveCount(0);
+
+		// Clear the seed (no agent kick-off — keeps this in the no-agent suite) and Start → no worktree is
+		// created; the project's built-in Default workspace becomes active → the welcome unmounts and the
+		// full 3-column surface appears, scoped to the project folder itself.
 		await dialog.getByTestId("ws-prompt").fill("");
+		await expect(page.getByTestId("create-workspace")).toHaveText(/Start/);
 		await page.getByTestId("create-workspace").click();
 		await expect(dialog).toBeHidden();
 		await expect(page.getByTestId("welcome")).toHaveCount(0);
 		await expect(page.getByTestId("center-tabs")).toBeVisible();
 		await expect(page.getByTestId("right-panel")).toBeVisible();
 		await expect(page.getByTestId("terminal-panel")).toBeVisible();
+		await expect(
+			page.locator('[data-testid="workspace-item"][data-kind="default"]'),
+		).toHaveAttribute("data-active", "true");
+		await expect(worktreeRows(page)).toHaveCount(0);
 	} finally {
 		execFileSync("git", ["-C", E2E_FIXTURE_REPO, "checkout", "--", ...FIXTURE_SPECS]);
 	}
@@ -245,9 +276,18 @@ test("opening a non-git folder from the Welcome screen offers to initialise a re
 	await expect(confirmInit).toBeVisible();
 	await confirmInit.click();
 
-	// It initialises + opens → the folder now shows up as a project in the rail.
+	// It initialises + opens → the folder now shows up as a project in the rail…
 	await expect(
 		page.getByTestId("project-item").filter({ hasText: basename(E2E_PLAIN_DIR) }),
+	).toBeVisible();
+	// …and lands on the fresh project's Welcome (no auto-enter): the just-initialised repo has no specs,
+	// so the spec-first funnel leads, with the project-folder fork beside it.
+	await expect(page.getByTestId("welcome")).toBeVisible();
+	await expect(page.getByTestId("center-tabs")).toHaveCount(0);
+	await expect(page.getByTestId("welcome-title")).toHaveText(basename(E2E_PLAIN_DIR));
+	await expect(page.getByTestId("welcome-cta")).toContainText("Set up project");
+	await expect(
+		page.getByTestId("welcome-action").filter({ hasText: "Work in project folder" }),
 	).toBeVisible();
 });
 
@@ -267,6 +307,6 @@ test("clicking a project returns to its Welcome, deselecting the active workspac
 	await expect(page.locator('[data-testid="workspace-item"][data-active="true"]')).toHaveCount(0);
 
 	// Re-selecting the workspace restores the IDE (its tabs/session survive the deselect).
-	await page.getByTestId("workspace-item").first().getByRole("button").first().click();
+	await worktreeRows(page).first().getByRole("button").first().click();
 	await expect(page.getByTestId("center-tabs")).toBeVisible();
 });

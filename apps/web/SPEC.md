@@ -39,7 +39,7 @@ convention; their boundary is held by convention + spec. Sibling edges live here
 | `components` | the app's single `ErrorBoundary` primitive (contains the `ui/` sub-module) | no | [components/SPEC.md](src/components/SPEC.md) |
 | `components/ui` | shadcn primitives, themed with our tokens | no | [components/ui/SPEC.md](src/components/ui/SPEC.md) |
 | `themes` | validated single-file manifests, bundled catalog + atomic token application | yes | [themes/SPEC.md](src/themes/SPEC.md) |
-| `lib` | `cn()` + small shared UI/highlighting helpers | yes | [lib/SPEC.md](src/lib/SPEC.md) |
+| `lib` | `cn()` + the shared UI/path/array primitives + highlighting | yes | [lib/SPEC.md](src/lib/SPEC.md) |
 
 Leaf utilities without their own spec: `constants/` (branding), `utils/` (font scaling), and `styles/`
 (the structural/derived CSS token contract — theme-specific values belong to `themes`). `main.tsx` is the
@@ -55,10 +55,10 @@ screen, not a blank root).
 - `chat` → `contracts` (pi message types, **type-only**), `components/ui`, `lib`; `store` + `transport`
   (**`ChatView` + `useHistorySearch.ts` + `TemplateEditorDialog.tsx` only** — the renderers stay store-free)
 - `auth` → `components/ui` (the dialog is store/transport-free — the panel integrates it; the state types need no imports)
-- `store` → `transport` (**type-only** — `ConnectionStatus`), `chat` (**type-only** — `ChatTurn`/`ToolResultState`), `auth` (**type-only** — `LoginState`; the `foldLoginFrame` reducer lives in `store`, like `reduceExtUi`), `contracts`
+- `store` → `transport` (**type-only** — `ConnectionStatus`), `chat` (**type-only** — `ChatTurn`/`ToolResultState`), `auth` (**type-only** — `LoginState`; the `foldLoginFrame` reducer lives in `store`, like `reduceExtUi`), `contracts`, `lib` (the shared path/array primitives — a leaf, so no cycle)
 - `transport` → `contracts`, `store` (welcome routing; the `store → transport` back-edge is type-only, so
   the runtime graph is acyclic)
-- `components` (`ErrorBoundary`) → none internal (React + `lucide-react` only, so any region can wrap in it); `components/ui` → `lib`
+- `components` (`ErrorBoundary`) → `lib` only (`shallowEqualArrays` for its reset keys — a leaf, so any region can still wrap in it); `components/ui` → `lib`
 - `lib` → `themes` (the lazy highlighter uses the one generic CSS-variable Shiki registration)
 - `themes` → `constants` (the branding storage prefix scopes the first-paint hint)
 - leaves (`constants`, `utils`, `styles`) → none internal

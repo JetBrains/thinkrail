@@ -79,7 +79,10 @@ import type {
 // pi-ai `getSupportedThinkingLevels`) so the effort picker offers only what the active model can do;
 // `model.clampThinking` exposes pi's own `clampThinkingLevel` for a `{model, level}` pair, so the
 // pre-session picker adjusts effort the same way `model.default` and live sessions already do.
-export const PROTOCOL_VERSION = 17;
+// v18: the built-in Default workspace — `Workspace.kind: "default"` marks the project folder itself as
+// a per-project, non-removable, non-renamable workspace, ensured lazily and pinned first in
+// `workspace.list`; `workspace.remove` rejects it.
+export const PROTOCOL_VERSION = 18;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a

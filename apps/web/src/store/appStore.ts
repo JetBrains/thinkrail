@@ -9,6 +9,7 @@ import type {
 	SessionStats,
 	SessionSummary,
 	SlashCommandInfo,
+	SpecGraphNode,
 	ThemeId,
 	ThinkingLevel,
 	WireModel,
@@ -20,6 +21,7 @@ import { create } from "zustand";
 import type { LoginState } from "../auth";
 import type { HydratedRuntime } from "../chat/hydrate";
 import type { ChatTurn, ExtUiDialogRequest, ToolResultState } from "../chat/types";
+import { shallowEqualArrays } from "../lib";
 import type { ConnectionStatus } from "../transport";
 import { type HistoryTarget, isSkillPath, selectWorkspaceTick } from "./selectors";
 
@@ -92,6 +94,12 @@ export const SettingsSection = {
 	Privacy: "privacy",
 } as const;
 export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSection];
+
+/**
+ * The right panel's views. The id lives here, not in `panels`, because the *intent* to show one is store
+ * state (`rightTabRequest`) that chat raises and the panel obeys — `RightPanel` reads the union back.
+ */
+export type RightPanelTab = "specs" | "files" | "changes";
 
 /** A transient notification. `error` persists until dismissed; `success`/`info` auto-dismiss (the Toaster
  * owns the timer). `title` is optional — a bare `message` is the common case. */
@@ -404,17 +412,13 @@ function reduceExtUi(
 				turns: [...rt.turns, { kind: "system", id: crypto.randomUUID(), text: request.message }],
 			};
 		case "setStatus": {
-			if (request.text === null) {
-				const { [request.key]: _drop, ...extUiStatus } = rt.extUiStatus;
-				return { ...rt, extUiStatus };
-			}
+			if (request.text === null)
+				return { ...rt, extUiStatus: omitKey(rt.extUiStatus, request.key) };
 			return { ...rt, extUiStatus: { ...rt.extUiStatus, [request.key]: request.text } };
 		}
 		case "setWidget": {
-			if (request.content === null) {
-				const { [request.key]: _drop, ...extUiWidget } = rt.extUiWidget;
-				return { ...rt, extUiWidget };
-			}
+			if (request.content === null)
+				return { ...rt, extUiWidget: omitKey(rt.extUiWidget, request.key) };
 			return { ...rt, extUiWidget: { ...rt.extUiWidget, [request.key]: request.content } };
 		}
 		default:
@@ -446,10 +450,20 @@ interface AppState {
 	 * the counter, never fetches (see `chat/SPEC.md`'s Template slots bullet). */
 	templatesVersion: number;
 	/**
+	 * Which right-panel view to show, when something outside it asks (a chat turn-divider chip). The panel
+	 * watches this ONE field, so "flip to a view" is a single concept rather than a side effect read off
+	 * each path intent below — a chip that only *reveals* a view (expanding its artifact list) needs no path
+	 * at all. Workspace-scoped, so a request from another workspace's chat can't move the active panel; a
+	 * fresh object each call so identical re-requests still fire, and **consumed** by the panel that obeys it
+	 * (`clearRightTabRequest`) — an unconsumed flip would re-fire whenever the workspace is re-activated,
+	 * moving the tab the user has since chosen.
+	 */
+	rightTabRequest: { workspaceId: string; tab: RightPanelTab } | null;
+	/**
 	 * A request to surface a file in the right-panel Changes view (e.g. a chat turn-divider's "files
-	 * changed" chip). The panels watch it and, when it targets the active workspace, switch to the Changes
-	 * tab and **highlight** the file's row — the diff opens only on an explicit click. A fresh object each
-	 * call so identical re-requests still fire.
+	 * changed" chip). The panels watch it and **highlight** the file's row — the diff opens only on an
+	 * explicit click. Travels with a `rightTabRequest` for the flip. A fresh object each call so identical
+	 * re-requests still fire.
 	 */
 	changesRequest: { workspaceId: string; path: string } | null;
 	/**
@@ -467,6 +481,21 @@ interface AppState {
 	 * A fresh object each call so a repeated chord still fires.
 	 */
 	historyOpenRequest: { sessionId: string } | null;
+	/**
+	 * A request to surface a spec in the right-panel Specs view (e.g. a chat turn-divider's "specs" chip).
+	 * The panels watch it and **open the rendered spec** — unlike a diff, a spec doc has nothing to preview
+	 * short of opening it, and the tree row lights up on its own (rows key off the active tab id). Travels
+	 * with a `rightTabRequest` for the flip, and is **consumed** once handled (it opens a center tab, so a
+	 * replay would steal the user's tab). A fresh object each call so identical re-requests still fire.
+	 */
+	specRequest: { workspaceId: string; path: string } | null;
+	/**
+	 * Each workspace's spec-graph snapshot (`spec.graph`), fetched by the Specs panel and kept here so the
+	 * chat can classify a written path as a spec without a second read — the ONE definition of "this file is
+	 * a spec", shared by the panel that lists them and the turn divider that counts them. Absent until the
+	 * first fetch lands; the panel refetches on the workspace fs tick, so it tracks the filesystem.
+	 */
+	specsByWorkspace: Record<string, SpecGraphNode[]>;
 	/**
 	 * The live-refresh signal, per workspace: `tick` increments on every `workspace.fsChanged` push (the
 	 * host's debounced worktree change notifier); `paths`/`truncated` are the LAST batch only. Panels
@@ -637,7 +666,9 @@ interface AppState {
 	setSettingsSection: (section: SettingsSection) => void;
 	/** Fold the server-synced app config in (from `server.welcome` / the `settings.changed` broadcast). */
 	applyConfig: (config: AppConfig) => void;
-	/** Ask the right panel to open `path`'s diff in its Changes view (deep-link from chat). */
+	/** Ask the right panel to show one of its views — no path, just the flip (a chip revealing its list). */
+	requestRightTab: (workspaceId: string, tab: RightPanelTab) => void;
+	/** Ask the right panel to surface `path` in its Changes view (deep-link from chat); flips to it too. */
 	requestChangesView: (workspaceId: string, path: string) => void;
 	/**
 	 * Open a history-search hit: sets `chatLocationRequest` AND switches `activeWorkspaceId` (the hit's
@@ -654,12 +685,60 @@ interface AppState {
 	requestHistoryOpen: (target: HistoryTarget) => void;
 	/** Dismiss the history-open request once `ChatView` has acted on it. */
 	clearHistoryOpen: () => void;
+	/** Ask the right panel to open `path` in its Specs view (deep-link from chat); flips to it too. */
+	requestSpecView: (workspaceId: string, path: string) => void;
+	/** Drop the spec deep-link once a panel has acted on it (it opens a tab — it must fire exactly once). */
+	clearSpecRequest: () => void;
+	/** Drop the view request once the panel has flipped, so re-activating a workspace can't replay it. */
+	clearRightTabRequest: () => void;
+	/** Record a workspace's fetched spec-graph snapshot (`useWorkspaceSpecs`' read lands here). */
+	setWorkspaceSpecs: (workspaceId: string, nodes: SpecGraphNode[]) => void;
 	/** Enqueue a toast; returns its id so a caller can dismiss it early. An identical live toast (same
 	 * variant/title/message — e.g. a retried failure) coalesces: no twin is added, the existing id returns.
 	 * The queue caps at `MAX_TOASTS` (oldest drop). Prefer the `toast` helper. */
 	pushToast: (toast: Omit<Toast, "id">) => string;
 	/** Drop a toast (user dismiss or the Toaster's auto-timeout). A missing id is a no-op. */
 	dismissToast: (id: string) => void;
+}
+
+/**
+ * A record without `key` — the immutable delete behind every per-workspace / per-session cleanup here
+ * (`applyWorkspaceRemoved`, `clearWorkspaceTabs`, `closeSession`, the ext-UI request drops). One helper so a
+ * new keyed map added to the state can be cleaned up with a single readable line.
+ */
+function omitKey<T>(record: Record<string, T>, key: string): Record<string, T> {
+	const { [key]: _dropped, ...rest } = record;
+	return rest;
+}
+
+/** Field-wise equality of two spec-graph nodes — every field the DTO carries, so "unchanged" is honest. */
+function sameSpecNode(a: SpecGraphNode, b: SpecGraphNode): boolean {
+	return (
+		a.id === b.id &&
+		a.type === b.type &&
+		a.title === b.title &&
+		a.status === b.status &&
+		a.path === b.path &&
+		a.parent === b.parent &&
+		shallowEqualArrays(a.dependsOn, b.dependsOn) &&
+		shallowEqualArrays(a.references, b.references) &&
+		shallowEqualArrays(a.implements, b.implements) &&
+		shallowEqualArrays(a.tags, b.tags)
+	);
+}
+
+/**
+ * Whether a re-read produced the same graph. The Specs read refetches on every worktree fs tick, and most
+ * ticks change no spec at all — keeping the previous array identity on those makes the refetch free for
+ * `ChatView`, whose `isSpec` memo (and with it `deriveRows` over the whole transcript, for every open chat)
+ * would otherwise be invalidated about once a second during any file activity.
+ */
+function sameSpecGraph(prev: SpecGraphNode[] | undefined, next: SpecGraphNode[]): boolean {
+	if (!prev || prev.length !== next.length) return false;
+	return prev.every((node, i) => {
+		const candidate = next[i];
+		return candidate !== undefined && sameSpecNode(node, candidate);
+	});
 }
 
 /** Apply an immutable update to one session's runtime; a no-op (and no new `sessions` object) if it's gone. */
@@ -746,7 +825,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 	sessions: {},
 	models: [],
 	templatesVersion: 0,
+	rightTabRequest: null,
 	changesRequest: null,
+	specRequest: null,
+	specsByWorkspace: {},
 	changesView: "list",
 	chatLocationRequest: null,
 	historyOpenRequest: null,
@@ -808,12 +890,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 		const name = s.workspaces[projectId]?.find((w) => w.id === workspaceId)?.name;
 		s.removeWorkspace(projectId, workspaceId);
 		s.clearWorkspaceTabs(workspaceId); // drops the row's tabs + terminals + chat runtimes
-		// Drop the live-refresh signal too — a removed workspace's fs tick record must not linger.
-		set((state) => {
-			const { [workspaceId]: _gone, ...rest } = state.fsChangesByWorkspace;
-			const { [workspaceId]: _skillGone, ...skillRest } = state.skillChangeTickByWorkspace;
-			return { fsChangesByWorkspace: rest, skillChangeTickByWorkspace: skillRest };
-		});
+		// Drop the live-refresh signal + the cached spec graph too — a removed workspace's records must not
+		// linger (the worktree is gone; a same-id workspace can never come back).
+		set((state) => ({
+			fsChangesByWorkspace: omitKey(state.fsChangesByWorkspace, workspaceId),
+			skillChangeTickByWorkspace: omitKey(state.skillChangeTickByWorkspace, workspaceId),
+			specsByWorkspace: omitKey(state.specsByWorkspace, workspaceId),
+		}));
 		if (wasActive) {
 			s.selectProject(projectId); // atomically fall back to the removed workspace's Project Home
 			toast.info(`Workspace "${name ?? "?"}" was removed`);
@@ -984,19 +1067,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 				delete sessions[closed.sessionId];
 				delete skillsSyncedTickBySession[closed.sessionId];
 			}
-			const { [workspaceId]: _tabs, ...tabsByWorkspace } = s.tabsByWorkspace;
-			const { [workspaceId]: _activeTab, ...activeTabByWorkspace } = s.activeTabByWorkspace;
-			const { [workspaceId]: _closed, ...closedChatsByWorkspace } = s.closedChatsByWorkspace;
-			// Dropping the terminals unmounts their instances, which close the PTYs server-side.
-			const { [workspaceId]: _terms, ...terminalsByWorkspace } = s.terminalsByWorkspace;
-			const { [workspaceId]: _activeTerm, ...activeTerminalByWorkspace } =
-				s.activeTerminalByWorkspace;
 			return {
-				tabsByWorkspace,
-				activeTabByWorkspace,
-				closedChatsByWorkspace,
-				terminalsByWorkspace,
-				activeTerminalByWorkspace,
+				tabsByWorkspace: omitKey(s.tabsByWorkspace, workspaceId),
+				activeTabByWorkspace: omitKey(s.activeTabByWorkspace, workspaceId),
+				closedChatsByWorkspace: omitKey(s.closedChatsByWorkspace, workspaceId),
+				// Dropping the terminals unmounts their instances, which close the PTYs server-side.
+				terminalsByWorkspace: omitKey(s.terminalsByWorkspace, workspaceId),
+				activeTerminalByWorkspace: omitKey(s.activeTerminalByWorkspace, workspaceId),
 				sessions,
 				skillsSyncedTickBySession,
 			};
@@ -1062,9 +1139,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 	closeChatRuntime: (sessionId) =>
 		set((s) => {
 			if (!s.sessions[sessionId]) return {};
-			const { [sessionId]: _drop, ...sessions } = s.sessions;
-			const { [sessionId]: _syncDrop, ...skillsSyncedTickBySession } = s.skillsSyncedTickBySession;
-			return { sessions, skillsSyncedTickBySession };
+			return {
+				sessions: omitKey(s.sessions, sessionId),
+				skillsSyncedTickBySession: omitKey(s.skillsSyncedTickBySession, sessionId),
+			};
 		}),
 	closeChatToHistory: (sessionId) =>
 		set((s) => {
@@ -1286,7 +1364,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 	closeSettings: () => set({ settingsOpen: false }),
 	setSettingsSection: (section) => set({ settingsSection: section }),
 	applyConfig: (config) => set({ theme: config.theme, analyticsEnabled: config.analyticsEnabled }),
-	requestChangesView: (workspaceId, path) => set({ changesRequest: { workspaceId, path } }),
+	requestRightTab: (workspaceId, tab) => set({ rightTabRequest: { workspaceId, tab } }),
+	// The path intent and the flip always travel together — one action, so no call site can send half of it.
+	requestChangesView: (workspaceId, path) =>
+		set({
+			changesRequest: { workspaceId, path },
+			rightTabRequest: { workspaceId, tab: "changes" },
+		}),
 	// Activate project + workspace together (the same atomicity `activateWorkspace` upholds) so a jump into
 	// another project can never leave `selectedProjectId` on the source while `activeWorkspaceId` points
 	// elsewhere. The caller (`useHistorySearch.openMessage`) ensures the target project's workspaces are
@@ -1304,6 +1388,16 @@ export const useAppStore = create<AppState>((set, get) => ({
 			activeTabByWorkspace: { ...s.activeTabByWorkspace, [target.workspaceId]: target.tabId },
 		})),
 	clearHistoryOpen: () => set({ historyOpenRequest: null }),
+	requestSpecView: (workspaceId, path) =>
+		set({ specRequest: { workspaceId, path }, rightTabRequest: { workspaceId, tab: "specs" } }),
+	clearSpecRequest: () => set({ specRequest: null }),
+	clearRightTabRequest: () => set({ rightTabRequest: null }),
+	setWorkspaceSpecs: (workspaceId, nodes) =>
+		set((s) =>
+			sameSpecGraph(s.specsByWorkspace[workspaceId], nodes)
+				? {}
+				: { specsByWorkspace: { ...s.specsByWorkspace, [workspaceId]: nodes } },
+		),
 	pushToast: (toast) => {
 		const twin = get().toasts.find(
 			(t) => t.variant === toast.variant && t.title === toast.title && t.message === toast.message,

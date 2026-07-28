@@ -1,8 +1,9 @@
 import { FilePlus } from "lucide-react";
+import { projectRelativePath } from "@/lib";
 import type { ToolRenderProps } from "../toolRegistry";
 import { CodeBlock } from "./CodeBlock";
 import { Collapsible, countLines } from "./Collapsible";
-import { languageFromPath, projectRelativePath, resultText, strArg } from "./toolHelpers";
+import { languageFromPath, resultText, strArg } from "./toolHelpers";
 
 /** Body for the `write` tool: file header + highlighted preview of the written content. */
 export function WriteCard({ args, result, status, workspaceRoot }: ToolRenderProps) {

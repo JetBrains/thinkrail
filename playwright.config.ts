@@ -6,13 +6,17 @@ import {
 	E2E_HOME_DIR,
 	E2E_PI_AGENT_DIR,
 	E2E_PICK_DIR_POINTER,
+	E2E_PORT,
 } from "./e2e/fixtures/paths";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
 const staticDir = fileURLToPath(new URL("./apps/web/dist", import.meta.url));
-// Dedicated e2e port — never collides with dev:server (24242). Overridable so PARALLEL WORKTREES
-// (this product's own working model) can run their suites concurrently without fighting over one port.
-const PORT = Number(process.env.THINKRAIL_E2E_PORT ?? 24252);
+// Per-worktree derived port (e2e/fixtures/paths.ts) — parallel worktrees (this product's own working
+// model) run their suites concurrently without fighting over one port, zero config; the dev host
+// (24242) stays clear. Slot clashes are auto-arbitrated by an atomic claim registry
+// (e2e/fixtures/portBlock.ts). Supersedes the manual THINKRAIL_E2E_PORT knob
+// (THINKRAIL_E2E_PORT_BASE pins the whole per-worktree block explicitly when ever needed).
+const PORT = E2E_PORT;
 // A stub `central` (JetBrains Central CLI) on the host's PATH so the JetBrains AI flow is drivable
 // deterministically — no real CLI, network, or JetBrains auth. Prepended so it wins over any real install.
 const fakeBinDir = fileURLToPath(new URL("./e2e/fixtures/bin", import.meta.url));

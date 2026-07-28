@@ -24,8 +24,8 @@ a future `packages/chat-ui`). Built-in tool renderers live in the child
 The transcript is pi-canonical turns (`ChatTurn` in `types.ts`: user/assistant are pi messages; `system`,
 `error`, `retry` are web-local notices), but the list renders **derived rows, not raw turns** — folding
 spans assistant-message boundaries (pi emits one assistant message per tool round), so a per-turn item
-model can't group. The pure **`deriveRows(turns, toolResults, isStreaming)`** (`rows.ts`) walks blocks in
-order into rows; `ChatTurnView` dispatches on row kind:
+model can't group. The pure **`deriveRows(turns, toolResults, isStreaming, isSpec?)`** (`rows.ts`) walks
+blocks in order into rows; `ChatTurnView` dispatches on row kind:
 
 - `user` / `system` / `retry` — 1:1 renderers. The retry countdown carries a `source` (`turn` =
   pi `auto_retry_*`; `summarization` = compaction/branch-summary `summarization_retry_*`, pi ≥0.81.1) —
@@ -48,12 +48,35 @@ order into rows; `ChatTurnView` dispatches on row kind:
   Errored *routine* steps get **no special treatment** (deliberate — agents often recover; `ErrorTurn`
   and primary error-auto-expand are the safety nets).
 - `divider` — the round-end summary (`TurnDivider` + pure `turnDivider` deriver), anchored the instant a
-  round ends: elapsed time, tool-call count, a clickable "files changed" chip.
+  round ends: elapsed time, tool-call count, and the round's written files as **two chips split the way the
+  right panel is** — "N specs" and "N files changed". The split is a **partition** (a path lands on exactly
+  one side, never counted twice) computed in the deriver from the injected `isSpec` predicate — the store's
+  `specPathMatcher` over the workspace's spec graph, plus `spec_create`'s target, which is a spec by
+  construction even before the graph snapshot catches up. Why it matters: a spec is often **gitignored**
+  scratch (`.thinkrail/context/`), so counting it as a "changed file" deep-linked the user to a Changes view
+  that structurally cannot show it. Each chip now routes to the panel that owns the artifact.
+  **One artifact → the chip is a direct deep link; several → it is a disclosure** that expands the round's
+  set as a list right here in the transcript (`ArtifactChip` + `ArtifactList`), each row deep-linking one
+  path. The set is kept in the chat rather than framed over the panels on purpose: it belongs to *this
+  round*, while the panels show *now* — a round from days ago would mark rows that have since moved on (or,
+  for Changes, are no longer in the diff at all). It also keeps the count honest: clicking "5 files changed"
+  can never quietly surface just the first one, and the handlers take exactly ONE path, so nothing
+  downstream has to guess which of several the user meant.
+- The two chips are a **switch, not two independent folds**: at most one list is open, choosing the other
+  side replaces it, and re-choosing the open one clears the selection. That invariant is *structural* — the
+  divider stores the **selected key** (`useSelection`, one entry per divider row), so no state exists in
+  which both are expanded. Expanding also **reveals the owning right-panel view** (`onReveal` →
+  `requestRightTab`) without surfacing any path, which is what makes the pair read as switching between
+  Specs and Changes; closing is "never mind" and leaves the panel where the user last sent it.
 
 Row/step ids are stable across streaming snapshots (first step's `toolCallId`, or message-anchored index —
 pi appends, never reorders), so fold state survives re-derivation and virtualization: **every fold surface
-(activity groups, step rows, `ToolCard`) records manual toggles in the shared `foldState` cache**
-(`foldState.ts`, keyed by row/step id — the `AskUserQuestionCard` pattern, see tools/SPEC.md; deliberately
+(activity groups, step rows, `ToolCard`, the divider's multi-artifact chips) records manual toggles in the
+shared `foldState` cache**
+(`foldState.ts`, keyed by row/step id. Two hooks over that module: **`useFold`** for independent booleans,
+and **`useSelection`** for a single-choice group — the divider's chips, which store the *selected key* under
+`${rowId}:artifacts` rather than a boolean per side, so "only one list open" cannot be violated;
+the `AskUserQuestionCard` pattern, see tools/SPEC.md; deliberately
 never evicted — growth is bounded by manual toggles). A manual toggle always wins — over auto-expand
 defaults *and* over a virtualization remount.
 
@@ -469,10 +492,13 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `store`/`transport` (only `ChatView`, its integration hooks, and `TemplateEditorDialog` may — keep the
   renderers reusable).
 - **`ChatView`** is the primary app-integration file: wires this session's runtime
-  (`store.sessions[sessionId]`), the transport calls, the `ChatActions` + `AskStates` contexts, and the
-  divider's "files changed" → `requestChangesView` deep link — together with **`useHistorySearch.ts`**
-  (the Ctrl+R history-recall overlay's store/transport edge) and **`TemplateEditorDialog.tsx`** (the
-  shared template save form), the other two integration points. A
+  (`store.sessions[sessionId]`), the transport calls, the `ChatActions` + `AskStates` contexts, the
+  divider's deep links (`onOpenChange` → `requestChangesView`, `onOpenSpec` → `requestSpecView`; each
+  receives the single path the user picked) plus its view switch (`onReveal` → `requestRightTab`), and the
+  `isSpec` classifier it builds from the store's `specsByWorkspace` snapshot (subscribed as the stored array
+  — a stable ref — and memoized into a matcher here, never a fresh Set inside the selector) — together with
+  **`useHistorySearch.ts`** (the Ctrl+R history-recall overlay's store/transport edge) and
+  **`TemplateEditorDialog.tsx`** (the shared template save form), the other two integration points. A
   **rejected** send (`prompt`/`steer`/`followUp`) lands in the chat via the store's `appendErrorTurn` —
   never swallowed; *streaming* faults arrive as pi events instead.
 

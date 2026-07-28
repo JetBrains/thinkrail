@@ -11,7 +11,15 @@ import { ArrowDown } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { Popover, PopoverAnchor, PopoverTrigger } from "@/components/ui/popover";
-import { EMPTY_RUNTIME, SettingsSection, selectSkillsStale, toast, useAppStore } from "@/store";
+import {
+	EMPTY_RUNTIME,
+	SettingsSection,
+	selectSkillsStale,
+	selectWorkspaceById,
+	specPathMatcher,
+	toast,
+	useAppStore,
+} from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { AskStatesContext, deriveAskStates } from "./askState";
 import { type ChatActions, ChatActionsContext } from "./ChatActions";
@@ -130,13 +138,9 @@ export default function ChatView({
 	// reload. Store-derived per session, so the badge survives tab-switch remounts (a fresh ChatView reads
 	// the same store state) and a reload clears only this chat (see selectSkillsStale / markSkillsSynced).
 	const skillsStale = useAppStore((s) => selectSkillsStale(s, workspaceId, sessionId));
-	const workspaceRoot = useAppStore((s) => {
-		for (const workspaces of Object.values(s.workspaces)) {
-			const workspace = workspaces.find((w) => w.id === workspaceId);
-			if (workspace) return workspace.worktreePath;
-		}
-		return undefined;
-	});
+	const workspaceRoot = useAppStore(
+		(s) => selectWorkspaceById(s, workspaceId)?.worktreePath ?? undefined,
+	);
 	// The raw record is a stable reference from zustand's perspective (unlike a fresh object/array
 	// literal, which would re-render this view on every unrelated store update); the workspaceId →
 	// display-name map the history overlay's cross-workspace chip needs is derived below in a `useMemo`.
@@ -148,6 +152,12 @@ export default function ChatView({
 		}
 		return map;
 	}, [workspaces]);
+	// The workspace's spec graph (fetched + kept fresh by the Specs panel): it tells the turn divider which
+	// of the round's written files are specs, so the two chips deep-link to the panel that can show them.
+	// Subscribed as the stored array (a stable ref) and turned into a matcher here — never a new Set/closure
+	// inside the selector, which would re-render on every store change.
+	const specNodes = useAppStore((s) => s.specsByWorkspace[workspaceId]);
+	const isSpec = useMemo(() => specPathMatcher(specNodes ?? []), [specNodes]);
 	const {
 		turns,
 		toolResults,
@@ -167,8 +177,8 @@ export default function ChatView({
 	// boundaries, so the row model is re-derived per snapshot (pure + memoized; stable row ids keep
 	// Virtuoso keys and fold state steady while streaming).
 	const rows = useMemo(
-		() => deriveRows(turns, toolResults, isStreaming),
-		[turns, toolResults, isStreaming],
+		() => deriveRows(turns, toolResults, isStreaming, isSpec),
+		[turns, toolResults, isStreaming, isSpec],
 	);
 
 	// The streaming loader lives as the list footer (so it forms where the next message will). Suppressed
@@ -502,14 +512,33 @@ export default function ChatView({
 		return () => clearTimeout(timer);
 	}, [flashRowId]);
 
-	// A turn-divider's "files changed" chip → deep-link the right panel to the first changed file (flip to
-	// Changes + highlight its row; the diff opens only on an explicit click). This is the one chat touch of
-	// the store outside the renderers, kept here in the integration layer.
-	const onOpenChanges = useCallback(
-		(paths: string[]) => {
-			const path = paths[0];
-			if (!path) return;
+	// A turn-divider's "files changed" chip → deep-link the right panel to the changed file (flip to Changes
+	// + highlight its row; the diff opens only on an explicit click). The divider hands over exactly one path
+	// — the round's only artifact, or the row the user picked from the expanded list — so nothing here has to
+	// guess which of several the user meant. These are the chat's touches of the store outside the renderers,
+	// kept here in the integration layer.
+	const onOpenChange = useCallback(
+		(path: string) => {
 			useAppStore.getState().requestChangesView(workspaceId, path);
+		},
+		[workspaceId],
+	);
+
+	// Its "N specs" twin → flip to Specs and open the rendered spec. Specs get the stronger treatment (open,
+	// not just highlight) because a spec doc has nothing to preview short of its content — and because a spec
+	// is often gitignored scratch, which the git-derived Changes view can't show at all.
+	const onOpenSpec = useCallback(
+		(path: string) => {
+			useAppStore.getState().requestSpecView(workspaceId, path);
+		},
+		[workspaceId],
+	);
+
+	// A chip expanding its artifact list asks for the owning view alongside — no path, so nothing is opened
+	// or highlighted: the user is choosing which side of the round to look at, and the panel follows.
+	const onReveal = useCallback(
+		(tab: "specs" | "changes") => {
+			useAppStore.getState().requestRightTab(workspaceId, tab);
 		},
 		[workspaceId],
 	);
@@ -602,7 +631,9 @@ export default function ChatView({
 									<ChatTurnView
 										row={row}
 										workspaceRoot={workspaceRoot}
-										onOpenChanges={onOpenChanges}
+										onOpenSpec={onOpenSpec}
+										onOpenChange={onOpenChange}
+										onReveal={onReveal}
 									/>
 								</div>
 							)}

@@ -6,6 +6,7 @@ import {
 	runInTerminal,
 	visibleTerminalScreen,
 	waitTerminalReady,
+	worktreeRows,
 } from "./fixtures/app";
 
 test("a workspace opens a terminal automatically, rooted in the worktree, with working I/O", async ({
@@ -13,7 +14,7 @@ test("a workspace opens a terminal automatically, rooted in the worktree, with w
 }) => {
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
-	await expect(page.getByTestId("workspace-item")).toHaveCount(1);
+	await expect(worktreeRows(page)).toHaveCount(1);
 
 	// No click needed — landing on the workspace opens a terminal on its own.
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
@@ -38,13 +39,13 @@ test("terminals are workspace-scoped and survive workspace switches", async ({ p
 
 	// A fresh second workspace gets its own auto terminal — not workspace 1's.
 	await createWorkspaceViaDialog(page); // workspace 2 (now active)
-	await expect(page.getByTestId("workspace-item")).toHaveCount(2);
+	await expect(worktreeRows(page)).toHaveCount(2);
 	await waitTerminalReady(page);
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
 	await expect(visibleTerminalScreen(page)).not.toContainText("TR_WS1_BUFFER");
 
 	// Back to workspace 1 → its terminal and buffer are restored (never unmounted).
-	await page.getByTestId("workspace-item").nth(0).getByRole("button").first().click();
+	await worktreeRows(page).nth(0).getByRole("button").first().click();
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
 	await expect(visibleTerminalScreen(page)).toContainText("TR_WS1_BUFFER");
 });

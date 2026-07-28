@@ -9,6 +9,19 @@ export interface TransportOptions {
 	onStatus?: (status: ConnectionStatus) => void;
 }
 
+/** How long a request waits for its reply before rejecting, unless the caller overrides it. */
+const DEFAULT_TIMEOUT_MS = 60_000;
+
+export interface RequestOptions {
+	sessionId?: string;
+	/**
+	 * Override the reply deadline (ms). Raise it for a request the **host answers only once a human has**
+	 * — `dialog.selectDirectory` sits on an open folder dialog — where the default would reject while the
+	 * dialog is still on screen *and* drop the reply that follows (the pending entry is gone by then).
+	 */
+	timeoutMs?: number;
+}
+
 /** Single WebSocket to the host: id-correlated requests + channel subscriptions, with reconnect. */
 export class WsTransport {
 	private ws: WebSocket | null = null;
@@ -65,15 +78,16 @@ export class WsTransport {
 	request<M extends WsMethodName>(
 		method: M,
 		params: WsParams<M>,
-		sessionId?: string,
+		options: RequestOptions = {},
 	): Promise<WsResult<M>> {
+		const { sessionId, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
 		const id = `trpi_${++this.seq}`;
 		const frame = JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) });
 		return new Promise<WsResult<M>>((resolve, reject) => {
 			const timer = setTimeout(() => {
 				this.pending.delete(id);
 				reject(new Error(`request "${method}" timed out`));
-			}, 60_000);
+			}, timeoutMs);
 			this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject, timer });
 			this.sendFrame(frame);
 		});

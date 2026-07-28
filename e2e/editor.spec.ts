@@ -4,8 +4,13 @@ import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
 test("opens a file in a center Monaco tab, focuses on re-open, and closes", async ({ page }) => {
 	await openFixtureProject(page);
 
-	// Create a workspace → its worktree files populate the All-files tree.
+	// Create a workspace → its worktree files populate the All-files tree. The create lands in its
+	// auto-opened chat; close it — this spec exercises *file* tabs and the last-tab receipt.
 	await createWorkspaceViaDialog(page);
+	const chatTab = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
+	await chatTab.hover();
+	await chatTab.getByTestId("editor-tab-close").click();
+	await expect(chatTab).toHaveCount(0);
 	await page.getByTestId("tab-files").click();
 	const readme = page.getByTestId("file-node").filter({ hasText: "README.md" });
 	await expect(readme).toBeVisible();

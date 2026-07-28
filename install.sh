@@ -11,7 +11,8 @@
 #                              Allowed chars: A-Z a-z 0-9 _ - . / ~ and space.
 #   --no-modify-path           don't touch shell rc files; just print PATH advice
 #
-# After install, run `thinkrail`. To update later, run `thinkrail update` (or re-run this installer).
+# After install, run `thinkrail`. To update later, run `thinkrail update`; to remove it, run
+# `thinkrail uninstall`.
 
 set -euo pipefail
 
@@ -36,7 +37,8 @@ Options:
                              Allowed chars: A-Z a-z 0-9 _ - . / ~ and space.
   --no-modify-path           don't touch shell rc files; just print PATH advice
 
-After install, run `thinkrail`. To update later, run `thinkrail update` (or re-run this installer).
+After install, run `thinkrail`. To update later, run `thinkrail update`; to remove it, run
+`thinkrail uninstall`.
 EOF
     exit "${1:-0}"
 }
@@ -286,3 +288,4 @@ fi
 
 echo "Run:            thinkrail"
 echo "Update later:   thinkrail update"
+echo "Uninstall:      thinkrail uninstall"

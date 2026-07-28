@@ -6,3 +6,6 @@ export {
 	registerBundledRuntime,
 } from "./agent";
 export * from "./host";
+// Where our app state lives (`~/.thinkrail` unless `THINKRAIL_DATA_DIR`). Exposed for `thinkrail
+// uninstall`, which has to name that dir — and must name the *same* one the host reads and writes.
+export { dataDir } from "./persistence";

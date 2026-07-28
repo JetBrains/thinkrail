@@ -1,23 +1,28 @@
 import { RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useAppStore } from "../store";
+import { type RightPanelTab, useAppStore } from "../store";
 import { ChangesPanel } from "./ChangesPanel";
 import { FileTree } from "./FileTree";
 import { SpecsPanel } from "./SpecsPanel";
-
-type RightTab = "specs" | "files" | "changes";
+import { useWorkspaceSpecs } from "./useWorkspaceSpecs";
 
 /** Right panel for the active worktree: Specs (read-only spec-graph tree), All-files tree, and Changes (git diff vs base). Checks/Review = V2. */
 export function RightPanel() {
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
-	const changesRequest = useAppStore((s) => s.changesRequest);
-	const [tab, setTab] = useState<RightTab>("specs");
-	const [specsRefresh, setSpecsRefresh] = useState(0);
+	const rightTabRequest = useAppStore((s) => s.rightTabRequest);
+	const [tab, setTab] = useState<RightPanelTab>("specs");
+	// Owned here, not in the tab body: the spec graph is app-wide state (the chat classifies its artifacts
+	// with it), and this panel outlives any one tab. See `useWorkspaceSpecs`.
+	const { failed: specsFailed, reload: reloadSpecs } = useWorkspaceSpecs(activeWorkspaceId);
 
-	// A deep-link from chat (turn-divider chip) targeting this workspace flips us to the Changes view.
+	// Anything outside the panel that wants a view shown raises one intent (`requestRightTab`, carried along
+	// by the chat deep-links too), so the flip is decided in a single place rather than inferred from each
+	// path request — and a chip that only reveals its own artifact list needs no path to do it.
 	useEffect(() => {
-		if (changesRequest?.workspaceId === activeWorkspaceId) setTab("changes");
-	}, [changesRequest, activeWorkspaceId]);
+		if (rightTabRequest?.workspaceId !== activeWorkspaceId) return;
+		setTab(rightTabRequest.tab);
+		useAppStore.getState().clearRightTabRequest(); // one flip per request; never replayed on re-activation
+	}, [rightTabRequest, activeWorkspaceId]);
 
 	return (
 		<div className="flex h-full min-h-0 flex-col">
@@ -41,7 +46,7 @@ export function RightPanel() {
 						data-testid="specs-refresh"
 						aria-label="Refresh specs"
 						title="Refresh specs"
-						onClick={() => setSpecsRefresh((n) => n + 1)}
+						onClick={reloadSpecs}
 						className="ml-auto text-hint hover:text-muted"
 					>
 						<RefreshCw className="size-3.5" />
@@ -53,7 +58,7 @@ export function RightPanel() {
 					<p className="p-sm text-xs text-hint">Select a workspace to browse files.</p>
 				) : tab === "specs" ? (
 					<div className="p-xs">
-						<SpecsPanel workspaceId={activeWorkspaceId} refreshToken={specsRefresh} />
+						<SpecsPanel workspaceId={activeWorkspaceId} failed={specsFailed} />
 					</div>
 				) : tab === "files" ? (
 					<div className="p-xs">

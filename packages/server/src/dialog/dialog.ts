@@ -9,6 +9,11 @@ export interface Picker {
 	cmd: string[];
 	/** Map raw stdout to an absolute path, or `null` when nothing usable was returned. */
 	parse: (stdout: string) => string | null;
+	/**
+	 * What a non-zero exit means. `osascript` (-128), `zenity` and `kdialog` exit non-zero when the user
+	 * cancels; PowerShell exits **0** and prints nothing, so there it's a real failure, not a cancel.
+	 */
+	nonZeroExit: "cancel" | "error";
 }
 
 // Trim surrounding whitespace and any trailing path separator(s); empty → null. Shared across
@@ -16,11 +21,53 @@ export interface Picker {
 const toPath = (stdout: string): string | null => stdout.trim().replace(/[/\\]+$/, "") || null;
 
 // PowerShell folder picker: a WinForms FolderBrowserDialog; prints the path on OK, nothing on cancel.
-const WINDOWS_PICKER =
-	"Add-Type -AssemblyName System.Windows.Forms; " +
-	"$d = New-Object System.Windows.Forms.FolderBrowserDialog; " +
-	"$d.Description = 'Open project'; " +
-	"if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { Write-Output $d.SelectedPath }";
+// The dialog is **owned by an invisible top-most form**: we spawn it from a background process, which
+// Windows forbids from taking the foreground, so an unowned dialog opens *behind* the browser the user
+// is looking at — indistinguishable from "the button does nothing". Top-most alone only wins the
+// z-order, though: the browser stays the *active* window, so the dialog opens without the keyboard.
+// `SetForegroundWindow` is subject to the same foreground lock — unless our input thread is attached
+// to the current foreground one first, which is what the P/Invoke block does. Best-effort: a host that
+// can't compile it still gets the top-most dialog, just unfocused, rather than no dialog at all.
+// `$ErrorActionPreference = 'Stop'` turns a blocked `Add-Type`/`New-Object` (ConstrainedLanguage mode on
+// a locked-down host) into a non-zero exit with a real message on stderr, instead of printing nothing
+// and looking like a cancel.
+const WINDOWS_PICKER = [
+	"$ErrorActionPreference = 'Stop'",
+	"Add-Type -AssemblyName System.Windows.Forms",
+	"$owner = New-Object System.Windows.Forms.Form",
+	"$owner.TopMost = $true",
+	"$owner.ShowInTaskbar = $false",
+	"$owner.Opacity = 0",
+	"$owner.Show()",
+	"try {",
+	"  Add-Type -Namespace ThinkRail -Name Fg -MemberDefinition '",
+	'    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();',
+	'    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr w, IntPtr p);',
+	'    [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint a, uint b, bool join);',
+	'    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr w);',
+	'    [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();\'',
+	// A null `lpdwProcessId` is allowed, so `IntPtr` spares us an out-param marshal; a zero thread id
+	// (no foreground window at all) just makes the attach a harmless no-op.
+	"  $fg = [ThinkRail.Fg]::GetWindowThreadProcessId([ThinkRail.Fg]::GetForegroundWindow(), [IntPtr]::Zero)",
+	"  $me = [ThinkRail.Fg]::GetCurrentThreadId()",
+	"  [void][ThinkRail.Fg]::AttachThreadInput($me, $fg, $true)",
+	"  [void][ThinkRail.Fg]::SetForegroundWindow($owner.Handle)",
+	"  [void][ThinkRail.Fg]::AttachThreadInput($me, $fg, $false)",
+	"} catch { }",
+	"$d = New-Object System.Windows.Forms.FolderBrowserDialog",
+	"$d.Description = 'Open project'",
+	"$ok = $d.ShowDialog($owner) -eq [System.Windows.Forms.DialogResult]::OK",
+	"$owner.Close()",
+	"if ($ok) { Write-Output $d.SelectedPath }",
+].join("\n");
+
+/**
+ * The picker as `-EncodedCommand` payload (base64 UTF-16LE, what PowerShell expects). Not `-Command`:
+ * the script carries C# string literals, and quoting embedded double quotes through a Windows command
+ * line into PowerShell's own parser is a known minefield — `apps/cli/src/powershell.ts` sidesteps the
+ * same problem with a temp `.ps1` file. Encoding keeps it a single, quote-proof argv element.
+ */
+const ENCODED_WINDOWS_PICKER = Buffer.from(WINDOWS_PICKER, "utf16le").toString("base64");
 
 /**
  * The ordered native pickers to try for a platform. Multiple entries are fallbacks tried only when the
@@ -33,6 +80,7 @@ export function pickersFor(platform: NodeJS.Platform): Picker[] {
 				{
 					cmd: ["osascript", "-e", 'POSIX path of (choose folder with prompt "Open project")'],
 					parse: toPath,
+					nonZeroExit: "cancel",
 				},
 			];
 		case "linux":
@@ -40,14 +88,23 @@ export function pickersFor(platform: NodeJS.Platform): Picker[] {
 				{
 					cmd: ["zenity", "--file-selection", "--directory", "--title=Open project"],
 					parse: toPath,
+					nonZeroExit: "cancel",
 				},
 				{
 					cmd: ["kdialog", "--getexistingdirectory", ".", "--title", "Open project"],
 					parse: toPath,
+					nonZeroExit: "cancel",
 				},
 			];
 		case "win32":
-			return [{ cmd: ["powershell", "-NoProfile", "-Command", WINDOWS_PICKER], parse: toPath }];
+			// The same two hosts (and order) `apps/cli/src/powershell.ts` uses. `-Sta` because a WinForms
+			// dialog needs a single-threaded apartment: both hosts already default to STA on Windows, so this
+			// only pins the requirement at the spawn site.
+			return ["powershell.exe", "pwsh.exe"].map((shell) => ({
+				cmd: [shell, "-NoProfile", "-Sta", "-EncodedCommand", ENCODED_WINDOWS_PICKER],
+				parse: toPath,
+				nonZeroExit: "error" as const,
+			}));
 		default:
 			return [];
 	}
@@ -72,23 +129,47 @@ function resolveOverride(): string | null {
 }
 
 /**
- * Pop the host's native folder picker and return the chosen path (`null` on cancel / no picker).
- * A missing binary falls through to the next candidate; a non-zero exit is a user cancel (stop).
+ * Why a picker that *ran* failed, for the notice the user sees: its first stderr line, else the exit code
+ * (a killed picker writes nothing). PowerShell's CRLF output would otherwise leave a trailing `\r`.
+ */
+export function pickerFailure(stderr: string, code: number): string {
+	const firstLine = stderr.replaceAll("\r", "").trim().split("\n")[0];
+	return `The folder picker failed: ${firstLine || `exit ${code}`}`;
+}
+
+/** Why we couldn't even start a picker — phrased so the user can act on it. */
+export function noPickerMessage(platform: NodeJS.Platform): string {
+	return platform === "linux"
+		? "No folder picker on this host — install zenity or kdialog."
+		: `No native folder picker is available on this host (${platform}).`;
+}
+
+/**
+ * Pop the host's native folder picker and return the chosen path (`null` when the user cancelled).
+ * A missing binary falls through to the next candidate; **throws** when a picker failed or none could
+ * run at all — the picker is the only way to add a project, so a silent `null` is a dead button.
  */
 export async function selectDirectory(): Promise<{ path: string | null }> {
 	const override = resolveOverride();
 	if (override) return { path: override };
 
 	for (const picker of pickersFor(process.platform)) {
+		let out: string;
+		let err: string;
+		let code: number;
 		try {
-			const proc = Bun.spawn(picker.cmd, { stdout: "pipe", stderr: "ignore" });
-			const out = await new Response(proc.stdout).text();
-			const code = await proc.exited;
-			if (code !== 0) return { path: null }; // user cancelled the dialog
-			return { path: picker.parse(out) };
+			const proc = Bun.spawn(picker.cmd, { stdout: "pipe", stderr: "pipe" });
+			[out, err, code] = await Promise.all([
+				new Response(proc.stdout).text(),
+				new Response(proc.stderr).text(),
+				proc.exited,
+			]);
 		} catch {
-			// Binary not installed (e.g. no zenity) — try the next candidate.
+			continue; // Binary not installed (e.g. no zenity) — try the next candidate.
 		}
+		if (code === 0) return { path: picker.parse(out) };
+		if (picker.nonZeroExit === "cancel") return { path: null };
+		throw new Error(pickerFailure(err, code));
 	}
-	return { path: null };
+	throw new Error(noPickerMessage(process.platform));
 }

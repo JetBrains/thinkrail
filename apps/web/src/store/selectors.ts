@@ -1,4 +1,5 @@
-import type { Project, Workspace } from "@thinkrail/contracts";
+import type { Project, SpecGraphNode, Workspace } from "@thinkrail/contracts";
+import { isAbsolutePath, normalizePath } from "../lib";
 import type { EditorTab } from "./appStore";
 
 interface ActiveWorkspaceState {
@@ -11,11 +12,26 @@ interface ProjectContextState extends ActiveWorkspaceState {
 	projects: Project[];
 }
 
+/**
+ * The built-in Default workspace — the project folder itself. Clients key off the wire's `kind` field
+ * only; this predicate is the single place it's read (rail row, receipt, scope spine, folder-mode entry).
+ */
+export function isDefaultWorkspace(workspace: Pick<Workspace, "kind">): boolean {
+	return workspace.kind === "default";
+}
+
 /** Resolve the active workspace from the project-grouped collection without duplicating it in state. */
 export function selectActiveWorkspace(state: ActiveWorkspaceState): Workspace | null {
-	if (!state.activeWorkspaceId) return null;
+	return state.activeWorkspaceId ? selectWorkspaceById(state, state.activeWorkspaceId) : null;
+}
+
+/** The workspace with this id, wherever it sits in the project-grouped collection. */
+export function selectWorkspaceById(
+	state: ActiveWorkspaceState,
+	workspaceId: string,
+): Workspace | null {
 	for (const workspaces of Object.values(state.workspaces)) {
-		const workspace = workspaces.find((candidate) => candidate.id === state.activeWorkspaceId);
+		const workspace = workspaces.find((candidate) => candidate.id === workspaceId);
 		if (workspace) return workspace;
 	}
 	return null;
@@ -70,6 +86,34 @@ export function selectHistoryTarget(state: {
 /** Whether a worktree-relative path is inside a skill directory — the auto-detect trigger for a reload. */
 export function isSkillPath(path: string): boolean {
 	return /(^|\/)\.(claude|github|gemini|pi|agents)\/skills(\/|$)/.test(path);
+}
+
+/**
+ * Whether a path **as pi reported it** (worktree-relative or absolute — a tool call's `path` argument is
+ * whichever the agent passed) designates the worktree-relative `rel`. Shared by every consumer that has to
+ * line an agent-reported path up against a worktree-relative one (the Changes deep link, the spec
+ * classifier).
+ *
+ * The suffix rule applies to **absolute reports only**, and is anchored at a separator. Both halves matter:
+ * unanchored, `/wt/src/a-foo.ts` would match the entry `src/foo.ts`; applied to relative reports,
+ * `module-b/SPEC.md` would match the *root* entry `SPEC.md` — turning every module spec in a repo into the
+ * root one, and every nested file into whatever short entry it happens to end with.
+ */
+export function matchesWorktreePath(reported: string, rel: string): boolean {
+	const path = normalizePath(reported);
+	if (path === rel) return true;
+	return isAbsolutePath(path) && path.endsWith(`/${rel}`);
+}
+
+/**
+ * A predicate over agent-reported paths: is this file a **spec** — i.e. a node of the workspace's spec
+ * graph? This is the one definition the app uses to route an agent-written file to the Specs side rather
+ * than the Changes side (see `chat`'s turn divider), and it deliberately reuses the very snapshot the Specs
+ * panel renders, so the two can never disagree. Closes over the paths alone, not the nodes.
+ */
+export function specPathMatcher(nodes: SpecGraphNode[]): (path: string) => boolean {
+	const paths = nodes.map((node) => node.path);
+	return (reported) => paths.some((rel) => matchesWorktreePath(reported, rel));
 }
 
 /**

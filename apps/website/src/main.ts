@@ -176,7 +176,8 @@ if (themeTrigger && themeMenu) {
 	themeMenu.addEventListener("keydown", (event) => {
 		if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
 		event.preventDefault();
-		const index = items.findIndex((item) => item === document.activeElement);
+		const { activeElement } = document;
+		const index = activeElement instanceof HTMLButtonElement ? items.indexOf(activeElement) : -1;
 		const delta = event.key === "ArrowDown" ? 1 : -1;
 		items[(index + delta + items.length) % items.length]?.focus();
 	});

@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, lstatSync, mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import type { DiffStats, Project, Workspace } from "@thinkrail/contracts";
 import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
-import { git, gitAsync } from "../git";
+import { currentBranch, git, gitAsync, resolveDefaultBranch } from "../git";
 import { dataDir, loadProjects, loadWorkspaces, saveWorkspaces } from "../persistence";
 import { getProjects } from "../projects";
 
@@ -86,6 +86,24 @@ function nextAutoBranch(project: Project): string {
 	return `workspace-${n}`;
 }
 
+/**
+ * The **Default workspace's** folder-truth fields, read from the project folder itself: `branch` = what it
+ * has checked out, `baseBranch` = the repo's default branch. Both move out-of-band (a terminal `git
+ * switch`), so they are re-read — never trusted from the record — by both sync paths below. Two sync git
+ * spawns: callers read them BEFORE loading the registry snapshot they intend to save (see the call sites).
+ */
+function folderTruth(repoPath: string): { branch: string; baseBranch: string } {
+	return { branch: currentBranch(repoPath), baseBranch: resolveDefaultBranch(repoPath) };
+}
+
+/** Write folder-truth onto a record; `true` when it actually drifted (i.e. a save + `updated` is due). */
+function applyFolderTruth(ws: Workspace, truth: { branch: string; baseBranch: string }): boolean {
+	if (ws.branch === truth.branch && ws.baseBranch === truth.baseBranch) return false;
+	ws.branch = truth.branch;
+	ws.baseBranch = truth.baseBranch;
+	return true;
+}
+
 /** Working-tree changes of a worktree vs its base branch. */
 function diffStats(worktreePath: string, baseBranch: string): DiffStats {
 	const result = git(worktreePath, ["diff", "--shortstat", baseBranch]);
@@ -114,7 +132,6 @@ export async function createWorkspace(
 	const project = getProjects().find((p) => p.id === projectId);
 	if (!project) throw new Error(`Unknown project: ${projectId}`);
 
-	const all = loadWorkspaces();
 	// A user-supplied name is the display name (casing/punctuation preserved); the branch is derived from
 	// it. Omitted (or unusable) → the auto `workspace-N` placeholder, where name === branch.
 	const displayName = name ? toDisplayName(name) : null;
@@ -147,13 +164,6 @@ export async function createWorkspace(
 	const added = git(project.path, ["worktree", "add", worktreePath, "-b", branch, baseBranch]);
 	if (!added.ok) throw new Error(`git worktree add failed: ${added.err}`);
 
-	// Ephemeral per-workspace scratch dir for temp docs (task-specs / working files). Its `.gitignore` is
-	// a lone `*` — which matches the `.gitignore` itself — so the whole dir has zero git footprint yet
-	// stays scannable by the spec tools (they ignore only node_modules/.git/dist/build, not .gitignore).
-	const contextDir = join(worktreePath, WORKSPACE_CONTEXT_DIR);
-	mkdirSync(contextDir, { recursive: true });
-	writeFileSync(join(contextDir, ".gitignore"), "*\n");
-
 	const workspace: Workspace = {
 		id: randomUUID(),
 		projectId,
@@ -165,10 +175,133 @@ export async function createWorkspace(
 		// leaves the flag unset: eligible for one assist rename.
 		...(displayName ? { renamed: true } : {}),
 	};
+	ensureWorkspaceScratchDir(workspace);
+	// Load the registry only now — after the awaited fallback fetch. A concurrent `workspace.list` may
+	// have written meanwhile (materializing/refreshing the Default); appending to a pre-await snapshot
+	// would clobber that write (same discipline as renameWorkspace's re-load after its git subprocess).
+	const all = loadWorkspaces();
 	all.push(workspace);
 	saveWorkspaces(all);
 	emit({ kind: "created", workspace });
 	return workspace;
+}
+
+/**
+ * Idempotently seed a workspace's ephemeral scratch dir (`WORKSPACE_CONTEXT_DIR`) for temp docs
+ * (task-specs / working files). Its `.gitignore` is a lone `*` — which matches the `.gitignore`
+ * itself — so the whole dir has zero git footprint yet stays scannable by the spec tools (they ignore
+ * only node_modules/.git/dist/build, not .gitignore). Worktree creation seeds eagerly; the host also
+ * calls this on session create, which is what seeds the **Default** workspace — merely listing or
+ * entering it must never write into the user's repo, starting a chat there may.
+ *
+ * Hardened — in the Default workspace this runs against **repository-controlled content** inside the
+ * user's own repo:
+ * - The workspace root must already exist: an externally-deleted worktree must fail the session loudly,
+ *   not be silently resurrected as an empty non-git directory.
+ * - Owned path components are walked with `lstat` (never followed) — a malicious checkout can't symlink
+ *   `.thinkrail`/`context` and redirect the seed outside the workspace.
+ * - The `.gitignore` is an **exclusive create** (`wx`): a pre-existing (possibly tracked, possibly
+ *   customized) file is the user's — never clobbered — and `O_EXCL` refuses to follow a (possibly
+ *   dangling) symlink, so the file lands only on a truly vacant path.
+ */
+export function ensureWorkspaceScratchDir(ws: Workspace): void {
+	if (!statSync(ws.worktreePath, { throwIfNoEntry: false })?.isDirectory())
+		throw new Error(`Workspace directory is missing: ${ws.worktreePath}`);
+	let dir = ws.worktreePath;
+	for (const part of WORKSPACE_CONTEXT_DIR.split("/")) {
+		dir = join(dir, part);
+		const entry = lstatSync(dir, { throwIfNoEntry: false });
+		if (!entry) mkdirSync(dir);
+		else if (!entry.isDirectory())
+			throw new Error(`Refusing to seed the scratch dir: not a real directory: ${dir}`);
+	}
+	try {
+		writeFileSync(join(dir, ".gitignore"), "*\n", { flag: "wx" });
+	} catch (err) {
+		if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+	}
+}
+
+/**
+ * Ensure the project's built-in **Default workspace** (`kind: "default"`) — the project folder itself
+ * (git's main working tree) surfaced as a workspace. Exactly one per project: find-or-create keyed by
+ * `projectId` + `kind` (the id is a plain `randomUUID` — the `kind` field is the marker, never an id
+ * convention), collapsing duplicates defensively if out-of-band state churn ever produced two (keep
+ * the oldest, emit `removed` for the rest so clients converge). No `git worktree add` (the folder
+ * already is a working tree) and no scratch-dir seeding (see `ensureWorkspaceScratchDir`).
+ *
+ * Fields are folder-truth: `branch` = whatever the folder has checked out, `baseBranch` = the repo's
+ * default branch — both refreshed when they drifted out-of-band, **emitting `updated`** so every
+ * client's rail converges (a terminal `git checkout` must not leave another tab stale; rename uses the
+ * same channel for the same fields, and the store's merge triggers no re-list, so no feedback loop).
+ * Every emit happens **after** the save — persist-then-publish, like every other mutation path.
+ * `renamed: true` keeps the auto-rename passes away, belt-and-suspenders on
+ * top of the hard guards in `renameWorkspace`/`forgetWorkspace`.
+ */
+function ensureDefaultWorkspace(project: Project): Workspace {
+	// Folder-truth FIRST: these are sync git spawns that block the JS thread, and another process can
+	// rewrite workspaces.json while we sit in them (see `renameWorkspace` below — the e2e reset does
+	// exactly that). Loading after them keeps load→mutate→save one uninterrupted synchronous block.
+	const truth = folderTruth(project.path);
+	const { branch, baseBranch } = truth;
+	const all = loadWorkspaces();
+	const defaults = all.filter((w) => w.projectId === project.id && w.kind === "default");
+
+	const existing = defaults[0];
+	if (existing) {
+		const extras = defaults.slice(1);
+		if (extras.length > 0) {
+			// Duplicates are corruption (the ensure is the only writer) — collapse to the oldest record.
+			const keep = all.filter((w) => !extras.includes(w));
+			all.length = 0;
+			all.push(...keep);
+		}
+		const drifted = applyFolderTruth(existing, truth);
+		if (extras.length > 0 || drifted) saveWorkspaces(all);
+		// Persist-then-publish: a failed save must not tear down (or update) records still on disk.
+		for (const extra of extras) emit({ kind: "removed", projectId: project.id, id: extra.id });
+		if (drifted) emit({ kind: "updated", workspace: existing });
+		return existing;
+	}
+
+	const workspace: Workspace = {
+		id: randomUUID(),
+		projectId: project.id,
+		kind: "default",
+		name: "Default",
+		branch,
+		worktreePath: project.path,
+		baseBranch,
+		renamed: true,
+	};
+	all.push(workspace);
+	saveWorkspaces(all);
+	emit({ kind: "created", workspace });
+	return workspace;
+}
+
+/**
+ * Re-sync one **Default workspace** record against folder-truth and publish it when it drifted — the
+ * *live* half of the ensure above, off the `workspace.list` path: cheap (two `symbolic-ref`-class git
+ * reads, **no** diff-stat listing) so the host can call it on `watch`'s debounced **repo-metadata nudge**
+ * (a `.git` write in the worktree). A `git switch` in the Default terminal therefore converges the rail,
+ * the top bar and the empty receipt in every client — including a switch that leaves the working tree
+ * byte-identical — instead of leaving them on the old branch until a manual project reload.
+ * Unknown id / a worktree workspace (its branch is pinned) / no drift → a no-op, no save, no emit.
+ */
+export function refreshDefaultWorkspace(workspaceId: string): void {
+	// A peek decides whether this id is even a Default (only those drift) — nothing is mutated from it.
+	const peek = loadWorkspaces().find((w) => w.id === workspaceId);
+	if (peek?.kind !== "default") return;
+	// Folder-truth, THEN the snapshot we mutate: the git reads block the JS thread and another process can
+	// rewrite workspaces.json meanwhile, so load→mutate→save stays one uninterrupted block (as above).
+	const truth = folderTruth(peek.worktreePath);
+	const all = loadWorkspaces();
+	const ws = all.find((w) => w.id === workspaceId);
+	if (ws?.kind !== "default") return;
+	if (!applyFolderTruth(ws, truth)) return;
+	saveWorkspaces(all);
+	emit({ kind: "updated", workspace: ws });
 }
 
 /**
@@ -197,6 +330,8 @@ export function renameWorkspace(
 	const project = getProjects().find((p) => p.id === ws.projectId);
 	if (!project) throw new Error(`Unknown project: ${ws.projectId}`);
 
+	// The Default workspace's branch is the user's real branch — renaming would `git branch -m` it.
+	if (ws.kind === "default") throw new Error("The Default workspace cannot be renamed");
 	const displayName = toDisplayName(requestedName);
 	if (!displayName) throw new Error(`Invalid workspace name: ${requestedName}`);
 	const wanted = toBranch(displayName);
@@ -246,9 +381,15 @@ export function setWorkspaceSkillOverride(
 }
 
 export function listWorkspaces(projectId: string): Workspace[] {
-	return loadWorkspaces()
-		.filter((w) => w.projectId === projectId)
-		.map((w) => ({ ...w, diffStats: diffStats(w.worktreePath, w.baseBranch) }));
+	// Lazily ensure the built-in Default workspace on every list: find-or-create is idempotent, backfills
+	// projects opened before the feature existed, and self-heals out-of-band state churn (the e2e reset
+	// rewrites workspaces.json mid-run). Unknown project → no ensure, the filter returns [] as before.
+	const project = getProjects().find((p) => p.id === projectId);
+	if (project) ensureDefaultWorkspace(project);
+	const rows = loadWorkspaces().filter((w) => w.projectId === projectId);
+	// Pin the Default workspace first (creation order would put a backfilled one last).
+	rows.sort((a, b) => (a.kind === "default" ? -1 : 0) - (b.kind === "default" ? -1 : 0));
+	return rows.map((w) => ({ ...w, diffStats: diffStats(w.worktreePath, w.baseBranch) }));
 }
 
 /**
@@ -269,6 +410,10 @@ export function forgetWorkspace(id: string): Workspace | null {
 	const all = loadWorkspaces();
 	const ws = all.find((w) => w.id === id);
 	if (!ws) return null;
+	// Loud, before any side-effect: the record's worktreePath is the project folder — forgetting it
+	// would hand the archive teardown's `rm -rf` fallback the user's repo. The UI offers no Remove for
+	// it; this guard is for buggy/rogue clients.
+	if (ws.kind === "default") throw new Error("The Default workspace cannot be removed");
 	saveWorkspaces(all.filter((w) => w.id !== id));
 	emit({ kind: "removed", projectId: ws.projectId, id: ws.id });
 	return ws;
@@ -280,8 +425,14 @@ export function forgetWorkspace(id: string): Workspace | null {
  * dir if it lingers then `prune` the stale registration so `git worktree list` never orphans it.
  */
 export function reclaimWorktree(ws: Workspace): void {
+	// Defense in depth: never reclaim the project folder itself (`git worktree remove` would refuse the
+	// main working tree, but the hardened rm-fallback below would not).
+	if (ws.kind === "default") return;
 	const project = loadProjects().find((p) => p.id === ws.projectId);
 	if (!project) return;
+	// Defense in depth: never reclaim the repo's main working tree, however the record got here (a
+	// corrupt or hand-edited registry) — git would refuse it, but the rm-fallback below would not.
+	if (resolve(ws.worktreePath) === resolve(project.path)) return;
 	const removed = git(project.path, ["worktree", "remove", "--force", ws.worktreePath]);
 	if (!removed.ok) {
 		rmSync(ws.worktreePath, { recursive: true, force: true });

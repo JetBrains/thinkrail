@@ -64,12 +64,14 @@ export type ChatRow =
  * a run is broken by non-empty answer text, a primary tool call, or any non-assistant turn. The trailing
  * run of a streaming transcript is marked `live` (the fold header becomes the ticker) — it stops being
  * trailing (and live) the moment answer text starts, which is what auto-collapses it. Round-end dividers
- * (the {@link turnDivider} deriver) are folded in as `divider` rows. Pure.
+ * (the {@link turnDivider} deriver, which `isSpec` lets split specs from code changes) are folded in as
+ * `divider` rows. Pure.
  */
 export function deriveRows(
 	turns: ChatTurn[],
 	toolResults: Record<string, ToolResultState>,
 	isStreaming: boolean,
+	isSpec?: (path: string) => boolean,
 ): ChatRow[] {
 	const rows: ChatRow[] = [];
 	let run: ActivityStep[] = [];
@@ -154,7 +156,7 @@ export function deriveRows(
 			(turns[i + 1]?.kind === "user" || (i === turns.length - 1 && !isStreaming));
 		if (roundEnded) {
 			flushRun(); // a round boundary always closes the run
-			const data = turnDivider(turns, i);
+			const data = turnDivider(turns, i, isSpec);
 			if (data) rows.push({ kind: "divider", id: `${turn.id}:divider`, data });
 		}
 	}
@@ -170,19 +172,51 @@ export interface TurnDividerData {
 	elapsedMs: number | null;
 	/** Tool calls made by the assistant turn(s) in this round. */
 	toolCount: number;
-	/** Distinct files written/edited by those tool calls (worktree-relative or absolute, as pi reported). */
+	/**
+	 * Distinct **spec** docs written by those tool calls — the round's Specs-side artifacts, deep-linked to
+	 * the Specs panel. A spec belongs here and NOT in `changedFiles`: the two are a partition, so one file is
+	 * never counted twice, and "files changed" reads as exactly "code changed".
+	 */
+	specs: string[];
+	/**
+	 * Distinct non-spec files written/edited by those tool calls (worktree-relative or absolute, as pi
+	 * reported) — the round's Changes-side artifacts.
+	 */
 	changedFiles: string[];
 }
 
 /**
- * Derive the divider that closes the round *ending* at `endIndex` (its "✓ Done" marker, or its last
- * assistant turn when hydrated): the round's tool calls + edited/written files, plus the elapsed wall-clock
- * from the round's user turn to its end. Anchored at the round end (not the next user turn) so the summary
- * appears the instant the turn finishes. The end time comes from the "✓ Done" marker's `endedAt` when
- * present (live), else the last assistant message's timestamp (hydrated) — stable either way, so the number
- * never jumps when a follow-up arrives. Returns null when there is no user turn starting the round. Pure.
+ * The tool whose `path` argument is a spec **by construction**: `spec_create`. Its target counts as a spec
+ * whatever the graph snapshot currently holds — which is what makes a spec *created this round* land on the
+ * Specs side even before the snapshot catches up with the filesystem. (`spec_update`/`spec_delete` are keyed
+ * by spec `id`, not path, so they carry no path to classify; a spec's prose is edited with `edit`, which the
+ * graph-backed classifier already routes here.)
  */
-export function turnDivider(turns: ChatTurn[], endIndex: number): TurnDividerData | null {
+const SPEC_WRITER_TOOL = "spec_create";
+
+/** Tools whose `path` argument is a file the agent wrote (as opposed to merely read). */
+const FILE_WRITER_TOOLS = new Set(["write", "edit"]);
+
+/**
+ * Derive the divider that closes the round *ending* at `endIndex` (its "✓ Done" marker, or its last
+ * assistant turn when hydrated): the round's tool calls + the files it wrote, **split into specs and code**,
+ * plus the elapsed wall-clock from the round's user turn to its end. Anchored at the round end (not the next
+ * user turn) so the summary appears the instant the turn finishes. The end time comes from the "✓ Done"
+ * marker's `endedAt` when present (live), else the last assistant message's timestamp (hydrated) — stable
+ * either way, so the number never jumps when a follow-up arrives. Returns null when there is no user turn
+ * starting the round.
+ *
+ * `isSpec` classifies an agent-reported path as a spec doc (the store's `specPathMatcher` over the
+ * workspace's spec graph); without it every written file counts as a code change. The split is a partition:
+ * each path lands in exactly one list, so the two chips deep-link to the panel that can actually show the
+ * file — the whole point being that a spec is often **gitignored** scratch (`.thinkrail/context/`) and would
+ * otherwise send the user to an empty Changes view. Pure.
+ */
+export function turnDivider(
+	turns: ChatTurn[],
+	endIndex: number,
+	isSpec: (path: string) => boolean = () => false,
+): TurnDividerData | null {
 	let userIdx = -1;
 	for (let i = endIndex; i >= 0; i--) {
 		if (turns[i]?.kind === "user") {
@@ -193,7 +227,9 @@ export function turnDivider(turns: ChatTurn[], endIndex: number): TurnDividerDat
 	if (userIdx < 0) return null;
 
 	let toolCount = 0;
-	const changedFiles: string[] = [];
+	// path → is it a spec. One entry per path makes the partition structural: a path cannot land on both
+	// sides, and first-write order is preserved (Map iterates in insertion order).
+	const written = new Map<string, boolean>();
 	let endMs: number | null = null;
 	for (let i = userIdx + 1; i <= endIndex; i++) {
 		const turn = turns[i];
@@ -202,10 +238,14 @@ export function turnDivider(turns: ChatTurn[], endIndex: number): TurnDividerDat
 			for (const block of turn.message.content) {
 				if (block.type !== "toolCall") continue;
 				toolCount++;
-				if (block.name === "edit" || block.name === "write") {
-					const path = strArg(block.arguments, "path");
-					if (path && !changedFiles.includes(path)) changedFiles.push(path);
-				}
+				const specWrite = block.name === SPEC_WRITER_TOOL;
+				if (!specWrite && !FILE_WRITER_TOOLS.has(block.name)) continue;
+				const path = strArg(block.arguments, "path");
+				if (!path) continue;
+				// A spec created this round stays a spec even if a later `edit` of it arrives before the graph
+				// snapshot refreshes (and vice versa) — the spec side wins the tie, so it only ever upgrades.
+				if (specWrite || isSpec(path)) written.set(path, true);
+				else if (!written.has(path)) written.set(path, false);
 			}
 		} else if (turn?.kind === "system" && turn.endedAt != null) {
 			endMs = turn.endedAt; // the live "✓ Done" marker carries the precise turn-end time
@@ -216,7 +256,10 @@ export function turnDivider(turns: ChatTurn[], endIndex: number): TurnDividerDat
 	const startMs = user?.kind === "user" ? user.message.timestamp : null;
 	const elapsedMs = startMs != null && endMs != null ? endMs - startMs : null;
 
-	return { elapsedMs, toolCount, changedFiles };
+	const specs: string[] = [];
+	const changedFiles: string[] = [];
+	for (const [path, isSpecPath] of written) (isSpecPath ? specs : changedFiles).push(path);
+	return { elapsedMs, toolCount, specs, changedFiles };
 }
 
 /** The first row rendering the turn a jump targets: the turn's own row (user/system/…) or its first

@@ -4,7 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { WorkspaceFsChangedPayload } from "@thinkrail/contracts";
 import { createCoalescer } from "./coalesce";
-import { ensureWatch, isIgnoredPath, setWatchPublisher, stopAllWatches, stopWatch } from "./watch";
+import {
+	ensureWatch,
+	isIgnoredPath,
+	setRepoMetaPublisher,
+	setWatchPublisher,
+	stopAllWatches,
+	stopWatch,
+} from "./watch";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -98,6 +105,10 @@ test("isIgnoredPath skips .git and node_modules subtrees and .DS_Store noise", (
 	expect(isIgnoredPath("docs/.DS_Store")).toBe(true);
 	expect(isIgnoredPath("src/index.ts")).toBe(false);
 	expect(isIgnoredPath("SPEC.md")).toBe(false);
+	// `.git` stays fully blacked out for *paths* — its churn reaches the host only as the pathless
+	// repo-metadata nudge (see the `setRepoMetaPublisher` test below).
+	expect(isIgnoredPath(".git/HEAD")).toBe(true);
+	expect(isIgnoredPath(".git/logs/HEAD")).toBe(true);
 	// Similar names that are NOT the ignored segments stay live.
 	expect(isIgnoredPath("src/gitignore-parser.ts")).toBe(false);
 	expect(isIgnoredPath("my_node_modules_tool/a.ts")).toBe(false);
@@ -135,6 +146,7 @@ beforeEach(() => {
 afterEach(() => {
 	stopAllWatches();
 	setWatchPublisher(null);
+	setRepoMetaPublisher(null);
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
@@ -149,6 +161,31 @@ test("a watched worktree publishes a debounced fsChanged batch for a new file", 
 	expect(payloads[0]?.workspaceId).toBe("ws1");
 	expect(payloads[0]?.truncated).toBe(false);
 	expect(payloads[0]?.paths).toContain("hello.ts");
+});
+
+test("a .git write nudges the repo-meta sink without ever becoming an fsChanged path", async () => {
+	const nudges: string[] = [];
+	setRepoMetaPublisher((id) => nudges.push(id));
+	ensureWatch("ws1");
+	await sleep(100);
+
+	// Stand in for git's plumbing churn (a `git switch` between content-identical branches writes only
+	// here): the worktree's content never changes, so this is the ONLY signal the branch may have moved.
+	mkdirSync(join(worktree, ".git"), { recursive: true });
+	writeFileSync(join(worktree, ".git", "HEAD"), "ref: refs/heads/live\n");
+	writeFileSync(join(worktree, ".git", "index"), "x\n");
+
+	await waitFor(() => nudges.length > 0);
+	expect(nudges).toEqual(["ws1"]); // debounced: one nudge for the burst
+	// …and nothing under `.git` ever leaks into a client-facing batch.
+	await sleep(600);
+	expect(payloads.filter((p) => p.paths.some((x) => x.includes(".git")))).toHaveLength(0);
+
+	// A stopped watcher's pending nudge is dropped, and later churn stays silent.
+	stopWatch("ws1");
+	writeFileSync(join(worktree, ".git", "HEAD"), "ref: refs/heads/other\n");
+	await sleep(600);
+	expect(nudges).toEqual(["ws1"]);
 });
 
 test("ignored churn (node_modules) never publishes", async () => {
