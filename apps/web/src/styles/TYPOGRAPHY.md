@@ -120,10 +120,11 @@ and survivors:
   that scales with the prose skin, deliberately NOT the fixed `text-mono` tier (user-confirmed).
 - Composer slash-command names and the ExtUiDialog JSON editor: `text-mono` — command syntax and a
   code-editing surface (user-confirmed exceptions to the "no mono for names" rule).
-- Sanctioned mono outside the fixed tier, each keeping its own size: the rail workspace-branch sub-line
-  (`ProjectTree`), the branch-picker refs (`NewWorkspaceDialog`), the editor tab-path line
-  (`CenterTabs`), the diff header path (`DiffPane`), TODO notes (`TodoList`), skill names
-  (`SkillsDialog`), the Welcome "spec-first" badge.
+- Sanctioned mono outside the fixed tier, each keeping its own size — the complete list, so the roles
+  table below has no unlisted exceptions: the rail workspace-branch sub-line (`ProjectTree`), the
+  empty-workspace screen's branch line (`CenterTabs`), the branch-picker refs + the `/` hint
+  (`NewWorkspaceDialog`), the diff header path (`DiffPane`), TODO notes (`TodoList`), skill names
+  (`SkillsDialog`), the Welcome card tag badge (`WelcomePanel`, e.g. "spec-first").
 
 ### Naming a font family (the form that silently fails)
 
@@ -136,9 +137,10 @@ were never monospace and the brand face never applied. `styles/fontClasses.test.
 form.
 
 **Open tension** (deliberately not settled here): the roles table below calls a branch *metadata*
-everywhere and the header branch line is proportional, yet the rail's branch sub-line is sanctioned mono
-above. Repairing the dead classes made that visible instead of hiding it behind CSS that did nothing —
-unifying the two is the entity-consistency pass's call.
+everywhere and the header branch line is proportional, yet **two** branch surfaces are sanctioned mono
+above — the rail sub-line and the empty-workspace screen. Repairing the dead classes made that visible
+instead of hiding it behind CSS that did nothing — unifying the three is the entity-consistency pass's
+call.
 
 ## Typographic roles
 

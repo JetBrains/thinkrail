@@ -26,7 +26,9 @@ binary.
 - Vite + vanilla TypeScript + hand-written CSS. No React, no Tailwind, no runtime deps at all —
   `devDependencies` only (`vite` pinned exact, `typescript` via `catalog:`). The two
   `@fontsource-variable/*` packages are build-time asset sources, not runtime deps: vite emits their
-  woff2 files into `dist/`.
+  woff2 files into `dist/`. They are shared with `apps/web`, so they come from the root
+  `workspaces.catalog` — one pin for both apps, which is what keeps the site's faces identical to the
+  app's.
 - **Fonts are self-hosted**, from the same packages and family names as the app (Geist Variable +
   JetBrains Mono Variable), so the site's type matches without importing anything from `apps/web`. The
   one remaining external font request is `--font-display` (Cabinet Grotesk, via Fontshare): it has no
