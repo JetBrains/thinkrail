@@ -513,8 +513,8 @@ export default function ChatView({
 		return () => clearTimeout(timer);
 	}, [flashRowId]);
 
-	// A turn-divider's "files changed" chip → deep-link the right panel to the changed file (flip to Changes
-	// + highlight its row; the diff opens only on an explicit click). The divider hands over exactly one path
+	// A turn-divider's "files changed" chip → deep-link the changed file (flip to Changes, highlight its
+	// row, and open its diff tab — handled and consumed by ChangesPanel). The divider hands over exactly one path
 	// — the round's only artifact, or the row the user picked from the expanded list — so nothing here has to
 	// guess which of several the user meant. These are the chat's touches of the store outside the renderers,
 	// kept here in the integration layer.

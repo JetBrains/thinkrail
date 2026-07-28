@@ -348,17 +348,20 @@ a project picker, the prompt hero, and the reused
   action) — so the flip is one concept rather than something re-derived per request type, and a divider chip
   that only reveals a view (expanding its artifact list, no path picked) needs no path to do it.
   `ChangesPanel` watches
-  `changesRequest` (set by a chat turn-divider's "files changed" chip) and **highlights** the requested
-  file's row (resolved with `matchesWorktreePath` against `git.status`) — deliberately without opening its
-  diff tab; the diff opens only on the user's explicit click, so a chat chip never steals the center area.
+  `changesRequest` (set by a chat turn-divider's "files changed" chip), **highlights** the requested
+  file's row (resolved with `matchesWorktreePath` against `git.status`) **and opens its diff tab** in the
+  center — the chip/list-row click *is* the user's explicit ask to see that change, so stopping at a
+  highlight read as broken. A path no longer in the current diff (a round from days ago) degrades to
+  highlight-only: there is no diff to show. The intent is **consumed** (`clearChangesRequest`) once
+  handled — it opens a center tab, so a git-status re-read replaying it would yank the user's tab back.
   `SpecsPanel` watches **`specRequest`** (the "N specs" chip) and **opens the rendered spec**
   (`openFileInTab`, which canonicalizes the reported path — pi may report it absolute or `./`-prefixed — to
   the worktree-relative **tab identity**, so a deep link can never open a second tab for a file already open
   under its relative path; that lives in the choke point, not in each caller, and it means a spec created
   seconds ago and not yet in the graph opens just the same) — a spec has nothing to preview short of its
   content, and the tree row lights up on its own since rows key off the active tab id. That intent is
-  **consumed** (`clearSpecRequest`) once handled: unlike the highlight-only Changes link, it opens a center
-  tab, so replaying it on a remount or a graph refetch would yank the user's tab back mid-edit. Two intents, two
+  **consumed** (`clearSpecRequest`) once handled: like the Changes link, it opens a center tab, so
+  replaying it on a remount or a graph refetch would yank the user's tab back mid-edit. Two intents, two
   effects: a spec chip must never land in the git-derived Changes view, which structurally cannot show a
   gitignored `.thinkrail/context/` scratch spec — the empty-Changes bug that motivated the split.
   Both intents carry **exactly one path**: a round that wrote several artifacts resolves the ambiguity in the

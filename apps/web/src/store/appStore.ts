@@ -461,9 +461,10 @@ interface AppState {
 	rightTabRequest: { workspaceId: string; tab: RightPanelTab } | null;
 	/**
 	 * A request to surface a file in the right-panel Changes view (e.g. a chat turn-divider's "files
-	 * changed" chip). The panels watch it and **highlight** the file's row — the diff opens only on an
-	 * explicit click. Travels with a `rightTabRequest` for the flip. A fresh object each call so identical
-	 * re-requests still fire.
+	 * changed" chip). `ChangesPanel` highlights the file's row AND opens its diff tab (a path no longer in
+	 * the diff degrades to highlight-only), then **consumes** the request (`clearChangesRequest`) — it
+	 * opens a center tab, so a replay on a git-status re-read would steal the user's tab. Travels with a
+	 * `rightTabRequest` for the flip. A fresh object each call so identical re-requests still fire.
 	 */
 	changesRequest: { workspaceId: string; path: string } | null;
 	/**
@@ -670,6 +671,8 @@ interface AppState {
 	requestRightTab: (workspaceId: string, tab: RightPanelTab) => void;
 	/** Ask the right panel to surface `path` in its Changes view (deep-link from chat); flips to it too. */
 	requestChangesView: (workspaceId: string, path: string) => void;
+	/** Drop the Changes deep-link once handled (it opens a diff tab — it must fire exactly once). */
+	clearChangesRequest: () => void;
 	/**
 	 * Open a history-search hit: sets `chatLocationRequest` AND switches `activeWorkspaceId` (the hit's
 	 * chat can live in a different workspace than the one the search ran from).
@@ -1371,6 +1374,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			changesRequest: { workspaceId, path },
 			rightTabRequest: { workspaceId, tab: "changes" },
 		}),
+	clearChangesRequest: () => set({ changesRequest: null }),
 	// Activate project + workspace together (the same atomicity `activateWorkspace` upholds) so a jump into
 	// another project can never leave `selectedProjectId` on the source while `activeWorkspaceId` points
 	// elsewhere. The caller (`useHistorySearch.openMessage`) ensures the target project's workspaces are

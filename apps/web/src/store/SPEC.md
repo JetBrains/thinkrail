@@ -133,16 +133,17 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   re-activation of the workspace, moving the tab the user has since chosen; which is what lets a divider chip reveal a view while merely expanding its own artifact
   list — no path picked yet. The transient **`changesRequest`** +
   **`requestChangesView(workspaceId, path)`** are a UI deep-link intent (a chat turn-divider asking the
-  right panel to surface a file in its Changes view — **highlight the row**, without
-  opening the diff; that waits for an explicit click); the panels watch it, scoped by workspace. Its Specs
+  right panel to surface a file in its Changes view — highlight the row **and open its diff tab** when
+  the file is in the current diff; a path no longer in the diff degrades to highlight-only); the panels
+  watch it, scoped by workspace. Its Specs
   twin **`specRequest`** + **`requestSpecView(workspaceId, path)`** **opens the
   rendered spec** — the stronger treatment, because a spec doc has nothing to preview short of its content.
   Both path intents set `rightTabRequest` **in the same action**: the panel is never asked to surface a path
   in a view it was not also told to show.
   Two separate fields, never one: the panel that can show a *gitignored* spec is not the git-derived one, and
-  that confusion is exactly the bug the split fixes. The spec intent is additionally **consumed**
-  (**`clearSpecRequest`**) by whoever handles it — it opens a center tab, so a replay would steal the user's
-  tab; the Changes intent only highlights, so it stays fire-and-forget. **`specsByWorkspace`** +
+  that confusion is exactly the bug the split fixes. Both path intents are **consumed** by whoever handles
+  them (**`clearSpecRequest`** / **`clearChangesRequest`**) — each opens a center tab, so a replay (a
+  remount, a git-status re-read) would steal the user's tab. **`specsByWorkspace`** +
   **`setWorkspaceSpecs`** hold each workspace's `spec.graph` snapshot (fetched by `panels`'
   `useWorkspaceSpecs`, kept fresh on the workspace fs tick) so
   the chat's turn divider can classify a written path as a spec off the very snapshot the Specs panel

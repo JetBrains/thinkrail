@@ -348,8 +348,8 @@ function ArtifactList({
  * A subtle round-end divider (rendered right when the turn finishes, below its "✓ Done" marker): tool-call
  * count, then the round's written artifacts as **two chips split the way the right panel is** — "N specs"
  * (deep-links the Specs panel, opening the rendered spec — via `onOpenSpec`) and "N files changed"
- * (deep-links the Changes panel to the file: flips to the tab and highlights its row, leaving the diff to an
- * explicit click — via `onOpenChange`) — and elapsed wall-clock. A single artifact deep-links outright;
+ * (deep-links the Changes panel to the file: flips to the tab, highlights its row, and opens its diff tab
+ * in the center — via `onOpenChange`) — and elapsed wall-clock. A single artifact deep-links outright;
  * several make the chip a **single-choice** disclosure (see `ArtifactChip`) whose list replaces the other
  * side's rather than joining it, keyed off `id` (the divider row's id). Presentational — the store touches
  * live in `ChatView`, which supplies the open + reveal handlers. The data comes from the pure `turnDivider`

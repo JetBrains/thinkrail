@@ -792,10 +792,24 @@ test("clearSpecRequest consumes the spec intent once — it opens a tab, so it m
 	// Idempotent: a second consume (a remount racing the first) is a no-op, not a resurrect.
 	useAppStore.getState().clearSpecRequest();
 	expect(useAppStore.getState().specRequest).toBeNull();
-	// It clears only its own intent — the Changes deep link is a separate, non-consuming field.
+	// It clears only its own intent — the Changes deep link is a separate field with its own consume.
 	useAppStore.getState().requestChangesView("w1", "src/a.ts");
 	useAppStore.getState().clearSpecRequest();
 	expect(useAppStore.getState().changesRequest).toEqual({ workspaceId: "w1", path: "src/a.ts" });
+});
+
+test("clearChangesRequest consumes the Changes intent once — it opens a diff tab, so it must not replay", () => {
+	useAppStore.setState({ specRequest: null, changesRequest: null });
+	useAppStore.getState().requestChangesView("w1", "src/a.ts");
+
+	useAppStore.getState().clearChangesRequest();
+
+	expect(useAppStore.getState().changesRequest).toBeNull();
+	// Idempotent, and it clears only its own intent — the Specs deep link stays.
+	useAppStore.getState().requestSpecView("w1", "docs/SPEC.md");
+	useAppStore.getState().clearChangesRequest();
+	expect(useAppStore.getState().changesRequest).toBeNull();
+	expect(useAppStore.getState().specRequest).toEqual({ workspaceId: "w1", path: "docs/SPEC.md" });
 });
 
 const specNode = (over: Partial<SpecGraphNode> = {}): SpecGraphNode => ({
