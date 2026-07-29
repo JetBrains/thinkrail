@@ -30,7 +30,7 @@ Fixed-px tokens in `styles/tokens.css` `:root` (shared by every theme):
 | `--font-md` | 14px | reading text AND the heading size (two utility names, below) |
 | `--font-mono-size` | 11px | the dense technical (mono) size |
 | `--font-lg` | 18px | large display (wordmark) |
-| `--line-height` | 1.6 | global |
+| `--line-height` | 1.6 | global — and the line-height of **every** size tier (see below) |
 
 (`--font-lg2`/`--font-xl`/`--font-xxl`, `--compact-font-base`, `--uppercase-*` exist but are unused —
 kept untouched deliberately.)
@@ -44,6 +44,15 @@ Tailwind mapping (`src/index.css` `@theme inline`):
   page-level supporting copy. **Never UI controls.**
 - `text-md` → `var(--font-md)` — 14px. The heading size (dialog/panel titles). Same value as
   `text-base`, different semantic role — both names stay.
+
+Each tier declares **both halves** of its style: `--text-<tier>` *and* `--text-<tier>--line-height`
+(pinned to `var(--line-height)`). Tailwind pairs every size with a default line-height (xs 1.333,
+sm 1.4286, base 1.5, lg 1.5556); mapping only the size would leave those defaults owning a typography
+property this design system owns — so the pairs are declared explicitly and the documented 1.6 is what
+actually renders at every tier. A per-usage `leading-*` utility sets `--tw-leading` and still wins.
+This "every property of a tier declared in one place" shape is deliberate: it is what a token source
+(the planned typography JSON — family, size, weight, line-height, tracking, transform per role) can
+generate without the implementation smuggling in framework defaults.
 
 ## Utilities (`@utility` in `index.css`)
 
@@ -79,9 +88,13 @@ Disabled = `opacity-50`, no token.
 
 ## Line-height / tracking
 
-Global 1.6; `leading-none` on dialog/card titles; `leading-tight` on the hero, the header scope
-block, and rail rows; `leading-snug` on card subtitles; `tracking-wider` on uppercase eyebrows; 0.5px
-tracking lives inside `text-brand` only.
+1.6 everywhere by default — both as the `global.css` body value and as each size tier's declared
+line-height (see Tailwind mapping above), so a tier's line-height never comes from the framework.
+Per-usage overrides: `leading-none` on dialog/card titles; `leading-tight` on the hero, the header
+scope block, and rail rows; `leading-snug` on card subtitles; `leading-relaxed` on tool output;
+`leading-[1.65]` on the markdown-preview prose root (the one untokenised value — see
+`TYPOGRAPHY-AUDIT.md` §3.4). `tracking-wider` on uppercase eyebrows; 0.5px tracking lives inside
+`text-brand` only.
 
 ## Rendering
 

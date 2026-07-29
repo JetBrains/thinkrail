@@ -30,13 +30,28 @@
 
 	--font-sans: var(--font);
 
+	/*
+	 * Each tier declares BOTH halves of its type style: the size AND its line-height. Tailwind pairs
+	 * every `--text-*` with a default `--text-*--line-height` (xs 1.333, sm 1.4286, base 1.5, lg 1.5556);
+	 * overriding only the size would leave those defaults governing line-height, i.e. Tailwind
+	 * would own a typography property our design system is supposed to own. Pinning each pair to
+	 * `--line-height` makes the documented global (tokens.css, 1.6) the real value at every tier, and
+	 * keeps every property of a type style declared in one place — the shape a token source (the planned
+	 * typography JSON) can generate. Per-usage exceptions stay where they belong: a `leading-*` utility
+	 * sets `--tw-leading`, which still wins over the pair.
+	 */
 	--text-xs: var(--font-xs);
+	--text-xs--line-height: var(--line-height);
 	--text-sm: var(--font-sm);
+	--text-sm--line-height: var(--line-height);
 	/* Reading tier: chat messages, markdown, page-level supporting copy — never UI controls. Same value
 	   as `text-md` (the heading size) on purpose; the two names carry different semantic roles. */
 	--text-base: var(--font-md);
+	--text-base--line-height: var(--line-height);
 	--text-md: var(--font-md);
+	--text-md--line-height: var(--line-height);
 	--text-lg: var(--font-lg);
+	--text-lg--line-height: var(--line-height);
 
 	--spacing-xs: var(--space-xs);
 	--spacing-sm: var(--space-sm);
