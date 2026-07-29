@@ -11,6 +11,8 @@
 		"preview": "vite preview"
 	},
 	"devDependencies": {
+		"@fontsource-variable/geist": "catalog:",
+		"@fontsource-variable/jetbrains-mono": "catalog:",
 		"typescript": "catalog:",
 		"vite": "8.0.16"
 	}

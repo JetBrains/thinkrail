@@ -107,7 +107,8 @@ that cannot currently be scaled.
 | `--font-mono` | `"JetBrains Mono", "Fira Code", "SF Mono", "Cascadia Code", monospace` | technical text |
 | `--font-accent` | `"Cabinet Grotesk", sans-serif` | brand display only |
 
-See §4 — one of these three is never loaded.
+*(As found. Current values — self-hosted `Geist Variable` / `JetBrains Mono Variable`, and
+`--font-accent: var(--font)` after Cabinet Grotesk was retired — are in §4.0.)*
 
 ### 1.3 The utility layer (`index.css`)
 
@@ -269,6 +270,10 @@ size; mermaid takes family only, so diagram label size is outside the system ent
 
 ### 2.10 Mono outside the mono utilities — **6 different mono sizes**
 
+> Read with §4.0.3: the `font-[var(--font-mono)]` form these 13 sites used was **inert** — it emitted a
+> `font-weight`, not a family, so none of them actually rendered monospace. The sizes below are real;
+> the *families* were not. §11.2 resolved the set.
+
 `font-[var(--font-mono)]` appears 13 times, bypassing `text-mono`/`text-base-mono`:
 
 | Site | Effective size | Sanctioned by `TYPOGRAPHY.md`? |
@@ -376,7 +381,38 @@ a fixed-px token scale cannot express. This is legitimate — but it is **entire
 
 ## 4. Font-family audit
 
-### 4.1 What is actually loaded
+> **Status: every finding in this section is now FIXED on `design/typography`** (PR #137, commit
+> `b1f6fe0` — "self-host the fonts, retire Cabinet Grotesk, and repair the dead font-family form").
+> §4.0 states the current reality; §§4.1–4.2 are kept as the as-found record, because the *reason* the
+> gap existed is the durable part.
+
+### 4.0 Current state (post-fix)
+
+| Family | Declared in | Loaded how | Renders as |
+|---|---|---|---|
+| **Geist Variable** | `--font` | **self-hosted** — `@fontsource-variable/geist` (+ italic) via `styles/fonts.css` | Geist, variable `wght` 100–900, real italics |
+| **JetBrains Mono Variable** | `--font-mono` | **self-hosted** — `@fontsource-variable/jetbrains-mono` (+ italic) | JetBrains Mono, variable weights |
+| ~~Cabinet Grotesk~~ | `--font-accent` → `var(--font)` | **retired** | `text-brand` is now Geist at a *real* 800 |
+
+Three consequences worth carrying forward:
+
+1. **No CDN, no FOUT, no third-party request** — the woff2 files are fingerprinted into `dist/assets`
+   and embedded in the binary, so an offline/air-gapped host renders the real type system. All unicode
+   subsets stay declared with `unicode-range`, so a document downloads only what it renders.
+2. **Weights are real, not synthesised** — variable faces cover 800 (`text-brand`, `font-extrabold`)
+   and true italics for markdown `<em>`.
+3. **The dead-class discovery.** `font-[var(--font-mono)]` — the ad-hoc form this audit counted 13
+   times in §2.10 and called "ad-hoc mono" — **never applied a family at all**: Tailwind reads `font-*`
+   with an ambiguous arbitrary value as a *weight*, emitting `font-weight: var(--font-mono)`, which the
+   browser drops. So those surfaces were rendering in the inherited **proportional** face while their
+   class list claimed mono, across 28 call sites (tool cards, keycaps, the header branch line, the
+   brand wordmark). The working forms are `font-(family-name:--font-mono)` or the
+   `text-mono`/`text-base-mono`/`text-brand` utilities; `styles/fontClasses.test.ts` now fails on the
+   bare form. **This retro-justifies §11.2**: making those identity surfaces proportional preserved
+   what users actually saw — repairing the class instead would have turned them monospace for the first
+   time.
+
+### 4.1 What was loaded (as found)
 
 `apps/web/index.html` loads exactly one stylesheet:
 
@@ -393,7 +429,7 @@ There is **no `@font-face` rule and no self-hosted font file anywhere in the rep
 | **JetBrains Mono** | `--font-mono` | ✅ Google Fonts, 400/500/600/700 | JetBrains Mono 400 (the app never sets a mono weight) |
 | **Cabinet Grotesk** | `--font-accent` | ❌ **never loaded** (it is a Fontshare font, absent from the Google Fonts request and from every `@font-face`) | falls through to the stack's next entry: **generic `sans-serif`** |
 
-### 4.2 Findings
+### 4.2 Findings (as found — all since fixed, see §4.0)
 
 1. **The brand face never renders.** `text-brand` (wordmark + hero) resolves to the browser's default
    `sans-serif` — Helvetica/Arial on macOS, Arial on Windows — at a **synthesised** 800 weight, since
@@ -588,15 +624,14 @@ Ordered by ratio of clarity gained to risk taken. Items 1, 2 and 10b are **done*
 11. **Document the markdown em-scale** in `TYPOGRAPHY.md` — it is the app's only relative type scale
     and currently exists only in code.
 
-**Font-layer (highest user-visible impact):**
+**Font-layer (all three landed on the base branch — see §4.0):**
 
-12. **Self-host the three families** (or bundle them) so a local/offline/binary launch renders the real
-    type system rather than system fallbacks, and the app stops making a Google Fonts request at boot.
-13. **Decide Cabinet Grotesk's fate:** load it (Fontshare/self-host) or make `--font-accent` fall back
-    to Geist as `apps/website` already does. Today the brand renders as generic `sans-serif` in the app
-    and as Geist on the site.
-14. **Align the requested weight set with the used one** — drop the unused 700, add 800 if any accent
-    fallback should legitimately be extra-bold instead of synthesised.
+12. ✅ **Done on `design/typography`** (`b1f6fe0`) — the two families are self-hosted variable faces, so
+    an offline/binary launch renders the real type system and nothing is fetched at boot (§4.0).
+13. ✅ **Done** — Cabinet Grotesk is retired; `--font-accent` is `var(--font)`, so `text-brand` is Geist
+    at a real 800 in both the app and the site.
+14. ✅ **Done** — variable faces cover the whole `wght` range, so no weight is synthesised and no
+    unused static weight is downloaded.
 
 **Spec hygiene:**
 
@@ -706,10 +741,18 @@ Adopted in: `RightPanel`, `ProjectTree`, `TerminalsPanel`, `SpecsPanel`, `Provid
 to shrink the style count is not. That is the one style the consolidation leaves on the table (33, not
 32), by decision.
 
-### 11.2 Mono is code-only again — identity text is proportional
+### 11.2 Mono is code-only — identity text is proportional
 
 The rule applied: mono = terminal, editor, code blocks, tool output, diff code + the diff header path,
 inline code, shell commands, slash syntax, keycaps. Everything else proportional.
+
+**This is also the appearance-preserving choice**, which only became clear once the base branch found
+the dead font-family form (§4.0.3): the ad-hoc `font-[var(--font-mono)]` on these surfaces never
+applied a family, so they were *already* proportional on screen. PR #137 repairs that form; had the
+repair reached these sites they would have become monospace for the first time. Dropping the class
+instead keeps what ships and settles the branch question the repair surfaced — **all three branch
+surfaces (header line, rail sub-line, empty-workspace screen) are proportional**, consistent with "a
+branch is metadata".
 
 | Site | Was | Now |
 |---|---|---|

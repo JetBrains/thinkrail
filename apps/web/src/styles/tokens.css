@@ -42,10 +42,17 @@
 	--space-lg: calc(var(--font-base) * 1.23);
 	--space-xl: calc(var(--font-base) * 1.85);
 
-	/* Fonts */
-	--font: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-	--font-mono: "JetBrains Mono", "Fira Code", "SF Mono", "Cascadia Code", monospace;
-	--font-accent: "Cabinet Grotesk", sans-serif;
+	/* Fonts — self-hosted variable faces (see styles/fonts.css); the `… Variable` names are the
+	   fontsource family names. The static names stay next in each stack so a host that already has
+	   Geist / JetBrains Mono installed still matches before the generic fallbacks. */
+	--font: "Geist Variable", "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	--font-mono:
+		"JetBrains Mono Variable", "JetBrains Mono", "Fira Code", "SF Mono", "Cascadia Code", monospace;
+	/* The brand display face (`text-brand`). Deliberately the same stack as `--font`: it stays a named
+	   role so a licensed display face can be dropped in here alone. It previously named "Cabinet
+	   Grotesk", which was never loaded — once the accent class actually applied, the wordmark and hero
+	   rendered in generic sans-serif. */
+	--font-accent: var(--font);
 }
 
 /*

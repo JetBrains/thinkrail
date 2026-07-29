@@ -129,7 +129,7 @@ export function LoginDialog({
 										<ExternalLink className="size-3 shrink-0" />
 									</a>
 								</span>
-								<code className="select-all text-center font-[var(--font-mono)] text-lg text-text tracking-widest">
+								<code className="select-all text-center font-(family-name:--font-mono) text-lg text-text tracking-widest">
 									{state.deviceCode.userCode}
 								</code>
 							</div>
