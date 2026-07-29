@@ -85,7 +85,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `Model` onto the wire's **allowlist** (see `WireModel`) — so `baseUrl` (the
     jbcentral proxy secret when JetBrains AI is wired), `headers`, and any other field are excluded by
     default — and the inbound side (`createSession`/`setModel`) **re-resolves** the ref by `{provider,id}`
-    via `resolveWireModel` against `getAvailable()` — pi uses `Model.baseUrl` verbatim, so a client's baseUrl
+    via `resolveWireModel` against **`settledAvailableModels`** (the one settled read above — the picker's
+    exact universe, so a ref the picker offered always resolves) — pi uses `Model.baseUrl` verbatim, so a client's baseUrl
     is never trusted (blocks disclosure *and* arbitrary-URL injection). The **hydration read side** —
     `listSessions(workspaceId, cwd)` (live sessions
     **unioned with on-disk** ones pi persisted under `cwd`, live winning on id → `SessionSummary[]` tagged
