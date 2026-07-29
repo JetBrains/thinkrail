@@ -55,7 +55,7 @@ type WorkspaceTarget = "worktree" | "default";
 
 /** A shared pill-trigger look for the project + branch pickers (mockup `.pill`). */
 const PILL =
-	"flex h-8 min-w-0 items-center gap-sm rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-sm text-sm text-text outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-[var(--primary-60)] data-[open=true]:bg-hover";
+	"flex h-8 min-w-0 items-center gap-sm rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-sm tr-text-ui text-text outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-[var(--primary-60)] data-[open=true]:bg-hover";
 
 /**
  * The start-working surface: a **target control** chooses where the work runs — an isolated worktree
@@ -475,7 +475,7 @@ export function NewWorkspaceDialog({
 						className="flex w-full items-center gap-sm rounded-[var(--radius-md)] border border-border2 border-l-[3px] border-l-[var(--gold)] bg-[var(--gold-tint)] px-md py-sm text-left"
 					>
 						<TriangleAlert className="size-4 shrink-0 text-gold" />
-						<span className="min-w-0 flex-1 text-sm text-text">
+						<span className="min-w-0 flex-1 tr-text-ui text-text">
 							This project ships {aliasSkills.length} skill{aliasSkills.length === 1 ? "" : "s"} —
 							off until you trust it. Your personal and ThinkRail's built-in skills are unaffected.
 						</span>
@@ -496,7 +496,7 @@ export function NewWorkspaceDialog({
 					{promptNote ? (
 						<p
 							data-testid="ws-prompt-note"
-							className="mb-xs flex items-start gap-sm rounded-[var(--radius-md)] border border-[var(--primary-40)] bg-[var(--primary-10)] px-md py-sm text-left text-muted text-xs leading-snug"
+							className="mb-xs flex items-start gap-sm rounded-[var(--radius-md)] border border-[var(--primary-40)] bg-[var(--primary-10)] px-md py-sm text-left text-muted tr-text-metadata leading-snug"
 						>
 							<Sparkles className="mt-0.5 size-3.5 shrink-0 text-primary" />
 							<span>{promptNote}</span>
@@ -528,12 +528,12 @@ export function NewWorkspaceDialog({
 							className="absolute top-full left-sm z-50 mt-xs"
 						/>
 					) : prompt.trim() && isolated ? (
-						<p data-testid="workspace-naming-hint" className="px-xs text-hint text-xs">
+						<p data-testid="workspace-naming-hint" className="px-xs text-hint tr-text-metadata">
 							ThinkRail will name the workspace and branch from your request.
 						</p>
 					) : (
-						<p className="mt-xs text-hint text-xs">
-							Type <span className="text-mono">/</span> for a project skill — previewed from the
+						<p className="mt-xs text-hint tr-text-metadata">
+							Type <span className="tr-code-text">/</span> for a project skill — previewed from the
 							current checkout; the created workspace's session is authoritative.
 						</p>
 					)}
@@ -563,10 +563,10 @@ export function NewWorkspaceDialog({
 						data-testid="create-workspace"
 						disabled={creating}
 						onClick={() => void create()}
-						className="flex h-8 shrink-0 items-center gap-sm rounded-[var(--radius-md)] bg-primary px-md font-medium text-on-accent text-sm outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
+						className="flex h-8 shrink-0 items-center gap-sm rounded-[var(--radius-md)] bg-primary px-md tr-text-action text-on-accent outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
 					>
 						{isolated ? "Create" : "Start"}
-						<span className="inline-flex h-4 min-w-4 items-center justify-center rounded-[3px] bg-[var(--on-accent-16)] px-1 text-mono">
+						<span className="inline-flex h-4 min-w-4 items-center justify-center rounded-[3px] bg-[var(--on-accent-16)] px-1 tr-code-text">
 							↵
 						</span>
 					</button>
@@ -608,7 +608,7 @@ function TargetOption({
 			data-testid={testid}
 			data-active={active}
 			className={cn(
-				"flex h-7 cursor-pointer items-center gap-sm rounded-[7px] px-md text-sm transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary",
+				"flex h-7 cursor-pointer items-center gap-sm rounded-[7px] px-md tr-text-ui transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary",
 				active ? "bg-[var(--primary-10)] text-primary" : "text-muted hover:text-text",
 			)}
 		>
@@ -709,9 +709,9 @@ function BranchPicker({
 				{ref === baseRef ? <Check className="size-3.5 text-primary" /> : null}
 			</span>
 			<GitBranch className="size-3.5 shrink-0 text-hint" />
-			<span className="truncate text-xs">{ref}</span>
+			<span className="truncate tr-text-metadata">{ref}</span>
 			{ref === defaultBranch ? (
-				<span className="ml-auto shrink-0 text-hint text-xs">default</span>
+				<span className="ml-auto shrink-0 text-hint tr-text-metadata">default</span>
 			) : null}
 		</CommandItem>
 	);
@@ -724,8 +724,8 @@ function BranchPicker({
 				className={`${PILL} max-w-[220px]`}
 			>
 				<GitBranch className="size-3.5 shrink-0 text-muted" />
-				<span className="shrink-0 text-hint text-xs">From</span>
-				<span className="truncate text-muted text-xs">{baseRef || "branch"}</span>
+				<span className="shrink-0 text-hint tr-text-metadata">From</span>
+				<span className="truncate text-muted tr-text-metadata">{baseRef || "branch"}</span>
 				<ChevronDown className="size-3 shrink-0 text-hint" />
 			</PopoverTrigger>
 			<PopoverContent align="start" container={container} className="w-[320px] p-0">

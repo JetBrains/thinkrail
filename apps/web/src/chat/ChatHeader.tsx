@@ -25,7 +25,7 @@ export function ChatHeader({
 			<div className="flex min-w-0 flex-1 items-center">{left}</div>
 			<div className="flex shrink-0 flex-wrap items-center justify-end gap-md">
 				{statusEntries.map(([key, text]) => (
-					<span key={key} className="text-muted text-xs">
+					<span key={key} className="text-muted tr-text-metadata">
 						{text}
 					</span>
 				))}

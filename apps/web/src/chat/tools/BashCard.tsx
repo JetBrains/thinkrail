@@ -10,7 +10,7 @@ export function BashCard({ args, result, status }: ToolRenderProps) {
 	return (
 		<div
 			data-testid="tool-bash"
-			className="overflow-hidden rounded-[var(--radius-sm)] border border-border2 bg-bg-dark text-mono"
+			className="overflow-hidden rounded-[var(--radius-sm)] border border-border2 bg-bg-dark tr-code-text"
 		>
 			<div className="border-border2 border-b px-sm py-xs">
 				<span className="text-green">$</span>

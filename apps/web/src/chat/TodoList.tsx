@@ -86,7 +86,7 @@ export function TodoAddRow({
 					if (e.key === "Enter") void submit();
 				}}
 				placeholder="Add a TODO for the agent…"
-				className="min-w-0 flex-1 bg-transparent text-sm text-text outline-none placeholder:text-hint"
+				className="min-w-0 flex-1 bg-transparent tr-text-ui text-text outline-none placeholder:text-hint"
 			/>
 			{onOpenMarkdown ? (
 				<button
@@ -128,7 +128,7 @@ export function TodoRows({ plan, onRemove }: { plan: TodoPlan; onRemove: (id: st
 				const count = items.length + groups.reduce((n, g) => n + g.todos.length, 0);
 				return (
 					<div key={status} className="mb-sm">
-						<div className="px-xs py-xs text-eyebrow text-hint">
+						<div className="px-xs py-xs tr-text-eyebrow text-hint">
 							{label} · {count}
 						</div>
 						{items.length > 0 ? (
@@ -166,10 +166,10 @@ function DoneGroup({ group, onRemove }: { group: TodoGroupItem; onRemove: (id: s
 			>
 				<Chevron className="size-3.5 shrink-0 text-hint" />
 				<Check className="size-4 shrink-0 text-primary" />
-				<span className="min-w-0 flex-1 truncate font-medium text-hint text-sm line-through">
+				<span className="min-w-0 flex-1 truncate tr-text-ui text-hint line-through">
 					{group.title}
 				</span>
-				<span className="shrink-0 text-eyebrow text-hint">{group.todos.length} done</span>
+				<span className="shrink-0 tr-text-eyebrow text-hint">{group.todos.length} done</span>
 			</button>
 			{expanded ? (
 				<ul className="ml-md flex flex-col border-border2 border-l pl-sm">
@@ -195,13 +195,13 @@ function TodoRow({ todo, onRemove }: { todo: TodoItem; onRemove: () => void }) {
 			<div className="min-w-0 flex-1">
 				<div
 					className={cn(
-						"truncate text-sm",
+						"truncate tr-text-ui",
 						todo.status === "done" ? "text-hint line-through" : "text-text",
 					)}
 				>
 					{todo.title}
 				</div>
-				{todo.note ? <div className="truncate text-hint text-xs">{todo.note}</div> : null}
+				{todo.note ? <div className="truncate text-hint tr-text-metadata">{todo.note}</div> : null}
 			</div>
 			{todo.origin === "user" ? (
 				<span

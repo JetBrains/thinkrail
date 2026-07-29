@@ -18,7 +18,7 @@ export function ChatPlanStripContent({ plan, open }: { plan: ChatTodos; open: bo
 	return (
 		<>
 			<Chevron className="size-3.5 shrink-0" />
-			<span className="shrink-0 font-medium">TODO list</span>
+			<span className="tr-text-emphasis shrink-0">TODO list</span>
 			<span className="shrink-0">
 				{done}/{total}
 			</span>
@@ -54,7 +54,7 @@ export function ChatPlanContent({ plan }: { plan: ChatTodos }) {
 			</div>
 			<div className="min-h-0 flex-1 overflow-auto p-xs">
 				{empty ? (
-					<p className="px-xs py-xs text-hint text-xs">
+					<p className="px-xs py-xs text-hint tr-text-metadata">
 						No TODOs yet — the agent adds its plan here, or add one above.
 					</p>
 				) : (

@@ -51,14 +51,14 @@ export function Shell() {
 		<div data-testid="shell" className="grid h-full grid-rows-[auto_1fr]">
 			<header className="flex items-center justify-between border-b border-border2 bg-bg-dark px-lg py-sm">
 				<div className="flex min-w-0 items-center gap-md">
-					<span className="shrink-0 text-brand text-lg text-primary">{PRODUCT_NAME}</span>
+					<span className="tr-brand-wordmark shrink-0 text-primary">{PRODUCT_NAME}</span>
 					{contextProject ? (
 						<div
 							data-testid="scope-context"
 							data-context={activeWorkspace ? "workspace" : "project-home"}
 							className="min-w-0 border-border2 border-l pl-md leading-tight"
 						>
-							<div className="flex min-w-0 items-center gap-xs text-sm">
+							<div className="flex min-w-0 items-center gap-xs tr-text-ui">
 								<span className="hidden min-w-0 items-center gap-xs sm:flex">
 									<span data-testid="scope-project" className="max-w-[160px] truncate text-muted">
 										{contextProject.name}
@@ -70,7 +70,7 @@ export function Shell() {
 								</span>
 							</div>
 							{activeWorkspace ? (
-								<div className="mt-0.5 flex min-w-0 items-center gap-xs text-hint text-xs">
+								<div className="mt-0.5 flex min-w-0 items-center gap-xs text-hint tr-text-metadata">
 									<GitBranch className="size-3 shrink-0" />
 									<span data-testid="scope-branch" className="truncate">
 										{activeWorkspace.branch}
@@ -92,7 +92,7 @@ export function Shell() {
 					<span
 						data-testid="connection-status"
 						data-status={status}
-						className="inline-flex items-center gap-sm text-sm text-muted"
+						className="inline-flex items-center gap-sm tr-text-ui text-muted"
 					>
 						<span className={`size-2 rounded-full ${STATUS_DOT[status]}`} />
 						{STATUS_LABEL[status]}

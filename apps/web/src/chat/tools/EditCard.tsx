@@ -16,7 +16,7 @@ export function EditCard({ args, result, status, workspaceRoot }: ToolRenderProp
 		return (
 			<div data-testid="tool-edit" className="flex flex-col gap-xs">
 				<EditHeader path={path} workspaceRoot={workspaceRoot} />
-				<pre className="overflow-auto px-sm py-xs text-red text-xs">{message}</pre>
+				<pre className="overflow-auto px-sm py-xs text-red tr-text-metadata">{message}</pre>
 			</div>
 		);
 	}
@@ -31,7 +31,7 @@ export function EditCard({ args, result, status, workspaceRoot }: ToolRenderProp
 				lines={oldLines.length + newLines.length}
 				fadeClass="bg-[linear-gradient(to_top,var(--elevated),transparent)]"
 			>
-				<div className="overflow-auto rounded-[var(--radius-sm)] border border-border2 text-mono leading-relaxed">
+				<div className="overflow-auto rounded-[var(--radius-sm)] border border-border2 tr-code-text leading-relaxed">
 					{oldLines.map((line, i) => {
 						// Diff lines are render-order-stable (never reordered), so the index is a correct key.
 						const key = `old-${i}`;
@@ -60,7 +60,7 @@ export function EditCard({ args, result, status, workspaceRoot }: ToolRenderProp
 function EditHeader({ path, workspaceRoot }: { path: string; workspaceRoot?: string | undefined }) {
 	const displayPath = projectRelativePath(path, workspaceRoot);
 	return (
-		<div className="flex items-center gap-xs text-xs">
+		<div className="flex items-center gap-xs tr-text-metadata">
 			<Pencil className="size-3.5 shrink-0 text-gold" />
 			<span className="truncate text-text" title={path}>
 				{displayPath}

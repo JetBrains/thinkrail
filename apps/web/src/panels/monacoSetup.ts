@@ -68,7 +68,7 @@ function cssVar(name: string): string | undefined {
 /**
  * The text/style options shared by the file viewer (`MonacoEditor`) and the diff tab (`MonacoDiff`), so
  * plain code and a diff of that code render identically. Font size/family/line-height track the app tokens
- * (`--font-mono-size`, `--font-mono`, `--line-height`) — parity with the `text-mono` technical tier —
+ * (`--font-mono-size`, `--font-mono`, `--line-height`) — parity with the `tr-code-text` technical tier —
  * instead of Monaco's built-in monospace defaults. Read at render time (like the theme) so DOM tokens are
  * resolved.
  */

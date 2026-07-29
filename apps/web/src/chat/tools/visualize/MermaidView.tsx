@@ -47,13 +47,13 @@ export function MermaidView({ source, title }: { source: string; title?: string 
 	if (error !== null) {
 		return (
 			<div data-testid="mermaid-error" className="flex flex-col gap-xs">
-				<span className="text-red text-xs">Diagram failed to render: {error}</span>
+				<span className="text-red tr-text-metadata">Diagram failed to render: {error}</span>
 				<CodeBlock code={source} lang="" />
 			</div>
 		);
 	}
 	if (svg === null) {
-		return <span className="text-muted text-xs">Rendering diagram…</span>;
+		return <span className="text-muted tr-text-metadata">Rendering diagram…</span>;
 	}
 	return (
 		<div className="relative">

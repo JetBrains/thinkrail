@@ -66,7 +66,7 @@ export function SettingsDialog() {
 									data-active={active}
 									onClick={() => useAppStore.getState().setSettingsSection(id)}
 									className={cn(
-										"flex shrink-0 items-center gap-sm rounded-[var(--radius-md)] px-md py-sm text-left text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
+										"flex shrink-0 items-center gap-sm rounded-[var(--radius-md)] px-md py-sm text-left tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
 										active
 											? "bg-[var(--primary-10)] text-primary"
 											: "text-muted hover:bg-hover hover:text-text",
@@ -80,11 +80,11 @@ export function SettingsDialog() {
 						{SOON.map(({ label, icon: Icon }) => (
 							<span
 								key={label}
-								className="flex shrink-0 cursor-default items-center gap-sm rounded-[var(--radius-md)] px-md py-sm text-hint text-sm opacity-60"
+								className="flex shrink-0 cursor-default items-center gap-sm rounded-[var(--radius-md)] px-md py-sm text-hint tr-text-ui opacity-60"
 							>
 								<Icon className="size-4 shrink-0" />
 								{label}
-								<span className="ml-auto rounded-full border border-border2 px-xs py-0.5 text-hint text-xs uppercase tracking-wider">
+								<span className="ml-auto rounded-full border border-border2 px-xs py-0.5 tr-text-label-pill text-hint">
 									Soon
 								</span>
 							</span>

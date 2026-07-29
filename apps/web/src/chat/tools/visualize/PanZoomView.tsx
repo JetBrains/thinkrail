@@ -79,7 +79,7 @@ export function PanZoomView({ svg }: { svg: string }) {
 				// biome-ignore lint/security/noDangerouslySetInnerHtml: mermaid renders agent-provided source with securityLevel "strict"
 				dangerouslySetInnerHTML={{ __html: svg }}
 			/>
-			<div className="absolute right-sm bottom-sm flex items-center gap-xs rounded-[var(--radius-sm)] border border-border2 bg-elevated p-1 text-xs shadow-[var(--shadow-lg)]">
+			<div className="absolute right-sm bottom-sm flex items-center gap-xs rounded-[var(--radius-sm)] border border-border2 bg-elevated p-1 tr-text-metadata shadow-[var(--shadow-lg)]">
 				<button
 					type="button"
 					aria-label="Zoom out"

@@ -37,7 +37,7 @@ export function ActivityGroup({
 			data-expanded={expanded}
 			data-live={live}
 			data-steps={steps.length}
-			className="text-muted text-xs"
+			className="text-muted tr-text-metadata"
 		>
 			<button
 				type="button"
@@ -136,7 +136,7 @@ function ActivityStepRow({
 				data-testid="activity-step"
 				data-step="thinking"
 				data-expanded={expanded}
-				className="text-muted text-xs"
+				className="text-muted tr-text-metadata"
 			>
 				<StepHeader
 					expanded={expanded}
@@ -168,7 +168,7 @@ function ActivityStepRow({
 			data-tool={step.toolName}
 			data-status={status}
 			data-expanded={expanded}
-			className="text-muted text-xs"
+			className="text-muted tr-text-metadata"
 		>
 			<StepHeader
 				expanded={expanded}

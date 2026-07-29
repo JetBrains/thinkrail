@@ -45,7 +45,7 @@ export function TreeRow({
 			data-status={dataStatus}
 			onClick={onClick}
 			onDoubleClick={onDoubleClick}
-			className={`flex h-6 w-full items-center gap-xs rounded-[var(--radius-sm)] px-xs text-left text-sm text-muted hover:bg-hover ${
+			className={`flex h-6 w-full items-center gap-xs rounded-[var(--radius-sm)] px-xs text-left tr-text-ui text-muted hover:bg-hover ${
 				active ? "bg-hover" : ""
 			}`}
 		>

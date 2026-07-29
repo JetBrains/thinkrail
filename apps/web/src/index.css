@@ -104,29 +104,3 @@
  * `styles/generated/typography.css`. Do not add a typography utility here; add a semantic style to the
  * JSON instead (TYPOGRAPHY.md → "Adding or changing a style").
  */
-
-/*
- * DEPRECATED transitional aliases, deleted in the migration commit that empties their call sites.
- * They exist ONLY so this commit is independently revertible: values come from the generated tokens, so
- * they cannot drift from the JSON while the migration is in flight. Do not add a call site.
- */
-@utility text-mono {
-	font-family: var(--tr-font-family-code);
-	font-size: var(--tr-font-size-s11);
-}
-@utility text-base-mono {
-	font-family: var(--tr-font-family-code);
-	font-size: var(--tr-font-size-s13);
-}
-@utility text-eyebrow {
-	font-size: var(--tr-font-size-s10);
-	line-height: var(--tr-line-height-default);
-	font-weight: var(--tr-font-weight-regular);
-	letter-spacing: var(--tr-letter-spacing-wide);
-	text-transform: uppercase;
-}
-@utility text-brand {
-	font-family: var(--tr-font-family-brand);
-	font-weight: var(--tr-font-weight-brand);
-	letter-spacing: var(--tr-letter-spacing-brand);
-}

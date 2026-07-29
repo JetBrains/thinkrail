@@ -123,8 +123,8 @@ export function JetBrainsAiCard({
 					<Zap className="size-4" />
 				</span>
 				<div className="flex min-w-0 flex-col">
-					<span className="text-sm text-text">JetBrains AI</span>
-					<span className="truncate text-hint text-xs">
+					<span className="tr-text-ui text-text">JetBrains AI</span>
+					<span className="truncate text-hint tr-text-metadata">
 						Route Claude + GPT through your JetBrains subscription.
 					</span>
 				</div>
@@ -156,7 +156,7 @@ export function JetBrainsAiCard({
 
 			{wired ? (
 				<p
-					className="flex items-center gap-xs text-green text-xs"
+					className="flex items-center gap-xs text-green tr-text-metadata"
 					data-testid="jetbrains-connected"
 				>
 					<Check className="size-3.5 shrink-0" />
@@ -166,7 +166,7 @@ export function JetBrainsAiCard({
 
 			{showInstall ? (
 				<div className="flex flex-col gap-xs" data-testid="jetbrains-needs-install">
-					<p className="text-hint text-xs">
+					<p className="text-hint tr-text-metadata">
 						{install?.shell === "powershell"
 							? "Install the JetBrains Central CLI (central) in PowerShell, then Recheck:"
 							: "Install the JetBrains Central CLI (central), then Recheck:"}
@@ -187,7 +187,7 @@ export function JetBrainsAiCard({
 
 			{showLogin ? (
 				<div className="flex flex-col gap-xs" data-testid="jetbrains-needs-login">
-					<p className="text-hint text-xs">
+					<p className="text-hint tr-text-metadata">
 						{loginLaunched
 							? "Complete sign-in in your browser, then Connect. If nothing opened, run this in a terminal:"
 							: "Sign in to JetBrains AI, then Connect. You can also run this in a terminal:"}
@@ -223,7 +223,7 @@ export function JetBrainsAiCard({
 
 			{!wired && result?.kind === "error" ? (
 				<div className="flex flex-col gap-xs" data-testid="jetbrains-error">
-					<p className="break-words text-red text-xs">{errorMsg}</p>
+					<p className="break-words text-red tr-text-metadata">{errorMsg}</p>
 					<Button
 						variant="ghost"
 						size="sm"
@@ -254,7 +254,7 @@ function CopyableCommand({ command }: { command: string }) {
 	};
 	return (
 		<div className="flex items-center gap-sm rounded-[var(--radius-md)] border border-border2 bg-bg px-sm py-xs">
-			<code className="min-w-0 flex-1 select-all break-all text-mono text-text">{command}</code>
+			<code className="min-w-0 flex-1 select-all break-all tr-code-text text-text">{command}</code>
 			<button
 				type="button"
 				data-testid="jetbrains-copy-cmd"
