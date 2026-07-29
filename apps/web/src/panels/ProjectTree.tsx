@@ -95,7 +95,7 @@ export function ProjectTree() {
 	return (
 		<nav className="flex flex-col gap-sm">
 			<header className="flex h-7 items-center justify-between pr-xs pl-sm">
-				<span className="text-xs uppercase tracking-wider text-muted">Projects</span>
+				<span className="text-eyebrow text-muted">Projects</span>
 				<AddProjectMenu
 					projects={projects}
 					onOpen={() => void pickAndOpen()}
@@ -271,7 +271,7 @@ function WorkspaceRow({
 					{workspace.branch !== workspace.name && (
 						<span
 							data-testid="workspace-branch"
-							className="truncate font-[var(--font-mono)] text-hint text-xs leading-tight"
+							className="truncate text-hint text-xs leading-tight"
 						>
 							{workspace.branch}
 						</span>

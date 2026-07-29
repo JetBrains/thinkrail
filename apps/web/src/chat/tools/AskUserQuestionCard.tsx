@@ -727,7 +727,7 @@ function OtherOptionRow({
 }
 
 const RECOMMENDED_PILL =
-	"inline-flex items-center rounded-full bg-primary/15 px-xs py-0 font-medium text-[11px] text-primary";
+	"inline-flex items-center rounded-full bg-primary/15 px-xs py-0 font-medium text-primary text-xs";
 
 /**
  * The "Recommended" pill next to an agent-recommended option — a plain label. Its rationale renders

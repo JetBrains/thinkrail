@@ -533,8 +533,8 @@ export function NewWorkspaceDialog({
 						</p>
 					) : (
 						<p className="mt-xs text-hint text-xs">
-							Type <span className="font-[var(--font-mono)]">/</span> for a project skill —
-							previewed from the current checkout; the created workspace's session is authoritative.
+							Type <span className="text-mono">/</span> for a project skill — previewed from the
+							current checkout; the created workspace's session is authoritative.
 						</p>
 					)}
 				</div>
@@ -709,9 +709,9 @@ function BranchPicker({
 				{ref === baseRef ? <Check className="size-3.5 text-primary" /> : null}
 			</span>
 			<GitBranch className="size-3.5 shrink-0 text-hint" />
-			<span className="truncate font-[var(--font-mono)] text-xs">{ref}</span>
+			<span className="truncate text-xs">{ref}</span>
 			{ref === defaultBranch ? (
-				<span className="ml-auto shrink-0 font-[var(--font-mono)] text-hint text-xs">default</span>
+				<span className="ml-auto shrink-0 text-hint text-xs">default</span>
 			) : null}
 		</CommandItem>
 	);
@@ -725,9 +725,7 @@ function BranchPicker({
 			>
 				<GitBranch className="size-3.5 shrink-0 text-muted" />
 				<span className="shrink-0 text-hint text-xs">From</span>
-				<span className="truncate font-[var(--font-mono)] text-muted text-xs">
-					{baseRef || "branch"}
-				</span>
+				<span className="truncate text-muted text-xs">{baseRef || "branch"}</span>
 				<ChevronDown className="size-3 shrink-0 text-hint" />
 			</PopoverTrigger>
 			<PopoverContent align="start" container={container} className="w-[320px] p-0">

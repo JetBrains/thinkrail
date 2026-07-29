@@ -89,9 +89,7 @@ function TabButton({
 			data-testid={testid}
 			data-active={active}
 			onClick={onClick}
-			className={`text-xs uppercase tracking-wider ${
-				active ? "text-text" : "text-hint hover:text-muted"
-			}`}
+			className={`text-eyebrow ${active ? "text-text" : "text-hint hover:text-muted"}`}
 		>
 			{children}
 		</button>
