@@ -22,6 +22,22 @@ function baseName(path: string): string {
 }
 
 /**
+ * Opens whose read is still in flight, by tab id → the intent the tab should end up with.
+ *
+ * A double click dispatches `click`, `click`, `dblclick`, so a row opens the same not-yet-open file three
+ * times with mixed intents before the first `fs.readFile` returns. Left unguarded, all three read and
+ * whichever lands first decides the placement: a leading `preview` replaces the tab in the slot, while a
+ * `keep` landing first appends and spares it — one gesture, two outcomes, split by round-trip latency
+ * (so the app would behave one way on localhost and another over Tailscale from a phone).
+ *
+ * Collapsing the flight to a single read settles it: the call that STARTED the read owns the placement,
+ * and an intent upgraded to `keep` while it was in flight is applied as a promote afterwards. That is
+ * exactly what the gesture means — a double click is a preview open (which claims the slot, as every
+ * IDE's does) plus a promote — and it holds at any latency.
+ */
+const inFlight = new Map<string, { intent: TabIntent }>();
+
+/**
  * Focus an already-open tab (promoting it when the intent is `keep` — one atomic store write, so the strip
  * never renders an in-between state), else read its content and open a fresh one. A read failure (missing
  * file, not text, no diff) is a no-op: tabs are left as they were and the source row stays for a retry.
@@ -38,14 +54,28 @@ async function openReadTab<T>(
 		store.setActiveTab(id, intent);
 		return;
 	}
+	const pending = inFlight.get(id);
+	if (pending) {
+		// The read is already on its way — upgrade its intent instead of racing a second read against it.
+		// Only ever upward: promotion is one-way, so a trailing browse can't undo a keep.
+		if (intent === "keep") pending.intent = "keep";
+		return;
+	}
+	const flight = { intent };
+	inFlight.set(id, flight);
 	try {
 		const payload = await read();
 		// Stamp the workspace's current fs tick: the content is fresh as of now, so the pane's live re-read
 		// only fires for ticks arriving AFTER this open.
 		const loadedTick = selectWorkspaceTick(useAppStore.getState(), workspaceId);
 		useAppStore.getState().openTab(build(payload, loadedTick), intent);
+		// Upgraded mid-read (the `dblclick` behind this gesture's leading `click`) — apply the promote. Both
+		// writes land in one tick, so the strip never flashes the italic in between.
+		if (flight.intent !== intent) useAppStore.getState().setActiveTab(id, flight.intent);
 	} catch {
 		// a failed read leaves tabs unchanged
+	} finally {
+		inFlight.delete(id);
 	}
 }
 

@@ -429,6 +429,18 @@ a project picker, the prompt hero, and the reused
   | strip tab, **active and in preview** | **keep** | keep |
   | strip tab, active and kept | no-op | no-op |
 
+  **A double click composes: it is a preview open plus a promote**, because the browser dispatches
+  `click`, `click`, `dblclick`. So — exactly as in VS Code — double-clicking a row *claims the slot on the
+  way through*: the tab that was previewing is replaced, and the new one ends up kept in its place. (The
+  `openTab(tab, "keep")` primitive itself never touches the slot; that is what a lone `keep` caller like
+  Settings' *Open as file* gets.) For that to hold at **any latency**, `openTabs.ts` collapses the three
+  opens one gesture fires into a **single `fs.readFile`** (its `inFlight` map): three in-flight reads would
+  otherwise be settled by whichever returned first — a leading `preview` replacing the slot's tab, or a
+  `keep` landing first and sparing it — so the app would behave one way on localhost and another over
+  Tailscale from a phone. The call that *started* the read owns the placement; a `keep` expressed while it
+  was in flight promotes the result afterwards. `e2e/preview-tabs.spec.ts` asserts the single read
+  directly, because the outcome it protects is invisible at localhost latency.
+
   The active-preview-tab click is the **touch** path: `apps/web/index.html` ships a plain
   `width=device-width` viewport, so a double tap is the browser's zoom gesture and `dblclick` is not
   something a phone user can rely on — this is the one promote gesture that works there, and it costs
