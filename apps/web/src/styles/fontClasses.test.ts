@@ -9,8 +9,9 @@ import { join } from "node:path";
  * inherited proportional face while the class list claims otherwise. It sat in 28 call sites
  * undetected (tool cards, keycaps, the header branch line, the brand wordmark).
  *
- * The working forms are `font-(family-name:--font-mono)` or the `text-mono` / `text-base-mono` /
- * `text-brand` utilities (see index.css, and TYPOGRAPHY.md for which to use where).
+ * Components must not name a family at all: they use a generated semantic class (`tr-code-text`,
+ * `tr-code-inline`, …). Where a family string is unavoidable — the mapping layers and the Monaco/xterm/
+ * mermaid integrations — the working form is `font-(family-name:--…)` or the `--tr-font-family-*` token.
  */
 const SRC = new URL("..", import.meta.url).pathname;
 const BARE_FONT_VAR = /font-\[var\(--font-[a-z-]*\)\]/g;

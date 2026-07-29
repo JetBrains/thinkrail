@@ -14,8 +14,8 @@
  * For a FONT FAMILY the bare form is a trap: `font-[var(--font-mono)]` is ambiguous, and Tailwind
  * resolves it as a *weight* (`font-weight: var(--font-mono)`), which is invalid and silently dropped
  * — the element keeps the inherited proportional face. Always name the type:
- * `font-(family-name:--font-mono)`, or one of the `text-mono` / `text-base-mono` / `text-brand`
- * utilities below. Pinned by `styles/fontClasses.test.ts`.
+ * `font-(family-name:--font-mono)`. In components neither form is allowed at all — they use a generated
+ * semantic class (`tr-code-text`, `tr-code-inline`, …). Pinned by `styles/fontClasses.test.ts`.
  */
 @theme inline {
 	--color-bg: var(--bg);
