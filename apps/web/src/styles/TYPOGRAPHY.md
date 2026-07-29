@@ -9,7 +9,9 @@ parent: module-web
 # Typography system
 
 The durable reference for `apps/web`'s typography: the type scale and its semantic tiers, the weight
-policy, and where mono is allowed. Components express all of it through token utilities (see
+policy, and where mono is allowed. (For the *as-implemented* picture — every declared style, the
+hardcoded values that remain and why, duplicates, and where this spec and the code disagree — see the
+companion audit `TYPOGRAPHY-AUDIT.md`. It is descriptive; this file stays normative.) Components express all of it through token utilities (see
 `apps/web/SPEC.md` → Styling & theming); this spec is what keeps those utilities from drifting.
 
 (Two companion efforts are specced/reviewed separately and referenced where they touch type: the
