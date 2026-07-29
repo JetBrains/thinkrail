@@ -9,7 +9,11 @@ parent: module-web
 # Typography system
 
 The durable reference for `apps/web`'s typography: the type scale and its semantic tiers, the weight
-policy, and where mono is allowed. (For the *as-implemented* picture — every declared style, the
+policy, and where mono is allowed. Its machine-readable form is **`styles/typography.json`** — the
+canonical role/token definition (status `draft`, `generatesCss: false`): it *encodes* this spec, it does
+not yet drive anything. No CSS, Tailwind utility or component reads it; `index.css` + `tokens.css`
+remain the runtime source, and migrating them onto the JSON is separate work. This file stays
+normative — if the two disagree, the JSON is wrong. (For the *as-implemented* picture — every declared style, the
 hardcoded values that remain and why, duplicates, and where this spec and the code disagree — see the
 companion audit `TYPOGRAPHY-AUDIT.md`. It is descriptive; this file stays normative.) Components express all of it through token utilities (see
 `apps/web/SPEC.md` → Styling & theming); this spec is what keeps those utilities from drifting.
@@ -52,8 +56,9 @@ sm 1.4286, base 1.5, lg 1.5556); mapping only the size would leave those default
 property this design system owns — so the pairs are declared explicitly and the documented 1.6 is what
 actually renders at every tier. A per-usage `leading-*` utility sets `--tw-leading` and still wins.
 This "every property of a tier declared in one place" shape is deliberate: it is what a token source
-(the planned typography JSON — family, size, weight, line-height, tracking, transform per role) can
-generate without the implementation smuggling in framework defaults.
+can generate without the implementation smuggling in framework defaults — and it is now expressed as
+`styles/typography.json` (family, size, weight, line-height, tracking, transform per role, with the
+relative markdown scale and the sanctioned exceptions modelled explicitly).
 
 ## Utilities (`@utility` in `index.css`)
 
