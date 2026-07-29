@@ -63,9 +63,11 @@ generate without the implementation smuggling in framework defaults.
   long-form content.
 - `text-eyebrow` = `--font-xs` (10px) @ 400, `tracking-wider`, `uppercase`, line-height `--line-height`:
   THE eyebrow / section-label role — panel labels, rail group headings, settings sub-group headings,
-  menu group headings, plan sections, the workspace-ready eyebrow, the Specs role chip, card tags, the
-  "Soon" pill. Carries the whole type style; the call site adds only colour (`text-muted` /
-  `text-hint` / `text-text` / conditional). No other uppercase label style may exist.
+  menu group headings, plan sections, the workspace-ready eyebrow, the Specs role chip. Carries the
+  whole type style; the call site adds only colour (`text-muted` / `text-hint` / `text-text` /
+  conditional). **Reserved for eyebrow/section-label content**: a pill or badge that merely looks
+  similar (the "Soon" pill, the Welcome card tag) spells its own
+  `text-xs uppercase tracking-wider` — same primitives, no borrowed semantic role.
 - `text-brand` = `--font-accent`, weight 800, 0.5px tracking: the canonical ThinkRail brand display
   style. Carries family/weight/tracking ONLY; each usage sets its own size + line-height — the Shell
   header wordmark (`text-brand text-lg text-primary`) and the Welcome hero (`text-brand text-[44px]
@@ -129,7 +131,8 @@ survivors that once did are swept (see the note at the end of this section). San
 Swept (formerly "known survivors", now proportional — do not reintroduce mono): the rail
 workspace-branch sub-line (`ProjectTree`), the branch-picker refs and its trigger (`NewWorkspaceDialog`),
 the workspace-ready branch line (`CenterTabs`), the skill name (`SkillsDialog`), the todo note
-(`TodoList`), the Welcome card tag and the "Soon" pill (both now `text-eyebrow`).
+(`TodoList`), the Welcome card tag and the "Soon" pill (both now proportional
+`text-xs uppercase tracking-wider`).
 
 ## Typographic roles
 
@@ -148,7 +151,8 @@ the workspace-ready branch line (`CenterTabs`), the skill name (`SkillsDialog`),
 | Status label (neutral) | `text-sm text-muted`, sentence case, no tracking | "Workspace ready", connection status |
 | Helper text | `text-xs text-hint` | settings helpers, placeholders (`placeholder:text-hint`) |
 | Empty state | `text-xs text-hint` (panels); rail placeholder deliberately `text-sm text-muted` | trees, changes, specs, terminals |
-| Eyebrow | `text-eyebrow` + a colour | section labels, group headings, plan sections, Specs role chip, card tags, "Soon" |
+| Eyebrow | `text-eyebrow` + a colour | section labels, group headings, plan sections, Specs role chip |
+| Label pill | `text-xs uppercase tracking-wider` + a colour | "Soon", the Welcome card tag |
 | Technical badge | `text-mono` pill | keycap (`↵`) |
 | Inline code | `text-base-mono` (chat/markdown) / `text-mono` (in `text-sm` sentences) — background consolidation proposed in the colour-system PR | shared `Markdown.tsx`, `GithubSettings` |
 | Code block | `text-mono` on `bg-elevated`/`bg-bg-dark` | tool output (markdown fenced blocks: em-based, see Mono policy) |

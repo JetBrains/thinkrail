@@ -243,7 +243,7 @@ const Card = forwardRef<HTMLButtonElement, CardProps>(function Card(
 			)}
 		>
 			{tag ? (
-				<span className="absolute top-md right-md rounded-full border border-[var(--primary-40)] bg-[var(--primary-10)] px-sm py-0.5 text-eyebrow text-primary">
+				<span className="absolute top-md right-md rounded-full border border-[var(--primary-40)] bg-[var(--primary-10)] px-sm py-0.5 text-primary text-xs uppercase tracking-wider">
 					{tag}
 				</span>
 			) : null}

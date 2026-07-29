@@ -55,7 +55,7 @@ Where they disagree, this file names the drift; it does not silently "fix" eithe
   3. Third-party text rendered by Monaco, xterm, mermaid and shiki is configured in JS, not classes;
      it is inventoried separately in §2.9.
 
-**Headline count (after §11):** **32** distinct typographic styles (family × size × weight ×
+**Headline count (after §11):** **33** distinct typographic styles (family × size × weight ×
 line-height × tracking × transform × style, ignoring colour) across 72 of the 159 `.ts(x)` files,
 expressed through 5 size utilities + 4 named role utilities (`text-mono`, `text-base-mono`,
 `text-eyebrow`, `text-brand`) + **14 hardcoded values, all documented exceptions** (hero 44px, OTP
@@ -680,10 +680,10 @@ screenshot/measurement probes above (temporary specs, not committed).
 ## 11. Consolidation pass — the minimal semantic set
 
 Driven by four decisions (recorded in `.thinkrail/context/TASK-typography-consolidation.md`). Net
-effect: **43 → 32** distinct typographic styles, **16 → 14** hardcoded values (all now documented
+effect: **43 → 33** distinct typographic styles, **16 → 14** hardcoded values (all now documented
 exceptions), zero ad-hoc mono outside the exceptions.
 
-### 11.1 One named eyebrow role — 5 variants → 1 (18 usages)
+### 11.1 One named eyebrow role — 5 variants → 1 (16 usages)
 
 `@utility text-eyebrow` = `--font-xs` (10px) / 400 / `tracking-wider` / `uppercase` / `--line-height`.
 Colour stays at the call site. It replaces:
@@ -695,12 +695,16 @@ Colour stays at the call site. It replaces:
 | `text-xs uppercase tracking-wide` | 2 | tracking 0.025em → 0.05em |
 | `text-xs font-medium uppercase tracking-wide` | 2 | 500 → 400 + tracking |
 | `text-[9px] uppercase tracking-wider` | 1 | 9px → 10px |
-| `font-[var(--font-mono)] text-xs uppercase tracking-wide` (Welcome tag) | 1 | mono → proportional + tracking |
-| `text-mono uppercase` ("Soon" pill) | 1 | mono 11px → proportional 10px |
 
 Adopted in: `RightPanel`, `ProjectTree`, `TerminalsPanel`, `SpecsPanel`, `ProvidersSettings`,
-`TemplatesSettings`, `CenterTabs`, `SettingsDialog`, `WelcomePanel`, `SkillsDialog` ×2,
-`HistoryOverlay` ×2, `TodoList` ×2, `ThinkingSelector`, `ui/command`, `ui/dropdown-menu`.
+`TemplatesSettings`, `CenterTabs`, `SkillsDialog` ×2, `HistoryOverlay` ×2, `TodoList` ×2,
+`ThinkingSelector`, `ui/command`, `ui/dropdown-menu`.
+
+**The role is reserved for eyebrow/section-label content.** Two pills that share the same *appearance*
+— the "Soon" pill (`SettingsDialog`) and the Welcome card tag — deliberately spell their own
+`text-xs uppercase tracking-wider` instead: reusing the primitives is fine, borrowing a semantic role
+to shrink the style count is not. That is the one style the consolidation leaves on the table (33, not
+32), by decision.
 
 ### 11.2 Mono is code-only again — identity text is proportional
 
@@ -714,8 +718,8 @@ inline code, shell commands, slash syntax, keycaps. Everything else proportional
 | `CenterTabs:260` workspace-ready branch line | mono 10px | `text-xs` |
 | `SkillsDialog:394` skill name | mono 12px | `text-sm` |
 | `TodoList:207` todo note | mono 10px | `text-xs` |
-| `WelcomePanel:246` card tag | mono 10px uppercase | `text-eyebrow` |
-| `SettingsDialog:87` "Soon" pill | `text-mono` uppercase | `text-eyebrow` |
+| `WelcomePanel:246` card tag | mono 10px uppercase | `text-xs uppercase tracking-wider` (proportional label pill) |
+| `SettingsDialog:87` "Soon" pill | `text-mono` uppercase (11px) | `text-xs uppercase tracking-wider` (proportional label pill) |
 | `NewWorkspaceDialog:536` the `/` syntax glyph | ad-hoc mono, inherited size | `text-mono` (11px) |
 | `DiffPane:86` diff header path | ad-hoc mono 10px | `text-mono` (11px) |
 
@@ -731,6 +735,10 @@ gains 1px of text — no padding compensation was needed (a whole-DOM clipping p
 clipped elements, and no pill sits in a row that requires matching heights).
 
 ### 11.4 Unchanged by design
+
+The diff header's path stays `text-mono` — confirmed as technical content (it labels code and sits
+above a monospaced diff), not metadata.
+
 
 Hero `text-[44px]` + `text-brand`; the OTP code; the markdown skins (`Markdown` fenced `0.85em`,
 `MarkdownPreview`'s em heading scale + `leading-[1.65]`); `text-base` ≡ `text-md` (two roles, one

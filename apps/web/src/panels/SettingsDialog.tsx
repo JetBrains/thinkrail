@@ -84,7 +84,7 @@ export function SettingsDialog() {
 							>
 								<Icon className="size-4 shrink-0" />
 								{label}
-								<span className="ml-auto rounded-full border border-border2 px-xs py-0.5 text-eyebrow text-hint">
+								<span className="ml-auto rounded-full border border-border2 px-xs py-0.5 text-hint text-xs uppercase tracking-wider">
 									Soon
 								</span>
 							</span>
