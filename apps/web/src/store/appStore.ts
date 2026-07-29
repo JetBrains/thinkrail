@@ -82,6 +82,13 @@ export interface DiffTab {
 export type EditorTab = FileTab | ChatTab | DocTab | DiffTab;
 
 /**
+ * How an open/reveal treats the workspace's single **preview slot**. `preview` is a light "I'm just
+ * browsing" open (a tree click, a link follow) that reuses the slot; `keep` is a deliberate open (a
+ * double click) that takes a tab of its own. See `previewTabByWorkspace`.
+ */
+export type TabIntent = "preview" | "keep";
+
+/**
  * A section of the settings dialog (a const-object "enum", the codebase convention). Extensible — the live
  * sections are providers, github, appearance (the theme picker), templates (prompt-template manager),
  * and privacy (the analytics toggle).
@@ -436,6 +443,13 @@ interface AppState {
 	/** Center tabs belong to a workspace — switching workspaces swaps the visible tab set. */
 	tabsByWorkspace: Record<string, EditorTab[]>;
 	activeTabByWorkspace: Record<string, string | null>;
+	/**
+	 * The workspace's **preview tab** — the one reusable slot a light open lands in (rendered italic; see
+	 * `panels/SPEC.md`). Keyed like `activeTabByWorkspace`, so "at most one preview tab per workspace" is
+	 * structural rather than a rule every writer has to remember, and the `EditorTab` union stays pure data.
+	 * Absent = this workspace has no preview tab.
+	 */
+	previewTabByWorkspace: Record<string, string>;
 	/** Chat tabs the user closed, per workspace (most-recent-first) — reopenable while their runtime lives. */
 	closedChatsByWorkspace: Record<string, ClosedChat[]>;
 	/** Terminals are workspace-scoped too; their instances stay mounted (hidden) to preserve buffers. */
@@ -568,12 +582,20 @@ interface AppState {
 	selectProject: (projectId: string) => void;
 	/** Enter a workspace and select its owning project in one state transition. */
 	activateWorkspace: (workspace: Pick<Workspace, "id" | "projectId">) => void;
-	openTab: (tab: EditorTab) => void;
+	/**
+	 * Open a center tab — an already-open id focuses instead of duplicating. `intent: "preview"` puts it in
+	 * the workspace's preview slot, **replacing the previous preview tab at its index** so the strip doesn't
+	 * reshuffle under the cursor; `intent: "keep"` appends a normal tab and releases the slot if it pointed
+	 * at this id. Chat tabs and `openDoc` never take the slot (see `previewTabByWorkspace`).
+	 */
+	openTab: (tab: EditorTab, intent: TabIntent) => void;
 	/** Open (or refresh + focus, if already open) an ephemeral rendered-markdown `doc` tab. Re-invoking
 	 * with the same id replaces its content so a "compile current state" action always shows the latest. */
 	openDoc: (tab: DocTab) => void;
 	closeTab: (id: string) => void;
-	setActiveTab: (id: string) => void;
+	/** Activate a tab. `intent: "keep"` also promotes it out of the preview slot — one-way: nothing ever
+	 * demotes a kept tab back to preview. */
+	setActiveTab: (id: string, intent?: TabIntent) => void;
 	/** Set a markdown file tab's view mode (rendered ↔ source); kept on the tab so it survives tab switches. */
 	setFileTabView: (id: string, view: "rendered" | "source") => void;
 	setDiffTabView: (id: string, view: DiffTabView) => void;
@@ -819,6 +841,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	activeWorkspaceId: null,
 	tabsByWorkspace: {},
 	activeTabByWorkspace: {},
+	previewTabByWorkspace: {},
 	closedChatsByWorkspace: {},
 	terminalsByWorkspace: {},
 	activeTerminalByWorkspace: {},
@@ -905,14 +928,36 @@ export const useAppStore = create<AppState>((set, get) => ({
 	selectProject: (selectedProjectId) => set({ selectedProjectId, activeWorkspaceId: null }),
 	activateWorkspace: (workspace) =>
 		set({ selectedProjectId: workspace.projectId, activeWorkspaceId: workspace.id }),
-	openTab: (tab) =>
+	openTab: (tab, intent) =>
 		set((s) => {
-			const tabs = s.tabsByWorkspace[tab.workspaceId] ?? [];
+			const wsId = tab.workspaceId;
+			const tabs = s.tabsByWorkspace[wsId] ?? [];
+			const preview = s.previewTabByWorkspace[wsId];
+			const activeTabByWorkspace = { ...s.activeTabByWorkspace, [wsId]: tab.id };
+			// Already open: focus it. A `keep` promotes it; a `preview` deliberately leaves every tab's state
+			// alone, so re-clicking a kept tab in the tree never demotes it and never steals the slot.
+			if (tabs.some((t) => t.id === tab.id)) {
+				return {
+					activeTabByWorkspace,
+					previewTabByWorkspace:
+						intent === "keep" && preview === tab.id
+							? omitKey(s.previewTabByWorkspace, wsId)
+							: s.previewTabByWorkspace,
+				};
+			}
+			// A preview open reuses the outgoing tab's position, so browsing a tree swaps one tab in place
+			// instead of reshuffling the strip under the cursor.
+			const at = intent === "preview" && preview ? tabs.findIndex((t) => t.id === preview) : -1;
 			return {
-				tabsByWorkspace: tabs.some((t) => t.id === tab.id)
-					? s.tabsByWorkspace
-					: { ...s.tabsByWorkspace, [tab.workspaceId]: [...tabs, tab] },
-				activeTabByWorkspace: { ...s.activeTabByWorkspace, [tab.workspaceId]: tab.id },
+				tabsByWorkspace: {
+					...s.tabsByWorkspace,
+					[wsId]: at === -1 ? [...tabs, tab] : tabs.with(at, tab),
+				},
+				activeTabByWorkspace,
+				previewTabByWorkspace:
+					intent === "preview"
+						? { ...s.previewTabByWorkspace, [wsId]: tab.id }
+						: s.previewTabByWorkspace,
 			};
 		}),
 	openDoc: (tab) =>
@@ -939,14 +984,23 @@ export const useAppStore = create<AppState>((set, get) => ({
 					...s.activeTabByWorkspace,
 					[wsId]: wasActive ? (tabs.at(-1)?.id ?? null) : (s.activeTabByWorkspace[wsId] ?? null),
 				},
+				// A closed tab must never leave a dangling slot id behind.
+				...(s.previewTabByWorkspace[wsId] === id
+					? { previewTabByWorkspace: omitKey(s.previewTabByWorkspace, wsId) }
+					: {}),
 			};
 		}),
-	setActiveTab: (id) =>
-		set((s) =>
-			s.activeWorkspaceId
-				? { activeTabByWorkspace: { ...s.activeTabByWorkspace, [s.activeWorkspaceId]: id } }
-				: {},
-		),
+	setActiveTab: (id, intent) =>
+		set((s) => {
+			const wsId = s.activeWorkspaceId;
+			if (!wsId) return {};
+			return {
+				activeTabByWorkspace: { ...s.activeTabByWorkspace, [wsId]: id },
+				...(intent === "keep" && s.previewTabByWorkspace[wsId] === id
+					? { previewTabByWorkspace: omitKey(s.previewTabByWorkspace, wsId) }
+					: {}),
+			};
+		}),
 	setFileTabView: (id, view) =>
 		set((s) => {
 			const wsId = s.activeWorkspaceId;
@@ -1070,6 +1124,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			return {
 				tabsByWorkspace: omitKey(s.tabsByWorkspace, workspaceId),
 				activeTabByWorkspace: omitKey(s.activeTabByWorkspace, workspaceId),
+				previewTabByWorkspace: omitKey(s.previewTabByWorkspace, workspaceId),
 				closedChatsByWorkspace: omitKey(s.closedChatsByWorkspace, workspaceId),
 				// Dropping the terminals unmounts their instances, which close the PTYs server-side.
 				terminalsByWorkspace: omitKey(s.terminalsByWorkspace, workspaceId),

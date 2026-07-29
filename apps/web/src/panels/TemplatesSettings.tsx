@@ -8,7 +8,7 @@ import { PopoverTrigger } from "@/components/ui/popover";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { ConfirmPopover } from "./ConfirmPopover";
-import { openFileInTab } from "./openFile";
+import { openFileInTab } from "./openTabs";
 
 /**
  * R4: verbatim starter-template content offered by `StarterTemplatesOffer` below (design doc "Amendments
@@ -351,7 +351,9 @@ function TemplateRow({
 
 	const openAsFile = () => {
 		if (!workspaceId) return;
-		void openFileInTab(workspaceId, `.pi/prompts/${template.name}.md`);
+		// "Open in editor" is a deliberate open, not browsing — it keeps its own tab, and closing Settings
+		// on top of a preview tab that a later click could silently replace would read as a lost file.
+		void openFileInTab(workspaceId, `.pi/prompts/${template.name}.md`, "keep");
 		useAppStore.getState().closeSettings();
 	};
 

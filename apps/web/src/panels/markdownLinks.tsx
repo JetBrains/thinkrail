@@ -1,14 +1,15 @@
 import type { ReactNode } from "react";
 import type { Components } from "react-markdown";
 import { getTransport } from "../transport";
-import { openFileInTab } from "./openFile";
+import { openFileInTab } from "./openTabs";
 
 /**
  * Link / image / heading-anchor handling for the rendered markdown view. All wired only into
  * `MarkdownPreview` (chat is untouched):
  *  - `remarkHeadingIds` — a dependency-free remark transform giving headings slug ids (for `#` targets).
- *  - `documentComponents(ctx)` — the `a` + `img` renderers: relative links open the target file as a
- *    tab, `#` links scroll the preview, relative images resolve to the host `/files/…` endpoint.
+ *  - `documentComponents(ctx)` — the `a` + `img` renderers: relative links open the target file in the
+ *    workspace's **preview** tab (following a link is browsing, so the slot is reused — see `SPEC.md`),
+ *    `#` links scroll the preview, relative images resolve to the host `/files/…` endpoint.
  */
 
 export type HrefKind = "empty" | "anchor" | "external" | "relative";
@@ -115,7 +116,7 @@ export function documentComponents(ctx: { workspaceId: string; path: string }): 
 					onClick={(e) => {
 						e.preventDefault();
 						const target = resolveRelativePath(ctx.path, splitHash(href).path);
-						if (target) void openFileInTab(ctx.workspaceId, target);
+						if (target) void openFileInTab(ctx.workspaceId, target, "preview");
 					}}
 				>
 					{children}

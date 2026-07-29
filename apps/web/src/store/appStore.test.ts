@@ -6,7 +6,7 @@ import type {
 	SpecGraphNode,
 	Workspace,
 } from "@thinkrail/contracts";
-import { type SessionRuntime, toast, useAppStore } from "./appStore";
+import { type FileTab, type SessionRuntime, toast, useAppStore } from "./appStore";
 import { selectSkillsStale, selectWorkspaceTick } from "./selectors";
 
 // Event fixtures — the reducer only reads the fields below, so casting minimal objects is safe here.
@@ -67,6 +67,7 @@ beforeEach(() => {
 		sessions: {},
 		tabsByWorkspace: {},
 		activeTabByWorkspace: {},
+		previewTabByWorkspace: {},
 		closedChatsByWorkspace: {},
 		fsChangesByWorkspace: {},
 		skillChangeTickByWorkspace: {},
@@ -1237,4 +1238,101 @@ test("skills badge: a LIVE restore stays conservatively stale; a disk attach anc
 		selectWorkspaceTick(s(), "ws1"),
 	);
 	expect(isStale("ws1", "disk1")).toBe(false);
+});
+
+// ── Preview tabs ────────────────────────────────────────────────────────────────────────────────────
+// One reusable "I'm just browsing" slot per workspace (`previewTabByWorkspace`), opened and released by
+// the `TabIntent` the surfaces pass. See `apps/web/src/panels/SPEC.md` for the gesture map.
+
+function fileTab(workspaceId: string, name: string): FileTab {
+	return { kind: "file", id: `${workspaceId}:${name}`, workspaceId, name, path: name, content: "" };
+}
+
+test("a preview open replaces the previous preview tab at its index (the strip never reshuffles)", () => {
+	const store = useAppStore.getState();
+	store.openTab(fileTab("ws1", "a.ts"), "keep");
+	store.openTab(fileTab("ws1", "b.ts"), "preview");
+	store.openTab(fileTab("ws1", "c.ts"), "keep"); // the slot now sits between two kept tabs
+
+	store.openTab(fileTab("ws1", "d.ts"), "preview");
+
+	const s = useAppStore.getState();
+	expect((s.tabsByWorkspace.ws1 ?? []).map((t) => t.name)).toEqual(["a.ts", "d.ts", "c.ts"]);
+	expect(s.previewTabByWorkspace.ws1).toBe("ws1:d.ts");
+	expect(s.activeTabByWorkspace.ws1).toBe("ws1:d.ts");
+});
+
+test("a preview open of an already-kept tab focuses it without demoting it or moving the slot", () => {
+	const store = useAppStore.getState();
+	store.openTab(fileTab("ws1", "a.ts"), "keep");
+	store.openTab(fileTab("ws1", "b.ts"), "preview");
+
+	store.openTab(fileTab("ws1", "a.ts"), "preview");
+
+	const s = useAppStore.getState();
+	expect(s.activeTabByWorkspace.ws1).toBe("ws1:a.ts");
+	expect(s.previewTabByWorkspace.ws1).toBe("ws1:b.ts"); // the slot stayed where it was
+	expect(s.tabsByWorkspace.ws1).toHaveLength(2); // and nothing was duplicated
+});
+
+test("keep releases the slot — through openTab, through setActiveTab, and through closeTab", () => {
+	useAppStore.setState({ activeWorkspaceId: "ws1" });
+	const store = useAppStore.getState();
+
+	store.openTab(fileTab("ws1", "a.ts"), "preview");
+	store.setActiveTab("ws1:a.ts", "keep");
+	expect(useAppStore.getState().previewTabByWorkspace.ws1).toBeUndefined();
+
+	store.openTab(fileTab("ws1", "b.ts"), "preview");
+	store.openTab(fileTab("ws1", "b.ts"), "keep"); // a double-click on a row already previewing
+	expect(useAppStore.getState().previewTabByWorkspace.ws1).toBeUndefined();
+
+	store.openTab(fileTab("ws1", "c.ts"), "preview");
+	store.closeTab("ws1:c.ts");
+	expect(useAppStore.getState().previewTabByWorkspace.ws1).toBeUndefined();
+});
+
+test("promotion is one-way: neither a plain activation nor a keep elsewhere demotes a tab", () => {
+	useAppStore.setState({ activeWorkspaceId: "ws1" });
+	const store = useAppStore.getState();
+	store.openTab(fileTab("ws1", "a.ts"), "keep");
+	store.openTab(fileTab("ws1", "b.ts"), "preview");
+
+	store.setActiveTab("ws1:a.ts"); // plain focus
+	expect(useAppStore.getState().previewTabByWorkspace.ws1).toBe("ws1:b.ts");
+
+	store.setActiveTab("ws1:a.ts", "keep"); // keep on a tab that isn't the slot
+	expect(useAppStore.getState().previewTabByWorkspace.ws1).toBe("ws1:b.ts");
+});
+
+test("the slot is per workspace — clearWorkspaceTabs releases only its own", () => {
+	const store = useAppStore.getState();
+	store.openTab(fileTab("ws1", "a.ts"), "preview");
+	store.openTab(fileTab("ws2", "b.ts"), "preview");
+
+	store.clearWorkspaceTabs("ws1");
+
+	const s = useAppStore.getState();
+	expect(s.previewTabByWorkspace.ws1).toBeUndefined();
+	expect(s.previewTabByWorkspace.ws2).toBe("ws2:b.ts");
+});
+
+test("chat tabs and doc tabs never enter the preview slot", () => {
+	useAppStore.setState({ activeWorkspaceId: "ws1" });
+	const store = useAppStore.getState();
+	store.openTab(fileTab("ws1", "a.ts"), "preview");
+
+	store.openChatSession("ws1", "s1", null, "medium");
+	store.openDoc({
+		kind: "doc",
+		id: "ws1:plan",
+		workspaceId: "ws1",
+		name: "Plan",
+		content: "# plan",
+		docPath: "plan.md",
+	});
+
+	const s = useAppStore.getState();
+	expect(s.previewTabByWorkspace.ws1).toBe("ws1:a.ts"); // still the file, untouched by either open
+	expect(s.tabsByWorkspace.ws1).toHaveLength(3);
 });

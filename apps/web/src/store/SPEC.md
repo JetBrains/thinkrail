@@ -37,7 +37,22 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   `tabsByWorkspace` /
   `activeTabByWorkspace` (`openTab`/`closeTab`/`setActiveTab`/`clearWorkspaceTabs`, plus
   **`setFileTabView(id, view)`** — a markdown `FileTab`'s `view` (`"rendered"`|`"source"`) lives on the tab
-  so the rendered↔source choice survives tab switches; absent = rendered); `terminalsByWorkspace`
+  so the rendered↔source choice survives tab switches; absent = rendered);
+  **`previewTabByWorkspace`** — the id of the workspace's **preview tab**, the one reusable slot a light
+  open lands in (rendered italic; the gesture map per surface is `panels/SPEC.md`'s). It is keyed like
+  `activeTabByWorkspace` *on purpose*: "at most one preview tab per workspace" is then structural rather
+  than a rule each writer must remember, and the `EditorTab` union stays pure data (no `preview?` flag to
+  sweep-and-clear on every open). Both openers carry a **`TabIntent`** (`"preview"` | `"keep"`):
+  **`openTab(tab, intent)`** focuses an already-open id rather than duplicating it, and a `preview` open
+  **replaces the slot's tab at its index** so the strip never reshuffles under the cursor, while a `keep`
+  appends and releases the slot if it pointed there; **`setActiveTab(id, intent?)`** activates, and
+  `"keep"` also promotes — **one-way**, so a plain activation (or a `keep` aimed at some other tab) never
+  demotes a kept tab back to preview. The slot is released by `closeTab`, `clearWorkspaceTabs`, and
+  `applyWorkspaceRemoved` (via `omitKey`), so a stale id can never outlive its tab. **Chat tabs and
+  `DocTab`s never enter it** — a chat is an explicit creation with a live session behind it, and a
+  `DocTab`'s content exists only in the store (no file backs it), so a silent replace would destroy it
+  with nothing to reopen. There is deliberately **no keyboard shortcut**: gestures only.
+  `terminalsByWorkspace`
   / `activeTerminalByWorkspace` (`addTerminal`/`closeTerminalTab`/`setActiveTerminalTab`); the
   **per-session chat state** — `sessions: Record<sessionId, SessionRuntime>`, where a `SessionRuntime` holds
   one chat's `turns` (pi-canonical) / `toolResults` / `askAnswers` (the `ask-user-answers` replies keyed

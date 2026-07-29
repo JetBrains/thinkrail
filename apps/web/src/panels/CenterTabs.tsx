@@ -93,13 +93,18 @@ function ChatHistoryMenu({
 	);
 }
 
-/** The center area: a strip of the active workspace's tabs (files + chats) over the active tab. */
+/**
+ * The center area: a strip of the active workspace's tabs (files + chats) over the active tab. One tab in
+ * the strip may be the workspace's **preview** tab — the reusable slot light opens land in, rendered in
+ * italics and promoted by a double click (see `SPEC.md`'s gesture map).
+ */
 export function CenterTabs() {
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
 	const activeWorkspace = useAppStore(selectActiveWorkspace);
 	const contextProject = useAppStore(selectContextProject);
 	const tabsByWorkspace = useAppStore((s) => s.tabsByWorkspace);
 	const activeTabByWorkspace = useAppStore((s) => s.activeTabByWorkspace);
+	const previewTabByWorkspace = useAppStore((s) => s.previewTabByWorkspace);
 	const closedChatsByWorkspace = useAppStore((s) => s.closedChatsByWorkspace);
 	const chatLocationRequest = useAppStore((s) => s.chatLocationRequest);
 	const setActiveTab = useAppStore((s) => s.setActiveTab);
@@ -107,6 +112,9 @@ export function CenterTabs() {
 
 	const openTabs = activeWorkspaceId ? (tabsByWorkspace[activeWorkspaceId] ?? NO_TABS) : NO_TABS;
 	const activeTabId = activeWorkspaceId ? (activeTabByWorkspace[activeWorkspaceId] ?? null) : null;
+	const previewTabId = activeWorkspaceId
+		? (previewTabByWorkspace[activeWorkspaceId] ?? null)
+		: null;
 	const closedChats = activeWorkspaceId
 		? (closedChatsByWorkspace[activeWorkspaceId] ?? NO_CLOSED)
 		: NO_CLOSED;
@@ -301,11 +309,13 @@ export function CenterTabs() {
 				<div role="tablist" className="flex flex-1 items-stretch overflow-x-auto">
 					{openTabs.map((tab) => {
 						const isActive = tab.id === activeTabId;
+						const isPreview = tab.id === previewTabId;
 						return (
 							<div
 								key={tab.id}
 								data-testid="editor-tab"
 								data-active={isActive}
+								data-preview={isPreview}
 								data-kind={tab.kind}
 								className={`group flex items-center gap-xs border-border2 border-r pr-xs pl-sm text-sm ${
 									isActive ? "bg-bg text-text" : "text-muted hover:bg-hover"
@@ -314,12 +324,18 @@ export function CenterTabs() {
 								<button
 									type="button"
 									className="flex max-w-[180px] items-center gap-xs py-xs"
-									onClick={() => setActiveTab(tab.id)}
+									title={isPreview ? "Preview — double-click to keep" : undefined}
+									// A click on the tab that is BOTH active and in preview keeps it: the one promote
+									// gesture a touch device can perform (a double tap is the browser's zoom), and a
+									// no-op on desktop otherwise. Anywhere else a click only activates — "preview"
+									// here means "leave the slot alone", never demote.
+									onClick={() => setActiveTab(tab.id, isActive && isPreview ? "keep" : "preview")}
+									onDoubleClick={() => setActiveTab(tab.id, "keep")}
 								>
 									{tab.kind === "diff" ? (
 										<GitCompareArrows className="size-3.5 shrink-0 text-hint" />
 									) : null}
-									<span className="truncate">{tab.name}</span>
+									<span className={`truncate ${isPreview ? "italic" : ""}`}>{tab.name}</span>
 								</button>
 								<button
 									type="button"

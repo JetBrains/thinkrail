@@ -1,16 +1,18 @@
 import type { GitStatus } from "@thinkrail/contracts";
 import { useEffect, useState } from "react";
-import { matchesWorktreePath, selectWorkspaceTick, useAppStore } from "../store";
+import { matchesWorktreePath, type TabIntent, useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { ChangesTree } from "./ChangesTree";
 import { diffTabId, isDiffTabId, statusNameClass } from "./changesModel";
 import { DiffStatBadge } from "./DiffStatBadge";
+import { openDiffInTab } from "./openTabs";
 import { ToggleSegment } from "./ToggleSegment";
 import { useWorkspaceRead } from "./useWorkspaceRead";
 
 /**
- * Changes for the active worktree: the changed-file list (vs base). Clicking a file opens (or focuses)
- * its Monaco diff tab in the center — the diff itself renders there (`DiffPane`), not under the list.
+ * Changes for the active worktree: the changed-file list (vs base). Clicking a file **previews** (or
+ * focuses) its Monaco diff tab in the center and a double click keeps it — so scanning a change set reuses
+ * one tab. The diff itself renders there (`DiffPane`), not under the list.
  * Two layouts, switched by the header toggle (`store.changesView`, app-wide): a flat **List** and a
  * folder **Tree** (`ChangesTree`, styled like the All-files tree, with per-file/-folder `+/−` counts).
  * Live: the store's per-workspace fs tick silently re-reads `git.status`; the open diff tabs follow the
@@ -36,30 +38,10 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 		},
 	});
 
-	// Open (or focus) the file's Monaco diff tab in the center.
-	const openDiff = async (path: string) => {
+	// Open (or focus) the file's Monaco diff tab in the center; the row lights up either way.
+	const openDiff = (path: string, intent: TabIntent) => {
 		setHighlighted(path);
-		const id = diffTabId(workspaceId, path);
-		const store = useAppStore.getState();
-		if ((store.tabsByWorkspace[workspaceId] ?? []).some((t) => t.id === id)) {
-			store.setActiveTab(id);
-			return;
-		}
-		try {
-			const { original, modified } = await getTransport().request("git.diffFile", {
-				workspaceId,
-				path,
-			});
-			const name = path.split("/").pop() || path;
-			// Stamp the workspace's current fs tick: the contents are fresh as of now, so DiffPane's live
-			// re-read only fires for ticks arriving AFTER this open.
-			const loadedTick = selectWorkspaceTick(useAppStore.getState(), workspaceId);
-			useAppStore
-				.getState()
-				.openTab({ kind: "diff", id, workspaceId, path, name, original, modified, loadedTick });
-		} catch {
-			// a failed read leaves tabs unchanged; the row stays for a retry
-		}
+		void openDiffInTab(workspaceId, path, intent);
 	};
 
 	// A chat deep-link (turn-divider chip) targeting this workspace: highlight the requested row once the
@@ -132,7 +114,8 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 									data-testid="change-item"
 									data-status={change.status}
 									data-active={isActive(change.path) ? true : undefined}
-									onClick={() => void openDiff(change.path)}
+									onClick={() => openDiff(change.path, "preview")}
+									onDoubleClick={() => openDiff(change.path, "keep")}
 									className={`flex w-full items-center gap-sm px-sm py-xs text-left text-sm hover:bg-hover ${
 										isActive(change.path) ? "bg-hover" : ""
 									}`}
