@@ -56,19 +56,25 @@ it resolves deterministically — there is no inheritance, no per-usage branchin
 } }
 ```
 
-A style may instead be a **reference** — `{ "$ref": "title.dialog" }` — which means *identical to that
-style*. Identical styles are never duplicated: the generator resolves the reference and still emits the
-style's own class, so `.tr-title-card` and `.tr-title-dialog` are separate classes with one definition
-behind them. References may chain (`prose.h5` → `prose.h4` → `title.compact`); cycles are rejected.
-Validation fails when two *canonical* definitions hold identical values — that is a missing `$ref`.
+A style may instead be an **alias** — `{ "$ref": "title.dialog" }` — meaning *identical to that style*.
+The rules, all enforced by `typography:validate`:
+
+- a **canonical definition** carries the complete set of seven values;
+- an **alias** carries `$ref` and nothing else;
+- a `$ref` must name a **canonical definition** — never another alias, so **chains are forbidden** and
+  resolution is one direct lookup;
+- a missing target, or a `$ref` pointing at itself, is rejected;
+- **two canonical definitions may not hold identical values** — that is a missing `$ref`;
+- aliases still emit their own semantic CSS class, so `.tr-title-card` and `.tr-title-dialog` are
+  separate classes backed by one definition.
 
 `textStyles` groups: **brand** (`wordmark`, `hero`) · **title** (`dialog`, `card`→dialog, `section`,
 `compact`, `entity`→body.reading) · **ui** (`default`, `metadata`, `eyebrow`, `labelPill`→eyebrow,
 `action`→title.compact, `emphasis`→title.compact) · **body** (`reading`) · **code** (`text`, `inline`,
-`block`, `otp`). `proseStyles` holds only what is unique to prose — `h1`, `h3`, `h6` — and references
+`block`, `otp`). `proseStyles` holds only what is unique to prose — `h1`, `h3`, `h6` — and aliases
 UI/body/code styles for the rest.
 
-16 canonical definitions, 16 references, 32 styles.
+**16 canonical definitions + 16 aliases = 32 styles.**
 
 The JSON holds **no** CSS selectors, class strings, component paths, usage lists, rationale or audit
 data. Rationale lives in this file; `TYPOGRAPHY-AUDIT.md` is a historical record that defines nothing.
@@ -176,8 +182,8 @@ The OTP code is **not** an exception any more: it is the named `code.otp` style 
 1. Edit `styles/typography.json` — a new primitive, or a new entry under `textStyles` / `proseStyles`.
    Reuse primitives; add one only when no existing value fits. **If the style you need already exists,
    write `{ "$ref": "<that.style>" }`** rather than repeating its values — validation rejects a second
-   canonical definition with identical values. Split a reference into its own definition only when the
-   two actually diverge.
+   canonical definition with identical values, and rejects an alias that points at another alias. Split
+   an alias into its own definition only when the two actually diverge.
 2. `bun run typography:validate`, then `bun run typography:generate`, and **commit the generated CSS**.
 3. Use the generated class at the call site (colour stays separate).
 4. `bun test` (source + adoption guards) and `bun run e2e -- e2e/typography.spec.ts` for computed styles.

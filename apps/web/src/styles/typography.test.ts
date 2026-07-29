@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import type { Style, StyleRef, Typography } from "../../scripts/typography";
 import {
 	allStyles,
 	CODE_STYLE_IDS,
@@ -106,26 +107,104 @@ describe("typography source", () => {
 });
 
 describe("references", () => {
-	it("every $ref points at an existing style and resolves without a cycle", () => {
+	/** A minimal valid document, so a case under test is the only thing that can fail. */
+	function doc(
+		styles: Record<string, Style | StyleRef>,
+		prose: Record<string, Style | StyleRef> = {},
+	) {
+		const canonical: Style = {
+			fontFamily: "interface",
+			fontSize: "s12",
+			fontWeight: "regular",
+			lineHeight: "default",
+			letterSpacing: "normal",
+			textTransform: "none",
+			fontStyle: "normal",
+		};
+		// The real `code` group stays, so the mono-only prose code styles have a canonical target.
+		return {
+			...typography,
+			textStyles: { probe: { base: canonical, ...styles }, code: typography.textStyles.code },
+			proseStyles: {
+				...Object.fromEntries(
+					Object.keys(PROSE_SELECTORS).map((id) => [
+						id,
+						{
+							$ref:
+								id === "inlineCode"
+									? "code.inline"
+									: id === "codeBlock"
+										? "code.block"
+										: "probe.base",
+						},
+					]),
+				),
+				...prose,
+			},
+		} as Typography;
+	}
+	const errorsFor = (t: Typography) => validate(t).filter((e) => !e.startsWith("title.card"));
+
+	it("accepts a reference straight to a canonical definition", () => {
+		expect(errorsFor(doc({ alias: { $ref: "probe.base" } }))).toEqual([]);
+	});
+
+	it("rejects a reference to another reference, naming the canonical target to use", () => {
+		const errors = errorsFor(
+			doc({ alias: { $ref: "probe.base" }, second: { $ref: "probe.alias" } }),
+		);
+		expect(errors).toContain(
+			"probe.second references probe.alias, which is itself a reference. Reference probe.base directly.",
+		);
+	});
+
+	it("rejects a missing reference target", () => {
+		expect(errorsFor(doc({ alias: { $ref: "probe.nope" } }))).toContain(
+			"probe.alias: $ref to unknown style 'probe.nope'",
+		);
+	});
+
+	it("rejects a circular (self) reference", () => {
+		expect(errorsFor(doc({ alias: { $ref: "probe.alias" } }))).toContain(
+			"probe.alias: $ref points at itself",
+		);
+	});
+
+	it("rejects a reference object carrying extra properties", () => {
+		const errors = errorsFor(
+			doc({ alias: { $ref: "probe.base", fontSize: "s14" } as unknown as StyleRef }),
+		);
+		expect(errors).toContain("probe.alias: a $ref may not carry other properties");
+	});
+
+	it("rejects two canonical definitions with identical values", () => {
+		const twin = { ...resolveStyle(typography, "ui.default") };
+		expect(errorsFor(doc({ twin }))).toContain(
+			"probe.twin duplicates probe.base — identical canonical definitions must use a $ref",
+		);
+	});
+
+	it("accepts separate aliases resolving to the same canonical definition", () => {
+		expect(errorsFor(doc({ one: { $ref: "probe.base" }, two: { $ref: "probe.base" } }))).toEqual(
+			[],
+		);
+	});
+
+	it("holds no chained or duplicated references in the real source", () => {
 		for (const { id, ref } of allStyles(typography)) {
 			if (!ref) continue;
-			expect(rawStyle(typography, ref), `${id} → ${ref}`).toBeDefined();
-			expect(() => resolveStyle(typography, id)).not.toThrow();
+			const target = rawStyle(typography, ref);
+			expect(target, `${id} → ${ref}`).toBeDefined();
+			expect(isRef(target), `${id} → ${ref} must be a canonical definition`).toBe(false);
+		}
+		for (const id of Object.keys(typography.fontFamilies)) {
+			const entry = typography.fontFamilies[id];
+			if (!isRef(entry)) continue;
+			expect(isRef(typography.fontFamilies[entry.$ref]), `fontFamilies.${id}`).toBe(false);
 		}
 	});
 
-	it("holds no two canonical definitions with identical values", () => {
-		const seen = new Map<string, string>();
-		for (const { id, style, ref } of allStyles(typography)) {
-			if (ref) continue;
-			const key = JSON.stringify(style);
-			const first = seen.get(key);
-			expect(first, `${id} duplicates ${first} — use a $ref`).toBeUndefined();
-			seen.set(key, id);
-		}
-	});
-
-	it("resolves a reference to the same values the target has", () => {
+	it("resolves every reference to its target's values in one hop", () => {
 		for (const { id, style, ref } of allStyles(typography)) {
 			if (!ref) continue;
 			expect(style, `${id} → ${ref}`).toEqual(resolveStyle(typography, ref));

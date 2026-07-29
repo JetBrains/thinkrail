@@ -1,7 +1,7 @@
 {
 	"$schema": "./typography.schema.json",
 	"metadata": {
-		"version": "2.1.0",
+		"version": "2.2.0",
 		"cssVarPrefix": "tr",
 		"classPrefix": "tr"
 	},
@@ -234,7 +234,7 @@
 			"$ref": "title.compact"
 		},
 		"h5": {
-			"$ref": "prose.h4"
+			"$ref": "title.compact"
 		},
 		"h6": {
 			"fontFamily": "interface",

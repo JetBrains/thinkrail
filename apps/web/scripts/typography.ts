@@ -62,20 +62,35 @@ export function rawStyle(t: Typography, id: string): Style | StyleRef | undefine
 	return group === "prose" ? t.proseStyles?.[name] : t.textStyles?.[group]?.[name];
 }
 
-/** Follow `$ref` to the canonical definition. A reference means "identical to" — no merging. */
-export function resolveStyle(t: Typography, id: string, seen: string[] = []): Style {
-	if (seen.includes(id)) throw new Error(`$ref cycle: ${[...seen, id].join(" -> ")}`);
+/**
+ * Resolve a style id to its canonical definition — ONE hop, by design. A reference must point straight
+ * at a definition (see `validate`), so there is no chain to walk and no inheritance to merge.
+ */
+export function resolveStyle(t: Typography, id: string): Style {
 	const entry = rawStyle(t, id);
 	if (!entry) throw new Error(`unknown style '${id}'`);
-	return isRef(entry) ? resolveStyle(t, entry.$ref, [...seen, id]) : entry;
+	if (!isRef(entry)) return entry;
+	const target = rawStyle(t, entry.$ref);
+	if (!target) throw new Error(`${id}: $ref to unknown style '${entry.$ref}'`);
+	if (isRef(target))
+		throw new Error(
+			`${id}: $ref to '${entry.$ref}', which is itself a reference (chains are invalid)`,
+		);
+	return target;
 }
 
-/** Follow a font-family alias to its definition. */
-export function resolveFamily(t: Typography, id: string, seen: string[] = []): FontFamily {
-	if (seen.includes(id)) throw new Error(`font-family $ref cycle: ${[...seen, id].join(" -> ")}`);
+/** Resolve a font family id — the same single hop. */
+export function resolveFamily(t: Typography, id: string): FontFamily {
 	const entry = t.fontFamilies?.[id];
 	if (!entry) throw new Error(`unknown font family '${id}'`);
-	return isRef(entry) ? resolveFamily(t, entry.$ref, [...seen, id]) : entry;
+	if (!isRef(entry)) return entry;
+	const target = t.fontFamilies?.[entry.$ref];
+	if (!target) throw new Error(`fontFamilies.${id}: $ref to unknown family '${entry.$ref}'`);
+	if (isRef(target))
+		throw new Error(
+			`fontFamilies.${id}: $ref to '${entry.$ref}', which is itself a reference (chains are invalid)`,
+		);
+	return target;
 }
 
 /* ── naming (the single place CSS identifiers are derived) ───────────────────────────────────── */
@@ -208,7 +223,8 @@ export function validate(t: Typography): string[] {
 	for (const [id, v] of Object.entries(t.lineHeights ?? {}))
 		if (!(v > 0)) fail(`lineHeights.${id}: must be > 0`);
 
-	// References resolve, and nothing cycles. Every check below reads RESOLVED styles.
+	// References: direct only. A `$ref` must name a canonical DEFINITION — never another reference —
+	// so resolution is one lookup and there is no chain, cycle or inheritance to reason about.
 	const rawEntries: [string, Style | StyleRef][] = [
 		...Object.entries(t.textStyles ?? {}).flatMap(([group, styles]) =>
 			Object.entries(styles).map(
@@ -219,19 +235,24 @@ export function validate(t: Typography): string[] {
 			([name, entry]) => [`prose.${name}`, entry] as [string, Style | StyleRef],
 		),
 	];
-	const known = new Set(rawEntries.map(([id]) => id));
 	for (const [id, entry] of rawEntries) {
 		if (!isRef(entry)) continue;
 		if (Object.keys(entry).length > 1) fail(`${id}: a $ref may not carry other properties`);
-		if (!known.has(entry.$ref)) fail(`${id}: $ref to unknown style '${entry.$ref}'`);
-	}
-	if (errors.length > 0) return errors;
-	for (const [id] of rawEntries)
-		try {
-			resolveStyle(t, id);
-		} catch (e) {
-			fail(`${id}: ${(e as Error).message}`);
+		if (entry.$ref === id) {
+			fail(`${id}: $ref points at itself`);
+			continue;
 		}
+		const target = rawStyle(t, entry.$ref);
+		if (!target) {
+			fail(`${id}: $ref to unknown style '${entry.$ref}'`);
+			continue;
+		}
+		if (isRef(target))
+			fail(
+				`${id} references ${entry.$ref}, which is itself a reference. ` +
+					`Reference ${target.$ref} directly.`,
+			);
+	}
 	if (errors.length > 0) return errors;
 
 	// Ids unique across the whole style space (a duplicate would silently overwrite a class).
@@ -248,6 +269,16 @@ export function validate(t: Typography): string[] {
 		const prev = classes.get(cls);
 		if (prev) fail(`class collision: '${id}' and '${prev}' both generate .${cls}`);
 		classes.set(cls, id);
+	}
+
+	// Two canonical definitions may not hold identical values — that is a missing $ref.
+	const byValue = new Map<string, string>();
+	for (const { id, style, ref } of allStyles(t)) {
+		if (ref) continue;
+		const key = JSON.stringify(style);
+		const first = byValue.get(key);
+		if (first) fail(`${id} duplicates ${first} — identical canonical definitions must use a $ref`);
+		else byValue.set(key, id);
 	}
 
 	// Every style fully resolves, and every reference exists.

@@ -2,7 +2,7 @@
 	"$schema": "http://json-schema.org/draft-07/schema#",
 	"$id": "https://thinkrail.ai/schemas/typography.schema.json",
 	"title": "ThinkRail typography source",
-	"description": "The canonical, machine-first typography definition: primitives plus the semantic text styles generated from them. A style is either a full definition or a `$ref` to another style id, which means \"identical to that style\" \u2014 identical styles are never duplicated. Contains no CSS selectors, class strings, component paths, usage inventories or rationale.",
+	"description": "The canonical, machine-first typography definition: primitives plus the semantic text styles generated from them. A style is either a complete definition or a `$ref` naming a canonical definition \u2014 identical styles are never duplicated, and references never chain. Contains no CSS selectors, class strings, component paths, usage inventories or rationale.",
 	"type": "object",
 	"additionalProperties": false,
 	"required": [
@@ -190,7 +190,7 @@
 			}
 		},
 		"ref": {
-			"description": "\"Identical to that style/family.\" The only property allowed; resolution follows the chain, cycles are rejected.",
+			"description": "\"Identical to that style/family.\" `$ref` must name a canonical DEFINITION, never another reference: chains are invalid, so resolution is one direct lookup. The only permitted property is `$ref`.",
 			"type": "object",
 			"additionalProperties": false,
 			"required": ["$ref"],
