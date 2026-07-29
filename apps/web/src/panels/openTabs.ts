@@ -35,7 +35,47 @@ function baseName(path: string): string {
  * exactly what the gesture means — a double click is a preview open (which claims the slot, as every
  * IDE's does) plus a promote — and it holds at any latency.
  */
-const inFlight = new Map<string, { intent: TabIntent }>();
+const inFlight = new Map<string, { intent: TabIntent; requestedAt: number }>();
+
+/**
+ * Per-workspace navigation counter. Every deliberate move in the center area bumps it — an open through
+ * the functions below, a strip-tab click, a chat deep link, a new chat — and a read records the count it
+ * was requested at, so on landing it can tell whether the user has since gone somewhere else.
+ *
+ * Needed because a read is slow and a click is not: tap an unopened file over a remote host, then tap an
+ * already-open tab while it loads. The tab activates at once, and the read's `openTab` would yank focus
+ * back to the file — and claim the preview slot away from whatever the user had actually landed on. Local
+ * navigation has to beat a pending read, so a browse the user has moved on from is dropped rather than
+ * committed.
+ *
+ * It lives here, not in the store, because only the caller knows when a navigation was *requested*; the
+ * store sees completions, which are the very thing being ordered against.
+ */
+const navTick = new Map<string, number>();
+
+function noteNav(workspaceId: string): number {
+	const next = (navTick.get(workspaceId) ?? 0) + 1;
+	navTick.set(workspaceId, next);
+	return next;
+}
+
+/**
+ * Record a navigation that opens no tab of its own — starting a new chat — so a read still in flight for
+ * this workspace can tell it was overtaken.
+ */
+export function noteNavigation(workspaceId: string): void {
+	noteNav(workspaceId);
+}
+
+/**
+ * Focus a tab that is already open: the strip's own clicks and the chat deep link. `intent: "keep"` also
+ * promotes it out of the preview slot. Routed through here rather than straight to `store.setActiveTab` so
+ * that the counter above sees it — a strip click is exactly the local navigation a pending read must lose to.
+ */
+export function revealTab(workspaceId: string, id: string, intent: TabIntent): void {
+	noteNav(workspaceId);
+	useAppStore.getState().setActiveTab(id, intent);
+}
 
 /**
  * Focus an already-open tab (promoting it when the intent is `keep` — one atomic store write, so the strip
@@ -49,6 +89,7 @@ async function openReadTab<T>(
 	read: () => Promise<T>,
 	build: (payload: T, loadedTick: number) => EditorTab,
 ): Promise<void> {
+	const requestedAt = noteNav(workspaceId);
 	const store = useAppStore.getState();
 	if ((store.tabsByWorkspace[workspaceId] ?? []).some((t) => t.id === id)) {
 		store.setActiveTab(id, intent);
@@ -56,15 +97,21 @@ async function openReadTab<T>(
 	}
 	const pending = inFlight.get(id);
 	if (pending) {
-		// The read is already on its way — upgrade its intent instead of racing a second read against it.
-		// Only ever upward: promotion is one-way, so a trailing browse can't undo a keep.
+		// The read is already on its way — fold this call into it instead of racing a second read against it.
+		// Intent only ever moves upward: promotion is one-way, so a trailing browse can't undo a keep. The
+		// request mark moves forward too, because re-clicking the same row is not navigating away from it.
 		if (intent === "keep") pending.intent = "keep";
+		pending.requestedAt = requestedAt;
 		return;
 	}
-	const flight = { intent };
+	const flight = { intent, requestedAt };
 	inFlight.set(id, flight);
 	try {
 		const payload = await read();
+		// Overtaken while reading — the user has clicked elsewhere since. Drop a browse they've moved on from
+		// so the last navigation wins. A `keep` still commits: it was deliberate, and silently swallowing a
+		// tab the user explicitly asked for would be the worse surprise.
+		if (flight.intent === "preview" && navTick.get(workspaceId) !== flight.requestedAt) return;
 		// Stamp the workspace's current fs tick: the content is fresh as of now, so the pane's live re-read
 		// only fires for ticks arriving AFTER this open.
 		const loadedTick = selectWorkspaceTick(useAppStore.getState(), workspaceId);

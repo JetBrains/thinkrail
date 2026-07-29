@@ -107,6 +107,41 @@ test("a double click on an unopened file sends exactly one fs.readFile", async (
 	expect(reads.filter((frame) => frame.includes("README.md"))).toHaveLength(1);
 });
 
+// A read is slow and a click is not, so a pending browse must lose to whatever the user does next —
+// otherwise, over a remote host, tapping a file and then tapping another tab yanks focus back to the file
+// and claims the preview slot away from it. Both clicks are dispatched in ONE JS tick here, which
+// guarantees the `fs.readFile` has not resolved and makes the interleaving deterministic rather than
+// dependent on real latency.
+test("a browse the user has navigated away from is dropped, not activated on arrival", async ({
+	page,
+}) => {
+	await openWorkspaceFiles(page);
+	const tabs = page.getByTestId("editor-tab");
+
+	await page.getByTestId("file-node").filter({ hasText: "README.md" }).dblclick();
+	await expect(tabs).toHaveCount(1);
+	await expect(tabs.first()).toHaveAttribute("data-preview", "false");
+
+	// Same tick: start a read for an unopened file, then navigate to the already-open tab.
+	await page.evaluate(() => {
+		const byText = <T extends Element>(sel: string, text: string): T => {
+			const hit = [...document.querySelectorAll(sel)].find((el) => el.textContent?.includes(text));
+			if (!hit) throw new Error(`no ${sel} containing ${text}`);
+			return hit as unknown as T;
+		};
+		byText<HTMLElement>('[data-testid="file-node"]', "notes.txt").click();
+		byText<HTMLElement>('[data-testid="editor-tab"]', "README.md")
+			.querySelector<HTMLElement>("button")
+			?.click();
+	});
+
+	// notes.txt never lands: the click on README.md superseded it.
+	await expect(tabs).toHaveCount(1);
+	await expect(tabs.first()).toContainText("README.md");
+	await expect(tabs.first()).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("editor-tab").filter({ hasText: "notes.txt" })).toHaveCount(0);
+});
+
 test("the Specs panel shares the one slot, and closing the preview tab releases it", async ({
 	page,
 }) => {

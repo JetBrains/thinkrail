@@ -444,6 +444,18 @@ a project picker, the prompt hero, and the reused
   active tab and drops to the workspace receipt. `e2e/preview-tabs.spec.ts` asserts the single read
   directly, because the outcome it protects is invisible at localhost latency.
 
+  **A read is slow and a click is not, so a pending browse loses to whatever the user does next.**
+  `openTabs.ts` keeps a per-workspace navigation counter; each read records the count it was requested at,
+  and a **`preview`** landing after the count has moved is **dropped** rather than committed. Without that,
+  tapping an unopened file over a remote host and then tapping an already-open tab yanks focus back to the
+  file when it arrives *and* claims the slot away from what the user landed on. A **`keep`** still commits
+  — it was deliberate, and swallowing an explicitly opened tab is the worse surprise. This is why
+  **`revealTab(workspaceId, id, intent)` and `noteNavigation(workspaceId)` are part of the module's public
+  surface, and why nothing outside it calls `store.setActiveTab`**: the strip's clicks, the chat deep-link
+  focus, and starting a new chat all have to be visible to the counter, so `openTabs.ts` is the choke point
+  for *navigating* the center area exactly as it already is for *opening* into it. The e2e dispatches both
+  clicks in one JS tick, which pins the interleaving without depending on real latency.
+
   The active-preview-tab click is the **touch** path: `apps/web/index.html` ships a plain
   `width=device-width` viewport, so a double tap is the browser's zoom gesture and `dblclick` is not
   something a phone user can rely on — this is the one promote gesture that works there, and it costs
