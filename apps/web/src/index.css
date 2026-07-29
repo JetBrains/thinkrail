@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "./styles/fonts.css";
+@import "./styles/generated/typography.css";
 @import "./styles/tokens.css";
 @import "./styles/global.css";
 
@@ -35,30 +36,24 @@
 	--color-gold: var(--gold);
 	--color-on-accent: var(--on-accent);
 
-	--font-sans: var(--font);
+	--font-sans: var(--tr-font-family-interface);
 
 	/*
-	 * Each tier declares BOTH halves of its type style: the size AND its line-height. Tailwind pairs
-	 * every `--text-*` with a default `--text-*--line-height` (xs 1.333, sm 1.4286, base 1.5, lg 1.5556);
-	 * overriding only the size would leave those defaults governing line-height, i.e. Tailwind
-	 * would own a typography property our design system is supposed to own. Pinning each pair to
-	 * `--line-height` makes the documented global (tokens.css, 1.6) the real value at every tier, and
-	 * keeps every property of a type style declared in one place — the shape a token source (the planned
-	 * typography JSON) can generate. Per-usage exceptions stay where they belong: a `leading-*` utility
-	 * sets `--tw-leading`, which still wins over the pair.
+	 * Primitive size utilities, mapped onto the generated typography tokens (source: typography.json).
+	 * Ordinary components use the SEMANTIC classes (`tr-text-ui`, `tr-title-dialog`, …); these remain for
+	 * genuinely exceptional surfaces and for third-party integration. Both halves of each tier are
+	 * declared — Tailwind's per-size default line-heights own nothing here.
 	 */
-	--text-xs: var(--font-xs);
-	--text-xs--line-height: var(--line-height);
-	--text-sm: var(--font-sm);
-	--text-sm--line-height: var(--line-height);
-	/* Reading tier: chat messages, markdown, page-level supporting copy — never UI controls. Same value
-	   as `text-md` (the heading size) on purpose; the two names carry different semantic roles. */
-	--text-base: var(--font-md);
-	--text-base--line-height: var(--line-height);
-	--text-md: var(--font-md);
-	--text-md--line-height: var(--line-height);
-	--text-lg: var(--font-lg);
-	--text-lg--line-height: var(--line-height);
+	--text-xs: var(--tr-font-size-s10);
+	--text-xs--line-height: var(--tr-line-height-default);
+	--text-sm: var(--tr-font-size-s12);
+	--text-sm--line-height: var(--tr-line-height-default);
+	--text-base: var(--tr-font-size-s14);
+	--text-base--line-height: var(--tr-line-height-default);
+	--text-md: var(--tr-font-size-s14);
+	--text-md--line-height: var(--tr-line-height-default);
+	--text-lg: var(--tr-font-size-s18);
+	--text-lg--line-height: var(--tr-line-height-default);
 
 	--spacing-xs: var(--space-xs);
 	--spacing-sm: var(--space-sm);
@@ -102,36 +97,36 @@
 	}
 }
 
-/* The dense technical tier (11px): terminal, fenced code, tool output, diffs, technical badges, keycaps. */
-@utility text-mono {
-	font-family: var(--font-mono);
-	font-size: var(--font-mono-size);
-}
-
-/* The long-form inline-code tier (13px): ONLY inline code inside `text-base` reading content. */
-@utility text-base-mono {
-	font-family: var(--font-mono);
-	font-size: var(--font-body);
-}
+/*
+ * NOTE: `text-mono`, `text-base-mono`, `text-eyebrow` and `text-brand` used to live here as
+ * hand-written utilities. They are now generated from `typography.json` as `tr-code-text`,
+ * `tr-code-inline`, `tr-text-eyebrow`, `tr-brand-wordmark` / `tr-brand-hero` — see
+ * `styles/generated/typography.css`. Do not add a typography utility here; add a semantic style to the
+ * JSON instead (TYPOGRAPHY.md → "Adding or changing a style").
+ */
 
 /*
- * The eyebrow / section-label role: a small uppercase label above or beside a group (panel labels,
- * rail group headings, settings sub-groups, menu group headings, plan sections, card tags). Carries
- * size + weight + tracking + transform — the whole type style — so a call site adds only its colour.
- * Replaces five near-identical spellings (400/500 × wide/wider × 10px/9px) with one.
+ * DEPRECATED transitional aliases, deleted in the migration commit that empties their call sites.
+ * They exist ONLY so this commit is independently revertible: values come from the generated tokens, so
+ * they cannot drift from the JSON while the migration is in flight. Do not add a call site.
  */
+@utility text-mono {
+	font-family: var(--tr-font-family-code);
+	font-size: var(--tr-font-size-s11);
+}
+@utility text-base-mono {
+	font-family: var(--tr-font-family-code);
+	font-size: var(--tr-font-size-s13);
+}
 @utility text-eyebrow {
-	font-size: var(--font-xs);
-	line-height: var(--line-height);
-	font-weight: 400;
-	letter-spacing: var(--tracking-wider);
+	font-size: var(--tr-font-size-s10);
+	line-height: var(--tr-line-height-default);
+	font-weight: var(--tr-font-weight-regular);
+	letter-spacing: var(--tr-letter-spacing-wide);
 	text-transform: uppercase;
 }
-
-/* The canonical ThinkRail brand display style — family/weight/tracking ONLY; each usage sets its own
- * size + line-height (header wordmark: text-lg; welcome hero: text-[44px] leading-tight). */
 @utility text-brand {
-	font-family: var(--font-accent);
-	font-weight: 800;
-	letter-spacing: 0.5px;
+	font-family: var(--tr-font-family-brand);
+	font-weight: var(--tr-font-weight-brand);
+	letter-spacing: var(--tr-letter-spacing-brand);
 }

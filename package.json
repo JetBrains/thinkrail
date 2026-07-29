@@ -42,7 +42,10 @@
 		"e2e:headed": "playwright test --headed",
 		"e2e:ui": "playwright test --ui",
 		"check:deps": "bun scripts/check-catalog.ts",
-		"check:seams": "bun scripts/check-binary-seams.ts"
+		"check:seams": "bun scripts/check-binary-seams.ts",
+		"typography:generate": "bun --filter @thinkrail/web typography:generate",
+		"typography:validate": "bun --filter @thinkrail/web typography:validate",
+		"typography:check": "bun --filter @thinkrail/web typography:check"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.5.0",

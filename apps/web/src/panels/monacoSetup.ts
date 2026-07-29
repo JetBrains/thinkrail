@@ -73,16 +73,16 @@ function cssVar(name: string): string | undefined {
  * resolved.
  */
 export function sharedEditorOptions() {
-	const fontSize = Number.parseFloat(cssVar("--font-mono-size") ?? "") || 11;
+	const fontSize = Number.parseFloat(cssVar("--tr-font-size-s11") ?? "") || 11;
 	// `--line-height` is a unitless multiplier (e.g. 1.6); Monaco reads 0<v<8 as a multiplier of fontSize.
-	const lineHeight = Number.parseFloat(cssVar("--line-height") ?? "") || undefined;
+	const lineHeight = Number.parseFloat(cssVar("--tr-line-height-default") ?? "") || undefined;
 	return {
 		readOnly: true,
 		minimap: { enabled: false },
 		scrollBeyondLastLine: false,
 		automaticLayout: true,
 		fontSize,
-		fontFamily: cssVar("--font-mono") ?? "monospace",
+		fontFamily: cssVar("--tr-font-family-code") ?? "monospace",
 		...(lineHeight && lineHeight > 0 ? { lineHeight } : {}),
 	} as const;
 }
