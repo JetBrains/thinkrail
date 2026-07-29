@@ -13,17 +13,21 @@ tags:
 
 # Typography audit (as-implemented)
 
-An **audit only** — a full inventory of every text style `apps/web` actually renders, the hardcoded
-values that survive outside the token system and why, and where the system duplicates itself or loses
-hierarchy. **Nothing here changes code, tokens, or branding.** No recommendation in §8 has been
-applied.
+A full inventory of every text style `apps/web` actually renders, the hardcoded values that survive
+outside the token system and why, and where the system duplicates itself or loses hierarchy.
+
+The document is **descriptive** — it reports, it does not decide. Two of its findings have since been
+acted on in a **reconciliation pass** (§10): line-height became a declared property of every size
+tier, and the 9 hardcoded values whose token mapping was unambiguous were replaced. Everything else in
+§8 remains a proposal; nothing else has been changed, and no branding or token was added.
 
 Companion documents:
 
-- `TYPOGRAPHY.md` — the *intended* system (scale, weight policy, mono policy). Normative.
-- **This file** — the *observed* system, and every place the two disagree. Descriptive.
+- `TYPOGRAPHY.md` — the *intended* system (scale, weight policy, mono policy). **Normative** — and the
+  side that wins: where implementation and spec disagreed, the implementation moved (§10).
+- **This file** — the *observed* system, and every place the two still disagree. Descriptive.
 
-Where they disagree, this file names the drift; it does not silently "fix" `TYPOGRAPHY.md`.
+Where they disagree, this file names the drift; it does not silently "fix" either side.
 
 ## 0. Scope & method
 
@@ -51,9 +55,14 @@ Where they disagree, this file names the drift; it does not silently "fix" `TYPO
   3. Third-party text rendered by Monaco, xterm, mermaid and shiki is configured in JS, not classes;
      it is inventoried separately in §2.9.
 
-**Headline count:** 78 distinct declared typography combinations across 72 of the 159 `.ts(x)` files,
-expressed through 5 size utilities + 3 composite utilities + **12 distinct hardcoded size expressions
-at 25 sites**.
+**Headline count:** **75** distinct declared typography combinations across 72 of the 159 `.ts(x)`
+files, expressed through 5 size utilities + 3 composite utilities + **10 distinct hardcoded size
+expressions at 16 sites**.
+
+> **Reconciliation pass applied (see §10).** This document was first written against a tree with 78
+> combinations / 25 hardcoded sites. Two changes have since landed: line-height became a declared
+> property of every size tier, and the 9 hardcoded values whose token mapping was unambiguous were
+> replaced. Every count and table below reflects the *current* tree; §10 records what moved and why.
 
 ## 1. The token layer
 
@@ -164,35 +173,36 @@ render at `text-base` (14px) — you type two pixels smaller than you read (§6.
 
 | # | Style | Size | Notes | Sites |
 |---|---|---|---|---|
-| 19 | `text-xs text-hint` | 10px | **the single most-used style in the app** | 56 sites across 26 files |
+| 19 | `text-xs text-hint` | 10px | **the single most-used style in the app** | 59 sites across 26 files (+3 from §10) |
 | 20 | `text-xs text-muted` | 10px | secondary metadata | 25 sites across 15 files |
 | 21 | `text-xs` (bare) | 10px | inherited colour | 15 sites |
 | 22 | `text-xs text-text` | 10px | high-contrast metadata + **tooltip body** | `ui/tooltip.tsx:19`, `chat/Composer:655`, `chat/tools/AskUserQuestionCard:573`, `chat/tools/visualize/ComparisonCard:42,52` |
 | 23 | `text-xs italic text-hint` | 10px | "no output"/empty placeholders in tool cards | 8 sites (7 files) |
 | 24 | `text-xs text-red` / `text-green` / `text-gold` / `text-primary` | 10px | status-coloured metadata | 9 / 2 / 1 / 1 sites |
 | 25 | `text-xs leading-snug text-muted` | 10px | card subtitle | `panels/{NewWorkspaceDialog:499, WelcomePanel:260}` |
-| 26 | `text-[10px] text-hint` | **10px hardcoded** | identical to #19 | `chat/HistoryOverlay.tsx:139,151,173` |
-| 27 | `text-[11px] text-hint` / `text-[11px] text-muted` | **11px hardcoded, proportional** | no token exists at 11px proportional | `chat/HistoryOverlay.tsx:284,493,572` |
+| 26 | ~~`text-[10px] text-hint`~~ | — | **resolved** — folded into #19 (`text-xs text-hint`) | was `chat/HistoryOverlay.tsx:139,151,173` |
+| 27 | `text-[11px] text-hint` / `text-[11px] text-muted` | **11px hardcoded, proportional** | no token exists at 11px proportional — **the one remaining size gap** (§3.3) | `chat/HistoryOverlay.tsx:284,493,572` |
 | 28 | `text-xs text-muted text-text` *(conditional)* | 10px | active/inactive pair | `chat/SkillsButton:32`, `chat/ChatView`, `panels/TemplatesSettings` |
 
-### 2.5 Eyebrows / section labels (uppercase) — **9 variants**
+### 2.5 Eyebrows / section labels (uppercase) — **8 variants**
 
 | # | Style | Size | Weight | Tracking | Colour | Sites |
 |---|---|---|---|---|---|---|
 | 29 | `text-xs uppercase tracking-wider text-muted` | 10px | 400 | wider | muted | `panels/{ProvidersSettings:254,TerminalsPanel:38,ProjectTree:98}`, `ui/dropdown-menu.tsx:49` |
-| 30 | `text-xs uppercase tracking-wider text-hint` | 10px | 400 | wider | hint | `chat/ThinkingSelector.tsx:34` |
+| 30 | `text-xs uppercase tracking-wider text-hint` | 10px | 400 | wider | hint | `chat/ThinkingSelector.tsx:34`, `chat/TodoList.tsx:131,172` (the latter two via §10) |
 | 31 | `text-xs uppercase tracking-wider` (bare) | 10px | 400 | wider | inherited | `panels/RightPanel.tsx:92` |
 | 32 | `text-xs font-medium uppercase tracking-wider text-hint` | 10px | **500** | wider | hint | `panels/CenterTabs.tsx:254` |
 | 33 | `text-xs font-medium uppercase tracking-wider text-muted` | 10px | **500** | wider | muted | `panels/TemplatesSettings.tsx:291` |
 | 34 | `text-xs uppercase tracking-wide text-hint` | 10px | 400 | **wide** | hint | `chat/HistoryOverlay.tsx:502,525` |
 | 35 | `text-xs font-medium uppercase tracking-wide text-text` | 10px | **500** | **wide** | text | `chat/SkillsDialog.tsx:197,313` |
-| 36 | `text-[10px] uppercase tracking-wider text-hint` | **10px hardcoded** | 400 | wider | hint | `chat/TodoList.tsx:131,172` |
+| 36 | ~~`text-[10px] uppercase tracking-wider text-hint`~~ | — | — | — | — | **resolved** — folded into #30 (`text-xs … text-hint`); was `chat/TodoList.tsx:131,172` |
 | 37 | `text-[9px] uppercase tracking-wider` | **9px hardcoded** | 400 | wider | inherited | `panels/SpecsPanel.tsx:171` |
 
-Nine ways to render the same semantic thing ("a small uppercase group label"), differing only in
-weight (400/500), tracking (`wide`/`wider`), colour (hint/muted/text/inherited) and size
-(10px token / 10px literal / 9px literal). `--uppercase-size/-weight/-spacing` — tokens that exist
-precisely for this role — are used by none of them.
+Eight ways to render the same semantic thing ("a small uppercase group label"), differing in weight
+(400/500), tracking (`wide`/`wider`), colour (hint/muted/text/inherited) and size (10px token vs the
+one 9px literal). Down from nine: §10 folded the `text-[10px]` variant into #30, so size is no longer
+a *third* axis of divergence. `--uppercase-size/-weight/-spacing` — tokens that exist precisely for
+this role — are still used by none of them, so the role remains unowned (§6.4).
 
 ### 2.6 Buttons / controls
 
@@ -221,17 +231,17 @@ so that agreement is 5 copies of a literal plus one file-local `INPUT_CLASS` con
 coincidence rather than by a shared component. There is also no `input` role in the scale — inputs are
 just "default UI text", which is why the composer/message mismatch in §6.3 exists.
 
-### 2.8 Badges / pills / keycaps — **5 variants**
+### 2.8 Badges / pills / keycaps — **5 variants** (all now token-sized except the 11px gap)
 
 | # | Style | Family | Size | Sites |
 |---|---|---|---|---|
 | 45 | `text-mono uppercase` | mono | 11px | `panels/SettingsDialog.tsx:87` ("Soon") |
-| 46 | `font-[var(--font-mono)] text-[10px] uppercase tracking-wide text-primary` | mono | **10px hardcoded** | `panels/WelcomePanel.tsx:246` (card tag, e.g. "spec-first") |
-| 47 | `text-[10px] text-on-accent` | **proportional** | **10px hardcoded** | `chat/tools/visualize/ComparisonCard.tsx:33` ("Recommended") |
+| 46 | `font-[var(--font-mono)] text-xs uppercase tracking-wide text-primary` | mono | 10px (was a literal) | `panels/WelcomePanel.tsx:246` (card tag, e.g. "spec-first") |
+| 47 | `text-xs text-on-accent` | **proportional** | 10px (was a literal) | `chat/tools/visualize/ComparisonCard.tsx:33` ("Recommended") |
 | 48 | `text-[11px] font-medium text-primary` | proportional | **11px hardcoded** | `chat/tools/AskUserQuestionCard.tsx:730` (pill) |
 | 49 | `text-xs` diff-stat badge | proportional | 10px | `panels/DiffStatBadge.tsx:17` |
 | 50 | `text-mono` keycap (`↵`) | mono | 11px | `panels/NewWorkspaceDialog.tsx:569` |
-| 51 | `text-[10px] text-hint` shortcut hint | proportional | **10px hardcoded** | `chat/HistoryOverlay.tsx:151,173` |
+| 51 | `text-xs text-hint` shortcut hint | proportional | 10px (was a literal) | `chat/HistoryOverlay.tsx:151,173` |
 
 Same UI object (a small pill), five typographic treatments across mono/proportional and 10/11px.
 
@@ -266,27 +276,26 @@ size; mermaid takes family only, so diagram label size is outside the system ent
 | `panels/CenterTabs.tsx:260` (workspace-ready branch line, `text-xs`) | 12px | ❌ undocumented |
 | `panels/DiffPane.tsx:86` (diff header path, `text-xs`) | 12px | ❌ undocumented |
 | `chat/SkillsDialog.tsx:394` (skill name, `text-sm`) | 12px | ❌ undocumented — and it's an *identity* name, which the mono policy forbids |
-| `chat/TodoList.tsx:207` (todo note, `text-[10px]`) | 10px | ❌ undocumented |
-| `panels/WelcomePanel.tsx:246` (card tag, `text-[10px]`) | 10px | ❌ undocumented |
+| `chat/TodoList.tsx:207` (todo note, now `text-xs`) | 10px | ❌ undocumented |
+| `panels/WelcomePanel.tsx:246` (card tag, now `text-xs`) | 10px | ❌ undocumented |
 
 Counting the utilities, mono renders at **10, 11, 12, 13, 18px and `0.85em`** — six sizes for a
 two-tier policy.
 
 ## 3. Remaining hardcoded typography — and why it survives
 
-**24 sites carry a hardcoded size (11 distinct values)** after the one unambiguous replacement landed
-(§5, D3). Grouped by *why*, since the reason determines whether it is technical debt or a deliberate
-exception.
+**16 sites carry a hardcoded size (10 distinct values)** after the reconciliation pass (§10). Grouped
+by *why*, since the reason determines whether it is technical debt or a deliberate exception.
 
 | Value | Sites | Verdict (below) |
 |---|---|---|
-| `text-[10px]` | 8 | drift — token exists (§3.2) |
-| `text-[11px]` | 4 | scale gap (§3.3) |
+| `text-[11px]` | 4 | **scale gap — left as-is by decision** (§3.3) |
 | `text-[0.85em]` | 4 | sanctioned / prose (§3.1, §3.4) |
-| `text-[9px]` | 1 | unmapped token (§3.3) |
+| `text-[9px]` | 1 | **scale gap — left as-is by decision** (§3.3) |
 | `text-[44px]` | 1 | sanctioned (§3.1) |
 | `text-[2em]` `[1.5em]` `[1.25em]` `[1em]` `[0.875em]` `[0.9em]` | 6 | prose scale (§3.4) |
-| ~~`text-[length:var(--font-md)]`~~ | 0 | **replaced** by `text-base` (§5, D3) |
+| ~~`text-[10px]`~~ | 0 | **replaced** by `text-xs` (§10) |
+| ~~`text-[length:var(--font-md)]`~~ | 0 | **replaced** by `text-base` (§10) |
 
 ### 3.1 Sanctioned by the spec (leave alone)
 
@@ -295,17 +304,18 @@ exception.
 | `text-[44px]` | `WelcomePanel:144` hero | `text-brand` deliberately carries **no size** — every brand usage sets its own. `TYPOGRAPHY.md` documents this exact value. |
 | `text-[0.85em]` ×3 | `Markdown.tsx:68,95,102` fenced code | Document content must scale *with the prose*, so it is em-relative by design (user-confirmed in `TYPOGRAPHY.md`). |
 
-### 3.2 A token exists with the identical value — pure drift (5 sites)
+### 3.2 A token existed with the identical value — **resolved** (8 sites)
 
-| Value | Site | Same-size token | Appearance-identical? |
-|---|---|---|---|
-| `text-[10px]` | `HistoryOverlay:139,151,173` | `text-xs` (`--font-xs` = 10px) | ✅ pixel-verified |
-| `text-[10px]` | `TodoList:131,172,207` | `text-xs` | ❓ unverified (agent-only surface) |
-| `text-[10px]` | `ComparisonCard:33` | `text-xs` | ❓ unverified (agent-only surface) |
-| `text-[10px]` | `WelcomePanel:246` | `text-xs` | ❌ **no** — pill 23px → 20px (§5.1) |
+All 8 `text-[10px]` literals are now `text-xs` (§10). They are listed here because the *reason they
+survived* is still the useful finding — and because the swap only became appearance-neutral after
+line-height became a declared tier property (§5.1).
 
-The font-*size* mapping is unambiguous at all 8 sites; the *line-height* is not (§5.1), which is why
-none of them has been swapped.
+| Value | Site | Now |
+|---|---|---|
+| `text-[10px]` | `HistoryOverlay:139,151,173` | `text-xs` |
+| `text-[10px]` | `TodoList:131,172,207` | `text-xs` |
+| `text-[10px]` | `ComparisonCard:33` | `text-xs` |
+| `text-[10px]` | `WelcomePanel:246` | `text-xs` |
 
 **Why they survive:** provenance explains it exactly. `HistoryOverlay` (Ctrl+R history search, #109,
 2026‑07‑26), `TodoList` (chat TODO plans, 2026‑07‑21), `SkillsDialog`/`SkillsButton`/
@@ -319,11 +329,14 @@ their literals passed through untouched.
 
 ### 3.3 No token exists for the value (4 sites)
 
+**These 5 sites are deliberately unchanged** — no token was invented for them; they are the audit's
+two standing design decisions.
+
 | Value | Site | Gap |
 |---|---|---|
 | `text-[11px]` ×3 | `HistoryOverlay:284,493,572` | 11px **proportional** has no token. `--font-mono-size` is 11px but is the *mono* tier, and `text-mono` would change the family too. The proportional scale jumps 10 → 12. |
 | `text-[11px]` | `AskUserQuestionCard:730` | same gap, in a pill |
-| `text-[9px]` | `SpecsPanel:171` | 9px exists as `--compact-font-base` — but it is written by JS and **never mapped to a utility**, so there was nothing to reference. |
+| `text-[9px]` | `SpecsPanel:171` | 9px exists as `--compact-font-base` — but it is written by JS and **never mapped to a utility**, so there is nothing to reference. |
 
 ### 3.4 Deliberately relative (markdown prose skins)
 
@@ -344,8 +357,8 @@ a fixed-px token scale cannot express. This is legitimate — but it is **entire
 
 ### 3.5 Non-size hardcoding
 
-- **Line-height, the big one:** the size utilities silently carry Tailwind's per-size line-heights, so
-  the documented "global 1.6" governs far less text than the spec implies — see §5.1.
+- **Line-height, the big one — now closed:** the size utilities used to silently carry Tailwind's
+  per-size line-heights; each tier now declares its own (§5.1, §10).
 - **Tracking:** `tracking-wider` (12), `tracking-wide` (5), `tracking-widest` (1) are Tailwind
   defaults (0.025em / 0.05em / 0.1em) — none flow from `--uppercase-spacing: 0.5px`, the token meant
   for exactly this.
@@ -402,7 +415,7 @@ There is **no `@font-face` rule and no self-hosted font file anywhere in the rep
 
 | # | Duplicate | Occurrences | Note |
 |---|---|---|---|
-| D1 | `text-[10px]` vs `text-xs` | 8 literal sites vs 150 token sites | **NOT equivalent** — same font-size, different line-height. See §5.1. |
+| D1 | ~~`text-[10px]` vs `text-xs`~~ | 0 (**resolved**) | Was *not* equivalent (line-height); made equivalent by §5.1, then swapped — §10 |
 | D2 | `text-base` ≡ `text-md` (both 14px) | 3 vs 9 | Deliberate two-name split, unenforced |
 | D3 | ~~`text-[length:var(--font-md)]` ≡ `text-base`~~ | 0 (**resolved**) | Was `MarkdownPreview:19`; now `text-base`, pixel-verified identical because the element's own `leading-[1.65]` supplies `--tw-leading` |
 | D4 | Dialog title vs ask-question title (`text-md font-semibold text-text` ± `leading-none`) | 1 + 2 | Same style, one via the `DialogTitle` primitive, one hand-rolled |
@@ -415,11 +428,13 @@ There is **no `@font-face` rule and no self-hosted font file anywhere in the rep
 | D11 | Mono-at-12px (`font-[var(--font-mono)] text-xs`) | 6 sites | An unnamed *de facto* third mono tier |
 | D12 | `<input>` type treatment | 5 literals + 1 local constant | No `Input` primitive exists to own it (§2.7) |
 
-### 5.1 The line-height trap (why D1 is not a duplicate)
+### 5.1 The line-height trap — found here, now closed
 
-The size utilities do **not** carry font-size alone. Tailwind's default theme pairs every size with a
-line-height, and mapping `--text-*` through `@theme inline` overrides the *size* while leaving the
-paired line-height in place. Both halves are visible in the built CSS:
+**This was the audit's most consequential finding, and it is the reason §10 exists.**
+
+The size utilities did **not** carry font-size alone. Tailwind's default theme pairs every size with a
+line-height, and mapping `--text-*` through `@theme inline` overrode the *size* while leaving the
+paired line-height in place. The original built CSS:
 
 ```css
 --text-xs--line-height: calc(1 / .75);      /* 1.3333 */
@@ -431,20 +446,22 @@ paired line-height in place. Both halves are visible in the built CSS:
 .text-\[10px\] { font-size: 10px }           /* no line-height — inherits the global 1.6 */
 ```
 
-So `text-[10px]` inherits 1.6 while `text-xs` applies 1.3333. Measured on the Welcome card tag
-(`WelcomePanel:246`), swapping the literal for the token shrinks the pill from **23px to 20px** tall —
-a real, visible change. The three `HistoryOverlay` sites are pixel-identical either way (their line box
-doesn't drive layout), but the *class* of change is not appearance-neutral, so **all 8 sites were left
-unchanged** pending a decision (§8, item 1).
+So `text-[10px]` inherited 1.6 while `text-xs` applied 1.3333. Measured on the Welcome card tag
+(`WelcomePanel:246`), swapping the literal for the token shrank the pill from **23px to 20px** — a real,
+visible change. Two consequences, both larger than D1 itself:
 
-Two consequences beyond D1:
+1. **`TYPOGRAPHY.md`'s "Line-height: 1.6 global" was not what rendered.** Every site carrying
+   `text-xs`/`text-sm`/`text-base`/`text-lg` (~253) used Tailwind's ratio for that size
+   (1.333 / 1.4286 / 1.5 / 1.5556) unless a `leading-*` overrode it. 1.6 governed only text with *no*
+   size utility — the body default and inherited text.
+2. The type system had **two** line-height regimes (documented-global vs Tailwind-default-per-size),
+   and the spec described only the first.
 
-1. **`TYPOGRAPHY.md`'s "Line-height: Global 1.6" is not what renders.** Every site carrying
-   `text-xs`/`text-sm`/`text-base`/`text-lg` (~253) renders at Tailwind's default ratio for that size
-   (1.333 / 1.4286 / 1.5 / 1.5556) unless a `leading-*` utility overrides it. 1.6 applies only to text
-   with *no* size utility — the body default and inherited text.
-2. The type system therefore has **two** line-height regimes (documented-global vs
-   Tailwind-default-per-size), and the spec describes only the first.
+**Resolution (§10):** the spec was *not* amended to match the framework. Instead every tier now
+declares both halves of its style — `--text-<tier>` **and** `--text-<tier>--line-height:
+var(--line-height)` — so the documented 1.6 is what renders, and no typography property is owned by
+Tailwind's defaults. This also made D1's swap a no-op: with the pair pinned, `text-xs` and
+`text-[10px]` compute the same 10px/16px, and the Welcome tag stayed 23px (pixel-verified).
 
 ## 6. Missing hierarchy (should probably share one semantic role)
 
@@ -494,10 +511,10 @@ one of which is documented and two of which are not.
 ### 6.8 Line-height and tracking are outside the system
 
 Six leading values and three tracking values, all Tailwind constants, none tokenised (§3.5). The
-prose root's 1.65 already diverges from the global 1.6 with nothing recording why — and, more
-fundamentally, **most text never uses the global 1.6 at all**: the size utilities carry Tailwind's
-per-size line-heights (§5.1). So "line-height" currently has three owners — the documented global
-value, Tailwind's implicit per-size defaults, and six ad-hoc `leading-*` overrides.
+prose root's 1.65 still diverges from the global 1.6 with nothing recording why. The *systemic* half of
+this finding is closed: line-height now has two owners (the declared tier value and explicit
+`leading-*` overrides) instead of three — Tailwind's implicit defaults no longer participate (§5.1).
+The six `leading-*` constants remain untokenised.
 
 ## 7. Component mapping (style → components)
 
@@ -526,19 +543,17 @@ Reverse index of §2. "→" reads *is used by*.
 | **xterm** | TerminalInstance |
 | **mermaid** | DiagramCard / MermaidView |
 
-## 8. Recommendations (not applied)
+## 8. Recommendations (§10 records the two that have been applied)
 
-Ordered by ratio of clarity gained to risk taken. Each is a *proposal*; none is implemented, and
-several need a design decision that is explicitly **not** made here.
+Ordered by ratio of clarity gained to risk taken. Items 1, 2 and 10b are **done** (§10); the rest are
+*proposals*, several of which need a design decision that is explicitly **not** made here.
 
 **Zero-visual-change consolidation:**
 
-1. ⚠️ **Not safe after all** — replacing the 8 `text-[10px]` literals with `text-xs` also swaps
-   line-height 1.6 → 1.333 (§5.1), measured at −3px of pill height on the Welcome tag. Needs one of:
-   accept the tightening; pin the current leading at those sites; or rule that the documented global
-   1.6 wins everywhere (which changes ~253 sites, not 8). **Open decision.**
-2. ✅ **Done** — `text-[length:var(--font-md)]` → `text-base` at `MarkdownPreview:19`, pixel-verified
-   identical (its `leading-[1.65]` already supplies `--tw-leading`). D3 resolved.
+1. ✅ **Done** (§10) — the 8 `text-[10px]` literals are `text-xs`, after §5.1's line-height ownership
+   change made the swap appearance-neutral. D1 resolved.
+2. ✅ **Done** (§10) — `text-[length:var(--font-md)]` → `text-base` at `MarkdownPreview:19`,
+   pixel-verified identical (its `leading-[1.65]` already supplies `--tw-leading`). D3 resolved.
 3. Use the shared `Button` (or its `buttonVariants`) at the 3 hand-rolled primary buttons — removes D5
    (15 files already import it).
 4. Delete the dead tokens (`--font-lg2/-xl/-xxl`, `--uppercase-*`) **or** give them a role; and either
@@ -562,10 +577,9 @@ several need a design decision that is explicitly **not** made here.
    recorded as intentional.
 10. **Tokenise prose line-height** (`--line-height-prose: 1.65`) so the markdown root's divergence from
     1.6 is a decision rather than a literal.
-10b. **Decide who owns line-height** (§5.1): either accept Tailwind's per-size ratios and amend
-    `TYPOGRAPHY.md` (which says 1.6 globally), or neutralise the paired `--text-*--line-height`
-    values so the documented 1.6 actually governs. This is the prerequisite for item 1 — and it is a
-    ~253-site visual decision, not a cleanup.
+10b. ✅ **Done** (§10) — line-height ownership was decided in favour of the design system: the paired
+    `--text-*--line-height` values are declared in our layer as `var(--line-height)`, so the
+    documented 1.6 governs every tier. The spec was **not** amended to match Tailwind.
 11. **Document the markdown em-scale** in `TYPOGRAPHY.md` — it is the app's only relative type scale
     and currently exists only in code.
 
@@ -607,6 +621,56 @@ is a *view* of this document, and this document stays the source of truth after 
 - **Constraints:** the page must apply the *live* utilities (no re-declared literals), so it re-themes
   with the theme engine and cannot drift from what components render; it must not introduce a token; and
   it must be removable in a single revert.
+
+## 10. Reconciliation pass — what was applied, and what was deliberately not
+
+The audit's first version was descriptive only. One reconciliation pass has since landed, on the
+principle that **the specification leads and the implementation follows** — explicitly *not* the other
+way around.
+
+### 10.1 Line-height became a declared property of every tier
+
+`index.css` now declares both halves of each tier — `--text-<tier>` **and**
+`--text-<tier>--line-height: var(--line-height)` — for `xs`, `sm`, `base`, `md`, `lg`.
+
+- **Why:** Tailwind's per-size defaults were silently owning a typography property this design system
+  owns (§5.1). The alternative — amending `TYPOGRAPHY.md` to describe 1.333/1.4286/1.5/1.5556 — was
+  rejected: the framework should not become the source of truth.
+- **Forward-compatibility:** every property of a tier is now declared in one place, which is the shape
+  a token source (the planned typography JSON: family, size, weight, line-height, tracking, transform
+  per role) can generate. Nothing here depends on Tailwind's defaults any more.
+- **Visual effect — intended, and real:** text at every tier gains its documented 1.6 leading. Measured
+  line boxes: `text-xs` 13.33px → 16px, `text-sm` 17.14px → 19.2px, `text-base` 21px → 22.4px,
+  `text-lg` 28px → 28.8px. Fixed-height rows (`h-7`/`h-8` rails, tree rows) are unchanged; auto-height
+  rows grow ~2–3px (a centre tab 25.2px → 27.2px, a right-panel tab label 13.3px → 16px). A
+  whole-DOM clipping probe (`scrollHeight > clientHeight` on every `overflow-hidden` element) found
+  **0 clipped elements before and after**, so no component needed a padding/min-height fix.
+- Per-usage `leading-*` overrides are untouched: they set `--tw-leading`, which still wins over the pair.
+
+### 10.2 Hardcoded values replaced by their semantic tokens (9 sites)
+
+| Was | Now | Sites | Proof of no visual change |
+|---|---|---|---|
+| `text-[10px]` | `text-xs` | `HistoryOverlay:139,151,173` · `TodoList:131,172,207` · `ComparisonCard:33` · `WelcomePanel:246` | Both compute 10px/16px once §10.1 lands. Welcome tag box **23px before and after** (byte-identical element PNG); the history overlay full-page shot is byte-identical. `TodoList`/`ComparisonCard` are agent-only surfaces — not screenshot-verified, but neither sits under a `leading-*` ancestor, so the computed pair is the same 10px/16px. |
+| `text-[length:var(--font-md)]` | `text-base` | `MarkdownPreview:19` | Byte-identical full-page shot; its own `leading-[1.65]` supplies `--tw-leading` in both spellings. |
+
+No token was invented, no `leading-*` was added to "hold" an old value, and no literal was kept for
+backward compatibility.
+
+### 10.3 Deliberately left alone
+
+| Left as-is | Why |
+|---|---|
+| `text-[11px]` ×4 (`HistoryOverlay`, `AskUserQuestionCard`) | A genuine **scale gap** — 11px proportional has no token, and inventing one was out of scope. Standing design decision. |
+| `text-[9px]` ×1 (`SpecsPanel`) | Same: 9px exists only as the unmapped `--compact-font-base`. Standing design decision. |
+| `text-[44px]` (hero), OTP code, fenced-code + prose em scales | Documented exceptions (§3.1, §3.4). |
+| Mono-at-12px ×6, hand-rolled buttons ×3, the ask-card title twin, `<input>` literals, `--font-body`/`--font-base` | Duplicates that differ in **appearance or box model**, not only implementation (§5) — each needs its own decision, not a mechanical swap. |
+| The 8 eyebrow variants, 5 badge treatments, `text-base`≡`text-md`, dead tokens | Hierarchy/token-layer decisions (§6, §1.1) — out of scope for a reconciliation pass. |
+
+### 10.4 Verification
+
+`check:deps` · `check:seams` · `lint` · `typecheck` 10/10 · unit · **e2e no-agent 115/115**, plus the
+screenshot/measurement probes above (temporary specs, not committed).
 
 ## Appendix A — reproducing the counts
 
