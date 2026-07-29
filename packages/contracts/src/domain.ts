@@ -69,8 +69,20 @@ export interface Workspace {
 	branch: string;
 	/** Absolute path to the worktree (the cwd everything downstream uses). */
 	worktreePath: string;
-	/** Branch the worktree's diff is measured against. */
+	/**
+	 * **Creation provenance** — the ref this worktree was cut from (`git worktree add … <baseBranch>`), or
+	 * for the Default workspace the repo's default branch. Shown in the UI as `branch · from baseBranch`.
+	 * It is *not* necessarily what the diff is measured against: see `diffBase`.
+	 */
 	baseBranch: string;
+	/**
+	 * **The diff target** — the ref the workspace's changes are measured against, when the user has
+	 * re-pointed it (`workspace.setDiffBase`). Absent = measure against `baseBranch`. Two fields because
+	 * the two meanings diverge the moment a target is re-pointed: creation provenance never moves, the
+	 * review target does. Every *read* resolves `diffBase ?? baseBranch` server-side, in one place (the git
+	 * module's `diffBaseRef`); a client only mirrors the resolution to label its target-branch picker.
+	 */
+	diffBase?: string;
 	/**
 	 * Set once the workspace carries a deliberate name (assist auto-rename or a user rename; user-named
 	 * creation sets it too). Absent = still the auto `workspace-N` default, eligible for exactly one
@@ -209,6 +221,31 @@ export interface GitFileChange {
 export interface GitStatus {
 	branch: string;
 	changes: GitFileChange[];
+}
+
+/**
+ * **What** is being diffed — the Changes panel's scope selector, and part of a diff tab's identity (a
+ * tab's content must never change meaning because the rail's scope flipped underneath it). Omitted on the
+ * wire = `{ kind: "branch" }`, so an older client keeps working unchanged.
+ *
+ * - `branch` — everything on this workspace's branch vs its diff base (`diffBase ?? baseBranch`).
+ * - `uncommitted` — the worktree vs `HEAD` (what a commit here would record).
+ * - `commit` — one commit alone (`sha^` vs `sha`; a root commit degrades to an add-style diff).
+ */
+export type GitDiffScope =
+	| { kind: "branch" }
+	| { kind: "uncommitted" }
+	| { kind: "commit"; sha: string };
+
+/** One commit on the workspace's branch (not on its diff base) — a row of the scope menu's commit list. */
+export interface GitCommit {
+	sha: string;
+	/** Abbreviated oid as git prints it (`%h`) — the display form. */
+	shortSha: string;
+	subject: string;
+	author: string;
+	/** Commit date, ISO 8601 (`%cI`). */
+	committedAt: string;
 }
 
 /** A repo's branches for the New-Workspace base picker. `defaultBranch` is `origin/main` when known. */

@@ -7,12 +7,10 @@ import type {
 } from "@thinkrail/contracts";
 import {
 	Box,
-	Check,
 	ChevronDown,
 	GitBranch,
 	House,
 	type LucideIcon,
-	RefreshCw,
 	Sparkles,
 	TriangleAlert,
 } from "lucide-react";
@@ -49,6 +47,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { selectCatalogModel, selectWorkspaceTick, toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
+import { BranchPicker } from "./BranchPicker";
+import { listBranchesOrEmpty } from "./branches";
 import { enterDefaultWorkspace } from "./defaultWorkspace";
 
 /** Where the work runs: cut an isolated worktree, or enter the project folder (Default workspace). */
@@ -318,8 +318,7 @@ export function NewWorkspaceDialog({
 		if (!open) return;
 		let cancelled = false;
 		setBranches(null);
-		getTransport()
-			.request("git.listBranches", { projectId: selectedProjectId })
+		listBranchesOrEmpty(selectedProjectId)
 			.then((list) => {
 				if (cancelled) return;
 				setBranches(list);
@@ -332,9 +331,8 @@ export function NewWorkspaceDialog({
 						.catch(() => {});
 				}
 			})
-			.catch(() => {
-				if (!cancelled) setBranches({ local: [], remote: [], defaultBranch: "HEAD" });
-			});
+			// `listBranchesOrEmpty` already degrades a failed read to an empty list.
+			.catch(() => {});
 		return () => {
 			cancelled = true;
 		};
@@ -348,7 +346,7 @@ export function NewWorkspaceDialog({
 			});
 			setBranches(list);
 		} catch {
-			// Keep the current list on failure.
+			// Keep the current list on failure (unlike the initial read, there IS a list to keep).
 		} finally {
 			setRefreshing(false);
 		}
@@ -520,7 +518,10 @@ export function NewWorkspaceDialog({
 					{isolated ? (
 						<BranchPicker
 							branches={branches}
-							baseRef={baseRef}
+							selected={baseRef}
+							label="From"
+							testid="ws-branch-picker"
+							triggerClassName={`${PILL} max-w-[220px]`}
 							refreshing={refreshing}
 							container={dialogEl}
 							onSelect={selectBaseRef}
@@ -735,93 +736,6 @@ function ProjectPicker({
 								</CommandItem>
 							))}
 						</CommandGroup>
-					</CommandList>
-				</Command>
-			</PopoverContent>
-		</Popover>
-	);
-}
-
-/** The base-branch combobox: searchable, grouped Remote/Local, with a Refresh that re-lists branches. */
-function BranchPicker({
-	branches,
-	baseRef,
-	refreshing,
-	container,
-	onSelect,
-	onRefresh,
-}: {
-	branches: BranchList | null;
-	baseRef: string;
-	refreshing: boolean;
-	container: HTMLElement | null;
-	onSelect: (ref: string) => void;
-	onRefresh: () => void;
-}) {
-	const [open, setOpen] = useState(false);
-	const remote = branches?.remote ?? [];
-	const local = branches?.local ?? [];
-	const defaultBranch = branches?.defaultBranch;
-
-	const renderItem = (ref: string) => (
-		<CommandItem
-			key={ref}
-			value={ref}
-			data-testid="branch-option"
-			data-branch={ref}
-			onSelect={() => {
-				onSelect(ref);
-				setOpen(false);
-			}}
-		>
-			<span className="flex w-3.5 shrink-0 justify-center">
-				{ref === baseRef ? <Check className="size-3.5 text-primary" /> : null}
-			</span>
-			<GitBranch className="size-3.5 shrink-0 text-hint" />
-			<span className="truncate font-[var(--font-mono)] text-xs">{ref}</span>
-			{ref === defaultBranch ? (
-				<span className="ml-auto shrink-0 font-[var(--font-mono)] text-hint text-xs">default</span>
-			) : null}
-		</CommandItem>
-	);
-
-	return (
-		<Popover open={open} onOpenChange={setOpen}>
-			<PopoverTrigger
-				data-testid="ws-branch-picker"
-				data-open={open}
-				className={`${PILL} max-w-[220px]`}
-			>
-				<GitBranch className="size-3.5 shrink-0 text-muted" />
-				<span className="shrink-0 text-hint text-xs">From</span>
-				<span className="truncate font-[var(--font-mono)] text-muted text-xs">
-					{baseRef || "branch"}
-				</span>
-				<ChevronDown className="size-3 shrink-0 text-hint" />
-			</PopoverTrigger>
-			<PopoverContent align="start" container={container} className="w-[320px] p-0">
-				<div className="flex items-center justify-end border-border border-b px-sm py-xs">
-					<button
-						type="button"
-						data-testid="branch-refresh"
-						aria-label="Refresh branches"
-						title="Refresh branches"
-						onClick={onRefresh}
-						className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-hint outline-none transition-colors hover:bg-hover hover:text-muted focus-visible:ring-2 focus-visible:ring-primary"
-					>
-						<RefreshCw className={`size-3.5 ${refreshing ? "animate-spin" : ""}`} />
-					</button>
-				</div>
-				<Command>
-					<CommandInput placeholder="Search branches…" />
-					<CommandList>
-						<CommandEmpty>No branches found.</CommandEmpty>
-						{remote.length > 0 ? (
-							<CommandGroup heading="Remote">{remote.map(renderItem)}</CommandGroup>
-						) : null}
-						{local.length > 0 ? (
-							<CommandGroup heading="Local">{local.map(renderItem)}</CommandGroup>
-						) : null}
 					</CommandList>
 				</Command>
 			</PopoverContent>

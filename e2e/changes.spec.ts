@@ -1,6 +1,7 @@
+import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { expect, test } from "@playwright/test";
+import { expect, type Locator, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
 import { E2E_DATA_DIR } from "./fixtures/paths";
 import { largeRepetitiveMarkdownEdited } from "./fixtures/repo";
@@ -191,4 +192,311 @@ test("Changes has a List|Tree toggle; Tree groups files into folders with +/- co
 	await page.getByTestId("tab-files").click();
 	await page.getByTestId("tab-changes").click();
 	await expect(page.getByTestId("changes-toggle-tree")).toHaveAttribute("data-active", "true");
+});
+
+/** Run a git command inside a worktree (the fixtures the scope selector needs are made with real git). */
+function gitIn(cwd: string, ...args: string[]): void {
+	execFileSync("git", ["-C", cwd, ...args], { stdio: "ignore" });
+}
+
+/** The seeded worktree of the suite's first created workspace. */
+function worktreeDir(): string {
+	return join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
+}
+
+/**
+ * A worktree with **both** kinds of change the scope selector distinguishes: one commit on the workspace's
+ * own branch (`committed.txt`), plus an uncommitted edit of a tracked file (`README.md`).
+ */
+function seedCommitAndDirtyEdit(): string {
+	const worktree = worktreeDir();
+	writeFileSync(join(worktree, "committed.txt"), "committed by e2e\n");
+	gitIn(worktree, "add", "committed.txt");
+	gitIn(
+		worktree,
+		"-c",
+		"user.email=e2e@thinkrail.test",
+		"-c",
+		"user.name=ThinkRail E2E",
+		"commit",
+		"-m",
+		"e2e scope commit",
+	);
+	writeFileSync(join(worktree, "README.md"), "# sample-project\n\ndirty edit by e2e\n");
+	return worktree;
+}
+
+test("Changes scope selector filters by commit / uncommitted; each scope is its own diff tab", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	seedCommitAndDirtyEdit();
+
+	await page.getByTestId("tab-changes").click();
+	// The default scope is everything on the branch: the commit's file AND the dirty edit.
+	await expect(page.getByTestId("changes-scope-label")).toHaveText("All changes");
+	await expect(page.getByTestId("change-item")).toHaveCount(2);
+
+	// The menu lists the branch's commits (subject + short sha), fetched lazily on first open.
+	await page.getByTestId("changes-scope-trigger").click();
+	const commitRow = page
+		.getByTestId("changes-scope-commit")
+		.filter({ hasText: "e2e scope commit" });
+	await expect(commitRow).toHaveCount(1);
+	await commitRow.click();
+	// Picking it narrows the list to that commit alone — the dirty worktree edit is not part of it.
+	// The pill reads the commit's short sha (its subject is the tooltip — see the header-readability spec).
+	await expect(page.getByTestId("changes-scope-label")).toHaveText(/^[0-9a-f]{7,}$/);
+	await expect(page.getByTestId("change-item")).toHaveCount(1);
+	await expect(page.getByTestId("change-item").first()).toContainText("committed.txt");
+
+	// Uncommitted shows only the dirty file.
+	await page.getByTestId("changes-scope-trigger").click();
+	await page.getByTestId("changes-scope-uncommitted").click();
+	await expect(page.getByTestId("changes-scope-label")).toHaveText("Uncommitted");
+	await expect(page.getByTestId("change-item")).toHaveCount(1);
+	const readme = page.getByTestId("change-item").filter({ hasText: "README.md" });
+	await expect(readme).toHaveCount(1);
+
+	// The scope is part of a diff tab's identity: the same file in two scopes opens TWO tabs (a tab's
+	// content must never change meaning because the rail's scope flipped underneath it).
+	await readme.click();
+	const diffTabs = page.locator('[data-testid="editor-tab"][data-kind="diff"]');
+	await expect(diffTabs).toHaveCount(1);
+	await page.getByTestId("changes-scope-trigger").click();
+	await page.getByTestId("changes-scope-all").click();
+	await expect(page.getByTestId("changes-scope-label")).toHaveText("All changes");
+	await page.getByTestId("change-item").filter({ hasText: "README.md" }).click();
+	await expect(diffTabs).toHaveCount(2);
+});
+
+test("The scope menu's target-branch picker re-points what the changes are measured against", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	seedCommitAndDirtyEdit();
+
+	await page.getByTestId("tab-changes").click();
+	await expect(page.getByTestId("change-item")).toHaveCount(2);
+
+	// Re-point the target at the workspace's own branch: everything committed on it is then common
+	// ground, so only the uncommitted edit is left — and the picker marks the new target.
+	await page.getByTestId("changes-target-picker").click();
+	await page.locator('[data-testid="branch-option"][data-branch="workspace-1"]').click();
+	await expect(page.getByTestId("change-item")).toHaveCount(1);
+	await expect(page.getByTestId("change-item").first()).toContainText("README.md");
+
+	await expect(page.getByTestId("changes-target-picker")).toContainText("workspace-1");
+	await page.getByTestId("changes-target-picker").click();
+	await expect(
+		page.locator('[data-testid="branch-option"][data-branch="workspace-1"]'),
+	).toHaveAttribute("data-active", "true");
+});
+
+test("A change row's action menu opens from the ⌄ button and from right-click; Copy path writes the relative path", async ({
+	page,
+	context,
+}) => {
+	await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+
+	// A file inside a folder, so the copied path proves it is worktree-relative (not a basename).
+	const worktree = worktreeDir();
+	mkdirSync(join(worktree, "docs"), { recursive: true });
+	writeFileSync(join(worktree, "docs", "notes.md"), "one\ntwo\n");
+
+	await page.getByTestId("tab-changes").click();
+	const row = page.getByTestId("change-item").filter({ hasText: "docs/notes.md" });
+	await expect(row).toBeVisible();
+
+	// The hover/focus-revealed ⌄ trigger — the touch path, where right-click doesn't exist.
+	await row.hover();
+	await page.getByTestId("change-row-menu").click();
+	await expect(page.getByTestId("change-row-actions")).toBeVisible();
+	await page.getByTestId("change-action-copy-path").click();
+	expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("docs/notes.md");
+
+	// Right-click on the row opens the same menu; View is the same action as a plain click.
+	await row.click({ button: "right" });
+	await expect(page.getByTestId("change-row-actions")).toBeVisible();
+	await page.getByTestId("change-action-view").click();
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="diff"]')).toHaveCount(1);
+	await expect(page.getByTestId("diff-pane")).toContainText("two");
+
+	// The folder tree offers the row menu on files too — and never on a folder row.
+	await page.getByTestId("changes-toggle-tree").click();
+	const fileNode = page.getByTestId("change-node").filter({ hasText: "notes.md" });
+	await fileNode.click({ button: "right" });
+	await expect(page.getByTestId("change-row-actions")).toBeVisible();
+	await page.keyboard.press("Escape");
+	await page
+		.getByTestId("change-tree-folder")
+		.filter({ hasText: "docs" })
+		.click({ button: "right" });
+	await expect(page.getByTestId("change-row-actions")).toHaveCount(0);
+});
+
+test("The diff viewer collapses unchanged context and has a per-tab hide-whitespace + copy header", async ({
+	page,
+	context,
+}) => {
+	await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+
+	// A long tracked file with a single changed line: everything around it is unchanged context, which
+	// Monaco's `hideUnchangedRegions` collapses into an expandable "unmodified lines" separator.
+	const worktree = worktreeDir();
+	const lines = Array.from({ length: 120 }, (_, i) => `export const v${i} = ${i};`);
+	writeFileSync(join(worktree, "long.ts"), `${lines.join("\n")}\n`);
+	gitIn(worktree, "add", "long.ts");
+	gitIn(
+		worktree,
+		"-c",
+		"user.email=e2e@thinkrail.test",
+		"-c",
+		"user.name=ThinkRail E2E",
+		"commit",
+		"-m",
+		"long file",
+	);
+	lines[60] = "export const v60 = 6000;";
+	writeFileSync(join(worktree, "long.ts"), `${lines.join("\n")}\n`);
+
+	await page.getByTestId("tab-changes").click();
+	// The *uncommitted* scope is what makes this a modification of a known file (vs HEAD) rather than a
+	// whole-file add against the base branch — i.e. a diff that HAS unchanged context to collapse.
+	await page.getByTestId("changes-scope-trigger").click();
+	await page.getByTestId("changes-scope-uncommitted").click();
+	await page.getByTestId("change-item").filter({ hasText: "long.ts" }).click();
+	// The header path is a chip: muted directory prefix + bright basename (here a root-level file).
+	await expect(page.getByTestId("diff-path")).toHaveText("long.ts");
+	// Collapsed unchanged context — Monaco's own "N hidden lines" separator with an expand control — so a
+	// one-line change 60 lines in isn't lost in a wall of identical context.
+	await expect(page.getByTestId("diff-pane").locator(".diff-hidden-lines").first()).toHaveText(
+		/\d+ hidden lines/,
+	);
+	await expect(page.getByTestId("diff-pane")).toContainText("6000");
+
+	// ¶ hides whitespace-only changes, per tab.
+	const whitespace = page.getByTestId("diff-toggle-whitespace");
+	await expect(whitespace).toHaveAttribute("data-active", "false");
+	await whitespace.click();
+	await expect(whitespace).toHaveAttribute("data-active", "true");
+
+	// Copy puts the worktree side on the clipboard.
+	await page.getByTestId("diff-copy").click();
+	expect(await page.evaluate(() => navigator.clipboard.readText())).toContain(
+		"export const v60 = 6000;",
+	);
+});
+
+test("Change rows stay one aligned, fully-highlighted row — menu slot included, long names truncated", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+
+	// A deep path with a long basename, plus a root-level file: the two cases that used to break the layout
+	// (a `shrink-0` basename pushing the counts out, and the file/folder count columns disagreeing).
+	const worktree = worktreeDir();
+	mkdirSync(join(worktree, "packages/server/src/git"), { recursive: true });
+	writeFileSync(
+		join(worktree, "packages/server/src/git/diffScopeResolverImplementationForTheChangesPanel.ts"),
+		"export const range = 1;\n",
+	);
+	writeFileSync(join(worktree, "README.md"), "# sample-project\n\nedited by e2e\n");
+
+	await page.getByTestId("tab-changes").click();
+	const longRow = page.getByTestId("change-item").filter({ hasText: "diffScopeResolver" });
+	await expect(longRow).toBeVisible();
+
+	// However long the path, the row's content stays inside the row: the basename truncates instead of
+	// pushing the `+N −M` counts (and, in the diff header's twin chip, the ¶/copy controls) out of the box.
+	const rowBox = (await page.getByTestId("change-row").first().boundingBox()) ?? { x: 0, width: 0 };
+	const overflow = await longRow.evaluate((n) => n.scrollWidth - n.clientWidth);
+	expect(overflow).toBeLessThanOrEqual(1);
+	expect(await rightEdge(longRow.getByText(/^\+\d+/))).toBeLessThanOrEqual(
+		rowBox.x + rowBox.width + 1,
+	);
+
+	// The whole row is the highlight surface (it has to span the trailing `⌄` slot, or a selected row reads
+	// as cut off before its own menu) — so the *wrapper* carries the selected state, not the inner button.
+	await longRow.click();
+	const activeWrapper = page.locator('[data-testid="change-row"][data-active="true"]');
+	await expect(activeWrapper).toHaveCount(1);
+	const activeBox = (await activeWrapper.boundingBox()) ?? { width: 0 };
+	expect(activeBox.width).toBeGreaterThanOrEqual(rowBox.width - 1);
+
+	// In the tree, files and folders line their `+N −M` counts up on the same column: a folder has no row
+	// menu but reserves the same trailing slot (ROW_MENU_SLOT).
+	await page.getByTestId("changes-toggle-tree").click();
+	const folderBadge = page.getByTestId("change-tree-folder").filter({ hasText: "packages" });
+	const fileBadge = page.getByTestId("change-node").filter({ hasText: "diffScopeResolver" });
+	const folderRight = await rightEdge(folderBadge);
+	const fileRight = await rightEdge(fileBadge);
+	expect(Math.abs(folderRight - fileRight)).toBeLessThanOrEqual(1);
+});
+
+/** The right edge of a locator's box — for asserting two columns line up. */
+async function rightEdge(locator: Locator): Promise<number> {
+	const box = await locator.boundingBox();
+	if (!box) throw new Error("element has no box");
+	return box.x + box.width;
+}
+
+test("The diff header keeps its controls on a narrow pane, however long the file's path", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+
+	const worktree = worktreeDir();
+	mkdirSync(join(worktree, "packages/server/src/git"), { recursive: true });
+	writeFileSync(
+		join(worktree, "packages/server/src/git/diffScopeResolverImplementationForTheChangesPanel.ts"),
+		"export const range = 1;\n",
+	);
+
+	await page.getByTestId("tab-changes").click();
+	await page.getByTestId("change-item").filter({ hasText: "diffScopeResolver" }).click();
+	await expect(page.getByTestId("diff-pane")).toBeVisible();
+
+	// The path chip must truncate rather than push the ¶ / copy / layout controls out of the header.
+	await page.setViewportSize({ width: 620, height: 800 });
+	await expect(page.getByTestId("diff-toggle-whitespace")).toBeVisible();
+	await expect(page.getByTestId("diff-copy")).toBeVisible();
+	await expect(page.getByTestId("diff-toggle-split")).toBeVisible();
+	// The chip's *text* must stay inside the chip's own box: a `shrink-0` basename overflows it invisibly to
+	// the layout while spilling over the buttons on screen, so the header's own width can't be the check.
+	const chipOverflow = await page
+		.getByTestId("diff-path")
+		.evaluate((n) => n.scrollWidth - n.clientWidth);
+	expect(chipOverflow).toBeLessThanOrEqual(1);
+});
+
+test("A commit scope keeps the header readable: short sha on the pill, subject in its tooltip", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	seedCommitAndDirtyEdit();
+
+	await page.getByTestId("tab-changes").click();
+	await page.getByTestId("changes-scope-trigger").click();
+	await page.getByTestId("changes-scope-commit").filter({ hasText: "e2e scope commit" }).click();
+
+	// The pill shows the sha, NOT the subject — a sentence there squeezed the target-branch pill down to an
+	// ellipsis. The subject stays available as the trigger's tooltip.
+	const label = page.getByTestId("changes-scope-label");
+	await expect(label).toHaveText(/^[0-9a-f]{7,}$/);
+	await expect(page.getByTestId("changes-scope-trigger")).toHaveAttribute(
+		"title",
+		/e2e scope commit/,
+	);
+	// …and the target-branch pill next to it still reads its ref.
+	await expect(page.getByTestId("changes-target-picker")).toContainText("main");
 });

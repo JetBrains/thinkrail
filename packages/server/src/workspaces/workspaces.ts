@@ -3,7 +3,7 @@ import { existsSync, lstatSync, mkdirSync, rmSync, statSync, writeFileSync } fro
 import { dirname, join, resolve } from "node:path";
 import type { DiffStats, Project, Workspace } from "@thinkrail/contracts";
 import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
-import { currentBranch, git, gitAsync, resolveDefaultBranch } from "../git";
+import { currentBranch, diffBaseRef, git, gitAsync, resolveDefaultBranch } from "../git";
 import { dataDir, loadProjects, loadWorkspaces, saveWorkspaces } from "../persistence";
 import { getProjects } from "../projects";
 
@@ -104,9 +104,9 @@ function applyFolderTruth(ws: Workspace, truth: { branch: string; baseBranch: st
 	return true;
 }
 
-/** Working-tree changes of a worktree vs its base branch. */
-function diffStats(worktreePath: string, baseBranch: string): DiffStats {
-	const result = git(worktreePath, ["diff", "--shortstat", baseBranch]);
+/** Working-tree changes of a worktree vs its **diff base** (the re-pointed target, else the creation base). */
+function diffStats(ws: Workspace): DiffStats {
+	const result = git(ws.worktreePath, ["diff", "--shortstat", diffBaseRef(ws)]);
 	if (!result.ok || !result.out) return { added: 0, removed: 0 };
 	return {
 		added: Number(/(\d+) insertion/.exec(result.out)?.[1] ?? 0),
@@ -348,7 +348,11 @@ export function renameWorkspace(
 	const target = all.find((w) => w.id === id);
 	if (!target) throw new Error(`Unknown workspace: ${id}`);
 	for (const w of all) {
-		if (w.projectId === target.projectId && w.baseBranch === ws.branch) w.baseBranch = branch;
+		if (w.projectId !== target.projectId) continue;
+		// Both meanings follow the moved ref: creation provenance stays truthful, and a sibling that had this
+		// branch as its *diff target* keeps measuring against it instead of silently emptying its diff.
+		if (w.baseBranch === ws.branch) w.baseBranch = branch;
+		if (w.diffBase === ws.branch) w.diffBase = branch;
 	}
 	target.name = displayName;
 	target.branch = branch;
@@ -380,6 +384,25 @@ export function setWorkspaceSkillOverride(
 	return ws;
 }
 
+/**
+ * Re-point the ref this workspace's diff is measured against (`Workspace.diffBase`), or clear it back to
+ * the creation base with `null`. Persists + broadcasts the updated record, so every client converges on the
+ * push rather than optimistically (modelled on `setWorkspaceSkillOverride`). A ref equal to `baseBranch`
+ * clears the field instead of storing a redundant override. Throws for an unknown id / an empty ref.
+ */
+export function setWorkspaceDiffBase(id: string, ref: string | null): Workspace {
+	const all = loadWorkspaces();
+	const ws = all.find((w) => w.id === id);
+	if (!ws) throw new Error(`Unknown workspace: ${id}`);
+	const wanted = ref?.trim();
+	if (ref !== null && !wanted) throw new Error("A diff base must be a ref or null");
+	if (!wanted || wanted === ws.baseBranch) delete ws.diffBase;
+	else ws.diffBase = wanted;
+	saveWorkspaces(all);
+	emit({ kind: "updated", workspace: ws });
+	return ws;
+}
+
 export function listWorkspaces(projectId: string): Workspace[] {
 	// Lazily ensure the built-in Default workspace on every list: find-or-create is idempotent, backfills
 	// projects opened before the feature existed, and self-heals out-of-band state churn (the e2e reset
@@ -389,7 +412,7 @@ export function listWorkspaces(projectId: string): Workspace[] {
 	const rows = loadWorkspaces().filter((w) => w.projectId === projectId);
 	// Pin the Default workspace first (creation order would put a backfilled one last).
 	rows.sort((a, b) => (a.kind === "default" ? -1 : 0) - (b.kind === "default" ? -1 : 0));
-	return rows.map((w) => ({ ...w, diffStats: diffStats(w.worktreePath, w.baseBranch) }));
+	return rows.map((w) => ({ ...w, diffStats: diffStats(w) }));
 }
 
 /**
@@ -447,7 +470,7 @@ export function removeWorkspace(id: string): void {
 }
 
 export function workspaceDiffStats(id: string): DiffStats {
-	return diffStats(getWorkspace(id).worktreePath, getWorkspace(id).baseBranch);
+	return diffStats(getWorkspace(id));
 }
 
 /** Look up a workspace by id (throws if unknown) — the worktree path anchors a chat session's cwd. */

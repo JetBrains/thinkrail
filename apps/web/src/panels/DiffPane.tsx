@@ -1,8 +1,10 @@
-import { lazy, Suspense } from "react";
-import { isMarkdownPath } from "@/lib/utils";
+import { Check, Copy, Pilcrow } from "lucide-react";
+import { lazy, Suspense, useState } from "react";
+import { copyText, isMarkdownPath } from "@/lib/utils";
 import type { DiffTab } from "../store";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
+import { splitPath } from "./changesModel";
 import { ToggleSegment } from "./ToggleSegment";
 import { useLiveTabContent } from "./useLiveTabContent";
 
@@ -15,25 +17,38 @@ const loading = <div className="flex h-full items-center justify-center text-hin
 
 /**
  * The center pane for a diff tab: a slim header over the diff. A non-markdown file gets the read-only
- * Monaco diff (base branch vs worktree) with a **Split | Inline** toggle (per-tab via
- * `store.setDiffTabView`). A markdown file gets exactly two views via a **Source | Rendered** toggle
- * (per-tab `store.setDiffTabRendered`): **Source** = the basic Monaco split diff; **Rendered** = the
+ * Monaco diff (the tab's own scope: base branch / HEAD / one commit) with a **Split | Inline** toggle
+ * (per-tab via `store.setDiffTabView`). A markdown file gets exactly two views via a **Source | Rendered**
+ * toggle (per-tab `store.setDiffTabRendered`): **Source** = the basic Monaco split diff; **Rendered** = the
  * lazy `RenderedDiff` — one htmldiff-merged rendered document with ins/del markers. See `RenderedDiff`
  * for the contract.
  *
+ * Two more header affordances, both per-tab and both read-only (editing in the diff is a separate task —
+ * it needs `fs.writeFile` plus a conflict story against agent/terminal writes): **¶** toggles hiding
+ * whitespace-only changes (Monaco's `ignoreTrimWhitespace`) and **copy** puts the modified side's contents
+ * on the clipboard. The path is a **chip**: muted directory prefix + bright basename, matching the Changes
+ * list's rows.
+ *
  * Live: same contract as `FilePane` — when the workspace's fs tick moves past the tick this tab's
- * contents were loaded at, both sides are re-read (`git.diffFile`) and replaced. Only the active tab
- * mounts, so background tabs catch up on activation. A file that left the change set keeps its last
- * contents (the Changes list is where the disappearance shows); a failed re-read just advances the tick.
+ * contents were loaded at, both sides are re-read (`git.diffFile`, **with this tab's scope** — never the
+ * panel's current one) and replaced. Only the active tab mounts, so background tabs catch up on
+ * activation. A file that left the change set keeps its last contents (the Changes list is where the
+ * disappearance shows); a failed re-read just advances the tick.
  */
 
 export function DiffPane({ tab }: { tab: DiffTab }) {
 	const setDiffTabView = useAppStore((s) => s.setDiffTabView);
 	const setDiffTabRendered = useAppStore((s) => s.setDiffTabRendered);
+	const setDiffTabIgnoreWhitespace = useAppStore((s) => s.setDiffTabIgnoreWhitespace);
+	const [copied, setCopied] = useState(false);
 
 	useLiveTabContent(tab, {
 		read: () =>
-			getTransport().request("git.diffFile", { workspaceId: tab.workspaceId, path: tab.path }),
+			getTransport().request("git.diffFile", {
+				workspaceId: tab.workspaceId,
+				path: tab.path,
+				scope: tab.scope,
+			}),
 		applyFresh: ({ original, modified }, tick) =>
 			useAppStore.getState().updateDiffTabContent(tab.id, original, modified, tick),
 		keepCurrent: (tick) =>
@@ -44,6 +59,14 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 	const view = tab.view ?? "split";
 	// `rendered` is only ever set through the toggle, which non-markdown tabs never offer.
 	const rendered = markdown && (tab.rendered ?? false);
+	const ignoreWhitespace = tab.ignoreWhitespace ?? false;
+	const { dir, base } = splitPath(tab.path);
+	const copy = async () => {
+		// No clipboard (insecure context / denied) — no flash; the diff text stays selectable.
+		if (!(await copyText(tab.modified))) return;
+		setCopied(true);
+		setTimeout(() => setCopied(false), 1500);
+	};
 	const toggles = markdown ? (
 		<>
 			<ToggleSegment
@@ -83,9 +106,31 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 				aria-label="Diff view mode"
 				className="flex h-8 shrink-0 items-center gap-xs border-border2 border-b bg-bg-dark px-sm"
 			>
-				<span className="mr-auto truncate font-[var(--font-mono)] text-hint text-xs">
-					{tab.path}
+				<span
+					data-testid="diff-path"
+					title={tab.path}
+					className="mr-auto flex min-w-0 items-baseline font-[var(--font-mono)] text-xs"
+				>
+					{dir ? <span className="min-w-0 truncate text-hint">{dir}</span> : null}
+					{/* Truncatable, not `shrink-0`: a long basename must never push the ¶/copy/layout controls
+					    out of the header on a narrow pane (the same rule as the Changes list's path rows). */}
+					<span className="min-w-0 truncate text-muted">{base}</span>
 				</span>
+				{/* Hide whitespace-only changes — Monaco's own `ignoreTrimWhitespace`, per tab. Not offered in
+				    the rendered markdown view, which has no lines to compare. */}
+				{rendered ? null : (
+					<HeaderIconButton
+						testid="diff-toggle-whitespace"
+						label="Hide whitespace changes"
+						active={ignoreWhitespace}
+						onClick={() => setDiffTabIgnoreWhitespace(tab.id, !ignoreWhitespace)}
+					>
+						<Pilcrow className="size-3.5" />
+					</HeaderIconButton>
+				)}
+				<HeaderIconButton testid="diff-copy" label="Copy file contents" onClick={() => void copy()}>
+					{copied ? <Check className="size-3.5 text-green" /> : <Copy className="size-3.5" />}
+				</HeaderIconButton>
 				{toggles}
 			</div>
 			<div className="min-h-0 flex-1">
@@ -98,10 +143,47 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 							original={tab.original}
 							modified={tab.modified}
 							view={markdown ? "split" : view}
+							ignoreWhitespace={ignoreWhitespace}
 						/>
 					)}
 				</Suspense>
 			</div>
 		</div>
+	);
+}
+
+/**
+ * A header icon button, styled like `ToggleSegment` — for affordances a word would crowd out (¶, copy).
+ * `active` is **optional on purpose**: given, the button is a toggle (pressed styling + `aria-pressed`);
+ * omitted, it is a plain action (copy), which must not claim a pressed state it doesn't have.
+ */
+function HeaderIconButton({
+	testid,
+	label,
+	active,
+	onClick,
+	children,
+}: {
+	testid: string;
+	label: string;
+	active?: boolean;
+	onClick: () => void;
+	children: React.ReactNode;
+}) {
+	return (
+		<button
+			type="button"
+			data-testid={testid}
+			data-active={active}
+			aria-pressed={active}
+			aria-label={label}
+			title={label}
+			onClick={onClick}
+			className={`flex size-6 items-center justify-center rounded-[var(--radius-sm)] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary ${
+				active ? "bg-elevated text-text" : "text-hint hover:bg-hover hover:text-text"
+			}`}
+		>
+			{children}
+		</button>
 	);
 }

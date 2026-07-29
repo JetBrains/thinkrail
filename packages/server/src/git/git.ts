@@ -2,12 +2,15 @@ import { readFileSync, statSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
 import type {
 	BranchList,
+	GitCommit,
+	GitDiffScope,
 	GitFileChange,
 	GitFileStatus,
 	GitStatus,
 	Workspace,
 } from "@thinkrail/contracts";
 import { loadProjects, loadWorkspaces } from "../persistence";
+import { changedFileArgs, type DiffRange, diffBaseRef, resolveDiffRange } from "./diffScope";
 import { git, gitAsync } from "./gitExec";
 
 function workspace(workspaceId: string): Workspace {
@@ -115,13 +118,13 @@ export function numstatPath(raw: string): string {
 	return arrow ? (arrow[1] ?? raw) : raw;
 }
 
-/** Per-file `{added, removed}` vs base, keyed by (resolved) path. Binary rows (`-`/`-`) are skipped. */
+/** Per-file `{added, removed}` over the range, keyed by (resolved) path. Binary rows (`-`/`-`) are skipped. */
 function numstat(
 	worktreePath: string,
-	baseBranch: string,
+	range: DiffRange,
 ): Map<string, { added: number; removed: number }> {
 	const counts = new Map<string, { added: number; removed: number }>();
-	const out = git(worktreePath, ["diff", "--numstat", baseBranch]);
+	const out = git(worktreePath, changedFileArgs(range, "--numstat"));
 	if (!out.ok || !out.out) return counts;
 	for (const line of out.out.split("\n")) {
 		const parts = line.split("\t");
@@ -161,13 +164,18 @@ function untrackedAdded(worktreePath: string, path: string): number | undefined 
 	}
 }
 
-/** A worktree's changed files vs its base branch, plus any untracked files. Each carries `+/−` counts. */
-export function gitStatus(workspaceId: string): GitStatus {
+/**
+ * A worktree's changed files over the given {@link GitDiffScope} (default: everything vs the diff base),
+ * plus any untracked files when the range ends at the worktree. Each carries `+/−` counts. Throws for a
+ * scope naming a commit that no longer exists — see `resolveDiffRange`.
+ */
+export function gitStatus(workspaceId: string, scope?: GitDiffScope): GitStatus {
 	const ws = workspace(workspaceId);
+	const range = resolveDiffRange(ws, scope);
 	const changes: GitFileChange[] = [];
-	const counts = numstat(ws.worktreePath, ws.baseBranch);
+	const counts = numstat(ws.worktreePath, range);
 
-	const tracked = git(ws.worktreePath, ["diff", "--name-status", ws.baseBranch]);
+	const tracked = git(ws.worktreePath, changedFileArgs(range, "--name-status"));
 	if (tracked.ok && tracked.out) {
 		for (const line of tracked.out.split("\n")) {
 			const parts = line.split("\t");
@@ -178,18 +186,22 @@ export function gitStatus(workspaceId: string): GitStatus {
 		}
 	}
 
-	const untracked = git(ws.worktreePath, ["ls-files", "--others", "--exclude-standard"]);
-	if (untracked.ok && untracked.out) {
-		for (const path of untracked.out.split("\n")) {
-			if (!path) continue;
-			const added = untrackedAdded(ws.worktreePath, path);
-			// Countable (small text) → whole content added, nothing removed. Binary/oversized → no counts at
-			// all, matching the tracked-binary rows `--numstat` drops (and satisfying `exactOptionalPropertyTypes`).
-			changes.push({
-				path,
-				status: "untracked",
-				...(added !== undefined && { added, removed: 0 }),
-			});
+	// Untracked files belong to a range that ends at the worktree (branch/uncommitted), never to a historical
+	// commit — they are not "in" it.
+	if (range.untracked) {
+		const untracked = git(ws.worktreePath, ["ls-files", "--others", "--exclude-standard"]);
+		if (untracked.ok && untracked.out) {
+			for (const path of untracked.out.split("\n")) {
+				if (!path) continue;
+				const added = untrackedAdded(ws.worktreePath, path);
+				// Countable (small text) → whole content added, nothing removed. Binary/oversized → no counts at
+				// all, matching the tracked-binary rows `--numstat` drops (and satisfying `exactOptionalPropertyTypes`).
+				changes.push({
+					path,
+					status: "untracked",
+					...(added !== undefined && { added, removed: 0 }),
+				});
+			}
 		}
 	}
 
@@ -200,31 +212,43 @@ export function gitStatus(workspaceId: string): GitStatus {
 }
 
 /**
- * Both sides of one changed file, for the center Monaco diff tab: `original` = the file at the base
- * branch (empty when it doesn't exist there — untracked/added, or a renamed file's new path, which
- * degrades to an add-style diff), `modified` = the worktree content (empty when deleted).
+ * One file's content at a ref (`git show ref:path`, byte-exact), or `""` when the path simply isn't there.
+ * A path absent from a ref is the intended empty side (an added file has no original; a deleted one has no
+ * modified). Any *other* failure — index-lock contention, an invalid/removed ref, repo corruption — would
+ * otherwise masquerade as a whole-file add/delete, so it's logged: the broken read stays visible.
+ */
+function showBlob(worktreePath: string, ref: string, path: string): string {
+	const shown = git(worktreePath, ["show", `${ref}:${path}`], { raw: true });
+	if (shown.ok) return shown.out;
+	if (!/does not exist in|exists on disk, but not in/.test(shown.err)) {
+		console.warn(`git show ${ref}:${path} failed: ${shown.err || "unknown error"}`);
+	}
+	return "";
+}
+
+/**
+ * Both sides of one changed file over the given {@link GitDiffScope} (default: everything vs the diff
+ * base), for the center Monaco diff tab: `original` = the file at the range's start (empty when it doesn't
+ * exist there — untracked/added, a renamed file's new path, or a root commit — which degrades to an
+ * add-style diff), `modified` = the file at its end: the worktree (empty when deleted) for a range ending
+ * there, else the commit's own tree.
  */
 export function gitDiffFile(
 	workspaceId: string,
 	path: string,
+	scope?: GitDiffScope,
 ): { original: string; modified: string } {
 	const ws = workspace(workspaceId);
+	const range = resolveDiffRange(ws, scope);
 
 	const abs = resolve(ws.worktreePath, path);
 	const rel = relative(ws.worktreePath, abs);
 	if (rel.startsWith("..") || isAbsolute(rel)) throw new Error("Path escapes the worktree");
 
-	const base = git(ws.worktreePath, ["show", `${ws.baseBranch}:${path}`], { raw: true });
-	let original = "";
-	if (base.ok) {
-		original = base.out;
-	} else if (!/does not exist in|exists on disk, but not in/.test(base.err)) {
-		// A clean "path absent from the base ref" (untracked/added, or a rename's new path) is the intended
-		// empty-original case. Any *other* failure — index-lock contention, an invalid/removed base ref, repo
-		// corruption — would otherwise masquerade as a whole-file add; surface it so the broken read is visible.
-		console.warn(`git show ${ws.baseBranch}:${path} failed: ${base.err || "unknown error"}`);
-	}
+	const original = range.originalRef ? showBlob(ws.worktreePath, range.originalRef, path) : "";
 
+	if (range.modifiedRef)
+		return { original, modified: showBlob(ws.worktreePath, range.modifiedRef, path) };
 	let modified = "";
 	try {
 		modified = readFileSync(abs, "utf8");
@@ -232,4 +256,38 @@ export function gitDiffFile(
 		// deleted (or unreadable) in the worktree → empty modified side
 	}
 	return { original, modified };
+}
+
+/** How many commits the scope menu's list can hold — a long-lived branch must not ship its whole history. */
+const COMMIT_LIST_MAX = 200;
+/** Field separator for the `git log` format: a control char no commit subject/author can contain. */
+const LOG_SEP = "\u001f";
+
+/**
+ * The commits **on this workspace's branch** that its diff base doesn't have (`git log <base>..HEAD`),
+ * newest first and capped — the scope menu's commit rows. An unreadable range (a base branch that was
+ * deleted, an unborn HEAD) degrades to an empty list: the menu still offers its other scopes.
+ */
+export function listCommits(workspaceId: string): { commits: GitCommit[] } {
+	const ws = workspace(workspaceId);
+	const log = git(ws.worktreePath, [
+		"log",
+		`--max-count=${COMMIT_LIST_MAX}`,
+		`--format=%H${LOG_SEP}%h${LOG_SEP}%s${LOG_SEP}%an${LOG_SEP}%cI`,
+		`${diffBaseRef(ws)}..HEAD`,
+	]);
+	if (!log.ok || !log.out) return { commits: [] };
+	const commits: GitCommit[] = [];
+	for (const line of log.out.split("\n")) {
+		const [sha, shortSha, subject, author, committedAt] = line.split(LOG_SEP);
+		if (!sha || !shortSha) continue;
+		commits.push({
+			sha,
+			shortSha,
+			subject: subject ?? "",
+			author: author ?? "",
+			committedAt: committedAt ?? "",
+		});
+	}
+	return { commits };
 }

@@ -2,7 +2,16 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { gitDiffFile, gitStatus, listBranches, numstatPath, prefetchBranch } from "./git";
+import type { Workspace } from "@thinkrail/contracts";
+import { changedFileArgs, diffBaseRef, resolveDiffRange } from "./diffScope";
+import {
+	gitDiffFile,
+	gitStatus,
+	listBranches,
+	listCommits,
+	numstatPath,
+	prefetchBranch,
+} from "./git";
 
 let dataDir: string;
 let repo: string;
@@ -37,7 +46,7 @@ afterEach(() => {
 });
 
 /** Register the repo itself as workspace `w1` (branch = base = main) for the gitDiffFile tests. */
-function seedWorkspace(): void {
+function seedWorkspace(extra: Partial<Workspace> = {}): void {
 	writeFileSync(
 		join(dataDir, "workspaces.json"),
 		JSON.stringify([
@@ -49,9 +58,20 @@ function seedWorkspace(): void {
 				worktreePath: repo,
 				baseBranch: "main",
 				createdAt: 1,
+				...extra,
 			},
 		]),
 	);
+}
+
+/** A commit on a `feature` branch off `main`, so the scopes have a real range to span. Returns its oid. */
+function commitOnFeature(file: string, content: string, message: string): string {
+	writeFileSync(join(repo, file), content);
+	git(repo, "add", "-A");
+	git(repo, "commit", "-m", message);
+	return new TextDecoder()
+		.decode(Bun.spawnSync(["git", "-C", repo, "rev-parse", "HEAD"], { stdout: "pipe" }).stdout)
+		.trim();
 }
 
 test("gitDiffFile returns both sides: base content vs worktree content (trailing newline intact)", () => {
@@ -201,4 +221,128 @@ test("gitStatus reads the Default workspace's branch live, not the persisted sna
 	);
 	git(repo, "switch", "-c", "feature/live");
 	expect(gitStatus("w-default").branch).toBe("feature/live");
+});
+
+test("diffBaseRef resolves the re-pointed diff target over the creation base", () => {
+	expect(diffBaseRef({ baseBranch: "main" })).toBe("main");
+	expect(diffBaseRef({ baseBranch: "main", diffBase: "origin/release" })).toBe("origin/release");
+});
+
+test("resolveDiffRange: one definition per scope (branch / uncommitted / commit)", () => {
+	const ws = { baseBranch: "main", worktreePath: repo };
+
+	// Default (and explicit `branch`): everything vs the diff base, ending at the worktree.
+	expect(resolveDiffRange(ws)).toEqual(resolveDiffRange(ws, { kind: "branch" }));
+	const branch = resolveDiffRange(ws, { kind: "branch" });
+	expect(changedFileArgs(branch, "--name-status")).toEqual(["diff", "--name-status", "main"]);
+	expect(branch).toMatchObject({ untracked: true, originalRef: "main", modifiedRef: null });
+	// The re-pointed target is what a branch range spans.
+	expect(resolveDiffRange({ ...ws, diffBase: "origin/release" }, { kind: "branch" })).toMatchObject(
+		{
+			listRevs: ["origin/release"],
+			originalRef: "origin/release",
+		},
+	);
+
+	// Uncommitted: worktree vs HEAD, untracked files included.
+	const uncommitted = resolveDiffRange(ws, { kind: "uncommitted" });
+	expect(changedFileArgs(uncommitted, "--numstat")).toEqual(["diff", "--numstat", "HEAD"]);
+	expect(uncommitted).toMatchObject({ untracked: true, originalRef: "HEAD", modifiedRef: null });
+
+	// One commit: `sha^` vs `sha`, both sides from history, no untracked files.
+	const sha = commitOnFeature("second.txt", "second\n", "second");
+	const commit = resolveDiffRange(ws, { kind: "commit", sha });
+	const parent = commit.originalRef ?? "";
+	expect(parent).toMatch(/^[0-9a-f]{40,}$/);
+	expect(parent).not.toBe(sha);
+	expect(commit).toMatchObject({ untracked: false, modifiedRef: sha, listRevs: [parent, sha] });
+	// An abbreviated sha resolves to the same full-oid range.
+	expect(resolveDiffRange(ws, { kind: "commit", sha: sha.slice(0, 8) })).toEqual(commit);
+});
+
+test("resolveDiffRange degrades a root commit to an add-style diff (no parent to subtract)", () => {
+	const ws = { baseBranch: "main", worktreePath: repo };
+	const root = new TextDecoder()
+		.decode(
+			Bun.spawnSync(["git", "-C", repo, "rev-list", "--max-parents=0", "HEAD"], {
+				stdout: "pipe",
+			}).stdout,
+		)
+		.trim();
+	const range = resolveDiffRange(ws, { kind: "commit", sha: root });
+	expect(range).toMatchObject({ untracked: false, originalRef: null, modifiedRef: root });
+	// `git show` (not `git diff`), since there is no `sha^` — the range's changed files are still listable.
+	expect(changedFileArgs(range, "--name-status")).toEqual([
+		"show",
+		"--format=",
+		"--name-status",
+		root,
+	]);
+	const listed = Bun.spawnSync(["git", "-C", repo, ...changedFileArgs(range, "--name-status")], {
+		stdout: "pipe",
+	});
+	expect(new TextDecoder().decode(listed.stdout)).toContain("README.md");
+});
+
+test("resolveDiffRange rejects a non-oid sha before it reaches git, and an unknown commit", () => {
+	const ws = { baseBranch: "main", worktreePath: repo };
+	expect(() => resolveDiffRange(ws, { kind: "commit", sha: "--output=/tmp/pwn" })).toThrow(
+		/Not a commit id/,
+	);
+	expect(() => resolveDiffRange(ws, { kind: "commit", sha: "HEAD" })).toThrow(/Not a commit id/);
+	expect(() => resolveDiffRange(ws, { kind: "commit", sha: "deadbeef" })).toThrow(/Unknown commit/);
+});
+
+test("gitStatus scopes: branch spans the base range, uncommitted only the dirty worktree", () => {
+	git(repo, "switch", "-c", "feature");
+	commitOnFeature("committed.txt", "committed\n", "add committed.txt");
+	seedWorkspace({ branch: "feature" });
+	writeFileSync(join(repo, "dirty.txt"), "dirty\n");
+
+	const branchPaths = gitStatus("w1").changes.map((c) => c.path);
+	expect(branchPaths).toEqual(["committed.txt", "dirty.txt"]);
+
+	const uncommitted = gitStatus("w1", { kind: "uncommitted" }).changes.map((c) => c.path);
+	expect(uncommitted).toEqual(["dirty.txt"]);
+});
+
+test("gitStatus/gitDiffFile for a commit scope read only that commit, from history", () => {
+	git(repo, "switch", "-c", "feature");
+	commitOnFeature("script.ts", "export const one = 1;\n", "add script");
+	const sha = commitOnFeature("script.ts", "export const two = 2;\n", "edit script");
+	seedWorkspace({ branch: "feature" });
+	// Worktree dirt (tracked + untracked) must not leak into a historical scope.
+	writeFileSync(join(repo, "script.ts"), "export const three = 3;\n");
+	writeFileSync(join(repo, "untracked.txt"), "nope\n");
+
+	const scope = { kind: "commit", sha } as const;
+	const changes = gitStatus("w1", scope).changes;
+	expect(changes.map((c) => c.path)).toEqual(["script.ts"]);
+	expect(changes[0]).toMatchObject({ status: "modified", added: 1, removed: 1 });
+
+	expect(gitDiffFile("w1", "script.ts", scope)).toEqual({
+		original: "export const one = 1;\n",
+		modified: "export const two = 2;\n",
+	});
+});
+
+test("gitStatus/listCommits measure against the re-pointed diffBase, not the creation base", () => {
+	git(repo, "switch", "-c", "release");
+	commitOnFeature("released.txt", "released\n", "release-only");
+	git(repo, "switch", "-c", "feature");
+	const sha = commitOnFeature("feature.txt", "feature\n", "feature-only");
+	seedWorkspace({ branch: "feature", baseBranch: "main", diffBase: "release" });
+
+	// vs `release`: only the feature commit's file (the release-only file is common to both).
+	expect(gitStatus("w1").changes.map((c) => c.path)).toEqual(["feature.txt"]);
+	const { commits } = listCommits("w1");
+	expect(commits.map((c) => c.sha)).toEqual([sha]);
+	expect(commits[0]).toMatchObject({ subject: "feature-only", author: "test" });
+	expect(commits[0]?.shortSha).toBe(sha.slice(0, commits[0]?.shortSha.length));
+	expect(commits[0]?.committedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+
+	// vs the creation base `main`: both commits' files, newest commit first.
+	seedWorkspace({ branch: "feature", baseBranch: "main" });
+	expect(gitStatus("w1").changes.map((c) => c.path)).toEqual(["feature.txt", "released.txt"]);
+	expect(listCommits("w1").commits.map((c) => c.subject)).toEqual(["feature-only", "release-only"]);
 });

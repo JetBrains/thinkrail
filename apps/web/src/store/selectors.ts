@@ -1,4 +1,10 @@
-import type { Project, SpecGraphNode, WireModel, Workspace } from "@thinkrail/contracts";
+import type {
+	GitDiffScope,
+	Project,
+	SpecGraphNode,
+	WireModel,
+	Workspace,
+} from "@thinkrail/contracts";
 import { isAbsolutePath, normalizePath } from "../lib";
 import type { EditorTab } from "./appStore";
 
@@ -96,6 +102,35 @@ export function selectCatalogModel(
 ): WireModel | null {
 	if (!ref) return null;
 	return models.find((m) => m.provider === ref.provider && m.id === ref.id) ?? null;
+}
+
+ * The **default** diff scope: everything on the workspace's branch vs its diff base (the behaviour that
+ * predates the scope selector). A shared module constant, not a fresh object per read, so
+ * {@link selectDiffScope} is referentially stable for a workspace that never picked a scope.
+ */
+export const BRANCH_SCOPE: GitDiffScope = { kind: "branch" };
+
+/**
+ * What the Changes panel of this workspace is diffing. Per **workspace**, not app-wide like `changesView`: a
+ * scope is a property of that branch's review (a commit sha means nothing in another worktree), so it must
+ * not follow the user across workspaces.
+ */
+export function selectDiffScope(
+	state: { diffScopeByWorkspace: Record<string, GitDiffScope> },
+	workspaceId: string,
+): GitDiffScope {
+	return state.diffScopeByWorkspace[workspaceId] ?? BRANCH_SCOPE;
+}
+
+/**
+ * The ref a workspace's changes are measured **against**, mirroring the host's own resolution
+ * (`diffBase ?? baseBranch`: the re-pointed review target, else the ref the worktree was cut from). The
+ * client needs it to label the target-branch picker and to key the Changes read — so it lives here once,
+ * rather than being re-derived in the panel. `""` when the workspace isn't known yet.
+ */
+export function selectDiffBaseRef(state: ActiveWorkspaceState, workspaceId: string): string {
+	const workspace = selectWorkspaceById(state, workspaceId);
+	return workspace ? (workspace.diffBase ?? workspace.baseBranch) : "";
 }
 
 /** Whether a worktree-relative path is inside a skill directory — the auto-detect trigger for a reload. */

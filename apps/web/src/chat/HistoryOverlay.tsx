@@ -7,6 +7,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { relativeTime } from "@/lib";
 import {
 	type ChatLocationRequest,
 	type HistorySearchState,
@@ -40,18 +41,6 @@ const SAVE_SHORTCUT_LABEL =
 	typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/.test(navigator.platform ?? "")
 		? "⌘S"
 		: "Ctrl+S";
-
-/** Tiny relative-time formatter — `panels/CenterTabs.tsx` has a private twin; `chat/` can't import from
- * `panels/` (wrong dependency direction), and this is too small to promote to a shared lib. */
-function relativeTime(ms: number): string {
-	const s = Math.floor((Date.now() - ms) / 1000);
-	if (s < 60) return "just now";
-	const m = Math.floor(s / 60);
-	if (m < 60) return `${m}m ago`;
-	const h = Math.floor(m / 60);
-	if (h < 24) return `${h}h ago`;
-	return `${Math.floor(h / 24)}d ago`;
-}
 
 function escapeRegExp(term: string): string {
 	return term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

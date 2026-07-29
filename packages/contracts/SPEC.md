@@ -101,7 +101,15 @@ of the host.
   project folder itself as a workspace, exactly one per project, pinned first in `workspace.list`,
   non-removable and non-renamable server-side; absent = a normal worktree workspace — an explicit wire
   field, never an id convention), `Session` (chat tab),
-  `FileNode` (file-tree node), `TabStatus`, `Git*`/diff types; **`ProviderStatus`/`ProviderStatusReport`**
+  `FileNode` (file-tree node), `TabStatus`, `Git*`/diff types — incl. **`GitDiffScope`** (what the Changes
+  panel is diffing: `branch` → everything vs the workspace's diff base / `uncommitted` → worktree vs `HEAD` /
+  `commit` → one commit, `sha^` vs `sha`; omitted on the wire = `branch`, so an older client is unchanged)
+  and **`GitCommit`** (a commit row of the scope menu's list). The two meanings of a workspace's base are
+  **two fields**: `Workspace.baseBranch` is *creation provenance* (the ref the worktree was cut from — what
+  the receipt's `branch · from baseBranch` shows) and the optional **`Workspace.diffBase`** is the *review
+  target* (`workspace.setDiffBase`); every read resolves `diffBase ?? baseBranch` **server-side, in one
+  place** — collapsing them into one field would make a re-pointed target lie about where the branch came
+  from; **`ProviderStatus`/`ProviderStatusReport`**
   — the auth-provider status rows the Welcome strip renders (per-provider `configured` + auth `kind`:
   oauth / api-key / env / central / other — never credential values; plus `canOAuth`/`canApiKey`/`canLogout`,
   which gate the strip's in-app Sign-in / Sign-out affordances — `canLogout` is true only for a removable
@@ -172,7 +180,13 @@ of the host.
   names, for the presence-gated notice's count) / **`project.acknowledgeSkills`** (confirm skills that
   appeared after trust) / **`project.setSkillEnabled`** (project baseline) / **`project.setGroupEnabled`**
   (turn a plugin / source tier / `@plugins` on/off at the baseline) / **`workspace.setSkillOverride`**
-  (per-workspace on/off/clear → the `Workspace`) / **`skills.state`** (`SkillCatalogEntry[]` — full catalog +
+  (per-workspace on/off/clear → the `Workspace`) / **`workspace.setDiffBase`** (re-point the diff target,
+  `null` clears it back to the creation base — echoes the updated `Workspace` **and** broadcasts
+  `workspace.updated`, so every client converges on the push) / **`git.status`** + **`git.diffFile`**, both
+  taking an optional **`scope: GitDiffScope`** (an unresolvable scope — a commit a rebase removed — is
+  *rejected*, which the panel reads as "reset the scope" instead of staying wedged on a dead sha) /
+  **`git.listCommits`** (the workspace branch's own commits, `<diff base>..HEAD`, newest first, capped
+  host-side — the scope menu's lazily-fetched list) / **`skills.state`** (`SkillCatalogEntry[]` — full catalog +
   per-skill `decision` + `group` — for a `workspaceId`) / **`project.skills`** (the same, project-scoped, for
   the pre-session manager) / **`session.reloadResources`** (re-scan skills + rebuild the system prompt for one
   running session; rejected while streaming) /

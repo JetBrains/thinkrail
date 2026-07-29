@@ -214,10 +214,20 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   (or refreshes + focuses) an ephemeral **`DocTab`** — inline rendered-markdown content, never backed by a
   file on disk (no fs re-read / source toggle) — used for on-demand snapshots like the plan-as-markdown
   export. **`DiffTab`** is a read-only Monaco diff of one
-changed file vs the workspace's base branch (id `${workspaceId}:diff:${path}` — one tab per file;
-`view` split|inline via **`setDiffTabView`**, split the default; a markdown diff's `rendered` flag via
-**`setDiffTabRendered`** swaps raw lines for compiled documents — `DiffPane` offers it for markdown
-paths only; opened by `ChangesPanel`). The transient **`chatLocationRequest`** — the history-search jump
+changed file over **one diff scope** (id `${workspaceId}:diff:${scopeKey}:${path}` — one tab per *(file,
+scope)*: **the scope is part of a tab's identity**, because a tab's content must never change meaning
+because the rail's scope flipped underneath it; the tab carries its own `scope`, which is also what
+`DiffPane` re-reads with, never the panel's current one). Its per-tab view state: `view` split|inline via
+**`setDiffTabView`**, split the default; a markdown diff's `rendered` flag via **`setDiffTabRendered`**
+(swaps raw lines for compiled documents — `DiffPane` offers it for markdown paths only); and
+`ignoreWhitespace` via **`setDiffTabIgnoreWhitespace`** (Monaco's `ignoreTrimWhitespace`). All three go
+through one internal `patchDiffTab(state, id, patch)` helper — locate-the-active-workspace's-tab-and-merge
+lives once, so a new per-tab diff toggle is a one-liner, not another copy. Opened by `ChangesPanel`.
+**`diffScopeByWorkspace`** + **`setDiffScope(workspaceId, scope)`** hold *what* each workspace's Changes
+panel is diffing (read through **`selectDiffScope`**, which defaults to the shared, referentially stable
+`BRANCH_SCOPE`); keyed **per workspace**, not app-wide like `changesView`, because a scope belongs to that
+branch's review — a commit sha means nothing in another worktree — and dropped with the workspace in
+`applyWorkspaceRemoved`. The transient **`chatLocationRequest`** — the history-search jump
   deep link; the requester activates the target project+workspace, `CenterTabs` opens/hydrates the target
   chat, `ChatView` consumes + clears — is **`ChatLocationRequest { workspaceId, projectId, sessionId,
   messageIndex, anchorText }`**, set by **`requestChatLocation(req)`** (which sets `selectedProjectId` +
@@ -241,7 +251,9 @@ paths only; opened by `ChangesPanel`). The transient **`chatLocationRequest`** �
   `openFileInTab`/`ChatView` read the worktree root through it),
   `selectActiveWorkspaceProjectId`, `selectHistoryTarget` + `HistoryTarget` (the shell's `Ctrl+R` routing
   target: the active chat tab, or the workspace's newest chat when a file/diff/doc tab is active),
-  `selectContextProject`, `selectSkillsStale`, `selectWorkspaceTick` (the
+  `selectContextProject`, `selectSkillsStale`, **`selectDiffScope` + `BRANCH_SCOPE`** (what a workspace's
+  Changes panel is diffing, defaulting to the shared branch-scope constant), **`selectDiffBaseRef`** (the ref
+  it is measured against — the client-side mirror of the host's one resolution), `selectWorkspaceTick` (the
   sync-baseline snapshot; + the `isSkillPath` path predicate it shares with `noteFsChanged`);
   `matchesWorktreePath` (line an agent-reported path — relative or absolute — up against a worktree-relative
   one; shared by the Changes deep link and the spec classifier. The suffix rule is for **absolute reports

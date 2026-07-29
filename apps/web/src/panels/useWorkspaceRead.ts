@@ -7,7 +7,10 @@ interface WorkspaceReadHandlers<T> {
 	onResult: (value: T, workspaceId: string) => void;
 	/** A failed read. Every current caller keeps its last good value and degrades the empty case. */
 	onFailure?: (workspaceId: string) => void;
-	/** The workspace being **left**: drop whatever belonged to it, before the next one's read lands. */
+	/**
+	 * The read being **left** (the workspace switched, or `readKey` changed): drop whatever belonged to it,
+	 * before the next read lands.
+	 */
 	onSwitch?: (workspaceId: string) => void;
 }
 
@@ -29,11 +32,18 @@ interface WorkspaceReadHandlers<T> {
  * - the **reset is the effect's cleanup**, which closes over the workspace being *left* — the id a reset
  *   actually needs (a plain effect keyed on `workspaceId` runs with the *new* id already in scope);
  * - a manual refresh is an **imperative `reload()`**, not a nonce dependency.
+ *
+ * `readKey` is a **second identity dimension** of the read, for a caller whose read has a parameter beyond the
+ * workspace (the Changes panel's diff scope): changing it re-reads exactly like a workspace switch — reset
+ * first (`onSwitch`), then a fresh, generation-stamped read — so one key's value can never linger under
+ * another. It is threaded to `read` as its second argument (and to `reload`), so it is genuinely consumed
+ * rather than being a dependency the effect merely names.
  */
 export function useWorkspaceRead<T>(
 	workspaceId: string | null,
-	read: (workspaceId: string) => Promise<T>,
+	read: (workspaceId: string, readKey: string | undefined) => Promise<T>,
 	handlers: WorkspaceReadHandlers<T>,
+	readKey?: string,
 ): { reload: () => void } {
 	const latest = useRef({ read, handlers });
 	latest.current = { read, handlers };
@@ -41,11 +51,11 @@ export function useWorkspaceRead<T>(
 	// response can tell it is stale without a per-call-site cancellation flag.
 	const generation = useRef(0);
 
-	const runRead = useCallback((id: string) => {
+	const runRead = useCallback((id: string, key: string | undefined) => {
 		const mine = ++generation.current;
 		const live = () => generation.current === mine;
 		latest.current
-			.read(id)
+			.read(id, key)
 			.then((value) => {
 				if (live()) latest.current.handlers.onResult(value, id);
 			})
@@ -56,24 +66,24 @@ export function useWorkspaceRead<T>(
 
 	useEffect(() => {
 		if (!workspaceId) return;
-		runRead(workspaceId);
+		runRead(workspaceId, readKey);
 		let tick = selectWorkspaceTick(useAppStore.getState(), workspaceId);
 		const unsubscribe = useAppStore.subscribe((state) => {
 			const next = selectWorkspaceTick(state, workspaceId);
 			if (next === tick) return;
 			tick = next;
-			runRead(workspaceId);
+			runRead(workspaceId, readKey);
 		});
 		return () => {
 			unsubscribe();
 			generation.current += 1; // abandon this workspace's in-flight read
 			latest.current.handlers.onSwitch?.(workspaceId);
 		};
-	}, [workspaceId, runRead]);
+	}, [workspaceId, readKey, runRead]);
 
 	return {
 		reload: () => {
-			if (workspaceId) runRead(workspaceId);
+			if (workspaceId) runRead(workspaceId, readKey);
 		},
 	};
 }

@@ -2,6 +2,7 @@ import type {
 	AppConfig,
 	AskUserQuestionResult,
 	ExtUiRequest,
+	GitDiffScope,
 	LoginFrame,
 	LoginPush,
 	PiEvent,
@@ -66,22 +67,29 @@ export interface DocTab {
 	docPath: string;
 }
 /**
- * A read-only diff of one changed file vs the workspace's base branch (opened from the Changes panel;
- * one tab per file). `view` is the layout — absent = split (side-by-side), the default. `rendered`
+ * A read-only diff of one changed file over one **diff scope** (opened from the Changes panel; one tab per
+ * file *and scope*). `view` is the layout — absent = split (side-by-side), the default. `rendered`
  * (markdown paths only — `DiffPane` gates the toggle) swaps raw Monaco lines for compiled documents:
  * split shows base | worktree previews side by side, inline shows the worktree preview alone.
+ * `ignoreWhitespace` hides whitespace-only changes (Monaco's `ignoreTrimWhitespace`), per tab.
  */
 export type DiffTabView = "split" | "inline";
 export interface DiffTab {
 	kind: "diff";
-	id: string; // `${workspaceId}:diff:${path}` — stable, so re-clicking a file focuses its tab
+	// `${workspaceId}:diff:${scopeKey}:${path}` — stable, so re-clicking a file in the same scope focuses its
+	// tab, while a different scope of that file is a different tab (its content can't change meaning
+	// because the rail's scope flipped underneath it).
+	id: string;
 	workspaceId: string;
 	name: string;
 	path: string;
+	/** What this tab diffs — fixed at open time and re-read with (never re-derived from the panel's scope). */
+	scope: GitDiffScope;
 	original: string;
 	modified: string;
 	view?: DiffTabView;
 	rendered?: boolean;
+	ignoreWhitespace?: boolean;
 	/** The workspace fs tick the contents were loaded at — same live-refresh contract as `FileTab`. */
 	loadedTick?: number;
 }
@@ -654,10 +662,17 @@ interface AppState {
 	setFileTabView: (id: string, view: "rendered" | "source") => void;
 	setDiffTabView: (id: string, view: DiffTabView) => void;
 	setDiffTabRendered: (id: string, rendered: boolean) => void;
+	setDiffTabIgnoreWhitespace: (id: string, ignoreWhitespace: boolean) => void;
 	/** How the Changes panel lays out its changed files — flat `list` or a `tree` of folders. App-wide,
 	 * persisted in the store (not per workspace) so the choice survives workspace switches. */
 	changesView: "list" | "tree";
 	setChangesView: (view: "list" | "tree") => void;
+	/**
+	 * What each workspace's Changes panel diffs (see `selectDiffScope` for the default). Per workspace, not
+	 * app-wide: a scope belongs to that branch's review — a commit sha means nothing in another worktree.
+	 */
+	diffScopeByWorkspace: Record<string, GitDiffScope>;
+	setDiffScope: (workspaceId: string, scope: GitDiffScope) => void;
 	/** Fold a `workspace.fsChanged` push into the live-refresh signal (tick++, last batch replaces). */
 	noteFsChanged: (payload: WorkspaceFsChangedPayload) => void;
 	/**
@@ -798,6 +813,28 @@ function omitKey<T>(record: Record<string, T>, key: string): Record<string, T> {
 	return rest;
 }
 
+/**
+ * Merge a partial into one diff tab of the **active** workspace — the shared body of every per-tab diff
+ * view toggle (layout, rendered, hide-whitespace), so adding a toggle is one line instead of another copy
+ * of the locate-and-map dance. Returns an empty patch (a no-op `set`) when there is no such tab.
+ */
+function patchDiffTab(
+	state: Pick<AppState, "activeWorkspaceId" | "tabsByWorkspace">,
+	id: string,
+	patch: Partial<Omit<DiffTab, "kind" | "id">>,
+): Partial<AppState> {
+	const wsId = state.activeWorkspaceId;
+	if (!wsId) return {};
+	const tabs = state.tabsByWorkspace[wsId] ?? [];
+	if (!tabs.some((t) => t.id === id && t.kind === "diff")) return {};
+	return {
+		tabsByWorkspace: {
+			...state.tabsByWorkspace,
+			[wsId]: tabs.map((t) => (t.id === id && t.kind === "diff" ? { ...t, ...patch } : t)),
+		},
+	};
+}
+
 /** Field-wise equality of two spec-graph nodes — every field the DTO carries, so "unchanged" is honest. */
 function sameSpecNode(a: SpecGraphNode, b: SpecGraphNode): boolean {
 	return (
@@ -930,6 +967,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	specRequest: null,
 	specsByWorkspace: {},
 	changesView: "list",
+	diffScopeByWorkspace: {},
 	chatLocationRequest: null,
 	historyOpenRequest: null,
 	fsChangesByWorkspace: {},
@@ -996,6 +1034,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			fsChangesByWorkspace: omitKey(state.fsChangesByWorkspace, workspaceId),
 			skillChangeTickByWorkspace: omitKey(state.skillChangeTickByWorkspace, workspaceId),
 			specsByWorkspace: omitKey(state.specsByWorkspace, workspaceId),
+			diffScopeByWorkspace: omitKey(state.diffScopeByWorkspace, workspaceId),
 		}));
 		if (wasActive) {
 			s.selectProject(projectId); // atomically fall back to the removed workspace's Project Home
@@ -1098,33 +1137,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 				},
 			};
 		}),
-	setDiffTabView: (id, view) =>
-		set((s) => {
-			const wsId = s.activeWorkspaceId;
-			if (!wsId) return {};
-			const tabs = s.tabsByWorkspace[wsId] ?? [];
-			if (!tabs.some((t) => t.id === id && t.kind === "diff")) return {};
-			return {
-				tabsByWorkspace: {
-					...s.tabsByWorkspace,
-					[wsId]: tabs.map((t) => (t.id === id && t.kind === "diff" ? { ...t, view } : t)),
-				},
-			};
-		}),
-	setDiffTabRendered: (id, rendered) =>
-		set((s) => {
-			const wsId = s.activeWorkspaceId;
-			if (!wsId) return {};
-			const tabs = s.tabsByWorkspace[wsId] ?? [];
-			if (!tabs.some((t) => t.id === id && t.kind === "diff")) return {};
-			return {
-				tabsByWorkspace: {
-					...s.tabsByWorkspace,
-					[wsId]: tabs.map((t) => (t.id === id && t.kind === "diff" ? { ...t, rendered } : t)),
-				},
-			};
-		}),
+	setDiffTabView: (id, view) => set((s) => patchDiffTab(s, id, { view })),
+	setDiffTabRendered: (id, rendered) => set((s) => patchDiffTab(s, id, { rendered })),
+	setDiffTabIgnoreWhitespace: (id, ignoreWhitespace) =>
+		set((s) => patchDiffTab(s, id, { ignoreWhitespace })),
 	setChangesView: (view) => set({ changesView: view }),
+	setDiffScope: (workspaceId, scope) =>
+		set((s) => ({ diffScopeByWorkspace: { ...s.diffScopeByWorkspace, [workspaceId]: scope } })),
 	noteFsChanged: (payload) =>
 		set((s) => {
 			const prev = s.fsChangesByWorkspace[payload.workspaceId];

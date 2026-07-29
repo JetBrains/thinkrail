@@ -2,6 +2,7 @@ import type { JbcentralInstall } from "@thinkrail/contracts";
 import { Check, Copy, ExternalLink, Loader2, LogOut, Zap } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { copyText } from "@/lib";
 import { getTransport } from "@/transport";
 
 const LOGIN_CMD = "central login";
@@ -244,13 +245,10 @@ export function JetBrainsAiCard({
 function CopyableCommand({ command }: { command: string }) {
 	const [copied, setCopied] = useState(false);
 	const copy = async () => {
-		try {
-			await navigator.clipboard.writeText(command);
-			setCopied(true);
-			setTimeout(() => setCopied(false), 1500);
-		} catch {
-			// Clipboard unavailable — the command stays selectable text.
-		}
+		// No clipboard (insecure context / denied) — the command stays selectable text, no "copied" flash.
+		if (!(await copyText(command))) return;
+		setCopied(true);
+		setTimeout(() => setCopied(false), 1500);
 	};
 	return (
 		<div className="flex items-center gap-sm rounded-[var(--radius-md)] border border-border2 bg-bg px-sm py-xs">

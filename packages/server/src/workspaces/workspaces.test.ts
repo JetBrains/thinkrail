@@ -20,6 +20,7 @@ import {
 	refreshDefaultWorkspace,
 	removeWorkspace,
 	renameWorkspace,
+	setWorkspaceDiffBase,
 	setWorkspacePublisher,
 	type WorkspaceLifecycleEvent,
 } from "./workspaces";
@@ -203,6 +204,35 @@ test("renameWorkspace re-points siblings basing their diff on the old branch", a
 	const after = listWorkspaces("p1");
 	expect(after.find((w) => w.id === dependent.id)?.baseBranch).toBe("core-work");
 	expect(after.find((w) => w.id === first.id)?.branch).toBe("core-work");
+});
+
+test("setWorkspaceDiffBase re-points the diff target, leaving creation provenance alone", async () => {
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((e) => events.push(e));
+	const ws = await createWorkspace("p1");
+	git(repo, "branch", "release");
+
+	const pointed = setWorkspaceDiffBase(ws.id, "release");
+	expect(pointed.diffBase).toBe("release");
+	expect(pointed.baseBranch).toBe(ws.baseBranch); // provenance never moves
+	expect(listWorkspaceRecords("p1")[0]?.diffBase).toBe("release"); // persisted
+	// Broadcast like every other membership mutation, so clients converge on the push.
+	expect(events.at(-1)).toMatchObject({ kind: "updated", workspace: { diffBase: "release" } });
+
+	// `null` clears it; so does re-pointing at the creation base (no redundant override is stored).
+	expect(setWorkspaceDiffBase(ws.id, null).diffBase).toBeUndefined();
+	expect(setWorkspaceDiffBase(ws.id, ws.baseBranch).diffBase).toBeUndefined();
+	expect(() => setWorkspaceDiffBase(ws.id, "   ")).toThrow(/must be a ref/);
+	expect(() => setWorkspaceDiffBase("nope", "release")).toThrow("Unknown workspace: nope");
+});
+
+test("renameWorkspace re-points a sibling whose diff TARGET was the renamed branch", async () => {
+	const first = await createWorkspace("p1");
+	const dependent = await createWorkspace("p1");
+	setWorkspaceDiffBase(dependent.id, first.branch);
+
+	renameWorkspace(first.id, "core work");
+	expect(listWorkspaceRecords("p1").find((w) => w.id === dependent.id)?.diffBase).toBe("core-work");
 });
 
 test("renameWorkspace throws on an unknown workspace", () => {
