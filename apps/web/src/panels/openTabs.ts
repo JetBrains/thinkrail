@@ -68,10 +68,14 @@ async function openReadTab<T>(
 		// Stamp the workspace's current fs tick: the content is fresh as of now, so the pane's live re-read
 		// only fires for ticks arriving AFTER this open.
 		const loadedTick = selectWorkspaceTick(useAppStore.getState(), workspaceId);
-		useAppStore.getState().openTab(build(payload, loadedTick), intent);
+		const tab = build(payload, loadedTick);
+		useAppStore.getState().openTab(tab, intent);
 		// Upgraded mid-read (the `dblclick` behind this gesture's leading `click`) — apply the promote. Both
-		// writes land in one tick, so the strip never flashes the italic in between.
-		if (flight.intent !== intent) useAppStore.getState().setActiveTab(id, flight.intent);
+		// writes land in one tick, so the strip never flashes the italic in between. `openTab` again, NOT
+		// `setActiveTab`: only `openTab` keys off `tab.workspaceId`. A slow read the user switches workspaces
+		// during would otherwise strand this one previewing and write its tab id into the workspace they
+		// moved to, whose center pane resolves no active tab and drops to the workspace receipt.
+		if (flight.intent !== intent) useAppStore.getState().openTab(tab, flight.intent);
 	} catch {
 		// a failed read leaves tabs unchanged
 	} finally {

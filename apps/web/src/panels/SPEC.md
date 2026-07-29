@@ -438,7 +438,10 @@ a project picker, the prompt hero, and the reused
   otherwise be settled by whichever returned first — a leading `preview` replacing the slot's tab, or a
   `keep` landing first and sparing it — so the app would behave one way on localhost and another over
   Tailscale from a phone. The call that *started* the read owns the placement; a `keep` expressed while it
-  was in flight promotes the result afterwards. `e2e/preview-tabs.spec.ts` asserts the single read
+  was in flight promotes the result afterwards — through **`openTab`**, never `setActiveTab`, because only
+  `openTab` keys off `tab.workspaceId`: a read the user switches workspaces during would otherwise strand
+  this tab previewing and write its id into the workspace they moved to, whose center pane then resolves no
+  active tab and drops to the workspace receipt. `e2e/preview-tabs.spec.ts` asserts the single read
   directly, because the outcome it protects is invisible at localhost latency.
 
   The active-preview-tab click is the **touch** path: `apps/web/index.html` ships a plain

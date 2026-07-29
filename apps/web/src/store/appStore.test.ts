@@ -1336,3 +1336,22 @@ test("chat tabs and doc tabs never enter the preview slot", () => {
 	expect(s.previewTabByWorkspace.ws1).toBe("ws1:a.ts"); // still the file, untouched by either open
 	expect(s.tabsByWorkspace.ws1).toHaveLength(3);
 });
+
+test("a keep on an already-open tab releases ITS workspace's slot, never the active one's", () => {
+	const store = useAppStore.getState();
+	store.openTab(fileTab("ws1", "a.ts"), "preview");
+	store.openTab(fileTab("ws2", "b.ts"), "preview");
+	useAppStore.setState({ activeWorkspaceId: "ws2" });
+
+	// The promote half of a double click, landing after a slow read let the user switch workspaces.
+	// `openTab` keys off `tab.workspaceId`, so it must reach ws1 and leave ws2 completely alone —
+	// `setActiveTab` here would strand ws1 previewing AND write a foreign tab id into ws2 (whose center
+	// pane then resolves no active tab and falls back to the workspace receipt).
+	store.openTab(fileTab("ws1", "a.ts"), "keep");
+
+	const s = useAppStore.getState();
+	expect(s.previewTabByWorkspace.ws1).toBeUndefined();
+	expect(s.previewTabByWorkspace.ws2).toBe("ws2:b.ts");
+	expect(s.activeTabByWorkspace.ws1).toBe("ws1:a.ts");
+	expect(s.activeTabByWorkspace.ws2).toBe("ws2:b.ts");
+});
