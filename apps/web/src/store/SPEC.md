@@ -72,7 +72,10 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   subject and confirm a removed model that `create()` then rejects. `beginModelsRefresh` /
   `finishModelsRefresh(models|null)` are the atomic pair (finish lands the list, sets provenance, and
   clears the in-flight flag in one write; `null` = failed refresh — keep the current list *and* its
-  provenance, since nothing was installed). The transport work lives in
+  provenance, since nothing was installed). **`dropModelsFreshness`** is the third writer: authority is
+  given up *without* replacing the list, which is what a consumer activating must do **synchronously** —
+  a flag an earlier consumer set can otherwise straddle the activation and let an inherited list pass as
+  this opening's own truth before its own `model.list` reply lands. The transport work lives in
   `chat/useModelCatalog`, not here (the store→transport edge stays type-only). The **in-app login** state
   **`activeLogin: LoginState | null`** (type from `auth`) is **flat + session-less** (a login runs on the
   Welcome screen before any session exists — routing it through a session runtime would drop its frames):

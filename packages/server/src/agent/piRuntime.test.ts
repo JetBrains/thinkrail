@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, jest, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -126,8 +126,9 @@ test("an implicit trigger opts into the network per-call but stays behind pi's f
 	expect(options?.signal).toBeInstanceOf(AbortSignal);
 });
 
-// pi returns early inside its 4h freshness window *before* the If-None-Match revalidation, so without
-// `force` a user-initiated "Refresh catalog" fetches nothing at all. These pin the bypass reaching pi.
+// Inside its 4h freshness window pi returns early before issuing any request at all (its If-None-Match
+// revalidation included), so without `force` a user-initiated "Refresh catalog" fetches nothing at all.
+// These pin the bypass reaching pi.
 test("an explicit refresh forces past the freshness throttle", () => {
 	const { runtime, calls } = fakeRuntime();
 	void refreshCatalogs(runtime, { force: true });
@@ -186,6 +187,27 @@ test("an aborted (timed-out) refresh is tolerated and frees the single-flight sl
 
 	refreshCatalogsDetached(runtime);
 	expect(calls.length).toBe(2);
+});
+
+// The finding this pins: pi's abort signal bounds `models.refresh` only — it awaits an unsignalled
+// `forceRefreshAvailability()` after it — and a forced caller can additionally be queued behind a
+// throttled pass, so what a caller awaits needs its own ceiling or the picker's refresh row spins with no
+// cap (and `modelsRefreshing` is app-wide).
+test("a caller's await is bounded even when pi's pass never settles", async () => {
+	jest.useFakeTimers();
+	try {
+		const { runtime, calls } = fakeRuntime();
+		const awaited = refreshCatalogs(runtime, { force: true });
+		jest.advanceTimersByTime(15_000);
+		await awaited; // resolves at the ceiling, though the pass it started is still pending
+
+		// ...and single-flight keeps tracking that unbounded pass, so a timed-out caller cannot start a
+		// second concurrent refresh — it just serves the registry as it stands.
+		void refreshCatalogs(runtime, { force: true });
+		expect(calls.length).toBe(1);
+	} finally {
+		jest.useRealTimers();
+	}
 });
 
 test("per-provider failures in a completed refresh are tolerated (result is only logged)", async () => {

@@ -159,8 +159,12 @@ a project picker, the prompt hero, and the reused
   **`reconcileModel`** (model only — effort is decided by the host's clamp, below): re-point to the same
   `{provider,id}` (the refreshed object, whose `thinkingLevels` may differ). What it does when the catalog
   has no such model turns on **`catalogFresh`** — the store's `modelsFresh`, true only for the installed
-  result of an awaited forced refresh and dropped by the next `model.list` install from any consumer
-  (whose handler answers from before the detached refresh it starts). Effort is a separate concern: one effect keeps the held level
+  result of an awaited forced refresh, dropped by the next `model.list` install from any consumer (whose
+  handler answers from before the detached refresh it starts) *and* dropped up front by any consumer
+  activating. On a fresh catalog it returns **`"unavailable"`** — a verdict, not a replacement: the dialog
+  then asks **`model.default`** (pi's own `pinned ?? available[0]`, plus a consistent effort) exactly as it
+  does for the preselect, through **one** `applyHostDefault` — so no client-side copy of the host's default
+  policy exists here. Asked at most once per opening, so a still-missing model can't spin the effect. Effort is a separate concern: one effect keeps the held level
   runnable by the held model by asking the host for pi's clamp (**`model.clampThinking`**) rather than
   deciding locally, so an explicit switch and a refresh that shrank a model's set resolve the same way
   pi would. `model.default` needs no adjustment: the host already returns a self-consistent pair.

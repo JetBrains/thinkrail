@@ -41,13 +41,17 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     where **`force` is the caller's intent, not a constant**: an *implicit* trigger (`model.list`, opening
     the picker) leaves it off and pi's **4h provider freshness throttle** decides whether anything is
     fetched, while a *user-initiated* refresh (the picker's Refresh row → `model.refresh({force:true})`)
-    bypasses it — pi returns early inside that window **before** its `If-None-Match` revalidation, so an
-    unforced explicit refresh would fetch nothing at all. **Single-flight per runtime instance** (pi's
+    bypasses it — inside that window pi returns early **before issuing any request at all** (its
+    `If-None-Match` revalidation included), so an unforced explicit refresh would fetch nothing at all. **Single-flight per runtime instance** (pi's
     `refresh()` doesn't dedupe concurrent calls) **keyed with the kind**: an implicit caller joins any
     pass, a forced caller never joins a throttled one (it would inherit the no-op) and instead queues
-    behind it. A **15s abort** (pi's model-selector budget — a hung refresh must self-expire
-    or single-flight would wedge) on an **unref'd** timer (must not hold a shutting-down host or a test
-    process open); failures `console.warn` + swallowed, never the picker's problem; **`PI_OFFLINE`**
+    behind it. The **15s budget** (pi's model-selector one) is applied **twice**, both on **unref'd**
+    timers (must not hold a shutting-down host or a test process open): as `models.refresh`'s **abort**
+    signal (a hung refresh must self-expire or single-flight would wedge) *and* as the ceiling on what a
+    **caller awaits**, because the signal bounds neither pi's unsignalled `forceRefreshAvailability()`
+    fan-out after it nor a forced pass queued behind a throttled one — without it one slow provider leaves
+    every picker's refresh row spinning. A timed-out caller serves the registry as it stands while
+    single-flight keeps tracking the unbounded pass (so it cannot start a second concurrent refresh); failures `console.warn` + swallowed, never the picker's problem; **`PI_OFFLINE`**
     (pi's env convention) disables it — the e2e webServer env and the manager's unit suite set it for
     hermeticity. The **provider-credential surface** over this runtime —
     `provider.status` + in-app login — lives in the sibling `auth` module (which consumes `getPiRuntime`),

@@ -461,7 +461,9 @@ interface AppState {
 	 * fall with it. Held as a consumer's local flag instead, it would outlive the list it was about and a
 	 * removed model would get confirmed as present, then rejected by `create()`. `model.list` can never
 	 * set it — its handler starts a *detached* refresh and answers from before it, so the registry can
-	 * move underneath the reply with the client none the wiser.
+	 * move underneath the reply with the client none the wiser. A consumer *activating* drops it up front
+	 * (`dropModelsFreshness`), because a flag left by an earlier consumer says nothing about whether the
+	 * inherited list still matches the registry this activation will be judged against.
 	 */
 	modelsFresh: boolean;
 	/**
@@ -662,6 +664,9 @@ interface AppState {
 	 * refresh: keep the current list, and with it its provenance) and clears the flag in ONE write. */
 	beginModelsRefresh: () => void;
 	finishModelsRefresh: (models: WireModel[] | null) => void;
+	/** Give up authority without replacing the list — a consumer activating can't yet know whether the
+	 * list it inherited still matches the host registry. */
+	dropModelsFreshness: () => void;
 	setCurrentModel: (sessionId: string, model: WireModel) => void;
 	setThinkingLevel: (sessionId: string, level: ThinkingLevel) => void;
 	setStats: (sessionId: string, stats: SessionStats) => void;
@@ -1321,6 +1326,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	setModels: (models) => set({ models, modelsFresh: false }),
 	bumpTemplatesVersion: () => set((s) => ({ templatesVersion: s.templatesVersion + 1 })),
 	beginModelsRefresh: () => set({ modelsRefreshing: true }),
+	dropModelsFreshness: () => set({ modelsFresh: false }),
 	// The only writer of `modelsFresh: true` — and only for a list that actually arrived.
 	finishModelsRefresh: (models) =>
 		set((s) => ({

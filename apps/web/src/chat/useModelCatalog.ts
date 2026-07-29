@@ -5,8 +5,8 @@ import { getTransport } from "@/transport";
 
 /**
  * The models-catalog integration seam (one of chat's app-integration files that may touch store +
- * transport — see SPEC): reads the store's shared `models`, re-reads them via `model.list` whenever a
- * consumer activates, and owns both catalog-freshness paths behind one `refresh(force)` callback. Shared
+ * transport — see SPEC): reads the store's shared `models`, fills them via `model.list` when a consumer
+ * activates on an empty list, and owns both catalog-freshness paths behind one `refresh(force)` callback. Shared
  * by `ChatView` (Composer's picker) and `panels/NewWorkspaceDialog`, so the fetch effect and the refresh
  * wiring cannot drift between the two pickers.
  */
@@ -22,14 +22,24 @@ export function useModelCatalog(active = true): {
 	 * Whether `models` holds a result a caller may treat as the host's settled truth. Read straight off the
 	 * store, because it is a property of the **shared list** rather than of this consumer: `models` is
 	 * app-wide, so a `model.list` install from anywhere — this picker reopening, another chat mounting —
-	 * replaces the list and drops its authority in the same write. See `store`'s `modelsFresh` for why
-	 * `model.list` can never establish it.
+	 * replaces the list and drops its authority in the same write — and this hook drops it *synchronously*
+	 * on activation, before its own read lands. See `store`'s `modelsFresh` for why `model.list` can never
+	 * establish it.
 	 */
 	const fresh = useAppStore((s) => s.modelsFresh);
 
 	useEffect(() => {
 		if (!active) return;
-		void readModels();
+		const state = useAppStore.getState();
+		// Synchronously, not on the `model.list` reply: `modelsFresh` set by a *previous* consumer must not
+		// straddle this activation, or a reconcile on first render reads an inherited list as this
+		// opening's own truth (the registry can have moved since — a provider logged in, say).
+		state.dropModelsFreshness();
+		// Fetch only when there is nothing to show. A `model.list` per activation would put a full host
+		// `runtime.refresh()` — provider auth fan-out included — behind every chat-tab switch, and it could
+		// not establish authority anyway (its handler answers from before the refresh it starts). The
+		// picker's Refresh row is the currency path.
+		if (state.models.length === 0) void readModels();
 	}, [active]);
 
 	/**

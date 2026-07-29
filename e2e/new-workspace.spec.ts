@@ -79,9 +79,23 @@ test("the dialog lists local branches (no stray origin) and creates a worktree",
 	await dialog.getByTestId("model-selector").click();
 	const refresh = page.getByTestId("model-refresh");
 	await expect(refresh).toBeVisible();
+	// Record every value the row takes, so the in-flight state can't be missed by a poll: under the host's
+	// PI_OFFLINE the refresh settles in ~one round trip, and a `toHaveAttribute("true")` would race it.
+	await refresh.evaluate((el) => {
+		const seen: string[] = [];
+		(window as unknown as { __refreshStates: string[] }).__refreshStates = seen;
+		new MutationObserver(() => seen.push(el.getAttribute("data-refreshing") ?? "")).observe(el, {
+			attributes: true,
+			attributeFilter: ["data-refreshing"],
+		});
+	});
 	await refresh.click();
 	await expect(refresh).toHaveAttribute("data-refreshing", "false");
 	await expect(refresh).toBeEnabled();
+	// The click really did spin the row (and disable it) before settling back to idle.
+	expect(
+		await page.evaluate(() => (window as unknown as { __refreshStates: string[] }).__refreshStates),
+	).toContain("true");
 	await page.keyboard.press("Escape"); // close WITHOUT picking — a pick is the @agent suite's business
 
 	// Dismissing the dialog (Escape) creates nothing (only the built-in Default row is present).

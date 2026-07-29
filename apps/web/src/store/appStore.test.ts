@@ -1271,3 +1271,19 @@ test("catalog authority falls with the list it describes — only an awaited ref
 	expect(s().models).toBe(refreshed);
 	expect(s().modelsFresh).toBe(true);
 });
+
+test("authority can be given up without replacing the list (a consumer activating)", () => {
+	const s = () => useAppStore.getState();
+	const refreshed = [{ id: "opus-6", name: "opus-6", provider: "anthropic" }] as WireModel[];
+	s().beginModelsRefresh();
+	s().finishModelsRefresh(refreshed);
+	expect(s().modelsFresh).toBe(true);
+
+	// The finding this pins: a consumer activating inherits the list a *previous* consumer made
+	// authoritative, and the registry can have moved since (a provider logged in, no `model.list`). It must
+	// be able to drop authority up front — synchronously, before its own read lands — while still serving
+	// the inherited list to render with.
+	s().dropModelsFreshness();
+	expect(s().modelsFresh).toBe(false);
+	expect(s().models).toBe(refreshed);
+});

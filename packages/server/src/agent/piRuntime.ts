@@ -69,8 +69,10 @@ const inflightCatalogRefresh = new WeakMap<
 	{ task: Promise<void>; force: boolean }
 >();
 
-// pi's own model-selector refresh budget. With single-flight, a hung refresh must self-expire or it
-// would block every future refresh for the host's lifetime.
+// pi's own model-selector refresh budget, applied twice over: as `models.refresh`'s abort signal (with
+// single-flight, a hung refresh must self-expire or it would block every future refresh for the host's
+// lifetime) and as the ceiling on what a *caller* awaits (`withDeadline`) — the signal alone does not
+// bound a pass, let alone a queued one.
 const CATALOG_REFRESH_TIMEOUT_MS = 15_000;
 
 /**
@@ -79,16 +81,19 @@ const CATALOG_REFRESH_TIMEOUT_MS = 15_000;
  * own `/model`. Two kinds of caller:
  *
  * - **throttled** (default): pi's provider freshness window decides whether anything is fetched. pi
- *   returns early inside that window — *before* its `If-None-Match` revalidation — so an implicit
- *   trigger (`model.list`, opening the picker) costs nothing and usually changes nothing.
- * - **`force`**: bypasses that window, so a user-initiated refresh actually reaches pi.dev (one
- *   conditional request per credentialed provider; a 304 is the common answer).
+ *   returns early inside that window — *before* it issues any request at all, `If-None-Match`
+ *   revalidation included — so an implicit trigger (`model.list`, opening the picker) costs nothing and
+ *   usually changes nothing.
+ * - **`force`**: bypasses that window, so a user-initiated refresh actually reaches pi.dev (one request
+ *   per credentialed provider; conditional — hence usually a 304 — wherever a cached body backs the
+ *   stored `ETag`).
  *
  * **Single-flighted per runtime**, tracked with the kind: a forced caller never joins a throttled pass
  * (it would silently inherit the no-op), it queues behind it and then fetches for real.
  *
- * Never throws: failures are logged and swallowed (an awaiting caller still gets a resolution — it then
- * serves whatever the registry holds), and `PI_OFFLINE` (pi's env convention, also set by the e2e
+ * Never throws and never hangs: failures are logged and swallowed, and what a caller awaits carries its
+ * own `CATALOG_REFRESH_TIMEOUT_MS` ceiling (`withDeadline`) — either way the caller gets a resolution and
+ * then serves whatever the registry holds. `PI_OFFLINE` (pi's env convention, also set by the e2e
  * harness for hermeticity) disables it entirely (resolves immediately).
  */
 export function refreshCatalogs(
@@ -97,7 +102,7 @@ export function refreshCatalogs(
 ): Promise<void> {
 	if (process.env.PI_OFFLINE) return Promise.resolve();
 	const existing = inflightCatalogRefresh.get(runtime);
-	if (existing && (existing.force || !force)) return existing.task;
+	if (existing && (existing.force || !force)) return withDeadline(existing.task);
 	// Free slot ⇒ start now (an implicit trigger must reach pi in the same tick it fires). Otherwise
 	// this is a forced caller behind a throttled pass: queue, so pi's own per-provider in-flight dedupe
 	// has cleared by the time the forced fetch runs.
@@ -110,7 +115,32 @@ export function refreshCatalogs(
 		}
 	});
 	inflightCatalogRefresh.set(runtime, { task, force });
-	return task;
+	return withDeadline(task);
+}
+
+/**
+ * The ceiling every *caller* gets, started at call time. `runCatalogRefresh`'s abort signal covers only
+ * `models.refresh` — pi awaits `forceRefreshAvailability()` after it with no signal, and that's the
+ * per-provider auth-check fan-out where a stalled local provider lives — and a queued forced pass adds a
+ * second pass on top of the wait, so an awaited `model.refresh` is otherwise unbounded and the picker's
+ * refresh row spins with no cap. Single-flight still tracks the *unbounded* task, so a timed-out caller
+ * can't start a second concurrent refresh; it just serves the registry as it stands.
+ */
+function withDeadline(task: Promise<void>): Promise<void> {
+	return new Promise<void>((resolve) => {
+		const timer = setTimeout(() => {
+			console.warn(
+				`model catalog refresh exceeded ${CATALOG_REFRESH_TIMEOUT_MS}ms; serving cached catalogs`,
+			);
+			resolve();
+		}, CATALOG_REFRESH_TIMEOUT_MS);
+		// The pending timer must keep neither a shutting-down host nor a test process alive.
+		timer.unref?.();
+		void task.then(() => {
+			clearTimeout(timer);
+			resolve();
+		});
+	});
 }
 
 /** One refresh pass against pi, with the abort budget applied. Resolves even on failure. */
