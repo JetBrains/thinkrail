@@ -65,7 +65,7 @@ function CodeBlock({
 			);
 		}
 		return (
-			<pre className="overflow-auto rounded-[var(--radius-sm)] bg-elevated p-sm font-[var(--font-mono)] text-[0.85em]">
+			<pre className="overflow-auto rounded-[var(--radius-sm)] bg-elevated p-sm font-(family-name:--font-mono) text-[0.85em]">
 				{code}
 			</pre>
 		);
@@ -92,7 +92,7 @@ function ShikiBlock({ code, lang }: { code: string; lang: string }) {
 
 	if (html === null) {
 		return (
-			<pre className="overflow-auto rounded-[var(--radius-sm)] bg-elevated p-sm font-[var(--font-mono)] text-[0.85em] text-text">
+			<pre className="overflow-auto rounded-[var(--radius-sm)] bg-elevated p-sm font-(family-name:--font-mono) text-[0.85em] text-text">
 				{code}
 			</pre>
 		);

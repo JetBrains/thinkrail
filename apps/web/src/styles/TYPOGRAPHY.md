@@ -71,14 +71,31 @@ generate without the implementation smuggling in framework defaults.
 - `text-brand` = `--font-accent`, weight 800, 0.5px tracking: the canonical ThinkRail brand display
   style. Carries family/weight/tracking ONLY; each usage sets its own size + line-height — the Shell
   header wordmark (`text-brand text-lg text-primary`) and the Welcome hero (`text-brand text-[44px]
-  leading-tight text-primary`). No other composed accent-font treatments may exist.
+  leading-tight text-primary`, whose text is the shown project's name or `PRODUCT_NAME`). No other
+  composed accent-font treatments may exist.
 
 ## Fonts
 
-- `--font`: "Geist" — the only proportional face. Emphasis inside sentences changes **weight**, never
-  family.
-- `--font-mono`: "JetBrains Mono".
-- `--font-accent`: "Cabinet Grotesk" — brand only; known unloaded fallback, left as-is.
+**Self-hosted and bundled** — `styles/fonts.css` imports the fontsource packages, vite fingerprints the
+woff2 files into `dist/assets`, and the CLI embeds that output. There is **no font CDN**: the app runs
+locally and often offline, and a `<link>` to fonts.googleapis.com meant an air-gapped host silently fell
+back to system faces (`document.fonts` came back *empty*), first paint waited on a third party, and
+every load contacted Google despite the analytics opt-out. Pinned by `e2e/fonts.spec.ts`.
+
+Both faces are **variable**, which is what makes the weight policy honest — 800 and italics are real
+faces, not the browser's synthetic bold/oblique:
+
+- `--font`: "Geist Variable" (`wght` 100–900 + italic) — the only proportional face. Emphasis inside
+  sentences changes **weight**, never family.
+- `--font-mono`: "JetBrains Mono Variable" (`wght` 100–800 + italic).
+- `--font-accent`: `var(--font)` — brand only, kept as a named role so a licensed display face can be
+  dropped in at this one line. It named "Cabinet Grotesk" until that face was retired: it was never
+  loaded, so the moment the accent class actually applied, the wordmark and hero rendered in generic
+  `sans-serif`. Each stack keeps the static family name ("Geist", "JetBrains Mono") next, so a host with
+  the font installed still matches before the generic fallbacks.
+
+The static-name fallbacks are the only reason a size looks stable across hosts; never assume a face is
+available because a family is *named* — assert it (`document.fonts`), as the e2e spec does.
 
 ## Weights
 
@@ -87,9 +104,19 @@ generate without the implementation smuggling in framework defaults.
 - **500** — buttons; in-page panel/section headings (`text-md`); settings sub-headings; toast/confirm
   (compact) titles; inline sentence emphasis; markdown `<strong>` (both prose skins carry an explicit
   `[&_strong]:font-medium` to beat preflight).
-- **600** — dialog titles (shadcn `DialogTitle`); Welcome card titles (the exact dialog-title style);
-  markdown h1–h6 + table `th`; alert titles. The `ask_user_question` card's question titles are
-  dialog-title analogs and keep 600 (user-confirmed).
+- **600** — dialog titles (shadcn `DialogTitle`, `text-md leading-none`); Welcome card titles (the
+  dialog-title *weight* at the card's own `text-sm` — `main`'s card rewrite made them smaller than a
+  dialog title, and matching the weight is what makes them read as titles); markdown h1–h6 + table
+  `th`; alert titles. The `ask_user_question` card's question titles are dialog-title analogs and keep
+  600 (user-confirmed).
+
+Surfaces `main` added or rewrote after this branch opened were swept to match on merge: the
+empty-workspace screen's eyebrow + entity heading (`CenterTabs`), the skills-dialog eyebrows, the
+template-settings eyebrow + template names, and the new-workspace project row's active state.
+**Remaining 500s, deliberately untouched** — not sanctioned, just out of this PR's scope: form-field
+labels (`TemplateEditorDialog`), the privacy toggle's row label, the chat plan strip label, and the
+completed-todo group title (`TodoList`, where 500 marks a *done* row — the odd one). The
+entity-consistency pass should rule on them.
 - **800** — `text-brand` only.
 
 Disabled = `opacity-50`, no token.
@@ -123,16 +150,32 @@ and label text is **proportional** — branches and refs, project/workspace name
 names/ids, tags, metadata and UI labels. Mono is never used to make a label look technical; the
 survivors that once did are swept (see the note at the end of this section). Sanctioned exceptions:
 
-- Login OTP code: `font-[var(--font-mono)] text-lg tracking-widest` — intentional emphasis.
-- Markdown **fenced** code blocks: `font-[var(--font-mono)] text-[0.85em]` — document content that
-  scales with the prose skin, deliberately NOT the fixed `text-mono` tier (user-confirmed).
+- Login OTP code: `font-(family-name:--font-mono) text-lg tracking-widest` — intentional emphasis.
+- Markdown **fenced** code blocks: `font-(family-name:--font-mono) text-[0.85em]` — document content
+  that scales with the prose skin, deliberately NOT the fixed `text-mono` tier (user-confirmed).
 - Composer slash-command names and the ExtUiDialog JSON editor: `text-mono` — command syntax and a
   code-editing surface (user-confirmed exceptions to the "no mono for names" rule).
-Swept (formerly "known survivors", now proportional — do not reintroduce mono): the rail
-workspace-branch sub-line (`ProjectTree`), the branch-picker refs and its trigger (`NewWorkspaceDialog`),
-the workspace-ready branch line (`CenterTabs`), the skill name (`SkillsDialog`), the todo note
-(`TodoList`), the Welcome card tag and the "Soon" pill (both now proportional
-`text-xs uppercase tracking-wider`).
+- The diff header's path and the new-workspace `/` hint: `text-mono` — a path labelling code, and
+  command syntax.
+
+Swept, and **do not reintroduce mono**: the rail workspace-branch sub-line (`ProjectTree`), the
+branch-picker refs + its trigger (`NewWorkspaceDialog`), the empty-workspace screen's branch line
+(`CenterTabs`), skill names (`SkillsDialog`), TODO notes (`TodoList`), the Welcome card tag and the
+"Soon" pill (the last two now `text-xs uppercase tracking-wider`). These were the "known survivors";
+repairing the dead font-family form (below) would have turned them genuinely monospace for the first
+time, so they were made proportional instead — which is also how they have always *rendered*. That
+also settles the branch question the repair surfaced: **all three branch surfaces are proportional**
+(header line, rail sub-line, empty-workspace screen), consistent with "a branch is metadata".
+
+### Naming a font family (the form that silently fails)
+
+Use `font-(family-name:--font-mono)`, or a `text-mono` / `text-base-mono` / `text-brand` utility.
+**Never** the bare `font-[var(--font-mono)]`: that arbitrary value is ambiguous and Tailwind compiles it
+as a *weight* — `font-weight: var(--font-mono)` — which the browser drops, leaving the element in the
+inherited proportional face while the class list claims otherwise. It went unnoticed in 28 call sites
+(tool cards, keycaps, the header branch line, the brand wordmark), which is why several "mono" surfaces
+were never monospace and the brand face never applied. `styles/fontClasses.test.ts` fails on the bare
+form.
 
 ## Typographic roles
 
@@ -140,7 +183,7 @@ the workspace-ready branch line (`CenterTabs`), the skill name (`SkillsDialog`),
 |---|---|---|
 | Page/brand heading | `text-brand` + per-usage size | header wordmark, welcome hero |
 | Dialog title | `text-md` 600 `leading-none text-text` | all dialogs (shadcn `DialogTitle`) |
-| Card title | = dialog title | welcome cards |
+| Card title | `text-sm` 600 `text-text` (dialog-title weight, card size) | welcome cards |
 | Panel/section title | `text-md` 500 `text-text` | settings `<h3>`s (600 = modal, 500 = in-page) |
 | Compact title | `text-sm` 500 | toasts, confirm popover |
 | Entity name | `text-sm` 400 | all entity rows/labels (colors per the entity-consistency spec work) |

@@ -256,7 +256,7 @@ const Card = forwardRef<HTMLButtonElement, CardProps>(function Card(
 				<Icon className="size-4" />
 			</span>
 			<span className="w-full">
-				<span className="block font-medium text-sm text-text">{title}</span>
+				<span className="block font-semibold text-sm text-text">{title}</span>
 				<span className="mt-0.5 block text-muted text-xs leading-snug">{subtitle}</span>
 			</span>
 		</button>

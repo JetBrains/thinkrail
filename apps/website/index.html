@@ -27,13 +27,10 @@
 				if (t) document.documentElement.setAttribute("data-theme", t);
 			} catch (_) {}
 		</script>
-		<link rel="preconnect" href="https://fonts.googleapis.com" />
-		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<!-- Geist + JetBrains Mono are self-hosted and bundled (src/styles.css), matching the app. Cabinet
+		     Grotesk (--font-display) is still fetched: it has no npm package, and self-hosting it is a
+		     licence call to make deliberately — the last external font request on the site. -->
 		<link rel="preconnect" href="https://api.fontshare.com" crossorigin />
-		<link
-			href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
-			rel="stylesheet"
-		/>
 		<link
 			href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@700,800&display=swap"
 			rel="stylesheet"

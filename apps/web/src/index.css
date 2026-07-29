@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./styles/fonts.css";
 @import "./styles/tokens.css";
 @import "./styles/global.css";
 
@@ -7,7 +8,13 @@
  * utilities resolve to the live `var(--token)` (not a baked value), so the theme engine's atomic
  * custom-property swap re-themes everything. Colors/spacing/text don't collide with token names; the
  * `--font-mono` / `--font-accent` / `--radius-*` tokens DO collide with Tailwind namespaces, so those
- * are referenced as token arbitrary values (e.g. `font-[var(--font-accent)]`) instead.
+ * are referenced as token arbitrary values (e.g. `rounded-[var(--radius-md)]`) instead.
+ *
+ * For a FONT FAMILY the bare form is a trap: `font-[var(--font-mono)]` is ambiguous, and Tailwind
+ * resolves it as a *weight* (`font-weight: var(--font-mono)`), which is invalid and silently dropped
+ * — the element keeps the inherited proportional face. Always name the type:
+ * `font-(family-name:--font-mono)`, or one of the `text-mono` / `text-base-mono` / `text-brand`
+ * utilities below. Pinned by `styles/fontClasses.test.ts`.
  */
 @theme inline {
 	--color-bg: var(--bg);

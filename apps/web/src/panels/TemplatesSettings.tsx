@@ -376,7 +376,7 @@ function TemplateRow({
 				className="group flex items-center gap-sm rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-md py-sm"
 			>
 				<div className="flex min-w-0 flex-1 flex-col">
-					<span className="truncate font-medium text-sm text-text">{template.name}</span>
+					<span className="truncate text-sm text-text">{template.name}</span>
 					{template.description ? (
 						<span className="truncate text-hint text-xs">{template.description}</span>
 					) : null}

@@ -254,7 +254,7 @@ export function CenterTabs() {
 					<span className="text-eyebrow text-hint">
 						{isDefault ? "Default workspace" : "Workspace ready"}
 					</span>
-					<h2 className="max-w-full truncate font-medium text-md text-text">
+					<h2 className="max-w-full truncate text-md text-text">
 						{isDefault ? (contextProject?.name ?? activeWorkspace.name) : activeWorkspace.name}
 					</h2>
 					<p className="flex max-w-full items-center gap-xs text-muted text-xs">
