@@ -281,7 +281,7 @@ function HistoryPreview({
 					<div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap break-words p-sm text-sm text-text">
 						<Highlight text={item.hit.text} query={query} />
 					</div>
-					<div className="shrink-0 border-t border-border2 px-sm py-xs text-[11px] text-hint">
+					<div className="shrink-0 border-t border-border2 px-sm py-xs text-hint text-xs">
 						{item.kind === "prompt" ? (
 							<PromptPreviewFooter hit={item.hit} workspaceName={workspaceName} />
 						) : (
@@ -488,10 +488,7 @@ export function HistoryOverlay({
 	) : !result ? null : (
 		<>
 			{result.indexing ? (
-				<div
-					data-testid="history-indexing"
-					className="px-sm py-1 text-center text-hint text-[11px]"
-				>
+				<div data-testid="history-indexing" className="px-sm py-1 text-center text-hint text-xs">
 					indexing history…
 				</div>
 			) : null}
@@ -499,7 +496,7 @@ export function HistoryOverlay({
 				<div className="flex flex-col gap-xs p-xs">
 					{result.prompts.length > 0 ? (
 						<div className="flex flex-col gap-0.5">
-							<div className="flex items-center justify-between px-sm py-0.5 text-hint text-xs uppercase tracking-wide">
+							<div className="flex items-center justify-between px-sm py-0.5 text-eyebrow text-hint">
 								<span>Prompts</span>
 								<span data-testid="history-counts">
 									{promptCount}/{result.promptTotal}
@@ -522,7 +519,7 @@ export function HistoryOverlay({
 					) : null}
 					{stage === "zoomed" && result.messages.length > 0 ? (
 						<div className="flex flex-col gap-0.5">
-							<div className="flex items-center justify-between px-sm py-0.5 text-hint text-xs uppercase tracking-wide">
+							<div className="flex items-center justify-between px-sm py-0.5 text-eyebrow text-hint">
 								<span>Messages</span>
 								<span data-testid="history-counts">
 									{messageCount}/{result.messageTotal}
@@ -569,7 +566,7 @@ export function HistoryOverlay({
 					<DropdownMenuTrigger
 						data-testid="history-scope"
 						data-scope={scope.kind}
-						className="flex shrink-0 items-center gap-xs rounded-full border border-border2 bg-bg px-sm py-0.5 text-[11px] text-muted outline-none hover:bg-hover"
+						className="flex shrink-0 items-center gap-xs rounded-full border border-border2 bg-bg px-sm py-0.5 text-muted text-xs outline-none hover:bg-hover"
 					>
 						<span>{SCOPE_LABELS[scope.kind]}</span>
 						<span className="text-hint">⌃R</span>

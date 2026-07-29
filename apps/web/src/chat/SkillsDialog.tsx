@@ -194,9 +194,7 @@ export function SkillsDialog({
 					)}
 				>
 					{group.isPlugin ? <Puzzle className="size-3.5 shrink-0 text-hint" aria-hidden /> : null}
-					<span className="font-medium text-text text-xs uppercase tracking-wide">
-						{group.label}
-					</span>
+					<span className="text-eyebrow text-text">{group.label}</span>
 					<span className="min-w-0 flex-1 truncate text-hint text-xs">{group.hint}</span>
 					<span className="shrink-0 rounded-full bg-hover px-1.5 text-hint text-xs">
 						{group.items.length}
@@ -310,9 +308,7 @@ export function SkillsDialog({
 									data-testid="skills-all-plugins"
 									className="sticky top-0 z-20 flex h-8 items-center gap-sm border-border2 border-y bg-bg-dark px-sm"
 								>
-									<span className="min-w-0 flex-1 font-medium text-text text-xs uppercase tracking-wide">
-										All plugins
-									</span>
+									<span className="min-w-0 flex-1 text-eyebrow text-text">All plugins</span>
 									<Toggle
 										on={!pluginsDisabled}
 										busy={busy}
@@ -391,7 +387,7 @@ function SkillRow({
 			className="flex items-center gap-sm py-1.5 pr-sm pl-md hover:bg-hover"
 		>
 			<span className="flex min-w-0 flex-1 flex-col">
-				<span className="truncate font-[var(--font-mono)] text-sm text-text">{entry.name}</span>
+				<span className="truncate text-sm text-text">{entry.name}</span>
 				{entry.description ? (
 					<span className="truncate text-hint text-xs">{entry.description}</span>
 				) : null}

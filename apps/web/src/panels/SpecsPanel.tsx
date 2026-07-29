@@ -168,7 +168,7 @@ function SpecNodeRow({
 					<span
 						data-testid="spec-role"
 						className={cn(
-							"max-w-16 shrink-0 truncate text-right text-[9px] uppercase tracking-wider",
+							"max-w-16 shrink-0 truncate text-right text-eyebrow",
 							isMainSpec || isActive ? "text-primary" : "text-hint",
 						)}
 					>

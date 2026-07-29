@@ -251,7 +251,7 @@ export function ProvidersSettings() {
 function Group({ title, children }: { title: string; children: ReactNode }) {
 	return (
 		<section className="flex flex-col gap-sm">
-			<h4 className="text-muted text-xs uppercase tracking-wider">{title}</h4>
+			<h4 className="text-eyebrow text-muted">{title}</h4>
 			<div className="flex flex-col gap-xs">{children}</div>
 		</section>
 	);

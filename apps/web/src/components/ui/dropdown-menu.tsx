@@ -46,7 +46,7 @@ function DropdownMenuLabel({
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Label>) {
 	return (
 		<DropdownMenuPrimitive.Label
-			className={cn("px-sm py-xs text-xs uppercase tracking-wider text-muted", className)}
+			className={cn("px-sm py-xs text-eyebrow text-muted", className)}
 			{...props}
 		/>
 	);

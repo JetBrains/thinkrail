@@ -29,6 +29,7 @@ Fixed-px tokens in `styles/tokens.css` `:root` (shared by every theme):
 | `--font-body` | 13px | the base body size (`--font-base` alias feeds spacing) |
 | `--font-md` | 14px | reading text AND the heading size (two utility names, below) |
 | `--font-mono-size` | 11px | the dense technical (mono) size |
+| — | — | *(no 11px or 9px proportional tier exists — `text-xs` is the single compact proportional size)* |
 | `--font-lg` | 18px | large display (wordmark) |
 | `--line-height` | 1.6 | global — and the line-height of **every** size tier (see below) |
 
@@ -60,6 +61,11 @@ generate without the implementation smuggling in framework defaults.
   technical badges, keycaps.
 - `text-base-mono` = `--font-mono` @ `--font-body` (13px): ONLY inline code inside `text-base`
   long-form content.
+- `text-eyebrow` = `--font-xs` (10px) @ 400, `tracking-wider`, `uppercase`, line-height `--line-height`:
+  THE eyebrow / section-label role — panel labels, rail group headings, settings sub-group headings,
+  menu group headings, plan sections, the workspace-ready eyebrow, the Specs role chip, card tags, the
+  "Soon" pill. Carries the whole type style; the call site adds only colour (`text-muted` /
+  `text-hint` / `text-text` / conditional). No other uppercase label style may exist.
 - `text-brand` = `--font-accent`, weight 800, 0.5px tracking: the canonical ThinkRail brand display
   style. Carries family/weight/tracking ONLY; each usage sets its own size + line-height — the Shell
   header wordmark (`text-brand text-lg text-primary`) and the Welcome hero (`text-brand text-[44px]
@@ -109,17 +115,21 @@ from `--font-mono`.
 
 ## Mono usage policy
 
-Mono is strictly for code/terminal/output/technical badges/keycaps. Branches, project/workspace
-names, model names/ids are proportional — mono had leaked into identity text. Sanctioned exceptions
-and survivors:
+Mono is strictly for **code and technical content**: terminal, editor, code blocks, tool output, diff
+code and the diff header's path, inline code, shell commands, slash-command syntax, keycaps. Identity
+and label text is **proportional** — branches and refs, project/workspace names, skill names, model
+names/ids, tags, metadata and UI labels. Mono is never used to make a label look technical; the
+survivors that once did are swept (see the note at the end of this section). Sanctioned exceptions:
 
 - Login OTP code: `font-[var(--font-mono)] text-lg tracking-widest` — intentional emphasis.
 - Markdown **fenced** code blocks: `font-[var(--font-mono)] text-[0.85em]` — document content that
   scales with the prose skin, deliberately NOT the fixed `text-mono` tier (user-confirmed).
 - Composer slash-command names and the ExtUiDialog JSON editor: `text-mono` — command syntax and a
   code-editing surface (user-confirmed exceptions to the "no mono for names" rule).
-- Known unswept survivors, do not "fix": the rail workspace-branch sub-line (`ProjectTree`) and the
-  branch-picker refs (`NewWorkspaceDialog`).
+Swept (formerly "known survivors", now proportional — do not reintroduce mono): the rail
+workspace-branch sub-line (`ProjectTree`), the branch-picker refs and its trigger (`NewWorkspaceDialog`),
+the workspace-ready branch line (`CenterTabs`), the skill name (`SkillsDialog`), the todo note
+(`TodoList`), the Welcome card tag and the "Soon" pill (both now `text-eyebrow`).
 
 ## Typographic roles
 
@@ -138,8 +148,8 @@ and survivors:
 | Status label (neutral) | `text-sm text-muted`, sentence case, no tracking | "Workspace ready", connection status |
 | Helper text | `text-xs text-hint` | settings helpers, placeholders (`placeholder:text-hint`) |
 | Empty state | `text-xs text-hint` (panels); rail placeholder deliberately `text-sm text-muted` | trees, changes, specs, terminals |
-| Eyebrow | `text-xs uppercase tracking-wider`, `text-muted` or `text-hint` (both exist; not unified) | section labels, group headings |
-| Technical badge | `text-mono uppercase` pill | SOON, spec-first, keycap |
+| Eyebrow | `text-eyebrow` + a colour | section labels, group headings, plan sections, Specs role chip, card tags, "Soon" |
+| Technical badge | `text-mono` pill | keycap (`↵`) |
 | Inline code | `text-base-mono` (chat/markdown) / `text-mono` (in `text-sm` sentences) — background consolidation proposed in the colour-system PR | shared `Markdown.tsx`, `GithubSettings` |
 | Code block | `text-mono` on `bg-elevated`/`bg-bg-dark` | tool output (markdown fenced blocks: em-based, see Mono policy) |
 

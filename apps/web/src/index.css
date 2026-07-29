@@ -107,6 +107,20 @@
 	font-size: var(--font-body);
 }
 
+/*
+ * The eyebrow / section-label role: a small uppercase label above or beside a group (panel labels,
+ * rail group headings, settings sub-groups, menu group headings, plan sections, card tags). Carries
+ * size + weight + tracking + transform — the whole type style — so a call site adds only its colour.
+ * Replaces five near-identical spellings (400/500 × wide/wider × 10px/9px) with one.
+ */
+@utility text-eyebrow {
+	font-size: var(--font-xs);
+	line-height: var(--line-height);
+	font-weight: 400;
+	letter-spacing: var(--tracking-wider);
+	text-transform: uppercase;
+}
+
 /* The canonical ThinkRail brand display style — family/weight/tracking ONLY; each usage sets its own
  * size + line-height (header wordmark: text-lg; welcome hero: text-[44px] leading-tight). */
 @utility text-brand {

@@ -288,7 +288,7 @@ function TemplateGroup({
 	return (
 		<section className="flex flex-col gap-sm">
 			<div className="flex items-center justify-between">
-				<h4 className="font-medium text-muted text-xs uppercase tracking-wider">{title}</h4>
+				<h4 className="text-eyebrow text-muted">{title}</h4>
 				<button
 					type="button"
 					data-testid={`template-new-${scope}`}

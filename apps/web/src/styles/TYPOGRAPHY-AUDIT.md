@@ -55,14 +55,19 @@ Where they disagree, this file names the drift; it does not silently "fix" eithe
   3. Third-party text rendered by Monaco, xterm, mermaid and shiki is configured in JS, not classes;
      it is inventoried separately in §2.9.
 
-**Headline count:** **75** distinct declared typography combinations across 72 of the 159 `.ts(x)`
-files, expressed through 5 size utilities + 3 composite utilities + **10 distinct hardcoded size
-expressions at 16 sites**.
+**Headline count (after §11):** **32** distinct typographic styles (family × size × weight ×
+line-height × tracking × transform × style, ignoring colour) across 72 of the 159 `.ts(x)` files,
+expressed through 5 size utilities + 4 named role utilities (`text-mono`, `text-base-mono`,
+`text-eyebrow`, `text-brand`) + **14 hardcoded values, all documented exceptions** (hero 44px, OTP
+mono, and the markdown em scales).
 
-> **Reconciliation pass applied (see §10).** This document was first written against a tree with 78
-> combinations / 25 hardcoded sites. Two changes have since landed: line-height became a declared
-> property of every size tier, and the 9 hardcoded values whose token mapping was unambiguous were
-> replaced. Every count and table below reflects the *current* tree; §10 records what moved and why.
+> **Two passes have been applied since this was written.** §10 (reconciliation): line-height became a
+> declared property of every tier + 9 unambiguous hardcoded values replaced. §11 (consolidation): the
+> eyebrow role got a name, identity text lost its mono, and the last two scale gaps closed.
+>
+> §§1–9 describe the tree **as first audited** and are kept as the record of what was found (the
+> "why it survived" analysis is the durable part). Where a finding has since been resolved the row
+> says so, but **for current counts read §10–§11 and the headline above**, not the per-section tallies.
 
 ## 1. The token layer
 
@@ -671,6 +676,78 @@ backward compatibility.
 
 `check:deps` · `check:seams` · `lint` · `typecheck` 10/10 · unit · **e2e no-agent 115/115**, plus the
 screenshot/measurement probes above (temporary specs, not committed).
+
+## 11. Consolidation pass — the minimal semantic set
+
+Driven by four decisions (recorded in `.thinkrail/context/TASK-typography-consolidation.md`). Net
+effect: **43 → 32** distinct typographic styles, **16 → 14** hardcoded values (all now documented
+exceptions), zero ad-hoc mono outside the exceptions.
+
+### 11.1 One named eyebrow role — 5 variants → 1 (18 usages)
+
+`@utility text-eyebrow` = `--font-xs` (10px) / 400 / `tracking-wider` / `uppercase` / `--line-height`.
+Colour stays at the call site. It replaces:
+
+| Old spelling | Sites | Change |
+|---|---|---|
+| `text-xs uppercase tracking-wider` (400) | 8 | none (canonical) |
+| `text-xs font-medium uppercase tracking-wider` | 2 | 500 → 400 |
+| `text-xs uppercase tracking-wide` | 2 | tracking 0.025em → 0.05em |
+| `text-xs font-medium uppercase tracking-wide` | 2 | 500 → 400 + tracking |
+| `text-[9px] uppercase tracking-wider` | 1 | 9px → 10px |
+| `font-[var(--font-mono)] text-xs uppercase tracking-wide` (Welcome tag) | 1 | mono → proportional + tracking |
+| `text-mono uppercase` ("Soon" pill) | 1 | mono 11px → proportional 10px |
+
+Adopted in: `RightPanel`, `ProjectTree`, `TerminalsPanel`, `SpecsPanel`, `ProvidersSettings`,
+`TemplatesSettings`, `CenterTabs`, `SettingsDialog`, `WelcomePanel`, `SkillsDialog` ×2,
+`HistoryOverlay` ×2, `TodoList` ×2, `ThinkingSelector`, `ui/command`, `ui/dropdown-menu`.
+
+### 11.2 Mono is code-only again — identity text is proportional
+
+The rule applied: mono = terminal, editor, code blocks, tool output, diff code + the diff header path,
+inline code, shell commands, slash syntax, keycaps. Everything else proportional.
+
+| Site | Was | Now |
+|---|---|---|
+| `ProjectTree:274` rail branch sub-line | mono 10px | `text-xs` |
+| `NewWorkspaceDialog:712,714,728` branch refs + picker trigger | mono 10px | `text-xs` |
+| `CenterTabs:260` workspace-ready branch line | mono 10px | `text-xs` |
+| `SkillsDialog:394` skill name | mono 12px | `text-sm` |
+| `TodoList:207` todo note | mono 10px | `text-xs` |
+| `WelcomePanel:246` card tag | mono 10px uppercase | `text-eyebrow` |
+| `SettingsDialog:87` "Soon" pill | `text-mono` uppercase | `text-eyebrow` |
+| `NewWorkspaceDialog:536` the `/` syntax glyph | ad-hoc mono, inherited size | `text-mono` (11px) |
+| `DiffPane:86` diff header path | ad-hoc mono 10px | `text-mono` (11px) |
+
+Mono now renders at exactly **11px** (`text-mono`), **13px** (`text-base-mono`, inline code in prose),
+plus the two documented exceptions (OTP 18px, fenced code `0.85em`) — down from six sizes.
+
+### 11.3 Scale gaps closed — `text-xs` is the only compact proportional size
+
+`text-[11px]` ×4 (`HistoryOverlay:284,493,572` chrome + `AskUserQuestionCard`'s Recommended pill) and
+`text-[9px]` ×1 (`SpecsPanel` role chip) → `text-xs` (10px). No token invented, no 11px/9px tier
+introduced. Layout effect: the history scope chip's pill height 23.6px → 22px and the Specs role chip
+gains 1px of text — no padding compensation was needed (a whole-DOM clipping probe reports **0**
+clipped elements, and no pill sits in a row that requires matching heights).
+
+### 11.4 Unchanged by design
+
+Hero `text-[44px]` + `text-brand`; the OTP code; the markdown skins (`Markdown` fenced `0.85em`,
+`MarkdownPreview`'s em heading scale + `leading-[1.65]`); `text-base` ≡ `text-md` (two roles, one
+value); the remaining `leading-*` overrides; the hand-rolled buttons and the ask-card title twin (they
+differ in box model, not just type); `--font-body`/`--font-base`; the dead tokens.
+
+### 11.5 Verification
+
+`lint` · `typecheck` 10/10 · unit · **e2e no-agent 115/115** · clipping probe 0 · 12-surface before/after
+screenshots (this pass changes appearance **on purpose** at the sites listed above: 03-shell, 06-specs,
+09-new-workspace, 10-history, 11/12-welcome-tag differ; the rest are byte-identical).
+
+### 11.6 Correction to §2.10
+
+§2.10 labelled the ad-hoc mono sites carrying `text-xs` as **12px**. Wrong: `--font-xs` is 10px
+(`--font-sm` is 12px), so those were mono at 10px. The resolved set was 10px ×8, 12px ×1
+(`SkillsDialog`), 18px ×1 (OTP), inherited ×1, `0.85em` ×2.
 
 ## Appendix A — reproducing the counts
 
