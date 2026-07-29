@@ -59,9 +59,14 @@ async function openReadTab<T>(
 	read: () => Promise<T>,
 	build: (payload: T, loadedTick: number) => EditorTab,
 ): Promise<void> {
+	// The request itself is the navigation: it marks "this is what the user wants next". Clicking an unopened
+	// file writes no store state of its own, so without this two browses clicked in a row would record the
+	// same count, and the first read to land would invalidate the second — leaving the FIRST click's file
+	// open. The mark is what lets a later browse supersede an earlier one still in flight.
+	useAppStore.getState().noteNavigation(workspaceId);
 	const store = useAppStore.getState();
 	if ((store.tabsByWorkspace[workspaceId] ?? []).some((t) => t.id === id)) {
-		store.setActiveTab(id, intent); // itself a navigation — bumps the count
+		store.setActiveTab(id, intent);
 		return;
 	}
 	const pending = inFlight.get(id);

@@ -15,6 +15,9 @@ async function openWorkspaceFiles(page: import("@playwright/test").Page): Promis
 	await chatTab.getByTestId("editor-tab-close").click();
 	await expect(chatTab).toHaveCount(0);
 	await page.getByTestId("tab-files").click();
+	// The tree has to be rendered before the specs that dispatch raw DOM clicks via `page.evaluate` — unlike
+	// a Playwright locator, `evaluate` does not auto-wait for the row to exist.
+	await expect(page.getByTestId("file-node").first()).toBeVisible();
 }
 
 test("a single click previews into one reusable slot, a double click keeps the tab", async ({
@@ -140,6 +143,62 @@ test("a browse the user has navigated away from is dropped, not activated on arr
 	await expect(tabs.first()).toContainText("README.md");
 	await expect(tabs.first()).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("editor-tab").filter({ hasText: "notes.txt" })).toHaveCount(0);
+});
+
+// Two browse clicks in a row: the LAST one must win. Both reads are started in one JS tick, so neither has
+// resolved and both are genuinely in flight — the case where an earlier read's own commit could otherwise
+// look like user navigation and drop the later one, leaving the first click's file open.
+test("of two browse clicks in flight at once, the later one wins", async ({ page }) => {
+	await openWorkspaceFiles(page);
+	const tabs = page.getByTestId("editor-tab");
+
+	await page.evaluate(() => {
+		const row = (text: string): HTMLElement => {
+			const hit = [...document.querySelectorAll('[data-testid="file-node"]')].find((el) =>
+				el.textContent?.includes(text),
+			);
+			if (!hit) throw new Error(`no file-node containing ${text}`);
+			return hit as HTMLElement;
+		};
+		row("README.md").click();
+		row("notes.txt").click();
+	});
+
+	await expect(tabs).toHaveCount(1);
+	await expect(tabs.first()).toContainText("notes.txt");
+	await expect(tabs.first()).toHaveAttribute("data-preview", "true");
+	await expect(page.getByTestId("editor-tab").filter({ hasText: "README.md" })).toHaveCount(0);
+});
+
+// A read landing is NOT a navigation, so it must not supersede a browse requested after it. Double-click A
+// and then browse B, all in one tick: A commits (it was deliberate) and B must still commit afterwards.
+// If a completion counted as navigation, A's own commit would invalidate B and the browse would vanish.
+test("a keep that lands first does not invalidate a browse requested after it", async ({
+	page,
+}) => {
+	await openWorkspaceFiles(page);
+	const tabs = page.getByTestId("editor-tab");
+
+	await page.evaluate(() => {
+		const row = (text: string): HTMLElement => {
+			const hit = [...document.querySelectorAll('[data-testid="file-node"]')].find((el) =>
+				el.textContent?.includes(text),
+			);
+			if (!hit) throw new Error(`no file-node containing ${text}`);
+			return hit as HTMLElement;
+		};
+		// A real double click, as the browser dispatches it: click, click, dblclick.
+		row("README.md").click();
+		row("README.md").click();
+		row("README.md").dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+		row("notes.txt").click();
+	});
+
+	await expect(tabs).toHaveCount(2);
+	await expect(tabs.first()).toContainText("README.md");
+	await expect(tabs.first()).toHaveAttribute("data-preview", "false"); // kept by the double click
+	await expect(tabs.nth(1)).toContainText("notes.txt");
+	await expect(tabs.nth(1)).toHaveAttribute("data-preview", "true");
 });
 
 test("the Specs panel shares the one slot, and closing the preview tab releases it", async ({

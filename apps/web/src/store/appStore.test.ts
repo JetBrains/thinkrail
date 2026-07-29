@@ -1372,8 +1372,14 @@ test("every center navigation bumps the workspace's nav tick, and none of them b
 	};
 
 	const s = () => useAppStore.getState();
-	bumps("openTab (new)", () => s().openTab(fileTab("ws1", "a.ts"), "preview"));
-	bumps("openTab (already open)", () => s().openTab(fileTab("ws1", "a.ts"), "keep"));
+	// `openTab` is the exception, and deliberately so: it IS the read completion being ordered. Counting it
+	// would make an earlier read's own commit look like user navigation and drop the later one — i.e. two
+	// browse clicks in a row would leave the FIRST click's file open.
+	const beforeOpen = tick();
+	s().openTab(fileTab("ws1", "a.ts"), "preview");
+	s().openTab(fileTab("ws1", "a.ts"), "keep");
+	expect(tick()).toBe(beforeOpen);
+
 	bumps("setActiveTab", () => s().setActiveTab("ws1:a.ts"));
 	bumps("openDoc", () =>
 		s().openDoc({

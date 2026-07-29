@@ -451,14 +451,21 @@ interface AppState {
 	 */
 	previewTabByWorkspace: Record<string, string>;
 	/**
-	 * Monotonic count of **center-area navigations** per workspace — bumped by every action that moves the
-	 * active tab (`openTab`/`openDoc`/`setActiveTab`/`closeTab`/`openChatSession`/`closeChatToHistory`/
-	 * `reopenChat`/`hydrateSession`/`requestHistoryOpen`) plus `noteNavigation` for an intent that hasn't
-	 * reached the store yet. Rendered by nothing: it exists so a **slow read can tell it was overtaken**.
-	 * A click is instant and an `fs.readFile` is not, so `panels/openTabs.ts` records this count when it
-	 * starts a read and drops a `preview` that lands after the count has moved — otherwise the file would
-	 * steal focus back from wherever the user went and claim the preview slot from it. It lives here rather
-	 * than in that module precisely so **no focus transition can bypass it**.
+	 * Monotonic count of **center-area navigations** per workspace. Rendered by nothing: it exists so a
+	 * **slow read can tell it was overtaken**. A click is instant and an `fs.readFile` is not, so
+	 * `panels/openTabs.ts` records this count when it starts a read and drops a `preview` that lands after
+	 * the count has moved — otherwise the file would steal focus back from wherever the user went, and claim
+	 * the preview slot from it. It lives here rather than in that module so **no focus transition can bypass
+	 * it**: `openDoc`/`setActiveTab`/`closeTab`/`openChatSession`/`closeChatToHistory`/`reopenChat`/
+	 * `requestHistoryOpen` all bump it, `hydrateSession` only when it actually takes focus, and
+	 * `noteNavigation` covers an intent whose focus change hasn't reached the store yet.
+	 *
+	 * **`openTab` deliberately does NOT bump it** — it *is* the read completion being ordered, so counting it
+	 * would make an earlier read's own commit look like user navigation and drop the later one. Two browse
+	 * clicks in a row is exactly that case: clicking an unopened file writes no store state, so both reads
+	 * would record the same count and the first to land would invalidate the second, leaving the *first*
+	 * click's file open. `openTabs.ts` therefore bumps this at **request** time and is the only caller of
+	 * `openTab`; a request and a completion are different events and only the request counts as navigating.
 	 */
 	navTickByWorkspace: Record<string, number>;
 	/** Chat tabs the user closed, per workspace (most-recent-first) — reopenable while their runtime lives. */
@@ -966,7 +973,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 			if (tabs.some((t) => t.id === tab.id)) {
 				return {
 					activeTabByWorkspace,
-					navTickByWorkspace: bumpNav(s, wsId),
 					previewTabByWorkspace:
 						intent === "keep" && preview === tab.id
 							? omitKey(s.previewTabByWorkspace, wsId)
@@ -982,7 +988,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 					[wsId]: at === -1 ? [...tabs, tab] : tabs.with(at, tab),
 				},
 				activeTabByWorkspace,
-				navTickByWorkspace: bumpNav(s, wsId),
 				previewTabByWorkspace:
 					intent === "preview"
 						? { ...s.previewTabByWorkspace, [wsId]: tab.id }
