@@ -1,13 +1,12 @@
 {
-	"$comment": "Canonical machine-readable typography definition for apps/web. Normative source: apps/web/src/styles/TYPOGRAPHY.md (this file encodes that spec; the spec's prose stays the rationale). NOT yet a generator input: no CSS, Tailwind utility, or component reads this file — index.css + tokens.css are still the runtime source. Every size and line-height is explicit here; nothing is inherited from framework defaults.",
-	"version": "1.0.0",
-	"status": "draft",
-	"generatesCss": false,
-	"fonts": {
-		"sans": {
-			"id": "sans",
-			"name": "Geist Variable",
-			"cssVar": "--font",
+	"$schema": "./typography.schema.json",
+	"metadata": {
+		"version": "2.0.0",
+		"cssVarPrefix": "tr",
+		"classPrefix": "tr"
+	},
+	"fontFamilies": {
+		"interface": {
 			"stack": [
 				"Geist Variable",
 				"Geist",
@@ -16,17 +15,9 @@
 				"Segoe UI",
 				"sans-serif"
 			],
-			"kind": "proportional",
-			"variable": true,
-			"weightRange": [100, 900],
-			"italic": true,
-			"selfHosted": "@fontsource-variable/geist",
-			"description": "The only proportional face: interface text and reading text. Emphasis inside a sentence changes weight, never family."
+			"kind": "proportional"
 		},
-		"mono": {
-			"id": "mono",
-			"name": "JetBrains Mono Variable",
-			"cssVar": "--font-mono",
+		"code": {
 			"stack": [
 				"JetBrains Mono Variable",
 				"JetBrains Mono",
@@ -35,826 +26,409 @@
 				"Cascadia Code",
 				"monospace"
 			],
-			"kind": "monospace",
-			"variable": true,
-			"weightRange": [100, 800],
-			"italic": true,
-			"selfHosted": "@fontsource-variable/jetbrains-mono",
-			"description": "Code and technical content ONLY: terminal, editor, code blocks, tool output, diff code and the diff header path, inline code, shell commands, slash-command syntax, keycaps. Never identity or label text."
+			"kind": "monospace"
 		},
-		"accent": {
-			"id": "accent",
-			"name": "Brand display (currently Geist Variable)",
-			"cssVar": "--font-accent",
-			"aliasOf": "sans",
-			"stack": ["var(--font)"],
-			"kind": "proportional",
-			"variable": true,
-			"italic": true,
-			"description": "Brand display role, kept as a named alias so a licensed display face can be dropped in at this one line. Cabinet Grotesk previously named here and has been RETIRED (it was never loaded); do not restore it."
+		"brand": {
+			"stack": [
+				"Geist Variable",
+				"Geist",
+				"-apple-system",
+				"BlinkMacSystemFont",
+				"Segoe UI",
+				"sans-serif"
+			],
+			"kind": "proportional"
 		}
 	},
-	"scale": {
-		"sizes": {
-			"xs": {
-				"id": "xs",
-				"cssVar": "--font-xs",
-				"px": 10,
-				"description": "The single compact proportional size: dense metadata, captions, helper text, status chrome, eyebrows. No 11px or 9px proportional tier exists."
-			},
-			"sm": {
-				"id": "sm",
-				"cssVar": "--font-sm",
-				"px": 12,
-				"description": "THE default UI text: nav, trees, lists, dialogs, settings, buttons, forms, labels."
-			},
-			"body": {
-				"id": "body",
-				"cssVar": "--font-body",
-				"px": 13,
-				"description": "The base body size; also the long-form inline-code size (text-base-mono). --font-base is its alias and feeds the spacing scale."
-			},
-			"md": {
-				"id": "md",
-				"cssVar": "--font-md",
-				"px": 14,
-				"description": "Reading text AND the heading size — one value, two semantic roles (text-base vs text-md)."
-			},
-			"lg": {
-				"id": "lg",
-				"cssVar": "--font-lg",
-				"px": 18,
-				"description": "Large display: the header wordmark, and the OTP code exception."
-			},
-			"mono": {
-				"id": "mono",
-				"cssVar": "--font-mono-size",
-				"px": 11,
-				"description": "The dense technical (mono) tier; also the size Monaco and xterm read."
-			}
-		},
-		"lineHeights": {
-			"default": {
-				"id": "default",
-				"cssVar": "--line-height",
-				"value": 1.6,
-				"description": "The global line-height AND the declared line-height of every size tier — never a framework default."
-			},
-			"none": { "id": "none", "value": 1, "description": "Dialog and card titles." },
-			"tight": {
-				"id": "tight",
-				"value": 1.25,
-				"description": "The brand hero, the header scope block, rail rows, prose h1/h2."
-			},
-			"snug": {
-				"id": "snug",
-				"value": 1.375,
-				"description": "Card subtitles, prose h3."
-			},
-			"normal": {
-				"id": "normal",
-				"value": 1.5,
-				"description": "Prose code blocks (denser than the prose body)."
-			},
-			"relaxed": {
-				"id": "relaxed",
-				"value": 1.625,
-				"description": "Tool output (BashCard, EditCard)."
-			},
-			"prose": {
-				"id": "prose",
-				"value": 1.65,
-				"description": "The markdown prose root. The one line-height with no CSS token behind it yet."
-			}
-		},
-		"letterSpacings": {
-			"normal": { "id": "normal", "value": "normal" },
-			"wider": {
-				"id": "wider",
-				"value": "0.05em",
-				"description": "Uppercase eyebrows and label pills."
-			},
-			"widest": {
-				"id": "widest",
-				"value": "0.1em",
-				"description": "The OTP code exception only."
-			},
-			"brand": {
-				"id": "brand",
-				"value": "0.5px",
-				"description": "Lives inside the brand role only."
-			}
-		},
-		"weights": {
-			"regular": {
-				"id": "regular",
-				"value": 400,
-				"description": "ALL body/UI text, including entity names, list items, eyebrows, status labels, and active nav/tab states — active is expressed as COLOUR, never weight."
-			},
-			"medium": {
-				"id": "medium",
-				"value": 500,
-				"description": "Buttons; in-page panel/section headings; settings sub-headings; compact (toast/confirm) titles; inline sentence emphasis; markdown <strong>."
-			},
-			"semibold": {
-				"id": "semibold",
-				"value": 600,
-				"description": "Dialog titles; Welcome card titles; markdown h1-h6 and table th; alert titles; ask_user_question card titles."
-			},
-			"brand": { "id": "brand", "value": 800, "description": "The brand role only." }
-		}
+	"fontWeights": {
+		"regular": 400,
+		"medium": 500,
+		"semibold": 600,
+		"brand": 800
 	},
-	"roles": [
-		{
-			"id": "brand-heading",
-			"name": "Brand heading",
-			"category": "brand",
-			"fontFamily": "accent",
-			"fontSize": {
-				"type": "per-usage",
-				"note": "The brand role carries family/weight/tracking only; each usage sets its own size + line-height. Both usages are enumerated in `variants`."
-			},
-			"fontWeight": "brand",
-			"lineHeight": { "type": "per-usage" },
-			"letterSpacing": "brand",
-			"textTransform": "none",
-			"fontStyle": "normal",
-			"utility": "text-brand",
-			"description": "The canonical ThinkRail brand display style. No other composed accent-font treatment may exist.",
-			"usages": [
-				"Shell header wordmark",
-				"Welcome hero (the shown project's name or PRODUCT_NAME)"
-			],
-			"variants": [
-				{
-					"id": "brand-heading-wordmark",
-					"fontSize": { "type": "scale", "ref": "lg" },
-					"lineHeight": { "type": "scale", "ref": "default" },
-					"usages": ["Shell header wordmark"]
-				},
-				{
-					"id": "brand-heading-hero",
-					"fontSize": { "type": "absolute", "px": 44, "exception": "brand-hero-size" },
-					"lineHeight": { "type": "scale", "ref": "tight" },
-					"usages": ["Welcome hero"]
-				}
-			]
-		},
-		{
-			"id": "dialog-title",
-			"name": "Dialog title",
-			"category": "title",
-			"fontFamily": "sans",
-			"fontSize": { "type": "scale", "ref": "md" },
-			"fontWeight": "semibold",
-			"lineHeight": { "type": "scale", "ref": "none" },
-			"letterSpacing": "normal",
-			"textTransform": "none",
-			"fontStyle": "normal",
-			"utility": "text-md font-semibold leading-none",
-			"description": "The title of a modal surface.",
-			"usages": [
-				"every Dialog via components/ui/dialog DialogTitle",
-				"AskUserQuestionCard question title and 'Review your answers' (dialog-title analogs)"
-			]
-		},
-		{
-			"id": "card-title",
-			"name": "Card title",
-			"category": "title",
-			"fontFamily": "sans",
-			"fontSize": { "type": "scale", "ref": "sm" },
-			"fontWeight": "semibold",
-			"lineHeight": { "type": "scale", "ref": "default" },
-			"letterSpacing": "normal",
-			"textTransform": "none",
-			"fontStyle": "normal",
-			"utility": "text-sm font-semibold",
-			"description": "The dialog-title WEIGHT at the card's own smaller size — matching the weight is what makes a card read as a title.",
-			"usages": ["Welcome cards"]
-		},
-		{
-			"id": "panel-section-title",
-			"name": "Panel / section title",
-			"category": "title",
-			"fontFamily": "sans",
-			"fontSize": { "type": "scale", "ref": "md" },
-			"fontWeight": "medium",
-			"lineHeight": { "type": "scale", "ref": "default" },
-			"letterSpacing": "normal",
-			"textTransform": "none",
-			"fontStyle": "normal",
-			"utility": "text-md font-medium",
-			"description": "An in-page heading (600 is modal, 500 is in-page).",
-			"usages": [
-				"Settings section h3s: AppearanceSettings, ProvidersSettings, GithubSettings, PrivacySettings, TemplatesSettings"
-			]
-		},
-		{
-			"id": "compact-title",
-			"name": "Compact title",
-			"category": "title",
-			"fontFamily": "sans",
-			"fontSize": { "type": "scale", "ref": "sm" },
-			"fontWeight": "medium",
-			"lineHeight": { "type": "scale", "ref": "default" },
-			"letterSpacing": "normal",
-			"textTransform": "none",
-			"fontStyle": "normal",
-			"utility": "text-sm font-medium",
-			"description": "The title of a transient or dense surface.",
-			"usages": ["Toast title", "ConfirmPopover title"]
-		},
-		{
-			"id": "entity-name",
-			"name": "Entity name",
-			"category": "ui",
-			"fontFamily": "sans",
-			"fontSize": { "type": "scale", "ref": "sm" },
-			"fontWeight": "regular",
-			"lineHeight": { "type": "scale", "ref": "default" },
-			"letterSpacing": "normal",
-			"textTransform": "none",
-			"fontStyle": "normal",
-			"utility": "text-sm",
-			"description": "The name of a project, workspace, skill, template, model, spec or file. Proportional — never mono. Active/selected state is a colour change, not a weight change.",
-			"usages": [
-				"ProjectTree project + workspace rows",
-				"SkillsDialog skill names",
-				"TemplatesSettings template names",
-				"SpecsPanel node titles",
-				"ModelSelector model name"
-			],
-			"variants": [
-				{
-					"id": "entity-name-two-line",
-					"lineHeight": { "type": "scale", "ref": "tight" },
-					"usages": ["ProjectTree workspace row (name over branch sub-line)"]
-				}
-			]
-		},
-		{
-			"id": "entity-screen-heading",
-			"name": "Entity screen heading",
-			"category": "title",
-			"fontFamily": "sans",
-			"fontSize": { "type": "scale", "ref": "md" },
-			"fontWeight": "regular",
-			"lineHeight": { "type": "scale", "ref": "default" },
-			"letterSpacing": "normal",
-			"textTransform": "none",
-			"fontStyle": "normal",
-			"utility": "text-md",
-			"description": "An entity name promoted to a screen's primary heading — the only place an entity name grows.",
-			"usages": ["CenterTabs empty-workspace screen (workspace name)"]
-		},
-		{
-			"id": "supporting-text",
-			"name": "Supporting text (page)",
-			"category": "body",
-			"fontFamily": "sans",
-			"fontSize": { "type": "scale", "ref": "md" },
-			"fontWeight": "regular",
-			"lineHeight": { "type": "scale", "ref": "default" },
-			"letterSpacing": "normal",
-			"textTransform": "none",
-			"fontStyle": "normal",
-			"utility": "text-base",
-			"description": "Page-level supporting copy — the reading tier, never a UI control.",
-			"usages": ["ProviderWarningBanner", "page-level explanatory copy"]
-		},
-		{
-			"id": "reading-text",
-			"name": "Reading text",
-			"category": "body",
-			"fontFamily": "sans",
-			"fontSize": { "type": "scale", "ref": "md" },
-			"fontWeight": "regular",
-			"lineHeight": { "type": "scale", "ref": "default" },
-			"letterSpacing": "normal",
-			"textTransform": "none",
-			"fontStyle": "normal",
-			"utility": "text-base text-text",
-			"description": "Long-form text the user reads rather than operates: chat messages. Markdown bodies use the prose group.",
-			"usages": ["chat/turns assistant message", "chat/turns user bubble"]
-		},
-		{
-			"id": "ui-text",
-			"name": "UI text",
-			"category": "ui",
-			"fontFamily": "sans",
-			"fontSize": { "type": "scale", "ref": "sm" },
-			"fontWeight": "regular",
-			"lineHeight": { "type": "scale", "ref": "default" },
-			"letterSpacing": "normal",
-			"textTransform": "none",
-			"fontStyle": "normal",
-			"utility": "text-sm",
-			"description": "The default interface text: menu and list items, tree rows, form fields, tabs, nav. Buttons are this size at weight 500.",
-			"usages": [
-				"components/ui/button (both sizes, weight 500)",
-				"components/ui/textarea and every text input",
-				"components/ui/command items",
-				"components/ui/dropdown-menu items",
-				"SettingsDialog nav",
-				"Composer textarea"
-			]
-		},
-		{
-			"id": "metadata",
-			"name": "Metadata",
-			"category": "metadata",
-			"fontFamily": "sans",
-			"fontSize": { "type": "scale", "ref": "xs" },
-			"fontWeight": "regular",
-			"lineHeight": { "type": "scale", "ref": "default" },
-			"letterSpacing": "normal",
-			"textTransform": "none",
-			"fontStyle": "normal",
-			"utility": "text-xs",
-			"description": "Timestamps, counts, ids, paths, branches and refs. A branch is metadata on EVERY surface — header line, rail sub-line and empty-workspace screen are all proportional.",
-			"usages": [
-				"ProjectTree workspace branch sub-line",
-				"CenterTabs empty-workspace branch line",
-				"NewWorkspaceDialog branch-picker refs and trigger",
-				"Shell header scope block",
-				"ChangesPanel and FileTree row metadata",
-				"SessionStatsBar",
-				"TodoList note"
-			]
-		},
-		{
-			"id": "helper-text",
-			"name": "Helper text",
-			"category": "metadata",
-			"fontFamily": "sans",
-			"fontSize": { "type": "scale", "ref": "xs" },
-			"fontWeight": "regular",
-			"lineHeight": { "type": "scale", "ref": "default" },
-			"letterSpacing": "normal",
-			"textTransform": "none",
-			"fontStyle": "normal",
-			"utility": "text-xs",
-			"description": "Explanatory text under a control, and placeholders (placeholder:text-hint). Same metrics as metadata, different semantic role.",
-			"usages": ["settings helper lines", "dialog captions", "input placeholders"]
-		},
-		{
-			"id": "status-label-neutral",
-			"name": "Neutral status label",
-			"category": "ui",
-			"fontFamily": "sans",
-			"fontSize": { "type": "scale", "ref": "sm" },
-			"fontWeight": "regular",
-			"lineHeight": { "type": "scale", "ref": "default" },
-			"letterSpacing": "normal",
-			"textTransform": "none",
-			"fontStyle": "normal",
-			"utility": "text-sm",
-			"description": "Plain secondary text in sentence case — no uppercase, no tracking, no weight bump.",
-			"usages": ["connection status", "StreamIndicator status text"]
-		},
-		{
-			"id": "empty-state",
-			"name": "Empty state",
-			"category": "metadata",
-			"fontFamily": "sans",
-			"fontSize": { "type": "scale", "ref": "xs" },
-			"fontWeight": "regular",
-			"lineHeight": { "type": "scale", "ref": "default" },
-			"letterSpacing": "normal",
-			"textTransform": "none",
-			"fontStyle": "normal",
-			"utility": "text-xs",
-			"description": "The 'nothing here' line inside a panel. Tool cards add italic for absent output.",
-			"usages": ["FileTree", "ChangesPanel", "SpecsPanel", "TerminalsPanel"],
-			"variants": [
-				{
-					"id": "empty-state-rail",
-					"fontSize": { "type": "scale", "ref": "sm" },
-					"description": "The projects-rail placeholder is deliberately one tier larger.",
-					"usages": ["ProjectTree rail placeholder"]
-				},
-				{
-					"id": "empty-state-tool-card",
-					"fontStyle": "italic",
-					"description": "Tool cards mark absent output with italic.",
-					"usages": [
-						"ReadCard",
-						"WriteCard",
-						"WebSearchCard",
-						"WebFetchCard",
-						"DiagramCard",
-						"ComparisonCard",
-						"AskUserQuestionCard"
-					]
-				}
-			]
-		},
-		{
-			"id": "eyebrow",
-			"name": "Eyebrow / section label",
-			"category": "label",
-			"fontFamily": "sans",
-			"fontSize": { "type": "scale", "ref": "xs" },
-			"fontWeight": "regular",
-			"lineHeight": { "type": "scale", "ref": "default" },
-			"letterSpacing": "wider",
-			"textTransform": "uppercase",
-			"fontStyle": "normal",
-			"utility": "text-eyebrow",
-			"description": "THE small uppercase label that titles a group or section. Carries the whole type style; the call site adds only colour. RESERVED for eyebrow/section-label content — a pill that merely looks similar uses label-pill instead.",
-			"usages": [
-				"RightPanel tab labels",
-				"ProjectTree 'Projects' rail heading",
-				"TerminalsPanel 'Terminal'",
-				"SpecsPanel role chip",
-				"ProvidersSettings group headings",
-				"TemplatesSettings group heading",
-				"CenterTabs workspace-ready eyebrow",
-				"SkillsDialog group headers and 'All plugins'",
-				"HistoryOverlay 'Prompts' / 'Messages' section headers",
-				"TodoList plan section headers",
-				"ThinkingSelector 'Effort'",
-				"components/ui/command group heading",
-				"components/ui/dropdown-menu label"
-			]
-		},
-		{
-			"id": "label-pill",
-			"name": "Label pill",
-			"category": "label",
-			"fontFamily": "sans",
-			"fontSize": { "type": "scale", "ref": "xs" },
-			"fontWeight": "regular",
-			"lineHeight": { "type": "scale", "ref": "default" },
-			"letterSpacing": "wider",
-			"textTransform": "uppercase",
-			"fontStyle": "normal",
-			"utility": "text-xs uppercase tracking-wider",
-			"description": "A bordered/filled pill carrying a short status or tag word. Shares the eyebrow's metrics deliberately, but NOT its semantic role — a pill is not a section label, so it spells its own classes.",
-			"usages": ["SettingsDialog 'Soon' pill", "WelcomePanel card tag (e.g. 'spec-first')"]
-		},
-		{
-			"id": "mono-code-text",
-			"name": "Mono / code text",
-			"category": "code",
-			"fontFamily": "mono",
-			"fontSize": { "type": "scale", "ref": "mono" },
-			"fontWeight": "regular",
-			"lineHeight": { "type": "scale", "ref": "default" },
-			"letterSpacing": "normal",
-			"textTransform": "none",
-			"fontStyle": "normal",
-			"utility": "text-mono",
-			"description": "The dense technical tier: terminal, editor, tool output, diff code and the diff header path, shell commands, slash-command syntax, keycaps. Monaco and xterm read the same size + family so third-party surfaces match.",
-			"usages": [
-				"TerminalInstance (xterm: size and family read from the same tokens)",
-				"monacoSetup sharedEditorOptions (all editors and both diff panes)",
-				"toolRegistry default renderer (args + result)",
-				"BashCard and EditCard output",
-				"ExtUiDialog JSON editor",
-				"SlashCommandCompletion command names",
-				"GithubSettings gh commands",
-				"JetBrainsAiCard command",
-				"DiffPane header path",
-				"NewWorkspaceDialog '/' hint and the return keycap"
-			],
-			"variants": [
-				{
-					"id": "mono-code-text-relaxed",
-					"lineHeight": { "type": "scale", "ref": "relaxed" },
-					"description": "Tool output loosens the line-height for scanability.",
-					"usages": ["BashCard", "EditCard"]
-				}
-			]
-		},
-		{
-			"id": "inline-code",
-			"name": "Inline code",
-			"category": "code",
-			"fontFamily": "mono",
-			"fontSize": { "type": "scale", "ref": "body" },
-			"fontWeight": "regular",
-			"lineHeight": { "type": "scale", "ref": "default" },
-			"letterSpacing": "normal",
-			"textTransform": "none",
-			"fontStyle": "normal",
-			"utility": "text-base-mono",
-			"description": "Code inside a sentence of long-form (reading-tier) content — one tier below the prose body so it sits level with it. Inline code inside 12px UI sentences uses mono-code-text instead.",
-			"usages": ["chat/Markdown inline code", "prose-inline-code (same metrics, prose group)"]
-		},
-		{
-			"id": "code-block",
-			"name": "Code block",
-			"category": "code",
-			"fontFamily": "mono",
-			"fontSize": { "type": "scale", "ref": "mono" },
-			"fontWeight": "regular",
-			"lineHeight": { "type": "scale", "ref": "default" },
-			"letterSpacing": "normal",
-			"textTransform": "none",
-			"fontStyle": "normal",
-			"utility": "text-mono",
-			"description": "A fixed-size code block in UI chrome (on bg-elevated / bg-bg-dark). Markdown's fenced blocks are em-relative instead — see prose-code-block and the exceptions list.",
-			"usages": ["CodeBlock (shiki and plain)", "toolRegistry result block"]
-		},
-		{
-			"id": "prose-body",
-			"name": "Prose body",
-			"category": "prose",
-			"fontFamily": "sans",
-			"fontSize": { "type": "scale", "ref": "md" },
-			"fontWeight": "regular",
-			"lineHeight": { "type": "scale", "ref": "prose" },
-			"letterSpacing": "normal",
-			"textTransform": "none",
-			"fontStyle": "normal",
-			"utility": "text-base leading-[1.65]",
-			"description": "The root of every rendered markdown document, and the basis all relative prose sizes resolve against. ONE prose group serves both markdown surfaces — there is no separate chat vs spec markdown system.",
-			"usages": ["MarkdownPreview document skin (spec/file preview)", "chat/Markdown chat skin"]
-		},
-		{
-			"id": "prose-strong",
-			"name": "Prose strong",
-			"category": "prose",
-			"fontFamily": "sans",
-			"fontSize": { "type": "relative", "factor": 1, "basisRole": "prose-body" },
-			"fontWeight": "medium",
-			"lineHeight": { "type": "inherit", "fromRole": "prose-body" },
-			"letterSpacing": "normal",
-			"textTransform": "none",
-			"fontStyle": "normal",
-			"utility": "[&_strong]:font-medium",
-			"description": "Inline emphasis inside prose. Both skins declare it explicitly to beat preflight; emphasis is a weight change, never a family change.",
-			"usages": ["MarkdownPreview", "chat/Markdown"]
-		},
-		{
-			"id": "prose-h1",
-			"name": "Prose h1",
-			"category": "prose",
-			"fontFamily": "sans",
-			"fontSize": { "type": "relative", "factor": 2, "basisRole": "prose-body" },
-			"fontWeight": "semibold",
-			"lineHeight": { "type": "scale", "ref": "tight" },
-			"letterSpacing": "normal",
-			"textTransform": "none",
-			"fontStyle": "normal",
-			"utility": "[&_h1]:text-[2em] [&_h1]:font-semibold [&_h1]:leading-tight",
-			"description": "Document title. Relative to the prose body on purpose: a document's internal hierarchy scales with its root, which a fixed px scale cannot express.",
-			"usages": ["MarkdownPreview", "chat/Markdown"]
-		},
-		{
-			"id": "prose-h2",
-			"name": "Prose h2",
-			"category": "prose",
-			"fontFamily": "sans",
-			"fontSize": { "type": "relative", "factor": 1.5, "basisRole": "prose-body" },
-			"fontWeight": "semibold",
-			"lineHeight": { "type": "scale", "ref": "tight" },
-			"letterSpacing": "normal",
-			"textTransform": "none",
-			"fontStyle": "normal",
-			"utility": "[&_h2]:text-[1.5em] [&_h2]:font-semibold [&_h2]:leading-tight",
-			"description": "Section heading.",
-			"usages": ["MarkdownPreview", "chat/Markdown"]
-		},
-		{
-			"id": "prose-h3",
-			"name": "Prose h3",
-			"category": "prose",
-			"fontFamily": "sans",
-			"fontSize": { "type": "relative", "factor": 1.25, "basisRole": "prose-body" },
-			"fontWeight": "semibold",
-			"lineHeight": { "type": "scale", "ref": "snug" },
-			"letterSpacing": "normal",
-			"textTransform": "none",
-			"fontStyle": "normal",
-			"utility": "[&_h3]:text-[1.25em] [&_h3]:font-semibold [&_h3]:leading-snug",
-			"description": "Sub-section heading.",
-			"usages": ["MarkdownPreview", "chat/Markdown"]
-		},
-		{
-			"id": "prose-h4",
-			"name": "Prose h4",
-			"category": "prose",
-			"fontFamily": "sans",
-			"fontSize": { "type": "relative", "factor": 1, "basisRole": "prose-body" },
-			"fontWeight": "semibold",
-			"lineHeight": { "type": "inherit", "fromRole": "prose-body" },
-			"letterSpacing": "normal",
-			"textTransform": "none",
-			"fontStyle": "normal",
-			"utility": "[&_h4]:text-[1em] [&_h4]:font-semibold",
-			"description": "Body-sized heading: hierarchy from weight and spacing, not size.",
-			"usages": ["MarkdownPreview", "chat/Markdown"]
-		},
-		{
-			"id": "prose-h5",
-			"name": "Prose h5",
-			"category": "prose",
-			"fontFamily": "sans",
-			"fontSize": { "type": "relative", "factor": 0.875, "basisRole": "prose-body" },
-			"fontWeight": "semibold",
-			"lineHeight": { "type": "inherit", "fromRole": "prose-body" },
-			"letterSpacing": "normal",
-			"textTransform": "none",
-			"fontStyle": "normal",
-			"utility": "[&_h5]:text-[0.875em] [&_h5]:font-semibold",
-			"description": "Below-body heading.",
-			"usages": ["MarkdownPreview", "chat/Markdown"]
-		},
-		{
-			"id": "prose-h6",
-			"name": "Prose h6",
-			"category": "prose",
-			"fontFamily": "sans",
-			"fontSize": { "type": "relative", "factor": 0.85, "basisRole": "prose-body" },
-			"fontWeight": "semibold",
-			"lineHeight": { "type": "inherit", "fromRole": "prose-body" },
-			"letterSpacing": "normal",
-			"textTransform": "none",
-			"fontStyle": "normal",
-			"utility": "[&_h6]:text-[0.85em] [&_h6]:font-semibold",
-			"description": "The smallest heading; rendered in the muted colour.",
-			"usages": ["MarkdownPreview", "chat/Markdown"]
-		},
-		{
-			"id": "prose-inline-code",
-			"name": "Prose inline code",
-			"category": "prose",
-			"fontFamily": "mono",
-			"fontSize": { "type": "scale", "ref": "body" },
-			"fontWeight": "regular",
-			"lineHeight": { "type": "inherit", "fromRole": "prose-body" },
-			"letterSpacing": "normal",
-			"textTransform": "none",
-			"fontStyle": "normal",
-			"utility": "text-base-mono",
-			"description": "Code inside a prose sentence — the same metrics as the inline-code role, named here so the prose group is complete. Fixed (not relative) so it sits level with the prose body.",
-			"sameAsRole": "inline-code",
-			"usages": ["MarkdownPreview", "chat/Markdown"]
-		},
-		{
-			"id": "prose-code-block",
-			"name": "Prose code block",
-			"category": "prose",
-			"fontFamily": "mono",
-			"fontSize": { "type": "relative", "factor": 0.85, "basisRole": "prose-body" },
-			"fontWeight": "regular",
-			"lineHeight": { "type": "scale", "ref": "normal" },
-			"letterSpacing": "normal",
-			"textTransform": "none",
-			"fontStyle": "normal",
-			"utility": "font-(family-name:--font-mono) text-[0.85em]",
-			"description": "A fenced block inside a document: em-relative so it scales with the prose skin, deliberately NOT the fixed mono tier. Shiki-highlighted blocks carry the same size.",
-			"exception": "markdown-relative-scale",
-			"usages": ["MarkdownPreview", "chat/Markdown (plain and shiki)"]
-		},
-		{
-			"id": "prose-blockquote",
-			"name": "Prose blockquote",
-			"category": "prose",
-			"fontFamily": "sans",
-			"fontSize": { "type": "relative", "factor": 1, "basisRole": "prose-body" },
-			"fontWeight": "regular",
-			"lineHeight": { "type": "inherit", "fromRole": "prose-body" },
-			"letterSpacing": "normal",
-			"textTransform": "none",
-			"fontStyle": "normal",
-			"utility": "[&_blockquote]:text-muted",
-			"description": "Body metrics in the muted colour with an accent rule — deliberately NOT italic, since quotes can be long.",
-			"usages": ["MarkdownPreview", "chat/Markdown"]
-		},
-		{
-			"id": "prose-list",
-			"name": "Prose list",
-			"category": "prose",
-			"fontFamily": "sans",
-			"fontSize": { "type": "relative", "factor": 1, "basisRole": "prose-body" },
-			"fontWeight": "regular",
-			"lineHeight": { "type": "inherit", "fromRole": "prose-body" },
-			"letterSpacing": "normal",
-			"textTransform": "none",
-			"fontStyle": "normal",
-			"utility": "[&_ul]:list-disc [&_ol]:list-decimal",
-			"description": "List items carry body typography; only indent and item spacing differ between the two skins.",
-			"usages": ["MarkdownPreview", "chat/Markdown"]
-		},
-		{
-			"id": "prose-table-header",
-			"name": "Prose table header",
-			"category": "prose",
-			"fontFamily": "sans",
-			"fontSize": { "type": "relative", "factor": 0.9, "basisRole": "prose-body" },
-			"fontWeight": "semibold",
-			"lineHeight": { "type": "inherit", "fromRole": "prose-body" },
-			"letterSpacing": "normal",
-			"textTransform": "none",
-			"fontStyle": "normal",
-			"utility": "[&_table]:text-[0.9em] [&_th]:font-semibold",
-			"description": "A GFM table header cell. The 0.9em comes from the table root, which sets the size for header and body cells alike; the header adds weight only.",
-			"usages": ["MarkdownPreview", "chat/Markdown"]
-		}
-	],
-	"exceptions": [
-		{
-			"id": "brand-hero-size",
-			"name": "Welcome hero size",
-			"style": {
-				"fontFamily": "accent",
-				"fontSize": { "type": "absolute", "px": 44 },
+	"fontSizes": {
+		"s10": 10,
+		"s11": 11,
+		"s12": 12,
+		"s13": 13,
+		"s14": 14,
+		"s18": 18,
+		"s44": 44
+	},
+	"lineHeights": {
+		"compact": 1.25,
+		"code": 1.5,
+		"default": 1.6
+	},
+	"letterSpacings": {
+		"normal": "normal",
+		"wide": "0.05em",
+		"widest": "0.1em",
+		"brand": "0.5px"
+	},
+	"textStyles": {
+		"brand": {
+			"wordmark": {
+				"fontFamily": "brand",
+				"fontSize": "s18",
 				"fontWeight": "brand",
-				"lineHeight": { "type": "scale", "ref": "tight" },
-				"letterSpacing": "brand"
+				"lineHeight": "compact",
+				"letterSpacing": "brand",
+				"textTransform": "none",
+				"fontStyle": "normal"
 			},
-			"reason": "The brand role carries no size by design, so each brand usage sets its own. 44px exists only here.",
-			"sites": ["panels/WelcomePanel.tsx (hero)"],
-			"sanctioned": true
+			"hero": {
+				"fontFamily": "brand",
+				"fontSize": "s44",
+				"fontWeight": "brand",
+				"lineHeight": "compact",
+				"letterSpacing": "brand",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			}
 		},
-		{
-			"id": "otp-code",
-			"name": "Login OTP code",
-			"style": {
-				"fontFamily": "mono",
-				"fontSize": { "type": "scale", "ref": "lg" },
+		"title": {
+			"dialog": {
+				"fontFamily": "interface",
+				"fontSize": "s14",
+				"fontWeight": "semibold",
+				"lineHeight": "compact",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			},
+			"card": {
+				"fontFamily": "interface",
+				"fontSize": "s14",
+				"fontWeight": "semibold",
+				"lineHeight": "compact",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			},
+			"section": {
+				"fontFamily": "interface",
+				"fontSize": "s14",
+				"fontWeight": "medium",
+				"lineHeight": "default",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			},
+			"compact": {
+				"fontFamily": "interface",
+				"fontSize": "s12",
+				"fontWeight": "medium",
+				"lineHeight": "default",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			},
+			"entity": {
+				"fontFamily": "interface",
+				"fontSize": "s14",
 				"fontWeight": "regular",
-				"lineHeight": { "type": "scale", "ref": "default" },
-				"letterSpacing": "widest"
+				"lineHeight": "default",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			}
+		},
+		"ui": {
+			"default": {
+				"fontFamily": "interface",
+				"fontSize": "s12",
+				"fontWeight": "regular",
+				"lineHeight": "default",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
 			},
-			"reason": "Intentional emphasis: a code the user must read aloud or copy accurately. The only mono usage at 18px and the only use of the widest tracking.",
-			"sites": ["auth/LoginDialog.tsx"],
-			"sanctioned": true
-		},
-		{
-			"id": "markdown-relative-scale",
-			"name": "Markdown relative scale",
-			"style": {
-				"fontSize": { "type": "relative", "basisRole": "prose-body" },
-				"note": "Factors live on the prose-* roles: 2 / 1.5 / 1.25 / 1 / 0.875 / 0.85 for h1-h6, 0.85 for fenced code, 0.9 for tables."
+			"entity": {
+				"fontFamily": "interface",
+				"fontSize": "s12",
+				"fontWeight": "regular",
+				"lineHeight": "default",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
 			},
-			"reason": "A rendered document needs an internally proportional scale that tracks its root; a fixed-px token scale cannot express that. This is the system's only relative sizing.",
-			"sites": ["panels/MarkdownPreview.tsx", "chat/Markdown.tsx"],
-			"sanctioned": true
-		},
-		{
-			"id": "prose-line-height",
-			"name": "Prose root line-height",
-			"style": { "lineHeight": { "type": "scale", "ref": "prose" } },
-			"reason": "1.65 reads better in long documents than the global 1.6. It is the one line-height value with no CSS token behind it yet — a token would let the two stop drifting.",
-			"sites": ["panels/MarkdownPreview.tsx"],
-			"sanctioned": true,
-			"openQuestion": "Give it a token (e.g. --line-height-prose) or fold it into the global 1.6."
-		},
-		{
-			"id": "mono-in-ui-sentences",
-			"name": "Mono inside 12px UI sentences",
-			"style": {
-				"fontFamily": "mono",
-				"fontSize": { "type": "scale", "ref": "mono" }
+			"entityCompact": {
+				"fontFamily": "interface",
+				"fontSize": "s12",
+				"fontWeight": "regular",
+				"lineHeight": "compact",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
 			},
-			"reason": "Command syntax and code-editing surfaces stay mono even inside UI text: slash-command names, the ExtUiDialog JSON editor, gh commands, the new-workspace '/' hint, the diff header path, the return keycap. Mono here marks CODE, never an identity or label.",
-			"sites": [
-				"chat/SlashCommandCompletion.tsx",
-				"chat/ExtUiDialog.tsx",
-				"panels/GithubSettings.tsx",
-				"panels/NewWorkspaceDialog.tsx",
-				"panels/DiffPane.tsx",
-				"panels/JetBrainsAiCard.tsx"
-			],
-			"sanctioned": true
-		},
-		{
-			"id": "per-usage-line-heights",
-			"name": "Per-usage line-height overrides",
-			"style": {
-				"note": "leading-none (dialog/card titles), leading-tight (hero, header scope block, rail rows, prose h1/h2), leading-snug (card subtitles, prose h3), leading-relaxed (tool output), 1.65 (prose root)."
+			"metadata": {
+				"fontFamily": "interface",
+				"fontSize": "s10",
+				"fontWeight": "regular",
+				"lineHeight": "default",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
 			},
-			"reason": "A tier's declared line-height is the default, not a ceiling: a `leading-*` utility sets --tw-leading and wins. Each override is enumerated so none is accidental.",
-			"sites": ["see the roles' variants"],
-			"sanctioned": true
-		},
-		{
-			"id": "unswept-medium-weights",
-			"name": "Remaining 500 weights",
-			"style": { "fontWeight": "medium" },
-			"reason": "NOT sanctioned — out of scope for the typography pass and left for the entity-consistency pass: form-field labels (TemplateEditorDialog), the privacy toggle row label, the chat plan strip label, and the completed-todo group title (where 500 marks a done row).",
-			"sites": [
-				"chat/TemplateEditorDialog.tsx",
-				"panels/PrivacySettings.tsx",
-				"chat/ChatPlan.tsx",
-				"chat/TodoList.tsx"
-			],
-			"sanctioned": false
-		},
-		{
-			"id": "dead-tokens",
-			"name": "Unused scale tokens",
-			"style": {
-				"note": "--font-lg2 (20px), --font-xl (25px), --font-xxl (40px), --compact-font-base (9px), --uppercase-size/-weight/-spacing exist in tokens.css but no role uses them; --compact-font-base is written on every boot by utils/fontScale.ts with no reader."
+			"helper": {
+				"fontFamily": "interface",
+				"fontSize": "s10",
+				"fontWeight": "regular",
+				"lineHeight": "default",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
 			},
-			"reason": "Deliberately left in place, and deliberately absent from this file: a role-driven definition should not carry sizes no role claims.",
-			"sites": ["styles/tokens.css", "utils/fontScale.ts"],
-			"sanctioned": false
+			"status": {
+				"fontFamily": "interface",
+				"fontSize": "s12",
+				"fontWeight": "regular",
+				"lineHeight": "default",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			},
+			"empty": {
+				"fontFamily": "interface",
+				"fontSize": "s10",
+				"fontWeight": "regular",
+				"lineHeight": "default",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			},
+			"emptyQuiet": {
+				"fontFamily": "interface",
+				"fontSize": "s10",
+				"fontWeight": "regular",
+				"lineHeight": "default",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "italic"
+			},
+			"eyebrow": {
+				"fontFamily": "interface",
+				"fontSize": "s10",
+				"fontWeight": "regular",
+				"lineHeight": "default",
+				"letterSpacing": "wide",
+				"textTransform": "uppercase",
+				"fontStyle": "normal"
+			},
+			"labelPill": {
+				"fontFamily": "interface",
+				"fontSize": "s10",
+				"fontWeight": "regular",
+				"lineHeight": "default",
+				"letterSpacing": "wide",
+				"textTransform": "uppercase",
+				"fontStyle": "normal"
+			},
+			"action": {
+				"fontFamily": "interface",
+				"fontSize": "s12",
+				"fontWeight": "medium",
+				"lineHeight": "default",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			},
+			"emphasis": {
+				"fontFamily": "interface",
+				"fontSize": "s12",
+				"fontWeight": "medium",
+				"lineHeight": "default",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			}
+		},
+		"body": {
+			"reading": {
+				"fontFamily": "interface",
+				"fontSize": "s14",
+				"fontWeight": "regular",
+				"lineHeight": "default",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			},
+			"supporting": {
+				"fontFamily": "interface",
+				"fontSize": "s14",
+				"fontWeight": "regular",
+				"lineHeight": "default",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			}
+		},
+		"code": {
+			"text": {
+				"fontFamily": "code",
+				"fontSize": "s11",
+				"fontWeight": "regular",
+				"lineHeight": "default",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			},
+			"inline": {
+				"fontFamily": "code",
+				"fontSize": "s13",
+				"fontWeight": "regular",
+				"lineHeight": "default",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			},
+			"block": {
+				"fontFamily": "code",
+				"fontSize": "s11",
+				"fontWeight": "regular",
+				"lineHeight": "code",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			},
+			"otp": {
+				"fontFamily": "code",
+				"fontSize": "s18",
+				"fontWeight": "regular",
+				"lineHeight": "default",
+				"letterSpacing": "widest",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			}
 		}
-	]
+	},
+	"proseStyles": {
+		"body": {
+			"fontFamily": "interface",
+			"fontSize": "s14",
+			"fontWeight": "regular",
+			"lineHeight": "default",
+			"letterSpacing": "normal",
+			"textTransform": "none",
+			"fontStyle": "normal"
+		},
+		"strong": {
+			"fontFamily": "interface",
+			"fontSize": "s14",
+			"fontWeight": "medium",
+			"lineHeight": "default",
+			"letterSpacing": "normal",
+			"textTransform": "none",
+			"fontStyle": "normal"
+		},
+		"h1": {
+			"fontFamily": "interface",
+			"fontSize": "s18",
+			"fontWeight": "semibold",
+			"lineHeight": "compact",
+			"letterSpacing": "normal",
+			"textTransform": "none",
+			"fontStyle": "normal"
+		},
+		"h2": {
+			"fontFamily": "interface",
+			"fontSize": "s14",
+			"fontWeight": "semibold",
+			"lineHeight": "compact",
+			"letterSpacing": "normal",
+			"textTransform": "none",
+			"fontStyle": "normal"
+		},
+		"h3": {
+			"fontFamily": "interface",
+			"fontSize": "s12",
+			"fontWeight": "semibold",
+			"lineHeight": "default",
+			"letterSpacing": "normal",
+			"textTransform": "none",
+			"fontStyle": "normal"
+		},
+		"h4": {
+			"fontFamily": "interface",
+			"fontSize": "s12",
+			"fontWeight": "medium",
+			"lineHeight": "default",
+			"letterSpacing": "normal",
+			"textTransform": "none",
+			"fontStyle": "normal"
+		},
+		"h5": {
+			"fontFamily": "interface",
+			"fontSize": "s12",
+			"fontWeight": "medium",
+			"lineHeight": "default",
+			"letterSpacing": "normal",
+			"textTransform": "none",
+			"fontStyle": "normal"
+		},
+		"h6": {
+			"fontFamily": "interface",
+			"fontSize": "s10",
+			"fontWeight": "medium",
+			"lineHeight": "default",
+			"letterSpacing": "wide",
+			"textTransform": "uppercase",
+			"fontStyle": "normal"
+		},
+		"inlineCode": {
+			"fontFamily": "code",
+			"fontSize": "s13",
+			"fontWeight": "regular",
+			"lineHeight": "default",
+			"letterSpacing": "normal",
+			"textTransform": "none",
+			"fontStyle": "normal"
+		},
+		"codeBlock": {
+			"fontFamily": "code",
+			"fontSize": "s11",
+			"fontWeight": "regular",
+			"lineHeight": "code",
+			"letterSpacing": "normal",
+			"textTransform": "none",
+			"fontStyle": "normal"
+		},
+		"blockquote": {
+			"fontFamily": "interface",
+			"fontSize": "s14",
+			"fontWeight": "regular",
+			"lineHeight": "default",
+			"letterSpacing": "normal",
+			"textTransform": "none",
+			"fontStyle": "normal"
+		},
+		"list": {
+			"fontFamily": "interface",
+			"fontSize": "s14",
+			"fontWeight": "regular",
+			"lineHeight": "default",
+			"letterSpacing": "normal",
+			"textTransform": "none",
+			"fontStyle": "normal"
+		},
+		"tableBody": {
+			"fontFamily": "interface",
+			"fontSize": "s12",
+			"fontWeight": "regular",
+			"lineHeight": "default",
+			"letterSpacing": "normal",
+			"textTransform": "none",
+			"fontStyle": "normal"
+		},
+		"tableHeader": {
+			"fontFamily": "interface",
+			"fontSize": "s12",
+			"fontWeight": "semibold",
+			"lineHeight": "default",
+			"letterSpacing": "normal",
+			"textTransform": "none",
+			"fontStyle": "normal"
+		}
+	}
 }
