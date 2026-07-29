@@ -16,7 +16,9 @@ import { documentComponents, remarkHeadingIds } from "./markdownLinks";
  *    the base font.
  */
 const DOCUMENT_PROSE = [
-	"max-w-none break-words text-[length:var(--font-md)] leading-[1.65] text-pretty text-text",
+	// The reading tier (14px, `--font-md`) rather than the same-valued heading tier: this is a prose
+	// root. The 1.65 leading stays as-is — an untokenised prose line-height (see TYPOGRAPHY-AUDIT.md).
+	"max-w-none break-words text-base leading-[1.65] text-pretty text-text",
 	"[&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
 	// Headings — em-relative sizes; fixed margins (bigger top than bottom); h1/h2 get a section rule.
 	"[&_h1]:mt-0 [&_h1]:mb-md [&_h1]:border-border2 [&_h1]:border-b [&_h1]:pb-xs [&_h1]:font-semibold [&_h1]:text-[2em] [&_h1]:leading-tight [&_h1]:text-balance",
