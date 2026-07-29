@@ -128,7 +128,7 @@ export function TodoRows({ plan, onRemove }: { plan: TodoPlan; onRemove: (id: st
 				const count = items.length + groups.reduce((n, g) => n + g.todos.length, 0);
 				return (
 					<div key={status} className="mb-sm">
-						<div className="px-xs py-xs text-[10px] text-hint uppercase tracking-wider">
+						<div className="px-xs py-xs text-hint text-xs uppercase tracking-wider">
 							{label} · {count}
 						</div>
 						{items.length > 0 ? (
@@ -169,7 +169,7 @@ function DoneGroup({ group, onRemove }: { group: TodoGroupItem; onRemove: (id: s
 				<span className="min-w-0 flex-1 truncate font-medium text-hint text-sm line-through">
 					{group.title}
 				</span>
-				<span className="shrink-0 text-[10px] text-hint uppercase tracking-wider">
+				<span className="shrink-0 text-hint text-xs uppercase tracking-wider">
 					{group.todos.length} done
 				</span>
 			</button>
@@ -204,7 +204,7 @@ function TodoRow({ todo, onRemove }: { todo: TodoItem; onRemove: () => void }) {
 					{todo.title}
 				</div>
 				{todo.note ? (
-					<div className="truncate font-[var(--font-mono)] text-[10px] text-hint">{todo.note}</div>
+					<div className="truncate font-[var(--font-mono)] text-hint text-xs">{todo.note}</div>
 				) : null}
 			</div>
 			{todo.origin === "user" ? (

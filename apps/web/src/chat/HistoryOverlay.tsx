@@ -136,7 +136,7 @@ function PromptRow({
 					<Highlight text={firstLine} query={query} />
 				</span>
 				{showChip ? (
-					<span className="shrink-0 rounded-full border border-border2 bg-bg px-xs text-[10px] text-hint">
+					<span className="shrink-0 rounded-full border border-border2 bg-bg px-xs text-hint text-xs">
 						{workspaceName ?? "workspace"}
 					</span>
 				) : null}
@@ -148,7 +148,7 @@ function PromptRow({
 				// hover-revealed via `group-hover`/`isSelected` opacity; this glyph is the part a
 				// keyboard-only user (Shift+Enter's own audience) needs, so it can't be mouse-hover-gated
 				// the way the icon itself is.
-				<span data-testid="history-save-shortcut" className="shrink-0 text-[10px] text-hint">
+				<span data-testid="history-save-shortcut" className="shrink-0 text-hint text-xs">
 					{SAVE_SHORTCUT_LABEL}
 				</span>
 			) : null}
@@ -170,7 +170,7 @@ function PromptRow({
 			{target ? (
 				<>
 					{isSelected ? (
-						<span data-testid="history-jump-shortcut" className="shrink-0 text-[10px] text-hint">
+						<span data-testid="history-jump-shortcut" className="shrink-0 text-hint text-xs">
 							⇧⏎
 						</span>
 					) : null}
