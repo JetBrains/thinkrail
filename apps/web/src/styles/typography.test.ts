@@ -5,10 +5,14 @@ import {
 	allStyles,
 	CODE_STYLE_IDS,
 	GENERATED_PATH,
+	isRef,
 	loadTypography,
 	PROSE_SELECTORS,
 	proseRootClassName,
+	rawStyle,
 	renderCss,
+	resolveFamily,
+	resolveStyle,
 	styleClassName,
 	validate,
 } from "../../scripts/typography";
@@ -59,15 +63,21 @@ describe("typography source", () => {
 			semibold: 600,
 			brand: 800,
 		});
-		expect(typography.fontFamilies.interface.stack[0]).toBe("Geist Variable");
-		expect(typography.fontFamilies.code.stack[0]).toBe("JetBrains Mono Variable");
+		expect(resolveFamily(typography, "interface").stack[0]).toBe("Geist Variable");
+		expect(resolveFamily(typography, "code").stack[0]).toBe("JetBrains Mono Variable");
+		// The brand family is an ALIAS of interface — the stack is never copied.
+		expect(isRef(typography.fontFamilies.brand)).toBe(true);
+		expect(resolveFamily(typography, "brand")).toEqual(resolveFamily(typography, "interface"));
 		// One reading line-height: no 1.65 anywhere in the system.
 		expect(Object.values(typography.lineHeights)).not.toContain(1.65);
 	});
 
-	it("keeps dialog title and card title identical", () => {
-		expect(typography.textStyles.title.card).toEqual(typography.textStyles.title.dialog);
-		expect(typography.textStyles.title.dialog).toMatchObject({
+	it("keeps dialog title and card title identical — by reference, not by copy", () => {
+		expect(rawStyle(typography, "title.card")).toEqual({ $ref: "title.dialog" });
+		expect(resolveStyle(typography, "title.card")).toEqual(
+			resolveStyle(typography, "title.dialog"),
+		);
+		expect(resolveStyle(typography, "title.dialog")).toMatchObject({
 			fontSize: "s14",
 			fontWeight: "semibold",
 			lineHeight: "compact",
@@ -76,21 +86,49 @@ describe("typography source", () => {
 
 	it("restricts monospace to code styles", () => {
 		for (const { id, style } of allStyles(typography)) {
-			const isMono = typography.fontFamilies[style.fontFamily].kind === "monospace";
+			const isMono = resolveFamily(typography, style.fontFamily).kind === "monospace";
 			expect(isMono, `${id} mono=${isMono}`).toBe(CODE_STYLE_IDS.has(id));
 		}
 		// The surfaces the mono policy names as proportional must be served by proportional styles.
-		for (const id of ["ui.entity", "ui.metadata", "ui.labelPill", "ui.status", "title.entity"]) {
-			const [group, name] = id.split(".");
-			const style = typography.textStyles[group][name];
-			expect(typography.fontFamilies[style.fontFamily].kind, id).toBe("proportional");
+		for (const id of ["ui.default", "ui.metadata", "ui.labelPill", "title.entity", "prose.body"]) {
+			const style = resolveStyle(typography, id);
+			expect(resolveFamily(typography, style.fontFamily).kind, id).toBe("proportional");
 		}
 	});
 
 	it("expresses active state through colour, not weight (no style is heavier for being active)", () => {
-		for (const [name, style] of Object.entries(typography.textStyles.ui)) {
+		for (const name of Object.keys(typography.textStyles.ui)) {
 			if (["action", "emphasis"].includes(name)) continue; // buttons + inline emphasis are 500 by policy
+			const style = resolveStyle(typography, `ui.${name}`);
 			expect(typography.fontWeights[style.fontWeight], `ui.${name}`).toBe(400);
+		}
+	});
+});
+
+describe("references", () => {
+	it("every $ref points at an existing style and resolves without a cycle", () => {
+		for (const { id, ref } of allStyles(typography)) {
+			if (!ref) continue;
+			expect(rawStyle(typography, ref), `${id} → ${ref}`).toBeDefined();
+			expect(() => resolveStyle(typography, id)).not.toThrow();
+		}
+	});
+
+	it("holds no two canonical definitions with identical values", () => {
+		const seen = new Map<string, string>();
+		for (const { id, style, ref } of allStyles(typography)) {
+			if (ref) continue;
+			const key = JSON.stringify(style);
+			const first = seen.get(key);
+			expect(first, `${id} duplicates ${first} — use a $ref`).toBeUndefined();
+			seen.set(key, id);
+		}
+	});
+
+	it("resolves a reference to the same values the target has", () => {
+		for (const { id, style, ref } of allStyles(typography)) {
+			if (!ref) continue;
+			expect(style, `${id} → ${ref}`).toEqual(resolveStyle(typography, ref));
 		}
 	});
 });

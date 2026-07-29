@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { loadTypography, proseRootClassName } from "../../scripts/typography";
+import { loadTypography, proseRootClassName, resolveStyle } from "../../scripts/typography";
 
 /**
  * The adoption guard: components may not re-declare typography that a generated semantic style already
@@ -115,27 +115,45 @@ describe("shared markdown prose", () => {
 	});
 
 	it("defines the prose hierarchy only in the JSON", () => {
-		expect(typography.proseStyles.h1).toMatchObject({ fontSize: "s18", fontWeight: "semibold" });
-		expect(typography.proseStyles.h2).toMatchObject({ fontSize: "s14", fontWeight: "semibold" });
-		expect(typography.proseStyles.h3).toMatchObject({ fontSize: "s12", fontWeight: "semibold" });
-		expect(typography.proseStyles.h4).toMatchObject({ fontSize: "s12", fontWeight: "medium" });
-		expect(typography.proseStyles.h5).toMatchObject({ fontSize: "s12", fontWeight: "medium" });
-		expect(typography.proseStyles.h6).toMatchObject({
+		expect(resolveStyle(typography, "prose.h1")).toMatchObject({
+			fontSize: "s18",
+			fontWeight: "semibold",
+		});
+		expect(resolveStyle(typography, "prose.h2")).toMatchObject({
+			fontSize: "s14",
+			fontWeight: "semibold",
+		});
+		expect(resolveStyle(typography, "prose.h3")).toMatchObject({
+			fontSize: "s12",
+			fontWeight: "semibold",
+		});
+		expect(resolveStyle(typography, "prose.h4")).toMatchObject({
+			fontSize: "s12",
+			fontWeight: "medium",
+		});
+		expect(resolveStyle(typography, "prose.h5")).toMatchObject({
+			fontSize: "s12",
+			fontWeight: "medium",
+		});
+		expect(resolveStyle(typography, "prose.h6")).toMatchObject({
 			fontSize: "s10",
 			fontWeight: "medium",
 			textTransform: "uppercase",
 			letterSpacing: "wide",
 		});
-		expect(typography.proseStyles.inlineCode).toMatchObject({
+		expect(resolveStyle(typography, "prose.inlineCode")).toMatchObject({
 			fontFamily: "code",
 			fontSize: "s13",
 		});
-		expect(typography.proseStyles.codeBlock).toMatchObject({ fontFamily: "code", fontSize: "s11" });
-		expect(typography.proseStyles.tableBody).toMatchObject({
+		expect(resolveStyle(typography, "prose.codeBlock")).toMatchObject({
+			fontFamily: "code",
+			fontSize: "s11",
+		});
+		expect(resolveStyle(typography, "prose.tableBody")).toMatchObject({
 			fontSize: "s12",
 			fontWeight: "regular",
 		});
-		expect(typography.proseStyles.tableHeader).toMatchObject({
+		expect(resolveStyle(typography, "prose.tableHeader")).toMatchObject({
 			fontSize: "s12",
 			fontWeight: "semibold",
 		});

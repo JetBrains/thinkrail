@@ -2,7 +2,7 @@
 	"$schema": "http://json-schema.org/draft-07/schema#",
 	"$id": "https://thinkrail.ai/schemas/typography.schema.json",
 	"title": "ThinkRail typography source",
-	"description": "The canonical, machine-first typography definition: primitives plus the semantic text styles generated from them. Contains no CSS selectors, class strings, component paths, usage inventories or rationale — those live in TYPOGRAPHY.md and in the generator.",
+	"description": "The canonical, machine-first typography definition: primitives plus the semantic text styles generated from them. A style is either a full definition or a `$ref` to another style id, which means \"identical to that style\" \u2014 identical styles are never duplicated. Contains no CSS selectors, class strings, component paths, usage inventories or rationale.",
 	"type": "object",
 	"additionalProperties": false,
 	"required": [
@@ -17,82 +17,143 @@
 		"proseStyles"
 	],
 	"properties": {
-		"$schema": { "type": "string" },
+		"$schema": {
+			"type": "string"
+		},
 		"metadata": {
 			"type": "object",
 			"additionalProperties": false,
 			"required": ["version", "cssVarPrefix", "classPrefix"],
 			"properties": {
-				"version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
-				"cssVarPrefix": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
-				"classPrefix": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" }
+				"version": {
+					"type": "string",
+					"pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+				},
+				"cssVarPrefix": {
+					"type": "string",
+					"pattern": "^[a-z][a-z0-9-]*$"
+				},
+				"classPrefix": {
+					"type": "string",
+					"pattern": "^[a-z][a-z0-9-]*$"
+				}
 			}
 		},
 		"fontFamilies": {
 			"type": "object",
 			"minProperties": 1,
-			"propertyNames": { "$ref": "#/definitions/tokenId" },
+			"propertyNames": {
+				"$ref": "#/definitions/tokenId"
+			},
 			"additionalProperties": {
-				"type": "object",
-				"additionalProperties": false,
-				"required": ["stack", "kind"],
-				"properties": {
-					"stack": {
-						"type": "array",
-						"minItems": 1,
-						"items": { "type": "string", "minLength": 1 }
+				"oneOf": [
+					{
+						"$ref": "#/definitions/fontFamily"
 					},
-					"kind": { "enum": ["proportional", "monospace"] }
-				}
+					{
+						"$ref": "#/definitions/ref"
+					}
+				]
 			}
 		},
 		"fontWeights": {
 			"type": "object",
 			"minProperties": 1,
-			"propertyNames": { "$ref": "#/definitions/tokenId" },
-			"additionalProperties": { "type": "integer", "minimum": 100, "maximum": 900 }
+			"propertyNames": {
+				"$ref": "#/definitions/tokenId"
+			},
+			"additionalProperties": {
+				"type": "integer",
+				"minimum": 100,
+				"maximum": 900
+			}
 		},
 		"fontSizes": {
 			"type": "object",
 			"minProperties": 1,
-			"propertyNames": { "$ref": "#/definitions/tokenId" },
-			"additionalProperties": { "type": "number", "exclusiveMinimum": 0 }
+			"propertyNames": {
+				"$ref": "#/definitions/tokenId"
+			},
+			"additionalProperties": {
+				"type": "number",
+				"exclusiveMinimum": 0
+			}
 		},
 		"lineHeights": {
 			"type": "object",
 			"minProperties": 1,
-			"propertyNames": { "$ref": "#/definitions/tokenId" },
-			"additionalProperties": { "type": "number", "exclusiveMinimum": 0 }
+			"propertyNames": {
+				"$ref": "#/definitions/tokenId"
+			},
+			"additionalProperties": {
+				"type": "number",
+				"exclusiveMinimum": 0
+			}
 		},
 		"letterSpacings": {
 			"type": "object",
 			"minProperties": 1,
-			"propertyNames": { "$ref": "#/definitions/tokenId" },
-			"additionalProperties": { "type": "string", "minLength": 1 }
+			"propertyNames": {
+				"$ref": "#/definitions/tokenId"
+			},
+			"additionalProperties": {
+				"type": "string",
+				"minLength": 1
+			}
 		},
 		"textStyles": {
 			"type": "object",
 			"minProperties": 1,
-			"propertyNames": { "$ref": "#/definitions/groupId" },
+			"propertyNames": {
+				"$ref": "#/definitions/groupId"
+			},
 			"additionalProperties": {
 				"type": "object",
 				"minProperties": 1,
-				"propertyNames": { "$ref": "#/definitions/tokenId" },
-				"additionalProperties": { "$ref": "#/definitions/style" }
+				"propertyNames": {
+					"$ref": "#/definitions/tokenId"
+				},
+				"additionalProperties": {
+					"oneOf": [
+						{
+							"$ref": "#/definitions/style"
+						},
+						{
+							"$ref": "#/definitions/ref"
+						}
+					]
+				}
 			}
 		},
 		"proseStyles": {
 			"type": "object",
 			"minProperties": 1,
-			"propertyNames": { "$ref": "#/definitions/tokenId" },
-			"additionalProperties": { "$ref": "#/definitions/style" }
+			"propertyNames": {
+				"$ref": "#/definitions/tokenId"
+			},
+			"additionalProperties": {
+				"oneOf": [
+					{
+						"$ref": "#/definitions/style"
+					},
+					{
+						"$ref": "#/definitions/ref"
+					}
+				]
+			}
 		}
 	},
 	"definitions": {
-		"tokenId": { "type": "string", "pattern": "^[a-zA-Z][a-zA-Z0-9]*$" },
-		"groupId": { "type": "string", "pattern": "^[a-z][a-zA-Z0-9]*$" },
+		"tokenId": {
+			"type": "string",
+			"pattern": "^[a-zA-Z][a-zA-Z0-9]*$"
+		},
+		"groupId": {
+			"type": "string",
+			"pattern": "^[a-z][a-zA-Z0-9]*$"
+		},
 		"style": {
-			"description": "A semantic text style. Every property is a reference to a primitive token id; a style resolves deterministically with no inheritance, per-usage branching or fallback.",
+			"description": "A canonical semantic text style. Every property is a reference to a primitive token id; a style resolves deterministically with no inheritance, per-usage branching or fallback. Use `$ref` instead of repeating an identical definition.",
 			"type": "object",
 			"additionalProperties": false,
 			"required": [
@@ -105,13 +166,57 @@
 				"fontStyle"
 			],
 			"properties": {
-				"fontFamily": { "$ref": "#/definitions/tokenId" },
-				"fontSize": { "$ref": "#/definitions/tokenId" },
-				"fontWeight": { "$ref": "#/definitions/tokenId" },
-				"lineHeight": { "$ref": "#/definitions/tokenId" },
-				"letterSpacing": { "$ref": "#/definitions/tokenId" },
-				"textTransform": { "enum": ["none", "uppercase", "lowercase", "capitalize"] },
-				"fontStyle": { "enum": ["normal", "italic"] }
+				"fontFamily": {
+					"$ref": "#/definitions/tokenId"
+				},
+				"fontSize": {
+					"$ref": "#/definitions/tokenId"
+				},
+				"fontWeight": {
+					"$ref": "#/definitions/tokenId"
+				},
+				"lineHeight": {
+					"$ref": "#/definitions/tokenId"
+				},
+				"letterSpacing": {
+					"$ref": "#/definitions/tokenId"
+				},
+				"textTransform": {
+					"enum": ["none", "uppercase", "lowercase", "capitalize"]
+				},
+				"fontStyle": {
+					"enum": ["normal", "italic"]
+				}
+			}
+		},
+		"ref": {
+			"description": "\"Identical to that style/family.\" The only property allowed; resolution follows the chain, cycles are rejected.",
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["$ref"],
+			"properties": {
+				"$ref": {
+					"type": "string",
+					"minLength": 1
+				}
+			}
+		},
+		"fontFamily": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["stack", "kind"],
+			"properties": {
+				"stack": {
+					"type": "array",
+					"minItems": 1,
+					"items": {
+						"type": "string",
+						"minLength": 1
+					}
+				},
+				"kind": {
+					"enum": ["proportional", "monospace"]
+				}
 			}
 		}
 	}

@@ -1,7 +1,7 @@
 /*
  * GENERATED FILE — DO NOT EDIT.
  *
- * Source:    src/styles/typography.json (v2.0.0)
+ * Source:    src/styles/typography.json (v2.1.0)
  * Generator: scripts/generate-typography.ts  ·  regenerate: bun run typography:generate
  * Drift gate: bun run typography:check (fails when this file is stale)
  *
@@ -115,24 +115,6 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-text-entity {
-	font-family: var(--tr-font-family-interface);
-	font-size: var(--tr-font-size-s12);
-	font-weight: var(--tr-font-weight-regular);
-	line-height: var(--tr-line-height-default);
-	letter-spacing: var(--tr-letter-spacing-normal);
-	text-transform: none;
-	font-style: normal;
-}
-.tr-text-entity-compact {
-	font-family: var(--tr-font-family-interface);
-	font-size: var(--tr-font-size-s12);
-	font-weight: var(--tr-font-weight-regular);
-	line-height: var(--tr-line-height-compact);
-	letter-spacing: var(--tr-letter-spacing-normal);
-	text-transform: none;
-	font-style: normal;
-}
 .tr-text-metadata {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s10);
@@ -141,42 +123,6 @@
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
 	font-style: normal;
-}
-.tr-text-helper {
-	font-family: var(--tr-font-family-interface);
-	font-size: var(--tr-font-size-s10);
-	font-weight: var(--tr-font-weight-regular);
-	line-height: var(--tr-line-height-default);
-	letter-spacing: var(--tr-letter-spacing-normal);
-	text-transform: none;
-	font-style: normal;
-}
-.tr-text-status {
-	font-family: var(--tr-font-family-interface);
-	font-size: var(--tr-font-size-s12);
-	font-weight: var(--tr-font-weight-regular);
-	line-height: var(--tr-line-height-default);
-	letter-spacing: var(--tr-letter-spacing-normal);
-	text-transform: none;
-	font-style: normal;
-}
-.tr-text-empty {
-	font-family: var(--tr-font-family-interface);
-	font-size: var(--tr-font-size-s10);
-	font-weight: var(--tr-font-weight-regular);
-	line-height: var(--tr-line-height-default);
-	letter-spacing: var(--tr-letter-spacing-normal);
-	text-transform: none;
-	font-style: normal;
-}
-.tr-text-empty-quiet {
-	font-family: var(--tr-font-family-interface);
-	font-size: var(--tr-font-size-s10);
-	font-weight: var(--tr-font-weight-regular);
-	line-height: var(--tr-line-height-default);
-	letter-spacing: var(--tr-letter-spacing-normal);
-	text-transform: none;
-	font-style: italic;
 }
 .tr-text-eyebrow {
 	font-family: var(--tr-font-family-interface);
@@ -215,15 +161,6 @@
 	font-style: normal;
 }
 .tr-text-reading {
-	font-family: var(--tr-font-family-interface);
-	font-size: var(--tr-font-size-s14);
-	font-weight: var(--tr-font-weight-regular);
-	line-height: var(--tr-line-height-default);
-	letter-spacing: var(--tr-letter-spacing-normal);
-	text-transform: none;
-	font-style: normal;
-}
-.tr-text-supporting {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s14);
 	font-weight: var(--tr-font-weight-regular);

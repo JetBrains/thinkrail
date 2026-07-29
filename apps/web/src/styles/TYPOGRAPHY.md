@@ -39,7 +39,7 @@ xterm, both markdown surfaces).
 
 | Group | Ids |
 |---|---|
-| `fontFamilies` | `interface` (Geist Variable, all proportional UI + reading text) · `code` (JetBrains Mono Variable, code only) · `brand` (the brand display face; today the interface stack, so a licensed face is a one-token swap) |
+| `fontFamilies` | `interface` (Geist Variable, all proportional UI + reading text) · `code` (JetBrains Mono Variable, code only) · `brand` → **`{ "$ref": "interface" }`** (the brand display role today *is* the interface face; swapping in a licensed face means replacing this one alias) |
 | `fontWeights` | `regular` 400 · `medium` 500 · `semibold` 600 · `brand` 800 |
 | `fontSizes` | `s10` `s11` `s12` `s13` `s14` `s18` `s44` (px) |
 | `lineHeights` | `compact` 1.25 · `code` 1.5 · `default` 1.6 |
@@ -56,10 +56,19 @@ it resolves deterministically — there is no inheritance, no per-usage branchin
 } }
 ```
 
-`textStyles` groups: **brand** (`wordmark`, `hero`) · **title** (`dialog`, `card`, `section`,
-`compact`, `entity`) · **ui** (`default`, `entity`, `entityCompact`, `metadata`, `helper`, `status`,
-`empty`, `emptyQuiet`, `eyebrow`, `labelPill`, `action`, `emphasis`) · **body** (`reading`,
-`supporting`) · **code** (`text`, `inline`, `block`, `otp`). `proseStyles` is the shared markdown set.
+A style may instead be a **reference** — `{ "$ref": "title.dialog" }` — which means *identical to that
+style*. Identical styles are never duplicated: the generator resolves the reference and still emits the
+style's own class, so `.tr-title-card` and `.tr-title-dialog` are separate classes with one definition
+behind them. References may chain (`prose.h5` → `prose.h4` → `title.compact`); cycles are rejected.
+Validation fails when two *canonical* definitions hold identical values — that is a missing `$ref`.
+
+`textStyles` groups: **brand** (`wordmark`, `hero`) · **title** (`dialog`, `card`→dialog, `section`,
+`compact`, `entity`→body.reading) · **ui** (`default`, `metadata`, `eyebrow`, `labelPill`→eyebrow,
+`action`→title.compact, `emphasis`→title.compact) · **body** (`reading`) · **code** (`text`, `inline`,
+`block`, `otp`). `proseStyles` holds only what is unique to prose — `h1`, `h3`, `h6` — and references
+UI/body/code styles for the rest.
+
+16 canonical definitions, 16 references, 32 styles.
 
 The JSON holds **no** CSS selectors, class strings, component paths, usage lists, rationale or audit
 data. Rationale lives in this file; `TYPOGRAPHY-AUDIT.md` is a historical record that defines nothing.
@@ -72,10 +81,9 @@ The generator derives one class per semantic style, mechanically:
 |---|---|
 | `brand.wordmark` / `brand.hero` | `.tr-brand-wordmark` / `.tr-brand-hero` |
 | `title.dialog` · `title.card` · `title.section` · `title.compact` · `title.entity` | `.tr-title-dialog` · `.tr-title-card` · `.tr-title-section` · `.tr-title-compact` · `.tr-title-entity` |
-| `ui.default` | `.tr-text-ui` |
-| `ui.metadata` · `ui.helper` · `ui.status` · `ui.empty` · `ui.emptyQuiet` | `.tr-text-metadata` · `.tr-text-helper` · `.tr-text-status` · `.tr-text-empty` · `.tr-text-empty-quiet` |
-| `ui.entity` · `ui.entityCompact` · `ui.eyebrow` · `ui.labelPill` · `ui.action` · `ui.emphasis` | `.tr-text-entity` · `.tr-text-entity-compact` · `.tr-text-eyebrow` · `.tr-text-label-pill` · `.tr-text-action` · `.tr-text-emphasis` |
-| `body.reading` / `body.supporting` | `.tr-text-reading` / `.tr-text-supporting` |
+| `ui.default` · `ui.metadata` | `.tr-text-ui` · `.tr-text-metadata` |
+| `ui.eyebrow` · `ui.labelPill` · `ui.action` · `ui.emphasis` | `.tr-text-eyebrow` · `.tr-text-label-pill` · `.tr-text-action` · `.tr-text-emphasis` |
+| `body.reading` | `.tr-text-reading` |
 | `code.text` · `code.inline` · `code.block` · `code.otp` | `.tr-code-text` · `.tr-code-inline` · `.tr-code-block` · `.tr-code-otp` |
 | `proseStyles.*` | `.tr-prose` + one element selector each |
 
@@ -166,7 +174,10 @@ The OTP code is **not** an exception any more: it is the named `code.otp` style 
 ## Adding or changing a style
 
 1. Edit `styles/typography.json` — a new primitive, or a new entry under `textStyles` / `proseStyles`.
-   Reuse primitives; add one only when no existing value fits.
+   Reuse primitives; add one only when no existing value fits. **If the style you need already exists,
+   write `{ "$ref": "<that.style>" }`** rather than repeating its values — validation rejects a second
+   canonical definition with identical values. Split a reference into its own definition only when the
+   two actually diverge.
 2. `bun run typography:validate`, then `bun run typography:generate`, and **commit the generated CSS**.
 3. Use the generated class at the call site (colour stays separate).
 4. `bun test` (source + adoption guards) and `bun run e2e -- e2e/typography.spec.ts` for computed styles.

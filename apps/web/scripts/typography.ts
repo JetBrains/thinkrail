@@ -16,6 +16,16 @@ export const SOURCE_PATH = join(STYLES_DIR, "typography.json");
 export const SCHEMA_PATH = join(STYLES_DIR, "typography.schema.json");
 export const GENERATED_PATH = join(STYLES_DIR, "generated", "typography.css");
 
+/** `{ "$ref": "title.dialog" }` — "identical to that style". The whole reference mechanism. */
+export interface StyleRef {
+	$ref: string;
+}
+
+export interface FontFamily {
+	stack: string[];
+	kind: "proportional" | "monospace";
+}
+
 export interface Style {
 	fontFamily: string;
 	fontSize: string;
@@ -29,17 +39,43 @@ export interface Style {
 export interface Typography {
 	$schema: string;
 	metadata: { version: string; cssVarPrefix: string; classPrefix: string };
-	fontFamilies: Record<string, { stack: string[]; kind: "proportional" | "monospace" }>;
+	fontFamilies: Record<string, FontFamily | StyleRef>;
 	fontWeights: Record<string, number>;
 	fontSizes: Record<string, number>;
 	lineHeights: Record<string, number>;
 	letterSpacings: Record<string, string>;
-	textStyles: Record<string, Record<string, Style>>;
-	proseStyles: Record<string, Style>;
+	textStyles: Record<string, Record<string, Style | StyleRef>>;
+	proseStyles: Record<string, Style | StyleRef>;
 }
 
 export function loadTypography(path = SOURCE_PATH): Typography {
 	return JSON.parse(readFileSync(path, "utf8")) as Typography;
+}
+
+export const isRef = (value: unknown): value is StyleRef =>
+	typeof value === "object" && value !== null && "$ref" in value;
+
+/** The raw entry at `<group>.<name>` (`prose.<name>` for prose): a definition or a reference. */
+export function rawStyle(t: Typography, id: string): Style | StyleRef | undefined {
+	const [group, name] = id.split(".");
+	if (!group || !name) return undefined;
+	return group === "prose" ? t.proseStyles?.[name] : t.textStyles?.[group]?.[name];
+}
+
+/** Follow `$ref` to the canonical definition. A reference means "identical to" — no merging. */
+export function resolveStyle(t: Typography, id: string, seen: string[] = []): Style {
+	if (seen.includes(id)) throw new Error(`$ref cycle: ${[...seen, id].join(" -> ")}`);
+	const entry = rawStyle(t, id);
+	if (!entry) throw new Error(`unknown style '${id}'`);
+	return isRef(entry) ? resolveStyle(t, entry.$ref, [...seen, id]) : entry;
+}
+
+/** Follow a font-family alias to its definition. */
+export function resolveFamily(t: Typography, id: string, seen: string[] = []): FontFamily {
+	if (seen.includes(id)) throw new Error(`font-family $ref cycle: ${[...seen, id].join(" -> ")}`);
+	const entry = t.fontFamilies?.[id];
+	if (!entry) throw new Error(`unknown font family '${id}'`);
+	return isRef(entry) ? resolveFamily(t, entry.$ref, [...seen, id]) : entry;
 }
 
 /* ── naming (the single place CSS identifiers are derived) ───────────────────────────────────── */
@@ -92,15 +128,31 @@ export const CODE_STYLE_IDS = new Set([
 	"prose.codeBlock",
 ]);
 
-export function allStyles(
-	t: Typography,
-): { id: string; group: string; name: string; style: Style }[] {
-	const out: { id: string; group: string; name: string; style: Style }[] = [];
+export interface ResolvedStyle {
+	id: string;
+	group: string;
+	name: string;
+	style: Style;
+	/** The id this entry points at, or null when it is a canonical definition. */
+	ref: string | null;
+}
+
+/** Every style, RESOLVED (references followed), in source order. */
+export function allStyles(t: Typography): ResolvedStyle[] {
+	const out: ResolvedStyle[] = [];
+	const push = (group: string, name: string, entry: Style | StyleRef) => {
+		const id = `${group}.${name}`;
+		out.push({
+			id,
+			group,
+			name,
+			style: resolveStyle(t, id),
+			ref: isRef(entry) ? entry.$ref : null,
+		});
+	};
 	for (const [group, styles] of Object.entries(t.textStyles))
-		for (const [name, style] of Object.entries(styles))
-			out.push({ id: `${group}.${name}`, group, name, style });
-	for (const [name, style] of Object.entries(t.proseStyles))
-		out.push({ id: `prose.${name}`, group: "prose", name, style });
+		for (const [name, entry] of Object.entries(styles)) push(group, name, entry);
+	for (const [name, entry] of Object.entries(t.proseStyles)) push("prose", name, entry);
 	return out;
 }
 
@@ -131,15 +183,56 @@ export function validate(t: Typography): string[] {
 			if (!ID.test(id)) fail(`${group}.${id}: invalid token id`);
 	}
 	for (const [id, f] of Object.entries(t.fontFamilies ?? {})) {
+		if (isRef(f)) {
+			if (Object.keys(f).length > 1)
+				fail(`fontFamilies.${id}: a $ref may not carry other properties`);
+			if (!(f.$ref in (t.fontFamilies ?? {})))
+				fail(`fontFamilies.${id}: $ref to unknown family '${f.$ref}'`);
+			continue;
+		}
 		if (!Array.isArray(f.stack) || f.stack.length === 0) fail(`fontFamilies.${id}: empty stack`);
 		if (f.kind !== "proportional" && f.kind !== "monospace") fail(`fontFamilies.${id}: bad kind`);
 	}
+	if (errors.length > 0) return errors;
+	for (const id of Object.keys(t.fontFamilies ?? {}))
+		try {
+			resolveFamily(t, id);
+		} catch (e) {
+			fail(`fontFamilies.${id}: ${(e as Error).message}`);
+		}
+	if (errors.length > 0) return errors;
 	for (const [id, w] of Object.entries(t.fontWeights ?? {}))
 		if (!Number.isInteger(w) || w < 100 || w > 900) fail(`fontWeights.${id}: out of range`);
 	for (const [id, v] of Object.entries(t.fontSizes ?? {}))
 		if (!(v > 0)) fail(`fontSizes.${id}: must be > 0`);
 	for (const [id, v] of Object.entries(t.lineHeights ?? {}))
 		if (!(v > 0)) fail(`lineHeights.${id}: must be > 0`);
+
+	// References resolve, and nothing cycles. Every check below reads RESOLVED styles.
+	const rawEntries: [string, Style | StyleRef][] = [
+		...Object.entries(t.textStyles ?? {}).flatMap(([group, styles]) =>
+			Object.entries(styles).map(
+				([name, entry]) => [`${group}.${name}`, entry] as [string, Style | StyleRef],
+			),
+		),
+		...Object.entries(t.proseStyles ?? {}).map(
+			([name, entry]) => [`prose.${name}`, entry] as [string, Style | StyleRef],
+		),
+	];
+	const known = new Set(rawEntries.map(([id]) => id));
+	for (const [id, entry] of rawEntries) {
+		if (!isRef(entry)) continue;
+		if (Object.keys(entry).length > 1) fail(`${id}: a $ref may not carry other properties`);
+		if (!known.has(entry.$ref)) fail(`${id}: $ref to unknown style '${entry.$ref}'`);
+	}
+	if (errors.length > 0) return errors;
+	for (const [id] of rawEntries)
+		try {
+			resolveStyle(t, id);
+		} catch (e) {
+			fail(`${id}: ${(e as Error).message}`);
+		}
+	if (errors.length > 0) return errors;
 
 	// Ids unique across the whole style space (a duplicate would silently overwrite a class).
 	const seen = new Set<string>();
@@ -182,15 +275,16 @@ export function validate(t: Typography): string[] {
 		if (!["none", "uppercase", "lowercase", "capitalize"].includes(style.textTransform))
 			fail(`${id}.textTransform: invalid`);
 		if (!["normal", "italic"].includes(style.fontStyle)) fail(`${id}.fontStyle: invalid`);
-		for (const key of Object.keys(style))
-			if (!REQUIRED.includes(key as keyof Style)) fail(`${id}: unexpected property '${key}'`);
+		const raw = rawStyle(t, id);
+		if (raw && !isRef(raw))
+			for (const key of Object.keys(raw))
+				if (!REQUIRED.includes(key as keyof Style)) fail(`${id}: unexpected property '${key}'`);
 	}
 
 	// Mono is code-only: no proportional role may reference a monospace family, and vice versa.
 	for (const { id, style } of allStyles(t)) {
-		const family = t.fontFamilies?.[style.fontFamily];
-		if (!family) continue;
-		const isMono = family.kind === "monospace";
+		if (!(style.fontFamily in (t.fontFamilies ?? {}))) continue;
+		const isMono = resolveFamily(t, style.fontFamily).kind === "monospace";
 		if (isMono && !CODE_STYLE_IDS.has(id))
 			fail(`${id}: monospace family on a non-code semantic style`);
 		if (!isMono && CODE_STYLE_IDS.has(id)) fail(`${id}: code style must use a monospace family`);
@@ -205,8 +299,8 @@ export function validate(t: Typography): string[] {
 			fail(`proseStyles.${id}: no selector mapping — unused prose style`);
 
 	// Card title must be typographically identical to dialog title.
-	const dialog = t.textStyles?.title?.dialog;
-	const card = t.textStyles?.title?.card;
+	const dialog = rawStyle(t, "title.dialog") ? resolveStyle(t, "title.dialog") : undefined;
+	const card = rawStyle(t, "title.card") ? resolveStyle(t, "title.card") : undefined;
 	if (dialog && card && JSON.stringify(dialog) !== JSON.stringify(card))
 		fail("title.card must be typographically identical to title.dialog");
 
@@ -244,8 +338,10 @@ export function renderCss(t: Typography): string {
 
 	out.push(":root {");
 	out.push("\t/* Font families */");
-	for (const [id, f] of Object.entries(t.fontFamilies))
-		out.push(`\t${cssVarName(t, "font-family", id)}: ${f.stack.map(quote).join(", ")};`);
+	for (const id of Object.keys(t.fontFamilies))
+		out.push(
+			`\t${cssVarName(t, "font-family", id)}: ${resolveFamily(t, id).stack.map(quote).join(", ")};`,
+		);
 	out.push("\n\t/* Font weights */");
 	for (const [id, w] of Object.entries(t.fontWeights))
 		out.push(`\t${cssVarName(t, "font-weight", id)}: ${w};`);
@@ -262,9 +358,9 @@ export function renderCss(t: Typography): string {
 
 	out.push("/* Semantic text styles — one class per style. Colour stays at the call site. */");
 	for (const [group, styles] of Object.entries(t.textStyles))
-		for (const [name, style] of Object.entries(styles)) {
+		for (const name of Object.keys(styles)) {
 			out.push(`.${styleClassName(t, group, name)} {`);
-			out.push(declarations(t, style));
+			out.push(declarations(t, resolveStyle(t, `${group}.${name}`)));
 			out.push("}");
 		}
 	out.push("");
@@ -273,10 +369,10 @@ export function renderCss(t: Typography): string {
 	out.push(
 		"/* Shared prose system — the ONE markdown typography, used by chat and the file preview. */",
 	);
-	for (const [name, style] of Object.entries(t.proseStyles)) {
+	for (const name of Object.keys(t.proseStyles)) {
 		const selector = PROSE_SELECTORS[name] ?? "";
 		out.push(`.${root}${selector} {`);
-		out.push(declarations(t, style));
+		out.push(declarations(t, resolveStyle(t, `prose.${name}`)));
 		out.push("}");
 	}
 	return `${out.join("\n")}\n`;
