@@ -3,15 +3,19 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { highlightCode } from "@/lib/highlighter";
 
-/** The default "prose skin": compact spacing tuned for a chat bubble. Callers (e.g. the file-tab
- * `MarkdownPreview`) pass their own `className` for a document skin. */
+/**
+ * The chat prose skin: `tr-prose` (the ONE generated markdown typography — see `typography.json` →
+ * `proseStyles`) plus chat-bubble *spacing* and link colour. Typography is never declared here; the
+ * document skin (`MarkdownPreview`) differs only in spacing, measure and chrome.
+ */
 const CHAT_PROSE =
-	"max-w-none break-words [&_a]:text-primary [&_a]:underline [&_h1]:font-semibold [&_h2]:font-semibold [&_li]:my-0.5 [&_ol]:my-sm [&_ol]:list-decimal [&_ol]:pl-lg [&_p]:my-sm [&_strong]:font-medium [&_ul]:my-sm [&_ul]:list-disc [&_ul]:pl-lg";
+	"tr-prose max-w-none break-words [&_a]:text-primary [&_a]:underline [&_li]:my-0.5 [&_ol]:my-sm [&_ol]:list-decimal [&_ol]:pl-lg [&_p]:my-sm [&_ul]:my-sm [&_ul]:list-disc [&_ul]:pl-lg";
 
 /**
  * Render GFM markdown with shiki-highlighted fenced code blocks. Presentational — no app/store deps.
  * The rendering (GFM + shiki) is fixed; the **prose skin** is the caller's via `className` (defaults to
- * the compact chat skin). Code blocks size in `em`, so they scale with the skin's base font. A caller can
+ * the compact chat skin) — but its *typography* is not: every skin includes `tr-prose`, so chat and the
+ * file preview render identical type and a skin only carries spacing/measure/chrome. A caller can
  * also **extend** the rendering with extra `remarkPlugins` + `components` (e.g. the file view's GitHub
  * alert callouts) — they're merged after the built-in GFM plugin / `code`+`a` renderers.
  */
@@ -58,17 +62,9 @@ function CodeBlock({
 	const code = String(children ?? "").replace(/\n$/, "");
 	if (!lang) {
 		if (!code.includes("\n")) {
-			return (
-				<code className="rounded-[var(--radius-sm)] bg-elevated px-1 py-0.5 text-base-mono">
-					{children}
-				</code>
-			);
+			return <code className="rounded-[var(--radius-sm)] bg-elevated px-1 py-0.5">{children}</code>;
 		}
-		return (
-			<pre className="overflow-auto rounded-[var(--radius-sm)] bg-elevated p-sm font-(family-name:--font-mono) text-[0.85em]">
-				{code}
-			</pre>
-		);
+		return <pre className="overflow-auto rounded-[var(--radius-sm)] bg-elevated p-sm">{code}</pre>;
 	}
 	return <ShikiBlock code={code} lang={lang} />;
 }
@@ -92,14 +88,14 @@ function ShikiBlock({ code, lang }: { code: string; lang: string }) {
 
 	if (html === null) {
 		return (
-			<pre className="overflow-auto rounded-[var(--radius-sm)] bg-elevated p-sm font-(family-name:--font-mono) text-[0.85em] text-text">
+			<pre className="overflow-auto rounded-[var(--radius-sm)] bg-elevated p-sm text-text">
 				{code}
 			</pre>
 		);
 	}
 	return (
 		<div
-			className="overflow-auto rounded-[var(--radius-sm)] text-[0.85em] [&_pre]:!m-0 [&_pre]:!bg-elevated [&_pre]:p-sm"
+			className="overflow-auto rounded-[var(--radius-sm)] [&_pre]:!m-0 [&_pre]:!bg-elevated [&_pre]:p-sm"
 			// biome-ignore lint/security/noDangerouslySetInnerHtml: shiki output is escaped, themed markup
 			dangerouslySetInnerHTML={{ __html: html }}
 		/>
