@@ -146,8 +146,9 @@ of the host.
   (the Specs-viewer whole-graph read, per workspace) / **`todo.*`** — **`list`**/**`add`**/**`update`**/
   **`remove`**, the chat's per-session TODO plan (keyed by `workspaceId` + `sessionId`; `add` tags the
   item `origin:"user"`) / `terminal.*` / `model.list` + **`model.refresh`** (awaits the host's
-  single-flighted catalog refresh, returns the post-refresh list; `force` bypasses pi's 4h freshness
-  throttle, so a user-initiated refresh actually fetches) / **`model.clampThinking`** (pi's
+  single-flighted catalog refresh and returns **`RefreshedModels`** — the post-refresh list plus
+  **`complete`**, whether that pass settled inside the host's capped wait, since only a settled list is
+  authoritative; `force` bypasses pi's 4h freshness throttle, so a user-initiated refresh actually fetches) / **`model.clampThinking`** (pi's
   `clampThinkingLevel` for a `{model, level}` pair — the pre-session picker's effort adjustment, so no
   client re-derives pi's policy) / **`provider.status`**
 (the auth-provider status report; every read revalidates host-side) / the **`provider.*` in-app login**

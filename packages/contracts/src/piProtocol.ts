@@ -46,6 +46,20 @@ export type WireModel = Pick<
 	thinkingLevels: ThinkingLevel[];
 };
 
+/**
+ * The answer to `model.refresh`: the post-refresh model list plus whether the refresh pass the host
+ * awaited actually **settled** inside its budget.
+ *
+ * `complete` exists because the host caps that wait (pi's catalog + availability work has legs it cannot
+ * signal), so a reply can carry a list that is *current* without being the host's **verdict**. Only a
+ * `complete: true` list may be treated as authoritative — e.g. as grounds for concluding a model the list
+ * lacks is really gone. A `false` is a snapshot to render, nothing to conclude from.
+ */
+export interface RefreshedModels {
+	models: WireModel[];
+	complete: boolean;
+}
+
 // The unified render union the UI switches on. The real superset (`AgentSessionEvent`) is declared in the
 // Node-only `pi-coding-agent` (it pulls node:fs), so it's MIRRORED here type-only, derived from the
 // imported `AgentEvent`. The members below are what `session.subscribe` emits. The mirror is NOT

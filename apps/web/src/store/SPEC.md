@@ -70,9 +70,12 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   handler answers from before the detached refresh it starts) **drops** it in the same write, so authority
   falls with the list any consumer replaced — held as one consumer's local flag it would outlive its
   subject and confirm a removed model that `create()` then rejects. `beginModelsRefresh` /
-  `finishModelsRefresh(models|null)` are the atomic pair (finish lands the list, sets provenance, and
-  clears the in-flight flag in one write; `null` = failed refresh — keep the current list *and* its
-  provenance, since nothing was installed). **`dropModelsFreshness`** is the third writer: authority is
+  `finishModelsRefresh(RefreshedModels|null)` are the atomic pair (finish lands the list, sets provenance,
+  and clears the in-flight flag in one write; `null` = failed refresh — keep the current list *and* its
+  provenance, since nothing was installed). Provenance comes from the **host's** `complete`, never from
+  "a reply arrived": the host caps how long it waits for pi, so a reply can carry the registry as it
+  stands while the pass that would settle it still runs — such a list is installed (it *is* current) but
+  drops authority, since concluding a model is gone from it is exactly the mistake. **`dropModelsFreshness`** is the third writer: authority is
   given up *without* replacing the list, which is what a consumer activating must do **synchronously** —
   a flag an earlier consumer set can otherwise straddle the activation and let an inherited list pass as
   this opening's own truth before its own `model.list` reply lands. The transport work lives in

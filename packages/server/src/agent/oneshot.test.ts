@@ -20,12 +20,12 @@ function modelDef(id: string, cost = 0) {
 
 /**
  * Point the shared runtime at a fake exposing exactly `models` as authenticated. `pickModel` is
- * pure logic over `getAvailable()`, so this stays deterministic regardless of the dev machine's real
- * provider env keys.
+ * pure logic over the settled availability snapshot, so this stays deterministic regardless of the dev
+ * machine's real provider env keys.
  */
 function stubAvailable(models: ReturnType<typeof withProvider>[]): void {
-	// A minimal runtime stub — pickModel only reads getAvailable.
-	configurePiRuntime({ getAvailable: async () => models } as unknown as ModelRuntime);
+	// A minimal runtime stub — pickModel only reads the snapshot (never pi's awaiting `getAvailable()`).
+	configurePiRuntime({ getAvailableSnapshot: () => models } as unknown as ModelRuntime);
 }
 
 function withProvider(provider: string, id: string, cost = 0) {

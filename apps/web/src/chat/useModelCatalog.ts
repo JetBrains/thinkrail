@@ -50,8 +50,10 @@ export function useModelCatalog(active = true): {
 	 * for as long as the slowest configured provider takes, up to the host's 15s abort, on every open.
 	 *
 	 * `force: true` (the Refresh row) is the deliberate one: await the host's forced refresh — the only
-	 * path past pi's 4h throttle — spin while it runs, and install the result as authoritative. A failure
-	 * keeps the current list, and with it whatever provenance it had; the host already logged why.
+	 * path past pi's 4h throttle — spin while it runs, and install the result *with the host's own verdict*
+	 * on it: `complete` says whether the pass settled inside the host's budget, and only then is the list
+	 * authority (the store decides that from the reply, so nothing here re-judges it). A failure keeps the
+	 * current list, and with it whatever provenance it had; the host already logged why.
 	 */
 	const refresh = useCallback((force: boolean) => {
 		if (!force) {
@@ -63,7 +65,7 @@ export function useModelCatalog(active = true): {
 		state.beginModelsRefresh();
 		getTransport()
 			.request("model.refresh", { force: true })
-			.then((m) => useAppStore.getState().finishModelsRefresh(m))
+			.then((r) => useAppStore.getState().finishModelsRefresh(r))
 			.catch(() => useAppStore.getState().finishModelsRefresh(null));
 	}, []);
 

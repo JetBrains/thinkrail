@@ -159,7 +159,8 @@ a project picker, the prompt hero, and the reused
   **`reconcileModel`** (model only — effort is decided by the host's clamp, below): re-point to the same
   `{provider,id}` (the refreshed object, whose `thinkingLevels` may differ). What it does when the catalog
   has no such model turns on **`catalogFresh`** — the store's `modelsFresh`, true only for the installed
-  result of an awaited forced refresh, dropped by the next `model.list` install from any consumer (whose
+  result of an awaited forced refresh the host reported **`complete`** (a capped wait can answer with a
+  current-but-unsettled list, which is no basis for a verdict), dropped by the next `model.list` install from any consumer (whose
   handler answers from before the detached refresh it starts) *and* dropped up front by any consumer
   activating. On a fresh catalog it returns **`"unavailable"`** — a verdict, not a replacement: the dialog
   then asks **`model.default`** (pi's own `pinned ?? available[0]`, plus a consistent effort) exactly as it

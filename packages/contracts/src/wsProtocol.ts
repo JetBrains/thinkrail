@@ -28,6 +28,7 @@ import type {
 	AskUserQuestionResult,
 	ExtUiResponse,
 	ImageContent,
+	RefreshedModels,
 	SessionStats,
 	SessionSummary,
 	SkillCatalogEntry,
@@ -83,8 +84,9 @@ import type {
 // a per-project, non-removable, non-renamable workspace, ensured lazily and pinned first in
 // `workspace.list`; `workspace.remove` rejects it.
 // v19: `model.refresh` awaits the host's single-flighted catalog refresh and returns the
-// post-refresh list (the picker's freshness affordance), with `force` bypassing pi's 4h
-// provider freshness throttle.
+// post-refresh list (the picker's freshness affordance) as `RefreshedModels` — `{ models, complete }`,
+// where `complete` says whether the pass actually settled inside the host's budget (only then is the
+// list authoritative) — with `force` bypassing pi's 4h provider freshness throttle.
 export const PROTOCOL_VERSION = 19;
 
 /**
@@ -447,8 +449,10 @@ export interface WsMethodMap {
 	// `model.list` serves the current snapshot (its refresh is detached); this AWAITS the single-flighted
 	// refresh and serves the post-refresh snapshot — refresh failures still resolve with the current list.
 	// `force` bypasses pi's 4h provider freshness throttle, so a user-initiated refresh actually fetches;
-	// without it the pass is a no-op inside that window.
-	"model.refresh": { params: { force?: boolean }; result: WireModel[] };
+	// without it the pass is a no-op inside that window. The reply carries `complete` because the host caps
+	// the wait: a timed-out pass still answers, but with a list that is current rather than settled — see
+	// `RefreshedModels`.
+	"model.refresh": { params: { force?: boolean }; result: RefreshedModels };
 	// The model/thinking a fresh session resolves to (settings default, else first available) — so the
 	// New-Workspace dialog shows the exact pre-session model, not a placeholder.
 	"model.default": {

@@ -57,8 +57,35 @@ export function getPiRuntime(): Promise<ModelRuntime> {
 	return runtime;
 }
 
+/** The slice of `ModelRuntime` a settled-models read needs — tests fake this, no cast required. */
+export type AvailableModelsRuntime = Pick<ModelRuntime, "getAvailableSnapshot">;
+
+/**
+ * pi's **settled** available-models snapshot — the single read every host path uses (the picker's
+ * universe, the default resolution, and every inbound model-ref check, so they can never disagree).
+ *
+ * Deliberately **not** `runtime.getAvailable()`: that awaits `refreshAvailability()`, which returns the
+ * pending availability pass *or starts a new one*, and that pass is pi's unsignalled per-provider auth
+ * fan-out (`checkAuth` per provider — where a stalled local provider lives). Awaiting it would hand every
+ * read an unbounded wait, `model.list` included, whose whole contract is to answer without touching the
+ * network — and it would escape `refreshCatalogs`' deadline one line after it was applied. The snapshot is
+ * pi's own result of that fan-out, written at `create()` (which awaits a refresh), after every `refresh()`,
+ * and on login/logout: what the last *settled* pass concluded, which is exactly what a caller may serve.
+ */
+export function settledAvailableModels(
+	runtime: AvailableModelsRuntime,
+): ReturnType<ModelRuntime["getAvailableSnapshot"]> {
+	return runtime.getAvailableSnapshot();
+}
+
 /** The slice of `ModelRuntime` the detached refresh needs — tests fake this, no cast required. */
 export type CatalogRefreshRuntime = Pick<ModelRuntime, "refresh">;
+
+/** What a caller learns from awaiting a refresh: whether the pass it waited on settled inside the budget
+ * (a timed-out caller is served the registry as it stands — current, but nobody's verdict). */
+export interface CatalogRefreshOutcome {
+	completed: boolean;
+}
 
 // One in-flight refresh per runtime instance: pi's `refresh()` does NOT single-flight itself (verified
 // only the availability sub-refresh is queued), and each picker open triggers us again.
@@ -91,6 +118,10 @@ const CATALOG_REFRESH_TIMEOUT_MS = 15_000;
  * **Single-flighted per runtime**, tracked with the kind: a forced caller never joins a throttled pass
  * (it would silently inherit the no-op), it queues behind it and then fetches for real.
  *
+ * Resolves with **`completed`**: whether the pass this caller waited on actually finished (see
+ * `withDeadline`). A `false` means the snapshot the caller goes on to read is *not* the host's settled
+ * verdict, which is what keeps the client from marking such a list authoritative.
+ *
  * Never throws and never hangs: failures are logged and swallowed, and what a caller awaits carries its
  * own `CATALOG_REFRESH_TIMEOUT_MS` ceiling (`withDeadline`) — either way the caller gets a resolution and
  * then serves whatever the registry holds. `PI_OFFLINE` (pi's env convention, also set by the e2e
@@ -99,8 +130,9 @@ const CATALOG_REFRESH_TIMEOUT_MS = 15_000;
 export function refreshCatalogs(
 	runtime: CatalogRefreshRuntime,
 	{ force = false }: { force?: boolean } = {},
-): Promise<void> {
-	if (process.env.PI_OFFLINE) return Promise.resolve();
+): Promise<CatalogRefreshOutcome> {
+	// Nothing to fetch, so the registry as it stands *is* the settled answer — a completed pass.
+	if (process.env.PI_OFFLINE) return Promise.resolve({ completed: true });
 	const existing = inflightCatalogRefresh.get(runtime);
 	if (existing && (existing.force || !force)) return withDeadline(existing.task);
 	// Free slot ⇒ start now (an implicit trigger must reach pi in the same tick it fires). Otherwise
@@ -125,20 +157,23 @@ export function refreshCatalogs(
  * second pass on top of the wait, so an awaited `model.refresh` is otherwise unbounded and the picker's
  * refresh row spins with no cap. Single-flight still tracks the *unbounded* task, so a timed-out caller
  * can't start a second concurrent refresh; it just serves the registry as it stands.
+ *
+ * `completed: false` is how the caller learns its answer is that unsettled registry — the pass it waited
+ * on is still running — so nothing downstream mistakes it for the host's verdict.
  */
-function withDeadline(task: Promise<void>): Promise<void> {
-	return new Promise<void>((resolve) => {
+function withDeadline(task: Promise<void>): Promise<CatalogRefreshOutcome> {
+	return new Promise<CatalogRefreshOutcome>((resolve) => {
 		const timer = setTimeout(() => {
 			console.warn(
 				`model catalog refresh exceeded ${CATALOG_REFRESH_TIMEOUT_MS}ms; serving cached catalogs`,
 			);
-			resolve();
+			resolve({ completed: false });
 		}, CATALOG_REFRESH_TIMEOUT_MS);
 		// The pending timer must keep neither a shutting-down host nor a test process alive.
 		timer.unref?.();
 		void task.then(() => {
 			clearTimeout(timer);
-			resolve();
+			resolve({ completed: true });
 		});
 	});
 }

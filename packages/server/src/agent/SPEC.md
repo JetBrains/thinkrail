@@ -37,7 +37,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     (`listAvailableModels` fires it, then serves the current snapshot — the picker read never awaits the
     network; broader triggers — `model.default`, host boot — were considered and declined) and
     **awaited** via `model.refresh` (`refreshAvailableModels`, the picker's freshness affordance: await
-    the refresh, then serve the post-refresh snapshot). Per-call `refresh({ allowNetwork: true, force })`,
+    the refresh, then serve the post-refresh snapshot **with `complete`** — `refreshCatalogs` resolves a
+    `CatalogRefreshOutcome` saying whether the pass it waited on settled, and that verdict travels to the
+    client as `RefreshedModels.complete`, because a capped wait can only promise a *current* list, not a
+    settled one, and catalog authority must key on the difference). Per-call `refresh({ allowNetwork: true, force })`,
     where **`force` is the caller's intent, not a constant**: an *implicit* trigger (`model.list`, opening
     the picker) leaves it off and pi's **4h provider freshness throttle** decides whether anything is
     fetched, while a *user-initiated* refresh (the picker's Refresh row → `model.refresh({force:true})`)
@@ -50,12 +53,22 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     signal (a hung refresh must self-expire or single-flight would wedge) *and* as the ceiling on what a
     **caller awaits**, because the signal bounds neither pi's unsignalled `forceRefreshAvailability()`
     fan-out after it nor a forced pass queued behind a throttled one — without it one slow provider leaves
-    every picker's refresh row spinning. A timed-out caller serves the registry as it stands while
-    single-flight keeps tracking the unbounded pass (so it cannot start a second concurrent refresh); failures `console.warn` + swallowed, never the picker's problem; **`PI_OFFLINE`**
-    (pi's env convention) disables it — the e2e webServer env and the manager's unit suite set it for
+    every picker's refresh row spinning. A timed-out caller serves the registry as it stands (reporting
+    `completed: false`) while single-flight keeps tracking the unbounded pass (so it cannot start a second concurrent refresh); failures `console.warn` + swallowed, never the picker's problem; **`PI_OFFLINE`**
+    (pi's env convention) disables it — resolving as a *completed* pass, since with nothing fetchable the
+    registry as it stands is the settled answer; the e2e webServer env and the manager's unit suite set it for
     hermeticity. The **provider-credential surface** over this runtime —
     `provider.status` + in-app login — lives in the sibling `auth` module (which consumes `getPiRuntime`),
     **not** here.
+
+    Every models **read** goes through **`settledAvailableModels(runtime)`** — pi's
+    `getAvailableSnapshot()`, **never `getAvailable()`**: that one awaits `refreshAvailability()`, which
+    returns the pending per-provider auth fan-out *or starts one*, all unsignalled — so reading through it
+    would hand `model.list` (whose contract is to answer without touching the network), `model.default` and
+    every inbound model-ref check an unbounded wait, and would escape the refresh deadline one line after
+    applying it. The snapshot is what pi's last *settled* pass concluded (written at `create()`, after every
+    `refresh()`, and on login/logout), and being the one read makes it the same universe everywhere —
+    picker, default and `resolveWireModel` cannot disagree.
   - `agentSessionManager` — sessions keyed by `session.sessionId` (each `Entry` also tracks its
     `workspaceId`), `createSession({ cwd, workspaceId, model?, thinkingLevel? })` → `createAgentSession(...)`
     with a per-session `SessionManager` **and a `buildSessionSettings(cwd)` settings manager** (the user's

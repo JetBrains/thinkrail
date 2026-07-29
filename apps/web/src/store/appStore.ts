@@ -6,6 +6,7 @@ import type {
 	LoginPush,
 	PiEvent,
 	Project,
+	RefreshedModels,
 	SessionStats,
 	SessionSummary,
 	SlashCommandInfo,
@@ -460,7 +461,8 @@ interface AppState {
 	 * from any consumer (a picker open, another chat mounting) replaces the list, and authority has to
 	 * fall with it. Held as a consumer's local flag instead, it would outlive the list it was about and a
 	 * removed model would get confirmed as present, then rejected by `create()`. `model.list` can never
-	 * set it — its handler starts a *detached* refresh and answers from before it, so the registry can
+	 * set it, nor can a refresh whose wait was **capped** (`RefreshedModels.complete: false` — current list,
+	 * unsettled pass) — `model.list`'s handler starts a *detached* refresh and answers from before it, so the registry can
 	 * move underneath the reply with the client none the wiser. A consumer *activating* drops it up front
 	 * (`dropModelsFreshness`), because a flag left by an earlier consumer says nothing about whether the
 	 * inherited list still matches the registry this activation will be judged against.
@@ -661,9 +663,11 @@ interface AppState {
 	setModels: (models: WireModel[]) => void;
 	bumpTemplatesVersion: () => void;
 	/** Atomic begin/finish of the awaited catalog refresh — `finish` lands the new list (null = failed
-	 * refresh: keep the current list, and with it its provenance) and clears the flag in ONE write. */
+	 * refresh: keep the current list, and with it its provenance) and clears the flag in ONE write. The
+	 * host's `complete` decides provenance: a capped wait can answer with a list that is current but not
+	 * settled, and only a settled one is authority. */
 	beginModelsRefresh: () => void;
-	finishModelsRefresh: (models: WireModel[] | null) => void;
+	finishModelsRefresh: (result: RefreshedModels | null) => void;
 	/** Give up authority without replacing the list — a consumer activating can't yet know whether the
 	 * list it inherited still matches the host registry. */
 	dropModelsFreshness: () => void;
@@ -1327,12 +1331,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 	bumpTemplatesVersion: () => set((s) => ({ templatesVersion: s.templatesVersion + 1 })),
 	beginModelsRefresh: () => set({ modelsRefreshing: true }),
 	dropModelsFreshness: () => set({ modelsFresh: false }),
-	// The only writer of `modelsFresh: true` — and only for a list that actually arrived.
-	finishModelsRefresh: (models) =>
+	// The only writer of `modelsFresh: true` — and only for a list that actually arrived AND settled.
+	finishModelsRefresh: (result) =>
 		set((s) => ({
 			modelsRefreshing: false,
-			models: models ?? s.models,
-			modelsFresh: models ? true : s.modelsFresh,
+			models: result?.models ?? s.models,
+			modelsFresh: result ? result.complete : s.modelsFresh,
 		})),
 	setCurrentModel: (sessionId, model) =>
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, model }))),
