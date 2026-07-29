@@ -48,7 +48,19 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   appends and releases the slot if it pointed there; **`setActiveTab(id, intent?)`** activates, and
   `"keep"` also promotes — **one-way**, so a plain activation (or a `keep` aimed at some other tab) never
   demotes a kept tab back to preview. The slot is released by `closeTab`, `clearWorkspaceTabs`, and
-  `applyWorkspaceRemoved` (via `omitKey`), so a stale id can never outlive its tab. **Chat tabs and
+  `applyWorkspaceRemoved` (via `omitKey`), so a stale id can never outlive its tab. Alongside it,
+  **`navTickByWorkspace`** counts **center-area navigations** per workspace — rendered by nothing, it exists
+  so a slow read can tell it was overtaken. A click is instant and an `fs.readFile` is not, so
+  `panels/openTabs.ts` records this count when it starts a read and **drops a `preview` that lands after the
+  count has moved** (otherwise the file steals focus back from wherever the user went, and claims the preview
+  slot from it). It is bumped *inside* every action that moves the active tab — `openTab` (both branches),
+  `openDoc`, `setActiveTab`, `closeTab`, `openChatSession`, `closeChatToHistory`, `reopenChat`,
+  `requestHistoryOpen`, and `hydrateSession` **only when it actually takes focus** (a background
+  auto-restore must not supersede a read the user is waiting on) — plus **`noteNavigation(workspaceId)`**
+  for an intent whose focus change hasn't reached the store yet (starting a chat, whose tab appears only once
+  `session.create` returns). Living here rather than in `panels` is the whole point: **no focus transition can
+  bypass it**, which a module-local counter demonstrably did (it missed close/reopen/doc/new-chat).
+  `clearWorkspaceTabs` releases the key with the rest. **Chat tabs and
   `DocTab`s never enter it** — a chat is an explicit creation with a live session behind it, and a
   `DocTab`'s content exists only in the store (no file backs it), so a silent replace would destroy it
   with nothing to reopen. There is deliberately **no keyboard shortcut**: gestures only.

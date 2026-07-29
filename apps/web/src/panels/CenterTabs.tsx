@@ -30,7 +30,6 @@ import {
 import { errorText, getTransport } from "../transport";
 import { DiffPane } from "./DiffPane";
 import { FilePane } from "./FilePane";
-import { noteNavigation, revealTab } from "./openTabs";
 
 // The chat view is heavy — load it only when its tab is first shown (protects first paint). File panes
 // lazy-load their own Monaco / markdown chunks inside `FilePane`.
@@ -108,6 +107,7 @@ export function CenterTabs() {
 	const previewTabByWorkspace = useAppStore((s) => s.previewTabByWorkspace);
 	const closedChatsByWorkspace = useAppStore((s) => s.closedChatsByWorkspace);
 	const chatLocationRequest = useAppStore((s) => s.chatLocationRequest);
+	const setActiveTab = useAppStore((s) => s.setActiveTab);
 	const closeTab = useAppStore((s) => s.closeTab);
 
 	const openTabs = activeWorkspaceId ? (tabsByWorkspace[activeWorkspaceId] ?? NO_TABS) : NO_TABS;
@@ -171,7 +171,7 @@ export function CenterTabs() {
 		// (a) Already open in a tab — just focus it, the exact action its own tab button calls.
 		const tab = openTabs.find((t) => t.kind === "chat" && t.sessionId === sessionId);
 		if (tab) {
-			revealTab(tab.workspaceId, tab.id, "preview");
+			setActiveTab(tab.id);
 			return;
 		}
 		const store = useAppStore.getState();
@@ -199,7 +199,7 @@ export function CenterTabs() {
 		return () => {
 			cancelled = true;
 		};
-	}, [chatLocationRequest, activeWorkspaceId, openTabs]);
+	}, [chatLocationRequest, activeWorkspaceId, openTabs, setActiveTab]);
 
 	// Reopen a chat from history: a live runtime just restores its tab; a disk-only one is re-opened on the
 	// host, its transcript fetched, then hydrated + focused (hydrateSession drops it from history, keyed to
@@ -229,7 +229,7 @@ export function CenterTabs() {
 		if (!activeWorkspaceId) return;
 		// Starting a chat is a navigation, even though its tab only appears once the create returns — so a
 		// file read still in flight must not activate itself on top of the chat the user asked for.
-		noteNavigation(activeWorkspaceId);
+		useAppStore.getState().noteNavigation(activeWorkspaceId);
 		// Snapshot the sync baseline before the create round-trip (see selectWorkspaceTick / openChatSession).
 		const syncedTick = selectWorkspaceTick(useAppStore.getState(), activeWorkspaceId);
 		try {
@@ -332,10 +332,8 @@ export function CenterTabs() {
 									// gesture a touch device can perform (a double tap is the browser's zoom), and a
 									// no-op on desktop otherwise. Anywhere else a click only activates — "preview"
 									// here means "leave the slot alone", never demote.
-									onClick={() =>
-										revealTab(tab.workspaceId, tab.id, isActive && isPreview ? "keep" : "preview")
-									}
-									onDoubleClick={() => revealTab(tab.workspaceId, tab.id, "keep")}
+									onClick={() => setActiveTab(tab.id, isActive && isPreview ? "keep" : "preview")}
+									onDoubleClick={() => setActiveTab(tab.id, "keep")}
 								>
 									{tab.kind === "diff" ? (
 										<GitCompareArrows className="size-3.5 shrink-0 text-hint" />

@@ -68,6 +68,7 @@ beforeEach(() => {
 		tabsByWorkspace: {},
 		activeTabByWorkspace: {},
 		previewTabByWorkspace: {},
+		navTickByWorkspace: {},
 		closedChatsByWorkspace: {},
 		fsChangesByWorkspace: {},
 		skillChangeTickByWorkspace: {},
@@ -1354,4 +1355,65 @@ test("a keep on an already-open tab releases ITS workspace's slot, never the act
 	expect(s.previewTabByWorkspace.ws2).toBe("ws2:b.ts");
 	expect(s.activeTabByWorkspace.ws1).toBe("ws1:a.ts");
 	expect(s.activeTabByWorkspace.ws2).toBe("ws2:b.ts");
+});
+
+// The counter a slow read compares against (`navTickByWorkspace`). It lives in the store so that NO focus
+// transition can bypass it — the earlier module-local version missed close/reopen/doc/new-chat, which is
+// exactly how a stale browse got to steal focus back. One case per action that moves the active tab.
+test("every center navigation bumps the workspace's nav tick, and none of them bypass it", () => {
+	useAppStore.setState({ activeWorkspaceId: "ws1" });
+	const tick = () => useAppStore.getState().navTickByWorkspace.ws1 ?? 0;
+	// Collected rather than asserted inline so a regression names the action that stopped bumping.
+	const missed: string[] = [];
+	const bumps = (label: string, act: () => void) => {
+		const before = tick();
+		act();
+		if (tick() <= before) missed.push(label);
+	};
+
+	const s = () => useAppStore.getState();
+	bumps("openTab (new)", () => s().openTab(fileTab("ws1", "a.ts"), "preview"));
+	bumps("openTab (already open)", () => s().openTab(fileTab("ws1", "a.ts"), "keep"));
+	bumps("setActiveTab", () => s().setActiveTab("ws1:a.ts"));
+	bumps("openDoc", () =>
+		s().openDoc({
+			kind: "doc",
+			id: "ws1:plan",
+			workspaceId: "ws1",
+			name: "Plan",
+			content: "# p",
+			docPath: "plan.md",
+		}),
+	);
+	bumps("openChatSession", () => s().openChatSession("ws1", "sess", null, "medium"));
+	bumps("closeChatToHistory", () => s().closeChatToHistory("sess"));
+	bumps("reopenChat", () => s().reopenChat("sess"));
+	bumps("closeTab", () => s().closeTab("ws1:a.ts"));
+	bumps("noteNavigation", () => s().noteNavigation("ws1"));
+	bumps("requestHistoryOpen", () =>
+		s().requestHistoryOpen({ sessionId: "sess", workspaceId: "ws1", tabId: "ws1:sess" }),
+	);
+	expect(missed).toEqual([]);
+
+	// A background auto-restore is NOT a navigation: it takes no focus, so it must not supersede a read the
+	// user is still waiting on.
+	useAppStore.setState({ activeTabByWorkspace: { ws1: "ws1:sess" } });
+	const before = tick();
+	s().hydrateSession(
+		{
+			sessionId: "bg",
+			workspaceId: "ws1",
+			title: "bg",
+			createdAt: 0,
+			updatedAt: 0,
+			live: true,
+		} as unknown as SessionSummary,
+		{ turns: [], toolResults: {}, askAnswers: {} },
+	);
+	expect(tick()).toBe(before);
+
+	// The tick is per workspace, and a cleared workspace releases its entry.
+	expect(useAppStore.getState().navTickByWorkspace.ws2).toBeUndefined();
+	s().clearWorkspaceTabs("ws1");
+	expect(useAppStore.getState().navTickByWorkspace.ws1).toBeUndefined();
 });

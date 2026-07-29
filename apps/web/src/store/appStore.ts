@@ -450,6 +450,17 @@ interface AppState {
 	 * Absent = this workspace has no preview tab.
 	 */
 	previewTabByWorkspace: Record<string, string>;
+	/**
+	 * Monotonic count of **center-area navigations** per workspace — bumped by every action that moves the
+	 * active tab (`openTab`/`openDoc`/`setActiveTab`/`closeTab`/`openChatSession`/`closeChatToHistory`/
+	 * `reopenChat`/`hydrateSession`/`requestHistoryOpen`) plus `noteNavigation` for an intent that hasn't
+	 * reached the store yet. Rendered by nothing: it exists so a **slow read can tell it was overtaken**.
+	 * A click is instant and an `fs.readFile` is not, so `panels/openTabs.ts` records this count when it
+	 * starts a read and drops a `preview` that lands after the count has moved — otherwise the file would
+	 * steal focus back from wherever the user went and claim the preview slot from it. It lives here rather
+	 * than in that module precisely so **no focus transition can bypass it**.
+	 */
+	navTickByWorkspace: Record<string, number>;
 	/** Chat tabs the user closed, per workspace (most-recent-first) — reopenable while their runtime lives. */
 	closedChatsByWorkspace: Record<string, ClosedChat[]>;
 	/** Terminals are workspace-scoped too; their instances stay mounted (hidden) to preserve buffers. */
@@ -596,6 +607,12 @@ interface AppState {
 	/** Activate a tab. `intent: "keep"` also promotes it out of the preview slot — one-way: nothing ever
 	 * demotes a kept tab back to preview. */
 	setActiveTab: (id: string, intent?: TabIntent) => void;
+	/**
+	 * Record a center-area navigation whose focus change hasn't reached the store yet — starting a chat,
+	 * whose tab only appears once `session.create` returns. Supersedes any read in flight for the workspace
+	 * (see `navTickByWorkspace`), so a file the user has navigated away from can't activate itself on arrival.
+	 */
+	noteNavigation: (workspaceId: string) => void;
 	/** Set a markdown file tab's view mode (rendered ↔ source); kept on the tab so it survives tab switches. */
 	setFileTabView: (id: string, view: "rendered" | "source") => void;
 	setDiffTabView: (id: string, view: DiffTabView) => void;
@@ -755,6 +772,15 @@ function sameSpecNode(a: SpecGraphNode, b: SpecGraphNode): boolean {
  * `ChatView`, whose `isSpec` memo (and with it `deriveRows` over the whole transcript, for every open chat)
  * would otherwise be invalidated about once a second during any file activity.
  */
+/**
+ * Advance a workspace's center-navigation count (see `navTickByWorkspace`). Every action that moves the
+ * active tab folds this into its own `set`, so the bump is atomic with the focus change it describes and
+ * a caller can't forget it separately.
+ */
+function bumpNav(s: AppState, workspaceId: string): Record<string, number> {
+	return { ...s.navTickByWorkspace, [workspaceId]: (s.navTickByWorkspace[workspaceId] ?? 0) + 1 };
+}
+
 function sameSpecGraph(prev: SpecGraphNode[] | undefined, next: SpecGraphNode[]): boolean {
 	if (!prev || prev.length !== next.length) return false;
 	return prev.every((node, i) => {
@@ -842,6 +868,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	tabsByWorkspace: {},
 	activeTabByWorkspace: {},
 	previewTabByWorkspace: {},
+	navTickByWorkspace: {},
 	closedChatsByWorkspace: {},
 	terminalsByWorkspace: {},
 	activeTerminalByWorkspace: {},
@@ -939,6 +966,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			if (tabs.some((t) => t.id === tab.id)) {
 				return {
 					activeTabByWorkspace,
+					navTickByWorkspace: bumpNav(s, wsId),
 					previewTabByWorkspace:
 						intent === "keep" && preview === tab.id
 							? omitKey(s.previewTabByWorkspace, wsId)
@@ -954,6 +982,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 					[wsId]: at === -1 ? [...tabs, tab] : tabs.with(at, tab),
 				},
 				activeTabByWorkspace,
+				navTickByWorkspace: bumpNav(s, wsId),
 				previewTabByWorkspace:
 					intent === "preview"
 						? { ...s.previewTabByWorkspace, [wsId]: tab.id }
@@ -970,6 +999,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 					[tab.workspaceId]: exists ? tabs.map((t) => (t.id === tab.id ? tab : t)) : [...tabs, tab],
 				},
 				activeTabByWorkspace: { ...s.activeTabByWorkspace, [tab.workspaceId]: tab.id },
+				navTickByWorkspace: bumpNav(s, tab.workspaceId),
 			};
 		}),
 	closeTab: (id) =>
@@ -984,6 +1014,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 					...s.activeTabByWorkspace,
 					[wsId]: wasActive ? (tabs.at(-1)?.id ?? null) : (s.activeTabByWorkspace[wsId] ?? null),
 				},
+				navTickByWorkspace: bumpNav(s, wsId),
 				// A closed tab must never leave a dangling slot id behind.
 				...(s.previewTabByWorkspace[wsId] === id
 					? { previewTabByWorkspace: omitKey(s.previewTabByWorkspace, wsId) }
@@ -996,11 +1027,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 			if (!wsId) return {};
 			return {
 				activeTabByWorkspace: { ...s.activeTabByWorkspace, [wsId]: id },
+				navTickByWorkspace: bumpNav(s, wsId),
 				...(intent === "keep" && s.previewTabByWorkspace[wsId] === id
 					? { previewTabByWorkspace: omitKey(s.previewTabByWorkspace, wsId) }
 					: {}),
 			};
 		}),
+	noteNavigation: (workspaceId) => set((s) => ({ navTickByWorkspace: bumpNav(s, workspaceId) })),
 	setFileTabView: (id, view) =>
 		set((s) => {
 			const wsId = s.activeWorkspaceId;
@@ -1125,6 +1158,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				tabsByWorkspace: omitKey(s.tabsByWorkspace, workspaceId),
 				activeTabByWorkspace: omitKey(s.activeTabByWorkspace, workspaceId),
 				previewTabByWorkspace: omitKey(s.previewTabByWorkspace, workspaceId),
+				navTickByWorkspace: omitKey(s.navTickByWorkspace, workspaceId),
 				closedChatsByWorkspace: omitKey(s.closedChatsByWorkspace, workspaceId),
 				// Dropping the terminals unmounts their instances, which close the PTYs server-side.
 				terminalsByWorkspace: omitKey(s.terminalsByWorkspace, workspaceId),
@@ -1174,6 +1208,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 					? s.tabsByWorkspace
 					: { ...s.tabsByWorkspace, [workspaceId]: [...tabs, tab] },
 				activeTabByWorkspace: { ...s.activeTabByWorkspace, [workspaceId]: id },
+				navTickByWorkspace: bumpNav(s, workspaceId),
 				// Keep any existing runtime (idempotent); otherwise start a fresh one.
 				sessions: fresh
 					? { ...s.sessions, [sessionId]: newRuntime(model, thinkingLevel) }
@@ -1211,6 +1246,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			const entry: ClosedChat = { sessionId, title: tab.name, closedAt: Date.now() };
 			return {
 				tabsByWorkspace: { ...s.tabsByWorkspace, [wsId]: remaining },
+				navTickByWorkspace: bumpNav(s, wsId),
 				activeTabByWorkspace: {
 					...s.activeTabByWorkspace,
 					[wsId]: wasActive
@@ -1240,6 +1276,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 					? s.tabsByWorkspace
 					: { ...s.tabsByWorkspace, [wsId]: [...tabs, tab] },
 				activeTabByWorkspace: { ...s.activeTabByWorkspace, [wsId]: id },
+				navTickByWorkspace: bumpNav(s, wsId),
 				closedChatsByWorkspace: {
 					...s.closedChatsByWorkspace,
 					[wsId]: closed.filter((c) => c.sessionId !== sessionId),
@@ -1315,6 +1352,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 					activate || !hasActive
 						? { ...s.activeTabByWorkspace, [wsId]: id }
 						: s.activeTabByWorkspace,
+				// Only a hydrate that TOOK focus is a navigation; a background auto-restore must not
+				// supersede a read the user is waiting on.
+				navTickByWorkspace: activate || !hasActive ? bumpNav(s, wsId) : s.navTickByWorkspace,
 				// It's open now, so it leaves history (if it was a disk-only entry there).
 				closedChatsByWorkspace: closed.some((c) => c.sessionId === summary.sessionId)
 					? {
@@ -1441,6 +1481,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) => ({
 			historyOpenRequest: { sessionId: target.sessionId },
 			activeTabByWorkspace: { ...s.activeTabByWorkspace, [target.workspaceId]: target.tabId },
+			navTickByWorkspace: bumpNav(s, target.workspaceId),
 		})),
 	clearHistoryOpen: () => set({ historyOpenRequest: null }),
 	requestSpecView: (workspaceId, path) =>

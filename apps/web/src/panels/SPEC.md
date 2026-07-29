@@ -444,17 +444,18 @@ a project picker, the prompt hero, and the reused
   active tab and drops to the workspace receipt. `e2e/preview-tabs.spec.ts` asserts the single read
   directly, because the outcome it protects is invisible at localhost latency.
 
-  **A read is slow and a click is not, so a pending browse loses to whatever the user does next.**
-  `openTabs.ts` keeps a per-workspace navigation counter; each read records the count it was requested at,
-  and a **`preview`** landing after the count has moved is **dropped** rather than committed. Without that,
-  tapping an unopened file over a remote host and then tapping an already-open tab yanks focus back to the
-  file when it arrives *and* claims the slot away from what the user landed on. A **`keep`** still commits
-  — it was deliberate, and swallowing an explicitly opened tab is the worse surprise. This is why
-  **`revealTab(workspaceId, id, intent)` and `noteNavigation(workspaceId)` are part of the module's public
-  surface, and why nothing outside it calls `store.setActiveTab`**: the strip's clicks, the chat deep-link
-  focus, and starting a new chat all have to be visible to the counter, so `openTabs.ts` is the choke point
-  for *navigating* the center area exactly as it already is for *opening* into it. The e2e dispatches both
-  clicks in one JS tick, which pins the interleaving without depending on real latency.
+  **A read is slow and a click is not, so a pending browse loses to whatever the user does next.** Each
+  read records the workspace's **`store.navTickByWorkspace`** count on the way out, and a **`preview`**
+  landing after that count has moved is **dropped** rather than committed. Without it, tapping an unopened
+  file over a remote host and then tapping an already-open tab yanks focus back to the file when it arrives
+  *and* claims the slot away from what the user landed on. A **`keep`** still commits — it was deliberate,
+  and swallowing an explicitly opened tab is the worse surprise; re-clicking the *same* row moves the mark
+  forward instead of superseding it, so a double click still promotes. The counter lives in the **store**,
+  bumped inside each action that moves the active tab, specifically so **no focus transition can bypass
+  it** — a first attempt kept it in this module and silently missed `closeTab`, `reopenChat`, `openDoc`, and
+  a new chat, every one of which is a way for the user to move on mid-read. `store/SPEC.md` lists the
+  bumping actions; `appStore.test.ts` asserts each one bumps, and `e2e/preview-tabs.spec.ts` dispatches both
+  clicks in one JS tick so the interleaving is pinned without depending on real latency.
 
   The active-preview-tab click is the **touch** path: `apps/web/index.html` ships a plain
   `width=device-width` viewport, so a double tap is the browser's zoom gesture and `dblclick` is not
