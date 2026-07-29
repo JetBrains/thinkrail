@@ -12,13 +12,10 @@
 	--bubble-user-border: color-mix(in srgb, var(--bubble-accent) 35%, transparent);
 
 	/*
-	 * Typography lives in `generated/typography.css`, generated from `typography.json` — never edited
-	 * here. These are the two non-typographic consumers of a type value, kept as their own tokens so
-	 * nothing has to reach into the generated names: the spacing scale's basis, and the compact basis
-	 * the JS font-scale writes.
+	 * The spacing basis. NOT typography: it carries no family, weight or line-height, and it is
+	 * deliberately independent of `typography.json` — a change to the type scale must never move layout.
 	 */
-	--font-base: 13px;
-	--compact-font-base: 9px;
+	--space-base: 13px;
 
 	/* Shape + motion */
 	--radius-sm: 4px;
@@ -27,12 +24,12 @@
 	--transition-fast: 120ms ease;
 	--transition-normal: 200ms ease;
 
-	/* Spacing (only calc family — tracks --font-base) */
-	--space-xs: calc(var(--font-base) * 0.31);
-	--space-sm: calc(var(--font-base) * 0.62);
-	--space-md: calc(var(--font-base) * 0.92);
-	--space-lg: calc(var(--font-base) * 1.23);
-	--space-xl: calc(var(--font-base) * 1.85);
+	/* Spacing (only calc family — tracks --space-base) */
+	--space-xs: calc(var(--space-base) * 0.31);
+	--space-sm: calc(var(--space-base) * 0.62);
+	--space-md: calc(var(--space-base) * 0.92);
+	--space-lg: calc(var(--space-base) * 1.23);
+	--space-xl: calc(var(--space-base) * 1.85);
 
 	/*
 	 * Font aliases onto the generated typography tokens (see `generated/typography.css`, source

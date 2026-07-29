@@ -13,7 +13,7 @@ body {
 	background: var(--bg);
 	color: var(--text);
 	font-family: var(--font);
-	font-size: var(--font-base);
+	font-size: var(--tr-font-size-s13);
 	line-height: var(--line-height);
 	/* macOS-only effect (both properties are no-ops elsewhere); no `optimizeLegibility` — document,
 	   don't hack other platforms. */
