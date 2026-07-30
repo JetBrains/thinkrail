@@ -81,7 +81,7 @@ One prose rule is deliberately *not* a semantic style: `<strong>` / `<b>` gets *
 line-height of whatever element the bold text sits inside.
 
 The JSON holds **no** CSS selectors, class strings, component paths, usage lists, rationale or audit
-data. Rationale lives in this file; `TYPOGRAPHY-AUDIT.md` is a historical record that defines nothing.
+data. Rationale lives in this file.
 
 ## How components consume it
 
