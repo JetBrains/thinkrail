@@ -19,8 +19,8 @@ const DOCUMENT_PROSE = [
 	"max-w-none break-words text-[length:var(--font-md)] leading-[1.65] text-pretty text-text-default",
 	"[&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
 	// Headings — em-relative sizes; fixed margins (bigger top than bottom); h1/h2 get a section rule.
-	"[&_h1]:mt-0 [&_h1]:mb-md [&_h1]:border-border2 [&_h1]:border-b [&_h1]:pb-xs [&_h1]:font-semibold [&_h1]:text-[2em] [&_h1]:leading-tight [&_h1]:text-balance",
-	"[&_h2]:mt-xl [&_h2]:mb-md [&_h2]:border-border2 [&_h2]:border-b [&_h2]:pb-xs [&_h2]:font-semibold [&_h2]:text-[1.5em] [&_h2]:leading-tight [&_h2]:text-balance",
+	"[&_h1]:mt-0 [&_h1]:mb-md [&_h1]:border-border-default [&_h1]:border-b [&_h1]:pb-xs [&_h1]:font-semibold [&_h1]:text-[2em] [&_h1]:leading-tight [&_h1]:text-balance",
+	"[&_h2]:mt-xl [&_h2]:mb-md [&_h2]:border-border-default [&_h2]:border-b [&_h2]:pb-xs [&_h2]:font-semibold [&_h2]:text-[1.5em] [&_h2]:leading-tight [&_h2]:text-balance",
 	"[&_h3]:mt-lg [&_h3]:mb-sm [&_h3]:font-semibold [&_h3]:text-[1.25em] [&_h3]:leading-snug [&_h3]:text-balance",
 	"[&_h4]:mt-lg [&_h4]:mb-sm [&_h4]:font-semibold [&_h4]:text-[1em] [&_h4]:text-balance",
 	"[&_h5]:mt-md [&_h5]:mb-xs [&_h5]:font-semibold [&_h5]:text-[0.875em]",
@@ -39,9 +39,9 @@ const DOCUMENT_PROSE = [
 	"[&_hr]:my-xl [&_hr]:h-px [&_hr]:border-0 [&_hr]:bg-border2",
 	// Tables (GFM) — only as wide as content (scroll if wider), bordered cells, header + zebra rows.
 	"[&_table]:my-md [&_table]:block [&_table]:w-max [&_table]:max-w-full [&_table]:overflow-x-auto [&_table]:border-collapse [&_table]:text-[0.9em]",
-	"[&_th]:border [&_th]:border-border2 [&_th]:bg-elevated [&_th]:px-sm [&_th]:py-xs [&_th]:text-left [&_th]:font-semibold",
-	"[&_td]:border [&_td]:border-border2 [&_td]:px-sm [&_td]:py-xs [&_td]:align-top",
-	"[&_tbody_tr:nth-child(2n)]:bg-elevated/30",
+	"[&_th]:border [&_th]:border-border-default [&_th]:bg-container-card-bg [&_th]:px-sm [&_th]:py-xs [&_th]:text-left [&_th]:font-semibold",
+	"[&_td]:border [&_td]:border-border-default [&_td]:px-sm [&_td]:py-xs [&_td]:align-top",
+	"[&_tbody_tr:nth-child(2n)]:bg-container-card-bg/30",
 	// Code blocks — tighten the line-height for dense code (inline/block sizing lives in `Markdown`).
 	"[&_pre]:my-md [&_pre]:leading-normal",
 	// Images.
@@ -87,7 +87,7 @@ export default function MarkdownPreview({
 	path: string;
 }) {
 	return (
-		<div data-testid="markdown-preview" className="h-full overflow-auto bg-surface-content">
+		<div data-testid="markdown-preview" className="h-full overflow-auto bg-container-terminal-bg">
 			<article className="mx-auto max-w-[78ch] px-xl py-lg">
 				<MarkdownDocument content={content} workspaceId={workspaceId} path={path} />
 			</article>

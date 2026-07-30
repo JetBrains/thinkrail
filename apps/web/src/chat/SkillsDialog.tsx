@@ -189,7 +189,7 @@ export function SkillsDialog({
 				    bg keeps rows from bleeding through. */}
 				<div
 					className={cn(
-						"sticky z-10 flex items-center gap-sm border-border2 border-y bg-bg-dark px-sm py-1.5",
+						"sticky z-10 flex items-center gap-sm border-border-default border-y bg-container-header-bg px-sm py-1.5",
 						hasPlugins && !isLeadingKey(group.key) ? "top-8" : "top-0",
 					)}
 				>
@@ -200,7 +200,7 @@ export function SkillsDialog({
 						{group.label}
 					</span>
 					<span className="min-w-0 flex-1 truncate text-text-muted text-xs">{group.hint}</span>
-					<span className="shrink-0 rounded-full bg-hover px-1.5 text-text-muted text-xs">
+					<span className="shrink-0 rounded-full bg-selection-item-bg-hovered px-1.5 text-text-muted text-xs">
 						{group.items.length}
 					</span>
 					<Toggle
@@ -211,7 +211,7 @@ export function SkillsDialog({
 					/>
 				</div>
 				{/* Indent + left rail nests the skills visually under their group/plugin header. */}
-				<div className="ml-sm divide-y divide-border2 border-border2 border-l">
+				<div className="ml-sm divide-y divide-border2 border-border-default border-l">
 					{group.items.map((entry) => (
 						<SkillRow
 							key={`${group.key}:${entry.name}`}
@@ -264,7 +264,7 @@ export function SkillsDialog({
 				{workspace?.stale ? (
 					<div
 						data-testid="skills-stale"
-						className="rounded-[var(--radius-md)] border border-border2 bg-elevated px-md py-sm text-text-muted text-xs"
+						className="rounded-[var(--radius-md)] border border-border-default bg-container-card-bg px-md py-sm text-text-muted text-xs"
 					>
 						This worktree's skills changed on disk —{" "}
 						<span className="text-text-default">Reload</span> to apply them to this chat.
@@ -274,7 +274,7 @@ export function SkillsDialog({
 				{untrustedCount > 0 ? (
 					<div
 						data-testid="skills-trust-all"
-						className="flex items-center gap-sm rounded-[var(--radius-md)] border border-border2 border-l-[3px] border-l-[var(--gold)] bg-[var(--gold-tint)] px-md py-sm"
+						className="flex items-center gap-sm rounded-[var(--radius-md)] border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-bg px-md py-sm"
 					>
 						<span className="min-w-0 flex-1 text-sm text-text-default">
 							{untrustedCount} project skill{untrustedCount === 1 ? "" : "s"} off until you trust
@@ -310,7 +310,7 @@ export function SkillsDialog({
 							{hasPlugins ? (
 								<div
 									data-testid="skills-all-plugins"
-									className="sticky top-0 z-20 flex h-8 items-center gap-sm border-border2 border-y bg-bg-dark px-sm"
+									className="sticky top-0 z-20 flex h-8 items-center gap-sm border-border-default border-y bg-container-header-bg px-sm"
 								>
 									<span className="min-w-0 flex-1 font-medium text-text-default text-xs uppercase tracking-wide">
 										All plugins
@@ -355,7 +355,7 @@ function Toggle({
 				"shrink-0 rounded-[var(--radius-sm)] border px-sm py-0.5 text-xs transition-colors disabled:opacity-50",
 				on
 					? "border-[var(--primary-40)] bg-[var(--primary-10)] text-primary"
-					: "border-border2 text-text-muted hover:bg-hover",
+					: "border-border-default text-text-muted hover:bg-control-bg-hovered",
 			)}
 		>
 			{on ? "on" : "off"}
@@ -390,7 +390,7 @@ function SkillRow({
 			data-testid="skill-row"
 			data-skill={entry.name}
 			data-decision={entry.decision}
-			className="flex items-center gap-sm py-1.5 pr-sm pl-md hover:bg-hover"
+			className="flex items-center gap-sm py-1.5 pr-sm pl-md hover:bg-control-bg-hovered"
 		>
 			<span className="flex min-w-0 flex-1 flex-col">
 				<span className="truncate font-[var(--font-mono)] text-sm text-text-default">
@@ -425,7 +425,7 @@ function SkillRow({
 						"shrink-0 rounded-[var(--radius-sm)] border px-sm py-0.5 text-xs transition-colors disabled:opacity-50",
 						loaded
 							? "border-[var(--primary-40)] bg-[var(--primary-10)] text-primary"
-							: "border-border2 text-text-muted hover:bg-hover",
+							: "border-border-default text-text-muted hover:bg-control-bg-hovered",
 					)}
 				>
 					{DECISION_TEXT[entry.decision]}

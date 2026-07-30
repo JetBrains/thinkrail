@@ -59,13 +59,13 @@ function CodeBlock({
 	if (!lang) {
 		if (!code.includes("\n")) {
 			return (
-				<code className="rounded-[var(--radius-sm)] bg-elevated px-1 py-0.5 font-[var(--font-mono)] text-[0.85em]">
+				<code className="rounded-[var(--radius-sm)] bg-container-terminal-bg px-1 py-0.5 font-[var(--font-mono)] text-[0.85em]">
 					{children}
 				</code>
 			);
 		}
 		return (
-			<pre className="overflow-auto rounded-[var(--radius-sm)] bg-elevated p-sm font-[var(--font-mono)] text-[0.85em]">
+			<pre className="overflow-auto rounded-[var(--radius-sm)] bg-container-terminal-bg p-sm font-[var(--font-mono)] text-[0.85em]">
 				{code}
 			</pre>
 		);
@@ -92,14 +92,14 @@ function ShikiBlock({ code, lang }: { code: string; lang: string }) {
 
 	if (html === null) {
 		return (
-			<pre className="overflow-auto rounded-[var(--radius-sm)] bg-elevated p-sm font-[var(--font-mono)] text-[0.85em] text-text-default">
+			<pre className="overflow-auto rounded-[var(--radius-sm)] bg-container-terminal-bg p-sm font-[var(--font-mono)] text-[0.85em] text-text-default">
 				{code}
 			</pre>
 		);
 	}
 	return (
 		<div
-			className="overflow-auto rounded-[var(--radius-sm)] text-[0.85em] [&_pre]:!m-0 [&_pre]:!bg-elevated [&_pre]:p-sm"
+			className="overflow-auto rounded-[var(--radius-sm)] text-[0.85em] [&_pre]:!m-0 [&_pre]:!bg-container-terminal-bg [&_pre]:p-sm"
 			// biome-ignore lint/security/noDangerouslySetInnerHtml: shiki output is escaped, themed markup
 			dangerouslySetInnerHTML={{ __html: html }}
 		/>

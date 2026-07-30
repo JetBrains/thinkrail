@@ -10,8 +10,8 @@ body,
 }
 
 body {
-	background: var(--bg);
-	color: var(--text);
+	background: var(--container-workspace-bg);
+	color: var(--text-default);
 	font-family: var(--font);
 	font-size: var(--font-base);
 	line-height: var(--line-height);
@@ -24,7 +24,7 @@ body {
 }
 
 a {
-	color: var(--blue);
+	color: var(--text-link);
 }
 
 ::-webkit-scrollbar {
@@ -32,6 +32,6 @@ a {
 	height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-	background: var(--border2);
+	background: var(--border-default);
 	border-radius: var(--radius-md);
 }

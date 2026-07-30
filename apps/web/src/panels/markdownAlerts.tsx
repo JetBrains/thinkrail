@@ -74,13 +74,19 @@ const ALERTS: Record<
 		text: string;
 	}
 > = {
-	note: { label: "Note", icon: Info, border: "border-blue", bg: "bg-blue/10", text: "text-blue" },
+	note: {
+		label: "Note",
+		icon: Info,
+		border: "border-feedback-info",
+		bg: "bg-feedback-info-bg",
+		text: "text-feedback-info",
+	},
 	tip: {
 		label: "Tip",
 		icon: Lightbulb,
-		border: "border-green",
-		bg: "bg-green/10",
-		text: "text-green",
+		border: "border-feedback-success",
+		bg: "bg-feedback-success-bg",
+		text: "text-feedback-success",
 	},
 	important: {
 		label: "Important",
@@ -92,16 +98,16 @@ const ALERTS: Record<
 	warning: {
 		label: "Warning",
 		icon: TriangleAlert,
-		border: "border-gold",
-		bg: "bg-gold/10",
-		text: "text-gold",
+		border: "border-feedback-warning",
+		bg: "bg-feedback-warning-bg",
+		text: "text-feedback-warning",
 	},
 	caution: {
 		label: "Caution",
 		icon: OctagonAlert,
-		border: "border-red",
-		bg: "bg-red/10",
-		text: "text-red",
+		border: "border-feedback-error",
+		bg: "bg-feedback-error-bg",
+		text: "text-feedback-error",
 	},
 };
 

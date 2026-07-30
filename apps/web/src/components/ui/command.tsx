@@ -8,7 +8,7 @@ function Command({ className, ...props }: React.ComponentProps<typeof CommandPri
 	return (
 		<CommandPrimitive
 			className={cn(
-				"flex w-full flex-col overflow-hidden bg-elevated text-text-default",
+				"flex w-full flex-col overflow-hidden bg-container-popover-bg text-text-default",
 				className,
 			)}
 			{...props}
@@ -21,7 +21,7 @@ function CommandInput({
 	...props
 }: React.ComponentProps<typeof CommandPrimitive.Input>) {
 	return (
-		<div className="flex items-center gap-sm border-border border-b px-sm">
+		<div className="flex items-center gap-sm border-border-muted border-b px-sm">
 			<Search className="size-3.5 shrink-0 text-text-muted" />
 			<CommandPrimitive.Input
 				className={cn(
@@ -68,7 +68,7 @@ function CommandItem({ className, ...props }: React.ComponentProps<typeof Comman
 	return (
 		<CommandPrimitive.Item
 			className={cn(
-				"flex cursor-pointer items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs text-sm text-text-default outline-none data-[selected=true]:bg-hover",
+				"flex cursor-pointer items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs text-sm text-text-default outline-none data-[selected=true]:bg-selection-item-bg-hovered",
 				className,
 			)}
 			{...props}

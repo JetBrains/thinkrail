@@ -142,7 +142,7 @@ export function SlashCommandMenu({
 		<div
 			data-testid="slash-menu"
 			className={cn(
-				"max-h-[40vh] w-[min(28rem,90%)] overflow-y-auto rounded-[var(--radius-md)] border border-border2 bg-elevated p-xs shadow-[var(--shadow-md)]",
+				"max-h-[40vh] w-[min(28rem,90%)] overflow-y-auto rounded-[var(--radius-md)] border border-border-default bg-container-popover-bg p-xs shadow-[var(--shadow-md)]",
 				className,
 			)}
 		>
@@ -155,7 +155,9 @@ export function SlashCommandMenu({
 					onClick={() => onSelect(command)}
 					className={cn(
 						"flex w-full items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs text-left text-sm",
-						index === activeIndex ? "bg-hover text-text-default" : "text-text-muted",
+						index === activeIndex
+							? "bg-selection-item-bg-hovered text-text-default"
+							: "text-text-muted",
 					)}
 				>
 					<span className="font-mono text-text-default">/{command.name}</span>

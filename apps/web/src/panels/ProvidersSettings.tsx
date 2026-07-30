@@ -275,9 +275,9 @@ function ConnectedCard({
 			data-testid="provider-row"
 			data-provider={provider.id}
 			data-configured="true"
-			className="flex items-center gap-md rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-md py-sm"
+			className="flex items-center gap-md rounded-[var(--radius-md)] border border-border-default bg-[var(--control-bg)] px-md py-sm"
 		>
-			<span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-[var(--green-tint)] text-green">
+			<span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-[var(--green-tint)] text-feedback-success">
 				<Check className="size-4" />
 			</span>
 			<div className="flex min-w-0 flex-col">
@@ -337,10 +337,10 @@ function ProviderActionRow({
 			data-testid="provider-signin-row"
 			data-provider={provider.id}
 			data-configured="false"
-			className="flex flex-col gap-xs rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-md py-sm"
+			className="flex flex-col gap-xs rounded-[var(--radius-md)] border border-border-default bg-[var(--control-bg)] px-md py-sm"
 		>
 			<div className="flex items-center gap-sm text-sm">
-				<span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-hover text-text-muted">
+				<span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-selection-item-bg-hovered text-text-muted">
 					<Boxes className="size-4" />
 				</span>
 				<span className="min-w-0 flex-1 truncate text-text-default">{provider.name}</span>

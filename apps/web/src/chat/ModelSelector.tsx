@@ -56,7 +56,7 @@ export function ModelSelector({
 				data-testid="model-selector"
 				data-open={open}
 				disabled={models.length === 0}
-				className="flex h-8 max-w-[220px] items-center gap-sm rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-sm text-sm text-text-default outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 data-[open=true]:border-[var(--primary-60)] data-[open=true]:bg-hover"
+				className="flex h-8 max-w-[220px] items-center gap-sm rounded-[var(--radius-md)] border border-border-default bg-[var(--control-bg)] px-sm text-sm text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 data-[open=true]:border-[var(--primary-60)] data-[open=true]:bg-selection-item-bg-hovered"
 			>
 				<span className="truncate font-[var(--font-mono)] text-text-muted text-xs">
 					{current?.name ?? "Select model"}

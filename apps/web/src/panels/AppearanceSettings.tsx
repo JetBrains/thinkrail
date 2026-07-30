@@ -49,7 +49,7 @@ export function AppearanceSettings() {
 								"flex items-center gap-sm rounded-[var(--radius-md)] border px-md py-sm text-left text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
 								active
 									? "border-[var(--primary-40)] bg-[var(--primary-10)] text-text-default"
-									: "border-border2 text-text-muted hover:bg-hover hover:text-text-default",
+									: "border-border-default text-text-muted hover:bg-control-bg-hovered hover:text-text-default",
 							)}
 						>
 							<span className="flex-1 font-medium">{label}</span>

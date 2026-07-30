@@ -22,9 +22,9 @@ const STATUS_LABEL: Record<ConnectionStatus, string> = {
 };
 
 const STATUS_DOT: Record<ConnectionStatus, string> = {
-	connected: "bg-green",
-	connecting: "bg-gold",
-	disconnected: "bg-red",
+	connected: "bg-feedback-success",
+	connecting: "bg-feedback-warning",
+	disconnected: "bg-feedback-error",
 };
 
 export function Shell() {
@@ -44,7 +44,7 @@ export function Shell() {
 	useGlobalHotkeys();
 	return (
 		<div data-testid="shell" className="grid h-full grid-rows-[auto_1fr]">
-			<header className="flex items-center justify-between border-b border-border2 bg-bg-dark px-lg py-sm">
+			<header className="flex items-center justify-between border-b border-border-default bg-container-header-bg px-lg py-sm">
 				<div className="flex min-w-0 items-center gap-md">
 					<span className="shrink-0 font-[var(--font-accent)] text-lg font-extrabold tracking-[0.5px] text-primary">
 						{PRODUCT_NAME}
@@ -53,7 +53,7 @@ export function Shell() {
 						<div
 							data-testid="scope-context"
 							data-context={activeWorkspace ? "workspace" : "project-home"}
-							className="min-w-0 border-border2 border-l pl-md leading-tight"
+							className="min-w-0 border-border-default border-l pl-md leading-tight"
 						>
 							<div className="flex min-w-0 items-center gap-xs text-xs">
 								<span className="hidden min-w-0 items-center gap-xs sm:flex">
@@ -101,7 +101,7 @@ export function Shell() {
 						aria-label="Settings"
 						title="Settings"
 						onClick={() => useAppStore.getState().openSettings()}
-						className="flex size-7 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:bg-hover hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+						className="flex size-7 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 					>
 						<Settings className="size-4" />
 					</button>
@@ -124,7 +124,7 @@ export function Shell() {
 					</ResizablePanel>
 					<ResizableHandle direction="horizontal" data-testid="resize-left" />
 					<ResizablePanel id="center" order={2} defaultSize={52} minSize={28}>
-						<main data-testid="center-tabs" className="h-full min-h-0 bg-surface-content">
+						<main data-testid="center-tabs" className="h-full min-h-0 bg-container-terminal-bg">
 							<ErrorBoundary label="Editor" resetKeys={[activeWorkspaceId]}>
 								<CenterTabs />
 							</ErrorBoundary>
@@ -134,7 +134,7 @@ export function Shell() {
 					<ResizablePanel id="right" order={3} defaultSize={30} minSize={16}>
 						<ResizablePanelGroup direction="vertical" autoSaveId="thinkrail-right">
 							<ResizablePanel id="right-files" order={1} defaultSize={60} minSize={20}>
-								<div data-testid="right-panel" className="h-full min-h-0 bg-surface-content">
+								<div data-testid="right-panel" className="h-full min-h-0 bg-container-terminal-bg">
 									<ErrorBoundary label="Files" resetKeys={[activeWorkspaceId]}>
 										<RightPanel />
 									</ErrorBoundary>
@@ -142,7 +142,7 @@ export function Shell() {
 							</ResizablePanel>
 							<ResizableHandle direction="vertical" data-testid="resize-terminals" />
 							<ResizablePanel id="right-terminals" order={2} defaultSize={40} minSize={15}>
-								<div className="h-full min-h-0 bg-surface-content">
+								<div className="h-full min-h-0 bg-container-terminal-bg">
 									<ErrorBoundary label="Terminals" resetKeys={[activeWorkspaceId]}>
 										<TerminalsPanel />
 									</ErrorBoundary>
@@ -169,7 +169,7 @@ export function Shell() {
 					</ResizablePanel>
 					<ResizableHandle direction="horizontal" data-testid="resize-left" />
 					<ResizablePanel id="welcome" order={2} defaultSize={82} minSize={40}>
-						<div className="h-full min-h-0 bg-surface-content">
+						<div className="h-full min-h-0 bg-container-terminal-bg">
 							<WelcomePanel />
 						</div>
 					</ResizablePanel>

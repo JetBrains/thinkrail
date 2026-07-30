@@ -39,7 +39,7 @@ export function WebSearchCard({ args, result, status }: ToolRenderProps) {
 			{status === "running" ? (
 				<span className="text-text-muted text-xs">Searching…</span>
 			) : status === "error" ? (
-				<pre className="overflow-auto px-sm py-xs text-red text-xs">{output}</pre>
+				<pre className="overflow-auto px-sm py-xs text-feedback-error text-xs">{output}</pre>
 			) : output ? (
 				<Collapsible lines={countLines(output)}>
 					<CodeBlock code={output} lang="markdown" />

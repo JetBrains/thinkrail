@@ -95,7 +95,7 @@ export function TodoAddRow({
 					onClick={onOpenMarkdown}
 					aria-label="Open as markdown"
 					title="Open the plan as a markdown tab"
-					className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-hover hover:text-text-default focus-visible:opacity-100"
+					className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default focus-visible:opacity-100"
 				>
 					<FileText className="size-3.5" />
 				</button>
@@ -162,7 +162,7 @@ function DoneGroup({ group, onRemove }: { group: TodoGroupItem; onRemove: (id: s
 				data-testid="todo-group-done"
 				data-expanded={expanded}
 				onClick={() => setExpanded((v) => !v)}
-				className="flex w-full items-center gap-sm rounded-[var(--radius-sm)] px-xs py-xs text-left hover:bg-hover"
+				className="flex w-full items-center gap-sm rounded-[var(--radius-sm)] px-xs py-xs text-left hover:bg-control-bg-hovered"
 			>
 				<Chevron className="size-3.5 shrink-0 text-text-muted" />
 				<Check className="size-4 shrink-0 text-primary" />
@@ -174,7 +174,7 @@ function DoneGroup({ group, onRemove }: { group: TodoGroupItem; onRemove: (id: s
 				</span>
 			</button>
 			{expanded ? (
-				<ul className="ml-md flex flex-col border-border2 border-l pl-sm">
+				<ul className="ml-md flex flex-col border-border-default border-l pl-sm">
 					{group.todos.map((todo) => (
 						<TodoRow key={todo.id} todo={todo} onRemove={() => onRemove(todo.id)} />
 					))}
@@ -189,7 +189,7 @@ function TodoRow({ todo, onRemove }: { todo: TodoItem; onRemove: () => void }) {
 		<li
 			data-testid="todo-row"
 			data-status={todo.status}
-			className="group flex items-center gap-sm rounded-[var(--radius-sm)] px-xs py-xs hover:bg-hover"
+			className="group flex items-center gap-sm rounded-[var(--radius-sm)] px-xs py-xs hover:bg-control-bg-hovered"
 		>
 			<span className="shrink-0" title={STATUS_LABEL[todo.status]}>
 				<StatusIcon status={todo.status} />
@@ -223,7 +223,7 @@ function TodoRow({ todo, onRemove }: { todo: TodoItem; onRemove: () => void }) {
 				onClick={onRemove}
 				aria-label="Remove"
 				title="Remove"
-				className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 transition-opacity hover:bg-elevated hover:text-red group-hover:opacity-100 focus-visible:opacity-100"
+				className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 transition-opacity hover:bg-control-bg-hovered hover:text-feedback-error group-hover:opacity-100 focus-visible:opacity-100"
 			>
 				<Trash2 className="size-3.5" />
 			</button>

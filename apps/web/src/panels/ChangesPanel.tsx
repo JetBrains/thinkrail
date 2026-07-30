@@ -119,7 +119,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 				data-testid="changes-view-toggle"
 				role="toolbar"
 				aria-label="Changes view mode"
-				className="flex h-8 shrink-0 items-center justify-end gap-xs border-border2 border-b bg-bg-dark px-sm"
+				className="flex h-8 shrink-0 items-center justify-end gap-xs border-border-default border-b bg-container-header-bg px-sm"
 			>
 				<ToggleSegment
 					testid="changes-toggle-list"
@@ -147,8 +147,8 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 									data-status={change.status}
 									data-active={isActive(change.path) ? true : undefined}
 									onClick={() => void openDiff(change.path)}
-									className={`flex w-full items-center gap-sm px-sm py-xs text-left text-sm hover:bg-hover ${
-										isActive(change.path) ? "bg-hover" : ""
+									className={`flex w-full items-center gap-sm px-sm py-xs text-left text-sm hover:bg-control-bg-hovered ${
+										isActive(change.path) ? "bg-selection-item-bg-hovered" : ""
 									}`}
 								>
 									<span

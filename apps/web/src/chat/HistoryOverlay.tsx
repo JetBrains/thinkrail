@@ -125,7 +125,7 @@ function PromptRow({
 			data-selected={isSelected}
 			className={`group flex w-full items-center gap-xs rounded-[var(--radius-sm)] border-l-2 py-xs pl-sm pr-xs text-left text-sm ${
 				isSelected
-					? "border-l-primary bg-hover text-text-default"
+					? "border-l-primary bg-selection-item-bg-hovered text-text-default"
 					: "border-l-transparent text-text-muted"
 			}`}
 		>
@@ -138,7 +138,7 @@ function PromptRow({
 					<Highlight text={firstLine} query={query} />
 				</span>
 				{showChip ? (
-					<span className="shrink-0 rounded-full border border-border2 bg-bg px-xs text-[10px] text-text-muted">
+					<span className="shrink-0 rounded-full border border-border-default bg-container-workspace-bg px-xs text-[10px] text-text-muted">
 						{workspaceName ?? "workspace"}
 					</span>
 				) : null}
@@ -163,7 +163,7 @@ function PromptRow({
 					e.stopPropagation();
 					onSaveAsTemplate();
 				}}
-				className={`flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] p-xs text-text-muted opacity-0 transition hover:bg-elevated hover:text-text-default group-hover:opacity-100 ${
+				className={`flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] p-xs text-text-muted opacity-0 transition hover:bg-control-bg-hovered hover:text-text-default group-hover:opacity-100 ${
 					isSelected ? "opacity-100" : ""
 				}`}
 			>
@@ -188,7 +188,7 @@ function PromptRow({
 							e.stopPropagation();
 							onOpenMessage(target);
 						}}
-						className={`flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] p-xs text-text-muted opacity-0 transition hover:bg-elevated hover:text-text-default group-hover:opacity-100 ${
+						className={`flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] p-xs text-text-muted opacity-0 transition hover:bg-control-bg-hovered hover:text-text-default group-hover:opacity-100 ${
 							isSelected ? "opacity-100" : ""
 						}`}
 					>
@@ -222,7 +222,7 @@ function MessageRow({
 			disabled={unmapped}
 			className={`flex w-full flex-col gap-0.5 rounded-[var(--radius-sm)] border-l-2 px-sm py-xs text-left text-sm disabled:cursor-default ${
 				isSelected
-					? "border-l-primary bg-hover text-text-default"
+					? "border-l-primary bg-selection-item-bg-hovered text-text-default"
 					: "border-l-transparent text-text-muted"
 			}`}
 		>
@@ -288,7 +288,7 @@ function HistoryPreview({
 					<div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap break-words p-sm text-sm text-text-default">
 						<Highlight text={item.hit.text} query={query} />
 					</div>
-					<div className="shrink-0 border-t border-border2 px-sm py-xs text-[11px] text-text-muted">
+					<div className="shrink-0 border-t border-border-default px-sm py-xs text-[11px] text-text-muted">
 						{item.kind === "prompt" ? (
 							<PromptPreviewFooter hit={item.hit} workspaceName={workspaceName} />
 						) : (
@@ -489,7 +489,7 @@ export function HistoryOverlay({
 		: undefined;
 
 	const resultsBody = error ? (
-		<div data-testid="history-error" className="p-md text-center text-red text-sm">
+		<div data-testid="history-error" className="p-md text-center text-feedback-error text-sm">
 			search unavailable
 		</div>
 	) : !result ? null : (
@@ -560,9 +560,9 @@ export function HistoryOverlay({
 		<div
 			data-testid="history-overlay"
 			data-stage={stage}
-			className="absolute bottom-full left-sm right-sm mb-xs flex flex-col overflow-hidden rounded-[var(--radius-md)] border border-border2 bg-elevated shadow-[var(--shadow-md)]"
+			className="absolute bottom-full left-sm right-sm mb-xs flex flex-col overflow-hidden rounded-[var(--radius-md)] border border-border-default bg-container-popover-bg shadow-[var(--shadow-md)]"
 		>
-			<div className="flex items-center gap-sm border-b border-border2 p-sm">
+			<div className="flex items-center gap-sm border-b border-border-default p-sm">
 				<input
 					ref={inputRef}
 					data-testid="history-query"
@@ -576,7 +576,7 @@ export function HistoryOverlay({
 					<DropdownMenuTrigger
 						data-testid="history-scope"
 						data-scope={scope.kind}
-						className="flex shrink-0 items-center gap-xs rounded-full border border-border2 bg-bg px-sm py-0.5 text-[11px] text-text-muted outline-none hover:bg-hover"
+						className="flex shrink-0 items-center gap-xs rounded-full border border-border-default bg-container-workspace-bg px-sm py-0.5 text-[11px] text-text-muted outline-none hover:bg-control-bg-hovered"
 					>
 						<span>{SCOPE_LABELS[scope.kind]}</span>
 						<span className="text-text-muted">⌃R</span>
@@ -619,7 +619,7 @@ export function HistoryOverlay({
 						item={selectedItem}
 						query={query}
 						workspaceName={selectedWorkspaceName}
-						className="max-h-[37.5vh] border-border2 border-t md:max-h-[75vh] md:w-[45%] md:border-t-0 md:border-l"
+						className="max-h-[37.5vh] border-border-default border-t md:max-h-[75vh] md:w-[45%] md:border-t-0 md:border-l"
 					/>
 				</div>
 			) : (
@@ -636,7 +636,7 @@ export function HistoryOverlay({
 					type="button"
 					data-testid="history-expand-hint"
 					onClick={onToggleStage}
-					className="border-t border-border2 p-xs text-center text-text-muted text-xs hover:bg-hover"
+					className="border-t border-border-default p-xs text-center text-text-muted text-xs hover:bg-control-bg-hovered"
 				>
 					{result.messageTotal} matches in conversations · ⇥ expand
 				</button>

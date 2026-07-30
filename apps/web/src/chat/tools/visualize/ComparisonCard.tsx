@@ -24,13 +24,13 @@ export function ComparisonCard({ args }: ToolRenderProps) {
 						key={opt.name}
 						data-recommended={opt.recommended || undefined}
 						className={`flex flex-col gap-xs rounded-[var(--radius-sm)] border p-sm ${
-							opt.recommended ? "border-primary bg-elevated" : "border-border2"
+							opt.recommended ? "border-primary bg-container-card-bg" : "border-border-default"
 						}`}
 					>
 						<div className="flex items-center gap-xs">
 							<span className="font-medium text-sm text-text-default">{opt.name}</span>
 							{opt.recommended ? (
-								<span className="rounded-[var(--radius-sm)] bg-primary px-1.5 py-0.5 text-[10px] text-text-on-primary">
+								<span className="rounded-[var(--radius-sm)] bg-control-primary-bg px-1.5 py-0.5 text-[10px] text-control-primary-text">
 									Recommended
 								</span>
 							) : null}
@@ -40,7 +40,7 @@ export function ComparisonCard({ args }: ToolRenderProps) {
 							<ul className="flex flex-col gap-0.5">
 								{opt.pros.map((p) => (
 									<li key={p} className="flex items-start gap-xs text-text-default text-xs">
-										<Check className="mt-0.5 size-3 shrink-0 text-green" />
+										<Check className="mt-0.5 size-3 shrink-0 text-feedback-success" />
 										<span>{p}</span>
 									</li>
 								))}
@@ -50,7 +50,7 @@ export function ComparisonCard({ args }: ToolRenderProps) {
 							<ul className="flex flex-col gap-0.5">
 								{opt.cons.map((c) => (
 									<li key={c} className="flex items-start gap-xs text-text-default text-xs">
-										<X className="mt-0.5 size-3 shrink-0 text-red" />
+										<X className="mt-0.5 size-3 shrink-0 text-feedback-error" />
 										<span>{c}</span>
 									</li>
 								))}

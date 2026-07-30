@@ -90,7 +90,7 @@ function PanelErrorFallback({
 			role="alert"
 			className="flex h-full min-h-0 flex-col items-center justify-center gap-sm overflow-auto p-lg text-center"
 		>
-			<AlertTriangle className="size-6 text-red" />
+			<AlertTriangle className="size-6 text-feedback-error" />
 			<p className="text-sm font-medium text-text-default">
 				{label ? `The ${label} panel hit an error` : "Something went wrong"}
 			</p>
@@ -105,7 +105,7 @@ function PanelErrorFallback({
 						type="button"
 						data-testid="error-reload"
 						onClick={() => window.location.reload()}
-						className="flex items-center gap-xs rounded-[var(--radius-md)] border border-border2 bg-elevated px-md py-xs text-sm text-text-default hover:bg-hover"
+						className="flex items-center gap-xs rounded-[var(--radius-md)] border border-border-default bg-control-bg px-md py-xs text-sm text-text-default hover:bg-control-bg-hovered"
 					>
 						<RefreshCw className="size-4" /> Reload page
 					</button>
@@ -114,7 +114,7 @@ function PanelErrorFallback({
 						type="button"
 						data-testid="error-retry"
 						onClick={reset}
-						className="flex items-center gap-xs rounded-[var(--radius-md)] border border-border2 bg-elevated px-md py-xs text-sm text-text-default hover:bg-hover"
+						className="flex items-center gap-xs rounded-[var(--radius-md)] border border-border-default bg-control-bg px-md py-xs text-sm text-text-default hover:bg-control-bg-hovered"
 					>
 						<RotateCcw className="size-4" /> Try again
 					</button>

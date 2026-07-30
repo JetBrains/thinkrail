@@ -60,7 +60,7 @@ export function ToolCard({
 			data-tool={toolName}
 			data-status={status}
 			data-expanded={expanded}
-			className="rounded-[var(--radius-sm)] border border-border2 bg-elevated"
+			className="rounded-[var(--radius-sm)] border border-border-default bg-container-card-bg"
 		>
 			<button
 				type="button"
@@ -72,9 +72,9 @@ export function ToolCard({
 				{status === "running" ? (
 					<Loader2 className="size-3 shrink-0 animate-spin text-text-muted motion-reduce:animate-none" />
 				) : isError ? (
-					<X className="size-3 shrink-0 text-red" />
+					<X className="size-3 shrink-0 text-feedback-error" />
 				) : (
-					<Check className="size-3 shrink-0 text-green" />
+					<Check className="size-3 shrink-0 text-feedback-success" />
 				)}
 				<span className="shrink-0 font-medium text-text-default">{toolName}</span>
 				{summary ? (
@@ -89,7 +89,7 @@ export function ToolCard({
 				/>
 			</button>
 			{expanded ? (
-				<div className={cn("px-sm pb-xs", isError && "text-red")}>
+				<div className={cn("px-sm pb-xs", isError && "text-feedback-error")}>
 					<Renderer {...renderProps} />
 				</div>
 			) : null}

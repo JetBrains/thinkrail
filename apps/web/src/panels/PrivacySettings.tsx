@@ -28,7 +28,7 @@ export function PrivacySettings() {
 				</p>
 			</div>
 
-			<div className="flex items-center justify-between gap-md rounded-[var(--radius-md)] border border-border2 px-md py-sm">
+			<div className="flex items-center justify-between gap-md rounded-[var(--radius-md)] border border-border-default px-md py-sm">
 				<div className="flex flex-col gap-0.5">
 					<span className="font-medium text-sm text-text-default">
 						Share anonymous usage analytics
@@ -47,12 +47,12 @@ export function PrivacySettings() {
 					onClick={toggle}
 					className={cn(
 						"relative h-5 w-9 shrink-0 rounded-full outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
-						enabled ? "bg-primary" : "bg-border2",
+						enabled ? "bg-primary" : "bg-border-default",
 					)}
 				>
 					<span
 						className={cn(
-							"absolute top-0.5 left-0.5 size-4 rounded-full bg-bg transition-transform",
+							"absolute top-0.5 left-0.5 size-4 rounded-full bg-container-workspace-bg transition-transform",
 							enabled && "translate-x-4",
 						)}
 					/>

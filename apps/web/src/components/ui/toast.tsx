@@ -29,9 +29,9 @@ const toastVariants = cva(
 	{
 		variants: {
 			variant: {
-				error: "border-border2 border-l-red",
-				success: "border-border2 border-l-green",
-				info: "border-border2 border-l-primary",
+				error: "border-border-default border-l-red",
+				success: "border-border-default border-l-green",
+				info: "border-border-default border-l-primary",
 			},
 		},
 		defaultVariants: { variant: "info" },
@@ -68,7 +68,7 @@ function ToastClose({ className, ...props }: React.ComponentProps<typeof ToastPr
 		<ToastPrimitive.Close
 			aria-label="Dismiss"
 			className={cn(
-				"-mr-1 -mt-1 ml-auto flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:bg-hover hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary",
+				"-mr-1 -mt-1 ml-auto flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary",
 				className,
 			)}
 			{...props}

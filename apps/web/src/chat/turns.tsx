@@ -145,7 +145,7 @@ function ErrorTurn({ text }: { text: string }) {
 		<div
 			data-testid="chat-message"
 			data-role="error"
-			className="flex items-start gap-sm rounded-[var(--radius-md)] border border-red/40 bg-red/10 px-md py-sm text-red text-sm"
+			className="flex items-start gap-sm rounded-[var(--radius-md)] border border-feedback-error/40 bg-feedback-error-bg px-md py-sm text-feedback-error text-sm"
 		>
 			<TriangleAlert className="mt-[2px] size-4 shrink-0" />
 			<span className="min-w-0 whitespace-pre-wrap break-words">{text}</span>
@@ -179,7 +179,7 @@ function RetryIndicator({
 		<div
 			data-testid="retry-indicator"
 			data-source={source}
-			className="flex flex-col gap-xs rounded-[var(--radius-sm)] border border-border2 bg-elevated px-sm py-xs text-text-muted text-xs"
+			className="flex flex-col gap-xs rounded-[var(--radius-sm)] border border-border-default bg-container-card-bg px-sm py-xs text-text-muted text-xs"
 		>
 			<span className="flex items-center gap-xs">
 				<RotateCw className="size-3 shrink-0" />
@@ -240,7 +240,7 @@ export function TurnDivider({
 					type="button"
 					data-testid="turn-divider-files"
 					onClick={() => onOpenChanges(changedFiles)}
-					className="flex items-center gap-xs rounded-[var(--radius-sm)] px-xs text-primary hover:bg-hover"
+					className="flex items-center gap-xs rounded-[var(--radius-sm)] px-xs text-primary hover:bg-control-bg-hovered"
 				>
 					<FileDiff className="size-3 shrink-0" />
 					{changedFiles.length} {changedFiles.length === 1 ? "file changed" : "files changed"}

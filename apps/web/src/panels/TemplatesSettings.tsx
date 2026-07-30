@@ -295,7 +295,7 @@ function TemplateGroup({
 					type="button"
 					data-testid={`template-new-${scope}`}
 					onClick={onNew}
-					className="flex items-center gap-xs rounded-[var(--radius-sm)] px-sm py-xs text-text-muted text-xs transition-colors hover:bg-hover hover:text-text-default"
+					className="flex items-center gap-xs rounded-[var(--radius-sm)] px-sm py-xs text-text-muted text-xs transition-colors hover:bg-control-bg-hovered hover:text-text-default"
 				>
 					<Plus className="size-3.5" />
 					New
@@ -375,7 +375,7 @@ function TemplateRow({
 				data-testid="template-row"
 				data-name={template.name}
 				data-scope={template.scope}
-				className="group flex items-center gap-sm rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-md py-sm"
+				className="group flex items-center gap-sm rounded-[var(--radius-md)] border border-border-default bg-[var(--control-bg)] px-md py-sm"
 			>
 				<div className="flex min-w-0 flex-1 flex-col">
 					<span className="truncate font-medium text-sm text-text-default">{template.name}</span>
@@ -391,7 +391,7 @@ function TemplateRow({
 							aria-label="Open as file"
 							title="Open as file"
 							onClick={openAsFile}
-							className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-elevated hover:text-text-default"
+							className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-control-bg-hovered hover:text-text-default"
 						>
 							<FileText className="size-3.5" />
 						</button>
@@ -402,7 +402,7 @@ function TemplateRow({
 						aria-label="Edit"
 						title="Edit"
 						onClick={onEdit}
-						className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-elevated hover:text-text-default"
+						className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-control-bg-hovered hover:text-text-default"
 					>
 						<Pencil className="size-3.5" />
 					</button>
@@ -412,7 +412,7 @@ function TemplateRow({
 							data-testid="template-delete"
 							aria-label="Delete"
 							title="Delete"
-							className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-elevated hover:text-red"
+							className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-control-bg-hovered hover:text-feedback-error"
 						>
 							<Trash2 className="size-3.5" />
 						</button>

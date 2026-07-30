@@ -85,12 +85,18 @@ export function LoginDialog({
 				</DialogHeader>
 
 				{state.status === "success" ? (
-					<p className="flex items-center gap-sm text-green text-sm" data-testid="login-success">
+					<p
+						className="flex items-center gap-sm text-feedback-success text-sm"
+						data-testid="login-success"
+					>
 						<Check className="size-4 shrink-0" />
 						{providerName} is connected.
 					</p>
 				) : state.status === "error" ? (
-					<p className="flex items-start gap-sm text-red text-sm" data-testid="login-error">
+					<p
+						className="flex items-start gap-sm text-feedback-error text-sm"
+						data-testid="login-error"
+					>
 						<TriangleAlert className="mt-0.5 size-4 shrink-0" />
 						<span className="min-w-0 break-words">{state.error ?? "Login failed."}</span>
 					</p>
@@ -105,7 +111,7 @@ export function LoginDialog({
 									<ExternalLink className="size-4" />
 									Open sign-in page
 								</Button>
-								<code className="select-all break-all rounded-[var(--radius-sm)] bg-[var(--input-bg)] px-sm py-xs font-[var(--font-mono)] text-text-muted text-xs">
+								<code className="select-all break-all rounded-[var(--radius-sm)] bg-[var(--control-bg)] px-sm py-xs font-[var(--font-mono)] text-text-muted text-xs">
 									{state.url}
 								</code>
 							</div>
@@ -113,7 +119,7 @@ export function LoginDialog({
 
 						{state.deviceCode ? (
 							<div
-								className="flex flex-col gap-xs rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] p-md"
+								className="flex flex-col gap-xs rounded-[var(--radius-md)] border border-border-default bg-[var(--control-bg)] p-md"
 								data-testid="login-device-code"
 							>
 								<span className="text-text-muted text-xs">
@@ -147,7 +153,7 @@ export function LoginDialog({
 										data-testid="login-option"
 										data-option={option.id}
 										onClick={() => onReply(option.id)}
-										className="rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-md py-sm text-left text-sm text-text-default outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-primary"
+										className="rounded-[var(--radius-md)] border border-border-default bg-[var(--control-bg)] px-md py-sm text-left text-sm text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
 									>
 										{option.label}
 									</button>
@@ -173,7 +179,7 @@ export function LoginDialog({
 												submitPrompt();
 											}
 										}}
-										className="min-w-0 flex-1 rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-sm py-xs text-sm text-text-default outline-none placeholder:text-text-muted focus:border-primary"
+										className="min-w-0 flex-1 rounded-[var(--radius-md)] border border-border-default bg-[var(--control-bg)] px-sm py-xs text-sm text-text-default outline-none placeholder:text-text-muted focus:border-primary"
 									/>
 									<Button data-testid="login-submit" onClick={submitPrompt}>
 										Submit

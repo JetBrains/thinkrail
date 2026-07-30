@@ -47,14 +47,14 @@ export function SettingsDialog() {
 				data-testid="settings-dialog"
 				className="flex h-[80vh] max-h-[85vh] w-full max-w-[52rem] flex-col gap-0 overflow-hidden p-0"
 			>
-				<DialogHeader className="border-border2 border-b px-lg py-md">
+				<DialogHeader className="border-border-default border-b px-lg py-md">
 					<DialogTitle>Settings</DialogTitle>
 				</DialogHeader>
 
 				<div className="flex min-h-0 flex-1 flex-col md:flex-row">
 					<nav
 						aria-label="Settings sections"
-						className="flex shrink-0 gap-xs overflow-x-auto border-border2 border-b p-sm md:w-[192px] md:flex-col md:gap-0.5 md:overflow-x-visible md:overflow-y-auto md:border-r md:border-b-0 md:bg-bg-dark md:p-md"
+						className="flex shrink-0 gap-xs overflow-x-auto border-border-default border-b p-sm md:w-[192px] md:flex-col md:gap-0.5 md:overflow-x-visible md:overflow-y-auto md:border-r md:border-b-0 md:bg-container-header-bg md:p-md"
 					>
 						{SECTIONS.map(({ id, label, icon: Icon }) => {
 							const active = section === id;
@@ -69,7 +69,7 @@ export function SettingsDialog() {
 										"flex shrink-0 items-center gap-sm rounded-[var(--radius-md)] px-md py-sm text-left text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
 										active
 											? "bg-[var(--primary-10)] font-medium text-primary"
-											: "text-text-muted hover:bg-hover hover:text-text-default",
+											: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default",
 									)}
 								>
 									<Icon className="size-4 shrink-0" />
@@ -84,7 +84,7 @@ export function SettingsDialog() {
 							>
 								<Icon className="size-4 shrink-0" />
 								{label}
-								<span className="ml-auto rounded-full border border-border2 px-xs py-0.5 font-[var(--font-mono)] text-[10px] text-text-disabled uppercase">
+								<span className="ml-auto rounded-full border border-border-default px-xs py-0.5 font-[var(--font-mono)] text-[10px] text-text-disabled uppercase">
 									Soon
 								</span>
 							</span>

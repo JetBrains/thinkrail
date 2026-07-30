@@ -45,12 +45,12 @@ export function GithubSettings() {
 					Authenticate the GitHub CLI to create workspaces from remote branches.
 				</p>
 			</div>
-			<div className="flex items-center gap-sm rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-md py-sm">
+			<div className="flex items-center gap-sm rounded-[var(--radius-md)] border border-border-default bg-[var(--control-bg)] px-md py-sm">
 				<span
 					data-testid="settings-gh-status"
 					data-connected={connected}
 					className={`inline-flex items-center gap-xs font-medium text-sm ${
-						connected ? "text-green" : "text-text-muted"
+						connected ? "text-feedback-success" : "text-text-muted"
 					}`}
 				>
 					{connected ? <Check className="size-3.5" /> : <X className="size-3.5" />}

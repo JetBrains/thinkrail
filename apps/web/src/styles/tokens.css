@@ -31,6 +31,8 @@
 	--container-sidebar-bg: var(--surface-sidebar);
 	--container-terminal-bg: var(--surface-content);
 	--container-popover-bg: var(--elevated);
+	--container-card-bg: var(--elevated);
+	--container-header-bg: var(--bg-dark);
 
 	/* Control */
 	--control-bg: var(--input-bg);
@@ -62,6 +64,9 @@
 	--feedback-error: var(--red);
 	--feedback-error-bg: color-mix(in srgb, var(--red) 10%, transparent);
 	--feedback-error-border: var(--red);
+	--feedback-warning: var(--gold);
+	--feedback-warning-bg: color-mix(in srgb, var(--gold) 10%, transparent);
+	--feedback-warning-border: var(--gold);
 
 	/* Selection — note: --selection-bg already exists for native ::selection */
 	--selection-text: var(--selection-fg);

@@ -15,7 +15,7 @@ export function EditCard({ args, result, status, workspaceRoot }: ToolRenderProp
 		return (
 			<div data-testid="tool-edit" className="flex flex-col gap-xs">
 				<EditHeader path={path} workspaceRoot={workspaceRoot} />
-				<pre className="overflow-auto px-sm py-xs text-red text-xs">{message}</pre>
+				<pre className="overflow-auto px-sm py-xs text-feedback-error text-xs">{message}</pre>
 			</div>
 		);
 	}
@@ -28,25 +28,29 @@ export function EditCard({ args, result, status, workspaceRoot }: ToolRenderProp
 			<EditHeader path={path} workspaceRoot={workspaceRoot} />
 			<Collapsible
 				lines={oldLines.length + newLines.length}
-				fadeClass="bg-[linear-gradient(to_top,var(--elevated),transparent)]"
+				fadeClass="bg-[linear-gradient(to_top,var(--container-card-bg),transparent)]"
 			>
-				<div className="overflow-auto rounded-[var(--radius-sm)] border border-border2 font-[var(--font-mono)] text-xs leading-relaxed">
+				<div className="overflow-auto rounded-[var(--radius-sm)] border border-border-default font-[var(--font-mono)] text-xs leading-relaxed">
 					{oldLines.map((line, i) => {
 						// Diff lines are render-order-stable (never reordered), so the index is a correct key.
 						const key = `old-${i}`;
 						return (
-							<div key={key} className="flex bg-red/10">
-								<span className="w-6 shrink-0 select-none px-1 text-right text-red/50">−</span>
-								<pre className="min-w-0 flex-1 px-1 text-red">{line}</pre>
+							<div key={key} className="flex bg-feedback-error-bg">
+								<span className="w-6 shrink-0 select-none px-1 text-right text-feedback-error/50">
+									−
+								</span>
+								<pre className="min-w-0 flex-1 px-1 text-feedback-error">{line}</pre>
 							</div>
 						);
 					})}
 					{newLines.map((line, i) => {
 						const key = `new-${i}`;
 						return (
-							<div key={key} className="flex bg-green/10">
-								<span className="w-6 shrink-0 select-none px-1 text-right text-green/50">+</span>
-								<pre className="min-w-0 flex-1 px-1 text-green">{line}</pre>
+							<div key={key} className="flex bg-feedback-success-bg">
+								<span className="w-6 shrink-0 select-none px-1 text-right text-feedback-success/50">
+									+
+								</span>
+								<pre className="min-w-0 flex-1 px-1 text-feedback-success">{line}</pre>
 							</div>
 						);
 					})}
@@ -60,7 +64,7 @@ function EditHeader({ path, workspaceRoot }: { path: string; workspaceRoot?: str
 	const displayPath = projectRelativePath(path, workspaceRoot);
 	return (
 		<div className="flex items-center gap-xs text-xs">
-			<Pencil className="size-3.5 shrink-0 text-gold" />
+			<Pencil className="size-3.5 shrink-0 text-feedback-warning" />
 			<span className="truncate text-text-default" title={path}>
 				{displayPath}
 			</span>

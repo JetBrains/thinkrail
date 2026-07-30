@@ -67,7 +67,7 @@ export function ProjectSkillsNotice({ projectId }: { projectId: string }) {
 				data-state="trusted"
 				className="mt-lg flex items-center gap-xs text-text-muted text-xs"
 			>
-				<ShieldCheck className="size-3.5 shrink-0 text-gold" />
+				<ShieldCheck className="size-3.5 shrink-0 text-feedback-warning" />
 				{count} project skill{plural(count)} trusted.
 			</p>
 		);
@@ -78,9 +78,9 @@ export function ProjectSkillsNotice({ projectId }: { projectId: string }) {
 		<div
 			data-testid="project-skills-notice"
 			data-state={isPending ? "pending" : "untrusted"}
-			className="mt-lg flex w-full max-w-[560px] items-center gap-sm rounded-[var(--radius-md)] border border-border2 border-l-[3px] border-l-[var(--gold)] bg-[var(--gold-tint)] px-md py-sm text-left"
+			className="mt-lg flex w-full max-w-[560px] items-center gap-sm rounded-[var(--radius-md)] border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-bg px-md py-sm text-left"
 		>
-			<TriangleAlert className="size-4 shrink-0 text-gold" />
+			<TriangleAlert className="size-4 shrink-0 text-feedback-warning" />
 			<span className="min-w-0 flex-1 text-sm text-text-default">
 				{isPending
 					? `${pending.length} new skill${plural(pending.length)} appeared since you trusted this project.`

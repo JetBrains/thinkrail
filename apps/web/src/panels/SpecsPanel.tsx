@@ -137,7 +137,7 @@ function SpecNodeRow({
 					"group flex h-7 min-w-0 items-stretch rounded-[var(--radius-sm)] transition-colors",
 					isActive
 						? "bg-[var(--primary-10)] ring-1 ring-[var(--primary-40)] ring-inset"
-						: "hover:bg-hover",
+						: "hover:bg-control-bg-hovered",
 				)}
 			>
 				{children.length > 0 ? (

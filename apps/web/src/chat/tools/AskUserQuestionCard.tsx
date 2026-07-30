@@ -278,10 +278,10 @@ export function AskUserQuestionCard({
 			<div
 				data-testid="ask-user-question"
 				data-tone="active"
-				className="overflow-hidden rounded-[var(--radius-lg)] border border-primary/40 bg-elevated ring-1 ring-primary/25"
+				className="overflow-hidden rounded-[var(--radius-lg)] border border-primary/40 bg-container-card-bg ring-1 ring-primary/25"
 			>
 				{multi ? (
-					<div className="flex items-center gap-xs overflow-x-auto border-border2 border-b px-md py-sm">
+					<div className="flex items-center gap-xs overflow-x-auto border-border-default border-b px-md py-sm">
 						{questions.map((question, i) => (
 							<TabChip
 								key={question.question}
@@ -345,7 +345,7 @@ export function AskUserQuestionCard({
 									type="button"
 									data-testid="ask-continue"
 									onClick={() => setTab(Math.min(tab + 1, reviewTab))}
-									className="rounded-[var(--radius-md)] bg-primary px-md py-1.5 font-medium text-text-on-primary text-sm hover:opacity-90"
+									className="rounded-[var(--radius-md)] bg-control-primary-bg px-md py-1.5 font-medium text-control-primary-text text-sm hover:opacity-90"
 								>
 									Next →
 								</button>
@@ -355,7 +355,7 @@ export function AskUserQuestionCard({
 									data-testid="ask-submit"
 									onClick={() => reply({ answers, cancelled: false })}
 									disabled={!canSubmit}
-									className="rounded-[var(--radius-md)] bg-primary px-md py-1.5 font-medium text-text-on-primary text-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+									className="rounded-[var(--radius-md)] bg-control-primary-bg px-md py-1.5 font-medium text-control-primary-text text-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
 								>
 									Submit
 								</button>
@@ -406,7 +406,7 @@ function WaitingCard({ children }: { children: React.ReactNode }) {
 			<div
 				data-testid="ask-user-question"
 				data-tone="pending"
-				className="flex items-center gap-xs rounded-[var(--radius-lg)] border border-border2 bg-elevated px-md py-sm text-text-muted text-xs"
+				className="flex items-center gap-xs rounded-[var(--radius-lg)] border border-border-default bg-container-card-bg px-md py-sm text-text-muted text-xs"
 			>
 				<MessageCircleQuestion className="size-3.5 shrink-0" />
 				{children}
@@ -427,15 +427,15 @@ function ComposingCard({ count }: { count: number }) {
 			<div
 				data-testid="ask-user-question"
 				data-tone="pending"
-				className="flex flex-col gap-sm rounded-[var(--radius-lg)] border border-border2 bg-elevated px-md py-sm"
+				className="flex flex-col gap-sm rounded-[var(--radius-lg)] border border-border-default bg-container-card-bg px-md py-sm"
 			>
 				<div className="flex items-center gap-xs text-text-muted text-xs">
 					<MessageCircleQuestion className="size-3.5 shrink-0" />
 					Preparing questions…{count > 0 ? ` (${count} ready)` : ""}
 				</div>
 				<div className="flex animate-pulse flex-col gap-xs" aria-hidden="true">
-					<div className="h-8 rounded-[var(--radius-md)] bg-hover" />
-					<div className="h-8 rounded-[var(--radius-md)] bg-hover" />
+					<div className="h-8 rounded-[var(--radius-md)] bg-selection-item-bg-hovered" />
+					<div className="h-8 rounded-[var(--radius-md)] bg-selection-item-bg-hovered" />
 				</div>
 			</div>
 		</div>
@@ -462,13 +462,13 @@ function TabChip({
 			onClick={onClick}
 			className={cn(
 				"flex shrink-0 items-center gap-xs whitespace-nowrap rounded-full px-sm py-0.5 text-xs",
-				active ? "bg-primary/15 text-primary" : "text-text-muted hover:bg-hover",
+				active ? "bg-primary/15 text-primary" : "text-text-muted hover:bg-control-bg-hovered",
 			)}
 		>
 			<span
 				className={cn(
 					"flex size-3.5 items-center justify-center rounded-full border",
-					answered ? "border-primary text-primary" : "border-border2",
+					answered ? "border-primary text-primary" : "border-border-default",
 				)}
 			>
 				{answered ? <Check className="size-2.5" /> : null}
@@ -570,7 +570,7 @@ function QuestionBody({
 												value={state.notes[opt.label] ?? ""}
 												placeholder="Add a note for the model…"
 												onChange={(e) => onNote(opt.label, e.target.value)}
-												className="w-full resize-none rounded-[var(--radius-sm)] border border-border2 bg-[var(--input-bg)] px-sm py-xs text-text-default text-xs outline-none focus:border-primary"
+												className="w-full resize-none rounded-[var(--radius-sm)] border border-border-default bg-[var(--control-bg)] px-sm py-xs text-text-default text-xs outline-none focus:border-primary"
 											/>
 										) : (
 											<button
@@ -605,7 +605,7 @@ function QuestionBody({
 				{anyPreview && previewSource?.preview ? (
 					<div
 						data-testid="ask-preview"
-						className="min-w-0 overflow-auto rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-sm py-xs text-xs"
+						className="min-w-0 overflow-auto rounded-[var(--radius-md)] border border-border-default bg-[var(--control-bg)] px-sm py-xs text-xs"
 					>
 						<div className="mb-xs text-text-muted text-xs">Preview · {previewSource.label}</div>
 						<Markdown text={previewSource.preview} />
@@ -640,7 +640,9 @@ function OptionRow({
 			onClick={onClick}
 			className={cn(
 				"flex items-start gap-sm rounded-[var(--radius-md)] border px-md py-sm text-left transition-colors",
-				selected ? "border-primary bg-primary/10" : "border-border2 hover:bg-hover",
+				selected
+					? "border-primary bg-primary/10"
+					: "border-border-default hover:bg-control-bg-hovered",
 			)}
 		>
 			<Indicator selected={selected} multi={multi} />
@@ -693,7 +695,9 @@ function OtherOptionRow({
 			data-selected={active}
 			className={cn(
 				"flex cursor-text items-center gap-sm rounded-[var(--radius-md)] border px-md py-sm transition-colors",
-				active ? "border-primary bg-primary/10" : "border-border2 hover:bg-hover",
+				active
+					? "border-primary bg-primary/10"
+					: "border-border-default hover:bg-control-bg-hovered",
 			)}
 		>
 			{multi ? (
@@ -753,7 +757,9 @@ function Indicator({
 			<span
 				className={cn(
 					"mt-0.5 flex size-[18px] shrink-0 items-center justify-center rounded-[var(--radius-sm)] border",
-					selected ? "border-primary bg-primary text-text-on-primary" : "border-border2",
+					selected
+						? "border-primary bg-control-primary-bg text-control-primary-text"
+						: "border-border-default",
 					className,
 				)}
 			>
@@ -765,7 +771,7 @@ function Indicator({
 		<span
 			className={cn(
 				"mt-0.5 flex size-[18px] shrink-0 items-center justify-center rounded-full border",
-				selected ? "border-primary" : "border-border2",
+				selected ? "border-primary" : "border-border-default",
 				className,
 			)}
 		>
@@ -815,7 +821,7 @@ function ReviewView({
 					type="button"
 					data-testid="ask-unanswered"
 					onClick={() => onJump(unanswered[0]?.i ?? 0)}
-					className="self-start text-gold text-xs hover:underline"
+					className="self-start text-feedback-warning text-xs hover:underline"
 				>
 					⚠ Unanswered: {unanswered.map(({ q, i }) => q.header || `Q${i + 1}`).join(", ")}
 				</button>
@@ -900,11 +906,11 @@ function QuestionRecap({
 									)}
 								>
 									{isSel ? (
-										<Check aria-hidden="true" className="size-3.5 shrink-0 text-green" />
+										<Check aria-hidden="true" className="size-3.5 shrink-0 text-feedback-success" />
 									) : (
 										<span
 											aria-hidden="true"
-											className="size-3 shrink-0 rounded-full border border-border2"
+											className="size-3 shrink-0 rounded-full border border-border-default"
 										/>
 									)}
 									<span data-testid="ask-selection-status" className="sr-only">
@@ -921,7 +927,7 @@ function QuestionRecap({
 								data-testid={reviewing ? "ask-review-custom" : "ask-record-custom"}
 								className="flex items-center gap-xs text-sm text-text-default"
 							>
-								<Check aria-hidden="true" className="size-3.5 shrink-0 text-green" />
+								<Check aria-hidden="true" className="size-3.5 shrink-0 text-feedback-success" />
 								<span data-testid="ask-selection-status" className="sr-only">
 									Selected custom answer:{" "}
 								</span>
@@ -943,8 +949,8 @@ function QuestionRecap({
 					<SkipForward className="size-3 shrink-0" /> No answer (skipped).
 				</div>
 			) : (
-				<div className="flex items-center gap-xs border-border2 border-l-2 pl-sm">
-					<Check aria-hidden="true" className="size-3.5 shrink-0 text-green" />
+				<div className="flex items-center gap-xs border-border-default border-l-2 pl-sm">
+					<Check aria-hidden="true" className="size-3.5 shrink-0 text-feedback-success" />
 					<span data-testid="ask-selection-status" className="sr-only">
 						Selected custom answer:{" "}
 					</span>

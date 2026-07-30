@@ -47,6 +47,8 @@
 	--color-container-sidebar-bg: var(--container-sidebar-bg);
 	--color-container-terminal-bg: var(--container-terminal-bg);
 	--color-container-popover-bg: var(--container-popover-bg);
+	--color-container-card-bg: var(--container-card-bg);
+	--color-container-header-bg: var(--container-header-bg);
 
 	/* Control */
 	--color-control-bg: var(--control-bg);
@@ -76,6 +78,9 @@
 	--color-feedback-error: var(--feedback-error);
 	--color-feedback-error-bg: var(--feedback-error-bg);
 	--color-feedback-error-border: var(--feedback-error-border);
+	--color-feedback-warning: var(--feedback-warning);
+	--color-feedback-warning-bg: var(--feedback-warning-bg);
+	--color-feedback-warning-border: var(--feedback-warning-border);
 
 	/* Selection */
 	/* Native ::selection; already exists as --selection-bg */

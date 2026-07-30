@@ -34,7 +34,7 @@ export function TerminalsPanel() {
 
 	return (
 		<div data-testid="terminal-panel" className="flex h-full min-h-0 flex-col">
-			<div className="flex h-7 shrink-0 items-center gap-xs border-b border-border2 pr-xs pl-sm">
+			<div className="flex h-7 shrink-0 items-center gap-xs border-b border-border-default pr-xs pl-sm">
 				<span className="shrink-0 text-xs uppercase tracking-wider text-text-muted">Terminal</span>
 				<div className="flex min-w-0 flex-1 items-center gap-px overflow-x-auto">
 					{tabs.map((tab) => (
@@ -53,7 +53,7 @@ export function TerminalsPanel() {
 					aria-label="New terminal"
 					disabled={!activeWorkspaceId}
 					onClick={() => activeWorkspaceId && addTerminal(activeWorkspaceId)}
-					className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-hover hover:text-text-default disabled:opacity-40"
+					className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:opacity-40"
 				>
 					<Plus className="size-4" />
 				</button>
@@ -94,7 +94,9 @@ function TerminalTabButton({
 	return (
 		<div
 			className={`group flex shrink-0 items-center gap-xs rounded-[var(--radius-sm)] pr-xs pl-sm text-xs ${
-				active ? "bg-hover text-text-default" : "text-text-muted hover:bg-hover"
+				active
+					? "bg-selection-item-bg-hovered text-text-default"
+					: "text-text-muted hover:bg-control-bg-hovered"
 			}`}
 		>
 			<button
@@ -111,7 +113,7 @@ function TerminalTabButton({
 				data-testid="terminal-tab-close"
 				aria-label={`Close ${tab.title}`}
 				onClick={onClose}
-				className="rounded-[var(--radius-sm)] p-0.5 text-text-muted opacity-0 hover:bg-elevated hover:text-text-default group-hover:opacity-100"
+				className="rounded-[var(--radius-sm)] p-0.5 text-text-muted opacity-0 hover:bg-control-bg-hovered hover:text-text-default group-hover:opacity-100"
 			>
 				<X className="size-3" />
 			</button>

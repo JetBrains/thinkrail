@@ -116,7 +116,7 @@ export function JetBrainsAiCard({
 			data-testid="jetbrains-ai-card"
 			data-wired={wired}
 			data-installed={installed}
-			className="flex flex-col gap-sm rounded-[var(--radius-lg)] border border-border2 bg-[var(--input-bg)] p-md"
+			className="flex flex-col gap-sm rounded-[var(--radius-lg)] border border-border-default bg-[var(--control-bg)] p-md"
 		>
 			<div className="flex items-center gap-md">
 				<span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-[var(--primary-10)] text-primary">
@@ -156,7 +156,7 @@ export function JetBrainsAiCard({
 
 			{wired ? (
 				<p
-					className="flex items-center gap-xs text-green text-xs"
+					className="flex items-center gap-xs text-feedback-success text-xs"
 					data-testid="jetbrains-connected"
 				>
 					<Check className="size-3.5 shrink-0" />
@@ -223,7 +223,7 @@ export function JetBrainsAiCard({
 
 			{!wired && result?.kind === "error" ? (
 				<div className="flex flex-col gap-xs" data-testid="jetbrains-error">
-					<p className="break-words text-red text-xs">{errorMsg}</p>
+					<p className="break-words text-feedback-error text-xs">{errorMsg}</p>
 					<Button
 						variant="ghost"
 						size="sm"
@@ -253,7 +253,7 @@ function CopyableCommand({ command }: { command: string }) {
 		}
 	};
 	return (
-		<div className="flex items-center gap-sm rounded-[var(--radius-md)] border border-border2 bg-bg px-sm py-xs">
+		<div className="flex items-center gap-sm rounded-[var(--radius-md)] border border-border-default bg-container-workspace-bg px-sm py-xs">
 			<code className="min-w-0 flex-1 select-all break-all font-[var(--font-mono)] text-text-default text-xs">
 				{command}
 			</code>
@@ -263,9 +263,13 @@ function CopyableCommand({ command }: { command: string }) {
 				aria-label={`Copy: ${command}`}
 				title="Copy"
 				onClick={() => void copy()}
-				className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:bg-hover hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 			>
-				{copied ? <Check className="size-3.5 text-green" /> : <Copy className="size-3.5" />}
+				{copied ? (
+					<Check className="size-3.5 text-feedback-success" />
+				) : (
+					<Copy className="size-3.5" />
+				)}
 			</button>
 		</div>
 	);
