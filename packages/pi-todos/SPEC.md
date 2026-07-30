@@ -25,18 +25,32 @@ plan UX ([[submodule-web-chat]]'s "Chat TODO plan"), modeled on [[module-spec-gr
   the host can value-import `pi-todos/core` to power the plan viewer — reading the plan and writing the
   user's own edits (the `spec/` → `spec.graph` pattern).
 - **`tools/`** — the five `todo_*` custom tools ([[submodule-pi-todos-tools]]), thin wrappers over `core/`.
-- **`skills/todos/SKILL.md`** — the bundled skill: the chat-plan discipline (lay out → work → fold in the
-  user's mid-conversation additions).
+- **`skills/todos/SKILL.md`** — the bundled skill: the chat-plan discipline — group = task (one user
+  ask, outcome-titled; 1–7 verifiable, ≈commit-sized steps), work tasks strictly in order with one step
+  `in_progress` (blocked task = note why, tell the user, move on), fold in the user's mid-conversation
+  additions.
 
 ## The tools
 
 | Tool | Purpose |
 | --- | --- |
-| `todo_list` | Read the current list (optionally filtered by status). |
-| `todo_add` | Append one item. |
-| `todo_update` | Change an item's status / title / note / artifacts — how the agent flips `pending → in_progress → done`. |
+| `todo_list` | Read the current plan, rendered **group-first** (each group under a derived status + done/total header), optionally filtered by status. |
+| `todo_add` | Add one item — into a `group`, or `after` an existing item (**one of the two is required**: the agent can't author loose items). |
+| `todo_update` | Change an item's status / title / note / artifacts — how the agent flips `pending → in_progress → done`. Reports auto-demoted (`paused`) items; a `done` flip suggests the group's next open step. |
 | `todo_remove` | Drop an item. |
-| `todo_write` | Replace the whole list with an ordered plan (the plan-first pattern). |
+| `todo_write` | Replace the agent's plan with fresh **groups only** — one group per task, steps inside (the plan-first pattern). |
+
+**Group = task.** The plan's model is two-level: a group is one user ask (title = the outcome), its
+items are the steps. A group's own status is **derived, never stored** (`groupStatus` in `core/`:
+all done → `done`, any in_progress → `active`, else `pending`), so it can't drift from the steps. The host
+reads it through this helper and ships it on the wire DTO (`TodoGroupItem.status`), so no client re-derives
+it — one truth table, one home.
+Two invariants are held structurally, not by model memory: **exactly one `in_progress` across the
+plan** (setting it auto-demotes the previous one back to `pending` — reported in the result as
+"paused"), and **the agent never authors loose items** (the tools require `group`/`after`; loose is
+the user's lane). Status discipline gets in-band feedback: tool results append a nudge when open items
+exist but nothing is `in_progress`, and a `done` flip names the task's next open step — suggest-only,
+never auto-started (that would fake "in work" when the agent stops).
 
 The tool resolves its list from `ctx.sessionManager.getSessionId()`, so it always reads/writes the list
 of the conversation it runs in.
@@ -55,7 +69,8 @@ with no staleness window; a missing or corrupt file reads as an empty list. Ephe
 ## Status ownership & provenance
 
 Status is **agent-owned**: the agent flips `pending → in_progress → done` via `todo_update` as it works
-its plan. The current UI never toggles status — its edit surface is only add / remove. (The `todo.update`
+its plan (the store auto-demotes a previous `in_progress` on each new one). The current UI never
+toggles status — its edit surface is only add / remove. (The `todo.update`
 wire method exists and accepts a status, but no UI path calls it today; it's reserved, not the user's
 lever.)
 

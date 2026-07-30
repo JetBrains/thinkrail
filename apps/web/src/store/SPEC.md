@@ -89,7 +89,24 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   chat is never clobbered. The
   pure **`reduceSessionEvent`** folds a `PiEvent` into a runtime; **`handlePiEvent(event,
   sessionId)`** and **`applyExtUi(request)`** route by id via the `withRuntime` helper (a no-op for an
-  unknown session). The host-wide **`models`** list stays global (not per session). The **in-app login** state
+  unknown session). The host-wide **`models`** list stays global (not per session), plus
+  **`modelsRefreshing`** — the awaited `model.refresh` in-flight flag — and **`modelsFresh`**, the
+  *provenance* of that list: true only while it holds the installed result of an awaited forced refresh,
+  which `NewWorkspaceDialog` needs before it may substitute a model the catalog lacks. It lives here,
+  beside the list, precisely **because `models` is app-wide**: `setModels` (a `model.list` snapshot, whose
+  handler answers from before the detached refresh it starts) **drops** it in the same write, so authority
+  falls with the list any consumer replaced — held as one consumer's local flag it would outlive its
+  subject and confirm a removed model that `create()` then rejects. `beginModelsRefresh` /
+  `finishModelsRefresh(RefreshedModels|null)` are the atomic pair (finish lands the list, sets provenance,
+  and clears the in-flight flag in one write; `null` = failed refresh — keep the current list *and* its
+  provenance, since nothing was installed). Provenance comes from the **host's** `complete`, never from
+  "a reply arrived": the host caps how long it waits for pi, so a reply can carry the registry as it
+  stands while the pass that would settle it still runs — such a list is installed (it *is* current) but
+  drops authority, since concluding a model is gone from it is exactly the mistake. **`dropModelsFreshness`** is the third writer: authority is
+  given up *without* replacing the list, which is what a consumer activating must do **synchronously** —
+  a flag an earlier consumer set can otherwise straddle the activation and let an inherited list pass as
+  this opening's own truth before its own `model.list` reply lands. The transport work lives in
+  `chat/useModelCatalog`, not here (the store→transport edge stays type-only). The **in-app login** state
   **`activeLogin: LoginState | null`** (type from `auth`) is **flat + session-less** (a login runs on the
   Welcome screen before any session exists — routing it through a session runtime would drop its frames):
   the pure **`foldLoginFrame`** reducer lives here (as `reduceExtUi`/`reduceSessionEvent` do — `auth` stays
@@ -160,16 +177,17 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   re-activation of the workspace, moving the tab the user has since chosen; which is what lets a divider chip reveal a view while merely expanding its own artifact
   list — no path picked yet. The transient **`changesRequest`** +
   **`requestChangesView(workspaceId, path)`** are a UI deep-link intent (a chat turn-divider asking the
-  right panel to surface a file in its Changes view — **highlight the row**, without
-  opening the diff; that waits for an explicit click); the panels watch it, scoped by workspace. Its Specs
+  right panel to surface a file in its Changes view — highlight the row **and open its diff tab** when
+  the file is in the current diff; a path no longer in the diff degrades to highlight-only); the panels
+  watch it, scoped by workspace. Its Specs
   twin **`specRequest`** + **`requestSpecView(workspaceId, path)`** **opens the
   rendered spec** — the stronger treatment, because a spec doc has nothing to preview short of its content.
   Both path intents set `rightTabRequest` **in the same action**: the panel is never asked to surface a path
   in a view it was not also told to show.
   Two separate fields, never one: the panel that can show a *gitignored* spec is not the git-derived one, and
-  that confusion is exactly the bug the split fixes. The spec intent is additionally **consumed**
-  (**`clearSpecRequest`**) by whoever handles it — it opens a center tab, so a replay would steal the user's
-  tab; the Changes intent only highlights, so it stays fire-and-forget. **`specsByWorkspace`** +
+  that confusion is exactly the bug the split fixes. Both path intents are **consumed** by whoever handles
+  them (**`clearSpecRequest`** / **`clearChangesRequest`**) — each opens a center tab, so a replay (a
+  remount, a git-status re-read) would steal the user's tab. **`specsByWorkspace`** +
   **`setWorkspaceSpecs`** hold each workspace's `spec.graph` snapshot (fetched by `panels`'
   `useWorkspaceSpecs`, kept fresh on the workspace fs tick) so
   the chat's turn divider can classify a written path as a spec off the very snapshot the Specs panel
@@ -214,8 +232,11 @@ paths only; opened by `ChangesPanel`). The transient **`chatLocationRequest`** �
   one; shared by the Changes deep link and the spec classifier. The suffix rule is for **absolute reports
   only** and is anchored at a separator: unanchored, `/wt/src/a-foo.ts` would match `src/foo.ts`; applied to
   relative reports, `module-b/SPEC.md` would match the *root* `SPEC.md`) + `specPathMatcher` (is a written
-  path a spec-graph node?); `toast` (the
-  fire-from-anywhere helper),
+  path a spec-graph node?);
+  `selectCatalogModel` (a model ref resolved against the **live** `models` list — a session's own `model`
+  is the snapshot it was created with, so host-computed facts on it, today `thinkingLevels`, are read
+  through this; callers fall back to the snapshot when the ref has left the catalog);
+  `toast` (the fire-from-anywhere helper),
   `Toast` (type), `EditorTab` (`FileTab`/`ChatTab`/`DocTab`), `TerminalTab`, `ClosedChat`, `SessionRuntime` +
   `EMPTY_RUNTIME` (ChatView's pre-creation fallback), `ChatLocationRequest` (type), `reduceSessionEvent`.
 - **Allowed deps:** `contracts` (`Project`/`Workspace`/`Model`/`ThinkingLevel`/`SessionStats`/

@@ -5,7 +5,7 @@
 // in-session `todo_*` writes converge on the same `.thinkrail/context/todos/<sessionId>.json`.
 
 import type { TodoItem, TodoPlan, TodoStatus } from "@thinkrail/contracts";
-import { TodoStore } from "pi-todos/core";
+import { flatItems, groupStatus, type TodoPlan as StoredPlan, TodoStore } from "pi-todos/core";
 import { getWorkspace } from "../workspaces";
 
 /** The store rooted at a workspace's worktree for one chat session. `TodoStore` is stateless (re-reads
@@ -16,7 +16,36 @@ function storeFor(workspaceId: string, sessionId: string): TodoStore {
 
 /** The chat's whole TODO plan (loose items + named groups). */
 export function listTodos(params: { workspaceId: string; sessionId: string }): TodoPlan {
-	return storeFor(params.workspaceId, params.sessionId).read();
+	const plan = storeFor(params.workspaceId, params.sessionId).read();
+	// Decorate each group with its derived task status: the rule lives in `pi-todos` (which owns plan
+	// semantics) and reaches the client on the DTO, so `apps/web` renders it instead of keeping a second
+	// copy of the truth table it can never import. Spread the plan so a future field can't be dropped here.
+	return {
+		...plan,
+		groups: plan.groups.map((group) => ({ ...group, status: groupStatus(group) })),
+	};
+}
+
+/**
+ * How many items in the chat's plan are unfinished (any status but `done`), loose + grouped. The
+ * counting rule lives here (todos owns plan semantics); `session.list`'s handler uses it to decorate
+ * `SessionSummary.openTodos` so a client can auto-open chats with work in progress. A session with no
+ * todo file reads as an empty plan → 0.
+ */
+export function countOpenTodos(params: { workspaceId: string; sessionId: string }): number {
+	// Straight off the store, not through `listTodos` — the count reads item statuses only, so routing it
+	// through the wire mapper would build (and discard) a decorated DTO once per session on every
+	// `session.list`.
+	return openTodoCount(storeFor(params.workspaceId, params.sessionId).read());
+}
+
+/**
+ * The pure counting rule behind {@link countOpenTodos}: unfinished = any status but `done`. Typed against
+ * the **stored** plan (the wire DTO is assignable to it), since the count reads item statuses only and has
+ * no business requiring the host-derived group decoration.
+ */
+export function openTodoCount(plan: StoredPlan): number {
+	return flatItems(plan).filter((item) => item.status !== "done").length;
 }
 
 /** Append one item to the chat's list. */
@@ -51,9 +80,11 @@ export function updateTodo(params: {
 	if (params.status !== undefined) patch.status = params.status;
 	if (params.title !== undefined) patch.title = params.title;
 	if (params.note !== undefined) patch.note = params.note;
-	const todo = storeFor(params.workspaceId, params.sessionId).update(params.id, patch);
-	if (!todo) throw new Error(`No TODO with id "${params.id}".`);
-	return todo;
+	// `update` also returns any auto-demoted (`paused`) items; the wire response stays a bare TodoItem —
+	// the UI re-reads the whole plan on change, so the demotions arrive with the next `todo.list`.
+	const result = storeFor(params.workspaceId, params.sessionId).update(params.id, patch);
+	if (!result) throw new Error(`No TODO with id "${params.id}".`);
+	return result.todo;
 }
 
 /** Remove an item (idempotent — removing an absent id is not an error). */

@@ -1,4 +1,5 @@
 import type { TodoItem, TodoPlan } from "@thinkrail/contracts";
+import { flatItems, groupProgress } from "./planView";
 
 // Compile a chat's TODO plan to a temporary, human-readable markdown snapshot (SPEC §Chat TODO plan) — the
 // "Open as markdown" action in the plan popup. Pure + presentational-adjacent (no store/transport): it
@@ -18,16 +19,22 @@ function line(item: TodoItem): string {
 
 /**
  * Render `plan` as markdown under a `# TODO — <title>` heading with a `Progress: done/total` line. Named
- * groups become `##` sections in order; the loose (ungrouped) items follow — under an `### Other` heading
- * only when groups exist, else listed directly. Trailing newline so it reads clean in the rendered view.
+ * groups (tasks) become `## <title> — n/m` sections in order (the same done/total badge the popup
+ * shows); the loose (user) items follow — under an `### Other` heading only when groups exist, else
+ * listed directly. Trailing newline so it reads clean in the rendered view.
  */
 export function planToMarkdown(plan: TodoPlan, title: string): string {
-	const all = [...plan.todos, ...plan.groups.flatMap((g) => g.todos)];
+	const all = flatItems(plan);
 	const done = all.filter((t) => t.status === "done").length;
 	const lines: string[] = [`# TODO — ${title}`, "", `Progress: ${done}/${all.length}`];
 
 	for (const group of plan.groups) {
-		lines.push("", `## ${group.title}`, ...group.todos.map(line));
+		const progress = groupProgress(group);
+		lines.push(
+			"",
+			`## ${group.title} — ${progress.done}/${progress.total}`,
+			...group.todos.map(line),
+		);
 	}
 	if (plan.todos.length > 0) {
 		lines.push("", ...(plan.groups.length > 0 ? ["### Other"] : []), ...plan.todos.map(line));

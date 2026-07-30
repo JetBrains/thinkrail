@@ -153,11 +153,22 @@ a project picker, the prompt hero, and the reused
   `chat/ModelSelector`+`ThinkingSelector` in **pre-session** mode — preselected to the host's resolved
   default via `model.default` so the exact model shows (values held in dialog state, applied at create
   time). The pickers' popovers portal into the dialog node (so their lists scroll under the Dialog scroll
-  lock). Pre-session there is no pi to clamp the effort, so an explicit model switch moves it onto the
-  new model's own set by asking the host for pi's clamp (**`model.clampThinking`**) rather than deciding
-  locally — one effect owns "the held effort must be runnable by the held model", so an explicit switch
-  and a catalog refresh that shrank a model's set both resolve the same way pi would. `model.default` needs no adjustment: the host
-  already returns a self-consistent pair.
+  lock). Their catalog is the shared one — `chat/useModelCatalog`, so the dialog and the chat composer
+  cannot drift — which means it is **live**: the picker's Refresh row can replace the list underneath a
+  held selection. The dialog therefore reconciles the held model against it on every change via the pure
+  **`reconcileModel`** (model only — effort is decided by the host's clamp, below): re-point to the same
+  `{provider,id}` (the refreshed object, whose `thinkingLevels` may differ). What it does when the catalog
+  has no such model turns on **`catalogFresh`** — the store's `modelsFresh`, true only for the installed
+  result of an awaited forced refresh the host reported **`complete`** (a capped wait can answer with a
+  current-but-unsettled list, which is no basis for a verdict), dropped by the next `model.list` install from any consumer (whose
+  handler answers from before the detached refresh it starts) *and* dropped up front by any consumer
+  activating. On a fresh catalog it returns **`"unavailable"`** — a verdict, not a replacement: the dialog
+  then asks **`model.default`** (pi's own `pinned ?? available[0]`, plus a consistent effort) exactly as it
+  does for the preselect, through **one** `applyHostDefault` — so no client-side copy of the host's default
+  policy exists here. Asked at most once per opening, so a still-missing model can't spin the effect. Effort is a separate concern: one effect keeps the held level
+  runnable by the held model by asking the host for pi's clamp (**`model.clampThinking`**) rather than
+  deciding locally, so an explicit switch and a refresh that shrank a model's set resolve the same way
+  pi would. `model.default` needs no adjustment: the host already returns a self-consistent pair.
   On open and project-picker changes, the dialog reads **`skill.list({projectId})`** and feeds the
   result to chat's shared slash-completion primitive: a leading `/` autocompletes skills from the selected
   project's **current checkout** plus personal/bundled sources, selecting one inserts `/skill:<name> `;
@@ -255,8 +266,20 @@ a project picker, the prompt hero, and the reused
   closing a chat tab routes to `store.closeChatToHistory` (keeps the session alive) and shows a
   **chat-history** dropdown (recently-closed + disk-only chats, shown only when non-empty). On
   workspace-activate it **hydrates**: `session.list` → **live** sessions auto-restore as tabs
-  (`session.getMessages` → `messagesToRuntime` → `store.hydrateSession`); **disk-only** ones go to history
-  via `store.noteClosedChats`. Reopening restores a live runtime's tab, or for a disk-only chat re-opens it
+  (`session.getMessages` → `messagesToRuntime` → `store.hydrateSession`), and so do **disk-only sessions
+  carrying unfinished TODOs** (`SessionSummary.openTodos > 0` — work in progress survives a host restart
+  as open tabs, hydrated with the disk-attach tick baseline), **capped at the newest `AUTO_OPEN_LIMIT`**:
+  a long-lived workspace can hold a dozen half-finished chats, and opening every one would bury the tab
+  strip and pull every transcript into memory, so past the cap they stay one click away in history. The
+  remaining **disk-only** ones go to
+  history via `store.noteClosedChats`. Two guarantees ride that pass: **never-empty** — when nothing
+  opened (and no session in *this client's* store was closed to history, which is what vetoes the
+  fallback; closes aren't persisted, so after a reload a closed chat is indistinguishable from any other
+  disk chat and may reopen), the most recent disk chat
+  auto-opens as a fallback; **most-recent focus** — the newest (`updatedAt` desc) hydrates first and alone,
+  the rest then load in parallel, and
+  `hydrateSession` only takes focus while the workspace has no active tab, so the latest auto-opened chat
+  lands focused without ever stealing an existing selection (e2e: `auto-open-chats.spec.ts`). Reopening restores a live runtime's tab, or for a disk-only chat re-opens it
   on the host (`getMessages`) + hydrates — so a reload, a second tab, or a host restart all rebuild from the
   host. A rejected new-chat `session.create` or history-reopen `getMessages` raises a `store.toast.error`
   (the click would otherwise do nothing, silently; a failed reopen stays in history for a retry).
@@ -274,7 +297,8 @@ a project picker, the prompt hero, and the reused
   (`WelcomePanel` and `CenterTabs`/`RightPanel`/`TerminalsPanel` are mutually exclusive — the shell mounts
   one set or the other on the active-workspace branch.)
 - **Allowed deps:** `store`, `transport`, `components/ui` (incl. `popover`/`command`/`textarea` for the
-  dialog), `chat` (`ModelSelector`/`ThinkingSelector`, reused by `NewWorkspaceDialog`; `Markdown`,
+  dialog), `chat` (`ModelSelector`/`ThinkingSelector` + the `useModelCatalog` hook that feeds them,
+  reused by `NewWorkspaceDialog`; `Markdown`,
   reused by `MarkdownPreview`; `TemplateEditorDialog`, reused by `TemplatesSettings`), `lib`, `themes` (catalog + generic application contract),
   `contracts`; `lucide-react`; and the heavy libs each lazy panel owns (`monaco-editor`, `shiki`,
   `@xterm/*`) loaded via `import()`.
@@ -351,19 +375,22 @@ a project picker, the prompt hero, and the reused
   store field — **`rightTabRequest`** (`requestRightTab`, which both path intents below set in the same
   action) — so the flip is one concept rather than something re-derived per request type, and a divider chip
   that only reveals a view (expanding its artifact list, no path picked) needs no path to do it.
-  `ChangesPanel` watches
-  `changesRequest` (set by a chat turn-divider's "files changed" chip) and **highlights** the requested
-  file's row (resolved with `matchesWorktreePath` against `git.status`) — deliberately without opening its
-  diff tab; the diff opens only on the user's explicit click, so a chat chip never steals the center area.
-  `SpecsPanel` watches **`specRequest`** (the "N specs" chip) and **opens the rendered spec** in the
-  preview slot — following a chip is browsing, same as clicking the row it points at
+  `ChangesPanel` watches `changesRequest` (set by a chat turn-divider's "files changed" chip),
+  **highlights** the requested file's row (resolved with `matchesWorktreePath` against `git.status`) **and
+  opens its diff tab** in the **preview slot** — the chip/list-row click *is* the user's explicit ask to see
+  that change, so stopping at a highlight read as broken, and following a chip is browsing, same as clicking
+  the row it points at, so it reuses the slot rather than accumulating a kept tab per chip. A path no longer
+  in the current diff (a round from days ago) degrades to highlight-only: there is no diff to show. The
+  intent is **consumed** (`clearChangesRequest`) once handled — it opens a center tab, so a git-status
+  re-read replaying it would yank the user's tab back. `SpecsPanel` watches **`specRequest`** (the "N specs"
+  chip) and **opens the rendered spec**, likewise in the preview slot
   (`openFileInTab`, which canonicalizes the reported path — pi may report it absolute or `./`-prefixed — to
   the worktree-relative **tab identity**, so a deep link can never open a second tab for a file already open
   under its relative path; that lives in the choke point, not in each caller, and it means a spec created
   seconds ago and not yet in the graph opens just the same) — a spec has nothing to preview short of its
   content, and the tree row lights up on its own since rows key off the active tab id. That intent is
-  **consumed** (`clearSpecRequest`) once handled: unlike the highlight-only Changes link, it opens a center
-  tab, so replaying it on a remount or a graph refetch would yank the user's tab back mid-edit. Two intents, two
+  **consumed** (`clearSpecRequest`) once handled: like the Changes link, it opens a center tab, so
+  replaying it on a remount or a graph refetch would yank the user's tab back mid-edit. Two intents, two
   effects: a spec chip must never land in the git-derived Changes view, which structurally cannot show a
   gitignored `.thinkrail/context/` scratch spec — the empty-Changes bug that motivated the split.
   Both intents carry **exactly one path**: a round that wrote several artifacts resolves the ambiguity in the

@@ -1,11 +1,12 @@
 import { expect, test } from "bun:test";
-import type { Project, Workspace } from "@thinkrail/contracts";
+import type { Project, WireModel, Workspace } from "@thinkrail/contracts";
 import type { EditorTab } from "./appStore";
 import {
 	isSkillPath,
 	matchesWorktreePath,
 	selectActiveWorkspace,
 	selectActiveWorkspaceProjectId,
+	selectCatalogModel,
 	selectContextProject,
 	selectHistoryTarget,
 	selectSkillsStale,
@@ -219,4 +220,39 @@ test("specPathMatcher recognizes a spec by graph membership, in either reported 
 	expect(isSpec("packages/server/src/todos/todos.ts")).toBe(false);
 	// An empty graph (never fetched) classifies nothing as a spec — the single-chip fallback.
 	expect(specPathMatcher([])(".thinkrail/context/TASK-x.md")).toBe(false);
+});
+
+const catalogModel = (
+	provider: string,
+	id: string,
+	thinkingLevels: WireModel["thinkingLevels"],
+) => ({
+	id,
+	name: id,
+	provider,
+	contextWindow: 200_000,
+	reasoning: thinkingLevels.length > 1,
+	thinkingLevels,
+});
+
+test("selectCatalogModel matches on {provider,id} — an id alone is ambiguous across providers", () => {
+	const bedrock = catalogModel("bedrock", "opus-5", ["off", "medium"]);
+	const anthropic = catalogModel("anthropic", "opus-5", ["off", "high"]);
+	expect(selectCatalogModel([bedrock, anthropic], { provider: "anthropic", id: "opus-5" })).toBe(
+		anthropic,
+	);
+	expect(selectCatalogModel([bedrock, anthropic], null)).toBeNull();
+});
+
+test("selectCatalogModel returns the LIVE entry, not the stale ref handed to it", () => {
+	// The point of the selector: a session's model snapshot keeps whatever `thinkingLevels` it was
+	// created with, so reading them off the snapshot would miss a `model.refresh`.
+	const stale = catalogModel("anthropic", "opus-5", ["off", "low"]);
+	const live = catalogModel("anthropic", "opus-5", ["off", "low", "medium", "high"]);
+	expect(selectCatalogModel([live], stale)?.thinkingLevels).toEqual(live.thinkingLevels);
+});
+
+test("selectCatalogModel is null when the ref left the catalog (caller keeps its snapshot)", () => {
+	const gone = catalogModel("anthropic", "opus-4", ["off"]);
+	expect(selectCatalogModel([catalogModel("anthropic", "opus-5", ["off"])], gone)).toBeNull();
 });

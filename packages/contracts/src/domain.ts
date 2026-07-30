@@ -166,11 +166,20 @@ export interface TodoItem {
 	updatedAt: string;
 }
 
-/** A named container of items — the agent's thematic cluster within a plan. */
+/**
+ * A group's lifecycle as a *task*: `active` = some step is in progress, `done` = every step is, else
+ * `pending`. **Derived from the steps by the host** (`pi-todos`' `groupStatus`) and shipped on the DTO, so
+ * the rule has one home — clients render it, they never re-derive it.
+ */
+export type TodoGroupStatus = "pending" | "active" | "done";
+
+/** A named container of items — the agent's task within a plan (its items are the steps). */
 export interface TodoGroupItem {
 	id: string;
 	title: string;
 	todos: TodoItem[];
+	/** Derived, never stored — see {@link TodoGroupStatus}. */
+	status: TodoGroupStatus;
 }
 
 /**

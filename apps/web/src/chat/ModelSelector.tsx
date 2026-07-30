@@ -1,5 +1,5 @@
 import type { WireModel } from "@thinkrail/contracts";
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import {
 	Command,
@@ -10,6 +10,7 @@ import {
 	CommandList,
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib";
 
 /** A model's context window as a compact label, e.g. 1_000_000 → "1M", 200_000 → "200K". */
 function formatContext(tokens: number): string {
@@ -34,11 +35,19 @@ export function ModelSelector({
 	models,
 	current,
 	onSelect,
+	refreshing,
+	onRefresh,
 	container,
 }: {
 	models: WireModel[];
 	current: WireModel | null;
 	onSelect: (model: WireModel) => void;
+	/** The awaited catalog refresh is in flight — spins the footer row (freshness affordance). */
+	refreshing: boolean;
+	/** Bring the catalog up to date. The footer row passes `force: true` — the user asked, so bypass pi's
+	 * freshness throttle and spin while it runs; opening the popover passes `false`, which the caller
+	 * serves from the host's snapshot so an open never blocks on the network. */
+	onRefresh: (force: boolean) => void;
 	/** Popover portal target — the host Dialog node when used inside a dialog (so the list scrolls). */
 	container?: HTMLElement | null;
 }) {
@@ -51,12 +60,20 @@ export function ModelSelector({
 	};
 
 	return (
-		<Popover open={open} onOpenChange={setOpen}>
+		<Popover
+			open={open}
+			onOpenChange={(next) => {
+				setOpen(next);
+				// Unforced: picks up whatever a prior refresh landed, without a network round trip.
+				if (next) onRefresh(false);
+			}}
+		>
+			{/* Always openable, even with an empty catalog — that is precisely when the footer's Refresh
+			    row is the thing to reach for. */}
 			<PopoverTrigger
 				data-testid="model-selector"
 				data-open={open}
-				disabled={models.length === 0}
-				className="flex h-8 max-w-[220px] items-center gap-sm rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-sm text-sm text-text outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 data-[open=true]:border-[var(--primary-60)] data-[open=true]:bg-hover"
+				className="flex h-8 max-w-[220px] items-center gap-sm rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-sm text-sm text-text outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-[var(--primary-60)] data-[open=true]:bg-hover"
 			>
 				<span className="truncate font-[var(--font-mono)] text-muted text-xs">
 					{current?.name ?? "Select model"}
@@ -99,6 +116,17 @@ export function ModelSelector({
 						))}
 					</CommandList>
 				</Command>
+				<button
+					type="button"
+					data-testid="model-refresh"
+					data-refreshing={refreshing}
+					disabled={refreshing}
+					onClick={() => onRefresh(true)}
+					className="flex w-full items-center gap-sm border-border2 border-t px-sm py-xs text-hint text-xs outline-none transition-colors hover:bg-hover hover:text-text disabled:cursor-default disabled:hover:bg-transparent disabled:hover:text-hint"
+				>
+					<RefreshCw className={cn("size-3.5 shrink-0", refreshing && "animate-spin")} />
+					{refreshing ? "Updating catalog…" : "Refresh catalog"}
+				</button>
 			</PopoverContent>
 		</Popover>
 	);

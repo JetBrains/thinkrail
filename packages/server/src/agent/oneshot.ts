@@ -7,7 +7,7 @@
  * model's auth itself (OAuth refresh included), so there is no separate auth-resolution step here.
  */
 import type { Api, Context, Model } from "@earendil-works/pi-ai";
-import { getPiRuntime } from "./piRuntime";
+import { getPiRuntime, settledAvailableModels } from "./piRuntime";
 
 /** Which model a one-shot task reaches for. `cheap` = small/fast; `default` = first authenticated. */
 export type ModelTier = "cheap" | "default";
@@ -52,9 +52,12 @@ const CHEAP_MODELS: ReadonlyArray<readonly [provider: string, idPrefix: string]>
  * is authenticated, else the cheapest authenticated model by per-token cost (id as a stable tiebreak).
  * For `default`: the first authenticated model. `null` when nothing is authenticated — the caller
  * degrades gracefully rather than erroring.
+ *
+ * Reads the same settled snapshot the picker does (`settledAvailableModels`) — a background one-shot must
+ * not hang on pi's unsignalled availability fan-out either.
  */
 export async function pickModel(tier: ModelTier = "cheap"): Promise<Model<Api> | null> {
-	const available = await (await getPiRuntime()).getAvailable();
+	const available = settledAvailableModels(await getPiRuntime());
 	if (available.length === 0) return null;
 	if (tier === "default") return available[0] ?? null;
 	for (const [provider, prefix] of CHEAP_MODELS) {

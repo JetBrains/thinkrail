@@ -6,6 +6,7 @@ import type {
 	LoginPush,
 	PiEvent,
 	Project,
+	RefreshedModels,
 	SessionStats,
 	SessionSummary,
 	SlashCommandInfo,
@@ -481,6 +482,24 @@ interface AppState {
 	 * Templates settings panel (Task B6) bumps it after a `template.save`/`delete`; the store holds only
 	 * the counter, never fetches (see `chat/SPEC.md`'s Template slots bullet). */
 	templatesVersion: number;
+	/** An awaited `model.refresh` is in flight (the picker's freshness affordance) — guards re-entry
+	 * and spins the picker's refresh row. */
+	modelsRefreshing: boolean;
+	/**
+	 * Provenance of the `models` list above: true only while it holds the installed result of an awaited
+	 * forced `model.refresh` — the one read whose catalog pass had finished when the host answered.
+	 *
+	 * It lives HERE, beside the list it describes, because `models` is app-wide: a `model.list` install
+	 * from any consumer (a picker open, another chat mounting) replaces the list, and authority has to
+	 * fall with it. Held as a consumer's local flag instead, it would outlive the list it was about and a
+	 * removed model would get confirmed as present, then rejected by `create()`. `model.list` can never
+	 * set it, nor can a refresh whose wait was **capped** (`RefreshedModels.complete: false` — current list,
+	 * unsettled pass) — `model.list`'s handler starts a *detached* refresh and answers from before it, so the registry can
+	 * move underneath the reply with the client none the wiser. A consumer *activating* drops it up front
+	 * (`dropModelsFreshness`), because a flag left by an earlier consumer says nothing about whether the
+	 * inherited list still matches the registry this activation will be judged against.
+	 */
+	modelsFresh: boolean;
 	/**
 	 * Which right-panel view to show, when something outside it asks (a chat turn-divider chip). The panel
 	 * watches this ONE field, so "flip to a view" is a single concept rather than a side effect read off
@@ -493,9 +512,10 @@ interface AppState {
 	rightTabRequest: { workspaceId: string; tab: RightPanelTab } | null;
 	/**
 	 * A request to surface a file in the right-panel Changes view (e.g. a chat turn-divider's "files
-	 * changed" chip). The panels watch it and **highlight** the file's row — the diff opens only on an
-	 * explicit click. Travels with a `rightTabRequest` for the flip. A fresh object each call so identical
-	 * re-requests still fire.
+	 * changed" chip). `ChangesPanel` highlights the file's row AND opens its diff tab (a path no longer in
+	 * the diff degrades to highlight-only), then **consumes** the request (`clearChangesRequest`) — it
+	 * opens a center tab, so a replay on a git-status re-read would steal the user's tab. Travels with a
+	 * `rightTabRequest` for the flip. A fresh object each call so identical re-requests still fire.
 	 */
 	changesRequest: { workspaceId: string; path: string } | null;
 	/**
@@ -689,6 +709,15 @@ interface AppState {
 	handlePiEvent: (event: PiEvent, sessionId: string) => void;
 	setModels: (models: WireModel[]) => void;
 	bumpTemplatesVersion: () => void;
+	/** Atomic begin/finish of the awaited catalog refresh — `finish` lands the new list (null = failed
+	 * refresh: keep the current list, and with it its provenance) and clears the flag in ONE write. The
+	 * host's `complete` decides provenance: a capped wait can answer with a list that is current but not
+	 * settled, and only a settled one is authority. */
+	beginModelsRefresh: () => void;
+	finishModelsRefresh: (result: RefreshedModels | null) => void;
+	/** Give up authority without replacing the list — a consumer activating can't yet know whether the
+	 * list it inherited still matches the host registry. */
+	dropModelsFreshness: () => void;
 	setCurrentModel: (sessionId: string, model: WireModel) => void;
 	setThinkingLevel: (sessionId: string, level: ThinkingLevel) => void;
 	setStats: (sessionId: string, stats: SessionStats) => void;
@@ -716,6 +745,8 @@ interface AppState {
 	requestRightTab: (workspaceId: string, tab: RightPanelTab) => void;
 	/** Ask the right panel to surface `path` in its Changes view (deep-link from chat); flips to it too. */
 	requestChangesView: (workspaceId: string, path: string) => void;
+	/** Drop the Changes deep-link once handled (it opens a diff tab — it must fire exactly once). */
+	clearChangesRequest: () => void;
 	/**
 	 * Open a history-search hit: sets `chatLocationRequest` AND switches `activeWorkspaceId` (the hit's
 	 * chat can live in a different workspace than the one the search ran from).
@@ -883,6 +914,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	models: [],
 	templatesVersion: 0,
 	rightTabRequest: null,
+	modelsRefreshing: false,
+	modelsFresh: false,
 	changesRequest: null,
 	specRequest: null,
 	specsByWorkspace: {},
@@ -1396,8 +1429,18 @@ export const useAppStore = create<AppState>((set, get) => ({
 	// The event→store dispatcher: route each pi event to its session's runtime, so chats stream independently.
 	handlePiEvent: (event, sessionId) =>
 		set((s) => withRuntime(s, sessionId, (rt) => reduceSessionEvent(rt, event))),
-	setModels: (models) => set({ models }),
+	// A `model.list` snapshot: current, but never authoritative — installing it drops `modelsFresh`.
+	setModels: (models) => set({ models, modelsFresh: false }),
 	bumpTemplatesVersion: () => set((s) => ({ templatesVersion: s.templatesVersion + 1 })),
+	beginModelsRefresh: () => set({ modelsRefreshing: true }),
+	dropModelsFreshness: () => set({ modelsFresh: false }),
+	// The only writer of `modelsFresh: true` — and only for a list that actually arrived AND settled.
+	finishModelsRefresh: (result) =>
+		set((s) => ({
+			modelsRefreshing: false,
+			models: result?.models ?? s.models,
+			modelsFresh: result ? result.complete : s.modelsFresh,
+		})),
 	setCurrentModel: (sessionId, model) =>
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, model }))),
 	setThinkingLevel: (sessionId, level) =>
@@ -1471,6 +1514,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			changesRequest: { workspaceId, path },
 			rightTabRequest: { workspaceId, tab: "changes" },
 		}),
+	clearChangesRequest: () => set({ changesRequest: null }),
 	// Activate project + workspace together (the same atomicity `activateWorkspace` upholds) so a jump into
 	// another project can never leave `selectedProjectId` on the source while `activeWorkspaceId` points
 	// elsewhere. The caller (`useHistorySearch.openMessage`) ensures the target project's workspaces are
