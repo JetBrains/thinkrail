@@ -24,7 +24,12 @@ import type { HydratedRuntime } from "../chat/hydrate";
 import type { ChatTurn, ExtUiDialogRequest, ToolResultState } from "../chat/types";
 import { shallowEqualArrays } from "../lib";
 import type { ConnectionStatus } from "../transport";
-import { type HistoryTarget, isSkillPath, selectWorkspaceTick } from "./selectors";
+import {
+	type HistoryTarget,
+	isSkillPath,
+	selectWorkspaceNavTick,
+	selectWorkspaceTick,
+} from "./selectors";
 
 /** A center tab. File tabs (Monaco) and chat tabs share the strip, discriminated by `kind`. */
 export interface FileTab {
@@ -516,8 +521,13 @@ interface AppState {
 	 * the diff degrades to highlight-only), then **consumes** the request (`clearChangesRequest`) — it
 	 * opens a center tab, so a replay on a git-status re-read would steal the user's tab. Travels with a
 	 * `rightTabRequest` for the flip. A fresh object each call so identical re-requests still fire.
+	 *
+	 * `navTick` stamps the center-navigation count **as the chip was clicked**. The panel cannot act on the
+	 * request until `git.status` resolves the path against the diff, so the click and the open are a round
+	 * trip apart; without the stamp the open would mark itself as the navigation on arrival and override
+	 * whatever the user did in between. See `ChangesPanel`.
 	 */
-	changesRequest: { workspaceId: string; path: string } | null;
+	changesRequest: { workspaceId: string; path: string; navTick: number } | null;
 	/**
 	 * A history-search "jump to message" deep link, set by `requestChatLocation` and consumed by
 	 * `CenterTabs` (open/hydrate the target chat tab) then `ChatView` (scroll to the anchored turn, then
@@ -816,7 +826,7 @@ function sameSpecNode(a: SpecGraphNode, b: SpecGraphNode): boolean {
  * a caller can't forget it separately.
  */
 function bumpNav(s: AppState, workspaceId: string): Record<string, number> {
-	return { ...s.navTickByWorkspace, [workspaceId]: (s.navTickByWorkspace[workspaceId] ?? 0) + 1 };
+	return { ...s.navTickByWorkspace, [workspaceId]: selectWorkspaceNavTick(s, workspaceId) + 1 };
 }
 
 function sameSpecGraph(prev: SpecGraphNode[] | undefined, next: SpecGraphNode[]): boolean {
@@ -1513,11 +1523,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 	applyConfig: (config) => set({ theme: config.theme, analyticsEnabled: config.analyticsEnabled }),
 	requestRightTab: (workspaceId, tab) => set({ rightTabRequest: { workspaceId, tab } }),
 	// The path intent and the flip always travel together — one action, so no call site can send half of it.
+	// The nav count is stamped here, at the click, because that is when the user navigated — the panel only
+	// gets to act on this a `git.status` round trip later.
 	requestChangesView: (workspaceId, path) =>
-		set({
-			changesRequest: { workspaceId, path },
+		set((s) => ({
+			changesRequest: { workspaceId, path, navTick: selectWorkspaceNavTick(s, workspaceId) },
 			rightTabRequest: { workspaceId, tab: "changes" },
-		}),
+		})),
 	clearChangesRequest: () => set({ changesRequest: null }),
 	// Activate project + workspace together (the same atomicity `activateWorkspace` upholds) so a jump into
 	// another project can never leave `selectedProjectId` on the source while `activeWorkspaceId` points

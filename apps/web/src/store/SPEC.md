@@ -189,9 +189,14 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   **`requestChangesView(workspaceId, path)`** are a UI deep-link intent (a chat turn-divider asking the
   right panel to surface a file in its Changes view — highlight the row **and open its diff tab** when
   the file is in the current diff; a path no longer in the diff degrades to highlight-only); the panels
-  watch it, scoped by workspace. Its Specs
+  watch it, scoped by workspace. It also carries **`navTick`**, the center-navigation count stamped **at the
+  click**: `ChangesPanel` cannot resolve the reported path until `git.status` lands (and this chip is usually
+  what *reveals* that view, so it is a fresh mount's read), so the click and the open sit a round trip apart.
+  Whatever the user does with the center in that window is the later navigation and wins — an overtaken deep
+  link degrades to the highlight rather than yanking focus off the tab they picked. Without the stamp the
+  arriving open would mark *itself* as the navigation and always win. Its Specs
   twin **`specRequest`** + **`requestSpecView(workspaceId, path)`** **opens the
-  rendered spec** — the stronger treatment, because a spec doc has nothing to preview short of its content.
+  rendered spec** and needs no stamp: it opens the reported path immediately, with no list to resolve first.
   Both path intents set `rightTabRequest` **in the same action**: the panel is never asked to surface a path
   in a view it was not also told to show.
   Two separate fields, never one: the panel that can show a *gitignored* spec is not the git-derived one, and

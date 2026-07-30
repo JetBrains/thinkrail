@@ -1,6 +1,6 @@
 import type { GitStatus } from "@thinkrail/contracts";
 import { useCallback, useEffect, useState } from "react";
-import { matchesWorktreePath, type TabIntent, useAppStore } from "../store";
+import { matchesWorktreePath, selectWorkspaceNavTick, type TabIntent, useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { ChangesTree } from "./ChangesTree";
 import { diffTabId, isDiffTabId, statusNameClass } from "./changesModel";
@@ -17,8 +17,9 @@ import { useWorkspaceRead } from "./useWorkspaceRead";
  * folder **Tree** (`ChangesTree`, styled like the All-files tree, with per-file/-folder `+/−` counts).
  * Live: the store's per-workspace fs tick silently re-reads `git.status`; the open diff tabs follow the
  * disk on their own (DiffPane's re-read). A chat deep-link highlights its row AND opens the diff tab in
- * the preview slot — the chip/list-row click is the user's explicit ask to see that change; a path no
- * longer in the diff degrades to highlight-only.
+ * the preview slot — the chip/list-row click is the user's explicit ask to see that change. It degrades to
+ * highlight-only for a path no longer in the diff, and for one the user has navigated past while the list
+ * was still loading (the open loses to the newer navigation, as any pending preview does).
  */
 export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	const [status, setStatus] = useState<GitStatus | null>(null);
@@ -58,12 +59,22 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	// `matchesWorktreePath` resolves an absolute pi path to its relative entry (the same helper the spec
 	// classifier uses). The request is consumed once handled: it opens a center tab, so a replay on the next
 	// git-status re-read (this effect keys on `status`) would yank the user's tab back.
+	//
+	// The open is gated on the nav count stamped when the chip was clicked. Unlike `SpecsPanel`, which opens
+	// the reported path straight away, this deep link cannot resolve its path until `git.status` lands — and
+	// the chip is usually what reveals this view, so that read is a fresh mount's, not a warm one's. Anything
+	// the user does with the center in that window (picking a tab, opening a chat) is the LATER navigation
+	// and has to win; without the stamp the arriving open would call itself the navigation and steal focus
+	// back. An overtaken deep link degrades to the highlight — the same outcome `openTabs` gives a preview
+	// read that lands after the count moved.
 	useEffect(() => {
 		if (!status || changesRequest?.workspaceId !== workspaceId) return;
 		const want = changesRequest.path;
 		const match = status.changes.find((c) => matchesWorktreePath(want, c.path));
-		if (match) openDiff(match.path, "preview");
-		else setHighlighted(want);
+		const overtaken =
+			selectWorkspaceNavTick(useAppStore.getState(), workspaceId) !== changesRequest.navTick;
+		if (match && !overtaken) openDiff(match.path, "preview");
+		else setHighlighted(match ? match.path : want);
 		useAppStore.getState().clearChangesRequest();
 	}, [changesRequest, status, workspaceId, openDiff]);
 

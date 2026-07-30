@@ -8,7 +8,7 @@ import type {
 	Workspace,
 } from "@thinkrail/contracts";
 import { type FileTab, type SessionRuntime, toast, useAppStore } from "./appStore";
-import { selectSkillsStale, selectWorkspaceTick } from "./selectors";
+import { selectSkillsStale, selectWorkspaceNavTick, selectWorkspaceTick } from "./selectors";
 
 // Event fixtures — the reducer only reads the fields below, so casting minimal objects is safe here.
 const agentStart = { type: "agent_start" } as unknown as PiEvent;
@@ -751,7 +751,8 @@ test("requestChangesView / requestSpecView are independent, workspace-scoped int
 	useAppStore.getState().requestSpecView("w1", ".thinkrail/context/TASK-x.md");
 
 	const s = useAppStore.getState();
-	expect(s.changesRequest).toEqual({ workspaceId: "w1", path: "src/a.ts" });
+	// `navTick` stamps the center-navigation count at the click; nothing has navigated here, so it's 0.
+	expect(s.changesRequest).toEqual({ workspaceId: "w1", path: "src/a.ts", navTick: 0 });
 	// The spec intent is a separate field, so a spec chip can never be mistaken for a changes chip (which
 	// would flip the right panel to a view that can't show a gitignored spec).
 	expect(s.specRequest).toEqual({ workspaceId: "w1", path: ".thinkrail/context/TASK-x.md" });
@@ -798,7 +799,37 @@ test("clearSpecRequest consumes the spec intent once — it opens a tab, so it m
 	// It clears only its own intent — the Changes deep link is a separate field with its own consume.
 	useAppStore.getState().requestChangesView("w1", "src/a.ts");
 	useAppStore.getState().clearSpecRequest();
-	expect(useAppStore.getState().changesRequest).toEqual({ workspaceId: "w1", path: "src/a.ts" });
+	expect(useAppStore.getState().changesRequest).toEqual({
+		workspaceId: "w1",
+		path: "src/a.ts",
+		navTick: 0,
+	});
+});
+
+// The Changes deep link can't act on itself: `ChangesPanel` has to resolve the reported path against
+// `git.status` first, and the chip is usually what reveals that view, so the open happens a fresh mount's
+// round trip after the click. Stamping the nav count at the click is what lets the panel tell that the user
+// moved the center on in between — an overtaken deep link degrades to the row highlight instead of yanking
+// focus off whatever they picked. (`specRequest` needs no stamp: it opens the reported path immediately.)
+test("the Changes deep link stamps the nav count at the click, so a later navigation still wins", () => {
+	useAppStore.setState({ activeWorkspaceId: "ws1", changesRequest: null, rightTabRequest: null });
+	const s = () => useAppStore.getState();
+
+	// A couple of navigations before the chip, so a stamp of "whatever it is now" is distinguishable from 0.
+	s().openTab(fileTab("ws1", "a.ts"), "keep");
+	s().setActiveTab("ws1:a.ts");
+	const atClick = selectWorkspaceNavTick(s(), "ws1");
+
+	s().requestChangesView("ws1", "src/b.ts");
+	expect(s().changesRequest?.navTick).toBe(atClick);
+
+	// Nothing has moved the center since, so the request is still current: the panel may open its diff.
+	expect(selectWorkspaceNavTick(s(), "ws1")).toBe(s().changesRequest?.navTick);
+
+	// The user picks a tab while `git.status` is still in flight. That is the LATER navigation, so the
+	// stamp no longer matches and the deep link has lost the race.
+	s().setActiveTab("ws1:a.ts");
+	expect(selectWorkspaceNavTick(s(), "ws1")).not.toBe(s().changesRequest?.navTick);
 });
 
 test("clearChangesRequest consumes the Changes intent once — it opens a diff tab, so it must not replay", () => {

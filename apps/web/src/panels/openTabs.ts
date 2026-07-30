@@ -2,6 +2,7 @@ import { projectRelativePath } from "../lib";
 import {
 	type EditorTab,
 	selectWorkspaceById,
+	selectWorkspaceNavTick,
 	selectWorkspaceTick,
 	type TabIntent,
 	useAppStore,
@@ -44,7 +45,7 @@ const inFlight = new Map<string, { intent: TabIntent; requestedAt: number }>();
  * focus transition — a strip click, a close, a reopened chat, a `doc` tab, a new chat — can bypass it.
  */
 function navTick(workspaceId: string): number {
-	return useAppStore.getState().navTickByWorkspace[workspaceId] ?? 0;
+	return selectWorkspaceNavTick(useAppStore.getState(), workspaceId);
 }
 
 /**

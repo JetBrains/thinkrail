@@ -380,7 +380,12 @@ a project picker, the prompt hero, and the reused
   opens its diff tab** in the **preview slot** — the chip/list-row click *is* the user's explicit ask to see
   that change, so stopping at a highlight read as broken, and following a chip is browsing, same as clicking
   the row it points at, so it reuses the slot rather than accumulating a kept tab per chip. A path no longer
-  in the current diff (a round from days ago) degrades to highlight-only: there is no diff to show. The
+  in the current diff (a round from days ago) degrades to highlight-only: there is no diff to show. **So does
+  a deep link the user has already navigated past** — this open is the one that *cannot* mark its own
+  navigation when it happens, because the path is only resolvable once `git.status` lands and the chip is
+  normally what reveals this view (a fresh mount, a full round trip). The count stamped on the request
+  (`changesRequest.navTick`, taken at the click) is what it compares against, so a tab the user picked while
+  the list was loading is the later navigation and keeps focus. The
   intent is **consumed** (`clearChangesRequest`) once handled — it opens a center tab, so a git-status
   re-read replaying it would yank the user's tab back. `SpecsPanel` watches **`specRequest`** (the "N specs"
   chip) and **opens the rendered spec**, likewise in the preview slot
