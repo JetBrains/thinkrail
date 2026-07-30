@@ -34,7 +34,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   **analytics wiring** (`initializeAnalytics` at boot from the launcher-threaded `analytics` option —
   keys/channel/mute + the initial `getConfig().analyticsEnabled`; a `setAnalyticsSending` sync teed
   off the settings publisher; a fire-and-forget `shutdownAnalytics()` in `stop()` — best-effort queue
-  drain; and every `track()` call site: `chat_started` in `session.create`, `provider_login` from the
+  drain; and every `track()` call site: `chat_started` in `session.create`, `message_sent` (via the
+  local `trackSend(mode)`) after an **accepted** `session.prompt`/`session.steer`/`session.followUp`
+  (`prompt`/`steer`/`follow_up`; `session.answerQuestion` is a tool reply, not a message),
+  `provider_login` from the
   login-publisher tee's terminal `success` frames with the method (`oauth`/`api-key`) looked up from
   `loginAnalytics.ts` — the loginId→method map the `provider.loginStart` handler records (and
   `provider.loginCancel` clears; an unknown loginId tracks nothing, fails closed) — +

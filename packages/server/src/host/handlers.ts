@@ -38,7 +38,7 @@ import {
 	setSessionThinkingLevel,
 	steerSession,
 } from "../agent";
-import { bucketProviderModel, track } from "../analytics";
+import { bucketProviderModel, type SendMode, track } from "../analytics";
 import {
 	cancelLogin,
 	connectJbcentral,
@@ -114,6 +114,14 @@ async function archiveTeardown(ws: Workspace): Promise<void> {
 	} catch (error) {
 		console.warn(`workspace archive teardown failed for ${ws.id}: ${error}`);
 	}
+}
+
+/**
+ * Analytics for a user-authored send, fired only once the send was ACCEPTED (a rejected send throws
+ * before this and never counts). Carries just the closed-vocabulary `mode` — nothing about the message.
+ */
+function trackSend(mode: SendMode): void {
+	track({ name: "message_sent", params: { mode } });
 }
 
 const handlers: Record<string, Handler> = {
@@ -331,16 +339,19 @@ const handlers: Record<string, Handler> = {
 	"session.prompt": async (params) => {
 		const p = params as { sessionId: string; text: string; images?: ImageContent[] };
 		await ackSend(promptSession(p.sessionId, p.text, p.images));
+		trackSend("prompt");
 		return { ok: true } as const;
 	},
 	"session.steer": async (params) => {
 		const p = params as { sessionId: string; text: string; images?: ImageContent[] };
 		await ackSend(steerSession(p.sessionId, p.text, p.images));
+		trackSend("steer");
 		return { ok: true } as const;
 	},
 	"session.followUp": async (params) => {
 		const p = params as { sessionId: string; text: string; images?: ImageContent[] };
 		await ackSend(followUpSession(p.sessionId, p.text, p.images));
+		trackSend("follow_up");
 		return { ok: true } as const;
 	},
 	"session.abort": async (params) => {

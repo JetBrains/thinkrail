@@ -101,6 +101,7 @@ const EVENT_SAMPLES = {
 	app_installed: { name: "app_installed" },
 	app_started: { name: "app_started" },
 	chat_started: { name: "chat_started", params: { provider: "anthropic", model: "some-model" } },
+	message_sent: { name: "message_sent", params: { mode: "prompt" } },
 	provider_login: { name: "provider_login", params: { provider: "openai", method: "oauth" } },
 } as const satisfies { [K in AnalyticsEvent["name"]]: Extract<AnalyticsEvent, { name: K }> };
 
@@ -111,6 +112,7 @@ const EXPECTED_KEYS: Record<keyof typeof EVENT_SAMPLES, string[]> = {
 	app_installed: ENV_KEYS,
 	app_started: ENV_KEYS,
 	chat_started: [...ENV_KEYS, "provider", "model"],
+	message_sent: [...ENV_KEYS, "mode"],
 	provider_login: [...ENV_KEYS, "provider", "method"],
 };
 
