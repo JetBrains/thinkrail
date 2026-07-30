@@ -67,10 +67,11 @@ function cssVar(name: string): string | undefined {
 
 /**
  * The text/style options shared by the file viewer (`MonacoEditor`) and the diff tab (`MonacoDiff`), so
- * plain code and a diff of that code render identically. Font size/family/line-height track the app tokens
- * (`--font-mono-size`, `--font-mono`, `--line-height`) — parity with the `tr-code-text` technical tier —
- * instead of Monaco's built-in monospace defaults. Read at render time (like the theme) so DOM tokens are
- * resolved.
+ * plain code and a diff of that code render identically. Font size/family/line-height are read straight
+ * off the generated typography tokens (`--tr-font-size-s11`, `--tr-font-family-code`,
+ * `--tr-line-height-default` — the values behind `tr-code-text`), never Monaco's built-in monospace
+ * defaults, so the editor cannot drift from a code block. Read at render time (like the theme) so DOM
+ * tokens are resolved.
  */
 export function sharedEditorOptions() {
 	const fontSize = Number.parseFloat(cssVar("--tr-font-size-s11") ?? "") || 11;
