@@ -13,7 +13,7 @@ export function ComparisonCard({ args }: ToolRenderProps) {
 	const options = parseComparisonOptions(args.options);
 
 	if (options.length === 0) {
-		return <span className="text-hint text-xs italic">(no options)</span>;
+		return <span className="text-text-muted text-xs italic">(no options)</span>;
 	}
 	return (
 		<div data-testid="tool-visualize-comparison" className="flex flex-col gap-sm">
@@ -35,7 +35,7 @@ export function ComparisonCard({ args }: ToolRenderProps) {
 								</span>
 							) : null}
 						</div>
-						{opt.description ? <p className="text-muted text-xs">{opt.description}</p> : null}
+						{opt.description ? <p className="text-text-muted text-xs">{opt.description}</p> : null}
 						{opt.pros.length > 0 ? (
 							<ul className="flex flex-col gap-0.5">
 								{opt.pros.map((p) => (

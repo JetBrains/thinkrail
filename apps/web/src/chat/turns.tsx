@@ -126,7 +126,11 @@ function ToolRow({
 
 function SystemTurn({ text }: { text: string }) {
 	return (
-		<div data-testid="chat-message" data-role="system" className="text-center text-hint text-xs">
+		<div
+			data-testid="chat-message"
+			data-role="system"
+			className="text-center text-text-muted text-xs"
+		>
 			{text}
 		</div>
 	);
@@ -175,7 +179,7 @@ function RetryIndicator({
 		<div
 			data-testid="retry-indicator"
 			data-source={source}
-			className="flex flex-col gap-xs rounded-[var(--radius-sm)] border border-border2 bg-elevated px-sm py-xs text-muted text-xs"
+			className="flex flex-col gap-xs rounded-[var(--radius-sm)] border border-border2 bg-elevated px-sm py-xs text-text-muted text-xs"
 		>
 			<span className="flex items-center gap-xs">
 				<RotateCw className="size-3 shrink-0" />
@@ -220,7 +224,10 @@ export function TurnDivider({
 		return <div data-testid="turn-divider" className="my-sm h-px bg-border2" />;
 	}
 	return (
-		<div data-testid="turn-divider" className="my-sm flex items-center gap-sm text-hint text-xs">
+		<div
+			data-testid="turn-divider"
+			className="my-sm flex items-center gap-sm text-text-muted text-xs"
+		>
 			<span className="h-px flex-1 bg-border2" />
 			{toolCount > 0 ? (
 				<span className="flex items-center gap-xs">

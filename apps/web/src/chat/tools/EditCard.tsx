@@ -64,7 +64,7 @@ function EditHeader({ path, workspaceRoot }: { path: string; workspaceRoot?: str
 			<span className="truncate text-text-default" title={path}>
 				{displayPath}
 			</span>
-			<span className="shrink-0 text-hint">edited</span>
+			<span className="shrink-0 text-text-muted">edited</span>
 		</div>
 	);
 }

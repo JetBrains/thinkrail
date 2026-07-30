@@ -336,7 +336,7 @@ export function AskUserQuestionCard({
 								data-testid="ask-skip"
 								onClick={() => reply({ answers: [], cancelled: true })}
 								disabled={!actions}
-								className="text-muted text-sm hover:text-text-default disabled:opacity-50"
+								className="text-text-muted text-sm hover:text-text-default disabled:opacity-50"
 							>
 								Skip
 							</button>
@@ -370,7 +370,7 @@ export function AskUserQuestionCard({
 
 /** "Agent is waiting for your input" — the small status line above the active card. */
 function WaitingLine() {
-	return <div className="text-muted text-xs">Agent is waiting for your input</div>;
+	return <div className="text-text-muted text-xs">Agent is waiting for your input</div>;
 }
 
 /**
@@ -383,14 +383,14 @@ function SupersededRecord({ questions }: { questions: AskUserQuestionItem[] }) {
 		<div
 			data-testid="ask-user-question"
 			data-tone="superseded"
-			className="flex flex-col gap-xs text-muted text-xs"
+			className="flex flex-col gap-xs text-text-muted text-xs"
 		>
 			<div className="flex items-center gap-xs">
 				<SkipForward className="size-3.5 shrink-0" />
 				Superseded — you replied in chat instead of answering these.
 			</div>
 			{questions.map((q) => (
-				<div key={q.question} className="pl-[calc(0.875rem+var(--spacing-sm))] text-hint">
+				<div key={q.question} className="pl-[calc(0.875rem+var(--spacing-sm))] text-text-muted">
 					{q.question}
 				</div>
 			))}
@@ -406,7 +406,7 @@ function WaitingCard({ children }: { children: React.ReactNode }) {
 			<div
 				data-testid="ask-user-question"
 				data-tone="pending"
-				className="flex items-center gap-xs rounded-[var(--radius-lg)] border border-border2 bg-elevated px-md py-sm text-muted text-xs"
+				className="flex items-center gap-xs rounded-[var(--radius-lg)] border border-border2 bg-elevated px-md py-sm text-text-muted text-xs"
 			>
 				<MessageCircleQuestion className="size-3.5 shrink-0" />
 				{children}
@@ -423,13 +423,13 @@ function WaitingCard({ children }: { children: React.ReactNode }) {
 function ComposingCard({ count }: { count: number }) {
 	return (
 		<div className="flex flex-col gap-xs">
-			<div className="text-muted text-xs">Agent is preparing questions…</div>
+			<div className="text-text-muted text-xs">Agent is preparing questions…</div>
 			<div
 				data-testid="ask-user-question"
 				data-tone="pending"
 				className="flex flex-col gap-sm rounded-[var(--radius-lg)] border border-border2 bg-elevated px-md py-sm"
 			>
-				<div className="flex items-center gap-xs text-muted text-xs">
+				<div className="flex items-center gap-xs text-text-muted text-xs">
 					<MessageCircleQuestion className="size-3.5 shrink-0" />
 					Preparing questions…{count > 0 ? ` (${count} ready)` : ""}
 				</div>
@@ -462,7 +462,7 @@ function TabChip({
 			onClick={onClick}
 			className={cn(
 				"flex shrink-0 items-center gap-xs whitespace-nowrap rounded-full px-sm py-0.5 text-xs",
-				active ? "bg-primary/15 text-primary" : "text-muted hover:bg-hover",
+				active ? "bg-primary/15 text-primary" : "text-text-muted hover:bg-hover",
 			)}
 		>
 			<span
@@ -488,14 +488,14 @@ function ModeHint({
 }) {
 	if (review) {
 		return (
-			<span className="flex items-center gap-xs text-hint text-xs">
+			<span className="flex items-center gap-xs text-text-muted text-xs">
 				<ListChecks className="size-3.5 shrink-0" /> Review your answers
 			</span>
 		);
 	}
 	const multi = !!question?.multiSelect;
 	return (
-		<span className="flex items-center gap-xs text-hint text-xs">
+		<span className="flex items-center gap-xs text-text-muted text-xs">
 			{multi ? (
 				<ListChecks className="size-3.5 shrink-0" />
 			) : (
@@ -538,7 +538,7 @@ function QuestionBody({
 	return (
 		<div className="flex flex-col gap-md">
 			<div className="flex items-start gap-sm">
-				<MessageCircleQuestion className="mt-0.5 size-4 shrink-0 text-muted" />
+				<MessageCircleQuestion className="mt-0.5 size-4 shrink-0 text-text-muted" />
 				<p data-testid="ask-question-text" className="font-semibold text-md text-text-default">
 					{question.question}
 				</p>
@@ -577,7 +577,7 @@ function QuestionBody({
 												type="button"
 												data-testid="ask-note-toggle"
 												onClick={() => onToggleNote(opt.label)}
-												className="flex items-center gap-xs text-hint text-xs hover:text-muted"
+												className="flex items-center gap-xs text-text-muted text-xs hover:text-text-muted"
 											>
 												<Pencil className="size-3" />
 												{state.notes[opt.label]?.trim() ? "Edit note" : "Add note"}
@@ -607,7 +607,7 @@ function QuestionBody({
 						data-testid="ask-preview"
 						className="min-w-0 overflow-auto rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-sm py-xs text-xs"
 					>
-						<div className="mb-xs text-hint text-xs">Preview · {previewSource.label}</div>
+						<div className="mb-xs text-text-muted text-xs">Preview · {previewSource.label}</div>
 						<Markdown text={previewSource.preview} />
 					</div>
 				) : null}
@@ -651,11 +651,11 @@ function OptionRow({
 					</span>
 					{recommended ? <RecommendedBadge /> : null}
 				</span>
-				{description ? <span className="text-muted text-xs">{description}</span> : null}
+				{description ? <span className="text-text-muted text-xs">{description}</span> : null}
 				{/* The recommendation rationale, shown inline up front for a recommended option so it
 				    reads on touch, and AT reads it as ordinary visible text. */}
 				{reason ? (
-					<span data-testid="ask-recommended-reason" className="mt-0.5 text-muted text-xs">
+					<span data-testid="ask-recommended-reason" className="mt-0.5 text-text-muted text-xs">
 						<span className="font-medium text-primary">Why:</span> {reason}
 					</span>
 				) : null}
@@ -720,7 +720,7 @@ function OtherOptionRow({
 				placeholder="type your own answer…"
 				onFocus={onActivate}
 				onChange={(e) => onText(e.target.value)}
-				className="min-w-0 flex-1 border-none bg-transparent text-sm text-text-default outline-none placeholder:text-hint"
+				className="min-w-0 flex-1 border-none bg-transparent text-sm text-text-default outline-none placeholder:text-text-muted"
 			/>
 		</label>
 	);
@@ -799,13 +799,13 @@ function ReviewView({
 	return (
 		<div className="flex flex-col gap-sm">
 			<div className="flex items-start gap-sm">
-				<MessageCircleQuestion className="mt-0.5 size-4 shrink-0 text-muted" />
+				<MessageCircleQuestion className="mt-0.5 size-4 shrink-0 text-text-muted" />
 				<p className="font-semibold text-md text-text-default">Review your answers</p>
 			</div>
 			<ul className="flex flex-col gap-md">
 				{questions.map((q, i) => (
 					<li key={q.question} data-testid="ask-review-item" className="flex flex-col gap-xs">
-						<span className="text-hint text-xs">{q.header || `Q${i + 1}`}</span>
+						<span className="text-text-muted text-xs">{q.header || `Q${i + 1}`}</span>
 						<QuestionRecap question={q} answer={byIndex.get(i)} variant="review" />
 					</li>
 				))}
@@ -837,7 +837,7 @@ function ResolvedRecord({
 	// No structured result (e.g. an old transcript without details) → fall back to the plain envelope text.
 	if (!result) {
 		return (
-			<div data-testid="ask-user-question" data-tone="pending" className="text-muted text-xs">
+			<div data-testid="ask-user-question" data-tone="pending" className="text-text-muted text-xs">
 				{rawText || "Question closed."}
 			</div>
 		);
@@ -853,7 +853,7 @@ function ResolvedRecord({
 				<QuestionRecap key={q.question} question={q} answer={byIndex.get(i)} variant="resolved" />
 			))}
 			{questions.length === 0 ? (
-				<div className="text-muted text-xs">{rawText || "Answered."}</div>
+				<div className="text-text-muted text-xs">{rawText || "Answered."}</div>
 			) : null}
 		</div>
 	);
@@ -876,10 +876,10 @@ function QuestionRecap({
 	return (
 		<div className="flex flex-col gap-xs">
 			<div className="flex items-start gap-sm">
-				<MessageCircleQuestion className="mt-0.5 size-3.5 shrink-0 text-hint" />
+				<MessageCircleQuestion className="mt-0.5 size-3.5 shrink-0 text-text-muted" />
 				<p
 					data-testid={reviewing ? "ask-review-question" : undefined}
-					className={cn("text-sm", reviewing ? "font-medium text-text-default" : "text-muted")}
+					className={cn("text-sm", reviewing ? "font-medium text-text-default" : "text-text-muted")}
 				>
 					{question.question}
 				</p>
@@ -896,7 +896,7 @@ function QuestionRecap({
 									data-selected={isSel}
 									className={cn(
 										"flex items-center gap-xs text-sm",
-										isSel ? "text-text-default" : "text-hint",
+										isSel ? "text-text-default" : "text-text-muted",
 									)}
 								>
 									{isSel ? (
@@ -932,14 +932,14 @@ function QuestionRecap({
 					{!answer ? (
 						<div
 							data-testid="ask-review-unanswered"
-							className="flex items-center gap-xs pl-[calc(0.875rem+var(--spacing-sm))] text-hint text-xs italic"
+							className="flex items-center gap-xs pl-[calc(0.875rem+var(--spacing-sm))] text-text-muted text-xs italic"
 						>
 							<SkipForward className="size-3 shrink-0" /> Not answered
 						</div>
 					) : null}
 				</>
 			) : !answer ? (
-				<div className="flex items-center gap-xs pl-[calc(0.875rem+var(--spacing-sm))] text-hint text-xs italic">
+				<div className="flex items-center gap-xs pl-[calc(0.875rem+var(--spacing-sm))] text-text-muted text-xs italic">
 					<SkipForward className="size-3 shrink-0" /> No answer (skipped).
 				</div>
 			) : (
@@ -952,7 +952,7 @@ function QuestionRecap({
 				</div>
 			)}
 			{answer?.notes ? (
-				<div className="pl-[calc(0.875rem+var(--spacing-sm))] text-hint text-xs">
+				<div className="pl-[calc(0.875rem+var(--spacing-sm))] text-text-muted text-xs">
 					Note: {answer.notes}
 				</div>
 			) : null}

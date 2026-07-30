@@ -42,7 +42,7 @@ export function RightPanel() {
 						aria-label="Refresh specs"
 						title="Refresh specs"
 						onClick={() => setSpecsRefresh((n) => n + 1)}
-						className="ml-auto text-hint hover:text-muted"
+						className="ml-auto text-text-muted hover:text-text-muted"
 					>
 						<RefreshCw className="size-3.5" />
 					</button>
@@ -50,7 +50,7 @@ export function RightPanel() {
 			</div>
 			<div className="min-h-0 flex-1 overflow-auto">
 				{!activeWorkspaceId ? (
-					<p className="p-sm text-xs text-hint">Select a workspace to browse files.</p>
+					<p className="p-sm text-xs text-text-muted">Select a workspace to browse files.</p>
 				) : tab === "specs" ? (
 					<div className="p-xs">
 						<SpecsPanel workspaceId={activeWorkspaceId} refreshToken={specsRefresh} />
@@ -85,7 +85,7 @@ function TabButton({
 			data-active={active}
 			onClick={onClick}
 			className={`text-xs uppercase tracking-wider ${
-				active ? "font-medium text-text-default" : "text-hint hover:text-muted"
+				active ? "font-medium text-text-default" : "text-text-muted hover:text-text-muted"
 			}`}
 		>
 			{children}

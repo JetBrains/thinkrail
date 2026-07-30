@@ -103,11 +103,11 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 			: highlighted === path;
 
 	if (status === null) {
-		return <p className="px-sm py-xs text-xs text-hint">Loading…</p>;
+		return <p className="px-sm py-xs text-xs text-text-muted">Loading…</p>;
 	}
 	if (status.changes.length === 0) {
 		return (
-			<p data-testid="changes-empty" className="px-sm py-xs text-xs text-hint">
+			<p data-testid="changes-empty" className="px-sm py-xs text-xs text-text-muted">
 				No changes in this workspace.
 			</p>
 		);
@@ -152,7 +152,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 									}`}
 								>
 									<span
-										className={`min-w-0 flex-1 truncate ${statusNameClass(change.status) || "text-muted"}`}
+										className={`min-w-0 flex-1 truncate ${statusNameClass(change.status) || "text-text-muted"}`}
 									>
 										{change.path}
 									</span>

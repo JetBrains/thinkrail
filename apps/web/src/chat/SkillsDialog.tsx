@@ -193,12 +193,14 @@ export function SkillsDialog({
 						hasPlugins && !isLeadingKey(group.key) ? "top-8" : "top-0",
 					)}
 				>
-					{group.isPlugin ? <Puzzle className="size-3.5 shrink-0 text-hint" aria-hidden /> : null}
+					{group.isPlugin ? (
+						<Puzzle className="size-3.5 shrink-0 text-text-muted" aria-hidden />
+					) : null}
 					<span className="font-medium text-text-default text-xs uppercase tracking-wide">
 						{group.label}
 					</span>
-					<span className="min-w-0 flex-1 truncate text-hint text-xs">{group.hint}</span>
-					<span className="shrink-0 rounded-full bg-hover px-1.5 text-hint text-xs">
+					<span className="min-w-0 flex-1 truncate text-text-muted text-xs">{group.hint}</span>
+					<span className="shrink-0 rounded-full bg-hover px-1.5 text-text-muted text-xs">
 						{group.items.length}
 					</span>
 					<Toggle
@@ -262,7 +264,7 @@ export function SkillsDialog({
 				{workspace?.stale ? (
 					<div
 						data-testid="skills-stale"
-						className="rounded-[var(--radius-md)] border border-border2 bg-elevated px-md py-sm text-muted text-xs"
+						className="rounded-[var(--radius-md)] border border-border2 bg-elevated px-md py-sm text-text-muted text-xs"
 					>
 						This worktree's skills changed on disk —{" "}
 						<span className="text-text-default">Reload</span> to apply them to this chat.
@@ -296,9 +298,9 @@ export function SkillsDialog({
 
 				<div className="max-h-[50vh] overflow-y-auto">
 					{entries === null ? (
-						<p className="px-sm py-md text-hint text-sm">Loading skills…</p>
+						<p className="px-sm py-md text-text-muted text-sm">Loading skills…</p>
 					) : entries.length === 0 ? (
-						<p className="px-sm py-md text-hint text-sm">No skills discovered.</p>
+						<p className="px-sm py-md text-text-muted text-sm">No skills discovered.</p>
 					) : (
 						<>
 							{/* First-party skills (ThinkRail + Pi) lead, above the all-plugins master. */}
@@ -353,7 +355,7 @@ function Toggle({
 				"shrink-0 rounded-[var(--radius-sm)] border px-sm py-0.5 text-xs transition-colors disabled:opacity-50",
 				on
 					? "border-[var(--primary-40)] bg-[var(--primary-10)] text-primary"
-					: "border-border2 text-muted hover:bg-hover",
+					: "border-border2 text-text-muted hover:bg-hover",
 			)}
 		>
 			{on ? "on" : "off"}
@@ -395,7 +397,7 @@ function SkillRow({
 					{entry.name}
 				</span>
 				{entry.description ? (
-					<span className="truncate text-hint text-xs">{entry.description}</span>
+					<span className="truncate text-text-muted text-xs">{entry.description}</span>
 				) : null}
 			</span>
 			{entry.decision === "pending-ack" ? (
@@ -404,9 +406,12 @@ function SkillRow({
 					Enable
 				</Button>
 			) : entry.decision === "untrusted" ? (
-				<span className="shrink-0 text-hint text-xs">{DECISION_TEXT.untrusted}</span>
+				<span className="shrink-0 text-text-muted text-xs">{DECISION_TEXT.untrusted}</span>
 			) : groupOff ? (
-				<span className="shrink-0 text-hint text-xs" title="Enable the group to change this skill">
+				<span
+					className="shrink-0 text-text-disabled text-xs"
+					title="Enable the group to change this skill"
+				>
 					group off
 				</span>
 			) : (
@@ -420,7 +425,7 @@ function SkillRow({
 						"shrink-0 rounded-[var(--radius-sm)] border px-sm py-0.5 text-xs transition-colors disabled:opacity-50",
 						loaded
 							? "border-[var(--primary-40)] bg-[var(--primary-10)] text-primary"
-							: "border-border2 text-muted hover:bg-hover",
+							: "border-border2 text-text-muted hover:bg-hover",
 					)}
 				>
 					{DECISION_TEXT[entry.decision]}

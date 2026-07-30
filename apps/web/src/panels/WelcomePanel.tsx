@@ -112,8 +112,8 @@ export function WelcomePanel() {
 			className="flex h-full min-h-0 flex-col items-center justify-center overflow-auto px-xl py-xl text-center"
 		>
 			{project ? (
-				<p className="mb-sm flex max-w-full items-center gap-xs px-md text-muted text-sm">
-					<Folder className="size-3.5 shrink-0 text-hint" />
+				<p className="mb-sm flex max-w-full items-center gap-xs px-md text-text-muted text-sm">
+					<Folder className="size-3.5 shrink-0 text-text-muted" />
 					<span className="truncate font-[var(--font-mono)]">{project.name}</span>
 				</p>
 			) : null}
@@ -121,7 +121,7 @@ export function WelcomePanel() {
 				{PRODUCT_NAME}
 			</h1>
 
-			<p className="mt-lg max-w-[440px] text-md text-muted">
+			<p className="mt-lg max-w-[440px] text-md text-text-muted">
 				A spec-first way to build with AI. ThinkRail keeps your project's intent as a{" "}
 				<span className="text-text-default">connected spec graph</span> that the agent reads, plans,
 				and builds from, all in git worktree isolated workspaces.
@@ -224,14 +224,14 @@ const Card = forwardRef<HTMLButtonElement, CardProps>(function Card(
 			<span
 				className={cn(
 					"flex size-9 items-center justify-center rounded-[10px]",
-					primary ? "bg-primary text-text-on-primary" : "bg-hover text-muted",
+					primary ? "bg-primary text-text-on-primary" : "bg-hover text-text-muted",
 				)}
 			>
 				<Icon className="size-4" />
 			</span>
 			<span className="w-full">
 				<span className="block font-medium text-sm text-text-default">{title}</span>
-				<span className="mt-0.5 block text-muted text-xs leading-snug">{subtitle}</span>
+				<span className="mt-0.5 block text-text-muted text-xs leading-snug">{subtitle}</span>
 			</span>
 		</button>
 	);

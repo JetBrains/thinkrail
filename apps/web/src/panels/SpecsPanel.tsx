@@ -70,13 +70,13 @@ export function SpecsPanel({
 
 	if (failed)
 		return (
-			<p data-testid="specs-error" className="px-xs py-xs text-xs text-hint">
+			<p data-testid="specs-error" className="px-xs py-xs text-xs text-text-muted">
 				Couldn't load specs — Refresh to retry.
 			</p>
 		);
 	if (nodes === null || roots === null)
-		return <p className="px-xs py-xs text-xs text-hint">Loading…</p>;
-	if (nodes.length === 0) return <p className="px-xs py-xs text-xs text-hint">No specs</p>;
+		return <p className="px-xs py-xs text-xs text-text-muted">Loading…</p>;
+	if (nodes.length === 0) return <p className="px-xs py-xs text-xs text-text-muted">No specs</p>;
 	return (
 		<ul className="flex flex-col">
 			{roots.map((root) => (
@@ -147,7 +147,7 @@ function SpecNodeRow({
 						aria-label={expanded ? `Collapse ${node.title}` : `Expand ${node.title}`}
 						aria-expanded={expanded}
 						onClick={() => setExpanded((value) => !value)}
-						className="flex w-5 shrink-0 items-center justify-center self-stretch rounded-[var(--radius-sm)] text-hint outline-none transition-colors hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+						className="flex w-5 shrink-0 items-center justify-center self-stretch rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
 					>
 						<Chevron className="size-3.5" />
 					</button>
@@ -172,7 +172,9 @@ function SpecNodeRow({
 					<DocumentIcon
 						className={cn(
 							"size-3.5 shrink-0 transition-colors",
-							isMainSpec || isActive ? "text-primary" : "text-hint group-hover:text-muted",
+							isMainSpec || isActive
+								? "text-primary"
+								: "text-text-muted group-hover:text-text-muted",
 						)}
 					/>
 					<span
@@ -180,7 +182,7 @@ function SpecNodeRow({
 							"min-w-0 flex-1 truncate text-sm transition-colors",
 							isActive
 								? "font-medium text-text-default"
-								: "text-muted group-hover:text-text-default",
+								: "text-text-muted group-hover:text-text-default",
 						)}
 					>
 						{node.title}
@@ -189,7 +191,7 @@ function SpecNodeRow({
 						data-testid="spec-role"
 						className={cn(
 							"max-w-16 shrink-0 truncate text-right text-[9px] uppercase tracking-wider",
-							isMainSpec || isActive ? "font-medium text-primary" : "text-hint",
+							isMainSpec || isActive ? "font-medium text-primary" : "text-text-muted",
 						)}
 					>
 						{trailingRole}

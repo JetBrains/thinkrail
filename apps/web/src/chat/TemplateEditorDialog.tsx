@@ -21,7 +21,7 @@ import { assembleTemplate, stripFrontmatter } from "./templateText";
 const SYNTAX_HINT = `$1, $ARGUMENTS, \${1:-default} — pi prompt-template syntax`;
 
 const INPUT_CLASS =
-	"w-full rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-md py-sm text-sm text-text-default outline-none transition-colors placeholder:text-hint focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-[var(--primary-20)] disabled:opacity-50";
+	"w-full rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-md py-sm text-sm text-text-default outline-none transition-colors placeholder:text-text-muted focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-[var(--primary-20)] disabled:opacity-50";
 
 /**
  * Mirrors the server's `isValidTemplateName` (`packages/server/src/templates/templates.ts`) exactly — a
@@ -212,7 +212,7 @@ export function TemplateEditorDialog({
 							/>
 						</div>
 						{!workspaceId && !editing ? (
-							<p className="text-hint text-xs">
+							<p className="text-text-muted text-xs">
 								Open a workspace to save a project-scoped template.
 							</p>
 						) : null}
@@ -255,7 +255,7 @@ export function TemplateEditorDialog({
 							spellCheck={false}
 							rows={8}
 						/>
-						<p className="text-hint text-xs">{SYNTAX_HINT}</p>
+						<p className="text-text-muted text-xs">{SYNTAX_HINT}</p>
 					</Field>
 
 					{error ? (
@@ -328,7 +328,7 @@ function ScopeOption({
 				"flex-1 rounded-[var(--radius-md)] border px-md py-sm text-left text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50",
 				active
 					? "border-[var(--primary-40)] bg-[var(--primary-10)] text-text-default"
-					: "border-border2 text-muted hover:bg-hover hover:text-text-default",
+					: "border-border2 text-text-muted hover:bg-hover hover:text-text-default",
 			)}
 		>
 			{label}

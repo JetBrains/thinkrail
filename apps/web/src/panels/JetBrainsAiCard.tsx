@@ -124,7 +124,7 @@ export function JetBrainsAiCard({
 				</span>
 				<div className="flex min-w-0 flex-col">
 					<span className="font-medium text-sm text-text-default">JetBrains AI</span>
-					<span className="truncate text-hint text-xs">
+					<span className="truncate text-text-muted text-xs">
 						Route Claude + GPT through your JetBrains subscription.
 					</span>
 				</div>
@@ -166,7 +166,7 @@ export function JetBrainsAiCard({
 
 			{showInstall ? (
 				<div className="flex flex-col gap-xs" data-testid="jetbrains-needs-install">
-					<p className="text-hint text-xs">
+					<p className="text-text-muted text-xs">
 						{install?.shell === "powershell"
 							? "Install the JetBrains Central CLI (central) in PowerShell, then Recheck:"
 							: "Install the JetBrains Central CLI (central), then Recheck:"}
@@ -187,7 +187,7 @@ export function JetBrainsAiCard({
 
 			{showLogin ? (
 				<div className="flex flex-col gap-xs" data-testid="jetbrains-needs-login">
-					<p className="text-hint text-xs">
+					<p className="text-text-muted text-xs">
 						{loginLaunched
 							? "Complete sign-in in your browser, then Connect. If nothing opened, run this in a terminal:"
 							: "Sign in to JetBrains AI, then Connect. You can also run this in a terminal:"}
@@ -263,7 +263,7 @@ function CopyableCommand({ command }: { command: string }) {
 				aria-label={`Copy: ${command}`}
 				title="Copy"
 				onClick={() => void copy()}
-				className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-muted outline-none transition-colors hover:bg-hover hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:bg-hover hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 			>
 				{copied ? <Check className="size-3.5 text-green" /> : <Copy className="size-3.5" />}
 			</button>

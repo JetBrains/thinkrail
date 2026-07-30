@@ -34,7 +34,7 @@ const STATUS_LABEL = Object.fromEntries(STATUS_SECTIONS.map((s) => [s.status, s.
 function StatusIcon({ status }: { status: TodoStatus }) {
 	if (status === "done") return <Check className="size-4 shrink-0 text-primary" />;
 	if (status === "in_progress") return <CircleDot className="size-4 shrink-0 text-primary" />;
-	return <Circle className="size-4 shrink-0 text-hint" />;
+	return <Circle className="size-4 shrink-0 text-text-muted" />;
 }
 
 /** Every item across loose + groups, in display order. */
@@ -77,7 +77,7 @@ export function TodoAddRow({
 	};
 	return (
 		<div className="flex items-center gap-sm px-sm py-xs">
-			<Plus className="size-3.5 shrink-0 text-hint" />
+			<Plus className="size-3.5 shrink-0 text-text-muted" />
 			<input
 				data-testid="todo-add-input"
 				value={draft}
@@ -86,7 +86,7 @@ export function TodoAddRow({
 					if (e.key === "Enter") void submit();
 				}}
 				placeholder="Add a TODO for the agent…"
-				className="min-w-0 flex-1 bg-transparent text-sm text-text-default outline-none placeholder:text-hint"
+				className="min-w-0 flex-1 bg-transparent text-sm text-text-default outline-none placeholder:text-text-muted"
 			/>
 			{onOpenMarkdown ? (
 				<button
@@ -95,7 +95,7 @@ export function TodoAddRow({
 					onClick={onOpenMarkdown}
 					aria-label="Open as markdown"
 					title="Open the plan as a markdown tab"
-					className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-hint hover:bg-hover hover:text-text-default focus-visible:opacity-100"
+					className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-hover hover:text-text-default focus-visible:opacity-100"
 				>
 					<FileText className="size-3.5" />
 				</button>
@@ -128,7 +128,7 @@ export function TodoRows({ plan, onRemove }: { plan: TodoPlan; onRemove: (id: st
 				const count = items.length + groups.reduce((n, g) => n + g.todos.length, 0);
 				return (
 					<div key={status} className="mb-sm">
-						<div className="px-xs py-xs text-[10px] text-hint uppercase tracking-wider">
+						<div className="px-xs py-xs text-[10px] text-text-muted uppercase tracking-wider">
 							{label} · {count}
 						</div>
 						{items.length > 0 ? (
@@ -164,12 +164,12 @@ function DoneGroup({ group, onRemove }: { group: TodoGroupItem; onRemove: (id: s
 				onClick={() => setExpanded((v) => !v)}
 				className="flex w-full items-center gap-sm rounded-[var(--radius-sm)] px-xs py-xs text-left hover:bg-hover"
 			>
-				<Chevron className="size-3.5 shrink-0 text-hint" />
+				<Chevron className="size-3.5 shrink-0 text-text-muted" />
 				<Check className="size-4 shrink-0 text-primary" />
-				<span className="min-w-0 flex-1 truncate font-medium text-hint text-sm line-through">
+				<span className="min-w-0 flex-1 truncate font-medium text-text-muted text-sm line-through">
 					{group.title}
 				</span>
-				<span className="shrink-0 text-[10px] text-hint uppercase tracking-wider">
+				<span className="shrink-0 text-[10px] text-text-muted uppercase tracking-wider">
 					{group.todos.length} done
 				</span>
 			</button>
@@ -198,20 +198,22 @@ function TodoRow({ todo, onRemove }: { todo: TodoItem; onRemove: () => void }) {
 				<div
 					className={cn(
 						"truncate text-sm",
-						todo.status === "done" ? "text-hint line-through" : "text-text-default",
+						todo.status === "done" ? "text-text-muted line-through" : "text-text-default",
 					)}
 				>
 					{todo.title}
 				</div>
 				{todo.note ? (
-					<div className="truncate font-[var(--font-mono)] text-[10px] text-hint">{todo.note}</div>
+					<div className="truncate font-[var(--font-mono)] text-[10px] text-text-muted">
+						{todo.note}
+					</div>
 				) : null}
 			</div>
 			{todo.origin === "user" ? (
 				<span
 					data-testid="todo-origin-user"
 					title="Added by you — the agent won't drop it"
-					className="shrink-0 text-hint"
+					className="shrink-0 text-text-muted"
 				>
 					<UserRound className="size-3.5" />
 				</span>
@@ -221,7 +223,7 @@ function TodoRow({ todo, onRemove }: { todo: TodoItem; onRemove: () => void }) {
 				onClick={onRemove}
 				aria-label="Remove"
 				title="Remove"
-				className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-hint opacity-0 transition-opacity hover:bg-elevated hover:text-red group-hover:opacity-100 focus-visible:opacity-100"
+				className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 transition-opacity hover:bg-elevated hover:text-red group-hover:opacity-100 focus-visible:opacity-100"
 			>
 				<Trash2 className="size-3.5" />
 			</button>

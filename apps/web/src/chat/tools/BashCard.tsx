@@ -14,7 +14,7 @@ export function BashCard({ args, result, status }: ToolRenderProps) {
 		>
 			<div className="border-border2 border-b px-sm py-xs">
 				<span className="text-green">$</span>
-				<span className="ml-sm text-muted text-xs">{command}</span>
+				<span className="ml-sm text-text-muted text-xs">{command}</span>
 			</div>
 			<pre
 				className={`overflow-auto px-sm py-xs text-xs leading-relaxed ${isError ? "text-red" : "text-text-default"}`}

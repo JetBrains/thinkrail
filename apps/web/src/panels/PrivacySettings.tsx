@@ -22,7 +22,7 @@ export function PrivacySettings() {
 		<section data-testid="settings-privacy" className="flex flex-col gap-lg">
 			<div className="flex flex-col gap-xs">
 				<h3 className="font-medium text-md text-text-default">Usage analytics</h3>
-				<p className="text-hint text-xs">
+				<p className="text-text-muted text-xs">
 					Anonymous usage analytics help us understand which features matter. Your choice is saved
 					on the host and follows you across devices.
 				</p>
@@ -33,7 +33,7 @@ export function PrivacySettings() {
 					<span className="font-medium text-sm text-text-default">
 						Share anonymous usage analytics
 					</span>
-					<span className="text-hint text-xs">
+					<span className="text-text-muted text-xs">
 						{enabled ? "On — thank you for helping improve ThinkRail." : "Off — nothing is sent."}
 					</span>
 				</div>
@@ -60,13 +60,13 @@ export function PrivacySettings() {
 			</div>
 
 			<div className="flex flex-col gap-xs text-xs">
-				<p className="text-muted">
+				<p className="text-text-muted">
 					<span className="font-medium text-text-default">What is collected:</span> a random
 					anonymous install id, app version and release channel, OS and architecture, when a chat
 					starts (and the model/provider it uses), and which providers you sign in to. Custom
 					providers and models are reported only as “custom”.
 				</p>
-				<p className="text-muted">
+				<p className="text-text-muted">
 					<span className="font-medium text-text-default">Never collected:</span> file paths or
 					names, prompts, code, chat transcripts, API keys, hostnames, usernames, or anything typed
 					into the app.

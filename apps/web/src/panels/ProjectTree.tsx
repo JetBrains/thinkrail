@@ -95,7 +95,7 @@ export function ProjectTree() {
 	return (
 		<nav className="flex flex-col gap-sm">
 			<header className="flex h-7 items-center justify-between pr-xs pl-sm">
-				<span className="text-xs uppercase tracking-wider text-muted">Projects</span>
+				<span className="text-xs uppercase tracking-wider text-text-muted">Projects</span>
 				<AddProjectMenu
 					projects={projects}
 					onOpen={() => void pickAndOpen()}
@@ -130,7 +130,7 @@ export function ProjectTree() {
 							{isExpanded && (
 								<ul className="flex flex-col">
 									{list.length === 0 ? (
-										<li className="py-xs pr-sm pl-xl text-xs text-hint">No workspaces yet</li>
+										<li className="py-xs pr-sm pl-xl text-xs text-text-muted">No workspaces yet</li>
 									) : (
 										list.map((ws) => (
 											<WorkspaceRow
@@ -193,7 +193,7 @@ function ProjectRow({
 				data-testid="project-expand"
 				aria-label={isExpanded ? "Collapse project" : "Expand project"}
 				onClick={onToggle}
-				className="flex size-4 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-hint opacity-0 transition-opacity hover:text-text-default group-hover:opacity-100 data-[expanded=true]:opacity-100"
+				className="flex size-4 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 transition-opacity hover:text-text-default group-hover:opacity-100 data-[expanded=true]:opacity-100"
 				data-expanded={isExpanded}
 			>
 				<Chevron className="size-4" />
@@ -203,22 +203,24 @@ function ProjectRow({
 				onClick={onSelect}
 				className="flex min-w-0 flex-1 items-center gap-sm text-left"
 			>
-				<Folder className={`size-4 shrink-0 ${isSelected ? "text-primary" : "text-muted"}`} />
+				<Folder className={`size-4 shrink-0 ${isSelected ? "text-primary" : "text-text-muted"}`} />
 				<span
-					className={`truncate text-sm ${isSelected ? "font-medium text-text-default" : "text-muted"}`}
+					className={`truncate text-sm ${isSelected ? "font-medium text-text-default" : "text-text-muted"}`}
 				>
 					{project.name}
 				</span>
 			</button>
 			{!isExpanded && workspaceCount > 0 && (
-				<span className="shrink-0 text-xs text-hint group-hover:hidden">{workspaceCount}</span>
+				<span className="shrink-0 text-xs text-text-muted group-hover:hidden">
+					{workspaceCount}
+				</span>
 			)}
 			<button
 				type="button"
 				data-testid="add-workspace"
 				aria-label="Create workspace"
 				onClick={onAddWorkspace}
-				className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-muted opacity-0 transition hover:bg-elevated hover:text-text-default group-hover:opacity-100"
+				className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 transition hover:bg-elevated hover:text-text-default group-hover:opacity-100"
 			>
 				<Plus className="size-4" />
 			</button>
@@ -271,21 +273,23 @@ function WorkspaceRow({
 					onClick={onSelect}
 					className="flex min-w-0 flex-1 items-center gap-sm text-left"
 				>
-					<GitBranch className={`size-4 shrink-0 ${isActive ? "text-primary" : "text-hint"}`} />
+					<GitBranch
+						className={`size-4 shrink-0 ${isActive ? "text-primary" : "text-text-muted"}`}
+					/>
 					{/* Name on top, the git branch on a second line beneath it — the display name is decoupled
 					    from the branch, so surface both without crowding one line. The branch line is hidden when
 					    they coincide, so pristine/legacy rows stay a single compact line. */}
 					<span className="flex min-w-0 flex-1 flex-col">
 						<span
 							data-testid="workspace-name"
-							className={`truncate text-sm leading-tight ${isActive ? "font-medium text-primary" : "text-muted"}`}
+							className={`truncate text-sm leading-tight ${isActive ? "font-medium text-primary" : "text-text-muted"}`}
 						>
 							{workspace.name}
 						</span>
 						{workspace.branch !== workspace.name && (
 							<span
 								data-testid="workspace-branch"
-								className="truncate font-[var(--font-mono)] text-hint text-xs leading-tight"
+								className="truncate font-[var(--font-mono)] text-text-muted text-xs leading-tight"
 							>
 								{workspace.branch}
 							</span>
@@ -302,7 +306,7 @@ function WorkspaceRow({
 						type="button"
 						data-testid="workspace-remove"
 						aria-label="Remove workspace"
-						className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-muted opacity-0 transition hover:bg-elevated hover:text-red group-hover:opacity-100 data-[state=open]:opacity-100"
+						className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 transition hover:bg-elevated hover:text-red group-hover:opacity-100 data-[state=open]:opacity-100"
 					>
 						<Trash2 className="size-4" />
 					</button>

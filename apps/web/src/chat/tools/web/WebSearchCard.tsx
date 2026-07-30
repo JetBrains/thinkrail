@@ -30,14 +30,14 @@ export function WebSearchCard({ args, result, status }: ToolRenderProps) {
 	return (
 		<div data-testid="tool-web_search" className="flex flex-col gap-xs">
 			<div className="flex items-center gap-xs text-xs">
-				<Search className="size-3.5 shrink-0 text-muted" />
+				<Search className="size-3.5 shrink-0 text-text-muted" />
 				<span className="truncate text-primary" title={query}>
 					{query}
 				</span>
-				{provider ? <span className="shrink-0 text-hint">via {provider}</span> : null}
+				{provider ? <span className="shrink-0 text-text-muted">via {provider}</span> : null}
 			</div>
 			{status === "running" ? (
-				<span className="text-muted text-xs">Searching…</span>
+				<span className="text-text-muted text-xs">Searching…</span>
 			) : status === "error" ? (
 				<pre className="overflow-auto px-sm py-xs text-red text-xs">{output}</pre>
 			) : output ? (
@@ -45,7 +45,7 @@ export function WebSearchCard({ args, result, status }: ToolRenderProps) {
 					<CodeBlock code={output} lang="markdown" />
 				</Collapsible>
 			) : (
-				<span className="text-hint text-xs italic">No results.</span>
+				<span className="text-text-muted text-xs italic">No results.</span>
 			)}
 		</div>
 	);

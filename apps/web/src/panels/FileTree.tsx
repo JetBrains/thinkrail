@@ -37,8 +37,8 @@ export function FileTree({ workspaceId }: { workspaceId: string }) {
 		};
 	}, [workspaceId, fsTick]);
 
-	if (nodes === null) return <p className="px-xs py-xs text-xs text-hint">Loading…</p>;
-	if (nodes.length === 0) return <p className="px-xs py-xs text-xs text-hint">Empty</p>;
+	if (nodes === null) return <p className="px-xs py-xs text-xs text-text-muted">Loading…</p>;
+	if (nodes.length === 0) return <p className="px-xs py-xs text-xs text-text-muted">Empty</p>;
 	return (
 		<ul className="flex flex-col">
 			{nodes.map((node) => (

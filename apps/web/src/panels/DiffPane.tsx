@@ -11,7 +11,9 @@ import { useLiveTabContent } from "./useLiveTabContent";
 const MonacoDiff = lazy(() => import("./MonacoDiff"));
 const RenderedDiff = lazy(() => import("./RenderedDiff"));
 
-const loading = <div className="flex h-full items-center justify-center text-hint">Loading…</div>;
+const loading = (
+	<div className="flex h-full items-center justify-center text-text-muted">Loading…</div>
+);
 
 /**
  * The center pane for a diff tab: a slim header over the diff. A non-markdown file gets the read-only
@@ -83,7 +85,7 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 				aria-label="Diff view mode"
 				className="flex h-8 shrink-0 items-center gap-xs border-border2 border-b bg-bg-dark px-sm"
 			>
-				<span className="mr-auto truncate font-[var(--font-mono)] text-hint text-xs">
+				<span className="mr-auto truncate font-[var(--font-mono)] text-text-muted text-xs">
 					{tab.path}
 				</span>
 				{toggles}

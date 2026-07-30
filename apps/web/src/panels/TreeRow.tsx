@@ -45,19 +45,19 @@ export function TreeRow({
 			data-status={dataStatus}
 			onClick={onClick}
 			onDoubleClick={onDoubleClick}
-			className={`flex h-6 w-full items-center gap-xs rounded-[var(--radius-sm)] px-xs text-left text-sm text-muted hover:bg-hover ${
+			className={`flex h-6 w-full items-center gap-xs rounded-[var(--radius-sm)] px-xs text-left text-sm text-text-muted hover:bg-hover ${
 				active ? "bg-hover" : ""
 			}`}
 		>
 			{kind === "dir" ? (
-				<Chevron className="size-3.5 shrink-0 text-hint" />
+				<Chevron className="size-3.5 shrink-0 text-text-muted" />
 			) : (
 				<span className="size-3.5 shrink-0" />
 			)}
 			{kind === "dir" ? (
-				<Folder className="size-4 shrink-0 text-hint" />
+				<Folder className="size-4 shrink-0 text-text-muted" />
 			) : (
-				<FileIcon className="size-4 shrink-0 text-hint" />
+				<FileIcon className="size-4 shrink-0 text-text-muted" />
 			)}
 			<span className={`min-w-0 flex-1 truncate ${labelClassName ?? ""}`}>{label}</span>
 			{trailing}

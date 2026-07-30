@@ -70,7 +70,7 @@ export function ToolCard({
 				className="flex w-full cursor-pointer select-none items-center gap-xs px-sm py-xs text-left text-xs outline-none focus-visible:ring-2 focus-visible:ring-primary"
 			>
 				{status === "running" ? (
-					<Loader2 className="size-3 shrink-0 animate-spin text-muted motion-reduce:animate-none" />
+					<Loader2 className="size-3 shrink-0 animate-spin text-text-muted motion-reduce:animate-none" />
 				) : isError ? (
 					<X className="size-3 shrink-0 text-red" />
 				) : (
@@ -78,14 +78,14 @@ export function ToolCard({
 				)}
 				<span className="shrink-0 font-medium text-text-default">{toolName}</span>
 				{summary ? (
-					<span className="min-w-0 flex-1 truncate text-muted" title={summary}>
+					<span className="min-w-0 flex-1 truncate text-text-muted" title={summary}>
 						{summary}
 					</span>
 				) : (
 					<span className="flex-1" />
 				)}
 				<ChevronRight
-					className={`size-3 shrink-0 text-muted transition-transform ${expanded ? "rotate-90" : ""}`}
+					className={`size-3 shrink-0 text-text-muted transition-transform ${expanded ? "rotate-90" : ""}`}
 				/>
 			</button>
 			{expanded ? (

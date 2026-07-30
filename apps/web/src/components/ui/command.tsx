@@ -22,10 +22,10 @@ function CommandInput({
 }: React.ComponentProps<typeof CommandPrimitive.Input>) {
 	return (
 		<div className="flex items-center gap-sm border-border border-b px-sm">
-			<Search className="size-3.5 shrink-0 text-hint" />
+			<Search className="size-3.5 shrink-0 text-text-muted" />
 			<CommandPrimitive.Input
 				className={cn(
-					"h-9 flex-1 bg-transparent text-sm text-text-default outline-none placeholder:text-hint",
+					"h-9 flex-1 bg-transparent text-sm text-text-default outline-none placeholder:text-text-muted",
 					className,
 				)}
 				{...props}
@@ -44,7 +44,9 @@ function CommandList({ className, ...props }: React.ComponentProps<typeof Comman
 }
 
 function CommandEmpty(props: React.ComponentProps<typeof CommandPrimitive.Empty>) {
-	return <CommandPrimitive.Empty className="py-md text-center text-hint text-sm" {...props} />;
+	return (
+		<CommandPrimitive.Empty className="py-md text-center text-text-muted text-sm" {...props} />
+	);
 }
 
 function CommandGroup({
@@ -54,7 +56,7 @@ function CommandGroup({
 	return (
 		<CommandPrimitive.Group
 			className={cn(
-				"[&_[cmdk-group-heading]]:px-sm [&_[cmdk-group-heading]]:py-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-hint [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider",
+				"[&_[cmdk-group-heading]]:px-sm [&_[cmdk-group-heading]]:py-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-text-muted [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider",
 				className,
 			)}
 			{...props}

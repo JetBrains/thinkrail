@@ -46,7 +46,7 @@ function Placeholder({ testid, children }: { testid: string; children: string })
 	return (
 		<div
 			data-testid={testid}
-			className="flex h-full items-center justify-center bg-surface-content text-hint"
+			className="flex h-full items-center justify-center bg-surface-content text-text-muted"
 		>
 			{children}
 		</div>

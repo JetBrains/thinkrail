@@ -57,10 +57,13 @@ export function Shell() {
 						>
 							<div className="flex min-w-0 items-center gap-xs text-xs">
 								<span className="hidden min-w-0 items-center gap-xs sm:flex">
-									<span data-testid="scope-project" className="max-w-[160px] truncate text-muted">
+									<span
+										data-testid="scope-project"
+										className="max-w-[160px] truncate text-text-muted"
+									>
 										{contextProject.name}
 									</span>
-									<ChevronRight className="size-3 shrink-0 text-hint" />
+									<ChevronRight className="size-3 shrink-0 text-text-muted" />
 								</span>
 								<span
 									data-testid="scope-name"
@@ -70,7 +73,7 @@ export function Shell() {
 								</span>
 							</div>
 							{activeWorkspace ? (
-								<div className="mt-0.5 flex min-w-0 items-center gap-xs font-[var(--font-mono)] text-[10px] text-hint">
+								<div className="mt-0.5 flex min-w-0 items-center gap-xs font-[var(--font-mono)] text-[10px] text-text-muted">
 									<GitBranch className="size-3 shrink-0" />
 									<span data-testid="scope-branch" className="truncate">
 										{activeWorkspace.branch}
@@ -87,7 +90,7 @@ export function Shell() {
 					<span
 						data-testid="connection-status"
 						data-status={status}
-						className="inline-flex items-center gap-sm text-sm text-muted"
+						className="inline-flex items-center gap-sm text-sm text-text-muted"
 					>
 						<span className={`size-2 rounded-full ${STATUS_DOT[status]}`} />
 						{STATUS_LABEL[status]}
@@ -98,7 +101,7 @@ export function Shell() {
 						aria-label="Settings"
 						title="Settings"
 						onClick={() => useAppStore.getState().openSettings()}
-						className="flex size-7 items-center justify-center rounded-[var(--radius-sm)] text-muted outline-none transition-colors hover:bg-hover hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+						className="flex size-7 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:bg-hover hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 					>
 						<Settings className="size-4" />
 					</button>

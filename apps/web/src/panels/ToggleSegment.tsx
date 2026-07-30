@@ -19,7 +19,7 @@ export function ToggleSegment({
 			className={`rounded-[var(--radius-sm)] px-sm py-0.5 text-xs ${
 				active
 					? "bg-elevated text-text-default"
-					: "text-hint hover:bg-hover hover:text-text-default"
+					: "text-text-muted hover:bg-hover hover:text-text-default"
 			}`}
 			onClick={onClick}
 		>

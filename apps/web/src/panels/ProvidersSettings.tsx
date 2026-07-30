@@ -109,7 +109,7 @@ export function ProvidersSettings() {
 			<div className="flex items-start justify-between gap-sm">
 				<div className="flex flex-col gap-xs">
 					<h3 className="font-medium text-md text-text-default">Model providers</h3>
-					<p className="text-hint text-xs">
+					<p className="text-text-muted text-xs">
 						Connect at least one provider so the agent can run — a subscription or an API key.
 					</p>
 				</div>
@@ -128,9 +128,9 @@ export function ProvidersSettings() {
 			</div>
 
 			{report == null && !failed ? (
-				<p className="text-hint text-sm">Loading providers…</p>
+				<p className="text-text-muted text-sm">Loading providers…</p>
 			) : failed ? (
-				<p data-testid="providers-error" className="text-hint text-sm">
+				<p data-testid="providers-error" className="text-text-muted text-sm">
 					Couldn't read the provider status from the host — try Refresh.
 				</p>
 			) : (
@@ -157,7 +157,7 @@ export function ProvidersSettings() {
 								<h4 className="font-medium text-sm text-text-default">
 									Sign in with a subscription
 								</h4>
-								<p className="text-hint text-xs">
+								<p className="text-text-muted text-xs">
 									Use your existing Claude, ChatGPT, or Copilot plan — no API key needed.
 								</p>
 							</div>
@@ -208,7 +208,7 @@ export function ProvidersSettings() {
 					) : null}
 
 					{noInApp.length > 0 ? (
-						<p data-testid="providers-more" className="text-hint text-xs">
+						<p data-testid="providers-more" className="text-text-muted text-xs">
 							{noInApp.length} more are configured outside the app (environment variables or
 							models.json):{" "}
 							{noInApp
@@ -253,7 +253,7 @@ export function ProvidersSettings() {
 function Group({ title, children }: { title: string; children: ReactNode }) {
 	return (
 		<section className="flex flex-col gap-sm">
-			<h4 className="font-medium text-muted text-xs uppercase tracking-wider">{title}</h4>
+			<h4 className="font-medium text-text-muted text-xs uppercase tracking-wider">{title}</h4>
 			<div className="flex flex-col gap-xs">{children}</div>
 		</section>
 	);
@@ -282,7 +282,7 @@ function ConnectedCard({
 			</span>
 			<div className="flex min-w-0 flex-col">
 				<span className="truncate font-medium text-sm text-text-default">{provider.name}</span>
-				<span className="truncate text-hint text-xs">
+				<span className="truncate text-text-muted text-xs">
 					{label}
 					{provider.detail ? ` · ${provider.detail}` : ""}
 				</span>
@@ -304,7 +304,7 @@ function ConnectedCard({
 				</Button>
 			) : (
 				<span
-					className="ml-auto flex shrink-0 items-center gap-xs text-hint text-xs"
+					className="ml-auto flex shrink-0 items-center gap-xs text-text-muted text-xs"
 					title="Configured outside the app (environment / models.json)"
 				>
 					<Lock className="size-3" />
@@ -340,7 +340,7 @@ function ProviderActionRow({
 			className="flex flex-col gap-xs rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-md py-sm"
 		>
 			<div className="flex items-center gap-sm text-sm">
-				<span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-hover text-muted">
+				<span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-hover text-text-muted">
 					<Boxes className="size-4" />
 				</span>
 				<span className="min-w-0 flex-1 truncate text-text-default">{provider.name}</span>

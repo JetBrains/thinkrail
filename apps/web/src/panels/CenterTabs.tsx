@@ -68,7 +68,7 @@ function ChatHistoryMenu({
 				data-testid="chat-history"
 				aria-label="Reopen a closed chat"
 				title="View chat history"
-				className="flex shrink-0 items-center border-border2 border-l px-sm text-hint outline-none hover:bg-hover hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex shrink-0 items-center border-border2 border-l px-sm text-text-muted outline-none hover:bg-hover hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 			>
 				<History className="size-4" />
 			</DropdownMenuTrigger>
@@ -82,8 +82,8 @@ function ChatHistoryMenu({
 						onSelect={() => onReopen(c.sessionId)}
 					>
 						<span className="flex-1 truncate">{c.title}</span>
-						<span className="shrink-0 text-hint text-xs">{relativeTime(c.closedAt)}</span>
-						<RotateCcw className="size-3.5 shrink-0 text-muted" />
+						<span className="shrink-0 text-text-muted text-xs">{relativeTime(c.closedAt)}</span>
+						<RotateCcw className="size-3.5 shrink-0 text-text-muted" />
 					</DropdownMenuItem>
 				))}
 			</DropdownMenuContent>
@@ -239,24 +239,24 @@ export function CenterTabs() {
 	};
 
 	const placeholder = (
-		<div className="flex h-full flex-col items-center justify-center gap-md px-lg text-center text-hint">
+		<div className="flex h-full flex-col items-center justify-center gap-md px-lg text-center text-text-muted">
 			{activeWorkspace ? (
 				<div
 					data-testid="workspace-ready"
 					className="flex max-w-[440px] flex-col items-center gap-xs"
 				>
-					<span className="font-medium text-hint text-xs uppercase tracking-wider">
+					<span className="font-medium text-text-muted text-xs uppercase tracking-wider">
 						Workspace ready
 					</span>
 					<h2 className="max-w-full truncate font-medium text-md text-text-default">
 						{activeWorkspace.name}
 					</h2>
-					<p className="flex max-w-full items-center gap-xs font-[var(--font-mono)] text-muted text-xs">
+					<p className="flex max-w-full items-center gap-xs font-[var(--font-mono)] text-text-muted text-xs">
 						<GitBranch className="size-3.5 shrink-0" />
 						<span className="truncate">{activeWorkspace.branch}</span>
-						<span className="shrink-0 text-hint">· from {activeWorkspace.baseBranch}</span>
+						<span className="shrink-0 text-text-muted">· from {activeWorkspace.baseBranch}</span>
 					</p>
-					<p className="mt-xs text-muted text-sm">
+					<p className="mt-xs text-text-muted text-sm">
 						Files, chats, changes, and terminals are scoped to this workspace.
 					</p>
 				</div>
@@ -294,7 +294,7 @@ export function CenterTabs() {
 								data-active={isActive}
 								data-kind={tab.kind}
 								className={`group flex items-center gap-xs border-border2 border-r pr-xs pl-sm text-sm ${
-									isActive ? "bg-bg text-text-default" : "text-muted hover:bg-hover"
+									isActive ? "bg-bg text-text-default" : "text-text-muted hover:bg-hover"
 								}`}
 							>
 								<button
@@ -303,7 +303,7 @@ export function CenterTabs() {
 									onClick={() => setActiveTab(tab.id)}
 								>
 									{tab.kind === "diff" ? (
-										<GitCompareArrows className="size-3.5 shrink-0 text-hint" />
+										<GitCompareArrows className="size-3.5 shrink-0 text-text-muted" />
 									) : null}
 									<span className="truncate">{tab.name}</span>
 								</button>
@@ -312,7 +312,7 @@ export function CenterTabs() {
 									data-testid="editor-tab-close"
 									aria-label={`Close ${tab.name}`}
 									onClick={() => onCloseTab(tab)}
-									className="rounded-[var(--radius-sm)] p-0.5 text-hint opacity-0 hover:bg-hover hover:text-text-default group-hover:opacity-100"
+									className="rounded-[var(--radius-sm)] p-0.5 text-text-muted opacity-0 hover:bg-hover hover:text-text-default group-hover:opacity-100"
 								>
 									<X className="size-3.5" />
 								</button>
@@ -325,7 +325,7 @@ export function CenterTabs() {
 							data-testid="new-chat"
 							aria-label="New chat"
 							onClick={() => void startChat()}
-							className="flex items-center px-sm text-hint hover:bg-hover hover:text-text-default"
+							className="flex items-center px-sm text-text-muted hover:bg-hover hover:text-text-default"
 						>
 							<MessageSquarePlus className="size-4" />
 						</button>
@@ -341,7 +341,9 @@ export function CenterTabs() {
 					<ErrorBoundary label={active.kind === "chat" ? "chat" : "editor"} resetKeys={[active.id]}>
 						<Suspense
 							fallback={
-								<div className="flex h-full items-center justify-center text-hint">Loading…</div>
+								<div className="flex h-full items-center justify-center text-text-muted">
+									Loading…
+								</div>
 							}
 						>
 							{active.kind === "chat" ? (

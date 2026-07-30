@@ -63,7 +63,7 @@ export function PanZoomView({ svg }: { svg: string }) {
 	};
 
 	const btn =
-		"rounded-[var(--radius-sm)] p-1 text-muted outline-none transition-colors hover:bg-hover hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary";
+		"rounded-[var(--radius-sm)] p-1 text-text-muted outline-none transition-colors hover:bg-hover hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary";
 
 	return (
 		<div className="relative min-h-0 flex-1">
@@ -91,7 +91,7 @@ export function PanZoomView({ svg }: { svg: string }) {
 				</button>
 				<span
 					data-testid="mermaid-zoom-level"
-					className="min-w-[3.5ch] text-center text-muted tabular-nums"
+					className="min-w-[3.5ch] text-center text-text-muted tabular-nums"
 				>
 					{Math.round(scale * 100)}%
 				</span>

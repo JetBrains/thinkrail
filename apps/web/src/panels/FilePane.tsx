@@ -10,7 +10,9 @@ import { useLiveTabContent } from "./useLiveTabContent";
 const MonacoEditor = lazy(() => import("./MonacoEditor"));
 const MarkdownPreview = lazy(() => import("./MarkdownPreview"));
 
-const loading = <div className="flex h-full items-center justify-center text-hint">Loading…</div>;
+const loading = (
+	<div className="flex h-full items-center justify-center text-text-muted">Loading…</div>
+);
 
 /**
  * The center pane for a file tab. Non-markdown files render Monaco directly (unchanged). Markdown files

@@ -443,11 +443,11 @@ export function NewWorkspaceDialog({
 							className="absolute top-full left-sm z-50 mt-xs"
 						/>
 					) : prompt.trim() ? (
-						<p data-testid="workspace-naming-hint" className="px-xs text-hint text-xs">
+						<p data-testid="workspace-naming-hint" className="px-xs text-text-muted text-xs">
 							ThinkRail will name the workspace and branch from your request.
 						</p>
 					) : (
-						<p className="mt-xs text-hint text-xs">
+						<p className="mt-xs text-text-muted text-xs">
 							Type <span className="font-[var(--font-mono)]">/</span> for a project skill —
 							previewed from the current checkout; the created workspace's session is authoritative.
 						</p>
@@ -520,7 +520,7 @@ function ProjectPicker({
 					<Box className="size-3 text-text-on-primary" />
 				</span>
 				<span className="truncate">{current}</span>
-				<ChevronDown className="size-3 shrink-0 text-hint" />
+				<ChevronDown className="size-3 shrink-0 text-text-muted" />
 			</PopoverTrigger>
 			<PopoverContent align="start" container={container} className="w-[280px] p-0">
 				<Command>
@@ -538,7 +538,7 @@ function ProjectPicker({
 										setOpen(false);
 									}}
 								>
-									<Box className="size-3.5 shrink-0 text-muted" />
+									<Box className="size-3.5 shrink-0 text-text-muted" />
 									<span className="truncate">{p.name}</span>
 								</CommandItem>
 							))}
@@ -585,10 +585,12 @@ function BranchPicker({
 			<span className="flex w-3.5 shrink-0 justify-center">
 				{ref === baseRef ? <Check className="size-3.5 text-primary" /> : null}
 			</span>
-			<GitBranch className="size-3.5 shrink-0 text-hint" />
+			<GitBranch className="size-3.5 shrink-0 text-text-muted" />
 			<span className="truncate font-[var(--font-mono)] text-xs">{ref}</span>
 			{ref === defaultBranch ? (
-				<span className="ml-auto shrink-0 font-[var(--font-mono)] text-hint text-xs">default</span>
+				<span className="ml-auto shrink-0 font-[var(--font-mono)] text-text-muted text-xs">
+					default
+				</span>
 			) : null}
 		</CommandItem>
 	);
@@ -600,12 +602,12 @@ function BranchPicker({
 				data-open={open}
 				className={`${PILL} max-w-[220px]`}
 			>
-				<GitBranch className="size-3.5 shrink-0 text-muted" />
-				<span className="shrink-0 text-hint text-xs">From</span>
-				<span className="truncate font-[var(--font-mono)] text-muted text-xs">
+				<GitBranch className="size-3.5 shrink-0 text-text-muted" />
+				<span className="shrink-0 text-text-muted text-xs">From</span>
+				<span className="truncate font-[var(--font-mono)] text-text-muted text-xs">
 					{baseRef || "branch"}
 				</span>
-				<ChevronDown className="size-3 shrink-0 text-hint" />
+				<ChevronDown className="size-3 shrink-0 text-text-muted" />
 			</PopoverTrigger>
 			<PopoverContent align="start" container={container} className="w-[320px] p-0">
 				<div className="flex items-center justify-end border-border border-b px-sm py-xs">
@@ -615,7 +617,7 @@ function BranchPicker({
 						aria-label="Refresh branches"
 						title="Refresh branches"
 						onClick={onRefresh}
-						className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-hint outline-none transition-colors hover:bg-hover hover:text-muted focus-visible:ring-2 focus-visible:ring-primary"
+						className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:bg-hover hover:text-text-muted focus-visible:ring-2 focus-visible:ring-primary"
 					>
 						<RefreshCw className={`size-3.5 ${refreshing ? "animate-spin" : ""}`} />
 					</button>

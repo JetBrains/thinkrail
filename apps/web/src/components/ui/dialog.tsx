@@ -37,7 +37,7 @@ function DialogContent({
 			>
 				{children}
 				{hideClose ? null : (
-					<DialogPrimitive.Close className="absolute top-md right-md rounded-[var(--radius-sm)] p-xs text-muted outline-none transition-colors hover:bg-hover hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary">
+					<DialogPrimitive.Close className="absolute top-md right-md rounded-[var(--radius-sm)] p-xs text-text-muted outline-none transition-colors hover:bg-hover hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary">
 						<X className="size-4" />
 						<span className="sr-only">Close</span>
 					</DialogPrimitive.Close>
@@ -73,7 +73,9 @@ function DialogDescription({
 	className,
 	...props
 }: React.ComponentProps<typeof DialogPrimitive.Description>) {
-	return <DialogPrimitive.Description className={cn("text-sm text-muted", className)} {...props} />;
+	return (
+		<DialogPrimitive.Description className={cn("text-sm text-text-muted", className)} {...props} />
+	);
 }
 
 export {
