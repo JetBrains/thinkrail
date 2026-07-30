@@ -16,7 +16,7 @@ import {
 	Sparkles,
 	TriangleAlert,
 } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { ModelSelector } from "@/chat/ModelSelector";
 import { SkillsButton } from "@/chat/SkillsButton";
 import { SkillsDialog } from "@/chat/SkillsDialog";
@@ -27,6 +27,7 @@ import {
 	useSlashCommandCompletion,
 } from "@/chat/SlashCommandCompletion";
 import { ThinkingSelector } from "@/chat/ThinkingSelector";
+import { useModelCatalog } from "@/chat/useModelCatalog";
 import { Button } from "@/components/ui/button";
 import {
 	Command,
@@ -46,12 +47,46 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { selectWorkspaceTick, toast, useAppStore } from "@/store";
+import { selectCatalogModel, selectWorkspaceTick, toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { enterDefaultWorkspace } from "./defaultWorkspace";
 
 /** Where the work runs: cut an isolated worktree, or enter the project folder (Default workspace). */
 type WorkspaceTarget = "worktree" | "default";
+
+/**
+ * Reconcile the held pre-session model against the catalog: re-point to the same `{provider,id}` entry
+ * (the refreshed object, whose `thinkingLevels` may differ). Null means "change nothing";
+ * **`"unavailable"`** means "this model is gone — ask the host what to use instead" (the *replacement* is
+ * never decided here; see below).
+ *
+ * Whether a model the catalog *lacks* may be declared gone turns on whether that catalog is authoritative
+ * for the question, which is what `catalogFresh` says:
+ *
+ * - **fresh** — the list *currently held* is the installed result of an awaited forced refresh.
+ *   `model.refresh` and the host's `resolveWireModel` read the same registry, and that refresh has
+ *   finished, so a missing model really is gone — replacing it beats letting Create fail. (Provenance
+ *   lives on the store beside `models` — so the next `model.list` install, from this dialog or any other
+ *   consumer, drops it along with the list it described.)
+ * - **not fresh** — the app-wide store copy, including anything `model.list` returned (its handler starts
+ *   a detached refresh and answers from before it, so the registry can move underneath the reply).
+ *   Substituting on that basis would replace a valid host-resolved default with a stale local entry, so
+ *   an unconfirmable model is kept until a real refresh settles it.
+ *
+ * Neither the replacement nor the effort is decided here: `models[0]` would re-derive the host's
+ * `pinned ?? available[0]` default policy client-side, so the caller asks `model.default` — authoritative,
+ * and it returns an effort consistent with the model it names — exactly as the effort clamp already defers
+ * to `model.clampThinking`. No path here invents a policy of its own.
+ */
+export function reconcileModel(
+	models: readonly WireModel[],
+	model: WireModel,
+	catalogFresh: boolean,
+): WireModel | "unavailable" | null {
+	const found = selectCatalogModel(models, model);
+	if (found) return found;
+	return catalogFresh && models.length > 0 ? "unavailable" : null;
+}
 
 /** A shared pill-trigger look for the project + branch pickers (mockup `.pill`). */
 const PILL =
@@ -90,7 +125,6 @@ export function NewWorkspaceDialog({
 	onCreated: (workspace: Workspace) => void;
 }) {
 	const projects = useAppStore((s) => s.projects);
-	const models = useAppStore((s) => s.models);
 
 	const [selectedProjectId, setSelectedProjectId] = useState(projectId);
 	// Every opener starts on the isolated-worktree side (task-welcome-trim made the entry points
@@ -108,6 +142,8 @@ export function NewWorkspaceDialog({
 	const [trusting, setTrusting] = useState(false);
 	const [manageSkills, setManageSkills] = useState(false);
 	const promptRef = useRef<HTMLTextAreaElement>(null);
+	// Whether this opening already asked the host to replace a model the catalog dropped (see below).
+	const hostDefaultAsked = useRef(false);
 	// Ties the two target radios into one native group, unique per dialog instance.
 	const targetGroupName = useId();
 	// The dialog content node — popovers portal into it so their lists stay scrollable under the Dialog's
@@ -141,6 +177,7 @@ export function NewWorkspaceDialog({
 		setPrompt(initialPrompt ?? "");
 		setTarget("worktree");
 		setCreating(false);
+		hostDefaultAsked.current = false;
 	}, [open, projectId, initialPrompt]);
 
 	// Skills are previewed from the selected project's current checkout; the created worktree/session is
@@ -176,26 +213,27 @@ export function NewWorkspaceDialog({
 		};
 	}, [open, selectedProjectId]);
 
-	// Models are global to the host — fetch once into the shared store; the picker reads them.
-	useEffect(() => {
-		if (!open || models.length > 0) return;
-		getTransport()
-			.request("model.list", {})
-			.then((m) => useAppStore.getState().setModels(m))
-			.catch(() => {});
-	}, [open, models.length]);
+	// Models are global to the host — the shared catalog hook re-reads them for this opening (`fresh`)
+	// and wires the refresh flow.
+	const {
+		models,
+		refreshing: modelsRefreshing,
+		refresh: onRefreshModels,
+		fresh: catalogFresh,
+	} = useModelCatalog(open);
 
-	// Preselect the exact model + effort a fresh session would resolve to (so the picker shows the real
-	// model, not a placeholder). Passing it back at create time is a no-op vs. the host default.
-	useEffect(() => {
-		if (!open) return;
+	// The one place a {model, effort} pair is *chosen* for this not-yet-created session: the host applies
+	// pi's own default policy and answers with a level already clamped onto the model it names, so nothing
+	// here re-derives either. Both callers below go through it — the preselect on open and the replacement
+	// for a model the catalog says is gone. Returns the calling effect's cleanup.
+	const applyHostDefault = useCallback(() => {
 		let cancelled = false;
 		getTransport()
 			.request("model.default", {})
 			.then((d) => {
 				if (cancelled) return;
 				setModel(d.model);
-				// Already self-consistent: the host clamped the saved level onto this model (same
+				// Self-consistent already (the host clamped the saved level onto this model with the same
 				// `clampThinkingLevel` the effect below asks for), so it needs no adjustment here.
 				setThinkingLevel(d.thinkingLevel);
 			})
@@ -203,7 +241,36 @@ export function NewWorkspaceDialog({
 		return () => {
 			cancelled = true;
 		};
-	}, [open]);
+	}, []);
+
+	// Preselect the exact model + effort a fresh session would resolve to (so the picker shows the real
+	// model, not a placeholder). Passing it back at create time is a no-op vs. the host default.
+	useEffect(() => {
+		if (!open) return;
+		return applyHostDefault();
+	}, [open, applyHostDefault]);
+
+	// The stored selection tracks the catalog, so a refresh that changes a model's `thinkingLevels`
+	// can't leave the UI and pi's clamp disagreeing, and a model this opening's own snapshot says is
+	// gone is replaced rather than left for `create()` to fail on. `catalogFresh` is what separates
+	// those two cases from a stale shared copy — see `reconcileModel`. Converges: the reconciled object
+	// comes FROM `models`, so the second pass is a no-op. The effort follows the model, either via the
+	// host's default here or via its clamp below.
+	useEffect(() => {
+		if (!open || !model) return;
+		const next = reconcileModel(models, model, catalogFresh);
+		if (next === null) return;
+		if (next !== "unavailable") {
+			if (next !== model) setModel(next);
+			return;
+		}
+		// Gone from an authoritative catalog — the host names the replacement. Asked at most once per
+		// opening: its answer comes from the same registry the fresh list did, so a still-missing model is a
+		// race to leave to `create()`'s error, never something to re-request in a loop.
+		if (hostDefaultAsked.current) return;
+		hostDefaultAsked.current = true;
+		return applyHostDefault();
+	}, [open, models, model, catalogFresh, applyHostDefault]);
 
 	// Keep the held effort runnable by the held model. Whenever the two disagree — an explicit model
 	// switch, or a catalog refresh that changed what the model supports — ask the host for pi's own
@@ -545,6 +612,8 @@ export function NewWorkspaceDialog({
 						<ModelSelector
 							models={models}
 							current={model}
+							refreshing={modelsRefreshing}
+							onRefresh={onRefreshModels}
 							container={dialogEl}
 							onSelect={(m) => {
 								setModel(m);

@@ -13,6 +13,7 @@ import type {
 	ImageContent,
 	Model,
 	PiEvent,
+	RefreshedModels,
 	SessionEventPayload,
 	SessionStats,
 	SessionSummary,
@@ -23,7 +24,12 @@ import type {
 } from "@thinkrail/contracts";
 import { ANSWERABILITY_ERRORS, assessAnswerability, buildAnswersMessage } from "./askUserQuestion";
 import { buildResourceLoader, toSkillCommands } from "./extensions";
-import { getPiRuntime, refreshCatalogsDetached } from "./piRuntime";
+import {
+	getPiRuntime,
+	refreshCatalogs,
+	refreshCatalogsDetached,
+	settledAvailableModels,
+} from "./piRuntime";
 import { repairDanglingToolCalls } from "./sessionRepair";
 import type { SkillAdmissionContext } from "./skillAdmission";
 import { cancelExtUiForSession, createWebUiContext, notifyExtUi } from "./webUiContext";
@@ -163,12 +169,12 @@ export function toWireModel(model: Model<string>): WireModel {
 
 /**
  * Re-resolve a wire model reference back to the real `Model` (with its `baseUrl`) from the registry, matching
- * the picker's universe (`getAvailable()`). **Never trust a client-supplied `baseUrl`** — pi's `setModel` /
+ * the picker's universe (the same `settledAvailableModels` read). **Never trust a client-supplied `baseUrl`** — pi's `setModel` /
  * `createAgentSession` use it verbatim, so accepting it would let a client (esp. a remote V2 one) point the
  * agent's model traffic at an arbitrary URL. Throws if the ref isn't an available model.
  */
 async function resolveWireModel(ref: Pick<WireModel, "provider" | "id">): Promise<Model<string>> {
-	const available = await (await getPiRuntime()).getAvailable();
+	const available = settledAvailableModels(await getPiRuntime());
 	const match = available.find((m) => m.provider === ref.provider && m.id === ref.id);
 	if (!match) throw new Error(`Unknown or unavailable model: ${ref.provider}/${ref.id}`);
 	return match as unknown as Model<string>;
@@ -454,13 +460,33 @@ export function getSessionCommands(sessionId: string): SlashCommandInfo[] {
 
 /** Models with configured auth, for the model picker (cheap win #1). Redacted to `WireModel` — the raw
  * `Model.baseUrl` carries the jbcentral proxy secret when wired, and the picker only reads id/name/provider.
- * Also fires the detached catalog refresh (issue #98): the read below returns the current snapshot
- * immediately — never awaiting the network — and a later `model.list` picks up whatever the refresh landed. */
+ * Also fires the detached catalog refresh (issue #98): the read below is `settledAvailableModels` — pi's
+ * last settled snapshot, so it truly never awaits the network — and a later `model.list` picks up whatever
+ * the refresh landed. */
 export async function listAvailableModels(): Promise<WireModel[]> {
 	const runtime = await getPiRuntime();
 	refreshCatalogsDetached(runtime);
-	const available = await runtime.getAvailable();
-	return available.map((m) => toWireModel(m as unknown as Model<string>));
+	return readAvailableWireModels(runtime);
+}
+
+/** `model.refresh` (the picker's freshness affordance): AWAIT the catalog refresh, then serve the
+ * post-refresh snapshot. Same redaction, same universe as `listAvailableModels`; refresh failures
+ * resolve (logged in piRuntime), so the caller always gets the registry's current truth. `force`
+ * bypasses pi's freshness throttle — pass it for a user-initiated refresh, omit it for an implicit
+ * one, which then shares the single-flight slot with any in-flight detached trigger.
+ *
+ * **`complete`** travels with the list because the wait is capped: it says whether the pass this call
+ * awaited actually settled. Only a `true` makes the list the host's verdict — the client keys catalog
+ * authority (`modelsFresh`, hence whether a missing model may be declared gone) on exactly this. */
+export async function refreshAvailableModels(force = false): Promise<RefreshedModels> {
+	const runtime = await getPiRuntime();
+	const { completed } = await refreshCatalogs(runtime, { force });
+	return { models: readAvailableWireModels(runtime), complete: completed };
+}
+
+/** The one snapshot→wire read both list paths share (redaction happens here, in `toWireModel`). */
+function readAvailableWireModels(runtime: Awaited<ReturnType<typeof getPiRuntime>>): WireModel[] {
+	return settledAvailableModels(runtime).map((m) => toWireModel(m as unknown as Model<string>));
 }
 
 /** The model + thinking level a new session resolves to (settings default if available, else first available). */
@@ -495,7 +521,7 @@ export async function clampThinkingForModel(
  * non-reasoning one — pi would silently clamp the created session to `off` otherwise).
  */
 export async function getDefaultModel(): Promise<DefaultModelResult> {
-	const available = await (await getPiRuntime()).getAvailable();
+	const available = settledAvailableModels(await getPiRuntime());
 	const settings = SettingsManager.create(process.cwd());
 	const provider = settings.getDefaultProvider();
 	const modelId = settings.getDefaultModel();

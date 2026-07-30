@@ -152,14 +152,24 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   template** action on the selected prompt row — see the Save-as-template bullet below, and a
   **zoomed-stage preview pane** + **scope picker** — see the next bullet),
   `ModelSelector` + `ThinkingSelector` (also shared with `NewWorkspaceDialog`;
-  optional `container` prop portals their popovers into a host Dialog; `ThinkingSelector` takes
+  optional `container` prop portals their popovers into a host Dialog; `ModelSelector` takes
+  `refreshing`/`onRefresh(force)` — a footer “Refresh catalog” row that passes **`force: true`** (the
+  user asked, so bypass pi's freshness throttle) and spins while that awaited refresh runs, plus an
+  **unforced** auto-fire on each open, which `useModelCatalog` serves from the host snapshot
+  (`model.list`) rather than the network: an open is incidental, and awaiting a real refresh there would
+  spin the row for as long as the slowest configured provider takes, up to the host's 15s abort, every
+  time. Its trigger stays openable with an **empty** catalog — that is exactly when the Refresh row is
+  the thing to reach for. `ThinkingSelector` takes
   **`levels`** — `WireModel.thinkingLevels` verbatim, the host-computed support truth, already in pi's
   escalation order — and its rows **are** that list. The web keeps no enumeration of the level
   vocabulary: pi owns it, the host projects the per-model slice, and an empty list (no model resolved
   yet) disables the trigger. It holds **no effort policy of its own**: when a held level isn't one the
   held model can run, the consumer asks the host for pi's `clampThinkingLevel` answer
   (`model.clampThinking`) — `model.default` clamps the same way, and a live session gets pi's answer
-  directly via `thinking_level_changed`), `SessionStatsBar`, `ChatHeader`
+  directly via `thinking_level_changed`. Its rows follow the **live catalog** — `ChatView` resolves the
+  session's model through `store`'s `selectCatalogModel` before passing it down, rather than reading the
+  session's own snapshot, so a `model.refresh` that changes what a model supports changes the offered
+  levels with it), `SessionStatsBar`, `ChatHeader`
   (its `left` slot carries the plan strip; its **Skills** button is the presentational **`SkillsButton`**
   primitive — a `BookOpen` pill, badged when a skill dir changed on disk — also shared with
   `NewWorkspaceDialog` so the two triggers cannot drift), `ExtUiDialog`, and **`SkillsDialog`** (the **Skills manager**: a catalog
@@ -521,12 +531,23 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   **No `index.ts` barrel** — chat pulls **shiki**, so per the code-splitting exception imports stay
   **per-file**; the registry is importable from `chat/toolRegistry` **without** pulling shiki.
 - **Allowed deps:** `contracts` (pi message/content-block types, **type-only**); `store` + `transport`
-  (**`ChatView` + its integration hooks (`useHistorySearch.ts`) + `TemplateEditorDialog.tsx` only** — the
-  app-integration edge); `react-markdown` / `remark-gfm` / `shiki` (via `lib/highlighter`); `mermaid`
+  (**app-integration files only** — a renderer that takes props must never reach for either. Today that
+  is `ChatView.tsx` plus the hooks and dialogs it composes: `useChatTodos.ts`, `useHistorySearch.ts`,
+  `useModelCatalog.ts`, `SkillsDialog.tsx`, `TemplateEditorDialog.tsx`. `useModelCatalog` is the shared
+  models-catalog seam `panels/NewWorkspaceDialog` also imports per-file, so the two pickers cannot
+  drift; on activation it **drops catalog authority synchronously** (a flag an earlier consumer set says
+  nothing about the list this one inherited) and reads `model.list` only when the shared list is **empty** —
+  a read per activation would hang a full host `runtime.refresh()` off every chat-tab switch, and the picker's
+  Refresh row is the currency path. It reports **`fresh`** — read straight off the store's `modelsFresh`,
+  because catalog authority belongs to the **shared list**, not to a consumer: true only for the installed
+  result of an awaited forced refresh **the host reported `complete`** (its wait is capped, so an unsettled
+  pass still answers — with a list to render, not a verdict), and dropped by the next `model.list` install
+  from *any* consumer. `model.list` answers from *before* the
+  detached refresh it triggers, so it is never a basis for concluding a model is gone);
+  `react-markdown` / `remark-gfm` / `shiki` (via `lib/highlighter`); `mermaid`
   (**lazy, `tools/visualize` only**); `react-virtuoso`; `lucide-react`; `components/ui`; `lib`.
 - **Forbidden:** value-importing any `pi` package; a **presentational** renderer importing
-  `store`/`transport` (only `ChatView`, its integration hooks, and `TemplateEditorDialog` may — keep the
-  renderers reusable).
+  `store`/`transport` (only the app-integration files enumerated above may — keep the renderers reusable).
 - **`ChatView`** is the primary app-integration file: wires this session's runtime
   (`store.sessions[sessionId]`), the transport calls, the `ChatActions` + `AskStates` contexts, the
   divider's deep links (`onOpenChange` → `requestChangesView`, `onOpenSpec` → `requestSpecView`; each

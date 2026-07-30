@@ -153,11 +153,22 @@ a project picker, the prompt hero, and the reused
   `chat/ModelSelector`+`ThinkingSelector` in **pre-session** mode — preselected to the host's resolved
   default via `model.default` so the exact model shows (values held in dialog state, applied at create
   time). The pickers' popovers portal into the dialog node (so their lists scroll under the Dialog scroll
-  lock). Pre-session there is no pi to clamp the effort, so an explicit model switch moves it onto the
-  new model's own set by asking the host for pi's clamp (**`model.clampThinking`**) rather than deciding
-  locally — one effect owns "the held effort must be runnable by the held model", so an explicit switch
-  and a catalog refresh that shrank a model's set both resolve the same way pi would. `model.default` needs no adjustment: the host
-  already returns a self-consistent pair.
+  lock). Their catalog is the shared one — `chat/useModelCatalog`, so the dialog and the chat composer
+  cannot drift — which means it is **live**: the picker's Refresh row can replace the list underneath a
+  held selection. The dialog therefore reconciles the held model against it on every change via the pure
+  **`reconcileModel`** (model only — effort is decided by the host's clamp, below): re-point to the same
+  `{provider,id}` (the refreshed object, whose `thinkingLevels` may differ). What it does when the catalog
+  has no such model turns on **`catalogFresh`** — the store's `modelsFresh`, true only for the installed
+  result of an awaited forced refresh the host reported **`complete`** (a capped wait can answer with a
+  current-but-unsettled list, which is no basis for a verdict), dropped by the next `model.list` install from any consumer (whose
+  handler answers from before the detached refresh it starts) *and* dropped up front by any consumer
+  activating. On a fresh catalog it returns **`"unavailable"`** — a verdict, not a replacement: the dialog
+  then asks **`model.default`** (pi's own `pinned ?? available[0]`, plus a consistent effort) exactly as it
+  does for the preselect, through **one** `applyHostDefault` — so no client-side copy of the host's default
+  policy exists here. Asked at most once per opening, so a still-missing model can't spin the effect. Effort is a separate concern: one effect keeps the held level
+  runnable by the held model by asking the host for pi's clamp (**`model.clampThinking`**) rather than
+  deciding locally, so an explicit switch and a refresh that shrank a model's set resolve the same way
+  pi would. `model.default` needs no adjustment: the host already returns a self-consistent pair.
   On open and project-picker changes, the dialog reads **`skill.list({projectId})`** and feeds the
   result to chat's shared slash-completion primitive: a leading `/` autocompletes skills from the selected
   project's **current checkout** plus personal/bundled sources, selecting one inserts `/skill:<name> `;
@@ -284,7 +295,8 @@ a project picker, the prompt hero, and the reused
   (`WelcomePanel` and `CenterTabs`/`RightPanel`/`TerminalsPanel` are mutually exclusive — the shell mounts
   one set or the other on the active-workspace branch.)
 - **Allowed deps:** `store`, `transport`, `components/ui` (incl. `popover`/`command`/`textarea` for the
-  dialog), `chat` (`ModelSelector`/`ThinkingSelector`, reused by `NewWorkspaceDialog`; `Markdown`,
+  dialog), `chat` (`ModelSelector`/`ThinkingSelector` + the `useModelCatalog` hook that feeds them,
+  reused by `NewWorkspaceDialog`; `Markdown`,
   reused by `MarkdownPreview`; `TemplateEditorDialog`, reused by `TemplatesSettings`), `lib`, `themes` (catalog + generic application contract),
   `contracts`; `lucide-react`; and the heavy libs each lazy panel owns (`monaco-editor`, `shiki`,
   `@xterm/*`) loaded via `import()`.
