@@ -113,10 +113,16 @@ export function proseRootClassName(t: Typography): string {
 	return `${t.metadata.classPrefix}-prose`;
 }
 
+/**
+ * The weight `<strong>`/`<b>` gets inside prose. It is deliberately NOT a semantic style: a complete
+ * style would override the size and line-height of whatever element the bold text sits in (a heading, a
+ * table cell), so the emitted rule sets weight alone and inherits the rest.
+ */
+export const PROSE_STRONG_WEIGHT = "medium";
+
 /** Which element inside `.tr-prose` each prose style owns. `body` styles the root itself. */
 export const PROSE_SELECTORS: Record<string, string> = {
 	body: "",
-	strong: " :is(strong, b)",
 	h1: " h1",
 	h2: " h2",
 	h3: " h3",
@@ -321,6 +327,10 @@ export function validate(t: Typography): string[] {
 		if (!isMono && CODE_STYLE_IDS.has(id)) fail(`${id}: code style must use a monospace family`);
 	}
 
+	// The weight-only <strong> rule references this token directly.
+	if (!(PROSE_STRONG_WEIGHT in (t.fontWeights ?? {})))
+		fail(`fontWeights.${PROSE_STRONG_WEIGHT}: missing — the prose <strong> rule references it`);
+
 	// Prose must be one shared system: every selector-owning style exists, and nothing else does.
 	const proseIds = Object.keys(t.proseStyles ?? {});
 	for (const id of Object.keys(PROSE_SELECTORS))
@@ -406,6 +416,18 @@ export function renderCss(t: Typography): string {
 		out.push(declarations(t, resolveStyle(t, `prose.${name}`)));
 		out.push("}");
 	}
+
+	// `<strong>` / `<b>`: WEIGHT ONLY. Family, size, line-height, tracking, transform and colour inherit
+	// from the enclosing prose element, so bold inside a heading keeps the heading's size, bold in a table
+	// cell keeps the table's size, and bold in body text keeps the body's. The (0,1,1) specificity beats
+	// preflight's `strong { font-weight: bolder }`.
+	out.push("");
+	out.push(
+		"/* Bold inside prose: weight only — every other property inherits from the parent element. */",
+	);
+	out.push(`.${root} :is(strong, b) {`);
+	out.push(`\tfont-weight: var(${cssVarName(t, "font-weight", PROSE_STRONG_WEIGHT)});`);
+	out.push("}");
 	return `${out.join("\n")}\n`;
 }
 

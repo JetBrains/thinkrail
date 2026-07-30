@@ -74,7 +74,11 @@ The rules, all enforced by `typography:validate`:
 `block`, `otp`). `proseStyles` holds only what is unique to prose — `h1`, `h3`, `h6` — and aliases
 UI/body/code styles for the rest.
 
-**16 canonical definitions + 16 aliases = 32 styles.**
+**16 canonical definitions + 15 aliases = 31 styles.**
+
+One prose rule is deliberately *not* a semantic style: `<strong>` / `<b>` gets **weight only**
+(`--tr-font-weight-medium`), emitted by the generator. A complete style there would override the size and
+line-height of whatever element the bold text sits inside.
 
 The JSON holds **no** CSS selectors, class strings, component paths, usage lists, rationale or audit
 data. Rationale lives in this file; `TYPOGRAPHY-AUDIT.md` is a historical record that defines nothing.
@@ -119,7 +123,7 @@ skin" now carries only spacing, measure and chrome (`chat/Markdown.tsx` = bubble
 | Element | Style |
 |---|---|
 | body, blockquote, lists | 14px / 400 / 1.6 |
-| `strong` | 14px / 500 |
+| `strong` / `b` | **weight 500 only** — family, size, line-height, tracking, transform and colour inherit from the enclosing element, so bold in a heading keeps the heading's size and bold in a cell keeps the table's |
 | h1 | 18px / 600 / 1.25 |
 | h2 | 14px / 600 / 1.25 |
 | h3 | 12px / 600 |

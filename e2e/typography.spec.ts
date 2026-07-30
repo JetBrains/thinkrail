@@ -157,3 +157,70 @@ test("typography survives a narrow mobile viewport without clipping or overflow"
 	});
 	expect(problems).toEqual([]);
 });
+
+test("bold inside prose changes weight only — both markdown surfaces share the rule", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await expect(page.getByTestId("welcome")).toBeVisible();
+
+	// Both markdown surfaces mount `.tr-prose`, so the shared rules are what govern each of them. Probe
+	// them directly on a detached fragment: no agent session needed to assert the CSS both surfaces use.
+	const measured = await page.evaluate(() => {
+		const host = document.createElement("div");
+		host.className = "tr-prose";
+		host.innerHTML =
+			"<h1>A <strong>bold</strong> title</h1>" +
+			"<table><tbody><tr><td>cell <strong>bold</strong></td></tr></tbody></table>" +
+			"<p>body <strong>bold</strong> text</p>" +
+			"<p><em><strong>nested</strong></em></p>";
+		document.body.appendChild(host);
+		const read = (el: Element | null) => {
+			if (!el) return null;
+			const s = getComputedStyle(el);
+			return {
+				family: s.fontFamily,
+				size: s.fontSize,
+				weight: s.fontWeight,
+				lineHeight: s.lineHeight,
+				spacing: s.letterSpacing,
+				transform: s.textTransform,
+				color: s.color,
+			};
+		};
+		const out = {
+			h1: read(host.querySelector("h1")),
+			h1Strong: read(host.querySelector("h1 strong")),
+			cell: read(host.querySelector("td")),
+			cellStrong: read(host.querySelector("td strong")),
+			body: read(host.querySelector("p")),
+			bodyStrong: read(host.querySelector("p strong")),
+			nestedStrong: read(host.querySelector("em strong")),
+		};
+		host.remove();
+		return out;
+	});
+
+	// A bold word in a heading keeps the heading's size and line-height; only the weight differs.
+	expect(measured.h1Strong?.size).toBe(measured.h1?.size);
+	expect(measured.h1Strong?.lineHeight).toBe(measured.h1?.lineHeight);
+	expect(measured.h1Strong?.weight).toBe("500");
+	expect(measured.h1?.weight).toBe("600");
+
+	// A bold word in a table cell keeps the table's size and line-height.
+	expect(measured.cellStrong?.size).toBe(measured.cell?.size);
+	expect(measured.cellStrong?.lineHeight).toBe(measured.cell?.lineHeight);
+	expect(measured.cellStrong?.weight).toBe("500");
+
+	// A bold word in body prose keeps the body typography and becomes 500.
+	expect(measured.bodyStrong?.size).toBe(measured.body?.size);
+	expect(measured.bodyStrong?.lineHeight).toBe(measured.body?.lineHeight);
+	expect(measured.bodyStrong?.weight).toBe("500");
+
+	// Nested bold inherits family, tracking, transform and colour from its parent.
+	for (const key of ["family", "spacing", "transform", "color"] as const) {
+		expect(measured.h1Strong?.[key], `h1 strong ${key}`).toBe(measured.h1?.[key]);
+		expect(measured.cellStrong?.[key], `cell strong ${key}`).toBe(measured.cell?.[key]);
+		expect(measured.nestedStrong?.[key], `nested strong ${key}`).toBe(measured.body?.[key]);
+	}
+});

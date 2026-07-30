@@ -1,7 +1,7 @@
 {
 	"$schema": "./typography.schema.json",
 	"metadata": {
-		"version": "2.2.0",
+		"version": "2.3.0",
 		"cssVarPrefix": "tr",
 		"classPrefix": "tr"
 	},
@@ -205,9 +205,6 @@
 	"proseStyles": {
 		"body": {
 			"$ref": "body.reading"
-		},
-		"strong": {
-			"$ref": "title.section"
 		},
 		"h1": {
 			"fontFamily": "interface",

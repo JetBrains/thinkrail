@@ -47,6 +47,13 @@ describe("typography source", () => {
 		}
 	});
 
+	it("holds 16 canonical definitions and 15 aliases (31 styles)", () => {
+		const styles = allStyles(typography);
+		expect(styles).toHaveLength(31);
+		expect(styles.filter((s) => !s.ref)).toHaveLength(16);
+		expect(styles.filter((s) => s.ref)).toHaveLength(15);
+	});
+
 	it("pins the primitive token values", () => {
 		expect(typography.fontSizes).toEqual({
 			s10: 10,
@@ -234,6 +241,20 @@ describe("generated CSS", () => {
 			])
 				expect(block?.[1], `.${cls} ${prop}`).toContain(`${prop}:`);
 		}
+	});
+
+	it("styles prose <strong> with weight ALONE, so bold inherits its parent's typography", () => {
+		const root = proseRootClassName(typography);
+		const block = new RegExp(`\\.${root} :is\\(strong, b\\) \\{([^}]*)\\}`).exec(GENERATED);
+		expect(block, "the weight-only strong rule is missing").not.toBeNull();
+		const declarations = (block?.[1] ?? "")
+			.split(";")
+			.map((d) => d.trim())
+			.filter(Boolean);
+		expect(declarations).toEqual([`font-weight: var(${"--tr-font-weight-medium"})`]);
+		// A complete style here would override the size/line-height of the heading or cell it sits in.
+		expect(typography.proseStyles).not.toHaveProperty("strong");
+		expect(PROSE_SELECTORS).not.toHaveProperty("strong");
 	});
 
 	it("emits the shared prose system as one class with element selectors", () => {

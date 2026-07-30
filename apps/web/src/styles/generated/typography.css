@@ -1,7 +1,7 @@
 /*
  * GENERATED FILE — DO NOT EDIT.
  *
- * Source:    src/styles/typography.json (v2.2.0)
+ * Source:    src/styles/typography.json (v2.3.0)
  * Generator: scripts/generate-typography.ts  ·  regenerate: bun run typography:generate
  * Drift gate: bun run typography:check (fails when this file is stale)
  *
@@ -216,15 +216,6 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose :is(strong, b) {
-	font-family: var(--tr-font-family-interface);
-	font-size: var(--tr-font-size-s14);
-	font-weight: var(--tr-font-weight-medium);
-	line-height: var(--tr-line-height-default);
-	letter-spacing: var(--tr-letter-spacing-normal);
-	text-transform: none;
-	font-style: normal;
-}
 .tr-prose h1 {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s18);
@@ -332,4 +323,9 @@
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
 	font-style: normal;
+}
+
+/* Bold inside prose: weight only — every other property inherits from the parent element. */
+.tr-prose :is(strong, b) {
+	font-weight: var(--tr-font-weight-medium);
 }
