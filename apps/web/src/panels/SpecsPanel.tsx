@@ -11,7 +11,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "../lib";
 import { useAppStore } from "../store";
-import { openFileInTab } from "./openFile";
+import { openFileInTab } from "./openTabs";
 import { buildSpecTree, type SpecTreeNode, specRoleLabel, specRoleTag } from "./specTree";
 
 /**
@@ -19,7 +19,9 @@ import { buildSpecTree, type SpecTreeNode, specRoleLabel, specRoleTag } from "./
  * tree — a pure reader of the store snapshot that `useWorkspaceSpecs` (owned by `RightPanel`, so it
  * outlives this tab) keeps current. Rows are keyed by spec id, so expansion state survives a silent
  * refresh; a failed re-read keeps the last good tree and `failed` renders the hint only when there is
- * nothing to show. The chevron expands children and one click on the document row opens its rendered spec.
+ * nothing to show. The chevron expands children; one click on the document row **previews** its rendered
+ * spec in the workspace's reusable center tab (so reading down the graph never piles tabs up) and a
+ * double click keeps it.
  *
  * Being keyed per workspace, a switch shows that workspace's last known tree while the re-read is in
  * flight — there is nothing to reset. A `specRequest` deep link (the divider's "N specs" chip) opens the
@@ -44,7 +46,7 @@ export function SpecsPanel({
 	// ago, not yet in the snapshot, opens just the same).
 	useEffect(() => {
 		if (specRequest?.workspaceId !== workspaceId) return;
-		void openFileInTab(workspaceId, specRequest.path);
+		void openFileInTab(workspaceId, specRequest.path, "preview");
 		useAppStore.getState().clearSpecRequest();
 	}, [specRequest, workspaceId]);
 
@@ -148,7 +150,8 @@ function SpecNodeRow({
 					aria-current={isActive ? "page" : undefined}
 					aria-label={`Open ${node.title}. ${isMainSpec ? "Main spec" : role}`}
 					title={`${node.title}\n${node.id} · ${node.type}`}
-					onClick={() => void openFileInTab(workspaceId, node.path)}
+					onClick={() => void openFileInTab(workspaceId, node.path, "preview")}
+					onDoubleClick={() => void openFileInTab(workspaceId, node.path, "keep")}
 					className="flex h-7 min-w-0 flex-1 items-center gap-xs rounded-[var(--radius-sm)] pr-xs text-left outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
 				>
 					<DocumentIcon

@@ -7,8 +7,8 @@ import type {
 	WireModel,
 	Workspace,
 } from "@thinkrail/contracts";
-import { type SessionRuntime, toast, useAppStore } from "./appStore";
-import { selectSkillsStale, selectWorkspaceTick } from "./selectors";
+import { type FileTab, type SessionRuntime, toast, useAppStore } from "./appStore";
+import { selectSkillsStale, selectWorkspaceNavTick, selectWorkspaceTick } from "./selectors";
 
 // Event fixtures — the reducer only reads the fields below, so casting minimal objects is safe here.
 const agentStart = { type: "agent_start" } as unknown as PiEvent;
@@ -68,6 +68,8 @@ beforeEach(() => {
 		sessions: {},
 		tabsByWorkspace: {},
 		activeTabByWorkspace: {},
+		previewTabByWorkspace: {},
+		navTickByWorkspace: {},
 		closedChatsByWorkspace: {},
 		fsChangesByWorkspace: {},
 		skillChangeTickByWorkspace: {},
@@ -749,7 +751,8 @@ test("requestChangesView / requestSpecView are independent, workspace-scoped int
 	useAppStore.getState().requestSpecView("w1", ".thinkrail/context/TASK-x.md");
 
 	const s = useAppStore.getState();
-	expect(s.changesRequest).toEqual({ workspaceId: "w1", path: "src/a.ts" });
+	// `navTick` stamps the center-navigation count at the click; nothing has navigated here, so it's 0.
+	expect(s.changesRequest).toEqual({ workspaceId: "w1", path: "src/a.ts", navTick: 0 });
 	// The spec intent is a separate field, so a spec chip can never be mistaken for a changes chip (which
 	// would flip the right panel to a view that can't show a gitignored spec).
 	expect(s.specRequest).toEqual({ workspaceId: "w1", path: ".thinkrail/context/TASK-x.md" });
@@ -796,7 +799,37 @@ test("clearSpecRequest consumes the spec intent once — it opens a tab, so it m
 	// It clears only its own intent — the Changes deep link is a separate field with its own consume.
 	useAppStore.getState().requestChangesView("w1", "src/a.ts");
 	useAppStore.getState().clearSpecRequest();
-	expect(useAppStore.getState().changesRequest).toEqual({ workspaceId: "w1", path: "src/a.ts" });
+	expect(useAppStore.getState().changesRequest).toEqual({
+		workspaceId: "w1",
+		path: "src/a.ts",
+		navTick: 0,
+	});
+});
+
+// The Changes deep link can't act on itself: `ChangesPanel` has to resolve the reported path against
+// `git.status` first, and the chip is usually what reveals that view, so the open happens a fresh mount's
+// round trip after the click. Stamping the nav count at the click is what lets the panel tell that the user
+// moved the center on in between — an overtaken deep link degrades to the row highlight instead of yanking
+// focus off whatever they picked. (`specRequest` needs no stamp: it opens the reported path immediately.)
+test("the Changes deep link stamps the nav count at the click, so a later navigation still wins", () => {
+	useAppStore.setState({ activeWorkspaceId: "ws1", changesRequest: null, rightTabRequest: null });
+	const s = () => useAppStore.getState();
+
+	// A couple of navigations before the chip, so a stamp of "whatever it is now" is distinguishable from 0.
+	s().openTab(fileTab("ws1", "a.ts"), "keep");
+	s().setActiveTab("ws1:a.ts");
+	const atClick = selectWorkspaceNavTick(s(), "ws1");
+
+	s().requestChangesView("ws1", "src/b.ts");
+	expect(s().changesRequest?.navTick).toBe(atClick);
+
+	// Nothing has moved the center since, so the request is still current: the panel may open its diff.
+	expect(selectWorkspaceNavTick(s(), "ws1")).toBe(s().changesRequest?.navTick);
+
+	// The user picks a tab while `git.status` is still in flight. That is the LATER navigation, so the
+	// stamp no longer matches and the deep link has lost the race.
+	s().setActiveTab("ws1:a.ts");
+	expect(selectWorkspaceNavTick(s(), "ws1")).not.toBe(s().changesRequest?.navTick);
 });
 
 test("clearChangesRequest consumes the Changes intent once — it opens a diff tab, so it must not replay", () => {
@@ -1252,6 +1285,221 @@ test("skills badge: a LIVE restore stays conservatively stale; a disk attach anc
 		selectWorkspaceTick(s(), "ws1"),
 	);
 	expect(isStale("ws1", "disk1")).toBe(false);
+});
+
+// ── Preview tabs ────────────────────────────────────────────────────────────────────────────────────
+// One reusable "I'm just browsing" slot per workspace (`previewTabByWorkspace`), opened and released by
+// the `TabIntent` the surfaces pass. See `apps/web/src/panels/SPEC.md` for the gesture map.
+
+function fileTab(workspaceId: string, name: string): FileTab {
+	return { kind: "file", id: `${workspaceId}:${name}`, workspaceId, name, path: name, content: "" };
+}
+
+test("a preview open replaces the previous preview tab at its index (the strip never reshuffles)", () => {
+	const store = useAppStore.getState();
+	store.openTab(fileTab("ws1", "a.ts"), "keep");
+	store.openTab(fileTab("ws1", "b.ts"), "preview");
+	store.openTab(fileTab("ws1", "c.ts"), "keep"); // the slot now sits between two kept tabs
+
+	store.openTab(fileTab("ws1", "d.ts"), "preview");
+
+	const s = useAppStore.getState();
+	expect((s.tabsByWorkspace.ws1 ?? []).map((t) => t.name)).toEqual(["a.ts", "d.ts", "c.ts"]);
+	expect(s.previewTabByWorkspace.ws1).toBe("ws1:d.ts");
+	expect(s.activeTabByWorkspace.ws1).toBe("ws1:d.ts");
+});
+
+test("a preview open of an already-kept tab focuses it without demoting it or moving the slot", () => {
+	const store = useAppStore.getState();
+	store.openTab(fileTab("ws1", "a.ts"), "keep");
+	store.openTab(fileTab("ws1", "b.ts"), "preview");
+
+	store.openTab(fileTab("ws1", "a.ts"), "preview");
+
+	const s = useAppStore.getState();
+	expect(s.activeTabByWorkspace.ws1).toBe("ws1:a.ts");
+	expect(s.previewTabByWorkspace.ws1).toBe("ws1:b.ts"); // the slot stayed where it was
+	expect(s.tabsByWorkspace.ws1).toHaveLength(2); // and nothing was duplicated
+});
+
+test("keep releases the slot — through openTab, through setActiveTab, and through closeTab", () => {
+	useAppStore.setState({ activeWorkspaceId: "ws1" });
+	const store = useAppStore.getState();
+
+	store.openTab(fileTab("ws1", "a.ts"), "preview");
+	store.setActiveTab("ws1:a.ts", "keep");
+	expect(useAppStore.getState().previewTabByWorkspace.ws1).toBeUndefined();
+
+	store.openTab(fileTab("ws1", "b.ts"), "preview");
+	store.openTab(fileTab("ws1", "b.ts"), "keep"); // a double-click on a row already previewing
+	expect(useAppStore.getState().previewTabByWorkspace.ws1).toBeUndefined();
+
+	store.openTab(fileTab("ws1", "c.ts"), "preview");
+	store.closeTab("ws1:c.ts");
+	expect(useAppStore.getState().previewTabByWorkspace.ws1).toBeUndefined();
+});
+
+test("promotion is one-way: neither a plain activation nor a keep elsewhere demotes a tab", () => {
+	useAppStore.setState({ activeWorkspaceId: "ws1" });
+	const store = useAppStore.getState();
+	store.openTab(fileTab("ws1", "a.ts"), "keep");
+	store.openTab(fileTab("ws1", "b.ts"), "preview");
+
+	store.setActiveTab("ws1:a.ts"); // plain focus
+	expect(useAppStore.getState().previewTabByWorkspace.ws1).toBe("ws1:b.ts");
+
+	store.setActiveTab("ws1:a.ts", "keep"); // keep on a tab that isn't the slot
+	expect(useAppStore.getState().previewTabByWorkspace.ws1).toBe("ws1:b.ts");
+});
+
+test("the slot is per workspace — clearWorkspaceTabs releases only its own", () => {
+	const store = useAppStore.getState();
+	store.openTab(fileTab("ws1", "a.ts"), "preview");
+	store.openTab(fileTab("ws2", "b.ts"), "preview");
+
+	store.clearWorkspaceTabs("ws1");
+
+	const s = useAppStore.getState();
+	expect(s.previewTabByWorkspace.ws1).toBeUndefined();
+	expect(s.previewTabByWorkspace.ws2).toBe("ws2:b.ts");
+});
+
+test("chat tabs and doc tabs never enter the preview slot", () => {
+	useAppStore.setState({ activeWorkspaceId: "ws1" });
+	const store = useAppStore.getState();
+	store.openTab(fileTab("ws1", "a.ts"), "preview");
+
+	store.openChatSession("ws1", "s1", null, "medium");
+	store.openDoc({
+		kind: "doc",
+		id: "ws1:plan",
+		workspaceId: "ws1",
+		name: "Plan",
+		content: "# plan",
+		docPath: "plan.md",
+	});
+
+	const s = useAppStore.getState();
+	expect(s.previewTabByWorkspace.ws1).toBe("ws1:a.ts"); // still the file, untouched by either open
+	expect(s.tabsByWorkspace.ws1).toHaveLength(3);
+});
+
+test("a keep on an already-open tab releases ITS workspace's slot, never the active one's", () => {
+	const store = useAppStore.getState();
+	store.openTab(fileTab("ws1", "a.ts"), "preview");
+	store.openTab(fileTab("ws2", "b.ts"), "preview");
+	useAppStore.setState({ activeWorkspaceId: "ws2" });
+
+	// The promote half of a double click, landing after a slow read let the user switch workspaces.
+	// `openTab` keys off `tab.workspaceId`, so it must reach ws1 and leave ws2 completely alone —
+	// `setActiveTab` here would strand ws1 previewing AND write a foreign tab id into ws2 (whose center
+	// pane then resolves no active tab and falls back to the workspace receipt).
+	store.openTab(fileTab("ws1", "a.ts"), "keep");
+
+	const s = useAppStore.getState();
+	expect(s.previewTabByWorkspace.ws1).toBeUndefined();
+	expect(s.previewTabByWorkspace.ws2).toBe("ws2:b.ts");
+	expect(s.activeTabByWorkspace.ws1).toBe("ws1:a.ts");
+	expect(s.activeTabByWorkspace.ws2).toBe("ws2:b.ts");
+});
+
+// The counter a slow read compares against (`navTickByWorkspace`). It lives in the store so that NO focus
+// transition can bypass it — the earlier module-local version missed close/reopen/doc/new-chat, which is
+// exactly how a stale browse got to steal focus back. One case per action that moves the active tab.
+test("every center navigation bumps the workspace's nav tick, and none of them bypass it", () => {
+	useAppStore.setState({ activeWorkspaceId: "ws1" });
+	const tick = () => useAppStore.getState().navTickByWorkspace.ws1 ?? 0;
+	// Collected rather than asserted inline so a regression names the action that stopped bumping.
+	const missed: string[] = [];
+	const bumps = (label: string, act: () => void) => {
+		const before = tick();
+		act();
+		if (tick() <= before) missed.push(label);
+	};
+
+	const s = () => useAppStore.getState();
+	// `openTab` is the exception, and deliberately so: it IS the read completion being ordered. Counting it
+	// would make an earlier read's own commit look like user navigation and drop the later one — i.e. two
+	// browse clicks in a row would leave the FIRST click's file open.
+	const beforeOpen = tick();
+	s().openTab(fileTab("ws1", "a.ts"), "preview");
+	s().openTab(fileTab("ws1", "a.ts"), "keep");
+	expect(tick()).toBe(beforeOpen);
+
+	bumps("setActiveTab", () => s().setActiveTab("ws1:a.ts"));
+	bumps("openDoc", () =>
+		s().openDoc({
+			kind: "doc",
+			id: "ws1:plan",
+			workspaceId: "ws1",
+			name: "Plan",
+			content: "# p",
+			docPath: "plan.md",
+		}),
+	);
+	bumps("openChatSession", () => s().openChatSession("ws1", "sess", null, "medium"));
+	bumps("closeChatToHistory", () => s().closeChatToHistory("sess"));
+	bumps("reopenChat", () => s().reopenChat("sess"));
+	// Closing the ACTIVE tab hands focus to a neighbour, so it counts. Closing an inactive one does not —
+	// that case is its own test below, since it's a distinct rule rather than another entry in this list.
+	s().setActiveTab("ws1:a.ts");
+	bumps("closeTab", () => s().closeTab("ws1:a.ts"));
+	bumps("noteNavigation", () => s().noteNavigation("ws1"));
+	bumps("requestHistoryOpen", () =>
+		s().requestHistoryOpen({ sessionId: "sess", workspaceId: "ws1", tabId: "ws1:sess" }),
+	);
+	expect(missed).toEqual([]);
+
+	// A background auto-restore is NOT a navigation: it takes no focus, so it must not supersede a read the
+	// user is still waiting on.
+	useAppStore.setState({ activeTabByWorkspace: { ws1: "ws1:sess" } });
+	const before = tick();
+	s().hydrateSession(
+		{
+			sessionId: "bg",
+			workspaceId: "ws1",
+			title: "bg",
+			createdAt: 0,
+			updatedAt: 0,
+			live: true,
+		} as unknown as SessionSummary,
+		{ turns: [], toolResults: {}, askAnswers: {} },
+	);
+	expect(tick()).toBe(before);
+
+	// The tick is per workspace, and a cleared workspace releases its entry.
+	expect(useAppStore.getState().navTickByWorkspace.ws2).toBeUndefined();
+	s().clearWorkspaceTabs("ws1");
+	expect(useAppStore.getState().navTickByWorkspace.ws1).toBeUndefined();
+});
+
+// The other half of the rule above: the counter tracks NAVIGATIONS, not tab-list edits. Closing a tab the
+// user isn't looking at leaves focus exactly where it was, so it must not count.
+// The finding this pins: bumped unconditionally, closing any unrelated tab while a browse was in flight made
+// that read look overtaken, and the file the user clicked never opened at all.
+test("a close that moves no focus is not a navigation — it can't discard a browse in flight", () => {
+	useAppStore.setState({ activeWorkspaceId: "ws1" });
+	const s = () => useAppStore.getState();
+	const tick = () => s().navTickByWorkspace.ws1 ?? 0;
+
+	s().openTab(fileTab("ws1", "a.ts"), "keep");
+	s().openTab(fileTab("ws1", "b.ts"), "keep");
+	s().openChatSession("ws1", "sess", null, "medium");
+	// `b.ts` is what the user is looking at; `a.ts` and the chat are both inactive.
+	s().setActiveTab("ws1:b.ts");
+	const before = tick();
+
+	s().closeTab("ws1:a.ts");
+	expect(tick()).toBe(before);
+	expect(s().activeTabByWorkspace.ws1).toBe("ws1:b.ts");
+
+	s().closeChatToHistory("sess");
+	expect(tick()).toBe(before);
+	expect(s().activeTabByWorkspace.ws1).toBe("ws1:b.ts");
+
+	// ...and closing what IS active still counts, since focus has to move somewhere.
+	s().closeTab("ws1:b.ts");
+	expect(tick()).toBeGreaterThan(before);
 });
 
 test("catalog authority falls with the list it describes — only an awaited refresh sets it", () => {

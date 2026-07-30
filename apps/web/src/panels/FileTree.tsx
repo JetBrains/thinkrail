@@ -1,12 +1,14 @@
 import type { FileNode } from "@thinkrail/contracts";
 import { useState } from "react";
+import type { TabIntent } from "../store";
 import { getTransport } from "../transport";
-import { openFileInTab } from "./openFile";
+import { openFileInTab } from "./openTabs";
 import { TreeRow } from "./TreeRow";
 import { useWorkspaceRead } from "./useWorkspaceRead";
 
 /**
- * Lazy file tree of the active worktree. Double-click a file to open it as a center editor tab.
+ * Lazy file tree of the active worktree. Single-click a file to **preview** it in the workspace's one
+ * reusable center tab (browsing never piles tabs up); double-click to keep it as a tab of its own.
  * Live: the store's per-workspace fs tick (the host's `workspace.fsChanged` nudge) silently refetches
  * the root and every expanded dir — expansion, keys, and scroll survive; a refetch failure keeps the
  * last good listing.
@@ -55,7 +57,7 @@ function FileNodeRow({ node, workspaceId }: { node: FileNode; workspaceId: strin
 		},
 	);
 
-	const open = () => void openFileInTab(workspaceId, node.path);
+	const open = (intent: TabIntent) => void openFileInTab(workspaceId, node.path, intent);
 
 	return (
 		<li>
@@ -64,8 +66,8 @@ function FileNodeRow({ node, workspaceId }: { node: FileNode; workspaceId: strin
 				kind={isDir ? "dir" : "file"}
 				expanded={expanded}
 				label={node.name}
-				onClick={isDir ? () => setExpanded((value) => !value) : undefined}
-				onDoubleClick={isDir ? undefined : open}
+				onClick={isDir ? () => setExpanded((value) => !value) : () => open("preview")}
+				onDoubleClick={isDir ? undefined : () => open("keep")}
 			/>
 			{isDir && expanded && children && (
 				<ul className="flex flex-col pl-md">

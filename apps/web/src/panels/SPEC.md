@@ -222,8 +222,10 @@ a project picker, the prompt hero, and the reused
   used that same workspace-scoped call for its Global group too, a shadowed global template would vanish
   from view entirely with no way to find, edit, or delete it
   (`data-testid="template-row"`: name + description, and — project rows only — an
-  **Open as file** action that opens `.pi/prompts/<name>.md` through the exact same `openFile.ts`
-  `openFileInTab` the file tree uses, then closes Settings, and an **Edit** action; a global template has
+  **Open as file** action that opens `.pi/prompts/<name>.md` through the exact same `openTabs.ts`
+  `openFileInTab` the file tree uses — at the **`keep`** intent, since a deliberate "open in editor" must
+  not land in a preview slot a later click would silently replace — then closes Settings, and an
+  **Edit** action; a global template has
   no worktree to open a file tab against, so global rows stay dialog-only). **New**/**Edit** open the shared
   `chat/TemplateEditorDialog` (see `chat/SPEC.md`'s Save-as-template bullet — it lives in `chat/` because
   `HistoryOverlay`'s save-as-template action needs the identical form, and `chat/` can't import
@@ -358,27 +360,35 @@ a project picker, the prompt hero, and the reused
   controls make both roles explicit. Hierarchy uses fixed per-depth indentation + chevrons, deliberately
   **without connector rails or branch elbows** (persistent lines overloaded the narrow rail). The padded
   **chevron alone** expands/collapses, while the rest of the row is a native document button whose
-  **single click** opens the rendered spec through the same `fs.readFile` → `openTab` flow as `FileTree`
-  (there is no hidden double-click gesture). Every row stays on one line: indentation → chevron →
+  **single click previews** the rendered spec — and whose **double click keeps** it — through the same
+  `fs.readFile` → `openTab` flow as `FileTree` (see the Preview tabs bullet; reading down a spec graph is
+  the case the reusable slot exists for). Every row stays on one line: indentation → chevron →
   shape-coded role icon → truncated title → fixed trailing role (`ARCH` / `MODULE` / `SUBMODULE` / `TASK`;
   unknown types degrade compactly). The top-level `goal-and-requirements` row instead carries the exact
   **`Main spec`** label and distinct root icon; the active file tab's row has a persistent selected
   treatment. **Lifecycle status is not presented at all** — future lint health arrives with a real linter
   feature, not speculative dots or reused status chrome. This remains a restrained hierarchy — no hero,
-  duplicate root, preview, or graph canvas. `FileTree` keeps its own gesture model (whole-row click
-  toggles dirs — no collision there).
+  duplicate root, preview pane, or graph canvas. `FileTree` shares the same file gesture model
+  (preview/keep) but keeps its own directory behaviour — a whole-row click toggles dirs, no collision
+  there.
 - **The chat deep-links mirror the tab split.** `RightPanel` decides *which view is showing* from exactly one
   store field — **`rightTabRequest`** (`requestRightTab`, which both path intents below set in the same
   action) — so the flip is one concept rather than something re-derived per request type, and a divider chip
   that only reveals a view (expanding its artifact list, no path picked) needs no path to do it.
-  `ChangesPanel` watches
-  `changesRequest` (set by a chat turn-divider's "files changed" chip), **highlights** the requested
-  file's row (resolved with `matchesWorktreePath` against `git.status`) **and opens its diff tab** in the
-  center — the chip/list-row click *is* the user's explicit ask to see that change, so stopping at a
-  highlight read as broken. A path no longer in the current diff (a round from days ago) degrades to
-  highlight-only: there is no diff to show. The intent is **consumed** (`clearChangesRequest`) once
-  handled — it opens a center tab, so a git-status re-read replaying it would yank the user's tab back.
-  `SpecsPanel` watches **`specRequest`** (the "N specs" chip) and **opens the rendered spec**
+  `ChangesPanel` watches `changesRequest` (set by a chat turn-divider's "files changed" chip),
+  **highlights** the requested file's row (resolved with `matchesWorktreePath` against `git.status`) **and
+  opens its diff tab** in the **preview slot** — the chip/list-row click *is* the user's explicit ask to see
+  that change, so stopping at a highlight read as broken, and following a chip is browsing, same as clicking
+  the row it points at, so it reuses the slot rather than accumulating a kept tab per chip. A path no longer
+  in the current diff (a round from days ago) degrades to highlight-only: there is no diff to show. **So does
+  a deep link the user has already navigated past** — this open is the one that *cannot* mark its own
+  navigation when it happens, because the path is only resolvable once `git.status` lands and the chip is
+  normally what reveals this view (a fresh mount, a full round trip). The count stamped on the request
+  (`changesRequest.navTick`, taken at the click) is what it compares against, so a tab the user picked while
+  the list was loading is the later navigation and keeps focus. The
+  intent is **consumed** (`clearChangesRequest`) once handled — it opens a center tab, so a git-status
+  re-read replaying it would yank the user's tab back. `SpecsPanel` watches **`specRequest`** (the "N specs"
+  chip) and **opens the rendered spec**, likewise in the preview slot
   (`openFileInTab`, which canonicalizes the reported path — pi may report it absolute or `./`-prefixed — to
   the worktree-relative **tab identity**, so a deep link can never open a second tab for a file already open
   under its relative path; that lives in the choke point, not in each caller, and it means a spec created
@@ -394,7 +404,9 @@ a project picker, the prompt hero, and the reused
   the two-rows-read-as-selected ambiguity the single-selection rule above exists to prevent.
 - **The diff is a center tab, not a rail inset.** Clicking a Changes row fetches `git.diffFile` (both
   sides: base branch vs worktree) and opens a **`DiffTab`** (`${workspaceId}:diff:${path}` — one tab per
-  file; a re-click focuses the existing tab). `DiffPane` renders a slim header (the path + a per-tab
+  file; a re-click focuses the existing tab) through `openTabs.ts`'s **`openDiffInTab`**, the diff twin of
+  `openFileInTab`: a single click **previews**, a double click **keeps**, so scanning a change set reuses
+  one tab. `DiffPane` renders a slim header (the path + a per-tab
   **Split | Inline** toggle via `store.setDiffTabView`; split is the default) over the read-only lazy
   `MonacoDiff` (`@monaco-editor/react` `DiffEditor`, model paths derived from the file's path so both
   sides highlight alike; `useInlineViewWhenSpaceIsLimited: false` — the toggle must do what it says, so
@@ -433,6 +445,59 @@ a project picker, the prompt hero, and the reused
   (`GitFileChange.added/removed`, from `git diff --numstat`; untracked files count their whole content as
   added — but a binary or oversized untracked file gets no count, mirroring how tracked binaries drop out
   of `--numstat`), folder counts are summed client-side. Both views share `ChangesPanel`'s `openDiff` + `isActive`.
+- **Browsing reuses one tab: preview vs keep.** Every workspace has at most one **preview tab** — the
+  standard IDE slot a *light* open lands in (`store.previewTabByWorkspace`, see `store/SPEC.md` for the
+  state rules). It renders with an **italic label** and `data-preview="true"` on its `editor-tab`; a
+  `title` says "Preview — double-click to keep". A **preview** open replaces the slot's tab **at its
+  index**, so browsing swaps one tab in place instead of reshuffling the strip under the cursor. The
+  gesture map, uniform across every surface (all of them route through `openTabs.ts`, which is what keeps
+  them uniform):
+
+  | Surface | single click | double click |
+  |---|---|---|
+  | `FileTree` file row · `SpecsPanel` document row · `ChangesPanel` list row and `ChangesTree` file row | preview | keep |
+  | rendered-markdown relative link · chat turn-divider spec chip | preview | — |
+  | strip tab, inactive | activate | keep |
+  | strip tab, **active and in preview** | **keep** | keep |
+  | strip tab, active and kept | no-op | no-op |
+
+  **A double click composes: it is a preview open plus a promote**, because the browser dispatches
+  `click`, `click`, `dblclick`. So — exactly as in VS Code — double-clicking a row *claims the slot on the
+  way through*: the tab that was previewing is replaced, and the new one ends up kept in its place. (The
+  `openTab(tab, "keep")` primitive itself never touches the slot; that is what a lone `keep` caller like
+  Settings' *Open as file* gets.) For that to hold at **any latency**, `openTabs.ts` collapses the three
+  opens one gesture fires into a **single `fs.readFile`** (its `inFlight` map): three in-flight reads would
+  otherwise be settled by whichever returned first — a leading `preview` replacing the slot's tab, or a
+  `keep` landing first and sparing it — so the app would behave one way on localhost and another over
+  Tailscale from a phone. The call that *started* the read owns the placement; a `keep` expressed while it
+  was in flight promotes the result afterwards — through **`openTab`**, never `setActiveTab`, because only
+  `openTab` keys off `tab.workspaceId`: a read the user switches workspaces during would otherwise strand
+  this tab previewing and write its id into the workspace they moved to, whose center pane then resolves no
+  active tab and drops to the workspace receipt. `e2e/preview-tabs.spec.ts` asserts the single read
+  directly, because the outcome it protects is invisible at localhost latency.
+
+  **A read is slow and a click is not, so a pending browse loses to whatever the user does next.** Each
+  read records the workspace's **`store.navTickByWorkspace`** count on the way out, and a **`preview`**
+  landing after that count has moved is **dropped** rather than committed. Without it, tapping an unopened
+  file over a remote host and then tapping an already-open tab yanks focus back to the file when it arrives
+  *and* claims the slot away from what the user landed on. A **`keep`** still commits — it was deliberate,
+  and swallowing an explicitly opened tab is the worse surprise; re-clicking the *same* row moves the mark
+  forward instead of superseding it, so a double click still promotes. The counter lives in the **store**,
+  bumped inside each action that moves the active tab, specifically so **no focus transition can bypass
+  it** — a first attempt kept it in this module and silently missed `closeTab`, `reopenChat`, `openDoc`, and
+  a new chat, every one of which is a way for the user to move on mid-read. `store/SPEC.md` lists the
+  bumping actions; `appStore.test.ts` asserts each one bumps, and `e2e/preview-tabs.spec.ts` dispatches both
+  clicks in one JS tick so the interleaving is pinned without depending on real latency.
+
+  The active-preview-tab click is the **touch** path: `apps/web/index.html` ships a plain
+  `width=device-width` viewport, so a double tap is the browser's zoom gesture and `dblclick` is not
+  something a phone user can rely on — this is the one promote gesture that works there, and it costs
+  nothing on desktop (that click is otherwise a no-op). Promotion is **one-way**: nothing demotes a kept
+  tab. Chat tabs and `doc` tabs never enter the slot (a chat is an explicit creation; a `DocTab`'s content
+  exists only in the store, so a silent replace would destroy it). There is deliberately **no keyboard
+  shortcut** — VS Code's `⌘K ↵` is the only convention worth copying and it would cost a two-key chord
+  machine the app has no other use for; JetBrains and Zed ship no default binding either. VS Code's
+  *pinned* tabs (sort-first, protected from Close Others) are a separate, unbuilt feature.
 - **Markdown file tabs render, don't read.** A `.md`/`.markdown` `FileTab` (from the file tree **or** the
   Specs panel — same `openTab` path) opens **rendered by default**: `FilePane` gates on `lib.isMarkdownPath`
   and shows a slim `Preview | Source` header (`markdown-view-toggle`), the rendered view being lazy
@@ -449,8 +514,10 @@ a project picker, the prompt hero, and the reused
   is a per-tab `store.setFileTabView` (survives tab switches; not persisted across reload). Non-markdown
   files render Monaco directly with no header, exactly as before.
 - **Rendered markdown navigates.** In the preview, links + images resolve against the file's own path
-  (via `markdownLinks`, passed as the `a`/`img` renderers): a **relative link** opens the target file as
-  a tab through the shared **`openFileInTab`** (the same flow `FileTree` uses), an **in-doc `#` link**
+  (via `markdownLinks`, passed as the `a`/`img` renderers): a **relative link** opens the target file in
+  the **preview** tab through the shared **`openFileInTab`** (the same flow `FileTree` uses) — following a
+  link is browsing, so the slot is reused rather than promoting the source doc the way VS Code does; the
+  slot is the slot, whatever the open came from — an **in-doc `#` link**
   scrolls the preview (headings carry slug ids from the in-repo `remarkHeadingIds` transform), an
   **external** link opens a new tab, and a **relative image** rewrites to the host **`/files/…`** route
   (built from `transport.httpBase()`). A cross-file link's `#fragment` is not yet followed (opens the

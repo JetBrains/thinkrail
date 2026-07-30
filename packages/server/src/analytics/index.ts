@@ -7,6 +7,7 @@ export {
 	bucketProvider,
 	bucketProviderModel,
 	type LoginMethod,
+	type SendMode,
 } from "./events";
 export {
 	type AnalyticsOptions,

@@ -1,5 +1,5 @@
 import type { AskUserAnswersDetails, TranscriptMessage, UserMessage } from "@thinkrail/contracts";
-import { isAskUserAnswersMessage, TODO_NUDGE_PREFIX } from "@thinkrail/contracts";
+import { isAskUserAnswersMessage, isControlMessage } from "@thinkrail/contracts";
 import type { ChatTurn, ToolResultState } from "./types";
 
 /** The leading text of a user message (string or text blocks). */
@@ -48,7 +48,7 @@ export function messagesToRuntime(messages: TranscriptMessage[]): HydratedRuntim
 		if (message.role === "user") {
 			// A pi-todos hidden nudge renders no turn, but still consumes its positional slot below
 			// (turnId stays null) so turnIdByMessageIndex stays aligned with the server's messageIndex.
-			if (!userText(message.content).startsWith(TODO_NUDGE_PREFIX)) {
+			if (!isControlMessage(userText(message.content))) {
 				turnId = crypto.randomUUID();
 				turns.push({ kind: "user", id: turnId, message });
 			}

@@ -460,8 +460,10 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
     — the history path already covers "reuse what I already wrote"; a second entry point for the same
     "type it, then decide to save it" gesture would be redundant surface, not a distinct use case.
   - **Edit-as-file** — project-scoped rows only get an `Open as file` action (`panels/TemplatesSettings.tsx`),
-    reusing `openFile.ts`'s exact `openFileInTab(workspaceId, ".pi/prompts/<name>.md")` (the same action
-    file-tree clicks use), then `store.closeSettings()`. **Global rows are dialog-only** — a deliberate
+    reusing `openTabs.ts`'s exact `openFileInTab(workspaceId, ".pi/prompts/<name>.md", "keep")` (the same
+    action file-tree clicks use) — at the **`keep`** intent deliberately, since an explicit "open in editor"
+    must not land in the preview slot a later browse click would silently replace (see `panels/SPEC.md`'s
+    Preview tabs bullet) — then `store.closeSettings()`. **Global rows are dialog-only** — a deliberate
     asymmetry, not an oversight: file tabs are worktree-scoped (`tabsByWorkspace` is keyed by workspace
     id), but a global template lives under the host's agent dir, outside any worktree, so there's no
     worktree-relative path to open it at.

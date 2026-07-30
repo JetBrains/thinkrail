@@ -363,6 +363,15 @@ export const DEFAULT_CONFIG: AppConfig = { theme: "dark", analyticsEnabled: true
  */
 export const TODO_NUDGE_PREFIX = "[thinkrail:todo-nudge] ";
 
+/**
+ * True when a send's text is internal control traffic rather than a user-authored message. The one
+ * shared reading of the marker above — the client hides these on hydrate, the host skips them in the
+ * history index and does not count them as sent messages in analytics.
+ */
+export function isControlMessage(text: string): boolean {
+	return text.startsWith(TODO_NUDGE_PREFIX);
+}
+
 /** History-search scope — the overlay's cycle: this chat → workspace → project → everywhere. */
 export type HistoryScope =
 	| { kind: "chat"; sessionId: string }

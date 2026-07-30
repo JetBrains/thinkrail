@@ -37,7 +37,44 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   `tabsByWorkspace` /
   `activeTabByWorkspace` (`openTab`/`closeTab`/`setActiveTab`/`clearWorkspaceTabs`, plus
   **`setFileTabView(id, view)`** — a markdown `FileTab`'s `view` (`"rendered"`|`"source"`) lives on the tab
-  so the rendered↔source choice survives tab switches; absent = rendered); `terminalsByWorkspace`
+  so the rendered↔source choice survives tab switches; absent = rendered);
+  **`previewTabByWorkspace`** — the id of the workspace's **preview tab**, the one reusable slot a light
+  open lands in (rendered italic; the gesture map per surface is `panels/SPEC.md`'s). It is keyed like
+  `activeTabByWorkspace` *on purpose*: "at most one preview tab per workspace" is then structural rather
+  than a rule each writer must remember, and the `EditorTab` union stays pure data (no `preview?` flag to
+  sweep-and-clear on every open). Both openers carry a **`TabIntent`** (`"preview"` | `"keep"`):
+  **`openTab(tab, intent)`** focuses an already-open id rather than duplicating it, and a `preview` open
+  **replaces the slot's tab at its index** so the strip never reshuffles under the cursor, while a `keep`
+  appends and releases the slot if it pointed there; **`setActiveTab(id, intent?)`** activates, and
+  `"keep"` also promotes — **one-way**, so a plain activation (or a `keep` aimed at some other tab) never
+  demotes a kept tab back to preview. The slot is released by `closeTab`, `clearWorkspaceTabs`, and
+  `applyWorkspaceRemoved` (via `omitKey`), so a stale id can never outlive its tab. Alongside it,
+  **`navTickByWorkspace`** counts **center-area navigations** per workspace — rendered by nothing, it exists
+  so a slow read can tell it was overtaken. A click is instant and an `fs.readFile` is not, so
+  `panels/openTabs.ts` records this count when it starts a read and **drops a `preview` that lands after the
+  count has moved** (otherwise the file steals focus back from wherever the user went, and claims the preview
+  slot from it) — and it takes that count at **request** time (`noteNavigation`, as the read starts), so a
+  browse is ordered by when the user asked for it, not by when the host happened to answer. It is bumped
+  *inside* every action that moves the active tab — `openDoc`, `setActiveTab`,
+  `openChatSession`, `reopenChat`,
+  `requestHistoryOpen`, `hydrateSession` **only when it actually takes focus** (a background
+  auto-restore must not supersede a read the user is waiting on), and `closeTab` /
+  `closeChatToHistory` **only when the closed tab was the active one** (closing some other tab in the strip
+  leaves the user where they were; counting it would discard a browse in flight and the clicked file would
+  never open) — plus **`noteNavigation(workspaceId)`**
+  for an intent whose focus change hasn't reached the store yet (starting a chat, whose tab appears only once
+  `session.create` returns). **`openTab` is the one deliberate exception and must stay uncounted**: it *is*
+  the read completion being ordered, so counting it would make an earlier read's own commit look like user
+  navigation and invalidate the later request — two browse clicks in a row would leave the FIRST click's file
+  open. (Pinned by "every center navigation bumps the workspace's nav tick, and none of them bypass it" in
+  `appStore.test.ts`, which asserts both branches of `openTab` leave the count alone.)
+  Living here rather than in `panels` is the whole point: **no focus transition can
+  bypass it**, which a module-local counter demonstrably did (it missed close/reopen/doc/new-chat).
+  `clearWorkspaceTabs` releases the key with the rest. **Chat tabs and
+  `DocTab`s never enter it** — a chat is an explicit creation with a live session behind it, and a
+  `DocTab`'s content exists only in the store (no file backs it), so a silent replace would destroy it
+  with nothing to reopen. There is deliberately **no keyboard shortcut**: gestures only.
+  `terminalsByWorkspace`
   / `activeTerminalByWorkspace` (`addTerminal`/`closeTerminalTab`/`setActiveTerminalTab`); the
   **per-session chat state** — `sessions: Record<sessionId, SessionRuntime>`, where a `SessionRuntime` holds
   one chat's `turns` (pi-canonical) / `toolResults` / `askAnswers` (the `ask-user-answers` replies keyed
@@ -152,9 +189,14 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   **`requestChangesView(workspaceId, path)`** are a UI deep-link intent (a chat turn-divider asking the
   right panel to surface a file in its Changes view — highlight the row **and open its diff tab** when
   the file is in the current diff; a path no longer in the diff degrades to highlight-only); the panels
-  watch it, scoped by workspace. Its Specs
+  watch it, scoped by workspace. It also carries **`navTick`**, the center-navigation count stamped **at the
+  click**: `ChangesPanel` cannot resolve the reported path until `git.status` lands (and this chip is usually
+  what *reveals* that view, so it is a fresh mount's read), so the click and the open sit a round trip apart.
+  Whatever the user does with the center in that window is the later navigation and wins — an overtaken deep
+  link degrades to the highlight rather than yanking focus off the tab they picked. Without the stamp the
+  arriving open would mark *itself* as the navigation and always win. Its Specs
   twin **`specRequest`** + **`requestSpecView(workspaceId, path)`** **opens the
-  rendered spec** — the stronger treatment, because a spec doc has nothing to preview short of its content.
+  rendered spec** and needs no stamp: it opens the reported path immediately, with no list to resolve first.
   Both path intents set `rightTabRequest` **in the same action**: the panel is never asked to surface a path
   in a view it was not also told to show.
   Two separate fields, never one: the panel that can show a *gitignored* spec is not the git-derived one, and

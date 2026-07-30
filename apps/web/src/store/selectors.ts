@@ -144,6 +144,19 @@ export function selectWorkspaceTick(
 	return state.fsChangesByWorkspace[workspaceId]?.tick ?? 0;
 }
 
+/**
+ * The workspace's center-navigation count (`navTickByWorkspace`) — the thing a deferred open compares
+ * against to tell whether the user has moved on since they asked for it. Read it through here rather than
+ * indexing the record: the "missing key means 0" default is the whole contract, and a caller that forgot it
+ * would read `undefined` and never match a stamp.
+ */
+export function selectWorkspaceNavTick(
+	state: { navTickByWorkspace: Record<string, number> },
+	workspaceId: string,
+): number {
+	return state.navTickByWorkspace[workspaceId] ?? 0;
+}
+
 interface SkillsStaleState {
 	/** Per workspace, the fs tick of the most recent skill-relevant `fsChanged` batch (see `noteFsChanged`). */
 	skillChangeTickByWorkspace: Record<string, number>;
