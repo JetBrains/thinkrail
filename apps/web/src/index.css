@@ -10,29 +10,10 @@
  * are referenced as token arbitrary values (e.g. `font-[var(--font-accent)]`) instead.
  */
 @theme inline {
-	/* Legacy color tokens (do not remove during migration) */
-	--color-bg: var(--bg);
-	--color-bg-dark: var(--bg-dark);
-	--color-surface-sidebar: var(--surface-sidebar);
-	--color-surface-content: var(--surface-content);
-	--color-elevated: var(--elevated);
-	--color-hover: var(--hover);
-	--color-border: var(--border);
-	--color-border2: var(--border2);
-	--color-text: var(--text);
-	--color-muted: var(--muted);
-	--color-hint: var(--hint);
+	/* Primary accent — the brand color, used for text-primary, bg-primary, border-primary, ring-primary */
 	--color-primary: var(--primary);
-	--color-blue: var(--blue);
-	--color-green: var(--green);
-	--color-red: var(--red);
-	--color-gold: var(--gold);
-	--color-on-accent: var(--on-accent);
 
-	/*
-	 * Semantic color tokens (new layer — coexists with legacy during migration)
-	 * These alias legacy tokens for visual parity; components will migrate incrementally.
-	 */
+	/* Semantic color tokens */
 
 	/* Text */
 	--color-text-default: var(--text-default);

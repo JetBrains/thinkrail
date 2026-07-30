@@ -73,7 +73,7 @@ The module set: `transport` / `store` / branded `shell`; `ProjectTree`; `FileTre
 ## Styling & theming
 
 - **Tailwind v4 utilities, mapped to the design tokens** (`src/index.css` `@theme inline`). Components
-  use utilities (`bg-bg-dark`, `text-primary`, `border-border`, `px-lg`, `text-lg`) — **never inline
+  use utilities (`bg-container-header-bg`, `text-primary`, `border-border-default`, `px-lg`, `text-lg`) — **never inline
   `style` objects, never raw hex.** Responsive (`md:` …) and states (`hover:` / `focus-visible:`) come
   from Tailwind (inline styles can't express them, and the responsive shell needs them).
 - **`src/themes` is the theme contract and catalog; `src/styles/tokens.css` is structural.** A bundled

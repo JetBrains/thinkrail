@@ -5,17 +5,17 @@ import type { GitFileChange, GitFileStatus } from "@thinkrail/contracts";
  * (the VS Code / git-decoration convention), shared by the flat list and the tree so both read alike:
  * added / untracked → a muted green (dimmed so it doesn't shout next to the neutral rows), deleted → red +
  * strikethrough, renamed → blue, modified → plain (the `+/−` counts carry it). Applied on top of the row's
- * default `text-muted`.
+ * default `text-text-muted`.
  */
 export function statusNameClass(status: GitFileStatus): string {
 	switch (status) {
 		case "added":
 		case "untracked":
-			return "text-green/40";
+			return "text-feedback-success/40";
 		case "deleted":
-			return "text-red line-through";
+			return "text-feedback-error line-through";
 		case "renamed":
-			return "text-blue";
+			return "text-feedback-info";
 		default:
 			return ""; // modified — plain name; the diff counts convey the change
 	}
