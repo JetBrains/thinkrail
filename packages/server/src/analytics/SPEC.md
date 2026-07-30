@@ -52,7 +52,9 @@ PostHog won on free tier, EU residency, and a self-host path).
   text, no length, no image count) and no identity params (model preference is `chat_started`'s job).
   New-chat and existing-chat sends are the same event; `chat_started` stays the new-chat signal. Fired
   by `host` from `session.prompt`/`steer`/`followUp` **after the send is accepted** (`ackSend`), so a
-  rejected send never counts.
+  rejected send never counts — and **only for user-authored** sends: the same wire methods also carry
+  internal control traffic (the client's TODO wake-nudge), which `isControlMessage` filters out, so the
+  count stays "messages the user sent" and never inflates with the app's own prompts.
 - **Public surface (barrel):** `initializeAnalytics`, `track`, `setAnalyticsSending`,
   `shutdownAnalytics`, `resetAnalyticsForTests`, the event types + bucket helpers.
 - **Allowed deps:** `persistence` (installation record + data dir), `contracts` (types),

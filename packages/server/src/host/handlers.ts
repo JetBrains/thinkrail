@@ -11,6 +11,7 @@ import type {
 	WireModel,
 	Workspace,
 } from "@thinkrail/contracts";
+import { isControlMessage } from "@thinkrail/contracts";
 import {
 	abortSession,
 	answerQuestion,
@@ -118,9 +119,12 @@ async function archiveTeardown(ws: Workspace): Promise<void> {
 
 /**
  * Analytics for a user-authored send, fired only once the send was ACCEPTED (a rejected send throws
- * before this and never counts). Carries just the closed-vocabulary `mode` — nothing about the message.
+ * before this and never counts). Carries just the closed-vocabulary `mode` — nothing about the message,
+ * not even its length. Internal control traffic (the client's TODO wake-nudge, marked on the wire) is
+ * not a message the user sent, so it is skipped: the `session.*` send methods carry both kinds.
  */
-function trackSend(mode: SendMode): void {
+function trackSend(mode: SendMode, text: string): void {
+	if (isControlMessage(text)) return;
 	track({ name: "message_sent", params: { mode } });
 }
 
@@ -339,19 +343,19 @@ const handlers: Record<string, Handler> = {
 	"session.prompt": async (params) => {
 		const p = params as { sessionId: string; text: string; images?: ImageContent[] };
 		await ackSend(promptSession(p.sessionId, p.text, p.images));
-		trackSend("prompt");
+		trackSend("prompt", p.text);
 		return { ok: true } as const;
 	},
 	"session.steer": async (params) => {
 		const p = params as { sessionId: string; text: string; images?: ImageContent[] };
 		await ackSend(steerSession(p.sessionId, p.text, p.images));
-		trackSend("steer");
+		trackSend("steer", p.text);
 		return { ok: true } as const;
 	},
 	"session.followUp": async (params) => {
 		const p = params as { sessionId: string; text: string; images?: ImageContent[] };
 		await ackSend(followUpSession(p.sessionId, p.text, p.images));
-		trackSend("follow_up");
+		trackSend("follow_up", p.text);
 		return { ok: true } as const;
 	},
 	"session.abort": async (params) => {
