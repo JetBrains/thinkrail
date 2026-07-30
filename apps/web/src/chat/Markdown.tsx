@@ -4,18 +4,19 @@ import remarkGfm from "remark-gfm";
 import { highlightCode } from "@/lib/highlighter";
 
 /**
- * The chat prose skin: `tr-prose` (the ONE generated markdown typography — see `typography.json` →
- * `proseStyles`) plus chat-bubble *spacing* and link colour. Typography is never declared here; the
- * document skin (`MarkdownPreview`) differs only in spacing, measure and chrome.
+ * The chat prose skin: `tr-prose-chat` (the generated markdown typography for a chat bubble — see
+ * `typography.json` → `proseSystems.chat`) plus chat-bubble *spacing* and link colour. Typography is
+ * never declared here; the document skin (`MarkdownPreview`) wears `tr-prose-doc`, which is the same
+ * element set at a document scale.
  */
 const CHAT_PROSE =
-	"tr-prose max-w-none break-words [&_a]:text-primary [&_a]:underline [&_li]:my-0.5 [&_ol]:my-sm [&_ol]:list-decimal [&_ol]:pl-lg [&_p]:my-sm [&_ul]:my-sm [&_ul]:list-disc [&_ul]:pl-lg";
+	"tr-prose-chat max-w-none break-words [&_a]:text-primary [&_a]:underline [&_li]:my-0.5 [&_ol]:my-sm [&_ol]:list-decimal [&_ol]:pl-lg [&_p]:my-sm [&_ul]:my-sm [&_ul]:list-disc [&_ul]:pl-lg";
 
 /**
  * Render GFM markdown with shiki-highlighted fenced code blocks. Presentational — no app/store deps.
  * The rendering (GFM + shiki) is fixed; the **prose skin** is the caller's via `className` (defaults to
- * the compact chat skin) — but its *typography* is not: every skin includes `tr-prose`, so chat and the
- * file preview render identical type and a skin only carries spacing/measure/chrome. A caller can
+ * the compact chat skin) — but its *typography* is not hand-written: every skin names exactly one
+ * generated `tr-prose-*` system and then only carries spacing/measure/chrome. A caller can
  * also **extend** the rendering with extra `remarkPlugins` + `components` (e.g. the file view's GitHub
  * alert callouts) — they're merged after the built-in GFM plugin / `code`+`a` renderers.
  */

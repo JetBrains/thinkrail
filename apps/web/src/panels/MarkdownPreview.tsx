@@ -4,14 +4,15 @@ import { alertComponents, remarkGithubAlerts } from "./markdownAlerts";
 import { documentComponents, remarkHeadingIds } from "./markdownLinks";
 
 /**
- * Document "prose skin" for the file-tab rendered view: `tr-prose` supplies ALL typography (the one
- * generated markdown type system — `typography.json` → `proseStyles`, shared with chat), and this skin
- * adds only what is not typography — reading measure, vertical rhythm, heading rules, table chrome,
- * blockquote rule, task lists, images. Reading measure is capped (~78ch); wide tables and code blocks
- * scroll within the column. Never add a font-size, weight, leading or tracking here: change the JSON.
+ * Document "prose skin" for the file-tab rendered view: `tr-prose-doc` supplies ALL typography
+ * (`typography.json` → `proseSystems.doc` — the same element set as the chat system, at a document
+ * scale, so h1–h4 are larger than body copy), and this skin adds only what is not typography — reading
+ * measure, vertical rhythm, heading rules, table chrome, blockquote rule, task lists, images. Reading
+ * measure is capped (~78ch); wide tables and code blocks scroll within the column. Never add a
+ * font-size, weight, leading or tracking here: change the JSON.
  */
 const DOCUMENT_PROSE = [
-	"tr-prose max-w-none break-words text-pretty text-text",
+	"tr-prose-doc max-w-none break-words text-pretty text-text",
 	"[&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
 	// Headings — spacing + section rules only (bigger top than bottom margin).
 	"[&_h1]:mt-0 [&_h1]:mb-md [&_h1]:border-border2 [&_h1]:border-b [&_h1]:pb-xs [&_h1]:text-balance",
@@ -37,7 +38,7 @@ const DOCUMENT_PROSE = [
 	"[&_th]:border [&_th]:border-border2 [&_th]:bg-elevated [&_th]:px-sm [&_th]:py-xs [&_th]:text-left",
 	"[&_td]:border [&_td]:border-border2 [&_td]:px-sm [&_td]:py-xs [&_td]:align-top",
 	"[&_tbody_tr:nth-child(2n)]:bg-elevated/30",
-	// Code blocks — spacing only; size/leading come from the shared prose system.
+	// Code blocks — spacing only; size/leading come from the doc prose system.
 	"[&_pre]:my-md",
 	// Images.
 	"[&_img]:my-md [&_img]:max-w-full [&_img]:rounded-[var(--radius-md)]",

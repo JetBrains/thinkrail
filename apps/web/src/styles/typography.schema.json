@@ -2,7 +2,7 @@
 	"$schema": "http://json-schema.org/draft-07/schema#",
 	"$id": "https://thinkrail.ai/schemas/typography.schema.json",
 	"title": "ThinkRail typography source",
-	"description": "The canonical, machine-first typography definition: primitives plus the semantic text styles generated from them. A style is either a complete definition or a `$ref` naming a canonical definition \u2014 identical styles are never duplicated, and references never chain. Contains no CSS selectors, class strings, component paths, usage inventories or rationale.",
+	"description": "The canonical, machine-first typography definition: primitives plus the semantic text styles generated from them. A style is either a complete definition or a `$ref` naming a canonical definition \u2014 identical styles are never duplicated, and references never chain. Contains no CSS selectors, class strings, component paths, usage inventories or rationale. This schema is the editor-facing contract; the enforced gate is `scripts/typography.ts` \u2192 `validate()`, which also checks the policies JSON Schema cannot express.",
 	"type": "object",
 	"additionalProperties": false,
 	"required": [
@@ -13,8 +13,9 @@
 		"fontSizes",
 		"lineHeights",
 		"letterSpacings",
+		"rootStyle",
 		"textStyles",
-		"proseStyles"
+		"proseSystems"
 	],
 	"properties": {
 		"$schema": {
@@ -101,6 +102,10 @@
 				"minLength": 1
 			}
 		},
+		"rootStyle": {
+			"description": "The `<body>` fallback for text that carries no semantic class. Always a `$ref` naming a semantic style, never values of its own, so the document base can never drift from the system.",
+			"$ref": "#/definitions/ref"
+		},
 		"textStyles": {
 			"type": "object",
 			"minProperties": 1,
@@ -125,21 +130,29 @@
 				}
 			}
 		},
-		"proseStyles": {
+		"proseSystems": {
+			"description": "One entry per markdown surface (`chat`, `doc`). Each owns the same fixed element set, so the surfaces stay comparable, but names its own type — a chat bubble and a full-page document want different heading scales. System ids share the id space with `textStyles` groups and must not collide with them.",
 			"type": "object",
 			"minProperties": 1,
 			"propertyNames": {
-				"$ref": "#/definitions/tokenId"
+				"$ref": "#/definitions/groupId"
 			},
 			"additionalProperties": {
-				"oneOf": [
-					{
-						"$ref": "#/definitions/style"
-					},
-					{
-						"$ref": "#/definitions/ref"
-					}
-				]
+				"type": "object",
+				"minProperties": 1,
+				"propertyNames": {
+					"$ref": "#/definitions/tokenId"
+				},
+				"additionalProperties": {
+					"oneOf": [
+						{
+							"$ref": "#/definitions/style"
+						},
+						{
+							"$ref": "#/definitions/ref"
+						}
+					]
+				}
 			}
 		}
 	},

@@ -30,16 +30,17 @@
 	--space-md: calc(var(--space-base) * 0.92);
 	--space-lg: calc(var(--space-base) * 1.23);
 	--space-xl: calc(var(--space-base) * 1.85);
-
-	/*
-	 * Font aliases onto the generated typography tokens (see `generated/typography.css`, source
-	 * `typography.json`). They exist so non-CSS consumers — Monaco, xterm, mermaid — and `global.css`
-	 * have one stable name to read; the VALUES are owned by the JSON. Self-hosted variable faces are
-	 * imported in `styles/fonts.css`.
-	 */
-	--font: var(--tr-font-family-interface);
-	--font-mono: var(--tr-font-family-code);
-	--font-accent: var(--tr-font-family-brand);
-	--font-mono-size: var(--tr-font-size-s11);
-	--line-height: var(--tr-line-height-default);
 }
+
+/*
+ * NO typography here — not a family, size, weight, line-height or tracking, and not an alias onto one.
+ * `styles/typography.json` is the single source; `generated/typography.css` publishes it as the
+ * `--tr-*` custom properties, the `<body>` base and the semantic classes. The three consumers that
+ * cannot use a class (Monaco, xterm, mermaid) read the `--tr-*` tokens directly, so there is exactly
+ * one name for each value. Self-hosted variable faces are imported in `styles/fonts.css`.
+ *
+ * Theme-specific values are intentionally absent too. `themes/bundled/*.theme.json` is the source of
+ * truth; the theme engine validates a complete UI + ANSI + syntax palette and writes its CSS custom
+ * properties before React mounts. Adding a bundled theme therefore adds one JSON file, not a selector
+ * block here.
+ */

@@ -1,7 +1,7 @@
 {
 	"$schema": "./typography.schema.json",
 	"metadata": {
-		"version": "2.3.0",
+		"version": "3.0.0",
 		"cssVarPrefix": "tr",
 		"classPrefix": "tr"
 	},
@@ -44,7 +44,10 @@
 		"s12": 12,
 		"s13": 13,
 		"s14": 14,
+		"s16": 16,
 		"s18": 18,
+		"s20": 20,
+		"s24": 24,
 		"s44": 44
 	},
 	"lineHeights": {
@@ -57,6 +60,9 @@
 		"wide": "0.05em",
 		"widest": "0.1em",
 		"brand": "0.5px"
+	},
+	"rootStyle": {
+		"$ref": "ui.default"
 	},
 	"textStyles": {
 		"brand": {
@@ -75,6 +81,44 @@
 				"fontWeight": "brand",
 				"lineHeight": "compact",
 				"letterSpacing": "brand",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			}
+		},
+		"heading": {
+			"xl": {
+				"fontFamily": "interface",
+				"fontSize": "s24",
+				"fontWeight": "semibold",
+				"lineHeight": "compact",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			},
+			"lg": {
+				"fontFamily": "interface",
+				"fontSize": "s20",
+				"fontWeight": "semibold",
+				"lineHeight": "compact",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			},
+			"md": {
+				"fontFamily": "interface",
+				"fontSize": "s18",
+				"fontWeight": "semibold",
+				"lineHeight": "compact",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			},
+			"sm": {
+				"fontFamily": "interface",
+				"fontSize": "s16",
+				"fontWeight": "semibold",
+				"lineHeight": "compact",
+				"letterSpacing": "normal",
 				"textTransform": "none",
 				"fontStyle": "normal"
 			}
@@ -191,6 +235,15 @@
 				"textTransform": "none",
 				"fontStyle": "normal"
 			},
+			"document": {
+				"fontFamily": "code",
+				"fontSize": "s13",
+				"fontWeight": "regular",
+				"lineHeight": "code",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			},
 			"otp": {
 				"fontFamily": "code",
 				"fontSize": "s18",
@@ -202,63 +255,106 @@
 			}
 		}
 	},
-	"proseStyles": {
-		"body": {
-			"$ref": "body.reading"
+	"proseSystems": {
+		"chat": {
+			"body": {
+				"$ref": "body.reading"
+			},
+			"h1": {
+				"$ref": "heading.md"
+			},
+			"h2": {
+				"$ref": "title.dialog"
+			},
+			"h3": {
+				"fontFamily": "interface",
+				"fontSize": "s12",
+				"fontWeight": "semibold",
+				"lineHeight": "default",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			},
+			"h4": {
+				"$ref": "title.compact"
+			},
+			"h5": {
+				"$ref": "title.compact"
+			},
+			"h6": {
+				"fontFamily": "interface",
+				"fontSize": "s10",
+				"fontWeight": "medium",
+				"lineHeight": "default",
+				"letterSpacing": "wide",
+				"textTransform": "uppercase",
+				"fontStyle": "normal"
+			},
+			"inlineCode": {
+				"$ref": "code.inline"
+			},
+			"codeBlock": {
+				"$ref": "code.block"
+			},
+			"blockquote": {
+				"$ref": "body.reading"
+			},
+			"list": {
+				"$ref": "body.reading"
+			},
+			"tableBody": {
+				"$ref": "ui.default"
+			},
+			"tableHeader": {
+				"$ref": "chat.h3"
+			}
 		},
-		"h1": {
-			"fontFamily": "interface",
-			"fontSize": "s18",
-			"fontWeight": "semibold",
-			"lineHeight": "compact",
-			"letterSpacing": "normal",
-			"textTransform": "none",
-			"fontStyle": "normal"
-		},
-		"h2": {
-			"$ref": "title.dialog"
-		},
-		"h3": {
-			"fontFamily": "interface",
-			"fontSize": "s12",
-			"fontWeight": "semibold",
-			"lineHeight": "default",
-			"letterSpacing": "normal",
-			"textTransform": "none",
-			"fontStyle": "normal"
-		},
-		"h4": {
-			"$ref": "title.compact"
-		},
-		"h5": {
-			"$ref": "title.compact"
-		},
-		"h6": {
-			"fontFamily": "interface",
-			"fontSize": "s10",
-			"fontWeight": "medium",
-			"lineHeight": "default",
-			"letterSpacing": "wide",
-			"textTransform": "uppercase",
-			"fontStyle": "normal"
-		},
-		"inlineCode": {
-			"$ref": "code.inline"
-		},
-		"codeBlock": {
-			"$ref": "code.block"
-		},
-		"blockquote": {
-			"$ref": "body.reading"
-		},
-		"list": {
-			"$ref": "body.reading"
-		},
-		"tableBody": {
-			"$ref": "ui.default"
-		},
-		"tableHeader": {
-			"$ref": "prose.h3"
+		"doc": {
+			"body": {
+				"$ref": "body.reading"
+			},
+			"h1": {
+				"$ref": "heading.xl"
+			},
+			"h2": {
+				"$ref": "heading.lg"
+			},
+			"h3": {
+				"$ref": "heading.md"
+			},
+			"h4": {
+				"$ref": "heading.sm"
+			},
+			"h5": {
+				"$ref": "title.dialog"
+			},
+			"h6": {
+				"fontFamily": "interface",
+				"fontSize": "s12",
+				"fontWeight": "semibold",
+				"lineHeight": "compact",
+				"letterSpacing": "wide",
+				"textTransform": "uppercase",
+				"fontStyle": "normal"
+			},
+			"inlineCode": {
+				"$ref": "code.inline"
+			},
+			"codeBlock": {
+				"$ref": "code.document"
+			},
+			"blockquote": {
+				"$ref": "body.reading"
+			},
+			"list": {
+				"$ref": "body.reading"
+			},
+			"tableBody": {
+				"$ref": "body.reading"
+			},
+			"tableHeader": {
+				"$ref": "title.dialog"
+			}
 		}
 	}
 }
