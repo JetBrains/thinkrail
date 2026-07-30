@@ -10,6 +10,7 @@
  * are referenced as token arbitrary values (e.g. `font-[var(--font-accent)]`) instead.
  */
 @theme inline {
+	/* Legacy color tokens (do not remove during migration) */
 	--color-bg: var(--bg);
 	--color-bg-dark: var(--bg-dark);
 	--color-surface-sidebar: var(--surface-sidebar);
@@ -27,6 +28,66 @@
 	--color-red: var(--red);
 	--color-gold: var(--gold);
 	--color-on-accent: var(--on-accent);
+
+	/*
+	 * Semantic color tokens (new layer — coexists with legacy during migration)
+	 * These alias legacy tokens for visual parity; components will migrate incrementally.
+	 */
+
+	/* Text */
+	--color-text-default: var(--text-default);
+	--color-text-strong: var(--text-strong);
+	--color-text-muted: var(--text-muted);
+	--color-text-disabled: var(--text-disabled);
+	--color-text-link: var(--text-link);
+	--color-text-on-primary: var(--text-on-primary);
+
+	/* Container */
+	--color-container-workspace-bg: var(--container-workspace-bg);
+	--color-container-sidebar-bg: var(--container-sidebar-bg);
+	--color-container-terminal-bg: var(--container-terminal-bg);
+	--color-container-popover-bg: var(--container-popover-bg);
+
+	/* Control */
+	--color-control-bg: var(--control-bg);
+	--color-control-bg-hovered: var(--control-bg-hovered);
+	--color-control-bg-disabled: var(--control-bg-disabled);
+	--color-control-border: var(--control-border);
+	--color-control-border-disabled: var(--control-border-disabled);
+	--color-control-focus-border: var(--control-focus-border);
+	--color-control-primary-bg: var(--control-primary-bg);
+	--color-control-primary-text: var(--control-primary-text);
+
+	/* Border */
+	--color-border-default: var(--border-default);
+	--color-border-strong: var(--border-strong);
+	--color-border-muted: var(--border-muted);
+
+	/* Primary */
+	--color-primary-muted: var(--primary-muted);
+
+	/* Feedback */
+	--color-feedback-info: var(--feedback-info);
+	--color-feedback-info-bg: var(--feedback-info-bg);
+	--color-feedback-info-border: var(--feedback-info-border);
+	--color-feedback-success: var(--feedback-success);
+	--color-feedback-success-bg: var(--feedback-success-bg);
+	--color-feedback-success-border: var(--feedback-success-border);
+	--color-feedback-error: var(--feedback-error);
+	--color-feedback-error-bg: var(--feedback-error-bg);
+	--color-feedback-error-border: var(--feedback-error-border);
+
+	/* Selection */
+	/* Native ::selection; already exists as --selection-bg */
+	--color-selection-bg: var(--selection-bg);
+	--color-selection-text: var(--selection-text);
+	--color-selection-item-bg-active: var(--selection-item-bg-active);
+	--color-selection-item-bg-active-muted: var(--selection-item-bg-active-muted);
+	--color-selection-item-bg-hovered: var(--selection-item-bg-hovered);
+
+	/* Editor */
+	--color-editor-selection-bg: var(--editor-selection-bg);
+	--color-editor-selection-text: var(--editor-selection-text);
 
 	--font-sans: var(--font);
 

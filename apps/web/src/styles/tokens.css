@@ -11,6 +11,68 @@
 	--bubble-user-bg: color-mix(in srgb, var(--bubble-accent) 12%, transparent);
 	--bubble-user-border: color-mix(in srgb, var(--bubble-accent) 35%, transparent);
 
+	/*
+	 * ─── Semantic Color Tokens ───────────────────────────────────────────────────
+	 * New semantic layer aliasing existing tokens for visual parity. These coexist
+	 * with legacy tokens during migration. Do not delete legacy tokens yet.
+	 */
+
+	/* Text */
+	--text-default: var(--text);
+	--text-strong: var(--text); /* No distinct "strong" exists today; aliased to default */
+	--text-muted: var(--muted);
+	/* TODO: disabled is currently opacity-based (disabled:opacity-50); hint is closest static value */
+	--text-disabled: var(--hint);
+	--text-link: var(--primary);
+	--text-on-primary: var(--on-accent);
+
+	/* Container */
+	--container-workspace-bg: var(--bg);
+	--container-sidebar-bg: var(--surface-sidebar);
+	--container-terminal-bg: var(--surface-content);
+	--container-popover-bg: var(--elevated);
+
+	/* Control */
+	--control-bg: var(--input-bg);
+	--control-bg-hovered: var(--hover);
+	/* TODO: disabled is currently opacity-based; no distinct disabled surface exists */
+	--control-bg-disabled: var(--input-bg);
+	--control-border: var(--border2); /* borderStrong is the de facto standard */
+	/* TODO: disabled is currently opacity-based; no distinct disabled border exists */
+	--control-border-disabled: var(--border2);
+	--control-focus-border: var(--primary);
+	--control-primary-bg: var(--primary);
+	--control-primary-text: var(--on-accent);
+
+	/* Border */
+	--border-default: var(--border2); /* borderStrong is the de facto default (101 uses vs 2) */
+	--border-strong: var(--border2); /* Same as default; two-weight scale was never adopted */
+	--border-muted: var(--border); /* The subtle tier (barely used) */
+
+	/* Primary — note: --primary already exists and is the canonical accent color */
+	--primary-muted: var(--primary-40);
+
+	/* Feedback */
+	--feedback-info: var(--blue);
+	--feedback-info-bg: color-mix(in srgb, var(--blue) 10%, transparent);
+	--feedback-info-border: var(--blue);
+	--feedback-success: var(--green);
+	--feedback-success-bg: var(--green-tint); /* Already exists at 12% */
+	--feedback-success-border: var(--green);
+	--feedback-error: var(--red);
+	--feedback-error-bg: color-mix(in srgb, var(--red) 10%, transparent);
+	--feedback-error-border: var(--red);
+
+	/* Selection — note: --selection-bg already exists for native ::selection */
+	--selection-text: var(--selection-fg);
+	--selection-item-bg-active: var(--primary-10);
+	--selection-item-bg-active-muted: var(--primary-10); /* TODO: May need distinct muted variant */
+	--selection-item-bg-hovered: var(--hover);
+
+	/* Editor */
+	--editor-selection-bg: var(--sel);
+	--editor-selection-text: var(--sel-fg);
+
 	/* Type scale (fixed px) */
 	--font-xs: 10px;
 	--font-sm: 12px;
