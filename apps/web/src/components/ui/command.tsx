@@ -48,10 +48,13 @@ function CommandGroup({
 	className,
 	...props
 }: React.ComponentProps<typeof CommandPrimitive.Group>) {
+	// cmdk renders the heading element itself, so a semantic typography class cannot be put on it — and
+	// an arbitrary variant cannot apply one. Spacing + colour only; a caller that wants the heading
+	// styled passes a node: `heading={<span className="tr-text-eyebrow">Remote</span>}`.
 	return (
 		<CommandPrimitive.Group
 			className={cn(
-				"[&_[cmdk-group-heading]]:px-sm [&_[cmdk-group-heading]]:py-xs [&_[cmdk-group-heading]]:text-eyebrow [&_[cmdk-group-heading]]:text-hint",
+				"[&_[cmdk-group-heading]]:px-sm [&_[cmdk-group-heading]]:py-xs [&_[cmdk-group-heading]]:text-hint",
 				className,
 			)}
 			{...props}

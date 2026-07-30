@@ -33,7 +33,7 @@ export function ReadCard({ args, result, status, workspaceRoot }: ToolRenderProp
 			{status === "running" ? (
 				<span className="text-muted tr-text-metadata">Reading…</span>
 			) : status === "error" ? (
-				<pre className="overflow-auto px-sm py-xs text-red tr-text-metadata">{output}</pre>
+				<pre className="overflow-auto px-sm py-xs text-red tr-code-text">{output}</pre>
 			) : output ? (
 				<Collapsible lines={countLines(output)}>
 					<CodeBlock code={output} lang={lang} />

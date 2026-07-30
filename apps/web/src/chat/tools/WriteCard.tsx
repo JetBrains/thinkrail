@@ -23,7 +23,7 @@ export function WriteCard({ args, result, status, workspaceRoot }: ToolRenderPro
 				<span className="shrink-0 text-hint">written</span>
 			</div>
 			{status === "error" ? (
-				<pre className="overflow-auto px-sm py-xs text-red tr-text-metadata">{message}</pre>
+				<pre className="overflow-auto px-sm py-xs text-red tr-code-text">{message}</pre>
 			) : content ? (
 				<Collapsible lines={countLines(content)}>
 					<CodeBlock code={content} lang={lang} />

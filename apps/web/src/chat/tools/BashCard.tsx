@@ -17,7 +17,7 @@ export function BashCard({ args, result, status }: ToolRenderProps) {
 				<span className="ml-sm text-muted">{command}</span>
 			</div>
 			<pre
-				className={`overflow-auto px-sm py-xs leading-relaxed ${isError ? "text-red" : "text-text"}`}
+				className={`overflow-auto px-sm py-xs tr-code-text leading-relaxed ${isError ? "text-red" : "text-text"}`}
 			>
 				{output || (status === "running" ? "Running…" : "(no output)")}
 			</pre>

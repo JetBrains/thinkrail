@@ -16,7 +16,7 @@ export function EditCard({ args, result, status, workspaceRoot }: ToolRenderProp
 		return (
 			<div data-testid="tool-edit" className="flex flex-col gap-xs">
 				<EditHeader path={path} workspaceRoot={workspaceRoot} />
-				<pre className="overflow-auto px-sm py-xs text-red tr-text-metadata">{message}</pre>
+				<pre className="overflow-auto px-sm py-xs text-red tr-code-text">{message}</pre>
 			</div>
 		);
 	}
@@ -38,7 +38,7 @@ export function EditCard({ args, result, status, workspaceRoot }: ToolRenderProp
 						return (
 							<div key={key} className="flex bg-red/10">
 								<span className="w-6 shrink-0 select-none px-1 text-right text-red/50">−</span>
-								<pre className="min-w-0 flex-1 px-1 text-red">{line}</pre>
+								<pre className="min-w-0 flex-1 px-1 text-red tr-code-text">{line}</pre>
 							</div>
 						);
 					})}
@@ -47,7 +47,7 @@ export function EditCard({ args, result, status, workspaceRoot }: ToolRenderProp
 						return (
 							<div key={key} className="flex bg-green/10">
 								<span className="w-6 shrink-0 select-none px-1 text-right text-green/50">+</span>
-								<pre className="min-w-0 flex-1 px-1 text-green">{line}</pre>
+								<pre className="min-w-0 flex-1 px-1 text-green tr-code-text">{line}</pre>
 							</div>
 						);
 					})}

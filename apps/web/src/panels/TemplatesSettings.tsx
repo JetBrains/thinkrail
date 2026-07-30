@@ -222,9 +222,9 @@ export function TemplatesSettings() {
 			<div className="flex flex-col gap-xs">
 				<h3 className="tr-title-section text-text">Prompt templates</h3>
 				<p className="text-hint tr-text-metadata">
-					Reusable prompts, expanded from the composer's <code>/</code> menu. Global templates are
-					available in every workspace; project templates live in this worktree's{" "}
-					<code>.pi/prompts/</code>.
+					Reusable prompts, expanded from the composer's <code className="tr-code-text">/</code>{" "}
+					menu. Global templates are available in every workspace; project templates live in this
+					worktree's <code className="tr-code-text">.pi/prompts/</code>.
 				</p>
 			</div>
 
