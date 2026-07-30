@@ -260,11 +260,25 @@ test("an option-shaped ref is refused at both mutation doors", async () => {
 	expect(() => setWorkspaceDiffBase(ws.id, "--output=/tmp/thinkrail-pwn")).toThrow(
 		/usable git ref/,
 	);
-	expect(createWorkspace("p1", "pwn", "--output=/tmp/thinkrail-pwn")).rejects.toThrow(
+	// `await`ed — an un-awaited `rejects.toThrow()` can never fail the test, which is the last thing an
+	// option-injection regression test should be.
+	await expect(createWorkspace("p1", "pwn", "--output=/tmp/thinkrail-pwn")).rejects.toThrow(
 		/usable git ref/,
 	);
 	// A well-formed but *deleted* ref stays acceptable — the read degrades, it is not malformed.
 	expect(setWorkspaceDiffBase(ws.id, "gone-branch").diffBase).toBe("gone-branch");
+});
+
+test("createWorkspace validates the RESOLVED base — including the one it reads off the repo's HEAD", async () => {
+	// The other half of the same door: with no base picked, the base comes from `rev-parse --abbrev-ref HEAD`,
+	// i.e. from the repository — and an untrusted repo can have an option-shaped branch checked out
+	// (`git branch` refuses the name, `symbolic-ref` does not).
+	const probe = join(dataDir, "head-pwn-probe.txt");
+	git(repo, "update-ref", `refs/heads/--output=${probe}`, "HEAD");
+	git(repo, "symbolic-ref", "HEAD", `refs/heads/--output=${probe}`);
+
+	await expect(createWorkspace("p1")).rejects.toThrow(/usable git ref/);
+	expect(existsSync(probe)).toBe(false);
 });
 
 test("renameWorkspace throws on an unknown workspace", () => {

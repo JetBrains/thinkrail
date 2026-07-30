@@ -66,11 +66,17 @@ folder" anchor, ensured lazily, **non-removable and non-renamable**.
   never optimistically (modelled exactly on `setWorkspaceSkillOverride`). Both **ref doors** — this one and
   `createWorkspace`'s `baseRef` — validate the ref's *shape* through the `git` module's `assertSafeRef`
   before it can reach a git argument (an option-shaped branch is reachable from any untrusted repo; see
-  [[submodule-server-git]]). **The two base meanings are two
+  [[submodule-server-git]]). `createWorkspace` validates the **resolved** base *unconditionally*, not just a
+  client-supplied one: with no base picked it comes from `rev-parse --abbrev-ref HEAD`, i.e. from the
+  repository, and an untrusted checkout can have an option-shaped branch checked out (`git branch` refuses such
+  a name, `symbolic-ref` does not) — both halves of the same door, closed by one check. **The two base meanings are two
   fields on purpose:** `baseBranch` = where the branch came from, `diffBase` = what its review is measured
   against; collapsing them would make a re-pointed target lie about provenance (the `branch · from
   baseBranch` receipt). Every read of "the base" — including this module's own `diffStats` — resolves it
-  through the `git` module's `diffBaseRef`, never inline,
+  through the `git` module's `diffBaseRef`, never inline (and reaches git bracketed by `--end-of-options` … `--`,
+  like every other rev this app passes). `diffStats` yields **no stats at all** (logged) when git couldn't
+  answer, rather than a fabricated `+0 −0` — a failed read must not paint a dirty worktree as clean; the
+  `Workspace.diffStats` field is simply absent, and `workspaceDiffStats` rejects,
   `getWorkspace` (by-id lookup, throws on unknown — anchors a chat session's cwd),
   and the **archive** primitives, split so the fast record-drop
   and the slow git reclaim are separable (the host archives off the request's critical path):

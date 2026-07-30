@@ -235,12 +235,14 @@ test("resolveDiffRange: one definition per scope (branch / uncommitted / commit)
 	// Default (and explicit `branch`): everything vs the diff base, ending at the worktree.
 	expect(resolveDiffRange(ws)).toEqual(resolveDiffRange(ws, { kind: "branch" }));
 	const branch = resolveDiffRange(ws, { kind: "branch" });
-	// `--end-of-options` brackets the revs, so a ref shaped like a flag can't be parsed as one.
+	// `--end-of-options` brackets the revs so a flag-shaped ref can't be parsed as one; the trailing `--`
+	// closes the other side, so a rev that also names a path isn't an "ambiguous argument".
 	expect(changedFileArgs(branch, "--name-status")).toEqual([
 		"diff",
 		"--name-status",
 		"--end-of-options",
 		"main",
+		"--",
 	]);
 	expect(branch).toMatchObject({ untracked: true, originalRef: "main", modifiedRef: null });
 	// The re-pointed target is what a branch range spans.
@@ -258,6 +260,7 @@ test("resolveDiffRange: one definition per scope (branch / uncommitted / commit)
 		"--numstat",
 		"--end-of-options",
 		"HEAD",
+		"--",
 	]);
 	expect(uncommitted).toMatchObject({ untracked: true, originalRef: "HEAD", modifiedRef: null });
 
@@ -290,6 +293,7 @@ test("resolveDiffRange degrades a root commit to an add-style diff (no parent to
 		"--name-status",
 		"--end-of-options",
 		root,
+		"--",
 	]);
 	const listed = Bun.spawnSync(["git", "-C", repo, ...changedFileArgs(range, "--name-status")], {
 		stdout: "pipe",
@@ -387,7 +391,9 @@ test("an option-shaped ref reaches git as a rev, never as an option", () => {
 	expect(listBranches("p1").local).toContain(`--output=${probe}`);
 
 	seedWorkspace({ diffBase: `--output=${probe}` });
-	// The read degrades (git refuses the rev) instead of writing the file the "ref" names.
+	// It reaches git as a REV (this one resolves — the crafted ref points at HEAD, hence an empty diff), never
+	// as an option: the file the "ref" names is not written. A *failed* read is asserted separately, where it
+	// throws rather than reading as a clean worktree.
 	expect(gitStatus("w1").changes).toEqual([]);
 	expect(listCommits("w1").commits).toEqual([]);
 	expect(existsSync(probe)).toBe(false);
@@ -408,6 +414,75 @@ test("isSafeRef accepts real refs and refuses anything git could re-read as more
 		"tab\there",
 		"ctrl\u001fchar",
 		"a".repeat(256),
+		// Revision metadata git itself refuses inside a ref name — `check-ref-format`'s rules, reproduced.
+		"main@{yesterday}",
+		"@{u}",
+		"@",
+		"main.lock",
+		"refs/heads/.hidden",
+		"a//b",
+		"/main",
+		"main/",
+		"main.",
 	])
 		expect(isSafeRef(bad)).toBe(false);
+});
+
+test("listCommits: a crafted AUTHOR name can't shift the timestamp or truncate itself", () => {
+	git(repo, "switch", "-c", "feature");
+	// `%an` is free text too, and it sits *between* the structured fields and the subject — the earlier
+	// "structured fields first" framing did not protect it: an author carrying the old `\u001f` separator
+	// shifted the subject one field over and truncated the author. NUL-separated fields of fixed arity do.
+	writeFileSync(join(repo, "spoof.txt"), "spoof\n");
+	git(repo, "add", "-A");
+	git(
+		repo,
+		"-c",
+		"user.name=ev\u001fil\u001f1999-01-01T00:00:00+00:00",
+		"-c",
+		"user.email=e@thinkrail.test",
+		"commit",
+		"-m",
+		"real subject",
+	);
+	seedWorkspace({ branch: "feature" });
+
+	const commit = listCommits("w1").commits[0];
+	expect(commit?.author).toBe("evil1999-01-01T00:00:00+00:00"); // whole name, control chars stripped
+	expect(commit?.subject).toBe("real subject"); // not shifted by the injected separators
+	expect(commit?.committedAt).not.toContain("1999");
+	expect(Number.isFinite(Date.parse(commit?.committedAt ?? ""))).toBe(true);
+});
+
+test("plainText strips invisible deception (bidi overrides, zero-width) from repo text", () => {
+	git(repo, "switch", "-c", "feature");
+	writeFileSync(join(repo, "bidi.txt"), "bidi\n");
+	git(repo, "add", "-A");
+	// A right-to-left override can make a subject *render* as something else entirely; a zero-width space
+	// hides inside a name. Both go before the wire, while ordinary non-ASCII text stays.
+	git(repo, "commit", "-m", "fix\u202egnisrever\u202c pa\u200bth — caf\u00e9 \u2713");
+	seedWorkspace({ branch: "feature" });
+
+	expect(listCommits("w1").commits[0]?.subject).toBe("fixgnisrever path — café ✓");
+});
+
+test("a base ref that also names a path still lists changes (the trailing `--`)", () => {
+	// A branch and a file with the same name is an "ambiguous argument" for `git diff <rev>` — which used to
+	// fail the whole read and surface as NO CHANGES. The `--` after the revs settles it as a rev.
+	writeFileSync(join(repo, "docs"), "a file called docs\n");
+	git(repo, "add", "-A");
+	git(repo, "commit", "-m", "add a file named docs");
+	git(repo, "branch", "docs");
+	git(repo, "switch", "-c", "feature");
+	commitOnFeature("feature.txt", "feature\n", "feature work");
+	seedWorkspace({ branch: "feature", baseBranch: "docs" });
+
+	expect(gitStatus("w1").changes.map((c) => c.path)).toEqual(["feature.txt"]);
+	expect(listCommits("w1").commits.map((c) => c.subject)).toEqual(["feature work"]);
+});
+
+test("a failed diff throws — a broken read is never reported as a clean worktree", () => {
+	seedWorkspace({ diffBase: "no-such-branch" });
+	writeFileSync(join(repo, "dirty.txt"), "dirty\n");
+	expect(() => gitStatus("w1")).toThrow(/Could not read the changed files/);
 });

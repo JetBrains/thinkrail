@@ -1,6 +1,6 @@
 import type { GitCommit, GitDiffScope } from "@thinkrail/contracts";
 import { Check, ChevronDown, GitCommitHorizontal, GitCompare } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -22,7 +22,13 @@ import { scopeLabel, scopeTitle } from "./changesModel";
  * Everything but the current scope is loaded **lazily on each open** (never on panel mount): the branch's
  * commits, and whether there is anything uncommitted at all (a read whose only job is to tell the user
  * *before* they pick an empty scope). Each degrades on its own — a failed commit read still leaves the
- * other scopes selectable.
+ * other scopes selectable. Both are **generation-stamped**: two opens in a row (or an open during a slow
+ * read) must not let the earlier response overwrite the later one — the same discipline `useWorkspaceRead`
+ * applies to the tick-driven reads this pair deliberately isn't part of.
+ *
+ * The menu's *identity* is `(workspaceId, baseRef)`, enforced by the caller's `key`: the commit rows are
+ * `git log <base>..HEAD`, so re-pointing the target changes which commits exist — keeping them would offer
+ * rows measured against a base that is no longer the workspace's.
  */
 export function ChangesScopeMenu({
 	workspaceId,
@@ -38,17 +44,31 @@ export function ChangesScopeMenu({
 	// `null` until known: whether the worktree has any uncommitted change (drives the empty-scope hint).
 	const [hasUncommitted, setHasUncommitted] = useState<boolean | null>(null);
 
+	// Stamps each open's pair of reads, so only the latest open's answers land (a slow first read can't
+	// overwrite a newer one's rows).
+	const generation = useRef(0);
+
 	// Re-read on every open, not once: commits land, files change, and a stale list would offer a scope the
 	// repo no longer has. The previous answer stays on screen until the fresh one replaces it.
 	const load = () => {
+		const mine = ++generation.current;
+		const live = () => generation.current === mine;
 		void getTransport()
 			.request("git.listCommits", { workspaceId })
-			.then(({ commits: list }) => setCommits(list))
-			.catch(() => setCommits([]));
+			.then(({ commits: list }) => {
+				if (live()) setCommits(list);
+			})
+			.catch(() => {
+				if (live()) setCommits([]);
+			});
 		void getTransport()
 			.request("git.status", { workspaceId, scope: { kind: "uncommitted" } })
-			.then(({ changes }) => setHasUncommitted(changes.length > 0))
-			.catch(() => setHasUncommitted(null));
+			.then(({ changes }) => {
+				if (live()) setHasUncommitted(changes.length > 0);
+			})
+			.catch(() => {
+				if (live()) setHasUncommitted(null);
+			});
 	};
 
 	return (

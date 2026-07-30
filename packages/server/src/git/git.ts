@@ -118,14 +118,19 @@ export function numstatPath(raw: string): string {
 	return arrow ? (arrow[1] ?? raw) : raw;
 }
 
-/** Per-file `{added, removed}` over the range, keyed by (resolved) path. Binary rows (`-`/`-`) are skipped. */
+/**
+ * Per-file `{added, removed}` over the range, keyed by (resolved) path. Binary rows (`-`/`-`) are skipped.
+ * A **failed** command throws (see {@link diffFailure}) rather than yielding an empty map: counts silently
+ * missing from every row is the same lie as a missing row.
+ */
 function numstat(
 	worktreePath: string,
 	range: DiffRange,
 ): Map<string, { added: number; removed: number }> {
 	const counts = new Map<string, { added: number; removed: number }>();
 	const out = git(worktreePath, changedFileArgs(range, "--numstat"));
-	if (!out.ok || !out.out) return counts;
+	if (!out.ok) throw diffFailure(out.err);
+	if (!out.out) return counts;
 	for (const line of out.out.split("\n")) {
 		const parts = line.split("\t");
 		if (parts.length < 3) continue;
@@ -165,9 +170,19 @@ function untrackedAdded(worktreePath: string, path: string): number | undefined 
 }
 
 /**
+ * A **failed** `git diff`/`git show` is an error, never an empty change set. Reporting "no changes" because
+ * the command didn't run is the worst failure a review surface can have — so the exit code is honoured and
+ * the caller (the panel) keeps its last good list and says the refresh failed.
+ */
+function diffFailure(stderr: string): Error {
+	return new Error(`Could not read the changed files: ${stderr || "git failed"}`);
+}
+
+/**
  * A worktree's changed files over the given {@link GitDiffScope} (default: everything vs the diff base),
  * plus any untracked files when the range ends at the worktree. Each carries `+/−` counts. Throws for a
- * scope naming a commit that no longer exists — see `resolveDiffRange`.
+ * scope naming a commit that no longer exists (see `resolveDiffRange`) — and for a diff that **failed**,
+ * which must never be reported as a clean worktree.
  */
 export function gitStatus(workspaceId: string, scope?: GitDiffScope): GitStatus {
 	const ws = workspace(workspaceId);
@@ -176,7 +191,8 @@ export function gitStatus(workspaceId: string, scope?: GitDiffScope): GitStatus 
 	const counts = numstat(ws.worktreePath, range);
 
 	const tracked = git(ws.worktreePath, changedFileArgs(range, "--name-status"));
-	if (tracked.ok && tracked.out) {
+	if (!tracked.ok) throw diffFailure(tracked.err);
+	if (tracked.out) {
 		for (const line of tracked.out.split("\n")) {
 			const parts = line.split("\t");
 			const code = parts[0] ?? "";
@@ -263,22 +279,41 @@ export function gitDiffFile(
 /** How many commits the scope menu's list can hold — a long-lived branch must not ship its whole history. */
 const COMMIT_LIST_MAX = 200;
 /**
- * Field separator for the `git log` format. A commit's *free text* (`%s`, `%an`) is repository-controlled
- * and **can** contain this byte, so the separator alone guarantees nothing: the format below puts every
- * structured field **before** the free text and the parser takes only the leading fields positionally, so an
- * injected separator can shift nothing but the subject it lives in (and is stripped from it anyway).
+ * Field separator for the `git log` format: a **NUL byte**, the one byte repository-controlled text cannot
+ * smuggle in. An author ident carries neither NUL nor newline (git's ident parser refuses both), so the
+ * record framing — fields split on NUL, records split on newline — holds no matter what a repo puts in a
+ * name; a `%s` *could* in principle carry a NUL, which costs nothing because the subject is the record's
+ * **tail**: everything past the fixed leading fields is joined back together.
+ *
+ * A previous version used `\u001f` and claimed "structured fields first" made it safe. It didn't: `%an` is
+ * free text too and sits *between* the structured fields and the subject, so an author named
+ * `a\u001f2020-01-01T00:00:00Z` shifted the subject one field over and truncated the author. Fixed arity +
+ * a separator the text can't contain is what actually makes the framing unambiguous.
  */
-const LOG_SEP = "\u001f";
+const LOG_SEP = "\u0000";
 
 /** How many leading `--format` fields are structured; everything after them is one free-text tail. */
 const LOG_LEADING_FIELDS = 4;
 
-/** Drop control characters from repository-controlled text before it goes on the wire. */
+/**
+ * Repository-controlled text, made safe to render: control characters (the framing bytes included) plus the
+ * **invisible** troublemakers — bidi overrides/embeddings (which can make a subject render right-to-left and
+ * disguise what a commit says) and zero-width/format characters (which hide inside a name). Everything else,
+ * emoji and scripts alike, is kept: this strips deception, not internationalization.
+ */
 function plainText(raw: string): string {
 	let out = "";
 	for (const char of raw) {
 		const code = char.codePointAt(0) ?? 0;
-		if (code >= 0x20 && code !== 0x7f) out += char;
+		if (code < 0x20 || code === 0x7f) continue; // C0 controls + DEL
+		if (code >= 0x80 && code <= 0x9f) continue; // C1 controls
+		if (code >= 0x200b && code <= 0x200f) continue; // zero-width + LRM/RLM
+		if (code >= 0x202a && code <= 0x202e) continue; // bidi embeddings/overrides
+		if (code >= 0x2066 && code <= 0x2069) continue; // bidi isolates
+		if (code === 0x061c) continue; // Arabic letter mark
+		if (code === 0xfeff) continue; // BOM / zero-width no-break space
+		if (code === 0x00ad) continue; // soft hyphen
+		out += char;
 	}
 	return out;
 }
@@ -293,11 +328,12 @@ export function listCommits(workspaceId: string): { commits: GitCommit[] } {
 	const log = git(ws.worktreePath, [
 		"log",
 		`--max-count=${COMMIT_LIST_MAX}`,
-		// Structured fields first, the free-text subject last (see LOG_SEP), and `--end-of-options` so the
-		// range's base ref can't be parsed as an option.
-		`--format=%H${LOG_SEP}%h${LOG_SEP}%cI${LOG_SEP}%an${LOG_SEP}%s`,
+		// NUL-separated fields of fixed arity, the free-text subject last (see LOG_SEP), and `--end-of-options`
+		// so the range's base ref can't be parsed as an option.
+		`--format=%H%x00%h%x00%cI%x00%an%x00%s`,
 		"--end-of-options",
 		`${diffBaseRef(ws)}..HEAD`,
+		"--",
 	]);
 	if (!log.ok || !log.out) return { commits: [] };
 	const commits: GitCommit[] = [];
@@ -305,8 +341,8 @@ export function listCommits(workspaceId: string): { commits: GitCommit[] } {
 		const parts = line.split(LOG_SEP);
 		const [sha, shortSha, committedAt, author] = parts;
 		if (!sha || !shortSha) continue;
-		// Everything past the structured head is the subject, separators and all — so a subject containing the
-		// separator can never shift `author`/`committedAt`.
+		// Everything past the fixed leading fields is the subject, separators and all — so nothing a repo can put
+		// in the free-text fields can shift `author`/`committedAt`.
 		const subject = parts.slice(LOG_LEADING_FIELDS).join(LOG_SEP);
 		commits.push({
 			sha,

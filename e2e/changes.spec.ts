@@ -259,15 +259,17 @@ test("Changes scope selector filters by commit / uncommitted; each scope is its 
 	const readme = page.getByTestId("change-item").filter({ hasText: "README.md" });
 	await expect(readme).toHaveCount(1);
 
-	// The scope is part of a diff tab's identity: the same file in two scopes opens TWO tabs (a tab's
-	// content must never change meaning because the rail's scope flipped underneath it).
-	await readme.click();
+	// The scope is part of a diff tab's identity: the same file in two scopes is TWO tabs (a tab's content must
+	// never change meaning because the rail's scope flipped underneath it). **Double**-clicked, so the first is
+	// KEPT — a second single click would land in the workspace's preview slot and replace it, which is the
+	// preview-tab rule, not a scope-identity failure.
+	await readme.dblclick();
 	const diffTabs = page.locator('[data-testid="editor-tab"][data-kind="diff"]');
 	await expect(diffTabs).toHaveCount(1);
 	await page.getByTestId("changes-scope-trigger").click();
 	await page.getByTestId("changes-scope-all").click();
 	await expect(page.getByTestId("changes-scope-label")).toHaveText("All changes");
-	await page.getByTestId("change-item").filter({ hasText: "README.md" }).click();
+	await page.getByTestId("change-item").filter({ hasText: "README.md" }).dblclick();
 	await expect(diffTabs).toHaveCount(2);
 });
 
@@ -415,12 +417,24 @@ test("Change rows stay one aligned, fully-highlighted row — menu slot included
 		join(worktree, "diffScopeResolverImplementationForTheChangesPanelAtRootLevel.ts"),
 		"export const root = 1;\n",
 	);
+	// A long dir with a SHORT basename — the case that pins "the dir yields first": here the name fits, so it
+	// must survive whole while the prefix truncates.
+	mkdirSync(join(worktree, "packages/server/src/git/deeply/nested/for/the/changes/panel"), {
+		recursive: true,
+	});
+	writeFileSync(
+		join(worktree, "packages/server/src/git/deeply/nested/for/the/changes/panel/shortName.ts"),
+		"export const short = 1;\n",
+	);
 
 	await page.getByTestId("tab-changes").click();
-	const longRow = page.getByTestId("change-item").filter({ hasText: "diffScopeResolver" }).first();
-	await expect(longRow).toBeVisible();
+	// Selected by their DIR prefix / its absence — both basenames start with `diffScopeResolver`, so a
+	// `hasText: "diffScopeResolver"` + `.first()` pair resolved to the *same* (root-level) row and the deep case
+	// went unasserted.
+	const longRow = page.getByTestId("change-item").filter({ hasText: "ForTheChangesPanel.ts" });
+	await expect(longRow).toHaveCount(1);
 	const rootRow = page.getByTestId("change-item").filter({ hasText: "AtRootLevel" });
-	await expect(rootRow).toBeVisible();
+	await expect(rootRow).toHaveCount(1);
 
 	// However long the path, the row's content stays inside the row: the basename truncates instead of
 	// pushing the `+N −M` counts (and, in the diff header's twin chip, the ¶/copy controls) out of the box.
@@ -435,13 +449,34 @@ test("Change rows stay one aligned, fully-highlighted row — menu slot included
 		rowBox.x + rowBox.width + 1,
 	);
 
+	// The dir prefix yields FIRST: on a row whose name fits, the prefix truncates and the basename — the part a
+	// user scans — stays whole. (Equal shrink truncated both, so this compares the two spans against each
+	// other, not a row against itself.)
+	const clipped = (locator: Locator) => locator.evaluate((n) => n.scrollWidth - n.clientWidth);
+	const shortNameRow = page.getByTestId("change-item").filter({ hasText: "shortName.ts" });
+	await expect(shortNameRow).toHaveCount(1);
+	expect(await clipped(shortNameRow.getByTestId("change-path-dir"))).toBeGreaterThan(1);
+	expect(await clipped(shortNameRow.getByTestId("change-path-base"))).toBeLessThanOrEqual(1);
+	// Only when the prefix has nothing left to give does the basename truncate too — which is the deep long-name
+	// row, and (with no prefix at all) the root-level one.
+	expect(await clipped(longRow.getByTestId("change-path-base"))).toBeGreaterThan(1);
+	expect(await clipped(rootRow.getByTestId("change-path-base"))).toBeGreaterThan(1);
+
 	// The whole row is the highlight surface (it has to span the trailing `⌄` slot, or a selected row reads
-	// as cut off before its own menu) — so the *wrapper* carries the selected state, not the inner button.
+	// as cut off before its own menu) — so the *wrapper* paints the band and the inner button paints NOTHING.
+	// Comparing the wrapper's own box to another wrapper's could never fail; comparing wrapper vs inner button
+	// is what pins "one painter, and it's the wide one".
 	await longRow.click();
 	const activeWrapper = page.locator('[data-testid="change-row"][data-active="true"]');
 	await expect(activeWrapper).toHaveCount(1);
 	const activeBox = (await activeWrapper.boundingBox()) ?? { width: 0 };
-	expect(activeBox.width).toBeGreaterThanOrEqual(rowBox.width - 1);
+	const innerBox = (await longRow.boundingBox()) ?? { width: 0 };
+	expect(activeBox.width).toBeGreaterThan(innerBox.width);
+	const background = (locator: Locator) =>
+		locator.evaluate((n) => getComputedStyle(n).backgroundColor);
+	const wrapperPaint = await background(activeWrapper);
+	expect(wrapperPaint).not.toBe("rgba(0, 0, 0, 0)");
+	expect(await background(longRow)).toBe("rgba(0, 0, 0, 0)");
 
 	// In the tree, files and folders line their `+N −M` counts up on the same column: a folder has no row
 	// menu but reserves the same trailing slot (ROW_MENU_SLOT).
@@ -536,26 +571,62 @@ test("The scope menu is per workspace: its commit rows never carry over to anoth
 	await expect(page.getByRole("menu")).toContainText("No commits on this branch");
 });
 
-test("Re-pointing the target branch re-reads an open branch-scope diff tab at once", async ({
+test("Re-pointing the target branch re-reads an open branch-scope diff tab — active or backgrounded", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
 	const worktree = seedCommitAndDirtyEdit();
+	// A second target branch whose copy of the file says something ELSE. That string is the whole point: it can
+	// only appear on screen through a re-read against that target, so the assertions below fail if the tab does
+	// not follow the target. (A previous version edited the worktree file instead — which the fs-tick re-read
+	// would have shown anyway, so it passed with the target dimension removed entirely.)
+	writeFileSync(join(worktree, "committed.txt"), "committed by the target branch\n");
+	gitIn(worktree, "add", "committed.txt");
+	gitIn(
+		worktree,
+		"-c",
+		"user.email=e2e@thinkrail.test",
+		"-c",
+		"user.name=ThinkRail E2E",
+		"commit",
+		"-m",
+		"e2e target commit",
+	);
+	gitIn(worktree, "branch", "e2e-target", "HEAD");
+	gitIn(worktree, "reset", "--hard", "HEAD~1"); // the workspace branch keeps only its own commit
+	// `reset --hard` also wiped the seeded dirty edit — restore it: the second half of this test parks on
+	// README.md's diff tab while the target moves.
+	writeFileSync(join(worktree, "README.md"), "# sample-project\n\ndirty edit by e2e\n");
 
 	await page.getByTestId("tab-changes").click();
-	// A file changed by the branch's commit — visible in the default (vs base) scope, and its diff shows the
-	// committed content as an addition.
-	await page.getByTestId("change-item").filter({ hasText: "committed.txt" }).click();
-	await expect(page.getByTestId("diff-pane")).toContainText("committed by e2e");
+	// A file changed by the branch's commit — visible in the default (vs base) scope, where the target has no
+	// copy of it at all, so the diff is an add of the worktree content. Double-clicked: the tab must be KEPT,
+	// or the second row below would replace it in the workspace's preview slot.
+	const committedRow = page.getByTestId("change-item").filter({ hasText: "committed.txt" });
+	await committedRow.dblclick();
+	const diffPane = page.getByTestId("diff-pane");
+	await expect(diffPane).toContainText("committed by e2e");
+	await expect(diffPane).not.toContainText("committed by the target branch");
 
-	// Re-point the target at the workspace's own branch: that commit is now common ground, so the file's two
-	// sides become identical. The OPEN tab must follow the new target immediately — a branch-scope tab means
-	// "this file vs the workspace's current target", it does not wait for the next fs tick.
-	writeFileSync(join(worktree, "committed.txt"), "committed by e2e\nplus an uncommitted line\n");
+	// (1) The ACTIVE tab follows a re-point immediately — a branch-scope tab means "this file vs the
+	// workspace's current target", it does not wait for the next fs tick.
 	await page.getByTestId("changes-target-picker").click();
-	await page.locator('[data-testid="branch-option"][data-branch="workspace-1"]').click();
-	await expect(page.getByTestId("diff-pane")).toContainText("plus an uncommitted line");
+	await page.locator('[data-testid="branch-option"][data-branch="e2e-target"]').click();
+	await expect(diffPane).toContainText("committed by the target branch");
+
+	// (2) A BACKGROUNDED tab follows it too. Panes mount only while their tab is active, so the drift has to be
+	// detected on activation — which works only because the tab persists the target its content was read
+	// against (`DiffTab.loadedTarget`). Park on another diff tab, re-point back, then come back.
+	const readmeTab = page.getByTestId("change-item").filter({ hasText: "README.md" });
+	await readmeTab.click();
+	await expect(diffPane).toContainText("dirty edit by e2e");
+	await page.getByTestId("changes-target-picker").click();
+	await page.locator('[data-testid="branch-option"][data-branch="main"]').first().click();
+
+	await committedRow.click();
+	await expect(diffPane).toContainText("committed by e2e");
+	await expect(diffPane).not.toContainText("committed by the target branch");
 });
 
 test("A commit scope whose commit is rewritten away falls back to All changes with a toast", async ({
@@ -584,4 +655,41 @@ test("A commit scope whose commit is rewritten away falls back to All changes wi
 	await expect(
 		page.getByTestId("toast").filter({ hasText: "no longer in this branch" }),
 	).toBeVisible();
+});
+
+test("A failed read says so — it never renders as an empty (clean) change set", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	const worktree = worktreeDir();
+	writeFileSync(join(worktree, "README.md"), "# sample-project\n\nedited by e2e\n");
+	gitIn(worktree, "branch", "doomed");
+
+	await page.getByTestId("tab-changes").click();
+	// Measure against a branch, then delete it out from under the workspace: the host's `git diff` now fails,
+	// and a failed diff must not read as "no changes" — that is a claim about the worktree that this read never
+	// made, and a review surface calling a dirty worktree clean is the worst thing it can do.
+	await page.getByTestId("changes-target-picker").click();
+	await page.locator('[data-testid="branch-option"][data-branch="doomed"]').click();
+	await expect(page.getByTestId("change-item").filter({ hasText: "README.md" })).toHaveCount(1);
+	gitIn(worktree, "branch", "-D", "doomed");
+
+	// A scope switch clears the list, so the next read has nothing to keep: exactly the "never answered vs
+	// answered empty" fork. Uncommitted still reads (it measures against HEAD); All changes cannot.
+	await page.getByTestId("changes-scope-trigger").click();
+	await page.getByTestId("changes-scope-uncommitted").click();
+	await expect(page.getByTestId("change-item")).toHaveCount(1);
+	await page.getByTestId("changes-scope-trigger").click();
+	await page.getByTestId("changes-scope-all").click();
+
+	await expect(page.getByTestId("changes-error")).toBeVisible();
+	await expect(page.getByTestId("changes-empty")).toHaveCount(0);
+	await expect(page.getByTestId("changes-retry")).toBeVisible();
+
+	// Re-pointing at a ref that exists recovers, so the failure state is a state and not a dead end.
+	await page.getByTestId("changes-target-picker").click();
+	await page.locator('[data-testid="branch-option"][data-branch="main"]').first().click();
+	await expect(page.getByTestId("change-item").filter({ hasText: "README.md" })).toHaveCount(1);
+	await expect(page.getByTestId("changes-error")).toHaveCount(0);
 });

@@ -16,6 +16,12 @@ import { useAppStore } from "../store";
  * fresh payload is applied at the tab's existing tick — the re-read answers "what does this tab mean now",
  * it does not observe a file change.
  *
+ * `loadedKey` is that dimension **as the tab's content was actually loaded** (persisted on the tab, e.g.
+ * `DiffTab.loadedTarget`), and it is what the "has the key moved?" comparison starts from. Seeding the
+ * comparison at mount time instead would make the drift invisible in exactly the case that matters: panes
+ * mount only while their tab is active, so a tab whose key moved while it sat in the background would come
+ * back with the *new* key already recorded and never re-read — old content under a new claim.
+ *
  * `read` / `applyFresh` / `keepCurrent` are read from a ref each run, so their identities are **not** effect
  * deps — the effect re-runs only when the fs tick, the reload key, or the tab's path / loaded-tick changes.
  */
@@ -27,6 +33,7 @@ export function useLiveTabContent<T>(
 		keepCurrent: (tick: number) => void;
 	},
 	reloadKey?: string,
+	loadedKey?: string,
 ) {
 	const change = useAppStore((s) => s.fsChangesByWorkspace[tab.workspaceId]);
 	const opsRef = useRef(ops);
@@ -57,7 +64,7 @@ export function useLiveTabContent<T>(
 
 	// The reload dimension: re-read on a *changed* key (never on mount — the content was just loaded for the
 	// current key), and drop a response the key has since moved past.
-	const lastKey = useRef(reloadKey);
+	const lastKey = useRef(loadedKey ?? reloadKey);
 	useEffect(() => {
 		if (reloadKey === undefined || reloadKey === lastKey.current) return;
 		lastKey.current = reloadKey;

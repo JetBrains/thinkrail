@@ -1146,6 +1146,7 @@ test("diff tabs: openTab dedupes by id + activates; view + contents update in pl
 		original: "old",
 		modified: "new",
 		loadedTick: 1,
+		loadedTarget: "main",
 	};
 	s().openTab(tab);
 	s().openTab(tab); // re-open = no duplicate, stays active
@@ -1165,14 +1166,16 @@ test("diff tabs: openTab dedupes by id + activates; view + contents update in pl
 	const afterWs = s().tabsByWorkspace.ws1?.[0];
 	expect(afterWs?.kind === "diff" && afterWs.ignoreWhitespace).toBe(true);
 
-	// A live re-read replaces both sides and advances the tick.
-	s().updateDiffTabContent(tab.id, "old2", "new2", 5);
+	// A live re-read replaces both sides and advances **both** live dimensions: the fs tick and the review
+	// target the fresh content was read against (which is what lets a background tab detect a moved target).
+	s().updateDiffTabContent(tab.id, "old2", "new2", 5, "origin/release");
 	const updated = s().tabsByWorkspace.ws1?.[0];
 	expect(updated?.kind).toBe("diff");
 	if (updated?.kind === "diff") {
 		expect(updated.original).toBe("old2");
 		expect(updated.modified).toBe("new2");
 		expect(updated.loadedTick).toBe(5);
+		expect(updated.loadedTarget).toBe("origin/release");
 	}
 });
 

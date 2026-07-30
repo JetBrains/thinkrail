@@ -104,6 +104,7 @@ export function selectCatalogModel(
 	return models.find((m) => m.provider === ref.provider && m.id === ref.id) ?? null;
 }
 
+/**
  * The **default** diff scope: everything on the workspace's branch vs its diff base (the behaviour that
  * predates the scope selector). A shared module constant, not a fresh object per read, so
  * {@link selectDiffScope} is referentially stable for a workspace that never picked a scope.
@@ -136,9 +137,14 @@ export function selectDiffBaseRef(state: ActiveWorkspaceState, workspaceId: stri
 /**
  * The **live dimension** of an open diff tab's content, beyond the workspace's fs tick: a `branch`-scope tab
  * shows "this file vs the workspace's *current* review target", so re-pointing that target (a
- * `workspace.setDiffBase` broadcast) has to re-read the tab — exactly like a file change does. A `commit` /
- * `uncommitted` scope has no such dimension (a commit sha is immutable, `HEAD` moves only with the
- * worktree), hence `""`: nothing to watch.
+ * `workspace.setDiffBase` broadcast) has to re-read the tab — exactly like a file change does. A `commit`
+ * scope has no such dimension (a sha is immutable), hence `""`: nothing to watch.
+ *
+ * An `uncommitted` tab is `""` too, but for a weaker reason: its `HEAD` can move **without** the worktree's
+ * files moving (a `git commit`/`reset`/`checkout` in a terminal), and this store has no signal for that — the
+ * fs tick is a file watcher, not a ref watcher. So such a tab converges only on the next file change. Watching
+ * `HEAD` (a host-side ref watch pushed like `fsChanged`) is the follow-up that would close it; until then this
+ * comment is the honest bound rather than a claim that HEAD can't move on its own.
  */
 export function selectDiffTabTargetRef(
 	state: ActiveWorkspaceState,

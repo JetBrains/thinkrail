@@ -54,12 +54,17 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 					path: tab.path,
 					scope: tab.scope,
 				}),
+			// Fresh content records the target it was read against; a tick-only advance keeps the tab's existing
+			// one (nothing was re-read, so nothing new is being claimed).
 			applyFresh: ({ original, modified }, tick) =>
-				useAppStore.getState().updateDiffTabContent(tab.id, original, modified, tick),
+				useAppStore.getState().updateDiffTabContent(tab.id, original, modified, tick, targetRef),
 			keepCurrent: (tick) =>
-				useAppStore.getState().updateDiffTabContent(tab.id, tab.original, tab.modified, tick),
+				useAppStore
+					.getState()
+					.updateDiffTabContent(tab.id, tab.original, tab.modified, tick, tab.loadedTarget),
 		},
 		targetRef,
+		tab.loadedTarget,
 	);
 
 	const markdown = isMarkdownPath(tab.path);
@@ -118,10 +123,17 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 					title={tab.path}
 					className="mr-auto flex min-w-0 items-baseline font-[var(--font-mono)] text-xs"
 				>
-					{dir ? <span className="min-w-0 truncate text-hint">{dir}</span> : null}
+					{dir ? (
+						<span data-testid="diff-path-dir" className="min-w-0 shrink-[20] truncate text-hint">
+							{dir}
+						</span>
+					) : null}
 					{/* Truncatable, not `shrink-0`: a long basename must never push the ¶/copy/layout controls
-					    out of the header on a narrow pane (the same rule as the Changes list's path rows). */}
-					<span className="min-w-0 truncate text-muted">{base}</span>
+					    out of the header on a narrow pane (the same rule as the Changes list's path rows) — but it
+					    out-lasts the dir prefix 20:1, so the name survives until the prefix is gone. */}
+					<span data-testid="diff-path-base" className="min-w-0 shrink truncate text-muted">
+						{base}
+					</span>
 				</span>
 				{/* Hide whitespace-only changes — Monaco's own `ignoreTrimWhitespace`, per tab. Not offered in
 				    the rendered markdown view, which has no lines to compare. */}

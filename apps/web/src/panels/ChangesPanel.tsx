@@ -39,7 +39,12 @@ import { useWorkspaceRead } from "./useWorkspaceRead";
  * (the open loses to the newer navigation, as any pending preview does).
  */
 export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
+	// Three distinct states, never two: `null` = **never answered** (loading), `error` = the read *failed* and
+	// there is no list to show, and a `GitStatus` = an answer — whose empty `changes` is the only thing allowed
+	// to render as "no changes". Collapsing the first two into an empty status is how a review surface ends up
+	// telling the user a dirty worktree is clean.
 	const [status, setStatus] = useState<GitStatus | null>(null);
+	const [error, setError] = useState<string | null>(null);
 	// Whether the current failing streak has already been reported — an fs tick can fail repeatedly, and one
 	// toast per tick would bury the user in the same line. Cleared by the next landed read.
 	const warnedRef = useRef(false);
@@ -64,30 +69,34 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	// neither wedged on a dead sha nor silently showing a different scope than the user picked. Every other
 	// failure (timeout, dropped socket, git error) must leave the chosen scope alone — hence the code, not just
 	// "the read failed".
-	useWorkspaceRead(
+	const { reload } = useWorkspaceRead(
 		workspaceId,
 		(id) => getTransport().request("git.status", { workspaceId: id, scope }),
 		{
 			onResult: (result) => {
 				setStatus(result);
+				setError(null);
 				warnedRef.current = false;
 			},
-			onFailure: (_id, error) => {
-				if (wsErrorCode(error) === "UNKNOWN_COMMIT") {
+			onFailure: (_id, failure) => {
+				if (wsErrorCode(failure) === "UNKNOWN_COMMIT") {
 					setDiffScope(workspaceId, { kind: "branch" });
 					toast.info("That commit is no longer in this branch — showing all changes.");
 					return;
 				}
 				// Keep the last good list — but say so once per failing streak, so a stale list is never silently
-				// passed off as current (a first, failed read has nothing to keep and reads as an empty scope).
+				// passed off as current.
 				if (status && !warnedRef.current) {
 					warnedRef.current = true;
-					toast.error(`Could not refresh the changes: ${errorText(error)}`);
+					toast.error(`Could not refresh the changes: ${errorText(failure)}`);
 				}
-				setStatus((prev) => prev ?? { branch: "", changes: [] });
+				// Nothing to keep (a first, failed read) → the failure itself is what the panel shows. It must never
+				// degrade to an empty change set: "clean" is a claim, and this read didn't make it.
+				setError(errorText(failure));
 			},
 			onSwitch: () => {
 				setStatus(null);
+				setError(null);
 				setHighlighted(null);
 				warnedRef.current = false; // a new workspace/scope is a new streak
 			},
@@ -173,16 +182,18 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 			<div
 				data-testid="changes-view-toggle"
 				role="toolbar"
-				aria-label="Changes view mode"
+				// The toolbar holds the scope selector and the target-branch picker as well as the List|Tree
+				// segments, so it is named for what it is, not for the one control it used to hold.
+				aria-label="Changes scope and view"
 				className="flex h-8 shrink-0 items-center gap-xs border-border2 border-b bg-bg-dark px-sm"
 			>
 				<div className="mr-auto flex min-w-0 items-center gap-xs">
-					{/* Keyed by workspace ON PURPOSE (do not "clean up"): the panel is not remounted on a workspace
-					    switch, and this menu's lazy reads are *open*-triggered, not tick-triggered, so they can't go
-					    through `useWorkspaceRead`'s generation stamping. The remount both clears the previous
-					    workspace's commit rows and neutralizes a response still in flight for it. */}
+					{/* Keyed ON PURPOSE (do not "clean up") by the menu's full identity — workspace **and** target ref:
+					    the panel is not remounted on a workspace switch, and the commit rows are `git log <base>..HEAD`,
+					    so re-pointing the target changes which commits exist. The remount clears rows that belonged to
+					    the previous (workspace, base) and neutralizes a response still in flight for it. */}
 					<ChangesScopeMenu
-						key={workspaceId}
+						key={`${workspaceId}:${baseRef}`}
 						workspaceId={workspaceId}
 						scope={scope}
 						onSelectScope={(next) => setDiffScope(workspaceId, next)}
@@ -216,7 +227,19 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 				/>
 			</div>
 			<div className="min-h-0 flex-1 overflow-auto">
-				{status === null ? (
+				{status === null && error !== null ? (
+					<div data-testid="changes-error" className="flex flex-col items-start gap-xs px-sm py-xs">
+						<p className="text-red text-xs">Could not read the changes: {error}</p>
+						<button
+							type="button"
+							data-testid="changes-retry"
+							onClick={reload}
+							className="rounded-[var(--radius-sm)] px-xs py-[2px] text-hint text-xs transition-colors hover:bg-hover hover:text-muted"
+						>
+							Retry
+						</button>
+					</div>
+				) : status === null ? (
 					<p className="px-sm py-xs text-xs text-hint">Loading…</p>
 				) : status.changes.length === 0 ? (
 					<p data-testid="changes-empty" className="px-sm py-xs text-xs text-hint">
@@ -245,19 +268,31 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 												onClick={() => openDiff(change.path, "preview")}
 												onDoubleClick={() => openDiff(change.path, "keep")}
 												title={change.path}
-												className={`flex min-w-0 flex-1 items-center gap-sm px-sm py-xs text-left text-sm hover:bg-hover ${
-													isActive(change.path) ? "bg-hover" : ""
-												}`}
+												// No background of its own: the WRAPPER paints the row's hover/selected band, which has
+												// to span the trailing ⌄ slot too. Two painters would make the row read as cut off at
+												// this button's edge (and hide that the wrapper stopped painting).
+												className="flex min-w-0 flex-1 items-center gap-sm px-sm py-xs text-left text-sm"
 											>
-												{/* The full relative path: a muted directory prefix, a bright basename. The dir
-											    yields first (`truncate` + `flex-1`), so the name a user scans stays visible. */}
+												{/* The full relative path: a muted directory prefix, a bright basename — and the dir
+												    **actually yields first**, because it out-shrinks the basename 20:1
+												    (`shrink-[20]` vs `shrink`) — a ratio, not a tiny factor: a shrink sum BELOW 1 makes
+												    CSS absorb only that fraction of the deficit, i.e. the row would overflow. Equal shrink
+												    made both truncate at once, the opposite of the point: the name is what a user scans. */}
 												<span className="flex min-w-0 flex-1 items-baseline">
-													{dir ? <span className="min-w-0 truncate text-hint">{dir}</span> : null}
+													{dir ? (
+														<span
+															data-testid="change-path-dir"
+															className="min-w-0 shrink-[20] truncate text-hint"
+														>
+															{dir}
+														</span>
+													) : null}
 													{/* Truncatable, not `shrink-0`: a long ROOT-level basename has no dir prefix to
 													    absorb the overflow, and a row that can't shrink pushes the +/− badge out of
 													    the panel — the same rule DiffPane's header chip follows. */}
 													<span
-														className={`min-w-0 truncate ${statusNameClass(change.status) || "text-muted"}`}
+														data-testid="change-path-base"
+														className={`min-w-0 shrink truncate ${statusNameClass(change.status) || "text-muted"}`}
 													>
 														{base}
 													</span>

@@ -57,6 +57,8 @@ function ChangeNodeRow({
 							testid="change-node"
 							onContextMenu={onContextMenu}
 							kind="file"
+							// The wrapper paints the band (it has to cover the trailing ⌄ slot); this row paints none.
+							highlight="wrapper"
 							active={isActive(node.path)}
 							dataStatus={node.status}
 							label={node.name}

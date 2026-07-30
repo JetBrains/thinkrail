@@ -41,8 +41,11 @@ interface WorkspaceReadHandlers<T> {
  * `readKey` is a **second identity dimension** of the read, for a caller whose read has a parameter beyond the
  * workspace (the Changes panel's diff scope): changing it re-reads exactly like a workspace switch — reset
  * first (`onSwitch`), then a fresh, generation-stamped read — so one key's value can never linger under
- * another. It is threaded to `read` as its second argument (and to `reload`), so it is genuinely consumed
- * rather than being a dependency the effect merely names.
+ * another. It is **identity only** — what makes a re-read happen, never what the read reads *with*: the
+ * parameter itself lives in the caller's `read` closure, which this hook re-captures on every render
+ * (`latest`), so the value a re-read uses is by construction the one the key describes. The key is handed to
+ * `read` as its second argument for callers that would rather branch on it than close over the parameter;
+ * ignoring it (as the Changes panel does, its `scope` being an object the key merely names) is expected.
  */
 export function useWorkspaceRead<T>(
 	workspaceId: string | null,

@@ -85,6 +85,15 @@ export interface DiffTab {
 	path: string;
 	/** What this tab diffs — fixed at open time and re-read with (never re-derived from the panel's scope). */
 	scope: GitDiffScope;
+	/**
+	 * The review **target** this tab's content was actually read against (`selectDiffTabTargetRef`: the
+	 * workspace's diff base for a `branch` scope, `""` for the scopes that have no such dimension). Persisted
+	 * *with* the content — and **required**, so no diff tab can exist without saying which target its two sides
+	 * came from: a background tab (panes mount only while active) whose target moved must detect the drift when
+	 * it is activated, and "the target as of mount" cannot — it would silently show the old target's diff under
+	 * the new target's label.
+	 */
+	loadedTarget: string;
 	original: string;
 	modified: string;
 	view?: DiffTabView;
@@ -687,8 +696,18 @@ interface AppState {
 	/** Replace a file tab's content after a live re-read, recording the fs tick it was loaded at. The tab
 	 * is located across workspaces by its (globally unique) id; a closed tab is a no-op. */
 	updateFileTabContent: (id: string, content: string, tick: number) => void;
-	/** Replace a diff tab's two sides after a live re-read (see `DiffPane`). */
-	updateDiffTabContent: (id: string, original: string, modified: string, tick: number) => void;
+	/**
+	 * Replace a diff tab's two sides after a live re-read (see `DiffPane`), recording the fs tick **and** the
+	 * review target the fresh content was read against — the two dimensions a diff tab is live in, written
+	 * together so neither can outlive the content it describes.
+	 */
+	updateDiffTabContent: (
+		id: string,
+		original: string,
+		modified: string,
+		tick: number,
+		loadedTarget: string,
+	) => void;
 	clearWorkspaceTabs: (workspaceId: string) => void;
 	addTerminal: (workspaceId: string) => void;
 	closeTerminalTab: (workspaceId: string, clientId: string) => void;
@@ -1199,7 +1218,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			}
 			return {};
 		}),
-	updateDiffTabContent: (id, original, modified, tick) =>
+	updateDiffTabContent: (id, original, modified, tick, loadedTarget) =>
 		set((s) => {
 			for (const [wsId, tabs] of Object.entries(s.tabsByWorkspace)) {
 				if (!tabs.some((t) => t.id === id && t.kind === "diff")) continue;
@@ -1207,7 +1226,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 					tabsByWorkspace: {
 						...s.tabsByWorkspace,
 						[wsId]: tabs.map((t) =>
-							t.id === id && t.kind === "diff" ? { ...t, original, modified, loadedTick: tick } : t,
+							t.id === id && t.kind === "diff"
+								? { ...t, original, modified, loadedTick: tick, loadedTarget }
+								: t,
 						),
 					},
 				};

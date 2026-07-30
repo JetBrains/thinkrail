@@ -8,6 +8,11 @@
  * validated at its **mutation** door (`createWorkspace`'s base, `setWorkspaceDiffBase`'s target), and the
  * read sites additionally pass `--end-of-options` so a ref can never be re-parsed as a flag.
  *
+ * The rule set is `git check-ref-format`'s, reproduced in-process (no spawn on a validation path): a
+ * name git itself refuses is never a name we accept — that includes the **revision-syntax** forms
+ * (`~ ^ : ? * [ \`, `..`, `@{`, a bare `@`), the structural ones (an empty path component, a component
+ * starting with `.`, a `.lock` suffix, a trailing `.`), and control characters/space.
+ *
  * Deliberately shape-only — never an existence check: a ref that was valid when it was chosen and has
  * since been deleted must still *degrade* (an empty diff), not be rejected as malformed.
  */
@@ -15,12 +20,22 @@ export function isSafeRef(ref: string): boolean {
 	if (ref.length === 0 || ref.length > 255) return false;
 	if (ref.startsWith("-")) return false; // an option-shaped ref (`--output=…`) is the whole attack
 	if (ref.includes("..")) return false; // range/traversal syntax, never a name we were handed
+	if (ref.includes("@{")) return false; // reflog/upstream syntax (`main@{yesterday}`, `@{u}`)
+	if (ref === "@") return false; // git's own shorthand for HEAD, not a ref name
+	if (ref.endsWith(".") || ref.endsWith("/")) return false;
 	for (const char of ref) {
 		const code = char.codePointAt(0) ?? 0;
 		// Control chars and space (git refs forbid both) plus git's own revision metacharacters — a name
 		// carrying them is either malformed or trying to mean more than a ref.
 		if (code <= 0x20 || code === 0x7f) return false;
 		if (REF_METACHARS.includes(char)) return false;
+	}
+	// Per-component rules: no empty component (`a//b`, `/a`), none starting with `.` (`a/.b`), none ending
+	// in `.lock` — all three are names `git check-ref-format` refuses.
+	for (const component of ref.split("/")) {
+		if (component.length === 0) return false;
+		if (component.startsWith(".")) return false;
+		if (component.endsWith(".lock")) return false;
 	}
 	return true;
 }

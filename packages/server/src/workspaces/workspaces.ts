@@ -111,11 +111,30 @@ function applyFolderTruth(ws: Workspace, truth: { branch: string; baseBranch: st
 	return true;
 }
 
-/** Working-tree changes of a worktree vs its **diff base** (the re-pointed target, else the creation base). */
-function diffStats(ws: Workspace): DiffStats {
-	// `--end-of-options`: the base is a repo/user-supplied ref and must never be re-parsed as an option.
-	const result = git(ws.worktreePath, ["diff", "--shortstat", "--end-of-options", diffBaseRef(ws)]);
-	if (!result.ok || !result.out) return { added: 0, removed: 0 };
+/**
+ * Working-tree changes of a worktree vs its **diff base** (the re-pointed target, else the creation base).
+ * `undefined` when git couldn't answer — **not** `{0,0}`: a failed diff read as "clean" is how a dirty
+ * worktree ends up wearing no badge, so the unknown is left unknown (the rail then shows no badge, as it does
+ * for a genuinely clean worktree, but nothing claims a count it doesn't have) and the reason is logged.
+ */
+function diffStats(ws: Workspace): DiffStats | undefined {
+	// The revs are bracketed on both sides: `--end-of-options` so a repo/user-supplied ref can't be re-parsed
+	// as an option, and a trailing `--` so a base that also names a path on disk is read as a rev instead of
+	// making git bail with "ambiguous argument" (the same framing `changedFileArgs` uses).
+	const result = git(ws.worktreePath, [
+		"diff",
+		"--shortstat",
+		"--end-of-options",
+		diffBaseRef(ws),
+		"--",
+	]);
+	if (!result.ok) {
+		console.warn(
+			`git diff --shortstat failed in ${ws.worktreePath}: ${result.err || "unknown error"}`,
+		);
+		return undefined;
+	}
+	if (!result.out) return { added: 0, removed: 0 };
 	return {
 		added: Number(/(\d+) insertion/.exec(result.out)?.[1] ?? 0),
 		removed: Number(/(\d+) deletion/.exec(result.out)?.[1] ?? 0),
@@ -150,24 +169,26 @@ export async function createWorkspace(
 
 	const base = baseRef?.trim();
 	let baseBranch: string;
-	if (base) {
-		// The base reaches `git worktree add` as a rev, and the picker's list comes from the *repository* — a
-		// crafted branch name (`--output=…`) is reachable without a malicious client (see `isSafeRef`).
-		assertSafeRef(base);
-		// Fallback fetch only when the remote-tracking ref is missing locally, so `worktree add` can't fail on
-		// an unknown ref (the freshness fetch already happened in the background via `prefetchBranch`). The
-		// `rev-parse` guard is ~10ms; offline it degrades to whatever ref exists locally. Async (`gitAsync`) so
-		// the network round-trip can't block the event loop; `--` guards against `-`-prefixed branch names.
-		if (
-			base.startsWith("origin/") &&
-			!git(project.path, ["rev-parse", "--verify", "--quiet", base]).ok
-		) {
-			await gitAsync(project.path, ["fetch", "origin", "--", base.slice("origin/".length)]);
-		}
-		baseBranch = base;
-	} else {
+	if (base) baseBranch = base;
+	else {
 		const head = git(project.path, ["rev-parse", "--abbrev-ref", "HEAD"]);
 		baseBranch = head.ok ? head.out : "HEAD";
+	}
+	// The base reaches `git worktree add` (and, below, `git fetch`) as a rev, so it is validated — and the
+	// **resolved** value is what gets validated, not just a client-supplied one: the fallback comes from
+	// `rev-parse --abbrev-ref HEAD`, i.e. from the repository, and an untrusted repo can have an
+	// option-shaped branch (`--output=…`) checked out just as it can offer one in the picker (see `isSafeRef`).
+	// Both halves of the same door: whichever way the base is chosen, it passes the same check.
+	assertSafeRef(baseBranch);
+	// Fallback fetch only when the remote-tracking ref is missing locally, so `worktree add` can't fail on
+	// an unknown ref (the freshness fetch already happened in the background via `prefetchBranch`). The
+	// `rev-parse` guard is ~10ms; offline it degrades to whatever ref exists locally. Async (`gitAsync`) so
+	// the network round-trip can't block the event loop; `--` guards against `-`-prefixed branch names.
+	if (
+		baseBranch.startsWith("origin/") &&
+		!git(project.path, ["rev-parse", "--verify", "--quiet", baseBranch]).ok
+	) {
+		await gitAsync(project.path, ["fetch", "origin", "--", baseBranch.slice("origin/".length)]);
 	}
 
 	const worktreePath = join(dataDir(), "worktrees", project.slug, branch);
@@ -445,7 +466,11 @@ export function listWorkspaces(projectId: string): Workspace[] {
 	const rows = loadWorkspaces().filter((w) => w.projectId === projectId);
 	// Pin the Default workspace first (creation order would put a backfilled one last).
 	rows.sort((a, b) => (a.kind === "default" ? -1 : 0) - (b.kind === "default" ? -1 : 0));
-	return rows.map((w) => ({ ...w, diffStats: diffStats(w) }));
+	return rows.map((w) => {
+		const stats = diffStats(w);
+		// Omitted, not zeroed, when git couldn't answer (`exactOptionalPropertyTypes`).
+		return stats ? { ...w, diffStats: stats } : w;
+	});
 }
 
 /**
@@ -503,7 +528,11 @@ export function removeWorkspace(id: string): void {
 }
 
 export function workspaceDiffStats(id: string): DiffStats {
-	return diffStats(getWorkspace(id));
+	const ws = getWorkspace(id);
+	const stats = diffStats(ws);
+	// A failed read is an error response, never a fabricated `+0 −0`.
+	if (!stats) throw new Error(`Could not read the diff stats of ${ws.name}`);
+	return stats;
 }
 
 /** Look up a workspace by id (throws if unknown) — the worktree path anchors a chat session's cwd. */

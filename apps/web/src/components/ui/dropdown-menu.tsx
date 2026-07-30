@@ -18,8 +18,10 @@ function DropdownMenuContent({
 				className={cn(
 					// Bounded + scrollable: a long menu (the Changes scope menu lists up to 200 commits) must never
 					// run its rows past the viewport edge where they are unreachable. Radix reports the space it
-					// has; we cap at 60vh so the menu never swallows the screen either.
-					"z-50 min-w-[12rem] max-h-[min(60vh,var(--radix-dropdown-menu-content-available-height))] overflow-y-auto rounded-[var(--radius-md)] border border-border2 bg-elevated p-xs text-text shadow-[var(--shadow-md)]",
+					// has; we cap at 60vh so the menu never swallows the screen either. Vertical scrolling only —
+					// `overflow-y-auto` alone leaves `overflow-x` at `auto`, so a wide row (a long commit subject)
+					// would add a horizontal scrollbar to a menu whose rows are supposed to truncate.
+					"z-50 min-w-[12rem] max-h-[min(60vh,var(--radix-dropdown-menu-content-available-height))] overflow-y-auto overflow-x-hidden rounded-[var(--radius-md)] border border-border2 bg-elevated p-xs text-text shadow-[var(--shadow-md)]",
 					className,
 				)}
 				{...props}

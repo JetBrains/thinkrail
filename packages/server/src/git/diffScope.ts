@@ -100,10 +100,15 @@ export function resolveDiffRange(
 }
 
 /**
- * The argv listing a range's changed files in the given mode (see {@link DiffRange}). `--end-of-options`
- * brackets the revs so a ref that *looks* like a flag (`--output=…`, reachable from an untrusted repo — see
- * `isSafeRef`) is refused as a rev instead of being parsed as an option by `git diff`/`git show`.
+ * The argv listing a range's changed files in the given mode (see {@link DiffRange}). The revs are bracketed
+ * on **both** sides:
+ * - `--end-of-options` ahead of them, so a ref that *looks* like a flag (`--output=…`, reachable from an
+ *   untrusted repo — see `isSafeRef`) is refused as a rev instead of parsed as an option;
+ * - a trailing **`--`**, so a rev that also names a path on disk (a branch called `docs`, a worktree folder
+ *   called `main`) is read as a rev instead of making git bail with "ambiguous argument". Without it that
+ *   ambiguity fails the whole command — and a failed diff used to read as *no changes*, i.e. a review
+ *   surface calling a dirty worktree clean.
  */
 export function changedFileArgs(range: DiffRange, mode: "--name-status" | "--numstat"): string[] {
-	return [...range.listPrefix, mode, "--end-of-options", ...range.listRevs];
+	return [...range.listPrefix, mode, "--end-of-options", ...range.listRevs, "--"];
 }

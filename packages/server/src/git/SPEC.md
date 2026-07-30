@@ -27,15 +27,20 @@ ref off the workspace-create critical path.
   untracked, both sides from history — a **root** commit degrades to `git show --format=` with an empty
   original, the same add-style degradation an absent path already gets). Both reads build their argv from it
   through `changedFileArgs(range, mode)`, so the file list and a file's two sides can never disagree on the
-  range — and that argv brackets its revs with **`--end-of-options`**, so no ref can be re-parsed as a git
-  option. A `commit` scope's `sha` is validated **twice** — shape (hex-oid regex, so a crafted value can never
+  range — and that argv brackets its revs on **both** sides: **`--end-of-options`** ahead of them (no ref can be
+  re-parsed as a git option) and a trailing **`--`** after them (a rev that also names a path on disk — a branch
+  called `docs` — is read as a rev instead of failing the command as an "ambiguous argument"). A **failed**
+  `git diff`/`git show` **throws**; it is never reported as an empty change set (see Get right). A `commit` scope's `sha` is validated **twice** — shape (hex-oid regex, so a crafted value can never
   reach a git argument as an option or a path) then existence (`rev-parse --verify`, whose full oid is what is
   then used) — and a vanished commit throws a **`CodedError("UNKNOWN_COMMIT")`** (`@thinkrail/shared/codedError`),
   which the host puts on the wire as `WsResponse.errorCode` and the client turns into "reset the scope, with a
   toast" — *only* for that named failure, never for a timeout or a dropped socket;
   **`isSafeRef(ref)` / `assertSafeRef(ref)`** — the shape check every **user/repo-supplied ref** passes at its
-  mutation door (`workspaces`' `createWorkspace` base + `setWorkspaceDiffBase` target): non-empty, no leading
-  `-`, no whitespace/control chars, no `..` or revision metacharacters. The threat is an **untrusted
+  mutation door (`workspaces`' `createWorkspace` base — the **resolved** one, including the value read off the
+  repo's own `HEAD` — + `setWorkspaceDiffBase` target). The rule set is `git check-ref-format`'s, reproduced
+  in-process (no spawn on a validation path): non-empty, no leading `-`, no whitespace/control chars, no `..`,
+  no revision metacharacters (`~ ^ : ? * [ \`), no `@{` and no bare `@`, no empty path component, no component
+  starting with `.`, no `.lock` suffix, no trailing `.` or `/`. A name git itself refuses is never one we accept. The threat is an **untrusted
   repository**, not a malicious client: `git update-ref` accepts a name like `refs/heads/--output=x` (only the
   `git branch` porcelain refuses it), `listBranches` reads refs with `for-each-ref`, so an option-shaped
   branch reaches the picker of any repo the user opens — and browsing someone's repo is the product's job;
@@ -51,10 +56,15 @@ ref off the workspace-create critical path.
   untracked/added, a renamed file's new path, or a root commit — degrading to an add-style diff; `modified` =
   the worktree file (empty when deleted) for a range ending there, else the commit's own tree; the path is
   escape-checked against the worktree root); **`listCommits(workspaceId)`** → `{ commits: GitCommit[] }` —
-  `git log <diff base>..HEAD`, newest first and capped, one control-char-separated `--format` line per commit —
-  with every **structured** field ahead of the free-text subject and the parser taking only the leading fields
-  positionally (a repository-controlled `%s` *can* contain the separator, so field order, not the separator, is
-  what keeps `%an`/`%cI` in place), and control chars stripped from the free-text fields before they go on the wire;
+  `git log <diff base>..HEAD`, newest first and capped, one `--format` line per commit whose fields are separated
+  by a **NUL byte** and read at **fixed arity** (the leading four positionally, everything after them joined back
+  as the subject). NUL is the one byte the repository-controlled text cannot smuggle in: an author ident carries
+  neither NUL nor newline, so no crafted `%an` can shift `%cI` or truncate itself, and a `%s` that carried one
+  would land in the tail anyway. (`%an` is free text *between* the structured fields and the subject, which is
+  why "structured fields first" was never enough — an author named `a<sep>2020-01-01T00:00:00Z` shifted the
+  subject one field over.) Free-text fields are then stripped of control characters **and of invisible
+  deception** — bidi overrides/isolates, zero-width and format characters — before they go on the wire, while
+  ordinary international text and emoji survive;
   an unreadable range (deleted base, unborn HEAD) degrades to an empty list so the scope menu still offers its
   other scopes; `listBranches(projectId)` → `{ local, remote,
   defaultBranch }` (local `refs/heads`, remote `refs/remotes/origin` minus `origin/HEAD`, default =
@@ -84,6 +94,11 @@ ref off the workspace-create critical path.
   rebase or reset can rewrite history out from under a selection; the object is still there, and showing its
   diff is *more* useful than silently resetting the user to "All changes". Which commits are *offered* is the
   scope menu's job (`listCommits`), not the read's — so no read pays for a `merge-base --is-ancestor` pair.
+- **A failed read is an error, never "no changes".** `gitStatus` (and its `--numstat` pass) honours the exit
+  code: a diff that could not run throws, so the panel keeps its last good list and says the refresh failed
+  instead of rendering an empty change set. The `workspaces` module's `diffStats` follows the same rule from
+  the other end — it returns *no* stats (and logs why) rather than a fabricated `+0 −0`. A review surface that
+  calls a dirty worktree clean is the worst failure this product can have.
 - `gitStatus` reports the **live** current branch for a `kind: "default"` workspace (the project
   folder's branch moves out-of-band — a terminal `git checkout` — and the persisted snapshot self-heals
   only at list time; the Changes header must not lag).

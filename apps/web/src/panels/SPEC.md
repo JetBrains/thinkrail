@@ -349,10 +349,16 @@ a project picker, the prompt hero, and the reused
   receives **the rejection**, not just the workspace id: a caller that reacts to one *named* failure (see the
   vanished-commit rule below) must be able to tell it from a timeout or a dropped socket.
   The one read that deliberately does **not** go through this hook is `ChangesScopeMenu`'s lazy pair — they
-  are *open*-triggered, not tick-triggered — so the menu is instead **keyed by `workspaceId`**: the remount
-  clears the previous workspace's commit rows and neutralizes any response still in flight for it. It is
-  **threaded to `read` (and `reload`) as an argument**, keeping the honest-dependency rule intact: the effect
-  consumes every dependency it names. Refetches **preserve view state**: `FileTree` re-reads the root + every
+  are *open*-triggered, not tick-triggered — so the menu is instead **keyed by its full identity,
+  `(workspaceId, targetRef)`**: its commit rows are `git log <base>..HEAD`, so re-pointing the target changes
+  which commits exist, and the remount clears rows that belonged to the previous pair while neutralizing any
+  response still in flight for it. Within one mount the pair is **generation-stamped** as well, so two opens
+  in a row can't let the earlier answer overwrite the later one. It is
+  **identity only** — what makes a re-read happen, never what the read reads *with* (the parameter lives in the
+  caller's `read` closure, which the hook re-captures every render, so the value a re-read uses is by
+  construction the one the key names). It is threaded to `read` (and `reload`) as an argument for a caller that
+  would rather branch on it than close over the parameter; ignoring it — as `ChangesPanel` does, its `scope`
+  being an object the key merely names — is expected. Refetches **preserve view state**: `FileTree` re-reads the root + every
   expanded dir (rows keyed by path; vanished dirs drop out via their parent), `ChangesPanel` re-reads
   `git.status` (list-only — the diff renders in the center tab, not under the list), `SpecsPanel`
   refetches without remounting (expansion survives), and `FilePane`/`DiffPane` re-read an
@@ -451,7 +457,15 @@ a project picker, the prompt hero, and the reused
   and only that one — **resets to the branch scope with a toast** rather than staying wedged on a dead sha.
   Every other failure (timeout, dropped socket, git error) leaves the user's chosen scope alone, keeps the
   last good list, and says so once per failing streak: silently swapping the scope on a network blip is a
-  worse lie than a stale list. The code exists precisely because "the read failed" cannot distinguish the two. The **target branch lives beside the scope menu, not inside it**
+  worse lie than a stale list. The code exists precisely because "the read failed" cannot distinguish the two.
+- **"Never answered", "failed", and "answered empty" are three states, never two.** The panel holds the
+  `GitStatus` *and* a failure separately: no status yet reads as **Loading…**, a failure with no list to keep
+  renders the error plus a **Retry** (`changes-error` / `changes-retry`, `reload()`), and only a landed answer
+  whose `changes` are empty may say “No changes in this scope.” (`changes-empty`). A failed first read must
+  never take the empty-state branch — “clean” is a *claim about the worktree*, and a read that didn't land
+  made no claim; a review surface that shows clean when it isn't is this product's worst failure. Same rule
+  on the host side: a non-zero `git diff` exit **throws** instead of yielding an empty change set (see
+  `server/src/git/SPEC.md`). The **target branch lives beside the scope menu, not inside it**
   (as first designed): a searchable list belongs in a combobox, and a nested Radix submenu closes itself when
   the menu re-renders as those lazy reads land.
 - **The diff is a center tab, not a rail inset.** Clicking a Changes row fetches `git.diffFile` (both sides of
@@ -573,13 +587,21 @@ a project picker, the prompt hero, and the reused
   Three layout rules make that wrapper invisible rather than a seam — each pinned by a geometric e2e
   assertion, because each was a real bug the first draft shipped:
   **(1) the wrapper owns the row's highlight** (hover / selected / menu-open), since the band has to span the
-  trailing slot too or a row reads as cut off before its own menu — the inner button paints no background;
+  trailing slot too or a row reads as cut off before its own menu — the inner element paints **no** background
+  at all (the flat list's button carries no `hover:`/selected class, and `TreeRow` takes
+  `highlight="wrapper"`, its `"self"` default being what the All-files tree wants). Exactly one painter,
+  always: two hide the case where the wrapper stopped painting, which is why the e2e pin compares the *wrapper's*
+  computed band against the *inner button's* (transparent) one, not a wrapper against a wrapper;
   **(2) rows *without* a menu reserve the same gutter** (`ROW_MENU_SLOT`, exported from `ChangeRowActions`
   and worn by the tree's folder rows), or the `+N −M` column sits 24px further right on folders than on
   files; and **(3) a row shares its flex line with that slot, so it must be able to shrink below its label**
   — `TreeRow` carries `min-w-0`, and every path is rendered as *two truncatable halves* (dir + basename), so
   a long basename can never push the counts (or, in `DiffPane`'s twin chip, the ¶/copy/layout controls) out
-  of the box. A `shrink-0` basename overflows its own chip **invisibly to the layout** while spilling over
+  of the box. The halves are **not** equally truncatable: the dir prefix out-shrinks the basename 20:1
+  (`shrink-[20]` vs `shrink` — a *ratio*, both ≥ 1, since a shrink sum below 1 makes CSS absorb only that
+  fraction of the deficit and the row overflows instead), so it yields *first* and the name a user scans survives — equal shrink made
+  both halves truncate at once, the opposite of the intent (and the e2e pin now measures the two spans
+  separately, so "the dir yields first" is a claim a test can falsify). A `shrink-0` basename overflows its own chip **invisibly to the layout** while spilling over
   the buttons on screen — which is why the e2e pin measures the *chip's* `scrollWidth`, not the header's.
 - **Markdown file tabs render, don't read.** A `.md`/`.markdown` `FileTab` (from the file tree **or** the
   Specs panel — same `openTab` path) opens **rendered by default**: `FilePane` gates on `lib.isMarkdownPath`
