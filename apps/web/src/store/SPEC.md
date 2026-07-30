@@ -53,12 +53,19 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   so a slow read can tell it was overtaken. A click is instant and an `fs.readFile` is not, so
   `panels/openTabs.ts` records this count when it starts a read and **drops a `preview` that lands after the
   count has moved** (otherwise the file steals focus back from wherever the user went, and claims the preview
-  slot from it). It is bumped *inside* every action that moves the active tab — `openTab` (both branches),
-  `openDoc`, `setActiveTab`, `closeTab`, `openChatSession`, `closeChatToHistory`, `reopenChat`,
+  slot from it) — and it takes that count at **request** time (`noteNavigation`, as the read starts), so a
+  browse is ordered by when the user asked for it, not by when the host happened to answer. It is bumped
+  *inside* every action that moves the active tab — `openDoc`, `setActiveTab`, `closeTab`,
+  `openChatSession`, `closeChatToHistory`, `reopenChat`,
   `requestHistoryOpen`, and `hydrateSession` **only when it actually takes focus** (a background
   auto-restore must not supersede a read the user is waiting on) — plus **`noteNavigation(workspaceId)`**
   for an intent whose focus change hasn't reached the store yet (starting a chat, whose tab appears only once
-  `session.create` returns). Living here rather than in `panels` is the whole point: **no focus transition can
+  `session.create` returns). **`openTab` is the one deliberate exception and must stay uncounted**: it *is*
+  the read completion being ordered, so counting it would make an earlier read's own commit look like user
+  navigation and invalidate the later request — two browse clicks in a row would leave the FIRST click's file
+  open. (Pinned by "every center navigation bumps the workspace's nav tick, and none of them bypass it" in
+  `appStore.test.ts`, which asserts both branches of `openTab` leave the count alone.)
+  Living here rather than in `panels` is the whole point: **no focus transition can
   bypass it**, which a module-local counter demonstrably did (it missed close/reopen/doc/new-chat).
   `clearWorkspaceTabs` releases the key with the rest. **Chat tabs and
   `DocTab`s never enter it** — a chat is an explicit creation with a live session behind it, and a
