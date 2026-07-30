@@ -27,9 +27,18 @@ ref off the workspace-create critical path.
   untracked, both sides from history — a **root** commit degrades to `git show --format=` with an empty
   original, the same add-style degradation an absent path already gets). Both reads build their argv from it
   through `changedFileArgs(range, mode)`, so the file list and a file's two sides can never disagree on the
-  range. A `commit` scope's `sha` is validated **twice** — shape (hex-oid regex, so a crafted value can never
+  range — and that argv brackets its revs with **`--end-of-options`**, so no ref can be re-parsed as a git
+  option. A `commit` scope's `sha` is validated **twice** — shape (hex-oid regex, so a crafted value can never
   reach a git argument as an option or a path) then existence (`rev-parse --verify`, whose full oid is what is
-  then used) — and a vanished commit **throws**, which the client turns into "reset the scope";
+  then used) — and a vanished commit throws a **`CodedError("UNKNOWN_COMMIT")`** (`@thinkrail/shared/codedError`),
+  which the host puts on the wire as `WsResponse.errorCode` and the client turns into "reset the scope, with a
+  toast" — *only* for that named failure, never for a timeout or a dropped socket;
+  **`isSafeRef(ref)` / `assertSafeRef(ref)`** — the shape check every **user/repo-supplied ref** passes at its
+  mutation door (`workspaces`' `createWorkspace` base + `setWorkspaceDiffBase` target): non-empty, no leading
+  `-`, no whitespace/control chars, no `..` or revision metacharacters. The threat is an **untrusted
+  repository**, not a malicious client: `git update-ref` accepts a name like `refs/heads/--output=x` (only the
+  `git branch` porcelain refuses it), `listBranches` reads refs with `for-each-ref`, so an option-shaped
+  branch reaches the picker of any repo the user opens — and browsing someone's repo is the product's job;
   **`diffBaseRef(ws)`** — `diffBase ?? baseBranch`, the single collapse of a workspace's two base meanings
   (creation provenance vs review target), consumed by the resolver, `listCommits`, and the `workspaces`
   module's `diffStats`;
@@ -42,7 +51,10 @@ ref off the workspace-create critical path.
   untracked/added, a renamed file's new path, or a root commit — degrading to an add-style diff; `modified` =
   the worktree file (empty when deleted) for a range ending there, else the commit's own tree; the path is
   escape-checked against the worktree root); **`listCommits(workspaceId)`** → `{ commits: GitCommit[] }` —
-  `git log <diff base>..HEAD`, newest first and capped, one control-char-separated `--format` line per commit;
+  `git log <diff base>..HEAD`, newest first and capped, one control-char-separated `--format` line per commit —
+  with every **structured** field ahead of the free-text subject and the parser taking only the leading fields
+  positionally (a repository-controlled `%s` *can* contain the separator, so field order, not the separator, is
+  what keeps `%an`/`%cI` in place), and control chars stripped from the free-text fields before they go on the wire;
   an unreadable range (deleted base, unborn HEAD) degrades to an empty list so the scope menu still offers its
   other scopes; `listBranches(projectId)` → `{ local, remote,
   defaultBranch }` (local `refs/heads`, remote `refs/remotes/origin` minus `origin/HEAD`, default =
@@ -57,10 +69,10 @@ ref off the workspace-create critical path.
   parsed as a git option), so a later `createWorkspace` branches off a fresh tip without the network
   round-trip on its critical path (non-`origin/` ref / offline → no-op).
 - **Public surface (barrel):** `git`, `gitAsync`, `gitStatus`, `gitDiffFile`, `listCommits`,
-  `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `DiffRange`, `listBranches`,
-  `resolveDefaultBranch`, `currentBranch`, `prefetchBranch`.
+  `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `DiffRange`, `isSafeRef`, `assertSafeRef`,
+  `listBranches`, `resolveDefaultBranch`, `currentBranch`, `prefetchBranch`.
 - **Allowed deps:** `persistence` (workspace + project lookup); `contracts` (`Git*`/`BranchList` types);
-  Bun (spawn).
+  `@thinkrail/shared/codedError` (naming a failure for the wire); Bun (spawn).
 - **Forbidden:** `host`; sibling features.
 
 ## Get right
@@ -68,6 +80,10 @@ ref off the workspace-create critical path.
 - **A scope is defined once.** Any new read that has to know what "the diff" is goes through
   `resolveDiffRange` — never its own `git diff <base>` line — and any read of the base ref goes through
   `diffBaseRef`, so `diffBase ?? baseBranch` exists in exactly one place in the codebase.
+- **A commit scope validates that the commit *exists*, not that it is still reachable** from the branch. A
+  rebase or reset can rewrite history out from under a selection; the object is still there, and showing its
+  diff is *more* useful than silently resetting the user to "All changes". Which commits are *offered* is the
+  scope menu's job (`listCommits`), not the read's — so no read pays for a `merge-base --is-ancestor` pair.
 - `gitStatus` reports the **live** current branch for a `kind: "default"` workspace (the project
   folder's branch moves out-of-band — a terminal `git checkout` — and the persisted snapshot self-heals
   only at list time; the Changes header must not lag).

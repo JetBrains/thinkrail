@@ -409,10 +409,18 @@ test("Change rows stay one aligned, fully-highlighted row — menu slot included
 		"export const range = 1;\n",
 	);
 	writeFileSync(join(worktree, "README.md"), "# sample-project\n\nedited by e2e\n");
+	// The case a deep path can't pin: a long ROOT-level basename has no truncatable dir prefix to absorb the
+	// overflow, so only a truncatable *basename* keeps it inside the row.
+	writeFileSync(
+		join(worktree, "diffScopeResolverImplementationForTheChangesPanelAtRootLevel.ts"),
+		"export const root = 1;\n",
+	);
 
 	await page.getByTestId("tab-changes").click();
-	const longRow = page.getByTestId("change-item").filter({ hasText: "diffScopeResolver" });
+	const longRow = page.getByTestId("change-item").filter({ hasText: "diffScopeResolver" }).first();
 	await expect(longRow).toBeVisible();
+	const rootRow = page.getByTestId("change-item").filter({ hasText: "AtRootLevel" });
+	await expect(rootRow).toBeVisible();
 
 	// However long the path, the row's content stays inside the row: the basename truncates instead of
 	// pushing the `+N −M` counts (and, in the diff header's twin chip, the ¶/copy controls) out of the box.
@@ -420,6 +428,10 @@ test("Change rows stay one aligned, fully-highlighted row — menu slot included
 	const overflow = await longRow.evaluate((n) => n.scrollWidth - n.clientWidth);
 	expect(overflow).toBeLessThanOrEqual(1);
 	expect(await rightEdge(longRow.getByText(/^\+\d+/))).toBeLessThanOrEqual(
+		rowBox.x + rowBox.width + 1,
+	);
+	expect(await rootRow.evaluate((n) => n.scrollWidth - n.clientWidth)).toBeLessThanOrEqual(1);
+	expect(await rightEdge(rootRow.getByText(/^\+\d+/))).toBeLessThanOrEqual(
 		rowBox.x + rowBox.width + 1,
 	);
 
@@ -435,7 +447,7 @@ test("Change rows stay one aligned, fully-highlighted row — menu slot included
 	// menu but reserves the same trailing slot (ROW_MENU_SLOT).
 	await page.getByTestId("changes-toggle-tree").click();
 	const folderBadge = page.getByTestId("change-tree-folder").filter({ hasText: "packages" });
-	const fileBadge = page.getByTestId("change-node").filter({ hasText: "diffScopeResolver" });
+	const fileBadge = page.getByTestId("change-node").filter({ hasText: "ForTheChangesPanel.ts" });
 	const folderRight = await rightEdge(folderBadge);
 	const fileRight = await rightEdge(fileBadge);
 	expect(Math.abs(folderRight - fileRight)).toBeLessThanOrEqual(1);
@@ -499,4 +511,77 @@ test("A commit scope keeps the header readable: short sha on the pill, subject i
 	);
 	// …and the target-branch pill next to it still reads its ref.
 	await expect(page.getByTestId("changes-target-picker")).toContainText("main");
+});
+
+test("The scope menu is per workspace: its commit rows never carry over to another worktree", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	seedCommitAndDirtyEdit();
+
+	await page.getByTestId("tab-changes").click();
+	await page.getByTestId("changes-scope-trigger").click();
+	await expect(
+		page.getByTestId("changes-scope-commit").filter({ hasText: "e2e scope commit" }),
+	).toHaveCount(1);
+	await page.keyboard.press("Escape");
+
+	// A second (fresh) workspace has no commits of its own — the previous workspace's rows must not linger
+	// (the panel is not remounted on a switch, so the menu is keyed by workspace).
+	await createWorkspaceViaDialog(page);
+	await page.getByTestId("tab-changes").click();
+	await page.getByTestId("changes-scope-trigger").click();
+	await expect(page.getByTestId("changes-scope-commit")).toHaveCount(0);
+	await expect(page.getByRole("menu")).toContainText("No commits on this branch");
+});
+
+test("Re-pointing the target branch re-reads an open branch-scope diff tab at once", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	const worktree = seedCommitAndDirtyEdit();
+
+	await page.getByTestId("tab-changes").click();
+	// A file changed by the branch's commit — visible in the default (vs base) scope, and its diff shows the
+	// committed content as an addition.
+	await page.getByTestId("change-item").filter({ hasText: "committed.txt" }).click();
+	await expect(page.getByTestId("diff-pane")).toContainText("committed by e2e");
+
+	// Re-point the target at the workspace's own branch: that commit is now common ground, so the file's two
+	// sides become identical. The OPEN tab must follow the new target immediately — a branch-scope tab means
+	// "this file vs the workspace's current target", it does not wait for the next fs tick.
+	writeFileSync(join(worktree, "committed.txt"), "committed by e2e\nplus an uncommitted line\n");
+	await page.getByTestId("changes-target-picker").click();
+	await page.locator('[data-testid="branch-option"][data-branch="workspace-1"]').click();
+	await expect(page.getByTestId("diff-pane")).toContainText("plus an uncommitted line");
+});
+
+test("A commit scope whose commit is rewritten away falls back to All changes with a toast", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	const worktree = seedCommitAndDirtyEdit();
+
+	await page.getByTestId("tab-changes").click();
+	await page.getByTestId("changes-scope-trigger").click();
+	await page.getByTestId("changes-scope-commit").filter({ hasText: "e2e scope commit" }).click();
+	await expect(page.getByTestId("changes-scope-label")).toHaveText(/^[0-9a-f]{7,}$/);
+
+	// Drop the commit from the repo entirely (reset + expire the reflog), then nudge the watcher: the host
+	// answers the scoped read with the named UNKNOWN_COMMIT failure, which is the ONE failure that resets the
+	// scope — and it says so instead of silently showing a different scope.
+	gitIn(worktree, "reset", "--hard", "HEAD~1");
+	gitIn(worktree, "reflog", "expire", "--expire=now", "--all");
+	gitIn(worktree, "gc", "--prune=now");
+	writeFileSync(join(worktree, "nudge.txt"), "nudge the watcher\n");
+
+	await expect(page.getByTestId("changes-scope-label")).toHaveText("All changes", {
+		timeout: 15_000,
+	});
+	await expect(
+		page.getByTestId("toast").filter({ hasText: "no longer in this branch" }),
+	).toBeVisible();
 });

@@ -29,8 +29,13 @@ The single WebSocket client to the host, and its app-wide singleton.
   `applyConfig(config)` — the server-synced app config (theme, …), applied on connect + on every broadcast
   so clients converge; all subscriptions happen once at init, never in component effects);
   `errorText.ts` (**`errorText(err, fallback?)`** — normalizes a rejected `request` (the host's error
-  string / a timeout / a thrown non-Error) into a short, display-ready line for an error turn/notice).
-- **Public surface (barrel):** `initTransport`, `getTransport`, `errorText`, `ConnectionStatus`, `TransportOptions`.
+  string / a timeout / a thrown non-Error) into a short, display-ready line for an error turn/notice);
+  `requestError.ts` (**`RequestError`** + **`wsErrorCode(err)`** — a rejection that carries the host's named
+  `WsResponse.errorCode`. A coded response rejects with a `RequestError`, everything else (timeout, dropped
+  socket, unnamed host error) with a plain `Error`, so *having* a code is exactly how a caller tells "this
+  specific failure" from "the read failed").
+- **Public surface (barrel):** `initTransport`, `getTransport`, `errorText`, `RequestError`, `wsErrorCode`,
+  `ConnectionStatus`, `TransportOptions`.
 - **Allowed deps:** `contracts` (method maps, `WS_CHANNELS`, `Project` for welcome, `SessionEventPayload`
   for `pi.event`, `ExtUiRequest` for `pi.extensionUi`, `Workspace` for `workspace.created`/`updated`,
   `WorkspaceRemoved` for `workspace.removed`, `WorkspaceFsChangedPayload` for `workspace.fsChanged`,

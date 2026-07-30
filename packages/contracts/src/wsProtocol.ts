@@ -97,7 +97,10 @@ import type {
 // lists the branch's commits for the scope menu, and `workspace.setDiffBase` re-points the diff target
 // (`Workspace.diffBase`, resolved server-side as `diffBase ?? baseBranch` — `baseBranch` is now creation
 // provenance only).
-export const PROTOCOL_VERSION = 21;
+// v22: a failed response may name its failure — `WsResponse.errorCode` (`WsErrorCode`, today only
+// `UNKNOWN_COMMIT`), so a client can react to one specific failure instead of pattern-matching the message.
+// Additive and optional: an older client simply sees the `error` string it always saw.
+export const PROTOCOL_VERSION = 22;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -553,12 +556,22 @@ export interface WsRequest<M extends WsMethodName = WsMethodName> {
 	sessionId?: string;
 }
 
-/** Host→client reply, correlated by `id`. */
+/**
+ * A failure the **host names**, so a client can react to *this* error rather than to "something failed".
+ * Only failures with a distinct client behaviour earn a code; everything else stays a plain message.
+ * - `UNKNOWN_COMMIT` — a `commit` diff scope names a commit the repo no longer has (a rebase, a branch
+ *   reset). The Changes panel falls back to the branch scope **with a toast**; any *other* failure (timeout,
+ *   dropped socket, git error) must leave the user's chosen scope alone.
+ */
+export type WsErrorCode = "UNKNOWN_COMMIT";
+
+/** Host→client reply, correlated by `id`. `errorCode` is set only for a {@link WsErrorCode} failure. */
 export interface WsResponse {
 	id: string;
 	ok: boolean;
 	result?: unknown;
 	error?: string;
+	errorCode?: WsErrorCode;
 }
 
 /** Host→client push on a channel (no correlation id). */

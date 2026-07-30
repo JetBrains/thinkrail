@@ -5,8 +5,13 @@ import { selectWorkspaceTick, useAppStore } from "../store";
 interface WorkspaceReadHandlers<T> {
 	/** A landed read (never called for a response the hook has since abandoned). */
 	onResult: (value: T, workspaceId: string) => void;
-	/** A failed read. Every current caller keeps its last good value and degrades the empty case. */
-	onFailure?: (workspaceId: string) => void;
+	/**
+	 * A failed read, **with the rejection**: a caller that reacts to one specific failure (the Changes panel
+	 * resets a scope whose commit is gone) needs to tell it from a timeout or a dropped socket, so the error
+	 * is passed through rather than swallowed here. Otherwise: keep the last good value, degrade the empty
+	 * case.
+	 */
+	onFailure?: (workspaceId: string, error: unknown) => void;
 	/**
 	 * The read being **left** (the workspace switched, or `readKey` changed): drop whatever belonged to it,
 	 * before the next read lands.
@@ -59,8 +64,8 @@ export function useWorkspaceRead<T>(
 			.then((value) => {
 				if (live()) latest.current.handlers.onResult(value, id);
 			})
-			.catch(() => {
-				if (live()) latest.current.handlers.onFailure?.(id);
+			.catch((error: unknown) => {
+				if (live()) latest.current.handlers.onFailure?.(id, error);
 			});
 	}, []);
 

@@ -1,6 +1,7 @@
 import { join, normalize } from "node:path";
 import type { ServerWelcome } from "@thinkrail/contracts";
 import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
+import { errorCodeOf } from "@thinkrail/shared/codedError";
 import {
 	disposeAllSessions,
 	getSessionWorkspaceId,
@@ -114,7 +115,12 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 					ws.send(JSON.stringify({ id: req.id, ok: true, result }));
 				} catch (err) {
 					const error = err instanceof Error ? err.message : String(err);
-					ws.send(JSON.stringify({ id: req.id, ok: false, error }));
+					// A failure the host can *name* travels as a code too (`CodedError`), so a client can react to
+					// this error specifically instead of pattern-matching a message.
+					const code = errorCodeOf(err);
+					ws.send(
+						JSON.stringify({ id: req.id, ok: false, error, ...(code ? { errorCode: code } : {}) }),
+					);
 				}
 			},
 		},

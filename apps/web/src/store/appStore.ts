@@ -618,8 +618,11 @@ interface AppState {
 	 */
 	addWorkspace: (workspace: Workspace) => void;
 	/**
-	 * Fold a server-pushed `workspace.updated` snapshot in (e.g. the auto-rename): merge by id into the
-	 * project's list. A project never fetched, or an id absent from its list, is a no-op — the next
+	 * Fold a server-pushed `workspace.updated` snapshot in (e.g. the auto-rename): **replace** the record by
+	 * id in the project's list, carrying over only the locally-computed `diffStats`. The push is
+	 * authoritative — a *merge* could never clear an optional field the server dropped (`diffBase` back to
+	 * the creation base, the last `skillOverrides` entry), leaving the client reading a value the host no
+	 * longer has. A project never fetched, or an id absent from its list, is a no-op — the next
 	 * `workspace.list` reconciles.
 	 */
 	updateWorkspace: (workspace: Workspace) => void;
@@ -1006,10 +1009,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 			return {
 				workspaces: {
 					...s.workspaces,
-					// Spread over the existing record: the push is the persisted snapshot, which carries no
-					// computed diffStats — a plain replace would wipe the +/− badge until the next list.
+					// The push replaces the record (so a field the server *dropped* clears here too), except for
+					// `diffStats`: the persisted snapshot carries no computed stats, and a bare replace would wipe
+					// the +/− badge until the next list.
 					[workspace.projectId]: list.map((w) =>
-						w.id === workspace.id ? { ...w, ...workspace } : w,
+						w.id === workspace.id
+							? { ...workspace, ...(w.diffStats ? { diffStats: w.diffStats } : {}) }
+							: w,
 					),
 				},
 			};

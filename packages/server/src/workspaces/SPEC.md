@@ -49,7 +49,9 @@ folder" anchor, ensured lazily, **non-removable and non-renamable**.
   is display-only, never a path/id; only the branch is uniqued (display names may repeat, the branch
   shown beneath the name in the nav disambiguates — see [[submodule-web-panels]]); **re-points sibling
   records whose `baseBranch` **or `diffBase`** was the old branch** in the same save so their provenance stays
-  truthful and their diffs don't silently empty;
+  truthful and their diffs don't silently empty, and **emits `updated` for every record it changed** (the
+  target plus those siblings) — the server would be right either way, but an unbroadcast sibling leaves its
+  clients labelling `vs <old branch>` and keying reads on it until the next `workspace.list`;
   **re-loads the records after the git subprocess** — a record that vanished meanwhile (archived / e2e
   reset) aborts the save instead of resurrecting it; throws on unknown id or git failure — callers decide,
   the auto-rename hook treats it as best-effort. `opts.lock` (default `true`) sets `renamed: true`,
@@ -61,7 +63,10 @@ folder" anchor, ensured lazily, **non-removable and non-renamable**.
   `workspaceDiffStats`, **`setWorkspaceDiffBase(id, ref | null)`** — re-point the ref this workspace's diff is
   measured against (`Workspace.diffBase`), `null` (or the creation base itself, which would be a redundant
   override) clearing it; persists + **broadcasts the updated record** so every client converges on the push,
-  never optimistically (modelled exactly on `setWorkspaceSkillOverride`). **The two base meanings are two
+  never optimistically (modelled exactly on `setWorkspaceSkillOverride`). Both **ref doors** — this one and
+  `createWorkspace`'s `baseRef` — validate the ref's *shape* through the `git` module's `assertSafeRef`
+  before it can reach a git argument (an option-shaped branch is reachable from any untrusted repo; see
+  [[submodule-server-git]]). **The two base meanings are two
   fields on purpose:** `baseBranch` = where the branch came from, `diffBase` = what its review is measured
   against; collapsing them would make a re-pointed target lie about provenance (the `branch · from
   baseBranch` receipt). Every read of "the base" — including this module's own `diffStats` — resolves it

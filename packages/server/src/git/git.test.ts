@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Workspace } from "@thinkrail/contracts";
@@ -12,6 +12,7 @@ import {
 	numstatPath,
 	prefetchBranch,
 } from "./git";
+import { isSafeRef } from "./refs";
 
 let dataDir: string;
 let repo: string;
@@ -234,7 +235,13 @@ test("resolveDiffRange: one definition per scope (branch / uncommitted / commit)
 	// Default (and explicit `branch`): everything vs the diff base, ending at the worktree.
 	expect(resolveDiffRange(ws)).toEqual(resolveDiffRange(ws, { kind: "branch" }));
 	const branch = resolveDiffRange(ws, { kind: "branch" });
-	expect(changedFileArgs(branch, "--name-status")).toEqual(["diff", "--name-status", "main"]);
+	// `--end-of-options` brackets the revs, so a ref shaped like a flag can't be parsed as one.
+	expect(changedFileArgs(branch, "--name-status")).toEqual([
+		"diff",
+		"--name-status",
+		"--end-of-options",
+		"main",
+	]);
 	expect(branch).toMatchObject({ untracked: true, originalRef: "main", modifiedRef: null });
 	// The re-pointed target is what a branch range spans.
 	expect(resolveDiffRange({ ...ws, diffBase: "origin/release" }, { kind: "branch" })).toMatchObject(
@@ -246,7 +253,12 @@ test("resolveDiffRange: one definition per scope (branch / uncommitted / commit)
 
 	// Uncommitted: worktree vs HEAD, untracked files included.
 	const uncommitted = resolveDiffRange(ws, { kind: "uncommitted" });
-	expect(changedFileArgs(uncommitted, "--numstat")).toEqual(["diff", "--numstat", "HEAD"]);
+	expect(changedFileArgs(uncommitted, "--numstat")).toEqual([
+		"diff",
+		"--numstat",
+		"--end-of-options",
+		"HEAD",
+	]);
 	expect(uncommitted).toMatchObject({ untracked: true, originalRef: "HEAD", modifiedRef: null });
 
 	// One commit: `sha^` vs `sha`, both sides from history, no untracked files.
@@ -276,6 +288,7 @@ test("resolveDiffRange degrades a root commit to an add-style diff (no parent to
 		"show",
 		"--format=",
 		"--name-status",
+		"--end-of-options",
 		root,
 	]);
 	const listed = Bun.spawnSync(["git", "-C", repo, ...changedFileArgs(range, "--name-status")], {
@@ -345,4 +358,56 @@ test("gitStatus/listCommits measure against the re-pointed diffBase, not the cre
 	seedWorkspace({ branch: "feature", baseBranch: "main" });
 	expect(gitStatus("w1").changes.map((c) => c.path)).toEqual(["feature.txt", "released.txt"]);
 	expect(listCommits("w1").commits.map((c) => c.subject)).toEqual(["feature-only", "release-only"]);
+});
+
+test("listCommits: a subject carrying the field separator can't shift author or timestamp", () => {
+	git(repo, "switch", "-c", "feature");
+	// The separator is a control char, but `%s` is repository-controlled and can contain it — the format's
+	// field order (structured head, free-text tail) is what actually keeps the later fields in place.
+	writeFileSync(join(repo, "spoof.txt"), "spoof\n");
+	git(repo, "add", "-A");
+	git(repo, "commit", "-m", "subject\u001fnot-the-author\u001f1999-01-01T00:00:00+00:00");
+	seedWorkspace({ branch: "feature" });
+
+	const commit = listCommits("w1").commits[0];
+	expect(commit?.author).toBe("test"); // the real author, not the injected one
+	expect(commit?.committedAt).not.toContain("1999"); // a real timestamp, so no NaN relative time
+	expect(Number.isFinite(Date.parse(commit?.committedAt ?? ""))).toBe(true);
+	// The whole subject survives, minus the control chars we never put on the wire.
+	expect(commit?.subject).toBe("subjectnot-the-author1999-01-01T00:00:00+00:00");
+});
+
+test("an option-shaped ref reaches git as a rev, never as an option", () => {
+	// `git update-ref` accepts a name the `git branch` porcelain refuses, so this ref is reachable from any
+	// untrusted repo via `for-each-ref` → the BranchPicker. isSafeRef closes the mutation doors; the read
+	// sites' `--end-of-options` is the second line of defense for a ref already persisted.
+	const probe = join(dataDir, "pwn-probe.txt");
+	git(repo, "update-ref", `refs/heads/--output=${probe}`, "HEAD");
+	expect(isSafeRef(`--output=${probe}`)).toBe(false);
+	expect(listBranches("p1").local).toContain(`--output=${probe}`);
+
+	seedWorkspace({ diffBase: `--output=${probe}` });
+	// The read degrades (git refuses the rev) instead of writing the file the "ref" names.
+	expect(gitStatus("w1").changes).toEqual([]);
+	expect(listCommits("w1").commits).toEqual([]);
+	expect(existsSync(probe)).toBe(false);
+});
+
+test("isSafeRef accepts real refs and refuses anything git could re-read as more than a name", () => {
+	for (const ok of ["main", "origin/main", "release-1.2", "feature/a_b", "HEAD"])
+		expect(isSafeRef(ok)).toBe(true);
+	for (const bad of [
+		"",
+		"-main",
+		"--output=/tmp/x",
+		"main..HEAD",
+		"main^",
+		"main~1",
+		"main:path",
+		"with space",
+		"tab\there",
+		"ctrl\u001fchar",
+		"a".repeat(256),
+	])
+		expect(isSafeRef(bad)).toBe(false);
 });

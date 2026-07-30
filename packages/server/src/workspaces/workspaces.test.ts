@@ -235,6 +235,38 @@ test("renameWorkspace re-points a sibling whose diff TARGET was the renamed bran
 	expect(listWorkspaceRecords("p1").find((w) => w.id === dependent.id)?.diffBase).toBe("core-work");
 });
 
+test("renameWorkspace broadcasts every record it re-pointed, not only the target", async () => {
+	const first = await createWorkspace("p1");
+	const basedOn = await createWorkspace("p1", "on top", first.branch);
+	const targeting = await createWorkspace("p1");
+	setWorkspaceDiffBase(targeting.id, first.branch);
+	const untouched = await createWorkspace("p1");
+
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((e) => events.push(e));
+	renameWorkspace(first.id, "core work");
+
+	const updated = events.filter((e) => e.kind === "updated").map((e) => e.workspace);
+	expect(updated.map((w) => w.id).sort()).toEqual([first.id, basedOn.id, targeting.id].sort());
+	expect(updated.find((w) => w.id === basedOn.id)?.baseBranch).toBe("core-work");
+	expect(updated.find((w) => w.id === targeting.id)?.diffBase).toBe("core-work");
+	expect(updated.some((w) => w.id === untouched.id)).toBe(false);
+});
+
+test("an option-shaped ref is refused at both mutation doors", async () => {
+	const ws = await createWorkspace("p1");
+	// Reachable without a malicious client: `git update-ref` accepts such a name, so `listBranches`
+	// (for-each-ref) offers it in the picker of any untrusted repo.
+	expect(() => setWorkspaceDiffBase(ws.id, "--output=/tmp/thinkrail-pwn")).toThrow(
+		/usable git ref/,
+	);
+	expect(createWorkspace("p1", "pwn", "--output=/tmp/thinkrail-pwn")).rejects.toThrow(
+		/usable git ref/,
+	);
+	// A well-formed but *deleted* ref stays acceptable — the read degrades, it is not malformed.
+	expect(setWorkspaceDiffBase(ws.id, "gone-branch").diffBase).toBe("gone-branch");
+});
+
 test("renameWorkspace throws on an unknown workspace", () => {
 	expect(() => renameWorkspace("nope", "anything")).toThrow("Unknown workspace: nope");
 });

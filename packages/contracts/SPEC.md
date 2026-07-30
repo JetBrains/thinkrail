@@ -18,7 +18,10 @@ of the host.
 ## Boundary
 
 - **Owns:** the wire — entity types, the `pi` event/message types (re-exported), the WS method & channel
-  registries, and the protocol version.
+  registries, and the protocol version. Including **`WsErrorCode`** — the closed set of failures the *host
+  names* (`WsResponse.errorCode`, today only `UNKNOWN_COMMIT`), so a client can react to one specific failure
+  instead of pattern-matching an error message. A failure earns a code only when a client behaves differently
+  for it; everything else stays a plain `error` string.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain`; the value re-exports
   `DEFAULT_CONFIG` from `domain`; `export *` (value) of `wsProtocol`
   (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`).

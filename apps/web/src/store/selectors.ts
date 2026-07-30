@@ -133,6 +133,20 @@ export function selectDiffBaseRef(state: ActiveWorkspaceState, workspaceId: stri
 	return workspace ? (workspace.diffBase ?? workspace.baseBranch) : "";
 }
 
+/**
+ * The **live dimension** of an open diff tab's content, beyond the workspace's fs tick: a `branch`-scope tab
+ * shows "this file vs the workspace's *current* review target", so re-pointing that target (a
+ * `workspace.setDiffBase` broadcast) has to re-read the tab — exactly like a file change does. A `commit` /
+ * `uncommitted` scope has no such dimension (a commit sha is immutable, `HEAD` moves only with the
+ * worktree), hence `""`: nothing to watch.
+ */
+export function selectDiffTabTargetRef(
+	state: ActiveWorkspaceState,
+	tab: { workspaceId: string; scope: GitDiffScope },
+): string {
+	return tab.scope.kind === "branch" ? selectDiffBaseRef(state, tab.workspaceId) : "";
+}
+
 /** Whether a worktree-relative path is inside a skill directory — the auto-detect trigger for a reload. */
 export function isSkillPath(path: string): boolean {
 	return /(^|\/)\.(claude|github|gemini|pi|agents)\/skills(\/|$)/.test(path);

@@ -218,7 +218,9 @@ export function gitStatus(workspaceId: string, scope?: GitDiffScope): GitStatus 
  * otherwise masquerade as a whole-file add/delete, so it's logged: the broken read stays visible.
  */
 function showBlob(worktreePath: string, ref: string, path: string): string {
-	const shown = git(worktreePath, ["show", `${ref}:${path}`], { raw: true });
+	// `--end-of-options`: `<ref>:<path>` starts with a repo-controlled ref, which must never be re-parsed
+	// as a git option (see `isSafeRef`).
+	const shown = git(worktreePath, ["show", "--end-of-options", `${ref}:${path}`], { raw: true });
 	if (shown.ok) return shown.out;
 	if (!/does not exist in|exists on disk, but not in/.test(shown.err)) {
 		console.warn(`git show ${ref}:${path} failed: ${shown.err || "unknown error"}`);
@@ -260,8 +262,26 @@ export function gitDiffFile(
 
 /** How many commits the scope menu's list can hold — a long-lived branch must not ship its whole history. */
 const COMMIT_LIST_MAX = 200;
-/** Field separator for the `git log` format: a control char no commit subject/author can contain. */
+/**
+ * Field separator for the `git log` format. A commit's *free text* (`%s`, `%an`) is repository-controlled
+ * and **can** contain this byte, so the separator alone guarantees nothing: the format below puts every
+ * structured field **before** the free text and the parser takes only the leading fields positionally, so an
+ * injected separator can shift nothing but the subject it lives in (and is stripped from it anyway).
+ */
 const LOG_SEP = "\u001f";
+
+/** How many leading `--format` fields are structured; everything after them is one free-text tail. */
+const LOG_LEADING_FIELDS = 4;
+
+/** Drop control characters from repository-controlled text before it goes on the wire. */
+function plainText(raw: string): string {
+	let out = "";
+	for (const char of raw) {
+		const code = char.codePointAt(0) ?? 0;
+		if (code >= 0x20 && code !== 0x7f) out += char;
+	}
+	return out;
+}
 
 /**
  * The commits **on this workspace's branch** that its diff base doesn't have (`git log <base>..HEAD`),
@@ -273,19 +293,26 @@ export function listCommits(workspaceId: string): { commits: GitCommit[] } {
 	const log = git(ws.worktreePath, [
 		"log",
 		`--max-count=${COMMIT_LIST_MAX}`,
-		`--format=%H${LOG_SEP}%h${LOG_SEP}%s${LOG_SEP}%an${LOG_SEP}%cI`,
+		// Structured fields first, the free-text subject last (see LOG_SEP), and `--end-of-options` so the
+		// range's base ref can't be parsed as an option.
+		`--format=%H${LOG_SEP}%h${LOG_SEP}%cI${LOG_SEP}%an${LOG_SEP}%s`,
+		"--end-of-options",
 		`${diffBaseRef(ws)}..HEAD`,
 	]);
 	if (!log.ok || !log.out) return { commits: [] };
 	const commits: GitCommit[] = [];
 	for (const line of log.out.split("\n")) {
-		const [sha, shortSha, subject, author, committedAt] = line.split(LOG_SEP);
+		const parts = line.split(LOG_SEP);
+		const [sha, shortSha, committedAt, author] = parts;
 		if (!sha || !shortSha) continue;
+		// Everything past the structured head is the subject, separators and all — so a subject containing the
+		// separator can never shift `author`/`committedAt`.
+		const subject = parts.slice(LOG_LEADING_FIELDS).join(LOG_SEP);
 		commits.push({
 			sha,
 			shortSha,
-			subject: subject ?? "",
-			author: author ?? "",
+			subject: plainText(subject),
+			author: plainText(author ?? ""),
 			committedAt: committedAt ?? "",
 		});
 	}

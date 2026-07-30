@@ -7,7 +7,8 @@
 		"./shellEnv": "./src/shellEnv.ts",
 		"./freePort": "./src/freePort.ts",
 		"./jbcentral": "./src/jbcentral.ts",
-		"./paths": "./src/paths.ts"
+		"./paths": "./src/paths.ts",
+		"./codedError": "./src/codedError.ts"
 	},
 	"scripts": {
 		"typecheck": "tsc --noEmit",

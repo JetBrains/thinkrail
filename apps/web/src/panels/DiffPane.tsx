@@ -2,7 +2,7 @@ import { Check, Copy, Pilcrow } from "lucide-react";
 import { lazy, Suspense, useState } from "react";
 import { copyText, isMarkdownPath } from "@/lib/utils";
 import type { DiffTab } from "../store";
-import { useAppStore } from "../store";
+import { selectDiffTabTargetRef, useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { splitPath } from "./changesModel";
 import { ToggleSegment } from "./ToggleSegment";
@@ -29,9 +29,11 @@ const loading = <div className="flex h-full items-center justify-center text-hin
  * on the clipboard. The path is a **chip**: muted directory prefix + bright basename, matching the Changes
  * list's rows.
  *
- * Live: same contract as `FilePane` — when the workspace's fs tick moves past the tick this tab's
- * contents were loaded at, both sides are re-read (`git.diffFile`, **with this tab's scope** — never the
- * panel's current one) and replaced. Only the active tab mounts, so background tabs catch up on
+ * Live in two dimensions: same contract as `FilePane` — when the workspace's fs tick moves past the tick
+ * this tab's contents were loaded at, both sides are re-read (`git.diffFile`, **with this tab's scope** —
+ * never the panel's current one) and replaced — **plus** the review target for a branch-scope tab: such a
+ * tab means "this file vs the workspace's *current* target", so re-pointing it re-reads immediately instead
+ * of lagging until the next fs tick (`selectDiffTabTargetRef`; a commit scope has no such dimension). Only the active tab mounts, so background tabs catch up on
  * activation. A file that left the change set keeps its last contents (the Changes list is where the
  * disappearance shows); a failed re-read just advances the tick.
  */
@@ -42,18 +44,23 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 	const setDiffTabIgnoreWhitespace = useAppStore((s) => s.setDiffTabIgnoreWhitespace);
 	const [copied, setCopied] = useState(false);
 
-	useLiveTabContent(tab, {
-		read: () =>
-			getTransport().request("git.diffFile", {
-				workspaceId: tab.workspaceId,
-				path: tab.path,
-				scope: tab.scope,
-			}),
-		applyFresh: ({ original, modified }, tick) =>
-			useAppStore.getState().updateDiffTabContent(tab.id, original, modified, tick),
-		keepCurrent: (tick) =>
-			useAppStore.getState().updateDiffTabContent(tab.id, tab.original, tab.modified, tick),
-	});
+	const targetRef = useAppStore((s) => selectDiffTabTargetRef(s, tab));
+	useLiveTabContent(
+		tab,
+		{
+			read: () =>
+				getTransport().request("git.diffFile", {
+					workspaceId: tab.workspaceId,
+					path: tab.path,
+					scope: tab.scope,
+				}),
+			applyFresh: ({ original, modified }, tick) =>
+				useAppStore.getState().updateDiffTabContent(tab.id, original, modified, tick),
+			keepCurrent: (tick) =>
+				useAppStore.getState().updateDiffTabContent(tab.id, tab.original, tab.modified, tick),
+		},
+		targetRef,
+	);
 
 	const markdown = isMarkdownPath(tab.path);
 	const view = tab.view ?? "split";

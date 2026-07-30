@@ -617,7 +617,30 @@ test("project and workspace navigation update both scope ids atomically", () => 
 	unsubscribe();
 });
 
-test("updateWorkspace merges the pushed snapshot by id, keeping the computed diffStats badge", () => {
+test("updateWorkspace applies a pushed snapshot authoritatively: dropped fields clear", () => {
+	useAppStore.setState({
+		workspaces: {
+			p1: [
+				{
+					...pushedWorkspace(),
+					diffBase: "release",
+					skillOverrides: { "spec-graph": "off" },
+					diffStats: { added: 3, removed: 1 },
+				},
+			],
+		},
+	});
+	// Re-pointing back to the creation base clears `diffBase` server-side; a merge would keep the stale
+	// override and the pill would keep reading `vs release` while the host diffs against `main`.
+	useAppStore.getState().updateWorkspace(pushedWorkspace());
+
+	const ws = useAppStore.getState().workspaces.p1?.[0];
+	expect(ws?.diffBase).toBeUndefined();
+	expect(ws?.skillOverrides).toBeUndefined();
+	expect(ws?.diffStats).toEqual({ added: 3, removed: 1 }); // locally computed — survives the replace
+});
+
+test("updateWorkspace applies the pushed snapshot by id, keeping the computed diffStats badge", () => {
 	useAppStore.setState({
 		workspaces: {
 			p1: [

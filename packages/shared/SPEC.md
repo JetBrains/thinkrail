@@ -20,6 +20,7 @@ Exposed through explicit subpath exports, not a barrel.
   `@thinkrail/shared/freePort` → `findFreePort()`, `isPortFree()`;
   `@thinkrail/shared/paths` → the worktree-relative path conventions (`WORKSPACE_INTERNAL_DIR`,
   `WORKSPACE_CONTEXT_DIR`, `WORKSPACE_TODOS_DIR`);
+  `@thinkrail/shared/codedError` → `CodedError` + `errorCodeOf()`;
   `@thinkrail/shared/jbcentral` → the full jbcentral protocol: `isJbcentralProxyUrl()` (read) +
   `isJbcentralInstalled()` / `wireJbcentral()` / `unwireJbcentral()` / `launchJbcentralLogin()` (write) + the
   pure transforms/consts they compose (`buildProxyUrls`, `apply`/`removeJbcentralOverrides`,
@@ -37,6 +38,11 @@ Exposed through explicit subpath exports, not a barrel.
 - **/freePort** — `findFreePort(preferred, host?)`: the first free port at or above `preferred`, so a
   host can pick an open port instead of colliding with one already running. `isPortFree(port, host?)`:
   the underlying single-port check.
+- **/codedError** — `CodedError(code, message)` + `errorCodeOf(err)`: an error carrying a wire
+  `WsErrorCode`, so a failure a client must react to *specifically* travels as a name rather than a string
+  to pattern-match. It lives here because both ends of the seam need it and neither may import the other:
+  the module that knows the failure throws it (today `server/src/git`, for a vanished commit scope) and the
+  host's request handler reads it onto `WsResponse.errorCode`.
 - **/paths** — the worktree-relative path conventions ThinkRail owns, named once so current and future
   consumers agree (today: `workspaces` *creates* the scratch dir and git *ignores* it):
   `WORKSPACE_INTERNAL_DIR` (`.thinkrail` — the repo-local host-managed dir, today holding the ephemeral

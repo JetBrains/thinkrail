@@ -1,5 +1,5 @@
-import type { BranchList, GitStatus } from "@thinkrail/contracts";
-import { useCallback, useEffect, useState } from "react";
+import type { GitStatus } from "@thinkrail/contracts";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
 	matchesWorktreePath,
 	selectDiffBaseRef,
@@ -10,9 +10,9 @@ import {
 	toast,
 	useAppStore,
 } from "../store";
-import { errorText, getTransport } from "../transport";
+import { errorText, getTransport, wsErrorCode } from "../transport";
 import { BranchPicker } from "./BranchPicker";
-import { listBranchesOrEmpty } from "./branches";
+import { useBranchList } from "./branches";
 import { ChangeRowActions } from "./ChangeRowActions";
 import { ChangesScopeMenu } from "./ChangesScopeMenu";
 import { ChangesTree } from "./ChangesTree";
@@ -40,8 +40,10 @@ import { useWorkspaceRead } from "./useWorkspaceRead";
  */
 export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	const [status, setStatus] = useState<GitStatus | null>(null);
+	// Whether the current failing streak has already been reported — an fs tick can fail repeatedly, and one
+	// toast per tick would bury the user in the same line. Cleared by the next landed read.
+	const warnedRef = useRef(false);
 	const [highlighted, setHighlighted] = useState<string | null>(null);
-	const [branches, setBranches] = useState<BranchList | null>(null);
 	const changesRequest = useAppStore((s) => s.changesRequest);
 	const changesView = useAppStore((s) => s.changesView);
 	const setChangesView = useAppStore((s) => s.setChangesView);
@@ -56,45 +58,50 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 
 	// The changed-file list, re-read on the workspace's fs tick *and* on a scope/target change (the `readKey`); a
 	// switch clears the list and its deep-link highlight, a failed re-read keeps the last good list (a failed
-	// first read reads as "no changes"). A scope naming a commit the repo no longer has (a rebase, a branch
-	// reset) is the one rejection with a meaning: reset to the branch scope rather than stay wedged on a dead
-	// sha — for any other scope a rejection is just a failed read.
+	// first read reads as "no changes").
+	// One rejection has a *meaning*: `UNKNOWN_COMMIT` — the host naming a commit scope whose commit the repo no
+	// longer has (a rebase, a branch reset). That falls back to the branch scope with a toast, so the panel is
+	// neither wedged on a dead sha nor silently showing a different scope than the user picked. Every other
+	// failure (timeout, dropped socket, git error) must leave the chosen scope alone — hence the code, not just
+	// "the read failed".
 	useWorkspaceRead(
 		workspaceId,
 		(id) => getTransport().request("git.status", { workspaceId: id, scope }),
 		{
-			onResult: (result) => setStatus(result),
-			onFailure: () => {
-				if (scope.kind === "commit") {
+			onResult: (result) => {
+				setStatus(result);
+				warnedRef.current = false;
+			},
+			onFailure: (_id, error) => {
+				if (wsErrorCode(error) === "UNKNOWN_COMMIT") {
 					setDiffScope(workspaceId, { kind: "branch" });
+					toast.info("That commit is no longer in this branch — showing all changes.");
 					return;
+				}
+				// Keep the last good list — but say so once per failing streak, so a stale list is never silently
+				// passed off as current (a first, failed read has nothing to keep and reads as an empty scope).
+				if (status && !warnedRef.current) {
+					warnedRef.current = true;
+					toast.error(`Could not refresh the changes: ${errorText(error)}`);
 				}
 				setStatus((prev) => prev ?? { branch: "", changes: [] });
 			},
 			onSwitch: () => {
 				setStatus(null);
 				setHighlighted(null);
+				warnedRef.current = false; // a new workspace/scope is a new streak
 			},
 		},
 		`${scopeKey(scope)}:${baseRef}`,
 	);
 
-	// The target-branch list is fetched when the workspace resolves (and on the picker's Refresh) — the same
-	// offline-degrading read the New-Workspace base picker uses.
-	useEffect(() => {
-		const projectId = workspace?.projectId;
-		if (!projectId) return;
-		let cancelled = false;
-		void listBranchesOrEmpty(projectId).then((list) => {
-			if (!cancelled) setBranches(list);
-		});
-		return () => {
-			cancelled = true;
-		};
-	}, [workspace?.projectId]);
-
-	const loadBranches = async (projectId: string) =>
-		setBranches(await listBranchesOrEmpty(projectId));
+	// The target-branch list, keyed to the project and refreshable — the same shared hook (and therefore the
+	// same degradation) the New-Workspace base picker uses.
+	const {
+		branches,
+		refreshing: branchesRefreshing,
+		refresh: refreshBranches,
+	} = useBranchList(workspace?.projectId ?? null);
 
 	// Re-point what the changes are measured against. `workspace.setDiffBase` echoes + broadcasts the updated
 	// workspace; the list re-reads off that push (the ref is part of this panel's read key).
@@ -170,7 +177,12 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 				className="flex h-8 shrink-0 items-center gap-xs border-border2 border-b bg-bg-dark px-sm"
 			>
 				<div className="mr-auto flex min-w-0 items-center gap-xs">
+					{/* Keyed by workspace ON PURPOSE (do not "clean up"): the panel is not remounted on a workspace
+					    switch, and this menu's lazy reads are *open*-triggered, not tick-triggered, so they can't go
+					    through `useWorkspaceRead`'s generation stamping. The remount both clears the previous
+					    workspace's commit rows and neutralizes a response still in flight for it. */}
 					<ChangesScopeMenu
+						key={workspaceId}
 						workspaceId={workspaceId}
 						scope={scope}
 						onSelectScope={(next) => setDiffScope(workspaceId, next)}
@@ -181,11 +193,12 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 						<BranchPicker
 							branches={branches}
 							selected={baseRef}
+							refreshing={branchesRefreshing}
 							label="vs"
 							testid="changes-target-picker"
 							triggerClassName="flex h-6 min-w-0 max-w-[200px] items-center gap-xs rounded-[var(--radius-sm)] px-xs outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-hover"
 							onSelect={(ref) => void pointAt(ref)}
-							onRefresh={() => void loadBranches(workspace.projectId)}
+							onRefresh={refreshBranches}
 						/>
 					) : null}
 				</div>
@@ -240,8 +253,11 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 											    yields first (`truncate` + `flex-1`), so the name a user scans stays visible. */}
 												<span className="flex min-w-0 flex-1 items-baseline">
 													{dir ? <span className="min-w-0 truncate text-hint">{dir}</span> : null}
+													{/* Truncatable, not `shrink-0`: a long ROOT-level basename has no dir prefix to
+													    absorb the overflow, and a row that can't shrink pushes the +/− badge out of
+													    the panel — the same rule DiffPane's header chip follows. */}
 													<span
-														className={`shrink-0 ${statusNameClass(change.status) || "text-muted"}`}
+														className={`min-w-0 truncate ${statusNameClass(change.status) || "text-muted"}`}
 													>
 														{base}
 													</span>

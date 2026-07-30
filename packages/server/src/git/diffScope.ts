@@ -1,4 +1,5 @@
 import type { GitDiffScope, Workspace } from "@thinkrail/contracts";
+import { CodedError } from "@thinkrail/shared/codedError";
 import { git } from "./gitExec";
 
 /**
@@ -38,7 +39,11 @@ const OID = /^[0-9a-f]{4,64}$/;
  * Resolve a scope against a workspace. A `commit` scope is validated twice — shape (`OID`, so a crafted
  * `sha` can never reach a git argument as e.g. an option or a path) and existence (`rev-parse --verify`,
  * whose full oid is what we then use) — and **throws** when the commit is gone (a rebase or branch reset):
- * the panel turns that one rejection into "reset the scope" instead of staying wedged on a dead sha.
+ * a `CodedError("UNKNOWN_COMMIT")`, so the panel can turn *that* rejection (and only that one — not a
+ * timeout or a dropped socket) into "reset the scope, and say so" instead of staying wedged on a dead sha.
+ *
+ * Existence, deliberately **not** reachability: a commit the branch no longer contains (a rebase rewrote
+ * history) is still a meaningful selection whose diff we can show — see the module SPEC.
  */
 export function resolveDiffRange(
 	ws: Pick<Workspace, "baseBranch" | "diffBase" | "worktreePath">,
@@ -61,7 +66,8 @@ export function resolveDiffRange(
 			"--quiet",
 			`${scope.sha}^{commit}`,
 		]);
-		if (!resolved.ok || !resolved.out) throw new Error(`Unknown commit: ${scope.sha}`);
+		if (!resolved.ok || !resolved.out)
+			throw new CodedError("UNKNOWN_COMMIT", `Unknown commit: ${scope.sha}`);
 		const sha = resolved.out;
 		const parent = git(ws.worktreePath, ["rev-parse", "--verify", "--quiet", `${sha}^^{commit}`]);
 		// A root commit has no `sha^` to subtract: `git show` diffs it against the empty tree, which is the
@@ -93,7 +99,11 @@ export function resolveDiffRange(
 	};
 }
 
-/** The argv listing a range's changed files in the given mode (see {@link DiffRange}). */
+/**
+ * The argv listing a range's changed files in the given mode (see {@link DiffRange}). `--end-of-options`
+ * brackets the revs so a ref that *looks* like a flag (`--output=…`, reachable from an untrusted repo — see
+ * `isSafeRef`) is refused as a rev instead of being parsed as an option by `git diff`/`git show`.
+ */
 export function changedFileArgs(range: DiffRange, mode: "--name-status" | "--numstat"): string[] {
-	return [...range.listPrefix, mode, ...range.listRevs];
+	return [...range.listPrefix, mode, "--end-of-options", ...range.listRevs];
 }

@@ -294,6 +294,14 @@ test("plain ArrowUp/ArrowDown recall steps through this chat's own prior prompts
 	await expect(input).toBeVisible();
 	// The reopened chat's transcript is restored, but its *draft* is fresh â recall must start from empty.
 	await expect(input).toHaveValue("");
+	// Recall reads *this chat's own user turns* (`ChatView`'s `recentPrompts`), so it only exists once the
+	// reopened transcript has hydrated â a visible composer is not that. Without this wait the first ArrowUp
+	// can land on an empty list and no-op (a real, if rare, flake in the full suite).
+	await expect(
+		page
+			.locator('[data-testid="chat-message"][data-role="user"]')
+			.filter({ hasText: "write a test for the jitter" }),
+	).toBeVisible();
 
 	// Newest first: ArrowUp on the empty field recalls the latest prompt, then steps older.
 	await input.press("ArrowUp");

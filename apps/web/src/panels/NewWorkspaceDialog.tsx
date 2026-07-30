@@ -1,10 +1,4 @@
-import type {
-	BranchList,
-	SlashCommandInfo,
-	ThinkingLevel,
-	WireModel,
-	Workspace,
-} from "@thinkrail/contracts";
+import type { SlashCommandInfo, ThinkingLevel, WireModel, Workspace } from "@thinkrail/contracts";
 import {
 	Box,
 	ChevronDown,
@@ -48,7 +42,7 @@ import { cn } from "@/lib/utils";
 import { selectCatalogModel, selectWorkspaceTick, toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { BranchPicker } from "./BranchPicker";
-import { listBranchesOrEmpty } from "./branches";
+import { useBranchList } from "./branches";
 import { enterDefaultWorkspace } from "./defaultWorkspace";
 
 /** Where the work runs: cut an isolated worktree, or enter the project folder (Default workspace). */
@@ -130,9 +124,7 @@ export function NewWorkspaceDialog({
 	// Every opener starts on the isolated-worktree side (task-welcome-trim made the entry points
 	// uniform — no opener-chosen target exists); the folder alternative is the in-dialog toggle.
 	const [target, setTarget] = useState<WorkspaceTarget>("worktree");
-	const [branches, setBranches] = useState<BranchList | null>(null);
 	const [baseRef, setBaseRef] = useState<string>("");
-	const [refreshing, setRefreshing] = useState(false);
 	const [prompt, setPrompt] = useState("");
 	const [skillCommands, setSkillCommands] = useState<SlashCommandInfo[]>([]);
 	const [aliasSkills, setAliasSkills] = useState<string[]>([]);
@@ -313,44 +305,18 @@ export function NewWorkspaceDialog({
 		prefetchBase(ref);
 	};
 
-	// Branches for the selected project; preselect the default base. Refetched when the project changes.
-	useEffect(() => {
-		if (!open) return;
-		let cancelled = false;
-		setBranches(null);
-		listBranchesOrEmpty(selectedProjectId)
-			.then((list) => {
-				if (cancelled) return;
-				setBranches(list);
-				setBaseRef(list.defaultBranch);
-				// Warm the preselected base now, while the user reads/types — create then skips the fetch.
-				// Inlined (not via prefetchBase) so the effect's deps stay [open, selectedProjectId].
-				if (list.defaultBranch.startsWith("origin/")) {
-					getTransport()
-						.request("git.prefetch", { projectId: selectedProjectId, ref: list.defaultBranch })
-						.catch(() => {});
-				}
-			})
-			// `listBranchesOrEmpty` already degrades a failed read to an empty list.
-			.catch(() => {});
-		return () => {
-			cancelled = true;
-		};
-	}, [open, selectedProjectId]);
-
-	const refreshBranches = async () => {
-		setRefreshing(true);
-		try {
-			const list = await getTransport().request("git.listBranches", {
-				projectId: selectedProjectId,
-			});
-			setBranches(list);
-		} catch {
-			// Keep the current list on failure (unlike the initial read, there IS a list to keep).
-		} finally {
-			setRefreshing(false);
-		}
-	};
+	// Branches for the selected project (the shared hook: keyed to the project, refreshable, only the initial
+	// read degrades). A closed dialog reads nothing. The first answer preselects the default base — empty when
+	// git couldn't be read, which makes `create` omit `baseRef` and let the host resolve the real branch — and
+	// warms it, so `workspace.create` skips the fetch while the user is still typing.
+	const {
+		branches,
+		refreshing,
+		refresh: refreshBranches,
+	} = useBranchList(open ? selectedProjectId : null, (list) => {
+		setBaseRef(list.defaultBranch);
+		prefetchBase(list.defaultBranch);
+	});
 
 	const create = async () => {
 		if (creating) return;
@@ -525,7 +491,7 @@ export function NewWorkspaceDialog({
 							refreshing={refreshing}
 							container={dialogEl}
 							onSelect={selectBaseRef}
-							onRefresh={() => void refreshBranches()}
+							onRefresh={refreshBranches}
 						/>
 					) : null}
 					<SkillsButton

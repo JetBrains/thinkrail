@@ -75,8 +75,17 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   used by both the flat list's path rows and the diff header's path chip. The **branch combobox** is the
   shared **`BranchPicker`** (searchable, grouped Remote/Local, current pick check-marked, a Refresh that
   re-lists) — one component for the New-Workspace dialog's *base* branch and the Changes header's *target*
-  branch; its offline-degrading fetch is the shared **`listBranchesOrEmpty(projectId)`** (`branches.ts`), so
-  a failed/offline list means "show what git could answer" in both places, defined once. **`WelcomePanel`** is the first-touch surface the shell mounts (centered, left-nav beside it) whenever no
+  branch; the whole state *around* it — the list, `refreshing`, `refresh()` — is the shared
+  **`useBranchList(projectId, onLoaded?)`** (`branches.ts`, over the offline-degrading
+  `listBranchesOrEmpty`), so both pickers are identical **by construction**: the list is **keyed to the
+  project** (it clears on a project change, and both reads are generation-stamped, so a switch can never
+  offer or land the previous project's branches), **only the initial read degrades** (a *refresh* keeps its
+  last good list instead of blanking the picker on a transient failure), and `refreshing` always drives the
+  spinner. A `null` projectId reads nothing — how a closed dialog pauses. Its degraded default is
+  `defaultBranch: ""`, **never the literal `HEAD`**: a sentinel that named a ref would be believed — the
+  dialog would preselect it and persist it as the workspace's `baseBranch`, and that worktree would forever
+  diff against its own head. Empty means "unknown", so `create` omits `baseRef` and the host resolves the
+  real branch. **`WelcomePanel`** is the first-touch surface the shell mounts (centered, left-nav beside it) whenever no
 workspace is active. **One hero heading** (`welcome-title`, the topbar's brand styling — accent font,
 `text-primary` — enlarged): the **shown project's name**, or `PRODUCT_NAME` when no project is shown —
 the wordmark is the empty-state identity, a project's own name is the identity once one is open (so no
@@ -336,7 +345,12 @@ a project picker, the prompt hero, and the reused
   and a manual refresh is an **imperative `reload()`**, not a nonce dependency. `readKey` is the read's
   **second identity dimension**, for a read parameterized by more than the workspace — `ChangesPanel` passes
   `${scopeKey}:${targetRef}`, so switching the diff scope or re-pointing the target branch resets and
-  re-reads exactly like a workspace switch, and one scope's list can never linger under another. It is
+  re-reads exactly like a workspace switch, and one scope's list can never linger under another. `onFailure`
+  receives **the rejection**, not just the workspace id: a caller that reacts to one *named* failure (see the
+  vanished-commit rule below) must be able to tell it from a timeout or a dropped socket.
+  The one read that deliberately does **not** go through this hook is `ChangesScopeMenu`'s lazy pair — they
+  are *open*-triggered, not tick-triggered — so the menu is instead **keyed by `workspaceId`**: the remount
+  clears the previous workspace's commit rows and neutralizes any response still in flight for it. It is
   **threaded to `read` (and `reload`) as an argument**, keeping the honest-dependency rule intact: the effect
   consumes every dependency it names. Refetches **preserve view state**: `FileTree` re-reads the root + every
   expanded dir (rows keyed by path; vanished dirs drop out via their parent), `ChangesPanel` re-reads
@@ -347,8 +361,12 @@ a project picker, the prompt hero, and the reused
   deleted — keeps the last content, no auto-close; a diff tab whose file left the change set likewise
   keeps its last contents — the Changes list is where the disappearance shows). `FilePane` and `DiffPane`
   run the **one** tab-content live-refresh contract — the shared **`useLiveTabContent(tab, {read, applyFresh,
-  keepCurrent})`** hook — differing only in the read method (`fs.readFile` vs `git.diffFile`) and the store
-  write (`updateFileTabContent` vs `updateDiffTabContent`). Panels are mounted only for the active workspace,
+  keepCurrent}, reloadKey?)`** hook — differing only in the read method (`fs.readFile` vs `git.diffFile`) and the store
+  write (`updateFileTabContent` vs `updateDiffTabContent`). `reloadKey` is the hook's **second live dimension**,
+  for a tab whose content depends on something besides the files: `DiffPane` passes `selectDiffTabTargetRef`,
+  so re-pointing the review target re-reads a **branch-scope** tab at once instead of lagging until the next
+  fs tick (a commit scope has no such dimension — its sides can't move). The re-read keeps the tab's existing
+  tick: it answers "what does this tab mean now", it does not observe a file change. Panels are mounted only for the active workspace,
   so scoping is natural; a degraded watcher just means back to read-on-demand. Deliberately **not**
   live (deferred): the project-rail workspace diffStats badges; editable-file conflict handling waits
   for `fs.writeFile` (the viewer is read-only today).
@@ -424,11 +442,16 @@ a project picker, the prompt hero, and the reused
   **lazily on each open**, never on panel mount: `git.listCommits` for the commit rows (subject +
   `shortSha · author · relative time`) and a `git.status` probe under the uncommitted scope, which is what
   lets the *Uncommitted* row say “No uncommitted changes” (disabled) instead of opening an unexplained empty
-  list; each degrades on its own. The pill names a commit scope by its **short sha**, never its subject
+  list; each degrades on its own. The menu content is **height-bounded and scrollable** (on the shared
+  `DropdownMenuContent` primitive, since any long menu has the problem) — 200 commit rows must not run past
+  the viewport edge where they are unreachable. The pill names a commit scope by its **short sha**, never its subject
   (`scopeLabel`; the subject is the trigger's `title` via `scopeTitle`, and the menu row shows it in full) —
   a sentence in a rail header squeezes the sibling target-branch pill down to an ellipsis. A scope naming a commit the repo no longer has (rebase, branch reset) makes
-  the host **reject** `git.status`, and the panel treats that one rejection as **reset to the branch scope**
-  rather than staying wedged on a dead sha. The **target branch lives beside the scope menu, not inside it**
+  the host reject `git.status` with the **named** code `UNKNOWN_COMMIT` (`wsErrorCode`), and *that* rejection —
+  and only that one — **resets to the branch scope with a toast** rather than staying wedged on a dead sha.
+  Every other failure (timeout, dropped socket, git error) leaves the user's chosen scope alone, keeps the
+  last good list, and says so once per failing streak: silently swapping the scope on a network blip is a
+  worse lie than a stale list. The code exists precisely because "the read failed" cannot distinguish the two. The **target branch lives beside the scope menu, not inside it**
   (as first designed): a searchable list belongs in a combobox, and a nested Radix submenu closes itself when
   the menu re-renders as those lazy reads land.
 - **The diff is a center tab, not a rail inset.** Clicking a Changes row fetches `git.diffFile` (both sides of
