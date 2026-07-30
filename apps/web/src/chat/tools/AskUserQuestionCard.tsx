@@ -336,7 +336,7 @@ export function AskUserQuestionCard({
 								data-testid="ask-skip"
 								onClick={() => reply({ answers: [], cancelled: true })}
 								disabled={!actions}
-								className="text-muted text-sm hover:text-text disabled:opacity-50"
+								className="text-muted text-sm hover:text-text-default disabled:opacity-50"
 							>
 								Skip
 							</button>
@@ -345,7 +345,7 @@ export function AskUserQuestionCard({
 									type="button"
 									data-testid="ask-continue"
 									onClick={() => setTab(Math.min(tab + 1, reviewTab))}
-									className="rounded-[var(--radius-md)] bg-primary px-md py-1.5 font-medium text-on-accent text-sm hover:opacity-90"
+									className="rounded-[var(--radius-md)] bg-primary px-md py-1.5 font-medium text-text-on-primary text-sm hover:opacity-90"
 								>
 									Next →
 								</button>
@@ -355,7 +355,7 @@ export function AskUserQuestionCard({
 									data-testid="ask-submit"
 									onClick={() => reply({ answers, cancelled: false })}
 									disabled={!canSubmit}
-									className="rounded-[var(--radius-md)] bg-primary px-md py-1.5 font-medium text-on-accent text-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+									className="rounded-[var(--radius-md)] bg-primary px-md py-1.5 font-medium text-text-on-primary text-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
 								>
 									Submit
 								</button>
@@ -539,7 +539,7 @@ function QuestionBody({
 		<div className="flex flex-col gap-md">
 			<div className="flex items-start gap-sm">
 				<MessageCircleQuestion className="mt-0.5 size-4 shrink-0 text-muted" />
-				<p data-testid="ask-question-text" className="font-semibold text-md text-text">
+				<p data-testid="ask-question-text" className="font-semibold text-md text-text-default">
 					{question.question}
 				</p>
 			</div>
@@ -570,7 +570,7 @@ function QuestionBody({
 												value={state.notes[opt.label] ?? ""}
 												placeholder="Add a note for the model…"
 												onChange={(e) => onNote(opt.label, e.target.value)}
-												className="w-full resize-none rounded-[var(--radius-sm)] border border-border2 bg-[var(--input-bg)] px-sm py-xs text-text text-xs outline-none focus:border-primary"
+												className="w-full resize-none rounded-[var(--radius-sm)] border border-border2 bg-[var(--input-bg)] px-sm py-xs text-text-default text-xs outline-none focus:border-primary"
 											/>
 										) : (
 											<button
@@ -646,7 +646,7 @@ function OptionRow({
 			<Indicator selected={selected} multi={multi} />
 			<span className="flex min-w-0 flex-col gap-0.5">
 				<span className="flex items-center gap-xs">
-					<span data-testid="ask-option-label" className="font-medium text-sm text-text">
+					<span data-testid="ask-option-label" className="font-medium text-sm text-text-default">
 						{text}
 					</span>
 					{recommended ? <RecommendedBadge /> : null}
@@ -713,14 +713,14 @@ function OtherOptionRow({
 			) : (
 				<Indicator selected={active} multi={false} className="mt-0" />
 			)}
-			<span className="font-medium text-sm text-text">Other</span>
+			<span className="font-medium text-sm text-text-default">Other</span>
 			<input
 				data-testid="ask-custom"
 				value={text}
 				placeholder="type your own answer…"
 				onFocus={onActivate}
 				onChange={(e) => onText(e.target.value)}
-				className="min-w-0 flex-1 border-none bg-transparent text-sm text-text outline-none placeholder:text-hint"
+				className="min-w-0 flex-1 border-none bg-transparent text-sm text-text-default outline-none placeholder:text-hint"
 			/>
 		</label>
 	);
@@ -753,7 +753,7 @@ function Indicator({
 			<span
 				className={cn(
 					"mt-0.5 flex size-[18px] shrink-0 items-center justify-center rounded-[var(--radius-sm)] border",
-					selected ? "border-primary bg-primary text-on-accent" : "border-border2",
+					selected ? "border-primary bg-primary text-text-on-primary" : "border-border2",
 					className,
 				)}
 			>
@@ -800,7 +800,7 @@ function ReviewView({
 		<div className="flex flex-col gap-sm">
 			<div className="flex items-start gap-sm">
 				<MessageCircleQuestion className="mt-0.5 size-4 shrink-0 text-muted" />
-				<p className="font-semibold text-md text-text">Review your answers</p>
+				<p className="font-semibold text-md text-text-default">Review your answers</p>
 			</div>
 			<ul className="flex flex-col gap-md">
 				{questions.map((q, i) => (
@@ -879,7 +879,7 @@ function QuestionRecap({
 				<MessageCircleQuestion className="mt-0.5 size-3.5 shrink-0 text-hint" />
 				<p
 					data-testid={reviewing ? "ask-review-question" : undefined}
-					className={cn("text-sm", reviewing ? "font-medium text-text" : "text-muted")}
+					className={cn("text-sm", reviewing ? "font-medium text-text-default" : "text-muted")}
 				>
 					{question.question}
 				</p>
@@ -896,7 +896,7 @@ function QuestionRecap({
 									data-selected={isSel}
 									className={cn(
 										"flex items-center gap-xs text-sm",
-										isSel ? "text-text" : "text-hint",
+										isSel ? "text-text-default" : "text-hint",
 									)}
 								>
 									{isSel ? (
@@ -919,7 +919,7 @@ function QuestionRecap({
 						{customAnswer ? (
 							<li
 								data-testid={reviewing ? "ask-review-custom" : "ask-record-custom"}
-								className="flex items-center gap-xs text-sm text-text"
+								className="flex items-center gap-xs text-sm text-text-default"
 							>
 								<Check aria-hidden="true" className="size-3.5 shrink-0 text-green" />
 								<span data-testid="ask-selection-status" className="sr-only">
@@ -948,7 +948,7 @@ function QuestionRecap({
 					<span data-testid="ask-selection-status" className="sr-only">
 						Selected custom answer:{" "}
 					</span>
-					<span className="text-sm text-text">“{answer.answer}”</span>
+					<span className="text-sm text-text-default">“{answer.answer}”</span>
 				</div>
 			)}
 			{answer?.notes ? (

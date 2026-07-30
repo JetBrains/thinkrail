@@ -24,7 +24,7 @@ export function CodeBlock({ code, lang }: { code: string; lang: string }) {
 
 	if (html === null) {
 		return (
-			<pre className="overflow-auto rounded-[var(--radius-sm)] bg-bg-dark p-sm font-[var(--font-mono)] text-text text-xs">
+			<pre className="overflow-auto rounded-[var(--radius-sm)] bg-bg-dark p-sm font-[var(--font-mono)] text-text-default text-xs">
 				{code}
 			</pre>
 		);

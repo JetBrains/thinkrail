@@ -128,8 +128,8 @@ export function defineThinkrailTheme(m: Monaco): void {
 	set("editor.foreground", token("--code-foreground"));
 	set("editorLineNumber.foreground", token("--hint"));
 	set("editorCursor.foreground", token("--primary"));
-	set("editor.selectionBackground", token("--sel"));
-	set("editor.selectionForeground", token("--sel-fg"));
+	set("editor.selectionBackground", token("--editor-selection-bg"));
+	set("editor.selectionForeground", token("--editor-selection-text"));
 	const rules = SYNTAX_TOKENS.flatMap(([monacoToken, name]) => {
 		const color = token(name);
 		return color ? [{ token: monacoToken, foreground: color.replace("#", "") }] : [];

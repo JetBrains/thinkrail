@@ -7,7 +7,10 @@ import { cn } from "@/lib";
 function Command({ className, ...props }: React.ComponentProps<typeof CommandPrimitive>) {
 	return (
 		<CommandPrimitive
-			className={cn("flex w-full flex-col overflow-hidden bg-elevated text-text", className)}
+			className={cn(
+				"flex w-full flex-col overflow-hidden bg-elevated text-text-default",
+				className,
+			)}
 			{...props}
 		/>
 	);
@@ -22,7 +25,7 @@ function CommandInput({
 			<Search className="size-3.5 shrink-0 text-hint" />
 			<CommandPrimitive.Input
 				className={cn(
-					"h-9 flex-1 bg-transparent text-sm text-text outline-none placeholder:text-hint",
+					"h-9 flex-1 bg-transparent text-sm text-text-default outline-none placeholder:text-hint",
 					className,
 				)}
 				{...props}
@@ -63,7 +66,7 @@ function CommandItem({ className, ...props }: React.ComponentProps<typeof Comman
 	return (
 		<CommandPrimitive.Item
 			className={cn(
-				"flex cursor-pointer items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs text-sm text-text outline-none data-[selected=true]:bg-hover",
+				"flex cursor-pointer items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs text-sm text-text-default outline-none data-[selected=true]:bg-hover",
 				className,
 			)}
 			{...props}

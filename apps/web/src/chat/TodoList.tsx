@@ -86,7 +86,7 @@ export function TodoAddRow({
 					if (e.key === "Enter") void submit();
 				}}
 				placeholder="Add a TODO for the agent…"
-				className="min-w-0 flex-1 bg-transparent text-sm text-text outline-none placeholder:text-hint"
+				className="min-w-0 flex-1 bg-transparent text-sm text-text-default outline-none placeholder:text-hint"
 			/>
 			{onOpenMarkdown ? (
 				<button
@@ -95,7 +95,7 @@ export function TodoAddRow({
 					onClick={onOpenMarkdown}
 					aria-label="Open as markdown"
 					title="Open the plan as a markdown tab"
-					className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-hint hover:bg-hover hover:text-text focus-visible:opacity-100"
+					className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-hint hover:bg-hover hover:text-text-default focus-visible:opacity-100"
 				>
 					<FileText className="size-3.5" />
 				</button>
@@ -198,7 +198,7 @@ function TodoRow({ todo, onRemove }: { todo: TodoItem; onRemove: () => void }) {
 				<div
 					className={cn(
 						"truncate text-sm",
-						todo.status === "done" ? "text-hint line-through" : "text-text",
+						todo.status === "done" ? "text-hint line-through" : "text-text-default",
 					)}
 				>
 					{todo.title}

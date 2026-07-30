@@ -30,14 +30,14 @@ function DialogContent({
 			<DialogOverlay />
 			<DialogPrimitive.Content
 				className={cn(
-					"-translate-x-1/2 -translate-y-1/2 fixed top-1/2 left-1/2 z-50 flex w-full max-w-[28rem] flex-col gap-lg rounded-[var(--radius-lg)] border border-border2 bg-elevated p-lg text-text shadow-[var(--shadow-lg)]",
+					"-translate-x-1/2 -translate-y-1/2 fixed top-1/2 left-1/2 z-50 flex w-full max-w-[28rem] flex-col gap-lg rounded-[var(--radius-lg)] border border-border2 bg-container-popover-bg p-lg text-text-default shadow-[var(--shadow-lg)]",
 					className,
 				)}
 				{...props}
 			>
 				{children}
 				{hideClose ? null : (
-					<DialogPrimitive.Close className="absolute top-md right-md rounded-[var(--radius-sm)] p-xs text-muted outline-none transition-colors hover:bg-hover hover:text-text focus-visible:ring-2 focus-visible:ring-primary">
+					<DialogPrimitive.Close className="absolute top-md right-md rounded-[var(--radius-sm)] p-xs text-muted outline-none transition-colors hover:bg-hover hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary">
 						<X className="size-4" />
 						<span className="sr-only">Close</span>
 					</DialogPrimitive.Close>
@@ -63,7 +63,7 @@ function DialogFooter({ className, ...props }: React.ComponentProps<"div">) {
 function DialogTitle({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Title>) {
 	return (
 		<DialogPrimitive.Title
-			className={cn("font-semibold text-md text-text leading-none", className)}
+			className={cn("font-semibold text-md text-text-default leading-none", className)}
 			{...props}
 		/>
 	);

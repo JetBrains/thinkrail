@@ -218,7 +218,7 @@ export function TemplatesSettings() {
 	return (
 		<section data-testid="settings-templates" className="flex flex-col gap-lg">
 			<div className="flex flex-col gap-xs">
-				<h3 className="font-medium text-md text-text">Prompt templates</h3>
+				<h3 className="font-medium text-md text-text-default">Prompt templates</h3>
 				<p className="text-hint text-xs">
 					Reusable prompts, expanded from the composer's <code>/</code> menu. Global templates are
 					available in every workspace; project templates live in this worktree's{" "}
@@ -293,7 +293,7 @@ function TemplateGroup({
 					type="button"
 					data-testid={`template-new-${scope}`}
 					onClick={onNew}
-					className="flex items-center gap-xs rounded-[var(--radius-sm)] px-sm py-xs text-muted text-xs transition-colors hover:bg-hover hover:text-text"
+					className="flex items-center gap-xs rounded-[var(--radius-sm)] px-sm py-xs text-muted text-xs transition-colors hover:bg-hover hover:text-text-default"
 				>
 					<Plus className="size-3.5" />
 					New
@@ -376,7 +376,7 @@ function TemplateRow({
 				className="group flex items-center gap-sm rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-md py-sm"
 			>
 				<div className="flex min-w-0 flex-1 flex-col">
-					<span className="truncate font-medium text-sm text-text">{template.name}</span>
+					<span className="truncate font-medium text-sm text-text-default">{template.name}</span>
 					{template.description ? (
 						<span className="truncate text-hint text-xs">{template.description}</span>
 					) : null}
@@ -389,7 +389,7 @@ function TemplateRow({
 							aria-label="Open as file"
 							title="Open as file"
 							onClick={openAsFile}
-							className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-muted transition hover:bg-elevated hover:text-text"
+							className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-muted transition hover:bg-elevated hover:text-text-default"
 						>
 							<FileText className="size-3.5" />
 						</button>
@@ -400,7 +400,7 @@ function TemplateRow({
 						aria-label="Edit"
 						title="Edit"
 						onClick={onEdit}
-						className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-muted transition hover:bg-elevated hover:text-text"
+						className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-muted transition hover:bg-elevated hover:text-text-default"
 					>
 						<Pencil className="size-3.5" />
 					</button>

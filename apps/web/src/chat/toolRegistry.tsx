@@ -135,7 +135,7 @@ export function DefaultToolRenderer({ args, result, status }: ToolRenderProps): 
 				</pre>
 			) : null}
 			{status !== "running" && resultText ? (
-				<pre className="overflow-auto font-[var(--font-mono)] text-[10px] text-text">
+				<pre className="overflow-auto font-[var(--font-mono)] text-[10px] text-text-default">
 					{resultText}
 				</pre>
 			) : null}

@@ -40,7 +40,7 @@ export function GithubSettings() {
 	return (
 		<section data-testid="settings-github" className="flex flex-col gap-sm">
 			<div className="flex flex-col gap-xs">
-				<h3 className="font-medium text-md text-text">Local GitHub</h3>
+				<h3 className="font-medium text-md text-text-default">Local GitHub</h3>
 				<p className="text-hint text-xs">
 					Authenticate the GitHub CLI to create workspaces from remote branches.
 				</p>

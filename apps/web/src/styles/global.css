@@ -20,7 +20,7 @@ body {
 
 ::selection {
 	background: var(--selection-bg);
-	color: var(--selection-fg, inherit);
+	color: var(--selection-text, inherit);
 }
 
 a {

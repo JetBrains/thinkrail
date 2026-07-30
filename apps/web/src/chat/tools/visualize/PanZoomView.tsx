@@ -63,7 +63,7 @@ export function PanZoomView({ svg }: { svg: string }) {
 	};
 
 	const btn =
-		"rounded-[var(--radius-sm)] p-1 text-muted outline-none transition-colors hover:bg-hover hover:text-text focus-visible:ring-2 focus-visible:ring-primary";
+		"rounded-[var(--radius-sm)] p-1 text-muted outline-none transition-colors hover:bg-hover hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary";
 
 	return (
 		<div className="relative min-h-0 flex-1">

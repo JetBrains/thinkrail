@@ -64,7 +64,7 @@ export function Shell() {
 								</span>
 								<span
 									data-testid="scope-name"
-									className="max-w-[220px] truncate font-medium text-text"
+									className="max-w-[220px] truncate font-medium text-text-default"
 								>
 									{activeWorkspace?.name ?? "Project home"}
 								</span>
@@ -98,7 +98,7 @@ export function Shell() {
 						aria-label="Settings"
 						title="Settings"
 						onClick={() => useAppStore.getState().openSettings()}
-						className="flex size-7 items-center justify-center rounded-[var(--radius-sm)] text-muted outline-none transition-colors hover:bg-hover hover:text-text focus-visible:ring-2 focus-visible:ring-primary"
+						className="flex size-7 items-center justify-center rounded-[var(--radius-sm)] text-muted outline-none transition-colors hover:bg-hover hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 					>
 						<Settings className="size-4" />
 					</button>
@@ -112,7 +112,10 @@ export function Shell() {
 					className="min-h-0"
 				>
 					<ResizablePanel id="left" order={1} defaultSize={18} minSize={12}>
-						<aside data-testid="left-nav" className="h-full overflow-auto bg-surface-sidebar p-md">
+						<aside
+							data-testid="left-nav"
+							className="h-full overflow-auto bg-container-sidebar-bg p-md"
+						>
 							<ProjectTree />
 						</aside>
 					</ResizablePanel>
@@ -154,7 +157,10 @@ export function Shell() {
 					className="min-h-0"
 				>
 					<ResizablePanel id="left" order={1} defaultSize={18} minSize={12}>
-						<aside data-testid="left-nav" className="h-full overflow-auto bg-surface-sidebar p-md">
+						<aside
+							data-testid="left-nav"
+							className="h-full overflow-auto bg-container-sidebar-bg p-md"
+						>
 							<ProjectTree />
 						</aside>
 					</ResizablePanel>

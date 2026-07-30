@@ -76,7 +76,7 @@ export function ToolCard({
 				) : (
 					<Check className="size-3 shrink-0 text-green" />
 				)}
-				<span className="shrink-0 font-medium text-text">{toolName}</span>
+				<span className="shrink-0 font-medium text-text-default">{toolName}</span>
 				{summary ? (
 					<span className="min-w-0 flex-1 truncate text-muted" title={summary}>
 						{summary}

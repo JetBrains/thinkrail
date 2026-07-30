@@ -129,7 +129,7 @@ export function LoginDialog({
 										<ExternalLink className="size-3 shrink-0" />
 									</a>
 								</span>
-								<code className="select-all text-center font-[var(--font-mono)] text-lg text-text tracking-widest">
+								<code className="select-all text-center font-[var(--font-mono)] text-lg text-text-default tracking-widest">
 									{state.deviceCode.userCode}
 								</code>
 							</div>
@@ -147,7 +147,7 @@ export function LoginDialog({
 										data-testid="login-option"
 										data-option={option.id}
 										onClick={() => onReply(option.id)}
-										className="rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-md py-sm text-left text-sm text-text outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-primary"
+										className="rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-md py-sm text-left text-sm text-text-default outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-primary"
 									>
 										{option.label}
 									</button>
@@ -173,7 +173,7 @@ export function LoginDialog({
 												submitPrompt();
 											}
 										}}
-										className="min-w-0 flex-1 rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-sm py-xs text-sm text-text outline-none placeholder:text-hint focus:border-primary"
+										className="min-w-0 flex-1 rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-sm py-xs text-sm text-text-default outline-none placeholder:text-hint focus:border-primary"
 									/>
 									<Button data-testid="login-submit" onClick={submitPrompt}>
 										Submit

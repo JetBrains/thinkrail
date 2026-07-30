@@ -194,7 +194,7 @@ export function SkillsDialog({
 					)}
 				>
 					{group.isPlugin ? <Puzzle className="size-3.5 shrink-0 text-hint" aria-hidden /> : null}
-					<span className="font-medium text-text text-xs uppercase tracking-wide">
+					<span className="font-medium text-text-default text-xs uppercase tracking-wide">
 						{group.label}
 					</span>
 					<span className="min-w-0 flex-1 truncate text-hint text-xs">{group.hint}</span>
@@ -239,7 +239,7 @@ export function SkillsDialog({
 			<DialogContent data-testid="skills-dialog" className="max-w-[560px] gap-md p-md">
 				{/* pr-8 reserves room for the DialogContent's absolute close (X) so it can't overlap Reload. */}
 				<div className="flex items-center justify-between gap-sm pr-8">
-					<DialogTitle className="text-sm text-text">Skills</DialogTitle>
+					<DialogTitle className="text-sm text-text-default">Skills</DialogTitle>
 					{workspace ? (
 						<Button
 							size="sm"
@@ -264,8 +264,8 @@ export function SkillsDialog({
 						data-testid="skills-stale"
 						className="rounded-[var(--radius-md)] border border-border2 bg-elevated px-md py-sm text-muted text-xs"
 					>
-						This worktree's skills changed on disk — <span className="text-text">Reload</span> to
-						apply them to this chat.
+						This worktree's skills changed on disk —{" "}
+						<span className="text-text-default">Reload</span> to apply them to this chat.
 					</div>
 				) : null}
 
@@ -274,7 +274,7 @@ export function SkillsDialog({
 						data-testid="skills-trust-all"
 						className="flex items-center gap-sm rounded-[var(--radius-md)] border border-border2 border-l-[3px] border-l-[var(--gold)] bg-[var(--gold-tint)] px-md py-sm"
 					>
-						<span className="min-w-0 flex-1 text-sm text-text">
+						<span className="min-w-0 flex-1 text-sm text-text-default">
 							{untrustedCount} project skill{untrustedCount === 1 ? "" : "s"} off until you trust
 							this repo.
 						</span>
@@ -310,7 +310,7 @@ export function SkillsDialog({
 									data-testid="skills-all-plugins"
 									className="sticky top-0 z-20 flex h-8 items-center gap-sm border-border2 border-y bg-bg-dark px-sm"
 								>
-									<span className="min-w-0 flex-1 font-medium text-text text-xs uppercase tracking-wide">
+									<span className="min-w-0 flex-1 font-medium text-text-default text-xs uppercase tracking-wide">
 										All plugins
 									</span>
 									<Toggle
@@ -391,7 +391,9 @@ function SkillRow({
 			className="flex items-center gap-sm py-1.5 pr-sm pl-md hover:bg-hover"
 		>
 			<span className="flex min-w-0 flex-1 flex-col">
-				<span className="truncate font-[var(--font-mono)] text-sm text-text">{entry.name}</span>
+				<span className="truncate font-[var(--font-mono)] text-sm text-text-default">
+					{entry.name}
+				</span>
 				{entry.description ? (
 					<span className="truncate text-hint text-xs">{entry.description}</span>
 				) : null}

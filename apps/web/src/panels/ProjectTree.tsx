@@ -193,7 +193,7 @@ function ProjectRow({
 				data-testid="project-expand"
 				aria-label={isExpanded ? "Collapse project" : "Expand project"}
 				onClick={onToggle}
-				className="flex size-4 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-hint opacity-0 transition-opacity hover:text-text group-hover:opacity-100 data-[expanded=true]:opacity-100"
+				className="flex size-4 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-hint opacity-0 transition-opacity hover:text-text-default group-hover:opacity-100 data-[expanded=true]:opacity-100"
 				data-expanded={isExpanded}
 			>
 				<Chevron className="size-4" />
@@ -204,7 +204,9 @@ function ProjectRow({
 				className="flex min-w-0 flex-1 items-center gap-sm text-left"
 			>
 				<Folder className={`size-4 shrink-0 ${isSelected ? "text-primary" : "text-muted"}`} />
-				<span className={`truncate text-sm ${isSelected ? "font-medium text-text" : "text-muted"}`}>
+				<span
+					className={`truncate text-sm ${isSelected ? "font-medium text-text-default" : "text-muted"}`}
+				>
 					{project.name}
 				</span>
 			</button>
@@ -216,7 +218,7 @@ function ProjectRow({
 				data-testid="add-workspace"
 				aria-label="Create workspace"
 				onClick={onAddWorkspace}
-				className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-muted opacity-0 transition hover:bg-elevated hover:text-text group-hover:opacity-100"
+				className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-muted opacity-0 transition hover:bg-elevated hover:text-text-default group-hover:opacity-100"
 			>
 				<Plus className="size-4" />
 			</button>
@@ -247,7 +249,7 @@ function WorkspaceRow({
 			description={
 				<>
 					Deletes this workspace's chats, terminals, and its worktree. The git branch{" "}
-					<span className="font-medium text-text">{workspace.branch}</span> is kept.
+					<span className="font-medium text-text-default">{workspace.branch}</span> is kept.
 				</>
 			}
 			confirmLabel="Remove"

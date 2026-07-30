@@ -147,7 +147,7 @@ function SpecNodeRow({
 						aria-label={expanded ? `Collapse ${node.title}` : `Expand ${node.title}`}
 						aria-expanded={expanded}
 						onClick={() => setExpanded((value) => !value)}
-						className="flex w-5 shrink-0 items-center justify-center self-stretch rounded-[var(--radius-sm)] text-hint outline-none transition-colors hover:text-text focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+						className="flex w-5 shrink-0 items-center justify-center self-stretch rounded-[var(--radius-sm)] text-hint outline-none transition-colors hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
 					>
 						<Chevron className="size-3.5" />
 					</button>
@@ -178,7 +178,9 @@ function SpecNodeRow({
 					<span
 						className={cn(
 							"min-w-0 flex-1 truncate text-sm transition-colors",
-							isActive ? "font-medium text-text" : "text-muted group-hover:text-text",
+							isActive
+								? "font-medium text-text-default"
+								: "text-muted group-hover:text-text-default",
 						)}
 					>
 						{node.title}

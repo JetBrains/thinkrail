@@ -61,7 +61,7 @@ function EditHeader({ path, workspaceRoot }: { path: string; workspaceRoot?: str
 	return (
 		<div className="flex items-center gap-xs text-xs">
 			<Pencil className="size-3.5 shrink-0 text-gold" />
-			<span className="truncate text-text" title={path}>
+			<span className="truncate text-text-default" title={path}>
 				{displayPath}
 			</span>
 			<span className="shrink-0 text-hint">edited</span>

@@ -591,7 +591,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							type="button"
 							data-testid="mention-item"
 							onClick={() => pickMention(candidate)}
-							className={`flex w-full items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs text-left text-sm ${index === mentionActiveIndex ? "bg-hover text-text" : "text-muted"}`}
+							className={`flex w-full items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs text-left text-sm ${index === mentionActiveIndex ? "bg-hover text-text-default" : "text-muted"}`}
 						>
 							{candidate.kind === "dir" ? (
 								<FolderIcon className="size-3.5 shrink-0" />
@@ -624,7 +624,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 									replaceDraft("");
 									onManageTemplates();
 								}}
-								className="flex w-full items-center gap-sm rounded-[var(--radius-sm)] border-border2 border-t px-sm py-xs text-left text-hint text-xs hover:bg-hover hover:text-text"
+								className="flex w-full items-center gap-sm rounded-[var(--radius-sm)] border-border2 border-t px-sm py-xs text-left text-hint text-xs hover:bg-hover hover:text-text-default"
 							>
 								<Sparkles className="size-3 shrink-0" />
 								<span className="truncate">
@@ -641,7 +641,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					type="button"
 					data-testid="slot-hint"
 					onClick={() => stepSlot(1)}
-					className="absolute bottom-full left-sm mb-xs rounded-[var(--radius-sm)] border border-border2 bg-elevated px-sm py-xs text-hint text-xs shadow-[var(--shadow-md)] hover:bg-hover hover:text-text"
+					className="absolute bottom-full left-sm mb-xs rounded-[var(--radius-sm)] border border-border2 bg-elevated px-sm py-xs text-hint text-xs shadow-[var(--shadow-md)] hover:bg-hover hover:text-text-default"
 				>
 					slot {slotIdx + 1}/{slots.length} · ⇥ next · esc done
 				</button>
@@ -652,14 +652,14 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					{images.map((img) => (
 						<span
 							key={img.id}
-							className="flex items-center gap-xs rounded-[var(--radius-sm)] border border-border2 bg-elevated px-sm py-xs text-text text-xs"
+							className="flex items-center gap-xs rounded-[var(--radius-sm)] border border-border2 bg-elevated px-sm py-xs text-text-default text-xs"
 						>
 							<FileIcon className="size-3" /> {img.content.mimeType}
 							<button
 								type="button"
 								aria-label="Remove image"
 								onClick={() => setImages((prev) => prev.filter((p) => p.id !== img.id))}
-								className="text-hint hover:text-text"
+								className="text-hint hover:text-text-default"
 							>
 								<X className="size-3" />
 							</button>
@@ -783,7 +783,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 						// `relative` keeps the textarea a positioned participant so it paints ABOVE the absolute
 						// slot-highlight backdrop (its earlier DOM sibling) — otherwise a static textarea paints
 						// under the backdrop and the native caret/selection get dimmed by the active-slot tint.
-						className="relative min-h-[108px] w-full resize-none rounded-[var(--radius-md)] border border-border2 bg-transparent px-md py-sm text-sm text-text outline-none transition-colors placeholder:text-hint focus:border-primary focus-visible:ring-2 focus-visible:ring-[var(--primary-20)]"
+						className="relative min-h-[108px] w-full resize-none rounded-[var(--radius-md)] border border-border2 bg-transparent px-md py-sm text-sm text-text-default outline-none transition-colors placeholder:text-hint focus:border-primary focus-visible:ring-2 focus-visible:ring-[var(--primary-20)]"
 					/>
 				</div>
 				<div className="flex flex-wrap items-center gap-sm">
@@ -803,7 +803,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							data-testid="history-open"
 							aria-label="Search history"
 							onClick={openHistory}
-							className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-border2 bg-elevated text-text hover:bg-hover"
+							className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-border2 bg-elevated text-text-default hover:bg-hover"
 						>
 							<History className="size-3.5" />
 						</button>
@@ -813,7 +813,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 								data-testid="chat-abort"
 								aria-label="Stop"
 								onClick={onAbort}
-								className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-border2 bg-elevated text-text hover:bg-hover"
+								className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-border2 bg-elevated text-text-default hover:bg-hover"
 							>
 								<Square className="size-3.5" />
 							</button>
@@ -824,7 +824,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							aria-label={isStreaming ? "Steer" : "Send"}
 							onClick={() => submit(isStreaming ? "steer" : "send")}
 							disabled={!value.trim() && images.length === 0}
-							className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-primary text-on-accent hover:opacity-90 disabled:pointer-events-none disabled:opacity-50"
+							className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-primary text-text-on-primary hover:opacity-90 disabled:pointer-events-none disabled:opacity-50"
 						>
 							<ArrowUp className="size-4" />
 						</button>

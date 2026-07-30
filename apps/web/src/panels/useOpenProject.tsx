@@ -79,9 +79,9 @@ export function useOpenProject(onOpened: (project: Project) => void | Promise<vo
 				title="Initialize a git repository?"
 				description={
 					<>
-						<span className="font-medium text-text">{initTarget}</span> isn't a git repository.
-						ThinkRail works on git worktrees, so it needs one. Initialize a repo here and commit the
-						folder's current contents?
+						<span className="font-medium text-text-default">{initTarget}</span> isn't a git
+						repository. ThinkRail works on git worktrees, so it needs one. Initialize a repo here
+						and commit the folder's current contents?
 					</>
 				}
 				confirmLabel="Initialize & open"

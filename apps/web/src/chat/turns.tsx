@@ -41,7 +41,7 @@ export function ChatTurnView({
 			);
 		case "markdown":
 			return (
-				<div data-testid="chat-message" data-role="assistant" className="text-sm text-text">
+				<div data-testid="chat-message" data-role="assistant" className="text-sm text-text-default">
 					<Markdown text={row.text} />
 				</div>
 			);
@@ -74,7 +74,7 @@ function userText(content: UserMessage["content"]): string {
 function UserTurn({ message }: { message: UserMessage }) {
 	return (
 		<div data-testid="chat-message" data-role="user" className="flex justify-end">
-			<div className="max-w-[85%] whitespace-pre-wrap rounded-[var(--radius-md)] border border-[var(--bubble-user-border)] bg-[var(--bubble-user-bg)] px-md py-sm text-sm text-text">
+			<div className="max-w-[85%] whitespace-pre-wrap rounded-[var(--radius-md)] border border-[var(--bubble-user-border)] bg-[var(--bubble-user-bg)] px-md py-sm text-sm text-text-default">
 				{userText(message.content)}
 			</div>
 		</div>
@@ -98,7 +98,7 @@ function ToolRow({
 	if (getToolChrome(row.toolName) === "bare") {
 		const Renderer = getToolRenderer(row.toolName);
 		return (
-			<div className="text-sm text-text">
+			<div className="text-sm text-text-default">
 				<Renderer
 					toolCallId={row.toolCallId}
 					toolName={row.toolName}

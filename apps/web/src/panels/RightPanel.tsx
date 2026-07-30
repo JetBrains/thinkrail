@@ -85,7 +85,7 @@ function TabButton({
 			data-active={active}
 			onClick={onClick}
 			className={`text-xs uppercase tracking-wider ${
-				active ? "font-medium text-text" : "text-hint hover:text-muted"
+				active ? "font-medium text-text-default" : "text-hint hover:text-muted"
 			}`}
 		>
 			{children}

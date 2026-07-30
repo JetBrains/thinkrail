@@ -82,7 +82,7 @@ function Highlight({ text, query }: { text: string; query: string }) {
 		<>
 			{parts.map(({ text: part, key }) =>
 				terms.includes(part.toLowerCase()) ? (
-					<mark key={key} className="rounded-[2px] bg-[var(--primary-20)] text-text">
+					<mark key={key} className="rounded-[2px] bg-[var(--primary-20)] text-text-default">
 						{part}
 					</mark>
 				) : (
@@ -124,7 +124,9 @@ function PromptRow({
 			data-kind="prompt"
 			data-selected={isSelected}
 			className={`group flex w-full items-center gap-xs rounded-[var(--radius-sm)] border-l-2 py-xs pl-sm pr-xs text-left text-sm ${
-				isSelected ? "border-l-primary bg-hover text-text" : "border-l-transparent text-muted"
+				isSelected
+					? "border-l-primary bg-hover text-text-default"
+					: "border-l-transparent text-muted"
 			}`}
 		>
 			<button
@@ -161,7 +163,7 @@ function PromptRow({
 					e.stopPropagation();
 					onSaveAsTemplate();
 				}}
-				className={`flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] p-xs text-muted opacity-0 transition hover:bg-elevated hover:text-text group-hover:opacity-100 ${
+				className={`flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] p-xs text-muted opacity-0 transition hover:bg-elevated hover:text-text-default group-hover:opacity-100 ${
 					isSelected ? "opacity-100" : ""
 				}`}
 			>
@@ -183,7 +185,7 @@ function PromptRow({
 							e.stopPropagation();
 							onOpenMessage(target);
 						}}
-						className={`flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] p-xs text-muted opacity-0 transition hover:bg-elevated hover:text-text group-hover:opacity-100 ${
+						className={`flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] p-xs text-muted opacity-0 transition hover:bg-elevated hover:text-text-default group-hover:opacity-100 ${
 							isSelected ? "opacity-100" : ""
 						}`}
 					>
@@ -216,7 +218,9 @@ function MessageRow({
 			onClick={onPick}
 			disabled={unmapped}
 			className={`flex w-full flex-col gap-0.5 rounded-[var(--radius-sm)] border-l-2 px-sm py-xs text-left text-sm disabled:cursor-default ${
-				isSelected ? "border-l-primary bg-hover text-text" : "border-l-transparent text-muted"
+				isSelected
+					? "border-l-primary bg-hover text-text-default"
+					: "border-l-transparent text-muted"
 			}`}
 		>
 			<span className="flex items-center gap-xs text-hint text-xs">
@@ -278,7 +282,7 @@ function HistoryPreview({
 		<div data-testid="history-preview" className={`flex flex-col overflow-hidden ${className}`}>
 			{item ? (
 				<>
-					<div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap break-words p-sm text-sm text-text">
+					<div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap break-words p-sm text-sm text-text-default">
 						<Highlight text={item.hit.text} query={query} />
 					</div>
 					<div className="shrink-0 border-t border-border2 px-sm py-xs text-[11px] text-hint">
@@ -563,7 +567,7 @@ export function HistoryOverlay({
 					onChange={(e) => onQueryChange(e.target.value)}
 					onKeyDown={onKeyDown}
 					placeholder="Search prompts and conversations…"
-					className="min-w-0 flex-1 bg-transparent text-sm text-text outline-none placeholder:text-hint"
+					className="min-w-0 flex-1 bg-transparent text-sm text-text-default outline-none placeholder:text-hint"
 				/>
 				<DropdownMenu open={scopeMenuOpen} onOpenChange={setScopeMenuOpen}>
 					<DropdownMenuTrigger

@@ -217,7 +217,7 @@ function StepHeader({
 			className="flex w-full cursor-pointer select-none items-center gap-xs rounded-[var(--radius-sm)] px-xs py-sm text-left outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-primary sm:py-[3px]"
 		>
 			{icon}
-			<span className="shrink-0 font-medium text-text">{name}</span>
+			<span className="shrink-0 font-medium text-text-default">{name}</span>
 			{summary ? (
 				<span className="min-w-0 flex-1 truncate" title={summary}>
 					{summary}

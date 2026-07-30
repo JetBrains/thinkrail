@@ -68,7 +68,7 @@ function ChatHistoryMenu({
 				data-testid="chat-history"
 				aria-label="Reopen a closed chat"
 				title="View chat history"
-				className="flex shrink-0 items-center border-border2 border-l px-sm text-hint outline-none hover:bg-hover hover:text-text focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex shrink-0 items-center border-border2 border-l px-sm text-hint outline-none hover:bg-hover hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 			>
 				<History className="size-4" />
 			</DropdownMenuTrigger>
@@ -248,7 +248,7 @@ export function CenterTabs() {
 					<span className="font-medium text-hint text-xs uppercase tracking-wider">
 						Workspace ready
 					</span>
-					<h2 className="max-w-full truncate font-medium text-md text-text">
+					<h2 className="max-w-full truncate font-medium text-md text-text-default">
 						{activeWorkspace.name}
 					</h2>
 					<p className="flex max-w-full items-center gap-xs font-[var(--font-mono)] text-muted text-xs">
@@ -268,7 +268,7 @@ export function CenterTabs() {
 					type="button"
 					data-testid="start-chat"
 					onClick={() => void startChat()}
-					className="flex items-center gap-xs rounded-[var(--radius-md)] border border-border2 bg-elevated px-md py-xs text-sm text-text hover:bg-hover"
+					className="flex items-center gap-xs rounded-[var(--radius-md)] border border-border2 bg-elevated px-md py-xs text-sm text-text-default hover:bg-hover"
 				>
 					<MessageSquarePlus className="size-4" /> New chat
 				</button>
@@ -294,7 +294,7 @@ export function CenterTabs() {
 								data-active={isActive}
 								data-kind={tab.kind}
 								className={`group flex items-center gap-xs border-border2 border-r pr-xs pl-sm text-sm ${
-									isActive ? "bg-bg text-text" : "text-muted hover:bg-hover"
+									isActive ? "bg-bg text-text-default" : "text-muted hover:bg-hover"
 								}`}
 							>
 								<button
@@ -312,7 +312,7 @@ export function CenterTabs() {
 									data-testid="editor-tab-close"
 									aria-label={`Close ${tab.name}`}
 									onClick={() => onCloseTab(tab)}
-									className="rounded-[var(--radius-sm)] p-0.5 text-hint opacity-0 hover:bg-hover hover:text-text group-hover:opacity-100"
+									className="rounded-[var(--radius-sm)] p-0.5 text-hint opacity-0 hover:bg-hover hover:text-text-default group-hover:opacity-100"
 								>
 									<X className="size-3.5" />
 								</button>
@@ -325,7 +325,7 @@ export function CenterTabs() {
 							data-testid="new-chat"
 							aria-label="New chat"
 							onClick={() => void startChat()}
-							className="flex items-center px-sm text-hint hover:bg-hover hover:text-text"
+							className="flex items-center px-sm text-hint hover:bg-hover hover:text-text-default"
 						>
 							<MessageSquarePlus className="size-4" />
 						</button>

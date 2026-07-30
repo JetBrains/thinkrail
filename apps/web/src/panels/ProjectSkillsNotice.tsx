@@ -81,7 +81,7 @@ export function ProjectSkillsNotice({ projectId }: { projectId: string }) {
 			className="mt-lg flex w-full max-w-[560px] items-center gap-sm rounded-[var(--radius-md)] border border-border2 border-l-[3px] border-l-[var(--gold)] bg-[var(--gold-tint)] px-md py-sm text-left"
 		>
 			<TriangleAlert className="size-4 shrink-0 text-gold" />
-			<span className="min-w-0 flex-1 text-sm text-text">
+			<span className="min-w-0 flex-1 text-sm text-text-default">
 				{isPending
 					? `${pending.length} new skill${plural(pending.length)} appeared since you trusted this project.`
 					: `This project ships ${count} skill${plural(count)} — off until you trust it.`}

@@ -123,8 +123,8 @@ export function WelcomePanel() {
 
 			<p className="mt-lg max-w-[440px] text-md text-muted">
 				A spec-first way to build with AI. ThinkRail keeps your project's intent as a{" "}
-				<span className="text-text">connected spec graph</span> that the agent reads, plans, and
-				builds from, all in git worktree isolated workspaces.
+				<span className="text-text-default">connected spec graph</span> that the agent reads, plans,
+				and builds from, all in git worktree isolated workspaces.
 			</p>
 
 			<ProviderWarningBanner />
@@ -224,13 +224,13 @@ const Card = forwardRef<HTMLButtonElement, CardProps>(function Card(
 			<span
 				className={cn(
 					"flex size-9 items-center justify-center rounded-[10px]",
-					primary ? "bg-primary text-on-accent" : "bg-hover text-muted",
+					primary ? "bg-primary text-text-on-primary" : "bg-hover text-muted",
 				)}
 			>
 				<Icon className="size-4" />
 			</span>
 			<span className="w-full">
-				<span className="block font-medium text-sm text-text">{title}</span>
+				<span className="block font-medium text-sm text-text-default">{title}</span>
 				<span className="mt-0.5 block text-muted text-xs leading-snug">{subtitle}</span>
 			</span>
 		</button>

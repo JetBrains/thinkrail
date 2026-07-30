@@ -17,7 +17,7 @@ export function ComparisonCard({ args }: ToolRenderProps) {
 	}
 	return (
 		<div data-testid="tool-visualize-comparison" className="flex flex-col gap-sm">
-			{title ? <div className="font-medium text-sm text-text">{title}</div> : null}
+			{title ? <div className="font-medium text-sm text-text-default">{title}</div> : null}
 			<div className="grid gap-sm sm:grid-cols-2">
 				{options.map((opt) => (
 					<div
@@ -28,9 +28,9 @@ export function ComparisonCard({ args }: ToolRenderProps) {
 						}`}
 					>
 						<div className="flex items-center gap-xs">
-							<span className="font-medium text-sm text-text">{opt.name}</span>
+							<span className="font-medium text-sm text-text-default">{opt.name}</span>
 							{opt.recommended ? (
-								<span className="rounded-[var(--radius-sm)] bg-primary px-1.5 py-0.5 text-[10px] text-on-accent">
+								<span className="rounded-[var(--radius-sm)] bg-primary px-1.5 py-0.5 text-[10px] text-text-on-primary">
 									Recommended
 								</span>
 							) : null}
@@ -39,7 +39,7 @@ export function ComparisonCard({ args }: ToolRenderProps) {
 						{opt.pros.length > 0 ? (
 							<ul className="flex flex-col gap-0.5">
 								{opt.pros.map((p) => (
-									<li key={p} className="flex items-start gap-xs text-text text-xs">
+									<li key={p} className="flex items-start gap-xs text-text-default text-xs">
 										<Check className="mt-0.5 size-3 shrink-0 text-green" />
 										<span>{p}</span>
 									</li>
@@ -49,7 +49,7 @@ export function ComparisonCard({ args }: ToolRenderProps) {
 						{opt.cons.length > 0 ? (
 							<ul className="flex flex-col gap-0.5">
 								{opt.cons.map((c) => (
-									<li key={c} className="flex items-start gap-xs text-text text-xs">
+									<li key={c} className="flex items-start gap-xs text-text-default text-xs">
 										<X className="mt-0.5 size-3 shrink-0 text-red" />
 										<span>{c}</span>
 									</li>

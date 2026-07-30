@@ -123,7 +123,7 @@ export function JetBrainsAiCard({
 					<Zap className="size-4" />
 				</span>
 				<div className="flex min-w-0 flex-col">
-					<span className="font-medium text-sm text-text">JetBrains AI</span>
+					<span className="font-medium text-sm text-text-default">JetBrains AI</span>
 					<span className="truncate text-hint text-xs">
 						Route Claude + GPT through your JetBrains subscription.
 					</span>
@@ -254,7 +254,7 @@ function CopyableCommand({ command }: { command: string }) {
 	};
 	return (
 		<div className="flex items-center gap-sm rounded-[var(--radius-md)] border border-border2 bg-bg px-sm py-xs">
-			<code className="min-w-0 flex-1 select-all break-all font-[var(--font-mono)] text-text text-xs">
+			<code className="min-w-0 flex-1 select-all break-all font-[var(--font-mono)] text-text-default text-xs">
 				{command}
 			</code>
 			<button
@@ -263,7 +263,7 @@ function CopyableCommand({ command }: { command: string }) {
 				aria-label={`Copy: ${command}`}
 				title="Copy"
 				onClick={() => void copy()}
-				className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-muted outline-none transition-colors hover:bg-hover hover:text-text focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-muted outline-none transition-colors hover:bg-hover hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 			>
 				{copied ? <Check className="size-3.5 text-green" /> : <Copy className="size-3.5" />}
 			</button>

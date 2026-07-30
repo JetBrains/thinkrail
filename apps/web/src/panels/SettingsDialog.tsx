@@ -69,7 +69,7 @@ export function SettingsDialog() {
 										"flex shrink-0 items-center gap-sm rounded-[var(--radius-md)] px-md py-sm text-left text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
 										active
 											? "bg-[var(--primary-10)] font-medium text-primary"
-											: "text-muted hover:bg-hover hover:text-text",
+											: "text-muted hover:bg-hover hover:text-text-default",
 									)}
 								>
 									<Icon className="size-4 shrink-0" />

@@ -40,7 +40,7 @@ import { errorText, getTransport } from "@/transport";
 
 /** A shared pill-trigger look for the project + branch pickers (mockup `.pill`). */
 const PILL =
-	"flex h-8 min-w-0 items-center gap-sm rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-sm text-sm text-text outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-[var(--primary-60)] data-[open=true]:bg-hover";
+	"flex h-8 min-w-0 items-center gap-sm rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-sm text-sm text-text-default outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-[var(--primary-60)] data-[open=true]:bg-hover";
 
 /**
  * The New-Workspace "create + kick-off" surface: pick a base branch, say what to work on, pick a
@@ -399,7 +399,7 @@ export function NewWorkspaceDialog({
 						className="flex w-full items-center gap-sm rounded-[var(--radius-md)] border border-border2 border-l-[3px] border-l-[var(--gold)] bg-[var(--gold-tint)] px-md py-sm text-left"
 					>
 						<TriangleAlert className="size-4 shrink-0 text-gold" />
-						<span className="min-w-0 flex-1 text-sm text-text">
+						<span className="min-w-0 flex-1 text-sm text-text-default">
 							This project ships {aliasSkills.length} skill{aliasSkills.length === 1 ? "" : "s"} —
 							off until you trust it. Your personal and ThinkRail's built-in skills are unaffected.
 						</span>
@@ -478,7 +478,7 @@ export function NewWorkspaceDialog({
 						data-testid="create-workspace"
 						disabled={creating}
 						onClick={() => void create()}
-						className="flex h-8 shrink-0 items-center gap-sm rounded-[var(--radius-md)] bg-primary px-md font-medium text-on-accent text-sm outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
+						className="flex h-8 shrink-0 items-center gap-sm rounded-[var(--radius-md)] bg-primary px-md font-medium text-text-on-primary text-sm outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
 					>
 						Create
 						<span className="inline-flex h-4 min-w-4 items-center justify-center rounded-[3px] bg-[var(--on-accent-16)] px-1 font-[var(--font-mono)] text-xs">
@@ -517,7 +517,7 @@ function ProjectPicker({
 				className={`${PILL} max-w-[180px]`}
 			>
 				<span className="flex size-[18px] shrink-0 items-center justify-center rounded-[5px] bg-primary">
-					<Box className="size-3 text-on-accent" />
+					<Box className="size-3 text-text-on-primary" />
 				</span>
 				<span className="truncate">{current}</span>
 				<ChevronDown className="size-3 shrink-0 text-hint" />

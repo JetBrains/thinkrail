@@ -108,7 +108,7 @@ export function ProvidersSettings() {
 		<div data-testid="settings-providers" className="flex flex-col gap-lg">
 			<div className="flex items-start justify-between gap-sm">
 				<div className="flex flex-col gap-xs">
-					<h3 className="font-medium text-md text-text">Model providers</h3>
+					<h3 className="font-medium text-md text-text-default">Model providers</h3>
 					<p className="text-hint text-xs">
 						Connect at least one provider so the agent can run — a subscription or an API key.
 					</p>
@@ -154,7 +154,9 @@ export function ProvidersSettings() {
 							className="flex flex-col gap-sm rounded-[var(--radius-lg)] border border-[var(--primary-40)] bg-[var(--primary-10)] p-md"
 						>
 							<div className="flex flex-col gap-0.5">
-								<h4 className="font-medium text-sm text-text">Sign in with a subscription</h4>
+								<h4 className="font-medium text-sm text-text-default">
+									Sign in with a subscription
+								</h4>
 								<p className="text-hint text-xs">
 									Use your existing Claude, ChatGPT, or Copilot plan — no API key needed.
 								</p>
@@ -279,7 +281,7 @@ function ConnectedCard({
 				<Check className="size-4" />
 			</span>
 			<div className="flex min-w-0 flex-col">
-				<span className="truncate font-medium text-sm text-text">{provider.name}</span>
+				<span className="truncate font-medium text-sm text-text-default">{provider.name}</span>
 				<span className="truncate text-hint text-xs">
 					{label}
 					{provider.detail ? ` · ${provider.detail}` : ""}
@@ -341,7 +343,7 @@ function ProviderActionRow({
 				<span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-hover text-muted">
 					<Boxes className="size-4" />
 				</span>
-				<span className="min-w-0 flex-1 truncate text-text">{provider.name}</span>
+				<span className="min-w-0 flex-1 truncate text-text-default">{provider.name}</span>
 				<div className="flex shrink-0 items-center gap-xs">
 					{provider.canApiKey ? (
 						<Button
