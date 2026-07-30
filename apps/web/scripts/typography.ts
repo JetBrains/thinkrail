@@ -359,6 +359,11 @@ const HEADER = (version: string) => `/*
  *
  * Contains every typography value the UI is allowed to use: primitive custom properties, one class per
  * semantic text style, and the shared prose system consumed by BOTH markdown surfaces.
+ *
+ * The classes live in \`@layer components\` on purpose. Tailwind v4 orders its layers
+ * \`theme, base, components, utilities\`, so a semantic class beats preflight (base) while a Tailwind
+ * utility at a call site — \`italic\`, \`leading-tight\`, \`leading-snug\` — can still override the one
+ * property it names. Unlayered CSS would outrank every layer and silently win instead.
  */\n`;
 
 function declarations(t: Typography, style: Style, indent = "\t"): string {
@@ -397,6 +402,8 @@ export function renderCss(t: Typography): string {
 		out.push(`\t${cssVarName(t, "letter-spacing", id)}: ${v};`);
 	out.push("}\n");
 
+	// Everything below is layered so Tailwind utilities can override a single property at a call site.
+	out.push("@layer components {");
 	out.push("/* Semantic text styles — one class per style. Colour stays at the call site. */");
 	for (const [group, styles] of Object.entries(t.textStyles))
 		for (const name of Object.keys(styles)) {
@@ -427,6 +434,7 @@ export function renderCss(t: Typography): string {
 	);
 	out.push(`.${root} :is(strong, b) {`);
 	out.push(`\tfont-weight: var(${cssVarName(t, "font-weight", PROSE_STRONG_WEIGHT)});`);
+	out.push("}");
 	out.push("}");
 	return `${out.join("\n")}\n`;
 }

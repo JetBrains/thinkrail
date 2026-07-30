@@ -224,6 +224,26 @@ describe("generated CSS", () => {
 		expect(GENERATED).toBe(renderCss(typography));
 	});
 
+	it("emits the semantic classes inside @layer components, so utilities can override them", () => {
+		// Unlayered CSS outranks every @layer, which would make `italic` / `leading-*` at a call site
+		// lose to the semantic declarations. Tailwind orders theme < base < components < utilities.
+		const layerStart = GENERATED.indexOf("@layer components {");
+		expect(layerStart, "the semantic classes must be layered").toBeGreaterThan(-1);
+		// Tokens stay unlayered: custom properties have nothing to compete with.
+		expect(GENERATED.indexOf(":root {")).toBeLessThan(layerStart);
+		for (const { group, name } of allStyles(typography)) {
+			if (group === "prose") continue;
+			const cls = `.${styleClassName(typography, group, name)} {`;
+			expect(GENERATED.indexOf(cls), `${cls} must sit inside the layer`).toBeGreaterThan(
+				layerStart,
+			);
+		}
+		expect(GENERATED.indexOf(`.${proseRootClassName(typography)} {`)).toBeGreaterThan(layerStart);
+		// The layer block closes exactly once at the end.
+		expect(GENERATED.trimEnd().endsWith("}\n}")).toBe(true);
+		expect(GENERATED.split("{").length).toBe(GENERATED.split("}").length);
+	});
+
 	it("emits a class for every semantic style, with all seven declarations", () => {
 		for (const { group, name } of allStyles(typography)) {
 			if (group === "prose") continue;

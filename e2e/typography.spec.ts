@@ -224,3 +224,48 @@ test("bold inside prose changes weight only — both markdown surfaces share the
 		expect(measured.nestedStrong?.[key], `nested strong ${key}`).toBe(measured.body?.[key]);
 	}
 });
+
+test("a Tailwind utility at a call site overrides the semantic default it names", async ({
+	page,
+}) => {
+	await openAppFresh(page);
+
+	// The semantic classes are emitted in `@layer components`, so `italic` / `leading-*` (Tailwind's
+	// `utilities` layer) win for the ONE property they set while the rest of the semantic style holds.
+	// Unlayered semantic CSS used to outrank every utility — "(empty file)" lost its italics and
+	// `leading-tight` rows kept the 1.6 default.
+	const measured = await page.evaluate(() => {
+		const probe = (className: string) => {
+			const el = document.createElement("span");
+			el.className = className;
+			el.textContent = "probe";
+			document.body.appendChild(el);
+			const s = getComputedStyle(el);
+			const out = { fontStyle: s.fontStyle, fontSize: s.fontSize, lineHeight: s.lineHeight };
+			el.remove();
+			return out;
+		};
+		return {
+			metadata: probe("tr-text-metadata"),
+			metadataItalic: probe("tr-text-metadata italic"),
+			metadataSnug: probe("tr-text-metadata leading-snug"),
+			ui: probe("tr-text-ui"),
+			uiTight: probe("tr-text-ui leading-tight"),
+		};
+	});
+
+	// `italic` applies, and the semantic size/line-height are untouched.
+	expect(measured.metadataItalic.fontStyle).toBe("italic");
+	expect(measured.metadata.fontStyle).toBe("normal");
+	expect(measured.metadataItalic.fontSize).toBe(measured.metadata.fontSize);
+	expect(measured.metadataItalic.lineHeight).toBe(measured.metadata.lineHeight);
+
+	// `leading-tight` (1.25) beats the semantic 1.6, and only the line-height moves.
+	expect(measured.uiTight.lineHeight).toBe("15px"); // 12px × 1.25
+	expect(measured.ui.lineHeight).toBe("19.2px"); // 12px × 1.6
+	expect(measured.uiTight.fontSize).toBe(measured.ui.fontSize);
+
+	// `leading-snug` (1.375) likewise, on the 10px tier.
+	expect(measured.metadataSnug.lineHeight).toBe("13.75px"); // 10px × 1.375
+	expect(measured.metadataSnug.fontSize).toBe(measured.metadata.fontSize);
+});

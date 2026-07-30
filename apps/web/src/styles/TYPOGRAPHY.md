@@ -100,10 +100,17 @@ The generator derives one class per semantic style, mechanically:
 Primitive tokens are also emitted as custom properties — `--tr-font-family-code`,
 `--tr-font-size-s11`, `--tr-line-height-default`, … — for the surfaces that cannot use a class.
 
+**Cascade layer.** The semantic classes are emitted inside `@layer components`; the token block stays
+unlayered. Tailwind v4 orders its layers `theme, base, components, utilities`, so a semantic class beats
+preflight while a Tailwind utility at a call site still overrides the single property it names — that is
+what keeps `italic` and `leading-tight` / `leading-snug` working next to a semantic class. Emitting the
+classes unlayered would outrank every utility and silently win instead.
+
 Rules at a call site:
 
-- **Typography = exactly one semantic class.** Never compose `font-*`, `text-<size>`, `leading-*`,
-  `tracking-*`, `uppercase`.
+- **Typography = exactly one semantic class.** Never compose `font-*`, `text-<size>`, `tracking-*` or
+  `uppercase`. The exceptions are `italic` and `leading-*`: a call site may add one to override that
+  single property (see *Cascade layer*), which is why a few rows and empty states carry them.
 - **Colour stays at the call site** (`text-muted`, `text-hint`, conditional actives). Active/selected
   state is a **colour** change — never a weight change.
 - Spacing, truncation, layout, hover and state classes are unaffected.

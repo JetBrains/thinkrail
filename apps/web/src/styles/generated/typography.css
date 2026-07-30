@@ -7,6 +7,11 @@
  *
  * Contains every typography value the UI is allowed to use: primitive custom properties, one class per
  * semantic text style, and the shared prose system consumed by BOTH markdown surfaces.
+ *
+ * The classes live in `@layer components` on purpose. Tailwind v4 orders its layers
+ * `theme, base, components, utilities`, so a semantic class beats preflight (base) while a Tailwind
+ * utility at a call site — `italic`, `leading-tight`, `leading-snug` — can still override the one
+ * property it names. Unlayered CSS would outrank every layer and silently win instead.
  */
 
 :root {
@@ -42,6 +47,7 @@
 	--tr-letter-spacing-brand: 0.5px;
 }
 
+@layer components {
 /* Semantic text styles — one class per style. Colour stays at the call site. */
 .tr-brand-wordmark {
 	font-family: var(--tr-font-family-brand);
@@ -328,4 +334,5 @@
 /* Bold inside prose: weight only — every other property inherits from the parent element. */
 .tr-prose :is(strong, b) {
 	font-weight: var(--tr-font-weight-medium);
+}
 }
