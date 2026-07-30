@@ -1052,7 +1052,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 					...s.activeTabByWorkspace,
 					[wsId]: wasActive ? (tabs.at(-1)?.id ?? null) : (s.activeTabByWorkspace[wsId] ?? null),
 				},
-				navTickByWorkspace: bumpNav(s, wsId),
+				// Only a close that actually moves focus is a navigation. Closing some other tab in the strip
+				// leaves the user exactly where they were, so counting it would discard a browse still in
+				// flight — the clicked file would never open.
+				navTickByWorkspace: wasActive ? bumpNav(s, wsId) : s.navTickByWorkspace,
 				// A closed tab must never leave a dangling slot id behind.
 				...(s.previewTabByWorkspace[wsId] === id
 					? { previewTabByWorkspace: omitKey(s.previewTabByWorkspace, wsId) }
@@ -1284,7 +1287,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 			const entry: ClosedChat = { sessionId, title: tab.name, closedAt: Date.now() };
 			return {
 				tabsByWorkspace: { ...s.tabsByWorkspace, [wsId]: remaining },
-				navTickByWorkspace: bumpNav(s, wsId),
+				// Same rule as `closeTab`: only a close that moves focus counts as a navigation.
+				navTickByWorkspace: wasActive ? bumpNav(s, wsId) : s.navTickByWorkspace,
 				activeTabByWorkspace: {
 					...s.activeTabByWorkspace,
 					[wsId]: wasActive

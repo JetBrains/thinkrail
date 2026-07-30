@@ -1409,6 +1409,9 @@ test("every center navigation bumps the workspace's nav tick, and none of them b
 	bumps("openChatSession", () => s().openChatSession("ws1", "sess", null, "medium"));
 	bumps("closeChatToHistory", () => s().closeChatToHistory("sess"));
 	bumps("reopenChat", () => s().reopenChat("sess"));
+	// Closing the ACTIVE tab hands focus to a neighbour, so it counts. Closing an inactive one does not —
+	// that case is its own test below, since it's a distinct rule rather than another entry in this list.
+	s().setActiveTab("ws1:a.ts");
 	bumps("closeTab", () => s().closeTab("ws1:a.ts"));
 	bumps("noteNavigation", () => s().noteNavigation("ws1"));
 	bumps("requestHistoryOpen", () =>
@@ -1437,6 +1440,35 @@ test("every center navigation bumps the workspace's nav tick, and none of them b
 	expect(useAppStore.getState().navTickByWorkspace.ws2).toBeUndefined();
 	s().clearWorkspaceTabs("ws1");
 	expect(useAppStore.getState().navTickByWorkspace.ws1).toBeUndefined();
+});
+
+// The other half of the rule above: the counter tracks NAVIGATIONS, not tab-list edits. Closing a tab the
+// user isn't looking at leaves focus exactly where it was, so it must not count.
+// The finding this pins: bumped unconditionally, closing any unrelated tab while a browse was in flight made
+// that read look overtaken, and the file the user clicked never opened at all.
+test("a close that moves no focus is not a navigation — it can't discard a browse in flight", () => {
+	useAppStore.setState({ activeWorkspaceId: "ws1" });
+	const s = () => useAppStore.getState();
+	const tick = () => s().navTickByWorkspace.ws1 ?? 0;
+
+	s().openTab(fileTab("ws1", "a.ts"), "keep");
+	s().openTab(fileTab("ws1", "b.ts"), "keep");
+	s().openChatSession("ws1", "sess", null, "medium");
+	// `b.ts` is what the user is looking at; `a.ts` and the chat are both inactive.
+	s().setActiveTab("ws1:b.ts");
+	const before = tick();
+
+	s().closeTab("ws1:a.ts");
+	expect(tick()).toBe(before);
+	expect(s().activeTabByWorkspace.ws1).toBe("ws1:b.ts");
+
+	s().closeChatToHistory("sess");
+	expect(tick()).toBe(before);
+	expect(s().activeTabByWorkspace.ws1).toBe("ws1:b.ts");
+
+	// ...and closing what IS active still counts, since focus has to move somewhere.
+	s().closeTab("ws1:b.ts");
+	expect(tick()).toBeGreaterThan(before);
 });
 
 test("catalog authority falls with the list it describes — only an awaited refresh sets it", () => {

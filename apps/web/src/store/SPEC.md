@@ -55,10 +55,13 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   count has moved** (otherwise the file steals focus back from wherever the user went, and claims the preview
   slot from it) — and it takes that count at **request** time (`noteNavigation`, as the read starts), so a
   browse is ordered by when the user asked for it, not by when the host happened to answer. It is bumped
-  *inside* every action that moves the active tab — `openDoc`, `setActiveTab`, `closeTab`,
-  `openChatSession`, `closeChatToHistory`, `reopenChat`,
-  `requestHistoryOpen`, and `hydrateSession` **only when it actually takes focus** (a background
-  auto-restore must not supersede a read the user is waiting on) — plus **`noteNavigation(workspaceId)`**
+  *inside* every action that moves the active tab — `openDoc`, `setActiveTab`,
+  `openChatSession`, `reopenChat`,
+  `requestHistoryOpen`, `hydrateSession` **only when it actually takes focus** (a background
+  auto-restore must not supersede a read the user is waiting on), and `closeTab` /
+  `closeChatToHistory` **only when the closed tab was the active one** (closing some other tab in the strip
+  leaves the user where they were; counting it would discard a browse in flight and the clicked file would
+  never open) — plus **`noteNavigation(workspaceId)`**
   for an intent whose focus change hasn't reached the store yet (starting a chat, whose tab appears only once
   `session.create` returns). **`openTab` is the one deliberate exception and must stay uncounted**: it *is*
   the read completion being ordered, so counting it would make an earlier read's own commit look like user
