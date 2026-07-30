@@ -81,7 +81,10 @@ function CommandSeparator({
 	...props
 }: React.ComponentProps<typeof CommandPrimitive.Separator>) {
 	return (
-		<CommandPrimitive.Separator className={cn("my-xs h-px bg-border", className)} {...props} />
+		<CommandPrimitive.Separator
+			className={cn("my-xs h-px bg-border-muted", className)}
+			{...props}
+		/>
 	);
 }
 

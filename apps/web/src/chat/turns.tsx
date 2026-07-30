@@ -186,7 +186,7 @@ function RetryIndicator({
 				{source === "summarization" ? "Retrying summarization" : "Retrying"} ({attempt}/
 				{maxAttempts})…
 			</span>
-			<div className="h-1 w-full overflow-hidden rounded-full bg-border2">
+			<div className="h-1 w-full overflow-hidden rounded-full bg-border-default">
 				<div
 					className={`h-full bg-primary transition-[width] ease-linear ${draining ? "w-0" : "w-full"}`}
 					style={{ transitionDuration: `${delayMs}ms` }}
@@ -221,14 +221,14 @@ export function TurnDivider({
 	const { elapsedMs, toolCount, changedFiles } = data;
 	if (toolCount === 0 && changedFiles.length === 0 && (elapsedMs == null || elapsedMs < 1000)) {
 		// Nothing worth noting between these turns — just a hairline rule.
-		return <div data-testid="turn-divider" className="my-sm h-px bg-border2" />;
+		return <div data-testid="turn-divider" className="my-sm h-px bg-border-default" />;
 	}
 	return (
 		<div
 			data-testid="turn-divider"
 			className="my-sm flex items-center gap-sm text-text-muted text-xs"
 		>
-			<span className="h-px flex-1 bg-border2" />
+			<span className="h-px flex-1 bg-border-default" />
 			{toolCount > 0 ? (
 				<span className="flex items-center gap-xs">
 					<Wrench className="size-3 shrink-0" />
@@ -252,7 +252,7 @@ export function TurnDivider({
 					{formatElapsed(elapsedMs)}
 				</span>
 			) : null}
-			<span className="h-px flex-1 bg-border2" />
+			<span className="h-px flex-1 bg-border-default" />
 		</div>
 	);
 }

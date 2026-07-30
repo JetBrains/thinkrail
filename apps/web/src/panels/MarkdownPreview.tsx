@@ -36,7 +36,7 @@ const DOCUMENT_PROSE = [
 	// Blockquote — muted with an accent rule (no italic; quotes can be long).
 	"[&_blockquote]:my-md [&_blockquote]:border-primary/50 [&_blockquote]:border-l-2 [&_blockquote]:pl-md [&_blockquote]:text-text-muted [&_blockquote>:first-child]:mt-0 [&_blockquote>:last-child]:mb-0",
 	// Horizontal rule — a crisp 1px divider.
-	"[&_hr]:my-xl [&_hr]:h-px [&_hr]:border-0 [&_hr]:bg-border2",
+	"[&_hr]:my-xl [&_hr]:h-px [&_hr]:border-0 [&_hr]:bg-border-default",
 	// Tables (GFM) — only as wide as content (scroll if wider), bordered cells, header + zebra rows.
 	"[&_table]:my-md [&_table]:block [&_table]:w-max [&_table]:max-w-full [&_table]:overflow-x-auto [&_table]:border-collapse [&_table]:text-[0.9em]",
 	"[&_th]:border [&_th]:border-border-default [&_th]:bg-container-card-bg [&_th]:px-sm [&_th]:py-xs [&_th]:text-left [&_th]:font-semibold",

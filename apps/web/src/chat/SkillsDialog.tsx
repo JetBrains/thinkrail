@@ -211,7 +211,7 @@ export function SkillsDialog({
 					/>
 				</div>
 				{/* Indent + left rail nests the skills visually under their group/plugin header. */}
-				<div className="ml-sm divide-y divide-border2 border-border-default border-l">
+				<div className="ml-sm divide-y divide-border-default border-border-default border-l">
 					{group.items.map((entry) => (
 						<SkillRow
 							key={`${group.key}:${entry.name}`}
