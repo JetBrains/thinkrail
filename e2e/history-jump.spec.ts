@@ -1,5 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
+import {
+	activeWorktreeRow,
+	createWorkspaceViaDialog,
+	openFixtureProject,
+	worktreeRows,
+} from "./fixtures/app";
 import { seedExternalCwdSessions, seedWorkspaceSession } from "./fixtures/sessions";
 
 // Selecting a message hit in the Ctrl+R history overlay (A7) jumps to it: `useHistorySearch`'s
@@ -50,12 +55,12 @@ test("selecting a same-workspace message hit opens the chat and flashes the matc
 	await page.reload();
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await page.getByTestId("project-item").first().click();
-	await page.getByTestId("workspace-item").first().click();
-	await expect(page.locator('[data-testid="workspace-item"][data-active="true"]')).toHaveCount(1);
+	await worktreeRows(page).first().click();
+	await expect(activeWorktreeRow(page)).toHaveCount(1);
 
-	// A fresh chat (not the seeded one) so a composer exists; the seeded session stays unopened — jumping
-	// to it must open a *second* tab, not reuse this one.
-	await page.getByTestId("start-chat").click();
+	// The create's auto-opened chat (still live in the host) auto-restores after the reload — a composer
+	// exists without any start-chat step; the seeded session stays unopened, so jumping to it must open a
+	// *second* tab, not reuse this one.
 	await expect(page.getByTestId("chat-input")).toBeVisible();
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
@@ -108,9 +113,8 @@ test("selecting a cross-workspace message hit switches the active workspace and 
 
 	// Workspace B: created second, so it's the active one — the search below runs from *its* chat, not A's.
 	await createWorkspaceViaDialog(page);
-	const workspaces = page.getByTestId("workspace-item");
+	const workspaces = worktreeRows(page);
 	await expect(workspaces.nth(1)).toHaveAttribute("data-active", "true");
-	await page.getByTestId("start-chat").click();
 	await expect(page.getByTestId("chat-input")).toBeVisible();
 
 	await page.getByTestId("chat-input").press("Control+r");
@@ -135,9 +139,10 @@ test("selecting a cross-workspace message hit switches the active workspace and 
 	// Active workspace switched from B (index 1) to A (index 0).
 	await expect(workspaces.nth(0)).toHaveAttribute("data-active", "true");
 	await expect(workspaces.nth(1)).not.toHaveAttribute("data-active", "true");
-	// Workspace A's tab strip now shows only the just-opened seeded chat (B's own started-but-empty chat is
-	// a different workspace's tab list, hidden now that A is active).
-	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
+	// Workspace A's tab strip settles on two chats: its own auto-opened one (created with A, restored
+	// live from the host on entering A) plus the just-opened seeded chat. B's own chat belongs to a
+	// different workspace's tab list, hidden now that A is active.
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(2);
 	const flashRow = page.locator("[data-flash]");
 	await expect(flashRow).toBeVisible();
 	await expect(flashRow).toContainText("migration notes");
@@ -154,7 +159,6 @@ test("an unmapped message hit is a no-op — the overlay stays open and the acti
 	seedExternalCwdSessions();
 	await page.waitForTimeout(2_100);
 
-	await page.getByTestId("start-chat").click();
 	await expect(page.getByTestId("chat-input")).toBeVisible();
 
 	await page.getByTestId("chat-input").press("Control+r");
@@ -177,7 +181,7 @@ test("an unmapped message hit is a no-op — the overlay stays open and the acti
 	// No-op: overlay stays open, no new tab, active workspace unchanged (still B).
 	await expect(overlay).toBeVisible();
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
-	const workspaces = page.getByTestId("workspace-item");
+	const workspaces = worktreeRows(page);
 	await expect(workspaces.nth(1)).toHaveAttribute("data-active", "true");
 	await expect(workspaces.nth(0)).not.toHaveAttribute("data-active", "true");
 });
@@ -210,7 +214,6 @@ test("searching a prompt's own words that an assistant reply also echoes shows o
 	});
 	await page.waitForTimeout(2_100);
 
-	await page.getByTestId("start-chat").click();
 	await expect(page.getByTestId("chat-input")).toBeVisible();
 
 	await page.getByTestId("chat-input").press("Control+r");
@@ -259,7 +262,6 @@ test("Shift+Enter on the selected prompt row jumps to the chat and flashes the m
 	});
 	await page.waitForTimeout(2_100);
 
-	await page.getByTestId("start-chat").click();
 	await expect(page.getByTestId("chat-input")).toBeVisible();
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
@@ -306,7 +308,6 @@ test("an unmapped prompt hit shows no jump icon, and Shift+Enter on it is a no-o
 	seedExternalCwdSessions();
 	await page.waitForTimeout(2_100);
 
-	await page.getByTestId("start-chat").click();
 	await expect(page.getByTestId("chat-input")).toBeVisible();
 
 	await page.getByTestId("chat-input").press("Control+r");
@@ -331,7 +332,7 @@ test("an unmapped prompt hit shows no jump icon, and Shift+Enter on it is a no-o
 	// No-op: overlay stays open, no new tab, active workspace unchanged (still B).
 	await expect(overlay).toBeVisible();
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
-	const workspaces = page.getByTestId("workspace-item");
+	const workspaces = worktreeRows(page);
 	await expect(workspaces.nth(1)).toHaveAttribute("data-active", "true");
 	await expect(workspaces.nth(0)).not.toHaveAttribute("data-active", "true");
 });

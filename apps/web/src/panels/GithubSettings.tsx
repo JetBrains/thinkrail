@@ -50,7 +50,7 @@ export function GithubSettings() {
 					data-testid="settings-gh-status"
 					data-connected={connected}
 					className={`inline-flex items-center gap-xs font-medium text-sm ${
-						connected ? "text-feedback-success" : "text-text-muted"
+						connected ? "text-feedback-success" : "text-text-text-muted"
 					}`}
 				>
 					{connected ? <Check className="size-3.5" /> : <X className="size-3.5" />}

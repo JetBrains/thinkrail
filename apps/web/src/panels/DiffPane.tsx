@@ -12,7 +12,7 @@ const MonacoDiff = lazy(() => import("./MonacoDiff"));
 const RenderedDiff = lazy(() => import("./RenderedDiff"));
 
 const loading = (
-	<div className="flex h-full items-center justify-center text-text-muted">Loading…</div>
+	<div className="flex h-full items-center justify-center text-text-text-muted">Loading…</div>
 );
 
 /**

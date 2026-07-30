@@ -15,8 +15,8 @@
 #
 # A saved copy also takes params: .\install.ps1 -Channel nightly -Version 0.2.0 -Prefix D:\tools -NoModifyPath
 #
-# After install, run `thinkrail`. To update later, re-run this installer (`thinkrail update` is
-# macOS/Linux-only for now).
+# After install, run `thinkrail`. To update later, run `thinkrail update` (it re-runs this installer for
+# you, replacing the running exe); to remove it, run `thinkrail uninstall`.
 #
 # Kept ASCII-only on purpose: Windows PowerShell 5.1 parses a saved UTF-8 file without BOM as ANSI,
 # which would garble any non-ASCII character. Errors `throw` (never `exit`): under `irm | iex` the
@@ -264,23 +264,23 @@ function Install-ThinkRail {
     }
 
     # Same file + shape install.sh writes; `thinkrail update` reads it (homedir()\.config\thinkrail).
+    # Written *after* the PATH section below, because it records whether that section added the entry.
     $configDir = Join-Path $env:USERPROFILE '.config\thinkrail'
-    New-Item -ItemType Directory -Path $configDir -Force | Out-Null
-    $meta = [ordered]@{
-        channel      = $channel
-        version      = ($tag -replace '^v', '')
-        tag          = $tag
-        prefix       = $prefix
-        installed_at = ((Get-Date).ToUniversalTime().ToString('s') + 'Z')
+    $metaFile = Join-Path $configDir 'install.json'
+    $previousMeta = $null
+    try {
+        if (Test-Path -LiteralPath $metaFile) {
+            $previousMeta = Get-Content -LiteralPath $metaFile -Raw | ConvertFrom-Json
+        }
+    } catch {
+        # Unreadable or not JSON -- treat as no previous install (the uninstaller does the same).
     }
-    # WriteAllText writes UTF-8 without BOM (PS 5.1's Set-Content -Encoding UTF8 adds one, which
-    # breaks the JSON.parse in `thinkrail update`).
-    [System.IO.File]::WriteAllText((Join-Path $configDir 'install.json'), ($meta | ConvertTo-Json))
 
     Write-Host ''
     Write-Host "ThinkRail $($tag -replace '^v', '') ($channel) installed."
 
     $pathAdvice = $null
+    $pathStatus = $null
     if ($NoModifyPath) {
         if (Test-ThinkRailOnPath -Dir $binDir -PathEntries (Get-ThinkRailPersistentPath)) {
             Write-Host 'PATH:           already configured'
@@ -304,9 +304,33 @@ function Install-ThinkRail {
             $env:Path = "$env:Path;$binDir"
         }
     }
+    # Did *we* put $binDir on the user PATH? `thinkrail uninstall` removes that entry only when this says
+    # yes: nothing else in the registry marks it as ours, and a user who already had this dir on PATH for
+    # other tools must not lose it. Sticky across re-installs of the same prefix -- an update sees
+    # 'already' precisely because an earlier run of ours added it, and that ownership must not decay.
+    $pathEntryAdded = $pathStatus -eq 'added'
+    if (-not $pathEntryAdded -and $previousMeta -and $previousMeta.path_entry_added -eq $true) {
+        $before = ([string]$previousMeta.prefix).Replace('/', '\').TrimEnd('\')
+        if ($before -and ($before -ieq $prefix.Replace('/', '\').TrimEnd('\'))) { $pathEntryAdded = $true }
+    }
+
+    New-Item -ItemType Directory -Path $configDir -Force | Out-Null
+    $meta = [ordered]@{
+        channel          = $channel
+        version          = ($tag -replace '^v', '')
+        tag              = $tag
+        prefix           = $prefix
+        path_entry_added = $pathEntryAdded
+        installed_at     = ((Get-Date).ToUniversalTime().ToString('s') + 'Z')
+    }
+    # WriteAllText writes UTF-8 without BOM (PS 5.1's Set-Content -Encoding UTF8 adds one, which
+    # breaks the JSON.parse in `thinkrail update`).
+    [System.IO.File]::WriteAllText($metaFile, ($meta | ConvertTo-Json))
+
     if ($pathAdvice) { Write-Host "Add to PATH:    $pathAdvice" }
     Write-Host 'Run:            thinkrail'
-    Write-Host 'Update later:   re-run this installer'
+    Write-Host 'Update later:   thinkrail update'
+    Write-Host 'Uninstall:      thinkrail uninstall'
 }
 
 Install-ThinkRail -Channel $Channel -Version $Version -Prefix $Prefix -NoModifyPath:$NoModifyPath

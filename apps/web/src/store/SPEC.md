@@ -37,7 +37,44 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   `tabsByWorkspace` /
   `activeTabByWorkspace` (`openTab`/`closeTab`/`setActiveTab`/`clearWorkspaceTabs`, plus
   **`setFileTabView(id, view)`** — a markdown `FileTab`'s `view` (`"rendered"`|`"source"`) lives on the tab
-  so the rendered↔source choice survives tab switches; absent = rendered); `terminalsByWorkspace`
+  so the rendered↔source choice survives tab switches; absent = rendered);
+  **`previewTabByWorkspace`** — the id of the workspace's **preview tab**, the one reusable slot a light
+  open lands in (rendered italic; the gesture map per surface is `panels/SPEC.md`'s). It is keyed like
+  `activeTabByWorkspace` *on purpose*: "at most one preview tab per workspace" is then structural rather
+  than a rule each writer must remember, and the `EditorTab` union stays pure data (no `preview?` flag to
+  sweep-and-clear on every open). Both openers carry a **`TabIntent`** (`"preview"` | `"keep"`):
+  **`openTab(tab, intent)`** focuses an already-open id rather than duplicating it, and a `preview` open
+  **replaces the slot's tab at its index** so the strip never reshuffles under the cursor, while a `keep`
+  appends and releases the slot if it pointed there; **`setActiveTab(id, intent?)`** activates, and
+  `"keep"` also promotes — **one-way**, so a plain activation (or a `keep` aimed at some other tab) never
+  demotes a kept tab back to preview. The slot is released by `closeTab`, `clearWorkspaceTabs`, and
+  `applyWorkspaceRemoved` (via `omitKey`), so a stale id can never outlive its tab. Alongside it,
+  **`navTickByWorkspace`** counts **center-area navigations** per workspace — rendered by nothing, it exists
+  so a slow read can tell it was overtaken. A click is instant and an `fs.readFile` is not, so
+  `panels/openTabs.ts` records this count when it starts a read and **drops a `preview` that lands after the
+  count has moved** (otherwise the file steals focus back from wherever the user went, and claims the preview
+  slot from it) — and it takes that count at **request** time (`noteNavigation`, as the read starts), so a
+  browse is ordered by when the user asked for it, not by when the host happened to answer. It is bumped
+  *inside* every action that moves the active tab — `openDoc`, `setActiveTab`,
+  `openChatSession`, `reopenChat`,
+  `requestHistoryOpen`, `hydrateSession` **only when it actually takes focus** (a background
+  auto-restore must not supersede a read the user is waiting on), and `closeTab` /
+  `closeChatToHistory` **only when the closed tab was the active one** (closing some other tab in the strip
+  leaves the user where they were; counting it would discard a browse in flight and the clicked file would
+  never open) — plus **`noteNavigation(workspaceId)`**
+  for an intent whose focus change hasn't reached the store yet (starting a chat, whose tab appears only once
+  `session.create` returns). **`openTab` is the one deliberate exception and must stay uncounted**: it *is*
+  the read completion being ordered, so counting it would make an earlier read's own commit look like user
+  navigation and invalidate the later request — two browse clicks in a row would leave the FIRST click's file
+  open. (Pinned by "every center navigation bumps the workspace's nav tick, and none of them bypass it" in
+  `appStore.test.ts`, which asserts both branches of `openTab` leave the count alone.)
+  Living here rather than in `panels` is the whole point: **no focus transition can
+  bypass it**, which a module-local counter demonstrably did (it missed close/reopen/doc/new-chat).
+  `clearWorkspaceTabs` releases the key with the rest. **Chat tabs and
+  `DocTab`s never enter it** — a chat is an explicit creation with a live session behind it, and a
+  `DocTab`'s content exists only in the store (no file backs it), so a silent replace would destroy it
+  with nothing to reopen. There is deliberately **no keyboard shortcut**: gestures only.
+  `terminalsByWorkspace`
   / `activeTerminalByWorkspace` (`addTerminal`/`closeTerminalTab`/`setActiveTerminalTab`); the
   **per-session chat state** — `sessions: Record<sessionId, SessionRuntime>`, where a `SessionRuntime` holds
   one chat's `turns` (pi-canonical) / `toolResults` / `askAnswers` (the `ask-user-answers` replies keyed
@@ -62,7 +99,24 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   chat is never clobbered. The
   pure **`reduceSessionEvent`** folds a `PiEvent` into a runtime; **`handlePiEvent(event,
   sessionId)`** and **`applyExtUi(request)`** route by id via the `withRuntime` helper (a no-op for an
-  unknown session). The host-wide **`models`** list stays global (not per session). The **in-app login** state
+  unknown session). The host-wide **`models`** list stays global (not per session), plus
+  **`modelsRefreshing`** — the awaited `model.refresh` in-flight flag — and **`modelsFresh`**, the
+  *provenance* of that list: true only while it holds the installed result of an awaited forced refresh,
+  which `NewWorkspaceDialog` needs before it may substitute a model the catalog lacks. It lives here,
+  beside the list, precisely **because `models` is app-wide**: `setModels` (a `model.list` snapshot, whose
+  handler answers from before the detached refresh it starts) **drops** it in the same write, so authority
+  falls with the list any consumer replaced — held as one consumer's local flag it would outlive its
+  subject and confirm a removed model that `create()` then rejects. `beginModelsRefresh` /
+  `finishModelsRefresh(RefreshedModels|null)` are the atomic pair (finish lands the list, sets provenance,
+  and clears the in-flight flag in one write; `null` = failed refresh — keep the current list *and* its
+  provenance, since nothing was installed). Provenance comes from the **host's** `complete`, never from
+  "a reply arrived": the host caps how long it waits for pi, so a reply can carry the registry as it
+  stands while the pass that would settle it still runs — such a list is installed (it *is* current) but
+  drops authority, since concluding a model is gone from it is exactly the mistake. **`dropModelsFreshness`** is the third writer: authority is
+  given up *without* replacing the list, which is what a consumer activating must do **synchronously** —
+  a flag an earlier consumer set can otherwise straddle the activation and let an inherited list pass as
+  this opening's own truth before its own `model.list` reply lands. The transport work lives in
+  `chat/useModelCatalog`, not here (the store→transport edge stays type-only). The **in-app login** state
   **`activeLogin: LoginState | null`** (type from `auth`) is **flat + session-less** (a login runs on the
   Welcome screen before any session exists — routing it through a session runtime would drop its frames):
   the pure **`foldLoginFrame`** reducer lives here (as `reduceExtUi`/`reduceSessionEvent` do — `auth` stays
@@ -126,10 +180,36 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   tick)`** — a `FileTab` carries the `tick` its content was loaded at, so `FilePane` detects staleness
   (`workspaceTick > tab.loadedTick`) across tab switches, and its diff twin
   **`updateDiffTabContent(id, original, modified, tick)`** — a `DiffTab` follows the same staleness
-  contract in `DiffPane`. The transient **`changesRequest`** +
+  contract in `DiffPane`. The transient **`rightTabRequest`** +
+  **`requestRightTab(workspaceId, tab)`** are the ONE intent for "show a right-panel view" (`RightPanelTab`
+  lives here, since the intent does): `RightPanel` watches that single field instead of inferring a flip from
+  each path request, and **consumes** it (`clearRightTabRequest`) — an unconsumed flip would re-fire on every
+  re-activation of the workspace, moving the tab the user has since chosen; which is what lets a divider chip reveal a view while merely expanding its own artifact
+  list — no path picked yet. The transient **`changesRequest`** +
   **`requestChangesView(workspaceId, path)`** are a UI deep-link intent (a chat turn-divider asking the
-  right panel to surface a file in its Changes view — flip to the tab and **highlight the row**, without
-  opening the diff; that waits for an explicit click); the panels watch it, scoped by workspace.
+  right panel to surface a file in its Changes view — highlight the row **and open its diff tab** when
+  the file is in the current diff; a path no longer in the diff degrades to highlight-only); the panels
+  watch it, scoped by workspace. It also carries **`navTick`**, the center-navigation count stamped **at the
+  click**: `ChangesPanel` cannot resolve the reported path until `git.status` lands (and this chip is usually
+  what *reveals* that view, so it is a fresh mount's read), so the click and the open sit a round trip apart.
+  Whatever the user does with the center in that window is the later navigation and wins — an overtaken deep
+  link degrades to the highlight rather than yanking focus off the tab they picked. Without the stamp the
+  arriving open would mark *itself* as the navigation and always win. Its Specs
+  twin **`specRequest`** + **`requestSpecView(workspaceId, path)`** **opens the
+  rendered spec** and needs no stamp: it opens the reported path immediately, with no list to resolve first.
+  Both path intents set `rightTabRequest` **in the same action**: the panel is never asked to surface a path
+  in a view it was not also told to show.
+  Two separate fields, never one: the panel that can show a *gitignored* spec is not the git-derived one, and
+  that confusion is exactly the bug the split fixes. Both path intents are **consumed** by whoever handles
+  them (**`clearSpecRequest`** / **`clearChangesRequest`**) — each opens a center tab, so a replay (a
+  remount, a git-status re-read) would steal the user's tab. **`specsByWorkspace`** +
+  **`setWorkspaceSpecs`** hold each workspace's `spec.graph` snapshot (fetched by `panels`'
+  `useWorkspaceSpecs`, kept fresh on the workspace fs tick) so
+  the chat's turn divider can classify a written path as a spec off the very snapshot the Specs panel
+  renders — one definition of "this file is a spec", via the **`specPathMatcher(nodes)`** selector; dropped
+  with the workspace in `applyWorkspaceRemoved`. `setWorkspaceSpecs` **keeps the previous array identity when
+  the re-read found no change** — most fs ticks touch no spec, and a fresh identity would invalidate
+  `ChatView`'s matcher memo and re-derive every open chat's whole transcript about once a second.
   **`openDoc(tab)`** opens
   (or refreshes + focuses) an ephemeral **`DocTab`** — inline rendered-markdown content, never backed by a
   file on disk (no fs re-read / source toggle) — used for on-demand snapshots like the plan-as-markdown
@@ -156,17 +236,29 @@ paths only; opened by `ChangesPanel`). The transient **`chatLocationRequest`** �
   `SessionRuntime` types. (Chat *render* types + renderers live in the `chat` module.) The pure context
   selectors in `selectors.ts` resolve the active `Workspace`, its owning project id, and the shell's context
   project from those canonical ids and collections; derived active-project state is never stored separately.
-- **Public surface (barrel):** `useAppStore`; `selectActiveWorkspace`,
+- **Public surface (barrel):** `useAppStore`; `selectActiveWorkspace`, `selectWorkspaceById` (the
+  one lookup for "the workspace with this id" — `selectActiveWorkspace` is it applied to the active id, and
+  `openFileInTab`/`ChatView` read the worktree root through it),
   `selectActiveWorkspaceProjectId`, `selectHistoryTarget` + `HistoryTarget` (the shell's `Ctrl+R` routing
   target: the active chat tab, or the workspace's newest chat when a file/diff/doc tab is active),
   `selectContextProject`, `selectSkillsStale`, `selectWorkspaceTick` (the
-  sync-baseline snapshot; + the `isSkillPath` path predicate it shares with `noteFsChanged`); `toast` (the
-  fire-from-anywhere helper),
+  sync-baseline snapshot; + the `isSkillPath` path predicate it shares with `noteFsChanged`);
+  `matchesWorktreePath` (line an agent-reported path — relative or absolute — up against a worktree-relative
+  one; shared by the Changes deep link and the spec classifier. The suffix rule is for **absolute reports
+  only** and is anchored at a separator: unanchored, `/wt/src/a-foo.ts` would match `src/foo.ts`; applied to
+  relative reports, `module-b/SPEC.md` would match the *root* `SPEC.md`) + `specPathMatcher` (is a written
+  path a spec-graph node?);
+  `selectCatalogModel` (a model ref resolved against the **live** `models` list — a session's own `model`
+  is the snapshot it was created with, so host-computed facts on it, today `thinkingLevels`, are read
+  through this; callers fall back to the snapshot when the ref has left the catalog);
+  `toast` (the fire-from-anywhere helper),
   `Toast` (type), `EditorTab` (`FileTab`/`ChatTab`/`DocTab`), `TerminalTab`, `ClosedChat`, `SessionRuntime` +
   `EMPTY_RUNTIME` (ChatView's pre-creation fallback), `ChatLocationRequest` (type), `reduceSessionEvent`.
 - **Allowed deps:** `contracts` (`Project`/`Workspace`/`Model`/`ThinkingLevel`/`SessionStats`/
   `SlashCommandInfo`/`ExtUiRequest`/`LoginPush`/`WorkspaceFsChangedPayload`/`AppConfig`/`ThemeId`;
-  `DEFAULT_CONFIG` for the pre-welcome default; `PiEvent`/`LoginFrame`, **type-only**); `chat`
+  `DEFAULT_CONFIG` for the pre-welcome default; `PiEvent`/`LoginFrame`, **type-only**); `lib` (the shared
+  path + array primitives — `normalizePath`/`isAbsolutePath` for `matchesWorktreePath`, `shallowEqualArrays`
+  for the snapshot-identity guard; a leaf, so the edge adds no cycle); `chat`
   (`ChatTurn`/`ToolResultState`, **type-only**); `auth` (`LoginState`, **type-only**); `transport`
   (`ConnectionStatus`, **type-only**); `zustand`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `panels`/`shell` or transport runtime.

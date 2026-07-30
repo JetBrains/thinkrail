@@ -75,6 +75,17 @@ calls `posthog.init()` **only when `location.hostname === "thinkrail.ai"`** — 
 - The `phc_…` project key is **public/client-safe** by design (meant to ship in browser code) — not a
   secret, so embedding it in the static build is expected.
 
+**Google Tag Manager** (container `GTM-WDW2DZW4`) runs **alongside** PostHog, under the same rules:
+production-only typed loader (`src/gtm.ts`, no pasted minified snippet — same Biome reasoning as
+PostHog), gated on `location.hostname === "thinkrail.ai"` with the pure `gtmConfig(hostname)`
+unit-tested in `src/gtm.test.ts`. GTM lives **only in this module** — it must never appear in
+`apps/web` or anything that ships in user instances (local or cloud).
+- **No `<noscript>` iframe** (deliberate): it is static HTML that can't be hostname-gated, and
+  JS-disabled tracking isn't worth loosening the production-only gate.
+- **Consent caveat:** the site's "no consent banner required" stance rests on cookieless PostHog. GTM
+  itself stores nothing, but tags configured *inside* the container (e.g. GA4) typically set cookies —
+  whoever adds such tags in the GTM UI owns re-opening the consent question.
+
 ## Deploy
 
 `.github/workflows/site.yml` builds (`bun run --filter @thinkrail/website build`) and publishes

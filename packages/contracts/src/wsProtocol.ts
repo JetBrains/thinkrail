@@ -28,6 +28,7 @@ import type {
 	AskUserQuestionResult,
 	ExtUiResponse,
 	ImageContent,
+	RefreshedModels,
 	SessionStats,
 	SessionSummary,
 	SkillCatalogEntry,
@@ -79,7 +80,17 @@ import type {
 // pi-ai `getSupportedThinkingLevels`) so the effort picker offers only what the active model can do;
 // `model.clampThinking` exposes pi's own `clampThinkingLevel` for a `{model, level}` pair, so the
 // pre-session picker adjusts effort the same way `model.default` and live sessions already do.
-export const PROTOCOL_VERSION = 17;
+// v18: the built-in Default workspace — `Workspace.kind: "default"` marks the project folder itself as
+// a per-project, non-removable, non-renamable workspace, ensured lazily and pinned first in
+// `workspace.list`; `workspace.remove` rejects it.
+// v19: `model.refresh` awaits the host's single-flighted catalog refresh and returns the
+// post-refresh list (the picker's freshness affordance) as `RefreshedModels` — `{ models, complete }`,
+// where `complete` says whether the pass actually settled inside the host's budget (only then is the
+// list authoritative) — with `force` bypassing pi's 4h provider freshness throttle.
+// v20: `TodoGroupItem.status` — a group's derived task lifecycle (`pending|active|done`), computed by the
+// host from the steps and **required** on the DTO; clients render it instead of deriving it, so an older
+// host would leave a newer UI bucketing every group as `pending`.
+export const PROTOCOL_VERSION = 20;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -186,6 +197,10 @@ export const WS_METHODS = {
 	sessionList: "session.list",
 	sessionGetMessages: "session.getMessages",
 	modelList: "model.list",
+	// Awaited catalog refresh (the picker's freshness affordance): resolves when the pi.dev catalog pass
+	// lands, returning the post-refresh list. `force` bypasses pi's 4h provider freshness throttle — set
+	// it for a user-initiated refresh, leave it off for an implicit one (picker open).
+	modelRefresh: "model.refresh",
 	modelDefault: "model.default",
 	// pi's own clamp for a `{model, desired-level}` pair. The pre-session picker has no session to ask,
 	// and re-deriving pi's clamp client-side would give that one path a policy of its own.
@@ -434,6 +449,13 @@ export interface WsMethodMap {
 		params: { provider: string; id: string; level: ThinkingLevel };
 		result: { level: ThinkingLevel };
 	};
+	// `model.list` serves the current snapshot (its refresh is detached); this AWAITS the single-flighted
+	// refresh and serves the post-refresh snapshot — refresh failures still resolve with the current list.
+	// `force` bypasses pi's 4h provider freshness throttle, so a user-initiated refresh actually fetches;
+	// without it the pass is a no-op inside that window. The reply carries `complete` because the host caps
+	// the wait: a timed-out pass still answers, but with a list that is current rather than settled — see
+	// `RefreshedModels`.
+	"model.refresh": { params: { force?: boolean }; result: RefreshedModels };
 	// The model/thinking a fresh session resolves to (settings default, else first available) — so the
 	// New-Workspace dialog shows the exact pre-session model, not a placeholder.
 	"model.default": {

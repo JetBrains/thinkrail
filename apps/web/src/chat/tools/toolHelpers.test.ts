@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { languageFromPath, numArg, projectRelativePath, resultText, strArg } from "./toolHelpers";
+import { projectRelativePath } from "@/lib";
+import { languageFromPath, numArg, resultText, strArg } from "./toolHelpers";
 
 test("resultText joins the text blocks of an AgentToolResult-shaped value", () => {
 	expect(

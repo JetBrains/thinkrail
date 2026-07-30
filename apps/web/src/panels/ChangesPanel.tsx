@@ -1,20 +1,25 @@
 import type { GitStatus } from "@thinkrail/contracts";
-import { useEffect, useState } from "react";
-import { useAppStore } from "../store";
+import { useCallback, useEffect, useState } from "react";
+import { matchesWorktreePath, selectWorkspaceNavTick, type TabIntent, useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { ChangesTree } from "./ChangesTree";
 import { diffTabId, isDiffTabId, statusNameClass } from "./changesModel";
 import { DiffStatBadge } from "./DiffStatBadge";
+import { openDiffInTab } from "./openTabs";
 import { ToggleSegment } from "./ToggleSegment";
+import { useWorkspaceRead } from "./useWorkspaceRead";
 
 /**
- * Changes for the active worktree: the changed-file list (vs base). Clicking a file opens (or focuses)
- * its Monaco diff tab in the center — the diff itself renders there (`DiffPane`), not under the list.
+ * Changes for the active worktree: the changed-file list (vs base). Clicking a file **previews** (or
+ * focuses) its Monaco diff tab in the center and a double click keeps it — so scanning a change set reuses
+ * one tab. The diff itself renders there (`DiffPane`), not under the list.
  * Two layouts, switched by the header toggle (`store.changesView`, app-wide): a flat **List** and a
  * folder **Tree** (`ChangesTree`, styled like the All-files tree, with per-file/-folder `+/−` counts).
  * Live: the store's per-workspace fs tick silently re-reads `git.status`; the open diff tabs follow the
- * disk on their own (DiffPane's re-read). A chat deep-link only highlights its row — no tab is opened
- * until the user clicks.
+ * disk on their own (DiffPane's re-read). A chat deep-link highlights its row AND opens the diff tab in
+ * the preview slot — the chip/list-row click is the user's explicit ask to see that change. It degrades to
+ * highlight-only for a path no longer in the diff, and for one the user has navigated past while the list
+ * was still loading (the open loses to the newer navigation, as any pending preview does).
  */
 export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	const [status, setStatus] = useState<GitStatus | null>(null);
@@ -22,69 +27,56 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	const changesRequest = useAppStore((s) => s.changesRequest);
 	const changesView = useAppStore((s) => s.changesView);
 	const setChangesView = useAppStore((s) => s.setChangesView);
-	const fsTick = useAppStore((s) => s.fsChangesByWorkspace[workspaceId]?.tick ?? 0);
 	const activeTabId = useAppStore((s) => s.activeTabByWorkspace[workspaceId] ?? null);
 
-	// Hard reset only on workspace switch — a tick refresh keeps the old list until the re-read lands.
-	// biome-ignore lint/correctness/useExhaustiveDependencies: workspaceId is the trigger (reset-on-switch), not a body input
-	useEffect(() => {
-		setStatus(null);
-		setHighlighted(null);
-	}, [workspaceId]);
+	// The changed-file list, re-read on the workspace's fs tick; a switch clears the list and its deep-link
+	// highlight, a failed re-read keeps the last good list (a failed first read reads as "no changes").
+	useWorkspaceRead(workspaceId, (id) => getTransport().request("git.status", { workspaceId: id }), {
+		onResult: (result) => setStatus(result),
+		onFailure: () => setStatus((prev) => prev ?? { branch: "", changes: [] }),
+		onSwitch: () => {
+			setStatus(null);
+			setHighlighted(null);
+		},
+	});
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: fsTick is the live-refresh trigger, not a body input
-	useEffect(() => {
-		let cancelled = false;
-		getTransport()
-			.request("git.status", { workspaceId })
-			.then((s) => {
-				if (!cancelled) setStatus(s);
-			})
-			.catch(() => {
-				if (!cancelled) setStatus((prev) => prev ?? { branch: "", changes: [] });
-			});
-		return () => {
-			cancelled = true;
-		};
-	}, [workspaceId, fsTick]);
+	// Open (or focus) the file's Monaco diff tab in the center; the row lights up either way. Stable per
+	// workspace so the deep-link effect below can depend on it without re-firing per render.
+	const openDiff = useCallback(
+		(path: string, intent: TabIntent) => {
+			setHighlighted(path);
+			void openDiffInTab(workspaceId, path, intent);
+		},
+		[workspaceId],
+	);
 
-	// Open (or focus) the file's Monaco diff tab in the center.
-	const openDiff = async (path: string) => {
-		setHighlighted(path);
-		const id = diffTabId(workspaceId, path);
-		const store = useAppStore.getState();
-		if ((store.tabsByWorkspace[workspaceId] ?? []).some((t) => t.id === id)) {
-			store.setActiveTab(id);
-			return;
-		}
-		try {
-			const { original, modified } = await getTransport().request("git.diffFile", {
-				workspaceId,
-				path,
-			});
-			const name = path.split("/").pop() || path;
-			// Stamp the workspace's current fs tick: the contents are fresh as of now, so DiffPane's live
-			// re-read only fires for ticks arriving AFTER this open.
-			const loadedTick = useAppStore.getState().fsChangesByWorkspace[workspaceId]?.tick ?? 0;
-			useAppStore
-				.getState()
-				.openTab({ kind: "diff", id, workspaceId, path, name, original, modified, loadedTick });
-		} catch {
-			// a failed read leaves tabs unchanged; the row stays for a retry
-		}
-	};
-
-	// A chat deep-link (turn-divider chip) targeting this workspace: highlight the requested row once the
-	// status list is loaded — the diff opens only on the user's explicit click. Match by suffix so an
-	// absolute pi path still resolves to the relative entry.
+	// A chat deep-link (turn-divider chip / expanded-list row) targeting this workspace: once the status
+	// list is loaded, open the file's diff tab (the click was the explicit ask to see the change) — or, when
+	// the path is no longer in the current diff (a round from days ago), just highlight where it would be.
+	// It opens as a `preview`, like `SpecsPanel`'s chip: following a deep link is browsing, exactly as
+	// clicking the row it points at is, so it belongs in the workspace's reusable slot rather than
+	// accumulating a kept tab per chip.
+	// `matchesWorktreePath` resolves an absolute pi path to its relative entry (the same helper the spec
+	// classifier uses). The request is consumed once handled: it opens a center tab, so a replay on the next
+	// git-status re-read (this effect keys on `status`) would yank the user's tab back.
+	//
+	// The open is gated on the nav count stamped when the chip was clicked. Unlike `SpecsPanel`, which opens
+	// the reported path straight away, this deep link cannot resolve its path until `git.status` lands — and
+	// the chip is usually what reveals this view, so that read is a fresh mount's, not a warm one's. Anything
+	// the user does with the center in that window (picking a tab, opening a chat) is the LATER navigation
+	// and has to win; without the stamp the arriving open would call itself the navigation and steal focus
+	// back. An overtaken deep link degrades to the highlight — the same outcome `openTabs` gives a preview
+	// read that lands after the count moved.
 	useEffect(() => {
 		if (!status || changesRequest?.workspaceId !== workspaceId) return;
 		const want = changesRequest.path;
-		// Anchor the suffix at a path separator so an absolute pi path resolves to its relative entry
-		// without `a-foo.ts` spuriously matching the entry `foo.ts`.
-		const match = status.changes.find((c) => c.path === want || want.endsWith(`/${c.path}`));
-		setHighlighted(match ? match.path : want);
-	}, [changesRequest, status, workspaceId]);
+		const match = status.changes.find((c) => matchesWorktreePath(want, c.path));
+		const overtaken =
+			selectWorkspaceNavTick(useAppStore.getState(), workspaceId) !== changesRequest.navTick;
+		if (match && !overtaken) openDiff(match.path, "preview");
+		else setHighlighted(match ? match.path : want);
+		useAppStore.getState().clearChangesRequest();
+	}, [changesRequest, status, workspaceId, openDiff]);
 
 	// Keep the deep-link highlight from lingering once the user starts navigating diff tabs: clear it as
 	// soon as a diff tab of this workspace is the active center tab, so closing that tab later doesn't
@@ -103,11 +95,11 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 			: highlighted === path;
 
 	if (status === null) {
-		return <p className="px-sm py-xs text-xs text-text-muted">Loading…</p>;
+		return <p className="px-sm py-xs text-xs text-text-text-muted">Loading…</p>;
 	}
 	if (status.changes.length === 0) {
 		return (
-			<p data-testid="changes-empty" className="px-sm py-xs text-xs text-text-muted">
+			<p data-testid="changes-empty" className="px-sm py-xs text-xs text-text-text-muted">
 				No changes in this workspace.
 			</p>
 		);
@@ -119,7 +111,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 				data-testid="changes-view-toggle"
 				role="toolbar"
 				aria-label="Changes view mode"
-				className="flex h-8 shrink-0 items-center justify-end gap-xs border-border-default border-b bg-container-header-bg px-sm"
+				className="flex h-8 shrink-0 items-center justify-end gap-xs border-border-default border-b bg-bg-dark px-sm"
 			>
 				<ToggleSegment
 					testid="changes-toggle-list"
@@ -146,13 +138,14 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 									data-testid="change-item"
 									data-status={change.status}
 									data-active={isActive(change.path) ? true : undefined}
-									onClick={() => void openDiff(change.path)}
+									onClick={() => openDiff(change.path, "preview")}
+									onDoubleClick={() => openDiff(change.path, "keep")}
 									className={`flex w-full items-center gap-sm px-sm py-xs text-left text-sm hover:bg-control-bg-hovered ${
-										isActive(change.path) ? "bg-selection-item-bg-hovered" : ""
+										isActive(change.path) ? "bg-control-bg-hovered" : ""
 									}`}
 								>
 									<span
-										className={`min-w-0 flex-1 truncate ${statusNameClass(change.status) || "text-text-muted"}`}
+										className={`min-w-0 flex-1 truncate ${statusNameClass(change.status) || "text-text-text-muted"}`}
 									>
 										{change.path}
 									</span>

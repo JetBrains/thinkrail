@@ -14,7 +14,9 @@ The single WebSocket client to the host, and its app-wide singleton.
 
 ## Boundary
 
-- **Owns:** `transport.ts` (`WsTransport`: id-correlated `request`, channel `subscribe` with last-value
+- **Owns:** `transport.ts` (`WsTransport`: id-correlated `request` — replies time out after 60s unless the
+  caller raises `timeoutMs`, which a request the host answers *only once a human has* must do (an open
+  folder dialog: a fired timeout also drops the reply that follows it) —, channel `subscribe` with last-value
   replay, reconnect/backoff; `inferUrl` defaults to same-origin; **`httpBase()`** derives the host's HTTP origin
   from the WS `url` — for building host HTTP URLs like the `/files/<workspaceId>/<path>` worktree-file
   endpoint the markdown viewer points relative `<img>`s at, targeting the same host the transport dials); `wireTransport.ts` (`initTransport`/

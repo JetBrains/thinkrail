@@ -33,7 +33,7 @@ export function ThinkingSelector({
 			>
 				<span className="text-text-muted text-xs uppercase tracking-wider">Effort</span>
 				<span className="capitalize">{level}</span>
-				<ChevronDown className="size-3 shrink-0 text-text-muted" />
+				<ChevronDown className="size-3 shrink-0 text-text-text-muted" />
 			</PopoverTrigger>
 			<PopoverContent align="start" container={container} className="w-[160px] p-xs">
 				{levels.map((l) => (

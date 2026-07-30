@@ -24,8 +24,8 @@ a future `packages/chat-ui`). Built-in tool renderers live in the child
 The transcript is pi-canonical turns (`ChatTurn` in `types.ts`: user/assistant are pi messages; `system`,
 `error`, `retry` are web-local notices), but the list renders **derived rows, not raw turns** — folding
 spans assistant-message boundaries (pi emits one assistant message per tool round), so a per-turn item
-model can't group. The pure **`deriveRows(turns, toolResults, isStreaming)`** (`rows.ts`) walks blocks in
-order into rows; `ChatTurnView` dispatches on row kind:
+model can't group. The pure **`deriveRows(turns, toolResults, isStreaming, isSpec?)`** (`rows.ts`) walks
+blocks in order into rows; `ChatTurnView` dispatches on row kind:
 
 - `user` / `system` / `retry` — 1:1 renderers. The retry countdown carries a `source` (`turn` =
   pi `auto_retry_*`; `summarization` = compaction/branch-summary `summarization_retry_*`, pi ≥0.81.1) —
@@ -48,12 +48,35 @@ order into rows; `ChatTurnView` dispatches on row kind:
   Errored *routine* steps get **no special treatment** (deliberate — agents often recover; `ErrorTurn`
   and primary error-auto-expand are the safety nets).
 - `divider` — the round-end summary (`TurnDivider` + pure `turnDivider` deriver), anchored the instant a
-  round ends: elapsed time, tool-call count, a clickable "files changed" chip.
+  round ends: elapsed time, tool-call count, and the round's written files as **two chips split the way the
+  right panel is** — "N specs" and "N files changed". The split is a **partition** (a path lands on exactly
+  one side, never counted twice) computed in the deriver from the injected `isSpec` predicate — the store's
+  `specPathMatcher` over the workspace's spec graph, plus `spec_create`'s target, which is a spec by
+  construction even before the graph snapshot catches up. Why it matters: a spec is often **gitignored**
+  scratch (`.thinkrail/context/`), so counting it as a "changed file" deep-linked the user to a Changes view
+  that structurally cannot show it. Each chip now routes to the panel that owns the artifact.
+  **One artifact → the chip is a direct deep link; several → it is a disclosure** that expands the round's
+  set as a list right here in the transcript (`ArtifactChip` + `ArtifactList`), each row deep-linking one
+  path. The set is kept in the chat rather than framed over the panels on purpose: it belongs to *this
+  round*, while the panels show *now* — a round from days ago would mark rows that have since moved on (or,
+  for Changes, are no longer in the diff at all). It also keeps the count honest: clicking "5 files changed"
+  can never quietly surface just the first one, and the handlers take exactly ONE path, so nothing
+  downstream has to guess which of several the user meant.
+- The two chips are a **switch, not two independent folds**: at most one list is open, choosing the other
+  side replaces it, and re-choosing the open one clears the selection. That invariant is *structural* — the
+  divider stores the **selected key** (`useSelection`, one entry per divider row), so no state exists in
+  which both are expanded. Expanding also **reveals the owning right-panel view** (`onReveal` →
+  `requestRightTab`) without surfacing any path, which is what makes the pair read as switching between
+  Specs and Changes; closing is "never mind" and leaves the panel where the user last sent it.
 
 Row/step ids are stable across streaming snapshots (first step's `toolCallId`, or message-anchored index —
 pi appends, never reorders), so fold state survives re-derivation and virtualization: **every fold surface
-(activity groups, step rows, `ToolCard`) records manual toggles in the shared `foldState` cache**
-(`foldState.ts`, keyed by row/step id — the `AskUserQuestionCard` pattern, see tools/SPEC.md; deliberately
+(activity groups, step rows, `ToolCard`, the divider's multi-artifact chips) records manual toggles in the
+shared `foldState` cache**
+(`foldState.ts`, keyed by row/step id. Two hooks over that module: **`useFold`** for independent booleans,
+and **`useSelection`** for a single-choice group — the divider's chips, which store the *selected key* under
+`${rowId}:artifacts` rather than a boolean per side, so "only one list open" cannot be violated;
+the `AskUserQuestionCard` pattern, see tools/SPEC.md; deliberately
 never evicted — growth is bounded by manual toggles). A manual toggle always wins — over auto-expand
 defaults *and* over a virtualization remount.
 
@@ -114,6 +137,12 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `data-flash` + a `bg-[var(--primary-10)]` transition on the row wrapper, cleared after 1600ms) draw the
   eye to it. Either resolving a row or giving up (toasted as "couldn't locate the message") always clears
   the request — `ChatView` is its only consumer, so an unresolved request must never linger.
+- **Open at the latest message** — the chat `Virtuoso` mounts with `initialTopMostItemIndex = { index:
+  last row, align: "end" }`, so every freshly shown transcript (new tab, reopen from history, auto-open,
+  reload) starts at the bottom instead of mid-scroll; jump-to-message (above) runs post-mount and
+  overrides with its centered `scrollToIndex`. Streaming follow stays `useChatScroll`'s job
+  (pointer-aware `followOutput` — unchanged). E2e: `auto-open-chats.spec.ts` asserts a long seeded
+  transcript's last message is in view without scrolling.
 - **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions, `/`
   commands + template **slot sessions** (Tab-through placeholders — see the Template slots bullet
   below), image paste/drop, `openHistory` on its imperative handle → `onHistoryOpen`) plus its props-driven **slash-completion
@@ -123,14 +152,24 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   template** action on the selected prompt row — see the Save-as-template bullet below, and a
   **zoomed-stage preview pane** + **scope picker** — see the next bullet),
   `ModelSelector` + `ThinkingSelector` (also shared with `NewWorkspaceDialog`;
-  optional `container` prop portals their popovers into a host Dialog; `ThinkingSelector` takes
+  optional `container` prop portals their popovers into a host Dialog; `ModelSelector` takes
+  `refreshing`/`onRefresh(force)` — a footer “Refresh catalog” row that passes **`force: true`** (the
+  user asked, so bypass pi's freshness throttle) and spins while that awaited refresh runs, plus an
+  **unforced** auto-fire on each open, which `useModelCatalog` serves from the host snapshot
+  (`model.list`) rather than the network: an open is incidental, and awaiting a real refresh there would
+  spin the row for as long as the slowest configured provider takes, up to the host's 15s abort, every
+  time. Its trigger stays openable with an **empty** catalog — that is exactly when the Refresh row is
+  the thing to reach for. `ThinkingSelector` takes
   **`levels`** — `WireModel.thinkingLevels` verbatim, the host-computed support truth, already in pi's
   escalation order — and its rows **are** that list. The web keeps no enumeration of the level
   vocabulary: pi owns it, the host projects the per-model slice, and an empty list (no model resolved
   yet) disables the trigger. It holds **no effort policy of its own**: when a held level isn't one the
   held model can run, the consumer asks the host for pi's `clampThinkingLevel` answer
   (`model.clampThinking`) — `model.default` clamps the same way, and a live session gets pi's answer
-  directly via `thinking_level_changed`), `SessionStatsBar`, `ChatHeader`
+  directly via `thinking_level_changed`. Its rows follow the **live catalog** — `ChatView` resolves the
+  session's model through `store`'s `selectCatalogModel` before passing it down, rather than reading the
+  session's own snapshot, so a `model.refresh` that changes what a model supports changes the offered
+  levels with it), `SessionStatsBar`, `ChatHeader`
   (its `left` slot carries the plan strip; its **Skills** button is the presentational **`SkillsButton`**
   primitive — a `BookOpen` pill, badged when a skill dir changed on disk — also shared with
   `NewWorkspaceDialog` so the two triggers cannot drift), `ExtUiDialog`, and **`SkillsDialog`** (the **Skills manager**: a catalog
@@ -420,8 +459,10 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
     — the history path already covers "reuse what I already wrote"; a second entry point for the same
     "type it, then decide to save it" gesture would be redundant surface, not a distinct use case.
   - **Edit-as-file** — project-scoped rows only get an `Open as file` action (`panels/TemplatesSettings.tsx`),
-    reusing `openFile.ts`'s exact `openFileInTab(workspaceId, ".pi/prompts/<name>.md")` (the same action
-    file-tree clicks use), then `store.closeSettings()`. **Global rows are dialog-only** — a deliberate
+    reusing `openTabs.ts`'s exact `openFileInTab(workspaceId, ".pi/prompts/<name>.md", "keep")` (the same
+    action file-tree clicks use) — at the **`keep`** intent deliberately, since an explicit "open in editor"
+    must not land in the preview slot a later browse click would silently replace (see `panels/SPEC.md`'s
+    Preview tabs bullet) — then `store.closeSettings()`. **Global rows are dialog-only** — a deliberate
     asymmetry, not an oversight: file tabs are worktree-scoped (`tabsByWorkspace` is keyed by workspace
     id), but a global template lives under the host's agent dir, outside any worktree, so there's no
     worktree-relative path to open it at.
@@ -437,13 +478,43 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 - **Chat TODO plan** — the chat's `pi-todos` list surfaced **only in the chat** (engine:
   [[module-pi-todos]]; host read/write: [[submodule-server-todos]]):
   `useChatTodos` (the `todo.*` data hook — fetch + live `pi.event` refetch + edits + the add-nudge + the
-  `openMarkdown` snapshot action), `TodoList` (loose items + named groups, add-row + an "open as markdown"
-  button), `planMarkdown` (a pure `plan → markdown` compiler), and `ChatPlan` (`ChatPlanStripContent` +
+  `openMarkdown` snapshot action), `planView` (pure derivations over the DTO: `groupProgress`,
+  `planSummary`, `planGlance`/`sessionGlance`, `planSections`, and `shouldNudgeOnAdd`. A group's *status* is
+  **not** derived here — the host computes it and ships it on `TodoGroupItem.status`, so the rule has one
+  home; a user edit therefore re-reads the plan rather than patching it locally, see `useChatTodos`), `TodoList` (the
+  **status-ordered, group-first** rendering (`planSections`) — group = task: the **in-progress** task
+  (its whole group) on top with **no section header**, then a **To do** section (the pending groups,
+  then the user's pending loose items), then a **"Done" label** at the very bottom under which **each
+  finished task is its own foldable row** (collapsed — title + `N done`) plus the done loose items (not
+  one collapse over all of Done). Finished *steps* stay inline in their (active/pending)
+  group; only whole done tasks move to Done. Each group is a header row (derived status icon + title +
+  done/total badge), the `active` group emphasized; the user's loose items carry a per-row `user` badge
+  (no separate "Your requests" header — they're placed by status). Plus the add-row + an "open as
+  markdown" button. **Status ordering is UI-only** — the agent's `formatPlan` stays plan-order so its
+  "work in order" discipline is unaffected), `planMarkdown` (a pure `plan →
+  markdown` compiler, `## <group> — n/m` sections), and `ChatPlan` (`ChatPlanStripContent` +
   `ChatPlanContent` — a header strip that opens the plan in a `Popover` over the chat; `ChatView` composes
   the `Popover` anchored to the header, so the popup hangs flush under it at the chat's left edge). There
   is no right-panel Todo tab — the plan lives in the conversation. The "open as markdown" action compiles
   the current plan and opens it as an ephemeral `doc` tab (`store.openDoc`), rendered by the panels'
   `MarkdownPreview` — no file is written to disk.
+  **The glance state** keeps the plan honest as the user's status window: `planGlance(isStreaming,
+  askStates)` — derived from session state in `ChatView`, **never stored**, so the agent can't make it
+  lie — renders the `in_progress` step as working (dot), **waiting for your answer**
+  (`MessageCircleQuestion` — the same glyph as the `ask_user_question` card, when the agent stopped with
+  an awaiting question), or **paused — waiting for you**
+  (`CirclePause`, any other stop: turn ended, error). **The header strip reflects the agent's state,
+  not the checkboxes** (`stripStatus`, decoupled from the `in_progress` step): it shows "waiting for
+  your answer" **even when every item is done** (the earlier strip hid it whenever there was no
+  in-progress step, so an agent blocked on a question read as "finished"); "working" while it runs;
+  "paused" only when it stopped with open steps left; and nothing extra on a clean finish (all done,
+  idle). `TodoList` stays props-driven — it receives the resolved glance, never reads the transport.
+  **The add-nudge respects that waiting state.** A user add always stores the item (loose, at the end),
+  but `nudgeAgent` **only wakes the agent when it isn't waiting on the user** (`shouldNudgeOnAdd` —
+  skip iff the glance is `waiting_question`): waking an agent that stopped on an `ask_user_question`
+  would send it off to work the new item and forget to return to its own question, so instead the item
+  just queues and is picked up on the agent's next natural turn (when the user answers, or a later idle
+  nudge). `working` rides a `followUp`, plain `waiting`/idle a `prompt`, unchanged.
 
 ## Boundary
 
@@ -462,17 +533,31 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   **No `index.ts` barrel** — chat pulls **shiki**, so per the code-splitting exception imports stay
   **per-file**; the registry is importable from `chat/toolRegistry` **without** pulling shiki.
 - **Allowed deps:** `contracts` (pi message/content-block types, **type-only**); `store` + `transport`
-  (**`ChatView` + its integration hooks (`useHistorySearch.ts`) + `TemplateEditorDialog.tsx` only** — the
-  app-integration edge); `react-markdown` / `remark-gfm` / `shiki` (via `lib/highlighter`); `mermaid`
+  (**app-integration files only** — a renderer that takes props must never reach for either. Today that
+  is `ChatView.tsx` plus the hooks and dialogs it composes: `useChatTodos.ts`, `useHistorySearch.ts`,
+  `useModelCatalog.ts`, `SkillsDialog.tsx`, `TemplateEditorDialog.tsx`. `useModelCatalog` is the shared
+  models-catalog seam `panels/NewWorkspaceDialog` also imports per-file, so the two pickers cannot
+  drift; on activation it **drops catalog authority synchronously** (a flag an earlier consumer set says
+  nothing about the list this one inherited) and reads `model.list` only when the shared list is **empty** —
+  a read per activation would hang a full host `runtime.refresh()` off every chat-tab switch, and the picker's
+  Refresh row is the currency path. It reports **`fresh`** — read straight off the store's `modelsFresh`,
+  because catalog authority belongs to the **shared list**, not to a consumer: true only for the installed
+  result of an awaited forced refresh **the host reported `complete`** (its wait is capped, so an unsettled
+  pass still answers — with a list to render, not a verdict), and dropped by the next `model.list` install
+  from *any* consumer. `model.list` answers from *before* the
+  detached refresh it triggers, so it is never a basis for concluding a model is gone);
+  `react-markdown` / `remark-gfm` / `shiki` (via `lib/highlighter`); `mermaid`
   (**lazy, `tools/visualize` only**); `react-virtuoso`; `lucide-react`; `components/ui`; `lib`.
 - **Forbidden:** value-importing any `pi` package; a **presentational** renderer importing
-  `store`/`transport` (only `ChatView`, its integration hooks, and `TemplateEditorDialog` may — keep the
-  renderers reusable).
+  `store`/`transport` (only the app-integration files enumerated above may — keep the renderers reusable).
 - **`ChatView`** is the primary app-integration file: wires this session's runtime
-  (`store.sessions[sessionId]`), the transport calls, the `ChatActions` + `AskStates` contexts, and the
-  divider's "files changed" → `requestChangesView` deep link — together with **`useHistorySearch.ts`**
-  (the Ctrl+R history-recall overlay's store/transport edge) and **`TemplateEditorDialog.tsx`** (the
-  shared template save form), the other two integration points. A
+  (`store.sessions[sessionId]`), the transport calls, the `ChatActions` + `AskStates` contexts, the
+  divider's deep links (`onOpenChange` → `requestChangesView`, `onOpenSpec` → `requestSpecView`; each
+  receives the single path the user picked) plus its view switch (`onReveal` → `requestRightTab`), and the
+  `isSpec` classifier it builds from the store's `specsByWorkspace` snapshot (subscribed as the stored array
+  — a stable ref — and memoized into a matcher here, never a fresh Set inside the selector) — together with
+  **`useHistorySearch.ts`** (the Ctrl+R history-recall overlay's store/transport edge) and
+  **`TemplateEditorDialog.tsx`** (the shared template save form), the other two integration points. A
   **rejected** send (`prompt`/`steer`/`followUp`) lands in the chat via the store's `appendErrorTurn` —
   never swallowed; *streaming* faults arrive as pi events instead.
 

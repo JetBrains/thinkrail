@@ -65,7 +65,7 @@ export function ConfirmPopover({
 					</span>
 				</div>
 				{description ? (
-					<p id={descId} className="text-xs text-text-muted">
+					<p id={descId} className="text-xs text-text-text-muted">
 						{description}
 					</p>
 				) : null}

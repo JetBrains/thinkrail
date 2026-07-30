@@ -1,14 +1,14 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
+import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
 import { E2E_DATA_DIR } from "./fixtures/paths";
 import { largeRepetitiveMarkdownEdited } from "./fixtures/repo";
 
 test("Changes tab shows the active worktree's diff and swaps per workspace", async ({ page }) => {
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
-	await expect(page.getByTestId("workspace-item")).toHaveCount(1);
+	await expect(worktreeRows(page)).toHaveCount(1); // the always-present Default is counted separately
 
 	// Edit a tracked file inside the worktree (outside the app), then surface it in the Changes tab.
 	const worktree = join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
@@ -56,7 +56,7 @@ test("Changes tab shows the active worktree's diff and swaps per workspace", asy
 
 	// A fresh second workspace has its own (empty) change set.
 	await createWorkspaceViaDialog(page);
-	await expect(page.getByTestId("workspace-item")).toHaveCount(2);
+	await expect(worktreeRows(page)).toHaveCount(2);
 	await expect(page.getByTestId("changes-empty")).toBeVisible();
 });
 

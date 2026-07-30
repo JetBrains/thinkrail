@@ -50,7 +50,15 @@ export interface Todo {
 	updatedAt: string;
 }
 
-/** A named container of items — the agent's thematic cluster. `id` is store-assigned. */
+/**
+ * A group's derived lifecycle — the "task" reading of a group (group = one user ask, items = steps).
+ * Never stored: computed from the items by {@link groupStatus}, so it cannot drift from the steps.
+ * `active` = some step is in_progress; `done` = every step is done; else `pending`.
+ */
+export const TODO_GROUP_STATUSES = ["pending", "active", "done"] as const;
+export type TodoGroupStatus = (typeof TODO_GROUP_STATUSES)[number];
+
+/** A named container of items — the agent's task (one user ask; items are its steps). `id` is store-assigned. */
 export interface TodoGroup {
 	id: string;
 	title: string;
@@ -75,14 +83,27 @@ export interface TodoFile {
 
 /**
  * The fields a caller may set when adding one item. `origin` defaults to `agent`; `group` (a group
- * title) places it in that named group — created if new — instead of loose.
+ * title) places it in that named group — created if new — instead of loose. `after` (an existing item
+ * id) inserts the new item immediately after that item, **inheriting its lane** (that group, or loose);
+ * when both are given, `after` wins. An unknown `after` id is an error.
  */
 export interface TodoInput {
 	title: string;
 	note?: string;
 	origin?: TodoOrigin;
 	group?: string;
+	after?: string;
 	artifacts?: TodoArtifact[];
+}
+
+/**
+ * What `TodoStore.update` returns: the updated item, plus any items the write auto-demoted back to
+ * `pending` to keep the "exactly one in_progress across the plan" invariant (empty when none) —
+ * surfaced so the change is visible in the transcript, never silent.
+ */
+export interface TodoUpdateResult {
+	todo: Todo;
+	paused: Todo[];
 }
 
 /** The fields a caller may change on an existing item (all optional). */

@@ -10,7 +10,12 @@ import { SettingsDialog } from "../panels/SettingsDialog";
 import { TerminalsPanel } from "../panels/TerminalsPanel";
 import { Toaster } from "../panels/Toaster";
 import { WelcomePanel } from "../panels/WelcomePanel";
-import { selectActiveWorkspace, selectContextProject, useAppStore } from "../store";
+import {
+	isDefaultWorkspace,
+	selectActiveWorkspace,
+	selectContextProject,
+	useAppStore,
+} from "../store";
 import { applyTheme, writeThemeHint } from "../themes";
 import type { ConnectionStatus } from "../transport";
 import { useGlobalHotkeys } from "./useGlobalHotkeys";
@@ -59,11 +64,11 @@ export function Shell() {
 								<span className="hidden min-w-0 items-center gap-xs sm:flex">
 									<span
 										data-testid="scope-project"
-										className="max-w-[160px] truncate text-text-muted"
+										className="max-w-[160px] truncate text-text-text-muted"
 									>
 										{contextProject.name}
 									</span>
-									<ChevronRight className="size-3 shrink-0 text-text-muted" />
+									<ChevronRight className="size-3 shrink-0 text-text-text-muted" />
 								</span>
 								<span
 									data-testid="scope-name"
@@ -73,14 +78,19 @@ export function Shell() {
 								</span>
 							</div>
 							{activeWorkspace ? (
-								<div className="mt-0.5 flex min-w-0 items-center gap-xs font-[var(--font-mono)] text-[10px] text-text-muted">
+								<div className="mt-0.5 flex min-w-0 items-center gap-xs font-[var(--font-mono)] text-[10px] text-text-text-muted">
 									<GitBranch className="size-3 shrink-0" />
 									<span data-testid="scope-branch" className="truncate">
 										{activeWorkspace.branch}
 									</span>
-									<span data-testid="scope-base" className="hidden shrink-0 md:inline">
-										· from {activeWorkspace.baseBranch}
-									</span>
+									{/* The Default workspace has no isolation base — "from <base>" would promise one
+									    (and read "main · from main" on the default branch), so the spine shows only the
+									    live branch, matching the CenterTabs receipt. */}
+									{isDefaultWorkspace(activeWorkspace) ? null : (
+										<span data-testid="scope-base" className="hidden shrink-0 md:inline">
+											· from {activeWorkspace.baseBranch}
+										</span>
+									)}
 								</div>
 							) : null}
 						</div>
@@ -90,7 +100,7 @@ export function Shell() {
 					<span
 						data-testid="connection-status"
 						data-status={status}
-						className="inline-flex items-center gap-sm text-sm text-text-muted"
+						className="inline-flex items-center gap-sm text-sm text-text-text-muted"
 					>
 						<span className={`size-2 rounded-full ${STATUS_DOT[status]}`} />
 						{STATUS_LABEL[status]}

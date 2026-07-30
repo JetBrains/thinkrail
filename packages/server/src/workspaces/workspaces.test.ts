@@ -1,12 +1,23 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	symlinkSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
 	createWorkspace,
+	ensureWorkspaceScratchDir,
 	forgetWorkspace,
+	listWorkspaceRecords,
 	listWorkspaces,
 	reclaimWorktree,
+	refreshDefaultWorkspace,
 	removeWorkspace,
 	renameWorkspace,
 	setWorkspacePublisher,
@@ -25,6 +36,11 @@ const savedDataDir = process.env.THINKRAIL_DATA_DIR;
 function git(cwd: string, ...args: string[]): void {
 	const result = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "ignore", stderr: "ignore" });
 	if (!result.success) throw new Error(`git ${args.join(" ")} failed`);
+}
+
+/** The project's worktree workspaces — `listWorkspaces` minus the always-ensured Default. */
+function worktrees(projectId = "p1") {
+	return listWorkspaces(projectId).filter((w) => w.kind !== "default");
 }
 
 beforeEach(() => {
@@ -102,6 +118,27 @@ test("createWorkspace seeds a self-ignoring .thinkrail/context scratch dir kept 
 	expect(gitOut(ws.worktreePath, "status", "--porcelain")).not.toContain(".thinkrail");
 });
 
+test("ensureWorkspaceScratchDir never clobbers an existing .gitignore (the Default workspace is the user's repo)", async () => {
+	// The Default workspace's scratch dir lives inside the user's own project folder, where a
+	// pre-existing (possibly tracked, possibly customized) .thinkrail/context/.gitignore is theirs.
+	const contextDir = join(repo, ".thinkrail", "context");
+	mkdirSync(contextDir, { recursive: true });
+	const gitignore = join(contextDir, ".gitignore");
+	writeFileSync(gitignore, "# mine\n!keep.md\n");
+
+	const def = (await listWorkspaces("p1")).find((w) => w.kind === "default");
+	expect(def?.worktreePath).toBe(repo);
+	if (def) ensureWorkspaceScratchDir(def);
+
+	// Preserved byte for byte — seeding only fills the gap, it never overwrites.
+	expect(readFileSync(gitignore, "utf8")).toBe("# mine\n!keep.md\n");
+
+	// And with the file absent, seeding still writes the self-ignoring default.
+	rmSync(gitignore);
+	if (def) ensureWorkspaceScratchDir(def);
+	expect(readFileSync(gitignore, "utf8")).toBe("*\n");
+});
+
 test("createWorkspace marks a user-named workspace renamed; an auto-named one stays eligible", async () => {
 	const auto = await createWorkspace("p1");
 	expect(auto.name).toBe("workspace-1");
@@ -127,8 +164,8 @@ test("renameWorkspace moves the branch in place: record + git follow, the worktr
 		"workspace-1",
 	);
 	// And the record on disk agrees.
-	expect(listWorkspaces("p1")[0]?.name).toBe("add login flow");
-	expect(listWorkspaces("p1")[0]?.branch).toBe("add-login-flow");
+	expect(worktrees()[0]?.name).toBe("add login flow");
+	expect(worktrees()[0]?.branch).toBe("add-login-flow");
 });
 
 test("renameWorkspace with lock:false renames name + branch but leaves renamed unset (provisional)", async () => {
@@ -139,7 +176,7 @@ test("renameWorkspace with lock:false renames name + branch but leaves renamed u
 	expect(renamed.branch).toBe("add-login-flow");
 	expect(renamed.renamed).toBeUndefined(); // still eligible for the agentic refinement
 	expect(gitOut(ws.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe("add-login-flow");
-	expect(listWorkspaces("p1")[0]?.renamed).toBeUndefined();
+	expect(worktrees()[0]?.renamed).toBeUndefined();
 
 	// A later default (lock) rename still moves the branch and now locks it.
 	const locked = renameWorkspace(ws.id, "final name");
@@ -197,12 +234,12 @@ test("creating after a rename skips the freed name whose worktree dir is still o
 
 test("forgetWorkspace drops the record + returns it, but leaves the worktree for a separate reclaim", async () => {
 	const ws = await createWorkspace("p1");
-	expect(listWorkspaces("p1")).toHaveLength(1);
+	expect(worktrees()).toHaveLength(1);
 
 	// forgetWorkspace removes the record synchronously (gone from the list) and hands back the record…
 	const forgotten = forgetWorkspace(ws.id);
 	expect(forgotten?.id).toBe(ws.id);
-	expect(listWorkspaces("p1")).toHaveLength(0);
+	expect(worktrees()).toHaveLength(0);
 	// …but the worktree is still registered with git (the slow reclaim runs separately, e.g. backgrounded).
 	const before = Bun.spawnSync(["git", "-C", repo, "worktree", "list"], { stdout: "pipe" });
 	expect(new TextDecoder().decode(before.stdout)).toContain(ws.worktreePath);
@@ -238,20 +275,235 @@ test("a null publisher makes lifecycle emits silent no-ops", async () => {
 	setWorkspacePublisher(null);
 	const ws = await createWorkspace("p1");
 	expect(() => removeWorkspace(ws.id)).not.toThrow();
-	expect(listWorkspaces("p1")).toHaveLength(0);
+	expect(worktrees()).toHaveLength(0);
 });
 
 test("removeWorkspace cleans up even when the worktree dir is already gone", async () => {
 	const ws = await createWorkspace("p1");
-	expect(listWorkspaces("p1")).toHaveLength(1);
+	expect(worktrees()).toHaveLength(1);
 
 	// Simulate drift: delete the worktree dir behind git's back so `git worktree remove` can't.
 	rmSync(ws.worktreePath, { recursive: true, force: true });
 
 	expect(() => removeWorkspace(ws.id)).not.toThrow();
-	expect(listWorkspaces("p1")).toHaveLength(0);
+	expect(worktrees()).toHaveLength(0);
 
 	// git's worktree registration is pruned — no orphan left behind.
 	const list = Bun.spawnSync(["git", "-C", repo, "worktree", "list"], { stdout: "pipe" });
 	expect(new TextDecoder().decode(list.stdout)).not.toContain(ws.worktreePath);
+});
+
+// ─── The built-in Default workspace (kind: "default") ────────────────────────────────────────────
+
+test("listWorkspaces ensures exactly one Default workspace, pinned first, with folder-truth fields", async () => {
+	const first = listWorkspaces("p1");
+	const def = first[0];
+	expect(def?.kind).toBe("default");
+	expect(def?.name).toBe("Default");
+	expect(def?.worktreePath).toBe(repo); // the project folder itself — no worktree was added
+	expect(def?.branch).toBe("main");
+	expect(def?.baseBranch).toBe("main"); // no remote → the repo HEAD branch
+	expect(def?.renamed).toBe(true); // the auto-namer must never touch it
+
+	// Idempotent: repeated lists neither duplicate it nor mint a new id.
+	const again = listWorkspaces("p1");
+	expect(again.filter((w) => w.kind === "default")).toHaveLength(1);
+	expect(again[0]?.id).toBe(def?.id);
+
+	// A later worktree create stays behind the pinned Default.
+	await createWorkspace("p1");
+	const rows = listWorkspaces("p1");
+	expect(rows[0]?.kind).toBe("default");
+	expect(rows).toHaveLength(2);
+});
+
+test("the Default workspace's branch and base refresh from the folder on each list", async () => {
+	// A bare remote with main pushed: the default branch resolves to origin/main from here on.
+	const remoteRepo = join(dataDir, "remote.git");
+	git(repo, "init", "--bare", remoteRepo);
+	git(repo, "remote", "add", "origin", remoteRepo);
+	git(repo, "push", "origin", "main");
+	git(repo, "fetch", "origin");
+
+	expect(listWorkspaces("p1")[0]?.baseBranch).toBe("origin/main");
+
+	// The user switches branches in a terminal — the next list reflects the folder and broadcasts
+	// `updated` so every other client's rail converges (rename uses the same channel).
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((e) => events.push(e));
+	git(repo, "switch", "-c", "feature/x");
+	const def = listWorkspaces("p1")[0];
+	expect(def?.branch).toBe("feature/x");
+	expect(def?.baseBranch).toBe("origin/main");
+	expect(events).toHaveLength(1);
+	expect(events[0]).toMatchObject({
+		kind: "updated",
+		workspace: { branch: "feature/x", kind: "default" },
+	});
+
+	// A drift-free list emits nothing further.
+	listWorkspaces("p1");
+	expect(events).toHaveLength(1);
+
+	// Committed work on the branch counts against the default branch (the Changes semantics).
+	writeFileSync(join(repo, "new.txt"), "one\ntwo\n");
+	git(repo, "add", "-A");
+	git(repo, "commit", "-m", "feature work");
+	expect(listWorkspaces("p1")[0]?.diffStats?.added).toBe(2);
+});
+
+test("refreshDefaultWorkspace re-syncs and publishes Default drift off the list path", async () => {
+	listWorkspaces("p1"); // ensures the Default
+	const def = listWorkspaceRecords("p1").find((w) => w.kind === "default");
+	if (!def) throw new Error("expected the ensured Default workspace");
+	const worktree = await createWorkspace("p1", "Iso");
+
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((e) => events.push(e));
+
+	// No drift → no save, no emit (the live path runs on every worktree-change batch: it must be quiet).
+	refreshDefaultWorkspace(def.id);
+	expect(events).toHaveLength(0);
+
+	// A terminal `git checkout` in the project folder converges without any `workspace.list`.
+	git(repo, "switch", "-c", "feature/live");
+	refreshDefaultWorkspace(def.id);
+	expect(events).toEqual([
+		{ kind: "updated", workspace: { ...def, branch: "feature/live", baseBranch: "feature/live" } },
+	]);
+	expect(listWorkspaceRecords("p1").find((w) => w.id === def.id)?.branch).toBe("feature/live");
+
+	// A worktree workspace's branch is pinned — and an unknown id is a no-op, never a throw.
+	refreshDefaultWorkspace(worktree.id);
+	refreshDefaultWorkspace("nope");
+	expect(events).toHaveLength(1);
+});
+
+test("the Default workspace is non-removable and non-renamable — loud server-side guards", () => {
+	const def = listWorkspaces("p1")[0];
+	if (!def) throw new Error("expected the ensured Default workspace");
+
+	expect(() => forgetWorkspace(def.id)).toThrow("The Default workspace cannot be removed");
+	expect(() => removeWorkspace(def.id)).toThrow("The Default workspace cannot be removed");
+	expect(() => renameWorkspace(def.id, "anything")).toThrow(
+		"The Default workspace cannot be renamed",
+	);
+	// Defense in depth: even handed the record directly, reclaim must never touch the project folder.
+	reclaimWorktree(def);
+	expect(existsSync(join(repo, "README.md"))).toBe(true);
+	// And the record survived every attempt.
+	expect(listWorkspaces("p1")[0]?.id).toBe(def.id);
+});
+
+test("duplicate Default records (out-of-band corruption) collapse to the oldest", () => {
+	const def = listWorkspaces("p1")[0];
+	if (!def) throw new Error("expected the ensured Default workspace");
+
+	// Simulate corruption: a second default record appears behind the module's back.
+	const raw = JSON.parse(readFileSync(join(dataDir, "workspaces.json"), "utf8"));
+	raw.push({ ...def, id: "dupe" });
+	writeFileSync(join(dataDir, "workspaces.json"), JSON.stringify(raw));
+
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((e) => events.push(e));
+	const rows = listWorkspaces("p1");
+	expect(rows.filter((w) => w.kind === "default")).toHaveLength(1);
+	expect(rows[0]?.id).toBe(def.id); // the oldest record wins
+	expect(events).toEqual([{ kind: "removed", projectId: "p1", id: "dupe" }]);
+});
+
+test("a concurrent list's Default-ensure survives createWorkspace's awaited fallback fetch", async () => {
+	// A remote branch that exists on origin but has no local remote-tracking ref — createWorkspace must
+	// take the awaited-fetch fallback path (its only await, where a concurrent write can interleave).
+	const remoteRepo = join(dataDir, "remote.git");
+	git(repo, "init", "--bare", remoteRepo);
+	git(repo, "remote", "add", "origin", remoteRepo);
+	git(repo, "push", "origin", "main");
+	git(repo, "push", "origin", "main:feature-x");
+	git(repo, "update-ref", "-d", "refs/remotes/origin/feature-x"); // push updated it — drop it again
+
+	const pending = createWorkspace("p1", undefined, "origin/feature-x"); // parked at the fetch await
+	const def = listWorkspaces("p1")[0]; // materializes the Default while the create is in flight
+	expect(def?.kind).toBe("default");
+
+	const ws = await pending;
+	expect(ws.baseBranch).toBe("origin/feature-x");
+	// The Default survived with its original id — the create re-read the registry after its await
+	// instead of saving a stale pre-await snapshot (which would re-mint the Default with a new id).
+	const rows = listWorkspaces("p1");
+	expect(rows.filter((w) => w.kind === "default")).toHaveLength(1);
+	expect(rows[0]?.id).toBe(def?.id);
+	expect(rows).toHaveLength(2);
+});
+
+test("ensureWorkspaceScratchDir refuses a missing workspace root instead of resurrecting it", async () => {
+	const ws = await createWorkspace("p1");
+	rmSync(ws.worktreePath, { recursive: true, force: true });
+	// An externally-deleted worktree must fail the session loudly — not come back as an empty non-git
+	// dir the agent then silently works in.
+	expect(() => ensureWorkspaceScratchDir(ws)).toThrow("Workspace directory is missing");
+	expect(existsSync(ws.worktreePath)).toBe(false);
+});
+
+test("ensureWorkspaceScratchDir never follows symlinks — the checkout controls these paths", () => {
+	const def = listWorkspaces("p1")[0];
+	if (!def) throw new Error("expected the ensured Default workspace");
+	const outside = join(dataDir, "outside");
+	mkdirSync(outside);
+
+	// A symlinked owned component is refused outright — nothing is created through the link.
+	symlinkSync(outside, join(repo, ".thinkrail"));
+	expect(() => ensureWorkspaceScratchDir(def)).toThrow("not a real directory");
+	expect(existsSync(join(outside, "context"))).toBe(false);
+	rmSync(join(repo, ".thinkrail"));
+
+	// A dangling symlink where .gitignore belongs is not followed into a file-create: the exclusive
+	// (`wx`) open refuses symlinks, and the resulting EEXIST is treated as "already seeded".
+	mkdirSync(join(repo, ".thinkrail", "context"), { recursive: true });
+	const planted = join(outside, "planted");
+	symlinkSync(planted, join(repo, ".thinkrail", "context", ".gitignore"));
+	expect(() => ensureWorkspaceScratchDir(def)).not.toThrow();
+	expect(existsSync(planted)).toBe(false);
+});
+
+test("reclaimWorktree refuses a record pointing at the project folder even without the kind flag", () => {
+	const def = listWorkspaces("p1")[0];
+	if (!def) throw new Error("expected the ensured Default workspace");
+	// A corrupt/hand-edited registry record: the `kind` marker lost, the path still the user's repo.
+	// The path-equality guard (not just the flag) must keep the rm-fallback off the project folder.
+	const { kind: _dropped, ...corrupt } = def;
+	reclaimWorktree(corrupt);
+	expect(existsSync(join(repo, "README.md"))).toBe(true);
+});
+
+test("an unborn repo's Default never persists the literal HEAD as its base", () => {
+	// A project whose repo has no commits yet (init'd elsewhere — project.init would commit): the
+	// unborn symbolic-ref still names the branch-to-be, and baseBranch must fall back to it.
+	const bare = join(dataDir, "unborn");
+	mkdirSync(bare);
+	git(bare, "init", "-b", "main");
+	const projects = JSON.parse(readFileSync(join(dataDir, "projects.json"), "utf8"));
+	projects.push({ id: "p2", name: "unborn", path: bare, slug: "unborn", lastOpened: 1 });
+	writeFileSync(join(dataDir, "projects.json"), JSON.stringify(projects));
+
+	const def = listWorkspaces("p2")[0];
+	expect(def?.branch).toBe("main");
+	expect(def?.baseBranch).toBe("main"); // not "HEAD"
+});
+
+test("ensuring the Default emits created once; listing never writes into the project folder", () => {
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((e) => events.push(e));
+
+	listWorkspaces("p1");
+	listWorkspaces("p1");
+	expect(events.map((e) => e.kind)).toEqual(["created"]); // once, not per list
+
+	// Listing/entering must not seed the scratch dir in the user's repo — only a chat start does.
+	expect(existsSync(join(repo, ".thinkrail"))).toBe(false);
+	const def = listWorkspaces("p1")[0];
+	if (!def) throw new Error("expected the ensured Default workspace");
+	ensureWorkspaceScratchDir(def); // what the host runs on session.create
+	expect(readFileSync(join(repo, ".thinkrail", "context", ".gitignore"), "utf8")).toBe("*\n");
+	expect(gitOut(repo, "status", "--porcelain")).not.toContain(".thinkrail");
 });

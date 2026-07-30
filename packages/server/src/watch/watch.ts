@@ -25,14 +25,58 @@ const STARTUP_NUDGE_MS = 750;
 const IGNORED_SEGMENTS = new Set([".git", "node_modules"]);
 /** Exact file names that are pure noise. */
 const IGNORED_NAMES = new Set([".DS_Store"]);
+/**
+ * Debounce for the repo-metadata nudge (below). Its own timer, not the file coalescer's: git plumbing
+ * churns in bursts (a checkout, a commit, a rebase), and the nudge is a single "re-read the repo's HEAD"
+ * signal — nothing to accumulate.
+ */
+const REPO_META_DEBOUNCE_MS = 300;
 
 type WatchPublisher = (payload: WorkspaceFsChangedPayload) => void;
+/** The repo-metadata nudge: "this workspace's git metadata moved" — no paths, it isn't file data. */
+type RepoMetaPublisher = (workspaceId: string) => void;
 
 let publish: WatchPublisher | null = null;
+let publishRepoMeta: RepoMetaPublisher | null = null;
 
 /** Host injects the `workspace.fsChanged` publish callback at wiring time (the tee pattern). */
 export function setWatchPublisher(publisher: WatchPublisher | null): void {
 	publish = publisher;
+}
+
+/**
+ * Install (or clear) the **repo-metadata** sink: fired, debounced, whenever a watched worktree's own
+ * `.git` metadata churns (a `git switch`/`commit`/`rebase` in a terminal) — the *only* signal for a
+ * change that leaves the working tree byte-identical, e.g. `git switch -c <new-branch>`, which writes
+ * nothing outside `.git` and would otherwise be invisible to this module. The host uses it to re-sync a
+ * **Default** workspace's folder-truth branch (`refreshDefaultWorkspace`) so every branch label converges
+ * live. Deliberately NOT a client push: `.git` internals are not worktree content, and the app's clients
+ * re-read state through the workspace-lifecycle event the host emits from this.
+ */
+export function setRepoMetaPublisher(publisher: RepoMetaPublisher | null): void {
+	publishRepoMeta = publisher;
+}
+
+/** Whether a watch event belongs to the worktree's own git metadata (its `.git` dir), not its content. */
+function isRepoMetaPath(relPath: string): boolean {
+	return relPath.split(/[\\/]/)[0] === ".git";
+}
+
+/**
+ * (Re)arm the debounced repo-metadata nudge for a workspace — fired once a burst of `.git` writes goes
+ * quiet, and only while this watcher is still the live one (a torn-down watcher never publishes).
+ */
+function scheduleRepoMeta(workspaceId: string, watcher: FSWatcher): void {
+	const entry = entries.get(workspaceId);
+	if (entry && entry.watcher !== watcher) return;
+	if (entry?.metaTimer) clearTimeout(entry.metaTimer);
+	const timer = setTimeout(() => {
+		const live = entries.get(workspaceId);
+		if (!live || live.watcher !== watcher) return;
+		live.metaTimer = null;
+		publishRepoMeta?.(workspaceId);
+	}, REPO_META_DEBOUNCE_MS);
+	if (entry) entry.metaTimer = timer;
 }
 
 /** True when a watch event's relative path should not notify anyone. */
@@ -51,6 +95,8 @@ interface WatchEntry {
 	rootIno: number;
 	/** The pending one-shot startup nudge, cleared on stop so a torn-down watcher never publishes. */
 	nudgeTimer: ReturnType<typeof setTimeout>;
+	/** The pending debounced repo-metadata nudge (see `setRepoMetaPublisher`), cleared on stop. */
+	metaTimer: ReturnType<typeof setTimeout> | null;
 }
 
 const entries = new Map<string, WatchEntry>();
@@ -98,6 +144,10 @@ export function ensureWatch(workspaceId: string): void {
 		const watcher = watch(ws.worktreePath, { recursive: true }, (_event, filename) => {
 			// `filename` can be null (platform edge) → treat as wildcard rather than dropping the signal.
 			const rel = typeof filename === "string" ? filename.replaceAll("\\", "/") : null;
+			// A `.git` write is metadata, not content: it never reaches clients as a path (the blackout below
+			// stands — plumbing storms must not become fsChanged frames), it only nudges the repo-meta sink.
+			// A wildcard (unknown path) nudges both, since it may well *be* a metadata change.
+			if (rel === null || isRepoMetaPath(rel)) scheduleRepoMeta(workspaceId, watcher);
 			if (rel !== null && isIgnoredPath(rel)) return;
 			coalescer.add(rel);
 		});
@@ -112,7 +162,7 @@ export function ensureWatch(workspaceId: string): void {
 				publish?.({ workspaceId, paths: [], truncated: true });
 			}
 		}, STARTUP_NUDGE_MS);
-		entries.set(workspaceId, { watcher, coalescer, rootIno, nudgeTimer });
+		entries.set(workspaceId, { watcher, coalescer, rootIno, nudgeTimer, metaTimer: null });
 	} catch (err) {
 		coalescer.dispose();
 		console.warn(`could not watch worktree for ${workspaceId}: ${err}`);
@@ -125,6 +175,7 @@ export function stopWatch(workspaceId: string): void {
 	if (!entry) return;
 	entries.delete(workspaceId);
 	clearTimeout(entry.nudgeTimer);
+	if (entry.metaTimer) clearTimeout(entry.metaTimer);
 	entry.coalescer.dispose();
 	entry.watcher.close();
 }

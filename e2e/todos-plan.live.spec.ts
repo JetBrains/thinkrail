@@ -16,18 +16,22 @@ test("the agent maintains the chat's TODO plan live, and picks up a user-added i
 	await page
 		.getByTestId("chat-input")
 		.fill(
-			'Use todo_write to create a TODO plan with exactly two items titled "Alpha" and "Beta". Then do no other work — just mark both done with todo_update.',
+			'Use todo_write to create a TODO plan with one group titled "Demo" containing exactly two items titled "Alpha" and "Beta". Then do no other work — just mark both done with todo_update.',
 		);
 	await page.getByTestId("chat-send").click();
 	await waitForDone(page, 150_000);
 
-	// Open the in-chat plan popup; both items show and reach done on their own (live, no manual refresh).
+	// Open the in-chat plan popup. The plan reads as a status flow; once every step is done the whole
+	// task drops under the "Done" label at the bottom as its own foldable row (live, no manual refresh) —
+	// expand that task to see its steps.
 	await page.getByTestId("chat-plan-toggle").click();
 	const popover = page.getByTestId("chat-plan-popover");
+	const doneGroup = popover.getByTestId("todo-group-done").filter({ hasText: "Demo" });
+	await expect(doneGroup).toBeVisible({ timeout: 15_000 });
+	await doneGroup.click();
 	await expect(popover.getByTestId("todo-row").filter({ hasText: "Alpha" })).toHaveAttribute(
 		"data-status",
 		"done",
-		{ timeout: 15_000 },
 	);
 	await expect(popover.getByTestId("todo-row").filter({ hasText: "Beta" })).toHaveAttribute(
 		"data-status",
@@ -35,7 +39,7 @@ test("the agent maintains the chat's TODO plan live, and picks up a user-added i
 	);
 
 	// The user adds an item in the popup. The add nudges the agent (no manual chat message), and the agent
-	// works it to done…
+	// works it to done. A finished user (loose) item lists plainly under the Done label, so it's visible.
 	await popover.getByTestId("todo-add-input").fill("Reply with the single word ACK");
 	await popover.getByTestId("todo-add-input").press("Enter");
 	await expect(popover.getByTestId("todo-row").filter({ hasText: "ACK" })).toHaveAttribute(

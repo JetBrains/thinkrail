@@ -150,6 +150,9 @@ interface ComposerProps {
 	 * below; `ChatView` derives it from `turns` via `turnAnchorText`. */
 	recentPrompts: string[];
 	models: WireModel[];
+	/** Catalog-freshness pass-throughs for the model picker (wired by `useModelCatalog` in ChatView). */
+	modelsRefreshing: boolean;
+	onRefreshModels: (force: boolean) => void;
 	currentModel: WireModel | null;
 	thinkingLevel: ThinkingLevel;
 	onMentionQuery: (query: string | null) => void;
@@ -222,6 +225,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		mentionCandidates,
 		recentPrompts,
 		models,
+		modelsRefreshing,
+		onRefreshModels,
 		currentModel,
 		thinkingLevel,
 		onMentionQuery,
@@ -591,7 +596,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							type="button"
 							data-testid="mention-item"
 							onClick={() => pickMention(candidate)}
-							className={`flex w-full items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs text-left text-sm ${index === mentionActiveIndex ? "bg-selection-item-bg-hovered text-text-default" : "text-text-muted"}`}
+							className={`flex w-full items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs text-left text-sm ${index === mentionActiveIndex ? "bg-selection-item-bg-hovered text-text-default" : "text-text-text-muted"}`}
 						>
 							{candidate.kind === "dir" ? (
 								<FolderIcon className="size-3.5 shrink-0" />
@@ -788,7 +793,13 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				</div>
 				<div className="flex flex-wrap items-center gap-sm">
 					<div className="flex min-w-0 flex-1 flex-wrap items-center gap-sm">
-						<ModelSelector models={models} current={currentModel} onSelect={onSelectModel} />
+						<ModelSelector
+							models={models}
+							current={currentModel}
+							refreshing={modelsRefreshing}
+							onRefresh={onRefreshModels}
+							onSelect={onSelectModel}
+						/>
 						<ThinkingSelector
 							level={thinkingLevel}
 							levels={currentModel?.thinkingLevels ?? []}

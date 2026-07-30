@@ -46,6 +46,22 @@ function resetState(): void {
 	// the blast radius stays that one spec.
 	if (!fixtureRepoHealthy()) seedFixtureRepo();
 
+	// A test can leave the shared repo on another branch (a terminal `git switch` — see
+	// default-workspace.spec.ts). Restore `main` first: a checked-out branch can't be deleted by the sweep
+	// below, so every later test would inherit both the branch and any dirt on it. Guarded by the branch
+	// check — an unconditional `checkout -f` would also resurrect files a test deliberately deleted from
+	// the fixture *on main* (welcome.spec.ts strips the seed specs, then re-opens the project).
+	try {
+		const head = execFileSync("git", ["-C", E2E_FIXTURE_REPO, "symbolic-ref", "--short", "HEAD"], {
+			encoding: "utf8",
+		}).trim();
+		if (head !== "main") {
+			execFileSync("git", ["-C", E2E_FIXTURE_REPO, "checkout", "-f", "main"], { stdio: "ignore" });
+		}
+	} catch {
+		// Unreadable HEAD (detached / mid-operation) — the branch sweep below is the backstop.
+	}
+
 	execFileSync("git", ["-C", E2E_FIXTURE_REPO, "worktree", "prune"]);
 	for (let sweep = 0; sweep < 2; sweep += 1) {
 		const branches = execFileSync(
@@ -107,7 +123,13 @@ export async function createWorkspaceViaDialog(page: Page): Promise<Workspace> {
 	}).toPass({ timeout: 30_000 });
 	await page.getByTestId("create-workspace").click();
 	await expect(dialog).toBeHidden();
-	const created = loadPersistedWorkspaces().find((w) => !before.has(w.id));
+	// Submitting the dialog always lands in a fresh chat (empty prompt → ready composer). Wait for the
+	// auto-opened tab before returning so every caller sees a settled center — the async session.create
+	// must not activate a chat tab mid-assertion later in a spec.
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]').first()).toBeVisible();
+	// Never the Default: the ensure can materialize its record mid-operation, and callers expect the
+	// created *worktree*, not the project folder.
+	const created = loadPersistedWorkspaces().find((w) => !before.has(w.id) && w.kind !== "default");
 	if (!created) throw new Error("Workspace was not persisted after creation");
 	return created;
 }
@@ -119,34 +141,74 @@ export async function openAppFresh(page: Page): Promise<void> {
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 }
 
-/** Reset state, then open the fixture repo as a project via the (stubbed) picker; auto-selects + expands. */
+/**
+ * Reset state, then open the fixture repo as a project via the (stubbed) picker; auto-selects + expands
+ * — landing on the project's **Welcome screen** (the mode fork: isolated worktree vs project folder).
+ * Deliberately no workspace is auto-entered; the rail lists the built-in Default row (the list ensures
+ * it host-side).
+ */
 export async function openFixtureProject(page: Page): Promise<void> {
 	await openAppFresh(page);
 	await page.getByTestId("add-project-menu").click();
 	await page.getByTestId("menu-open-project").click();
 	await expect(page.getByTestId("project-item").first()).toBeVisible();
+	await expect(page.getByTestId("welcome")).toBeVisible();
+	await expect(defaultWorkspaceRow(page)).toBeVisible();
 }
 
 /**
- * Open the fixture project, create a workspace, and start a chat — leaving the composer ready. Creation
- * is retried: when the `@agent` suite shares one host under load, an `add-workspace` click can
+ * From the project's Welcome, take the "Work in project folder" fork card — direct-enters the built-in
+ * Default workspace (the project folder itself) and lands on the IDE surface.
+ */
+export async function enterDefaultWorkspace(page: Page): Promise<void> {
+	await page.getByTestId("welcome-action").filter({ hasText: "Work in project folder" }).click();
+	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("center-tabs")).toBeVisible();
+}
+
+/** The built-in Default workspace's row (exactly one per open project in the rail). */
+export function defaultWorkspaceRow(page: Page): Locator {
+	return page.locator('[data-testid="workspace-item"][data-kind="default"]');
+}
+
+/** The *worktree* workspace rows — every workspace row minus the always-present Default. */
+export function worktreeRows(page: Page): Locator {
+	return page.locator('[data-testid="workspace-item"]:not([data-kind="default"])');
+}
+
+/** The *active* worktree row — the active workspace, excluding the always-present Default. */
+export function activeWorktreeRow(page: Page): Locator {
+	return worktreeRows(page).and(page.locator('[data-active="true"]'));
+}
+
+/** The "project home" gesture: click the project row to deselect the workspace → its Welcome screen. */
+export async function goProjectHome(page: Page): Promise<void> {
+	await page.getByTestId("project-item").first().getByText("sample-project").click();
+	await expect(page.getByTestId("welcome")).toBeVisible();
+}
+
+/**
+ * Open the fixture project and create a workspace — leaving the dialog's auto-opened chat with its
+ * composer ready (submitting the dialog always lands in a fresh chat; no separate start-chat step).
+ * Creation is retried: when the `@agent` suite shares one host under load, an `add-workspace` click can
  * occasionally not register, so we re-click until a workspace becomes active (re-clicking only while none
  * exists, so we never spawn duplicates). Use this for any chat-driven spec.
  */
 export async function openWorkspaceChat(page: Page): Promise<void> {
 	await openFixtureProject(page);
+	// Chat in a *worktree* workspace, never the project-folder Default (the shared fixture repo itself):
+	// agent specs run bash/edits in the workspace cwd, and worktree isolation keeps them off the repo.
 	await expect(async () => {
-		if ((await page.getByTestId("workspace-item").count()) === 0) {
+		if ((await worktreeRows(page).count()) === 0) {
 			await createWorkspaceViaDialog(page);
 		}
-		await expect(page.locator('[data-testid="workspace-item"][data-active="true"]')).toHaveCount(
-			1,
-			{
-				timeout: 5_000,
-			},
-		);
+		// Activate it explicitly (a no-op when the dialog's create already did) — a lost activation would
+		// otherwise never self-heal.
+		await worktreeRows(page).first().getByRole("button").first().click();
+		await expect(activeWorktreeRow(page)).toHaveCount(1, {
+			timeout: 5_000,
+		});
 	}).toPass({ timeout: 30_000 });
-	await page.getByTestId("start-chat").click();
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 	await expect(page.getByTestId("chat-input")).toBeVisible();
 }

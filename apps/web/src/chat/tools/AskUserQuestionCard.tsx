@@ -390,7 +390,10 @@ function SupersededRecord({ questions }: { questions: AskUserQuestionItem[] }) {
 				Superseded — you replied in chat instead of answering these.
 			</div>
 			{questions.map((q) => (
-				<div key={q.question} className="pl-[calc(0.875rem+var(--spacing-sm))] text-text-muted">
+				<div
+					key={q.question}
+					className="pl-[calc(0.875rem+var(--spacing-sm))] text-text-text-muted"
+				>
 					{q.question}
 				</div>
 			))}
@@ -538,7 +541,7 @@ function QuestionBody({
 	return (
 		<div className="flex flex-col gap-md">
 			<div className="flex items-start gap-sm">
-				<MessageCircleQuestion className="mt-0.5 size-4 shrink-0 text-text-muted" />
+				<MessageCircleQuestion className="mt-0.5 size-4 shrink-0 text-text-text-muted" />
 				<p data-testid="ask-question-text" className="font-semibold text-md text-text-default">
 					{question.question}
 				</p>
@@ -577,7 +580,7 @@ function QuestionBody({
 												type="button"
 												data-testid="ask-note-toggle"
 												onClick={() => onToggleNote(opt.label)}
-												className="flex items-center gap-xs text-text-muted text-xs hover:text-text-muted"
+												className="flex items-center gap-xs text-text-muted text-xs hover:text-text-text-muted"
 											>
 												<Pencil className="size-3" />
 												{state.notes[opt.label]?.trim() ? "Edit note" : "Add note"}
@@ -724,7 +727,7 @@ function OtherOptionRow({
 				placeholder="type your own answer…"
 				onFocus={onActivate}
 				onChange={(e) => onText(e.target.value)}
-				className="min-w-0 flex-1 border-none bg-transparent text-sm text-text-default outline-none placeholder:text-text-muted"
+				className="min-w-0 flex-1 border-none bg-transparent text-sm text-text-default outline-none placeholder:text-text-text-muted"
 			/>
 		</label>
 	);
@@ -805,7 +808,7 @@ function ReviewView({
 	return (
 		<div className="flex flex-col gap-sm">
 			<div className="flex items-start gap-sm">
-				<MessageCircleQuestion className="mt-0.5 size-4 shrink-0 text-text-muted" />
+				<MessageCircleQuestion className="mt-0.5 size-4 shrink-0 text-text-text-muted" />
 				<p className="font-semibold text-md text-text-default">Review your answers</p>
 			</div>
 			<ul className="flex flex-col gap-md">
@@ -882,10 +885,13 @@ function QuestionRecap({
 	return (
 		<div className="flex flex-col gap-xs">
 			<div className="flex items-start gap-sm">
-				<MessageCircleQuestion className="mt-0.5 size-3.5 shrink-0 text-text-muted" />
+				<MessageCircleQuestion className="mt-0.5 size-3.5 shrink-0 text-text-text-muted" />
 				<p
 					data-testid={reviewing ? "ask-review-question" : undefined}
-					className={cn("text-sm", reviewing ? "font-medium text-text-default" : "text-text-muted")}
+					className={cn(
+						"text-sm",
+						reviewing ? "font-medium text-text-default" : "text-text-text-muted",
+					)}
 				>
 					{question.question}
 				</p>
@@ -902,7 +908,7 @@ function QuestionRecap({
 									data-selected={isSel}
 									className={cn(
 										"flex items-center gap-xs text-sm",
-										isSel ? "text-text-default" : "text-text-muted",
+										isSel ? "text-text-default" : "text-text-text-muted",
 									)}
 								>
 									{isSel ? (

@@ -20,7 +20,6 @@ test("skills badge: flags a worktree skill change, clears on reload, and survive
 	const worktree = workspace.worktreePath;
 
 	// Chat A — its header carries the Skills trigger. No prompt sent, so it never streams (Reload stays enabled).
-	await page.getByTestId("start-chat").click();
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 	const skillsBtn = page.getByTestId("open-skills");
 	await expect(skillsBtn).toBeVisible();

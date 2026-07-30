@@ -11,7 +11,16 @@ import { ArrowDown } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { Popover, PopoverAnchor, PopoverTrigger } from "@/components/ui/popover";
-import { EMPTY_RUNTIME, SettingsSection, selectSkillsStale, toast, useAppStore } from "@/store";
+import {
+	EMPTY_RUNTIME,
+	SettingsSection,
+	selectCatalogModel,
+	selectSkillsStale,
+	selectWorkspaceById,
+	specPathMatcher,
+	toast,
+	useAppStore,
+} from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { AskStatesContext, deriveAskStates } from "./askState";
 import { type ChatActions, ChatActionsContext } from "./ChatActions";
@@ -25,6 +34,7 @@ import {
 } from "./Composer";
 import { ExtUiDialog } from "./ExtUiDialog";
 import { HistoryOverlay } from "./HistoryOverlay";
+import { planGlance } from "./planView";
 import { type ChatRow, deriveRows, rowIndexForTurn } from "./rows";
 import { SkillsDialog } from "./SkillsDialog";
 import { StreamIndicator, type StreamStatus, streamStatus } from "./StreamIndicator";
@@ -32,6 +42,7 @@ import { parseTemplateSlots } from "./slotSession";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
 import { shouldApplyTemplatePick } from "./templatePick";
 import { stripFrontmatter } from "./templateText";
+import { useModelCatalog } from "./useModelCatalog";
 import "./tools/register"; // side-effect: register the built-in pi tool renderers (bash/read/edit/write)
 import { ChatTurnView } from "./turns";
 import type { ChatTurn } from "./types";
@@ -116,7 +127,7 @@ export default function ChatView({
 	// This tab's runtime — zustand only re-renders when *this* session's slice ref changes, so a background
 	// chat streaming into its own runtime never re-renders the foreground one.
 	const runtime = useAppStore((s) => s.sessions[sessionId]) ?? EMPTY_RUNTIME;
-	const models = useAppStore((s) => s.models);
+	const { models, refreshing: modelsRefreshing, refresh: onRefreshModels } = useModelCatalog();
 	// This chat's owning project (workspaces are keyed by project) — for the Skills manager's trust ops
 	// and the "project" / "all" history-search scopes.
 	const projectId = useAppStore(
@@ -130,13 +141,9 @@ export default function ChatView({
 	// reload. Store-derived per session, so the badge survives tab-switch remounts (a fresh ChatView reads
 	// the same store state) and a reload clears only this chat (see selectSkillsStale / markSkillsSynced).
 	const skillsStale = useAppStore((s) => selectSkillsStale(s, workspaceId, sessionId));
-	const workspaceRoot = useAppStore((s) => {
-		for (const workspaces of Object.values(s.workspaces)) {
-			const workspace = workspaces.find((w) => w.id === workspaceId);
-			if (workspace) return workspace.worktreePath;
-		}
-		return undefined;
-	});
+	const workspaceRoot = useAppStore(
+		(s) => selectWorkspaceById(s, workspaceId)?.worktreePath ?? undefined,
+	);
 	// The raw record is a stable reference from zustand's perspective (unlike a fresh object/array
 	// literal, which would re-render this view on every unrelated store update); the workspaceId →
 	// display-name map the history overlay's cross-workspace chip needs is derived below in a `useMemo`.
@@ -148,6 +155,12 @@ export default function ChatView({
 		}
 		return map;
 	}, [workspaces]);
+	// The workspace's spec graph (fetched + kept fresh by the Specs panel): it tells the turn divider which
+	// of the round's written files are specs, so the two chips deep-link to the panel that can show them.
+	// Subscribed as the stored array (a stable ref) and turned into a matcher here — never a new Set/closure
+	// inside the selector, which would re-render on every store change.
+	const specNodes = useAppStore((s) => s.specsByWorkspace[workspaceId]);
+	const isSpec = useMemo(() => specPathMatcher(specNodes ?? []), [specNodes]);
 	const {
 		turns,
 		toolResults,
@@ -159,16 +172,22 @@ export default function ChatView({
 		pendingExtUi,
 		extUiStatus,
 		extUiWidget,
-		model: currentModel,
+		model: sessionModel,
 		thinkingLevel,
 	} = runtime;
+
+	// The session's `model` is the snapshot it was created with; `models` is refreshed live. Show the
+	// catalog's entry for the same `{provider,id}` so host-computed facts on it — today `thinkingLevels`,
+	// which decides the effort picker's disabled rows — track a `model.refresh`. Falls back to the
+	// snapshot while the ref is missing from the catalog (not yet loaded, or dropped upstream).
+	const currentModel = selectCatalogModel(models, sessionModel) ?? sessionModel;
 
 	// The transcript renders derived rows, not raw turns: routine activity folds across assistant-message
 	// boundaries, so the row model is re-derived per snapshot (pure + memoized; stable row ids keep
 	// Virtuoso keys and fold state steady while streaming).
 	const rows = useMemo(
-		() => deriveRows(turns, toolResults, isStreaming),
-		[turns, toolResults, isStreaming],
+		() => deriveRows(turns, toolResults, isStreaming, isSpec),
+		[turns, toolResults, isStreaming, isSpec],
 	);
 
 	// The streaming loader lives as the list footer (so it forms where the next message will). Suppressed
@@ -234,15 +253,6 @@ export default function ChatView({
 	// effect's jsdoc).
 	const chatLocationRequest = useAppStore((s) => s.chatLocationRequest);
 	const [flashRowId, setFlashRowId] = useState<string | null>(null);
-
-	// Models are global to the host — fetch once, then every chat's picker shares them.
-	useEffect(() => {
-		if (models.length > 0) return;
-		getTransport()
-			.request("model.list", {})
-			.then((m) => useAppStore.getState().setModels(m))
-			.catch(() => {});
-	}, [models.length]);
 
 	// The skill catalog is per-session; load it when the chat opens.
 	useEffect(() => {
@@ -502,14 +512,33 @@ export default function ChatView({
 		return () => clearTimeout(timer);
 	}, [flashRowId]);
 
-	// A turn-divider's "files changed" chip → deep-link the right panel to the first changed file (flip to
-	// Changes + highlight its row; the diff opens only on an explicit click). This is the one chat touch of
-	// the store outside the renderers, kept here in the integration layer.
-	const onOpenChanges = useCallback(
-		(paths: string[]) => {
-			const path = paths[0];
-			if (!path) return;
+	// A turn-divider's "files changed" chip → deep-link the changed file (flip to Changes, highlight its
+	// row, and open its diff tab — handled and consumed by ChangesPanel). The divider hands over exactly one path
+	// — the round's only artifact, or the row the user picked from the expanded list — so nothing here has to
+	// guess which of several the user meant. These are the chat's touches of the store outside the renderers,
+	// kept here in the integration layer.
+	const onOpenChange = useCallback(
+		(path: string) => {
 			useAppStore.getState().requestChangesView(workspaceId, path);
+		},
+		[workspaceId],
+	);
+
+	// Its "N specs" twin → flip to Specs and open the rendered spec. Specs get the stronger treatment (open,
+	// not just highlight) because a spec doc has nothing to preview short of its content — and because a spec
+	// is often gitignored scratch, which the git-derived Changes view can't show at all.
+	const onOpenSpec = useCallback(
+		(path: string) => {
+			useAppStore.getState().requestSpecView(workspaceId, path);
+		},
+		[workspaceId],
+	);
+
+	// A chip expanding its artifact list asks for the owning view alongside — no path, so nothing is opened
+	// or highlighted: the user is choosing which side of the round to look at, and the panel follows.
+	const onReveal = useCallback(
+		(tab: "specs" | "changes") => {
+			useAppStore.getState().requestRightTab(workspaceId, tab);
 		},
 		[workspaceId],
 	);
@@ -519,6 +548,14 @@ export default function ChatView({
 	const askStates = useMemo(
 		() => deriveAskStates(runtime.turns, runtime.askAnswers),
 		[runtime.turns, runtime.askAnswers],
+	);
+
+	// The plan's glance state — "working or waiting on you?" — derived from session state (streaming +
+	// any awaiting questionnaire), never stored, so the TODO strip can't claim "in work" while the
+	// system waits (see planView.ts).
+	const planGlanceState = useMemo(
+		() => planGlance(isStreaming, askStates),
+		[isStreaming, askStates],
 	);
 
 	// Interactive tool renderers reach the agent through this context (kept out of the presentational
@@ -566,7 +603,11 @@ export default function ChatView({
 													data-open={planOpen}
 													className="flex min-w-0 items-center gap-xs text-text-muted text-xs hover:text-text-default"
 												>
-													<ChatPlanStripContent plan={plan} open={planOpen} />
+													<ChatPlanStripContent
+														plan={plan}
+														open={planOpen}
+														glance={planGlanceState}
+													/>
 												</button>
 											</PopoverTrigger>
 										) : null
@@ -576,7 +617,7 @@ export default function ChatView({
 								/>
 							</div>
 						</PopoverAnchor>
-						<ChatPlanContent plan={plan} />
+						<ChatPlanContent plan={plan} glance={planGlanceState} />
 					</Popover>
 					<div
 						data-testid="chat-scroll"
@@ -589,6 +630,9 @@ export default function ChatView({
 							context={listContext}
 							components={CHAT_LIST_COMPONENTS}
 							className="min-h-0 flex-1"
+							// Any chat opens at the latest message (a fresh mount would otherwise land mid-transcript);
+							// the jump-to-message deep link overrides post-mount with its centered scrollToIndex.
+							initialTopMostItemIndex={{ index: Math.max(rows.length - 1, 0), align: "end" }}
 							followOutput={followOutput}
 							atBottomStateChange={handleAtBottom}
 							atBottomThreshold={50}
@@ -602,7 +646,9 @@ export default function ChatView({
 									<ChatTurnView
 										row={row}
 										workspaceRoot={workspaceRoot}
-										onOpenChanges={onOpenChanges}
+										onOpenSpec={onOpenSpec}
+										onOpenChange={onOpenChange}
+										onReveal={onReveal}
 									/>
 								</div>
 							)}
@@ -649,6 +695,8 @@ export default function ChatView({
 							mentionCandidates={mentionCandidates}
 							recentPrompts={recentPrompts}
 							models={models}
+							modelsRefreshing={modelsRefreshing}
+							onRefreshModels={onRefreshModels}
 							currentModel={currentModel}
 							thinkingLevel={thinkingLevel}
 							onMentionQuery={onMentionQuery}

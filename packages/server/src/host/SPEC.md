@@ -22,7 +22,11 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `index.html` fallback, the `server.welcome` push, `terminal.data` topic subscribe + `server.publish`,
   the **`provider.login`** channel publish (the `auth` module's session-less login-frame bridge, wired like
   `pi.extensionUi`) and the `provider.*` login handlers, the **`watch` wiring** (inject the
-  `workspace.fsChanged` publish callback into `watch`; call `ensureWatch(workspaceId)` from the
+  `workspace.fsChanged` publish callback into `watch`, plus its **repo-metadata** callback
+  (`setRepoMetaPublisher` → `refreshDefaultWorkspace`) so a `.git` write in a watched worktree **re-syncs a
+  Default workspace's folder-truth branch** — host-mediated, since `watch` has no `workspaces` edge, and
+  self-publishing through the workspace-lifecycle tee; call
+  `ensureWatch(workspaceId)` from the
   workspace-read handlers (`fs.*`, `git.status`/`git.diffFile`, `spec.graph`) — a read is the "a client is
   looking" signal; `stopWatch` in `workspace.remove`'s fast path beside `evictSpecIndex`;
   `stopAllWatches()` in `stop()`), `cancelAllLogins()` in `stop()` before the socket close,
@@ -30,7 +34,12 @@ channel fan-out, and the process-boot wrapper both launchers share.
   **analytics wiring** (`initializeAnalytics` at boot from the launcher-threaded `analytics` option —
   keys/channel/mute + the initial `getConfig().analyticsEnabled`; a `setAnalyticsSending` sync teed
   off the settings publisher; a fire-and-forget `shutdownAnalytics()` in `stop()` — best-effort queue
-  drain; and every `track()` call site: `chat_started` in `session.create`, `provider_login` from the
+  drain; and every `track()` call site: `chat_started` in `session.create`, `message_sent` (via the
+  local `trackSend(mode, text)`) after an **accepted** `session.prompt`/`session.steer`/`session.followUp`
+  (`prompt`/`steer`/`follow_up`; skipped when contracts' `isControlMessage(text)` — the client's TODO
+  wake-nudge rides the same methods and is not a user message; `session.answerQuestion` is a tool reply,
+  not a message either),
+  `provider_login` from the
   login-publisher tee's terminal `success` frames with the method (`oauth`/`api-key`) looked up from
   `loginAnalytics.ts` — the loginId→method map the `provider.loginStart` handler records (and
   `provider.loginCancel` clears; an unknown loginId tracks nothing, fails closed) — +
@@ -45,7 +54,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   would strand mid-tool transcripts on the restart repair); `handlers.ts` (the WS method→handler registry, including the **Skills-manager set**:
   `skill.list` / `skills.state` / `project.skills` build the admission context from `projects` (+ the
   workspace's `skillOverrides` when workspace-scoped) and pass it into agent's `listSkillCommands`/
-  `listSkillCatalog`; `project.setTrust` acknowledges the aliases present at grant via agent's
+  `listSkillCatalog`; `session.list` decorates agent's `listSessions` summaries with
+  `openTodos: countOpenTodos(…)` per session (a host-only composition of `agent` + `todos` — `agent`
+  stays todos-free; a failed count omits the field, never fails the list); `project.setTrust`
+  acknowledges the aliases present at grant via agent's
   `listProjectAliasSkillNames`; `project.acknowledgeSkills` / `project.setSkillEnabled` /
   `project.setGroupEnabled` / `project.aliasSkills` / `workspace.setSkillOverride` mutate/read the persisted
   toggles; `session.reloadResources` re-scans a running session — the composition stays here; `agent` never
@@ -81,7 +93,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
     **in-flight set** (independent of the naive one — the two passes can overlap on a short turn) dedupes
     concurrent turns/sessions.
   - The **workspace-archive teardown** — the other composition of `agent` + `terminal` + `workspaces` only
-    the host may make. `workspace.remove` reaps *everything* rooted in the worktree but is **non-blocking**:
+    the host may make. `workspace.remove` **rejects a `kind: "default"` workspace loudly, before any
+    side-effect** (the record's `worktreePath` is the project folder — the reclaim's `rm -rf` fallback
+    must never see it; the UI hides Remove, this guard is for buggy/rogue clients). Otherwise it
+    reaps *everything* rooted in the worktree but is **non-blocking**:
     it does the fast part synchronously — `forgetWorkspace` (drop the record → gone from `workspace.list`
     immediately) → `evictSpecIndex` (drop the spec cache) → `closeWorkspaceTerminals` (kill its PTYs) —
     **acks**, then runs the slow reclamation in the **background** (`archiveTeardown`, fire-and-forget):
@@ -92,6 +107,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
     a failed background teardown is `console.warn`ed, never thrown into the void (nothing awaits it), like
     the auto-rename tee. **Archive keeps the branch but not the chat:** the git branch stays (code is
     recoverable), yet chat history is purged with the worktree — a deliberate scope choice, not a leak.
+- **Scratch-dir seeding on chat start:** the `session.create` handler calls `workspaces`'
+  `ensureWorkspaceScratchDir` before creating the session — the Default workspace's gitignored
+  `.thinkrail/context/` lands in the user's repo only when a chat actually starts there (and a
+  worktree's deleted scratch dir self-heals). Host-composed — no new module edges.
 - **Workspace lifecycle fan-out:** `createServer` installs the `workspaces` module's publisher
   (`setWorkspacePublisher`), mapping each domain event `kind` → its `WS_CHANNELS.workspace*` channel
   (`created`/`updated` → the full record; `removed` → `{ projectId, id }`) and `server.publish`ing it. This

@@ -22,10 +22,10 @@ function CommandInput({
 }: React.ComponentProps<typeof CommandPrimitive.Input>) {
 	return (
 		<div className="flex items-center gap-sm border-border-muted border-b px-sm">
-			<Search className="size-3.5 shrink-0 text-text-muted" />
+			<Search className="size-3.5 shrink-0 text-text-text-muted" />
 			<CommandPrimitive.Input
 				className={cn(
-					"h-9 flex-1 bg-transparent text-sm text-text-default outline-none placeholder:text-text-muted",
+					"h-9 flex-1 bg-transparent text-sm text-text-default outline-none placeholder:text-text-text-muted",
 					className,
 				)}
 				{...props}

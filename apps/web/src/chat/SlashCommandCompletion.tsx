@@ -157,7 +157,7 @@ export function SlashCommandMenu({
 						"flex w-full items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs text-left text-sm",
 						index === activeIndex
 							? "bg-selection-item-bg-hovered text-text-default"
-							: "text-text-muted",
+							: "text-text-text-muted",
 					)}
 				>
 					<span className="font-mono text-text-default">/{command.name}</span>

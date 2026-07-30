@@ -46,9 +46,11 @@ set "THINKRAIL_VERSION=0.2.0" && powershell -c "irm https://raw.githubuserconten
 ```
 
 Then run `thinkrail` (add a git repo path to open it as a project: `thinkrail ~/code/my-repo`). To update
-later, run `thinkrail update` (re-installs the latest build for your channel; macOS/Linux only — on
-Windows, re-run the installer). `thinkrail --help` lists the flags; `thinkrail --version` prints the
-build.
+later, run `thinkrail update` on any platform — it re-runs the installer for your channel (on Windows it
+replaces the running `thinkrail.exe` in place). To remove it, run `thinkrail uninstall`: it takes out the
+executable, the PATH entry the installer added, and the install metadata, and asks whether to delete your
+`~/.thinkrail` app state (kept by default — pass `--remove-data` to delete it, `-y` to skip the
+questions). `thinkrail --help` lists the flags; `thinkrail --version` prints the build.
 
 **Prebuilt platforms:** macOS (Apple Silicon), Linux arm64 + x64, Windows x64 (`.exe`). Intel macOS isn't
 prebuilt — use Apple Silicon or build from source.
@@ -156,7 +158,8 @@ stored in `~/.thinkrail/installation.json`; it never leaves the host except as t
 `distinct_id` on events. Events additionally carry only low-cardinality, non-personal metadata: app
 version, release channel (`stable`/`nightly`), OS (`macos`/`linux`/`windows`), architecture
 (`x64`/`arm64`), and — on chat/login events — the model/provider name **only if it is a pi built-in**
-(anything user-configured is reported as `custom`). Events are sent **personless** (no person
+(anything user-configured is reported as `custom`). Message activity is counted as a bare send event
+carrying only *how* it was sent (`prompt`/`steer`/`follow_up`) — never the message itself. Events are sent **personless** (no person
 profiles are ever built) and with **GeoIP lookup disabled**.
 
 **Never collected:** file paths or names, prompts, code, chat transcripts, API keys, token counts,

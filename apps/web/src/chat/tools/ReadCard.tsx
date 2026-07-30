@@ -1,8 +1,9 @@
 import { FileText } from "lucide-react";
+import { projectRelativePath } from "@/lib";
 import type { ToolRenderProps } from "../toolRegistry";
 import { CodeBlock } from "./CodeBlock";
 import { Collapsible, countLines } from "./Collapsible";
-import { languageFromPath, numArg, projectRelativePath, resultText, strArg } from "./toolHelpers";
+import { languageFromPath, numArg, resultText, strArg } from "./toolHelpers";
 
 /** Body for the `read` tool: file path + optional line range + highlighted content. */
 export function ReadCard({ args, result, status, workspaceRoot }: ToolRenderProps) {
@@ -23,11 +24,11 @@ export function ReadCard({ args, result, status, workspaceRoot }: ToolRenderProp
 	return (
 		<div data-testid="tool-read" className="flex flex-col gap-xs">
 			<div className="flex items-center gap-xs text-xs">
-				<FileText className="size-3.5 shrink-0 text-text-muted" />
+				<FileText className="size-3.5 shrink-0 text-text-text-muted" />
 				<span className="truncate text-primary" title={path}>
 					{displayPath}
 				</span>
-				{range ? <span className="shrink-0 text-text-muted">{range}</span> : null}
+				{range ? <span className="shrink-0 text-text-text-muted">{range}</span> : null}
 			</div>
 			{status === "running" ? (
 				<span className="text-text-muted text-xs">Reading…</span>

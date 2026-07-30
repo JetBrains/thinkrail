@@ -1,7 +1,8 @@
 import { Pencil } from "lucide-react";
+import { projectRelativePath } from "@/lib";
 import type { ToolRenderProps } from "../toolRegistry";
 import { Collapsible } from "./Collapsible";
-import { projectRelativePath, resultText, strArg } from "./toolHelpers";
+import { resultText, strArg } from "./toolHelpers";
 
 /** Body for the `edit` tool: a simple removed/added line diff. */
 export function EditCard({ args, result, status, workspaceRoot }: ToolRenderProps) {
@@ -68,7 +69,7 @@ function EditHeader({ path, workspaceRoot }: { path: string; workspaceRoot?: str
 			<span className="truncate text-text-default" title={path}>
 				{displayPath}
 			</span>
-			<span className="shrink-0 text-text-muted">edited</span>
+			<span className="shrink-0 text-text-text-muted">edited</span>
 		</div>
 	);
 }

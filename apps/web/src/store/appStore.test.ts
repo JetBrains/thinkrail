@@ -1,7 +1,14 @@
 import { beforeEach, expect, test } from "bun:test";
-import type { ExtUiRequest, PiEvent, SessionSummary, Workspace } from "@thinkrail/contracts";
-import { type SessionRuntime, toast, useAppStore } from "./appStore";
-import { selectSkillsStale, selectWorkspaceTick } from "./selectors";
+import type {
+	ExtUiRequest,
+	PiEvent,
+	SessionSummary,
+	SpecGraphNode,
+	WireModel,
+	Workspace,
+} from "@thinkrail/contracts";
+import { type FileTab, type SessionRuntime, toast, useAppStore } from "./appStore";
+import { selectSkillsStale, selectWorkspaceNavTick, selectWorkspaceTick } from "./selectors";
 
 // Event fixtures — the reducer only reads the fields below, so casting minimal objects is safe here.
 const agentStart = { type: "agent_start" } as unknown as PiEvent;
@@ -61,6 +68,8 @@ beforeEach(() => {
 		sessions: {},
 		tabsByWorkspace: {},
 		activeTabByWorkspace: {},
+		previewTabByWorkspace: {},
+		navTickByWorkspace: {},
 		closedChatsByWorkspace: {},
 		fsChangesByWorkspace: {},
 		skillChangeTickByWorkspace: {},
@@ -716,6 +725,174 @@ test("applyWorkspaceRemoved on a non-active workspace drops the row silently (no
 	expect(s.toasts).toHaveLength(0);
 });
 
+test("applyWorkspaceRemoved drops the removed workspace's cached spec graph", () => {
+	const keep = pushedWorkspace({ id: "other", name: "workspace-2", branch: "workspace-2" });
+	useAppStore.setState({
+		workspaces: { p1: [pushedWorkspace(), keep] },
+		activeWorkspaceId: "other",
+		specsByWorkspace: { w1: [], other: [] },
+		toasts: [],
+	});
+
+	useAppStore.getState().applyWorkspaceRemoved("p1", "w1");
+
+	const s = useAppStore.getState();
+	expect(s.specsByWorkspace.w1).toBeUndefined(); // the worktree is gone; its graph must not linger
+	expect(s.specsByWorkspace.other).toEqual([]); // a sibling's snapshot is untouched
+});
+
+// --- the right-panel deep links (chat turn-divider chips) ------------------------------------------
+
+test("requestChangesView / requestSpecView are independent, workspace-scoped intents", () => {
+	useAppStore.setState({ changesRequest: null, specRequest: null, rightTabRequest: null });
+
+	useAppStore.getState().requestChangesView("w1", "src/a.ts");
+	expect(useAppStore.getState().rightTabRequest).toEqual({ workspaceId: "w1", tab: "changes" });
+	useAppStore.getState().requestSpecView("w1", ".thinkrail/context/TASK-x.md");
+
+	const s = useAppStore.getState();
+	// `navTick` stamps the center-navigation count at the click; nothing has navigated here, so it's 0.
+	expect(s.changesRequest).toEqual({ workspaceId: "w1", path: "src/a.ts", navTick: 0 });
+	// The spec intent is a separate field, so a spec chip can never be mistaken for a changes chip (which
+	// would flip the right panel to a view that can't show a gitignored spec).
+	expect(s.specRequest).toEqual({ workspaceId: "w1", path: ".thinkrail/context/TASK-x.md" });
+	// The path intent and the flip are one action: the panel is never asked to surface a path in a view it
+	// was not also told to show.
+	expect(s.rightTabRequest).toEqual({ workspaceId: "w1", tab: "specs" });
+
+	// A fresh object each call, so re-clicking the same chip re-fires the watching effects.
+	const first = useAppStore.getState().specRequest;
+	useAppStore.getState().requestSpecView("w1", ".thinkrail/context/TASK-x.md");
+	expect(useAppStore.getState().specRequest).not.toBe(first);
+	expect(useAppStore.getState().specRequest).toEqual(first);
+});
+
+test("requestRightTab flips a view without surfacing any path", () => {
+	// The divider's chips use this when they expand their own list: the panel follows the side the user
+	// chose, but nothing is opened or highlighted (no path was picked yet).
+	useAppStore.setState({ rightTabRequest: null, changesRequest: null, specRequest: null });
+
+	useAppStore.getState().requestRightTab("w1", "specs");
+
+	const s = useAppStore.getState();
+	expect(s.rightTabRequest).toEqual({ workspaceId: "w1", tab: "specs" });
+	expect(s.specRequest).toBeNull();
+	expect(s.changesRequest).toBeNull();
+
+	// A fresh object each call, so re-choosing the same side after a manual tab switch still flips back.
+	const first = s.rightTabRequest;
+	useAppStore.getState().requestRightTab("w1", "specs");
+	expect(useAppStore.getState().rightTabRequest).not.toBe(first);
+	expect(useAppStore.getState().rightTabRequest).toEqual(first);
+});
+
+test("clearSpecRequest consumes the spec intent once — it opens a tab, so it must not replay", () => {
+	useAppStore.setState({ specRequest: null, changesRequest: null });
+	useAppStore.getState().requestSpecView("w1", "docs/SPEC.md");
+
+	useAppStore.getState().clearSpecRequest();
+
+	expect(useAppStore.getState().specRequest).toBeNull();
+	// Idempotent: a second consume (a remount racing the first) is a no-op, not a resurrect.
+	useAppStore.getState().clearSpecRequest();
+	expect(useAppStore.getState().specRequest).toBeNull();
+	// It clears only its own intent — the Changes deep link is a separate field with its own consume.
+	useAppStore.getState().requestChangesView("w1", "src/a.ts");
+	useAppStore.getState().clearSpecRequest();
+	expect(useAppStore.getState().changesRequest).toEqual({
+		workspaceId: "w1",
+		path: "src/a.ts",
+		navTick: 0,
+	});
+});
+
+// The Changes deep link can't act on itself: `ChangesPanel` has to resolve the reported path against
+// `git.status` first, and the chip is usually what reveals that view, so the open happens a fresh mount's
+// round trip after the click. Stamping the nav count at the click is what lets the panel tell that the user
+// moved the center on in between — an overtaken deep link degrades to the row highlight instead of yanking
+// focus off whatever they picked. (`specRequest` needs no stamp: it opens the reported path immediately.)
+test("the Changes deep link stamps the nav count at the click, so a later navigation still wins", () => {
+	useAppStore.setState({ activeWorkspaceId: "ws1", changesRequest: null, rightTabRequest: null });
+	const s = () => useAppStore.getState();
+
+	// A couple of navigations before the chip, so a stamp of "whatever it is now" is distinguishable from 0.
+	s().openTab(fileTab("ws1", "a.ts"), "keep");
+	s().setActiveTab("ws1:a.ts");
+	const atClick = selectWorkspaceNavTick(s(), "ws1");
+
+	s().requestChangesView("ws1", "src/b.ts");
+	expect(s().changesRequest?.navTick).toBe(atClick);
+
+	// Nothing has moved the center since, so the request is still current: the panel may open its diff.
+	expect(selectWorkspaceNavTick(s(), "ws1")).toBe(s().changesRequest?.navTick);
+
+	// The user picks a tab while `git.status` is still in flight. That is the LATER navigation, so the
+	// stamp no longer matches and the deep link has lost the race.
+	s().setActiveTab("ws1:a.ts");
+	expect(selectWorkspaceNavTick(s(), "ws1")).not.toBe(s().changesRequest?.navTick);
+});
+
+test("clearChangesRequest consumes the Changes intent once — it opens a diff tab, so it must not replay", () => {
+	useAppStore.setState({ specRequest: null, changesRequest: null });
+	useAppStore.getState().requestChangesView("w1", "src/a.ts");
+
+	useAppStore.getState().clearChangesRequest();
+
+	expect(useAppStore.getState().changesRequest).toBeNull();
+	// Idempotent, and it clears only its own intent — the Specs deep link stays.
+	useAppStore.getState().requestSpecView("w1", "docs/SPEC.md");
+	useAppStore.getState().clearChangesRequest();
+	expect(useAppStore.getState().changesRequest).toBeNull();
+	expect(useAppStore.getState().specRequest).toEqual({ workspaceId: "w1", path: "docs/SPEC.md" });
+});
+
+const specNode = (over: Partial<SpecGraphNode> = {}): SpecGraphNode => ({
+	id: "task-x",
+	type: "task-spec",
+	title: "X",
+	path: ".thinkrail/context/TASK-x.md",
+	dependsOn: [],
+	references: [],
+	implements: [],
+	tags: [],
+	...over,
+});
+
+test("setWorkspaceSpecs records a snapshot per workspace without touching its siblings", () => {
+	const node = specNode();
+	useAppStore.setState({ specsByWorkspace: { other: [] } });
+
+	useAppStore.getState().setWorkspaceSpecs("w1", [node]);
+
+	const s = useAppStore.getState();
+	expect(s.specsByWorkspace.w1).toEqual([node]);
+	expect(s.specsByWorkspace.other).toEqual([]);
+});
+
+test("setWorkspaceSpecs keeps the previous array identity when the re-read found no change", () => {
+	// The Specs read refetches on every worktree fs tick and most ticks touch no spec. A new array identity
+	// would invalidate ChatView's `isSpec` memo and re-derive every open chat's whole transcript, ~1/s.
+	useAppStore.setState({ specsByWorkspace: {} });
+	useAppStore.getState().setWorkspaceSpecs("w1", [specNode()]);
+	const first = useAppStore.getState().specsByWorkspace.w1;
+
+	useAppStore.getState().setWorkspaceSpecs("w1", [specNode()]); // equal, freshly-allocated wire objects
+	expect(useAppStore.getState().specsByWorkspace.w1).toBe(first);
+
+	// Any field the DTO carries counts as a change — including the link lists the tree doesn't render yet,
+	// so a stale snapshot can never survive here.
+	useAppStore.getState().setWorkspaceSpecs("w1", [specNode({ status: "active" })]);
+	expect(useAppStore.getState().specsByWorkspace.w1).not.toBe(first);
+
+	const withStatus = useAppStore.getState().specsByWorkspace.w1;
+	useAppStore.getState().setWorkspaceSpecs("w1", [specNode({ status: "active", tags: ["v1"] })]);
+	expect(useAppStore.getState().specsByWorkspace.w1).not.toBe(withStatus);
+
+	// A shorter/longer graph is a change too (a spec was deleted or added).
+	useAppStore.getState().setWorkspaceSpecs("w1", []);
+	expect(useAppStore.getState().specsByWorkspace.w1).toEqual([]);
+});
+
 // --- in-app login (flat, session-less) -------------------------------------------------------------
 
 test("beginLogin opens a fresh active login; frames accumulate (url + paste prompt coexist)", () => {
@@ -1108,4 +1285,286 @@ test("skills badge: a LIVE restore stays conservatively stale; a disk attach anc
 		selectWorkspaceTick(s(), "ws1"),
 	);
 	expect(isStale("ws1", "disk1")).toBe(false);
+});
+
+// ── Preview tabs ────────────────────────────────────────────────────────────────────────────────────
+// One reusable "I'm just browsing" slot per workspace (`previewTabByWorkspace`), opened and released by
+// the `TabIntent` the surfaces pass. See `apps/web/src/panels/SPEC.md` for the gesture map.
+
+function fileTab(workspaceId: string, name: string): FileTab {
+	return { kind: "file", id: `${workspaceId}:${name}`, workspaceId, name, path: name, content: "" };
+}
+
+test("a preview open replaces the previous preview tab at its index (the strip never reshuffles)", () => {
+	const store = useAppStore.getState();
+	store.openTab(fileTab("ws1", "a.ts"), "keep");
+	store.openTab(fileTab("ws1", "b.ts"), "preview");
+	store.openTab(fileTab("ws1", "c.ts"), "keep"); // the slot now sits between two kept tabs
+
+	store.openTab(fileTab("ws1", "d.ts"), "preview");
+
+	const s = useAppStore.getState();
+	expect((s.tabsByWorkspace.ws1 ?? []).map((t) => t.name)).toEqual(["a.ts", "d.ts", "c.ts"]);
+	expect(s.previewTabByWorkspace.ws1).toBe("ws1:d.ts");
+	expect(s.activeTabByWorkspace.ws1).toBe("ws1:d.ts");
+});
+
+test("a preview open of an already-kept tab focuses it without demoting it or moving the slot", () => {
+	const store = useAppStore.getState();
+	store.openTab(fileTab("ws1", "a.ts"), "keep");
+	store.openTab(fileTab("ws1", "b.ts"), "preview");
+
+	store.openTab(fileTab("ws1", "a.ts"), "preview");
+
+	const s = useAppStore.getState();
+	expect(s.activeTabByWorkspace.ws1).toBe("ws1:a.ts");
+	expect(s.previewTabByWorkspace.ws1).toBe("ws1:b.ts"); // the slot stayed where it was
+	expect(s.tabsByWorkspace.ws1).toHaveLength(2); // and nothing was duplicated
+});
+
+test("keep releases the slot — through openTab, through setActiveTab, and through closeTab", () => {
+	useAppStore.setState({ activeWorkspaceId: "ws1" });
+	const store = useAppStore.getState();
+
+	store.openTab(fileTab("ws1", "a.ts"), "preview");
+	store.setActiveTab("ws1:a.ts", "keep");
+	expect(useAppStore.getState().previewTabByWorkspace.ws1).toBeUndefined();
+
+	store.openTab(fileTab("ws1", "b.ts"), "preview");
+	store.openTab(fileTab("ws1", "b.ts"), "keep"); // a double-click on a row already previewing
+	expect(useAppStore.getState().previewTabByWorkspace.ws1).toBeUndefined();
+
+	store.openTab(fileTab("ws1", "c.ts"), "preview");
+	store.closeTab("ws1:c.ts");
+	expect(useAppStore.getState().previewTabByWorkspace.ws1).toBeUndefined();
+});
+
+test("promotion is one-way: neither a plain activation nor a keep elsewhere demotes a tab", () => {
+	useAppStore.setState({ activeWorkspaceId: "ws1" });
+	const store = useAppStore.getState();
+	store.openTab(fileTab("ws1", "a.ts"), "keep");
+	store.openTab(fileTab("ws1", "b.ts"), "preview");
+
+	store.setActiveTab("ws1:a.ts"); // plain focus
+	expect(useAppStore.getState().previewTabByWorkspace.ws1).toBe("ws1:b.ts");
+
+	store.setActiveTab("ws1:a.ts", "keep"); // keep on a tab that isn't the slot
+	expect(useAppStore.getState().previewTabByWorkspace.ws1).toBe("ws1:b.ts");
+});
+
+test("the slot is per workspace — clearWorkspaceTabs releases only its own", () => {
+	const store = useAppStore.getState();
+	store.openTab(fileTab("ws1", "a.ts"), "preview");
+	store.openTab(fileTab("ws2", "b.ts"), "preview");
+
+	store.clearWorkspaceTabs("ws1");
+
+	const s = useAppStore.getState();
+	expect(s.previewTabByWorkspace.ws1).toBeUndefined();
+	expect(s.previewTabByWorkspace.ws2).toBe("ws2:b.ts");
+});
+
+test("chat tabs and doc tabs never enter the preview slot", () => {
+	useAppStore.setState({ activeWorkspaceId: "ws1" });
+	const store = useAppStore.getState();
+	store.openTab(fileTab("ws1", "a.ts"), "preview");
+
+	store.openChatSession("ws1", "s1", null, "medium");
+	store.openDoc({
+		kind: "doc",
+		id: "ws1:plan",
+		workspaceId: "ws1",
+		name: "Plan",
+		content: "# plan",
+		docPath: "plan.md",
+	});
+
+	const s = useAppStore.getState();
+	expect(s.previewTabByWorkspace.ws1).toBe("ws1:a.ts"); // still the file, untouched by either open
+	expect(s.tabsByWorkspace.ws1).toHaveLength(3);
+});
+
+test("a keep on an already-open tab releases ITS workspace's slot, never the active one's", () => {
+	const store = useAppStore.getState();
+	store.openTab(fileTab("ws1", "a.ts"), "preview");
+	store.openTab(fileTab("ws2", "b.ts"), "preview");
+	useAppStore.setState({ activeWorkspaceId: "ws2" });
+
+	// The promote half of a double click, landing after a slow read let the user switch workspaces.
+	// `openTab` keys off `tab.workspaceId`, so it must reach ws1 and leave ws2 completely alone —
+	// `setActiveTab` here would strand ws1 previewing AND write a foreign tab id into ws2 (whose center
+	// pane then resolves no active tab and falls back to the workspace receipt).
+	store.openTab(fileTab("ws1", "a.ts"), "keep");
+
+	const s = useAppStore.getState();
+	expect(s.previewTabByWorkspace.ws1).toBeUndefined();
+	expect(s.previewTabByWorkspace.ws2).toBe("ws2:b.ts");
+	expect(s.activeTabByWorkspace.ws1).toBe("ws1:a.ts");
+	expect(s.activeTabByWorkspace.ws2).toBe("ws2:b.ts");
+});
+
+// The counter a slow read compares against (`navTickByWorkspace`). It lives in the store so that NO focus
+// transition can bypass it — the earlier module-local version missed close/reopen/doc/new-chat, which is
+// exactly how a stale browse got to steal focus back. One case per action that moves the active tab.
+test("every center navigation bumps the workspace's nav tick, and none of them bypass it", () => {
+	useAppStore.setState({ activeWorkspaceId: "ws1" });
+	const tick = () => useAppStore.getState().navTickByWorkspace.ws1 ?? 0;
+	// Collected rather than asserted inline so a regression names the action that stopped bumping.
+	const missed: string[] = [];
+	const bumps = (label: string, act: () => void) => {
+		const before = tick();
+		act();
+		if (tick() <= before) missed.push(label);
+	};
+
+	const s = () => useAppStore.getState();
+	// `openTab` is the exception, and deliberately so: it IS the read completion being ordered. Counting it
+	// would make an earlier read's own commit look like user navigation and drop the later one — i.e. two
+	// browse clicks in a row would leave the FIRST click's file open.
+	const beforeOpen = tick();
+	s().openTab(fileTab("ws1", "a.ts"), "preview");
+	s().openTab(fileTab("ws1", "a.ts"), "keep");
+	expect(tick()).toBe(beforeOpen);
+
+	bumps("setActiveTab", () => s().setActiveTab("ws1:a.ts"));
+	bumps("openDoc", () =>
+		s().openDoc({
+			kind: "doc",
+			id: "ws1:plan",
+			workspaceId: "ws1",
+			name: "Plan",
+			content: "# p",
+			docPath: "plan.md",
+		}),
+	);
+	bumps("openChatSession", () => s().openChatSession("ws1", "sess", null, "medium"));
+	bumps("closeChatToHistory", () => s().closeChatToHistory("sess"));
+	bumps("reopenChat", () => s().reopenChat("sess"));
+	// Closing the ACTIVE tab hands focus to a neighbour, so it counts. Closing an inactive one does not —
+	// that case is its own test below, since it's a distinct rule rather than another entry in this list.
+	s().setActiveTab("ws1:a.ts");
+	bumps("closeTab", () => s().closeTab("ws1:a.ts"));
+	bumps("noteNavigation", () => s().noteNavigation("ws1"));
+	bumps("requestHistoryOpen", () =>
+		s().requestHistoryOpen({ sessionId: "sess", workspaceId: "ws1", tabId: "ws1:sess" }),
+	);
+	expect(missed).toEqual([]);
+
+	// A background auto-restore is NOT a navigation: it takes no focus, so it must not supersede a read the
+	// user is still waiting on.
+	useAppStore.setState({ activeTabByWorkspace: { ws1: "ws1:sess" } });
+	const before = tick();
+	s().hydrateSession(
+		{
+			sessionId: "bg",
+			workspaceId: "ws1",
+			title: "bg",
+			createdAt: 0,
+			updatedAt: 0,
+			live: true,
+		} as unknown as SessionSummary,
+		{ turns: [], toolResults: {}, askAnswers: {} },
+	);
+	expect(tick()).toBe(before);
+
+	// The tick is per workspace, and a cleared workspace releases its entry.
+	expect(useAppStore.getState().navTickByWorkspace.ws2).toBeUndefined();
+	s().clearWorkspaceTabs("ws1");
+	expect(useAppStore.getState().navTickByWorkspace.ws1).toBeUndefined();
+});
+
+// The other half of the rule above: the counter tracks NAVIGATIONS, not tab-list edits. Closing a tab the
+// user isn't looking at leaves focus exactly where it was, so it must not count.
+// The finding this pins: bumped unconditionally, closing any unrelated tab while a browse was in flight made
+// that read look overtaken, and the file the user clicked never opened at all.
+test("a close that moves no focus is not a navigation — it can't discard a browse in flight", () => {
+	useAppStore.setState({ activeWorkspaceId: "ws1" });
+	const s = () => useAppStore.getState();
+	const tick = () => s().navTickByWorkspace.ws1 ?? 0;
+
+	s().openTab(fileTab("ws1", "a.ts"), "keep");
+	s().openTab(fileTab("ws1", "b.ts"), "keep");
+	s().openChatSession("ws1", "sess", null, "medium");
+	// `b.ts` is what the user is looking at; `a.ts` and the chat are both inactive.
+	s().setActiveTab("ws1:b.ts");
+	const before = tick();
+
+	s().closeTab("ws1:a.ts");
+	expect(tick()).toBe(before);
+	expect(s().activeTabByWorkspace.ws1).toBe("ws1:b.ts");
+
+	s().closeChatToHistory("sess");
+	expect(tick()).toBe(before);
+	expect(s().activeTabByWorkspace.ws1).toBe("ws1:b.ts");
+
+	// ...and closing what IS active still counts, since focus has to move somewhere.
+	s().closeTab("ws1:b.ts");
+	expect(tick()).toBeGreaterThan(before);
+});
+
+test("catalog authority falls with the list it describes — only an awaited refresh sets it", () => {
+	const s = () => useAppStore.getState();
+	const listed = [{ id: "opus-5", name: "opus-5", provider: "anthropic" }] as WireModel[];
+	const refreshed = [{ id: "opus-6", name: "opus-6", provider: "anthropic" }] as WireModel[];
+
+	// A `model.list` snapshot is current but never authoritative (its handler answers from before the
+	// detached refresh it starts).
+	s().setModels(listed);
+	expect(s().modelsFresh).toBe(false);
+
+	// The installed result of an awaited forced refresh that SETTLED is.
+	s().beginModelsRefresh();
+	s().finishModelsRefresh({ models: refreshed, complete: true });
+	expect(s().models).toBe(refreshed);
+	expect(s().modelsRefreshing).toBe(false);
+	expect(s().modelsFresh).toBe(true);
+
+	// The finding this pins: authority is a property of the SHARED list, so the next `model.list` install
+	// — this picker reopening, or any other consumer mounting — drops it in the same write. Held as a
+	// consumer's local flag, it outlived the list and a removed model reached `create()`.
+	s().setModels(listed);
+	expect(s().models).toBe(listed);
+	expect(s().modelsFresh).toBe(false);
+
+	// A FAILED refresh installs nothing, so it changes neither the list nor its provenance.
+	s().finishModelsRefresh({ models: refreshed, complete: true });
+	s().beginModelsRefresh();
+	s().finishModelsRefresh(null);
+	expect(s().models).toBe(refreshed);
+	expect(s().modelsFresh).toBe(true);
+});
+
+test("a refresh whose wait was capped installs its list but claims no authority", () => {
+	const s = () => useAppStore.getState();
+	const listed = [{ id: "opus-5", name: "opus-5", provider: "anthropic" }] as WireModel[];
+	const unsettled = [{ id: "opus-6", name: "opus-6", provider: "anthropic" }] as WireModel[];
+	s().beginModelsRefresh();
+	s().finishModelsRefresh({ models: listed, complete: true });
+	expect(s().modelsFresh).toBe(true);
+
+	// The finding this pins: the host caps how long it waits for pi, so a reply can carry the registry as it
+	// stands while the pass that would settle it is still running (`complete: false`). Rendering it is right;
+	// treating it as the host's verdict is what would let `NewWorkspaceDialog` substitute off a list nothing
+	// confirmed — so it must also DROP any authority the previous list had.
+	s().beginModelsRefresh();
+	s().finishModelsRefresh({ models: unsettled, complete: false });
+	expect(s().models).toBe(unsettled);
+	expect(s().modelsRefreshing).toBe(false);
+	expect(s().modelsFresh).toBe(false);
+});
+
+test("authority can be given up without replacing the list (a consumer activating)", () => {
+	const s = () => useAppStore.getState();
+	const refreshed = [{ id: "opus-6", name: "opus-6", provider: "anthropic" }] as WireModel[];
+	s().beginModelsRefresh();
+	s().finishModelsRefresh({ models: refreshed, complete: true });
+	expect(s().modelsFresh).toBe(true);
+
+	// The finding this pins: a consumer activating inherits the list a *previous* consumer made
+	// authoritative, and the registry can have moved since (a provider logged in, no `model.list`). It must
+	// be able to drop authority up front — synchronously, before its own read lands — while still serving
+	// the inherited list to render with.
+	s().dropModelsFreshness();
+	expect(s().modelsFresh).toBe(false);
+	expect(s().models).toBe(refreshed);
 });

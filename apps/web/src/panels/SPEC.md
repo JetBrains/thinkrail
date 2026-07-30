@@ -26,18 +26,28 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   surfaces an error toast, leaving the row in place). Each **workspace row** is **two-line**: the display
   `name` on top with the git **branch on a second line beneath it** (muted, monospace), rendered only when
   it differs from the name (so pristine/legacy `workspace-N` rows stay a single compact line) — the display
-  name is decoupled from the git branch (see [[submodule-server-workspaces]]). The active workspace must
+  name is decoupled from the git branch (see [[submodule-server-workspaces]]). The **Default workspace**
+  (`kind === "default"` — the project folder itself) renders **pinned first** (the server pins it in
+  `workspace.list`; `addWorkspace` appends created worktree rows after it), with a **`House` icon** in
+  place of the `GitBranch` glyph and **no Remove button** (non-removable — the server enforces it; the UI
+  simply offers nothing). Its branch line shows the folder's real current branch. The active workspace must
   also stay visible: when `ProjectTree` mounts with an active workspace, or the active workspace's derived
   owning project changes or first becomes resolvable, it expands that parent project. A manual collapse
   remains respected while the owning project is unchanged; ordinary `workspace.updated` snapshots and
   same-project workspace switches do not force it open again. Workspace creation expands its project
   explicitly. Selecting or creating a workspace also selects its owning project, keeping project-home and
   active-workspace context coherent even when the create dialog's project picker targets another project.
-  **Opening a project** goes through the shared **`useOpenProject`** hook (reused by `ProjectTree` **and**
+  **Opening a project lands on that project's Welcome** — deliberately **no auto-enter** into any
+  workspace: Welcome is the fork where the two working modes (isolated worktree vs the project folder's
+  Default workspace) are presented as an explicit choice (see `WelcomePanel`), so opening and the
+  "project home" gesture converge on the same surface. Opening goes through the shared
+  **`useOpenProject`** hook (reused by `ProjectTree` **and**
   `WelcomePanel`, so the flow is identical in the rail and the Welcome screen): `project.open`, and on
   failure `project.inspect` → either offers to bootstrap the folder into a repo — a modal **`ConfirmDialog`**
   (confirm → `project.init`) — when it's `initable`, or surfaces the error in a **`NoticeDialog`** — so a
-  non-git folder is never a silent no-op. Both are modals on `components/ui/dialog` (the init offer has no
+  non-git folder is never a silent no-op — and neither is a host that couldn't *show* a folder dialog (that
+  throws; the notice carries the reason, and the request runs on a raised `timeoutMs` since the picker waits
+  on a human). Both are modals on `components/ui/dialog` (the init offer has no
   on-screen anchor, unlike the Remove popover); `NoticeDialog` is a single-button info modal for failures
   with no yes/no follow-up. The hook returns a `dialogs` node each consumer renders. **Selecting a
   project** (clicking its row — the chevron expands/collapses separately) **deselects any active
@@ -58,22 +68,43 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   per-folder counts. `ChangesTree`'s tree build + `+/−` aggregation + shared status glyphs live in the pure
   **`changesModel.ts`** (unit-tested; no store/transport — `ChangesTree` is presentational, fed `changes` +
   `onOpen`/`isActive` by `ChangesPanel`). **`WelcomePanel`** is the first-touch surface the shell mounts (centered, left-nav beside it) whenever no
-workspace is active. The `PRODUCT_NAME` wordmark as the hero (the topbar's brand styling — accent font,
-`text-primary` — enlarged), with the **active project's name as a small eyebrow** (folder icon) above it
-once a project is selected, over a **constant** spec-first pitch (not spec-conditional) and
-**one-to-three cards** (Conductor-inspired: icon top-left, label + explainer
-bottom-left; the primary is a filled-violet card carrying the stable `welcome-cta` hook, others quiet
-`welcome-action`s). The cards by state: **no projects** → **"Open project"** (one card); **project +
-`hasSpecs`** → **"Start building"** (primary) + "Open project"; **project + no specs** → a spec-first
-**"Set up project"** (primary) + "Start building" + "Open project". The **"Open project"** card hangs the shared
+workspace is active. **One hero heading** (`welcome-title`, the topbar's brand styling — accent font,
+`text-primary` — enlarged): the **shown project's name**, or `PRODUCT_NAME` when no project is shown —
+the wordmark is the empty-state identity, a project's own name is the identity once one is open (so no
+separate project eyebrow). **No pitch prose in any state** — the marketing paragraph was removed as
+unread; the screen is heading → banners → **one-to-three cards** (Conductor-inspired: icon top-left,
+label + explainer bottom-left; the primary is a filled-violet card carrying the stable `welcome-cta`
+hook, others quiet `welcome-action`s). Welcome is **the mode fork**: with a project shown it always pairs
+**"Start building"** (isolated worktree) with **"Work in project folder"** (the Default workspace) so the
+two working modes are a visible choice, not a hidden default. The cards by state: **no projects** →
+**"Open project"** (one card); **project + `hasSpecs`** → **"Start building"** (primary) + "Work in
+project folder"; **project + no specs** → a spec-first **"Set up project"** (primary) + "Start building"
++ "Work in project folder". **"Open project" appears only in the no-projects state** — where it's the
+only possible action; once a project is shown, opening another is the projects-rail **"+"** (the same
+dropdown), so Welcome stays the *work-in-this-project* surface. That card hangs the shared
 **`AddProjectMenu`** dropdown off it (same menu as the projects-rail "+": Open project / Open GitHub (soon)
-/ Recents), so `Card` is a `forwardRef` usable as a Radix `asChild` trigger. **"Start building"** is the
-intent-first framing of the create-and-kick-off flow — it opens `NewWorkspaceDialog` (which cuts a
-worktree-isolated workspace + starts a chat); *workspace* is the mechanism, not the label. **"Set up
-project"** opens the same dialog with an `initialPrompt` seed — the `/skill:setting-up-a-project` command,
-which **forces** the setting-up-a-project dispatcher skill to load (pi's skill-command syntax; expanded on the
-`session.prompt` path) rather than hoping the model auto-matches it; the dispatcher then detects
-new-vs-existing and drafts the specs accordingly (see [[module-thinkrail-workflow]]). Which
+/ Recents), so `Card` is a `forwardRef` usable as a Radix `asChild` trigger. **"Work in project folder"**
+(`House` icon, matching the rail's Default row) **direct-enters** the Default workspace — no dialog: the
+shared `enterDefaultWorkspace` helper lists the project's workspaces, stores them, and activates the
+`kind === "default"` row; an older host with no Default row degrades to an error toast. **"Start building"** is the
+intent-first framing of the create-and-kick-off flow — it opens `NewWorkspaceDialog` preselected to the
+**Isolated workspace** target; *workspace* is the mechanism, not the label. **"Set up
+project"** opens the same dialog with an `initialPrompt` seed **and a `promptNote`** — the note is the
+card's own copy (the dialog stays skill-agnostic), saying what the seeded command does: the agent drafts
+the project's specs, starting from its goal, before building — deliberately **not** an enumeration of
+artifacts, since the dispatcher's routes differ (starting-a-new-project stops at goal-and-requirements;
+only importing-a-codebase drafts architecture + module SPECs) and the card can't know the route up
+front. The seed is the
+`/skill:setting-up-a-project` command **with a trailing space** — the same insertion format the
+slash-command completion writes (`chat`'s `selectedSlashCommandValue`), so the seeded hero reads as a
+*completed* command and the completion menu stays closed over it (pi's parser treats the arg tail as
+optional). The command **forces** the setting-up-a-project dispatcher skill to load (pi's skill-command
+syntax; expanded on the `session.prompt` path) rather than hoping the model auto-matches it; the dispatcher then detects
+new-vs-existing and drafts the specs accordingly (see [[module-thinkrail-workflow]]). **Every Welcome entry point preselects the Isolated
+workspace target** — setup included, so spec drafting is reviewable on its own branch like any other work
+and the mode story stays uniform; the Project-folder alternative stays one click away in the dialog.
+(Uniformity made an opener-chosen target dead API — the dialog owns its target state and always opens
+on the worktree side; there is no `initialTarget` prop.) Which
 project drives the has-specs states = `selectedProjectId ?? projects[0]`, read reactively (so the visible
 nav's selection updates it). Its `hasSpecs` is **fetched lazily** via `project.hasSpecs` for that one
 project (a full-tree walk, kept off the connect handshake) — pending until it resolves, so the cards wait
@@ -96,22 +127,48 @@ skills' (attacker-controlled) names before trust. The full manager (`chat/Skills
 pre-session half of the user's skill settings; the chat header opens the same dialog in workspace mode
 (with Reload).
 
-**`NewWorkspaceDialog`** is the create-and-kick-off surface. It names the operation visibly — title
-**“Create workspace”** — and states the model without adding a step: **“A separate checkout on its own new
-branch. Files, chats, changes, and terminals stay scoped to it.”** Its base-branch trigger reads **“From
+**`NewWorkspaceDialog`** is the start-working surface: **a target control** (a two-option segment — a
+native radio group, `fieldset` + sr-only `legend` over visually-hidden radio inputs, so assistive tech
+hears one mutually-exclusive choice — both always visible: the two-mode model in one glance) chooses **where** the work runs, and the header is
+**mode-aware** so it always names the operation truthfully: **Isolated workspace** → title **“Create
+workspace”**, description **“A separate checkout on its own new branch. Files, chats, changes, and
+terminals stay scoped to it.”**; **Project folder** → title **“Work in project folder”**, description
+**“Runs directly in your project folder — no isolation. Changes land on the current branch.”** In folder
+mode the base-branch picker and the naming hint are hidden (nothing is created — submit **enters** the
+project's Default workspace via the shared **`enterDefaultWorkspace`** helper (`defaultWorkspace.ts`:
+`workspace.list` → fold into the store → activate the `kind === "default"` row, one atomic entry — the
+rail's auto-expand follows activation; error toast + `null` if an older host has none — the same helper
+behind the Welcome fork card, so the enter + degrade path lives once; **`onCreated` does not fire** —
+nothing was created and the helper's list is already fresh))
+and the submit button reads **Start** instead of **Create**; the branch-list fetch + background base
+prefetch still run (fire-and-forget, keeps a toggle back to worktree instant); the chat
+kick-off tail is identical in both modes. An optional **`promptNote`** renders as a small info strip above
+the prompt (used by "Set up project" to say what the seeded skill command does). The worktree mode's
+base-branch trigger reads **“From
 {base}”**, not an unexplained ref. An optional **`initialPrompt`** seeds the prompt hero (still editable;
-empty by default); while the prompt is non-empty, a secondary hint says ThinkRail will name the workspace
+empty by default); while the prompt is non-empty (worktree mode), a secondary hint says ThinkRail will name the workspace
 and branch from the request. The rest stays compact: the base-branch combobox (`git.listBranches`,
 degrading to local branches offline; a Refresh re-lists; `origin/HEAD` is filtered so no stray `origin`),
 a project picker, the prompt hero, and the reused
   `chat/ModelSelector`+`ThinkingSelector` in **pre-session** mode — preselected to the host's resolved
   default via `model.default` so the exact model shows (values held in dialog state, applied at create
   time). The pickers' popovers portal into the dialog node (so their lists scroll under the Dialog scroll
-  lock). Pre-session there is no pi to clamp the effort, so an explicit model switch moves it onto the
-  new model's own set by asking the host for pi's clamp (**`model.clampThinking`**) rather than deciding
-  locally — one effect owns "the held effort must be runnable by the held model", so an explicit switch
-  and a catalog refresh that shrank a model's set both resolve the same way pi would. `model.default` needs no adjustment: the host
-  already returns a self-consistent pair.
+  lock). Their catalog is the shared one — `chat/useModelCatalog`, so the dialog and the chat composer
+  cannot drift — which means it is **live**: the picker's Refresh row can replace the list underneath a
+  held selection. The dialog therefore reconciles the held model against it on every change via the pure
+  **`reconcileModel`** (model only — effort is decided by the host's clamp, below): re-point to the same
+  `{provider,id}` (the refreshed object, whose `thinkingLevels` may differ). What it does when the catalog
+  has no such model turns on **`catalogFresh`** — the store's `modelsFresh`, true only for the installed
+  result of an awaited forced refresh the host reported **`complete`** (a capped wait can answer with a
+  current-but-unsettled list, which is no basis for a verdict), dropped by the next `model.list` install from any consumer (whose
+  handler answers from before the detached refresh it starts) *and* dropped up front by any consumer
+  activating. On a fresh catalog it returns **`"unavailable"`** — a verdict, not a replacement: the dialog
+  then asks **`model.default`** (pi's own `pinned ?? available[0]`, plus a consistent effort) exactly as it
+  does for the preselect, through **one** `applyHostDefault` — so no client-side copy of the host's default
+  policy exists here. Asked at most once per opening, so a still-missing model can't spin the effect. Effort is a separate concern: one effect keeps the held level
+  runnable by the held model by asking the host for pi's clamp (**`model.clampThinking`**) rather than
+  deciding locally, so an explicit switch and a refresh that shrank a model's set resolve the same way
+  pi would. `model.default` needs no adjustment: the host already returns a self-consistent pair.
   On open and project-picker changes, the dialog reads **`skill.list({projectId})`** and feeds the
   result to chat's shared slash-completion primitive: a leading `/` autocompletes skills from the selected
   project's **current checkout** plus personal/bundled sources, selecting one inserts `/skill:<name> `;
@@ -120,11 +177,14 @@ a project picker, the prompt hero, and the reused
   authoritative if the selected base branch differs). When the selected project is **untrusted AND ships
   committed skills** (a count from `project.aliasSkills`, never their names), a **trust notice** shows a
   *Trust project* button — the repo's skills stay withheld until granted (`project.setTrust`, which folds the
-  updated project back into the store and re-previews); personal + bundled skills show regardless. When the menu is closed, **Enter creates** (matching the Create button's
+  updated project back into the store and re-previews); personal + bundled skills show regardless. When the menu is closed, **Enter submits** (matching the submit button's
   `↵` affordance) and
-  **Shift+Enter** inserts a newline. Create = `workspace.create({ projectId, baseRef })` → set active → (with a prompt) open a chat +
-  `session.create({ model, thinkingLevel })` + fire-and-forget `prompt`; with an empty prompt it just
-  creates the workspace. A **rejected** kick-off `prompt` (a bad model / missing API key — e.g. picking a
+  **Shift+Enter** inserts a newline. Worktree-mode submit = `workspace.create({ projectId, baseRef })` → set active → **always open a
+  fresh chat** (`session.create({ model, thinkingLevel })` — the picked model + effort apply even
+  without a prompt) → a typed prompt is additionally sent as the first message (fire-and-forget
+  `prompt`); an **empty prompt leaves the just-opened composer ready** — submitting the start-working
+  surface always lands the user in a chat, never on a bare receipt (folder mode: the same tail after
+  entering Default). A **rejected** kick-off `prompt` (a bad model / missing API key — e.g. picking a
   nonexistent model) surfaces as an `error` turn in the just-opened chat via `store.appendErrorTurn` (with
   `transport`'s `errorText`) rather than vanishing. The two rejections with **no chat to host a turn** raise a
   `store.toast.error` instead: a failed **`workspace.create`** (keeps the dialog open to retry) and a failed
@@ -162,8 +222,10 @@ a project picker, the prompt hero, and the reused
   used that same workspace-scoped call for its Global group too, a shadowed global template would vanish
   from view entirely with no way to find, edit, or delete it
   (`data-testid="template-row"`: name + description, and — project rows only — an
-  **Open as file** action that opens `.pi/prompts/<name>.md` through the exact same `openFile.ts`
-  `openFileInTab` the file tree uses, then closes Settings, and an **Edit** action; a global template has
+  **Open as file** action that opens `.pi/prompts/<name>.md` through the exact same `openTabs.ts`
+  `openFileInTab` the file tree uses — at the **`keep`** intent, since a deliberate "open in editor" must
+  not land in a preview slot a later click would silently replace — then closes Settings, and an
+  **Edit** action; a global template has
   no worktree to open a file tab against, so global rows stay dialog-only). **New**/**Edit** open the shared
   `chat/TemplateEditorDialog` (see `chat/SPEC.md`'s Save-as-template bullet — it lives in `chat/` because
   `HistoryOverlay`'s save-as-template action needs the identical form, and `chat/` can't import
@@ -195,15 +257,29 @@ a project picker, the prompt hero, and the reused
   When the active workspace has no open center tab, `CenterTabs` uses the empty surface as a persistent
   creation/orientation receipt rather than a generic placeholder: **“Workspace ready”**, the display name,
   `branch · from baseBranch`, and **“Files, chats, changes, and terminals are scoped to this workspace,”**
-  followed by the existing **New chat** action. It is neither one-time nor dismissible, so it also helps
+  followed by the existing **New chat** action. For the **Default workspace** the receipt tells the truth
+  instead of promising isolation: **“Default workspace”**, the project name, `on <branch>`, and “Chats,
+  changes, and terminals run directly in your project folder.” It is neither one-time nor dismissible, so it also helps
   after the last tab closes without introducing onboarding state. `CenterTabs` also renders ephemeral
   **`doc`** tabs (`DocTab` — inline rendered markdown, no file on disk) via its own
   `DocPane`→`MarkdownPreview`; used for the plan-as-markdown snapshot (see the `chat` module). `CenterTabs`
   closing a chat tab routes to `store.closeChatToHistory` (keeps the session alive) and shows a
   **chat-history** dropdown (recently-closed + disk-only chats, shown only when non-empty). On
   workspace-activate it **hydrates**: `session.list` → **live** sessions auto-restore as tabs
-  (`session.getMessages` → `messagesToRuntime` → `store.hydrateSession`); **disk-only** ones go to history
-  via `store.noteClosedChats`. Reopening restores a live runtime's tab, or for a disk-only chat re-opens it
+  (`session.getMessages` → `messagesToRuntime` → `store.hydrateSession`), and so do **disk-only sessions
+  carrying unfinished TODOs** (`SessionSummary.openTodos > 0` — work in progress survives a host restart
+  as open tabs, hydrated with the disk-attach tick baseline), **capped at the newest `AUTO_OPEN_LIMIT`**:
+  a long-lived workspace can hold a dozen half-finished chats, and opening every one would bury the tab
+  strip and pull every transcript into memory, so past the cap they stay one click away in history. The
+  remaining **disk-only** ones go to
+  history via `store.noteClosedChats`. Two guarantees ride that pass: **never-empty** — when nothing
+  opened (and no session in *this client's* store was closed to history, which is what vetoes the
+  fallback; closes aren't persisted, so after a reload a closed chat is indistinguishable from any other
+  disk chat and may reopen), the most recent disk chat
+  auto-opens as a fallback; **most-recent focus** — the newest (`updatedAt` desc) hydrates first and alone,
+  the rest then load in parallel, and
+  `hydrateSession` only takes focus while the workspace has no active tab, so the latest auto-opened chat
+  lands focused without ever stealing an existing selection (e2e: `auto-open-chats.spec.ts`). Reopening restores a live runtime's tab, or for a disk-only chat re-opens it
   on the host (`getMessages`) + hydrates — so a reload, a second tab, or a host restart all rebuild from the
   host. A rejected new-chat `session.create` or history-reopen `getMessages` raises a `store.toast.error`
   (the click would otherwise do nothing, silently; a failed reopen stays in history for a retry).
@@ -221,7 +297,8 @@ a project picker, the prompt hero, and the reused
   (`WelcomePanel` and `CenterTabs`/`RightPanel`/`TerminalsPanel` are mutually exclusive — the shell mounts
   one set or the other on the active-workspace branch.)
 - **Allowed deps:** `store`, `transport`, `components/ui` (incl. `popover`/`command`/`textarea` for the
-  dialog), `chat` (`ModelSelector`/`ThinkingSelector`, reused by `NewWorkspaceDialog`; `Markdown`,
+  dialog), `chat` (`ModelSelector`/`ThinkingSelector` + the `useModelCatalog` hook that feeds them,
+  reused by `NewWorkspaceDialog`; `Markdown`,
   reused by `MarkdownPreview`; `TemplateEditorDialog`, reused by `TemplatesSettings`), `lib`, `themes` (catalog + generic application contract),
   `contracts`; `lucide-react`; and the heavy libs each lazy panel owns (`monaco-editor`, `shiki`,
   `@xterm/*`) loaded via `import()`.
@@ -231,11 +308,23 @@ a project picker, the prompt hero, and the reused
 
 - `RightPanel` tabs are **Specs | All files | Changes** (Specs leftmost and the **default** — specs are
   the project's ground truth, so the rail leads with them).
-- **Live refresh (the worktree panels follow the disk).** `FileTree` / `ChangesPanel` / `SpecsPanel` /
-  `FilePane` watch the store's `fsChangesByWorkspace` tick for their workspace (fed by the host's
-  debounced `workspace.fsChanged` push — see [[submodule-server-watch]]) and silently refetch through
-  the same read methods they mount with — agent edits, terminal commands, and Finder changes all land
-  without a manual step. Refetches **preserve view state**: `FileTree` re-reads the root + every
+- **Live refresh (the worktree panels follow the disk).** Every workspace-scoped read goes through one
+  hook — **`useWorkspaceRead(workspaceId, read, handlers) → { reload }`** — which owns *when* to read
+  (workspace change, that workspace's `fsChangesByWorkspace` tick, or `reload()` for a manual Refresh) while
+  the caller owns *what to do* with the outcome (`onResult` / `onFailure` / `onSwitch`). Centralized because
+  each site was otherwise re-implementing the **stale-response guard**: an answer in flight when the caller
+  moves on must not land in the new workspace's view (reads are generation-stamped — latest wins, abandoned
+  ones stay silent). A `null` workspaceId reads nothing, which is also how a *paused* read is expressed (a
+  collapsed `FileTree` dir), so no tick has to be threaded down as a prop.
+  Its users — `FileTree` (root + each expanded dir), `ChangesPanel` (`git.status`), `useWorkspaceSpecs`
+  (`spec.graph`) — plus `FilePane`/`DiffPane`, which follow the same tick contract per open tab. Agent edits,
+  terminal commands, and Finder changes all land without a manual step.
+  Three shapes keep its effect's dependency list **honest** (no exhaustive-deps exemption anywhere in it):
+  the fs tick is consumed as an **event** (`useAppStore.subscribe`) rather than selected into the component —
+  so it triggers a re-read without being a render input, and consumers stop re-rendering on unrelated
+  worktree churn; the **reset is the effect's cleanup**, which closes over the workspace being *left* (the id
+  a reset actually needs — a plain effect keyed on `workspaceId` runs with the *new* id already in scope);
+  and a manual refresh is an **imperative `reload()`**, not a nonce dependency. Refetches **preserve view state**: `FileTree` re-reads the root + every
   expanded dir (rows keyed by path; vanished dirs drop out via their parent), `ChangesPanel` re-reads
   `git.status` (list-only — the diff renders in the center tab, not under the list), `SpecsPanel`
   refetches without remounting (expansion survives), and `FilePane`/`DiffPane` re-read an
@@ -249,8 +338,17 @@ a project picker, the prompt hero, and the reused
   so scoping is natural; a degraded watcher just means back to read-on-demand. Deliberately **not**
   live (deferred): the project-rail workspace diffStats badges; editable-file conflict handling waits
   for `fs.writeFile` (the viewer is read-only today).
-- `SpecsPanel` is the read-only spec-graph viewer: one `spec.graph` fetch per workspace-activation /
-  tab-visit, refetched on the fs tick, plus a header **Refresh** button re-fetching on demand (the
+- **`useWorkspaceSpecs` owns the `spec.graph` read** (one fetcher, one definition of "this file is a spec"):
+  the snapshot lands in the store (`specsByWorkspace`), not panel state, because the chat's turn divider
+  needs the same answer to route its chips. It is called by **`RightPanel`**, not by `SpecsPanel` — the
+  panel body only exists while its tab is showing, so owning the read there would mean a user sitting on
+  Changes stops the graph tracking the worktree, and every spec the agent writes gets counted as a changed
+  file (the split silently undone by a tab selection). Being keyed per workspace, a switch shows that
+  workspace's last known tree while the re-read is in flight (there is nothing to reset), and the failed-read
+  flag is workspace-scoped so it can't leak a hint over a sibling's good tree. It returns `{ failed, reload }`
+  — the header's Refresh calls `reload` directly, so no refresh counter has to be held in panel state.
+- `SpecsPanel` is the read-only spec-graph viewer — a pure reader of that snapshot. One fetch per
+  workspace-activation, refetched on the fs tick, plus a header **Refresh** button re-fetching on demand (the
   manual escape hatch if the host's watcher degraded; the host side revalidates per read), rendered as
   the **`parent` tree** (roots = no/dangling parent; default-expanded). A fetch **failure renders a distinct error hint** (pointing at Refresh), never the
   "No specs" empty state — offline and empty are different answers. The tree build (`specTree.ts`)
@@ -262,23 +360,53 @@ a project picker, the prompt hero, and the reused
   controls make both roles explicit. Hierarchy uses fixed per-depth indentation + chevrons, deliberately
   **without connector rails or branch elbows** (persistent lines overloaded the narrow rail). The padded
   **chevron alone** expands/collapses, while the rest of the row is a native document button whose
-  **single click** opens the rendered spec through the same `fs.readFile` → `openTab` flow as `FileTree`
-  (there is no hidden double-click gesture). Every row stays on one line: indentation → chevron →
+  **single click previews** the rendered spec — and whose **double click keeps** it — through the same
+  `fs.readFile` → `openTab` flow as `FileTree` (see the Preview tabs bullet; reading down a spec graph is
+  the case the reusable slot exists for). Every row stays on one line: indentation → chevron →
   shape-coded role icon → truncated title → fixed trailing role (`ARCH` / `MODULE` / `SUBMODULE` / `TASK`;
   unknown types degrade compactly). The top-level `goal-and-requirements` row instead carries the exact
   **`Main spec`** label and distinct root icon; the active file tab's row has a persistent selected
   treatment. **Lifecycle status is not presented at all** — future lint health arrives with a real linter
   feature, not speculative dots or reused status chrome. This remains a restrained hierarchy — no hero,
-  duplicate root, preview, or graph canvas. `FileTree` keeps its own gesture model (whole-row click
-  toggles dirs — no collision there).
-- `RightPanel`/`ChangesPanel` watch the store's `changesRequest` deep-link (set by a chat turn-divider's
-  "files changed" chip): when it targets the active workspace, `RightPanel` flips to the Changes tab and
-  `ChangesPanel` **highlights** the requested file's row (matched by path suffix against `git.status`) —
-  deliberately without opening its diff tab; the diff opens only on the user's explicit click, so a chat
-  chip never steals the center area.
+  duplicate root, preview pane, or graph canvas. `FileTree` shares the same file gesture model
+  (preview/keep) but keeps its own directory behaviour — a whole-row click toggles dirs, no collision
+  there.
+- **The chat deep-links mirror the tab split.** `RightPanel` decides *which view is showing* from exactly one
+  store field — **`rightTabRequest`** (`requestRightTab`, which both path intents below set in the same
+  action) — so the flip is one concept rather than something re-derived per request type, and a divider chip
+  that only reveals a view (expanding its artifact list, no path picked) needs no path to do it.
+  `ChangesPanel` watches `changesRequest` (set by a chat turn-divider's "files changed" chip),
+  **highlights** the requested file's row (resolved with `matchesWorktreePath` against `git.status`) **and
+  opens its diff tab** in the **preview slot** — the chip/list-row click *is* the user's explicit ask to see
+  that change, so stopping at a highlight read as broken, and following a chip is browsing, same as clicking
+  the row it points at, so it reuses the slot rather than accumulating a kept tab per chip. A path no longer
+  in the current diff (a round from days ago) degrades to highlight-only: there is no diff to show. **So does
+  a deep link the user has already navigated past** — this open is the one that *cannot* mark its own
+  navigation when it happens, because the path is only resolvable once `git.status` lands and the chip is
+  normally what reveals this view (a fresh mount, a full round trip). The count stamped on the request
+  (`changesRequest.navTick`, taken at the click) is what it compares against, so a tab the user picked while
+  the list was loading is the later navigation and keeps focus. The
+  intent is **consumed** (`clearChangesRequest`) once handled — it opens a center tab, so a git-status
+  re-read replaying it would yank the user's tab back. `SpecsPanel` watches **`specRequest`** (the "N specs"
+  chip) and **opens the rendered spec**, likewise in the preview slot
+  (`openFileInTab`, which canonicalizes the reported path — pi may report it absolute or `./`-prefixed — to
+  the worktree-relative **tab identity**, so a deep link can never open a second tab for a file already open
+  under its relative path; that lives in the choke point, not in each caller, and it means a spec created
+  seconds ago and not yet in the graph opens just the same) — a spec has nothing to preview short of its
+  content, and the tree row lights up on its own since rows key off the active tab id. That intent is
+  **consumed** (`clearSpecRequest`) once handled: like the Changes link, it opens a center tab, so
+  replaying it on a remount or a graph refetch would yank the user's tab back mid-edit. Two intents, two
+  effects: a spec chip must never land in the git-derived Changes view, which structurally cannot show a
+  gitignored `.thinkrail/context/` scratch spec — the empty-Changes bug that motivated the split.
+  Both intents carry **exactly one path**: a round that wrote several artifacts resolves the ambiguity in the
+  chat (the chip expands into a list there — see chat/SPEC.md), so no panel ever has to mark a *set*. That is
+  deliberate — a second, round-scoped marking vocabulary over these workspace-scoped trees would reintroduce
+  the two-rows-read-as-selected ambiguity the single-selection rule above exists to prevent.
 - **The diff is a center tab, not a rail inset.** Clicking a Changes row fetches `git.diffFile` (both
   sides: base branch vs worktree) and opens a **`DiffTab`** (`${workspaceId}:diff:${path}` — one tab per
-  file; a re-click focuses the existing tab). `DiffPane` renders a slim header (the path + a per-tab
+  file; a re-click focuses the existing tab) through `openTabs.ts`'s **`openDiffInTab`**, the diff twin of
+  `openFileInTab`: a single click **previews**, a double click **keeps**, so scanning a change set reuses
+  one tab. `DiffPane` renders a slim header (the path + a per-tab
   **Split | Inline** toggle via `store.setDiffTabView`; split is the default) over the read-only lazy
   `MonacoDiff` (`@monaco-editor/react` `DiffEditor`, model paths derived from the file's path so both
   sides highlight alike; `useInlineViewWhenSpaceIsLimited: false` — the toggle must do what it says, so
@@ -317,6 +445,59 @@ a project picker, the prompt hero, and the reused
   (`GitFileChange.added/removed`, from `git diff --numstat`; untracked files count their whole content as
   added — but a binary or oversized untracked file gets no count, mirroring how tracked binaries drop out
   of `--numstat`), folder counts are summed client-side. Both views share `ChangesPanel`'s `openDiff` + `isActive`.
+- **Browsing reuses one tab: preview vs keep.** Every workspace has at most one **preview tab** — the
+  standard IDE slot a *light* open lands in (`store.previewTabByWorkspace`, see `store/SPEC.md` for the
+  state rules). It renders with an **italic label** and `data-preview="true"` on its `editor-tab`; a
+  `title` says "Preview — double-click to keep". A **preview** open replaces the slot's tab **at its
+  index**, so browsing swaps one tab in place instead of reshuffling the strip under the cursor. The
+  gesture map, uniform across every surface (all of them route through `openTabs.ts`, which is what keeps
+  them uniform):
+
+  | Surface | single click | double click |
+  |---|---|---|
+  | `FileTree` file row · `SpecsPanel` document row · `ChangesPanel` list row and `ChangesTree` file row | preview | keep |
+  | rendered-markdown relative link · chat turn-divider spec chip | preview | — |
+  | strip tab, inactive | activate | keep |
+  | strip tab, **active and in preview** | **keep** | keep |
+  | strip tab, active and kept | no-op | no-op |
+
+  **A double click composes: it is a preview open plus a promote**, because the browser dispatches
+  `click`, `click`, `dblclick`. So — exactly as in VS Code — double-clicking a row *claims the slot on the
+  way through*: the tab that was previewing is replaced, and the new one ends up kept in its place. (The
+  `openTab(tab, "keep")` primitive itself never touches the slot; that is what a lone `keep` caller like
+  Settings' *Open as file* gets.) For that to hold at **any latency**, `openTabs.ts` collapses the three
+  opens one gesture fires into a **single `fs.readFile`** (its `inFlight` map): three in-flight reads would
+  otherwise be settled by whichever returned first — a leading `preview` replacing the slot's tab, or a
+  `keep` landing first and sparing it — so the app would behave one way on localhost and another over
+  Tailscale from a phone. The call that *started* the read owns the placement; a `keep` expressed while it
+  was in flight promotes the result afterwards — through **`openTab`**, never `setActiveTab`, because only
+  `openTab` keys off `tab.workspaceId`: a read the user switches workspaces during would otherwise strand
+  this tab previewing and write its id into the workspace they moved to, whose center pane then resolves no
+  active tab and drops to the workspace receipt. `e2e/preview-tabs.spec.ts` asserts the single read
+  directly, because the outcome it protects is invisible at localhost latency.
+
+  **A read is slow and a click is not, so a pending browse loses to whatever the user does next.** Each
+  read records the workspace's **`store.navTickByWorkspace`** count on the way out, and a **`preview`**
+  landing after that count has moved is **dropped** rather than committed. Without it, tapping an unopened
+  file over a remote host and then tapping an already-open tab yanks focus back to the file when it arrives
+  *and* claims the slot away from what the user landed on. A **`keep`** still commits — it was deliberate,
+  and swallowing an explicitly opened tab is the worse surprise; re-clicking the *same* row moves the mark
+  forward instead of superseding it, so a double click still promotes. The counter lives in the **store**,
+  bumped inside each action that moves the active tab, specifically so **no focus transition can bypass
+  it** — a first attempt kept it in this module and silently missed `closeTab`, `reopenChat`, `openDoc`, and
+  a new chat, every one of which is a way for the user to move on mid-read. `store/SPEC.md` lists the
+  bumping actions; `appStore.test.ts` asserts each one bumps, and `e2e/preview-tabs.spec.ts` dispatches both
+  clicks in one JS tick so the interleaving is pinned without depending on real latency.
+
+  The active-preview-tab click is the **touch** path: `apps/web/index.html` ships a plain
+  `width=device-width` viewport, so a double tap is the browser's zoom gesture and `dblclick` is not
+  something a phone user can rely on — this is the one promote gesture that works there, and it costs
+  nothing on desktop (that click is otherwise a no-op). Promotion is **one-way**: nothing demotes a kept
+  tab. Chat tabs and `doc` tabs never enter the slot (a chat is an explicit creation; a `DocTab`'s content
+  exists only in the store, so a silent replace would destroy it). There is deliberately **no keyboard
+  shortcut** — VS Code's `⌘K ↵` is the only convention worth copying and it would cost a two-key chord
+  machine the app has no other use for; JetBrains and Zed ship no default binding either. VS Code's
+  *pinned* tabs (sort-first, protected from Close Others) are a separate, unbuilt feature.
 - **Markdown file tabs render, don't read.** A `.md`/`.markdown` `FileTab` (from the file tree **or** the
   Specs panel — same `openTab` path) opens **rendered by default**: `FilePane` gates on `lib.isMarkdownPath`
   and shows a slim `Preview | Source` header (`markdown-view-toggle`), the rendered view being lazy
@@ -332,8 +513,10 @@ a project picker, the prompt hero, and the reused
   is a per-tab `store.setFileTabView` (survives tab switches; not persisted across reload). Non-markdown
   files render Monaco directly with no header, exactly as before.
 - **Rendered markdown navigates.** In the preview, links + images resolve against the file's own path
-  (via `markdownLinks`, passed as the `a`/`img` renderers): a **relative link** opens the target file as
-  a tab through the shared **`openFileInTab`** (the same flow `FileTree` uses), an **in-doc `#` link**
+  (via `markdownLinks`, passed as the `a`/`img` renderers): a **relative link** opens the target file in
+  the **preview** tab through the shared **`openFileInTab`** (the same flow `FileTree` uses) — following a
+  link is browsing, so the slot is reused rather than promoting the source doc the way VS Code does; the
+  slot is the slot, whatever the open came from — an **in-doc `#` link**
   scrolls the preview (headings carry slug ids from the in-repo `remarkHeadingIds` transform), an
   **external** link opens a new tab, and a **relative image** rewrites to the host **`/files/…`** route
   (built from `transport.httpBase()`). A cross-file link's `#fragment` is not yet followed (opens the

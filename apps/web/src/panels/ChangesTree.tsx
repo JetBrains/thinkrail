@@ -1,5 +1,6 @@
 import type { GitFileChange } from "@thinkrail/contracts";
 import { useState } from "react";
+import type { TabIntent } from "../store";
 import { buildChangesTree, type ChangeTreeNode, statusNameClass } from "./changesModel";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { TreeRow } from "./TreeRow";
@@ -8,7 +9,8 @@ import { TreeRow } from "./TreeRow";
  * The Changes panel's folder view: the changed files laid out as a tree, styled exactly like the All-files
  * tree (shared `TreeRow`) with a per-file / per-folder `+/−` badge (shared `DiffStatBadge`) mirroring the
  * project rail's worktree stats. Presentational — the flat list and this view share the same `onOpen`
- * (open/focus the file's diff tab) and `isActive` (selected row) from `ChangesPanel`.
+ * (open/focus the file's diff tab, at the gesture's `TabIntent`) and `isActive` (selected row) from
+ * `ChangesPanel`.
  */
 export function ChangesTree({
 	changes,
@@ -16,7 +18,7 @@ export function ChangesTree({
 	isActive,
 }: {
 	changes: readonly GitFileChange[];
-	onOpen: (path: string) => void;
+	onOpen: (path: string, intent: TabIntent) => void;
 	isActive: (path: string) => boolean;
 }) {
 	return (
@@ -34,7 +36,7 @@ function ChangeNodeRow({
 	isActive,
 }: {
 	node: ChangeTreeNode;
-	onOpen: (path: string) => void;
+	onOpen: (path: string, intent: TabIntent) => void;
 	isActive: (path: string) => boolean;
 }) {
 	// Folders default open — change sets are small, so the tree reads at a glance (like VS Code's SCM tree).
@@ -50,7 +52,8 @@ function ChangeNodeRow({
 					dataStatus={node.status}
 					label={node.name}
 					labelClassName={statusNameClass(node.status)}
-					onClick={() => onOpen(node.path)}
+					onClick={() => onOpen(node.path, "preview")}
+					onDoubleClick={() => onOpen(node.path, "keep")}
 					trailing={<DiffStatBadge added={node.added} removed={node.removed} />}
 				/>
 			</li>

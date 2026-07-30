@@ -28,11 +28,24 @@ warms a remote base ref off the workspace-create critical path.
   added, or a renamed file's new path, degrading to an add-style diff; `modified` = the worktree file,
   empty when deleted; the path is escape-checked against the worktree root); `listBranches(projectId)` → `{ local, remote,
   defaultBranch }` (local `refs/heads`, remote `refs/remotes/origin` minus `origin/HEAD`, default =
-  `origin/HEAD`→`origin/main`→repo `HEAD`); `prefetchBranch(projectId, ref)` — best-effort background
+  `origin/HEAD`→`origin/main`→repo `HEAD`); **`resolveDefaultBranch(repoPath)`** — that default-branch
+  resolution factored out (named once), shared by `listBranches` and the `workspaces` module's
+  Default-workspace ensure (its `baseBranch`); its last fallback is `currentBranch`, so an unborn `HEAD`
+  resolves to the branch name it will become, never the literal `"HEAD"` (which would persist into a
+  user-visible `baseBranch`); **`currentBranch(repoPath)`** — the branch a checkout currently has out
+  (`symbolic-ref --short HEAD`, unborn-safe; detached → literal `HEAD`), consumed by the `workspaces`
+  module for the Default workspace's folder-truth `branch`; `prefetchBranch(projectId, ref)` — best-effort background
   `git fetch` of a remote ref (via `gitAsync`, branch passed after `--` so a `-`-prefixed name can't be
   parsed as a git option), so a later `createWorkspace` branches off a fresh tip without the network
   round-trip on its critical path (non-`origin/` ref / offline → no-op).
-- **Public surface (barrel):** `git`, `gitAsync`, `gitStatus`, `gitDiffFile`, `listBranches`, `prefetchBranch`.
+- **Public surface (barrel):** `git`, `gitAsync`, `gitStatus`, `gitDiffFile`, `listBranches`,
+  `resolveDefaultBranch`, `currentBranch`, `prefetchBranch`.
 - **Allowed deps:** `persistence` (workspace + project lookup); `contracts` (`Git*`/`BranchList` types);
   Bun (spawn).
 - **Forbidden:** `host`; sibling features.
+
+## Get right
+
+- `gitStatus` reports the **live** current branch for a `kind: "default"` workspace (the project
+  folder's branch moves out-of-band — a terminal `git checkout` — and the persisted snapshot self-heals
+  only at list time; the Changes header must not lag).

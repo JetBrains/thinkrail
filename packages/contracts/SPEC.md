@@ -20,7 +20,10 @@ of the host.
 - **Owns:** the wire — entity types, the `pi` event/message types (re-exported), the WS method & channel
   registries, and the protocol version.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain`; the value re-exports
-  `DEFAULT_CONFIG` from `domain`; `export *` (value) of `wsProtocol`
+  `DEFAULT_CONFIG`, `MAX_HISTORY_LIMIT`, `MAX_HISTORY_QUERY_LENGTH`, `TODO_NUDGE_PREFIX` +
+  **`isControlMessage(text)`** (the one shared reading of that marker — the client hides such sends on
+  hydrate, the host skips them in the history index and does not count them as `message_sent`; both
+  sides agree here rather than each re-deriving `startsWith`) from `domain`; `export *` (value) of `wsProtocol`
   (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`).
 - **Allowed deps:** none at runtime. **Type-only** devDeps on `@earendil-works/pi-ai` +
   `@earendil-works/pi-agent-core`, imported **from their package roots** (type-only → erased at build).
@@ -37,7 +40,8 @@ of the host.
     `AssistantMessageEvent`, `Usage`, `StopReason`;
   - **`WireModel`** = `Pick<Model<string>, "id"|"name"|"provider"|"contextWindow"|"reasoning">` **+ the one
     computed field `thinkingLevels`** (pi-ai `getSupportedThinkingLevels`, mapped host-side in `toWireModel`;
-    client→host params carry it inert) — the shape a model takes **on the wire** (`model.list`/`model.default`, the `session.create` result + params,
+    client→host params carry it inert) — the shape a model takes **on the wire**
+    (`model.list`/`model.refresh`/`model.default`, the `session.create` result + params,
     `session.setModel` params, `SessionSummary.model`). An **allowlist** of exactly what the UI renders, *not*
     an `Omit`: `Model.baseUrl` carries the jbcentral proxy secret (`.../wire/<SECRET>/...`) when JetBrains AI
     is wired and `headers` can carry auth, and an allowlist **fails closed** — a future `Model` field (secret
@@ -58,7 +62,10 @@ of the host.
     `disabled`) — the workspace Skills manager's `skills.state` rows.
   - **`SessionSummary`** — a chat session as the host reports it for hydration (read side); `live`
     distinguishes an in-memory session (auto-restored) from a disk-only one (surfaced in chat-history,
-    re-opened on demand). `session.getMessages` returns `{ summary, messages }` (the transcript is
+    re-opened on demand — except one carrying unfinished TODOs, which a client auto-opens). The optional
+    **`openTodos`** (count of non-`done` items in the chat's TODO plan) is populated only by
+    `session.list` (the host decorates via the todos module); absent = unknown, treated as 0 — an
+    additive optional field, so no protocol-version bump. `session.getMessages` returns `{ summary, messages }` (the transcript is
     **`TranscriptMessage[]`** — the pi-canonical `Message` union widened with **`WireCustomMessage`**, a
     type-only mirror of pi-coding-agent's Node-only `CustomMessage`, so extension-injected messages like
     the ask replies cross the wire; the summary reflects the now-live session after a disk re-open).
@@ -93,7 +100,10 @@ of the host.
   optional **`renamed`** flag is the naming lifecycle — absent = **not yet locked** (either pristine
   `workspace-N`, or a *provisional* non-agentic name the host applied from the first prompt), so still
   eligible for the agentic auto-rename; `true` = deliberately named (agentic or user), never auto-touched
-  again), `Session` (chat tab),
+  again; its optional **`kind: "default"`** marks the built-in per-project **Default workspace** — the
+  project folder itself as a workspace, exactly one per project, pinned first in `workspace.list`,
+  non-removable and non-renamable server-side; absent = a normal worktree workspace — an explicit wire
+  field, never an id convention), `Session` (chat tab),
   `FileNode` (file-tree node), `TabStatus`, `Git*`/diff types; **`ProviderStatus`/`ProviderStatusReport`**
   — the auth-provider status rows the Welcome strip renders (per-provider `configured` + auth `kind`:
   oauth / api-key / env / central / other — never credential values; plus `canOAuth`/`canApiKey`/`canLogout`,
@@ -123,6 +133,9 @@ of the host.
   carries only what the panel renders (`type`/`status` stay `string`: tolerate whatever is on disk);
   **`TodoItem`/`TodoGroupItem`/`TodoPlan`** + the **`TodoStatus`/`TodoOrigin`** unions — the in-chat plan
   DTOs, **mirrored** from `pi-todos/core` (never imported), carrying the chat's per-session TODO list.
+  `TodoGroupItem` additionally carries **`status: TodoGroupStatus`** — the group's *task* lifecycle
+  (`pending`/`active`/`done`), **derived by the host** from the steps (`pi-todos`' `groupStatus`) rather than
+  stored: shipping it means the truth table has one home and no client re-derives it.
   **history-search read DTOs** — **`HistoryScope`** (the overlay's cycle: this chat → workspace →
   project → everywhere); **`PromptHit`** (a recalled prompt; carries optional `messageIndex` +
   `anchorText` — the kept-newest occurrence's jump anchor) and **`MessageHit`** (a full-text
@@ -141,9 +154,12 @@ of the host.
   never eagerly for every project) / `workspace.*` / `fs.*` / `git.*` / **`spec.graph`**
   (the Specs-viewer whole-graph read, per workspace) / **`todo.*`** — **`list`**/**`add`**/**`update`**/
   **`remove`**, the chat's per-session TODO plan (keyed by `workspaceId` + `sessionId`; `add` tags the
-  item `origin:"user"`) / `terminal.*` / `model.list` / **`model.clampThinking`** (pi's `clampThinkingLevel` for a
-  `{model, level}` pair — the pre-session picker's effort adjustment, so no client re-derives pi's
-  policy) / **`provider.status`**
+  item `origin:"user"`) / `terminal.*` / `model.list` + **`model.refresh`** (awaits the host's
+  single-flighted catalog refresh and returns **`RefreshedModels`** — the post-refresh list plus
+  **`complete`**, whether that pass settled inside the host's capped wait, since only a settled list is
+  authoritative; `force` bypasses pi's 4h freshness throttle, so a user-initiated refresh actually fetches) / **`model.clampThinking`** (pi's
+  `clampThinkingLevel` for a `{model, level}` pair — the pre-session picker's effort adjustment, so no
+  client re-derives pi's policy) / **`provider.status`**
 (the auth-provider status report; every read revalidates host-side) / the **`provider.*` in-app login**
   (**`loginStart`** — mints a `loginId` and runs pi's login flow **detached** (`type` `"oauth"` |
   `"api_key"`, issue #97 — both auth routes ride one channel; a flow can take minutes and must

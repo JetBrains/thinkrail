@@ -74,9 +74,8 @@ test("`/skill:setting-up-a-project` routes an existing codebase to import and dr
 		"// The image-resizing pipeline — the core domain. Never imports from cli.\nexport function resize(files: string[]): void {\n\tvoid files;\n}\n",
 	);
 
-	// The dialog set this workspace active on create; start a chat in it.
+	// The dialog set this workspace active on create and landed in a fresh chat there.
 	await expect(page.locator('[data-testid="workspace-item"][data-active="true"]')).toHaveCount(1);
-	await page.getByTestId("start-chat").click();
 	await expect(page.getByTestId("chat-input")).toBeVisible();
 
 	// The SAME command the button seeds, plus a no-questions instruction so the interview can't block the

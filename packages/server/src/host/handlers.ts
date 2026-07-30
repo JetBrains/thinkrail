@@ -11,6 +11,7 @@ import type {
 	WireModel,
 	Workspace,
 } from "@thinkrail/contracts";
+import { isControlMessage } from "@thinkrail/contracts";
 import {
 	abortSession,
 	answerQuestion,
@@ -29,6 +30,7 @@ import {
 	listSkillCatalog,
 	listSkillCommands,
 	promptSession,
+	refreshAvailableModels,
 	reloadSessionResources,
 	removeSession,
 	removeWorkspaceSessions,
@@ -37,7 +39,7 @@ import {
 	setSessionThinkingLevel,
 	steerSession,
 } from "../agent";
-import { bucketProviderModel, track } from "../analytics";
+import { bucketProviderModel, type SendMode, track } from "../analytics";
 import {
 	cancelLogin,
 	connectJbcentral,
@@ -80,10 +82,11 @@ import {
 	resizeTerminal,
 	writeTerminal,
 } from "../terminal";
-import { addTodo, listTodos, removeTodo, updateTodo } from "../todos";
+import { addTodo, countOpenTodos, listTodos, removeTodo, updateTodo } from "../todos";
 import { ensureWatch, stopWatch } from "../watch";
 import {
 	createWorkspace,
+	ensureWorkspaceScratchDir,
 	forgetWorkspace,
 	getWorkspace,
 	listWorkspaceRecords,
@@ -112,6 +115,17 @@ async function archiveTeardown(ws: Workspace): Promise<void> {
 	} catch (error) {
 		console.warn(`workspace archive teardown failed for ${ws.id}: ${error}`);
 	}
+}
+
+/**
+ * Analytics for a user-authored send, fired only once the send was ACCEPTED (a rejected send throws
+ * before this and never counts). Carries just the closed-vocabulary `mode` — nothing about the message,
+ * not even its length. Internal control traffic (the client's TODO wake-nudge, marked on the wire) is
+ * not a message the user sent, so it is skipped: the `session.*` send methods carry both kinds.
+ */
+function trackSend(mode: SendMode, text: string): void {
+	if (isControlMessage(text)) return;
+	track({ name: "message_sent", params: { mode } });
 }
 
 const handlers: Record<string, Handler> = {
@@ -305,6 +319,9 @@ const handlers: Record<string, Handler> = {
 			thinkingLevel?: ThinkingLevel;
 		};
 		const ws = getWorkspace(p.workspaceId);
+		// Chat start is what seeds the gitignored scratch dir — for the Default workspace this is the one
+		// moment ThinkRail may write into the user's repo (worktrees self-heal a deleted dir the same way).
+		ensureWorkspaceScratchDir(ws);
 		const created = await createSession({
 			cwd: ws.worktreePath,
 			workspaceId: p.workspaceId,
@@ -326,16 +343,19 @@ const handlers: Record<string, Handler> = {
 	"session.prompt": async (params) => {
 		const p = params as { sessionId: string; text: string; images?: ImageContent[] };
 		await ackSend(promptSession(p.sessionId, p.text, p.images));
+		trackSend("prompt", p.text);
 		return { ok: true } as const;
 	},
 	"session.steer": async (params) => {
 		const p = params as { sessionId: string; text: string; images?: ImageContent[] };
 		await ackSend(steerSession(p.sessionId, p.text, p.images));
+		trackSend("steer", p.text);
 		return { ok: true } as const;
 	},
 	"session.followUp": async (params) => {
 		const p = params as { sessionId: string; text: string; images?: ImageContent[] };
 		await ackSend(followUpSession(p.sessionId, p.text, p.images));
+		trackSend("follow_up", p.text);
 		return { ok: true } as const;
 	},
 	"session.abort": async (params) => {
@@ -364,9 +384,21 @@ const handlers: Record<string, Handler> = {
 	"session.getStats": (params) => getSessionStats((params as { sessionId: string }).sessionId),
 	"session.getCommands": (params) =>
 		getSessionCommands((params as { sessionId: string }).sessionId),
-	"session.list": (params) => {
+	"session.list": async (params) => {
 		const { workspaceId } = params as { workspaceId: string };
-		return listSessions(workspaceId, getWorkspace(workspaceId).worktreePath);
+		const summaries = await listSessions(workspaceId, getWorkspace(workspaceId).worktreePath);
+		// Decorate with each chat's unfinished-TODO count (agent stays todos-free — host composes, the
+		// same pattern as history + scope). A single failed count omits the field, never fails the list.
+		return summaries.map((summary) => {
+			try {
+				return {
+					...summary,
+					openTodos: countOpenTodos({ workspaceId, sessionId: summary.sessionId }),
+				};
+			} catch {
+				return summary;
+			}
+		});
 	},
 	"session.getMessages": (params) => {
 		const p = params as { sessionId: string; workspaceId: string };
@@ -392,6 +424,10 @@ const handlers: Record<string, Handler> = {
 	"model.clampThinking": async (params) => {
 		const p = params as { provider: string; id: string; level: ThinkingLevel };
 		return { level: await clampThinkingForModel({ provider: p.provider, id: p.id }, p.level) };
+	},
+	"model.refresh": (params) => {
+		const p = params as { force?: boolean };
+		return refreshAvailableModels(p.force === true);
 	},
 	"model.default": () => getDefaultModel(),
 	"provider.status": () => getProviderStatus(),

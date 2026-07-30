@@ -6,9 +6,11 @@ import type {
 	LoginPush,
 	PiEvent,
 	Project,
+	RefreshedModels,
 	SessionStats,
 	SessionSummary,
 	SlashCommandInfo,
+	SpecGraphNode,
 	ThemeId,
 	ThinkingLevel,
 	WireModel,
@@ -20,8 +22,14 @@ import { create } from "zustand";
 import type { LoginState } from "../auth";
 import type { HydratedRuntime } from "../chat/hydrate";
 import type { ChatTurn, ExtUiDialogRequest, ToolResultState } from "../chat/types";
+import { shallowEqualArrays } from "../lib";
 import type { ConnectionStatus } from "../transport";
-import { type HistoryTarget, isSkillPath, selectWorkspaceTick } from "./selectors";
+import {
+	type HistoryTarget,
+	isSkillPath,
+	selectWorkspaceNavTick,
+	selectWorkspaceTick,
+} from "./selectors";
 
 /** A center tab. File tabs (Monaco) and chat tabs share the strip, discriminated by `kind`. */
 export interface FileTab {
@@ -80,6 +88,13 @@ export interface DiffTab {
 export type EditorTab = FileTab | ChatTab | DocTab | DiffTab;
 
 /**
+ * How an open/reveal treats the workspace's single **preview slot**. `preview` is a light "I'm just
+ * browsing" open (a tree click, a link follow) that reuses the slot; `keep` is a deliberate open (a
+ * double click) that takes a tab of its own. See `previewTabByWorkspace`.
+ */
+export type TabIntent = "preview" | "keep";
+
+/**
  * A section of the settings dialog (a const-object "enum", the codebase convention). Extensible — the live
  * sections are providers, github, appearance (the theme picker), templates (prompt-template manager),
  * and privacy (the analytics toggle).
@@ -92,6 +107,12 @@ export const SettingsSection = {
 	Privacy: "privacy",
 } as const;
 export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSection];
+
+/**
+ * The right panel's views. The id lives here, not in `panels`, because the *intent* to show one is store
+ * state (`rightTabRequest`) that chat raises and the panel obeys — `RightPanel` reads the union back.
+ */
+export type RightPanelTab = "specs" | "files" | "changes";
 
 /** A transient notification. `error` persists until dismissed; `success`/`info` auto-dismiss (the Toaster
  * owns the timer). `title` is optional — a bare `message` is the common case. */
@@ -404,17 +425,13 @@ function reduceExtUi(
 				turns: [...rt.turns, { kind: "system", id: crypto.randomUUID(), text: request.message }],
 			};
 		case "setStatus": {
-			if (request.text === null) {
-				const { [request.key]: _drop, ...extUiStatus } = rt.extUiStatus;
-				return { ...rt, extUiStatus };
-			}
+			if (request.text === null)
+				return { ...rt, extUiStatus: omitKey(rt.extUiStatus, request.key) };
 			return { ...rt, extUiStatus: { ...rt.extUiStatus, [request.key]: request.text } };
 		}
 		case "setWidget": {
-			if (request.content === null) {
-				const { [request.key]: _drop, ...extUiWidget } = rt.extUiWidget;
-				return { ...rt, extUiWidget };
-			}
+			if (request.content === null)
+				return { ...rt, extUiWidget: omitKey(rt.extUiWidget, request.key) };
 			return { ...rt, extUiWidget: { ...rt.extUiWidget, [request.key]: request.content } };
 		}
 		default:
@@ -432,6 +449,31 @@ interface AppState {
 	/** Center tabs belong to a workspace — switching workspaces swaps the visible tab set. */
 	tabsByWorkspace: Record<string, EditorTab[]>;
 	activeTabByWorkspace: Record<string, string | null>;
+	/**
+	 * The workspace's **preview tab** — the one reusable slot a light open lands in (rendered italic; see
+	 * `panels/SPEC.md`). Keyed like `activeTabByWorkspace`, so "at most one preview tab per workspace" is
+	 * structural rather than a rule every writer has to remember, and the `EditorTab` union stays pure data.
+	 * Absent = this workspace has no preview tab.
+	 */
+	previewTabByWorkspace: Record<string, string>;
+	/**
+	 * Monotonic count of **center-area navigations** per workspace. Rendered by nothing: it exists so a
+	 * **slow read can tell it was overtaken**. A click is instant and an `fs.readFile` is not, so
+	 * `panels/openTabs.ts` records this count when it starts a read and drops a `preview` that lands after
+	 * the count has moved — otherwise the file would steal focus back from wherever the user went, and claim
+	 * the preview slot from it. It lives here rather than in that module so **no focus transition can bypass
+	 * it**: `openDoc`/`setActiveTab`/`closeTab`/`openChatSession`/`closeChatToHistory`/`reopenChat`/
+	 * `requestHistoryOpen` all bump it, `hydrateSession` only when it actually takes focus, and
+	 * `noteNavigation` covers an intent whose focus change hasn't reached the store yet.
+	 *
+	 * **`openTab` deliberately does NOT bump it** — it *is* the read completion being ordered, so counting it
+	 * would make an earlier read's own commit look like user navigation and drop the later one. Two browse
+	 * clicks in a row is exactly that case: clicking an unopened file writes no store state, so both reads
+	 * would record the same count and the first to land would invalidate the second, leaving the *first*
+	 * click's file open. `openTabs.ts` therefore bumps this at **request** time and is the only caller of
+	 * `openTab`; a request and a completion are different events and only the request counts as navigating.
+	 */
+	navTickByWorkspace: Record<string, number>;
 	/** Chat tabs the user closed, per workspace (most-recent-first) — reopenable while their runtime lives. */
 	closedChatsByWorkspace: Record<string, ClosedChat[]>;
 	/** Terminals are workspace-scoped too; their instances stay mounted (hidden) to preserve buffers. */
@@ -445,13 +487,47 @@ interface AppState {
 	 * Templates settings panel (Task B6) bumps it after a `template.save`/`delete`; the store holds only
 	 * the counter, never fetches (see `chat/SPEC.md`'s Template slots bullet). */
 	templatesVersion: number;
+	/** An awaited `model.refresh` is in flight (the picker's freshness affordance) — guards re-entry
+	 * and spins the picker's refresh row. */
+	modelsRefreshing: boolean;
+	/**
+	 * Provenance of the `models` list above: true only while it holds the installed result of an awaited
+	 * forced `model.refresh` — the one read whose catalog pass had finished when the host answered.
+	 *
+	 * It lives HERE, beside the list it describes, because `models` is app-wide: a `model.list` install
+	 * from any consumer (a picker open, another chat mounting) replaces the list, and authority has to
+	 * fall with it. Held as a consumer's local flag instead, it would outlive the list it was about and a
+	 * removed model would get confirmed as present, then rejected by `create()`. `model.list` can never
+	 * set it, nor can a refresh whose wait was **capped** (`RefreshedModels.complete: false` — current list,
+	 * unsettled pass) — `model.list`'s handler starts a *detached* refresh and answers from before it, so the registry can
+	 * move underneath the reply with the client none the wiser. A consumer *activating* drops it up front
+	 * (`dropModelsFreshness`), because a flag left by an earlier consumer says nothing about whether the
+	 * inherited list still matches the registry this activation will be judged against.
+	 */
+	modelsFresh: boolean;
+	/**
+	 * Which right-panel view to show, when something outside it asks (a chat turn-divider chip). The panel
+	 * watches this ONE field, so "flip to a view" is a single concept rather than a side effect read off
+	 * each path intent below — a chip that only *reveals* a view (expanding its artifact list) needs no path
+	 * at all. Workspace-scoped, so a request from another workspace's chat can't move the active panel; a
+	 * fresh object each call so identical re-requests still fire, and **consumed** by the panel that obeys it
+	 * (`clearRightTabRequest`) — an unconsumed flip would re-fire whenever the workspace is re-activated,
+	 * moving the tab the user has since chosen.
+	 */
+	rightTabRequest: { workspaceId: string; tab: RightPanelTab } | null;
 	/**
 	 * A request to surface a file in the right-panel Changes view (e.g. a chat turn-divider's "files
-	 * changed" chip). The panels watch it and, when it targets the active workspace, switch to the Changes
-	 * tab and **highlight** the file's row — the diff opens only on an explicit click. A fresh object each
-	 * call so identical re-requests still fire.
+	 * changed" chip). `ChangesPanel` highlights the file's row AND opens its diff tab (a path no longer in
+	 * the diff degrades to highlight-only), then **consumes** the request (`clearChangesRequest`) — it
+	 * opens a center tab, so a replay on a git-status re-read would steal the user's tab. Travels with a
+	 * `rightTabRequest` for the flip. A fresh object each call so identical re-requests still fire.
+	 *
+	 * `navTick` stamps the center-navigation count **as the chip was clicked**. The panel cannot act on the
+	 * request until `git.status` resolves the path against the diff, so the click and the open are a round
+	 * trip apart; without the stamp the open would mark itself as the navigation on arrival and override
+	 * whatever the user did in between. See `ChangesPanel`.
 	 */
-	changesRequest: { workspaceId: string; path: string } | null;
+	changesRequest: { workspaceId: string; path: string; navTick: number } | null;
 	/**
 	 * A history-search "jump to message" deep link, set by `requestChatLocation` and consumed by
 	 * `CenterTabs` (open/hydrate the target chat tab) then `ChatView` (scroll to the anchored turn, then
@@ -467,6 +543,21 @@ interface AppState {
 	 * A fresh object each call so a repeated chord still fires.
 	 */
 	historyOpenRequest: { sessionId: string } | null;
+	/**
+	 * A request to surface a spec in the right-panel Specs view (e.g. a chat turn-divider's "specs" chip).
+	 * The panels watch it and **open the rendered spec** — unlike a diff, a spec doc has nothing to preview
+	 * short of opening it, and the tree row lights up on its own (rows key off the active tab id). Travels
+	 * with a `rightTabRequest` for the flip, and is **consumed** once handled (it opens a center tab, so a
+	 * replay would steal the user's tab). A fresh object each call so identical re-requests still fire.
+	 */
+	specRequest: { workspaceId: string; path: string } | null;
+	/**
+	 * Each workspace's spec-graph snapshot (`spec.graph`), fetched by the Specs panel and kept here so the
+	 * chat can classify a written path as a spec without a second read — the ONE definition of "this file is
+	 * a spec", shared by the panel that lists them and the turn divider that counts them. Absent until the
+	 * first fetch lands; the panel refetches on the workspace fs tick, so it tracks the filesystem.
+	 */
+	specsByWorkspace: Record<string, SpecGraphNode[]>;
 	/**
 	 * The live-refresh signal, per workspace: `tick` increments on every `workspace.fsChanged` push (the
 	 * host's debounced worktree change notifier); `paths`/`truncated` are the LAST batch only. Panels
@@ -539,12 +630,26 @@ interface AppState {
 	selectProject: (projectId: string) => void;
 	/** Enter a workspace and select its owning project in one state transition. */
 	activateWorkspace: (workspace: Pick<Workspace, "id" | "projectId">) => void;
-	openTab: (tab: EditorTab) => void;
+	/**
+	 * Open a center tab — an already-open id focuses instead of duplicating. `intent: "preview"` puts it in
+	 * the workspace's preview slot, **replacing the previous preview tab at its index** so the strip doesn't
+	 * reshuffle under the cursor; `intent: "keep"` appends a normal tab and releases the slot if it pointed
+	 * at this id. Chat tabs and `openDoc` never take the slot (see `previewTabByWorkspace`).
+	 */
+	openTab: (tab: EditorTab, intent: TabIntent) => void;
 	/** Open (or refresh + focus, if already open) an ephemeral rendered-markdown `doc` tab. Re-invoking
 	 * with the same id replaces its content so a "compile current state" action always shows the latest. */
 	openDoc: (tab: DocTab) => void;
 	closeTab: (id: string) => void;
-	setActiveTab: (id: string) => void;
+	/** Activate a tab. `intent: "keep"` also promotes it out of the preview slot — one-way: nothing ever
+	 * demotes a kept tab back to preview. */
+	setActiveTab: (id: string, intent?: TabIntent) => void;
+	/**
+	 * Record a center-area navigation whose focus change hasn't reached the store yet — starting a chat,
+	 * whose tab only appears once `session.create` returns. Supersedes any read in flight for the workspace
+	 * (see `navTickByWorkspace`), so a file the user has navigated away from can't activate itself on arrival.
+	 */
+	noteNavigation: (workspaceId: string) => void;
 	/** Set a markdown file tab's view mode (rendered ↔ source); kept on the tab so it survives tab switches. */
 	setFileTabView: (id: string, view: "rendered" | "source") => void;
 	setDiffTabView: (id: string, view: DiffTabView) => void;
@@ -614,6 +719,15 @@ interface AppState {
 	handlePiEvent: (event: PiEvent, sessionId: string) => void;
 	setModels: (models: WireModel[]) => void;
 	bumpTemplatesVersion: () => void;
+	/** Atomic begin/finish of the awaited catalog refresh — `finish` lands the new list (null = failed
+	 * refresh: keep the current list, and with it its provenance) and clears the flag in ONE write. The
+	 * host's `complete` decides provenance: a capped wait can answer with a list that is current but not
+	 * settled, and only a settled one is authority. */
+	beginModelsRefresh: () => void;
+	finishModelsRefresh: (result: RefreshedModels | null) => void;
+	/** Give up authority without replacing the list — a consumer activating can't yet know whether the
+	 * list it inherited still matches the host registry. */
+	dropModelsFreshness: () => void;
 	setCurrentModel: (sessionId: string, model: WireModel) => void;
 	setThinkingLevel: (sessionId: string, level: ThinkingLevel) => void;
 	setStats: (sessionId: string, stats: SessionStats) => void;
@@ -637,8 +751,12 @@ interface AppState {
 	setSettingsSection: (section: SettingsSection) => void;
 	/** Fold the server-synced app config in (from `server.welcome` / the `settings.changed` broadcast). */
 	applyConfig: (config: AppConfig) => void;
-	/** Ask the right panel to open `path`'s diff in its Changes view (deep-link from chat). */
+	/** Ask the right panel to show one of its views — no path, just the flip (a chip revealing its list). */
+	requestRightTab: (workspaceId: string, tab: RightPanelTab) => void;
+	/** Ask the right panel to surface `path` in its Changes view (deep-link from chat); flips to it too. */
 	requestChangesView: (workspaceId: string, path: string) => void;
+	/** Drop the Changes deep-link once handled (it opens a diff tab — it must fire exactly once). */
+	clearChangesRequest: () => void;
 	/**
 	 * Open a history-search hit: sets `chatLocationRequest` AND switches `activeWorkspaceId` (the hit's
 	 * chat can live in a different workspace than the one the search ran from).
@@ -654,12 +772,69 @@ interface AppState {
 	requestHistoryOpen: (target: HistoryTarget) => void;
 	/** Dismiss the history-open request once `ChatView` has acted on it. */
 	clearHistoryOpen: () => void;
+	/** Ask the right panel to open `path` in its Specs view (deep-link from chat); flips to it too. */
+	requestSpecView: (workspaceId: string, path: string) => void;
+	/** Drop the spec deep-link once a panel has acted on it (it opens a tab — it must fire exactly once). */
+	clearSpecRequest: () => void;
+	/** Drop the view request once the panel has flipped, so re-activating a workspace can't replay it. */
+	clearRightTabRequest: () => void;
+	/** Record a workspace's fetched spec-graph snapshot (`useWorkspaceSpecs`' read lands here). */
+	setWorkspaceSpecs: (workspaceId: string, nodes: SpecGraphNode[]) => void;
 	/** Enqueue a toast; returns its id so a caller can dismiss it early. An identical live toast (same
 	 * variant/title/message — e.g. a retried failure) coalesces: no twin is added, the existing id returns.
 	 * The queue caps at `MAX_TOASTS` (oldest drop). Prefer the `toast` helper. */
 	pushToast: (toast: Omit<Toast, "id">) => string;
 	/** Drop a toast (user dismiss or the Toaster's auto-timeout). A missing id is a no-op. */
 	dismissToast: (id: string) => void;
+}
+
+/**
+ * A record without `key` — the immutable delete behind every per-workspace / per-session cleanup here
+ * (`applyWorkspaceRemoved`, `clearWorkspaceTabs`, `closeSession`, the ext-UI request drops). One helper so a
+ * new keyed map added to the state can be cleaned up with a single readable line.
+ */
+function omitKey<T>(record: Record<string, T>, key: string): Record<string, T> {
+	const { [key]: _dropped, ...rest } = record;
+	return rest;
+}
+
+/** Field-wise equality of two spec-graph nodes — every field the DTO carries, so "unchanged" is honest. */
+function sameSpecNode(a: SpecGraphNode, b: SpecGraphNode): boolean {
+	return (
+		a.id === b.id &&
+		a.type === b.type &&
+		a.title === b.title &&
+		a.status === b.status &&
+		a.path === b.path &&
+		a.parent === b.parent &&
+		shallowEqualArrays(a.dependsOn, b.dependsOn) &&
+		shallowEqualArrays(a.references, b.references) &&
+		shallowEqualArrays(a.implements, b.implements) &&
+		shallowEqualArrays(a.tags, b.tags)
+	);
+}
+
+/**
+ * Whether a re-read produced the same graph. The Specs read refetches on every worktree fs tick, and most
+ * ticks change no spec at all — keeping the previous array identity on those makes the refetch free for
+ * `ChatView`, whose `isSpec` memo (and with it `deriveRows` over the whole transcript, for every open chat)
+ * would otherwise be invalidated about once a second during any file activity.
+ */
+/**
+ * Advance a workspace's center-navigation count (see `navTickByWorkspace`). Every action that moves the
+ * active tab folds this into its own `set`, so the bump is atomic with the focus change it describes and
+ * a caller can't forget it separately.
+ */
+function bumpNav(s: AppState, workspaceId: string): Record<string, number> {
+	return { ...s.navTickByWorkspace, [workspaceId]: selectWorkspaceNavTick(s, workspaceId) + 1 };
+}
+
+function sameSpecGraph(prev: SpecGraphNode[] | undefined, next: SpecGraphNode[]): boolean {
+	if (!prev || prev.length !== next.length) return false;
+	return prev.every((node, i) => {
+		const candidate = next[i];
+		return candidate !== undefined && sameSpecNode(node, candidate);
+	});
 }
 
 /** Apply an immutable update to one session's runtime; a no-op (and no new `sessions` object) if it's gone. */
@@ -740,13 +915,20 @@ export const useAppStore = create<AppState>((set, get) => ({
 	activeWorkspaceId: null,
 	tabsByWorkspace: {},
 	activeTabByWorkspace: {},
+	previewTabByWorkspace: {},
+	navTickByWorkspace: {},
 	closedChatsByWorkspace: {},
 	terminalsByWorkspace: {},
 	activeTerminalByWorkspace: {},
 	sessions: {},
 	models: [],
 	templatesVersion: 0,
+	rightTabRequest: null,
+	modelsRefreshing: false,
+	modelsFresh: false,
 	changesRequest: null,
+	specRequest: null,
+	specsByWorkspace: {},
 	changesView: "list",
 	chatLocationRequest: null,
 	historyOpenRequest: null,
@@ -808,12 +990,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 		const name = s.workspaces[projectId]?.find((w) => w.id === workspaceId)?.name;
 		s.removeWorkspace(projectId, workspaceId);
 		s.clearWorkspaceTabs(workspaceId); // drops the row's tabs + terminals + chat runtimes
-		// Drop the live-refresh signal too — a removed workspace's fs tick record must not linger.
-		set((state) => {
-			const { [workspaceId]: _gone, ...rest } = state.fsChangesByWorkspace;
-			const { [workspaceId]: _skillGone, ...skillRest } = state.skillChangeTickByWorkspace;
-			return { fsChangesByWorkspace: rest, skillChangeTickByWorkspace: skillRest };
-		});
+		// Drop the live-refresh signal + the cached spec graph too — a removed workspace's records must not
+		// linger (the worktree is gone; a same-id workspace can never come back).
+		set((state) => ({
+			fsChangesByWorkspace: omitKey(state.fsChangesByWorkspace, workspaceId),
+			skillChangeTickByWorkspace: omitKey(state.skillChangeTickByWorkspace, workspaceId),
+			specsByWorkspace: omitKey(state.specsByWorkspace, workspaceId),
+		}));
 		if (wasActive) {
 			s.selectProject(projectId); // atomically fall back to the removed workspace's Project Home
 			toast.info(`Workspace "${name ?? "?"}" was removed`);
@@ -822,14 +1005,36 @@ export const useAppStore = create<AppState>((set, get) => ({
 	selectProject: (selectedProjectId) => set({ selectedProjectId, activeWorkspaceId: null }),
 	activateWorkspace: (workspace) =>
 		set({ selectedProjectId: workspace.projectId, activeWorkspaceId: workspace.id }),
-	openTab: (tab) =>
+	openTab: (tab, intent) =>
 		set((s) => {
-			const tabs = s.tabsByWorkspace[tab.workspaceId] ?? [];
+			const wsId = tab.workspaceId;
+			const tabs = s.tabsByWorkspace[wsId] ?? [];
+			const preview = s.previewTabByWorkspace[wsId];
+			const activeTabByWorkspace = { ...s.activeTabByWorkspace, [wsId]: tab.id };
+			// Already open: focus it. A `keep` promotes it; a `preview` deliberately leaves every tab's state
+			// alone, so re-clicking a kept tab in the tree never demotes it and never steals the slot.
+			if (tabs.some((t) => t.id === tab.id)) {
+				return {
+					activeTabByWorkspace,
+					previewTabByWorkspace:
+						intent === "keep" && preview === tab.id
+							? omitKey(s.previewTabByWorkspace, wsId)
+							: s.previewTabByWorkspace,
+				};
+			}
+			// A preview open reuses the outgoing tab's position, so browsing a tree swaps one tab in place
+			// instead of reshuffling the strip under the cursor.
+			const at = intent === "preview" && preview ? tabs.findIndex((t) => t.id === preview) : -1;
 			return {
-				tabsByWorkspace: tabs.some((t) => t.id === tab.id)
-					? s.tabsByWorkspace
-					: { ...s.tabsByWorkspace, [tab.workspaceId]: [...tabs, tab] },
-				activeTabByWorkspace: { ...s.activeTabByWorkspace, [tab.workspaceId]: tab.id },
+				tabsByWorkspace: {
+					...s.tabsByWorkspace,
+					[wsId]: at === -1 ? [...tabs, tab] : tabs.with(at, tab),
+				},
+				activeTabByWorkspace,
+				previewTabByWorkspace:
+					intent === "preview"
+						? { ...s.previewTabByWorkspace, [wsId]: tab.id }
+						: s.previewTabByWorkspace,
 			};
 		}),
 	openDoc: (tab) =>
@@ -842,6 +1047,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 					[tab.workspaceId]: exists ? tabs.map((t) => (t.id === tab.id ? tab : t)) : [...tabs, tab],
 				},
 				activeTabByWorkspace: { ...s.activeTabByWorkspace, [tab.workspaceId]: tab.id },
+				navTickByWorkspace: bumpNav(s, tab.workspaceId),
 			};
 		}),
 	closeTab: (id) =>
@@ -856,14 +1062,29 @@ export const useAppStore = create<AppState>((set, get) => ({
 					...s.activeTabByWorkspace,
 					[wsId]: wasActive ? (tabs.at(-1)?.id ?? null) : (s.activeTabByWorkspace[wsId] ?? null),
 				},
+				// Only a close that actually moves focus is a navigation. Closing some other tab in the strip
+				// leaves the user exactly where they were, so counting it would discard a browse still in
+				// flight — the clicked file would never open.
+				navTickByWorkspace: wasActive ? bumpNav(s, wsId) : s.navTickByWorkspace,
+				// A closed tab must never leave a dangling slot id behind.
+				...(s.previewTabByWorkspace[wsId] === id
+					? { previewTabByWorkspace: omitKey(s.previewTabByWorkspace, wsId) }
+					: {}),
 			};
 		}),
-	setActiveTab: (id) =>
-		set((s) =>
-			s.activeWorkspaceId
-				? { activeTabByWorkspace: { ...s.activeTabByWorkspace, [s.activeWorkspaceId]: id } }
-				: {},
-		),
+	setActiveTab: (id, intent) =>
+		set((s) => {
+			const wsId = s.activeWorkspaceId;
+			if (!wsId) return {};
+			return {
+				activeTabByWorkspace: { ...s.activeTabByWorkspace, [wsId]: id },
+				navTickByWorkspace: bumpNav(s, wsId),
+				...(intent === "keep" && s.previewTabByWorkspace[wsId] === id
+					? { previewTabByWorkspace: omitKey(s.previewTabByWorkspace, wsId) }
+					: {}),
+			};
+		}),
+	noteNavigation: (workspaceId) => set((s) => ({ navTickByWorkspace: bumpNav(s, workspaceId) })),
 	setFileTabView: (id, view) =>
 		set((s) => {
 			const wsId = s.activeWorkspaceId;
@@ -984,19 +1205,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 				delete sessions[closed.sessionId];
 				delete skillsSyncedTickBySession[closed.sessionId];
 			}
-			const { [workspaceId]: _tabs, ...tabsByWorkspace } = s.tabsByWorkspace;
-			const { [workspaceId]: _activeTab, ...activeTabByWorkspace } = s.activeTabByWorkspace;
-			const { [workspaceId]: _closed, ...closedChatsByWorkspace } = s.closedChatsByWorkspace;
-			// Dropping the terminals unmounts their instances, which close the PTYs server-side.
-			const { [workspaceId]: _terms, ...terminalsByWorkspace } = s.terminalsByWorkspace;
-			const { [workspaceId]: _activeTerm, ...activeTerminalByWorkspace } =
-				s.activeTerminalByWorkspace;
 			return {
-				tabsByWorkspace,
-				activeTabByWorkspace,
-				closedChatsByWorkspace,
-				terminalsByWorkspace,
-				activeTerminalByWorkspace,
+				tabsByWorkspace: omitKey(s.tabsByWorkspace, workspaceId),
+				activeTabByWorkspace: omitKey(s.activeTabByWorkspace, workspaceId),
+				previewTabByWorkspace: omitKey(s.previewTabByWorkspace, workspaceId),
+				navTickByWorkspace: omitKey(s.navTickByWorkspace, workspaceId),
+				closedChatsByWorkspace: omitKey(s.closedChatsByWorkspace, workspaceId),
+				// Dropping the terminals unmounts their instances, which close the PTYs server-side.
+				terminalsByWorkspace: omitKey(s.terminalsByWorkspace, workspaceId),
+				activeTerminalByWorkspace: omitKey(s.activeTerminalByWorkspace, workspaceId),
 				sessions,
 				skillsSyncedTickBySession,
 			};
@@ -1042,6 +1259,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 					? s.tabsByWorkspace
 					: { ...s.tabsByWorkspace, [workspaceId]: [...tabs, tab] },
 				activeTabByWorkspace: { ...s.activeTabByWorkspace, [workspaceId]: id },
+				navTickByWorkspace: bumpNav(s, workspaceId),
 				// Keep any existing runtime (idempotent); otherwise start a fresh one.
 				sessions: fresh
 					? { ...s.sessions, [sessionId]: newRuntime(model, thinkingLevel) }
@@ -1062,9 +1280,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 	closeChatRuntime: (sessionId) =>
 		set((s) => {
 			if (!s.sessions[sessionId]) return {};
-			const { [sessionId]: _drop, ...sessions } = s.sessions;
-			const { [sessionId]: _syncDrop, ...skillsSyncedTickBySession } = s.skillsSyncedTickBySession;
-			return { sessions, skillsSyncedTickBySession };
+			return {
+				sessions: omitKey(s.sessions, sessionId),
+				skillsSyncedTickBySession: omitKey(s.skillsSyncedTickBySession, sessionId),
+			};
 		}),
 	closeChatToHistory: (sessionId) =>
 		set((s) => {
@@ -1078,6 +1297,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 			const entry: ClosedChat = { sessionId, title: tab.name, closedAt: Date.now() };
 			return {
 				tabsByWorkspace: { ...s.tabsByWorkspace, [wsId]: remaining },
+				// Same rule as `closeTab`: only a close that moves focus counts as a navigation.
+				navTickByWorkspace: wasActive ? bumpNav(s, wsId) : s.navTickByWorkspace,
 				activeTabByWorkspace: {
 					...s.activeTabByWorkspace,
 					[wsId]: wasActive
@@ -1107,6 +1328,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 					? s.tabsByWorkspace
 					: { ...s.tabsByWorkspace, [wsId]: [...tabs, tab] },
 				activeTabByWorkspace: { ...s.activeTabByWorkspace, [wsId]: id },
+				navTickByWorkspace: bumpNav(s, wsId),
 				closedChatsByWorkspace: {
 					...s.closedChatsByWorkspace,
 					[wsId]: closed.filter((c) => c.sessionId !== sessionId),
@@ -1182,6 +1404,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 					activate || !hasActive
 						? { ...s.activeTabByWorkspace, [wsId]: id }
 						: s.activeTabByWorkspace,
+				// Only a hydrate that TOOK focus is a navigation; a background auto-restore must not
+				// supersede a read the user is waiting on.
+				navTickByWorkspace: activate || !hasActive ? bumpNav(s, wsId) : s.navTickByWorkspace,
 				// It's open now, so it leaves history (if it was a disk-only entry there).
 				closedChatsByWorkspace: closed.some((c) => c.sessionId === summary.sessionId)
 					? {
@@ -1218,8 +1443,18 @@ export const useAppStore = create<AppState>((set, get) => ({
 	// The event→store dispatcher: route each pi event to its session's runtime, so chats stream independently.
 	handlePiEvent: (event, sessionId) =>
 		set((s) => withRuntime(s, sessionId, (rt) => reduceSessionEvent(rt, event))),
-	setModels: (models) => set({ models }),
+	// A `model.list` snapshot: current, but never authoritative — installing it drops `modelsFresh`.
+	setModels: (models) => set({ models, modelsFresh: false }),
 	bumpTemplatesVersion: () => set((s) => ({ templatesVersion: s.templatesVersion + 1 })),
+	beginModelsRefresh: () => set({ modelsRefreshing: true }),
+	dropModelsFreshness: () => set({ modelsFresh: false }),
+	// The only writer of `modelsFresh: true` — and only for a list that actually arrived AND settled.
+	finishModelsRefresh: (result) =>
+		set((s) => ({
+			modelsRefreshing: false,
+			models: result?.models ?? s.models,
+			modelsFresh: result ? result.complete : s.modelsFresh,
+		})),
 	setCurrentModel: (sessionId, model) =>
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, model }))),
 	setThinkingLevel: (sessionId, level) =>
@@ -1286,7 +1521,16 @@ export const useAppStore = create<AppState>((set, get) => ({
 	closeSettings: () => set({ settingsOpen: false }),
 	setSettingsSection: (section) => set({ settingsSection: section }),
 	applyConfig: (config) => set({ theme: config.theme, analyticsEnabled: config.analyticsEnabled }),
-	requestChangesView: (workspaceId, path) => set({ changesRequest: { workspaceId, path } }),
+	requestRightTab: (workspaceId, tab) => set({ rightTabRequest: { workspaceId, tab } }),
+	// The path intent and the flip always travel together — one action, so no call site can send half of it.
+	// The nav count is stamped here, at the click, because that is when the user navigated — the panel only
+	// gets to act on this a `git.status` round trip later.
+	requestChangesView: (workspaceId, path) =>
+		set((s) => ({
+			changesRequest: { workspaceId, path, navTick: selectWorkspaceNavTick(s, workspaceId) },
+			rightTabRequest: { workspaceId, tab: "changes" },
+		})),
+	clearChangesRequest: () => set({ changesRequest: null }),
 	// Activate project + workspace together (the same atomicity `activateWorkspace` upholds) so a jump into
 	// another project can never leave `selectedProjectId` on the source while `activeWorkspaceId` points
 	// elsewhere. The caller (`useHistorySearch.openMessage`) ensures the target project's workspaces are
@@ -1302,8 +1546,19 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) => ({
 			historyOpenRequest: { sessionId: target.sessionId },
 			activeTabByWorkspace: { ...s.activeTabByWorkspace, [target.workspaceId]: target.tabId },
+			navTickByWorkspace: bumpNav(s, target.workspaceId),
 		})),
 	clearHistoryOpen: () => set({ historyOpenRequest: null }),
+	requestSpecView: (workspaceId, path) =>
+		set({ specRequest: { workspaceId, path }, rightTabRequest: { workspaceId, tab: "specs" } }),
+	clearSpecRequest: () => set({ specRequest: null }),
+	clearRightTabRequest: () => set({ rightTabRequest: null }),
+	setWorkspaceSpecs: (workspaceId, nodes) =>
+		set((s) =>
+			sameSpecGraph(s.specsByWorkspace[workspaceId], nodes)
+				? {}
+				: { specsByWorkspace: { ...s.specsByWorkspace, [workspaceId]: nodes } },
+		),
 	pushToast: (toast) => {
 		const twin = get().toasts.find(
 			(t) => t.variant === toast.variant && t.title === toast.title && t.message === toast.message,

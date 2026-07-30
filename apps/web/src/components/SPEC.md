@@ -26,8 +26,9 @@ which has its own spec.
 - **Public surface:** `ErrorBoundary`, `isChunkLoadError` — imported directly via
   `@/components/ErrorBoundary` (no barrel). The `ui/` primitives are their own sub-module
   ([components/ui/SPEC.md](ui/SPEC.md)).
-- **Allowed deps:** React, `lucide-react`. **Nothing else internal** — kept dependency-light on purpose so
-  *any* region (shell, panels, `main.tsx`) can wrap in it without creating a cycle.
+- **Allowed deps:** React, `lucide-react`, `lib` (`shallowEqualArrays` — the reset-keys comparison, shared
+  rather than re-stated). Kept dependency-light on purpose, and `lib` is a leaf, so *any* region (shell,
+  panels, `main.tsx`) can still wrap in it without creating a cycle.
 - **Forbidden:** `store`/`transport`/`panels`/`shell`/`chat`/`contracts`; `server`/`shared`/`pi`; inline
   `style` objects or raw hex (fallback is themed with token utilities only).
 

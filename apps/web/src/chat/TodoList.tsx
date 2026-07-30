@@ -5,55 +5,68 @@ import {
 	ChevronRight,
 	Circle,
 	CircleDot,
+	CirclePause,
 	FileText,
+	MessageCircleQuestion,
 	Plus,
 	Trash2,
 	UserRound,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "../lib";
+import { groupProgress, type PlanGlance, planSections } from "./planView";
 
 // Presentational TODO rendering for the in-chat plan popup (SPEC §Chat TODO plan). Props-driven (no transport) —
-// the caller supplies the plan + edit callbacks (see `useChatTodos`). The plan renders as three status
-// sections (In progress / To do / Done); every item (loose or grouped) falls into the section for its
-// status. The one exception is Done: a group whose every item is done folds into one expandable row
-// instead of listing its items. Status is read-only (agent-owned); the user's edit surface is add + remove.
+// the caller supplies the plan + edit callbacks (see `useChatTodos`) and the glance state (see
+// `planView.ts`). The plan reads as a **status flow, group-first** (`planSections`): the **in-progress**
+// task (its whole group) on top with no header, then a **To do** section (pending groups, then the
+// user's pending loose items), then a **Done** label at the very bottom with each finished task as its
+// own foldable row (collapsed) + done loose items. Finished *steps* stay inline in their group; only
+// whole done tasks move to Done. The in_progress step's icon follows the glance: working → dot, stopped on a
+// question → `?`, stopped otherwise → pause — so the list never claims "in work" while the system waits.
+// Status is read-only (agent-owned); the user's edit surface is add + remove.
 
-/** The three status sections, in display order (also the single source for each status's label). */
-const STATUS_SECTIONS: { status: TodoStatus; label: string }[] = [
-	{ status: "in_progress", label: "In progress" },
-	{ status: "pending", label: "To do" },
-	{ status: "done", label: "Done" },
-];
+const STATUS_LABEL: Record<TodoStatus, string> = {
+	in_progress: "In progress",
+	pending: "To do",
+	done: "Done",
+};
 
-const STATUS_LABEL = Object.fromEntries(STATUS_SECTIONS.map((s) => [s.status, s.label])) as Record<
-	TodoStatus,
-	string
->;
-
-function StatusIcon({ status }: { status: TodoStatus }) {
-	if (status === "done") return <Check className="size-4 shrink-0 text-primary" />;
-	if (status === "in_progress") return <CircleDot className="size-4 shrink-0 text-primary" />;
-	return <Circle className="size-4 shrink-0 text-text-muted" />;
-}
-
-/** Every item across loose + groups, in display order. */
-function flatItems(plan: TodoPlan): TodoItem[] {
-	return [...plan.todos, ...plan.groups.flatMap((g) => g.todos)];
-}
-
-/** done / total and the current in-progress item — the "what's happening now" glance. */
-export function planSummary(plan: TodoPlan): {
-	done: number;
-	total: number;
-	current: TodoItem | undefined;
+/** The in_progress glyph + hover label for a glance state (shared by the rows and the header strip). */
+export function glanceIcon(glance: PlanGlance): {
+	Icon: typeof CircleDot;
+	label: string;
+	className: string;
 } {
-	const all = flatItems(plan);
-	return {
-		done: all.filter((t) => t.status === "done").length,
-		total: all.length,
-		current: all.find((t) => t.status === "in_progress"),
-	};
+	// Same glyph as the `ask_user_question` panel (`MessageCircleQuestion`), so "the agent is asking you"
+	// reads identically in the strip and in the questionnaire card.
+	if (glance === "waiting_question")
+		return {
+			Icon: MessageCircleQuestion,
+			label: "Waiting for your answer",
+			className: "text-primary",
+		};
+	if (glance === "waiting")
+		return {
+			Icon: CirclePause,
+			label: "Paused — waiting for you",
+			className: "text-text-text-muted",
+		};
+	return { Icon: CircleDot, label: STATUS_LABEL.in_progress, className: "text-primary" };
+}
+
+/** The hover label for an item's status glyph (glance-aware for the in_progress step). */
+function statusLabel(status: TodoStatus, glance: PlanGlance): string {
+	return status === "in_progress" ? glanceIcon(glance).label : STATUS_LABEL[status];
+}
+
+function StatusIcon({ status, glance }: { status: TodoStatus; glance: PlanGlance }) {
+	if (status === "done") return <Check className="size-4 shrink-0 text-primary" />;
+	if (status === "in_progress") {
+		const { Icon, className } = glanceIcon(glance);
+		return <Icon data-glance={glance} className={cn("size-4 shrink-0", className)} />;
+	}
+	return <Circle className="size-4 shrink-0 text-text-text-muted" />;
 }
 
 /** The add-a-TODO input row, with an "open as markdown" action on the right. */
@@ -77,7 +90,7 @@ export function TodoAddRow({
 	};
 	return (
 		<div className="flex items-center gap-sm px-sm py-xs">
-			<Plus className="size-3.5 shrink-0 text-text-muted" />
+			<Plus className="size-3.5 shrink-0 text-text-text-muted" />
 			<input
 				data-testid="todo-add-input"
 				value={draft}
@@ -86,7 +99,7 @@ export function TodoAddRow({
 					if (e.key === "Enter") void submit();
 				}}
 				placeholder="Add a TODO for the agent…"
-				className="min-w-0 flex-1 bg-transparent text-sm text-text-default outline-none placeholder:text-text-muted"
+				className="min-w-0 flex-1 bg-transparent text-sm text-text-default outline-none placeholder:text-text-text-muted"
 			/>
 			{onOpenMarkdown ? (
 				<button
@@ -95,7 +108,7 @@ export function TodoAddRow({
 					onClick={onOpenMarkdown}
 					aria-label="Open as markdown"
 					title="Open the plan as a markdown tab"
-					className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default focus-visible:opacity-100"
+					className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text focus-visible:opacity-100"
 				>
 					<FileText className="size-3.5" />
 				</button>
@@ -104,55 +117,130 @@ export function TodoAddRow({
 	);
 }
 
-function isGroupDone(group: TodoGroupItem): boolean {
-	return group.todos.length > 0 && group.todos.every((t) => t.status === "done");
+/** A non-done task group (active or pending): a header row (status icon + title + done/total) with its
+ * steps indented — finished steps stay inline (checked + struck through). */
+function GroupBlock({
+	group,
+	glance,
+	onRemove,
+}: {
+	group: TodoGroupItem;
+	glance: PlanGlance;
+	onRemove: (id: string) => void;
+}) {
+	const status = group.status;
+	const { done, total } = groupProgress(group);
+	return (
+		<div className="mb-sm" data-testid="todo-group" data-status={status}>
+			<div className="flex items-center gap-sm px-xs py-xs">
+				{status === "active" ? (
+					<StatusIcon status="in_progress" glance={glance} />
+				) : (
+					<Circle className="size-4 shrink-0 text-text-text-muted" />
+				)}
+				<span
+					className={cn(
+						"min-w-0 flex-1 truncate text-sm",
+						status === "active" ? "font-medium text-text-default" : "text-text-text-muted",
+					)}
+				>
+					{group.title}
+				</span>
+				<span
+					data-testid="todo-group-progress"
+					className="shrink-0 text-[10px] text-text-muted uppercase tracking-wider"
+				>
+					{done}/{total}
+				</span>
+			</div>
+			<ul className="ml-md flex flex-col border-border-default border-l pl-sm">
+				{group.todos.map((todo) => (
+					<TodoRow key={todo.id} todo={todo} glance={glance} onRemove={() => onRemove(todo.id)} />
+				))}
+			</ul>
+		</div>
+	);
+}
+
+/** A flat list of loose items (the user's own adds) as rows — each carries the `user` badge. */
+function LooseList({
+	items,
+	glance,
+	onRemove,
+}: {
+	items: TodoItem[];
+	glance: PlanGlance;
+	onRemove: (id: string) => void;
+}) {
+	if (items.length === 0) return null;
+	return (
+		<ul className="flex flex-col">
+			{items.map((todo) => (
+				<TodoRow key={todo.id} todo={todo} glance={glance} onRemove={() => onRemove(todo.id)} />
+			))}
+		</ul>
+	);
+}
+
+/** A section header (`To do`), the quiet uppercase label shared by the status sections. */
+function SectionLabel({ label }: { label: string }) {
+	return (
+		<div className="px-xs py-xs text-[10px] text-text-muted uppercase tracking-wider">{label}</div>
+	);
 }
 
 /**
- * The plan is three **status** sections — In progress / To do / Done — and every item (loose or grouped)
- * falls into the section matching its own status; groups are otherwise invisible. The one exception is
- * **Done**: a group whose every item is done doesn't list its items individually — it folds into a single
- * expandable `DoneGroup` row (finished thread grouped away but reachable). Empty state: the caller.
+ * The plan as a **status flow** (`planSections`): the in-progress task (its whole group) first with no
+ * header, then a **To do** section (pending groups, then the user's pending loose items), then the
+ * collapsed **Done** section at the very bottom. Finished steps stay inline in their group. Empty: the
+ * caller renders the placeholder.
  */
-export function TodoRows({ plan, onRemove }: { plan: TodoPlan; onRemove: (id: string) => void }) {
-	const all = flatItems(plan);
-	const doneGroups = plan.groups.filter(isGroupDone);
-	// Items inside a fully-done group are shown as the folded group row, not individually.
-	const folded = new Set(doneGroups.flatMap((g) => g.todos.map((t) => t.id)));
+export function TodoRows({
+	plan,
+	onRemove,
+	glance = "working",
+}: {
+	plan: TodoPlan;
+	onRemove: (id: string) => void;
+	glance?: PlanGlance;
+}) {
+	const s = planSections(plan);
+	const hasTodo = s.pendingGroups.length > 0 || s.pendingLoose.length > 0;
+	const hasDone = s.doneGroups.length > 0 || s.doneLoose.length > 0;
 	return (
 		<>
-			{STATUS_SECTIONS.map(({ status, label }) => {
-				const items = all.filter((t) => t.status === status && !folded.has(t.id));
-				const groups = status === "done" ? doneGroups : [];
-				if (items.length === 0 && groups.length === 0) return null;
-				const count = items.length + groups.reduce((n, g) => n + g.todos.length, 0);
-				return (
-					<div key={status} className="mb-sm">
-						<div className="px-xs py-xs text-[10px] text-text-muted uppercase tracking-wider">
-							{label} · {count}
-						</div>
-						{items.length > 0 ? (
-							<ul className="flex flex-col">
-								{items.map((todo) => (
-									<TodoRow key={todo.id} todo={todo} onRemove={() => onRemove(todo.id)} />
-								))}
-							</ul>
-						) : null}
-						{groups.map((group) => (
-							<DoneGroup key={group.id} group={group} onRemove={onRemove} />
-						))}
-					</div>
-				);
-			})}
+			{s.activeGroups.map((group) => (
+				<GroupBlock key={group.id} group={group} glance={glance} onRemove={onRemove} />
+			))}
+			<LooseList items={s.activeLoose} glance={glance} onRemove={onRemove} />
+			{hasTodo ? <SectionLabel label="To do" /> : null}
+			{s.pendingGroups.map((group) => (
+				<GroupBlock key={group.id} group={group} glance={glance} onRemove={onRemove} />
+			))}
+			<LooseList items={s.pendingLoose} glance={glance} onRemove={onRemove} />
+			{hasDone ? <SectionLabel label="Done" /> : null}
+			{s.doneGroups.map((group) => (
+				<DoneGroup key={group.id} group={group} glance={glance} onRemove={onRemove} />
+			))}
+			<LooseList items={s.doneLoose} glance={glance} onRemove={onRemove} />
 		</>
 	);
 }
 
 /**
- * A fully-completed group, folded into one expandable row (collapsed by default) sunk to the bottom — a
- * finished thread out of the way but reachable. Expands to its items (a plain glyph list).
+ * One finished task under the **Done** label: its own foldable row (collapsed by default) — title +
+ * `N done`, expanding to its steps. Per-task, not one collapse over all of Done, so each finished task
+ * is visible at a glance and opened on its own.
  */
-function DoneGroup({ group, onRemove }: { group: TodoGroupItem; onRemove: (id: string) => void }) {
+function DoneGroup({
+	group,
+	glance,
+	onRemove,
+}: {
+	group: TodoGroupItem;
+	glance: PlanGlance;
+	onRemove: (id: string) => void;
+}) {
 	const [expanded, setExpanded] = useState(false);
 	const Chevron = expanded ? ChevronDown : ChevronRight;
 	return (
@@ -164,7 +252,7 @@ function DoneGroup({ group, onRemove }: { group: TodoGroupItem; onRemove: (id: s
 				onClick={() => setExpanded((v) => !v)}
 				className="flex w-full items-center gap-sm rounded-[var(--radius-sm)] px-xs py-xs text-left hover:bg-control-bg-hovered"
 			>
-				<Chevron className="size-3.5 shrink-0 text-text-muted" />
+				<Chevron className="size-3.5 shrink-0 text-text-text-muted" />
 				<Check className="size-4 shrink-0 text-primary" />
 				<span className="min-w-0 flex-1 truncate font-medium text-text-muted text-sm line-through">
 					{group.title}
@@ -176,7 +264,7 @@ function DoneGroup({ group, onRemove }: { group: TodoGroupItem; onRemove: (id: s
 			{expanded ? (
 				<ul className="ml-md flex flex-col border-border-default border-l pl-sm">
 					{group.todos.map((todo) => (
-						<TodoRow key={todo.id} todo={todo} onRemove={() => onRemove(todo.id)} />
+						<TodoRow key={todo.id} todo={todo} glance={glance} onRemove={() => onRemove(todo.id)} />
 					))}
 				</ul>
 			) : null}
@@ -184,27 +272,35 @@ function DoneGroup({ group, onRemove }: { group: TodoGroupItem; onRemove: (id: s
 	);
 }
 
-function TodoRow({ todo, onRemove }: { todo: TodoItem; onRemove: () => void }) {
+function TodoRow({
+	todo,
+	glance,
+	onRemove,
+}: {
+	todo: TodoItem;
+	glance: PlanGlance;
+	onRemove: () => void;
+}) {
 	return (
 		<li
 			data-testid="todo-row"
 			data-status={todo.status}
 			className="group flex items-center gap-sm rounded-[var(--radius-sm)] px-xs py-xs hover:bg-control-bg-hovered"
 		>
-			<span className="shrink-0" title={STATUS_LABEL[todo.status]}>
-				<StatusIcon status={todo.status} />
+			<span className="shrink-0" title={statusLabel(todo.status, glance)}>
+				<StatusIcon status={todo.status} glance={glance} />
 			</span>
 			<div className="min-w-0 flex-1">
 				<div
 					className={cn(
 						"truncate text-sm",
-						todo.status === "done" ? "text-text-muted line-through" : "text-text-default",
+						todo.status === "done" ? "text-hint line-through" : "text-text-default",
 					)}
 				>
 					{todo.title}
 				</div>
 				{todo.note ? (
-					<div className="truncate font-[var(--font-mono)] text-[10px] text-text-muted">
+					<div className="truncate font-[var(--font-mono)] text-[10px] text-text-text-muted">
 						{todo.note}
 					</div>
 				) : null}
@@ -213,7 +309,7 @@ function TodoRow({ todo, onRemove }: { todo: TodoItem; onRemove: () => void }) {
 				<span
 					data-testid="todo-origin-user"
 					title="Added by you — the agent won't drop it"
-					className="shrink-0 text-text-muted"
+					className="shrink-0 text-text-text-muted"
 				>
 					<UserRound className="size-3.5" />
 				</span>
@@ -223,7 +319,7 @@ function TodoRow({ todo, onRemove }: { todo: TodoItem; onRemove: () => void }) {
 				onClick={onRemove}
 				aria-label="Remove"
 				title="Remove"
-				className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 transition-opacity hover:bg-control-bg-hovered hover:text-feedback-error group-hover:opacity-100 focus-visible:opacity-100"
+				className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 transition-opacity hover:bg-elevated hover:text-red group-hover:opacity-100 focus-visible:opacity-100"
 			>
 				<Trash2 className="size-3.5" />
 			</button>

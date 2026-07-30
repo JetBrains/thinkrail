@@ -60,13 +60,13 @@ export function PrivacySettings() {
 			</div>
 
 			<div className="flex flex-col gap-xs text-xs">
-				<p className="text-text-muted">
+				<p className="text-text-text-muted">
 					<span className="font-medium text-text-default">What is collected:</span> a random
 					anonymous install id, app version and release channel, OS and architecture, when a chat
 					starts (and the model/provider it uses), and which providers you sign in to. Custom
 					providers and models are reported only as “custom”.
 				</p>
-				<p className="text-text-muted">
+				<p className="text-text-text-muted">
 					<span className="font-medium text-text-default">Never collected:</span> file paths or
 					names, prompts, code, chat transcripts, API keys, hostnames, usernames, or anything typed
 					into the app.

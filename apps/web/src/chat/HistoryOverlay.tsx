@@ -126,7 +126,7 @@ function PromptRow({
 			className={`group flex w-full items-center gap-xs rounded-[var(--radius-sm)] border-l-2 py-xs pl-sm pr-xs text-left text-sm ${
 				isSelected
 					? "border-l-primary bg-selection-item-bg-hovered text-text-default"
-					: "border-l-transparent text-text-muted"
+					: "border-l-transparent text-text-text-muted"
 			}`}
 		>
 			<button
@@ -138,7 +138,7 @@ function PromptRow({
 					<Highlight text={firstLine} query={query} />
 				</span>
 				{showChip ? (
-					<span className="shrink-0 rounded-full border border-border-default bg-container-workspace-bg px-xs text-[10px] text-text-muted">
+					<span className="shrink-0 rounded-full border border-border-default bg-container-workspace-bg px-xs text-[10px] text-text-text-muted">
 						{workspaceName ?? "workspace"}
 					</span>
 				) : null}
@@ -150,7 +150,10 @@ function PromptRow({
 				// hover-revealed via `group-hover`/`isSelected` opacity; this glyph is the part a
 				// keyboard-only user (Shift+Enter's own audience) needs, so it can't be mouse-hover-gated
 				// the way the icon itself is.
-				<span data-testid="history-save-shortcut" className="shrink-0 text-[10px] text-text-muted">
+				<span
+					data-testid="history-save-shortcut"
+					className="shrink-0 text-[10px] text-text-text-muted"
+				>
 					{SAVE_SHORTCUT_LABEL}
 				</span>
 			) : null}
@@ -174,7 +177,7 @@ function PromptRow({
 					{isSelected ? (
 						<span
 							data-testid="history-jump-shortcut"
-							className="shrink-0 text-[10px] text-text-muted"
+							className="shrink-0 text-[10px] text-text-text-muted"
 						>
 							⇧⏎
 						</span>
@@ -223,7 +226,7 @@ function MessageRow({
 			className={`flex w-full flex-col gap-0.5 rounded-[var(--radius-sm)] border-l-2 px-sm py-xs text-left text-sm disabled:cursor-default ${
 				isSelected
 					? "border-l-primary bg-selection-item-bg-hovered text-text-default"
-					: "border-l-transparent text-text-muted"
+					: "border-l-transparent text-text-text-muted"
 			}`}
 		>
 			<span className="flex items-center gap-xs text-text-muted text-xs">
@@ -288,7 +291,7 @@ function HistoryPreview({
 					<div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap break-words p-sm text-sm text-text-default">
 						<Highlight text={item.hit.text} query={query} />
 					</div>
-					<div className="shrink-0 border-t border-border-default px-sm py-xs text-[11px] text-text-muted">
+					<div className="shrink-0 border-t border-border-default px-sm py-xs text-[11px] text-text-text-muted">
 						{item.kind === "prompt" ? (
 							<PromptPreviewFooter hit={item.hit} workspaceName={workspaceName} />
 						) : (
@@ -570,7 +573,7 @@ export function HistoryOverlay({
 					onChange={(e) => onQueryChange(e.target.value)}
 					onKeyDown={onKeyDown}
 					placeholder="Search prompts and conversations…"
-					className="min-w-0 flex-1 bg-transparent text-sm text-text-default outline-none placeholder:text-text-muted"
+					className="min-w-0 flex-1 bg-transparent text-sm text-text-default outline-none placeholder:text-text-text-muted"
 				/>
 				<DropdownMenu open={scopeMenuOpen} onOpenChange={setScopeMenuOpen}>
 					<DropdownMenuTrigger
@@ -579,7 +582,7 @@ export function HistoryOverlay({
 						className="flex shrink-0 items-center gap-xs rounded-full border border-border-default bg-container-workspace-bg px-sm py-0.5 text-[11px] text-text-muted outline-none hover:bg-control-bg-hovered"
 					>
 						<span>{SCOPE_LABELS[scope.kind]}</span>
-						<span className="text-text-muted">⌃R</span>
+						<span className="text-text-text-muted">⌃R</span>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent
 						align="end"

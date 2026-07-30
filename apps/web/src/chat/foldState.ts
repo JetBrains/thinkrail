@@ -28,3 +28,25 @@ export function useFold(id: string, fallback = false): [boolean, () => void] {
 	};
 	return [expanded, toggle];
 }
+
+/** Radio-valued sibling of {@link foldState}: which ONE key is open, per id. Same survival guarantees. */
+const selectionState = new Map<string, string | null>();
+
+/**
+ * A **single-choice** disclosure: at most one of an id's keys is open at a time, and re-choosing the open
+ * one closes it (nothing selected). Used by the turn divider, whose two artifact lists are alternatives
+ * rather than independent folds — storing the *selected key* instead of a boolean per side makes "only one
+ * is open" structural: there is no state in which both are.
+ *
+ * Nothing selected is the default, and a selection survives virtualization + streaming re-derivation like
+ * every other fold in the transcript.
+ */
+export function useSelection(id: string): [string | null, (key: string) => void] {
+	const [selected, setSelected] = useState<string | null>(() => selectionState.get(id) ?? null);
+	const select = (key: string) => {
+		const next = selected === key ? null : key;
+		selectionState.set(id, next);
+		setSelected(next);
+	};
+	return [selected, select];
+}

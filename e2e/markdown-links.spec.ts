@@ -24,9 +24,10 @@ test("relative links, images, and heading anchors work in the rendered markdown 
 		.poll(async () => img.evaluate((el: HTMLImageElement) => el.naturalWidth))
 		.toBeGreaterThan(0);
 
-	// An in-doc anchor click stays on this tab (no navigation, no new tab).
+	// An in-doc anchor click stays on this tab (no navigation, no new tab — just the create's
+	// auto-opened chat plus this LINKS.md tab).
 	await preview.getByRole("link", { name: "Section two" }).click();
-	await expect(page.getByTestId("editor-tab")).toHaveCount(1);
+	await expect(page.getByTestId("editor-tab")).toHaveCount(2);
 	await expect(preview).toBeVisible();
 
 	// A relative file link opens the target file as its own editor tab.

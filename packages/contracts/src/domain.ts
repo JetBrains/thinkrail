@@ -53,6 +53,13 @@ export interface Workspace {
 	id: string;
 	projectId: string;
 	/**
+	 * `"default"` marks the built-in per-project **Default workspace** — the project folder itself
+	 * (git's main working tree) surfaced as a workspace. Exactly one per project, pinned first in
+	 * `workspace.list`, non-removable and non-renamable (enforced server-side). Absent = a normal
+	 * worktree workspace. An explicit wire field — clients must never detect it by id convention.
+	 */
+	kind?: "default";
+	/**
 	 * Human-readable display label shown in the UI (Title Case, spaces) — decoupled from `branch`. May
 	 * repeat across workspaces; the branch is what's uniqued. Equals `branch` only for the auto
 	 * `workspace-N` placeholder.
@@ -159,11 +166,20 @@ export interface TodoItem {
 	updatedAt: string;
 }
 
-/** A named container of items — the agent's thematic cluster within a plan. */
+/**
+ * A group's lifecycle as a *task*: `active` = some step is in progress, `done` = every step is, else
+ * `pending`. **Derived from the steps by the host** (`pi-todos`' `groupStatus`) and shipped on the DTO, so
+ * the rule has one home — clients render it, they never re-derive it.
+ */
+export type TodoGroupStatus = "pending" | "active" | "done";
+
+/** A named container of items — the agent's task within a plan (its items are the steps). */
 export interface TodoGroupItem {
 	id: string;
 	title: string;
 	todos: TodoItem[];
+	/** Derived, never stored — see {@link TodoGroupStatus}. */
+	status: TodoGroupStatus;
 }
 
 /**
@@ -346,6 +362,15 @@ export const DEFAULT_CONFIG: AppConfig = { theme: "dark", analyticsEnabled: true
  * hides it) and the host history indexer (which must skip it) agree on the exact marker.
  */
 export const TODO_NUDGE_PREFIX = "[thinkrail:todo-nudge] ";
+
+/**
+ * True when a send's text is internal control traffic rather than a user-authored message. The one
+ * shared reading of the marker above — the client hides these on hydrate, the host skips them in the
+ * history index and does not count them as sent messages in analytics.
+ */
+export function isControlMessage(text: string): boolean {
+	return text.startsWith(TODO_NUDGE_PREFIX);
+}
 
 /** History-search scope — the overlay's cycle: this chat → workspace → project → everywhere. */
 export type HistoryScope =

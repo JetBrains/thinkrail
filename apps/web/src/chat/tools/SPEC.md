@@ -59,7 +59,7 @@ registration runs once when the chat module mounts. Unregistered tools fall back
 - **`web/`** — search/fetch renderers for `pi-web-access`; own child spec
   ([web/SPEC.md](web/SPEC.md)). Routine.
 - **Shared pieces** — `CodeBlock` (shiki), `Collapsible` ("Show all N lines" fold for long output),
-  pure `toolHelpers` (arg readers, `projectRelativePath`, `resultText`).
+  pure `toolHelpers` (arg readers, `resultText`, `languageFromPath`) + `lib`'s `projectRelativePath`.
 
 ## Boundary
 

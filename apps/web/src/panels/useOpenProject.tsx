@@ -5,6 +5,11 @@ import { errorText, getTransport } from "../transport";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { NoticeDialog } from "./NoticeDialog";
 
+// The host answers `dialog.selectDirectory` only once the user has picked a folder or dismissed the
+// dialog, so it needs far more than the transport's 60s default: that would reject (and drop the reply)
+// while the picker is still on screen. Generous but finite, so a dead host still releases the request.
+const PICK_TIMEOUT_MS = 30 * 60_000;
+
 /**
  * The shared "open a project" flow, reused by the projects rail (`ProjectTree`) and the Welcome screen
  * (`WelcomePanel`) so the non-git handling is identical in both. Opens a folder as a project; when it
@@ -26,6 +31,9 @@ export function useOpenProject(onOpened: (project: Project) => void | Promise<vo
 	const [openError, setOpenError] = useState<string | null>(null);
 
 	// Refresh the store's project list, then let the caller adopt (select/expand) the opened project.
+	// Deliberately NO auto-enter into any workspace: opening lands on the project's Welcome — the fork
+	// where the two working modes (isolated worktree vs the project folder's Default workspace) are an
+	// explicit choice (see task-workspace-mode-clarity).
 	const adopt = async (project: Project) => {
 		useAppStore.getState().setProjects(await getTransport().request("project.list", {}));
 		await onOpened(project);
@@ -61,12 +69,20 @@ export function useOpenProject(onOpened: (project: Project) => void | Promise<vo
 
 	/** Ask the host for a directory via its native picker, then open it. */
 	const pickAndOpen = async () => {
+		let path: string | null;
 		try {
-			const { path } = await getTransport().request("dialog.selectDirectory", {});
-			if (path) await openProject(path);
-		} catch {
-			// Cancelled / unavailable — nothing to do.
+			({ path } = await getTransport().request(
+				"dialog.selectDirectory",
+				{},
+				{ timeoutMs: PICK_TIMEOUT_MS },
+			));
+		} catch (err) {
+			// A cancel is a null path; a throw means the host couldn't *show* a dialog — surface it, or the
+			// only way to add a project reads as a dead button.
+			setOpenError(errorText(err, "Couldn't open the folder picker on the host."));
+			return;
 		}
+		if (path) await openProject(path);
 	};
 
 	const dialogs = (

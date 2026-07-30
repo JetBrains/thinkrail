@@ -20,7 +20,9 @@ import {
 	type ClosedChat,
 	type DocTab,
 	type EditorTab,
+	isDefaultWorkspace,
 	selectActiveWorkspace,
+	selectContextProject,
 	selectWorkspaceTick,
 	toast,
 	useAppStore,
@@ -39,6 +41,13 @@ const MarkdownPreview = lazy(() => import("./MarkdownPreview"));
 function DocPane({ tab }: { tab: DocTab }) {
 	return <MarkdownPreview content={tab.content} workspaceId={tab.workspaceId} path={tab.docPath} />;
 }
+
+/**
+ * How many chats auto-open on workspace entry (newest first). Unfinished work should be in front of the
+ * user, but a workspace that has accumulated a dozen half-finished chats must not open a dozen tabs and
+ * load a dozen transcripts — past this, they stay one click away in chat-history.
+ */
+const AUTO_OPEN_LIMIT = 4;
 
 // Stable empty references so selectors don't re-render the component on unrelated state changes.
 const NO_TABS: EditorTab[] = [];
@@ -68,7 +77,7 @@ function ChatHistoryMenu({
 				data-testid="chat-history"
 				aria-label="Reopen a closed chat"
 				title="View chat history"
-				className="flex shrink-0 items-center border-border-default border-l px-sm text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex shrink-0 items-center border-border-default border-l px-sm text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text focus-visible:ring-2 focus-visible:ring-primary"
 			>
 				<History className="size-4" />
 			</DropdownMenuTrigger>
@@ -91,12 +100,18 @@ function ChatHistoryMenu({
 	);
 }
 
-/** The center area: a strip of the active workspace's tabs (files + chats) over the active tab. */
+/**
+ * The center area: a strip of the active workspace's tabs (files + chats) over the active tab. One tab in
+ * the strip may be the workspace's **preview** tab — the reusable slot light opens land in, rendered in
+ * italics and promoted by a double click (see `SPEC.md`'s gesture map).
+ */
 export function CenterTabs() {
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
 	const activeWorkspace = useAppStore(selectActiveWorkspace);
+	const contextProject = useAppStore(selectContextProject);
 	const tabsByWorkspace = useAppStore((s) => s.tabsByWorkspace);
 	const activeTabByWorkspace = useAppStore((s) => s.activeTabByWorkspace);
+	const previewTabByWorkspace = useAppStore((s) => s.previewTabByWorkspace);
 	const closedChatsByWorkspace = useAppStore((s) => s.closedChatsByWorkspace);
 	const chatLocationRequest = useAppStore((s) => s.chatLocationRequest);
 	const setActiveTab = useAppStore((s) => s.setActiveTab);
@@ -104,43 +119,92 @@ export function CenterTabs() {
 
 	const openTabs = activeWorkspaceId ? (tabsByWorkspace[activeWorkspaceId] ?? NO_TABS) : NO_TABS;
 	const activeTabId = activeWorkspaceId ? (activeTabByWorkspace[activeWorkspaceId] ?? null) : null;
+	const previewTabId = activeWorkspaceId
+		? (previewTabByWorkspace[activeWorkspaceId] ?? null)
+		: null;
 	const closedChats = activeWorkspaceId
 		? (closedChatsByWorkspace[activeWorkspaceId] ?? NO_CLOSED)
 		: NO_CLOSED;
 	// Hydrate-on-connect: when a workspace becomes active, pull its sessions from the host. Live ones (still
-	// in host memory) auto-restore as tabs; disk-only ones (survived a host restart) go to chat-history to
-	// reopen on demand. So a reload, a second tab, or a restart all rebuild from the host.
+	// in host memory) auto-restore as tabs, and so do disk-only ones carrying unfinished TODOs (work in
+	// progress must survive a host restart as open tabs, not history entries) — the newest
+	// `AUTO_OPEN_LIMIT` of them (see the const). Everything else goes to chat-history, one click away. If
+	// nothing opened at all, the most recent of those opens as a fallback — the center is never empty when
+	// the workspace has any chat. So a reload, a second tab, or a restart all rebuild from the host.
+	//
+	// Every transcript is requested up front and *applied* newest-first, so the reads overlap while focus
+	// stays deterministic: `hydrateSession` takes focus only while the workspace has no active tab, and
+	// that is decided when a store write lands, not when its request goes out.
 	useEffect(() => {
 		if (!activeWorkspaceId) return;
+		const workspaceId = activeWorkspaceId;
 		let cancelled = false;
+		// Sync baseline for disk-only attaches, snapshotted before the fetches (see selectWorkspaceTick).
+		const syncedTick = selectWorkspaceTick(useAppStore.getState(), workspaceId);
+		// Split into request + apply so a batch can have its reads in flight together while the *writes*
+		// still land in a chosen order (focus follows the first write, not the first response).
+		const fetchMessages = (sessionId: string) =>
+			getTransport()
+				.request("session.getMessages", { sessionId, workspaceId })
+				// A session that failed to load is skipped; the others still hydrate.
+				.catch(() => null);
+		const applyHydrate = (result: Awaited<ReturnType<typeof fetchMessages>>, live: boolean) => {
+			if (!result || cancelled) return;
+			// A live restore reused the server's already-loaded resources → no baseline (stays
+			// conservatively stale); a disk attach reloaded against current disk → the pre-fetch tick.
+			const tick = live ? undefined : syncedTick;
+			useAppStore
+				.getState()
+				.hydrateSession(result.summary, messagesToRuntime(result.messages), false, tick);
+		};
+		const hydrateFromHost = async (sessionId: string, live: boolean) =>
+			applyHydrate(await fetchMessages(sessionId), live);
 		void getTransport()
-			.request("session.list", { workspaceId: activeWorkspaceId })
+			.request("session.list", { workspaceId })
 			.then(async (summaries) => {
-				const diskOnly: ClosedChat[] = [];
-				for (const summary of summaries) {
-					if (cancelled) return;
-					if (useAppStore.getState().sessions[summary.sessionId]) continue; // already hydrated/live here
-					if (!summary.live) {
-						diskOnly.push({
-							sessionId: summary.sessionId,
-							title: summary.title,
-							closedAt: summary.updatedAt,
-						});
+				// Not "disk-only" any more: past the cap a *live* session lands here too — this is simply
+				// everything the pass chose not to auto-open.
+				const toHistory: typeof summaries = [];
+				const toOpen: typeof summaries = [];
+				// A session already in this client's store but without a tab was closed to history *here* —
+				// its presence vetoes the open-something fallback below, so the fallback never undoes a close
+				// the user just made. (Closes aren't persisted, so after a reload a closed chat is
+				// indistinguishable from any other disk chat and the fallback may reopen it.)
+				let sawKnown = false;
+				// Newest-first, so the most recently active chat hydrates (and takes focus) first.
+				const ordered = [...summaries].sort((a, b) => b.updatedAt - a.updatedAt);
+				for (const summary of ordered) {
+					if (useAppStore.getState().sessions[summary.sessionId]) {
+						sawKnown = true; // already hydrated/live here
 						continue;
 					}
-					try {
-						const { summary: fresh, messages } = await getTransport().request(
-							"session.getMessages",
-							{ sessionId: summary.sessionId, workspaceId: activeWorkspaceId },
-						);
-						if (cancelled) return;
-						useAppStore.getState().hydrateSession(fresh, messagesToRuntime(messages), false); // live restore: no reload → no baseline (stays conservatively stale; see hydrateSession)
-					} catch {
-						// Skip a session that failed to load; the others still hydrate.
-					}
+					const wanted = summary.live || (summary.openTodos ?? 0) > 0;
+					if (wanted && toOpen.length < AUTO_OPEN_LIMIT) toOpen.push(summary);
+					else toHistory.push(summary);
 				}
-				if (!cancelled && diskOnly.length > 0) {
-					useAppStore.getState().noteClosedChats(activeWorkspaceId, diskOnly);
+				if (cancelled) return;
+				// All reads start now; applying them newest-first keeps focus deterministic (see above).
+				const inFlight = toOpen.map((s) => ({ live: s.live, result: fetchMessages(s.sessionId) }));
+				for (const { live, result } of inFlight) applyHydrate(await result, live);
+				if (cancelled) return;
+				// Fallback: nothing opened (and nothing was deliberately closed) → open the newest disk chat.
+				const state = useAppStore.getState();
+				const hasChatTab = (state.tabsByWorkspace[workspaceId] ?? []).some(
+					(t) => t.kind === "chat",
+				);
+				if (!hasChatTab && !sawKnown && toHistory.length > 0) {
+					const newest = toHistory.shift(); // `ordered` kept them newest-first
+					if (newest) await hydrateFromHost(newest.sessionId, newest.live);
+				}
+				if (!cancelled && toHistory.length > 0) {
+					useAppStore.getState().noteClosedChats(
+						workspaceId,
+						toHistory.map((s) => ({
+							sessionId: s.sessionId,
+							title: s.title,
+							closedAt: s.updatedAt,
+						})),
+					);
 				}
 			})
 			.catch(() => {});
@@ -216,6 +280,9 @@ export function CenterTabs() {
 
 	const startChat = async () => {
 		if (!activeWorkspaceId) return;
+		// Starting a chat is a navigation, even though its tab only appears once the create returns — so a
+		// file read still in flight must not activate itself on top of the chat the user asked for.
+		useAppStore.getState().noteNavigation(activeWorkspaceId);
 		// Snapshot the sync baseline before the create round-trip (see selectWorkspaceTick / openChatSession).
 		const syncedTick = selectWorkspaceTick(useAppStore.getState(), activeWorkspaceId);
 		try {
@@ -238,6 +305,9 @@ export function CenterTabs() {
 		else closeTab(tab.id);
 	};
 
+	// The Default workspace is the project folder itself — its receipt must tell the truth ("runs
+	// directly in your project folder") instead of promising worktree isolation.
+	const isDefault = activeWorkspace != null && isDefaultWorkspace(activeWorkspace);
 	const placeholder = (
 		<div className="flex h-full flex-col items-center justify-center gap-md px-lg text-center text-text-muted">
 			{activeWorkspace ? (
@@ -246,18 +316,28 @@ export function CenterTabs() {
 					className="flex max-w-[440px] flex-col items-center gap-xs"
 				>
 					<span className="font-medium text-text-muted text-xs uppercase tracking-wider">
-						Workspace ready
+						{isDefault ? "Default workspace" : "Workspace ready"}
 					</span>
 					<h2 className="max-w-full truncate font-medium text-md text-text-default">
-						{activeWorkspace.name}
+						{isDefault ? (contextProject?.name ?? activeWorkspace.name) : activeWorkspace.name}
 					</h2>
 					<p className="flex max-w-full items-center gap-xs font-[var(--font-mono)] text-text-muted text-xs">
 						<GitBranch className="size-3.5 shrink-0" />
-						<span className="truncate">{activeWorkspace.branch}</span>
-						<span className="shrink-0 text-text-muted">· from {activeWorkspace.baseBranch}</span>
+						{isDefault ? (
+							<span className="truncate">on {activeWorkspace.branch}</span>
+						) : (
+							<>
+								<span className="truncate">{activeWorkspace.branch}</span>
+								<span className="shrink-0 text-text-muted">
+									· from {activeWorkspace.baseBranch}
+								</span>
+							</>
+						)}
 					</p>
 					<p className="mt-xs text-text-muted text-sm">
-						Files, chats, changes, and terminals are scoped to this workspace.
+						{isDefault
+							? "Chats, changes, and terminals run directly in your project folder."
+							: "Files, chats, changes, and terminals are scoped to this workspace."}
 					</p>
 				</div>
 			) : (
@@ -268,7 +348,7 @@ export function CenterTabs() {
 					type="button"
 					data-testid="start-chat"
 					onClick={() => void startChat()}
-					className="flex items-center gap-xs rounded-[var(--radius-md)] border border-border-default bg-control-bg px-md py-xs text-sm text-text-default hover:bg-control-bg-hovered"
+					className="flex items-center gap-xs rounded-[var(--radius-md)] border border-border-default bg-elevated px-md py-xs text-sm text-text-default hover:bg-control-bg-hovered"
 				>
 					<MessageSquarePlus className="size-4" /> New chat
 				</button>
@@ -283,38 +363,44 @@ export function CenterTabs() {
 
 	return (
 		<div className="flex h-full min-h-0 flex-col">
-			<div className="flex h-8 shrink-0 items-stretch border-border-default border-b bg-container-header-bg">
+			<div className="flex h-8 shrink-0 items-stretch border-border-default border-b bg-bg-dark">
 				<div role="tablist" className="flex flex-1 items-stretch overflow-x-auto">
 					{openTabs.map((tab) => {
 						const isActive = tab.id === activeTabId;
+						const isPreview = tab.id === previewTabId;
 						return (
 							<div
 								key={tab.id}
 								data-testid="editor-tab"
 								data-active={isActive}
+								data-preview={isPreview}
 								data-kind={tab.kind}
 								className={`group flex items-center gap-xs border-border-default border-r pr-xs pl-sm text-sm ${
-									isActive
-										? "bg-container-workspace-bg text-text-default"
-										: "text-text-muted hover:bg-control-bg-hovered"
+									isActive ? "bg-bg text-text-default" : "text-muted hover:bg-control-bg-hovered"
 								}`}
 							>
 								<button
 									type="button"
 									className="flex max-w-[180px] items-center gap-xs py-xs"
-									onClick={() => setActiveTab(tab.id)}
+									title={isPreview ? "Preview — double-click to keep" : undefined}
+									// A click on the tab that is BOTH active and in preview keeps it: the one promote
+									// gesture a touch device can perform (a double tap is the browser's zoom), and a
+									// no-op on desktop otherwise. Anywhere else a click only activates — "preview"
+									// here means "leave the slot alone", never demote.
+									onClick={() => setActiveTab(tab.id, isActive && isPreview ? "keep" : "preview")}
+									onDoubleClick={() => setActiveTab(tab.id, "keep")}
 								>
 									{tab.kind === "diff" ? (
 										<GitCompareArrows className="size-3.5 shrink-0 text-text-muted" />
 									) : null}
-									<span className="truncate">{tab.name}</span>
+									<span className={`truncate ${isPreview ? "italic" : ""}`}>{tab.name}</span>
 								</button>
 								<button
 									type="button"
 									data-testid="editor-tab-close"
 									aria-label={`Close ${tab.name}`}
 									onClick={() => onCloseTab(tab)}
-									className="rounded-[var(--radius-sm)] p-0.5 text-text-muted opacity-0 hover:bg-control-bg-hovered hover:text-text-default group-hover:opacity-100"
+									className="rounded-[var(--radius-sm)] p-0.5 text-text-muted opacity-0 hover:bg-control-bg-hovered hover:text-text group-hover:opacity-100"
 								>
 									<X className="size-3.5" />
 								</button>
