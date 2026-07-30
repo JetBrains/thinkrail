@@ -15,12 +15,18 @@ Serve the in-chat TODO plan for a chat session, mapped to the wire DTOs. The lis
 `sessionId`** (one JSON file per session under the workspace's worktree, in the ephemeral context scratch
 dir `.thinkrail/context/todos/<sessionId>.json`), not the worktree. Read-modify-write on demand: every call re-reads
 through `pi-todos`' pi-free `TodoStore`, so the agent's in-session `todo_*` writes and the user's UI edits
-converge on the same file with no staleness window.
+converge on the same file with no staleness window. `listTodos` also **decorates each group with its
+derived `status`** (`pi-todos`' `groupStatus`) on the way out: the rule belongs to the package that owns plan
+semantics, and shipping the result keeps `apps/web` — which may import `contracts` only — from carrying a
+second copy of it.
 
 Unlike the agent's own tools (which own status), the host's write surface is the **user's** edit lever:
 `todo.add` tags new items `origin: "user"` so the agent's `todo_write` re-plans never drop them, and
 `todo.remove` deletes by id. `todo.update` exists on the wire (accepts status/title/note) but no current
-UI path calls it — status stays agent-owned (see [[module-pi-todos]]).
+UI path calls it — status stays agent-owned (see [[module-pi-todos]]). `updateTodo` unwraps the store's
+`TodoUpdateResult` (`{ todo, paused }` — `paused` = items auto-demoted to keep one `in_progress`); the
+wire response stays a bare `TodoItem` — the UI re-reads the whole plan on change, so demotions arrive
+with the next `todo.list`.
 
 This module does **not** push: a user edit isn't broadcast to other clients. The acting client updates
 optimistically; a second viewer reconciles on the next `pi.event`-driven refetch. Fine for single-owner
@@ -42,6 +48,10 @@ agent attaches `file`/`spec` artifacts itself through the `todo_*` tools (see [[
 ## Boundary
 
 - **Owns / public surface (barrel):** `listTodos({workspaceId, sessionId}) → TodoPlan`,
+  `countOpenTodos({workspaceId, sessionId}) → number` + its pure rule `openTodoCount(plan)` (unfinished =
+  any status but `done`, loose + grouped — the `SessionSummary.openTodos` decoration the host's
+  `session.list` handler attaches so a client can auto-open chats with work in progress; a session with
+  no todo file counts 0),
   `addTodo(...) → TodoItem` (validates a non-empty title; tags `origin: "user"`),
   `updateTodo(...) → TodoItem` (throws on unknown id → a `{ ok:false }` WS response),
   `removeTodo(...) → { ok:true }` (idempotent). **Mapping only** — no plan logic; `TodoStore` owns disk.

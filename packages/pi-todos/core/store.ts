@@ -20,11 +20,13 @@ import {
 	type TodoArtifact,
 	type TodoFile,
 	type TodoGroup,
+	type TodoGroupStatus,
 	type TodoInput,
 	type TodoOrigin,
 	type TodoPatch,
 	type TodoPlan,
 	type TodoStatus,
+	type TodoUpdateResult,
 	type WritePlan,
 } from "./types.ts";
 
@@ -56,6 +58,27 @@ export function storeRel(sessionId: string): string {
 /** Total item count across loose items + every group. */
 export function countItems(plan: TodoPlan): number {
 	return plan.todos.length + plan.groups.reduce((n, g) => n + g.todos.length, 0);
+}
+
+/**
+ * Every item in display order: the groups' steps (the agent's tasks) first, then the loose lane (the
+ * user's own adds) **last** — the single flatten used across reads, updates, and rendering, so the order
+ * lives in one place. Returns the stored objects by reference (callers may mutate in place before a
+ * `write`). Mirrored by `apps/web`'s `planView.flatItems` (the web app can't import this package).
+ */
+export function flatItems(plan: TodoPlan): Todo[] {
+	return [...plan.groups.flatMap((g) => g.todos), ...plan.todos];
+}
+
+/**
+ * A group's derived task status — never stored, so it can't drift from the steps: `done` when every
+ * item is done, `active` when any item is in_progress, else `pending`. The host reads it through here and
+ * ships the result on the wire DTO (`TodoGroupItem.status`), so no client re-derives it.
+ */
+export function groupStatus(group: TodoGroup): TodoGroupStatus {
+	if (group.todos.length > 0 && group.todos.every((t) => t.status === "done")) return "done";
+	if (group.todos.some((t) => t.status === "in_progress")) return "active";
+	return "pending";
 }
 
 const CURRENT_VERSION = 3 as const;
@@ -212,10 +235,9 @@ export class TodoStore {
 		return { todos, groups };
 	}
 
-	/** Every item across loose + groups, in display order. */
+	/** Every item in display order (groups first, the user's loose lane last) — see {@link flatItems}. */
 	flat(): Todo[] {
-		const plan = this.read();
-		return [...plan.todos, ...plan.groups.flatMap((g) => g.todos)];
+		return flatItems(this.read());
 	}
 
 	/** Items, optionally filtered by status (flattened across loose + groups). */
@@ -230,8 +252,10 @@ export class TodoStore {
 	}
 
 	/**
-	 * Add one item; returns the created Todo. `input.group` (a title) places it in that named group —
-	 * created if new — otherwise it's appended loose.
+	 * Add one item; returns the created Todo. `input.after` (an existing item id) inserts the new item
+	 * right after that item, inheriting its lane (that group, or loose) — the surgical mid-plan insert;
+	 * an unknown id throws. Otherwise `input.group` (a title) places it in that named group — created if
+	 * new — and with neither, it's appended loose.
 	 */
 	add(input: TodoInput): Todo {
 		const todo = makeTodo(
@@ -242,6 +266,15 @@ export class TodoStore {
 			input.artifacts,
 		);
 		const plan = this.read();
+		if (input.after !== undefined) {
+			const lane = [plan.todos, ...plan.groups.map((g) => g.todos)].find((items) =>
+				items.some((t) => t.id === input.after),
+			);
+			if (!lane) throw new Error(`No TODO with id "${input.after}" to insert after.`);
+			lane.splice(lane.findIndex((t) => t.id === input.after) + 1, 0, todo);
+			this.write(plan);
+			return todo;
+		}
 		const groupTitle = input.group ? decodeEscapes(input.group) : undefined;
 		if (groupTitle) {
 			let group = plan.groups.find((g) => g.title === groupTitle);
@@ -257,13 +290,45 @@ export class TodoStore {
 		return todo;
 	}
 
-	/** Apply a partial change to an item; returns the updated Todo, or undefined if the id is unknown. */
-	update(id: string, patch: TodoPatch): Todo | undefined {
+	/**
+	 * Leave exactly one `in_progress` item: `keep` when given (the item a caller just started), else the
+	 * first in display order. Every other one returns to `pending`; the demoted items are returned so a
+	 * caller can report them. The single home of the linearity rule — both write paths that can introduce
+	 * an `in_progress` (`update`, `replaceAll`) go through it. Mutates `plan` in place.
+	 */
+	private keepOneInProgress(plan: TodoPlan, keep?: string): Todo[] {
+		const demoted: Todo[] = [];
+		let kept = false;
+		for (const item of flatItems(plan)) {
+			if (item.status !== "in_progress") continue;
+			if (item.id === keep || (keep === undefined && !kept)) {
+				kept = true;
+				continue;
+			}
+			item.status = "pending";
+			item.updatedAt = nowIso();
+			demoted.push(item);
+		}
+		return demoted;
+	}
+
+	/**
+	 * Apply a partial change to an item; returns the updated Todo plus any auto-demoted items, or
+	 * undefined if the id is unknown. Setting `in_progress` demotes every *other* in_progress item back
+	 * to `pending` in the same write (see {@link TodoStore.keepOneInProgress}, the one home of that rule),
+	 * and the demoted items are returned (`paused`) so the change stays visible.
+	 */
+	update(id: string, patch: TodoPatch): TodoUpdateResult | undefined {
 		const plan = this.read();
-		const todo = [...plan.todos, ...plan.groups.flatMap((g) => g.todos)].find((t) => t.id === id);
+		const all = flatItems(plan);
+		const todo = all.find((t) => t.id === id);
 		if (!todo) return undefined;
+		let paused: Todo[] = [];
 		if (patch.title !== undefined) todo.title = decodeIfAgent(patch.title, todo.origin);
-		if (patch.status !== undefined) todo.status = patch.status;
+		if (patch.status !== undefined) {
+			todo.status = patch.status;
+			if (patch.status === "in_progress") paused = this.keepOneInProgress(plan, id);
+		}
 		if (patch.note !== undefined) {
 			if (patch.note) todo.note = decodeIfAgent(patch.note, todo.origin);
 			else delete todo.note;
@@ -275,7 +340,7 @@ export class TodoStore {
 		}
 		todo.updatedAt = nowIso();
 		this.write(plan);
-		return todo;
+		return { todo, paused };
 	}
 
 	/** Remove an item (loose or grouped); returns whether it existed. Empties out a group left blank. */
@@ -295,6 +360,10 @@ export class TodoStore {
 	 * re-planning never drops the user's requests or the completed history. Preserved user items stay
 	 * loose; a preserved done item rejoins its group if the new plan still has one by that title, else it
 	 * falls back to loose. Kept items come after the fresh plan.
+	 *
+	 * The "exactly one in_progress" invariant is re-established over the **merged** result
+	 * ({@link TodoStore.keepOneInProgress}), so a re-plan can never leave the user's in_progress item
+	 * beside a fresh in_progress step.
 	 */
 	replaceAll(plan: WritePlan): TodoPlan {
 		const freshLoose = (plan.todos ?? []).map((w) =>
@@ -307,7 +376,6 @@ export class TodoStore {
 				makeTodo(w.title, w.status ?? "pending", "agent", w.note, w.artifacts),
 			),
 		}));
-
 		const current = this.read();
 		const keptLoose = current.todos.filter((t) => t.origin === "user" || t.status === "done");
 		const resultLoose = [...freshLoose, ...keptLoose];
@@ -326,6 +394,9 @@ export class TodoStore {
 		}
 
 		const next: TodoPlan = { todos: resultLoose, groups: freshGroups };
+		// Over the MERGED plan, not just the fresh half: a *kept* user item that is in_progress would
+		// otherwise sit beside a fresh in_progress step — two at once.
+		this.keepOneInProgress(next);
 		this.write(next);
 		return next;
 	}

@@ -4,7 +4,14 @@ import { StringEnum } from "@earendil-works/pi-ai/compat";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { countItems, TODO_STATUSES, type TodoPlan } from "../core/index.ts";
-import { formatPlan, formatTodo, storeFor, textResult } from "./shared.ts";
+import {
+	consistencyNudge,
+	formatPlan,
+	formatTodo,
+	storeFor,
+	textResult,
+	withNudges,
+} from "./shared.ts";
 
 const parameters = Type.Object({
 	status: Type.Optional(
@@ -41,7 +48,12 @@ export function registerTodoList(pi: ExtensionAPI): void {
 				};
 				return textResult(text, { plan: filtered });
 			}
-			return textResult(countItems(plan) ? formatPlan(plan) : "The plan is empty.", { plan });
+			return textResult(
+				countItems(plan)
+					? withNudges(formatPlan(plan), consistencyNudge(plan))
+					: "The plan is empty.",
+				{ plan },
+			);
 		},
 	});
 }

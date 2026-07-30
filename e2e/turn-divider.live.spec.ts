@@ -3,12 +3,12 @@ import { openWorkspaceChat, waitForDone } from "./fixtures/app";
 
 // Tagged @agent (see agent.live.spec.ts): drives a REAL pi agent to make a file change, then proves the
 // chat turn-divider (Task 9) — it appears the instant the turn ends (no follow-up needed), and its "files
-// changed" chip deep-links the right panel's Changes view, highlighting the edited file's row (the diff
-// itself opens only on an explicit click — the chip never steals the center area; see panels/SPEC.md).
+// changed" chip deep-links the right panel's Changes view, highlighting the edited file's row AND opening
+// its diff tab in the center (the click is the explicit ask to see the change; see panels/SPEC.md).
 // The second spec covers the divider's OTHER chip: a written spec is counted and routed as a spec, never as
 // a change — the two chips mirror the Specs/Changes tab split.
 
-test("turn-divider files-changed chip highlights the file's row in the Changes panel", {
+test("turn-divider files-changed chip opens the file's diff and highlights its row in Changes", {
 	tag: "@agent",
 }, async ({ page }) => {
 	test.setTimeout(150_000);
@@ -36,14 +36,14 @@ test("turn-divider files-changed chip highlights the file's row in the Changes p
 	await expect(chip).toBeVisible({ timeout: 30_000 });
 	await expect(chip).toContainText("file changed");
 
-	// Clicking it flips the right panel to Changes and highlights notes.txt's row — no diff tab opens
-	// (highlight-only deep link: the diff opens only on an explicit row click).
+	// Clicking it flips the right panel to Changes, highlights notes.txt's row, and opens its diff tab in
+	// the center — the click is the user's explicit ask to see that change.
 	await chip.click();
 	await expect(page.getByTestId("tab-changes")).toHaveAttribute("data-active", "true");
 	const row = page.getByTestId("change-item").filter({ hasText: "notes.txt" });
 	await expect(row).toBeVisible();
 	await expect(row).toHaveAttribute("data-active", "true");
-	await expect(page.getByTestId("diff-pane")).toHaveCount(0);
+	await expect(page.getByTestId("diff-pane")).toBeVisible();
 });
 
 test("turn-divider counts a scratch task-spec as a spec and opens it from the Specs panel", {
@@ -122,9 +122,11 @@ test("a multi-artifact chip expands into the round's list instead of guessing wh
 		"true",
 	);
 
-	// A row is the deep link: it flips to Changes and highlights that file — the one the user picked.
+	// A row is the deep link: it flips to Changes, highlights that file — the one the user picked — and
+	// opens its diff tab in the center.
 	await list.getByTestId("turn-divider-files-list-item").filter({ hasText: "beta.txt" }).click();
 	await expect(page.getByTestId("tab-changes")).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("diff-pane")).toBeVisible();
 	const row = page.getByTestId("change-item").filter({ hasText: "beta.txt" });
 	await expect(row).toHaveAttribute("data-active", "true");
 	await expect(

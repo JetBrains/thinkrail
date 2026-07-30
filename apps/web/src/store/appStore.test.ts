@@ -4,6 +4,7 @@ import type {
 	PiEvent,
 	SessionSummary,
 	SpecGraphNode,
+	WireModel,
 	Workspace,
 } from "@thinkrail/contracts";
 import { type SessionRuntime, toast, useAppStore } from "./appStore";
@@ -792,10 +793,24 @@ test("clearSpecRequest consumes the spec intent once — it opens a tab, so it m
 	// Idempotent: a second consume (a remount racing the first) is a no-op, not a resurrect.
 	useAppStore.getState().clearSpecRequest();
 	expect(useAppStore.getState().specRequest).toBeNull();
-	// It clears only its own intent — the Changes deep link is a separate, non-consuming field.
+	// It clears only its own intent — the Changes deep link is a separate field with its own consume.
 	useAppStore.getState().requestChangesView("w1", "src/a.ts");
 	useAppStore.getState().clearSpecRequest();
 	expect(useAppStore.getState().changesRequest).toEqual({ workspaceId: "w1", path: "src/a.ts" });
+});
+
+test("clearChangesRequest consumes the Changes intent once — it opens a diff tab, so it must not replay", () => {
+	useAppStore.setState({ specRequest: null, changesRequest: null });
+	useAppStore.getState().requestChangesView("w1", "src/a.ts");
+
+	useAppStore.getState().clearChangesRequest();
+
+	expect(useAppStore.getState().changesRequest).toBeNull();
+	// Idempotent, and it clears only its own intent — the Specs deep link stays.
+	useAppStore.getState().requestSpecView("w1", "docs/SPEC.md");
+	useAppStore.getState().clearChangesRequest();
+	expect(useAppStore.getState().changesRequest).toBeNull();
+	expect(useAppStore.getState().specRequest).toEqual({ workspaceId: "w1", path: "docs/SPEC.md" });
 });
 
 const specNode = (over: Partial<SpecGraphNode> = {}): SpecGraphNode => ({
@@ -1237,4 +1252,71 @@ test("skills badge: a LIVE restore stays conservatively stale; a disk attach anc
 		selectWorkspaceTick(s(), "ws1"),
 	);
 	expect(isStale("ws1", "disk1")).toBe(false);
+});
+
+test("catalog authority falls with the list it describes — only an awaited refresh sets it", () => {
+	const s = () => useAppStore.getState();
+	const listed = [{ id: "opus-5", name: "opus-5", provider: "anthropic" }] as WireModel[];
+	const refreshed = [{ id: "opus-6", name: "opus-6", provider: "anthropic" }] as WireModel[];
+
+	// A `model.list` snapshot is current but never authoritative (its handler answers from before the
+	// detached refresh it starts).
+	s().setModels(listed);
+	expect(s().modelsFresh).toBe(false);
+
+	// The installed result of an awaited forced refresh that SETTLED is.
+	s().beginModelsRefresh();
+	s().finishModelsRefresh({ models: refreshed, complete: true });
+	expect(s().models).toBe(refreshed);
+	expect(s().modelsRefreshing).toBe(false);
+	expect(s().modelsFresh).toBe(true);
+
+	// The finding this pins: authority is a property of the SHARED list, so the next `model.list` install
+	// — this picker reopening, or any other consumer mounting — drops it in the same write. Held as a
+	// consumer's local flag, it outlived the list and a removed model reached `create()`.
+	s().setModels(listed);
+	expect(s().models).toBe(listed);
+	expect(s().modelsFresh).toBe(false);
+
+	// A FAILED refresh installs nothing, so it changes neither the list nor its provenance.
+	s().finishModelsRefresh({ models: refreshed, complete: true });
+	s().beginModelsRefresh();
+	s().finishModelsRefresh(null);
+	expect(s().models).toBe(refreshed);
+	expect(s().modelsFresh).toBe(true);
+});
+
+test("a refresh whose wait was capped installs its list but claims no authority", () => {
+	const s = () => useAppStore.getState();
+	const listed = [{ id: "opus-5", name: "opus-5", provider: "anthropic" }] as WireModel[];
+	const unsettled = [{ id: "opus-6", name: "opus-6", provider: "anthropic" }] as WireModel[];
+	s().beginModelsRefresh();
+	s().finishModelsRefresh({ models: listed, complete: true });
+	expect(s().modelsFresh).toBe(true);
+
+	// The finding this pins: the host caps how long it waits for pi, so a reply can carry the registry as it
+	// stands while the pass that would settle it is still running (`complete: false`). Rendering it is right;
+	// treating it as the host's verdict is what would let `NewWorkspaceDialog` substitute off a list nothing
+	// confirmed — so it must also DROP any authority the previous list had.
+	s().beginModelsRefresh();
+	s().finishModelsRefresh({ models: unsettled, complete: false });
+	expect(s().models).toBe(unsettled);
+	expect(s().modelsRefreshing).toBe(false);
+	expect(s().modelsFresh).toBe(false);
+});
+
+test("authority can be given up without replacing the list (a consumer activating)", () => {
+	const s = () => useAppStore.getState();
+	const refreshed = [{ id: "opus-6", name: "opus-6", provider: "anthropic" }] as WireModel[];
+	s().beginModelsRefresh();
+	s().finishModelsRefresh({ models: refreshed, complete: true });
+	expect(s().modelsFresh).toBe(true);
+
+	// The finding this pins: a consumer activating inherits the list a *previous* consumer made
+	// authoritative, and the registry can have moved since (a provider logged in, no `model.list`). It must
+	// be able to drop authority up front — synchronously, before its own read lands — while still serving
+	// the inherited list to render with.
+	s().dropModelsFreshness();
+	expect(s().modelsFresh).toBe(false);
+	expect(s().models).toBe(refreshed);
 });

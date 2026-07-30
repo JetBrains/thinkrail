@@ -1,5 +1,5 @@
 import type { GitStatus } from "@thinkrail/contracts";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { matchesWorktreePath, selectWorkspaceTick, useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { ChangesTree } from "./ChangesTree";
@@ -14,8 +14,9 @@ import { useWorkspaceRead } from "./useWorkspaceRead";
  * Two layouts, switched by the header toggle (`store.changesView`, app-wide): a flat **List** and a
  * folder **Tree** (`ChangesTree`, styled like the All-files tree, with per-file/-folder `+/−` counts).
  * Live: the store's per-workspace fs tick silently re-reads `git.status`; the open diff tabs follow the
- * disk on their own (DiffPane's re-read). A chat deep-link only highlights its row — no tab is opened
- * until the user clicks.
+ * disk on their own (DiffPane's re-read). A chat deep-link highlights its row AND opens the diff tab —
+ * the chip/list-row click is the user's explicit ask to see that change; a path no longer in the diff
+ * degrades to highlight-only.
  */
 export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	const [status, setStatus] = useState<GitStatus | null>(null);
@@ -36,41 +37,50 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 		},
 	});
 
-	// Open (or focus) the file's Monaco diff tab in the center.
-	const openDiff = async (path: string) => {
-		setHighlighted(path);
-		const id = diffTabId(workspaceId, path);
-		const store = useAppStore.getState();
-		if ((store.tabsByWorkspace[workspaceId] ?? []).some((t) => t.id === id)) {
-			store.setActiveTab(id);
-			return;
-		}
-		try {
-			const { original, modified } = await getTransport().request("git.diffFile", {
-				workspaceId,
-				path,
-			});
-			const name = path.split("/").pop() || path;
-			// Stamp the workspace's current fs tick: the contents are fresh as of now, so DiffPane's live
-			// re-read only fires for ticks arriving AFTER this open.
-			const loadedTick = selectWorkspaceTick(useAppStore.getState(), workspaceId);
-			useAppStore
-				.getState()
-				.openTab({ kind: "diff", id, workspaceId, path, name, original, modified, loadedTick });
-		} catch {
-			// a failed read leaves tabs unchanged; the row stays for a retry
-		}
-	};
+	// Open (or focus) the file's Monaco diff tab in the center. Stable per workspace so the deep-link
+	// effect below can depend on it without re-firing per render.
+	const openDiff = useCallback(
+		async (path: string) => {
+			setHighlighted(path);
+			const id = diffTabId(workspaceId, path);
+			const store = useAppStore.getState();
+			if ((store.tabsByWorkspace[workspaceId] ?? []).some((t) => t.id === id)) {
+				store.setActiveTab(id);
+				return;
+			}
+			try {
+				const { original, modified } = await getTransport().request("git.diffFile", {
+					workspaceId,
+					path,
+				});
+				const name = path.split("/").pop() || path;
+				// Stamp the workspace's current fs tick: the contents are fresh as of now, so DiffPane's live
+				// re-read only fires for ticks arriving AFTER this open.
+				const loadedTick = selectWorkspaceTick(useAppStore.getState(), workspaceId);
+				useAppStore
+					.getState()
+					.openTab({ kind: "diff", id, workspaceId, path, name, original, modified, loadedTick });
+			} catch {
+				// a failed read leaves tabs unchanged; the row stays for a retry
+			}
+		},
+		[workspaceId],
+	);
 
-	// A chat deep-link (turn-divider chip) targeting this workspace: highlight the requested row once the
-	// status list is loaded — the diff opens only on the user's explicit click. `matchesWorktreePath` resolves
-	// an absolute pi path to its relative entry (the same helper the spec classifier uses).
+	// A chat deep-link (turn-divider chip / expanded-list row) targeting this workspace: once the status
+	// list is loaded, open the file's diff tab (the click was the explicit ask to see the change) — or, when
+	// the path is no longer in the current diff (a round from days ago), just highlight where it would be.
+	// `matchesWorktreePath` resolves an absolute pi path to its relative entry (the same helper the spec
+	// classifier uses). The request is consumed once handled: it opens a center tab, so a replay on the next
+	// git-status re-read (this effect keys on `status`) would yank the user's tab back.
 	useEffect(() => {
 		if (!status || changesRequest?.workspaceId !== workspaceId) return;
 		const want = changesRequest.path;
 		const match = status.changes.find((c) => matchesWorktreePath(want, c.path));
-		setHighlighted(match ? match.path : want);
-	}, [changesRequest, status, workspaceId]);
+		if (match) void openDiff(match.path);
+		else setHighlighted(want);
+		useAppStore.getState().clearChangesRequest();
+	}, [changesRequest, status, workspaceId, openDiff]);
 
 	// Keep the deep-link highlight from lingering once the user starts navigating diff tabs: clear it as
 	// soon as a diff tab of this workspace is the active center tab, so closing that tab later doesn't

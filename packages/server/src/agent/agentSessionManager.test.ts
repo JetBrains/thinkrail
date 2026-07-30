@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, expect, jest, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -23,6 +23,7 @@ import {
 	listAvailableModels,
 	listSessions,
 	promptSession,
+	refreshAvailableModels,
 	removeSession,
 	removeWorkspaceSessions,
 	setSessionManagerFactory,
@@ -334,6 +335,83 @@ test("model.default clamps the saved thinking level onto the resolved model's su
 		expect(d.thinkingLevel).toBe("off");
 	} finally {
 		rmSync(settingsPath, { force: true });
+	}
+});
+
+test("model.refresh serves the same redacted universe as model.list (post-refresh snapshot)", async () => {
+	// Under the suite's PI_OFFLINE the awaited refresh is an immediate no-op — the point here is the
+	// path: refreshAvailableModels must answer with the same allowlist projection as listAvailableModels.
+	const [listed, refreshed] = [await listAvailableModels(), await refreshAvailableModels()];
+	expect(refreshed.models).toEqual(listed);
+	expect(refreshed.models.length).toBeGreaterThan(0);
+	// Nothing to fetch under PI_OFFLINE, so the registry as it stands IS the settled answer.
+	expect(refreshed.complete).toBe(true);
+});
+
+test("model.refresh WAITS for the refresh — its list already includes what the refresh landed", async () => {
+	// The one thing `model.refresh` does that `model.list` doesn't. It has to be pinned off PI_OFFLINE
+	// (which short-circuits the refresh to a resolved promise) and against a refresh that lands LATER
+	// than the call: a detached trigger would answer from the pre-refresh snapshot and miss `fauxc`.
+	delete process.env.PI_OFFLINE;
+	const originalRefresh = runtime.refresh.bind(runtime);
+	try {
+		runtime.refresh = () =>
+			new Promise<ModelsRefreshResult>((resolve) => {
+				setTimeout(() => {
+					runtime.registerProvider("fauxc", cfg(fauxC, "fauxc"));
+					resolve({ aborted: false, errors: new Map() });
+				}, 5);
+			});
+		const refreshed = await refreshAvailableModels(true);
+		expect(refreshed.models.map((m) => m.id)).toContain("fauxc");
+		expect(refreshed.complete).toBe(true); // the pass settled well inside the budget
+	} finally {
+		runtime.unregisterProvider("fauxc");
+		runtime.refresh = originalRefresh;
+		process.env.PI_OFFLINE = "1";
+	}
+});
+
+/**
+ * Yield microtasks until the awaited wire call has armed its own deadline timer (it resolves the memoized
+ * runtime first, so the timer does not exist in the tick the call is made). Asserted rather than assumed:
+ * advancing an unarmed fake clock would leave the test waiting on a promise nothing can resolve.
+ */
+async function armedDeadline(before: number): Promise<void> {
+	for (let i = 0; i < 100 && jest.getTimerCount() <= before; i++) await Promise.resolve();
+	expect(jest.getTimerCount()).toBeGreaterThan(before);
+}
+
+// The finding this pins, at the WIRE call rather than at `refreshCatalogs`: pi's `getAvailable()` awaits
+// `refreshAvailability()` — the unsignalled per-provider auth fan-out, which it *starts* when none is
+// pending — so reading through it would hand every model call an unbounded wait and would escape the
+// refresh deadline one line after it was applied. Both wire calls read pi's settled snapshot instead, and a
+// pass that never settled is never reported as authoritative.
+test("a stalled availability fan-out neither blocks a model call nor authorizes its list", async () => {
+	delete process.env.PI_OFFLINE;
+	const originalRefresh = runtime.refresh.bind(runtime);
+	const originalGetAvailable = runtime.getAvailable.bind(runtime);
+	jest.useFakeTimers();
+	try {
+		runtime.getAvailable = () => new Promise<never>(() => {}); // the stalled provider check
+		runtime.refresh = () => new Promise<never>(() => {}); // ...and the catalog pass it hangs
+		const listed = await listAvailableModels();
+		expect(listed.map((m) => m.id)).toContain("fauxa"); // served, not blocked
+		const pendingTimers = jest.getTimerCount();
+
+		const refreshing = refreshAvailableModels(true);
+		await armedDeadline(pendingTimers); // it awaits the runtime first — don't advance an unarmed timer
+		jest.advanceTimersByTime(15_000); // the caller's ceiling
+		const refreshed = await refreshing;
+		expect(refreshed.models).toEqual(listed); // the registry as it stands
+		expect(refreshed.complete).toBe(false); // ...and the client must not call it settled
+	} finally {
+		jest.useRealTimers();
+		runtime.getAvailable = originalGetAvailable;
+		runtime.refresh = originalRefresh;
+		// Restored BEFORE anything else touches the runtime: the never-settling pass still owns the
+		// single-flight slot, and PI_OFFLINE short-circuits every later trigger before it can join.
+		process.env.PI_OFFLINE = "1";
 	}
 });
 

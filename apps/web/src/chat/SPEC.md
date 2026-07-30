@@ -137,6 +137,12 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `data-flash` + a `bg-[var(--primary-10)]` transition on the row wrapper, cleared after 1600ms) draw the
   eye to it. Either resolving a row or giving up (toasted as "couldn't locate the message") always clears
   the request — `ChatView` is its only consumer, so an unresolved request must never linger.
+- **Open at the latest message** — the chat `Virtuoso` mounts with `initialTopMostItemIndex = { index:
+  last row, align: "end" }`, so every freshly shown transcript (new tab, reopen from history, auto-open,
+  reload) starts at the bottom instead of mid-scroll; jump-to-message (above) runs post-mount and
+  overrides with its centered `scrollToIndex`. Streaming follow stays `useChatScroll`'s job
+  (pointer-aware `followOutput` — unchanged). E2e: `auto-open-chats.spec.ts` asserts a long seeded
+  transcript's last message is in view without scrolling.
 - **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions, `/`
   commands + template **slot sessions** (Tab-through placeholders — see the Template slots bullet
   below), image paste/drop, `openHistory` on its imperative handle → `onHistoryOpen`) plus its props-driven **slash-completion
@@ -146,14 +152,24 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   template** action on the selected prompt row — see the Save-as-template bullet below, and a
   **zoomed-stage preview pane** + **scope picker** — see the next bullet),
   `ModelSelector` + `ThinkingSelector` (also shared with `NewWorkspaceDialog`;
-  optional `container` prop portals their popovers into a host Dialog; `ThinkingSelector` takes
+  optional `container` prop portals their popovers into a host Dialog; `ModelSelector` takes
+  `refreshing`/`onRefresh(force)` — a footer “Refresh catalog” row that passes **`force: true`** (the
+  user asked, so bypass pi's freshness throttle) and spins while that awaited refresh runs, plus an
+  **unforced** auto-fire on each open, which `useModelCatalog` serves from the host snapshot
+  (`model.list`) rather than the network: an open is incidental, and awaiting a real refresh there would
+  spin the row for as long as the slowest configured provider takes, up to the host's 15s abort, every
+  time. Its trigger stays openable with an **empty** catalog — that is exactly when the Refresh row is
+  the thing to reach for. `ThinkingSelector` takes
   **`levels`** — `WireModel.thinkingLevels` verbatim, the host-computed support truth, already in pi's
   escalation order — and its rows **are** that list. The web keeps no enumeration of the level
   vocabulary: pi owns it, the host projects the per-model slice, and an empty list (no model resolved
   yet) disables the trigger. It holds **no effort policy of its own**: when a held level isn't one the
   held model can run, the consumer asks the host for pi's `clampThinkingLevel` answer
   (`model.clampThinking`) — `model.default` clamps the same way, and a live session gets pi's answer
-  directly via `thinking_level_changed`), `SessionStatsBar`, `ChatHeader`
+  directly via `thinking_level_changed`. Its rows follow the **live catalog** — `ChatView` resolves the
+  session's model through `store`'s `selectCatalogModel` before passing it down, rather than reading the
+  session's own snapshot, so a `model.refresh` that changes what a model supports changes the offered
+  levels with it), `SessionStatsBar`, `ChatHeader`
   (its `left` slot carries the plan strip; its **Skills** button is the presentational **`SkillsButton`**
   primitive — a `BookOpen` pill, badged when a skill dir changed on disk — also shared with
   `NewWorkspaceDialog` so the two triggers cannot drift), `ExtUiDialog`, and **`SkillsDialog`** (the **Skills manager**: a catalog
@@ -460,13 +476,43 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 - **Chat TODO plan** — the chat's `pi-todos` list surfaced **only in the chat** (engine:
   [[module-pi-todos]]; host read/write: [[submodule-server-todos]]):
   `useChatTodos` (the `todo.*` data hook — fetch + live `pi.event` refetch + edits + the add-nudge + the
-  `openMarkdown` snapshot action), `TodoList` (loose items + named groups, add-row + an "open as markdown"
-  button), `planMarkdown` (a pure `plan → markdown` compiler), and `ChatPlan` (`ChatPlanStripContent` +
+  `openMarkdown` snapshot action), `planView` (pure derivations over the DTO: `groupProgress`,
+  `planSummary`, `planGlance`/`sessionGlance`, `planSections`, and `shouldNudgeOnAdd`. A group's *status* is
+  **not** derived here — the host computes it and ships it on `TodoGroupItem.status`, so the rule has one
+  home; a user edit therefore re-reads the plan rather than patching it locally, see `useChatTodos`), `TodoList` (the
+  **status-ordered, group-first** rendering (`planSections`) — group = task: the **in-progress** task
+  (its whole group) on top with **no section header**, then a **To do** section (the pending groups,
+  then the user's pending loose items), then a **"Done" label** at the very bottom under which **each
+  finished task is its own foldable row** (collapsed — title + `N done`) plus the done loose items (not
+  one collapse over all of Done). Finished *steps* stay inline in their (active/pending)
+  group; only whole done tasks move to Done. Each group is a header row (derived status icon + title +
+  done/total badge), the `active` group emphasized; the user's loose items carry a per-row `user` badge
+  (no separate "Your requests" header — they're placed by status). Plus the add-row + an "open as
+  markdown" button. **Status ordering is UI-only** — the agent's `formatPlan` stays plan-order so its
+  "work in order" discipline is unaffected), `planMarkdown` (a pure `plan →
+  markdown` compiler, `## <group> — n/m` sections), and `ChatPlan` (`ChatPlanStripContent` +
   `ChatPlanContent` — a header strip that opens the plan in a `Popover` over the chat; `ChatView` composes
   the `Popover` anchored to the header, so the popup hangs flush under it at the chat's left edge). There
   is no right-panel Todo tab — the plan lives in the conversation. The "open as markdown" action compiles
   the current plan and opens it as an ephemeral `doc` tab (`store.openDoc`), rendered by the panels'
   `MarkdownPreview` — no file is written to disk.
+  **The glance state** keeps the plan honest as the user's status window: `planGlance(isStreaming,
+  askStates)` — derived from session state in `ChatView`, **never stored**, so the agent can't make it
+  lie — renders the `in_progress` step as working (dot), **waiting for your answer**
+  (`MessageCircleQuestion` — the same glyph as the `ask_user_question` card, when the agent stopped with
+  an awaiting question), or **paused — waiting for you**
+  (`CirclePause`, any other stop: turn ended, error). **The header strip reflects the agent's state,
+  not the checkboxes** (`stripStatus`, decoupled from the `in_progress` step): it shows "waiting for
+  your answer" **even when every item is done** (the earlier strip hid it whenever there was no
+  in-progress step, so an agent blocked on a question read as "finished"); "working" while it runs;
+  "paused" only when it stopped with open steps left; and nothing extra on a clean finish (all done,
+  idle). `TodoList` stays props-driven — it receives the resolved glance, never reads the transport.
+  **The add-nudge respects that waiting state.** A user add always stores the item (loose, at the end),
+  but `nudgeAgent` **only wakes the agent when it isn't waiting on the user** (`shouldNudgeOnAdd` —
+  skip iff the glance is `waiting_question`): waking an agent that stopped on an `ask_user_question`
+  would send it off to work the new item and forget to return to its own question, so instead the item
+  just queues and is picked up on the agent's next natural turn (when the user answers, or a later idle
+  nudge). `working` rides a `followUp`, plain `waiting`/idle a `prompt`, unchanged.
 
 ## Boundary
 
@@ -485,12 +531,23 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   **No `index.ts` barrel** — chat pulls **shiki**, so per the code-splitting exception imports stay
   **per-file**; the registry is importable from `chat/toolRegistry` **without** pulling shiki.
 - **Allowed deps:** `contracts` (pi message/content-block types, **type-only**); `store` + `transport`
-  (**`ChatView` + its integration hooks (`useHistorySearch.ts`) + `TemplateEditorDialog.tsx` only** — the
-  app-integration edge); `react-markdown` / `remark-gfm` / `shiki` (via `lib/highlighter`); `mermaid`
+  (**app-integration files only** — a renderer that takes props must never reach for either. Today that
+  is `ChatView.tsx` plus the hooks and dialogs it composes: `useChatTodos.ts`, `useHistorySearch.ts`,
+  `useModelCatalog.ts`, `SkillsDialog.tsx`, `TemplateEditorDialog.tsx`. `useModelCatalog` is the shared
+  models-catalog seam `panels/NewWorkspaceDialog` also imports per-file, so the two pickers cannot
+  drift; on activation it **drops catalog authority synchronously** (a flag an earlier consumer set says
+  nothing about the list this one inherited) and reads `model.list` only when the shared list is **empty** —
+  a read per activation would hang a full host `runtime.refresh()` off every chat-tab switch, and the picker's
+  Refresh row is the currency path. It reports **`fresh`** — read straight off the store's `modelsFresh`,
+  because catalog authority belongs to the **shared list**, not to a consumer: true only for the installed
+  result of an awaited forced refresh **the host reported `complete`** (its wait is capped, so an unsettled
+  pass still answers — with a list to render, not a verdict), and dropped by the next `model.list` install
+  from *any* consumer. `model.list` answers from *before* the
+  detached refresh it triggers, so it is never a basis for concluding a model is gone);
+  `react-markdown` / `remark-gfm` / `shiki` (via `lib/highlighter`); `mermaid`
   (**lazy, `tools/visualize` only**); `react-virtuoso`; `lucide-react`; `components/ui`; `lib`.
 - **Forbidden:** value-importing any `pi` package; a **presentational** renderer importing
-  `store`/`transport` (only `ChatView`, its integration hooks, and `TemplateEditorDialog` may — keep the
-  renderers reusable).
+  `store`/`transport` (only the app-integration files enumerated above may — keep the renderers reusable).
 - **`ChatView`** is the primary app-integration file: wires this session's runtime
   (`store.sessions[sessionId]`), the transport calls, the `ChatActions` + `AskStates` contexts, the
   divider's deep links (`onOpenChange` → `requestChangesView`, `onOpenSpec` → `requestSpecView`; each

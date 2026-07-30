@@ -1,4 +1,4 @@
-import type { Project, SpecGraphNode, Workspace } from "@thinkrail/contracts";
+import type { Project, SpecGraphNode, WireModel, Workspace } from "@thinkrail/contracts";
 import { isAbsolutePath, normalizePath } from "../lib";
 import type { EditorTab } from "./appStore";
 
@@ -81,6 +81,21 @@ export function selectHistoryTarget(state: {
 	// opened one — the best "which chat did they mean" answer available without an MRU we don't track.
 	const chat = active?.kind === "chat" ? active : tabs.findLast((t) => t.kind === "chat");
 	return chat ? { workspaceId, tabId: chat.id, sessionId: chat.sessionId } : null;
+}
+
+/**
+ * The catalog entry for a model ref, matched by `{provider,id}`. A session's own `model` is the snapshot
+ * it was created with, while `models` is refreshed live — so anything reading host-computed facts off a
+ * model (today `thinkingLevels`, which drives the effort picker's disabled rows) must read them here,
+ * not off the snapshot. Null when the ref is absent from the catalog: the caller then falls back to the
+ * snapshot rather than blanking the UI.
+ */
+export function selectCatalogModel(
+	models: readonly WireModel[],
+	ref: Pick<WireModel, "provider" | "id"> | null,
+): WireModel | null {
+	if (!ref) return null;
+	return models.find((m) => m.provider === ref.provider && m.id === ref.id) ?? null;
 }
 
 /** Whether a worktree-relative path is inside a skill directory — the auto-detect trigger for a reload. */

@@ -37,7 +37,8 @@ of the host.
     `AssistantMessageEvent`, `Usage`, `StopReason`;
   - **`WireModel`** = `Pick<Model<string>, "id"|"name"|"provider"|"contextWindow"|"reasoning">` **+ the one
     computed field `thinkingLevels`** (pi-ai `getSupportedThinkingLevels`, mapped host-side in `toWireModel`;
-    client→host params carry it inert) — the shape a model takes **on the wire** (`model.list`/`model.default`, the `session.create` result + params,
+    client→host params carry it inert) — the shape a model takes **on the wire**
+    (`model.list`/`model.refresh`/`model.default`, the `session.create` result + params,
     `session.setModel` params, `SessionSummary.model`). An **allowlist** of exactly what the UI renders, *not*
     an `Omit`: `Model.baseUrl` carries the jbcentral proxy secret (`.../wire/<SECRET>/...`) when JetBrains AI
     is wired and `headers` can carry auth, and an allowlist **fails closed** — a future `Model` field (secret
@@ -58,7 +59,10 @@ of the host.
     `disabled`) — the workspace Skills manager's `skills.state` rows.
   - **`SessionSummary`** — a chat session as the host reports it for hydration (read side); `live`
     distinguishes an in-memory session (auto-restored) from a disk-only one (surfaced in chat-history,
-    re-opened on demand). `session.getMessages` returns `{ summary, messages }` (the transcript is
+    re-opened on demand — except one carrying unfinished TODOs, which a client auto-opens). The optional
+    **`openTodos`** (count of non-`done` items in the chat's TODO plan) is populated only by
+    `session.list` (the host decorates via the todos module); absent = unknown, treated as 0 — an
+    additive optional field, so no protocol-version bump. `session.getMessages` returns `{ summary, messages }` (the transcript is
     **`TranscriptMessage[]`** — the pi-canonical `Message` union widened with **`WireCustomMessage`**, a
     type-only mirror of pi-coding-agent's Node-only `CustomMessage`, so extension-injected messages like
     the ask replies cross the wire; the summary reflects the now-live session after a disk re-open).
@@ -126,6 +130,9 @@ of the host.
   carries only what the panel renders (`type`/`status` stay `string`: tolerate whatever is on disk);
   **`TodoItem`/`TodoGroupItem`/`TodoPlan`** + the **`TodoStatus`/`TodoOrigin`** unions — the in-chat plan
   DTOs, **mirrored** from `pi-todos/core` (never imported), carrying the chat's per-session TODO list.
+  `TodoGroupItem` additionally carries **`status: TodoGroupStatus`** — the group's *task* lifecycle
+  (`pending`/`active`/`done`), **derived by the host** from the steps (`pi-todos`' `groupStatus`) rather than
+  stored: shipping it means the truth table has one home and no client re-derives it.
   **history-search read DTOs** — **`HistoryScope`** (the overlay's cycle: this chat → workspace →
   project → everywhere); **`PromptHit`** (a recalled prompt; carries optional `messageIndex` +
   `anchorText` — the kept-newest occurrence's jump anchor) and **`MessageHit`** (a full-text
@@ -144,9 +151,12 @@ of the host.
   never eagerly for every project) / `workspace.*` / `fs.*` / `git.*` / **`spec.graph`**
   (the Specs-viewer whole-graph read, per workspace) / **`todo.*`** — **`list`**/**`add`**/**`update`**/
   **`remove`**, the chat's per-session TODO plan (keyed by `workspaceId` + `sessionId`; `add` tags the
-  item `origin:"user"`) / `terminal.*` / `model.list` / **`model.clampThinking`** (pi's `clampThinkingLevel` for a
-  `{model, level}` pair — the pre-session picker's effort adjustment, so no client re-derives pi's
-  policy) / **`provider.status`**
+  item `origin:"user"`) / `terminal.*` / `model.list` + **`model.refresh`** (awaits the host's
+  single-flighted catalog refresh and returns **`RefreshedModels`** — the post-refresh list plus
+  **`complete`**, whether that pass settled inside the host's capped wait, since only a settled list is
+  authoritative; `force` bypasses pi's 4h freshness throttle, so a user-initiated refresh actually fetches) / **`model.clampThinking`** (pi's
+  `clampThinkingLevel` for a `{model, level}` pair — the pre-session picker's effort adjustment, so no
+  client re-derives pi's policy) / **`provider.status`**
 (the auth-provider status report; every read revalidates host-side) / the **`provider.*` in-app login**
   (**`loginStart`** — mints a `loginId` and runs pi's login flow **detached** (`type` `"oauth"` |
   `"api_key"`, issue #97 — both auth routes ride one channel; a flow can take minutes and must
