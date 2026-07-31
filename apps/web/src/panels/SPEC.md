@@ -556,6 +556,16 @@ a project picker, the prompt hero, and the reused
   active tab and drops to the workspace receipt. `e2e/preview-tabs.spec.ts` asserts the single read
   directly, because the outcome it protects is invisible at localhost latency.
 
+  **A tab's freshness stamps are captured BEFORE its read leaves, never after the response lands.**
+  `loadedTick` (both tab kinds) and `loadedTarget` (a diff tab's review target) are *claims about what the
+  content was read against*, and the store keeps moving while the request is in flight: read back from the
+  store on arrival, a `workspace.fsChanged` push or a `workspace.setDiffBase` broadcast that landed mid-read
+  would be stamped as already reflected — the live-refresh contract, which re-reads on exactly that drift,
+  would see none, and the tab would sit on stale content under a new claim indefinitely. Captured early the
+  stamp is at worst pessimistic (one extra re-read on mount), which is the safe direction — the same rule the
+  store's `markSkillsSynced` follows. `openTabs.test.ts` pins it by resolving a read by hand after moving the
+  store underneath it.
+
   **A read is slow and a click is not, so a pending browse loses to whatever the user does next.** Each
   read records the workspace's **`store.navTickByWorkspace`** count on the way out, and a **`preview`**
   landing after that count has moved is **dropped** rather than committed. Without it, tapping an unopened
