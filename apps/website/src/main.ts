@@ -284,6 +284,7 @@ if (mockElements.length > 0) {
 	let currentTarget: HTMLElement | null = null;
 	let mouseX = 0;
 	let mouseY = 0;
+	let positionLocked = false; // Lock position when moving from trigger to tooltip
 
 	const OFFSET = 12; // Offset from cursor
 	const MARGIN = 8; // Viewport margin
@@ -337,13 +338,16 @@ if (mockElements.length > 0) {
 		currentTarget = target;
 		text.textContent = hint;
 		tooltip.classList.add("visible");
+		positionLocked = false; // Allow positioning on new trigger
 		positionTooltip();
 	};
 
-	const hideTooltip = () => {
+	const hideTooltip = (lock = true) => {
+		if (lock) positionLocked = true; // Lock position while moving to tooltip
 		hideTimeout = setTimeout(() => {
 			tooltip.classList.remove("visible");
 			currentTarget = null;
+			positionLocked = false;
 		}, 150); // Grace delay allows moving cursor to tooltip
 	};
 
@@ -353,13 +357,14 @@ if (mockElements.length > 0) {
 			clearTimeout(hideTimeout);
 			hideTimeout = null;
 		}
+		positionLocked = true; // Keep position locked while in tooltip
 	});
-	tooltip.addEventListener("mouseleave", hideTooltip);
+	tooltip.addEventListener("mouseleave", () => hideTooltip(false));
 
 	const handleMouseMove = (e: MouseEvent) => {
 		mouseX = e.clientX;
 		mouseY = e.clientY;
-		if (currentTarget) {
+		if (currentTarget && !positionLocked) {
 			positionTooltip();
 		}
 	};
@@ -375,7 +380,7 @@ if (mockElements.length > 0) {
 			mouseY = e.clientY;
 			showTooltip(el);
 		});
-		el.addEventListener("mouseleave", hideTooltip);
+		el.addEventListener("mouseleave", () => hideTooltip(true));
 		// Block clicks on the element itself
 		el.addEventListener("click", (e) => {
 			e.preventDefault();
