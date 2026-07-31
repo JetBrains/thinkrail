@@ -344,8 +344,17 @@ if (mockElements.length > 0) {
 		hideTimeout = setTimeout(() => {
 			tooltip.classList.remove("visible");
 			currentTarget = null;
-		}, 100);
+		}, 150); // Grace delay allows moving cursor to tooltip
 	};
+
+	// Keep tooltip open when hovering the tooltip itself (for clicking the CTA)
+	tooltip.addEventListener("mouseenter", () => {
+		if (hideTimeout) {
+			clearTimeout(hideTimeout);
+			hideTimeout = null;
+		}
+	});
+	tooltip.addEventListener("mouseleave", hideTooltip);
 
 	const handleMouseMove = (e: MouseEvent) => {
 		mouseX = e.clientX;
