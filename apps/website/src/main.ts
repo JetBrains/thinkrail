@@ -249,14 +249,38 @@ if (stars) {
 }
 
 /* ── Mock-disabled tooltips ─────────────────────────────────────────────── */
-// Disabled mock UI elements show a tooltip encouraging visitors to try the real product.
+// Disabled mock UI elements show a rich callout encouraging visitors to try the real product.
 
 const mockElements = document.querySelectorAll<HTMLElement>("[data-mock-hint]");
 if (mockElements.length > 0) {
-	// Create a shared tooltip element
+	// Create a shared tooltip element with icon, text, and CTA
 	const tooltip = document.createElement("div");
 	tooltip.className = "mock-tooltip";
 	tooltip.setAttribute("role", "tooltip");
+
+	// Info icon (uses the SVG sprite)
+	const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+	icon.setAttribute("class", "mock-tooltip-icon");
+	icon.setAttribute("aria-hidden", "true");
+	const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+	use.setAttribute("href", "#i-info");
+	icon.appendChild(use);
+	tooltip.appendChild(icon);
+
+	// Text message (updated dynamically)
+	const text = document.createElement("div");
+	text.className = "mock-tooltip-text";
+	tooltip.appendChild(text);
+
+	// CTA button (reuses hero button styling)
+	const cta = document.createElement("div");
+	cta.className = "mock-tooltip-cta";
+	cta.innerHTML = `<a href="https://github.com/JetBrains/thinkrail">
+		<svg class="i" aria-hidden="true"><use href="#i-github" /></svg>
+		Star on GitHub
+	</a>`;
+	tooltip.appendChild(cta);
+
 	document.body.appendChild(tooltip);
 
 	let hideTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -269,7 +293,7 @@ if (mockElements.length > 0) {
 		const hint = target.dataset.mockHint;
 		if (!hint) return;
 
-		tooltip.textContent = hint;
+		text.textContent = hint;
 		tooltip.classList.add("visible");
 
 		// Position above the element, centered
