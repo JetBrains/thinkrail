@@ -284,6 +284,50 @@ if (mockElements.length > 0) {
 	document.body.appendChild(tooltip);
 
 	let hideTimeout: ReturnType<typeof setTimeout> | null = null;
+	let currentTarget: HTMLElement | null = null;
+	let mouseX = 0;
+	let mouseY = 0;
+
+	const OFFSET = 12; // Offset from cursor
+	const MARGIN = 8; // Viewport margin
+
+	const positionTooltip = () => {
+		const tooltipRect = tooltip.getBoundingClientRect();
+		const vw = window.innerWidth;
+		const vh = window.innerHeight;
+
+		// Prefer bottom-right of cursor
+		let left = mouseX + OFFSET;
+		let top = mouseY + OFFSET;
+
+		// Check if tooltip fits on the right
+		const fitsRight = left + tooltipRect.width + MARGIN <= vw;
+		// Check if tooltip fits below
+		const fitsBelow = top + tooltipRect.height + MARGIN <= vh;
+
+		if (!fitsRight) {
+			// Place to the left of cursor
+			left = mouseX - tooltipRect.width - OFFSET;
+		}
+
+		if (!fitsBelow) {
+			// Place above cursor
+			top = mouseY - tooltipRect.height - OFFSET;
+		}
+
+		// Final clamp to ensure it stays in viewport
+		if (left < MARGIN) left = MARGIN;
+		if (left + tooltipRect.width > vw - MARGIN) {
+			left = vw - tooltipRect.width - MARGIN;
+		}
+		if (top < MARGIN) top = MARGIN;
+		if (top + tooltipRect.height > vh - MARGIN) {
+			top = vh - tooltipRect.height - MARGIN;
+		}
+
+		tooltip.style.left = `${left}px`;
+		tooltip.style.top = `${top}px`;
+	};
 
 	const showTooltip = (target: HTMLElement) => {
 		if (hideTimeout) {
@@ -293,38 +337,38 @@ if (mockElements.length > 0) {
 		const hint = target.dataset.mockHint;
 		if (!hint) return;
 
+		currentTarget = target;
 		text.textContent = hint;
 		tooltip.classList.add("visible");
-
-		// Position above the element, centered
-		const rect = target.getBoundingClientRect();
-		const tooltipRect = tooltip.getBoundingClientRect();
-		let left = rect.left + rect.width / 2 - tooltipRect.width / 2;
-		let top = rect.top - tooltipRect.height - 8;
-
-		// Keep within viewport
-		if (left < 8) left = 8;
-		if (left + tooltipRect.width > window.innerWidth - 8) {
-			left = window.innerWidth - tooltipRect.width - 8;
-		}
-		if (top < 8) {
-			top = rect.bottom + 8; // flip below if no room above
-		}
-
-		tooltip.style.left = `${left}px`;
-		tooltip.style.top = `${top}px`;
+		positionTooltip();
 	};
 
 	const hideTooltip = () => {
 		hideTimeout = setTimeout(() => {
 			tooltip.classList.remove("visible");
+			currentTarget = null;
 		}, 100);
 	};
+
+	const handleMouseMove = (e: MouseEvent) => {
+		mouseX = e.clientX;
+		mouseY = e.clientY;
+		if (currentTarget) {
+			positionTooltip();
+		}
+	};
+
+	// Track mouse position globally for tooltip positioning
+	document.addEventListener("mousemove", handleMouseMove);
 
 	for (const el of mockElements) {
 		// Re-enable pointer events for hover detection, but prevent clicks
 		el.style.pointerEvents = "auto";
-		el.addEventListener("mouseenter", () => showTooltip(el));
+		el.addEventListener("mouseenter", (e) => {
+			mouseX = e.clientX;
+			mouseY = e.clientY;
+			showTooltip(el);
+		});
 		el.addEventListener("mouseleave", hideTooltip);
 		// Block clicks on the element itself
 		el.addEventListener("click", (e) => {
