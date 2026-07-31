@@ -376,7 +376,14 @@ a project picker, the prompt hero, and the reused
   for a tab whose content depends on something besides the files: `DiffPane` passes `selectDiffTabTargetRef`,
   so re-pointing the review target re-reads a **branch-scope** tab at once instead of lagging until the next
   fs tick (a commit scope has no such dimension — its sides can't move). The re-read keeps the tab's existing
-  tick: it answers "what does this tab mean now", it does not observe a file change. Panels are mounted only for the active workspace,
+  tick: it answers "what does this tab mean now", it does not observe a file change. The two dimensions are
+  two effects, so **two reads can be in flight at once** (a slow tick re-read, then a re-point); both take a
+  turn from **one per-tab sequencer** (`createReadSequencer`, unit-tested) and a response is written **only
+  while no later read has started**. Otherwise the network picks the winner: resolving out of order, the
+  older read lands last and overwrites the newer target's content while carrying its own honest — but now
+  stale — stamp, so neither effect sees any drift and the pane keeps the old target's diff under the new
+  target's label indefinitely. Dropping the superseded read costs nothing: the read that superseded it is
+  the one the user is waiting for. Panels are mounted only for the active workspace,
   so scoping is natural; a degraded watcher just means back to read-on-demand. Deliberately **not**
   live (deferred): the project-rail workspace diffStats badges; editable-file conflict handling waits
   for `fs.writeFile` (the viewer is read-only today).
