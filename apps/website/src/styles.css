@@ -1512,7 +1512,7 @@ html.anim .terminal.armed [data-out] {
 
 [data-mock-hint] {
 	pointer-events: none;
-	cursor: default;
+	cursor: help;
 	position: relative;
 }
 
