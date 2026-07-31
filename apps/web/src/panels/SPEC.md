@@ -368,7 +368,11 @@ a project picker, the prompt hero, and the reused
   keeps its last contents — the Changes list is where the disappearance shows). `FilePane` and `DiffPane`
   run the **one** tab-content live-refresh contract — the shared **`useLiveTabContent(tab, {read, applyFresh,
   keepCurrent}, reloadKey?)`** hook — differing only in the read method (`fs.readFile` vs `git.diffFile`) and the store
-  write (`updateFileTabContent` vs `updateDiffTabContent`). `reloadKey` is the hook's **second live dimension**,
+  write (`updateFileTabContent` vs `updateDiffTabContent`). Its one-batch skip ("this file isn't in it—just
+  advance the tick") requires the batch to have **named** files: a **pathless** frame (`paths: []`, the host's
+  ref-move nudge) always re-reads, since path membership says nothing about a change that touched no file —
+  that is what keeps an open `uncommitted`-scope diff honest when a terminal `git commit` moves `HEAD`.
+  `reloadKey` is the hook's **second live dimension**,
   for a tab whose content depends on something besides the files: `DiffPane` passes `selectDiffTabTargetRef`,
   so re-pointing the review target re-reads a **branch-scope** tab at once instead of lagging until the next
   fs tick (a commit scope has no such dimension — its sides can't move). The re-read keeps the tab's existing

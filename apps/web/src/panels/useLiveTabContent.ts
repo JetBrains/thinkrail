@@ -5,7 +5,10 @@ import { useAppStore } from "../store";
  * The live-refresh contract shared by `FilePane` and `DiffPane` (the SPEC describes them as one contract).
  * Watches the tab's workspace fs tick; when it moves past the tick this tab's content was loaded at, it
  * either advances the tick in place (a single unrelated batch — this file isn't in it, so nothing to
- * re-read) or re-reads via `read` and writes the fresh payload through `applyFresh`. A failed/cancelled
+ * re-read) or re-reads via `read` and writes the fresh payload through `applyFresh`. A **pathless** batch
+ * never takes the skip: it names no file precisely because what moved isn't one (the host's ref-move nudge —
+ * a terminal `git commit` invalidates an `uncommitted`-scope diff without touching a single byte on disk),
+ * so path membership can't speak to it and the only honest answer is to re-read. A failed/cancelled
  * read falls back to `keepCurrent`, which advances the tick without changing content — so a file that left
  * the change set (or a deleted file) holds its last contents. Only the active tab mounts, so a background
  * tab catches up on activation.
@@ -44,8 +47,10 @@ export function useLiveTabContent<T>(
 		const loaded = tab.loadedTick ?? 0;
 		if (change.tick <= loaded) return;
 		const { read, applyFresh, keepCurrent } = opsRef.current;
-		// Exactly one batch behind and this file isn't in it → nothing to re-read, just advance the tick.
-		if (change.tick === loaded + 1 && !change.truncated && !change.paths.includes(tab.path)) {
+		// Exactly one batch behind, and that batch NAMED files none of which is this one → nothing to re-read,
+		// just advance the tick. An empty batch names nothing (the pathless ref-move nudge), so it never skips.
+		const namesOtherFiles = change.paths.length > 0 && !change.paths.includes(tab.path);
+		if (change.tick === loaded + 1 && !change.truncated && namesOtherFiles) {
 			keepCurrent(change.tick);
 			return;
 		}

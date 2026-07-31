@@ -284,18 +284,33 @@ test("Uncommitted scope converges when HEAD moves out-of-band (a commit in a ter
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
 	const worktree = seedCommitAndDirtyEdit();
+	// A dirty edit of a tracked NON-markdown file, so the diff opens in Monaco rather than the rendered
+	// markdown view — this spec reads the diff's two sides as text.
+	writeFileSync(join(worktree, "committed.txt"), "committed by e2e\ndirty line by e2e\n");
 
 	await page.getByTestId("tab-changes").click();
 	await page.getByTestId("changes-scope-trigger").click();
 	await page.getByTestId("changes-scope-uncommitted").click();
-	await expect(page.getByTestId("change-item").filter({ hasText: "README.md" })).toHaveCount(1);
+	const dirtyRow = page.getByTestId("change-item").filter({ hasText: "committed.txt" });
+	await expect(dirtyRow).toHaveCount(1);
+
+	// …with that file's diff open and ACTIVE, so the tab-content contract is under test too, not just the
+	// list. The dirty line appears ONCE while the edit is uncommitted (the modified side only); once it is
+	// committed, `HEAD` carries it as well, so an honest re-read shows it on BOTH sides.
+	await dirtyRow.dblclick();
+	// Monaco renders spaces as NBSP, so the pane's raw text is whitespace-normalized before counting.
+	const dirtyLineCount = async () => {
+		const text = ((await page.getByTestId("diff-pane").textContent()) ?? "").replace(/\s+/g, " ");
+		return (text.match(/dirty line by e2e/g) ?? []).length;
+	};
+	await expect.poll(dirtyLineCount, { timeout: 15_000 }).toBe(1);
 
 	// Wait out the watcher's one-shot startup nudge (~750ms after it registers) first: it would refetch the
 	// panel for unrelated reasons and hide the very staleness this asserts.
 	await new Promise((r) => setTimeout(r, 1500));
 
-	// Commit the dirty file — HEAD moves, the worktree does not.
-	gitIn(worktree, "add", "README.md");
+	// Commit the dirty files — HEAD moves, the worktree does not.
+	gitIn(worktree, "add", "-A");
 	gitIn(
 		worktree,
 		"-c",
@@ -304,13 +319,16 @@ test("Uncommitted scope converges when HEAD moves out-of-band (a commit in a ter
 		"user.name=ThinkRail E2E",
 		"commit",
 		"-m",
-		"e2e commits the dirty edit",
+		"e2e commits the dirty edits",
 	);
 
 	// No click, no refresh: the ref-move nudge alone empties the scope. (Generous window — the same
 	// watch → debounce → push → re-read chain the live-refresh spec allows 10s for.)
 	await expect(page.getByTestId("change-item")).toHaveCount(0, { timeout: 10_000 });
 	await expect(page.getByTestId("changes-empty")).toBeVisible();
+	// …and the open diff tab re-read against the new `HEAD` rather than advancing its tick on a frame that
+	// named no file (the pathless nudge is exactly the case path membership cannot answer).
+	await expect.poll(dirtyLineCount, { timeout: 10_000 }).toBe(2);
 });
 
 test("The scope menu's target-branch picker re-points what the changes are measured against", async ({

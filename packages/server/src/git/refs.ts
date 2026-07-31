@@ -14,10 +14,15 @@
  * starting with `.`, a `.lock` suffix, a trailing `.`), and control characters/space.
  *
  * Deliberately shape-only — never an existence check: a ref that was valid when it was chosen and has
- * since been deleted must still *degrade* (an empty diff), not be rejected as malformed.
+ * since been deleted must still *degrade* (an empty diff), not be rejected as malformed. And deliberately
+ * **no length rule** beyond non-empty: `check-ref-format` has none, so a long hierarchical name git accepts
+ * (and hands back through `for-each-ref`) must be selectable too — rejecting it here would wedge the picker
+ * on a branch the repo really has. Length is not a safety property anyway (every attack shape above is a
+ * character or structure rule), and the real limits — the filesystem's per-component cap, `execve`'s argv
+ * size — are enforced where they exist, failing loudly as a read error rather than silently as "malformed".
  */
 export function isSafeRef(ref: string): boolean {
-	if (ref.length === 0 || ref.length > 255) return false;
+	if (ref.length === 0) return false;
 	if (ref.startsWith("-")) return false; // an option-shaped ref (`--output=…`) is the whole attack
 	if (ref.includes("..")) return false; // range/traversal syntax, never a name we were handed
 	if (ref.includes("@{")) return false; // reflog/upstream syntax (`main@{yesterday}`, `@{u}`)

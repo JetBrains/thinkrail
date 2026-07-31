@@ -40,7 +40,10 @@ ref off the workspace-create critical path.
   repo's own `HEAD` — + `setWorkspaceDiffBase` target). The rule set is `git check-ref-format`'s, reproduced
   in-process (no spawn on a validation path): non-empty, no leading `-`, no whitespace/control chars, no `..`,
   no revision metacharacters (`~ ^ : ? * [ \`), no `@{` and no bare `@`, no empty path component, no component
-  starting with `.`, no `.lock` suffix, no trailing `.` or `/`. A name git itself refuses is never one we accept. The threat is an **untrusted
+  starting with `.`, no `.lock` suffix, no trailing `.` or `/`. A name git itself refuses is never one we accept
+  — and, symmetrically, **no length cap**: `check-ref-format` has none, so a long hierarchical branch the repo
+  really has (and `for-each-ref` really lists) stays selectable; length is not a safety property, and the real
+  limits (filesystem component cap, argv size) fail loudly as a read error instead of "malformed". The threat is an **untrusted
   repository**, not a malicious client: `git update-ref` accepts a name like `refs/heads/--output=x` (only the
   `git branch` porcelain refuses it), `listBranches` reads refs with `for-each-ref`, so an option-shaped
   branch reaches the picker of any repo the user opens — and browsing someone's repo is the product's job;

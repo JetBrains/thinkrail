@@ -400,7 +400,16 @@ test("an option-shaped ref reaches git as a rev, never as an option", () => {
 });
 
 test("isSafeRef accepts real refs and refuses anything git could re-read as more than a name", () => {
-	for (const ok of ["main", "origin/main", "release-1.2", "feature/a_b", "HEAD"])
+	for (const ok of [
+		"main",
+		"origin/main",
+		"release-1.2",
+		"feature/a_b",
+		"HEAD",
+		// Long, but every component is a name git accepts — `check-ref-format` caps no length, so neither do
+		// we: such a branch is listable by `for-each-ref`, hence selectable as a base or a diff target.
+		`feature/${"a".repeat(200)}/${"b".repeat(200)}`,
+	])
 		expect(isSafeRef(ok)).toBe(true);
 	for (const bad of [
 		"",
@@ -413,7 +422,6 @@ test("isSafeRef accepts real refs and refuses anything git could re-read as more
 		"with space",
 		"tab\there",
 		"ctrl\u001fchar",
-		"a".repeat(256),
 		// Revision metadata git itself refuses inside a ref name — `check-ref-format`'s rules, reproduced.
 		"main@{yesterday}",
 		"@{u}",
