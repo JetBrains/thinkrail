@@ -104,6 +104,12 @@ export interface Workspace {
  * edits, terminal commands, Finder). An **invalidation nudge, not data** — clients re-read via the
  * existing read methods, so a duplicate/replayed frame is harmless. `paths` are worktree-relative and
  * deduped, capped host-side; `truncated: true` = treat as a wildcard (anything may have changed).
+ *
+ * An **empty, non-truncated** frame (`paths: []`, `truncated: false`) is the pathless variant: something
+ * the reads depend on moved *without* naming a file — the host emits it when a worktree's git metadata
+ * moves (a `commit`/`reset`/`switch` in a terminal), which invalidates the git-derived reads (`git.status`,
+ * an `uncommitted`-scope diff) while leaving the working tree untouched. Same contract: re-read, don't
+ * patch. Path-driven consumers see no paths and correctly do nothing extra.
  */
 export interface WorkspaceFsChangedPayload {
 	workspaceId: string;

@@ -188,6 +188,35 @@ test("a .git write nudges the repo-meta sink without ever becoming an fsChanged 
 	expect(nudges).toEqual(["ws1"]);
 });
 
+test("a linked worktree's git metadata lives outside the root — its churn still nudges the sink", async () => {
+	// The shape every workspace this app creates has: `.git` is a *file* pointing at the parent repo's
+	// `.git/worktrees/<name>`, so a `git commit` in this worktree writes NOTHING under the watched root.
+	const metaDir = join(dataDir, "repo", ".git", "worktrees", "ws");
+	mkdirSync(metaDir, { recursive: true });
+	writeFileSync(join(metaDir, "HEAD"), "ref: refs/heads/b\n");
+	writeFileSync(join(worktree, ".git"), `gitdir: ${metaDir}\n`);
+
+	const nudges: string[] = [];
+	setRepoMetaPublisher((id) => nudges.push(id));
+	ensureWatch("ws1");
+	await sleep(100);
+
+	// Stand in for the commit: HEAD moves, the index is rewritten, the worktree is byte-identical.
+	writeFileSync(join(metaDir, "HEAD"), "ref: refs/heads/b2\n");
+	writeFileSync(join(metaDir, "index"), "x\n");
+
+	await waitFor(() => nudges.length > 0);
+	expect(nudges).toEqual(["ws1"]); // debounced: one nudge for the burst
+	expect(payloads.filter((p) => p.paths.length > 0)).toHaveLength(0); // no path ever leaks
+
+	// Stopping the watcher closes the metadata stream too — later churn is silent.
+	stopWatch("ws1");
+	await sleep(50);
+	writeFileSync(join(metaDir, "HEAD"), "ref: refs/heads/b3\n");
+	await sleep(600);
+	expect(nudges).toEqual(["ws1"]);
+});
+
 test("ignored churn (node_modules) never publishes", async () => {
 	ensureWatch("ws1");
 	await sleep(100);

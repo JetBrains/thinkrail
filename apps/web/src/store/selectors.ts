@@ -140,11 +140,10 @@ export function selectDiffBaseRef(state: ActiveWorkspaceState, workspaceId: stri
  * `workspace.setDiffBase` broadcast) has to re-read the tab — exactly like a file change does. A `commit`
  * scope has no such dimension (a sha is immutable), hence `""`: nothing to watch.
  *
- * An `uncommitted` tab is `""` too, but for a weaker reason: its `HEAD` can move **without** the worktree's
- * files moving (a `git commit`/`reset`/`checkout` in a terminal), and this store has no signal for that — the
- * fs tick is a file watcher, not a ref watcher. So such a tab converges only on the next file change. Watching
- * `HEAD` (a host-side ref watch pushed like `fsChanged`) is the follow-up that would close it; until then this
- * comment is the honest bound rather than a claim that HEAD can't move on its own.
+ * An `uncommitted` tab is `""` too, and needs nothing more: its `HEAD` *can* move without the worktree's files
+ * moving (a `git commit`/`reset`/`checkout` in a terminal), but the host watches each worktree's resolved git
+ * metadata and pushes a **pathless** `fsChanged` nudge when a ref moves — so that case arrives on the same fs
+ * tick every other live read uses, rather than needing a second dimension here.
  */
 export function selectDiffTabTargetRef(
 	state: ActiveWorkspaceState,

@@ -5,7 +5,8 @@
 // workspace read lands — the read is the "a client is looking" signal) and degrade silently: a watcher
 // that can't start or errors mid-flight is warned + dropped, leaving read-on-demand behavior intact.
 
-import { type FSWatcher, statSync, watch } from "node:fs";
+import { type FSWatcher, readFileSync, statSync, watch } from "node:fs";
+import { isAbsolute, resolve } from "node:path";
 import type { WorkspaceFsChangedPayload } from "@thinkrail/contracts";
 import { loadWorkspaces } from "../persistence";
 import { type Coalescer, createCoalescer } from "./coalesce";
@@ -45,13 +46,17 @@ export function setWatchPublisher(publisher: WatchPublisher | null): void {
 }
 
 /**
- * Install (or clear) the **repo-metadata** sink: fired, debounced, whenever a watched worktree's own
- * `.git` metadata churns (a `git switch`/`commit`/`rebase` in a terminal) — the *only* signal for a
- * change that leaves the working tree byte-identical, e.g. `git switch -c <new-branch>`, which writes
- * nothing outside `.git` and would otherwise be invisible to this module. The host uses it to re-sync a
- * **Default** workspace's folder-truth branch (`refreshDefaultWorkspace`) so every branch label converges
- * live. Deliberately NOT a client push: `.git` internals are not worktree content, and the app's clients
- * re-read state through the workspace-lifecycle event the host emits from this.
+ * Install (or clear) the **repo-metadata** sink: fired, debounced, whenever a watched worktree's git
+ * metadata churns (a `git switch`/`commit`/`rebase` in a terminal) — the *only* signal for a change that
+ * leaves the working tree byte-identical, e.g. `git switch -c <new-branch>` or a `git commit` (which moves
+ * `HEAD` and empties the index while writing nothing under the worktree). Two sources feed it: `.git`
+ * events inside the recursive root watcher (a repo root), and the non-recursive watcher on the **resolved**
+ * git dir (a linked worktree's metadata lives in the parent repo, outside the root — see `resolveGitDir`).
+ *
+ * The host turns it into two convergences: a **Default** workspace's folder-truth branch label
+ * (`refreshDefaultWorkspace`) and a pathless client invalidation, so git-derived reads (`git.status`, an
+ * `uncommitted`-scope diff tab) re-read when a ref moves. This sink stays **pathless** on purpose: `.git`
+ * internals are not worktree content, so no `.git` path ever reaches a client.
  */
 export function setRepoMetaPublisher(publisher: RepoMetaPublisher | null): void {
 	publishRepoMeta = publisher;
@@ -60,6 +65,62 @@ export function setRepoMetaPublisher(publisher: RepoMetaPublisher | null): void 
 /** Whether a watch event belongs to the worktree's own git metadata (its `.git` dir), not its content. */
 function isRepoMetaPath(relPath: string): boolean {
 	return relPath.split(/[\\/]/)[0] === ".git";
+}
+
+/**
+ * The worktree's git metadata dir when it lies **outside** the watched root — else `null`.
+ *
+ * That dir (`HEAD`, `index`, `ORIG_HEAD`) is the only place a `git commit` / `reset` / `checkout` writes
+ * when the working tree ends up byte-identical. For a **repo root** it is the in-tree `.git` *directory*,
+ * already seen by the recursive root watcher (hence `null`: nothing to watch twice). For a **linked
+ * worktree** — every workspace this app creates — `.git` is a *file* (`gitdir: <path>`) pointing at
+ * `<repo>/.git/worktrees/<name>`, i.e. outside the root, where nothing would otherwise be observed at all.
+ *
+ * Resolved with plain fs, deliberately not by shelling out to `git rev-parse`: this module's boundary
+ * allows `persistence` + Node only (no `git` sibling edge), and the gitfile format is a one-line contract.
+ * Unreadable/absent metadata → `null` (a non-git folder; the caller just skips the second watcher).
+ */
+function resolveExternalGitDir(worktreePath: string): string | null {
+	const dotGit = resolve(worktreePath, ".git");
+	try {
+		if (statSync(dotGit).isDirectory()) return null;
+		const pointer = readFileSync(dotGit, "utf8").trim();
+		const match = /^gitdir:\s*(.+)$/.exec(pointer);
+		if (!match?.[1]) return null;
+		const target = match[1].trim();
+		const abs = isAbsolute(target) ? target : resolve(worktreePath, target);
+		return statSync(abs).isDirectory() ? abs : null;
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Watch a worktree's out-of-root git metadata dir (see {@link resolveExternalGitDir}) — **non-recursive**,
+ * because only its top level holds the refs that move (`HEAD`, `index`, `ORIG_HEAD`) and its subtrees
+ * (`objects/`, `logs/`) are pure storms. Every event there is a metadata nudge, never a client path.
+ * A failed start degrades silently: the root watcher (and read-on-demand) still stand.
+ */
+function watchGitDir(
+	workspaceId: string,
+	gitDir: string,
+	rootWatcher: FSWatcher,
+): FSWatcher | null {
+	try {
+		const watcher = watch(gitDir, { recursive: false }, () => {
+			scheduleRepoMeta(workspaceId, rootWatcher);
+		});
+		watcher.on("error", (err) => {
+			console.warn(`git metadata watcher for ${workspaceId} failed: ${err}`);
+			watcher.close();
+			const entry = entries.get(workspaceId);
+			if (entry?.metaWatcher === watcher) entry.metaWatcher = null;
+		});
+		return watcher;
+	} catch (err) {
+		console.warn(`could not watch git metadata for ${workspaceId}: ${err}`);
+		return null;
+	}
 }
 
 /**
@@ -97,6 +158,8 @@ interface WatchEntry {
 	nudgeTimer: ReturnType<typeof setTimeout>;
 	/** The pending debounced repo-metadata nudge (see `setRepoMetaPublisher`), cleared on stop. */
 	metaTimer: ReturnType<typeof setTimeout> | null;
+	/** The non-recursive watcher on the resolved git metadata dir (see `watchGitDir`); null if absent. */
+	metaWatcher: FSWatcher | null;
 }
 
 const entries = new Map<string, WatchEntry>();
@@ -162,7 +225,19 @@ export function ensureWatch(workspaceId: string): void {
 				publish?.({ workspaceId, paths: [], truncated: true });
 			}
 		}, STARTUP_NUDGE_MS);
-		entries.set(workspaceId, { watcher, coalescer, rootIno, nudgeTimer, metaTimer: null });
+		const gitDir = resolveExternalGitDir(ws.worktreePath);
+		const entry: WatchEntry = {
+			watcher,
+			coalescer,
+			rootIno,
+			nudgeTimer,
+			metaTimer: null,
+			metaWatcher: null,
+		};
+		// Registered after the entry is in the map: the git-dir watcher's callback resolves it through
+		// `scheduleRepoMeta` (live-watcher identity check), and a write can land the moment the stream opens.
+		entries.set(workspaceId, entry);
+		if (gitDir) entry.metaWatcher = watchGitDir(workspaceId, gitDir, watcher);
 	} catch (err) {
 		coalescer.dispose();
 		console.warn(`could not watch worktree for ${workspaceId}: ${err}`);
@@ -176,6 +251,7 @@ export function stopWatch(workspaceId: string): void {
 	entries.delete(workspaceId);
 	clearTimeout(entry.nudgeTimer);
 	if (entry.metaTimer) clearTimeout(entry.metaTimer);
+	entry.metaWatcher?.close();
 	entry.coalescer.dispose();
 	entry.watcher.close();
 }

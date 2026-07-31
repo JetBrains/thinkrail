@@ -273,6 +273,46 @@ test("Changes scope selector filters by commit / uncommitted; each scope is its 
 	await expect(diffTabs).toHaveCount(2);
 });
 
+// The `uncommitted` scope is the one scope whose content depends on a **ref**, not on worktree files: its
+// `HEAD` can move while every file on disk stays byte-identical (a `git commit` in the workspace's terminal
+// stages nothing new to see). A linked worktree's git metadata even lives in the *parent* repo, outside the
+// watched root — so without the host's git-metadata watch this panel would keep calling the just-committed
+// files "uncommitted" until some unrelated file edit happened to nudge it.
+test("Uncommitted scope converges when HEAD moves out-of-band (a commit in a terminal)", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	const worktree = seedCommitAndDirtyEdit();
+
+	await page.getByTestId("tab-changes").click();
+	await page.getByTestId("changes-scope-trigger").click();
+	await page.getByTestId("changes-scope-uncommitted").click();
+	await expect(page.getByTestId("change-item").filter({ hasText: "README.md" })).toHaveCount(1);
+
+	// Wait out the watcher's one-shot startup nudge (~750ms after it registers) first: it would refetch the
+	// panel for unrelated reasons and hide the very staleness this asserts.
+	await new Promise((r) => setTimeout(r, 1500));
+
+	// Commit the dirty file — HEAD moves, the worktree does not.
+	gitIn(worktree, "add", "README.md");
+	gitIn(
+		worktree,
+		"-c",
+		"user.email=e2e@thinkrail.test",
+		"-c",
+		"user.name=ThinkRail E2E",
+		"commit",
+		"-m",
+		"e2e commits the dirty edit",
+	);
+
+	// No click, no refresh: the ref-move nudge alone empties the scope. (Generous window — the same
+	// watch → debounce → push → re-read chain the live-refresh spec allows 10s for.)
+	await expect(page.getByTestId("change-item")).toHaveCount(0, { timeout: 10_000 });
+	await expect(page.getByTestId("changes-empty")).toBeVisible();
+});
+
 test("The scope menu's target-branch picker re-points what the changes are measured against", async ({
 	page,
 }) => {
