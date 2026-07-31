@@ -1541,7 +1541,7 @@ html.anim .terminal.armed [data-out] {
 	flex-direction: column;
 	align-items: flex-start;
 	text-align: left;
-	padding: 32px;
+	padding: 12px;
 	background: var(--elevated);
 	border: 1px solid var(--border2);
 	border-radius: 12px;
@@ -1564,14 +1564,14 @@ html.anim .terminal.armed [data-out] {
 }
 
 .mock-tooltip-text {
-	margin-top: 32px;
+	margin-top: 12px;
 	font-size: 15px;
 	line-height: 1.5;
 	color: var(--text);
 }
 
 .mock-tooltip-cta {
-	margin-top: 32px;
+	margin-top: 16px;
 }
 
 /* Reuse .btn-primary styling inline for the tooltip CTA */
