@@ -105,8 +105,8 @@ export function selectCatalogModel(
 }
 
 /**
- * The **default** diff scope: everything on the workspace's branch vs its diff base (the behaviour that
- * predates the scope selector). A shared module constant, not a fresh object per read, so
+ * The **default** diff scope: the workspace's work since diverging from its diff base (the scope that
+ * predates the scope selector; the host measures it from the merge-base). A shared module constant, not a fresh object per read, so
  * {@link selectDiffScope} is referentially stable for a workspace that never picked a scope.
  */
 export const BRANCH_SCOPE: GitDiffScope = { kind: "branch" };

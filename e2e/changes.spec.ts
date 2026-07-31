@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Locator, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
-import { E2E_DATA_DIR } from "./fixtures/paths";
+import { E2E_DATA_DIR, E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { largeRepetitiveMarkdownEdited } from "./fixtures/repo";
 
 test("Changes tab shows the active worktree's diff and swaps per workspace", async ({ page }) => {
@@ -355,6 +355,50 @@ test("The scope menu's target-branch picker re-points what the changes are measu
 	).toHaveAttribute("data-active", "true");
 });
 
+test("A target that advanced past the fork point adds no phantom changes (merge-base semantics)", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	seedCommitAndDirtyEdit();
+
+	// A branch that is main + one commit the workspace never saw ("upstream" work) — built in a throwaway
+	// git worktree so the shared fixture's main checkout is never disturbed. Self-cleaning: resetState
+	// prunes stray worktrees and deletes every non-main branch.
+	const upstreamWt = join(E2E_DATA_DIR, "worktrees", "e2e-upstream");
+	gitIn(E2E_FIXTURE_REPO, "worktree", "add", upstreamWt, "-b", "future-main", "main");
+	writeFileSync(join(upstreamWt, "upstream.txt"), "landed on the base after the fork\n");
+	gitIn(upstreamWt, "add", "upstream.txt");
+	gitIn(
+		upstreamWt,
+		"-c",
+		"user.email=e2e@thinkrail.test",
+		"-c",
+		"user.name=ThinkRail E2E",
+		"commit",
+		"-m",
+		"upstream work",
+	);
+
+	await page.getByTestId("tab-changes").click();
+	await expect(page.getByTestId("change-item")).toHaveCount(2); // committed.txt + README.md
+
+	// Re-point the target at the advanced branch. Tip semantics would now claim upstream.txt as a phantom
+	// deletion — a file this workspace never touched; measuring from the merge-base (the fork point) keeps
+	// the list at exactly the workspace's own work.
+	await page.getByTestId("changes-target-picker").click();
+	await page.locator('[data-testid="branch-option"][data-branch="future-main"]').click();
+	await expect(page.getByTestId("changes-target-picker")).toContainText("future-main");
+
+	// Convergence signal: a fresh own edit must appear via the fs tick — that landed read was taken
+	// against the new target, which makes the phantom's absence a claim about the NEW range, not a stale
+	// list. (Under tip semantics this same read would surface upstream.txt as a fourth, deleted row.)
+	writeFileSync(join(worktreeDir(), "own-file.txt"), "still just my work\n");
+	await expect(page.getByTestId("change-item")).toHaveCount(3);
+	await expect(page.getByTestId("change-item").filter({ hasText: "own-file.txt" })).toHaveCount(1);
+	await expect(page.getByTestId("change-item").filter({ hasText: "upstream.txt" })).toHaveCount(0);
+});
+
 test("A change row's action menu opens from the ⌄ button and from right-click; Copy path writes the relative path", async ({
 	page,
 	context,
@@ -635,11 +679,16 @@ test("Re-pointing the target branch re-reads an open branch-scope diff tab — a
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
 	const worktree = seedCommitAndDirtyEdit();
-	// A second target branch whose copy of the file says something ELSE. That string is the whole point: it can
-	// only appear on screen through a re-read against that target, so the assertions below fail if the tab does
-	// not follow the target. (A previous version edited the worktree file instead — which the fs-tick re-read
-	// would have shown anyway, so it passed with the target dimension removed entirely.)
-	writeFileSync(join(worktree, "committed.txt"), "committed by the target branch\n");
+	// Two targets whose FORK POINTS hold different copies of the file — the observable dimension under
+	// merge-base semantics (the original side always comes from the fork point, an ancestor of the
+	// workspace, never from a target's own tip). A second workspace commit revises the file, and
+	// `e2e-target` parks on the FIRST commit: targeting `main` puts the fork point before the file existed
+	// (add-style original), targeting `e2e-target` puts it at the first commit — whose content
+	// ("committed by e2e") can appear on screen only through a re-read against that target, so the
+	// assertions below fail if the tab does not follow the re-point. (A previous version edited the
+	// worktree file instead — which the fs-tick re-read would have shown anyway, so it passed with the
+	// target dimension removed entirely.)
+	writeFileSync(join(worktree, "committed.txt"), "revised by the workspace\n");
 	gitIn(worktree, "add", "committed.txt");
 	gitIn(
 		worktree,
@@ -649,29 +698,26 @@ test("Re-pointing the target branch re-reads an open branch-scope diff tab — a
 		"user.name=ThinkRail E2E",
 		"commit",
 		"-m",
-		"e2e target commit",
+		"e2e revise commit",
 	);
-	gitIn(worktree, "branch", "e2e-target", "HEAD");
-	gitIn(worktree, "reset", "--hard", "HEAD~1"); // the workspace branch keeps only its own commit
-	// `reset --hard` also wiped the seeded dirty edit — restore it: the second half of this test parks on
-	// README.md's diff tab while the target moves.
-	writeFileSync(join(worktree, "README.md"), "# sample-project\n\ndirty edit by e2e\n");
+	gitIn(worktree, "branch", "e2e-target", "HEAD~1");
 
 	await page.getByTestId("tab-changes").click();
-	// A file changed by the branch's commit — visible in the default (vs base) scope, where the target has no
-	// copy of it at all, so the diff is an add of the worktree content. Double-clicked: the tab must be KEPT,
-	// or the second row below would replace it in the workspace's preview slot.
+	// A file changed by the branch's commits — visible in the default (vs base) scope, where the fork point
+	// has no copy of it at all, so the diff is an add of the worktree content. Double-clicked: the tab must
+	// be KEPT, or the second row below would replace it in the workspace's preview slot.
 	const committedRow = page.getByTestId("change-item").filter({ hasText: "committed.txt" });
 	await committedRow.dblclick();
 	const diffPane = page.getByTestId("diff-pane");
-	await expect(diffPane).toContainText("committed by e2e");
-	await expect(diffPane).not.toContainText("committed by the target branch");
+	await expect(diffPane).toContainText("revised by the workspace");
+	await expect(diffPane).not.toContainText("committed by e2e");
 
 	// (1) The ACTIVE tab follows a re-point immediately — a branch-scope tab means "this file vs the
-	// workspace's current target", it does not wait for the next fs tick.
+	// workspace's current target", it does not wait for the next fs tick. The fork point is now the first
+	// commit, so ITS copy becomes the original side.
 	await page.getByTestId("changes-target-picker").click();
 	await page.locator('[data-testid="branch-option"][data-branch="e2e-target"]').click();
-	await expect(diffPane).toContainText("committed by the target branch");
+	await expect(diffPane).toContainText("committed by e2e");
 
 	// (2) A BACKGROUNDED tab follows it too. Panes mount only while their tab is active, so the drift has to be
 	// detected on activation — which works only because the tab persists the target its content was read
@@ -683,8 +729,8 @@ test("Re-pointing the target branch re-reads an open branch-scope diff tab — a
 	await page.locator('[data-testid="branch-option"][data-branch="main"]').first().click();
 
 	await committedRow.click();
-	await expect(diffPane).toContainText("committed by e2e");
-	await expect(diffPane).not.toContainText("committed by the target branch");
+	await expect(diffPane).toContainText("revised by the workspace");
+	await expect(diffPane).not.toContainText("committed by e2e");
 });
 
 test("A commit scope whose commit is rewritten away falls back to All changes with a toast", async ({

@@ -72,9 +72,11 @@ folder" anchor, ensured lazily, **non-removable and non-renamable**.
   a name, `symbolic-ref` does not) — both halves of the same door, closed by one check. **The two base meanings are two
   fields on purpose:** `baseBranch` = where the branch came from, `diffBase` = what its review is measured
   against; collapsing them would make a re-pointed target lie about provenance (the `branch · from
-  baseBranch` receipt). Every read of "the base" — including this module's own `diffStats` — resolves it
-  through the `git` module's `diffBaseRef`, never inline (and reaches git bracketed by `--end-of-options` … `--`,
-  like every other rev this app passes). `diffStats` yields **no stats at all** (logged) when git couldn't
+  baseBranch` receipt). Every read of "the base" resolves through the `git` module, never inline —
+  `diffStats` composes the git module's **branch-scope range** (`resolveDiffRange` +
+  `changedFileArgs(…, "--shortstat")`), so the rail badge measures exactly what the Changes panel shows
+  (merge-base semantics included — upstream commits on the base never inflate the badge) and reaches git
+  bracketed by `--end-of-options` … `--` like every other rev this app passes. `diffStats` yields **no stats at all** (logged) when git couldn't
   answer, rather than a fabricated `+0 −0` — a failed read must not paint a dirty worktree as clean; the
   `Workspace.diffStats` field is simply absent, and `workspaceDiffStats` rejects,
   `getWorkspace` (by-id lookup, throws on unknown — anchors a chat session's cwd),

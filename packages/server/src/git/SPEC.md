@@ -22,7 +22,12 @@ ref off the workspace-create critical path.
   args)` (its async twin — `Bun.spawn`, off the event loop, for network-bound ops like `fetch` that must
   not block the host);
   **the scope→range resolver** — `resolveDiffRange(ws, scope?)` → `DiffRange` — **the one definition of what
-  a `GitDiffScope` means** (`branch`: `git diff <base>` + untracked, sides = base ref ↔ worktree;
+  a `GitDiffScope` means** (`branch`: `git diff <merge-base(base, HEAD)>` + untracked, sides = **fork
+  point** ↔ worktree — what the workspace changed *since diverging*, so a base that advanced underneath it
+  (a fetch moving `origin/main`, upstream work landing) never surfaces as phantom changes; while the base
+  hasn't diverged the merge-base *is* its tip, and a failed `merge-base` (missing base, unrelated
+  histories, unborn `HEAD`) falls back to the raw ref, keeping the old error surfaces — and keeping the
+  file list ancestry-consistent with `listCommits`' `base..HEAD`;
   `uncommitted`: `git diff HEAD` + untracked, sides = `HEAD` ↔ worktree; `commit`: `git diff <sha>^ <sha>`, no
   untracked, both sides from history — a **root** commit degrades to `git show --format=` with an empty
   original, the same add-style degradation an absent path already gets). Both reads build their argv from it
@@ -48,8 +53,8 @@ ref off the workspace-create critical path.
   `git branch` porcelain refuses it), `listBranches` reads refs with `for-each-ref`, so an option-shaped
   branch reaches the picker of any repo the user opens — and browsing someone's repo is the product's job;
   **`diffBaseRef(ws)`** — `diffBase ?? baseBranch`, the single collapse of a workspace's two base meanings
-  (creation provenance vs review target), consumed by the resolver, `listCommits`, and the `workspaces`
-  module's `diffStats`;
+  (creation provenance vs review target), consumed by the resolver and `listCommits` (the `workspaces`
+  module's `diffStats` reaches it *through* the resolver — see Get right);
   `gitStatus(workspaceId, scope?)` — changed files over the range plus untracked (only when the range ends at
   the worktree), each carrying per-file `added`/`removed` line counts (`git diff --numstat`, its rename-mangled paths resolved
   via `numstatPath` to match `--name-status`; binary rows dropped; untracked files count their whole
@@ -80,7 +85,15 @@ ref off the workspace-create critical path.
   module for the Default workspace's folder-truth `branch`; `prefetchBranch(projectId, ref)` — best-effort background
   `git fetch` of a remote ref (via `gitAsync`, branch passed after `--` so a `-`-prefixed name can't be
   parsed as a git option), so a later `createWorkspace` branches off a fresh tip without the network
-  round-trip on its critical path (non-`origin/` ref / offline → no-op).
+  round-trip on its critical path (non-`origin/` ref / offline → no-op). Its result also says whether the
+  fetch **`moved`** the local remote-tracking ref (first appearance included; compared on the
+  fully-qualified `refs/remotes/…` — the exact ref a fetch updates — so a local branch literally named
+  `origin/<b>` can't shadow the check via git's DWIM order): a moved ref *may* change what a sibling
+  workspace's branch-scope diff means (its merge-base can move), and it is invisible to the `watch` module
+  (the write lands in the project repo's shared `.git`, outside every watched location) — so the
+  `git.prefetch` handler uses `moved` to fan out the host's pathless `fsChanged` nudge (`host`'s fsNudge
+  seam; an unaffected re-read is an idempotent no-op). `moved` is host-internal; the wire response stays
+  `{ ok }`.
 - **Public surface (barrel):** `git`, `gitAsync`, `gitStatus`, `gitDiffFile`, `listCommits`,
   `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `DiffRange`, `isSafeRef`, `assertSafeRef`,
   `listBranches`, `resolveDefaultBranch`, `currentBranch`, `prefetchBranch`.

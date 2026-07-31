@@ -36,7 +36,18 @@ export interface DiffRange {
 const OID = /^[0-9a-f]{4,64}$/;
 
 /**
- * Resolve a scope against a workspace. A `commit` scope is validated twice — shape (`OID`, so a crafted
+ * Resolve a scope against a workspace.
+ *
+ * A `branch` scope measures "what this workspace changed": it spans from the **merge-base** of the diff
+ * base and `HEAD` (the fork point), not from the base's tip — a base that advanced underneath the
+ * workspace (a fetch moving `origin/main`, a commit landing on the local base) must not surface upstream
+ * work as phantom changes (`D` rows for files this worktree never touched). While the base hasn't
+ * diverged, the merge-base *is* its tip, so the range is identical to a plain `git diff <base>`. A failed
+ * `merge-base` (missing/deleted base, unrelated histories, unborn `HEAD`) **falls back to the raw ref**,
+ * preserving the old behavior exactly where it mattered: a missing base still fails the diff loudly
+ * (never reading as "no changes"), unrelated histories still diff against the tip.
+ *
+ * A `commit` scope is validated twice — shape (`OID`, so a crafted
  * `sha` can never reach a git argument as e.g. an option or a path) and existence (`rev-parse --verify`,
  * whose full oid is what we then use) — and **throws** when the commit is gone (a rebase or branch reset):
  * a `CodedError("UNKNOWN_COMMIT")`, so the panel can turn *that* rejection (and only that one — not a
@@ -90,11 +101,15 @@ export function resolveDiffRange(
 		};
 	}
 	const base = diffBaseRef(ws);
+	// The fork point (see the function docstring). No trailing `--` here: `merge-base` takes revs only,
+	// so a ref that also names a path on disk can't be "ambiguous" the way it is for `diff`.
+	const mergeBase = git(ws.worktreePath, ["merge-base", "--end-of-options", base, "HEAD"]);
+	const forkPoint = mergeBase.ok && mergeBase.out ? mergeBase.out : base;
 	return {
 		listPrefix: ["diff"],
-		listRevs: [base],
+		listRevs: [forkPoint],
 		untracked: true,
-		originalRef: base,
+		originalRef: forkPoint,
 		modifiedRef: null,
 	};
 }
@@ -109,6 +124,9 @@ export function resolveDiffRange(
  *   ambiguity fails the whole command — and a failed diff used to read as *no changes*, i.e. a review
  *   surface calling a dirty worktree clean.
  */
-export function changedFileArgs(range: DiffRange, mode: "--name-status" | "--numstat"): string[] {
+export function changedFileArgs(
+	range: DiffRange,
+	mode: "--name-status" | "--numstat" | "--shortstat",
+): string[] {
 	return [...range.listPrefix, mode, "--end-of-options", ...range.listRevs, "--"];
 }

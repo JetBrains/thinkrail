@@ -426,6 +426,15 @@ test("the Default workspace's branch and base refresh from the folder on each li
 	git(repo, "add", "-A");
 	git(repo, "commit", "-m", "feature work");
 	expect(listWorkspaces("p1")[0]?.diffStats?.added).toBe(2);
+
+	// The badge shares the Changes panel's branch-scope range (the resolver): work landing on the BASE
+	// after the fork must not inflate it — tip semantics would count main's new file as a removal here.
+	git(repo, "switch", "main");
+	writeFileSync(join(repo, "upstream.txt"), "a\nb\nc\n");
+	git(repo, "add", "-A");
+	git(repo, "commit", "-m", "upstream work");
+	git(repo, "switch", "feature/x");
+	expect(listWorkspaces("p1")[0]?.diffStats).toEqual({ added: 2, removed: 0 });
 });
 
 test("refreshDefaultWorkspace re-syncs and publishes Default drift off the list path", async () => {

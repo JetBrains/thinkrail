@@ -28,6 +28,7 @@ import {
 	maybeAutoRenameWorkspace,
 	maybeNaiveNameWorkspace,
 } from "./autoRename";
+import { setFsNudgePublisher } from "./fsNudge";
 import { handleRequest } from "./handlers";
 import { trackLoginOutcome } from "./loginAnalytics";
 
@@ -176,6 +177,10 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		);
 	};
 	setWatchPublisher(publishFsChanged);
+	// The same frame, publishable from the `git.prefetch` handler: the app's own background fetch moves
+	// `refs/remotes/…` in the project repo's shared `.git` — a location no worktree watcher can see — so the
+	// handler nudges the workspaces whose diff base that ref is (see `fsNudge.ts`).
+	setFsNudgePublisher(publishFsChanged);
 
 	// The notifier's second seam, host-mediated (`watch` has no `workspaces` edge): a git-metadata write in
 	// a watched worktree — a `git switch`/`commit`/`reset` in its terminal — converges two things that a

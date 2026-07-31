@@ -98,6 +98,7 @@ import {
 	workspaceDiffStats,
 } from "../workspaces";
 import { ackSend } from "./ackSend";
+import { nudgeBaseRefWorkspaces } from "./fsNudge";
 import { buildHistoryScope } from "./historyScope";
 import { dropLogin, recordLoginStart } from "./loginAnalytics";
 
@@ -175,9 +176,16 @@ const handlers: Record<string, Handler> = {
 	},
 	"workspace.diffStats": (params) => workspaceDiffStats((params as { id: string }).id),
 	"git.listBranches": (params) => listBranches((params as { projectId: string }).projectId),
-	"git.prefetch": (params) => {
+	"git.prefetch": async (params) => {
 		const p = params as { projectId: string; ref: string };
-		return prefetchBranch(p.projectId, p.ref);
+		const { ok, moved } = await prefetchBranch(p.projectId, p.ref);
+		// A fetch that moved the local remote-tracking ref may have changed what a sibling workspace's
+		// branch-scope diff *means* (its merge-base can move) — and it is invisible to the watch module (it
+		// writes only to the shared `.git`, outside every watched location), so this is the one signal those
+		// workspaces get; an unaffected re-read is an idempotent no-op. `moved` itself stays host-internal:
+		// the wire result remains `{ ok }`.
+		if (moved) nudgeBaseRefWorkspaces(p.projectId, p.ref);
+		return { ok };
 	},
 	"github.authStatus": () => githubAuthStatus(),
 	"github.refresh": () => githubRefresh(),

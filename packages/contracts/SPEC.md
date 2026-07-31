@@ -108,7 +108,8 @@ of the host.
   non-removable and non-renamable server-side; absent = a normal worktree workspace — an explicit wire
   field, never an id convention), `Session` (chat tab),
   `FileNode` (file-tree node), `TabStatus`, `Git*`/diff types — incl. **`GitDiffScope`** (what the Changes
-  panel is diffing: `branch` → everything vs the workspace's diff base / `uncommitted` → worktree vs `HEAD` /
+  panel is diffing: `branch` → the workspace's work since diverging from its diff base (the range starts at
+  their merge-base, never the base's tip) / `uncommitted` → worktree vs `HEAD` /
   `commit` → one commit, `sha^` vs `sha`; omitted on the wire = `branch`, so an older client is unchanged)
   and **`GitCommit`** (a commit row of the scope menu's list). The two meanings of a workspace's base are
   **two fields**: `Workspace.baseBranch` is *creation provenance* (the ref the worktree was cut from — what
@@ -192,7 +193,10 @@ of the host.
   taking an optional **`scope: GitDiffScope`** (an unresolvable scope — a commit a rebase removed — is
   *rejected*, which the panel reads as "reset the scope" instead of staying wedged on a dead sha) /
   **`git.listCommits`** (the workspace branch's own commits, `<diff base>..HEAD`, newest first, capped
-  host-side — the scope menu's lazily-fetched list) / **`skills.state`** (`SkillCatalogEntry[]` — full catalog +
+  host-side — the scope menu's lazily-fetched list) / **`git.prefetch`** (best-effort background fetch of a
+  remote base — the New-Workspace dialog's freshness warm-up; always acks `{ ok }`, and when the fetch
+  actually moved the local remote-tracking ref the host follows up with pathless `workspace.fsChanged`
+  frames to the workspaces whose diff base that ref is, so their git-derived reads re-converge) / **`skills.state`** (`SkillCatalogEntry[]` — full catalog +
   per-skill `decision` + `group` — for a `workspaceId`) / **`project.skills`** (the same, project-scoped, for
   the pre-session manager) / **`session.reloadResources`** (re-scan skills + rebuild the system prompt for one
   running session; rejected while streaming) /

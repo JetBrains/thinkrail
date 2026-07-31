@@ -216,7 +216,7 @@ export interface GitFileChange {
 	path: string;
 	status: GitFileStatus;
 	/**
-	 * Lines added / removed vs the base branch (`git diff --numstat`; untracked files count their whole
+	 * Lines added / removed over the scope's range (`git diff --numstat`; untracked files count their whole
 	 * content as added). Omitted when git reports no per-line count — binary files, or a rename whose
 	 * numstat path couldn't be resolved. Used by the Changes tree's per-file / per-folder `+/−` badge.
 	 */
@@ -234,7 +234,9 @@ export interface GitStatus {
  * tab's content must never change meaning because the rail's scope flipped underneath it). Omitted on the
  * wire = `{ kind: "branch" }`, so an older client keeps working unchanged.
  *
- * - `branch` — everything on this workspace's branch vs its diff base (`diffBase ?? baseBranch`).
+ * - `branch` — what this workspace changed since diverging from its diff base (`diffBase ??
+ *   baseBranch`): the range starts at their **merge-base** (the fork point), never at the base's tip —
+ *   upstream work landing on the base is not this workspace's change and never shows up here.
  * - `uncommitted` — the worktree vs `HEAD` (what a commit here would record).
  * - `commit` — one commit alone (`sha^` vs `sha`; a root commit degrades to an add-style diff).
  */

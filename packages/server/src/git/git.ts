@@ -83,10 +83,32 @@ export function currentBranch(repoPath: string): string {
  * overlaps the time the user spends choosing a branch / typing the prompt, so the create itself stays local
  * and instant. Async (`gitAsync`, never `spawnSync`) so the network fetch can't block the host's event
  * loop; a local (non-`origin/`) ref or an offline/failed fetch is a harmless no-op ack.
+ *
+ * `moved` reports whether the fetch changed which commit the local remote-tracking ref names (its first
+ * appearance counts). A moved ref *may* change what a sibling workspace's branch-scope diff means (its
+ * merge-base can move), so the `git.prefetch` handler fans the pathless `fsChanged` invalidation out to
+ * the workspaces reading that ref (see `host`'s fsNudge seam; the re-read is idempotent when the
+ * merge-base stayed put) — `moved` is host-internal and never reaches the wire (the response stays
+ * `{ ok }`).
  */
-export async function prefetchBranch(projectId: string, ref: string): Promise<{ ok: boolean }> {
+export async function prefetchBranch(
+	projectId: string,
+	ref: string,
+): Promise<{ ok: boolean; moved: boolean }> {
 	const project = loadProjects().find((p) => p.id === projectId);
-	if (!project || !ref.startsWith("origin/")) return { ok: false };
+	if (!project || !ref.startsWith("origin/")) return { ok: false, moved: false };
+	// Fully qualified on purpose: the short name resolves by git's DWIM order, where a local branch
+	// literally named `origin/<b>` (`refs/heads/origin/<b>`) would shadow the remote-tracking ref — and the
+	// fetch updates `refs/remotes/…` regardless, so the comparison must read exactly that.
+	const revParse = () =>
+		git(project.path, [
+			"rev-parse",
+			"--verify",
+			"--quiet",
+			"--end-of-options",
+			`refs/remotes/${ref}`,
+		]);
+	const before = revParse();
 	// `--` so a `-`-prefixed branch name can't be parsed by git as an option.
 	const result = await gitAsync(project.path, [
 		"fetch",
@@ -94,7 +116,10 @@ export async function prefetchBranch(projectId: string, ref: string): Promise<{ 
 		"--",
 		ref.slice("origin/".length),
 	]);
-	return { ok: result.ok };
+	if (!result.ok) return { ok: false, moved: false };
+	const after = revParse();
+	const moved = after.ok && after.out !== "" && (!before.ok || before.out !== after.out);
+	return { ok: true, moved };
 }
 
 /** Map a `git diff --name-status` code (`M`, `A`, `D`, `R100`, …) to our status enum. */
@@ -179,7 +204,8 @@ function diffFailure(stderr: string): Error {
 }
 
 /**
- * A worktree's changed files over the given {@link GitDiffScope} (default: everything vs the diff base),
+ * A worktree's changed files over the given {@link GitDiffScope} (default: the branch scope — what the
+ * workspace changed since diverging from its diff base),
  * plus any untracked files when the range ends at the worktree. Each carries `+/−` counts. Throws for a
  * scope naming a commit that no longer exists (see `resolveDiffRange`) — and for a diff that **failed**,
  * which must never be reported as a clean worktree.
@@ -245,8 +271,8 @@ function showBlob(worktreePath: string, ref: string, path: string): string {
 }
 
 /**
- * Both sides of one changed file over the given {@link GitDiffScope} (default: everything vs the diff
- * base), for the center Monaco diff tab: `original` = the file at the range's start (empty when it doesn't
+ * Both sides of one changed file over the given {@link GitDiffScope} (default: the branch scope — since
+ * diverging from the diff base), for the center Monaco diff tab: `original` = the file at the range's start (empty when it doesn't
  * exist there — untracked/added, a renamed file's new path, or a root commit — which degrades to an
  * add-style diff), `modified` = the file at its end: the worktree (empty when deleted) for a range ending
  * there, else the commit's own tree.

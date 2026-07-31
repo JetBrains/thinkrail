@@ -5,11 +5,12 @@ import type { DiffStats, Project, Workspace } from "@thinkrail/contracts";
 import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
 import {
 	assertSafeRef,
+	changedFileArgs,
 	currentBranch,
-	diffBaseRef,
 	git,
 	gitAsync,
 	resolveDefaultBranch,
+	resolveDiffRange,
 } from "../git";
 import { dataDir, loadProjects, loadWorkspaces, saveWorkspaces } from "../persistence";
 import { getProjects } from "../projects";
@@ -112,22 +113,15 @@ function applyFolderTruth(ws: Workspace, truth: { branch: string; baseBranch: st
 }
 
 /**
- * Working-tree changes of a worktree vs its **diff base** (the re-pointed target, else the creation base).
+ * Working-tree changes of a worktree over its **branch scope** — the same range the Changes panel shows
+ * (the git module's resolver: merge-base of the diff base and `HEAD`, so upstream commits never inflate
+ * the badge), composed through `changedFileArgs` so the counts can't disagree with the file list.
  * `undefined` when git couldn't answer — **not** `{0,0}`: a failed diff read as "clean" is how a dirty
  * worktree ends up wearing no badge, so the unknown is left unknown (the rail then shows no badge, as it does
  * for a genuinely clean worktree, but nothing claims a count it doesn't have) and the reason is logged.
  */
 function diffStats(ws: Workspace): DiffStats | undefined {
-	// The revs are bracketed on both sides: `--end-of-options` so a repo/user-supplied ref can't be re-parsed
-	// as an option, and a trailing `--` so a base that also names a path on disk is read as a rev instead of
-	// making git bail with "ambiguous argument" (the same framing `changedFileArgs` uses).
-	const result = git(ws.worktreePath, [
-		"diff",
-		"--shortstat",
-		"--end-of-options",
-		diffBaseRef(ws),
-		"--",
-	]);
+	const result = git(ws.worktreePath, changedFileArgs(resolveDiffRange(ws), "--shortstat"));
 	if (!result.ok) {
 		console.warn(
 			`git diff --shortstat failed in ${ws.worktreePath}: ${result.err || "unknown error"}`,

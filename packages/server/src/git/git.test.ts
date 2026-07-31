@@ -195,12 +195,31 @@ test("prefetchBranch fetches a remote ref and no-ops on a local ref or unknown p
 	const remoteTip = gitOut(remoteRepo, "rev-parse", "main");
 	expect(gitOut(repo, "rev-parse", "origin/main")).not.toBe(remoteTip);
 
-	expect(await prefetchBranch("p1", "origin/main")).toEqual({ ok: true });
+	// The fetch advances the local remote-tracking ref → `moved` (the handler's fanout trigger).
+	expect(await prefetchBranch("p1", "origin/main")).toEqual({ ok: true, moved: true });
 	expect(gitOut(repo, "rev-parse", "origin/main")).toBe(remoteTip);
 
+	// Fetching again with nothing new is ok but NOT a move — no invalidation fans out for a no-op fetch.
+	expect(await prefetchBranch("p1", "origin/main")).toEqual({ ok: true, moved: false });
+
+	// A ref's *first appearance* counts as moved: siblings measuring against it were failing their reads.
+	git(repo, "update-ref", "-d", "refs/remotes/origin/main");
+	expect(await prefetchBranch("p1", "origin/main")).toEqual({ ok: true, moved: true });
+
+	// Move detection reads the FULLY-QUALIFIED remote-tracking ref: a local branch literally named
+	// `origin/main` sits earlier in git's DWIM resolution (`refs/heads/…`) and never moves on a fetch — it
+	// must not shadow the comparison into a missed nudge.
+	git(repo, "update-ref", "refs/heads/origin/main", "HEAD");
+	writeFileSync(join(clone, "remote-only-2.txt"), "more\n");
+	git(clone, "add", "-A");
+	git(clone, "commit", "-m", "remote-only-2");
+	git(clone, "push", "origin", "main");
+	expect(await prefetchBranch("p1", "origin/main")).toEqual({ ok: true, moved: true });
+	git(repo, "update-ref", "-d", "refs/heads/origin/main");
+
 	// A local ref never touches the network; an unknown project can't fetch — both are quiet no-ops.
-	expect(await prefetchBranch("p1", "main")).toEqual({ ok: false });
-	expect(await prefetchBranch("nope", "origin/main")).toEqual({ ok: false });
+	expect(await prefetchBranch("p1", "main")).toEqual({ ok: false, moved: false });
+	expect(await prefetchBranch("nope", "origin/main")).toEqual({ ok: false, moved: false });
 });
 
 test("gitStatus reads the Default workspace's branch live, not the persisted snapshot", () => {
@@ -232,20 +251,26 @@ test("diffBaseRef resolves the re-pointed diff target over the creation base", (
 test("resolveDiffRange: one definition per scope (branch / uncommitted / commit)", () => {
 	const ws = { baseBranch: "main", worktreePath: repo };
 
-	// Default (and explicit `branch`): everything vs the diff base, ending at the worktree.
+	// Default (and explicit `branch`): what the workspace changed since diverging from the diff base —
+	// the range starts at the MERGE-BASE of base and HEAD (here HEAD is on main, so it's main's tip oid),
+	// never at the base ref's own tip.
 	expect(resolveDiffRange(ws)).toEqual(resolveDiffRange(ws, { kind: "branch" }));
 	const branch = resolveDiffRange(ws, { kind: "branch" });
+	const forkPoint = branch.originalRef ?? "";
+	expect(forkPoint).toMatch(/^[0-9a-f]{40,}$/);
 	// `--end-of-options` brackets the revs so a flag-shaped ref can't be parsed as one; the trailing `--`
 	// closes the other side, so a rev that also names a path isn't an "ambiguous argument".
 	expect(changedFileArgs(branch, "--name-status")).toEqual([
 		"diff",
 		"--name-status",
 		"--end-of-options",
-		"main",
+		forkPoint,
 		"--",
 	]);
-	expect(branch).toMatchObject({ untracked: true, originalRef: "main", modifiedRef: null });
-	// The re-pointed target is what a branch range spans.
+	expect(branch).toMatchObject({ untracked: true, listRevs: [forkPoint], modifiedRef: null });
+	// The re-pointed target is what a branch range spans — and a target with no merge-base to resolve
+	// (this ref doesn't exist here) FALLS BACK to the raw ref, preserving the old error surfaces: a
+	// missing base still fails the downstream diff loudly instead of reading as "no changes".
 	expect(resolveDiffRange({ ...ws, diffBase: "origin/release" }, { kind: "branch" })).toMatchObject(
 		{
 			listRevs: ["origin/release"],
@@ -321,6 +346,25 @@ test("gitStatus scopes: branch spans the base range, uncommitted only the dirty 
 
 	const uncommitted = gitStatus("w1", { kind: "uncommitted" }).changes.map((c) => c.path);
 	expect(uncommitted).toEqual(["dirty.txt"]);
+});
+
+test("branch scope measures from the merge-base: upstream commits on the base are never phantom changes", () => {
+	git(repo, "switch", "-c", "feature");
+	commitOnFeature("feature.txt", "feature\n", "feature work");
+	// The base advances AFTER the branch forked — upstream work landing on main (or a fetch moving it).
+	git(repo, "switch", "main");
+	writeFileSync(join(repo, "upstream.txt"), "upstream\n");
+	git(repo, "add", "-A");
+	git(repo, "commit", "-m", "upstream work");
+	git(repo, "switch", "feature");
+	seedWorkspace({ branch: "feature" });
+
+	// Tip semantics would list upstream.txt as a phantom deletion; the merge-base range shows only the
+	// workspace's own work — agreeing with listCommits' `base..HEAD`, which was always ancestry-based.
+	expect(gitStatus("w1").changes.map((c) => c.path)).toEqual(["feature.txt"]);
+	expect(listCommits("w1").commits.map((c) => c.subject)).toEqual(["feature work"]);
+	// The per-file read agrees: the original side comes from the fork point, where the file didn't exist.
+	expect(gitDiffFile("w1", "feature.txt")).toEqual({ original: "", modified: "feature\n" });
 });
 
 test("gitStatus/gitDiffFile for a commit scope read only that commit, from history", () => {

@@ -453,7 +453,8 @@ a project picker, the prompt hero, and the reused
   the two-rows-read-as-selected ambiguity the single-selection rule above exists to prevent.
 - **The diff scope is chosen in the Changes header, and enters the tab's identity.** Two header controls say
   what is being diffed: the **`ChangesScopeMenu`** pill — *All
-  changes* (everything vs the target branch, the default) / *Uncommitted changes* / one **commit** from the
+  changes* (the workspace's work since diverging from the target branch — measured from the merge-base,
+  so upstream commits landing on the target are never phantom rows here; the default) / *Uncommitted changes* / one **commit** from the
   branch's list — and the shared **`BranchPicker`** pill for the **target branch** (`workspace.setDiffBase`;
   the panel converges on the broadcast `workspace.updated`, never optimistically). The menu's contents load
   **lazily on each open**, never on panel mount: `git.listCommits` for the commit rows (subject +
