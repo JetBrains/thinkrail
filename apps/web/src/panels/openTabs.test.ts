@@ -6,7 +6,12 @@ import type { Workspace } from "@thinkrail/contracts";
 // store did WHILE a read was in flight — the whole point of these cases.
 let pending: { resolve: (value: unknown) => void } | null = null;
 const requests: { method: string; params: unknown }[] = [];
+// The real barrel is spread back in: `mock.module` replaces the WHOLE module for every importer in the
+// process, so returning `getTransport` alone would break any other test file that imports `errorText` from
+// here — a failure whose appearance depends on suite file order.
+const actualTransport = await import("../transport");
 mock.module("../transport", () => ({
+	...actualTransport,
 	getTransport: () => ({
 		request: (method: string, params: unknown) => {
 			requests.push({ method, params });
