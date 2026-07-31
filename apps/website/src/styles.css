@@ -587,7 +587,7 @@ code {
 .tab {
 	display: flex;
 	align-items: center;
-	justify-content: center;
+	justify-content: flex-start;
 	gap: 7px;
 	padding: 8px 12px;
 	font-size: 12.5px;
@@ -595,17 +595,21 @@ code {
 	color: var(--muted);
 	border-right: 1px solid var(--border);
 	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
 	position: relative;
-	flex: 1 1 0;
-	min-width: 0;
+	flex: none;
 }
 
 .tab:hover {
 	text-decoration: none;
 	color: var(--text);
 	background: var(--hover);
+}
+
+/* Tabs inside disabled mock chrome have no hover state */
+[data-mock-hint] .tab:hover {
+	text-decoration: none;
+	color: var(--muted);
+	background: transparent;
 }
 
 .tab .i {
@@ -639,6 +643,11 @@ code {
 
 .tab:hover .tab-x {
 	opacity: 0.6;
+}
+
+/* No close button on disabled tabs */
+[data-mock-hint] .tab:hover .tab-x {
+	opacity: 0;
 }
 
 .tab-x::before,
@@ -1530,18 +1539,18 @@ html.anim .terminal.armed [data-out] {
 	position: fixed;
 	display: flex;
 	flex-direction: column;
-	align-items: center;
-	text-align: center;
+	align-items: flex-start;
+	text-align: left;
 	padding: 32px;
 	background: var(--elevated);
 	border: 1px solid var(--border2);
 	border-radius: 12px;
 	pointer-events: none;
 	opacity: 0;
-	transform: translateY(4px);
+	transform: translateY(8px);
 	transition:
-		opacity 150ms ease,
-		transform 150ms ease;
+		opacity 200ms ease-out,
+		transform 200ms ease-out;
 	z-index: 1001;
 	box-shadow: 0 8px 24px rgb(0 0 0 / 0.35);
 	max-width: 280px;
