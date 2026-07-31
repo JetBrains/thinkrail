@@ -77,7 +77,7 @@ function ChatHistoryMenu({
 				data-testid="chat-history"
 				aria-label="Reopen a closed chat"
 				title="View chat history"
-				className="flex shrink-0 items-center border-border-default border-l px-sm text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex shrink-0 items-center border-border-default border-l px-sm text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 			>
 				<History className="size-4" />
 			</DropdownMenuTrigger>
@@ -402,7 +402,7 @@ export function CenterTabs() {
 									data-testid="editor-tab-close"
 									aria-label={`Close ${tab.name}`}
 									onClick={() => onCloseTab(tab)}
-									className="rounded-[var(--radius-sm)] p-0.5 text-text-muted opacity-0 hover:bg-control-bg-hovered hover:text-text group-hover:opacity-100"
+									className="rounded-[var(--radius-sm)] p-0.5 text-text-muted opacity-0 hover:bg-control-bg-hovered hover:text-text-default group-hover:opacity-100"
 								>
 									<X className="size-3.5" />
 								</button>

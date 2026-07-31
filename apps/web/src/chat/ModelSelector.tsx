@@ -122,7 +122,7 @@ export function ModelSelector({
 					data-refreshing={refreshing}
 					disabled={refreshing}
 					onClick={() => onRefresh(true)}
-					className="flex w-full items-center gap-sm border-border-default border-t px-sm py-xs text-text-muted text-xs outline-none transition-colors hover:bg-control-bg-hovered hover:text-text disabled:cursor-default disabled:hover:bg-transparent disabled:hover:text-text-muted"
+					className="flex w-full items-center gap-sm border-border-default border-t px-sm py-xs text-text-muted text-xs outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default disabled:cursor-default disabled:hover:bg-transparent disabled:hover:text-text-muted"
 				>
 					<RefreshCw className={cn("size-3.5 shrink-0", refreshing && "animate-spin")} />
 					{refreshing ? "Updating catalog…" : "Refresh catalog"}

@@ -108,7 +108,7 @@ export function TodoAddRow({
 					onClick={onOpenMarkdown}
 					aria-label="Open as markdown"
 					title="Open the plan as a markdown tab"
-					className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text focus-visible:opacity-100"
+					className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default focus-visible:opacity-100"
 				>
 					<FileText className="size-3.5" />
 				</button>
