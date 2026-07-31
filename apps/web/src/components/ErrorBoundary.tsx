@@ -82,10 +82,10 @@ function PanelErrorFallback({
 			className="flex h-full min-h-0 flex-col items-center justify-center gap-sm overflow-auto p-lg text-center"
 		>
 			<AlertTriangle className="size-6 text-feedback-error" />
-			<p className="text-sm font-medium text-text-default">
+			<p className="tr-title-compact text-text-default">
 				{label ? `The ${label} panel hit an error` : "Something went wrong"}
 			</p>
-			<p className="max-w-[28rem] text-xs text-text-muted">
+			<p className="max-w-[28rem] tr-text-metadata text-text-muted">
 				{isChunkError
 					? "Failed to load part of the app (a stale or unreachable resource). Reloading usually fixes it."
 					: error.message || "An unexpected error occurred while rendering this view."}
@@ -96,7 +96,7 @@ function PanelErrorFallback({
 						type="button"
 						data-testid="error-reload"
 						onClick={() => window.location.reload()}
-						className="flex items-center gap-xs rounded-[var(--radius-md)] border border-border-default bg-control-bg px-md py-xs text-sm text-text-default hover:bg-control-bg-hovered"
+						className="flex items-center gap-xs rounded-[var(--radius-md)] border border-border-default bg-container-popover-bg px-md py-xs tr-text-ui text-text-default hover:bg-control-bg-hovered"
 					>
 						<RefreshCw className="size-4" /> Reload page
 					</button>
@@ -105,7 +105,7 @@ function PanelErrorFallback({
 						type="button"
 						data-testid="error-retry"
 						onClick={reset}
-						className="flex items-center gap-xs rounded-[var(--radius-md)] border border-border-default bg-control-bg px-md py-xs text-sm text-text-default hover:bg-control-bg-hovered"
+						className="flex items-center gap-xs rounded-[var(--radius-md)] border border-border-default bg-container-popover-bg px-md py-xs tr-text-ui text-text-default hover:bg-control-bg-hovered"
 					>
 						<RotateCcw className="size-4" /> Try again
 					</button>

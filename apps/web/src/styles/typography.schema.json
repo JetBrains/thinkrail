@@ -1,0 +1,236 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"$id": "https://thinkrail.ai/schemas/typography.schema.json",
+	"title": "ThinkRail typography source",
+	"description": "The canonical, machine-first typography definition: primitives plus the semantic text styles generated from them. A style is either a complete definition or a `$ref` naming a canonical definition \u2014 identical styles are never duplicated, and references never chain. Contains no CSS selectors, class strings, component paths, usage inventories or rationale. This schema is the editor-facing contract; the enforced gate is `scripts/typography.ts` \u2192 `validate()`, which also checks the policies JSON Schema cannot express.",
+	"type": "object",
+	"additionalProperties": false,
+	"required": [
+		"$schema",
+		"metadata",
+		"fontFamilies",
+		"fontWeights",
+		"fontSizes",
+		"lineHeights",
+		"letterSpacings",
+		"rootStyle",
+		"textStyles",
+		"proseSystems"
+	],
+	"properties": {
+		"$schema": {
+			"type": "string"
+		},
+		"metadata": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["version", "cssVarPrefix", "classPrefix"],
+			"properties": {
+				"version": {
+					"type": "string",
+					"pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+				},
+				"cssVarPrefix": {
+					"type": "string",
+					"pattern": "^[a-z][a-z0-9-]*$"
+				},
+				"classPrefix": {
+					"type": "string",
+					"pattern": "^[a-z][a-z0-9-]*$"
+				}
+			}
+		},
+		"fontFamilies": {
+			"type": "object",
+			"minProperties": 1,
+			"propertyNames": {
+				"$ref": "#/definitions/tokenId"
+			},
+			"additionalProperties": {
+				"oneOf": [
+					{
+						"$ref": "#/definitions/fontFamily"
+					},
+					{
+						"$ref": "#/definitions/ref"
+					}
+				]
+			}
+		},
+		"fontWeights": {
+			"type": "object",
+			"minProperties": 1,
+			"propertyNames": {
+				"$ref": "#/definitions/tokenId"
+			},
+			"additionalProperties": {
+				"type": "integer",
+				"minimum": 100,
+				"maximum": 900
+			}
+		},
+		"fontSizes": {
+			"type": "object",
+			"minProperties": 1,
+			"propertyNames": {
+				"$ref": "#/definitions/tokenId"
+			},
+			"additionalProperties": {
+				"type": "number",
+				"exclusiveMinimum": 0
+			}
+		},
+		"lineHeights": {
+			"type": "object",
+			"minProperties": 1,
+			"propertyNames": {
+				"$ref": "#/definitions/tokenId"
+			},
+			"additionalProperties": {
+				"type": "number",
+				"exclusiveMinimum": 0
+			}
+		},
+		"letterSpacings": {
+			"type": "object",
+			"minProperties": 1,
+			"propertyNames": {
+				"$ref": "#/definitions/tokenId"
+			},
+			"additionalProperties": {
+				"type": "string",
+				"minLength": 1
+			}
+		},
+		"rootStyle": {
+			"description": "The `<body>` fallback for text that carries no semantic class. Always a `$ref` naming a semantic style, never values of its own, so the document base can never drift from the system.",
+			"$ref": "#/definitions/ref"
+		},
+		"textStyles": {
+			"type": "object",
+			"minProperties": 1,
+			"propertyNames": {
+				"$ref": "#/definitions/groupId"
+			},
+			"additionalProperties": {
+				"type": "object",
+				"minProperties": 1,
+				"propertyNames": {
+					"$ref": "#/definitions/tokenId"
+				},
+				"additionalProperties": {
+					"oneOf": [
+						{
+							"$ref": "#/definitions/style"
+						},
+						{
+							"$ref": "#/definitions/ref"
+						}
+					]
+				}
+			}
+		},
+		"proseSystems": {
+			"description": "One entry per markdown surface (`chat`, `doc`). Each owns the same fixed element set, so the surfaces stay comparable, but names its own type — a chat bubble and a full-page document want different heading scales. System ids share the id space with `textStyles` groups and must not collide with them.",
+			"type": "object",
+			"minProperties": 1,
+			"propertyNames": {
+				"$ref": "#/definitions/groupId"
+			},
+			"additionalProperties": {
+				"type": "object",
+				"minProperties": 1,
+				"propertyNames": {
+					"$ref": "#/definitions/tokenId"
+				},
+				"additionalProperties": {
+					"oneOf": [
+						{
+							"$ref": "#/definitions/style"
+						},
+						{
+							"$ref": "#/definitions/ref"
+						}
+					]
+				}
+			}
+		}
+	},
+	"definitions": {
+		"tokenId": {
+			"type": "string",
+			"pattern": "^[a-zA-Z][a-zA-Z0-9]*$"
+		},
+		"groupId": {
+			"type": "string",
+			"pattern": "^[a-z][a-zA-Z0-9]*$"
+		},
+		"style": {
+			"description": "A canonical semantic text style. Every property is a reference to a primitive token id; a style resolves deterministically with no inheritance, per-usage branching or fallback. Use `$ref` instead of repeating an identical definition.",
+			"type": "object",
+			"additionalProperties": false,
+			"required": [
+				"fontFamily",
+				"fontSize",
+				"fontWeight",
+				"lineHeight",
+				"letterSpacing",
+				"textTransform",
+				"fontStyle"
+			],
+			"properties": {
+				"fontFamily": {
+					"$ref": "#/definitions/tokenId"
+				},
+				"fontSize": {
+					"$ref": "#/definitions/tokenId"
+				},
+				"fontWeight": {
+					"$ref": "#/definitions/tokenId"
+				},
+				"lineHeight": {
+					"$ref": "#/definitions/tokenId"
+				},
+				"letterSpacing": {
+					"$ref": "#/definitions/tokenId"
+				},
+				"textTransform": {
+					"enum": ["none", "uppercase", "lowercase", "capitalize"]
+				},
+				"fontStyle": {
+					"enum": ["normal", "italic"]
+				}
+			}
+		},
+		"ref": {
+			"description": "\"Identical to that style/family.\" `$ref` must name a canonical DEFINITION, never another reference: chains are invalid, so resolution is one direct lookup. The only permitted property is `$ref`.",
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["$ref"],
+			"properties": {
+				"$ref": {
+					"type": "string",
+					"minLength": 1
+				}
+			}
+		},
+		"fontFamily": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["stack", "kind"],
+			"properties": {
+				"stack": {
+					"type": "array",
+					"minItems": 1,
+					"items": {
+						"type": "string",
+						"minLength": 1
+					}
+				},
+				"kind": {
+					"enum": ["proportional", "monospace"]
+				}
+			}
+		}
+	}
+}

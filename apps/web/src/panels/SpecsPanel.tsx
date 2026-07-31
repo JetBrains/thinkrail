@@ -54,13 +54,14 @@ export function SpecsPanel({
 
 	if (failed && !nodes)
 		return (
-			<p data-testid="specs-error" className="px-xs py-xs text-xs text-text-muted">
+			<p data-testid="specs-error" className="px-xs py-xs tr-text-metadata text-text-muted">
 				Couldn't load specs — Refresh to retry.
 			</p>
 		);
 	if (nodes === null || roots === null)
-		return <p className="px-xs py-xs text-xs text-text-muted">Loading…</p>;
-	if (nodes.length === 0) return <p className="px-xs py-xs text-xs text-text-muted">No specs</p>;
+		return <p className="px-xs py-xs tr-text-metadata text-text-muted">Loading…</p>;
+	if (nodes.length === 0)
+		return <p className="px-xs py-xs tr-text-metadata text-text-muted">No specs</p>;
 	return (
 		<ul className="flex flex-col">
 			{roots.map((root) => (
@@ -164,10 +165,8 @@ function SpecNodeRow({
 					/>
 					<span
 						className={cn(
-							"min-w-0 flex-1 truncate text-sm transition-colors",
-							isActive
-								? "font-medium text-text-default"
-								: "text-text-muted group-hover:text-text-default",
+							"min-w-0 flex-1 truncate tr-text-ui transition-colors",
+							isActive ? "text-text-default" : "text-text-muted group-hover:text-text-default",
 						)}
 					>
 						{node.title}
@@ -175,8 +174,8 @@ function SpecNodeRow({
 					<span
 						data-testid="spec-role"
 						className={cn(
-							"max-w-16 shrink-0 truncate text-right text-[9px] uppercase tracking-wider",
-							isMainSpec || isActive ? "font-medium text-primary" : "text-text-muted",
+							"max-w-16 shrink-0 truncate text-right tr-text-eyebrow",
+							isMainSpec || isActive ? "text-primary" : "text-text-muted",
 						)}
 					>
 						{trailingRole}

@@ -9,22 +9,24 @@ body,
 	margin: 0;
 }
 
+/* Colour + rendering only. The body's family/size/weight/line-height are the `rootStyle` from
+   `typography.json`, emitted into `@layer base` by `generated/typography.css` — never restated here. */
 body {
-	background: var(--container-workspace-bg);
-	color: var(--text-default);
-	font-family: var(--font);
-	font-size: var(--font-base);
-	line-height: var(--line-height);
+	background: var(--bg);
+	color: var(--text);
+	/* macOS-only effect (both properties are no-ops elsewhere); no `optimizeLegibility` — document,
+	   don't hack other platforms. */
 	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
 }
 
 ::selection {
 	background: var(--selection-bg);
-	color: var(--selection-text, inherit);
+	color: var(--selection-fg, inherit);
 }
 
 a {
-	color: var(--text-link);
+	color: var(--blue);
 }
 
 ::-webkit-scrollbar {
@@ -32,6 +34,6 @@ a {
 	height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-	background: var(--border-default);
+	background: var(--border2);
 	border-radius: var(--radius-md);
 }

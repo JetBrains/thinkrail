@@ -95,11 +95,11 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 			: highlighted === path;
 
 	if (status === null) {
-		return <p className="px-sm py-xs text-xs text-text-muted">Loading…</p>;
+		return <p className="px-sm py-xs tr-text-metadata text-text-muted">Loading…</p>;
 	}
 	if (status.changes.length === 0) {
 		return (
-			<p data-testid="changes-empty" className="px-sm py-xs text-xs text-text-muted">
+			<p data-testid="changes-empty" className="px-sm py-xs tr-text-metadata text-text-muted">
 				No changes in this workspace.
 			</p>
 		);
@@ -140,7 +140,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 									data-active={isActive(change.path) ? true : undefined}
 									onClick={() => openDiff(change.path, "preview")}
 									onDoubleClick={() => openDiff(change.path, "keep")}
-									className={`flex w-full items-center gap-sm px-sm py-xs text-left text-sm hover:bg-control-bg-hovered ${
+									className={`flex w-full items-center gap-sm px-sm py-xs text-left tr-text-ui hover:bg-control-bg-hovered ${
 										isActive(change.path) ? "bg-control-bg-hovered" : ""
 									}`}
 								>

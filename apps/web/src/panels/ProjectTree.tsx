@@ -95,7 +95,7 @@ export function ProjectTree() {
 	return (
 		<nav className="flex flex-col gap-sm">
 			<header className="flex h-7 items-center justify-between pr-xs pl-sm">
-				<span className="text-xs uppercase tracking-wider text-text-muted">Projects</span>
+				<span className="tr-text-eyebrow text-text-muted">Projects</span>
 				<AddProjectMenu
 					projects={projects}
 					onOpen={() => void pickAndOpen()}
@@ -205,13 +205,13 @@ function ProjectRow({
 			>
 				<Folder className={`size-4 shrink-0 ${isSelected ? "text-primary" : "text-text-muted"}`} />
 				<span
-					className={`truncate text-sm ${isSelected ? "font-medium text-text-default" : "text-text-muted"}`}
+					className={`truncate tr-text-ui ${isSelected ? "text-text-default" : "text-text-muted"}`}
 				>
 					{project.name}
 				</span>
 			</button>
 			{!isExpanded && workspaceCount > 0 && (
-				<span className="shrink-0 text-xs text-text-muted group-hover:hidden">
+				<span className="shrink-0 tr-text-metadata text-text-muted group-hover:hidden">
 					{workspaceCount}
 				</span>
 			)}
@@ -220,7 +220,7 @@ function ProjectRow({
 				data-testid="add-workspace"
 				aria-label="Create workspace"
 				onClick={onAddWorkspace}
-				className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 transition hover:bg-control-bg-hovered hover:text-text-default group-hover:opacity-100"
+				className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 transition hover:bg-container-popover-bg hover:text-text-default group-hover:opacity-100"
 			>
 				<Plus className="size-4" />
 			</button>
@@ -268,14 +268,14 @@ function WorkspaceRow({
 				<span className="flex min-w-0 flex-1 flex-col">
 					<span
 						data-testid="workspace-name"
-						className={`truncate text-sm leading-tight ${isActive ? "font-medium text-primary" : "text-text-muted"}`}
+						className={`truncate tr-text-ui leading-tight ${isActive ? "text-primary" : "text-text-muted"}`}
 					>
 						{workspace.name}
 					</span>
 					{workspace.branch !== workspace.name && (
 						<span
 							data-testid="workspace-branch"
-							className="truncate font-[var(--font-mono)] text-text-muted text-xs leading-tight"
+							className="truncate text-text-muted tr-text-metadata leading-tight"
 						>
 							{workspace.branch}
 						</span>
@@ -293,7 +293,7 @@ function WorkspaceRow({
 						type="button"
 						data-testid="workspace-remove"
 						aria-label="Remove workspace"
-						className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 transition hover:bg-control-bg-hovered hover:text-feedback-error group-hover:opacity-100 data-[state=open]:opacity-100"
+						className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 transition hover:bg-container-popover-bg hover:text-feedback-error group-hover:opacity-100 data-[state=open]:opacity-100"
 					>
 						<Trash2 className="size-4" />
 					</button>
@@ -312,7 +312,7 @@ function WorkspaceRow({
 			description={
 				<>
 					Deletes this workspace's chats, terminals, and its worktree. The git branch{" "}
-					<span className="font-medium text-text-default">{workspace.branch}</span> is kept.
+					<span className="tr-text-emphasis text-text-default">{workspace.branch}</span> is kept.
 				</>
 			}
 			confirmLabel="Remove"

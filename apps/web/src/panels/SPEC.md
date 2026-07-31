@@ -501,9 +501,10 @@ a project picker, the prompt hero, and the reused
 - **Markdown file tabs render, don't read.** A `.md`/`.markdown` `FileTab` (from the file tree **or** the
   Specs panel — same `openTab` path) opens **rendered by default**: `FilePane` gates on `lib.isMarkdownPath`
   and shows a slim `Preview | Source` header (`markdown-view-toggle`), the rendered view being lazy
-  `MarkdownPreview` (reuses `chat/Markdown` for GFM+shiki but owns the **document skin** — a
-  reading-optimized token-utility prose treatment modeled on GitHub's markdown CSS: an em-relative
-  heading scale (h1 2em…h6 .85em) with h1/h2 rules, a capped reading measure (~78ch) with wide
+  `MarkdownPreview` (reuses `chat/Markdown` for GFM+shiki but owns the **document skin** — `tr-prose-doc`
+  supplies every typography value (`typography.json` → `proseSystems.doc`: h1–h4 at 24/20/18/16 against
+  14px body copy, so a rendered file reads as a document rather than a chat bubble), and the skin adds
+  only what is *not* typography: h1/h2 section rules, a capped reading measure (~78ch) with wide
   tables/code scrolling inside it, zebra-striped bordered tables, muted accent blockquotes, crisp
   rules, and **GitHub-style alert callouts** (`> [!NOTE]`…`[!CAUTION]`, via the in-repo
   `markdownAlerts` remark transform + a lucide/token `AlertCallout`, wired in only here — not chat) — in

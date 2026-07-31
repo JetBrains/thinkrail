@@ -21,8 +21,8 @@ export function PrivacySettings() {
 	return (
 		<section data-testid="settings-privacy" className="flex flex-col gap-lg">
 			<div className="flex flex-col gap-xs">
-				<h3 className="font-medium text-md text-text-default">Usage analytics</h3>
-				<p className="text-text-muted text-xs">
+				<h3 className="tr-title-section text-text-default">Usage analytics</h3>
+				<p className="text-text-muted tr-text-metadata">
 					Anonymous usage analytics help us understand which features matter. Your choice is saved
 					on the host and follows you across devices.
 				</p>
@@ -30,10 +30,10 @@ export function PrivacySettings() {
 
 			<div className="flex items-center justify-between gap-md rounded-[var(--radius-md)] border border-border-default px-md py-sm">
 				<div className="flex flex-col gap-0.5">
-					<span className="font-medium text-sm text-text-default">
+					<span className="tr-title-compact text-text-default">
 						Share anonymous usage analytics
 					</span>
-					<span className="text-text-muted text-xs">
+					<span className="text-text-muted tr-text-metadata">
 						{enabled ? "On — thank you for helping improve ThinkRail." : "Off — nothing is sent."}
 					</span>
 				</div>
@@ -59,15 +59,15 @@ export function PrivacySettings() {
 				</button>
 			</div>
 
-			<div className="flex flex-col gap-xs text-xs">
+			<div className="flex flex-col gap-xs tr-text-metadata">
 				<p className="text-text-muted">
-					<span className="font-medium text-text-default">What is collected:</span> a random
+					<span className="tr-text-emphasis text-text-default">What is collected:</span> a random
 					anonymous install id, app version and release channel, OS and architecture, when a chat
 					starts (and the model/provider it uses), and which providers you sign in to. Custom
 					providers and models are reported only as “custom”.
 				</p>
 				<p className="text-text-muted">
-					<span className="font-medium text-text-default">Never collected:</span> file paths or
+					<span className="tr-text-emphasis text-text-default">Never collected:</span> file paths or
 					names, prompts, code, chat transcripts, API keys, hostnames, usernames, or anything typed
 					into the app.
 				</p>

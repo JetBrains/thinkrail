@@ -60,14 +60,14 @@ export function ToolCard({
 			data-tool={toolName}
 			data-status={status}
 			data-expanded={expanded}
-			className="rounded-[var(--radius-sm)] border border-border-default bg-container-card-bg"
+			className="rounded-[var(--radius-sm)] border border-border-default bg-container-popover-bg"
 		>
 			<button
 				type="button"
 				data-testid="tool-card-toggle"
 				aria-expanded={expanded}
 				onClick={toggle}
-				className="flex w-full cursor-pointer select-none items-center gap-xs px-sm py-xs text-left text-xs outline-none focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex w-full cursor-pointer select-none items-center gap-xs px-sm py-xs text-left tr-text-metadata outline-none focus-visible:ring-2 focus-visible:ring-primary"
 			>
 				{status === "running" ? (
 					<Loader2 className="size-3 shrink-0 animate-spin text-text-muted motion-reduce:animate-none" />
@@ -76,7 +76,7 @@ export function ToolCard({
 				) : (
 					<Check className="size-3 shrink-0 text-feedback-success" />
 				)}
-				<span className="shrink-0 font-medium text-text-default">{toolName}</span>
+				<span className="shrink-0 text-text-default">{toolName}</span>
 				{summary ? (
 					<span className="min-w-0 flex-1 truncate text-text-muted" title={summary}>
 						{summary}

@@ -29,9 +29,9 @@ export function ThinkingSelector({
 				data-testid="thinking-selector"
 				data-open={open}
 				disabled={levels.length === 0}
-				className="flex h-8 items-center gap-sm rounded-[var(--radius-md)] border border-border-default bg-[var(--control-bg)] px-sm text-sm text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 data-[open=true]:border-[var(--primary-60)] data-[open=true]:bg-selection-item-bg-hovered"
+				className="flex h-8 items-center gap-sm rounded-[var(--radius-md)] border border-border-default bg-[var(--input-bg)] px-sm tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 data-[open=true]:border-[var(--primary-60)] data-[open=true]:bg-control-bg-hovered"
 			>
-				<span className="text-text-muted text-xs uppercase tracking-wider">Effort</span>
+				<span className="tr-text-eyebrow text-text-muted">Effort</span>
 				<span className="capitalize">{level}</span>
 				<ChevronDown className="size-3 shrink-0 text-text-muted" />
 			</PopoverTrigger>
@@ -47,7 +47,7 @@ export function ThinkingSelector({
 							onSelect(l);
 							setOpen(false);
 						}}
-						className="flex w-full items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs text-left text-sm text-text-default capitalize outline-none transition-colors hover:bg-control-bg-hovered"
+						className="flex w-full items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs text-left tr-text-ui text-text-default capitalize outline-none transition-colors hover:bg-control-bg-hovered"
 					>
 						<span className="flex w-3.5 shrink-0 justify-center">
 							{l === level ? <Check className="size-3.5 text-primary" /> : null}

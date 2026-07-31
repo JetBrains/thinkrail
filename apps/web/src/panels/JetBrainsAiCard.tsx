@@ -116,15 +116,15 @@ export function JetBrainsAiCard({
 			data-testid="jetbrains-ai-card"
 			data-wired={wired}
 			data-installed={installed}
-			className="flex flex-col gap-sm rounded-[var(--radius-lg)] border border-border-default bg-[var(--control-bg)] p-md"
+			className="flex flex-col gap-sm rounded-[var(--radius-lg)] border border-border-default bg-[var(--input-bg)] p-md"
 		>
 			<div className="flex items-center gap-md">
 				<span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-[var(--primary-10)] text-primary">
 					<Zap className="size-4" />
 				</span>
 				<div className="flex min-w-0 flex-col">
-					<span className="font-medium text-sm text-text-default">JetBrains AI</span>
-					<span className="truncate text-text-muted text-xs">
+					<span className="tr-text-ui text-text-default">JetBrains AI</span>
+					<span className="truncate text-text-muted tr-text-metadata">
 						Route Claude + GPT through your JetBrains subscription.
 					</span>
 				</div>
@@ -156,7 +156,7 @@ export function JetBrainsAiCard({
 
 			{wired ? (
 				<p
-					className="flex items-center gap-xs text-feedback-success text-xs"
+					className="flex items-center gap-xs text-feedback-success tr-text-metadata"
 					data-testid="jetbrains-connected"
 				>
 					<Check className="size-3.5 shrink-0" />
@@ -166,7 +166,7 @@ export function JetBrainsAiCard({
 
 			{showInstall ? (
 				<div className="flex flex-col gap-xs" data-testid="jetbrains-needs-install">
-					<p className="text-text-muted text-xs">
+					<p className="text-text-muted tr-text-metadata">
 						{install?.shell === "powershell"
 							? "Install the JetBrains Central CLI (central) in PowerShell, then Recheck:"
 							: "Install the JetBrains Central CLI (central), then Recheck:"}
@@ -187,7 +187,7 @@ export function JetBrainsAiCard({
 
 			{showLogin ? (
 				<div className="flex flex-col gap-xs" data-testid="jetbrains-needs-login">
-					<p className="text-text-muted text-xs">
+					<p className="text-text-muted tr-text-metadata">
 						{loginLaunched
 							? "Complete sign-in in your browser, then Connect. If nothing opened, run this in a terminal:"
 							: "Sign in to JetBrains AI, then Connect. You can also run this in a terminal:"}
@@ -223,7 +223,7 @@ export function JetBrainsAiCard({
 
 			{!wired && result?.kind === "error" ? (
 				<div className="flex flex-col gap-xs" data-testid="jetbrains-error">
-					<p className="break-words text-feedback-error text-xs">{errorMsg}</p>
+					<p className="break-words text-feedback-error tr-text-metadata">{errorMsg}</p>
 					<Button
 						variant="ghost"
 						size="sm"
@@ -254,7 +254,7 @@ function CopyableCommand({ command }: { command: string }) {
 	};
 	return (
 		<div className="flex items-center gap-sm rounded-[var(--radius-md)] border border-border-default bg-container-workspace-bg px-sm py-xs">
-			<code className="min-w-0 flex-1 select-all break-all font-[var(--font-mono)] text-text-default text-xs">
+			<code className="min-w-0 flex-1 select-all break-all tr-code-text text-text-default">
 				{command}
 			</code>
 			<button

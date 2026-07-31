@@ -196,11 +196,11 @@ export function SkillsDialog({
 					{group.isPlugin ? (
 						<Puzzle className="size-3.5 shrink-0 text-text-muted" aria-hidden />
 					) : null}
-					<span className="font-medium text-text-default text-xs uppercase tracking-wide">
-						{group.label}
+					<span className="tr-text-eyebrow text-text-default">{group.label}</span>
+					<span className="min-w-0 flex-1 truncate text-text-muted tr-text-metadata">
+						{group.hint}
 					</span>
-					<span className="min-w-0 flex-1 truncate text-text-muted text-xs">{group.hint}</span>
-					<span className="shrink-0 rounded-full bg-selection-item-bg-hovered px-1.5 text-text-muted text-xs">
+					<span className="shrink-0 rounded-full bg-control-bg-hovered px-1.5 text-text-muted tr-text-metadata">
 						{group.items.length}
 					</span>
 					<Toggle
@@ -241,7 +241,7 @@ export function SkillsDialog({
 			<DialogContent data-testid="skills-dialog" className="max-w-[560px] gap-md p-md">
 				{/* pr-8 reserves room for the DialogContent's absolute close (X) so it can't overlap Reload. */}
 				<div className="flex items-center justify-between gap-sm pr-8">
-					<DialogTitle className="text-sm text-text-default">Skills</DialogTitle>
+					<DialogTitle className="tr-text-ui text-text-default">Skills</DialogTitle>
 					{workspace ? (
 						<Button
 							size="sm"
@@ -264,7 +264,7 @@ export function SkillsDialog({
 				{workspace?.stale ? (
 					<div
 						data-testid="skills-stale"
-						className="rounded-[var(--radius-md)] border border-border-default bg-container-card-bg px-md py-sm text-text-muted text-xs"
+						className="rounded-[var(--radius-md)] border border-border-default bg-container-popover-bg px-md py-sm text-text-muted tr-text-metadata"
 					>
 						This worktree's skills changed on disk —{" "}
 						<span className="text-text-default">Reload</span> to apply them to this chat.
@@ -274,9 +274,9 @@ export function SkillsDialog({
 				{untrustedCount > 0 ? (
 					<div
 						data-testid="skills-trust-all"
-						className="flex items-center gap-sm rounded-[var(--radius-md)] border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-bg px-md py-sm"
+						className="flex items-center gap-sm rounded-[var(--radius-md)] border border-border-default border-l-[3px] border-l-[var(--gold)] bg-[var(--gold-tint)] px-md py-sm"
 					>
-						<span className="min-w-0 flex-1 text-sm text-text-default">
+						<span className="min-w-0 flex-1 tr-text-ui text-text-default">
 							{untrustedCount} project skill{untrustedCount === 1 ? "" : "s"} off until you trust
 							this repo.
 						</span>
@@ -298,9 +298,9 @@ export function SkillsDialog({
 
 				<div className="max-h-[50vh] overflow-y-auto">
 					{entries === null ? (
-						<p className="px-sm py-md text-text-muted text-sm">Loading skills…</p>
+						<p className="px-sm py-md text-text-muted tr-text-ui">Loading skills…</p>
 					) : entries.length === 0 ? (
-						<p className="px-sm py-md text-text-muted text-sm">No skills discovered.</p>
+						<p className="px-sm py-md text-text-muted tr-text-ui">No skills discovered.</p>
 					) : (
 						<>
 							{/* First-party skills (ThinkRail + Pi) lead, above the all-plugins master. */}
@@ -312,7 +312,7 @@ export function SkillsDialog({
 									data-testid="skills-all-plugins"
 									className="sticky top-0 z-20 flex h-8 items-center gap-sm border-border-default border-y bg-container-header-bg px-sm"
 								>
-									<span className="min-w-0 flex-1 font-medium text-text-default text-xs uppercase tracking-wide">
+									<span className="min-w-0 flex-1 tr-text-eyebrow text-text-default">
 										All plugins
 									</span>
 									<Toggle
@@ -352,7 +352,7 @@ function Toggle({
 			disabled={busy}
 			onClick={onClick}
 			className={cn(
-				"shrink-0 rounded-[var(--radius-sm)] border px-sm py-0.5 text-xs transition-colors disabled:opacity-50",
+				"shrink-0 rounded-[var(--radius-sm)] border px-sm py-0.5 tr-text-metadata transition-colors disabled:opacity-50",
 				on
 					? "border-[var(--primary-40)] bg-[var(--primary-10)] text-primary"
 					: "border-border-default text-text-muted hover:bg-control-bg-hovered",
@@ -393,11 +393,9 @@ function SkillRow({
 			className="flex items-center gap-sm py-1.5 pr-sm pl-md hover:bg-control-bg-hovered"
 		>
 			<span className="flex min-w-0 flex-1 flex-col">
-				<span className="truncate font-[var(--font-mono)] text-sm text-text-default">
-					{entry.name}
-				</span>
+				<span className="truncate tr-text-ui text-text-default">{entry.name}</span>
 				{entry.description ? (
-					<span className="truncate text-text-muted text-xs">{entry.description}</span>
+					<span className="truncate text-text-muted tr-text-metadata">{entry.description}</span>
 				) : null}
 			</span>
 			{entry.decision === "pending-ack" ? (
@@ -406,10 +404,10 @@ function SkillRow({
 					Enable
 				</Button>
 			) : entry.decision === "untrusted" ? (
-				<span className="shrink-0 text-text-muted text-xs">{DECISION_TEXT.untrusted}</span>
+				<span className="shrink-0 text-text-muted tr-text-metadata">{DECISION_TEXT.untrusted}</span>
 			) : groupOff ? (
 				<span
-					className="shrink-0 text-text-disabled text-xs"
+					className="shrink-0 text-text-muted tr-text-metadata"
 					title="Enable the group to change this skill"
 				>
 					group off
@@ -422,7 +420,7 @@ function SkillRow({
 					disabled={busy}
 					onClick={() => onToggle(!loaded)}
 					className={cn(
-						"shrink-0 rounded-[var(--radius-sm)] border px-sm py-0.5 text-xs transition-colors disabled:opacity-50",
+						"shrink-0 rounded-[var(--radius-sm)] border px-sm py-0.5 tr-text-metadata transition-colors disabled:opacity-50",
 						loaded
 							? "border-[var(--primary-40)] bg-[var(--primary-10)] text-primary"
 							: "border-border-default text-text-muted hover:bg-control-bg-hovered",

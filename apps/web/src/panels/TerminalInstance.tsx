@@ -93,8 +93,10 @@ export default function TerminalInstance({ clientId, workspaceId, visible }: Pro
 		const term = new XTerm({
 			allowProposedApi: true,
 			cursorBlink: true,
-			fontSize: 12,
-			fontFamily: cssVar("--font-mono") ?? "monospace",
+			// Parity with the generated code style (typography.json → textStyles.code.text): both values
+			// come from the same tokens the CSS uses, so the terminal can never drift from a code block.
+			fontSize: Number.parseFloat(cssVar("--tr-font-size-s11") ?? "") || 11,
+			fontFamily: cssVar("--tr-font-family-code") ?? "monospace",
 			theme: readTheme(),
 			scrollback: 5000,
 		});

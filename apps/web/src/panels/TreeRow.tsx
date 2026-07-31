@@ -45,8 +45,8 @@ export function TreeRow({
 			data-status={dataStatus}
 			onClick={onClick}
 			onDoubleClick={onDoubleClick}
-			className={`flex h-6 w-full items-center gap-xs rounded-[var(--radius-sm)] px-xs text-left text-sm text-text-muted hover:bg-control-bg-hovered ${
-				active ? "bg-selection-item-bg-hovered" : ""
+			className={`flex h-6 w-full items-center gap-xs rounded-[var(--radius-sm)] px-xs text-left tr-text-ui text-text-muted hover:bg-control-bg-hovered ${
+				active ? "bg-control-bg-hovered" : ""
 			}`}
 		>
 			{kind === "dir" ? (

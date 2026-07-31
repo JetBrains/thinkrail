@@ -27,9 +27,9 @@ const STATUS_LABEL: Record<ConnectionStatus, string> = {
 };
 
 const STATUS_DOT: Record<ConnectionStatus, string> = {
-	connected: "bg-feedback-success",
-	connecting: "bg-feedback-warning",
-	disconnected: "bg-feedback-error",
+	connected: "bg-green",
+	connecting: "bg-gold",
+	disconnected: "bg-red",
 };
 
 export function Shell() {
@@ -51,16 +51,14 @@ export function Shell() {
 		<div data-testid="shell" className="grid h-full grid-rows-[auto_1fr]">
 			<header className="flex items-center justify-between border-b border-border-default bg-container-header-bg px-lg py-sm">
 				<div className="flex min-w-0 items-center gap-md">
-					<span className="shrink-0 font-[var(--font-accent)] text-lg font-extrabold tracking-[0.5px] text-primary">
-						{PRODUCT_NAME}
-					</span>
+					<span className="tr-brand-wordmark shrink-0 text-primary">{PRODUCT_NAME}</span>
 					{contextProject ? (
 						<div
 							data-testid="scope-context"
 							data-context={activeWorkspace ? "workspace" : "project-home"}
 							className="min-w-0 border-border-default border-l pl-md leading-tight"
 						>
-							<div className="flex min-w-0 items-center gap-xs text-xs">
+							<div className="flex min-w-0 items-center gap-xs tr-text-ui">
 								<span className="hidden min-w-0 items-center gap-xs sm:flex">
 									<span
 										data-testid="scope-project"
@@ -70,15 +68,12 @@ export function Shell() {
 									</span>
 									<ChevronRight className="size-3 shrink-0 text-text-muted" />
 								</span>
-								<span
-									data-testid="scope-name"
-									className="max-w-[220px] truncate font-medium text-text-default"
-								>
+								<span data-testid="scope-name" className="max-w-[220px] truncate text-text-default">
 									{activeWorkspace?.name ?? "Project home"}
 								</span>
 							</div>
 							{activeWorkspace ? (
-								<div className="mt-0.5 flex min-w-0 items-center gap-xs font-[var(--font-mono)] text-[10px] text-text-muted">
+								<div className="mt-0.5 flex min-w-0 items-center gap-xs text-text-muted tr-text-metadata">
 									<GitBranch className="size-3 shrink-0" />
 									<span data-testid="scope-branch" className="truncate">
 										{activeWorkspace.branch}
@@ -100,7 +95,7 @@ export function Shell() {
 					<span
 						data-testid="connection-status"
 						data-status={status}
-						className="inline-flex items-center gap-sm text-sm text-text-muted"
+						className="inline-flex items-center gap-sm tr-text-ui text-text-muted"
 					>
 						<span className={`size-2 rounded-full ${STATUS_DOT[status]}`} />
 						{STATUS_LABEL[status]}

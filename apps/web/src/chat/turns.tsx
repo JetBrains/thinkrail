@@ -58,7 +58,11 @@ export function ChatTurnView({
 			);
 		case "markdown":
 			return (
-				<div data-testid="chat-message" data-role="assistant" className="text-sm text-text-default">
+				<div
+					data-testid="chat-message"
+					data-role="assistant"
+					className="tr-text-reading text-text-default"
+				>
 					<Markdown text={row.text} />
 				</div>
 			);
@@ -100,7 +104,7 @@ function userText(content: UserMessage["content"]): string {
 function UserTurn({ message }: { message: UserMessage }) {
 	return (
 		<div data-testid="chat-message" data-role="user" className="flex justify-end">
-			<div className="max-w-[85%] whitespace-pre-wrap rounded-[var(--radius-md)] border border-[var(--bubble-user-border)] bg-[var(--bubble-user-bg)] px-md py-sm text-sm text-text-default">
+			<div className="max-w-[85%] whitespace-pre-wrap rounded-[var(--radius-md)] border border-[var(--bubble-user-border)] bg-[var(--bubble-user-bg)] px-md py-sm tr-text-reading text-text-default">
 				{userText(message.content)}
 			</div>
 		</div>
@@ -124,7 +128,7 @@ function ToolRow({
 	if (getToolChrome(row.toolName) === "bare") {
 		const Renderer = getToolRenderer(row.toolName);
 		return (
-			<div className="text-sm text-text-default">
+			<div className="tr-text-ui text-text-default">
 				<Renderer
 					toolCallId={row.toolCallId}
 					toolName={row.toolName}
@@ -155,7 +159,7 @@ function SystemTurn({ text }: { text: string }) {
 		<div
 			data-testid="chat-message"
 			data-role="system"
-			className="text-center text-text-muted text-xs"
+			className="text-center text-text-muted tr-text-metadata"
 		>
 			{text}
 		</div>
@@ -171,7 +175,7 @@ function ErrorTurn({ text }: { text: string }) {
 		<div
 			data-testid="chat-message"
 			data-role="error"
-			className="flex items-start gap-sm rounded-[var(--radius-md)] border border-feedback-error/40 bg-feedback-error/10 px-md py-sm text-feedback-error text-sm"
+			className="flex items-start gap-sm rounded-[var(--radius-md)] border border-feedback-error/40 bg-feedback-error/10 px-md py-sm text-feedback-error tr-text-ui"
 		>
 			<TriangleAlert className="mt-[2px] size-4 shrink-0" />
 			<span className="min-w-0 whitespace-pre-wrap break-words">{text}</span>
@@ -205,7 +209,7 @@ function RetryIndicator({
 		<div
 			data-testid="retry-indicator"
 			data-source={source}
-			className="flex flex-col gap-xs rounded-[var(--radius-sm)] border border-border-default bg-container-card-bg px-sm py-xs text-text-muted text-xs"
+			className="flex flex-col gap-xs rounded-[var(--radius-sm)] border border-border-default bg-container-popover-bg px-sm py-xs text-text-muted tr-text-metadata"
 		>
 			<span className="flex items-center gap-xs">
 				<RotateCw className="size-3 shrink-0" />
@@ -406,7 +410,10 @@ export function TurnDivider({
 		return <div data-testid="turn-divider" className="my-sm h-px bg-border-default" />;
 	}
 	return (
-		<div data-testid="turn-divider" className="my-sm flex flex-col gap-xs text-text-muted text-xs">
+		<div
+			data-testid="turn-divider"
+			className="my-sm flex flex-col gap-xs text-text-muted tr-text-metadata"
+		>
 			<div className="flex items-center gap-sm">
 				<span className="h-px flex-1 bg-border-default" />
 				{toolCount > 0 ? (

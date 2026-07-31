@@ -29,7 +29,7 @@ export function WebFetchCard({ args, result, status }: ToolRenderProps) {
 
 	return (
 		<div data-testid="tool-fetch_content" className="flex flex-col gap-xs">
-			<div className="flex items-center gap-xs text-xs">
+			<div className="flex items-center gap-xs tr-text-metadata">
 				<LinkIcon className="size-3.5 shrink-0 text-text-muted" />
 				{url ? (
 					<a
@@ -46,15 +46,15 @@ export function WebFetchCard({ args, result, status }: ToolRenderProps) {
 				)}
 			</div>
 			{status === "running" ? (
-				<span className="text-text-muted text-xs">Fetching…</span>
+				<span className="text-text-muted tr-text-metadata">Fetching…</span>
 			) : status === "error" ? (
-				<pre className="overflow-auto px-sm py-xs text-feedback-error text-xs">{output}</pre>
+				<pre className="overflow-auto px-sm py-xs text-feedback-error tr-code-text">{output}</pre>
 			) : output ? (
 				<Collapsible lines={countLines(output)}>
 					<CodeBlock code={output} lang="markdown" />
 				</Collapsible>
 			) : (
-				<span className="text-text-muted text-xs italic">(no content)</span>
+				<span className="text-text-muted tr-text-metadata italic">(no content)</span>
 			)}
 		</div>
 	);

@@ -25,7 +25,7 @@ function CommandInput({
 			<Search className="size-3.5 shrink-0 text-text-muted" />
 			<CommandPrimitive.Input
 				className={cn(
-					"h-9 flex-1 bg-transparent text-sm text-text-default outline-none placeholder:text-text-muted",
+					"h-9 flex-1 bg-transparent tr-text-ui text-text-default outline-none placeholder:text-text-muted",
 					className,
 				)}
 				{...props}
@@ -45,7 +45,7 @@ function CommandList({ className, ...props }: React.ComponentProps<typeof Comman
 
 function CommandEmpty(props: React.ComponentProps<typeof CommandPrimitive.Empty>) {
 	return (
-		<CommandPrimitive.Empty className="py-md text-center text-text-muted text-sm" {...props} />
+		<CommandPrimitive.Empty className="py-md text-center text-text-muted tr-text-ui" {...props} />
 	);
 }
 
@@ -53,10 +53,13 @@ function CommandGroup({
 	className,
 	...props
 }: React.ComponentProps<typeof CommandPrimitive.Group>) {
+	// cmdk renders the heading element itself, so a semantic typography class cannot be put on it — and
+	// an arbitrary variant cannot apply one. Spacing + colour only; a caller that wants the heading
+	// styled passes a node: `heading={<span className="tr-text-eyebrow">Remote</span>}`.
 	return (
 		<CommandPrimitive.Group
 			className={cn(
-				"[&_[cmdk-group-heading]]:px-sm [&_[cmdk-group-heading]]:py-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-text-muted [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider",
+				"[&_[cmdk-group-heading]]:px-sm [&_[cmdk-group-heading]]:py-xs [&_[cmdk-group-heading]]:text-text-muted",
 				className,
 			)}
 			{...props}
@@ -68,7 +71,7 @@ function CommandItem({ className, ...props }: React.ComponentProps<typeof Comman
 	return (
 		<CommandPrimitive.Item
 			className={cn(
-				"flex cursor-pointer items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs text-sm text-text-default outline-none data-[selected=true]:bg-selection-item-bg-hovered",
+				"flex cursor-pointer items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs tr-text-ui text-text-default outline-none data-[selected=true]:bg-control-bg-hovered",
 				className,
 			)}
 			{...props}

@@ -24,7 +24,15 @@ binary.
 - **Standalone leaf.** No workspace deps — it must never import `@thinkrail/contracts`, `server`,
   `shared`, or `web`. It is not on the wire and has no protocol knowledge.
 - Vite + vanilla TypeScript + hand-written CSS. No React, no Tailwind, no runtime deps at all —
-  `devDependencies` only (`vite` pinned exact, `typescript` via `catalog:`).
+  `devDependencies` only (`vite` pinned exact, `typescript` via `catalog:`). The two
+  `@fontsource-variable/*` packages are build-time asset sources, not runtime deps: vite emits their
+  woff2 files into `dist/`. They are shared with `apps/web`, so they come from the root
+  `workspaces.catalog` — one pin for both apps, which is what keeps the site's faces identical to the
+  app's.
+- **Fonts are self-hosted**, from the same packages and family names as the app (Geist Variable +
+  JetBrains Mono Variable), so the site's type matches without importing anything from `apps/web`. The
+  one remaining external font request is `--font-display` (Cabinet Grotesk, via Fontshare): it has no
+  npm package, and self-hosting it is a licence decision to take deliberately.
 - **Brand values are copied, not imported.** Theme palettes are lifted at authoring time from
   `apps/web/src/themes/bundled/*.theme.json` (dark = default, darcula, light, gruvbox) into the site's
   own CSS custom properties under `[data-theme]`; the site never reaches into `apps/web` at build time

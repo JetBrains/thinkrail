@@ -47,11 +47,7 @@ export function glanceIcon(glance: PlanGlance): {
 			className: "text-primary",
 		};
 	if (glance === "waiting")
-		return {
-			Icon: CirclePause,
-			label: "Paused — waiting for you",
-			className: "text-text-muted",
-		};
+		return { Icon: CirclePause, label: "Paused — waiting for you", className: "text-text-muted" };
 	return { Icon: CircleDot, label: STATUS_LABEL.in_progress, className: "text-primary" };
 }
 
@@ -99,7 +95,7 @@ export function TodoAddRow({
 					if (e.key === "Enter") void submit();
 				}}
 				placeholder="Add a TODO for the agent…"
-				className="min-w-0 flex-1 bg-transparent text-sm text-text-default outline-none placeholder:text-text-muted"
+				className="min-w-0 flex-1 bg-transparent tr-text-ui text-text-default outline-none placeholder:text-text-muted"
 			/>
 			{onOpenMarkdown ? (
 				<button
@@ -140,15 +136,17 @@ function GroupBlock({
 				)}
 				<span
 					className={cn(
-						"min-w-0 flex-1 truncate text-sm",
-						status === "active" ? "font-medium text-text-default" : "text-text-muted",
+						"min-w-0 flex-1 truncate",
+						status === "active"
+							? "tr-title-compact text-text-default"
+							: "tr-text-ui text-text-muted",
 					)}
 				>
 					{group.title}
 				</span>
 				<span
 					data-testid="todo-group-progress"
-					className="shrink-0 text-[10px] text-text-muted uppercase tracking-wider"
+					className="shrink-0 tr-text-eyebrow text-text-muted"
 				>
 					{done}/{total}
 				</span>
@@ -184,9 +182,7 @@ function LooseList({
 
 /** A section header (`To do`), the quiet uppercase label shared by the status sections. */
 function SectionLabel({ label }: { label: string }) {
-	return (
-		<div className="px-xs py-xs text-[10px] text-text-muted uppercase tracking-wider">{label}</div>
-	);
+	return <div className="px-xs py-xs tr-text-eyebrow text-text-muted">{label}</div>;
 }
 
 /**
@@ -254,12 +250,10 @@ function DoneGroup({
 			>
 				<Chevron className="size-3.5 shrink-0 text-text-muted" />
 				<Check className="size-4 shrink-0 text-primary" />
-				<span className="min-w-0 flex-1 truncate font-medium text-text-muted text-sm line-through">
+				<span className="min-w-0 flex-1 truncate tr-text-ui text-text-muted line-through">
 					{group.title}
 				</span>
-				<span className="shrink-0 text-[10px] text-text-muted uppercase tracking-wider">
-					{group.todos.length} done
-				</span>
+				<span className="shrink-0 tr-text-eyebrow text-text-muted">{group.todos.length} done</span>
 			</button>
 			{expanded ? (
 				<ul className="ml-md flex flex-col border-border-default border-l pl-sm">
@@ -293,16 +287,14 @@ function TodoRow({
 			<div className="min-w-0 flex-1">
 				<div
 					className={cn(
-						"truncate text-sm",
-						todo.status === "done" ? "text-text-disabled line-through" : "text-text-default",
+						"truncate tr-text-ui",
+						todo.status === "done" ? "text-text-muted line-through" : "text-text-default",
 					)}
 				>
 					{todo.title}
 				</div>
 				{todo.note ? (
-					<div className="truncate font-[var(--font-mono)] text-[10px] text-text-muted">
-						{todo.note}
-					</div>
+					<div className="truncate text-text-muted tr-text-metadata">{todo.note}</div>
 				) : null}
 			</div>
 			{todo.origin === "user" ? (
@@ -319,7 +311,7 @@ function TodoRow({
 				onClick={onRemove}
 				aria-label="Remove"
 				title="Remove"
-				className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 transition-opacity hover:bg-control-bg-hovered hover:text-feedback-error group-hover:opacity-100 focus-visible:opacity-100"
+				className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 transition-opacity hover:bg-container-popover-bg hover:text-feedback-error group-hover:opacity-100 focus-visible:opacity-100"
 			>
 				<Trash2 className="size-3.5" />
 			</button>

@@ -35,7 +35,7 @@ export function TerminalsPanel() {
 	return (
 		<div data-testid="terminal-panel" className="flex h-full min-h-0 flex-col">
 			<div className="flex h-7 shrink-0 items-center gap-xs border-b border-border-default pr-xs pl-sm">
-				<span className="shrink-0 text-xs uppercase tracking-wider text-text-muted">Terminal</span>
+				<span className="shrink-0 tr-text-eyebrow text-text-muted">Terminal</span>
 				<div className="flex min-w-0 flex-1 items-center gap-px overflow-x-auto">
 					{tabs.map((tab) => (
 						<TerminalTabButton
@@ -60,9 +60,9 @@ export function TerminalsPanel() {
 			</div>
 			<div className="relative min-h-0 flex-1">
 				{!activeWorkspaceId ? (
-					<p className="px-sm py-xs text-xs text-text-muted">Select a workspace.</p>
+					<p className="px-sm py-xs tr-text-metadata text-text-muted">Select a workspace.</p>
 				) : tabs.length === 0 ? (
-					<p data-testid="terminals-empty" className="px-sm py-xs text-xs text-text-muted">
+					<p data-testid="terminals-empty" className="px-sm py-xs tr-text-metadata text-text-muted">
 						No terminals yet — press + to open one.
 					</p>
 				) : null}
@@ -93,9 +93,9 @@ function TerminalTabButton({
 }) {
 	return (
 		<div
-			className={`group flex shrink-0 items-center gap-xs rounded-[var(--radius-sm)] pr-xs pl-sm text-xs ${
+			className={`group flex shrink-0 items-center gap-xs rounded-[var(--radius-sm)] pr-xs pl-sm tr-text-ui ${
 				active
-					? "bg-selection-item-bg-hovered text-text-default"
+					? "bg-control-bg-hovered text-text-default"
 					: "text-text-muted hover:bg-control-bg-hovered"
 			}`}
 		>
@@ -113,7 +113,7 @@ function TerminalTabButton({
 				data-testid="terminal-tab-close"
 				aria-label={`Close ${tab.title}`}
 				onClick={onClose}
-				className="rounded-[var(--radius-sm)] p-0.5 text-text-muted opacity-0 hover:bg-control-bg-hovered hover:text-text-default group-hover:opacity-100"
+				className="rounded-[var(--radius-sm)] p-0.5 text-text-muted opacity-0 hover:bg-container-popover-bg hover:text-text-default group-hover:opacity-100"
 			>
 				<X className="size-3" />
 			</button>
