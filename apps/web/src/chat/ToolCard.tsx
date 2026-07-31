@@ -78,7 +78,7 @@ export function ToolCard({
 				)}
 				<span className="shrink-0 font-medium text-text-default">{toolName}</span>
 				{summary ? (
-					<span className="min-w-0 flex-1 truncate text-text-text-muted" title={summary}>
+					<span className="min-w-0 flex-1 truncate text-text-muted" title={summary}>
 						{summary}
 					</span>
 				) : (

@@ -20,7 +20,7 @@ export function WriteCard({ args, result, status, workspaceRoot }: ToolRenderPro
 				<span className="truncate text-text-default" title={path}>
 					{displayPath}
 				</span>
-				<span className="shrink-0 text-text-text-muted">written</span>
+				<span className="shrink-0 text-text-muted">written</span>
 			</div>
 			{status === "error" ? (
 				<pre className="overflow-auto px-sm py-xs text-feedback-error text-xs">{message}</pre>

@@ -54,14 +54,13 @@ export function SpecsPanel({
 
 	if (failed && !nodes)
 		return (
-			<p data-testid="specs-error" className="px-xs py-xs text-xs text-text-text-muted">
+			<p data-testid="specs-error" className="px-xs py-xs text-xs text-text-muted">
 				Couldn't load specs — Refresh to retry.
 			</p>
 		);
 	if (nodes === null || roots === null)
-		return <p className="px-xs py-xs text-xs text-text-text-muted">Loading…</p>;
-	if (nodes.length === 0)
-		return <p className="px-xs py-xs text-xs text-text-text-muted">No specs</p>;
+		return <p className="px-xs py-xs text-xs text-text-muted">Loading…</p>;
+	if (nodes.length === 0) return <p className="px-xs py-xs text-xs text-text-muted">No specs</p>;
 	return (
 		<ul className="flex flex-col">
 			{roots.map((root) => (
@@ -160,7 +159,7 @@ function SpecNodeRow({
 							"size-3.5 shrink-0 transition-colors",
 							isMainSpec || isActive
 								? "text-primary"
-								: "text-text-muted group-hover:text-text-text-muted",
+								: "text-text-muted group-hover:text-text-muted",
 						)}
 					/>
 					<span
@@ -177,7 +176,7 @@ function SpecNodeRow({
 						data-testid="spec-role"
 						className={cn(
 							"max-w-16 shrink-0 truncate text-right text-[9px] uppercase tracking-wider",
-							isMainSpec || isActive ? "font-medium text-primary" : "text-text-text-muted",
+							isMainSpec || isActive ? "font-medium text-primary" : "text-text-muted",
 						)}
 					>
 						{trailingRole}

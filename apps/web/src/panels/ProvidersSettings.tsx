@@ -340,7 +340,7 @@ function ProviderActionRow({
 			className="flex flex-col gap-xs rounded-[var(--radius-md)] border border-border-default bg-[var(--control-bg)] px-md py-sm"
 		>
 			<div className="flex items-center gap-sm text-sm">
-				<span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-selection-item-bg-hovered text-text-text-muted">
+				<span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-selection-item-bg-hovered text-text-muted">
 					<Boxes className="size-4" />
 				</span>
 				<span className="min-w-0 flex-1 truncate text-text-default">{provider.name}</span>

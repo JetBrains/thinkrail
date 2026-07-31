@@ -95,11 +95,11 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 			: highlighted === path;
 
 	if (status === null) {
-		return <p className="px-sm py-xs text-xs text-text-text-muted">Loading…</p>;
+		return <p className="px-sm py-xs text-xs text-text-muted">Loading…</p>;
 	}
 	if (status.changes.length === 0) {
 		return (
-			<p data-testid="changes-empty" className="px-sm py-xs text-xs text-text-text-muted">
+			<p data-testid="changes-empty" className="px-sm py-xs text-xs text-text-muted">
 				No changes in this workspace.
 			</p>
 		);
@@ -111,7 +111,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 				data-testid="changes-view-toggle"
 				role="toolbar"
 				aria-label="Changes view mode"
-				className="flex h-8 shrink-0 items-center justify-end gap-xs border-border-default border-b bg-bg-dark px-sm"
+				className="flex h-8 shrink-0 items-center justify-end gap-xs border-border-default border-b bg-container-header-bg px-sm"
 			>
 				<ToggleSegment
 					testid="changes-toggle-list"
@@ -145,7 +145,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 									}`}
 								>
 									<span
-										className={`min-w-0 flex-1 truncate ${statusNameClass(change.status) || "text-text-text-muted"}`}
+										className={`min-w-0 flex-1 truncate ${statusNameClass(change.status) || "text-text-muted"}`}
 									>
 										{change.path}
 									</span>

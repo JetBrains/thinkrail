@@ -24,11 +24,11 @@ export function ReadCard({ args, result, status, workspaceRoot }: ToolRenderProp
 	return (
 		<div data-testid="tool-read" className="flex flex-col gap-xs">
 			<div className="flex items-center gap-xs text-xs">
-				<FileText className="size-3.5 shrink-0 text-text-text-muted" />
+				<FileText className="size-3.5 shrink-0 text-text-muted" />
 				<span className="truncate text-primary" title={path}>
 					{displayPath}
 				</span>
-				{range ? <span className="shrink-0 text-text-text-muted">{range}</span> : null}
+				{range ? <span className="shrink-0 text-text-muted">{range}</span> : null}
 			</div>
 			{status === "running" ? (
 				<span className="text-text-muted text-xs">Reading…</span>

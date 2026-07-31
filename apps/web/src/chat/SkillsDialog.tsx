@@ -194,7 +194,7 @@ export function SkillsDialog({
 					)}
 				>
 					{group.isPlugin ? (
-						<Puzzle className="size-3.5 shrink-0 text-text-text-muted" aria-hidden />
+						<Puzzle className="size-3.5 shrink-0 text-text-muted" aria-hidden />
 					) : null}
 					<span className="font-medium text-text-default text-xs uppercase tracking-wide">
 						{group.label}

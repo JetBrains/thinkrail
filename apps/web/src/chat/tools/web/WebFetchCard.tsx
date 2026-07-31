@@ -30,7 +30,7 @@ export function WebFetchCard({ args, result, status }: ToolRenderProps) {
 	return (
 		<div data-testid="tool-fetch_content" className="flex flex-col gap-xs">
 			<div className="flex items-center gap-xs text-xs">
-				<LinkIcon className="size-3.5 shrink-0 text-text-text-muted" />
+				<LinkIcon className="size-3.5 shrink-0 text-text-muted" />
 				{url ? (
 					<a
 						href={url}

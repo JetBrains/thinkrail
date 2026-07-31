@@ -238,7 +238,7 @@ const Card = forwardRef<HTMLButtonElement, CardProps>(function Card(
 				"relative flex h-[150px] w-[220px] flex-col items-start justify-between rounded-[var(--radius-lg)] border p-lg text-left transition-colors",
 				primary
 					? "border-[var(--primary-40)] bg-[var(--primary-10)] hover:bg-[var(--primary-20)]"
-					: "border-border-default bg-container-workspace-bg hover:border-[var(--primary-40)] hover:bg-elevated",
+					: "border-border-default bg-container-workspace-bg hover:border-[var(--primary-40)] hover:bg-control-bg-hovered",
 				className,
 			)}
 		>
@@ -250,7 +250,7 @@ const Card = forwardRef<HTMLButtonElement, CardProps>(function Card(
 			<span
 				className={cn(
 					"flex size-9 items-center justify-center rounded-[10px]",
-					primary ? "bg-primary text-on-accent" : "bg-hover text-text-text-muted",
+					primary ? "bg-primary text-text-on-primary" : "bg-control-bg-hovered text-text-muted",
 				)}
 			>
 				<Icon className="size-4" />

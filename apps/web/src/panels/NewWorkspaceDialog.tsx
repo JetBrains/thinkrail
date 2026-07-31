@@ -632,7 +632,7 @@ export function NewWorkspaceDialog({
 						data-testid="create-workspace"
 						disabled={creating}
 						onClick={() => void create()}
-						className="flex h-8 shrink-0 items-center gap-sm rounded-[var(--radius-md)] bg-primary px-md font-medium text-on-accent text-sm outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
+						className="flex h-8 shrink-0 items-center gap-sm rounded-[var(--radius-md)] bg-primary px-md font-medium text-text-on-primary text-sm outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
 					>
 						{isolated ? "Create" : "Start"}
 						<span className="inline-flex h-4 min-w-4 items-center justify-center rounded-[3px] bg-[var(--on-accent-16)] px-1 font-[var(--font-mono)] text-xs">
@@ -711,7 +711,7 @@ function ProjectPicker({
 				className={`${PILL} max-w-[180px]`}
 			>
 				<span className="flex size-[18px] shrink-0 items-center justify-center rounded-[5px] bg-primary">
-					<Box className="size-3 text-on-accent" />
+					<Box className="size-3 text-text-on-primary" />
 				</span>
 				<span className="truncate">{current}</span>
 				<ChevronDown className="size-3 shrink-0 text-text-muted" />
@@ -804,7 +804,7 @@ function BranchPicker({
 				<ChevronDown className="size-3 shrink-0 text-text-muted" />
 			</PopoverTrigger>
 			<PopoverContent align="start" container={container} className="w-[320px] p-0">
-				<div className="flex items-center justify-end border-border border-b px-sm py-xs">
+				<div className="flex items-center justify-end border-border-muted border-b px-sm py-xs">
 					<button
 						type="button"
 						data-testid="branch-refresh"

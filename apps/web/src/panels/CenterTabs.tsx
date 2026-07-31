@@ -348,7 +348,7 @@ export function CenterTabs() {
 					type="button"
 					data-testid="start-chat"
 					onClick={() => void startChat()}
-					className="flex items-center gap-xs rounded-[var(--radius-md)] border border-border-default bg-elevated px-md py-xs text-sm text-text-default hover:bg-control-bg-hovered"
+					className="flex items-center gap-xs rounded-[var(--radius-md)] border border-border-default bg-container-card-bg px-md py-xs text-sm text-text-default hover:bg-control-bg-hovered"
 				>
 					<MessageSquarePlus className="size-4" /> New chat
 				</button>
@@ -363,7 +363,7 @@ export function CenterTabs() {
 
 	return (
 		<div className="flex h-full min-h-0 flex-col">
-			<div className="flex h-8 shrink-0 items-stretch border-border-default border-b bg-bg-dark">
+			<div className="flex h-8 shrink-0 items-stretch border-border-default border-b bg-container-header-bg">
 				<div role="tablist" className="flex flex-1 items-stretch overflow-x-auto">
 					{openTabs.map((tab) => {
 						const isActive = tab.id === activeTabId;

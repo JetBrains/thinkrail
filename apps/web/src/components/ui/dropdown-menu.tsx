@@ -32,7 +32,7 @@ function DropdownMenuItem({
 	return (
 		<DropdownMenuPrimitive.Item
 			className={cn(
-				"relative flex cursor-default select-none items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs text-sm text-text-default outline-none transition-colors focus:bg-selection-item-bg-hovered data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-text-text-muted",
+				"relative flex cursor-default select-none items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs text-sm text-text-default outline-none transition-colors focus:bg-selection-item-bg-hovered data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-text-muted",
 				className,
 			)}
 			{...props}
@@ -46,7 +46,7 @@ function DropdownMenuLabel({
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Label>) {
 	return (
 		<DropdownMenuPrimitive.Label
-			className={cn("px-sm py-xs text-xs uppercase tracking-wider text-text-text-muted", className)}
+			className={cn("px-sm py-xs text-xs uppercase tracking-wider text-text-muted", className)}
 			{...props}
 		/>
 	);

@@ -220,7 +220,7 @@ function ProjectRow({
 				data-testid="add-workspace"
 				aria-label="Create workspace"
 				onClick={onAddWorkspace}
-				className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 transition hover:bg-elevated hover:text-text group-hover:opacity-100"
+				className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 transition hover:bg-control-bg-hovered hover:text-text group-hover:opacity-100"
 			>
 				<Plus className="size-4" />
 			</button>
@@ -293,7 +293,7 @@ function WorkspaceRow({
 						type="button"
 						data-testid="workspace-remove"
 						aria-label="Remove workspace"
-						className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 transition hover:bg-elevated hover:text-red group-hover:opacity-100 data-[state=open]:opacity-100"
+						className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 transition hover:bg-control-bg-hovered hover:text-red group-hover:opacity-100 data-[state=open]:opacity-100"
 					>
 						<Trash2 className="size-4" />
 					</button>

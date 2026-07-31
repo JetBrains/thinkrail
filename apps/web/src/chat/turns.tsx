@@ -205,14 +205,14 @@ function RetryIndicator({
 		<div
 			data-testid="retry-indicator"
 			data-source={source}
-			className="flex flex-col gap-xs rounded-[var(--radius-sm)] border border-border-default bg-elevated px-sm py-xs text-text-muted text-xs"
+			className="flex flex-col gap-xs rounded-[var(--radius-sm)] border border-border-default bg-container-card-bg px-sm py-xs text-text-muted text-xs"
 		>
 			<span className="flex items-center gap-xs">
 				<RotateCw className="size-3 shrink-0" />
 				{source === "summarization" ? "Retrying summarization" : "Retrying"} ({attempt}/
 				{maxAttempts})…
 			</span>
-			<div className="h-1 w-full overflow-hidden rounded-full bg-border2">
+			<div className="h-1 w-full overflow-hidden rounded-full bg-border-default">
 				<div
 					className={`h-full bg-primary transition-[width] ease-linear ${draining ? "w-0" : "w-full"}`}
 					style={{ transitionDuration: `${delayMs}ms` }}
@@ -337,8 +337,8 @@ function ArtifactList({
 						title={path}
 						className="flex w-full items-center gap-xs rounded-[var(--radius-sm)] px-xs py-[2px] text-left hover:bg-control-bg-hovered"
 					>
-						<Icon className="size-3 shrink-0 text-text-text-muted" />
-						<span className="min-w-0 flex-1 truncate text-text-text-muted">
+						<Icon className="size-3 shrink-0 text-text-muted" />
+						<span className="min-w-0 flex-1 truncate text-text-muted">
 							{projectRelativePath(path, workspaceRoot)}
 						</span>
 					</button>
@@ -403,12 +403,12 @@ export function TurnDivider({
 
 	if (toolCount === 0 && groups.length === 0 && (elapsedMs == null || elapsedMs < 1000)) {
 		// Nothing worth noting between these turns — just a hairline rule.
-		return <div data-testid="turn-divider" className="my-sm h-px bg-border2" />;
+		return <div data-testid="turn-divider" className="my-sm h-px bg-border-default" />;
 	}
 	return (
 		<div data-testid="turn-divider" className="my-sm flex flex-col gap-xs text-text-muted text-xs">
 			<div className="flex items-center gap-sm">
-				<span className="h-px flex-1 bg-border2" />
+				<span className="h-px flex-1 bg-border-default" />
 				{toolCount > 0 ? (
 					<span className="flex items-center gap-xs">
 						<Wrench className="size-3 shrink-0" />
@@ -429,7 +429,7 @@ export function TurnDivider({
 						{formatElapsed(elapsedMs)}
 					</span>
 				) : null}
-				<span className="h-px flex-1 bg-border2" />
+				<span className="h-px flex-1 bg-border-default" />
 			</div>
 			{groups
 				.filter((group) => group.paths.length > 1 && group.expanded)

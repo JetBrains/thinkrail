@@ -50,7 +50,7 @@ export function glanceIcon(glance: PlanGlance): {
 		return {
 			Icon: CirclePause,
 			label: "Paused — waiting for you",
-			className: "text-text-text-muted",
+			className: "text-text-muted",
 		};
 	return { Icon: CircleDot, label: STATUS_LABEL.in_progress, className: "text-primary" };
 }
@@ -66,7 +66,7 @@ function StatusIcon({ status, glance }: { status: TodoStatus; glance: PlanGlance
 		const { Icon, className } = glanceIcon(glance);
 		return <Icon data-glance={glance} className={cn("size-4 shrink-0", className)} />;
 	}
-	return <Circle className="size-4 shrink-0 text-text-text-muted" />;
+	return <Circle className="size-4 shrink-0 text-text-muted" />;
 }
 
 /** The add-a-TODO input row, with an "open as markdown" action on the right. */
@@ -90,7 +90,7 @@ export function TodoAddRow({
 	};
 	return (
 		<div className="flex items-center gap-sm px-sm py-xs">
-			<Plus className="size-3.5 shrink-0 text-text-text-muted" />
+			<Plus className="size-3.5 shrink-0 text-text-muted" />
 			<input
 				data-testid="todo-add-input"
 				value={draft}
@@ -99,7 +99,7 @@ export function TodoAddRow({
 					if (e.key === "Enter") void submit();
 				}}
 				placeholder="Add a TODO for the agent…"
-				className="min-w-0 flex-1 bg-transparent text-sm text-text-default outline-none placeholder:text-text-text-muted"
+				className="min-w-0 flex-1 bg-transparent text-sm text-text-default outline-none placeholder:text-text-muted"
 			/>
 			{onOpenMarkdown ? (
 				<button
@@ -136,12 +136,12 @@ function GroupBlock({
 				{status === "active" ? (
 					<StatusIcon status="in_progress" glance={glance} />
 				) : (
-					<Circle className="size-4 shrink-0 text-text-text-muted" />
+					<Circle className="size-4 shrink-0 text-text-muted" />
 				)}
 				<span
 					className={cn(
 						"min-w-0 flex-1 truncate text-sm",
-						status === "active" ? "font-medium text-text-default" : "text-text-text-muted",
+						status === "active" ? "font-medium text-text-default" : "text-text-muted",
 					)}
 				>
 					{group.title}
@@ -252,7 +252,7 @@ function DoneGroup({
 				onClick={() => setExpanded((v) => !v)}
 				className="flex w-full items-center gap-sm rounded-[var(--radius-sm)] px-xs py-xs text-left hover:bg-control-bg-hovered"
 			>
-				<Chevron className="size-3.5 shrink-0 text-text-text-muted" />
+				<Chevron className="size-3.5 shrink-0 text-text-muted" />
 				<Check className="size-4 shrink-0 text-primary" />
 				<span className="min-w-0 flex-1 truncate font-medium text-text-muted text-sm line-through">
 					{group.title}
@@ -294,13 +294,13 @@ function TodoRow({
 				<div
 					className={cn(
 						"truncate text-sm",
-						todo.status === "done" ? "text-hint line-through" : "text-text-default",
+						todo.status === "done" ? "text-text-disabled line-through" : "text-text-default",
 					)}
 				>
 					{todo.title}
 				</div>
 				{todo.note ? (
-					<div className="truncate font-[var(--font-mono)] text-[10px] text-text-text-muted">
+					<div className="truncate font-[var(--font-mono)] text-[10px] text-text-muted">
 						{todo.note}
 					</div>
 				) : null}
@@ -309,7 +309,7 @@ function TodoRow({
 				<span
 					data-testid="todo-origin-user"
 					title="Added by you — the agent won't drop it"
-					className="shrink-0 text-text-text-muted"
+					className="shrink-0 text-text-muted"
 				>
 					<UserRound className="size-3.5" />
 				</span>
@@ -319,7 +319,7 @@ function TodoRow({
 				onClick={onRemove}
 				aria-label="Remove"
 				title="Remove"
-				className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 transition-opacity hover:bg-elevated hover:text-red group-hover:opacity-100 focus-visible:opacity-100"
+				className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 transition-opacity hover:bg-control-bg-hovered hover:text-red group-hover:opacity-100 focus-visible:opacity-100"
 			>
 				<Trash2 className="size-3.5" />
 			</button>
