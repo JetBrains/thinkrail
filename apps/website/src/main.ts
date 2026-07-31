@@ -247,3 +247,65 @@ if (stars) {
 			// rate-limited or offline — the star count is decorative
 		});
 }
+
+/* ── Mock-disabled tooltips ─────────────────────────────────────────────── */
+// Disabled mock UI elements show a tooltip encouraging visitors to try the real product.
+
+const mockElements = document.querySelectorAll<HTMLElement>("[data-mock-hint]");
+if (mockElements.length > 0) {
+	// Create a shared tooltip element
+	const tooltip = document.createElement("div");
+	tooltip.className = "mock-tooltip";
+	tooltip.setAttribute("role", "tooltip");
+	document.body.appendChild(tooltip);
+
+	let hideTimeout: ReturnType<typeof setTimeout> | null = null;
+
+	const showTooltip = (target: HTMLElement) => {
+		if (hideTimeout) {
+			clearTimeout(hideTimeout);
+			hideTimeout = null;
+		}
+		const hint = target.dataset.mockHint;
+		if (!hint) return;
+
+		tooltip.textContent = hint;
+		tooltip.classList.add("visible");
+
+		// Position above the element, centered
+		const rect = target.getBoundingClientRect();
+		const tooltipRect = tooltip.getBoundingClientRect();
+		let left = rect.left + rect.width / 2 - tooltipRect.width / 2;
+		let top = rect.top - tooltipRect.height - 8;
+
+		// Keep within viewport
+		if (left < 8) left = 8;
+		if (left + tooltipRect.width > window.innerWidth - 8) {
+			left = window.innerWidth - tooltipRect.width - 8;
+		}
+		if (top < 8) {
+			top = rect.bottom + 8; // flip below if no room above
+		}
+
+		tooltip.style.left = `${left}px`;
+		tooltip.style.top = `${top}px`;
+	};
+
+	const hideTooltip = () => {
+		hideTimeout = setTimeout(() => {
+			tooltip.classList.remove("visible");
+		}, 100);
+	};
+
+	for (const el of mockElements) {
+		// Re-enable pointer events for hover detection, but prevent clicks
+		el.style.pointerEvents = "auto";
+		el.addEventListener("mouseenter", () => showTooltip(el));
+		el.addEventListener("mouseleave", hideTooltip);
+		// Block clicks on the element itself
+		el.addEventListener("click", (e) => {
+			e.preventDefault();
+			e.stopPropagation();
+		});
+	}
+}

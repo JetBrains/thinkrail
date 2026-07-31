@@ -121,9 +121,8 @@
 		<div class="window">
 			<!-- ══ Title bar ══ -->
 			<header class="titlebar">
-				<div class="traffic" aria-hidden="true"><i></i><i></i><i></i></div>
 				<span class="wordmark">ThinkRail</span>
-				<div class="scope">
+				<div class="scope" data-mock-hint="Looks better in motion.">
 					<span class="scope-crumbs">
 						<span class="scope-project">thinkrail</span>
 						<svg class="i" aria-hidden="true"><use href="#i-chevron-right" /></svg>
@@ -183,7 +182,7 @@
 
 			<div class="cols">
 				<!-- ══ Left rail: projects ══ -->
-				<aside class="rail-left" aria-label="Projects">
+				<aside class="rail-left" aria-label="Projects" data-mock-hint="This is only a preview.">
 					<div class="rail-heading">Projects <svg class="i" aria-hidden="true"><use href="#i-plus" /></svg></div>
 					<div class="tree">
 						<div class="tree-row">
@@ -212,7 +211,7 @@
 
 				<!-- ══ Center: tab strip + the scrolling "editor" ══ -->
 				<div class="center">
-					<nav class="tabstrip" aria-label="Sections">
+					<nav class="tabstrip" aria-label="Sections" data-mock-hint="The real experience starts inside the app.">
 						<a class="tab" href="#readme"><svg class="i" aria-hidden="true"><use href="#i-file" /></svg>README.md<i class="tab-x"></i></a>
 						<a class="tab" href="#why"><svg class="i" aria-hidden="true"><use href="#i-file" /></svg>why.md<i class="tab-x"></i></a>
 						<a class="tab" href="#worktrees"><svg class="i" aria-hidden="true"><use href="#i-file" /></svg>worktrees.md<i class="tab-x"></i></a>
@@ -503,12 +502,12 @@
 
 				<!-- ══ Right rail: file tree + terminal ══ -->
 				<aside class="rail-right" id="rail-right" aria-label="Files and terminal">
-					<div class="rail-tabs">
+					<div class="rail-tabs" data-mock-hint="Explore the live product instead.">
 						<span class="rail-tab dim" title="In the app: the worktree's spec graph">Specs</span>
 						<span class="rail-tab active">All files</span>
 						<span class="rail-tab dim" title="In the app: the live git diff">Changes <b class="badge-add">+2,431</b></span>
 					</div>
-					<nav class="filetree" aria-label="Files">
+					<nav class="filetree" aria-label="Files" data-mock-hint="This is only a preview.">
 						<a class="ft-row file" href="#readme"><svg class="i" aria-hidden="true"><use href="#i-file" /></svg>README.md</a>
 						<a class="ft-row file" href="#why"><svg class="i" aria-hidden="true"><use href="#i-file" /></svg>why.md</a>
 						<div class="ft-row folder open"><svg class="i" aria-hidden="true"><use href="#i-chevron-down" /></svg><svg class="i" aria-hidden="true"><use href="#i-folder" /></svg>features</div>
@@ -521,7 +520,7 @@
 						<div class="ft-row folder dim" title="The real ones live on GitHub"><svg class="i" aria-hidden="true"><use href="#i-chevron-right" /></svg><svg class="i" aria-hidden="true"><use href="#i-folder" /></svg>apps</div>
 						<div class="ft-row folder dim" title="The real ones live on GitHub"><svg class="i" aria-hidden="true"><use href="#i-chevron-right" /></svg><svg class="i" aria-hidden="true"><use href="#i-folder" /></svg>packages</div>
 					</nav>
-					<div class="terminal">
+					<div class="terminal" data-mock-hint="Looks better in motion.">
 						<div class="terminal-head">
 							<span class="terminal-label">Terminal</span>
 							<span class="terminal-tab">Terminal 1</span>
@@ -538,7 +537,7 @@
 			</div>
 
 			<!-- ══ Status bar ══ -->
-			<footer class="statusbar">
+			<footer class="statusbar" data-mock-hint="The real experience starts inside the app.">
 				<span class="sb-item"><svg class="i" aria-hidden="true"><use href="#i-branch" /></svg> main</span>
 				<span class="sb-item sb-wide">pi · Claude Opus 4.8</span>
 				<span class="sb-item sb-wide">25.9k tok · $0.17</span>
