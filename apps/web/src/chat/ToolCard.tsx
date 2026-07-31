@@ -67,7 +67,7 @@ export function ToolCard({
 				data-testid="tool-card-toggle"
 				aria-expanded={expanded}
 				onClick={toggle}
-				className="flex w-full cursor-pointer select-none items-center gap-xs px-sm py-xs text-left text-xs outline-none focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex w-full cursor-pointer select-none items-center gap-xs px-sm py-xs text-left tr-text-metadata outline-none focus-visible:ring-2 focus-visible:ring-primary"
 			>
 				{status === "running" ? (
 					<Loader2 className="size-3 shrink-0 animate-spin text-muted motion-reduce:animate-none" />
@@ -76,7 +76,7 @@ export function ToolCard({
 				) : (
 					<Check className="size-3 shrink-0 text-green" />
 				)}
-				<span className="shrink-0 font-medium text-text">{toolName}</span>
+				<span className="shrink-0 text-text">{toolName}</span>
 				{summary ? (
 					<span className="min-w-0 flex-1 truncate text-muted" title={summary}>
 						{summary}

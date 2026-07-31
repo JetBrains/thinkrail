@@ -229,20 +229,20 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 			<div className="min-h-0 flex-1 overflow-auto">
 				{status === null && error !== null ? (
 					<div data-testid="changes-error" className="flex flex-col items-start gap-xs px-sm py-xs">
-						<p className="text-red text-xs">Could not read the changes: {error}</p>
+						<p className="tr-text-metadata text-red">Could not read the changes: {error}</p>
 						<button
 							type="button"
 							data-testid="changes-retry"
 							onClick={reload}
-							className="rounded-[var(--radius-sm)] px-xs py-[2px] text-hint text-xs transition-colors hover:bg-hover hover:text-muted"
+							className="rounded-[var(--radius-sm)] px-xs py-[2px] tr-text-metadata text-hint transition-colors hover:bg-hover hover:text-muted"
 						>
 							Retry
 						</button>
 					</div>
 				) : status === null ? (
-					<p className="px-sm py-xs text-xs text-hint">Loading…</p>
+					<p className="px-sm py-xs tr-text-metadata text-hint">Loading…</p>
 				) : status.changes.length === 0 ? (
-					<p data-testid="changes-empty" className="px-sm py-xs text-xs text-hint">
+					<p data-testid="changes-empty" className="px-sm py-xs tr-text-metadata text-hint">
 						No changes in this scope.
 					</p>
 				) : changesView === "tree" ? (
@@ -271,7 +271,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 												// No background of its own: the WRAPPER paints the row's hover/selected band, which has
 												// to span the trailing ⌄ slot too. Two painters would make the row read as cut off at
 												// this button's edge (and hide that the wrapper stopped painting).
-												className="flex min-w-0 flex-1 items-center gap-sm px-sm py-xs text-left text-sm"
+												className="flex min-w-0 flex-1 items-center gap-sm px-sm py-xs text-left tr-text-ui"
 											>
 												{/* The full relative path: a muted directory prefix, a bright basename — and the dir
 												    **actually yields first**, because it out-shrinks the basename 20:1

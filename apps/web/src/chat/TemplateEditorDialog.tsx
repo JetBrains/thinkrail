@@ -21,7 +21,7 @@ import { assembleTemplate, stripFrontmatter } from "./templateText";
 const SYNTAX_HINT = `$1, $ARGUMENTS, \${1:-default} — pi prompt-template syntax`;
 
 const INPUT_CLASS =
-	"w-full rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-md py-sm text-sm text-text outline-none transition-colors placeholder:text-hint focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-[var(--primary-20)] disabled:opacity-50";
+	"w-full rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-md py-sm tr-text-ui text-text outline-none transition-colors placeholder:text-hint focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-[var(--primary-20)] disabled:opacity-50";
 
 /**
  * Mirrors the server's `isValidTemplateName` (`packages/server/src/templates/templates.ts`) exactly — a
@@ -194,7 +194,7 @@ export function TemplateEditorDialog({
 					</Field>
 
 					<div className="flex flex-col gap-xs">
-						<span className="font-medium text-sm text-text">Scope</span>
+						<span className="tr-title-compact text-text">Scope</span>
 						<div className="flex gap-sm">
 							<ScopeOption
 								id="global"
@@ -212,7 +212,7 @@ export function TemplateEditorDialog({
 							/>
 						</div>
 						{!workspaceId && !editing ? (
-							<p className="text-hint text-xs">
+							<p className="text-hint tr-text-metadata">
 								Open a workspace to save a project-scoped template.
 							</p>
 						) : null}
@@ -255,11 +255,11 @@ export function TemplateEditorDialog({
 							spellCheck={false}
 							rows={8}
 						/>
-						<p className="text-hint text-xs">{SYNTAX_HINT}</p>
+						<p className="text-hint tr-text-metadata">{SYNTAX_HINT}</p>
 					</Field>
 
 					{error ? (
-						<p data-testid="template-error" className="text-red text-xs">
+						<p data-testid="template-error" className="text-red tr-text-metadata">
 							{error}
 						</p>
 					) : null}
@@ -291,8 +291,8 @@ export function TemplateEditorDialog({
  * and non-control children (the Body field's syntax hint) aren't nested inside a `<label>`. */
 function Field({ id, label, children }: { id: string; label: string; children: ReactNode }) {
 	return (
-		<div className="flex flex-col gap-xs text-sm">
-			<label htmlFor={id} className="font-medium text-text">
+		<div className="flex flex-col gap-xs tr-text-ui">
+			<label htmlFor={id} className="tr-text-emphasis text-text">
 				{label}
 			</label>
 			{children}
@@ -325,7 +325,7 @@ function ScopeOption({
 			disabled={disabled}
 			onClick={onSelect}
 			className={cn(
-				"flex-1 rounded-[var(--radius-md)] border px-md py-sm text-left text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50",
+				"flex-1 rounded-[var(--radius-md)] border px-md py-sm text-left tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50",
 				active
 					? "border-[var(--primary-40)] bg-[var(--primary-10)] text-text"
 					: "border-border2 text-muted hover:bg-hover hover:text-text",

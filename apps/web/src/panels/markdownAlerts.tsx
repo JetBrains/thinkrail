@@ -126,7 +126,7 @@ function AlertCallout({
 			data-variant={isVariant(raw) ? raw : "note"}
 			className={`my-md rounded-r-[var(--radius-sm)] border-l-2 py-sm pr-md pl-md text-text ${cfg.border} ${cfg.bg} [&>*:last-child]:mb-0 [&_p]:my-1`}
 		>
-			<p className={`mb-xs flex items-center gap-xs font-semibold ${cfg.text}`}>
+			<p className={`tr-title-card mb-xs flex items-center gap-xs ${cfg.text}`}>
 				<Icon className="size-4 shrink-0" />
 				{cfg.label}
 			</p>

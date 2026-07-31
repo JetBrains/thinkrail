@@ -4,7 +4,7 @@ import {
 	parseSessionEntries,
 	type SessionEntry,
 } from "@earendil-works/pi-coding-agent";
-import { TODO_NUDGE_PREFIX } from "@thinkrail/contracts";
+import { isControlMessage } from "@thinkrail/contracts";
 
 /** One searchable message from a session transcript (see SPEC.md for the messageIndex invariant). */
 export interface HistoryEntry {
@@ -92,7 +92,7 @@ export function extractSession(jsonl: string): ExtractedSession | null {
 		// Internal control traffic: the pi-todos wake-nudge is hidden from the transcript on hydrate, so it
 		// must not surface as a recallable/insertable prompt. The index was already consumed above, so
 		// skipping only the text keeps every later hit's anchor aligned.
-		if (message.role === "user" && text.startsWith(TODO_NUDGE_PREFIX)) continue;
+		if (message.role === "user" && isControlMessage(text)) continue;
 		out.push({
 			text,
 			role: message.role,

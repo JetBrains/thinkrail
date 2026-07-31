@@ -158,7 +158,8 @@ stored in `~/.thinkrail/installation.json`; it never leaves the host except as t
 `distinct_id` on events. Events additionally carry only low-cardinality, non-personal metadata: app
 version, release channel (`stable`/`nightly`), OS (`macos`/`linux`/`windows`), architecture
 (`x64`/`arm64`), and — on chat/login events — the model/provider name **only if it is a pi built-in**
-(anything user-configured is reported as `custom`). Events are sent **personless** (no person
+(anything user-configured is reported as `custom`). Message activity is counted as a bare send event
+carrying only *how* it was sent (`prompt`/`steer`/`follow_up`) — never the message itself. Events are sent **personless** (no person
 profiles are ever built) and with **GeoIP lookup disabled**.
 
 **Never collected:** file paths or names, prompts, code, chat transcripts, API keys, token counts,

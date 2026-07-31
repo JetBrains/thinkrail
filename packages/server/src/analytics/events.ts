@@ -7,15 +7,20 @@ import { getBuiltinModels, getBuiltinProviders } from "@earendil-works/pi-ai/pro
 /** How a provider credential was configured in-app. A closed vocabulary, never user input. */
 export type LoginMethod = "oauth" | "api-key" | "central";
 
+/** How a user-authored message was sent. A closed vocabulary mirroring pi's three send methods. */
+export type SendMode = "prompt" | "steer" | "follow_up";
+
 /**
  * Every analytics event the host can emit. `app_installed`/`app_started` carry no event params (the
- * env set below rides on every event); the identity params on the other two pass through
- * `bucketProviderModel`/`bucketProvider` first, so a user-configured name never leaves the process.
+ * env set below rides on every event); the identity params on `chat_started`/`provider_login` pass
+ * through `bucketProviderModel`/`bucketProvider` first, so a user-configured name never leaves the
+ * process. `message_sent` carries only its closed-vocabulary `mode` — nothing about the message itself.
  */
 export type AnalyticsEvent =
 	| { name: "app_installed" }
 	| { name: "app_started" }
 	| { name: "chat_started"; params: { provider: string; model: string } }
+	| { name: "message_sent"; params: { mode: SendMode } }
 	| { name: "provider_login"; params: { provider: string; method: LoginMethod } };
 
 /** The bucket a user-configured (non-built-in) provider or model id collapses to. */

@@ -336,7 +336,7 @@ export function AskUserQuestionCard({
 								data-testid="ask-skip"
 								onClick={() => reply({ answers: [], cancelled: true })}
 								disabled={!actions}
-								className="text-muted text-sm hover:text-text disabled:opacity-50"
+								className="text-muted tr-text-ui hover:text-text disabled:opacity-50"
 							>
 								Skip
 							</button>
@@ -345,7 +345,7 @@ export function AskUserQuestionCard({
 									type="button"
 									data-testid="ask-continue"
 									onClick={() => setTab(Math.min(tab + 1, reviewTab))}
-									className="rounded-[var(--radius-md)] bg-primary px-md py-1.5 font-medium text-on-accent text-sm hover:opacity-90"
+									className="rounded-[var(--radius-md)] bg-primary px-md py-1.5 tr-text-action text-on-accent hover:opacity-90"
 								>
 									Next →
 								</button>
@@ -355,7 +355,7 @@ export function AskUserQuestionCard({
 									data-testid="ask-submit"
 									onClick={() => reply({ answers, cancelled: false })}
 									disabled={!canSubmit}
-									className="rounded-[var(--radius-md)] bg-primary px-md py-1.5 font-medium text-on-accent text-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+									className="rounded-[var(--radius-md)] bg-primary px-md py-1.5 tr-text-action text-on-accent hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
 								>
 									Submit
 								</button>
@@ -370,7 +370,7 @@ export function AskUserQuestionCard({
 
 /** "Agent is waiting for your input" — the small status line above the active card. */
 function WaitingLine() {
-	return <div className="text-muted text-xs">Agent is waiting for your input</div>;
+	return <div className="text-muted tr-text-metadata">Agent is waiting for your input</div>;
 }
 
 /**
@@ -383,7 +383,7 @@ function SupersededRecord({ questions }: { questions: AskUserQuestionItem[] }) {
 		<div
 			data-testid="ask-user-question"
 			data-tone="superseded"
-			className="flex flex-col gap-xs text-muted text-xs"
+			className="flex flex-col gap-xs text-muted tr-text-metadata"
 		>
 			<div className="flex items-center gap-xs">
 				<SkipForward className="size-3.5 shrink-0" />
@@ -406,7 +406,7 @@ function WaitingCard({ children }: { children: React.ReactNode }) {
 			<div
 				data-testid="ask-user-question"
 				data-tone="pending"
-				className="flex items-center gap-xs rounded-[var(--radius-lg)] border border-border2 bg-elevated px-md py-sm text-muted text-xs"
+				className="flex items-center gap-xs rounded-[var(--radius-lg)] border border-border2 bg-elevated px-md py-sm text-muted tr-text-metadata"
 			>
 				<MessageCircleQuestion className="size-3.5 shrink-0" />
 				{children}
@@ -423,13 +423,13 @@ function WaitingCard({ children }: { children: React.ReactNode }) {
 function ComposingCard({ count }: { count: number }) {
 	return (
 		<div className="flex flex-col gap-xs">
-			<div className="text-muted text-xs">Agent is preparing questions…</div>
+			<div className="text-muted tr-text-metadata">Agent is preparing questions…</div>
 			<div
 				data-testid="ask-user-question"
 				data-tone="pending"
 				className="flex flex-col gap-sm rounded-[var(--radius-lg)] border border-border2 bg-elevated px-md py-sm"
 			>
-				<div className="flex items-center gap-xs text-muted text-xs">
+				<div className="flex items-center gap-xs text-muted tr-text-metadata">
 					<MessageCircleQuestion className="size-3.5 shrink-0" />
 					Preparing questions…{count > 0 ? ` (${count} ready)` : ""}
 				</div>
@@ -461,7 +461,7 @@ function TabChip({
 			data-answered={answered}
 			onClick={onClick}
 			className={cn(
-				"flex shrink-0 items-center gap-xs whitespace-nowrap rounded-full px-sm py-0.5 text-xs",
+				"flex shrink-0 items-center gap-xs whitespace-nowrap rounded-full px-sm py-0.5 tr-text-metadata",
 				active ? "bg-primary/15 text-primary" : "text-muted hover:bg-hover",
 			)}
 		>
@@ -488,14 +488,14 @@ function ModeHint({
 }) {
 	if (review) {
 		return (
-			<span className="flex items-center gap-xs text-hint text-xs">
+			<span className="flex items-center gap-xs text-hint tr-text-metadata">
 				<ListChecks className="size-3.5 shrink-0" /> Review your answers
 			</span>
 		);
 	}
 	const multi = !!question?.multiSelect;
 	return (
-		<span className="flex items-center gap-xs text-hint text-xs">
+		<span className="flex items-center gap-xs text-hint tr-text-metadata">
 			{multi ? (
 				<ListChecks className="size-3.5 shrink-0" />
 			) : (
@@ -539,7 +539,7 @@ function QuestionBody({
 		<div className="flex flex-col gap-md">
 			<div className="flex items-start gap-sm">
 				<MessageCircleQuestion className="mt-0.5 size-4 shrink-0 text-muted" />
-				<p data-testid="ask-question-text" className="font-semibold text-md text-text">
+				<p data-testid="ask-question-text" className="tr-title-dialog text-text">
 					{question.question}
 				</p>
 			</div>
@@ -570,14 +570,14 @@ function QuestionBody({
 												value={state.notes[opt.label] ?? ""}
 												placeholder="Add a note for the model…"
 												onChange={(e) => onNote(opt.label, e.target.value)}
-												className="w-full resize-none rounded-[var(--radius-sm)] border border-border2 bg-[var(--input-bg)] px-sm py-xs text-text text-xs outline-none focus:border-primary"
+												className="w-full resize-none rounded-[var(--radius-sm)] border border-border2 bg-[var(--input-bg)] px-sm py-xs text-text tr-text-metadata outline-none focus:border-primary"
 											/>
 										) : (
 											<button
 												type="button"
 												data-testid="ask-note-toggle"
 												onClick={() => onToggleNote(opt.label)}
-												className="flex items-center gap-xs text-hint text-xs hover:text-muted"
+												className="flex items-center gap-xs text-hint tr-text-metadata hover:text-muted"
 											>
 												<Pencil className="size-3" />
 												{state.notes[opt.label]?.trim() ? "Edit note" : "Add note"}
@@ -605,9 +605,9 @@ function QuestionBody({
 				{anyPreview && previewSource?.preview ? (
 					<div
 						data-testid="ask-preview"
-						className="min-w-0 overflow-auto rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-sm py-xs text-xs"
+						className="min-w-0 overflow-auto rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-sm py-xs tr-text-metadata"
 					>
-						<div className="mb-xs text-hint text-xs">Preview · {previewSource.label}</div>
+						<div className="mb-xs text-hint tr-text-metadata">Preview · {previewSource.label}</div>
 						<Markdown text={previewSource.preview} />
 					</div>
 				) : null}
@@ -646,17 +646,17 @@ function OptionRow({
 			<Indicator selected={selected} multi={multi} />
 			<span className="flex min-w-0 flex-col gap-0.5">
 				<span className="flex items-center gap-xs">
-					<span data-testid="ask-option-label" className="font-medium text-sm text-text">
+					<span data-testid="ask-option-label" className="tr-text-ui text-text">
 						{text}
 					</span>
 					{recommended ? <RecommendedBadge /> : null}
 				</span>
-				{description ? <span className="text-muted text-xs">{description}</span> : null}
+				{description ? <span className="text-muted tr-text-metadata">{description}</span> : null}
 				{/* The recommendation rationale, shown inline up front for a recommended option so it
 				    reads on touch, and AT reads it as ordinary visible text. */}
 				{reason ? (
-					<span data-testid="ask-recommended-reason" className="mt-0.5 text-muted text-xs">
-						<span className="font-medium text-primary">Why:</span> {reason}
+					<span data-testid="ask-recommended-reason" className="mt-0.5 text-muted tr-text-metadata">
+						<span className="tr-text-emphasis text-primary">Why:</span> {reason}
 					</span>
 				) : null}
 			</span>
@@ -713,21 +713,21 @@ function OtherOptionRow({
 			) : (
 				<Indicator selected={active} multi={false} className="mt-0" />
 			)}
-			<span className="font-medium text-sm text-text">Other</span>
+			<span className="tr-text-ui text-text">Other</span>
 			<input
 				data-testid="ask-custom"
 				value={text}
 				placeholder="type your own answer…"
 				onFocus={onActivate}
 				onChange={(e) => onText(e.target.value)}
-				className="min-w-0 flex-1 border-none bg-transparent text-sm text-text outline-none placeholder:text-hint"
+				className="min-w-0 flex-1 border-none bg-transparent tr-text-ui text-text outline-none placeholder:text-hint"
 			/>
 		</label>
 	);
 }
 
 const RECOMMENDED_PILL =
-	"inline-flex items-center rounded-full bg-primary/15 px-xs py-0 font-medium text-[11px] text-primary";
+	"inline-flex items-center rounded-full bg-primary/15 px-xs py-0 tr-text-label-pill text-primary";
 
 /**
  * The "Recommended" pill next to an agent-recommended option — a plain label. Its rationale renders
@@ -800,12 +800,12 @@ function ReviewView({
 		<div className="flex flex-col gap-sm">
 			<div className="flex items-start gap-sm">
 				<MessageCircleQuestion className="mt-0.5 size-4 shrink-0 text-muted" />
-				<p className="font-semibold text-md text-text">Review your answers</p>
+				<p className="tr-title-dialog text-text">Review your answers</p>
 			</div>
 			<ul className="flex flex-col gap-md">
 				{questions.map((q, i) => (
 					<li key={q.question} data-testid="ask-review-item" className="flex flex-col gap-xs">
-						<span className="text-hint text-xs">{q.header || `Q${i + 1}`}</span>
+						<span className="text-hint tr-text-metadata">{q.header || `Q${i + 1}`}</span>
 						<QuestionRecap question={q} answer={byIndex.get(i)} variant="review" />
 					</li>
 				))}
@@ -815,7 +815,7 @@ function ReviewView({
 					type="button"
 					data-testid="ask-unanswered"
 					onClick={() => onJump(unanswered[0]?.i ?? 0)}
-					className="self-start text-gold text-xs hover:underline"
+					className="self-start text-gold tr-text-metadata hover:underline"
 				>
 					⚠ Unanswered: {unanswered.map(({ q, i }) => q.header || `Q${i + 1}`).join(", ")}
 				</button>
@@ -837,7 +837,11 @@ function ResolvedRecord({
 	// No structured result (e.g. an old transcript without details) → fall back to the plain envelope text.
 	if (!result) {
 		return (
-			<div data-testid="ask-user-question" data-tone="pending" className="text-muted text-xs">
+			<div
+				data-testid="ask-user-question"
+				data-tone="pending"
+				className="text-muted tr-text-metadata"
+			>
 				{rawText || "Question closed."}
 			</div>
 		);
@@ -853,7 +857,7 @@ function ResolvedRecord({
 				<QuestionRecap key={q.question} question={q} answer={byIndex.get(i)} variant="resolved" />
 			))}
 			{questions.length === 0 ? (
-				<div className="text-muted text-xs">{rawText || "Answered."}</div>
+				<div className="text-muted tr-text-metadata">{rawText || "Answered."}</div>
 			) : null}
 		</div>
 	);
@@ -879,7 +883,7 @@ function QuestionRecap({
 				<MessageCircleQuestion className="mt-0.5 size-3.5 shrink-0 text-hint" />
 				<p
 					data-testid={reviewing ? "ask-review-question" : undefined}
-					className={cn("text-sm", reviewing ? "font-medium text-text" : "text-muted")}
+					className={cn("tr-text-ui", reviewing ? "text-text" : "text-muted")}
 				>
 					{question.question}
 				</p>
@@ -895,7 +899,7 @@ function QuestionRecap({
 									data-testid={reviewing ? "ask-review-option" : "ask-record-option"}
 									data-selected={isSel}
 									className={cn(
-										"flex items-center gap-xs text-sm",
+										"flex items-center gap-xs tr-text-ui",
 										isSel ? "text-text" : "text-hint",
 									)}
 								>
@@ -919,7 +923,7 @@ function QuestionRecap({
 						{customAnswer ? (
 							<li
 								data-testid={reviewing ? "ask-review-custom" : "ask-record-custom"}
-								className="flex items-center gap-xs text-sm text-text"
+								className="flex items-center gap-xs tr-text-ui text-text"
 							>
 								<Check aria-hidden="true" className="size-3.5 shrink-0 text-green" />
 								<span data-testid="ask-selection-status" className="sr-only">
@@ -932,14 +936,14 @@ function QuestionRecap({
 					{!answer ? (
 						<div
 							data-testid="ask-review-unanswered"
-							className="flex items-center gap-xs pl-[calc(0.875rem+var(--spacing-sm))] text-hint text-xs italic"
+							className="flex items-center gap-xs pl-[calc(0.875rem+var(--spacing-sm))] text-hint tr-text-metadata italic"
 						>
 							<SkipForward className="size-3 shrink-0" /> Not answered
 						</div>
 					) : null}
 				</>
 			) : !answer ? (
-				<div className="flex items-center gap-xs pl-[calc(0.875rem+var(--spacing-sm))] text-hint text-xs italic">
+				<div className="flex items-center gap-xs pl-[calc(0.875rem+var(--spacing-sm))] text-hint tr-text-metadata italic">
 					<SkipForward className="size-3 shrink-0" /> No answer (skipped).
 				</div>
 			) : (
@@ -948,11 +952,11 @@ function QuestionRecap({
 					<span data-testid="ask-selection-status" className="sr-only">
 						Selected custom answer:{" "}
 					</span>
-					<span className="text-sm text-text">“{answer.answer}”</span>
+					<span className="tr-text-ui text-text">“{answer.answer}”</span>
 				</div>
 			)}
 			{answer?.notes ? (
-				<div className="pl-[calc(0.875rem+var(--spacing-sm))] text-hint text-xs">
+				<div className="pl-[calc(0.875rem+var(--spacing-sm))] text-hint tr-text-metadata">
 					Note: {answer.notes}
 				</div>
 			) : null}

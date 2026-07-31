@@ -95,7 +95,7 @@ export function TodoAddRow({
 					if (e.key === "Enter") void submit();
 				}}
 				placeholder="Add a TODO for the agent…"
-				className="min-w-0 flex-1 bg-transparent text-sm text-text outline-none placeholder:text-hint"
+				className="min-w-0 flex-1 bg-transparent tr-text-ui text-text outline-none placeholder:text-hint"
 			/>
 			{onOpenMarkdown ? (
 				<button
@@ -136,16 +136,13 @@ function GroupBlock({
 				)}
 				<span
 					className={cn(
-						"min-w-0 flex-1 truncate text-sm",
-						status === "active" ? "font-medium text-text" : "text-muted",
+						"min-w-0 flex-1 truncate",
+						status === "active" ? "tr-title-compact text-text" : "tr-text-ui text-muted",
 					)}
 				>
 					{group.title}
 				</span>
-				<span
-					data-testid="todo-group-progress"
-					className="shrink-0 text-[10px] text-hint uppercase tracking-wider"
-				>
+				<span data-testid="todo-group-progress" className="shrink-0 tr-text-eyebrow text-hint">
 					{done}/{total}
 				</span>
 			</div>
@@ -180,7 +177,7 @@ function LooseList({
 
 /** A section header (`To do`), the quiet uppercase label shared by the status sections. */
 function SectionLabel({ label }: { label: string }) {
-	return <div className="px-xs py-xs text-[10px] text-hint uppercase tracking-wider">{label}</div>;
+	return <div className="px-xs py-xs tr-text-eyebrow text-hint">{label}</div>;
 }
 
 /**
@@ -248,12 +245,10 @@ function DoneGroup({
 			>
 				<Chevron className="size-3.5 shrink-0 text-hint" />
 				<Check className="size-4 shrink-0 text-primary" />
-				<span className="min-w-0 flex-1 truncate font-medium text-hint text-sm line-through">
+				<span className="min-w-0 flex-1 truncate tr-text-ui text-hint line-through">
 					{group.title}
 				</span>
-				<span className="shrink-0 text-[10px] text-hint uppercase tracking-wider">
-					{group.todos.length} done
-				</span>
+				<span className="shrink-0 tr-text-eyebrow text-hint">{group.todos.length} done</span>
 			</button>
 			{expanded ? (
 				<ul className="ml-md flex flex-col border-border2 border-l pl-sm">
@@ -287,15 +282,13 @@ function TodoRow({
 			<div className="min-w-0 flex-1">
 				<div
 					className={cn(
-						"truncate text-sm",
+						"truncate tr-text-ui",
 						todo.status === "done" ? "text-hint line-through" : "text-text",
 					)}
 				>
 					{todo.title}
 				</div>
-				{todo.note ? (
-					<div className="truncate font-[var(--font-mono)] text-[10px] text-hint">{todo.note}</div>
-				) : null}
+				{todo.note ? <div className="truncate text-hint tr-text-metadata">{todo.note}</div> : null}
 			</div>
 			{todo.origin === "user" ? (
 				<span

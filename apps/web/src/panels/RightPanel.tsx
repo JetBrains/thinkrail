@@ -55,7 +55,7 @@ export function RightPanel() {
 			</div>
 			<div className="min-h-0 flex-1 overflow-auto">
 				{!activeWorkspaceId ? (
-					<p className="p-sm text-xs text-hint">Select a workspace to browse files.</p>
+					<p className="p-sm tr-text-metadata text-hint">Select a workspace to browse files.</p>
 				) : tab === "specs" ? (
 					<div className="p-xs">
 						<SpecsPanel workspaceId={activeWorkspaceId} failed={specsFailed} />
@@ -89,9 +89,7 @@ function TabButton({
 			data-testid={testid}
 			data-active={active}
 			onClick={onClick}
-			className={`text-xs uppercase tracking-wider ${
-				active ? "font-medium text-text" : "text-hint hover:text-muted"
-			}`}
+			className={`tr-text-eyebrow ${active ? "text-text" : "text-hint hover:text-muted"}`}
 		>
 			{children}
 		</button>

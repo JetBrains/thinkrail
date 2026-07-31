@@ -15,7 +15,7 @@ export function WriteCard({ args, result, status, workspaceRoot }: ToolRenderPro
 
 	return (
 		<div data-testid="tool-write" className="flex flex-col gap-xs">
-			<div className="flex items-center gap-xs text-xs">
+			<div className="flex items-center gap-xs tr-text-metadata">
 				<FilePlus className="size-3.5 shrink-0 text-green" />
 				<span className="truncate text-text" title={path}>
 					{displayPath}
@@ -23,13 +23,13 @@ export function WriteCard({ args, result, status, workspaceRoot }: ToolRenderPro
 				<span className="shrink-0 text-hint">written</span>
 			</div>
 			{status === "error" ? (
-				<pre className="overflow-auto px-sm py-xs text-red text-xs">{message}</pre>
+				<pre className="overflow-auto px-sm py-xs text-red tr-code-text">{message}</pre>
 			) : content ? (
 				<Collapsible lines={countLines(content)}>
 					<CodeBlock code={content} lang={lang} />
 				</Collapsible>
 			) : (
-				<span className="text-hint text-xs italic">(empty file)</span>
+				<span className="text-hint tr-text-metadata italic">(empty file)</span>
 			)}
 		</div>
 	);

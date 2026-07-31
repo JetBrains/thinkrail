@@ -82,7 +82,7 @@ function ChatHistoryMenu({
 						onSelect={() => onReopen(c.sessionId)}
 					>
 						<span className="flex-1 truncate">{c.title}</span>
-						<span className="shrink-0 text-hint text-xs">{relativeTime(c.closedAt)}</span>
+						<span className="shrink-0 text-hint tr-text-metadata">{relativeTime(c.closedAt)}</span>
 						<RotateCcw className="size-3.5 shrink-0 text-muted" />
 					</DropdownMenuItem>
 				))}
@@ -306,13 +306,13 @@ export function CenterTabs() {
 					data-testid="workspace-ready"
 					className="flex max-w-[440px] flex-col items-center gap-xs"
 				>
-					<span className="font-medium text-hint text-xs uppercase tracking-wider">
+					<span className="tr-text-eyebrow text-hint">
 						{isDefault ? "Default workspace" : "Workspace ready"}
 					</span>
-					<h2 className="max-w-full truncate font-medium text-md text-text">
+					<h2 className="max-w-full truncate tr-title-entity text-text">
 						{isDefault ? (contextProject?.name ?? activeWorkspace.name) : activeWorkspace.name}
 					</h2>
-					<p className="flex max-w-full items-center gap-xs font-[var(--font-mono)] text-muted text-xs">
+					<p className="flex max-w-full items-center gap-xs text-muted tr-text-metadata">
 						<GitBranch className="size-3.5 shrink-0" />
 						{isDefault ? (
 							<span className="truncate">on {activeWorkspace.branch}</span>
@@ -323,7 +323,7 @@ export function CenterTabs() {
 							</>
 						)}
 					</p>
-					<p className="mt-xs text-muted text-sm">
+					<p className="mt-xs text-muted tr-text-ui">
 						{isDefault
 							? "Chats, changes, and terminals run directly in your project folder."
 							: "Files, chats, changes, and terminals are scoped to this workspace."}
@@ -337,7 +337,7 @@ export function CenterTabs() {
 					type="button"
 					data-testid="start-chat"
 					onClick={() => void startChat()}
-					className="flex items-center gap-xs rounded-[var(--radius-md)] border border-border2 bg-elevated px-md py-xs text-sm text-text hover:bg-hover"
+					className="flex items-center gap-xs rounded-[var(--radius-md)] border border-border2 bg-elevated px-md py-xs tr-text-ui text-text hover:bg-hover"
 				>
 					<MessageSquarePlus className="size-4" /> New chat
 				</button>
@@ -364,7 +364,7 @@ export function CenterTabs() {
 								data-active={isActive}
 								data-preview={isPreview}
 								data-kind={tab.kind}
-								className={`group flex items-center gap-xs border-border2 border-r pr-xs pl-sm text-sm ${
+								className={`group flex items-center gap-xs border-border2 border-r pr-xs pl-sm tr-text-ui ${
 									isActive ? "bg-bg text-text" : "text-muted hover:bg-hover"
 								}`}
 							>

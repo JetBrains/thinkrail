@@ -85,12 +85,12 @@ export function LoginDialog({
 				</DialogHeader>
 
 				{state.status === "success" ? (
-					<p className="flex items-center gap-sm text-green text-sm" data-testid="login-success">
+					<p className="flex items-center gap-sm text-green tr-text-ui" data-testid="login-success">
 						<Check className="size-4 shrink-0" />
 						{providerName} is connected.
 					</p>
 				) : state.status === "error" ? (
-					<p className="flex items-start gap-sm text-red text-sm" data-testid="login-error">
+					<p className="flex items-start gap-sm text-red tr-text-ui" data-testid="login-error">
 						<TriangleAlert className="mt-0.5 size-4 shrink-0" />
 						<span className="min-w-0 break-words">{state.error ?? "Login failed."}</span>
 					</p>
@@ -105,7 +105,7 @@ export function LoginDialog({
 									<ExternalLink className="size-4" />
 									Open sign-in page
 								</Button>
-								<code className="select-all break-all rounded-[var(--radius-sm)] bg-[var(--input-bg)] px-sm py-xs font-[var(--font-mono)] text-hint text-xs">
+								<code className="select-all break-all rounded-[var(--radius-sm)] bg-[var(--input-bg)] px-sm py-xs tr-code-text text-hint">
 									{state.url}
 								</code>
 							</div>
@@ -116,7 +116,7 @@ export function LoginDialog({
 								className="flex flex-col gap-xs rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] p-md"
 								data-testid="login-device-code"
 							>
-								<span className="text-hint text-xs">
+								<span className="text-hint tr-text-metadata">
 									Enter this code at{" "}
 									<a
 										href={state.deviceCode.verificationUri}
@@ -129,7 +129,7 @@ export function LoginDialog({
 										<ExternalLink className="size-3 shrink-0" />
 									</a>
 								</span>
-								<code className="select-all text-center font-[var(--font-mono)] text-lg text-text tracking-widest">
+								<code className="tr-code-otp select-all text-center text-text">
 									{state.deviceCode.userCode}
 								</code>
 							</div>
@@ -138,7 +138,7 @@ export function LoginDialog({
 						{state.input?.kind === "select" ? (
 							<div className="flex flex-col gap-xs">
 								{state.input.message ? (
-									<p className="text-muted text-sm">{state.input.message}</p>
+									<p className="text-muted tr-text-ui">{state.input.message}</p>
 								) : null}
 								{state.input.options.map((option) => (
 									<button
@@ -147,7 +147,7 @@ export function LoginDialog({
 										data-testid="login-option"
 										data-option={option.id}
 										onClick={() => onReply(option.id)}
-										className="rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-md py-sm text-left text-sm text-text outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-primary"
+										className="rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-md py-sm text-left tr-text-ui text-text outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-primary"
 									>
 										{option.label}
 									</button>
@@ -158,7 +158,7 @@ export function LoginDialog({
 						{state.input?.kind === "prompt" ? (
 							<div className="flex flex-col gap-xs">
 								{state.input.message ? (
-									<p className="text-muted text-sm">{state.input.message}</p>
+									<p className="text-muted tr-text-ui">{state.input.message}</p>
 								) : null}
 								<div className="flex gap-sm">
 									<input
@@ -173,7 +173,7 @@ export function LoginDialog({
 												submitPrompt();
 											}
 										}}
-										className="min-w-0 flex-1 rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-sm py-xs text-sm text-text outline-none placeholder:text-hint focus:border-primary"
+										className="min-w-0 flex-1 rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-sm py-xs tr-text-ui text-text outline-none placeholder:text-hint focus:border-primary"
 									/>
 									<Button data-testid="login-submit" onClick={submitPrompt}>
 										Submit
@@ -184,7 +184,7 @@ export function LoginDialog({
 
 						{state.progress ? (
 							<p
-								className="flex items-center gap-sm text-hint text-sm"
+								className="flex items-center gap-sm text-hint tr-text-ui"
 								data-testid="login-progress"
 							>
 								<Loader2 className="size-4 shrink-0 animate-spin" />
@@ -193,7 +193,10 @@ export function LoginDialog({
 						) : null}
 
 						{!state.url && !state.deviceCode && !state.input && !state.progress ? (
-							<p className="flex items-center gap-sm text-hint text-sm" data-testid="login-working">
+							<p
+								className="flex items-center gap-sm text-hint tr-text-ui"
+								data-testid="login-working"
+							>
 								<Loader2 className="size-4 shrink-0 animate-spin" />
 								Working…
 							</p>

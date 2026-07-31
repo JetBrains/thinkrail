@@ -26,8 +26,8 @@ export function AppearanceSettings() {
 	return (
 		<section data-testid="settings-appearance" className="flex flex-col gap-sm">
 			<div className="flex flex-col gap-xs">
-				<h3 className="font-medium text-md text-text">Theme</h3>
-				<p className="text-hint text-xs">
+				<h3 className="tr-title-section text-text">Theme</h3>
+				<p className="text-hint tr-text-metadata">
 					Choose the app theme. Your choice is saved on the host and follows you across devices.
 				</p>
 			</div>
@@ -46,13 +46,13 @@ export function AppearanceSettings() {
 							data-active={active}
 							onClick={() => select(id)}
 							className={cn(
-								"flex items-center gap-sm rounded-[var(--radius-md)] border px-md py-sm text-left text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
+								"flex items-center gap-sm rounded-[var(--radius-md)] border px-md py-sm text-left tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
 								active
 									? "border-[var(--primary-40)] bg-[var(--primary-10)] text-text"
 									: "border-border2 text-muted hover:bg-hover hover:text-text",
 							)}
 						>
-							<span className="flex-1 font-medium">{label}</span>
+							<span className="flex-1">{label}</span>
 							{active ? <Check className="size-4 shrink-0 text-primary" /> : null}
 						</button>
 					);

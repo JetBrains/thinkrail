@@ -33,7 +33,7 @@ export function Collapsible({
 				type="button"
 				data-testid="collapsible-toggle"
 				onClick={() => setExpanded((e) => !e)}
-				className="self-start text-primary text-xs hover:underline"
+				className="self-start text-primary tr-text-metadata hover:underline"
 			>
 				{expanded ? "Show less" : `Show all ${lines} lines`}
 			</button>

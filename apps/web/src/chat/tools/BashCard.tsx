@@ -10,14 +10,14 @@ export function BashCard({ args, result, status }: ToolRenderProps) {
 	return (
 		<div
 			data-testid="tool-bash"
-			className="overflow-hidden rounded-[var(--radius-sm)] border border-border2 bg-bg-dark font-[var(--font-mono)]"
+			className="overflow-hidden rounded-[var(--radius-sm)] border border-border2 bg-bg-dark tr-code-text"
 		>
 			<div className="border-border2 border-b px-sm py-xs">
 				<span className="text-green">$</span>
-				<span className="ml-sm text-muted text-xs">{command}</span>
+				<span className="ml-sm text-muted">{command}</span>
 			</div>
 			<pre
-				className={`overflow-auto px-sm py-xs text-xs leading-relaxed ${isError ? "text-red" : "text-text"}`}
+				className={`overflow-auto px-sm py-xs tr-code-text leading-relaxed ${isError ? "text-red" : "text-text"}`}
 			>
 				{output || (status === "running" ? "Running…" : "(no output)")}
 			</pre>

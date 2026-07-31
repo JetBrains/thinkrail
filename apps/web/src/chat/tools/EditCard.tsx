@@ -16,7 +16,7 @@ export function EditCard({ args, result, status, workspaceRoot }: ToolRenderProp
 		return (
 			<div data-testid="tool-edit" className="flex flex-col gap-xs">
 				<EditHeader path={path} workspaceRoot={workspaceRoot} />
-				<pre className="overflow-auto px-sm py-xs text-red text-xs">{message}</pre>
+				<pre className="overflow-auto px-sm py-xs text-red tr-code-text">{message}</pre>
 			</div>
 		);
 	}
@@ -31,14 +31,14 @@ export function EditCard({ args, result, status, workspaceRoot }: ToolRenderProp
 				lines={oldLines.length + newLines.length}
 				fadeClass="bg-[linear-gradient(to_top,var(--elevated),transparent)]"
 			>
-				<div className="overflow-auto rounded-[var(--radius-sm)] border border-border2 font-[var(--font-mono)] text-xs leading-relaxed">
+				<div className="overflow-auto rounded-[var(--radius-sm)] border border-border2 tr-code-text leading-relaxed">
 					{oldLines.map((line, i) => {
 						// Diff lines are render-order-stable (never reordered), so the index is a correct key.
 						const key = `old-${i}`;
 						return (
 							<div key={key} className="flex bg-red/10">
 								<span className="w-6 shrink-0 select-none px-1 text-right text-red/50">−</span>
-								<pre className="min-w-0 flex-1 px-1 text-red">{line}</pre>
+								<pre className="min-w-0 flex-1 px-1 text-red tr-code-text">{line}</pre>
 							</div>
 						);
 					})}
@@ -47,7 +47,7 @@ export function EditCard({ args, result, status, workspaceRoot }: ToolRenderProp
 						return (
 							<div key={key} className="flex bg-green/10">
 								<span className="w-6 shrink-0 select-none px-1 text-right text-green/50">+</span>
-								<pre className="min-w-0 flex-1 px-1 text-green">{line}</pre>
+								<pre className="min-w-0 flex-1 px-1 text-green tr-code-text">{line}</pre>
 							</div>
 						);
 					})}
@@ -60,7 +60,7 @@ export function EditCard({ args, result, status, workspaceRoot }: ToolRenderProp
 function EditHeader({ path, workspaceRoot }: { path: string; workspaceRoot?: string | undefined }) {
 	const displayPath = projectRelativePath(path, workspaceRoot);
 	return (
-		<div className="flex items-center gap-xs text-xs">
+		<div className="flex items-center gap-xs tr-text-metadata">
 			<Pencil className="size-3.5 shrink-0 text-gold" />
 			<span className="truncate text-text" title={path}>
 				{displayPath}

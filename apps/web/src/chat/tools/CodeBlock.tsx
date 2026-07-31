@@ -24,14 +24,14 @@ export function CodeBlock({ code, lang }: { code: string; lang: string }) {
 
 	if (html === null) {
 		return (
-			<pre className="overflow-auto rounded-[var(--radius-sm)] bg-bg-dark p-sm font-[var(--font-mono)] text-text text-xs">
+			<pre className="overflow-auto rounded-[var(--radius-sm)] bg-bg-dark p-sm tr-code-text text-text">
 				{code}
 			</pre>
 		);
 	}
 	return (
 		<div
-			className="overflow-auto rounded-[var(--radius-sm)] text-xs [&_pre]:!m-0 [&_pre]:!bg-bg-dark [&_pre]:p-sm"
+			className="overflow-auto rounded-[var(--radius-sm)] tr-code-text [&_pre]:!m-0 [&_pre]:!bg-bg-dark [&_pre]:p-sm"
 			// biome-ignore lint/security/noDangerouslySetInnerHtml: shiki output is escaped, themed markup
 			dangerouslySetInnerHTML={{ __html: html }}
 		/>

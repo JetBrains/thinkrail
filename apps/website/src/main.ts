@@ -2,9 +2,12 @@
 // complete with JS disabled, and every animation is gated on prefers-reduced-motion.
 
 import { initAnalytics } from "./analytics";
+import { initGtm } from "./gtm";
 
 // Production-only, cookieless PostHog (self-gates on hostname). See src/analytics.ts.
 initAnalytics();
+// Production-only Google Tag Manager (self-gates on hostname). See src/gtm.ts.
+initGtm();
 
 const motionOK = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 if (motionOK) document.documentElement.classList.add("anim");

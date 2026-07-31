@@ -65,7 +65,7 @@ export function ProjectSkillsNotice({ projectId }: { projectId: string }) {
 			<p
 				data-testid="project-skills-notice"
 				data-state="trusted"
-				className="mt-lg flex items-center gap-xs text-hint text-xs"
+				className="mt-lg flex items-center gap-xs text-hint tr-text-metadata"
 			>
 				<ShieldCheck className="size-3.5 shrink-0 text-gold" />
 				{count} project skill{plural(count)} trusted.
@@ -81,7 +81,7 @@ export function ProjectSkillsNotice({ projectId }: { projectId: string }) {
 			className="mt-lg flex w-full max-w-[560px] items-center gap-sm rounded-[var(--radius-md)] border border-border2 border-l-[3px] border-l-[var(--gold)] bg-[var(--gold-tint)] px-md py-sm text-left"
 		>
 			<TriangleAlert className="size-4 shrink-0 text-gold" />
-			<span className="min-w-0 flex-1 text-sm text-text">
+			<span className="min-w-0 flex-1 tr-text-ui text-text">
 				{isPending
 					? `${pending.length} new skill${plural(pending.length)} appeared since you trusted this project.`
 					: `This project ships ${count} skill${plural(count)} — off until you trust it.`}

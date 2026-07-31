@@ -357,9 +357,10 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   (`Composer`'s own `slotIdx`), else `"unfilled"`/`"filled"` per its own `filled` flag; everything else is
   `"plain"` — pure offsets/slices, no empty segment for zero-gap-adjacent slots, and the tests pin
   `segments.map(s => s.text).join("") === value` in every case. The backdrop's inner mirror div matches the
-  textarea's box model **exactly** (`px-md py-sm`, `text-sm`, a `border border-transparent` of the same
-  width so the content box lines up, `whitespace-pre-wrap break-words` — spelled out explicitly since a
-  `<div>`, unlike a `<textarea>`, doesn't soft-wrap this way by default) so each `SlotSegment`'s tint span
+  textarea's box model **exactly** (`px-md py-sm`, the same `tr-text-ui` typography class, a
+  `border border-transparent` of the same width so the content box lines up,
+  `whitespace-pre-wrap break-words` — spelled out explicitly since a `<div>`, unlike a `<textarea>`,
+  doesn't soft-wrap this way by default) so each `SlotSegment`'s tint span
   (`data-testid="slot-highlight"` + `data-slot-state`, `rounded-[2px]` `bg-[var(--primary-20/40/10)]` for
   unfilled/active/filled, no tint for plain, every span `text-transparent` so only the real textarea text
   above shows through) lands exactly under its own characters. **Scroll sync**: the textarea's `onScroll`
@@ -520,8 +521,10 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 
 - **Public surface:** the registry API (`toolRegistry`), the props-driven slash-completion primitive, and
   the renderers (incl. the presentational `Markdown` — GFM + shiki, no store/transport; the rendering is fixed but the **prose skin** is the
-  caller's via an optional `className` — chat uses a compact bubble skin, `panels/MarkdownPreview` a
-  reading-optimized document skin; code blocks size in `em` so they scale with the skin; a caller may
+  caller's via an optional `className` — chat uses the compact bubble skin (`tr-prose-chat`),
+  `panels/MarkdownPreview` the document skin (`tr-prose-doc`). A skin names exactly one generated
+  `tr-prose-*` system and then carries only spacing/measure/chrome — no size, weight, leading or
+  tracking (see `styles/TYPOGRAPHY.md`); a caller may
   also **extend** the render with extra `remarkPlugins` + `components`, e.g. the file view's GitHub
   alert callouts), the view types
   (`types.ts`,

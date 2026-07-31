@@ -33,7 +33,10 @@ export function SessionStatsBar({ stats }: { stats: SessionStats | null }) {
 	const bucket = percent === null ? null : Math.round(Math.min(100, Math.max(0, percent)) / 10);
 
 	return (
-		<div data-testid="session-stats" className="flex items-center gap-sm text-muted text-xs">
+		<div
+			data-testid="session-stats"
+			className="flex items-center gap-sm text-muted tr-text-metadata"
+		>
 			<span title="Total tokens">{formatTokens(stats.tokens.total)} tok</span>
 			<span title="Session cost">{formatCost(stats.cost)}</span>
 			{percent !== null && bucket !== null ? (

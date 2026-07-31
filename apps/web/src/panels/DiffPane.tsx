@@ -121,7 +121,7 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 				<span
 					data-testid="diff-path"
 					title={tab.path}
-					className="mr-auto flex min-w-0 items-baseline font-[var(--font-mono)] text-xs"
+					className="mr-auto flex min-w-0 items-baseline tr-code-text"
 				>
 					{dir ? (
 						<span data-testid="diff-path-dir" className="min-w-0 shrink-[20] truncate text-hint">

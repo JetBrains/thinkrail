@@ -23,7 +23,10 @@ of the host.
   instead of pattern-matching an error message. A failure earns a code only when a client behaves differently
   for it; everything else stays a plain `error` string.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain`; the value re-exports
-  `DEFAULT_CONFIG` from `domain`; `export *` (value) of `wsProtocol`
+  `DEFAULT_CONFIG`, `MAX_HISTORY_LIMIT`, `MAX_HISTORY_QUERY_LENGTH`, `TODO_NUDGE_PREFIX` +
+  **`isControlMessage(text)`** (the one shared reading of that marker — the client hides such sends on
+  hydrate, the host skips them in the history index and does not count them as `message_sent`; both
+  sides agree here rather than each re-deriving `startsWith`) from `domain`; `export *` (value) of `wsProtocol`
   (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`).
 - **Allowed deps:** none at runtime. **Type-only** devDeps on `@earendil-works/pi-ai` +
   `@earendil-works/pi-agent-core`, imported **from their package roots** (type-only → erased at build).

@@ -35,7 +35,7 @@ export function TerminalsPanel() {
 	return (
 		<div data-testid="terminal-panel" className="flex h-full min-h-0 flex-col">
 			<div className="flex h-7 shrink-0 items-center gap-xs border-b border-border2 pr-xs pl-sm">
-				<span className="shrink-0 text-xs uppercase tracking-wider text-muted">Terminal</span>
+				<span className="shrink-0 tr-text-eyebrow text-muted">Terminal</span>
 				<div className="flex min-w-0 flex-1 items-center gap-px overflow-x-auto">
 					{tabs.map((tab) => (
 						<TerminalTabButton
@@ -60,9 +60,9 @@ export function TerminalsPanel() {
 			</div>
 			<div className="relative min-h-0 flex-1">
 				{!activeWorkspaceId ? (
-					<p className="px-sm py-xs text-xs text-hint">Select a workspace.</p>
+					<p className="px-sm py-xs tr-text-metadata text-hint">Select a workspace.</p>
 				) : tabs.length === 0 ? (
-					<p data-testid="terminals-empty" className="px-sm py-xs text-xs text-hint">
+					<p data-testid="terminals-empty" className="px-sm py-xs tr-text-metadata text-hint">
 						No terminals yet — press + to open one.
 					</p>
 				) : null}
@@ -93,7 +93,7 @@ function TerminalTabButton({
 }) {
 	return (
 		<div
-			className={`group flex shrink-0 items-center gap-xs rounded-[var(--radius-sm)] pr-xs pl-sm text-xs ${
+			className={`group flex shrink-0 items-center gap-xs rounded-[var(--radius-sm)] pr-xs pl-sm tr-text-ui ${
 				active ? "bg-hover text-text" : "text-muted hover:bg-hover"
 			}`}
 		>

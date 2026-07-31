@@ -95,7 +95,7 @@ export function ProjectTree() {
 	return (
 		<nav className="flex flex-col gap-sm">
 			<header className="flex h-7 items-center justify-between pr-xs pl-sm">
-				<span className="text-xs uppercase tracking-wider text-muted">Projects</span>
+				<span className="tr-text-eyebrow text-muted">Projects</span>
 				<AddProjectMenu
 					projects={projects}
 					onOpen={() => void pickAndOpen()}
@@ -204,12 +204,14 @@ function ProjectRow({
 				className="flex min-w-0 flex-1 items-center gap-sm text-left"
 			>
 				<Folder className={`size-4 shrink-0 ${isSelected ? "text-primary" : "text-muted"}`} />
-				<span className={`truncate text-sm ${isSelected ? "font-medium text-text" : "text-muted"}`}>
+				<span className={`truncate tr-text-ui ${isSelected ? "text-text" : "text-muted"}`}>
 					{project.name}
 				</span>
 			</button>
 			{!isExpanded && workspaceCount > 0 && (
-				<span className="shrink-0 text-xs text-hint group-hover:hidden">{workspaceCount}</span>
+				<span className="shrink-0 tr-text-metadata text-hint group-hover:hidden">
+					{workspaceCount}
+				</span>
 			)}
 			<button
 				type="button"
@@ -264,14 +266,14 @@ function WorkspaceRow({
 				<span className="flex min-w-0 flex-1 flex-col">
 					<span
 						data-testid="workspace-name"
-						className={`truncate text-sm leading-tight ${isActive ? "font-medium text-primary" : "text-muted"}`}
+						className={`truncate tr-text-ui leading-tight ${isActive ? "text-primary" : "text-muted"}`}
 					>
 						{workspace.name}
 					</span>
 					{workspace.branch !== workspace.name && (
 						<span
 							data-testid="workspace-branch"
-							className="truncate font-[var(--font-mono)] text-hint text-xs leading-tight"
+							className="truncate text-hint tr-text-metadata leading-tight"
 						>
 							{workspace.branch}
 						</span>
@@ -308,7 +310,7 @@ function WorkspaceRow({
 			description={
 				<>
 					Deletes this workspace's chats, terminals, and its worktree. The git branch{" "}
-					<span className="font-medium text-text">{workspace.branch}</span> is kept.
+					<span className="tr-text-emphasis text-text">{workspace.branch}</span> is kept.
 				</>
 			}
 			confirmLabel="Remove"

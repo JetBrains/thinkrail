@@ -73,9 +73,9 @@ export function ModelSelector({
 			<PopoverTrigger
 				data-testid="model-selector"
 				data-open={open}
-				className="flex h-8 max-w-[220px] items-center gap-sm rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-sm text-sm text-text outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-[var(--primary-60)] data-[open=true]:bg-hover"
+				className="flex h-8 max-w-[220px] items-center gap-sm rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-sm tr-text-ui text-text outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-[var(--primary-60)] data-[open=true]:bg-hover"
 			>
-				<span className="truncate font-[var(--font-mono)] text-muted text-xs">
+				<span className="truncate text-muted tr-text-metadata">
 					{current?.name ?? "Select model"}
 				</span>
 				<ChevronDown className="size-3 shrink-0 text-hint" />
@@ -104,11 +104,9 @@ export function ModelSelector({
 												</span>
 												<span className="flex min-w-0 flex-col">
 													<span className="truncate">{m.name}</span>
-													<span className="truncate text-hint text-xs">{subLine(m)}</span>
+													<span className="truncate text-hint tr-text-metadata">{subLine(m)}</span>
 												</span>
-												<span className="ml-auto shrink-0 font-[var(--font-mono)] text-hint text-xs">
-													{m.id}
-												</span>
+												<span className="ml-auto shrink-0 text-hint tr-text-metadata">{m.id}</span>
 											</CommandItem>
 										);
 									})}
@@ -122,7 +120,7 @@ export function ModelSelector({
 					data-refreshing={refreshing}
 					disabled={refreshing}
 					onClick={() => onRefresh(true)}
-					className="flex w-full items-center gap-sm border-border2 border-t px-sm py-xs text-hint text-xs outline-none transition-colors hover:bg-hover hover:text-text disabled:cursor-default disabled:hover:bg-transparent disabled:hover:text-hint"
+					className="flex w-full items-center gap-sm border-border2 border-t px-sm py-xs tr-text-metadata text-hint outline-none transition-colors hover:bg-hover hover:text-text disabled:cursor-default disabled:hover:bg-transparent disabled:hover:text-hint"
 				>
 					<RefreshCw className={cn("size-3.5 shrink-0", refreshing && "animate-spin")} />
 					{refreshing ? "Updating catalog…" : "Refresh catalog"}

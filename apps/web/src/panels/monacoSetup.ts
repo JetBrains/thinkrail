@@ -67,21 +67,23 @@ function cssVar(name: string): string | undefined {
 
 /**
  * The text/style options shared by the file viewer (`MonacoEditor`) and the diff tab (`MonacoDiff`), so
- * plain code and a diff of that code render identically. Font size/family/line-height track the app tokens
- * (`--font-base`, `--font-mono`, `--line-height`) — the same tokens the rest of the UI uses — instead of
- * Monaco's built-in monospace defaults. Read at render time (like the theme) so DOM tokens are resolved.
+ * plain code and a diff of that code render identically. Font size/family/line-height are read straight
+ * off the generated typography tokens (`--tr-font-size-s11`, `--tr-font-family-code`,
+ * `--tr-line-height-default` — the values behind `tr-code-text`), never Monaco's built-in monospace
+ * defaults, so the editor cannot drift from a code block. Read at render time (like the theme) so DOM
+ * tokens are resolved.
  */
 export function sharedEditorOptions() {
-	const fontSize = Number.parseFloat(cssVar("--font-base") ?? "") || 13;
+	const fontSize = Number.parseFloat(cssVar("--tr-font-size-s11") ?? "") || 11;
 	// `--line-height` is a unitless multiplier (e.g. 1.6); Monaco reads 0<v<8 as a multiplier of fontSize.
-	const lineHeight = Number.parseFloat(cssVar("--line-height") ?? "") || undefined;
+	const lineHeight = Number.parseFloat(cssVar("--tr-line-height-default") ?? "") || undefined;
 	return {
 		readOnly: true,
 		minimap: { enabled: false },
 		scrollBeyondLastLine: false,
 		automaticLayout: true,
 		fontSize,
-		fontFamily: cssVar("--font-mono") ?? "monospace",
+		fontFamily: cssVar("--tr-font-family-code") ?? "monospace",
 		...(lineHeight && lineHeight > 0 ? { lineHeight } : {}),
 	} as const;
 }

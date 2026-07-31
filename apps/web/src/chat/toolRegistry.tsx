@@ -130,14 +130,10 @@ export function DefaultToolRenderer({ args, result, status }: ToolRenderProps): 
 	return (
 		<div className="flex flex-col gap-xs">
 			{argsText && argsText !== "{}" ? (
-				<pre className="overflow-auto font-[var(--font-mono)] text-[10px] text-muted">
-					{argsText}
-				</pre>
+				<pre className="overflow-auto tr-code-text text-muted">{argsText}</pre>
 			) : null}
 			{status !== "running" && resultText ? (
-				<pre className="overflow-auto font-[var(--font-mono)] text-[10px] text-text">
-					{resultText}
-				</pre>
+				<pre className="overflow-auto tr-code-text text-text">{resultText}</pre>
 			) : null}
 		</div>
 	);

@@ -95,7 +95,9 @@ function StarterTemplatesOffer() {
 
 	return (
 		<div className="flex flex-col items-start gap-sm">
-			<p className="text-hint text-xs">No templates yet. Add a few common ones to get started.</p>
+			<p className="text-hint tr-text-metadata">
+				No templates yet. Add a few common ones to get started.
+			</p>
 			<Button
 				data-testid="template-starters"
 				variant="outline"
@@ -218,18 +220,18 @@ export function TemplatesSettings() {
 	return (
 		<section data-testid="settings-templates" className="flex flex-col gap-lg">
 			<div className="flex flex-col gap-xs">
-				<h3 className="font-medium text-md text-text">Prompt templates</h3>
-				<p className="text-hint text-xs">
-					Reusable prompts, expanded from the composer's <code>/</code> menu. Global templates are
-					available in every workspace; project templates live in this worktree's{" "}
-					<code>.pi/prompts/</code>.
+				<h3 className="tr-title-section text-text">Prompt templates</h3>
+				<p className="text-hint tr-text-metadata">
+					Reusable prompts, expanded from the composer's <code className="tr-code-text">/</code>{" "}
+					menu. Global templates are available in every workspace; project templates live in this
+					worktree's <code className="tr-code-text">.pi/prompts/</code>.
 				</p>
 			</div>
 
 			{loading ? (
-				<p className="text-hint text-sm">Loading templates…</p>
+				<p className="text-hint tr-text-ui">Loading templates…</p>
 			) : failed ? (
-				<p data-testid="templates-error" className="text-hint text-sm">
+				<p data-testid="templates-error" className="text-hint tr-text-ui">
 					Couldn't read templates from the host — reopen Settings to retry.
 				</p>
 			) : (
@@ -288,12 +290,12 @@ function TemplateGroup({
 	return (
 		<section className="flex flex-col gap-sm">
 			<div className="flex items-center justify-between">
-				<h4 className="font-medium text-muted text-xs uppercase tracking-wider">{title}</h4>
+				<h4 className="tr-text-eyebrow text-muted">{title}</h4>
 				<button
 					type="button"
 					data-testid={`template-new-${scope}`}
 					onClick={onNew}
-					className="flex items-center gap-xs rounded-[var(--radius-sm)] px-sm py-xs text-muted text-xs transition-colors hover:bg-hover hover:text-text"
+					className="flex items-center gap-xs rounded-[var(--radius-sm)] px-sm py-xs text-muted tr-text-metadata transition-colors hover:bg-hover hover:text-text"
 				>
 					<Plus className="size-3.5" />
 					New
@@ -303,7 +305,7 @@ function TemplateGroup({
 				scope === "global" ? (
 					<StarterTemplatesOffer />
 				) : (
-					<p className="text-hint text-xs">No templates yet.</p>
+					<p className="text-hint tr-text-metadata">No templates yet.</p>
 				)
 			) : (
 				<div className="flex flex-col gap-xs">
@@ -378,9 +380,9 @@ function TemplateRow({
 				className="group flex items-center gap-sm rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-md py-sm"
 			>
 				<div className="flex min-w-0 flex-1 flex-col">
-					<span className="truncate font-medium text-sm text-text">{template.name}</span>
+					<span className="truncate tr-text-ui text-text">{template.name}</span>
 					{template.description ? (
-						<span className="truncate text-hint text-xs">{template.description}</span>
+						<span className="truncate text-hint tr-text-metadata">{template.description}</span>
 					) : null}
 				</div>
 				<div className="flex shrink-0 items-center gap-xs">

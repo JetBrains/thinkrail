@@ -47,7 +47,7 @@ function Toast({
 }
 
 function ToastTitle({ className, ...props }: React.ComponentProps<typeof ToastPrimitive.Title>) {
-	return <ToastPrimitive.Title className={cn("font-medium text-sm", className)} {...props} />;
+	return <ToastPrimitive.Title className={cn("tr-title-compact", className)} {...props} />;
 }
 
 function ToastDescription({
@@ -56,7 +56,7 @@ function ToastDescription({
 }: React.ComponentProps<typeof ToastPrimitive.Description>) {
 	return (
 		<ToastPrimitive.Description
-			className={cn("text-muted text-sm [overflow-wrap:anywhere]", className)}
+			className={cn("text-muted tr-text-ui [overflow-wrap:anywhere]", className)}
 			{...props}
 		/>
 	);

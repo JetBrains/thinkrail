@@ -21,8 +21,8 @@ export function PrivacySettings() {
 	return (
 		<section data-testid="settings-privacy" className="flex flex-col gap-lg">
 			<div className="flex flex-col gap-xs">
-				<h3 className="font-medium text-md text-text">Usage analytics</h3>
-				<p className="text-hint text-xs">
+				<h3 className="tr-title-section text-text">Usage analytics</h3>
+				<p className="text-hint tr-text-metadata">
 					Anonymous usage analytics help us understand which features matter. Your choice is saved
 					on the host and follows you across devices.
 				</p>
@@ -30,8 +30,8 @@ export function PrivacySettings() {
 
 			<div className="flex items-center justify-between gap-md rounded-[var(--radius-md)] border border-border2 px-md py-sm">
 				<div className="flex flex-col gap-0.5">
-					<span className="font-medium text-sm text-text">Share anonymous usage analytics</span>
-					<span className="text-hint text-xs">
+					<span className="tr-title-compact text-text">Share anonymous usage analytics</span>
+					<span className="text-hint tr-text-metadata">
 						{enabled ? "On — thank you for helping improve ThinkRail." : "Off — nothing is sent."}
 					</span>
 				</div>
@@ -57,15 +57,15 @@ export function PrivacySettings() {
 				</button>
 			</div>
 
-			<div className="flex flex-col gap-xs text-xs">
+			<div className="flex flex-col gap-xs tr-text-metadata">
 				<p className="text-muted">
-					<span className="font-medium text-text">What is collected:</span> a random anonymous
+					<span className="tr-text-emphasis text-text">What is collected:</span> a random anonymous
 					install id, app version and release channel, OS and architecture, when a chat starts (and
 					the model/provider it uses), and which providers you sign in to. Custom providers and
 					models are reported only as “custom”.
 				</p>
 				<p className="text-muted">
-					<span className="font-medium text-text">Never collected:</span> file paths or names,
+					<span className="tr-text-emphasis text-text">Never collected:</span> file paths or names,
 					prompts, code, chat transcripts, API keys, hostnames, usernames, or anything typed into
 					the app.
 				</p>

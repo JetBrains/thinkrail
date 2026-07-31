@@ -40,8 +40,8 @@ export function GithubSettings() {
 	return (
 		<section data-testid="settings-github" className="flex flex-col gap-sm">
 			<div className="flex flex-col gap-xs">
-				<h3 className="font-medium text-md text-text">Local GitHub</h3>
-				<p className="text-hint text-xs">
+				<h3 className="tr-title-section text-text">Local GitHub</h3>
+				<p className="text-hint tr-text-metadata">
 					Authenticate the GitHub CLI to create workspaces from remote branches.
 				</p>
 			</div>
@@ -49,7 +49,7 @@ export function GithubSettings() {
 				<span
 					data-testid="settings-gh-status"
 					data-connected={connected}
-					className={`inline-flex items-center gap-xs font-medium text-sm ${
+					className={`inline-flex items-center gap-xs tr-text-ui ${
 						connected ? "text-green" : "text-hint"
 					}`}
 				>
@@ -57,7 +57,7 @@ export function GithubSettings() {
 					{connected ? "Connected" : "Not connected"}
 				</span>
 				{connected && gh?.login ? (
-					<span className="truncate text-muted text-sm">{gh.login}</span>
+					<span className="truncate text-muted tr-text-ui">{gh.login}</span>
 				) : null}
 				<Button
 					variant="outline"
@@ -71,10 +71,10 @@ export function GithubSettings() {
 					Refresh
 				</Button>
 			</div>
-			<p className="text-hint text-xs">
-				The GitHub CLI (<code className="font-[var(--font-mono)]">gh</code>) is read locally on the
-				host. Authenticate with <code className="font-[var(--font-mono)]">gh auth login</code> to
-				enable creating workspaces from remote branches.
+			<p className="text-hint tr-text-metadata">
+				The GitHub CLI (<code className="tr-code-text">gh</code>) is read locally on the host.
+				Authenticate with <code className="tr-code-text">gh auth login</code> to enable creating
+				workspaces from remote branches.
 			</p>
 		</section>
 	);

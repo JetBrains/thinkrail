@@ -141,7 +141,7 @@ export function WelcomePanel() {
 		>
 			<h1
 				data-testid="welcome-title"
-				className="max-w-[640px] break-words font-[var(--font-accent)] font-extrabold text-[44px] text-primary leading-tight tracking-[0.5px]"
+				className="tr-brand-hero max-w-[640px] break-words text-primary"
 			>
 				{project ? project.name : PRODUCT_NAME}
 			</h1>
@@ -243,7 +243,7 @@ const Card = forwardRef<HTMLButtonElement, CardProps>(function Card(
 			)}
 		>
 			{tag ? (
-				<span className="absolute top-md right-md rounded-full border border-[var(--primary-40)] bg-[var(--primary-10)] px-sm py-0.5 font-[var(--font-mono)] text-[10px] text-primary uppercase tracking-wide">
+				<span className="absolute top-md right-md rounded-full border border-[var(--primary-40)] bg-[var(--primary-10)] px-sm py-0.5 tr-text-label-pill text-primary">
 					{tag}
 				</span>
 			) : null}
@@ -256,8 +256,8 @@ const Card = forwardRef<HTMLButtonElement, CardProps>(function Card(
 				<Icon className="size-4" />
 			</span>
 			<span className="w-full">
-				<span className="block font-medium text-sm text-text">{title}</span>
-				<span className="mt-0.5 block text-muted text-xs leading-snug">{subtitle}</span>
+				<span className="block tr-title-card text-text">{title}</span>
+				<span className="mt-0.5 block text-muted tr-text-metadata leading-snug">{subtitle}</span>
 			</span>
 		</button>
 	);

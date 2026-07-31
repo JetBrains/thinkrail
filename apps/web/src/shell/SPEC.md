@@ -19,7 +19,8 @@ later, the mobile single-view-with-switcher).
   `store.openSettings()` — open state lives in the store, not local, so other surfaces (the Welcome
   provider warning) can open it too) over a body that branches on whether a workspace is active. The
   location context makes scope persistent rather than rail-dependent: an **active workspace** renders two
-  lines — `project / workspace display name`, then the monospace git `branch · from baseBranch`; a selected
+  lines — `project / workspace display name`, then the git `branch · from baseBranch` metadata line
+  (proportional `tr-text-metadata text-hint` per [[web-typography]]); a selected
   project with no active workspace renders `project / Project home`; no project leaves the wordmark alone.
   It follows the existing workspace lifecycle snapshots, so auto-renames update live. Responsive
   degradation drops the base, then the project prefix, before it drops active workspace/branch identity.

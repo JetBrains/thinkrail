@@ -601,7 +601,7 @@ export default function ChatView({
 													type="button"
 													data-testid="chat-plan-toggle"
 													data-open={planOpen}
-													className="flex min-w-0 items-center gap-xs text-muted text-xs hover:text-text"
+													className="flex min-w-0 items-center gap-xs text-muted tr-text-metadata hover:text-text"
 												>
 													<ChatPlanStripContent
 														plan={plan}
@@ -658,7 +658,7 @@ export default function ChatView({
 								type="button"
 								data-testid="scroll-to-bottom"
 								onClick={scrollToBottom}
-								className="-translate-x-1/2 absolute bottom-md left-1/2 flex items-center gap-xs rounded-[var(--radius-lg)] border border-border2 bg-elevated px-sm py-xs text-muted text-xs shadow-[var(--shadow-md)] hover:bg-hover hover:text-text"
+								className="-translate-x-1/2 absolute bottom-md left-1/2 flex items-center gap-xs rounded-[var(--radius-lg)] border border-border2 bg-elevated px-sm py-xs text-muted tr-text-metadata shadow-[var(--shadow-md)] hover:bg-hover hover:text-text"
 							>
 								<ArrowDown className="size-3" />
 								New messages
@@ -666,7 +666,7 @@ export default function ChatView({
 						) : null}
 					</div>
 					{widgetEntries.length > 0 ? (
-						<div className="shrink-0 border-border2 border-t bg-elevated px-md py-xs text-muted text-xs">
+						<div className="shrink-0 border-border2 border-t bg-elevated px-md py-xs text-muted tr-text-metadata">
 							{widgetEntries.map(([key, lines]) => (
 								<div key={key}>{lines.join(" ")}</div>
 							))}

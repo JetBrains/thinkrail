@@ -79,7 +79,7 @@ export function StreamIndicator({ status }: { status: StreamStatus }) {
 			data-phase={status.phase}
 			role="status"
 			aria-live="polite"
-			className="flex items-center gap-sm py-xs text-muted text-xs"
+			className="flex items-center gap-sm py-xs text-muted tr-text-metadata"
 		>
 			<TypingDots />
 			<span>{phaseLabel(status)}</span>

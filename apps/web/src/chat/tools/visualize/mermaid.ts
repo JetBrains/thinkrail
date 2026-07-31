@@ -36,7 +36,7 @@ function themeVariables(): Record<string, string> {
 		clusterBkg: bg,
 		clusterBorder: border,
 		titleColor: text,
-		fontFamily: cssVar("--font-mono") || "monospace",
+		fontFamily: cssVar("--tr-font-family-code") || "monospace",
 	};
 }
 

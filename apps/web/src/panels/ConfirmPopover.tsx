@@ -60,12 +60,12 @@ export function ConfirmPopover({
 			>
 				<div className="flex items-center gap-sm">
 					{destructive ? <TriangleAlert className="size-4 shrink-0 text-red" /> : null}
-					<span id={titleId} className="font-medium text-sm text-text">
+					<span id={titleId} className="tr-title-compact text-text">
 						{title}
 					</span>
 				</div>
 				{description ? (
-					<p id={descId} className="text-xs text-muted">
+					<p id={descId} className="tr-text-metadata text-muted">
 						{description}
 					</p>
 				) : null}

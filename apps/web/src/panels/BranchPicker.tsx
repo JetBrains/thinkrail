@@ -66,9 +66,9 @@ export function BranchPicker({
 				{ref === selected ? <Check className="size-3.5 text-primary" /> : null}
 			</span>
 			<GitBranch className="size-3.5 shrink-0 text-hint" />
-			<span className="truncate font-[var(--font-mono)] text-xs">{ref}</span>
+			<span className="truncate tr-text-metadata">{ref}</span>
 			{ref === defaultBranch ? (
-				<span className="ml-auto shrink-0 font-[var(--font-mono)] text-hint text-xs">default</span>
+				<span className="ml-auto shrink-0 text-hint tr-text-metadata">default</span>
 			) : null}
 		</CommandItem>
 	);
@@ -77,10 +77,8 @@ export function BranchPicker({
 		<Popover open={open} onOpenChange={setOpen}>
 			<PopoverTrigger data-testid={testid} data-open={open} className={triggerClassName}>
 				<GitBranch className="size-3.5 shrink-0 text-muted" />
-				<span className="shrink-0 text-hint text-xs">{label}</span>
-				<span className="truncate font-[var(--font-mono)] text-muted text-xs">
-					{selected || "branch"}
-				</span>
+				<span className="shrink-0 text-hint tr-text-metadata">{label}</span>
+				<span className="truncate text-muted tr-text-metadata">{selected || "branch"}</span>
 				<ChevronDown className="size-3 shrink-0 text-hint" />
 			</PopoverTrigger>
 			<PopoverContent align="start" container={container} className="w-[320px] p-0">

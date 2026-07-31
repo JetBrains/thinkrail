@@ -11,21 +11,11 @@
 	--bubble-user-bg: color-mix(in srgb, var(--bubble-accent) 12%, transparent);
 	--bubble-user-border: color-mix(in srgb, var(--bubble-accent) 35%, transparent);
 
-	/* Type scale (fixed px) */
-	--font-xs: 10px;
-	--font-sm: 12px;
-	--font-body: 13px;
-	--font-md: 15px;
-	--font-lg: 18px;
-	--font-lg2: 20px;
-	--font-xl: 25px;
-	--font-xxl: 40px;
-	--line-height: 1.6;
-	--font-base: 13px;
-	--compact-font-base: 9px;
-	--uppercase-size: 13px;
-	--uppercase-weight: 500;
-	--uppercase-spacing: 0.5px;
+	/*
+	 * The spacing basis. NOT typography: it carries no family, weight or line-height, and it is
+	 * deliberately independent of `typography.json` — a change to the type scale must never move layout.
+	 */
+	--space-base: 13px;
 
 	/* Shape + motion */
 	--radius-sm: 4px;
@@ -34,21 +24,23 @@
 	--transition-fast: 120ms ease;
 	--transition-normal: 200ms ease;
 
-	/* Spacing (only calc family — tracks --font-base) */
-	--space-xs: calc(var(--font-base) * 0.31);
-	--space-sm: calc(var(--font-base) * 0.62);
-	--space-md: calc(var(--font-base) * 0.92);
-	--space-lg: calc(var(--font-base) * 1.23);
-	--space-xl: calc(var(--font-base) * 1.85);
-
-	/* Fonts */
-	--font: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-	--font-mono: "JetBrains Mono", "Fira Code", "SF Mono", "Cascadia Code", monospace;
-	--font-accent: "Cabinet Grotesk", sans-serif;
+	/* Spacing (only calc family — tracks --space-base) */
+	--space-xs: calc(var(--space-base) * 0.31);
+	--space-sm: calc(var(--space-base) * 0.62);
+	--space-md: calc(var(--space-base) * 0.92);
+	--space-lg: calc(var(--space-base) * 1.23);
+	--space-xl: calc(var(--space-base) * 1.85);
 }
 
 /*
- * Theme-specific values are intentionally absent. `themes/bundled/*.theme.json` is the source of truth;
- * the theme engine validates a complete UI + ANSI + syntax palette and writes its CSS custom properties
- * before React mounts. Adding a bundled theme therefore adds one JSON file, not a selector block here.
+ * NO typography here — not a family, size, weight, line-height or tracking, and not an alias onto one.
+ * `styles/typography.json` is the single source; `generated/typography.css` publishes it as the
+ * `--tr-*` custom properties, the `<body>` base and the semantic classes. The three consumers that
+ * cannot use a class (Monaco, xterm, mermaid) read the `--tr-*` tokens directly, so there is exactly
+ * one name for each value. Self-hosted variable faces are imported in `styles/fonts.css`.
+ *
+ * Theme-specific values are intentionally absent too. `themes/bundled/*.theme.json` is the source of
+ * truth; the theme engine validates a complete UI + ANSI + syntax palette and writes its CSS custom
+ * properties before React mounts. Adding a bundled theme therefore adds one JSON file, not a selector
+ * block here.
  */

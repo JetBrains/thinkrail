@@ -154,15 +154,15 @@ export function SlashCommandMenu({
 					data-source={command.source}
 					onClick={() => onSelect(command)}
 					className={cn(
-						"flex w-full items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs text-left text-sm",
+						"flex w-full items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs text-left tr-text-ui",
 						index === activeIndex ? "bg-hover text-text" : "text-muted",
 					)}
 				>
-					<span className="font-mono text-text">/{command.name}</span>
+					<span className="tr-code-text text-text">/{command.name}</span>
 					{command.description ? (
-						<span className="truncate text-xs">{command.description}</span>
+						<span className="truncate tr-text-metadata">{command.description}</span>
 					) : null}
-					<span className="ml-auto shrink-0 text-hint text-xs">
+					<span className="ml-auto shrink-0 text-hint tr-text-metadata">
 						{command.source}/{command.sourceInfo.scope}
 					</span>
 				</button>

@@ -1,0 +1,360 @@
+{
+	"$schema": "./typography.schema.json",
+	"metadata": {
+		"version": "3.0.0",
+		"cssVarPrefix": "tr",
+		"classPrefix": "tr"
+	},
+	"fontFamilies": {
+		"interface": {
+			"stack": [
+				"Geist Variable",
+				"Geist",
+				"-apple-system",
+				"BlinkMacSystemFont",
+				"Segoe UI",
+				"sans-serif"
+			],
+			"kind": "proportional"
+		},
+		"code": {
+			"stack": [
+				"JetBrains Mono Variable",
+				"JetBrains Mono",
+				"Fira Code",
+				"SF Mono",
+				"Cascadia Code",
+				"monospace"
+			],
+			"kind": "monospace"
+		},
+		"brand": {
+			"$ref": "interface"
+		}
+	},
+	"fontWeights": {
+		"regular": 400,
+		"medium": 500,
+		"semibold": 600,
+		"brand": 800
+	},
+	"fontSizes": {
+		"s10": 10,
+		"s11": 11,
+		"s12": 12,
+		"s13": 13,
+		"s14": 14,
+		"s16": 16,
+		"s18": 18,
+		"s20": 20,
+		"s24": 24,
+		"s44": 44
+	},
+	"lineHeights": {
+		"compact": 1.25,
+		"code": 1.5,
+		"default": 1.6
+	},
+	"letterSpacings": {
+		"normal": "normal",
+		"wide": "0.05em",
+		"widest": "0.1em",
+		"brand": "0.5px"
+	},
+	"rootStyle": {
+		"$ref": "ui.default"
+	},
+	"textStyles": {
+		"brand": {
+			"wordmark": {
+				"fontFamily": "brand",
+				"fontSize": "s18",
+				"fontWeight": "brand",
+				"lineHeight": "compact",
+				"letterSpacing": "brand",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			},
+			"hero": {
+				"fontFamily": "brand",
+				"fontSize": "s44",
+				"fontWeight": "brand",
+				"lineHeight": "compact",
+				"letterSpacing": "brand",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			}
+		},
+		"heading": {
+			"xl": {
+				"fontFamily": "interface",
+				"fontSize": "s24",
+				"fontWeight": "semibold",
+				"lineHeight": "compact",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			},
+			"lg": {
+				"fontFamily": "interface",
+				"fontSize": "s20",
+				"fontWeight": "semibold",
+				"lineHeight": "compact",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			},
+			"md": {
+				"fontFamily": "interface",
+				"fontSize": "s18",
+				"fontWeight": "semibold",
+				"lineHeight": "compact",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			},
+			"sm": {
+				"fontFamily": "interface",
+				"fontSize": "s16",
+				"fontWeight": "semibold",
+				"lineHeight": "compact",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			}
+		},
+		"title": {
+			"dialog": {
+				"fontFamily": "interface",
+				"fontSize": "s14",
+				"fontWeight": "semibold",
+				"lineHeight": "compact",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			},
+			"card": {
+				"$ref": "title.dialog"
+			},
+			"section": {
+				"fontFamily": "interface",
+				"fontSize": "s14",
+				"fontWeight": "medium",
+				"lineHeight": "default",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			},
+			"compact": {
+				"fontFamily": "interface",
+				"fontSize": "s12",
+				"fontWeight": "medium",
+				"lineHeight": "default",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			},
+			"entity": {
+				"$ref": "body.reading"
+			}
+		},
+		"ui": {
+			"default": {
+				"fontFamily": "interface",
+				"fontSize": "s12",
+				"fontWeight": "regular",
+				"lineHeight": "default",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			},
+			"metadata": {
+				"fontFamily": "interface",
+				"fontSize": "s10",
+				"fontWeight": "regular",
+				"lineHeight": "default",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			},
+			"eyebrow": {
+				"fontFamily": "interface",
+				"fontSize": "s10",
+				"fontWeight": "regular",
+				"lineHeight": "default",
+				"letterSpacing": "wide",
+				"textTransform": "uppercase",
+				"fontStyle": "normal"
+			},
+			"labelPill": {
+				"$ref": "ui.eyebrow"
+			},
+			"action": {
+				"$ref": "title.compact"
+			},
+			"emphasis": {
+				"$ref": "title.compact"
+			}
+		},
+		"body": {
+			"reading": {
+				"fontFamily": "interface",
+				"fontSize": "s14",
+				"fontWeight": "regular",
+				"lineHeight": "default",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			}
+		},
+		"code": {
+			"text": {
+				"fontFamily": "code",
+				"fontSize": "s11",
+				"fontWeight": "regular",
+				"lineHeight": "default",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			},
+			"inline": {
+				"fontFamily": "code",
+				"fontSize": "s13",
+				"fontWeight": "regular",
+				"lineHeight": "default",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			},
+			"block": {
+				"fontFamily": "code",
+				"fontSize": "s11",
+				"fontWeight": "regular",
+				"lineHeight": "code",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			},
+			"document": {
+				"fontFamily": "code",
+				"fontSize": "s13",
+				"fontWeight": "regular",
+				"lineHeight": "code",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			},
+			"otp": {
+				"fontFamily": "code",
+				"fontSize": "s18",
+				"fontWeight": "regular",
+				"lineHeight": "default",
+				"letterSpacing": "widest",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			}
+		}
+	},
+	"proseSystems": {
+		"chat": {
+			"body": {
+				"$ref": "body.reading"
+			},
+			"h1": {
+				"$ref": "heading.md"
+			},
+			"h2": {
+				"$ref": "title.dialog"
+			},
+			"h3": {
+				"fontFamily": "interface",
+				"fontSize": "s12",
+				"fontWeight": "semibold",
+				"lineHeight": "default",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
+			},
+			"h4": {
+				"$ref": "title.compact"
+			},
+			"h5": {
+				"$ref": "title.compact"
+			},
+			"h6": {
+				"fontFamily": "interface",
+				"fontSize": "s10",
+				"fontWeight": "medium",
+				"lineHeight": "default",
+				"letterSpacing": "wide",
+				"textTransform": "uppercase",
+				"fontStyle": "normal"
+			},
+			"inlineCode": {
+				"$ref": "code.inline"
+			},
+			"codeBlock": {
+				"$ref": "code.block"
+			},
+			"blockquote": {
+				"$ref": "body.reading"
+			},
+			"list": {
+				"$ref": "body.reading"
+			},
+			"tableBody": {
+				"$ref": "ui.default"
+			},
+			"tableHeader": {
+				"$ref": "chat.h3"
+			}
+		},
+		"doc": {
+			"body": {
+				"$ref": "body.reading"
+			},
+			"h1": {
+				"$ref": "heading.xl"
+			},
+			"h2": {
+				"$ref": "heading.lg"
+			},
+			"h3": {
+				"$ref": "heading.md"
+			},
+			"h4": {
+				"$ref": "heading.sm"
+			},
+			"h5": {
+				"$ref": "title.dialog"
+			},
+			"h6": {
+				"fontFamily": "interface",
+				"fontSize": "s12",
+				"fontWeight": "semibold",
+				"lineHeight": "compact",
+				"letterSpacing": "wide",
+				"textTransform": "uppercase",
+				"fontStyle": "normal"
+			},
+			"inlineCode": {
+				"$ref": "code.inline"
+			},
+			"codeBlock": {
+				"$ref": "code.document"
+			},
+			"blockquote": {
+				"$ref": "body.reading"
+			},
+			"list": {
+				"$ref": "body.reading"
+			},
+			"tableBody": {
+				"$ref": "body.reading"
+			},
+			"tableHeader": {
+				"$ref": "title.dialog"
+			}
+		}
+	}
+}
