@@ -541,7 +541,7 @@ export function NewWorkspaceDialog({
 						data-testid="ws-trust-notice"
 						className="flex w-full items-center gap-sm rounded-[var(--radius-md)] border border-border-default border-l-[3px] border-l-[var(--gold)] bg-[var(--gold-tint)] px-md py-sm text-left"
 					>
-						<TriangleAlert className="size-4 shrink-0 text-gold" />
+						<TriangleAlert className="size-4 shrink-0 text-feedback-warning" />
 						<span className="min-w-0 flex-1 text-sm text-text-default">
 							This project ships {aliasSkills.length} skill{aliasSkills.length === 1 ? "" : "s"} —
 							off until you trust it. Your personal and ThinkRail's built-in skills are unaffected.

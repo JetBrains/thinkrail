@@ -376,7 +376,9 @@ export function CenterTabs() {
 								data-preview={isPreview}
 								data-kind={tab.kind}
 								className={`group flex items-center gap-xs border-border-default border-r pr-xs pl-sm text-sm ${
-									isActive ? "bg-bg text-text-default" : "text-muted hover:bg-control-bg-hovered"
+									isActive
+										? "bg-container-workspace-bg text-text-default"
+										: "text-text-muted hover:bg-control-bg-hovered"
 								}`}
 							>
 								<button

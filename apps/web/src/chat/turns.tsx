@@ -171,7 +171,7 @@ function ErrorTurn({ text }: { text: string }) {
 		<div
 			data-testid="chat-message"
 			data-role="error"
-			className="flex items-start gap-sm rounded-[var(--radius-md)] border border-red/40 bg-red/10 px-md py-sm text-red text-sm"
+			className="flex items-start gap-sm rounded-[var(--radius-md)] border border-feedback-error/40 bg-feedback-error/10 px-md py-sm text-feedback-error text-sm"
 		>
 			<TriangleAlert className="mt-[2px] size-4 shrink-0" />
 			<span className="min-w-0 whitespace-pre-wrap break-words">{text}</span>
