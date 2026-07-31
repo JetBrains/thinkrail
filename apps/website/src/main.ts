@@ -14,19 +14,16 @@ if (motionOK) document.documentElement.classList.add("anim");
 
 const editor = document.getElementById("editor-scroll");
 
-/* ── Scroll-spy: active tab + file-tree row follow the section in view ──── */
+/* ── Scroll-spy: file-tree rows follow the section in view ─────────────── */
+// Top tabs are now decorative editor tabs; scroll-spy only updates file tree navigation.
 
 const sections = Array.from(document.querySelectorAll<HTMLElement>(".file-section"));
-const tabs = Array.from(document.querySelectorAll<HTMLAnchorElement>(".tabstrip .tab"));
 const treeRows = Array.from(document.querySelectorAll<HTMLAnchorElement>(".filetree a.ft-row"));
 
-function setActive(id: string): void {
-	for (const el of [...tabs, ...treeRows]) {
+function setActiveTreeRow(id: string): void {
+	for (const el of treeRows) {
 		const active = el.getAttribute("href") === `#${id}`;
 		el.classList.toggle("active", active);
-		if (active && el.classList.contains("tab")) {
-			el.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "auto" });
-		}
 	}
 }
 
@@ -41,7 +38,7 @@ if (editor && sections.length > 0) {
 			for (const [id, ratio] of visible) {
 				if (ratio > 0 && (best === null || ratio > best.ratio)) best = { id, ratio };
 			}
-			if (best) setActive(best.id);
+			if (best) setActiveTreeRow(best.id);
 		},
 		{ root: editor, threshold: [0.05, 0.2, 0.5, 0.8] },
 	);
