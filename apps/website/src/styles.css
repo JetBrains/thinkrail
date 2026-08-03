@@ -177,9 +177,11 @@ svg.i.i-fill {
 a {
 	color: var(--accent);
 	text-decoration: none;
+	transition: color 150ms ease-out;
 }
 
 a:hover {
+	color: color-mix(in srgb, var(--accent) 85%, white);
 	text-decoration: underline;
 }
 
@@ -1234,6 +1236,11 @@ html.anim .chat-demo [data-step].on {
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
+	color: var(--accent);
+}
+
+.footer-links a:hover {
+	color: color-mix(in srgb, var(--accent) 85%, white);
 }
 
 .footer-links .i {
