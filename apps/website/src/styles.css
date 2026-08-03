@@ -1020,6 +1020,7 @@ p.hero-platforms {
 /* ── Chat demo ──────────────────────────────────────────────────────────── */
 
 .chat-demo {
+	position: relative;
 	border: 1px solid var(--border2);
 	border-radius: 12px;
 	background: color-mix(in srgb, var(--elevated) 30%, var(--editor-bg));
@@ -1028,6 +1029,41 @@ p.hero-platforms {
 	display: flex;
 	flex-direction: column;
 	gap: 14px;
+}
+
+.chat-restart {
+	position: absolute;
+	bottom: 12px;
+	right: 12px;
+	width: 32px;
+	height: 32px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: transparent;
+	border: 1px solid var(--border2);
+	border-radius: 6px;
+	cursor: pointer;
+	z-index: 10;
+	transition:
+		background 150ms ease,
+		border-color 150ms ease;
+}
+
+.chat-restart .i {
+	width: 16px;
+	height: 16px;
+	color: var(--hint);
+	transition: color 150ms ease;
+}
+
+.chat-restart:hover {
+	background: var(--elevated);
+	border-color: var(--border);
+}
+
+.chat-restart:hover .i {
+	color: var(--muted);
 }
 
 .chat-msg.user {
