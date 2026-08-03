@@ -418,6 +418,12 @@ code {
 	gap: 10px;
 }
 
+.rail-left-nav {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
 .rail-heading {
 	display: flex;
 	align-items: center;
