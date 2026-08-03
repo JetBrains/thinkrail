@@ -54,11 +54,17 @@ to the code canvas in every theme. Every bundled manifest ships `header` equal t
 split changed no pixel — it made a knob exist. The same move is what any future divergence needs: a role
 can only vary between themes if the manifest has a key for it.
 
-**The manifest→variable map is generated, not written here.** `styles/colors.json` owns
-`palette` (key → CSS custom properties) and the per-appearance `effects`; `generate-colors.ts` emits
-both as `styles/generated/colors.ts`, which `runtime.ts` applies. The generator refuses to run when
-`palette` and `THEME_COLOR_KEYS` disagree, so a key added to one and forgotten in the other cannot
-reach a build.
+**The manifest→variable name is derived, not mapped.** A key writes to its kebab-cased name —
+`borderStrong` → `--border-strong`, `editorSelection` → `--editor-selection`. `runtime.ts` applies that
+rule when it writes the palette to the document root, and `scripts/colors.ts` applies the same rule when
+it resolves a role's `from`; neither consults a table, because the table *was* the drift path (and its
+names — `--blue` for `info`, `--border2` for `borderStrong` — had stopped describing what they held).
+There is no `palette` section in `colors.json` and no generated TypeScript: `generate-colors.ts` emits
+exactly one artifact, `styles/generated/colors.css` (the roles, the per-appearance `effects`, and the
+Tailwind `@theme inline` map). What keeps the two lists honest is coverage, not a mapping — the
+generator refuses to run unless **every** `THEME_COLOR_KEYS` entry is claimed by at least one role, so a
+key added to the manifest schema and forgotten in `colors.json` cannot reach a build, and a role naming
+a key that does not exist fails the same gate.
 
 **A manifest must also be legible, not merely complete.** `schema.test.ts` enforces WCAG AA on every
 resting surface (`background`, `content`, `sidebar`, `header`, `elevated`, `input`) and a lower 3.0
