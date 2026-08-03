@@ -89,14 +89,49 @@ const PALETTE_BARE = new Set(
 	[...PALETTE_VARS].map((v) => (v as string).slice(2)).filter((n) => !PUBLISHED.has(n)),
 );
 
-/** The first segment of every published token — `text`, `container`, `feedback`, `primary`, … */
-const FAMILIES = new Set([...PUBLISHED].map((n) => n.split("-")[0] as string));
+/**
+ * The COMPLETE set of non-colour values that legitimately share a colour-utility prefix: the CSS-wide
+ * colour keywords, the directional border shorthands, and a handful of `text-*` / `outline-*` /
+ * `ring-*` properties that are not colours at all. Everything else after a colour prefix must be a
+ * published token — that is what makes the check below strict rather than heuristic.
+ */
+const NON_COLOR = new Set([
+	"current",
+	"transparent",
+	"inherit",
+	// directional border shorthands and widths: border-t, border-l-2, border-b-0, border-y
+	"t",
+	"r",
+	"b",
+	"l",
+	"x",
+	"y",
+	"t-0",
+	"b-0",
+	"l-2",
+	"l-4",
+	"collapse",
+	"separate",
+	// text-align / text-wrap / text-overflow
+	"center",
+	"left",
+	"right",
+	"balance",
+	"pretty",
+	"ellipsis",
+	"clip",
+	// outline-none, ring-inset
+	"none",
+	"inset",
+]);
 
+// Longest alternative FIRST: with `border` ahead of `border-l`, `border-l-feedback-error` parsed as
+// the token `l-feedback-error` and slipped past every check below.
 const COLOR_PREFIX =
-	"bg|text|border|border-[trblxyse]{1,2}|ring|fill|stroke|divide|outline|decoration|caret|accent|placeholder";
+	"border-[trblxyse]{1,2}|bg|text|border|ring|fill|stroke|divide|outline|decoration|caret|accent|placeholder";
 /** A colour-capable utility, with any variant chain stripped: captures the prefix and the token name. */
 const UTILITY = new RegExp(
-	`(?<![\\w-])(${COLOR_PREFIX})-([a-z][a-z0-9-]*)(/\\d+)?(?![\\w./-])`,
+	`(?<![\\w-])(${COLOR_PREFIX})-([a-z][a-z0-9-]*)(/\\d+)?(?![\\w./[-])`,
 	"g",
 );
 
@@ -162,12 +197,16 @@ describe("colour at a call site", () => {
 		expect(bad).toEqual([]);
 	});
 
-	it("never names a token the theme does not publish", () => {
-		// The silent-drop guard: a suffix inside one of our families must resolve exactly, or Tailwind
-		// emits nothing and the element renders unstyled.
-		const bad = USES.filter(
-			(u) => FAMILIES.has(u.name.split("-")[0] as string) && !PUBLISHED.has(u.name),
-		).map((u) => `${u.file}: ${u.text}`);
+	it("names a published token, or nothing that is a colour at all", () => {
+		// The strict guard, and the one that matters most. Two failures hide here:
+		//  - a token we do not publish (a typo, or a rename that missed a call site) — Tailwind emits
+		//    NOTHING and the element renders unstyled while its class list claims otherwise;
+		//  - one of Tailwind's own 250+ built-in colours (`bg-red-500`, `text-white`) — which used to
+		//    compile into a hardcoded, un-themeable value that no theme could reach. `colors.json`
+		//    now resets that namespace, and this check keeps the source honest about it too.
+		const bad = USES.filter((u) => !PUBLISHED.has(u.name) && !NON_COLOR.has(u.name)).map(
+			(u) => `${u.file}: ${u.text}`,
+		);
 		expect(bad).toEqual([]);
 	});
 

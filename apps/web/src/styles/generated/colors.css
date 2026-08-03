@@ -46,6 +46,7 @@
 }
 
 @theme inline {
+	--color-*: initial;
 	--color-text-default: var(--text-default);
 	--color-text-muted: var(--text-muted);
 	--color-text-subtle: var(--text-subtle);

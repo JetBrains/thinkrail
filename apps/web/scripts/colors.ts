@@ -140,6 +140,10 @@ export function renderCss(colors: Colors): string {
 		});
 
 	const themeLines = [
+		// Drop Tailwind's built-in palette FIRST, so `bg-red-500` / `text-white` are not utilities at
+		// all. They compile happily otherwise — hardcoded, un-themeable, and invisible to review. This
+		// has to precede our own entries: a reset in a later block would wipe them too.
+		"\t--color-*: initial;",
 		...roles.filter(([, r]) => r.publish).map(([n]) => `\t${themeVar(n)}: var(${roleVar(n)});`),
 		...effects.map(([n]) => `\t${themeVar(n)}: var(--${n});`),
 	];
