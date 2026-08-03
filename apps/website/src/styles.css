@@ -1524,12 +1524,25 @@ html.anim .terminal.armed [data-out] {
 [data-mock-hint],
 [data-mock-hint] * {
 	color: var(--hint);
+	transition: color 150ms ease-out;
 }
 
 [data-mock-hint] {
 	pointer-events: none;
 	cursor: help;
 	position: relative;
+}
+
+/* Subtle hover feedback: brighten text when hovering the region */
+[data-mock-hint]:hover,
+[data-mock-hint]:hover * {
+	color: var(--muted);
+}
+
+/* Active items stay bright on hover */
+[data-mock-hint]:hover .active,
+[data-mock-hint]:hover .active * {
+	color: var(--text);
 }
 
 [data-mock-hint] a,
@@ -1541,6 +1554,14 @@ html.anim .terminal.armed [data-out] {
 [data-mock-hint] .i {
 	color: var(--hint);
 	opacity: 0.7;
+	transition:
+		color 150ms ease-out,
+		opacity 150ms ease-out;
+}
+
+[data-mock-hint]:hover .i {
+	color: var(--muted);
+	opacity: 0.85;
 }
 
 /* Re-enable pointer events for the tooltip layer */
