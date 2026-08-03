@@ -116,79 +116,66 @@ if (motionOK && chat) {
 	player.observe(chat);
 }
 
-/* ── Theme dropdown: chip shows the current palette, menu picks one ─────── */
+/* ── Theme toggle: dark/light with system preference support ───────────── */
 
-const themeTrigger = document.getElementById("theme-trigger");
-const themeMenu = document.getElementById("theme-menu");
-if (themeTrigger && themeMenu) {
-	const items = Array.from(
-		themeMenu.querySelectorAll<HTMLButtonElement>(".theme-item[data-theme-id]"),
-	);
-	const currentLabel = document.getElementById("theme-current");
-	const triggerSwatch = themeTrigger.querySelector<HTMLElement>(".theme-swatch");
+const themeToggle = document.getElementById("theme-toggle");
+if (themeToggle) {
+	const STORAGE_KEY = "thinkrail-site-theme";
+	const mediaQuery = window.matchMedia("(prefers-color-scheme: light)");
 
-	const apply = (id: string) => {
-		document.documentElement.setAttribute("data-theme", id);
-		for (const item of items) {
-			const active = item.dataset.themeId === id;
-			item.setAttribute("aria-checked", String(active));
-			if (active) {
-				// The item's visible label is the single source of the theme's display name.
-				if (currentLabel) currentLabel.textContent = item.textContent?.trim() ?? id;
-				triggerSwatch?.setAttribute("data-swatch", id);
-			}
+	// Check if user has made an explicit choice
+	const getSavedTheme = (): string | null => {
+		try {
+			return localStorage.getItem(STORAGE_KEY);
+		} catch {
+			return null;
 		}
-		// The palette lives in CSS ([data-theme] custom properties) — read it back rather than
-		// duplicating hex values here.
+	};
+
+	// Get system preference
+	const getSystemTheme = (): string => (mediaQuery.matches ? "light" : "dark");
+
+	const apply = (theme: string, save: boolean) => {
+		document.documentElement.setAttribute("data-theme", theme);
+
+		// Update aria-label to describe the action
+		const nextTheme = theme === "dark" ? "light" : "dark";
+		themeToggle.setAttribute("aria-label", `Switch to ${nextTheme} theme`);
+
+		// Update theme-color meta tag
 		const chrome = getComputedStyle(document.documentElement).getPropertyValue("--chrome").trim();
 		if (chrome) {
 			document
 				.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
 				?.setAttribute("content", chrome);
 		}
-		try {
-			localStorage.setItem("thinkrail-site-theme", id);
-		} catch {
-			// storage unavailable (private mode) — the switch still applies for this visit
+
+		// Only save if this is an explicit user choice
+		if (save) {
+			try {
+				localStorage.setItem(STORAGE_KEY, theme);
+			} catch {
+				// storage unavailable (private mode)
+			}
 		}
 	};
 
-	const setOpen = (open: boolean) => {
-		themeMenu.hidden = !open;
-		themeTrigger.setAttribute("aria-expanded", String(open));
-	};
-	const isOpen = () => themeTrigger.getAttribute("aria-expanded") === "true";
+	// Initialize: prefer saved choice, fall back to system preference
+	const savedTheme = getSavedTheme();
+	const initialTheme = savedTheme ?? getSystemTheme();
+	apply(initialTheme, false);
 
-	apply(document.documentElement.getAttribute("data-theme") ?? "dark");
+	// Toggle on click (always saves as explicit choice)
+	themeToggle.addEventListener("click", () => {
+		const current = document.documentElement.getAttribute("data-theme") ?? "dark";
+		const next = current === "dark" ? "light" : "dark";
+		apply(next, true);
+	});
 
-	themeTrigger.addEventListener("click", () => {
-		const opening = !isOpen();
-		setOpen(opening);
-		if (opening) items.find((item) => item.getAttribute("aria-checked") === "true")?.focus();
-	});
-	for (const item of items) {
-		item.addEventListener("click", () => {
-			apply(item.dataset.themeId ?? "dark");
-			setOpen(false);
-			themeTrigger.focus();
-		});
-	}
-	themeMenu.addEventListener("keydown", (event) => {
-		if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-		event.preventDefault();
-		const { activeElement } = document;
-		const index = activeElement instanceof HTMLButtonElement ? items.indexOf(activeElement) : -1;
-		const delta = event.key === "ArrowDown" ? 1 : -1;
-		items[(index + delta + items.length) % items.length]?.focus();
-	});
-	document.addEventListener("click", (event) => {
-		if (!isOpen() || !(event.target instanceof Node)) return;
-		if (!themeTrigger.contains(event.target) && !themeMenu.contains(event.target)) setOpen(false);
-	});
-	document.addEventListener("keydown", (event) => {
-		if (event.key === "Escape" && isOpen()) {
-			setOpen(false);
-			themeTrigger.focus();
+	// Follow system changes only if no explicit choice saved
+	mediaQuery.addEventListener("change", () => {
+		if (!getSavedTheme()) {
+			apply(getSystemTheme(), false);
 		}
 	});
 }

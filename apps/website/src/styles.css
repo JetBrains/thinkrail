@@ -345,120 +345,40 @@ code {
 	color: var(--text);
 }
 
-/* Theme dropdown: a chip showing the current palette (same language as the composer's model chip),
-   opening a menu of all four. The two-tone swatches mirror each theme's chrome + accent so every
-   entry stays identifiable under any active theme. */
-.theme-menu-wrap {
-	position: relative;
-}
-
-.theme-trigger {
+/* Theme toggle: a simple icon button that switches between dark and light themes.
+   Shows Sun icon in dark mode (click to switch to light), Moon in light mode (click to switch to dark). */
+.theme-toggle {
 	display: inline-flex;
 	align-items: center;
-	gap: 7px;
-	padding: 6px 10px;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
 	border: 1px solid var(--border2);
 	border-radius: 7px;
 	background: transparent;
 	color: var(--muted);
-	font: inherit;
-	font-size: 12.5px;
 	cursor: pointer;
-	white-space: nowrap;
 }
 
-.theme-trigger:hover {
+.theme-toggle:hover {
 	background: var(--hover);
 	color: var(--text);
 }
 
-.theme-trigger[aria-expanded="true"] {
-	background: var(--hover);
-	color: var(--text);
+.theme-toggle .i {
+	width: 16px;
+	height: 16px;
 }
 
-.theme-trigger .i {
-	font-size: 11px;
-	color: var(--hint);
-}
-
-.theme-swatch {
-	width: 13px;
-	height: 13px;
-	flex: none;
-	border: 1px solid var(--border2);
-	border-radius: 50%;
-}
-
-[data-swatch="dark"] {
-	background: linear-gradient(135deg, #171719 50%, #8c81ff 50%);
-}
-
-[data-swatch="darcula"] {
-	background: linear-gradient(135deg, #3c3f41 50%, #8c81ff 50%);
-}
-
-[data-swatch="light"] {
-	background: linear-gradient(135deg, #f2f3f5 50%, #6b57ff 50%);
-}
-
-[data-swatch="gruvbox"] {
-	background: linear-gradient(135deg, #282828 50%, #fe8019 50%);
-}
-
-.theme-menu {
-	position: absolute;
-	top: calc(100% + 6px);
-	right: 0;
-	z-index: 70;
-	min-width: 170px;
-	padding: 5px;
-	display: flex;
-	flex-direction: column;
-	gap: 1px;
-	background: var(--elevated);
-	border: 1px solid var(--border2);
-	border-radius: 9px;
-	box-shadow: var(--shadow);
-}
-
-.theme-menu[hidden] {
+/* Show Sun in dark mode, Moon in light mode */
+[data-theme="dark"] .theme-icon-moon,
+[data-theme="light"] .theme-icon-sun {
 	display: none;
 }
 
-.theme-item {
-	display: flex;
-	align-items: center;
-	gap: 9px;
-	width: 100%;
-	padding: 7px 10px;
-	border: 0;
-	border-radius: 6px;
-	background: transparent;
-	color: var(--muted);
-	font: inherit;
-	font-size: 12.5px;
-	text-align: left;
-	cursor: pointer;
-}
-
-.theme-item:hover {
-	background: var(--hover);
-	color: var(--text);
-}
-
-.theme-item[aria-checked="true"] {
-	color: var(--text);
-}
-
-.theme-check {
-	margin-left: auto;
-	visibility: hidden;
-	color: var(--accent);
-}
-
-.theme-item[aria-checked="true"] .theme-check {
-	visibility: visible;
+[data-theme="dark"] .theme-icon-sun,
+[data-theme="light"] .theme-icon-moon {
+	display: block;
 }
 
 .gh-btn {
@@ -1695,11 +1615,6 @@ html.anim .terminal.armed [data-out] {
 
 @media (max-width: 560px) {
 	.scope {
-		display: none;
-	}
-
-	/* keep the swatch + chevron; the name yields space to the wordmark */
-	.theme-current {
 		display: none;
 	}
 

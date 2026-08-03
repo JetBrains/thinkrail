@@ -24,7 +24,8 @@
 		<script>
 			try {
 				const t = localStorage.getItem("thinkrail-site-theme");
-				if (t) document.documentElement.setAttribute("data-theme", t);
+				const theme = t ?? (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+				document.documentElement.setAttribute("data-theme", theme);
 			} catch (_) {}
 		</script>
 		<!-- Geist + JetBrains Mono are self-hosted and bundled (src/styles.css), matching the app. Cabinet
@@ -170,6 +171,20 @@
 				<polyline points="3.29 7 12 12 20.71 7" />
 				<path d="m7.5 4.27 9 5.15" />
 			</symbol>
+			<symbol id="i-sun" viewBox="0 0 24 24">
+				<circle cx="12" cy="12" r="4" />
+				<path d="M12 2v2" />
+				<path d="M12 20v2" />
+				<path d="m4.93 4.93 1.41 1.41" />
+				<path d="m17.66 17.66 1.41 1.41" />
+				<path d="M2 12h2" />
+				<path d="M20 12h2" />
+				<path d="m6.34 17.66-1.41 1.41" />
+				<path d="m19.07 4.93-1.41 1.41" />
+			</symbol>
+			<symbol id="i-moon" viewBox="0 0 24 24">
+				<path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401" />
+			</symbol>
 			<symbol id="i-github" viewBox="0 0 16 16">
 				<path
 					d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"
@@ -195,38 +210,15 @@
 					</span>
 				</div>
 				<div class="titlebar-right">
-					<div class="theme-menu-wrap">
-						<button
-							type="button"
-							class="theme-trigger"
-							id="theme-trigger"
-							aria-haspopup="menu"
-							aria-expanded="false"
-							aria-label="Theme"
-						>
-							<span class="theme-swatch" data-swatch="dark" aria-hidden="true"></span>
-							<span class="theme-current" id="theme-current">Dark</span>
-							<svg class="i" aria-hidden="true"><use href="#i-chevron-down" /></svg>
-						</button>
-						<div class="theme-menu" id="theme-menu" role="menu" aria-label="Theme" hidden>
-							<button type="button" class="theme-item" role="menuitemradio" aria-checked="true" data-theme-id="dark">
-								<span class="theme-swatch" data-swatch="dark" aria-hidden="true"></span>Dark
-								<svg class="i theme-check" aria-hidden="true"><use href="#i-check" /></svg>
-							</button>
-							<button type="button" class="theme-item" role="menuitemradio" aria-checked="false" data-theme-id="darcula">
-								<span class="theme-swatch" data-swatch="darcula" aria-hidden="true"></span>Darcula
-								<svg class="i theme-check" aria-hidden="true"><use href="#i-check" /></svg>
-							</button>
-							<button type="button" class="theme-item" role="menuitemradio" aria-checked="false" data-theme-id="light">
-								<span class="theme-swatch" data-swatch="light" aria-hidden="true"></span>Light
-								<svg class="i theme-check" aria-hidden="true"><use href="#i-check" /></svg>
-							</button>
-							<button type="button" class="theme-item" role="menuitemradio" aria-checked="false" data-theme-id="gruvbox">
-								<span class="theme-swatch" data-swatch="gruvbox" aria-hidden="true"></span>Gruvbox
-								<svg class="i theme-check" aria-hidden="true"><use href="#i-check" /></svg>
-							</button>
-						</div>
-					</div>
+					<button
+						type="button"
+						class="theme-toggle"
+						id="theme-toggle"
+						aria-label="Switch to light theme"
+					>
+						<svg class="i theme-icon-sun" aria-hidden="true"><use href="#i-sun" /></svg>
+						<svg class="i theme-icon-moon" aria-hidden="true"><use href="#i-moon" /></svg>
+					</button>
 					<a
 						class="chrome-btn gh-btn"
 						href="https://github.com/JetBrains/thinkrail"
