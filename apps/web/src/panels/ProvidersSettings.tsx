@@ -151,7 +151,7 @@ export function ProvidersSettings() {
 					{subscriptionRows.length > 0 ? (
 						<section
 							data-testid="providers-subscriptions"
-							className="flex flex-col gap-sm rounded-[var(--radius-lg)] border border-[var(--primary-40)] bg-[var(--primary-10)] p-md"
+							className="flex flex-col gap-sm rounded-[var(--radius-lg)] border border-primary-muted bg-primary-subtle p-md"
 						>
 							<div className="flex flex-col gap-0.5">
 								<h4 className="tr-title-compact text-text-default">Sign in with a subscription</h4>
@@ -273,9 +273,9 @@ function ConnectedCard({
 			data-testid="provider-row"
 			data-provider={provider.id}
 			data-configured="true"
-			className="flex items-center gap-md rounded-[var(--radius-md)] border border-border-default bg-[var(--input-bg)] px-md py-sm"
+			className="flex items-center gap-md rounded-[var(--radius-md)] border border-border-default bg-control-bg px-md py-sm"
 		>
-			<span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-[var(--green-tint)] text-feedback-success">
+			<span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-feedback-success-bg text-feedback-success">
 				<Check className="size-4" />
 			</span>
 			<div className="flex min-w-0 flex-col">
@@ -335,7 +335,7 @@ function ProviderActionRow({
 			data-testid="provider-signin-row"
 			data-provider={provider.id}
 			data-configured="false"
-			className="flex flex-col gap-xs rounded-[var(--radius-md)] border border-border-default bg-[var(--input-bg)] px-md py-sm"
+			className="flex flex-col gap-xs rounded-[var(--radius-md)] border border-border-default bg-control-bg px-md py-sm"
 		>
 			<div className="flex items-center gap-sm tr-text-ui">
 				<span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-control-bg-hovered text-text-muted">

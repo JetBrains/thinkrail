@@ -13,7 +13,7 @@ function DialogOverlay({
 }: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
 	return (
 		<DialogPrimitive.Overlay
-			className={cn("fixed inset-0 z-50 bg-[var(--overlay)]", className)}
+			className={cn("fixed inset-0 z-50 bg-overlay", className)}
 			{...props}
 		/>
 	);

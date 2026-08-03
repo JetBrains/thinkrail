@@ -641,7 +641,7 @@ export default function ChatView({
 							itemContent={(_, row) => (
 								<div
 									data-flash={row.id === flashRowId || undefined}
-									className="mx-auto max-w-3xl rounded-[var(--radius-md)] px-md py-xs transition-colors data-[flash]:bg-[var(--primary-10)]"
+									className="mx-auto max-w-3xl rounded-[var(--radius-md)] px-md py-xs transition-colors data-[flash]:bg-primary-subtle"
 								>
 									<ChatTurnView
 										row={row}

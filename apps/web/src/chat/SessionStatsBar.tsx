@@ -41,7 +41,7 @@ export function SessionStatsBar({ stats }: { stats: SessionStats | null }) {
 			<span title="Session cost">{formatCost(stats.cost)}</span>
 			{percent !== null && bucket !== null ? (
 				<span className="flex items-center gap-xs" title="Context window used">
-					<span className="block h-1.5 w-16 overflow-hidden rounded-full bg-[var(--sunken)]">
+					<span className="block h-1.5 w-16 overflow-hidden rounded-full bg-sunken">
 						<span className={cn("block h-full rounded-full bg-primary", FILL[bucket])} />
 					</span>
 					{Math.round(percent)}%

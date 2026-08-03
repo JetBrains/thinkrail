@@ -274,7 +274,7 @@ export function SkillsDialog({
 				{untrustedCount > 0 ? (
 					<div
 						data-testid="skills-trust-all"
-						className="flex items-center gap-sm rounded-[var(--radius-md)] border border-border-default border-l-[3px] border-l-[var(--gold)] bg-[var(--gold-tint)] px-md py-sm"
+						className="flex items-center gap-sm rounded-[var(--radius-md)] border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-bg px-md py-sm"
 					>
 						<span className="min-w-0 flex-1 tr-text-ui text-text-default">
 							{untrustedCount} project skill{untrustedCount === 1 ? "" : "s"} off until you trust
@@ -354,7 +354,7 @@ function Toggle({
 			className={cn(
 				"shrink-0 rounded-[var(--radius-sm)] border px-sm py-0.5 tr-text-metadata transition-colors disabled:opacity-50",
 				on
-					? "border-[var(--primary-40)] bg-[var(--primary-10)] text-primary"
+					? "border-primary-muted bg-primary-subtle text-primary"
 					: "border-border-default text-text-muted hover:bg-control-bg-hovered",
 			)}
 		>
@@ -424,7 +424,7 @@ function SkillRow({
 					className={cn(
 						"shrink-0 rounded-[var(--radius-sm)] border px-sm py-0.5 tr-text-metadata transition-colors disabled:opacity-50",
 						loaded
-							? "border-[var(--primary-40)] bg-[var(--primary-10)] text-primary"
+							? "border-primary-muted bg-primary-subtle text-primary"
 							: "border-border-default text-text-muted hover:bg-control-bg-hovered",
 					)}
 				>

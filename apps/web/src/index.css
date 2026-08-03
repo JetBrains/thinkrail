@@ -19,17 +19,18 @@
  * `font-[var(--…)]` form, which Tailwind silently compiles to an invalid `font-weight`.
  */
 @theme inline {
-	/* Primary accent — the brand color, used for text-primary, bg-primary, border-primary, ring-primary */
-	--color-primary: var(--primary);
-
-	/* Semantic color tokens */
+	/*
+	 * One entry per semantic token in `styles/tokens.css`, and NOTHING else — no palette entry
+	 * (`--color-gold`) and no token that only a non-CSS consumer reads (Monaco/xterm/mermaid pull
+	 * `--editor-selection-bg` and friends through `getComputedStyle`, so a utility for them would be
+	 * dead weight). Anything listed here becomes a real utility; anything omitted silently produces
+	 * no CSS at the call site, which is why `styles/colorUsage.test.ts` pins the two lists together.
+	 */
 
 	/* Text */
 	--color-text-default: var(--text-default);
-	--color-text-strong: var(--text-strong);
 	--color-text-muted: var(--text-muted);
 	--color-text-subtle: var(--text-subtle);
-	--color-text-link: var(--text-link);
 	--color-text-on-primary: var(--text-on-primary);
 
 	/* Container */
@@ -43,46 +44,38 @@
 	/* Control */
 	--color-control-bg: var(--control-bg);
 	--color-control-bg-hovered: var(--control-bg-hovered);
-	--color-control-bg-disabled: var(--control-bg-disabled);
-	--color-control-border: var(--control-border);
-	--color-control-border-disabled: var(--control-border-disabled);
-	--color-control-focus-border: var(--control-focus-border);
 	--color-control-primary-bg: var(--control-primary-bg);
 	--color-control-primary-text: var(--control-primary-text);
 
 	/* Border */
 	--color-border-default: var(--border-default);
-	--color-border-strong: var(--border-strong);
 	--color-border-muted: var(--border-muted);
 
-	/* Primary */
+	/* Primary — the accent itself, then its four tints */
+	--color-primary: var(--primary);
+	--color-primary-subtle: var(--primary-subtle);
+	--color-primary-soft: var(--primary-soft);
 	--color-primary-muted: var(--primary-muted);
+	--color-primary-strong: var(--primary-strong);
+	--color-on-primary-subtle: var(--on-primary-subtle);
 
 	/* Feedback */
 	--color-feedback-info: var(--feedback-info);
 	--color-feedback-info-bg: var(--feedback-info-bg);
-	--color-feedback-info-border: var(--feedback-info-border);
 	--color-feedback-success: var(--feedback-success);
 	--color-feedback-success-bg: var(--feedback-success-bg);
-	--color-feedback-success-border: var(--feedback-success-border);
 	--color-feedback-error: var(--feedback-error);
 	--color-feedback-error-bg: var(--feedback-error-bg);
-	--color-feedback-error-border: var(--feedback-error-border);
 	--color-feedback-warning: var(--feedback-warning);
 	--color-feedback-warning-bg: var(--feedback-warning-bg);
-	--color-feedback-warning-border: var(--feedback-warning-border);
 
-	/* Selection */
-	/* Native ::selection; already exists as --selection-bg */
-	--color-selection-bg: var(--selection-bg);
-	--color-selection-text: var(--selection-text);
-	--color-selection-item-bg-active: var(--selection-item-bg-active);
-	--color-selection-item-bg-active-muted: var(--selection-item-bg-active-muted);
-	--color-selection-item-bg-hovered: var(--selection-item-bg-hovered);
+	/* Chat bubble */
+	--color-bubble-user-bg: var(--bubble-user-bg);
+	--color-bubble-user-border: var(--bubble-user-border);
 
-	/* Editor */
-	--color-editor-selection-bg: var(--editor-selection-bg);
-	--color-editor-selection-text: var(--editor-selection-text);
+	/* Appearance-level effects (the theme engine writes these per light/dark) */
+	--color-overlay: var(--overlay);
+	--color-sunken: var(--sunken);
 
 	/*
 	 * Tailwind's PREFLIGHT defaults, pointed at the generated tokens. Preflight sets a family on `html`

@@ -21,7 +21,7 @@ import { assembleTemplate, stripFrontmatter } from "./templateText";
 const SYNTAX_HINT = `$1, $ARGUMENTS, \${1:-default} — pi prompt-template syntax`;
 
 const INPUT_CLASS =
-	"w-full rounded-[var(--radius-md)] border border-border-default bg-[var(--input-bg)] px-md py-sm tr-text-ui text-text-default outline-none transition-colors placeholder:text-text-subtle focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-[var(--primary-20)] disabled:opacity-50";
+	"w-full rounded-[var(--radius-md)] border border-border-default bg-control-bg px-md py-sm tr-text-ui text-text-default outline-none transition-colors placeholder:text-text-subtle focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary-soft disabled:opacity-50";
 
 /**
  * Mirrors the server's `isValidTemplateName` (`packages/server/src/templates/templates.ts`) exactly — a
@@ -327,7 +327,7 @@ function ScopeOption({
 			className={cn(
 				"flex-1 rounded-[var(--radius-md)] border px-md py-sm text-left tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50",
 				active
-					? "border-[var(--primary-40)] bg-[var(--primary-10)] text-text-default"
+					? "border-primary-muted bg-primary-subtle text-text-default"
 					: "border-border-default text-text-muted hover:bg-control-bg-hovered hover:text-text-default",
 			)}
 		>

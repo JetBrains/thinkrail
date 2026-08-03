@@ -130,11 +130,11 @@ function withOffsets(segments: SlotSegment[]): (SlotSegment & { start: number })
 function highlightTint(state: SlotHighlightState): string {
 	switch (state) {
 		case "unfilled":
-			return "rounded-[2px] bg-[var(--primary-20)]";
+			return "rounded-[2px] bg-primary-soft";
 		case "active":
-			return "rounded-[2px] bg-[var(--primary-40)]";
+			return "rounded-[2px] bg-primary-muted";
 		case "filled":
-			return "rounded-[2px] bg-[var(--primary-10)]";
+			return "rounded-[2px] bg-primary-subtle";
 		case "plain":
 			return "";
 	}
@@ -680,7 +680,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				 * background is clipped to the same rounded shape — with no session active this wrapper is
 				 * otherwise invisible (no border, no padding of its own), so the composer looks identical to
 				 * before this layer existed. */}
-				<div className="relative rounded-[var(--radius-md)] bg-[var(--input-bg)]">
+				<div className="relative rounded-[var(--radius-md)] bg-control-bg">
 					{slots ? (
 						<div
 							ref={attachBackdrop}
@@ -788,7 +788,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 						// `relative` keeps the textarea a positioned participant so it paints ABOVE the absolute
 						// slot-highlight backdrop (its earlier DOM sibling) — otherwise a static textarea paints
 						// under the backdrop and the native caret/selection get dimmed by the active-slot tint.
-						className="relative min-h-[108px] w-full resize-none rounded-[var(--radius-md)] border border-border-default bg-transparent px-md py-sm tr-text-ui text-text-default outline-none transition-colors placeholder:text-text-subtle focus:border-primary focus-visible:ring-2 focus-visible:ring-[var(--primary-20)]"
+						className="relative min-h-[108px] w-full resize-none rounded-[var(--radius-md)] border border-border-default bg-transparent px-md py-sm tr-text-ui text-text-default outline-none transition-colors placeholder:text-text-subtle focus:border-primary focus-visible:ring-2 focus-visible:ring-primary-soft"
 					/>
 				</div>
 				<div className="flex flex-wrap items-center gap-sm">

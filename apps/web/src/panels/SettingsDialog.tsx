@@ -68,7 +68,7 @@ export function SettingsDialog() {
 									className={cn(
 										"flex shrink-0 items-center gap-sm rounded-[var(--radius-md)] px-md py-sm text-left tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
 										active
-											? "bg-[var(--primary-10)] text-primary"
+											? "bg-primary-subtle text-primary"
 											: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default",
 									)}
 								>

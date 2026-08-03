@@ -121,7 +121,7 @@ function SpecNodeRow({
 				className={cn(
 					"group flex h-7 min-w-0 items-stretch rounded-[var(--radius-sm)] transition-colors",
 					isActive
-						? "bg-[var(--primary-10)] ring-1 ring-[var(--primary-40)] ring-inset"
+						? "bg-primary-subtle ring-1 ring-primary-muted ring-inset"
 						: "hover:bg-control-bg-hovered",
 				)}
 			>

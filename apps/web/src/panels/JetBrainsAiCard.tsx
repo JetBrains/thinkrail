@@ -116,10 +116,10 @@ export function JetBrainsAiCard({
 			data-testid="jetbrains-ai-card"
 			data-wired={wired}
 			data-installed={installed}
-			className="flex flex-col gap-sm rounded-[var(--radius-lg)] border border-border-default bg-[var(--input-bg)] p-md"
+			className="flex flex-col gap-sm rounded-[var(--radius-lg)] border border-border-default bg-control-bg p-md"
 		>
 			<div className="flex items-center gap-md">
-				<span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-[var(--primary-10)] text-primary">
+				<span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-primary-subtle text-primary">
 					<Zap className="size-4" />
 				</span>
 				<div className="flex min-w-0 flex-col">

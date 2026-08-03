@@ -13,8 +13,11 @@
 
 	/*
 	 * ─── Semantic Color Tokens ───────────────────────────────────────────────────
-	 * New semantic layer aliasing existing tokens for visual parity. These coexist
-	 * with legacy tokens during migration. Do not delete legacy tokens yet.
+	 * The layer components name. Everything above this line is the raw palette the theme engine
+	 * writes (`themes/runtime.ts`) plus its alpha helpers — those are INTERNAL: a component names a
+	 * role (`bg-control-bg`), never a palette entry (`bg-[var(--input-bg)]`). A token earns its place
+	 * here only if some call site uses it AND it can differ from its neighbours; an alias that can
+	 * never diverge is a second name for one thing, so it is not declared.
 	 */
 
 	/*
@@ -25,10 +28,9 @@
 	 * (`disabled:opacity-50`), so a static disabled colour would be a second, conflicting answer.
 	 */
 	--text-default: var(--text);
-	--text-strong: var(--text); /* No distinct "strong" exists today; aliased to default */
 	--text-muted: var(--muted);
 	--text-subtle: var(--hint);
-	--text-link: var(--primary);
+	--text-link: var(--blue); /* What links actually are; `global.css` is the only consumer */
 	--text-on-primary: var(--on-accent);
 
 	/* Container */
@@ -39,47 +41,50 @@
 	--container-card-bg: var(--elevated);
 	--container-header-bg: var(--bg-dark);
 
-	/* Control */
+	/*
+	 * Control — the interactive surfaces. No `-disabled` pair: disabled state is opacity-based
+	 * (`disabled:opacity-50`), and a border/focus alias identical to `--border-default` / `--primary`
+	 * would be a second name for one value.
+	 */
 	--control-bg: var(--input-bg);
 	--control-bg-hovered: var(--hover);
-	/* TODO: disabled is currently opacity-based; no distinct disabled surface exists */
-	--control-bg-disabled: var(--input-bg);
-	--control-border: var(--border2); /* borderStrong is the de facto standard */
-	/* TODO: disabled is currently opacity-based; no distinct disabled border exists */
-	--control-border-disabled: var(--border2);
-	--control-focus-border: var(--primary);
 	--control-primary-bg: var(--primary);
 	--control-primary-text: var(--on-accent);
 
-	/* Border */
-	--border-default: var(--border2); /* borderStrong is the de facto default (101 uses vs 2) */
-	--border-strong: var(--border2); /* Same as default; two-weight scale was never adopted */
-	--border-muted: var(--border); /* The subtle tier (barely used) */
+	/* Border — two weights: the default rule, and the quieter tier used inside popovers. */
+	--border-default: var(--border2);
+	--border-muted: var(--border);
 
-	/* Primary — note: --primary already exists and is the canonical accent color */
+	/*
+	 * Primary — the accent at four strengths. Named by strength, not purpose: the same tints back
+	 * selected rows, chips, pills, focus rings and search highlights, so any single purpose name
+	 * would be wrong at most of its call sites.
+	 */
+	--primary-subtle: var(--primary-10);
+	--primary-soft: var(--primary-20);
 	--primary-muted: var(--primary-40);
+	--primary-strong: var(--primary-60);
+	--on-primary-subtle: var(--on-accent-16);
 
-	/* Feedback */
+	/*
+	 * Feedback — a foreground and a tinted background per state. No `-border` tier: a feedback border
+	 * is the foreground colour, so `border-feedback-error` already says it.
+	 */
 	--feedback-info: var(--blue);
 	--feedback-info-bg: color-mix(in srgb, var(--blue) 10%, transparent);
-	--feedback-info-border: var(--blue);
 	--feedback-success: var(--green);
-	--feedback-success-bg: var(--green-tint); /* Already exists at 12% */
-	--feedback-success-border: var(--green);
+	--feedback-success-bg: var(--green-tint);
 	--feedback-error: var(--red);
 	--feedback-error-bg: color-mix(in srgb, var(--red) 10%, transparent);
-	--feedback-error-border: var(--red);
 	--feedback-warning: var(--gold);
 	--feedback-warning-bg: color-mix(in srgb, var(--gold) 10%, transparent);
-	--feedback-warning-border: var(--gold);
 
-	/* Selection — note: --selection-bg already exists for native ::selection */
-	--selection-text: var(--selection-fg);
-	--selection-item-bg-active: var(--primary-10);
-	--selection-item-bg-active-muted: var(--primary-10); /* TODO: May need distinct muted variant */
-	--selection-item-bg-hovered: var(--hover);
-
-	/* Editor */
+	/*
+	 * Selection — `--selection-bg` / `--sel` come straight from the manifest. The two foregrounds are
+	 * nullable there (high-contrast keeps the native one), so the `inherit` fallback is baked in here
+	 * rather than repeated at each consumer.
+	 */
+	--selection-text: var(--selection-fg, inherit);
 	--editor-selection-bg: var(--sel);
 	--editor-selection-text: var(--sel-fg);
 

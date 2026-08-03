@@ -237,13 +237,13 @@ const Card = forwardRef<HTMLButtonElement, CardProps>(function Card(
 			className={cn(
 				"relative flex h-[150px] w-[220px] flex-col items-start justify-between rounded-[var(--radius-lg)] border p-lg text-left transition-colors",
 				primary
-					? "border-[var(--primary-40)] bg-[var(--primary-10)] hover:bg-[var(--primary-20)]"
-					: "border-border-default bg-container-workspace-bg hover:border-[var(--primary-40)] hover:bg-container-popover-bg",
+					? "border-primary-muted bg-primary-subtle hover:bg-primary-soft"
+					: "border-border-default bg-container-workspace-bg hover:border-primary-muted hover:bg-container-popover-bg",
 				className,
 			)}
 		>
 			{tag ? (
-				<span className="absolute top-md right-md rounded-full border border-[var(--primary-40)] bg-[var(--primary-10)] px-sm py-0.5 tr-text-label-pill text-primary">
+				<span className="absolute top-md right-md rounded-full border border-primary-muted bg-primary-subtle px-sm py-0.5 tr-text-label-pill text-primary">
 					{tag}
 				</span>
 			) : null}

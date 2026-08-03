@@ -570,7 +570,7 @@ function QuestionBody({
 												value={state.notes[opt.label] ?? ""}
 												placeholder="Add a note for the model…"
 												onChange={(e) => onNote(opt.label, e.target.value)}
-												className="w-full resize-none rounded-[var(--radius-sm)] border border-border-default bg-[var(--input-bg)] px-sm py-xs text-text-default tr-text-metadata outline-none focus:border-primary"
+												className="w-full resize-none rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-sm py-xs text-text-default tr-text-metadata outline-none focus:border-primary"
 											/>
 										) : (
 											<button
@@ -605,7 +605,7 @@ function QuestionBody({
 				{anyPreview && previewSource?.preview ? (
 					<div
 						data-testid="ask-preview"
-						className="min-w-0 overflow-auto rounded-[var(--radius-md)] border border-border-default bg-[var(--input-bg)] px-sm py-xs tr-text-metadata"
+						className="min-w-0 overflow-auto rounded-[var(--radius-md)] border border-border-default bg-control-bg px-sm py-xs tr-text-metadata"
 					>
 						<div className="mb-xs text-text-subtle tr-text-metadata">
 							Preview · {previewSource.label}

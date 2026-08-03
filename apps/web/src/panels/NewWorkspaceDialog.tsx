@@ -90,7 +90,7 @@ export function reconcileModel(
 
 /** A shared pill-trigger look for the project + branch pickers (mockup `.pill`). */
 const PILL =
-	"flex h-8 min-w-0 items-center gap-sm rounded-[var(--radius-md)] border border-border-default bg-[var(--input-bg)] px-sm tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-[var(--primary-60)] data-[open=true]:bg-control-bg-hovered";
+	"flex h-8 min-w-0 items-center gap-sm rounded-[var(--radius-md)] border border-border-default bg-control-bg px-sm tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-primary-strong data-[open=true]:bg-control-bg-hovered";
 
 /**
  * The start-working surface: a **target control** chooses where the work runs — an isolated worktree
@@ -488,7 +488,7 @@ export function NewWorkspaceDialog({
 				{/* where: the target control — both modes always visible, the two-mode model in one glance */}
 				<fieldset
 					data-testid="ws-target"
-					className="flex w-fit items-center gap-0.5 rounded-[var(--radius-md)] border border-border-default bg-[var(--input-bg)] p-0.5"
+					className="flex w-fit items-center gap-0.5 rounded-[var(--radius-md)] border border-border-default bg-control-bg p-0.5"
 				>
 					<legend className="sr-only">Where the work runs</legend>
 					<TargetOption
@@ -539,7 +539,7 @@ export function NewWorkspaceDialog({
 				{selectedProject && selectedProject.trusted !== true && aliasSkills.length > 0 ? (
 					<div
 						data-testid="ws-trust-notice"
-						className="flex w-full items-center gap-sm rounded-[var(--radius-md)] border border-border-default border-l-[3px] border-l-[var(--gold)] bg-[var(--gold-tint)] px-md py-sm text-left"
+						className="flex w-full items-center gap-sm rounded-[var(--radius-md)] border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-bg px-md py-sm text-left"
 					>
 						<TriangleAlert className="size-4 shrink-0 text-feedback-warning" />
 						<span className="min-w-0 flex-1 tr-text-ui text-text-default">
@@ -563,7 +563,7 @@ export function NewWorkspaceDialog({
 					{promptNote ? (
 						<p
 							data-testid="ws-prompt-note"
-							className="mb-xs flex items-start gap-sm rounded-[var(--radius-md)] border border-[var(--primary-40)] bg-[var(--primary-10)] px-md py-sm text-left text-text-muted tr-text-metadata leading-snug"
+							className="mb-xs flex items-start gap-sm rounded-[var(--radius-md)] border border-primary-muted bg-primary-subtle px-md py-sm text-left text-text-muted tr-text-metadata leading-snug"
 						>
 							<Sparkles className="mt-0.5 size-3.5 shrink-0 text-primary" />
 							<span>{promptNote}</span>
@@ -638,7 +638,7 @@ export function NewWorkspaceDialog({
 						className="flex h-8 shrink-0 items-center gap-sm rounded-[var(--radius-md)] bg-primary px-md tr-text-action text-text-on-primary outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
 					>
 						{isolated ? "Create" : "Start"}
-						<span className="inline-flex h-4 min-w-4 items-center justify-center rounded-[3px] bg-[var(--on-accent-16)] px-1 tr-code-text">
+						<span className="inline-flex h-4 min-w-4 items-center justify-center rounded-[3px] bg-on-primary-subtle px-1 tr-code-text">
 							↵
 						</span>
 					</button>
@@ -681,7 +681,7 @@ function TargetOption({
 			data-active={active}
 			className={cn(
 				"flex h-7 cursor-pointer items-center gap-sm rounded-[7px] px-md tr-text-ui transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary",
-				active ? "bg-[var(--primary-10)] text-primary" : "text-text-muted hover:text-text-default",
+				active ? "bg-primary-subtle text-primary" : "text-text-muted hover:text-text-default",
 			)}
 		>
 			<input type="radio" name={name} className="sr-only" checked={active} onChange={onSelect} />
