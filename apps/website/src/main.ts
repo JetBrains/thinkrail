@@ -288,6 +288,7 @@ if (mockElements.length > 0) {
 	const MARGIN = 8; // Viewport margin
 	const titlebar = document.querySelector(".titlebar");
 	const railRight = document.getElementById("rail-right");
+	const statusbar = document.querySelector(".statusbar");
 
 	const positionTooltip = (trigger: HTMLElement) => {
 		const triggerRect = trigger.getBoundingClientRect();
@@ -305,10 +306,11 @@ if (mockElements.length > 0) {
 			const railRect = railRight.getBoundingClientRect();
 			left = railRect.left - tooltipRect.width - 12;
 			top = titlebarRect.bottom + 12;
-		} else if (trigger.classList.contains("term-screen")) {
-			// Terminal: below trigger, right-aligned to trigger's right edge
-			left = triggerRect.right - tooltipRect.width;
-			top = triggerRect.bottom + GAP;
+		} else if (trigger.classList.contains("term-screen") && statusbar) {
+			// Terminal: to the left of terminal, bottom-aligned with statusbar
+			const statusbarRect = statusbar.getBoundingClientRect();
+			left = triggerRect.left - tooltipRect.width - 12;
+			top = statusbarRect.top - tooltipRect.height;
 		} else {
 			// Left sidebar and others: right of trigger (original behavior)
 			left = triggerRect.right + GAP;
