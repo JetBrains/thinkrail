@@ -102,6 +102,11 @@
 	color-scheme: light;
 }
 
+/* Hero uses the same brand violet in both themes */
+[data-theme="light"] .hero {
+	--accent: #8c81ff;
+}
+
 [data-theme="gruvbox"] {
 	--chrome: #282828;
 	--editor-bg: #1d2021;
