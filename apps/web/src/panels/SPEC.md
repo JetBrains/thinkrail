@@ -15,22 +15,36 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
 
 ## Boundary
 
-- **Owns:** `ProjectTree` (+ the `NewWorkspaceDialog` its "+" opens **and** the `ConfirmPopover` its per-row
-  **Remove** button (a `Trash2` glyph) opens — a small reusable yes/no built on `components/ui/popover`,
-  **anchored to that Remove button** (`align="end"`, so its right border lines up with the button's) and
-  opening just beneath it rather than as a centered modal; it **forces a
-  deliberate choice** (Cancel takes initial focus; a `destructive` confirm shows a warning glyph + red
-  button; Esc + outside-click cancel); removal is **event-driven** (no per-client optimism): on confirm it
-  just fires `workspace.remove` and lets every client — including this one — react to the host's
-  `workspace.removed` push via the store's `applyWorkspaceRemoved`; a rejected request (no event will come)
-  surfaces an error toast, leaving the row in place). Each **workspace row** is **two-line**: the display
+- **Owns:** `ProjectTree` (+ the `NewWorkspaceDialog` its "+" opens **and** each workspace row's
+  hover-revealed **kebab menu** (`MoreVertical`, `DropdownMenu`) — a `DropdownMenuSub` **"Open in"**
+  (rendered only when at least one editor was detected — never a dead entry), **Copy path**, **Reveal in
+  file manager**, and (worktrees only) **Remove workspace**. "Open in"'s items come from `editor.list`
+  (an `EditorInfo[]`), fetched once per `ProjectTree` mount — not per row, since installed editors are
+  host-wide — and passed down; an entry's `kind` routes the click: `"gui"` calls `workspace.openIn`
+  (launches that editor detached at the worktree, host-side); `"terminal"` (Vim — it has no window of its
+  own) instead activates the workspace and runs it in that workspace's embedded terminal (`addTerminal`'s
+  one-shot `initialCommand`, sent by `TerminalInstance` once its PTY is ready — see `store/SPEC.md`), never
+  asking the host to spawn a TTY-less process. **Copy path** writes `worktreePath` to the clipboard
+  (`copyText`, silent — no toast, matching `ChangeRowActions`'s identical item). **Reveal** calls
+  `workspace.reveal` (the host's own file manager, at the worktree). **Remove** is styled destructive
+  (red text/icon) and, unlike the other items, doesn't act on `onSelect` — it `preventDefault`s (so
+  Radix's close-then-refocus-trigger doesn't fight the dialog opening right behind it) and opens a
+  **`ConfirmDialog`** (a *centered* modal, not `ConfirmPopover`: the kebab is a generic overflow trigger,
+  not itself a delete affordance, so anchoring a confirm box to it the way a dedicated Remove button would
+  reads oddly). It forces the same deliberate choice every confirm in this codebase does (Cancel takes
+  initial focus; `destructive` shows a warning glyph + red button; Esc/outside-click cancel). Removal
+  itself is **event-driven** (no per-client optimism): confirming just fires `workspace.remove` and lets
+  every client — including this one — react to the host's `workspace.removed` push via the store's
+  `applyWorkspaceRemoved`; a rejected request (no event will come) surfaces an error toast, leaving the row
+  in place. Each **workspace row** is **two-line**: the display
   `name` on top with the git **branch on a second line beneath it** (muted, monospace), rendered only when
   it differs from the name (so pristine/legacy `workspace-N` rows stay a single compact line) — the display
   name is decoupled from the git branch (see [[submodule-server-workspaces]]). The **Default workspace**
   (`kind === "default"` — the project folder itself) renders **pinned first** (the server pins it in
   `workspace.list`; `addWorkspace` appends created worktree rows after it), with a **`House` icon** in
-  place of the `GitBranch` glyph and **no Remove button** (non-removable — the server enforces it; the UI
-  simply offers nothing). Its branch line shows the folder's real current branch. The active workspace must
+  place of the `GitBranch` glyph and **no Remove item** (non-removable — the server enforces it; the menu
+  simply omits it) — it still gets "Open in" / Copy path / Reveal, same as any worktree. Its branch line
+  shows the folder's real current branch. The active workspace must
   also stay visible: when `ProjectTree` mounts with an active workspace, or the active workspace's derived
   owning project changes or first becomes resolvable, it expands that parent project. A manual collapse
   remains respected while the owning project is unchanged; ordinary `workspace.updated` snapshots and
@@ -247,9 +261,9 @@ a project picker, the prompt hero, and the reused
   no worktree to open a file tab against, so global rows stay dialog-only). **New**/**Edit** open the shared
   `chat/TemplateEditorDialog` (see `chat/SPEC.md`'s Save-as-template bullet — it lives in `chat/` because
   `HistoryOverlay`'s save-as-template action needs the identical form, and `chat/` can't import
-  `panels/`). **Delete** is a `ConfirmPopover` on the row (the same anchored-confirm pattern
-  `ProjectTree.tsx`'s workspace-remove uses) calling `template.delete` directly — the dialog itself is
-  never involved in deletion. **R4 — starter-templates offer:** when the **Global** group's fetch has
+  `panels/`). **Delete** is a `ConfirmPopover` anchored to the row's own Delete button, calling
+  `template.delete` directly — the dialog itself is never involved in deletion. **R4 — starter-templates
+  offer:** when the **Global** group's fetch has
   resolved with zero rows and no error, its empty state swaps the bare "No templates yet." for that same
   hint plus a button (`data-testid="template-starters"`) — clicking it `template.save`s five verbatim
   starter templates (scope `"global"`, body assembled client-side via

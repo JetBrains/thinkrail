@@ -149,6 +149,8 @@ export interface TerminalTab {
 	clientId: string;
 	workspaceId: string;
 	title: string;
+	/** A command to run once, right after this tab's PTY is ready (e.g. "Open in Vim") — never replayed. */
+	initialCommand?: string;
 }
 
 /** A chat tab the user closed — reopenable from history; its session + runtime stay alive in `sessions`. */
@@ -709,7 +711,7 @@ interface AppState {
 		loadedTarget: string,
 	) => void;
 	clearWorkspaceTabs: (workspaceId: string) => void;
-	addTerminal: (workspaceId: string) => void;
+	addTerminal: (workspaceId: string, initialCommand?: string) => void;
 	closeTerminalTab: (workspaceId: string, clientId: string) => void;
 	setActiveTerminalTab: (workspaceId: string, clientId: string) => void;
 	openChatSession: (
@@ -1264,11 +1266,16 @@ export const useAppStore = create<AppState>((set, get) => ({
 				skillsSyncedTickBySession,
 			};
 		}),
-	addTerminal: (workspaceId) =>
+	addTerminal: (workspaceId, initialCommand) =>
 		set((s) => {
 			const list = s.terminalsByWorkspace[workspaceId] ?? [];
 			const clientId = crypto.randomUUID();
-			const tab: TerminalTab = { clientId, workspaceId, title: `Terminal ${list.length + 1}` };
+			const tab: TerminalTab = {
+				clientId,
+				workspaceId,
+				title: `Terminal ${list.length + 1}`,
+				...(initialCommand ? { initialCommand } : {}),
+			};
 			return {
 				terminalsByWorkspace: { ...s.terminalsByWorkspace, [workspaceId]: [...list, tab] },
 				activeTerminalByWorkspace: { ...s.activeTerminalByWorkspace, [workspaceId]: clientId },

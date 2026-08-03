@@ -1,10 +1,12 @@
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
+import { ChevronRight } from "lucide-react";
 import type * as React from "react";
 import { cn } from "@/lib";
 
 const DropdownMenu = DropdownMenuPrimitive.Root;
 const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
 const DropdownMenuGroup = DropdownMenuPrimitive.Group;
+const DropdownMenuSub = DropdownMenuPrimitive.Sub;
 
 function DropdownMenuContent({
 	className,
@@ -45,6 +47,42 @@ function DropdownMenuItem({
 	);
 }
 
+function DropdownMenuSubTrigger({
+	className,
+	children,
+	...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.SubTrigger>) {
+	return (
+		<DropdownMenuPrimitive.SubTrigger
+			className={cn(
+				"relative flex cursor-default select-none items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs tr-text-ui text-text outline-none transition-colors focus:bg-hover data-[state=open]:bg-hover [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-muted",
+				className,
+			)}
+			{...props}
+		>
+			{children}
+			<ChevronRight className="ml-auto" />
+		</DropdownMenuPrimitive.SubTrigger>
+	);
+}
+
+function DropdownMenuSubContent({
+	className,
+	...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.SubContent>) {
+	return (
+		<DropdownMenuPrimitive.Portal>
+			<DropdownMenuPrimitive.SubContent
+				className={cn(
+					"z-50 min-w-[10rem] max-h-[min(60vh,var(--radix-dropdown-menu-content-available-height))] overflow-y-auto overflow-x-hidden rounded-[var(--radius-md)] border border-border2 bg-elevated p-xs text-text shadow-[var(--shadow-md)]",
+					className,
+				)}
+				{...props}
+			/>
+		</DropdownMenuPrimitive.Portal>
+	);
+}
+
 function DropdownMenuLabel({
 	className,
 	...props
@@ -76,5 +114,8 @@ export {
 	DropdownMenuItem,
 	DropdownMenuLabel,
 	DropdownMenuSeparator,
+	DropdownMenuSub,
+	DropdownMenuSubContent,
+	DropdownMenuSubTrigger,
 	DropdownMenuTrigger,
 };

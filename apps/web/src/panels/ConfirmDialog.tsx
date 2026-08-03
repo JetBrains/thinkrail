@@ -12,9 +12,14 @@ import {
 
 /**
  * A small modal confirm on the `Dialog` primitive — a yes/no for an action with no on-screen anchor (e.g.
- * the "initialize a git repository?" offer). For a confirm anchored to the element it acts on (removing a
- * workspace), use `ConfirmPopover`. Forces a deliberate choice: no ✕ (`hideClose`), Cancel takes initial
- * focus (a destructive action is never one stray Enter away), and a `destructive` confirm shows a warning glyph.
+ * the "initialize a git repository?" offer, or an action reached through an overflow menu like the
+ * workspace row's Remove — the trigger there is a generic kebab icon, not itself a delete affordance, so
+ * anchoring a confirm box to it the way `ConfirmPopover` does would read oddly). For a confirm anchored to
+ * a dedicated trigger that *is* the action (deleting a prompt template), use `ConfirmPopover`. Forces a
+ * deliberate choice: `role="alertdialog"` (Radix's `Dialog.Content` defaults to plain `"dialog"` — this
+ * IS an alert awaiting a response, so it's overridden the same way `ConfirmPopover` sets it explicitly),
+ * no ✕ (`hideClose`), Cancel takes initial focus (a destructive action is never one stray Enter away), and
+ * a `destructive` confirm shows a warning glyph.
  */
 export function ConfirmDialog({
 	open,
@@ -39,7 +44,12 @@ export function ConfirmDialog({
 }) {
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-[24rem]" hideClose data-testid="confirm-dialog">
+			<DialogContent
+				role="alertdialog"
+				className="max-w-[24rem]"
+				hideClose
+				data-testid="confirm-dialog"
+			>
 				<DialogHeader>
 					<div className="flex items-center gap-sm">
 						{destructive ? <TriangleAlert className="size-4 shrink-0 text-feedback-error" /> : null}

@@ -100,6 +100,22 @@ export interface Workspace {
 }
 
 /**
+ * A host-installed editor/IDE the "Open in" menu can offer, from `editor.list` — never a fixed client
+ * list: the host probes its own PATH (+ a few well-known JetBrains launcher names) and only names what it
+ * actually found, so the menu never carries a dead entry for an app the host doesn't have. `kind` is
+ * routing info the client needs: `"gui"` spawns the app detached via `workspace.openIn`; `"terminal"` (Vim)
+ * has no window of its own — the client opens/focuses that workspace's embedded terminal and runs it there
+ * instead of asking the host to spawn a TTY-less child process.
+ */
+export interface EditorInfo {
+	/** Stable across a host's lifetime, but not a wire-versioned enum — new candidates can appear freely. */
+	id: string;
+	/** Display label, e.g. "VS Code", "WebStorm". */
+	label: string;
+	kind: "gui" | "terminal";
+}
+
+/**
  * The `workspace.fsChanged` push frame: the host's worktree watcher noticed on-disk changes (agent
  * edits, terminal commands, Finder). An **invalidation nudge, not data** — clients re-read via the
  * existing read methods, so a duplicate/replayed frame is harmless. `paths` are worktree-relative and

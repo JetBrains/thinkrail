@@ -77,7 +77,10 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   `DocTab`'s content exists only in the store (no file backs it), so a silent replace would destroy it
   with nothing to reopen. There is deliberately **no keyboard shortcut**: gestures only.
   `terminalsByWorkspace`
-  / `activeTerminalByWorkspace` (`addTerminal`/`closeTerminalTab`/`setActiveTerminalTab`); the
+  / `activeTerminalByWorkspace` (`addTerminal`/`closeTerminalTab`/`setActiveTerminalTab` — `addTerminal`
+  takes an optional `initialCommand`, carried on the new tab's `TerminalTab.initialCommand` and consumed
+  exactly once by `TerminalInstance` right after its own PTY comes up, e.g. the workspace row's "Open in
+  Vim"); the
   **per-session chat state** — `sessions: Record<sessionId, SessionRuntime>`, where a `SessionRuntime` holds
   one chat's `turns` (pi-canonical) / `toolResults` / `askAnswers` (the `ask-user-answers` replies keyed
   by tool call id — indexed by the reducer and hydration, never turned into bubbles) /

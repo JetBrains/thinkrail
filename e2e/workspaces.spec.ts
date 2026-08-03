@@ -1,6 +1,11 @@
 import { execFileSync } from "node:child_process";
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
+import {
+	createWorkspaceViaDialog,
+	openFixtureProject,
+	openWorkspaceMenu,
+	worktreeRows,
+} from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 
 test("creates, removes, and re-creates worktree workspaces (no branch collision)", async ({
@@ -19,11 +24,12 @@ test("creates, removes, and re-creates worktree workspaces (no branch collision)
 	// Worktrees live under a readable project-name dir, not the project id.
 	expect(worktrees).toContain("/worktrees/sample-project/");
 
-	// Remove it: the button opens a confirmation anchored to the row; confirming fires `workspace.remove`,
-	// and the row disappears when the client reacts to the host's `workspace.removed` push (event-driven, not
-	// optimistic) AND the worktree is reclaimed from disk in the background (back to just `main`).
-	await items.first().hover();
-	await items.first().getByTestId("workspace-remove").click();
+	// Remove it: the kebab menu's Remove item opens a centered confirm dialog; confirming fires
+	// `workspace.remove`, and the row disappears when the client reacts to the host's `workspace.removed`
+	// push (event-driven, not optimistic) AND the worktree is reclaimed from disk in the background (back
+	// to just `main`).
+	await openWorkspaceMenu(items.first());
+	await page.getByTestId("workspace-remove").click();
 	// The confirm is an accessible alertdialog named by its title (so screen readers announce it).
 	await expect(page.getByRole("alertdialog", { name: /Remove .+ workspace/ })).toBeVisible();
 	await page.getByTestId("confirm-remove").click();

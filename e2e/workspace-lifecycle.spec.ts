@@ -1,5 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
+import {
+	createWorkspaceViaDialog,
+	openFixtureProject,
+	openWorkspaceMenu,
+	worktreeRows,
+} from "./fixtures/app";
 
 // Two tabs on ONE host, no agent. Registry membership is backend-owned shared domain state (architecture
 // #9), so a create/remove in one tab streams to the other via the workspace lifecycle pushes — every
@@ -21,9 +26,9 @@ test("workspace removal propagates — no zombie row in a second tab", async ({ 
 	await worktreeRows(page2).first().click();
 	await expect(worktreeRows(page2).first()).toHaveAttribute("data-active", "true");
 
-	// Tab A: remove the workspace (confirm-popover → confirm).
-	await worktreeRows(page).first().hover();
-	await worktreeRows(page).first().getByTestId("workspace-remove").click();
+	// Tab A: remove the workspace (kebab menu → Remove → confirm dialog → confirm).
+	await openWorkspaceMenu(worktreeRows(page).first());
+	await page.getByTestId("workspace-remove").click();
 	await page.getByTestId("confirm-remove").click();
 	await expect(worktreeRows(page)).toHaveCount(0);
 

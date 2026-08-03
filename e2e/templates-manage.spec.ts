@@ -154,9 +154,9 @@ test.describe("templates management", () => {
 		await expect(editor).toBeHidden();
 		await expect(row).toContainText("Standup notes, revised");
 
-		// Delete (confirm popover, mirroring the workspace-remove pattern) — gone from the panel... Scoped
-		// to this row: the Global group also lists the suite-wide seeded fixture templates, so an unscoped
-		// `template-delete` would be ambiguous.
+		// Delete (a `ConfirmPopover` anchored to this row's own Delete button) — gone from the panel...
+		// Scoped to this row: the Global group also lists the suite-wide seeded fixture templates, so an
+		// unscoped `template-delete` would be ambiguous.
 		await row.getByTestId("template-delete").click();
 		await expect(page.getByRole("alertdialog", { name: /Delete standup/ })).toBeVisible();
 		await page.getByTestId("template-confirm-delete").click();

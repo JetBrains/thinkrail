@@ -1,12 +1,34 @@
-import type { Project, Workspace } from "@thinkrail/contracts";
-import { ChevronDown, ChevronRight, Folder, GitBranch, House, Plus, Trash2 } from "lucide-react";
+import type { EditorInfo, Project, Workspace } from "@thinkrail/contracts";
+import {
+	ChevronDown,
+	ChevronRight,
+	Copy,
+	ExternalLink,
+	Folder,
+	FolderOpen,
+	GitBranch,
+	House,
+	MoreVertical,
+	Plus,
+	Trash2,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { PopoverTrigger } from "@/components/ui/popover";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuSub,
+	DropdownMenuSubContent,
+	DropdownMenuSubTrigger,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { copyText } from "@/lib";
 import { isDefaultWorkspace, selectActiveWorkspaceProjectId, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
-import { ConfirmPopover } from "./ConfirmPopover";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { useOpenProject } from "./useOpenProject";
@@ -17,6 +39,17 @@ export function ProjectTree() {
 	const selectedProjectId = useAppStore((s) => s.selectedProjectId);
 	const workspaces = useAppStore((s) => s.workspaces);
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
+
+	// The host's installed editors for every row's "Open in" submenu — host-wide, not per-workspace, so
+	// it's fetched once here rather than once per row. An empty list (still loading, or none detected)
+	// simply hides the submenu — never a dead entry for an app the host doesn't have.
+	const [editors, setEditors] = useState<EditorInfo[]>([]);
+	useEffect(() => {
+		void getTransport()
+			.request("editor.list", {})
+			.then(setEditors)
+			.catch(() => {});
+	}, []);
 
 	const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
 	// The project a New-Workspace dialog is open for (null = closed). The "+" opens it instead of
@@ -92,6 +125,27 @@ export function ProjectTree() {
 			.catch((err) => toast.error(errorText(err, "Failed to remove workspace")));
 	};
 
+	// GUI editors (`code`/`emacs`/a JetBrains IDE) launch host-side, detached, at the worktree. Vim is
+	// `kind: "terminal"` — it has no window of its own, so instead of asking the host to spawn a TTY-less
+	// process, activate the workspace and run it in its embedded terminal (`editor.id` doubles as the
+	// literal shell command for a terminal-kind entry — a deliberate simplification for the one case).
+	const openWorkspaceIn = (workspace: Workspace, editor: EditorInfo) => {
+		if (editor.kind === "terminal") {
+			useAppStore.getState().activateWorkspace(workspace);
+			useAppStore.getState().addTerminal(workspace.id, `${editor.id} .`);
+			return;
+		}
+		void getTransport()
+			.request("workspace.openIn", { id: workspace.id, editor: editor.id })
+			.catch((err) => toast.error(errorText(err, `Failed to open in ${editor.label}`)));
+	};
+
+	const revealWorkspace = (workspace: Workspace) => {
+		void getTransport()
+			.request("workspace.reveal", { id: workspace.id })
+			.catch((err) => toast.error(errorText(err, "Failed to reveal workspace")));
+	};
+
 	return (
 		<nav className="flex flex-col gap-sm">
 			<header className="flex h-7 items-center justify-between pr-xs pl-sm">
@@ -138,7 +192,11 @@ export function ProjectTree() {
 											key={ws.id}
 											workspace={ws}
 											isActive={activeWorkspaceId === ws.id}
+											editors={editors}
 											onSelect={() => selectWorkspace(ws)}
+											onOpenIn={(editor) => openWorkspaceIn(ws, editor)}
+											onCopyPath={() => void copyText(ws.worktreePath)}
+											onReveal={() => revealWorkspace(ws)}
 											onRemove={() => removeWorkspace(ws.id)}
 										/>
 									))}
@@ -231,98 +289,147 @@ function ProjectRow({
 function WorkspaceRow({
 	workspace,
 	isActive,
+	editors,
 	onSelect,
+	onOpenIn,
+	onCopyPath,
+	onReveal,
 	onRemove,
 }: {
 	workspace: Workspace;
 	isActive: boolean;
+	editors: EditorInfo[];
 	onSelect: () => void;
+	onOpenIn: (editor: EditorInfo) => void;
+	onCopyPath: () => void;
+	onReveal: () => void;
 	onRemove: () => void;
 }) {
 	const stats = workspace.diffStats;
 	// The built-in Default workspace (the project folder itself) is non-removable — the server enforces
-	// it; the UI simply offers nothing. It wears a House icon in place of the branch glyph.
+	// it; the UI simply offers nothing (no Remove item, no confirm dialog). It wears a House icon in place
+	// of the branch glyph, but otherwise gets the same "Open in" / Copy path / Reveal menu as any worktree.
 	const isDefault = isDefaultWorkspace(workspace);
 	const Icon = isDefault ? House : GitBranch;
-	// Confirm-before-remove lives on the row so the popover anchors right beneath it (contextual to the
-	// workspace being removed) rather than as a centered modal.
+	const [menuOpen, setMenuOpen] = useState(false);
+	// A centered dialog, not an anchored popover: the trigger is a generic overflow icon, not a dedicated
+	// delete affordance, so anchoring a confirm box to it the way the old dedicated Remove button did would
+	// read oddly. Opened from the menu item's `onSelect`, `preventDefault`ed so Radix's own close-then-
+	// return-focus-to-trigger doesn't fight the dialog's focus trap opening right behind it.
 	const [confirmOpen, setConfirmOpen] = useState(false);
-	const row = (
-		<div
-			data-testid="workspace-item"
-			data-active={isActive}
-			data-kind={workspace.kind ?? "worktree"}
-			className={`group flex min-h-7 items-center gap-sm rounded-[var(--radius-sm)] py-xs pr-xs pl-xl transition-colors ${
-				isActive ? "bg-control-bg-hovered" : "hover:bg-control-bg-hovered"
-			}`}
-		>
-			<button
-				type="button"
-				onClick={onSelect}
-				className="flex min-w-0 flex-1 items-center gap-sm text-left"
-			>
-				<Icon className={`size-4 shrink-0 ${isActive ? "text-primary" : "text-text-subtle"}`} />
-				{/* Name on top, the git branch on a second line beneath it — the display name is decoupled
-				    from the branch, so surface both without crowding one line. The branch line is hidden when
-				    they coincide, so pristine/legacy rows stay a single compact line. */}
-				<span className="flex min-w-0 flex-1 flex-col">
-					<span
-						data-testid="workspace-name"
-						className={`truncate tr-text-ui leading-tight ${isActive ? "text-primary" : "text-text-muted"}`}
-					>
-						{workspace.name}
-					</span>
-					{workspace.branch !== workspace.name && (
-						<span
-							data-testid="workspace-branch"
-							className="truncate text-text-subtle tr-text-metadata leading-tight"
-						>
-							{workspace.branch}
-						</span>
-					)}
-				</span>
-			</button>
-			<DiffStatBadge
-				added={stats?.added ?? 0}
-				removed={stats?.removed ?? 0}
-				className="group-hover:hidden"
-			/>
-			{!isDefault && (
-				<PopoverTrigger asChild>
-					<button
-						type="button"
-						data-testid="workspace-remove"
-						aria-label="Remove workspace"
-						className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 transition hover:bg-container-elevated-bg hover:text-feedback-error group-hover:opacity-100 data-[state=open]:opacity-100"
-					>
-						<Trash2 className="size-4" />
-					</button>
-				</PopoverTrigger>
-			)}
-		</div>
-	);
-	// No ConfirmPopover for the Default row — there is nothing to confirm (and PopoverTrigger only
-	// renders inside the popover context of the removable branch below).
-	if (isDefault) return row;
 	return (
-		<ConfirmPopover
-			open={confirmOpen}
-			onOpenChange={setConfirmOpen}
-			title={`Remove ${workspace.name} workspace`}
-			description={
-				<>
-					Deletes this workspace's chats, terminals, and its worktree. The git branch{" "}
-					<span className="tr-text-emphasis text-text-default">{workspace.branch}</span> is kept.
-				</>
-			}
-			confirmLabel="Remove"
-			destructive
-			confirmTestId="confirm-remove"
-			onConfirm={onRemove}
-			align="end"
-		>
-			{/* Anchored to the Remove button (the PopoverTrigger), right border aligned via align="end". */}
-			{row}
-		</ConfirmPopover>
+		<>
+			<div
+				data-testid="workspace-item"
+				data-active={isActive}
+				data-kind={workspace.kind ?? "worktree"}
+				className={`group flex min-h-7 items-center gap-sm rounded-[var(--radius-sm)] py-xs pr-xs pl-xl transition-colors ${
+					isActive || menuOpen ? "bg-control-bg-hovered" : "hover:bg-control-bg-hovered"
+				}`}
+			>
+				<button
+					type="button"
+					onClick={onSelect}
+					className="flex min-w-0 flex-1 items-center gap-sm text-left"
+				>
+					<Icon className={`size-4 shrink-0 ${isActive ? "text-primary" : "text-text-subtle"}`} />
+					{/* Name on top, the git branch on a second line beneath it — the display name is decoupled
+					    from the branch, so surface both without crowding one line. The branch line is hidden when
+					    they coincide, so pristine/legacy rows stay a single compact line. */}
+					<span className="flex min-w-0 flex-1 flex-col">
+						<span
+							data-testid="workspace-name"
+							className={`truncate tr-text-ui leading-tight ${isActive ? "text-primary" : "text-text-muted"}`}
+						>
+							{workspace.name}
+						</span>
+						{workspace.branch !== workspace.name && (
+							<span
+								data-testid="workspace-branch"
+								className="truncate text-text-subtle tr-text-metadata leading-tight"
+							>
+								{workspace.branch}
+							</span>
+						)}
+					</span>
+				</button>
+				<DiffStatBadge
+					added={stats?.added ?? 0}
+					removed={stats?.removed ?? 0}
+					className="group-hover:hidden"
+				/>
+				<DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+					<DropdownMenuTrigger
+						data-testid="workspace-menu"
+						aria-label={`Actions for ${workspace.name}`}
+						className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 outline-none transition hover:bg-container-elevated-bg hover:text-text-default group-hover:opacity-100 data-[state=open]:opacity-100"
+					>
+						<MoreVertical className="size-4" />
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="end" data-testid="workspace-actions">
+						{editors.length > 0 && (
+							<DropdownMenuSub>
+								<DropdownMenuSubTrigger data-testid="workspace-open-in">
+									<ExternalLink />
+									Open in
+								</DropdownMenuSubTrigger>
+								<DropdownMenuSubContent>
+									{editors.map((editor) => (
+										<DropdownMenuItem
+											key={editor.id}
+											data-testid="workspace-open-in-editor"
+											onSelect={() => onOpenIn(editor)}
+										>
+											{editor.label}
+										</DropdownMenuItem>
+									))}
+								</DropdownMenuSubContent>
+							</DropdownMenuSub>
+						)}
+						<DropdownMenuItem data-testid="workspace-copy-path" onSelect={onCopyPath}>
+							<Copy />
+							Copy path
+						</DropdownMenuItem>
+						<DropdownMenuItem data-testid="workspace-reveal" onSelect={onReveal}>
+							<FolderOpen />
+							Reveal in file manager
+						</DropdownMenuItem>
+						{!isDefault && (
+							<>
+								<DropdownMenuSeparator />
+								<DropdownMenuItem
+									data-testid="workspace-remove"
+									className="text-feedback-error focus:bg-feedback-error-subtle [&_svg]:text-feedback-error"
+									onSelect={(event) => {
+										event.preventDefault();
+										setConfirmOpen(true);
+									}}
+								>
+									<Trash2 />
+									Remove workspace
+								</DropdownMenuItem>
+							</>
+						)}
+					</DropdownMenuContent>
+				</DropdownMenu>
+			</div>
+			{!isDefault && (
+				<ConfirmDialog
+					open={confirmOpen}
+					onOpenChange={setConfirmOpen}
+					title={`Remove ${workspace.name} workspace`}
+					description={
+						<>
+							Deletes this workspace's chats, terminals, and its worktree. The git branch{" "}
+							<span className="tr-text-emphasis text-text-default">{workspace.branch}</span> is kept.
+						</>
+					}
+					confirmLabel="Remove"
+					destructive
+					confirmTestId="confirm-remove"
+					onConfirm={onRemove}
+				/>
+			)}
+		</>
 	);
 }
