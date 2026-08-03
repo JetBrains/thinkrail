@@ -1582,6 +1582,11 @@ html.anim .terminal.armed [data-out] {
 	height: 24px;
 	color: var(--accent);
 	flex-shrink: 0;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 2;
+	stroke-linecap: round;
+	stroke-linejoin: round;
 }
 
 .mock-tooltip-text {
