@@ -11,38 +11,57 @@
 	--text-muted: var(--muted);
 	--text-subtle: var(--hint);
 	--text-on-primary: var(--on-accent);
-	--text-link: var(--blue); /* global.css `a {}` is the only consumer; no component styles a bare link */
-	--container-workspace-bg: var(--bg);
-	--container-sidebar-bg: var(--surface-sidebar);
-	--container-header-bg: var(--bg-dark);
-	--container-content-bg: var(--surface-content); /* the code canvas: Monaco, Shiki, the terminal, the markdown preview */
+	--text-link: var(--info); /* global.css `a {}` is the only consumer; no component styles a bare link */
+	--container-workspace-bg: var(--background);
+	--container-sidebar-bg: var(--sidebar);
+	--container-header-bg: var(--header);
+	--container-content-bg: var(--content); /* the code canvas: Monaco, Shiki, the terminal, the markdown preview */
 	--container-elevated-bg: var(--elevated); /* every raised surface: dialogs, popovers, menus, toasts, cards, code blocks */
-	--control-bg: var(--input-bg);
+	--control-bg: var(--input);
 	--control-bg-hovered: var(--hover);
-	--control-primary-bg: var(--primary);
+	--control-primary-bg: var(--accent);
 	--control-primary-text: var(--on-accent);
-	--border-default: var(--border2);
+	--border-default: var(--border-strong);
 	--border-muted: var(--border);
-	--primary-subtle: color-mix(in srgb, var(--primary) 10%, transparent);
-	--primary-soft: color-mix(in srgb, var(--primary) 20%, transparent);
-	--primary-muted: color-mix(in srgb, var(--primary) 40%, transparent);
-	--primary-strong: color-mix(in srgb, var(--primary) 60%, transparent);
+	--primary: var(--accent);
+	--primary-subtle: color-mix(in srgb, var(--accent) 10%, transparent);
+	--primary-soft: color-mix(in srgb, var(--accent) 20%, transparent);
+	--primary-muted: color-mix(in srgb, var(--accent) 40%, transparent);
+	--primary-strong: color-mix(in srgb, var(--accent) 60%, transparent);
 	--on-primary-soft: color-mix(in srgb, var(--on-accent) 20%, transparent);
-	--feedback-info: var(--blue);
-	--feedback-info-subtle: color-mix(in srgb, var(--blue) 10%, transparent);
-	--feedback-success: var(--green);
-	--feedback-success-subtle: color-mix(in srgb, var(--green) 10%, transparent);
-	--feedback-success-muted: color-mix(in srgb, var(--green) 40%, transparent);
-	--feedback-error: var(--red);
-	--feedback-error-subtle: color-mix(in srgb, var(--red) 10%, transparent);
-	--feedback-error-muted: color-mix(in srgb, var(--red) 40%, transparent);
-	--feedback-warning: var(--gold);
-	--feedback-warning-subtle: color-mix(in srgb, var(--gold) 10%, transparent);
+	--feedback-info: var(--info);
+	--feedback-info-subtle: color-mix(in srgb, var(--info) 10%, transparent);
+	--feedback-success: var(--success);
+	--feedback-success-subtle: color-mix(in srgb, var(--success) 10%, transparent);
+	--feedback-success-muted: color-mix(in srgb, var(--success) 40%, transparent);
+	--feedback-error: var(--danger);
+	--feedback-error-subtle: color-mix(in srgb, var(--danger) 10%, transparent);
+	--feedback-error-muted: color-mix(in srgb, var(--danger) 40%, transparent);
+	--feedback-warning: var(--warning);
+	--feedback-warning-subtle: color-mix(in srgb, var(--warning) 10%, transparent);
 	--bubble-user-bg: color-mix(in srgb, var(--bubble-accent) 10%, transparent);
 	--bubble-user-border: color-mix(in srgb, var(--bubble-accent) 40%, transparent);
-	--selection-text: var(--selection-fg, inherit); /* nullable in the manifest (high contrast keeps the native foreground) */
-	--editor-selection-bg: var(--sel);
-	--editor-selection-text: var(--sel-fg); /* read by Monaco and xterm through getComputedStyle; a utility would be dead weight */
+	--selection-text: var(--selection-foreground, inherit); /* nullable in the manifest (high contrast keeps the native foreground) */
+	--selection-bg: var(--selection); /* native ::selection in global.css; not a utility */
+	--editor-selection-bg: var(--editor-selection);
+	--editor-selection-text: var(--editor-selection-foreground); /* read by Monaco and xterm through getComputedStyle; a utility would be dead weight */
+}
+
+/* Appearance-level effects. The theme engine stamps `data-theme-appearance` before React mounts, so
+ * these need no JavaScript — they are constants, not palette derivations. */
+:root[data-theme-appearance="dark"] {
+	--sunken: rgba(0, 0, 0, 0.12);
+	--overlay: rgba(0, 0, 0, 0.5);
+	--shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+	--shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35);
+	--shadow-lg: 0 8px 28px rgba(0, 0, 0, 0.4);
+}
+:root[data-theme-appearance="light"] {
+	--sunken: rgba(0, 0, 0, 0.05);
+	--overlay: rgba(0, 0, 0, 0.5);
+	--shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.1);
+	--shadow-md: 0 4px 16px rgba(0, 0, 0, 0.12);
+	--shadow-lg: 0 8px 28px rgba(0, 0, 0, 0.14);
 }
 
 @theme inline {

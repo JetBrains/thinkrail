@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { loadColors, renderCss, renderTs, validate } from "../../scripts/colors";
+import { loadColors, paletteVar, renderCss, themeColorKeys, validate } from "../../scripts/colors";
 
 /**
  * The colour adoption guard, the sibling of `typographyUsage.test.ts`. Three failure modes shaped it,
@@ -11,7 +11,7 @@ import { loadColors, renderCss, renderTs, validate } from "../../scripts/colors"
  *    claims otherwise — nothing in lint, typecheck or the test suite could see it;
  *  - a CSS variable read from JS that does not exist (`--text-text-muted`, the *class* name spelled
  *    into a `getComputedStyle` call) — it resolves to "" and slides into a fallback;
- *  - a component reaching around the semantic layer for a palette entry (`bg-[var(--input-bg)]`),
+ *  - a component reaching around the semantic layer for a palette entry (`bg-[var(--input)]`),
  *    which re-couples the component to a colour instead of a role.
  *
  * The palette denylist is DERIVED from `themes/runtime.ts`, so renaming a manifest key updates this
@@ -47,7 +47,6 @@ const TS_FILES = FILES.filter((f) => /\.tsx?$/.test(f));
 const CSS_FILES = FILES.filter((f) => f.endsWith(".css"));
 
 const GENERATED_CSS = join(SRC, "styles/generated/colors.css");
-const GENERATED_TS = join(SRC, "themes/generated/colors.ts");
 const GENERATED_TYPE_CSS = join(SRC, "styles/generated/typography.css");
 
 const THEME_ENTRY = /^\s*--color-([a-z0-9-]+)\s*:\s*var\((--[a-z0-9-]+)\)/gm;
@@ -70,14 +69,16 @@ const DECLARED_VARS = new Set(
 	),
 );
 /**
- * Every custom property the theme engine writes at runtime: the palette + effects (generated from
- * `colors.json`) and the ANSI + syntax tables (`themes/runtime.ts`).
+ * Every custom property the theme engine writes at runtime. The UI palette is DERIVED from the manifest
+ * key list exactly as `runtime.ts` derives it, so a renamed key updates this guard for free; the ANSI
+ * and syntax tables are still literals in `runtime.ts`.
  */
-const PALETTE_VARS = new Set(
-	[join(SRC, "themes/runtime.ts"), GENERATED_TS].flatMap((f) =>
-		[...read(f).matchAll(/"(--[a-z0-9-]+)"/g)].map((m) => m[1] as string),
+const PALETTE_VARS = new Set([
+	...themeColorKeys().map(paletteVar),
+	...[...read(join(SRC, "themes/runtime.ts")).matchAll(/"(--[a-z0-9-]+)"/g)].map(
+		(m) => m[1] as string,
 	),
-);
+]);
 const ALL_VARS = new Set([...DECLARED_VARS, ...PALETTE_VARS]);
 
 /**
@@ -185,7 +186,6 @@ describe("the published token set", () => {
 		// here too rather than only at commit time.
 		expect(validate(COLORS)).toEqual([]);
 		expect(read(GENERATED_CSS)).toBe(renderCss(COLORS));
-		expect(read(GENERATED_TS)).toBe(renderTs(COLORS));
 	});
 });
 
@@ -295,7 +295,7 @@ describe("variables read from JavaScript", () => {
 		// The syntax palette (`--code-*`) and the type tokens (`--tr-*`) are their own contracts.
 		const bad = reads
 			.filter((r) => PALETTE_VARS.has(r.name))
-			.filter((r) => !/^--(code|tr)-/.test(r.name) && r.name !== "--primary")
+			.filter((r) => !/^--(code|tr)-/.test(r.name))
 			.map((r) => `${r.file}: ${r.name}`);
 		expect(bad).toEqual([]);
 	});

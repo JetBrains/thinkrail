@@ -2,7 +2,7 @@ import { AlertTriangle, RefreshCw, RotateCcw } from "lucide-react";
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { shallowEqualArrays } from "../lib";
 
-// Our single boundary primitive: contains a panel's render/lazy-import crash to that region instead of unmounting the root (bare gray `--bg-dark`); a rejected lazy `import()` (stale Vite chunk → 504) throws through Suspense into here, and we steer that case to a reload.
+// Our single boundary primitive: contains a panel's render/lazy-import crash to that region instead of unmounting the root (bare gray `--header`); a rejected lazy `import()` (stale Vite chunk → 504) throws through Suspense into here, and we steer that case to a reload.
 
 const CHUNK_ERROR_PATTERNS = [
 	"dynamically imported module", // "Failed to fetch dynamically imported module: …"

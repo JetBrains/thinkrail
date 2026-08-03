@@ -12,11 +12,23 @@ export const STYLES_DIR = join(import.meta.dir, "..", "src", "styles");
 export const SOURCE_PATH = join(STYLES_DIR, "colors.json");
 export const GENERATED_CSS_PATH = join(STYLES_DIR, "generated", "colors.css");
 export const THEMES_DIR = join(import.meta.dir, "..", "src", "themes");
-/** The palette map + effects are the THEME ENGINE's data, so they are emitted inside that module:
- * `runtime.ts` must not reach into `styles/`, and the table must not reach back into `themes/`. */
-export const GENERATED_TS_PATH = join(THEMES_DIR, "generated", "colors.ts");
-/** Kept in step by `validate`: the manifest keys the theme schema declares. */
+/** The manifest keys a role may name. Read from the schema so the two lists cannot drift. */
 export const THEME_SCHEMA_PATH = join(THEMES_DIR, "schema.ts");
+
+/**
+ * The CSS custom property a manifest key writes to — DERIVED, never tabulated. `borderStrong` writes
+ * `--border-strong`, `editorSelection` writes `--editor-selection`. A lookup table used to carry this,
+ * which meant a second list to keep in step and a set of names (`--blue` for `info`, `--border2` for
+ * `borderStrong`) that had stopped describing what they held.
+ */
+export const paletteVar = (key: string) =>
+	`--${key.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase()}`;
+
+export function themeColorKeys(): string[] {
+	const schema = readFileSync(THEME_SCHEMA_PATH, "utf8");
+	const block = /export const THEME_COLOR_KEYS = \[([\s\S]*?)\] as const;/.exec(schema)?.[1] ?? "";
+	return [...block.matchAll(/"([A-Za-z]+)"/g)].map((m) => m[1] as string);
+}
 
 export interface Role {
 	readonly from: string;
@@ -36,7 +48,6 @@ export interface Effect {
 export interface Colors {
 	readonly metadata: { readonly version: string; readonly note?: string };
 	readonly scale: Readonly<Record<string, number>>;
-	readonly palette: Readonly<Record<string, readonly string[]>>;
 	readonly roles: Readonly<Record<string, Role>>;
 	readonly effects: Readonly<Record<string, Effect>>;
 }
@@ -52,11 +63,9 @@ export const themeVar = (name: string) => `--color-${name}`;
 
 /** The single expression that turns a palette entry + a scale step into a colour. */
 export function derive(colors: Colors, role: Role): string {
-	const source = colors.palette[role.from];
-	if (!source) return "";
-	const base = `var(${source[0]}${role.fallback ? `, ${role.fallback}` : ""})`;
-	if (!role.alpha) return base;
-	return `color-mix(in srgb, var(${source[0]}) ${colors.scale[role.alpha]}%, transparent)`;
+	const source = paletteVar(role.from);
+	if (!role.alpha) return `var(${source}${role.fallback ? `, ${role.fallback}` : ""})`;
+	return `color-mix(in srgb, var(${source}) ${colors.scale[role.alpha]}%, transparent)`;
 }
 
 /**
@@ -66,8 +75,8 @@ export function derive(colors: Colors, role: Role): string {
  * palette as an inline style that outranks `:root`. Such a role publishes the palette variable directly
  * and emits no `:root` line of its own.
  */
-export function aliasesPaletteVar(colors: Colors, name: string, role: Role): boolean {
-	return colors.palette[role.from]?.[0] === roleVar(name) && !role.alpha && !role.fallback;
+export function aliasesPaletteVar(_colors: Colors, name: string, role: Role): boolean {
+	return paletteVar(role.from) === roleVar(name) && !role.alpha && !role.fallback;
 }
 
 export function validate(colors: Colors): string[] {
@@ -80,9 +89,10 @@ export function validate(colors: Colors): string[] {
 			issues.push(`scale.${step} must be an integer percentage in (0, 100)`);
 		}
 	}
+	const keys = themeColorKeys();
 	for (const [name, role] of Object.entries(colors.roles)) {
-		if (!colors.palette[role.from]) {
-			issues.push(`roles.${name}.from is not a palette key: ${role.from}`);
+		if (!keys.includes(role.from)) {
+			issues.push(`roles.${name}.from is not a theme manifest key: ${role.from}`);
 		}
 		if (role.alpha !== undefined && colors.scale[role.alpha] === undefined) {
 			issues.push(
@@ -104,18 +114,11 @@ export function validate(colors: Colors): string[] {
 		if (typeof effect.publish !== "boolean")
 			issues.push(`effects.${name}.publish must be a boolean`);
 	}
-	// The palette table IS the runtime's manifest→variable map, so it must match the theme schema's
-	// key list exactly: a key here with no schema entry never receives a value, and a schema key
-	// missing here is a manifest colour the app silently drops.
-	const schema = readFileSync(THEME_SCHEMA_PATH, "utf8");
-	const block = /export const THEME_COLOR_KEYS = \[([\s\S]*?)\] as const;/.exec(schema)?.[1] ?? "";
-	const schemaKeys = [...block.matchAll(/"([A-Za-z]+)"/g)].map((m) => m[1] as string);
-	const paletteKeys = Object.keys(colors.palette);
-	for (const key of schemaKeys) {
-		if (!paletteKeys.includes(key)) issues.push(`palette is missing the theme key "${key}"`);
-	}
-	for (const key of paletteKeys) {
-		if (!schemaKeys.includes(key)) issues.push(`palette."${key}" is not a theme manifest key`);
+	// Every manifest key must be claimed by at least one role, or a colour a theme supplies is
+	// silently dropped on the floor.
+	const used = new Set(Object.values(colors.roles).map((r) => r.from));
+	for (const key of keys) {
+		if (!used.has(key)) issues.push(`no role reads the theme manifest key "${key}"`);
 	}
 	return issues;
 }
@@ -139,6 +142,16 @@ export function renderCss(colors: Colors): string {
 			return `\t${roleVar(name)}: ${derive(colors, role)};${note}`;
 		});
 
+	const effectBlocks = ["dark", "light"].map((appearance) =>
+		[
+			`:root[data-theme-appearance="${appearance}"] {`,
+			...Object.entries(colors.effects).map(
+				([n, e]) => `\t--${n}: ${e[appearance as "dark" | "light"]};`,
+			),
+			"}",
+		].join("\n"),
+	);
+
 	const themeLines = [
 		// Drop Tailwind's built-in palette FIRST, so `bg-red-500` / `text-white` are not utilities at
 		// all. They compile happily otherwise — hardcoded, un-themeable, and invisible to review. This
@@ -157,37 +170,13 @@ export function renderCss(colors: Colors): string {
 		...rootLines,
 		"}",
 		"",
+		"/* Appearance-level effects. The theme engine stamps `data-theme-appearance` before React mounts, so",
+		" * these need no JavaScript — they are constants, not palette derivations. */",
+		...effectBlocks,
+		"",
 		"@theme inline {",
 		...themeLines,
 		"}",
 		"",
 	].join("\n");
-}
-
-/** The palette-variable and effect tables the theme runtime applies, so neither is restated in code. */
-export function renderTs(colors: Colors): string {
-	const palette = Object.entries(colors.palette)
-		.map(([key, vars]) => `\t${key}: [${vars.map((v) => `"${v}"`).join(", ")}],`)
-		.join("\n");
-	const effects = (appearance: "dark" | "light") =>
-		Object.entries(colors.effects)
-			.map(([name, e]) => `\t\t"--${name}": "${e[appearance]}",`)
-			.join("\n");
-
-	return `${HEADER(colors.metadata.version, "The manifest-key → CSS-variable map, and the per-appearance effect values.")}
-import type { ThemeColorKey } from "../schema";
-
-export const COLOR_VARIABLES: Record<ThemeColorKey, readonly string[]> = {
-${palette}
-};
-
-export const EFFECTS = {
-	dark: {
-${effects("dark")}
-	},
-	light: {
-${effects("light")}
-	},
-} as const;
-`;
 }

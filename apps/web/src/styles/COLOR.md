@@ -18,16 +18,20 @@ styles/colors.json             the SEMANTIC layer — what each palette entry is
 styles/colors.schema.json      the editor-facing contract for it
 scripts/colors.ts              load / validate / render — the only place a derivation is written
 scripts/generate-colors.ts     writes the output; `--check` fails when it is stale
-styles/generated/colors.css    GENERATED: the `:root` roles + the `@theme inline` utility map
-styles/generated/colors.ts     GENERATED: the manifest→variable map and the effect values
-themes/runtime.ts              applies the active manifest through those generated tables
+styles/generated/colors.css    GENERATED: the roles, the `@theme inline` map, the effect blocks
+themes/runtime.ts              writes the active manifest onto the document root
 styles/colorUsage.test.ts      the adoption guard
 ```
 
 **No colour is written twice.** A role's derivation lives in `colors.json` and nowhere else — not in
-`tokens.css` (structure only), not in `index.css` (no `--color-*` at all), not in `runtime.ts` (its
-palette map and effect scrims are generated). Editing a generated file fails `bun run colors:check`,
-which runs in pre-commit and in `apps/web`'s build.
+`tokens.css` (structure only), not in `index.css` (no `--color-*` at all), not in `runtime.ts` (which
+now derives variable names rather than tabulating them). Editing the generated file fails
+`bun run colors:check`, which runs in pre-commit and in `apps/web`'s build.
+
+**Variable names are derived, not chosen.** A manifest key writes to its kebab-cased name —
+`borderStrong` → `--border-strong`, `editorSelection` → `--editor-selection`. `colors.json` and
+`runtime.ts` apply the same rule independently, so a role's `from` and the variable it reads cannot
+disagree. There is no lookup table to keep in step, and no more names like `--blue` for `info`.
 
 A **palette entry** answers *which colour* (`--gold`, `--elevated`, `--hint`). A **semantic token**
 answers *what for* (`feedback-warning`, `container-elevated-bg`, `text-subtle`). Components name roles;
@@ -113,8 +117,8 @@ Every case is a JSON edit followed by `bun run colors:generate`.
 4. **A new tint** → an `alpha` step from `scale`, never a `/N` at the call site. If the step itself is
    new, add it to `scale` — that is a design decision, and it is made once.
 5. **A role two themes must be able to differ on** → it needs its own manifest key. Add it to
-   `palette` here, to `THEME_COLOR_KEYS` and `theme.schema.json`, and to all six manifests; the
-   generator refuses to run while the two lists disagree.
+   `THEME_COLOR_KEYS` and `theme.schema.json`, and to all six manifests, then point a role at it. The
+   generator refuses to run while a role names a key that does not exist, or a key no role reads.
 
 Never: a raw hex or `rgb()` in a component, an inline `style` object, a `bg-[var(--palette-entry)]`
 escape hatch, or a second name for a value that already has one.

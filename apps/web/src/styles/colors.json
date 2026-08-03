@@ -2,7 +2,7 @@
 	"$schema": "./colors.schema.json",
 	"metadata": {
 		"version": "1.0.0",
-		"note": "The semantic colour layer. Palettes live in themes/bundled/*.theme.json; this file says what each palette entry is FOR, and is the only place a derivation is written. See COLOR.md."
+		"note": "The semantic colour layer. Palettes live in themes/bundled/*.theme.json; this file says what each palette entry is FOR, and is the only place a derivation is written. A role's `from` names a theme manifest key; the CSS variable that key writes to is derived (kebab-case), not tabulated. See COLOR.md."
 	},
 
 	"scale": {
@@ -10,32 +10,6 @@
 		"soft": 20,
 		"muted": 40,
 		"strong": 60
-	},
-
-	"palette": {
-		"accent": ["--primary"],
-		"onAccent": ["--on-accent"],
-		"bubbleAccent": ["--bubble-accent"],
-		"background": ["--bg"],
-		"header": ["--bg-dark"],
-		"content": ["--surface-content"],
-		"sidebar": ["--surface-sidebar"],
-		"input": ["--input-bg"],
-		"elevated": ["--elevated"],
-		"hover": ["--hover"],
-		"border": ["--border"],
-		"borderStrong": ["--border2"],
-		"text": ["--text"],
-		"muted": ["--muted"],
-		"hint": ["--hint"],
-		"selection": ["--selection-bg"],
-		"selectionForeground": ["--selection-fg"],
-		"editorSelection": ["--sel"],
-		"editorSelectionForeground": ["--sel-fg"],
-		"info": ["--blue"],
-		"success": ["--green"],
-		"danger": ["--red"],
-		"warning": ["--gold"]
 	},
 
 	"roles": {
@@ -76,6 +50,7 @@
 		"primary-soft": { "from": "accent", "alpha": "soft", "publish": true },
 		"primary-muted": { "from": "accent", "alpha": "muted", "publish": true },
 		"primary-strong": { "from": "accent", "alpha": "strong", "publish": true },
+
 		"on-primary-soft": { "from": "onAccent", "alpha": "soft", "publish": true },
 
 		"feedback-info": { "from": "info", "publish": true },
@@ -98,6 +73,12 @@
 			"publish": false,
 			"note": "nullable in the manifest (high contrast keeps the native foreground)"
 		},
+		"selection-bg": {
+			"from": "selection",
+			"publish": false,
+			"note": "native ::selection in global.css; not a utility"
+		},
+
 		"editor-selection-bg": { "from": "editorSelection", "publish": false },
 		"editor-selection-text": {
 			"from": "editorSelectionForeground",

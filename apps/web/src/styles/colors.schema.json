@@ -2,19 +2,26 @@
 	"$schema": "https://json-schema.org/draft/2020-12/schema",
 	"$id": "https://thinkrail.dev/schemas/colors.json",
 	"title": "ThinkRail semantic colour layer",
-	"description": "What each palette entry is FOR. Palettes themselves live in themes/bundled/*.theme.json; this file is the only place a colour derivation is written. See COLOR.md.",
+	"description": "What each theme-manifest colour is FOR. Palettes themselves live in themes/bundled/*.theme.json; this file is the only place a colour derivation is written. See COLOR.md.",
 	"type": "object",
 	"additionalProperties": false,
-	"required": ["metadata", "scale", "palette", "roles", "effects"],
+	"required": ["metadata", "scale", "roles", "effects"],
 	"properties": {
-		"$schema": { "type": "string" },
+		"$schema": {
+			"type": "string"
+		},
 		"metadata": {
 			"type": "object",
 			"additionalProperties": false,
 			"required": ["version"],
 			"properties": {
-				"version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
-				"note": { "type": "string" }
+				"version": {
+					"type": "string",
+					"pattern": "^\\d+\\.\\d+\\.\\d+$"
+				},
+				"note": {
+					"type": "string"
+				}
 			}
 		},
 		"scale": {
@@ -27,26 +34,24 @@
 			},
 			"minProperties": 1
 		},
-		"palette": {
-			"description": "Theme manifest key → the CSS custom properties the theme engine writes it to. Must match THEME_COLOR_KEYS exactly.",
-			"type": "object",
-			"additionalProperties": {
-				"type": "array",
-				"minItems": 1,
-				"items": { "type": "string", "pattern": "^--[a-z0-9-]+$" }
-			}
-		},
 		"roles": {
 			"description": "The semantic layer: the names components are allowed to use.",
 			"type": "object",
-			"propertyNames": { "pattern": "^[a-z][a-z0-9-]*$" },
+			"propertyNames": {
+				"pattern": "^[a-z][a-z0-9-]*$"
+			},
 			"additionalProperties": {
 				"type": "object",
 				"additionalProperties": false,
 				"required": ["from", "publish"],
-				"not": { "required": ["alpha", "fallback"] },
+				"not": {
+					"required": ["alpha", "fallback"]
+				},
 				"properties": {
-					"from": { "type": "string", "description": "A key of `palette`." },
+					"from": {
+						"type": "string",
+						"description": "A theme manifest key (THEME_COLOR_KEYS). The CSS variable it writes to is derived kebab-case, not tabulated: `borderStrong` -> `--border-strong`."
+					},
 					"alpha": {
 						"type": "string",
 						"description": "A step of `scale`. Omit for a solid colour."
@@ -59,23 +64,37 @@
 						"type": "boolean",
 						"description": "true → a Tailwind utility. false → read directly by Monaco/xterm/mermaid/global.css."
 					},
-					"note": { "type": "string" }
+					"note": {
+						"type": "string"
+					}
 				}
 			}
 		},
 		"effects": {
 			"description": "Appearance-level values that are not palette derivations: scrims and shadows.",
 			"type": "object",
-			"propertyNames": { "pattern": "^[a-z][a-z0-9-]*$" },
+			"propertyNames": {
+				"pattern": "^[a-z][a-z0-9-]*$"
+			},
 			"additionalProperties": {
 				"type": "object",
 				"additionalProperties": false,
 				"required": ["dark", "light", "publish"],
 				"properties": {
-					"dark": { "type": "string", "minLength": 1 },
-					"light": { "type": "string", "minLength": 1 },
-					"publish": { "type": "boolean" },
-					"note": { "type": "string" }
+					"dark": {
+						"type": "string",
+						"minLength": 1
+					},
+					"light": {
+						"type": "string",
+						"minLength": 1
+					},
+					"publish": {
+						"type": "boolean"
+					},
+					"note": {
+						"type": "string"
+					}
 				}
 			}
 		}

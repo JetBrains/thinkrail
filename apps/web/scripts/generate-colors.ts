@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * Writes `src/styles/generated/colors.css` + `colors.ts` from `src/styles/colors.json`.
+ * Writes `src/styles/generated/colors.css` from `src/styles/colors.json`.
  *
  *   bun run colors:generate          write the files
  *   bun run colors:generate --check  fail if a committed file is stale (CI + pre-commit gate)
@@ -10,15 +10,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, relative } from "node:path";
-import {
-	type Colors,
-	GENERATED_CSS_PATH,
-	GENERATED_TS_PATH,
-	loadColors,
-	renderCss,
-	renderTs,
-	validate,
-} from "./colors";
+import { type Colors, GENERATED_CSS_PATH, loadColors, renderCss, validate } from "./colors";
 
 const check = process.argv.includes("--check");
 const colors: Colors = loadColors();
@@ -30,10 +22,7 @@ if (errors.length > 0) {
 	process.exit(1);
 }
 
-const outputs = [
-	{ path: GENERATED_CSS_PATH, content: renderCss(colors) },
-	{ path: GENERATED_TS_PATH, content: renderTs(colors) },
-];
+const outputs = [{ path: GENERATED_CSS_PATH, content: renderCss(colors) }];
 
 if (check) {
 	const stale = outputs.filter(
