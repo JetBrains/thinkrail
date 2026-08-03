@@ -440,6 +440,7 @@ code {
 	display: flex;
 	flex-direction: column;
 	gap: 1px;
+	font-family: var(--font-mono);
 	font-size: 13px;
 }
 
