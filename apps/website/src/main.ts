@@ -312,22 +312,29 @@ if (mockElements.length > 0) {
 		const vw = window.innerWidth;
 		const vh = window.innerHeight;
 
-		// Prefer bottom-right of trigger region
-		let left = triggerRect.right + GAP;
-		let top = triggerRect.bottom + GAP;
+		let left: number;
+		let top: number;
 
-		// Check if tooltip fits on the right of trigger
-		const fitsRight = left + tooltipRect.width + MARGIN <= vw;
-		// Check if tooltip fits below trigger
-		const fitsBelow = top + tooltipRect.height + MARGIN <= vh;
+		// Customize placement per region
+		if (trigger.classList.contains("tabstrip") || trigger.classList.contains("term-screen")) {
+			// Tabs and terminal: below trigger, right-aligned to trigger's right edge
+			left = triggerRect.right - tooltipRect.width;
+			top = triggerRect.bottom + GAP;
+		} else {
+			// Left sidebar and others: right of trigger (original behavior)
+			left = triggerRect.right + GAP;
+			top = triggerRect.bottom + GAP;
 
-		if (!fitsRight) {
-			// Place to the left of trigger
-			left = triggerRect.left - tooltipRect.width - GAP;
+			// Check if tooltip fits on the right of trigger
+			const fitsRight = left + tooltipRect.width + MARGIN <= vw;
+			if (!fitsRight) {
+				left = triggerRect.left - tooltipRect.width - GAP;
+			}
 		}
 
+		// Check if tooltip fits below trigger
+		const fitsBelow = top + tooltipRect.height + MARGIN <= vh;
 		if (!fitsBelow) {
-			// Place above trigger
 			top = triggerRect.top - tooltipRect.height - GAP;
 		}
 
