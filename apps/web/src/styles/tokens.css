@@ -1,98 +1,10 @@
 :root {
 	/*
-	 * ─── Semantic Color Tokens ───────────────────────────────────────────────────
-	 * The layer components name. The raw palette (`--text`, `--elevated`, `--gold`, …) is written by
-	 * the theme engine (`themes/runtime.ts`) from the active manifest and is INTERNAL: a component
-	 * names a role (`bg-control-bg`), never a palette entry (`bg-[var(--input-bg)]`). A token earns
-	 * its place here only if some call site uses it AND it can differ from its neighbours; an alias
-	 * that can never diverge is a second name for one thing, so it is not declared.
-	 *
-	 * TRANSPARENCY HAS EXACTLY ONE FORM: a token, mixed `in srgb`, on a four-step scale —
-	 *     subtle 10%  ·  soft 20%  ·  muted 40%  ·  strong 60%
-	 * Tailwind's `/40` modifier is deliberately NOT used at call sites. It mixes `in oklab`, so the
-	 * same nominal percentage rendered differently depending on whether it came from a class or a
-	 * token, and the percentages themselves drifted across components (10, 12, 15, 16, 25, 30, 35,
-	 * 50). A new tint is a new token on this scale, never a new number in a class name.
+	 * Structure only — spacing, shape and motion. COLOUR IS NOT HERE: the semantic roles are generated
+	 * into `generated/colors.css` from `colors.json`, which is the single place a colour derivation is
+	 * written. Adding a `--color-*` or a `color-mix()` to this file would be a second source, and the
+	 * one that can drift; `colorUsage.test.ts` fails on a colour literal here.
 	 */
-
-	/*
-	 * Text — three tiers, because the palette defines three distinct greys and the UI uses all of
-	 * them: body copy, dimmed secondary copy, and the quietest tier (timestamps, counts, eyebrow
-	 * labels, placeholders). Collapsing subtle into muted visibly brightens ~160 call sites.
-	 * There is deliberately no `--text-disabled`: disabled state is opacity-based
-	 * (`disabled:opacity-50`), so a static disabled colour would be a second, conflicting answer.
-	 */
-	--text-default: var(--text);
-	--text-muted: var(--muted);
-	--text-subtle: var(--hint);
-	--text-link: var(--blue); /* What links actually are; `global.css` is the only consumer */
-	--text-on-primary: var(--on-accent);
-
-	/*
-	 * Container — the app's surfaces, named for what they are rather than for one thing that sits on
-	 * them. `elevated` is every raised surface (dialogs, popovers, menus, toasts, inline cards, code
-	 * blocks, table headers) — it was split into `card` + `popover` aliases of one value, and neither
-	 * name was true at most of its call sites. `content` is the code canvas shared by Monaco, Shiki
-	 * and the terminal, so it is not "terminal" either.
-	 */
-	--container-workspace-bg: var(--bg);
-	--container-sidebar-bg: var(--surface-sidebar);
-	--container-content-bg: var(--surface-content);
-	--container-elevated-bg: var(--elevated);
-	--container-header-bg: var(--bg-dark);
-
-	/*
-	 * Control — the interactive surfaces. No `-disabled` pair: disabled state is opacity-based
-	 * (`disabled:opacity-50`), and a border/focus alias identical to `--border-default` / `--primary`
-	 * would be a second name for one value.
-	 */
-	--control-bg: var(--input-bg);
-	--control-bg-hovered: var(--hover);
-	--control-primary-bg: var(--primary);
-	--control-primary-text: var(--on-accent);
-
-	/* Border — two weights: the default rule, and the quieter tier used inside popovers. */
-	--border-default: var(--border2);
-	--border-muted: var(--border);
-
-	/*
-	 * Primary — the accent at four strengths. Named by strength, not purpose: the same tints back
-	 * selected rows, chips, pills, focus rings and search highlights, so any single purpose name
-	 * would be wrong at most of its call sites.
-	 */
-	--primary-subtle: color-mix(in srgb, var(--primary) 10%, transparent);
-	--primary-soft: color-mix(in srgb, var(--primary) 20%, transparent);
-	--primary-muted: color-mix(in srgb, var(--primary) 40%, transparent);
-	--primary-strong: color-mix(in srgb, var(--primary) 60%, transparent);
-	--on-primary-soft: color-mix(in srgb, var(--on-accent) 20%, transparent);
-
-	/* Chat bubble — the user's own turn, tinted from its own manifest accent. */
-	--bubble-user-bg: color-mix(in srgb, var(--bubble-accent) 10%, transparent);
-	--bubble-user-border: color-mix(in srgb, var(--bubble-accent) 40%, transparent);
-
-	/*
-	 * Feedback — the solid colour plus whichever scale steps are actually used. A solid border is the
-	 * solid colour (`border-feedback-error`), so there is no `-border` tier.
-	 */
-	--feedback-info: var(--blue);
-	--feedback-info-subtle: color-mix(in srgb, var(--blue) 10%, transparent);
-	--feedback-success: var(--green);
-	--feedback-success-subtle: color-mix(in srgb, var(--green) 10%, transparent);
-	--feedback-success-muted: color-mix(in srgb, var(--green) 40%, transparent);
-	--feedback-error: var(--red);
-	--feedback-error-subtle: color-mix(in srgb, var(--red) 10%, transparent);
-	--feedback-error-muted: color-mix(in srgb, var(--red) 40%, transparent);
-	--feedback-warning: var(--gold);
-	--feedback-warning-subtle: color-mix(in srgb, var(--gold) 10%, transparent);
-
-	/*
-	 * Selection — `--selection-bg` / `--sel` come straight from the manifest. The two foregrounds are
-	 * nullable there (high-contrast keeps the native one), so the `inherit` fallback is baked in here
-	 * rather than repeated at each consumer.
-	 */
-	--selection-text: var(--selection-fg, inherit);
-	--editor-selection-bg: var(--sel);
-	--editor-selection-text: var(--sel-fg);
 
 	/*
 	 * The spacing basis. NOT typography: it carries no family, weight or line-height, and it is

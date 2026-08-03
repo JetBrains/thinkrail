@@ -1,6 +1,6 @@
 {
 	"$schema": "../theme.schema.json",
-	"schemaVersion": 1,
+	"schemaVersion": 2,
 	"id": "high-contrast-light",
 	"label": "High Contrast Light",
 	"order": 60,
@@ -11,6 +11,7 @@
 		"onAccent": "#ffffff",
 		"bubbleAccent": "#0f4a85",
 		"background": "#ffffff",
+		"header": "#ffffff",
 		"content": "#ffffff",
 		"sidebar": "#ffffff",
 		"input": "#ffffff",

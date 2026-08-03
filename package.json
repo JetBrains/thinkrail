@@ -45,7 +45,9 @@
 		"check:seams": "bun scripts/check-binary-seams.ts",
 		"typography:generate": "bun --filter @thinkrail/web typography:generate",
 		"typography:validate": "bun --filter @thinkrail/web typography:validate",
-		"typography:check": "bun --filter @thinkrail/web typography:check"
+		"typography:check": "bun --filter @thinkrail/web typography:check",
+		"colors:generate": "bun --filter @thinkrail/web colors:generate",
+		"colors:check": "bun --filter @thinkrail/web colors:check"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.5.0",

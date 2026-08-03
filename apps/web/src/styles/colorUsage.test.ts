@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { loadColors, renderCss, renderTs, validate } from "../../scripts/colors";
 
 /**
  * The colour adoption guard, the sibling of `typographyUsage.test.ts`. Three failure modes shaped it,
@@ -40,40 +41,43 @@ function sourceFiles(dir = SRC, exts = /\.(tsx?|css)$/): string[] {
 	return out;
 }
 
+const COLORS = loadColors();
 const FILES = sourceFiles();
 const TS_FILES = FILES.filter((f) => /\.tsx?$/.test(f));
 const CSS_FILES = FILES.filter((f) => f.endsWith(".css"));
 
-const INDEX_CSS = join(SRC, "index.css");
-const TOKENS_CSS = join(SRC, "styles/tokens.css");
-const RUNTIME_TS = join(SRC, "themes/runtime.ts");
+const GENERATED_CSS = join(SRC, "styles/generated/colors.css");
+const GENERATED_TS = join(SRC, "themes/generated/colors.ts");
+const GENERATED_TYPE_CSS = join(SRC, "styles/generated/typography.css");
 
-/** `--color-<name>` in `@theme inline` — exactly the colour utilities Tailwind will emit. */
-const PUBLISHED = new Set(
-	[...read(INDEX_CSS).matchAll(/^\s*--color-([a-z0-9-]+)\s*:\s*var\((--[a-z0-9-]+)\)/gm)].map(
-		(m) => m[1] as string,
-	),
-);
-/** …and the semantic variable each one points at. */
+const THEME_ENTRY = /^\s*--color-([a-z0-9-]+)\s*:\s*var\((--[a-z0-9-]+)\)/gm;
+/** `--color-<name>` in the generated `@theme inline` — exactly the utilities Tailwind will emit. */
 const PUBLISHED_TARGET = new Map(
-	[...read(INDEX_CSS).matchAll(/^\s*--color-([a-z0-9-]+)\s*:\s*var\((--[a-z0-9-]+)\)/gm)].map(
+	[...read(GENERATED_CSS).matchAll(THEME_ENTRY)].map(
 		(m) => [m[1] as string, m[2] as string] as const,
 	),
 );
+const PUBLISHED = new Set(PUBLISHED_TARGET.keys());
 
 /**
  * Every custom property declared anywhere in our CSS. The generated typography sheet is excluded from
  * the scans below (it is not hand-written) but still DECLARES the `--tr-*` tokens that Monaco, xterm
  * and mermaid read, so it counts here.
  */
-const GENERATED_CSS = join(SRC, "styles/generated/typography.css");
 const DECLARED_VARS = new Set(
-	[...CSS_FILES, GENERATED_CSS].flatMap((f) =>
+	[...CSS_FILES, GENERATED_CSS, GENERATED_TYPE_CSS].flatMap((f) =>
 		[...read(f).matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm)].map((m) => m[1]),
 	),
 );
-/** Every custom property the theme engine writes at runtime (palette + ANSI + syntax + effects). */
-const PALETTE_VARS = new Set([...read(RUNTIME_TS).matchAll(/"(--[a-z0-9-]+)"/g)].map((m) => m[1]));
+/**
+ * Every custom property the theme engine writes at runtime: the palette + effects (generated from
+ * `colors.json`) and the ANSI + syntax tables (`themes/runtime.ts`).
+ */
+const PALETTE_VARS = new Set(
+	[join(SRC, "themes/runtime.ts"), GENERATED_TS].flatMap((f) =>
+		[...read(f).matchAll(/"(--[a-z0-9-]+)"/g)].map((m) => m[1] as string),
+	),
+);
 const ALL_VARS = new Set([...DECLARED_VARS, ...PALETTE_VARS]);
 
 /**
@@ -125,21 +129,28 @@ describe("the published token set", () => {
 		expect([...PUBLISHED].filter((n) => !used.has(n)).sort()).toEqual([]);
 	});
 
-	it("keeps `tokens.css` and `@theme inline` in step", () => {
-		// Every semantic token is either published as a utility or read by a non-CSS consumer
+	it("gives every generated role a consumer", () => {
+		// A role is either published as a utility or read directly by a non-CSS consumer
 		// (Monaco/xterm/mermaid/Shiki/`global.css`). One that is neither is dead weight.
-		const semantic = read(TOKENS_CSS).split("Semantic Color Tokens")[1] as string;
-		const declared = [...semantic.matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm)]
-			.map((m) => m[1] as string)
-			.filter((v) => !/^--(space|radius|transition)/.test(v));
+		const roles = [
+			...(read(GENERATED_CSS).split("@theme inline")[0] as string).matchAll(
+				/^\s*(--[a-z0-9-]+)\s*:/gm,
+			),
+		].map((m) => m[1] as string);
 		const targets = new Set(PUBLISHED_TARGET.values());
-		const consumers = FILES.filter((f) => f !== TOKENS_CSS)
-			.map(code)
-			.join("");
-		const orphans = declared.filter(
+		const consumers = FILES.map(code).join("");
+		const orphans = roles.filter(
 			(v) => !targets.has(v) && !consumers.includes(`var(${v})`) && !consumers.includes(`"${v}"`),
 		);
 		expect(orphans).toEqual([]);
+	});
+
+	it("is regenerated from `colors.json` — the committed output is not stale", () => {
+		// The same assertion `bun run colors:check` makes, so a hand-edit of the generated CSS fails
+		// here too rather than only at commit time.
+		expect(validate(COLORS)).toEqual([]);
+		expect(read(GENERATED_CSS)).toBe(renderCss(COLORS));
+		expect(read(GENERATED_TS)).toBe(renderTs(COLORS));
 	});
 });
 
@@ -186,10 +197,11 @@ describe("colour at a call site", () => {
 
 describe("raw colour values", () => {
 	/**
-	 * The COMPLETE allowlist. `lib/utils.ts` round-trips colours through a canvas and needs two literal
-	 * probes; `themes/runtime.ts` holds the appearance-level effect scrims.
+	 * The COMPLETE allowlist, now one file: `lib/utils.ts` round-trips colours through a canvas and
+	 * needs two literal probes. The effect scrims that used to sit in `themes/runtime.ts` are data in
+	 * `colors.json`.
 	 */
-	const ALLOWLIST = new Set(["lib/utils.ts", "themes/runtime.ts"]);
+	const ALLOWLIST = new Set(["lib/utils.ts"]);
 
 	it("appear in no component", () => {
 		const literal = /#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(/;
@@ -205,16 +217,16 @@ describe("raw colour values", () => {
 		expect(bad).toEqual([]);
 	});
 
-	it("appear in no stylesheet outside the token layer", () => {
-		const bad = CSS_FILES.filter((f) => f !== TOKENS_CSS)
-			.flatMap((f) =>
-				code(f)
-					.split("\n")
-					.map((line, i) => ({ line, i }))
-					.filter(({ line }) => /#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(/.test(line))
-					.map(({ line, i }) => `${rel(f)}:${i + 1}: ${line.trim().slice(0, 80)}`),
-			)
-			.filter((s) => !s.startsWith("styles/generated/"));
+	it("appear in no hand-written stylesheet", () => {
+		// There is no exception any more: the roles are generated, so a literal in a .css file is a
+		// colour that `colors.json` does not know about.
+		const bad = CSS_FILES.flatMap((f) =>
+			code(f)
+				.split("\n")
+				.map((line, i) => ({ line, i }))
+				.filter(({ line }) => /#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(/.test(line))
+				.map(({ line, i }) => `${rel(f)}:${i + 1}: ${line.trim().slice(0, 80)}`),
+		);
 		expect(bad).toEqual([]);
 	});
 });

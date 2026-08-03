@@ -2,7 +2,7 @@
 id: web-color
 type: submodule-design
 status: active
-title: ThinkRail colour — a per-theme palette, one semantic layer, one alpha scale
+title: ThinkRail colour — one JSON source, generated CSS, semantic roles
 parent: module-web
 depends-on: [submodule-web-themes]
 references: [web-typography]
@@ -14,11 +14,20 @@ Colour arrives in **two layers**, and a component may only ever name the second 
 
 ```
 themes/bundled/*.theme.json    the PALETTE — one file per theme, the only place a hex lives
-themes/runtime.ts              writes that palette to CSS custom properties before React mounts
-styles/tokens.css              the SEMANTIC layer — roles, derived from the palette
-index.css  @theme inline       publishes each role as a Tailwind utility
+styles/colors.json             the SEMANTIC layer — what each palette entry is FOR (one file)
+styles/colors.schema.json      the editor-facing contract for it
+scripts/colors.ts              load / validate / render — the only place a derivation is written
+scripts/generate-colors.ts     writes the output; `--check` fails when it is stale
+styles/generated/colors.css    GENERATED: the `:root` roles + the `@theme inline` utility map
+styles/generated/colors.ts     GENERATED: the manifest→variable map and the effect values
+themes/runtime.ts              applies the active manifest through those generated tables
 styles/colorUsage.test.ts      the adoption guard
 ```
+
+**No colour is written twice.** A role's derivation lives in `colors.json` and nowhere else — not in
+`tokens.css` (structure only), not in `index.css` (no `--color-*` at all), not in `runtime.ts` (its
+palette map and effect scrims are generated). Editing a generated file fails `bun run colors:check`,
+which runs in pre-commit and in `apps/web`'s build.
 
 A **palette entry** answers *which colour* (`--gold`, `--elevated`, `--hint`). A **semantic token**
 answers *what for* (`feedback-warning`, `container-elevated-bg`, `text-subtle`). Components name roles;
@@ -38,9 +47,9 @@ unstyled while its class list claims otherwise. `colorUsage.test.ts` exists beca
 
 ## The tokens
 
-Declared in `styles/tokens.css`, published as utilities in `index.css`. Every one is used; a token with
-no call site is deleted, and so is an alias that can never differ from its neighbour (`border-strong`
-that equals `border-default` is not a second weight, it is a second name).
+Declared in `colors.json`, published as utilities by the generator. Every one is used; a token with no
+call site is deleted, and so is an alias that can never differ from its neighbour (`border-strong` that
+equals `border-default` is not a second weight, it is a second name).
 
 | family | tokens | notes |
 | --- | --- | --- |
@@ -80,12 +89,18 @@ CSS is minified and Monaco/xterm accept hex only.
 
 ## Adding or changing a colour
 
-1. **A theme should look different** → edit `themes/bundled/<theme>.theme.json`. Nothing else changes.
-2. **A role should point somewhere else** → edit the one declaration in `styles/tokens.css`.
-3. **A new role is genuinely needed** → declare it in `tokens.css`, publish it in `index.css`
-   `@theme inline`, and use it. Both halves are required: a token that is not published produces no
-   utility, and a published token that nothing uses is deleted by review.
-4. **A new tint** → a step on the scale above, never a `/N` at the call site.
+Every case is a JSON edit followed by `bun run colors:generate`.
+
+1. **A theme should look different** → edit `themes/bundled/<theme>.theme.json`. Nothing else changes,
+   and no regeneration is needed: manifests are read at runtime.
+2. **A role should point somewhere else** → change its `from` in `colors.json`.
+3. **A new role** → add it to `roles` with `from`, an optional `alpha` step, and `publish`
+   (`true` → a Tailwind utility; `false` → read directly by Monaco/xterm/mermaid/`global.css`).
+4. **A new tint** → an `alpha` step from `scale`, never a `/N` at the call site. If the step itself is
+   new, add it to `scale` — that is a design decision, and it is made once.
+5. **A role two themes must be able to differ on** → it needs its own manifest key. Add it to
+   `palette` here, to `THEME_COLOR_KEYS` and `theme.schema.json`, and to all six manifests; the
+   generator refuses to run while the two lists disagree.
 
 Never: a raw hex or `rgb()` in a component, an inline `style` object, a `bg-[var(--palette-entry)]`
 escape hatch, or a second name for a value that already has one.
@@ -98,7 +113,8 @@ escape hatch, or a second name for a value that already has one.
 - a component contains a raw hex, `rgb()` or `hsl()`;
 - a component reaches a palette entry through `bg-[var(--…)]`;
 - a `/N` opacity modifier appears on a colour utility;
-- a declared token has no call site, or a published utility has no token.
+- a declared token has no call site, or a published utility has no token;
+- the committed generated files do not match what `colors.json` renders.
 
 `themes/schema.test.ts` and `themes/runtime.test.ts` pin the manifest contract; `themes/shiki.test.ts`
 pins the syntax-variable map. See [`themes/SPEC.md`](../themes/SPEC.md) for the manifest itself and

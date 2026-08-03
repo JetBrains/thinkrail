@@ -1,5 +1,6 @@
 import { DEFAULT_CONFIG, type ThemeId } from "@thinkrail/contracts";
 import { STORAGE_PREFIX } from "../constants/branding";
+import { COLOR_VARIABLES, EFFECTS } from "./generated/colors";
 import {
 	ANSI_COLOR_KEYS,
 	type AnsiColorKey,
@@ -9,7 +10,6 @@ import {
 	type SyntaxColorKey,
 	THEME_COLOR_KEYS,
 	type ThemeAppearance,
-	type ThemeColorKey,
 	type ThemeContrast,
 	type ThemeManifest,
 } from "./schema";
@@ -28,31 +28,6 @@ export interface ThemeCatalog {
 }
 
 const HINT_KEY = `${STORAGE_PREFIX}theme`;
-
-const COLOR_VARIABLES: Record<ThemeColorKey, readonly string[]> = {
-	accent: ["--primary"],
-	onAccent: ["--on-accent"],
-	bubbleAccent: ["--bubble-accent"],
-	background: ["--bg"],
-	content: ["--bg-dark", "--surface-content"],
-	sidebar: ["--surface-sidebar"],
-	input: ["--input-bg"],
-	elevated: ["--elevated"],
-	hover: ["--hover"],
-	border: ["--border"],
-	borderStrong: ["--border2"],
-	text: ["--text"],
-	muted: ["--muted"],
-	hint: ["--hint"],
-	selection: ["--selection-bg"],
-	selectionForeground: ["--selection-fg"],
-	editorSelection: ["--sel"],
-	editorSelectionForeground: ["--sel-fg"],
-	info: ["--blue"],
-	success: ["--green"],
-	danger: ["--red"],
-	warning: ["--gold"],
-};
 
 const ANSI_VARIABLES: Record<AnsiColorKey, string> = {
 	black: "--ansi-black",
@@ -96,23 +71,6 @@ export const SYNTAX_VARIABLES: Record<SyntaxColorKey, string> = {
 	deleted: "--code-deleted",
 	changed: "--code-changed",
 };
-
-const EFFECTS = {
-	dark: {
-		"--sunken": "rgba(0, 0, 0, 0.12)",
-		"--overlay": "rgba(0, 0, 0, 0.5)",
-		"--shadow-sm": "0 2px 8px rgba(0, 0, 0, 0.3)",
-		"--shadow-md": "0 4px 16px rgba(0, 0, 0, 0.35)",
-		"--shadow-lg": "0 8px 28px rgba(0, 0, 0, 0.4)",
-	},
-	light: {
-		"--sunken": "rgba(0, 0, 0, 0.05)",
-		"--overlay": "rgba(0, 0, 0, 0.5)",
-		"--shadow-sm": "0 2px 8px rgba(0, 0, 0, 0.1)",
-		"--shadow-md": "0 4px 16px rgba(0, 0, 0, 0.12)",
-		"--shadow-lg": "0 8px 28px rgba(0, 0, 0, 0.14)",
-	},
-} as const;
 
 let catalog: ThemeCatalog = { byId: new Map(), list: [] };
 

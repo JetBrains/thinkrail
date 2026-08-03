@@ -21,7 +21,7 @@
 			"type": "string"
 		},
 		"schemaVersion": {
-			"const": 1
+			"const": 2
 		},
 		"id": {
 			"type": "string",
@@ -63,6 +63,7 @@
 				"onAccent",
 				"bubbleAccent",
 				"background",
+				"header",
 				"content",
 				"sidebar",
 				"input",
@@ -87,6 +88,7 @@
 				"onAccent": { "$ref": "#/$defs/hexColor" },
 				"bubbleAccent": { "$ref": "#/$defs/hexColor" },
 				"background": { "$ref": "#/$defs/hexColor" },
+				"header": { "$ref": "#/$defs/hexColor" },
 				"content": { "$ref": "#/$defs/hexColor" },
 				"sidebar": { "$ref": "#/$defs/hexColor" },
 				"input": { "$ref": "#/$defs/hexColor" },

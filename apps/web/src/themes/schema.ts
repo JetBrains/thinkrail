@@ -5,6 +5,7 @@ export const THEME_COLOR_KEYS = [
 	"onAccent",
 	"bubbleAccent",
 	"background",
+	"header",
 	"content",
 	"sidebar",
 	"input",
@@ -87,7 +88,7 @@ export type ThemeColors = Readonly<
 
 export interface ThemeManifest {
 	readonly $schema?: string;
-	readonly schemaVersion: 1;
+	readonly schemaVersion: 2;
 	readonly id: ThemeId;
 	readonly label: string;
 	readonly order: number;
@@ -193,7 +194,7 @@ export function parseThemeManifest(value: unknown): ThemeManifestParseResult {
 	if (!isRecord(value)) return { ok: false, issues: ["theme manifest must be an object"] };
 
 	noteUnexpectedKeys(value, ROOT_KEYS, "theme", issues);
-	if (value.schemaVersion !== 1) issues.push("theme.schemaVersion must be 1");
+	if (value.schemaVersion !== 2) issues.push("theme.schemaVersion must be 2");
 	if (typeof value.id !== "string" || !isThemeIdSlug(value.id)) {
 		issues.push("theme.id must be a lowercase slug (1-64 characters; letters, numbers, ., _, -)");
 	}
@@ -217,7 +218,7 @@ export function parseThemeManifest(value: unknown): ThemeManifestParseResult {
 
 	const manifest: ThemeManifest = Object.freeze({
 		...(typeof value.$schema === "string" ? { $schema: value.$schema } : {}),
-		schemaVersion: 1,
+		schemaVersion: 2,
 		id: value.id as ThemeId,
 		label: value.label as string,
 		order: value.order as number,

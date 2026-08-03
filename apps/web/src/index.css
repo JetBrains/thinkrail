@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "./styles/fonts.css";
 @import "./styles/generated/typography.css";
+@import "./styles/generated/colors.css";
 @import "./styles/tokens.css";
 @import "./styles/global.css";
 
@@ -20,63 +21,13 @@
  */
 @theme inline {
 	/*
-	 * One entry per semantic token in `styles/tokens.css`, and NOTHING else — no palette entry
-	 * (`--color-gold`) and no token that only a non-CSS consumer reads (Monaco/xterm/mermaid pull
-	 * `--editor-selection-bg` and friends through `getComputedStyle`, so a utility for them would be
-	 * dead weight). Anything listed here becomes a real utility; anything omitted silently produces
-	 * no CSS at the call site, which is why `styles/colorUsage.test.ts` pins the two lists together.
+	 * COLOUR IS NOT HERE. The `--color-*` namespace is generated into `styles/generated/colors.css`
+	 * from `styles/colors.json`, which also carries its own `@theme inline` block — Tailwind flattens
+	 * imports before resolving the theme, so an imported block registers exactly like an inline one.
+	 * Declaring a colour here would be the second source of truth this whole layer exists to remove.
+	 *
+	 * What remains is everything that is NOT a colour and NOT typography.
 	 */
-
-	/* Text */
-	--color-text-default: var(--text-default);
-	--color-text-muted: var(--text-muted);
-	--color-text-subtle: var(--text-subtle);
-	--color-text-on-primary: var(--text-on-primary);
-
-	/* Container */
-	--color-container-workspace-bg: var(--container-workspace-bg);
-	--color-container-sidebar-bg: var(--container-sidebar-bg);
-	--color-container-content-bg: var(--container-content-bg);
-	--color-container-elevated-bg: var(--container-elevated-bg);
-	--color-container-header-bg: var(--container-header-bg);
-
-	/* Control */
-	--color-control-bg: var(--control-bg);
-	--color-control-bg-hovered: var(--control-bg-hovered);
-	--color-control-primary-bg: var(--control-primary-bg);
-	--color-control-primary-text: var(--control-primary-text);
-
-	/* Border */
-	--color-border-default: var(--border-default);
-	--color-border-muted: var(--border-muted);
-
-	/* Primary — the accent itself, then its scale steps */
-	--color-primary: var(--primary);
-	--color-primary-subtle: var(--primary-subtle);
-	--color-primary-soft: var(--primary-soft);
-	--color-primary-muted: var(--primary-muted);
-	--color-primary-strong: var(--primary-strong);
-	--color-on-primary-soft: var(--on-primary-soft);
-
-	/* Feedback */
-	--color-feedback-info: var(--feedback-info);
-	--color-feedback-info-subtle: var(--feedback-info-subtle);
-	--color-feedback-success: var(--feedback-success);
-	--color-feedback-success-subtle: var(--feedback-success-subtle);
-	--color-feedback-success-muted: var(--feedback-success-muted);
-	--color-feedback-error: var(--feedback-error);
-	--color-feedback-error-subtle: var(--feedback-error-subtle);
-	--color-feedback-error-muted: var(--feedback-error-muted);
-	--color-feedback-warning: var(--feedback-warning);
-	--color-feedback-warning-subtle: var(--feedback-warning-subtle);
-
-	/* Chat bubble */
-	--color-bubble-user-bg: var(--bubble-user-bg);
-	--color-bubble-user-border: var(--bubble-user-border);
-
-	/* Appearance-level effects (the theme engine writes these per light/dark) */
-	--color-overlay: var(--overlay);
-	--color-sunken: var(--sunken);
 
 	/*
 	 * Tailwind's PREFLIGHT defaults, pointed at the generated tokens. Preflight sets a family on `html`

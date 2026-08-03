@@ -1,6 +1,6 @@
 {
 	"$schema": "../theme.schema.json",
-	"schemaVersion": 1,
+	"schemaVersion": 2,
 	"id": "light",
 	"label": "Light",
 	"order": 20,
@@ -11,6 +11,7 @@
 		"onAccent": "#ffffff",
 		"bubbleAccent": "#6b57ff",
 		"background": "#f2f3f5",
+		"header": "#ffffff",
 		"content": "#ffffff",
 		"sidebar": "#f2f3f5",
 		"input": "#ffffff",
