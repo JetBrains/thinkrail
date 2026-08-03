@@ -11,15 +11,11 @@ import {
 } from "@/components/ui/dialog";
 
 /**
- * A small modal confirm on the `Dialog` primitive — a yes/no for an action with no on-screen anchor (e.g.
- * the "initialize a git repository?" offer, or an action reached through an overflow menu like the
- * workspace row's Remove — the trigger there is a generic kebab icon, not itself a delete affordance, so
- * anchoring a confirm box to it the way `ConfirmPopover` does would read oddly). For a confirm anchored to
- * a dedicated trigger that *is* the action (deleting a prompt template), use `ConfirmPopover`. Forces a
- * deliberate choice: `role="alertdialog"` (Radix's `Dialog.Content` defaults to plain `"dialog"` — this
- * IS an alert awaiting a response, so it's overridden the same way `ConfirmPopover` sets it explicitly),
- * no ✕ (`hideClose`), Cancel takes initial focus (a destructive action is never one stray Enter away), and
- * a `destructive` confirm shows a warning glyph.
+ * A small modal confirm on the `Dialog` primitive — a yes/no for an action with no stable on-screen
+ * confirmation anchor (for example an initialize offer, a context-menu action, or an overflow-menu
+ * action like workspace Remove). For a confirm anchored to a dedicated action control, use
+ * `ConfirmPopover`. Forces a deliberate choice: `role="alertdialog"`, no ✕ (`hideClose`), Cancel takes
+ * initial focus, and a `destructive` confirm shows a warning glyph.
  */
 export function ConfirmDialog({
 	open,
@@ -31,6 +27,7 @@ export function ConfirmDialog({
 	destructive = false,
 	confirmTestId,
 	onConfirm,
+	onClosedAutoFocus,
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
@@ -41,6 +38,7 @@ export function ConfirmDialog({
 	destructive?: boolean;
 	confirmTestId?: string;
 	onConfirm: () => void;
+	onClosedAutoFocus?: () => void;
 }) {
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
@@ -49,6 +47,14 @@ export function ConfirmDialog({
 				className="max-w-[24rem]"
 				hideClose
 				data-testid="confirm-dialog"
+				onCloseAutoFocus={
+					onClosedAutoFocus
+						? (event) => {
+								event.preventDefault();
+								onClosedAutoFocus();
+							}
+						: undefined
+				}
 			>
 				<DialogHeader>
 					<div className="flex items-center gap-sm">

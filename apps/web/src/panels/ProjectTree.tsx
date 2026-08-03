@@ -13,8 +13,15 @@ import {
 	Trash2,
 	X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import {
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuSeparator,
+	ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -57,6 +64,38 @@ export function ProjectTree() {
 	// The project a New-Workspace dialog is open for (null = closed). The "+" opens it instead of
 	// creating a workspace directly.
 	const [dialogProjectId, setDialogProjectId] = useState<string | null>(null);
+	const addProjectButtonRef = useRef<HTMLButtonElement>(null);
+	const projectNameButtonsRef = useRef(new Map<string, HTMLButtonElement>());
+	const pendingCloseFocusProjectIdRef = useRef<string | null>(null);
+	const workspaceDialogReturnFocusIdRef = useRef<string | null>(null);
+
+	const registerProjectNameButton = useCallback(
+		(projectId: string, element: HTMLButtonElement | null) => {
+			if (element) projectNameButtonsRef.current.set(projectId, element);
+			else projectNameButtonsRef.current.delete(projectId);
+		},
+		[],
+	);
+	const focusProjectNameOrAdd = useCallback((projectId?: string) => {
+		requestAnimationFrame(() => {
+			const projectButton = projectId ? projectNameButtonsRef.current.get(projectId) : undefined;
+			(projectButton ?? addProjectButtonRef.current)?.focus();
+		});
+	}, []);
+
+	// Once this client's event-driven close removes its source row, move focus to the project selected by
+	// the store's navigation fallback (or the newest open project for a background close), then Add project
+	// when the rail is empty. Other clients receive the same snapshot without having their focus moved.
+	useEffect(() => {
+		const closedProjectId = pendingCloseFocusProjectIdRef.current;
+		if (!closedProjectId || projects.some((project) => project.id === closedProjectId)) return;
+		pendingCloseFocusProjectIdRef.current = null;
+		let fallbackProjectId = projects[0]?.id;
+		if (selectedProjectId && projects.some((project) => project.id === selectedProjectId)) {
+			fallbackProjectId = selectedProjectId;
+		}
+		focusProjectNameOrAdd(fallbackProjectId);
+	}, [focusProjectNameOrAdd, projects, selectedProjectId]);
 
 	// Reveal the active workspace's parent on mount or when its derived owner changes/resolves. Depending
 	// only on that project id preserves a deliberate manual collapse across same-project switches and
@@ -151,9 +190,21 @@ export function ProjectTree() {
 	// Lossless and event-driven: the host marks the stable project record closed, then project.updated
 	// removes it from every client's rail. A rejected request emits no event, so the row stays and we toast.
 	const closeProject = (project: Project) => {
+		pendingCloseFocusProjectIdRef.current = project.id;
 		void getTransport()
 			.request("project.close", { id: project.id })
-			.catch((err) => toast.error(errorText(err, `Couldn't close ${project.name}`)));
+			.catch((err) => {
+				if (pendingCloseFocusProjectIdRef.current === project.id) {
+					pendingCloseFocusProjectIdRef.current = null;
+				}
+				focusProjectNameOrAdd(project.id);
+				toast.error(errorText(err, `Couldn't close ${project.name}`));
+			});
+	};
+
+	const openWorkspaceDialog = (projectId: string, returnFocusToProject: boolean) => {
+		workspaceDialogReturnFocusIdRef.current = returnFocusToProject ? projectId : null;
+		setDialogProjectId(projectId);
 	};
 
 	return (
@@ -166,6 +217,7 @@ export function ProjectTree() {
 					onOpenRecent={(p) => void openProject(p)}
 				>
 					<Button
+						ref={addProjectButtonRef}
 						variant="ghost"
 						size="icon"
 						data-testid="add-project-menu"
@@ -194,7 +246,10 @@ export function ProjectTree() {
 								onToggle={() => toggleExpand(project.id)}
 								onSelect={() => void selectProject(project.id)}
 								onClose={() => closeProject(project)}
-								onAddWorkspace={() => setDialogProjectId(project.id)}
+								onAddWorkspace={() => openWorkspaceDialog(project.id, false)}
+								onAddWorkspaceFromMenu={() => openWorkspaceDialog(project.id, true)}
+								onRegisterNameButton={(element) => registerProjectNameButton(project.id, element)}
+								onRestoreFocus={() => focusProjectNameOrAdd(project.id)}
 							/>
 							{isExpanded && list !== undefined && (
 								<ul className="flex flex-col">
@@ -223,7 +278,11 @@ export function ProjectTree() {
 					open
 					projectId={dialogProjectId}
 					onOpenChange={(o) => {
-						if (!o) setDialogProjectId(null);
+						if (o) return;
+						setDialogProjectId(null);
+						const returnFocusId = workspaceDialogReturnFocusIdRef.current;
+						workspaceDialogReturnFocusIdRef.current = null;
+						if (returnFocusId) focusProjectNameOrAdd(returnFocusId);
 					}}
 					onCreated={(ws) => void onWorkspaceCreated(ws)}
 				/>
@@ -243,6 +302,9 @@ function ProjectRow({
 	onSelect,
 	onClose,
 	onAddWorkspace,
+	onAddWorkspaceFromMenu,
+	onRegisterNameButton,
+	onRestoreFocus,
 }: {
 	project: Project;
 	isSelected: boolean;
@@ -252,26 +314,44 @@ function ProjectRow({
 	onSelect: () => void;
 	onClose: () => void;
 	onAddWorkspace: () => void;
+	onAddWorkspaceFromMenu: () => void;
+	onRegisterNameButton: (element: HTMLButtonElement | null) => void;
+	onRestoreFocus: () => void;
 }) {
 	const Chevron = isExpanded ? ChevronDown : ChevronRight;
+	const [menuOpen, setMenuOpen] = useState(false);
 	const [confirmOpen, setConfirmOpen] = useState(false);
+	const openingDialogRef = useRef(false);
+	const closeConfirmedRef = useRef(false);
+	// Release the context menu's modal layer before mounting another one. Overlapping Radix modals can
+	// otherwise race while restoring body pointer events after the next dialog closes.
+	const openDialogAfterMenu = (openDialog: () => void) => {
+		openingDialogRef.current = true;
+		setMenuOpen(false);
+		requestAnimationFrame(openDialog);
+	};
 	const row = (
 		<div
 			data-testid="project-item"
-			className="group flex h-7 items-center gap-xs rounded-[var(--radius-sm)] pr-xs pl-xs transition-colors hover:bg-control-bg-hovered"
+			data-menu-open={menuOpen}
+			className={`group flex h-7 items-center gap-xs rounded-[var(--radius-sm)] pr-xs pl-xs transition-colors ${
+				menuOpen ? "bg-control-bg-hovered" : "hover:bg-control-bg-hovered"
+			}`}
 		>
 			<button
 				type="button"
 				data-testid="project-expand"
 				aria-label={isExpanded ? "Collapse project" : "Expand project"}
 				onClick={onToggle}
-				className="flex size-4 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-subtle opacity-0 transition-opacity hover:text-text-default group-hover:opacity-100 data-[expanded=true]:opacity-100"
+				className="flex size-4 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-subtle transition-colors hover:text-text-default focus-visible:text-text-default"
 				data-expanded={isExpanded}
 			>
 				<Chevron className="size-4" />
 			</button>
 			<button
+				ref={onRegisterNameButton}
 				type="button"
+				data-testid="project-name"
 				onClick={onSelect}
 				className="flex min-w-0 flex-1 items-center gap-sm text-left"
 			>
@@ -283,42 +363,88 @@ function ProjectRow({
 				</span>
 			</button>
 			{!isExpanded && workspaceCount > 0 && (
-				<span className="shrink-0 tr-text-metadata text-text-subtle">{workspaceCount}</span>
-			)}
-			<PopoverTrigger asChild>
-				<button
-					type="button"
-					data-testid="close-project"
-					aria-label={`Close ${project.name} project`}
-					className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-container-elevated-bg hover:text-text-default focus-visible:bg-container-elevated-bg focus-visible:text-text-default"
+				<span
+					data-testid="project-workspace-count"
+					className="shrink-0 tr-text-metadata text-text-subtle"
 				>
-					<X className="size-4" />
-				</button>
-			</PopoverTrigger>
+					{workspaceCount}
+				</span>
+			)}
 			<button
 				type="button"
 				data-testid="add-workspace"
 				aria-label="Create workspace"
 				onClick={onAddWorkspace}
-				className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-container-elevated-bg hover:text-text-default focus-visible:bg-container-elevated-bg focus-visible:text-text-default"
+				className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition-colors hover:bg-container-elevated-bg hover:text-text-default focus-visible:bg-container-elevated-bg focus-visible:text-text-default"
 			>
 				<Plus className="size-4" />
 			</button>
 		</div>
 	);
 	return (
-		<ConfirmPopover
-			open={confirmOpen}
-			onOpenChange={setConfirmOpen}
-			title={`Close ${project.name}?`}
-			description="Removes this project from the open projects list. Its repository, workspaces, chats, and running activity are kept. Reopen it from Add project → Recents."
-			confirmLabel="Close project"
-			confirmTestId="confirm-close-project"
-			onConfirm={onClose}
-			align="end"
-		>
-			{row}
-		</ConfirmPopover>
+		<>
+			<ContextMenu open={menuOpen} onOpenChange={setMenuOpen}>
+				<ContextMenuTrigger
+					asChild
+					onContextMenu={(event) => {
+						if (event.button !== 2) event.preventDefault();
+					}}
+					onKeyDownCapture={(event) => {
+						if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+							event.preventDefault();
+						}
+					}}
+				>
+					{row}
+				</ContextMenuTrigger>
+				<ContextMenuContent
+					data-testid="project-actions"
+					onCloseAutoFocus={(event) => {
+						event.preventDefault();
+						if (!openingDialogRef.current) onRestoreFocus();
+						openingDialogRef.current = false;
+					}}
+				>
+					<ContextMenuItem
+						data-testid="project-menu-create-workspace"
+						onSelect={(event) => {
+							event.preventDefault();
+							openDialogAfterMenu(onAddWorkspaceFromMenu);
+						}}
+					>
+						<Plus />
+						Create workspace
+					</ContextMenuItem>
+					<ContextMenuSeparator />
+					<ContextMenuItem
+						data-testid="project-menu-close"
+						onSelect={(event) => {
+							event.preventDefault();
+							openDialogAfterMenu(() => setConfirmOpen(true));
+						}}
+					>
+						<X />
+						Close project
+					</ContextMenuItem>
+				</ContextMenuContent>
+			</ContextMenu>
+			<ConfirmDialog
+				open={confirmOpen}
+				onOpenChange={setConfirmOpen}
+				title={`Close ${project.name}?`}
+				description="Removes this project from the open projects list. Its repository, workspaces, chats, and running activity are kept. Reopen it from Add project → Recents."
+				confirmLabel="Close project"
+				confirmTestId="confirm-close-project"
+				onConfirm={() => {
+					closeConfirmedRef.current = true;
+					onClose();
+				}}
+				onClosedAutoFocus={() => {
+					if (!closeConfirmedRef.current) onRestoreFocus();
+					closeConfirmedRef.current = false;
+				}}
+			/>
+		</>
 	);
 }
 
