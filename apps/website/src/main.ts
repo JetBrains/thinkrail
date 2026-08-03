@@ -232,6 +232,32 @@ if (stars) {
 		});
 }
 
+/* ── Rail note dismiss ─────────────────────────────────────────────────── */
+
+const railNote = document.getElementById("rail-note");
+const railNoteDismiss = document.getElementById("rail-note-dismiss");
+if (railNote && railNoteDismiss) {
+	const STORAGE_KEY = "thinkrail-rail-note-dismissed";
+
+	// Check if already dismissed
+	try {
+		if (localStorage.getItem(STORAGE_KEY) === "true") {
+			railNote.classList.add("hidden");
+		}
+	} catch {
+		// localStorage unavailable
+	}
+
+	railNoteDismiss.addEventListener("click", () => {
+		railNote.classList.add("hidden");
+		try {
+			localStorage.setItem(STORAGE_KEY, "true");
+		} catch {
+			// localStorage unavailable
+		}
+	});
+}
+
 /* ── Mock-disabled tooltips ─────────────────────────────────────────────── */
 // Disabled mock UI elements show a rich callout encouraging visitors to try the real product.
 // Tooltip is anchored to the trigger region, not the cursor.
