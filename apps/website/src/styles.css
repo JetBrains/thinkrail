@@ -1521,18 +1521,17 @@ html.anim .terminal.armed [data-out] {
 	margin-top: 16px;
 }
 
-/* Reuse .btn-primary styling inline for the tooltip CTA */
+/* Secondary outlined button for tooltip CTA */
 .mock-tooltip-cta a {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
 	gap: 9px;
-	width: 200px;
 	padding: 10px 18px;
 	border-radius: 8px;
-	border: 1px solid var(--accent);
-	background: var(--accent);
-	color: var(--on-accent);
+	border: 1px solid var(--border2);
+	background: transparent;
+	color: var(--text);
 	font-size: 14px;
 	font-weight: 500;
 	text-decoration: none;
@@ -1540,7 +1539,8 @@ html.anim .terminal.armed [data-out] {
 }
 
 .mock-tooltip-cta a:hover {
-	background: color-mix(in srgb, var(--accent) 88%, black);
+	background: var(--hover);
+	border-color: var(--muted);
 }
 
 .mock-tooltip-cta .i {
