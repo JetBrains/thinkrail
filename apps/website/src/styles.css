@@ -495,7 +495,7 @@ code {
 .rail-note-icon {
 	width: 24px;
 	height: 24px;
-	color: var(--accent);
+	color: var(--hint);
 	flex-shrink: 0;
 	fill: none;
 	stroke: currentColor;
@@ -505,17 +505,21 @@ code {
 }
 
 .rail-note p {
-	margin: 12px 0 0;
+	margin: 8px 0 0;
 	font-size: 14px;
 	color: var(--text);
 	line-height: 1.5;
+}
+
+.rail-note code {
+	white-space: nowrap;
 }
 
 .rail-note-dismiss {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	margin-top: 16px;
+	margin-top: 12px;
 	padding: 10px 18px;
 	border: 1px solid var(--border2);
 	border-radius: 8px;
