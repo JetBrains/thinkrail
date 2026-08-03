@@ -27,9 +27,9 @@ const STATUS_LABEL: Record<ConnectionStatus, string> = {
 };
 
 const STATUS_DOT: Record<ConnectionStatus, string> = {
-	connected: "bg-green",
-	connecting: "bg-gold",
-	disconnected: "bg-red",
+	connected: "bg-feedback-success",
+	connecting: "bg-feedback-warning",
+	disconnected: "bg-feedback-error",
 };
 
 export function Shell() {

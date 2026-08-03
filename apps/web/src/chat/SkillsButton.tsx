@@ -35,7 +35,7 @@ export function SkillsButton({
 		>
 			<BookOpen className="size-3.5" />
 			Skills
-			{stale ? <span className="size-1.5 rounded-full bg-gold" aria-hidden /> : null}
+			{stale ? <span className="size-1.5 rounded-full bg-feedback-warning" aria-hidden /> : null}
 		</button>
 	);
 }

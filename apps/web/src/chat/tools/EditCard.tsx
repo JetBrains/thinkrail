@@ -47,7 +47,7 @@ export function EditCard({ args, result, status, workspaceRoot }: ToolRenderProp
 					{newLines.map((line, i) => {
 						const key = `new-${i}`;
 						return (
-							<div key={key} className="flex bg-green/10">
+							<div key={key} className="flex bg-feedback-success/10">
 								<span className="w-6 shrink-0 select-none px-1 text-right text-feedback-success/50">
 									+
 								</span>
