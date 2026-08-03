@@ -296,10 +296,10 @@ if (mockElements.length > 0) {
 			left = railRect.left - tooltipRect.width - 12;
 			top = titlebarRect.bottom + 12;
 		} else if (trigger.classList.contains("term-screen") && statusbar) {
-			// Terminal: to the left of terminal, bottom-aligned with statusbar
+			// Terminal: to the left of terminal, 12px above statusbar
 			const statusbarRect = statusbar.getBoundingClientRect();
 			left = triggerRect.left - tooltipRect.width - 12;
-			top = statusbarRect.top - tooltipRect.height;
+			top = statusbarRect.top - tooltipRect.height - 12;
 		} else {
 			// Left sidebar and others: right of trigger (original behavior)
 			left = triggerRect.right + GAP;
