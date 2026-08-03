@@ -843,18 +843,18 @@ p.hero-lede {
 
 .install-line {
 	display: flex;
-	align-items: center;
-	gap: 8px;
+	align-items: stretch;
 	margin: 26px 0 10px;
 	max-width: 100%;
+	background: var(--input);
+	border: 1px solid var(--border2);
+	border-radius: 8px;
+	overflow: hidden;
 }
 
 .install-line > code {
 	flex: 1;
 	min-width: 0;
-	background: var(--input);
-	border: 1px solid var(--border2);
-	border-radius: 8px;
 	padding: 12px 14px;
 	font-size: 12.5px;
 	white-space: nowrap;
@@ -867,12 +867,11 @@ p.hero-lede {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 40px;
-	height: 42px;
+	width: 44px;
 	flex: none;
-	border: 1px solid var(--border2);
-	border-radius: 8px;
-	background: var(--elevated);
+	border: none;
+	border-left: 1px solid var(--border2);
+	background: transparent;
 	color: var(--muted);
 	cursor: pointer;
 	font-size: 15px;
