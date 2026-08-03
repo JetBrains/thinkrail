@@ -232,20 +232,39 @@ if (stars) {
 		});
 }
 
-/* ── Rail note dismiss ─────────────────────────────────────────────────── */
+/* ── Rail note (scroll-triggered reveal + dismiss) ───────────────────────── */
 
 const railNote = document.getElementById("rail-note");
 const railNoteDismiss = document.getElementById("rail-note-dismiss");
 if (railNote && railNoteDismiss) {
 	const STORAGE_KEY = "thinkrail-rail-note-dismissed";
+	const SCROLL_THRESHOLD = 150; // px
+	let revealed = false;
 
 	// Check if already dismissed
+	let dismissed = false;
 	try {
-		if (localStorage.getItem(STORAGE_KEY) === "true") {
-			railNote.classList.add("hidden");
-		}
+		dismissed = localStorage.getItem(STORAGE_KEY) === "true";
 	} catch {
 		// localStorage unavailable
+	}
+
+	if (dismissed) {
+		// Already dismissed — keep hidden permanently
+		railNote.classList.add("hidden");
+	} else {
+		// Start hidden, reveal on scroll
+		railNote.classList.add("pending");
+
+		const revealOnScroll = () => {
+			if (revealed) return;
+			if (editor && editor.scrollTop >= SCROLL_THRESHOLD) {
+				revealed = true;
+				railNote.classList.remove("pending");
+			}
+		};
+
+		editor?.addEventListener("scroll", revealOnScroll);
 	}
 
 	railNoteDismiss.addEventListener("click", () => {

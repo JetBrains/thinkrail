@@ -486,6 +486,17 @@ code {
 	background: var(--elevated);
 	border: 1px solid var(--border2);
 	border-radius: 12px;
+	opacity: 1;
+	transform: translateY(0);
+	transition:
+		opacity 300ms ease-out,
+		transform 300ms ease-out;
+}
+
+.rail-note.pending {
+	opacity: 0;
+	transform: translateY(12px);
+	pointer-events: none;
 }
 
 .rail-note.hidden {
