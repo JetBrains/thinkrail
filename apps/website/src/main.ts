@@ -300,8 +300,10 @@ if (mockElements.length > 0) {
 		let top: number;
 
 		// Customize placement per region
-		if (trigger.classList.contains("tabstrip") && titlebar && railRight) {
-			// Editor tabs: 12px below titlebar, 12px to the left of right rail
+		const isTopRegion =
+			trigger.classList.contains("tabstrip") || trigger.classList.contains("rail-tabs");
+		if (isTopRegion && titlebar && railRight) {
+			// Top regions (editor tabs + rail tabs): 12px below titlebar, 12px to the left of right rail
 			const titlebarRect = titlebar.getBoundingClientRect();
 			const railRect = railRight.getBoundingClientRect();
 			left = railRect.left - tooltipRect.width - 12;
