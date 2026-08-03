@@ -266,6 +266,7 @@ if (stars) {
 
 /* ── Mock-disabled tooltips ─────────────────────────────────────────────── */
 // Disabled mock UI elements show a rich callout encouraging visitors to try the real product.
+// Tooltip is anchored to the trigger region, not the cursor.
 
 const mockElements = document.querySelectorAll<HTMLElement>("[data-mock-hint]");
 if (mockElements.length > 0) {
@@ -301,35 +302,33 @@ if (mockElements.length > 0) {
 
 	let hideTimeout: ReturnType<typeof setTimeout> | null = null;
 	let currentTarget: HTMLElement | null = null;
-	let mouseX = 0;
-	let mouseY = 0;
-	let positionLocked = false; // Lock position when moving from trigger to tooltip
 
-	const OFFSET = 12; // Offset from cursor
+	const GAP = 8; // Gap between trigger and tooltip
 	const MARGIN = 8; // Viewport margin
 
-	const positionTooltip = () => {
+	const positionTooltip = (trigger: HTMLElement) => {
+		const triggerRect = trigger.getBoundingClientRect();
 		const tooltipRect = tooltip.getBoundingClientRect();
 		const vw = window.innerWidth;
 		const vh = window.innerHeight;
 
-		// Prefer bottom-right of cursor
-		let left = mouseX + OFFSET;
-		let top = mouseY + OFFSET;
+		// Prefer bottom-right of trigger region
+		let left = triggerRect.right + GAP;
+		let top = triggerRect.bottom + GAP;
 
-		// Check if tooltip fits on the right
+		// Check if tooltip fits on the right of trigger
 		const fitsRight = left + tooltipRect.width + MARGIN <= vw;
-		// Check if tooltip fits below
+		// Check if tooltip fits below trigger
 		const fitsBelow = top + tooltipRect.height + MARGIN <= vh;
 
 		if (!fitsRight) {
-			// Place to the left of cursor
-			left = mouseX - tooltipRect.width - OFFSET;
+			// Place to the left of trigger
+			left = triggerRect.left - tooltipRect.width - GAP;
 		}
 
 		if (!fitsBelow) {
-			// Place above cursor
-			top = mouseY - tooltipRect.height - OFFSET;
+			// Place above trigger
+			top = triggerRect.top - tooltipRect.height - GAP;
 		}
 
 		// Final clamp to ensure it stays in viewport
@@ -347,59 +346,47 @@ if (mockElements.length > 0) {
 	};
 
 	const showTooltip = (target: HTMLElement) => {
+		// Cancel any pending hide
 		if (hideTimeout) {
 			clearTimeout(hideTimeout);
 			hideTimeout = null;
 		}
+
+		// If already showing for this target, don't restart animation
+		if (currentTarget === target) return;
+
 		const hint = target.dataset.mockHint;
 		if (!hint) return;
 
 		currentTarget = target;
 		text.textContent = hint;
 		tooltip.classList.add("visible");
-		positionLocked = false; // Allow positioning on new trigger
-		positionTooltip();
+		positionTooltip(target);
 	};
 
-	const hideTooltip = (lock = true) => {
-		if (lock) positionLocked = true; // Lock position while moving to tooltip
+	const hideTooltip = () => {
 		hideTimeout = setTimeout(() => {
 			tooltip.classList.remove("visible");
 			currentTarget = null;
-			positionLocked = false;
-		}, 150); // Grace delay allows moving cursor to tooltip
+		}, 200); // Grace delay allows moving cursor to tooltip
 	};
 
-	// Keep tooltip open when hovering the tooltip itself (for clicking the CTA)
-	tooltip.addEventListener("mouseenter", () => {
+	const cancelHide = () => {
 		if (hideTimeout) {
 			clearTimeout(hideTimeout);
 			hideTimeout = null;
 		}
-		positionLocked = true; // Keep position locked while in tooltip
-	});
-	tooltip.addEventListener("mouseleave", () => hideTooltip(false));
-
-	const handleMouseMove = (e: MouseEvent) => {
-		mouseX = e.clientX;
-		mouseY = e.clientY;
-		if (currentTarget && !positionLocked) {
-			positionTooltip();
-		}
 	};
 
-	// Track mouse position globally for tooltip positioning
-	document.addEventListener("mousemove", handleMouseMove);
+	// Keep tooltip open when hovering the tooltip itself (for clicking the CTA)
+	tooltip.addEventListener("mouseenter", cancelHide);
+	tooltip.addEventListener("mouseleave", hideTooltip);
 
 	for (const el of mockElements) {
 		// Re-enable pointer events for hover detection, but prevent clicks
 		el.style.pointerEvents = "auto";
-		el.addEventListener("mouseenter", (e) => {
-			mouseX = e.clientX;
-			mouseY = e.clientY;
-			showTooltip(el);
-		});
-		el.addEventListener("mouseleave", () => hideTooltip(true));
+		el.addEventListener("mouseenter", () => showTooltip(el));
+		el.addEventListener("mouseleave", hideTooltip);
 		// Block clicks on the element itself
 		el.addEventListener("click", (e) => {
 			e.preventDefault();
