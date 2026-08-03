@@ -1580,7 +1580,7 @@ html.anim .terminal.armed [data-out] {
 .mock-tooltip-icon {
 	width: 24px;
 	height: 24px;
-	color: var(--accent);
+	color: var(--text);
 	flex-shrink: 0;
 	fill: none;
 	stroke: currentColor;
