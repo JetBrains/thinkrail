@@ -404,8 +404,7 @@ export function NewWorkspaceDialog({
 				id: selectedProjectId,
 				trusted: true,
 			});
-			const store = useAppStore.getState();
-			store.setProjects(store.projects.map((p) => (p.id === updated.id ? updated : p)));
+			useAppStore.getState().applyProjectUpdated(updated);
 			const commands = await slashCommandCatalogOrEmpty(() =>
 				getTransport().request("skill.list", { projectId: selectedProjectId }),
 			);

@@ -11,6 +11,7 @@ import {
 	MoreVertical,
 	Plus,
 	Trash2,
+	X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -36,6 +37,7 @@ import { useOpenProject } from "./useOpenProject";
 /** Left-nav: projects → workspaces (git worktrees). Open a repo, select it, create/select workspaces. */
 export function ProjectTree() {
 	const projects = useAppStore((s) => s.projects);
+	const recentProjects = useAppStore((s) => s.recentProjects);
 	const selectedProjectId = useAppStore((s) => s.selectedProjectId);
 	const workspaces = useAppStore((s) => s.workspaces);
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
@@ -146,12 +148,20 @@ export function ProjectTree() {
 			.catch((err) => toast.error(errorText(err, "Failed to reveal workspace")));
 	};
 
+	// Lossless and event-driven: the host marks the stable project record closed, then project.updated
+	// removes it from every client's rail. A rejected request emits no event, so the row stays and we toast.
+	const closeProject = (project: Project) => {
+		void getTransport()
+			.request("project.close", { id: project.id })
+			.catch((err) => toast.error(errorText(err, `Couldn't close ${project.name}`)));
+	};
+
 	return (
 		<nav className="flex flex-col gap-sm">
 			<header className="flex h-7 items-center justify-between pr-xs pl-sm">
 				<span className="tr-text-eyebrow text-text-muted">Projects</span>
 				<AddProjectMenu
-					projects={projects}
+					recentProjects={recentProjects}
 					onOpen={() => void pickAndOpen()}
 					onOpenRecent={(p) => void openProject(p)}
 				>
@@ -183,6 +193,7 @@ export function ProjectTree() {
 								workspaceCount={(list ?? []).filter((w) => !isDefaultWorkspace(w)).length}
 								onToggle={() => toggleExpand(project.id)}
 								onSelect={() => void selectProject(project.id)}
+								onClose={() => closeProject(project)}
 								onAddWorkspace={() => setDialogProjectId(project.id)}
 							/>
 							{isExpanded && list !== undefined && (
@@ -230,6 +241,7 @@ function ProjectRow({
 	workspaceCount,
 	onToggle,
 	onSelect,
+	onClose,
 	onAddWorkspace,
 }: {
 	project: Project;
@@ -238,10 +250,12 @@ function ProjectRow({
 	workspaceCount: number;
 	onToggle: () => void;
 	onSelect: () => void;
+	onClose: () => void;
 	onAddWorkspace: () => void;
 }) {
 	const Chevron = isExpanded ? ChevronDown : ChevronRight;
-	return (
+	const [confirmOpen, setConfirmOpen] = useState(false);
+	const row = (
 		<div
 			data-testid="project-item"
 			className="group flex h-7 items-center gap-xs rounded-[var(--radius-sm)] pr-xs pl-xs transition-colors hover:bg-control-bg-hovered"
@@ -269,20 +283,42 @@ function ProjectRow({
 				</span>
 			</button>
 			{!isExpanded && workspaceCount > 0 && (
-				<span className="shrink-0 tr-text-metadata text-text-subtle group-hover:hidden">
-					{workspaceCount}
-				</span>
+				<span className="shrink-0 tr-text-metadata text-text-subtle">{workspaceCount}</span>
 			)}
+			<PopoverTrigger asChild>
+				<button
+					type="button"
+					data-testid="close-project"
+					aria-label={`Close ${project.name} project`}
+					className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-container-elevated-bg hover:text-text-default focus-visible:bg-container-elevated-bg focus-visible:text-text-default"
+				>
+					<X className="size-4" />
+				</button>
+			</PopoverTrigger>
 			<button
 				type="button"
 				data-testid="add-workspace"
 				aria-label="Create workspace"
 				onClick={onAddWorkspace}
-				className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 transition hover:bg-container-elevated-bg hover:text-text-default group-hover:opacity-100"
+				className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-container-elevated-bg hover:text-text-default focus-visible:bg-container-elevated-bg focus-visible:text-text-default"
 			>
 				<Plus className="size-4" />
 			</button>
 		</div>
+	);
+	return (
+		<ConfirmPopover
+			open={confirmOpen}
+			onOpenChange={setConfirmOpen}
+			title={`Close ${project.name}?`}
+			description="Removes this project from the open projects list. Its repository, workspaces, chats, and running activity are kept. Reopen it from Add project → Recents."
+			confirmLabel="Close project"
+			confirmTestId="confirm-close-project"
+			onConfirm={onClose}
+			align="end"
+		>
+			{row}
+		</ConfirmPopover>
 	);
 }
 

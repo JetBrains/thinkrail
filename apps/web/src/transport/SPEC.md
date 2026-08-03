@@ -20,9 +20,10 @@ The single WebSocket client to the host, and its app-wide singleton.
   replay, reconnect/backoff; `inferUrl` defaults to same-origin; **`httpBase()`** derives the host's HTTP origin
   from the WS `url` — for building host HTTP URLs like the `/files/<workspaceId>/<path>` worktree-file
   endpoint the markdown viewer points relative `<img>`s at, targeting the same host the transport dials); `wireTransport.ts` (`initTransport`/
-  `getTransport` singleton; routes the `server.welcome`, `pi.event`, `pi.extensionUi`, **the
-  `workspace.created`/`updated`/`removed` lifecycle trio, and `workspace.fsChanged`** into the store —
-  `pi.event` via `handlePiEvent(event, sessionId)`, `pi.extensionUi` via `applyExtUi(request)`,
+  `getTransport` singleton; routes `server.welcome`, **`project.updated`**, `pi.event`, `pi.extensionUi`,
+  **the `workspace.created`/`updated`/`removed` lifecycle trio, and `workspace.fsChanged`** into the store —
+  welcome's open + recent project views via `installProjectSnapshot`, project snapshots via
+  `applyProjectUpdated`, `pi.event` via `handlePiEvent(event, sessionId)`, `pi.extensionUi` via `applyExtUi(request)`,
   `workspace.created` via `addWorkspace(workspace)`, `workspace.updated` via `updateWorkspace(workspace)`,
   `workspace.removed` via `applyWorkspaceRemoved(projectId, id)`, `workspace.fsChanged` via
   `noteFsChanged(payload)`, and **`settings.changed`** (+ the `config` field in `server.welcome`) via
@@ -36,7 +37,7 @@ The single WebSocket client to the host, and its app-wide singleton.
   specific failure" from "the read failed").
 - **Public surface (barrel):** `initTransport`, `getTransport`, `errorText`, `RequestError`, `wsErrorCode`,
   `ConnectionStatus`, `TransportOptions`.
-- **Allowed deps:** `contracts` (method maps, `WS_CHANNELS`, `Project` for welcome, `SessionEventPayload`
+- **Allowed deps:** `contracts` (method maps, `WS_CHANNELS`, `Project` for welcome + `project.updated`, `SessionEventPayload`
   for `pi.event`, `ExtUiRequest` for `pi.extensionUi`, `Workspace` for `workspace.created`/`updated`,
   `WorkspaceRemoved` for `workspace.removed`, `WorkspaceFsChangedPayload` for `workspace.fsChanged`,
   `AppConfig` for `server.welcome`'s config + `settings.changed`); `store`

@@ -15,7 +15,15 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
 
 ## Boundary
 
-- **Owns:** `ProjectTree` (+ the `NewWorkspaceDialog` its "+" opens **and** each workspace row's
+- **Owns:** `ProjectTree`. Each project row keeps its direct **Create workspace `+` always visible and
+  rightmost** (the rail-header Add project `+` is unchanged), with an always-visible neutral Lucide `X`
+  **Close project** immediately before it; the name truncates before either action disappears. Close uses
+  an anchored, non-destructive `ConfirmPopover` (`align="end"`) titled **“Close {name}?”**, stating that the
+  repository/workspaces/chats/running activity are kept and the project remains in Add project → Recents;
+  Cancel takes initial focus and the confirm says **Close project**. Confirm fires `project.close` and waits
+  for the full `project.updated` push—no optimistic removal; success is the row disappearing, with no toast,
+  while a rejected request leaves it in place and raises an error toast. `ProjectTree` also owns the
+  `NewWorkspaceDialog` the per-project `+` opens **and** each workspace row's
   hover-revealed **kebab menu** (`MoreVertical`, `DropdownMenu`) — a `DropdownMenuSub` **"Open in"**
   (rendered only when at least one editor was detected — never a dead entry), **Copy path**, **Reveal in
   file manager**, and (worktrees only) **Remove workspace**. "Open in"'s items come from `editor.list`
@@ -56,8 +64,10 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   Default workspace) are presented as an explicit choice (see `WelcomePanel`), so opening and the
   "project home" gesture converge on the same surface. Opening goes through the shared
   **`useOpenProject`** hook (reused by `ProjectTree` **and**
-  `WelcomePanel`, so the flow is identical in the rail and the Welcome screen): `project.open`, and on
-  failure `project.inspect` → either offers to bootstrap the folder into a repo — a modal **`ConfirmDialog`**
+  `WelcomePanel`, so the flow is identical in the rail and the Welcome screen): `project.open` reactivates
+  a closed known path under its same id (or opens a new one), then the initiating client selects Project
+  Home while every client receives `project.updated`; on failure `project.inspect` → either offers to
+  bootstrap the folder into a repo — a modal **`ConfirmDialog`**
   (confirm → `project.init`) — when it's `initable`, or surfaces the error in a **`NoticeDialog`** — so a
   non-git folder is never a silent no-op — and neither is a host that couldn't *show* a folder dialog (that
   throws; the notice carries the reason, and the request runs on a raised `timeoutMs` since the picker waits
@@ -115,7 +125,10 @@ project folder"; **project + no specs** → a spec-first **"Set up project"** (p
 only possible action; once a project is shown, opening another is the projects-rail **"+"** (the same
 dropdown), so Welcome stays the *work-in-this-project* surface. That card hangs the shared
 **`AddProjectMenu`** dropdown off it (same menu as the projects-rail "+": Open project / Open GitHub (soon)
-/ Recents), so `Card` is a `forwardRef` usable as a Radix `asChild` trigger. **"Work in project folder"**
+/ Recents). Recents is the store's `recentProjects`: one last-opened path list containing open + closed
+records with no status badge; selecting either runs the shared open flow and lands at Project Home, with a
+closed record retaining its id and workspace state. `Card` is a `forwardRef` usable as a Radix `asChild`
+trigger. **"Work in project folder"**
 (`House` icon, matching the rail's Default row) **direct-enters** the Default workspace — no dialog: the
 shared `enterDefaultWorkspace` helper lists the project's workspaces, stores them, and activates the
 `kind === "default"` row; an older host with no Default row degrades to an error toast. **"Start building"** is the

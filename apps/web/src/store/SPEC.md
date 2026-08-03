@@ -16,11 +16,21 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
 
 ## Boundary
 
-- **Owns:** `appStore.ts` — connection/projects/workspaces state + setters, including the two atomic
-  navigation transitions: **`selectProject(projectId)`** enters that Project Home (`selectedProjectId`
-  set + `activeWorkspaceId` cleared in one write), while **`activateWorkspace(workspace)`** enters the
-  workspace and selects its owner (both ids set in one write). There is no generic active-workspace setter
-  that can split that invariant. It also owns the **workspace lifecycle reactions** every client runs
+- **Owns:** `appStore.ts` — connection/projects/workspaces state + setters. **`projects`** is the open
+  rail, while **`recentProjects`** is the last-opened-ordered set of every known open + closed project.
+  **`installProjectSnapshot(projects, recentProjects)`** atomically installs both `server.welcome` views;
+  **`applyProjectUpdated(project)`** is the one full-snapshot updater for `project.updated` pushes and
+  authoritative project-mutation responses: it upserts/sorts Recents and either upserts/sorts the rail or
+  removes the row when `closed === true`. Both actions reconcile stale navigation too: only when this
+  client's selected project or active workspace belongs to a record no longer open, they clear the active
+  workspace and select the first remaining project's Home (or `null` when none remain), while deliberately
+  retaining every workspace/tab/terminal/session map for lossless reopen. Other-client opens never steal
+  navigation, and a background close never moves it. All project response call sites use the same updater,
+  so the open and recent copies cannot drift. The two explicit navigation transitions remain:
+  **`selectProject(projectId)`** enters that Project Home (`selectedProjectId` set + `activeWorkspaceId`
+  cleared in one write), while **`activateWorkspace(workspace)`** enters the workspace and selects its
+  owner (both ids set in one write). There is no generic active-workspace setter that can split that
+  invariant. It also owns the **workspace lifecycle reactions** every client runs
   identically on the `workspace.created`/`updated`/`removed` pushes (no per-client optimism — the backend
   is authoritative): **`addWorkspace(ws)`** upserts a
   `workspace.created` snapshot by `id` (no-op if the project isn't listed yet — reconciles on its next

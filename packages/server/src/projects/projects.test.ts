@@ -1,12 +1,24 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	realpathSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+	closeProject,
 	initProject,
 	inspectProjectPath,
 	isProjectTrusted,
 	listProjects,
+	listRecentProjects,
+	openProject,
+	setProjectPublisher,
 	setProjectTrust,
 } from "./projects";
 
@@ -42,6 +54,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+	setProjectPublisher(null);
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
@@ -134,6 +147,59 @@ test("initProject: an existing repo is opened, not re-initialised (dedupe, histo
 	expect(listProjects()).toHaveLength(1);
 	// No fresh commit was layered on top — the original history is intact.
 	expect(gitOut(repo, "rev-parse", "HEAD")).toBe(originalHead);
+});
+
+test("legacy project records default to open in both projections", () => {
+	const repo = join(dataDir, "repo");
+	makeRepo(repo);
+	writeFileSync(
+		join(dataDir, "projects.json"),
+		JSON.stringify([{ id: "legacy", name: "repo", path: repo, slug: "repo", lastOpened: 1 }]),
+	);
+
+	expect(listProjects().map((project) => project.id)).toEqual(["legacy"]);
+	expect(listRecentProjects().map((project) => project.id)).toEqual(["legacy"]);
+});
+
+test("close/reopen preserves the stable project identity and workspace associations", async () => {
+	const repo = join(dataDir, "repo");
+	makeRepo(repo);
+	const project = openProject(repo);
+	const workspaceRecord = { id: "ws1", projectId: project.id, worktreePath: "/kept" };
+	writeFileSync(join(dataDir, "workspaces.json"), JSON.stringify([workspaceRecord]));
+
+	const published: Array<{ id: string; closed?: true }> = [];
+	setProjectPublisher((snapshot) => published.push(snapshot));
+	const closed = closeProject(project.id);
+
+	expect(closed.closed).toBe(true);
+	expect(listProjects()).toEqual([]);
+	expect(listRecentProjects().map(({ id, closed: state }) => ({ id, closed: state }))).toEqual([
+		{ id: project.id, closed: true },
+	]);
+	expect(JSON.parse(readFileSync(join(dataDir, "workspaces.json"), "utf8"))).toEqual([
+		workspaceRecord,
+	]);
+	expect(published).toEqual([expect.objectContaining({ id: project.id, closed: true })]);
+
+	await Bun.sleep(2);
+	const reopened = openProject(repo);
+	expect(reopened.id).toBe(project.id);
+	expect(reopened.closed).toBeUndefined();
+	expect(reopened.lastOpened).toBeGreaterThan(closed.lastOpened);
+	expect(listProjects().map((candidate) => candidate.id)).toEqual([project.id]);
+	expect(listRecentProjects().map((candidate) => candidate.id)).toEqual([project.id]);
+	expect(published).toEqual([
+		expect.objectContaining({ id: project.id, closed: true }),
+		expect.not.objectContaining({ closed: true }),
+	]);
+});
+
+test("closeProject rejects an unknown id instead of reporting a success with no lifecycle event", () => {
+	const published: string[] = [];
+	setProjectPublisher((snapshot) => published.push(snapshot.id));
+	expect(() => closeProject("missing")).toThrow("Unknown project: missing");
+	expect(published).toEqual([]);
 });
 
 test("setProjectTrust: persists a revocable, fail-closed trust decision", () => {

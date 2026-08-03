@@ -12,6 +12,9 @@ export interface Project {
 	slug: string;
 	/** Epoch ms of last open, for sort order. */
 	lastOpened: number;
+	/** Closed projects stay known (and keep their id/workspace associations) but leave the open-project rail.
+	 * Absent means open, so persisted records from before this field remain open without migration. */
+	closed?: true;
 	/**
 	 * Whether the user has engaged trust for this project — the gate on loading its **committed cross-agent
 	 * skill aliases** (`.claude/skills`, `.github/skills`, `.gemini/skills`), which are attacker-controlled

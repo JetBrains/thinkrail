@@ -104,17 +104,23 @@ import type {
 // v23: the workspace row's "Open in" menu — `editor.list` probes the host's PATH for installed
 // editors/IDEs (`EditorInfo[]`, never a fixed client list), `workspace.openIn` launches one detached at a
 // workspace's `worktreePath`, `workspace.reveal` opens the host's file manager there.
-export const PROTOCOL_VERSION = 23;
+// v24: lossless project close/reopen — Project.closed marks rail membership, server.welcome carries open
+// + recent project views, and project.updated streams full snapshots so every client converges.
+export const PROTOCOL_VERSION = 24;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
  * stale UI detect host drift; `appVersion` is the host launcher's baked release version (a released
- * binary stamps it — `undefined` when run from source); `projects` seeds the initial project list.
+ * binary stamps it — `undefined` when run from source); `projects` seeds the open rail and
+ * `recentProjects` seeds Add project → Recents.
  */
 export interface ServerWelcome {
 	protocolVersion: number;
 	appVersion?: string;
+	/** Open projects only, ordered by last open. */
 	projects: Project[];
+	/** Every known project (open + closed), ordered by last open. */
+	recentProjects: Project[];
 	/** The server-synced app settings (theme, …) — applied on connect so the initial paint matches. */
 	config: AppConfig;
 }
@@ -261,6 +267,9 @@ export const WS_METHODS = {
 /** Server→client push channels. */
 export const WS_CHANNELS = {
 	serverWelcome: "server.welcome",
+	// Full persisted snapshot after open/reopen/close. One idempotent channel avoids opened/closed event
+	// streams replaying out of order; `Project.closed` says which projection the record belongs to.
+	projectUpdated: "project.updated",
 	piEvent: "pi.event",
 	piExtensionUi: "pi.extensionUi",
 	// In-app login flow updates (a `LoginPush` per frame), keyed by loginId. Session-less — a login runs on

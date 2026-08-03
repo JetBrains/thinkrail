@@ -28,6 +28,7 @@ import type { ConnectionStatus } from "../transport";
 import {
 	type HistoryTarget,
 	isSkillPath,
+	selectActiveWorkspaceProjectId,
 	selectWorkspaceNavTick,
 	selectWorkspaceTick,
 } from "./selectors";
@@ -461,7 +462,10 @@ function reduceExtUi(
 interface AppState {
 	status: ConnectionStatus;
 	protocolVersion: number | null;
+	/** Open projects shown in the left rail, newest first. */
 	projects: Project[];
+	/** Every known project (open + closed) shown under Add project → Recents, newest first. */
+	recentProjects: Project[];
 	workspaces: Record<string, Workspace[]>;
 	selectedProjectId: string | null;
 	activeWorkspaceId: string | null;
@@ -619,7 +623,10 @@ interface AppState {
 	toasts: Toast[];
 	setStatus: (status: ConnectionStatus) => void;
 	setWelcome: (protocolVersion: number) => void;
-	setProjects: (projects: Project[]) => void;
+	/** Install the host's open + recent project views atomically and repair stale navigation. */
+	installProjectSnapshot: (projects: Project[], recentProjects: Project[]) => void;
+	/** Fold one authoritative project snapshot into both views and repair navigation after close. */
+	applyProjectUpdated: (project: Project) => void;
 	setWorkspaces: (projectId: string, workspaces: Workspace[]) => void;
 	/**
 	 * Fold a server-pushed `workspace.created` snapshot in (**upsert** by id). A project never fetched is a
@@ -827,6 +834,31 @@ interface AppState {
 	dismissToast: (id: string) => void;
 }
 
+/** Newest-first project ordering, copied so a wire array is never mutated in place. */
+function sortProjects(projects: Project[]): Project[] {
+	return [...projects].sort((a, b) => b.lastOpened - a.lastOpened);
+}
+
+/** Replace one full project snapshot by id, or append it when this client has not seen it yet. */
+function upsertProject(projects: Project[], project: Project): Project[] {
+	return projects.some((candidate) => candidate.id === project.id)
+		? projects.map((candidate) => (candidate.id === project.id ? project : candidate))
+		: [...projects, project];
+}
+
+/**
+ * A project close is domain state, but the fallback is this client's view state. Repair it only when the
+ * current Project Home or active workspace belongs to a project no longer in the open projection.
+ */
+function reconcileProjectNavigation(
+	state: Pick<AppState, "selectedProjectId" | "activeWorkspaceId" | "workspaces">,
+	projects: Project[],
+): Pick<AppState, "selectedProjectId" | "activeWorkspaceId"> | Record<string, never> {
+	const currentProjectId = selectActiveWorkspaceProjectId(state) ?? state.selectedProjectId;
+	if (!currentProjectId || projects.some((project) => project.id === currentProjectId)) return {};
+	return { selectedProjectId: projects[0]?.id ?? null, activeWorkspaceId: null };
+}
+
 /**
  * A record without `key` — the immutable delete behind every per-workspace / per-session cleanup here
  * (`applyWorkspaceRemoved`, `clearWorkspaceTabs`, `closeSession`, the ext-UI request drops). One helper so a
@@ -971,6 +1003,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	status: "connecting",
 	protocolVersion: null,
 	projects: [],
+	recentProjects: [],
 	workspaces: {},
 	selectedProjectId: null,
 	activeWorkspaceId: null,
@@ -1005,7 +1038,27 @@ export const useAppStore = create<AppState>((set, get) => ({
 	toasts: [],
 	setStatus: (status) => set({ status }),
 	setWelcome: (protocolVersion) => set({ protocolVersion }),
-	setProjects: (projects) => set({ projects }),
+	installProjectSnapshot: (projects, recentProjects) =>
+		set((state) => {
+			const openProjects = sortProjects(projects.filter((project) => project.closed !== true));
+			return {
+				projects: openProjects,
+				recentProjects: sortProjects(recentProjects),
+				...reconcileProjectNavigation(state, openProjects),
+			};
+		}),
+	applyProjectUpdated: (project) =>
+		set((state) => {
+			const projects =
+				project.closed === true
+					? state.projects.filter((candidate) => candidate.id !== project.id)
+					: sortProjects(upsertProject(state.projects, project));
+			return {
+				projects,
+				recentProjects: sortProjects(upsertProject(state.recentProjects, project)),
+				...reconcileProjectNavigation(state, projects),
+			};
+		}),
 	setWorkspaces: (projectId, workspaces) =>
 		set((s) => ({ workspaces: { ...s.workspaces, [projectId]: workspaces } })),
 	addWorkspace: (workspace) =>

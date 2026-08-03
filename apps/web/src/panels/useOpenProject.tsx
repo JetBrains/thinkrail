@@ -30,12 +30,11 @@ export function useOpenProject(onOpened: (project: Project) => void | Promise<vo
 	// A non-actionable open failure to surface (a stale recent, a broken path). null = no notice.
 	const [openError, setOpenError] = useState<string | null>(null);
 
-	// Refresh the store's project list, then let the caller adopt (select/expand) the opened project.
-	// Deliberately NO auto-enter into any workspace: opening lands on the project's Welcome — the fork
-	// where the two working modes (isolated worktree vs the project folder's Default workspace) are an
-	// explicit choice (see task-workspace-mode-clarity).
+	// Fold the authoritative response immediately (the matching project.updated push is idempotent), then
+	// let the initiating caller select/expand it. Other clients only fold the push and never have navigation
+	// stolen. Deliberately NO auto-enter into any workspace: open/reopen lands on Project Home.
 	const adopt = async (project: Project) => {
-		useAppStore.getState().setProjects(await getTransport().request("project.list", {}));
+		useAppStore.getState().applyProjectUpdated(project);
 		await onOpened(project);
 	};
 
