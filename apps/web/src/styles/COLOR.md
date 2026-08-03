@@ -87,6 +87,20 @@ Those four tokens are therefore **not** mapped in `@theme inline` — a utility 
 weight. Values reach them canonicalised to hex via `cssColorToHex` (`lib/utils.ts`), because the built
 CSS is minified and Monaco/xterm accept hex only.
 
+**What they do NOT cover, deliberately.** Each of these libraries paints far more than we hand it, and
+the remainder comes from its own built-in palette:
+
+| consumer | we set | the rest comes from |
+| --- | --- | --- |
+| Monaco | editor background/foreground, line numbers, cursor, both selection colours, and every syntax rule | `vs` / `vs-dark` / `hc-black` / `hc-light` via `inherit: true` — scrollbars, find/suggest/hover widgets, bracket match, indent guides, overview ruler |
+| xterm | background, foreground, cursor, both selection colours, all 16 ANSI | xterm defaults for `cursorAccent` and `selectionInactiveBackground` |
+| mermaid | the `themeVariables` map in `chat/tools/visualize/mermaid.ts` | mermaid's `base` theme for anything absent from that map |
+
+This is a bounded, accepted gap, not an oversight. Monaco alone exposes ~200 colour keys; enumerating
+them would be a large and brittle surface, and the base is chosen from the manifest's appearance and
+contrast metadata, so it is never wildly wrong. If a theme ever looks off in one of these widgets, the
+fix is to add that specific key — not to adopt the whole surface.
+
 ## Adding or changing a colour
 
 Every case is a JSON edit followed by `bun run colors:generate`.
@@ -116,6 +130,26 @@ escape hatch, or a second name for a value that already has one.
 - a declared token has no call site, or a published utility has no token;
 - the committed generated files do not match what `colors.json` renders.
 
-`themes/schema.test.ts` and `themes/runtime.test.ts` pin the manifest contract; `themes/shiki.test.ts`
-pins the syntax-variable map. See [`themes/SPEC.md`](../themes/SPEC.md) for the manifest itself and
+`themes/schema.test.ts` additionally pins the **contrast floors**, and those deserve stating here
+because one tier is our judgement rather than the standard's:
+
+- on every RESTING surface (`background`, `content`, `sidebar`, `header`, `elevated`, `input`) text
+  meets WCAG AA in full — 4.5 for body and secondary text, 3.0 for the quietest tier;
+- on the transient HOVER surface the floor is **3.0**, not 4.5.
+
+WCAG has no "transient state" allowance, so the hover tier is a line we drew deliberately. These themes
+lift the row background toward the text colour on hover, and holding that to 4.5 would have forced
+Darcula's purple to lavender and Gruvbox's orange to pale orange — the signature colours of the themes
+they are named after. 3.0 keeps hovered text comfortably visible while leaving the themes recognisable.
+Revisit it if strict AA across every state ever becomes a requirement.
+
+`themes/runtime.test.ts` pins application; `themes/shiki.test.ts` pins the syntax-variable map. See [`themes/SPEC.md`](../themes/SPEC.md) for the manifest itself and
 [TYPOGRAPHY.md](./TYPOGRAPHY.md) for the parallel type system.
+
+## Scope: this app only
+
+`apps/website` — the public landing page — has its own stylesheet with its own hardcoded colours and
+fonts, and shares nothing with this system. That is deliberate: it is a static marketing page on GitHub
+Pages with no theme switching, no runtime, and no reason to carry a token layer. Do not "fix" it by
+importing from here; if it ever needs to match the app, the move is to extract a small shared token
+package, not to reach across apps.

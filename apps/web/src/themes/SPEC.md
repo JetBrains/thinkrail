@@ -60,6 +60,12 @@ both as `styles/generated/colors.ts`, which `runtime.ts` applies. The generator 
 `palette` and `THEME_COLOR_KEYS` disagree, so a key added to one and forgotten in the other cannot
 reach a build.
 
+**A manifest must also be legible, not merely complete.** `schema.test.ts` enforces WCAG AA on every
+resting surface (`background`, `content`, `sidebar`, `header`, `elevated`, `input`) and a lower 3.0
+floor on the transient `hover` surface — the latter being our line rather than the standard's, so that
+a theme borrowed from elsewhere keeps its signature colours. A new manifest that reads poorly fails to
+merge; see [`styles/COLOR.md`](../styles/COLOR.md) for the reasoning.
+
 Bundled files are discovered by a build-time glob rather than named in a code catalog, and validated
 all-or-nothing at bootstrap. The files are our own, so any invalid or duplicate manifest — or a missing
 configured default — **fails loudly** (unit tests catch it before merge). Runtime and JSON-schema

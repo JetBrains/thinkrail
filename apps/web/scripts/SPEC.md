@@ -2,7 +2,7 @@
 id: module-web-scripts
 type: submodule-design
 status: active
-title: apps/web build-time scripts — the typography pipeline
+title: apps/web build-time scripts — the typography and colour pipelines
 parent: module-web
 ---
 
@@ -12,7 +12,7 @@ Build-time tooling for `apps/web`. **Nothing here ships**: these modules run und
 machine or in CI, never in the browser bundle. They read files from `src/`, write generated files back
 into `src/`, and exit with a status code.
 
-Today the directory holds exactly one pipeline — typography. It lives here rather than in `src/` because
+The directory holds two pipelines — typography and colour — built the same way. They live here rather than in `src/` because
 it is a *generator*: it uses `node:fs` and `node:path`, which must never reach browser-bundled code.
 
 ## What it owns
@@ -22,15 +22,18 @@ it is a *generator*: it uses `node:fs` and `node:path`, which must never reach b
 | `typography.ts` | the library: load → validate → render CSS. The **only** place CSS custom-property names, semantic class names and prose root class names are derived. |
 | `generate-typography.ts` | CLI. Writes `src/styles/generated/typography.css`; `--check` fails instead of writing when the committed file is stale. |
 | `validate-typography.ts` | CLI. Validates `src/styles/typography.json` and prints a summary. The enforced gate. |
+| `colors.ts` | the library: load → validate → render. The **only** place a colour derivation (a palette alias or an alpha step) is written. |
+| `generate-colors.ts` | CLI. Writes `src/styles/generated/colors.css` (roles + the Tailwind map) and `src/themes/generated/colors.ts` (the manifest→variable table + effects); `--check` fails when either is stale. |
 
-Public surface: `typography.ts`'s exports. There is no `index.ts` barrel — the two CLIs are entry points
+Public surface: the `typography.ts` and `colors.ts` exports. There is no `index.ts` barrel — the two CLIs are entry points
 invoked by name from `package.json`, and the one importer outside this directory
 (`src/styles/*.test.ts`) imports the library directly, which keeps the tests and the generator provably
 in agreement about the same functions.
 
 ## Boundary
 
-- **Allowed deps:** `node:fs`, `node:path`, and `src/styles/typography.json` + `typography.schema.json`
+- **Allowed deps:** `node:fs`, `node:path`, the two JSON sources + their schemas, and — for `colors.ts`
+  alone — a READ of `src/themes/schema.ts`, so the palette table and `THEME_COLOR_KEYS` cannot drift
   as *data* read at run time.
 - **Forbidden:** React, Tailwind, anything under `src/` other than the two JSON files, any
   `@thinkrail/*` package, and any network or shell access. A generator that needed one of those would be

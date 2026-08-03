@@ -41,11 +41,12 @@ convention; their boundary is held by convention + spec. Sibling edges live here
 | `themes` | validated single-file manifests, bundled catalog + atomic token application | yes | [themes/SPEC.md](src/themes/SPEC.md) |
 | `lib` | `cn()` + the shared UI/path/array primitives + highlighting | yes | [lib/SPEC.md](src/lib/SPEC.md) |
 
-Leaf utilities without their own spec: `constants/` (branding) and `styles/` (the typography source +
-generated CSS, plus the structural/derived token contract — theme-specific values belong to `themes`;
-the typography system itself is specced in [src/styles/TYPOGRAPHY.md](src/styles/TYPOGRAPHY.md)).
+Leaf utilities without their own spec: `constants/` (branding) and `styles/` — which holds the two
+design-system SOURCES (`typography.json`, `colors.json`), their generated CSS, and the structural token
+contract; per-theme palettes belong to `themes`. Each system is specced beside its source:
+[TYPOGRAPHY.md](src/styles/TYPOGRAPHY.md) and [COLOR.md](src/styles/COLOR.md).
 Outside `src/`, **[`scripts/`](scripts/SPEC.md)** is the build-time generator module — it runs under Bun,
-never ships, and turns `styles/typography.json` into `styles/generated/typography.css`.
+never ships, and turns those two JSON sources into `styles/generated/`.
 `main.tsx` is the entry/composition root — it synchronously builds the bundled theme catalog, then
 applies the cached first-paint theme hint pre-React before wrapping `<Shell />` in
 `components/ErrorBoundary` as the last-resort boundary (a crash escaping every region shows a reload
@@ -81,6 +82,9 @@ The module set: `transport` / `store` / branded `shell`; `ProjectTree`; `FileTre
   `px-lg`) and a **generated semantic typography class** for type (`tr-text-ui`, `tr-title-dialog`,
   `tr-code-text`, …) — **never inline `style` objects, never raw hex.** Responsive (`md:` …) and states (`hover:` / `focus-visible:`) come
   from Tailwind (inline styles can't express them, and the responsive shell needs them).
+- **The colour and type systems are this app's, not the monorepo's.** `apps/website` keeps its own
+  hardcoded stylesheet on purpose — a static page with no theming has no use for a token layer, and
+  reaching across apps would couple them for nothing.
 - **A colour utility names a semantic role, never a palette entry** — `bg-container-elevated-bg`, not
   `bg-[var(--elevated)]`; and a tint is a token on the four-step alpha scale, not a `/40` modifier.
   `src/styles/COLOR.md` is the system; `src/styles/colorUsage.test.ts` is the adoption guard (Tailwind
