@@ -98,41 +98,22 @@ if (motionOK && terminal && typeTarget) {
 /* ── Chat demo: replay the captured session when it scrolls into view ───── */
 
 const chat = document.getElementById("chat-demo");
-const restartBtn = document.getElementById("chat-restart");
 if (motionOK && chat) {
 	chat.classList.add("armed");
 	const steps = Array.from(chat.querySelectorAll<HTMLElement>("[data-step]"));
 	let played = false;
-	let timeouts: ReturnType<typeof setTimeout>[] = [];
-
-	const playDemo = () => {
-		// Clear any pending timeouts
-		for (const t of timeouts) clearTimeout(t);
-		timeouts = [];
-		// Reset all steps
-		for (const step of steps) step.classList.remove("on");
-		// Replay animation
-		steps.forEach((step, index) => {
-			const t = setTimeout(() => step.classList.add("on"), 250 + index * 550);
-			timeouts.push(t);
-		});
-	};
-
 	const player = new IntersectionObserver(
 		(entries) => {
 			if (played || !entries.some((entry) => entry.isIntersecting)) return;
 			played = true;
 			player.disconnect();
-			playDemo();
+			steps.forEach((step, index) => {
+				setTimeout(() => step.classList.add("on"), 250 + index * 550);
+			});
 		},
 		{ root: editor, threshold: 0.35 },
 	);
 	player.observe(chat);
-
-	// Restart button
-	if (restartBtn) {
-		restartBtn.addEventListener("click", playDemo);
-	}
 }
 
 /* ── Theme dropdown: chip shows the current palette, menu picks one ─────── */
