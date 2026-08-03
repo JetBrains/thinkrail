@@ -237,46 +237,47 @@ if (stars) {
 const railNote = document.getElementById("rail-note");
 const railNoteDismiss = document.getElementById("rail-note-dismiss");
 if (railNote && railNoteDismiss) {
-	const SESSION_KEY = "thinkrail-rail-note-shown";
+	const SHOWN_KEY = "thinkrail-rail-note-shown"; // sessionStorage: seen this session
+	const DISMISSED_KEY = "thinkrail-rail-note-dismissed"; // localStorage: dismissed for good
 	const REVEAL_DELAY = 5000; // 5 seconds
 
-	// Check if already shown this session
-	let alreadyShown = false;
-	try {
-		alreadyShown = sessionStorage.getItem(SESSION_KEY) === "true";
-	} catch {
-		// sessionStorage unavailable
-	}
+	const readFlag = (store: Storage | undefined, key: string): boolean => {
+		try {
+			return store?.getItem(key) === "true";
+		} catch {
+			return false;
+		}
+	};
+	const writeFlag = (store: Storage | undefined, key: string): void => {
+		try {
+			store?.setItem(key, "true");
+		} catch {
+			// storage unavailable — non-fatal
+		}
+	};
 
-	if (alreadyShown) {
-		// Already shown this session — keep hidden
-		// Note: HTML starts with "pending" class; switch to "hidden" for display:none
+	const dismissed = readFlag(window.localStorage, DISMISSED_KEY);
+	const shownThisSession = readFlag(window.sessionStorage, SHOWN_KEY);
+
+	if (dismissed || shownThisSession) {
+		// Never render again — HTML starts "pending" (opacity 0); collapse it entirely.
 		railNote.classList.remove("pending");
 		railNote.classList.add("hidden");
 	} else {
-		// HTML already has "pending" class — reveal after delay
-		const timerId = setTimeout(() => {
+		// HTML already carries "pending" (hidden, no flash) — reveal once after the delay.
+		const timerId = window.setTimeout(() => {
 			railNote.classList.remove("pending");
-			// Mark as shown when it actually becomes visible
-			try {
-				sessionStorage.setItem(SESSION_KEY, "true");
-			} catch {
-				// sessionStorage unavailable
-			}
+			writeFlag(window.sessionStorage, SHOWN_KEY);
 		}, REVEAL_DELAY);
 
-		// Clear timer if page unloads before reveal (prevents stale state)
-		window.addEventListener("beforeunload", () => clearTimeout(timerId));
+		// One timer, cleared if the page unloads before it fires.
+		window.addEventListener("pagehide", () => window.clearTimeout(timerId), { once: true });
 	}
 
 	railNoteDismiss.addEventListener("click", () => {
 		railNote.classList.add("hidden");
-		// Mark as shown when dismissed
-		try {
-			sessionStorage.setItem(SESSION_KEY, "true");
-		} catch {
-			// sessionStorage unavailable
-		}
+		writeFlag(window.sessionStorage, SHOWN_KEY);
+		writeFlag(window.localStorage, DISMISSED_KEY);
 	});
 }
 
