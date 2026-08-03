@@ -497,7 +497,13 @@ a project picker, the prompt hero, and the reused
   Split never silently renders as inline on a narrow pane; **`hideUnchangedRegions: { enabled: true }`** —
   Monaco's own collapsed context (“N hidden lines” with an expand control, in both layouts), never a
   hand-rolled folding of our own; the inline view's dual line-number gutter
-  — base-branch no. left, worktree no. right — is Monaco's standard and stays). **A markdown diff has exactly two
+  — base-branch no. left, worktree no. right — is Monaco's standard and stays; on unmount it sets
+  **`keepCurrentOriginalModel`/`keepCurrentModifiedModel`** so `@monaco-editor/react` won't dispose the
+  models early, and then disposes the **widget before its two models itself** — the only order that dodges
+  Monaco 0.52+'s "TextModel got disposed before DiffEditorWidget model got reset" assertion (disposing a
+  model while a live widget still references it), which the library otherwise trips by disposing models
+  first; keeping them also avoids leaking a model pair per closed diff tab (regression-pinned in
+  `e2e/changes.spec.ts`)). **A markdown diff has exactly two
   views** instead, via a **Source | Rendered** toggle (`diff-toggle-source`/`diff-toggle-rendered`,
   per-tab `DiffTab.rendered` via `store.setDiffTabRendered`, gated on `lib.isMarkdownPath`; Source is
   the default — no Split|Inline segment for markdown). **Source** = the basic Monaco split diff.

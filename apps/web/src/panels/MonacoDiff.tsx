@@ -1,4 +1,9 @@
-import { type BeforeMount, DiffEditor, type DiffOnMount } from "@monaco-editor/react";
+import {
+	type BeforeMount,
+	DiffEditor,
+	type DiffOnMount,
+	type MonacoDiffEditor,
+} from "@monaco-editor/react";
 import { useEffect, useRef } from "react";
 import {
 	defineThinkrailTheme,
@@ -29,13 +34,36 @@ export default function MonacoDiff({
 	ignoreWhitespace: boolean;
 }) {
 	const observerRef = useRef<MutationObserver | null>(null);
+	// The diff widget + its two TextModels, captured at mount so our unmount cleanup can dispose them in the
+	// right order — see below.
+	const editorRef = useRef<MonacoDiffEditor | null>(null);
+	const modelsRef = useRef<{ dispose(): void }[]>([]);
 
 	// Mirrors MonacoEditor's observer: follow atomic `[data-theme]` swaps while mounted.
-	const onMount: DiffOnMount = (_editor, m) => {
+	const onMount: DiffOnMount = (editor, m) => {
 		observerRef.current = watchThemeSwap(m);
+		editorRef.current = editor;
+		const model = editor.getModel();
+		modelsRef.current = model ? [model.original, model.modified] : [];
 	};
 
-	useEffect(() => () => observerRef.current?.disconnect(), []);
+	useEffect(
+		() => () => {
+			observerRef.current?.disconnect();
+			// Dispose the diff *widget* before its TextModels. Disposing a model while a live widget still
+			// references it trips Monaco 0.52+'s "TextModel got disposed before DiffEditorWidget model got
+			// reset" assertion (@monaco-editor/react#647 / monaco-editor#4779, unfixed in 4.7.0), and
+			// `@monaco-editor/react`'s own cleanup disposes them in the wrong order. The `keepCurrent*` flags
+			// below stop it from disposing the models early, so we own their lifecycle here and free them only
+			// after the widget is gone (widget dispose is idempotent, so it's fine if the library already ran).
+			// Not keeping them would also leak a model pair per closed diff tab.
+			editorRef.current?.dispose();
+			editorRef.current = null;
+			for (const model of modelsRef.current) model.dispose();
+			modelsRef.current = [];
+		},
+		[],
+	);
 
 	return (
 		<DiffEditor
@@ -46,6 +74,10 @@ export default function MonacoDiff({
 			originalModelPath={`diff-original://${path}`}
 			modifiedModelPath={`diff-modified://${path}`}
 			theme={THEME}
+			// Keep the models on unmount so `DiffEditor` disposes the widget *before* its models (it otherwise
+			// disposes models first — the assertion trip above); we free them ourselves once the widget is gone.
+			keepCurrentOriginalModel
+			keepCurrentModifiedModel
 			beforeMount={beforeMount}
 			onMount={onMount}
 			loading={

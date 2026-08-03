@@ -797,3 +797,39 @@ test("A failed read says so — it never renders as an empty (clean) change set"
 	await expect(page.getByTestId("change-item").filter({ hasText: "README.md" })).toHaveCount(1);
 	await expect(page.getByTestId("changes-error")).toHaveCount(0);
 });
+
+test("Closing a diff tab disposes Monaco cleanly — no 'TextModel got disposed' assertion", async ({
+	page,
+}) => {
+	// `@monaco-editor/react`'s DiffEditor unmount used to dispose the two TextModels *before* the diff
+	// widget, tripping Monaco 0.52+'s "TextModel got disposed before DiffEditorWidget model got reset"
+	// assertion (surfaces via Monaco's onUnexpectedError as an uncaught error / console.error). `MonacoDiff`
+	// keeps the models and frees them itself after the widget is gone; this pins that closing a diff tab
+	// (the unmount) stays silent.
+	const monacoErrors: string[] = [];
+	const record = (text: string) => {
+		if (/TextModel got disposed before DiffEditorWidget/.test(text)) monacoErrors.push(text);
+	};
+	page.on("pageerror", (err) => record(err.message));
+	page.on("console", (msg) => {
+		if (msg.type() === "error") record(msg.text());
+	});
+
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	const worktree = worktreeDir();
+	writeFileSync(join(worktree, "script.ts"), "export const edited = true;\n");
+
+	await page.getByTestId("tab-changes").click();
+	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).click();
+	const diffTab = page.locator('[data-testid="editor-tab"][data-kind="diff"]');
+	await expect(diffTab).toHaveCount(1);
+	await expect(page.getByTestId("diff-pane")).toContainText("edited = true");
+
+	// Close the diff tab → DiffEditor unmounts. The old disposal order would fire the assertion here.
+	await diffTab.getByTestId("editor-tab-close").click();
+	await expect(diffTab).toHaveCount(0);
+	// Give any deferred (setTimeout-rethrown) unexpected-error a turn to surface before asserting.
+	await page.waitForTimeout(100);
+	expect(monacoErrors).toEqual([]);
+});
