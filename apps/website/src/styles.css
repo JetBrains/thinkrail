@@ -1269,6 +1269,10 @@ p.footer-fineprint {
 	padding-left: 28px;
 }
 
+.ft-row.depth-2 {
+	padding-left: 48px;
+}
+
 .ft-row.folder {
 	color: var(--muted);
 }
