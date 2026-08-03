@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@import "./styles/fonts.css";
+@import "./styles/generated/fonts.css";
 @import "./styles/generated/typography.css";
 @import "./styles/generated/colors.css";
 @import "./styles/tokens.css";

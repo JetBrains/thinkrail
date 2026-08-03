@@ -229,6 +229,12 @@
 				},
 				"kind": {
 					"enum": ["proportional", "monospace"]
+				},
+				"selfHosted": {
+					"type": "array",
+					"minItems": 1,
+					"items": { "type": "string" },
+					"description": "The npm entry points shipping this family's faces. `generate-typography.ts` turns these into `styles/generated/fonts.css`, and fails when one is not a dependency of apps/web \u2014 or when an installed font package is claimed by no family. Omit for families we do not self-host."
 				}
 			}
 		}

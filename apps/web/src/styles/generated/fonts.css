@@ -1,0 +1,19 @@
+/*
+ * GENERATED — do not edit. Source: `src/styles/typography.json` (v3.0.0), the `selfHosted`
+ * entries of each font family. Regenerate with `bun run typography:generate`.
+ *
+ * The app's faces are self-hosted — no runtime call to a font CDN. ThinkRail runs locally (often
+ * offline) and ships as a single-file binary, so the fonts have to be part of the artifact: Vite
+ * fingerprints these woff2 files into `dist/assets` and the CLI embeds that output. A `<link>` to a
+ * font CDN satisfied none of it — it left an air-gapped host in system faces, put first paint behind a
+ * third party, and contacted the CDN on every load despite the app's analytics opt-out.
+ *
+ * Both packages are VARIABLE (wght 100–900 / 100–800) with real italics, which is what makes the type
+ * scale honest: the brand weight (800) and markdown `<em>` are real faces, not the browser's
+ * synthetic bold/oblique. Every unicode subset stays declared — each is its own `@font-face` with a
+ * `unicode-range`, so a document downloads only the ranges it renders.
+ */
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist/wght-italic.css";
+@import "@fontsource-variable/jetbrains-mono";
+@import "@fontsource-variable/jetbrains-mono/wght-italic.css";

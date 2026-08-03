@@ -15,7 +15,8 @@
 				"Segoe UI",
 				"sans-serif"
 			],
-			"kind": "proportional"
+			"kind": "proportional",
+			"selfHosted": ["@fontsource-variable/geist", "@fontsource-variable/geist/wght-italic.css"]
 		},
 		"code": {
 			"stack": [
@@ -26,7 +27,11 @@
 				"Cascadia Code",
 				"monospace"
 			],
-			"kind": "monospace"
+			"kind": "monospace",
+			"selfHosted": [
+				"@fontsource-variable/jetbrains-mono",
+				"@fontsource-variable/jetbrains-mono/wght-italic.css"
+			]
 		},
 		"brand": {
 			"$ref": "interface"

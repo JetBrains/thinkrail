@@ -202,7 +202,8 @@ JSON entry — the generator, the naming and the guards all follow.
 
 ## Fonts
 
-Self-hosted variable faces, imported by `styles/fonts.css` (`@fontsource-variable/geist`,
+Self-hosted variable faces. The packages are declared per family as `selfHosted` in the JSON and
+`styles/generated/fonts.css` is emitted from them (`@fontsource-variable/geist`,
 `@fontsource-variable/jetbrains-mono`), fingerprinted into `dist/assets` and embedded in the binary —
 **no font CDN**, so an offline host renders the real system. Both faces are variable, so 800 and
 italics are real, not synthetic. Pinned by `e2e/fonts.spec.ts`.
@@ -243,7 +244,7 @@ The allowlist is deliberately tiny, and each entry is enforced by name in
 | `panels/monacoSetup.ts` | Monaco takes `fontFamily` / `fontSize` / `lineHeight` as JS options — it reads `--tr-font-family-code`, `--tr-font-size-s11`, `--tr-line-height-default`, so it cannot drift from a code block |
 | `panels/TerminalInstance.tsx` | xterm, same reason (`--tr-font-family-code` + `--tr-font-size-s11`) |
 | `chat/tools/visualize/mermaid.ts` | mermaid's theme config takes a family string (`--tr-font-family-code`) |
-| `index.css`, `styles/tokens.css`, `styles/global.css`, `styles/fonts.css` | the mapping layers themselves |
+| `index.css`, `styles/tokens.css`, `styles/global.css` | the mapping layers themselves |
 
 The OTP code is **not** an exception any more: it is the named `code.otp` style (`.tr-code-otp`).
 

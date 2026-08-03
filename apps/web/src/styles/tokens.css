@@ -32,7 +32,7 @@
  * `styles/typography.json` is the single source; `generated/typography.css` publishes it as the
  * `--tr-*` custom properties, the `<body>` base and the semantic classes. The three consumers that
  * cannot use a class (Monaco, xterm, mermaid) read the `--tr-*` tokens directly, so there is exactly
- * one name for each value. Self-hosted variable faces are imported in `styles/fonts.css`.
+ * one name for each value. Self-hosted variable faces are imported by `styles/generated/fonts.css`.
  *
  * Theme-specific values are intentionally absent too. `themes/bundled/*.theme.json` is the source of
  * truth; the theme engine validates a complete UI + ANSI + syntax palette and writes its CSS custom
