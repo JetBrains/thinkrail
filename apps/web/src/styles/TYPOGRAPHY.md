@@ -135,8 +135,9 @@ Rules at a call site:
 - **Typography = exactly one semantic class.** Never compose `font-*`, `text-<size>`, `tracking-*` or
   `uppercase`. The exceptions are `italic` and `leading-*`: a call site may add one to override that
   single property (see *Cascade layers*), which is why a few rows and empty states carry them.
-- **Colour stays at the call site** (`text-muted`, `text-hint`, conditional actives). Active/selected
-  state is a **colour** change — never a weight change.
+- **Colour stays at the call site**, as a semantic colour token (`text-text-muted`,
+  `text-text-subtle`, conditional actives) — see [COLOR.md](./COLOR.md). Active/selected state is a
+  **colour** change — never a weight change.
 - **`<pre>` and `<code>` always name a style**, even inside a container that already has one. Preflight
   targets those elements directly, and a directly-matching rule beats an inherited family, so a bare
   `<pre>` renders in a *different* mono face from its `tr-code-text` parent. Pinned by
@@ -144,9 +145,9 @@ Rules at a call site:
 - Spacing, truncation, layout, hover and state classes are unaffected.
 
 ```tsx
-<span className="tr-text-eyebrow text-muted">Projects</span>
-<h2 className="tr-title-dialog text-text">{title}</h2>
-<code className="tr-code-text text-hint">{command}</code>
+<span className="tr-text-eyebrow text-text-muted">Projects</span>
+<h2 className="tr-title-dialog text-text-default">{title}</h2>
+<code className="tr-code-text text-text-subtle">{command}</code>
 ```
 
 **When the element is not yours.** A third-party component that renders its own inner DOM (cmdk's group

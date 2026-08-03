@@ -76,10 +76,15 @@ The module set: `transport` / `store` / branded `shell`; `ProjectTree`; `FileTre
 ## Styling & theming
 
 - **Tailwind v4 utilities, mapped to the design tokens** (`src/index.css` `@theme inline`). Components
-  use utilities for colour, spacing, borders and layout (`bg-bg-dark`, `text-primary`, `border-border`,
+  use utilities for colour, spacing, borders and layout (`bg-container-header-bg`, `text-primary`,
+  `border-border-default`,
   `px-lg`) and a **generated semantic typography class** for type (`tr-text-ui`, `tr-title-dialog`,
   `tr-code-text`, …) — **never inline `style` objects, never raw hex.** Responsive (`md:` …) and states (`hover:` / `focus-visible:`) come
   from Tailwind (inline styles can't express them, and the responsive shell needs them).
+- **A colour utility names a semantic role, never a palette entry** — `bg-container-elevated-bg`, not
+  `bg-[var(--elevated)]`; and a tint is a token on the four-step alpha scale, not a `/40` modifier.
+  `src/styles/COLOR.md` is the system; `src/styles/colorUsage.test.ts` is the adoption guard (Tailwind
+  drops an unknown utility silently, so an unpublished token renders as nothing at all).
 - **`src/themes` is the theme contract and catalog; `src/styles/tokens.css` is structural.** A bundled
   theme is one strict, complete `*.theme.json` manifest: appearance/contrast metadata + semantic UI
   colors + all 16 ANSI colors + a semantic syntax palette. Selected-text foreground overrides are the

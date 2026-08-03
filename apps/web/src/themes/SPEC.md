@@ -37,10 +37,21 @@ A theme is exactly one `*.theme.json` file. Schema version 1 is strict and self-
 label/order, light-or-dark appearance, normal-or-high contrast metadata, a complete semantic UI palette,
 all 16 terminal ANSI colors, and a complete semantic syntax palette. Color values are canonical
 six/eight-digit hex; the two selected-text foreground overrides may explicitly be `null` to retain the
-consumer's native foreground. There is no inheritance or partial overlay. The engine owns repetitive
-derivations (alpha tints and appearance-level effects), TextMate/Monaco scope mapping, and CSS-token
-mapping, so those mechanics never leak into manifests. Typography, spacing, radii, fonts, and motion
-remain product tokens, not theme values.
+consumer's native foreground. There is no inheritance or partial overlay. The engine owns appearance-level
+effects, TextMate/Monaco scope mapping, and CSS-token mapping, so those mechanics never leak into
+manifests. Typography, spacing, radii, fonts, and motion remain product tokens, not theme values.
+
+**A manifest supplies the palette, not the roles.** It answers *which colour*; what each colour is
+*for* is the semantic layer in `styles/tokens.css` — `container-elevated-bg`, `feedback-warning`,
+`text-subtle` — which is the only layer components name, and which owns the alpha scale. The split is
+what lets a theme be a palette swap with no component change, and it is why this module's variables
+(`--elevated`, `--gold`, `--hint`) are internal: reaching one from a component bypasses the role it
+belongs to. See [`styles/COLOR.md`](../styles/COLOR.md).
+
+One consequence worth naming: a role can only vary between themes if the manifest can express it. Where
+two roles share one manifest key today they are locked together across every theme — `content` writes
+both `--bg-dark` and `--surface-content`, so `container-header-bg` and `container-content-bg` can never
+differ. Splitting such a key is a schema change (a new key on every manifest), not a token change.
 
 Bundled files are discovered by a build-time glob rather than named in a code catalog, and validated
 all-or-nothing at bootstrap. The files are our own, so any invalid or duplicate manifest — or a missing
