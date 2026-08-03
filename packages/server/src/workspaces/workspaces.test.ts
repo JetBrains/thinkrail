@@ -281,6 +281,16 @@ test("createWorkspace validates the RESOLVED base — including the one it reads
 	expect(existsSync(probe)).toBe(false);
 });
 
+test("createWorkspace rejects a closed project — a stale or rogue client can't create behind the rail's back", async () => {
+	writeFileSync(
+		join(dataDir, "projects.json"),
+		JSON.stringify([
+			{ id: "p1", name: "repo", path: repo, slug: "repo", lastOpened: 1, closed: true },
+		]),
+	);
+	await expect(createWorkspace("p1")).rejects.toThrow(/Unknown project/);
+});
+
 test("renameWorkspace throws on an unknown workspace", () => {
 	expect(() => renameWorkspace("nope", "anything")).toThrow("Unknown workspace: nope");
 });
