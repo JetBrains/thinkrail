@@ -29,7 +29,7 @@ export function EditCard({ args, result, status, workspaceRoot }: ToolRenderProp
 			<EditHeader path={path} workspaceRoot={workspaceRoot} />
 			<Collapsible
 				lines={oldLines.length + newLines.length}
-				fadeClass="bg-[linear-gradient(to_top,var(--container-card-bg),transparent)]"
+				fadeClass="bg-[linear-gradient(to_top,var(--container-elevated-bg),transparent)]"
 			>
 				<div className="overflow-auto rounded-[var(--radius-sm)] border border-border-default tr-code-text leading-relaxed">
 					{oldLines.map((line, i) => {

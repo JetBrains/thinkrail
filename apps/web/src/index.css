@@ -36,9 +36,8 @@
 	/* Container */
 	--color-container-workspace-bg: var(--container-workspace-bg);
 	--color-container-sidebar-bg: var(--container-sidebar-bg);
-	--color-container-terminal-bg: var(--container-terminal-bg);
-	--color-container-popover-bg: var(--container-popover-bg);
-	--color-container-card-bg: var(--container-card-bg);
+	--color-container-content-bg: var(--container-content-bg);
+	--color-container-elevated-bg: var(--container-elevated-bg);
 	--color-container-header-bg: var(--container-header-bg);
 
 	/* Control */

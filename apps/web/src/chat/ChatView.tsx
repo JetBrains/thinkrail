@@ -658,7 +658,7 @@ export default function ChatView({
 								type="button"
 								data-testid="scroll-to-bottom"
 								onClick={scrollToBottom}
-								className="-translate-x-1/2 absolute bottom-md left-1/2 flex items-center gap-xs rounded-[var(--radius-lg)] border border-border-default bg-container-popover-bg px-sm py-xs text-text-muted tr-text-metadata shadow-[var(--shadow-md)] hover:bg-control-bg-hovered hover:text-text-default"
+								className="-translate-x-1/2 absolute bottom-md left-1/2 flex items-center gap-xs rounded-[var(--radius-lg)] border border-border-default bg-container-elevated-bg px-sm py-xs text-text-muted tr-text-metadata shadow-[var(--shadow-md)] hover:bg-control-bg-hovered hover:text-text-default"
 							>
 								<ArrowDown className="size-3" />
 								New messages
@@ -666,7 +666,7 @@ export default function ChatView({
 						) : null}
 					</div>
 					{widgetEntries.length > 0 ? (
-						<div className="shrink-0 border-border-default border-t bg-container-popover-bg px-md py-xs text-text-muted tr-text-metadata">
+						<div className="shrink-0 border-border-default border-t bg-container-elevated-bg px-md py-xs text-text-muted tr-text-metadata">
 							{widgetEntries.map(([key, lines]) => (
 								<div key={key}>{lines.join(" ")}</div>
 							))}

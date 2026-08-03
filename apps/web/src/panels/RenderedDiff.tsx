@@ -46,7 +46,7 @@ function Placeholder({ testid, children }: { testid: string; children: string })
 	return (
 		<div
 			data-testid={testid}
-			className="flex h-full items-center justify-center bg-container-terminal-bg text-text-subtle"
+			className="flex h-full items-center justify-center bg-container-content-bg text-text-subtle"
 		>
 			{children}
 		</div>
@@ -89,7 +89,7 @@ export default function RenderedDiff({ tab }: { tab: DiffTab }) {
 	}
 
 	return (
-		<div data-testid="rendered-diff" className="h-full overflow-auto bg-container-terminal-bg">
+		<div data-testid="rendered-diff" className="h-full overflow-auto bg-container-content-bg">
 			<article
 				className={`mx-auto max-w-[78ch] px-xl py-lg ${DIFF_MARKS}`}
 				// biome-ignore lint/security/noDangerouslySetInnerHtml: htmldiff meshing of our own escaped react-markdown output (user-approved; same risk class as the shiki path in chat/Markdown)

@@ -126,7 +126,7 @@ export function defineThinkrailTheme(m: Monaco): void {
 	const set = (key: string, value: string) => {
 		if (value) colors[key] = value;
 	};
-	set("editor.background", token("--container-terminal-bg"));
+	set("editor.background", token("--container-content-bg"));
 	set("editor.foreground", token("--code-foreground"));
 	set("editorLineNumber.foreground", token("--text-subtle"));
 	set("editorCursor.foreground", token("--primary"));

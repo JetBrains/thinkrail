@@ -20,16 +20,16 @@ function cssVar(name: string): string {
 function themeVariables(): Record<string, string> {
 	const text = cssVar("--text-default");
 	const border = cssVar("--border-default");
-	const cardBg = cssVar("--container-card-bg");
+	const elevated = cssVar("--container-elevated-bg");
 	const bg = cssVar("--container-workspace-bg");
 	return {
 		background: bg,
-		mainBkg: cardBg,
-		primaryColor: cardBg,
+		mainBkg: elevated,
+		primaryColor: elevated,
 		primaryTextColor: text,
 		primaryBorderColor: border,
-		secondaryColor: cssVar("--control-bg-hovered") || cardBg,
-		tertiaryColor: cssVar("--container-terminal-bg") || bg,
+		secondaryColor: cssVar("--control-bg-hovered") || elevated,
+		tertiaryColor: cssVar("--container-content-bg") || bg,
 		lineColor: cssVar("--text-muted") || border,
 		textColor: text,
 		nodeBorder: border,

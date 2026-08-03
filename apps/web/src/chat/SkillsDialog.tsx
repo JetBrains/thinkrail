@@ -264,7 +264,7 @@ export function SkillsDialog({
 				{workspace?.stale ? (
 					<div
 						data-testid="skills-stale"
-						className="rounded-[var(--radius-md)] border border-border-default bg-container-popover-bg px-md py-sm text-text-muted tr-text-metadata"
+						className="rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg px-md py-sm text-text-muted tr-text-metadata"
 					>
 						This worktree's skills changed on disk —{" "}
 						<span className="text-text-default">Reload</span> to apply them to this chat.

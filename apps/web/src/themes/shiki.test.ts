@@ -13,7 +13,7 @@ test("the TextMate map references exactly the semantic syntax variables", () => 
 			}
 		}
 	}
-	const expected = new Set<string>([...Object.values(SYNTAX_VARIABLES), "--container-terminal-bg"]);
+	const expected = new Set<string>([...Object.values(SYNTAX_VARIABLES), "--container-content-bg"]);
 	expect(referenced).toEqual(expected);
 });
 

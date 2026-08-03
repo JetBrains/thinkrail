@@ -116,7 +116,7 @@ function TerminalTabButton({
 				data-testid="terminal-tab-close"
 				aria-label={`Close ${tab.title}`}
 				onClick={onClose}
-				className="rounded-[var(--radius-sm)] p-0.5 text-text-subtle opacity-0 hover:bg-container-popover-bg hover:text-text-default group-hover:opacity-100"
+				className="rounded-[var(--radius-sm)] p-0.5 text-text-subtle opacity-0 hover:bg-container-elevated-bg hover:text-text-default group-hover:opacity-100"
 			>
 				<X className="size-3" />
 			</button>

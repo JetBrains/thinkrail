@@ -64,13 +64,13 @@ function CodeBlock({
 	if (!lang) {
 		if (!code.includes("\n")) {
 			return (
-				<code className="rounded-[var(--radius-sm)] bg-container-popover-bg px-1 py-0.5">
+				<code className="rounded-[var(--radius-sm)] bg-container-elevated-bg px-1 py-0.5">
 					{children}
 				</code>
 			);
 		}
 		return (
-			<pre className="overflow-auto rounded-[var(--radius-sm)] bg-container-popover-bg p-sm">
+			<pre className="overflow-auto rounded-[var(--radius-sm)] bg-container-elevated-bg p-sm">
 				{code}
 			</pre>
 		);
@@ -97,14 +97,14 @@ function ShikiBlock({ code, lang }: { code: string; lang: string }) {
 
 	if (html === null) {
 		return (
-			<pre className="overflow-auto rounded-[var(--radius-sm)] bg-container-popover-bg p-sm text-text-default">
+			<pre className="overflow-auto rounded-[var(--radius-sm)] bg-container-elevated-bg p-sm text-text-default">
 				{code}
 			</pre>
 		);
 	}
 	return (
 		<div
-			className="overflow-auto rounded-[var(--radius-sm)] [&_pre]:!m-0 [&_pre]:!bg-container-popover-bg [&_pre]:p-sm"
+			className="overflow-auto rounded-[var(--radius-sm)] [&_pre]:!m-0 [&_pre]:!bg-container-elevated-bg [&_pre]:p-sm"
 			// biome-ignore lint/security/noDangerouslySetInnerHtml: shiki output is escaped, themed markup
 			dangerouslySetInnerHTML={{ __html: html }}
 		/>

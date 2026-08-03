@@ -35,9 +35,9 @@ const DOCUMENT_PROSE = [
 	"[&_hr]:my-xl [&_hr]:h-px [&_hr]:border-0 [&_hr]:bg-border-default",
 	// Tables (GFM) — only as wide as content (scroll if wider), bordered cells, header + zebra rows.
 	"[&_table]:my-md [&_table]:block [&_table]:w-max [&_table]:max-w-full [&_table]:overflow-x-auto [&_table]:border-collapse",
-	"[&_th]:border [&_th]:border-border-default [&_th]:bg-container-popover-bg [&_th]:px-sm [&_th]:py-xs [&_th]:text-left",
+	"[&_th]:border [&_th]:border-border-default [&_th]:bg-container-elevated-bg [&_th]:px-sm [&_th]:py-xs [&_th]:text-left",
 	"[&_td]:border [&_td]:border-border-default [&_td]:px-sm [&_td]:py-xs [&_td]:align-top",
-	"[&_tbody_tr:nth-child(2n)]:bg-container-popover-bg/30",
+	"[&_tbody_tr:nth-child(2n)]:bg-container-elevated-bg/30",
 	// Code blocks — spacing only; size/leading come from the doc prose system.
 	"[&_pre]:my-md",
 	// Images.
@@ -83,7 +83,7 @@ export default function MarkdownPreview({
 	path: string;
 }) {
 	return (
-		<div data-testid="markdown-preview" className="h-full overflow-auto bg-container-terminal-bg">
+		<div data-testid="markdown-preview" className="h-full overflow-auto bg-container-content-bg">
 			<article className="mx-auto max-w-[78ch] px-xl py-lg">
 				<MarkdownDocument content={content} workspaceId={workspaceId} path={path} />
 			</article>

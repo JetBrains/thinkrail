@@ -168,7 +168,7 @@ function PromptRow({
 					e.stopPropagation();
 					onSaveAsTemplate();
 				}}
-				className={`flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] p-xs text-text-muted opacity-0 transition hover:bg-container-popover-bg hover:text-text-default group-hover:opacity-100 ${
+				className={`flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] p-xs text-text-muted opacity-0 transition hover:bg-container-elevated-bg hover:text-text-default group-hover:opacity-100 ${
 					isSelected ? "opacity-100" : ""
 				}`}
 			>
@@ -193,7 +193,7 @@ function PromptRow({
 							e.stopPropagation();
 							onOpenMessage(target);
 						}}
-						className={`flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] p-xs text-text-muted opacity-0 transition hover:bg-container-popover-bg hover:text-text-default group-hover:opacity-100 ${
+						className={`flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] p-xs text-text-muted opacity-0 transition hover:bg-container-elevated-bg hover:text-text-default group-hover:opacity-100 ${
 							isSelected ? "opacity-100" : ""
 						}`}
 					>
@@ -565,7 +565,7 @@ export function HistoryOverlay({
 		<div
 			data-testid="history-overlay"
 			data-stage={stage}
-			className="absolute bottom-full left-sm right-sm mb-xs flex flex-col overflow-hidden rounded-[var(--radius-md)] border border-border-default bg-container-popover-bg shadow-[var(--shadow-md)]"
+			className="absolute bottom-full left-sm right-sm mb-xs flex flex-col overflow-hidden rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg shadow-[var(--shadow-md)]"
 		>
 			<div className="flex items-center gap-sm border-b border-border-default p-sm">
 				<input

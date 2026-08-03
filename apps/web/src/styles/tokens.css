@@ -33,12 +33,17 @@
 	--text-link: var(--blue); /* What links actually are; `global.css` is the only consumer */
 	--text-on-primary: var(--on-accent);
 
-	/* Container */
+	/*
+	 * Container — the app's surfaces, named for what they are rather than for one thing that sits on
+	 * them. `elevated` is every raised surface (dialogs, popovers, menus, toasts, inline cards, code
+	 * blocks, table headers) — it was split into `card` + `popover` aliases of one value, and neither
+	 * name was true at most of its call sites. `content` is the code canvas shared by Monaco, Shiki
+	 * and the terminal, so it is not "terminal" either.
+	 */
 	--container-workspace-bg: var(--bg);
 	--container-sidebar-bg: var(--surface-sidebar);
-	--container-terminal-bg: var(--surface-content);
-	--container-popover-bg: var(--elevated);
-	--container-card-bg: var(--elevated);
+	--container-content-bg: var(--surface-content);
+	--container-elevated-bg: var(--elevated);
 	--container-header-bg: var(--bg-dark);
 
 	/*

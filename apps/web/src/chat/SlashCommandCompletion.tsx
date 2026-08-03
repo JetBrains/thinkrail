@@ -142,7 +142,7 @@ export function SlashCommandMenu({
 		<div
 			data-testid="slash-menu"
 			className={cn(
-				"max-h-[40vh] w-[min(28rem,90%)] overflow-y-auto rounded-[var(--radius-md)] border border-border-default bg-container-popover-bg p-xs shadow-[var(--shadow-md)]",
+				"max-h-[40vh] w-[min(28rem,90%)] overflow-y-auto rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg p-xs shadow-[var(--shadow-md)]",
 				className,
 			)}
 		>

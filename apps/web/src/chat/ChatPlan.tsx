@@ -77,7 +77,7 @@ export function ChatPlanContent({ plan, glance }: { plan: ChatTodos; glance: Pla
 			alignOffset={0}
 			// Cap at ~half the chat (the header is at the top, so half the space below it ≈ half the chat);
 			// the inner list scrolls when the plan is taller.
-			className="flex max-h-[calc(var(--radix-popover-content-available-height)*0.5)] w-[24rem] flex-col overflow-hidden rounded-t-none border-t-0 bg-container-terminal-bg p-0"
+			className="flex max-h-[calc(var(--radix-popover-content-available-height)*0.5)] w-[24rem] flex-col overflow-hidden rounded-t-none border-t-0 bg-container-content-bg p-0"
 		>
 			<div className="shrink-0 border-border-default border-b">
 				<TodoAddRow onAdd={plan.add} onOpenMarkdown={plan.openMarkdown} />

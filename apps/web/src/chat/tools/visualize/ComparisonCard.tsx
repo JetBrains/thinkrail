@@ -24,7 +24,7 @@ export function ComparisonCard({ args }: ToolRenderProps) {
 						key={opt.name}
 						data-recommended={opt.recommended || undefined}
 						className={`flex flex-col gap-xs rounded-[var(--radius-sm)] border p-sm ${
-							opt.recommended ? "border-primary bg-container-popover-bg" : "border-border-default"
+							opt.recommended ? "border-primary bg-container-elevated-bg" : "border-border-default"
 						}`}
 					>
 						<div className="flex items-center gap-xs">

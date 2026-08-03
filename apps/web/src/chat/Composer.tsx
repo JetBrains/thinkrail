@@ -588,7 +588,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			{mentionOpen ? (
 				<div
 					data-testid="mention-menu"
-					className="absolute bottom-full left-sm mb-xs max-h-[40vh] w-[min(28rem,90%)] overflow-y-auto rounded-[var(--radius-md)] border border-border-default bg-container-popover-bg p-xs shadow-[var(--shadow-md)]"
+					className="absolute bottom-full left-sm mb-xs max-h-[40vh] w-[min(28rem,90%)] overflow-y-auto rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg p-xs shadow-[var(--shadow-md)]"
 				>
 					{mentionCandidates.map((candidate, index) => (
 						<button
@@ -646,7 +646,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					type="button"
 					data-testid="slot-hint"
 					onClick={() => stepSlot(1)}
-					className="absolute bottom-full left-sm mb-xs rounded-[var(--radius-sm)] border border-border-default bg-container-popover-bg px-sm py-xs text-text-subtle tr-text-metadata shadow-[var(--shadow-md)] hover:bg-control-bg-hovered hover:text-text-default"
+					className="absolute bottom-full left-sm mb-xs rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-sm py-xs text-text-subtle tr-text-metadata shadow-[var(--shadow-md)] hover:bg-control-bg-hovered hover:text-text-default"
 				>
 					slot {slotIdx + 1}/{slots.length} · ⇥ next · esc done
 				</button>
@@ -657,7 +657,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					{images.map((img) => (
 						<span
 							key={img.id}
-							className="flex items-center gap-xs rounded-[var(--radius-sm)] border border-border-default bg-container-popover-bg px-sm py-xs text-text-default tr-text-metadata"
+							className="flex items-center gap-xs rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-sm py-xs text-text-default tr-text-metadata"
 						>
 							<FileIcon className="size-3" /> {img.content.mimeType}
 							<button
@@ -814,7 +814,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							data-testid="history-open"
 							aria-label="Search history"
 							onClick={openHistory}
-							className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-border-default bg-container-popover-bg text-text-default hover:bg-control-bg-hovered"
+							className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg text-text-default hover:bg-control-bg-hovered"
 						>
 							<History className="size-3.5" />
 						</button>
@@ -824,7 +824,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 								data-testid="chat-abort"
 								aria-label="Stop"
 								onClick={onAbort}
-								className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-border-default bg-container-popover-bg text-text-default hover:bg-control-bg-hovered"
+								className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg text-text-default hover:bg-control-bg-hovered"
 							>
 								<Square className="size-3.5" />
 							</button>

@@ -350,7 +350,7 @@ export function CenterTabs() {
 					type="button"
 					data-testid="start-chat"
 					onClick={() => void startChat()}
-					className="flex items-center gap-xs rounded-[var(--radius-md)] border border-border-default bg-container-popover-bg px-md py-xs tr-text-ui text-text-default hover:bg-control-bg-hovered"
+					className="flex items-center gap-xs rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg px-md py-xs tr-text-ui text-text-default hover:bg-control-bg-hovered"
 				>
 					<MessageSquarePlus className="size-4" /> New chat
 				</button>

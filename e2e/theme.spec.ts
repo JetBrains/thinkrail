@@ -46,7 +46,7 @@ async function expectEditorMatchesTheme(page: Page): Promise<void> {
 		.first()
 		.evaluate((editor) => {
 			const token = getComputedStyle(document.documentElement)
-				.getPropertyValue("--surface-content")
+				.getPropertyValue("--container-content-bg")
 				.trim();
 			const probe = document.createElement("div");
 			probe.style.backgroundColor = token;

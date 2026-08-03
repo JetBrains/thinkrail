@@ -278,7 +278,7 @@ export function AskUserQuestionCard({
 			<div
 				data-testid="ask-user-question"
 				data-tone="active"
-				className="overflow-hidden rounded-[var(--radius-lg)] border border-primary/40 bg-container-popover-bg ring-1 ring-primary/25"
+				className="overflow-hidden rounded-[var(--radius-lg)] border border-primary/40 bg-container-elevated-bg ring-1 ring-primary/25"
 			>
 				{multi ? (
 					<div className="flex items-center gap-xs overflow-x-auto border-border-default border-b px-md py-sm">
@@ -406,7 +406,7 @@ function WaitingCard({ children }: { children: React.ReactNode }) {
 			<div
 				data-testid="ask-user-question"
 				data-tone="pending"
-				className="flex items-center gap-xs rounded-[var(--radius-lg)] border border-border-default bg-container-popover-bg px-md py-sm text-text-muted tr-text-metadata"
+				className="flex items-center gap-xs rounded-[var(--radius-lg)] border border-border-default bg-container-elevated-bg px-md py-sm text-text-muted tr-text-metadata"
 			>
 				<MessageCircleQuestion className="size-3.5 shrink-0" />
 				{children}
@@ -427,7 +427,7 @@ function ComposingCard({ count }: { count: number }) {
 			<div
 				data-testid="ask-user-question"
 				data-tone="pending"
-				className="flex flex-col gap-sm rounded-[var(--radius-lg)] border border-border-default bg-container-popover-bg px-md py-sm"
+				className="flex flex-col gap-sm rounded-[var(--radius-lg)] border border-border-default bg-container-elevated-bg px-md py-sm"
 			>
 				<div className="flex items-center gap-xs text-text-muted tr-text-metadata">
 					<MessageCircleQuestion className="size-3.5 shrink-0" />

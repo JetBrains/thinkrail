@@ -18,7 +18,7 @@ export function ToggleSegment({
 			aria-pressed={active}
 			className={`rounded-[var(--radius-sm)] px-sm py-0.5 tr-text-metadata ${
 				active
-					? "bg-container-popover-bg text-text-default"
+					? "bg-container-elevated-bg text-text-default"
 					: "text-text-subtle hover:bg-control-bg-hovered hover:text-text-default"
 			}`}
 			onClick={onClick}
