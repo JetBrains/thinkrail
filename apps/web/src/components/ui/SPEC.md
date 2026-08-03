@@ -26,3 +26,12 @@ The shadcn/ui primitives (Radix), copied in and owned here, themed with our desi
   `class-variance-authority`/`clsx`/`tailwind-merge`.
 - **Forbidden:** `store`/`transport`/`panels`/`shell` (primitives are leaf UI); `server`/`shared`/`pi`;
   shadcn's default oklch palette — themed with our token utilities only.
+
+## Get right
+
+- **`dropdown-menu` content is height-bounded and vertically scrollable** —
+  `max-h-[min(60vh, --radix-dropdown-menu-content-available-height)]` + `overflow-y-auto`, with
+  **`overflow-x-hidden`** beside it: `overflow-y-auto` alone leaves `overflow-x` at `auto`, so a wide row
+  (a long commit subject in the Changes scope menu) earns the menu a horizontal scrollbar when its rows are
+  supposed to truncate. It lives on the primitive, not on one caller, because any long menu has the problem:
+  rows past the viewport edge are unreachable.

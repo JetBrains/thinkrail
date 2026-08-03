@@ -1,6 +1,8 @@
+import type { GitDiffScope } from "@thinkrail/contracts";
 import { projectRelativePath } from "../lib";
 import {
 	type EditorTab,
+	selectDiffTabTargetRef,
 	selectWorkspaceById,
 	selectWorkspaceNavTick,
 	selectWorkspaceTick,
@@ -8,7 +10,7 @@ import {
 	useAppStore,
 } from "../store";
 import { getTransport } from "../transport";
-import { diffTabId } from "./changesModel";
+import { diffTabId, diffTabName } from "./changesModel";
 
 /**
  * The center-tab openers: one file tab, one diff tab. Shared by the file tree, the Specs panel, the
@@ -81,15 +83,18 @@ async function openReadTab<T>(
 	}
 	const flight = { intent, requestedAt: navTick(workspaceId) };
 	inFlight.set(id, flight);
+	// Stamped BEFORE the read leaves, not after it lands: the stamp is a claim about what the content was
+	// read against, and the store can move while the request is in flight. Reading it from the store on the
+	// way back would claim a state the content never saw — a change frame arriving mid-read would be recorded
+	// as already reflected, and the pane would never re-read it. Captured early it is at worst pessimistic:
+	// the live-refresh contract sees the drift and does one extra read. (Same rule as `markSkillsSynced`.)
+	const loadedTick = selectWorkspaceTick(useAppStore.getState(), workspaceId);
 	try {
 		const payload = await read();
 		// Overtaken while reading — the user went somewhere else since. Drop a browse they've moved on from
 		// so the last navigation wins. A `keep` still commits: it was deliberate, and silently swallowing a
 		// tab the user explicitly asked for would be the worse surprise.
 		if (flight.intent === "preview" && navTick(workspaceId) !== flight.requestedAt) return;
-		// Stamp the workspace's current fs tick: the content is fresh as of now, so the pane's live re-read
-		// only fires for ticks arriving AFTER this open.
-		const loadedTick = selectWorkspaceTick(useAppStore.getState(), workspaceId);
 		const tab = build(payload, loadedTick);
 		useAppStore.getState().openTab(tab, intent);
 		// Upgraded mid-read (the `dblclick` behind this gesture's leading `click`) — apply the promote. Both
@@ -141,23 +146,42 @@ export function openFileInTab(
 	);
 }
 
-/** Open a changed file's read-only diff (base branch vs worktree) as a center tab — one tab per file. */
-export function openDiffInTab(workspaceId: string, path: string, intent: TabIntent): Promise<void> {
-	const id = diffTabId(workspaceId, path);
+/**
+ * Open a changed file's read-only diff as a center tab — one tab per **(file, scope)**: the scope is part of
+ * the tab's identity *and* is carried on the tab, so its content can never change meaning because the rail's
+ * scope flipped underneath it.
+ */
+export function openDiffInTab(
+	workspaceId: string,
+	scope: GitDiffScope,
+	path: string,
+	intent: TabIntent,
+): Promise<void> {
+	const id = diffTabId(workspaceId, scope, path);
+	// The review target as it stands *now*, before the read is issued — the value `git.diffFile` will resolve
+	// against. Read from the store after the response instead, a `workspace.setDiffBase` broadcast landing
+	// mid-read would stamp the NEW target onto contents diffed against the OLD one: no key drift for
+	// `useLiveTabContent` to see, so the stale diff would sit under the new target indefinitely.
+	const target = selectDiffTabTargetRef(useAppStore.getState(), { workspaceId, scope });
 	return openReadTab(
 		workspaceId,
 		id,
 		intent,
-		() => getTransport().request("git.diffFile", { workspaceId, path }),
+		() => getTransport().request("git.diffFile", { workspaceId, path, scope }),
 		({ original, modified }, loadedTick) => ({
 			kind: "diff",
 			id,
 			workspaceId,
 			path,
-			name: baseName(path),
+			scope,
+			name: diffTabName(scope, path),
 			original,
 			modified,
 			loadedTick,
+			// Stamp the target the content was read against, next to the fs tick: `DiffPane` compares it on mount,
+			// so a tab whose target was re-pointed while it sat in the background — or *during this very read* —
+			// re-reads when activated.
+			loadedTarget: target,
 		}),
 	);
 }

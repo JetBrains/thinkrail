@@ -69,8 +69,20 @@ export interface Workspace {
 	branch: string;
 	/** Absolute path to the worktree (the cwd everything downstream uses). */
 	worktreePath: string;
-	/** Branch the worktree's diff is measured against. */
+	/**
+	 * **Creation provenance** — the ref this worktree was cut from (`git worktree add … <baseBranch>`), or
+	 * for the Default workspace the repo's default branch. Shown in the UI as `branch · from baseBranch`.
+	 * It is *not* necessarily what the diff is measured against: see `diffBase`.
+	 */
 	baseBranch: string;
+	/**
+	 * **The diff target** — the ref the workspace's changes are measured against, when the user has
+	 * re-pointed it (`workspace.setDiffBase`). Absent = measure against `baseBranch`. Two fields because
+	 * the two meanings diverge the moment a target is re-pointed: creation provenance never moves, the
+	 * review target does. Every *read* resolves `diffBase ?? baseBranch` server-side, in one place (the git
+	 * module's `diffBaseRef`); a client only mirrors the resolution to label its target-branch picker.
+	 */
+	diffBase?: string;
 	/**
 	 * Set once the workspace carries a deliberate name (assist auto-rename or a user rename; user-named
 	 * creation sets it too). Absent = still the auto `workspace-N` default, eligible for exactly one
@@ -92,6 +104,12 @@ export interface Workspace {
  * edits, terminal commands, Finder). An **invalidation nudge, not data** — clients re-read via the
  * existing read methods, so a duplicate/replayed frame is harmless. `paths` are worktree-relative and
  * deduped, capped host-side; `truncated: true` = treat as a wildcard (anything may have changed).
+ *
+ * An **empty, non-truncated** frame (`paths: []`, `truncated: false`) is the pathless variant: something
+ * the reads depend on moved *without* naming a file — the host emits it when a worktree's git metadata
+ * moves (a `commit`/`reset`/`switch` in a terminal), which invalidates the git-derived reads (`git.status`,
+ * an `uncommitted`-scope diff) while leaving the working tree untouched. Same contract: re-read, don't
+ * patch. Path-driven consumers see no paths and correctly do nothing extra.
  */
 export interface WorkspaceFsChangedPayload {
 	workspaceId: string;
@@ -198,7 +216,7 @@ export interface GitFileChange {
 	path: string;
 	status: GitFileStatus;
 	/**
-	 * Lines added / removed vs the base branch (`git diff --numstat`; untracked files count their whole
+	 * Lines added / removed over the scope's range (`git diff --numstat`; untracked files count their whole
 	 * content as added). Omitted when git reports no per-line count — binary files, or a rename whose
 	 * numstat path couldn't be resolved. Used by the Changes tree's per-file / per-folder `+/−` badge.
 	 */
@@ -209,6 +227,33 @@ export interface GitFileChange {
 export interface GitStatus {
 	branch: string;
 	changes: GitFileChange[];
+}
+
+/**
+ * **What** is being diffed — the Changes panel's scope selector, and part of a diff tab's identity (a
+ * tab's content must never change meaning because the rail's scope flipped underneath it). Omitted on the
+ * wire = `{ kind: "branch" }`, so an older client keeps working unchanged.
+ *
+ * - `branch` — what this workspace changed since diverging from its diff base (`diffBase ??
+ *   baseBranch`): the range starts at their **merge-base** (the fork point), never at the base's tip —
+ *   upstream work landing on the base is not this workspace's change and never shows up here.
+ * - `uncommitted` — the worktree vs `HEAD` (what a commit here would record).
+ * - `commit` — one commit alone (`sha^` vs `sha`; a root commit degrades to an add-style diff).
+ */
+export type GitDiffScope =
+	| { kind: "branch" }
+	| { kind: "uncommitted" }
+	| { kind: "commit"; sha: string };
+
+/** One commit on the workspace's branch (not on its diff base) — a row of the scope menu's commit list. */
+export interface GitCommit {
+	sha: string;
+	/** Abbreviated oid as git prints it (`%h`) — the display form. */
+	shortSha: string;
+	subject: string;
+	author: string;
+	/** Commit date, ISO 8601 (`%cI`). */
+	committedAt: string;
 }
 
 /** A repo's branches for the New-Workspace base picker. `defaultBranch` is `origin/main` when known. */

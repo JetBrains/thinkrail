@@ -1,18 +1,10 @@
-import type {
-	BranchList,
-	SlashCommandInfo,
-	ThinkingLevel,
-	WireModel,
-	Workspace,
-} from "@thinkrail/contracts";
+import type { SlashCommandInfo, ThinkingLevel, WireModel, Workspace } from "@thinkrail/contracts";
 import {
 	Box,
-	Check,
 	ChevronDown,
 	GitBranch,
 	House,
 	type LucideIcon,
-	RefreshCw,
 	Sparkles,
 	TriangleAlert,
 } from "lucide-react";
@@ -49,6 +41,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { selectCatalogModel, selectWorkspaceTick, toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
+import { BranchPicker } from "./BranchPicker";
+import { useBranchList } from "./branches";
 import { enterDefaultWorkspace } from "./defaultWorkspace";
 
 /** Where the work runs: cut an isolated worktree, or enter the project folder (Default workspace). */
@@ -130,9 +124,7 @@ export function NewWorkspaceDialog({
 	// Every opener starts on the isolated-worktree side (task-welcome-trim made the entry points
 	// uniform — no opener-chosen target exists); the folder alternative is the in-dialog toggle.
 	const [target, setTarget] = useState<WorkspaceTarget>("worktree");
-	const [branches, setBranches] = useState<BranchList | null>(null);
 	const [baseRef, setBaseRef] = useState<string>("");
-	const [refreshing, setRefreshing] = useState(false);
 	const [prompt, setPrompt] = useState("");
 	const [skillCommands, setSkillCommands] = useState<SlashCommandInfo[]>([]);
 	const [aliasSkills, setAliasSkills] = useState<string[]>([]);
@@ -313,46 +305,18 @@ export function NewWorkspaceDialog({
 		prefetchBase(ref);
 	};
 
-	// Branches for the selected project; preselect the default base. Refetched when the project changes.
-	useEffect(() => {
-		if (!open) return;
-		let cancelled = false;
-		setBranches(null);
-		getTransport()
-			.request("git.listBranches", { projectId: selectedProjectId })
-			.then((list) => {
-				if (cancelled) return;
-				setBranches(list);
-				setBaseRef(list.defaultBranch);
-				// Warm the preselected base now, while the user reads/types — create then skips the fetch.
-				// Inlined (not via prefetchBase) so the effect's deps stay [open, selectedProjectId].
-				if (list.defaultBranch.startsWith("origin/")) {
-					getTransport()
-						.request("git.prefetch", { projectId: selectedProjectId, ref: list.defaultBranch })
-						.catch(() => {});
-				}
-			})
-			.catch(() => {
-				if (!cancelled) setBranches({ local: [], remote: [], defaultBranch: "HEAD" });
-			});
-		return () => {
-			cancelled = true;
-		};
-	}, [open, selectedProjectId]);
-
-	const refreshBranches = async () => {
-		setRefreshing(true);
-		try {
-			const list = await getTransport().request("git.listBranches", {
-				projectId: selectedProjectId,
-			});
-			setBranches(list);
-		} catch {
-			// Keep the current list on failure.
-		} finally {
-			setRefreshing(false);
-		}
-	};
+	// Branches for the selected project (the shared hook: keyed to the project, refreshable, only the initial
+	// read degrades). A closed dialog reads nothing. The first answer preselects the default base — empty when
+	// git couldn't be read, which makes `create` omit `baseRef` and let the host resolve the real branch — and
+	// warms it, so `workspace.create` skips the fetch while the user is still typing.
+	const {
+		branches,
+		refreshing,
+		refresh: refreshBranches,
+	} = useBranchList(open ? selectedProjectId : null, (list) => {
+		setBaseRef(list.defaultBranch);
+		prefetchBase(list.defaultBranch);
+	});
 
 	const create = async () => {
 		if (creating) return;
@@ -520,11 +484,14 @@ export function NewWorkspaceDialog({
 					{isolated ? (
 						<BranchPicker
 							branches={branches}
-							baseRef={baseRef}
+							selected={baseRef}
+							label="From"
+							testid="ws-branch-picker"
+							triggerClassName={`${PILL} max-w-[220px]`}
 							refreshing={refreshing}
 							container={dialogEl}
 							onSelect={selectBaseRef}
-							onRefresh={() => void refreshBranches()}
+							onRefresh={refreshBranches}
 						/>
 					) : null}
 					<SkillsButton
@@ -738,91 +705,6 @@ function ProjectPicker({
 								</CommandItem>
 							))}
 						</CommandGroup>
-					</CommandList>
-				</Command>
-			</PopoverContent>
-		</Popover>
-	);
-}
-
-/** The base-branch combobox: searchable, grouped Remote/Local, with a Refresh that re-lists branches. */
-function BranchPicker({
-	branches,
-	baseRef,
-	refreshing,
-	container,
-	onSelect,
-	onRefresh,
-}: {
-	branches: BranchList | null;
-	baseRef: string;
-	refreshing: boolean;
-	container: HTMLElement | null;
-	onSelect: (ref: string) => void;
-	onRefresh: () => void;
-}) {
-	const [open, setOpen] = useState(false);
-	const remote = branches?.remote ?? [];
-	const local = branches?.local ?? [];
-	const defaultBranch = branches?.defaultBranch;
-
-	const renderItem = (ref: string) => (
-		<CommandItem
-			key={ref}
-			value={ref}
-			data-testid="branch-option"
-			data-branch={ref}
-			onSelect={() => {
-				onSelect(ref);
-				setOpen(false);
-			}}
-		>
-			<span className="flex w-3.5 shrink-0 justify-center">
-				{ref === baseRef ? <Check className="size-3.5 text-primary" /> : null}
-			</span>
-			<GitBranch className="size-3.5 shrink-0 text-text-subtle" />
-			<span className="truncate tr-text-metadata">{ref}</span>
-			{ref === defaultBranch ? (
-				<span className="ml-auto shrink-0 text-text-subtle tr-text-metadata">default</span>
-			) : null}
-		</CommandItem>
-	);
-
-	return (
-		<Popover open={open} onOpenChange={setOpen}>
-			<PopoverTrigger
-				data-testid="ws-branch-picker"
-				data-open={open}
-				className={`${PILL} max-w-[220px]`}
-			>
-				<GitBranch className="size-3.5 shrink-0 text-text-muted" />
-				<span className="shrink-0 text-text-subtle tr-text-metadata">From</span>
-				<span className="truncate text-text-muted tr-text-metadata">{baseRef || "branch"}</span>
-				<ChevronDown className="size-3 shrink-0 text-text-subtle" />
-			</PopoverTrigger>
-			<PopoverContent align="start" container={container} className="w-[320px] p-0">
-				<div className="flex items-center justify-end border-border-muted border-b px-sm py-xs">
-					<button
-						type="button"
-						data-testid="branch-refresh"
-						aria-label="Refresh branches"
-						title="Refresh branches"
-						onClick={onRefresh}
-						className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-text-subtle outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-muted focus-visible:ring-2 focus-visible:ring-primary"
-					>
-						<RefreshCw className={`size-3.5 ${refreshing ? "animate-spin" : ""}`} />
-					</button>
-				</div>
-				<Command>
-					<CommandInput placeholder="Search branches…" />
-					<CommandList>
-						<CommandEmpty>No branches found.</CommandEmpty>
-						{remote.length > 0 ? (
-							<CommandGroup heading="Remote">{remote.map(renderItem)}</CommandGroup>
-						) : null}
-						{local.length > 0 ? (
-							<CommandGroup heading="Local">{local.map(renderItem)}</CommandGroup>
-						) : null}
 					</CommandList>
 				</Command>
 			</PopoverContent>

@@ -1,4 +1,5 @@
 import type { WsMethodName, WsParams, WsResult, WsServerMessage } from "@thinkrail/contracts";
+import { RequestError } from "./requestError";
 
 export type ConnectionStatus = "connecting" | "connected" | "disconnected";
 type PushHandler = (data: unknown) => void;
@@ -129,8 +130,14 @@ export class WsTransport {
 		if (!entry) return;
 		clearTimeout(entry.timer);
 		this.pending.delete(msg.id);
-		if (msg.ok) entry.resolve(msg.result);
-		else entry.reject(new Error(msg.error ?? "request failed"));
+		if (msg.ok) {
+			entry.resolve(msg.result);
+			return;
+		}
+		const message = msg.error ?? "request failed";
+		// A host-named failure rejects with its code attached, so a caller can gate behaviour on *this*
+		// failure; an unnamed one stays a plain Error.
+		entry.reject(msg.errorCode ? new RequestError(msg.errorCode, message) : new Error(message));
 	}
 }
 

@@ -118,3 +118,32 @@ export function stripFrontmatter(text: string): string {
 	const match = /^---[ \t]*\r?\n([\s\S]*?)\r?\n(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/.exec(text);
 	return match ? text.slice(match[0].length) : text;
 }
+
+/**
+ * Tiny relative-time formatter (`just now` / `5m ago` / `3h ago` / `2d ago`) — shared by every "when did
+ * this happen" line (chat history, the tab strip's closed chats, the Changes scope menu's commits) so they
+ * all read alike. Lives here because `chat/` may not import from `panels/`.
+ */
+export function relativeTime(ms: number): string {
+	const s = Math.floor((Date.now() - ms) / 1000);
+	if (s < 60) return "just now";
+	const m = Math.floor(s / 60);
+	if (m < 60) return `${m}m ago`;
+	const h = Math.floor(m / 60);
+	if (h < 24) return `${h}h ago`;
+	return `${Math.floor(h / 24)}d ago`;
+}
+
+/**
+ * Copy text to the clipboard, reporting whether it landed. One helper because the *degradation* is the
+ * point: an insecure context (plain-http remote access) or a denied permission has no clipboard, and every
+ * caller's answer is the same — do nothing loud, the text stays selectable/visible.
+ */
+export async function copyText(text: string): Promise<boolean> {
+	try {
+		await navigator.clipboard.writeText(text);
+		return true;
+	} catch {
+		return false;
+	}
+}

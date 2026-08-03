@@ -3,7 +3,15 @@ import { existsSync, lstatSync, mkdirSync, rmSync, statSync, writeFileSync } fro
 import { dirname, join, resolve } from "node:path";
 import type { DiffStats, Project, Workspace } from "@thinkrail/contracts";
 import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
-import { currentBranch, git, gitAsync, resolveDefaultBranch } from "../git";
+import {
+	assertSafeRef,
+	changedFileArgs,
+	currentBranch,
+	git,
+	gitAsync,
+	resolveDefaultBranch,
+	resolveDiffRange,
+} from "../git";
 import { dataDir, loadProjects, loadWorkspaces, saveWorkspaces } from "../persistence";
 import { getProjects } from "../projects";
 
@@ -104,10 +112,23 @@ function applyFolderTruth(ws: Workspace, truth: { branch: string; baseBranch: st
 	return true;
 }
 
-/** Working-tree changes of a worktree vs its base branch. */
-function diffStats(worktreePath: string, baseBranch: string): DiffStats {
-	const result = git(worktreePath, ["diff", "--shortstat", baseBranch]);
-	if (!result.ok || !result.out) return { added: 0, removed: 0 };
+/**
+ * Working-tree changes of a worktree over its **branch scope** — the same range the Changes panel shows
+ * (the git module's resolver: merge-base of the diff base and `HEAD`, so upstream commits never inflate
+ * the badge), composed through `changedFileArgs` so the counts can't disagree with the file list.
+ * `undefined` when git couldn't answer — **not** `{0,0}`: a failed diff read as "clean" is how a dirty
+ * worktree ends up wearing no badge, so the unknown is left unknown (the rail then shows no badge, as it does
+ * for a genuinely clean worktree, but nothing claims a count it doesn't have) and the reason is logged.
+ */
+function diffStats(ws: Workspace): DiffStats | undefined {
+	const result = git(ws.worktreePath, changedFileArgs(resolveDiffRange(ws), "--shortstat"));
+	if (!result.ok) {
+		console.warn(
+			`git diff --shortstat failed in ${ws.worktreePath}: ${result.err || "unknown error"}`,
+		);
+		return undefined;
+	}
+	if (!result.out) return { added: 0, removed: 0 };
 	return {
 		added: Number(/(\d+) insertion/.exec(result.out)?.[1] ?? 0),
 		removed: Number(/(\d+) deletion/.exec(result.out)?.[1] ?? 0),
@@ -142,26 +163,39 @@ export async function createWorkspace(
 
 	const base = baseRef?.trim();
 	let baseBranch: string;
-	if (base) {
-		// Fallback fetch only when the remote-tracking ref is missing locally, so `worktree add` can't fail on
-		// an unknown ref (the freshness fetch already happened in the background via `prefetchBranch`). The
-		// `rev-parse` guard is ~10ms; offline it degrades to whatever ref exists locally. Async (`gitAsync`) so
-		// the network round-trip can't block the event loop; `--` guards against `-`-prefixed branch names.
-		if (
-			base.startsWith("origin/") &&
-			!git(project.path, ["rev-parse", "--verify", "--quiet", base]).ok
-		) {
-			await gitAsync(project.path, ["fetch", "origin", "--", base.slice("origin/".length)]);
-		}
-		baseBranch = base;
-	} else {
+	if (base) baseBranch = base;
+	else {
 		const head = git(project.path, ["rev-parse", "--abbrev-ref", "HEAD"]);
 		baseBranch = head.ok ? head.out : "HEAD";
+	}
+	// The base reaches `git worktree add` (and, below, `git fetch`) as a rev, so it is validated — and the
+	// **resolved** value is what gets validated, not just a client-supplied one: the fallback comes from
+	// `rev-parse --abbrev-ref HEAD`, i.e. from the repository, and an untrusted repo can have an
+	// option-shaped branch (`--output=…`) checked out just as it can offer one in the picker (see `isSafeRef`).
+	// Both halves of the same door: whichever way the base is chosen, it passes the same check.
+	assertSafeRef(baseBranch);
+	// Fallback fetch only when the remote-tracking ref is missing locally, so `worktree add` can't fail on
+	// an unknown ref (the freshness fetch already happened in the background via `prefetchBranch`). The
+	// `rev-parse` guard is ~10ms; offline it degrades to whatever ref exists locally. Async (`gitAsync`) so
+	// the network round-trip can't block the event loop; `--` guards against `-`-prefixed branch names.
+	if (
+		baseBranch.startsWith("origin/") &&
+		!git(project.path, ["rev-parse", "--verify", "--quiet", baseBranch]).ok
+	) {
+		await gitAsync(project.path, ["fetch", "origin", "--", baseBranch.slice("origin/".length)]);
 	}
 
 	const worktreePath = join(dataDir(), "worktrees", project.slug, branch);
 	mkdirSync(dirname(worktreePath), { recursive: true });
-	const added = git(project.path, ["worktree", "add", worktreePath, "-b", branch, baseBranch]);
+	const added = git(project.path, [
+		"worktree",
+		"add",
+		worktreePath,
+		"-b",
+		branch,
+		"--end-of-options",
+		baseBranch,
+	]);
 	if (!added.ok) throw new Error(`git worktree add failed: ${added.err}`);
 
 	const workspace: Workspace = {
@@ -311,7 +345,8 @@ export function refreshDefaultWorkspace(workspaceId: string): void {
  * `fix-auth-redirect`). The branch ref moves via `git branch -m` from the project repo (the worktree's
  * HEAD follows); the worktree directory never moves — pi keys sessions by exact cwd, and terminals/tabs are
  * rooted there, so the dir keeps its creation name. Re-points sibling records that based their diff on the
- * old branch. Sync on purpose: a caller's check-then-rename can't interleave on the event loop. Throws on
+ * old branch, and emits `updated` for **every** record it changed (the target plus those siblings), so no
+ * client is left with a stale `vs <old branch>` label. Sync on purpose: a caller's check-then-rename can't interleave on the event loop. Throws on
  * unknown id / git failure / an empty requested name.
  *
  * `lock` (default `true`) sets `renamed`, marking the name deliberate so the auto-namer never touches it
@@ -347,14 +382,28 @@ export function renameWorkspace(
 	const all = loadWorkspaces();
 	const target = all.find((w) => w.id === id);
 	if (!target) throw new Error(`Unknown workspace: ${id}`);
+	// Siblings this rename re-pointed. They are broadcast too: the *server* already has the right value (so
+	// diffs are correct), but a sibling client would otherwise keep a stale `vs <old-name>` label and a stale
+	// read key until the next `workspace.list`.
+	const repointed: Workspace[] = [];
 	for (const w of all) {
-		if (w.projectId === target.projectId && w.baseBranch === ws.branch) w.baseBranch = branch;
+		if (w.projectId !== target.projectId || w.id === target.id) continue;
+		// Both meanings follow the moved ref: creation provenance stays truthful, and a sibling that had this
+		// branch as its *diff target* keeps measuring against it instead of silently emptying its diff.
+		const changed = w.baseBranch === ws.branch || w.diffBase === ws.branch;
+		if (w.baseBranch === ws.branch) w.baseBranch = branch;
+		if (w.diffBase === ws.branch) w.diffBase = branch;
+		if (changed) repointed.push(w);
 	}
+	if (target.baseBranch === ws.branch) target.baseBranch = branch;
+	if (target.diffBase === ws.branch) target.diffBase = branch;
 	target.name = displayName;
 	target.branch = branch;
 	if (lock) target.renamed = true;
 	saveWorkspaces(all);
+	// Persist-then-publish, one event per changed record (the target included).
 	emit({ kind: "updated", workspace: target });
+	for (const w of repointed) emit({ kind: "updated", workspace: w });
 	return target;
 }
 
@@ -380,6 +429,28 @@ export function setWorkspaceSkillOverride(
 	return ws;
 }
 
+/**
+ * Re-point the ref this workspace's diff is measured against (`Workspace.diffBase`), or clear it back to
+ * the creation base with `null`. Persists + broadcasts the updated record, so every client converges on the
+ * push rather than optimistically (modelled on `setWorkspaceSkillOverride`). A ref equal to `baseBranch`
+ * clears the field instead of storing a redundant override. Throws for an unknown id / an empty ref / a ref
+ * whose *shape* could be re-parsed by git as an option (`isSafeRef` — the branch list comes from the
+ * repository, so an option-shaped name is reachable without a malicious client).
+ */
+export function setWorkspaceDiffBase(id: string, ref: string | null): Workspace {
+	const all = loadWorkspaces();
+	const ws = all.find((w) => w.id === id);
+	if (!ws) throw new Error(`Unknown workspace: ${id}`);
+	const wanted = ref?.trim();
+	if (ref !== null && !wanted) throw new Error("A diff base must be a ref or null");
+	if (wanted) assertSafeRef(wanted);
+	if (!wanted || wanted === ws.baseBranch) delete ws.diffBase;
+	else ws.diffBase = wanted;
+	saveWorkspaces(all);
+	emit({ kind: "updated", workspace: ws });
+	return ws;
+}
+
 export function listWorkspaces(projectId: string): Workspace[] {
 	// Lazily ensure the built-in Default workspace on every list: find-or-create is idempotent, backfills
 	// projects opened before the feature existed, and self-heals out-of-band state churn (the e2e reset
@@ -389,7 +460,11 @@ export function listWorkspaces(projectId: string): Workspace[] {
 	const rows = loadWorkspaces().filter((w) => w.projectId === projectId);
 	// Pin the Default workspace first (creation order would put a backfilled one last).
 	rows.sort((a, b) => (a.kind === "default" ? -1 : 0) - (b.kind === "default" ? -1 : 0));
-	return rows.map((w) => ({ ...w, diffStats: diffStats(w.worktreePath, w.baseBranch) }));
+	return rows.map((w) => {
+		const stats = diffStats(w);
+		// Omitted, not zeroed, when git couldn't answer (`exactOptionalPropertyTypes`).
+		return stats ? { ...w, diffStats: stats } : w;
+	});
 }
 
 /**
@@ -447,7 +522,11 @@ export function removeWorkspace(id: string): void {
 }
 
 export function workspaceDiffStats(id: string): DiffStats {
-	return diffStats(getWorkspace(id).worktreePath, getWorkspace(id).baseBranch);
+	const ws = getWorkspace(id);
+	const stats = diffStats(ws);
+	// A failed read is an error response, never a fabricated `+0 −0`.
+	if (!stats) throw new Error(`Could not read the diff stats of ${ws.name}`);
+	return stats;
 }
 
 /** Look up a workspace by id (throws if unknown) — the worktree path anchors a chat session's cwd. */

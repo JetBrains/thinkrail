@@ -210,7 +210,7 @@ export function WelcomePanel() {
 }
 
 /**
- * One welcome card (Conductor-style: icon top-left, label + explainer bottom-left). The state's primary
+ * One welcome card (icon top-left, label + explainer bottom-left). The state's primary
  * is a filled-violet card carrying the stable `welcome-cta` hook; others are quiet outlined
  * `welcome-action`s. A `forwardRef` so it can serve as a Radix `asChild` trigger (the "Open project" card
  * hangs the `AddProjectMenu` dropdown off it).

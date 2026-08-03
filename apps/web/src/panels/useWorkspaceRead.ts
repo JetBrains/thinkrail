@@ -5,9 +5,17 @@ import { selectWorkspaceTick, useAppStore } from "../store";
 interface WorkspaceReadHandlers<T> {
 	/** A landed read (never called for a response the hook has since abandoned). */
 	onResult: (value: T, workspaceId: string) => void;
-	/** A failed read. Every current caller keeps its last good value and degrades the empty case. */
-	onFailure?: (workspaceId: string) => void;
-	/** The workspace being **left**: drop whatever belonged to it, before the next one's read lands. */
+	/**
+	 * A failed read, **with the rejection**: a caller that reacts to one specific failure (the Changes panel
+	 * resets a scope whose commit is gone) needs to tell it from a timeout or a dropped socket, so the error
+	 * is passed through rather than swallowed here. Otherwise: keep the last good value, degrade the empty
+	 * case.
+	 */
+	onFailure?: (workspaceId: string, error: unknown) => void;
+	/**
+	 * The read being **left** (the workspace switched, or `readKey` changed): drop whatever belonged to it,
+	 * before the next read lands.
+	 */
 	onSwitch?: (workspaceId: string) => void;
 }
 
@@ -29,11 +37,21 @@ interface WorkspaceReadHandlers<T> {
  * - the **reset is the effect's cleanup**, which closes over the workspace being *left* — the id a reset
  *   actually needs (a plain effect keyed on `workspaceId` runs with the *new* id already in scope);
  * - a manual refresh is an **imperative `reload()`**, not a nonce dependency.
+ *
+ * `readKey` is a **second identity dimension** of the read, for a caller whose read has a parameter beyond the
+ * workspace (the Changes panel's diff scope): changing it re-reads exactly like a workspace switch — reset
+ * first (`onSwitch`), then a fresh, generation-stamped read — so one key's value can never linger under
+ * another. It is **identity only** — what makes a re-read happen, never what the read reads *with*: the
+ * parameter itself lives in the caller's `read` closure, which this hook re-captures on every render
+ * (`latest`), so the value a re-read uses is by construction the one the key describes. The key is handed to
+ * `read` as its second argument for callers that would rather branch on it than close over the parameter;
+ * ignoring it (as the Changes panel does, its `scope` being an object the key merely names) is expected.
  */
 export function useWorkspaceRead<T>(
 	workspaceId: string | null,
-	read: (workspaceId: string) => Promise<T>,
+	read: (workspaceId: string, readKey: string | undefined) => Promise<T>,
 	handlers: WorkspaceReadHandlers<T>,
+	readKey?: string,
 ): { reload: () => void } {
 	const latest = useRef({ read, handlers });
 	latest.current = { read, handlers };
@@ -41,39 +59,39 @@ export function useWorkspaceRead<T>(
 	// response can tell it is stale without a per-call-site cancellation flag.
 	const generation = useRef(0);
 
-	const runRead = useCallback((id: string) => {
+	const runRead = useCallback((id: string, key: string | undefined) => {
 		const mine = ++generation.current;
 		const live = () => generation.current === mine;
 		latest.current
-			.read(id)
+			.read(id, key)
 			.then((value) => {
 				if (live()) latest.current.handlers.onResult(value, id);
 			})
-			.catch(() => {
-				if (live()) latest.current.handlers.onFailure?.(id);
+			.catch((error: unknown) => {
+				if (live()) latest.current.handlers.onFailure?.(id, error);
 			});
 	}, []);
 
 	useEffect(() => {
 		if (!workspaceId) return;
-		runRead(workspaceId);
+		runRead(workspaceId, readKey);
 		let tick = selectWorkspaceTick(useAppStore.getState(), workspaceId);
 		const unsubscribe = useAppStore.subscribe((state) => {
 			const next = selectWorkspaceTick(state, workspaceId);
 			if (next === tick) return;
 			tick = next;
-			runRead(workspaceId);
+			runRead(workspaceId, readKey);
 		});
 		return () => {
 			unsubscribe();
 			generation.current += 1; // abandon this workspace's in-flight read
 			latest.current.handlers.onSwitch?.(workspaceId);
 		};
-	}, [workspaceId, runRead]);
+	}, [workspaceId, readKey, runRead]);
 
 	return {
 		reload: () => {
-			if (workspaceId) runRead(workspaceId);
+			if (workspaceId) runRead(workspaceId, readKey);
 		},
 	};
 }

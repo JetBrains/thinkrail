@@ -26,7 +26,9 @@ folder" anchor, ensured lazily, **non-removable and non-renamable**.
   path** — the New-Workspace dialog `git.prefetch`es the base in the background, so create only `git
   fetch`es as a cheap fallback when the local remote-tracking ref is missing entirely — that fallback runs
   via `gitAsync` (network must not block the event loop) with the branch passed after `--`;
-  `Workspace.baseBranch` records the base the diff is measured against; **branch name made unique
+  `Workspace.baseBranch` records **creation provenance** — the ref the worktree was cut from, which never
+  moves afterwards (what the diff is measured *against* is the separate, re-pointable `diffBase`; see
+  `setWorkspaceDiffBase`); **branch name made unique
   against refs *and* worktree dirs** — archiving leaves the branch behind and renaming frees a branch
   name whose worktree directory stays occupied, so candidate names skip both; path
   `dataDir/worktrees/<project-slug>/<branch>`; **seeds the ephemeral per-workspace scratch dir**
@@ -46,7 +48,10 @@ folder" anchor, ensured lazily, **non-removable and non-renamable**.
   **`name` and `branch` deliberately differ** (e.g. `Fix Auth Redirect` / `fix-auth-redirect`) — the name
   is display-only, never a path/id; only the branch is uniqued (display names may repeat, the branch
   shown beneath the name in the nav disambiguates — see [[submodule-web-panels]]); **re-points sibling
-  records whose `baseBranch` was the old branch** in the same save so their diffs don't silently empty;
+  records whose `baseBranch` **or `diffBase`** was the old branch** in the same save so their provenance stays
+  truthful and their diffs don't silently empty, and **emits `updated` for every record it changed** (the
+  target plus those siblings) — the server would be right either way, but an unbroadcast sibling leaves its
+  clients labelling `vs <old branch>` and keying reads on it until the next `workspace.list`;
   **re-loads the records after the git subprocess** — a record that vanished meanwhile (archived / e2e
   reset) aborts the save instead of resurrecting it; throws on unknown id or git failure — callers decide,
   the auto-rename hook treats it as best-effort. `opts.lock` (default `true`) sets `renamed: true`,
@@ -55,7 +60,26 @@ folder" anchor, ensured lazily, **non-removable and non-renamable**.
   branch while leaving `renamed` unset, so the settled-turn agentic pass still refines it),
   `listWorkspaces` (with diff stats), `listWorkspaceRecords` (registry records without per-workspace git
   diffStats — for read-only paths like history scope mapping that must not block on git spawns),
-  `workspaceDiffStats`, `getWorkspace` (by-id lookup, throws on unknown — anchors a chat session's cwd),
+  `workspaceDiffStats`, **`setWorkspaceDiffBase(id, ref | null)`** — re-point the ref this workspace's diff is
+  measured against (`Workspace.diffBase`), `null` (or the creation base itself, which would be a redundant
+  override) clearing it; persists + **broadcasts the updated record** so every client converges on the push,
+  never optimistically (modelled exactly on `setWorkspaceSkillOverride`). Both **ref doors** — this one and
+  `createWorkspace`'s `baseRef` — validate the ref's *shape* through the `git` module's `assertSafeRef`
+  before it can reach a git argument (an option-shaped branch is reachable from any untrusted repo; see
+  [[submodule-server-git]]). `createWorkspace` validates the **resolved** base *unconditionally*, not just a
+  client-supplied one: with no base picked it comes from `rev-parse --abbrev-ref HEAD`, i.e. from the
+  repository, and an untrusted checkout can have an option-shaped branch checked out (`git branch` refuses such
+  a name, `symbolic-ref` does not) — both halves of the same door, closed by one check. **The two base meanings are two
+  fields on purpose:** `baseBranch` = where the branch came from, `diffBase` = what its review is measured
+  against; collapsing them would make a re-pointed target lie about provenance (the `branch · from
+  baseBranch` receipt). Every read of "the base" resolves through the `git` module, never inline —
+  `diffStats` composes the git module's **branch-scope range** (`resolveDiffRange` +
+  `changedFileArgs(…, "--shortstat")`), so the rail badge measures exactly what the Changes panel shows
+  (merge-base semantics included — upstream commits on the base never inflate the badge) and reaches git
+  bracketed by `--end-of-options` … `--` like every other rev this app passes. `diffStats` yields **no stats at all** (logged) when git couldn't
+  answer, rather than a fabricated `+0 −0` — a failed read must not paint a dirty worktree as clean; the
+  `Workspace.diffStats` field is simply absent, and `workspaceDiffStats` rejects,
+  `getWorkspace` (by-id lookup, throws on unknown — anchors a chat session's cwd),
   and the **archive** primitives, split so the fast record-drop
   and the slow git reclaim are separable (the host archives off the request's critical path):
   `forgetWorkspace(id)` (drop the persistence record, return the removed record or `null` — gone from

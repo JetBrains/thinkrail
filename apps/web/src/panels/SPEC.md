@@ -54,25 +54,43 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   workspace**, so the shell returns to that project's Welcome — a deliberate "project home" gesture; the
   workspace's tabs survive in the store, so re-selecting it restores its view. Also
   `FileTree`, `SpecsPanel`, `RightPanel`,
-  `ChangesPanel` (the changed files, with a header **List | Tree** toggle (`store.changesView`, app-wide)
-  switching a flat list and a folder **`ChangesTree`**; clicking a file in either opens/focuses its
-  **center Monaco diff tab**),
+  `ChangesPanel` (the changed files under a header that says **what** is being diffed — the
+  **`ChangesScopeMenu`** scope pill + the shared **`BranchPicker`** target-branch pill — plus the
+  **List | Tree** toggle (`store.changesView`, app-wide) switching a flat list and a folder
+  **`ChangesTree`**; clicking a file in either opens/focuses its **center Monaco diff tab**, and every file
+  row carries the shared **`ChangeRowActions`** menu),
   `CenterTabs` + `FilePane` (+ its lazy `MonacoEditor` / `MarkdownPreview`) + `DiffPane` (+ its lazy
   `MonacoDiff`), `TerminalsPanel` + lazy `TerminalInstance`. The Monaco plumbing both editors share —
   worker wiring, the local loader, the token-driven `thinkrail` theme + the `[data-theme]` re-theme
   observer — lives once in `monacoSetup.ts`; the slim header view-toggle segment (`Preview|Source`,
   `Split|Inline`, `List|Tree`) is the shared `ToggleSegment`. The **file-style tree row** (chevron/spacer
-  lead, folder/file icon, truncated label, trailing slot) is the shared **`TreeRow`**, used by both
+  lead, folder/file icon, truncated label, trailing slot; `min-w-0` so a row can shrink when it shares a
+  flex line with a trailing control) is the shared **`TreeRow`**, used by both
   `FileTree` and `ChangesTree` so the two trees stay identical; the **`+N −M` diff-count badge** is the
   shared **`DiffStatBadge`**, used by the project-rail worktree stats and the Changes tree's per-file /
   per-folder counts. `ChangesTree`'s tree build + `+/−` aggregation + shared status glyphs live in the pure
   **`changesModel.ts`** (unit-tested; no store/transport — `ChangesTree` is presentational, fed `changes` +
-  `onOpen`/`isActive` by `ChangesPanel`). **`WelcomePanel`** is the first-touch surface the shell mounts (centered, left-nav beside it) whenever no
+  `onOpen`/`isActive` by `ChangesPanel`), together with the **diff-tab identity + scope vocabulary**:
+  `scopeKey` / `diffTabId(workspaceId, scope, path)` / `diffTabName` / `scopeLabel` and the `splitPath`
+  used by both the flat list's path rows and the diff header's path chip. The **branch combobox** is the
+  shared **`BranchPicker`** (searchable, grouped Remote/Local, current pick check-marked, a Refresh that
+  re-lists) — one component for the New-Workspace dialog's *base* branch and the Changes header's *target*
+  branch; the whole state *around* it — the list, `refreshing`, `refresh()` — is the shared
+  **`useBranchList(projectId, onLoaded?)`** (`branches.ts`, over the offline-degrading
+  `listBranchesOrEmpty`), so both pickers are identical **by construction**: the list is **keyed to the
+  project** (it clears on a project change, and both reads are generation-stamped, so a switch can never
+  offer or land the previous project's branches), **only the initial read degrades** (a *refresh* keeps its
+  last good list instead of blanking the picker on a transient failure), and `refreshing` always drives the
+  spinner. A `null` projectId reads nothing — how a closed dialog pauses. Its degraded default is
+  `defaultBranch: ""`, **never the literal `HEAD`**: a sentinel that named a ref would be believed — the
+  dialog would preselect it and persist it as the workspace's `baseBranch`, and that worktree would forever
+  diff against its own head. Empty means "unknown", so `create` omits `baseRef` and the host resolves the
+  real branch. **`WelcomePanel`** is the first-touch surface the shell mounts (centered, left-nav beside it) whenever no
 workspace is active. **One hero heading** (`welcome-title`, the topbar's brand styling — accent font,
 `text-primary` — enlarged): the **shown project's name**, or `PRODUCT_NAME` when no project is shown —
 the wordmark is the empty-state identity, a project's own name is the identity once one is open (so no
 separate project eyebrow). **No pitch prose in any state** — the marketing paragraph was removed as
-unread; the screen is heading → banners → **one-to-three cards** (Conductor-inspired: icon top-left,
+unread; the screen is heading → banners → **one-to-three cards** (icon top-left,
 label + explainer bottom-left; the primary is a filled-violet card carrying the stable `welcome-cta`
 hook, others quiet `welcome-action`s). Welcome is **the mode fork**: with a project shown it always pairs
 **"Start building"** (isolated worktree) with **"Work in project folder"** (the Default workspace) so the
@@ -309,8 +327,8 @@ a project picker, the prompt hero, and the reused
 - `RightPanel` tabs are **Specs | All files | Changes** (Specs leftmost and the **default** — specs are
   the project's ground truth, so the rail leads with them).
 - **Live refresh (the worktree panels follow the disk).** Every workspace-scoped read goes through one
-  hook — **`useWorkspaceRead(workspaceId, read, handlers) → { reload }`** — which owns *when* to read
-  (workspace change, that workspace's `fsChangesByWorkspace` tick, or `reload()` for a manual Refresh) while
+  hook — **`useWorkspaceRead(workspaceId, read, handlers, readKey?) → { reload }`** — which owns *when* to read
+  (workspace change, that workspace's `fsChangesByWorkspace` tick, a **`readKey`** change, or `reload()` for a manual Refresh) while
   the caller owns *what to do* with the outcome (`onResult` / `onFailure` / `onSwitch`). Centralized because
   each site was otherwise re-implementing the **stale-response guard**: an answer in flight when the caller
   moves on must not land in the new workspace's view (reads are generation-stamped — latest wins, abandoned
@@ -324,7 +342,23 @@ a project picker, the prompt hero, and the reused
   so it triggers a re-read without being a render input, and consumers stop re-rendering on unrelated
   worktree churn; the **reset is the effect's cleanup**, which closes over the workspace being *left* (the id
   a reset actually needs — a plain effect keyed on `workspaceId` runs with the *new* id already in scope);
-  and a manual refresh is an **imperative `reload()`**, not a nonce dependency. Refetches **preserve view state**: `FileTree` re-reads the root + every
+  and a manual refresh is an **imperative `reload()`**, not a nonce dependency. `readKey` is the read's
+  **second identity dimension**, for a read parameterized by more than the workspace — `ChangesPanel` passes
+  `${scopeKey}:${targetRef}`, so switching the diff scope or re-pointing the target branch resets and
+  re-reads exactly like a workspace switch, and one scope's list can never linger under another. `onFailure`
+  receives **the rejection**, not just the workspace id: a caller that reacts to one *named* failure (see the
+  vanished-commit rule below) must be able to tell it from a timeout or a dropped socket.
+  The one read that deliberately does **not** go through this hook is `ChangesScopeMenu`'s lazy pair — they
+  are *open*-triggered, not tick-triggered — so the menu is instead **keyed by its full identity,
+  `(workspaceId, targetRef)`**: its commit rows are `git log <base>..HEAD`, so re-pointing the target changes
+  which commits exist, and the remount clears rows that belonged to the previous pair while neutralizing any
+  response still in flight for it. Within one mount the pair is **generation-stamped** as well, so two opens
+  in a row can't let the earlier answer overwrite the later one. It is
+  **identity only** — what makes a re-read happen, never what the read reads *with* (the parameter lives in the
+  caller's `read` closure, which the hook re-captures every render, so the value a re-read uses is by
+  construction the one the key names). It is threaded to `read` (and `reload`) as an argument for a caller that
+  would rather branch on it than close over the parameter; ignoring it — as `ChangesPanel` does, its `scope`
+  being an object the key merely names — is expected. Refetches **preserve view state**: `FileTree` re-reads the root + every
   expanded dir (rows keyed by path; vanished dirs drop out via their parent), `ChangesPanel` re-reads
   `git.status` (list-only — the diff renders in the center tab, not under the list), `SpecsPanel`
   refetches without remounting (expansion survives), and `FilePane`/`DiffPane` re-read an
@@ -333,8 +367,23 @@ a project picker, the prompt hero, and the reused
   deleted — keeps the last content, no auto-close; a diff tab whose file left the change set likewise
   keeps its last contents — the Changes list is where the disappearance shows). `FilePane` and `DiffPane`
   run the **one** tab-content live-refresh contract — the shared **`useLiveTabContent(tab, {read, applyFresh,
-  keepCurrent})`** hook — differing only in the read method (`fs.readFile` vs `git.diffFile`) and the store
-  write (`updateFileTabContent` vs `updateDiffTabContent`). Panels are mounted only for the active workspace,
+  keepCurrent}, reloadKey?)`** hook — differing only in the read method (`fs.readFile` vs `git.diffFile`) and the store
+  write (`updateFileTabContent` vs `updateDiffTabContent`). Its one-batch skip ("this file isn't in it—just
+  advance the tick") requires the batch to have **named** files: a **pathless** frame (`paths: []`, the host's
+  ref-move nudge) always re-reads, since path membership says nothing about a change that touched no file —
+  that is what keeps an open `uncommitted`-scope diff honest when a terminal `git commit` moves `HEAD`.
+  `reloadKey` is the hook's **second live dimension**,
+  for a tab whose content depends on something besides the files: `DiffPane` passes `selectDiffTabTargetRef`,
+  so re-pointing the review target re-reads a **branch-scope** tab at once instead of lagging until the next
+  fs tick (a commit scope has no such dimension — its sides can't move). The re-read keeps the tab's existing
+  tick: it answers "what does this tab mean now", it does not observe a file change. The two dimensions are
+  two effects, so **two reads can be in flight at once** (a slow tick re-read, then a re-point); both take a
+  turn from **one per-tab sequencer** (`createReadSequencer`, unit-tested) and a response is written **only
+  while no later read has started**. Otherwise the network picks the winner: resolving out of order, the
+  older read lands last and overwrites the newer target's content while carrying its own honest — but now
+  stale — stamp, so neither effect sees any drift and the pane keeps the old target's diff under the new
+  target's label indefinitely. Dropping the superseded read costs nothing: the read that superseded it is
+  the one the user is waiting for. Panels are mounted only for the active workspace,
   so scoping is natural; a degraded watcher just means back to read-on-demand. Deliberately **not**
   live (deferred): the project-rail workspace diffStats badges; editable-file conflict handling waits
   for `fs.writeFile` (the viewer is read-only today).
@@ -402,15 +451,52 @@ a project picker, the prompt hero, and the reused
   chat (the chip expands into a list there — see chat/SPEC.md), so no panel ever has to mark a *set*. That is
   deliberate — a second, round-scoped marking vocabulary over these workspace-scoped trees would reintroduce
   the two-rows-read-as-selected ambiguity the single-selection rule above exists to prevent.
-- **The diff is a center tab, not a rail inset.** Clicking a Changes row fetches `git.diffFile` (both
-  sides: base branch vs worktree) and opens a **`DiffTab`** (`${workspaceId}:diff:${path}` — one tab per
-  file; a re-click focuses the existing tab) through `openTabs.ts`'s **`openDiffInTab`**, the diff twin of
-  `openFileInTab`: a single click **previews**, a double click **keeps**, so scanning a change set reuses
-  one tab. `DiffPane` renders a slim header (the path + a per-tab
-  **Split | Inline** toggle via `store.setDiffTabView`; split is the default) over the read-only lazy
+- **The diff scope is chosen in the Changes header, and enters the tab's identity.** Two header controls say
+  what is being diffed: the **`ChangesScopeMenu`** pill — *All
+  changes* (the workspace's work since diverging from the target branch — measured from the merge-base,
+  so upstream commits landing on the target are never phantom rows here; the default) / *Uncommitted changes* / one **commit** from the
+  branch's list — and the shared **`BranchPicker`** pill for the **target branch** (`workspace.setDiffBase`;
+  the panel converges on the broadcast `workspace.updated`, never optimistically). The menu's contents load
+  **lazily on each open**, never on panel mount: `git.listCommits` for the commit rows (subject +
+  `shortSha · author · relative time`) and a `git.status` probe under the uncommitted scope, which is what
+  lets the *Uncommitted* row say “No uncommitted changes” (disabled) instead of opening an unexplained empty
+  list; each degrades on its own. The menu content is **height-bounded and scrollable** (on the shared
+  `DropdownMenuContent` primitive, since any long menu has the problem) — 200 commit rows must not run past
+  the viewport edge where they are unreachable. The pill names a commit scope by its **short sha**, never its subject
+  (`scopeLabel`; the subject is the trigger's `title` via `scopeTitle`, and the menu row shows it in full) —
+  a sentence in a rail header squeezes the sibling target-branch pill down to an ellipsis. A scope naming a commit the repo no longer has (rebase, branch reset) makes
+  the host reject `git.status` with the **named** code `UNKNOWN_COMMIT` (`wsErrorCode`), and *that* rejection —
+  and only that one — **resets to the branch scope with a toast** rather than staying wedged on a dead sha.
+  Every other failure (timeout, dropped socket, git error) leaves the user's chosen scope alone, keeps the
+  last good list, and says so once per failing streak: silently swapping the scope on a network blip is a
+  worse lie than a stale list. The code exists precisely because "the read failed" cannot distinguish the two.
+- **"Never answered", "failed", and "answered empty" are three states, never two.** The panel holds the
+  `GitStatus` *and* a failure separately: no status yet reads as **Loading…**, a failure with no list to keep
+  renders the error plus a **Retry** (`changes-error` / `changes-retry`, `reload()`), and only a landed answer
+  whose `changes` are empty may say “No changes in this scope.” (`changes-empty`). A failed first read must
+  never take the empty-state branch — “clean” is a *claim about the worktree*, and a read that didn't land
+  made no claim; a review surface that shows clean when it isn't is this product's worst failure. Same rule
+  on the host side: a non-zero `git diff` exit **throws** instead of yielding an empty change set (see
+  `server/src/git/SPEC.md`). The **target branch lives beside the scope menu, not inside it**
+  (as first designed): a searchable list belongs in a combobox, and a nested Radix submenu closes itself when
+  the menu re-renders as those lazy reads land.
+- **The diff is a center tab, not a rail inset.** Clicking a Changes row fetches `git.diffFile` (both sides of
+  the row's scope) and opens a **`DiffTab`** (`${workspaceId}:diff:${scopeKey}:${path}` — one tab per *file and
+  scope*, carrying its own `scope`: a re-click in the same scope focuses the existing tab, while the same file
+  in another scope is a second tab, because a tab's content must never change meaning because the rail's scope
+  flipped underneath it; non-default scopes tag the tab label via `diffTabName`) through `openTabs.ts`'s
+  **`openDiffInTab`**, the diff twin of `openFileInTab`: a single click **previews**, a double click **keeps**,
+  so scanning a change set reuses one tab. `DiffPane` renders a slim
+  header — the **path chip** (muted directory prefix + bright basename, matching the flat list's rows), a
+  **¶ hide-whitespace** toggle (Monaco's `ignoreTrimWhitespace`, per tab via
+  `store.setDiffTabIgnoreWhitespace`), a **copy-contents** button (the modified side; no clipboard → no-op,
+  the text stays selectable), and the per-tab
+  **Split | Inline** toggle via `store.setDiffTabView`; split is the default — over the read-only lazy
   `MonacoDiff` (`@monaco-editor/react` `DiffEditor`, model paths derived from the file's path so both
   sides highlight alike; `useInlineViewWhenSpaceIsLimited: false` — the toggle must do what it says, so
-  Split never silently renders as inline on a narrow pane; the inline view's dual line-number gutter
+  Split never silently renders as inline on a narrow pane; **`hideUnchangedRegions: { enabled: true }`** —
+  Monaco's own collapsed context (“N hidden lines” with an expand control, in both layouts), never a
+  hand-rolled folding of our own; the inline view's dual line-number gutter
   — base-branch no. left, worktree no. right — is Monaco's standard and stays). **A markdown diff has exactly two
   views** instead, via a **Source | Rendered** toggle (`diff-toggle-source`/`diff-toggle-rendered`,
   per-tab `DiffTab.rendered` via `store.setDiffTabRendered`, gated on `lib.isMarkdownPath`; Source is
@@ -445,6 +531,8 @@ a project picker, the prompt hero, and the reused
   (`GitFileChange.added/removed`, from `git diff --numstat`; untracked files count their whole content as
   added — but a binary or oversized untracked file gets no count, mirroring how tracked binaries drop out
   of `--numstat`), folder counts are summed client-side. Both views share `ChangesPanel`'s `openDiff` + `isActive`.
+  The **List shows the full worktree-relative path** — muted directory prefix (which yields first when the
+  row overflows) + the status-colored basename, so the name a user scans stays visible.
 - **Browsing reuses one tab: preview vs keep.** Every workspace has at most one **preview tab** — the
   standard IDE slot a *light* open lands in (`store.previewTabByWorkspace`, see `store/SPEC.md` for the
   state rules). It renders with an **italic label** and `data-preview="true"` on its `editor-tab`; a
@@ -476,6 +564,16 @@ a project picker, the prompt hero, and the reused
   active tab and drops to the workspace receipt. `e2e/preview-tabs.spec.ts` asserts the single read
   directly, because the outcome it protects is invisible at localhost latency.
 
+  **A tab's freshness stamps are captured BEFORE its read leaves, never after the response lands.**
+  `loadedTick` (both tab kinds) and `loadedTarget` (a diff tab's review target) are *claims about what the
+  content was read against*, and the store keeps moving while the request is in flight: read back from the
+  store on arrival, a `workspace.fsChanged` push or a `workspace.setDiffBase` broadcast that landed mid-read
+  would be stamped as already reflected — the live-refresh contract, which re-reads on exactly that drift,
+  would see none, and the tab would sit on stale content under a new claim indefinitely. Captured early the
+  stamp is at worst pessimistic (one extra re-read on mount), which is the safe direction — the same rule the
+  store's `markSkillsSynced` follows. `openTabs.test.ts` pins it by resolving a read by hand after moving the
+  store underneath it.
+
   **A read is slow and a click is not, so a pending browse loses to whatever the user does next.** Each
   read records the workspace's **`store.navTickByWorkspace`** count on the way out, and a **`preview`**
   landing after that count has moved is **dropped** rather than committed. Without it, tapping an unopened
@@ -498,6 +596,35 @@ a project picker, the prompt hero, and the reused
   shortcut** — VS Code's `⌘K ↵` is the only convention worth copying and it would cost a two-key chord
   machine the app has no other use for; JetBrains and Zed ship no default binding either. VS Code's
   *pinned* tabs (sort-first, protected from Close Others) are a separate, unbuilt feature.
+- **Row actions: one menu, two triggers.** Every **file** row (both views) is wrapped in
+  **`ChangeRowActions`**: a hover/focus-revealed `⌄` button *and* right-click on the row open the same
+  dropdown. The `⌄` is not garnish — it is the **touch path**, where right-click does not exist (mobile-first).
+  Items: **View** (the same action as a plain click) and **Copy path** (worktree-relative). Deliberately
+  nothing else: the panel is **read-only** — no discard-file/-folder/-all — and no “Open in ‹external app›”,
+  which a host-side `open` would make silently wrong for every remote/phone client (Copy path is the portable
+  escape hatch). **Folder rows get no menu** — nothing in that list applies to a folder. Built on the existing
+  `components/ui/dropdown-menu` (no new `context-menu` primitive); the right-click handler is handed back
+  through a render prop so it lands on the row's real interactive element rather than a bare div, and the `⌄`
+  trigger is a *sibling* of the row's button (a button inside a button is invalid).
+  Three layout rules make that wrapper invisible rather than a seam — each pinned by a geometric e2e
+  assertion, because each was a real bug the first draft shipped:
+  **(1) the wrapper owns the row's highlight** (hover / selected / menu-open), since the band has to span the
+  trailing slot too or a row reads as cut off before its own menu — the inner element paints **no** background
+  at all (the flat list's button carries no `hover:`/selected class, and `TreeRow` takes
+  `highlight="wrapper"`, its `"self"` default being what the All-files tree wants). Exactly one painter,
+  always: two hide the case where the wrapper stopped painting, which is why the e2e pin compares the *wrapper's*
+  computed band against the *inner button's* (transparent) one, not a wrapper against a wrapper;
+  **(2) rows *without* a menu reserve the same gutter** (`ROW_MENU_SLOT`, exported from `ChangeRowActions`
+  and worn by the tree's folder rows), or the `+N −M` column sits 24px further right on folders than on
+  files; and **(3) a row shares its flex line with that slot, so it must be able to shrink below its label**
+  — `TreeRow` carries `min-w-0`, and every path is rendered as *two truncatable halves* (dir + basename), so
+  a long basename can never push the counts (or, in `DiffPane`'s twin chip, the ¶/copy/layout controls) out
+  of the box. The halves are **not** equally truncatable: the dir prefix out-shrinks the basename 20:1
+  (`shrink-[20]` vs `shrink` — a *ratio*, both ≥ 1, since a shrink sum below 1 makes CSS absorb only that
+  fraction of the deficit and the row overflows instead), so it yields *first* and the name a user scans survives — equal shrink made
+  both halves truncate at once, the opposite of the intent (and the e2e pin now measures the two spans
+  separately, so "the dir yields first" is a claim a test can falsify). A `shrink-0` basename overflows its own chip **invisibly to the layout** while spilling over
+  the buttons on screen — which is why the e2e pin measures the *chip's* `scrollWidth`, not the header's.
 - **Markdown file tabs render, don't read.** A `.md`/`.markdown` `FileTab` (from the file tree **or** the
   Specs panel — same `openTab` path) opens **rendered by default**: `FilePane` gates on `lib.isMarkdownPath`
   and shows a slim `Preview | Source` header (`markdown-view-toggle`), the rendered view being lazy

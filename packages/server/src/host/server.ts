@@ -1,6 +1,7 @@
 import { join, normalize } from "node:path";
-import type { ServerWelcome } from "@thinkrail/contracts";
+import type { ServerWelcome, WorkspaceFsChangedPayload } from "@thinkrail/contracts";
 import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
+import { errorCodeOf } from "@thinkrail/shared/codedError";
 import {
 	disposeAllSessions,
 	getSessionWorkspaceId,
@@ -27,6 +28,7 @@ import {
 	maybeAutoRenameWorkspace,
 	maybeNaiveNameWorkspace,
 } from "./autoRename";
+import { setFsNudgePublisher } from "./fsNudge";
 import { handleRequest } from "./handlers";
 import { trackLoginOutcome } from "./loginAnalytics";
 
@@ -114,7 +116,12 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 					ws.send(JSON.stringify({ id: req.id, ok: true, result }));
 				} catch (err) {
 					const error = err instanceof Error ? err.message : String(err);
-					ws.send(JSON.stringify({ id: req.id, ok: false, error }));
+					// A failure the host can *name* travels as a code too (`CodedError`), so a client can react to
+					// this error specifically instead of pattern-matching a message.
+					const code = errorCodeOf(err);
+					ws.send(
+						JSON.stringify({ id: req.id, ok: false, error, ...(code ? { errorCode: code } : {}) }),
+					);
 				}
 			},
 		},
@@ -163,20 +170,35 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 
 	// Push the worktree change notifier's debounced invalidation batches (agent edits, terminal
 	// commands, Finder) to every subscribed client — receivers re-read via the normal read methods.
-	setWatchPublisher((payload) => {
+	const publishFsChanged = (payload: WorkspaceFsChangedPayload) => {
 		server.publish(
 			WS_CHANNELS.workspaceFsChanged,
 			JSON.stringify({ channel: WS_CHANNELS.workspaceFsChanged, data: payload }),
 		);
-	});
+	};
+	setWatchPublisher(publishFsChanged);
+	// The same frame, publishable from the `git.prefetch` handler: the app's own background fetch moves
+	// `refs/remotes/…` in the project repo's shared `.git` — a location no worktree watcher can see — so the
+	// handler nudges the workspaces whose diff base that ref is (see `fsNudge.ts`).
+	setFsNudgePublisher(publishFsChanged);
 
-	// The notifier's second seam, host-mediated (`watch` has no `workspaces` edge): a `.git` write in a
-	// watched worktree re-syncs a **Default** workspace's folder-truth branch, so a `git switch` in its
-	// terminal converges the rail, the top bar and the receipt live instead of only at the next
-	// `workspace.list` — including a branch switch that leaves the working tree byte-identical, which
-	// produces no `fsChanged` frame at all. Cheap and self-publishing (`refreshDefaultWorkspace` emits
-	// `workspace.updated` through the lifecycle tee above); a no-op for worktree workspaces (pinned branch).
-	setRepoMetaPublisher(refreshDefaultWorkspace);
+	// The notifier's second seam, host-mediated (`watch` has no `workspaces` edge): a git-metadata write in
+	// a watched worktree — a `git switch`/`commit`/`reset` in its terminal — converges two things that a
+	// file watcher alone cannot see, because such a change can leave the working tree byte-identical and
+	// produce no `fsChanged` batch at all:
+	//   1. a **Default** workspace's folder-truth branch (rail, top bar, receipt) instead of only at the next
+	//      `workspace.list`; self-publishing (`refreshDefaultWorkspace` emits `workspace.updated` through the
+	//      lifecycle tee above), and a no-op for worktree workspaces (pinned branch);
+	//   2. every **git-derived read** on the clients — `git.status` and an open `uncommitted`-scope diff tab
+	//      are relative to `HEAD`, so a commit made in a terminal would otherwise keep being reported as
+	//      uncommitted until some later file edit. Emitted as a **pathless** `fsChanged` nudge (no paths, not
+	//      truncated): the frame is an invalidation, and a ref move invalidates exactly these reads without
+	//      naming any file — so no `.git` path leaks to a client, and path-driven consumers (the Skills-reload
+	//      badge) correctly see nothing of interest.
+	setRepoMetaPublisher((workspaceId) => {
+		refreshDefaultWorkspace(workspaceId);
+		publishFsChanged({ workspaceId, paths: [], truncated: false });
+	});
 
 	// Broadcast a server-synced settings change (the full `AppConfig`) to every client so they converge —
 	// the initiator applies on this push too, never optimistically (the workspace-lifecycle pattern). The

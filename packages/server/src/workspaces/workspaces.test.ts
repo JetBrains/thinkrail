@@ -20,6 +20,7 @@ import {
 	refreshDefaultWorkspace,
 	removeWorkspace,
 	renameWorkspace,
+	setWorkspaceDiffBase,
 	setWorkspacePublisher,
 	type WorkspaceLifecycleEvent,
 } from "./workspaces";
@@ -205,6 +206,81 @@ test("renameWorkspace re-points siblings basing their diff on the old branch", a
 	expect(after.find((w) => w.id === first.id)?.branch).toBe("core-work");
 });
 
+test("setWorkspaceDiffBase re-points the diff target, leaving creation provenance alone", async () => {
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((e) => events.push(e));
+	const ws = await createWorkspace("p1");
+	git(repo, "branch", "release");
+
+	const pointed = setWorkspaceDiffBase(ws.id, "release");
+	expect(pointed.diffBase).toBe("release");
+	expect(pointed.baseBranch).toBe(ws.baseBranch); // provenance never moves
+	expect(listWorkspaceRecords("p1")[0]?.diffBase).toBe("release"); // persisted
+	// Broadcast like every other membership mutation, so clients converge on the push.
+	expect(events.at(-1)).toMatchObject({ kind: "updated", workspace: { diffBase: "release" } });
+
+	// `null` clears it; so does re-pointing at the creation base (no redundant override is stored).
+	expect(setWorkspaceDiffBase(ws.id, null).diffBase).toBeUndefined();
+	expect(setWorkspaceDiffBase(ws.id, ws.baseBranch).diffBase).toBeUndefined();
+	expect(() => setWorkspaceDiffBase(ws.id, "   ")).toThrow(/must be a ref/);
+	expect(() => setWorkspaceDiffBase("nope", "release")).toThrow("Unknown workspace: nope");
+});
+
+test("renameWorkspace re-points a sibling whose diff TARGET was the renamed branch", async () => {
+	const first = await createWorkspace("p1");
+	const dependent = await createWorkspace("p1");
+	setWorkspaceDiffBase(dependent.id, first.branch);
+
+	renameWorkspace(first.id, "core work");
+	expect(listWorkspaceRecords("p1").find((w) => w.id === dependent.id)?.diffBase).toBe("core-work");
+});
+
+test("renameWorkspace broadcasts every record it re-pointed, not only the target", async () => {
+	const first = await createWorkspace("p1");
+	const basedOn = await createWorkspace("p1", "on top", first.branch);
+	const targeting = await createWorkspace("p1");
+	setWorkspaceDiffBase(targeting.id, first.branch);
+	const untouched = await createWorkspace("p1");
+
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((e) => events.push(e));
+	renameWorkspace(first.id, "core work");
+
+	const updated = events.filter((e) => e.kind === "updated").map((e) => e.workspace);
+	expect(updated.map((w) => w.id).sort()).toEqual([first.id, basedOn.id, targeting.id].sort());
+	expect(updated.find((w) => w.id === basedOn.id)?.baseBranch).toBe("core-work");
+	expect(updated.find((w) => w.id === targeting.id)?.diffBase).toBe("core-work");
+	expect(updated.some((w) => w.id === untouched.id)).toBe(false);
+});
+
+test("an option-shaped ref is refused at both mutation doors", async () => {
+	const ws = await createWorkspace("p1");
+	// Reachable without a malicious client: `git update-ref` accepts such a name, so `listBranches`
+	// (for-each-ref) offers it in the picker of any untrusted repo.
+	expect(() => setWorkspaceDiffBase(ws.id, "--output=/tmp/thinkrail-pwn")).toThrow(
+		/usable git ref/,
+	);
+	// `await`ed — an un-awaited `rejects.toThrow()` can never fail the test, which is the last thing an
+	// option-injection regression test should be.
+	await expect(createWorkspace("p1", "pwn", "--output=/tmp/thinkrail-pwn")).rejects.toThrow(
+		/usable git ref/,
+	);
+	// A well-formed but *deleted* ref stays acceptable — the read degrades, it is not malformed.
+	expect(setWorkspaceDiffBase(ws.id, "gone-branch").diffBase).toBe("gone-branch");
+});
+
+test("createWorkspace validates the RESOLVED base — including the one it reads off the repo's HEAD", async () => {
+	// The other half of the same door: with no base picked, the base comes from `rev-parse --abbrev-ref HEAD`,
+	// i.e. from the repository — and an untrusted repo can have an option-shaped branch checked out
+	// (`git branch` refuses the name, `symbolic-ref` does not).
+	const probe = join(dataDir, "head-pwn-probe.txt");
+	git(repo, "update-ref", `refs/heads/--output=${probe}`, "HEAD");
+	git(repo, "symbolic-ref", "HEAD", `refs/heads/--output=${probe}`);
+
+	await expect(createWorkspace("p1")).rejects.toThrow(/usable git ref/);
+	expect(existsSync(probe)).toBe(false);
+});
+
 test("renameWorkspace throws on an unknown workspace", () => {
 	expect(() => renameWorkspace("nope", "anything")).toThrow("Unknown workspace: nope");
 });
@@ -350,6 +426,15 @@ test("the Default workspace's branch and base refresh from the folder on each li
 	git(repo, "add", "-A");
 	git(repo, "commit", "-m", "feature work");
 	expect(listWorkspaces("p1")[0]?.diffStats?.added).toBe(2);
+
+	// The badge shares the Changes panel's branch-scope range (the resolver): work landing on the BASE
+	// after the fork must not inflate it — tip semantics would count main's new file as a removal here.
+	git(repo, "switch", "main");
+	writeFileSync(join(repo, "upstream.txt"), "a\nb\nc\n");
+	git(repo, "add", "-A");
+	git(repo, "commit", "-m", "upstream work");
+	git(repo, "switch", "feature/x");
+	expect(listWorkspaces("p1")[0]?.diffStats).toEqual({ added: 2, removed: 0 });
 });
 
 test("refreshDefaultWorkspace re-syncs and publishes Default drift off the list path", async () => {

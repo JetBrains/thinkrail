@@ -15,6 +15,7 @@ import {
 	DropdownMenuLabel,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { relativeTime } from "@/lib";
 import { messagesToRuntime } from "../chat/hydrate";
 import {
 	type ClosedChat,
@@ -52,16 +53,6 @@ const AUTO_OPEN_LIMIT = 4;
 // Stable empty references so selectors don't re-render the component on unrelated state changes.
 const NO_TABS: EditorTab[] = [];
 const NO_CLOSED: ClosedChat[] = [];
-
-function relativeTime(ms: number): string {
-	const s = Math.floor((Date.now() - ms) / 1000);
-	if (s < 60) return "just now";
-	const m = Math.floor(s / 60);
-	if (m < 60) return `${m}m ago`;
-	const h = Math.floor(m / 60);
-	if (h < 24) return `${h}h ago`;
-	return `${Math.floor(h / 24)}d ago`;
-}
 
 /** Dropdown of chats closed in this workspace; picking one reopens it (and removes it from history). */
 function ChatHistoryMenu({

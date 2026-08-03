@@ -8,7 +8,12 @@ import type {
 	Workspace,
 } from "@thinkrail/contracts";
 import { type FileTab, type SessionRuntime, toast, useAppStore } from "./appStore";
-import { selectSkillsStale, selectWorkspaceNavTick, selectWorkspaceTick } from "./selectors";
+import {
+	selectDiffScope,
+	selectSkillsStale,
+	selectWorkspaceNavTick,
+	selectWorkspaceTick,
+} from "./selectors";
 
 // Event fixtures — the reducer only reads the fields below, so casting minimal objects is safe here.
 const agentStart = { type: "agent_start" } as unknown as PiEvent;
@@ -612,7 +617,30 @@ test("project and workspace navigation update both scope ids atomically", () => 
 	unsubscribe();
 });
 
-test("updateWorkspace merges the pushed snapshot by id, keeping the computed diffStats badge", () => {
+test("updateWorkspace applies a pushed snapshot authoritatively: dropped fields clear", () => {
+	useAppStore.setState({
+		workspaces: {
+			p1: [
+				{
+					...pushedWorkspace(),
+					diffBase: "release",
+					skillOverrides: { "spec-graph": "off" },
+					diffStats: { added: 3, removed: 1 },
+				},
+			],
+		},
+	});
+	// Re-pointing back to the creation base clears `diffBase` server-side; a merge would keep the stale
+	// override and the pill would keep reading `vs release` while the host diffs against `main`.
+	useAppStore.getState().updateWorkspace(pushedWorkspace());
+
+	const ws = useAppStore.getState().workspaces.p1?.[0];
+	expect(ws?.diffBase).toBeUndefined();
+	expect(ws?.skillOverrides).toBeUndefined();
+	expect(ws?.diffStats).toEqual({ added: 3, removed: 1 }); // locally computed — survives the replace
+});
+
+test("updateWorkspace applies the pushed snapshot by id, keeping the computed diffStats badge", () => {
 	useAppStore.setState({
 		workspaces: {
 			p1: [
@@ -1110,13 +1138,15 @@ test("diff tabs: openTab dedupes by id + activates; view + contents update in pl
 	useAppStore.setState({ activeWorkspaceId: "ws1" });
 	const tab = {
 		kind: "diff" as const,
-		id: "ws1:diff:src/a.ts",
+		id: "ws1:diff:branch:src/a.ts",
 		workspaceId: "ws1",
 		name: "a.ts",
 		path: "src/a.ts",
+		scope: { kind: "branch" } as const,
 		original: "old",
 		modified: "new",
 		loadedTick: 1,
+		loadedTarget: "main",
 	};
 	s().openTab(tab);
 	s().openTab(tab); // re-open = no duplicate, stays active
@@ -1131,15 +1161,53 @@ test("diff tabs: openTab dedupes by id + activates; view + contents update in pl
 	const guarded = s().tabsByWorkspace.ws1?.[0];
 	expect(guarded?.kind === "diff" && guarded.view).toBe("inline");
 
-	// A live re-read replaces both sides and advances the tick.
-	s().updateDiffTabContent(tab.id, "old2", "new2", 5);
+	// Hide-whitespace is per-tab too, through the same patch path.
+	s().setDiffTabIgnoreWhitespace(tab.id, true);
+	const afterWs = s().tabsByWorkspace.ws1?.[0];
+	expect(afterWs?.kind === "diff" && afterWs.ignoreWhitespace).toBe(true);
+
+	// A live re-read replaces both sides and advances **both** live dimensions: the fs tick and the review
+	// target the fresh content was read against (which is what lets a background tab detect a moved target).
+	s().updateDiffTabContent(tab.id, "old2", "new2", 5, "origin/release");
 	const updated = s().tabsByWorkspace.ws1?.[0];
 	expect(updated?.kind).toBe("diff");
 	if (updated?.kind === "diff") {
 		expect(updated.original).toBe("old2");
 		expect(updated.modified).toBe("new2");
 		expect(updated.loadedTick).toBe(5);
+		expect(updated.loadedTarget).toBe("origin/release");
 	}
+});
+
+test("the diff scope is per workspace, defaults to the branch, and is dropped with the workspace", () => {
+	const s = () => useAppStore.getState();
+	useAppStore.setState({
+		workspaces: {
+			p1: [
+				{
+					id: "ws1",
+					projectId: "p1",
+					name: "ws1",
+					branch: "b",
+					worktreePath: "/wt",
+					baseBranch: "main",
+				},
+			],
+		},
+		activeWorkspaceId: "ws1",
+		selectedProjectId: "p1",
+	});
+	// Unset → the shared default object (referentially stable, so selectors don't re-render).
+	expect(selectDiffScope(s(), "ws1")).toBe(selectDiffScope(s(), "ws2"));
+	expect(selectDiffScope(s(), "ws1")).toEqual({ kind: "branch" });
+
+	s().setDiffScope("ws1", { kind: "commit", sha: "abc123" });
+	expect(selectDiffScope(s(), "ws1")).toEqual({ kind: "commit", sha: "abc123" });
+	// Another workspace is unaffected — a commit sha means nothing in a different worktree.
+	expect(selectDiffScope(s(), "ws2")).toEqual({ kind: "branch" });
+
+	s().applyWorkspaceRemoved("p1", "ws1");
+	expect(s().diffScopeByWorkspace.ws1).toBeUndefined();
 });
 
 // The Skills-reload badge (selectSkillsStale) is store-derived, so it must not depend on the ChatView
