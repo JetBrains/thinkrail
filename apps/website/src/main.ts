@@ -305,6 +305,8 @@ if (mockElements.length > 0) {
 
 	const GAP = 8; // Gap between trigger and tooltip
 	const MARGIN = 8; // Viewport margin
+	const titlebar = document.querySelector(".titlebar");
+	const railRight = document.getElementById("rail-right");
 
 	const positionTooltip = (trigger: HTMLElement) => {
 		const triggerRect = trigger.getBoundingClientRect();
@@ -316,8 +318,14 @@ if (mockElements.length > 0) {
 		let top: number;
 
 		// Customize placement per region
-		if (trigger.classList.contains("tabstrip") || trigger.classList.contains("term-screen")) {
-			// Tabs and terminal: below trigger, right-aligned to trigger's right edge
+		if (trigger.classList.contains("tabstrip") && titlebar && railRight) {
+			// Editor tabs: 12px below titlebar, 12px to the left of right rail
+			const titlebarRect = titlebar.getBoundingClientRect();
+			const railRect = railRight.getBoundingClientRect();
+			left = railRect.left - tooltipRect.width - 12;
+			top = titlebarRect.bottom + 12;
+		} else if (trigger.classList.contains("term-screen")) {
+			// Terminal: below trigger, right-aligned to trigger's right edge
 			left = triggerRect.right - tooltipRect.width;
 			top = triggerRect.bottom + GAP;
 		} else {
