@@ -1446,6 +1446,7 @@ html.anim .terminal.armed [data-out] {
 .statusbar {
 	display: flex;
 	align-items: center;
+	justify-content: flex-end;
 	gap: 18px;
 	padding: 5px 16px;
 	border-top: 1px solid var(--border2);
@@ -1456,6 +1457,16 @@ html.anim .terminal.armed [data-out] {
 	flex: none;
 	overflow: hidden;
 	white-space: nowrap;
+}
+
+.statusbar a {
+	color: inherit;
+	text-decoration: none;
+}
+
+.statusbar a:hover {
+	color: var(--text);
+	text-decoration: underline;
 }
 
 .sb-item {
