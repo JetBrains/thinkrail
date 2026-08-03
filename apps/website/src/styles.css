@@ -763,7 +763,7 @@ code {
 	font-size: clamp(52px, 9vw, 96px);
 	line-height: 0.98;
 	letter-spacing: 0.5px;
-	margin: 0 0 10px;
+	margin: 48px 0;
 	color: var(--accent);
 }
 
@@ -841,6 +841,7 @@ p.hero-platforms {
 	font-size: 12.5px;
 	color: var(--hint);
 	font-family: var(--font-mono);
+	max-width: 100%;
 }
 
 .hero-ctas {
