@@ -30,7 +30,7 @@ function themeVariables(): Record<string, string> {
 		primaryBorderColor: border,
 		secondaryColor: cssVar("--control-bg-hovered") || cardBg,
 		tertiaryColor: cssVar("--container-terminal-bg") || bg,
-		lineColor: cssVar("--text-text-muted") || border,
+		lineColor: cssVar("--text-muted") || border,
 		textColor: text,
 		nodeBorder: border,
 		clusterBkg: bg,
