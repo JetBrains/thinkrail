@@ -1494,7 +1494,7 @@ html.anim .terminal.armed [data-out] {
 		transform 200ms ease-out;
 	z-index: 1001;
 	box-shadow: 0 8px 24px rgb(0 0 0 / 0.35);
-	max-width: 280px;
+	max-width: calc(100vw - 32px);
 }
 
 .mock-tooltip-icon {
@@ -1514,6 +1514,7 @@ html.anim .terminal.armed [data-out] {
 	font-size: 15px;
 	line-height: 1.5;
 	color: var(--text);
+	white-space: nowrap;
 }
 
 .mock-tooltip-cta {
