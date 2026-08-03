@@ -3,9 +3,9 @@ import { join } from "node:path";
 
 /**
  * Load / validate / render the semantic colour layer. The single place a colour derivation is written:
- * `renderCss` emits the `:root` roles and the `@theme inline` utility map, and `paletteModule` emits the
- * palette-variable + effect tables the theme runtime applies. Nothing downstream restates a percentage,
- * a variable name or a mapping.
+ * `renderCss` emits the `:root` roles, the appearance-level effects, and the `@theme inline` utility
+ * map. Nothing downstream restates a percentage, a variable name or a mapping — the palette variables
+ * the roles read are written to the document root at runtime by `themes/runtime.ts`.
  */
 
 export const STYLES_DIR = join(import.meta.dir, "..", "src", "styles");
@@ -75,7 +75,7 @@ export function derive(colors: Colors, role: Role): string {
  * palette as an inline style that outranks `:root`. Such a role publishes the palette variable directly
  * and emits no `:root` line of its own.
  */
-export function aliasesPaletteVar(_colors: Colors, name: string, role: Role): boolean {
+function aliasesPaletteVar(name: string, role: Role): boolean {
 	return paletteVar(role.from) === roleVar(name) && !role.alpha && !role.fallback;
 }
 
@@ -136,7 +136,7 @@ export function renderCss(colors: Colors): string {
 	const effects = Object.entries(colors.effects).filter(([, e]) => e.publish);
 
 	const rootLines = roles
-		.filter(([name, role]) => !aliasesPaletteVar(colors, name, role))
+		.filter(([name, role]) => !aliasesPaletteVar(name, role))
 		.map(([name, role]) => {
 			const note = role.note ? ` /* ${role.note} */` : "";
 			return `\t${roleVar(name)}: ${derive(colors, role)};${note}`;
