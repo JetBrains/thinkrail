@@ -232,14 +232,13 @@ if (stars) {
 		});
 }
 
-/* ── Rail note (scroll-triggered reveal + dismiss) ───────────────────────── */
+/* ── Rail note (time-delayed reveal + dismiss) ─────────────────────────── */
 
 const railNote = document.getElementById("rail-note");
 const railNoteDismiss = document.getElementById("rail-note-dismiss");
 if (railNote && railNoteDismiss) {
 	const STORAGE_KEY = "thinkrail-rail-note-dismissed";
-	const SCROLL_THRESHOLD = 150; // px
-	let revealed = false;
+	const REVEAL_DELAY = 5000; // 5 seconds
 
 	// Check if already dismissed
 	let dismissed = false;
@@ -253,18 +252,12 @@ if (railNote && railNoteDismiss) {
 		// Already dismissed — keep hidden permanently
 		railNote.classList.add("hidden");
 	} else {
-		// Start hidden, reveal on scroll
+		// Start hidden, reveal after delay
 		railNote.classList.add("pending");
 
-		const revealOnScroll = () => {
-			if (revealed) return;
-			if (editor && editor.scrollTop >= SCROLL_THRESHOLD) {
-				revealed = true;
-				railNote.classList.remove("pending");
-			}
-		};
-
-		editor?.addEventListener("scroll", revealOnScroll);
+		setTimeout(() => {
+			railNote.classList.remove("pending");
+		}, REVEAL_DELAY);
 	}
 
 	railNoteDismiss.addEventListener("click", () => {
