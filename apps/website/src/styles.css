@@ -1024,7 +1024,7 @@ p.hero-platforms {
 	border: 1px solid var(--border2);
 	border-radius: 12px;
 	background: color-mix(in srgb, var(--elevated) 30%, var(--editor-bg));
-	padding: 20px;
+	padding: 20px 20px 4px;
 	margin: 22px 0;
 	display: flex;
 	flex-direction: column;
