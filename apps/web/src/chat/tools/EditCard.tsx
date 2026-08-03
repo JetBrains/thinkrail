@@ -36,8 +36,8 @@ export function EditCard({ args, result, status, workspaceRoot }: ToolRenderProp
 						// Diff lines are render-order-stable (never reordered), so the index is a correct key.
 						const key = `old-${i}`;
 						return (
-							<div key={key} className="flex bg-feedback-error/10">
-								<span className="w-6 shrink-0 select-none px-1 text-right text-feedback-error/50">
+							<div key={key} className="flex bg-feedback-error-subtle">
+								<span className="w-6 shrink-0 select-none px-1 text-right text-feedback-error-muted">
 									−
 								</span>
 								<pre className="min-w-0 flex-1 px-1 text-feedback-error tr-code-text">{line}</pre>
@@ -47,8 +47,8 @@ export function EditCard({ args, result, status, workspaceRoot }: ToolRenderProp
 					{newLines.map((line, i) => {
 						const key = `new-${i}`;
 						return (
-							<div key={key} className="flex bg-feedback-success/10">
-								<span className="w-6 shrink-0 select-none px-1 text-right text-feedback-success/50">
+							<div key={key} className="flex bg-feedback-success-subtle">
+								<span className="w-6 shrink-0 select-none px-1 text-right text-feedback-success-muted">
 									+
 								</span>
 								<pre className="min-w-0 flex-1 px-1 text-feedback-success tr-code-text">{line}</pre>

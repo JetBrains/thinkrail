@@ -539,7 +539,7 @@ export function NewWorkspaceDialog({
 				{selectedProject && selectedProject.trusted !== true && aliasSkills.length > 0 ? (
 					<div
 						data-testid="ws-trust-notice"
-						className="flex w-full items-center gap-sm rounded-[var(--radius-md)] border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-bg px-md py-sm text-left"
+						className="flex w-full items-center gap-sm rounded-[var(--radius-md)] border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-subtle px-md py-sm text-left"
 					>
 						<TriangleAlert className="size-4 shrink-0 text-feedback-warning" />
 						<span className="min-w-0 flex-1 tr-text-ui text-text-default">
@@ -638,7 +638,7 @@ export function NewWorkspaceDialog({
 						className="flex h-8 shrink-0 items-center gap-sm rounded-[var(--radius-md)] bg-primary px-md tr-text-action text-text-on-primary outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
 					>
 						{isolated ? "Create" : "Start"}
-						<span className="inline-flex h-4 min-w-4 items-center justify-center rounded-[3px] bg-on-primary-subtle px-1 tr-code-text">
+						<span className="inline-flex h-4 min-w-4 items-center justify-center rounded-[3px] bg-on-primary-soft px-1 tr-code-text">
 							↵
 						</span>
 					</button>

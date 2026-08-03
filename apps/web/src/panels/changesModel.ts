@@ -11,7 +11,7 @@ export function statusNameClass(status: GitFileStatus): string {
 	switch (status) {
 		case "added":
 		case "untracked":
-			return "text-feedback-success/40";
+			return "text-feedback-success-muted";
 		case "deleted":
 			return "text-feedback-error line-through";
 		case "renamed":

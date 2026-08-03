@@ -50,23 +50,25 @@
 	--color-border-default: var(--border-default);
 	--color-border-muted: var(--border-muted);
 
-	/* Primary — the accent itself, then its four tints */
+	/* Primary — the accent itself, then its scale steps */
 	--color-primary: var(--primary);
 	--color-primary-subtle: var(--primary-subtle);
 	--color-primary-soft: var(--primary-soft);
 	--color-primary-muted: var(--primary-muted);
 	--color-primary-strong: var(--primary-strong);
-	--color-on-primary-subtle: var(--on-primary-subtle);
+	--color-on-primary-soft: var(--on-primary-soft);
 
 	/* Feedback */
 	--color-feedback-info: var(--feedback-info);
-	--color-feedback-info-bg: var(--feedback-info-bg);
+	--color-feedback-info-subtle: var(--feedback-info-subtle);
 	--color-feedback-success: var(--feedback-success);
-	--color-feedback-success-bg: var(--feedback-success-bg);
+	--color-feedback-success-subtle: var(--feedback-success-subtle);
+	--color-feedback-success-muted: var(--feedback-success-muted);
 	--color-feedback-error: var(--feedback-error);
-	--color-feedback-error-bg: var(--feedback-error-bg);
+	--color-feedback-error-subtle: var(--feedback-error-subtle);
+	--color-feedback-error-muted: var(--feedback-error-muted);
 	--color-feedback-warning: var(--feedback-warning);
-	--color-feedback-warning-bg: var(--feedback-warning-bg);
+	--color-feedback-warning-subtle: var(--feedback-warning-subtle);
 
 	/* Chat bubble */
 	--color-bubble-user-bg: var(--bubble-user-bg);

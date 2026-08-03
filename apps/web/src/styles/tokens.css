@@ -1,23 +1,18 @@
 :root {
-	/* Theme-derived helpers. The theme engine owns the source colors; these repetitive alpha variants
-	   are generic so manifests never repeat them. */
-	--primary-10: color-mix(in srgb, var(--primary) 10%, transparent);
-	--primary-20: color-mix(in srgb, var(--primary) 20%, transparent);
-	--primary-40: color-mix(in srgb, var(--primary) 40%, transparent);
-	--primary-60: color-mix(in srgb, var(--primary) 60%, transparent);
-	--green-tint: color-mix(in srgb, var(--green) 12%, transparent);
-	--gold-tint: color-mix(in srgb, var(--gold) 12%, transparent);
-	--on-accent-16: color-mix(in srgb, var(--on-accent) 16%, transparent);
-	--bubble-user-bg: color-mix(in srgb, var(--bubble-accent) 12%, transparent);
-	--bubble-user-border: color-mix(in srgb, var(--bubble-accent) 35%, transparent);
-
 	/*
 	 * ─── Semantic Color Tokens ───────────────────────────────────────────────────
-	 * The layer components name. Everything above this line is the raw palette the theme engine
-	 * writes (`themes/runtime.ts`) plus its alpha helpers — those are INTERNAL: a component names a
-	 * role (`bg-control-bg`), never a palette entry (`bg-[var(--input-bg)]`). A token earns its place
-	 * here only if some call site uses it AND it can differ from its neighbours; an alias that can
-	 * never diverge is a second name for one thing, so it is not declared.
+	 * The layer components name. The raw palette (`--text`, `--elevated`, `--gold`, …) is written by
+	 * the theme engine (`themes/runtime.ts`) from the active manifest and is INTERNAL: a component
+	 * names a role (`bg-control-bg`), never a palette entry (`bg-[var(--input-bg)]`). A token earns
+	 * its place here only if some call site uses it AND it can differ from its neighbours; an alias
+	 * that can never diverge is a second name for one thing, so it is not declared.
+	 *
+	 * TRANSPARENCY HAS EXACTLY ONE FORM: a token, mixed `in srgb`, on a four-step scale —
+	 *     subtle 10%  ·  soft 20%  ·  muted 40%  ·  strong 60%
+	 * Tailwind's `/40` modifier is deliberately NOT used at call sites. It mixes `in oklab`, so the
+	 * same nominal percentage rendered differently depending on whether it came from a class or a
+	 * token, and the percentages themselves drifted across components (10, 12, 15, 16, 25, 30, 35,
+	 * 50). A new tint is a new token on this scale, never a new number in a class name.
 	 */
 
 	/*
@@ -65,24 +60,30 @@
 	 * selected rows, chips, pills, focus rings and search highlights, so any single purpose name
 	 * would be wrong at most of its call sites.
 	 */
-	--primary-subtle: var(--primary-10);
-	--primary-soft: var(--primary-20);
-	--primary-muted: var(--primary-40);
-	--primary-strong: var(--primary-60);
-	--on-primary-subtle: var(--on-accent-16);
+	--primary-subtle: color-mix(in srgb, var(--primary) 10%, transparent);
+	--primary-soft: color-mix(in srgb, var(--primary) 20%, transparent);
+	--primary-muted: color-mix(in srgb, var(--primary) 40%, transparent);
+	--primary-strong: color-mix(in srgb, var(--primary) 60%, transparent);
+	--on-primary-soft: color-mix(in srgb, var(--on-accent) 20%, transparent);
+
+	/* Chat bubble — the user's own turn, tinted from its own manifest accent. */
+	--bubble-user-bg: color-mix(in srgb, var(--bubble-accent) 10%, transparent);
+	--bubble-user-border: color-mix(in srgb, var(--bubble-accent) 40%, transparent);
 
 	/*
-	 * Feedback — a foreground and a tinted background per state. No `-border` tier: a feedback border
-	 * is the foreground colour, so `border-feedback-error` already says it.
+	 * Feedback — the solid colour plus whichever scale steps are actually used. A solid border is the
+	 * solid colour (`border-feedback-error`), so there is no `-border` tier.
 	 */
 	--feedback-info: var(--blue);
-	--feedback-info-bg: color-mix(in srgb, var(--blue) 10%, transparent);
+	--feedback-info-subtle: color-mix(in srgb, var(--blue) 10%, transparent);
 	--feedback-success: var(--green);
-	--feedback-success-bg: var(--green-tint);
+	--feedback-success-subtle: color-mix(in srgb, var(--green) 10%, transparent);
+	--feedback-success-muted: color-mix(in srgb, var(--green) 40%, transparent);
 	--feedback-error: var(--red);
-	--feedback-error-bg: color-mix(in srgb, var(--red) 10%, transparent);
+	--feedback-error-subtle: color-mix(in srgb, var(--red) 10%, transparent);
+	--feedback-error-muted: color-mix(in srgb, var(--red) 40%, transparent);
 	--feedback-warning: var(--gold);
-	--feedback-warning-bg: color-mix(in srgb, var(--gold) 10%, transparent);
+	--feedback-warning-subtle: color-mix(in srgb, var(--gold) 10%, transparent);
 
 	/*
 	 * Selection — `--selection-bg` / `--sel` come straight from the manifest. The two foregrounds are

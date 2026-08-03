@@ -278,7 +278,7 @@ export function AskUserQuestionCard({
 			<div
 				data-testid="ask-user-question"
 				data-tone="active"
-				className="overflow-hidden rounded-[var(--radius-lg)] border border-primary/40 bg-container-elevated-bg ring-1 ring-primary/25"
+				className="overflow-hidden rounded-[var(--radius-lg)] border border-primary-muted bg-container-elevated-bg ring-1 ring-primary-soft"
 			>
 				{multi ? (
 					<div className="flex items-center gap-xs overflow-x-auto border-border-default border-b px-md py-sm">
@@ -462,7 +462,7 @@ function TabChip({
 			onClick={onClick}
 			className={cn(
 				"flex shrink-0 items-center gap-xs whitespace-nowrap rounded-full px-sm py-0.5 tr-text-metadata",
-				active ? "bg-primary/15 text-primary" : "text-text-muted hover:bg-control-bg-hovered",
+				active ? "bg-primary-subtle text-primary" : "text-text-muted hover:bg-control-bg-hovered",
 			)}
 		>
 			<span
@@ -643,7 +643,7 @@ function OptionRow({
 			className={cn(
 				"flex items-start gap-sm rounded-[var(--radius-md)] border px-md py-sm text-left transition-colors",
 				selected
-					? "border-primary bg-primary/10"
+					? "border-primary bg-primary-subtle"
 					: "border-border-default hover:bg-control-bg-hovered",
 			)}
 		>
@@ -703,7 +703,7 @@ function OtherOptionRow({
 			className={cn(
 				"flex cursor-text items-center gap-sm rounded-[var(--radius-md)] border px-md py-sm transition-colors",
 				active
-					? "border-primary bg-primary/10"
+					? "border-primary bg-primary-subtle"
 					: "border-border-default hover:bg-control-bg-hovered",
 			)}
 		>
@@ -738,7 +738,7 @@ function OtherOptionRow({
 }
 
 const RECOMMENDED_PILL =
-	"inline-flex items-center rounded-full bg-primary/15 px-xs py-0 tr-text-label-pill text-primary";
+	"inline-flex items-center rounded-full bg-primary-subtle px-xs py-0 tr-text-label-pill text-primary";
 
 /**
  * The "Recommended" pill next to an agent-recommended option — a plain label. Its rationale renders

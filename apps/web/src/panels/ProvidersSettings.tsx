@@ -275,7 +275,7 @@ function ConnectedCard({
 			data-configured="true"
 			className="flex items-center gap-md rounded-[var(--radius-md)] border border-border-default bg-control-bg px-md py-sm"
 		>
-			<span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-feedback-success-bg text-feedback-success">
+			<span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-feedback-success-subtle text-feedback-success">
 				<Check className="size-4" />
 			</span>
 			<div className="flex min-w-0 flex-col">

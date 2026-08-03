@@ -5,8 +5,8 @@ import { MarkdownDocument } from "./MarkdownPreview";
 
 /** Marker skin for the merged document — token colors only, so it wears any theme. */
 const DIFF_MARKS = [
-	"[&_ins]:rounded-[var(--radius-sm)] [&_ins]:bg-feedback-success-bg [&_ins]:text-feedback-success [&_ins]:no-underline",
-	"[&_del]:rounded-[var(--radius-sm)] [&_del]:bg-feedback-error-bg [&_del]:text-feedback-error",
+	"[&_ins]:rounded-[var(--radius-sm)] [&_ins]:bg-feedback-success-subtle [&_ins]:text-feedback-success [&_ins]:no-underline",
+	"[&_del]:rounded-[var(--radius-sm)] [&_del]:bg-feedback-error-subtle [&_del]:text-feedback-error",
 ].join(" ");
 
 type MergeState = { state: "pending" } | { state: "failed" } | { state: "done"; html: string };
