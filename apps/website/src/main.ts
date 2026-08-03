@@ -237,35 +237,45 @@ if (stars) {
 const railNote = document.getElementById("rail-note");
 const railNoteDismiss = document.getElementById("rail-note-dismiss");
 if (railNote && railNoteDismiss) {
-	const STORAGE_KEY = "thinkrail-rail-note-dismissed";
+	const SESSION_KEY = "thinkrail-rail-note-shown";
 	const REVEAL_DELAY = 5000; // 5 seconds
 
-	// Check if already dismissed
-	let dismissed = false;
+	// Check if already shown this session
+	let alreadyShown = false;
 	try {
-		dismissed = localStorage.getItem(STORAGE_KEY) === "true";
+		alreadyShown = sessionStorage.getItem(SESSION_KEY) === "true";
 	} catch {
-		// localStorage unavailable
+		// sessionStorage unavailable
 	}
 
-	if (dismissed) {
-		// Already dismissed — keep hidden permanently
+	if (alreadyShown) {
+		// Already shown this session — keep hidden
+		// Note: HTML starts with "pending" class; switch to "hidden" for display:none
+		railNote.classList.remove("pending");
 		railNote.classList.add("hidden");
 	} else {
-		// Start hidden, reveal after delay
-		railNote.classList.add("pending");
-
-		setTimeout(() => {
+		// HTML already has "pending" class — reveal after delay
+		const timerId = setTimeout(() => {
 			railNote.classList.remove("pending");
+			// Mark as shown when it actually becomes visible
+			try {
+				sessionStorage.setItem(SESSION_KEY, "true");
+			} catch {
+				// sessionStorage unavailable
+			}
 		}, REVEAL_DELAY);
+
+		// Clear timer if page unloads before reveal (prevents stale state)
+		window.addEventListener("beforeunload", () => clearTimeout(timerId));
 	}
 
 	railNoteDismiss.addEventListener("click", () => {
 		railNote.classList.add("hidden");
+		// Mark as shown when dismissed
 		try {
-			localStorage.setItem(STORAGE_KEY, "true");
+			sessionStorage.setItem(SESSION_KEY, "true");
 		} catch {
-			// localStorage unavailable
+			// sessionStorage unavailable
 		}
 	});
 }
