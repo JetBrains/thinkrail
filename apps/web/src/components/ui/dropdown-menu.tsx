@@ -55,7 +55,7 @@ function DropdownMenuSubTrigger({
 	return (
 		<DropdownMenuPrimitive.SubTrigger
 			className={cn(
-				"relative flex cursor-default select-none items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs tr-text-ui text-text outline-none transition-colors focus:bg-hover data-[state=open]:bg-hover [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-muted",
+				"relative flex cursor-default select-none items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs tr-text-ui text-text-default outline-none transition-colors focus:bg-control-bg-hovered data-[state=open]:bg-control-bg-hovered [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-text-muted",
 				className,
 			)}
 			{...props}
@@ -74,7 +74,7 @@ function DropdownMenuSubContent({
 		<DropdownMenuPrimitive.Portal>
 			<DropdownMenuPrimitive.SubContent
 				className={cn(
-					"z-50 min-w-[10rem] max-h-[min(60vh,var(--radix-dropdown-menu-content-available-height))] overflow-y-auto overflow-x-hidden rounded-[var(--radius-md)] border border-border2 bg-elevated p-xs text-text shadow-[var(--shadow-md)]",
+					"z-50 min-w-[10rem] max-h-[min(60vh,var(--radix-dropdown-menu-content-available-height))] overflow-y-auto overflow-x-hidden rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg p-xs text-text-default shadow-[var(--shadow-md)]",
 					className,
 				)}
 				{...props}

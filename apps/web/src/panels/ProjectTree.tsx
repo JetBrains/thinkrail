@@ -421,7 +421,8 @@ function WorkspaceRow({
 					description={
 						<>
 							Deletes this workspace's chats, terminals, and its worktree. The git branch{" "}
-							<span className="tr-text-emphasis text-text-default">{workspace.branch}</span> is kept.
+							<span className="tr-text-emphasis text-text-default">{workspace.branch}</span> is
+							kept.
 						</>
 					}
 					confirmLabel="Remove"
