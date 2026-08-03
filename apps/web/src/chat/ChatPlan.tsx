@@ -84,7 +84,7 @@ export function ChatPlanContent({ plan, glance }: { plan: ChatTodos; glance: Pla
 			</div>
 			<div className="min-h-0 flex-1 overflow-auto p-xs">
 				{empty ? (
-					<p className="px-xs py-xs text-text-muted tr-text-metadata">
+					<p className="px-xs py-xs text-text-subtle tr-text-metadata">
 						No TODOs yet — the agent adds its plan here, or add one above.
 					</p>
 				) : (

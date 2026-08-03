@@ -597,12 +597,12 @@ export function NewWorkspaceDialog({
 					) : prompt.trim() && isolated ? (
 						<p
 							data-testid="workspace-naming-hint"
-							className="px-xs text-text-muted tr-text-metadata"
+							className="px-xs text-text-subtle tr-text-metadata"
 						>
 							ThinkRail will name the workspace and branch from your request.
 						</p>
 					) : (
-						<p className="mt-xs text-text-muted tr-text-metadata">
+						<p className="mt-xs text-text-subtle tr-text-metadata">
 							Type <span className="tr-code-text">/</span> for a project skill — previewed from the
 							current checkout; the created workspace's session is authoritative.
 						</p>
@@ -715,7 +715,7 @@ function ProjectPicker({
 					<Box className="size-3 text-text-on-primary" />
 				</span>
 				<span className="truncate">{current}</span>
-				<ChevronDown className="size-3 shrink-0 text-text-muted" />
+				<ChevronDown className="size-3 shrink-0 text-text-subtle" />
 			</PopoverTrigger>
 			<PopoverContent align="start" container={container} className="w-[280px] p-0">
 				<Command>
@@ -780,10 +780,10 @@ function BranchPicker({
 			<span className="flex w-3.5 shrink-0 justify-center">
 				{ref === baseRef ? <Check className="size-3.5 text-primary" /> : null}
 			</span>
-			<GitBranch className="size-3.5 shrink-0 text-text-muted" />
+			<GitBranch className="size-3.5 shrink-0 text-text-subtle" />
 			<span className="truncate tr-text-metadata">{ref}</span>
 			{ref === defaultBranch ? (
-				<span className="ml-auto shrink-0 text-text-muted tr-text-metadata">default</span>
+				<span className="ml-auto shrink-0 text-text-subtle tr-text-metadata">default</span>
 			) : null}
 		</CommandItem>
 	);
@@ -796,9 +796,9 @@ function BranchPicker({
 				className={`${PILL} max-w-[220px]`}
 			>
 				<GitBranch className="size-3.5 shrink-0 text-text-muted" />
-				<span className="shrink-0 text-text-muted tr-text-metadata">From</span>
+				<span className="shrink-0 text-text-subtle tr-text-metadata">From</span>
 				<span className="truncate text-text-muted tr-text-metadata">{baseRef || "branch"}</span>
-				<ChevronDown className="size-3 shrink-0 text-text-muted" />
+				<ChevronDown className="size-3 shrink-0 text-text-subtle" />
 			</PopoverTrigger>
 			<PopoverContent align="start" container={container} className="w-[320px] p-0">
 				<div className="flex items-center justify-end border-border-muted border-b px-sm py-xs">
@@ -808,7 +808,7 @@ function BranchPicker({
 						aria-label="Refresh branches"
 						title="Refresh branches"
 						onClick={onRefresh}
-						className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-muted focus-visible:ring-2 focus-visible:ring-primary"
+						className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-text-subtle outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-muted focus-visible:ring-2 focus-visible:ring-primary"
 					>
 						<RefreshCw className={`size-3.5 ${refreshing ? "animate-spin" : ""}`} />
 					</button>

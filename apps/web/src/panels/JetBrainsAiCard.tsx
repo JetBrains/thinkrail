@@ -124,7 +124,7 @@ export function JetBrainsAiCard({
 				</span>
 				<div className="flex min-w-0 flex-col">
 					<span className="tr-text-ui text-text-default">JetBrains AI</span>
-					<span className="truncate text-text-muted tr-text-metadata">
+					<span className="truncate text-text-subtle tr-text-metadata">
 						Route Claude + GPT through your JetBrains subscription.
 					</span>
 				</div>
@@ -166,7 +166,7 @@ export function JetBrainsAiCard({
 
 			{showInstall ? (
 				<div className="flex flex-col gap-xs" data-testid="jetbrains-needs-install">
-					<p className="text-text-muted tr-text-metadata">
+					<p className="text-text-subtle tr-text-metadata">
 						{install?.shell === "powershell"
 							? "Install the JetBrains Central CLI (central) in PowerShell, then Recheck:"
 							: "Install the JetBrains Central CLI (central), then Recheck:"}
@@ -187,7 +187,7 @@ export function JetBrainsAiCard({
 
 			{showLogin ? (
 				<div className="flex flex-col gap-xs" data-testid="jetbrains-needs-login">
-					<p className="text-text-muted tr-text-metadata">
+					<p className="text-text-subtle tr-text-metadata">
 						{loginLaunched
 							? "Complete sign-in in your browser, then Connect. If nothing opened, run this in a terminal:"
 							: "Sign in to JetBrains AI, then Connect. You can also run this in a terminal:"}

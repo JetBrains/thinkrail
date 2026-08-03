@@ -27,7 +27,7 @@ export function AppearanceSettings() {
 		<section data-testid="settings-appearance" className="flex flex-col gap-sm">
 			<div className="flex flex-col gap-xs">
 				<h3 className="tr-title-section text-text-default">Theme</h3>
-				<p className="text-text-muted tr-text-metadata">
+				<p className="text-text-subtle tr-text-metadata">
 					Choose the app theme. Your choice is saved on the host and follows you across devices.
 				</p>
 			</div>

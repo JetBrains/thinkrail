@@ -95,11 +95,11 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 			: highlighted === path;
 
 	if (status === null) {
-		return <p className="px-sm py-xs tr-text-metadata text-text-muted">Loading…</p>;
+		return <p className="px-sm py-xs tr-text-metadata text-text-subtle">Loading…</p>;
 	}
 	if (status.changes.length === 0) {
 		return (
-			<p data-testid="changes-empty" className="px-sm py-xs tr-text-metadata text-text-muted">
+			<p data-testid="changes-empty" className="px-sm py-xs tr-text-metadata text-text-subtle">
 				No changes in this workspace.
 			</p>
 		);

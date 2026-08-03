@@ -17,12 +17,17 @@
 	 * with legacy tokens during migration. Do not delete legacy tokens yet.
 	 */
 
-	/* Text */
+	/*
+	 * Text — three tiers, because the palette defines three distinct greys and the UI uses all of
+	 * them: body copy, dimmed secondary copy, and the quietest tier (timestamps, counts, eyebrow
+	 * labels, placeholders). Collapsing subtle into muted visibly brightens ~160 call sites.
+	 * There is deliberately no `--text-disabled`: disabled state is opacity-based
+	 * (`disabled:opacity-50`), so a static disabled colour would be a second, conflicting answer.
+	 */
 	--text-default: var(--text);
 	--text-strong: var(--text); /* No distinct "strong" exists today; aliased to default */
 	--text-muted: var(--muted);
-	/* TODO: disabled is currently opacity-based (disabled:opacity-50); hint is closest static value */
-	--text-disabled: var(--hint);
+	--text-subtle: var(--hint);
 	--text-link: var(--primary);
 	--text-on-primary: var(--on-accent);
 

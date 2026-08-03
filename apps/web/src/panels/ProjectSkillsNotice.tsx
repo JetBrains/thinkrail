@@ -65,7 +65,7 @@ export function ProjectSkillsNotice({ projectId }: { projectId: string }) {
 			<p
 				data-testid="project-skills-notice"
 				data-state="trusted"
-				className="mt-lg flex items-center gap-xs text-text-muted tr-text-metadata"
+				className="mt-lg flex items-center gap-xs text-text-subtle tr-text-metadata"
 			>
 				<ShieldCheck className="size-3.5 shrink-0 text-feedback-warning" />
 				{count} project skill{plural(count)} trusted.

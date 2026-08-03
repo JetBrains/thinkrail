@@ -28,7 +28,7 @@
 	--color-text-default: var(--text-default);
 	--color-text-strong: var(--text-strong);
 	--color-text-muted: var(--text-muted);
-	--color-text-disabled: var(--text-disabled);
+	--color-text-subtle: var(--text-subtle);
 	--color-text-link: var(--text-link);
 	--color-text-on-primary: var(--text-on-primary);
 

@@ -128,7 +128,7 @@ export function defineThinkrailTheme(m: Monaco): void {
 	};
 	set("editor.background", token("--container-terminal-bg"));
 	set("editor.foreground", token("--code-foreground"));
-	set("editorLineNumber.foreground", token("--text-disabled"));
+	set("editorLineNumber.foreground", token("--text-subtle"));
 	set("editorCursor.foreground", token("--primary"));
 	set("editor.selectionBackground", token("--editor-selection-bg"));
 	set("editor.selectionForeground", token("--editor-selection-text"));

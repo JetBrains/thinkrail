@@ -22,7 +22,7 @@ export function PrivacySettings() {
 		<section data-testid="settings-privacy" className="flex flex-col gap-lg">
 			<div className="flex flex-col gap-xs">
 				<h3 className="tr-title-section text-text-default">Usage analytics</h3>
-				<p className="text-text-muted tr-text-metadata">
+				<p className="text-text-subtle tr-text-metadata">
 					Anonymous usage analytics help us understand which features matter. Your choice is saved
 					on the host and follows you across devices.
 				</p>
@@ -33,7 +33,7 @@ export function PrivacySettings() {
 					<span className="tr-title-compact text-text-default">
 						Share anonymous usage analytics
 					</span>
-					<span className="text-text-muted tr-text-metadata">
+					<span className="text-text-subtle tr-text-metadata">
 						{enabled ? "On — thank you for helping improve ThinkRail." : "Off — nothing is sent."}
 					</span>
 				</div>

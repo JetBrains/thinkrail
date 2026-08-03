@@ -194,13 +194,13 @@ export function SkillsDialog({
 					)}
 				>
 					{group.isPlugin ? (
-						<Puzzle className="size-3.5 shrink-0 text-text-muted" aria-hidden />
+						<Puzzle className="size-3.5 shrink-0 text-text-subtle" aria-hidden />
 					) : null}
 					<span className="tr-text-eyebrow text-text-default">{group.label}</span>
-					<span className="min-w-0 flex-1 truncate text-text-muted tr-text-metadata">
+					<span className="min-w-0 flex-1 truncate text-text-subtle tr-text-metadata">
 						{group.hint}
 					</span>
-					<span className="shrink-0 rounded-full bg-control-bg-hovered px-1.5 text-text-muted tr-text-metadata">
+					<span className="shrink-0 rounded-full bg-control-bg-hovered px-1.5 text-text-subtle tr-text-metadata">
 						{group.items.length}
 					</span>
 					<Toggle
@@ -298,9 +298,9 @@ export function SkillsDialog({
 
 				<div className="max-h-[50vh] overflow-y-auto">
 					{entries === null ? (
-						<p className="px-sm py-md text-text-muted tr-text-ui">Loading skills…</p>
+						<p className="px-sm py-md text-text-subtle tr-text-ui">Loading skills…</p>
 					) : entries.length === 0 ? (
-						<p className="px-sm py-md text-text-muted tr-text-ui">No skills discovered.</p>
+						<p className="px-sm py-md text-text-subtle tr-text-ui">No skills discovered.</p>
 					) : (
 						<>
 							{/* First-party skills (ThinkRail + Pi) lead, above the all-plugins master. */}
@@ -395,7 +395,7 @@ function SkillRow({
 			<span className="flex min-w-0 flex-1 flex-col">
 				<span className="truncate tr-text-ui text-text-default">{entry.name}</span>
 				{entry.description ? (
-					<span className="truncate text-text-muted tr-text-metadata">{entry.description}</span>
+					<span className="truncate text-text-subtle tr-text-metadata">{entry.description}</span>
 				) : null}
 			</span>
 			{entry.decision === "pending-ack" ? (
@@ -404,10 +404,12 @@ function SkillRow({
 					Enable
 				</Button>
 			) : entry.decision === "untrusted" ? (
-				<span className="shrink-0 text-text-muted tr-text-metadata">{DECISION_TEXT.untrusted}</span>
+				<span className="shrink-0 text-text-subtle tr-text-metadata">
+					{DECISION_TEXT.untrusted}
+				</span>
 			) : groupOff ? (
 				<span
-					className="shrink-0 text-text-muted tr-text-metadata"
+					className="shrink-0 text-text-subtle tr-text-metadata"
 					title="Enable the group to change this skill"
 				>
 					group off

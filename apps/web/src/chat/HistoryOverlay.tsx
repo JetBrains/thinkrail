@@ -138,11 +138,11 @@ function PromptRow({
 					<Highlight text={firstLine} query={query} />
 				</span>
 				{showChip ? (
-					<span className="shrink-0 rounded-full border border-border-default bg-container-workspace-bg px-xs text-text-muted tr-text-metadata">
+					<span className="shrink-0 rounded-full border border-border-default bg-container-workspace-bg px-xs text-text-subtle tr-text-metadata">
 						{workspaceName ?? "workspace"}
 					</span>
 				) : null}
-				<span className="shrink-0 text-text-muted tr-text-metadata">
+				<span className="shrink-0 text-text-subtle tr-text-metadata">
 					{relativeTime(hit.timestamp)}
 				</span>
 			</button>
@@ -154,7 +154,7 @@ function PromptRow({
 				// the way the icon itself is.
 				<span
 					data-testid="history-save-shortcut"
-					className="shrink-0 text-text-muted tr-text-metadata"
+					className="shrink-0 text-text-subtle tr-text-metadata"
 				>
 					{SAVE_SHORTCUT_LABEL}
 				</span>
@@ -179,7 +179,7 @@ function PromptRow({
 					{isSelected ? (
 						<span
 							data-testid="history-jump-shortcut"
-							className="shrink-0 text-text-muted tr-text-metadata"
+							className="shrink-0 text-text-subtle tr-text-metadata"
 						>
 							⇧⏎
 						</span>
@@ -231,7 +231,7 @@ function MessageRow({
 					: "border-l-transparent text-text-muted"
 			}`}
 		>
-			<span className="flex items-center gap-xs text-text-muted tr-text-metadata">
+			<span className="flex items-center gap-xs text-text-subtle tr-text-metadata">
 				<span className="truncate">
 					{hit.sessionTitle || hit.cwd.split("/").pop() || "session"}
 				</span>
@@ -293,7 +293,7 @@ function HistoryPreview({
 					<div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap break-words p-sm tr-text-ui text-text-default">
 						<Highlight text={item.hit.text} query={query} />
 					</div>
-					<div className="shrink-0 border-t border-border-default px-sm py-xs text-text-muted tr-text-metadata">
+					<div className="shrink-0 border-t border-border-default px-sm py-xs text-text-subtle tr-text-metadata">
 						{item.kind === "prompt" ? (
 							<PromptPreviewFooter hit={item.hit} workspaceName={workspaceName} />
 						) : (
@@ -502,7 +502,7 @@ export function HistoryOverlay({
 			{result.indexing ? (
 				<div
 					data-testid="history-indexing"
-					className="px-sm py-1 text-center text-text-muted tr-text-metadata"
+					className="px-sm py-1 text-center text-text-subtle tr-text-metadata"
 				>
 					indexing history…
 				</div>
@@ -511,7 +511,7 @@ export function HistoryOverlay({
 				<div className="flex flex-col gap-xs p-xs">
 					{result.prompts.length > 0 ? (
 						<div className="flex flex-col gap-0.5">
-							<div className="flex items-center justify-between px-sm py-0.5 tr-text-eyebrow text-text-muted">
+							<div className="flex items-center justify-between px-sm py-0.5 tr-text-eyebrow text-text-subtle">
 								<span>Prompts</span>
 								<span data-testid="history-counts">
 									{promptCount}/{result.promptTotal}
@@ -534,7 +534,7 @@ export function HistoryOverlay({
 					) : null}
 					{stage === "zoomed" && result.messages.length > 0 ? (
 						<div className="flex flex-col gap-0.5">
-							<div className="flex items-center justify-between px-sm py-0.5 tr-text-eyebrow text-text-muted">
+							<div className="flex items-center justify-between px-sm py-0.5 tr-text-eyebrow text-text-subtle">
 								<span>Messages</span>
 								<span data-testid="history-counts">
 									{messageCount}/{result.messageTotal}
@@ -575,7 +575,7 @@ export function HistoryOverlay({
 					onChange={(e) => onQueryChange(e.target.value)}
 					onKeyDown={onKeyDown}
 					placeholder="Search prompts and conversations…"
-					className="min-w-0 flex-1 bg-transparent tr-text-ui text-text-default outline-none placeholder:text-text-muted"
+					className="min-w-0 flex-1 bg-transparent tr-text-ui text-text-default outline-none placeholder:text-text-subtle"
 				/>
 				<DropdownMenu open={scopeMenuOpen} onOpenChange={setScopeMenuOpen}>
 					<DropdownMenuTrigger
@@ -584,7 +584,7 @@ export function HistoryOverlay({
 						className="flex shrink-0 items-center gap-xs rounded-full border border-border-default bg-container-workspace-bg px-sm py-0.5 text-text-muted tr-text-metadata outline-none hover:bg-control-bg-hovered"
 					>
 						<span>{SCOPE_LABELS[scope.kind]}</span>
-						<span className="text-text-muted">⌃R</span>
+						<span className="text-text-subtle">⌃R</span>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent
 						align="end"
@@ -641,7 +641,7 @@ export function HistoryOverlay({
 					type="button"
 					data-testid="history-expand-hint"
 					onClick={onToggleStage}
-					className="border-t border-border-default p-xs text-center text-text-muted tr-text-metadata hover:bg-control-bg-hovered"
+					className="border-t border-border-default p-xs text-center text-text-subtle tr-text-metadata hover:bg-control-bg-hovered"
 				>
 					{result.messageTotal} matches in conversations · ⇥ expand
 				</button>
