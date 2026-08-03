@@ -292,7 +292,7 @@ if (mockElements.length > 0) {
 	// CTA button (reuses hero button styling)
 	const cta = document.createElement("div");
 	cta.className = "mock-tooltip-cta";
-	cta.innerHTML = `<a href="https://github.com/JetBrains/thinkrail">
+	cta.innerHTML = `<a href="https://github.com/JetBrains/thinkrail" target="_blank" rel="noopener noreferrer">
 		<svg class="i" aria-hidden="true"><use href="#i-github" /></svg>
 		Star on GitHub
 	</a>`;
