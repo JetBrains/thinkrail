@@ -33,7 +33,7 @@ now derives variable names rather than tabulating them). Editing the generated f
 `runtime.ts` apply the same rule independently, so a role's `from` and the variable it reads cannot
 disagree. There is no lookup table to keep in step, and no more names like `--blue` for `info`.
 
-A **palette entry** answers *which colour* (`--gold`, `--elevated`, `--hint`). A **semantic token**
+A **palette entry** answers *which colour* (`--warning`, `--elevated`, `--hint`). A **semantic token**
 answers *what for* (`feedback-warning`, `container-elevated-bg`, `text-subtle`). Components name roles;
 the palette is internal.
 

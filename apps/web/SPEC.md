@@ -147,9 +147,11 @@ The module set: `transport` / `store` / branded `shell`; `ProjectTree`; `FileTre
   `font-[var(--font-mono)]` is ambiguous — Tailwind compiles it to an invalid `font-weight`, so it
   silently does nothing; the working form is `font-(family-name:--font-mono)`
   (`styles/fontClasses.test.ts` fails on the bare form).
-- **Fonts ship inside the artifact.** `styles/fonts.css` imports self-hosted variable faces
+- **Fonts ship inside the artifact.** `styles/generated/fonts.css` imports self-hosted variable faces
   (fontsource; Geist Variable + JetBrains Mono Variable, both with real italics — shared with
-  `apps/website`, so their versions live in the root `workspaces.catalog`), vite emits the woff2 files
+  `apps/website`, so their versions live in the root `workspaces.catalog`). Which packages those are is
+  declared per family as `selfHosted` in `styles/typography.json`, so the stack and the bundled faces
+  cannot drift; the imports are generated from it. Vite emits the woff2 files
   into `dist/assets`, and `apps/cli` embeds them. No font CDN — the host is local and often
   offline, and an external `<link>` also put first paint behind a third party and contacted it on every
   load despite the analytics opt-out. `e2e/fonts.spec.ts` pins both halves (no CDN request; the real
