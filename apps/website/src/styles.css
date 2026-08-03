@@ -763,7 +763,7 @@ code {
 	font-size: clamp(52px, 9vw, 96px);
 	line-height: 0.98;
 	letter-spacing: 0.5px;
-	margin: 32px 0;
+	margin: 36px 0 32px;
 	color: var(--accent);
 }
 
