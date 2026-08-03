@@ -304,6 +304,7 @@ code {
 }
 
 .scope-name {
+	font-family: var(--font-mono);
 	color: var(--text);
 }
 
