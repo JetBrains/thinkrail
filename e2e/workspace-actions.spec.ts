@@ -68,3 +68,68 @@ test("the Default workspace's kebab menu offers Open in / Copy path but no Remov
 	await expect(page.getByTestId("workspace-copy-path")).toBeVisible();
 	await expect(page.getByTestId("workspace-remove")).toHaveCount(0);
 });
+
+test("the kebab is hover-only ONLY on devices that actually have hover — never invisible by default", async ({
+	page,
+}) => {
+	// Regression guard for a real bug: the trigger is the row's *only* surface for all four actions
+	// (Open in / Copy path / Reveal / Remove). A plain `opacity-0` + `group-hover:opacity-100` would make
+	// it undiscoverable on a touch device (phone/tablet), which has no hover to reveal it. Playwright/CDP
+	// can't reliably emulate the `hover`/`pointer` media features in this environment, so this checks the
+	// actual CSS contract instead of trying to emulate a touchscreen: the opacity-0 rule must live inside
+	// an `@media (hover: hover)` block, so a device that reports no hover keeps the row's default
+	// (visible) opacity untouched — see the standard's own well-supported hover/pointer media features.
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await settleAfterCreate(page);
+	const row = worktreeRows(page).first();
+	const kebab = row.getByTestId("workspace-menu");
+
+	const opacityZeroIsHoverGated = await page.evaluate(() => {
+		// Tailwind v4 nests everything inside `@layer` blocks (`CSSLayerBlockRule`), which aren't
+		// `CSSMediaRule`s themselves — walk every grouping rule's own `.cssRules`, not just the
+		// stylesheet's direct children, or a real `@media (hover: hover)` rule three layers down is missed.
+		function findHoverGatedOpacityZero(rules: CSSRuleList): boolean {
+			for (const rule of Array.from(rules)) {
+				if (
+					rule instanceof CSSMediaRule &&
+					/hover:\s*hover/.test(rule.media.mediaText) &&
+					findOpacityZero(rule.cssRules)
+				) {
+					return true;
+				}
+				const grouping = rule as CSSRule & { cssRules?: CSSRuleList };
+				if (grouping.cssRules && findHoverGatedOpacityZero(grouping.cssRules)) return true;
+			}
+			return false;
+		}
+		function findOpacityZero(rules: CSSRuleList): boolean {
+			for (const rule of Array.from(rules)) {
+				if (
+					rule instanceof CSSStyleRule &&
+					rule.selectorText.includes("opacity-0") &&
+					rule.style.opacity === "0"
+				) {
+					return true;
+				}
+			}
+			return false;
+		}
+		for (const sheet of Array.from(document.styleSheets)) {
+			let rules: CSSRuleList;
+			try {
+				rules = sheet.cssRules;
+			} catch {
+				continue;
+			}
+			if (findHoverGatedOpacityZero(rules)) return true;
+		}
+		return false;
+	});
+	expect(opacityZeroIsHoverGated).toBe(true);
+
+	// This test browser IS hover-capable, so the ordinary desktop behavior is unchanged: hidden until hover.
+	await expect(kebab).toHaveCSS("opacity", "0");
+	await row.hover();
+	await expect(kebab).toHaveCSS("opacity", "1");
+});

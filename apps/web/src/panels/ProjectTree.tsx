@@ -362,7 +362,11 @@ function WorkspaceRow({
 					<DropdownMenuTrigger
 						data-testid="workspace-menu"
 						aria-label={`Actions for ${workspace.name}`}
-						className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 outline-none transition hover:bg-container-elevated-bg hover:text-text-default group-hover:opacity-100 data-[state=open]:opacity-100"
+						// This menu is the row's only surface for Open in / Copy path / Reveal / Remove, so it
+						// can't be hover-only-invisible: a touch device has no hover and would never discover
+						// it. `opacity-0` only applies under `(hover: hover)` (a device that actually has a
+						// hover state to reveal it on) — everywhere else (touch) it stays visible by default.
+						className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-100 outline-none transition hover:bg-container-elevated-bg hover:text-text-default [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
 					>
 						<MoreVertical className="size-4" />
 					</DropdownMenuTrigger>
