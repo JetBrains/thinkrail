@@ -1201,8 +1201,9 @@ p.footer-fineprint {
 
 .rail-tabs {
 	display: flex;
+	align-items: center;
 	gap: 18px;
-	padding: 10px 16px;
+	padding: 8px 16px;
 	border-bottom: 1px solid var(--border);
 	font-size: 11.5px;
 	font-weight: 500;
