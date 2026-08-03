@@ -1033,8 +1033,8 @@ p.hero-platforms {
 
 .chat-restart {
 	position: absolute;
-	bottom: 12px;
-	right: 12px;
+	bottom: 0;
+	right: 0;
 	width: 32px;
 	height: 32px;
 	display: flex;
@@ -1143,6 +1143,7 @@ html.anim .chat-demo [data-step].on {
 	display: flex;
 	flex-direction: column;
 	gap: 12px;
+	margin-bottom: 40px; /* space for restart button (32px) + 8px gap */
 }
 
 .composer-box {
