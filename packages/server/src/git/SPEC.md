@@ -206,6 +206,11 @@ ref off the workspace-create critical path.
   though the "killed" child is gone. A call with no deadline stays in the host's own group (unchanged
   behavior; nothing there ever kills it anyway).
 - **A background remote call cannot prompt.** `REMOTE_ENV` sets `GIT_TERMINAL_PROMPT=0`, an empty
-  `GIT_ASKPASS`/`SSH_ASKPASS`, and `GIT_SSH_COMMAND="ssh -o BatchMode=yes"`. It removes the *git-level*
-  prompt paths only: the OS keychain and hardware-backed keys sit below git and can still prompt, which is
-  why `remotes` additionally refuses to touch SSH remotes when an agent is present.
+  `GIT_ASKPASS`/`SSH_ASKPASS`, and `GIT_SSH_COMMAND="ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new"`.
+  It removes the *git-level* prompt paths only: the OS keychain and hardware-backed keys sit below git and
+  can still prompt, which is why `remotes` additionally refuses to touch SSH remotes when an agent is
+  present. `accept-new` is load-bearing, not decoration: `BatchMode=yes` alone fails **closed** on an
+  unknown host key (batch mode suppresses the prompt, it does not accept the key), so without it the very
+  first background connection to any new host would fail — and the feature would silently never work for
+  that user. A future simplification back to bare `BatchMode=yes` would reintroduce that failure with no
+  warning anywhere.
