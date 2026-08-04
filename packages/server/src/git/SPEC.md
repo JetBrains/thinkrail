@@ -29,8 +29,11 @@ ref off the workspace-create critical path.
   | `branch` | `diff <merge-base>` | yes | merge-base ref | worktree |
   | `working-tree` | `diff` (no revs) | yes | index | worktree |
   | `staged` | `diff --cached HEAD` | no | `HEAD` | index |
-  | `uncommitted` | `diff HEAD` | yes | `HEAD` | worktree | (transitional — removed with the panel migration) |
+  | `uncommitted` | `diff HEAD` | yes | `HEAD` | worktree |
   | `commit` | `diff <sha>^ <sha>` / `show` for a root | no | parent / empty | `sha` |
+
+  `uncommitted` is **transitional** — it conflates the index with the worktree, and is removed once the
+  panel offers the two halves above.
 
   `branch`'s merge-base ref is the **fork point** of the diff base and `HEAD` — what the workspace changed
   *since diverging*, so a base that advanced underneath it (a fetch moving `origin/main`, upstream work
