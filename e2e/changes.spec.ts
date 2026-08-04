@@ -655,8 +655,12 @@ test("A commit scope keeps the header readable: short sha on the pill, subject i
 		"title",
 		/e2e scope commit/,
 	);
-	// …and the target-branch pill next to it still reads its ref.
-	await expect(page.getByTestId("changes-target-picker")).toContainText("main");
+	// The target is no longer a control in commit scope: a commit is diffed against its own parent, so
+	// there is nothing to point at. It must be inert text, not a disabled button.
+	await expect(page.getByTestId("changes-target-picker")).toHaveCount(0);
+	const target = page.getByTestId("changes-target-static");
+	await expect(target).toHaveAttribute("data-scope", "commit");
+	await expect(target).toHaveText("vs — (parent)");
 });
 
 test("The scope menu is per workspace: its commit rows never carry over to another worktree", async ({

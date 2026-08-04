@@ -92,7 +92,8 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   `FileTree`, `SpecsPanel`, `RightPanel`,
   `ChangesPanel` (the changed files under a fixed **28px panel-header row** — shared structural geometry
   with the center/right tab strips and chat header — that says **what** is being diffed via the
-  **`ChangesScopeMenu`** scope pill + the shared **`BranchPicker`** target-branch pill, plus the
+  **`ChangesScopeMenu`** scope pill + the **`ComparisonTarget`** pill (a live `BranchPicker` only for
+  `branch` scope, inert text for every other scope) — plus the
   **List | Tree** toggle (`store.changesView`, app-wide) switching a flat list and a folder
   **`ChangesTree`**; clicking a file in either opens/focuses its **center Monaco diff tab**, and every file
   row carries the shared **`ChangeRowActions`** menu),
@@ -704,9 +705,10 @@ a project picker, the prompt hero, and the reused
   deliberate — a second, round-scoped marking vocabulary over these workspace-scoped trees would reintroduce
   the two-rows-read-as-selected ambiguity the single-selection rule above exists to prevent.
 - **The diff scope is chosen in the Changes header, and enters the tab's identity.** Two header controls say
-  what is being diffed: the **`ChangesScopeMenu`** pill and the shared **`BranchPicker`** pill for the
+  what is being diffed: the **`ChangesScopeMenu`** pill and the **`ComparisonTarget`** pill for the
   **target branch** (`workspace.setDiffBase`; the panel converges on the broadcast `workspace.updated`,
-  never optimistically). The scope pill offers *All changes* (the workspace's work since diverging from the
+  never optimistically — live only for `branch` scope, see the comparison-target bullet below). The scope
+  pill offers *All changes* (the workspace's work since diverging from the
   target branch — measured from the merge-base, so upstream commits landing on the target are never phantom
   rows here; the default), the two halves of what is uncommitted, or one **commit** from the branch's list:
   - **Working tree** — what is not staged yet (index vs disk, plus untracked). Offered but inert, reading
@@ -734,9 +736,14 @@ a project picker, the prompt hero, and the reused
   never take the empty-state branch — “clean” is a *claim about the worktree*, and a read that didn't land
   made no claim; a review surface that shows clean when it isn't is this product's worst failure. Same rule
   on the host side: a non-zero `git diff` exit **throws** instead of yielding an empty change set (see
-  `server/src/git/SPEC.md`). The **target branch lives beside the scope menu, not inside it**
-  (as first designed): a searchable list belongs in a combobox, and a nested Radix submenu closes itself when
-  the menu re-renders as those lazy reads land.
+  `server/src/git/SPEC.md`).
+- The **comparison target** sits beside the scope menu and states *the other side of the diff*. It is a
+  live `BranchPicker` **only** for `branch` scope, where that side is genuinely choosable; for the other
+  three it is inert text — `vs index`, `vs HEAD`, `vs — (parent)`. Inert renderings are **not disabled
+  buttons**: no click target, no focus stop, no caret. It occupies the same slot at the same height in
+  every scope, so switching scope never reflows the toolbar. Previously the picker stayed live in commit
+  scope while having no effect on the diff at all — it only filtered which commits were offered, which
+  made it a control that lied about participating.
 - **The diff is a center tab, not a rail inset.** Clicking a Changes row fetches `git.diffFile` (both sides of
   the row's scope) and opens a **`DiffTab`** (`${workspaceId}:diff:${scopeKey}:${path}` — one tab per *file and
   scope*, carrying its own `scope`: a re-click in the same scope focuses the existing tab, while the same file
