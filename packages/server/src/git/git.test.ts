@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Workspace } from "@thinkrail/contracts";
+import type { GitDiffScope, Workspace } from "@thinkrail/contracts";
 import { changedFileArgs, diffBaseRef, resolveDiffRange } from "./diffScope";
 import {
 	gitDiffFile,
@@ -75,6 +75,69 @@ function commitOnFeature(file: string, content: string, message: string): string
 		.decode(Bun.spawnSync(["git", "-C", repo, "rev-parse", "HEAD"], { stdout: "pipe" }).stdout)
 		.trim();
 }
+
+/**
+ * Put the repo into a real merge conflict on `file`: two branches each change the SAME line, so the merge
+ * is a genuine content conflict (`CONFLICT (content)`, `git status` prints `UU <file>`) with all three
+ * stages present — verified empirically to be the shape where `git diff --name-status` (no revs) prints
+ * *two* rows for the one path (a generic `U` marker plus a real comparison against stage 2), unlike a
+ * modify/delete conflict, which prints only one. Leaves the repo checked out on `conflict-a` with the
+ * failed merge still in progress, and seeds workspace `w1` on it. Returns `file`.
+ */
+function conflictedMerge(file: string): string {
+	writeFileSync(join(repo, file), "base\n");
+	git(repo, "add", "-A");
+	git(repo, "commit", "-m", `${file}: base`);
+	git(repo, "switch", "-c", "conflict-a");
+	writeFileSync(join(repo, file), "a-version\n");
+	git(repo, "commit", "-am", "a change");
+	git(repo, "switch", "main");
+	git(repo, "switch", "-c", "conflict-b");
+	writeFileSync(join(repo, file), "b-version\n");
+	git(repo, "commit", "-am", "b change");
+	git(repo, "switch", "conflict-a");
+	// The merge is EXPECTED to fail (that's the whole point of the fixture) — the throwing `git()` helper
+	// would blow up on it, so spawn directly and ignore the exit code.
+	Bun.spawnSync(["git", "-C", repo, "merge", "conflict-b"], { stdout: "ignore", stderr: "ignore" });
+	seedWorkspace({ branch: "conflict-a" });
+	return file;
+}
+
+test("a conflicted (unmerged) path is listed exactly once in working-tree scope", () => {
+	// Regression pin: `git diff --name-status` (the working-tree list command) prints TWO rows for one
+	// unmerged path (`U` then `M`) — without a dedupe, the Changes list renders the file twice and
+	// `ChangesPanel`'s `<li key={change.path}>` collides.
+	const file = conflictedMerge("f.txt");
+	const matches = gitStatus("w1", { kind: "working-tree" }).changes.filter((c) => c.path === file);
+	expect(matches).toHaveLength(1);
+});
+
+test("a conflicted path's working-tree diff has a real (non-empty) original side, not an add-style lie", () => {
+	// `git show :<path>` (stage 0) fails for an unmerged path — "is in the index, but not at stage 0" — so an
+	// original side that just accepts that failure as empty renders the file as a whole-file ADDITION, a
+	// false claim about a conflicted file. Stage 2 ("ours") is real content that must be read instead.
+	const file = conflictedMerge("f.txt");
+	const { original } = gitDiffFile("w1", file, { kind: "working-tree" });
+	expect(original).not.toBe("");
+});
+
+test("reading a conflicted path never spams console.warn", () => {
+	// `showIndexBlob`'s expected-absence regex must recognise "is in the index, but not at stage 0" — the
+	// message `git show :<path>` prints for an unmerged path — as expected, not a broken read.
+	const file = conflictedMerge("f.txt");
+	const warnings: string[] = [];
+	const realWarn = console.warn;
+	console.warn = (...args: unknown[]) => {
+		warnings.push(args.join(" "));
+	};
+	try {
+		gitStatus("w1", { kind: "working-tree" });
+		gitDiffFile("w1", file, { kind: "working-tree" });
+	} finally {
+		console.warn = realWarn;
+	}
+	expect(warnings).toEqual([]);
+});
 
 test("gitDiffFile returns both sides: base content vs worktree content (trailing newline intact)", () => {
 	seedWorkspace();
@@ -326,6 +389,16 @@ test("resolveDiffRange degrades a root commit to an add-style diff (no parent to
 		stdout: "pipe",
 	});
 	expect(new TextDecoder().decode(listed.stdout)).toContain("README.md");
+});
+
+test("resolveDiffRange: an unrecognised scope kind resolves to the branch range, deliberately", () => {
+	// A kind this host doesn't know — e.g. a client ahead of the host, or a persisted/replayed scope from a
+	// future version. This value arrives from outside the type system, so the cast is deliberate: it models
+	// an out-of-band value, not a shortcut around the type checker for one we could construct honestly.
+	// `apps/web/src/store/selectors.test.ts`'s degradation test does the same, through `unknown`, never `any`.
+	const ws = { baseBranch: "main", worktreePath: repo };
+	const futureScope = { kind: "future-scope" } as unknown as GitDiffScope;
+	expect(resolveDiffRange(ws, futureScope)).toEqual(resolveDiffRange(ws, { kind: "branch" }));
 });
 
 test("resolveDiffRange rejects a non-oid sha before it reaches git, and an unknown commit", () => {
@@ -638,10 +711,11 @@ test("a failed diff throws — a broken read is never reported as a clean worktr
 	expect(() => gitStatus("w1")).toThrow(/Could not read the changed files/);
 });
 
-test("gitArgv puts --no-optional-locks before the subcommand, and opting out omits it", () => {
+test("gitArgv puts --no-optional-locks before the subcommand, unconditionally", () => {
 	// The flag is git-level, not subcommand-level: after the subcommand git rejects it. Asserting the exact
 	// argv pins both its presence and its position — a behavioural assertion on `.ok` would pass whether or
-	// not the flag were ever added.
+	// not the flag were ever added. There is no opt-out: every writer this repo has succeeds under it, so
+	// the flag is unconditional (see the SPEC / gitArgv doc comment).
 	expect(gitArgv("/w", ["status", "--porcelain"])).toEqual([
 		"git",
 		"-C",
@@ -650,5 +724,4 @@ test("gitArgv puts --no-optional-locks before the subcommand, and opting out omi
 		"status",
 		"--porcelain",
 	]);
-	expect(gitArgv("/w", ["status"], { optionalLocks: true })).toEqual(["git", "-C", "/w", "status"]);
 });

@@ -111,13 +111,19 @@ export function selectCatalogModel(
  */
 export const BRANCH_SCOPE: GitDiffScope = { kind: "branch" };
 
-/** The scope kinds this client understands. An unknown kind degrades to `branch` — see the store SPEC. */
-const KNOWN_SCOPE_KINDS = new Set<GitDiffScope["kind"]>([
-	"branch",
-	"working-tree",
-	"staged",
-	"commit",
-]);
+/**
+ * The scope kinds this client understands, as a `Record` rather than a `Set` — a `Set<GitDiffScope["kind"]>`
+ * literal is never checked against the union, so adding a fifth kind and forgetting it here would compile
+ * silently and `selectDiffScope` would degrade it to `branch` with no signal at all. `Record<K, true>`
+ * requires every member of the union as a key, so a missing one is a **compile error** here instead of a
+ * silent runtime mis-degradation — see the store SPEC.
+ */
+const KNOWN_SCOPE_KINDS: Record<GitDiffScope["kind"], true> = {
+	branch: true,
+	"working-tree": true,
+	staged: true,
+	commit: true,
+};
 
 /**
  * What the Changes panel of this workspace is diffing. Per **workspace**, not app-wide like `changesView`: a
@@ -131,7 +137,7 @@ export function selectDiffScope(
 	workspaceId: string,
 ): GitDiffScope {
 	const scope = state.diffScopeByWorkspace[workspaceId];
-	if (!scope || !KNOWN_SCOPE_KINDS.has(scope.kind)) return BRANCH_SCOPE;
+	if (!scope || !(scope.kind in KNOWN_SCOPE_KINDS)) return BRANCH_SCOPE;
 	return scope;
 }
 
