@@ -14,17 +14,18 @@ import { getTransport } from "../transport";
 import { scopeLabel, scopeTitle } from "./changesModel";
 
 /**
- * The Changes header's **scope selector** — what is being diffed: everything on the branch, only what is
- * uncommitted, or a single commit. (The *target branch* that the branch scope measures against is its own
- * header control, the shared `BranchPicker` — a searchable list belongs in a combobox, and a nested submenu
- * closes itself when the menu re-renders as these lazy reads land.)
+ * The Changes header's **scope selector** — what is being diffed: everything on the branch, what is
+ * unstaged, what is staged, or a single commit. (The *target branch* that the branch scope measures against
+ * is its own header control, the shared `BranchPicker` — a searchable list belongs in a combobox, and a
+ * nested submenu closes itself when the menu re-renders as these lazy reads land.)
  *
  * Everything but the current scope is loaded **lazily on each open** (never on panel mount): the branch's
- * commits, and whether there is anything uncommitted at all (a read whose only job is to tell the user
- * *before* they pick an empty scope). Each degrades on its own — a failed commit read still leaves the
- * other scopes selectable. Both are **generation-stamped**: two opens in a row (or an open during a slow
- * read) must not let the earlier response overwrite the later one — the same discipline `useWorkspaceRead`
- * applies to the tick-driven reads this pair deliberately isn't part of.
+ * commits, and whether each half of what is uncommitted — the working tree and the index — has anything in
+ * it (a read whose only job is to tell the user *before* they pick an empty scope). Each degrades on its
+ * own — a failed commit read still leaves the other scopes selectable. All three are **generation-stamped**:
+ * two opens in a row (or an open during a slow read) must not let the earlier response overwrite the later
+ * one — the same discipline `useWorkspaceRead` applies to the tick-driven reads this trio deliberately isn't
+ * part of.
  *
  * The menu's *identity* is `(workspaceId, baseRef)`, enforced by the caller's `key`: the commit rows are
  * `git log <base>..HEAD`, so re-pointing the target changes which commits exist — keeping them would offer
@@ -41,10 +42,12 @@ export function ChangesScopeMenu({
 }) {
 	const [open, setOpen] = useState(false);
 	const [commits, setCommits] = useState<GitCommit[] | null>(null);
-	// `null` until known: whether the worktree has any uncommitted change (drives the empty-scope hint).
-	const [hasUncommitted, setHasUncommitted] = useState<boolean | null>(null);
+	// `null` until known: whether each half has anything, so an empty scope says so instead of opening an
+	// unexplained empty list.
+	const [hasWorking, setHasWorking] = useState<boolean | null>(null);
+	const [hasStaged, setHasStaged] = useState<boolean | null>(null);
 
-	// Stamps each open's pair of reads, so only the latest open's answers land (a slow first read can't
+	// Stamps each open's trio of reads, so only the latest open's answers land (a slow first read can't
 	// overwrite a newer one's rows).
 	const generation = useRef(0);
 
@@ -61,14 +64,18 @@ export function ChangesScopeMenu({
 			.catch(() => {
 				if (live()) setCommits([]);
 			});
-		void getTransport()
-			.request("git.status", { workspaceId, scope: { kind: "uncommitted" } })
-			.then(({ changes }) => {
-				if (live()) setHasUncommitted(changes.length > 0);
-			})
-			.catch(() => {
-				if (live()) setHasUncommitted(null);
-			});
+		const probe = (kind: "working-tree" | "staged", set: (value: boolean | null) => void) => {
+			void getTransport()
+				.request("git.status", { workspaceId, scope: { kind } })
+				.then(({ changes }) => {
+					if (live()) set(changes.length > 0);
+				})
+				.catch(() => {
+					if (live()) set(null);
+				});
+		};
+		probe("working-tree", setHasWorking);
+		probe("staged", setHasStaged);
 	};
 
 	return (
@@ -102,15 +109,22 @@ export function ChangesScopeMenu({
 					All changes
 				</DropdownMenuItem>
 				<DropdownMenuItem
-					data-testid="changes-scope-uncommitted"
-					data-active={scope.kind === "uncommitted" ? true : undefined}
-					// Nothing dirty → the scope is offered but visibly inert, saying so instead of opening an
-					// unexplained empty list. Unknown (`null`, a failed probe) stays selectable.
-					disabled={hasUncommitted === false && scope.kind !== "uncommitted"}
-					onSelect={() => onSelectScope({ kind: "uncommitted" })}
+					data-testid="changes-scope-working-tree"
+					data-active={scope.kind === "working-tree" ? true : undefined}
+					disabled={hasWorking === false && scope.kind !== "working-tree"}
+					onSelect={() => onSelectScope({ kind: "working-tree" })}
 				>
-					<Check className={scope.kind === "uncommitted" ? "" : "invisible"} />
-					{hasUncommitted === false ? "No uncommitted changes" : "Uncommitted changes"}
+					<Check className={scope.kind === "working-tree" ? "" : "invisible"} />
+					{hasWorking === false ? "Nothing unstaged" : "Working tree"}
+				</DropdownMenuItem>
+				<DropdownMenuItem
+					data-testid="changes-scope-staged"
+					data-active={scope.kind === "staged" ? true : undefined}
+					disabled={hasStaged === false && scope.kind !== "staged"}
+					onSelect={() => onSelectScope({ kind: "staged" })}
+				>
+					<Check className={scope.kind === "staged" ? "" : "invisible"} />
+					{hasStaged === false ? "Nothing staged" : "Staged"}
 				</DropdownMenuItem>
 				<DropdownMenuSeparator />
 				<DropdownMenuLabel>Commits</DropdownMenuLabel>

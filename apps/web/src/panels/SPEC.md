@@ -348,11 +348,11 @@ a project picker, the prompt hero, and the reused
   re-reads exactly like a workspace switch, and one scope's list can never linger under another. `onFailure`
   receives **the rejection**, not just the workspace id: a caller that reacts to one *named* failure (see the
   vanished-commit rule below) must be able to tell it from a timeout or a dropped socket.
-  The one read that deliberately does **not** go through this hook is `ChangesScopeMenu`'s lazy pair — they
+  The one read that deliberately does **not** go through this hook is `ChangesScopeMenu`'s lazy trio — they
   are *open*-triggered, not tick-triggered — so the menu is instead **keyed by its full identity,
   `(workspaceId, targetRef)`**: its commit rows are `git log <base>..HEAD`, so re-pointing the target changes
-  which commits exist, and the remount clears rows that belonged to the previous pair while neutralizing any
-  response still in flight for it. Within one mount the pair is **generation-stamped** as well, so two opens
+  which commits exist, and the remount clears rows that belonged to the previous trio while neutralizing any
+  response still in flight for it. Within one mount the trio is **generation-stamped** as well, so two opens
   in a row can't let the earlier answer overwrite the later one. It is
   **identity only** — what makes a re-read happen, never what the read reads *with* (the parameter lives in the
   caller's `read` closure, which the hook re-captures every render, so the value a re-read uses is by
@@ -452,15 +452,20 @@ a project picker, the prompt hero, and the reused
   deliberate — a second, round-scoped marking vocabulary over these workspace-scoped trees would reintroduce
   the two-rows-read-as-selected ambiguity the single-selection rule above exists to prevent.
 - **The diff scope is chosen in the Changes header, and enters the tab's identity.** Two header controls say
-  what is being diffed: the **`ChangesScopeMenu`** pill — *All
-  changes* (the workspace's work since diverging from the target branch — measured from the merge-base,
-  so upstream commits landing on the target are never phantom rows here; the default) / *Uncommitted changes* / one **commit** from the
-  branch's list — and the shared **`BranchPicker`** pill for the **target branch** (`workspace.setDiffBase`;
-  the panel converges on the broadcast `workspace.updated`, never optimistically). The menu's contents load
-  **lazily on each open**, never on panel mount: `git.listCommits` for the commit rows (subject +
-  `shortSha · author · relative time`) and a `git.status` probe under the uncommitted scope, which is what
-  lets the *Uncommitted* row say “No uncommitted changes” (disabled) instead of opening an unexplained empty
-  list; each degrades on its own. The menu content is **height-bounded and scrollable** (on the shared
+  what is being diffed: the **`ChangesScopeMenu`** pill and the shared **`BranchPicker`** pill for the
+  **target branch** (`workspace.setDiffBase`; the panel converges on the broadcast `workspace.updated`,
+  never optimistically). The scope pill offers *All changes* (the workspace's work since diverging from the
+  target branch — measured from the merge-base, so upstream commits landing on the target are never phantom
+  rows here; the default), the two halves of what is uncommitted, or one **commit** from the branch's list:
+  - **Working tree** — what is not staged yet (index vs disk, plus untracked). Offered but inert, reading
+    "Nothing unstaged", when the probe says there is nothing.
+  - **Staged** — what a commit would record right now (HEAD vs index). Offered but inert, reading
+    "Nothing staged", when empty.
+
+  The menu's contents load **lazily on each open**, never on panel mount: `git.listCommits` for the commit
+  rows (subject + `shortSha · author · relative time`) and one `git.status` probe per half, each of which is
+  what lets that half's row read as empty (disabled) instead of opening an unexplained empty list; each
+  degrades on its own. The menu content is **height-bounded and scrollable** (on the shared
   `DropdownMenuContent` primitive, since any long menu has the problem) — 200 commit rows must not run past
   the viewport edge where they are unreachable. The pill names a commit scope by its **short sha**, never its subject
   (`scopeLabel`; the subject is the trigger's `title` via `scopeTitle`, and the menu row shows it in full) —
