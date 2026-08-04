@@ -60,10 +60,14 @@ ref off the workspace-create critical path.
   via `numstatPath` to match `--name-status`; binary rows dropped; untracked files count their whole
   content as added) for the Changes tree's `+/−` badges;
   `gitDiffFile(workspaceId, path, scope?)` → `{ original, modified }` — both sides of one file's change for
-  the center Monaco diff tab (`original` = the file at the range's start ref, raw, empty when absent there —
-  untracked/added, a renamed file's new path, or a root commit — degrading to an add-style diff; `modified` =
-  the worktree file (empty when deleted) for a range ending there, else the commit's own tree; the path is
-  escape-checked against the worktree root); **`listCommits(workspaceId)`** → `{ commits: GitCommit[] }` —
+  the center Monaco diff tab, each read through its side's explicit **`DiffSide`** union — `{kind:"ref"}`
+  (a commit/branch, raw `git show ref:path`), `{kind:"index"}` (the staging area, `git show :<path>`),
+  `{kind:"worktree"}` (the file on disk), or `{kind:"empty"}` (nothing there — untracked/added, a renamed
+  file's new path, or a root commit, degrading to an add-style diff). A union rather than `string | null`,
+  because `null` previously meant *empty* on one side and *the worktree* on the other — two meanings for
+  one value, and no room for the index, which the `staged`/`working-tree` scopes need. The path is
+  escape-checked against the worktree root before either side is read; **`listCommits(workspaceId)`** →
+  `{ commits: GitCommit[] }` —
   `git log <diff base>..HEAD`, newest first and capped, one `--format` line per commit whose fields are separated
   by a **NUL byte** and read at **fixed arity** (the leading four positionally, everything after them joined back
   as the subject). NUL is the one byte the repository-controlled text cannot smuggle in: an author ident carries
@@ -94,11 +98,6 @@ ref off the workspace-create critical path.
   `git.prefetch` handler uses `moved` to fan out the host's pathless `fsChanged` nudge (`host`'s fsNudge
   seam; an unaffected re-read is an idempotent no-op). `moved` is host-internal; the wire response stays
   `{ ok }`.
-- `original` / `modified`: the two sides of the diff as an explicit **`DiffSide`** union — `{kind:"ref"}`
-  (a commit/branch), `{kind:"index"}` (the staging area, read as `git show :<path>`),
-  `{kind:"worktree"}` (the file on disk), or `{kind:"empty"}` (nothing there — a root commit's
-  add-style diff). A union rather than `string | null`, because `null` previously meant *empty* on one
-  side and *the worktree* on the other, and neither meaning left room for the index.
 - **Public surface (barrel):** `git`, `gitAsync`, `gitStatus`, `gitDiffFile`, `listCommits`,
   `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `DiffRange`, `DiffSide`, `isSafeRef`,
   `assertSafeRef`, `listBranches`, `resolveDefaultBranch`, `currentBranch`, `prefetchBranch`.

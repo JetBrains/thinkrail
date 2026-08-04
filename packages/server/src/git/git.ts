@@ -325,13 +325,18 @@ function readSide(worktreePath: string, side: DiffSide, path: string, abs: strin
 
 /**
  * One file's **staged** content (`git show :<path>` — stage 0), byte-exact, or `""` when the path isn't in
- * the index. Separate from {@link showBlob} because there is no ref to bracket: the argument is a
+ * the index — a staged deletion (`git rm`), or a path never staged at all — read silently, without a
+ * warning. Separate from {@link showBlob} because there is no ref to bracket: the argument is a
  * pathspec-shaped `:<path>`, and passing it through the ref path would read as `":" + ":" + path`.
  */
 function showIndexBlob(worktreePath: string, path: string): string {
 	const shown = git(worktreePath, ["show", "--end-of-options", `:${path}`], { raw: true });
 	if (shown.ok) return shown.out;
-	if (!/does not exist in|exists on disk, but not in|Path .* does not exist/.test(shown.err)) {
+	// Both expected absences, verified against real git output:
+	//   `fatal: path 'x' does not exist (neither on disk nor in the index)`  — a staged deletion
+	//   `fatal: path 'x' exists on disk, but not in the index`               — never staged
+	// Case-insensitive: git prints a lowercase `path` here and a capitalised one elsewhere.
+	if (!/does not exist|exists on disk, but not in/i.test(shown.err)) {
 		console.warn(`git show :${path} failed: ${shown.err || "unknown error"}`);
 	}
 	return "";
