@@ -134,13 +134,33 @@ of the host.
   hint on this result));
   the **theme/config selection** — **`ThemeId`** is an open string on the wire, because the host persists
   an opaque selection while the independently shipped web client owns the available manifest catalog;
-  **`AppConfig`** (`{ theme, analyticsEnabled }` — an extensible bag; `analyticsEnabled` is the
+  **`AppConfig`** (`{ theme, analyticsEnabled, gitRemoteCheck, gitRemoteCheckIntervalMinutes }` — an
+  extensible **flat** bag, deliberately never nested per-feature: `loadConfig()` is a shallow spread over
+  `DEFAULT_CONFIG`, so a nested `git: {…}` object arriving from `config.json` would replace the whole thing
+  and silently drop sibling keys the user didn't mention — see the server `settings` submodule's SPEC for
+  the same rule stated from the persistence side; `analyticsEnabled` is the
   anonymous-usage-analytics switch, default `true` — it is the **only** analytics fact on the wire:
-  the installation id stays server-side by design, see `submodule-server-analytics`) carries it with the
+  the installation id stays server-side by design, see `submodule-server-analytics`; `gitRemoteCheck`
+  (`"probe" | "fetch" | "off"`, default `"probe"`) and `gitRemoteCheckIntervalMinutes` (default `15`,
+  server-clamped to `[1, 1440]`) are the remote-check scheduler's user-facing knobs) carries it with the
   **`DEFAULT_CONFIG`** fallback
   (persisted host-side as `config.json`, delivered in `server.welcome`, mutated via `settings.update`).
   Contracts deliberately exports no theme enum/list/labels: a future manifest can mint an id unknown when
   the host was built, and a client missing it resolves its own bundled default;
+  the **remote-awareness wire** — **`RemoteDormantReason`** (`"never-authenticated"` / `"ssh-agent-present"`
+  / `"disabled"` / `"failing"` — why a `(project, ref)` pair is not being checked automatically, reported
+  explicitly rather than left as silent idleness) and **`RemoteState`** (`{ projectId, ref, behind,
+  lastCheckedAt, dormant? }` — what the host last learned about one remote-tracking ref, e.g.
+  `"origin/main"`; `behind` is `number | "unknown" | null`, THREE meanings because the default background
+  check is a write-nothing `git ls-remote` probe that can tell the caller *that* a ref moved but never *by
+  how much*: a number is only possible once a real fetch made the commits local, `"unknown"` is probe mode
+  with a real difference — rendered as a bare `↓` — and `null` is up to date; collapsing `"unknown"` into
+  either `0` or `null` would make the UI lie). **`ProjectRemoteStatePayload`** (`{ projectId, states }` —
+  the `project.remoteState` push: a full per-project snapshot, replace-not-merge like `workspace.updated`,
+  since one background check can cover several of a project's refs in one network call) and
+  **`ProjectRefsChangedPayload`** (`{ projectId }` — the `project.refsChanged` push: the project repo's own
+  shared git metadata moved in some worktree, invisible to the per-worktree `workspace.fsChanged` watcher;
+  an invalidation nudge, not data, mirroring `WorkspaceFsChangedPayload` at project scope);
   **`SpecGraphNode`/`SpecGraphSnapshot`** — the
   Specs-viewer read DTOs, **mirrored** (like `PiEvent`), never imported from `pi-spec-graph` — the wire
   carries only what the panel renders (`type`/`status` stay `string`: tolerate whatever is on disk);
@@ -194,7 +214,12 @@ of the host.
   taking an optional **`scope: GitDiffScope`** (an unresolvable scope — a commit a rebase removed — is
   *rejected*, which the panel reads as "reset the scope" instead of staying wedged on a dead sha) /
   **`git.listCommits`** (the workspace branch's own commits, `<diff base>..HEAD`, newest first, capped
-  host-side — the scope menu's lazily-fetched list) / **`git.prefetch`** (best-effort background fetch of a
+  host-side — the scope menu's lazily-fetched list) / **`git.remoteState`** (the last-known `RemoteState`
+  for the workspace's resolved diff-base ref, `null` when that base isn't a remote-tracking ref or has
+  never been checked — the pull; `project.remoteState` is the push that keeps a connected client current) /
+  **`git.fetchNow`** (a user-initiated real fetch of that same ref — rejects, rather than answering `null`,
+  when there is nothing remote-tracking to fetch; on success this is the one place `noteRemoteTrusted`
+  fires for that (project, remote) pair) / **`git.prefetch`** (best-effort background fetch of a
   remote base — the New-Workspace dialog's freshness warm-up; always acks `{ ok }`, and when the fetch
   actually moved the local remote-tracking ref the host follows up with pathless `workspace.fsChanged`
   frames to the workspaces whose diff base that ref is, so their git-derived reads re-converge) / **`skills.state`** (`SkillCatalogEntry[]` — full catalog +
@@ -224,7 +249,12 @@ of the host.
   pair (`{ projectId, id }` — the record is already gone) / **`workspace.fsChanged`** — the worktree
   change-notifier push (**`WorkspaceFsChangedPayload`**: `{ workspaceId, paths, truncated }`,
   worktree-relative deduped paths, capped — `truncated` = treat as wildcard); an **invalidation nudge,
-  not data**: clients re-read via the existing read methods, so a duplicate/replayed frame is harmless.
+  not data**: clients re-read via the existing read methods, so a duplicate/replayed frame is harmless /
+  **`project.refsChanged`** — the SAME invalidation-nudge contract at project scope
+  (**`ProjectRefsChangedPayload`**: `{ projectId }`), for shared git metadata a `git branch`/`fetch`/`reset`
+  in any one worktree writes that no per-worktree watcher sees / **`project.remoteState`** — the
+  remote-check scheduler's own findings (**`ProjectRemoteStatePayload`**: `{ projectId, states }`), a full
+  per-project `RemoteState[]` snapshot, replace-not-merge like the workspace trio's `created`/`updated`.
   The `WsMethodMap` typed request/result map +
   `WsParams`/`WsResult` helpers, and `PROTOCOL_VERSION`.
 

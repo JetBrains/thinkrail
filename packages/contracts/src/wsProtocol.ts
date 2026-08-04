@@ -16,6 +16,7 @@ import type {
 	Project,
 	ProjectPathStatus,
 	ProviderStatusReport,
+	RemoteState,
 	SpecGraphSnapshot,
 	Template,
 	TemplateInfo,
@@ -103,7 +104,13 @@ import type {
 // v23: `GitDiffScope`'s `uncommitted` is replaced by `working-tree` (index → disk) and `staged`
 //      (HEAD → index). A BREAKING change to an existing member, not an additive one — one scope could
 //      not say what a commit would actually record. Unknown kinds degrade to `branch` client-side.
-export const PROTOCOL_VERSION = 23;
+// v24: remote awareness. `AppConfig` gains flat `gitRemoteCheck` (`"probe" | "fetch" | "off"`, default
+//      `"probe"`) and `gitRemoteCheckIntervalMinutes` (default `15`); `RemoteState`/`RemoteDormantReason`
+//      land on the wire, read via the new `git.remoteState`/`git.fetchNow` methods and kept current by the
+//      new `project.refsChanged`/`project.remoteState` push channels. Unlike v23's breaking union change,
+//      every addition here is ADDITIVE and OPTIONAL: an older client that has never heard of these
+//      fields/methods/channels is simply unaffected — nothing it already does changes meaning.
+export const PROTOCOL_VERSION = 24;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -182,6 +189,14 @@ export const WS_METHODS = {
 	// The workspace branch's own commits (`<diff base>..HEAD`, newest first) — the scope menu's commit list,
 	// fetched lazily when that menu first opens.
 	gitListCommits: "git.listCommits",
+	// The last-known `RemoteState` for a workspace's resolved diff-base ref (read side of the remote-check
+	// scheduler; `null` when that base isn't a remote-tracking ref). The scheduler's own pushes
+	// (`project.remoteState`) keep a connected client's copy current; this is the pull for hydration.
+	gitRemoteState: "git.remoteState",
+	// A user-initiated real `git fetch` of a workspace's resolved diff-base ref — the ComparisonTarget
+	// pill's "Fetch" affordance. Unlike the scheduler's background probe, this is the one place credential-
+	// ladder rung 2 (`noteRemoteTrusted`) is satisfied for that (project, remote) pair.
+	gitFetchNow: "git.fetchNow",
 	terminalCreate: "terminal.create",
 	terminalWrite: "terminal.write",
 	terminalResize: "terminal.resize",
@@ -275,6 +290,14 @@ export const WS_CHANNELS = {
 	// The server-synced app settings changed (carries the full `AppConfig`), broadcast to every client so
 	// they converge — the initiator applies on this push too, never optimistically.
 	settingsChanged: "settings.changed",
+	// The project repo's OWN shared git metadata moved (a `git branch`/`fetch`/`reset` in any one of its
+	// worktrees) — an invalidation nudge at project scope, mirroring `workspace.fsChanged`. Carries a
+	// `ProjectRefsChangedPayload`.
+	projectRefsChanged: "project.refsChanged",
+	// The remote-check scheduler learned something new about one or more of a project's remote-tracking
+	// refs — a full per-project snapshot (`ProjectRemoteStatePayload`), broadcast so every client converges
+	// on the same `RemoteState[]` the same way the workspace-lifecycle trio converges on `Workspace`.
+	projectRemoteState: "project.remoteState",
 } as const;
 
 export type WsMethod = (typeof WS_METHODS)[keyof typeof WS_METHODS];
@@ -418,6 +441,15 @@ export interface WsMethodMap {
 	// Commits on the workspace's branch that its diff base doesn't have (`git log <base>..HEAD`), newest
 	// first and capped host-side — the scope menu's commit rows.
 	"git.listCommits": { params: { workspaceId: string }; result: { commits: GitCommit[] } };
+	// The last-known state for the workspace's resolved diff-base ref (`diffBase ?? baseBranch`, resolved
+	// server-side); `null` when that base is not a remote-tracking ref (nothing to report) or has never
+	// been checked. The `project.remoteState` push keeps a connected client current — this is the pull.
+	"git.remoteState": { params: { workspaceId: string }; result: RemoteState | null };
+	// A user-initiated real fetch of the workspace's resolved diff-base ref; rejects when that base is not
+	// a remote-tracking ref (there is nothing to fetch — unlike the read side, an action has no silent
+	// "nothing to report" answer). On success this is the one place `noteRemoteTrusted(projectId, remote)`
+	// fires for this pair.
+	"git.fetchNow": { params: { workspaceId: string }; result: RemoteState };
 	"terminal.create": { params: { workspaceId: string }; result: { id: string } };
 	"terminal.write": { params: { id: string; data: string }; result: Ack };
 	"terminal.resize": { params: { id: string; cols: number; rows: number }; result: Ack };
