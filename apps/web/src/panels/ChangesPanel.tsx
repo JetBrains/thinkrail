@@ -11,11 +11,11 @@ import {
 	useAppStore,
 } from "../store";
 import { errorText, getTransport, wsErrorCode } from "../transport";
-import { BranchPicker } from "./BranchPicker";
 import { useBranchList } from "./branches";
 import { ChangeRowActions } from "./ChangeRowActions";
 import { ChangesScopeMenu } from "./ChangesScopeMenu";
 import { ChangesTree } from "./ChangesTree";
+import { ComparisonTarget } from "./ComparisonTarget";
 import { diffTabId, isDiffTabId, scopeKey, splitPath, statusNameClass } from "./changesModel";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { openDiffInTab } from "./openTabs";
@@ -23,10 +23,10 @@ import { ToggleSegment } from "./ToggleSegment";
 import { useWorkspaceRead } from "./useWorkspaceRead";
 
 /**
- * Changes for the active worktree: a **scope selector** (what is diffed — all changes on the branch, only
- * the uncommitted ones, or a single commit) plus a **target-branch picker** (the ref the branch scope
- * measures against, re-pointable per workspace), over the changed-file list. Clicking a file **previews**
- * (or focuses) its Monaco diff tab in the center and a double click keeps it — so scanning a change set
+ * Changes for the active worktree: a **scope selector** (what is diffed — all changes on the branch, the
+ * working tree, staged, or a single commit) plus a **comparison target** (`ComparisonTarget` — the other
+ * side of the diff; re-pointable only for the branch scope), over the changed-file list. Clicking a file
+ * **previews** (or focuses) its Monaco diff tab in the center and a double click keeps it — so scanning a change set
  * reuses one tab. The diff itself renders there (`DiffPane`), not under the list.
  * Two layouts, switched by the header toggle (`store.changesView`, app-wide): a flat **List** of full
  * relative paths and a folder **Tree** (`ChangesTree`, styled like the All-files tree), both with per-file
@@ -182,7 +182,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 			<div
 				data-testid="changes-view-toggle"
 				role="toolbar"
-				// The toolbar holds the scope selector and the target-branch picker as well as the List|Tree
+				// The toolbar holds the scope selector and the comparison target as well as the List|Tree
 				// segments, so it is named for what it is, not for the one control it used to hold.
 				aria-label="Changes scope and view"
 				className="flex h-8 shrink-0 items-center gap-xs border-border-default border-b bg-container-header-bg px-sm"
@@ -198,16 +198,15 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 						scope={scope}
 						onSelectScope={(next) => setDiffScope(workspaceId, next)}
 					/>
-					{/* The target branch is re-pointable, and it is a host mutation: the panel converges on the
-					    broadcast `workspace.updated` (which moves `baseRef`, hence the read key), never optimistically. */}
+					{/* States the other side of the diff. A live picker only for the branch scope, whose target is
+					    genuinely re-pointable; the other scopes' opposite side is a fact, not a choice. The host
+					    mutation still converges on the `workspace.updated` broadcast, never optimistically. */}
 					{workspace ? (
-						<BranchPicker
+						<ComparisonTarget
+							scope={scope}
+							baseRef={baseRef}
 							branches={branches}
-							selected={baseRef}
 							refreshing={branchesRefreshing}
-							label="vs"
-							testid="changes-target-picker"
-							triggerClassName="flex h-6 min-w-0 max-w-[200px] items-center gap-xs rounded-[var(--radius-sm)] px-xs outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-hovered"
 							onSelect={(ref) => void pointAt(ref)}
 							onRefresh={refreshBranches}
 						/>

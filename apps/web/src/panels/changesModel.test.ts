@@ -3,6 +3,7 @@ import type { GitFileChange } from "@thinkrail/contracts";
 import {
 	buildChangesTree,
 	type ChangeTreeDir,
+	comparisonTargetLabel,
 	diffTabId,
 	diffTabName,
 	isDiffTabId,
@@ -115,4 +116,23 @@ test("a file open in working-tree and staged scope is two distinct tabs", () => 
 test("splitPath separates the muted directory prefix from the bright basename", () => {
 	expect(splitPath("apps/web/src/a.ts")).toEqual({ dir: "apps/web/src/", base: "a.ts" });
 	expect(splitPath("README.md")).toEqual({ dir: "", base: "README.md" });
+});
+
+test("the comparison target names the other side, and is live only for branch scope", () => {
+	expect(comparisonTargetLabel({ kind: "branch" }, "main")).toEqual({
+		label: "main",
+		interactive: true,
+	});
+	expect(comparisonTargetLabel({ kind: "working-tree" }, "main")).toEqual({
+		label: "index",
+		interactive: false,
+	});
+	expect(comparisonTargetLabel({ kind: "staged" }, "main")).toEqual({
+		label: "HEAD",
+		interactive: false,
+	});
+	expect(comparisonTargetLabel({ kind: "commit", sha: "abc1234" }, "main")).toEqual({
+		label: "— (parent)",
+		interactive: false,
+	});
 });

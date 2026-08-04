@@ -72,6 +72,31 @@ export function scopeTitle(scope: GitDiffScope, commits: readonly GitCommit[] = 
 }
 
 /**
+ * The comparison target pill's content — *the other side of this diff*, and whether that side is something
+ * the user can choose. Only `branch` scope has a choosable other side (the re-pointable diff base); the
+ * other three are facts about the scope itself, so they render as inert text rather than a control that
+ * would do nothing when clicked.
+ */
+export function comparisonTargetLabel(
+	scope: GitDiffScope,
+	baseRef: string,
+): { label: string; interactive: boolean } {
+	switch (scope.kind) {
+		case "branch":
+			return { label: baseRef, interactive: true };
+		case "working-tree":
+			return { label: "index", interactive: false };
+		case "staged":
+			return { label: "HEAD", interactive: false };
+		case "commit":
+			return { label: "— (parent)", interactive: false };
+		case "uncommitted":
+			// Task 7 removes this scope; until then it behaves like working-tree (both diff against the index).
+			return { label: "index", interactive: false };
+	}
+}
+
+/**
  * A path split for the **path row/chip**: a muted directory prefix (with its trailing slash) plus a bright
  * basename. One definition, shared by the Changes flat list and the diff header's chip so they read alike.
  */
