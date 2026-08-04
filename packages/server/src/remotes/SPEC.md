@@ -90,21 +90,32 @@ in two halves that share this one `SPEC.md` (written in the first, extended by t
     qualify for more than one dormancy reason at once, and the order is a deliberate, tested precedence,
     not incidental:
     1. `"disabled"` — `AppConfig.gitRemoteCheck === "off"`. Checked before anything else, for the whole
-       project in one shot, touching neither `persistence` nor `git`: this is what makes ambiguity #3 true
-       (a flipped-off project costs zero I/O, not just zero network I/O).
-    2. `"never-authenticated"` — rung 2 of the credential ladder (`isRemoteTrusted`) hasn't fired yet.
-       Checked next because it's the cheapest real gate (one local JSON read) and, since this repo's trust
-       record is write-once/monotonic (`noteRemoteTrusted`, never revoked), an untrusted pair can never
-       simultaneously be "failing" — so in practice this and `"failing"` are mutually exclusive, but the
-       order is still fixed and tested via the reachable case (untrusted beats a *configured-but-unused*
+       project in one shot, touching no `git` and no network at all: this is what makes ambiguity #3 true
+       (a flipped-off project costs zero network I/O, not zero I/O whatsoever — `refsForProject` still does
+       its one `loadWorkspaces()` read up front, before the mode is even consulted, since the ref set is
+       needed either way to know which refs to label `"disabled"`).
+    2. `"upstream-gone"` — a *prior completed* check found this ref absent from the remote. Checked right
+       after `"disabled"` and ahead of the credential ladder proper, because it is a fact about the remote
+       itself, not a credential/local-policy question — see "Design notes" for why it is deliberately
+       **sticky until process restart** rather than re-verified on a timer.
+    3. `"never-authenticated"` — rung 2 of the credential ladder proper (`isRemoteTrusted`) hasn't fired
+       yet. Checked next because it's the cheapest real gate (one local JSON read) and, since this repo's
+       trust record is write-once/monotonic (`noteRemoteTrusted`, never revoked), an untrusted pair can
+       never simultaneously be "failing" — so in practice this and `"failing"` are mutually exclusive, but
+       the order is still fixed and tested via the reachable case (untrusted beats a *configured-but-unused*
        ssh-agent-present condition, since trust is checked first and short-circuits before `remoteUrlKind`
-       is ever called).
-    3. `"ssh-agent-present"` — rung 3 (`remoteUrlKind` is `"ssh"` and `sshAgentPresent()`). Checked after
+       is ever called). (A direct "upstream-gone beats never-authenticated" precedence test isn't
+       constructible with the real, monotonic `isRemoteTrusted` — reaching `"upstream-gone"` requires a
+       prior *successful* check, which itself requires trust to already have passed. The order is still
+       correct and load-bearing by code structure — see `policy.test.ts`'s upstream-gone-vs-ssh-agent-present
+       test for the reachable sibling proof.)
+    4. `"ssh-agent-present"` — rung 3 (`remoteUrlKind` is `"ssh"` and `sshAgentPresent()`). Checked after
        trust because it requires a `git` subprocess call (`remote get-url`) the untrusted case skips
        entirely.
-    4. `"failing"` — this pair's per-pair backoff clock (below) hasn't elapsed yet. Checked last: it is
-       the only reason that can *change on its own* between checks (the other three are configuration/trust
-       state), and it's the only one that requires having attempted a real network call at least once.
+    5. `"failing"` — this pair's per-pair backoff clock (below) hasn't elapsed yet. Checked last: it is
+       the only reason that can *change on its own* between checks (the other rungs above it are
+       configuration/trust/remote-fact state), and it's the only one that requires having attempted a real
+       network call at least once.
     First reason that matches wins; `null` (not dormant) only when none do, which is also the one case
     that adds the pair to this round's network batch.
   - **Per-pair exponential backoff on failure, with quiet recovery**: `BACKOFF_BASE_MS` (5 minutes) on the
@@ -117,8 +128,8 @@ in two halves that share this one `SPEC.md` (written in the first, extended by t
     fields reflect the last time a check *actually completed*, exactly as `RemoteState`'s own doc states.
   - **Turning a probe/fetch result into `RemoteState.behind`, honestly** — the comparison basis in every
     case is the *local* remote-tracking ref (`refs/remotes/origin/<name>`, read fresh via `git`'s exported
-    sync runner — see "Design notes" below for why this, not an in-memory "last observed" cache, is the
-    correct anchor):
+    `trackingRefOid` — see "Design notes" below for why this, not an in-memory "last observed" cache, is
+    the correct anchor):
     - **probe mode, the remote's head differs from the local tracking ref** → `"unknown"`: we know it
       moved, never by how much, because `ls-remote` makes no object local.
     - **probe or fetch mode, they match** → `null` (up to date).
@@ -128,9 +139,29 @@ in two halves that share this one `SPEC.md` (written in the first, extended by t
       `behindCount` itself returns `null` (never `0` — a resolution failure) → `null` for the former (a
       fresh baseline, nothing to report yet) / `"unknown"` for the latter (a real range that failed to
       resolve). Never substituted with `0` or a guess in any of these cases.
-    - A ref absent from a successful probe/fetch's result (the upstream branch no longer exists) is
-      treated as `null` — there is no "moved" signal for a ref that vanished, and reporting a stale
-      `"unknown"`/count would be a worse lie than reporting nothing new.
+    - A ref absent from a successful probe's result, or a name the classifying `ls-remote` below reports
+      absent, means the upstream branch no longer exists: `{ behind: null, dormant: "upstream-gone" }` —
+      **never** a bare `behind: null` with no reason, which a consumer rendering no dormant field at all
+      would misread as "up to date". This is a real, completed finding, not a failure: it clears any live
+      backoff exactly like a genuine up-to-date/moved result does.
+  - **Fetch mode isolates a batch failure instead of attributing it to every requested ref.**
+    `fetchRemoteRefsArgv` names every ref explicitly, so `git fetch origin <name…>` exits non-zero for the
+    **whole** invocation the moment even one named ref no longer exists upstream — verified empirically —
+    even when every other named ref is perfectly fetchable. Treating that as "every ref in the batch is
+    now failing" would be wrong (and, worse, permanently wrong: a healthy sibling ref would stay falsely
+    marked "failing" forever, since nothing else would ever re-attempt it once no ref in a poisoned batch
+    is presumed fetchable). On a batch fetch failure, `applyFetch` recovers in two extra network calls at
+    most, regardless of batch size:
+    1. A classifying `probeRemoteRefs` (`ls-remote`) over the same names — this call, unlike `fetch`,
+       never fails just because one requested name is absent, so it safely partitions the batch into
+       `gone` (absent from the probe's heads) and `survivors` (present).
+    2. If the classifying probe **itself** fails, the remote is genuinely unreachable (a transient/network
+       failure) — every originally-requested name is marked `"failing"` via `markFailure`, never guessed
+       `"upstream-gone"`. This is the case that must never be confused with the one above: an unreachable
+       remote says nothing about which refs still exist.
+    3. Otherwise, `gone` names are marked `"upstream-gone"` directly, and (if any survivors remain) the
+       fetch is retried naming only the `survivors` — interpreted exactly like a batch that succeeded on
+       the first attempt (`applyFetchOutcome`, shared by both paths).
   - **`remoteStateFor(projectId): RemoteState[]` is a pure cache READ — never a probe trigger.** It
     re-derives the current ref set (a `loadWorkspaces()` read — cheap, same pattern the mechanics half
     already uses for `loadProjects()`) and projects each ref's last-computed `PairRecord` (behind,
@@ -156,12 +187,19 @@ in two halves that share this one `SPEC.md` (written in the first, extended by t
     in-memory, per `(projectId, ref)`, and reset on process restart** — exactly as the mechanics half's own
     `projectStates` is. A restart re-attempting a currently-backed-off pair once is an acceptable cost;
     persisting backoff across restarts was not worth the complexity.
+  - **Stale `PairRecord`s are pruned every round, before anything else** (`pruneStaleRecords`, called at
+    the top of `checkProject` with the freshly-derived ref set): a ref no longer produced by any of a
+    project's workspaces (re-pointed base, deleted workspace) has its record dropped rather than left to
+    occupy memory for the rest of the process's life under ordinary workspace churn. A pruned ref that
+    later reappears (e.g. a workspace re-pointed back) starts from a fresh record deliberately — nothing
+    about its old backoff/dormancy state is still true once it was gone for a round.
   - **The git-function seam + the clock are injected**, mirroring `RemoteCheckDeps`: production defaults
-    (the real `probeRemoteRefs`/`fetchRemoteRefs`/`behindCount`/`remoteUrlKind`/`sshAgentPresent`, plus a
-    local, non-exported "read this tracking ref's oid" helper built on `git`'s exported sync runner, and
-    `Date.now`) are installed directly at module scope, overridable only by this module's own test file
-    (not barrel-exported) — so a policy test fakes git's *answers*, never git itself, and never sleeps for
-    the backoff timing either.
+    (the real `probeRemoteRefs`/`fetchRemoteRefs`/`behindCount`/`remoteUrlKind`/`sshAgentPresent`, plus
+    `git/remoteRefs.ts`'s exported `trackingRefOid` — the same "what does this repo currently believe this
+    tracking ref points at" primitive `fetchRemoteRefs` itself uses internally, reused here rather than
+    reimplemented a third time, and `Date.now`) are installed directly at module scope, overridable only
+    by this module's own test file (not barrel-exported) — so a policy test fakes git's *answers*, never
+    git itself, and never sleeps for the backoff timing either.
 - **Public surface (barrel, policy half):** `checkProject` (the real implementation — this is what host
   wiring passes to `startRemoteChecks`), `remoteStateFor`, `setRemoteStatePublisher`, plus the
   `RemoteCheckPolicyDeps` type and `BACKOFF_BASE_MS`/`BACKOFF_MAX_MS`/`REMOTE_CHECK_TIMEOUT_MS`. The
@@ -169,11 +207,11 @@ in two halves that share this one `SPEC.md` (written in the first, extended by t
   imports it directly from `./policy`, exactly as `remotes.test.ts` imports `startRemoteChecks` directly
   from `./remotes` rather than through `./index`).
 - **Allowed deps (policy half):** `git` (`probeRemoteRefs`, `fetchRemoteRefs`, `behindCount`,
-  `remoteUrlKind`, `sshAgentPresent`, `diffBaseRef`, and the exported sync `git` runner — for reading a
-  local tracking ref's oid; see "Design notes"), `persistence` (`isRemoteTrusted`, `loadProjects`,
-  `loadWorkspaces`), `contracts` (`RemoteState`, `RemoteDormantReason`, `ProjectRemoteStatePayload`,
-  `AppConfig`), and the mechanics half's own `currentGitRemoteCheckMode()` (a direct file import, not
-  through the barrel — both files are this one module's internal organization, not a boundary).
+  `remoteUrlKind`, `sshAgentPresent`, `diffBaseRef`, and `trackingRefOid` — for reading a local tracking
+  ref's oid; see "Design notes"), `persistence` (`isRemoteTrusted`, `loadProjects`, `loadWorkspaces`),
+  `contracts` (`RemoteState`, `RemoteDormantReason`, `ProjectRemoteStatePayload`, `AppConfig`), and the
+  mechanics half's own `currentGitRemoteCheckMode()` (a direct file import, not through the barrel — both
+  files are this one module's internal organization, not a boundary).
 - **Forbidden (both halves):** `host` (config and the publish seam are both injected, never read by
   importing `host`); `settings` (see above — config arrives by injection only); sibling feature modules
   the policy half doesn't need (`workspaces`, `chats`, …).
@@ -196,11 +234,33 @@ in two halves that share this one `SPEC.md` (written in the first, extended by t
   Counting from the ref's own prior value answers a workspace-agnostic question instead: "how many new
   commits did `origin/<name>` itself pick up since we last looked" — the same thing `fetchRemoteRefs`'s own
   `moved` detection already computes internally, just also expressed as a count.
-- **A vanished upstream branch** (the requested ref is absent from an otherwise-successful probe/fetch
-  result) reports `behind: null` rather than carrying forward a stale `"unknown"`/count, or inventing a
-  new state contracts doesn't have a slot for. This is a deliberate, minor judgment call, not something
-  the brief specified — flagged here in case a later task (e.g. surfacing "this branch was deleted
-  upstream" in the UI) wants to distinguish it from genuine up-to-dateness.
+- **A vanished upstream branch** (the requested ref is absent from an otherwise-successful probe result,
+  or from the classifying `ls-remote` used to recover from a batch fetch failure) reports
+  `{ behind: null, dormant: "upstream-gone" }`, never a bare `behind: null` with no reason — a bare `null`
+  reads as "up to date" to a UI rendering no dormant field at all, which would misrepresent a branch that
+  no longer exists as one that's simply current. `"upstream-gone"` is its own `RemoteDormantReason` rather
+  than reusing `"unknown"` (which already means something different: "differs, but by an amount a probe
+  can't know" — a live branch, not a dead one) specifically so a later UI can render the two cases apart.
+- **Why `"upstream-gone"` is sticky until process restart, never re-verified on a timer**: once a
+  completed check finds a ref absent from the remote, there is no cheap self-healing signal to re-check it
+  against (branches that get deleted upstream do not typically come back), and re-probing it on every
+  round forever would cost a real network round-trip for a pair that is, for all practical purposes, dead.
+  This matches the module's existing precedent that in-memory policy state resets only on restart, never
+  on its own; a restart re-attempting a currently-`"upstream-gone"` pair once, and discovering it really is
+  still gone, is an acceptable cost — identical in kind to the accepted cost of re-attempting a
+  currently-backed-off `"failing"` pair once after a restart.
+- **Why a batch fetch failure is isolated (classify, then retry survivors) rather than attributed to every
+  requested ref**: `fetchRemoteRefsArgv` names every ref explicitly, and `git fetch origin <name…>` exits
+  non-zero for the *entire* invocation the moment even one named ref no longer exists upstream — verified
+  empirically, by running exactly that fetch against a remote with one healthy and one deleted branch and
+  observing the healthy branch is never fetched even though the command's own exit code gives no way to
+  tell that apart from "nothing in the batch worked" without a follow-up call. A per-ref fetch loop would
+  also work but costs one network round-trip per ref every round, defeating the whole point of batching;
+  a classifying `ls-remote` (which does not share `fetch`'s all-or-nothing failure mode — it simply omits
+  a head it can't find) plus a survivors-only retry costs at most two extra round-trips *total*,
+  regardless of batch size, and only on the failure path at all. The classifying probe's own failure is
+  the deliberate fallback to "genuinely unreachable, mark everything failing" — it must never be read as
+  "everything is gone", since an unreachable remote answers nothing about which refs still exist.
 
 ## Get right
 
@@ -219,6 +279,11 @@ in two halves that share this one `SPEC.md` (written in the first, extended by t
 - **A failed attempt never touches `behind`/`lastCheckedAt`** — only `failureCount`/`nextRetryAt`/
   `dormant`. Those two fields are a promise about the *last completed* check, and a failure completed
   nothing new to report.
-- **The dormancy ladder's order is load-bearing, not cosmetic** — `disabled` → `never-authenticated` →
-  `ssh-agent-present` → `failing`. Tested directly (see `policy.test.ts`), because a pair reaching this
-  ladder can satisfy more than one rung's condition at once and the precedence must be deterministic.
+- **The dormancy ladder's order is load-bearing, not cosmetic** — `disabled` → `upstream-gone` →
+  `never-authenticated` → `ssh-agent-present` → `failing`. Tested directly (see `policy.test.ts`), because
+  a pair reaching this ladder can satisfy more than one rung's condition at once and the precedence must
+  be deterministic.
+- **A batch fetch failure must never be attributed to every requested ref without isolating first** — the
+  fast path (one `fetch` call for the whole batch) stays the fast path; a failure triggers a classifying
+  `ls-remote` before anything is marked `"upstream-gone"` OR `"failing"`, and a failure of *that* probe
+  too is what proves the remote itself is unreachable (never a signal that every ref is gone).

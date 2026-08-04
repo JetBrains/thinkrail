@@ -18,6 +18,7 @@ import {
 	resolveDiffRange,
 } from "./diffScope";
 import { git, gitAsync } from "./gitExec";
+import { trackingRefOid } from "./remoteRefs";
 
 function workspace(workspaceId: string): Workspace {
 	const ws = loadWorkspaces().find((w) => w.id === workspaceId);
@@ -128,26 +129,16 @@ export async function prefetchBranch(
 	if (!project || !ref.startsWith("origin/")) return { ok: false, moved: false };
 	// Fully qualified on purpose: the short name resolves by git's DWIM order, where a local branch
 	// literally named `origin/<b>` (`refs/heads/origin/<b>`) would shadow the remote-tracking ref — and the
-	// fetch updates `refs/remotes/…` regardless, so the comparison must read exactly that.
-	const revParse = () =>
-		git(project.path, [
-			"rev-parse",
-			"--verify",
-			"--quiet",
-			"--end-of-options",
-			`refs/remotes/${ref}`,
-		]);
-	const before = revParse();
+	// fetch updates `refs/remotes/…` regardless, so the comparison must read exactly that. `trackingRefOid`
+	// (this module's own `remoteRefs.ts`) is the shared primitive for this read — see its docstring for why
+	// it's exported rather than reimplemented per caller.
+	const name = ref.slice("origin/".length);
+	const before = trackingRefOid(project.path, "origin", name);
 	// `--` so a `-`-prefixed branch name can't be parsed by git as an option.
-	const result = await gitAsync(project.path, [
-		"fetch",
-		"origin",
-		"--",
-		ref.slice("origin/".length),
-	]);
+	const result = await gitAsync(project.path, ["fetch", "origin", "--", name]);
 	if (!result.ok) return { ok: false, moved: false };
-	const after = revParse();
-	const moved = after.ok && after.out !== "" && (!before.ok || before.out !== after.out);
+	const after = trackingRefOid(project.path, "origin", name);
+	const moved = after !== undefined && after !== before;
 	return { ok: true, moved };
 }
 

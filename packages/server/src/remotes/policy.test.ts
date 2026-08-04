@@ -64,18 +64,29 @@ function workspace(
 	};
 }
 
+type ProbeResult = { ok: boolean; heads: Record<string, string>; err: string };
+type FetchResult = { ok: boolean; moved: string[]; err: string };
+
 /**
  * Fakes for every git-module answer `policy.ts` consumes, plus the clock — installed via
  * `configureRemoteCheckPolicyDeps` (which also resets all in-memory `PairRecord` state, so every test
  * starts from a clean slate regardless of a previous test's project/ref ids). `state.*Result` is mutated
  * by a test to script the next call's answer; `calls.*` records what was actually asked, so a test can
  * assert both the outcome AND that a short-circuited path never made the call at all.
+ *
+ * `probeResult`/`fetchResult` may also be a **function of the requested `refs`** — needed by the
+ * fetch-batch-isolation tests, where the batch attempt, the classifying probe, and the survivors-only
+ * retry all happen within one `checkProject` call and must each answer differently.
  */
 function makeFakes() {
 	const state = {
 		clock: 1_000_000,
-		probeResult: { ok: true, heads: {} as Record<string, string>, err: "" },
-		fetchResult: { ok: true, moved: [] as string[], err: "" },
+		probeResult: { ok: true, heads: {} as Record<string, string>, err: "" } as
+			| ProbeResult
+			| ((refs: string[]) => ProbeResult),
+		fetchResult: { ok: true, moved: [] as string[], err: "" } as
+			| FetchResult
+			| ((refs: string[]) => FetchResult),
 		behindCountResult: null as number | null,
 		remoteUrlKindResult: "other" as "ssh" | "other" | "unknown",
 		sshAgentPresentResult: false,
@@ -93,11 +104,11 @@ function makeFakes() {
 	const deps: RemoteCheckPolicyDeps = {
 		probeRemoteRefs: async (repoPath, remote, refs, timeoutMs) => {
 			calls.probe.push({ repoPath, remote, refs, timeoutMs });
-			return state.probeResult;
+			return typeof state.probeResult === "function" ? state.probeResult(refs) : state.probeResult;
 		},
 		fetchRemoteRefs: async (repoPath, remote, refs, timeoutMs) => {
 			calls.fetch.push({ repoPath, remote, refs, timeoutMs });
-			return state.fetchResult;
+			return typeof state.fetchResult === "function" ? state.fetchResult(refs) : state.fetchResult;
 		},
 		behindCount: (repoPath, from, to) => {
 			calls.behindCount.push({ repoPath, from, to });
@@ -222,6 +233,8 @@ test("a trusted non-SSH remote is never dormant with ssh-agent-present even when
 	const { deps, state } = makeFakes();
 	state.remoteUrlKindResult = "other";
 	state.sshAgentPresentResult = true; // an agent IS present, but the remote isn't ssh — irrelevant
+	// Present on the remote (this test is about the ssh-agent rung, not upstream-gone) — any oid will do.
+	state.probeResult = { ok: true, heads: { main: "irrelevant-oid" }, err: "" };
 	configureRemoteCheckPolicyDeps(deps);
 
 	await checkProject("p1");
@@ -316,23 +329,30 @@ test("backoff is capped at BACKOFF_MAX_MS after enough consecutive failures", as
 	state.probeResult = { ok: false, heads: {}, err: "unreachable" };
 	configureRemoteCheckPolicyDeps(deps);
 
-	// BACKOFF_MAX_MS comfortably clears every un-capped delay below it too, so 10 successive real
-	// attempts land here — enough consecutive failures (5 * 2**9 = 2560min) to exceed the 24h cap.
+	// Ten consecutive failures, spaced by exactly BACKOFF_MAX_MS each time. Every UNCAPPED delay below the
+	// 10th failure (the largest is after failure #9: 5 * 2**8 = 1280min) is comfortably under BACKOFF_MAX_MS
+	// (1440min), so all ten attempts fire regardless of whether the cap exists — this loop by itself would
+	// still pass with `Math.min(..., BACKOFF_MAX_MS)` deleted from `backoffDelayFor`. The discriminating
+	// assertion is the one after the loop, not this one.
 	for (let i = 0; i < 10; i++) {
 		await checkProject("p1");
 		state.clock += BACKOFF_MAX_MS;
 	}
 	expect(calls.probe).toHaveLength(10);
+	// The clock now sits exactly BACKOFF_MAX_MS past failure #10's timestamp (the loop's last increment).
 
-	// One ms short of the (capped) retry time must still be backed off — if the delay had kept doubling
-	// unboundedly instead of capping, this assertion would hold too, so the real proof is the PREVIOUS
-	// loop completing 10 attempts using a fixed BACKOFF_MAX_MS stride: an uncapped delay after failure #10
-	// (2560min) would have left this call still gated by then as well, but by then far more than
-	// BACKOFF_MAX_MS would have been required between attempts #9 and #10 — which the loop already
-	// disproved by succeeding with a constant stride.
-	state.clock -= 1;
+	state.clock -= 1; // one ms short of that
 	await checkProject("p1");
-	expect(calls.probe).toHaveLength(10); // still gated
+	expect(calls.probe).toHaveLength(10); // still gated — boundary is exclusive, not inclusive
+
+	// Restore the clock to exactly BACKOFF_MAX_MS elapsed since failure #10. Capped, `backoffDelayFor(10)`
+	// is exactly BACKOFF_MAX_MS, so this attempt is due. Uncapped, it would be 5 * 2**9 = 2560min — more
+	// than twice what has elapsed here — and this attempt would stay gated instead. Verified by hand:
+	// removing `Math.min(..., BACKOFF_MAX_MS)` from `backoffDelayFor` turns this into a failing assertion
+	// (calls.probe stays at 10).
+	state.clock += 1;
+	await checkProject("p1");
+	expect(calls.probe).toHaveLength(11);
 });
 
 test("a later success clears the backoff quietly and behind reflects the new result", async () => {
@@ -414,7 +434,7 @@ test("probe mode reports behind: null when the ref matches the local tracking re
 	expect(remoteStateFor("p1")[0]?.behind).toBeNull();
 });
 
-test("probe mode reports behind: null when the ref no longer exists on the remote", async () => {
+test("probe mode reports dormant: upstream-gone (and behind: null, never a bare unreasoned null) when the ref no longer exists on the remote", async () => {
 	saveProjects([project("p1")]);
 	saveWorkspaces([workspace("w1", "p1", "origin/main")]);
 	noteRemoteTrusted("p1", "origin");
@@ -427,7 +447,7 @@ test("probe mode reports behind: null when the ref no longer exists on the remot
 
 	const [s] = remoteStateFor("p1");
 	expect(s?.behind).toBeNull();
-	expect(s?.dormant).toBeUndefined();
+	expect(s?.dormant).toBe("upstream-gone");
 });
 
 // ── RemoteState honesty: fetch mode ──────────────────────────────────────
@@ -497,6 +517,164 @@ test("fetch mode reports behind: null on a ref's very first fetch, with no prior
 
 	expect(remoteStateFor("p1")[0]?.behind).toBeNull();
 	expect(calls.behindCount).toEqual([]); // no baseline to count from
+});
+
+// ── RemoteState honesty: fetch-batch isolation ────────────────────────────
+//
+// `fetchRemoteRefsArgv` names every ref explicitly, so ONE deleted upstream branch makes the WHOLE `git
+// fetch` invocation exit non-zero — verified empirically against real git — even when every other named
+// ref is perfectly fetchable. These tests pin `applyFetch`'s batch-then-isolate recovery: a failed batch
+// fetch is followed by a classifying `ls-remote` (which never fails just because one name is absent) to
+// tell gone names apart from survivors, then a survivors-only retry.
+
+test("fetch mode isolates a batch failure: one vanished ref doesn't poison its healthy sibling", async () => {
+	saveProjects([project("p1")]);
+	saveWorkspaces([workspace("w1", "p1", "origin/main"), workspace("w2", "p1", "origin/feature-x")]);
+	noteRemoteTrusted("p1", "origin");
+	configureRemoteChecks({ ...DEFAULT_CONFIG, gitRemoteCheck: "fetch" });
+	const { deps, calls, state } = makeFakes();
+	state.localTrackingOid["origin/main"] = "before-oid";
+	// The batch fetch (both names) fails outright — `git fetch origin main feature-x` exits 128 for the
+	// WHOLE invocation because `feature-x` no longer exists upstream, even though `main` is perfectly
+	// fetchable.
+	state.fetchResult = (refs) =>
+		refs.length === 2
+			? { ok: false, moved: [], err: "fatal: couldn't find remote ref feature-x" }
+			: { ok: true, moved: ["main"], err: "" };
+	// The classifying ls-remote never fails just because one name is absent: main present, feature-x gone.
+	state.probeResult = { ok: true, heads: { main: "after-oid" }, err: "" };
+	state.behindCountResult = 2;
+	configureRemoteCheckPolicyDeps(deps);
+
+	await checkProject("p1");
+
+	const states = remoteStateFor("p1");
+	const main = states.find((s) => s.ref === "origin/main");
+	const feature = states.find((s) => s.ref === "origin/feature-x");
+	expect(main?.dormant).toBeUndefined();
+	expect(main?.behind).toBe(2);
+	expect(feature?.dormant).toBe("upstream-gone");
+	expect(feature?.behind).toBeNull();
+
+	// The call sequence proves isolation, not just the outcome: one failed batch fetch (both names), one
+	// classifying probe (both names), one retry fetch naming ONLY the survivor.
+	expect(calls.fetch).toHaveLength(2);
+	expect(calls.fetch[0]?.refs.sort()).toEqual(["feature-x", "main"]);
+	expect(calls.fetch[1]?.refs).toEqual(["main"]);
+	expect(calls.probe).toHaveLength(1);
+	expect(calls.probe[0]?.refs.sort()).toEqual(["feature-x", "main"]);
+});
+
+test("fetch mode: if the classifying probe ALSO fails, every ref is marked failing — never guessed gone", async () => {
+	saveProjects([project("p1")]);
+	saveWorkspaces([workspace("w1", "p1", "origin/main"), workspace("w2", "p1", "origin/feature-x")]);
+	noteRemoteTrusted("p1", "origin");
+	configureRemoteChecks({ ...DEFAULT_CONFIG, gitRemoteCheck: "fetch" });
+	const { deps, calls, state } = makeFakes();
+	state.fetchResult = { ok: false, moved: [], err: "fatal: unable to access remote" };
+	// A genuinely unreachable remote: the classifying ls-remote fails too, not just the fetch.
+	state.probeResult = { ok: false, heads: {}, err: "fatal: unable to access remote" };
+	configureRemoteCheckPolicyDeps(deps);
+
+	await checkProject("p1");
+
+	for (const s of remoteStateFor("p1")) expect(s.dormant).toBe("failing");
+	expect(calls.fetch).toHaveLength(1); // batch attempt only — a failed classify rules out a retry
+	expect(calls.probe).toHaveLength(1); // the classifying attempt
+});
+
+test("fetch mode: when every name in the batch turns out gone, no survivors retry is attempted", async () => {
+	saveProjects([project("p1")]);
+	saveWorkspaces([workspace("w1", "p1", "origin/main")]);
+	noteRemoteTrusted("p1", "origin");
+	configureRemoteChecks({ ...DEFAULT_CONFIG, gitRemoteCheck: "fetch" });
+	const { deps, calls, state } = makeFakes();
+	state.fetchResult = { ok: false, moved: [], err: "fatal: couldn't find remote ref main" };
+	state.probeResult = { ok: true, heads: {}, err: "" }; // "main" absent from the classifying probe too
+	configureRemoteCheckPolicyDeps(deps);
+
+	await checkProject("p1");
+
+	expect(remoteStateFor("p1")[0]?.dormant).toBe("upstream-gone");
+	expect(calls.fetch).toHaveLength(1); // batch attempt only — no survivors left to retry
+	expect(calls.probe).toHaveLength(1);
+});
+
+// ── dormancy precedence: upstream-gone ────────────────────────────────────
+
+test("dormancy precedence: disabled beats a sticky upstream-gone", async () => {
+	saveProjects([project("p1")]);
+	saveWorkspaces([workspace("w1", "p1", "origin/main")]);
+	noteRemoteTrusted("p1", "origin");
+	const { deps, state } = makeFakes();
+	state.probeResult = { ok: true, heads: {}, err: "" }; // "main" absent — discovered gone
+	configureRemoteCheckPolicyDeps(deps);
+
+	await checkProject("p1");
+	expect(remoteStateFor("p1")[0]?.dormant).toBe("upstream-gone");
+
+	configureRemoteChecks({ ...DEFAULT_CONFIG, gitRemoteCheck: "off" });
+	await checkProject("p1");
+
+	expect(remoteStateFor("p1")[0]?.dormant).toBe("disabled");
+});
+
+test("dormancy precedence: a sticky upstream-gone short-circuits the ladder — never re-consulted even once agent-present would otherwise apply", async () => {
+	saveProjects([project("p1")]);
+	saveWorkspaces([workspace("w1", "p1", "origin/main")]);
+	noteRemoteTrusted("p1", "origin");
+	const { deps, calls, state } = makeFakes();
+	state.probeResult = { ok: true, heads: {}, err: "" }; // "main" absent — discovered gone
+	configureRemoteCheckPolicyDeps(deps);
+
+	await checkProject("p1");
+	expect(remoteStateFor("p1")[0]?.dormant).toBe("upstream-gone");
+	expect(calls.probe).toHaveLength(1);
+	// Round 1 legitimately consults remoteUrlKind once (ladderReason's ssh check runs before the probe
+	// discovers the ref is gone) — snapshot that count so round 2's "no NEW call" check isn't fooled by it.
+	const remoteUrlKindCallsAfterRound1 = calls.remoteUrlKind.length;
+
+	// If the ladder were re-consulted from scratch, this would now report ssh-agent-present instead.
+	state.remoteUrlKindResult = "ssh";
+	state.sshAgentPresentResult = true;
+	await checkProject("p1");
+
+	expect(remoteStateFor("p1")[0]?.dormant).toBe("upstream-gone"); // unchanged
+	expect(calls.remoteUrlKind).toHaveLength(remoteUrlKindCallsAfterRound1); // no NEW call — short-circuited
+	expect(calls.probe).toHaveLength(1); // no new network call either — the pair stays fully excluded
+});
+
+// ── pairRecords pruning ────────────────────────────────────────────────────
+
+test("a ref no longer derived is forgotten, so re-deriving it later starts fresh rather than resuming a stale backoff", async () => {
+	saveProjects([project("p1")]);
+	saveWorkspaces([workspace("w1", "p1", "origin/main")]);
+	noteRemoteTrusted("p1", "origin");
+	const { deps, state } = makeFakes();
+	state.probeResult = { ok: false, heads: {}, err: "unreachable" };
+	configureRemoteCheckPolicyDeps(deps);
+
+	await checkProject("p1"); // origin/main fails, backed off for BACKOFF_BASE_MS (well into the future)
+	expect(remoteStateFor("p1")[0]?.dormant).toBe("failing");
+
+	// The workspace re-points away from origin/main entirely — its old record must not linger.
+	saveWorkspaces([workspace("w1", "p1", "origin/other")]);
+	state.probeResult = { ok: true, heads: { other: "same" }, err: "" };
+	state.localTrackingOid["origin/other"] = "same";
+	await checkProject("p1"); // prunes origin/main's record; origin/other succeeds cleanly
+
+	// Re-point back to origin/main, still well within what would have been the old backoff window (the
+	// clock never advanced).
+	saveWorkspaces([workspace("w1", "p1", "origin/main")]);
+	state.probeResult = { ok: true, heads: { main: "same-main" }, err: "" };
+	state.localTrackingOid["origin/main"] = "same-main";
+	await checkProject("p1");
+
+	// If the old PairRecord had survived, its nextRetryAt (still in the future) would have gated this
+	// exact call and reported dormant: "failing" again despite the healthy probe result just given.
+	const [s] = remoteStateFor("p1");
+	expect(s?.dormant).toBeUndefined();
+	expect(s?.behind).toBeNull();
 });
 
 // ── publisher ─────────────────────────────────────────────────────────────
