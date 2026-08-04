@@ -24,7 +24,7 @@ import type {
 	ReviewCommentStatus,
 	ReviewSnapshot,
 } from "@thinkrail/contracts";
-import { diffBaseRef, readBlobAt, resolveCommitOid, resolveDiffRange } from "../git";
+import { type DiffSide, diffBaseRef, readBlobAt, resolveCommitOid, resolveDiffRange } from "../git";
 import { dataDir } from "../persistence";
 import { getWorkspace } from "../workspaces";
 import { buildTextQuote, hashContent, lineRangeOf, reanchor, textQuoteOf } from "./anchoring";
@@ -166,11 +166,16 @@ function readWorktreeFile(worktreePath: string, path: string): string | null {
 	}
 }
 
+/** The ref a `DiffSide` names, when it names one (`kind: "ref"`) — `null` for index/worktree/empty. */
+function sideRef(side: DiffSide): string | null {
+	return side.kind === "ref" ? side.ref : null;
+}
+
 /** Build a fresh open review against the workspace's current branch range; persistence is the caller's. */
 function freshSnapshot(workspaceId: string): ReviewSnapshot {
 	const ws = getWorkspace(workspaceId);
 	// The review is made against the ORIGINAL SIDE OF THE DIFF the user is reviewing, pinned to a full
-	// oid. That is the branch range's `originalRef` — the **fork point** (`merge-base` of the diff target
+	// oid. That is the branch range's original side — the **fork point** (`merge-base` of the diff target
 	// and `HEAD`) — not the target's tip: once the target advances past a diverged workspace, the tip
 	// carries upstream commits the review never displayed. Pinned because the target is re-pointable
 	// and its branch can move, while what this review *is* must not. Deliberately the BRANCH range,
@@ -178,7 +183,7 @@ function freshSnapshot(workspaceId: string): ReviewSnapshot {
 	// comment made in another scope still quotes its own `anchor.baseRef`). Degrades to the raw ref if
 	// it wouldn't resolve — the base's consumers cope with a raw ref, and losing the whole review
 	// surface over an unreadable base would cost far more than it saves.
-	const ref = resolveDiffRange(ws).originalRef ?? diffBaseRef(ws);
+	const ref = sideRef(resolveDiffRange(ws).original) ?? diffBaseRef(ws);
 	const base = resolveCommitOid(ws.worktreePath, ref);
 	return {
 		review: {
@@ -300,10 +305,10 @@ export function addComment(input: AddCommentInput): ReviewComment {
 	if (anchor) {
 		const ws = getWorkspace(input.workspaceId);
 		if (anchor.side === "base") {
-			const originalRef = resolveDiffRange(ws, input.scope).originalRef;
+			const originalRef = sideRef(resolveDiffRange(ws, input.scope).original);
 			if (!originalRef)
 				throw new Error("This diff has no base side to comment on (nothing precedes the change).");
-			// PIN IT. A scope's `originalRef` can be symbolic — `uncommitted` is the literal `HEAD`, a
+			// PIN IT. A scope's original ref can be symbolic — `uncommitted` is the literal `HEAD`, a
 			// `branch` scope degrades to the raw base ref when `merge-base` fails — and a base anchor's
 			// whole premise is that the blob it quotes never moves. Stored as-is, the user's next commit
 			// re-points `HEAD` and the package reads today's content at yesterday's line numbers: the agent

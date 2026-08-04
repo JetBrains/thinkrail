@@ -48,9 +48,8 @@ export function diffTabId(workspaceId: string, scope: GitDiffScope, path: string
 export function diffTabName(scope: GitDiffScope, path: string): string {
 	const { base } = splitPath(path);
 	if (scope.kind === "branch") return base;
-	if (scope.kind === "uncommitted") return `${base} · uncommitted`;
-	// A pinned tab is "the file vs the commit the review comment quoted" — same short-oid tag form.
-	return `${base} · ${(scope.kind === "pinned" ? scope.baseRef : scope.sha).slice(0, 7)}`;
+	if (scope.kind === "commit") return `${base} · ${scope.sha.slice(0, 7)}`;
+	return `${base} · ${scopeLabel(scope).toLowerCase()}`;
 }
 
 /**
@@ -61,6 +60,8 @@ export function diffTabName(scope: GitDiffScope, path: string): string {
  */
 export function scopeLabel(scope: GitDiffScope, commits: readonly GitCommit[] = []): string {
 	if (scope.kind === "branch") return "All changes";
+	if (scope.kind === "working-tree") return "Working tree";
+	if (scope.kind === "staged") return "Staged";
 	if (scope.kind === "uncommitted") return "Uncommitted";
 	if (scope.kind === "pinned") return scope.baseRef.slice(0, 7);
 	const known = commits.find((c) => c.sha === scope.sha);

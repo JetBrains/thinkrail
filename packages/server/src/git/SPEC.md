@@ -22,18 +22,32 @@ ref off the workspace-create critical path.
   args)` (its async twin — `Bun.spawn`, off the event loop, for network-bound ops like `fetch` that must
   not block the host);
   **the scope→range resolver** — `resolveDiffRange(ws, scope?)` → `DiffRange` — **the one definition of what
-  a `GitDiffScope` means** (`branch`: `git diff <merge-base(base, HEAD)>` + untracked, sides = **fork
-  point** ↔ worktree — what the workspace changed *since diverging*, so a base that advanced underneath it
-  (a fetch moving `origin/main`, upstream work landing) never surfaces as phantom changes; while the base
-  hasn't diverged the merge-base *is* its tip, and a failed `merge-base` (missing base, unrelated
-  histories, unborn `HEAD`) falls back to the raw ref, keeping the old error surfaces — and keeping the
-  file list ancestry-consistent with `listCommits`' `base..HEAD`;
-  `uncommitted`: `git diff HEAD` + untracked, sides = `HEAD` ↔ worktree; `commit`: `git diff <sha>^ <sha>`, no
-  untracked, both sides from history — a **root** commit degrades to `git show --format=` with an empty
-  original, the same add-style degradation an absent path already gets; `pinned`: `git diff <oid>` +
-  untracked, sides = the given immutable commit ↔ worktree — the review sidebar's base-side
-  navigation, validated exactly like a `commit` sha, same `UNKNOWN_COMMIT` rejection). Both reads build their argv from it
-  through `changedFileArgs(range, mode)`, so the file list and a file's two sides can never disagree on the
+  a `GitDiffScope` means**:
+
+  | scope | list command | untracked | original | modified |
+  |---|---|---|---|---|
+  | `branch` | `diff <merge-base>` | yes | merge-base ref | worktree |
+  | `working-tree` | `diff` (no revs) | yes | index | worktree |
+  | `staged` | `diff --cached HEAD` | no | `HEAD` | index |
+  | `uncommitted` *(transitional)* | `diff HEAD` | yes | `HEAD` | worktree |
+  | `pinned` | `diff <oid>` | yes | pinned commit | worktree |
+  | `commit` | `diff <sha>^ <sha>` / `show` for a root | no | parent / empty | `sha` |
+
+  `branch`'s merge-base ref is the **fork point** of the diff base and `HEAD` — what the workspace changed
+  *since diverging*, so a base that advanced underneath it (a fetch moving `origin/main`, upstream work
+  landing) never surfaces as phantom changes; while the base hasn't diverged the merge-base *is* its tip,
+  and a failed `merge-base` (missing base, unrelated histories, unborn `HEAD`) falls back to the raw ref,
+  keeping the old error surfaces — and keeping the file list ancestry-consistent with `listCommits`'
+  `base..HEAD`. `working-tree` and `staged` are what `uncommitted` used to conflate, pulled apart now that
+  the index is a real `DiffSide`: `working-tree` is what you have not staged yet (index vs worktree, plus
+  untracked — nothing staged belongs here), `staged` is what a commit would record right now (`HEAD` vs the
+  index, no untracked — untracked is by definition not staged). `uncommitted` stays only until the panel
+  migration finishes (removed last, once nothing depends on it). `pinned` is the review sidebar's base-side
+  navigation — one IMMUTABLE commit (validated exactly like a `commit` scope's sha, same `UNKNOWN_COMMIT`
+  rejection) against the worktree, untracked included: the anchor's own pinned oid, never whatever
+  `branch`/`uncommitted` resolves to today. A **root** `commit` degrades to `git show
+  --format=` with an empty original, the same add-style degradation an absent path already gets. Both reads
+  build their argv from it through `changedFileArgs(range, mode)`, so the file list and a file's two sides can never disagree on the
   range — and that argv brackets its revs on **both** sides: **`--end-of-options`** ahead of them (no ref can be
   re-parsed as a git option) and a trailing **`--`** after them (a rev that also names a path on disk — a branch
   called `docs` — is read as a rev instead of failing the command as an "ambiguous argument"). A **failed**
@@ -59,10 +73,9 @@ ref off the workspace-create critical path.
   module's `diffStats` reaches it *through* the resolver — see Get right);
   **`resolveCommitOid(worktreePath, ref)`** — the full commit oid a ref names right now, or `null`. The one
   place a symbolic ref is FROZEN, and every caller that must still mean the same thing later goes through
-  it: the review's `baseSha`, a base-side comment's `baseRef`. A scope's
-  `originalRef` is not already immutable (`uncommitted` is the literal `HEAD`; a `branch` scope degrades to
-  the raw base ref when `merge-base` fails), so storing one verbatim lets the content move under whoever
-  stored it;
+  it: the review's `baseSha`, a base-side comment's `baseRef`. A scope's original side is not already
+  immutable (`uncommitted`'s is the literal `HEAD`; a `branch` scope's degrades to the raw base ref when
+  `merge-base` fails), so storing one verbatim lets the content move under whoever stored it;
   `gitStatus(workspaceId, scope?)` — changed files over the range plus untracked (only when the range ends at
   the worktree), each carrying per-file `added`/`removed` line counts (`git diff --numstat`, its rename-mangled paths resolved
   via `numstatPath` to match `--name-status`; binary rows dropped; untracked files count their whole
