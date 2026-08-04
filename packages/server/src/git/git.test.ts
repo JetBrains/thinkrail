@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	statSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Workspace } from "@thinkrail/contracts";
@@ -13,6 +21,7 @@ import {
 	prefetchBranch,
 	tryCurrentBranch,
 } from "./git";
+import { gitArgv } from "./gitExec";
 import { isSafeRef } from "./refs";
 
 let dataDir: string;
@@ -698,4 +707,36 @@ test("a failed diff throws — a broken read is never reported as a clean worktr
 	seedWorkspace({ diffBase: "no-such-branch" });
 	writeFileSync(join(repo, "dirty.txt"), "dirty\n");
 	expect(() => gitStatus("w1")).toThrow(/Could not read the changed files/);
+});
+
+test("gitArgv puts --no-optional-locks before the subcommand, and opting out omits it", () => {
+	// The flag is git-level, not subcommand-level: after the subcommand git rejects it. Asserting the exact
+	// argv pins both its presence and its position — a behavioural assertion on `.ok` would pass whether or
+	// not the flag were ever added.
+	expect(gitArgv("/w", ["status", "--porcelain"])).toEqual([
+		"git",
+		"-C",
+		"/w",
+		"--no-optional-locks",
+		"status",
+		"--porcelain",
+	]);
+	expect(gitArgv("/w", ["status"], { optionalLocks: true })).toEqual(["git", "-C", "/w", "status"]);
+});
+
+test("a status read with --no-optional-locks does not rewrite the index", () => {
+	// The flag's actual effect: `git status` normally refreshes the index as a side effect, taking
+	// `.git/index.lock` to do it. That write is what contends with a pi agent's concurrent git.
+	seedWorkspace();
+	const indexPath = join(repo, ".git", "index");
+
+	// Make the index stale so a refresh would have something to write: touch a tracked file's mtime
+	// without changing its content.
+	const readme = join(repo, "README.md");
+	const content = readFileSync(readme);
+	writeFileSync(readme, content);
+
+	const before = statSync(indexPath).mtimeMs;
+	expect(gitStatus("w1", { kind: "working-tree" })).toBeDefined();
+	expect(statSync(indexPath).mtimeMs).toBe(before);
 });
