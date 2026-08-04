@@ -15,10 +15,10 @@ import {
 	behindCount,
 	diffBaseRef,
 	fetchRemoteRefs,
-	git,
 	probeRemoteRefs,
 	remoteUrlKind,
 	sshAgentPresent,
+	trackingRefOid,
 } from "../git";
 import { isRemoteTrusted, loadProjects, loadWorkspaces } from "../persistence";
 import type { CheckProjectFn } from "./remotes";
@@ -88,6 +88,23 @@ function recordFor(projectId: string, ref: string): PairRecord {
 	return record;
 }
 
+/**
+ * Drops any `PairRecord` for this project whose ref is no longer in `currentRefs` — a workspace re-pointed
+ * to a different base (or deleted) otherwise leaves its old ref's record in memory for the process's
+ * entire remaining lifetime. Called once per `checkProject` round, before anything else, so it runs
+ * regardless of mode/dormancy (a pruned ref that later reappears — e.g. a workspace re-pointed back —
+ * starts from a fresh record, which is correct: nothing about its old state is still true).
+ */
+function pruneStaleRecords(projectId: string, currentRefs: string[]): void {
+	const byRef = pairRecords.get(projectId);
+	if (!byRef) return;
+	const keep = new Set(currentRefs);
+	for (const ref of byRef.keys()) {
+		if (!keep.has(ref)) byRef.delete(ref);
+	}
+	if (byRef.size === 0) pairRecords.delete(projectId);
+}
+
 // ── backoff schedule ───────────────────────────────────────────────────────
 
 /**
@@ -114,32 +131,13 @@ export const REMOTE_CHECK_TIMEOUT_MS = 15_000;
 
 // ── injected git-function + clock seam (production defaults; test-only override below) ──────────────────
 
-function defaultLocalTrackingOid(
-	repoPath: string,
-	remote: string,
-	name: string,
-): string | undefined {
-	// The same "read this tracking ref's oid" primitive `git/remoteRefs.ts`'s own private `trackingRefOid`
-	// is built on, reimplemented here on the already-public sync `git` runner rather than exporting that
-	// private helper — see SPEC.md's "Design notes" for why this belongs to the POLICY half's own
-	// comparison basis, not a widened `git` module surface.
-	const result = git(repoPath, [
-		"rev-parse",
-		"--verify",
-		"--quiet",
-		"--end-of-options",
-		`refs/remotes/${remote}/${name}`,
-	]);
-	return result.ok && result.out !== "" ? result.out : undefined;
-}
-
 export interface RemoteCheckPolicyDeps {
 	probeRemoteRefs?: typeof probeRemoteRefs;
 	fetchRemoteRefs?: typeof fetchRemoteRefs;
 	behindCount?: typeof behindCount;
 	remoteUrlKind?: typeof remoteUrlKind;
 	sshAgentPresent?: typeof sshAgentPresent;
-	localTrackingOid?: (repoPath: string, remote: string, name: string) => string | undefined;
+	localTrackingOid?: typeof trackingRefOid;
 	now?: () => number;
 }
 
@@ -148,8 +146,7 @@ let fetchRemoteRefsFn: typeof fetchRemoteRefs = fetchRemoteRefs;
 let behindCountFn: typeof behindCount = behindCount;
 let remoteUrlKindFn: typeof remoteUrlKind = remoteUrlKind;
 let sshAgentPresentFn: typeof sshAgentPresent = sshAgentPresent;
-let localTrackingOidFn: (repoPath: string, remote: string, name: string) => string | undefined =
-	defaultLocalTrackingOid;
+let localTrackingOidFn: typeof trackingRefOid = trackingRefOid;
 let nowFn: () => number = Date.now;
 
 /**
@@ -165,15 +162,21 @@ export function configureRemoteCheckPolicyDeps(deps: RemoteCheckPolicyDeps = {})
 	behindCountFn = deps.behindCount ?? behindCount;
 	remoteUrlKindFn = deps.remoteUrlKind ?? remoteUrlKind;
 	sshAgentPresentFn = deps.sshAgentPresent ?? sshAgentPresent;
-	localTrackingOidFn = deps.localTrackingOid ?? defaultLocalTrackingOid;
+	localTrackingOidFn = deps.localTrackingOid ?? trackingRefOid;
 	nowFn = deps.now ?? Date.now;
 	pairRecords.clear();
 }
 
 // ── the credential ladder (fixed precedence — see SPEC.md) ───────────────
 
-/** Rungs 2-4 of the ladder (rung 1, `"disabled"`, is checked once for the whole project before this is
- * ever called — see {@link checkProject}). `null` means eligible: add this ref to the network batch. */
+/**
+ * Rungs 2-5 of the ladder (rung 1, `"disabled"`, is checked once for the whole project before this is ever
+ * called — see {@link checkProject}). `"upstream-gone"` comes first here: once a prior completed check
+ * found this ref absent from the remote, that is a durable fact about the remote itself (not a credential
+ * or local-policy question), so it stays excluded from every future batch without re-consulting trust or
+ * ssh-agent state at all — see SPEC.md's "Design notes" for the sticky-until-restart tradeoff this implies.
+ * `null` means eligible: add this ref to the network batch.
+ */
 function ladderReason(
 	projectId: string,
 	remote: string,
@@ -181,6 +184,7 @@ function ladderReason(
 	record: PairRecord,
 	now: number,
 ): RemoteDormantReason | null {
+	if (record.dormant === "upstream-gone") return "upstream-gone";
 	if (!isRemoteTrusted(projectId, remote)) return "never-authenticated";
 	if (remoteUrlKindFn(repoPath, remote) === "ssh" && sshAgentPresentFn())
 		return "ssh-agent-present";
@@ -201,16 +205,22 @@ function markFailure(projectId: string, names: string[], now: number): void {
 	}
 }
 
+/**
+ * Records a check that actually completed — successfully finding either a `behind` value or (via
+ * `dormant: "upstream-gone"`) that the ref no longer exists upstream. Both are real, informative outcomes,
+ * unlike `markFailure`'s "the attempt itself didn't complete" — so both clear any live backoff.
+ */
 function markSuccess(
 	projectId: string,
 	name: string,
 	behind: number | "unknown" | null,
 	now: number,
+	dormant: RemoteDormantReason | null = null,
 ): void {
 	const record = recordFor(projectId, `${REMOTE_NAME}/${name}`);
 	record.behind = behind;
 	record.lastCheckedAt = new Date(now).toISOString();
-	record.dormant = null;
+	record.dormant = dormant;
 	record.failureCount = 0;
 	record.nextRetryAt = null;
 }
@@ -228,33 +238,34 @@ async function applyProbe(
 	}
 	for (const name of names) {
 		const remoteHead = result.heads[name];
-		// A ref absent from the result (deleted upstream) has no "moved" signal to report — see SPEC.md.
-		const localOid =
-			remoteHead === undefined ? undefined : localTrackingOidFn(repoPath, REMOTE_NAME, name);
-		const behind = remoteHead === undefined || remoteHead === localOid ? null : "unknown";
-		markSuccess(projectId, name, behind, now);
+		if (remoteHead === undefined) {
+			// Absent from an otherwise-successful ls-remote: the upstream branch no longer exists. This is a
+			// real, completed finding — never collapsed into a bare `behind: null` with no reason, which a
+			// consumer would read as "up to date" (see SPEC.md / RemoteDormantReason's "upstream-gone").
+			markSuccess(projectId, name, null, now, "upstream-gone");
+			continue;
+		}
+		const localOid = localTrackingOidFn(repoPath, REMOTE_NAME, name);
+		markSuccess(projectId, name, remoteHead === localOid ? null : "unknown", now);
 	}
 }
 
-async function applyFetch(
+/**
+ * Turns a successful `fetchRemoteRefs` result (`moved`, plus the tracking-ref oids read just before the
+ * fetch) into `RemoteState.behind` for exactly the given `names` — shared between the batch-succeeded path
+ * and the isolated-survivors retry path in {@link applyFetch}, since both end up with the same shape of
+ * result to interpret, just for a different subset of names.
+ */
+function applyFetchOutcome(
 	projectId: string,
 	repoPath: string,
 	names: string[],
+	moved: string[],
+	before: Map<string, string | undefined>,
 	now: number,
-): Promise<void> {
-	// Snapshotted BEFORE the fetch: the fetch itself moves the local tracking ref, so this is the only
-	// chance to read what it was "before" — see SPEC.md's "Design notes" for why this, not an arbitrary
-	// workspace's HEAD, is the count's other endpoint.
-	const before = new Map(
-		names.map((name) => [name, localTrackingOidFn(repoPath, REMOTE_NAME, name)]),
-	);
-	const result = await fetchRemoteRefsFn(repoPath, REMOTE_NAME, names, REMOTE_CHECK_TIMEOUT_MS);
-	if (!result.ok) {
-		markFailure(projectId, names, now);
-		return;
-	}
+): void {
 	for (const name of names) {
-		if (!result.moved.includes(name)) {
+		if (!moved.includes(name)) {
 			markSuccess(projectId, name, null, now);
 			continue;
 		}
@@ -267,6 +278,51 @@ async function applyFetch(
 		const count = behindCountFn(repoPath, beforeOid, `refs/remotes/${REMOTE_NAME}/${name}`);
 		markSuccess(projectId, name, count === null ? "unknown" : count, now);
 	}
+}
+
+async function applyFetch(
+	projectId: string,
+	repoPath: string,
+	names: string[],
+	now: number,
+): Promise<void> {
+	// Snapshotted BEFORE the fetch: the fetch itself moves the local tracking ref, so this is the only
+	// chance to read what it was "before" — see SPEC.md's "Design notes" for why this, not an arbitrary
+	// workspace's HEAD, is the count's other endpoint. Shared across the batch attempt AND (on failure) the
+	// isolated survivors retry below, since both describe the same round's "before" state.
+	const before = new Map(
+		names.map((name) => [name, localTrackingOidFn(repoPath, REMOTE_NAME, name)]),
+	);
+
+	const result = await fetchRemoteRefsFn(repoPath, REMOTE_NAME, names, REMOTE_CHECK_TIMEOUT_MS);
+	if (result.ok) {
+		applyFetchOutcome(projectId, repoPath, names, result.moved, before, now);
+		return;
+	}
+
+	// `fetchRemoteRefsArgv` names every ref explicitly, so ONE deleted upstream branch makes the WHOLE `git
+	// fetch` invocation exit non-zero (verified empirically — see SPEC.md), even when every other named ref
+	// is perfectly fetchable. Isolate before blaming every ref: a batched `ls-remote` never fails just
+	// because one requested name is absent (see `applyProbe`'s own absent-name handling above), so it can
+	// safely tell us which names still exist without risking the same poisoning.
+	const classify = await probeRemoteRefsFn(repoPath, REMOTE_NAME, names, REMOTE_CHECK_TIMEOUT_MS);
+	if (!classify.ok) {
+		// The remote itself is unreachable — a genuine transient/network failure, not any one ref's
+		// problem. Every ref stays (or becomes) "failing", never "gone" on a guess.
+		markFailure(projectId, names, now);
+		return;
+	}
+	const gone = names.filter((name) => classify.heads[name] === undefined);
+	const survivors = names.filter((name) => classify.heads[name] !== undefined);
+	for (const name of gone) markSuccess(projectId, name, null, now, "upstream-gone");
+	if (survivors.length === 0) return;
+
+	const retry = await fetchRemoteRefsFn(repoPath, REMOTE_NAME, survivors, REMOTE_CHECK_TIMEOUT_MS);
+	if (!retry.ok) {
+		markFailure(projectId, survivors, now);
+		return;
+	}
+	applyFetchOutcome(projectId, repoPath, survivors, retry.moved, before, now);
 }
 
 // ── the real CheckProjectFn ────────────────────────────────────────────────
@@ -319,6 +375,7 @@ export function remoteStateFor(projectId: string): RemoteState[] {
  */
 export const checkProject: CheckProjectFn = async (projectId) => {
 	const refs = refsForProject(projectId);
+	pruneStaleRecords(projectId, refs);
 	if (refs.length === 0) {
 		publishSnapshot(projectId, refs);
 		return;

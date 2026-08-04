@@ -261,17 +261,21 @@ export interface GitCommit {
 /**
  * Why a `(project, ref)` pair is not being checked automatically — reported explicitly rather than left as
  * silent idleness, since a background feature that just never runs (with no visible reason anywhere)
- * is undiagnosable. `"never-authenticated"` = rung 2 of the credential ladder hasn't been satisfied yet (no
- * user-initiated op has proven credentials for this remote — see the persistence module's `remotes.json`);
- * `"ssh-agent-present"` = rung 3 — an SSH remote is skipped while an external ssh-agent might prompt outside
- * git's own no-prompt env; `"disabled"` = `AppConfig.gitRemoteCheck` is `"off"`; `"failing"` = repeated
- * check failures have backed off past the point of retrying automatically (never surfaced as a toast per
- * tick — see the top-level plan's "never nag" rule).
+ * is undiagnosable. `"disabled"` = `AppConfig.gitRemoteCheck` is `"off"`; `"upstream-gone"` = the last
+ * completed check found this ref no longer exists on the remote (e.g. a PR branch deleted on merge) — a
+ * fact about the remote, not a credential/local-policy gate, so it is checked right after `"disabled"` and
+ * ahead of the credential ladder proper; `"never-authenticated"` = rung 2 of the credential ladder hasn't
+ * been satisfied yet (no user-initiated op has proven credentials for this remote — see the persistence
+ * module's `remotes.json`); `"ssh-agent-present"` = rung 3 — an SSH remote is skipped while an external
+ * ssh-agent might prompt outside git's own no-prompt env; `"failing"` = repeated check failures have backed
+ * off past the point of retrying automatically (never surfaced as a toast per tick — see the top-level
+ * plan's "never nag" rule).
  */
 export type RemoteDormantReason =
+	| "disabled"
+	| "upstream-gone"
 	| "never-authenticated"
 	| "ssh-agent-present"
-	| "disabled"
 	| "failing";
 
 /**
@@ -285,7 +289,9 @@ export type RemoteDormantReason =
  *   local (`AppConfig.gitRemoteCheck === "fetch"`, or a one-off user-initiated `git.fetchNow`).
  * - `"unknown"` — probe mode, and the remote differs. The UI renders a bare `↓` — honest about knowing
  *   *that* it differs without claiming a count it does not have.
- * - `null` — up to date (probe or fetch mode agree here: nothing to report).
+ * - `null` — up to date (probe or fetch mode agree here: nothing to report), OR the ref no longer exists on
+ *   the remote (paired with `dormant: "upstream-gone"` in that case — see below; never bare `null` with no
+ *   reason, which would read as "up to date" to a UI that renders no dormant reason at all).
  *
  * Collapsing `"unknown"` into `0` or into `null` would make the UI lie — either "nothing changed" (false),
  * or "changed by nothing" (also false, and worse: it would then be indistinguishable from a real zero-behind

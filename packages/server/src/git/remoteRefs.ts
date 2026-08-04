@@ -60,8 +60,15 @@ export async function probeRemoteRefs(
 	return { ok: true, heads, err: "" };
 }
 
-/** `refs/remotes/<remote>/<name>`, resolved and existence-checked. See {@link fetchRemoteRefs}'s docstring for why fully qualified. */
-function trackingRefOid(repoPath: string, remote: string, name: string): string | undefined {
+/**
+ * `refs/remotes/<remote>/<name>`, resolved and existence-checked. See {@link fetchRemoteRefs}'s docstring
+ * for why fully qualified. Exported (not just used internally by {@link fetchRemoteRefs}) because the
+ * `remotes` module's policy half needs the exact same "what does this repo currently believe this
+ * tracking ref points at" primitive as the comparison basis for `RemoteState.behind` in BOTH probe and
+ * fetch mode — reimplementing it a third time there would duplicate a lookup that already has zero
+ * remotes-specific logic in it.
+ */
+export function trackingRefOid(repoPath: string, remote: string, name: string): string | undefined {
 	const result = git(repoPath, [
 		"rev-parse",
 		"--verify",
