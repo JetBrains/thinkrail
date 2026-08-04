@@ -103,6 +103,35 @@ function conflictedMerge(file: string): string {
 	return file;
 }
 
+/**
+ * Put the repo into a real modify/delete conflict on `file`: our side deletes it, theirs modifies it, so
+ * the merge fails with `CONFLICT (modify/delete)` and the index has stages 1 (base) and 3 (theirs) but no
+ * stage 2 ("ours") — verified empirically: `git show :2:<path>` itself fails with "is in the index, but not
+ * at stage 2" (a real git message, not a guess). Leaves the repo checked out on `delete-ours` with the
+ * failed merge still in progress, and seeds workspace `w1` on it. Returns `file`.
+ */
+function conflictedModifyDelete(file: string): string {
+	writeFileSync(join(repo, file), "base\n");
+	git(repo, "add", "-A");
+	git(repo, "commit", "-m", `${file}: base`);
+	git(repo, "switch", "-c", "delete-ours");
+	git(repo, "rm", file);
+	git(repo, "commit", "-m", "we delete it");
+	git(repo, "switch", "main");
+	git(repo, "switch", "-c", "modify-theirs");
+	writeFileSync(join(repo, file), "modified\n");
+	git(repo, "commit", "-am", "they modify it");
+	git(repo, "switch", "delete-ours");
+	// The merge is EXPECTED to fail (that's the whole point of the fixture) — the throwing `git()` helper
+	// would blow up on it, so spawn directly and ignore the exit code.
+	Bun.spawnSync(["git", "-C", repo, "merge", "modify-theirs"], {
+		stdout: "ignore",
+		stderr: "ignore",
+	});
+	seedWorkspace({ branch: "delete-ours" });
+	return file;
+}
+
 test("a conflicted (unmerged) path is listed exactly once in working-tree scope", () => {
 	// Regression pin: `git diff --name-status` (the working-tree list command) prints TWO rows for one
 	// unmerged path (`U` then `M`) — without a dedupe, the Changes list renders the file twice and
@@ -133,6 +162,28 @@ test("reading a conflicted path never spams console.warn", () => {
 	try {
 		gitStatus("w1", { kind: "working-tree" });
 		gitDiffFile("w1", file, { kind: "working-tree" });
+	} finally {
+		console.warn = realWarn;
+	}
+	expect(warnings).toEqual([]);
+});
+
+test("a modify/delete conflict (no stage 2) reads as an honest empty index side, with no console.warn", () => {
+	// Regression pin: `showIndexBlob`'s stage-2 retry can itself fail — "is in the index, but not at stage
+	// 2" — for a path our side deleted. Before `isExpectedAbsence`'s stage clause was generalised to `\d`,
+	// that retry failure didn't match the (stage-0-only) regex, so it fell through to `console.warn` even
+	// though an empty side here is the honest answer, not a broken read.
+	const file = conflictedModifyDelete("f.txt");
+	const warnings: string[] = [];
+	const realWarn = console.warn;
+	console.warn = (...args: unknown[]) => {
+		warnings.push(args.join(" "));
+	};
+	try {
+		const workingTree = gitDiffFile("w1", file, { kind: "working-tree" });
+		const staged = gitDiffFile("w1", file, { kind: "staged" });
+		expect(workingTree.original).toBe("");
+		expect(staged.modified).toBe("");
 	} finally {
 		console.warn = realWarn;
 	}
