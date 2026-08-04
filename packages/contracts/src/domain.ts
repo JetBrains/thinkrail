@@ -86,7 +86,7 @@ export interface Workspace {
 	 * re-pointed it (`workspace.setDiffBase`). Absent = measure against `baseBranch`. Two fields because
 	 * the two meanings diverge the moment a target is re-pointed: creation provenance never moves, the
 	 * review target does. Every *read* resolves `diffBase ?? baseBranch` server-side, in one place (the git
-	 * module's `diffBaseRef`); a client only mirrors the resolution to label its target-branch picker.
+	 * module's `diffBaseRef`); a client only mirrors the resolution to label its comparison target.
 	 */
 	diffBase?: string;
 	/**
@@ -145,8 +145,9 @@ export interface EditorInfo {
  * An **empty, non-truncated, skill-neutral** frame (`paths: []`, `truncated: false`,
  * `skillChange: "none"`) is the pathless variant: re-read the workspace without claiming a file changed.
  * The host emits it when worktree git metadata moves (a `commit`/`reset`/`switch` in a terminal), which
- * invalidates git-derived reads (`git.status`, an `uncommitted`-scope diff) while leaving the working tree
- * untouched. Same contract: re-read, don't patch.
+ * invalidates git-derived reads (`git.status`, an open `working-tree`- or `staged`-scope diff) while
+ * leaving the working tree untouched. Same contract: re-read, don't patch. Path-driven consumers see no
+ * paths and correctly do nothing extra.
  */
 export type WorkspaceSkillChange = "none" | "detected" | "unknown";
 
@@ -279,19 +280,17 @@ export interface GitStatus {
  *   upstream work landing on the base is not this workspace's change and never shows up here.
  * - `working-tree` — the index vs the files on disk (what you have not staged yet), plus untracked files.
  * - `staged` — `HEAD` vs the index (what a commit would record right now).
- * - `uncommitted` — DEPRECATED, removed once the panel offers the two above; `HEAD` vs the worktree.
  * - `commit` — one commit alone (`sha^` vs `sha`; a root commit degrades to an add-style diff).
  * - `pinned` — the worktree vs one IMMUTABLE commit (`baseRef`, a full oid). The review sidebar's
  *   navigation surface for a base-side comment: the anchor pinned the blob it quotes at creation, and
- *   this scope is what reopens exactly that original side later — a `branch`/`uncommitted` scope
- *   re-resolves against the current fork point/`HEAD`, which moves out from under the comment when the
- *   worktree commits or the review target is re-pointed.
+ *   this scope is what reopens exactly that original side later — a `branch`/`working-tree`/`staged`
+ *   scope re-resolves against the current fork point/`HEAD`/index, which moves out from under the
+ *   comment when the worktree commits or the review target is re-pointed.
  */
 export type GitDiffScope =
 	| { kind: "branch" }
 	| { kind: "working-tree" }
 	| { kind: "staged" }
-	| { kind: "uncommitted" }
 	| { kind: "commit"; sha: string }
 	| { kind: "pinned"; baseRef: string };
 

@@ -15,9 +15,10 @@ import { scopeLabel, scopeTitle } from "./changesModel";
 
 /**
  * The Changes header's **scope selector** — what is being diffed: everything on the branch, what is
- * unstaged, what is staged, or a single commit. (The *target branch* that the branch scope measures against
- * is its own header control, the shared `BranchPicker` — a searchable list belongs in a combobox, and a
- * nested submenu closes itself when the menu re-renders as these lazy reads land.)
+ * unstaged, what is staged, or a single commit. (The *comparison target* that the branch scope measures
+ * against has its own header control — `ComparisonTarget`, a live `BranchPicker` only in branch scope, inert
+ * text otherwise — a searchable list belongs in a combobox, and a nested submenu closes itself when the menu
+ * re-renders as these lazy reads land.)
  *
  * Everything but the current scope is loaded **lazily on each open** (never on panel mount): the branch's
  * commits, and whether each half of what is uncommitted — the working tree and the index — has anything in

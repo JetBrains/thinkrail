@@ -308,7 +308,7 @@ export function addComment(input: AddCommentInput): ReviewComment {
 			const originalRef = sideRef(resolveDiffRange(ws, input.scope).original);
 			if (!originalRef)
 				throw new Error("This diff has no base side to comment on (nothing precedes the change).");
-			// PIN IT. A scope's original ref can be symbolic — `uncommitted` is the literal `HEAD`, a
+			// PIN IT. A scope's original ref can be symbolic — `staged`'s is the literal `HEAD`, a
 			// `branch` scope degrades to the raw base ref when `merge-base` fails — and a base anchor's
 			// whole premise is that the blob it quotes never moves. Stored as-is, the user's next commit
 			// re-points `HEAD` and the package reads today's content at yesterday's line numbers: the agent

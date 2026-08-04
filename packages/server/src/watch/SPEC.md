@@ -70,8 +70,8 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   `host` fans the nudge out to two convergences: `refreshUserOwnedWorkspace` (a user-owned workspace's
   folder-truth branch labels) **and** a pathless, skill-neutral `fsChanged` frame (`paths: []`,
   `truncated: false`, `skillChange: "none"`) so the clients' git-derived reads re-read — `git.status` and an
-  open `uncommitted`-scope diff tab are relative to `HEAD`, and would otherwise keep reporting a committed
-  change as uncommitted until the next file edit.
+  open `working-tree`- or `staged`-scope diff tab read the index, and would otherwise keep reporting stale
+  state until the next file edit.
 - **Composition seams:** never imports `host` or `agent` — `host` injects both the publish callback and
   `agent`'s pure project-skill path classifier at wiring time (the publisher-tee pattern). A missing
   classifier degrades concrete events to `skillChange: "unknown"`, never false-clean.

@@ -7,8 +7,8 @@ import { useAppStore } from "../store";
  * either advances the tick in place (a single unrelated batch — this file isn't in it, so nothing to
  * re-read) or re-reads via `read` and writes the fresh payload through `applyFresh`. A **pathless** batch
  * never takes the skip: it names no file precisely because what moved isn't one (the host's ref-move nudge —
- * a terminal `git commit` invalidates an `uncommitted`-scope diff without touching a single byte on disk),
- * so path membership can't speak to it and the only honest answer is to re-read. A failed/cancelled
+ * a terminal `git commit` invalidates a `working-tree`- or `staged`-scope diff without touching a single byte
+ * on disk), so path membership can't speak to it and the only honest answer is to re-read. A failed/cancelled
  * read falls back to `keepCurrent`, which advances the tick without changing content — so a file that left
  * the change set (or a deleted file) holds its last contents. Only the active tab mounts, so a background
  * tab catches up on activation.

@@ -119,15 +119,6 @@ export function resolveDiffRange(
 			modified: { kind: "index" },
 		};
 	}
-	if (scope.kind === "uncommitted") {
-		return {
-			listPrefix: ["diff"],
-			listRevs: ["HEAD"],
-			untracked: true,
-			original: { kind: "ref", ref: "HEAD" },
-			modified: { kind: "worktree" },
-		};
-	}
 	if (scope.kind === "pinned") {
 		// The review sidebar's base-side navigation: worktree vs one immutable commit. Validated like a
 		// `commit` scope (shape, then existence — the anchor's pinned oid can be gone after a prune/gc),

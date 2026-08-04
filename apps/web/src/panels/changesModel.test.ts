@@ -64,7 +64,6 @@ test("buildChangesTree treats missing counts as zero", () => {
 
 test("scopeKey + diffTabId: the scope is part of a diff tab's identity", () => {
 	expect(scopeKey({ kind: "branch" })).toBe("branch");
-	expect(scopeKey({ kind: "uncommitted" })).toBe("uncommitted");
 	expect(scopeKey({ kind: "commit", sha: "abc123" })).toBe("commit:abc123");
 	// A pinned scope (the review sidebar's base-side navigation) keys off its own immutable baseRef, so a
 	// pinned diff tab is distinct from a same-file branch/commit one.
@@ -83,7 +82,6 @@ test("scopeKey + diffTabId: the scope is part of a diff tab's identity", () => {
 
 test("diffTabName tags every non-default scope so two tabs of one file are distinguishable", () => {
 	expect(diffTabName({ kind: "branch" }, "src/a.ts")).toBe("a.ts");
-	expect(diffTabName({ kind: "uncommitted" }, "src/a.ts")).toBe("a.ts · uncommitted");
 	expect(diffTabName({ kind: "commit", sha: "abc1234567" }, "src/a.ts")).toBe("a.ts · abc1234");
 	// A pinned tab tags with its baseRef's short oid, same form as a commit tab.
 	expect(diffTabName({ kind: "pinned", baseRef: "abc1234567" }, "src/a.ts")).toBe("a.ts · abc1234");
@@ -100,8 +98,8 @@ test("scopeLabel keeps a commit scope short (sha), with the subject in the toolt
 		},
 	];
 	expect(scopeLabel({ kind: "branch" })).toBe("All changes");
-	expect(scopeLabel({ kind: "uncommitted" })).toBe("Uncommitted");
-	// The pill never carries a commit *subject* — a sentence there squeezes the sibling target-branch pill.
+	// The pill never carries a commit *subject* — a sentence there would crowd the comparison target beside
+	// it down toward its own ellipsis.
 	expect(scopeLabel({ kind: "commit", sha: "abc1234567" }, commits)).toBe("abc1234");
 	expect(scopeLabel({ kind: "commit", sha: "abc1234567" })).toBe("abc1234");
 	// The subject lives in the tooltip (and the menu row), where there is room for it.
@@ -109,13 +107,12 @@ test("scopeLabel keeps a commit scope short (sha), with the subject in the toolt
 		"abc1234 · Fix the thing",
 	);
 	expect(scopeTitle({ kind: "commit", sha: "abc1234567" })).toBe("abc1234");
-	expect(scopeTitle({ kind: "uncommitted" })).toBe("Diff scope: Uncommitted");
 	// A pinned scope reads as its short baseRef in both the pill and the tooltip.
 	expect(scopeLabel({ kind: "pinned", baseRef: "abc1234567" })).toBe("abc1234");
 	expect(scopeTitle({ kind: "pinned", baseRef: "abc1234567" })).toBe("Diff scope: abc1234");
 });
 
-test("scopeLabel names the two uncommitted halves distinctly", () => {
+test("scopeLabel names the two dirty-worktree halves distinctly", () => {
 	expect(scopeLabel({ kind: "working-tree" })).toBe("Working tree");
 	expect(scopeLabel({ kind: "staged" })).toBe("Staged");
 });
@@ -165,14 +162,13 @@ test("the read key carries the diff base only for the scope whose range uses it"
 		changesReadKey({ kind: "branch" }, "develop"),
 	);
 
-	// The other four ranges (index→disk, HEAD→index, sha^→sha, HEAD→worktree) cannot move when the target is
+	// The other three ranges (index→disk, HEAD→index, sha^→sha) cannot move when the target is
 	// re-pointed, so their keys must be base-independent — otherwise a re-point resets the list to Loading…
 	// and re-reads for a diff that provably could not change.
 	for (const scope of [
 		{ kind: "working-tree" } as const,
 		{ kind: "staged" } as const,
 		{ kind: "commit", sha: "abc1234" } as const,
-		{ kind: "uncommitted" } as const,
 	]) {
 		expect(changesReadKey(scope, "main")).toBe(changesReadKey(scope, "develop"));
 	}
@@ -183,7 +179,6 @@ test("the read key carries the diff base only for the scope whose range uses it"
 		changesReadKey({ kind: "working-tree" }, "main"),
 		changesReadKey({ kind: "staged" }, "main"),
 		changesReadKey({ kind: "commit", sha: "abc1234" }, "main"),
-		changesReadKey({ kind: "uncommitted" }, "main"),
 	];
-	expect(new Set(keys).size).toBe(5);
+	expect(new Set(keys).size).toBe(4);
 });

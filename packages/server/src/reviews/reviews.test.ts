@@ -363,7 +363,7 @@ test("a base-side anchor is captured from the BASE blob and never re-anchored", 
 });
 
 test("a base anchor pins its ref to a commit oid, so a later commit can't move the fragment under it", () => {
-	// `uncommitted` scope resolves its original side to the literal `HEAD`. Stored verbatim, the user's
+	// `staged` scope resolves its original side to the literal `HEAD`. Stored verbatim, the user's
 	// next commit re-points it and the package reads TODAY's content at yesterday's line numbers — the
 	// agent is shown a fragment the remark was never about.
 	commitThenEdit("b.ts", "const one = 1;\nconst two = 2;\n", "const one = 1;\nconst TWO = 2;\n");
@@ -380,7 +380,7 @@ test("a base anchor pins its ref to a commit oid, so a later commit can't move t
 			selectors: [{ kind: "lineRange", startLine: 2, endLine: 2 }],
 		},
 		body: "why the rename?",
-		scope: { kind: "uncommitted" },
+		scope: { kind: "staged" },
 	});
 	expect(comment.anchor?.baseRef).toBe(head);
 

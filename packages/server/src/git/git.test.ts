@@ -280,7 +280,7 @@ test("diffBaseRef resolves the re-pointed diff target over the creation base", (
 	expect(diffBaseRef({ baseBranch: "main", diffBase: "origin/release" })).toBe("origin/release");
 });
 
-test("resolveDiffRange: one definition per scope (branch / uncommitted / commit)", () => {
+test("resolveDiffRange: one definition per scope (branch / commit)", () => {
 	const ws = { baseBranch: "main", worktreePath: repo };
 
 	// Default (and explicit `branch`): what the workspace changed since diverging from the diff base —
@@ -313,21 +313,6 @@ test("resolveDiffRange: one definition per scope (branch / uncommitted / commit)
 			original: { kind: "ref", ref: "origin/release" },
 		},
 	);
-
-	// Uncommitted: worktree vs HEAD, untracked files included.
-	const uncommitted = resolveDiffRange(ws, { kind: "uncommitted" });
-	expect(changedFileArgs(uncommitted, "--numstat")).toEqual([
-		"diff",
-		"--numstat",
-		"--end-of-options",
-		"HEAD",
-		"--",
-	]);
-	expect(uncommitted).toMatchObject({
-		untracked: true,
-		original: { kind: "ref", ref: "HEAD" },
-		modified: { kind: "worktree" },
-	});
 
 	// One commit: `sha^` vs `sha`, both sides from history, no untracked files.
 	const sha = commitOnFeature("second.txt", "second\n", "second");
@@ -441,7 +426,7 @@ test("DiffSide: a root commit's original side is empty, not a ref", () => {
 	expect(range.modified).toEqual({ kind: "ref", ref: root });
 });
 
-test("gitStatus scopes: branch spans the base range, uncommitted only the dirty worktree", () => {
+test("gitStatus scopes: branch spans the base range, working-tree only the dirty worktree", () => {
 	git(repo, "switch", "-c", "feature");
 	commitOnFeature("committed.txt", "committed\n", "add committed.txt");
 	seedWorkspace({ branch: "feature" });
@@ -450,8 +435,8 @@ test("gitStatus scopes: branch spans the base range, uncommitted only the dirty 
 	const branchPaths = gitStatus("w1").changes.map((c) => c.path);
 	expect(branchPaths).toEqual(["committed.txt", "dirty.txt"]);
 
-	const uncommitted = gitStatus("w1", { kind: "uncommitted" }).changes.map((c) => c.path);
-	expect(uncommitted).toEqual(["dirty.txt"]);
+	const workingTree = gitStatus("w1", { kind: "working-tree" }).changes.map((c) => c.path);
+	expect(workingTree).toEqual(["dirty.txt"]);
 });
 
 test("staged and working-tree split a partially-staged worktree", () => {

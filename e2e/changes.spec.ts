@@ -281,6 +281,44 @@ test("Changes scope selector filters by commit / working tree; each scope is its
 	await expect(diffTabs).toHaveCount(2);
 });
 
+test("Staged scope shows only what a commit would record right now, distinct from Working tree", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	const worktree = seedCommitAndDirtyEdit();
+	// A second, staged-only change: `git add`ed but not committed. `staged` (HEAD vs index) must show it;
+	// `working-tree` (index vs disk) must not — the index already matches the worktree for this file.
+	writeFileSync(join(worktree, "staged-only.txt"), "staged by e2e\n");
+	gitIn(worktree, "add", "staged-only.txt");
+
+	await page.getByTestId("tab-changes").click();
+	// All changes: the earlier commit's file, the staged-only file, and the still-dirty README.
+	await expect(page.getByTestId("change-item")).toHaveCount(3);
+
+	await page.getByTestId("changes-scope-trigger").click();
+	await page.getByTestId("changes-scope-staged").click();
+	await expect(page.getByTestId("changes-scope-label")).toHaveText("Staged");
+	await expect(page.getByTestId("change-item")).toHaveCount(1);
+	await expect(page.getByTestId("change-item").first()).toContainText("staged-only.txt");
+	// The comparison target is inert text naming the fixed other side (`HEAD`), never a picker — there is
+	// nothing to re-point for a scope whose both sides are facts, not a choice.
+	await expect(page.getByTestId("changes-target-picker")).toHaveCount(0);
+	const stagedTarget = page.getByTestId("changes-target-static");
+	await expect(stagedTarget).toHaveAttribute("data-scope", "staged");
+	await expect(stagedTarget).toHaveText("vs HEAD");
+
+	// Working tree is staged's complement here: the unstaged dirty edit, not the staged-only file.
+	await page.getByTestId("changes-scope-trigger").click();
+	await page.getByTestId("changes-scope-working-tree").click();
+	await expect(page.getByTestId("changes-scope-label")).toHaveText("Working tree");
+	await expect(page.getByTestId("change-item")).toHaveCount(1);
+	await expect(page.getByTestId("change-item").first()).toContainText("README.md");
+	const workingTarget = page.getByTestId("changes-target-static");
+	await expect(workingTarget).toHaveAttribute("data-scope", "working-tree");
+	await expect(workingTarget).toHaveText("vs index");
+});
+
 // The `working-tree` scope is the one scope whose content depends on the **index**, not on worktree files
 // alone: `git add` moves it while every file on disk stays byte-identical (a `git commit` in the
 // workspace's terminal stages nothing new to see). A linked worktree's git metadata even lives in the
@@ -647,8 +685,9 @@ test("A commit scope keeps the header readable: short sha on the pill, subject i
 	await page.getByTestId("changes-scope-trigger").click();
 	await page.getByTestId("changes-scope-commit").filter({ hasText: "e2e scope commit" }).click();
 
-	// The pill shows the sha, NOT the subject — a sentence there squeezed the target-branch pill down to an
-	// ellipsis. The subject stays available as the trigger's tooltip.
+	// The pill shows the sha, NOT the subject — a sentence there would crowd the comparison target beside it
+	// (inert text in commit scope, not a picker) down toward its own ellipsis. The subject stays available
+	// as the trigger's tooltip.
 	const label = page.getByTestId("changes-scope-label");
 	await expect(label).toHaveText(/^[0-9a-f]{7,}$/);
 	await expect(page.getByTestId("changes-scope-trigger")).toHaveAttribute(

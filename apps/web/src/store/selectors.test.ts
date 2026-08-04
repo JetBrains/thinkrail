@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
-import type { Project, WireModel, Workspace } from "@thinkrail/contracts";
+import type { GitDiffScope, Project, WireModel, Workspace } from "@thinkrail/contracts";
 import type { EditorTab } from "./appStore";
 import {
+	BRANCH_SCOPE,
 	isDefaultWorkspace,
 	isExternalWorkspace,
 	isUserOwnedWorkspace,
@@ -10,6 +11,7 @@ import {
 	selectActiveWorkspaceProjectId,
 	selectCatalogModel,
 	selectContextProject,
+	selectDiffScope,
 	selectHistoryTarget,
 	selectSkillsStale,
 	specPathMatcher,
@@ -248,4 +250,25 @@ test("selectCatalogModel returns the LIVE entry, not the stale ref handed to it"
 test("selectCatalogModel is null when the ref left the catalog (caller keeps its snapshot)", () => {
 	const gone = catalogModel("anthropic", "opus-4", ["off"]);
 	expect(selectCatalogModel([catalogModel("anthropic", "opus-5", ["off"])], gone)).toBeNull();
+});
+
+test("an unrecognised scope kind degrades to the branch scope", () => {
+	const state = {
+		diffScopeByWorkspace: {
+			// A kind this host no longer knows — e.g. a client still holding the removed `uncommitted`. This
+			// value arrives from outside the type system (a persisted tab or a replayed store record from an
+			// older client), so the cast is deliberate: it models an out-of-band value, not a shortcut around
+			// the type checker for a value we could otherwise construct honestly.
+			w1: { kind: "uncommitted" } as unknown as Parameters<
+				typeof selectDiffScope
+			>[0]["diffScopeByWorkspace"][string],
+		},
+	};
+	expect(selectDiffScope(state, "w1")).toBe(BRANCH_SCOPE);
+	expect(selectDiffScope({ diffScopeByWorkspace: {} }, "w2")).toBe(BRANCH_SCOPE);
+});
+
+test("a pinned scope is recognised, not degraded to branch", () => {
+	const scope: GitDiffScope = { kind: "pinned", baseRef: "deadbeef" };
+	expect(selectDiffScope({ diffScopeByWorkspace: { w1: scope } }, "w1")).toBe(scope);
 });

@@ -136,10 +136,10 @@ test("a base-side comment navigates to a PINNED diff on its own baseRef, a workt
 	expect(
 		commentSurface(
 			comment({
-				anchor: { path: "a.ts", side: "base", scope: { kind: "uncommitted" }, selectors: [] },
+				anchor: { path: "a.ts", side: "base", scope: { kind: "working-tree" }, selectors: [] },
 			}),
 		),
-	).toEqual({ kind: "diff", scope: { kind: "uncommitted" } });
+	).toEqual({ kind: "diff", scope: { kind: "working-tree" } });
 	// …and with neither, to the workspace's current scope (the caller's job).
 	expect(
 		commentSurface(comment({ anchor: { path: "a.ts", side: "base", selectors: [] } })),

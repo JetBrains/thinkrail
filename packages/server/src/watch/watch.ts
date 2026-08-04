@@ -74,9 +74,10 @@ export function setSkillPathClassifier(classifier: SkillPathClassifier | null): 
  * git dir (a linked worktree's metadata lives in the parent repo, outside the root — see `resolveGitDir`).
  *
  * The host turns it into two convergences: a user-owned **Default/external** workspace's folder-truth
- * branch label (`refreshUserOwnedWorkspace`) and a pathless client invalidation, so git-derived reads (`git.status`, an
- * `uncommitted`-scope diff tab) re-read when a ref moves. This sink stays **pathless** on purpose: `.git`
- * internals are not worktree content, so no `.git` path ever reaches a client.
+ * branch label (`refreshUserOwnedWorkspace`) and a pathless client invalidation, so git-derived reads
+ * (`git.status`, an open `working-tree`- or `staged`-scope diff tab) re-read when a ref moves. This sink
+ * stays **pathless** on purpose: `.git` internals are not worktree content, so no `.git` path ever reaches
+ * a client.
  */
 export function setRepoMetaPublisher(publisher: RepoMetaPublisher | null): void {
 	publishRepoMeta = publisher;

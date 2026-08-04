@@ -58,8 +58,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `refreshUserOwnedWorkspace` (**re-sync a user-owned workspace's folder-truth branch** — host-mediated,
   since `watch` has no `workspaces` edge, and self-publishing through the workspace-lifecycle tee) **and** a
   pathless, skill-neutral `fsChanged` frame (`paths: []`, `truncated: false`, `skillChange: "none"`) so the
-  clients' `HEAD`-relative reads
-  (`git.status`, an `uncommitted`-scope diff tab) re-read when a terminal `commit`/`reset` moves a ref;
+  clients' index-relative reads (`git.status`, an open `working-tree`- or `staged`-scope diff tab) re-read
+  when a terminal `commit`/`reset` moves a ref;
   the same publish also feeds the **fsNudge seam** (`fsNudge.ts`: `setFsNudgePublisher` +
   `nudgeBaseRefWorkspaces`), the host mediation the `git.prefetch` handler triggers when the app's own
   background fetch **moved** a remote-tracking ref — a write only the project repo's shared `.git` sees,

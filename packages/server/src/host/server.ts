@@ -431,9 +431,10 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 	//   1. a user-owned **Default/external** workspace's folder-truth branch (rail, top bar, receipt)
 	//      instead of only at the next `workspace.list`; self-publishing (`refreshUserOwnedWorkspace` emits
 	//      `workspace.updated` through the lifecycle tee above), and a no-op for managed worktrees;
-	//   2. every **git-derived read** on the clients — `git.status` and an open `uncommitted`-scope diff tab
-	//      are relative to `HEAD`, so a commit made in a terminal would otherwise keep being reported as
-	//      uncommitted until some later file edit. Emitted as a **pathless** `fsChanged` nudge (no paths, not
+	//   2. every **git-derived read** on the clients — `git.status` and an open `working-tree`- or
+	//      `staged`-scope diff tab read the index, which a commit/reset/switch made in a terminal can move
+	//      without touching a single worktree byte, so they would otherwise keep reporting stale state until
+	//      some later file edit. Emitted as a **pathless** `fsChanged` nudge (no paths, not
 	//      truncated): the frame is an invalidation, and a ref move invalidates exactly these reads without
 	//      naming any file — so no `.git` path leaks to a client, and path-driven consumers (the Skills-reload
 	//      badge) correctly see nothing of interest.
