@@ -113,6 +113,21 @@ test("scopeLabel keeps a commit scope short (sha), with the subject in the toolt
 	expect(scopeTitle({ kind: "pinned", baseRef: "abc1234567" })).toBe("Diff scope: abc1234");
 });
 
+test("scopeLabel names the two uncommitted halves distinctly", () => {
+	expect(scopeLabel({ kind: "working-tree" })).toBe("Working tree");
+	expect(scopeLabel({ kind: "staged" })).toBe("Staged");
+});
+
+test("a file open in working-tree and staged scope is two distinct tabs", () => {
+	const working = diffTabId("w1", { kind: "working-tree" }, "src/a.ts");
+	const staged = diffTabId("w1", { kind: "staged" }, "src/a.ts");
+	expect(working).not.toBe(staged);
+	// The tab tag is the human label lowercased ("working tree", not the raw kind "working-tree") — it is
+	// user-facing text in a tab strip.
+	expect(diffTabName({ kind: "working-tree" }, "src/a.ts")).toBe("a.ts · working tree");
+	expect(diffTabName({ kind: "staged" }, "src/a.ts")).toBe("a.ts · staged");
+});
+
 test("splitPath separates the muted directory prefix from the bright basename", () => {
 	expect(splitPath("apps/web/src/a.ts")).toEqual({ dir: "apps/web/src/", base: "a.ts" });
 	expect(splitPath("README.md")).toEqual({ dir: "", base: "README.md" });
