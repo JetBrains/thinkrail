@@ -226,7 +226,7 @@ function seedCommitAndDirtyEdit(): string {
 	return worktree;
 }
 
-test("Changes scope selector filters by commit / uncommitted; each scope is its own diff tab", async ({
+test("Changes scope selector filters by commit / working tree; each scope is its own diff tab", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -251,10 +251,10 @@ test("Changes scope selector filters by commit / uncommitted; each scope is its 
 	await expect(page.getByTestId("change-item")).toHaveCount(1);
 	await expect(page.getByTestId("change-item").first()).toContainText("committed.txt");
 
-	// Uncommitted shows only the dirty file.
+	// Working tree shows only the dirty file (it is unstaged — never `git add`ed).
 	await page.getByTestId("changes-scope-trigger").click();
-	await page.getByTestId("changes-scope-uncommitted").click();
-	await expect(page.getByTestId("changes-scope-label")).toHaveText("Uncommitted");
+	await page.getByTestId("changes-scope-working-tree").click();
+	await expect(page.getByTestId("changes-scope-label")).toHaveText("Working tree");
 	await expect(page.getByTestId("change-item")).toHaveCount(1);
 	const readme = page.getByTestId("change-item").filter({ hasText: "README.md" });
 	await expect(readme).toHaveCount(1);
@@ -273,12 +273,12 @@ test("Changes scope selector filters by commit / uncommitted; each scope is its 
 	await expect(diffTabs).toHaveCount(2);
 });
 
-// The `uncommitted` scope is the one scope whose content depends on a **ref**, not on worktree files: its
-// `HEAD` can move while every file on disk stays byte-identical (a `git commit` in the workspace's terminal
-// stages nothing new to see). A linked worktree's git metadata even lives in the *parent* repo, outside the
-// watched root — so without the host's git-metadata watch this panel would keep calling the just-committed
-// files "uncommitted" until some unrelated file edit happened to nudge it.
-test("Uncommitted scope converges when HEAD moves out-of-band (a commit in a terminal)", async ({
+// The `working-tree` scope is the one scope whose content depends on the **index**, not on worktree files
+// alone: `git add` moves it while every file on disk stays byte-identical (a `git commit` in the
+// workspace's terminal stages nothing new to see). A linked worktree's git metadata even lives in the
+// *parent* repo, outside the watched root — so without the host's git-metadata watch this panel would keep
+// calling the just-committed file "unstaged" until some unrelated file edit happened to nudge it.
+test("Working tree scope converges when the index moves out-of-band (a commit in a terminal)", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -290,7 +290,7 @@ test("Uncommitted scope converges when HEAD moves out-of-band (a commit in a ter
 
 	await page.getByTestId("tab-changes").click();
 	await page.getByTestId("changes-scope-trigger").click();
-	await page.getByTestId("changes-scope-uncommitted").click();
+	await page.getByTestId("changes-scope-working-tree").click();
 	const dirtyRow = page.getByTestId("change-item").filter({ hasText: "committed.txt" });
 	await expect(dirtyRow).toHaveCount(1);
 
@@ -471,10 +471,11 @@ test("The diff viewer collapses unchanged context and has a per-tab hide-whitesp
 	writeFileSync(join(worktree, "long.ts"), `${lines.join("\n")}\n`);
 
 	await page.getByTestId("tab-changes").click();
-	// The *uncommitted* scope is what makes this a modification of a known file (vs HEAD) rather than a
-	// whole-file add against the base branch — i.e. a diff that HAS unchanged context to collapse.
+	// The working-tree scope compares the index to disk; for this unstaged edit of a tracked file the index
+	// still matches HEAD, so this is still a modification-of-a-known-file diff — not a whole-file add against
+	// the base branch — i.e. a diff that HAS unchanged context to collapse.
 	await page.getByTestId("changes-scope-trigger").click();
-	await page.getByTestId("changes-scope-uncommitted").click();
+	await page.getByTestId("changes-scope-working-tree").click();
 	await page.getByTestId("change-item").filter({ hasText: "long.ts" }).click();
 	// The header path is a chip: muted directory prefix + bright basename (here a root-level file).
 	await expect(page.getByTestId("diff-path")).toHaveText("long.ts");
@@ -780,9 +781,10 @@ test("A failed read says so — it never renders as an empty (clean) change set"
 	gitIn(worktree, "branch", "-D", "doomed");
 
 	// A scope switch clears the list, so the next read has nothing to keep: exactly the "never answered vs
-	// answered empty" fork. Uncommitted still reads (it measures against HEAD); All changes cannot.
+	// answered empty" fork. Working tree still reads because it measures against the index, not the deleted
+	// base branch; All changes cannot.
 	await page.getByTestId("changes-scope-trigger").click();
-	await page.getByTestId("changes-scope-uncommitted").click();
+	await page.getByTestId("changes-scope-working-tree").click();
 	await expect(page.getByTestId("change-item")).toHaveCount(1);
 	await page.getByTestId("changes-scope-trigger").click();
 	await page.getByTestId("changes-scope-all").click();
