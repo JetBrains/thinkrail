@@ -60,6 +60,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `auth` | provider status (`provider.status`) + in-app login (OAuth / API key / logout) | [auth/SPEC.md](src/auth/SPEC.md) |
 | `assist` | ad-hoc one-shot tasks (workspace naming, …) on a cheap model, best-effort | [assist/SPEC.md](src/assist/SPEC.md) |
 | `analytics` | anonymous usage analytics: closed event set → PostHog sink (privacy contract in its spec) | [analytics/SPEC.md](src/analytics/SPEC.md) |
+| `remotes` | remote-check scheduler: when a check runs (floor + jittered backstop); policy half pending | [remotes/SPEC.md](src/remotes/SPEC.md) |
 | `dialog` | the host's native folder picker | [dialog/SPEC.md](src/dialog/SPEC.md) |
 | `history` | prompt recall + conversation search over pi's session files | [history/SPEC.md](src/history/SPEC.md) |
 | `templates` | file CRUD over pi's prompt-template dirs (global + project scoped) | [templates/SPEC.md](src/templates/SPEC.md) |
@@ -74,7 +75,7 @@ the host from env via `bootHost` for dev/e2e.
 - `host` → `projects`, `workspaces`, `git`, `github`, `fs`, `spec`, `todos`, `watch`, `terminal`, `dialog`, `agent`, `auth`, `assist`, `settings`, `history`, `templates`, `analytics`
 - `workspaces` → `projects`, `git`, `persistence`
 - `projects` → `git` (shared runner), `persistence`
-- `git`, `fs`, `spec`, `watch`, `terminal`, `settings`, `analytics` → `persistence` (`spec` also → `pi-spec-graph/core`, external; `analytics` also → the pi-ai built-in provider/model catalog + `posthog-node`, external — the identity-bucketing vocabulary and the delivery SDK)
+- `git`, `fs`, `spec`, `watch`, `terminal`, `settings`, `analytics`, `remotes` → `persistence` (`spec` also → `pi-spec-graph/core`, external; `analytics` also → the pi-ai built-in provider/model catalog + `posthog-node`, external — the identity-bucketing vocabulary and the delivery SDK)
 - `todos` → `workspaces` (worktree path lookup) + `pi-todos/core` (external, value-imported, pi-free)
 - `assist` → `agent` (the one-shot completion primitive)
 - `auth` → `agent` (`getPiRuntime` — the shared `AuthStorage` + `ModelRegistry`; one-way, `agent` never imports `auth`)
@@ -95,6 +96,10 @@ registry-free too — it takes a plain `cwd`, never a `workspaceId`; the `templa
 Analytics is host-mediated the same way: **every `track()` call site lives in `host`** (boot,
 session-create, login-success observation), and `host` syncs `setAnalyticsSending` off the settings
 broadcast — `analytics` has no `settings` edge and no feature module knows analytics exists.
+
+`remotes` is **not yet in `host`'s wiring list above** — its mechanics half (scheduling only) has landed,
+but `startRemoteChecks`/`configureRemoteChecks` are not yet called from anywhere; that lands with the
+policy half + host wiring (a later task), the same `setAnalyticsSending`-style config tee once it exists.
 
 ## Get right
 
