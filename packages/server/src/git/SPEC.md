@@ -17,10 +17,12 @@ ref off the workspace-create critical path.
 
 ## Boundary
 
-- **Owns:** `git(cwd, args)` (spawn git *sync*, capture trimmed stdout/stderr + ok; `opts.raw` keeps
-  stdout byte-exact for file-content reads) and `gitAsync(cwd,
-  args)` (its async twin — `Bun.spawn`, off the event loop, for network-bound ops like `fetch` that must
-  not block the host);
+- **Owns:** `git(cwd, args, opts)` (spawn git *sync*, capture trimmed stdout/stderr + ok; `opts.raw` keeps
+  stdout byte-exact for file-content reads; `opts.optionalLocks` opts a genuine writer back into git's
+  optional locks) and `gitAsync(cwd, args, opts)` (its async twin — `Bun.spawn`, off the event loop, for
+  network-bound ops like `fetch` that must not block the host) — both route their argv through
+  **`gitArgv(cwd, args, opts)`**, extracted (and exported) so the flag set is assertable without spawning:
+  `--no-optional-locks` is git-level and must sit before the subcommand, alongside `-C`;
   **the scope→range resolver** — `resolveDiffRange(ws, scope?)` → `DiffRange` — **the one definition of what
   a `GitDiffScope` means**:
 
@@ -113,8 +115,8 @@ ref off the workspace-create critical path.
   `git.prefetch` handler uses `moved` to fan out the host's pathless `fsChanged` nudge (`host`'s fsNudge
   seam; an unaffected re-read is an idempotent no-op). `moved` is host-internal; the wire response stays
   `{ ok }`.
-- **Public surface (barrel):** `git`, `gitAsync`, `gitStatus`, `gitDiffFile`, `listCommits`,
-  `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `DiffRange`, `DiffSide`, `isSafeRef`,
+- **Public surface (barrel):** `git`, `gitAsync`, `gitArgv`, `GitRunOptions`, `gitStatus`, `gitDiffFile`,
+  `listCommits`, `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `DiffRange`, `DiffSide`, `isSafeRef`,
   `assertSafeRef`, `listBranches`, `resolveDefaultBranch`, `currentBranch`, `prefetchBranch`.
 - **Allowed deps:** `persistence` (workspace + project lookup); `contracts` (`Git*`/`BranchList` types);
   `@thinkrail/shared/codedError` (naming a failure for the wire); Bun (spawn).
@@ -137,3 +139,7 @@ ref off the workspace-create critical path.
 - `gitStatus` reports the **live** current branch for a `kind: "default"` workspace (the project
   folder's branch moves out-of-band — a terminal `git checkout` — and the persisted snapshot self-heals
   only at list time; the Changes header must not lag).
+- **Reads never take git's optional locks.** Every `git()` invocation passes `--no-optional-locks` unless
+  a caller opts out. A pi agent runs git concurrently in the same worktree, and a status read that
+  refreshes the index as a side effect can lose a race for `.git/index.lock` — turning a healthy repo
+  into a failed read. Opt out only for a command that genuinely must write.
