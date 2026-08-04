@@ -46,9 +46,13 @@ in two halves that share this one `SPEC.md` (written in the first, extended by t
   - **The no-client gate**: nothing runs — not even the backstop — until `noteClientActivity()` has been
     called at least once. There is no "last client left" signal owned here (this module has no WS
     lifecycle edge), so the gate only ever latches on, never back off.
-  - **`Promise` hygiene**: `checkProject`'s rejection is caught at the single funnel every trigger goes
-    through, never at the caller. One project's failing check can never propagate into another project's
-    check, or into the backstop's self-rescheduling loop.
+  - **`Promise` hygiene**: `checkProject`'s failure is caught at the single funnel every trigger goes
+    through, never at the caller — and "failure" means both an async rejection AND a SYNCHRONOUS throw
+    (the call is routed through an already-resolved `.then`, since `CheckProjectFn`'s type promises a
+    `Promise<void>` but cannot enforce that at runtime; a non-`async` implementation that throws before
+    ever constructing one must be caught exactly like a rejection). One project's failing check can never
+    propagate into another project's check, or abort the `for` loop sweeping the remaining projects in
+    the same activity/backstop pass, or kill the backstop's self-rescheduling loop.
   - `configureRemoteChecks(config)` applies the host's config: only reads `gitRemoteCheckIntervalMinutes`,
     and rearms the backstop immediately when already running (a live interval change, e.g. a Settings
     edit, takes effect at once rather than waiting out whatever was left of the old interval).

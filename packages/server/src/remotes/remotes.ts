@@ -207,9 +207,18 @@ export function checkNow(projectId: string): Promise<void> {
 /**
  * The one path every trigger (an activity sweep, the backstop tick, `checkNow`) funnels through:
  * de-dupe a check already in flight for this project, floor-gate against `MIN_CHECK_INTERVAL_MS`, and —
- * the Promise-hygiene rule this module is on the hook for — catch `checkProject`'s rejection right here,
- * so it can never propagate into another project's check or the self-rescheduling backstop loop. Skipped
+ * the Promise-hygiene rule this module is on the hook for — catch `checkProject`'s failure right here, so
+ * it can never propagate into another project's check or the self-rescheduling backstop loop. Skipped
  * requests (in-flight dedupe or the floor) resolve immediately with nothing to await.
+ *
+ * The call is wrapped in `Promise.resolve().then(...)` rather than invoked directly: `CheckProjectFn`'s
+ * type signature promises a `Promise<void>`, but nothing enforces that at runtime, and a real
+ * implementation could throw SYNCHRONOUSLY before ever constructing one (a non-`async` function doing a
+ * synchronous git call, say). A direct call's synchronous throw would escape this function entirely —
+ * uncaught by the `.catch` below, since it never even gets attached — and abort the `for` loop in
+ * whichever caller (`noteClientActivity`/`backstopTick`) is mid-sweep over the REMAINING projects. Routing
+ * the call through an already-resolved `.then` turns that synchronous throw into an ordinary rejection,
+ * so it is caught exactly like an async failure.
  */
 function requestCheck(projectId: string): Promise<void> {
 	const state = stateFor(projectId);
@@ -221,7 +230,8 @@ function requestCheck(projectId: string): Promise<void> {
 	}
 
 	state.lastCheckedAt = now;
-	const run: Promise<void> = checkProject(projectId)
+	const run: Promise<void> = Promise.resolve()
+		.then(() => checkProject(projectId))
 		.catch((err: unknown) => {
 			console.warn(
 				`remote check failed for project ${projectId}: ${err instanceof Error ? err.message : String(err)}`,

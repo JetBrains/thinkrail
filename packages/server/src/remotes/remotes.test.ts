@@ -62,6 +62,13 @@ function fakeScheduler() {
 	return { scheduled, cleared, setTimer, clearTimer, fireLatest, latest };
 }
 
+/** Drains the microtask queue deep enough for a `checkProject(...).catch().finally()`-shaped chain to
+ * fully settle (several `.then`-equivalent hops), without ever touching a real timer or the wall clock —
+ * needed wherever a test's next step depends on `state.inFlight` having already cleared. */
+async function flushMicrotasks(): Promise<void> {
+	for (let i = 0; i < 10; i++) await Promise.resolve();
+}
+
 // ── the no-client gate ──────────────────────────────────────────────────
 
 test("a check is skipped entirely while no client has ever been active", async () => {
@@ -115,18 +122,18 @@ test("the 60s floor collapses three activity nudges into one check per project",
 	});
 
 	noteClientActivity();
-	await Promise.resolve();
+	await flushMicrotasks(); // let this round's in-flight promise fully clear before the next nudge
 	clock += 1_000; // +1s — well inside the 60s floor
 	noteClientActivity();
-	await Promise.resolve();
+	await flushMicrotasks();
 	clock += 1_000; // +2s total — still inside the floor
 	noteClientActivity();
-	await Promise.resolve();
+	await flushMicrotasks();
 	expect(calls).toEqual(["p1"]); // three nudges, one probe
 
 	clock += MIN_CHECK_INTERVAL_MS; // the floor has now fully elapsed
 	noteClientActivity();
-	await Promise.resolve();
+	await flushMicrotasks();
 	expect(calls).toEqual(["p1", "p1"]); // the floor releases — this isn't "once ever"
 });
 
@@ -238,7 +245,69 @@ test("stopRemoteChecks clears the pending timer, and a tick that fires anyway is
 	expect(fake.scheduled).toHaveLength(1); // ...and no reschedule either: no live timer survives.
 });
 
+// ── the backstop's resume path ───────────────────────────────────────────
+
+test("a backstop tick resumes checking once a client has connected, with no further activity nudge", async () => {
+	saveProjects([project("p1")]);
+	const calls: string[] = [];
+	let clock = 1_000_000;
+	const fake = fakeScheduler();
+	startRemoteChecks({
+		checkProject: async (id) => {
+			calls.push(id);
+		},
+		now: () => clock,
+		setTimer: fake.setTimer,
+		clearTimer: fake.clearTimer,
+	});
+
+	fake.fireLatest(); // the backstop elapses before anyone has ever shown up — must be a no-op
+	await flushMicrotasks();
+	expect(calls).toEqual([]);
+
+	noteClientActivity(); // latches hasClient; this call's OWN sweep also checks p1 once
+	await flushMicrotasks(); // let that check fully settle — its in-flight promise must clear before below
+	expect(calls).toEqual(["p1"]);
+	calls.length = 0; // discard the activity sweep's own check — only the SUBSEQUENT tick matters below
+
+	clock += MIN_CHECK_INTERVAL_MS; // past the floor, so the next tick isn't dropped by it
+	fake.fireLatest(); // the NEXT backstop tick, with no further noteClientActivity() call at all
+	await flushMicrotasks();
+	expect(calls).toEqual(["p1"]); // hasClient is latched — the tick itself resumes checking
+});
+
 // ── Promise hygiene ──────────────────────────────────────────────────────
+
+test("a checkProject that throws SYNCHRONOUSLY (before returning any promise) does not abort the sweep for the remaining projects", async () => {
+	saveProjects([project("p1"), project("p2"), project("p3")]);
+	const calls: string[] = [];
+	const warnings: unknown[] = [];
+	const originalWarn = console.warn;
+	console.warn = (...args: unknown[]) => {
+		warnings.push(args);
+	};
+	try {
+		startRemoteChecks({
+			// Deliberately NOT `async` — `CheckProjectFn`'s type promises a `Promise<void>`, but nothing
+			// stops a real implementation from throwing before it ever constructs one (a non-async function
+			// doing a synchronous git call, say). This must be caught exactly like a rejection.
+			checkProject: (id) => {
+				calls.push(id);
+				if (id === "p2") throw new Error("synchronous failure before any promise exists");
+				return Promise.resolve();
+			},
+			setTimer: () => 0,
+			clearTimer: () => {},
+		});
+		noteClientActivity();
+		await Promise.resolve();
+		await Promise.resolve();
+		expect(calls.sort()).toEqual(["p1", "p2", "p3"]); // every project still got its turn
+		expect(warnings.length).toBeGreaterThan(0); // the synchronous throw was logged, not silently lost
+	} finally {
+		console.warn = originalWarn;
+	}
+});
 
 test("one project's rejected check does not stop another project's check, or the loop", async () => {
 	saveProjects([project("p1"), project("p2")]);
@@ -260,8 +329,7 @@ test("one project's rejected check does not stop another project's check, or the
 			clearTimer: () => {},
 		});
 		noteClientActivity();
-		await Promise.resolve();
-		await Promise.resolve(); // let p1's rejection settle through its `.catch`
+		await flushMicrotasks(); // let p1's rejection settle through its `.catch` (and both clear in-flight)
 		expect(calls.sort()).toEqual(["p1", "p2"]);
 		expect(warnings.length).toBeGreaterThan(0); // logged, not swallowed silently
 
@@ -270,10 +338,49 @@ test("one project's rejected check does not stop another project's check, or the
 		calls.length = 0;
 		clock += MIN_CHECK_INTERVAL_MS;
 		noteClientActivity();
-		await Promise.resolve();
-		await Promise.resolve();
+		await flushMicrotasks();
 		expect(calls.sort()).toEqual(["p1", "p2"]);
 	} finally {
 		console.warn = originalWarn;
 	}
+});
+
+// ── in-flight dedupe (distinct from the floor) ──────────────────────────
+
+test("checkNow returns the SAME promise as an already in-flight check for that project", async () => {
+	saveProjects([project("p1")]);
+	const calls: string[] = [];
+	let resolveCheck: (() => void) | undefined;
+	startRemoteChecks({
+		checkProject: async (id) => {
+			calls.push(id);
+			// Hangs deliberately — a manually-controlled deferred, so the check is PROVABLY still
+			// pending (not settled within a microtask or two, unlike every other fake in this suite).
+			await new Promise<void>((resolve) => {
+				resolveCheck = resolve;
+			});
+		},
+		setTimer: () => 0,
+		clearTimer: () => {},
+	});
+
+	const first = checkNow("p1");
+	await Promise.resolve(); // let checkProject start and suspend on its own still-pending deferred
+	expect(calls).toEqual(["p1"]);
+
+	const second = checkNow("p1"); // genuinely in flight, not yet settled — must share the SAME promise
+	expect(second).toBe(first);
+
+	let settled = false;
+	void second.then(() => {
+		settled = true;
+	});
+	await Promise.resolve();
+	expect(settled).toBe(false); // still pending — this isn't an instant no-op resolve in disguise
+	expect(calls).toEqual(["p1"]); // checkProject was invoked exactly once, not twice
+
+	resolveCheck?.();
+	await first;
+	await second;
+	expect(settled).toBe(true);
 });
