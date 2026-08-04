@@ -42,12 +42,19 @@ export async function probeRemoteRefs(
 	});
 	if (!result.ok) return { ok: false, heads: {}, err: result.err || "git ls-remote failed" };
 
+	// `ls-remote`'s pattern matching is suffix-based, not exact: a bare pattern `main` also matches
+	// `refs/heads/feature/main` (verified directly — a remote holding both `main` and `feature/main`
+	// returns both rows for a `main` pattern). Filtering the parsed result down to exactly the requested
+	// names keeps `heads`'s key set equal to what was asked for, so a caller iterating `Object.keys(heads)`
+	// never sees a ref it didn't request.
+	const requested = new Set(refs);
 	const heads: Record<string, string> = {};
 	for (const line of result.out.split("\n")) {
 		if (!line) continue;
 		const [sha, ref] = line.split("\t");
 		if (!sha || !ref) continue;
 		const name = ref.startsWith("refs/heads/") ? ref.slice("refs/heads/".length) : ref;
+		if (!requested.has(name)) continue;
 		heads[name] = sha;
 	}
 	return { ok: true, heads, err: "" };
@@ -123,23 +130,31 @@ export function behindCount(repoPath: string, from: string, to: string): number 
 	return Number.isFinite(count) ? count : null;
 }
 
-/** SSH's "scp-like" syntax (`[user@]host.xz:path`) — recognised only when there is no `://` scheme and no
- * slash before the first colon (a `/`-then-`:` shape is a local path, e.g. a Windows-style one is excluded
- * by the `@` requirement below). Both `git@host:path` and `user@host:path` share this one shape. */
+/**
+ * SSH's "scp-like" syntax, `[user@]host.xz:path` — the `user@` prefix is OPTIONAL in git's own rule
+ * (confirmed directly: `git fetch` against a bare `buildserver.internal:org/repo.git` remote shells out to
+ * `ssh buildserver.internal git-upload-pack ...`), so this does NOT require an `@`. Recognised whenever
+ * there is no `://` scheme and no slash before the first colon — a `/`-then-`:` shape is a local path.
+ * This over-matches some local paths that happen to contain a colon before any slash (e.g. a relative
+ * `foo:bar` — which is exactly why git itself tells users to write `./foo:bar` to disambiguate), and that
+ * is the deliberately-safe direction here: under-matching would background-probe an SSH remote the caller
+ * meant to skip, which is the one failure this classification exists to prevent; over-matching only costs
+ * an extra skipped probe on a rare, oddly-named local path.
+ */
 function isScpLikeSshUrl(url: string): boolean {
 	if (url.includes("://")) return false;
 	const colon = url.indexOf(":");
 	if (colon === -1) return false;
 	const slash = url.indexOf("/");
-	if (slash !== -1 && slash < colon) return false;
-	return url.slice(0, colon).includes("@");
+	return slash === -1 || slash > colon;
 }
 
 /**
  * Classify a remote's URL for the SSH-agent safety ladder (see {@link sshAgentPresent}): `"ssh"` for
- * `ssh://…` or either SCP-like form (`git@host:path`, `user@host:path`), `"other"` for anything else this
- * repo can resolve a URL for, `"unknown"` when the remote doesn't exist or its URL can't be read. A missed
- * SSH form here means the app would background-probe an SSH remote it meant to skip — the one failure this
+ * `ssh://…` or any scp-like form (`git@host:path`, `user@host:path`, or a bare `host:path` with no user
+ * at all — the `user@` prefix is optional in git's own rule), `"other"` for anything else this repo can
+ * resolve a URL for, `"unknown"` when the remote doesn't exist or its URL can't be read. A missed SSH form
+ * here means the app would background-probe an SSH remote it meant to skip — the one failure this
  * classification exists to prevent — so it stays a static, empirically-checked shape test rather than
  * anything that could silently narrow.
  */
@@ -152,18 +167,34 @@ export function remoteUrlKind(repoPath: string, remote: string): "ssh" | "other"
 }
 
 /**
- * Whether an external ssh-agent might be listening — `SSH_AUTH_SOCK` set to a non-empty value. Deliberately
- * **not** special-cased for the plain macOS launchd socket (`/private/tmp/com.apple.launchd.<id>/Listeners`,
- * set by default on nearly every Mac): that socket is a real, protocol-compliant agent — Apple's Secure
- * Keychain agent — that can hold keys added via `ssh-add --apple-use-keychain` and answer agent requests, so
- * treating its mere presence as "no agent" would invert the safety direction this check exists for. The
- * conservative failure mode is "assume an agent might be listening, skip the background op": a background
- * probe refusing to run on a machine that turns out to have no loaded key is a convenience cost, while a
- * silent Keychain/Touch ID prompt surfacing during an unattended background call is exactly the failure
- * `REMOTE_ENV` cannot prevent on its own (it closes every *git-level* prompt path, not what sits below git)
- * and this function exists to let a caller refuse instead.
+ * The plain macOS launchd default socket's trailing path segment, matched independent of its root
+ * directory: it has been seen at both `/private/tmp/com.apple.launchd.<token>/Listeners` and
+ * `/var/run/com.apple.launchd.<token>/Listeners` across macOS versions/session types — the inconsistency
+ * between those two roots is itself the reason this matches the *segment*, never a fixed prefix. `<token>`
+ * is a launchd-generated random id, minted per login session; nothing user-run organically produces a
+ * directory named `com.apple.launchd.<token>` with a leaf literally named `Listeners`, so this cannot
+ * plausibly exclude a genuine user-loaded agent.
  */
-export function sshAgentPresent(): boolean {
-	const sock = process.env.SSH_AUTH_SOCK;
-	return sock !== undefined && sock !== "";
+const LAUNCHD_DEFAULT_SOCKET = /\/com\.apple\.launchd\.[^/]+\/Listeners$/;
+
+/**
+ * Whether an external ssh-agent might be listening. Takes the socket path explicitly (defaulting to
+ * `process.env.SSH_AUTH_SOCK` so every real call site is unchanged) so the launchd cases below are
+ * testable with plain strings instead of mutating global env.
+ *
+ * `true` for any non-empty value — **except** the plain macOS launchd default socket
+ * ({@link LAUNCHD_DEFAULT_SOCKET}), which is carved out and answers `false`. That default is set on
+ * nearly every Mac whether or not the user has ever loaded a key into it; treating its mere presence as
+ * "an agent is present" made every SSH remote look agent-guarded on virtually every Mac, which — for a
+ * later caller that marks SSH remotes dormant when an agent might be listening — meant SSH remotes never
+ * got probed on this Mac-first product's most common environment. That failure (a background check that
+ * silently never runs) is worse than the risk this carve-out re-admits: the launchd socket is Apple's
+ * Secure Keychain agent, which only prompts (Touch ID/Keychain) when a key has actually been loaded into
+ * it via `ssh-add --apple-use-keychain` — the common case is no loaded key and no prompt at all. A
+ * launchd-*shaped* path whose leaf isn't literally `Listeners` is not carved out: only the exact default
+ * shape is excluded, not the whole `com.apple.launchd.*` prefix.
+ */
+export function sshAgentPresent(sock: string | undefined = process.env.SSH_AUTH_SOCK): boolean {
+	if (sock === undefined || sock === "") return false;
+	return !LAUNCHD_DEFAULT_SOCKET.test(sock);
 }
