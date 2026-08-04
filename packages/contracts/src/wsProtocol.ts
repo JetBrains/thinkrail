@@ -100,7 +100,10 @@ import type {
 // v22: a failed response may name its failure — `WsResponse.errorCode` (`WsErrorCode`, today only
 // `UNKNOWN_COMMIT`), so a client can react to one specific failure instead of pattern-matching the message.
 // Additive and optional: an older client simply sees the `error` string it always saw.
-export const PROTOCOL_VERSION = 22;
+// v23: `GitDiffScope`'s `uncommitted` is replaced by `working-tree` (index → disk) and `staged`
+//      (HEAD → index). A BREAKING change to an existing member, not an additive one — one scope could
+//      not say what a commit would actually record. Unknown kinds degrade to `branch` client-side.
+export const PROTOCOL_VERSION = 23;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -405,8 +408,9 @@ export interface WsMethodMap {
 	"git.status": { params: { workspaceId: string; scope?: GitDiffScope }; result: GitStatus };
 	// One changed file, both sides of the `scope`'s range: `original` = the file at the range's start (empty
 	// for untracked/added — and for a renamed file's new path, which degrades to an add-style diff),
-	// `modified` = the file at its end (the worktree for branch/uncommitted, the commit's tree for `commit`;
-	// empty when deleted). Feeds Monaco's diff editor, which needs two contents rather than a unified patch.
+	// `modified` = the file at its end (the worktree for branch/working-tree, the index for staged, the
+	// commit's tree for `commit`; empty when deleted). Feeds Monaco's diff editor, which needs two contents
+	// rather than a unified patch.
 	"git.diffFile": {
 		params: { workspaceId: string; path: string; scope?: GitDiffScope };
 		result: { original: string; modified: string };

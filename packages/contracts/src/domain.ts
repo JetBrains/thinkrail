@@ -80,7 +80,7 @@ export interface Workspace {
 	 * re-pointed it (`workspace.setDiffBase`). Absent = measure against `baseBranch`. Two fields because
 	 * the two meanings diverge the moment a target is re-pointed: creation provenance never moves, the
 	 * review target does. Every *read* resolves `diffBase ?? baseBranch` server-side, in one place (the git
-	 * module's `diffBaseRef`); a client only mirrors the resolution to label its target-branch picker.
+	 * module's `diffBaseRef`); a client only mirrors the resolution to label its comparison target.
 	 */
 	diffBase?: string;
 	/**
@@ -108,8 +108,8 @@ export interface Workspace {
  * An **empty, non-truncated** frame (`paths: []`, `truncated: false`) is the pathless variant: something
  * the reads depend on moved *without* naming a file — the host emits it when a worktree's git metadata
  * moves (a `commit`/`reset`/`switch` in a terminal), which invalidates the git-derived reads (`git.status`,
- * an `uncommitted`-scope diff) while leaving the working tree untouched. Same contract: re-read, don't
- * patch. Path-driven consumers see no paths and correctly do nothing extra.
+ * an open `working-tree`- or `staged`-scope diff) while leaving the working tree untouched. Same contract:
+ * re-read, don't patch. Path-driven consumers see no paths and correctly do nothing extra.
  */
 export interface WorkspaceFsChangedPayload {
 	workspaceId: string;
@@ -239,14 +239,12 @@ export interface GitStatus {
  *   upstream work landing on the base is not this workspace's change and never shows up here.
  * - `working-tree` — the index vs the files on disk (what you have not staged yet), plus untracked files.
  * - `staged` — `HEAD` vs the index (what a commit would record right now).
- * - `uncommitted` — DEPRECATED, removed once the panel offers the two above; `HEAD` vs the worktree.
  * - `commit` — one commit alone (`sha^` vs `sha`; a root commit degrades to an add-style diff).
  */
 export type GitDiffScope =
 	| { kind: "branch" }
 	| { kind: "working-tree" }
 	| { kind: "staged" }
-	| { kind: "uncommitted" }
 	| { kind: "commit"; sha: string };
 
 /** One commit on the workspace's branch (not on its diff base) — a row of the scope menu's commit list. */

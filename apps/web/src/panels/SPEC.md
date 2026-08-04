@@ -373,7 +373,8 @@ a project picker, the prompt hero, and the reused
   write (`updateFileTabContent` vs `updateDiffTabContent`). Its one-batch skip ("this file isn't in it—just
   advance the tick") requires the batch to have **named** files: a **pathless** frame (`paths: []`, the host's
   ref-move nudge) always re-reads, since path membership says nothing about a change that touched no file —
-  that is what keeps an open `uncommitted`-scope diff honest when a terminal `git commit` moves `HEAD`.
+  that is what keeps an open `working-tree`- or `staged`-scope diff honest when a terminal `git commit`
+  moves the index.
   `reloadKey` is the hook's **second live dimension**,
   for a tab whose content depends on something besides the files: `DiffPane` passes `selectDiffTabTargetRef`,
   so re-pointing the review target re-reads a **branch-scope** tab at once instead of lagging until the next
@@ -389,8 +390,8 @@ a project picker, the prompt hero, and the reused
   so scoping is natural; a degraded watcher just means back to read-on-demand. Deliberately **not**
   live (deferred): the project-rail workspace diffStats badges; editable-file conflict handling waits
   for `fs.writeFile` (the viewer is read-only today).
-- The read key carries the diff base **only for `branch` scope**. The other four scopes' ranges — index→disk
-  (`working-tree`), HEAD→index (`staged`), `sha^`→`sha` (`commit`), and HEAD→worktree (`uncommitted`) —
+- The read key carries the diff base **only for `branch` scope**. The other three scopes' ranges — index→disk
+  (`working-tree`), HEAD→index (`staged`), and `sha^`→`sha` (`commit`) —
   cannot move when the target is re-pointed, so including it forced a full reset-and-re-read (a visible
   `Loading…`) for a diff that provably could not change. `ChangesScopeMenu`'s `key` still carries the
   base — unlike the diff, the *commit list* really is `git log <base>..HEAD`.
@@ -464,7 +465,8 @@ a project picker, the prompt hero, and the reused
   never optimistically — live only for `branch` scope, see the comparison-target bullet below). The scope
   pill offers *All changes* (the workspace's work since diverging from the
   target branch — measured from the merge-base, so upstream commits landing on the target are never phantom
-  rows here; the default), the two halves of what is uncommitted, or one **commit** from the branch's list:
+  rows here; the default), **Working tree** and **Staged** — the two halves of a dirty worktree — or one
+  **commit** from the branch's list:
   - **Working tree** — what is not staged yet (index vs disk, plus untracked). Offered but inert, reading
     "Nothing unstaged", when the probe says there is nothing.
   - **Staged** — what a commit would record right now (HEAD vs index). Offered but inert, reading
@@ -477,7 +479,8 @@ a project picker, the prompt hero, and the reused
   `DropdownMenuContent` primitive, since any long menu has the problem) — 200 commit rows must not run past
   the viewport edge where they are unreachable. The pill names a commit scope by its **short sha**, never its subject
   (`scopeLabel`; the subject is the trigger's `title` via `scopeTitle`, and the menu row shows it in full) —
-  a sentence in a rail header squeezes the sibling target-branch pill down to an ellipsis. A scope naming a commit the repo no longer has (rebase, branch reset) makes
+  a sentence in a rail header would crowd the comparison target beside it (inert text in commit scope, not a
+  picker) down toward its own ellipsis. A scope naming a commit the repo no longer has (rebase, branch reset) makes
   the host reject `git.status` with the **named** code `UNKNOWN_COMMIT` (`wsErrorCode`), and *that* rejection —
   and only that one — **resets to the branch scope with a toast** rather than staying wedged on a dead sha.
   Every other failure (timeout, dropped socket, git error) leaves the user's chosen scope alone, keeps the

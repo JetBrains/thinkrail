@@ -98,15 +98,6 @@ export function resolveDiffRange(
 			modified: { kind: "index" },
 		};
 	}
-	if (scope.kind === "uncommitted") {
-		return {
-			listPrefix: ["diff"],
-			listRevs: ["HEAD"],
-			untracked: true,
-			original: { kind: "ref", ref: "HEAD" },
-			modified: { kind: "worktree" },
-		};
-	}
 	if (scope.kind === "commit") {
 		if (!OID.test(scope.sha)) throw new Error(`Not a commit id: ${scope.sha}`);
 		const resolved = git(ws.worktreePath, [

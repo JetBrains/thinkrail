@@ -266,10 +266,11 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   `selectActiveWorkspaceProjectId`, `selectHistoryTarget` + `HistoryTarget` (the shell's `Ctrl+R` routing
   target: the active chat tab, or the workspace's newest chat when a file/diff/doc tab is active),
   `selectContextProject`, `selectSkillsStale`, **`selectDiffScope` + `BRANCH_SCOPE`** (what a workspace's
-  Changes panel is diffing, defaulting to the shared branch-scope constant), **`selectDiffBaseRef`** (the ref
-  it is measured against — the client-side mirror of the host's one resolution), **`selectDiffTabTargetRef`**
-  (that ref *as an open diff tab's live dimension*: the target for a branch-scope tab, `""` for a
-  commit/uncommitted one whose sides can't move — derived here, never re-assembled in a panel), `selectWorkspaceTick` (the
+  Changes panel is diffing, defaulting to the shared branch-scope constant when unset **or when the
+  persisted/replayed kind is one this client no longer knows** — see Get right), **`selectDiffBaseRef`** (the
+  ref it is measured against — the client-side mirror of the host's one resolution), **`selectDiffTabTargetRef`**
+  (that ref *as an open diff tab's live dimension*: the target for a branch-scope tab, `""` for any other
+  scope, whose sides never move by re-pointing the base — derived here, never re-assembled in a panel), `selectWorkspaceTick` (the
   sync-baseline snapshot; + the `isSkillPath` path predicate it shares with `noteFsChanged`);
   `matchesWorktreePath` (line an agent-reported path — relative or absolute — up against a worktree-relative
   one; shared by the Changes deep link and the spec classifier. The suffix rule is for **absolute reports
@@ -290,3 +291,9 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   (`ChatTurn`/`ToolResultState`, **type-only**); `auth` (`LoginState`, **type-only**); `transport`
   (`ConnectionStatus`, **type-only**); `zustand`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `panels`/`shell` or transport runtime.
+
+## Get right
+
+- An **unrecognised scope kind degrades to `branch`.** A long-lived client (or a replayed store value)
+  can carry a scope kind this host no longer knows; resolving it to nothing would render an empty change
+  set, which is the one thing this surface must never do on a claim it cannot support.

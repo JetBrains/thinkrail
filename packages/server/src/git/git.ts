@@ -234,7 +234,7 @@ export function gitStatus(workspaceId: string, scope?: GitDiffScope): GitStatus 
 		}
 	}
 
-	// Untracked files belong to a range that ends at the worktree (branch/uncommitted), never to a historical
+	// Untracked files belong to a range that ends at the worktree (branch/working-tree), never to a historical
 	// commit — they are not "in" it.
 	if (range.untracked) {
 		const untracked = git(ws.worktreePath, ["ls-files", "--others", "--exclude-standard"]);

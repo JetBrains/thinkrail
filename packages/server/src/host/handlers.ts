@@ -223,7 +223,7 @@ const handlers: Record<string, Handler> = {
 		),
 	"todo.remove": (params) =>
 		removeTodo(params as { workspaceId: string; sessionId: string; id: string }),
-	// `scope` selects what is diffed (branch / working-tree / staged / uncommitted / one commit; omitted =
+	// `scope` selects what is diffed (branch / working-tree / staged / one commit; omitted =
 	// branch). A scope naming a commit that no longer exists rejects — the panel resets its scope on that
 	// rejection.
 	"git.status": (params) => {

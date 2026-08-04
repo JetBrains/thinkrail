@@ -33,8 +33,8 @@ export function scopeKey(scope: GitDiffScope): string {
 /**
  * The Changes read's **second identity dimension** (beyond the workspace): a change resets the list and
  * re-reads. The diff base joins it ONLY for the branch scope, because that is the one range measured
- * against the target (`merge-base(target, HEAD)`). The other four ranges — index→disk, HEAD→index,
- * `sha^`→`sha`, HEAD→worktree — cannot move when the target is re-pointed, and keying them on it forced a
+ * against the target (`merge-base(target, HEAD)`). The other three ranges — index→disk, HEAD→index,
+ * `sha^`→`sha` — cannot move when the target is re-pointed, and keying them on it forced a
  * visible `Loading…` plus a re-read for a diff that provably could not change.
  *
  * Note this is NOT the same rule as `ChangesScopeMenu`'s `key`, which *does* depend on the base for every
@@ -65,15 +65,14 @@ export function diffTabName(scope: GitDiffScope, path: string): string {
 
 /**
  * The scope pill's label — the same vocabulary the scope menu offers. A commit reads as its **short sha**,
- * never its subject: a subject is a sentence, and letting it into a rail header squeezes the sibling
- * target-branch pill down to an ellipsis. The subject belongs to the menu row (and to the trigger's
- * `title`, see {@link scopeTitle}).
+ * never its subject: a subject is a sentence, and letting it into a rail header would crowd the comparison
+ * target beside it — inert text in commit scope, but still sharing the same tight flex row — down toward its
+ * own ellipsis. The subject belongs to the menu row (and to the trigger's `title`, see {@link scopeTitle}).
  */
 export function scopeLabel(scope: GitDiffScope, commits: readonly GitCommit[] = []): string {
 	if (scope.kind === "branch") return "All changes";
 	if (scope.kind === "working-tree") return "Working tree";
 	if (scope.kind === "staged") return "Staged";
-	if (scope.kind === "uncommitted") return "Uncommitted";
 	const known = commits.find((c) => c.sha === scope.sha);
 	return known?.shortSha ?? scope.sha.slice(0, 7);
 }
@@ -104,9 +103,6 @@ export function comparisonTargetLabel(
 			return { label: "HEAD", interactive: false };
 		case "commit":
 			return { label: "— (parent)", interactive: false };
-		case "uncommitted":
-			// Task 7 removes this scope; until then it behaves like working-tree (both diff against the index).
-			return { label: "index", interactive: false };
 	}
 }
 

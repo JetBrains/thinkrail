@@ -33,22 +33,17 @@ ref off the workspace-create critical path.
   | `branch` | `diff <merge-base>` | yes | merge-base ref | worktree |
   | `working-tree` | `diff` (no revs) | yes | index | worktree |
   | `staged` | `diff --cached HEAD` | no | `HEAD` | index |
-  | `uncommitted` | `diff HEAD` | yes | `HEAD` | worktree |
   | `commit` | `diff <sha>^ <sha>` / `show` for a root | no | parent / empty | `sha` |
-
-  `uncommitted` is **transitional** — it conflates the index with the worktree, and is removed once the
-  panel offers the two halves above.
 
   `branch`'s merge-base ref is the **fork point** of the diff base and `HEAD` — what the workspace changed
   *since diverging*, so a base that advanced underneath it (a fetch moving `origin/main`, upstream work
   landing) never surfaces as phantom changes; while the base hasn't diverged the merge-base *is* its tip,
   and a failed `merge-base` (missing base, unrelated histories, unborn `HEAD`) falls back to the raw ref,
   keeping the old error surfaces — and keeping the file list ancestry-consistent with `listCommits`'
-  `base..HEAD`. `working-tree` and `staged` are what `uncommitted` used to conflate, pulled apart now that
-  the index is a real `DiffSide`: `working-tree` is what you have not staged yet (index vs worktree, plus
-  untracked — nothing staged belongs here), `staged` is what a commit would record right now (`HEAD` vs the
-  index, no untracked — untracked is by definition not staged). `uncommitted` stays only until the panel
-  migration finishes (removed last, once nothing depends on it). A **root** `commit` degrades to `git show
+  `base..HEAD`. `working-tree` and `staged` split what a single conflated `uncommitted` scope used to lump
+  together, now that the index is a real `DiffSide`: `working-tree` is what you have not staged yet (index vs
+  worktree, plus untracked — nothing staged belongs here), `staged` is what a commit would record right now
+  (`HEAD` vs the index, no untracked — untracked is by definition not staged). A **root** `commit` degrades to `git show
   --format=` with an empty original, the same add-style degradation an absent path already gets. Both reads
   build their argv from it through `changedFileArgs(range, mode)`, so the file list and a file's two sides
   can never disagree on the range — and that argv brackets its revs on **both** sides: **`--end-of-options`** ahead of them (no ref can be

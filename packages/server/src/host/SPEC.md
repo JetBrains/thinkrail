@@ -26,8 +26,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   (`setRepoMetaPublisher`) fanned out to **two** convergences for a git-metadata write in a watched worktree:
   `refreshDefaultWorkspace` (**re-sync a Default workspace's folder-truth branch** — host-mediated, since
   `watch` has no `workspaces` edge, and self-publishing through the workspace-lifecycle tee) **and** a
-  pathless `fsChanged` frame (`paths: []`, `truncated: false`) so the clients' `HEAD`-relative reads
-  (`git.status`, an `uncommitted`-scope diff tab) re-read when a terminal `commit`/`reset` moves a ref;
+  pathless `fsChanged` frame (`paths: []`, `truncated: false`) so the clients' index-relative reads
+  (`git.status`, an open `working-tree`- or `staged`-scope diff tab) re-read when a terminal `commit`/`reset`
+  moves a ref;
   the same publish also feeds the **fsNudge seam** (`fsNudge.ts`: `setFsNudgePublisher` +
   `nudgeBaseRefWorkspaces`), the host mediation the `git.prefetch` handler triggers when the app's own
   background fetch **moved** a remote-tracking ref — a write only the project repo's shared `.git` sees,

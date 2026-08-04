@@ -53,8 +53,8 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
 
   `host` fans the nudge out to two convergences: `refreshDefaultWorkspace` (a **Default** workspace's
   folder-truth branch labels) **and** a pathless `fsChanged` frame (`paths: []`, `truncated: false`) so the
-  clients' git-derived reads re-read — `git.status` and an open `uncommitted`-scope diff tab are relative to
-  `HEAD`, and would otherwise keep reporting a committed change as uncommitted until the next file edit.
+  clients' git-derived reads re-read — `git.status` and an open `working-tree`- or `staged`-scope diff tab
+  read the index, and would otherwise keep reporting stale state until the next file edit.
 - **Publish seam:** never imports `host` — `host` injects the publish callback at wiring time (the
   session-publisher tee pattern).
 - **Self-healing per read (out-of-band worktree churn is normal — e2e resets, `rm -rf` in a terminal):**

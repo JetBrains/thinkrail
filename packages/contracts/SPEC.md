@@ -109,7 +109,8 @@ of the host.
   field, never an id convention), `Session` (chat tab),
   `FileNode` (file-tree node), `TabStatus`, `Git*`/diff types — incl. **`GitDiffScope`** (what the Changes
   panel is diffing: `branch` → the workspace's work since diverging from its diff base (the range starts at
-  their merge-base, never the base's tip) / `uncommitted` → worktree vs `HEAD` /
+  their merge-base, never the base's tip) / `working-tree` → the index vs the worktree (not staged yet, plus
+  untracked) / `staged` → `HEAD` vs the index (what a commit would record) /
   `commit` → one commit, `sha^` vs `sha`; omitted on the wire = `branch`, so an older client is unchanged)
   and **`GitCommit`** (a commit row of the scope menu's list). The two meanings of a workspace's base are
   **two fields**: `Workspace.baseBranch` is *creation provenance* (the ref the worktree was cut from — what

@@ -111,23 +111,36 @@ export function selectCatalogModel(
  */
 export const BRANCH_SCOPE: GitDiffScope = { kind: "branch" };
 
+/** The scope kinds this client understands. An unknown kind degrades to `branch` — see the store SPEC. */
+const KNOWN_SCOPE_KINDS = new Set<GitDiffScope["kind"]>([
+	"branch",
+	"working-tree",
+	"staged",
+	"commit",
+]);
+
 /**
  * What the Changes panel of this workspace is diffing. Per **workspace**, not app-wide like `changesView`: a
  * scope is a property of that branch's review (a commit sha means nothing in another worktree), so it must
- * not follow the user across workspaces.
+ * not follow the user across workspaces. An **unrecognised kind degrades to `branch`**: a long-lived client
+ * (or a replayed store value) can carry a scope this host no longer knows, and resolving it to nothing would
+ * render an empty change set — the one thing this surface must never do on a claim it cannot support.
  */
 export function selectDiffScope(
 	state: { diffScopeByWorkspace: Record<string, GitDiffScope> },
 	workspaceId: string,
 ): GitDiffScope {
-	return state.diffScopeByWorkspace[workspaceId] ?? BRANCH_SCOPE;
+	const scope = state.diffScopeByWorkspace[workspaceId];
+	if (!scope || !KNOWN_SCOPE_KINDS.has(scope.kind)) return BRANCH_SCOPE;
+	return scope;
 }
 
 /**
  * The ref a workspace's changes are measured **against**, mirroring the host's own resolution
  * (`diffBase ?? baseBranch`: the re-pointed review target, else the ref the worktree was cut from). The
- * client needs it to label the target-branch picker and to key the Changes read — so it lives here once,
- * rather than being re-derived in the panel. `""` when the workspace isn't known yet.
+ * client needs it to label the comparison target (live only for `branch` scope; the other scopes ignore it)
+ * and to key the Changes read — so it lives here once, rather than being re-derived in the panel. `""` when
+ * the workspace isn't known yet.
  */
 export function selectDiffBaseRef(state: ActiveWorkspaceState, workspaceId: string): string {
 	const workspace = selectWorkspaceById(state, workspaceId);
@@ -140,10 +153,11 @@ export function selectDiffBaseRef(state: ActiveWorkspaceState, workspaceId: stri
  * `workspace.setDiffBase` broadcast) has to re-read the tab — exactly like a file change does. A `commit`
  * scope has no such dimension (a sha is immutable), hence `""`: nothing to watch.
  *
- * An `uncommitted` tab is `""` too, and needs nothing more: its `HEAD` *can* move without the worktree's files
- * moving (a `git commit`/`reset`/`checkout` in a terminal), but the host watches each worktree's resolved git
- * metadata and pushes a **pathless** `fsChanged` nudge when a ref moves — so that case arrives on the same fs
- * tick every other live read uses, rather than needing a second dimension here.
+ * A `working-tree`- or `staged`-scope tab is `""` too, and needs nothing more: the index each reads *can*
+ * move without the worktree's files moving (a `git commit`/`reset`/`checkout` in a terminal), but the host
+ * watches each worktree's resolved git metadata and pushes a **pathless** `fsChanged` nudge when a ref moves
+ * — so that case arrives on the same fs tick every other live read uses, rather than needing a second
+ * dimension here.
  */
 export function selectDiffTabTargetRef(
 	state: ActiveWorkspaceState,
