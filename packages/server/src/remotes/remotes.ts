@@ -80,23 +80,37 @@ function stateFor(projectId: string): ProjectCheckState {
 
 let intervalMs = DEFAULT_CONFIG.gitRemoteCheckIntervalMinutes * 60_000;
 
+/** The most recently injected `gitRemoteCheck` mode — see {@link currentGitRemoteCheckMode}. */
+let gitRemoteCheckMode: AppConfig["gitRemoteCheck"] = DEFAULT_CONFIG.gitRemoteCheck;
+
 /**
  * Apply the host's already-validated config. Task 4's `updateConfig` clamps `gitRemoteCheckIntervalMinutes`
  * to `[1, 1440]` minutes before this ever sees it, so this function does not re-validate and never imports
  * `settings` (the module boundary this repo enforces for every config consumer).
  *
- * Only the interval is read here. `gitRemoteCheck` (`"probe" | "fetch" | "off"`) is a DORMANCY concern,
- * not a timing one: this scheduler keeps inviting `checkProject` on schedule regardless of that value, so
- * `"off"` is reported honestly as `dormant: "disabled"` PER PAIR by whatever implements `checkProject` —
- * never as this scheduler silently going dark. (See the report/SPEC for why this is the seam call, not an
- * oversight.)
+ * The interval drives THIS module's own scheduling. `gitRemoteCheck` (`"probe" | "fetch" | "off"`) is a
+ * DORMANCY concern, not a timing one: this scheduler keeps inviting `checkProject` on schedule regardless
+ * of that value — it is only cached here (see {@link currentGitRemoteCheckMode}) so the POLICY half can
+ * read it without either half importing `settings`. `"off"` is reported honestly as `dormant: "disabled"`
+ * PER PAIR by whatever implements `checkProject`, never by this scheduler silently going dark.
  *
  * Rearms the backstop immediately when already running, so a live interval change (e.g. a Settings edit)
  * takes effect at once rather than waiting out whatever was left of the old interval.
  */
 export function configureRemoteChecks(config: AppConfig): void {
 	intervalMs = config.gitRemoteCheckIntervalMinutes * 60_000;
+	gitRemoteCheckMode = config.gitRemoteCheck;
 	if (running) rearmBackstop();
+}
+
+/**
+ * The most recently injected `gitRemoteCheck` mode, defaulting to `DEFAULT_CONFIG.gitRemoteCheck` until
+ * `configureRemoteChecks` is ever called. Read directly by `policy.ts` (a same-module file import, not
+ * through the barrel — see SPEC.md) so it can report `dormant: "disabled"` per pair, and pick probe vs.
+ * fetch, without this file or that one importing `settings`.
+ */
+export function currentGitRemoteCheckMode(): AppConfig["gitRemoteCheck"] {
+	return gitRemoteCheckMode;
 }
 
 // ── lifecycle state (module-singleton, matching every sibling feature's injected-dependency pattern) ──
