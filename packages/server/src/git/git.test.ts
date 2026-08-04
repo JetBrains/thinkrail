@@ -351,6 +351,26 @@ test("resolveDiffRange rejects a non-oid sha before it reaches git, and an unkno
 	expect(() => resolveDiffRange(ws, { kind: "commit", sha: "deadbeef" })).toThrow(/Unknown commit/);
 });
 
+test("working-tree scope diffs the index against the worktree, including untracked", () => {
+	const ws = { baseBranch: "main", worktreePath: repo };
+	const range = resolveDiffRange(ws, { kind: "working-tree" });
+	expect(range.listPrefix).toEqual(["diff"]);
+	expect(range.listRevs).toEqual([]);
+	expect(range.untracked).toBe(true);
+	expect(range.original).toEqual({ kind: "index" });
+	expect(range.modified).toEqual({ kind: "worktree" });
+});
+
+test("staged scope diffs HEAD against the index and excludes untracked", () => {
+	const ws = { baseBranch: "main", worktreePath: repo };
+	const range = resolveDiffRange(ws, { kind: "staged" });
+	expect(range.listPrefix).toEqual(["diff", "--cached"]);
+	expect(range.listRevs).toEqual(["HEAD"]);
+	expect(range.untracked).toBe(false);
+	expect(range.original).toEqual({ kind: "ref", ref: "HEAD" });
+	expect(range.modified).toEqual({ kind: "index" });
+});
+
 test("DiffSide: a branch scope reads a ref against the worktree", () => {
 	const ws = { baseBranch: "main", worktreePath: repo };
 	const range = resolveDiffRange(ws, { kind: "branch" });
@@ -383,6 +403,62 @@ test("gitStatus scopes: branch spans the base range, uncommitted only the dirty 
 
 	const uncommitted = gitStatus("w1", { kind: "uncommitted" }).changes.map((c) => c.path);
 	expect(uncommitted).toEqual(["dirty.txt"]);
+});
+
+test("staged and working-tree split a partially-staged worktree", () => {
+	seedWorkspace();
+	writeFileSync(join(repo, "staged-only.txt"), "staged\n");
+	git(repo, "add", "staged-only.txt");
+	writeFileSync(join(repo, "README.md"), "dirty, unstaged\n");
+
+	const staged = gitStatus("w1", { kind: "staged" }).changes.map((c) => c.path);
+	const working = gitStatus("w1", { kind: "working-tree" }).changes.map((c) => c.path);
+
+	expect(staged).toContain("staged-only.txt");
+	expect(staged).not.toContain("README.md");
+	expect(working).toContain("README.md");
+	expect(working).not.toContain("staged-only.txt");
+});
+
+test("a staged file's diff sides read HEAD and the index, not the dirty worktree", () => {
+	seedWorkspace();
+	writeFileSync(join(repo, "README.md"), "staged content\n");
+	git(repo, "add", "README.md");
+	writeFileSync(join(repo, "README.md"), "later worktree edit\n");
+
+	const staged = gitDiffFile("w1", "README.md", { kind: "staged" });
+	expect(staged.modified).toBe("staged content\n");
+	expect(staged.modified).not.toBe("later worktree edit\n");
+
+	const working = gitDiffFile("w1", "README.md", { kind: "working-tree" });
+	expect(working.original).toBe("staged content\n");
+	expect(working.modified).toBe("later worktree edit\n");
+});
+
+test("a staged deletion reads as an empty modified side, without warning", () => {
+	// This is the case that makes `showIndexBlob`'s expected-absence detection load-bearing: `git show
+	// :<path>` for a staged deletion prints `fatal: path 'x' does not exist (neither on disk nor in the
+	// index)`. If that is not recognised as an expected absence, every ordinary staged deletion logs a
+	// warning — burying the real broken-read signal the warning exists for.
+	//
+	// The fixture's own committed file (README.md) stands in for the brief's `notes.txt`, which this
+	// suite's `beforeEach` never seeds.
+	seedWorkspace();
+	git(repo, "rm", "-q", "README.md");
+
+	const warnings: string[] = [];
+	const realWarn = console.warn;
+	console.warn = (...args: unknown[]) => {
+		warnings.push(args.join(" "));
+	};
+	try {
+		const staged = gitDiffFile("w1", "README.md", { kind: "staged" });
+		expect(staged.original).not.toBe(""); // it existed at HEAD
+		expect(staged.modified).toBe(""); // gone from the index — the deletion
+	} finally {
+		console.warn = realWarn;
+	}
+	expect(warnings).toEqual([]);
 });
 
 test("branch scope measures from the merge-base: upstream commits on the base are never phantom changes", () => {

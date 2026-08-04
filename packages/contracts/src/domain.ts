@@ -237,11 +237,15 @@ export interface GitStatus {
  * - `branch` — what this workspace changed since diverging from its diff base (`diffBase ??
  *   baseBranch`): the range starts at their **merge-base** (the fork point), never at the base's tip —
  *   upstream work landing on the base is not this workspace's change and never shows up here.
- * - `uncommitted` — the worktree vs `HEAD` (what a commit here would record).
+ * - `working-tree` — the index vs the files on disk (what you have not staged yet), plus untracked files.
+ * - `staged` — `HEAD` vs the index (what a commit would record right now).
+ * - `uncommitted` — DEPRECATED, removed once the panel offers the two above; `HEAD` vs the worktree.
  * - `commit` — one commit alone (`sha^` vs `sha`; a root commit degrades to an add-style diff).
  */
 export type GitDiffScope =
 	| { kind: "branch" }
+	| { kind: "working-tree" }
+	| { kind: "staged" }
 	| { kind: "uncommitted" }
 	| { kind: "commit"; sha: string };
 

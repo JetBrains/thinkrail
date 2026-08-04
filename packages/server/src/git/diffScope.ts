@@ -67,11 +67,37 @@ const OID = /^[0-9a-f]{4,64}$/;
  *
  * Existence, deliberately **not** reachability: a commit the branch no longer contains (a rebase rewrote
  * history) is still a meaningful selection whose diff we can show — see the module SPEC.
+ *
+ * `working-tree` and `staged` split what `uncommitted` used to conflate: `working-tree` is the index vs the
+ * worktree (what you have not staged yet, plus untracked files — nothing staged is "in" it); `staged` is
+ * `HEAD` vs the index (what a commit would record right now, no untracked files — they are by definition
+ * not staged). Together they are `uncommitted` with the index made a real stop instead of skipped over.
  */
 export function resolveDiffRange(
 	ws: Pick<Workspace, "baseBranch" | "diffBase" | "worktreePath">,
 	scope: GitDiffScope = { kind: "branch" },
 ): DiffRange {
+	if (scope.kind === "working-tree") {
+		// No revs: a bare `git diff` is index-vs-worktree. Untracked files belong here — they are precisely
+		// what is not staged.
+		return {
+			listPrefix: ["diff"],
+			listRevs: [],
+			untracked: true,
+			original: { kind: "index" },
+			modified: { kind: "worktree" },
+		};
+	}
+	if (scope.kind === "staged") {
+		// `--cached` against HEAD is what a commit would record. Untracked files are by definition not staged.
+		return {
+			listPrefix: ["diff", "--cached"],
+			listRevs: ["HEAD"],
+			untracked: false,
+			original: { kind: "ref", ref: "HEAD" },
+			modified: { kind: "index" },
+		};
+	}
 	if (scope.kind === "uncommitted") {
 		return {
 			listPrefix: ["diff"],

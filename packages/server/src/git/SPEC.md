@@ -22,17 +22,29 @@ ref off the workspace-create critical path.
   args)` (its async twin — `Bun.spawn`, off the event loop, for network-bound ops like `fetch` that must
   not block the host);
   **the scope→range resolver** — `resolveDiffRange(ws, scope?)` → `DiffRange` — **the one definition of what
-  a `GitDiffScope` means** (`branch`: `git diff <merge-base(base, HEAD)>` + untracked, sides = **fork
-  point** ↔ worktree — what the workspace changed *since diverging*, so a base that advanced underneath it
-  (a fetch moving `origin/main`, upstream work landing) never surfaces as phantom changes; while the base
-  hasn't diverged the merge-base *is* its tip, and a failed `merge-base` (missing base, unrelated
-  histories, unborn `HEAD`) falls back to the raw ref, keeping the old error surfaces — and keeping the
-  file list ancestry-consistent with `listCommits`' `base..HEAD`;
-  `uncommitted`: `git diff HEAD` + untracked, sides = `HEAD` ↔ worktree; `commit`: `git diff <sha>^ <sha>`, no
-  untracked, both sides from history — a **root** commit degrades to `git show --format=` with an empty
-  original, the same add-style degradation an absent path already gets). Both reads build their argv from it
-  through `changedFileArgs(range, mode)`, so the file list and a file's two sides can never disagree on the
-  range — and that argv brackets its revs on **both** sides: **`--end-of-options`** ahead of them (no ref can be
+  a `GitDiffScope` means**:
+
+  | scope | list command | untracked | original | modified |
+  |---|---|---|---|---|
+  | `branch` | `diff <merge-base>` | yes | merge-base ref | worktree |
+  | `working-tree` | `diff` (no revs) | yes | index | worktree |
+  | `staged` | `diff --cached HEAD` | no | `HEAD` | index |
+  | `uncommitted` | `diff HEAD` | yes | `HEAD` | worktree | (transitional — removed with the panel migration) |
+  | `commit` | `diff <sha>^ <sha>` / `show` for a root | no | parent / empty | `sha` |
+
+  `branch`'s merge-base ref is the **fork point** of the diff base and `HEAD` — what the workspace changed
+  *since diverging*, so a base that advanced underneath it (a fetch moving `origin/main`, upstream work
+  landing) never surfaces as phantom changes; while the base hasn't diverged the merge-base *is* its tip,
+  and a failed `merge-base` (missing base, unrelated histories, unborn `HEAD`) falls back to the raw ref,
+  keeping the old error surfaces — and keeping the file list ancestry-consistent with `listCommits`'
+  `base..HEAD`. `working-tree` and `staged` are what `uncommitted` used to conflate, pulled apart now that
+  the index is a real `DiffSide`: `working-tree` is what you have not staged yet (index vs worktree, plus
+  untracked — nothing staged belongs here), `staged` is what a commit would record right now (`HEAD` vs the
+  index, no untracked — untracked is by definition not staged). `uncommitted` stays only until the panel
+  migration finishes (removed last, once nothing depends on it). A **root** `commit` degrades to `git show
+  --format=` with an empty original, the same add-style degradation an absent path already gets. Both reads
+  build their argv from it through `changedFileArgs(range, mode)`, so the file list and a file's two sides
+  can never disagree on the range — and that argv brackets its revs on **both** sides: **`--end-of-options`** ahead of them (no ref can be
   re-parsed as a git option) and a trailing **`--`** after them (a rev that also names a path on disk — a branch
   called `docs` — is read as a rev instead of failing the command as an "ambiguous argument"). A **failed**
   `git diff`/`git show` **throws**; it is never reported as an empty change set (see Get right). A `commit` scope's `sha` is validated **twice** — shape (hex-oid regex, so a crafted value can never
