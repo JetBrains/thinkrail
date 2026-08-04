@@ -345,8 +345,9 @@ a project picker, the prompt hero, and the reused
   a reset actually needs — a plain effect keyed on `workspaceId` runs with the *new* id already in scope);
   and a manual refresh is an **imperative `reload()`**, not a nonce dependency. `readKey` is the read's
   **second identity dimension**, for a read parameterized by more than the workspace — `ChangesPanel` passes
-  `${scopeKey}:${targetRef}`, so switching the diff scope or re-pointing the target branch resets and
-  re-reads exactly like a workspace switch, and one scope's list can never linger under another. `onFailure`
+  `changesReadKey(scope, baseRef)`, so switching the diff scope resets and re-reads exactly like a
+  workspace switch (a re-point additionally re-reads only in `branch` scope — see the read-key bullet
+  below), and one scope's list can never linger under another. `onFailure`
   receives **the rejection**, not just the workspace id: a caller that reacts to one *named* failure (see the
   vanished-commit rule below) must be able to tell it from a timeout or a dropped socket.
   The one read that deliberately does **not** go through this hook is `ChangesScopeMenu`'s lazy trio — they
@@ -388,6 +389,10 @@ a project picker, the prompt hero, and the reused
   so scoping is natural; a degraded watcher just means back to read-on-demand. Deliberately **not**
   live (deferred): the project-rail workspace diffStats badges; editable-file conflict handling waits
   for `fs.writeFile` (the viewer is read-only today).
+- The read key carries the diff base **only for `branch` scope**. The other three scopes' ranges cannot
+  move when the target is re-pointed, so including it forced a full reset-and-re-read (a visible
+  `Loading…`) for a diff that provably could not change. `ChangesScopeMenu`'s `key` still carries the
+  base — unlike the diff, the *commit list* really is `git log <base>..HEAD`.
 - **`useWorkspaceSpecs` owns the `spec.graph` read** (one fetcher, one definition of "this file is a spec"):
   the snapshot lands in the store (`specsByWorkspace`), not panel state, because the chat's turn divider
   needs the same answer to route its chips. It is called by **`RightPanel`**, not by `SpecsPanel` — the

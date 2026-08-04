@@ -3,6 +3,7 @@ import type { GitFileChange } from "@thinkrail/contracts";
 import {
 	buildChangesTree,
 	type ChangeTreeDir,
+	changesReadKey,
 	comparisonTargetLabel,
 	diffTabId,
 	diffTabName,
@@ -135,4 +136,32 @@ test("the comparison target names the other side, and is live only for branch sc
 		label: "— (parent)",
 		interactive: false,
 	});
+});
+
+test("the read key carries the diff base only for the scope whose range uses it", () => {
+	// Branch scope is measured from merge-base(target, HEAD) — re-pointing the target changes the answer,
+	// so the target belongs to the read's identity.
+	expect(changesReadKey({ kind: "branch" }, "main")).not.toBe(
+		changesReadKey({ kind: "branch" }, "develop"),
+	);
+
+	// The other three ranges (index→disk, HEAD→index, sha^→sha) cannot move when the target is re-pointed,
+	// so their keys must be base-independent — otherwise a re-point resets the list to Loading… and re-reads
+	// for a diff that provably could not change.
+	for (const scope of [
+		{ kind: "working-tree" } as const,
+		{ kind: "staged" } as const,
+		{ kind: "commit", sha: "abc1234" } as const,
+	]) {
+		expect(changesReadKey(scope, "main")).toBe(changesReadKey(scope, "develop"));
+	}
+
+	// Distinct scopes still key distinctly — the key must not collapse two scopes into one read.
+	const keys = [
+		changesReadKey({ kind: "branch" }, "main"),
+		changesReadKey({ kind: "working-tree" }, "main"),
+		changesReadKey({ kind: "staged" }, "main"),
+		changesReadKey({ kind: "commit", sha: "abc1234" }, "main"),
+	];
+	expect(new Set(keys).size).toBe(4);
 });
