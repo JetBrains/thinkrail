@@ -94,9 +94,14 @@ ref off the workspace-create critical path.
   `git.prefetch` handler uses `moved` to fan out the host's pathless `fsChanged` nudge (`host`'s fsNudge
   seam; an unaffected re-read is an idempotent no-op). `moved` is host-internal; the wire response stays
   `{ ok }`.
+- `original` / `modified`: the two sides of the diff as an explicit **`DiffSide`** union — `{kind:"ref"}`
+  (a commit/branch), `{kind:"index"}` (the staging area, read as `git show :<path>`),
+  `{kind:"worktree"}` (the file on disk), or `{kind:"empty"}` (nothing there — a root commit's
+  add-style diff). A union rather than `string | null`, because `null` previously meant *empty* on one
+  side and *the worktree* on the other, and neither meaning left room for the index.
 - **Public surface (barrel):** `git`, `gitAsync`, `gitStatus`, `gitDiffFile`, `listCommits`,
-  `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `DiffRange`, `isSafeRef`, `assertSafeRef`,
-  `listBranches`, `resolveDefaultBranch`, `currentBranch`, `prefetchBranch`.
+  `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `DiffRange`, `DiffSide`, `isSafeRef`,
+  `assertSafeRef`, `listBranches`, `resolveDefaultBranch`, `currentBranch`, `prefetchBranch`.
 - **Allowed deps:** `persistence` (workspace + project lookup); `contracts` (`Git*`/`BranchList` types);
   `@thinkrail/shared/codedError` (naming a failure for the wire); Bun (spawn).
 - **Forbidden:** `host`; sibling features.

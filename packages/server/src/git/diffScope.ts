@@ -13,6 +13,18 @@ export function diffBaseRef(ws: Pick<Workspace, "baseBranch" | "diffBase">): str
 }
 
 /**
+ * One side of a diff. A union rather than `string | null`, because `null` used to mean *nothing there* on
+ * the original side and *the file on disk* on the modified side — two meanings for one value, and no room
+ * for a third source. `index` is the staging area (`git show :<path>`, stage 0), which the `staged` and
+ * `working-tree` scopes both need.
+ */
+export type DiffSide =
+	| { kind: "ref"; ref: string }
+	| { kind: "index" }
+	| { kind: "worktree" }
+	| { kind: "empty" };
+
+/**
  * What a {@link GitDiffScope} *means* in git terms — the one definition shared by both reads (the changed
  * file list and a single file's two sides), so "what is being diffed" can never drift between them.
  *
@@ -21,15 +33,15 @@ export function diffBaseRef(ws: Pick<Workspace, "baseBranch" | "diffBase">): str
  *   to subtract) is `git show --format= <mode> <sha>`. Compose them with {@link changedFileArgs}.
  * - `untracked`: whether worktree files git doesn't track belong in the change set (they do for anything
  *   ending at the worktree, never for a historical commit).
- * - `originalRef` / `modifiedRef`: the blob sources of the diff's two sides — `null` on `originalRef` means
- *   "nothing there" (a root commit's add-style diff), `null` on `modifiedRef` means the file **on disk**.
+ * - `original` / `modified`: the blob source each side of the diff reads from — see {@link DiffSide}.
  */
 export interface DiffRange {
 	listPrefix: string[];
 	listRevs: string[];
 	untracked: boolean;
-	originalRef: string | null;
-	modifiedRef: string | null;
+	/** The blob source each side of the diff reads from — see {@link DiffSide}. */
+	original: DiffSide;
+	modified: DiffSide;
 }
 
 /** A commit id as git prints one — abbreviated or full, sha1 or sha256. Never interpolated unvalidated. */
@@ -65,8 +77,8 @@ export function resolveDiffRange(
 			listPrefix: ["diff"],
 			listRevs: ["HEAD"],
 			untracked: true,
-			originalRef: "HEAD",
-			modifiedRef: null,
+			original: { kind: "ref", ref: "HEAD" },
+			modified: { kind: "worktree" },
 		};
 	}
 	if (scope.kind === "commit") {
@@ -88,16 +100,16 @@ export function resolveDiffRange(
 				listPrefix: ["show", "--format="],
 				listRevs: [sha],
 				untracked: false,
-				originalRef: null,
-				modifiedRef: sha,
+				original: { kind: "empty" },
+				modified: { kind: "ref", ref: sha },
 			};
 		}
 		return {
 			listPrefix: ["diff"],
 			listRevs: [parent.out, sha],
 			untracked: false,
-			originalRef: parent.out,
-			modifiedRef: sha,
+			original: { kind: "ref", ref: parent.out },
+			modified: { kind: "ref", ref: sha },
 		};
 	}
 	const base = diffBaseRef(ws);
@@ -109,8 +121,8 @@ export function resolveDiffRange(
 		listPrefix: ["diff"],
 		listRevs: [forkPoint],
 		untracked: true,
-		originalRef: forkPoint,
-		modifiedRef: null,
+		original: { kind: "ref", ref: forkPoint },
+		modified: { kind: "worktree" },
 	};
 }
 

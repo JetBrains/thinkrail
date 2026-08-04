@@ -256,7 +256,7 @@ test("resolveDiffRange: one definition per scope (branch / uncommitted / commit)
 	// never at the base ref's own tip.
 	expect(resolveDiffRange(ws)).toEqual(resolveDiffRange(ws, { kind: "branch" }));
 	const branch = resolveDiffRange(ws, { kind: "branch" });
-	const forkPoint = branch.originalRef ?? "";
+	const forkPoint = branch.original.kind === "ref" ? branch.original.ref : "";
 	expect(forkPoint).toMatch(/^[0-9a-f]{40,}$/);
 	// `--end-of-options` brackets the revs so a flag-shaped ref can't be parsed as one; the trailing `--`
 	// closes the other side, so a rev that also names a path isn't an "ambiguous argument".
@@ -267,14 +267,18 @@ test("resolveDiffRange: one definition per scope (branch / uncommitted / commit)
 		forkPoint,
 		"--",
 	]);
-	expect(branch).toMatchObject({ untracked: true, listRevs: [forkPoint], modifiedRef: null });
+	expect(branch).toMatchObject({
+		untracked: true,
+		listRevs: [forkPoint],
+		modified: { kind: "worktree" },
+	});
 	// The re-pointed target is what a branch range spans — and a target with no merge-base to resolve
 	// (this ref doesn't exist here) FALLS BACK to the raw ref, preserving the old error surfaces: a
 	// missing base still fails the downstream diff loudly instead of reading as "no changes".
 	expect(resolveDiffRange({ ...ws, diffBase: "origin/release" }, { kind: "branch" })).toMatchObject(
 		{
 			listRevs: ["origin/release"],
-			originalRef: "origin/release",
+			original: { kind: "ref", ref: "origin/release" },
 		},
 	);
 
@@ -287,15 +291,23 @@ test("resolveDiffRange: one definition per scope (branch / uncommitted / commit)
 		"HEAD",
 		"--",
 	]);
-	expect(uncommitted).toMatchObject({ untracked: true, originalRef: "HEAD", modifiedRef: null });
+	expect(uncommitted).toMatchObject({
+		untracked: true,
+		original: { kind: "ref", ref: "HEAD" },
+		modified: { kind: "worktree" },
+	});
 
 	// One commit: `sha^` vs `sha`, both sides from history, no untracked files.
 	const sha = commitOnFeature("second.txt", "second\n", "second");
 	const commit = resolveDiffRange(ws, { kind: "commit", sha });
-	const parent = commit.originalRef ?? "";
+	const parent = commit.original.kind === "ref" ? commit.original.ref : "";
 	expect(parent).toMatch(/^[0-9a-f]{40,}$/);
 	expect(parent).not.toBe(sha);
-	expect(commit).toMatchObject({ untracked: false, modifiedRef: sha, listRevs: [parent, sha] });
+	expect(commit).toMatchObject({
+		untracked: false,
+		modified: { kind: "ref", ref: sha },
+		listRevs: [parent, sha],
+	});
 	// An abbreviated sha resolves to the same full-oid range.
 	expect(resolveDiffRange(ws, { kind: "commit", sha: sha.slice(0, 8) })).toEqual(commit);
 });
@@ -310,7 +322,11 @@ test("resolveDiffRange degrades a root commit to an add-style diff (no parent to
 		)
 		.trim();
 	const range = resolveDiffRange(ws, { kind: "commit", sha: root });
-	expect(range).toMatchObject({ untracked: false, originalRef: null, modifiedRef: root });
+	expect(range).toMatchObject({
+		untracked: false,
+		original: { kind: "empty" },
+		modified: { kind: "ref", ref: root },
+	});
 	// `git show` (not `git diff`), since there is no `sha^` — the range's changed files are still listable.
 	expect(changedFileArgs(range, "--name-status")).toEqual([
 		"show",
@@ -333,6 +349,27 @@ test("resolveDiffRange rejects a non-oid sha before it reaches git, and an unkno
 	);
 	expect(() => resolveDiffRange(ws, { kind: "commit", sha: "HEAD" })).toThrow(/Not a commit id/);
 	expect(() => resolveDiffRange(ws, { kind: "commit", sha: "deadbeef" })).toThrow(/Unknown commit/);
+});
+
+test("DiffSide: a branch scope reads a ref against the worktree", () => {
+	const ws = { baseBranch: "main", worktreePath: repo };
+	const range = resolveDiffRange(ws, { kind: "branch" });
+	expect(range.original.kind).toBe("ref");
+	expect(range.modified).toEqual({ kind: "worktree" });
+});
+
+test("DiffSide: a root commit's original side is empty, not a ref", () => {
+	const ws = { baseBranch: "main", worktreePath: repo };
+	const root = new TextDecoder()
+		.decode(
+			Bun.spawnSync(["git", "-C", repo, "rev-list", "--max-parents=0", "HEAD"], {
+				stdout: "pipe",
+			}).stdout,
+		)
+		.trim();
+	const range = resolveDiffRange(ws, { kind: "commit", sha: root });
+	expect(range.original).toEqual({ kind: "empty" });
+	expect(range.modified).toEqual({ kind: "ref", ref: root });
 });
 
 test("gitStatus scopes: branch spans the base range, uncommitted only the dirty worktree", () => {

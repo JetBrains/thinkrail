@@ -10,7 +10,13 @@ import type {
 	Workspace,
 } from "@thinkrail/contracts";
 import { loadProjects, loadWorkspaces } from "../persistence";
-import { changedFileArgs, type DiffRange, diffBaseRef, resolveDiffRange } from "./diffScope";
+import {
+	changedFileArgs,
+	type DiffRange,
+	type DiffSide,
+	diffBaseRef,
+	resolveDiffRange,
+} from "./diffScope";
 import { git, gitAsync } from "./gitExec";
 
 function workspace(workspaceId: string): Workspace {
@@ -289,17 +295,46 @@ export function gitDiffFile(
 	const rel = relative(ws.worktreePath, abs);
 	if (rel.startsWith("..") || isAbsolute(rel)) throw new Error("Path escapes the worktree");
 
-	const original = range.originalRef ? showBlob(ws.worktreePath, range.originalRef, path) : "";
+	return {
+		original: readSide(ws.worktreePath, range.original, path, abs),
+		modified: readSide(ws.worktreePath, range.modified, path, abs),
+	};
+}
 
-	if (range.modifiedRef)
-		return { original, modified: showBlob(ws.worktreePath, range.modifiedRef, path) };
-	let modified = "";
-	try {
-		modified = readFileSync(abs, "utf8");
-	} catch {
-		// deleted (or unreadable) in the worktree → empty modified side
+/**
+ * One side of a diff as text. `empty` is the intended blank side (an added file has no original, a deleted
+ * one has no modified); `worktree` reads the file on disk; `index` reads stage 0. An unreadable worktree
+ * file degrades to empty — the file is genuinely not there for this side.
+ */
+function readSide(worktreePath: string, side: DiffSide, path: string, abs: string): string {
+	switch (side.kind) {
+		case "empty":
+			return "";
+		case "ref":
+			return showBlob(worktreePath, side.ref, path);
+		case "index":
+			return showIndexBlob(worktreePath, path);
+		case "worktree":
+			try {
+				return readFileSync(abs, "utf8");
+			} catch {
+				return "";
+			}
 	}
-	return { original, modified };
+}
+
+/**
+ * One file's **staged** content (`git show :<path>` — stage 0), byte-exact, or `""` when the path isn't in
+ * the index. Separate from {@link showBlob} because there is no ref to bracket: the argument is a
+ * pathspec-shaped `:<path>`, and passing it through the ref path would read as `":" + ":" + path`.
+ */
+function showIndexBlob(worktreePath: string, path: string): string {
+	const shown = git(worktreePath, ["show", "--end-of-options", `:${path}`], { raw: true });
+	if (shown.ok) return shown.out;
+	if (!/does not exist in|exists on disk, but not in|Path .* does not exist/.test(shown.err)) {
+		console.warn(`git show :${path} failed: ${shown.err || "unknown error"}`);
+	}
+	return "";
 }
 
 /** How many commits the scope menu's list can hold — a long-lived branch must not ship its whole history. */
