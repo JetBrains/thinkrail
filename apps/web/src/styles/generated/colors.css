@@ -1,0 +1,104 @@
+/*
+ * GENERATED — do not edit. Source: `src/styles/colors.json` (v1.0.0).
+ * Regenerate with `bun run colors:generate`; `colors:check` fails when this file is stale.
+ *
+ * The semantic roles, then the Tailwind utility map. The palette they read is written to the
+ * document root by `themes/runtime.ts` before React mounts.
+ */
+
+:root {
+	--text-default: var(--text);
+	--text-muted: var(--muted);
+	--text-subtle: var(--hint);
+	--text-on-primary: var(--on-accent);
+	--text-link: var(--info); /* global.css `a {}` is the only consumer; no component styles a bare link */
+	--container-workspace-bg: var(--background);
+	--container-sidebar-bg: var(--sidebar);
+	--container-header-bg: var(--header);
+	--container-content-bg: var(--content); /* the code canvas: Monaco, Shiki, the terminal, the markdown preview */
+	--container-elevated-bg: var(--elevated); /* every raised surface: dialogs, popovers, menus, toasts, cards, code blocks */
+	--control-bg: var(--input);
+	--control-bg-hovered: var(--hover);
+	--control-primary-bg: var(--accent);
+	--control-primary-text: var(--on-accent);
+	--border-default: var(--border-strong);
+	--border-muted: var(--border);
+	--primary: var(--accent);
+	--primary-subtle: color-mix(in srgb, var(--accent) 10%, transparent);
+	--primary-soft: color-mix(in srgb, var(--accent) 20%, transparent);
+	--primary-muted: color-mix(in srgb, var(--accent) 40%, transparent);
+	--primary-strong: color-mix(in srgb, var(--accent) 60%, transparent);
+	--on-primary-soft: color-mix(in srgb, var(--on-accent) 20%, transparent);
+	--feedback-info: var(--info);
+	--feedback-info-subtle: color-mix(in srgb, var(--info) 10%, transparent);
+	--feedback-success: var(--success);
+	--feedback-success-subtle: color-mix(in srgb, var(--success) 10%, transparent);
+	--feedback-success-muted: color-mix(in srgb, var(--success) 40%, transparent);
+	--feedback-error: var(--danger);
+	--feedback-error-subtle: color-mix(in srgb, var(--danger) 10%, transparent);
+	--feedback-error-muted: color-mix(in srgb, var(--danger) 40%, transparent);
+	--feedback-warning: var(--warning);
+	--feedback-warning-subtle: color-mix(in srgb, var(--warning) 10%, transparent);
+	--bubble-user-bg: color-mix(in srgb, var(--bubble-accent) 10%, transparent);
+	--bubble-user-border: color-mix(in srgb, var(--bubble-accent) 40%, transparent);
+	--selection-text: var(--selection-foreground, inherit); /* nullable in the manifest (high contrast keeps the native foreground) */
+	--selection-bg: var(--selection); /* native ::selection in global.css; not a utility */
+	--editor-selection-bg: var(--editor-selection);
+	--editor-selection-text: var(--editor-selection-foreground); /* read by Monaco and xterm through getComputedStyle; a utility would be dead weight */
+}
+
+/* Appearance-level effects. The theme engine stamps `data-theme-appearance` before React mounts, so
+ * these need no JavaScript — they are constants, not palette derivations. */
+:root[data-theme-appearance="dark"] {
+	--sunken: rgba(0, 0, 0, 0.12);
+	--overlay: rgba(0, 0, 0, 0.5);
+	--shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+	--shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35);
+	--shadow-lg: 0 8px 28px rgba(0, 0, 0, 0.4);
+}
+:root[data-theme-appearance="light"] {
+	--sunken: rgba(0, 0, 0, 0.05);
+	--overlay: rgba(0, 0, 0, 0.5);
+	--shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.1);
+	--shadow-md: 0 4px 16px rgba(0, 0, 0, 0.12);
+	--shadow-lg: 0 8px 28px rgba(0, 0, 0, 0.14);
+}
+
+@theme inline {
+	--color-*: initial;
+	--color-text-default: var(--text-default);
+	--color-text-muted: var(--text-muted);
+	--color-text-subtle: var(--text-subtle);
+	--color-text-on-primary: var(--text-on-primary);
+	--color-container-workspace-bg: var(--container-workspace-bg);
+	--color-container-sidebar-bg: var(--container-sidebar-bg);
+	--color-container-header-bg: var(--container-header-bg);
+	--color-container-content-bg: var(--container-content-bg);
+	--color-container-elevated-bg: var(--container-elevated-bg);
+	--color-control-bg: var(--control-bg);
+	--color-control-bg-hovered: var(--control-bg-hovered);
+	--color-control-primary-bg: var(--control-primary-bg);
+	--color-control-primary-text: var(--control-primary-text);
+	--color-border-default: var(--border-default);
+	--color-border-muted: var(--border-muted);
+	--color-primary: var(--primary);
+	--color-primary-subtle: var(--primary-subtle);
+	--color-primary-soft: var(--primary-soft);
+	--color-primary-muted: var(--primary-muted);
+	--color-primary-strong: var(--primary-strong);
+	--color-on-primary-soft: var(--on-primary-soft);
+	--color-feedback-info: var(--feedback-info);
+	--color-feedback-info-subtle: var(--feedback-info-subtle);
+	--color-feedback-success: var(--feedback-success);
+	--color-feedback-success-subtle: var(--feedback-success-subtle);
+	--color-feedback-success-muted: var(--feedback-success-muted);
+	--color-feedback-error: var(--feedback-error);
+	--color-feedback-error-subtle: var(--feedback-error-subtle);
+	--color-feedback-error-muted: var(--feedback-error-muted);
+	--color-feedback-warning: var(--feedback-warning);
+	--color-feedback-warning-subtle: var(--feedback-warning-subtle);
+	--color-bubble-user-bg: var(--bubble-user-bg);
+	--color-bubble-user-border: var(--bubble-user-border);
+	--color-sunken: var(--sunken);
+	--color-overlay: var(--overlay);
+}

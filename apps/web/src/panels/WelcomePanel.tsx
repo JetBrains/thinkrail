@@ -210,7 +210,7 @@ export function WelcomePanel() {
 }
 
 /**
- * One welcome card (Conductor-style: icon top-left, label + explainer bottom-left). The state's primary
+ * One welcome card (icon top-left, label + explainer bottom-left). The state's primary
  * is a filled-violet card carrying the stable `welcome-cta` hook; others are quiet outlined
  * `welcome-action`s. A `forwardRef` so it can serve as a Radix `asChild` trigger (the "Open project" card
  * hangs the `AddProjectMenu` dropdown off it).
@@ -237,27 +237,29 @@ const Card = forwardRef<HTMLButtonElement, CardProps>(function Card(
 			className={cn(
 				"relative flex h-[150px] w-[220px] flex-col items-start justify-between rounded-[var(--radius-lg)] border p-lg text-left transition-colors",
 				primary
-					? "border-[var(--primary-40)] bg-[var(--primary-10)] hover:bg-[var(--primary-20)]"
-					: "border-border2 bg-bg hover:border-[var(--primary-40)] hover:bg-elevated",
+					? "border-primary-muted bg-primary-subtle hover:bg-primary-soft"
+					: "border-border-default bg-container-workspace-bg hover:border-primary-muted hover:bg-container-elevated-bg",
 				className,
 			)}
 		>
 			{tag ? (
-				<span className="absolute top-md right-md rounded-full border border-[var(--primary-40)] bg-[var(--primary-10)] px-sm py-0.5 tr-text-label-pill text-primary">
+				<span className="absolute top-md right-md rounded-full border border-primary-muted bg-primary-subtle px-sm py-0.5 tr-text-label-pill text-primary">
 					{tag}
 				</span>
 			) : null}
 			<span
 				className={cn(
 					"flex size-9 items-center justify-center rounded-[10px]",
-					primary ? "bg-primary text-on-accent" : "bg-hover text-muted",
+					primary ? "bg-primary text-text-on-primary" : "bg-control-bg-hovered text-text-muted",
 				)}
 			>
 				<Icon className="size-4" />
 			</span>
 			<span className="w-full">
-				<span className="block tr-title-card text-text">{title}</span>
-				<span className="mt-0.5 block text-muted tr-text-metadata leading-snug">{subtitle}</span>
+				<span className="block tr-title-card text-text-default">{title}</span>
+				<span className="mt-0.5 block text-text-muted tr-text-metadata leading-snug">
+					{subtitle}
+				</span>
 			</span>
 		</button>
 	);

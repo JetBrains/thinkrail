@@ -24,7 +24,9 @@ export default function MonacoEditor({ path, content }: { path: string; content:
 			beforeMount={beforeMount}
 			onMount={onMount}
 			loading={
-				<div className="flex h-full items-center justify-center text-hint">Loading editor…</div>
+				<div className="flex h-full items-center justify-center text-text-subtle">
+					Loading editor…
+				</div>
 			}
 			options={sharedEditorOptions()}
 		/>

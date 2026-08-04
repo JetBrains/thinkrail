@@ -47,7 +47,6 @@ const PRIMITIVE_ALLOWLIST = new Set([
 	"index.css",
 	"styles/tokens.css",
 	"styles/global.css",
-	"styles/fonts.css",
 	"panels/monacoSetup.ts",
 	"panels/TerminalInstance.tsx",
 	"chat/tools/visualize/mermaid.ts",

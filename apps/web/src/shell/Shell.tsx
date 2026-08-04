@@ -27,9 +27,9 @@ const STATUS_LABEL: Record<ConnectionStatus, string> = {
 };
 
 const STATUS_DOT: Record<ConnectionStatus, string> = {
-	connected: "bg-green",
-	connecting: "bg-gold",
-	disconnected: "bg-red",
+	connected: "bg-feedback-success",
+	connecting: "bg-feedback-warning",
+	disconnected: "bg-feedback-error",
 };
 
 export function Shell() {
@@ -49,28 +49,31 @@ export function Shell() {
 	useGlobalHotkeys();
 	return (
 		<div data-testid="shell" className="grid h-full grid-rows-[auto_1fr]">
-			<header className="flex items-center justify-between border-b border-border2 bg-bg-dark px-lg py-sm">
+			<header className="flex items-center justify-between border-b border-border-default bg-container-header-bg px-lg py-sm">
 				<div className="flex min-w-0 items-center gap-md">
 					<span className="tr-brand-wordmark shrink-0 text-primary">{PRODUCT_NAME}</span>
 					{contextProject ? (
 						<div
 							data-testid="scope-context"
 							data-context={activeWorkspace ? "workspace" : "project-home"}
-							className="min-w-0 border-border2 border-l pl-md leading-tight"
+							className="min-w-0 border-border-default border-l pl-md leading-tight"
 						>
 							<div className="flex min-w-0 items-center gap-xs tr-text-ui">
 								<span className="hidden min-w-0 items-center gap-xs sm:flex">
-									<span data-testid="scope-project" className="max-w-[160px] truncate text-muted">
+									<span
+										data-testid="scope-project"
+										className="max-w-[160px] truncate text-text-muted"
+									>
 										{contextProject.name}
 									</span>
-									<ChevronRight className="size-3 shrink-0 text-hint" />
+									<ChevronRight className="size-3 shrink-0 text-text-subtle" />
 								</span>
-								<span data-testid="scope-name" className="max-w-[220px] truncate text-text">
+								<span data-testid="scope-name" className="max-w-[220px] truncate text-text-default">
 									{activeWorkspace?.name ?? "Project home"}
 								</span>
 							</div>
 							{activeWorkspace ? (
-								<div className="mt-0.5 flex min-w-0 items-center gap-xs text-hint tr-text-metadata">
+								<div className="mt-0.5 flex min-w-0 items-center gap-xs text-text-subtle tr-text-metadata">
 									<GitBranch className="size-3 shrink-0" />
 									<span data-testid="scope-branch" className="truncate">
 										{activeWorkspace.branch}
@@ -92,7 +95,7 @@ export function Shell() {
 					<span
 						data-testid="connection-status"
 						data-status={status}
-						className="inline-flex items-center gap-sm tr-text-ui text-muted"
+						className="inline-flex items-center gap-sm tr-text-ui text-text-muted"
 					>
 						<span className={`size-2 rounded-full ${STATUS_DOT[status]}`} />
 						{STATUS_LABEL[status]}
@@ -103,7 +106,7 @@ export function Shell() {
 						aria-label="Settings"
 						title="Settings"
 						onClick={() => useAppStore.getState().openSettings()}
-						className="flex size-7 items-center justify-center rounded-[var(--radius-sm)] text-muted outline-none transition-colors hover:bg-hover hover:text-text focus-visible:ring-2 focus-visible:ring-primary"
+						className="flex size-7 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 					>
 						<Settings className="size-4" />
 					</button>
@@ -117,13 +120,16 @@ export function Shell() {
 					className="min-h-0"
 				>
 					<ResizablePanel id="left" order={1} defaultSize={18} minSize={12}>
-						<aside data-testid="left-nav" className="h-full overflow-auto bg-surface-sidebar p-md">
+						<aside
+							data-testid="left-nav"
+							className="h-full overflow-auto bg-container-sidebar-bg p-md"
+						>
 							<ProjectTree />
 						</aside>
 					</ResizablePanel>
 					<ResizableHandle direction="horizontal" data-testid="resize-left" />
 					<ResizablePanel id="center" order={2} defaultSize={52} minSize={28}>
-						<main data-testid="center-tabs" className="h-full min-h-0 bg-surface-content">
+						<main data-testid="center-tabs" className="h-full min-h-0 bg-container-content-bg">
 							<ErrorBoundary label="Editor" resetKeys={[activeWorkspaceId]}>
 								<CenterTabs />
 							</ErrorBoundary>
@@ -133,7 +139,7 @@ export function Shell() {
 					<ResizablePanel id="right" order={3} defaultSize={30} minSize={16}>
 						<ResizablePanelGroup direction="vertical" autoSaveId="thinkrail-right">
 							<ResizablePanel id="right-files" order={1} defaultSize={60} minSize={20}>
-								<div data-testid="right-panel" className="h-full min-h-0 bg-surface-content">
+								<div data-testid="right-panel" className="h-full min-h-0 bg-container-content-bg">
 									<ErrorBoundary label="Files" resetKeys={[activeWorkspaceId]}>
 										<RightPanel />
 									</ErrorBoundary>
@@ -141,7 +147,7 @@ export function Shell() {
 							</ResizablePanel>
 							<ResizableHandle direction="vertical" data-testid="resize-terminals" />
 							<ResizablePanel id="right-terminals" order={2} defaultSize={40} minSize={15}>
-								<div className="h-full min-h-0 bg-surface-content">
+								<div className="h-full min-h-0 bg-container-content-bg">
 									<ErrorBoundary label="Terminals" resetKeys={[activeWorkspaceId]}>
 										<TerminalsPanel />
 									</ErrorBoundary>
@@ -159,13 +165,16 @@ export function Shell() {
 					className="min-h-0"
 				>
 					<ResizablePanel id="left" order={1} defaultSize={18} minSize={12}>
-						<aside data-testid="left-nav" className="h-full overflow-auto bg-surface-sidebar p-md">
+						<aside
+							data-testid="left-nav"
+							className="h-full overflow-auto bg-container-sidebar-bg p-md"
+						>
 							<ProjectTree />
 						</aside>
 					</ResizablePanel>
 					<ResizableHandle direction="horizontal" data-testid="resize-left" />
 					<ResizablePanel id="welcome" order={2} defaultSize={82} minSize={40}>
-						<div className="h-full min-h-0 bg-surface-content">
+						<div className="h-full min-h-0 bg-container-content-bg">
 							<WelcomePanel />
 						</div>
 					</ResizablePanel>

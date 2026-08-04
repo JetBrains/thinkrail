@@ -58,7 +58,11 @@ export function ChatTurnView({
 			);
 		case "markdown":
 			return (
-				<div data-testid="chat-message" data-role="assistant" className="tr-text-reading text-text">
+				<div
+					data-testid="chat-message"
+					data-role="assistant"
+					className="tr-text-reading text-text-default"
+				>
 					<Markdown text={row.text} />
 				</div>
 			);
@@ -100,7 +104,7 @@ function userText(content: UserMessage["content"]): string {
 function UserTurn({ message }: { message: UserMessage }) {
 	return (
 		<div data-testid="chat-message" data-role="user" className="flex justify-end">
-			<div className="max-w-[85%] whitespace-pre-wrap rounded-[var(--radius-md)] border border-[var(--bubble-user-border)] bg-[var(--bubble-user-bg)] px-md py-sm tr-text-reading text-text">
+			<div className="max-w-[85%] whitespace-pre-wrap rounded-[var(--radius-md)] border border-bubble-user-border bg-bubble-user-bg px-md py-sm tr-text-reading text-text-default">
 				{userText(message.content)}
 			</div>
 		</div>
@@ -124,7 +128,7 @@ function ToolRow({
 	if (getToolChrome(row.toolName) === "bare") {
 		const Renderer = getToolRenderer(row.toolName);
 		return (
-			<div className="tr-text-ui text-text">
+			<div className="tr-text-ui text-text-default">
 				<Renderer
 					toolCallId={row.toolCallId}
 					toolName={row.toolName}
@@ -155,7 +159,7 @@ function SystemTurn({ text }: { text: string }) {
 		<div
 			data-testid="chat-message"
 			data-role="system"
-			className="text-center text-hint tr-text-metadata"
+			className="text-center text-text-subtle tr-text-metadata"
 		>
 			{text}
 		</div>
@@ -171,7 +175,7 @@ function ErrorTurn({ text }: { text: string }) {
 		<div
 			data-testid="chat-message"
 			data-role="error"
-			className="flex items-start gap-sm rounded-[var(--radius-md)] border border-red/40 bg-red/10 px-md py-sm text-red tr-text-ui"
+			className="flex items-start gap-sm rounded-[var(--radius-md)] border border-feedback-error-muted bg-feedback-error-subtle px-md py-sm text-feedback-error tr-text-ui"
 		>
 			<TriangleAlert className="mt-[2px] size-4 shrink-0" />
 			<span className="min-w-0 whitespace-pre-wrap break-words">{text}</span>
@@ -205,14 +209,14 @@ function RetryIndicator({
 		<div
 			data-testid="retry-indicator"
 			data-source={source}
-			className="flex flex-col gap-xs rounded-[var(--radius-sm)] border border-border2 bg-elevated px-sm py-xs text-muted tr-text-metadata"
+			className="flex flex-col gap-xs rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-sm py-xs text-text-muted tr-text-metadata"
 		>
 			<span className="flex items-center gap-xs">
 				<RotateCw className="size-3 shrink-0" />
 				{source === "summarization" ? "Retrying summarization" : "Retrying"} ({attempt}/
 				{maxAttempts})…
 			</span>
-			<div className="h-1 w-full overflow-hidden rounded-full bg-border2">
+			<div className="h-1 w-full overflow-hidden rounded-full bg-border-default">
 				<div
 					className={`h-full bg-primary transition-[width] ease-linear ${draining ? "w-0" : "w-full"}`}
 					style={{ transitionDuration: `${delayMs}ms` }}
@@ -293,8 +297,8 @@ function ArtifactChip({
 				onSelect();
 			}}
 			className={cn(
-				"flex items-center gap-xs rounded-[var(--radius-sm)] px-xs text-primary hover:bg-hover",
-				many && expanded && "bg-hover",
+				"flex items-center gap-xs rounded-[var(--radius-sm)] px-xs text-primary hover:bg-control-bg-hovered",
+				many && expanded && "bg-control-bg-hovered",
 			)}
 		>
 			<Icon className="size-3 shrink-0" />
@@ -335,10 +339,10 @@ function ArtifactList({
 						data-testid={`${testid}-list-item`}
 						onClick={() => onOpen(path)}
 						title={path}
-						className="flex w-full items-center gap-xs rounded-[var(--radius-sm)] px-xs py-[2px] text-left hover:bg-hover"
+						className="flex w-full items-center gap-xs rounded-[var(--radius-sm)] px-xs py-[2px] text-left hover:bg-control-bg-hovered"
 					>
-						<Icon className="size-3 shrink-0 text-hint" />
-						<span className="min-w-0 flex-1 truncate text-muted">
+						<Icon className="size-3 shrink-0 text-text-subtle" />
+						<span className="min-w-0 flex-1 truncate text-text-muted">
 							{projectRelativePath(path, workspaceRoot)}
 						</span>
 					</button>
@@ -403,15 +407,15 @@ export function TurnDivider({
 
 	if (toolCount === 0 && groups.length === 0 && (elapsedMs == null || elapsedMs < 1000)) {
 		// Nothing worth noting between these turns — just a hairline rule.
-		return <div data-testid="turn-divider" className="my-sm h-px bg-border2" />;
+		return <div data-testid="turn-divider" className="my-sm h-px bg-border-default" />;
 	}
 	return (
 		<div
 			data-testid="turn-divider"
-			className="my-sm flex flex-col gap-xs text-hint tr-text-metadata"
+			className="my-sm flex flex-col gap-xs text-text-subtle tr-text-metadata"
 		>
 			<div className="flex items-center gap-sm">
-				<span className="h-px flex-1 bg-border2" />
+				<span className="h-px flex-1 bg-border-default" />
 				{toolCount > 0 ? (
 					<span className="flex items-center gap-xs">
 						<Wrench className="size-3 shrink-0" />
@@ -432,7 +436,7 @@ export function TurnDivider({
 						{formatElapsed(elapsedMs)}
 					</span>
 				) : null}
-				<span className="h-px flex-1 bg-border2" />
+				<span className="h-px flex-1 bg-border-default" />
 			</div>
 			{groups
 				.filter((group) => group.paths.length > 1 && group.expanded)

@@ -29,11 +29,11 @@ export function ThinkingSelector({
 				data-testid="thinking-selector"
 				data-open={open}
 				disabled={levels.length === 0}
-				className="flex h-8 items-center gap-sm rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-sm tr-text-ui text-text outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 data-[open=true]:border-[var(--primary-60)] data-[open=true]:bg-hover"
+				className="flex h-8 items-center gap-sm rounded-[var(--radius-md)] border border-border-default bg-control-bg px-sm tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 data-[open=true]:border-primary-strong data-[open=true]:bg-control-bg-hovered"
 			>
-				<span className="tr-text-eyebrow text-hint">Effort</span>
+				<span className="tr-text-eyebrow text-text-subtle">Effort</span>
 				<span className="capitalize">{level}</span>
-				<ChevronDown className="size-3 shrink-0 text-hint" />
+				<ChevronDown className="size-3 shrink-0 text-text-subtle" />
 			</PopoverTrigger>
 			<PopoverContent align="start" container={container} className="w-[160px] p-xs">
 				{levels.map((l) => (
@@ -47,7 +47,7 @@ export function ThinkingSelector({
 							onSelect(l);
 							setOpen(false);
 						}}
-						className="flex w-full items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs text-left tr-text-ui text-text capitalize outline-none transition-colors hover:bg-hover"
+						className="flex w-full items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs text-left tr-text-ui text-text-default capitalize outline-none transition-colors hover:bg-control-bg-hovered"
 					>
 						<span className="flex w-3.5 shrink-0 justify-center">
 							{l === level ? <Check className="size-3.5 text-primary" /> : null}

@@ -108,8 +108,8 @@ export function ProvidersSettings() {
 		<div data-testid="settings-providers" className="flex flex-col gap-lg">
 			<div className="flex items-start justify-between gap-sm">
 				<div className="flex flex-col gap-xs">
-					<h3 className="tr-title-section text-text">Model providers</h3>
-					<p className="text-hint tr-text-metadata">
+					<h3 className="tr-title-section text-text-default">Model providers</h3>
+					<p className="text-text-subtle tr-text-metadata">
 						Connect at least one provider so the agent can run — a subscription or an API key.
 					</p>
 				</div>
@@ -128,9 +128,9 @@ export function ProvidersSettings() {
 			</div>
 
 			{report == null && !failed ? (
-				<p className="text-hint tr-text-ui">Loading providers…</p>
+				<p className="text-text-subtle tr-text-ui">Loading providers…</p>
 			) : failed ? (
-				<p data-testid="providers-error" className="text-hint tr-text-ui">
+				<p data-testid="providers-error" className="text-text-subtle tr-text-ui">
 					Couldn't read the provider status from the host — try Refresh.
 				</p>
 			) : (
@@ -151,11 +151,11 @@ export function ProvidersSettings() {
 					{subscriptionRows.length > 0 ? (
 						<section
 							data-testid="providers-subscriptions"
-							className="flex flex-col gap-sm rounded-[var(--radius-lg)] border border-[var(--primary-40)] bg-[var(--primary-10)] p-md"
+							className="flex flex-col gap-sm rounded-[var(--radius-lg)] border border-primary-muted bg-primary-subtle p-md"
 						>
 							<div className="flex flex-col gap-0.5">
-								<h4 className="tr-title-compact text-text">Sign in with a subscription</h4>
-								<p className="text-hint tr-text-metadata">
+								<h4 className="tr-title-compact text-text-default">Sign in with a subscription</h4>
+								<p className="text-text-subtle tr-text-metadata">
 									Use your existing Claude, ChatGPT, or Copilot plan — no API key needed.
 								</p>
 							</div>
@@ -206,7 +206,7 @@ export function ProvidersSettings() {
 					) : null}
 
 					{noInApp.length > 0 ? (
-						<p data-testid="providers-more" className="text-hint tr-text-metadata">
+						<p data-testid="providers-more" className="text-text-subtle tr-text-metadata">
 							{noInApp.length} more are configured outside the app (environment variables or
 							models.json):{" "}
 							{noInApp
@@ -251,7 +251,7 @@ export function ProvidersSettings() {
 function Group({ title, children }: { title: string; children: ReactNode }) {
 	return (
 		<section className="flex flex-col gap-sm">
-			<h4 className="tr-text-eyebrow text-muted">{title}</h4>
+			<h4 className="tr-text-eyebrow text-text-muted">{title}</h4>
 			<div className="flex flex-col gap-xs">{children}</div>
 		</section>
 	);
@@ -273,14 +273,14 @@ function ConnectedCard({
 			data-testid="provider-row"
 			data-provider={provider.id}
 			data-configured="true"
-			className="flex items-center gap-md rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-md py-sm"
+			className="flex items-center gap-md rounded-[var(--radius-md)] border border-border-default bg-control-bg px-md py-sm"
 		>
-			<span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-[var(--green-tint)] text-green">
+			<span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-feedback-success-subtle text-feedback-success">
 				<Check className="size-4" />
 			</span>
 			<div className="flex min-w-0 flex-col">
-				<span className="truncate tr-text-ui text-text">{provider.name}</span>
-				<span className="truncate text-hint tr-text-metadata">
+				<span className="truncate tr-text-ui text-text-default">{provider.name}</span>
+				<span className="truncate text-text-subtle tr-text-metadata">
 					{label}
 					{provider.detail ? ` · ${provider.detail}` : ""}
 				</span>
@@ -302,7 +302,7 @@ function ConnectedCard({
 				</Button>
 			) : (
 				<span
-					className="ml-auto flex shrink-0 items-center gap-xs text-hint tr-text-metadata"
+					className="ml-auto flex shrink-0 items-center gap-xs text-text-subtle tr-text-metadata"
 					title="Configured outside the app (environment / models.json)"
 				>
 					<Lock className="size-3" />
@@ -335,13 +335,13 @@ function ProviderActionRow({
 			data-testid="provider-signin-row"
 			data-provider={provider.id}
 			data-configured="false"
-			className="flex flex-col gap-xs rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-md py-sm"
+			className="flex flex-col gap-xs rounded-[var(--radius-md)] border border-border-default bg-control-bg px-md py-sm"
 		>
 			<div className="flex items-center gap-sm tr-text-ui">
-				<span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-hover text-muted">
+				<span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-control-bg-hovered text-text-muted">
 					<Boxes className="size-4" />
 				</span>
-				<span className="min-w-0 flex-1 truncate text-text">{provider.name}</span>
+				<span className="min-w-0 flex-1 truncate text-text-default">{provider.name}</span>
 				<div className="flex shrink-0 items-center gap-xs">
 					{provider.canApiKey ? (
 						<Button

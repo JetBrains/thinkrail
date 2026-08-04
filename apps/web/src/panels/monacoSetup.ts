@@ -126,12 +126,12 @@ export function defineThinkrailTheme(m: Monaco): void {
 	const set = (key: string, value: string) => {
 		if (value) colors[key] = value;
 	};
-	set("editor.background", token("--surface-content"));
+	set("editor.background", token("--container-content-bg"));
 	set("editor.foreground", token("--code-foreground"));
-	set("editorLineNumber.foreground", token("--hint"));
+	set("editorLineNumber.foreground", token("--text-subtle"));
 	set("editorCursor.foreground", token("--primary"));
-	set("editor.selectionBackground", token("--sel"));
-	set("editor.selectionForeground", token("--sel-fg"));
+	set("editor.selectionBackground", token("--editor-selection-bg"));
+	set("editor.selectionForeground", token("--editor-selection-text"));
 	const rules = SYNTAX_TOKENS.flatMap(([monacoToken, name]) => {
 		const color = token(name);
 		return color ? [{ token: monacoToken, foreground: color.replace("#", "") }] : [];

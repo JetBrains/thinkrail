@@ -32,14 +32,29 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   nudge** — a fresh watcher publishes one synthetic wildcard batch after the platform stream's
   registration window (~750ms), because a write landing inside that window is otherwise lost forever
   (an invalidation nudge is idempotent, so the cost is one cheap no-op refetch).
-- **Repo-metadata nudge (second seam):** a `.git` write is *metadata, not content*, so it never becomes
-  an `fsChanged` path (the blackout stands — plumbing storms must not turn into frames). It instead arms a
-  separately debounced (300ms), **pathless** `setRepoMetaPublisher(workspaceId)` nudge, which `host` wires
-  to `refreshDefaultWorkspace` so a **Default** workspace's branch labels converge live. This is the only
-  signal for a change that leaves the working tree byte-identical — `git switch -c <new-branch>` writes
-  nothing outside `.git` — and it is deliberately **not** matched on specific paths (`.git/HEAD`,
-  `.git/logs/HEAD`, …): the platform streams coalesce and report *a* representative path per burst, so
-  which git-internal path surfaces is not reliable. A wildcard event (null filename) nudges it too.
+- **Repo-metadata nudge (second seam):** a git-metadata write is *metadata, not content*, so it never
+  becomes an `fsChanged` path (the `.git` blackout stands — plumbing storms must not turn into frames). It
+  instead arms a separately debounced (300ms), **pathless** `setRepoMetaPublisher(workspaceId)` nudge. This
+  is the only signal for a change that leaves the working tree byte-identical: `git switch -c <new-branch>`
+  writes nothing outside the git dir, and a `git commit` moves `HEAD` without touching a worktree file.
+  It is deliberately **not** matched on specific paths (`.git/HEAD`, `.git/logs/HEAD`, …): the platform
+  streams coalesce and report *a* representative path per burst, so which git-internal path surfaces is not
+  reliable. A wildcard event (null filename) nudges it too. Two sources feed the one nudge:
+  - `.git`-prefixed events seen by the recursive **root** watcher — covers a **repo root** workspace, whose
+    `.git` directory lives inside the watched tree;
+  - a second, **non-recursive** watcher on the worktree's git dir **when that dir lies outside the root**
+    (a repo root's in-tree `.git` directory is already covered above, so it is never watched twice): for a
+    *linked worktree* (every workspace this app creates) `.git` is a *file* (`gitdir: <path>`) pointing at
+    `<repo>/.git/worktrees/<name>`, i.e. **outside the watched root**, so a commit made in that worktree's
+    terminal would otherwise produce no signal at all. Resolved with plain fs (stat + parse the gitfile
+    line), never by shelling out — this module has no `git` sibling edge. Non-recursive because only the
+    dir's top level holds the refs that move (`HEAD`, `index`, `ORIG_HEAD`) while `objects/`/`logs/` are
+    pure storms; a missing/unreadable git dir (non-git folder) or a failed start degrades silently.
+
+  `host` fans the nudge out to two convergences: `refreshDefaultWorkspace` (a **Default** workspace's
+  folder-truth branch labels) **and** a pathless `fsChanged` frame (`paths: []`, `truncated: false`) so the
+  clients' git-derived reads re-read — `git.status` and an open `uncommitted`-scope diff tab are relative to
+  `HEAD`, and would otherwise keep reporting a committed change as uncommitted until the next file edit.
 - **Publish seam:** never imports `host` — `host` injects the publish callback at wiring time (the
   session-publisher tee pattern).
 - **Self-healing per read (out-of-band worktree churn is normal — e2e resets, `rm -rf` in a terminal):**

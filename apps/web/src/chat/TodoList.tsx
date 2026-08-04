@@ -47,7 +47,7 @@ export function glanceIcon(glance: PlanGlance): {
 			className: "text-primary",
 		};
 	if (glance === "waiting")
-		return { Icon: CirclePause, label: "Paused — waiting for you", className: "text-hint" };
+		return { Icon: CirclePause, label: "Paused — waiting for you", className: "text-text-subtle" };
 	return { Icon: CircleDot, label: STATUS_LABEL.in_progress, className: "text-primary" };
 }
 
@@ -62,7 +62,7 @@ function StatusIcon({ status, glance }: { status: TodoStatus; glance: PlanGlance
 		const { Icon, className } = glanceIcon(glance);
 		return <Icon data-glance={glance} className={cn("size-4 shrink-0", className)} />;
 	}
-	return <Circle className="size-4 shrink-0 text-hint" />;
+	return <Circle className="size-4 shrink-0 text-text-subtle" />;
 }
 
 /** The add-a-TODO input row, with an "open as markdown" action on the right. */
@@ -86,7 +86,7 @@ export function TodoAddRow({
 	};
 	return (
 		<div className="flex items-center gap-sm px-sm py-xs">
-			<Plus className="size-3.5 shrink-0 text-hint" />
+			<Plus className="size-3.5 shrink-0 text-text-subtle" />
 			<input
 				data-testid="todo-add-input"
 				value={draft}
@@ -95,7 +95,7 @@ export function TodoAddRow({
 					if (e.key === "Enter") void submit();
 				}}
 				placeholder="Add a TODO for the agent…"
-				className="min-w-0 flex-1 bg-transparent tr-text-ui text-text outline-none placeholder:text-hint"
+				className="min-w-0 flex-1 bg-transparent tr-text-ui text-text-default outline-none placeholder:text-text-subtle"
 			/>
 			{onOpenMarkdown ? (
 				<button
@@ -104,7 +104,7 @@ export function TodoAddRow({
 					onClick={onOpenMarkdown}
 					aria-label="Open as markdown"
 					title="Open the plan as a markdown tab"
-					className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-hint hover:bg-hover hover:text-text focus-visible:opacity-100"
+					className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-subtle hover:bg-control-bg-hovered hover:text-text-default focus-visible:opacity-100"
 				>
 					<FileText className="size-3.5" />
 				</button>
@@ -132,21 +132,26 @@ function GroupBlock({
 				{status === "active" ? (
 					<StatusIcon status="in_progress" glance={glance} />
 				) : (
-					<Circle className="size-4 shrink-0 text-hint" />
+					<Circle className="size-4 shrink-0 text-text-subtle" />
 				)}
 				<span
 					className={cn(
 						"min-w-0 flex-1 truncate",
-						status === "active" ? "tr-title-compact text-text" : "tr-text-ui text-muted",
+						status === "active"
+							? "tr-title-compact text-text-default"
+							: "tr-text-ui text-text-muted",
 					)}
 				>
 					{group.title}
 				</span>
-				<span data-testid="todo-group-progress" className="shrink-0 tr-text-eyebrow text-hint">
+				<span
+					data-testid="todo-group-progress"
+					className="shrink-0 tr-text-eyebrow text-text-subtle"
+				>
 					{done}/{total}
 				</span>
 			</div>
-			<ul className="ml-md flex flex-col border-border2 border-l pl-sm">
+			<ul className="ml-md flex flex-col border-border-default border-l pl-sm">
 				{group.todos.map((todo) => (
 					<TodoRow key={todo.id} todo={todo} glance={glance} onRemove={() => onRemove(todo.id)} />
 				))}
@@ -177,7 +182,7 @@ function LooseList({
 
 /** A section header (`To do`), the quiet uppercase label shared by the status sections. */
 function SectionLabel({ label }: { label: string }) {
-	return <div className="px-xs py-xs tr-text-eyebrow text-hint">{label}</div>;
+	return <div className="px-xs py-xs tr-text-eyebrow text-text-subtle">{label}</div>;
 }
 
 /**
@@ -241,17 +246,17 @@ function DoneGroup({
 				data-testid="todo-group-done"
 				data-expanded={expanded}
 				onClick={() => setExpanded((v) => !v)}
-				className="flex w-full items-center gap-sm rounded-[var(--radius-sm)] px-xs py-xs text-left hover:bg-hover"
+				className="flex w-full items-center gap-sm rounded-[var(--radius-sm)] px-xs py-xs text-left hover:bg-control-bg-hovered"
 			>
-				<Chevron className="size-3.5 shrink-0 text-hint" />
+				<Chevron className="size-3.5 shrink-0 text-text-subtle" />
 				<Check className="size-4 shrink-0 text-primary" />
-				<span className="min-w-0 flex-1 truncate tr-text-ui text-hint line-through">
+				<span className="min-w-0 flex-1 truncate tr-text-ui text-text-subtle line-through">
 					{group.title}
 				</span>
-				<span className="shrink-0 tr-text-eyebrow text-hint">{group.todos.length} done</span>
+				<span className="shrink-0 tr-text-eyebrow text-text-subtle">{group.todos.length} done</span>
 			</button>
 			{expanded ? (
-				<ul className="ml-md flex flex-col border-border2 border-l pl-sm">
+				<ul className="ml-md flex flex-col border-border-default border-l pl-sm">
 					{group.todos.map((todo) => (
 						<TodoRow key={todo.id} todo={todo} glance={glance} onRemove={() => onRemove(todo.id)} />
 					))}
@@ -274,7 +279,7 @@ function TodoRow({
 		<li
 			data-testid="todo-row"
 			data-status={todo.status}
-			className="group flex items-center gap-sm rounded-[var(--radius-sm)] px-xs py-xs hover:bg-hover"
+			className="group flex items-center gap-sm rounded-[var(--radius-sm)] px-xs py-xs hover:bg-control-bg-hovered"
 		>
 			<span className="shrink-0" title={statusLabel(todo.status, glance)}>
 				<StatusIcon status={todo.status} glance={glance} />
@@ -283,18 +288,20 @@ function TodoRow({
 				<div
 					className={cn(
 						"truncate tr-text-ui",
-						todo.status === "done" ? "text-hint line-through" : "text-text",
+						todo.status === "done" ? "text-text-subtle line-through" : "text-text-default",
 					)}
 				>
 					{todo.title}
 				</div>
-				{todo.note ? <div className="truncate text-hint tr-text-metadata">{todo.note}</div> : null}
+				{todo.note ? (
+					<div className="truncate text-text-subtle tr-text-metadata">{todo.note}</div>
+				) : null}
 			</div>
 			{todo.origin === "user" ? (
 				<span
 					data-testid="todo-origin-user"
 					title="Added by you — the agent won't drop it"
-					className="shrink-0 text-hint"
+					className="shrink-0 text-text-subtle"
 				>
 					<UserRound className="size-3.5" />
 				</span>
@@ -304,7 +311,7 @@ function TodoRow({
 				onClick={onRemove}
 				aria-label="Remove"
 				title="Remove"
-				className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-hint opacity-0 transition-opacity hover:bg-elevated hover:text-red group-hover:opacity-100 focus-visible:opacity-100"
+				className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-subtle opacity-0 transition-opacity hover:bg-container-elevated-bg hover:text-feedback-error group-hover:opacity-100 focus-visible:opacity-100"
 			>
 				<Trash2 className="size-3.5" />
 			</button>

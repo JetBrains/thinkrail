@@ -42,16 +42,16 @@ const ANSI_TOKENS = [
 /** xterm theme from the live CSS tokens (no raw hex; falls back to xterm defaults if a token is unset). */
 function readTheme(): ITheme {
 	const theme: ITheme = {};
-	const bg = cssColorVar("--surface-content");
+	const bg = cssColorVar("--container-content-bg");
 	if (bg) theme.background = bg;
-	const fg = cssColorVar("--text");
+	const fg = cssColorVar("--text-default");
 	if (fg) theme.foreground = fg;
 	const cursor = cssColorVar("--primary");
 	if (cursor) theme.cursor = cursor;
-	const sel = cssColorVar("--sel");
+	const sel = cssColorVar("--editor-selection-bg");
 	if (sel) theme.selectionBackground = sel;
 	// Optional selected-text color (high-contrast: black on the yellow selection); unset → xterm default.
-	const selFg = cssColorVar("--sel-fg");
+	const selFg = cssColorVar("--editor-selection-text");
 	if (selFg) theme.selectionForeground = selFg;
 	for (const [slot, name] of ANSI_TOKENS) {
 		const color = cssColorVar(name);

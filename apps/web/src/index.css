@@ -1,6 +1,7 @@
 @import "tailwindcss";
-@import "./styles/fonts.css";
+@import "./styles/generated/fonts.css";
 @import "./styles/generated/typography.css";
+@import "./styles/generated/colors.css";
 @import "./styles/tokens.css";
 @import "./styles/global.css";
 
@@ -19,23 +20,14 @@
  * `font-[var(--…)]` form, which Tailwind silently compiles to an invalid `font-weight`.
  */
 @theme inline {
-	--color-bg: var(--bg);
-	--color-bg-dark: var(--bg-dark);
-	--color-surface-sidebar: var(--surface-sidebar);
-	--color-surface-content: var(--surface-content);
-	--color-elevated: var(--elevated);
-	--color-hover: var(--hover);
-	--color-border: var(--border);
-	--color-border2: var(--border2);
-	--color-text: var(--text);
-	--color-muted: var(--muted);
-	--color-hint: var(--hint);
-	--color-primary: var(--primary);
-	--color-blue: var(--blue);
-	--color-green: var(--green);
-	--color-red: var(--red);
-	--color-gold: var(--gold);
-	--color-on-accent: var(--on-accent);
+	/*
+	 * COLOUR IS NOT HERE. The `--color-*` namespace is generated into `styles/generated/colors.css`
+	 * from `styles/colors.json`, which also carries its own `@theme inline` block — Tailwind flattens
+	 * imports before resolving the theme, so an imported block registers exactly like an inline one.
+	 * Declaring a colour here would be the second source of truth this whole layer exists to remove.
+	 *
+	 * What remains is everything that is NOT a colour and NOT typography.
+	 */
 
 	/*
 	 * Tailwind's PREFLIGHT defaults, pointed at the generated tokens. Preflight sets a family on `html`
@@ -90,12 +82,3 @@
 		}
 	}
 }
-
-/*
- * NOTE: `text-mono`, `text-base-mono`, `text-eyebrow`, `text-brand` and the `--text-xs|sm|base|md|lg`
- * tiers used to live here as hand-written utilities / theme mappings. Every one of them is now
- * generated from `typography.json` as a semantic class — `tr-code-text`, `tr-code-inline`,
- * `tr-text-eyebrow`, `tr-brand-wordmark` / `tr-brand-hero`, `tr-text-ui`, … — see
- * `styles/generated/typography.css`. Do not add a typography utility here; add a semantic style to the
- * JSON instead (TYPOGRAPHY.md → "Adding or changing a style").
- */

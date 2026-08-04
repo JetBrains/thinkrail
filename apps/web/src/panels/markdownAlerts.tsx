@@ -74,34 +74,40 @@ const ALERTS: Record<
 		text: string;
 	}
 > = {
-	note: { label: "Note", icon: Info, border: "border-blue", bg: "bg-blue/10", text: "text-blue" },
+	note: {
+		label: "Note",
+		icon: Info,
+		border: "border-feedback-info",
+		bg: "bg-feedback-info-subtle",
+		text: "text-feedback-info",
+	},
 	tip: {
 		label: "Tip",
 		icon: Lightbulb,
-		border: "border-green",
-		bg: "bg-green/10",
-		text: "text-green",
+		border: "border-feedback-success",
+		bg: "bg-feedback-success-subtle",
+		text: "text-feedback-success",
 	},
 	important: {
 		label: "Important",
 		icon: CircleAlert,
 		border: "border-primary",
-		bg: "bg-primary/10",
+		bg: "bg-primary-subtle",
 		text: "text-primary",
 	},
 	warning: {
 		label: "Warning",
 		icon: TriangleAlert,
-		border: "border-gold",
-		bg: "bg-gold/10",
-		text: "text-gold",
+		border: "border-feedback-warning",
+		bg: "bg-feedback-warning-subtle",
+		text: "text-feedback-warning",
 	},
 	caution: {
 		label: "Caution",
 		icon: OctagonAlert,
-		border: "border-red",
-		bg: "bg-red/10",
-		text: "text-red",
+		border: "border-feedback-error",
+		bg: "bg-feedback-error-subtle",
+		text: "text-feedback-error",
 	},
 };
 
@@ -124,7 +130,7 @@ function AlertCallout({
 		<div
 			data-testid="md-alert"
 			data-variant={isVariant(raw) ? raw : "note"}
-			className={`my-md rounded-r-[var(--radius-sm)] border-l-2 py-sm pr-md pl-md text-text ${cfg.border} ${cfg.bg} [&>*:last-child]:mb-0 [&_p]:my-1`}
+			className={`my-md rounded-r-[var(--radius-sm)] border-l-2 py-sm pr-md pl-md text-text-default ${cfg.border} ${cfg.bg} [&>*:last-child]:mb-0 [&_p]:my-1`}
 		>
 			<p className={`tr-title-card mb-xs flex items-center gap-xs ${cfg.text}`}>
 				<Icon className="size-4 shrink-0" />

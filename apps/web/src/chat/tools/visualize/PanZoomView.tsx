@@ -63,7 +63,7 @@ export function PanZoomView({ svg }: { svg: string }) {
 	};
 
 	const btn =
-		"rounded-[var(--radius-sm)] p-1 text-muted outline-none transition-colors hover:bg-hover hover:text-text focus-visible:ring-2 focus-visible:ring-primary";
+		"rounded-[var(--radius-sm)] p-1 text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary";
 
 	return (
 		<div className="relative min-h-0 flex-1">
@@ -79,7 +79,7 @@ export function PanZoomView({ svg }: { svg: string }) {
 				// biome-ignore lint/security/noDangerouslySetInnerHtml: mermaid renders agent-provided source with securityLevel "strict"
 				dangerouslySetInnerHTML={{ __html: svg }}
 			/>
-			<div className="absolute right-sm bottom-sm flex items-center gap-xs rounded-[var(--radius-sm)] border border-border2 bg-elevated p-1 tr-text-metadata shadow-[var(--shadow-lg)]">
+			<div className="absolute right-sm bottom-sm flex items-center gap-xs rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg p-1 tr-text-metadata shadow-[var(--shadow-lg)]">
 				<button
 					type="button"
 					aria-label="Zoom out"
@@ -91,7 +91,7 @@ export function PanZoomView({ svg }: { svg: string }) {
 				</button>
 				<span
 					data-testid="mermaid-zoom-level"
-					className="min-w-[3.5ch] text-center text-muted tabular-nums"
+					className="min-w-[3.5ch] text-center text-text-muted tabular-nums"
 				>
 					{Math.round(scale * 100)}%
 				</span>

@@ -7,6 +7,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { relativeTime } from "@/lib";
 import {
 	type ChatLocationRequest,
 	type HistorySearchState,
@@ -41,18 +42,6 @@ const SAVE_SHORTCUT_LABEL =
 		? "⌘S"
 		: "Ctrl+S";
 
-/** Tiny relative-time formatter — `panels/CenterTabs.tsx` has a private twin; `chat/` can't import from
- * `panels/` (wrong dependency direction), and this is too small to promote to a shared lib. */
-function relativeTime(ms: number): string {
-	const s = Math.floor((Date.now() - ms) / 1000);
-	if (s < 60) return "just now";
-	const m = Math.floor(s / 60);
-	if (m < 60) return `${m}m ago`;
-	const h = Math.floor(m / 60);
-	if (h < 24) return `${h}h ago`;
-	return `${Math.floor(h / 24)}d ago`;
-}
-
 function escapeRegExp(term: string): string {
 	return term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -82,7 +71,7 @@ function Highlight({ text, query }: { text: string; query: string }) {
 		<>
 			{parts.map(({ text: part, key }) =>
 				terms.includes(part.toLowerCase()) ? (
-					<mark key={key} className="rounded-[2px] bg-[var(--primary-20)] text-text">
+					<mark key={key} className="rounded-[2px] bg-primary-soft text-text-default">
 						{part}
 					</mark>
 				) : (
@@ -124,7 +113,9 @@ function PromptRow({
 			data-kind="prompt"
 			data-selected={isSelected}
 			className={`group flex w-full items-center gap-xs rounded-[var(--radius-sm)] border-l-2 py-xs pl-sm pr-xs text-left tr-text-ui ${
-				isSelected ? "border-l-primary bg-hover text-text" : "border-l-transparent text-muted"
+				isSelected
+					? "border-l-primary bg-control-bg-hovered text-text-default"
+					: "border-l-transparent text-text-muted"
 			}`}
 		>
 			<button
@@ -136,11 +127,13 @@ function PromptRow({
 					<Highlight text={firstLine} query={query} />
 				</span>
 				{showChip ? (
-					<span className="shrink-0 rounded-full border border-border2 bg-bg px-xs text-hint tr-text-metadata">
+					<span className="shrink-0 rounded-full border border-border-default bg-container-workspace-bg px-xs text-text-subtle tr-text-metadata">
 						{workspaceName ?? "workspace"}
 					</span>
 				) : null}
-				<span className="shrink-0 text-hint tr-text-metadata">{relativeTime(hit.timestamp)}</span>
+				<span className="shrink-0 text-text-subtle tr-text-metadata">
+					{relativeTime(hit.timestamp)}
+				</span>
 			</button>
 			{isSelected ? (
 				// Persistent keyboard-shortcut glyph — the same precedent as the scope badge's `⌃R`
@@ -148,7 +141,10 @@ function PromptRow({
 				// hover-revealed via `group-hover`/`isSelected` opacity; this glyph is the part a
 				// keyboard-only user (Shift+Enter's own audience) needs, so it can't be mouse-hover-gated
 				// the way the icon itself is.
-				<span data-testid="history-save-shortcut" className="shrink-0 text-hint tr-text-metadata">
+				<span
+					data-testid="history-save-shortcut"
+					className="shrink-0 text-text-subtle tr-text-metadata"
+				>
 					{SAVE_SHORTCUT_LABEL}
 				</span>
 			) : null}
@@ -161,7 +157,7 @@ function PromptRow({
 					e.stopPropagation();
 					onSaveAsTemplate();
 				}}
-				className={`flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] p-xs text-muted opacity-0 transition hover:bg-elevated hover:text-text group-hover:opacity-100 ${
+				className={`flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] p-xs text-text-muted opacity-0 transition hover:bg-container-elevated-bg hover:text-text-default group-hover:opacity-100 ${
 					isSelected ? "opacity-100" : ""
 				}`}
 			>
@@ -172,7 +168,7 @@ function PromptRow({
 					{isSelected ? (
 						<span
 							data-testid="history-jump-shortcut"
-							className="shrink-0 text-hint tr-text-metadata"
+							className="shrink-0 text-text-subtle tr-text-metadata"
 						>
 							⇧⏎
 						</span>
@@ -186,7 +182,7 @@ function PromptRow({
 							e.stopPropagation();
 							onOpenMessage(target);
 						}}
-						className={`flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] p-xs text-muted opacity-0 transition hover:bg-elevated hover:text-text group-hover:opacity-100 ${
+						className={`flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] p-xs text-text-muted opacity-0 transition hover:bg-container-elevated-bg hover:text-text-default group-hover:opacity-100 ${
 							isSelected ? "opacity-100" : ""
 						}`}
 					>
@@ -219,10 +215,12 @@ function MessageRow({
 			onClick={onPick}
 			disabled={unmapped}
 			className={`flex w-full flex-col gap-0.5 rounded-[var(--radius-sm)] border-l-2 px-sm py-xs text-left tr-text-ui disabled:cursor-default ${
-				isSelected ? "border-l-primary bg-hover text-text" : "border-l-transparent text-muted"
+				isSelected
+					? "border-l-primary bg-control-bg-hovered text-text-default"
+					: "border-l-transparent text-text-muted"
 			}`}
 		>
-			<span className="flex items-center gap-xs text-hint tr-text-metadata">
+			<span className="flex items-center gap-xs text-text-subtle tr-text-metadata">
 				<span className="truncate">
 					{hit.sessionTitle || hit.cwd.split("/").pop() || "session"}
 				</span>
@@ -281,10 +279,10 @@ function HistoryPreview({
 		<div data-testid="history-preview" className={`flex flex-col overflow-hidden ${className}`}>
 			{item ? (
 				<>
-					<div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap break-words p-sm tr-text-ui text-text">
+					<div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap break-words p-sm tr-text-ui text-text-default">
 						<Highlight text={item.hit.text} query={query} />
 					</div>
-					<div className="shrink-0 border-t border-border2 px-sm py-xs text-hint tr-text-metadata">
+					<div className="shrink-0 border-t border-border-default px-sm py-xs text-text-subtle tr-text-metadata">
 						{item.kind === "prompt" ? (
 							<PromptPreviewFooter hit={item.hit} workspaceName={workspaceName} />
 						) : (
@@ -485,7 +483,7 @@ export function HistoryOverlay({
 		: undefined;
 
 	const resultsBody = error ? (
-		<div data-testid="history-error" className="p-md text-center text-red tr-text-ui">
+		<div data-testid="history-error" className="p-md text-center text-feedback-error tr-text-ui">
 			search unavailable
 		</div>
 	) : !result ? null : (
@@ -493,7 +491,7 @@ export function HistoryOverlay({
 			{result.indexing ? (
 				<div
 					data-testid="history-indexing"
-					className="px-sm py-1 text-center text-hint tr-text-metadata"
+					className="px-sm py-1 text-center text-text-subtle tr-text-metadata"
 				>
 					indexing history…
 				</div>
@@ -502,7 +500,7 @@ export function HistoryOverlay({
 				<div className="flex flex-col gap-xs p-xs">
 					{result.prompts.length > 0 ? (
 						<div className="flex flex-col gap-0.5">
-							<div className="flex items-center justify-between px-sm py-0.5 tr-text-eyebrow text-hint">
+							<div className="flex items-center justify-between px-sm py-0.5 tr-text-eyebrow text-text-subtle">
 								<span>Prompts</span>
 								<span data-testid="history-counts">
 									{promptCount}/{result.promptTotal}
@@ -525,7 +523,7 @@ export function HistoryOverlay({
 					) : null}
 					{stage === "zoomed" && result.messages.length > 0 ? (
 						<div className="flex flex-col gap-0.5">
-							<div className="flex items-center justify-between px-sm py-0.5 tr-text-eyebrow text-hint">
+							<div className="flex items-center justify-between px-sm py-0.5 tr-text-eyebrow text-text-subtle">
 								<span>Messages</span>
 								<span data-testid="history-counts">
 									{messageCount}/{result.messageTotal}
@@ -547,7 +545,7 @@ export function HistoryOverlay({
 					) : null}
 				</div>
 			) : isEmpty ? (
-				<div className="p-md text-center text-muted tr-text-ui">no matches</div>
+				<div className="p-md text-center text-text-muted tr-text-ui">no matches</div>
 			) : null}
 		</>
 	);
@@ -556,9 +554,9 @@ export function HistoryOverlay({
 		<div
 			data-testid="history-overlay"
 			data-stage={stage}
-			className="absolute bottom-full left-sm right-sm mb-xs flex flex-col overflow-hidden rounded-[var(--radius-md)] border border-border2 bg-elevated shadow-[var(--shadow-md)]"
+			className="absolute bottom-full left-sm right-sm mb-xs flex flex-col overflow-hidden rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg shadow-[var(--shadow-md)]"
 		>
-			<div className="flex items-center gap-sm border-b border-border2 p-sm">
+			<div className="flex items-center gap-sm border-b border-border-default p-sm">
 				<input
 					ref={inputRef}
 					data-testid="history-query"
@@ -566,16 +564,16 @@ export function HistoryOverlay({
 					onChange={(e) => onQueryChange(e.target.value)}
 					onKeyDown={onKeyDown}
 					placeholder="Search prompts and conversations…"
-					className="min-w-0 flex-1 bg-transparent tr-text-ui text-text outline-none placeholder:text-hint"
+					className="min-w-0 flex-1 bg-transparent tr-text-ui text-text-default outline-none placeholder:text-text-subtle"
 				/>
 				<DropdownMenu open={scopeMenuOpen} onOpenChange={setScopeMenuOpen}>
 					<DropdownMenuTrigger
 						data-testid="history-scope"
 						data-scope={scope.kind}
-						className="flex shrink-0 items-center gap-xs rounded-full border border-border2 bg-bg px-sm py-0.5 text-muted tr-text-metadata outline-none hover:bg-hover"
+						className="flex shrink-0 items-center gap-xs rounded-full border border-border-default bg-container-workspace-bg px-sm py-0.5 text-text-muted tr-text-metadata outline-none hover:bg-control-bg-hovered"
 					>
 						<span>{SCOPE_LABELS[scope.kind]}</span>
-						<span className="text-hint">⌃R</span>
+						<span className="text-text-subtle">⌃R</span>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent
 						align="end"
@@ -615,7 +613,7 @@ export function HistoryOverlay({
 						item={selectedItem}
 						query={query}
 						workspaceName={selectedWorkspaceName}
-						className="max-h-[37.5vh] border-border2 border-t md:max-h-[75vh] md:w-[45%] md:border-t-0 md:border-l"
+						className="max-h-[37.5vh] border-border-default border-t md:max-h-[75vh] md:w-[45%] md:border-t-0 md:border-l"
 					/>
 				</div>
 			) : (
@@ -632,7 +630,7 @@ export function HistoryOverlay({
 					type="button"
 					data-testid="history-expand-hint"
 					onClick={onToggleStage}
-					className="border-t border-border2 p-xs text-center text-hint tr-text-metadata hover:bg-hover"
+					className="border-t border-border-default p-xs text-center text-text-subtle tr-text-metadata hover:bg-control-bg-hovered"
 				>
 					{result.messageTotal} matches in conversations · ⇥ expand
 				</button>

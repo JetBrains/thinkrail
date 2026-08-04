@@ -21,17 +21,19 @@ export function PrivacySettings() {
 	return (
 		<section data-testid="settings-privacy" className="flex flex-col gap-lg">
 			<div className="flex flex-col gap-xs">
-				<h3 className="tr-title-section text-text">Usage analytics</h3>
-				<p className="text-hint tr-text-metadata">
+				<h3 className="tr-title-section text-text-default">Usage analytics</h3>
+				<p className="text-text-subtle tr-text-metadata">
 					Anonymous usage analytics help us understand which features matter. Your choice is saved
 					on the host and follows you across devices.
 				</p>
 			</div>
 
-			<div className="flex items-center justify-between gap-md rounded-[var(--radius-md)] border border-border2 px-md py-sm">
+			<div className="flex items-center justify-between gap-md rounded-[var(--radius-md)] border border-border-default px-md py-sm">
 				<div className="flex flex-col gap-0.5">
-					<span className="tr-title-compact text-text">Share anonymous usage analytics</span>
-					<span className="text-hint tr-text-metadata">
+					<span className="tr-title-compact text-text-default">
+						Share anonymous usage analytics
+					</span>
+					<span className="text-text-subtle tr-text-metadata">
 						{enabled ? "On — thank you for helping improve ThinkRail." : "Off — nothing is sent."}
 					</span>
 				</div>
@@ -45,12 +47,12 @@ export function PrivacySettings() {
 					onClick={toggle}
 					className={cn(
 						"relative h-5 w-9 shrink-0 rounded-full outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
-						enabled ? "bg-primary" : "bg-border2",
+						enabled ? "bg-primary" : "bg-border-default",
 					)}
 				>
 					<span
 						className={cn(
-							"absolute top-0.5 left-0.5 size-4 rounded-full bg-bg transition-transform",
+							"absolute top-0.5 left-0.5 size-4 rounded-full bg-container-workspace-bg transition-transform",
 							enabled && "translate-x-4",
 						)}
 					/>
@@ -58,16 +60,16 @@ export function PrivacySettings() {
 			</div>
 
 			<div className="flex flex-col gap-xs tr-text-metadata">
-				<p className="text-muted">
-					<span className="tr-text-emphasis text-text">What is collected:</span> a random anonymous
-					install id, app version and release channel, OS and architecture, when a chat starts (and
-					the model/provider it uses), and which providers you sign in to. Custom providers and
-					models are reported only as “custom”.
+				<p className="text-text-muted">
+					<span className="tr-text-emphasis text-text-default">What is collected:</span> a random
+					anonymous install id, app version and release channel, OS and architecture, when a chat
+					starts (and the model/provider it uses), and which providers you sign in to. Custom
+					providers and models are reported only as “custom”.
 				</p>
-				<p className="text-muted">
-					<span className="tr-text-emphasis text-text">Never collected:</span> file paths or names,
-					prompts, code, chat transcripts, API keys, hostnames, usernames, or anything typed into
-					the app.
+				<p className="text-text-muted">
+					<span className="tr-text-emphasis text-text-default">Never collected:</span> file paths or
+					names, prompts, code, chat transcripts, API keys, hostnames, usernames, or anything typed
+					into the app.
 				</p>
 			</div>
 		</section>

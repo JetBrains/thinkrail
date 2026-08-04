@@ -25,13 +25,13 @@ function ToastViewport({
 // The left accent bar + icon tint carry the variant; the surface stays the elevated panel so toasts read
 // as one family regardless of severity (color signals meaning, it doesn't repaint the whole card).
 const toastVariants = cva(
-	"group pointer-events-auto relative flex w-full items-start gap-sm overflow-hidden rounded-[var(--radius-md)] border border-l-4 bg-elevated p-md text-text shadow-[var(--shadow-md)] data-[state=closed]:animate-[toast-out_120ms_ease-in] data-[state=open]:animate-[toast-in_150ms_ease-out] data-[swipe=cancel]:translate-x-0 data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[swipe=end]:animate-[toast-out_120ms_ease-in]",
+	"group pointer-events-auto relative flex w-full items-start gap-sm overflow-hidden rounded-[var(--radius-md)] border border-l-4 bg-container-elevated-bg p-md text-text-default shadow-[var(--shadow-md)] data-[state=closed]:animate-[toast-out_120ms_ease-in] data-[state=open]:animate-[toast-in_150ms_ease-out] data-[swipe=cancel]:translate-x-0 data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[swipe=end]:animate-[toast-out_120ms_ease-in]",
 	{
 		variants: {
 			variant: {
-				error: "border-border2 border-l-red",
-				success: "border-border2 border-l-green",
-				info: "border-border2 border-l-primary",
+				error: "border-border-default border-l-feedback-error",
+				success: "border-border-default border-l-feedback-success",
+				info: "border-border-default border-l-primary",
 			},
 		},
 		defaultVariants: { variant: "info" },
@@ -56,7 +56,7 @@ function ToastDescription({
 }: React.ComponentProps<typeof ToastPrimitive.Description>) {
 	return (
 		<ToastPrimitive.Description
-			className={cn("text-muted tr-text-ui [overflow-wrap:anywhere]", className)}
+			className={cn("text-text-muted tr-text-ui [overflow-wrap:anywhere]", className)}
 			{...props}
 		/>
 	);
@@ -68,7 +68,7 @@ function ToastClose({ className, ...props }: React.ComponentProps<typeof ToastPr
 		<ToastPrimitive.Close
 			aria-label="Dismiss"
 			className={cn(
-				"-mr-1 -mt-1 ml-auto flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-hint outline-none transition-colors hover:bg-hover hover:text-text focus-visible:ring-2 focus-visible:ring-primary",
+				"-mr-1 -mt-1 ml-auto flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-subtle outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary",
 				className,
 			)}
 			{...props}

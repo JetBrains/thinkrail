@@ -54,13 +54,14 @@ export function SpecsPanel({
 
 	if (failed && !nodes)
 		return (
-			<p data-testid="specs-error" className="px-xs py-xs tr-text-metadata text-hint">
+			<p data-testid="specs-error" className="px-xs py-xs tr-text-metadata text-text-subtle">
 				Couldn't load specs — Refresh to retry.
 			</p>
 		);
 	if (nodes === null || roots === null)
-		return <p className="px-xs py-xs tr-text-metadata text-hint">Loading…</p>;
-	if (nodes.length === 0) return <p className="px-xs py-xs tr-text-metadata text-hint">No specs</p>;
+		return <p className="px-xs py-xs tr-text-metadata text-text-subtle">Loading…</p>;
+	if (nodes.length === 0)
+		return <p className="px-xs py-xs tr-text-metadata text-text-subtle">No specs</p>;
 	return (
 		<ul className="flex flex-col">
 			{roots.map((root) => (
@@ -120,8 +121,8 @@ function SpecNodeRow({
 				className={cn(
 					"group flex h-7 min-w-0 items-stretch rounded-[var(--radius-sm)] transition-colors",
 					isActive
-						? "bg-[var(--primary-10)] ring-1 ring-[var(--primary-40)] ring-inset"
-						: "hover:bg-hover",
+						? "bg-primary-subtle ring-1 ring-primary-muted ring-inset"
+						: "hover:bg-control-bg-hovered",
 				)}
 			>
 				{children.length > 0 ? (
@@ -131,7 +132,7 @@ function SpecNodeRow({
 						aria-label={expanded ? `Collapse ${node.title}` : `Expand ${node.title}`}
 						aria-expanded={expanded}
 						onClick={() => setExpanded((value) => !value)}
-						className="flex w-5 shrink-0 items-center justify-center self-stretch rounded-[var(--radius-sm)] text-hint outline-none transition-colors hover:text-text focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+						className="flex w-5 shrink-0 items-center justify-center self-stretch rounded-[var(--radius-sm)] text-text-subtle outline-none transition-colors hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
 					>
 						<Chevron className="size-3.5" />
 					</button>
@@ -157,13 +158,15 @@ function SpecNodeRow({
 					<DocumentIcon
 						className={cn(
 							"size-3.5 shrink-0 transition-colors",
-							isMainSpec || isActive ? "text-primary" : "text-hint group-hover:text-muted",
+							isMainSpec || isActive
+								? "text-primary"
+								: "text-text-subtle group-hover:text-text-muted",
 						)}
 					/>
 					<span
 						className={cn(
 							"min-w-0 flex-1 truncate tr-text-ui transition-colors",
-							isActive ? "text-text" : "text-muted group-hover:text-text",
+							isActive ? "text-text-default" : "text-text-muted group-hover:text-text-default",
 						)}
 					>
 						{node.title}
@@ -172,7 +175,7 @@ function SpecNodeRow({
 						data-testid="spec-role"
 						className={cn(
 							"max-w-16 shrink-0 truncate text-right tr-text-eyebrow",
-							isMainSpec || isActive ? "text-primary" : "text-hint",
+							isMainSpec || isActive ? "text-primary" : "text-text-subtle",
 						)}
 					>
 						{trailingRole}

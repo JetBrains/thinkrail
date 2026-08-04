@@ -26,7 +26,7 @@ export function RightPanel() {
 
 	return (
 		<div className="flex h-full min-h-0 flex-col">
-			<div className="flex h-7 shrink-0 items-center gap-md border-b border-border2 px-sm">
+			<div className="flex h-7 shrink-0 items-center gap-md border-b border-border-default px-sm">
 				<TabButton testid="tab-specs" active={tab === "specs"} onClick={() => setTab("specs")}>
 					Specs
 				</TabButton>
@@ -47,7 +47,7 @@ export function RightPanel() {
 						aria-label="Refresh specs"
 						title="Refresh specs"
 						onClick={reloadSpecs}
-						className="ml-auto text-hint hover:text-muted"
+						className="ml-auto text-text-subtle hover:text-text-muted"
 					>
 						<RefreshCw className="size-3.5" />
 					</button>
@@ -55,7 +55,9 @@ export function RightPanel() {
 			</div>
 			<div className="min-h-0 flex-1 overflow-auto">
 				{!activeWorkspaceId ? (
-					<p className="p-sm tr-text-metadata text-hint">Select a workspace to browse files.</p>
+					<p className="p-sm tr-text-metadata text-text-subtle">
+						Select a workspace to browse files.
+					</p>
 				) : tab === "specs" ? (
 					<div className="p-xs">
 						<SpecsPanel workspaceId={activeWorkspaceId} failed={specsFailed} />
@@ -89,7 +91,7 @@ function TabButton({
 			data-testid={testid}
 			data-active={active}
 			onClick={onClick}
-			className={`tr-text-eyebrow ${active ? "text-text" : "text-hint hover:text-muted"}`}
+			className={`tr-text-eyebrow ${active ? "text-text-default" : "text-text-subtle hover:text-text-muted"}`}
 		>
 			{children}
 		</button>

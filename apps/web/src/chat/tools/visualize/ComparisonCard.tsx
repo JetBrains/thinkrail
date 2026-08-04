@@ -13,36 +13,39 @@ export function ComparisonCard({ args }: ToolRenderProps) {
 	const options = parseComparisonOptions(args.options);
 
 	if (options.length === 0) {
-		return <span className="text-hint tr-text-metadata italic">(no options)</span>;
+		return <span className="text-text-subtle tr-text-metadata italic">(no options)</span>;
 	}
 	return (
 		<div data-testid="tool-visualize-comparison" className="flex flex-col gap-sm">
-			{title ? <div className="tr-title-compact text-text">{title}</div> : null}
+			{title ? <div className="tr-title-compact text-text-default">{title}</div> : null}
 			<div className="grid gap-sm sm:grid-cols-2">
 				{options.map((opt) => (
 					<div
 						key={opt.name}
 						data-recommended={opt.recommended || undefined}
 						className={`flex flex-col gap-xs rounded-[var(--radius-sm)] border p-sm ${
-							opt.recommended ? "border-primary bg-elevated" : "border-border2"
+							opt.recommended ? "border-primary bg-container-elevated-bg" : "border-border-default"
 						}`}
 					>
 						<div className="flex items-center gap-xs">
-							<span className="tr-text-ui text-text">{opt.name}</span>
+							<span className="tr-text-ui text-text-default">{opt.name}</span>
 							{opt.recommended ? (
-								<span className="rounded-[var(--radius-sm)] bg-primary px-1.5 py-0.5 text-on-accent tr-text-metadata">
+								<span className="rounded-[var(--radius-sm)] bg-primary px-1.5 py-0.5 text-text-on-primary tr-text-metadata">
 									Recommended
 								</span>
 							) : null}
 						</div>
 						{opt.description ? (
-							<p className="text-muted tr-text-metadata">{opt.description}</p>
+							<p className="text-text-muted tr-text-metadata">{opt.description}</p>
 						) : null}
 						{opt.pros.length > 0 ? (
 							<ul className="flex flex-col gap-0.5">
 								{opt.pros.map((p) => (
-									<li key={p} className="flex items-start gap-xs text-text tr-text-metadata">
-										<Check className="mt-0.5 size-3 shrink-0 text-green" />
+									<li
+										key={p}
+										className="flex items-start gap-xs text-text-default tr-text-metadata"
+									>
+										<Check className="mt-0.5 size-3 shrink-0 text-feedback-success" />
 										<span>{p}</span>
 									</li>
 								))}
@@ -51,8 +54,11 @@ export function ComparisonCard({ args }: ToolRenderProps) {
 						{opt.cons.length > 0 ? (
 							<ul className="flex flex-col gap-0.5">
 								{opt.cons.map((c) => (
-									<li key={c} className="flex items-start gap-xs text-text tr-text-metadata">
-										<X className="mt-0.5 size-3 shrink-0 text-red" />
+									<li
+										key={c}
+										className="flex items-start gap-xs text-text-default tr-text-metadata"
+									>
+										<X className="mt-0.5 size-3 shrink-0 text-feedback-error" />
 										<span>{c}</span>
 									</li>
 								))}

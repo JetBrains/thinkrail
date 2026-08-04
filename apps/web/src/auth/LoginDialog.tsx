@@ -85,12 +85,18 @@ export function LoginDialog({
 				</DialogHeader>
 
 				{state.status === "success" ? (
-					<p className="flex items-center gap-sm text-green tr-text-ui" data-testid="login-success">
+					<p
+						className="flex items-center gap-sm text-feedback-success tr-text-ui"
+						data-testid="login-success"
+					>
 						<Check className="size-4 shrink-0" />
 						{providerName} is connected.
 					</p>
 				) : state.status === "error" ? (
-					<p className="flex items-start gap-sm text-red tr-text-ui" data-testid="login-error">
+					<p
+						className="flex items-start gap-sm text-feedback-error tr-text-ui"
+						data-testid="login-error"
+					>
 						<TriangleAlert className="mt-0.5 size-4 shrink-0" />
 						<span className="min-w-0 break-words">{state.error ?? "Login failed."}</span>
 					</p>
@@ -105,7 +111,7 @@ export function LoginDialog({
 									<ExternalLink className="size-4" />
 									Open sign-in page
 								</Button>
-								<code className="select-all break-all rounded-[var(--radius-sm)] bg-[var(--input-bg)] px-sm py-xs tr-code-text text-hint">
+								<code className="select-all break-all rounded-[var(--radius-sm)] bg-control-bg px-sm py-xs tr-code-text text-text-subtle">
 									{state.url}
 								</code>
 							</div>
@@ -113,10 +119,10 @@ export function LoginDialog({
 
 						{state.deviceCode ? (
 							<div
-								className="flex flex-col gap-xs rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] p-md"
+								className="flex flex-col gap-xs rounded-[var(--radius-md)] border border-border-default bg-control-bg p-md"
 								data-testid="login-device-code"
 							>
-								<span className="text-hint tr-text-metadata">
+								<span className="text-text-subtle tr-text-metadata">
 									Enter this code at{" "}
 									<a
 										href={state.deviceCode.verificationUri}
@@ -129,7 +135,7 @@ export function LoginDialog({
 										<ExternalLink className="size-3 shrink-0" />
 									</a>
 								</span>
-								<code className="tr-code-otp select-all text-center text-text">
+								<code className="tr-code-otp select-all text-center text-text-default">
 									{state.deviceCode.userCode}
 								</code>
 							</div>
@@ -138,7 +144,7 @@ export function LoginDialog({
 						{state.input?.kind === "select" ? (
 							<div className="flex flex-col gap-xs">
 								{state.input.message ? (
-									<p className="text-muted tr-text-ui">{state.input.message}</p>
+									<p className="text-text-muted tr-text-ui">{state.input.message}</p>
 								) : null}
 								{state.input.options.map((option) => (
 									<button
@@ -147,7 +153,7 @@ export function LoginDialog({
 										data-testid="login-option"
 										data-option={option.id}
 										onClick={() => onReply(option.id)}
-										className="rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-md py-sm text-left tr-text-ui text-text outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-primary"
+										className="rounded-[var(--radius-md)] border border-border-default bg-control-bg px-md py-sm text-left tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
 									>
 										{option.label}
 									</button>
@@ -158,7 +164,7 @@ export function LoginDialog({
 						{state.input?.kind === "prompt" ? (
 							<div className="flex flex-col gap-xs">
 								{state.input.message ? (
-									<p className="text-muted tr-text-ui">{state.input.message}</p>
+									<p className="text-text-muted tr-text-ui">{state.input.message}</p>
 								) : null}
 								<div className="flex gap-sm">
 									<input
@@ -173,7 +179,7 @@ export function LoginDialog({
 												submitPrompt();
 											}
 										}}
-										className="min-w-0 flex-1 rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-sm py-xs tr-text-ui text-text outline-none placeholder:text-hint focus:border-primary"
+										className="min-w-0 flex-1 rounded-[var(--radius-md)] border border-border-default bg-control-bg px-sm py-xs tr-text-ui text-text-default outline-none placeholder:text-text-subtle focus:border-primary"
 									/>
 									<Button data-testid="login-submit" onClick={submitPrompt}>
 										Submit
@@ -184,7 +190,7 @@ export function LoginDialog({
 
 						{state.progress ? (
 							<p
-								className="flex items-center gap-sm text-hint tr-text-ui"
+								className="flex items-center gap-sm text-text-subtle tr-text-ui"
 								data-testid="login-progress"
 							>
 								<Loader2 className="size-4 shrink-0 animate-spin" />
@@ -194,7 +200,7 @@ export function LoginDialog({
 
 						{!state.url && !state.deviceCode && !state.input && !state.progress ? (
 							<p
-								className="flex items-center gap-sm text-hint tr-text-ui"
+								className="flex items-center gap-sm text-text-subtle tr-text-ui"
 								data-testid="login-working"
 							>
 								<Loader2 className="size-4 shrink-0 animate-spin" />

@@ -134,7 +134,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   turnId)`** (`rows.ts`) — a turn's own row for `user`/`system`/`error`/`retry`, or its first `:text:` row
   for `assistant` (whose turns dissolve into `markdown`/`tool`/`activity` rows, never a row of their own)
   — then `virtuosoRef.scrollToIndex({ align: "center" })` plus a transient `flashRowId` (rendered as
-  `data-flash` + a `bg-[var(--primary-10)]` transition on the row wrapper, cleared after 1600ms) draw the
+  `data-flash` + a `bg-primary-subtle` transition on the row wrapper, cleared after 1600ms) draw the
   eye to it. Either resolving a row or giving up (toasted as "couldn't locate the message") always clears
   the request — `ChatView` is its only consumer, so an unresolved request must never linger.
 - **Open at the latest message** — the chat `Virtuoso` mounts with `initialTopMostItemIndex = { index:

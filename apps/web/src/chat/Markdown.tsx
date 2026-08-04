@@ -63,9 +63,17 @@ function CodeBlock({
 	const code = String(children ?? "").replace(/\n$/, "");
 	if (!lang) {
 		if (!code.includes("\n")) {
-			return <code className="rounded-[var(--radius-sm)] bg-elevated px-1 py-0.5">{children}</code>;
+			return (
+				<code className="rounded-[var(--radius-sm)] bg-container-elevated-bg px-1 py-0.5">
+					{children}
+				</code>
+			);
 		}
-		return <pre className="overflow-auto rounded-[var(--radius-sm)] bg-elevated p-sm">{code}</pre>;
+		return (
+			<pre className="overflow-auto rounded-[var(--radius-sm)] bg-container-elevated-bg p-sm">
+				{code}
+			</pre>
+		);
 	}
 	return <ShikiBlock code={code} lang={lang} />;
 }
@@ -89,14 +97,14 @@ function ShikiBlock({ code, lang }: { code: string; lang: string }) {
 
 	if (html === null) {
 		return (
-			<pre className="overflow-auto rounded-[var(--radius-sm)] bg-elevated p-sm text-text">
+			<pre className="overflow-auto rounded-[var(--radius-sm)] bg-container-elevated-bg p-sm text-text-default">
 				{code}
 			</pre>
 		);
 	}
 	return (
 		<div
-			className="overflow-auto rounded-[var(--radius-sm)] [&_pre]:!m-0 [&_pre]:!bg-elevated [&_pre]:p-sm"
+			className="overflow-auto rounded-[var(--radius-sm)] [&_pre]:!m-0 [&_pre]:!bg-container-elevated-bg [&_pre]:p-sm"
 			// biome-ignore lint/security/noDangerouslySetInnerHtml: shiki output is escaped, themed markup
 			dangerouslySetInnerHTML={{ __html: html }}
 		/>

@@ -5,6 +5,8 @@ import type {
 	BranchList,
 	DiffStats,
 	FileNode,
+	GitCommit,
+	GitDiffScope,
 	GithubAuthStatus,
 	GitStatus,
 	HistoryScope,
@@ -90,7 +92,15 @@ import type {
 // v20: `TodoGroupItem.status` — a group's derived task lifecycle (`pending|active|done`), computed by the
 // host from the steps and **required** on the DTO; clients render it instead of deriving it, so an older
 // host would leave a newer UI bucketing every group as `pending`.
-export const PROTOCOL_VERSION = 20;
+// v21: the Changes panel's **diff scope** — `git.status` / `git.diffFile` take an optional `GitDiffScope`
+// (branch / uncommitted / one commit; omitted = `branch`, so an older client is unchanged), `git.listCommits`
+// lists the branch's commits for the scope menu, and `workspace.setDiffBase` re-points the diff target
+// (`Workspace.diffBase`, resolved server-side as `diffBase ?? baseBranch` — `baseBranch` is now creation
+// provenance only).
+// v22: a failed response may name its failure — `WsResponse.errorCode` (`WsErrorCode`, today only
+// `UNKNOWN_COMMIT`), so a client can react to one specific failure instead of pattern-matching the message.
+// Additive and optional: an older client simply sees the `error` string it always saw.
+export const PROTOCOL_VERSION = 22;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -146,6 +156,8 @@ export const WS_METHODS = {
 	workspaceDiffStats: "workspace.diffStats",
 	// Per-workspace per-skill enable/disable override (over the project baseline).
 	workspaceSetSkillOverride: "workspace.setSkillOverride",
+	// Re-point the ref the workspace's diff is measured against (`null` clears back to the creation base).
+	workspaceSetDiffBase: "workspace.setDiffBase",
 	// gh-backed New-Workspace surface: branch list per project + local `gh` auth status.
 	gitListBranches: "git.listBranches",
 	// Background freshness fetch of a remote base ref, fired when the New-Workspace dialog opens/picks a
@@ -164,6 +176,9 @@ export const WS_METHODS = {
 	todoRemove: "todo.remove",
 	gitStatus: "git.status",
 	gitDiffFile: "git.diffFile",
+	// The workspace branch's own commits (`<diff base>..HEAD`, newest first) — the scope menu's commit list,
+	// fetched lazily when that menu first opens.
+	gitListCommits: "git.listCommits",
 	terminalCreate: "terminal.create",
 	terminalWrite: "terminal.write",
 	terminalResize: "terminal.resize",
@@ -352,6 +367,9 @@ export interface WsMethodMap {
 		params: { id: string; name: string; override: "on" | "off" | null };
 		result: Workspace;
 	};
+	// Re-point the diff target (`Workspace.diffBase`); `null` clears back to the creation base. Echoes the
+	// updated `Workspace` **and** broadcasts `workspace.updated`, so every client converges on the push.
+	"workspace.setDiffBase": { params: { id: string; ref: string | null }; result: Workspace };
 	"git.listBranches": { params: { projectId: string }; result: BranchList };
 	// Best-effort background `git fetch` of a remote ref (`origin/<b>`); `ok` reports whether the fetch ran
 	// (offline / non-remote ref → `false`). The UI fires-and-forgets it to warm the ref before create.
@@ -381,15 +399,21 @@ export interface WsMethodMap {
 		result: TodoItem;
 	};
 	"todo.remove": { params: { workspaceId: string; sessionId: string; id: string }; result: Ack };
-	"git.status": { params: { workspaceId: string }; result: GitStatus };
-	// One changed file, both sides: `original` = the file at the workspace's base branch (empty for
-	// untracked/added — and for a renamed file's new path, which degrades to an add-style diff),
-	// `modified` = the worktree content (empty when deleted). Feeds Monaco's diff editor, which needs
-	// two contents rather than a unified patch.
+	// `scope` (default `{ kind: "branch" }`) selects **what** is diffed; see `GitDiffScope`. An unresolvable
+	// scope (a commit that a rebase/reset removed) is REJECTED — the panel treats that as "reset the scope"
+	// rather than staying wedged on a dead sha.
+	"git.status": { params: { workspaceId: string; scope?: GitDiffScope }; result: GitStatus };
+	// One changed file, both sides of the `scope`'s range: `original` = the file at the range's start (empty
+	// for untracked/added — and for a renamed file's new path, which degrades to an add-style diff),
+	// `modified` = the file at its end (the worktree for branch/uncommitted, the commit's tree for `commit`;
+	// empty when deleted). Feeds Monaco's diff editor, which needs two contents rather than a unified patch.
 	"git.diffFile": {
-		params: { workspaceId: string; path: string };
+		params: { workspaceId: string; path: string; scope?: GitDiffScope };
 		result: { original: string; modified: string };
 	};
+	// Commits on the workspace's branch that its diff base doesn't have (`git log <base>..HEAD`), newest
+	// first and capped host-side — the scope menu's commit rows.
+	"git.listCommits": { params: { workspaceId: string }; result: { commits: GitCommit[] } };
 	"terminal.create": { params: { workspaceId: string }; result: { id: string } };
 	"terminal.write": { params: { id: string; data: string }; result: Ack };
 	"terminal.resize": { params: { id: string; cols: number; rows: number }; result: Ack };
@@ -532,12 +556,22 @@ export interface WsRequest<M extends WsMethodName = WsMethodName> {
 	sessionId?: string;
 }
 
-/** Host→client reply, correlated by `id`. */
+/**
+ * A failure the **host names**, so a client can react to *this* error rather than to "something failed".
+ * Only failures with a distinct client behaviour earn a code; everything else stays a plain message.
+ * - `UNKNOWN_COMMIT` — a `commit` diff scope names a commit the repo no longer has (a rebase, a branch
+ *   reset). The Changes panel falls back to the branch scope **with a toast**; any *other* failure (timeout,
+ *   dropped socket, git error) must leave the user's chosen scope alone.
+ */
+export type WsErrorCode = "UNKNOWN_COMMIT";
+
+/** Host→client reply, correlated by `id`. `errorCode` is set only for a {@link WsErrorCode} failure. */
 export interface WsResponse {
 	id: string;
 	ok: boolean;
 	result?: unknown;
 	error?: string;
+	errorCode?: WsErrorCode;
 }
 
 /** Host→client push on a channel (no correlation id). */

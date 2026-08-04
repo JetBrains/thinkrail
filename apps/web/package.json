@@ -5,13 +5,15 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vite",
-		"build": "bun run typography:check && tsc --noEmit && vite build",
+		"build": "bun run typography:check && bun run colors:check && tsc --noEmit && vite build",
 		"typecheck": "tsc --noEmit",
 		"test": "bun test",
 		"preview": "vite preview",
 		"typography:generate": "bun scripts/generate-typography.ts",
 		"typography:validate": "bun scripts/validate-typography.ts",
-		"typography:check": "bun scripts/generate-typography.ts --check"
+		"typography:check": "bun scripts/generate-typography.ts --check",
+		"colors:generate": "bun scripts/generate-colors.ts",
+		"colors:check": "bun scripts/generate-colors.ts --check"
 	},
 	"dependencies": {
 		"@fontsource-variable/geist": "catalog:",

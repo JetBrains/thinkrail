@@ -48,7 +48,7 @@ export function ExtUiDialog({
 								type="button"
 								data-testid="ext-ui-option"
 								onClick={() => onReply(option)}
-								className="rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-md py-sm text-left tr-text-ui text-text outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-primary"
+								className="rounded-[var(--radius-md)] border border-border-default bg-control-bg px-md py-sm text-left tr-text-ui text-text-default outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
 							>
 								{option}
 							</button>
@@ -69,7 +69,7 @@ export function ExtUiDialog({
 								onReply(text);
 							}
 						}}
-						className="rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-sm py-xs tr-text-ui text-text outline-none placeholder:text-hint focus:border-primary"
+						className="rounded-[var(--radius-md)] border border-border-default bg-control-bg px-sm py-xs tr-text-ui text-text-default outline-none placeholder:text-text-subtle focus:border-primary"
 					/>
 				) : null}
 
@@ -80,7 +80,7 @@ export function ExtUiDialog({
 						value={text}
 						rows={8}
 						onChange={(e) => setText(e.target.value)}
-						className="resize-none rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-sm py-xs tr-code-text text-text outline-none focus:border-primary"
+						className="resize-none rounded-[var(--radius-md)] border border-border-default bg-control-bg px-sm py-xs tr-code-text text-text-default outline-none focus:border-primary"
 					/>
 				) : null}
 

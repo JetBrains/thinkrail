@@ -11,7 +11,7 @@ const THRESHOLD = 24;
 export function Collapsible({
 	lines,
 	children,
-	fadeClass = "bg-[linear-gradient(to_top,var(--bg-dark),transparent)]",
+	fadeClass = "bg-[linear-gradient(to_top,var(--container-header-bg),transparent)]",
 }: {
 	lines: number;
 	children: ReactNode;

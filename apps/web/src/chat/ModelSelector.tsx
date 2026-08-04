@@ -73,12 +73,12 @@ export function ModelSelector({
 			<PopoverTrigger
 				data-testid="model-selector"
 				data-open={open}
-				className="flex h-8 max-w-[220px] items-center gap-sm rounded-[var(--radius-md)] border border-border2 bg-[var(--input-bg)] px-sm tr-text-ui text-text outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-[var(--primary-60)] data-[open=true]:bg-hover"
+				className="flex h-8 max-w-[220px] items-center gap-sm rounded-[var(--radius-md)] border border-border-default bg-control-bg px-sm tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-primary-strong data-[open=true]:bg-control-bg-hovered"
 			>
-				<span className="truncate text-muted tr-text-metadata">
+				<span className="truncate text-text-muted tr-text-metadata">
 					{current?.name ?? "Select model"}
 				</span>
-				<ChevronDown className="size-3 shrink-0 text-hint" />
+				<ChevronDown className="size-3 shrink-0 text-text-subtle" />
 			</PopoverTrigger>
 			<PopoverContent align="start" container={container} className="w-[320px] p-0">
 				<Command>
@@ -104,9 +104,13 @@ export function ModelSelector({
 												</span>
 												<span className="flex min-w-0 flex-col">
 													<span className="truncate">{m.name}</span>
-													<span className="truncate text-hint tr-text-metadata">{subLine(m)}</span>
+													<span className="truncate text-text-subtle tr-text-metadata">
+														{subLine(m)}
+													</span>
 												</span>
-												<span className="ml-auto shrink-0 text-hint tr-text-metadata">{m.id}</span>
+												<span className="ml-auto shrink-0 text-text-subtle tr-text-metadata">
+													{m.id}
+												</span>
 											</CommandItem>
 										);
 									})}
@@ -120,7 +124,7 @@ export function ModelSelector({
 					data-refreshing={refreshing}
 					disabled={refreshing}
 					onClick={() => onRefresh(true)}
-					className="flex w-full items-center gap-sm border-border2 border-t px-sm py-xs tr-text-metadata text-hint outline-none transition-colors hover:bg-hover hover:text-text disabled:cursor-default disabled:hover:bg-transparent disabled:hover:text-hint"
+					className="flex w-full items-center gap-sm border-border-default border-t px-sm py-xs tr-text-metadata text-text-subtle outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default disabled:cursor-default disabled:hover:bg-transparent disabled:hover:text-text-subtle"
 				>
 					<RefreshCw className={cn("size-3.5 shrink-0", refreshing && "animate-spin")} />
 					{refreshing ? "Updating catalog…" : "Refresh catalog"}

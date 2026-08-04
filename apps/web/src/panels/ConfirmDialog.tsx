@@ -42,7 +42,7 @@ export function ConfirmDialog({
 			<DialogContent className="max-w-[24rem]" hideClose data-testid="confirm-dialog">
 				<DialogHeader>
 					<div className="flex items-center gap-sm">
-						{destructive ? <TriangleAlert className="size-4 shrink-0 text-red" /> : null}
+						{destructive ? <TriangleAlert className="size-4 shrink-0 text-feedback-error" /> : null}
 						<DialogTitle>{title}</DialogTitle>
 					</div>
 					{description ? <DialogDescription>{description}</DialogDescription> : null}

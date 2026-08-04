@@ -37,14 +37,14 @@ export function ActivityGroup({
 			data-expanded={expanded}
 			data-live={live}
 			data-steps={steps.length}
-			className="text-muted tr-text-metadata"
+			className="text-text-muted tr-text-metadata"
 		>
 			<button
 				type="button"
 				data-testid="activity-group-toggle"
 				aria-expanded={expanded}
 				onClick={toggle}
-				className="flex w-full cursor-pointer select-none items-center gap-xs rounded-[var(--radius-sm)] px-xs py-xs text-left outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex w-full cursor-pointer select-none items-center gap-xs rounded-[var(--radius-sm)] px-xs py-xs text-left outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
 			>
 				<ChevronRight
 					className={`size-3 shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
@@ -136,7 +136,7 @@ function ActivityStepRow({
 				data-testid="activity-step"
 				data-step="thinking"
 				data-expanded={expanded}
-				className="text-muted tr-text-metadata"
+				className="text-text-muted tr-text-metadata"
 			>
 				<StepHeader
 					expanded={expanded}
@@ -168,7 +168,7 @@ function ActivityStepRow({
 			data-tool={step.toolName}
 			data-status={status}
 			data-expanded={expanded}
-			className="text-muted tr-text-metadata"
+			className="text-text-muted tr-text-metadata"
 		>
 			<StepHeader
 				expanded={expanded}
@@ -177,16 +177,16 @@ function ActivityStepRow({
 					status === "running" ? (
 						<Loader2 className="size-3 shrink-0 animate-spin motion-reduce:animate-none" />
 					) : status === "error" ? (
-						<X className="size-3 shrink-0 text-red" />
+						<X className="size-3 shrink-0 text-feedback-error" />
 					) : (
-						<Check className="size-3 shrink-0 text-green" />
+						<Check className="size-3 shrink-0 text-feedback-success" />
 					)
 				}
 				name={step.toolName}
 				summary={getToolSummary(step.toolName, renderProps)}
 			/>
 			{expanded ? (
-				<div className={cn("px-sm pb-xs pl-lg", status === "error" && "text-red")}>
+				<div className={cn("px-sm pb-xs pl-lg", status === "error" && "text-feedback-error")}>
 					<Renderer {...renderProps} />
 				</div>
 			) : null}
@@ -214,10 +214,10 @@ function StepHeader({
 			aria-expanded={expanded}
 			onClick={onToggle}
 			// Mobile-first hit area: ~32px touch rows, compact 22px density from `sm:` up.
-			className="flex w-full cursor-pointer select-none items-center gap-xs rounded-[var(--radius-sm)] px-xs py-sm text-left outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-primary sm:py-[3px]"
+			className="flex w-full cursor-pointer select-none items-center gap-xs rounded-[var(--radius-sm)] px-xs py-sm text-left outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary sm:py-[3px]"
 		>
 			{icon}
-			<span className="shrink-0 text-text">{name}</span>
+			<span className="shrink-0 text-text-default">{name}</span>
 			{summary ? (
 				<span className="min-w-0 flex-1 truncate" title={summary}>
 					{summary}

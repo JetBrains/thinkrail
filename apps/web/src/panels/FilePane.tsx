@@ -10,7 +10,9 @@ import { useLiveTabContent } from "./useLiveTabContent";
 const MonacoEditor = lazy(() => import("./MonacoEditor"));
 const MarkdownPreview = lazy(() => import("./MarkdownPreview"));
 
-const loading = <div className="flex h-full items-center justify-center text-hint">Loading…</div>;
+const loading = (
+	<div className="flex h-full items-center justify-center text-text-subtle">Loading…</div>
+);
 
 /**
  * The center pane for a file tab. Non-markdown files render Monaco directly (unchanged). Markdown files
@@ -49,7 +51,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 				data-testid="markdown-view-toggle"
 				role="toolbar"
 				aria-label="Markdown view mode"
-				className="flex h-8 shrink-0 items-center gap-xs border-border2 border-b bg-bg-dark px-sm"
+				className="flex h-8 shrink-0 items-center gap-xs border-border-default border-b bg-container-header-bg px-sm"
 			>
 				<ToggleSegment
 					testid="md-toggle-preview"

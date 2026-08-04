@@ -13,7 +13,7 @@ export const THINKRAIL_SHIKI_THEME: ThemeRegistration = {
 		{
 			settings: {
 				foreground: "var(--code-foreground)",
-				background: "var(--surface-content)",
+				background: "var(--container-content-bg)",
 			},
 		},
 		{ scope: ["comment"], settings: { foreground: "var(--code-comment)" } },

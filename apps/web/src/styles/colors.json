@@ -1,0 +1,119 @@
+{
+	"$schema": "./colors.schema.json",
+	"metadata": {
+		"version": "1.0.0",
+		"note": "The semantic colour layer. Palettes live in themes/bundled/*.theme.json; this file says what each palette entry is FOR, and is the only place a derivation is written. A role's `from` names a theme manifest key; the CSS variable that key writes to is derived (kebab-case), not tabulated. See COLOR.md."
+	},
+
+	"scale": {
+		"subtle": 10,
+		"soft": 20,
+		"muted": 40,
+		"strong": 60
+	},
+
+	"roles": {
+		"text-default": { "from": "text", "publish": true },
+		"text-muted": { "from": "muted", "publish": true },
+		"text-subtle": { "from": "hint", "publish": true },
+		"text-on-primary": { "from": "onAccent", "publish": true },
+		"text-link": {
+			"from": "info",
+			"publish": false,
+			"note": "global.css `a {}` is the only consumer; no component styles a bare link"
+		},
+
+		"container-workspace-bg": { "from": "background", "publish": true },
+		"container-sidebar-bg": { "from": "sidebar", "publish": true },
+		"container-header-bg": { "from": "header", "publish": true },
+		"container-content-bg": {
+			"from": "content",
+			"publish": true,
+			"note": "the code canvas: Monaco, Shiki, the terminal, the markdown preview"
+		},
+		"container-elevated-bg": {
+			"from": "elevated",
+			"publish": true,
+			"note": "every raised surface: dialogs, popovers, menus, toasts, cards, code blocks"
+		},
+
+		"control-bg": { "from": "input", "publish": true },
+		"control-bg-hovered": { "from": "hover", "publish": true },
+		"control-primary-bg": { "from": "accent", "publish": true },
+		"control-primary-text": { "from": "onAccent", "publish": true },
+
+		"border-default": { "from": "borderStrong", "publish": true },
+		"border-muted": { "from": "border", "publish": true },
+
+		"primary": { "from": "accent", "publish": true },
+		"primary-subtle": { "from": "accent", "alpha": "subtle", "publish": true },
+		"primary-soft": { "from": "accent", "alpha": "soft", "publish": true },
+		"primary-muted": { "from": "accent", "alpha": "muted", "publish": true },
+		"primary-strong": { "from": "accent", "alpha": "strong", "publish": true },
+
+		"on-primary-soft": { "from": "onAccent", "alpha": "soft", "publish": true },
+
+		"feedback-info": { "from": "info", "publish": true },
+		"feedback-info-subtle": { "from": "info", "alpha": "subtle", "publish": true },
+		"feedback-success": { "from": "success", "publish": true },
+		"feedback-success-subtle": { "from": "success", "alpha": "subtle", "publish": true },
+		"feedback-success-muted": { "from": "success", "alpha": "muted", "publish": true },
+		"feedback-error": { "from": "danger", "publish": true },
+		"feedback-error-subtle": { "from": "danger", "alpha": "subtle", "publish": true },
+		"feedback-error-muted": { "from": "danger", "alpha": "muted", "publish": true },
+		"feedback-warning": { "from": "warning", "publish": true },
+		"feedback-warning-subtle": { "from": "warning", "alpha": "subtle", "publish": true },
+
+		"bubble-user-bg": { "from": "bubbleAccent", "alpha": "subtle", "publish": true },
+		"bubble-user-border": { "from": "bubbleAccent", "alpha": "muted", "publish": true },
+
+		"selection-text": {
+			"from": "selectionForeground",
+			"fallback": "inherit",
+			"publish": false,
+			"note": "nullable in the manifest (high contrast keeps the native foreground)"
+		},
+		"selection-bg": {
+			"from": "selection",
+			"publish": false,
+			"note": "native ::selection in global.css; not a utility"
+		},
+
+		"editor-selection-bg": { "from": "editorSelection", "publish": false },
+		"editor-selection-text": {
+			"from": "editorSelectionForeground",
+			"publish": false,
+			"note": "read by Monaco and xterm through getComputedStyle; a utility would be dead weight"
+		}
+	},
+
+	"effects": {
+		"sunken": {
+			"note": "a recessed row or track",
+			"dark": "rgba(0, 0, 0, 0.12)",
+			"light": "rgba(0, 0, 0, 0.05)",
+			"publish": true
+		},
+		"overlay": {
+			"note": "the scrim behind a modal",
+			"dark": "rgba(0, 0, 0, 0.5)",
+			"light": "rgba(0, 0, 0, 0.5)",
+			"publish": true
+		},
+		"shadow-sm": {
+			"dark": "0 2px 8px rgba(0, 0, 0, 0.3)",
+			"light": "0 2px 8px rgba(0, 0, 0, 0.1)",
+			"publish": false
+		},
+		"shadow-md": {
+			"dark": "0 4px 16px rgba(0, 0, 0, 0.35)",
+			"light": "0 4px 16px rgba(0, 0, 0, 0.12)",
+			"publish": false
+		},
+		"shadow-lg": {
+			"dark": "0 8px 28px rgba(0, 0, 0, 0.4)",
+			"light": "0 8px 28px rgba(0, 0, 0, 0.14)",
+			"publish": false
+		}
+	}
+}

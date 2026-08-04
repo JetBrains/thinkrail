@@ -135,8 +135,9 @@ Rules at a call site:
 - **Typography = exactly one semantic class.** Never compose `font-*`, `text-<size>`, `tracking-*` or
   `uppercase`. The exceptions are `italic` and `leading-*`: a call site may add one to override that
   single property (see *Cascade layers*), which is why a few rows and empty states carry them.
-- **Colour stays at the call site** (`text-muted`, `text-hint`, conditional actives). Active/selected
-  state is a **colour** change — never a weight change.
+- **Colour stays at the call site**, as a semantic colour token (`text-text-muted`,
+  `text-text-subtle`, conditional actives) — see [COLOR.md](./COLOR.md). Active/selected state is a
+  **colour** change — never a weight change.
 - **`<pre>` and `<code>` always name a style**, even inside a container that already has one. Preflight
   targets those elements directly, and a directly-matching rule beats an inherited family, so a bare
   `<pre>` renders in a *different* mono face from its `tr-code-text` parent. Pinned by
@@ -144,9 +145,9 @@ Rules at a call site:
 - Spacing, truncation, layout, hover and state classes are unaffected.
 
 ```tsx
-<span className="tr-text-eyebrow text-muted">Projects</span>
-<h2 className="tr-title-dialog text-text">{title}</h2>
-<code className="tr-code-text text-hint">{command}</code>
+<span className="tr-text-eyebrow text-text-muted">Projects</span>
+<h2 className="tr-title-dialog text-text-default">{title}</h2>
+<code className="tr-code-text text-text-subtle">{command}</code>
 ```
 
 **When the element is not yours.** A third-party component that renders its own inner DOM (cmdk's group
@@ -201,7 +202,8 @@ JSON entry — the generator, the naming and the guards all follow.
 
 ## Fonts
 
-Self-hosted variable faces, imported by `styles/fonts.css` (`@fontsource-variable/geist`,
+Self-hosted variable faces. The packages are declared per family as `selfHosted` in the JSON and
+`styles/generated/fonts.css` is emitted from them (`@fontsource-variable/geist`,
 `@fontsource-variable/jetbrains-mono`), fingerprinted into `dist/assets` and embedded in the binary —
 **no font CDN**, so an offline host renders the real system. Both faces are variable, so 800 and
 italics are real, not synthetic. Pinned by `e2e/fonts.spec.ts`.
@@ -242,7 +244,7 @@ The allowlist is deliberately tiny, and each entry is enforced by name in
 | `panels/monacoSetup.ts` | Monaco takes `fontFamily` / `fontSize` / `lineHeight` as JS options — it reads `--tr-font-family-code`, `--tr-font-size-s11`, `--tr-line-height-default`, so it cannot drift from a code block |
 | `panels/TerminalInstance.tsx` | xterm, same reason (`--tr-font-family-code` + `--tr-font-size-s11`) |
 | `chat/tools/visualize/mermaid.ts` | mermaid's theme config takes a family string (`--tr-font-family-code`) |
-| `index.css`, `styles/tokens.css`, `styles/global.css`, `styles/fonts.css` | the mapping layers themselves |
+| `index.css`, `styles/tokens.css`, `styles/global.css` | the mapping layers themselves |
 
 The OTP code is **not** an exception any more: it is the named `code.otp` style (`.tr-code-otp`).
 

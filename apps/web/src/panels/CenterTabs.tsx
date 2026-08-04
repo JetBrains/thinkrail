@@ -15,6 +15,7 @@ import {
 	DropdownMenuLabel,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { relativeTime } from "@/lib";
 import { messagesToRuntime } from "../chat/hydrate";
 import {
 	type ClosedChat,
@@ -53,16 +54,6 @@ const AUTO_OPEN_LIMIT = 4;
 const NO_TABS: EditorTab[] = [];
 const NO_CLOSED: ClosedChat[] = [];
 
-function relativeTime(ms: number): string {
-	const s = Math.floor((Date.now() - ms) / 1000);
-	if (s < 60) return "just now";
-	const m = Math.floor(s / 60);
-	if (m < 60) return `${m}m ago`;
-	const h = Math.floor(m / 60);
-	if (h < 24) return `${h}h ago`;
-	return `${Math.floor(h / 24)}d ago`;
-}
-
 /** Dropdown of chats closed in this workspace; picking one reopens it (and removes it from history). */
 function ChatHistoryMenu({
 	closedChats,
@@ -77,7 +68,7 @@ function ChatHistoryMenu({
 				data-testid="chat-history"
 				aria-label="Reopen a closed chat"
 				title="View chat history"
-				className="flex shrink-0 items-center border-border2 border-l px-sm text-hint outline-none hover:bg-hover hover:text-text focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex shrink-0 items-center border-border-default border-l px-sm text-text-subtle outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 			>
 				<History className="size-4" />
 			</DropdownMenuTrigger>
@@ -91,8 +82,10 @@ function ChatHistoryMenu({
 						onSelect={() => onReopen(c.sessionId)}
 					>
 						<span className="flex-1 truncate">{c.title}</span>
-						<span className="shrink-0 text-hint tr-text-metadata">{relativeTime(c.closedAt)}</span>
-						<RotateCcw className="size-3.5 shrink-0 text-muted" />
+						<span className="shrink-0 text-text-subtle tr-text-metadata">
+							{relativeTime(c.closedAt)}
+						</span>
+						<RotateCcw className="size-3.5 shrink-0 text-text-muted" />
 					</DropdownMenuItem>
 				))}
 			</DropdownMenuContent>
@@ -309,30 +302,32 @@ export function CenterTabs() {
 	// directly in your project folder") instead of promising worktree isolation.
 	const isDefault = activeWorkspace != null && isDefaultWorkspace(activeWorkspace);
 	const placeholder = (
-		<div className="flex h-full flex-col items-center justify-center gap-md px-lg text-center text-hint">
+		<div className="flex h-full flex-col items-center justify-center gap-md px-lg text-center text-text-subtle">
 			{activeWorkspace ? (
 				<div
 					data-testid="workspace-ready"
 					className="flex max-w-[440px] flex-col items-center gap-xs"
 				>
-					<span className="tr-text-eyebrow text-hint">
+					<span className="tr-text-eyebrow text-text-subtle">
 						{isDefault ? "Default workspace" : "Workspace ready"}
 					</span>
-					<h2 className="max-w-full truncate tr-title-entity text-text">
+					<h2 className="max-w-full truncate tr-title-entity text-text-default">
 						{isDefault ? (contextProject?.name ?? activeWorkspace.name) : activeWorkspace.name}
 					</h2>
-					<p className="flex max-w-full items-center gap-xs text-muted tr-text-metadata">
+					<p className="flex max-w-full items-center gap-xs text-text-muted tr-text-metadata">
 						<GitBranch className="size-3.5 shrink-0" />
 						{isDefault ? (
 							<span className="truncate">on {activeWorkspace.branch}</span>
 						) : (
 							<>
 								<span className="truncate">{activeWorkspace.branch}</span>
-								<span className="shrink-0 text-hint">· from {activeWorkspace.baseBranch}</span>
+								<span className="shrink-0 text-text-subtle">
+									· from {activeWorkspace.baseBranch}
+								</span>
 							</>
 						)}
 					</p>
-					<p className="mt-xs text-muted tr-text-ui">
+					<p className="mt-xs text-text-muted tr-text-ui">
 						{isDefault
 							? "Chats, changes, and terminals run directly in your project folder."
 							: "Files, chats, changes, and terminals are scoped to this workspace."}
@@ -346,7 +341,7 @@ export function CenterTabs() {
 					type="button"
 					data-testid="start-chat"
 					onClick={() => void startChat()}
-					className="flex items-center gap-xs rounded-[var(--radius-md)] border border-border2 bg-elevated px-md py-xs tr-text-ui text-text hover:bg-hover"
+					className="flex items-center gap-xs rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg px-md py-xs tr-text-ui text-text-default hover:bg-control-bg-hovered"
 				>
 					<MessageSquarePlus className="size-4" /> New chat
 				</button>
@@ -361,7 +356,7 @@ export function CenterTabs() {
 
 	return (
 		<div className="flex h-full min-h-0 flex-col">
-			<div className="flex h-8 shrink-0 items-stretch border-border2 border-b bg-bg-dark">
+			<div className="flex h-8 shrink-0 items-stretch border-border-default border-b bg-container-header-bg">
 				<div role="tablist" className="flex flex-1 items-stretch overflow-x-auto">
 					{openTabs.map((tab) => {
 						const isActive = tab.id === activeTabId;
@@ -373,8 +368,10 @@ export function CenterTabs() {
 								data-active={isActive}
 								data-preview={isPreview}
 								data-kind={tab.kind}
-								className={`group flex items-center gap-xs border-border2 border-r pr-xs pl-sm tr-text-ui ${
-									isActive ? "bg-bg text-text" : "text-muted hover:bg-hover"
+								className={`group flex items-center gap-xs border-border-default border-r pr-xs pl-sm tr-text-ui ${
+									isActive
+										? "bg-container-workspace-bg text-text-default"
+										: "text-text-muted hover:bg-control-bg-hovered"
 								}`}
 							>
 								<button
@@ -389,7 +386,7 @@ export function CenterTabs() {
 									onDoubleClick={() => setActiveTab(tab.id, "keep")}
 								>
 									{tab.kind === "diff" ? (
-										<GitCompareArrows className="size-3.5 shrink-0 text-hint" />
+										<GitCompareArrows className="size-3.5 shrink-0 text-text-subtle" />
 									) : null}
 									<span className={`truncate ${isPreview ? "italic" : ""}`}>{tab.name}</span>
 								</button>
@@ -398,7 +395,7 @@ export function CenterTabs() {
 									data-testid="editor-tab-close"
 									aria-label={`Close ${tab.name}`}
 									onClick={() => onCloseTab(tab)}
-									className="rounded-[var(--radius-sm)] p-0.5 text-hint opacity-0 hover:bg-hover hover:text-text group-hover:opacity-100"
+									className="rounded-[var(--radius-sm)] p-0.5 text-text-subtle opacity-0 hover:bg-control-bg-hovered hover:text-text-default group-hover:opacity-100"
 								>
 									<X className="size-3.5" />
 								</button>
@@ -411,7 +408,7 @@ export function CenterTabs() {
 							data-testid="new-chat"
 							aria-label="New chat"
 							onClick={() => void startChat()}
-							className="flex items-center px-sm text-hint hover:bg-hover hover:text-text"
+							className="flex items-center px-sm text-text-subtle hover:bg-control-bg-hovered hover:text-text-default"
 						>
 							<MessageSquarePlus className="size-4" />
 						</button>
@@ -427,7 +424,9 @@ export function CenterTabs() {
 					<ErrorBoundary label={active.kind === "chat" ? "chat" : "editor"} resetKeys={[active.id]}>
 						<Suspense
 							fallback={
-								<div className="flex h-full items-center justify-center text-hint">Loading…</div>
+								<div className="flex h-full items-center justify-center text-text-subtle">
+									Loading…
+								</div>
 							}
 						>
 							{active.kind === "chat" ? (

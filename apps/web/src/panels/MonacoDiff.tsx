@@ -11,20 +11,22 @@ import {
 const beforeMount: BeforeMount = (m) => defineThinkrailTheme(m);
 
 /**
- * Read-only Monaco diff of one file: base-branch content vs worktree content. `view` picks split
- * (side-by-side) or inline rendering. Language is inferred from the model paths (both derive from the
- * file's own path, so both sides highlight alike).
+ * Read-only Monaco diff of one file: the diff scope's original side vs its modified side. `view` picks split
+ * (side-by-side) or inline rendering; `ignoreWhitespace` drops whitespace-only changes. Language is inferred
+ * from the model paths (both derive from the file's own path, so both sides highlight alike).
  */
 export default function MonacoDiff({
 	path,
 	original,
 	modified,
 	view,
+	ignoreWhitespace,
 }: {
 	path: string;
 	original: string;
 	modified: string;
 	view: "split" | "inline";
+	ignoreWhitespace: boolean;
 }) {
 	const observerRef = useRef<MutationObserver | null>(null);
 
@@ -47,7 +49,9 @@ export default function MonacoDiff({
 			beforeMount={beforeMount}
 			onMount={onMount}
 			loading={
-				<div className="flex h-full items-center justify-center text-hint">Loading diff…</div>
+				<div className="flex h-full items-center justify-center text-text-subtle">
+					Loading diff…
+				</div>
 			}
 			// `useInlineViewWhenSpaceIsLimited: false`: the pane-header toggle must do what it says — without
 			// it Monaco silently renders Split as inline on a narrow pane, which reads as a broken toggle.
@@ -55,6 +59,10 @@ export default function MonacoDiff({
 				...sharedEditorOptions(),
 				renderSideBySide: view === "split",
 				useInlineViewWhenSpaceIsLimited: false,
+				// Collapsed unchanged context ("N unmodified lines", with an expand control) is Monaco's own
+				// feature in both split and inline — nothing hand-rolled to keep in sync with its folding.
+				hideUnchangedRegions: { enabled: true },
+				ignoreTrimWhitespace: ignoreWhitespace,
 			}}
 		/>
 	);

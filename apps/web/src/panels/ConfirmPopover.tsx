@@ -59,13 +59,13 @@ export function ConfirmPopover({
 				data-testid="confirm-popover"
 			>
 				<div className="flex items-center gap-sm">
-					{destructive ? <TriangleAlert className="size-4 shrink-0 text-red" /> : null}
-					<span id={titleId} className="tr-title-compact text-text">
+					{destructive ? <TriangleAlert className="size-4 shrink-0 text-feedback-error" /> : null}
+					<span id={titleId} className="tr-title-compact text-text-default">
 						{title}
 					</span>
 				</div>
 				{description ? (
-					<p id={descId} className="tr-text-metadata text-muted">
+					<p id={descId} className="tr-text-metadata text-text-muted">
 						{description}
 					</p>
 				) : null}

@@ -26,8 +26,8 @@ export function AppearanceSettings() {
 	return (
 		<section data-testid="settings-appearance" className="flex flex-col gap-sm">
 			<div className="flex flex-col gap-xs">
-				<h3 className="tr-title-section text-text">Theme</h3>
-				<p className="text-hint tr-text-metadata">
+				<h3 className="tr-title-section text-text-default">Theme</h3>
+				<p className="text-text-subtle tr-text-metadata">
 					Choose the app theme. Your choice is saved on the host and follows you across devices.
 				</p>
 			</div>
@@ -48,8 +48,8 @@ export function AppearanceSettings() {
 							className={cn(
 								"flex items-center gap-sm rounded-[var(--radius-md)] border px-md py-sm text-left tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
 								active
-									? "border-[var(--primary-40)] bg-[var(--primary-10)] text-text"
-									: "border-border2 text-muted hover:bg-hover hover:text-text",
+									? "border-primary-muted bg-primary-subtle text-text-default"
+									: "border-border-default text-text-muted hover:bg-control-bg-hovered hover:text-text-default",
 							)}
 						>
 							<span className="flex-1">{label}</span>

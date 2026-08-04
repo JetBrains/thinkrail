@@ -28,8 +28,10 @@ export function FileTree({ workspaceId }: { workspaceId: string }) {
 		},
 	);
 
-	if (nodes === null) return <p className="px-xs py-xs tr-text-metadata text-hint">Loading…</p>;
-	if (nodes.length === 0) return <p className="px-xs py-xs tr-text-metadata text-hint">Empty</p>;
+	if (nodes === null)
+		return <p className="px-xs py-xs tr-text-metadata text-text-subtle">Loading…</p>;
+	if (nodes.length === 0)
+		return <p className="px-xs py-xs tr-text-metadata text-text-subtle">Empty</p>;
 	return (
 		<ul className="flex flex-col">
 			{nodes.map((node) => (

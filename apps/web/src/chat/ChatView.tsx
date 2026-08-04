@@ -585,7 +585,7 @@ export default function ChatView({
 	return (
 		<ChatActionsContext.Provider value={chatActions}>
 			<AskStatesContext.Provider value={askStates}>
-				<div className="flex h-full min-h-0 flex-col bg-bg">
+				<div className="flex h-full min-h-0 flex-col bg-container-workspace-bg">
 					{/* The plan popover is anchored to the whole header, so it hangs flush under it at the chat's
 					    left edge; the strip in the header's left slot is the trigger. */}
 					<Popover open={planOpen} onOpenChange={setPlanOpen}>
@@ -601,7 +601,7 @@ export default function ChatView({
 													type="button"
 													data-testid="chat-plan-toggle"
 													data-open={planOpen}
-													className="flex min-w-0 items-center gap-xs text-muted tr-text-metadata hover:text-text"
+													className="flex min-w-0 items-center gap-xs text-text-muted tr-text-metadata hover:text-text-default"
 												>
 													<ChatPlanStripContent
 														plan={plan}
@@ -641,7 +641,7 @@ export default function ChatView({
 							itemContent={(_, row) => (
 								<div
 									data-flash={row.id === flashRowId || undefined}
-									className="mx-auto max-w-3xl rounded-[var(--radius-md)] px-md py-xs transition-colors data-[flash]:bg-[var(--primary-10)]"
+									className="mx-auto max-w-3xl rounded-[var(--radius-md)] px-md py-xs transition-colors data-[flash]:bg-primary-subtle"
 								>
 									<ChatTurnView
 										row={row}
@@ -658,7 +658,7 @@ export default function ChatView({
 								type="button"
 								data-testid="scroll-to-bottom"
 								onClick={scrollToBottom}
-								className="-translate-x-1/2 absolute bottom-md left-1/2 flex items-center gap-xs rounded-[var(--radius-lg)] border border-border2 bg-elevated px-sm py-xs text-muted tr-text-metadata shadow-[var(--shadow-md)] hover:bg-hover hover:text-text"
+								className="-translate-x-1/2 absolute bottom-md left-1/2 flex items-center gap-xs rounded-[var(--radius-lg)] border border-border-default bg-container-elevated-bg px-sm py-xs text-text-muted tr-text-metadata shadow-[var(--shadow-md)] hover:bg-control-bg-hovered hover:text-text-default"
 							>
 								<ArrowDown className="size-3" />
 								New messages
@@ -666,7 +666,7 @@ export default function ChatView({
 						) : null}
 					</div>
 					{widgetEntries.length > 0 ? (
-						<div className="shrink-0 border-border2 border-t bg-elevated px-md py-xs text-muted tr-text-metadata">
+						<div className="shrink-0 border-border-default border-t bg-container-elevated-bg px-md py-xs text-text-muted tr-text-metadata">
 							{widgetEntries.map(([key, lines]) => (
 								<div key={key}>{lines.join(" ")}</div>
 							))}

@@ -47,13 +47,15 @@ export function MermaidView({ source, title }: { source: string; title?: string 
 	if (error !== null) {
 		return (
 			<div data-testid="mermaid-error" className="flex flex-col gap-xs">
-				<span className="text-red tr-text-metadata">Diagram failed to render: {error}</span>
+				<span className="text-feedback-error tr-text-metadata">
+					Diagram failed to render: {error}
+				</span>
 				<CodeBlock code={source} lang="" />
 			</div>
 		);
 	}
 	if (svg === null) {
-		return <span className="text-muted tr-text-metadata">Rendering diagram…</span>;
+		return <span className="text-text-muted tr-text-metadata">Rendering diagram…</span>;
 	}
 	return (
 		<div className="relative">
@@ -69,7 +71,7 @@ export function MermaidView({ source, title }: { source: string; title?: string 
 				aria-label="View diagram full screen"
 				title="Full screen"
 				onClick={() => setOpen(true)}
-				className="absolute top-xs right-xs rounded-[var(--radius-sm)] border border-border2 bg-elevated p-1 text-muted transition-colors hover:text-text focus-visible:ring-2 focus-visible:ring-primary"
+				className="absolute top-xs right-xs rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg p-1 text-text-muted transition-colors hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 			>
 				<Maximize2 className="size-3.5" />
 			</button>

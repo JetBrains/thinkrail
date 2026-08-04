@@ -31,7 +31,7 @@ export function ResizableHandle({
 	return (
 		<PanelResizeHandle
 			className={cn(
-				"relative flex shrink-0 items-center justify-center bg-border2 transition-colors",
+				"relative flex shrink-0 items-center justify-center bg-border-default transition-colors",
 				"data-[resize-handle-state=hover]:bg-primary data-[resize-handle-state=drag]:bg-primary",
 				isVertical
 					? "h-px w-full cursor-row-resize after:absolute after:inset-x-0 after:top-1/2 after:h-2 after:-translate-y-1/2 after:content-['']"
@@ -41,8 +41,8 @@ export function ResizableHandle({
 			{...props}
 		>
 			{withHandle && (
-				<div className="z-10 flex items-center justify-center rounded-[var(--radius-sm)] border border-border2 bg-elevated px-px py-0.5">
-					<GripVertical className={cn("size-2.5 text-hint", isVertical && "rotate-90")} />
+				<div className="z-10 flex items-center justify-center rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-px py-0.5">
+					<GripVertical className={cn("size-2.5 text-text-subtle", isVertical && "rotate-90")} />
 				</div>
 			)}
 		</PanelResizeHandle>

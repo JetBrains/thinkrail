@@ -2,7 +2,7 @@ import { AlertTriangle, RefreshCw, RotateCcw } from "lucide-react";
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { shallowEqualArrays } from "../lib";
 
-// Our single boundary primitive: contains a panel's render/lazy-import crash to that region instead of unmounting the root (bare gray `--bg-dark`); a rejected lazy `import()` (stale Vite chunk → 504) throws through Suspense into here, and we steer that case to a reload.
+// Our single boundary primitive: contains a panel's render/lazy-import crash to that region instead of unmounting the root (bare gray `--header`); a rejected lazy `import()` (stale Vite chunk → 504) throws through Suspense into here, and we steer that case to a reload.
 
 const CHUNK_ERROR_PATTERNS = [
 	"dynamically imported module", // "Failed to fetch dynamically imported module: …"
@@ -81,11 +81,11 @@ function PanelErrorFallback({
 			role="alert"
 			className="flex h-full min-h-0 flex-col items-center justify-center gap-sm overflow-auto p-lg text-center"
 		>
-			<AlertTriangle className="size-6 text-red" />
-			<p className="tr-title-compact text-text">
+			<AlertTriangle className="size-6 text-feedback-error" />
+			<p className="tr-title-compact text-text-default">
 				{label ? `The ${label} panel hit an error` : "Something went wrong"}
 			</p>
-			<p className="max-w-[28rem] tr-text-metadata text-hint">
+			<p className="max-w-[28rem] tr-text-metadata text-text-subtle">
 				{isChunkError
 					? "Failed to load part of the app (a stale or unreachable resource). Reloading usually fixes it."
 					: error.message || "An unexpected error occurred while rendering this view."}
@@ -96,7 +96,7 @@ function PanelErrorFallback({
 						type="button"
 						data-testid="error-reload"
 						onClick={() => window.location.reload()}
-						className="flex items-center gap-xs rounded-[var(--radius-md)] border border-border2 bg-elevated px-md py-xs tr-text-ui text-text hover:bg-hover"
+						className="flex items-center gap-xs rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg px-md py-xs tr-text-ui text-text-default hover:bg-control-bg-hovered"
 					>
 						<RefreshCw className="size-4" /> Reload page
 					</button>
@@ -105,7 +105,7 @@ function PanelErrorFallback({
 						type="button"
 						data-testid="error-retry"
 						onClick={reset}
-						className="flex items-center gap-xs rounded-[var(--radius-md)] border border-border2 bg-elevated px-md py-xs tr-text-ui text-text hover:bg-hover"
+						className="flex items-center gap-xs rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg px-md py-xs tr-text-ui text-text-default hover:bg-control-bg-hovered"
 					>
 						<RotateCcw className="size-4" /> Try again
 					</button>

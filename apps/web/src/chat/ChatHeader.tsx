@@ -21,11 +21,11 @@ export function ChatHeader({
 	skillsStale?: boolean;
 }) {
 	return (
-		<div className="flex min-h-9 shrink-0 items-center gap-md border-border2 border-b bg-bg-dark px-sm py-xs">
+		<div className="flex min-h-9 shrink-0 items-center gap-md border-border-default border-b bg-container-header-bg px-sm py-xs">
 			<div className="flex min-w-0 flex-1 items-center">{left}</div>
 			<div className="flex shrink-0 flex-wrap items-center justify-end gap-md">
 				{statusEntries.map(([key, text]) => (
-					<span key={key} className="text-muted tr-text-metadata">
+					<span key={key} className="text-text-muted tr-text-metadata">
 						{text}
 					</span>
 				))}

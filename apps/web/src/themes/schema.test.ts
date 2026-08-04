@@ -90,22 +90,49 @@ test("high-contrast manifests provide legible selected-text foregrounds", () => 
 	}
 });
 
-test("every bundled manifest meets the primary text contrast floors", () => {
-	const surfaces = ["background", "content", "sidebar"] as const;
+/**
+ * Contrast is the property that makes a palette trustworthy rather than merely tidy, so the floors are
+ * enumerated here rather than left to review.
+ *
+ * RESTING surfaces get the full WCAG AA floor. `elevated` and `input` matter as much as `background`:
+ * every dialog, popover and card sits on the first, and every field on the second.
+ *
+ * HOVER is deliberately held to a lower bar. These themes lift the row background toward the text
+ * colour on hover, which eats contrast exactly where rows are interactive. Requiring the full 4.5 there
+ * would force Darcula's purple to lavender and Gruvbox's orange to pale orange — the signature colours
+ * of the themes they are named after. WCAG has no "transient state" allowance, so this tier is OUR
+ * judgement, written down: hovered text must still be comfortably visible (3.0), never merely present.
+ *
+ * `accent` is excluded from `input` on purpose: no component renders accent-coloured text on a control
+ * background (`colorUsage.test.ts` keeps that honest by banning palette entries at call sites).
+ */
+const RESTING = ["background", "content", "sidebar", "header", "elevated", "input"] as const;
+/** Body text 4.5, secondary text 4.5, the quietest tier 3.0 — WCAG AA for their sizes. */
+const FLOORS = { text: 4.5, muted: 4.5, hint: 3, accent: 4.5 } as const;
+const HOVER_FLOOR = 3;
+
+test("every bundled manifest meets the contrast floors on every resting surface", () => {
 	for (const theme of bundledThemes()) {
-		for (const surface of surfaces) {
+		for (const [key, floor] of Object.entries(FLOORS)) {
+			const foreground = theme.colors[key as keyof typeof FLOORS];
+			for (const surface of RESTING) {
+				if (key === "accent" && surface === "input") continue;
+				expect(
+					contrast(foreground, theme.colors[surface]),
+					`${theme.id}: ${key} on ${surface}`,
+				).toBeGreaterThanOrEqual(floor);
+			}
+		}
+	}
+});
+
+test("hovered text never drops below the visibility floor", () => {
+	for (const theme of bundledThemes()) {
+		for (const key of Object.keys(FLOORS)) {
 			expect(
-				contrast(theme.colors.text, theme.colors[surface]),
-				`${theme.id}: text on ${surface}`,
-			).toBeGreaterThanOrEqual(4.5);
-			expect(
-				contrast(theme.colors.muted, theme.colors[surface]),
-				`${theme.id}: muted on ${surface}`,
-			).toBeGreaterThanOrEqual(4.5);
-			expect(
-				contrast(theme.colors.hint, theme.colors[surface]),
-				`${theme.id}: hint on ${surface}`,
-			).toBeGreaterThanOrEqual(3);
+				contrast(theme.colors[key as keyof typeof FLOORS], theme.colors.hover),
+				`${theme.id}: ${key} on hover`,
+			).toBeGreaterThanOrEqual(HOVER_FLOOR);
 		}
 	}
 });

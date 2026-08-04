@@ -2,6 +2,7 @@ import type { JbcentralInstall } from "@thinkrail/contracts";
 import { Check, Copy, ExternalLink, Loader2, LogOut, Zap } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { copyText } from "@/lib";
 import { getTransport } from "@/transport";
 
 const LOGIN_CMD = "central login";
@@ -116,15 +117,15 @@ export function JetBrainsAiCard({
 			data-testid="jetbrains-ai-card"
 			data-wired={wired}
 			data-installed={installed}
-			className="flex flex-col gap-sm rounded-[var(--radius-lg)] border border-border2 bg-[var(--input-bg)] p-md"
+			className="flex flex-col gap-sm rounded-[var(--radius-lg)] border border-border-default bg-control-bg p-md"
 		>
 			<div className="flex items-center gap-md">
-				<span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-[var(--primary-10)] text-primary">
+				<span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-primary-subtle text-primary">
 					<Zap className="size-4" />
 				</span>
 				<div className="flex min-w-0 flex-col">
-					<span className="tr-text-ui text-text">JetBrains AI</span>
-					<span className="truncate text-hint tr-text-metadata">
+					<span className="tr-text-ui text-text-default">JetBrains AI</span>
+					<span className="truncate text-text-subtle tr-text-metadata">
 						Route Claude + GPT through your JetBrains subscription.
 					</span>
 				</div>
@@ -156,7 +157,7 @@ export function JetBrainsAiCard({
 
 			{wired ? (
 				<p
-					className="flex items-center gap-xs text-green tr-text-metadata"
+					className="flex items-center gap-xs text-feedback-success tr-text-metadata"
 					data-testid="jetbrains-connected"
 				>
 					<Check className="size-3.5 shrink-0" />
@@ -166,7 +167,7 @@ export function JetBrainsAiCard({
 
 			{showInstall ? (
 				<div className="flex flex-col gap-xs" data-testid="jetbrains-needs-install">
-					<p className="text-hint tr-text-metadata">
+					<p className="text-text-subtle tr-text-metadata">
 						{install?.shell === "powershell"
 							? "Install the JetBrains Central CLI (central) in PowerShell, then Recheck:"
 							: "Install the JetBrains Central CLI (central), then Recheck:"}
@@ -187,7 +188,7 @@ export function JetBrainsAiCard({
 
 			{showLogin ? (
 				<div className="flex flex-col gap-xs" data-testid="jetbrains-needs-login">
-					<p className="text-hint tr-text-metadata">
+					<p className="text-text-subtle tr-text-metadata">
 						{loginLaunched
 							? "Complete sign-in in your browser, then Connect. If nothing opened, run this in a terminal:"
 							: "Sign in to JetBrains AI, then Connect. You can also run this in a terminal:"}
@@ -223,7 +224,7 @@ export function JetBrainsAiCard({
 
 			{!wired && result?.kind === "error" ? (
 				<div className="flex flex-col gap-xs" data-testid="jetbrains-error">
-					<p className="break-words text-red tr-text-metadata">{errorMsg}</p>
+					<p className="break-words text-feedback-error tr-text-metadata">{errorMsg}</p>
 					<Button
 						variant="ghost"
 						size="sm"
@@ -244,26 +245,29 @@ export function JetBrainsAiCard({
 function CopyableCommand({ command }: { command: string }) {
 	const [copied, setCopied] = useState(false);
 	const copy = async () => {
-		try {
-			await navigator.clipboard.writeText(command);
-			setCopied(true);
-			setTimeout(() => setCopied(false), 1500);
-		} catch {
-			// Clipboard unavailable — the command stays selectable text.
-		}
+		// No clipboard (insecure context / denied) — the command stays selectable text, no "copied" flash.
+		if (!(await copyText(command))) return;
+		setCopied(true);
+		setTimeout(() => setCopied(false), 1500);
 	};
 	return (
-		<div className="flex items-center gap-sm rounded-[var(--radius-md)] border border-border2 bg-bg px-sm py-xs">
-			<code className="min-w-0 flex-1 select-all break-all tr-code-text text-text">{command}</code>
+		<div className="flex items-center gap-sm rounded-[var(--radius-md)] border border-border-default bg-container-workspace-bg px-sm py-xs">
+			<code className="min-w-0 flex-1 select-all break-all tr-code-text text-text-default">
+				{command}
+			</code>
 			<button
 				type="button"
 				data-testid="jetbrains-copy-cmd"
 				aria-label={`Copy: ${command}`}
 				title="Copy"
 				onClick={() => void copy()}
-				className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-muted outline-none transition-colors hover:bg-hover hover:text-text focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 			>
-				{copied ? <Check className="size-3.5 text-green" /> : <Copy className="size-3.5" />}
+				{copied ? (
+					<Check className="size-3.5 text-feedback-success" />
+				) : (
+					<Copy className="size-3.5" />
+				)}
 			</button>
 		</div>
 	);

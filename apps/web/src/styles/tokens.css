@@ -1,15 +1,10 @@
 :root {
-	/* Theme-derived helpers. The theme engine owns the source colors; these repetitive alpha variants
-	   are generic so manifests never repeat them. */
-	--primary-10: color-mix(in srgb, var(--primary) 10%, transparent);
-	--primary-20: color-mix(in srgb, var(--primary) 20%, transparent);
-	--primary-40: color-mix(in srgb, var(--primary) 40%, transparent);
-	--primary-60: color-mix(in srgb, var(--primary) 60%, transparent);
-	--green-tint: color-mix(in srgb, var(--green) 12%, transparent);
-	--gold-tint: color-mix(in srgb, var(--gold) 12%, transparent);
-	--on-accent-16: color-mix(in srgb, var(--on-accent) 16%, transparent);
-	--bubble-user-bg: color-mix(in srgb, var(--bubble-accent) 12%, transparent);
-	--bubble-user-border: color-mix(in srgb, var(--bubble-accent) 35%, transparent);
+	/*
+	 * Structure only — spacing, shape and motion. COLOUR IS NOT HERE: the semantic roles are generated
+	 * into `generated/colors.css` from `colors.json`, which is the single place a colour derivation is
+	 * written. Adding a `--color-*` or a `color-mix()` to this file would be a second source, and the
+	 * one that can drift; `colorUsage.test.ts` fails on a colour literal here.
+	 */
 
 	/*
 	 * The spacing basis. NOT typography: it carries no family, weight or line-height, and it is
@@ -37,7 +32,7 @@
  * `styles/typography.json` is the single source; `generated/typography.css` publishes it as the
  * `--tr-*` custom properties, the `<body>` base and the semantic classes. The three consumers that
  * cannot use a class (Monaco, xterm, mermaid) read the `--tr-*` tokens directly, so there is exactly
- * one name for each value. Self-hosted variable faces are imported in `styles/fonts.css`.
+ * one name for each value. Self-hosted variable faces are imported by `styles/generated/fonts.css`.
  *
  * Theme-specific values are intentionally absent too. `themes/bundled/*.theme.json` is the source of
  * truth; the theme engine validates a complete UI + ANSI + syntax palette and writes its CSS custom

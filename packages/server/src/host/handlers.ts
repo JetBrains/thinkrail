@@ -2,6 +2,7 @@ import type {
 	AppConfig,
 	AskUserQuestionResult,
 	ExtUiResponse,
+	GitDiffScope,
 	HistoryScope,
 	ImageContent,
 	LoginReply,
@@ -52,7 +53,7 @@ import {
 } from "../auth";
 import { selectDirectory } from "../dialog";
 import { readDir, readFile } from "../fs";
-import { gitDiffFile, gitStatus, listBranches, prefetchBranch } from "../git";
+import { gitDiffFile, gitStatus, listBranches, listCommits, prefetchBranch } from "../git";
 import { githubAuthStatus, githubRefresh } from "../github";
 import { clampLimit, getHistoryIndex } from "../history";
 import {
@@ -92,10 +93,12 @@ import {
 	listWorkspaceRecords,
 	listWorkspaces,
 	reclaimWorktree,
+	setWorkspaceDiffBase,
 	setWorkspaceSkillOverride,
 	workspaceDiffStats,
 } from "../workspaces";
 import { ackSend } from "./ackSend";
+import { nudgeBaseRefWorkspaces } from "./fsNudge";
 import { buildHistoryScope } from "./historyScope";
 import { dropLogin, recordLoginStart } from "./loginAnalytics";
 
@@ -173,9 +176,16 @@ const handlers: Record<string, Handler> = {
 	},
 	"workspace.diffStats": (params) => workspaceDiffStats((params as { id: string }).id),
 	"git.listBranches": (params) => listBranches((params as { projectId: string }).projectId),
-	"git.prefetch": (params) => {
+	"git.prefetch": async (params) => {
 		const p = params as { projectId: string; ref: string };
-		return prefetchBranch(p.projectId, p.ref);
+		const { ok, moved } = await prefetchBranch(p.projectId, p.ref);
+		// A fetch that moved the local remote-tracking ref may have changed what a sibling workspace's
+		// branch-scope diff *means* (its merge-base can move) — and it is invisible to the watch module (it
+		// writes only to the shared `.git`, outside every watched location), so this is the one signal those
+		// workspaces get; an unaffected re-read is an idempotent no-op. `moved` itself stays host-internal:
+		// the wire result remains `{ ok }`.
+		if (moved) nudgeBaseRefWorkspaces(p.projectId, p.ref);
+		return { ok };
 	},
 	"github.authStatus": () => githubAuthStatus(),
 	"github.refresh": () => githubRefresh(),
@@ -213,16 +223,20 @@ const handlers: Record<string, Handler> = {
 		),
 	"todo.remove": (params) =>
 		removeTodo(params as { workspaceId: string; sessionId: string; id: string }),
+	// `scope` selects what is diffed (branch / uncommitted / one commit; omitted = branch). A scope naming a
+	// commit that no longer exists rejects — the panel resets its scope on that rejection.
 	"git.status": (params) => {
-		const p = params as { workspaceId: string };
+		const p = params as { workspaceId: string; scope?: GitDiffScope };
 		ensureWatch(p.workspaceId);
-		return gitStatus(p.workspaceId);
+		return gitStatus(p.workspaceId, p.scope);
 	},
 	"git.diffFile": (params) => {
-		const p = params as { workspaceId: string; path: string };
+		const p = params as { workspaceId: string; path: string; scope?: GitDiffScope };
 		ensureWatch(p.workspaceId);
-		return gitDiffFile(p.workspaceId, p.path);
+		return gitDiffFile(p.workspaceId, p.path, p.scope);
 	},
+	// The workspace branch's own commits — the scope menu's lazily-fetched commit list.
+	"git.listCommits": (params) => listCommits((params as { workspaceId: string }).workspaceId),
 	"terminal.create": (params) => createTerminal((params as { workspaceId: string }).workspaceId),
 	"terminal.write": (params) => {
 		const p = params as { id: string; data: string };
@@ -304,6 +318,11 @@ const handlers: Record<string, Handler> = {
 	"workspace.setSkillOverride": (params) => {
 		const p = params as { id: string; name: string; override: "on" | "off" | null };
 		return setWorkspaceSkillOverride(p.id, p.name, p.override);
+	},
+	// Re-point the workspace's diff target (`null` clears it back to the creation base).
+	"workspace.setDiffBase": (params) => {
+		const p = params as { id: string; ref: string | null };
+		return setWorkspaceDiffBase(p.id, p.ref);
 	},
 	// Apply skill/settings changes to a running session (active-chat reload); rejects while streaming.
 	"session.reloadResources": async (params) => {

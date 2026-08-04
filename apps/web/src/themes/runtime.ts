@@ -9,7 +9,6 @@ import {
 	type SyntaxColorKey,
 	THEME_COLOR_KEYS,
 	type ThemeAppearance,
-	type ThemeColorKey,
 	type ThemeContrast,
 	type ThemeManifest,
 } from "./schema";
@@ -29,30 +28,15 @@ export interface ThemeCatalog {
 
 const HINT_KEY = `${STORAGE_PREFIX}theme`;
 
-const COLOR_VARIABLES: Record<ThemeColorKey, readonly string[]> = {
-	accent: ["--primary"],
-	onAccent: ["--on-accent"],
-	bubbleAccent: ["--bubble-accent"],
-	background: ["--bg"],
-	content: ["--bg-dark", "--surface-content"],
-	sidebar: ["--surface-sidebar"],
-	input: ["--input-bg"],
-	elevated: ["--elevated"],
-	hover: ["--hover"],
-	border: ["--border"],
-	borderStrong: ["--border2"],
-	text: ["--text"],
-	muted: ["--muted"],
-	hint: ["--hint"],
-	selection: ["--selection-bg"],
-	selectionForeground: ["--selection-fg"],
-	editorSelection: ["--sel"],
-	editorSelectionForeground: ["--sel-fg"],
-	info: ["--blue"],
-	success: ["--green"],
-	danger: ["--red"],
-	warning: ["--gold"],
-};
+/**
+ * The CSS custom property a manifest key writes to. DERIVED, not tabulated: `borderStrong` writes
+ * `--border-strong`, `editorSelection` writes `--editor-selection`. The lookup table this replaces was
+ * a second list to keep in step, and its names (`--blue` for `info`, `--border2` for `borderStrong`)
+ * had stopped describing what they held. `styles/colors.json` derives the same way, so a role's
+ * `from` and the variable it reads can never disagree.
+ */
+const paletteVariable = (key: string) =>
+	`--${key.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase()}`;
 
 const ANSI_VARIABLES: Record<AnsiColorKey, string> = {
 	black: "--ansi-black",
@@ -96,23 +80,6 @@ export const SYNTAX_VARIABLES: Record<SyntaxColorKey, string> = {
 	deleted: "--code-deleted",
 	changed: "--code-changed",
 };
-
-const EFFECTS = {
-	dark: {
-		"--sunken": "rgba(0, 0, 0, 0.12)",
-		"--overlay": "rgba(0, 0, 0, 0.5)",
-		"--shadow-sm": "0 2px 8px rgba(0, 0, 0, 0.3)",
-		"--shadow-md": "0 4px 16px rgba(0, 0, 0, 0.35)",
-		"--shadow-lg": "0 8px 28px rgba(0, 0, 0, 0.4)",
-	},
-	light: {
-		"--sunken": "rgba(0, 0, 0, 0.05)",
-		"--overlay": "rgba(0, 0, 0, 0.5)",
-		"--shadow-sm": "0 2px 8px rgba(0, 0, 0, 0.1)",
-		"--shadow-md": "0 4px 16px rgba(0, 0, 0, 0.12)",
-		"--shadow-lg": "0 8px 28px rgba(0, 0, 0, 0.14)",
-	},
-} as const;
 
 let catalog: ThemeCatalog = { byId: new Map(), list: [] };
 
@@ -182,18 +149,17 @@ export function resolveTheme(id: ThemeId): ThemeDescriptor {
 
 function applyVariables(root: HTMLElement, theme: ThemeManifest): void {
 	for (const key of THEME_COLOR_KEYS) {
-		for (const variable of COLOR_VARIABLES[key]) {
-			const color = theme.colors[key];
-			if (color === null) root.style.removeProperty(variable);
-			else root.style.setProperty(variable, color);
-		}
+		const variable = paletteVariable(key);
+		const color = theme.colors[key];
+		if (color === null) root.style.removeProperty(variable);
+		else root.style.setProperty(variable, color);
 	}
 	for (const key of ANSI_COLOR_KEYS) root.style.setProperty(ANSI_VARIABLES[key], theme.ansi[key]);
 	for (const key of SYNTAX_COLOR_KEYS)
 		root.style.setProperty(SYNTAX_VARIABLES[key], theme.syntax[key]);
-	for (const [variable, value] of Object.entries(EFFECTS[theme.appearance])) {
-		root.style.setProperty(variable, value);
-	}
+	// The appearance-level effects (scrims, shadows) are CSS, keyed off this attribute — they are
+	// constants per light/dark, not palette derivations, so they need no JavaScript table.
+	root.dataset.themeAppearance = theme.appearance;
 	root.style.setProperty("color-scheme", theme.appearance);
 }
 

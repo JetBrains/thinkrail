@@ -5,8 +5,8 @@ import { MarkdownDocument } from "./MarkdownPreview";
 
 /** Marker skin for the merged document — token colors only, so it wears any theme. */
 const DIFF_MARKS = [
-	"[&_ins]:rounded-[var(--radius-sm)] [&_ins]:bg-green/15 [&_ins]:text-green [&_ins]:no-underline",
-	"[&_del]:rounded-[var(--radius-sm)] [&_del]:bg-red/15 [&_del]:text-red",
+	"[&_ins]:rounded-[var(--radius-sm)] [&_ins]:bg-feedback-success-subtle [&_ins]:text-feedback-success [&_ins]:no-underline",
+	"[&_del]:rounded-[var(--radius-sm)] [&_del]:bg-feedback-error-subtle [&_del]:text-feedback-error",
 ].join(" ");
 
 type MergeState = { state: "pending" } | { state: "failed" } | { state: "done"; html: string };
@@ -46,7 +46,7 @@ function Placeholder({ testid, children }: { testid: string; children: string })
 	return (
 		<div
 			data-testid={testid}
-			className="flex h-full items-center justify-center bg-surface-content text-hint"
+			className="flex h-full items-center justify-center bg-container-content-bg text-text-subtle"
 		>
 			{children}
 		</div>
@@ -89,7 +89,7 @@ export default function RenderedDiff({ tab }: { tab: DiffTab }) {
 	}
 
 	return (
-		<div data-testid="rendered-diff" className="h-full overflow-auto bg-surface-content">
+		<div data-testid="rendered-diff" className="h-full overflow-auto bg-container-content-bg">
 			<article
 				className={`mx-auto max-w-[78ch] px-xl py-lg ${DIFF_MARKS}`}
 				// biome-ignore lint/security/noDangerouslySetInnerHtml: htmldiff meshing of our own escaped react-markdown output (user-approved; same risk class as the shiki path in chat/Markdown)

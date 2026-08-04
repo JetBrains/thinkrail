@@ -34,8 +34,8 @@ export function TerminalsPanel() {
 
 	return (
 		<div data-testid="terminal-panel" className="flex h-full min-h-0 flex-col">
-			<div className="flex h-7 shrink-0 items-center gap-xs border-b border-border2 pr-xs pl-sm">
-				<span className="shrink-0 tr-text-eyebrow text-muted">Terminal</span>
+			<div className="flex h-7 shrink-0 items-center gap-xs border-b border-border-default pr-xs pl-sm">
+				<span className="shrink-0 tr-text-eyebrow text-text-muted">Terminal</span>
 				<div className="flex min-w-0 flex-1 items-center gap-px overflow-x-auto">
 					{tabs.map((tab) => (
 						<TerminalTabButton
@@ -53,16 +53,19 @@ export function TerminalsPanel() {
 					aria-label="New terminal"
 					disabled={!activeWorkspaceId}
 					onClick={() => activeWorkspaceId && addTerminal(activeWorkspaceId)}
-					className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-muted hover:bg-hover hover:text-text disabled:opacity-40"
+					className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:opacity-40"
 				>
 					<Plus className="size-4" />
 				</button>
 			</div>
 			<div className="relative min-h-0 flex-1">
 				{!activeWorkspaceId ? (
-					<p className="px-sm py-xs tr-text-metadata text-hint">Select a workspace.</p>
+					<p className="px-sm py-xs tr-text-metadata text-text-subtle">Select a workspace.</p>
 				) : tabs.length === 0 ? (
-					<p data-testid="terminals-empty" className="px-sm py-xs tr-text-metadata text-hint">
+					<p
+						data-testid="terminals-empty"
+						className="px-sm py-xs tr-text-metadata text-text-subtle"
+					>
 						No terminals yet — press + to open one.
 					</p>
 				) : null}
@@ -94,7 +97,9 @@ function TerminalTabButton({
 	return (
 		<div
 			className={`group flex shrink-0 items-center gap-xs rounded-[var(--radius-sm)] pr-xs pl-sm tr-text-ui ${
-				active ? "bg-hover text-text" : "text-muted hover:bg-hover"
+				active
+					? "bg-control-bg-hovered text-text-default"
+					: "text-text-muted hover:bg-control-bg-hovered"
 			}`}
 		>
 			<button
@@ -111,7 +116,7 @@ function TerminalTabButton({
 				data-testid="terminal-tab-close"
 				aria-label={`Close ${tab.title}`}
 				onClick={onClose}
-				className="rounded-[var(--radius-sm)] p-0.5 text-hint opacity-0 hover:bg-elevated hover:text-text group-hover:opacity-100"
+				className="rounded-[var(--radius-sm)] p-0.5 text-text-subtle opacity-0 hover:bg-container-elevated-bg hover:text-text-default group-hover:opacity-100"
 			>
 				<X className="size-3" />
 			</button>

@@ -18,19 +18,19 @@ function cssVar(name: string): string {
 
 /** Map our design tokens onto mermaid's base-theme variables so diagrams match the active theme. */
 function themeVariables(): Record<string, string> {
-	const text = cssVar("--text");
-	const border = cssVar("--border2");
-	const elevated = cssVar("--elevated");
-	const bg = cssVar("--bg");
+	const text = cssVar("--text-default");
+	const border = cssVar("--border-default");
+	const elevated = cssVar("--container-elevated-bg");
+	const bg = cssVar("--container-workspace-bg");
 	return {
 		background: bg,
 		mainBkg: elevated,
 		primaryColor: elevated,
 		primaryTextColor: text,
 		primaryBorderColor: border,
-		secondaryColor: cssVar("--hover") || elevated,
-		tertiaryColor: cssVar("--surface-content") || bg,
-		lineColor: cssVar("--muted") || border,
+		secondaryColor: cssVar("--control-bg-hovered") || elevated,
+		tertiaryColor: cssVar("--container-content-bg") || bg,
+		lineColor: cssVar("--text-muted") || border,
 		textColor: text,
 		nodeBorder: border,
 		clusterBkg: bg,

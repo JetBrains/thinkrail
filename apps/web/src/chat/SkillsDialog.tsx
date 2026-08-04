@@ -189,14 +189,18 @@ export function SkillsDialog({
 				    bg keeps rows from bleeding through. */}
 				<div
 					className={cn(
-						"sticky z-10 flex items-center gap-sm border-border2 border-y bg-bg-dark px-sm py-1.5",
+						"sticky z-10 flex items-center gap-sm border-border-default border-y bg-container-header-bg px-sm py-1.5",
 						hasPlugins && !isLeadingKey(group.key) ? "top-8" : "top-0",
 					)}
 				>
-					{group.isPlugin ? <Puzzle className="size-3.5 shrink-0 text-hint" aria-hidden /> : null}
-					<span className="tr-text-eyebrow text-text">{group.label}</span>
-					<span className="min-w-0 flex-1 truncate text-hint tr-text-metadata">{group.hint}</span>
-					<span className="shrink-0 rounded-full bg-hover px-1.5 text-hint tr-text-metadata">
+					{group.isPlugin ? (
+						<Puzzle className="size-3.5 shrink-0 text-text-subtle" aria-hidden />
+					) : null}
+					<span className="tr-text-eyebrow text-text-default">{group.label}</span>
+					<span className="min-w-0 flex-1 truncate text-text-subtle tr-text-metadata">
+						{group.hint}
+					</span>
+					<span className="shrink-0 rounded-full bg-control-bg-hovered px-1.5 text-text-subtle tr-text-metadata">
 						{group.items.length}
 					</span>
 					<Toggle
@@ -207,7 +211,7 @@ export function SkillsDialog({
 					/>
 				</div>
 				{/* Indent + left rail nests the skills visually under their group/plugin header. */}
-				<div className="ml-sm divide-y divide-border2 border-border2 border-l">
+				<div className="ml-sm divide-y divide-border-default border-border-default border-l">
 					{group.items.map((entry) => (
 						<SkillRow
 							key={`${group.key}:${entry.name}`}
@@ -237,7 +241,7 @@ export function SkillsDialog({
 			<DialogContent data-testid="skills-dialog" className="max-w-[560px] gap-md p-md">
 				{/* pr-8 reserves room for the DialogContent's absolute close (X) so it can't overlap Reload. */}
 				<div className="flex items-center justify-between gap-sm pr-8">
-					<DialogTitle className="tr-text-ui text-text">Skills</DialogTitle>
+					<DialogTitle className="tr-text-ui text-text-default">Skills</DialogTitle>
 					{workspace ? (
 						<Button
 							size="sm"
@@ -260,19 +264,19 @@ export function SkillsDialog({
 				{workspace?.stale ? (
 					<div
 						data-testid="skills-stale"
-						className="rounded-[var(--radius-md)] border border-border2 bg-elevated px-md py-sm text-muted tr-text-metadata"
+						className="rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg px-md py-sm text-text-muted tr-text-metadata"
 					>
-						This worktree's skills changed on disk — <span className="text-text">Reload</span> to
-						apply them to this chat.
+						This worktree's skills changed on disk —{" "}
+						<span className="text-text-default">Reload</span> to apply them to this chat.
 					</div>
 				) : null}
 
 				{untrustedCount > 0 ? (
 					<div
 						data-testid="skills-trust-all"
-						className="flex items-center gap-sm rounded-[var(--radius-md)] border border-border2 border-l-[3px] border-l-[var(--gold)] bg-[var(--gold-tint)] px-md py-sm"
+						className="flex items-center gap-sm rounded-[var(--radius-md)] border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-subtle px-md py-sm"
 					>
-						<span className="min-w-0 flex-1 tr-text-ui text-text">
+						<span className="min-w-0 flex-1 tr-text-ui text-text-default">
 							{untrustedCount} project skill{untrustedCount === 1 ? "" : "s"} off until you trust
 							this repo.
 						</span>
@@ -294,9 +298,9 @@ export function SkillsDialog({
 
 				<div className="max-h-[50vh] overflow-y-auto">
 					{entries === null ? (
-						<p className="px-sm py-md text-hint tr-text-ui">Loading skills…</p>
+						<p className="px-sm py-md text-text-subtle tr-text-ui">Loading skills…</p>
 					) : entries.length === 0 ? (
-						<p className="px-sm py-md text-hint tr-text-ui">No skills discovered.</p>
+						<p className="px-sm py-md text-text-subtle tr-text-ui">No skills discovered.</p>
 					) : (
 						<>
 							{/* First-party skills (ThinkRail + Pi) lead, above the all-plugins master. */}
@@ -306,9 +310,11 @@ export function SkillsDialog({
 							{hasPlugins ? (
 								<div
 									data-testid="skills-all-plugins"
-									className="sticky top-0 z-20 flex h-8 items-center gap-sm border-border2 border-y bg-bg-dark px-sm"
+									className="sticky top-0 z-20 flex h-8 items-center gap-sm border-border-default border-y bg-container-header-bg px-sm"
 								>
-									<span className="min-w-0 flex-1 tr-text-eyebrow text-text">All plugins</span>
+									<span className="min-w-0 flex-1 tr-text-eyebrow text-text-default">
+										All plugins
+									</span>
 									<Toggle
 										on={!pluginsDisabled}
 										busy={busy}
@@ -348,8 +354,8 @@ function Toggle({
 			className={cn(
 				"shrink-0 rounded-[var(--radius-sm)] border px-sm py-0.5 tr-text-metadata transition-colors disabled:opacity-50",
 				on
-					? "border-[var(--primary-40)] bg-[var(--primary-10)] text-primary"
-					: "border-border2 text-muted hover:bg-hover",
+					? "border-primary-muted bg-primary-subtle text-primary"
+					: "border-border-default text-text-muted hover:bg-control-bg-hovered",
 			)}
 		>
 			{on ? "on" : "off"}
@@ -384,12 +390,12 @@ function SkillRow({
 			data-testid="skill-row"
 			data-skill={entry.name}
 			data-decision={entry.decision}
-			className="flex items-center gap-sm py-1.5 pr-sm pl-md hover:bg-hover"
+			className="flex items-center gap-sm py-1.5 pr-sm pl-md hover:bg-control-bg-hovered"
 		>
 			<span className="flex min-w-0 flex-1 flex-col">
-				<span className="truncate tr-text-ui text-text">{entry.name}</span>
+				<span className="truncate tr-text-ui text-text-default">{entry.name}</span>
 				{entry.description ? (
-					<span className="truncate text-hint tr-text-metadata">{entry.description}</span>
+					<span className="truncate text-text-subtle tr-text-metadata">{entry.description}</span>
 				) : null}
 			</span>
 			{entry.decision === "pending-ack" ? (
@@ -398,10 +404,12 @@ function SkillRow({
 					Enable
 				</Button>
 			) : entry.decision === "untrusted" ? (
-				<span className="shrink-0 text-hint tr-text-metadata">{DECISION_TEXT.untrusted}</span>
+				<span className="shrink-0 text-text-subtle tr-text-metadata">
+					{DECISION_TEXT.untrusted}
+				</span>
 			) : groupOff ? (
 				<span
-					className="shrink-0 text-hint tr-text-metadata"
+					className="shrink-0 text-text-subtle tr-text-metadata"
 					title="Enable the group to change this skill"
 				>
 					group off
@@ -416,8 +424,8 @@ function SkillRow({
 					className={cn(
 						"shrink-0 rounded-[var(--radius-sm)] border px-sm py-0.5 tr-text-metadata transition-colors disabled:opacity-50",
 						loaded
-							? "border-[var(--primary-40)] bg-[var(--primary-10)] text-primary"
-							: "border-border2 text-muted hover:bg-hover",
+							? "border-primary-muted bg-primary-subtle text-primary"
+							: "border-border-default text-text-muted hover:bg-control-bg-hovered",
 					)}
 				>
 					{DECISION_TEXT[entry.decision]}

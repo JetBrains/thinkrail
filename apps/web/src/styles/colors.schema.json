@@ -1,0 +1,102 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://thinkrail.dev/schemas/colors.json",
+	"title": "ThinkRail semantic colour layer",
+	"description": "What each theme-manifest colour is FOR. Palettes themselves live in themes/bundled/*.theme.json; this file is the only place a colour derivation is written. See COLOR.md.",
+	"type": "object",
+	"additionalProperties": false,
+	"required": ["metadata", "scale", "roles", "effects"],
+	"properties": {
+		"$schema": {
+			"type": "string"
+		},
+		"metadata": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["version"],
+			"properties": {
+				"version": {
+					"type": "string",
+					"pattern": "^\\d+\\.\\d+\\.\\d+$"
+				},
+				"note": {
+					"type": "string"
+				}
+			}
+		},
+		"scale": {
+			"description": "The alpha scale. Every tint is one of these steps — a percentage never appears anywhere else.",
+			"type": "object",
+			"additionalProperties": {
+				"type": "integer",
+				"exclusiveMinimum": 0,
+				"exclusiveMaximum": 100
+			},
+			"minProperties": 1
+		},
+		"roles": {
+			"description": "The semantic layer: the names components are allowed to use.",
+			"type": "object",
+			"propertyNames": {
+				"pattern": "^[a-z][a-z0-9-]*$"
+			},
+			"additionalProperties": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["from", "publish"],
+				"not": {
+					"required": ["alpha", "fallback"]
+				},
+				"properties": {
+					"from": {
+						"type": "string",
+						"description": "A theme manifest key (THEME_COLOR_KEYS). The CSS variable it writes to is derived kebab-case, not tabulated: `borderStrong` -> `--border-strong`."
+					},
+					"alpha": {
+						"type": "string",
+						"description": "A step of `scale`. Omit for a solid colour."
+					},
+					"fallback": {
+						"type": "string",
+						"description": "Used when the manifest value is null (the nullable selection foregrounds)."
+					},
+					"publish": {
+						"type": "boolean",
+						"description": "true → a Tailwind utility. false → read directly by Monaco/xterm/mermaid/global.css."
+					},
+					"note": {
+						"type": "string"
+					}
+				}
+			}
+		},
+		"effects": {
+			"description": "Appearance-level values that are not palette derivations: scrims and shadows.",
+			"type": "object",
+			"propertyNames": {
+				"pattern": "^[a-z][a-z0-9-]*$"
+			},
+			"additionalProperties": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["dark", "light", "publish"],
+				"properties": {
+					"dark": {
+						"type": "string",
+						"minLength": 1
+					},
+					"light": {
+						"type": "string",
+						"minLength": 1
+					},
+					"publish": {
+						"type": "boolean"
+					},
+					"note": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	}
+}

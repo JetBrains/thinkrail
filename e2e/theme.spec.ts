@@ -46,7 +46,7 @@ async function expectEditorMatchesTheme(page: Page): Promise<void> {
 		.first()
 		.evaluate((editor) => {
 			const token = getComputedStyle(document.documentElement)
-				.getPropertyValue("--surface-content")
+				.getPropertyValue("--container-content-bg")
 				.trim();
 			const probe = document.createElement("div");
 			probe.style.backgroundColor = token;
@@ -109,8 +109,8 @@ test("Monaco opens files and re-themes under every discovered manifest", async (
 		await expectEditorMatchesTheme(page);
 		if (option.contrast === "high") {
 			const selectedText = await page.locator("html").evaluate((root) => ({
-				browser: getComputedStyle(root).getPropertyValue("--selection-fg").trim(),
-				editor: getComputedStyle(root).getPropertyValue("--sel-fg").trim(),
+				browser: getComputedStyle(root).getPropertyValue("--selection-text").trim(),
+				editor: getComputedStyle(root).getPropertyValue("--editor-selection-text").trim(),
 			}));
 			expect(selectedText.browser).not.toBe("");
 			expect(selectedText.editor).not.toBe("");

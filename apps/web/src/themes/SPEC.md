@@ -33,14 +33,44 @@ selected opaque id; this module owns what that id means visually. **Adding a the
 
 ## Manifest contract
 
-A theme is exactly one `*.theme.json` file. Schema version 1 is strict and self-contained: id,
+A theme is exactly one `*.theme.json` file. Schema version 2 is strict and self-contained: id,
 label/order, light-or-dark appearance, normal-or-high contrast metadata, a complete semantic UI palette,
 all 16 terminal ANSI colors, and a complete semantic syntax palette. Color values are canonical
 six/eight-digit hex; the two selected-text foreground overrides may explicitly be `null` to retain the
-consumer's native foreground. There is no inheritance or partial overlay. The engine owns repetitive
-derivations (alpha tints and appearance-level effects), TextMate/Monaco scope mapping, and CSS-token
-mapping, so those mechanics never leak into manifests. Typography, spacing, radii, fonts, and motion
-remain product tokens, not theme values.
+consumer's native foreground. There is no inheritance or partial overlay. The engine owns appearance-level
+effects, TextMate/Monaco scope mapping, and CSS-token mapping, so those mechanics never leak into
+manifests. Typography, spacing, radii, fonts, and motion remain product tokens, not theme values.
+
+**A manifest supplies the palette, not the roles.** It answers *which colour*; what each colour is
+*for* is the semantic layer declared in `styles/colors.json` — `container-elevated-bg`,
+`feedback-warning`, `text-subtle` — which is the only layer components name, and which owns the alpha
+scale. The split is what lets a theme be a palette swap with no component change, and it is why this
+module's variables (`--elevated`, `--border-strong`, `--hint`) are internal: reaching one from a component
+bypasses the role it belongs to. See [`styles/COLOR.md`](../styles/COLOR.md).
+
+**One key per role that themes may vary independently.** Schema version 2 splits `header` out of
+`content`, which previously wrote both `--bg-dark` and `--surface-content` and so pinned the app header
+to the code canvas in every theme. Every bundled manifest ships `header` equal to its `content`, so the
+split changed no pixel — it made a knob exist. The same move is what any future divergence needs: a role
+can only vary between themes if the manifest has a key for it.
+
+**The manifest→variable name is derived, not mapped.** A key writes to its kebab-cased name —
+`borderStrong` → `--border-strong`, `editorSelection` → `--editor-selection`. `runtime.ts` applies that
+rule when it writes the palette to the document root, and `scripts/colors.ts` applies the same rule when
+it resolves a role's `from`; neither consults a table, because the table *was* the drift path (and its
+names — `--blue` for `info`, `--border2` for `borderStrong` — had stopped describing what they held).
+There is no `palette` section in `colors.json` and no generated TypeScript: `generate-colors.ts` emits
+exactly one artifact, `styles/generated/colors.css` (the roles, the per-appearance `effects`, and the
+Tailwind `@theme inline` map). What keeps the two lists honest is coverage, not a mapping — the
+generator refuses to run unless **every** `THEME_COLOR_KEYS` entry is claimed by at least one role, so a
+key added to the manifest schema and forgotten in `colors.json` cannot reach a build, and a role naming
+a key that does not exist fails the same gate.
+
+**A manifest must also be legible, not merely complete.** `schema.test.ts` enforces WCAG AA on every
+resting surface (`background`, `content`, `sidebar`, `header`, `elevated`, `input`) and a lower 3.0
+floor on the transient `hover` surface — the latter being our line rather than the standard's, so that
+a theme borrowed from elsewhere keeps its signature colours. A new manifest that reads poorly fails to
+merge; see [`styles/COLOR.md`](../styles/COLOR.md) for the reasoning.
 
 Bundled files are discovered by a build-time glob rather than named in a code catalog, and validated
 all-or-nothing at bootstrap. The files are our own, so any invalid or duplicate manifest — or a missing

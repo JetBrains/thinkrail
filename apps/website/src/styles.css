@@ -4,7 +4,8 @@
  * (see SPEC.md: values are lifted at authoring time, never imported).
  */
 
-/* Self-hosted variable faces, same packages and family names as the app (apps/web/src/styles/fonts.css)
+/* Self-hosted variable faces, same packages and family names as the app
+   (apps/web/src/styles/generated/fonts.css, generated from its typography.json)
    — no Google Fonts call from the site either. `--font-display` (Cabinet Grotesk) is still CDN-served;
    see the note in index.html. */
 @import "@fontsource-variable/geist";

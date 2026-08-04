@@ -100,9 +100,16 @@ Architecture decisions live as spec-graph nodes, dogfooding the spec layer the p
 - **`prompt()` throws while a session is streaming** → call `steer()` / `followUp()`. Errors arrive via
   the event stream + thrown methods, not a crash signal — wrap each call and forward to the WS client.
 - **UI panels are layout-agnostic**; the shell arranges them (desktop multi-pane / mobile single-view).
-- **Web styling = Tailwind v4 utilities mapped to the CSS-var tokens** (`@theme inline` in
-  `apps/web/src/index.css`); themes swap the token set via `[data-theme]`. Components use utilities,
+- **Web styling = Tailwind v4 utilities mapped to the CSS-var tokens** (`@theme inline` — colour in the
+  generated `styles/generated/colors.css`, everything else in `apps/web/src/index.css`); themes swap the
+  token set via `[data-theme]`. Components use utilities,
   **never inline `style` objects or raw hex** — that's what keeps the UI themeable and responsive.
+  **Colour has two layers and components may only name the second:** the per-theme *palette*
+  (`themes/bundled/*.theme.json` → `--elevated`, `--hint`) is internal; the *semantic* tokens
+  (`styles/colors.json` → `bg-container-elevated-bg`, `text-feedback-warning`) are the surface. Tints
+  come from a four-step alpha scale as tokens, never Tailwind's `/40` modifier. `styles/COLOR.md` is
+  the system, `styles/colorUsage.test.ts` the gate — Tailwind drops an unknown utility *silently*, so
+  a token that isn't published renders as nothing.
 - **Icons: `lucide-react` only. UI primitives: shadcn/ui** (Radix), copied into
   `apps/web/src/components/ui/` (we own them) and themed with our token utilities — *not* shadcn's
   default palette. `cn()` lives in `apps/web/src/lib/utils.ts`.

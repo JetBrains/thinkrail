@@ -9,7 +9,14 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, relative } from "node:path";
-import { GENERATED_PATH, loadTypography, renderCss, validate } from "./typography";
+import {
+	GENERATED_FONTS_PATH,
+	GENERATED_PATH,
+	loadTypography,
+	renderCss,
+	renderFontsCss,
+	validate,
+} from "./typography";
 
 const check = process.argv.includes("--check");
 const typography = loadTypography();
@@ -21,20 +28,27 @@ if (errors.length > 0) {
 	process.exit(1);
 }
 
-const css = renderCss(typography);
-const shown = relative(process.cwd(), GENERATED_PATH);
+const outputs = [
+	{ path: GENERATED_PATH, content: renderCss(typography) },
+	{ path: GENERATED_FONTS_PATH, content: renderFontsCss(typography) },
+];
 
 if (check) {
-	const current = existsSync(GENERATED_PATH) ? readFileSync(GENERATED_PATH, "utf8") : "";
-	if (current !== css) {
-		console.error(
-			`typography: ${shown} is STALE — run \`bun run typography:generate\` and commit it.`,
-		);
+	const stale = outputs.filter(
+		({ path, content }) => (existsSync(path) ? readFileSync(path, "utf8") : "") !== content,
+	);
+	if (stale.length > 0) {
+		for (const { path } of stale) {
+			console.error(`typography: ${relative(process.cwd(), path)} is STALE`);
+		}
+		console.error("Run `bun run typography:generate` and commit the result.");
 		process.exit(1);
 	}
-	console.log(`typography: ${shown} is up to date (v${typography.metadata.version})`);
+	console.log(`typography: generated output is up to date (v${typography.metadata.version})`);
 } else {
-	mkdirSync(dirname(GENERATED_PATH), { recursive: true });
-	writeFileSync(GENERATED_PATH, css);
-	console.log(`typography: wrote ${shown} (v${typography.metadata.version})`);
+	for (const { path, content } of outputs) {
+		mkdirSync(dirname(path), { recursive: true });
+		writeFileSync(path, content);
+		console.log(`typography: wrote ${relative(process.cwd(), path)}`);
+	}
 }

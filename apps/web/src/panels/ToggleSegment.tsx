@@ -17,7 +17,9 @@ export function ToggleSegment({
 			data-active={active}
 			aria-pressed={active}
 			className={`rounded-[var(--radius-sm)] px-sm py-0.5 tr-text-metadata ${
-				active ? "bg-elevated text-text" : "text-hint hover:bg-hover hover:text-text"
+				active
+					? "bg-container-elevated-bg text-text-default"
+					: "text-text-subtle hover:bg-control-bg-hovered hover:text-text-default"
 			}`}
 			onClick={onClick}
 		>
