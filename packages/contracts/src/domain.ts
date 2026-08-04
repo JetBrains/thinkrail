@@ -305,6 +305,77 @@ export interface GitCommit {
 	committedAt: string;
 }
 
+/**
+ * Why a `(project, ref)` pair is not being checked automatically — reported explicitly rather than left as
+ * silent idleness, since a background feature that just never runs (with no visible reason anywhere)
+ * is undiagnosable. `"never-authenticated"` = rung 2 of the credential ladder hasn't been satisfied yet (no
+ * user-initiated op has proven credentials for this remote — see the persistence module's `remotes.json`);
+ * `"ssh-agent-present"` = rung 3 — an SSH remote is skipped while an external ssh-agent might prompt outside
+ * git's own no-prompt env; `"disabled"` = `AppConfig.gitRemoteCheck` is `"off"`; `"failing"` = repeated
+ * check failures have backed off past the point of retrying automatically (never surfaced as a toast per
+ * tick — see the top-level plan's "never nag" rule).
+ */
+export type RemoteDormantReason =
+	| "never-authenticated"
+	| "ssh-agent-present"
+	| "disabled"
+	| "failing";
+
+/**
+ * What the host last learned about one `(project, ref)` pair, `ref` being a remote-tracking ref such as
+ * `"origin/main"` — one of the project's workspaces' resolved diff bases (worktrees share one `.git`, so
+ * this is tracked per project, never per workspace). `behind` carries **three** distinct meanings, not two,
+ * because the default background check is a write-nothing `git ls-remote` **probe** (see the `git` module's
+ * `remoteRefs.ts`), which can tell the caller *that* the remote moved but never *by how much* — the objects
+ * behind a moved ref are never made local by a probe:
+ * - a **number** — the exact local `rev-list --count`, only possible once a real fetch made the commits
+ *   local (`AppConfig.gitRemoteCheck === "fetch"`, or a one-off user-initiated `git.fetchNow`).
+ * - `"unknown"` — probe mode, and the remote differs. The UI renders a bare `↓` — honest about knowing
+ *   *that* it differs without claiming a count it does not have.
+ * - `null` — up to date (probe or fetch mode agree here: nothing to report).
+ *
+ * Collapsing `"unknown"` into `0` or into `null` would make the UI lie — either "nothing changed" (false),
+ * or "changed by nothing" (also false, and worse: it would then be indistinguishable from a real zero-behind
+ * row a fetch legitimately reports). `dormant`, when present, means this pair is not being checked
+ * automatically at all (see {@link RemoteDormantReason}) — `behind`/`lastCheckedAt` then reflect the last
+ * time it *was* checked (both `null` if it never was).
+ */
+export interface RemoteState {
+	projectId: string;
+	/** A remote-tracking ref, e.g. `"origin/main"`. */
+	ref: string;
+	/** See the interface doc above: a number (fetch mode only), `"unknown"` (probe mode, differs), or `null`
+	 * (up to date). */
+	behind: number | "unknown" | null;
+	/** ISO 8601 timestamp of the last check that actually ran; `null` if this pair has never been checked. */
+	lastCheckedAt: string | null;
+	/** Present only while this pair is not being checked automatically; see {@link RemoteDormantReason}. */
+	dormant?: RemoteDormantReason;
+}
+
+/**
+ * The `project.remoteState` push payload — a full per-project snapshot of every remote-tracking ref the
+ * scheduler currently tracks for that project (one background check can cover several refs in one network
+ * call, since `probeRemoteRefs`/`fetchRemoteRefs` both take multiple ref names at once). A **replace, not a
+ * merge** — the same full-snapshot contract as `workspace.updated` — so a client's per-project cache is
+ * simply overwritten, never patched field-by-field.
+ */
+export interface ProjectRemoteStatePayload {
+	projectId: string;
+	states: RemoteState[];
+}
+
+/**
+ * The `project.refsChanged` push payload: the project repo's OWN shared git metadata moved — a `git
+ * branch`/`fetch`/`reset` run in *any* one of its worktrees writes refs every worktree of that repo shares,
+ * which is invisible to the per-worktree `workspace.fsChanged` watcher. An **invalidation nudge, not
+ * data**, mirroring `WorkspaceFsChangedPayload` at project scope: clients re-read via the existing methods
+ * (`git.remoteState`, `git.listBranches`, …), so a duplicate/replayed frame is harmless.
+ */
+export interface ProjectRefsChangedPayload {
+	projectId: string;
+}
+
 /** A repo's branches for the New-Workspace base picker. `defaultBranch` is `origin/main` when known. */
 export interface BranchList {
 	/** Local branch names (`git for-each-ref refs/heads`), e.g. `main`, `feature/x`. */
@@ -452,6 +523,23 @@ export interface AppConfig {
 	 * generous by fiat. `0` disables replay entirely.
 	 */
 	terminalReplayKb: number;
+	/**
+	 * How the host checks a project's remote-tracking refs for movement in the background: `"probe"`
+	 * (default) is the write-nothing `git ls-remote` — it can report *that* a ref moved but never by how
+	 * much (see {@link RemoteState.behind}); `"fetch"` makes it a real `git fetch`, trading that safety
+	 * for an exact count; `"off"` disables the background check entirely (a user can still force one via
+	 * `git.fetchNow`). **FLAT, not nested under a `git: {…}` key** — see the settings submodule's SPEC for
+	 * why: `loadConfig()` is a shallow spread over `DEFAULT_CONFIG`, so a nested object arriving from
+	 * `config.json` would replace the whole object and silently drop sibling keys the user didn't mention.
+	 */
+	gitRemoteCheck: "probe" | "fetch" | "off";
+	/**
+	 * Minutes between background remote checks — the scheduler's jittered backstop interval. Clamped
+	 * server-side to `[1, 1440]` by `updateConfig`'s validator, so a buggy or hostile client cannot turn
+	 * this into a one-second poll; a non-finite value falls back to the default rather than a clamp bound.
+	 * FLAT for the same shallow-merge reason as `gitRemoteCheck` above.
+	 */
+	gitRemoteCheckIntervalMinutes: number;
 }
 
 /** Bounds for `AppConfig.terminalReplayKb`, enforced host-side so a hand-edited config cannot exhaust memory. */
@@ -462,6 +550,8 @@ export const DEFAULT_CONFIG: AppConfig = {
 	theme: "dark",
 	analyticsEnabled: true,
 	terminalReplayKb: TERMINAL_REPLAY_KB.default,
+	gitRemoteCheck: "probe",
+	gitRemoteCheckIntervalMinutes: 15,
 };
 
 /**

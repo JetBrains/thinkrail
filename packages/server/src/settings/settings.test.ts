@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DEFAULT_CONFIG } from "@thinkrail/contracts";
+import { type AppConfig, DEFAULT_CONFIG } from "@thinkrail/contracts";
 import { getConfig, resetConfigCache, setSettingsPublisher, updateConfig } from "./settings";
 
 let dataDir: string;
@@ -54,4 +54,23 @@ test("loadConfig degrades a partial/corrupt file over DEFAULT_CONFIG", () => {
 	writeFileSync(join(dataDir, "config.json"), "{ not json");
 	resetConfigCache();
 	expect(getConfig()).toEqual(DEFAULT_CONFIG);
+});
+
+test("updateConfig clamps the remote-check interval and rejects an unknown mode", () => {
+	expect(updateConfig({ gitRemoteCheckIntervalMinutes: 0 }).gitRemoteCheckIntervalMinutes).toBe(1);
+	expect(
+		updateConfig({ gitRemoteCheckIntervalMinutes: 99_999 }).gitRemoteCheckIntervalMinutes,
+	).toBe(1440);
+	expect(
+		updateConfig({ gitRemoteCheckIntervalMinutes: Number.NaN }).gitRemoteCheckIntervalMinutes,
+	).toBe(15);
+	// An unrecognised mode falls back to the default rather than disabling checks or crashing the tee. Cast
+	// through `unknown`, not `any`: this models an out-of-band value a buggy/hostile client put on the wire,
+	// which the type system would otherwise never let us construct.
+	expect(
+		updateConfig({ gitRemoteCheck: "nonsense" as unknown as AppConfig["gitRemoteCheck"] })
+			.gitRemoteCheck,
+	).toBe("probe");
+	// Unrelated keys are untouched by the validation.
+	expect(updateConfig({ theme: "light" }).theme).toBe("light");
 });
