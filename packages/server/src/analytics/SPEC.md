@@ -12,7 +12,9 @@ tags: [v1, analytics, privacy]
 
 Anonymous, no-personal-data usage analytics, emitted **host-side only**. Answers product questions —
 unique users, version/platform, model preference, provider auth — via a **closed event set** delivered
-to **PostHog (EU cloud)** through the official `posthog-node` SDK. The SDK is an implementation detail
+to **PostHog (EU cloud)** through the official `posthog-node` SDK. **Every channel reports** (a release
+binary, a locally compiled binary, and a run from source alike); what a run is gets *reported*, via
+`channel` + `build`, not gated on. What never reports is an **automated** run — CI, `bun test`, e2e. The SDK is an implementation detail
 **inside** the sink: the delivery backend hides behind the `AnalyticsSink` interface — swapping vendors
 is implementing a new sink, nothing else moves (exercised for real twice: GA4's Measurement Protocol →
 a hand-rolled PostHog capture POST → `posthog-node`, each swap contained to `sink.ts` + the key seam;
@@ -43,6 +45,14 @@ PostHog won on free tier, EU residency, and a self-host path).
     200, zero network; this is deliberately NOT the SDK's `disable()`, which only stops new enqueues
     (`optedOut` is never checked in its flush/retry paths). `shutdown()` drains the queue (bounded,
     2s) for graceful stops. Plus `noopSink` (disabled/dev: events vanish).
+  - `mute.ts` — the **environment mute policy**: `environmentMute(env)` → `MuteReason | null`, the ONE
+    place that decides whether *this process* may send at all, whichever entrypoint booted the host.
+    `THINKRAIL_NO_ANALYTICS` (the documented per-run opt-out) beats `CI` (every automated run) beats
+    `NODE_ENV=test` (which `bun test` sets, so a unit test that boots a host stays silent). Every reason
+    fails **closed**. `AnalyticsEnv` is the injected env slice — injected precisely because this module's
+    own tests must exercise the *sending* path under `bun test`, which would otherwise mute them.
+    Centralizing here (rather than per-launcher) is what makes **"no entrypoint can forget to mute"**
+    true: `dev.ts` parses no argv, and unit tests boot hosts with no options at all.
   - `service.ts` — the facade: `initializeAnalytics(opts)` (installation record via `persistence`,
     sink selection, env stamping, first-run notice + `app_installed` announce, `app_started`),
     `track(event)`, `setAnalyticsSending(enabled)`, `shutdownAnalytics()` (best-effort flush — the
@@ -56,7 +66,9 @@ PostHog won on free tier, EU residency, and a self-host path).
   internal control traffic (the client's TODO wake-nudge), which `isControlMessage` filters out, so the
   count stays "messages the user sent" and never inflates with the app's own prompts.
 - **Public surface (barrel):** `initializeAnalytics`, `track`, `setAnalyticsSending`,
-  `shutdownAnalytics`, `resetAnalyticsForTests`, the event types + bucket helpers.
+  `shutdownAnalytics`, `resetAnalyticsForTests`, the event types + bucket helpers, and `BuildKind` — which
+  `host/index.ts` re-exports so a launcher can name its own provenance without importing this module
+  (the forbidden edge below stays intact).
 - **Allowed deps:** `persistence` (installation record + data dir), `contracts` (types),
   `@earendil-works/pi-ai` (the built-in catalog — server-side value import), `posthog-node` (the
   delivery SDK — value-imported **only** in `sink.ts`), Node `crypto`/`process`.
@@ -78,16 +90,25 @@ PostHog won on free tier, EU residency, and a self-host path).
   are dropped client-side (an HTTP request already on the wire cannot be recalled; everything after it
   can, and is). `app_installed` fires at most once per install (the `announced` bit), on the first
   sending-enabled boot, together with the first-run notice.
-- **Only stable/nightly releases send — ever:** the sink is real only when `channel` is in the
-  release allowlist (`stable` / `nightly`) AND a baked key is present; anything else (dev, source,
-  e2e, an unknown channel) fails closed to the noop sink. There is deliberately **no env-var key
-  override** — a dev run has no path to the network at all (pipeline verification happens by calling
-  `initializeAnalytics` directly with a release-like channel, or on a real nightly).
-  `THINKRAIL_POSTHOG_HOST` still retargets the endpoint of a *sending* (release) build — the future
-  self-host seam.
+- **An automated run never sends; every human run does.** `channel` gates nothing — it is a reported
+  property. The sink is real unless the run is muted, and muting folds the launcher's `--no-analytics`
+  with the three environmental reasons in `mute.ts`. A muted boot installs `noopSink` **outright** rather
+  than constructing a client and closing its transport gate: no vendor client exists, so there is nothing
+  to leak and nothing to drain. Because muted ⇒ no real sink, `sending` is just `enabled && realSink` —
+  there is deliberately no separate `mute` bit in the state to drift out of sync.
+- **One committed project key.** `POSTHOG_PROJECT_KEY` (in `sink.ts`) is the destination for every
+  build — the same project `apps/website` reports to, so app usage and landing-page traffic answer
+  questions in one place. It is committed on purpose: a run-from-source host has no release pipeline to
+  bake a key into, and a PostHog project API key is write-only and public by design (it appends events; it
+  can never read them). Consequences accepted: rotating it is a commit, not a secret edit; and a fork that
+  runs from source reports too (anonymously — the first-run notice and both opt-outs still apply).
+  `AnalyticsOptions.posthogApiKey` overrides it (tests, self-hosting), as `THINKRAIL_POSTHOG_HOST` does
+  the endpoint.
 - **Never sent:** paths, file/spec names, prompts, code, transcripts, token counts, hostnames,
   usernames, IP-derived fields, or any free-form user string. Params on every event: `app_version`,
-  `channel`, `os`, `arch` — plus only the closed per-event params above; the unit tests pin each
+  `channel`, `os`, `arch`, `build` (`source` | `binary` — declared by the launching entry, see
+  `module-cli`, so `channel = dev` still separates a locally compiled binary from a run out of the repo)
+  — plus only the closed per-event params above; the unit tests pin each
   variant's exact non-`$` properties (transport framing — the SDK's `$lib*` fields, `$geoip_disable`,
   and the personless flag — is the sink's, never an event param).
 - **Fire-and-forget:** `track`/`initializeAnalytics` never throw into callers and never block boot.

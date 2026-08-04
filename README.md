@@ -148,25 +148,32 @@ spec in the same change. See [`AGENTS.md`](AGENTS.md) for the spec workflow.
 
 ## Analytics & Privacy
 
-Released ThinkRail builds send **anonymous usage analytics** to [PostHog](https://posthog.com) (EU
-cloud; on by default; a notice is printed the first time anything is sent). The data answers product
-questions — how many installs are active, on which versions/platforms, which models and providers
-get used, and which features matter — and nothing more.
+ThinkRail sends **anonymous usage analytics** to [PostHog](https://posthog.com) (EU cloud; on by default;
+a notice is printed the first time anything is sent). The data answers product questions — how many
+installs are active, on which versions/platforms, which models and providers get used, and which features
+matter — and nothing more.
+
+This applies to **every way of running ThinkRail**, including a build you compiled yourself and a run
+straight from a source checkout — each is reported as what it is (see `channel` and `build` below) rather
+than kept silent. **Automated runs never send:** anything under CI, `bun test`, and the e2e suites are all
+muted, so test traffic can't be mistaken for a person.
 
 **The only stable identifier** is a random per-install id (a `uuid4`) minted on your machine and
 stored in `~/.thinkrail/installation.json`; it never leaves the host except as the anonymous
 `distinct_id` on events. Events additionally carry only low-cardinality, non-personal metadata: app
-version, release channel (`stable`/`nightly`), OS (`macos`/`linux`/`windows`), architecture
+version, release channel (`stable`/`nightly`/`dev`), how the code was built (`binary` for a compiled
+executable, `source` for a repo checkout), OS (`macos`/`linux`/`windows`), architecture
 (`x64`/`arm64`), and — on chat/login events — the model/provider name **only if it is a pi built-in**
 (anything user-configured is reported as `custom`). Message activity is counted as a bare send event
 carrying only *how* it was sent (`prompt`/`steer`/`follow_up`) — never the message itself. Events are sent **personless** (no person
 profiles are ever built) and with **GeoIP lookup disabled**.
 
 **Never collected:** file paths or names, prompts, code, chat transcripts, API keys, token counts,
-hostnames, usernames, or IP-derived fields. **Only stable and nightly release builds ever send**:
-development builds (`bun run dev`, from-source runs, e2e) carry no analytics key, and analytics
-activates exclusively on the `stable`/`nightly` release channels — there is no way (not even an
-environment variable) to make a dev run emit events.
+hostnames, usernames, or IP-derived fields.
+
+**Contributors:** running `bun run dev` or the CLI from a checkout reports too, tagged `channel=dev` /
+`build=source`. Your test and CI runs don't (they're muted, as above), and if you'd rather not report at
+all, either switch it off in-app or export `THINKRAIL_NO_ANALYTICS=1` in your shell.
 
 Turn it off any time:
 

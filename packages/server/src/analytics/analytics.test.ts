@@ -12,19 +12,14 @@ import {
 	shutdownAnalytics,
 	track,
 } from "./service";
+import { POSTHOG_PROJECT_KEY } from "./sink";
 
 let dataDir: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
-const savedEnv = {
-	key: process.env.THINKRAIL_POSTHOG_API_KEY,
-	host: process.env.THINKRAIL_POSTHOG_HOST,
-};
 
 beforeEach(() => {
 	dataDir = mkdtempSync(join(tmpdir(), "trpi-analytics-test-"));
 	process.env.THINKRAIL_DATA_DIR = dataDir;
-	delete process.env.THINKRAIL_POSTHOG_API_KEY;
-	delete process.env.THINKRAIL_POSTHOG_HOST;
 	resetAnalyticsForTests();
 });
 
@@ -33,10 +28,6 @@ afterEach(() => {
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
-	if (savedEnv.key === undefined) delete process.env.THINKRAIL_POSTHOG_API_KEY;
-	else process.env.THINKRAIL_POSTHOG_API_KEY = savedEnv.key;
-	if (savedEnv.host === undefined) delete process.env.THINKRAIL_POSTHOG_HOST;
-	else process.env.THINKRAIL_POSTHOG_HOST = savedEnv.host;
 });
 
 // ── test fetch (the sink's injected seam) ──────────────────────────────
@@ -76,16 +67,21 @@ async function drained(sent: SentPayload[], count: number): Promise<void> {
 /** A short settle so "nothing was sent" assertions are honest against the async queue. */
 const settled = (): Promise<void> => Bun.sleep(25);
 
-/** Boot the service on the baked-key path (release-like: key + a non-dev channel). */
-function bootReleaseLike(
+/**
+ * Boot the service on the sending path. `env: {}` is load-bearing: `bun test` sets `NODE_ENV=test`, which
+ * the mute policy honors, so without an injected clean env every test here would silently assert nothing.
+ * No `posthogApiKey` either — the committed project key is what a real boot uses.
+ */
+function bootSending(
 	sent: SentPayload[],
 	overrides: Partial<Parameters<typeof initializeAnalytics>[0]> = {},
 ): void {
 	initializeAnalytics({
 		appVersion: "1.2.3",
 		channel: "stable",
-		posthogApiKey: "phc_TEST",
+		build: "binary",
 		enabled: true,
+		env: {},
 		fetchImpl: makeFetch(sent),
 		...overrides,
 	});
@@ -105,7 +101,7 @@ const EVENT_SAMPLES = {
 	provider_login: { name: "provider_login", params: { provider: "openai", method: "oauth" } },
 } as const satisfies { [K in AnalyticsEvent["name"]]: Extract<AnalyticsEvent, { name: K }> };
 
-const ENV_KEYS = ["app_version", "channel", "os", "arch"];
+const ENV_KEYS = ["app_version", "channel", "os", "arch", "build"];
 
 /** The exact non-`$` property keys each variant may put on the wire — extend only with a spec change. */
 const EXPECTED_KEYS: Record<keyof typeof EVENT_SAMPLES, string[]> = {
@@ -118,7 +114,7 @@ const EXPECTED_KEYS: Record<keyof typeof EVENT_SAMPLES, string[]> = {
 
 test("every event's outgoing properties are EXACTLY its declared params (+ $ transport framing)", async () => {
 	const sent: SentPayload[] = [];
-	bootReleaseLike(sent);
+	bootSending(sent);
 	for (const event of Object.values(EVENT_SAMPLES)) track(event);
 	// boot emits app_installed + app_started, then one per tracked sample
 	await drained(sent, 2 + Object.keys(EVENT_SAMPLES).length);
@@ -137,25 +133,29 @@ test("every event's outgoing properties are EXACTLY its declared params (+ $ tra
 
 test("every event is stamped with the env metadata", async () => {
 	const sent: SentPayload[] = [];
-	bootReleaseLike(sent);
+	bootSending(sent);
 	track({ name: "app_started" });
 	await drained(sent, 3);
 	const entry = allEntries(sent).at(-1);
-	expect(entry?.properties).toMatchObject({ app_version: "1.2.3", channel: "stable" });
+	expect(entry?.properties).toMatchObject({
+		app_version: "1.2.3",
+		channel: "stable",
+		build: "binary",
+	});
 	expect(entry?.properties.os).toBeString();
 	expect(entry?.properties.arch).toBeString();
 });
 
 test("the batch goes to the EU cloud by default; THINKRAIL_POSTHOG_HOST retargets it", async () => {
 	const sent: SentPayload[] = [];
-	bootReleaseLike(sent);
+	bootSending(sent);
 	await drained(sent, 1);
 	expect(sent[0]?.url).toBe("https://eu.i.posthog.com/batch/");
 
 	resetAnalyticsForTests();
-	process.env.THINKRAIL_POSTHOG_HOST = "https://ph.example.test/"; // trailing slash normalized
 	const retargeted: SentPayload[] = [];
-	bootReleaseLike(retargeted);
+	// trailing slash normalized; the host rides the injected env, the module's one env reader
+	bootSending(retargeted, { env: { THINKRAIL_POSTHOG_HOST: "https://ph.example.test/" } });
 	await drained(retargeted, 1);
 	expect(retargeted[0]?.url).toBe("https://ph.example.test/batch/");
 });
@@ -167,7 +167,7 @@ test("shutdownAnalytics genuinely awaits the drain (slow transport, no polling) 
 		sent.push({ url: String(url), body: JSON.parse(String(init?.body)) });
 		return new Response("{}", { status: 200 });
 	}) as typeof fetch;
-	bootReleaseLike(sent, { fetchImpl: slowFetch });
+	bootSending(sent, { fetchImpl: slowFetch });
 	track({ name: "chat_started", params: { provider: "anthropic", model: "m" } });
 	await shutdownAnalytics();
 	// Asserted immediately after the await — deliverable only because shutdown really waited.
@@ -188,7 +188,7 @@ test("toggle-off silences events already queued inside the SDK — the transport
 		delivered.push({ url: String(url), body: JSON.parse(String(init?.body)) });
 		return new Response("{}", { status: 200 });
 	}) as typeof fetch;
-	bootReleaseLike(delivered, { fetchImpl: slowFetch });
+	bootSending(delivered, { fetchImpl: slowFetch });
 	await drained(delivered, 2); // boot lifecycle out of the way
 
 	const startedBefore = started;
@@ -211,7 +211,7 @@ test("toggle-off silences events already queued inside the SDK — the transport
 
 test("the install id is minted once, used as distinct_id, and NEVER rotated by toggles", async () => {
 	const sent: SentPayload[] = [];
-	bootReleaseLike(sent);
+	bootSending(sent);
 	await drained(sent, 1);
 	const id = ensureInstallation().id;
 	expect(allEntries(sent)[0]?.distinct_id).toBe(id);
@@ -226,14 +226,14 @@ test("the install id is minted once, used as distinct_id, and NEVER rotated by t
 
 test("app_installed fires exactly once per install (announced bit survives restarts)", async () => {
 	const sent: SentPayload[] = [];
-	bootReleaseLike(sent);
+	bootSending(sent);
 	await drained(sent, 2);
 	expect(allEntries(sent).map((e) => e.event)).toEqual(["app_installed", "app_started"]);
 
 	// Simulated restart: same data dir, fresh in-memory state.
 	resetAnalyticsForTests();
 	const sentAfterRestart: SentPayload[] = [];
-	bootReleaseLike(sentAfterRestart);
+	bootSending(sentAfterRestart);
 	await drained(sentAfterRestart, 1);
 	await settled();
 	expect(allEntries(sentAfterRestart).map((e) => e.event)).toEqual(["app_started"]);
@@ -241,7 +241,7 @@ test("app_installed fires exactly once per install (announced bit survives resta
 
 test("a disabled boot mints the id but sends nothing; enabling later announces once", async () => {
 	const sent: SentPayload[] = [];
-	bootReleaseLike(sent, { enabled: false });
+	bootSending(sent, { enabled: false });
 	await settled();
 	expect(sent).toHaveLength(0);
 	expect(readFileSync(join(dataDir, "installation.json"), "utf8")).toContain('"announced": false');
@@ -256,39 +256,46 @@ test("a disabled boot mints the id but sends nothing; enabling later announces o
 
 // ── gates ──────────────────────────────────────────────────────────────
 
-test("the dev channel refuses a baked key — a dev run never sends", async () => {
+test("a run from source on the dev channel sends — the release allowlist is gone", async () => {
 	const sent: SentPayload[] = [];
-	bootReleaseLike(sent, { channel: "dev" });
-	track({ name: "app_started" });
-	await settled();
-	expect(sent).toHaveLength(0);
+	bootSending(sent, { appVersion: "0.0.0-dev", channel: "dev", build: "source" });
+	await drained(sent, 2);
+	expect(allEntries(sent).at(-1)?.properties).toMatchObject({
+		app_version: "0.0.0-dev",
+		channel: "dev",
+		build: "source",
+	});
 });
 
-test("a THINKRAIL_POSTHOG_API_KEY env var is IGNORED — a dev run has no path to the network", async () => {
-	process.env.THINKRAIL_POSTHOG_API_KEY = "phc_ENV";
+test("channel is reported verbatim and gates nothing — an unrecognized one still sends", async () => {
 	const sent: SentPayload[] = [];
-	initializeAnalytics({ channel: "dev", enabled: true, fetchImpl: makeFetch(sent) });
-	track({ name: "app_started" });
-	await settled();
-	expect(sent).toHaveLength(0);
+	bootSending(sent, { channel: "beta" });
+	await drained(sent, 2);
+	expect(allEntries(sent).at(-1)?.properties).toMatchObject({ channel: "beta" });
 });
 
-test("an unknown channel fails closed — only stable/nightly ever send", async () => {
+test("events go to the committed project key when the launcher passes none", async () => {
 	const sent: SentPayload[] = [];
-	bootReleaseLike(sent, { channel: "beta" });
-	track({ name: "app_started" });
-	await settled();
-	expect(sent).toHaveLength(0);
-
-	resetAnalyticsForTests();
-	const nightly: SentPayload[] = [];
-	bootReleaseLike(nightly, { channel: "nightly" });
-	await drained(nightly, 2); // nightly is a release channel — it sends
+	bootSending(sent);
+	await drained(sent, 1);
+	expect(sent[0]?.body.api_key).toBe(POSTHOG_PROJECT_KEY);
 });
 
-test("--no-analytics (mute) silences the run even when key + config say send", async () => {
+test.each([
+	["THINKRAIL_NO_ANALYTICS", { THINKRAIL_NO_ANALYTICS: "1" }],
+	["CI", { CI: "true" }],
+	["NODE_ENV=test", { NODE_ENV: "test" }],
+])("an environment mute (%s) sends nothing at all", async (_label, env) => {
 	const sent: SentPayload[] = [];
-	bootReleaseLike(sent, { mute: true });
+	bootSending(sent, { env });
+	track({ name: "message_sent", params: { mode: "prompt" } });
+	await settled();
+	expect(allEntries(sent)).toEqual([]);
+});
+
+test("--no-analytics (mute) silences the run even when the config says send", async () => {
+	const sent: SentPayload[] = [];
+	bootSending(sent, { mute: true });
 	track({ name: "app_started" });
 	setAnalyticsSending(true); // a settings toggle during a muted run must not unmute it
 	track({ name: "app_started" });
@@ -298,7 +305,7 @@ test("--no-analytics (mute) silences the run even when key + config say send", a
 
 test("setAnalyticsSending(false) stops sending immediately", async () => {
 	const sent: SentPayload[] = [];
-	bootReleaseLike(sent);
+	bootSending(sent);
 	await drained(sent, 2); // let the boot lifecycle land first…
 	sent.length = 0; // …then drop it
 	setAnalyticsSending(false);
@@ -310,8 +317,8 @@ test("setAnalyticsSending(false) stops sending immediately", async () => {
 test("track never throws into the caller, even when the transport does", async () => {
 	initializeAnalytics({
 		channel: "stable",
-		posthogApiKey: "phc_TEST",
 		enabled: true,
+		env: {},
 		fetchImpl: (() => {
 			throw new Error("boom");
 		}) as unknown as typeof fetch,

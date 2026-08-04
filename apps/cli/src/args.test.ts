@@ -34,9 +34,11 @@ describe("parseArgs", () => {
 		});
 	});
 
-	test("--no-analytics mutes for the run; THINKRAIL_NO_ANALYTICS is the env spelling", () => {
+	test("--no-analytics mutes for the run; the env spelling is the analytics service's job", () => {
 		expect(parseArgs(["--no-analytics"], {}).noAnalytics).toBe(true);
-		expect(parseArgs([], { THINKRAIL_NO_ANALYTICS: "1" }).noAnalytics).toBe(true);
+		// THINKRAIL_NO_ANALYTICS is deliberately NOT read here — `packages/server/src/analytics/mute.ts`
+		// is its single reader, so every entrypoint honors it (including `dev.ts`, which parses no argv).
+		expect(parseArgs([], { THINKRAIL_NO_ANALYTICS: "1" }).noAnalytics).toBe(false);
 		expect(parseArgs([], {}).noAnalytics).toBe(false);
 	});
 

@@ -48,10 +48,15 @@ export interface CreateServerOptions {
 	/** The launcher's baked release version, echoed in the `server.welcome` push (undefined from source). */
 	appVersion?: string;
 	/**
-	 * Anonymous-analytics wiring from the launcher: release channel + the PostHog key baked at release
-	 * + the `--no-analytics` per-run mute. Absent (dev/e2e/source runs) ⇒ the noop sink — never sends.
+	 * Anonymous-analytics wiring from the launcher: the release channel + how this process was produced
+	 * (`build`) + the `--no-analytics` per-run mute. Every channel sends; muting is the analytics
+	 * service's own decision (CI / `NODE_ENV=test` / `THINKRAIL_NO_ANALYTICS`), so a launcher that passes
+	 * nothing still gets the right behaviour.
 	 */
-	analytics?: Pick<AnalyticsOptions, "channel" | "posthogApiKey" | "posthogHost" | "mute">;
+	analytics?: Pick<
+		AnalyticsOptions,
+		"channel" | "build" | "posthogApiKey" | "posthogHost" | "mute"
+	>;
 }
 
 export interface RunningServer {
@@ -271,8 +276,8 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 	});
 
 	// Boot analytics before any trackable action can occur (fire-and-forget by contract — a failure in
-	// here can never block or crash the host). The persisted flag gates sending; dev/source runs have no
-	// keys and land on the noop sink.
+	// here can never block or crash the host). The persisted flag gates sending; the analytics module
+	// itself mutes CI, `bun test`, and an explicit opt-out (see analytics/mute.ts).
 	initializeAnalytics({
 		...(appVersion ? { appVersion } : {}),
 		...(analytics ?? {}),

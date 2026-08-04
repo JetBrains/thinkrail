@@ -4,6 +4,9 @@
 // and we control every call site.)
 import { getBuiltinModels, getBuiltinProviders } from "@earendil-works/pi-ai/providers/all";
 
+/** How the running code was produced: straight from the repo, or a compiled single-file binary. */
+export type BuildKind = "source" | "binary";
+
 /** How a provider credential was configured in-app. A closed vocabulary, never user input. */
 export type LoginMethod = "oauth" | "api-key" | "central";
 

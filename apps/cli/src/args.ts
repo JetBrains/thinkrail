@@ -10,7 +10,11 @@ export interface CliOptions {
 	host: string;
 	/** Open the browser at the resolved URL on boot. */
 	open: boolean;
-	/** `--no-analytics` / `THINKRAIL_NO_ANALYTICS`: mute anonymous usage analytics for this run. */
+	/**
+	 * `--no-analytics`: mute anonymous usage analytics for this run. The `THINKRAIL_NO_ANALYTICS` env
+	 * spelling is honored by the host itself (`packages/server/src/analytics/mute.ts`, its single reader),
+	 * so it is deliberately not folded in here.
+	 */
 	noAnalytics: boolean;
 	/** Static SPA dir override (`THINKRAIL_STATIC_DIR`); when unset the bin derives a default. */
 	staticDir: string | undefined;
@@ -62,7 +66,7 @@ Arguments:
 Env:
   THINKRAIL_PORT / THINKRAIL_HOST   Defaults for --port / --host.
   THINKRAIL_STATIC_DIR                 Override the built web app served by the host.
-  THINKRAIL_NO_ANALYTICS               Same as --no-analytics (any non-empty value).`;
+  THINKRAIL_NO_ANALYTICS               Same as --no-analytics (any non-empty value; read by the host).`;
 
 /** Read a flag's value from either `--flag value` or `--flag=value`; returns the value + how many argv slots it consumed. */
 function readFlagValue(arg: string, next: string | undefined): { value: string; consumed: number } {
@@ -125,7 +129,7 @@ export function parseArgs(argv: readonly string[], env: ParseEnv = {}): CliOptio
 		port: resolvedPort,
 		host: host ?? env.THINKRAIL_HOST ?? DEFAULT_HOST,
 		open,
-		noAnalytics: noAnalytics || Boolean(env.THINKRAIL_NO_ANALYTICS),
+		noAnalytics,
 		staticDir: env.THINKRAIL_STATIC_DIR,
 		projectDir,
 		help,

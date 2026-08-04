@@ -86,6 +86,9 @@ export default defineConfig({
 			// Register a deterministic fake OAuth provider (`e2e-oauth`) so the in-app login flow is drivable
 			// end-to-end without a real provider/browser (see packages/server/src/dev.ts).
 			THINKRAIL_E2E_FAKE_OAUTH: "1",
+			// Analytics: every channel sends now, and `CI` is unset on a developer machine — so the suite
+			// mutes explicitly. Nothing an e2e run does may reach PostHog.
+			THINKRAIL_NO_ANALYTICS: "1",
 		},
 	},
 });
