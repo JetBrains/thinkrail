@@ -150,11 +150,40 @@ ref off the workspace-create critical path.
   `{kind:"worktree"}` (the file on disk), or `{kind:"empty"}` (nothing there — a root commit's
   add-style diff). A union rather than `string | null`, because `null` previously meant *empty* on one
   side and *the worktree* on the other, and neither meaning left room for the index.
+- **`remoteRefs.ts`** — the two remote operations and the local counting that interprets them.
+  `probeRemoteRefs` runs `git ls-remote --heads <remote> <refs…>`: it **writes nothing** — no objects, no
+  refs, no `FETCH_HEAD`, no ref locks, no gc trigger — and answers only *whether* a ref differs, never by
+  how much. `fetchRemoteRefs` is the opt-in real fetch and reports which refs moved. `behindCount` is a
+  purely local `rev-list --count`. Both remote calls run under `REMOTE_ENV` with a deadline, pass
+  `-c maintenance.auto=false -c gc.auto=0` so a fetch cannot trigger background repacking, and **never**
+  pass `--prune`: pruning can delete a remote-tracking ref a workspace is pinned to. `probeRemoteRefs`
+  passes the requested refs as `ls-remote` **patterns** so the filtering happens server-side (protocol v2),
+  and parses `<sha>\trefs/heads/<name>` rows into `heads` keyed by the short name; a failed read answers
+  `{ ok: false, heads: {}, err }`, never an empty-but-`ok` result. `fetchRemoteRefs` reads each requested
+  ref's **fully-qualified** `refs/remotes/<remote>/<name>` before and after the fetch — never the short
+  name — because a local branch literally named `origin/<b>` would otherwise shadow the remote-tracking ref
+  via git's DWIM resolution order (`prefetchBranch`, above, hits the identical hazard and documents it the
+  same way); the ref names whose oid changed (first appearance counts) come back as `moved`. Neither remote
+  call ever passes `--tags`, for the same pinned-ref reason as `--prune`. `behindCount(repoPath, from, to)`
+  is `rev-list --count --end-of-options <from>..<to>`, purely local — it returns **`null`, not `0`**, when
+  the range fails to resolve (e.g. one side doesn't exist locally, which is exactly the state a probe alone
+  leaves the caller in): an unknown count is not "up to date", and the UI renders the two differently, so
+  collapsing the distinction here would falsify the indicator two layers up. `remoteUrlKind(repoPath,
+  remote)` reads `git remote get-url` and classifies `ssh://…`, `git@host:path`, and `user@host:path` (any
+  `user@host:path` with no `://` scheme and no slash before the first colon — git's own scp-like-syntax
+  rule) as `"ssh"`, anything else resolvable as `"other"`, and an unreadable/missing remote as `"unknown"`.
+  `sshAgentPresent()` reads `SSH_AUTH_SOCK`, answering `false` only for an unset/empty value —
+  deliberately **not** special-cased for the plain macOS launchd socket (`.../com.apple.launchd.*/
+  Listeners`): that socket is a real, protocol-compliant agent (the Secure Keychain agent) that can hold
+  keys added via `ssh-add --apple-use-keychain` and answer agent requests, so treating its mere presence as
+  "no agent" would invert the safety direction this check exists for — a background op skipped because an
+  agent *might* be listening is a convenience cost; a Keychain/Touch ID prompt surfacing during an
+  unattended probe is the failure the whole ladder exists to prevent.
 - **Public surface (barrel):** `git`, `gitAsync`, `REMOTE_ENV`, `gitArgv`, `GitRunOptions`, `gitStatus`,
   `gitDiffFile`, `readBlobAt`, `listCommits`, `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`,
-  `resolveCommitOid`, `DiffRange`, `DiffSide`, `isSafeRef`,
-  `assertSafeRef`, `listBranches`, `resolveDefaultBranch`, `tryCurrentBranch`, `currentBranch`,
-  `canonicalPath`, `prefetchBranch`.
+  `resolveCommitOid`, `DiffRange`, `DiffSide`, `isSafeRef`, `assertSafeRef`, `listBranches`,
+  `resolveDefaultBranch`, `tryCurrentBranch`, `currentBranch`, `canonicalPath`, `prefetchBranch`,
+  `probeRemoteRefs`, `fetchRemoteRefs`, `behindCount`, `remoteUrlKind`, `sshAgentPresent`.
 - **Allowed deps:** `persistence` (workspace + project lookup); `contracts` (`Git*`/`BranchList` types);
   `@thinkrail/shared/codedError` (naming a failure for the wire); Bun (spawn).
 - **Forbidden:** `host`; sibling features.
@@ -214,3 +243,14 @@ ref off the workspace-create critical path.
   first background connection to any new host would fail — and the feature would silently never work for
   that user. A future simplification back to bare `BatchMode=yes` would reintroduce that failure with no
   warning anywhere.
+- **The default background remote op writes nothing, on purpose — that is a safety guarantee, not an
+  optimisation.** `probeRemoteRefs` is `ls-remote`, never a `fetch`: a background fetch would move
+  `refs/remotes/*` (and `@{upstream}`) mid-session, which **silently defeats `git push --force-with-lease`**
+  (per git's own docs) and could point a user's `git rebase @{u}` at a commit they never saw — and this app
+  hands the user real terminals inside these worktrees, so that is not a hypothetical. A real fetch
+  (`fetchRemoteRefs`) is therefore opt-in, never triggered on a bare background timer. Consequence: a probe
+  can tell the caller *that* a ref moved but never *by how much* (the objects aren't local), so
+  `behindCount` reads 0 right after a probe — this is why the UI's indicator has two modes (a bare `↓` for
+  "moved, count unknown" vs `↓·N` only once a real fetch made the count answerable), not a bug in either
+  layer. Neither remote call ever passes `--prune` or `--tags`: pruning can delete a remote-tracking ref a
+  workspace is pinned to, and this module has no use for tags at all.
