@@ -22,8 +22,14 @@ as JSON under the data dir.
   per-install uuid4 + the `app_installed`-sent bit; **server-only by design**: it must never ride
   the wire-broadcast `config.json` — see `submodule-server-analytics`; `ensureInstallation` mints
   the id on first read and never rotates it) — all tab-indented JSON.
+- **`remotes.json` — SERVER-ONLY, like `installation.json`.** Records which `(project, remote)` pairs a
+  *user-initiated* operation has successfully authenticated against. `remotes` refuses to check a pair
+  automatically until it appears here, so a background operation can never be the first thing to touch a
+  remote the user has not yet proven credentials for. It never rides the wire: it is inference about the
+  user's machine, not app state a client needs.
 - **Public surface (barrel):** `dataDir`, `loadProjects`, `saveProjects`, `loadWorkspaces`,
-  `saveWorkspaces`, `loadConfig`, `saveConfig`, `ensureInstallation`, `saveInstallation`.
+  `saveWorkspaces`, `loadConfig`, `saveConfig`, `ensureInstallation`, `saveInstallation`,
+  `loadRemoteTrust`, `isRemoteTrusted`, `noteRemoteTrusted`.
 - **Allowed deps:** `contracts` (`Project`/`Workspace`/`AppConfig` types + `DEFAULT_CONFIG`); Node
   `fs`/`os`/`path`.
 - **Forbidden:** importing any sibling module or `host` — this is a leaf others depend on.

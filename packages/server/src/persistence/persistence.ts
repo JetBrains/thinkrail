@@ -98,3 +98,33 @@ export function ensureInstallation(): InstallationRecord {
 export function saveInstallation(record: InstallationRecord): void {
 	writeJson("installation.json", record);
 }
+
+/**
+ * Which `(project, remote)` pairs a **user-initiated** operation has authenticated against successfully.
+ * SERVER-ONLY, exactly like `installation.json`: it is inference about the user's machine, not app state a
+ * client needs, and it must never ride a broadcast.
+ *
+ * Keyed by `projectId` + NUL + remote name. NUL because neither component may contain it, so two different
+ * pairs can never collide into one key the way a `:`-joined key could (`"a:b" + "c"` vs `"a" + "b:c"`).
+ */
+export type RemoteTrustRecord = Record<string, string>;
+
+const trustKey = (projectId: string, remote: string) => `${projectId}\0${remote}`;
+
+export function loadRemoteTrust(): RemoteTrustRecord {
+	return readJson<RemoteTrustRecord>("remotes.json", {});
+}
+
+/** Whether a background check is allowed to touch this pair at all. */
+export function isRemoteTrusted(projectId: string, remote: string): boolean {
+	return typeof loadRemoteTrust()[trustKey(projectId, remote)] === "string";
+}
+
+/** Record that a user-initiated operation authenticated against this pair. Idempotent. */
+export function noteRemoteTrusted(projectId: string, remote: string): void {
+	const record = loadRemoteTrust();
+	const key = trustKey(projectId, remote);
+	if (record[key]) return;
+	record[key] = new Date().toISOString();
+	writeJson("remotes.json", record);
+}
