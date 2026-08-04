@@ -89,15 +89,19 @@ ref off the workspace-create critical path.
   the center Monaco diff tab, each read through its side's explicit **`DiffSide`** union — `{kind:"ref"}`
   (a commit/branch, raw `git show ref:path`), `{kind:"index"}` (the staging area, `git show :<path>` — stage
   0, falling back to **stage 2** ("ours") for an unmerged path, which has no stage 0 at all: an empty index
-  side there would render the file as an add-style or delete-style lie, which this surface must never do),
-  `{kind:"worktree"}` (the file on disk), or `{kind:"empty"}` (nothing there — untracked/added, a renamed
-  file's new path, or a root commit, degrading to an add-style diff). A union rather than `string | null`,
-  because `null` previously meant *empty* on one side and *the worktree* on the other — two meanings for
-  one value, and no room for the index, which the `staged`/`working-tree` scopes need. Both `showBlob` (a
-  ref side) and `showIndexBlob` (the index side) treat a **read failure** as either an *expected absence*
-  (the path genuinely isn't there — logged nowhere) or a broken read (index-lock contention, a bad ref,
-  repo corruption — `console.warn`ed, because that failure must stay visible) through the **one shared
-  predicate** `isExpectedAbsence(stderr)`, so the two can't drift into two regexes for one concept. The
+  side there would render the file as an add-style or delete-style lie, which this surface must never do —
+  and if stage 2 is itself absent too, e.g. a modify/delete conflict where *our* side deleted the file, that
+  retry's own failure is *also* an expected absence, not a broken read, so the index side degrades to empty
+  silently rather than warning), `{kind:"worktree"}` (the file on disk), or `{kind:"empty"}` (nothing there —
+  untracked/added, a renamed file's new path, or a root commit, degrading to an add-style diff). A union
+  rather than `string | null`, because `null` previously meant *empty* on one side and *the worktree* on the
+  other — two meanings for one value, and no room for the index, which the `staged`/`working-tree` scopes
+  need. Both `showBlob` (a ref side) and `showIndexBlob` (the index side) treat a **read failure** as either
+  an *expected absence* (the path genuinely isn't there — logged nowhere) or a broken read (index-lock
+  contention, a bad ref, repo corruption — `console.warn`ed, because that failure must stay visible) through
+  the **one shared predicate** `isExpectedAbsence(stderr)` — its "not at stage" clause names *any* stage
+  digit, not just 0, because `showIndexBlob`'s stage-2 retry can fail with that same message shape at a
+  different digit — so the two reads can't drift into two regexes for one concept. The
   path is escape-checked against the worktree root before either side is read; **`listCommits(workspaceId)`** →
   `{ commits: GitCommit[] }` —
   `git log <diff base>..HEAD`, newest first and capped, one `--format` line per commit whose fields are separated
@@ -184,4 +188,7 @@ ref off the workspace-create critical path.
   its index side falls back from stage 0 (absent for an unmerged path) to stage 2 ("ours") rather than
   reading as empty. A `pi` agent and the user both run `merge`/`rebase`/`cherry-pick`/`stash pop` in these
   worktrees, so an unmerged index is a normal state here, not an edge case — and this surface's one job is
-  to never make a false claim about the working tree (see the top-of-file "Get right" entry above).
+  to never make a false claim about the working tree (see the top-of-file "Get right" entry above). The
+  stage-2 retry can itself have nothing to read — a modify/delete conflict where *our* side deleted the file
+  has no stage 2 either — and that is a genuine absence, not a broken read: it degrades to an empty index
+  side, like every other expected absence, never a `console.warn`.

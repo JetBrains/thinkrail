@@ -309,12 +309,17 @@ export function gitStatus(workspaceId: string, scope?: GitDiffScope): GitStatus 
  *   - `path '<p>' exists on disk, but not in '<ref>'`                 — a ref side, exists only on disk
  *   - `path '<p>' does not exist (neither on disk nor in the index)`  — the index side, a staged deletion
  *   - `path '<p>' exists on disk, but not in the index`               — the index side, never staged
- *   - `path '<p>' is in the index, but not at stage 0`                — the index side, an unmerged path
- *     (a live conflict) — `showIndexBlob` treats this one specially (see there), but it is still an
- *     expected shape of failure, not a broken read.
+ *   - `path '<p>' is in the index, but not at stage <N>`              — the queried stage isn't present for
+ *     this unmerged path. `<N>` is whichever stage the caller just asked for, not always 0: `showIndexBlob`'s
+ *     stage-2 retry (see there) asks for stage 2 ("ours"), and a modify/delete conflict where *we* deleted
+ *     the file has no stage 2 either, so that retry can fail with literally "...not at stage 2" (verified
+ *     against real git 2.50.1) — still an expected shape of failure, not a broken read. The stage-0 shape of
+ *     this same message never reaches this predicate: `showIndexBlob`'s own `UNMERGED_AT_STAGE_ZERO` check
+ *     intercepts it first, before falling back to stage 2, so in practice this clause only ever fires for
+ *     that retry's own failure.
  */
 function isExpectedAbsence(stderr: string): boolean {
-	return /does not exist|exists on disk, but not in|is in the index, but not at stage 0/.test(
+	return /does not exist|exists on disk, but not in|is in the index, but not at stage \d/.test(
 		stderr,
 	);
 }
@@ -391,8 +396,14 @@ function readSide(worktreePath: string, side: DiffSide, path: string, abs: strin
 	}
 }
 
-/** `git show`'s message for a path that is in the index but unmerged — no stage 0 to read. */
-const UNMERGED_NO_STAGE_ZERO = /is in the index, but not at stage 0/;
+/**
+ * `git show`'s message for a path that is in the index but unmerged, specifically at stage 0 — the initial
+ * read `showIndexBlob` always attempts. Deliberately narrower than {@link isExpectedAbsence}'s general
+ * "not at stage `<N>`" clause: this one names the literal digit `0` because the read it guards always asks
+ * for stage 0, so it can decide "retry at stage 2" precisely — a generic `\d` here would also fire for a
+ * stage-2 failure that has nothing to do with the initial read.
+ */
+const UNMERGED_AT_STAGE_ZERO = /is in the index, but not at stage 0/;
 
 /**
  * One file's **staged** content (`git show :<path>` — stage 0), byte-exact, or `""` when the path isn't in
@@ -408,12 +419,14 @@ const UNMERGED_NO_STAGE_ZERO = /is in the index, but not at stage 0/;
  * side against a real worktree) or a whole-file deletion (`staged` scope: a real `HEAD` against an empty
  * index side) — both false claims on a surface whose one job is to never lie about the working tree. A path
  * absent even from stage 2 (e.g. a modify/delete conflict where *we* deleted it) has genuinely nothing on
- * our side, which is itself an expected absence, not a broken read.
+ * our side — `git show :2:<path>` fails with "is in the index, but not at stage 2" (verified against real
+ * git 2.50.1) — which {@link isExpectedAbsence}'s general "not at stage `<N>`" clause recognises as an
+ * expected absence too, so that retry's own failure degrades to an empty side silently, not a warning.
  */
 function showIndexBlob(worktreePath: string, path: string): string {
 	const shown = git(worktreePath, ["show", "--end-of-options", `:${path}`], { raw: true });
 	if (shown.ok) return shown.out;
-	if (UNMERGED_NO_STAGE_ZERO.test(shown.err)) {
+	if (UNMERGED_AT_STAGE_ZERO.test(shown.err)) {
 		const ours = git(worktreePath, ["show", "--end-of-options", `:2:${path}`], { raw: true });
 		if (ours.ok) return ours.out;
 		if (!isExpectedAbsence(ours.err)) {
