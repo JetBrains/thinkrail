@@ -1,4 +1,4 @@
-/** Options shared by the sync and async runners. */
+/** The sync runner's (`git`) options. `gitAsync` implements only `optionalLocks` — see its signature. */
 export interface GitRunOptions {
 	env?: Record<string, string | undefined>;
 	raw?: boolean;
@@ -54,7 +54,9 @@ export function git(
 export async function gitAsync(
 	cwd: string,
 	args: string[],
-	opts: GitRunOptions = {},
+	// `optionalLocks` only: `gitAsync` does not implement `env` or `raw`, and accepting them in the type
+	// would let a future caller pass one and silently get trimmed output or an un-overridden env.
+	opts: Pick<GitRunOptions, "optionalLocks"> = {},
 ): Promise<{ ok: boolean; out: string; err: string }> {
 	const proc = Bun.spawn(gitArgv(cwd, args, opts), { stdout: "pipe", stderr: "pipe" });
 	const [out, err, exitCode] = await Promise.all([
