@@ -58,7 +58,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	// The ref the branch scope measures against, as the host resolves it. Part of what the read *means* only
 	// for that scope (`changesReadKey`), so re-pointing the target (which arrives as a `workspace.updated`
 	// broadcast, never optimistically) re-reads the list exactly like a scope switch — but only in branch
-	// scope; the other three ranges cannot move when the target does.
+	// scope; the other four ranges cannot move when the target does.
 	const baseRef = useAppStore((s) => selectDiffBaseRef(s, workspaceId));
 	const activeTabId = useAppStore((s) => s.activeTabByWorkspace[workspaceId] ?? null);
 

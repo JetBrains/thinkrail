@@ -389,8 +389,9 @@ a project picker, the prompt hero, and the reused
   so scoping is natural; a degraded watcher just means back to read-on-demand. Deliberately **not**
   live (deferred): the project-rail workspace diffStats badges; editable-file conflict handling waits
   for `fs.writeFile` (the viewer is read-only today).
-- The read key carries the diff base **only for `branch` scope**. The other three scopes' ranges cannot
-  move when the target is re-pointed, so including it forced a full reset-and-re-read (a visible
+- The read key carries the diff base **only for `branch` scope**. The other four scopes' ranges — index→disk
+  (`working-tree`), HEAD→index (`staged`), `sha^`→`sha` (`commit`), and HEAD→worktree (`uncommitted`) —
+  cannot move when the target is re-pointed, so including it forced a full reset-and-re-read (a visible
   `Loading…`) for a diff that provably could not change. `ChangesScopeMenu`'s `key` still carries the
   base — unlike the diff, the *commit list* really is `git log <base>..HEAD`.
 - **`useWorkspaceSpecs` owns the `spec.graph` read** (one fetcher, one definition of "this file is a spec"):
