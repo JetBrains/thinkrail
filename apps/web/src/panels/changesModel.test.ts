@@ -98,6 +98,8 @@ test("scopeLabel keeps a commit scope short (sha), with the subject in the toolt
 		},
 	];
 	expect(scopeLabel({ kind: "branch" })).toBe("All changes");
+	// The non-commit path (`Diff scope: <label>`) — the tooltip's only case since `uncommitted` was removed.
+	expect(scopeTitle({ kind: "branch" })).toBe("Diff scope: All changes");
 	// The pill never carries a commit *subject* — a sentence there would crowd the comparison target beside
 	// it down toward its own ellipsis.
 	expect(scopeLabel({ kind: "commit", sha: "abc1234567" }, commits)).toBe("abc1234");

@@ -18,13 +18,12 @@ ref off the workspace-create critical path.
 ## Boundary
 
 - **Owns:** `git(cwd, args, opts)` (spawn git *sync*, capture trimmed stdout/stderr + ok; `opts.raw` keeps
-  stdout byte-exact for file-content reads; `opts.optionalLocks` opts a genuine writer back into git's
-  optional locks) and `gitAsync(cwd, args, opts)` (its async twin — `Bun.spawn`, off the event loop, for
-  network-bound ops like `fetch` that must not block the host; its `opts` is `Pick<GitRunOptions,
-  "optionalLocks">` — it implements only that field, so a future caller can't pass `env`/`raw` and
-  silently have them ignored) — both route their argv through **`gitArgv(cwd, args, opts)`**, extracted
-  (and exported) so the flag set is assertable without spawning: `--no-optional-locks` is git-level and
-  must sit before the subcommand, alongside `-C`;
+  stdout byte-exact for file-content reads) and `gitAsync(cwd, args)` (its async twin — `Bun.spawn`, off the
+  event loop, for network-bound ops like `fetch` that must not block the host; no options — it never needed
+  `env`/`raw`) — both route their argv through **`gitArgv(cwd, args)`**, extracted (and exported) so the flag
+  set is assertable without spawning: it unconditionally prepends **`--no-optional-locks`**, git-level and so
+  must sit before the subcommand, alongside `-C` (see Get right — there is no opt-out; every writer this
+  repo has succeeds under it);
   **the scope→range resolver** — `resolveDiffRange(ws, scope?)` → `DiffRange` — **the one definition of what
   a `GitDiffScope` means**:
 
@@ -81,15 +80,25 @@ ref off the workspace-create critical path.
   `gitStatus(workspaceId, scope?)` — changed files over the range plus untracked (only when the range ends at
   the worktree), each carrying per-file `added`/`removed` line counts (`git diff --numstat`, its rename-mangled paths resolved
   via `numstatPath` to match `--name-status`; binary rows dropped; untracked files count their whole
-  content as added) for the Changes tree's `+/−` badges;
+  content as added) for the Changes tree's `+/−` badges. **Deduped by path**: an unmerged (conflicted) path —
+  a live `merge`/`rebase`/`cherry-pick` — is not a hypothetical, and git's `--name-status` prints it **twice**
+  for `working-tree` scope (a generic `U` marker row, then a second row comparing stage 2 against the
+  worktree when one exists); the second, more substantive row wins, so the Changes list — and its
+  React `key={change.path}` — never doubles the file;
   `gitDiffFile(workspaceId, path, scope?)` → `{ original, modified }` — both sides of one file's change for
   the center Monaco diff tab, each read through its side's explicit **`DiffSide`** union — `{kind:"ref"}`
-  (a commit/branch, raw `git show ref:path`), `{kind:"index"}` (the staging area, `git show :<path>`),
+  (a commit/branch, raw `git show ref:path`), `{kind:"index"}` (the staging area, `git show :<path>` — stage
+  0, falling back to **stage 2** ("ours") for an unmerged path, which has no stage 0 at all: an empty index
+  side there would render the file as an add-style or delete-style lie, which this surface must never do),
   `{kind:"worktree"}` (the file on disk), or `{kind:"empty"}` (nothing there — untracked/added, a renamed
   file's new path, or a root commit, degrading to an add-style diff). A union rather than `string | null`,
   because `null` previously meant *empty* on one side and *the worktree* on the other — two meanings for
-  one value, and no room for the index, which the `staged`/`working-tree` scopes need. The path is
-  escape-checked against the worktree root before either side is read; **`listCommits(workspaceId)`** →
+  one value, and no room for the index, which the `staged`/`working-tree` scopes need. Both `showBlob` (a
+  ref side) and `showIndexBlob` (the index side) treat a **read failure** as either an *expected absence*
+  (the path genuinely isn't there — logged nowhere) or a broken read (index-lock contention, a bad ref,
+  repo corruption — `console.warn`ed, because that failure must stay visible) through the **one shared
+  predicate** `isExpectedAbsence(stderr)`, so the two can't drift into two regexes for one concept. The
+  path is escape-checked against the worktree root before either side is read; **`listCommits(workspaceId)`** →
   `{ commits: GitCommit[] }` —
   `git log <diff base>..HEAD`, newest first and capped, one `--format` line per commit whose fields are separated
   by a **NUL byte** and read at **fixed arity** (the leading four positionally, everything after them joined back
@@ -147,6 +156,11 @@ ref off the workspace-create critical path.
 - **A scope is defined once.** Any new read that has to know what "the diff" is goes through
   `resolveDiffRange` — never its own `git diff <base>` line — and any read of the base ref goes through
   `diffBaseRef`, so `diffBase ?? baseBranch` exists in exactly one place in the codebase.
+- **An unrecognised scope kind resolves to the `branch` range, deliberately.** `resolveDiffRange` checks
+  `working-tree`/`staged`/`commit` and falls through to `branch` for everything else — including a fifth
+  kind a version-skewed client sends that this host predates. That fall-through is the intended behavior,
+  not an accident of narrowing: a client ahead of its host must get a real diff back, never an error or a
+  silently empty set, for a scope the host simply doesn't know yet.
 - **A commit scope validates that the commit *exists*, not that it is still reachable** from the branch. A
   rebase or reset can rewrite history out from under a selection; the object is still there, and showing its
   diff is *more* useful than silently resetting the user to "All changes". Which commits are *offered* is the
@@ -159,7 +173,15 @@ ref off the workspace-create critical path.
 - `gitStatus` reports the **live** current branch for a user-owned (`kind: "default" | "external"`)
   workspace (its branch moves out-of-band — a terminal `git checkout` — and the persisted snapshot
   self-heals only at list time; the Changes header must not lag).
-- **Reads never take git's optional locks.** Every `git()` invocation passes `--no-optional-locks` unless
-  a caller opts out. A pi agent runs git concurrently in the same worktree, and a status read that
-  refreshes the index as a side effect can lose a race for `.git/index.lock` — turning a healthy repo
-  into a failed read. Opt out only for a command that genuinely must write.
+- **Reads never take git's optional locks.** Every `git()`/`gitAsync()` invocation passes
+  `--no-optional-locks`, unconditionally — `gitArgv` has no opt-out. A pi agent runs git concurrently in the
+  same worktree, and a status read that refreshes the index as a side effect can lose a race for
+  `.git/index.lock` — turning a healthy repo into a failed read. There is no writer in this repo that needs
+  the flag gone (`init`/`add`/`commit`/`branch`/`worktree add` all succeed under it — the flag suppresses
+  only *optional* locks, never a required one), so an opt-out would be speculative API with no caller.
+- **A conflicted (unmerged) path is never doubled, and never silently blanked.** `gitStatus` dedupes
+  `--name-status`'s output by path (git prints an unmerged path twice for `working-tree` scope); reading
+  its index side falls back from stage 0 (absent for an unmerged path) to stage 2 ("ours") rather than
+  reading as empty. A `pi` agent and the user both run `merge`/`rebase`/`cherry-pick`/`stash pop` in these
+  worktrees, so an unmerged index is a normal state here, not an edge case — and this surface's one job is
+  to never make a false claim about the working tree (see the top-of-file "Get right" entry above).

@@ -1,14 +1,7 @@
-/** The sync runner's (`git`) options. `gitAsync` implements only `optionalLocks` — see its signature. */
+/** The sync runner's (`git`) options. */
 export interface GitRunOptions {
 	env?: Record<string, string | undefined>;
 	raw?: boolean;
-	/**
-	 * Allow git's *optional* locks (default: no). A pi agent runs git concurrently in this worktree, so a
-	 * read that refreshes the index as a side effect can lose a race for `.git/index.lock` — and a failed
-	 * read is precisely what this module must never produce. Set this only for a command that must
-	 * genuinely write.
-	 */
-	optionalLocks?: boolean;
 }
 
 /**
@@ -16,9 +9,15 @@ export interface GitRunOptions {
  * spawning: `--no-optional-locks` is a **git-level** flag and must sit before the subcommand, alongside
  * `-C` — after the subcommand git rejects it, and a behavioural test on the exit code would pass whether
  * or not the flag were present at all.
+ *
+ * Unconditional, with no opt-out: every writer this repo has (`init`, `add`, `commit`, `branch`,
+ * `worktree add`, …) succeeds under it, because it suppresses only git's *optional* locks, never a required
+ * one — so there is no genuinely-write command that needs the flag gone. A pi agent runs git concurrently
+ * in this worktree, and a read that refreshes the index as a side effect can lose a race for
+ * `.git/index.lock`; a failed read is precisely what this module must never produce.
  */
-export function gitArgv(cwd: string, args: string[], opts: GitRunOptions = {}): string[] {
-	return ["git", "-C", cwd, ...(opts.optionalLocks ? [] : ["--no-optional-locks"]), ...args];
+export function gitArgv(cwd: string, args: string[]): string[] {
+	return ["git", "-C", cwd, "--no-optional-locks", ...args];
 }
 
 /**
@@ -32,7 +31,7 @@ export function git(
 	args: string[],
 	opts: GitRunOptions = {},
 ): { ok: boolean; out: string; err: string } {
-	const result = Bun.spawnSync(gitArgv(cwd, args, opts), {
+	const result = Bun.spawnSync(gitArgv(cwd, args), {
 		stdout: "pipe",
 		stderr: "pipe",
 		// Omit when unset so existing callers keep Bun's inherited default.
@@ -49,16 +48,15 @@ export function git(
 /**
  * Async twin of `git` — runs the command *off* the event loop (`Bun.spawn`, not `spawnSync`), so a slow,
  * network-bound op (e.g. `fetch`) can't freeze the host's single cooperative event loop while it blocks.
- * Use this for anything that may touch the network; `git` (sync) stays for the cheap local plumbing.
+ * Use this for anything that may touch the network; `git` (sync) stays for the cheap local plumbing. Takes
+ * no options: it never needed `env`/`raw`, and `gitArgv`'s `--no-optional-locks` is unconditional now, so
+ * there is nothing left for a caller to pass.
  */
 export async function gitAsync(
 	cwd: string,
 	args: string[],
-	// `optionalLocks` only: `gitAsync` does not implement `env` or `raw`, and accepting them in the type
-	// would let a future caller pass one and silently get trimmed output or an un-overridden env.
-	opts: Pick<GitRunOptions, "optionalLocks"> = {},
 ): Promise<{ ok: boolean; out: string; err: string }> {
-	const proc = Bun.spawn(gitArgv(cwd, args, opts), { stdout: "pipe", stderr: "pipe" });
+	const proc = Bun.spawn(gitArgv(cwd, args), { stdout: "pipe", stderr: "pipe" });
 	const [out, err, exitCode] = await Promise.all([
 		new Response(proc.stdout).text(),
 		new Response(proc.stderr).text(),

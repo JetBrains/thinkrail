@@ -248,13 +248,23 @@ export function gitStatus(workspaceId: string, scope?: GitDiffScope): GitStatus 
 	const tracked = git(ws.worktreePath, changedFileArgs(range, "--name-status"));
 	if (!tracked.ok) throw diffFailure(tracked.err);
 	if (tracked.out) {
+		// An unmerged (conflicted) path can print TWICE: git's `diff-files` reports it as two separate
+		// 2-way comparisons rather than collapsing the 3-way conflict into one row — a generic `U` marker
+		// (zero-value, no real diff) always first, then — when a stage-2 ("ours") blob exists to compare
+		// against the worktree — a second row carrying the real status/counts (verified against real git
+		// 2.50.1: a deleted-by-us conflict, which has no stage 2, prints only the `U` row; a content or
+		// add/add conflict, which has one, prints `U` then that real row). Keyed by path so the LAST row
+		// wins: the substantive comparison when there is one, the sole `U` row when there isn't — never
+		// both, which would double the file in the Changes list and its React `key`.
+		const byPath = new Map<string, GitFileChange>();
 		for (const line of tracked.out.split("\n")) {
 			const parts = line.split("\t");
 			const code = parts[0] ?? "";
 			// Renames/copies have a third field (old → new); take the destination path.
 			const path = parts.length > 2 ? parts[parts.length - 1] : parts[1];
-			if (path) changes.push({ path, status: mapStatus(code), ...counts.get(path) });
+			if (path) byPath.set(path, { path, status: mapStatus(code), ...counts.get(path) });
 		}
+		changes.push(...byPath.values());
 	}
 
 	// Untracked files belong to a range that ends at the worktree (branch/working-tree), never to a historical
@@ -285,6 +295,31 @@ export function gitStatus(workspaceId: string, scope?: GitDiffScope): GitStatus 
 }
 
 /**
+ * Whether a `git show`/`git show :<path>` failure is an **expected** absence — the path genuinely isn't
+ * there on this side — rather than a broken read (index-lock contention, a bad/removed ref, repo
+ * corruption) that must stay visible via `console.warn`. The single definition shared by {@link showBlob}
+ * (a ref side) and {@link showIndexBlob} (the index side), so the two can never drift into two regexes for
+ * one concept.
+ *
+ * Every message below was captured verbatim from real git 2.50.1, and every one prints a lowercase `path` —
+ * a case-sensitive match is enough. Git *does* capitalise "Path" elsewhere (`git rm`'s "Path '%s' unmerged;
+ * will not remove…"), but that family belongs to `git rm`/`checkout`, which neither `showBlob` nor
+ * `showIndexBlob` ever runs, so it can't reach here; there is no capitalised counterpart for these:
+ *   - `path '<p>' does not exist in '<ref>'`                         — a ref side, never existed there
+ *   - `path '<p>' exists on disk, but not in '<ref>'`                 — a ref side, exists only on disk
+ *   - `path '<p>' does not exist (neither on disk nor in the index)`  — the index side, a staged deletion
+ *   - `path '<p>' exists on disk, but not in the index`               — the index side, never staged
+ *   - `path '<p>' is in the index, but not at stage 0`                — the index side, an unmerged path
+ *     (a live conflict) — `showIndexBlob` treats this one specially (see there), but it is still an
+ *     expected shape of failure, not a broken read.
+ */
+function isExpectedAbsence(stderr: string): boolean {
+	return /does not exist|exists on disk, but not in|is in the index, but not at stage 0/.test(
+		stderr,
+	);
+}
+
+/**
  * One file's content at a ref (`git show ref:path`, byte-exact), or `null` when the read didn't produce
  * one. Any failure — a path the ref simply doesn't have, index-lock contention, an invalid/removed ref,
  * repo corruption — is logged unless it's the ordinary "not in that ref", so a broken read stays visible
@@ -295,7 +330,7 @@ export function readBlobAt(worktreePath: string, ref: string, path: string): str
 	// as a git option (see `isSafeRef`).
 	const shown = git(worktreePath, ["show", "--end-of-options", `${ref}:${path}`], { raw: true });
 	if (shown.ok) return shown.out;
-	if (!/does not exist in|exists on disk, but not in/.test(shown.err)) {
+	if (!isExpectedAbsence(shown.err)) {
 		console.warn(`git show ${ref}:${path} failed: ${shown.err || "unknown error"}`);
 	}
 	return null;
@@ -356,20 +391,37 @@ function readSide(worktreePath: string, side: DiffSide, path: string, abs: strin
 	}
 }
 
+/** `git show`'s message for a path that is in the index but unmerged — no stage 0 to read. */
+const UNMERGED_NO_STAGE_ZERO = /is in the index, but not at stage 0/;
+
 /**
  * One file's **staged** content (`git show :<path>` — stage 0), byte-exact, or `""` when the path isn't in
  * the index — a staged deletion (`git rm`), or a path never staged at all — read silently, without a
- * warning. Separate from {@link showBlob} because there is no ref to bracket: the argument is a
- * pathspec-shaped `:<path>`, and passing it through the ref path would read as `":" + ":" + path`.
+ * warning (see {@link isExpectedAbsence}). Separate from {@link showBlob} because there is no ref to
+ * bracket: the argument is a pathspec-shaped `:<path>`, and passing it through the ref path would read as
+ * `":" + ":" + path`.
+ *
+ * A path **mid-conflict** (an unmerged index entry from a live `merge`/`rebase`/`cherry-pick`) has no stage
+ * 0 at all — `git show :<path>` fails with "is in the index, but not at stage 0" — so it falls back to
+ * stage 2 ("ours"), the closest honest stand-in for "what the index holds right now". Accepting the stage-0
+ * failure as empty would render the file as a whole-file addition (`working-tree` scope: an empty index
+ * side against a real worktree) or a whole-file deletion (`staged` scope: a real `HEAD` against an empty
+ * index side) — both false claims on a surface whose one job is to never lie about the working tree. A path
+ * absent even from stage 2 (e.g. a modify/delete conflict where *we* deleted it) has genuinely nothing on
+ * our side, which is itself an expected absence, not a broken read.
  */
 function showIndexBlob(worktreePath: string, path: string): string {
 	const shown = git(worktreePath, ["show", "--end-of-options", `:${path}`], { raw: true });
 	if (shown.ok) return shown.out;
-	// Both expected absences, verified against real git output:
-	//   `fatal: path 'x' does not exist (neither on disk nor in the index)`  — a staged deletion
-	//   `fatal: path 'x' exists on disk, but not in the index`               — never staged
-	// Case-insensitive: git prints a lowercase `path` here and a capitalised one elsewhere.
-	if (!/does not exist|exists on disk, but not in/i.test(shown.err)) {
+	if (UNMERGED_NO_STAGE_ZERO.test(shown.err)) {
+		const ours = git(worktreePath, ["show", "--end-of-options", `:2:${path}`], { raw: true });
+		if (ours.ok) return ours.out;
+		if (!isExpectedAbsence(ours.err)) {
+			console.warn(`git show :2:${path} failed: ${ours.err || "unknown error"}`);
+		}
+		return "";
+	}
+	if (!isExpectedAbsence(shown.err)) {
 		console.warn(`git show :${path} failed: ${shown.err || "unknown error"}`);
 	}
 	return "";
