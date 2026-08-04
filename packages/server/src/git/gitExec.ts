@@ -53,6 +53,11 @@ export function git(
  * This is necessary but NOT sufficient: the OS keychain and hardware-backed keys (TouchID, YubiKey) live
  * *below* git and can still surface a prompt. That residue is why `remotes` refuses SSH remotes outright
  * when an external ssh-agent is present, rather than relying on this alone.
+ *
+ * `GIT_SSH_COMMAND`'s `-o StrictHostKeyChecking=accept-new` is load-bearing, not decoration: `BatchMode=yes`
+ * alone fails CLOSED on an unknown host key (batch mode disables the interactive prompt, it does not accept
+ * the key), so without `accept-new` the very first background connection to any new host would fail, and
+ * this feature would silently never work for that user. Do not simplify this back to bare `BatchMode=yes`.
  */
 export const REMOTE_ENV: Record<string, string> = {
 	GIT_TERMINAL_PROMPT: "0",
