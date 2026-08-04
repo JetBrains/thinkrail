@@ -109,8 +109,13 @@ ref off the workspace-create critical path.
   **`readBlobAt(worktreePath, ref, path)`** → the file's byte-exact content at a ref, or `null` when the
   read produced none (the diff sides degrade that to `""`; the `reviews` module uses it to capture and
   render a base-side anchor's own content).
+- `original` / `modified`: the two sides of the diff as an explicit **`DiffSide`** union — `{kind:"ref"}`
+  (a commit/branch), `{kind:"index"}` (the staging area, read as `git show :<path>`),
+  `{kind:"worktree"}` (the file on disk), or `{kind:"empty"}` (nothing there — a root commit's
+  add-style diff). A union rather than `string | null`, because `null` previously meant *empty* on one
+  side and *the worktree* on the other, and neither meaning left room for the index.
 - **Public surface (barrel):** `git`, `gitAsync`, `gitStatus`, `gitDiffFile`, `readBlobAt`, `listCommits`,
-  `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `resolveCommitOid`, `DiffRange`, `isSafeRef`,
+  `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `resolveCommitOid`, `DiffRange`, `DiffSide`, `isSafeRef`,
   `assertSafeRef`, `listBranches`, `resolveDefaultBranch`, `tryCurrentBranch`, `currentBranch`,
   `canonicalPath`, `prefetchBranch`.
 - **Allowed deps:** `persistence` (workspace + project lookup); `contracts` (`Git*`/`BranchList` types);
