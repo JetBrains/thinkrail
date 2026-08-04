@@ -20,9 +20,11 @@ ref off the workspace-create critical path.
 - **Owns:** `git(cwd, args, opts)` (spawn git *sync*, capture trimmed stdout/stderr + ok; `opts.raw` keeps
   stdout byte-exact for file-content reads; `opts.optionalLocks` opts a genuine writer back into git's
   optional locks) and `gitAsync(cwd, args, opts)` (its async twin — `Bun.spawn`, off the event loop, for
-  network-bound ops like `fetch` that must not block the host) — both route their argv through
-  **`gitArgv(cwd, args, opts)`**, extracted (and exported) so the flag set is assertable without spawning:
-  `--no-optional-locks` is git-level and must sit before the subcommand, alongside `-C`;
+  network-bound ops like `fetch` that must not block the host; its `opts` is `Pick<GitRunOptions,
+  "optionalLocks">` — it implements only that field, so a future caller can't pass `env`/`raw` and
+  silently have them ignored) — both route their argv through **`gitArgv(cwd, args, opts)`**, extracted
+  (and exported) so the flag set is assertable without spawning: `--no-optional-locks` is git-level and
+  must sit before the subcommand, alongside `-C`;
   **the scope→range resolver** — `resolveDiffRange(ws, scope?)` → `DiffRange` — **the one definition of what
   a `GitDiffScope` means**:
 
