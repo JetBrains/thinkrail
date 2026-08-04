@@ -137,7 +137,10 @@ ref off the workspace-create critical path.
   `-c maintenance.auto=false -c gc.auto=0` so a fetch cannot trigger background repacking, and **never**
   pass `--prune`: pruning can delete a remote-tracking ref a workspace is pinned to. `probeRemoteRefs`
   passes the requested refs as `ls-remote` **patterns** so the filtering happens server-side (protocol v2),
-  and parses `<sha>\trefs/heads/<name>` rows into `heads` keyed by the short name; a failed read answers
+  and parses `<sha>\trefs/heads/<name>` rows into `heads` keyed by the short name — then filters that down
+  to exactly the requested names, because `ls-remote`'s pattern matching is **suffix-based, not exact**
+  (a bare pattern `main` also matches `refs/heads/feature/main`, verified directly), so `heads`'s key set
+  must never silently contain a ref the caller didn't ask for. A failed read answers
   `{ ok: false, heads: {}, err }`, never an empty-but-`ok` result. `fetchRemoteRefs` reads each requested
   ref's **fully-qualified** `refs/remotes/<remote>/<name>` before and after the fetch — never the short
   name — because a local branch literally named `origin/<b>` would otherwise shadow the remote-tracking ref
@@ -148,20 +151,27 @@ ref off the workspace-create critical path.
   the range fails to resolve (e.g. one side doesn't exist locally, which is exactly the state a probe alone
   leaves the caller in): an unknown count is not "up to date", and the UI renders the two differently, so
   collapsing the distinction here would falsify the indicator two layers up. `remoteUrlKind(repoPath,
-  remote)` reads `git remote get-url` and classifies `ssh://…`, `git@host:path`, and `user@host:path` (any
-  `user@host:path` with no `://` scheme and no slash before the first colon — git's own scp-like-syntax
-  rule) as `"ssh"`, anything else resolvable as `"other"`, and an unreadable/missing remote as `"unknown"`.
-  `sshAgentPresent()` reads `SSH_AUTH_SOCK`, answering `false` only for an unset/empty value —
-  deliberately **not** special-cased for the plain macOS launchd socket (`.../com.apple.launchd.*/
-  Listeners`): that socket is a real, protocol-compliant agent (the Secure Keychain agent) that can hold
-  keys added via `ssh-add --apple-use-keychain` and answer agent requests, so treating its mere presence as
-  "no agent" would invert the safety direction this check exists for — a background op skipped because an
-  agent *might* be listening is a convenience cost; a Keychain/Touch ID prompt surfacing during an
-  unattended probe is the failure the whole ladder exists to prevent.
+  remote)` reads `git remote get-url` and classifies `ssh://…` and any scp-like form — `git@host:path`,
+  `user@host:path`, or a bare `host:path` with no user at all, since the `user@` prefix is **optional** in
+  git's own rule (confirmed directly: `git fetch` against a bare `host:path` remote shells out to `ssh
+  host git-upload-pack ...`) — as `"ssh"`, anything else resolvable as `"other"`, and an unreadable/missing
+  remote as `"unknown"`. Under-matching here is the dangerous direction (an SSH remote probed when the
+  ladder meant to skip it), so the match deliberately over-matches some local paths that happen to contain
+  a colon before any slash (e.g. a relative `foo:bar` — the exact shape git itself tells users to write
+  `./foo:bar` to disambiguate). `sshAgentPresent(sock = process.env.SSH_AUTH_SOCK)` answers `false` for an
+  unset/empty value, **and also for the plain macOS launchd default socket** — matched as the path segment
+  `com.apple.launchd.<token>/Listeners` independent of its root directory (seen at both
+  `/private/tmp/…` and `/var/run/…` across macOS versions/session types), never a fixed prefix. That
+  default is set on nearly every Mac regardless of whether the user ever loaded a key into it; treating its
+  mere presence as "an agent is present" made every SSH remote look agent-guarded on this product's most
+  common environment, silently disabling the very check a later task keys off to mark SSH remotes dormant.
+  A launchd-*shaped* path whose leaf isn't literally `Listeners` is not carved out — only the exact default
+  shape is excluded, not the whole `com.apple.launchd.*` prefix.
 - **Public surface (barrel):** `git`, `gitAsync`, `REMOTE_ENV`, `gitArgv`, `GitRunOptions`, `gitStatus`,
   `gitDiffFile`, `listCommits`, `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `DiffRange`, `DiffSide`,
   `isSafeRef`, `assertSafeRef`, `listBranches`, `resolveDefaultBranch`, `currentBranch`, `prefetchBranch`,
-  `probeRemoteRefs`, `fetchRemoteRefs`, `behindCount`, `remoteUrlKind`, `sshAgentPresent`.
+  `probeRemoteRefsArgv`, `probeRemoteRefs`, `fetchRemoteRefsArgv`, `fetchRemoteRefs`, `behindCount`,
+  `remoteUrlKind`, `sshAgentPresent`.
 - **Allowed deps:** `persistence` (workspace + project lookup); `contracts` (`Git*`/`BranchList` types);
   `@thinkrail/shared/codedError` (naming a failure for the wire); Bun (spawn).
 - **Forbidden:** `host`; sibling features.

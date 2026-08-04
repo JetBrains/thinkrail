@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { git } from "./gitExec";
@@ -32,6 +32,19 @@ function run(cwd: string, args: string[]): string {
 	const result = git(cwd, args);
 	if (!result.ok) throw new Error(`git ${args.join(" ")} failed: ${result.err}`);
 	return result.out;
+}
+
+/**
+ * Every `*.lock` file anywhere under `.git`, sorted. A direct recursive filesystem scan — NOT `git
+ * ls-files`, which unconditionally excludes `.git` from any working-tree scan and so would report "no
+ * locks" even with a real lock file sitting right there (verified directly: creating
+ * `.git/refs/remotes/origin/FAKE.lock` by hand and re-running `ls-files --others -- .git/*.lock` still
+ * returns nothing).
+ */
+function lockFilesUnder(gitDir: string): string[] {
+	return (readdirSync(gitDir, { recursive: true }) as string[])
+		.filter((entry) => entry.endsWith(".lock"))
+		.sort();
 }
 
 /**
@@ -112,11 +125,12 @@ test("fetchRemoteRefsArgv: no-auto-maintenance, --end-of-options before remote/r
 test("probeRemoteRefs reports the remote's head and writes nothing locally", async () => {
 	const { repo } = seedRepoWithRemote();
 	// Snapshot everything a fetch would touch, so "writes nothing" is asserted, not assumed.
+	const gitDir = join(repo, ".git");
 	const before = {
 		remoteRefs: git(repo, ["for-each-ref", "--format=%(refname) %(objectname)", "refs/remotes"])
 			.out,
-		fetchHead: existsSync(join(repo, ".git", "FETCH_HEAD")),
-		locks: git(repo, ["ls-files", "--others", "--", ".git/*.lock"]).out,
+		fetchHead: existsSync(join(gitDir, "FETCH_HEAD")),
+		locks: lockFilesUnder(gitDir),
 	};
 
 	const result = await probeRemoteRefs(repo, "origin", ["main"], 10_000);
@@ -126,8 +140,8 @@ test("probeRemoteRefs reports the remote's head and writes nothing locally", asy
 	const after = {
 		remoteRefs: git(repo, ["for-each-ref", "--format=%(refname) %(objectname)", "refs/remotes"])
 			.out,
-		fetchHead: existsSync(join(repo, ".git", "FETCH_HEAD")),
-		locks: git(repo, ["ls-files", "--others", "--", ".git/*.lock"]).out,
+		fetchHead: existsSync(join(gitDir, "FETCH_HEAD")),
+		locks: lockFilesUnder(gitDir),
 	};
 	expect(after).toEqual(before);
 });
@@ -142,6 +156,21 @@ test("probeRemoteRefs sees a ref the local repo has not fetched", async () => {
 	expect(result.heads.main).not.toBe(localBefore);
 	// The probe told us the remote moved WITHOUT moving our local tracking ref — the whole point.
 	expect(git(repo, ["rev-parse", "refs/remotes/origin/main"]).out).toBe(localBefore);
+});
+
+test("probeRemoteRefs filters ls-remote's suffix-matched patterns down to exactly the requested ref names", async () => {
+	// `git ls-remote --heads origin main` doesn't match refs/heads/main exactly — a bare pattern also
+	// matches any ref whose LAST path component equals it, so a `feature/main` branch comes back too
+	// (verified directly: `ls-remote --heads origin main` against a remote holding both `main` and
+	// `feature/main` returns both rows). Harmless if a caller only reads `heads["main"]`, but a caller that
+	// iterates `Object.keys(heads)` must see exactly what it asked for, or it will process a ref it never
+	// requested.
+	const { repo, remote } = seedRepoWithRemote();
+	run(repo, ["push", "origin", "main:refs/heads/feature/main"]);
+
+	const result = await probeRemoteRefs(repo, "origin", ["main"], 10_000);
+	expect(Object.keys(result.heads)).toEqual(["main"]);
+	expect(result.heads.main).toBe(git(remote, ["rev-parse", "refs/heads/main"]).out);
 });
 
 test("fetchRemoteRefs moves the tracking ref and reports which moved", async () => {
@@ -253,6 +282,14 @@ test("remoteUrlKind classifies ssh:// URLs, both SCP-like forms, and non-ssh rem
 	run(repo, ["remote", "set-url", "origin", "alice@example.com:org/repo.git"]);
 	expect(remoteUrlKind(repo, "origin")).toBe("ssh");
 
+	// The `user@` prefix is OPTIONAL in git's scp-like syntax — a bare `host:path` with no leading slash
+	// before the colon is still SSH (confirmed directly: `GIT_TRACE=1 git fetch` against
+	// `buildserver.internal:org/repo.git` shells out to `ssh buildserver.internal git-upload-pack ...`).
+	// Under-matching here is the dangerous direction (an SSH remote gets background-probed when the ladder
+	// meant to skip it), so this form must classify as `"ssh"`, not fall through to `"other"`.
+	run(repo, ["remote", "set-url", "origin", "buildserver.internal:org/repo.git"]);
+	expect(remoteUrlKind(repo, "origin")).toBe("ssh");
+
 	run(repo, ["remote", "set-url", "origin", "https://example.com/org/repo.git"]);
 	expect(remoteUrlKind(repo, "origin")).toBe("other");
 
@@ -263,13 +300,33 @@ test("remoteUrlKind classifies ssh:// URLs, both SCP-like forms, and non-ssh rem
 	expect(remoteUrlKind(repo, "no-such-remote")).toBe("unknown");
 });
 
-test("sshAgentPresent reads SSH_AUTH_SOCK and answers false only when unset or empty", () => {
+test("sshAgentPresent: unset/empty -> false; a real-looking agent path -> true; EITHER macOS launchd default-socket root -> false", () => {
+	// Explicit-argument calls, no env mutation needed — deterministic regardless of the host's own
+	// SSH_AUTH_SOCK (this dev machine's happens to itself be a launchd default, which is exactly the
+	// defect this test pins).
+	expect(sshAgentPresent(undefined)).toBe(false);
+	expect(sshAgentPresent("")).toBe(false);
+	expect(sshAgentPresent("/tmp/ssh-agent.sock")).toBe(true);
+
+	// launchd generates this directory name per-session with a random token; nothing user-run organically
+	// produces it. Both roots are real across macOS versions/session types (this repo's own docstring
+	// named only one, which was itself part of the bug) — matched as a path SEGMENT, independent of root.
+	expect(sshAgentPresent("/private/tmp/com.apple.launchd.QsVPEn8zeh/Listeners")).toBe(false);
+	expect(sshAgentPresent("/var/run/com.apple.launchd.QsVPEn8zeh/Listeners")).toBe(false);
+
+	// A launchd-SHAPED path whose leaf isn't literally "Listeners" is not the default socket — a real
+	// agent could in principle live under a similarly-named directory. Only the exact leaf name is carved
+	// out, not the whole `com.apple.launchd.*` prefix.
+	expect(sshAgentPresent("/private/tmp/com.apple.launchd.QsVPEn8zeh/sock.real")).toBe(true);
+});
+
+test("sshAgentPresent()'s default parameter reads SSH_AUTH_SOCK directly — the launchd carve-out applies to real callers, not just explicit-argument tests", () => {
+	// Reproduces the reported defect verbatim: this repo's own dev machine has
+	// SSH_AUTH_SOCK=/var/run/com.apple.launchd.<token>/Listeners by default, and every production call site
+	// calls `sshAgentPresent()` with no arguments.
+	process.env.SSH_AUTH_SOCK = "/var/run/com.apple.launchd.ABC123xyz/Listeners";
+	expect(sshAgentPresent()).toBe(false);
+
 	delete process.env.SSH_AUTH_SOCK;
 	expect(sshAgentPresent()).toBe(false);
-
-	process.env.SSH_AUTH_SOCK = "";
-	expect(sshAgentPresent()).toBe(false);
-
-	process.env.SSH_AUTH_SOCK = "/tmp/ssh-agent.sock";
-	expect(sshAgentPresent()).toBe(true);
 });
