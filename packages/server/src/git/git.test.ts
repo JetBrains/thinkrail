@@ -12,7 +12,7 @@ import {
 	numstatPath,
 	prefetchBranch,
 } from "./git";
-import { gitArgv } from "./gitExec";
+import { gitArgv, gitAsync, REMOTE_ENV } from "./gitExec";
 import { isSafeRef } from "./refs";
 
 let dataDir: string;
@@ -775,4 +775,62 @@ test("gitArgv puts --no-optional-locks before the subcommand, unconditionally", 
 		"status",
 		"--porcelain",
 	]);
+});
+
+test("gitAsync kills a child that outlives its deadline and reports a failure", async () => {
+	// `git hash-object --stdin` does NOT hang under this runner: Bun's default (inherited) stdin is already
+	// at EOF inside `bun test` here, so the command returns in ~15ms with no timeout in play at all — a
+	// vacuous test that would pass whether or not a deadline existed. `git ls-remote` against a black-holed
+	// address (a reserved, non-routable IP: packets are silently dropped, no RST/ICMP) genuinely blocks —
+	// verified empirically to still be running 3s in with no timeout implemented, and to die within ~150ms
+	// of `proc.kill()`. It also matches the feature this primitive is for: a network probe against a remote
+	// that never answers.
+	const result = await gitAsync(repo, ["ls-remote", "http://10.255.255.1/x.git"], {
+		timeoutMs: 150,
+	});
+	expect(result.ok).toBe(false);
+	expect(result.err).toContain("timed out");
+});
+
+test("gitAsync still resolves normally well inside its deadline", async () => {
+	const result = await gitAsync(repo, ["rev-parse", "--git-dir"], { timeoutMs: 10_000 });
+	expect(result.ok).toBe(true);
+	expect(result.out.length).toBeGreaterThan(0);
+});
+
+test("REMOTE_ENV disables every git-level prompt path", () => {
+	expect(REMOTE_ENV.GIT_TERMINAL_PROMPT).toBe("0");
+	expect(REMOTE_ENV.GIT_ASKPASS).toBe("");
+	expect(REMOTE_ENV.SSH_ASKPASS).toBe("");
+	expect(REMOTE_ENV.GIT_SSH_COMMAND).toContain("BatchMode=yes");
+});
+
+test("gitAsync's opts.env MERGES over process.env rather than replacing it", async () => {
+	// Bun resolves the `git` binary using its OWN process's lookup, not the child's `env` — so a bare
+	// `env: opts.env` (replacing, not merging) does NOT fail to find `git`, which would make a PATH-based
+	// regression test pass vacuously either way (verified empirically before writing this test). HOME is a
+	// real, observable difference instead: this repo has NO local `user.*` config, so `git config --get
+	// user.name` can only succeed via a GLOBAL `~/.gitconfig` — which git can only find if HOME survives
+	// into the child's env. Replacing (stripping HOME) makes this fail; merging (keeping the live HOME
+	// alongside the override) makes it succeed.
+	const noIdentityRepo = join(dataDir, "no-identity-repo");
+	mkdirSync(noIdentityRepo);
+	git(noIdentityRepo, "init", "-b", "main");
+	const tempHome = join(dataDir, "temp-home");
+	mkdirSync(tempHome);
+	writeFileSync(join(tempHome, ".gitconfig"), "[user]\n\tname = home user\n");
+
+	const savedHome = process.env.HOME;
+	process.env.HOME = tempHome;
+	try {
+		// Any truthy opts.env takes the merge branch; MARKER itself is irrelevant to the outcome.
+		const result = await gitAsync(noIdentityRepo, ["config", "--get", "user.name"], {
+			env: { MARKER: "1" },
+		});
+		expect(result.ok).toBe(true);
+		expect(result.out).toBe("home user");
+	} finally {
+		if (savedHome === undefined) delete process.env.HOME;
+		else process.env.HOME = savedHome;
+	}
 });

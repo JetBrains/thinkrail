@@ -18,9 +18,13 @@ ref off the workspace-create critical path.
 ## Boundary
 
 - **Owns:** `git(cwd, args, opts)` (spawn git *sync*, capture trimmed stdout/stderr + ok; `opts.raw` keeps
-  stdout byte-exact for file-content reads) and `gitAsync(cwd, args)` (its async twin — `Bun.spawn`, off the
-  event loop, for network-bound ops like `fetch` that must not block the host; no options — it never needed
-  `env`/`raw`) — both route their argv through **`gitArgv(cwd, args)`**, extracted (and exported) so the flag
+  stdout byte-exact for file-content reads) and `gitAsync(cwd, args, opts)` (its async twin — `Bun.spawn`, off
+  the event loop, for network-bound ops like `fetch` that must not block the host; `opts.timeoutMs` kills the
+  child on a deadline instead of letting a hung network call run forever, `opts.env` merges over
+  `process.env` — never replaces it — so a caller can add `REMOTE_ENV` without stripping `PATH`/`HOME`/
+  `SSH_AUTH_SOCK`; still no `raw`, since byte-exact reads stay on the sync runner) plus **`REMOTE_ENV`**, the
+  no-prompt environment a *background* remote call runs under (see Get right) — both runners route their argv
+  through **`gitArgv(cwd, args)`**, extracted (and exported) so the flag
   set is assertable without spawning: it unconditionally prepends **`--no-optional-locks`**, git-level and so
   must sit before the subcommand, alongside `-C` (see Get right — there is no opt-out; every writer this
   repo has succeeds under it);
@@ -125,9 +129,9 @@ ref off the workspace-create critical path.
   `git.prefetch` handler uses `moved` to fan out the host's pathless `fsChanged` nudge (`host`'s fsNudge
   seam; an unaffected re-read is an idempotent no-op). `moved` is host-internal; the wire response stays
   `{ ok }`.
-- **Public surface (barrel):** `git`, `gitAsync`, `gitArgv`, `GitRunOptions`, `gitStatus`, `gitDiffFile`,
-  `listCommits`, `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `DiffRange`, `DiffSide`, `isSafeRef`,
-  `assertSafeRef`, `listBranches`, `resolveDefaultBranch`, `currentBranch`, `prefetchBranch`.
+- **Public surface (barrel):** `git`, `gitAsync`, `REMOTE_ENV`, `gitArgv`, `GitRunOptions`, `gitStatus`,
+  `gitDiffFile`, `listCommits`, `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `DiffRange`, `DiffSide`,
+  `isSafeRef`, `assertSafeRef`, `listBranches`, `resolveDefaultBranch`, `currentBranch`, `prefetchBranch`.
 - **Allowed deps:** `persistence` (workspace + project lookup); `contracts` (`Git*`/`BranchList` types);
   `@thinkrail/shared/codedError` (naming a failure for the wire); Bun (spawn).
 - **Forbidden:** `host`; sibling features.
@@ -169,3 +173,16 @@ ref off the workspace-create critical path.
   stage-2 retry can itself have nothing to read — a modify/delete conflict where *our* side deleted the file
   has no stage 2 either — and that is a genuine absence, not a broken read: it degrades to an empty index
   side, like every other expected absence, never a `console.warn`.
+- **A network-bound git call has a deadline.** `gitAsync` takes `timeoutMs` and kills the child when it
+  expires, resolving a normal failure rather than throwing. Without it a hung fetch or probe against an
+  unreachable remote runs until the host exits, and the scheduler that called it never gets its slot back.
+  The kill targets the whole **process group**, not just the immediate pid (which is why a deadlined call
+  is spawned `detached`): git's http transport forks a `git-remote-http` helper that inherits the
+  stdout/stderr pipes, and signalling only the top `git` process — verified empirically against a
+  black-holed address — leaves that helper running and the pipes open, so the read side hangs forever even
+  though the "killed" child is gone. A call with no deadline stays in the host's own group (unchanged
+  behavior; nothing there ever kills it anyway).
+- **A background remote call cannot prompt.** `REMOTE_ENV` sets `GIT_TERMINAL_PROMPT=0`, an empty
+  `GIT_ASKPASS`/`SSH_ASKPASS`, and `GIT_SSH_COMMAND="ssh -o BatchMode=yes"`. It removes the *git-level*
+  prompt paths only: the OS keychain and hardware-backed keys sit below git and can still prompt, which is
+  why `remotes` additionally refuses to touch SSH remotes when an agent is present.

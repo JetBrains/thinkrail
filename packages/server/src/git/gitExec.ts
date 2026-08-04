@@ -46,21 +46,83 @@ export function git(
 }
 
 /**
+ * The environment a **background** remote operation runs in. It removes every git-level path by which git
+ * could stop and ask a human something: terminal prompts, the askpass helpers, and SSH's interactive
+ * modes. The operation may then only succeed or fail — it can never hang waiting on input.
+ *
+ * This is necessary but NOT sufficient: the OS keychain and hardware-backed keys (TouchID, YubiKey) live
+ * *below* git and can still surface a prompt. That residue is why `remotes` refuses SSH remotes outright
+ * when an external ssh-agent is present, rather than relying on this alone.
+ */
+export const REMOTE_ENV: Record<string, string> = {
+	GIT_TERMINAL_PROMPT: "0",
+	GIT_ASKPASS: "",
+	SSH_ASKPASS: "",
+	GIT_SSH_COMMAND: "ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new",
+};
+
+/**
  * Async twin of `git` — runs the command *off* the event loop (`Bun.spawn`, not `spawnSync`), so a slow,
  * network-bound op (e.g. `fetch`) can't freeze the host's single cooperative event loop while it blocks.
- * Use this for anything that may touch the network; `git` (sync) stays for the cheap local plumbing. Takes
- * no options: it never needed `env`/`raw`, and `gitArgv`'s `--no-optional-locks` is unconditional now, so
- * there is nothing left for a caller to pass.
+ * Use this for anything that may touch the network; `git` (sync) stays for the cheap local plumbing.
+ *
+ * `opts.timeoutMs` gives a network-bound call a deadline: past it, the child is killed (not merely
+ * un-awaited — an orphaned network child would keep its socket and the caller's scheduler slot) and the
+ * call resolves a normal `{ ok: false }` failure, never a throw and never a hang. `opts.env` **merges over**
+ * `process.env` rather than replacing it — a bare `env` would strip `PATH`/`HOME`/`SSH_AUTH_SOCK`, and git
+ * would then fail for reasons unrelated to the caller's intent (e.g. passing `REMOTE_ENV`). Still no `raw`:
+ * byte-exact reads stay on the sync runner.
+ *
+ * When a deadline is set, the child is spawned `detached` (its own session/process group) purely so the
+ * deadline can kill the whole **group**, not just the immediate pid: `git`'s http transport forks a
+ * `git-remote-http` helper (itself forking again) that inherits the stdout/stderr pipes, and
+ * `proc.kill()` alone only signals the top `git` process — verified empirically to leave the helper
+ * running, still holding the pipes open, so the read side of this function hung forever even after the
+ * "killed" child was gone. Killing `-pid` (the negative pid = the whole group, valid because `detached`
+ * makes this child its own group leader) reaps the helper too, which is what lets the stdout/stderr reads
+ * below actually see EOF. No deadline, no detach: today's only non-deadlined caller relies on the child
+ * staying in the host's own group (e.g. a foreground Ctrl-C during dev), and there is nothing here that
+ * would ever kill it anyway.
  */
 export async function gitAsync(
 	cwd: string,
 	args: string[],
+	opts: { timeoutMs?: number; env?: Record<string, string | undefined> } = {},
 ): Promise<{ ok: boolean; out: string; err: string }> {
-	const proc = Bun.spawn(gitArgv(cwd, args), { stdout: "pipe", stderr: "pipe" });
-	const [out, err, exitCode] = await Promise.all([
-		new Response(proc.stdout).text(),
-		new Response(proc.stderr).text(),
-		proc.exited,
-	]);
-	return { ok: exitCode === 0, out: out.trim(), err: err.trim() };
+	const hasDeadline = opts.timeoutMs !== undefined;
+	const proc = Bun.spawn(gitArgv(cwd, args), {
+		stdout: "pipe",
+		stderr: "pipe",
+		...(hasDeadline ? { detached: true } : {}),
+		...(opts.env ? { env: { ...process.env, ...opts.env } } : {}),
+	});
+
+	// A network-bound child must not outlive its deadline: kill its whole group, so the socket, any forked
+	// transport helper, and the scheduler's slot are all released. `timedOut` is what turns the resulting
+	// non-zero exit into an honest message. The kill can race the child's own natural exit (it may finish
+	// between the timer firing and the signal landing) — `process.kill` throws `ESRCH` for a group that's
+	// already gone, which must not become an uncaught exception in a timer callback.
+	let timedOut = false;
+	const timer = !hasDeadline
+		? null
+		: setTimeout(() => {
+				timedOut = true;
+				try {
+					process.kill(-proc.pid, "SIGTERM");
+				} catch {
+					// Already exited: nothing left to reap.
+				}
+			}, opts.timeoutMs);
+
+	try {
+		const [out, err, exitCode] = await Promise.all([
+			new Response(proc.stdout).text(),
+			new Response(proc.stderr).text(),
+			proc.exited,
+		]);
+		if (timedOut) return { ok: false, out: "", err: `timed out after ${opts.timeoutMs}ms` };
+		return { ok: exitCode === 0, out: out.trim(), err: err.trim() };
+	} finally {
+		if (timer) clearTimeout(timer);
+	}
 }
