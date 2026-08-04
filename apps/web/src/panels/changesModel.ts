@@ -36,9 +36,9 @@ export function scopeKey(scope: GitDiffScope): string {
 /**
  * The Changes read's **second identity dimension** (beyond the workspace): a change resets the list and
  * re-reads. The diff base joins it ONLY for the branch scope, because that is the one range measured
- * against the target (`merge-base(target, HEAD)`). The other three ranges — index→disk, HEAD→index,
- * `sha^`→`sha` — cannot move when the target is re-pointed, and keying them on it forced a visible
- * `Loading…` plus a re-read for a diff that provably could not change.
+ * against the target (`merge-base(target, HEAD)`). The other four ranges — index→disk, HEAD→index,
+ * `sha^`→`sha`, HEAD→worktree — cannot move when the target is re-pointed, and keying them on it forced a
+ * visible `Loading…` plus a re-read for a diff that provably could not change.
  *
  * Note this is NOT the same rule as `ChangesScopeMenu`'s `key`, which *does* depend on the base for every
  * scope: the commit list it offers really is `git log <base>..HEAD`.

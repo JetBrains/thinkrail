@@ -165,13 +165,14 @@ test("the read key carries the diff base only for the scope whose range uses it"
 		changesReadKey({ kind: "branch" }, "develop"),
 	);
 
-	// The other three ranges (index→disk, HEAD→index, sha^→sha) cannot move when the target is re-pointed,
-	// so their keys must be base-independent — otherwise a re-point resets the list to Loading… and re-reads
-	// for a diff that provably could not change.
+	// The other four ranges (index→disk, HEAD→index, sha^→sha, HEAD→worktree) cannot move when the target is
+	// re-pointed, so their keys must be base-independent — otherwise a re-point resets the list to Loading…
+	// and re-reads for a diff that provably could not change.
 	for (const scope of [
 		{ kind: "working-tree" } as const,
 		{ kind: "staged" } as const,
 		{ kind: "commit", sha: "abc1234" } as const,
+		{ kind: "uncommitted" } as const,
 	]) {
 		expect(changesReadKey(scope, "main")).toBe(changesReadKey(scope, "develop"));
 	}
@@ -182,6 +183,7 @@ test("the read key carries the diff base only for the scope whose range uses it"
 		changesReadKey({ kind: "working-tree" }, "main"),
 		changesReadKey({ kind: "staged" }, "main"),
 		changesReadKey({ kind: "commit", sha: "abc1234" }, "main"),
+		changesReadKey({ kind: "uncommitted" }, "main"),
 	];
-	expect(new Set(keys).size).toBe(4);
+	expect(new Set(keys).size).toBe(5);
 });
