@@ -16,7 +16,7 @@ import { ChangeRowActions } from "./ChangeRowActions";
 import { ChangesScopeMenu } from "./ChangesScopeMenu";
 import { ChangesTree } from "./ChangesTree";
 import { ComparisonTarget } from "./ComparisonTarget";
-import { diffTabId, isDiffTabId, scopeKey, splitPath, statusNameClass } from "./changesModel";
+import { changesReadKey, diffTabId, isDiffTabId, splitPath, statusNameClass } from "./changesModel";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { openDiffInTab } from "./openTabs";
 import { ToggleSegment } from "./ToggleSegment";
@@ -55,15 +55,17 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	const setDiffScope = useAppStore((s) => s.setDiffScope);
 	const scope = useAppStore((s) => selectDiffScope(s, workspaceId));
 	const workspace = useAppStore((s) => selectWorkspaceById(s, workspaceId));
-	// The ref the branch scope measures against, as the host resolves it. Part of what the read *means*, so
-	// it joins the scope in the read key: re-pointing the target (which arrives as a `workspace.updated`
-	// broadcast, never optimistically) re-reads the list exactly like a scope switch.
+	// The ref the branch scope measures against, as the host resolves it. Part of what the read *means* only
+	// for that scope (`changesReadKey`), so re-pointing the target (which arrives as a `workspace.updated`
+	// broadcast, never optimistically) re-reads the list exactly like a scope switch — but only in branch
+	// scope; the other three ranges cannot move when the target does.
 	const baseRef = useAppStore((s) => selectDiffBaseRef(s, workspaceId));
 	const activeTabId = useAppStore((s) => s.activeTabByWorkspace[workspaceId] ?? null);
 
-	// The changed-file list, re-read on the workspace's fs tick *and* on a scope/target change (the `readKey`); a
-	// switch clears the list and its deep-link highlight, a failed re-read keeps the last good list (a failed
-	// first read reads as "no changes").
+	// The changed-file list, re-read on the workspace's fs tick *and* on a scope change, plus a target
+	// re-point in branch scope (the `readKey`, see `changesReadKey`); a switch clears the list and its
+	// deep-link highlight, a failed re-read keeps the last good list (a failed first read reads as "no
+	// changes").
 	// One rejection has a *meaning*: `UNKNOWN_COMMIT` — the host naming a commit scope whose commit the repo no
 	// longer has (a rebase, a branch reset). That falls back to the branch scope with a toast, so the panel is
 	// neither wedged on a dead sha nor silently showing a different scope than the user picked. Every other
@@ -101,7 +103,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 				warnedRef.current = false; // a new workspace/scope is a new streak
 			},
 		},
-		`${scopeKey(scope)}:${baseRef}`,
+		changesReadKey(scope, baseRef),
 	);
 
 	// The target-branch list, keyed to the project and refreshable — the same shared hook (and therefore the
