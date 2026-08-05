@@ -121,7 +121,7 @@ export type TabIntent = "preview" | "keep";
 /**
  * A section of the settings dialog (a const-object "enum", the codebase convention). Extensible — the live
  * sections are providers, github, appearance (the theme picker), templates (prompt-template manager),
- * and privacy (the analytics toggle).
+ * privacy (the analytics toggle), and git (the remote-check mode + interval).
  */
 export const SettingsSection = {
 	Providers: "providers",
@@ -130,6 +130,7 @@ export const SettingsSection = {
 	Terminal: "terminal",
 	Templates: "templates",
 	Privacy: "privacy",
+	Git: "git",
 } as const;
 export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSection];
 
@@ -716,6 +717,13 @@ interface AppState {
 	analyticsEnabled: boolean;
 	/** How much terminal output the host keeps for replay, in KiB (host-owned; same `applyConfig` fold). */
 	terminalReplayKb: number;
+	/** Remote-check mode (host-owned, same `applyConfig` fold as `theme`): `"probe"` (default, write-nothing
+	 * `git ls-remote`), `"fetch"` (a real `git fetch`, exact `behind` counts), or `"off"`. Read side of the
+	 * Git settings section; the scheduler that acts on it lives server-side (`remotes/SPEC.md`). */
+	gitRemoteCheck: AppConfig["gitRemoteCheck"];
+	/** The backstop interval (minutes) between automatic remote checks when a client has been idle. Same
+	 * `applyConfig` fold; the authoritative `[1, 1440]` clamp lives server-side in `updateConfig`. */
+	gitRemoteCheckIntervalMinutes: number;
 	/** Transient notifications, oldest-first (the Toaster renders + times them out). At-most a handful live
 	 * at once; a failed wire call that has no better home (no chat tab to host an error turn) lands here. */
 	toasts: Toast[];
@@ -1267,6 +1275,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	theme: DEFAULT_CONFIG.theme,
 	analyticsEnabled: DEFAULT_CONFIG.analyticsEnabled,
 	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,
+	gitRemoteCheck: DEFAULT_CONFIG.gitRemoteCheck,
+	gitRemoteCheckIntervalMinutes: DEFAULT_CONFIG.gitRemoteCheckIntervalMinutes,
 	toasts: [],
 	setStatus: (status) =>
 		set((state) => ({
@@ -1985,6 +1995,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 			theme: config.theme,
 			analyticsEnabled: config.analyticsEnabled,
 			terminalReplayKb: config.terminalReplayKb,
+			gitRemoteCheck: config.gitRemoteCheck,
+			gitRemoteCheckIntervalMinutes: config.gitRemoteCheckIntervalMinutes,
 		}),
 	requestRightTab: (workspaceId, tab) => set({ rightTabRequest: { workspaceId, tab } }),
 	// The path intent and the flip always travel together — one action, so no call site can send half of it.
