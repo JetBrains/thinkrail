@@ -390,7 +390,7 @@ function SupersededRecord({ questions }: { questions: AskUserQuestionItem[] }) {
 				Superseded — you replied in chat instead of answering these.
 			</div>
 			{questions.map((q) => (
-				<div key={q.question} className="pl-[calc(0.875rem+var(--spacing-sm))] text-text-subtle">
+				<div key={q.question} className="pl-[calc(0.875rem+var(--spacing-sm))] text-text-muted">
 					{q.question}
 				</div>
 			))}
@@ -488,14 +488,14 @@ function ModeHint({
 }) {
 	if (review) {
 		return (
-			<span className="flex items-center gap-xs text-text-subtle tr-text-metadata">
+			<span className="flex items-center gap-xs text-text-muted tr-text-metadata">
 				<ListChecks className="size-3.5 shrink-0" /> Review your answers
 			</span>
 		);
 	}
 	const multi = !!question?.multiSelect;
 	return (
-		<span className="flex items-center gap-xs text-text-subtle tr-text-metadata">
+		<span className="flex items-center gap-xs text-text-muted tr-text-metadata">
 			{multi ? (
 				<ListChecks className="size-3.5 shrink-0" />
 			) : (
@@ -577,7 +577,7 @@ function QuestionBody({
 												type="button"
 												data-testid="ask-note-toggle"
 												onClick={() => onToggleNote(opt.label)}
-												className="flex items-center gap-xs text-text-subtle tr-text-metadata hover:text-text-muted"
+												className="flex items-center gap-xs text-text-muted tr-text-metadata hover:text-text-muted"
 											>
 												<Pencil className="size-3" />
 												{state.notes[opt.label]?.trim() ? "Edit note" : "Add note"}
@@ -607,7 +607,7 @@ function QuestionBody({
 						data-testid="ask-preview"
 						className="min-w-0 overflow-auto rounded-[var(--radius-md)] border border-border-default bg-control-bg px-sm py-xs tr-text-metadata"
 					>
-						<div className="mb-xs text-text-subtle tr-text-metadata">
+						<div className="mb-xs text-text-muted tr-text-metadata">
 							Preview · {previewSource.label}
 						</div>
 						<Markdown text={previewSource.preview} />
@@ -731,7 +731,7 @@ function OtherOptionRow({
 				placeholder="type your own answer…"
 				onFocus={onActivate}
 				onChange={(e) => onText(e.target.value)}
-				className="min-w-0 flex-1 border-none bg-transparent tr-text-ui text-text-default outline-none placeholder:text-text-subtle"
+				className="min-w-0 flex-1 border-none bg-transparent tr-text-ui text-text-default outline-none placeholder:text-text-muted"
 			/>
 		</label>
 	);
@@ -816,7 +816,7 @@ function ReviewView({
 			<ul className="flex flex-col gap-md">
 				{questions.map((q, i) => (
 					<li key={q.question} data-testid="ask-review-item" className="flex flex-col gap-xs">
-						<span className="text-text-subtle tr-text-metadata">{q.header || `Q${i + 1}`}</span>
+						<span className="text-text-muted tr-text-metadata">{q.header || `Q${i + 1}`}</span>
 						<QuestionRecap question={q} answer={byIndex.get(i)} variant="review" />
 					</li>
 				))}
@@ -891,7 +891,7 @@ function QuestionRecap({
 	return (
 		<div className="flex flex-col gap-xs">
 			<div className="flex items-start gap-sm">
-				<MessageCircleQuestion className="mt-0.5 size-3.5 shrink-0 text-text-subtle" />
+				<MessageCircleQuestion className="mt-0.5 size-3.5 shrink-0 text-text-muted" />
 				<p
 					data-testid={reviewing ? "ask-review-question" : undefined}
 					className={cn("tr-text-ui", reviewing ? "text-text-default" : "text-text-muted")}
@@ -911,7 +911,7 @@ function QuestionRecap({
 									data-selected={isSel}
 									className={cn(
 										"flex items-center gap-xs tr-text-ui",
-										isSel ? "text-text-default" : "text-text-subtle",
+										isSel ? "text-text-default" : "text-text-muted",
 									)}
 								>
 									{isSel ? (
@@ -947,14 +947,14 @@ function QuestionRecap({
 					{!answer ? (
 						<div
 							data-testid="ask-review-unanswered"
-							className="flex items-center gap-xs pl-[calc(0.875rem+var(--spacing-sm))] text-text-subtle tr-text-metadata italic"
+							className="flex items-center gap-xs pl-[calc(0.875rem+var(--spacing-sm))] text-text-muted tr-text-metadata italic"
 						>
 							<SkipForward className="size-3 shrink-0" /> Not answered
 						</div>
 					) : null}
 				</>
 			) : !answer ? (
-				<div className="flex items-center gap-xs pl-[calc(0.875rem+var(--spacing-sm))] text-text-subtle tr-text-metadata italic">
+				<div className="flex items-center gap-xs pl-[calc(0.875rem+var(--spacing-sm))] text-text-muted tr-text-metadata italic">
 					<SkipForward className="size-3 shrink-0" /> No answer (skipped).
 				</div>
 			) : (
@@ -967,7 +967,7 @@ function QuestionRecap({
 				</div>
 			)}
 			{answer?.notes ? (
-				<div className="pl-[calc(0.875rem+var(--spacing-sm))] text-text-subtle tr-text-metadata">
+				<div className="pl-[calc(0.875rem+var(--spacing-sm))] text-text-muted tr-text-metadata">
 					Note: {answer.notes}
 				</div>
 			) : null}

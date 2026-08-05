@@ -54,7 +54,7 @@ export function WebFetchCard({ args, result, status }: ToolRenderProps) {
 					<CodeBlock code={output} lang="markdown" />
 				</Collapsible>
 			) : (
-				<span className="text-text-subtle tr-text-metadata italic">(no content)</span>
+				<span className="text-text-muted tr-text-metadata italic">(no content)</span>
 			)}
 		</div>
 	);

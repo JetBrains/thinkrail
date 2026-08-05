@@ -14,7 +14,7 @@ const MonacoDiff = lazy(() => import("./MonacoDiff"));
 const RenderedDiff = lazy(() => import("./RenderedDiff"));
 
 const loading = (
-	<div className="flex h-full items-center justify-center text-text-subtle">Loading…</div>
+	<div className="flex h-full items-center justify-center text-text-muted">Loading…</div>
 );
 
 /**
@@ -128,7 +128,7 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 					{dir ? (
 						<span
 							data-testid="diff-path-dir"
-							className="min-w-0 shrink-[20] truncate text-text-subtle"
+							className="min-w-0 shrink-[20] truncate text-text-muted"
 						>
 							{dir}
 						</span>
@@ -210,7 +210,7 @@ function HeaderIconButton({
 			className={`flex size-6 items-center justify-center rounded-[var(--radius-sm)] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary ${
 				active
 					? "bg-container-elevated-bg text-text-default"
-					: "text-text-subtle hover:bg-control-bg-hovered hover:text-text-default"
+					: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 			}`}
 		>
 			{children}

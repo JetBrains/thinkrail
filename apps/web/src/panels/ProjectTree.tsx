@@ -193,7 +193,7 @@ function ProjectRow({
 				data-testid="project-expand"
 				aria-label={isExpanded ? "Collapse project" : "Expand project"}
 				onClick={onToggle}
-				className="flex size-4 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-subtle opacity-0 transition-opacity hover:text-text-default group-hover:opacity-100 data-[expanded=true]:opacity-100"
+				className="flex size-4 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 transition-opacity hover:text-text-default group-hover:opacity-100 data-[expanded=true]:opacity-100"
 				data-expanded={isExpanded}
 			>
 				<Chevron className="size-4" />
@@ -211,7 +211,7 @@ function ProjectRow({
 				</span>
 			</button>
 			{!isExpanded && workspaceCount > 0 && (
-				<span className="shrink-0 tr-text-metadata text-text-subtle group-hover:hidden">
+				<span className="shrink-0 tr-text-metadata text-text-muted group-hover:hidden">
 					{workspaceCount}
 				</span>
 			)}
@@ -261,7 +261,7 @@ function WorkspaceRow({
 				onClick={onSelect}
 				className="flex min-w-0 flex-1 items-center gap-sm text-left"
 			>
-				<Icon className={`size-4 shrink-0 ${isActive ? "text-primary" : "text-text-subtle"}`} />
+				<Icon className={`size-4 shrink-0 ${isActive ? "text-primary" : "text-text-muted"}`} />
 				{/* Name on top, the git branch on a second line beneath it — the display name is decoupled
 				    from the branch, so surface both without crowding one line. The branch line is hidden when
 				    they coincide, so pristine/legacy rows stay a single compact line. */}
@@ -275,7 +275,7 @@ function WorkspaceRow({
 					{workspace.branch !== workspace.name && (
 						<span
 							data-testid="workspace-branch"
-							className="truncate text-text-subtle tr-text-metadata leading-tight"
+							className="truncate text-text-muted tr-text-metadata leading-tight"
 						>
 							{workspace.branch}
 						</span>

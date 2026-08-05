@@ -28,7 +28,7 @@ export function ReadCard({ args, result, status, workspaceRoot }: ToolRenderProp
 				<span className="truncate text-primary" title={path}>
 					{displayPath}
 				</span>
-				{range ? <span className="shrink-0 text-text-subtle">{range}</span> : null}
+				{range ? <span className="shrink-0 text-text-muted">{range}</span> : null}
 			</div>
 			{status === "running" ? (
 				<span className="text-text-muted tr-text-metadata">Reading…</span>
@@ -39,7 +39,7 @@ export function ReadCard({ args, result, status, workspaceRoot }: ToolRenderProp
 					<CodeBlock code={output} lang={lang} />
 				</Collapsible>
 			) : (
-				<span className="text-text-subtle tr-text-metadata italic">(empty file)</span>
+				<span className="text-text-muted tr-text-metadata italic">(empty file)</span>
 			)}
 		</div>
 	);

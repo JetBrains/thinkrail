@@ -236,15 +236,15 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 							type="button"
 							data-testid="changes-retry"
 							onClick={reload}
-							className="rounded-[var(--radius-sm)] px-xs py-[2px] tr-text-metadata text-text-subtle transition-colors hover:bg-control-bg-hovered hover:text-text-muted"
+							className="rounded-[var(--radius-sm)] px-xs py-[2px] tr-text-metadata text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-muted"
 						>
 							Retry
 						</button>
 					</div>
 				) : status === null ? (
-					<p className="px-sm py-xs tr-text-metadata text-text-subtle">Loading…</p>
+					<p className="px-sm py-xs tr-text-metadata text-text-muted">Loading…</p>
 				) : status.changes.length === 0 ? (
-					<p data-testid="changes-empty" className="px-sm py-xs tr-text-metadata text-text-subtle">
+					<p data-testid="changes-empty" className="px-sm py-xs tr-text-metadata text-text-muted">
 						No changes in this scope.
 					</p>
 				) : changesView === "tree" ? (
@@ -284,7 +284,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 													{dir ? (
 														<span
 															data-testid="change-path-dir"
-															className="min-w-0 shrink-[20] truncate text-text-subtle"
+															className="min-w-0 shrink-[20] truncate text-text-muted"
 														>
 															{dir}
 														</span>

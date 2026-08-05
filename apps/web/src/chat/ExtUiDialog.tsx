@@ -69,7 +69,7 @@ export function ExtUiDialog({
 								onReply(text);
 							}
 						}}
-						className="rounded-[var(--radius-md)] border border-border-default bg-control-bg px-sm py-xs tr-text-ui text-text-default outline-none placeholder:text-text-subtle focus:border-primary"
+						className="rounded-[var(--radius-md)] border border-border-default bg-control-bg px-sm py-xs tr-text-ui text-text-default outline-none placeholder:text-text-muted focus:border-primary"
 					/>
 				) : null}
 

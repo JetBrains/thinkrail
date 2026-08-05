@@ -11,7 +11,7 @@ const MonacoEditor = lazy(() => import("./MonacoEditor"));
 const MarkdownPreview = lazy(() => import("./MarkdownPreview"));
 
 const loading = (
-	<div className="flex h-full items-center justify-center text-text-subtle">Loading…</div>
+	<div className="flex h-full items-center justify-center text-text-muted">Loading…</div>
 );
 
 /**

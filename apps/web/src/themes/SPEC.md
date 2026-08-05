@@ -45,7 +45,7 @@ manifests. Typography, spacing, radii, fonts, and motion remain product tokens, 
 *for* is the semantic layer declared in `styles/colors.json` — `container-elevated-bg`,
 `feedback-warning`, `text-subtle` — which is the only layer components name, and which owns the alpha
 scale. The split is what lets a theme be a palette swap with no component change, and it is why this
-module's variables (`--elevated`, `--border-strong`, `--hint`) are internal: reaching one from a component
+module's variables (`--elevated`, `--border-strong`, `--muted`) are internal: reaching one from a component
 bypasses the role it belongs to. See [`styles/COLOR.md`](../styles/COLOR.md).
 
 **One key per role that themes may vary independently.** Schema version 2 splits `header` out of

@@ -13,7 +13,7 @@ export function ComparisonCard({ args }: ToolRenderProps) {
 	const options = parseComparisonOptions(args.options);
 
 	if (options.length === 0) {
-		return <span className="text-text-subtle tr-text-metadata italic">(no options)</span>;
+		return <span className="text-text-muted tr-text-metadata italic">(no options)</span>;
 	}
 	return (
 		<div data-testid="tool-visualize-comparison" className="flex flex-col gap-sm">

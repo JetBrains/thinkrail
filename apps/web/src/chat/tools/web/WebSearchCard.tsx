@@ -34,7 +34,7 @@ export function WebSearchCard({ args, result, status }: ToolRenderProps) {
 				<span className="truncate text-primary" title={query}>
 					{query}
 				</span>
-				{provider ? <span className="shrink-0 text-text-subtle">via {provider}</span> : null}
+				{provider ? <span className="shrink-0 text-text-muted">via {provider}</span> : null}
 			</div>
 			{status === "running" ? (
 				<span className="text-text-muted tr-text-metadata">Searching…</span>
@@ -45,7 +45,7 @@ export function WebSearchCard({ args, result, status }: ToolRenderProps) {
 					<CodeBlock code={output} lang="markdown" />
 				</Collapsible>
 			) : (
-				<span className="text-text-subtle tr-text-metadata italic">No results.</span>
+				<span className="text-text-muted tr-text-metadata italic">No results.</span>
 			)}
 		</div>
 	);

@@ -564,12 +564,12 @@ export function NewWorkspaceDialog({
 					) : prompt.trim() && isolated ? (
 						<p
 							data-testid="workspace-naming-hint"
-							className="px-xs text-text-subtle tr-text-metadata"
+							className="px-xs text-text-muted tr-text-metadata"
 						>
 							ThinkRail will name the workspace and branch from your request.
 						</p>
 					) : (
-						<p className="mt-xs text-text-subtle tr-text-metadata">
+						<p className="mt-xs text-text-muted tr-text-metadata">
 							Type <span className="tr-code-text">/</span> for a project skill — previewed from the
 							current checkout; the created workspace's session is authoritative.
 						</p>
@@ -682,7 +682,7 @@ function ProjectPicker({
 					<Box className="size-3 text-text-on-primary" />
 				</span>
 				<span className="truncate">{current}</span>
-				<ChevronDown className="size-3 shrink-0 text-text-subtle" />
+				<ChevronDown className="size-3 shrink-0 text-text-muted" />
 			</PopoverTrigger>
 			<PopoverContent align="start" container={container} className="w-[280px] p-0">
 				<Command>

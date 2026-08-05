@@ -68,7 +68,7 @@ function ChatHistoryMenu({
 				data-testid="chat-history"
 				aria-label="Reopen a closed chat"
 				title="View chat history"
-				className="flex shrink-0 items-center border-border-default border-l px-sm text-text-subtle outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex shrink-0 items-center border-border-default border-l px-sm text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 			>
 				<History className="size-4" />
 			</DropdownMenuTrigger>
@@ -82,7 +82,7 @@ function ChatHistoryMenu({
 						onSelect={() => onReopen(c.sessionId)}
 					>
 						<span className="flex-1 truncate">{c.title}</span>
-						<span className="shrink-0 text-text-subtle tr-text-metadata">
+						<span className="shrink-0 text-text-muted tr-text-metadata">
 							{relativeTime(c.closedAt)}
 						</span>
 						<RotateCcw className="size-3.5 shrink-0 text-text-muted" />
@@ -302,13 +302,13 @@ export function CenterTabs() {
 	// directly in your project folder") instead of promising worktree isolation.
 	const isDefault = activeWorkspace != null && isDefaultWorkspace(activeWorkspace);
 	const placeholder = (
-		<div className="flex h-full flex-col items-center justify-center gap-md px-lg text-center text-text-subtle">
+		<div className="flex h-full flex-col items-center justify-center gap-md px-lg text-center text-text-muted">
 			{activeWorkspace ? (
 				<div
 					data-testid="workspace-ready"
 					className="flex max-w-[440px] flex-col items-center gap-xs"
 				>
-					<span className="tr-text-eyebrow text-text-subtle">
+					<span className="tr-text-eyebrow text-text-muted">
 						{isDefault ? "Default workspace" : "Workspace ready"}
 					</span>
 					<h2 className="max-w-full truncate tr-title-entity text-text-default">
@@ -321,7 +321,7 @@ export function CenterTabs() {
 						) : (
 							<>
 								<span className="truncate">{activeWorkspace.branch}</span>
-								<span className="shrink-0 text-text-subtle">
+								<span className="shrink-0 text-text-muted">
 									· from {activeWorkspace.baseBranch}
 								</span>
 							</>
@@ -386,7 +386,7 @@ export function CenterTabs() {
 									onDoubleClick={() => setActiveTab(tab.id, "keep")}
 								>
 									{tab.kind === "diff" ? (
-										<GitCompareArrows className="size-3.5 shrink-0 text-text-subtle" />
+										<GitCompareArrows className="size-3.5 shrink-0 text-text-muted" />
 									) : null}
 									<span className={`truncate ${isPreview ? "italic" : ""}`}>{tab.name}</span>
 								</button>
@@ -395,7 +395,7 @@ export function CenterTabs() {
 									data-testid="editor-tab-close"
 									aria-label={`Close ${tab.name}`}
 									onClick={() => onCloseTab(tab)}
-									className="rounded-[var(--radius-sm)] p-0.5 text-text-subtle opacity-0 hover:bg-control-bg-hovered hover:text-text-default group-hover:opacity-100"
+									className="rounded-[var(--radius-sm)] p-0.5 text-text-muted opacity-0 hover:bg-control-bg-hovered hover:text-text-default group-hover:opacity-100"
 								>
 									<X className="size-3.5" />
 								</button>
@@ -408,7 +408,7 @@ export function CenterTabs() {
 							data-testid="new-chat"
 							aria-label="New chat"
 							onClick={() => void startChat()}
-							className="flex items-center px-sm text-text-subtle hover:bg-control-bg-hovered hover:text-text-default"
+							className="flex items-center px-sm text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 						>
 							<MessageSquarePlus className="size-4" />
 						</button>
@@ -424,7 +424,7 @@ export function CenterTabs() {
 					<ErrorBoundary label={active.kind === "chat" ? "chat" : "editor"} resetKeys={[active.id]}>
 						<Suspense
 							fallback={
-								<div className="flex h-full items-center justify-center text-text-subtle">
+								<div className="flex h-full items-center justify-center text-text-muted">
 									Loading…
 								</div>
 							}

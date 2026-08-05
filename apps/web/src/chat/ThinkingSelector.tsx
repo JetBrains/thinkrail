@@ -31,9 +31,9 @@ export function ThinkingSelector({
 				disabled={levels.length === 0}
 				className="flex h-8 items-center gap-sm rounded-[var(--radius-md)] border border-border-default bg-control-bg px-sm tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 data-[open=true]:border-primary-strong data-[open=true]:bg-control-bg-hovered"
 			>
-				<span className="tr-text-eyebrow text-text-subtle">Effort</span>
+				<span className="tr-text-eyebrow text-text-muted">Effort</span>
 				<span className="capitalize">{level}</span>
-				<ChevronDown className="size-3 shrink-0 text-text-subtle" />
+				<ChevronDown className="size-3 shrink-0 text-text-muted" />
 			</PopoverTrigger>
 			<PopoverContent align="start" container={container} className="w-[160px] p-xs">
 				{levels.map((l) => (

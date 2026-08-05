@@ -66,14 +66,14 @@ export function Shell() {
 									>
 										{contextProject.name}
 									</span>
-									<ChevronRight className="size-3 shrink-0 text-text-subtle" />
+									<ChevronRight className="size-3 shrink-0 text-text-muted" />
 								</span>
 								<span data-testid="scope-name" className="max-w-[220px] truncate text-text-default">
 									{activeWorkspace?.name ?? "Project home"}
 								</span>
 							</div>
 							{activeWorkspace ? (
-								<div className="mt-0.5 flex min-w-0 items-center gap-xs text-text-subtle tr-text-metadata">
+								<div className="mt-0.5 flex min-w-0 items-center gap-xs text-text-muted tr-text-metadata">
 									<GitBranch className="size-3 shrink-0" />
 									<span data-testid="scope-branch" className="truncate">
 										{activeWorkspace.branch}

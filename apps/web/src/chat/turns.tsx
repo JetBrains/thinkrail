@@ -159,7 +159,7 @@ function SystemTurn({ text }: { text: string }) {
 		<div
 			data-testid="chat-message"
 			data-role="system"
-			className="text-center text-text-subtle tr-text-metadata"
+			className="text-center text-text-muted tr-text-metadata"
 		>
 			{text}
 		</div>
@@ -341,7 +341,7 @@ function ArtifactList({
 						title={path}
 						className="flex w-full items-center gap-xs rounded-[var(--radius-sm)] px-xs py-[2px] text-left hover:bg-control-bg-hovered"
 					>
-						<Icon className="size-3 shrink-0 text-text-subtle" />
+						<Icon className="size-3 shrink-0 text-text-muted" />
 						<span className="min-w-0 flex-1 truncate text-text-muted">
 							{projectRelativePath(path, workspaceRoot)}
 						</span>
@@ -412,7 +412,7 @@ export function TurnDivider({
 	return (
 		<div
 			data-testid="turn-divider"
-			className="my-sm flex flex-col gap-xs text-text-subtle tr-text-metadata"
+			className="my-sm flex flex-col gap-xs text-text-muted tr-text-metadata"
 		>
 			<div className="flex items-center gap-sm">
 				<span className="h-px flex-1 bg-border-default" />

@@ -7,6 +7,7 @@
 
 	"scale": {
 		"subtle": 10,
+		"wash": 12,
 		"soft": 20,
 		"muted": 40,
 		"strong": 60
@@ -15,7 +16,6 @@
 	"roles": {
 		"text-default": { "from": "text", "publish": true },
 		"text-muted": { "from": "muted", "publish": true },
-		"text-subtle": { "from": "hint", "publish": true },
 		"text-on-primary": { "from": "onAccent", "publish": true },
 		"text-link": {
 			"from": "info",
@@ -54,15 +54,15 @@
 		"on-primary-soft": { "from": "onAccent", "alpha": "soft", "publish": true },
 
 		"feedback-info": { "from": "info", "publish": true },
-		"feedback-info-subtle": { "from": "info", "alpha": "subtle", "publish": true },
+		"feedback-info-subtle": { "from": "info", "alpha": "wash", "publish": true },
 		"feedback-success": { "from": "success", "publish": true },
-		"feedback-success-subtle": { "from": "success", "alpha": "subtle", "publish": true },
+		"feedback-success-subtle": { "from": "success", "alpha": "wash", "publish": true },
 		"feedback-success-muted": { "from": "success", "alpha": "muted", "publish": true },
 		"feedback-error": { "from": "danger", "publish": true },
-		"feedback-error-subtle": { "from": "danger", "alpha": "subtle", "publish": true },
+		"feedback-error-subtle": { "from": "danger", "alpha": "wash", "publish": true },
 		"feedback-error-muted": { "from": "danger", "alpha": "muted", "publish": true },
 		"feedback-warning": { "from": "warning", "publish": true },
-		"feedback-warning-subtle": { "from": "warning", "alpha": "subtle", "publish": true },
+		"feedback-warning-subtle": { "from": "warning", "alpha": "wash", "publish": true },
 
 		"bubble-user-bg": { "from": "bubbleAccent", "alpha": "subtle", "publish": true },
 		"bubble-user-border": { "from": "bubbleAccent", "alpha": "muted", "publish": true },

@@ -41,7 +41,7 @@ export function GithubSettings() {
 		<section data-testid="settings-github" className="flex flex-col gap-sm">
 			<div className="flex flex-col gap-xs">
 				<h3 className="tr-title-section text-text-default">Local GitHub</h3>
-				<p className="text-text-subtle tr-text-metadata">
+				<p className="text-text-muted tr-text-metadata">
 					Authenticate the GitHub CLI to create workspaces from remote branches.
 				</p>
 			</div>
@@ -50,7 +50,7 @@ export function GithubSettings() {
 					data-testid="settings-gh-status"
 					data-connected={connected}
 					className={`inline-flex items-center gap-xs tr-text-ui ${
-						connected ? "text-feedback-success" : "text-text-subtle"
+						connected ? "text-feedback-success" : "text-text-muted"
 					}`}
 				>
 					{connected ? <Check className="size-3.5" /> : <X className="size-3.5" />}
@@ -71,7 +71,7 @@ export function GithubSettings() {
 					Refresh
 				</Button>
 			</div>
-			<p className="text-text-subtle tr-text-metadata">
+			<p className="text-text-muted tr-text-metadata">
 				The GitHub CLI (<code className="tr-code-text">gh</code>) is read locally on the host.
 				Authenticate with <code className="tr-code-text">gh auth login</code> to enable creating
 				workspaces from remote branches.

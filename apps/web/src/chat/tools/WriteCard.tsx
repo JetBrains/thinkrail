@@ -20,7 +20,7 @@ export function WriteCard({ args, result, status, workspaceRoot }: ToolRenderPro
 				<span className="truncate text-text-default" title={path}>
 					{displayPath}
 				</span>
-				<span className="shrink-0 text-text-subtle">written</span>
+				<span className="shrink-0 text-text-muted">written</span>
 			</div>
 			{status === "error" ? (
 				<pre className="overflow-auto px-sm py-xs text-feedback-error tr-code-text">{message}</pre>
@@ -29,7 +29,7 @@ export function WriteCard({ args, result, status, workspaceRoot }: ToolRenderPro
 					<CodeBlock code={content} lang={lang} />
 				</Collapsible>
 			) : (
-				<span className="text-text-subtle tr-text-metadata italic">(empty file)</span>
+				<span className="text-text-muted tr-text-metadata italic">(empty file)</span>
 			)}
 		</div>
 	);

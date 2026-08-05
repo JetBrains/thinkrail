@@ -60,12 +60,9 @@ export function TerminalsPanel() {
 			</div>
 			<div className="relative min-h-0 flex-1">
 				{!activeWorkspaceId ? (
-					<p className="px-sm py-xs tr-text-metadata text-text-subtle">Select a workspace.</p>
+					<p className="px-sm py-xs tr-text-metadata text-text-muted">Select a workspace.</p>
 				) : tabs.length === 0 ? (
-					<p
-						data-testid="terminals-empty"
-						className="px-sm py-xs tr-text-metadata text-text-subtle"
-					>
+					<p data-testid="terminals-empty" className="px-sm py-xs tr-text-metadata text-text-muted">
 						No terminals yet — press + to open one.
 					</p>
 				) : null}
@@ -116,7 +113,7 @@ function TerminalTabButton({
 				data-testid="terminal-tab-close"
 				aria-label={`Close ${tab.title}`}
 				onClick={onClose}
-				className="rounded-[var(--radius-sm)] p-0.5 text-text-subtle opacity-0 hover:bg-container-elevated-bg hover:text-text-default group-hover:opacity-100"
+				className="rounded-[var(--radius-sm)] p-0.5 text-text-muted opacity-0 hover:bg-container-elevated-bg hover:text-text-default group-hover:opacity-100"
 			>
 				<X className="size-3" />
 			</button>

@@ -84,7 +84,7 @@ export function ChangesScopeMenu({
 				data-open={open}
 				aria-label="Diff scope"
 				title={scopeTitle(scope, commits ?? [])}
-				className="flex h-6 min-w-0 items-center gap-xs rounded-[var(--radius-sm)] px-xs tr-text-metadata text-text-subtle outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-hovered data-[open=true]:text-text-default"
+				className="flex h-6 min-w-0 items-center gap-xs rounded-[var(--radius-sm)] px-xs tr-text-metadata text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-hovered data-[open=true]:text-text-default"
 			>
 				<GitCompare className="size-3.5 shrink-0" />
 				<span data-testid="changes-scope-label" className="truncate">
@@ -133,7 +133,7 @@ export function ChangesScopeMenu({
 								<GitCommitHorizontal />
 								<span className="flex min-w-0 flex-col">
 									<span className="truncate">{commit.subject || commit.shortSha}</span>
-									<span className="truncate tr-text-metadata text-text-subtle">
+									<span className="truncate tr-text-metadata text-text-muted">
 										{commit.shortSha} · {commit.author}
 										{commit.committedAt ? ` · ${relativeTime(Date.parse(commit.committedAt))}` : ""}
 									</span>

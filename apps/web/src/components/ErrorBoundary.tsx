@@ -85,7 +85,7 @@ function PanelErrorFallback({
 			<p className="tr-title-compact text-text-default">
 				{label ? `The ${label} panel hit an error` : "Something went wrong"}
 			</p>
-			<p className="max-w-[28rem] tr-text-metadata text-text-subtle">
+			<p className="max-w-[28rem] tr-text-metadata text-text-muted">
 				{isChunkError
 					? "Failed to load part of the app (a stale or unreachable resource). Reloading usually fixes it."
 					: error.message || "An unexpected error occurred while rendering this view."}

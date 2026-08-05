@@ -9,7 +9,7 @@ export function DiagramCard({ args, status }: ToolRenderProps) {
 
 	if (!source) {
 		return (
-			<span className="text-text-subtle tr-text-metadata italic">
+			<span className="text-text-muted tr-text-metadata italic">
 				{status === "running" ? "Rendering…" : "(no diagram)"}
 			</span>
 		);

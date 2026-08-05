@@ -21,7 +21,7 @@ import { assembleTemplate, stripFrontmatter } from "./templateText";
 const SYNTAX_HINT = `$1, $ARGUMENTS, \${1:-default} — pi prompt-template syntax`;
 
 const INPUT_CLASS =
-	"w-full rounded-[var(--radius-md)] border border-border-default bg-control-bg px-md py-sm tr-text-ui text-text-default outline-none transition-colors placeholder:text-text-subtle focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary-soft disabled:opacity-50";
+	"w-full rounded-[var(--radius-md)] border border-border-default bg-control-bg px-md py-sm tr-text-ui text-text-default outline-none transition-colors placeholder:text-text-muted focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary-soft disabled:opacity-50";
 
 /**
  * Mirrors the server's `isValidTemplateName` (`packages/server/src/templates/templates.ts`) exactly — a
@@ -212,7 +212,7 @@ export function TemplateEditorDialog({
 							/>
 						</div>
 						{!workspaceId && !editing ? (
-							<p className="text-text-subtle tr-text-metadata">
+							<p className="text-text-muted tr-text-metadata">
 								Open a workspace to save a project-scoped template.
 							</p>
 						) : null}
@@ -255,7 +255,7 @@ export function TemplateEditorDialog({
 							spellCheck={false}
 							rows={8}
 						/>
-						<p className="text-text-subtle tr-text-metadata">{SYNTAX_HINT}</p>
+						<p className="text-text-muted tr-text-metadata">{SYNTAX_HINT}</p>
 					</Field>
 
 					{error ? (

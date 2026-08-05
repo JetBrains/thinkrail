@@ -42,7 +42,7 @@ export function ResizableHandle({
 		>
 			{withHandle && (
 				<div className="z-10 flex items-center justify-center rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-px py-0.5">
-					<GripVertical className={cn("size-2.5 text-text-subtle", isVertical && "rotate-90")} />
+					<GripVertical className={cn("size-2.5 text-text-muted", isVertical && "rotate-90")} />
 				</div>
 			)}
 		</PanelResizeHandle>

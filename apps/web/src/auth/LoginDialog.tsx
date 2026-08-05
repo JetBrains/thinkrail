@@ -111,7 +111,7 @@ export function LoginDialog({
 									<ExternalLink className="size-4" />
 									Open sign-in page
 								</Button>
-								<code className="select-all break-all rounded-[var(--radius-sm)] bg-control-bg px-sm py-xs tr-code-text text-text-subtle">
+								<code className="select-all break-all rounded-[var(--radius-sm)] bg-control-bg px-sm py-xs tr-code-text text-text-muted">
 									{state.url}
 								</code>
 							</div>
@@ -122,7 +122,7 @@ export function LoginDialog({
 								className="flex flex-col gap-xs rounded-[var(--radius-md)] border border-border-default bg-control-bg p-md"
 								data-testid="login-device-code"
 							>
-								<span className="text-text-subtle tr-text-metadata">
+								<span className="text-text-muted tr-text-metadata">
 									Enter this code at{" "}
 									<a
 										href={state.deviceCode.verificationUri}
@@ -179,7 +179,7 @@ export function LoginDialog({
 												submitPrompt();
 											}
 										}}
-										className="min-w-0 flex-1 rounded-[var(--radius-md)] border border-border-default bg-control-bg px-sm py-xs tr-text-ui text-text-default outline-none placeholder:text-text-subtle focus:border-primary"
+										className="min-w-0 flex-1 rounded-[var(--radius-md)] border border-border-default bg-control-bg px-sm py-xs tr-text-ui text-text-default outline-none placeholder:text-text-muted focus:border-primary"
 									/>
 									<Button data-testid="login-submit" onClick={submitPrompt}>
 										Submit
@@ -190,7 +190,7 @@ export function LoginDialog({
 
 						{state.progress ? (
 							<p
-								className="flex items-center gap-sm text-text-subtle tr-text-ui"
+								className="flex items-center gap-sm text-text-muted tr-text-ui"
 								data-testid="login-progress"
 							>
 								<Loader2 className="size-4 shrink-0 animate-spin" />
@@ -200,7 +200,7 @@ export function LoginDialog({
 
 						{!state.url && !state.deviceCode && !state.input && !state.progress ? (
 							<p
-								className="flex items-center gap-sm text-text-subtle tr-text-ui"
+								className="flex items-center gap-sm text-text-muted tr-text-ui"
 								data-testid="login-working"
 							>
 								<Loader2 className="size-4 shrink-0 animate-spin" />

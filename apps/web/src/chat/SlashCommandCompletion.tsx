@@ -162,7 +162,7 @@ export function SlashCommandMenu({
 					{command.description ? (
 						<span className="truncate tr-text-metadata">{command.description}</span>
 					) : null}
-					<span className="ml-auto shrink-0 text-text-subtle tr-text-metadata">
+					<span className="ml-auto shrink-0 text-text-muted tr-text-metadata">
 						{command.source}/{command.sourceInfo.scope}
 					</span>
 				</button>

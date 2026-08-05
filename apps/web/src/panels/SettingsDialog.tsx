@@ -80,11 +80,11 @@ export function SettingsDialog() {
 						{SOON.map(({ label, icon: Icon }) => (
 							<span
 								key={label}
-								className="flex shrink-0 cursor-default items-center gap-sm rounded-[var(--radius-md)] px-md py-sm text-text-subtle tr-text-ui opacity-60"
+								className="flex shrink-0 cursor-default items-center gap-sm rounded-[var(--radius-md)] px-md py-sm text-text-muted tr-text-ui opacity-60"
 							>
 								<Icon className="size-4 shrink-0" />
 								{label}
-								<span className="ml-auto rounded-full border border-border-default px-xs py-0.5 tr-text-label-pill text-text-subtle">
+								<span className="ml-auto rounded-full border border-border-default px-xs py-0.5 tr-text-label-pill text-text-muted">
 									Soon
 								</span>
 							</span>

@@ -34,7 +34,7 @@ now derives variable names rather than tabulating them). Editing the generated f
 disagree. There is no lookup table to keep in step, and no more names like `--blue` for `info`.
 
 A **palette entry** answers *which colour* (`--warning`, `--elevated`, `--hint`). A **semantic token**
-answers *what for* (`feedback-warning`, `container-elevated-bg`, `text-subtle`). Components name roles;
+answers *what for* (`feedback-warning`, `container-elevated-bg`, `text-muted`). Components name roles;
 the palette is internal.
 
 ```tsx
@@ -57,7 +57,7 @@ equals `border-default` is not a second weight, it is a second name).
 
 | family | tokens | notes |
 | --- | --- | --- |
-| Text | `text-default` · `text-muted` · `text-subtle` · `text-on-primary` | three tiers, because the palette defines three greys and the UI uses all of them |
+| Text | `text-default` · `text-muted` · `text-on-primary` | two tiers — a single quiet tier (`text-muted`); there is no separate `text-subtle`/`hint` tier |
 | Container | `container-workspace-bg` · `container-sidebar-bg` · `container-header-bg` · `container-content-bg` · `container-elevated-bg` | `content` is the code canvas (Monaco, Shiki, terminal); `elevated` is every raised surface |
 | Control | `control-bg` · `control-bg-hovered` · `control-primary-bg` · `control-primary-text` | no `-disabled` pair — disabled is `disabled:opacity-50` |
 | Border | `border-default` · `border-muted` | |
@@ -66,16 +66,20 @@ equals `border-default` is not a second weight, it is a second name).
 | Chat bubble | `bubble-user-bg` · `bubble-user-border` | tinted from the manifest's own `bubbleAccent` |
 | Effects | `overlay` · `sunken` | written per light/dark by the theme engine |
 
-There is no `text-disabled`, no `text-strong` and no `text-link` utility: the first two duplicate other
-tokens, and `--text-link` exists as a variable for `global.css`'s `a {}` alone.
+There is no `text-disabled`, no `text-strong`, no `text-subtle` and no `text-link` utility: they
+duplicate other tokens (`text-muted` is the one quiet tier), and `--text-link` exists as a variable for
+`global.css`'s `a {}` alone.
 
 ## Transparency: one form only
 
-**A tint is a token, mixed `in srgb`, on a four-step scale.**
+**A tint is a token, mixed `in srgb`, on the alpha scale.**
 
 ```
-subtle 10%   ·   soft 20%   ·   muted 40%   ·   strong 60%
+subtle 10%   ·   wash 12%   ·   soft 20%   ·   muted 40%   ·   strong 60%
 ```
+
+`wash` (12%) is the feedback-surface fill step (`feedback-*-subtle`), kept one notch above `subtle`
+(10%) so `primary-subtle` and `bubble-user-bg` stay at 10% while feedback backgrounds read at 12%.
 
 Tailwind's `/40` opacity modifier is **not used on colour utilities**. It mixes `in oklab`, so the same
 nominal percentage rendered differently depending on whether it came from a class or a token — and the
@@ -86,7 +90,7 @@ the scale, never a new number in a class name.
 
 Monaco, xterm, mermaid and Shiki cannot wear a class; they read the tokens through `getComputedStyle`
 and rebuild after the `[data-theme]` swap. They name the same semantic tokens everything else does
-(`--container-content-bg`, `--text-subtle`, `--editor-selection-bg`), so there is one name per value.
+(`--container-content-bg`, `--text-muted`, `--editor-selection-bg`), so there is one name per value.
 Those four tokens are therefore **not** mapped in `@theme inline` — a utility nothing can use is dead
 weight. Values reach them canonicalised to hex via `cssColorToHex` (`lib/utils.ts`), because the built
 CSS is minified and Monaco/xterm accept hex only.
@@ -138,7 +142,7 @@ escape hatch, or a second name for a value that already has one.
 because one tier is our judgement rather than the standard's:
 
 - on every RESTING surface (`background`, `content`, `sidebar`, `header`, `elevated`, `input`) text
-  meets WCAG AA in full — 4.5 for body and secondary text, 3.0 for the quietest tier;
+  meets WCAG AA in full — 4.5 for body and the quiet `text-muted` tier;
 - on the transient HOVER surface the floor is **3.0**, not 4.5.
 
 WCAG has no "transient state" allowance, so the hover tier is a line we drew deliberately. These themes

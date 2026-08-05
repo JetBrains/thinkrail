@@ -9,7 +9,6 @@
 :root {
 	--text-default: var(--text);
 	--text-muted: var(--muted);
-	--text-subtle: var(--hint);
 	--text-on-primary: var(--on-accent);
 	--text-link: var(--info); /* global.css `a {}` is the only consumer; no component styles a bare link */
 	--container-workspace-bg: var(--background);
@@ -30,15 +29,15 @@
 	--primary-strong: color-mix(in srgb, var(--accent) 60%, transparent);
 	--on-primary-soft: color-mix(in srgb, var(--on-accent) 20%, transparent);
 	--feedback-info: var(--info);
-	--feedback-info-subtle: color-mix(in srgb, var(--info) 10%, transparent);
+	--feedback-info-subtle: color-mix(in srgb, var(--info) 12%, transparent);
 	--feedback-success: var(--success);
-	--feedback-success-subtle: color-mix(in srgb, var(--success) 10%, transparent);
+	--feedback-success-subtle: color-mix(in srgb, var(--success) 12%, transparent);
 	--feedback-success-muted: color-mix(in srgb, var(--success) 40%, transparent);
 	--feedback-error: var(--danger);
-	--feedback-error-subtle: color-mix(in srgb, var(--danger) 10%, transparent);
+	--feedback-error-subtle: color-mix(in srgb, var(--danger) 12%, transparent);
 	--feedback-error-muted: color-mix(in srgb, var(--danger) 40%, transparent);
 	--feedback-warning: var(--warning);
-	--feedback-warning-subtle: color-mix(in srgb, var(--warning) 10%, transparent);
+	--feedback-warning-subtle: color-mix(in srgb, var(--warning) 12%, transparent);
 	--bubble-user-bg: color-mix(in srgb, var(--bubble-accent) 10%, transparent);
 	--bubble-user-border: color-mix(in srgb, var(--bubble-accent) 40%, transparent);
 	--selection-text: var(--selection-foreground, inherit); /* nullable in the manifest (high contrast keeps the native foreground) */
@@ -68,7 +67,6 @@
 	--color-*: initial;
 	--color-text-default: var(--text-default);
 	--color-text-muted: var(--text-muted);
-	--color-text-subtle: var(--text-subtle);
 	--color-text-on-primary: var(--text-on-primary);
 	--color-container-workspace-bg: var(--container-workspace-bg);
 	--color-container-sidebar-bg: var(--container-sidebar-bg);

@@ -73,7 +73,6 @@
 				"borderStrong",
 				"text",
 				"muted",
-				"hint",
 				"selection",
 				"selectionForeground",
 				"editorSelection",
@@ -98,7 +97,6 @@
 				"borderStrong": { "$ref": "#/$defs/hexColor" },
 				"text": { "$ref": "#/$defs/hexColor" },
 				"muted": { "$ref": "#/$defs/hexColor" },
-				"hint": { "$ref": "#/$defs/hexColor" },
 				"selection": { "$ref": "#/$defs/hexColor" },
 				"selectionForeground": {
 					"oneOf": [{ "$ref": "#/$defs/hexColor" }, { "type": "null" }]
