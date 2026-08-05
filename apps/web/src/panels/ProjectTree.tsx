@@ -275,7 +275,7 @@ function WorkspaceRow({
 					{workspace.branch !== workspace.name && (
 						<span
 							data-testid="workspace-branch"
-							className="truncate text-text-muted tr-text-metadata leading-tight"
+							className="truncate text-text-disabled tr-text-metadata leading-tight"
 						>
 							{workspace.branch}
 						</span>
