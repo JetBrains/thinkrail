@@ -6,6 +6,7 @@ import type {
 	RemoteDormantReason,
 	RemoteState,
 } from "@thinkrail/contracts";
+import { relativeTime } from "../lib/utils";
 import { extendFolderChain, startFolderChain } from "./folderChains";
 
 /**
@@ -125,10 +126,25 @@ export function comparisonTargetLabel(
 const DORMANT_REASON_TEXT: Record<RemoteDormantReason, string> = {
 	disabled: "Automatic remote checks are turned off.",
 	"upstream-gone": "This branch no longer exists on the remote — it was likely merged and deleted.",
-	"never-authenticated": "Not checked automatically yet. Fetch once to check now and enable it.",
+	// Not "…and enable it": a successful fetch grants credential-ladder rung 2, but an SSH remote behind a
+	// non-launchd agent simply re-dormants as "ssh-agent-present" right afterward — fetching does not
+	// reliably "enable" automatic checks, it only answers this once. Match the other reasons' plain wording.
+	"never-authenticated": "Not checked automatically yet. Fetch to check now.",
 	"ssh-agent-present": "Skipped automatically — an SSH agent might prompt. Fetch to check now.",
 	failing: "Automatic checks have been failing and backed off. Fetch to check now.",
 };
+
+/**
+ * `" — last checked 5m ago."` appended to a reason sentence, or `""` when `lastCheckedAt` is `null` (no
+ * completed check to report a time for — e.g. `"never-authenticated"` before its first Fetch). Reuses the
+ * existing `relativeTime` formatter (chat history, closed-chat tabs, the commit list) rather than a new
+ * one-off date format. `RemoteState.lastCheckedAt` is an ISO string on the wire (JSON has no Date type).
+ */
+function lastCheckedSuffix(lastCheckedAt: string | null): string {
+	return lastCheckedAt === null
+		? ""
+		: ` Last checked ${relativeTime(new Date(lastCheckedAt).getTime())}.`;
+}
 
 /**
  * What a workspace's `↓` indicator, and its explanatory popover, actually show — the one place the
@@ -155,8 +171,9 @@ export type RemoteIndicatorView =
 	| { kind: "behind"; text: string; muted: boolean; reason: string };
 
 export function remoteIndicatorView(state: RemoteState): RemoteIndicatorView | null {
+	const checkedSuffix = lastCheckedSuffix(state.lastCheckedAt);
 	if (state.dormant === "upstream-gone") {
-		return { kind: "warning", reason: DORMANT_REASON_TEXT["upstream-gone"] };
+		return { kind: "warning", reason: DORMANT_REASON_TEXT["upstream-gone"] + checkedSuffix };
 	}
 	// Three fidelities, never collapsed into one another: a real count only from a fetch, the bare arrow
 	// when a probe knows the remote differs but not by how much, and `null` genuinely means nothing to say.
@@ -164,10 +181,20 @@ export function remoteIndicatorView(state: RemoteState): RemoteIndicatorView | n
 		state.behind === null ? null : state.behind === "unknown" ? "↓" : `↓·${state.behind}`;
 	if (!text) {
 		if (!state.dormant) return null; // up to date, actively checked — the one true "nothing to render"
-		return { kind: "behind", text: "↓", muted: true, reason: DORMANT_REASON_TEXT[state.dormant] };
+		return {
+			kind: "behind",
+			text: "↓",
+			muted: true,
+			reason: DORMANT_REASON_TEXT[state.dormant] + checkedSuffix,
+		};
 	}
 	if (state.dormant) {
-		return { kind: "behind", text, muted: true, reason: DORMANT_REASON_TEXT[state.dormant] };
+		return {
+			kind: "behind",
+			text,
+			muted: true,
+			reason: DORMANT_REASON_TEXT[state.dormant] + checkedSuffix,
+		};
 	}
 	// Actively checked, genuinely behind: a plain sentence, not just the glyph, so the popover always has
 	// something to say without composing its own text from the raw `behind` value.
@@ -175,7 +202,7 @@ export function remoteIndicatorView(state: RemoteState): RemoteIndicatorView | n
 		state.behind === "unknown"
 			? `${state.ref} has new commits on the remote — fetch to see how many.`
 			: `${state.ref} is ${state.behind} commit${state.behind === 1 ? "" : "s"} behind.`;
-	return { kind: "behind", text, muted: false, reason };
+	return { kind: "behind", text, muted: false, reason: reason + checkedSuffix };
 }
 
 /**

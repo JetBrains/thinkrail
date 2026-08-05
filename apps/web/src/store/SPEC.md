@@ -242,7 +242,7 @@ components. The **Skills-reload badge** rides the same tick without a separate s
   `git.fetchNow` RPC answer (one ref) lands without clobbering sibling refs the last push already
   delivered. **`refsChangedTickByProject: Record<projectId, tick>`** + **`noteRefsChanged(projectId)`** is
   the bare invalidation-nudge twin of `fsChangesByWorkspace`'s `tick` (increment-only, no payload) folded
-  from `project.refsChanged` — a signal that a project's tracked refs moved, for a consumer (`useBranchList`,
+  from `project.refsChanged` — a signal that a project's tracked refs moved, for a consumer (`ChangesPanel`,
   today's only project-tick reader) that wants to know *that* a re-list is worth doing without the store
   fetching on its behalf. Neither map is dropped by `applyWorkspaceRemoved`: they are keyed by project, not
   workspace, and there is no `removeProject` action to hook a cleanup into (a stale project's entry simply

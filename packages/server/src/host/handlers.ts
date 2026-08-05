@@ -84,7 +84,7 @@ import {
 	setProjectSkillEnabled,
 	setProjectTrust,
 } from "../projects";
-import { fetchRefNow, noteRemoteTrusted, remoteStateFor } from "../remotes";
+import { checkNow, fetchRefNow, noteRemoteTrusted, remoteStateFor } from "../remotes";
 import {
 	addComment,
 	buildSendPackage,
@@ -358,12 +358,17 @@ const handlers: Record<string, Handler> = {
 		// branch-scope diff *means* (its merge-base can move) — and it is invisible to the watch module (it
 		// writes only to the shared `.git`, outside every watched location), so this is the one signal those
 		// workspaces get; an unaffected re-read is an idempotent no-op. `moved` itself stays host-internal:
-		// the wire result remains `{ ok }`. The same move also invalidates the remote-check scheduler's cached
-		// `RemoteState` for this ref (it's now stale re: what the local tracking ref points at), so the
-		// project-scoped nudge fires alongside the per-workspace one.
+		// the wire result remains `{ ok }`. The same move also makes the remote-check scheduler's cached
+		// `RemoteState` for this ref stale (it's now behind what the local tracking ref points at), so this
+		// re-checks the project alongside the per-workspace nudge — `checkNow` is floor-gated by the same
+		// `MIN_CHECK_INTERVAL_MS` as every other trigger (activity sweep, backstop), so a burst of prefetches
+		// collapses to at most one re-check per project per minute, never a thrash loop. Fire-and-forget
+		// (`void`): `checkNow` never rejects (see its own doc), and this handler's wire result is `{ ok }` for
+		// the fetch itself, not for whatever the re-check finds — that arrives via the normal publish/pull.
 		if (moved) {
 			nudgeBaseRefWorkspaces(p.projectId, p.ref);
 			nudgeProjectRefsChanged(p.projectId);
+			void checkNow(p.projectId);
 		}
 		return { ok };
 	},

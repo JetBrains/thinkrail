@@ -162,7 +162,8 @@ of the host.
   Contracts deliberately exports no theme enum/list/labels: a future manifest can mint an id unknown when
   the host was built, and a client missing it resolves its own bundled default;
   the **remote-awareness wire** — **`RemoteDormantReason`** (`"never-authenticated"` / `"ssh-agent-present"`
-  / `"disabled"` / `"failing"` — why a `(project, ref)` pair is not being checked automatically, reported
+  / `"disabled"` / `"failing"` / `"upstream-gone"` — why a `(project, ref)` pair is not being checked
+  automatically, reported
   explicitly rather than left as silent idleness) and **`RemoteState`** (`{ projectId, ref, behind,
   lastCheckedAt, dormant? }` — what the host last learned about one remote-tracking ref, e.g.
   `"origin/main"`; `behind` is `number | "unknown" | null`, THREE meanings because the default background
@@ -259,8 +260,10 @@ of the host.
   *rejected*, which the panel reads as "reset the scope" instead of staying wedged on a dead sha) /
   **`git.listCommits`** (the workspace branch's own commits, `<diff base>..HEAD`, newest first, capped
   host-side — the scope menu's lazily-fetched list) / **`git.remoteState`** (the last-known `RemoteState`
-  for the workspace's resolved diff-base ref, `null` when that base isn't a remote-tracking ref or has
-  never been checked — the pull; `project.remoteState` is the push that keeps a connected client current) /
+  for the workspace's resolved diff-base ref, `null` when that base isn't a remote-tracking ref — nothing
+  to ever report; a remote-tracking base that has never been checked answers a non-null `RemoteState` with
+  `behind: null, lastCheckedAt: null` instead, the honest "not yet known" — the pull; `project.remoteState`
+  is the push that keeps a connected client current) /
   **`git.fetchNow`** (a user-initiated real fetch of that same ref — rejects, rather than answering `null`,
   when there is nothing remote-tracking to fetch; on success this is the one place `noteRemoteTrusted`
   fires for that (project, remote) pair) / **`git.prefetch`** (best-effort background fetch of a

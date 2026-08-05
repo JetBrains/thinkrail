@@ -34,6 +34,7 @@ import {
 	setProjectPublisher,
 } from "../projects";
 import {
+	checkNow,
 	checkProject,
 	configureRemoteChecks,
 	noteClientActivity,
@@ -458,6 +459,19 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 	setRepoMetaPublisher((workspaceId) => {
 		refreshUserOwnedWorkspace(workspaceId);
 		publishFsChanged({ workspaceId, paths: [], truncated: false, skillChange: "none" });
+		// The same terminal `git branch`/`fetch`/`reset` this tee exists for can also move a remote-tracking
+		// ref out from under the scheduler's cached `RemoteState` (e.g. `git fetch` run by hand in an app
+		// terminal) — re-check the project so a following `git.remoteState` pull isn't stale, mirroring
+		// `git.prefetch`'s own `checkNow` call for the app-initiated case. `getWorkspace` throws for a
+		// workspace that vanished between the watcher's debounce firing and this callback running (e.g. a
+		// concurrent `workspace.remove`); that race must never crash the host from inside a `setTimeout`
+		// callback, so it's caught here exactly like `refreshDefaultWorkspace`'s own missing-workspace
+		// graceful-degradation elsewhere in this file. `checkNow` itself never rejects (see its own doc).
+		try {
+			void checkNow(getWorkspace(workspaceId).projectId);
+		} catch {
+			// Workspace vanished before this ran — nothing to re-check.
+		}
 	});
 
 	// Fan `review.changed` snapshots out to every client (the reviews module stays channel-ignorant),

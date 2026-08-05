@@ -9,7 +9,19 @@ import { loadConfig, saveConfig } from "../persistence";
 const MIN_REMOTE_CHECK_INTERVAL_MINUTES = 1;
 const MAX_REMOTE_CHECK_INTERVAL_MINUTES = 1440;
 
-const GIT_REMOTE_CHECK_MODES: readonly AppConfig["gitRemoteCheck"][] = ["probe", "fetch", "off"];
+/**
+ * The `gitRemoteCheck` modes this host recognises, as a `Record` rather than an array — an array literal is
+ * never checked against `AppConfig["gitRemoteCheck"]`'s union, so a mode added to that union and forgotten
+ * here would compile silently and every client sending it would silently fall back to the default with no
+ * signal at all. `Record<K, true>` requires every union member as a key, so a missing one is a **compile
+ * error** here instead — the same pattern `apps/web/src/store/selectors.ts`'s `KNOWN_SCOPE_KINDS` uses for
+ * `GitDiffScope["kind"]`.
+ */
+const GIT_REMOTE_CHECK_MODES: Record<AppConfig["gitRemoteCheck"], true> = {
+	probe: true,
+	fetch: true,
+	off: true,
+};
 
 /**
  * `updateConfig` accepts a partial straight off the wire — from any connected client, buggy or hostile —
@@ -38,9 +50,10 @@ function clampRemoteCheckFields(partial: Partial<AppConfig>): Partial<AppConfig>
 			: DEFAULT_CONFIG.gitRemoteCheckIntervalMinutes;
 	}
 	if (partial.gitRemoteCheck !== undefined) {
-		clamped.gitRemoteCheck = GIT_REMOTE_CHECK_MODES.includes(partial.gitRemoteCheck)
-			? partial.gitRemoteCheck
-			: DEFAULT_CONFIG.gitRemoteCheck;
+		clamped.gitRemoteCheck =
+			partial.gitRemoteCheck in GIT_REMOTE_CHECK_MODES
+				? partial.gitRemoteCheck
+				: DEFAULT_CONFIG.gitRemoteCheck;
 	}
 	return clamped;
 }

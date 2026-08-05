@@ -188,9 +188,10 @@ ref off the workspace-create critical path.
   common environment, silently disabling the very check a later task keys off to mark SSH remotes dormant.
   A launchd-*shaped* path whose leaf isn't literally `Listeners` is not carved out — only the exact default
   shape is excluded, not the whole `com.apple.launchd.*` prefix.
-- **Public surface (barrel):** `git`, `gitAsync`, `REMOTE_ENV`, `gitArgv`, `GitRunOptions`, `gitStatus`,
-  `gitDiffFile`, `readBlobAt`, `listCommits`, `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`,
-  `resolveCommitOid`, `DiffRange`, `DiffSide`, `isSafeRef`, `assertSafeRef`, `listBranches`,
+- **Public surface (barrel):** `git`, `gitAsync`, `REMOTE_ENV`, `BACKGROUND_FETCH_TIMEOUT_MS`, `gitArgv`,
+  `GitRunOptions`, `gitStatus`, `gitDiffFile`, `readBlobAt`, `listCommits`, `resolveDiffRange`,
+  `changedFileArgs`, `diffBaseRef`, `resolveCommitOid`, `DiffRange`, `DiffSide`, `isSafeRef`,
+  `assertSafeRef`, `listBranches`,
   `resolveDefaultBranch`, `tryCurrentBranch`, `currentBranch`, `canonicalPath`, `prefetchBranch`,
   `probeRemoteRefsArgv`, `probeRemoteRefs`, `fetchRemoteRefsArgv`, `fetchRemoteRefs`, `behindCount`,
   `remoteUrlKind`, `sshAgentPresent`.
@@ -252,7 +253,11 @@ ref off the workspace-create critical path.
   unknown host key (batch mode suppresses the prompt, it does not accept the key), so without it the very
   first background connection to any new host would fail — and the feature would silently never work for
   that user. A future simplification back to bare `BatchMode=yes` would reintroduce that failure with no
-  warning anywhere.
+  warning anywhere. Every `gitAsync` call this module makes against a real remote — `prefetchBranch`'s
+  fetch and `workspaces`' create-time fallback fetch — passes both `REMOTE_ENV` and a deadline
+  (`BACKGROUND_FETCH_TIMEOUT_MS`, 15s); this constant is deliberately separate from
+  `remotes/policy.ts`'s own `REMOTE_CHECK_TIMEOUT_MS` (same value today) rather than shared, because
+  `remotes` already depends on `git` and importing back the other way would invert that edge into a cycle.
 - **The default background remote op writes nothing, on purpose — that is a safety guarantee, not an
   optimisation.** `probeRemoteRefs` is `ls-remote`, never a `fetch`: a background fetch would move
   `refs/remotes/*` (and `@{upstream}`) mid-session, which **silently defeats `git push --force-with-lease`**
