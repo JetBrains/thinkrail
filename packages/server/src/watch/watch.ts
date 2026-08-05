@@ -8,7 +8,7 @@
 import { type FSWatcher, readFileSync, statSync, watch } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 import type { WorkspaceFsChangedPayload } from "@thinkrail/contracts";
-import { loadWorkspaces } from "../persistence";
+import { loadProjects, loadWorkspaces } from "../persistence";
 import { type Coalescer, createCoalescer } from "./coalesce";
 
 const QUIET_MS = 300;
@@ -49,9 +49,15 @@ export function setWatchPublisher(publisher: WatchPublisher | null): void {
  * Install (or clear) the **repo-metadata** sink: fired, debounced, whenever a watched worktree's git
  * metadata churns (a `git switch`/`commit`/`rebase` in a terminal) — the *only* signal for a change that
  * leaves the working tree byte-identical, e.g. `git switch -c <new-branch>` or a `git commit` (which moves
- * `HEAD` and empties the index while writing nothing under the worktree). Two sources feed it: `.git`
- * events inside the recursive root watcher (a repo root), and the non-recursive watcher on the **resolved**
- * git dir (a linked worktree's metadata lives in the parent repo, outside the root — see `resolveGitDir`).
+ * `HEAD` and empties the index while writing nothing under the worktree). Three sources feed it, one per
+ * workspace whose watcher is currently live: `.git` events inside the recursive root watcher (a repo root),
+ * the non-recursive watcher on the **resolved** git dir (a linked worktree's metadata lives in the parent
+ * repo, outside the root — see `resolveExternalGitDir`), and the non-recursive watcher on the **project
+ * repo's own** git dir (see `resolveProjectGitDir`) — the one place `refs/heads/*` actually lives, which a
+ * `git branch` run in *any* worktree of the project writes and which neither of the first two ever sees,
+ * because it is shared, not per-worktree. That third source fans out to every workspace of the project whose
+ * watcher is currently live (one repo, many workspaces — never a watcher per workspace), reusing this exact
+ * per-workspace debounce rather than adding a second one.
  *
  * The host turns it into two convergences: a **Default** workspace's folder-truth branch label
  * (`refreshDefaultWorkspace`) and a pathless client invalidation, so git-derived reads (`git.status`, an open
@@ -160,9 +166,121 @@ interface WatchEntry {
 	metaTimer: ReturnType<typeof setTimeout> | null;
 	/** The non-recursive watcher on the resolved git metadata dir (see `watchGitDir`); null if absent. */
 	metaWatcher: FSWatcher | null;
+	/** Which project this workspace belongs to — lets the project git-dir watcher (see `ensureProjectWatch`)
+	 * find every currently-watched workspace of a project without a second, project-keyed watcher registry. */
+	projectId: string;
 }
 
 const entries = new Map<string, WatchEntry>();
+
+/**
+ * The project repo's OWN git dir (`<project.path>/.git`) — the directory every worktree of the repo shares,
+ * where `refs/heads/*`, `packed-refs`, and the main worktree's own `HEAD`/`index` live. Every workspace this
+ * app creates hangs off `project.path` via `git worktree add`, so `project.path` is always the repo's main
+ * working tree: its `.git` is a real directory, never a gitfile pointer (that shape only ever appears for a
+ * *linked* worktree, which this app never opens as a project). Resolved with plain fs, the same boundary as
+ * `resolveExternalGitDir`: no `git` sibling edge. A missing/odd `.git` (not a directory) degrades silently —
+ * the caller just skips the project watcher.
+ */
+function resolveProjectGitDir(projectPath: string): string | null {
+	const dotGit = resolve(projectPath, ".git");
+	try {
+		return statSync(dotGit).isDirectory() ? dotGit : null;
+	} catch {
+		return null;
+	}
+}
+
+interface ProjectWatchEntry {
+	watcher: FSWatcher;
+	/** Inode of the watched project git dir — self-healed exactly like a worktree root (see `ensureWatch`):
+	 * a delete + re-create at the same path (e.g. `git init` run again) gets a new inode, and the old watcher
+	 * silently follows the dead one. */
+	gitDirIno: number;
+}
+
+/** One watcher per PROJECT REPO, not per workspace — many workspaces share the one git dir being watched
+ * here, so this is keyed by `projectId`, never by `workspaceId` (see `ensureProjectWatch`). */
+const projectWatchers = new Map<string, ProjectWatchEntry>();
+
+/**
+ * Start (or repair) the ONE watcher for a project's shared git dir. Called from every `ensureWatch` for any
+ * of its workspaces, and idempotent for the same reason: many workspaces can share one project repo, and
+ * this must never become a watcher per workspace (the fan-out below reaches every one of them from a single
+ * stream). Self-heals like the worktree-root watcher: re-stats the git dir on every call and re-creates it
+ * on inode change; a missing/non-git `.git` or a failed start degrades silently (warned, retried on the next
+ * call — read-on-demand still stands).
+ *
+ * Non-recursive on purpose (a recursive watch on this dir would storm on every object write during a
+ * `fetch`/`gc`, for a directory every workspace of the project shares) — but be clear-eyed about what that
+ * buys here, which is *less* than for the linked-worktree watcher above. That one gets away with
+ * non-recursive because the refs that move for it (`HEAD`, `index`, `ORIG_HEAD`) sit at the watched dir's
+ * top level. `refs/heads/<name>` — what a plain `git branch <name>` writes — is *two levels* below this
+ * dir, and non-recursive `fs.watch` on darwin only sees the watched dir's direct children (kqueue
+ * semantics): measured directly, a settled non-recursive watch on a real repo's `.git` saw **zero** events
+ * for a bare nested write, and only ~50% for a real `git branch` (every firing mis-attributed to a
+ * top-level `HEAD.lock` rename that `git branch` never touches — FSEvents coalescing noise, not a real
+ * signal). What this watcher *does* reliably catch: any write that touches a genuine top-level entry —
+ * `packed-refs` (rewritten by `git gc` / `fetch --prune` / `pack-refs`), or the project's own `HEAD`/`index`
+ * if the project itself is checked out and edited directly. Loose `refs/heads/*` creation from a plain
+ * `git branch` is a known, open gap — see `packages/server/src/watch/SPEC.md` and
+ * `.superpowers/sdd/2026-08-04-remote-awareness/task-7-report.md` for the full measurement.
+ */
+function ensureProjectWatch(projectId: string, projectPath: string): void {
+	const gitDir = resolveProjectGitDir(projectPath);
+	if (!gitDir) {
+		stopProjectWatch(projectId); // no longer a git folder — drop any stale watcher
+		return;
+	}
+	let gitDirIno: number;
+	try {
+		gitDirIno = statSync(gitDir).ino;
+	} catch {
+		stopProjectWatch(projectId);
+		return;
+	}
+	const existing = projectWatchers.get(projectId);
+	if (existing) {
+		if (existing.gitDirIno === gitDirIno) return;
+		stopProjectWatch(projectId); // same path, new inode — the old watcher is dead, re-create
+	}
+
+	try {
+		const watcher = watch(gitDir, { recursive: false }, () => {
+			nudgeProjectWorkspaces(projectId);
+		});
+		watcher.on("error", (err) => {
+			console.warn(`project git-dir watcher for ${projectId} failed: ${err}`);
+			watcher.close();
+			if (projectWatchers.get(projectId)?.watcher === watcher) projectWatchers.delete(projectId);
+		});
+		projectWatchers.set(projectId, { watcher, gitDirIno });
+	} catch (err) {
+		console.warn(`could not watch project git dir for ${projectId}: ${err}`);
+	}
+}
+
+/** Stop a project's git-dir watcher (its project record vanished; server shutdown). Idempotent. */
+function stopProjectWatch(projectId: string): void {
+	const entry = projectWatchers.get(projectId);
+	if (!entry) return;
+	projectWatchers.delete(projectId);
+	entry.watcher.close();
+}
+
+/**
+ * A write in the project's shared git dir (`git branch`/`fetch`/`reset` run in ANY of its worktrees) — fan
+ * out to the existing per-workspace repo-metadata debounce (`scheduleRepoMeta`) for every workspace of this
+ * project whose OWN watcher is currently live. Deliberately reuses that debounce untouched rather than
+ * arming a second, project-keyed one: each affected workspace gets exactly the same 300ms coalescing a
+ * same-worktree `.git` write already gets. An unwatched workspace of the project has no client looking, so
+ * there is nothing to debounce for it yet — its next read re-derives fresh state regardless.
+ */
+function nudgeProjectWorkspaces(projectId: string): void {
+	for (const [workspaceId, entry] of entries) {
+		if (entry.projectId === projectId) scheduleRepoMeta(workspaceId, entry.watcher);
+	}
+}
 
 /**
  * Start (or repair) the watcher for a workspace's worktree — idempotent and self-healing, called by
@@ -171,15 +289,23 @@ const entries = new Map<string, WatchEntry>();
  * out-of-band — nothing went through `workspace.remove`) is torn down and re-created. A failed start
  * is warned and left absent — the next read simply retries. Also reaps zombie watchers whose workspace
  * record is gone (a worktree removed out-of-band can resurrect its path-based stream and keep
- * publishing for a forgotten id).
+ * publishing for a forgotten id). Also (re)starts the project's shared git-dir watcher (see
+ * `ensureProjectWatch`) for `ws`'s project — one per project repo, reaping its own zombies the same way.
  */
 export function ensureWatch(workspaceId: string): void {
 	const workspaces = loadWorkspaces();
 	for (const id of [...entries.keys()]) {
 		if (!workspaces.some((w) => w.id === id)) stopWatch(id);
 	}
+	const projects = loadProjects();
+	for (const id of [...projectWatchers.keys()]) {
+		if (!projects.some((p) => p.id === id)) stopProjectWatch(id);
+	}
 	const ws = workspaces.find((w) => w.id === workspaceId);
 	if (!ws) return;
+
+	const project = projects.find((p) => p.id === ws.projectId);
+	if (project) ensureProjectWatch(project.id, project.path);
 
 	let rootIno: number;
 	try {
@@ -233,6 +359,7 @@ export function ensureWatch(workspaceId: string): void {
 			nudgeTimer,
 			metaTimer: null,
 			metaWatcher: null,
+			projectId: ws.projectId,
 		};
 		// Registered after the entry is in the map: the git-dir watcher's callback resolves it through
 		// `scheduleRepoMeta` (live-watcher identity check), and a write can land the moment the stream opens.
@@ -256,7 +383,8 @@ export function stopWatch(workspaceId: string): void {
 	entry.watcher.close();
 }
 
-/** Server shutdown: stop every watcher. */
+/** Server shutdown: stop every watcher — per-workspace and per-project. */
 export function stopAllWatches(): void {
 	for (const id of [...entries.keys()]) stopWatch(id);
+	for (const id of [...projectWatchers.keys()]) stopProjectWatch(id);
 }

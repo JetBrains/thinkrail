@@ -217,6 +217,101 @@ test("a linked worktree's git metadata lives outside the root — its churn stil
 	expect(nudges).toEqual(["ws1"]);
 });
 
+test("the project repo's own shared git dir nudges every currently-watched workspace of that project", async () => {
+	// The project's OWN git dir — a real directory (never a gitfile pointer, unlike a linked worktree's),
+	// shared by every worktree of the repo. This is the only watcher that ever looks here at all.
+	//
+	// The write below targets `packed-refs`, a genuine TOP-LEVEL git artifact (rewritten by `git gc` /
+	// `fetch --prune` / `pack-refs`), not a synthetic path picked for convenience: it is deliberately NOT a
+	// stand-in for a plain `git branch` (which only ever touches `refs/heads/<name>`, two levels down).
+	// Measured directly (see `packages/server/src/watch/SPEC.md` and the task report): a non-recursive
+	// `fs.watch` on darwin only reliably observes this dir's *direct children* — top-level writes fire
+	// 10/10 in a clean sample, while a bare nested `refs/heads/<name>` write fires 0/N once the watcher has
+	// settled, and even a real `git branch` (whose *reflog* write is nested too) only fired ~50% of the
+	// time, via an unrelated top-level `HEAD.lock` mis-attribution. So this test exercises exactly what the
+	// mechanism can deliver — top-level churn, fanned out to every open workspace of the one project,
+	// never leaking a `.git` path — and does not claim more reliability for loose-ref creation than was
+	// actually measured.
+	const repoDir = join(dataDir, "repo");
+	mkdirSync(join(repoDir, ".git", "refs", "heads"), { recursive: true });
+	writeFileSync(
+		join(dataDir, "projects.json"),
+		JSON.stringify([
+			{ id: "p1", name: "repo", path: repoDir, slug: "repo", lastOpened: Date.now() },
+		]),
+	);
+	// A second workspace of the SAME project — many workspaces, one repo, is the whole point of this watcher:
+	// it must not become a per-workspace watcher, so one write should nudge both.
+	const worktree2 = join(dataDir, "worktree2");
+	mkdirSync(worktree2);
+	writeFileSync(
+		join(dataDir, "workspaces.json"),
+		JSON.stringify([
+			{
+				id: "ws1",
+				projectId: "p1",
+				name: "ws",
+				branch: "b",
+				worktreePath: worktree,
+				baseBranch: "main",
+			},
+			{
+				id: "ws2",
+				projectId: "p1",
+				name: "ws2",
+				branch: "b2",
+				worktreePath: worktree2,
+				baseBranch: "main",
+			},
+		]),
+	);
+
+	const nudges: string[] = [];
+	setRepoMetaPublisher((id) => nudges.push(id));
+	ensureWatch("ws1");
+	ensureWatch("ws2");
+	await sleep(150);
+
+	writeFileSync(
+		join(repoDir, ".git", "packed-refs"),
+		"# pack-refs with: peeled fully-peeled sorted \n",
+	);
+
+	await waitFor(() => nudges.length >= 2);
+	expect(nudges.toSorted()).toEqual(["ws1", "ws2"]); // one repo, fanned out to both open workspaces
+	// …and, as always, no `.git` path ever leaks into a client-facing batch.
+	await sleep(600);
+	expect(payloads.filter((p) => p.paths.some((x) => x.includes(".git")))).toHaveLength(0);
+});
+
+test("the project git-dir watcher self-heals on inode change (dir deleted and recreated)", async () => {
+	const repoDir = join(dataDir, "repo");
+	mkdirSync(join(repoDir, ".git"), { recursive: true });
+	writeFileSync(
+		join(dataDir, "projects.json"),
+		JSON.stringify([
+			{ id: "p1", name: "repo", path: repoDir, slug: "repo", lastOpened: Date.now() },
+		]),
+	);
+
+	const nudges: string[] = [];
+	setRepoMetaPublisher((id) => nudges.push(id));
+	ensureWatch("ws1"); // ws1's projectId is "p1" (see the shared beforeEach fixture)
+	await sleep(150);
+
+	// Recreate the shared git dir out from under the live watcher (same path, new inode) — the exact shape
+	// every other self-healing watcher in this module handles (e.g. the worktree-root test above).
+	rmSync(join(repoDir, ".git"), { recursive: true, force: true });
+	mkdirSync(join(repoDir, ".git"));
+	ensureWatch("ws1"); // detects the inode change → tears down + re-creates the project watcher
+	await sleep(150);
+	nudges.length = 0;
+
+	writeFileSync(join(repoDir, ".git", "HEAD"), "ref: refs/heads/reborn\n");
+	await waitFor(() => nudges.length > 0);
+	expect(nudges).toEqual(["ws1"]);
+});
+
 test("ignored churn (node_modules) never publishes", async () => {
 	ensureWatch("ws1");
 	await sleep(100);

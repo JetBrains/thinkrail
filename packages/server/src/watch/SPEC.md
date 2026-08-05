@@ -39,7 +39,7 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   writes nothing outside the git dir, and a `git commit` moves `HEAD` without touching a worktree file.
   It is deliberately **not** matched on specific paths (`.git/HEAD`, `.git/logs/HEAD`, …): the platform
   streams coalesce and report *a* representative path per burst, so which git-internal path surfaces is not
-  reliable. A wildcard event (null filename) nudges it too. Two sources feed the one nudge:
+  reliable. A wildcard event (null filename) nudges it too. Three sources feed the one nudge:
   - `.git`-prefixed events seen by the recursive **root** watcher — covers a **repo root** workspace, whose
     `.git` directory lives inside the watched tree;
   - a second, **non-recursive** watcher on the worktree's git dir **when that dir lies outside the root**
@@ -50,6 +50,34 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
     line), never by shelling out — this module has no `git` sibling edge. Non-recursive because only the
     dir's top level holds the refs that move (`HEAD`, `index`, `ORIG_HEAD`) while `objects/`/`logs/` are
     pure storms; a missing/unreadable git dir (non-git folder) or a failed start degrades silently.
+  - a third, **non-recursive** watcher on the **project repo's own git dir** (`<project.path>/.git`,
+    resolved with plain fs `stat` — it is always a real directory, never a gitfile pointer, because every
+    project this app opens is a repo's main working tree, not a linked worktree). A project has **one**
+    repo but **many** workspaces, so this is **one watcher per project, never per workspace**: it fans out
+    to every currently-watched workspace of that project, reusing the exact same per-workspace debounce
+    (`scheduleRepoMeta`) — no second debounce mechanism. It is the only watcher that can see a **shared**
+    ref move (`refs/heads/*`, `packed-refs`) that lives in the repo's common dir, which no per-worktree
+    watcher (root or linked-gitdir, above) ever looks at.
+
+    **Open limitation, measured empirically on darwin — shipped as-is, not silently upgraded to
+    recursive.** The linked-worktree watcher above gets away with non-recursive because the refs that move
+    for *it* (`HEAD`, `index`, `ORIG_HEAD`) sit at the watched dir's top level. That does not hold here:
+    `refs/heads/<name>` — what a plain `git branch <name>` writes — is *two levels* below
+    `<project.path>/.git`, and non-recursive `fs.watch` on darwin is a direct-children-only view (kqueue
+    semantics): it structurally cannot see two levels down. Measured directly (repeated clean trials,
+    non-recursive watch on a real repo's `.git`, real `git branch`): a plain nested write is **never**
+    observed once the watcher has settled; a real `git branch` fired only **~50%** of the time in a
+    12-trial sample, and every firing was attributed to a top-level `rename` of `HEAD.lock` — which `git
+    branch` does not touch — an FSEvents coalescing/mis-attribution artifact, not a dependable signal. What
+    this watcher *does* reliably catch (10/10 in the same harness): anything that touches a genuine
+    **top-level** entry of the project's `.git` — `packed-refs` (written by `git gc` / `git fetch --prune`
+    / `git pack-refs`), the project's own `HEAD`/`index` if it is itself checked out and edited directly,
+    and lock-file churn during `gc`. A **recursive** watch on the same dir measured 100% reliable for `git
+    branch` (via the `logs/refs/heads/<name>` reflog write), but recursive was explicitly ruled out for
+    this seam going in — it would storm on every object write during a `fetch`/`gc`, for a directory every
+    workspace of the project shares. This gap is left open on purpose: see
+    `.superpowers/sdd/2026-08-04-remote-awareness/task-7-report.md` for the full measurement and the
+    follow-up options considered (recursive on `.git/logs` only was one candidate raised but not built).
 
   `host` fans the nudge out to two convergences: `refreshDefaultWorkspace` (a **Default** workspace's
   folder-truth branch labels) **and** a pathless `fsChanged` frame (`paths: []`, `truncated: false`) so the
@@ -64,8 +92,10 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   publishing for a forgotten id), and **retries a failed start on the next read** (no sticky failure
   marker). A watcher that errors mid-flight (ENOSPC, root deleted) is `console.warn`ed and dropped —
   panels fall back to read-on-demand until a later read re-creates it. No idle-stop in V1 (bounded by
-  workspaces actually visited).
+  workspaces actually visited). The **project git-dir watcher** (above) is self-healing the same way —
+  `ensureWatch` re-stats and re-creates it on inode change too — and is **reaped when the project record
+  is gone**, keyed off the project id rather than any one workspace's id.
 - **Public surface (barrel):** `ensureWatch`, `stopWatch`, `stopAllWatches`, `setWatchPublisher`,
   `setRepoMetaPublisher`.
-- **Allowed deps:** `persistence` (workspace lookup); `contracts` (payload type); Bun/Node.
+- **Allowed deps:** `persistence` (workspace + project lookup); `contracts` (payload type); Bun/Node.
 - **Forbidden:** `host`; sibling features; any pi package.
