@@ -776,11 +776,17 @@ a project picker, the prompt hero, and the reused
   `store.toast.error` rather than failing silently, since a git fetch can fail for reasons — bad
   credentials, no network — worth surfacing (the message is the server's own, unprefixed — it already
   names the ref). `ChangesPanel`'s own initial `git.remoteState` pull is a **plain effect** keyed on
-  `[workspaceId, baseRef, refsChangedTick]`, deliberately not `useWorkspaceRead`: that hook's re-read
-  trigger is the workspace's fs tick, uncorrelated with remote state (the watcher excludes `.git`), and
-  riding it would poll on every ordinary file write. A `cancelled` closure flag stands in for
-  `useWorkspaceRead`'s generation stamp — React's cleanup-before-next-body guarantee makes it sufficient
-  here, since nothing but this effect's own re-run can supersede it.
+  `[workspaceId, baseRef]`, deliberately not `useWorkspaceRead`: that hook's re-read trigger is the
+  workspace's fs tick, uncorrelated with remote state (the watcher excludes `.git`), and riding it would
+  poll on every ordinary file write. Its *other* trigger — a worktree-shared ref moving outside the fs
+  watcher's view (`project.refsChanged`) — is consumed as an **event**
+  (`useAppStore.subscribe`/**`selectProjectRefsChangedTick`**), exactly mirroring how `useWorkspaceRead`
+  itself consumes the fs tick (see its doc): never selected into render, so an unrelated project's refs
+  churn doesn't re-render this panel over a signal it only needs as a trigger. A `cancelled` closure flag
+  stands in for `useWorkspaceRead`'s generation stamp, unsubscribing alongside it on cleanup; a second,
+  independent guard — folding only when the answer's own `ref` still matches the `baseRef` this render is
+  currently showing — protects against a response for a target the panel has since moved past even if
+  cancellation somehow didn't.
 
   The mapping's three outcomes render distinctly, matching the
   wire's own three-fidelity `behind` (`number | "unknown" | null`, see `contracts`' `RemoteState`):
