@@ -47,7 +47,7 @@ both markdown surfaces, the `<body>` base).
 | `fontFamilies` | `interface` (Geist Variable, all proportional UI + reading text) · `code` (JetBrains Mono Variable, code only) · `brand` → **`{ "$ref": "interface" }`** (the brand display role today *is* the interface face; swapping in a licensed face means replacing this one alias) |
 | `fontWeights` | `regular` 400 · `medium` 500 · `semibold` 600 · `brand` 800 |
 | `fontSizes` | `s10` `s11` `s12` `s13` `s14` `s16` `s18` `s20` `s24` `s44` (px) |
-| `lineHeights` | `compact` 1.25 · `metadata` 1.3333 (12px→16px) · `ui` 1.4286 (14px→20px) · `code` 1.5 · `default` 1.6 |
+| `lineHeights` | `tight` 1.2308 (13px→16px) · `compact` 1.25 · `metadata` 1.3333 (12px→16px, 18px→24px) · `ui` 1.4286 (14px→20px) · `code` 1.5 · `relaxed` 1.5385 (13px→20px) · `default` 1.6 |
 | `letterSpacings` | `normal` · `wide` 0.05em · `widest` 0.1em · `brand` 0.5px |
 
 **Semantic styles** are what components use. Each names seven primitive references and nothing else, so
@@ -76,10 +76,10 @@ The rules, all enforced by `typography:validate`:
 `textStyles` groups: **brand** (`wordmark`, `hero`) · **heading** (`xl`, `lg`, `md`, `sm` — the shared
 document heading scale) · **title** (`dialog`, `card`→dialog, `section`, `compact`, `entity`→body.reading)
 · **ui** (`default`, `metadata`, `eyebrow`, `labelPill`→eyebrow, `action`→title.compact,
-`emphasis`→title.compact) · **body** (`reading`) · **code** (`text`, `inline`, `block`, `document`,
+`emphasis`→title.compact) · **body** (`reading`) · **code** (`text`, `inline`, `block`→inline, `document`,
 `otp`). `proseSystems` holds one entry per markdown surface, almost entirely aliases into the above.
 
-**21 canonical definitions + 28 aliases = 49 styles.**
+**20 canonical definitions + 29 aliases = 49 styles.**
 
 One prose rule is deliberately *not* a semantic style: `<strong>` / `<b>` gets **weight only**
 (`--tr-font-weight-medium`), emitted by the generator into each prose system. A complete style there
@@ -174,7 +174,7 @@ naming its own type. Two exist:
 | h5 | 12 / 500 | 14 / 600 |
 | h6 | 10 / 500 uppercase | 12 / 600 uppercase |
 | inline code | 13 mono | 13 mono |
-| fenced code | 11 mono / 1.5 | 13 mono / 1.5 |
+| fenced code | 13 mono / 1.54 | 13 mono / 1.5 |
 | table body / header | 12 / 400 · 12 / 600 | 14 / 400 · 14 / 600 |
 | `strong` / `b` | weight 500 only | weight 500 only |
 

@@ -41,10 +41,12 @@
 	--tr-font-size-s44: 44px;
 
 	/* Line heights (unitless) */
+	--tr-line-height-tight: 1.2307692;
 	--tr-line-height-compact: 1.25;
 	--tr-line-height-metadata: 1.3333333;
 	--tr-line-height-ui: 1.4285714;
 	--tr-line-height-code: 1.5;
+	--tr-line-height-relaxed: 1.5384615;
 	--tr-line-height-default: 1.6;
 
 	/* Letter spacing */
@@ -233,9 +235,9 @@
 }
 .tr-code-text {
 	font-family: var(--tr-font-family-code);
-	font-size: var(--tr-font-size-s11);
+	font-size: var(--tr-font-size-s13);
 	font-weight: var(--tr-font-weight-regular);
-	line-height: var(--tr-line-height-default);
+	line-height: var(--tr-line-height-tight);
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
 	font-style: normal;
@@ -244,16 +246,16 @@
 	font-family: var(--tr-font-family-code);
 	font-size: var(--tr-font-size-s13);
 	font-weight: var(--tr-font-weight-regular);
-	line-height: var(--tr-line-height-default);
+	line-height: var(--tr-line-height-relaxed);
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
 	font-style: normal;
 }
 .tr-code-block {
 	font-family: var(--tr-font-family-code);
-	font-size: var(--tr-font-size-s11);
+	font-size: var(--tr-font-size-s13);
 	font-weight: var(--tr-font-weight-regular);
-	line-height: var(--tr-line-height-code);
+	line-height: var(--tr-line-height-relaxed);
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
 	font-style: normal;
@@ -271,7 +273,7 @@
 	font-family: var(--tr-font-family-code);
 	font-size: var(--tr-font-size-s18);
 	font-weight: var(--tr-font-weight-regular);
-	line-height: var(--tr-line-height-default);
+	line-height: var(--tr-line-height-metadata);
 	letter-spacing: var(--tr-letter-spacing-widest);
 	text-transform: none;
 	font-style: normal;
@@ -345,16 +347,16 @@
 	font-family: var(--tr-font-family-code);
 	font-size: var(--tr-font-size-s13);
 	font-weight: var(--tr-font-weight-regular);
-	line-height: var(--tr-line-height-default);
+	line-height: var(--tr-line-height-relaxed);
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
 	font-style: normal;
 }
 .tr-prose-chat :is(pre, pre code) {
 	font-family: var(--tr-font-family-code);
-	font-size: var(--tr-font-size-s11);
+	font-size: var(--tr-font-size-s13);
 	font-weight: var(--tr-font-weight-regular);
-	line-height: var(--tr-line-height-code);
+	line-height: var(--tr-line-height-relaxed);
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
 	font-style: normal;
@@ -468,7 +470,7 @@
 	font-family: var(--tr-font-family-code);
 	font-size: var(--tr-font-size-s13);
 	font-weight: var(--tr-font-weight-regular);
-	line-height: var(--tr-line-height-default);
+	line-height: var(--tr-line-height-relaxed);
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
 	font-style: normal;

@@ -185,7 +185,7 @@ describe("markdown prose systems", () => {
 			h5: { fontSize: "s12", fontWeight: "medium" },
 			h6: { fontSize: "s10", fontWeight: "medium", textTransform: "uppercase" },
 			inlineCode: { fontFamily: "code", fontSize: "s13" },
-			codeBlock: { fontFamily: "code", fontSize: "s11" },
+			codeBlock: { fontFamily: "code", fontSize: "s13" },
 			tableBody: { fontSize: "s12", fontWeight: "regular" },
 			tableHeader: { fontSize: "s12", fontWeight: "semibold" },
 		};
@@ -213,7 +213,7 @@ describe("markdown prose systems", () => {
 		const ladder = ["h1", "h2", "h3", "h4", "h5", "h6"].map((h) => px(`doc.${h}`) as number);
 		for (let i = 1; i < ladder.length; i++)
 			expect(ladder[i], `doc.h${i + 1} <= doc.h${i}`).toBeLessThanOrEqual(ladder[i - 1] as number);
-		// Document code is bigger than chat code, because the surrounding body copy is bigger too.
-		expect(px("doc.codeBlock")).toBeGreaterThan(px("chat.codeBlock") as number);
+		// Chat and document fenced code now share one 13px mono size; document code is never smaller.
+		expect(px("doc.codeBlock")).toBeGreaterThanOrEqual(px("chat.codeBlock") as number);
 	});
 });
