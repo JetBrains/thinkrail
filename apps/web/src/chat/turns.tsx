@@ -104,7 +104,7 @@ function userText(content: UserMessage["content"]): string {
 function UserTurn({ message }: { message: UserMessage }) {
 	return (
 		<div data-testid="chat-message" data-role="user" className="flex justify-end">
-			<div className="max-w-[85%] whitespace-pre-wrap rounded-[var(--radius-md)] border border-bubble-user-border bg-bubble-user-bg px-md py-sm tr-text-reading text-text-default">
+			<div className="max-w-[85%] whitespace-pre-wrap rounded-[var(--radius-md)] bg-bubble-user-bg px-md py-sm tr-text-reading text-text-default">
 				{userText(message.content)}
 			</div>
 		</div>

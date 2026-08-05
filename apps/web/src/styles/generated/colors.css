@@ -39,7 +39,6 @@
 	--feedback-warning: var(--warning);
 	--feedback-warning-subtle: color-mix(in srgb, var(--warning) 12%, transparent);
 	--bubble-user-bg: color-mix(in srgb, var(--bubble-accent) 10%, transparent);
-	--bubble-user-border: color-mix(in srgb, var(--bubble-accent) 40%, transparent);
 	--selection-text: var(--selection-foreground, inherit); /* nullable in the manifest (high contrast keeps the native foreground) */
 	--selection-bg: var(--selection); /* native ::selection in global.css; not a utility */
 	--editor-selection-bg: var(--editor-selection);
@@ -96,7 +95,6 @@
 	--color-feedback-warning: var(--feedback-warning);
 	--color-feedback-warning-subtle: var(--feedback-warning-subtle);
 	--color-bubble-user-bg: var(--bubble-user-bg);
-	--color-bubble-user-border: var(--bubble-user-border);
 	--color-sunken: var(--sunken);
 	--color-overlay: var(--overlay);
 }
