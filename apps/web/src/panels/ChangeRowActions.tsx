@@ -58,7 +58,11 @@ export function ChangeRowActions({
 				data-testid="change-row"
 				data-active={active || open ? true : undefined}
 				className={`group flex min-w-0 items-center rounded-[var(--radius-sm)] ${
-					active || open ? "bg-control-bg-hovered" : "hover:bg-control-bg-hovered"
+					active
+						? "bg-container-sidebar-bg"
+						: open
+							? "bg-control-bg-hovered"
+							: "hover:bg-control-bg-hovered"
 				}`}
 			>
 				{children({ onContextMenu })}
