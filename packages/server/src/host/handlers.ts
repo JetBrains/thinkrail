@@ -283,6 +283,10 @@ const handlers: Record<string, Handler> = {
 		const ref = diffBaseRef(ws);
 		const state = await fetchRefNow(ws.projectId, ref);
 		noteRemoteTrusted(ws.projectId, "origin");
+		// Unconditional, unlike git.prefetch's `if (moved)` gate above — fetchRefNow's resolved RemoteState
+		// doesn't expose whether the ref actually moved, only that the fetch completed. A harmless duplicate
+		// frame when it didn't move (the module's replace-not-merge contract makes a redundant nudge a no-op
+		// for a subscriber), deliberately, not an oversight.
 		nudgeProjectRefsChanged(ws.projectId);
 		return state;
 	},

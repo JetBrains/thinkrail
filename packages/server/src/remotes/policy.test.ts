@@ -853,15 +853,24 @@ test("a discovered-gone ref resolves dormant: upstream-gone rather than throwing
 	});
 });
 
-test("throws when the underlying fetch genuinely fails, even after the classifying isolation", async () => {
+test("throws when the underlying fetch genuinely fails, even after the classifying isolation, and the thrown message carries the real git stderr", async () => {
 	saveProjects([project("p1")]);
 	saveWorkspaces([workspace("w1", "p1", "origin/main")]);
 	const { deps, state } = makeFakes();
 	state.fetchResult = { ok: false, moved: [], err: "fatal: unable to access remote" };
-	state.probeResult = { ok: false, heads: {}, err: "fatal: unable to access remote" }; // remote unreachable
+	// The classifying probe is the call that actually diagnoses the failure (it runs second, and its
+	// stderr is what markFailure stores) — give it a DISTINCT message so the assertion below can only pass
+	// if the classifying probe's stderr specifically reached the thrown error, not just any stderr.
+	state.probeResult = {
+		ok: false,
+		heads: {},
+		err: "ssh: connect to host example.com port 22: Connection refused",
+	};
 	configureRemoteCheckPolicyDeps(deps);
 
-	await expect(fetchRefNow("p1", "origin/main")).rejects.toThrow();
+	await expect(fetchRefNow("p1", "origin/main")).rejects.toThrow(
+		"ssh: connect to host example.com port 22: Connection refused",
+	);
 });
 
 test("rejects a ref that isn't remote-tracking-shaped, before making any git call at all", async () => {
