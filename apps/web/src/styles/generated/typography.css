@@ -42,6 +42,8 @@
 
 	/* Line heights (unitless) */
 	--tr-line-height-compact: 1.25;
+	--tr-line-height-metadata: 1.3333333;
+	--tr-line-height-ui: 1.4285714;
 	--tr-line-height-code: 1.5;
 	--tr-line-height-default: 1.6;
 
@@ -52,13 +54,13 @@
 	--tr-letter-spacing-brand: 0.5px;
 }
 
-/* Document base — `rootStyle` (body.reading). Any semantic class overrides it. */
+/* Document base — `rootStyle` (ui.default). Any semantic class overrides it. */
 @layer base {
 	body {
 		font-family: var(--tr-font-family-interface);
 		font-size: var(--tr-font-size-s14);
 		font-weight: var(--tr-font-weight-regular);
-		line-height: var(--tr-line-height-default);
+		line-height: var(--tr-line-height-ui);
 		letter-spacing: var(--tr-letter-spacing-normal);
 		text-transform: none;
 		font-style: normal;
@@ -170,7 +172,7 @@
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s14);
 	font-weight: var(--tr-font-weight-regular);
-	line-height: var(--tr-line-height-default);
+	line-height: var(--tr-line-height-ui);
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
 	font-style: normal;
@@ -179,7 +181,7 @@
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s12);
 	font-weight: var(--tr-font-weight-regular);
-	line-height: var(--tr-line-height-default);
+	line-height: var(--tr-line-height-metadata);
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
 	font-style: normal;
@@ -379,7 +381,7 @@
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s12);
 	font-weight: var(--tr-font-weight-regular);
-	line-height: var(--tr-line-height-default);
+	line-height: var(--tr-line-height-metadata);
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
 	font-style: normal;
