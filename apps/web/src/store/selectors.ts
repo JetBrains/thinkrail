@@ -261,6 +261,21 @@ export function selectWorkspaceNavTick(
 	return state.navTickByWorkspace[workspaceId] ?? 0;
 }
 
+/**
+ * A project's refs-changed nudge count (`refsChangedTickByProject`) — bumped by `noteRefsChanged` whenever
+ * the scheduler or a manual fetch learns the remote picture moved. Read it through here, not by indexing
+ * the record, for the same reason as `selectWorkspaceTick`/`selectWorkspaceNavTick`: "missing key means 0"
+ * is the whole contract. Meant to be consumed as an **event** (`useAppStore.subscribe`, comparing the last
+ * seen value to this one), never selected into a component with `useAppStore(...)` — that would make an
+ * unrelated project's refs churn a render input for every subscriber, not just the trigger it's meant to be.
+ */
+export function selectProjectRefsChangedTick(
+	state: { refsChangedTickByProject: Record<string, number> },
+	projectId: string,
+): number {
+	return state.refsChangedTickByProject[projectId] ?? 0;
+}
+
 interface SkillsStaleState {
 	/** Per workspace, the fs tick of the most recent skill-relevant `fsChanged` batch (see `noteFsChanged`). */
 	skillChangeTickByWorkspace: Record<string, number>;

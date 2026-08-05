@@ -4,6 +4,7 @@ import {
 	matchesWorktreePath,
 	selectDiffBaseRef,
 	selectDiffScope,
+	selectProjectRefsChangedTick,
 	selectWorkspaceById,
 	selectWorkspaceNavTick,
 	selectWorkspaceRemoteState,
@@ -67,12 +68,6 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	// `RemoteIndicator`'s doc for why the rail row needs neither) and its shared Fetch action.
 	const remoteState = useAppStore((s) => selectWorkspaceRemoteState(s, workspaceId));
 	const { fetching, fetchNow } = useRemoteFetch(workspaceId);
-	// A worktree-shared ref moving outside the fs watcher's view (`project.refsChanged`) — folded into the
-	// pull's `readKey` below, alongside `baseRef`, so a rebase/fetch elsewhere re-reads this workspace's
-	// remote state too, not just a re-point of the target itself.
-	const refsChangedTick = useAppStore(
-		(s) => s.refsChangedTickByProject[workspace?.projectId ?? ""] ?? 0,
-	);
 
 	// The changed-file list, re-read on the workspace's fs tick *and* on a scope change, plus a target
 	// re-point in branch scope (the `readKey`, see `changesReadKey`); a switch clears the list and its
@@ -132,29 +127,48 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	// workspace's fs tick, which fires on ordinary file writes (the watcher deliberately excludes `.git`) —
 	// a signal with zero correlation to remote state. Riding it would poll `git.remoteState` roughly once a
 	// second under continuous churn (this app's central scenario: an agent writing steadily), for a reason
-	// unrelated to what it's checking. `baseRef` + `refsChangedTick` are already the complete set of reasons
-	// this needs a fresh read, so they're the effect's only deps. `cancelled` guards the same thing
-	// `useWorkspaceRead`'s generation stamp does — React runs this effect's cleanup before the next one's
-	// body, so a response for an abandoned (workspaceId, baseRef, refsChangedTick) triple can never land
-	// after a newer read's. Silent on failure — a background pull, not a user action, so only the explicit
-	// Fetch button (`fetchNow` above) ever toasts. `git.remoteState` may answer `null` (no tracked state for
-	// this ref yet, or it isn't a remote-tracking ref at all); nothing folds into the store for that case,
-	// since there is nothing to correct — the selector already reads `null` from an absent entry.
-	// biome-ignore lint/correctness/useExhaustiveDependencies: baseRef/refsChangedTick are refetch triggers, not read
+	// unrelated to what it's checking. `baseRef` re-pointing and a worktree-shared ref moving outside the fs
+	// watcher's view (`project.refsChanged`) are the two other reasons this needs a fresh read, so a
+	// rebase/fetch elsewhere re-reads this workspace's remote state too, not just a re-point of the target
+	// itself. The refs-changed tick is consumed as an **event** (`useAppStore.subscribe`), exactly like
+	// `useWorkspaceRead`'s own fs-tick handling (see its doc) and for the same reason: selecting it into
+	// render would make an unrelated project's refs churn re-render this whole panel, when nothing it
+	// displays actually depends on the tick's *value* — only on "did it change". `cancelled` guards the same
+	// thing `useWorkspaceRead`'s generation stamp does — React runs this effect's cleanup, which both
+	// unsubscribes and cancels, before the next one's body, so a response for an abandoned read can never
+	// land after a newer one's; the `result.ref === baseRef` check is a second, independent guard against
+	// folding an answer for a ref this render has since moved past. Silent on failure — a background pull,
+	// not a user action, so only the explicit Fetch button (`fetchNow` above) ever toasts. `git.remoteState`
+	// may answer `null` (no tracked state for this ref yet, or it isn't a remote-tracking ref at all);
+	// nothing folds into the store for that case, since there is nothing to correct — the selector already
+	// reads `null` from an absent entry.
 	useEffect(() => {
 		let cancelled = false;
-		getTransport()
-			.request("git.remoteState", { workspaceId })
-			.then((result) => {
-				if (!cancelled && result) useAppStore.getState().noteRemoteState(result);
-			})
-			.catch(() => {
-				// Silent — see above.
-			});
+		const projectId = selectWorkspaceById(useAppStore.getState(), workspaceId)?.projectId ?? "";
+		const pull = () => {
+			getTransport()
+				.request("git.remoteState", { workspaceId })
+				.then((result) => {
+					if (!cancelled && result && result.ref === baseRef)
+						useAppStore.getState().noteRemoteState(result);
+				})
+				.catch(() => {
+					// Silent — see above.
+				});
+		};
+		pull();
+		let tick = selectProjectRefsChangedTick(useAppStore.getState(), projectId);
+		const unsubscribe = useAppStore.subscribe((state) => {
+			const next = selectProjectRefsChangedTick(state, projectId);
+			if (next === tick) return;
+			tick = next;
+			pull();
+		});
 		return () => {
 			cancelled = true;
+			unsubscribe();
 		};
-	}, [workspaceId, baseRef, refsChangedTick]);
+	}, [workspaceId, baseRef]);
 
 	// Re-point what the changes are measured against. `workspace.setDiffBase` echoes + broadcasts the updated
 	// workspace; the list re-reads off that push (the ref is part of this panel's read key).
