@@ -200,21 +200,39 @@ in two halves that share this one `SPEC.md` (written in the first, extended by t
     reimplemented a third time, and `Date.now`) are installed directly at module scope, overridable only
     by this module's own test file (not barrel-exported) — so a policy test fakes git's *answers*, never
     git itself, and never sleeps for the backoff timing either.
-- **Public surface (barrel, policy half):** `checkProject` (the real implementation — this is what host
-  wiring passes to `startRemoteChecks`), `remoteStateFor`, `setRemoteStatePublisher`, plus the
-  `RemoteCheckPolicyDeps` type and `BACKOFF_BASE_MS`/`BACKOFF_MAX_MS`/`REMOTE_CHECK_TIMEOUT_MS`. The
-  test-only `configureRemoteCheckPolicyDeps` setter is deliberately **not** barrel-exported (`policy.test.ts`
+- **`fetchRefNow(projectId, ref): Promise<RemoteState>`** — the policy half of `git.fetchNow`, a
+  user-initiated real fetch of exactly one pair. Unlike `checkProject`, it **bypasses the credential ladder
+  entirely**: it is the one path that performs a real git operation for a pair that has never been trusted
+  (`isRemoteTrusted` would otherwise gate `checkProject` from ever calling git for it, forever — this is how
+  rung 2 of the ladder gets satisfied in the first place). It reuses `applyFetch` (the same
+  batch-then-classify-then-retry recovery `checkProject`'s fetch mode uses, degenerate here at a batch of
+  one) so a vanished upstream branch resolves as `dormant: "upstream-gone"` rather than reintroducing the
+  batch-poisoning bug class `applyFetch` already exists to prevent; folds the result into the same
+  `PairRecord` `checkProject`/`remoteStateFor` read and write, and publishes the project's full snapshot.
+  Throws (never resolves a `RemoteState`) on a non-remote-tracking `ref`, an unknown `projectId`, or a
+  genuine fetch failure (`dormant: "failing"`) — recording the resulting trust (`noteRemoteTrusted`) is the
+  **host's** job, called only after this resolves successfully, never this function's.
+- **`noteRemoteTrusted(projectId, remote)`** is re-exported here (from `persistence`, which this module
+  already depends on) purely so `host` can satisfy ladder rung 2 through this same barrel, without gaining
+  a direct `persistence` edge of its own for that one call.
+- **Public surface (barrel, policy half):** `checkProject` (the real implementation host wiring passes to
+  `startRemoteChecks`), `fetchRefNow`, `noteRemoteTrusted` (re-exported), `remoteStateFor`,
+  `setRemoteStatePublisher`, plus the `RemoteCheckPolicyDeps` type and
+  `BACKOFF_BASE_MS`/`BACKOFF_MAX_MS`/`REMOTE_CHECK_TIMEOUT_MS`. The test-only
+  `configureRemoteCheckPolicyDeps` setter is deliberately **not** barrel-exported (`policy.test.ts`
   imports it directly from `./policy`, exactly as `remotes.test.ts` imports `startRemoteChecks` directly
   from `./remotes` rather than through `./index`).
 - **Allowed deps (policy half):** `git` (`probeRemoteRefs`, `fetchRemoteRefs`, `behindCount`,
   `remoteUrlKind`, `sshAgentPresent`, `diffBaseRef`, and `trackingRefOid` — for reading a local tracking
-  ref's oid; see "Design notes"), `persistence` (`isRemoteTrusted`, `loadProjects`, `loadWorkspaces`),
-  `contracts` (`RemoteState`, `RemoteDormantReason`, `ProjectRemoteStatePayload`, `AppConfig`), and the
-  mechanics half's own `currentGitRemoteCheckMode()` (a direct file import, not through the barrel — both
-  files are this one module's internal organization, not a boundary).
+  ref's oid; see "Design notes"), `persistence` (`isRemoteTrusted`, `loadProjects`, `loadWorkspaces`,
+  `noteRemoteTrusted`), `contracts` (`RemoteState`, `RemoteDormantReason`, `ProjectRemoteStatePayload`,
+  `AppConfig`), and the mechanics half's own `currentGitRemoteCheckMode()` (a direct file import, not
+  through the barrel — both files are this one module's internal organization, not a boundary).
 - **Forbidden (both halves):** `host` (config and the publish seam are both injected, never read by
-  importing `host`); `settings` (see above — config arrives by injection only); sibling feature modules
-  the policy half doesn't need (`workspaces`, `chats`, …).
+  importing `host`; `host` is the one that imports `remotes`, never the reverse); `settings` (see above —
+  config arrives by injection only); sibling feature modules the policy half doesn't need (`workspaces`,
+  `chats`, …) — note `fetchRefNow` takes a bare `(projectId, ref)`, never a `Workspace`, precisely so this
+  module never needs a `workspaces` import to resolve one.
 
 ## Design notes (policy half)
 

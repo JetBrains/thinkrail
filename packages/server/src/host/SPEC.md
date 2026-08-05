@@ -35,7 +35,29 @@ channel fan-out, and the process-boot wrapper both launchers share.
   invisible to every worktree watcher — fanning the pathless frame to each workspace of that project whose
   diff base is the moved ref (their branch-scope merge-base may have moved — the re-read is idempotent when
   it hasn't; everyone else stays asleep)
-  without touching a worktree file; call
+  without touching a worktree file;
+  the **remote-check wiring** — `setRefsNudgePublisher` (`refsNudge.ts`) and `remotes`' own
+  `setRemoteStatePublisher`, each teed to `server.publish` on `WS_CHANNELS.projectRefsChanged` /
+  `projectRemoteState` respectively (both `ws.subscribe`d in the WS `open` handler, alongside the
+  workspace-lifecycle trio); the **same settings-publisher tee that already calls `setAnalyticsSending`**
+  additionally calls `configureRemoteChecks(config)` — the one place a config change reaches `remotes`,
+  and why `remotes` must not import `settings`; `startRemoteChecks({ checkProject })` runs once at boot
+  (seeded with `configureRemoteChecks(getConfig())` first, so the scheduler picks up the user's real
+  persisted config immediately, not `DEFAULT_CONFIG`), and `stopRemoteChecks()` runs in `stop()` — the
+  pair that proves no live timer survives a shutdown; `noteClientActivity()` is called from the WS `open`
+  handler only — once per new connection (covering first load, a hard refresh, and a reconnect, never a
+  per-message or per-request call), because it does an **uncached, synchronous `loadProjects()` disk
+  read** per call, cheap only at connect-grade frequency; the `git.prefetch` handler's success path calls
+  `noteRemoteTrusted(projectId, "origin")` (satisfying credential-ladder rung 2 for a background fetch
+  that just proved it can authenticate) beside its existing `nudgeBaseRefWorkspaces` call, and now also
+  calls `nudgeProjectRefsChanged(projectId)`; the new **`git.fetchNow`** handler (a user-initiated fetch of
+  a workspace's resolved diff-base ref) does the same on success — `noteRemoteTrusted` then
+  `nudgeProjectRefsChanged` — and echoes the resulting `RemoteState` directly rather than making the
+  caller wait on the broadcast; the new **`git.remoteState`** handler is a pure cache read
+  (`remotes.remoteStateFor`, never a probe/fetch trigger) that returns `null` **only** when the
+  workspace's resolved base isn't remote-tracking-shaped at all (a permanent fact) — a remote-tracking ref
+  that simply hasn't had a check run for it yet reads as the honest, non-null "not yet known"
+  `{ behind: null, lastCheckedAt: null }` (see the handler's own doc comment for this distinction); call
   `ensureWatch(workspaceId)` from the
   workspace-read handlers (`fs.*`, `git.status`/`git.diffFile`, `spec.graph`) — a read is the "a client is
   looking" signal; `stopWatch` in `workspace.remove`'s fast path beside `evictSpecIndex`;

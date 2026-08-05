@@ -19,6 +19,7 @@ import {
 	BACKOFF_MAX_MS,
 	checkProject,
 	configureRemoteCheckPolicyDeps,
+	fetchRefNow,
 	REMOTE_CHECK_TIMEOUT_MS,
 	type RemoteCheckPolicyDeps,
 	refsForProject,
@@ -774,4 +775,111 @@ test("checkProject for a project id with no matching Project record degrades qui
 	configureRemoteCheckPolicyDeps(deps);
 
 	await checkProject("ghost"); // refsForProject("ghost") is non-empty, but loadProjects() has no match
+});
+
+// ── fetchRefNow: the user-initiated fetch, bypassing the credential ladder ──
+//
+// `git.fetchNow`'s policy half. Unlike checkProject, there is no "off" short-circuit and no ladder
+// consultation at all — a caller reaches this specifically BECAUSE the pair hasn't been trusted yet
+// (`noteRemoteTrusted` is the host's job, called only after this resolves), so gating it on
+// `isRemoteTrusted` would make the bootstrap path impossible to ever complete.
+
+test("performs a real fetch for exactly the given ref, folds the result into the same record remoteStateFor reads, and returns it", async () => {
+	saveProjects([project("p1")]);
+	saveWorkspaces([workspace("w1", "p1", "origin/main")]);
+	// Trust deliberately never granted — fetchRefNow must not consult the ladder at all.
+	const { deps, state, calls } = makeFakes();
+	state.localTrackingOid["origin/main"] = "before-oid";
+	state.fetchResult = { ok: true, moved: ["main"], err: "" };
+	state.behindCountResult = 3;
+	configureRemoteCheckPolicyDeps(deps);
+
+	const result = await fetchRefNow("p1", "origin/main");
+
+	expect(result).toEqual({
+		projectId: "p1",
+		ref: "origin/main",
+		behind: 3,
+		lastCheckedAt: expect.any(String),
+	});
+	expect(remoteStateFor("p1")).toEqual([result]); // the scheduler's own cache read agrees immediately
+	expect(calls.fetch).toEqual([
+		{ repoPath: "/tmp/p1", remote: "origin", refs: ["main"], timeoutMs: REMOTE_CHECK_TIMEOUT_MS },
+	]);
+});
+
+test("never consults the credential ladder — succeeds even though the pair has never been trusted", async () => {
+	saveProjects([project("p1")]);
+	saveWorkspaces([workspace("w1", "p1", "origin/main")]);
+	const { deps, calls } = makeFakes();
+	configureRemoteCheckPolicyDeps(deps);
+
+	await fetchRefNow("p1", "origin/main");
+
+	expect(calls.remoteUrlKind).toEqual([]);
+	expect(calls.sshAgentPresent).toBe(0);
+});
+
+test("publishes the project's full snapshot on success, matching every other publish here", async () => {
+	saveProjects([project("p1")]);
+	saveWorkspaces([workspace("w1", "p1", "origin/main"), workspace("w2", "p1", "origin/develop")]);
+	const { deps } = makeFakes();
+	configureRemoteCheckPolicyDeps(deps);
+	const published: ProjectRemoteStatePayload[] = [];
+	setRemoteStatePublisher((payload) => published.push(payload));
+
+	await fetchRefNow("p1", "origin/main");
+
+	expect(published).toHaveLength(1);
+	expect(published[0]).toEqual({ projectId: "p1", states: remoteStateFor("p1") });
+});
+
+test("a discovered-gone ref resolves dormant: upstream-gone rather than throwing — the fetch mechanism worked", async () => {
+	saveProjects([project("p1")]);
+	saveWorkspaces([workspace("w1", "p1", "origin/main")]);
+	const { deps, state } = makeFakes();
+	state.fetchResult = { ok: false, moved: [], err: "fatal: couldn't find remote ref main" };
+	state.probeResult = { ok: true, heads: {}, err: "" }; // classifying ls-remote: main is genuinely absent
+	configureRemoteCheckPolicyDeps(deps);
+
+	const result = await fetchRefNow("p1", "origin/main");
+
+	expect(result).toEqual({
+		projectId: "p1",
+		ref: "origin/main",
+		behind: null,
+		lastCheckedAt: expect.any(String),
+		dormant: "upstream-gone",
+	});
+});
+
+test("throws when the underlying fetch genuinely fails, even after the classifying isolation", async () => {
+	saveProjects([project("p1")]);
+	saveWorkspaces([workspace("w1", "p1", "origin/main")]);
+	const { deps, state } = makeFakes();
+	state.fetchResult = { ok: false, moved: [], err: "fatal: unable to access remote" };
+	state.probeResult = { ok: false, heads: {}, err: "fatal: unable to access remote" }; // remote unreachable
+	configureRemoteCheckPolicyDeps(deps);
+
+	await expect(fetchRefNow("p1", "origin/main")).rejects.toThrow();
+});
+
+test("rejects a ref that isn't remote-tracking-shaped, before making any git call at all", async () => {
+	saveProjects([project("p1")]);
+	saveWorkspaces([workspace("w1", "p1", "feature/local")]);
+	const { deps, calls } = makeFakes();
+	configureRemoteCheckPolicyDeps(deps);
+
+	await expect(fetchRefNow("p1", "feature/local")).rejects.toThrow();
+	expect(calls.fetch).toEqual([]);
+	expect(calls.probe).toEqual([]);
+});
+
+test("rejects an unknown project id, before making any git call at all", async () => {
+	saveWorkspaces([workspace("w1", "ghost", "origin/main")]);
+	const { deps, calls } = makeFakes();
+	configureRemoteCheckPolicyDeps(deps);
+
+	await expect(fetchRefNow("ghost", "origin/main")).rejects.toThrow();
+	expect(calls.fetch).toEqual([]);
 });

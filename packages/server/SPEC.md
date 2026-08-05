@@ -60,7 +60,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `auth` | provider status (`provider.status`) + in-app login (OAuth / API key / logout) | [auth/SPEC.md](src/auth/SPEC.md) |
 | `assist` | ad-hoc one-shot tasks (workspace naming, …) on a cheap model, best-effort | [assist/SPEC.md](src/assist/SPEC.md) |
 | `analytics` | anonymous usage analytics: closed event set → PostHog sink (privacy contract in its spec) | [analytics/SPEC.md](src/analytics/SPEC.md) |
-| `remotes` | remote-check scheduler: when a check runs (floor + jittered backstop); policy half pending | [remotes/SPEC.md](src/remotes/SPEC.md) |
+| `remotes` | remote-check scheduler: when a check runs (floor + jittered backstop) + what it finds (credential ladder, dormancy, `RemoteState`) | [remotes/SPEC.md](src/remotes/SPEC.md) |
 | `dialog` | the host's native folder picker | [dialog/SPEC.md](src/dialog/SPEC.md) |
 | `history` | prompt recall + conversation search over pi's session files | [history/SPEC.md](src/history/SPEC.md) |
 | `templates` | file CRUD over pi's prompt-template dirs (global + project scoped) | [templates/SPEC.md](src/templates/SPEC.md) |
@@ -72,7 +72,7 @@ the host from env via `bootHost` for dev/e2e.
 
 `host` is the **only composition root** — it wires each feature's handlers into the WS registry.
 
-- `host` → `projects`, `workspaces`, `git`, `github`, `fs`, `spec`, `todos`, `watch`, `terminal`, `dialog`, `agent`, `auth`, `assist`, `settings`, `history`, `templates`, `analytics`
+- `host` → `projects`, `workspaces`, `git`, `github`, `fs`, `spec`, `todos`, `watch`, `terminal`, `dialog`, `agent`, `auth`, `assist`, `settings`, `history`, `templates`, `analytics`, `remotes`
 - `workspaces` → `projects`, `git`, `persistence`
 - `projects` → `git` (shared runner), `persistence`
 - `git`, `fs`, `spec`, `watch`, `terminal`, `settings`, `analytics`, `remotes` → `persistence` (`spec` also → `pi-spec-graph/core`, external; `analytics` also → the pi-ai built-in provider/model catalog + `posthog-node`, external — the identity-bucketing vocabulary and the delivery SDK)
@@ -97,9 +97,14 @@ Analytics is host-mediated the same way: **every `track()` call site lives in `h
 session-create, login-success observation), and `host` syncs `setAnalyticsSending` off the settings
 broadcast — `analytics` has no `settings` edge and no feature module knows analytics exists.
 
-`remotes` is **not yet in `host`'s wiring list above** — its mechanics half (scheduling only) has landed,
-but `startRemoteChecks`/`configureRemoteChecks` are not yet called from anywhere; that lands with the
-policy half + host wiring (a later task), the same `setAnalyticsSending`-style config tee once it exists.
+The remote-check scheduler is host-mediated the same way: `host` calls `startRemoteChecks({ checkProject })`
+at boot and `stopRemoteChecks()` in `server.stop()` (the lifecycle pair that proves no live timer survives
+a shutdown), extends the **same** settings-publisher tee that syncs `setAnalyticsSending` to also call
+`configureRemoteChecks(config)` (the one place a config change reaches `remotes`, which — like `analytics`
+— has no `settings` edge of its own), and calls `noteClientActivity()` on the WS `open` handler (a discrete,
+per-connection event — not per message). The project-scoped `project.refsChanged`/`project.remoteState`
+channels are installed via `host/refsNudge.ts`'s and `remotes`' own publisher-injection seams, exactly like
+every other push channel in this table.
 
 ## Get right
 

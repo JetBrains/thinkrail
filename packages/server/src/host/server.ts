@@ -18,6 +18,14 @@ import {
 import { cancelAllLogins, setLoginPublisher } from "../auth";
 import { resolveWorktreeFile } from "../fs";
 import { listProjects, openProject } from "../projects";
+import {
+	checkProject,
+	configureRemoteChecks,
+	noteClientActivity,
+	setRemoteStatePublisher,
+	startRemoteChecks,
+	stopRemoteChecks,
+} from "../remotes";
 import { getConfig, setSettingsPublisher } from "../settings";
 import { closeAllTerminals, setTerminalPublisher } from "../terminal";
 import { setRepoMetaPublisher, setWatchPublisher, stopAllWatches } from "../watch";
@@ -31,6 +39,7 @@ import {
 import { setFsNudgePublisher } from "./fsNudge";
 import { handleRequest } from "./handlers";
 import { trackLoginOutcome } from "./loginAnalytics";
+import { setRefsNudgePublisher } from "./refsNudge";
 
 export interface CreateServerOptions {
 	port?: number;
@@ -94,6 +103,8 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 				ws.subscribe(WS_CHANNELS.workspaceRemoved);
 				ws.subscribe(WS_CHANNELS.workspaceFsChanged);
 				ws.subscribe(WS_CHANNELS.settingsChanged);
+				ws.subscribe(WS_CHANNELS.projectRefsChanged);
+				ws.subscribe(WS_CHANNELS.projectRemoteState);
 				const welcome: ServerWelcome = {
 					protocolVersion: PROTOCOL_VERSION,
 					projects: listProjects(),
@@ -101,6 +112,10 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 					...(appVersion ? { appVersion } : {}),
 				};
 				ws.send(JSON.stringify({ channel: WS_CHANNELS.serverWelcome, data: welcome }));
+				// A discrete, per-connection signal (first load, hard refresh, or reconnect — never per WS
+				// message) — cheap only at this frequency, since `noteClientActivity` does an uncached,
+				// synchronous `loadProjects()` disk read.
+				noteClientActivity();
 			},
 			async message(ws, message) {
 				const raw = typeof message === "string" ? message : message.toString();
@@ -201,16 +216,37 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		publishFsChanged({ workspaceId, paths: [], truncated: false });
 	});
 
+	// The project repo's own shared git metadata moved (a `git branch`/`fetch`/`reset` in any one of its
+	// worktrees) — the `remotes` module's invalidation nudge, mirroring `workspace.fsChanged` at project
+	// scope. `remotes` owns no publish channel of its own (see `remotes/SPEC.md`'s "forbidden: host").
+	setRefsNudgePublisher((payload) => {
+		server.publish(
+			WS_CHANNELS.projectRefsChanged,
+			JSON.stringify({ channel: WS_CHANNELS.projectRefsChanged, data: payload }),
+		);
+	});
+
+	// The remote-check scheduler's full per-project `RemoteState[]` snapshot, pushed after every
+	// `checkProject`/`fetchRefNow` round — every client converges on the same array, replace not merge.
+	setRemoteStatePublisher((payload) => {
+		server.publish(
+			WS_CHANNELS.projectRemoteState,
+			JSON.stringify({ channel: WS_CHANNELS.projectRemoteState, data: payload }),
+		);
+	});
+
 	// Broadcast a server-synced settings change (the full `AppConfig`) to every client so they converge —
 	// the initiator applies on this push too, never optimistically (the workspace-lifecycle pattern). The
-	// analytics service syncs off the same tee (host-mediated — `analytics` has no `settings` edge), so
-	// the Privacy toggle takes effect the moment the new config is persisted.
+	// analytics service and the remote-check scheduler both sync off the same tee (host-mediated — neither
+	// `analytics` nor `remotes` has a `settings` edge), so the Privacy toggle and a changed
+	// `gitRemoteCheck`/interval take effect the moment the new config is persisted.
 	setSettingsPublisher((config) => {
 		server.publish(
 			WS_CHANNELS.settingsChanged,
 			JSON.stringify({ channel: WS_CHANNELS.settingsChanged, data: config }),
 		);
 		setAnalyticsSending(config.analyticsEnabled);
+		configureRemoteChecks(config);
 	});
 
 	// Stream each in-process AgentSession's events to subscribed clients over the pi.event channel, and
@@ -263,6 +299,13 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		enabled: getConfig().analyticsEnabled,
 	});
 
+	// Seed the scheduler with the user's real persisted config (not `DEFAULT_CONFIG`) before arming it, then
+	// start it — `checkProject` is `remotes`' real policy implementation, handed in exactly as `remotes.ts`'s
+	// own doc describes (mechanics invokes an opaque callback; policy supplies it). No check runs yet: the
+	// no-client gate stays closed until the first `noteClientActivity()` call above.
+	configureRemoteChecks(getConfig());
+	startRemoteChecks({ checkProject });
+
 	// Open a project on boot if the launcher passed one (e.g. `thinkrail /path/to/repo`). Best-effort:
 	// a non-repo / missing dir is a warning, not a boot failure — the UI's Open-Project flow still works.
 	if (projectPath) {
@@ -286,6 +329,7 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 			void shutdownAnalytics();
 			cancelAllLogins();
 			stopAllWatches();
+			stopRemoteChecks();
 			disposeAllSessions();
 			closeAllTerminals();
 			server.stop(true);
