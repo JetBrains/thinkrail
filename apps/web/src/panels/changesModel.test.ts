@@ -234,3 +234,33 @@ test("remoteIndicatorView surfaces every other dormancy reason, muted rather tha
 		);
 	}
 });
+
+// ---- remoteIndicatorView surfaces `lastCheckedAt` in the reason text (never rendered before) ------------
+
+test("remoteIndicatorView appends a relative 'last checked' note whenever lastCheckedAt is known", () => {
+	const fiveMinutesAgo = new Date(Date.now() - 5 * 60_000).toISOString();
+
+	// Actively-checked, genuinely behind.
+	const behind = remoteIndicatorView(remote({ behind: 3, lastCheckedAt: fiveMinutesAgo }));
+	expect(behind?.kind === "behind" ? behind.reason : "").toContain("5m ago");
+
+	// A dormant reason with a real prior check (e.g. "failing" after backing off from a past success).
+	const dormant = remoteIndicatorView(
+		remote({ behind: null, dormant: "failing", lastCheckedAt: fiveMinutesAgo }),
+	);
+	expect(dormant?.kind === "behind" ? dormant.reason : "").toContain("5m ago");
+
+	// upstream-gone: the completed check that discovered the branch is gone still has a timestamp.
+	const gone = remoteIndicatorView(
+		remote({ behind: null, dormant: "upstream-gone", lastCheckedAt: fiveMinutesAgo }),
+	);
+	expect(gone?.kind === "warning" ? gone.reason : "").toContain("5m ago");
+});
+
+test("remoteIndicatorView never fabricates a 'last checked' note when lastCheckedAt is null", () => {
+	// never-authenticated, fresh: nothing has ever completed a check for this pair.
+	const view = remoteIndicatorView(
+		remote({ behind: null, dormant: "never-authenticated", lastCheckedAt: null }),
+	);
+	expect(view?.kind === "behind" ? view.reason : "").not.toContain("Last checked");
+});

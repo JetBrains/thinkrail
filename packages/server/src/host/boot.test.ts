@@ -1,8 +1,10 @@
 import { afterEach, expect, spyOn, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { RemoteState } from "@thinkrail/contracts";
 import { isPortFree } from "@thinkrail/shared/freePort";
+import { saveWorkspaces } from "../persistence";
 import { resetConfigCache } from "../settings";
 import { type BootedHost, bootHost } from "./boot";
 import { handleRequest } from "./handlers";
@@ -163,6 +165,108 @@ test("a settings.update reaches the remote-check scheduler through the host-medi
 	} finally {
 		setTimeoutSpy.mockRestore();
 		clearTimeoutSpy.mockRestore();
+		resetConfigCache();
+		rmSync(dataDir, { recursive: true, force: true });
+		if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
+		else process.env.THINKRAIL_DATA_DIR = savedDataDir;
+	}
+});
+
+// ── git.prefetch's `moved` branch must invalidate the scheduler's cached RemoteState ────────────────
+//
+// `git.prefetch`'s success path already grants credential-ladder rung 2 (`noteRemoteTrusted`) and nudges
+// every CLIENT that this project's refs moved (`nudgeProjectRefsChanged`) — but a client reacting to that
+// nudge does a `git.remoteState` PULL, which is a pure cache read (`remoteStateFor`, see `remotes/SPEC.md`).
+// Nothing in the pre-fix code ever asks the scheduler to actually RE-CHECK, so that pull kept answering the
+// stale pre-fetch snapshot (`lastCheckedAt: null`) forever, unless the unrelated backstop happened to fire
+// first. This test drives the real `createServer` wiring end to end (real project/workspace/origin repo, a
+// real `git fetch` through the handler) — a fake `checkProject` would prove nothing about whether `server.ts`
+// and `handlers.ts` actually wire `checkNow` in.
+
+function gitIn(cwd: string, ...args: string[]): void {
+	const result = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "ignore", stderr: "ignore" });
+	if (!result.success) throw new Error(`git ${args.join(" ")} failed`);
+}
+
+test("git.prefetch's moved branch calls checkNow — a follow-up git.remoteState read reflects the fetch, never the stale pre-fetch snapshot", async () => {
+	const dataDir = mkdtempSync(join(tmpdir(), "thinkrail-boot-checknow-"));
+	const savedDataDir = process.env.THINKRAIL_DATA_DIR;
+	process.env.THINKRAIL_DATA_DIR = dataDir;
+	resetConfigCache();
+	try {
+		// `repo` is the project; `originRepo` stands in for "origin" — a local filesystem remote is a
+		// genuine `git fetch` target, no network involved (same technique `git/git.test.ts` uses).
+		const repo = join(dataDir, "repo");
+		const originRepo = join(dataDir, "origin");
+		mkdirSync(repo);
+		gitIn(repo, "init", "-b", "main");
+		gitIn(repo, "config", "user.email", "t@thinkrail.test");
+		gitIn(repo, "config", "user.name", "test");
+		writeFileSync(join(repo, "README.md"), "# repo\n");
+		gitIn(repo, "add", "-A");
+		gitIn(repo, "commit", "-m", "init");
+
+		mkdirSync(originRepo);
+		gitIn(originRepo, "init", "-b", "main");
+		gitIn(originRepo, "config", "user.email", "t@thinkrail.test");
+		gitIn(originRepo, "config", "user.name", "test");
+		writeFileSync(join(originRepo, "README.md"), "# origin\n");
+		gitIn(originRepo, "add", "-A");
+		gitIn(originRepo, "commit", "-m", "origin init");
+		gitIn(repo, "remote", "add", "origin", originRepo);
+
+		const projectId = "boot-checknow-important1-p";
+		writeFileSync(
+			join(dataDir, "projects.json"),
+			JSON.stringify([{ id: projectId, name: "repo", path: repo, slug: "repo", lastOpened: 1 }]),
+		);
+		saveWorkspaces([
+			{
+				id: "ws-checknow",
+				projectId,
+				name: "checknow-target",
+				branch: "checknow-target",
+				worktreePath: repo,
+				baseBranch: "origin/main",
+			},
+		]);
+
+		await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
+
+		// Sanity: nothing has checked this project yet — the honest not-yet-known object, per
+		// `handlers.test.ts`'s own `git.remoteState` contract test.
+		expect(await handleRequest("git.remoteState", { workspaceId: "ws-checknow" })).toEqual({
+			projectId,
+			ref: "origin/main",
+			behind: null,
+			lastCheckedAt: null,
+		});
+
+		const prefetchResult = (await handleRequest("git.prefetch", {
+			projectId,
+			ref: "origin/main",
+		})) as { ok: boolean };
+		expect(prefetchResult.ok).toBe(true); // `origin/main` had never been fetched locally — moved=true
+
+		// The fix under test: `git.prefetch`'s `moved` branch must call `checkNow(projectId)`, which runs a
+		// real background check (now that the fetch above granted credential-ladder rung 2) and stamps a
+		// fresh `lastCheckedAt`. Pre-fix, this stays the exact same stale `{ behind: null, lastCheckedAt:
+		// null }` object asserted above — proving the cache was never invalidated. `checkNow` is
+		// fire-and-forget from the handler's perspective (it must never block the fetch's own wire response
+		// on a SECOND network round-trip), so its background check may still be in flight the instant
+		// `git.prefetch` resolves — poll instead of asserting on the very first read.
+		let after: RemoteState | null = null;
+		const deadline = Date.now() + 3_000;
+		do {
+			after = (await handleRequest("git.remoteState", {
+				workspaceId: "ws-checknow",
+			})) as RemoteState | null;
+			if (after?.lastCheckedAt !== null) break;
+			await new Promise((resolve) => setTimeout(resolve, 20));
+		} while (Date.now() < deadline);
+		expect(after).not.toBeNull();
+		expect(after?.lastCheckedAt).not.toBeNull();
+	} finally {
 		resetConfigCache();
 		rmSync(dataDir, { recursive: true, force: true });
 		if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;

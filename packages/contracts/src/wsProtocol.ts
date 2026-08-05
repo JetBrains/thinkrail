@@ -442,8 +442,10 @@ export interface WsMethodMap {
 	// first and capped host-side — the scope menu's commit rows.
 	"git.listCommits": { params: { workspaceId: string }; result: { commits: GitCommit[] } };
 	// The last-known state for the workspace's resolved diff-base ref (`diffBase ?? baseBranch`, resolved
-	// server-side); `null` when that base is not a remote-tracking ref (nothing to report) or has never
-	// been checked. The `project.remoteState` push keeps a connected client current — this is the pull.
+	// server-side); `null` when that base is not a remote-tracking ref — nothing to ever report. A
+	// remote-tracking base that has never been checked answers a non-null `RemoteState` with `behind: null,
+	// lastCheckedAt: null` instead — the honest "not yet known", distinct from "permanently nothing to check".
+	// The `project.remoteState` push keeps a connected client current — this is the pull.
 	"git.remoteState": { params: { workspaceId: string }; result: RemoteState | null };
 	// A user-initiated real fetch of the workspace's resolved diff-base ref; rejects when that base is not
 	// a remote-tracking ref (there is nothing to fetch — unlike the read side, an action has no silent

@@ -5,10 +5,12 @@ import type { DiffStats, Project, Workspace } from "@thinkrail/contracts";
 import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
 import {
 	assertSafeRef,
+	BACKGROUND_FETCH_TIMEOUT_MS,
 	changedFileArgs,
 	currentBranch,
 	git,
 	gitAsync,
+	REMOTE_ENV,
 	resolveDefaultBranch,
 	resolveDiffRange,
 } from "../git";
@@ -178,11 +180,20 @@ export async function createWorkspace(
 	// an unknown ref (the freshness fetch already happened in the background via `prefetchBranch`). The
 	// `rev-parse` guard is ~10ms; offline it degrades to whatever ref exists locally. Async (`gitAsync`) so
 	// the network round-trip can't block the event loop; `--` guards against `-`-prefixed branch names.
+	// Runs under `REMOTE_ENV` (no prompt path) with a `BACKGROUND_FETCH_TIMEOUT_MS` deadline — same
+	// rationale as `prefetchBranch` (`git.ts`): an interactive credential prompt or a hung network fetch
+	// must never block workspace creation. The result is intentionally ignored (fire-and-forget): if the
+	// fetch fails or times out, `worktree add` below simply fails on the still-missing ref, exactly as it
+	// would have failed offline before this fetch existed — the deadline only bounds *how long* that
+	// failure takes to surface, it does not change *whether* creation fails.
 	if (
 		baseBranch.startsWith("origin/") &&
 		!git(project.path, ["rev-parse", "--verify", "--quiet", baseBranch]).ok
 	) {
-		await gitAsync(project.path, ["fetch", "origin", "--", baseBranch.slice("origin/".length)]);
+		await gitAsync(project.path, ["fetch", "origin", "--", baseBranch.slice("origin/".length)], {
+			env: REMOTE_ENV,
+			timeoutMs: BACKGROUND_FETCH_TIMEOUT_MS,
+		});
 	}
 
 	const worktreePath = join(dataDir(), "worktrees", project.slug, branch);

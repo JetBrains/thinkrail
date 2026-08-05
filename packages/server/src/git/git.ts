@@ -17,7 +17,7 @@ import {
 	diffBaseRef,
 	resolveDiffRange,
 } from "./diffScope";
-import { git, gitAsync } from "./gitExec";
+import { BACKGROUND_FETCH_TIMEOUT_MS, git, gitAsync, REMOTE_ENV } from "./gitExec";
 import { trackingRefOid } from "./remoteRefs";
 
 function workspace(workspaceId: string): Workspace {
@@ -91,6 +91,11 @@ export function currentBranch(repoPath: string): string {
  * and instant. Async (`gitAsync`, never `spawnSync`) so the network fetch can't block the host's event
  * loop; a local (non-`origin/`) ref or an offline/failed fetch is a harmless no-op ack.
  *
+ * Runs under `REMOTE_ENV` (no prompt path — see that constant's doc) with a `BACKGROUND_FETCH_TIMEOUT_MS`
+ * deadline, exactly like every other background remote call this app makes: without them, this fetch is
+ * the one credential-ladder-unlocking operation (`handlers.ts`'s `git.prefetch` grants rung 2 off its
+ * success) that could prompt or hang indefinitely.
+ *
  * `moved` reports whether the fetch changed which commit the local remote-tracking ref names (its first
  * appearance counts). A moved ref *may* change what a sibling workspace's branch-scope diff means (its
  * merge-base can move), so the `git.prefetch` handler fans the pathless `fsChanged` invalidation out to
@@ -112,7 +117,10 @@ export async function prefetchBranch(
 	const name = ref.slice("origin/".length);
 	const before = trackingRefOid(project.path, "origin", name);
 	// `--` so a `-`-prefixed branch name can't be parsed by git as an option.
-	const result = await gitAsync(project.path, ["fetch", "origin", "--", name]);
+	const result = await gitAsync(project.path, ["fetch", "origin", "--", name], {
+		env: REMOTE_ENV,
+		timeoutMs: BACKGROUND_FETCH_TIMEOUT_MS,
+	});
 	if (!result.ok) return { ok: false, moved: false };
 	const after = trackingRefOid(project.path, "origin", name);
 	const moved = after !== undefined && after !== before;

@@ -196,18 +196,22 @@ export function configureRemoteCheckPolicyDeps(deps: RemoteCheckPolicyDeps = {})
  * or local-policy question), so it stays excluded from every future batch without re-consulting trust or
  * ssh-agent state at all — see SPEC.md's "Design notes" for the sticky-until-restart tradeoff this implies.
  * `null` means eligible: add this ref to the network batch.
+ *
+ * `trusted`/`urlKind` are lazy thunks, not plain values, so that short-circuit stays real: `checkProject`
+ * memoizes each on first actual use (see its own doc), and a round whose only ref is sticky `"upstream-gone"`
+ * must invoke neither `isRemoteTrusted` (a `persistence` read) nor `remoteUrlKindFn` (a `git` subprocess) even
+ * once — passing already-computed values would force both to run unconditionally before this is ever called,
+ * for every round, defeating the sticky short-circuit `policy.test.ts` pins.
  */
 function ladderReason(
-	projectId: string,
-	remote: string,
-	repoPath: string,
 	record: PairRecord,
 	now: number,
+	trusted: () => boolean,
+	urlKind: () => "ssh" | "other" | "unknown",
 ): RemoteDormantReason | null {
 	if (record.dormant === "upstream-gone") return "upstream-gone";
-	if (!isRemoteTrusted(projectId, remote)) return "never-authenticated";
-	if (remoteUrlKindFn(repoPath, remote) === "ssh" && sshAgentPresentFn())
-		return "ssh-agent-present";
+	if (!trusted()) return "never-authenticated";
+	if (urlKind() === "ssh" && sshAgentPresentFn()) return "ssh-agent-present";
 	if (record.nextRetryAt !== null && now < record.nextRetryAt) return "failing";
 	return null;
 }
@@ -419,10 +423,25 @@ export const checkProject: CheckProjectFn = async (projectId) => {
 	}
 
 	const now = nowFn();
+	// Both answers are identical for every ref this round (`REMOTE_NAME` is a fixed module constant, and
+	// `project` is resolved once above) — memoized lazily, on first actual use, rather than computed
+	// unconditionally here: see `ladderReason`'s own doc for why eager hoisting would break the sticky
+	// `"upstream-gone"` short-circuit.
+	let trustedCache: boolean | undefined;
+	const trusted = (): boolean => {
+		if (trustedCache === undefined) trustedCache = isRemoteTrusted(projectId, REMOTE_NAME);
+		return trustedCache;
+	};
+	let urlKindCache: ReturnType<typeof remoteUrlKindFn> | undefined;
+	const urlKind = (): ReturnType<typeof remoteUrlKindFn> => {
+		if (urlKindCache === undefined) urlKindCache = remoteUrlKindFn(project.path, REMOTE_NAME);
+		return urlKindCache;
+	};
+
 	const toCheck: string[] = [];
 	for (const ref of refs) {
 		const record = recordFor(projectId, ref);
-		const reason = ladderReason(projectId, REMOTE_NAME, project.path, record, now);
+		const reason = ladderReason(record, now, trusted, urlKind);
 		record.dormant = reason;
 		if (!reason) toCheck.push(shortNameOf(ref));
 	}

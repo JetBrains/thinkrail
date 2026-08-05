@@ -39,6 +39,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	setRemoteStatePublisher(null); // never leak a publisher into the next test
+	configureRemoteCheckPolicyDeps(); // reset every injected fake (git answers + clock) back to production
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
@@ -753,6 +754,26 @@ test("checkProject batches every derived ref into one probe call per project", a
 	expect(calls.probe).toHaveLength(1);
 	expect(calls.probe[0]?.refs.sort()).toEqual(["develop", "main"]);
 	expect(calls.probe[0]?.timeoutMs).toBe(REMOTE_CHECK_TIMEOUT_MS);
+});
+
+test("the ladder's per-round-invariant checks (remoteUrlKind) run at most once per checkProject call, not once per ref", async () => {
+	// `REMOTE_NAME` is a fixed module constant and the project's path doesn't vary per ref, so
+	// `remoteUrlKindFn` answers identically for every ref in a round — this pins that `checkProject` hoists
+	// (memoizes) that answer above the per-ref ladder loop rather than re-asking it for each one.
+	saveProjects([project("p1")]);
+	saveWorkspaces([
+		workspace("w1", "p1", "origin/main"),
+		workspace("w2", "p1", "origin/develop"),
+		workspace("w3", "p1", "origin/release"),
+	]);
+	noteRemoteTrusted("p1", "origin");
+	const { deps, calls, state } = makeFakes();
+	state.probeResult = { ok: true, heads: { main: "a", develop: "b", release: "c" }, err: "" };
+	configureRemoteCheckPolicyDeps(deps);
+
+	await checkProject("p1");
+
+	expect(calls.remoteUrlKind).toHaveLength(1);
 });
 
 test("a project with no remote-tracking refs does nothing and publishes an empty snapshot", async () => {

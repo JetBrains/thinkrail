@@ -67,6 +67,19 @@ export const REMOTE_ENV: Record<string, string> = {
 };
 
 /**
+ * The deadline for this module's OWN background remote calls — `prefetchBranch` (`git.ts`) and
+ * `workspaces`' create-time fallback fetch, the two callers outside `remotes` that reach a real remote
+ * over `gitAsync`. Deliberately a **separate** constant from `remotes/policy.ts`'s `REMOTE_CHECK_TIMEOUT_MS`
+ * (same value today, 15s) rather than importing that one: `remotes` already depends on `git` for
+ * `probeRemoteRefs`/`fetchRemoteRefs`/etc (see `remotes/SPEC.md`'s allowed deps), so `git` importing
+ * anything back from `remotes` would invert that edge into a cycle. This constant lives where its two
+ * callers already live (`git.ts`) / already import from (`workspaces.ts` goes through this module's own
+ * barrel) — `remotes` picking its own value independently, even if it happens to match, is the right shape
+ * for two modules that don't share a dependency edge.
+ */
+export const BACKGROUND_FETCH_TIMEOUT_MS = 15_000;
+
+/**
  * Async twin of `git` — runs the command *off* the event loop (`Bun.spawn`, not `spawnSync`), so a slow,
  * network-bound op (e.g. `fetch`) can't freeze the host's single cooperative event loop while it blocks.
  * Use this for anything that may touch the network; `git` (sync) stays for the cheap local plumbing.
@@ -85,9 +98,12 @@ export const REMOTE_ENV: Record<string, string> = {
  * running, still holding the pipes open, so the read side of this function hung forever even after the
  * "killed" child was gone. Killing `-pid` (the negative pid = the whole group, valid because `detached`
  * makes this child its own group leader) reaps the helper too, which is what lets the stdout/stderr reads
- * below actually see EOF. No deadline, no detach: today's only non-deadlined caller relies on the child
- * staying in the host's own group (e.g. a foreground Ctrl-C during dev), and there is nothing here that
- * would ever kill it anyway.
+ * below actually see EOF. No deadline, no detach: `timeoutMs` stays optional so a purely local,
+ * no-network `gitAsync` call (should one ever be added) isn't forced to invent a duration for something
+ * that cannot hang, rather than because any *current* caller relies on staying undetached — every
+ * network-bound caller today (`git.ts`'s `prefetchBranch`, `workspaces`' create-time fallback fetch, both
+ * via `BACKGROUND_FETCH_TIMEOUT_MS`; `remotes/policy.ts`'s probe/fetch calls via its own
+ * `REMOTE_CHECK_TIMEOUT_MS`) passes one.
  */
 export async function gitAsync(
 	cwd: string,
