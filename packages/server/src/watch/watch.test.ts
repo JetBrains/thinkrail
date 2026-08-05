@@ -16,6 +16,31 @@ import {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** Run a real git command (fixture setup only — this module itself never shells out to `git`; see SPEC.md). */
+function git(cwd: string, ...args: string[]): void {
+	Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "ignore", stderr: "ignore" });
+}
+
+/** A real repo with one commit, so branches can be created off a real HEAD. */
+function initRepo(dir: string): void {
+	// `git -C <dir>` chdirs into `dir` before doing anything else, so `dir` must already exist —
+	// `git init` normally creates it FOR you only when given as a trailing path argument, not via `-C`.
+	mkdirSync(dir, { recursive: true });
+	git(dir, "init", "-q", "-b", "main");
+	git(
+		dir,
+		"-c",
+		"user.email=e2e@example.com",
+		"-c",
+		"user.name=e2e",
+		"commit",
+		"--allow-empty",
+		"-q",
+		"-m",
+		"init",
+	);
+}
+
 async function waitFor(check: () => boolean, timeoutMs = 3000): Promise<void> {
 	const deadline = Date.now() + timeoutMs;
 	while (!check()) {
@@ -287,19 +312,12 @@ test("a linked worktree's git metadata lives outside the root — its churn stil
 
 test("the project repo's own shared git dir nudges every currently-watched workspace of that project", async () => {
 	// The project's OWN git dir — a real directory (never a gitfile pointer, unlike a linked worktree's),
-	// shared by every worktree of the repo. This is the only watcher that ever looks here at all.
+	// shared by every worktree of the repo. This is the only watcher pair that ever looks here at all.
 	//
 	// The write below targets `packed-refs`, a genuine TOP-LEVEL git artifact (rewritten by `git gc` /
-	// `fetch --prune` / `pack-refs`), not a synthetic path picked for convenience: it is deliberately NOT a
-	// stand-in for a plain `git branch` (which only ever touches `refs/heads/<name>`, two levels down).
-	// Measured directly (see `packages/server/src/watch/SPEC.md` and the task report): a non-recursive
-	// `fs.watch` on darwin only reliably observes this dir's *direct children* — top-level writes fire
-	// 10/10 in a clean sample, while a bare nested `refs/heads/<name>` write fires 0/N once the watcher has
-	// settled, and even a real `git branch` (whose *reflog* write is nested too) only fired ~50% of the
-	// time, via an unrelated top-level `HEAD.lock` mis-attribution. So this test exercises exactly what the
-	// mechanism can deliver — top-level churn, fanned out to every open workspace of the one project,
-	// never leaking a `.git` path — and does not claim more reliability for loose-ref creation than was
-	// actually measured.
+	// `fetch --prune` / `pack-refs`) — the non-recursive `<gitDir>` watch's job. The recursive `refs/`
+	// sub-watch (the OTHER half of the pair, covering loose refs like a plain `git branch`) is exercised on
+	// its own, with real git commands, in the "reliably nudges" test below.
 	const repoDir = join(dataDir, "repo");
 	mkdirSync(join(repoDir, ".git", "refs", "heads"), { recursive: true });
 	writeFileSync(
@@ -350,6 +368,75 @@ test("the project repo's own shared git dir nudges every currently-watched works
 	// …and, as always, no `.git` path ever leaks into a client-facing batch.
 	await sleep(600);
 	expect(payloads.filter((p) => p.paths.some((x) => x.includes(".git")))).toHaveLength(0);
+});
+
+test("a plain `git branch` in one worktree reliably nudges the project signal via the recursive refs/ watch", async () => {
+	// This is the scenario the whole watcher exists for, exercised with a REAL git repo and REAL `git branch`
+	// commands — not a synthetic stand-in. `refs/heads/<name>` is what a plain `git branch` writes, and it is
+	// two levels below `<gitDir>`, out of reach of the non-recursive `<gitDir>` watch on its own (measured:
+	// ~50% hit rate there, every hit mis-attributed to an unrelated `HEAD.lock` rename — see SPEC.md). The
+	// recursive watch rooted at `<gitDir>/refs` is what actually closes the gap.
+	//
+	// Five independent branches, waited on one at a time: a regression back to non-recursive-on-`.git` only
+	// would have roughly a (1 - 0.5^5) ≈ 97% chance of missing at least one of these and failing on a
+	// `waitFor` timeout — this is not a coin-flip-tolerant assertion.
+	const repoDir = join(dataDir, "repo");
+	initRepo(repoDir);
+	writeFileSync(
+		join(dataDir, "projects.json"),
+		JSON.stringify([
+			{ id: "p1", name: "repo", path: repoDir, slug: "repo", lastOpened: Date.now() },
+		]),
+	);
+
+	const nudges: string[] = [];
+	setRepoMetaPublisher((id) => nudges.push(id));
+	ensureWatch("ws1"); // ws1's projectId is "p1" (see the shared beforeEach fixture)
+	await sleep(150);
+
+	for (let i = 0; i < 5; i++) {
+		const before = nudges.length;
+		git(repoDir, "branch", `newbranch-${i}`); // the write lands only in the shared repo dir, not in worktree
+		await waitFor(() => nudges.length > before);
+	}
+	expect(nudges.length).toBeGreaterThanOrEqual(5);
+	// …and, as always, no `.git` path ever leaks into a client-facing batch.
+	await sleep(600);
+	expect(payloads.filter((p) => p.paths.some((x) => x.includes(".git")))).toHaveLength(0);
+});
+
+test("the project refs/ watcher tolerates refs/ being absent at first — no sticky failure", async () => {
+	// `refs/` can genuinely not exist yet when the project is first watched (this repo has none at all,
+	// unlike a normal `git init`, which pre-creates `refs/heads` and `refs/tags` empty) — and, more
+	// realistically, a repo whose refs are fully packed can have a sparse or absent loose-refs tree. Either
+	// way this must degrade the same way every other failed watcher start in this module does: retried on
+	// the next `ensureWatch`, never permanently given up on.
+	const repoDir = join(dataDir, "repo");
+	mkdirSync(join(repoDir, ".git"), { recursive: true }); // a `.git` dir with no `refs/` subtree at all
+	writeFileSync(
+		join(dataDir, "projects.json"),
+		JSON.stringify([
+			{ id: "p1", name: "repo", path: repoDir, slug: "repo", lastOpened: Date.now() },
+		]),
+	);
+
+	const nudges: string[] = [];
+	setRepoMetaPublisher((id) => nudges.push(id));
+	ensureWatch("ws1"); // refs/ doesn't exist yet — must not throw, must not disable the watcher permanently
+	await sleep(150);
+
+	// refs/ appears later (e.g. the repo's first branch is about to be created) — the next `ensureWatch`
+	// (host calls this on every workspace read) must notice and start watching it, not stay silent forever.
+	mkdirSync(join(repoDir, ".git", "refs", "heads"), { recursive: true });
+	ensureWatch("ws1");
+	await sleep(150);
+
+	writeFileSync(
+		join(repoDir, ".git", "refs", "heads", "late"),
+		"0000000000000000000000000000000000000000\n",
+	);
+	await waitFor(() => nudges.length > 0);
+	expect(nudges).toEqual(["ws1"]);
 });
 
 test("the project git-dir watcher self-heals on inode change (dir deleted and recreated)", async () => {
