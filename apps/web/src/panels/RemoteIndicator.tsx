@@ -38,6 +38,7 @@ export function RemoteIndicator({
 			<PopoverTrigger asChild>
 				<button
 					type="button"
+					aria-label={view.reason}
 					className="inline-flex shrink-0 items-center rounded-[var(--radius-sm)] px-1 tr-text-metadata tabular-nums outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
 					data-testid={testid}
 					data-behind={String(remoteState.behind)}

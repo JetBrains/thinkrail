@@ -774,7 +774,15 @@ a project picker, the prompt hero, and the reused
   so `ChangesPanel` and the rail row's `WorkspaceRow` can't drift into fixing a fetch bug in only one of
   them. It folds a success the same way an initial `git.remoteState` pull does; a rejection raises
   `store.toast.error` rather than failing silently, since a git fetch can fail for reasons — bad
-  credentials, no network — worth surfacing. The mapping's three outcomes render distinctly, matching the
+  credentials, no network — worth surfacing (the message is the server's own, unprefixed — it already
+  names the ref). `ChangesPanel`'s own initial `git.remoteState` pull is a **plain effect** keyed on
+  `[workspaceId, baseRef, refsChangedTick]`, deliberately not `useWorkspaceRead`: that hook's re-read
+  trigger is the workspace's fs tick, uncorrelated with remote state (the watcher excludes `.git`), and
+  riding it would poll on every ordinary file write. A `cancelled` closure flag stands in for
+  `useWorkspaceRead`'s generation stamp — React's cleanup-before-next-body guarantee makes it sufficient
+  here, since nothing but this effect's own re-run can supersede it.
+
+  The mapping's three outcomes render distinctly, matching the
   wire's own three-fidelity `behind` (`number | "unknown" | null`, see `contracts`' `RemoteState`):
   a numeric `behind` (only ever produced by a real fetch, never a probe) is the glyph **`↓·N`**; `"unknown"`
   (a probe that detected drift but cannot count it) is the **bare `↓`**, deliberately never rendered as
@@ -790,7 +798,10 @@ a project picker, the prompt hero, and the reused
   already use), never folded into the ordinary muted `↓`, because "behind by some amount" is a nonsensical
   reading of a branch that no longer exists — and because a Critical review finding on the server side
   named this exact case as the one that must not be swallowed as bare absence (indistinguishable from "up
-  to date"). `RemoteIndicator`'s testid is a caller-supplied prefix (not a fixed string): both
+  to date"). The trigger's `aria-label` is `changesModel.ts#remoteIndicatorView`'s own `reason` field, reused
+  verbatim rather than reconstructed in the component — a bare glyph (`↓`, `↓·3`) or the icon-only warning
+  triangle has no accessible name otherwise, most acutely for `"upstream-gone"`, whose entire visible content
+  is the `TriangleAlert`. `RemoteIndicator`'s testid is a caller-supplied prefix (not a fixed string): both
   `ComparisonTarget` and the rail row can show it for the active workspace at once, and each needs its own
   `${prefix}-fetch` button id to stay addressable in tests.
 - **The diff is a center tab, not a rail inset.** Clicking a Changes row fetches `git.diffFile` (both sides of
