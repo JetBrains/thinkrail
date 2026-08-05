@@ -72,13 +72,21 @@ interface Props {
 	clientId: string;
 	workspaceId: string;
 	visible: boolean;
+	/** Sent once, right after this terminal's PTY is ready (e.g. "Open in Vim") — never replayed, since the
+	 * mount effect below only ever runs once per instance. */
+	initialCommand?: string;
 }
 
 /**
  * One xterm terminal bound to a server PTY. Stays mounted while its tab exists (hidden when not the
  * active tab) so its buffer survives workspace/tab switches; re-fits when it becomes visible.
  */
-export default function TerminalInstance({ clientId, workspaceId, visible }: Props) {
+export default function TerminalInstance({
+	clientId,
+	workspaceId,
+	visible,
+	initialCommand,
+}: Props) {
 	const hostRef = useRef<HTMLDivElement>(null);
 	const termRef = useRef<XTerm | null>(null);
 	const serverIdRef = useRef<string | null>(null);
@@ -155,6 +163,8 @@ export default function TerminalInstance({ clientId, workspaceId, visible }: Pro
 				for (const ev of early) if (ev.id === id) term.write(ev.data);
 				early.length = 0;
 				void getTransport().request("terminal.resize", { id, cols: term.cols, rows: term.rows });
+				if (initialCommand)
+					void getTransport().request("terminal.write", { id, data: `${initialCommand}\r` });
 				setReady(true);
 			})
 			.catch(() => {});

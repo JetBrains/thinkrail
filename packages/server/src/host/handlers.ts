@@ -52,6 +52,7 @@ import {
 	startLogin,
 } from "../auth";
 import { selectDirectory } from "../dialog";
+import { listAvailableEditors, openEditor, revealInFileManager } from "../editors";
 import { readDir, readFile } from "../fs";
 import { gitDiffFile, gitStatus, listBranches, listCommits, prefetchBranch } from "../git";
 import { githubAuthStatus, githubRefresh } from "../github";
@@ -175,6 +176,16 @@ const handlers: Record<string, Handler> = {
 		return { ok: true } as const;
 	},
 	"workspace.diffStats": (params) => workspaceDiffStats((params as { id: string }).id),
+	"workspace.openIn": (params) => {
+		const p = params as { id: string; editor: string };
+		openEditor(p.editor, getWorkspace(p.id).worktreePath);
+		return { ok: true } as const;
+	},
+	"workspace.reveal": (params) => {
+		revealInFileManager(getWorkspace((params as { id: string }).id).worktreePath);
+		return { ok: true } as const;
+	},
+	"editor.list": () => listAvailableEditors(),
 	"git.listBranches": (params) => listBranches((params as { projectId: string }).projectId),
 	"git.prefetch": async (params) => {
 		const p = params as { projectId: string; ref: string };

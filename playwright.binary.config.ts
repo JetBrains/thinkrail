@@ -6,6 +6,7 @@ import {
 	E2E_BINARY_PORT,
 	E2E_CENTRAL_STATE,
 	E2E_DATA_DIR,
+	E2E_EDITOR_LOG,
 	E2E_HOME_DIR,
 	E2E_PI_AGENT_DIR,
 	E2E_PICK_DIR_POINTER,
@@ -88,6 +89,8 @@ export default defineConfig({
 			PATH: `${fakeBinDir}:${process.env.PATH ?? ""}`,
 			WIRE_PROXY_PORT: "19516",
 			CENTRAL_STUB_STATE: E2E_CENTRAL_STATE,
+			// Where the stub `code` appends each invocation's argv — see playwright.config.ts.
+			THINKRAIL_E2E_EDITOR_LOG: E2E_EDITOR_LOG,
 		},
 	},
 });

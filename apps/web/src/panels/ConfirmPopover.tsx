@@ -5,8 +5,10 @@ import { Popover, PopoverContent } from "@/components/ui/popover";
 
 /**
  * A small reusable confirmation popover built on the `Popover` primitive — for destructive actions that
- * need an explicit yes/no anchored to the thing they act on (e.g. removing a workspace opens it right
- * beneath that row). The caller supplies the trigger as `children` (a `PopoverTrigger`, which also acts
+ * need an explicit yes/no anchored to the thing they act on (e.g. deleting a prompt template opens it
+ * right beneath that row's own Delete button — see `TemplatesSettings`). Reach for `ConfirmDialog` instead
+ * when the trigger is a generic control (an overflow menu item) rather than a dedicated affordance for
+ * this one action. The caller supplies the trigger as `children` (a `PopoverTrigger`, which also acts
  * as the popover's anchor — add a `PopoverAnchor` only to reposition against something else); this
  * renders the confirm body in `PopoverContent`.
  *

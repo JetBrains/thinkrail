@@ -15,22 +15,41 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
 
 ## Boundary
 
-- **Owns:** `ProjectTree` (+ the `NewWorkspaceDialog` its "+" opens **and** the `ConfirmPopover` its per-row
-  **Remove** button (a `Trash2` glyph) opens — a small reusable yes/no built on `components/ui/popover`,
-  **anchored to that Remove button** (`align="end"`, so its right border lines up with the button's) and
-  opening just beneath it rather than as a centered modal; it **forces a
-  deliberate choice** (Cancel takes initial focus; a `destructive` confirm shows a warning glyph + red
-  button; Esc + outside-click cancel); removal is **event-driven** (no per-client optimism): on confirm it
-  just fires `workspace.remove` and lets every client — including this one — react to the host's
-  `workspace.removed` push via the store's `applyWorkspaceRemoved`; a rejected request (no event will come)
-  surfaces an error toast, leaving the row in place). Each **workspace row** is **two-line**: the display
+- **Owns:** `ProjectTree`. Each top-level project row is a compact 28px IDE-tree row:
+  **always-visible chevron** + folder/name + a collapsed-only plain workspace count + a **bare muted Create
+  workspace `+` always visible in a fixed right-edge column** (the rail-header Add project `+` is unchanged).
+  Long names truncate before the count/action; there is deliberately **no visible Close or overflow icon**.
+  Hover highlights the full row and the highlight remains while its **project context menu** is open.
+  Right-click opens that PR-#167-styled menu at the pointer without selecting/navigating; a scroll-cancelled
+  ~700ms long press is its touch equivalent. With a project-name button focused, the standard Context Menu
+  key or Shift+F10 opens the same menu for keyboard-only use; arrow/activate/Escape keys work normally.
+  The menu is neutral
+  **Plus Create workspace**, separator, **X Close project**; Create is exactly the direct `+` flow. Close
+  opens a centered, neutral `ConfirmDialog` titled **“Close {name}?”**, description **“Removes this project
+  from the open projects list. Its repository, workspaces, chats, and running activity are kept. Reopen it
+  from Add project → Recents.”**, Cancel initially focused, and **Close project**; Cancel, backdrop, and
+  Escape dismiss. Confirm fires `project.close` and waits for the full `project.updated` push—no optimistic
+  removal; success is the
+  row disappearing with no toast, while rejection keeps it and raises an error toast. Menu/dialog dismissal
+  restores the source project-name focus; successful close focuses the fallback project name or rail Add
+  project. `ProjectTree` also owns the `NewWorkspaceDialog` the per-project `+` opens **and** each
+  workspace row's hover-revealed **kebab menu** (`MoreVertical`, `DropdownMenu`) — a `DropdownMenuSub`
+  **"Open in"** (rendered only when at least one editor was detected), **Copy path**, **Reveal in file
+  manager**, and (worktrees only) **Remove workspace**. "Open in" comes from the host-wide `editor.list`;
+  GUI entries call `workspace.openIn`, while terminal-kind Vim activates the workspace and runs through
+  `addTerminal`'s one-shot `initialCommand`. Copy writes `worktreePath`; Reveal calls `workspace.reveal`.
+  Remove is styled destructive and opens a centered `ConfirmDialog`; confirming fires
+  `workspace.remove` and lets every client react to the host's `workspace.removed` push via the store's
+  `applyWorkspaceRemoved`; a rejected request (no event will come) surfaces an error toast, leaving the row
+  in place. Each **workspace row** is **two-line**: the display
   `name` on top with the git **branch on a second line beneath it** (muted, monospace), rendered only when
   it differs from the name (so pristine/legacy `workspace-N` rows stay a single compact line) — the display
   name is decoupled from the git branch (see [[submodule-server-workspaces]]). The **Default workspace**
   (`kind === "default"` — the project folder itself) renders **pinned first** (the server pins it in
   `workspace.list`; `addWorkspace` appends created worktree rows after it), with a **`House` icon** in
-  place of the `GitBranch` glyph and **no Remove button** (non-removable — the server enforces it; the UI
-  simply offers nothing). Its branch line shows the folder's real current branch. The active workspace must
+  place of the `GitBranch` glyph and **no Remove item** (non-removable — the server enforces it; the menu
+  simply omits it) — it still gets "Open in" / Copy path / Reveal, same as any worktree. Its branch line
+  shows the folder's real current branch. The active workspace must
   also stay visible: when `ProjectTree` mounts with an active workspace, or the active workspace's derived
   owning project changes or first becomes resolvable, it expands that parent project. A manual collapse
   remains respected while the owning project is unchanged; ordinary `workspace.updated` snapshots and
@@ -42,8 +61,10 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   Default workspace) are presented as an explicit choice (see `WelcomePanel`), so opening and the
   "project home" gesture converge on the same surface. Opening goes through the shared
   **`useOpenProject`** hook (reused by `ProjectTree` **and**
-  `WelcomePanel`, so the flow is identical in the rail and the Welcome screen): `project.open`, and on
-  failure `project.inspect` → either offers to bootstrap the folder into a repo — a modal **`ConfirmDialog`**
+  `WelcomePanel`, so the flow is identical in the rail and the Welcome screen): `project.open` reactivates
+  a closed known path under its same id (or opens a new one), then the initiating client selects Project
+  Home while every client receives `project.updated`; on failure `project.inspect` → either offers to
+  bootstrap the folder into a repo — a modal **`ConfirmDialog`**
   (confirm → `project.init`) — when it's `initable`, or surfaces the error in a **`NoticeDialog`** — so a
   non-git folder is never a silent no-op — and neither is a host that couldn't *show* a folder dialog (that
   throws; the notice carries the reason, and the request runs on a raised `timeoutMs` since the picker waits
@@ -101,7 +122,10 @@ project folder"; **project + no specs** → a spec-first **"Set up project"** (p
 only possible action; once a project is shown, opening another is the projects-rail **"+"** (the same
 dropdown), so Welcome stays the *work-in-this-project* surface. That card hangs the shared
 **`AddProjectMenu`** dropdown off it (same menu as the projects-rail "+": Open project / Open GitHub (soon)
-/ Recents), so `Card` is a `forwardRef` usable as a Radix `asChild` trigger. **"Work in project folder"**
+/ Recents). Recents is the store's `recentProjects`: one last-opened path list containing open + closed
+records with no status badge; selecting either runs the shared open flow and lands at Project Home, with a
+closed record retaining its id and workspace state. `Card` is a `forwardRef` usable as a Radix `asChild`
+trigger. **"Work in project folder"**
 (`House` icon, matching the rail's Default row) **direct-enters** the Default workspace — no dialog: the
 shared `enterDefaultWorkspace` helper lists the project's workspaces, stores them, and activates the
 `kind === "default"` row; an older host with no Default row degrades to an error toast. **"Start building"** is the
@@ -247,9 +271,9 @@ a project picker, the prompt hero, and the reused
   no worktree to open a file tab against, so global rows stay dialog-only). **New**/**Edit** open the shared
   `chat/TemplateEditorDialog` (see `chat/SPEC.md`'s Save-as-template bullet — it lives in `chat/` because
   `HistoryOverlay`'s save-as-template action needs the identical form, and `chat/` can't import
-  `panels/`). **Delete** is a `ConfirmPopover` on the row (the same anchored-confirm pattern
-  `ProjectTree.tsx`'s workspace-remove uses) calling `template.delete` directly — the dialog itself is
-  never involved in deletion. **R4 — starter-templates offer:** when the **Global** group's fetch has
+  `panels/`). **Delete** is a `ConfirmPopover` anchored to the row's own Delete button, calling
+  `template.delete` directly — the dialog itself is never involved in deletion. **R4 — starter-templates
+  offer:** when the **Global** group's fetch has
   resolved with zero rows and no error, its empty state swaps the bare "No templates yet." for that same
   hint plus a button (`data-testid="template-starters"`) — clicking it `template.save`s five verbatim
   starter templates (scope `"global"`, body assembled client-side via

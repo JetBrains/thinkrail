@@ -1,2 +1,2 @@
-/** Open/list/close git repos as projects (validated, deduped, slugged); inspect + init a folder. */
+/** Stable known-project registry: open/recent views, lossless close/reopen, inspect + init. */
 export * from "./projects";

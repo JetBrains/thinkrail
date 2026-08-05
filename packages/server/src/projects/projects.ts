@@ -5,6 +5,21 @@ import type { Project, ProjectPathStatus } from "@thinkrail/contracts";
 import { git as runGit } from "../git";
 import { loadProjects, saveProjects } from "../persistence";
 
+type ProjectPublisher = (project: Project) => void;
+
+// Injected by the host; null in unit tests and before host wiring, so registry operations remain usable
+// without a WebSocket server. The full snapshot is idempotent and carries its own open/closed membership.
+let publishProject: ProjectPublisher | null = null;
+
+/** Install (or clear with `null`) the sink for authoritative open/reopen/close snapshots. */
+export function setProjectPublisher(fn: ProjectPublisher | null): void {
+	publishProject = fn;
+}
+
+function emit(project: Project): void {
+	publishProject?.(project);
+}
+
 /** The shared `git` runner, bound to the live `process.env` so runtime config overrides apply. */
 function git(cwd: string, args: string[]) {
 	return runGit(cwd, args, { env: process.env });
@@ -62,8 +77,10 @@ export function openProject(path: string): Project {
 	const projects = getProjects();
 	const existing = projects.find((p) => p.path === root);
 	if (existing) {
+		delete existing.closed;
 		existing.lastOpened = Date.now();
 		saveProjects(projects);
+		emit(existing);
 		return existing;
 	}
 
@@ -77,15 +94,34 @@ export function openProject(path: string): Project {
 	};
 	projects.push(project);
 	saveProjects(projects);
+	emit(project);
 	return project;
 }
 
-export function listProjects(): Project[] {
-	return getProjects().sort((a, b) => b.lastOpened - a.lastOpened);
+/** Newest-first registry order, mutating only the fresh array loaded for this projection. */
+function newestFirst(projects: Project[]): Project[] {
+	return projects.sort((a, b) => b.lastOpened - a.lastOpened);
 }
 
-export function closeProject(id: string): void {
-	saveProjects(loadProjects().filter((p) => p.id !== id));
+/** Open projects only — the left-rail and project-scoped host views. */
+export function listProjects(): Project[] {
+	return newestFirst(getProjects().filter((project) => project.closed !== true));
+}
+
+/** Every known project, open or closed — Add project → Recents. */
+export function listRecentProjects(): Project[] {
+	return newestFirst(getProjects());
+}
+
+/** Lossless close: remove rail membership while retaining identity and every associated record/runtime. */
+export function closeProject(id: string): Project {
+	const projects = getProjects();
+	const project = projects.find((candidate) => candidate.id === id);
+	if (!project) throw new Error(`Unknown project: ${id}`);
+	project.closed = true;
+	saveProjects(projects);
+	emit(project);
+	return project;
 }
 
 /**

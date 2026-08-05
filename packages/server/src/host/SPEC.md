@@ -120,6 +120,12 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `ensureWorkspaceScratchDir` before creating the session — the Default workspace's gitignored
   `.thinkrail/context/` lands in the user's repo only when a chat actually starts there (and a
   worktree's deleted scratch dir self-heals). Host-composed — no new module edges.
+- **Project lifecycle fan-out:** `createServer` installs the `projects` module's publisher and maps every
+  authoritative open/reopen/close snapshot to **`project.updated`**. The WS `open` handler subscribes to
+  that channel and hydrates two views in `server.welcome`: `projects` (open records only) and
+  `recentProjects` (all known records). The one full-snapshot channel is idempotent and avoids separate
+  opened/closed streams replaying out of order. Every client converges its rail + Recents from it; only
+  the initiating open flow selects Project Home, while a close fallback remains per-client view state.
 - **Workspace lifecycle fan-out:** `createServer` installs the `workspaces` module's publisher
   (`setWorkspacePublisher`), mapping each domain event `kind` → its `WS_CHANNELS.workspace*` channel
   (`created`/`updated` → the full record; `removed` → `{ projectId, id }`) and `server.publish`ing it. This
@@ -135,7 +141,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
 
 ## Get right
 
-- WS commands return values directly; only events + extension-UI + the workspace lifecycle trio
+- WS commands return values directly; only events + extension-UI + **`project.updated`** (published from
+  the `projects` module's injected publisher) + the workspace lifecycle trio
   (`workspace.created`/`updated`/`removed`, published from the `workspaces` module's injected publisher)
   use push channels. Every push channel a client should hear must be `ws.subscribe`d in the WS `open`
   handler — a publish on an unsubscribed topic reaches nobody, silently.

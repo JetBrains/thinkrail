@@ -3,6 +3,7 @@ import { defineConfig, devices } from "@playwright/test";
 import {
 	E2E_CENTRAL_STATE,
 	E2E_DATA_DIR,
+	E2E_EDITOR_LOG,
 	E2E_HOME_DIR,
 	E2E_PI_AGENT_DIR,
 	E2E_PICK_DIR_POINTER,
@@ -17,8 +18,9 @@ const staticDir = fileURLToPath(new URL("./apps/web/dist", import.meta.url));
 // (e2e/fixtures/portBlock.ts). Supersedes the manual THINKRAIL_E2E_PORT knob
 // (THINKRAIL_E2E_PORT_BASE pins the whole per-worktree block explicitly when ever needed).
 const PORT = E2E_PORT;
-// A stub `central` (JetBrains Central CLI) on the host's PATH so the JetBrains AI flow is drivable
-// deterministically — no real CLI, network, or JetBrains auth. Prepended so it wins over any real install.
+// A stub `central` (JetBrains Central CLI) and `code` (VS Code CLI) on the host's PATH so the JetBrains AI
+// flow and the workspace row's "Open in" are both drivable deterministically — no real CLI, network,
+// JetBrains auth, or editor install. Prepended so each wins over any real install on the dev machine.
 const fakeBinDir = fileURLToPath(new URL("./e2e/fixtures/bin", import.meta.url));
 
 export default defineConfig({
@@ -78,6 +80,9 @@ export default defineConfig({
 			// Control file the stub `central` reads live to pick its outcome (signed in / not signed in /
 			// error), letting a test drive the JetBrains AI card's non-happy branches without restarting the host.
 			CENTRAL_STUB_STATE: E2E_CENTRAL_STATE,
+			// Where the stub `code` appends each invocation's argv, so a test can assert "Open in VS Code"
+			// actually launched with the right worktree path.
+			THINKRAIL_E2E_EDITOR_LOG: E2E_EDITOR_LOG,
 			// Register a deterministic fake OAuth provider (`e2e-oauth`) so the in-app login flow is drivable
 			// end-to-end without a real provider/browser (see packages/server/src/dev.ts).
 			THINKRAIL_E2E_FAKE_OAUTH: "1",
