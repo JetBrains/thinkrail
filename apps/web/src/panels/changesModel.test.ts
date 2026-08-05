@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { GitFileChange } from "@thinkrail/contracts";
+import type { GitFileChange, RemoteState } from "@thinkrail/contracts";
 import {
 	buildChangesTree,
 	type ChangeTreeDir,
@@ -8,6 +8,7 @@ import {
 	diffTabId,
 	diffTabName,
 	isDiffTabId,
+	remoteIndicatorView,
 	scopeKey,
 	scopeLabel,
 	scopeTitle,
@@ -163,4 +164,73 @@ test("the read key carries the diff base only for the scope whose range uses it"
 		changesReadKey({ kind: "commit", sha: "abc1234" }, "main"),
 	];
 	expect(new Set(keys).size).toBe(4);
+});
+
+// ---- remoteIndicatorView: the `↓` indicator's three-fidelity + dormancy rendering ----------------------
+
+function remote(patch: Partial<RemoteState> = {}): RemoteState {
+	return { projectId: "p1", ref: "origin/main", behind: null, lastCheckedAt: null, ...patch };
+}
+
+test("remoteIndicatorView renders each `behind` fidelity distinctly when actively checked", () => {
+	// A number (fetch mode) → `↓·N`, never collapsed to the bare arrow.
+	expect(remoteIndicatorView(remote({ behind: 3 }))).toEqual(
+		expect.objectContaining({ kind: "behind", text: "↓·3", muted: false }),
+	);
+	// `"unknown"` (probe mode) → the bare arrow, honest about not having a count.
+	expect(remoteIndicatorView(remote({ behind: "unknown" }))).toEqual(
+		expect.objectContaining({ kind: "behind", text: "↓", muted: false }),
+	);
+	// `null`, no dormant reason → up to date, nothing to render at all.
+	expect(remoteIndicatorView(remote({ behind: null }))).toBeNull();
+});
+
+test("remoteIndicatorView never collapses `unknown` into `0` or `null`", () => {
+	// The regression this guards: a `0` reads as "checked, definitely 0 behind" — a claim probe mode cannot
+	// make — and collapsing into `null` (nothing rendered) hides that the remote differs at all.
+	const unknown = remoteIndicatorView(remote({ behind: "unknown" }));
+	const zero = remoteIndicatorView(remote({ behind: 0 }));
+	expect(unknown?.kind === "behind" ? unknown.text : null).not.toBe(
+		zero?.kind === "behind" ? zero.text : null,
+	);
+	expect(unknown).not.toBeNull();
+});
+
+test("remoteIndicatorView renders upstream-gone as a warning, never as bare absence", () => {
+	// The Critical review finding this guards: `dormant: "upstream-gone"` paired with `behind: null` must not
+	// render as "nothing to show" (indistinguishable from up to date) — it needs its own reason.
+	const view = remoteIndicatorView(remote({ behind: null, dormant: "upstream-gone" }));
+	expect(view?.kind).toBe("warning");
+	expect(view && "reason" in view ? view.reason.length > 0 : false).toBe(true);
+});
+
+test("remoteIndicatorView surfaces every other dormancy reason, muted rather than swallowed", () => {
+	for (const dormant of [
+		"disabled",
+		"never-authenticated",
+		"ssh-agent-present",
+		"failing",
+	] as const) {
+		// No count ever having landed (behind: null) still has to render *something* — the tooltip explaining
+		// why is unreachable if there is nothing on screen to open it from.
+		const view = remoteIndicatorView(remote({ behind: null, dormant }));
+		expect(view).toEqual(
+			expect.objectContaining({
+				kind: "behind",
+				text: "↓",
+				muted: true,
+				reason: expect.any(String),
+			}),
+		);
+		// A real count from before the pair went dormant is never hidden — only muted.
+		const withCount = remoteIndicatorView(remote({ behind: 2, dormant }));
+		expect(withCount).toEqual(
+			expect.objectContaining({
+				kind: "behind",
+				text: "↓·2",
+				muted: true,
+				reason: expect.any(String),
+			}),
+		);
+	}
 });

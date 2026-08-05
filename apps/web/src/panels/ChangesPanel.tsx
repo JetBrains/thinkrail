@@ -6,6 +6,7 @@ import {
 	selectDiffScope,
 	selectWorkspaceById,
 	selectWorkspaceNavTick,
+	selectWorkspaceRemoteState,
 	type TabIntent,
 	toast,
 	useAppStore,
@@ -20,6 +21,7 @@ import { changesReadKey, diffTabId, isDiffTabId, splitPath, statusNameClass } fr
 import { DiffStatBadge } from "./DiffStatBadge";
 import { openDiffInTab } from "./openTabs";
 import { ToggleSegment } from "./ToggleSegment";
+import { useRemoteFetch } from "./useRemoteFetch";
 import { useWorkspaceRead } from "./useWorkspaceRead";
 
 /**
@@ -61,6 +63,16 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	// scope; the other three ranges cannot move when the target does.
 	const baseRef = useAppStore((s) => selectDiffBaseRef(s, workspaceId));
 	const activeTabId = useAppStore((s) => s.activeTabByWorkspace[workspaceId] ?? null);
+	// The `↓` behind-the-remote indicator's state (store-derived; see the silent pull below and
+	// `RemoteIndicator`'s doc for why the rail row needs neither) and its shared Fetch action.
+	const remoteState = useAppStore((s) => selectWorkspaceRemoteState(s, workspaceId));
+	const { fetching, fetchNow } = useRemoteFetch(workspaceId);
+	// A worktree-shared ref moving outside the fs watcher's view (`project.refsChanged`) — folded into the
+	// pull's `readKey` below, alongside `baseRef`, so a rebase/fetch elsewhere re-reads this workspace's
+	// remote state too, not just a re-point of the target itself.
+	const refsChangedTick = useAppStore(
+		(s) => s.refsChangedTickByProject[workspace?.projectId ?? ""] ?? 0,
+	);
 
 	// The changed-file list, re-read on the workspace's fs tick *and* on a scope change, plus a target
 	// re-point in branch scope (the `readKey`, see `changesReadKey`); a switch clears the list and its
@@ -113,6 +125,23 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 		refreshing: branchesRefreshing,
 		refresh: refreshBranches,
 	} = useBranchList(workspace?.projectId ?? null);
+
+	// A "don't wait for the next scheduler tick" pull of the workspace's own remote state, layered on top of
+	// the per-project `project.remoteState` push the rail row alone relies on (see `RemoteIndicator`'s doc).
+	// Silent on failure — this is a background pull, not a user action, so only the explicit Fetch button
+	// (`fetchNow` below) ever toasts. `git.remoteState` may answer `null` (no tracked state for this ref yet,
+	// or it isn't a remote-tracking ref at all); nothing folds into the store for that case, since there is
+	// nothing to correct — the selector already reads `null` from an absent entry.
+	useWorkspaceRead(
+		workspaceId,
+		(id) => getTransport().request("git.remoteState", { workspaceId: id }),
+		{
+			onResult: (result) => {
+				if (result) useAppStore.getState().noteRemoteState(result);
+			},
+		},
+		`${baseRef}:${refsChangedTick}`,
+	);
 
 	// Re-point what the changes are measured against. `workspace.setDiffBase` echoes + broadcasts the updated
 	// workspace; the list re-reads off that push (the ref is part of this panel's read key).
@@ -211,6 +240,9 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 							refreshing={branchesRefreshing}
 							onSelect={(ref) => void pointAt(ref)}
 							onRefresh={refreshBranches}
+							remoteState={remoteState}
+							fetching={fetching}
+							onFetch={fetchNow}
 						/>
 					) : null}
 				</div>

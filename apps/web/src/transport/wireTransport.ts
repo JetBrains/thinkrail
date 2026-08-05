@@ -2,6 +2,8 @@ import type {
 	AppConfig,
 	ExtUiRequest,
 	LoginPush,
+	ProjectRefsChangedPayload,
+	ProjectRemoteStatePayload,
 	ServerWelcome,
 	SessionEventPayload,
 	Workspace,
@@ -67,6 +69,18 @@ export function initTransport(): WsTransport {
 
 	transport.subscribe(WS_CHANNELS.workspaceFsChanged, (data) => {
 		useAppStore.getState().noteFsChanged(data as WorkspaceFsChangedPayload);
+	});
+
+	// Remote awareness — per-project, per the same "converge on the push" contract as the workspace trio
+	// above. `remoteState` is a full per-project snapshot (replace); `refsChanged` is a bare invalidation
+	// nudge (a worktree-shared ref moved outside the fs watcher's view — no data of its own).
+	transport.subscribe(WS_CHANNELS.projectRemoteState, (data) => {
+		useAppStore.getState().setProjectRemoteState(data as ProjectRemoteStatePayload);
+	});
+
+	transport.subscribe(WS_CHANNELS.projectRefsChanged, (data) => {
+		const { projectId } = data as ProjectRefsChangedPayload;
+		useAppStore.getState().noteRefsChanged(projectId);
 	});
 
 	// A server-synced settings change (theme, …) — every client converges on this broadcast, including the

@@ -3,13 +3,21 @@ import { ChevronDown, ChevronRight, Folder, GitBranch, House, Plus, Trash2 } fro
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { PopoverTrigger } from "@/components/ui/popover";
-import { isDefaultWorkspace, selectActiveWorkspaceProjectId, toast, useAppStore } from "../store";
+import {
+	isDefaultWorkspace,
+	selectActiveWorkspaceProjectId,
+	selectWorkspaceRemoteState,
+	toast,
+	useAppStore,
+} from "../store";
 import { errorText, getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
 import { ConfirmPopover } from "./ConfirmPopover";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
+import { RemoteIndicator } from "./RemoteIndicator";
 import { useOpenProject } from "./useOpenProject";
+import { useRemoteFetch } from "./useRemoteFetch";
 
 /** Left-nav: projects → workspaces (git worktrees). Open a repo, select it, create/select workspaces. */
 export function ProjectTree() {
@@ -247,6 +255,12 @@ function WorkspaceRow({
 	// Confirm-before-remove lives on the row so the popover anchors right beneath it (contextual to the
 	// workspace being removed) rather than as a centered modal.
 	const [confirmOpen, setConfirmOpen] = useState(false);
+	// The `↓` behind-the-remote indicator — same selector + component `ComparisonTarget` uses, so the two
+	// can never disagree. Deliberately no independent `git.remoteState` pull here: the host's scheduler
+	// pushes a full per-project snapshot on every tick once the project is open, so this row's own
+	// `useAppStore` selection is enough for it to eventually reflect the remote's state.
+	const remoteState = useAppStore((s) => selectWorkspaceRemoteState(s, workspace.id));
+	const { fetching, fetchNow } = useRemoteFetch(workspace.id);
 	const row = (
 		<div
 			data-testid="workspace-item"
@@ -286,6 +300,12 @@ function WorkspaceRow({
 				added={stats?.added ?? 0}
 				removed={stats?.removed ?? 0}
 				className="group-hover:hidden"
+			/>
+			<RemoteIndicator
+				remoteState={remoteState}
+				fetching={fetching}
+				onFetch={fetchNow}
+				testid="workspace-remote"
 			/>
 			{!isDefault && (
 				<PopoverTrigger asChild>

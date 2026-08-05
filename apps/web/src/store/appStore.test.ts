@@ -2,6 +2,7 @@ import { beforeEach, expect, test } from "bun:test";
 import type {
 	ExtUiRequest,
 	PiEvent,
+	RemoteState,
 	SessionSummary,
 	SpecGraphNode,
 	WireModel,
@@ -77,6 +78,8 @@ beforeEach(() => {
 		navTickByWorkspace: {},
 		closedChatsByWorkspace: {},
 		fsChangesByWorkspace: {},
+		remoteStateByProject: {},
+		refsChangedTickByProject: {},
 		skillChangeTickByWorkspace: {},
 		skillsSyncedTickBySession: {},
 		selectedProjectId: null,
@@ -1208,6 +1211,77 @@ test("the diff scope is per workspace, defaults to the branch, and is dropped wi
 
 	s().applyWorkspaceRemoved("p1", "ws1");
 	expect(s().diffScopeByWorkspace.ws1).toBeUndefined();
+});
+
+// Remote awareness: per-project tracked `RemoteState[]` + the invalidation-nudge tick, exercised through
+// the store actions `wireTransport` folds the pushes into (see `selectors.test.ts` for the selector that
+// reads through them).
+function remoteState(patch: Partial<RemoteState> = {}) {
+	return { projectId: "p1", ref: "origin/main", behind: null, lastCheckedAt: null, ...patch };
+}
+
+test("setProjectRemoteState replaces a project's tracked list wholesale, never merges", () => {
+	const s = () => useAppStore.getState();
+	useAppStore.setState({
+		remoteStateByProject: {
+			p1: [
+				remoteState({ ref: "origin/main", behind: 1 }),
+				remoteState({ ref: "origin/dev", behind: 2 }),
+			],
+		},
+	});
+
+	// A fresh push drops a ref the scheduler stopped tracking (e.g. its workspace closed) — a merge would
+	// have left `origin/dev`'s stale reading lingering forever.
+	s().setProjectRemoteState({
+		projectId: "p1",
+		states: [remoteState({ ref: "origin/main", behind: 5 })],
+	});
+	expect(s().remoteStateByProject.p1).toEqual([remoteState({ ref: "origin/main", behind: 5 })]);
+});
+
+test("setProjectRemoteState never touches a sibling project's list", () => {
+	const s = () => useAppStore.getState();
+	useAppStore.setState({ remoteStateByProject: { p2: [remoteState({ projectId: "p2" })] } });
+	s().setProjectRemoteState({ projectId: "p1", states: [remoteState()] });
+	expect(s().remoteStateByProject.p2).toEqual([remoteState({ projectId: "p2" })]);
+});
+
+test("noteRemoteState upserts by ref within its project: replaces an existing ref, appends a new one", () => {
+	const s = () => useAppStore.getState();
+	useAppStore.setState({
+		remoteStateByProject: { p1: [remoteState({ ref: "origin/main", behind: "unknown" })] },
+	});
+
+	// A workspace's own `git.remoteState`/`git.fetchNow` answer for a tracked ref replaces just that entry —
+	// it must not clobber a sibling ref a `project.remoteState` push already delivered for this project.
+	s().noteRemoteState(remoteState({ ref: "origin/main", behind: 3 }));
+	expect(s().remoteStateByProject.p1).toEqual([remoteState({ ref: "origin/main", behind: 3 })]);
+
+	s().noteRemoteState(remoteState({ ref: "origin/dev", behind: "unknown" }));
+	expect(s().remoteStateByProject.p1).toEqual([
+		remoteState({ ref: "origin/main", behind: 3 }),
+		remoteState({ ref: "origin/dev", behind: "unknown" }),
+	]);
+});
+
+test("noteRemoteState against an untracked project starts its list fresh", () => {
+	const s = () => useAppStore.getState();
+	s().noteRemoteState(remoteState());
+	expect(s().remoteStateByProject.p1).toEqual([remoteState()]);
+});
+
+test("noteRefsChanged bumps a per-project tick, independent of sibling projects", () => {
+	const s = () => useAppStore.getState();
+	expect(s().refsChangedTickByProject.p1).toBeUndefined();
+
+	s().noteRefsChanged("p1");
+	expect(s().refsChangedTickByProject.p1).toBe(1);
+	s().noteRefsChanged("p1");
+	expect(s().refsChangedTickByProject.p1).toBe(2);
+
+	// A different project's tick is untouched by p1's churn.
+	expect(s().refsChangedTickByProject.p2).toBeUndefined();
 });
 
 // The Skills-reload badge (selectSkillsStale) is store-derived, so it must not depend on the ChatView

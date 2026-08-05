@@ -1,6 +1,7 @@
 import type {
 	GitDiffScope,
 	Project,
+	RemoteState,
 	SpecGraphNode,
 	WireModel,
 	Workspace,
@@ -253,4 +254,37 @@ export function selectSkillsStale(
 		(state.skillChangeTickByWorkspace[workspaceId] ?? 0) >
 		(state.skillsSyncedTickBySession[sessionId] ?? 0)
 	);
+}
+
+interface RemoteStateLookupState extends ActiveWorkspaceState {
+	/** Per project (worktrees share one `.git`, so this is never per workspace), the scheduler's last-known
+	 * state for every remote-tracking ref it currently tracks — folded from `project.remoteState` (full
+	 * replace) and from a workspace's own `git.remoteState`/`git.fetchNow` pulls (upsert by `ref`). */
+	remoteStateByProject: Record<string, RemoteState[]>;
+}
+
+/**
+ * The **one** place a workspace's behind-the-remote indicator is derived: its project's tracked
+ * `RemoteState[]` (per-project, since worktrees of one repo share a remote) narrowed to the single entry
+ * whose `ref` matches this workspace's own resolved diff base (`selectDiffBaseRef` — `diffBase ??
+ * baseBranch`, the same ref the host resolves `git.remoteState` against). Both the `ComparisonTarget` pill
+ * and the workspace-rail row read through this — never a `.find()` inlined at either call site — so the two
+ * can never disagree about what a workspace's indicator shows.
+ *
+ * `null` covers three cases the caller does not need to distinguish (there is nothing to render either
+ * way): the workspace is unknown, its project has no tracked remote state yet (no push/pull has landed),
+ * or its resolved ref isn't among the tracked ones (e.g. a local branch with no upstream — `git.remoteState`
+ * answers `null` for that too). A **non-null** result's own fields carry the three-fidelity `behind`
+ * (number / `"unknown"` / `null`) and optional `dormant` reason untouched — see {@link RemoteState}'s doc for
+ * what each means; this selector only locates the record, it never reshapes it.
+ */
+export function selectWorkspaceRemoteState(
+	state: RemoteStateLookupState,
+	workspaceId: string,
+): RemoteState | null {
+	const workspace = selectWorkspaceById(state, workspaceId);
+	if (!workspace) return null;
+	const ref = selectDiffBaseRef(state, workspaceId);
+	const states = state.remoteStateByProject[workspace.projectId];
+	return states?.find((s) => s.ref === ref) ?? null;
 }

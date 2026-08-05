@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { Project, WireModel, Workspace } from "@thinkrail/contracts";
+import type { Project, RemoteState, WireModel, Workspace } from "@thinkrail/contracts";
 import type { EditorTab } from "./appStore";
 import {
 	BRANCH_SCOPE,
@@ -12,6 +12,7 @@ import {
 	selectDiffScope,
 	selectHistoryTarget,
 	selectSkillsStale,
+	selectWorkspaceRemoteState,
 	specPathMatcher,
 } from "./selectors";
 
@@ -273,4 +274,82 @@ test("an unrecognised scope kind degrades to the branch scope", () => {
 	};
 	expect(selectDiffScope(state, "w1")).toBe(BRANCH_SCOPE);
 	expect(selectDiffScope({ diffScopeByWorkspace: {} }, "w2")).toBe(BRANCH_SCOPE);
+});
+
+// ---- selectWorkspaceRemoteState: the one place a workspace's remote indicator is derived --------------
+
+/** A `RemoteState` fixture for project p2's "origin/main" — the ref `workspace` (w2) resolves to. */
+function remoteState(patch: Partial<RemoteState> = {}): RemoteState {
+	return { projectId: "p2", ref: "origin/main", behind: null, lastCheckedAt: null, ...patch };
+}
+
+/** `workspace` (declared above) plus a `diffBase` pointing at the remote-tracking ref the fixtures use. */
+const trackedWorkspace: Workspace = { ...workspace, diffBase: "origin/main" };
+const trackedWorkspaces = { p1: [], p2: [trackedWorkspace] };
+
+test("selectWorkspaceRemoteState resolves through the workspace's diffBaseRef, by ref", () => {
+	const state = {
+		activeWorkspaceId: null,
+		workspaces: trackedWorkspaces,
+		remoteStateByProject: { p2: [remoteState({ behind: 3 })] },
+	};
+	expect(selectWorkspaceRemoteState(state, "w2")).toEqual(remoteState({ behind: 3 }));
+});
+
+test("selectWorkspaceRemoteState carries each of the three `behind` fidelities untouched", () => {
+	for (const behind of [5, "unknown", null] as const) {
+		const state = {
+			activeWorkspaceId: null,
+			workspaces: trackedWorkspaces,
+			remoteStateByProject: { p2: [remoteState({ behind })] },
+		};
+		expect(selectWorkspaceRemoteState(state, "w2")?.behind).toBe(behind);
+	}
+});
+
+test("selectWorkspaceRemoteState carries each dormancy reason untouched", () => {
+	for (const dormant of [
+		"disabled",
+		"upstream-gone",
+		"never-authenticated",
+		"ssh-agent-present",
+		"failing",
+	] as const) {
+		const state = {
+			activeWorkspaceId: null,
+			workspaces: trackedWorkspaces,
+			remoteStateByProject: { p2: [remoteState({ dormant })] },
+		};
+		expect(selectWorkspaceRemoteState(state, "w2")?.dormant).toBe(dormant);
+	}
+});
+
+test("selectWorkspaceRemoteState is null when the workspace, project, or ref is unknown", () => {
+	const populated = { p2: [remoteState()] };
+	// Unknown workspace id.
+	expect(
+		selectWorkspaceRemoteState(
+			{ activeWorkspaceId: null, workspaces: trackedWorkspaces, remoteStateByProject: populated },
+			"missing",
+		),
+	).toBeNull();
+	// The workspace's own project has no tracked remote state at all yet.
+	expect(
+		selectWorkspaceRemoteState(
+			{ activeWorkspaceId: null, workspaces: trackedWorkspaces, remoteStateByProject: {} },
+			"w2",
+		),
+	).toBeNull();
+	// The project has *other* refs tracked, but not this workspace's resolved one (e.g. it points at a
+	// local branch with no upstream — `git.remoteState` would have answered `null` for it too).
+	expect(
+		selectWorkspaceRemoteState(
+			{
+				activeWorkspaceId: null,
+				workspaces: { p1: [], p2: [{ ...workspace, diffBase: "origin/other" }] },
+				remoteStateByProject: populated,
+			},
+			"w2",
+		),
+	).toBeNull();
 });
