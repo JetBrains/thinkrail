@@ -191,7 +191,7 @@
 }
 .tr-text-eyebrow {
 	font-family: var(--tr-font-family-interface);
-	font-size: var(--tr-font-size-s13);
+	font-size: var(--tr-font-size-s12);
 	font-weight: var(--tr-font-weight-medium);
 	line-height: var(--tr-line-height-relaxed);
 	letter-spacing: var(--tr-letter-spacing-loose);
@@ -200,7 +200,7 @@
 }
 .tr-text-label-pill {
 	font-family: var(--tr-font-family-interface);
-	font-size: var(--tr-font-size-s13);
+	font-size: var(--tr-font-size-s12);
 	font-weight: var(--tr-font-weight-medium);
 	line-height: var(--tr-line-height-relaxed);
 	letter-spacing: var(--tr-letter-spacing-loose);

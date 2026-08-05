@@ -189,7 +189,7 @@
 			},
 			"eyebrow": {
 				"fontFamily": "interface",
-				"fontSize": "s13",
+				"fontSize": "s12",
 				"fontWeight": "medium",
 				"lineHeight": "relaxed",
 				"letterSpacing": "loose",
