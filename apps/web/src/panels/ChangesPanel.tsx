@@ -128,20 +128,33 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 
 	// A "don't wait for the next scheduler tick" pull of the workspace's own remote state, layered on top of
 	// the per-project `project.remoteState` push the rail row alone relies on (see `RemoteIndicator`'s doc).
-	// Silent on failure — this is a background pull, not a user action, so only the explicit Fetch button
-	// (`fetchNow` below) ever toasts. `git.remoteState` may answer `null` (no tracked state for this ref yet,
-	// or it isn't a remote-tracking ref at all); nothing folds into the store for that case, since there is
-	// nothing to correct — the selector already reads `null` from an absent entry.
-	useWorkspaceRead(
-		workspaceId,
-		(id) => getTransport().request("git.remoteState", { workspaceId: id }),
-		{
-			onResult: (result) => {
-				if (result) useAppStore.getState().noteRemoteState(result);
-			},
-		},
-		`${baseRef}:${refsChangedTick}`,
-	);
+	// A **plain effect**, deliberately not `useWorkspaceRead`: that hook's re-read trigger is the
+	// workspace's fs tick, which fires on ordinary file writes (the watcher deliberately excludes `.git`) —
+	// a signal with zero correlation to remote state. Riding it would poll `git.remoteState` roughly once a
+	// second under continuous churn (this app's central scenario: an agent writing steadily), for a reason
+	// unrelated to what it's checking. `baseRef` + `refsChangedTick` are already the complete set of reasons
+	// this needs a fresh read, so they're the effect's only deps. `cancelled` guards the same thing
+	// `useWorkspaceRead`'s generation stamp does — React runs this effect's cleanup before the next one's
+	// body, so a response for an abandoned (workspaceId, baseRef, refsChangedTick) triple can never land
+	// after a newer read's. Silent on failure — a background pull, not a user action, so only the explicit
+	// Fetch button (`fetchNow` above) ever toasts. `git.remoteState` may answer `null` (no tracked state for
+	// this ref yet, or it isn't a remote-tracking ref at all); nothing folds into the store for that case,
+	// since there is nothing to correct — the selector already reads `null` from an absent entry.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: baseRef/refsChangedTick are refetch triggers, not read
+	useEffect(() => {
+		let cancelled = false;
+		getTransport()
+			.request("git.remoteState", { workspaceId })
+			.then((result) => {
+				if (!cancelled && result) useAppStore.getState().noteRemoteState(result);
+			})
+			.catch(() => {
+				// Silent — see above.
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [workspaceId, baseRef, refsChangedTick]);
 
 	// Re-point what the changes are measured against. `workspace.setDiffBase` echoes + broadcasts the updated
 	// workspace; the list re-reads off that push (the ref is part of this panel's read key).

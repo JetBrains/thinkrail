@@ -19,7 +19,9 @@ export function useRemoteFetch(workspaceId: string): { fetching: boolean; fetchN
 				const result = await getTransport().request("git.fetchNow", { workspaceId });
 				useAppStore.getState().noteRemoteState(result);
 			} catch (error) {
-				toast.error(`Could not fetch: ${errorText(error)}`);
+				// No client-side prefix: the server's own rejection (`policy.ts`'s `fetchRefNow`) already reads
+				// "Could not fetch <ref>: <detail>" — prefixing it again here doubled the phrase.
+				toast.error(errorText(error, "Could not fetch."));
 			} finally {
 				setFetching(false);
 			}

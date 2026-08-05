@@ -128,8 +128,12 @@ const DORMANT_REASON_TEXT: Record<RemoteDormantReason, string> = {
  * three-fidelity `behind` (see {@link RemoteState}) and an optional {@link RemoteDormantReason} become
  * glyph + tone + reason. `reason` is **always** populated for a non-null result — even an actively-checked
  * pair with a real count gets a plain-English sentence ("`origin/main` is 3 commits behind.") — so the
- * popover never has to fall back to composing its own text from the raw fields. `null` means there is
- * nothing to render at all: up to date, and being checked automatically, so there is nothing to explain.
+ * popover never has to fall back to composing its own text from the raw fields, **and** `RemoteIndicator`
+ * reuses it verbatim as the trigger's `aria-label`: a bare glyph (`↓`, `↓·3`, a bare warning triangle) has
+ * no accessible name of its own, and the whole point of this indicator is that a user notices and
+ * understands it — most acutely for `"upstream-gone"`, whose visible content is icon-only. `null` means
+ * there is nothing to render at all: up to date, and being checked automatically, so there is nothing to
+ * explain.
  *
  * `"upstream-gone"` is deliberately its own `kind`, independent of `behind` — the branch is gone, so a
  * `↓`-shaped "behind by some amount" reading would be nonsensical, and (the Critical review finding this
