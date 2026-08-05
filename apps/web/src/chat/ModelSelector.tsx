@@ -73,7 +73,7 @@ export function ModelSelector({
 			<PopoverTrigger
 				data-testid="model-selector"
 				data-open={open}
-				className="flex h-8 max-w-[220px] items-center gap-sm rounded-[var(--radius-md)] border border-border-default bg-control-bg px-sm tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-primary-strong data-[open=true]:bg-control-bg-hovered"
+				className="flex h-8 max-w-[220px] items-center gap-sm rounded-[var(--radius-md)] border border-control-border bg-control-bg px-sm tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-primary-strong data-[open=true]:bg-control-bg-hovered"
 			>
 				<span className="truncate text-text-muted tr-text-metadata">
 					{current?.name ?? "Select model"}

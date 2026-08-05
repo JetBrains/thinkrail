@@ -20,6 +20,7 @@
 	--control-bg-hovered: var(--hover);
 	--control-primary-bg: var(--accent);
 	--control-primary-text: var(--on-accent);
+	--control-border: var(--border);
 	--border-default: var(--border-strong);
 	--border-muted: var(--border);
 	--primary: var(--accent);
@@ -77,6 +78,7 @@
 	--color-control-bg-hovered: var(--control-bg-hovered);
 	--color-control-primary-bg: var(--control-primary-bg);
 	--color-control-primary-text: var(--control-primary-text);
+	--color-control-border: var(--control-border);
 	--color-border-default: var(--border-default);
 	--color-border-muted: var(--border-muted);
 	--color-primary: var(--primary);

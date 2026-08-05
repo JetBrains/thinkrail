@@ -788,7 +788,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 						// `relative` keeps the textarea a positioned participant so it paints ABOVE the absolute
 						// slot-highlight backdrop (its earlier DOM sibling) — otherwise a static textarea paints
 						// under the backdrop and the native caret/selection get dimmed by the active-slot tint.
-						className="relative min-h-[108px] w-full resize-none rounded-[var(--radius-md)] border border-border-default bg-transparent px-md py-sm tr-text-ui text-text-default outline-none transition-colors placeholder:text-text-muted focus:border-primary focus-visible:ring-2 focus-visible:ring-primary-soft"
+						className="relative min-h-[108px] w-full resize-none rounded-[var(--radius-md)] border border-control-border bg-transparent px-md py-sm tr-text-ui text-text-default outline-none transition-colors placeholder:text-text-muted focus:border-primary focus-visible:ring-2 focus-visible:ring-primary-soft"
 					/>
 				</div>
 				<div className="flex flex-wrap items-center gap-sm">

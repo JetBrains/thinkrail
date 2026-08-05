@@ -41,6 +41,7 @@
 		"control-bg-hovered": { "from": "hover", "publish": true },
 		"control-primary-bg": { "from": "accent", "publish": true },
 		"control-primary-text": { "from": "onAccent", "publish": true },
+		"control-border": { "from": "border", "publish": true },
 
 		"border-default": { "from": "borderStrong", "publish": true },
 		"border-muted": { "from": "border", "publish": true },

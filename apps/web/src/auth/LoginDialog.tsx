@@ -153,7 +153,7 @@ export function LoginDialog({
 										data-testid="login-option"
 										data-option={option.id}
 										onClick={() => onReply(option.id)}
-										className="rounded-[var(--radius-md)] border border-border-default bg-control-bg px-md py-sm text-left tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
+										className="rounded-[var(--radius-md)] border border-control-border bg-control-bg px-md py-sm text-left tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
 									>
 										{option.label}
 									</button>
@@ -179,7 +179,7 @@ export function LoginDialog({
 												submitPrompt();
 											}
 										}}
-										className="min-w-0 flex-1 rounded-[var(--radius-md)] border border-border-default bg-control-bg px-sm py-xs tr-text-ui text-text-default outline-none placeholder:text-text-muted focus:border-primary"
+										className="min-w-0 flex-1 rounded-[var(--radius-md)] border border-control-border bg-control-bg px-sm py-xs tr-text-ui text-text-default outline-none placeholder:text-text-muted focus:border-primary"
 									/>
 									<Button data-testid="login-submit" onClick={submitPrompt}>
 										Submit

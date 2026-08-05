@@ -59,7 +59,7 @@ equals `border-default` is not a second weight, it is a second name).
 | --- | --- | --- |
 | Text | `text-default` · `text-muted` · `text-on-primary` | two tiers — a single quiet tier (`text-muted`); there is no separate `text-subtle`/`hint` tier |
 | Container | `container-workspace-bg` · `container-sidebar-bg` · `container-header-bg` · `container-content-bg` · `container-elevated-bg` | `content` is the code canvas (Monaco, Shiki, terminal); `elevated` is every raised surface |
-| Control | `control-bg` · `control-bg-hovered` · `control-primary-bg` · `control-primary-text` | no `-disabled` pair — disabled is `disabled:opacity-50` |
+| Control | `control-bg` · `control-bg-hovered` · `control-primary-bg` · `control-primary-text` · `control-border` | `control-border` is the default border for form controls (inputs/textareas/selects/buttons); no `-disabled` pair — disabled is `disabled:opacity-50` |
 | Border | `border-default` · `border-muted` | |
 | Primary | `primary` + `primary-subtle` · `-soft` · `-muted` · `-strong`, `on-primary-soft` | |
 | Feedback | `feedback-{info,success,warning,error}` + the `-subtle` / `-muted` steps in use | a solid border is the solid colour, so there is no `-border` tier |
