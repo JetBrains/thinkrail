@@ -70,10 +70,26 @@ interface PairRecord {
 	failureCount: number;
 	/** `now()` before which a "failing" pair is not retried; `null` when not backed off. */
 	nextRetryAt: number | null;
+	/**
+	 * The stderr from the most recent failed probe/fetch attempt for this pair (`git/remoteRefs.ts`'s
+	 * `probeRemoteRefs`/`fetchRemoteRefs` both document their failure answer as "the stderr, never
+	 * swallowed" — this is where that promise is kept past `applyProbe`/`applyFetch`). `null` once a check
+	 * completes successfully (see `markSuccess`). Internal only — `RemoteState` has no field for it, so the
+	 * background scheduler's own failures never put raw stderr on the wire; only {@link fetchRefNow}'s
+	 * thrown error (a user-initiated action that must say WHY it failed) reads this back out.
+	 */
+	lastError: string | null;
 }
 
 function defaultRecord(): PairRecord {
-	return { behind: null, lastCheckedAt: null, dormant: null, failureCount: 0, nextRetryAt: null };
+	return {
+		behind: null,
+		lastCheckedAt: null,
+		dormant: null,
+		failureCount: 0,
+		nextRetryAt: null,
+		lastError: null,
+	};
 }
 
 const pairRecords = new Map<string, Map<string, PairRecord>>();
@@ -198,12 +214,13 @@ function ladderReason(
 
 // ── applying a probe/fetch result ─────────────────────────────────────────
 
-function markFailure(projectId: string, names: string[], now: number): void {
+function markFailure(projectId: string, names: string[], now: number, err: string): void {
 	for (const name of names) {
 		const record = recordFor(projectId, `${REMOTE_NAME}/${name}`);
 		record.failureCount += 1;
 		record.nextRetryAt = now + backoffDelayFor(record.failureCount);
 		record.dormant = "failing";
+		record.lastError = err;
 		// behind/lastCheckedAt intentionally untouched: a failed attempt taught us nothing new about
 		// either, and RemoteState's own contract says they reflect the last check that actually completed.
 	}
@@ -227,6 +244,7 @@ function markSuccess(
 	record.dormant = dormant;
 	record.failureCount = 0;
 	record.nextRetryAt = null;
+	record.lastError = null;
 }
 
 async function applyProbe(
@@ -237,7 +255,7 @@ async function applyProbe(
 ): Promise<void> {
 	const result = await probeRemoteRefsFn(repoPath, REMOTE_NAME, names, REMOTE_CHECK_TIMEOUT_MS);
 	if (!result.ok) {
-		markFailure(projectId, names, now);
+		markFailure(projectId, names, now, result.err);
 		return;
 	}
 	for (const name of names) {
@@ -312,8 +330,10 @@ async function applyFetch(
 	const classify = await probeRemoteRefsFn(repoPath, REMOTE_NAME, names, REMOTE_CHECK_TIMEOUT_MS);
 	if (!classify.ok) {
 		// The remote itself is unreachable — a genuine transient/network failure, not any one ref's
-		// problem. Every ref stays (or becomes) "failing", never "gone" on a guess.
-		markFailure(projectId, names, now);
+		// problem. Every ref stays (or becomes) "failing", never "gone" on a guess. The classifying probe's
+		// stderr (not the original fetch's) is what's stored: it is the call that actually diagnosed the
+		// remote as unreachable, and it ran second, so it is the more current answer.
+		markFailure(projectId, names, now, classify.err);
 		return;
 	}
 	const gone = names.filter((name) => classify.heads[name] === undefined);
@@ -323,7 +343,7 @@ async function applyFetch(
 
 	const retry = await fetchRemoteRefsFn(repoPath, REMOTE_NAME, survivors, REMOTE_CHECK_TIMEOUT_MS);
 	if (!retry.ok) {
-		markFailure(projectId, survivors, now);
+		markFailure(projectId, survivors, now, retry.err);
 		return;
 	}
 	applyFetchOutcome(projectId, repoPath, survivors, retry.moved, before, now);
@@ -439,6 +459,12 @@ export const checkProject: CheckProjectFn = async (projectId) => {
  * "failing"` after `applyFetch`) — a one-shot user action's failure belongs on the error path, not folded
  * silently into a dormancy label the way the background scheduler's is. A discovered-gone ref (`dormant:
  * "upstream-gone"`) is NOT a failure here: the fetch mechanism worked and gave a real, completed answer.
+ *
+ * The thrown message includes the underlying git stderr (`PairRecord.lastError`, set by `markFailure` from
+ * whichever of `applyFetch`'s calls actually diagnosed the failure) — never just "it failed". This backs a
+ * button the user just clicked; "auth rejected", "could not resolve host", and "connection refused" are
+ * three different next actions for them, and collapsing all three into one generic sentence would erase
+ * exactly the distinction the click was trying to get an answer to.
  */
 export async function fetchRefNow(projectId: string, ref: string): Promise<RemoteState> {
 	if (!isRemoteTrackingRef(ref)) throw new Error(`Not a remote-tracking ref: ${ref}`);
@@ -450,7 +476,9 @@ export async function fetchRefNow(projectId: string, ref: string): Promise<Remot
 	await applyFetch(projectId, project.path, [name], now);
 	publishSnapshot(projectId, refsForProject(projectId));
 
-	const state = stateFromRecord(projectId, ref);
-	if (state.dormant === "failing") throw new Error(`Could not fetch ${ref}`);
-	return state;
+	const record = recordFor(projectId, ref);
+	if (record.dormant === "failing") {
+		throw new Error(`Could not fetch ${ref}: ${record.lastError ?? "unknown error"}`);
+	}
+	return stateFromRecord(projectId, ref);
 }

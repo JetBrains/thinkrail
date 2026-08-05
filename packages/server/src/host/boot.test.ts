@@ -1,9 +1,11 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, expect, spyOn, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { isPortFree } from "@thinkrail/shared/freePort";
+import { resetConfigCache } from "../settings";
 import { type BootedHost, bootHost } from "./boot";
+import { handleRequest } from "./handlers";
 
 // bootHost registers a SIGINT/SIGTERM handler per call; a handful of boots stays well under the warn
 // threshold, but lift the cap so a noisy run never trips MaxListenersExceededWarning.
@@ -87,4 +89,87 @@ test("stop() releases the port", async () => {
 	expect(await isPortFree(b.port)).toBe(false);
 	b.server.stop();
 	expect(await isPortFree(b.port)).toBe(true);
+});
+
+// ── the remote-check scheduler's lifecycle, proven against the REAL global timer ──────────────────────
+//
+// `remotes.test.ts` already proves the scheduler is internally consistent against its OWN injected
+// `setTimer`/`clearTimer` seam — that's the mechanics half's unit test, exercising the module in
+// isolation. It does NOT prove `createServer` calls `startRemoteChecks`/`stopRemoteChecks` at all: in
+// production, `server.ts` installs no `setTimer`/`clearTimer` override, so the scheduler's defaults
+// (`defaultSetTimer`/`defaultClearTimer`) call the true global `setTimeout`/`clearTimeout` — deleting
+// `stopRemoteChecks();` from `server.ts`'s `stop()` would fail none of `remotes.test.ts`, `policy.test.ts`,
+// or the e2e suite (whose own teardown goes through `boot.ts`'s SIGINT handler, which calls
+// `process.exit(0)` in a `finally` — that kills every pending timer regardless of whether
+// `stopRemoteChecks()` ran, so e2e is structurally incapable of catching this class of regression). These
+// two tests spy on the true globals instead, so a boot that never disarms its own timer is caught here.
+
+test("stop() clears the remote-check scheduler's real backstop timer — no live timer survives it", async () => {
+	const dataDir = mkdtempSync(join(tmpdir(), "thinkrail-boot-remotes-"));
+	const savedDataDir = process.env.THINKRAIL_DATA_DIR;
+	process.env.THINKRAIL_DATA_DIR = dataDir;
+	resetConfigCache(); // a previous test/file may have cached a different data dir's config
+	const setTimeoutSpy = spyOn(globalThis, "setTimeout");
+	const clearTimeoutSpy = spyOn(globalThis, "clearTimeout");
+	try {
+		const b = await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
+
+		// startRemoteChecks armed the backstop during boot, through the real global setTimeout.
+		expect(setTimeoutSpy.mock.calls.length).toBeGreaterThan(0);
+		const armedHandles = setTimeoutSpy.mock.results.map(
+			(r) => r.value as ReturnType<typeof setTimeout>,
+		);
+
+		b.server.stop();
+
+		// Every handle armed up to this point was cleared by stop() — none is still live afterward.
+		const clearedHandles = clearTimeoutSpy.mock.calls.map((call) => call[0]);
+		for (const handle of armedHandles) {
+			expect(clearedHandles).toContain(handle);
+		}
+	} finally {
+		setTimeoutSpy.mockRestore();
+		clearTimeoutSpy.mockRestore();
+		resetConfigCache();
+		rmSync(dataDir, { recursive: true, force: true });
+		if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
+		else process.env.THINKRAIL_DATA_DIR = savedDataDir;
+	}
+});
+
+test("a settings.update reaches the remote-check scheduler through the host-mediated tee — the seam that exists because remotes may not import settings", async () => {
+	const dataDir = mkdtempSync(join(tmpdir(), "thinkrail-boot-settingstee-"));
+	const savedDataDir = process.env.THINKRAIL_DATA_DIR;
+	process.env.THINKRAIL_DATA_DIR = dataDir;
+	resetConfigCache();
+	const setTimeoutSpy = spyOn(globalThis, "setTimeout");
+	const clearTimeoutSpy = spyOn(globalThis, "clearTimeout");
+	try {
+		await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
+		const armedAtBoot = setTimeoutSpy.mock.results.at(-1)?.value as
+			| ReturnType<typeof setTimeout>
+			| undefined;
+		expect(armedAtBoot).toBeDefined();
+
+		await handleRequest(
+			"settings.update",
+			{ config: { gitRemoteCheckIntervalMinutes: 5 } },
+			{ clientKey: "test-client" },
+		);
+
+		// `configureRemoteChecks`'s own doc: "Rearms the backstop immediately when already running" — a
+		// changed interval clears the boot-time timer and arms a fresh one. This is only observable if the
+		// settings tee actually calls `configureRemoteChecks` (not just broadcasts `settingsChanged`) — a
+		// tee that dropped that call would leave the boot-time handle live and never clear it here.
+		const clearedHandles = clearTimeoutSpy.mock.calls.map((call) => call[0]);
+		expect(clearedHandles).toContain(armedAtBoot);
+		expect(setTimeoutSpy.mock.calls.length).toBeGreaterThan(1);
+	} finally {
+		setTimeoutSpy.mockRestore();
+		clearTimeoutSpy.mockRestore();
+		resetConfigCache();
+		rmSync(dataDir, { recursive: true, force: true });
+		if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
+		else process.env.THINKRAIL_DATA_DIR = savedDataDir;
+	}
 });
