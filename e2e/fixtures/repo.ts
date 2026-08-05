@@ -1,7 +1,8 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { E2E_FIXTURE_REPO } from "./paths";
+import { E2E_DATA_DIR, E2E_FIXTURE_REPO } from "./paths";
 
 /**
  * Whether the shared fixture repo is a live git repo the suite can open + `resetState` can prune. Returns
@@ -116,6 +117,79 @@ export function seedFixtureRepo(): void {
 	);
 	git("add", "-A");
 	git("commit", "-m", "init");
+}
+
+// ─── The opt-in bare remote (remote-awareness specs only) ─────────────────────────────────────────
+// The shared fixture repo has NO remote by default — `new-workspace.spec.ts` pins that as a property
+// (`origin` must never appear as a branch option). So this is a per-spec opt-in, never folded into
+// `seedFixtureRepo`: a spec calls `addBareRemote`, does its work, then `removeBareRemote` in its own
+// teardown, leaving every other spec's "no remote" world untouched.
+
+/**
+ * Add a local **bare** repo as the fixture's `origin` and seed `main` onto it — a write-nothing,
+ * credential-free stand-in for a real hosted remote, so the remote-awareness specs need no network and no
+ * auth. Critically, this also runs an explicit `git fetch origin` after the push: `remote add` + `push`
+ * alone does NOT create the local `refs/remotes/origin/main` tracking ref (only a real fetch does), and
+ * without it `resolveDefaultBranch` falls back to the local `main` branch instead of `origin/main` — which
+ * would silently defeat every one of these specs (only remote-tracking refs are ever scheduler-checked).
+ * Returns the bare repo's path, threaded through to `pushUpstreamCommit`/`deleteUpstreamBranch`.
+ */
+export function addBareRemote(): string {
+	const barePath = join(E2E_DATA_DIR, "sample-project-origin.git");
+	rmSync(barePath, { recursive: true, force: true });
+	execFileSync("git", ["init", "--bare", "-b", "main", barePath], { stdio: "ignore" });
+	const git = (...args: string[]) =>
+		execFileSync("git", ["-C", E2E_FIXTURE_REPO, ...args], { stdio: "ignore" });
+	git("remote", "add", "origin", barePath);
+	git("push", "origin", "main");
+	git("fetch", "origin");
+	return barePath;
+}
+
+/** Undo `addBareRemote`: drop the fixture's `origin` remote and delete the bare repo. Idempotent — safe to
+ * call even if a spec already removed the remote itself (e.g. mid-test cleanup). */
+export function removeBareRemote(barePath: string): void {
+	try {
+		execFileSync("git", ["-C", E2E_FIXTURE_REPO, "remote", "remove", "origin"], {
+			stdio: "ignore",
+		});
+	} catch {
+		// Already gone — nothing to undo.
+	}
+	rmSync(barePath, { recursive: true, force: true });
+}
+
+/**
+ * Push one new commit onto the bare remote's `main`, simulating "someone else pushed upstream" — via a
+ * throwaway clone, deliberately NOT the fixture repo's own checkout: committing there and pushing would
+ * advance the fixture's local `main` right along with `origin/main`, leaving nothing behind to detect. The
+ * clone is the only writer that moves the remote without also moving the local tracking ref.
+ */
+export function pushUpstreamCommit(barePath: string): void {
+	const scratch = mkdtempSync(join(tmpdir(), "thinkrail-e2e-upstream-"));
+	try {
+		execFileSync("git", ["clone", barePath, scratch], { stdio: "ignore" });
+		const git = (...args: string[]) =>
+			execFileSync("git", ["-C", scratch, ...args], { stdio: "ignore" });
+		git("config", "user.email", "e2e@thinkrail.test");
+		git("config", "user.name", "ThinkRail E2E");
+		writeFileSync(join(scratch, `upstream-${Date.now()}.txt`), "moved\n");
+		git("add", "-A");
+		git("commit", "-m", "upstream moves on");
+		git("push", "origin", "main");
+	} finally {
+		rmSync(scratch, { recursive: true, force: true });
+	}
+}
+
+/**
+ * Delete `main` on the bare remote directly — `update-ref -d`, never `branch -D`: a bare repo's `HEAD`
+ * symref still points at `refs/heads/main`, and the porcelain delete refuses to remove a branch HEAD
+ * names, which is exactly the safety check this plumbing command bypasses (there's no working tree to
+ * switch off of first, since the repo is bare). Simulates a merged-and-deleted PR branch upstream.
+ */
+export function deleteUpstreamBranch(barePath: string): void {
+	execFileSync("git", ["-C", barePath, "update-ref", "-d", "refs/heads/main"], { stdio: "ignore" });
 }
 
 /**

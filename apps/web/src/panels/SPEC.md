@@ -266,8 +266,17 @@ a project picker, the prompt hero, and the reused
   ever seeds global files. No server change. **`PrivacySettings`** is the **anonymous-usage-analytics
   toggle** — a switch over `store.analyticsEnabled`, fired via `settings.update { analyticsEnabled }`
   with the same converge-on-broadcast pattern as the theme, plus the what-is/isn't-collected copy; only
-  the boolean ever crosses the wire, see `submodule-server-analytics`. A single dimmed "General" nav item ("Soon") still signals the shell is
-  built to grow. `ProvidersSettings`/`AppearanceSettings`/`TemplatesSettings`/`PrivacySettings` are the
+  the boolean ever crosses the wire, see `submodule-server-analytics`. **`GitSettings`** is the Git nav
+  section: a hand-rolled probe/fetch/off mode picker over `store.gitRemoteCheck` and a minutes input over
+  `store.gitRemoteCheckIntervalMinutes`, both fired via a single `settings.update { gitRemoteCheck,
+  gitRemoteCheckIntervalMinutes }` with the same fire-and-forget, no-optimistic-set,
+  converge-on-`settings.changed` pattern as `PrivacySettings` — the mode only ever changes what the
+  scheduler in `remotes/SPEC.md` does with it, so the UI's job is narrow: show the current value, send the
+  next one, and let the broadcast be the only thing that moves the toggle. The interval input applies a
+  light client-side sanity bound only (nonsense entries like empty or negative are prevented before
+  sending); the authoritative `[1, 1440]` clamp and unknown-mode rejection live server-side in
+  `updateConfig` and are deliberately not duplicated here. `ProvidersSettings`/`AppearanceSettings`/
+  `TemplatesSettings`/`PrivacySettings`/`GitSettings` are the
   **integration pieces**
   (store + transport); the `LoginDialog` stays presentational (`auth` module).
 

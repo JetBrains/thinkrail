@@ -116,7 +116,7 @@ export type TabIntent = "preview" | "keep";
 /**
  * A section of the settings dialog (a const-object "enum", the codebase convention). Extensible — the live
  * sections are providers, github, appearance (the theme picker), templates (prompt-template manager),
- * and privacy (the analytics toggle).
+ * privacy (the analytics toggle), and git (the remote-check mode + interval).
  */
 export const SettingsSection = {
 	Providers: "providers",
@@ -124,6 +124,7 @@ export const SettingsSection = {
 	Appearance: "appearance",
 	Templates: "templates",
 	Privacy: "privacy",
+	Git: "git",
 } as const;
 export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSection];
 
@@ -630,6 +631,13 @@ interface AppState {
 	/** Anonymous-usage-analytics switch (host-owned, same `applyConfig` fold as `theme`). Only this boolean
 	 * ever reaches a client — events are emitted host-side and the install id never crosses the wire. */
 	analyticsEnabled: boolean;
+	/** Remote-check mode (host-owned, same `applyConfig` fold as `theme`): `"probe"` (default, write-nothing
+	 * `git ls-remote`), `"fetch"` (a real `git fetch`, exact `behind` counts), or `"off"`. Read side of the
+	 * Git settings section; the scheduler that acts on it lives server-side (`remotes/SPEC.md`). */
+	gitRemoteCheck: AppConfig["gitRemoteCheck"];
+	/** The backstop interval (minutes) between automatic remote checks when a client has been idle. Same
+	 * `applyConfig` fold; the authoritative `[1, 1440]` clamp lives server-side in `updateConfig`. */
+	gitRemoteCheckIntervalMinutes: number;
 	/** Transient notifications, oldest-first (the Toaster renders + times them out). At-most a handful live
 	 * at once; a failed wire call that has no better home (no chat tab to host an error turn) lands here. */
 	toasts: Toast[];
@@ -1030,6 +1038,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	settingsSection: SettingsSection.Providers,
 	theme: DEFAULT_CONFIG.theme,
 	analyticsEnabled: DEFAULT_CONFIG.analyticsEnabled,
+	gitRemoteCheck: DEFAULT_CONFIG.gitRemoteCheck,
+	gitRemoteCheckIntervalMinutes: DEFAULT_CONFIG.gitRemoteCheckIntervalMinutes,
 	toasts: [],
 	setStatus: (status) => set({ status }),
 	setWelcome: (protocolVersion) => set({ protocolVersion }),
@@ -1620,7 +1630,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set({ settingsOpen: true, settingsSection: section }),
 	closeSettings: () => set({ settingsOpen: false }),
 	setSettingsSection: (section) => set({ settingsSection: section }),
-	applyConfig: (config) => set({ theme: config.theme, analyticsEnabled: config.analyticsEnabled }),
+	applyConfig: (config) =>
+		set({
+			theme: config.theme,
+			analyticsEnabled: config.analyticsEnabled,
+			gitRemoteCheck: config.gitRemoteCheck,
+			gitRemoteCheckIntervalMinutes: config.gitRemoteCheckIntervalMinutes,
+		}),
 	requestRightTab: (workspaceId, tab) => set({ rightTabRequest: { workspaceId, tab } }),
 	// The path intent and the flip always travel together — one action, so no call site can send half of it.
 	// The nav count is stamped here, at the click, because that is when the user navigated — the panel only
