@@ -53,11 +53,12 @@ export function setWatchPublisher(publisher: WatchPublisher | null): void {
  * workspace whose watcher is currently live: `.git` events inside the recursive root watcher (a repo root),
  * the non-recursive watcher on the **resolved** git dir (a linked worktree's metadata lives in the parent
  * repo, outside the root — see `resolveExternalGitDir`), and the non-recursive watcher on the **project
- * repo's own** git dir (see `resolveProjectGitDir`) — the one place `refs/heads/*` actually lives, which a
- * `git branch` run in *any* worktree of the project writes and which neither of the first two ever sees,
- * because it is shared, not per-worktree. That third source fans out to every workspace of the project whose
- * watcher is currently live (one repo, many workspaces — never a watcher per workspace), reusing this exact
- * per-workspace debounce rather than adding a second one.
+ * repo's own** git dir PLUS a recursive watcher scoped to its `refs/` subtree (see `resolveProjectGitDir`,
+ * `ensureProjectWatch`) — together the one place `refs/heads/*` actually lives, which a `git branch` run in
+ * *any* worktree of the project writes and which neither of the first two ever sees, because it is shared,
+ * not per-worktree. That third source fans out to every workspace of the project whose watcher is currently
+ * live (one repo, many workspaces — never a watcher per workspace), reusing this exact per-workspace
+ * debounce rather than adding a second one.
  *
  * The host turns it into two convergences: a **Default** workspace's folder-truth branch label
  * (`refreshDefaultWorkspace`) and a pathless client invalidation, so git-derived reads (`git.status`, an open
@@ -192,44 +193,53 @@ function resolveProjectGitDir(projectPath: string): string | null {
 }
 
 interface ProjectWatchEntry {
+	/** Non-recursive watcher on `<gitDir>` itself — top-level churn only (`packed-refs`, `HEAD`, `index`). */
 	watcher: FSWatcher;
 	/** Inode of the watched project git dir — self-healed exactly like a worktree root (see `ensureWatch`):
 	 * a delete + re-create at the same path (e.g. `git init` run again) gets a new inode, and the old watcher
 	 * silently follows the dead one. */
 	gitDirIno: number;
+	/** Recursive watcher on `<gitDir>/refs` — see `ensureProjectRefsWatch`. `null` when `refs/` doesn't exist
+	 * right now (a freshly-initialised repo before its first loose ref, or one fully packed away): this is
+	 * not a sticky failure, `ensureProjectRefsWatch` retries it on every subsequent `ensureWatch` call. */
+	refsWatcher: FSWatcher | null;
+	/** Inode of the watched `refs/` dir, paired with `refsWatcher`; `null` exactly when it is. */
+	refsDirIno: number | null;
 }
 
-/** One watcher per PROJECT REPO, not per workspace — many workspaces share the one git dir being watched
- * here, so this is keyed by `projectId`, never by `workspaceId` (see `ensureProjectWatch`). */
+/** One watcher pair per PROJECT REPO, not per workspace — many workspaces share the one git dir being
+ * watched here, so this is keyed by `projectId`, never by `workspaceId` (see `ensureProjectWatch`). */
 const projectWatchers = new Map<string, ProjectWatchEntry>();
 
 /**
- * Start (or repair) the ONE watcher for a project's shared git dir. Called from every `ensureWatch` for any
- * of its workspaces, and idempotent for the same reason: many workspaces can share one project repo, and
- * this must never become a watcher per workspace (the fan-out below reaches every one of them from a single
- * stream). Self-heals like the worktree-root watcher: re-stats the git dir on every call and re-creates it
- * on inode change; a missing/non-git `.git` or a failed start degrades silently (warned, retried on the next
- * call — read-on-demand still stands).
+ * Start (or repair) the watcher **pair** for a project's shared git dir: a non-recursive watch on `<gitDir>`
+ * itself, plus a recursive watch on `<gitDir>/refs` (see `ensureProjectRefsWatch`). Called from every
+ * `ensureWatch` for any of its workspaces, and idempotent for the same reason: many workspaces can share one
+ * project repo, and this must never become a watcher per workspace (the fan-out below reaches every one of
+ * them from a single pair of streams). Self-heals like the worktree-root watcher: re-stats `<gitDir>` on
+ * every call and re-creates both watchers on inode change; a missing/non-git `.git` or a failed start
+ * degrades silently (warned, retried on the next call — read-on-demand still stands).
  *
- * Non-recursive on purpose (a recursive watch on this dir would storm on every object write during a
- * `fetch`/`gc`, for a directory every workspace of the project shares) — but be clear-eyed about what that
- * buys here, which is *less* than for the linked-worktree watcher above. That one gets away with
- * non-recursive because the refs that move for it (`HEAD`, `index`, `ORIG_HEAD`) sit at the watched dir's
- * top level. `refs/heads/<name>` — what a plain `git branch <name>` writes — is *two levels* below this
- * dir, and non-recursive `fs.watch` on darwin only sees the watched dir's direct children (kqueue
- * semantics): measured directly, a settled non-recursive watch on a real repo's `.git` saw **zero** events
- * for a bare nested write, and only ~50% for a real `git branch` (every firing mis-attributed to a
- * top-level `HEAD.lock` rename that `git branch` never touches — FSEvents coalescing noise, not a real
- * signal). What this watcher *does* reliably catch: any write that touches a genuine top-level entry —
- * `packed-refs` (rewritten by `git gc` / `fetch --prune` / `pack-refs`), or the project's own `HEAD`/`index`
- * if the project itself is checked out and edited directly. Loose `refs/heads/*` creation from a plain
- * `git branch` is a known, open gap — see `packages/server/src/watch/SPEC.md` and
- * `.superpowers/sdd/2026-08-04-remote-awareness/task-7-report.md` for the full measurement.
+ * Split this way — non-recursive on `<gitDir>`, recursive on `<gitDir>/refs` only — because a single
+ * non-recursive watch on `<gitDir>` cannot do the job by itself, and neither can going fully recursive.
+ * Measured directly on darwin: `refs/heads/<name>` (what a plain `git branch <name>` writes) is *two levels*
+ * below `<gitDir>`, and non-recursive `fs.watch` there only sees the dir's direct children (kqueue
+ * semantics) — a settled non-recursive watch on a real repo's `.git` saw **zero** events for a bare nested
+ * write, and only ~50% for a real `git branch` (every firing mis-attributed to an unrelated top-level
+ * `HEAD.lock` rename — FSEvents coalescing noise, not a real signal). Rooting a *recursive* watch at
+ * `refs/` instead — rather than at `<gitDir>` — gets the reliability of recursion (100% for `git branch` in
+ * the same measurement, via the loose ref file itself) while EXCLUDING the storm a fully recursive `<gitDir>`
+ * watch would cause: `objects/`, where a `fetch`/`gc` writes the bulk of its churn, is a sibling of `refs/`,
+ * not a descendant, so it is structurally never seen by this watcher — not filtered out, excluded by the
+ * root chosen. What the non-recursive `<gitDir>` watch still covers on its own: `packed-refs` (rewritten by
+ * `git gc` / `fetch --prune` / `pack-refs`) and the project's own `HEAD`/`index` if it is itself checked out
+ * and edited directly — both top-level, outside `refs/`. See `packages/server/src/watch/SPEC.md` for the
+ * measured hit rates before/after this split.
  */
 function ensureProjectWatch(projectId: string, projectPath: string): void {
 	const gitDir = resolveProjectGitDir(projectPath);
 	if (!gitDir) {
-		stopProjectWatch(projectId); // no longer a git folder — drop any stale watcher
+		stopProjectWatch(projectId); // no longer a git folder — drop any stale watchers
 		return;
 	}
 	let gitDirIno: number;
@@ -239,33 +249,89 @@ function ensureProjectWatch(projectId: string, projectPath: string): void {
 		stopProjectWatch(projectId);
 		return;
 	}
-	const existing = projectWatchers.get(projectId);
-	if (existing) {
-		if (existing.gitDirIno === gitDirIno) return;
-		stopProjectWatch(projectId); // same path, new inode — the old watcher is dead, re-create
+
+	let entry = projectWatchers.get(projectId);
+	if (entry && entry.gitDirIno !== gitDirIno) {
+		stopProjectWatch(projectId); // same path, new inode — the old watchers are dead, re-create both
+		entry = undefined;
+	}
+	if (!entry) {
+		try {
+			const watcher = watch(gitDir, { recursive: false }, () => {
+				nudgeProjectWorkspaces(projectId);
+			});
+			watcher.on("error", (err) => {
+				console.warn(`project git-dir watcher for ${projectId} failed: ${err}`);
+				watcher.close();
+				const live = projectWatchers.get(projectId);
+				if (live?.watcher === watcher) {
+					live.refsWatcher?.close();
+					projectWatchers.delete(projectId);
+				}
+			});
+			entry = { watcher, gitDirIno, refsWatcher: null, refsDirIno: null };
+			projectWatchers.set(projectId, entry);
+		} catch (err) {
+			console.warn(`could not watch project git dir for ${projectId}: ${err}`);
+			return;
+		}
 	}
 
+	ensureProjectRefsWatch(projectId, gitDir, entry);
+}
+
+/**
+ * Start (or repair) the recursive watch on a project's `<gitDir>/refs` — the one place a plain `git branch`
+ * (loose ref creation) is reliably observed (see `ensureProjectWatch`'s doc comment for the measurement).
+ * `refs/` can genuinely be absent — a freshly-initialised repo before its first loose ref exists, or one
+ * whose refs are fully packed away — so a missing dir is handled exactly like a failed watcher start
+ * elsewhere in this module: warned, `null`ed out, and retried on the next `ensureWatch` call, never a sticky
+ * failure that would leave the project silently unwatched forever. Self-heals on inode change, same as
+ * every other watched dir in this module.
+ */
+function ensureProjectRefsWatch(projectId: string, gitDir: string, entry: ProjectWatchEntry): void {
+	const refsDir = resolve(gitDir, "refs");
+	let refsDirIno: number;
 	try {
-		const watcher = watch(gitDir, { recursive: false }, () => {
+		refsDirIno = statSync(refsDir).ino;
+	} catch {
+		entry.refsWatcher?.close();
+		entry.refsWatcher = null;
+		entry.refsDirIno = null;
+		return;
+	}
+	if (entry.refsWatcher && entry.refsDirIno === refsDirIno) return; // already live, same inode
+	entry.refsWatcher?.close(); // stale (inode changed) — the old watcher is dead, re-create
+
+	try {
+		const watcher = watch(refsDir, { recursive: true }, () => {
 			nudgeProjectWorkspaces(projectId);
 		});
 		watcher.on("error", (err) => {
-			console.warn(`project git-dir watcher for ${projectId} failed: ${err}`);
+			console.warn(`project refs watcher for ${projectId} failed: ${err}`);
 			watcher.close();
-			if (projectWatchers.get(projectId)?.watcher === watcher) projectWatchers.delete(projectId);
+			const live = projectWatchers.get(projectId);
+			if (live?.refsWatcher === watcher) {
+				live.refsWatcher = null;
+				live.refsDirIno = null;
+			}
 		});
-		projectWatchers.set(projectId, { watcher, gitDirIno });
+		entry.refsWatcher = watcher;
+		entry.refsDirIno = refsDirIno;
 	} catch (err) {
-		console.warn(`could not watch project git dir for ${projectId}: ${err}`);
+		console.warn(`could not watch project refs dir for ${projectId}: ${err}`);
+		entry.refsWatcher = null;
+		entry.refsDirIno = null;
 	}
 }
 
-/** Stop a project's git-dir watcher (its project record vanished; server shutdown). Idempotent. */
+/** Stop a project's git-dir watcher pair (its project record vanished; server shutdown). Idempotent. */
 function stopProjectWatch(projectId: string): void {
 	const entry = projectWatchers.get(projectId);
 	if (!entry) return;
 	projectWatchers.delete(projectId);
 	entry.watcher.close();
+	entry.refsWatcher?.close();
 }
 
 /**
