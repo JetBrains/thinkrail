@@ -51,6 +51,7 @@
 
 	/* Letter spacing */
 	--tr-letter-spacing-normal: normal;
+	--tr-letter-spacing-loose: 0.02em;
 	--tr-letter-spacing-wide: 0.05em;
 	--tr-letter-spacing-widest: 0.1em;
 	--tr-letter-spacing-brand: 0.5px;
@@ -190,19 +191,19 @@
 }
 .tr-text-eyebrow {
 	font-family: var(--tr-font-family-interface);
-	font-size: var(--tr-font-size-s10);
-	font-weight: var(--tr-font-weight-regular);
-	line-height: var(--tr-line-height-default);
-	letter-spacing: var(--tr-letter-spacing-wide);
+	font-size: var(--tr-font-size-s13);
+	font-weight: var(--tr-font-weight-medium);
+	line-height: var(--tr-line-height-relaxed);
+	letter-spacing: var(--tr-letter-spacing-loose);
 	text-transform: uppercase;
 	font-style: normal;
 }
 .tr-text-label-pill {
 	font-family: var(--tr-font-family-interface);
-	font-size: var(--tr-font-size-s10);
-	font-weight: var(--tr-font-weight-regular);
-	line-height: var(--tr-line-height-default);
-	letter-spacing: var(--tr-letter-spacing-wide);
+	font-size: var(--tr-font-size-s13);
+	font-weight: var(--tr-font-weight-medium);
+	line-height: var(--tr-line-height-relaxed);
+	letter-spacing: var(--tr-letter-spacing-loose);
 	text-transform: uppercase;
 	font-style: normal;
 }

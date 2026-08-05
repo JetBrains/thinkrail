@@ -66,6 +66,7 @@
 	},
 	"letterSpacings": {
 		"normal": "normal",
+		"loose": "0.02em",
 		"wide": "0.05em",
 		"widest": "0.1em",
 		"brand": "0.5px"
@@ -188,10 +189,10 @@
 			},
 			"eyebrow": {
 				"fontFamily": "interface",
-				"fontSize": "s10",
-				"fontWeight": "regular",
-				"lineHeight": "default",
-				"letterSpacing": "wide",
+				"fontSize": "s13",
+				"fontWeight": "medium",
+				"lineHeight": "relaxed",
+				"letterSpacing": "loose",
 				"textTransform": "uppercase",
 				"fontStyle": "normal"
 			},

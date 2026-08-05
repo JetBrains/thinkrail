@@ -48,7 +48,7 @@ both markdown surfaces, the `<body>` base).
 | `fontWeights` | `regular` 400 · `medium` 500 · `semibold` 600 · `brand` 800 |
 | `fontSizes` | `s10` `s11` `s12` `s13` `s14` `s16` `s18` `s20` `s24` `s44` (px) |
 | `lineHeights` | `tight` 1.2308 (13px→16px) · `compact` 1.25 · `metadata` 1.3333 (12px→16px, 18px→24px) · `ui` 1.4286 (14px→20px) · `code` 1.5 · `relaxed` 1.5385 (13px→20px) · `default` 1.6 |
-| `letterSpacings` | `normal` · `wide` 0.05em · `widest` 0.1em · `brand` 0.5px |
+| `letterSpacings` | `normal` · `loose` 0.02em · `wide` 0.05em · `widest` 0.1em · `brand` 0.5px |
 
 **Semantic styles** are what components use. Each names seven primitive references and nothing else, so
 it resolves deterministically — there is no inheritance, no per-usage branching, no fallback:
@@ -227,7 +227,7 @@ those are proportional. Validation enforces this: a monospace family on a non-co
 
 - **400** — ordinary UI, body, entity, metadata and status text.
 - **500** — buttons (`ui.action`), in-page section titles, compact titles, inline emphasis
-  (`ui.emphasis`), chat prose h4–h6 and `strong`.
+  (`ui.emphasis`), uppercase labels (`ui.eyebrow`/`labelPill`), chat prose h4–h6 and `strong`.
 - **600** — dialog titles, card titles, alert titles, every `heading.*`, chat prose h1–h3, document
   prose h1–h6 and table headers.
 - **800** — brand only.
