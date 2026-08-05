@@ -386,13 +386,17 @@ function ProjectRow({
 			<ContextMenu open={menuOpen} onOpenChange={setMenuOpen}>
 				<ContextMenuTrigger
 					asChild
-					onContextMenu={(event) => {
-						if (event.button !== 2) event.preventDefault();
-					}}
-					onKeyDownCapture={(event) => {
-						if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
-							event.preventDefault();
-						}
+					onKeyDown={(event) => {
+						if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
+						event.preventDefault();
+						const rect = event.currentTarget.getBoundingClientRect();
+						event.currentTarget.dispatchEvent(
+							new MouseEvent("contextmenu", {
+								bubbles: true,
+								clientX: rect.left,
+								clientY: rect.bottom,
+							}),
+						);
 					}}
 				>
 					{row}

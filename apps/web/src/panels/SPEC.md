@@ -21,8 +21,9 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   Long names truncate before the count/action; there is deliberately **no visible Close or overflow icon**.
   Hover highlights the full row and the highlight remains while its **project context menu** is open.
   Right-click opens that PR-#167-styled menu at the pointer without selecting/navigating; a scroll-cancelled
-  ~700ms long press is its touch equivalent. There is no hint and intentionally no Context Menu/Shift+F10
-  opener, although a pointer-opened menu keeps standard arrow/activate/Escape keys. The menu is neutral
+  ~700ms long press is its touch equivalent. With a project-name button focused, the standard Context Menu
+  key or Shift+F10 opens the same menu for keyboard-only use; arrow/activate/Escape keys work normally.
+  The menu is neutral
   **Plus Create workspace**, separator, **X Close project**; Create is exactly the direct `+` flow. Close
   opens a centered, neutral `ConfirmDialog` titled **“Close {name}?”**, description **“Removes this project
   from the open projects list. Its repository, workspaces, chats, and running activity are kept. Reopen it

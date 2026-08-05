@@ -104,12 +104,18 @@ test("project context actions stay compact and close/reopen is lossless across c
 		await count.evaluate((element) => element.nextElementSibling?.getAttribute("data-testid")),
 	).toBe("add-workspace");
 
-	// There is deliberately no keyboard-only opener.
+	// Standard keyboard context-menu gestures expose the same actions without requiring a pointer.
+	const projectActions = page.getByTestId("project-actions");
 	await fixtureName.focus();
 	await page.keyboard.press("Shift+F10");
-	await expect(page.getByTestId("project-actions")).toHaveCount(0);
+	await expect(projectActions).toBeVisible();
+	await page.keyboard.press("Escape");
+	await expect(fixtureName).toBeFocused();
+	await fixtureName.focus();
 	await page.keyboard.press("ContextMenu");
-	await expect(page.getByTestId("project-actions")).toHaveCount(0);
+	await expect(projectActions).toBeVisible();
+	await page.keyboard.press("Escape");
+	await expect(fixtureName).toBeFocused();
 
 	// Right-click anchors at the pointer, highlights the row, and never performs the name button's
 	// Project-Home navigation. Once open, standard menu keys remain available.
@@ -117,7 +123,6 @@ test("project context actions stay compact and close/reopen is lossless across c
 	if (!fixtureBox) throw new Error("Fixture project row has no bounding box");
 	const pointer = { x: fixtureBox.x + 72, y: fixtureBox.y + fixtureBox.height / 2 };
 	await page.mouse.click(pointer.x, pointer.y, { button: "right" });
-	const projectActions = page.getByTestId("project-actions");
 	await expect(projectActions).toBeVisible();
 	await expect(fixtureRow).toHaveAttribute("data-menu-open", "true");
 	await expect(page.getByTestId("center-tabs")).toBeVisible();
