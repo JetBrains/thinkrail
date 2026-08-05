@@ -52,11 +52,11 @@
 	--tr-letter-spacing-brand: 0.5px;
 }
 
-/* Document base — `rootStyle` (ui.default). Any semantic class overrides it. */
+/* Document base — `rootStyle` (body.reading). Any semantic class overrides it. */
 @layer base {
 	body {
 		font-family: var(--tr-font-family-interface);
-		font-size: var(--tr-font-size-s12);
+		font-size: var(--tr-font-size-s14);
 		font-weight: var(--tr-font-weight-regular);
 		line-height: var(--tr-line-height-default);
 		letter-spacing: var(--tr-letter-spacing-normal);
@@ -168,7 +168,7 @@
 }
 .tr-text-ui {
 	font-family: var(--tr-font-family-interface);
-	font-size: var(--tr-font-size-s12);
+	font-size: var(--tr-font-size-s14);
 	font-weight: var(--tr-font-weight-regular);
 	line-height: var(--tr-line-height-default);
 	letter-spacing: var(--tr-letter-spacing-normal);
@@ -177,7 +177,7 @@
 }
 .tr-text-metadata {
 	font-family: var(--tr-font-family-interface);
-	font-size: var(--tr-font-size-s10);
+	font-size: var(--tr-font-size-s12);
 	font-weight: var(--tr-font-weight-regular);
 	line-height: var(--tr-line-height-default);
 	letter-spacing: var(--tr-letter-spacing-normal);

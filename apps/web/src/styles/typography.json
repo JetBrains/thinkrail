@@ -67,7 +67,7 @@
 		"brand": "0.5px"
 	},
 	"rootStyle": {
-		"$ref": "ui.default"
+		"$ref": "body.reading"
 	},
 	"textStyles": {
 		"brand": {
@@ -165,17 +165,11 @@
 		},
 		"ui": {
 			"default": {
-				"fontFamily": "interface",
-				"fontSize": "s12",
-				"fontWeight": "regular",
-				"lineHeight": "default",
-				"letterSpacing": "normal",
-				"textTransform": "none",
-				"fontStyle": "normal"
+				"$ref": "body.reading"
 			},
 			"metadata": {
 				"fontFamily": "interface",
-				"fontSize": "s10",
+				"fontSize": "s12",
 				"fontWeight": "regular",
 				"lineHeight": "default",
 				"letterSpacing": "normal",
@@ -308,7 +302,7 @@
 				"$ref": "body.reading"
 			},
 			"tableBody": {
-				"$ref": "ui.default"
+				"$ref": "ui.metadata"
 			},
 			"tableHeader": {
 				"$ref": "chat.h3"
