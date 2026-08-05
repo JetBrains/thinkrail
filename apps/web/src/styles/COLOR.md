@@ -63,7 +63,7 @@ equals `border-default` is not a second weight, it is a second name).
 | Border | `border-default` · `border-muted` | |
 | Primary | `primary` + `primary-subtle` · `-soft` · `-muted` · `-strong`, `on-primary-soft` | |
 | Feedback | `feedback-{info,success,warning,error}` + the `-subtle` / `-muted` steps in use | a solid border is the solid colour, so there is no `-border` tier |
-| Chat bubble | `bubble-user-bg` | tinted from the manifest's own `bubbleAccent` |
+| Chat bubble | `bubble-user-bg` · `bubble-user-border` | tinted from the manifest's own `bubbleAccent` |
 | Effects | `overlay` · `sunken` | written per light/dark by the theme engine |
 
 There is no `text-disabled`, no `text-strong`, no `text-subtle` and no `text-link` utility: they

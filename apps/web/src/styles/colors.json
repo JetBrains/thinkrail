@@ -65,6 +65,7 @@
 		"feedback-warning-subtle": { "from": "warning", "alpha": "wash", "publish": true },
 
 		"bubble-user-bg": { "from": "bubbleAccent", "alpha": "subtle", "publish": true },
+		"bubble-user-border": { "from": "bubbleAccent", "alpha": "muted", "publish": true },
 
 		"selection-text": {
 			"from": "selectionForeground",
