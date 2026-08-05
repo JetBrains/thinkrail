@@ -63,7 +63,14 @@ import { findOpenBranchReview } from "../branch-review";
 import { selectDirectory } from "../dialog";
 import { listAvailableEditors, openEditor, revealInFileManager } from "../editors";
 import { readDir, readFile } from "../fs";
-import { gitDiffFile, gitStatus, listBranches, listCommits, prefetchBranch } from "../git";
+import {
+	diffBaseRef,
+	gitDiffFile,
+	gitStatus,
+	listBranches,
+	listCommits,
+	prefetchBranch,
+} from "../git";
 import { githubAuthStatus, githubRefresh } from "../github";
 import { clampLimit, getHistoryIndex } from "../history";
 import {
@@ -77,6 +84,7 @@ import {
 	setProjectSkillEnabled,
 	setProjectTrust,
 } from "../projects";
+import { fetchRefNow, noteRemoteTrusted, remoteStateFor } from "../remotes";
 import {
 	addComment,
 	buildSendPackage,
@@ -130,6 +138,7 @@ import { ackSend } from "./ackSend";
 import { nudgeBaseRefWorkspaces } from "./fsNudge";
 import { buildHistoryScope } from "./historyScope";
 import { dropLogin, recordLoginStart } from "./loginAnalytics";
+import { nudgeProjectRefsChanged } from "./refsNudge";
 import { withReviewLock } from "./reviewLock";
 
 /**
@@ -341,12 +350,21 @@ const handlers: Record<string, Handler> = {
 	"git.prefetch": async (params) => {
 		const p = params as { projectId: string; ref: string };
 		const { ok, moved } = await prefetchBranch(p.projectId, p.ref);
+		// This is a user-initiated fetch too (the app's own background prefetch, but still a real
+		// authenticated round-trip against the remote) — satisfy credential-ladder rung 2 on any successful
+		// attempt, regardless of whether the ref actually moved.
+		if (ok) noteRemoteTrusted(p.projectId, "origin");
 		// A fetch that moved the local remote-tracking ref may have changed what a sibling workspace's
 		// branch-scope diff *means* (its merge-base can move) — and it is invisible to the watch module (it
 		// writes only to the shared `.git`, outside every watched location), so this is the one signal those
 		// workspaces get; an unaffected re-read is an idempotent no-op. `moved` itself stays host-internal:
-		// the wire result remains `{ ok }`.
-		if (moved) nudgeBaseRefWorkspaces(p.projectId, p.ref);
+		// the wire result remains `{ ok }`. The same move also invalidates the remote-check scheduler's cached
+		// `RemoteState` for this ref (it's now stale re: what the local tracking ref points at), so the
+		// project-scoped nudge fires alongside the per-workspace one.
+		if (moved) {
+			nudgeBaseRefWorkspaces(p.projectId, p.ref);
+			nudgeProjectRefsChanged(p.projectId);
+		}
 		return { ok };
 	},
 	"github.authStatus": () => githubAuthStatus(),
@@ -401,6 +419,36 @@ const handlers: Record<string, Handler> = {
 	},
 	// The workspace branch's own commits — the scope menu's lazily-fetched commit list.
 	"git.listCommits": (params) => listCommits((params as { workspaceId: string }).workspaceId),
+	// The last-known `RemoteState` for a workspace's resolved diff-base ref — a pure cache read, never a
+	// probe/fetch trigger (`remoteStateFor` never touches `git`). `null` means ONE thing only: the resolved
+	// base isn't remote-tracking-shaped at all (a local branch base — a permanent fact, nothing to ever
+	// check). It is deliberately NEVER returned for "remote-tracking, but `checkProject` hasn't run for it
+	// yet" — that transient case is a real, non-null `RemoteState` (`{ behind: null, lastCheckedAt: null }`,
+	// no `dormant` field), which `remoteStateFor` already produces for exactly this reason (see its own doc
+	// comment in `remotes/policy.ts`). Collapsing the two into one bare `null` would make "not remote-tracked"
+	// indistinguishable from "remote-tracked, not yet checked" — `RemoteState.lastCheckedAt` is what
+	// disambiguates them without a wire-shape change.
+	"git.remoteState": (params) => {
+		const p = params as { workspaceId: string };
+		const ws = getWorkspace(p.workspaceId);
+		const ref = diffBaseRef(ws);
+		return remoteStateFor(ws.projectId).find((s) => s.ref === ref) ?? null;
+	},
+	// A user-initiated real `git fetch` of a workspace's resolved diff-base ref — the ComparisonTarget
+	// pill's "Fetch" affordance. Unlike the scheduler's background probe, this bypasses the credential
+	// ladder entirely (see `fetchRefNow`'s doc) and, on success, is the one place rung 2 of the ladder is
+	// satisfied for a pair that had never been trusted before. Echoes the resulting `RemoteState` directly
+	// (mirrors `workspace.setDiffBase`'s echo-then-broadcast pattern) rather than making the caller wait on
+	// the scheduler's own broadcast round-trip; throws on a genuine failure (see `fetchRefNow`).
+	"git.fetchNow": async (params) => {
+		const p = params as { workspaceId: string };
+		const ws = getWorkspace(p.workspaceId);
+		const ref = diffBaseRef(ws);
+		const state = await fetchRefNow(ws.projectId, ref);
+		noteRemoteTrusted(ws.projectId, "origin");
+		nudgeProjectRefsChanged(ws.projectId);
+		return state;
+	},
 	// Every terminal op is scoped to `ctx.clientKey`: a PTY belongs to the client that created it, so another
 	// connection can neither read its output nor write to or kill it. An id the caller doesn't own is treated
 	// exactly like one that doesn't exist.

@@ -24,6 +24,10 @@ import { isRemoteTrusted, loadProjects, loadWorkspaces } from "../persistence";
 import type { CheckProjectFn } from "./remotes";
 import { currentGitRemoteCheckMode } from "./remotes";
 
+// Re-exported for `host` — see the `fetchRefNow` doc below for why the write side of the ladder's rung 2
+// belongs there, not here.
+export { noteRemoteTrusted } from "../persistence";
+
 // ── ref derivation ────────────────────────────────────────────────────────
 
 /** This app hardcodes a single remote everywhere else too (`git.ts`'s `listBranches`/
@@ -410,3 +414,43 @@ export const checkProject: CheckProjectFn = async (projectId) => {
 
 	publishSnapshot(projectId, refs);
 };
+
+// ── fetchRefNow: the user-initiated fetch (git.fetchNow's policy half) ────
+
+/**
+ * A user-initiated real fetch of exactly one `(project, ref)` pair — the ComparisonTarget pill's "Fetch"
+ * affordance (`git.fetchNow`). Unlike {@link checkProject}, this BYPASSES the credential ladder entirely:
+ * it is the one path that performs a real git operation for a pair that has never been trusted (the
+ * ladder's `never-authenticated` rung would otherwise gate `checkProject` from ever calling git for it,
+ * forever). Recording that trust once this resolves successfully is the HOST's job (`noteRemoteTrusted`,
+ * called from the `git.fetchNow` handler after this returns) — not this function's; see the re-export
+ * above for why the write side of rung 2 is exposed through this same barrel.
+ *
+ * Reuses {@link applyFetch} — the same batch-then-classify-then-retry recovery `checkProject`'s fetch mode
+ * uses, degenerate here at a batch of one — so a vanished upstream branch resolves as `dormant:
+ * "upstream-gone"`, never mis-attributed to "failing": the exact bug class Task 5b's review fixed for the
+ * scheduler. A hand-rolled single-ref fetch here would silently reintroduce it. Folds the result into the
+ * SAME `PairRecord` `checkProject`/`remoteStateFor` read and write, so a following `git.remoteState` read
+ * (or the next scheduled check) is never stale behind what this just resolved, and publishes the project's
+ * full snapshot (replace, matching every other publish here) so every OTHER connected client converges too.
+ *
+ * Throws — never resolves a `RemoteState` — when: `ref` isn't remote-tracking-shaped (nothing to fetch);
+ * `projectId` names no known project; or the underlying git operation itself didn't complete (`dormant:
+ * "failing"` after `applyFetch`) — a one-shot user action's failure belongs on the error path, not folded
+ * silently into a dormancy label the way the background scheduler's is. A discovered-gone ref (`dormant:
+ * "upstream-gone"`) is NOT a failure here: the fetch mechanism worked and gave a real, completed answer.
+ */
+export async function fetchRefNow(projectId: string, ref: string): Promise<RemoteState> {
+	if (!isRemoteTrackingRef(ref)) throw new Error(`Not a remote-tracking ref: ${ref}`);
+	const project = loadProjects().find((p) => p.id === projectId);
+	if (!project) throw new Error(`Unknown project: ${projectId}`);
+
+	const name = shortNameOf(ref);
+	const now = nowFn();
+	await applyFetch(projectId, project.path, [name], now);
+	publishSnapshot(projectId, refsForProject(projectId));
+
+	const state = stateFromRecord(projectId, ref);
+	if (state.dormant === "failing") throw new Error(`Could not fetch ${ref}`);
+	return state;
+}
