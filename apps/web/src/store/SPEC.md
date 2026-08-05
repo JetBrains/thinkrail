@@ -225,7 +225,32 @@ components. The **Skills-reload badge** rides the same tick without a separate s
   The selector
   **`selectSkillsStale(state, workspaceId, sessionId)`** = `skillChangeTick > syncedTick` — store-derived
   (survives `ChatView`'s tab-switch remount) and per-session (a sibling/newer chat that loaded the current
-  skills is not flagged; a reload clears only its own). Also **`updateFileTabContent(id, content,
+  skills is not flagged; a reload clears only its own). The **remote-awareness state** is **per project**,
+  never per workspace — worktrees of one repo share a single `.git` and remote, so there is exactly one
+  tracked state per remote-tracking ref regardless of how many workspaces diff against it.
+  **`remoteStateByProject: Record<projectId, RemoteState[]>`** holds the scheduler's last-known state for
+  every ref it currently tracks for that project, folded two ways: **`setProjectRemoteState(payload)`**
+  is a **full replace** of the project's list from a `project.remoteState` push (never a merge — a ref the
+  scheduler stopped tracking, e.g. its workspace was removed, must disappear from the list, not linger with
+  a stale reading); **`noteRemoteState(state)`** upserts a single `RemoteState` by `ref` within its
+  project's list (add-if-absent / replace-if-present) — how a workspace's own `git.remoteState`/
+  `git.fetchNow` RPC answer (one ref) lands without clobbering sibling refs the last push already
+  delivered. **`refsChangedTickByProject: Record<projectId, tick>`** + **`noteRefsChanged(projectId)`** is
+  the bare invalidation-nudge twin of `fsChangesByWorkspace`'s `tick` (increment-only, no payload) folded
+  from `project.refsChanged` — a signal that a project's tracked refs moved, for a consumer (`useBranchList`,
+  today's only project-tick reader) that wants to know *that* a re-list is worth doing without the store
+  fetching on its behalf. Neither map is dropped by `applyWorkspaceRemoved`: they are keyed by project, not
+  workspace, and there is no `removeProject` action to hook a cleanup into (a stale project's entry simply
+  sits unread once its last workspace closes, the same as every other project-scoped map here). The
+  selector **`selectWorkspaceRemoteState(state, workspaceId)`** is the **one** place a workspace's
+  behind-the-remote indicator is derived: it resolves the workspace's own `selectDiffBaseRef` against its
+  project's tracked list, by `ref` — so the Changes header's `ComparisonTarget` pill and the project rail's
+  workspace row read the identical answer and can never disagree about what a workspace's indicator shows.
+  `null` covers every case with nothing to render (unknown workspace, no tracked state for its project yet,
+  or its ref isn't among the tracked ones — e.g. a local branch with no upstream); a non-null result's
+  `behind` (number / `"unknown"` / `null`) and `dormant` fields pass through untouched — this selector only
+  locates the record, `panels/changesModel.ts`'s `remoteIndicatorView` is what turns it into glyph + tone +
+  reason. Also **`updateFileTabContent(id, content,
   tick)`** — a `FileTab` carries the `tick` its content was loaded at, so `FilePane` detects staleness
   (`workspaceTick > tab.loadedTick`) across tab switches, and its diff twin
   **`updateDiffTabContent(id, original, modified, tick, loadedTarget)`** — a `DiffTab` follows the same
@@ -332,11 +357,14 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   `selectCatalogModel` (a model ref resolved against the **live** `models` list — a session's own `model`
   is the snapshot it was created with, so host-computed facts on it, today `thinkingLevels`, are read
   through this; callers fall back to the snapshot when the ref has left the catalog);
+  **`selectWorkspaceRemoteState`** (the one place a workspace's behind-the-remote indicator is derived —
+  see above), `setProjectRemoteState`, `noteRemoteState`, `noteRefsChanged`;
   `toast` (the fire-from-anywhere helper),
   `Toast` (type), `EditorTab` (`FileTab`/`ChatTab`/`DocTab`), `TerminalTab`, `ClosedChat`, `SessionRuntime` +
   `EMPTY_RUNTIME` (ChatView's pre-creation fallback), `ChatLocationRequest` (type), `reduceSessionEvent`.
 - **Allowed deps:** `contracts` (`Project`/`Workspace`/`Model`/`ThinkingLevel`/`SessionStats`/
-  `SlashCommandInfo`/`ExtUiRequest`/`LoginPush`/`WorkspaceFsChangedPayload`/`AppConfig`/`ThemeId`;
+  `SlashCommandInfo`/`ExtUiRequest`/`LoginPush`/`WorkspaceFsChangedPayload`/`AppConfig`/`ThemeId`/
+  `RemoteState`/`ProjectRemoteStatePayload`/`ProjectRefsChangedPayload`;
   `DEFAULT_CONFIG` for the pre-welcome default; `PiEvent`/`LoginFrame`, **type-only**); `lib` (the shared
   path + array primitives — `normalizePath`/`isAbsolutePath` for `matchesWorktreePath`, `shallowEqualArrays`
   for the snapshot-identity guard; a leaf, so the edge adds no cycle); `chat`

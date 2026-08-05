@@ -1,4 +1,11 @@
-import type { GitCommit, GitDiffScope, GitFileChange, GitFileStatus } from "@thinkrail/contracts";
+import type {
+	GitCommit,
+	GitDiffScope,
+	GitFileChange,
+	GitFileStatus,
+	RemoteDormantReason,
+	RemoteState,
+} from "@thinkrail/contracts";
 import { extendFolderChain, startFolderChain } from "./folderChains";
 
 /**
@@ -111,6 +118,60 @@ export function comparisonTargetLabel(
 		case "commit":
 			return { label: "— (parent)", interactive: false };
 	}
+}
+
+/** Why a dormant pair isn't being checked automatically, in the indicator's tooltip copy — see
+ * {@link RemoteDormantReason}'s own doc for the full reasoning behind each rung. */
+const DORMANT_REASON_TEXT: Record<RemoteDormantReason, string> = {
+	disabled: "Automatic remote checks are turned off.",
+	"upstream-gone": "This branch no longer exists on the remote — it was likely merged and deleted.",
+	"never-authenticated": "Not checked automatically yet. Fetch once to check now and enable it.",
+	"ssh-agent-present": "Skipped automatically — an SSH agent might prompt. Fetch to check now.",
+	failing: "Automatic checks have been failing and backed off. Fetch to check now.",
+};
+
+/**
+ * What a workspace's `↓` indicator, and its explanatory popover, actually show — the one place the
+ * three-fidelity `behind` (see {@link RemoteState}) and an optional {@link RemoteDormantReason} become
+ * glyph + tone + reason. `reason` is **always** populated for a non-null result — even an actively-checked
+ * pair with a real count gets a plain-English sentence ("`origin/main` is 3 commits behind.") — so the
+ * popover never has to fall back to composing its own text from the raw fields. `null` means there is
+ * nothing to render at all: up to date, and being checked automatically, so there is nothing to explain.
+ *
+ * `"upstream-gone"` is deliberately its own `kind`, independent of `behind` — the branch is gone, so a
+ * `↓`-shaped "behind by some amount" reading would be nonsensical, and (the Critical review finding this
+ * guards) a dormant pair with `behind: null` must never render as bare absence, indistinguishable from
+ * "up to date". Every *other* dormancy reason still renders the ordinary `↓`/`↓·N` glyph (muted, since it
+ * reflects the last time it *was* checked, possibly a while ago) rather than nothing — the tooltip
+ * explaining why is unreachable if there is nothing on screen to open it from, and `never-authenticated` /
+ * `ssh-agent-present` most need that reachable Fetch affordance.
+ */
+export type RemoteIndicatorView =
+	| { kind: "warning"; reason: string }
+	| { kind: "behind"; text: string; muted: boolean; reason: string };
+
+export function remoteIndicatorView(state: RemoteState): RemoteIndicatorView | null {
+	if (state.dormant === "upstream-gone") {
+		return { kind: "warning", reason: DORMANT_REASON_TEXT["upstream-gone"] };
+	}
+	// Three fidelities, never collapsed into one another: a real count only from a fetch, the bare arrow
+	// when a probe knows the remote differs but not by how much, and `null` genuinely means nothing to say.
+	const text =
+		state.behind === null ? null : state.behind === "unknown" ? "↓" : `↓·${state.behind}`;
+	if (!text) {
+		if (!state.dormant) return null; // up to date, actively checked — the one true "nothing to render"
+		return { kind: "behind", text: "↓", muted: true, reason: DORMANT_REASON_TEXT[state.dormant] };
+	}
+	if (state.dormant) {
+		return { kind: "behind", text, muted: true, reason: DORMANT_REASON_TEXT[state.dormant] };
+	}
+	// Actively checked, genuinely behind: a plain sentence, not just the glyph, so the popover always has
+	// something to say without composing its own text from the raw `behind` value.
+	const reason =
+		state.behind === "unknown"
+			? `${state.ref} has new commits on the remote — fetch to see how many.`
+			: `${state.ref} is ${state.behind} commit${state.behind === 1 ? "" : "s"} behind.`;
+	return { kind: "behind", text, muted: false, reason };
 }
 
 /**

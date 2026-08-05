@@ -641,7 +641,11 @@ a project picker, the prompt hero, and the reused
   the one the user is waiting for. Panels are mounted only for the active workspace,
   so scoping is natural; a degraded watcher just means back to read-on-demand. Deliberately **not**
   live (deferred): the project-rail workspace diffStats badges; editable-file conflict handling waits
-  for `fs.writeFile` (the viewer is read-only today).
+  for `fs.writeFile` (the viewer is read-only today). The rail's **remote-behind indicator**, added
+  alongside those badges, is the opposite case — it *is* live, but needs no read of its own: the host's
+  scheduler pushes a full per-project `RemoteState[]` snapshot (`project.remoteState`) on every tick once a
+  project is open, so the rail row's `useAppStore` selection alone (see the comparison-target bullet below)
+  is enough for it to eventually reflect the remote's state with no rail-initiated RPC.
 - The read key carries the diff base **only for `branch` scope**. The other three scopes' ranges — index→disk
   (`working-tree`), HEAD→index (`staged`), and `sha^`→`sha` (`commit`) —
   cannot move when the target is re-pointed, so including it forced a full reset-and-re-read (a visible
@@ -753,6 +757,42 @@ a project picker, the prompt hero, and the reused
   every scope, so switching scope never reflows the toolbar. Previously the picker stayed live in commit
   scope while having no effect on the diff at all — it only filtered which commits were offered, which
   made it a control that lied about participating.
+- **The `↓` behind-the-remote indicator** rides beside `ComparisonTarget`, in **both** its shapes (the live
+  picker and the three inert renderings) and beside the project rail's own workspace row — a version that
+  only appeared in one place would leave the other silently uninformed. Both sites read the **same**
+  selector, `store.selectWorkspaceRemoteState`, and hand its result to the shared **`RemoteIndicator`**
+  component: no `.find()` over a project's `RemoteState[]` is ever inlined at a call site, so the pill and
+  the rail row cannot disagree about what a workspace's indicator shows. `RemoteIndicator` renders nothing
+  when the selector answers `null` (workspace/project/ref unknown, or genuinely up to date and being
+  checked automatically) or when the shared `panels/changesModel.ts#remoteIndicatorView` mapping decides
+  there is nothing to say (see `store/SPEC.md` for the selector, `changesModel.ts` for the mapping). When
+  there **is** something to render, it is a click-triggered **`Popover`** (never a hover `Tooltip` — this
+  is a mobile-first app, and the popover must host a clickable Fetch button) whose trigger shows the glyph
+  and whose content explains + offers **Fetch** (`git.fetchNow`, an authenticated user action per the
+  credential ladder). Both call sites share the action too, not just the read: **`useRemoteFetch(workspaceId)`**
+  (`panels/useRemoteFetch.ts`) is the one place the request/fold/toast/in-flight-flag sequence is written,
+  so `ChangesPanel` and the rail row's `WorkspaceRow` can't drift into fixing a fetch bug in only one of
+  them. It folds a success the same way an initial `git.remoteState` pull does; a rejection raises
+  `store.toast.error` rather than failing silently, since a git fetch can fail for reasons — bad
+  credentials, no network — worth surfacing. The mapping's three outcomes render distinctly, matching the
+  wire's own three-fidelity `behind` (`number | "unknown" | null`, see `contracts`' `RemoteState`):
+  a numeric `behind` (only ever produced by a real fetch, never a probe) is the glyph **`↓·N`**; `"unknown"`
+  (a probe that detected drift but cannot count it) is the **bare `↓`**, deliberately never rendered as
+  `↓·0` (a fetch-mode claim a probe cannot make) or as nothing (which would silently claim "up to date");
+  `null` renders nothing, *provided* the pair is being checked automatically. A **dormant** pair (`dormant`
+  set — the scheduler isn't checking it automatically, see `RemoteDormantReason`) always renders
+  *something* to open the explanation from, even at `behind: null`: every reason but one renders the
+  ordinary glyph **muted**, with the reason in the popover — `"never-authenticated"` and
+  `"ssh-agent-present"` are the two rungs where Fetch is the *only* way to check at all, so the affordance
+  staying reachable matters most for them. **`"upstream-gone"`** — the base branch was deleted on the
+  remote, typically a merged PR — is the one exception: it renders as its own **warning** treatment (a
+  `TriangleAlert` in `text-feedback-warning`, the same token `ProjectSkillsNotice`/`ProviderWarningBanner`
+  already use), never folded into the ordinary muted `↓`, because "behind by some amount" is a nonsensical
+  reading of a branch that no longer exists — and because a Critical review finding on the server side
+  named this exact case as the one that must not be swallowed as bare absence (indistinguishable from "up
+  to date"). `RemoteIndicator`'s testid is a caller-supplied prefix (not a fixed string): both
+  `ComparisonTarget` and the rail row can show it for the active workspace at once, and each needs its own
+  `${prefix}-fetch` button id to stay addressable in tests.
 - **The diff is a center tab, not a rail inset.** Clicking a Changes row fetches `git.diffFile` (both sides of
   the row's scope) and opens a **`DiffTab`** (`${workspaceId}:diff:${scopeKey}:${path}` — one tab per *file and
   scope*, carrying its own `scope`: a re-click in the same scope focuses the existing tab, while the same file

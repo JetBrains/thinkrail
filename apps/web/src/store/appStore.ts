@@ -7,7 +7,9 @@ import type {
 	LoginPush,
 	PiEvent,
 	Project,
+	ProjectRemoteStatePayload,
 	RefreshedModels,
+	RemoteState,
 	ReviewChangedPayload,
 	ReviewSnapshot,
 	SessionStats,
@@ -666,6 +668,22 @@ interface AppState {
 	 */
 	fsChangesByWorkspace: Record<string, { tick: number; paths: string[]; truncated: boolean }>;
 	/**
+	 * Per **project** (never per workspace — worktrees of one repo share a single `.git`/remote), the
+	 * scheduler's last-known state for every remote-tracking ref it currently tracks. Folded two ways: a
+	 * `project.remoteState` push is a full **replace** of the project's list (`setProjectRemoteState`) —
+	 * never a merge, since a ref the scheduler stopped tracking must disappear, not linger stale; a
+	 * workspace's own `git.remoteState`/`git.fetchNow` answer is a single-ref **upsert** (`noteRemoteState`)
+	 * so it can't clobber sibling refs the last push already delivered. Read through the one selector,
+	 * `selectWorkspaceRemoteState` (`selectors.ts`), never a `.find()` inlined at a call site.
+	 */
+	remoteStateByProject: Record<string, RemoteState[]>;
+	/**
+	 * Per project, a bare invalidation-nudge tick (increment-only, no payload) folded from a
+	 * `project.refsChanged` push — the same shape as `fsChangesByWorkspace`'s `tick`, for a consumer that
+	 * wants to know a project's tracked refs moved without the store fetching on its behalf.
+	 */
+	refsChangedTickByProject: Record<string, number>;
+	/**
 	 * Per workspace, the `fsChangesByWorkspace` tick of the most recent *skill-relevant* batch — host
 	 * evidence is `detected` for a concrete project-skill path or `unknown` for a truly pathless event;
 	 * generic path-list truncation with `skillChange: "none"` is deliberately irrelevant. Folded alongside
@@ -776,6 +794,16 @@ interface AppState {
 	setDiffScope: (workspaceId: string, scope: GitDiffScope) => void;
 	/** Fold a `workspace.fsChanged` push into the live-refresh signal (tick++, last batch replaces). */
 	noteFsChanged: (payload: WorkspaceFsChangedPayload) => void;
+	/** Fold a `project.remoteState` push: a full **replace** of that project's tracked `RemoteState[]`. */
+	setProjectRemoteState: (payload: ProjectRemoteStatePayload) => void;
+	/**
+	 * Upsert one `RemoteState` into its project's tracked list, by `ref` (add if absent, replace if
+	 * present). How a workspace's own `git.remoteState`/`git.fetchNow` answer — a single ref — lands
+	 * without clobbering the sibling refs the last `project.remoteState` push already delivered.
+	 */
+	noteRemoteState: (state: RemoteState) => void;
+	/** Fold a `project.refsChanged` push into the bare invalidation tick (increment-only). */
+	noteRefsChanged: (projectId: string) => void;
 	/**
 	 * Record a session's skills as synced to `syncedTick` — the workspace fs tick captured at the *start* of
 	 * the reload round-trip (`selectWorkspaceTick`), so a skill change folded while the reload was in flight
@@ -1229,6 +1257,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	chatLocationRequest: null,
 	historyOpenRequest: null,
 	fsChangesByWorkspace: {},
+	remoteStateByProject: {},
+	refsChangedTickByProject: {},
 	skillChangeTickByWorkspace: {},
 	skillsSyncedTickBySession: {},
 	activeLogin: null,
@@ -1454,6 +1484,30 @@ export const useAppStore = create<AppState>((set, get) => ({
 					: {}),
 			};
 		}),
+	setProjectRemoteState: (payload) =>
+		set((s) => ({
+			remoteStateByProject: { ...s.remoteStateByProject, [payload.projectId]: payload.states },
+		})),
+	noteRemoteState: (state) =>
+		set((s) => {
+			const list = s.remoteStateByProject[state.projectId] ?? [];
+			const known = list.some((entry) => entry.ref === state.ref);
+			return {
+				remoteStateByProject: {
+					...s.remoteStateByProject,
+					[state.projectId]: known
+						? list.map((entry) => (entry.ref === state.ref ? state : entry))
+						: [...list, state],
+				},
+			};
+		}),
+	noteRefsChanged: (projectId) =>
+		set((s) => ({
+			refsChangedTickByProject: {
+				...s.refsChangedTickByProject,
+				[projectId]: (s.refsChangedTickByProject[projectId] ?? 0) + 1,
+			},
+		})),
 	markSkillsSynced: (sessionId, syncedTick) =>
 		set((s) => {
 			// A reload can resolve after its chat was disposed (closeChatRuntime/clearWorkspaceTabs) — don't

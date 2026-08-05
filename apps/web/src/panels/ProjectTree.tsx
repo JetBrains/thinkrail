@@ -37,6 +37,7 @@ import {
 	isDefaultWorkspace,
 	isExternalWorkspace,
 	selectActiveWorkspaceProjectId,
+	selectWorkspaceRemoteState,
 	toast,
 	useAppStore,
 } from "../store";
@@ -46,7 +47,9 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { ExistingWorktreeDialog } from "./ExistingWorktreeDialog";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
+import { RemoteIndicator } from "./RemoteIndicator";
 import { useOpenProject } from "./useOpenProject";
+import { useRemoteFetch } from "./useRemoteFetch";
 
 /** Left-nav: projects → workspaces (git worktrees). Open a repo, select it, create/select workspaces. */
 export function ProjectTree() {
@@ -543,6 +546,12 @@ function WorkspaceRow({
 	// read oddly. Opened from the menu item's `onSelect`, `preventDefault`ed so Radix's own close-then-
 	// return-focus-to-trigger doesn't fight the dialog's focus trap opening right behind it.
 	const [confirmOpen, setConfirmOpen] = useState(false);
+	// The `↓` behind-the-remote indicator — same selector + component `ComparisonTarget` uses, so the two
+	// can never disagree. Deliberately no independent `git.remoteState` pull here: the host's scheduler
+	// pushes a full per-project snapshot on every tick once the project is open, so this row's own
+	// `useAppStore` selection is enough for it to eventually reflect the remote's state.
+	const remoteState = useAppStore((s) => selectWorkspaceRemoteState(s, workspace.id));
+	const { fetching, fetchNow } = useRemoteFetch(workspace.id);
 	return (
 		<li>
 			<fieldset
@@ -585,6 +594,12 @@ function WorkspaceRow({
 					added={stats?.added ?? 0}
 					removed={stats?.removed ?? 0}
 					className="self-start group-hover:hidden"
+				/>
+				<RemoteIndicator
+					remoteState={remoteState}
+					fetching={fetching}
+					onFetch={fetchNow}
+					testid="workspace-remote"
 				/>
 				<DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
 					<DropdownMenuTrigger
