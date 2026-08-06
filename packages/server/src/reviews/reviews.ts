@@ -394,6 +394,43 @@ export function markCommentsSent(
 	persistAndPublish(workspaceId, snapshot);
 }
 
+/**
+ * Undo an optimistic {@link markCommentsSent} when the send it fired was REJECTED before the agent's
+ * turn began (a bad model, a missing/expired key — see `host`'s `fireReviewPrompt`). Without this the
+ * comments stay `sent` forever, and the sidebar drops their send/edit/delete actions, so a review that
+ * never actually reached the agent can't be delivered without recreating every remark.
+ *
+ * Roll the named comments still pinned to `sessionId` back to `draft` (clearing `sentAt`/`sessionId`),
+ * then **unpin** any `fileSessions` key pointing at that session once no comment references it any more —
+ * so a chat spun up solely for this failed send doesn't linger as the file's pin. A key still carrying
+ * another comment's discussion keeps its pin (the reused-chat case). No-op if nothing matches (the send
+ * was accepted, or a concurrent resolve/edit already moved these comments on).
+ */
+export function rollbackSend(workspaceId: string, commentIds: string[], sessionId: string): void {
+	const snapshot = ensureSnapshot(workspaceId);
+	const ids = new Set(commentIds);
+	let changed = false;
+	for (const comment of snapshot.comments) {
+		if (!ids.has(comment.id) || comment.status !== "sent" || comment.sessionId !== sessionId)
+			continue;
+		comment.status = "draft";
+		delete comment.sentAt;
+		delete comment.sessionId;
+		changed = true;
+	}
+	if (!changed) return;
+	// Drop the pin only if the rolled-back session no longer backs any comment — a reused chat with
+	// other sent/resolved remarks keeps it.
+	const stillReferenced = snapshot.comments.some((c) => c.sessionId === sessionId);
+	if (!stillReferenced && snapshot.review.fileSessions) {
+		const kept = Object.fromEntries(
+			Object.entries(snapshot.review.fileSessions).filter(([, sid]) => sid !== sessionId),
+		);
+		snapshot.review.fileSessions = kept;
+	}
+	persistAndPublish(workspaceId, snapshot);
+}
+
 /** The chat pinned for a file (or the review-level bucket), if one exists — the session every later
  * send for that key must follow up into. */
 export function fileReviewSession(workspaceId: string, key: string): string | undefined {

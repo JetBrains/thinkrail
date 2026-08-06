@@ -20,6 +20,7 @@ export {
 	removeWorkspaceReviews,
 	resolveCommentFromAgent,
 	reviewSessionKey,
+	rollbackSend,
 	sendableComments,
 	setReviewPublisher,
 	updateComment,

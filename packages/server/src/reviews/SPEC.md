@@ -95,9 +95,14 @@ happens *before* the awaited session creation, so in that gap two concurrent sen
 already built, leaving the agent with comment ids no open review contains.
 **The prompt is fired DETACHED** (`fireReviewPrompt`): the handler returns the
 moment the session exists so the client opens the chat immediately — awaiting the ack meant sitting
-out pi's 10s acceptance window on every send. A pre-turn rejection (bad model, missing key) therefore
-surfaces INSIDE the just-opened chat as an extension-UI notice; later faults ride the event stream as
-always. The **`resolve_comment`** capability is an agent-module custom tool
+out pi's 10s acceptance window on every send. Because `markSent` runs synchronously (before the turn is
+known-accepted — it must, so the key's pin exists inside the lock and a concurrent send can't fork the
+chat), a pre-turn rejection (bad model, missing/expired key) both surfaces INSIDE the just-opened chat
+as an extension-UI notice AND **rolls the comments back to `draft`** (`rollbackSend`, keyed off
+`ackSend`'s accept-vs-reject window): a review the agent never received stays retryable instead of
+stranding as `sent` with its send/edit/delete actions gone, and a chat spun up solely for that failed
+send is unpinned unless another comment still backs it. A fault AFTER acceptance is a real turn fault
+(the package *was* delivered) and rides the event stream, leaving the `sent` state correct. The **`resolve_comment`** capability is an agent-module custom tool
 (`agent/reviewTool.ts`, registered on every session like `ask_user_question`) whose execution is
 delegated back here through a host-installed seam — the agent module stays dependency-free.
 
@@ -108,7 +113,8 @@ delegated back here through a host-installed seam — the agent module stays dep
   package rendering (pure `packageRender.ts`), and the `review.changed` publisher seam
   (`setReviewPublisher`, installed by `host` — full-snapshot pushes, idempotent under last-value replay).
 - **Public surface (barrel):** `getReviewSnapshot`, `addComment`, `updateComment`, `deleteComment`
-  (draft-only), `closeReview`, `markCommentsSent`, `markFileDone`, `fileReviewSession` + `reviewSessionKey`/`REVIEW_LEVEL_KEY` (the
+  (draft-only), `closeReview`, `markCommentsSent`, `rollbackSend` (undo `markCommentsSent` on a
+  pre-turn send rejection), `markFileDone`, `fileReviewSession` + `reviewSessionKey`/`REVIEW_LEVEL_KEY` (the
   per-key chat pin), `resolveCommentFromAgent`, `reanchorWorkspace`, `sendableComments`,
   `buildSendPackage`, `removeWorkspaceReviews`, `setReviewPublisher` (+ the pure
   anchoring/render helpers: `reanchor`, `buildTextQuote`, `hashContent`, `lineRangeOf`, `textQuoteOf`,
