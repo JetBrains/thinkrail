@@ -16,6 +16,7 @@
 	"roles": {
 		"text-default": { "from": "text", "publish": true },
 		"text-muted": { "from": "muted", "publish": true },
+		"text-subtle": { "from": "hint", "publish": true },
 		"text-disabled": { "from": "muted", "alpha": "strong", "publish": true },
 		"text-on-primary": { "from": "onAccent", "publish": true },
 		"text-link": {

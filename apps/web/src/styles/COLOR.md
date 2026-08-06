@@ -57,7 +57,7 @@ equals `border-default` is not a second weight, it is a second name).
 
 | family | tokens | notes |
 | --- | --- | --- |
-| Text | `text-default` · `text-muted` · `text-disabled` · `text-on-primary` | `text-disabled` (muted @ 60%) is the de-emphasised metadata tier (branch lines, spec role labels); there is no separate `text-subtle`/`hint` tier |
+| Text | `text-default` · `text-muted` · `text-subtle` · `text-disabled` · `text-on-primary` | `text-subtle` (from the `hint` palette key) is the secondary-metadata tier (branch lines, spec role labels); `text-disabled` (muted @ 60%) is reserved for genuinely disabled UI text (e.g. the Settings "Soon" item) |
 | Container | `container-workspace-bg` · `container-sidebar-bg` · `container-header-bg` · `container-content-bg` · `container-elevated-bg` | `content` is the code canvas (Monaco, Shiki, terminal); `elevated` is every raised surface |
 | Control | `control-bg` · `control-bg-hovered` · `control-primary-bg` · `control-primary-text` · `control-border` | `control-border` is the default border for form controls (inputs/textareas/selects/buttons); no `-disabled` pair — disabled is `disabled:opacity-50` |
 | Border | `border-default` · `border-muted` | |
@@ -66,8 +66,8 @@ equals `border-default` is not a second weight, it is a second name).
 | Chat bubble | `bubble-user-bg` · `bubble-user-border` | tinted from the manifest's own `bubbleAccent` |
 | Effects | `overlay` · `sunken` | written per light/dark by the theme engine |
 
-There is no `text-strong`, no `text-subtle` and no `text-link` utility: they duplicate other tokens, and
-`--text-link` exists as a variable for `global.css`'s `a {}` alone.
+There is no `text-strong` and no `text-link` utility: they duplicate other tokens, and `--text-link`
+exists as a variable for `global.css`'s `a {}` alone.
 
 ## Transparency: one form only
 

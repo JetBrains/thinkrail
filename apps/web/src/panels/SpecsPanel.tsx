@@ -175,7 +175,7 @@ function SpecNodeRow({
 						data-testid="spec-role"
 						className={cn(
 							"max-w-16 shrink-0 truncate text-right tr-text-eyebrow",
-							isMainSpec || isActive ? "text-primary" : "text-text-disabled",
+							isMainSpec || isActive ? "text-primary" : "text-text-subtle",
 						)}
 					>
 						{trailingRole}

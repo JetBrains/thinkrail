@@ -9,6 +9,7 @@
 :root {
 	--text-default: var(--text);
 	--text-muted: var(--muted);
+	--text-subtle: var(--hint);
 	--text-disabled: color-mix(in srgb, var(--muted) 60%, transparent);
 	--text-on-primary: var(--on-accent);
 	--text-link: var(--info); /* global.css `a {}` is the only consumer; no component styles a bare link */
@@ -69,6 +70,7 @@
 	--color-*: initial;
 	--color-text-default: var(--text-default);
 	--color-text-muted: var(--text-muted);
+	--color-text-subtle: var(--text-subtle);
 	--color-text-disabled: var(--text-disabled);
 	--color-text-on-primary: var(--text-on-primary);
 	--color-container-workspace-bg: var(--container-workspace-bg);
