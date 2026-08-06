@@ -51,7 +51,7 @@ const OID = /^[0-9a-f]{4,64}$/;
  * `sha` can never reach a git argument as e.g. an option or a path) and existence (`rev-parse --verify`,
  * whose full oid is what we then use) — and **throws** when the commit is gone (a rebase or branch reset):
  * a `CodedError("UNKNOWN_COMMIT")`, so the panel can turn *that* rejection (and only that one — not a
- * timeout or a dropped socket) into "reset the scope, and say so" instead of staying wedged on a dead sha.
+ * timeout or an unnamed host failure) into "reset the scope, and say so" instead of staying wedged on a dead sha.
  *
  * Existence, deliberately **not** reachability: a commit the branch no longer contains (a rebase rewrote
  * history) is still a meaningful selection whose diff we can show — see the module SPEC.

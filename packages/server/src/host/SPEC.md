@@ -21,7 +21,11 @@ channel fan-out, and the process-boot wrapper both launchers share.
   markdown viewer's relative `<img>`s resolve, static serving with
   `index.html` fallback, the `server.welcome` push, the **`?client=` page identity** read off the socket URL at
   upgrade (threaded to every handler as `RequestContext` and used to own that client's PTYs) plus the
-  `clientKey → socket` registry and the **abandoned-client reap timer** that outlives a reconnect,
+  `clientKey → socket` registry and the **abandoned-client reap timer** that outlives a reconnect; the
+  count-and-serialized-byte-bounded **request replay cache** keyed by `(clientKey, requestId)` (the first frame
+  owns one handler promise + its
+  serialized response, a reconnect replay awaits/returns that same result, a mismatched duplicate is rejected,
+  and reaping the client clears its cache),
   the **`provider.login`** channel publish (the `auth` module's session-less login-frame bridge, wired like
   `pi.extensionUi`) and the `provider.*` login handlers, the **`watch` wiring** (inject the
   `workspace.fsChanged` publish callback into `watch`, plus its **repo-metadata** callback

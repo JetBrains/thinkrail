@@ -242,7 +242,10 @@ of the host.
   worktree-relative deduped paths, capped — `truncated` = treat as wildcard); an **invalidation nudge,
   not data**: clients re-read via the existing read methods, so a duplicate/replayed frame is harmless.
   The `WsMethodMap` typed request/result map +
-  `WsParams`/`WsResult` helpers, and `PROTOCOL_VERSION`.
+  `WsParams`/`WsResult` helpers, and `PROTOCOL_VERSION`. Request ids are also the reconnect idempotency key:
+  an unresolved client replays the same frame/id, and the host returns the one cached result for
+  `(clientKey, requestId)` instead of executing the handler again. This behavior is protocol-versioned — a
+  replaying UI must never run against a pre-dedup host.
 
 ## Get right
 

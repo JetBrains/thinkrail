@@ -303,6 +303,115 @@ test("a shell survives losing the connection and reconnecting", async ({ page })
 	await expect(visibleTerminalScreen(page)).toContainText("AFTER=survived");
 });
 
+// A response can die after the host committed a mutation. The client must replay that unresolved frame under
+// the same request id, and the host must return the cached result rather than running the handler twice. A
+// terminal create makes both failures observable: rejecting would leave the tab failed, while rerunning would
+// return a second PTY id and orphan the first shell.
+test("a terminal create response lost with its socket is replayed exactly once", async ({
+	page,
+}) => {
+	let createRequestId: string | undefined;
+	const createRequestIds: string[] = [];
+	const createdPtyIds: string[] = [];
+	let droppedFirstResponse = false;
+
+	await page.routeWebSocket(/\/ws(\?|$)/, (ws) => {
+		const server = ws.connectToServer();
+		ws.onMessage((message) => {
+			const text = message.toString();
+			try {
+				const frame = JSON.parse(text) as { id?: string; method?: string };
+				if (frame.method === "terminal.create" && frame.id) {
+					createRequestId ??= frame.id;
+					createRequestIds.push(frame.id);
+				}
+			} catch {
+				// Non-JSON is irrelevant to this request/response assertion.
+			}
+			server.send(message);
+		});
+		server.onMessage((message) => {
+			const text = message.toString();
+			try {
+				const frame = JSON.parse(text) as {
+					id?: string;
+					ok?: boolean;
+					result?: { id?: string };
+				};
+				if (frame.id === createRequestId && frame.ok && frame.result?.id) {
+					createdPtyIds.push(frame.result.id);
+					if (!droppedFirstResponse) {
+						droppedFirstResponse = true;
+						void ws.close(); // response never reaches the page; transport must reconnect + replay
+						return;
+					}
+				}
+			} catch {
+				// Push frames are forwarded unchanged below.
+			}
+			ws.send(message);
+		});
+	});
+
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await waitTerminalReady(page);
+	await runInTerminal(page, "echo TR_REPLAYED_CREATE_WORKS");
+	await expect(visibleTerminalScreen(page)).toContainText("TR_REPLAYED_CREATE_WORKS");
+
+	await expect.poll(() => createRequestIds.length).toBeGreaterThan(1);
+	expect(droppedFirstResponse).toBe(true);
+	expect(new Set(createRequestIds).size).toBe(1); // client replayed the same request id
+	expect(createdPtyIds.length).toBeGreaterThan(1);
+	expect(new Set(createdPtyIds).size).toBe(1); // host returned one cached handler result
+});
+
+// Natural exit is a two-frame completion: final bytes, then the exit notice. If the shell dies while its owner
+// is disconnected, both must survive and retain that order. The old path retried the bytes, immediately
+// disposed their batcher, and therefore reconnected with only "process exited".
+test("final shell output is delivered before exit after reconnect", async ({ page }) => {
+	let firstSocket: WebSocketRoute | undefined;
+	let socketsOpened = 0;
+	let releaseReconnect: () => void = () => {};
+	const reconnectAllowed = new Promise<void>((resolve) => {
+		releaseReconnect = resolve;
+	});
+
+	await page.routeWebSocket(/\/ws(\?|$)/, async (ws) => {
+		socketsOpened += 1;
+		if (socketsOpened > 1) await reconnectAllowed;
+		firstSocket ??= ws;
+		ws.connectToServer();
+	});
+
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await waitTerminalReady(page);
+	const term = visibleTerminalScreen(page);
+
+	// Echoed command text does NOT contain the final marker contiguously; only executed output does.
+	await runInTerminal(page, "M=TR_FINAL; sleep 1; printf '\\n%s_%s\\n' \"$M\" DURING_DROP; exit 7");
+	await expect(term).toContainText("M=TR_FINAL"); // command reached the PTY before the yank
+	await firstSocket?.close();
+	await page.waitForTimeout(1_500); // shell prints + exits while no host socket exists
+	await expect(page.getByTestId("connection-status")).not.toHaveAttribute(
+		"data-status",
+		"connected",
+	);
+
+	releaseReconnect();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await expect.poll(() => socketsOpened).toBeGreaterThan(1);
+	await expect(term).toContainText("TR_FINAL_DURING_DROP");
+	await expect(visibleTerminal(page)).toHaveAttribute("data-exited", "true");
+	await expect(term).toContainText("[process exited with code 7]");
+	const screen = await term.textContent();
+	const outputIndex = screen?.indexOf("TR_FINAL_DURING_DROP") ?? -1;
+	const exitIndex = screen?.indexOf("[process exited with code 7]") ?? -1;
+	expect(outputIndex).toBeGreaterThanOrEqual(0);
+	expect(exitIndex).toBeGreaterThan(outputIndex);
+});
+
 // The ownership half of the isolation fix: not just "output goes only to the owner" but "another client cannot
 // write to, resize or kill a terminal it does not own". Nothing pinned that, so every ownership guard in
 // `terminalManager` was freely deletable. An id the caller does not own must behave exactly like one that never

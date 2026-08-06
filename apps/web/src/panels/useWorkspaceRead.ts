@@ -7,7 +7,7 @@ interface WorkspaceReadHandlers<T> {
 	onResult: (value: T, workspaceId: string) => void;
 	/**
 	 * A failed read, **with the rejection**: a caller that reacts to one specific failure (the Changes panel
-	 * resets a scope whose commit is gone) needs to tell it from a timeout or a dropped socket, so the error
+	 * resets a scope whose commit is gone) needs to tell it from a timeout or an unnamed host failure, so the error
 	 * is passed through rather than swallowed here. Otherwise: keep the last good value, degrade the empty
 	 * case.
 	 */

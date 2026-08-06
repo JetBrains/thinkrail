@@ -1,6 +1,13 @@
 // Batches one PTY's output into whole frames. Timer-only and transport-free, so it's unit-testable: chunks
 // accumulate and flush as ONE string, and a flush the caller can't deliver stays pending until it can.
 
+export type TerminalDeliveryResult = "delivered" | "backpressured" | "unavailable";
+
+export interface OutputBatch {
+	data: string;
+	truncated: boolean;
+}
+
 export interface OutputBatcherOptions {
 	/**
 	 * How long after the first chunk of a batch to flush. This is the latency a keystroke echo pays, so it is
@@ -16,16 +23,21 @@ export interface OutputBatcherOptions {
 	 * to give. Losing the start of a flood and saying so beats growing until the host dies.
 	 */
 	maxPendingChars: number;
-	/** Deliver a batch. Return false if the receiver is currently unreachable — the batch is then kept. */
-	onFlush: (batch: { data: string; truncated: boolean }) => boolean;
+	/**
+	 * Deliver a batch. `backpressured` means this batch was accepted but no successor may be sent yet;
+	 * `unavailable` means this batch was not accepted and must remain pending.
+	 */
+	onFlush: (batch: OutputBatch) => TerminalDeliveryResult;
 }
 
 export interface OutputBatcher {
 	/** Record a chunk of PTY output. */
 	push(chunk: string): void;
-	/** Try to deliver anything held back (the receiver just became reachable again). */
+	/** Retry held output after the receiver becomes writable (drain/reconnect). */
 	resume(): void;
-	/** Drop pending output + timers without delivering (the PTY is gone). */
+	/** Retire the batcher and transfer its final pending output to the exit-completion queue. */
+	finish(): OutputBatch | undefined;
+	/** Retire the batcher and drop pending output (an intentional PTY teardown). */
 	dispose(): void;
 }
 
@@ -34,47 +46,68 @@ export function createOutputBatcher(options: OutputBatcherOptions): OutputBatche
 	let pending = "";
 	let truncated = false;
 	let timer: ReturnType<typeof setTimeout> | null = null;
+	let blocked = false;
+	let disposed = false;
 
 	const clearTimer = (): void => {
-		if (timer) clearTimeout(timer);
+		if (timer !== null) clearTimeout(timer);
 		timer = null;
 	};
 
 	const flush = (): void => {
 		clearTimer();
-		if (pending === "") return;
-		// Hand the batch over optimistically, then put it back if the receiver couldn't take it — so an
-		// undeliverable batch is retried rather than dropped (a brief reconnect keeps its output).
+		if (disposed || blocked || pending === "") return;
+
+		// Hand the batch over optimistically, then put it back only when the receiver did not accept it. Both
+		// unavailable and accepted-with-backpressure latch the batcher until an explicit resume; otherwise a
+		// flood would keep calling send while Bun has told us to stop.
 		const batch = { data: pending, truncated };
 		pending = "";
 		truncated = false;
-		if (onFlush(batch)) return;
-		pending = batch.data;
-		truncated = batch.truncated;
+		const delivery = onFlush(batch);
+		if (delivery === "delivered") return;
+		blocked = true;
+		if (delivery === "unavailable") {
+			pending = batch.data;
+			truncated = batch.truncated;
+		}
+	};
+
+	const finish = (): OutputBatch | undefined => {
+		if (disposed) return undefined;
+		clearTimer();
+		disposed = true;
+		if (pending === "") return undefined;
+		const finalBatch = { data: pending, truncated };
+		pending = "";
+		truncated = false;
+		return finalBatch;
 	};
 
 	return {
 		push(chunk) {
-			if (chunk === "") return;
+			if (disposed || chunk === "") return;
 			pending += chunk;
 			if (pending.length > maxPendingChars) {
 				// Keep the NEWEST output: on a terminal the tail is what the user is waiting to see.
 				pending = pending.slice(pending.length - maxPendingChars);
 				truncated = true;
 			}
+			if (blocked) return;
 			if (pending.length >= maxBatchChars) {
 				flush();
 				return;
 			}
-			if (!timer) timer = setTimeout(flush, flushMs);
+			if (timer === null) timer = setTimeout(flush, flushMs);
 		},
 		resume() {
+			if (disposed) return;
+			blocked = false;
 			flush();
 		},
+		finish,
 		dispose() {
-			clearTimer();
-			pending = "";
-			truncated = false;
+			finish();
 		},
 	};
 }

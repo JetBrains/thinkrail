@@ -83,16 +83,14 @@ export class WsTransport {
 	private readonly pending = new Map<
 		string,
 		{
+			frame: string;
 			resolve: (v: unknown) => void;
 			reject: (e: Error) => void;
 			timer: ReturnType<typeof setTimeout>;
-			/** Already on the wire (vs. still queued for the next open) — decides who dies with the socket. */
-			sent: boolean;
 		}
 	>();
 	private readonly subscribers = new Map<string, Set<PushHandler>>();
 	private readonly latest = new Map<string, unknown>();
-	private readonly queue: string[] = [];
 	private backoff = 500;
 
 	constructor(opts: TransportOptions = {}) {
@@ -116,20 +114,23 @@ export class WsTransport {
 		const ws = new WebSocket(withClientId(this.url));
 		this.ws = ws;
 		ws.onopen = () => {
+			if (this.ws !== ws) {
+				ws.close();
+				return;
+			}
 			this.backoff = 500;
 			this.onStatus?.("connected");
-			for (const frame of this.queue.splice(0)) ws.send(frame);
-			// Everything queued has now gone out, so every pending request is in flight on THIS socket and must
-			// die with it. `sent` was a snapshot taken at request time, so a request issued during a disconnect
-			// stayed `sent: false` for life and `failInFlight` skipped it forever — leaving exactly the 60s hang
-			// that method exists to prevent. (`sendFrame` is only ever called from `request`, so the queue and the
-			// not-yet-sent pending entries are the same set.)
-			for (const entry of this.pending.values()) entry.sent = true;
+			// Every unresolved frame is safe to replay under the SAME id: the host's per-client replay cache
+			// returns the original handler result instead of executing it again. This includes requests issued
+			// while disconnected and requests whose response died with the previous socket.
+			for (const entry of this.pending.values()) this.sendFrame(entry.frame);
 		};
 		ws.onmessage = (ev) => this.handleMessage(ev.data);
 		ws.onclose = () => {
+			// A replaced socket may close after its successor is already live. It no longer owns reconnect state.
+			if (this.ws !== ws) return;
+			this.ws = null;
 			this.onStatus?.("disconnected");
-			this.failInFlight();
 			setTimeout(() => this.connect(), this.backoff);
 			this.backoff = Math.min(this.backoff * 2, 10_000);
 		};
@@ -149,8 +150,14 @@ export class WsTransport {
 				this.pending.delete(id);
 				reject(new Error(`request "${method}" timed out`));
 			}, timeoutMs);
-			const sent = this.sendFrame(frame);
-			this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject, timer, sent });
+			// Register before send: even an eager test socket cannot answer before the correlation entry exists.
+			this.pending.set(id, {
+				frame,
+				resolve: resolve as (v: unknown) => void,
+				reject,
+				timer,
+			});
+			this.sendFrame(frame);
 		});
 	}
 
@@ -169,31 +176,14 @@ export class WsTransport {
 		};
 	}
 
-	/** Send now if the socket is open, else queue for the next `onopen`. Returns whether it went out. */
-	private sendFrame(frame: string): boolean {
-		if (this.ws?.readyState === WebSocket.OPEN) {
+	/** Send now if the socket is open; otherwise the pending map is the reconnect queue. */
+	private sendFrame(frame: string): void {
+		if (this.ws?.readyState !== WebSocket.OPEN) return;
+		try {
 			this.ws.send(frame);
-			return true;
-		}
-		this.queue.push(frame);
-		return false;
-	}
-
-	/**
-	 * Fail the requests that were already on the wire when the socket died. Their replies died with it, so they
-	 * can never resolve — previously they sat until the 60s timeout, which for a `terminal.create` meant a tab
-	 * stuck at "not ready" with no PTY behind it and nothing on screen to say why.
-	 *
-	 * Requests still *queued* are deliberately untouched: they were never sent, `onopen` flushes them, and that
-	 * is exactly what makes a brief hiccup invisible to the caller. Rejecting those would turn a recoverable
-	 * blip into a visible failure.
-	 */
-	private failInFlight(): void {
-		for (const [id, entry] of this.pending) {
-			if (!entry.sent) continue;
-			clearTimeout(entry.timer);
-			this.pending.delete(id);
-			entry.reject(new Error("connection lost before the host replied"));
+		} catch {
+			// `close` owns status/backoff. The unresolved frame remains in `pending` for the replacement socket.
+			this.ws.close();
 		}
 	}
 
