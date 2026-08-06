@@ -116,7 +116,8 @@ test("Monaco and xterm render the generated code family and size", async ({ page
 	await waitTerminalReady(page);
 	const termType = await typeOf(visibleTerminalScreen(page));
 	expect(termType.family).toMatch(MONO);
-	expect(termType.size).toBe("11px");
+	// xterm adopts `code.block`'s size (13px); Monaco stays on the 11px editor tier above.
+	expect(termType.size).toBe("13px");
 });
 
 test("the chat and document markdown surfaces each wear their own prose system", async ({

@@ -223,22 +223,16 @@
 				"fontFamily": "code",
 				"fontSize": "s13",
 				"fontWeight": "regular",
-				"lineHeight": "tight",
-				"letterSpacing": "normal",
-				"textTransform": "none",
-				"fontStyle": "normal"
-			},
-			"inline": {
-				"fontFamily": "code",
-				"fontSize": "s13",
-				"fontWeight": "regular",
 				"lineHeight": "relaxed",
 				"letterSpacing": "normal",
 				"textTransform": "none",
 				"fontStyle": "normal"
 			},
+			"inline": {
+				"$ref": "code.text"
+			},
 			"block": {
-				"$ref": "code.inline"
+				"$ref": "code.text"
 			},
 			"document": {
 				"fontFamily": "code",
@@ -296,10 +290,10 @@
 				"fontStyle": "normal"
 			},
 			"inlineCode": {
-				"$ref": "code.inline"
+				"$ref": "code.text"
 			},
 			"codeBlock": {
-				"$ref": "code.inline"
+				"$ref": "code.text"
 			},
 			"blockquote": {
 				"$ref": "body.reading"
@@ -343,7 +337,7 @@
 				"fontStyle": "normal"
 			},
 			"inlineCode": {
-				"$ref": "code.inline"
+				"$ref": "code.text"
 			},
 			"codeBlock": {
 				"$ref": "code.document"

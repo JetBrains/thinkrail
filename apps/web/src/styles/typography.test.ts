@@ -49,11 +49,11 @@ describe("typography source", () => {
 		}
 	});
 
-	it("holds 20 canonical definitions and 29 aliases (49 styles)", () => {
+	it("holds 19 canonical definitions and 30 aliases (49 styles)", () => {
 		const styles = allStyles(typography);
 		expect(styles).toHaveLength(49);
-		expect(styles.filter((s) => !s.ref)).toHaveLength(20);
-		expect(styles.filter((s) => s.ref)).toHaveLength(29);
+		expect(styles.filter((s) => !s.ref)).toHaveLength(19);
+		expect(styles.filter((s) => s.ref)).toHaveLength(30);
 		// Both markdown surfaces are almost entirely aliases — that is the point of the reference
 		// mechanism: two scales, one set of underlying definitions.
 		expect(styles.filter((s) => s.prose)).toHaveLength(26);
@@ -253,7 +253,7 @@ describe("references", () => {
 						Object.keys(PROSE_SELECTORS).map((id) => [
 							id,
 							{
-								$ref: id === "inlineCode" || id === "codeBlock" ? "code.inline" : "probe.base",
+								$ref: id === "inlineCode" || id === "codeBlock" ? "code.text" : "probe.base",
 							},
 						]),
 					),
@@ -452,11 +452,14 @@ describe("generated CSS", () => {
 	it("exposes the code family + size tokens Monaco and xterm read", () => {
 		expect(GENERATED).toContain("--tr-font-family-code:");
 		expect(GENERATED).toContain("--tr-font-size-s11: 11px;");
+		expect(GENERATED).toContain("--tr-font-size-s13: 13px;");
 		expect(GENERATED).toContain("--tr-line-height-default: 1.6;");
 		const monaco = read(join(SRC, "panels/monacoSetup.ts"));
 		const xterm = read(join(SRC, "panels/TerminalInstance.tsx"));
+		// Monaco reads the s11 editor tier; xterm reads `code.block`'s size (s13).
+		expect(monaco).toContain('cssVar("--tr-font-size-s11")');
+		expect(xterm).toContain('cssVar("--tr-font-size-s13")');
 		for (const file of [monaco, xterm]) {
-			expect(file).toContain('cssVar("--tr-font-size-s11")');
 			expect(file).toContain('cssVar("--tr-font-family-code")');
 		}
 		expect(monaco).toContain('cssVar("--tr-line-height-default")');

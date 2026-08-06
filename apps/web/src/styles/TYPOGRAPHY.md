@@ -76,10 +76,11 @@ The rules, all enforced by `typography:validate`:
 `textStyles` groups: **brand** (`wordmark`, `hero`) · **heading** (`xl`, `lg`, `md`, `sm` — the shared
 document heading scale) · **title** (`dialog`, `card`→dialog, `section`, `compact`, `entity`→body.reading)
 · **ui** (`default`, `metadata`, `eyebrow`, `labelPill`→eyebrow, `action`→title.compact,
-`emphasis`→title.compact) · **body** (`reading`) · **code** (`text`, `inline`, `block`→inline, `document`,
-`otp`). `proseSystems` holds one entry per markdown surface, almost entirely aliases into the above.
+`emphasis`→title.compact) · **body** (`reading`) · **code** (`text` — the base code style, `inline`→text,
+`block`→text, `document`, `otp`). `proseSystems` holds one entry per markdown surface, almost entirely
+aliases into the above.
 
-**20 canonical definitions + 29 aliases = 49 styles.**
+**19 canonical definitions + 30 aliases = 49 styles.**
 
 One prose rule is deliberately *not* a semantic style: `<strong>` / `<b>` gets **weight only**
 (`--tr-font-weight-medium`), emitted by the generator into each prose system. A complete style there
@@ -243,7 +244,7 @@ The allowlist is deliberately tiny, and each entry is enforced by name in
 | Surface | Why it cannot use a semantic class |
 |---|---|
 | `panels/monacoSetup.ts` | Monaco takes `fontFamily` / `fontSize` / `lineHeight` as JS options — it reads `--tr-font-family-code`, `--tr-font-size-s11`, `--tr-line-height-default`, so it cannot drift from a code block |
-| `panels/TerminalInstance.tsx` | xterm, same reason (`--tr-font-family-code` + `--tr-font-size-s11`) |
+| `panels/TerminalInstance.tsx` | xterm, same reason — it reads `--tr-font-family-code` + `--tr-font-size-s13` (the family + size behind `code.block`), and owns row height through its own `lineHeight` option rather than a CSS line-height |
 | `chat/tools/visualize/mermaid.ts` | mermaid's theme config takes a family string (`--tr-font-family-code`) |
 | `index.css`, `styles/tokens.css`, `styles/global.css` | the mapping layers themselves |
 
