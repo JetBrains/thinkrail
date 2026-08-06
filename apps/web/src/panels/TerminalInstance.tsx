@@ -11,6 +11,8 @@ import { cssColorToHex } from "@/lib";
 import { useAppStore } from "../store";
 import { onThemeSwap } from "../themes";
 import { getTransport } from "../transport";
+import { createPtySizeSync } from "./ptySizeSync";
+import { createTerminalPrebindBuffer } from "./terminalPrebindBuffer";
 
 /**
  * PTY ids left behind by unmounted instances, keyed by tab `clientId`.
@@ -43,14 +45,10 @@ const detachedPtyByClientId = new Map<string, string>();
 const RESIZE_DEBOUNCE_MS = 60;
 
 /**
- * Fire-and-forget terminal I/O: a keystroke or a resize we don't await.
- *
- * The rejection must be swallowed explicitly. Since the transport started failing requests that were in flight
- * when a socket dropped, every un-caught one of these would surface as an unhandled promise rejection on every
- * disconnect — noise in the console and in any error reporter. There is nothing useful to do about a lost
- * keystroke anyway: the shell is authoritative and the user will retype.
+ * Fire-and-forget terminal writes. Reconnect replay + host request deduplication still executes a submitted
+ * write at most once; callers merely have no useful UI to show for a true host rejection.
  */
-function fireAndForget(send: Promise<unknown>): void {
+function sendTerminalWrite(send: Promise<unknown>): void {
 	void send.catch(() => {});
 }
 
@@ -166,13 +164,14 @@ export default function TerminalInstance({
 	const termRef = useRef<XTerm | null>(null);
 	const serverIdRef = useRef<string | null>(null);
 	const fitFnRef = useRef<(() => void) | null>(null);
+	/** Immutable tab creation intent; prop changes must not tear down a live shell. */
+	const initialCommandRef = useRef(initialCommand);
 	const [ready, setReady] = useState(false);
 	/** The shell behind this tab is gone — see the `terminal.exit` subscription below. */
 	const [exited, setExited] = useState(false);
 	/** No PTY was ever obtained, so this pane is inert — see the `terminal.create` rejection below. */
 	const [failed, setFailed] = useState(false);
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: mount-once; clientId/workspaceId are stable per instance
 	useEffect(() => {
 		const host = hostRef.current;
 		if (!host) return;
@@ -212,7 +211,7 @@ export default function TerminalInstance({
 			const bytes = imeControlBytes(event);
 			if (bytes === null) return true;
 			const id = serverIdRef.current;
-			if (id) fireAndForget(getTransport().request("terminal.write", { id, data: bytes }));
+			if (id) sendTerminalWrite(getTransport().request("terminal.write", { id, data: bytes }));
 			return false;
 		});
 
@@ -221,20 +220,19 @@ export default function TerminalInstance({
 		// spilling the scrollback out of view (it looks like the buffer was cleared on the next re-show).
 		// Skipping the zero-size case keeps the buffer intact across workspace/tab switches; the
 		// ResizeObserver re-fits for real once the layer is shown and laid out.
-		/** The grid the PTY was last told about, so an unchanged fit costs nothing. */
-		let ptySize: { cols: number; rows: number } | null = null;
+		const sizeSync = createPtySizeSync(({ cols, rows }) => {
+			const id = serverIdRef.current;
+			if (!id) return Promise.reject(new Error("terminal is no longer live"));
+			return getTransport().request("terminal.resize", { id, cols, rows });
+		});
 		const applyFit = (): void => {
 			if (host.clientWidth === 0 || host.clientHeight === 0) return;
 			tryLoad(() => fit.fit());
-			const id = serverIdRef.current;
-			if (!id) return;
+			if (!serverIdRef.current) return;
 			// A PTY resize is an ioctl plus a SIGWINCH to the shell, and full-screen apps (vim, htop, lazygit)
-			// repaint on every one — so send only genuine changes, never the same size twice.
-			if (ptySize?.cols === term.cols && ptySize.rows === term.rows) return;
-			ptySize = { cols: term.cols, rows: term.rows };
-			fireAndForget(
-				getTransport().request("terminal.resize", { id, cols: term.cols, rows: term.rows }),
-			);
+			// repaint on every one. The synchronizer sends only genuine changes, serializes them, and advances
+			// its acknowledged grid only after the host confirms the request.
+			sizeSync.request({ cols: term.cols, rows: term.rows });
 		};
 
 		// Trailing-edge debounce for observed layout changes. Dragging the terminals divider fires the
@@ -254,45 +252,43 @@ export default function TerminalInstance({
 		applyFit();
 		requestAnimationFrame(applyFit);
 
-		// Buffer output that arrives before the PTY id is known (e.g. the initial shell prompt).
-		const early: TerminalDataPush[] = [];
+		// Pushes can beat `terminal.create`'s response, before this instance knows which page-owned PTY is its
+		// own. The bounded pre-bind buffer filters on adoption and becomes inert on bind/failure.
+		const prebind = createTerminalPrebindBuffer();
+		const writeTruncation = (): void => term.write("\r\n[output truncated]\r\n");
 		/** Paint a batch, saying so when the host had to drop output to stay bounded. */
 		const writeFrame = (ev: TerminalDataPush): void => {
 			// The host cannot slow a shell down (`bun-pty` exposes no pause), so a flood that outran a reconnect
 			// loses its oldest output rather than growing until the host dies. Silently dropping it would look
 			// like the shell simply printed less than it did.
-			if (ev.truncated) term.write("\r\n[output truncated]\r\n");
+			if (ev.truncated) writeTruncation();
 			term.write(ev.data);
 		};
-		// Buffer only until this instance has ever been bound to a PTY. Keying the buffer off `serverIdRef` being
-		// null instead would turn it into an unbounded sink after `terminal.exit` clears the id: every later frame
-		// from every OTHER terminal would accumulate here for the life of the tab.
-		let bound = false;
 		const unsubscribe = getTransport().subscribe(WS_CHANNELS.terminalData, (payload) => {
 			const ev = payload as TerminalDataPush;
-			const id = serverIdRef.current;
-			if (!bound) {
-				early.push(ev);
-			} else if (ev.id === id) {
-				writeFrame(ev);
-			}
+			if (prebind.acceptData(ev)) return;
+			if (ev.id === serverIdRef.current) writeFrame(ev);
 		});
 		const onData = term.onData((data) => {
 			const id = serverIdRef.current;
-			if (id) fireAndForget(getTransport().request("terminal.write", { id, data }));
+			if (id) sendTerminalWrite(getTransport().request("terminal.write", { id, data }));
 		});
 
 		// The shell exited (the user typed `exit`, or it crashed). Until the host said so, the tab went on
 		// looking alive — cursor blinking, keystrokes accepted — while every keystroke was written to a dead id
 		// and silently dropped, with no way to tell.
-		const unsubscribeExit = getTransport().subscribe(WS_CHANNELS.terminalExit, (payload) => {
-			const ev = payload as TerminalExitPush;
+		const handleExit = (ev: TerminalExitPush): void => {
 			if (ev.id !== serverIdRef.current) return;
 			// Forget the id: there is nothing left to write to, to detach for a later mount, or to close.
 			serverIdRef.current = null;
 			detachedPtyByClientId.delete(clientId);
 			term.write(`\r\n[process exited${ev.exitCode === 0 ? "" : ` with code ${ev.exitCode}`}]\r\n`);
 			setExited(true);
+		};
+		const unsubscribeExit = getTransport().subscribe(WS_CHANNELS.terminalExit, (payload) => {
+			const ev = payload as TerminalExitPush;
+			if (prebind.acceptExit(ev)) return;
+			handleExit(ev);
 		});
 
 		let disposed = false;
@@ -333,13 +329,16 @@ export default function TerminalInstance({
 				.catch(() => {});
 		};
 
-		/** Bind to a PTY id: route its output here, catch up on anything buffered, and go ready. */
+		/** Bind to a PTY id: route its output here, catch up on ordered pre-bind events, and go ready. */
 		const bindPty = (id: string): void => {
-			bound = true;
 			serverIdRef.current = id;
-			for (const ev of early) if (ev.id === id) writeFrame(ev);
-			early.length = 0;
+			const buffered = prebind.bind(id);
+			if (buffered.truncated) writeTruncation();
+			for (const ev of buffered.frames) writeFrame(ev);
 			setReady(true);
+			// A very short-lived shell can send its addressed exit before the create response names its id.
+			// Paint buffered data first, then apply that matching exit exactly as a live subscription would.
+			if (buffered.exit) handleExit(buffered.exit);
 		};
 
 		/** Ask the host for a brand-new shell. */
@@ -360,20 +359,24 @@ export default function TerminalInstance({
 							.catch(() => {});
 						return;
 					}
-					ptySize = spawnedAt;
+					sizeSync.acknowledge(spawnedAt);
 					bindPty(id);
 					// Catch up if the grid moved while we were waiting; a no-op when it didn't.
 					applyFit();
-					if (initialCommand)
-						fireAndForget(
-							getTransport().request("terminal.write", { id, data: `${initialCommand}\r` }),
+					if (serverIdRef.current === id && initialCommandRef.current)
+						sendTerminalWrite(
+							getTransport().request("terminal.write", {
+								id,
+								data: `${initialCommandRef.current}\r`,
+							}),
 						);
 				})
 				.catch(() => {
 					if (disposed) return;
-					// The host never answered. A dropped socket now rejects the request instead of leaving it to
-					// time out 60s later, so this is reachable promptly — and without saying anything the pane
-					// would just sit blank and never-ready with no hint that there is no shell behind it.
+					// Reconnects replay this request, so this is a real host refusal or deadline rather than an
+					// ambiguous dropped response. Stop pre-bind intake: this failed pane must not retain every other
+					// terminal's page-addressed output for the rest of its life.
+					prebind.stop();
 					term.write("\r\n[could not start a shell — close this tab and open a new one]\r\n");
 					setFailed(true);
 				});
@@ -407,10 +410,9 @@ export default function TerminalInstance({
 					applyFit();
 				})
 				.catch(() => {
-					// Couldn't ask (socket dropped mid-check). A fresh shell is the safe answer: worse than
-					// re-attaching, far better than presenting a shell we cannot vouch for. Best-effort kill the one
-					// we gave up on so it isn't left running with nothing pointing at it — the frame queues and
-					// flushes on reconnect.
+					// The liveness check genuinely failed or timed out (socket loss itself is replayed). A fresh shell
+					// is safer than presenting one we cannot vouch for. Best-effort kill the id we gave up on so it
+					// is not left running with nothing pointing at it.
 					void getTransport()
 						.request("terminal.close", { id: detached })
 						.catch(() => {});
@@ -427,6 +429,8 @@ export default function TerminalInstance({
 
 		return () => {
 			disposed = true;
+			prebind.stop();
+			sizeSync.dispose();
 			clearTimeout(fitTimer);
 			resizeObserver.disconnect();
 			stopThemeWatch();

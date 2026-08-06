@@ -1,103 +1,137 @@
 import { describe, expect, test } from "bun:test";
-import { createOutputBatcher, type OutputBatcherOptions } from "./outputBatcher";
+import {
+	createOutputBatcher,
+	type OutputBatcherOptions,
+	type TerminalDeliveryResult,
+} from "./outputBatcher";
 
-/** A batcher plus the batches it delivered. `deliverable` flips to simulate a receiver going away. */
+/** A batcher plus accepted batches. `delivery` flips to simulate receiver/backpressure state. */
 function harness(overrides: Partial<OutputBatcherOptions> = {}) {
-	const flushed: { data: string; truncated: boolean }[] = [];
-	const state = { deliverable: true };
+	const accepted: { data: string; truncated: boolean }[] = [];
+	const attempts: { data: string; truncated: boolean }[] = [];
+	const state: { delivery: TerminalDeliveryResult } = { delivery: "delivered" };
 	const batcher = createOutputBatcher({
 		flushMs: 8,
 		maxBatchChars: 64,
 		maxPendingChars: 256,
 		onFlush: (batch) => {
-			if (!state.deliverable) return false;
-			flushed.push(batch);
-			return true;
+			attempts.push(batch);
+			if (state.delivery !== "unavailable") accepted.push(batch);
+			return state.delivery;
 		},
 		...overrides,
 	});
-	return { batcher, flushed, state };
+	return { accepted, attempts, batcher, state };
 }
 
 const tick = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 describe("output batcher", () => {
 	test("collapses a burst of chunks into one batch", async () => {
-		const { batcher, flushed } = harness();
+		const { batcher, accepted } = harness();
 
 		for (const chunk of ["a", "b", "c", "d"]) batcher.push(chunk);
-		expect(flushed).toHaveLength(0); // nothing delivered yet — still inside the flush window
+		expect(accepted).toHaveLength(0); // nothing delivered yet — still inside the flush window
 
 		await tick(20);
-		expect(flushed).toEqual([{ data: "abcd", truncated: false }]);
+		expect(accepted).toEqual([{ data: "abcd", truncated: false }]);
 	});
 
 	test("flushes early once a batch is big enough, without waiting out the timer", () => {
-		const { batcher, flushed } = harness({ maxBatchChars: 4 });
+		const { batcher, accepted } = harness({ maxBatchChars: 4 });
 
 		batcher.push("abc");
-		expect(flushed).toHaveLength(0);
+		expect(accepted).toHaveLength(0);
 		batcher.push("d"); // reaches maxBatchChars
-		expect(flushed).toEqual([{ data: "abcd", truncated: false }]);
+		expect(accepted).toEqual([{ data: "abcd", truncated: false }]);
 	});
 
-	test("keeps output when the receiver is away, and delivers it on resume", async () => {
-		const { batcher, flushed, state } = harness();
+	test("keeps unavailable output and retries it only on resume", async () => {
+		const { accepted, attempts, batcher, state } = harness();
 
-		state.deliverable = false;
+		state.delivery = "unavailable";
 		batcher.push("while-away");
 		await tick(20);
-		expect(flushed).toHaveLength(0); // held, not dropped
+		batcher.push("-more");
+		await tick(20);
+		expect(accepted).toHaveLength(0);
+		expect(attempts).toHaveLength(1); // blocked is latched; a flood does not keep calling send
 
-		state.deliverable = true;
+		state.delivery = "delivered";
 		batcher.resume();
-		expect(flushed).toEqual([{ data: "while-away", truncated: false }]);
+		expect(accepted).toEqual([{ data: "while-away-more", truncated: false }]);
 	});
 
-	test("drops the OLDEST output past the ceiling and says so", async () => {
-		const { batcher, flushed, state } = harness({ maxPendingChars: 10, maxBatchChars: 1000 });
+	test("treats a backpressured batch as accepted but blocks its successor until resume", async () => {
+		const { accepted, attempts, batcher, state } = harness({ maxBatchChars: 5 });
 
-		state.deliverable = false;
+		state.delivery = "backpressured";
+		batcher.push("first");
+		expect(accepted).toEqual([{ data: "first", truncated: false }]);
+		batcher.push("second");
+		await tick(20);
+		expect(attempts).toHaveLength(1); // first was accepted; second stays local while blocked
+
+		state.delivery = "delivered";
+		batcher.resume();
+		expect(accepted).toEqual([
+			{ data: "first", truncated: false },
+			{ data: "second", truncated: false },
+		]);
+	});
+
+	test("drops the OLDEST output past the ceiling and says so", () => {
+		const { accepted, batcher, state } = harness({ maxPendingChars: 10, maxBatchChars: 1000 });
+
+		state.delivery = "unavailable";
 		batcher.push("0123456789");
 		batcher.push("ABCDE"); // overflows: the oldest 5 characters go
-		state.deliverable = true;
+		state.delivery = "delivered";
 		batcher.resume();
 
 		// The tail survives — on a terminal that is the part the user is waiting to see.
-		expect(flushed).toEqual([{ data: "56789ABCDE", truncated: true }]);
+		expect(accepted).toEqual([{ data: "56789ABCDE", truncated: true }]);
 	});
 
 	test("a delivered batch clears the truncation flag rather than latching it", async () => {
-		const { batcher, flushed, state } = harness({ maxPendingChars: 4, maxBatchChars: 1000 });
+		const { accepted, batcher, state } = harness({ maxPendingChars: 4, maxBatchChars: 1000 });
 
-		state.deliverable = false;
+		state.delivery = "unavailable";
 		batcher.push("overflowing");
-		state.deliverable = true;
+		state.delivery = "delivered";
 		batcher.resume();
-		expect(flushed[0]?.truncated).toBe(true);
+		expect(accepted[0]?.truncated).toBe(true);
 
 		batcher.push("ok");
 		await tick(20);
-		expect(flushed[1]).toEqual({ data: "ok", truncated: false });
+		expect(accepted[1]).toEqual({ data: "ok", truncated: false });
 	});
 
-	test("dispose drops pending output for good", async () => {
-		const { batcher, flushed } = harness();
+	test("finish transfers pending output once and permanently retires the batcher", async () => {
+		const { accepted, batcher, state } = harness();
+
+		state.delivery = "unavailable";
+		batcher.push("final");
+		await tick(20);
+		expect(batcher.finish()).toEqual({ data: "final", truncated: false });
+		expect(batcher.finish()).toBeUndefined();
+
+		state.delivery = "delivered";
+		batcher.resume();
+		batcher.push("after");
+		await tick(20);
+		expect(accepted).toHaveLength(0);
+	});
+
+	test("dispose drops pending output and permanently retires the batcher", async () => {
+		const { accepted, batcher } = harness();
 
 		batcher.push("gone");
 		batcher.dispose();
-
-		// Not delivered by the flush that was already scheduled...
 		await tick(20);
-		expect(flushed).toHaveLength(0);
-		// ...and not resurrected by a later resume either, which is what would surface it if dispose had only
-		// cancelled the timer and left the buffer sitting there.
 		batcher.resume();
-		expect(flushed).toHaveLength(0);
-
-		// The batcher is still coherent afterwards: a fresh push flushes on its own schedule.
 		batcher.push("after");
 		await tick(20);
-		expect(flushed).toEqual([{ data: "after", truncated: false }]);
+		expect(accepted).toHaveLength(0);
 	});
 });

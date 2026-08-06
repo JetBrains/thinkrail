@@ -130,7 +130,10 @@ export interface TerminalExitPush {
 // every socket subscribed to, and carries an optional `truncated` flag when the host had to drop held output;
 // `terminal.exit` announces a dead shell; `terminal.alive` lets a tab re-attaching to a shell it detached
 // earlier confirm it is still there. `terminal.create` additionally takes the client's measured `cols`/`rows`.
-export const PROTOCOL_VERSION = 25;
+// v26: unresolved requests survive reconnect: the client replays the same request id and the host deduplicates
+// by `(clientKey, requestId)`. The version prevents a replaying UI from connecting to a pre-dedup host and
+// executing a mutation twice after a lost response.
+export const PROTOCOL_VERSION = 26;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a

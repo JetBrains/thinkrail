@@ -24,7 +24,8 @@ that owns them.
   shutdown, `setTerminalPublisher`.
 - **Public surface (barrel):** the four terminal operations + `isTerminalAlive` (serves `terminal.alive`, the
   liveness check a re-attaching tab must pass — see below) + `resumeClientTerminals` + `closeClientTerminals` +
-  `closeWorkspaceTerminals` + `closeAllTerminals` + `setTerminalPublisher`.
+  `closeWorkspaceTerminals` + `closeAllTerminals` + `setTerminalPublisher`; the `TerminalDeliveryResult` type
+  shared with the host publisher adapter (no WebSocket type crosses this boundary).
 - **Allowed deps:** `persistence` (worktree cwd lookup); `contracts` (`WS_CHANNELS`); `bun-pty`; `process.env`.
 - **Forbidden:** `host`; sibling features. The module never learns what a WebSocket is — it addresses a client
   by opaque key through the injected publisher.
@@ -49,20 +50,23 @@ down** — `yes` or a huge `cat` will be read as fast as it is produced. Two con
 `outputBatcher.ts` (timer-only and transport-free, so it is unit-tested directly):
 
 - Reads are grouped into whole frames instead of one frame per read.
-- A batch the owner cannot take is **kept and retried** (`resumeClientTerminals` on reconnect), so a brief
-  disconnect no longer leaves a silent hole in the scrollback. Held output is capped; past the cap the
-  **oldest** is dropped and the next batch is flagged `truncated` so the client can say so rather than
-  appearing to have simply printed less.
+- Delivery has three explicit outcomes: **delivered**, **backpressured** (this frame was accepted, but no more
+  may be sent), and **unavailable** (this frame was not accepted). The host maps Bun's `send()` statuses
+  correctly (`>0`, `-1`, `0`) and latches per-client backpressure until `drain`/reconnect; a batcher likewise
+  stops retrying while blocked. A batch the owner cannot take is **kept and retried**
+  (`resumeClientTerminals`), so a brief disconnect no longer leaves a silent hole in the scrollback. Held
+  output is capped; past the cap the **oldest** is dropped and the next batch is flagged `truncated` so the
+  client can say so rather than appearing to have simply printed less.
 
-An **exit** the owner could not take is held per client and retried on reconnect too, for the same reason: a
-shell dying during a hiccup would otherwise leave a tab believing it was alive forever, which is exactly what
-`terminal.exit` exists to prevent. A client reaped as abandoned drops its held exits — there is nobody to tell.
+A natural PTY exit moves its final pending output plus `terminal.exit` into one per-client completion queue.
+The data must be accepted before the exit can be accepted, including across reconnect/backpressure, so a
+command cannot return with only its death notice and no final result. Intentional close/archive/shutdown instead
+discards pending output. A client reaped as abandoned drops its completions — there is nobody to tell.
 
 `terminal.alive` closes the matching gap on the client's side: `terminal.exit` is only heard by a *mounted*
 terminal, and a tab detaches its PTY precisely when none is mounted, so a shell that died while detached must be
 detected by asking rather than by having been told.
 
-Every path that kills a PTY disposes its batcher, so held output is dropped rather than delivered against a
-terminal that no longer exists. (The cancelled flush timer is incidental — `flush()` is a no-op on an empty
-buffer, so a missed `clearTimeout` would cost one idle timer for `flushMs`, not correctness. Dropping the
-**buffer** is the part that matters, and is what the unit test pins.)
+Every intentional path that kills a PTY disposes its batcher, so held output is dropped rather than delivered
+against a terminal that no longer exists. Natural exit is the one exception: `finish()` transfers the pending
+batch into the ordered completion above before the batcher is retired.

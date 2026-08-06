@@ -376,7 +376,7 @@ a project picker, the prompt hero, and the reused
   `${scopeKey}:${targetRef}`, so switching the diff scope or re-pointing the target branch resets and
   re-reads exactly like a workspace switch, and one scope's list can never linger under another. `onFailure`
   receives **the rejection**, not just the workspace id: a caller that reacts to one *named* failure (see the
-  vanished-commit rule below) must be able to tell it from a timeout or a dropped socket.
+  vanished-commit rule below) must be able to tell it from a timeout or an unnamed host failure.
   The one read that deliberately does **not** go through this hook is `ChangesScopeMenu`'s lazy pair — they
   are *open*-triggered, not tick-triggered — so the menu is instead **keyed by its full identity,
   `(workspaceId, targetRef)`**: its commit rows are `git log <base>..HEAD`, so re-pointing the target changes
@@ -496,7 +496,7 @@ a project picker, the prompt hero, and the reused
   a sentence in a rail header squeezes the sibling target-branch pill down to an ellipsis. A scope naming a commit the repo no longer has (rebase, branch reset) makes
   the host reject `git.status` with the **named** code `UNKNOWN_COMMIT` (`wsErrorCode`), and *that* rejection —
   and only that one — **resets to the branch scope with a toast** rather than staying wedged on a dead sha.
-  Every other failure (timeout, dropped socket, git error) leaves the user's chosen scope alone, keeps the
+  Every other failure (timeout, prolonged network outage, git error) leaves the user's chosen scope alone, keeps the
   last good list, and says so once per failing streak: silently swapping the scope on a network blip is a
   worse lie than a stale list. The code exists precisely because "the read failed" cannot distinguish the two.
 - **"Never answered", "failed", and "answered empty" are three states, never two.** The panel holds the
@@ -706,7 +706,11 @@ a project picker, the prompt hero, and the reused
   so the Cyrillic/CJK file lands *after* xterm has measured the character cell (which it does once, at
   construction, and never again — unlike Monaco, which re-measures an untrusted early reading). Without the
   re-measure, non-Latin glyphs render into cells sized for the fallback font and the PTY holds the wrong
-  cols/rows; the panel drives `relayout()` itself so it knows when to re-`fit()`.
+  cols/rows; the panel drives `relayout()` itself so it knows when to re-`fit()`. Its pre-bind output buffer is
+  a bounded waiting state: successful bind filters it to the adopted PTY, while permanent creation failure
+  clears it and stops accepting page-wide terminal frames. PTY sizing distinguishes desired, in-flight, and
+  host-acknowledged grids; only a successful `terminal.resize` advances the acknowledgement, so reconnect
+  replay cannot leave a full-screen app permanently sized to a request the host never applied.
 - Heavy deps (Monaco / shiki / xterm) load via `React.lazy(() => import())` to stay out of the eager bundle.
   A lazy chunk that fails to load (or a render throw) is contained by the `components/ErrorBoundary` the
   **shell** wraps each region in (see `shell/SPEC.md`), so a single panel degrades instead of blanking the
