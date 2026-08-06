@@ -278,7 +278,7 @@ export function AskUserQuestionCard({
 			<div
 				data-testid="ask-user-question"
 				data-tone="active"
-				className="overflow-hidden rounded-[var(--radius-lg)] border border-primary-muted bg-container-elevated-bg ring-1 ring-primary-soft"
+				className="overflow-hidden rounded-[var(--radius-lg)] border border-primary-muted bg-clip-padding bg-container-elevated-bg ring-1 ring-primary-soft"
 			>
 				{multi ? (
 					<div className="flex items-center gap-xs overflow-x-auto border-border-default border-b px-md py-sm">

@@ -121,6 +121,8 @@ const NON_COLOR = new Set([
 	"pretty",
 	"ellipsis",
 	"clip",
+	// background-clip: `bg-clip-padding` renders a translucent border against the surrounding surface
+	"clip-padding",
 	// outline-none, ring-inset
 	"none",
 	"inset",

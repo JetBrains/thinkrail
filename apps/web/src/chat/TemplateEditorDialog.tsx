@@ -327,7 +327,7 @@ function ScopeOption({
 			className={cn(
 				"flex-1 rounded-[var(--radius-md)] border px-md py-sm text-left tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50",
 				active
-					? "border-primary-muted bg-primary-subtle text-text-default"
+					? "border-primary-muted bg-clip-padding bg-primary-subtle text-text-default"
 					: "border-border-default text-text-muted hover:bg-control-bg-hovered hover:text-text-default",
 			)}
 		>

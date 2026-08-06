@@ -84,7 +84,7 @@ export function reconcileModel(
 
 /** A shared pill-trigger look for the project + branch pickers (mockup `.pill`). */
 const PILL =
-	"flex h-8 min-w-0 items-center gap-sm rounded-[var(--radius-md)] border border-control-border bg-control-bg px-sm tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-primary-strong data-[open=true]:bg-control-bg-hovered";
+	"flex h-8 min-w-0 items-center gap-sm rounded-[var(--radius-md)] border border-control-border bg-clip-padding bg-control-bg px-sm tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-primary-strong data-[open=true]:bg-control-bg-hovered";
 
 /**
  * The start-working surface: a **target control** chooses where the work runs — an isolated worktree
@@ -530,7 +530,7 @@ export function NewWorkspaceDialog({
 					{promptNote ? (
 						<p
 							data-testid="ws-prompt-note"
-							className="mb-xs flex items-start gap-sm rounded-[var(--radius-md)] border border-primary-muted bg-primary-subtle px-md py-sm text-left text-text-muted tr-text-metadata leading-snug"
+							className="mb-xs flex items-start gap-sm rounded-[var(--radius-md)] border border-primary-muted bg-clip-padding bg-primary-subtle px-md py-sm text-left text-text-muted tr-text-metadata leading-snug"
 						>
 							<Sparkles className="mt-0.5 size-3.5 shrink-0 text-primary" />
 							<span>{promptNote}</span>

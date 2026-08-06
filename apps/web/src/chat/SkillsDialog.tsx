@@ -354,7 +354,7 @@ function Toggle({
 			className={cn(
 				"shrink-0 rounded-[var(--radius-sm)] border px-sm py-0.5 tr-text-metadata transition-colors disabled:opacity-50",
 				on
-					? "border-primary-muted bg-primary-subtle text-primary"
+					? "border-primary-muted bg-clip-padding bg-primary-subtle text-primary"
 					: "border-border-default text-text-muted hover:bg-control-bg-hovered",
 			)}
 		>
@@ -422,7 +422,7 @@ function SkillRow({
 					className={cn(
 						"shrink-0 rounded-[var(--radius-sm)] border px-sm py-0.5 tr-text-metadata transition-colors disabled:opacity-50",
 						loaded
-							? "border-primary-muted bg-primary-subtle text-primary"
+							? "border-primary-muted bg-clip-padding bg-primary-subtle text-primary"
 							: "border-border-default text-text-muted hover:bg-control-bg-hovered",
 					)}
 				>

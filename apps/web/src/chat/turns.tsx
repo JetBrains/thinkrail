@@ -104,7 +104,7 @@ function userText(content: UserMessage["content"]): string {
 function UserTurn({ message }: { message: UserMessage }) {
 	return (
 		<div data-testid="chat-message" data-role="user" className="flex justify-end">
-			<div className="max-w-[85%] whitespace-pre-wrap rounded-[var(--radius-md)] border border-bubble-user-border bg-bubble-user-bg px-md py-sm tr-text-reading text-text-default">
+			<div className="max-w-[85%] whitespace-pre-wrap rounded-[var(--radius-md)] border border-bubble-user-border bg-clip-padding bg-bubble-user-bg px-md py-sm tr-text-reading text-text-default">
 				{userText(message.content)}
 			</div>
 		</div>
@@ -175,7 +175,7 @@ function ErrorTurn({ text }: { text: string }) {
 		<div
 			data-testid="chat-message"
 			data-role="error"
-			className="flex items-start gap-sm rounded-[var(--radius-md)] border border-feedback-error-muted bg-feedback-error-subtle px-md py-sm text-feedback-error tr-text-ui"
+			className="flex items-start gap-sm rounded-[var(--radius-md)] border border-feedback-error-muted bg-clip-padding bg-feedback-error-subtle px-md py-sm text-feedback-error tr-text-ui"
 		>
 			<TriangleAlert className="mt-[2px] size-4 shrink-0" />
 			<span className="min-w-0 whitespace-pre-wrap break-words">{text}</span>
