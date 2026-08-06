@@ -407,7 +407,7 @@ export function TurnDivider({
 
 	if (toolCount === 0 && groups.length === 0 && (elapsedMs == null || elapsedMs < 1000)) {
 		// Nothing worth noting between these turns — just a hairline rule.
-		return <div data-testid="turn-divider" className="my-sm h-px bg-border-default" />;
+		return <div data-testid="turn-divider" className="my-sm h-px bg-border-muted" />;
 	}
 	return (
 		<div
@@ -415,7 +415,7 @@ export function TurnDivider({
 			className="my-sm flex flex-col gap-xs text-text-muted tr-text-metadata"
 		>
 			<div className="flex items-center gap-sm">
-				<span className="h-px flex-1 bg-border-default" />
+				<span className="h-px flex-1 bg-border-muted" />
 				{toolCount > 0 ? (
 					<span className="flex items-center gap-xs">
 						<Wrench className="size-3 shrink-0" />
@@ -436,7 +436,7 @@ export function TurnDivider({
 						{formatElapsed(elapsedMs)}
 					</span>
 				) : null}
-				<span className="h-px flex-1 bg-border-default" />
+				<span className="h-px flex-1 bg-border-muted" />
 			</div>
 			{groups
 				.filter((group) => group.paths.length > 1 && group.expanded)
