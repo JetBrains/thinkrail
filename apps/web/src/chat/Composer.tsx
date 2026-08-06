@@ -683,7 +683,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				 * only focusable child); the textarea keeps its own `focus-visible` ring. `overflow-hidden`
 				 * still clips the backdrop's mirrored spans to the rounded shape (and the ring exactly as
 				 * before). Geometry is unchanged: the 1px border simply moved from the textarea to here. */}
-				<div className="relative overflow-hidden rounded-[var(--radius-md)] border border-control-border-default bg-control-bg bg-clip-padding transition-colors focus-within:border-primary">
+				<div className="relative overflow-hidden rounded-[var(--radius-md)] border border-control-border-default bg-control-bg bg-clip-padding transition-colors focus-within:border-control-border-active focus-within:ring-2 focus-within:ring-primary-soft">
 					{slots ? (
 						<div
 							ref={attachBackdrop}
@@ -793,7 +793,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 						// `relative` keeps the textarea a positioned participant so it paints ABOVE the absolute
 						// slot-highlight backdrop (its earlier DOM sibling) — otherwise a static textarea paints
 						// under the backdrop and the native caret/selection get dimmed by the active-slot tint.
-						className="relative min-h-[108px] w-full resize-none rounded-[var(--radius-md)] bg-transparent px-md py-sm tr-text-ui text-text-default outline-none placeholder:text-text-muted focus-visible:ring-2 focus-visible:ring-primary-soft"
+						className="relative min-h-[108px] w-full resize-none rounded-[var(--radius-md)] bg-transparent px-md py-sm tr-text-ui text-text-default outline-none placeholder:text-text-muted"
 					/>
 				</div>
 				<div className="flex flex-wrap items-center gap-sm">
