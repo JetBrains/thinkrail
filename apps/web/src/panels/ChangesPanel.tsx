@@ -236,7 +236,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 							type="button"
 							data-testid="changes-retry"
 							onClick={reload}
-							className="rounded-[var(--radius-sm)] px-xs py-[2px] tr-text-metadata text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-muted"
+							className="rounded-[var(--radius-sm)] px-xs py-[2px] tr-text-metadata text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
 						>
 							Retry
 						</button>

@@ -89,7 +89,7 @@ export function BranchPicker({
 						aria-label="Refresh branches"
 						title="Refresh branches"
 						onClick={onRefresh}
-						className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-muted focus-visible:ring-2 focus-visible:ring-primary"
+						className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 					>
 						<RefreshCw className={`size-3.5 ${refreshing ? "animate-spin" : ""}`} />
 					</button>
