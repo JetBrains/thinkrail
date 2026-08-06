@@ -95,7 +95,7 @@ function TerminalTabButton({
 		<div
 			className={`group flex shrink-0 items-center gap-xs rounded-[var(--radius-sm)] pr-xs pl-sm tr-text-ui ${
 				active
-					? "bg-control-bg-hovered text-text-default"
+					? "bg-control-bg text-text-default hover:bg-control-bg-hovered"
 					: "text-text-muted hover:bg-control-bg-hovered"
 			}`}
 		>
