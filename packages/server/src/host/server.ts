@@ -11,6 +11,7 @@ import {
 	disposeAllSessions,
 	getSessionWorkspaceId,
 	setExtUiPublisher,
+	setReviewCommentHandler,
 	setSessionPublisher,
 	setSkillAdmissionResolver,
 } from "../agent";
@@ -29,6 +30,7 @@ import {
 	openProject,
 	setProjectPublisher,
 } from "../projects";
+import { reanchorWorkspace, resolveCommentFromAgent, setReviewPublisher } from "../reviews";
 import { getConfig, setSettingsPublisher } from "../settings";
 import {
 	closeAllTerminals,
@@ -198,6 +200,7 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 				ws.subscribe(WS_CHANNELS.workspaceRemoved);
 				ws.subscribe(WS_CHANNELS.workspaceFsChanged);
 				ws.subscribe(WS_CHANNELS.settingsChanged);
+				ws.subscribe(WS_CHANNELS.reviewChanged);
 				const welcome: ServerWelcome = {
 					protocolVersion: PROTOCOL_VERSION,
 					projects: listProjects(),
@@ -395,11 +398,15 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 
 	// Push the worktree change notifier's debounced invalidation batches (agent edits, terminal
 	// commands, Finder) to every subscribed client — receivers re-read via the normal read methods.
+	// The reviews tee rides the same signal (host-mediated — `watch` has no `reviews` edge): a worktree
+	// change re-anchors the workspace's open review comments, which self-publishes `review.changed`
+	// only when an anchor actually moved. Cheap: a workspace with no review file is a no-op.
 	const publishFsChanged = (payload: WorkspaceFsChangedPayload) => {
 		server.publish(
 			WS_CHANNELS.workspaceFsChanged,
 			JSON.stringify({ channel: WS_CHANNELS.workspaceFsChanged, data: payload }),
 		);
+		reanchorWorkspace(payload.workspaceId);
 	};
 	setWatchPublisher(publishFsChanged);
 	// The same frame, publishable from the `git.prefetch` handler: the app's own background fetch moves
@@ -424,6 +431,19 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		refreshUserOwnedWorkspace(workspaceId);
 		publishFsChanged({ workspaceId, paths: [], truncated: false });
 	});
+
+	// Fan `review.changed` snapshots out to every client (the reviews module stays channel-ignorant),
+	// and wire the agent-side `resolve_comment` tool's execution back into the review store — the seam
+	// pair that keeps `reviews` and `agent` decoupled (see reviews/SPEC.md).
+	setReviewPublisher((payload) => {
+		server.publish(
+			WS_CHANNELS.reviewChanged,
+			JSON.stringify({ channel: WS_CHANNELS.reviewChanged, data: payload }),
+		);
+	});
+	setReviewCommentHandler((commentId, note) => ({
+		resolvedBody: resolveCommentFromAgent(commentId, note).body,
+	}));
 
 	// Broadcast a server-synced settings change (the full `AppConfig`) to every client so they converge —
 	// the initiator applies on this push too, never optimistically (the workspace-lifecycle pattern). The

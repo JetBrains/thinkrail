@@ -6,6 +6,11 @@ import type {
 	HistoryScope,
 	ImageContent,
 	LoginReply,
+	ReviewAnchor,
+	ReviewComment,
+	ReviewCommentKind,
+	ReviewCommentStatus,
+	ReviewSendResult,
 	TemplateScope,
 	ThinkingLevel,
 	TodoStatus,
@@ -19,6 +24,7 @@ import {
 	clampThinkingForModel,
 	compactSession,
 	createSession,
+	ensureSessionAttached,
 	followUpSession,
 	getDefaultModel,
 	getSessionCommands,
@@ -30,6 +36,7 @@ import {
 	listSessions,
 	listSkillCatalog,
 	listSkillCommands,
+	notifyExtUi,
 	promptSession,
 	refreshAvailableModels,
 	reloadSessionResources,
@@ -68,6 +75,21 @@ import {
 	setProjectSkillEnabled,
 	setProjectTrust,
 } from "../projects";
+import {
+	addComment,
+	buildSendPackage,
+	closeReview,
+	deleteComment,
+	fileReviewSession,
+	getReviewSnapshot,
+	markCommentsSent,
+	markFileDone,
+	REVIEW_LEVEL_KEY,
+	removeWorkspaceReviews,
+	reviewSessionKey,
+	sendableComments,
+	updateComment,
+} from "../reviews";
 import { updateConfig } from "../settings";
 import { evictSpecIndex, projectHasSpecs, specGraph } from "../spec";
 import {
@@ -105,6 +127,7 @@ import { ackSend } from "./ackSend";
 import { nudgeBaseRefWorkspaces } from "./fsNudge";
 import { buildHistoryScope } from "./historyScope";
 import { dropLogin, recordLoginStart } from "./loginAnalytics";
+import { withReviewLock } from "./reviewLock";
 
 /**
  * Who a request came from. Threaded to every handler so one can scope a resource to its caller; most ignore
@@ -144,6 +167,87 @@ async function archiveTeardown(ws: Workspace): Promise<void> {
 function trackSend(mode: SendMode, text: string): void {
 	if (isControlMessage(text)) return;
 	track({ name: "message_sent", params: { mode } });
+}
+
+/**
+ * Fire a review package into its session DETACHED — the send handlers return the moment the session
+ * exists, so the client opens the chat tab immediately instead of sitting on pi's turn (`ackSend`'s
+ * 10s acceptance window made every review send feel stuck). A pre-turn rejection (bad model, missing
+ * API key) can't reach the WS response any more, so it surfaces INSIDE the just-opened chat as an
+ * extension-UI notice; later faults arrive via the event stream as always.
+ */
+function fireReviewPrompt(
+	sessionId: string,
+	pkg: string,
+	send: (sessionId: string, text: string) => Promise<void> = promptSession,
+): void {
+	void send(sessionId, pkg).catch((err) => {
+		notifyExtUi(
+			sessionId,
+			`Review send failed: ${err instanceof Error ? err.message : String(err)}`,
+			"error",
+		);
+	});
+}
+
+/**
+ * Send one KEY's comments into a review chat. The landing is, in order: the client's **last open
+ * chat** (`opts.sessionId` — the conversation already on the user's screen), else the key's pinned
+ * chat (the key is the file path, or the review-level bucket for anchorless remarks, see
+ * `reviews.reviewSessionKey`), else a NEW chat (with the review tools every session carries). Whatever
+ * receives the package becomes the key's pin (`markCommentsSent`), so the sidebar's "open the
+ * discussion" follows the comments. A linked chat that isn't LIVE is not an absent chat: review state
+ * and pi transcripts both survive a host restart, so the session is RE-ATTACHED
+ * (`ensureSessionAttached`) rather than forked. Only a transcript that is genuinely gone (a purged pi
+ * session dir) falls back to a fresh chat — a recovery, not a routine path, so the reason is logged.
+ * Every comment handed in must share one key (`sendBatch` groups first). Callers hold the workspace's
+ * review lock.
+ */
+async function sendToFileChat(
+	workspaceId: string,
+	comments: ReviewComment[],
+	opts: { model?: WireModel; thinkingLevel?: ThinkingLevel; sessionId?: string },
+): Promise<ReviewSendResult> {
+	const ids = comments.map((c) => c.id);
+	const pkg = buildSendPackage(workspaceId, comments);
+	const ws = getWorkspace(workspaceId);
+	const first = comments[0];
+	const path = first ? reviewSessionKey(first) : REVIEW_LEVEL_KEY;
+	const existing = opts.sessionId ?? fileReviewSession(workspaceId, path);
+	if (existing && (await ensureSessionAttached(existing, workspaceId, ws.worktreePath))) {
+		markCommentsSent(workspaceId, ids, existing);
+		fireReviewPrompt(existing, pkg, followUpSession);
+		// `reused`: the client must HYDRATE this chat rather than open it as new — it may never have seen
+		// it (a second client, or this one after a reload). The model/thinking placeholders match the
+		// disk-summary convention and are ignored on that path.
+		return {
+			sessionId: existing,
+			model: null,
+			thinkingLevel: "medium" as ThinkingLevel,
+			reused: true,
+		};
+	}
+	if (existing) {
+		console.warn(
+			`review ${workspaceId}: linked chat ${existing} for ${path} is no longer on disk — starting a new review chat`,
+		);
+	}
+	ensureWorkspaceScratchDir(ws);
+	const created = await createSession({
+		cwd: ws.worktreePath,
+		workspaceId,
+		...(opts.model ? { model: opts.model } : {}),
+		...(opts.thinkingLevel ? { thinkingLevel: opts.thinkingLevel } : {}),
+	});
+	if (created.model) {
+		track({
+			name: "chat_started",
+			params: bucketProviderModel(created.model.provider, created.model.id),
+		});
+	}
+	markCommentsSent(workspaceId, ids, created.sessionId);
+	fireReviewPrompt(created.sessionId, pkg);
+	return { ...created, reused: false };
 }
 
 const handlers: Record<string, Handler> = {
@@ -190,6 +294,7 @@ const handlers: Record<string, Handler> = {
 		// slow git subprocess + session abort.
 		const ws = forgetWorkspace(id);
 		evictSpecIndex(id); // the archived worktree's spec parse cache must not outlive it
+		removeWorkspaceReviews(id); // the review file must not outlive its workspace either
 		stopWatch(id); // fast: stop the change notifier before the worktree dir is reclaimed
 		closeWorkspaceTerminals(id); // fast: kill workspace-scoped PTYs before the dir is reclaimed
 		if (ws) void archiveTeardown(ws);
@@ -261,6 +366,7 @@ const handlers: Record<string, Handler> = {
 		ensureWatch(p.workspaceId);
 		return gitStatus(p.workspaceId, p.scope);
 	},
+
 	"git.diffFile": (params) => {
 		const p = params as { workspaceId: string; path: string; scope?: GitDiffScope };
 		ensureWatch(p.workspaceId);
@@ -563,6 +669,102 @@ const handlers: Record<string, Handler> = {
 			filter,
 			labels,
 			limit: clampLimit(p.limit),
+		});
+	},
+	// review.* — draft comments on files/diffs → AI sessions (see reviews/SPEC.md). Reads re-anchor
+	// server-side; every mutation converges via the `review.changed` push, so handlers just delegate.
+	// Every MUTATION runs under the workspace's review lock, sends included: a send's check→mark
+	// straddles an await, and a delete/close landing in that gap sends the agent a package for comments
+	// no open review contains (see `reviewLock`). The read stays unlocked — it is atomic on its own and
+	// hydration must not queue behind a send.
+	"review.get": (params) => {
+		const p = params as { workspaceId: string };
+		ensureWatch(p.workspaceId);
+		return getReviewSnapshot(p.workspaceId);
+	},
+	"review.commentAdd": (params) => {
+		const p = params as {
+			workspaceId: string;
+			kind: ReviewCommentKind;
+			anchor: ReviewAnchor | null;
+			body: string;
+			scope?: GitDiffScope;
+		};
+		return withReviewLock(p.workspaceId, async () => addComment(p));
+	},
+	"review.commentUpdate": (params) => {
+		const p = params as {
+			workspaceId: string;
+			id: string;
+			body?: string;
+			status?: ReviewCommentStatus;
+		};
+		return withReviewLock(p.workspaceId, async () => updateComment(p));
+	},
+	"review.commentDelete": (params) => {
+		const p = params as { workspaceId: string; id: string };
+		return withReviewLock(p.workspaceId, async () => {
+			deleteComment(p.workspaceId, p.id);
+			return { ok: true } as const;
+		});
+	},
+	"review.fileDone": (params) => {
+		const p = params as { workspaceId: string; path: string };
+		return withReviewLock(p.workspaceId, async () => {
+			markFileDone(p.workspaceId, p.path);
+			return { ok: true } as const;
+		});
+	},
+	"review.close": (params) => {
+		const p = params as { workspaceId: string };
+		return withReviewLock(p.workspaceId, async () => {
+			closeReview(p.workspaceId);
+			return { ok: true } as const;
+		});
+	},
+	// Send ONE comment — into its FILE's review chat (created on the file's first send, followed up
+	// after). Serialized per workspace: check-and-mark straddles an await, so a concurrent send would
+	// double-spawn and a concurrent delete/close would strand the package (see `reviewLock`).
+	"review.sendComment": (params) => {
+		const p = params as {
+			workspaceId: string;
+			id: string;
+			model?: WireModel;
+			thinkingLevel?: ThinkingLevel;
+			sessionId?: string;
+		};
+		return withReviewLock(p.workspaceId, () =>
+			sendToFileChat(p.workspaceId, sendableComments(p.workspaceId, [p.id]), p),
+		);
+	},
+	// Send all/selected drafts as one batch, grouped by review key (file path, or the review-level
+	// bucket): each group lands in its own chat. **Every session it touched comes back**, in group order
+	// — a batch spanning two files starts two chats, and returning only the first left the user with a
+	// chat they never saw for comments already marked sent. (The Send-review button is per-file, so a
+	// multi-group batch is a wire-only case today.) Serialized per workspace like `review.sendComment`:
+	// without it two concurrent "Send review" clicks both read the file's session as unset and each
+	// create their own.
+	"review.sendBatch": (params) => {
+		const p = params as {
+			workspaceId: string;
+			commentIds?: string[];
+			model?: WireModel;
+			thinkingLevel?: ThinkingLevel;
+			sessionId?: string;
+		};
+		return withReviewLock(p.workspaceId, async () => {
+			const comments = sendableComments(p.workspaceId, p.commentIds);
+			const groups = new Map<string, typeof comments>();
+			for (const comment of comments) {
+				const key = reviewSessionKey(comment);
+				groups.set(key, [...(groups.get(key) ?? []), comment]);
+			}
+			const sessions: ReviewSendResult[] = [];
+			for (const group of groups.values()) {
+				sessions.push(await sendToFileChat(p.workspaceId, group, p));
+			}
+			if (sessions.length === 0) throw new Error("No draft comments to send.");
+			return { sessions };
 		});
 	},
 	// Prompt-template CRUD: list/read/write/delete pi's global + project-scoped templates. The

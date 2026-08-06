@@ -162,6 +162,24 @@ of the host.
   so the jump affordance lives there instead; `messageIndex` anchors jump-to-message into
   `session.getMessages` order, `anchorText` makes the anchor drift-tolerant), and
   **`HistorySearchResult`** (the prompts + full-text messages sections, with totals and indexing status);
+  the **review DTOs** — **`Review`** (one open review per workspace; `baseSha` — the reviewed diff's
+  ORIGINAL side (the branch range's fork point, what that diff actually displays — never the target's
+  tip, which can carry upstream commits the review never showed) pinned to a **full commit oid at
+  creation**, immutable for the review's life — plus **`fileSessions`**, key → that
+  key's review chat: one chat per file, pinned on first send, the **empty key** being the anchorless
+  whole-change-set bucket, pinned the same way so a second overall remark continues one discussion —
+  and **`doneFiles`**, same keys: files whose review the user marked finished, so a fully-resolved
+  file leaves the list only on their say-so), **`ReviewComment`** (`kind`
+  inline/diff/file/review; `status` draft/sent/resolved/
+  dismissed — orthogonal to **`anchorState`** anchored/moved/outdated; per-comment `sessionId` — the
+  chat it was sent into), **`ReviewAnchor`** (`path` + `side` + `contentHash` + an ordered **`ReviewSelector`**
+  fallback chain: `lineRange` / `textQuote` / `diffHunk` / `structural` — the last two are forward
+  slots V1 authors don't populate; a `side: "base"` anchor additionally carries **`baseRef`**, the ref
+  its lines and fragment were captured against, since the two diff sides are two line spaces, plus the
+  **`scope`** it was captured in — the diff identity that reopens the one surface rendering that blob),
+  **`ReviewSnapshot`** (`{ review, comments }` — the `review.get`
+  read and, with `workspaceId`, the `review.changed` push payload **`ReviewChangedPayload`** —
+  full-snapshot so replay is idempotent);
   **prompt-template DTOs** — **`TemplateScope`** (`"global"` | `"project"` — where a template lives),
   **`TemplateInfo`** (metadata only: name, optional `description`/`argumentHint`, `scope`, `filePath` —
   what `template.list` returns; deliberately body-free so a listing never ships every file's full text),
@@ -220,7 +238,23 @@ of the host.
   read side) / **`settings.update`** (merge + persist a partial `AppConfig`, returns the merged
   config) / **`history.search`** (the prompt-recall + conversation-search read; results capped,
   recency-ordered; the messages section is assistant-only — a user-role hit surfaces as a jumpable
-  `PromptHit` instead, never a separate `MessageHit`) / **`template.*`** — prompt-template CRUD
+  `PromptHit` instead, never a separate `MessageHit`) / the **`review.*` set** — **`get`** (the open
+  review + comments, lazily created; re-anchored on read) / **`commentAdd`**/**`commentUpdate`**/
+  **`commentDelete`** (authoring + manual resolve/dismiss; delete is DRAFT-only — a sent comment is a
+  record, and resolved is final: no reopen and no
+  worktree rollback on the wire; `commentAdd` takes the diff tab's
+  `scope`, which is what lets the host resolve a base-side anchor's `baseRef` — and is persisted on the
+  anchor) / **`sendComment`** (one comment → its FILE's review chat, created on the file's first send
+  then `followUp`ed) / **`sendBatch`** (all/selected drafts, grouped per key into each key's chat;
+  answers with **every** session it touched, in group order — naming only the first left the other
+  chats invisible while their comments already read as sent) — both carry **`ReviewSendResult`**: `session.create`'s shape
+  plus **`reused`**, the one fact only the host knows (was this chat followed up into, or created now?).
+  A reused chat may be one the client has never seen — a second client, or this one after a reload,
+  since review state and pi transcripts both outlive the host — so it must be HYDRATED, not opened as
+  new; opening it as new shows a blank conversation for comments already marked sent / **`fileDone`**
+  (mark a fully-resolved file's review finished; rejected while anything is unresolved — a new
+  comment re-opens the file) / **`close`** — plus
+  **`template.*`** — prompt-template CRUD
   (**`template.list`**, **`template.get`**
   — `scope` optional, project wins over global, **`template.save`**, **`template.delete`**) — all
   read/write pi's prompt dirs (global + project), so templates stay CLI-portable,
@@ -241,7 +275,10 @@ of the host.
   publisher (never a per-client optimistic mutation). `created`/`updated` carry the **full persisted
   `Workspace` snapshot** (idempotent under the transport's last-value replay, so e.g. the auto-rename's
   naive-then-agentic pair merges by `id` — never a delta); `removed` carries a **`WorkspaceRemoved`** id
-  pair (`{ projectId, id }` — the record is already gone) / **`workspace.fsChanged`** — the worktree
+  pair (`{ projectId, id }` — the record is already gone) / **`review.changed`** — a workspace's review
+  state changed (emitted by the server's `reviews` publisher on every mutation — UI edits, agent
+  `resolve_comment` calls, re-anchoring — so all clients converge, same pattern as the trio) /
+  **`workspace.fsChanged`** — the worktree
   change-notifier push (**`WorkspaceFsChangedPayload`**: `{ workspaceId, paths, truncated }`,
   worktree-relative deduped paths, capped — `truncated` = treat as wildcard); an **invalidation nudge,
   not data**: clients re-read via the existing read methods, so a duplicate/replayed frame is harmless.

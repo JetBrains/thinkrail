@@ -18,6 +18,11 @@ import type {
 	Project,
 	ProjectPathStatus,
 	ProviderStatusReport,
+	ReviewAnchor,
+	ReviewComment,
+	ReviewCommentKind,
+	ReviewCommentStatus,
+	ReviewSnapshot,
 	SpecGraphSnapshot,
 	Template,
 	TemplateInfo,
@@ -179,7 +184,15 @@ export interface TerminalTabsPush {
 // survive a reload, a closed browser and a different browser; attach is exclusive, and taking one over tells
 // the previous client via `terminal.detached`. Attach also returns the recorded output to repaint (`replay`),
 // which is what a revived tab shows after a host restart.
-export const PROTOCOL_VERSION = 28;
+// v29: review mode — `review.*` (draft comments anchored to files/diffs; add/edit + DRAFT-only delete;
+// manual resolve, final) with the `review.changed` full-snapshot push. A diff's ORIGINAL side carries
+// its own comments (`review.commentAdd` takes the tab's `scope`, resolved and pinned onto the anchor as
+// `baseRef`). Sends land, in order of preference, in the client's last OPEN chat (the optional
+// `sessionId`), the key's pinned chat (`Review.fileSessions`, key = path or "" for anchorless remarks),
+// or a new one; both sends answer `ReviewSendResult` (`reused` → hydrate, don't open as new), and
+// `review.sendBatch` returns every session it touched. `review.fileDone` + `Review.doneFiles` keep a
+// fully-resolved file listed until the user finishes it.
+export const PROTOCOL_VERSION = 29;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -333,6 +346,17 @@ export const WS_METHODS = {
 	// `config.json`, and broadcasts `settings.changed` — the caller converges on that push, not optimism.
 	settingsUpdate: "settings.update",
 	historySearch: "history.search",
+	// Review mode: the open review + comment authoring (add / edit / resolve — comments are records,
+	// never deleted), sends (single or batch → the chat pinned for each comment's key, see
+	// `Review.fileSessions`), close.
+	reviewGet: "review.get",
+	reviewCommentAdd: "review.commentAdd",
+	reviewCommentUpdate: "review.commentUpdate",
+	reviewCommentDelete: "review.commentDelete",
+	reviewFileDone: "review.fileDone",
+	reviewSendComment: "review.sendComment",
+	reviewSendBatch: "review.sendBatch",
+	reviewClose: "review.close",
 	// Prompt-template CRUD: list/read/write/delete pi's global + project-scoped templates.
 	templateList: "template.list",
 	templateGet: "template.get",
@@ -389,6 +413,10 @@ export const WS_CHANNELS = {
 	// The server-synced app settings changed (carries the full `AppConfig`), broadcast to every client so
 	// they converge — the initiator applies on this push too, never optimistically.
 	settingsChanged: "settings.changed",
+	// A workspace's review state changed (a `ReviewChangedPayload` — the full snapshot). Emitted on every
+	// mutation: UI edits, agent `resolve_comment` calls, re-anchoring. All clients converge on it — the
+	// initiator too, never optimistically (the workspace-trio pattern).
+	reviewChanged: "review.changed",
 } as const;
 
 export type WsMethod = (typeof WS_METHODS)[keyof typeof WS_METHODS];
@@ -436,6 +464,24 @@ export function isAskUserAnswersMessage(message: unknown): message is AskUserAns
 /** Wire result for methods that return nothing meaningful — the host coerces a void handler to this. */
 export interface Ack {
 	ok: true;
+}
+
+/**
+ * What a review send returns: the chat its package went into, shaped like `session.create` plus the one
+ * fact only the host knows — whether that chat was **reused** (a file's earlier review chat, followed up
+ * into) or created by this very call.
+ *
+ * The client cannot infer it: a reused chat may be one it has never seen (a second client, or this one
+ * after a reload — review state and pi transcripts both outlive the host). Opening such a session as if
+ * it were new gives it an empty runtime, so the user lands in a blank conversation whose comments are
+ * already marked sent. On `reused`, `model`/`thinkingLevel` are placeholders (the session already runs
+ * its own) and the client must take the hydration path instead.
+ */
+export interface ReviewSendResult {
+	sessionId: string;
+	model: WireModel | null;
+	thinkingLevel: ThinkingLevel;
+	reused: boolean;
 }
 
 /** Per-method params + result. Both ends (web request, server handler) are typed off this. */
@@ -685,6 +731,66 @@ export interface WsMethodMap {
 		params: { query: string; scope: HistoryScope; limit?: number };
 		result: HistorySearchResult;
 	};
+	// The open review + its comments (created lazily on first read). The read re-anchors server-side, so
+	// anchor states are true as of this snapshot.
+	"review.get": { params: { workspaceId: string }; result: ReviewSnapshot };
+	// Add a draft comment. The client supplies the anchor's `lineRange`; the host reads the side's own
+	// content and fills `contentHash` + the drift-tolerant `textQuote` + the initial `anchorState`.
+	// `scope` is required for a `side: "base"` anchor: it names which diff the original side belongs to,
+	// so the host resolves the same ref the editor is showing and stamps it on the anchor (`baseRef`).
+	"review.commentAdd": {
+		params: {
+			workspaceId: string;
+			kind: ReviewCommentKind;
+			anchor: ReviewAnchor | null;
+			body: string;
+			scope?: GitDiffScope;
+		};
+		result: ReviewComment;
+	};
+	// Edit a draft's body, or flip status (manual resolve/dismiss — `resolvedBy: "user"`; resolved is
+	// FINAL, a reopen is rejected — a fresh remark is a fresh comment).
+	"review.commentUpdate": {
+		params: { workspaceId: string; id: string; body?: string; status?: ReviewCommentStatus };
+		result: ReviewComment;
+	};
+	// Send ONE comment into its file's review chat (created on the first send for that file; later sends
+	// `followUp` into it, and then `model`/`thinkingLevel` are ignored). The structured package is the
+	// prompt; the session carries the review tools. Returns the session like `session.create`.
+	"review.sendComment": {
+		params: {
+			workspaceId: string;
+			id: string;
+			/** The client's last open chat — the preferred landing; omitted → the key's pinned chat / new. */
+			sessionId?: string;
+			model?: WireModel;
+			thinkingLevel?: ThinkingLevel;
+		};
+		result: ReviewSendResult;
+	};
+	// Send all (or the given) draft comments as one batch, grouped per file: each file's comments go to
+	// that file's review chat (reused via `followUp` when it exists — then `model`/`thinkingLevel` are
+	// ignored). Answers with EVERY session the batch touched, in group order — a batch spanning two
+	// files starts two chats, and naming only one of them leaves the other invisible to the user while
+	// its comments already read as sent.
+	"review.sendBatch": {
+		params: {
+			workspaceId: string;
+			commentIds?: string[];
+			/** The client's last open chat — the preferred landing; omitted → each key's pinned chat / new. */
+			sessionId?: string;
+			model?: WireModel;
+			thinkingLevel?: ThinkingLevel;
+		};
+		result: { sessions: ReviewSendResult[] };
+	};
+	// Delete a DRAFT (the one deletable state; a sent comment is a record and is rejected).
+	"review.commentDelete": { params: { workspaceId: string; id: string }; result: Ack };
+	// Mark one file's review finished (`path`: the comment's file, or "" for the whole-change-set
+	// bucket). Rejected while the file still has unresolved comments; a new comment re-opens the file.
+	"review.fileDone": { params: { workspaceId: string; path: string }; result: Ack };
+	// Archive the open review (the next touch starts a fresh one).
+	"review.close": { params: { workspaceId: string }; result: Ack };
 	// List all templates (global + project-scoped). `workspaceId` needed to resolve the project dir;
 	// omitted → global templates only.
 	"template.list": {

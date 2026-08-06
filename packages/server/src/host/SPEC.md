@@ -145,6 +145,41 @@ channel fan-out, and the process-boot wrapper both launchers share.
     a failed background teardown is `console.warn`ed, never thrown into the void (nothing awaits it), like
     the auto-rename tee. **Archive keeps the branch but not the chat:** the git branch stays (code is
     recoverable), yet chat history is purged with the worktree — a deliberate scope choice, not a leak.
+- **Review state is host-composed and serialized per workspace** (`reviewLock.ts`): `review.send*` is
+  `reviews` (drafts + package) plus `agent` (session) plus `reviews` again (mark sent + link) — a
+  check-then-mark straddling an `await createSession(…)`, the review layer's only non-atomic gap.
+  **`withReviewLock` covers every review mutation the WIRE exposes, not just sends**, because two different things fall
+  into that gap: a second *send* reads the same "drafts, no session yet" and forks the review, and a
+  *mutation* invalidates the package already built — a `review.close` landing there strands the
+  package: the mark re-creates a fresh empty review and links the chat to *that*, leaving comment ids
+  the agent can never `resolve_comment`. One queue per workspace, so a mutation issued mid-send simply
+  happens after it.
+  The package prompt is fired **detached** after the mark, so the lock only ever holds session
+  creation, and a failed operation releases it rather than poisoning the queue. Deliberately unlocked:
+  `review.get` (its load → re-anchor → persist is one synchronous pass, and hydration must not queue
+  behind a send) — plus the two mutations that don't
+  arrive over the wire, `reviews.resolveCommentFromAgent` (the agent-tool seam) and `reanchorWorkspace`
+  (the fs-watch tee): both are fully synchronous and re-read the snapshot from disk before writing, and
+  neither removes a comment nor closes the review, so landing in a send's gap can't invalidate the
+  package's ids.
+- **A review send lands in the conversation already on screen, else the key's chat.** Both send
+  handlers route through `sendToFileChat`: comments are grouped by `reviews.reviewSessionKey` (the
+  anchor's path, or the review-level bucket for anchorless remarks — pinned like a file so a second
+  overall remark continues one discussion), and each group lands, in order of preference, in the
+  client's **last open chat** (the optional `sessionId` the send carries — the conversation the user
+  is already in), else the key's pinned chat (`reviews.fileReviewSession`), else a NEW chat; whatever
+  received the package becomes the key's pin (`markCommentsSent`), so the sidebar's "open the
+  discussion" always follows the comments. **`review.sendBatch` answers with every session it touched**, in group
+  order: a batch spanning two files starts two chats, and naming only the first left the other one
+  running unseen while its comments already read as sent (the client opens them all, focusing the
+  first). A linked chat that is merely **detached** is
+  treated as present: it is `agent.ensureSessionAttached`ed from the persisted transcript and followed
+  up into. Review state and pi sessions both survive a host restart, so gating on liveness alone
+  (`hasSession`) meant any review chat no client had reopened got a *second* chat and an overwritten
+  link. A new session is created only when the file never had one — or, logged as an explicit
+  recovery, when the transcript is genuinely gone from disk (there is no UI to close a review and
+  start over, so wedging it would be worse); every other re-open failure throws rather than silently
+  forking the conversation.
 - **Scratch-dir seeding on chat start:** the `session.create` handler calls `workspaces`'
   `ensureWorkspaceScratchDir` before creating the session — the Default workspace's gitignored
   `.thinkrail/context/` lands in the user's repo only when a chat actually starts there (and a

@@ -76,6 +76,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     sends image files **raw**, bypassing pi's photon/WASM resizer that the single-file binary can't bundle;
     the web UI downsizes user-attached images itself); a shared `registerSession` forwards each event tagged with its id +
     `bindExtensions({ mode:'rpc', uiContext })`; `prompt`/`steer`/`followUp` (with images) / `abort` /
+    — **both `promptSession` and `followUpSession` resolve the delivery mode against the session's
+    LIVE `isStreaming`, never the caller's belief about it**: `prompt()` throws mid-turn (so it falls
+    back to `steer`), and pi's `followUp()` only *enqueues* into a queue that a run already in flight
+    drains (so on an idle session it falls back to `prompt`, else the message parks forever — the way a
+    `review.sendBatch` into a re-attached review chat marked its comments sent to an agent that never
+    saw them) —
     `setModel` / `setThinkingLevel` / `compact` / `getSessionStats` (+ contextUsage) / `getSessionCommands` /
     `listAvailableModels` / **`clampThinkingForModel`** (pi's `clampThinkingLevel` for a `{model, level}`
     pair — `model.clampThinking`; the host owns it so the pre-session picker, `getDefaultModel`, and a live
@@ -93,7 +99,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `live`) + `getSessionMessages(sessionId, workspaceId, cwd)` (re-opens a disk session into the manager if
     not live, then returns `{ summary, messages }` — `TranscriptMessage[]`: the pi-canonical subset **plus
     `custom` messages**, which carry the `ask-user-answers` replies the questionnaire card pairs by tool
-    call id); the disk half is what survives a host **restart** — and re-attaching runs
+    call id), plus **`ensureSessionAttached(sessionId, workspaceId, cwd)`** — the same single-flighted
+    re-open with no transcript read, for a caller that only needs the session *promptable* again (the
+    review send's follow-up into an existing chat). It answers **`false` only when the id names no transcript
+    in that cwd** — the sole case a caller may recover from by starting a new chat — and **throws** on
+    every other re-open failure, so a merely-unreadable session can never be mistaken for an absent one
+    and silently forked; the disk half is what survives a host **restart** — and re-attaching runs
     **`repairDanglingToolCalls` (the `sessionRepair` sibling) BEFORE `createAgentSession` seeds its
     context**: a host death mid-tool leaves an assistant message with unpaired `toolCall`s, every provider
     rejects such a context (the chat would brick), and appending behind a live session would desync its

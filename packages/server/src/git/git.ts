@@ -279,12 +279,12 @@ export function gitStatus(workspaceId: string, scope?: GitDiffScope): GitStatus 
 }
 
 /**
- * One file's content at a ref (`git show ref:path`, byte-exact), or `""` when the path simply isn't there.
- * A path absent from a ref is the intended empty side (an added file has no original; a deleted one has no
- * modified). Any *other* failure — index-lock contention, an invalid/removed ref, repo corruption — would
- * otherwise masquerade as a whole-file add/delete, so it's logged: the broken read stays visible.
+ * One file's content at a ref (`git show ref:path`, byte-exact), or `null` when the read didn't produce
+ * one. Any failure — a path the ref simply doesn't have, index-lock contention, an invalid/removed ref,
+ * repo corruption — is logged unless it's the ordinary "not in that ref", so a broken read stays visible
+ * instead of masquerading as an empty file.
  */
-function showBlob(worktreePath: string, ref: string, path: string): string {
+export function readBlobAt(worktreePath: string, ref: string, path: string): string | null {
 	// `--end-of-options`: `<ref>:<path>` starts with a repo-controlled ref, which must never be re-parsed
 	// as a git option (see `isSafeRef`).
 	const shown = git(worktreePath, ["show", "--end-of-options", `${ref}:${path}`], { raw: true });
@@ -292,7 +292,15 @@ function showBlob(worktreePath: string, ref: string, path: string): string {
 	if (!/does not exist in|exists on disk, but not in/.test(shown.err)) {
 		console.warn(`git show ${ref}:${path} failed: ${shown.err || "unknown error"}`);
 	}
-	return "";
+	return null;
+}
+
+/**
+ * `readBlobAt` for the diff sides: a path absent from a ref is the intended EMPTY side (an added file has
+ * no original; a deleted one has no modified), so the diff degrades to add/delete style rather than failing.
+ */
+function showBlob(worktreePath: string, ref: string, path: string): string {
+	return readBlobAt(worktreePath, ref, path) ?? "";
 }
 
 /**

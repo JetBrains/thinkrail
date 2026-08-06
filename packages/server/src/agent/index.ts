@@ -12,6 +12,11 @@ export {
 } from "./extensions";
 export * from "./oneshot";
 export * from "./piRuntime";
+export {
+	RESOLVE_COMMENT_TOOL_NAME,
+	type ResolveCommentOutcome,
+	setReviewCommentHandler,
+} from "./reviewTool";
 export * from "./sessionRepair";
 export type { SkillAdmissionContext, SkillDecision, SkillFacts } from "./skillAdmission";
 export * from "./webUiContext";
