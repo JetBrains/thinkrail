@@ -680,10 +680,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				 * *inside* the border — the fill can't bleed past the rounded border, and the border stays fully
 				 * visible. Border colour: `control-border-default` at rest, `control-border-active` via
 				 * `focus-within` while the textarea is being edited (the textarea is the only focusable child) —
-				 * never an accent border. The accent focus **ring** stays on the textarea (`focus-visible`), and
-				 * this wrapper is deliberately NOT `overflow-hidden` so that ring is not clipped; the fill is
-				 * clipped by `bg-clip-padding` + `rounded`, and the slot backdrop clips itself (its own
-				 * `overflow-hidden` below), so nothing here needs to clip children. */}
+				 * never an accent border. **Composer-specific:** the active border is the *single* focus outline;
+				 * unlike other controls it carries NO accent focus ring (the textarea below has none), so the
+				 * neutral border + accent ring never double up here. The fill is clipped by `bg-clip-padding` +
+				 * `rounded` and the slot backdrop clips itself (its own `overflow-hidden` below), so this wrapper
+				 * needs no `overflow-hidden`. */}
 				<div className="relative rounded-[var(--radius-md)] border border-control-border-default bg-control-bg bg-clip-padding transition-colors focus-within:border-control-border-active">
 					{slots ? (
 						<div
@@ -794,7 +795,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 						// `relative` keeps the textarea a positioned participant so it paints ABOVE the absolute
 						// slot-highlight backdrop (its earlier DOM sibling) — otherwise a static textarea paints
 						// under the backdrop and the native caret/selection get dimmed by the active-slot tint.
-						className="relative min-h-[108px] w-full resize-none rounded-[var(--radius-md)] bg-transparent px-md py-sm tr-text-ui text-text-default outline-none placeholder:text-text-muted focus-visible:ring-2 focus-visible:ring-primary-soft"
+						className="relative min-h-[108px] w-full resize-none rounded-[var(--radius-md)] bg-transparent px-md py-sm tr-text-ui text-text-default outline-none placeholder:text-text-muted"
 					/>
 				</div>
 				<div className="flex flex-wrap items-center gap-sm">
