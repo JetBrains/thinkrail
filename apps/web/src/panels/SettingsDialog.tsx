@@ -54,7 +54,7 @@ export function SettingsDialog() {
 				<div className="flex min-h-0 flex-1 flex-col md:flex-row">
 					<nav
 						aria-label="Settings sections"
-						className="flex shrink-0 gap-xs overflow-x-auto border-border-default border-b p-sm md:w-[192px] md:flex-col md:gap-0.5 md:overflow-x-visible md:overflow-y-auto md:border-r md:border-b-0 md:bg-container-header-bg md:p-md"
+						className="flex shrink-0 gap-xs overflow-x-auto border-border-default border-b p-sm md:w-[192px] md:flex-col md:gap-0.5 md:overflow-x-visible md:overflow-y-auto md:border-r md:border-b-0 md:bg-container-elevated-bg md:p-md"
 					>
 						{SECTIONS.map(({ id, label, icon: Icon }) => {
 							const active = section === id;
