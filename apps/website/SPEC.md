@@ -104,6 +104,14 @@ settings: Pages → Source: GitHub Actions, and Pages → Custom domain: `thinkr
 identity. Canonical/OG URLs in `index.html` (and the README website link) point at
 `https://thinkrail.ai/`, never the `jetbrains.github.io/thinkrail` address (which redirects there).
 
+**The deploy fails fast rather than hanging.** `deploy-pages` only creates the Pages deployment and then
+polls it, so a stalled backend hangs the step until timeout — 10min on 2026-08-06 (`31107056870`),
+leaving `main` red and the site stale. Hence `timeout: 180000` (a healthy deploy reports `succeed` in
+~10s), `retention-days: 7` on the artifact so re-running the `deploy` job stays a valid remedy for a
+week, and `cancel-in-progress: false` so an in-flight publish finishes. Don't add an in-job retry: the
+deployment is keyed by `GITHUB_SHA` and the timeout cancels it, so a second attempt moments later only
+reads back `deployment_cancelled`. Re-deploying that SHA *later* is fine — hence the remedy above.
+
 ## Assets
 
 `public/og.png` is a capture of the site's own hero. The transcript in the `features/agent-chat.md`

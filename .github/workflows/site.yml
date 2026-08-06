@@ -13,10 +13,11 @@ permissions:
   pages: write
   id-token: write
 
-# One deploy at a time; a newer push supersedes an in-flight one.
+# One deploy at a time; a newer push supersedes a *queued* one. An in-flight deploy is never cancelled —
+# a production publish should finish. (Same setting, same reason, as GitHub's own Pages starter.)
 concurrency:
   group: site-deploy
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -38,6 +39,9 @@ jobs:
       - uses: actions/upload-pages-artifact@v4
         with:
           path: apps/website/dist
+          # The action defaults to 1 day; deploy-pages resolves the artifact by name at run time, so 7
+          # (as in ci.yml/_build.yml) keeps "re-run the deploy job" a usable remedy for a week.
+          retention-days: 7
 
   deploy:
     name: Deploy to GitHub Pages
@@ -47,5 +51,10 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      # A healthy deploy reports `succeed` in ~10s. When the Pages backend never dequeues the deployment
+      # it just sits in `deployment_queued` and the action can only keep polling — so cap the wait far
+      # below the 10min default: go red in 3min with the real error, not 10min (run 31107056870).
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
+        with:
+          timeout: 180000
