@@ -285,8 +285,7 @@ function WorkspaceRow({
 			<DiffStatBadge
 				added={stats?.added ?? 0}
 				removed={stats?.removed ?? 0}
-				muted
-				className="group-hover:hidden"
+				className="self-start group-hover:hidden"
 			/>
 			{!isDefault && (
 				<PopoverTrigger asChild>
