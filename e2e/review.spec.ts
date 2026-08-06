@@ -1,7 +1,7 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
+import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
 import { E2E_DATA_DIR } from "./fixtures/paths";
 
 // Review mode without an agent: selection-triggered commenting (floating icon → inline composer), the
@@ -510,4 +510,70 @@ test("resolved comments sink into a muted Resolved section (TODO Done style)", a
 	await page.getByTestId("review-file-done").click();
 	await expect(page.getByTestId("review-file-row")).toHaveCount(0);
 	await expect(page.getByTestId("review-empty")).toBeVisible();
+});
+
+test("a draft is server truth: a second client converges by push, and a cold reload re-hydrates it", async ({
+	page,
+	browser,
+}) => {
+	await openDiff(page);
+	await composeComment(page, "one = 1", "Persisted remark.");
+	await page.getByTestId("review-composer-save").click();
+	await expect(page.getByTestId("review-composer")).toHaveCount(0);
+
+	// A SECOND client on the same workspace: the existing draft hydrates, and a draft added by client 1
+	// AFTERWARDS arrives by `review.changed` push — no reload, no optimism, both screens agree.
+	const ctx = await browser.newContext();
+	const page2 = await ctx.newPage();
+	await page2.goto("/");
+	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await page2.getByTestId("project-item").first().click();
+	await worktreeRows(page2).first().click();
+	await page2.getByTestId("tab-review").click();
+	await expect(page2.getByTestId("review-file-row")).toContainText("script.ts");
+	await expect(page2.getByTestId("review-pending-badge")).toHaveText("1");
+	await composeComment(page, "two = 2", "Second remark.");
+	await page.getByTestId("review-composer-save").click();
+	await expect(page2.getByTestId("review-pending-badge")).toHaveText("2");
+	await ctx.close();
+
+	// A cold reload of client 1: nothing lived only in the client, the review hydrates back whole.
+	await page.reload();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await page.getByTestId("project-item").first().click();
+	await worktreeRows(page).first().click();
+	await page.getByTestId("tab-review").click();
+	await expect(page.getByTestId("review-pending-badge")).toHaveText("2");
+	await expect(page.getByTestId("review-file-row")).toContainText("2 drafts");
+});
+
+test("Done is undone by a fresh remark: the file re-lists the moment a new comment lands", async ({
+	page,
+}) => {
+	await openDiff(page);
+	await composeComment(page, "one = 1", "The only remark.");
+	await page.getByTestId("review-composer-save").click();
+	await expect(page.getByTestId("review-composer")).toHaveCount(0);
+	// Resolve it over the wire (the UI resolve needs an agent-sent comment), then finish the file.
+	const comments = await persistedComments(page);
+	await overWire(page, [
+		{ method: "review.commentUpdate", params: { id: comments[0]?.id, status: "resolved" } },
+	]);
+	await page.getByTestId("tab-review").click();
+	// All resolved → the panel sits at the files level; Done lives in the opened file's header.
+	await page.getByTestId("review-file-row").click();
+	await page.getByTestId("review-file-done").click();
+	await expect(page.getByTestId("review-empty")).toBeVisible();
+
+	// A fresh remark on the SAME file re-opens its review — Done is a state, not a tombstone.
+	// (The row click above surfaced the plain file tab; comment from the diff again.)
+	await page.getByTestId("tab-changes").click();
+	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).click();
+	await composeComment(page, "three = 3", "One more thing.");
+	await page.getByTestId("review-composer-save").click();
+	await expect(page.getByTestId("review-pending-badge")).toHaveText("1");
+	await page.getByTestId("tab-review").click();
+	await page.getByTestId("review-back").click();
+	await expect(page.getByTestId("review-file-row")).toContainText("script.ts");
+	await expect(page.getByTestId("review-file-row")).toContainText("1 draft");
 });
