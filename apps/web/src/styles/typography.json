@@ -227,12 +227,6 @@
 				"textTransform": "none",
 				"fontStyle": "normal"
 			},
-			"inline": {
-				"$ref": "code.text"
-			},
-			"block": {
-				"$ref": "code.text"
-			},
 			"document": {
 				"fontFamily": "code",
 				"fontSize": "s13",

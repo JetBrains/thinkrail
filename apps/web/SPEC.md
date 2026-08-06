@@ -138,10 +138,10 @@ The module set: `transport` / `store` / branded `shell`; `ProjectTree`; `FileTre
   class a component names is one the generator actually emits (an unknown class is dropped silently by
   Tailwind, so the element renders unstyled while the class list claims otherwise).
 - **A primitive font family may only be named for a documented third-party integration.** Monaco
-  (`panels/monacoSetup.ts`), xterm (`panels/TerminalInstance.tsx`) and mermaid
-  (`chat/tools/visualize/mermaid.ts`) configure text through JS options, so they read
-  `--tr-font-family-code` / `--tr-font-size-s11` / `--tr-line-height-default` directly — that allowlist
-  is exhaustive and lives in `styles/typographyUsage.test.ts`. Everywhere else a class is required, and
+  (`panels/monacoSetup.ts`) reads the code family, `s11`, and the default line-height; xterm
+  (`panels/TerminalInstance.tsx`) reads the code family + `s13` and owns its row height; mermaid
+  (`chat/tools/visualize/mermaid.ts`) reads the code family. These JS-option integrations are the exhaustive
+  allowlist in `styles/typographyUsage.test.ts`. Everywhere else a class is required, and
   `<pre>` / `<code>` must carry one even inside a container that has one: preflight targets those elements
   directly, and a directly-matching rule beats an inherited family. Note that the bare arbitrary value
   `font-[var(--font-mono)]` is ambiguous — Tailwind compiles it to an invalid `font-weight`, so it

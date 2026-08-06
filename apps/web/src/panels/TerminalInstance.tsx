@@ -93,8 +93,8 @@ export default function TerminalInstance({ clientId, workspaceId, visible }: Pro
 		const term = new XTerm({
 			allowProposedApi: true,
 			cursorBlink: true,
-			// Font family + size are the generated code style `code.block` (typography.json → textStyles.code):
-			// both come from the same tokens the CSS emits, so the terminal can never drift from a code block.
+			// Font family + size are the primitives behind `code.text` (typography.json → textStyles.code):
+			// both come from the same tokens the CSS emits, so the terminal can never drift from code text.
 			// Row height stays xterm's own `lineHeight` mechanism (default 1.0) — the semantic token owns the
 			// font, xterm owns line spacing, so we deliberately do not feed it a CSS line-height.
 			fontSize: Number.parseFloat(cssVar("--tr-font-size-s13") ?? "") || 13,

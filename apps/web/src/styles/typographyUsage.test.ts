@@ -1,7 +1,13 @@
 import { describe, expect, it } from "bun:test";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { loadTypography, proseRootClassName, resolveStyle } from "../../scripts/typography";
+import {
+	allStyles,
+	loadTypography,
+	proseRootClassName,
+	resolveStyle,
+	styleClassName,
+} from "../../scripts/typography";
 
 /**
  * The adoption guard: components may not re-declare typography that a generated semantic style already
@@ -35,8 +41,11 @@ function sourceFiles(dir = SRC): string[] {
 }
 const FILES = sourceFiles();
 const read = (p: string) => readFileSync(p, "utf8");
-/** Source with block comments removed — docstrings name classes to explain them, which is not a usage. */
-const code = (p: string) => read(p).replace(/\/\*[\s\S]*?\*\//g, "");
+/** Source with comments removed — explanations that name classes are not consumers. */
+const code = (p: string) =>
+	read(p)
+		.replace(/\/\*[\s\S]*?\*\//g, "")
+		.replace(/^[ \t]*\/\/.*$/gm, "");
 const rel = (p: string) => p.slice(p.indexOf("/src/") + 5);
 
 /**
@@ -123,6 +132,42 @@ describe("component usage", () => {
 			}
 		}
 		expect(offenders).toEqual([]);
+	});
+
+	it("emits no semantic style without a legitimate consumer", () => {
+		const styles = allStyles(typography);
+		const textStyles = styles.filter((style) => !style.prose);
+		const byId = new Map(textStyles.map((style) => [style.id, style]));
+		const source = FILES.map(code).join("\n");
+		const namedClasses = new Set(
+			[...source.matchAll(/(?<![-\w.])(tr-[a-z0-9]+(?:-[a-z0-9]+)*)(?![-\w])/g)].map(
+				(match) => match[1] as string,
+			),
+		);
+		const proseSystems = Object.keys(typography.proseSystems);
+		const mountedProse = new Set(
+			proseSystems.filter((system) => namedClasses.has(proseRootClassName(typography, system))),
+		);
+		expect(proseSystems.filter((system) => !mountedProse.has(system))).toEqual([]);
+
+		// Reachability roots: the body base, every mounted prose selector's target, and classes named by
+		// shipped source. Following references also keeps a canonical target live when a live alias uses it.
+		const live = new Set<string>([typography.rootStyle.$ref]);
+		for (const style of styles) {
+			if (style.prose && style.ref && mountedProse.has(style.group)) live.add(style.ref);
+			if (!style.prose && namedClasses.has(styleClassName(typography, style.group, style.name)))
+				live.add(style.id);
+		}
+		const queue = [...live];
+		for (let index = 0; index < queue.length; index++) {
+			const ref = byId.get(queue[index] as string)?.ref;
+			if (ref && !live.has(ref)) {
+				live.add(ref);
+				queue.push(ref);
+			}
+		}
+
+		expect(textStyles.filter((style) => !live.has(style.id)).map((style) => style.id)).toEqual([]);
 	});
 
 	/**

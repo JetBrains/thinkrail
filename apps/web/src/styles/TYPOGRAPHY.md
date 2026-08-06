@@ -76,11 +76,11 @@ The rules, all enforced by `typography:validate`:
 `textStyles` groups: **brand** (`wordmark`, `hero`) · **heading** (`xl`, `lg`, `md`, `sm` — the shared
 document heading scale) · **title** (`dialog`, `card`→dialog, `section`, `compact`, `entity`→body.reading)
 · **ui** (`default`, `metadata`, `eyebrow`, `labelPill`→eyebrow, `action`→title.compact,
-`emphasis`→title.compact) · **body** (`reading`) · **code** (`text` — the base code style, `inline`→text,
-`block`→text, `document`, `otp`, `textSmall` — an 11px code style for inline code in table cells).
-`proseSystems` holds one entry per markdown surface, almost entirely aliases into the above.
+`emphasis`→title.compact) · **body** (`reading`) · **code** (`text` — the base 13px code style, `document`, `otp`, `textSmall` — an 11px code style for
+inline code in table cells). `proseSystems` holds one entry per markdown surface, almost entirely aliases
+into the above. Dead aliases are not retained: prose points directly to the semantic style it uses.
 
-**20 canonical definitions + 32 aliases = 52 styles.**
+**20 canonical definitions + 30 aliases = 50 styles.**
 
 One prose rule is deliberately *not* a semantic style: `<strong>` / `<b>` gets **weight only**
 (`--tr-font-weight-medium`), emitted by the generator into each prose system. A complete style there
@@ -118,7 +118,7 @@ The generator derives one class per semantic style, mechanically:
 | `ui.default` · `ui.metadata` | `.tr-text-ui` · `.tr-text-metadata` |
 | `ui.eyebrow` · `ui.labelPill` · `ui.action` · `ui.emphasis` | `.tr-text-eyebrow` · `.tr-text-label-pill` · `.tr-text-action` · `.tr-text-emphasis` |
 | `body.reading` | `.tr-text-reading` |
-| `code.text` · `code.inline` · `code.block` · `code.document` · `code.otp` | `.tr-code-text` · `.tr-code-inline` · `.tr-code-block` · `.tr-code-document` · `.tr-code-otp` |
+| `code.text` · `code.document` · `code.otp` · `code.textSmall` | `.tr-code-text` · `.tr-code-document` · `.tr-code-otp` · `.tr-code-text-small` |
 | `proseSystems.<id>.*` | `.tr-prose-<id>` + one element selector each |
 
 Primitive tokens are also emitted as custom properties — `--tr-font-family-code`,
@@ -235,7 +235,9 @@ those are proportional. Validation enforces this: a monospace family on a non-co
   prose h1–h6 and table headers.
 - **800** — brand only.
 
-Disabled = `opacity-50`, no token.
+Disabled control colors come from `control-disabled-bg` / `control-disabled-text`; disabled non-control
+text uses `text-disabled`. Typography does not encode disabled state, and controls do not use opacity to
+simulate it.
 
 ## Permitted exceptions
 
@@ -245,7 +247,7 @@ The allowlist is deliberately tiny, and each entry is enforced by name in
 | Surface | Why it cannot use a semantic class |
 |---|---|
 | `panels/monacoSetup.ts` | Monaco takes `fontFamily` / `fontSize` / `lineHeight` as JS options — it reads `--tr-font-family-code`, `--tr-font-size-s11`, `--tr-line-height-default`, so it cannot drift from a code block |
-| `panels/TerminalInstance.tsx` | xterm, same reason — it reads `--tr-font-family-code` + `--tr-font-size-s13` (the family + size behind `code.block`), and owns row height through its own `lineHeight` option rather than a CSS line-height |
+| `panels/TerminalInstance.tsx` | xterm, same reason — it reads `--tr-font-family-code` + `--tr-font-size-s13` (the primitives behind `code.text`), and owns row height through its own `lineHeight` option rather than a CSS line-height |
 | `chat/tools/visualize/mermaid.ts` | mermaid's theme config takes a family string (`--tr-font-family-code`) |
 | `index.css`, `styles/tokens.css`, `styles/global.css` | the mapping layers themselves |
 

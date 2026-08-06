@@ -10,7 +10,7 @@ import { join } from "node:path";
  * undetected (tool cards, keycaps, the header branch line, the brand wordmark).
  *
  * Components must not name a family at all: they use a generated semantic class (`tr-code-text`,
- * `tr-code-inline`, …). Where a family string is unavoidable — the mapping layers and the Monaco/xterm/
+ * `tr-code-document`, …). Where a family string is unavoidable — the mapping layers and the Monaco/xterm/
  * mermaid integrations — the working form is `font-(family-name:--…)` or the `--tr-font-family-*` token.
  */
 const SRC = new URL("..", import.meta.url).pathname;

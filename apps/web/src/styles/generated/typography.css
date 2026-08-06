@@ -243,24 +243,6 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-code-inline {
-	font-family: var(--tr-font-family-code);
-	font-size: var(--tr-font-size-s13);
-	font-weight: var(--tr-font-weight-regular);
-	line-height: var(--tr-line-height-relaxed);
-	letter-spacing: var(--tr-letter-spacing-normal);
-	text-transform: none;
-	font-style: normal;
-}
-.tr-code-block {
-	font-family: var(--tr-font-family-code);
-	font-size: var(--tr-font-size-s13);
-	font-weight: var(--tr-font-weight-regular);
-	line-height: var(--tr-line-height-relaxed);
-	letter-spacing: var(--tr-letter-spacing-normal);
-	text-transform: none;
-	font-style: normal;
-}
 .tr-code-document {
 	font-family: var(--tr-font-family-code);
 	font-size: var(--tr-font-size-s13);
