@@ -363,7 +363,8 @@ export default function ChatView({
 	};
 
 	const onSubmit = (text: string, images: ImageContent[], behavior: SubmitBehavior) => {
-		if (text) useAppStore.getState().appendUserMessage(sessionId, text);
+		if (text || images.length > 0)
+			useAppStore.getState().appendUserMessage(sessionId, text, images);
 		const params = { sessionId, text, ...(images.length > 0 ? { images } : {}) };
 		const method =
 			behavior === "steer"

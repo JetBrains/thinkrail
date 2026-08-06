@@ -330,7 +330,9 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `AgentSession.prompt()` substitutes args into `expandedText` before persisting the `role: "user"`
   message, so a `session.getMessages` re-fetch (a reload, or reopening from history) shows the expanded
   text. The one nuance: the web client's own immediate bubble is an **optimistic echo**
-  (`ChatView.onSubmit` → `appendUserMessage`, store-only, appended *before* the transport call resolves) —
+  (`ChatView.onSubmit` → `appendUserMessage`, store-only, appended *before* the transport call resolves;
+attached images ride along as content blocks so the bubble shows them — `UserTurn` renders image blocks
+as inline thumbnails above the text, for the echo and hydrated messages alike) —
   it shows exactly what was typed (the raw command) until a re-fetch replaces it with pi's real persisted
   record. **The `/` menu merge**
   (`ChatView`): pi's `commands` snapshot (`session.getCommands`, frozen at session-create time) minus its

@@ -110,6 +110,20 @@ export function ChatTurnView({
 	}
 }
 
+/** Image blocks keyed for React — content tail + a duplicate counter (blocks carry no ids). */
+function userImages(content: UserMessage["content"]) {
+	if (typeof content === "string") return [];
+	const seen = new Map<string, number>();
+	return content
+		.filter((c) => c.type === "image")
+		.map((img) => {
+			const tail = img.data.slice(-24);
+			const n = seen.get(tail) ?? 0;
+			seen.set(tail, n + 1);
+			return { key: `${tail}-${n}`, img };
+		});
+}
+
 const USER_BUBBLE =
 	"max-w-[85%] whitespace-pre-wrap rounded-[var(--radius-lg)] border border-bubble-user-border bg-clip-padding bg-bubble-user-bg px-md py-sm tr-text-reading text-text-muted";
 
@@ -122,6 +136,7 @@ const USER_BUBBLE =
  * chat unfolds the same way; the folds survive virtualization via the shared cache. */
 function UserTurn({ id, message }: { id: string; message: UserMessage }) {
 	const text = userText(message.content);
+	const images = userImages(message.content);
 	const skill = parseSkillInvocation(text);
 	if (skill) {
 		return (
@@ -142,6 +157,18 @@ function UserTurn({ id, message }: { id: string; message: UserMessage }) {
 	return (
 		<div data-testid="chat-message" data-role="user" className="flex justify-end">
 			<div className={USER_BUBBLE}>
+				{images.length > 0 ? (
+					<div className="flex flex-wrap gap-xs pb-xs" data-testid="chat-message-images">
+						{images.map(({ key, img }) => (
+							<img
+								key={key}
+								src={`data:${img.mimeType};base64,${img.data}`}
+								alt="attached"
+								className="max-h-40 max-w-full rounded-[var(--radius-sm)] border border-border-default"
+							/>
+						))}
+					</div>
+				) : null}
 				{review ? (
 					<div data-testid="review-package-card" className="whitespace-normal">
 						<span data-testid="review-package-summary" className="block text-text-default">

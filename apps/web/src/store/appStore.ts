@@ -3,6 +3,7 @@ import type {
 	AskUserQuestionResult,
 	ExtUiRequest,
 	GitDiffScope,
+	ImageContent,
 	LayoutChangedPayload,
 	LayoutSettings,
 	LayoutToolId,
@@ -1124,7 +1125,7 @@ interface AppState {
 		syncedTick?: number,
 		options?: LayoutOpenOptions,
 	) => void;
-	appendUserMessage: (sessionId: string, text: string) => void;
+	appendUserMessage: (sessionId: string, text: string, images?: ImageContent[]) => void;
 	/**
 	 * Surface a failed send as a visible error turn. The turn-driving wire calls (`session.prompt`/`steer`/
 	 * `followUp`/`create`) can reject before any pi event streams — e.g. `prompt()` throws "no API key" /
@@ -2908,7 +2909,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 					: s.closedChatsByWorkspace,
 			};
 		}),
-	appendUserMessage: (sessionId, text) =>
+	appendUserMessage: (sessionId, text, images) =>
 		set((s) =>
 			withRuntime(s, sessionId, (rt) => ({
 				...rt,
@@ -2917,7 +2918,16 @@ export const useAppStore = create<AppState>((set, get) => ({
 					{
 						kind: "user",
 						id: crypto.randomUUID(),
-						message: { role: "user", content: text, timestamp: Date.now() },
+						message: {
+							role: "user",
+							// Mirror pi's own persisted shape: plain string when text-only, content blocks
+							// when images ride along — so the optimistic echo renders like a re-fetch would.
+							content:
+								images && images.length > 0
+									? [...(text ? [{ type: "text" as const, text }] : []), ...images]
+									: text,
+							timestamp: Date.now(),
+						},
 					},
 				],
 			})),
