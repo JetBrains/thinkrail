@@ -139,7 +139,7 @@ export function Shell() {
 					<ResizablePanel id="right" order={3} defaultSize={30} minSize={16}>
 						<ResizablePanelGroup direction="vertical" autoSaveId="thinkrail-right">
 							<ResizablePanel id="right-files" order={1} defaultSize={60} minSize={20}>
-								<div data-testid="right-panel" className="h-full min-h-0 bg-container-content-bg">
+								<div data-testid="right-panel" className="h-full min-h-0 bg-container-sidebar-bg">
 									<ErrorBoundary label="Files" resetKeys={[activeWorkspaceId]}>
 										<RightPanel />
 									</ErrorBoundary>
