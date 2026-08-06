@@ -683,7 +683,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				 * only focusable child); the textarea keeps its own `focus-visible` ring. `overflow-hidden`
 				 * still clips the backdrop's mirrored spans to the rounded shape (and the ring exactly as
 				 * before). Geometry is unchanged: the 1px border simply moved from the textarea to here. */}
-				<div className="relative overflow-hidden rounded-[var(--radius-md)] border border-control-border bg-control-bg bg-clip-padding transition-colors focus-within:border-primary">
+				<div className="relative overflow-hidden rounded-[var(--radius-md)] border border-control-border-default bg-control-bg bg-clip-padding transition-colors focus-within:border-primary">
 					{slots ? (
 						<div
 							ref={attachBackdrop}

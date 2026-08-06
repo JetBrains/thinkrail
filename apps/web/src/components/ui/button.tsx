@@ -12,7 +12,7 @@ const buttonVariants = cva(
 				destructive:
 					"bg-feedback-error text-text-on-primary hover:opacity-90 disabled:bg-control-disabled-bg disabled:text-control-disabled-text",
 				outline:
-					"border border-control-border bg-control-bg text-text-default hover:bg-control-bg-hovered disabled:bg-control-disabled-bg disabled:text-control-disabled-text",
+					"border border-control-border-default bg-control-bg text-text-default hover:bg-control-bg-hovered disabled:bg-control-disabled-bg disabled:text-control-disabled-text",
 				ghost:
 					"text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text",
 			},

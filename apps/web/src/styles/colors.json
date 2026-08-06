@@ -45,7 +45,7 @@
 		"control-bg-selected": { "from": "hover", "publish": true },
 		"control-primary-bg": { "from": "accent", "publish": true },
 		"control-primary-text": { "from": "onAccent", "publish": true },
-		"control-border": { "from": "border", "publish": true },
+		"control-border-default": { "from": "border", "publish": true },
 		"control-disabled-bg": { "from": "input", "publish": true },
 		"control-disabled-text": { "from": "disabled", "alpha": "strong", "publish": true },
 

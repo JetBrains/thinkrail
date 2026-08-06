@@ -24,7 +24,7 @@
 	--control-bg-selected: var(--hover);
 	--control-primary-bg: var(--accent);
 	--control-primary-text: var(--on-accent);
-	--control-border: var(--border);
+	--control-border-default: var(--border);
 	--control-disabled-bg: var(--input);
 	--control-disabled-text: color-mix(in srgb, var(--disabled) 60%, transparent);
 	--border-default: var(--border-strong);
@@ -88,7 +88,7 @@
 	--color-control-bg-selected: var(--control-bg-selected);
 	--color-control-primary-bg: var(--control-primary-bg);
 	--color-control-primary-text: var(--control-primary-text);
-	--color-control-border: var(--control-border);
+	--color-control-border-default: var(--control-border-default);
 	--color-control-disabled-bg: var(--control-disabled-bg);
 	--color-control-disabled-text: var(--control-disabled-text);
 	--color-border-default: var(--border-default);
