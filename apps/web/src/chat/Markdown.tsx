@@ -7,12 +7,13 @@ import { highlightCode } from "@/lib/highlighter";
  * The chat prose skin: `tr-prose-chat` (the generated markdown typography for a chat bubble — see
  * `typography.json` → `proseSystems.chat`) plus chat-bubble *spacing*, link colour, and table borders
  * (`border-muted` on every cell + `border-collapse`, so the outer frame and every row/column separator
- * are single lines; header/background/padding are otherwise unchanged). Typography is
+ * are single lines; header/background are otherwise unchanged) and cell padding (`px-sm py-xs` on every
+ * `th`/`td`, headers left-aligned). Typography is
  * never declared here; the document skin (`MarkdownPreview`) wears `tr-prose-doc`, which is the same
  * element set at a document scale.
  */
 const CHAT_PROSE =
-	"tr-prose-chat max-w-none break-words [&_a]:text-primary [&_a]:underline [&_li]:my-0.5 [&_ol]:my-sm [&_ol]:list-decimal [&_ol]:pl-lg [&_p]:my-sm [&_table]:border-collapse [&_td]:border [&_td]:border-border-muted [&_th]:border [&_th]:border-border-muted [&_ul]:my-sm [&_ul]:list-disc [&_ul]:pl-lg";
+	"tr-prose-chat max-w-none break-words [&_a]:text-primary [&_a]:underline [&_li]:my-0.5 [&_ol]:my-sm [&_ol]:list-decimal [&_ol]:pl-lg [&_p]:my-sm [&_table]:border-collapse [&_td]:border [&_td]:border-border-muted [&_td]:px-sm [&_td]:py-xs [&_th]:border [&_th]:border-border-muted [&_th]:px-sm [&_th]:py-xs [&_th]:text-left [&_ul]:my-sm [&_ul]:list-disc [&_ul]:pl-lg";
 
 /**
  * Render GFM markdown with shiki-highlighted fenced code blocks. Presentational — no app/store deps.
