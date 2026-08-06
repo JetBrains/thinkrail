@@ -676,14 +676,15 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			<div className="flex flex-col gap-sm p-sm">
 				{/* The input's border AND background live here (the textarea below is `bg-transparent` + has no
 				 * border), so the backdrop's tint spans, painted behind the textarea, show through. The 1px
-				 * border is on this wrapper rather than the textarea so `bg-clip-padding` (background-clip:
-				 * padding-box) can clip the fill to *inside* the border — the fill can't paint under or bleed
-				 * past the rounded border, and the border stays fully visible on every edge. `focus-within`
-				 * carries the focus border-colour the textarea used to (identical, since the textarea is the
-				 * only focusable child); the textarea keeps its own `focus-visible` ring. `overflow-hidden`
-				 * still clips the backdrop's mirrored spans to the rounded shape (and the ring exactly as
-				 * before). Geometry is unchanged: the 1px border simply moved from the textarea to here. */}
-				<div className="relative overflow-hidden rounded-[var(--radius-md)] border border-control-border-default bg-control-bg bg-clip-padding transition-colors focus-within:border-control-border-active focus-within:ring-2 focus-within:ring-primary-soft">
+				 * border is on this wrapper so `bg-clip-padding` (background-clip: padding-box) clips the fill to
+				 * *inside* the border — the fill can't bleed past the rounded border, and the border stays fully
+				 * visible. Border colour: `control-border-default` at rest, `control-border-active` via
+				 * `focus-within` while the textarea is being edited (the textarea is the only focusable child) —
+				 * never an accent border. The accent focus **ring** stays on the textarea (`focus-visible`), and
+				 * this wrapper is deliberately NOT `overflow-hidden` so that ring is not clipped; the fill is
+				 * clipped by `bg-clip-padding` + `rounded`, and the slot backdrop clips itself (its own
+				 * `overflow-hidden` below), so nothing here needs to clip children. */}
+				<div className="relative rounded-[var(--radius-md)] border border-control-border-default bg-control-bg bg-clip-padding transition-colors focus-within:border-control-border-active">
 					{slots ? (
 						<div
 							ref={attachBackdrop}
@@ -793,7 +794,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 						// `relative` keeps the textarea a positioned participant so it paints ABOVE the absolute
 						// slot-highlight backdrop (its earlier DOM sibling) — otherwise a static textarea paints
 						// under the backdrop and the native caret/selection get dimmed by the active-slot tint.
-						className="relative min-h-[108px] w-full resize-none rounded-[var(--radius-md)] bg-transparent px-md py-sm tr-text-ui text-text-default outline-none placeholder:text-text-muted"
+						className="relative min-h-[108px] w-full resize-none rounded-[var(--radius-md)] bg-transparent px-md py-sm tr-text-ui text-text-default outline-none placeholder:text-text-muted focus-visible:ring-2 focus-visible:ring-primary-soft"
 					/>
 				</div>
 				<div className="flex flex-wrap items-center gap-sm">
