@@ -256,7 +256,12 @@ const handlers: Record<string, Handler> = {
 	},
 	// The workspace branch's own commits — the scope menu's lazily-fetched commit list.
 	"git.listCommits": (params) => listCommits((params as { workspaceId: string }).workspaceId),
-	"terminal.create": (params) => createTerminal((params as { workspaceId: string }).workspaceId),
+	"terminal.create": (params) => {
+		// Forwarded whole rather than rebuilt: under `exactOptionalPropertyTypes`, an absent `cols` and an
+		// explicit `cols: undefined` are different types, and only the former means "use the default".
+		const p = params as { workspaceId: string; cols?: number; rows?: number };
+		return createTerminal(p.workspaceId, p);
+	},
 	"terminal.write": (params) => {
 		const p = params as { id: string; data: string };
 		writeTerminal(p.id, p.data);

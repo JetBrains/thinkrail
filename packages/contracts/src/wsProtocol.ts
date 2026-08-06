@@ -456,7 +456,13 @@ export interface WsMethodMap {
 	// Commits on the workspace's branch that its diff base doesn't have (`git log <base>..HEAD`), newest
 	// first and capped host-side — the scope menu's commit rows.
 	"git.listCommits": { params: { workspaceId: string }; result: { commits: GitCommit[] } };
-	"terminal.create": { params: { workspaceId: string }; result: { id: string } };
+	// `cols`/`rows` are the client's already-measured grid. Optional so an older client still works, but
+	// sending them matters: a PTY spawned at a default 80×24 renders its first prompt at the wrong size and
+	// then reflows when the real size arrives, which can visibly garble it.
+	"terminal.create": {
+		params: { workspaceId: string; cols?: number; rows?: number };
+		result: { id: string };
+	};
 	"terminal.write": { params: { id: string; data: string }; result: Ack };
 	"terminal.resize": { params: { id: string; cols: number; rows: number }; result: Ack };
 	"terminal.close": { params: { id: string }; result: Ack };

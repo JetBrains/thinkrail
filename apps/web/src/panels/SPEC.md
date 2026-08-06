@@ -78,7 +78,12 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   with no yes/no follow-up. The hook returns a `dialogs` node each consumer renders. **Selecting a
   project** (clicking its row — the chevron expands/collapses separately) **deselects any active
   workspace**, so the shell returns to that project's Welcome — a deliberate "project home" gesture; the
-  workspace's tabs survive in the store, so re-selecting it restores its view. Also
+  workspace's tabs survive in the store, so re-selecting it restores its view. **Terminals need more than the
+  store to survive that round trip**, since the whole workspace surface — `TerminalsPanel` included —
+  unmounts: each instance therefore **detaches** its PTY instead of closing it
+  (`detachedPtyByClientId` in `TerminalInstance`) and the next mount re-adopts the same shell, so a
+  long-running process is never silently killed by a project-home gesture. Only a *closed tab* kills its PTY.
+  The painted scrollback does not survive (a remount is a fresh xterm buffer); the process does. Also
   `FileTree`, `SpecsPanel`, `RightPanel`,
   `ChangesPanel` (the changed files under a header that says **what** is being diffed — the
   **`ChangesScopeMenu`** scope pill + the shared **`BranchPicker`** target-branch pill — plus the
