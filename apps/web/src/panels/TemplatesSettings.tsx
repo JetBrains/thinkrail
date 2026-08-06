@@ -395,7 +395,7 @@ function TemplateRow({
 							aria-label="Open as file"
 							title="Open as file"
 							onClick={openAsFile}
-							className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-container-elevated-bg hover:text-text-default"
+							className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-control-bg-hovered hover:text-text-default"
 						>
 							<FileText className="size-3.5" />
 						</button>
@@ -406,7 +406,7 @@ function TemplateRow({
 						aria-label="Edit"
 						title="Edit"
 						onClick={onEdit}
-						className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-container-elevated-bg hover:text-text-default"
+						className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-control-bg-hovered hover:text-text-default"
 					>
 						<Pencil className="size-3.5" />
 					</button>
@@ -416,7 +416,7 @@ function TemplateRow({
 							data-testid="template-delete"
 							aria-label="Delete"
 							title="Delete"
-							className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-container-elevated-bg hover:text-feedback-error"
+							className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-control-bg-hovered hover:text-feedback-error"
 						>
 							<Trash2 className="size-3.5" />
 						</button>
