@@ -10,7 +10,7 @@
 	--text-default: var(--text);
 	--text-muted: var(--muted);
 	--text-subtle: var(--hint);
-	--text-disabled: color-mix(in srgb, var(--muted) 60%, transparent);
+	--text-disabled: color-mix(in srgb, var(--disabled) 60%, transparent);
 	--text-on-primary: var(--on-accent);
 	--text-link: var(--info); /* global.css `a {}` is the only consumer; no component styles a bare link */
 	--container-workspace-bg: var(--background);

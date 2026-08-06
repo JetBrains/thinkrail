@@ -22,6 +22,7 @@
 		"text": "#ebdbb2",
 		"muted": "#aea08c",
 		"hint": "#a29588",
+		"disabled": "#aea08c",
 		"selection": "#504945",
 		"selectionForeground": null,
 		"editorSelection": "#504945",
