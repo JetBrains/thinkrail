@@ -1753,6 +1753,10 @@ html.anim .terminal.armed [data-out] {
 		transition: none;
 	}
 
+	a {
+		transition: none;
+	}
+
 	[data-mock-hint],
 	[data-mock-hint] *,
 	[data-mock-hint] .i {
