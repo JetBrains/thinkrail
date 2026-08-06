@@ -1,4 +1,4 @@
-import { readFileSync, statSync } from "node:fs";
+import { readFileSync, realpathSync, statSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
 import type {
 	BranchList,
@@ -66,14 +66,37 @@ export function resolveDefaultBranch(repoPath: string): string {
 }
 
 /**
- * The branch a checkout currently has out — `symbolic-ref --short HEAD`, which (unlike `rev-parse
- * --abbrev-ref`) also answers on an unborn HEAD (a repo with no commits yet). Detached HEAD → the
- * literal `"HEAD"`. Used for the Default workspace, whose branch is whatever the project folder has
- * checked out (it moves out-of-band — a terminal `git checkout` — unlike a worktree's pinned branch).
+ * The comparable form of a path. **Git reports symlink-resolved paths** (`--show-toplevel`, `worktree
+ * list`) while a path we were handed keeps whatever symlinks the caller wrote (macOS's `/var` →
+ * `private/var`), so comparing either side raw mismatches silently. An unreadable path degrades to
+ * `resolve` — a missing dir still compares by name instead of throwing.
+ */
+export function canonicalPath(path: string): string {
+	try {
+		return realpathSync(path);
+	} catch {
+		return resolve(path);
+	}
+}
+
+/**
+ * Fallibly read the branch a checkout currently has out. A valid detached checkout is the literal
+ * `"HEAD"`; an unreadable/non-worktree root is `null`, so callers that persist folder truth never turn an
+ * I/O failure into a fake detach. `symbolic-ref` also answers on an unborn branch.
+ */
+export function tryCurrentBranch(repoPath: string): string | null {
+	const head = git(repoPath, ["symbolic-ref", "--short", "HEAD"]);
+	if (head.ok && head.out) return head.out;
+	const topLevel = git(repoPath, ["rev-parse", "--show-toplevel"]);
+	return topLevel.ok && canonicalPath(topLevel.out) === canonicalPath(repoPath) ? "HEAD" : null;
+}
+
+/**
+ * Compatibility read for callers that already established a valid checkout. Detached (or unreadable)
+ * paths degrade to `"HEAD"`; persistence refreshes use `tryCurrentBranch` instead.
  */
 export function currentBranch(repoPath: string): string {
-	const head = git(repoPath, ["symbolic-ref", "--short", "HEAD"]);
-	return head.ok && head.out ? head.out : "HEAD";
+	return tryCurrentBranch(repoPath) ?? "HEAD";
 }
 
 /**
@@ -248,9 +271,11 @@ export function gitStatus(workspaceId: string, scope?: GitDiffScope): GitStatus 
 	}
 
 	changes.sort((a, b) => a.path.localeCompare(b.path));
-	// The Default workspace's branch is folder-truth that moves out-of-band (a terminal `git checkout`);
-	// the persisted snapshot self-heals only at list time, so the Changes header reads it live.
-	return { branch: ws.kind === "default" ? currentBranch(ws.worktreePath) : ws.branch, changes };
+	// User-owned workspaces can switch branches out-of-band; the Changes header reads folder truth live
+	// while their persisted snapshot converges through the metadata nudge/list path.
+	const branch =
+		ws.kind === "default" || ws.kind === "external" ? currentBranch(ws.worktreePath) : ws.branch;
+	return { branch, changes };
 }
 
 /**

@@ -1,2 +1,2 @@
-/** Workspaces = git worktrees on their own branch under the data dir. */
+/** Managed and explicitly attached Git worktree workspaces. */
 export * from "./workspaces";

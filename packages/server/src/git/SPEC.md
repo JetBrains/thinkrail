@@ -82,7 +82,11 @@ ref off the workspace-create critical path.
   resolves to the branch name it will become, never the literal `"HEAD"` (which would persist into a
   user-visible `baseBranch`); **`currentBranch(repoPath)`** — the branch a checkout currently has out
   (`symbolic-ref --short HEAD`, unborn-safe; detached → literal `HEAD`), consumed by the `workspaces`
-  module for the Default workspace's folder-truth `branch`; `prefetchBranch(projectId, ref)` — best-effort background
+  module for a user-owned workspace's folder-truth `branch`, with **`tryCurrentBranch`** its fallible form
+  (`null` when the path is not a readable worktree root, so a refresh never persists an I/O failure as a
+  detach); **`canonicalPath(path)`** — the symlink-resolved form any path compared against git output must
+  take (git resolves symlinks, a caller's path does not), shared with `workspaces`' worktree-identity
+  checks; `prefetchBranch(projectId, ref)` — best-effort background
   `git fetch` of a remote ref (via `gitAsync`, branch passed after `--` so a `-`-prefixed name can't be
   parsed as a git option), so a later `createWorkspace` branches off a fresh tip without the network
   round-trip on its critical path (non-`origin/` ref / offline → no-op). Its result also says whether the
@@ -96,7 +100,8 @@ ref off the workspace-create critical path.
   `{ ok }`.
 - **Public surface (barrel):** `git`, `gitAsync`, `gitStatus`, `gitDiffFile`, `listCommits`,
   `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `DiffRange`, `isSafeRef`, `assertSafeRef`,
-  `listBranches`, `resolveDefaultBranch`, `currentBranch`, `prefetchBranch`.
+  `listBranches`, `resolveDefaultBranch`, `tryCurrentBranch`, `currentBranch`, `canonicalPath`,
+  `prefetchBranch`.
 - **Allowed deps:** `persistence` (workspace + project lookup); `contracts` (`Git*`/`BranchList` types);
   `@thinkrail/shared/codedError` (naming a failure for the wire); Bun (spawn).
 - **Forbidden:** `host`; sibling features.
@@ -115,6 +120,6 @@ ref off the workspace-create critical path.
   instead of rendering an empty change set. The `workspaces` module's `diffStats` follows the same rule from
   the other end — it returns *no* stats (and logs why) rather than a fabricated `+0 −0`. A review surface that
   calls a dirty worktree clean is the worst failure this product can have.
-- `gitStatus` reports the **live** current branch for a `kind: "default"` workspace (the project
-  folder's branch moves out-of-band — a terminal `git checkout` — and the persisted snapshot self-heals
-  only at list time; the Changes header must not lag).
+- `gitStatus` reports the **live** current branch for a user-owned (`kind: "default" | "external"`)
+  workspace (its branch moves out-of-band — a terminal `git checkout` — and the persisted snapshot
+  self-heals only at list time; the Changes header must not lag).

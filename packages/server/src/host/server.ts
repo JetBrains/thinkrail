@@ -27,7 +27,7 @@ import {
 import { getConfig, setSettingsPublisher } from "../settings";
 import { closeAllTerminals, setTerminalPublisher } from "../terminal";
 import { setRepoMetaPublisher, setWatchPublisher, stopAllWatches } from "../watch";
-import { getWorkspace, refreshDefaultWorkspace, setWorkspacePublisher } from "../workspaces";
+import { getWorkspace, refreshUserOwnedWorkspace, setWorkspacePublisher } from "../workspaces";
 import {
 	isPromptCommitted,
 	isSettledTurn,
@@ -208,9 +208,9 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 	// a watched worktree — a `git switch`/`commit`/`reset` in its terminal — converges two things that a
 	// file watcher alone cannot see, because such a change can leave the working tree byte-identical and
 	// produce no `fsChanged` batch at all:
-	//   1. a **Default** workspace's folder-truth branch (rail, top bar, receipt) instead of only at the next
-	//      `workspace.list`; self-publishing (`refreshDefaultWorkspace` emits `workspace.updated` through the
-	//      lifecycle tee above), and a no-op for worktree workspaces (pinned branch);
+	//   1. a user-owned **Default/external** workspace's folder-truth branch (rail, top bar, receipt)
+	//      instead of only at the next `workspace.list`; self-publishing (`refreshUserOwnedWorkspace` emits
+	//      `workspace.updated` through the lifecycle tee above), and a no-op for managed worktrees;
 	//   2. every **git-derived read** on the clients — `git.status` and an open `uncommitted`-scope diff tab
 	//      are relative to `HEAD`, so a commit made in a terminal would otherwise keep being reported as
 	//      uncommitted until some later file edit. Emitted as a **pathless** `fsChanged` nudge (no paths, not
@@ -218,7 +218,7 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 	//      naming any file — so no `.git` path leaks to a client, and path-driven consumers (the Skills-reload
 	//      badge) correctly see nothing of interest.
 	setRepoMetaPublisher((workspaceId) => {
-		refreshDefaultWorkspace(workspaceId);
+		refreshUserOwnedWorkspace(workspaceId);
 		publishFsChanged({ workspaceId, paths: [], truncated: false });
 	});
 

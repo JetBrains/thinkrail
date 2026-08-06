@@ -11,7 +11,7 @@ import { TerminalsPanel } from "../panels/TerminalsPanel";
 import { Toaster } from "../panels/Toaster";
 import { WelcomePanel } from "../panels/WelcomePanel";
 import {
-	isDefaultWorkspace,
+	isUserOwnedWorkspace,
 	selectActiveWorkspace,
 	selectContextProject,
 	useAppStore,
@@ -78,10 +78,9 @@ export function Shell() {
 									<span data-testid="scope-branch" className="truncate">
 										{activeWorkspace.branch}
 									</span>
-									{/* The Default workspace has no isolation base — "from <base>" would promise one
-									    (and read "main · from main" on the default branch), so the spine shows only the
-									    live branch, matching the CenterTabs receipt. */}
-									{isDefaultWorkspace(activeWorkspace) ? null : (
+									{/* User-owned Default/external workspaces have no ThinkRail creation provenance,
+									    so "from <base>" would make a promise the app cannot support. */}
+									{isUserOwnedWorkspace(activeWorkspace) ? null : (
 										<span data-testid="scope-base" className="hidden shrink-0 md:inline">
 											· from {activeWorkspace.baseBranch}
 										</span>

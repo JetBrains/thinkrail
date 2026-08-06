@@ -132,16 +132,21 @@ test("project context actions stay compact and close/reopen is lossless across c
 	expect(Math.abs(menuBox.y - pointer.y)).toBeLessThan(8);
 
 	const createFromMenu = page.getByTestId("project-menu-create-workspace");
+	const openExistingFromMenu = page.getByTestId("project-menu-open-existing-worktree");
 	const closeFromMenu = page.getByTestId("project-menu-close");
 	const menuParts = projectActions.locator('[role="menuitem"], [role="separator"]');
-	await expect(menuParts).toHaveCount(3);
+	await expect(menuParts).toHaveCount(4);
 	await expect(menuParts.nth(0)).toHaveText("Create workspace");
-	await expect(menuParts.nth(1)).toHaveAttribute("role", "separator");
-	await expect(menuParts.nth(2)).toHaveText("Close project");
+	await expect(menuParts.nth(1)).toHaveText("Open existing worktree…");
+	await expect(menuParts.nth(2)).toHaveAttribute("role", "separator");
+	await expect(menuParts.nth(3)).toHaveText("Close project");
 	await expect(createFromMenu.locator("svg.lucide-plus")).toHaveCount(1);
+	await expect(openExistingFromMenu.locator("svg.lucide-folder-open")).toHaveCount(1);
 	await expect(closeFromMenu.locator("svg.lucide-x")).toHaveCount(1);
 	await page.keyboard.press("ArrowDown");
 	await expect(createFromMenu).toBeFocused();
+	await page.keyboard.press("ArrowDown");
+	await expect(openExistingFromMenu).toBeFocused();
 	await page.keyboard.press("ArrowDown");
 	await expect(closeFromMenu).toBeFocused();
 	await page.keyboard.press("Escape");

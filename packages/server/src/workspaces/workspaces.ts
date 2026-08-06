@@ -1,16 +1,23 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import type { DiffStats, Project, Workspace } from "@thinkrail/contracts";
+import { basename, dirname, join, resolve } from "node:path";
+import type {
+	DiffStats,
+	ExistingWorktreeCandidate,
+	Project,
+	Workspace,
+} from "@thinkrail/contracts";
 import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
 import {
 	assertSafeRef,
+	canonicalPath,
 	changedFileArgs,
 	currentBranch,
 	git,
 	gitAsync,
 	resolveDefaultBranch,
 	resolveDiffRange,
+	tryCurrentBranch,
 } from "../git";
 import { dataDir, loadProjects, loadWorkspaces, saveWorkspaces } from "../persistence";
 import { getProjects, listProjects } from "../projects";
@@ -94,6 +101,116 @@ function nextAutoBranch(project: Project): string {
 	return `workspace-${n}`;
 }
 
+function openProjectById(projectId: string): Project {
+	// Open projects only — stale/rogue clients cannot create or attach work behind a closed rail row.
+	const project = listProjects().find((candidate) => candidate.id === projectId);
+	if (!project) throw new Error(`Unknown project: ${projectId}`);
+	return project;
+}
+
+interface GitWorktreeEntry {
+	path: string;
+	branch?: string;
+	prunable: boolean;
+}
+
+/** Parse Git's NUL-delimited porcelain so spaces/newlines in a worktree path remain data, not syntax. */
+function gitWorktreeEntries(repoPath: string): GitWorktreeEntry[] {
+	const listed = git(repoPath, ["worktree", "list", "--porcelain", "-z"], { raw: true });
+	if (!listed.ok) throw new Error(`git worktree list failed: ${listed.err}`);
+	const entries: GitWorktreeEntry[] = [];
+	for (const record of listed.out.split("\0\0")) {
+		if (!record) continue;
+		let path: string | undefined;
+		let branch: string | undefined;
+		let prunable = false;
+		for (const field of record.split("\0")) {
+			if (field.startsWith("worktree ")) path = field.slice("worktree ".length);
+			else if (field.startsWith("branch refs/heads/")) {
+				branch = field.slice("branch refs/heads/".length);
+			} else if (field === "prunable" || field.startsWith("prunable ")) prunable = true;
+		}
+		if (path) entries.push({ path, prunable, ...(branch ? { branch } : {}) });
+	}
+	return entries;
+}
+
+/**
+ * Git-registered worktrees that are not the selected project's folder and not represented anywhere in
+ * ThinkRail. Detached rows remain visible but disabled; stale/prunable registrations are not checkouts.
+ */
+export function listExistingWorktrees(projectId: string): ExistingWorktreeCandidate[] {
+	const project = openProjectById(projectId);
+	const entries = gitWorktreeEntries(project.path);
+	const projectPath = canonicalPath(project.path);
+	// A cwd already represented by either domain identity is not attachable. Project paths matter even
+	// before their lazily-created Default workspace exists.
+	const representedPaths = new Set([
+		...loadProjects().map((knownProject) => canonicalPath(knownProject.path)),
+		...loadWorkspaces().map((workspace) => canonicalPath(workspace.worktreePath)),
+	]);
+	return entries.flatMap((entry): ExistingWorktreeCandidate[] => {
+		const path = canonicalPath(entry.path);
+		if (entry.prunable || path === projectPath || representedPaths.has(path)) return [];
+		return entry.branch
+			? [{ path: entry.path, branch: entry.branch, status: "available" }]
+			: [{ path: entry.path, status: "detached" }];
+	});
+}
+
+/**
+ * Register one existing branch-backed checkout as a user-owned workspace. Revalidates against Git's
+ * registry at the mutation door and never runs a Git mutation or writes into the checkout.
+ */
+export function openExistingWorktree(projectId: string, requestedPath: string): Workspace {
+	const project = openProjectById(projectId);
+	if (!requestedPath) throw new Error("An existing worktree path is required");
+	const wantedPath = canonicalPath(requestedPath);
+	const projectPath = canonicalPath(project.path);
+	if (wantedPath === projectPath) return ensureDefaultWorkspace(project);
+
+	const entry = gitWorktreeEntries(project.path).find(
+		(candidate) => !candidate.prunable && canonicalPath(candidate.path) === wantedPath,
+	);
+	if (!entry) throw new Error("The selected path is not a registered worktree of this project");
+	if (!entry.branch)
+		throw new Error("Detached HEAD worktrees cannot be opened; create a branch first");
+	const baseBranch = resolveDefaultBranch(project.path);
+
+	// Load only after every git subprocess: another process can update the registries while this thread is
+	// blocked. A project path owns its cwd before its lazy Default workspace has ever been materialized.
+	const projectOwner = loadProjects().find(
+		(candidate) => candidate.id !== projectId && canonicalPath(candidate.path) === wantedPath,
+	);
+	if (projectOwner)
+		throw new Error("This worktree is already open under another ThinkRail project");
+
+	// Same-project retries are idempotent; sharing one cwd across project identities is rejected.
+	const all = loadWorkspaces();
+	const existing = all.find((workspace) => canonicalPath(workspace.worktreePath) === wantedPath);
+	if (existing) {
+		if (existing.projectId === projectId) return existing;
+		throw new Error("This worktree is already open under another ThinkRail project");
+	}
+
+	const displayName =
+		toDisplayName(basename(entry.path)) ?? toDisplayName(entry.branch) ?? "Existing worktree";
+	const workspace: Workspace = {
+		id: randomUUID(),
+		projectId,
+		kind: "external",
+		name: displayName,
+		branch: entry.branch,
+		worktreePath: entry.path,
+		baseBranch,
+		renamed: true,
+	};
+	all.push(workspace);
+	saveWorkspaces(all);
+	emit({ kind: "created", workspace });
+	return workspace;
+}
+
 /**
  * The **Default workspace's** folder-truth fields, read from the project folder itself: `branch` = what it
  * has checked out, `baseBranch` = the repo's default branch. Both move out-of-band (a terminal `git
@@ -150,10 +267,7 @@ export async function createWorkspace(
 	name?: string,
 	baseRef?: string,
 ): Promise<Workspace> {
-	// `listProjects` (open only) — a closed project must reject creation even from a stale or rogue client
-	// that still names it (the rail can't offer the "+" once closed, but the request can still arrive).
-	const project = listProjects().find((p) => p.id === projectId);
-	if (!project) throw new Error(`Unknown project: ${projectId}`);
+	const project = openProjectById(projectId);
 
 	// A user-supplied name is the display name (casing/punctuation preserved); the branch is derived from
 	// it. Omitted (or unusable) → the auto `workspace-N` placeholder, where name === branch.
@@ -227,11 +341,10 @@ export async function createWorkspace(
  * (task-specs / working files). Its `.gitignore` is a lone `*` — which matches the `.gitignore`
  * itself — so the whole dir has zero git footprint yet stays scannable by the spec tools (they ignore
  * only node_modules/.git/dist/build, not .gitignore). Worktree creation seeds eagerly; the host also
- * calls this on session create, which is what seeds the **Default** workspace — merely listing or
- * entering it must never write into the user's repo, starting a chat there may.
+ * calls this on session create, which is what seeds user-owned **Default/external** workspaces — merely
+ * listing or entering one must never write into the user's checkout, starting a chat there may.
  *
- * Hardened — in the Default workspace this runs against **repository-controlled content** inside the
- * user's own repo:
+ * Hardened — in a user-owned workspace this runs against **repository-controlled content**:
  * - The workspace root must already exist: an externally-deleted worktree must fail the session loudly,
  *   not be silently resurrected as an empty non-git directory.
  * - Owned path components are walked with `lstat` (never followed) — a malicious checkout can't symlink
@@ -317,27 +430,36 @@ function ensureDefaultWorkspace(project: Project): Workspace {
 }
 
 /**
- * Re-sync one **Default workspace** record against folder-truth and publish it when it drifted — the
- * *live* half of the ensure above, off the `workspace.list` path: cheap (two `symbolic-ref`-class git
- * reads, **no** diff-stat listing) so the host can call it on `watch`'s debounced **repo-metadata nudge**
- * (a `.git` write in the worktree). A `git switch` in the Default terminal therefore converges the rail,
- * the top bar and the empty receipt in every client — including a switch that leaves the working tree
- * byte-identical — instead of leaving them on the old branch until a manual project reload.
- * Unknown id / a worktree workspace (its branch is pinned) / no drift → a no-op, no save, no emit.
+ * Re-sync one user-owned workspace from its folder truth and publish drift. Default owns both its live
+ * branch + repository-default base; external owns only its live branch (its initial review target stays
+ * stable). Cheap enough for `watch`'s debounced repo-metadata nudge and list-time convergence.
+ * Unknown id / managed workspace / unreadable external checkout / no drift → no save and no emit.
  */
-export function refreshDefaultWorkspace(workspaceId: string): void {
-	// A peek decides whether this id is even a Default (only those drift) — nothing is mutated from it.
-	const peek = loadWorkspaces().find((w) => w.id === workspaceId);
-	if (peek?.kind !== "default") return;
-	// Folder-truth, THEN the snapshot we mutate: the git reads block the JS thread and another process can
-	// rewrite workspaces.json meanwhile, so load→mutate→save stays one uninterrupted block (as above).
-	const truth = folderTruth(peek.worktreePath);
+export function refreshUserOwnedWorkspace(workspaceId: string): void {
+	const peek = loadWorkspaces().find((workspace) => workspace.id === workspaceId);
+	if (peek?.kind !== "default" && peek?.kind !== "external") return;
+	// Read folder truth before the snapshot we mutate: git blocks while another process may rewrite state.
+	// External checkout failures stay unknown — never persist them as a fake detached `HEAD`.
+	const truth =
+		peek.kind === "default"
+			? { kind: "default" as const, ...folderTruth(peek.worktreePath) }
+			: (() => {
+					const branch = tryCurrentBranch(peek.worktreePath);
+					return branch === null ? null : { kind: "external" as const, branch };
+				})();
+	if (!truth) return;
+
 	const all = loadWorkspaces();
-	const ws = all.find((w) => w.id === workspaceId);
-	if (ws?.kind !== "default") return;
-	if (!applyFolderTruth(ws, truth)) return;
+	const workspace = all.find((candidate) => candidate.id === workspaceId);
+	if (workspace?.kind !== truth.kind) return;
+	if (truth.kind === "default") {
+		if (!applyFolderTruth(workspace, truth)) return;
+	} else {
+		if (workspace.branch === truth.branch) return;
+		workspace.branch = truth.branch;
+	}
 	saveWorkspaces(all);
-	emit({ kind: "updated", workspace: ws });
+	emit({ kind: "updated", workspace });
 }
 
 /**
@@ -367,8 +489,10 @@ export function renameWorkspace(
 	const project = getProjects().find((p) => p.id === ws.projectId);
 	if (!project) throw new Error(`Unknown project: ${ws.projectId}`);
 
-	// The Default workspace's branch is the user's real branch — renaming would `git branch -m` it.
+	// User-owned branches are never ours to rename.
 	if (ws.kind === "default") throw new Error("The Default workspace cannot be renamed");
+	if (ws.kind === "external")
+		throw new Error("An existing worktree cannot be renamed by ThinkRail");
 	const displayName = toDisplayName(requestedName);
 	if (!displayName) throw new Error(`Invalid workspace name: ${requestedName}`);
 	const wanted = toBranch(displayName);
@@ -459,6 +583,13 @@ export function listWorkspaces(projectId: string): Workspace[] {
 	// rewrites workspaces.json mid-run). Unknown project → no ensure, the filter returns [] as before.
 	const project = getProjects().find((p) => p.id === projectId);
 	if (project) ensureDefaultWorkspace(project);
+	// External checkouts are user-controlled and may switch branches outside ThinkRail. Converge their
+	// persisted snapshots before calculating branch-scoped stats or returning rows.
+	for (const workspace of loadWorkspaces()) {
+		if (workspace.projectId === projectId && workspace.kind === "external") {
+			refreshUserOwnedWorkspace(workspace.id);
+		}
+	}
 	const rows = loadWorkspaces().filter((w) => w.projectId === projectId);
 	// Pin the Default workspace first (creation order would put a backfilled one last).
 	rows.sort((a, b) => (a.kind === "default" ? -1 : 0) - (b.kind === "default" ? -1 : 0));
@@ -502,9 +633,8 @@ export function forgetWorkspace(id: string): Workspace | null {
  * dir if it lingers then `prune` the stale registration so `git worktree list` never orphans it.
  */
 export function reclaimWorktree(ws: Workspace): void {
-	// Defense in depth: never reclaim the project folder itself (`git worktree remove` would refuse the
-	// main working tree, but the hardened rm-fallback below would not).
-	if (ws.kind === "default") return;
+	// User-owned checkouts are never ours to reclaim. This guard is before every Git/disk side effect.
+	if (ws.kind === "default" || ws.kind === "external") return;
 	const project = loadProjects().find((p) => p.id === ws.projectId);
 	if (!project) return;
 	// Defense in depth: never reclaim the repo's main working tree, however the record got here (a

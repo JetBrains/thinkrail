@@ -26,6 +26,16 @@ export function isDefaultWorkspace(workspace: Pick<Workspace, "kind">): boolean 
 	return workspace.kind === "default";
 }
 
+/** An explicitly attached existing worktree whose checkout stays user-owned. */
+export function isExternalWorkspace(workspace: Pick<Workspace, "kind">): boolean {
+	return workspace.kind === "external";
+}
+
+/** User-owned checkouts never carry ThinkRail-created-worktree provenance or reclaim semantics. */
+export function isUserOwnedWorkspace(workspace: Pick<Workspace, "kind">): boolean {
+	return isDefaultWorkspace(workspace) || isExternalWorkspace(workspace);
+}
+
 /** Resolve the active workspace from the project-grouped collection without duplicating it in state. */
 export function selectActiveWorkspace(state: ActiveWorkspaceState): Workspace | null {
 	return state.activeWorkspaceId ? selectWorkspaceById(state, state.activeWorkspaceId) : null;

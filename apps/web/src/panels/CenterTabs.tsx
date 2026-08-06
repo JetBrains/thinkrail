@@ -22,6 +22,7 @@ import {
 	type DocTab,
 	type EditorTab,
 	isDefaultWorkspace,
+	isExternalWorkspace,
 	selectActiveWorkspace,
 	selectContextProject,
 	selectWorkspaceTick,
@@ -298,9 +299,10 @@ export function CenterTabs() {
 		else closeTab(tab.id);
 	};
 
-	// The Default workspace is the project folder itself — its receipt must tell the truth ("runs
-	// directly in your project folder") instead of promising worktree isolation.
+	// User-owned workspaces never claim ThinkRail-created provenance. Default runs in the project folder;
+	// external is an existing checkout but keeps the normal workspace-scoped tools.
 	const isDefault = activeWorkspace != null && isDefaultWorkspace(activeWorkspace);
+	const isExternal = activeWorkspace != null && isExternalWorkspace(activeWorkspace);
 	const placeholder = (
 		<div className="flex h-full flex-col items-center justify-center gap-md px-lg text-center text-text-muted">
 			{activeWorkspace ? (
@@ -309,14 +311,14 @@ export function CenterTabs() {
 					className="flex max-w-[440px] flex-col items-center gap-xs"
 				>
 					<span className="tr-text-eyebrow text-text-muted">
-						{isDefault ? "Default workspace" : "Workspace ready"}
+						{isDefault ? "Default workspace" : isExternal ? "Existing worktree" : "Workspace ready"}
 					</span>
 					<h2 className="max-w-full truncate tr-title-entity text-text-default">
 						{isDefault ? (contextProject?.name ?? activeWorkspace.name) : activeWorkspace.name}
 					</h2>
 					<p className="flex max-w-full items-center gap-xs text-text-muted tr-text-metadata">
 						<GitBranch className="size-3.5 shrink-0" />
-						{isDefault ? (
+						{isDefault || isExternal ? (
 							<span className="truncate">on {activeWorkspace.branch}</span>
 						) : (
 							<>

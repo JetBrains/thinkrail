@@ -53,8 +53,8 @@ export function setWatchPublisher(publisher: WatchPublisher | null): void {
  * events inside the recursive root watcher (a repo root), and the non-recursive watcher on the **resolved**
  * git dir (a linked worktree's metadata lives in the parent repo, outside the root — see `resolveGitDir`).
  *
- * The host turns it into two convergences: a **Default** workspace's folder-truth branch label
- * (`refreshDefaultWorkspace`) and a pathless client invalidation, so git-derived reads (`git.status`, an
+ * The host turns it into two convergences: a user-owned **Default/external** workspace's folder-truth
+ * branch label (`refreshUserOwnedWorkspace`) and a pathless client invalidation, so git-derived reads (`git.status`, an
  * `uncommitted`-scope diff tab) re-read when a ref moves. This sink stays **pathless** on purpose: `.git`
  * internals are not worktree content, so no `.git` path ever reaches a client.
  */

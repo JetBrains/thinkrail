@@ -5,6 +5,7 @@ import type {
 	BranchList,
 	DiffStats,
 	EditorInfo,
+	ExistingWorktreeCandidate,
 	FileNode,
 	GitCommit,
 	GitDiffScope,
@@ -106,7 +107,9 @@ import type {
 // workspace's `worktreePath`, `workspace.reveal` opens the host's file manager there.
 // v24: lossless project close/reopen — Project.closed marks rail membership, server.welcome carries open
 // + recent project views, and project.updated streams full snapshots so every client converges.
-export const PROTOCOL_VERSION = 24;
+// v25: existing-worktree adoption — `Workspace.kind: "external"` marks user-owned checkouts;
+// `workspace.listExisting` discovers candidates and `workspace.openExisting` registers one in place.
+export const PROTOCOL_VERSION = 25;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -161,6 +164,8 @@ export const WS_METHODS = {
 	projectSetGroupEnabled: "project.setGroupEnabled",
 	projectSkills: "project.skills",
 	workspaceCreate: "workspace.create",
+	workspaceListExisting: "workspace.listExisting",
+	workspaceOpenExisting: "workspace.openExisting",
 	workspaceList: "workspace.list",
 	workspaceRemove: "workspace.remove",
 	workspaceDiffStats: "workspace.diffStats",
@@ -376,6 +381,14 @@ export interface WsMethodMap {
 	// omitted, the worktree branches off the repo's current HEAD (the default behavior).
 	"workspace.create": {
 		params: { projectId: string; name?: string; baseRef?: string };
+		result: Workspace;
+	};
+	"workspace.listExisting": {
+		params: { projectId: string };
+		result: ExistingWorktreeCandidate[];
+	};
+	"workspace.openExisting": {
+		params: { projectId: string; path: string };
 		result: Workspace;
 	};
 	"workspace.list": { params: { projectId: string }; result: Workspace[] };
