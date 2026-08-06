@@ -23,6 +23,7 @@
 	--tr-font-family-brand: "Geist Variable", Geist, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 
 	/* Font weights */
+	--tr-font-weight-light: 350;
 	--tr-font-weight-regular: 400;
 	--tr-font-weight-medium: 500;
 	--tr-font-weight-semibold: 600;
@@ -62,7 +63,7 @@
 	body {
 		font-family: var(--tr-font-family-interface);
 		font-size: var(--tr-font-size-s14);
-		font-weight: var(--tr-font-weight-regular);
+		font-weight: var(--tr-font-weight-light);
 		line-height: var(--tr-line-height-ui);
 		letter-spacing: var(--tr-letter-spacing-normal);
 		text-transform: none;
@@ -165,7 +166,7 @@
 .tr-title-entity {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s14);
-	font-weight: var(--tr-font-weight-regular);
+	font-weight: var(--tr-font-weight-light);
 	line-height: var(--tr-line-height-default);
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
@@ -174,7 +175,7 @@
 .tr-text-ui {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s14);
-	font-weight: var(--tr-font-weight-regular);
+	font-weight: var(--tr-font-weight-light);
 	line-height: var(--tr-line-height-ui);
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
@@ -183,7 +184,7 @@
 .tr-text-metadata {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s12);
-	font-weight: var(--tr-font-weight-regular);
+	font-weight: var(--tr-font-weight-light);
 	line-height: var(--tr-line-height-metadata);
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
@@ -228,7 +229,7 @@
 .tr-text-reading {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s14);
-	font-weight: var(--tr-font-weight-regular);
+	font-weight: var(--tr-font-weight-light);
 	line-height: var(--tr-line-height-default);
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
@@ -284,7 +285,7 @@
 .tr-prose-chat {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s14);
-	font-weight: var(--tr-font-weight-regular);
+	font-weight: var(--tr-font-weight-light);
 	line-height: var(--tr-line-height-default);
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
@@ -365,7 +366,7 @@
 .tr-prose-chat blockquote {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s14);
-	font-weight: var(--tr-font-weight-regular);
+	font-weight: var(--tr-font-weight-light);
 	line-height: var(--tr-line-height-default);
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
@@ -374,7 +375,7 @@
 .tr-prose-chat :is(ul, ol, li) {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s14);
-	font-weight: var(--tr-font-weight-regular);
+	font-weight: var(--tr-font-weight-light);
 	line-height: var(--tr-line-height-default);
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
@@ -383,7 +384,7 @@
 .tr-prose-chat :is(table, td) {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s12);
-	font-weight: var(--tr-font-weight-regular);
+	font-weight: var(--tr-font-weight-light);
 	line-height: var(--tr-line-height-metadata);
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
@@ -407,7 +408,7 @@
 .tr-prose-doc {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s14);
-	font-weight: var(--tr-font-weight-regular);
+	font-weight: var(--tr-font-weight-light);
 	line-height: var(--tr-line-height-default);
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
@@ -488,7 +489,7 @@
 .tr-prose-doc blockquote {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s14);
-	font-weight: var(--tr-font-weight-regular);
+	font-weight: var(--tr-font-weight-light);
 	line-height: var(--tr-line-height-default);
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
@@ -497,7 +498,7 @@
 .tr-prose-doc :is(ul, ol, li) {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s14);
-	font-weight: var(--tr-font-weight-regular);
+	font-weight: var(--tr-font-weight-light);
 	line-height: var(--tr-line-height-default);
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
@@ -506,7 +507,7 @@
 .tr-prose-doc :is(table, td) {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s14);
-	font-weight: var(--tr-font-weight-regular);
+	font-weight: var(--tr-font-weight-light);
 	line-height: var(--tr-line-height-default);
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;

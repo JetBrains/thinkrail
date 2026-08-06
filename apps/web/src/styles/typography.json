@@ -38,6 +38,7 @@
 		}
 	},
 	"fontWeights": {
+		"light": 350,
 		"regular": 400,
 		"medium": 500,
 		"semibold": 600,
@@ -172,7 +173,7 @@
 			"default": {
 				"fontFamily": "interface",
 				"fontSize": "s14",
-				"fontWeight": "regular",
+				"fontWeight": "light",
 				"lineHeight": "ui",
 				"letterSpacing": "normal",
 				"textTransform": "none",
@@ -181,7 +182,7 @@
 			"metadata": {
 				"fontFamily": "interface",
 				"fontSize": "s12",
-				"fontWeight": "regular",
+				"fontWeight": "light",
 				"lineHeight": "metadata",
 				"letterSpacing": "normal",
 				"textTransform": "none",
@@ -210,7 +211,7 @@
 			"reading": {
 				"fontFamily": "interface",
 				"fontSize": "s14",
-				"fontWeight": "regular",
+				"fontWeight": "light",
 				"lineHeight": "default",
 				"letterSpacing": "normal",
 				"textTransform": "none",

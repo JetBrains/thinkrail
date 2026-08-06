@@ -186,7 +186,7 @@ describe("markdown prose systems", () => {
 			h6: { fontSize: "s10", fontWeight: "medium", textTransform: "uppercase" },
 			inlineCode: { fontFamily: "code", fontSize: "s13" },
 			codeBlock: { fontFamily: "code", fontSize: "s13" },
-			tableBody: { fontSize: "s12", fontWeight: "regular" },
+			tableBody: { fontSize: "s12", fontWeight: "light" },
 			tableHeader: { fontSize: "s12", fontWeight: "semibold" },
 		};
 		for (const [name, shape] of Object.entries(expected))
