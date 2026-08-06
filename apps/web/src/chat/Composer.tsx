@@ -680,7 +680,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				 * background is clipped to the same rounded shape — with no session active this wrapper is
 				 * otherwise invisible (no border, no padding of its own), so the composer looks identical to
 				 * before this layer existed. */}
-				<div className="relative rounded-[var(--radius-md)] bg-control-bg">
+				<div className="relative overflow-hidden rounded-[var(--radius-md)] bg-control-bg">
 					{slots ? (
 						<div
 							ref={attachBackdrop}
