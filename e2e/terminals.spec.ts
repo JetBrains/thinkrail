@@ -103,3 +103,33 @@ test("the terminal's shell counts characters, not bytes", async ({ page }) => {
 	await runInTerminal(page, 'echo "CHARMAP=$(locale charmap)"');
 	await expect(term).toContainText("CHARMAP=UTF-8");
 });
+
+// Regression: `TerminalsPanel` is mounted only inside the shell's `hasActiveWorkspace` branch, so clicking a
+// project row — the deliberate "project home" gesture, which clears the active workspace — unmounted every
+// terminal of *every* workspace, and each unmount closed its PTY. Anything running in one (a dev server, a
+// watch build) was silently killed by a single click, with the tabs reappearing afterwards backed by new,
+// empty shells, so nothing looked wrong. Instances now detach their PTY and the next mount re-adopts it.
+test("a shell survives a trip to Project Home and back", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await waitTerminalReady(page);
+
+	// A shell variable is the discriminator: only *this* shell process holds it. A replacement shell echoes an
+	// empty value, which is precisely what the bug produced.
+	await runInTerminal(page, "TR_SURVIVOR=alive");
+	await runInTerminal(page, 'echo "CHECK=$TR_SURVIVOR"');
+	await expect(visibleTerminalScreen(page)).toContainText("CHECK=alive");
+
+	// Project Home tears the whole workspace surface down, terminals included.
+	await page.getByTestId("project-item").first().click();
+	await expect(page.getByTestId("terminal-panel")).toHaveCount(0);
+
+	// Back into the workspace. The remount is a fresh xterm buffer, so the old output is genuinely gone and
+	// the assertion below can only pass on newly painted output from the re-adopted shell.
+	await worktreeRows(page).nth(0).getByRole("button").first().click();
+	await waitTerminalReady(page);
+	await expect(visibleTerminalScreen(page)).not.toContainText("CHECK=alive");
+
+	await runInTerminal(page, 'echo "CHECK=$TR_SURVIVOR"');
+	await expect(visibleTerminalScreen(page)).toContainText("CHECK=alive");
+});

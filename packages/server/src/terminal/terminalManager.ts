@@ -29,8 +29,20 @@ function ptyEnv(): Record<string, string> {
 	return env;
 }
 
-/** Spawn a PTY rooted in the workspace's worktree; its output streams on the `terminal.data` channel. */
-export function createTerminal(workspaceId: string): { id: string } {
+/** The size a PTY starts at when the client didn't measure one — a plain terminal's conventional default. */
+const DEFAULT_PTY_SIZE = { cols: 80, rows: 24 } as const;
+
+/**
+ * Spawn a PTY rooted in the workspace's worktree; its output streams on the `terminal.data` channel.
+ *
+ * `size` is the client's measured grid. Honouring it at spawn time matters because the shell prints its first
+ * prompt immediately: born at the wrong size, that prompt is laid out for the wrong width and then reflowed
+ * when the real size arrives a round trip later, which can visibly garble it.
+ */
+export function createTerminal(
+	workspaceId: string,
+	size: { cols?: number; rows?: number } = {},
+): { id: string } {
 	const ws = loadWorkspaces().find((w) => w.id === workspaceId);
 	if (!ws) throw new Error(`Unknown workspace: ${workspaceId}`);
 
@@ -38,8 +50,8 @@ export function createTerminal(workspaceId: string): { id: string } {
 	const pty = spawn(shell, [], {
 		name: "xterm-256color",
 		cwd: ws.worktreePath,
-		cols: 80,
-		rows: 24,
+		cols: size.cols ?? DEFAULT_PTY_SIZE.cols,
+		rows: size.rows ?? DEFAULT_PTY_SIZE.rows,
 		env: ptyEnv(),
 	});
 

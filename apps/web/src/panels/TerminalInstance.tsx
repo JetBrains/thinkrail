@@ -7,7 +7,29 @@ import { type ITheme, Terminal as XTerm } from "@xterm/xterm";
 import { useEffect, useRef, useState } from "react";
 import "@xterm/xterm/css/xterm.css";
 import { cssColorToHex } from "@/lib";
+import { useAppStore } from "../store";
 import { getTransport } from "../transport";
+
+/**
+ * PTY ids left behind by unmounted instances, keyed by tab `clientId`.
+ *
+ * An instance unmounts for two very different reasons. Its **tab was closed** — the PTY should die. Or **the
+ * surface it lives on went away while the tab survived**: the shell only mounts `TerminalsPanel` while a
+ * workspace is active (`shell/Shell.tsx`), so every visit to Project Home unmounts every terminal of every
+ * workspace. Killing the PTY in that second case silently kills whatever was running in it — a dev server, a
+ * watch build — with no warning and no visible cause.
+ *
+ * So unmount hands the id here instead, and the next mount adopts it. Resuming needs no server round-trip at
+ * all: `terminal.data` is keyed by PTY id, so re-subscribing to the same id reconnects the stream. Module
+ * scope is the point — the registry has to outlive the component.
+ *
+ * The registry only ever holds *detached* PTYs: adopting removes the entry, and a genuinely closed tab is
+ * reaped rather than registered. A PTY orphaned by a page reload is reaped host-side when its socket drops.
+ * One entry can go stale — a workspace removed *while* its terminals are detached has no mounted instance to
+ * run the reap — but the host kills those PTYs itself on archive, and `clientId` is a fresh UUID per tab, so a
+ * stale entry can never be adopted by a later tab. It costs a dangling string until reload, nothing more.
+ */
+const detachedPtyByClientId = new Map<string, string>();
 
 function cssVar(name: string): string | undefined {
 	return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || undefined;
@@ -73,14 +95,19 @@ interface Props {
 	clientId: string;
 	workspaceId: string;
 	visible: boolean;
-	/** Sent once, right after this terminal's PTY is ready (e.g. "Open in Vim") — never replayed, since the
-	 * mount effect below only ever runs once per instance. */
+	/** Sent once, right after this terminal's PTY is *created* (e.g. "Open in Vim") — never replayed. The
+	 * mount effect can run more than once per tab (see `detachedPtyByClientId`), so this deliberately hangs
+	 * off the create branch only: re-attaching to an existing shell must not re-run the command. */
 	initialCommand?: string;
 }
 
 /**
  * One xterm terminal bound to a server PTY. Stays mounted while its tab exists (hidden when not the
  * active tab) so its buffer survives workspace/tab switches; re-fits when it becomes visible.
+ *
+ * The PTY outlives the component, not the other way round: an unmount that leaves the tab in place detaches
+ * the shell into `detachedPtyByClientId` for the next mount to adopt, so nothing running in it dies. Only a
+ * closed tab kills its PTY.
  */
 export default function TerminalInstance({
 	clientId,
@@ -137,6 +164,10 @@ export default function TerminalInstance({
 				void getTransport().request("terminal.resize", { id, cols: term.cols, rows: term.rows });
 		};
 		fitFnRef.current = applyFit;
+		// Fit once synchronously so `term.cols/rows` are the real grid by the time we ask for a PTY — a shell
+		// born at the wrong size prints its first prompt for the wrong width and then reflows. No-ops (leaving
+		// xterm's 80×24 default) if this layer isn't laid out yet, which the rAF below then corrects.
+		applyFit();
 		requestAnimationFrame(applyFit);
 
 		// Buffer output that arrives before the PTY id is known (e.g. the initial shell prompt).
@@ -173,24 +204,57 @@ export default function TerminalInstance({
 				// A font that never resolves must not break the terminal — the construction-time fit stands.
 			});
 
-		void getTransport()
-			.request("terminal.create", { workspaceId })
-			.then(({ id }) => {
-				if (disposed) {
-					void getTransport()
-						.request("terminal.close", { id })
-						.catch(() => {});
-					return;
-				}
-				serverIdRef.current = id;
-				for (const ev of early) if (ev.id === id) term.write(ev.data);
-				early.length = 0;
-				void getTransport().request("terminal.resize", { id, cols: term.cols, rows: term.rows });
-				if (initialCommand)
-					void getTransport().request("terminal.write", { id, data: `${initialCommand}\r` });
-				setReady(true);
-			})
-			.catch(() => {});
+		/**
+		 * Let go of a PTY: hand it to the registry if this tab outlived the instance, otherwise kill it. The
+		 * store is the authority on "does the tab still exist" — closing a tab removes it *before* React
+		 * unmounts the instance, so a genuine close is already absent here, while an incidental unmount
+		 * (Project Home, a workspace switch) still finds it.
+		 */
+		const releasePty = (id: string): void => {
+			const tabSurvives = useAppStore
+				.getState()
+				.terminalsByWorkspace[workspaceId]?.some((t) => t.clientId === clientId);
+			if (tabSurvives) {
+				detachedPtyByClientId.set(clientId, id);
+				return;
+			}
+			detachedPtyByClientId.delete(clientId);
+			void getTransport()
+				.request("terminal.close", { id })
+				.catch(() => {});
+		};
+
+		const detached = detachedPtyByClientId.get(clientId);
+		if (detached !== undefined) {
+			// Re-attaching to our own still-running shell. Set the id synchronously so the subscription above
+			// starts routing its output immediately (nothing can arrive in between). The scrollback is a fresh
+			// xterm buffer — the *process* survived, its painted history did not.
+			detachedPtyByClientId.delete(clientId);
+			serverIdRef.current = detached;
+			void getTransport().request("terminal.resize", {
+				id: detached,
+				cols: term.cols,
+				rows: term.rows,
+			});
+			setReady(true);
+		} else {
+			void getTransport()
+				.request("terminal.create", { workspaceId, cols: term.cols, rows: term.rows })
+				.then(({ id }) => {
+					if (disposed) {
+						releasePty(id);
+						return;
+					}
+					serverIdRef.current = id;
+					for (const ev of early) if (ev.id === id) term.write(ev.data);
+					early.length = 0;
+					void getTransport().request("terminal.resize", { id, cols: term.cols, rows: term.rows });
+					if (initialCommand)
+						void getTransport().request("terminal.write", { id, data: `${initialCommand}\r` });
+					setReady(true);
+				})
+				.catch(() => {});
+		}
 
 		const resizeObserver = new ResizeObserver(applyFit);
 		resizeObserver.observe(host);
@@ -210,10 +274,7 @@ export default function TerminalInstance({
 			onData.dispose();
 			unsubscribe();
 			const id = serverIdRef.current;
-			if (id)
-				void getTransport()
-					.request("terminal.close", { id })
-					.catch(() => {});
+			if (id) releasePty(id);
 			term.dispose();
 		};
 	}, [clientId, workspaceId]);
