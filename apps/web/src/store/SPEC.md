@@ -175,7 +175,12 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   **`noteFsChanged(payload)`** (folds a `workspace.fsChanged` push: `tick` increments per frame;
   `paths`/`truncated` are the last batch) — panels select their workspace's entry and refetch on `tick`
   change (the store holds only the signal, never fetches; `applyWorkspaceRemoved` drops a removed
-  workspace's entry). The **Skills-reload badge** rides the same tick without a separate signal:
+  workspace's entry). The **review slice** — **`reviewsByWorkspace: Record<workspaceId,
+ReviewSnapshot>`** with **`setWorkspaceReview`** (a `review.get` read landing) and
+**`applyReviewChanged`** (folds a `review.changed` push — full snapshot, idempotent; every client,
+including a mutation's initiator, converges here — no optimism); `applyWorkspaceRemoved` drops the
+entry; the pending-draft count is a selector (`selectReviewDraftCount`), never duplicated in
+components. The **Skills-reload badge** rides the same tick without a separate signal:
   `noteFsChanged` also folds **`skillChangeTickByWorkspace: Record<workspaceId, tick>`** — the tick of the
   most recent *skill-relevant* batch (a `.claude|.github|.gemini|.pi|.agents/skills` path, via
   `isSkillPath`, or a truncated wildcard), *accumulated* so a later non-skill batch never clears it — and

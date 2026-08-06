@@ -8,6 +8,8 @@ import type {
 	PiEvent,
 	Project,
 	RefreshedModels,
+	ReviewChangedPayload,
+	ReviewSnapshot,
 	SessionStats,
 	SessionSummary,
 	SlashCommandInfo,
@@ -15,14 +17,15 @@ import type {
 	TerminalTabInfo,
 	ThemeId,
 	ThinkingLevel,
+	UserMessage,
 	WireModel,
 	Workspace,
 	WorkspaceFsChangedPayload,
 } from "@thinkrail/contracts";
-import { DEFAULT_CONFIG, isAskUserAnswersMessage } from "@thinkrail/contracts";
+import { DEFAULT_CONFIG, isAskUserAnswersMessage, isControlMessage } from "@thinkrail/contracts";
 import { create } from "zustand";
 import type { LoginState } from "../auth";
-import type { HydratedRuntime } from "../chat/hydrate";
+import { type HydratedRuntime, userText } from "../chat/hydrate";
 import type { ChatTurn, ExtUiDialogRequest, ToolResultState } from "../chat/types";
 import { shallowEqualArrays } from "../lib";
 import type { ConnectionStatus } from "../transport";
@@ -132,7 +135,7 @@ export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSect
  * The right panel's views. The id lives here, not in `panels`, because the *intent* to show one is store
  * state (`rightTabRequest`) that chat raises and the panel obeys — `RightPanel` reads the union back.
  */
-export type RightPanelTab = "specs" | "files" | "changes";
+export type RightPanelTab = "specs" | "files" | "changes" | "review";
 
 /** A transient notification. `error` persists until dismissed; `success`/`info` auto-dismiss (the Toaster
  * owns the timer). `title` is optional — a bare `message` is the common case. */
@@ -303,14 +306,34 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 	switch (event.type) {
 		case "agent_start":
 			return { ...rt, isStreaming: true };
-		case "message_start":
-			// User turns are shown optimistically on send; the assistant turn is created lazily on the first
-			// message_update (from its `partial` snapshot) — here we just reserve its id. A new assistant
-			// message also finalizes the previous one (pi may not send it a terminal `done`), so its live
-			// indicator doesn't linger.
-			return event.message.role === "assistant"
-				? { ...rt, currentAssistantId: crypto.randomUUID(), turns: clearTurnStreaming(rt.turns) }
-				: rt;
+		case "message_start": {
+			// The assistant turn is created lazily on the first message_update (from its `partial`
+			// snapshot) — here we just reserve its id. A new assistant message also finalizes the previous
+			// one (pi may not send it a terminal `done`), so its live indicator doesn't linger.
+			if (event.message.role === "assistant")
+				return {
+					...rt,
+					currentAssistantId: crypto.randomUUID(),
+					turns: clearTurnStreaming(rt.turns),
+				};
+			// A USER message: composer sends append it optimistically (skip the echo — the last turn is
+			// its twin), but a HOST-fired prompt (a review send's context package) has no optimistic
+			// append — folding it here is what makes the opened review chat start with the sent message
+			// instead of a blank transcript. Control messages (pi-todos nudges) stay hidden, like in
+			// hydration.
+			if (event.message.role === "user") {
+				const message = event.message as UserMessage;
+				const text = userText(message.content);
+				if (isControlMessage(text)) return rt;
+				const last = rt.turns[rt.turns.length - 1];
+				if (last?.kind === "user" && userText(last.message.content) === text) return rt;
+				return {
+					...rt,
+					turns: [...rt.turns, { kind: "user", id: crypto.randomUUID(), message }],
+				};
+			}
+			return rt;
+		}
 		case "message_update": {
 			const ame = event.assistantMessageEvent;
 			// Streaming variants carry `partial`; the terminals carry `message` (done) / `error`.
@@ -598,6 +621,18 @@ interface AppState {
 	 */
 	specsByWorkspace: Record<string, SpecGraphNode[]>;
 	/**
+	 * Each workspace's review snapshot (the open review + its comments). Seeded by the ReviewPanel's
+	 * `review.get` read (`setWorkspaceReview`) and converged by `review.changed` pushes
+	 * (`applyReviewChanged`) — full snapshots, idempotent under replay; never an optimistic mutation.
+	 */
+	reviewsByWorkspace: Record<string, ReviewSnapshot>;
+	/**
+	 * A "focus this review comment in its file" deep link (a Review-panel row click): the pane over that
+	 * file consumes it — Monaco reveals the anchor line, the preview scrolls the in-flow card into view
+	 * — then clears it. A fresh object each call so re-clicking the same row still fires.
+	 */
+	reviewFocusRequest: { workspaceId: string; commentId: string } | null;
+	/**
 	 * The live-refresh signal, per workspace: `tick` increments on every `workspace.fsChanged` push (the
 	 * host's debounced worktree change notifier); `paths`/`truncated` are the LAST batch only. Panels
 	 * select their workspace's entry and silently refetch on `tick` change — the store holds only the
@@ -847,6 +882,14 @@ interface AppState {
 	clearRightTabRequest: () => void;
 	/** Record a workspace's fetched spec-graph snapshot (`useWorkspaceSpecs`' read lands here). */
 	setWorkspaceSpecs: (workspaceId: string, nodes: SpecGraphNode[]) => void;
+	/** Record a workspace's review snapshot (the ReviewPanel's `review.get` read lands here). */
+	setWorkspaceReview: (workspaceId: string, snapshot: ReviewSnapshot) => void;
+	/** Ask the file's pane to focus a review comment (open the tab first — the pane consumes this). */
+	requestReviewFocus: (workspaceId: string, commentId: string) => void;
+	/** Drop the focus request once a pane has acted on it (it scrolls — it must fire exactly once). */
+	clearReviewFocus: () => void;
+	/** Fold a `review.changed` push in — the same full snapshot every client converges on. */
+	applyReviewChanged: (payload: ReviewChangedPayload) => void;
 	/** Enqueue a toast; returns its id so a caller can dismiss it early. An identical live toast (same
 	 * variant/title/message — e.g. a retried failure) coalesces: no twin is added, the existing id returns.
 	 * The queue caps at `MAX_TOASTS` (oldest drop). Prefer the `toast` helper. */
@@ -949,6 +992,16 @@ function sameSpecGraph(prev: SpecGraphNode[] | undefined, next: SpecGraphNode[])
 		const candidate = next[i];
 		return candidate !== undefined && sameSpecNode(node, candidate);
 	});
+}
+
+/**
+ * Whether a re-read/push carries the same review snapshot. The ReviewPanel's read refetches on every
+ * worktree fs tick (`useWorkspaceRead`), and most ticks change no comment — keeping the previous object
+ * identity there (the `sameSpecGraph` pattern) spares every review consumer a re-render per tick. The
+ * DTOs are small plain-JSON trees, so a structural stringify compare is the honest cheap check.
+ */
+function sameReviewSnapshot(prev: ReviewSnapshot | undefined, next: ReviewSnapshot): boolean {
+	return prev !== undefined && JSON.stringify(prev) === JSON.stringify(next);
 }
 
 /** Apply an immutable update to one session's runtime; a no-op (and no new `sessions` object) if it's gone. */
@@ -1058,6 +1111,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	changesRequest: null,
 	specRequest: null,
 	specsByWorkspace: {},
+	reviewsByWorkspace: {},
+	reviewFocusRequest: null,
 	changesView: "list",
 	diffScopeByWorkspace: {},
 	chatLocationRequest: null,
@@ -1151,6 +1206,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			skillChangeTickByWorkspace: omitKey(state.skillChangeTickByWorkspace, workspaceId),
 			specsByWorkspace: omitKey(state.specsByWorkspace, workspaceId),
 			diffScopeByWorkspace: omitKey(state.diffScopeByWorkspace, workspaceId),
+			reviewsByWorkspace: omitKey(state.reviewsByWorkspace, workspaceId),
 		}));
 		if (wasActive) {
 			s.selectProject(projectId); // atomically fall back to the removed workspace's Project Home
@@ -1780,6 +1836,22 @@ export const useAppStore = create<AppState>((set, get) => ({
 				? {}
 				: { specsByWorkspace: { ...s.specsByWorkspace, [workspaceId]: nodes } },
 		),
+	requestReviewFocus: (workspaceId, commentId) =>
+		set({ reviewFocusRequest: { workspaceId, commentId } }),
+	clearReviewFocus: () => set({ reviewFocusRequest: null }),
+	setWorkspaceReview: (workspaceId, snapshot) =>
+		set((s) =>
+			sameReviewSnapshot(s.reviewsByWorkspace[workspaceId], snapshot)
+				? {}
+				: { reviewsByWorkspace: { ...s.reviewsByWorkspace, [workspaceId]: snapshot } },
+		),
+	applyReviewChanged: (payload) =>
+		set((s) => {
+			const next = { review: payload.review, comments: payload.comments };
+			return sameReviewSnapshot(s.reviewsByWorkspace[payload.workspaceId], next)
+				? {}
+				: { reviewsByWorkspace: { ...s.reviewsByWorkspace, [payload.workspaceId]: next } };
+		}),
 	pushToast: (toast) => {
 		const twin = get().toasts.find(
 			(t) => t.variant === toast.variant && t.title === toast.title && t.message === toast.message,

@@ -3,7 +3,9 @@ import { isAskUserAnswersMessage, isControlMessage } from "@thinkrail/contracts"
 import type { ChatTurn, ToolResultState } from "./types";
 
 /** The leading text of a user message (string or text blocks). */
-function userText(content: UserMessage["content"]): string {
+/** A user message's plain text (ignores image parts) — shared by hydration, the live event fold, and
+ * the transcript renderer, so "same message" means the same thing everywhere. */
+export function userText(content: UserMessage["content"]): string {
 	if (typeof content === "string") return content;
 	return content
 		.filter((c) => c.type === "text")

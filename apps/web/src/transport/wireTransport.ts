@@ -3,6 +3,7 @@ import type {
 	ExtUiRequest,
 	LoginPush,
 	Project,
+	ReviewChangedPayload,
 	ServerWelcome,
 	SessionEventPayload,
 	Workspace,
@@ -75,6 +76,13 @@ export function initTransport(): WsTransport {
 	transport.subscribe(WS_CHANNELS.workspaceRemoved, (data) => {
 		const { projectId, id } = data as WorkspaceRemoved;
 		useAppStore.getState().applyWorkspaceRemoved(projectId, id);
+	});
+
+	// A workspace's review snapshot changed (UI edit, agent resolve, re-anchor) — every client converges
+	// on the full-snapshot push, the initiator too (no optimistic mutation).
+	transport.subscribe(WS_CHANNELS.reviewChanged, (data) => {
+		const payload = data as ReviewChangedPayload;
+		useAppStore.getState().applyReviewChanged(payload);
 	});
 
 	transport.subscribe(WS_CHANNELS.workspaceFsChanged, (data) => {
