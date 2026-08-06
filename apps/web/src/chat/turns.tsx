@@ -125,7 +125,7 @@ function userImages(content: UserMessage["content"]) {
 }
 
 const USER_BUBBLE =
-	"max-w-[85%] whitespace-pre-wrap rounded-[var(--radius-lg)] border border-bubble-user-border bg-clip-padding bg-bubble-user-bg px-md py-sm tr-text-reading text-text-muted";
+	"max-w-[85%] whitespace-pre-wrap break-words rounded-[var(--radius-lg)] border border-bubble-user-border bg-clip-padding bg-bubble-user-bg px-md py-sm tr-text-reading text-text-muted";
 
 /** The user bubble. Pi's canonical expanded skill block renders as a compact, collapsed invocation with
  * any user-supplied request kept visible beneath it. A review send's context package renders as a compact

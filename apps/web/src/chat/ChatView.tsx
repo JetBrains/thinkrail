@@ -659,7 +659,9 @@ export default function ChatView({
 							data={rows}
 							context={listContext}
 							components={CHAT_LIST_COMPONENTS}
-							className="min-h-0 flex-1"
+							// `overflow-x-hidden` on the scroller: the chat only ever scrolls vertically — wide
+							// content (code, diffs) scrolls inside its own block, never the whole transcript.
+							className="min-h-0 flex-1 overflow-x-hidden"
 							// Any chat opens at the latest message (a fresh mount would otherwise land mid-transcript);
 							// the jump-to-message deep link overrides post-mount with its centered scrollToIndex.
 							initialTopMostItemIndex={{ index: Math.max(rows.length - 1, 0), align: "end" }}
