@@ -63,7 +63,7 @@ export function TreeRow({
 			// control out and the `+N −M` column stops lining up with the folder rows'.
 			className={`flex h-6 w-full min-w-0 items-center gap-xs rounded-[var(--radius-sm)] px-xs text-left tr-text-ui text-text-muted ${
 				highlight === "self"
-					? `hover:bg-control-bg-hovered ${active ? "bg-control-bg-hovered" : ""}`
+					? `hover:bg-control-bg-hovered ${active ? "bg-control-bg-selected" : ""}`
 					: ""
 			}`}
 		>

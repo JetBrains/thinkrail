@@ -207,7 +207,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 							refreshing={branchesRefreshing}
 							label="vs"
 							testid="changes-target-picker"
-							triggerClassName="flex h-6 min-w-0 max-w-[200px] items-center gap-xs rounded-[var(--radius-sm)] px-xs outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-hovered"
+							triggerClassName="flex h-6 min-w-0 max-w-[200px] items-center gap-xs rounded-[var(--radius-sm)] px-xs outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-selected"
 							onSelect={(ref) => void pointAt(ref)}
 							onRefresh={refreshBranches}
 						/>

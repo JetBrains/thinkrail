@@ -253,7 +253,7 @@ function WorkspaceRow({
 			data-active={isActive}
 			data-kind={workspace.kind ?? "worktree"}
 			className={`group flex min-h-7 items-center gap-sm rounded-[var(--radius-sm)] py-xs pr-xs pl-xl transition-colors ${
-				isActive ? "bg-control-bg-hovered" : "hover:bg-control-bg-hovered"
+				isActive ? "bg-control-bg-selected" : "hover:bg-control-bg-hovered"
 			}`}
 		>
 			<button

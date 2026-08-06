@@ -71,7 +71,7 @@ function CommandItem({ className, ...props }: React.ComponentProps<typeof Comman
 	return (
 		<CommandPrimitive.Item
 			className={cn(
-				"flex cursor-pointer items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs tr-text-ui text-text-default outline-none data-[selected=true]:bg-control-bg-hovered",
+				"flex cursor-pointer items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs tr-text-ui text-text-default outline-none data-[selected=true]:bg-control-bg-selected",
 				className,
 			)}
 			{...props}

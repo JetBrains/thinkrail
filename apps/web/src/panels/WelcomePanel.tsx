@@ -250,7 +250,7 @@ const Card = forwardRef<HTMLButtonElement, CardProps>(function Card(
 			<span
 				className={cn(
 					"flex size-9 items-center justify-center rounded-[10px]",
-					primary ? "bg-primary text-text-on-primary" : "bg-control-bg-hovered text-text-muted",
+					primary ? "bg-primary text-text-on-primary" : "bg-control-bg-selected text-text-muted",
 				)}
 			>
 				<Icon className="size-4" />

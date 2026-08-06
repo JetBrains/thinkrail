@@ -28,7 +28,7 @@ function themeVariables(): Record<string, string> {
 		primaryColor: elevated,
 		primaryTextColor: text,
 		primaryBorderColor: border,
-		secondaryColor: cssVar("--control-bg-hovered") || elevated,
+		secondaryColor: cssVar("--control-bg-selected") || elevated,
 		tertiaryColor: cssVar("--container-content-bg") || bg,
 		lineColor: cssVar("--text-muted") || border,
 		textColor: text,

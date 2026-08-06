@@ -298,7 +298,7 @@ function ArtifactChip({
 			}}
 			className={cn(
 				"flex items-center gap-xs rounded-[var(--radius-sm)] px-xs text-primary hover:bg-control-bg-hovered",
-				many && expanded && "bg-control-bg-hovered",
+				many && expanded && "bg-control-bg-selected",
 			)}
 		>
 			<Icon className="size-3 shrink-0" />

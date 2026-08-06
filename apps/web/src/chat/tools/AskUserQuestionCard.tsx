@@ -434,8 +434,8 @@ function ComposingCard({ count }: { count: number }) {
 					Preparing questions…{count > 0 ? ` (${count} ready)` : ""}
 				</div>
 				<div className="flex animate-pulse flex-col gap-xs" aria-hidden="true">
-					<div className="h-8 rounded-[var(--radius-md)] bg-control-bg-hovered" />
-					<div className="h-8 rounded-[var(--radius-md)] bg-control-bg-hovered" />
+					<div className="h-8 rounded-[var(--radius-md)] bg-control-bg-selected" />
+					<div className="h-8 rounded-[var(--radius-md)] bg-control-bg-selected" />
 				</div>
 			</div>
 		</div>

@@ -200,7 +200,7 @@ export function SkillsDialog({
 					<span className="min-w-0 flex-1 truncate text-text-muted tr-text-metadata">
 						{group.hint}
 					</span>
-					<span className="shrink-0 rounded-full bg-control-bg-hovered px-1.5 text-text-muted tr-text-metadata">
+					<span className="shrink-0 rounded-full bg-control-bg-selected px-1.5 text-text-muted tr-text-metadata">
 						{group.items.length}
 					</span>
 					<Toggle

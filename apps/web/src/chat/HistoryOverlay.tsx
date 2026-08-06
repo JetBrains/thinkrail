@@ -114,7 +114,7 @@ function PromptRow({
 			data-selected={isSelected}
 			className={`group flex w-full items-center gap-xs rounded-[var(--radius-sm)] border-l-2 py-xs pl-sm pr-xs text-left tr-text-ui ${
 				isSelected
-					? "border-l-primary bg-control-bg-hovered text-text-default"
+					? "border-l-primary bg-control-bg-selected text-text-default"
 					: "border-l-transparent text-text-muted"
 			}`}
 		>
@@ -216,7 +216,7 @@ function MessageRow({
 			disabled={unmapped}
 			className={`flex w-full flex-col gap-0.5 rounded-[var(--radius-sm)] border-l-2 px-sm py-xs text-left tr-text-ui disabled:cursor-default ${
 				isSelected
-					? "border-l-primary bg-control-bg-hovered text-text-default"
+					? "border-l-primary bg-control-bg-selected text-text-default"
 					: "border-l-transparent text-text-muted"
 			}`}
 		>
