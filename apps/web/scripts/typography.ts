@@ -194,9 +194,11 @@ export const PROSE_SELECTORS: Record<string, string> = {
 	list: " :is(ul, ol, li)",
 	tableBody: " :is(table, td)",
 	tableHeader: " th",
-	// More specific than `inlineCode` (adds the `:is(td, th)` ancestor), so inline code inside a table
-	// cell takes this style while paragraph inline code keeps `inlineCode`.
-	tableInlineCode: " :is(td, th) :not(pre) > code",
+	// Inline code that is a direct child of a table cell (`<td><code>` / `<th><code>`) — a fenced block
+	// in a cell is `<td><pre><code>`, whose `code` parent is `pre`, so it's excluded here and stays
+	// `codeBlock`. Same specificity as `inlineCode` but emitted after it (last in this map), so it wins
+	// for cell inline code while paragraph inline code keeps `inlineCode`.
+	tableInlineCode: " :is(td, th) > code",
 };
 
 /** The prose roles that render code, in every prose system. */

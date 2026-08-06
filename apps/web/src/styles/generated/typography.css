@@ -407,7 +407,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-chat :is(td, th) :not(pre) > code {
+.tr-prose-chat :is(td, th) > code {
 	font-family: var(--tr-font-family-code);
 	font-size: var(--tr-font-size-s11);
 	font-weight: var(--tr-font-weight-regular);
@@ -539,7 +539,7 @@
 	text-transform: none;
 	font-style: normal;
 }
-.tr-prose-doc :is(td, th) :not(pre) > code {
+.tr-prose-doc :is(td, th) > code {
 	font-family: var(--tr-font-family-code);
 	font-size: var(--tr-font-size-s13);
 	font-weight: var(--tr-font-weight-regular);
