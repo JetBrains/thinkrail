@@ -107,8 +107,8 @@ test("high-contrast manifests provide legible selected-text foregrounds", () => 
  * background (`colorUsage.test.ts` keeps that honest by banning palette entries at call sites).
  */
 const RESTING = ["background", "content", "sidebar", "header", "elevated", "input"] as const;
-/** Body text 4.5, muted (the quietest text tier) 4.5 — WCAG AA for their sizes. */
-const FLOORS = { text: 4.5, muted: 4.5, accent: 4.5 } as const;
+/** Body/muted text meet 4.5; the deliberately quiet hint tier remains visible at 3.0. */
+const FLOORS = { text: 4.5, muted: 4.5, hint: 3, accent: 4.5 } as const;
 const HOVER_FLOOR = 3;
 
 test("every bundled manifest meets the contrast floors on every resting surface", () => {

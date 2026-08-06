@@ -49,11 +49,11 @@ describe("typography source", () => {
 		}
 	});
 
-	it("holds 21 canonical definitions and 28 aliases (49 styles)", () => {
+	it("holds 20 canonical definitions and 29 aliases (49 styles)", () => {
 		const styles = allStyles(typography);
 		expect(styles).toHaveLength(49);
-		expect(styles.filter((s) => !s.ref)).toHaveLength(21);
-		expect(styles.filter((s) => s.ref)).toHaveLength(28);
+		expect(styles.filter((s) => !s.ref)).toHaveLength(20);
+		expect(styles.filter((s) => s.ref)).toHaveLength(29);
 		// Both markdown surfaces are almost entirely aliases — that is the point of the reference
 		// mechanism: two scales, one set of underlying definitions.
 		expect(styles.filter((s) => s.prose)).toHaveLength(26);
@@ -72,8 +72,17 @@ describe("typography source", () => {
 			s24: 24,
 			s44: 44,
 		});
-		expect(typography.lineHeights).toEqual({ compact: 1.25, code: 1.5, default: 1.6 });
+		expect(typography.lineHeights).toEqual({
+			tight: 1.2307692,
+			compact: 1.25,
+			metadata: 1.3333333,
+			ui: 1.4285714,
+			code: 1.5,
+			relaxed: 1.5384615,
+			default: 1.6,
+		});
 		expect(typography.fontWeights).toEqual({
+			light: 350,
 			regular: 400,
 			medium: 500,
 			semibold: 600,
@@ -133,12 +142,22 @@ describe("typography source", () => {
 		}
 	});
 
-	it("expresses active state through colour, not weight (no style is heavier for being active)", () => {
-		for (const name of Object.keys(typography.textStyles.ui)) {
-			if (["action", "emphasis"].includes(name)) continue; // buttons + inline emphasis are 500 by policy
-			const style = resolveStyle(typography, `ui.${name}`);
-			expect(typography.fontWeights[style.fontWeight], `ui.${name}`).toBe(400);
-		}
+	it("keeps state out of typography and pins the UI role weights", () => {
+		expect(
+			Object.fromEntries(
+				Object.keys(typography.textStyles.ui).map((name) => {
+					const style = resolveStyle(typography, `ui.${name}`);
+					return [name, typography.fontWeights[style.fontWeight]];
+				}),
+			),
+		).toEqual({
+			default: 350,
+			metadata: 350,
+			eyebrow: 500,
+			labelPill: 500,
+			action: 500,
+			emphasis: 500,
+		});
 	});
 
 	/** The shared heading scale both markdown surfaces draw from, largest to smallest, no gaps. */
@@ -169,7 +188,7 @@ describe("prose systems", () => {
 		expect(px("chat.h1")).toBe(18);
 		expect(px("chat.h2")).toBe(14);
 		expect(px("chat.h3")).toBe(12);
-		expect(px("chat.codeBlock")).toBe(11);
+		expect(px("chat.codeBlock")).toBe(13);
 	});
 
 	/**
@@ -192,9 +211,9 @@ describe("prose systems", () => {
 			fontWeight: "semibold",
 			textTransform: "uppercase",
 		});
-		// Document code tracks the bigger document body copy.
+		// Chat and document fenced code share the current 13px size; document code is never smaller.
 		expect(px("doc.codeBlock")).toBe(13);
-		expect(px("doc.codeBlock")).toBeGreaterThan(px("chat.codeBlock") as number);
+		expect(px("doc.codeBlock")).toBeGreaterThanOrEqual(px("chat.codeBlock") as number);
 	});
 
 	it("shares its canonical definitions across both surfaces", () => {
@@ -234,12 +253,7 @@ describe("references", () => {
 						Object.keys(PROSE_SELECTORS).map((id) => [
 							id,
 							{
-								$ref:
-									id === "inlineCode"
-										? "code.inline"
-										: id === "codeBlock"
-											? "code.block"
-											: "probe.base",
+								$ref: id === "inlineCode" || id === "codeBlock" ? "code.inline" : "probe.base",
 							},
 						]),
 					),
@@ -285,7 +299,15 @@ describe("references", () => {
 	});
 
 	it("rejects two canonical definitions with identical values", () => {
-		const twin = { ...resolveStyle(typography, "ui.default") };
+		const twin: Style = {
+			fontFamily: "interface",
+			fontSize: "s12",
+			fontWeight: "regular",
+			lineHeight: "default",
+			letterSpacing: "normal",
+			textTransform: "none",
+			fontStyle: "normal",
+		};
 		expect(errorsFor(doc({ twin }))).toContain(
 			"probe.twin duplicates probe.base — identical canonical definitions must use a $ref",
 		);

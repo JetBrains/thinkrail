@@ -90,10 +90,11 @@ test("entity rows, branch metadata and eyebrows are proportional", async ({ page
 		expect(type.family, `${testid} must not be mono`).not.toMatch(MONO);
 	}
 	expect(await typeOf(page.locator(".tr-text-eyebrow").first())).toMatchObject({
-		size: "10px",
-		weight: "400",
+		size: "12px",
+		weight: "500",
+		lineHeight: "18.4615px",
 		transform: "uppercase",
-		spacing: "0.5px",
+		spacing: "0.24px",
 	});
 });
 
@@ -129,7 +130,7 @@ test("the chat and document markdown surfaces each wear their own prose system",
 	// The document surface: `tr-prose-doc`, body copy at the reading size, h1 at the document scale —
 	// 24px, which is the whole point of a separate system (the chat h1 is 18px).
 	const doc = page.locator(".tr-prose-doc").first();
-	expect(await typeOf(doc)).toMatchObject({ size: "14px", weight: "400", lineHeight: "22.4px" });
+	expect(await typeOf(doc)).toMatchObject({ size: "14px", weight: "350", lineHeight: "22.4px" });
 	expect(await typeOf(doc.locator("h1").first())).toMatchObject({ size: "24px", weight: "600" });
 
 	// One system per surface: the rendered file must not also carry the bubble scale, or which of the two
@@ -205,7 +206,7 @@ test("the chat prose system stays compact", async ({ page }) => {
 		return out;
 	});
 
-	expect(measured).toEqual({ body: 14, h1: 18, h2: 14, h3: 12, pre: 11 });
+	expect(measured).toEqual({ body: 14, h1: 18, h2: 14, h3: 12, pre: 13 });
 });
 
 test("typography survives a narrow mobile viewport without clipping or overflow", async ({
@@ -343,16 +344,16 @@ test("a Tailwind utility at a call site overrides the semantic default it names"
 	expect(measured.metadataItalic.fontSize).toBe(measured.metadata.fontSize);
 	expect(measured.metadataItalic.lineHeight).toBe(measured.metadata.lineHeight);
 
-	// `leading-tight` (1.25) beats the semantic 1.6, and only the line-height moves.
-	expect(measured.uiTight.lineHeight).toBe("15px"); // 12px × 1.25
-	expect(measured.ui.lineHeight).toBe("19.2px"); // 12px × 1.6
+	// `leading-tight` (1.25) beats the semantic 20px line-height, and only line-height moves.
+	expect(measured.uiTight.lineHeight).toBe("17.5px"); // 14px × 1.25
+	expect(measured.ui.lineHeight).toBe("20px");
 	expect(measured.uiTight.fontSize).toBe(measured.ui.fontSize);
 
-	// `leading-snug` (1.375) likewise, on the 10px tier.
-	expect(measured.metadataSnug.lineHeight).toBe("13.75px"); // 10px × 1.375
+	// `leading-snug` (1.375) likewise, on the current 12px metadata tier.
+	expect(measured.metadataSnug.lineHeight).toBe("16.5px"); // 12px × 1.375
 	expect(measured.metadataSnug.fontSize).toBe(measured.metadata.fontSize);
 
-	// The document base is `rootStyle` → `ui.default` (12px), and a class beats it rather than tying.
-	expect(measured.bare.fontSize).toBe("12px");
-	expect(measured.metadata.fontSize).toBe("10px");
+	// The document base is `rootStyle` → `ui.default` (14px), and a class beats it rather than tying.
+	expect(measured.bare.fontSize).toBe("14px");
+	expect(measured.metadata.fontSize).toBe("12px");
 });

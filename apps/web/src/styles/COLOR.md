@@ -141,7 +141,8 @@ escape hatch, or a second name for a value that already has one.
 because one tier is our judgement rather than the standard's:
 
 - on every RESTING surface (`background`, `content`, `sidebar`, `header`, `elevated`, `input`) text
-  meets WCAG AA in full — 4.5 for body and the quiet `text-muted` tier;
+  meets WCAG AA in full — 4.5 for body and the `text-muted` tier;
+- the deliberately quiet `text-subtle` / `hint` tier remains visible at **3.0** on every resting surface;
 - on the transient HOVER surface the floor is **3.0**, not 4.5.
 
 WCAG has no "transient state" allowance, so the hover tier is a line we drew deliberately. These themes
