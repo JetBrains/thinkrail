@@ -405,9 +405,16 @@ export function markCommentsSent(
  * so a chat spun up solely for this failed send doesn't linger as the file's pin. A key still carrying
  * another comment's discussion keeps its pin (the reused-chat case). No-op if nothing matches (the send
  * was accepted, or a concurrent resolve/edit already moved these comments on).
+ *
+ * Reads with {@link load}, never {@link ensureSnapshot}: this runs DETACHED, after the send's lock is
+ * released, so a `review.close`/archive can land first — and rolling back a review that no longer exists
+ * must be a clean no-op, not a resurrection of an empty open review over the closed one. Fully
+ * synchronous (no `await` between read and write), so like `reanchorWorkspace` it stays correct without
+ * the lock.
  */
 export function rollbackSend(workspaceId: string, commentIds: string[], sessionId: string): void {
-	const snapshot = ensureSnapshot(workspaceId);
+	const snapshot = load(workspaceId);
+	if (snapshot?.review.status !== "open") return;
 	const ids = new Set(commentIds);
 	let changed = false;
 	for (const comment of snapshot.comments) {
