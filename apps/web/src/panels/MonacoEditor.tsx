@@ -11,14 +11,14 @@ const beforeMount: BeforeMount = (m) => defineThinkrailTheme(m);
 
 /** Read-only file viewer; language is inferred from `path`. Editing + save land with `fs.writeFile`. */
 export default function MonacoEditor({ path, content }: { path: string; content: string }) {
-	const observerRef = useRef<MutationObserver | null>(null);
+	const stopThemeWatchRef = useRef<(() => void) | null>(null);
 
-	// Mirrors TerminalInstance's observer: follow atomic `[data-theme]` swaps while mounted.
+	// Follows atomic `[data-theme]` swaps while mounted, via the themes module's shared watcher.
 	const onMount: OnMount = (_editor, m) => {
-		observerRef.current = watchThemeSwap(m, EDITOR_THEME);
+		stopThemeWatchRef.current = watchThemeSwap(m, EDITOR_THEME);
 	};
 
-	useEffect(() => () => observerRef.current?.disconnect(), []);
+	useEffect(() => () => stopThemeWatchRef.current?.(), []);
 
 	return (
 		<MonacoReact

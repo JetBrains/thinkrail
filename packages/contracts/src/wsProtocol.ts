@@ -42,6 +42,25 @@ import type {
 	WireModel,
 } from "./piProtocol";
 
+/**
+ * A batch of one terminal's output. Addressed to the PTY's owning client, never broadcast.
+ *
+ * `truncated` says the host had to drop the *oldest* held output to stay bounded — a shell can emit faster than
+ * it can be shipped and `bun-pty` offers no way to slow it down — so the client can mark the gap instead of
+ * appearing to have simply printed less.
+ */
+export interface TerminalDataPush {
+	id: string;
+	data: string;
+	truncated?: boolean;
+}
+
+/** The shell behind a terminal exited; its tab is now dead and must say so instead of looking alive. */
+export interface TerminalExitPush {
+	id: string;
+	exitCode: number;
+}
+
 /** Bumped on any breaking wire change; sent in `server.welcome` so a stale UI can detect host drift. */
 // v4: model.* / session.create / session.setModel / SessionSummary now carry `WireModel` (pi's `Model`
 // minus the secret-bearing `baseUrl`/`headers`); the host re-resolves the real model by `{provider,id}`.
@@ -106,7 +125,12 @@ import type {
 // workspace's `worktreePath`, `workspace.reveal` opens the host's file manager there.
 // v24: lossless project close/reopen — Project.closed marks rail membership, server.welcome carries open
 // + recent project views, and project.updated streams full snapshots so every client converges.
-export const PROTOCOL_VERSION = 24;
+// v25: terminals belong to ONE client, keyed by the `?client=` page identity on the socket URL (stable across
+// that client's reconnects, new on reload). Output is addressed to the owner instead of broadcast to a topic
+// every socket subscribed to, and carries an optional `truncated` flag when the host had to drop held output;
+// `terminal.exit` announces a dead shell; `terminal.alive` lets a tab re-attaching to a shell it detached
+// earlier confirm it is still there. `terminal.create` additionally takes the client's measured `cols`/`rows`.
+export const PROTOCOL_VERSION = 25;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -199,6 +223,7 @@ export const WS_METHODS = {
 	terminalWrite: "terminal.write",
 	terminalResize: "terminal.resize",
 	terminalClose: "terminal.close",
+	terminalAlive: "terminal.alive",
 	dialogSelectDirectory: "dialog.selectDirectory",
 	// Skill-only command preview for New Workspace, before a worktree/session exists.
 	skillList: "skill.list",
@@ -275,7 +300,13 @@ export const WS_CHANNELS = {
 	// In-app login flow updates (a `LoginPush` per frame), keyed by loginId. Session-less — a login runs on
 	// the Welcome screen before any session exists, so this is the sibling of pi.extensionUi, not scoped to one.
 	providerLogin: "provider.login",
+	// Both terminal channels are addressed to the ONE client that owns the PTY, not broadcast: a shell's bytes
+	// are that client's alone (tokens, keys, private paths), and a second browser filtering them out
+	// client-side is not isolation. Ownership is keyed to a client id that survives reconnects — see
+	// `terminalManager.closeClientTerminals`.
 	terminalData: "terminal.data",
+	/** `{ id, exitCode }` — the shell behind a terminal exited, so its tab is now dead and must say so. */
+	terminalExit: "terminal.exit",
 	// The workspace-registry lifecycle trio, broadcast to every client so registry membership is shared
 	// domain state (architecture #9), not per-client. All three are emitted by the `workspaces` module's
 	// injected publisher (host maps kind → channel); every client reacts identically (no per-client
@@ -453,6 +484,10 @@ export interface WsMethodMap {
 	"terminal.write": { params: { id: string; data: string }; result: Ack };
 	"terminal.resize": { params: { id: string; cols: number; rows: number }; result: Ack };
 	"terminal.close": { params: { id: string }; result: Ack };
+	// Is this id still a live PTY the caller owns? A tab re-attaching to a shell it detached earlier has to
+	// ask, because `terminal.exit` is only heard by a MOUNTED terminal and a detach happens exactly when none
+	// is mounted — so the shell may have died unobserved.
+	"terminal.alive": { params: { id: string }; result: { alive: boolean } };
 	"dialog.selectDirectory": { params: Record<string, never>; result: { path: string | null } };
 	// Preview from the selected project's current checkout; the eventual worktree session is authoritative.
 	"skill.list": { params: { projectId: string }; result: SlashCommandInfo[] };

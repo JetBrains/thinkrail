@@ -276,6 +276,11 @@ branch's review — a commit sha means nothing in another worktree — and dropp
 - **Public surface (barrel):** `useAppStore`; `selectActiveWorkspace`, `selectWorkspaceById` (the
   one lookup for "the workspace with this id" — `selectActiveWorkspace` is it applied to the active id, and
   `openFileInTab`/`ChatView` read the worktree root through it),
+  `selectWorkspaceTerminals` / `selectActiveTerminalId` (the active workspace's terminal tabs and which one is
+  showing) plus the pure helpers `allTerminalTabs` / `isTerminalVisible` — helpers rather than store selectors
+  because each derives a fresh value per call, and subscribing to that would re-render on every unrelated store
+  change; visibility is two conditions (right workspace **and** right tab) because every workspace's terminals
+  stay mounted,
   `selectActiveWorkspaceProjectId`, `selectHistoryTarget` + `HistoryTarget` (the shell's `Ctrl+R` routing
   target: the active chat tab, or the workspace's newest chat when a file/diff/doc tab is active),
   `selectContextProject`, `selectSkillsStale`, **`selectDiffScope` + `BRANCH_SCOPE`** (what a workspace's

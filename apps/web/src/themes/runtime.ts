@@ -196,3 +196,21 @@ export function writeThemeHint(id: ThemeId): void {
 		return;
 	}
 }
+
+/**
+ * Run `onSwap` after a theme change has fully landed; returns an unsubscribe.
+ *
+ * `applyTheme` writes `data-theme` **last**, once every palette variable is in place, so that attribute is the
+ * atomic "the new theme is complete" signal. Consumers that cannot wear a CSS class — Monaco, xterm, mermaid —
+ * re-read the resolved custom properties at this point. It belongs here because this module owns that contract;
+ * three hand-copied MutationObservers used to re-encode it independently, which is the duplication `AGENTS.md`
+ * forbids.
+ */
+export function onThemeSwap(onSwap: () => void): () => void {
+	const observer = new MutationObserver(onSwap);
+	observer.observe(document.documentElement, {
+		attributes: true,
+		attributeFilter: ["data-theme"],
+	});
+	return () => observer.disconnect();
+}

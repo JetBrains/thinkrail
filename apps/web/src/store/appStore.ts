@@ -999,6 +999,20 @@ function foldLoginFrame(state: LoginState, frame: LoginFrame): LoginState {
 	}
 }
 
+/**
+ * The next free "Terminal N" label: one past the highest number currently in use.
+ *
+ * `list.length + 1` collided — with two terminals open, closing "Terminal 1" and adding another produced a
+ * second "Terminal 2". The number is parsed back out of the title because the title is where it lives; an
+ * unparseable one (a future rename) simply doesn't constrain the next number.
+ */
+function nextTerminalTitle(list: TerminalTab[]): string {
+	const used = list
+		.map((tab) => Number.parseInt(/^Terminal (\d+)$/.exec(tab.title)?.[1] ?? "", 10))
+		.filter((n) => Number.isInteger(n));
+	return `Terminal ${Math.max(0, ...used) + 1}`;
+}
+
 export const useAppStore = create<AppState>((set, get) => ({
 	status: "connecting",
 	protocolVersion: null,
@@ -1326,7 +1340,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			const tab: TerminalTab = {
 				clientId,
 				workspaceId,
-				title: `Terminal ${list.length + 1}`,
+				title: nextTerminalTitle(list),
 				...(initialCommand ? { initialCommand } : {}),
 			};
 			return {

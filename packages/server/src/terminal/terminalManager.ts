@@ -1,21 +1,71 @@
 import { randomUUID } from "node:crypto";
+import type { TerminalDataPush, TerminalExitPush } from "@thinkrail/contracts";
 import { WS_CHANNELS } from "@thinkrail/contracts";
 import { type IPty, spawn } from "bun-pty";
 import { loadWorkspaces } from "../persistence";
+import { createOutputBatcher, type OutputBatcher } from "./outputBatcher";
 
-type Publish = (channel: string, data: unknown) => void;
+/** Push a frame to one client, addressed by its client id. Returns false if that client isn't connected. */
+type PushToClient = (clientKey: string, channel: string, data: unknown) => boolean;
 
 interface TerminalEntry {
 	pty: IPty;
 	workspaceId: string;
+	/** The client that owns this PTY — see `ownedEntry` for why a terminal is not shared. */
+	clientKey: string;
+	/** Groups this PTY's reads into whole frames instead of one frame per read. */
+	output: OutputBatcher;
 }
+
+/**
+ * Output batching bounds. `bun-pty` gives us no way to slow a shell down — its `IPty` has no `pause()`/
+ * `resume()` and its read loop starts at spawn — so we cannot push back on `yes` or a huge `cat`. What we can
+ * do is stop turning every read into its own WebSocket frame, and refuse to buffer without limit.
+ */
+const OUTPUT_BATCH = {
+	/** ~one display frame: collapses a burst without making an echo feel laggy. */
+	flushMs: 8,
+	/** Flush early past this, so a flood streams steadily instead of in visible lumps. */
+	maxBatchChars: 32_768,
+	/** Held only while the owner is away (mid-reconnect); past it the oldest output goes. */
+	maxPendingChars: 1_048_576,
+} as const;
 
 const terminals = new Map<string, TerminalEntry>();
 
-/** Push terminal output to subscribed clients. Set by `createServer` once the WS server exists. */
-let publish: Publish = () => {};
-export function setTerminalPublisher(fn: Publish): void {
-	publish = fn;
+/**
+ * Exit announcements whose owner was unreachable, keyed by client, retried when it reconnects.
+ *
+ * Output already survives a brief disconnect (the batcher holds and retries it), but `terminal.exit` was
+ * fire-and-forget — so a shell dying during a hiccup left the tab believing it was alive forever, which is the
+ * exact failure the exit event exists to prevent. Held per client rather than per terminal because by then the
+ * terminal is gone from `terminals`.
+ */
+const undeliveredExits = new Map<string, TerminalExitPush[]>();
+
+/**
+ * Push terminal output to its owning client. Set by `createServer` once the WS server exists.
+ *
+ * Addressed rather than broadcast, deliberately: the host previously published every PTY's bytes to a single
+ * topic that *every* socket subscribed to, leaving each browser to discard the ones that weren't its own. That
+ * handed every connected client everything typed or printed in every terminal of every workspace — tokens,
+ * keys, private paths — which matters all the more once the host is reachable from a phone over Tailscale.
+ */
+let pushToClient: PushToClient = () => false;
+export function setTerminalPublisher(fn: PushToClient): void {
+	pushToClient = fn;
+}
+
+/**
+ * The entry for `id`, but only if `owner` may touch it. A PTY belongs to the client that created it: it holds
+ * that client's shell, history and output, so another connection must not read it, write to it or kill it.
+ *
+ * An unknown id and someone else's id are deliberately indistinguishable, so a caller probing ids learns
+ * nothing about which exist.
+ */
+function ownedEntry(id: string, owner: string): TerminalEntry | undefined {
+	const entry = terminals.get(id);
+	return entry?.clientKey === owner ? entry : undefined;
 }
 
 /** The host's full env (login PATH already resolved at boot) plus terminal-friendly vars. */
@@ -41,6 +91,7 @@ const DEFAULT_PTY_SIZE = { cols: 80, rows: 24 } as const;
  */
 export function createTerminal(
 	workspaceId: string,
+	clientKey: string,
 	size: { cols?: number; rows?: number } = {},
 ): { id: string } {
 	const ws = loadWorkspaces().find((w) => w.id === workspaceId);
@@ -56,30 +107,104 @@ export function createTerminal(
 	});
 
 	const id = randomUUID();
-	terminals.set(id, { pty, workspaceId });
-	pty.onData((data) => publish(WS_CHANNELS.terminalData, { id, data }));
-	pty.onExit(() => terminals.delete(id));
+	// One frame per batch rather than per read, and output survives a brief reconnect: a batch the owner can't
+	// take is kept and retried (see `resumeClientTerminals`) instead of vanishing.
+	const output = createOutputBatcher({
+		...OUTPUT_BATCH,
+		onFlush: ({ data, truncated }) => {
+			const push: TerminalDataPush = { id, data, truncated };
+			return pushToClient(clientKey, WS_CHANNELS.terminalData, push);
+		},
+	});
+	terminals.set(id, { pty, workspaceId, clientKey, output });
+	pty.onData((data) => output.push(data));
+	// Tell the owner the shell is gone. Without this the tab stays looking alive — cursor blinking, keystrokes
+	// accepted — while every one of them is written to a dead id and silently dropped.
+	pty.onExit(({ exitCode }) => {
+		// Deliver whatever the shell printed on its way out before announcing that it's gone.
+		output.resume();
+		output.dispose();
+		terminals.delete(id);
+		if (!pushToClient(clientKey, WS_CHANNELS.terminalExit, { id, exitCode })) {
+			const held = undeliveredExits.get(clientKey) ?? [];
+			held.push({ id, exitCode });
+			undeliveredExits.set(clientKey, held);
+		}
+	});
 	return { id };
 }
 
-export function writeTerminal(id: string, data: string): void {
-	terminals.get(id)?.pty.write(data);
+export function writeTerminal(id: string, data: string, owner: string): void {
+	ownedEntry(id, owner)?.pty.write(data);
 }
 
-export function resizeTerminal(id: string, cols: number, rows: number): void {
-	terminals.get(id)?.pty.resize(cols, rows);
+export function resizeTerminal(id: string, cols: number, rows: number, owner: string): void {
+	ownedEntry(id, owner)?.pty.resize(cols, rows);
 }
 
-export function closeTerminal(id: string): void {
-	const entry = terminals.get(id);
+/**
+ * Whether `id` is a live PTY this client owns — what a re-attaching tab asks before presenting a detached shell
+ * as still working. An id that died, or was never the caller's, answers the same: false.
+ */
+export function isTerminalAlive(id: string, owner: string): boolean {
+	return ownedEntry(id, owner) !== undefined;
+}
+
+export function closeTerminal(id: string, owner: string): void {
+	const entry = ownedEntry(id, owner);
 	if (!entry) return;
+	entry.output.dispose();
 	entry.pty.kill();
 	terminals.delete(id);
 }
 
+/**
+ * Try again to deliver output held back while a client was unreachable — called when it reconnects, so the gap
+ * in its scrollback closes instead of being lost for good.
+ */
+export function resumeClientTerminals(clientKey: string): void {
+	for (const entry of terminals.values()) {
+		if (entry.clientKey === clientKey) entry.output.resume();
+	}
+	// Then the deaths it missed, so a shell that exited during the outage doesn't leave a tab looking alive.
+	const held = undeliveredExits.get(clientKey);
+	if (!held) return;
+	undeliveredExits.delete(clientKey);
+	for (const exit of held) {
+		if (!pushToClient(clientKey, WS_CHANNELS.terminalExit, exit)) {
+			// Gone again mid-flush; keep the rest for the next reconnect rather than dropping them.
+			const remaining = undeliveredExits.get(clientKey) ?? [];
+			remaining.push(exit);
+			undeliveredExits.set(clientKey, remaining);
+		}
+	}
+}
+
+/**
+ * Kill every PTY owned by a client — called once its connection has been gone long enough to count as
+ * abandoned (see `server.ts`), so a closed laptop or a killed tab doesn't leave shells running forever.
+ *
+ * Deliberately *not* called the moment a socket drops: the client reconnects on its own, and a shell holding
+ * real work must survive a network hiccup. That is the whole reason ownership is keyed to a client id rather
+ * than to a socket.
+ */
+export function closeClientTerminals(clientKey: string): void {
+	// The client is gone for good, so there is nobody left to tell about these deaths.
+	undeliveredExits.delete(clientKey);
+	for (const [id, entry] of terminals) {
+		if (entry.clientKey !== clientKey) continue;
+		entry.output.dispose();
+		entry.pty.kill();
+		terminals.delete(id);
+	}
+}
+
 /** Kill every live PTY — called on host shutdown so no shell processes orphan. */
 export function closeAllTerminals(): void {
-	for (const { pty } of terminals.values()) pty.kill();
+	for (const { pty, output } of terminals.values()) {
+		output.dispose();
+		pty.kill();
+	}
 	terminals.clear();
 }
 
@@ -90,6 +215,7 @@ export function closeAllTerminals(): void {
 export function closeWorkspaceTerminals(workspaceId: string): void {
 	for (const [id, entry] of terminals) {
 		if (entry.workspaceId !== workspaceId) continue;
+		entry.output.dispose();
 		entry.pty.kill();
 		terminals.delete(id);
 	}

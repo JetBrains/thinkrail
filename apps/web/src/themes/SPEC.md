@@ -22,8 +22,10 @@ selected opaque id; this module owns what that id means visually. **Adding a the
   semantic syntax-variable contract, and Shiki's generic CSS-variable TextMate scope map (Monaco
   consumes the same palette through its fixed adapter).
 - **Public surface:** `index.ts` only — `initializeBundledThemes` (the synchronous bootstrap),
-  `applyTheme`, `resolveTheme`, `getThemes`, the first-paint hint pair, and the manifest/descriptor
-  types plus the Shiki registration.
+  `applyTheme`, `resolveTheme`, `getThemes`, `onThemeSwap` (subscribe to a completed theme change — this
+  module owns the `data-theme` signal, so it owns the way to observe it; Monaco/xterm/mermaid all re-read their
+  palettes through it rather than each hand-rolling a MutationObserver), the first-paint hint pair, and the
+  manifest/descriptor types plus the Shiki registration.
 - **Allowed external deps:** `@thinkrail/contracts` for the opaque `ThemeId` and configured default;
   browser DOM/storage APIs and Vite's build-time glob; Shiki types only, to type the generic
   registration.
