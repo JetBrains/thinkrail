@@ -14,11 +14,6 @@ inputs:
   target:
     description: "Bun compile target for this runner (e.g. bun-darwin-arm64 / bun-windows-x64)"
     required: true
-  posthog-api-key:
-    description: "PostHog project API key for anonymous usage analytics (empty: key stays unbaked — noop sink)"
-    required: false
-    default: ""
-
 outputs:
   artifact-name:
     description: "Final artifact filename (thinkrail-<os>-<arch>[.exe])"
@@ -50,22 +45,6 @@ runs:
         EOF
         echo "Stamped apps/cli/src/version.ts:"
         cat apps/cli/src/version.ts
-
-    # Same seam as version.ts: bake the PostHog key into the throwaway checkout before compiling.
-    # Skipped when the secret is absent (forks, PR CI) — the committed empty default stays, the
-    # binary's host lands on the noop sink and never sends (see packages/server/src/analytics/SPEC.md).
-    - name: Stamp analytics key into the CLI
-      if: inputs.posthog-api-key != ''
-      shell: bash
-      env:
-        POSTHOG_API_KEY: ${{ inputs.posthog-api-key }}
-      run: |
-        set -eu
-        cat > apps/cli/src/analytics-keys.ts <<EOF
-        // Stamped at release time by .github/actions/build-binary. Do not commit this edit.
-        export const posthogApiKey = "${POSTHOG_API_KEY}";
-        EOF
-        echo "Stamped apps/cli/src/analytics-keys.ts (value withheld)"
 
     - name: Compile single-file binary
       shell: bash

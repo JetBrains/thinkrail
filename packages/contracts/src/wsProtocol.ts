@@ -4,6 +4,7 @@ import type {
 	AppConfig,
 	BranchList,
 	DiffStats,
+	EditorInfo,
 	FileNode,
 	GitCommit,
 	GitDiffScope,
@@ -100,17 +101,26 @@ import type {
 // v22: a failed response may name its failure — `WsResponse.errorCode` (`WsErrorCode`, today only
 // `UNKNOWN_COMMIT`), so a client can react to one specific failure instead of pattern-matching the message.
 // Additive and optional: an older client simply sees the `error` string it always saw.
-export const PROTOCOL_VERSION = 22;
+// v23: the workspace row's "Open in" menu — `editor.list` probes the host's PATH for installed
+// editors/IDEs (`EditorInfo[]`, never a fixed client list), `workspace.openIn` launches one detached at a
+// workspace's `worktreePath`, `workspace.reveal` opens the host's file manager there.
+// v24: lossless project close/reopen — Project.closed marks rail membership, server.welcome carries open
+// + recent project views, and project.updated streams full snapshots so every client converges.
+export const PROTOCOL_VERSION = 24;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
  * stale UI detect host drift; `appVersion` is the host launcher's baked release version (a released
- * binary stamps it — `undefined` when run from source); `projects` seeds the initial project list.
+ * binary stamps it — `undefined` when run from source); `projects` seeds the open rail and
+ * `recentProjects` seeds Add project → Recents.
  */
 export interface ServerWelcome {
 	protocolVersion: number;
 	appVersion?: string;
+	/** Open projects only, ordered by last open. */
 	projects: Project[];
+	/** Every known project (open + closed), ordered by last open. */
+	recentProjects: Project[];
 	/** The server-synced app settings (theme, …) — applied on connect so the initial paint matches. */
 	config: AppConfig;
 }
@@ -158,6 +168,12 @@ export const WS_METHODS = {
 	workspaceSetSkillOverride: "workspace.setSkillOverride",
 	// Re-point the ref the workspace's diff is measured against (`null` clears back to the creation base).
 	workspaceSetDiffBase: "workspace.setDiffBase",
+	// The workspace row's "Open in" menu: launch a detected editor detached at the worktree, or reveal the
+	// worktree in the host's file manager.
+	workspaceOpenIn: "workspace.openIn",
+	workspaceReveal: "workspace.reveal",
+	// Host-installed editors/IDEs the "Open in" menu can offer (probed once per connection, not per-workspace).
+	editorList: "editor.list",
 	// gh-backed New-Workspace surface: branch list per project + local `gh` auth status.
 	gitListBranches: "git.listBranches",
 	// Background freshness fetch of a remote base ref, fired when the New-Workspace dialog opens/picks a
@@ -251,6 +267,9 @@ export const WS_METHODS = {
 /** Server→client push channels. */
 export const WS_CHANNELS = {
 	serverWelcome: "server.welcome",
+	// Full persisted snapshot after open/reopen/close. One idempotent channel avoids opened/closed event
+	// streams replaying out of order; `Project.closed` says which projection the record belongs to.
+	projectUpdated: "project.updated",
 	piEvent: "pi.event",
 	piExtensionUi: "pi.extensionUi",
 	// In-app login flow updates (a `LoginPush` per frame), keyed by loginId. Session-less — a login runs on
@@ -370,6 +389,16 @@ export interface WsMethodMap {
 	// Re-point the diff target (`Workspace.diffBase`); `null` clears back to the creation base. Echoes the
 	// updated `Workspace` **and** broadcasts `workspace.updated`, so every client converges on the push.
 	"workspace.setDiffBase": { params: { id: string; ref: string | null }; result: Workspace };
+	// Launch an `EditorInfo.id` from `editor.list`, detached, at the workspace's `worktreePath`. GUI editors
+	// only — a `"terminal"`-kind entry (Vim) has no window of its own; the client runs it in that workspace's
+	// embedded terminal instead of calling this.
+	"workspace.openIn": { params: { id: string; editor: string }; result: Ack };
+	// Open the host's file manager at the workspace's `worktreePath` (Finder / Explorer / the Linux desktop's
+	// default file manager).
+	"workspace.reveal": { params: { id: string }; result: Ack };
+	// Editors/IDEs the host actually has installed — probed via PATH lookups, so the list never offers an
+	// app that would fail to launch. Host-wide, not workspace-scoped: safe to fetch once and cache.
+	"editor.list": { params: Record<string, never>; result: EditorInfo[] };
 	"git.listBranches": { params: { projectId: string }; result: BranchList };
 	// Best-effort background `git fetch` of a remote ref (`origin/<b>`); `ok` reports whether the fetch ran
 	// (offline / non-remote ref → `false`). The UI fires-and-forgets it to warm the ref before create.

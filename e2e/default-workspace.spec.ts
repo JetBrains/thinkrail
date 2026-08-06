@@ -5,6 +5,7 @@ import {
 	enterDefaultWorkspace,
 	goProjectHome,
 	openFixtureProject,
+	openWorkspaceMenu,
 	runInTerminal,
 	visibleTerminalScreen,
 	waitTerminalReady,
@@ -87,13 +88,18 @@ test("the Default workspace is non-removable and unique; project home stays reac
 }) => {
 	await openFixtureProject(page);
 
-	// No Remove affordance on the Default row — while a worktree row offers one on hover.
+	// No Remove item in the Default row's kebab menu — while a worktree row's menu offers one.
 	await createWorkspaceViaDialog(page);
 	const row = defaultWorkspaceRow(page);
-	await row.hover();
-	await expect(row.getByTestId("workspace-remove")).toHaveCount(0);
-	await worktreeRows(page).first().hover();
-	await expect(worktreeRows(page).first().getByTestId("workspace-remove")).toBeVisible();
+	await openWorkspaceMenu(row);
+	await expect(page.getByTestId("workspace-actions")).toBeVisible();
+	await expect(page.getByTestId("workspace-remove")).toHaveCount(0);
+	await page.keyboard.press("Escape");
+	await openWorkspaceMenu(worktreeRows(page).first());
+	await expect(page.getByTestId("workspace-remove")).toBeVisible();
+	// Close it — Radix's dropdown is modal (traps pointer events on the rest of the page while open), so
+	// leaving it open here would block every click the rest of this test makes elsewhere.
+	await page.keyboard.press("Escape");
 
 	// Re-opening the same project (the picker points at the same repo) does not duplicate the Default,
 	// and lands back on the Welcome fork (deselecting the active workspace — the project-home surface).

@@ -181,6 +181,15 @@ export function activeWorktreeRow(page: Page): Locator {
 	return worktreeRows(page).and(page.locator('[data-active="true"]'));
 }
 
+/**
+ * Open a workspace row's kebab (`⋮`) menu — the "Open in" / Copy path / Reveal / Remove actions live
+ * there, hover-revealed then click-opened, same as any Radix dropdown trigger.
+ */
+export async function openWorkspaceMenu(row: Locator): Promise<void> {
+	await row.hover();
+	await row.getByTestId("workspace-menu").click();
+}
+
 /** The "project home" gesture: click the project row to deselect the workspace → its Welcome screen. */
 export async function goProjectHome(page: Page): Promise<void> {
 	await page.getByTestId("project-item").first().getByText("sample-project").click();

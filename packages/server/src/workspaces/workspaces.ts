@@ -13,7 +13,7 @@ import {
 	resolveDiffRange,
 } from "../git";
 import { dataDir, loadProjects, loadWorkspaces, saveWorkspaces } from "../persistence";
-import { getProjects } from "../projects";
+import { getProjects, listProjects } from "../projects";
 
 /**
  * A workspace-registry membership change, emitted on every create/rename/archive so the host can fan it
@@ -150,7 +150,9 @@ export async function createWorkspace(
 	name?: string,
 	baseRef?: string,
 ): Promise<Workspace> {
-	const project = getProjects().find((p) => p.id === projectId);
+	// `listProjects` (open only) — a closed project must reject creation even from a stale or rogue client
+	// that still names it (the rail can't offer the "+" once closed, but the request can still arrive).
+	const project = listProjects().find((p) => p.id === projectId);
 	if (!project) throw new Error(`Unknown project: ${projectId}`);
 
 	// A user-supplied name is the display name (casing/punctuation preserved); the branch is derived from

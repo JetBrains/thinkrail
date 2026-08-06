@@ -4,6 +4,7 @@
  */
 export {
 	type AnalyticsEvent,
+	type BuildKind,
 	bucketProvider,
 	bucketProviderModel,
 	type LoginMethod,

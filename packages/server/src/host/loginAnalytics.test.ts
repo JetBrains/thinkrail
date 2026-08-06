@@ -25,8 +25,10 @@ beforeEach(() => {
 	sent = [];
 	initializeAnalytics({
 		channel: "stable",
-		posthogApiKey: "phc_TEST",
 		enabled: true,
+		// `env: {}` is load-bearing: `bun test` sets NODE_ENV=test, which the mute policy honors, so
+		// without a clean injected env this suite would assert against a noop sink (see analytics/mute.ts).
+		env: {},
 		fetchImpl: ((_url: string | URL | Request, init?: RequestInit) => {
 			sent.push(...JSON.parse(String(init?.body)).batch);
 			return Promise.resolve(new Response("{}", { status: 200 }));

@@ -2,6 +2,7 @@ import type {
 	AppConfig,
 	ExtUiRequest,
 	LoginPush,
+	Project,
 	ServerWelcome,
 	SessionEventPayload,
 	Workspace,
@@ -28,13 +29,24 @@ export function initTransport(): WsTransport {
 			useAppStore.getState().setWelcome(welcome.protocolVersion);
 		}
 		if (Array.isArray(welcome.projects)) {
-			useAppStore.getState().setProjects(welcome.projects);
+			// `recentProjects` is required by the current protocol; falling back keeps a stale host's open
+			// projects usable while the shell surfaces the version mismatch.
+			useAppStore
+				.getState()
+				.installProjectSnapshot(
+					welcome.projects,
+					Array.isArray(welcome.recentProjects) ? welcome.recentProjects : welcome.projects,
+				);
 		}
 		// The host's source-of-truth app config (theme, …), applied on connect. Reconciles the pre-React
 		// paint hint; the shell's theme effect performs the DOM swap.
 		if (welcome.config) {
 			useAppStore.getState().applyConfig(welcome.config);
 		}
+	});
+
+	transport.subscribe(WS_CHANNELS.projectUpdated, (data) => {
+		useAppStore.getState().applyProjectUpdated(data as Project);
 	});
 
 	transport.subscribe(WS_CHANNELS.piEvent, (data) => {

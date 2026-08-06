@@ -172,6 +172,16 @@ export function NewWorkspaceDialog({
 		hostDefaultAsked.current = false;
 	}, [open, projectId, initialPrompt]);
 
+	// The picker's list is open projects only — if the selected one is closed by another client while this
+	// dialog is up, it drops out from under the picker. Close now rather than let `create()` round-trip to
+	// the host's now-enforced rejection.
+	useEffect(() => {
+		if (!open) return;
+		if (projects.some((p) => p.id === selectedProjectId)) return;
+		onOpenChange(false);
+		toast.info("That project was closed");
+	}, [open, projects, selectedProjectId, onOpenChange]);
+
 	// Skills are previewed from the selected project's current checkout; the created worktree/session is
 	// authoritative if its base ref differs. Autocomplete is an enhancement, so failure degrades to empty.
 	useEffect(() => {
@@ -404,8 +414,7 @@ export function NewWorkspaceDialog({
 				id: selectedProjectId,
 				trusted: true,
 			});
-			const store = useAppStore.getState();
-			store.setProjects(store.projects.map((p) => (p.id === updated.id ? updated : p)));
+			useAppStore.getState().applyProjectUpdated(updated);
 			const commands = await slashCommandCatalogOrEmpty(() =>
 				getTransport().request("skill.list", { projectId: selectedProjectId }),
 			);

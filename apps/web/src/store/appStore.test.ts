@@ -2,6 +2,7 @@ import { beforeEach, expect, test } from "bun:test";
 import type {
 	ExtUiRequest,
 	PiEvent,
+	Project,
 	SessionSummary,
 	SpecGraphNode,
 	WireModel,
@@ -79,6 +80,9 @@ beforeEach(() => {
 		fsChangesByWorkspace: {},
 		skillChangeTickByWorkspace: {},
 		skillsSyncedTickBySession: {},
+		projects: [],
+		recentProjects: [],
+		workspaces: {},
 		selectedProjectId: null,
 		activeWorkspaceId: null,
 		activeLogin: null,
@@ -584,6 +588,150 @@ test("requestChatLocation sets the jump deep link AND switches project+workspace
 	expect(st.chatLocationRequest).toBeNull();
 	expect(st.activeWorkspaceId).toBe("ws2"); // clearing the request never reverts the navigation
 	expect(st.selectedProjectId).toBe("p2");
+});
+
+// ---- project.updated: open/recent projections + per-client navigation fallback -------------------
+
+function project(over: Partial<Project> = {}): Project {
+	return {
+		id: "p1",
+		name: "Project one",
+		path: "/projects/one",
+		slug: "project-one",
+		lastOpened: 100,
+		...over,
+	};
+}
+
+test("installProjectSnapshot sorts both projections and repairs navigation after an off-screen close", () => {
+	const p1 = project();
+	const p2 = project({
+		id: "p2",
+		name: "Project two",
+		path: "/projects/two",
+		slug: "project-two",
+		lastOpened: 200,
+		closed: true,
+	});
+	const workspace = pushedWorkspace({ id: "w2", projectId: "p2" });
+	const tabs = {
+		w2: [{ kind: "file", id: "w2:a", workspaceId: "w2", name: "a", path: "a", content: "" }],
+	} satisfies Record<string, FileTab[]>;
+	useAppStore.setState({
+		projects: [p2],
+		recentProjects: [p2],
+		workspaces: { p2: [workspace] },
+		selectedProjectId: "p2",
+		activeWorkspaceId: "w2",
+		tabsByWorkspace: tabs,
+	});
+
+	useAppStore.getState().installProjectSnapshot([p1], [p1, p2]);
+
+	const state = useAppStore.getState();
+	expect(state.projects.map((candidate) => candidate.id)).toEqual(["p1"]);
+	expect(state.recentProjects.map((candidate) => candidate.id)).toEqual(["p2", "p1"]);
+	expect(state.selectedProjectId).toBe("p1");
+	expect(state.activeWorkspaceId).toBeNull();
+	expect(state.workspaces.p2).toEqual([workspace]);
+	expect(state.tabsByWorkspace).toBe(tabs);
+});
+
+test("applyProjectUpdated closes a background project without moving the current workspace", () => {
+	const p1 = project();
+	const p2 = project({
+		id: "p2",
+		name: "Project two",
+		path: "/projects/two",
+		slug: "project-two",
+		lastOpened: 50,
+	});
+	useAppStore.setState({
+		projects: [p1, p2],
+		recentProjects: [p1, p2],
+		workspaces: { p1: [pushedWorkspace()] },
+		selectedProjectId: "p1",
+		activeWorkspaceId: "w1",
+	});
+
+	useAppStore.getState().applyProjectUpdated({ ...p2, closed: true });
+
+	const state = useAppStore.getState();
+	expect(state.projects.map((candidate) => candidate.id)).toEqual(["p1"]);
+	expect(state.recentProjects.find((candidate) => candidate.id === "p2")?.closed).toBe(true);
+	expect(state.selectedProjectId).toBe("p1");
+	expect(state.activeWorkspaceId).toBe("w1");
+});
+
+test("applyProjectUpdated closes the current project to the next Home and preserves its view maps", () => {
+	const p1 = project();
+	const p2 = project({
+		id: "p2",
+		name: "Project two",
+		path: "/projects/two",
+		slug: "project-two",
+		lastOpened: 50,
+	});
+	const workspace = pushedWorkspace();
+	const tabs = {
+		w1: [{ kind: "file", id: "w1:a", workspaceId: "w1", name: "a", path: "a", content: "" }],
+	} satisfies Record<string, FileTab[]>;
+	useAppStore.setState({
+		projects: [p1, p2],
+		recentProjects: [p1, p2],
+		workspaces: { p1: [workspace] },
+		selectedProjectId: "p1",
+		activeWorkspaceId: "w1",
+		tabsByWorkspace: tabs,
+	});
+
+	useAppStore.getState().applyProjectUpdated({ ...p1, closed: true });
+
+	const state = useAppStore.getState();
+	expect(state.projects.map((candidate) => candidate.id)).toEqual(["p2"]);
+	expect(state.selectedProjectId).toBe("p2");
+	expect(state.activeWorkspaceId).toBeNull();
+	expect(state.workspaces.p1).toEqual([workspace]);
+	expect(state.tabsByWorkspace).toBe(tabs);
+});
+
+test("applyProjectUpdated reopens and reorders the same project without duplicating it", () => {
+	const p1 = project();
+	const closed = project({
+		id: "p2",
+		name: "Project two",
+		path: "/projects/two",
+		slug: "project-two",
+		lastOpened: 50,
+		closed: true,
+	});
+	useAppStore.setState({ projects: [p1], recentProjects: [p1, closed] });
+	const { closed: _closed, ...reopened } = closed;
+
+	useAppStore.getState().applyProjectUpdated({ ...reopened, lastOpened: 200 });
+
+	const state = useAppStore.getState();
+	expect(state.projects.map((candidate) => candidate.id)).toEqual(["p2", "p1"]);
+	expect(state.recentProjects.map((candidate) => candidate.id)).toEqual(["p2", "p1"]);
+	expect(state.projects.filter((candidate) => candidate.id === "p2")).toHaveLength(1);
+	expect(state.recentProjects[0]?.closed).toBeUndefined();
+});
+
+test("applyProjectUpdated closes the last project to the no-project state", () => {
+	const p1 = project();
+	useAppStore.setState({
+		projects: [p1],
+		recentProjects: [p1],
+		selectedProjectId: "p1",
+		activeWorkspaceId: null,
+	});
+
+	useAppStore.getState().applyProjectUpdated({ ...p1, closed: true });
+
+	const state = useAppStore.getState();
+	expect(state.projects).toEqual([]);
+	expect(state.selectedProjectId).toBeNull();
+	expect(state.activeWorkspaceId).toBeNull();
 });
 
 // ---- updateWorkspace: the workspace.updated push folds in without losing local computed state ----

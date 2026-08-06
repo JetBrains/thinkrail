@@ -17,7 +17,13 @@ import {
 } from "../analytics";
 import { cancelAllLogins, setLoginPublisher } from "../auth";
 import { resolveWorktreeFile } from "../fs";
-import { listProjects, openProject } from "../projects";
+import {
+	getProjects,
+	listProjects,
+	listRecentProjects,
+	openProject,
+	setProjectPublisher,
+} from "../projects";
 import { getConfig, setSettingsPublisher } from "../settings";
 import { closeAllTerminals, setTerminalPublisher } from "../terminal";
 import { setRepoMetaPublisher, setWatchPublisher, stopAllWatches } from "../watch";
@@ -42,10 +48,15 @@ export interface CreateServerOptions {
 	/** The launcher's baked release version, echoed in the `server.welcome` push (undefined from source). */
 	appVersion?: string;
 	/**
-	 * Anonymous-analytics wiring from the launcher: release channel + the PostHog key baked at release
-	 * + the `--no-analytics` per-run mute. Absent (dev/e2e/source runs) ⇒ the noop sink — never sends.
+	 * Anonymous-analytics wiring from the launcher: the release channel + how this process was produced
+	 * (`build`) + the `--no-analytics` per-run mute. Every channel sends; muting is the analytics
+	 * service's own decision (CI / `NODE_ENV=test` / `THINKRAIL_NO_ANALYTICS`), so a launcher that passes
+	 * nothing still gets the right behaviour.
 	 */
-	analytics?: Pick<AnalyticsOptions, "channel" | "posthogApiKey" | "posthogHost" | "mute">;
+	analytics?: Pick<
+		AnalyticsOptions,
+		"channel" | "build" | "posthogApiKey" | "posthogHost" | "mute"
+	>;
 }
 
 export interface RunningServer {
@@ -89,6 +100,7 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 				ws.subscribe(WS_CHANNELS.piEvent);
 				ws.subscribe(WS_CHANNELS.piExtensionUi);
 				ws.subscribe(WS_CHANNELS.providerLogin);
+				ws.subscribe(WS_CHANNELS.projectUpdated);
 				ws.subscribe(WS_CHANNELS.workspaceCreated);
 				ws.subscribe(WS_CHANNELS.workspaceUpdated);
 				ws.subscribe(WS_CHANNELS.workspaceRemoved);
@@ -97,6 +109,7 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 				const welcome: ServerWelcome = {
 					protocolVersion: PROTOCOL_VERSION,
 					projects: listProjects(),
+					recentProjects: listRecentProjects(),
 					config: getConfig(),
 					...(appVersion ? { appVersion } : {}),
 				};
@@ -138,7 +151,7 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 	setSkillAdmissionResolver((workspaceId) => {
 		try {
 			const { projectId, skillOverrides } = getWorkspace(workspaceId);
-			const project = listProjects().find((p) => p.id === projectId);
+			const project = getProjects().find((p) => p.id === projectId);
 			return {
 				trusted: project?.trusted === true,
 				acknowledged: project?.acknowledgedSkills ?? [],
@@ -149,6 +162,15 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		} catch {
 			return { trusted: false, acknowledged: [], disabled: [], disabledGroups: [], overrides: {} };
 		}
+	});
+
+	// Fan authoritative project open/reopen/close snapshots out to every client. One full-snapshot
+	// channel is idempotent: Project.closed tells each store whether to upsert or remove the rail row.
+	setProjectPublisher((project) => {
+		server.publish(
+			WS_CHANNELS.projectUpdated,
+			JSON.stringify({ channel: WS_CHANNELS.projectUpdated, data: project }),
+		);
 	});
 
 	// Fan the `workspaces` module's lifecycle events out to every subscribed client, mapping each domain
@@ -254,8 +276,8 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 	});
 
 	// Boot analytics before any trackable action can occur (fire-and-forget by contract — a failure in
-	// here can never block or crash the host). The persisted flag gates sending; dev/source runs have no
-	// keys and land on the noop sink.
+	// here can never block or crash the host). The persisted flag gates sending; the analytics module
+	// itself mutes CI, `bun test`, and an explicit opt-out (see analytics/mute.ts).
 	initializeAnalytics({
 		...(appVersion ? { appVersion } : {}),
 		...(analytics ?? {}),

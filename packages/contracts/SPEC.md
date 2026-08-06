@@ -91,7 +91,9 @@ of the host.
     is a **host-owned pi custom tool** (server `agent/askUserQuestion` — see its SPEC for the design
     rationale); the chat renders the questionnaire **inline** and replies via `session.answerQuestion`
     (correlated by the tool call id; rejected loud when the call is unknown/answered/superseded).
-- **domain.ts** — app entities: `Project` (git repo + unique `slug` + the skill-trust fields **`trusted`**
+- **domain.ts** — app entities: `Project` (git repo + unique `slug` + optional **`closed: true`** — the
+  persisted open-rail membership bit; absence means open for backward compatibility, and closing never
+  changes the project's id or deletes its workspace associations — plus the skill-trust fields **`trusted`**
   (the per-project grant), **`acknowledgedSkills`** (re-confirm-new — which committed aliases are OK'd) and
   **`disabledSkills`** / **`disabledGroups`** (project-baseline per-skill and per-group off — a group is a
   plugin, a source tier, or the special `@plugins`), which gate what its skills contribute; a workspace layers
@@ -160,9 +162,10 @@ of the host.
   what `template.list` returns; deliberately body-free so a listing never ships every file's full text),
   and **`Template`** (`TemplateInfo` + full `content` — frontmatter + body — the by-name
   `template.get`/`template.save` shape).
-- **wsProtocol.ts** — `WS_METHODS` (`project.*` — incl. **`project.inspect`** (classify a path) +
-  **`project.init`** (`git init` + commit, then open) + **`project.hasSpecs`** (lazy per-project "has any
-  registered spec?" for the Welcome screen — a full-tree walk, so requested only for the shown project,
+- **wsProtocol.ts** — `WS_METHODS` (`project.*` — incl. **`project.close`** (mark the stable record
+  closed without deleting associated state), **`project.inspect`** (classify a path) + **`project.init`**
+  (`git init` + commit, then open) + **`project.hasSpecs`** (lazy per-project "contains a registered
+  spec?" for the Welcome screen — a full-tree walk, so requested only for the shown project,
   never eagerly for every project) / `workspace.*` / `fs.*` / `git.*` / **`spec.graph`**
   (the Specs-viewer whole-graph read, per workspace) / **`todo.*`** — **`list`**/**`add`**/**`update`**/
   **`remove`**, the chat's per-session TODO plan (keyed by `workspaceId` + `sessionId`; `add` tags the
@@ -210,8 +213,11 @@ of the host.
   (**`template.list`**, **`template.get`**
   — `scope` optional, project wins over global, **`template.save`**, **`template.delete`**) — all
   read/write pi's prompt dirs (global + project), so templates stay CLI-portable,
-  `WS_CHANNELS` (`server.welcome` — which carries the initial `config: AppConfig` alongside `projects` /
-  `pi.event` / `pi.extensionUi` / **`settings.changed`** (the full `AppConfig`, broadcast so every client
+  `WS_CHANNELS` (`server.welcome` — which carries the initial `config: AppConfig` alongside **`projects`**
+  (open records) and **`recentProjects`** (all known records, open + closed) / **`project.updated`** — the
+  full persisted `Project` snapshot after open/reopen/close, including `closed` membership, so every client
+  atomically converges its rail + Recents without optimistic removal / `pi.event` / `pi.extensionUi` /
+  **`settings.changed`** (the full `AppConfig`, broadcast so every client
   converges) / **`provider.login`** — the session-less in-app login stream (a `LoginPush`
   per frame, keyed by `loginId`; the sibling of `pi.extensionUi`, since a login runs on the Welcome screen
   before any session exists) / `terminal.data` / the **workspace lifecycle trio** — **`workspace.created`**
