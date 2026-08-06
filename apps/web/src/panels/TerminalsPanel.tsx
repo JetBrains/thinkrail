@@ -1,16 +1,22 @@
 import { Plus, X } from "lucide-react";
 import { lazy, Suspense, useEffect } from "react";
-import { type TerminalTab, useAppStore } from "../store";
+import {
+	allTerminalTabs,
+	isTerminalVisible,
+	selectActiveTerminalId,
+	selectWorkspaceTerminals,
+	type TerminalTab,
+	useAppStore,
+} from "../store";
 
 const TerminalInstance = lazy(() => import("./TerminalInstance"));
-
-const NO_TERMINALS: TerminalTab[] = [];
 
 /** Lower-right terminals for the active worktree. All instances stay mounted; only the active is shown. */
 export function TerminalsPanel() {
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
 	const terminalsByWorkspace = useAppStore((s) => s.terminalsByWorkspace);
-	const activeTerminalByWorkspace = useAppStore((s) => s.activeTerminalByWorkspace);
+	const tabs = useAppStore(selectWorkspaceTerminals);
+	const activeTerminalId = useAppStore(selectActiveTerminalId);
 	const addTerminal = useAppStore((s) => s.addTerminal);
 	const closeTerminalTab = useAppStore((s) => s.closeTerminalTab);
 	const setActiveTerminalTab = useAppStore((s) => s.setActiveTerminalTab);
@@ -24,13 +30,7 @@ export function TerminalsPanel() {
 		}
 	}, [activeWorkspaceId]);
 
-	const tabs = activeWorkspaceId
-		? (terminalsByWorkspace[activeWorkspaceId] ?? NO_TERMINALS)
-		: NO_TERMINALS;
-	const activeTerminalId = activeWorkspaceId
-		? (activeTerminalByWorkspace[activeWorkspaceId] ?? null)
-		: null;
-	const allTerminals = Object.values(terminalsByWorkspace).flat();
+	const allTerminals = allTerminalTabs(terminalsByWorkspace);
 
 	return (
 		<div data-testid="terminal-panel" className="flex h-full min-h-0 flex-col">
@@ -71,7 +71,7 @@ export function TerminalsPanel() {
 						<TerminalInstance
 							clientId={tab.clientId}
 							workspaceId={tab.workspaceId}
-							visible={tab.workspaceId === activeWorkspaceId && tab.clientId === activeTerminalId}
+							visible={isTerminalVisible(tab, activeWorkspaceId, activeTerminalId)}
 							{...(tab.initialCommand ? { initialCommand: tab.initialCommand } : {})}
 						/>
 					</Suspense>

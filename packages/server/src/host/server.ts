@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { join, normalize } from "node:path";
 import type { ServerWelcome, WorkspaceFsChangedPayload } from "@thinkrail/contracts";
 import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
@@ -25,7 +26,12 @@ import {
 	setProjectPublisher,
 } from "../projects";
 import { getConfig, setSettingsPublisher } from "../settings";
-import { closeAllTerminals, setTerminalPublisher } from "../terminal";
+import {
+	closeAllTerminals,
+	closeClientTerminals,
+	resumeClientTerminals,
+	setTerminalPublisher,
+} from "../terminal";
 import { setRepoMetaPublisher, setWatchPublisher, stopAllWatches } from "../watch";
 import { getWorkspace, refreshUserOwnedWorkspace, setWorkspacePublisher } from "../workspaces";
 import {
@@ -64,6 +70,22 @@ export interface RunningServer {
 	stop: () => void;
 }
 
+/** Per-socket state carried through the upgrade — see the `?client=` note in `fetch`. */
+interface SocketData {
+	clientKey: string;
+}
+
+/**
+ * How long a vanished client's PTYs are kept before being killed.
+ *
+ * The client reconnects on its own with backoff, so a dropped socket usually means a hiccup, not a departure —
+ * and a shell can be holding real work (a dev server, a watch build). Waiting is therefore the safe default and
+ * killing is the exception: this only has to be longer than a realistic reconnect, not short. A genuinely gone
+ * client (closed tab, closed laptop, reload — a reload arrives under a *new* client id) then loses its shells
+ * one window later instead of leaving them running until the host restarts.
+ */
+const ABANDONED_CLIENT_GRACE_MS = 60_000;
+
 /** Boot the engine host: Bun.serve HTTP+WS, /health, optional static SPA, and the server.welcome push. */
 export function createServer(options: CreateServerOptions = {}): RunningServer {
 	const {
@@ -75,13 +97,31 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		analytics,
 	} = options;
 
-	const server = Bun.serve({
+	/** The live socket per client id. One entry per connected page; a reconnect replaces its own entry. */
+	const sockets = new Map<string, Bun.ServerWebSocket<SocketData>>();
+	/** Pending "this client looks gone, reap its PTYs" timers, cancelled if it reconnects in time. */
+	const reapTimers = new Map<string, ReturnType<typeof setTimeout>>();
+	/**
+	 * Set by `stop()` before it closes the socket. `server.stop(true)` fires every `close(ws)` synchronously, so
+	 * without this the shutdown path armed a fresh 60s reap timer per connected client *after* clearing them —
+	 * leaving timers holding the event loop open and contradicting stop()'s own claim of symmetric teardown.
+	 */
+	let stopping = false;
+
+	const server = Bun.serve<SocketData, never>({
 		port,
 		hostname: host,
 		async fetch(req, srv) {
 			const url = new URL(req.url);
 			if (url.pathname === "/ws") {
-				return srv.upgrade(req) ? undefined : new Response("ws upgrade failed", { status: 400 });
+				// `?client=` identifies the *page*, not the socket: it survives that client's reconnects and is
+				// new on every reload, which is what lets a PTY outlive a dropped connection (the client
+				// reconnects on its own) without outliving the document that owns it. A client that sends none
+				// gets a per-socket fallback — correct isolation, just no reconnect grace.
+				const clientKey = url.searchParams.get("client") ?? `anon-${randomUUID()}`;
+				return srv.upgrade(req, { data: { clientKey } })
+					? undefined
+					: new Response("ws upgrade failed", { status: 400 });
 			}
 			if (url.pathname === "/health") {
 				return new Response("ok");
@@ -96,7 +136,19 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		},
 		websocket: {
 			open(ws) {
-				ws.subscribe(WS_CHANNELS.terminalData);
+				sockets.set(ws.data.clientKey, ws);
+				// Reconnected inside the grace window — this client never really left, so its PTYs stand.
+				const pendingReap = reapTimers.get(ws.data.clientKey);
+				if (pendingReap !== undefined) {
+					clearTimeout(pendingReap);
+					reapTimers.delete(ws.data.clientKey);
+				}
+				// Deliver anything its terminals printed while it was away, so the reconnect doesn't leave a
+				// silent hole in the scrollback.
+				resumeClientTerminals(ws.data.clientKey);
+				// Deliberately NO `terminal.data` subscription: terminal frames are addressed to the one client
+				// that owns the PTY (see `setTerminalPublisher` below), never published to a topic every socket
+				// listens on.
 				ws.subscribe(WS_CHANNELS.piEvent);
 				ws.subscribe(WS_CHANNELS.piExtensionUi);
 				ws.subscribe(WS_CHANNELS.providerLogin);
@@ -125,7 +177,9 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 				}
 				if (!req.id || !req.method) return;
 				try {
-					const result = await handleRequest(req.method, req.params);
+					const result = await handleRequest(req.method, req.params, {
+						clientKey: ws.data.clientKey,
+					});
 					ws.send(JSON.stringify({ id: req.id, ok: true, result }));
 				} catch (err) {
 					const error = err instanceof Error ? err.message : String(err);
@@ -137,12 +191,39 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 					);
 				}
 			},
+			drain(ws) {
+				// The socket has room again — push whatever was held back when `send` refused it.
+				resumeClientTerminals(ws.data.clientKey);
+			},
+			close(ws) {
+				if (stopping) return; // shutting down: closeAllTerminals covers every PTY, no reaping needed
+				const { clientKey } = ws.data;
+				// Only forget the socket if it is still the current one: a fast reconnect can register the new
+				// socket before the old one's close fires, and clearing then would orphan a live connection.
+				if (sockets.get(clientKey) === ws) sockets.delete(clientKey);
+				if (sockets.has(clientKey) || reapTimers.has(clientKey)) return;
+				// Don't kill this client's shells yet — it reconnects on its own, and a hiccup must not cost the
+				// user a running dev server. Only if nothing comes back within the grace window is it gone.
+				reapTimers.set(
+					clientKey,
+					setTimeout(() => {
+						reapTimers.delete(clientKey);
+						if (!sockets.has(clientKey)) closeClientTerminals(clientKey);
+					}, ABANDONED_CLIENT_GRACE_MS),
+				);
+			},
 		},
 	});
 
-	// Stream PTY output to every subscribed client over the terminal.data channel.
-	setTerminalPublisher((channel, data) => {
-		server.publish(channel, JSON.stringify({ channel, data }));
+	// Terminal frames go to the ONE client that owns the PTY, addressed by client id rather than published to a
+	// topic — see the `terminalData` note in the wire. Returns false when that client is briefly away
+	// (mid-reconnect); that is just a dropped frame, its PTYs are alive and streaming resumes on reconnect.
+	setTerminalPublisher((clientKey, channel, data) => {
+		const ws = sockets.get(clientKey);
+		if (!ws) return false;
+		// Bun returns -1 when the socket is backpressured and the frame was NOT accepted. Reporting that as
+		// delivered would drop the batch; returning false makes the batcher hold it, and `drain` below retries.
+		return ws.send(JSON.stringify({ channel, data })) !== -1;
 	});
 
 	// Resolve a session's skill-admission context: map the workspace it belongs to back to its project's
@@ -308,6 +389,13 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 			cancelAllLogins();
 			stopAllWatches();
 			disposeAllSessions();
+			// Drop the pending abandoned-client reapers before killing the PTYs they would have killed, so no
+			// timer outlives the host and keeps the event loop alive after `stop()`. `stopping` stops
+			// `server.stop(true)`'s synchronous close handlers from arming replacements.
+			stopping = true;
+			for (const timer of reapTimers.values()) clearTimeout(timer);
+			reapTimers.clear();
+			sockets.clear();
 			closeAllTerminals();
 			server.stop(true);
 		},

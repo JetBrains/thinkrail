@@ -1,6 +1,7 @@
 import { Maximize2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { onThemeSwap } from "@/themes";
 import { CodeBlock } from "../CodeBlock";
 import { renderMermaid } from "./mermaid";
 import { PanZoomView } from "./PanZoomView";
@@ -33,14 +34,10 @@ export function MermaidView({ source, title }: { source: string; title?: string 
 		setError(null);
 		run();
 		// Re-render when the theme flips so token-derived colors stay in sync.
-		const observer = new MutationObserver(run);
-		observer.observe(document.documentElement, {
-			attributes: true,
-			attributeFilter: ["data-theme"],
-		});
+		const stopThemeWatch = onThemeSwap(run);
 		return () => {
 			cancelled = true;
-			observer.disconnect();
+			stopThemeWatch();
 		};
 	}, [source]);
 

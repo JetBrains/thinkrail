@@ -25,7 +25,12 @@ interface WireFrame {
  * which then 404s the tag. Every other frame, both directions, is relayed verbatim.
  */
 async function forceBadModelOnCreate(page: Page): Promise<void> {
-	await page.routeWebSocket("**/ws", (ws) => {
+	// A regex, not the `"**/ws"` glob this used to be: Playwright anchors a glob at both ends
+	// (`globToRegexPattern` appends `$`), so `**/ws` compiles to `^(.*/)ws$` and stopped matching once the
+	// transport began appending `?client=<id>` to the socket URL. A silently-unmatched route is the worst
+	// possible failure here — the interception below would no-op and this spec would assert against a real
+	// successful turn instead of the error turn it exists to cover.
+	await page.routeWebSocket(/\/ws(\?|$)/, (ws) => {
 		const server = ws.connectToServer();
 		ws.onMessage((message) => {
 			const raw = typeof message === "string" ? message : message.toString();
