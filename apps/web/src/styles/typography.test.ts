@@ -73,7 +73,6 @@ describe("typography source", () => {
 			s44: 44,
 		});
 		expect(typography.lineHeights).toEqual({
-			tight: 1.2307692,
 			compact: 1.25,
 			metadata: 1.3333333,
 			ui: 1.4285714,

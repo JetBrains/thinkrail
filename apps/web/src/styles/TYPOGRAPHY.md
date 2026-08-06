@@ -47,7 +47,7 @@ both markdown surfaces, the `<body>` base).
 | `fontFamilies` | `interface` (Geist Variable, all proportional UI + reading text) · `code` (JetBrains Mono Variable, code only) · `brand` → **`{ "$ref": "interface" }`** (the brand display role today *is* the interface face; swapping in a licensed face means replacing this one alias) |
 | `fontWeights` | `light` 370 · `regular` 400 · `medium` 500 · `semibold` 600 · `brand` 800 |
 | `fontSizes` | `s10` `s11` `s12` `s13` `s14` `s16` `s18` `s20` `s24` `s44` (px) |
-| `lineHeights` | `tight` 1.2308 (13px→16px) · `compact` 1.25 · `metadata` 1.3333 (12px→16px, 18px→24px) · `ui` 1.4286 (14px→20px) · `code` 1.5 · `relaxed` 1.5385 (13px→20px) · `default` 1.6 |
+| `lineHeights` | `compact` 1.25 · `metadata` 1.3333 (12px→16px, 18px→24px) · `ui` 1.4286 (14px→20px) · `code` 1.5 · `relaxed` 1.5385 (13px→20px) · `default` 1.6 |
 | `letterSpacings` | `normal` · `loose` 0.02em · `wide` 0.05em · `widest` 0.1em · `brand` 0.5px |
 
 **Semantic styles** are what components use. Each names seven primitive references and nothing else, so
