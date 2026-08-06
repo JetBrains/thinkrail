@@ -89,6 +89,12 @@
 			"publish": false,
 			"note": "native ::selection in global.css; not a utility"
 		},
+		"selection-bg-muted": {
+			"from": "selection",
+			"alpha": "muted",
+			"publish": false,
+			"note": "the content canvas's ::selection (markdown preview): translucent, so the unselected remainder of a line box reads as a soft edge, not a black hole punched in an opaque wash"
+		},
 
 		"editor-selection-bg": { "from": "editorSelection", "publish": false },
 		"editor-selection-text": {
