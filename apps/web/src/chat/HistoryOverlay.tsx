@@ -421,10 +421,12 @@ export function HistoryOverlay({
 	// with focus anywhere — `Ctrl+R` by `shell/useGlobalHotkeys` (which routes a scope cycle back through
 	// `ChatView` while the overlay is open), Escape by the window listener above.
 	const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+		if ((e.metaKey || e.ctrlKey) && e.code === "KeyS") {
 			// Always swallow — Cmd/Ctrl+S is the browser's own "save page" shortcut. Only a prompt row
 			// selection actually opens the save-as-template dialog; on a message hit (or none) this is a
 			// no-op, same as Enter's message-hit gating above.
+			// Matched by `e.code` (the physical key), not `e.key` (the character): on a Cyrillic layout the S
+			// key produces `ы`, so a `key`-based guard let the browser's save dialog through.
 			e.preventDefault();
 			const item = resolveHistorySelection(stage, result, selected);
 			if (item?.kind === "prompt") onSaveAsTemplate(item.hit);

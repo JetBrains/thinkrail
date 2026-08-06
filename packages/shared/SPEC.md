@@ -16,7 +16,8 @@ Exposed through explicit subpath exports, not a barrel.
 ## Boundary
 
 - **Owns:** host-side runtime helpers that are neither engine- nor transport-specific.
-- **Public surface:** `@thinkrail/shared/shellEnv` → `resolveShellEnv()`, `pathLooksComplete()`;
+- **Public surface:** `@thinkrail/shared/shellEnv` → `resolveShellEnv()`, `pathLooksComplete()`,
+  `localeRepair()`;
   `@thinkrail/shared/freePort` → `findFreePort()`, `isPortFree()`;
   `@thinkrail/shared/paths` → the worktree-relative path conventions (`WORKSPACE_INTERNAL_DIR`,
   `WORKSPACE_CONTEXT_DIR`, `WORKSPACE_TODOS_DIR`);
@@ -33,8 +34,19 @@ Exposed through explicit subpath exports, not a barrel.
 
 ## Contents
 
-- **/shellEnv** — `resolveShellEnv()`: ensure `process.env.PATH` is the user's full login PATH so the
-  in-process agent's bash/tools find `git`/`node`/etc. when the host is launched from Finder/Dock.
+- **/shellEnv** — `resolveShellEnv()`: make the host's environment safe for the shells it spawns, because a
+  GUI-launched host (Finder/Dock, launchd, a systemd unit, a container) inherits a stripped-down one. Two
+  independent repairs, each applied only when needed:
+  - **`PATH`** — ensure it is the user's full login PATH so the in-process agent's bash/tools find
+    `git`/`node`/etc. Skipped when `pathLooksComplete()`.
+  - **locale** — set `LANG` to a UTF-8 locale when *no* locale is configured at all (`LC_ALL`, `LC_CTYPE`
+    and `LANG` all unset). Without one, bash/readline is **byte**-oriented rather than character-oriented,
+    so one backspace over a multi-byte character (Cyrillic, umlauts, CJK) deletes half of it and desyncs the
+    line. Only `LANG` is set, never `LC_ALL`, so a user's per-category settings (`LC_NUMERIC`, `LC_TIME`, …)
+    survive.
+
+  Both repairs land on `process.env`, which is what makes them reach *every* shell the host spawns: the PTY
+  terminals copy it (`server/src/terminal`), and so does the in-process agent's own bash.
 - **/freePort** — `findFreePort(preferred, host?)`: the first free port at or above `preferred`, so a
   host can pick an open port instead of colliding with one already running. `isPortFree(port, host?)`:
   the underlying single-port check.

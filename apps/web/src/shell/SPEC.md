@@ -77,6 +77,13 @@ have been worse than the bug: the chord is swallowed there too, so it would sile
 Monaco, a diff, or the file tree — the very places this handler exists for. Only a workspace with **no**
 chat tab at all has nothing to open; there the chord is purely swallowed (still never a reload).
 
+**Matched by the physical key (`e.code`), never the produced character (`e.key`).** `e.key` depends on the
+active layout — on a Cyrillic layout the R key produces `к` — so a `key`-based guard bailed out before
+`preventDefault()` and the browser reloaded the app, defeating the whole point of the hook. `e.code` is
+layout-independent, and it agrees with the terminal one layer down: xterm resolves its own chords through
+`keyCode`, which browsers derive from the US layout. The same rule binds every letter chord in the app —
+today that's this one plus the history overlay's `Cmd/Ctrl+S`.
+
 Two carve-outs, both load-bearing:
 - **Terminals.** A keydown from inside `.xterm` passes straight through — `Ctrl+R` there is the shell's
   reverse-i-search and belongs to the PTY. (`.xterm` is xterm's own root class, not a hook of ours.)

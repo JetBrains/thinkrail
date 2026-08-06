@@ -94,6 +94,21 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
     rejects any range and any catalog drift. Exempt: `peerDependencies` (extension packages declare `"*"` on
     purpose — the host provides the dep) and local protocols (`workspace:` / `link:` / `file:`).
 
+11. **Terminal = xterm.js on the DOM renderer.** The browser terminal is `@xterm/xterm`, driven from
+    `apps/web/src/panels/TerminalInstance.tsx` against a real PTY (`bun-pty`) in
+    `packages/server/src/terminal`. It stays the choice because it is the only production-ready browser
+    terminal: the credible alternatives are all Ghostty's VT engine compiled to WebAssembly (`ghostty-web`,
+    `restty`, `wterm`), and the most mature of them has a single tagged release that can do neither mouse
+    reporting nor OSC 8 links — vim/htop/lazygit would regress. **The renderer is deliberately the default
+    DOM one**, not `addon-webgl`: xterm's own maintainer names the DOM renderer a prerequisite for touch
+    support, and WebGL carries defects we would inherit (`WebglAddon.dispose()` leaks its WebGL2 context —
+    fatal for our per-worktree terminal churn — plus iOS context-limit crashes). Loading `addon-webgl` would
+    be a regression, not an upgrade; ligatures and `rescaleOverlappingGlyphs` are the accepted cost. Coupling
+    is kept deliberately thin (about a dozen xterm API members; no parser hooks, decorations or
+    serialization), so a swap stays a contained rewrite of one file. **Re-evaluate when both** (a) upstream
+    tags `libghostty-vt` with an official WASM/npm distribution, and (b) `ghostty-web` ships past 0.4.0 with
+    mouse reporting and OSC 8 working.
+
 ## Invariants
 
 - Never **value**-import `pi` in browser-bundled code; import types only, from the `pi-ai` /

@@ -856,3 +856,61 @@ test("Ctrl+R from an active file tab switches to the chat and opens history sear
 	await expect(page.getByTestId("history-overlay")).toBeVisible();
 	await expect(page.getByTestId("history-query")).toBeFocused();
 });
+
+// Regression: both of the app's letter chords used to be matched by `e.key` — the character a key
+// *produces*, which is layout-dependent. On a Russian layout R produces `к` and S produces `ы`, so both
+// guards bailed out before `preventDefault()` and the browser's own shortcuts won instead: `Ctrl+R`
+// reloaded the whole app (the exact thing `useGlobalHotkeys` exists to prevent) and `Ctrl+S` opened "Save
+// page as". Both now match `e.code`, the physical key, which no layout changes.
+//
+// CDP is the only way to drive a *trusted* event whose `key` and `code` disagree — Playwright's
+// `press("Control+r")` always sends the matching pair, so it passed both before and after the fix. Scope
+// note: a real reload is performed by the browser UI, not the renderer, so a CDP-dispatched chord cannot
+// exercise it. What this pins is that our handlers fire at all when `key` is non-Latin, which is precisely
+// what regressed.
+test("the Ctrl+R and Ctrl+S chords fire on a non-Latin keyboard layout", async ({ page }) => {
+	await openWorkspaceChat(page);
+	seedExternalCwdSessions();
+
+	const overlay = page.getByTestId("history-overlay");
+	const query = page.getByTestId("history-query");
+	const scopeBadge = page.getByTestId("history-scope");
+	const promptRow = page
+		.locator('[data-testid="history-item"][data-kind="prompt"]')
+		.filter({ hasText: "fix the flaky watcher test" });
+
+	const cdp = await page.context().newCDPSession(page);
+	/** Ctrl + a physical key, while the active layout produces a Cyrillic character for it. */
+	const pressCyrillicChord = async (key: string, code: string, virtualKeyCode: number) => {
+		for (const type of ["keyDown", "keyUp"] as const) {
+			await cdp.send("Input.dispatchKeyEvent", {
+				type,
+				key,
+				code,
+				modifiers: 2, // Ctrl
+				windowsVirtualKeyCode: virtualKeyCode,
+			});
+		}
+	};
+	const pressCtrlR = () => pressCyrillicChord("к", "KeyR", 82);
+
+	// Ctrl+R from the composer still opens the overlay, even though `key` is `к`.
+	await page.getByTestId("chat-input").click();
+	await pressCtrlR();
+	await expect(overlay).toBeVisible();
+
+	// …and still cycles scope workspace → project → all, so the external-cwd fixture rows come into view.
+	await query.fill("flaky");
+	await pressCtrlR();
+	await pressCtrlR();
+	await expect(scopeBadge).toHaveAttribute("data-scope", "all");
+	await expect(promptRow).toBeVisible();
+
+	// Ctrl+S on that selected prompt row still reaches save-as-template rather than the browser's save dialog.
+	await pressCyrillicChord("ы", "KeyS", 83);
+	await expect(overlay).toBeHidden();
+	await expect(page.getByTestId("template-editor-dialog")).toBeVisible();
+	await expect(page.getByTestId("template-body-input")).toHaveValue("fix the flaky watcher test");
+
+	await page.getByTestId("template-cancel").click();
+});

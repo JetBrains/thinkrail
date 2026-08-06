@@ -75,3 +75,31 @@ test("multiple terminals per workspace keep independent buffers and can be close
 	await page.getByTestId("terminal-tab-close").nth(1).click();
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
 });
+
+// The reported bug: a Russian-layout user saw the terminal corrupt their input. The root cause was the PTY
+// inheriting no locale at all — a GUI-launched host (Finder/Dock, launchd, a container) gets none — which
+// leaves bash/readline *byte*-oriented, so one backspace deletes half of a two-byte character and the line
+// desyncs from what the shell holds. `resolveShellEnv` now installs a UTF-8 `LANG` when the host has none.
+//
+// Honest scope: this pins the invariant, not the failure. It can only go red on a host that itself has no
+// locale, and the e2e host inherits the developer's environment, where `LANG` is usually already set — so
+// the decision logic is regression-tested at the unit level instead (`packages/shared/src/shellEnv.test.ts`
+// covers every branch of `localeRepair`). What this adds is end-to-end coverage of the composition
+// shellEnv → process.env → ptyEnv → PTY, which no unit test spans.
+test("the terminal's shell counts characters, not bytes", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await waitTerminalReady(page);
+	const term = visibleTerminalScreen(page);
+
+	// "привет" is 6 characters but 12 bytes, and `wc -m` counts in the current locale — so a byte-oriented
+	// shell reports 12 here. That is the same shell that deletes half a character per backspace, which is
+	// what the user actually saw.
+	// (`tr -d` strips the leading padding BSD `wc` adds, so the marker matches on macOS too.)
+	await runInTerminal(page, "echo \"LEN=$(printf %s привет | wc -m | tr -d ' ')\"");
+	await expect(term).toContainText("LEN=6");
+
+	// And the locale making it so is genuinely a UTF-8 one, whichever name the platform resolved to.
+	await runInTerminal(page, 'echo "CHARMAP=$(locale charmap)"');
+	await expect(term).toContainText("CHARMAP=UTF-8");
+});

@@ -699,6 +699,16 @@ a project picker, the prompt hero, and the reused
   nullable editor selection-foreground override when provided. `MonacoDiff` re-themes exactly like
   `MonacoEditor` — both consume `monacoSetup.ts`'s define + observer, so a palette swap lands in the
   diff tab too.
+- **Terminal renderer + font measurement.** `TerminalInstance` runs xterm's **default DOM renderer** on
+  purpose — `addon-webgl` is *not* loaded, and loading it would be a regression (see `architecture.md`
+  Decision #11: the DOM renderer is a prerequisite for touch, and `WebglAddon.dispose()` leaks its WebGL2
+  context, which our per-worktree terminal churn would hit). Addons are exactly `fit`, `clipboard`,
+  `unicode11` and `web-fonts`; anything else pinned but unimported is dead weight and a trap for the next
+  reader. `web-fonts` is load-bearing rather than cosmetic: our code font ships as per-alphabet woff2 subsets,
+  so the Cyrillic/CJK file lands *after* xterm has measured the character cell (which it does once, at
+  construction, and never again — unlike Monaco, which re-measures an untrusted early reading). Without the
+  re-measure, non-Latin glyphs render into cells sized for the fallback font and the PTY holds the wrong
+  cols/rows; the panel drives `relayout()` itself so it knows when to re-`fit()`.
 - Heavy deps (Monaco / shiki / xterm) load via `React.lazy(() => import())` to stay out of the eager bundle.
   A lazy chunk that fails to load (or a render throw) is contained by the `components/ErrorBoundary` the
   **shell** wraps each region in (see `shell/SPEC.md`), so a single panel degrades instead of blanking the

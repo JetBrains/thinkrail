@@ -2,6 +2,7 @@ import { WS_CHANNELS } from "@thinkrail/contracts";
 import { ClipboardAddon } from "@xterm/addon-clipboard";
 import { FitAddon } from "@xterm/addon-fit";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
+import { WebFontsAddon } from "@xterm/addon-web-fonts";
 import { type ITheme, Terminal as XTerm } from "@xterm/xterm";
 import { useEffect, useRef, useState } from "react";
 import "@xterm/xterm/css/xterm.css";
@@ -117,6 +118,9 @@ export default function TerminalInstance({
 			term.unicode.activeVersion = "11";
 		});
 		tryLoad(() => term.loadAddon(new ClipboardAddon()));
+		// `false` = don't relayout on activation; we drive it below so we know when to re-fit.
+		const webFonts = new WebFontsAddon(false);
+		tryLoad(() => term.loadAddon(webFonts));
 		termRef.current = term;
 		term.open(host);
 
@@ -152,6 +156,23 @@ export default function TerminalInstance({
 		});
 
 		let disposed = false;
+
+		// Our code font ships as per-alphabet woff2 subsets (`font-display: swap`), so the Cyrillic/CJK file
+		// is only fetched once such a glyph is first drawn. xterm measures the character cell exactly once, at
+		// construction, against whatever had loaded by then — and never re-measures (unlike Monaco, which
+		// treats an early measurement as untrusted). Left alone, non-Latin text renders into cells sized for
+		// the fallback font (drifting glyphs, a misplaced cursor) and the PTY holds the wrong cols/rows. The
+		// addon re-measures once `document.fonts.ready` resolves; we await that ourselves rather than letting
+		// its constructor fire it, so we know when to re-fit and push the corrected size to the shell.
+		void webFonts
+			.relayout()
+			.then(() => {
+				if (!disposed) applyFit();
+			})
+			.catch(() => {
+				// A font that never resolves must not break the terminal — the construction-time fit stands.
+			});
+
 		void getTransport()
 			.request("terminal.create", { workspaceId })
 			.then(({ id }) => {
