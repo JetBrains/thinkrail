@@ -46,6 +46,7 @@
 		"control-primary-bg": { "from": "accent", "publish": true },
 		"control-primary-text": { "from": "onAccent", "publish": true },
 		"control-border-default": { "from": "border", "publish": true },
+		"control-border-active": { "from": "borderStrong", "publish": true },
 		"control-disabled-bg": { "from": "input", "publish": true },
 		"control-disabled-text": { "from": "disabled", "alpha": "strong", "publish": true },
 
@@ -56,7 +57,6 @@
 		"primary-subtle": { "from": "accent", "alpha": "subtle", "publish": true },
 		"primary-soft": { "from": "accent", "alpha": "soft", "publish": true },
 		"primary-muted": { "from": "accent", "alpha": "muted", "publish": true },
-		"primary-strong": { "from": "accent", "alpha": "strong", "publish": true },
 
 		"on-primary-soft": { "from": "onAccent", "alpha": "soft", "publish": true },
 

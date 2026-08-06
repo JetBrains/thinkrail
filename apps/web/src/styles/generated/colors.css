@@ -25,6 +25,7 @@
 	--control-primary-bg: var(--accent);
 	--control-primary-text: var(--on-accent);
 	--control-border-default: var(--border);
+	--control-border-active: var(--border-strong);
 	--control-disabled-bg: var(--input);
 	--control-disabled-text: color-mix(in srgb, var(--disabled) 60%, transparent);
 	--border-default: var(--border-strong);
@@ -33,7 +34,6 @@
 	--primary-subtle: color-mix(in srgb, var(--accent) 10%, transparent);
 	--primary-soft: color-mix(in srgb, var(--accent) 20%, transparent);
 	--primary-muted: color-mix(in srgb, var(--accent) 40%, transparent);
-	--primary-strong: color-mix(in srgb, var(--accent) 60%, transparent);
 	--on-primary-soft: color-mix(in srgb, var(--on-accent) 20%, transparent);
 	--feedback-info: var(--info);
 	--feedback-info-subtle: color-mix(in srgb, var(--info) 12%, transparent);
@@ -89,6 +89,7 @@
 	--color-control-primary-bg: var(--control-primary-bg);
 	--color-control-primary-text: var(--control-primary-text);
 	--color-control-border-default: var(--control-border-default);
+	--color-control-border-active: var(--control-border-active);
 	--color-control-disabled-bg: var(--control-disabled-bg);
 	--color-control-disabled-text: var(--control-disabled-text);
 	--color-border-default: var(--border-default);
@@ -97,7 +98,6 @@
 	--color-primary-subtle: var(--primary-subtle);
 	--color-primary-soft: var(--primary-soft);
 	--color-primary-muted: var(--primary-muted);
-	--color-primary-strong: var(--primary-strong);
 	--color-on-primary-soft: var(--on-primary-soft);
 	--color-feedback-info: var(--feedback-info);
 	--color-feedback-info-subtle: var(--feedback-info-subtle);

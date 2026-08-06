@@ -84,7 +84,7 @@ export function reconcileModel(
 
 /** A shared pill-trigger look for the project + branch pickers (mockup `.pill`). */
 const PILL =
-	"flex h-8 min-w-0 items-center gap-sm rounded-[var(--radius-md)] border border-control-border-default bg-clip-padding bg-control-bg px-sm tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-primary-strong data-[open=true]:bg-control-bg-selected";
+	"flex h-8 min-w-0 items-center gap-sm rounded-[var(--radius-md)] border border-control-border-default bg-clip-padding bg-control-bg px-sm tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected";
 
 /**
  * The start-working surface: a **target control** chooses where the work runs — an isolated worktree
