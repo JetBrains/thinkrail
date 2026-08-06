@@ -102,7 +102,10 @@ as an extension-UI notice AND **rolls the comments back to `draft`** (`rollbackS
 `ackSend`'s accept-vs-reject window): a review the agent never received stays retryable instead of
 stranding as `sent` with its send/edit/delete actions gone, and a chat spun up solely for that failed
 send is unpinned unless another comment still backs it. A fault AFTER acceptance is a real turn fault
-(the package *was* delivered) and rides the event stream, leaving the `sent` state correct. The **`resolve_comment`** capability is an agent-module custom tool
+(the package *was* delivered) and rides the event stream, leaving the `sent` state correct. The
+rollback runs DETACHED (after the send's lock released) and fully synchronously, so — like
+`reanchorWorkspace` — it stays correct unlocked, and it reads with `load` (never `ensureSnapshot`): a
+`close`/archive that lands first makes it a clean no-op instead of resurrecting an empty open review. The **`resolve_comment`** capability is an agent-module custom tool
 (`agent/reviewTool.ts`, registered on every session like `ask_user_question`) whose execution is
 delegated back here through a host-installed seam — the agent module stays dependency-free.
 

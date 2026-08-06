@@ -218,6 +218,20 @@ test("rollbackSend is a no-op for a session that never sent these comments (faul
 	expect(getReviewSnapshot(WS_ID).comments[0]?.status).toBe("sent");
 });
 
+test("rollbackSend after close is a clean no-op — it never resurrects the closed review", () => {
+	// The rollback fires DETACHED, so a close can land first; reading with `load` (not `ensureSnapshot`)
+	// keeps it from writing a fresh empty open review over the closed one.
+	const comment = addInline();
+	markCommentsSent(WS_ID, [comment.id], "sess-file");
+	closeReview(WS_ID);
+	const before = pushes.length;
+	rollbackSend(WS_ID, [comment.id], "sess-file");
+	expect(pushes.length).toBe(before); // no read-through, no write, no push
+	// On disk the review is still closed until the next touch starts a fresh one.
+	const onDisk = JSON.parse(readFileSync(join(dataDir, "reviews", `${WS_ID}.json`), "utf8"));
+	expect(onDisk.review.status).toBe("closed");
+});
+
 test("a review-level remark pins its own bucket chat, so a second one continues the discussion", () => {
 	// The whole-change-set bucket is keyed like a file (`REVIEW_LEVEL_KEY`). Without a pin, every
 	// anchorless remark opened a chat of its own — the one send that could never be followed up.
