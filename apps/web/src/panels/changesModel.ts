@@ -3,15 +3,15 @@ import type { GitCommit, GitDiffScope, GitFileChange, GitFileStatus } from "@thi
 /**
  * Token-utility classes for a changed file's *name*, encoding its git status without a letter glyph
  * (the VS Code / git-decoration convention), shared by the flat list and the tree so both read alike:
- * added / untracked → a muted green (dimmed so it doesn't shout next to the neutral rows), deleted → red +
- * strikethrough, renamed → blue, modified → plain (the `+/−` counts carry it). Applied on top of the row's
- * default `text-text-muted`.
+ * added / untracked → green, deleted → red + strikethrough, renamed → blue, modified → plain (the `+/−`
+ * counts carry it) — each at full feedback strength so the new/removed/renamed names read clearly against
+ * the neutral rows. Applied on top of the row's default `text-text-muted`.
  */
 export function statusNameClass(status: GitFileStatus): string {
 	switch (status) {
 		case "added":
 		case "untracked":
-			return "text-feedback-success-muted";
+			return "text-feedback-success";
 		case "deleted":
 			return "text-feedback-error line-through";
 		case "renamed":
