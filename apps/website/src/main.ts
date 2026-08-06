@@ -45,26 +45,6 @@ if (editor && sections.length > 0) {
 	for (const section of sections) spy.observe(section);
 }
 
-/* ── Status bar: a line counter that tracks scroll like a cursor ────────── */
-
-const TOTAL_LINES = 2431;
-const lnEl = document.getElementById("sb-ln");
-if (editor && lnEl) {
-	let ticking = false;
-	const update = () => {
-		ticking = false;
-		const range = editor.scrollHeight - editor.clientHeight;
-		const ratio = range > 0 ? editor.scrollTop / range : 0;
-		lnEl.textContent = `Ln ${Math.max(1, Math.round(ratio * TOTAL_LINES))}, Col 1`;
-	};
-	editor.addEventListener("scroll", () => {
-		if (!ticking) {
-			ticking = true;
-			requestAnimationFrame(update);
-		}
-	});
-}
-
 /* ── Terminal: type the install command, then reveal the output ─────────── */
 
 const terminal = document.querySelector<HTMLElement>(".terminal");
@@ -123,10 +103,14 @@ if (themeToggle) {
 	const STORAGE_KEY = "thinkrail-site-theme";
 	const mediaQuery = window.matchMedia("(prefers-color-scheme: light)");
 
-	// Check if user has made an explicit choice
+	// Check if user has made an explicit choice. Legacy multi-theme values (darcula/gruvbox,
+	// from the old 4-theme selector) are dark palettes — migrate them to "dark" since the
+	// toggle and its icon CSS only understand dark/light.
 	const getSavedTheme = (): string | null => {
 		try {
-			return localStorage.getItem(STORAGE_KEY);
+			const raw = localStorage.getItem(STORAGE_KEY);
+			if (raw === null) return null;
+			return raw === "light" ? "light" : "dark";
 		} catch {
 			return null;
 		}
@@ -241,33 +225,36 @@ if (railNote && railNoteDismiss) {
 	const DISMISSED_KEY = "thinkrail-rail-note-dismissed"; // localStorage: dismissed for good
 	const REVEAL_DELAY = 5000; // 5 seconds
 
-	const readFlag = (store: Storage | undefined, key: string): boolean => {
+	// Storage is resolved inside the try — accessing window.localStorage/sessionStorage itself
+	// can throw (e.g. a SecurityError when the browser blocks storage), not just getItem/setItem.
+	const readFlag = (getStore: () => Storage, key: string): boolean => {
 		try {
-			return store?.getItem(key) === "true";
+			return getStore().getItem(key) === "true";
 		} catch {
 			return false;
 		}
 	};
-	const writeFlag = (store: Storage | undefined, key: string): void => {
+	const writeFlag = (getStore: () => Storage, key: string): void => {
 		try {
-			store?.setItem(key, "true");
+			getStore().setItem(key, "true");
 		} catch {
 			// storage unavailable — non-fatal
 		}
 	};
 
-	const dismissed = readFlag(window.localStorage, DISMISSED_KEY);
-	const shownThisSession = readFlag(window.sessionStorage, SHOWN_KEY);
+	const dismissed = readFlag(() => window.localStorage, DISMISSED_KEY);
+	const shownThisSession = readFlag(() => window.sessionStorage, SHOWN_KEY);
 
 	if (dismissed || shownThisSession) {
-		// Never render again — HTML starts "pending" (opacity 0); collapse it entirely.
+		// Never render again — an inline script in index.html already applied "pending"
+		// (opacity 0, no flash) before this module ran; collapse it entirely.
 		railNote.classList.remove("pending");
 		railNote.classList.add("hidden");
 	} else {
-		// HTML already carries "pending" (hidden, no flash) — reveal once after the delay.
+		// Already "pending" (hidden, no flash) courtesy of the inline script — reveal once after the delay.
 		const timerId = window.setTimeout(() => {
 			railNote.classList.remove("pending");
-			writeFlag(window.sessionStorage, SHOWN_KEY);
+			writeFlag(() => window.sessionStorage, SHOWN_KEY);
 		}, REVEAL_DELAY);
 
 		// One timer, cleared if the page unloads before it fires.
@@ -276,8 +263,8 @@ if (railNote && railNoteDismiss) {
 
 	railNoteDismiss.addEventListener("click", () => {
 		railNote.classList.add("hidden");
-		writeFlag(window.sessionStorage, SHOWN_KEY);
-		writeFlag(window.localStorage, DISMISSED_KEY);
+		writeFlag(() => window.sessionStorage, SHOWN_KEY);
+		writeFlag(() => window.localStorage, DISMISSED_KEY);
 	});
 }
 

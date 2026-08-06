@@ -13,8 +13,9 @@ The project's public website — a single landing page whose creative conceit is
 IDE**: a faithful HTML/CSS recreation of the ThinkRail shell (title bar, project rail, tab strip,
 files rail, terminal, status bar) whose center "editor" is the normally-scrolling page content. Each
 section poses as a file of a `website` workspace (`README.md`, `why.md`, `features/*.md`,
-`install.sh`, `CONTRIBUTING.md`); the chrome reacts to scroll (active tab,
-tree selection, status-bar line counter) like the editor is switching files.
+`install.sh`, `CONTRIBUTING.md`); the file tree's selection reacts to scroll (scroll-spy) like the
+editor is switching files. The tab strip is decorative — it does not react to scroll — and the status
+bar is a plain copyright footer, not a live line counter.
 
 Not part of the product: nothing in the app depends on it, and it ships to GitHub Pages, not in the
 binary.

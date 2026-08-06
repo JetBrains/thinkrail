@@ -278,11 +278,28 @@
 							</div>
 						</div>
 					</div>
-					<div class="rail-note pending" id="rail-note">
+					<div class="rail-note" id="rail-note">
 						<svg class="rail-note-icon" aria-hidden="true"><use href="#i-info" /></svg>
 						<p>A workspace is a <code>git worktree</code>: its own branch, files, terminals, and chats.</p>
 						<button type="button" class="rail-note-dismiss" id="rail-note-dismiss">Understood</button>
 					</div>
+					<!--
+						Card starts visible in the markup so it reads with JS disabled. This inline,
+						non-module script (always runs if JS runs at all, independent of whether the
+						main.ts bundle fetches/executes) hides it immediately to avoid a flash, then
+						main.ts takes over the reveal/dismiss lifecycle. The fallback timeout guards
+						against main.ts failing to load — the card still surfaces on its own.
+					-->
+					<script>
+						(() => {
+							const note = document.getElementById("rail-note");
+							if (!note) return;
+							note.classList.add("pending");
+							window.setTimeout(() => {
+								note.classList.remove("pending");
+							}, 10000);
+						})();
+					</script>
 				</aside>
 
 				<!-- ══ Center: tab strip + the scrolling "editor" ══ -->

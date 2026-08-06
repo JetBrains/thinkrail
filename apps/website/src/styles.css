@@ -1748,4 +1748,18 @@ html.anim .terminal.armed [data-out] {
 	.term-caret {
 		animation: none;
 	}
+
+	.rail-note {
+		transition: none;
+	}
+
+	[data-mock-hint],
+	[data-mock-hint] *,
+	[data-mock-hint] .i {
+		transition: none;
+	}
+
+	.mock-tooltip {
+		transition: none;
+	}
 }
