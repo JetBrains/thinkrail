@@ -157,7 +157,7 @@ The module set: `transport` / `store` / branded `shell`; `ProjectTree`; `FileTre
   load despite the analytics opt-out. `e2e/fonts.spec.ts` pins both halves (no CDN request; the real
   faces present).
 - **The typography system — `typography.json` as the single source of truth, the primitives and the
-  semantic styles generated from them, the `<body>` base, the 350/400/500/600/800 weight policy,
+  semantic styles generated from them, the `<body>` base, the 370/400/500/600/800 weight policy,
   code-only mono, the two prose systems, and how to add or change a style — is specced in
   [src/styles/TYPOGRAPHY.md](src/styles/TYPOGRAPHY.md)** (`web-typography`); check changes against it. The
   generator that turns it into CSS is [scripts/SPEC.md](scripts/SPEC.md).

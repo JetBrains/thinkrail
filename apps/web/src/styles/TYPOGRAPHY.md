@@ -45,7 +45,7 @@ both markdown surfaces, the `<body>` base).
 | Group | Ids |
 |---|---|
 | `fontFamilies` | `interface` (Geist Variable, all proportional UI + reading text) · `code` (JetBrains Mono Variable, code only) · `brand` → **`{ "$ref": "interface" }`** (the brand display role today *is* the interface face; swapping in a licensed face means replacing this one alias) |
-| `fontWeights` | `light` 350 · `regular` 400 · `medium` 500 · `semibold` 600 · `brand` 800 |
+| `fontWeights` | `light` 370 · `regular` 400 · `medium` 500 · `semibold` 600 · `brand` 800 |
 | `fontSizes` | `s10` `s11` `s12` `s13` `s14` `s16` `s18` `s20` `s24` `s44` (px) |
 | `lineHeights` | `tight` 1.2308 (13px→16px) · `compact` 1.25 · `metadata` 1.3333 (12px→16px, 18px→24px) · `ui` 1.4286 (14px→20px) · `code` 1.5 · `relaxed` 1.5385 (13px→20px) · `default` 1.6 |
 | `letterSpacings` | `normal` · `loose` 0.02em · `wide` 0.05em · `widest` 0.1em · `brand` 0.5px |
@@ -92,7 +92,7 @@ data. Rationale lives in this file.
 ## The `<body>` base
 
 `rootStyle` is the typography of text that carries no semantic class — and it is **a `$ref`, never
-values** (today `{ "$ref": "ui.default" }`, so 14px/350 interface with a 20px line height). The generator emits it as a
+values** (today `{ "$ref": "ui.default" }`, so 14px/370 interface with a 20px line height). The generator emits it as a
 `body { … }` rule inside `@layer base`, which puts it *below* every semantic class in the cascade: it is
 a floor, never something a component relies on.
 
@@ -167,7 +167,7 @@ naming its own type. Two exist:
 | | `chat` (`.tr-prose-chat`) | `doc` (`.tr-prose-doc`) |
 |---|---|---|
 | mounted by | `chat/Markdown.tsx` | `panels/MarkdownPreview.tsx` |
-| body, blockquote, lists | 14 / 350 / 1.6 | 14 / 350 / 1.6 |
+| body, blockquote, lists | 14 / 370 / 1.6 | 14 / 370 / 1.6 |
 | h1 | 18 / 600 | **24 / 600** |
 | h2 | 14 / 600 | **20 / 600** |
 | h3 | 12 / 600 | **18 / 600** |
@@ -176,7 +176,7 @@ naming its own type. Two exist:
 | h6 | 10 / 500 uppercase | 12 / 600 uppercase |
 | inline code | 13 mono | 13 mono |
 | fenced code | 13 mono / 1.54 | 13 mono / 1.5 |
-| table body / header | 12 / 350 · 12 / 600 | 14 / 350 · 14 / 600 |
+| table body / header | 12 / 370 · 12 / 600 | 14 / 370 · 14 / 600 |
 | `strong` / `b` | weight 500 only | weight 500 only |
 
 **Why two.** A chat bubble is a stream of short messages: headings there are separators, and a 24px h1
@@ -226,7 +226,7 @@ those are proportional. Validation enforces this: a monospace family on a non-co
 
 ## Weight policy
 
-- **350** (`light`) — ordinary UI, body, entity, metadata and status text (interface family).
+- **370** (`light`) — ordinary UI, body, entity, metadata and status text (interface family).
 - **400** (`regular`) — monospace / code text only (`code.*`).
 - **500** — buttons (`ui.action`), in-page section titles, compact titles, inline emphasis
   (`ui.emphasis`), uppercase labels (`ui.eyebrow`/`labelPill`), chat prose h4–h6 and `strong`.

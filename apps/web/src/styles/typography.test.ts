@@ -82,7 +82,7 @@ describe("typography source", () => {
 			default: 1.6,
 		});
 		expect(typography.fontWeights).toEqual({
-			light: 350,
+			light: 370,
 			regular: 400,
 			medium: 500,
 			semibold: 600,
@@ -151,8 +151,8 @@ describe("typography source", () => {
 				}),
 			),
 		).toEqual({
-			default: 350,
-			metadata: 350,
+			default: 370,
+			metadata: 370,
 			eyebrow: 500,
 			labelPill: 500,
 			action: 500,

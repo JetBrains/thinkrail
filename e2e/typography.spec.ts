@@ -131,7 +131,7 @@ test("the chat and document markdown surfaces each wear their own prose system",
 	// The document surface: `tr-prose-doc`, body copy at the reading size, h1 at the document scale —
 	// 24px, which is the whole point of a separate system (the chat h1 is 18px).
 	const doc = page.locator(".tr-prose-doc").first();
-	expect(await typeOf(doc)).toMatchObject({ size: "14px", weight: "350", lineHeight: "22.4px" });
+	expect(await typeOf(doc)).toMatchObject({ size: "14px", weight: "370", lineHeight: "22.4px" });
 	expect(await typeOf(doc.locator("h1").first())).toMatchObject({ size: "24px", weight: "600" });
 
 	// One system per surface: the rendered file must not also carry the bubble scale, or which of the two
