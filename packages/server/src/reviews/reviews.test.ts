@@ -27,6 +27,7 @@ import {
 	removeWorkspaceReviews,
 	resolveCommentFromAgent,
 	reviewSessionKey,
+	rollbackSend,
 	sendableComments,
 	setReviewPublisher,
 	updateComment,
@@ -177,6 +178,44 @@ test("send lifecycle: sendable drafts → sent with session link; the file's cha
 		true,
 	);
 	expect(() => sendableComments(WS_ID)).toThrow("No draft comments");
+});
+
+test("rollbackSend undoes an optimistic markSent (pre-turn rejection) → drafts again, chat unpinned", () => {
+	const c1 = addInline("one");
+	const c2 = addInline("two");
+	markCommentsSent(WS_ID, [c1.id, c2.id], "sess-file");
+	expect(getReviewSnapshot(WS_ID).review.fileSessions).toEqual({ "a.ts": "sess-file" });
+	rollbackSend(WS_ID, [c1.id, c2.id], "sess-file");
+	const snapshot = getReviewSnapshot(WS_ID);
+	expect(snapshot.comments.every((c) => c.status === "draft" && c.sessionId === undefined)).toBe(
+		true,
+	);
+	expect(snapshot.comments.every((c) => c.sentAt === undefined)).toBe(true);
+	// The chat spun up for the failed send no longer backs any comment → unpinned, so a retry is clean.
+	expect(snapshot.review.fileSessions).toEqual({});
+	expect(sendableComments(WS_ID).map((c) => c.id)).toEqual([c1.id, c2.id]);
+});
+
+test("rollbackSend keeps a reused chat's pin when another comment still backs it", () => {
+	const first = addInline("delivered");
+	markCommentsSent(WS_ID, [first.id], "sess-file");
+	const second = addInline("failed follow-up");
+	markCommentsSent(WS_ID, [second.id], "sess-file");
+	rollbackSend(WS_ID, [second.id], "sess-file");
+	const snapshot = getReviewSnapshot(WS_ID);
+	expect(snapshot.comments.find((c) => c.id === first.id)?.status).toBe("sent");
+	expect(snapshot.comments.find((c) => c.id === second.id)?.status).toBe("draft");
+	// The first comment still lives in that chat, so the pin stays.
+	expect(snapshot.review.fileSessions).toEqual({ "a.ts": "sess-file" });
+});
+
+test("rollbackSend is a no-op for a session that never sent these comments (fault after acceptance)", () => {
+	const comment = addInline();
+	markCommentsSent(WS_ID, [comment.id], "sess-file");
+	const before = pushes.length;
+	rollbackSend(WS_ID, [comment.id], "other-session");
+	expect(pushes.length).toBe(before); // nothing matched → no push
+	expect(getReviewSnapshot(WS_ID).comments[0]?.status).toBe("sent");
 });
 
 test("a review-level remark pins its own bucket chat, so a second one continues the discussion", () => {

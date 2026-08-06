@@ -87,6 +87,7 @@ import {
 	REVIEW_LEVEL_KEY,
 	removeWorkspaceReviews,
 	reviewSessionKey,
+	rollbackSend,
 	sendableComments,
 	updateComment,
 } from "../reviews";
@@ -160,20 +161,33 @@ function trackSend(mode: SendMode, text: string): void {
  * exists, so the client opens the chat tab immediately instead of sitting on pi's turn (`ackSend`'s
  * 10s acceptance window made every review send feel stuck). A pre-turn rejection (bad model, missing
  * API key) can't reach the WS response any more, so it surfaces INSIDE the just-opened chat as an
- * extension-UI notice; later faults arrive via the event stream as always.
+ * extension-UI notice — AND rolls the comments back from the optimistic `sent` (`markCommentsSent`
+ * runs synchronously, before we know the turn is accepted) to `draft` (`rollbackSend`), so a review
+ * the agent never received stays retryable instead of stranding as sent with its actions gone. The
+ * `ackSend` window is what tells accept from reject: a fault AFTER acceptance is a real turn fault
+ * (the package WAS delivered) and rides the event stream, leaving the `sent` state correct.
  */
 function fireReviewPrompt(
+	workspaceId: string,
+	ids: string[],
 	sessionId: string,
 	pkg: string,
 	send: (sessionId: string, text: string) => Promise<void> = promptSession,
 ): void {
-	void send(sessionId, pkg).catch((err) => {
-		notifyExtUi(
-			sessionId,
-			`Review send failed: ${err instanceof Error ? err.message : String(err)}`,
-			"error",
-		);
-	});
+	void ackSend(send(sessionId, pkg))
+		.then(undefined, (err) => {
+			rollbackSend(workspaceId, ids, sessionId);
+			notifyExtUi(
+				sessionId,
+				`Review send failed: ${err instanceof Error ? err.message : String(err)}`,
+				"error",
+			);
+		})
+		.catch((err) => {
+			// The rollback/notify itself failed — nothing left to do but log; a detached fire has no one
+			// to throw to, and letting it surface as an unhandled rejection would be worse.
+			console.warn(`review send rollback failed: ${err instanceof Error ? err.message : err}`);
+		});
 }
 
 /**
@@ -202,7 +216,7 @@ async function sendToFileChat(
 	const existing = opts.sessionId ?? fileReviewSession(workspaceId, path);
 	if (existing && (await ensureSessionAttached(existing, workspaceId, ws.worktreePath))) {
 		markCommentsSent(workspaceId, ids, existing);
-		fireReviewPrompt(existing, pkg, followUpSession);
+		fireReviewPrompt(workspaceId, ids, existing, pkg, followUpSession);
 		// `reused`: the client must HYDRATE this chat rather than open it as new — it may never have seen
 		// it (a second client, or this one after a reload). The model/thinking placeholders match the
 		// disk-summary convention and are ignored on that path.
@@ -232,7 +246,7 @@ async function sendToFileChat(
 		});
 	}
 	markCommentsSent(workspaceId, ids, created.sessionId);
-	fireReviewPrompt(created.sessionId, pkg);
+	fireReviewPrompt(workspaceId, ids, created.sessionId, pkg);
 	return { ...created, reused: false };
 }
 
