@@ -46,6 +46,8 @@
 		"control-primary-bg": { "from": "accent", "publish": true },
 		"control-primary-text": { "from": "onAccent", "publish": true },
 		"control-border": { "from": "border", "publish": true },
+		"control-disabled-bg": { "from": "input", "publish": true },
+		"control-disabled-text": { "from": "disabled", "alpha": "strong", "publish": true },
 
 		"border-default": { "from": "borderStrong", "publish": true },
 		"border-muted": { "from": "border", "publish": true },

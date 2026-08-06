@@ -602,7 +602,7 @@ export function NewWorkspaceDialog({
 						data-testid="create-workspace"
 						disabled={creating}
 						onClick={() => void create()}
-						className="flex h-8 shrink-0 items-center gap-sm rounded-[var(--radius-md)] bg-primary px-md tr-text-action text-text-on-primary outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
+						className="flex h-8 shrink-0 items-center gap-sm rounded-[var(--radius-md)] bg-control-primary-bg px-md tr-text-action text-control-primary-text outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-primary disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
 					>
 						{isolated ? "Create" : "Start"}
 						<span className="inline-flex h-4 min-w-4 items-center justify-center rounded-[3px] bg-on-primary-soft px-1 tr-code-text">

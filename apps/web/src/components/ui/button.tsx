@@ -3,15 +3,18 @@ import type * as React from "react";
 import { cn } from "@/lib";
 
 const buttonVariants = cva(
-	"inline-flex items-center justify-center gap-sm whitespace-nowrap rounded-[var(--radius-md)] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+	"inline-flex items-center justify-center gap-sm whitespace-nowrap rounded-[var(--radius-md)] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0",
 	{
 		variants: {
 			variant: {
-				default: "bg-control-primary-bg text-control-primary-text hover:opacity-90",
-				destructive: "bg-feedback-error text-text-on-primary hover:opacity-90",
+				default:
+					"bg-control-primary-bg text-control-primary-text hover:opacity-90 disabled:bg-control-disabled-bg disabled:text-control-disabled-text",
+				destructive:
+					"bg-feedback-error text-text-on-primary hover:opacity-90 disabled:bg-control-disabled-bg disabled:text-control-disabled-text",
 				outline:
-					"border border-control-border bg-control-bg text-text-default hover:bg-control-bg-hovered",
-				ghost: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default",
+					"border border-control-border bg-control-bg text-text-default hover:bg-control-bg-hovered disabled:bg-control-disabled-bg disabled:text-control-disabled-text",
+				ghost:
+					"text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text",
 			},
 			size: {
 				default: "h-8 px-md tr-text-ui",

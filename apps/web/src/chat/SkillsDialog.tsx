@@ -352,7 +352,7 @@ function Toggle({
 			disabled={busy}
 			onClick={onClick}
 			className={cn(
-				"shrink-0 rounded-[var(--radius-sm)] border px-sm py-0.5 tr-text-metadata transition-colors disabled:opacity-50",
+				"shrink-0 rounded-[var(--radius-sm)] border px-sm py-0.5 tr-text-metadata transition-colors disabled:bg-control-disabled-bg disabled:text-control-disabled-text",
 				on
 					? "border-primary-muted bg-clip-padding bg-primary-subtle text-primary"
 					: "border-border-default text-text-muted hover:bg-control-bg-hovered",
@@ -420,7 +420,7 @@ function SkillRow({
 					disabled={busy}
 					onClick={() => onToggle(!loaded)}
 					className={cn(
-						"shrink-0 rounded-[var(--radius-sm)] border px-sm py-0.5 tr-text-metadata transition-colors disabled:opacity-50",
+						"shrink-0 rounded-[var(--radius-sm)] border px-sm py-0.5 tr-text-metadata transition-colors disabled:bg-control-disabled-bg disabled:text-control-disabled-text",
 						loaded
 							? "border-primary-muted bg-clip-padding bg-primary-subtle text-primary"
 							: "border-border-default text-text-muted hover:bg-control-bg-hovered",

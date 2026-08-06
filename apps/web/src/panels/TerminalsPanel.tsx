@@ -53,7 +53,7 @@ export function TerminalsPanel() {
 					aria-label="New terminal"
 					disabled={!activeWorkspaceId}
 					onClick={() => activeWorkspaceId && addTerminal(activeWorkspaceId)}
-					className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:opacity-40"
+					className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text"
 				>
 					<Plus className="size-4" />
 				</button>

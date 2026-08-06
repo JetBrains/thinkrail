@@ -336,7 +336,7 @@ export function AskUserQuestionCard({
 								data-testid="ask-skip"
 								onClick={() => reply({ answers: [], cancelled: true })}
 								disabled={!actions}
-								className="text-text-muted tr-text-ui hover:text-text-default disabled:opacity-50"
+								className="text-text-muted tr-text-ui hover:text-text-default disabled:text-control-disabled-text"
 							>
 								Skip
 							</button>
@@ -345,7 +345,7 @@ export function AskUserQuestionCard({
 									type="button"
 									data-testid="ask-continue"
 									onClick={() => setTab(Math.min(tab + 1, reviewTab))}
-									className="rounded-[var(--radius-md)] bg-primary px-md py-1.5 tr-text-action text-text-on-primary hover:opacity-90"
+									className="rounded-[var(--radius-md)] bg-control-primary-bg px-md py-1.5 tr-text-action text-control-primary-text hover:opacity-90"
 								>
 									Next →
 								</button>
@@ -355,7 +355,7 @@ export function AskUserQuestionCard({
 									data-testid="ask-submit"
 									onClick={() => reply({ answers, cancelled: false })}
 									disabled={!canSubmit}
-									className="rounded-[var(--radius-md)] bg-primary px-md py-1.5 tr-text-action text-text-on-primary hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+									className="rounded-[var(--radius-md)] bg-control-primary-bg px-md py-1.5 tr-text-action text-control-primary-text hover:opacity-90 disabled:cursor-not-allowed disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
 								>
 									Submit
 								</button>
