@@ -83,7 +83,7 @@ export default function MarkdownPreview({
 	path: string;
 }) {
 	return (
-		<div data-testid="markdown-preview" className="h-full overflow-auto bg-container-content-bg">
+		<div data-testid="markdown-preview" className="h-full overflow-auto bg-container-workspace-bg">
 			<article className="mx-auto max-w-[78ch] px-xl py-lg">
 				<MarkdownDocument content={content} workspaceId={workspaceId} path={path} />
 			</article>

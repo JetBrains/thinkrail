@@ -34,6 +34,9 @@ window.MonacoEnvironment = {
 loader.config({ monaco });
 
 export const THEME = "thinkrail";
+/** The document-editor canvas theme: identical to THEME but painted on `container-workspace-bg` (the
+ * file editor + markdown Source view). THEME stays on `container-content-bg` for the Changes diff. */
+export const EDITOR_THEME = "thinkrail-editor";
 
 // Resolved language ids, cached per path. The probe model below is disposed immediately, and the answer
 // is pure per path, so a given file is probed at most once.
@@ -126,7 +129,6 @@ export function defineThinkrailTheme(m: Monaco): void {
 	const set = (key: string, value: string) => {
 		if (value) colors[key] = value;
 	};
-	set("editor.background", token("--container-content-bg"));
 	set("editor.foreground", token("--code-foreground"));
 	set("editorLineNumber.foreground", token("--text-muted"));
 	set("editorCursor.foreground", token("--primary"));
@@ -147,20 +149,34 @@ export function defineThinkrailTheme(m: Monaco): void {
 			: light
 				? "vs"
 				: "vs-dark";
+	// Two themes, identical but for the canvas background: THEME is the diff surface (content-bg), and
+	// EDITOR_THEME is the document editor canvas (workspace-bg). Only one Monaco instance mounts at a time
+	// (the active center tab), so switching the global theme per instance is safe.
+	const withBackground = (bg: string): Record<string, string> =>
+		bg ? { ...colors, "editor.background": bg } : colors;
+	const contentBg = token("--container-content-bg");
+	const workspaceBg = token("--container-workspace-bg");
 	try {
-		m.editor.defineTheme(THEME, { base, inherit: true, rules, colors });
+		m.editor.defineTheme(THEME, { base, inherit: true, rules, colors: withBackground(contentBg) });
+		m.editor.defineTheme(EDITOR_THEME, {
+			base,
+			inherit: true,
+			rules,
+			colors: withBackground(workspaceBg),
+		});
 	} catch {
 		// A token value Monaco can't parse must degrade to the base palette, never crash the panel.
 		m.editor.defineTheme(THEME, { base, inherit: true, rules: [], colors: {} });
+		m.editor.defineTheme(EDITOR_THEME, { base, inherit: true, rules: [], colors: {} });
 	}
 }
 
 /** Re-theme Monaco on a `[data-theme]` swap: the theme's chrome + contrast-aware base are read once at
  * define time, so without this an editor keeps the theme it mounted with. Disconnect on unmount. */
-export function watchThemeSwap(m: Monaco): MutationObserver {
+export function watchThemeSwap(m: Monaco, themeName: string = THEME): MutationObserver {
 	const observer = new MutationObserver(() => {
 		defineThinkrailTheme(m);
-		m.editor.setTheme(THEME);
+		m.editor.setTheme(themeName);
 	});
 	observer.observe(document.documentElement, {
 		attributes: true,

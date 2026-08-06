@@ -32,7 +32,7 @@ export default function MonacoDiff({
 
 	// Mirrors MonacoEditor's observer: follow atomic `[data-theme]` swaps while mounted.
 	const onMount: DiffOnMount = (_editor, m) => {
-		observerRef.current = watchThemeSwap(m);
+		observerRef.current = watchThemeSwap(m, THEME);
 	};
 
 	useEffect(() => () => observerRef.current?.disconnect(), []);
