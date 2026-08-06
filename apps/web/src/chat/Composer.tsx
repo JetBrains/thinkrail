@@ -674,13 +674,16 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			) : null}
 
 			<div className="flex flex-col gap-sm p-sm">
-				{/* Input background now lives here (not on the textarea below — it's `bg-transparent`), so the
-				 * backdrop's tint spans, painted behind the textarea's transparent background, show through.
-				 * `rounded-[var(--radius-md)]` matches the textarea's own corner radius so this container's own
-				 * background is clipped to the same rounded shape — with no session active this wrapper is
-				 * otherwise invisible (no border, no padding of its own), so the composer looks identical to
-				 * before this layer existed. */}
-				<div className="relative overflow-hidden rounded-[var(--radius-md)] bg-control-bg">
+				{/* The input's border AND background live here (the textarea below is `bg-transparent` + has no
+				 * border), so the backdrop's tint spans, painted behind the textarea, show through. The 1px
+				 * border is on this wrapper rather than the textarea so `bg-clip-padding` (background-clip:
+				 * padding-box) can clip the fill to *inside* the border — the fill can't paint under or bleed
+				 * past the rounded border, and the border stays fully visible on every edge. `focus-within`
+				 * carries the focus border-colour the textarea used to (identical, since the textarea is the
+				 * only focusable child); the textarea keeps its own `focus-visible` ring. `overflow-hidden`
+				 * still clips the backdrop's mirrored spans to the rounded shape (and the ring exactly as
+				 * before). Geometry is unchanged: the 1px border simply moved from the textarea to here. */}
+				<div className="relative overflow-hidden rounded-[var(--radius-md)] border border-control-border bg-control-bg bg-clip-padding transition-colors focus-within:border-primary">
 					{slots ? (
 						<div
 							ref={attachBackdrop}
@@ -694,8 +697,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							 * this way by default (its own UA stylesheet), but a plain <div> does not, so this
 							 * has to be spelled out explicitly for the two to wrap identical text identically.
 							 * The mirrored content overflows the `overflow-hidden` parent, whose scroll offsets
-							 * the textarea's `onScroll` sets imperatively (see `attachBackdrop`). */}
-							<div className="w-full whitespace-pre-wrap break-words border border-transparent px-md py-sm tr-text-ui">
+							 * the textarea's `onScroll` sets imperatively (see `attachBackdrop`). The border now
+							 * lives on the wrapper (this backdrop already sits inside it), so the mirror needs only
+							 * the shared `px-md py-sm` padding to line its content box up with the textarea. */}
+							<div className="w-full whitespace-pre-wrap break-words px-md py-sm tr-text-ui">
 								{withOffsets(highlightSegments(value, slots, slotIdx)).map((seg) => (
 									<span
 										key={seg.start}
@@ -788,7 +793,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 						// `relative` keeps the textarea a positioned participant so it paints ABOVE the absolute
 						// slot-highlight backdrop (its earlier DOM sibling) — otherwise a static textarea paints
 						// under the backdrop and the native caret/selection get dimmed by the active-slot tint.
-						className="relative min-h-[108px] w-full resize-none rounded-[var(--radius-md)] border border-control-border bg-transparent px-md py-sm tr-text-ui text-text-default outline-none transition-colors placeholder:text-text-muted focus:border-primary focus-visible:ring-2 focus-visible:ring-primary-soft"
+						className="relative min-h-[108px] w-full resize-none rounded-[var(--radius-md)] bg-transparent px-md py-sm tr-text-ui text-text-default outline-none placeholder:text-text-muted focus-visible:ring-2 focus-visible:ring-primary-soft"
 					/>
 				</div>
 				<div className="flex flex-wrap items-center gap-sm">
