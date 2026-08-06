@@ -30,6 +30,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type { SkillCatalogEntry, SlashCommandInfo } from "@thinkrail/contracts";
 import { askUserQuestionExtension } from "./askUserQuestion";
+import { reviewToolExtension } from "./reviewTool";
 import { decideSkill, type SkillAdmissionContext } from "./skillAdmission";
 import {
 	type CompatibilitySkillSource,
@@ -242,7 +243,7 @@ export async function buildResourceLoader(
 	settingsManager: SettingsManager,
 	getAdmission: () => SkillAdmissionContext,
 ): Promise<ResourceLoader> {
-	const sharedFactories = [headlessSearchPolicy, askUserQuestionExtension];
+	const sharedFactories = [headlessSearchPolicy, askUserQuestionExtension, reviewToolExtension];
 	const skillInputs = resolveSkillInputs(cwd, getAdmission);
 	const common = {
 		cwd,

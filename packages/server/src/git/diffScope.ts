@@ -36,6 +36,27 @@ export interface DiffRange {
 const OID = /^[0-9a-f]{4,64}$/;
 
 /**
+ * The **full commit oid** a ref names right now, or `null` when it names no commit (a deleted ref, an
+ * unborn `HEAD`). The one place a symbolic ref is frozen into an immutable one.
+ *
+ * Everything that must keep meaning the same thing later goes through here: the review's `baseSha`, the
+ * blob a base-side comment quotes, the commit Reject restores from. A scope's `originalRef` is *not*
+ * already immutable — `uncommitted` resolves to the literal `HEAD`, and a `branch` scope degrades to the
+ * raw base ref when `merge-base` fails — so storing one verbatim means the content moves out from under
+ * whatever stored it. `--end-of-options` because the ref is repo-controlled text (see `isSafeRef`).
+ */
+export function resolveCommitOid(worktreePath: string, ref: string): string | null {
+	const out = git(worktreePath, [
+		"rev-parse",
+		"--verify",
+		"--quiet",
+		"--end-of-options",
+		`${ref}^{commit}`,
+	]);
+	return out.ok && out.out ? out.out : null;
+}
+
+/**
  * Resolve a scope against a workspace.
  *
  * A `branch` scope measures "what this workspace changed": it spans from the **merge-base** of the diff
