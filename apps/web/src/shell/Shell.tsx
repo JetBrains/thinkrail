@@ -147,7 +147,7 @@ export function Shell() {
 							</ResizablePanel>
 							<ResizableHandle direction="vertical" data-testid="resize-terminals" />
 							<ResizablePanel id="right-terminals" order={2} defaultSize={40} minSize={15}>
-								<div className="h-full min-h-0 bg-container-sidebar-bg">
+								<div className="h-full min-h-0 bg-container-terminal-bg">
 									<ErrorBoundary label="Terminals" resetKeys={[activeWorkspaceId]}>
 										<TerminalsPanel />
 									</ErrorBoundary>

@@ -42,7 +42,7 @@ const ANSI_TOKENS = [
 /** xterm theme from the live CSS tokens (no raw hex; falls back to xterm defaults if a token is unset). */
 function readTheme(): ITheme {
 	const theme: ITheme = {};
-	const bg = cssColorVar("--container-sidebar-bg");
+	const bg = cssColorVar("--container-terminal-bg");
 	if (bg) theme.background = bg;
 	const fg = cssColorVar("--text-default");
 	if (fg) theme.foreground = fg;

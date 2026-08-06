@@ -15,8 +15,9 @@
 	--text-link: var(--info); /* global.css `a {}` is the only consumer; no component styles a bare link */
 	--container-workspace-bg: var(--background);
 	--container-sidebar-bg: var(--sidebar);
+	--container-terminal-bg: var(--sidebar);
 	--container-header-bg: var(--header);
-	--container-content-bg: var(--content); /* the code canvas: Monaco, Shiki, the terminal, the markdown preview */
+	--container-content-bg: var(--content); /* the editor/document canvas: Monaco, Shiki, rendered diffs, markdown preview */
 	--container-elevated-bg: var(--elevated); /* every raised surface: dialogs, popovers, menus, toasts, cards, code blocks */
 	--control-bg: var(--input);
 	--control-bg-hovered: var(--hover);
@@ -75,6 +76,7 @@
 	--color-text-on-primary: var(--text-on-primary);
 	--color-container-workspace-bg: var(--container-workspace-bg);
 	--color-container-sidebar-bg: var(--container-sidebar-bg);
+	--color-container-terminal-bg: var(--container-terminal-bg);
 	--color-container-header-bg: var(--container-header-bg);
 	--color-container-content-bg: var(--container-content-bg);
 	--color-container-elevated-bg: var(--container-elevated-bg);

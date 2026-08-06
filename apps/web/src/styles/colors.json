@@ -27,11 +27,12 @@
 
 		"container-workspace-bg": { "from": "background", "publish": true },
 		"container-sidebar-bg": { "from": "sidebar", "publish": true },
+		"container-terminal-bg": { "from": "sidebar", "publish": true },
 		"container-header-bg": { "from": "header", "publish": true },
 		"container-content-bg": {
 			"from": "content",
 			"publish": true,
-			"note": "the code canvas: Monaco, Shiki, the terminal, the markdown preview"
+			"note": "the editor/document canvas: Monaco, Shiki, rendered diffs, markdown preview"
 		},
 		"container-elevated-bg": {
 			"from": "elevated",
