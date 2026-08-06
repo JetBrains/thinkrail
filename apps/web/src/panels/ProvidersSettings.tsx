@@ -345,7 +345,7 @@ function ProviderActionRow({
 				<div className="flex shrink-0 items-center gap-xs">
 					{provider.canApiKey ? (
 						<Button
-							variant={provider.canOAuth ? "ghost" : "default"}
+							variant={provider.canOAuth ? "outline" : "default"}
 							size="sm"
 							data-testid="provider-apikey"
 							data-provider={provider.id}
@@ -358,6 +358,7 @@ function ProviderActionRow({
 					) : null}
 					{provider.canOAuth ? (
 						<Button
+							variant="outline"
 							size="sm"
 							data-testid="provider-signin"
 							data-provider={provider.id}
