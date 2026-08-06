@@ -27,7 +27,11 @@ spans assistant-message boundaries (pi emits one assistant message per tool roun
 model can't group. The pure **`deriveRows(turns, toolResults, isStreaming, isSpec?)`** (`rows.ts`) walks
 blocks in order into rows; `ChatTurnView` dispatches on row kind:
 
-- `user` / `system` / `retry` — 1:1 renderers. The retry countdown carries a `source` (`turn` =
+- `user` / `system` / `retry` — 1:1 renderers. A user message that IS a review context package
+  (`reviewPackage.ts` recognizes the `<review …>` header + `<comment …>` items the server's
+  `packageRender` emits) wears ONLY its one-sentence summary in the ordinary user bubble — "Sent 3
+  review comments on script.ts" — never the comment bodies/fragments: the chat opens with what the
+  user DID; the full package lives in pi's on-disk transcript. The retry countdown carries a `source` (`turn` =
   pi `auto_retry_*`; `summarization` = compaction/branch-summary `summarization_retry_*`, pi ≥0.81.1) —
   the flows can overlap mid-run, each keeps exactly one indicator (re-scheduling replaces, each source's
   end event clears only its own), and `RetryIndicator` labels them apart ("Retrying" vs "Retrying
@@ -510,6 +514,9 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   in-progress step, so an agent blocked on a question read as "finished"); "working" while it runs;
   "paused" only when it stopped with open steps left; and nothing extra on a clean finish (all done,
   idle). `TodoList` stays props-driven — it receives the resolved glance, never reads the transport.
+  Its section label + pending/active/done status glyphs live in **`planKit.tsx`** — shared
+  presentational atoms the Review panel (`panels/ReviewPanel`) reuses so both "work items in
+  sections" surfaces read identically.
   **The add-nudge respects that waiting state.** A user add always stores the item (loose, at the end),
   but `nudgeAgent` **only wakes the agent when it isn't waiting on the user** (`shouldNudgeOnAdd` —
   skip iff the glance is `waiting_question`): waking an agent that stopped on an `ask_user_question`
