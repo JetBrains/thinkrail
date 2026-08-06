@@ -22,6 +22,13 @@ export default function globalSetup(): void {
 	// first keystrokes instead of running them. A real (minimal) rc file keeps the isolated shell inert.
 	writeFileSync(join(E2E_HOME_DIR, ".zshrc"), "# ThinkRail e2e isolated shell\n");
 
+	// Terminal PTYs spawn the developer's `$SHELL` against this isolated HOME. zsh reads a HOME with no rc
+	// files as a brand-new install and blocks the terminal on its interactive `zsh-newuser-install` wizard
+	// ("--- Type one of the keys in parentheses ---"), which then swallows every keystroke a terminal test
+	// sends. Seeding empty rc files makes an interactive shell start silently with a predictable prompt,
+	// whichever shell the developer runs — so terminal specs don't depend on the host's dotfiles.
+	for (const rc of [".zshrc", ".bashrc"]) writeFileSync(join(E2E_HOME_DIR, rc), "");
+
 	// Isolated pi agent dir: copy the user's provider/auth config so a real provider works (the `@agent`
 	// suite needs it — auth lives across BOTH `auth.json` (OAuth providers) and `models.json` (providers
 	// configured with an apiKey)), and pin a deterministic default model — so every run uses the *same*
