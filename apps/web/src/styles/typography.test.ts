@@ -49,14 +49,14 @@ describe("typography source", () => {
 		}
 	});
 
-	it("holds 19 canonical definitions and 30 aliases (49 styles)", () => {
+	it("holds 20 canonical definitions and 32 aliases (52 styles)", () => {
 		const styles = allStyles(typography);
-		expect(styles).toHaveLength(49);
-		expect(styles.filter((s) => !s.ref)).toHaveLength(19);
-		expect(styles.filter((s) => s.ref)).toHaveLength(30);
+		expect(styles).toHaveLength(52);
+		expect(styles.filter((s) => !s.ref)).toHaveLength(20);
+		expect(styles.filter((s) => s.ref)).toHaveLength(32);
 		// Both markdown surfaces are almost entirely aliases — that is the point of the reference
 		// mechanism: two scales, one set of underlying definitions.
-		expect(styles.filter((s) => s.prose)).toHaveLength(26);
+		expect(styles.filter((s) => s.prose)).toHaveLength(28);
 	});
 
 	it("pins the primitive token values", () => {
@@ -252,7 +252,10 @@ describe("references", () => {
 						Object.keys(PROSE_SELECTORS).map((id) => [
 							id,
 							{
-								$ref: id === "inlineCode" || id === "codeBlock" ? "code.text" : "probe.base",
+								$ref:
+									id === "inlineCode" || id === "codeBlock" || id === "tableInlineCode"
+										? "code.text"
+										: "probe.base",
 							},
 						]),
 					),

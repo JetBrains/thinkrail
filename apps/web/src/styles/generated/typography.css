@@ -279,6 +279,15 @@
 	text-transform: none;
 	font-style: normal;
 }
+.tr-code-text-small {
+	font-family: var(--tr-font-family-code);
+	font-size: var(--tr-font-size-s11);
+	font-weight: var(--tr-font-weight-regular);
+	line-height: var(--tr-line-height-code);
+	letter-spacing: var(--tr-letter-spacing-normal);
+	text-transform: none;
+	font-style: normal;
+}
 
 /* Prose system 'chat' — the markdown typography for that surface. */
 .tr-prose-chat {
@@ -394,6 +403,15 @@
 	font-size: var(--tr-font-size-s12);
 	font-weight: var(--tr-font-weight-semibold);
 	line-height: var(--tr-line-height-default);
+	letter-spacing: var(--tr-letter-spacing-normal);
+	text-transform: none;
+	font-style: normal;
+}
+.tr-prose-chat :is(td, th) :not(pre) > code {
+	font-family: var(--tr-font-family-code);
+	font-size: var(--tr-font-size-s11);
+	font-weight: var(--tr-font-weight-regular);
+	line-height: var(--tr-line-height-code);
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
 	font-style: normal;
@@ -517,6 +535,15 @@
 	font-size: var(--tr-font-size-s14);
 	font-weight: var(--tr-font-weight-semibold);
 	line-height: var(--tr-line-height-compact);
+	letter-spacing: var(--tr-letter-spacing-normal);
+	text-transform: none;
+	font-style: normal;
+}
+.tr-prose-doc :is(td, th) :not(pre) > code {
+	font-family: var(--tr-font-family-code);
+	font-size: var(--tr-font-size-s13);
+	font-weight: var(--tr-font-weight-regular);
+	line-height: var(--tr-line-height-relaxed);
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
 	font-style: normal;

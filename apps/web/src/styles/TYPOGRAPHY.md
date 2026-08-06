@@ -77,10 +77,10 @@ The rules, all enforced by `typography:validate`:
 document heading scale) · **title** (`dialog`, `card`→dialog, `section`, `compact`, `entity`→body.reading)
 · **ui** (`default`, `metadata`, `eyebrow`, `labelPill`→eyebrow, `action`→title.compact,
 `emphasis`→title.compact) · **body** (`reading`) · **code** (`text` — the base code style, `inline`→text,
-`block`→text, `document`, `otp`). `proseSystems` holds one entry per markdown surface, almost entirely
-aliases into the above.
+`block`→text, `document`, `otp`, `textSmall` — an 11px code style for inline code in table cells).
+`proseSystems` holds one entry per markdown surface, almost entirely aliases into the above.
 
-**19 canonical definitions + 30 aliases = 49 styles.**
+**20 canonical definitions + 32 aliases = 52 styles.**
 
 One prose rule is deliberately *not* a semantic style: `<strong>` / `<b>` gets **weight only**
 (`--tr-font-weight-medium`), emitted by the generator into each prose system. A complete style there
@@ -177,6 +177,7 @@ naming its own type. Two exist:
 | inline code | 13 mono | 13 mono |
 | fenced code | 13 mono / 1.54 | 13 mono / 1.5 |
 | table body / header | 12 / 370 · 12 / 600 | 14 / 370 · 14 / 600 |
+| table cell inline code | **11 mono / 1.5** (`code.textSmall`) | 13 mono (`code.text`) |
 | `strong` / `b` | weight 500 only | weight 500 only |
 
 **Why two.** A chat bubble is a stream of short messages: headings there are separators, and a 24px h1
@@ -189,7 +190,7 @@ uppercase — the convention every markdown renderer settles on, since documents
 that deep.
 
 The two systems share their canonical definitions: `chat.h1` and `doc.h3` are both `{ "$ref":
-"heading.md" }`, body copy everywhere is `body.reading`. Only 3 of the 26 prose entries are canonical
+"heading.md" }`, body copy everywhere is `body.reading`. Only 3 of the 28 prose entries are canonical
 definitions of their own.
 
 `strong` / `b` gets **weight 500 only** in both systems — family, size, line-height, tracking, transform

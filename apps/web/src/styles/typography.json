@@ -250,6 +250,15 @@
 				"letterSpacing": "widest",
 				"textTransform": "none",
 				"fontStyle": "normal"
+			},
+			"textSmall": {
+				"fontFamily": "code",
+				"fontSize": "s11",
+				"fontWeight": "regular",
+				"lineHeight": "code",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
 			}
 		}
 	},
@@ -305,6 +314,9 @@
 			},
 			"tableHeader": {
 				"$ref": "chat.h3"
+			},
+			"tableInlineCode": {
+				"$ref": "code.textSmall"
 			}
 		},
 		"doc": {
@@ -352,6 +364,9 @@
 			},
 			"tableHeader": {
 				"$ref": "title.dialog"
+			},
+			"tableInlineCode": {
+				"$ref": "code.text"
 			}
 		}
 	}

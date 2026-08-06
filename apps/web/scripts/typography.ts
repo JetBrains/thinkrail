@@ -194,10 +194,13 @@ export const PROSE_SELECTORS: Record<string, string> = {
 	list: " :is(ul, ol, li)",
 	tableBody: " :is(table, td)",
 	tableHeader: " th",
+	// More specific than `inlineCode` (adds the `:is(td, th)` ancestor), so inline code inside a table
+	// cell takes this style while paragraph inline code keeps `inlineCode`.
+	tableInlineCode: " :is(td, th) :not(pre) > code",
 };
 
 /** The prose roles that render code, in every prose system. */
-export const PROSE_CODE_NAMES = new Set(["inlineCode", "codeBlock"]);
+export const PROSE_CODE_NAMES = new Set(["inlineCode", "codeBlock", "tableInlineCode"]);
 
 /* ── validation ─────────────────────────────────────────────────────────────────────────────── */
 
@@ -208,6 +211,7 @@ export const CODE_STYLE_IDS = new Set([
 	"code.block",
 	"code.document",
 	"code.otp",
+	"code.textSmall",
 ]);
 
 /** Should `id` render in a monospace family? The single definition of the mono policy. */
