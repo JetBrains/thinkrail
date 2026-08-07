@@ -18,6 +18,9 @@ export default function globalSetup(): void {
 	rmSync(E2E_DATA_DIR, { recursive: true, force: true });
 	mkdirSync(E2E_DATA_DIR, { recursive: true });
 	mkdirSync(E2E_HOME_DIR, { recursive: true });
+	// An empty HOME makes zsh launch its interactive first-run wizard, which consumes the terminal test's
+	// first keystrokes instead of running them. A real (minimal) rc file keeps the isolated shell inert.
+	writeFileSync(join(E2E_HOME_DIR, ".zshrc"), "# ThinkRail e2e isolated shell\n");
 
 	// Isolated pi agent dir: copy the user's provider/auth config so a real provider works (the `@agent`
 	// suite needs it — auth lives across BOTH `auth.json` (OAuth providers) and `models.json` (providers

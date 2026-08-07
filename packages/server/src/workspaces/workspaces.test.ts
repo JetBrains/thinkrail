@@ -4,6 +4,7 @@ import {
 	mkdirSync,
 	mkdtempSync,
 	readFileSync,
+	realpathSync,
 	rmSync,
 	symlinkSync,
 	writeFileSync,
@@ -14,10 +15,12 @@ import {
 	createWorkspace,
 	ensureWorkspaceScratchDir,
 	forgetWorkspace,
+	listExistingWorktrees,
 	listWorkspaceRecords,
 	listWorkspaces,
+	openExistingWorktree,
 	reclaimWorktree,
-	refreshDefaultWorkspace,
+	refreshUserOwnedWorkspace,
 	removeWorkspace,
 	renameWorkspace,
 	setWorkspaceDiffBase,
@@ -45,7 +48,9 @@ function worktrees(projectId = "p1") {
 }
 
 beforeEach(() => {
-	dataDir = mkdtempSync(join(tmpdir(), "trpi-ws-test-"));
+	// Resolved: the fixtures compare paths against git's output, and git resolves symlinks (macOS's
+	// tmpdir sits under `/var` → `private/var`).
+	dataDir = realpathSync(mkdtempSync(join(tmpdir(), "trpi-ws-test-")));
 	process.env.THINKRAIL_DATA_DIR = dataDir;
 	repo = join(dataDir, "repo");
 	mkdirSync(repo);
@@ -101,6 +106,142 @@ test("createWorkspace branches off a locally-present remote ref without a networ
 	expect(ws.baseBranch).toBe("origin/main");
 	expect(gitOut(ws.worktreePath, "rev-parse", "HEAD")).toBe(originSha);
 	expect(gitOut(ws.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe(ws.branch);
+});
+
+test("listExistingWorktrees shows unattached branch and detached checkouts only", async () => {
+	const external = join(dataDir, "existing auth checkout");
+	git(repo, "worktree", "add", external, "-b", "feature/auth", "main");
+	const detached = join(dataDir, "detached checkout");
+	git(repo, "worktree", "add", "--detach", detached, "main");
+	const managed = await createWorkspace("p1");
+
+	const candidates = listExistingWorktrees("p1");
+	expect(candidates).toContainEqual({
+		path: external,
+		branch: "feature/auth",
+		status: "available",
+	});
+	expect(candidates).toContainEqual({ path: detached, status: "detached" });
+	expect(candidates.some((candidate) => candidate.path === repo)).toBe(false);
+	expect(candidates.some((candidate) => candidate.path === managed.worktreePath)).toBe(false);
+});
+
+test("openExistingWorktree adopts idempotently and removal never reclaims the checkout", () => {
+	const external = join(dataDir, "existing auth checkout");
+	git(repo, "worktree", "add", external, "-b", "feature/auth", "main");
+	writeFileSync(join(external, "staged.txt"), "keep staged\n");
+	git(external, "add", "staged.txt");
+	writeFileSync(join(external, "README.md"), "# repo\nkeep unstaged\n");
+	writeFileSync(join(external, "uncommitted.txt"), "keep untracked\n");
+	const before = {
+		status: gitOut(external, "status", "--porcelain=v1", "-z"),
+		branch: gitOut(external, "symbolic-ref", "--short", "HEAD"),
+		head: gitOut(external, "rev-parse", "HEAD"),
+		registry: gitOut(repo, "worktree", "list", "--porcelain", "-z"),
+	};
+	const expectCheckoutUnchanged = () => {
+		expect(gitOut(external, "status", "--porcelain=v1", "-z")).toBe(before.status);
+		expect(gitOut(external, "symbolic-ref", "--short", "HEAD")).toBe(before.branch);
+		expect(gitOut(external, "rev-parse", "HEAD")).toBe(before.head);
+		expect(gitOut(repo, "worktree", "list", "--porcelain", "-z")).toBe(before.registry);
+	};
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((event) => events.push(event));
+
+	const workspace = openExistingWorktree("p1", external);
+	expect(workspace).toMatchObject({
+		projectId: "p1",
+		kind: "external",
+		name: "existing auth checkout",
+		branch: "feature/auth",
+		worktreePath: external,
+		baseBranch: "main",
+		renamed: true,
+	});
+	expect(events).toEqual([{ kind: "created", workspace }]);
+	expect(listExistingWorktrees("p1")).toHaveLength(0);
+	expectCheckoutUnchanged();
+
+	// A stale double-submit returns the one identity and emits no duplicate lifecycle event.
+	expect(openExistingWorktree("p1", external).id).toBe(workspace.id);
+	expect(events).toHaveLength(1);
+	expect(() => renameWorkspace(workspace.id, "hands off")).toThrow(
+		"An existing worktree cannot be renamed by ThinkRail",
+	);
+
+	removeWorkspace(workspace.id);
+	expect(listWorkspaceRecords("p1").some((candidate) => candidate.id === workspace.id)).toBe(false);
+	expect(readFileSync(join(external, "uncommitted.txt"), "utf8")).toBe("keep untracked\n");
+	expectCheckoutUnchanged();
+	expect(gitOut(repo, "show-ref", "--verify", "refs/heads/feature/auth")).not.toBe("");
+});
+
+test("openExistingWorktree rejects detached and unrelated paths", () => {
+	const detached = join(dataDir, "detached checkout");
+	git(repo, "worktree", "add", "--detach", detached, "main");
+	expect(() => openExistingWorktree("p1", detached)).toThrow(
+		"Detached HEAD worktrees cannot be opened; create a branch first",
+	);
+
+	const unrelated = join(dataDir, "unrelated");
+	mkdirSync(unrelated);
+	expect(() => openExistingWorktree("p1", unrelated)).toThrow(
+		"The selected path is not a registered worktree of this project",
+	);
+});
+
+test("existing worktrees represented by another project are rejected before its Default exists", () => {
+	const external = join(dataDir, "existing auth checkout");
+	git(repo, "worktree", "add", external, "-b", "feature/auth", "main");
+	writeFileSync(
+		join(dataDir, "projects.json"),
+		JSON.stringify([
+			{ id: "p1", name: "repo", path: repo, slug: "repo", lastOpened: 1 },
+			{ id: "p2", name: "external", path: external, slug: "external", lastOpened: 2 },
+		]),
+	);
+	// No workspace.list for p2: a project path owns its cwd before the lazy Default is materialized.
+	expect(listWorkspaceRecords("p2")).toHaveLength(0);
+	expect(listExistingWorktrees("p1").some((candidate) => candidate.path === external)).toBe(false);
+	expect(() => openExistingWorktree("p1", external)).toThrow(
+		"This worktree is already open under another ThinkRail project",
+	);
+});
+
+test("external workspace branch metadata converges on refresh and list", () => {
+	const external = join(dataDir, "existing auth checkout");
+	git(repo, "worktree", "add", external, "-b", "feature/auth", "main");
+	const workspace = openExistingWorktree("p1", external);
+	listWorkspaces("p1"); // ensure Default before this test starts observing lifecycle events
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((event) => events.push(event));
+
+	git(external, "switch", "-c", "feature/live");
+	refreshUserOwnedWorkspace(workspace.id);
+	expect(events).toEqual([
+		{
+			kind: "updated",
+			workspace: { ...workspace, branch: "feature/live" },
+		},
+	]);
+
+	events.length = 0;
+	git(external, "switch", "-c", "feature/list-refresh");
+	const listed = listWorkspaces("p1").find((candidate) => candidate.id === workspace.id);
+	expect(listed?.branch).toBe("feature/list-refresh");
+	expect(listed?.name).toBe("existing auth checkout");
+	expect(listed?.baseBranch).toBe("main");
+	expect(events).toHaveLength(1);
+
+	// A missing user-owned checkout is an I/O failure, not a detached checkout. Keep its last-known branch
+	// and stay quiet until the path is readable again.
+	events.length = 0;
+	rmSync(external, { recursive: true, force: true });
+	refreshUserOwnedWorkspace(workspace.id);
+	expect(events).toHaveLength(0);
+	expect(
+		listWorkspaceRecords("p1").find((candidate) => candidate.id === workspace.id)?.branch,
+	).toBe("feature/list-refresh");
 });
 
 test("createWorkspace seeds a self-ignoring .thinkrail/context scratch dir kept out of git", async () => {
@@ -447,7 +588,7 @@ test("the Default workspace's branch and base refresh from the folder on each li
 	expect(listWorkspaces("p1")[0]?.diffStats).toEqual({ added: 2, removed: 0 });
 });
 
-test("refreshDefaultWorkspace re-syncs and publishes Default drift off the list path", async () => {
+test("refreshUserOwnedWorkspace re-syncs and publishes Default drift off the list path", async () => {
 	listWorkspaces("p1"); // ensures the Default
 	const def = listWorkspaceRecords("p1").find((w) => w.kind === "default");
 	if (!def) throw new Error("expected the ensured Default workspace");
@@ -457,20 +598,20 @@ test("refreshDefaultWorkspace re-syncs and publishes Default drift off the list 
 	setWorkspacePublisher((e) => events.push(e));
 
 	// No drift → no save, no emit (the live path runs on every worktree-change batch: it must be quiet).
-	refreshDefaultWorkspace(def.id);
+	refreshUserOwnedWorkspace(def.id);
 	expect(events).toHaveLength(0);
 
 	// A terminal `git checkout` in the project folder converges without any `workspace.list`.
 	git(repo, "switch", "-c", "feature/live");
-	refreshDefaultWorkspace(def.id);
+	refreshUserOwnedWorkspace(def.id);
 	expect(events).toEqual([
 		{ kind: "updated", workspace: { ...def, branch: "feature/live", baseBranch: "feature/live" } },
 	]);
 	expect(listWorkspaceRecords("p1").find((w) => w.id === def.id)?.branch).toBe("feature/live");
 
-	// A worktree workspace's branch is pinned — and an unknown id is a no-op, never a throw.
-	refreshDefaultWorkspace(worktree.id);
-	refreshDefaultWorkspace("nope");
+	// A managed worktree's branch is pinned — and an unknown id is a no-op, never a throw.
+	refreshUserOwnedWorkspace(worktree.id);
+	refreshUserOwnedWorkspace("nope");
 	expect(events).toHaveLength(1);
 });
 

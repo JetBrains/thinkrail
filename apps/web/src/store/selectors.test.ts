@@ -2,7 +2,10 @@ import { expect, test } from "bun:test";
 import type { Project, WireModel, Workspace } from "@thinkrail/contracts";
 import type { EditorTab } from "./appStore";
 import {
+	isDefaultWorkspace,
+	isExternalWorkspace,
 	isSkillPath,
+	isUserOwnedWorkspace,
 	matchesWorktreePath,
 	selectActiveWorkspace,
 	selectActiveWorkspaceProjectId,
@@ -26,6 +29,18 @@ const workspace: Workspace = {
 	baseBranch: "main",
 };
 const workspaces = { p1: [], p2: [workspace] };
+
+test("workspace kind predicates distinguish managed and user-owned checkouts", () => {
+	const managed = {};
+	const external = { kind: "external" as const };
+	const defaultWorkspace = { kind: "default" as const };
+
+	expect(isDefaultWorkspace(defaultWorkspace)).toBe(true);
+	expect(isExternalWorkspace(external)).toBe(true);
+	expect(isUserOwnedWorkspace(managed)).toBe(false);
+	expect(isUserOwnedWorkspace(defaultWorkspace)).toBe(true);
+	expect(isUserOwnedWorkspace(external)).toBe(true);
+});
 
 test("active workspace selectors resolve the workspace and its owning project", () => {
 	const state = { activeWorkspaceId: "w2", workspaces };

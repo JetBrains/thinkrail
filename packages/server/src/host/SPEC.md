@@ -24,8 +24,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `pi.extensionUi`) and the `provider.*` login handlers, the **`watch` wiring** (inject the
   `workspace.fsChanged` publish callback into `watch`, plus its **repo-metadata** callback
   (`setRepoMetaPublisher`) fanned out to **two** convergences for a git-metadata write in a watched worktree:
-  `refreshDefaultWorkspace` (**re-sync a Default workspace's folder-truth branch** — host-mediated, since
-  `watch` has no `workspaces` edge, and self-publishing through the workspace-lifecycle tee) **and** a
+  `refreshUserOwnedWorkspace` (**re-sync a user-owned workspace's folder-truth branch** — host-mediated,
+  since `watch` has no `workspaces` edge, and self-publishing through the workspace-lifecycle tee) **and** a
   pathless `fsChanged` frame (`paths: []`, `truncated: false`) so the clients' `HEAD`-relative reads
   (`git.status`, an `uncommitted`-scope diff tab) re-read when a terminal `commit`/`reset` moves a ref;
   the same publish also feeds the **fsNudge seam** (`fsNudge.ts`: `setFsNudgePublisher` +
@@ -105,12 +105,14 @@ channel fan-out, and the process-boot wrapper both launchers share.
     the host may make. `workspace.remove` **rejects a `kind: "default"` workspace loudly, before any
     side-effect** (the record's `worktreePath` is the project folder — the reclaim's `rm -rf` fallback
     must never see it; the UI hides Remove, this guard is for buggy/rogue clients). Otherwise it
-    reaps *everything* rooted in the worktree but is **non-blocking**:
+    reaps *everything* rooted in the worktree (for a user-owned `kind: "external"` one, everything except
+    the checkout itself) but is **non-blocking**:
     it does the fast part synchronously — `forgetWorkspace` (drop the record → gone from `workspace.list`
     immediately) → `evictSpecIndex` (drop the spec cache) → `closeWorkspaceTerminals` (kill its PTYs) —
     **acks**, then runs the slow reclamation in the **background** (`archiveTeardown`, fire-and-forget):
     `removeWorkspaceSessions` (abort a streaming turn, dispose the live sessions, **and** purge pi's
-    on-disk transcripts for the cwd) → `reclaimWorktree` (`git worktree remove`). So the user never waits
+    on-disk transcripts for the cwd) → `reclaimWorktree` (`git worktree remove`; a hard no-op for an
+    external one). So the user never waits
     for the git subprocess + session abort. **Ordering holds:** terminals (sync) and sessions (bg, before
     the reclaim) are down before the dir is deleted, since they hold it as cwd. Best-effort by contract —
     a failed background teardown is `console.warn`ed, never thrown into the void (nothing awaits it), like

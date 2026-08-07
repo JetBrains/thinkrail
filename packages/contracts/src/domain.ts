@@ -58,10 +58,12 @@ export interface Workspace {
 	/**
 	 * `"default"` marks the built-in per-project **Default workspace** — the project folder itself
 	 * (git's main working tree) surfaced as a workspace. Exactly one per project, pinned first in
-	 * `workspace.list`, non-removable and non-renamable (enforced server-side). Absent = a normal
-	 * worktree workspace. An explicit wire field — clients must never detect it by id convention.
+	 * `workspace.list`, non-removable and non-renamable (enforced server-side). `"external"` marks an
+	 * explicitly attached, user-owned worktree: ThinkRail may forget its app state but must never rename
+	 * its branch or reclaim its checkout. Absent = a ThinkRail-managed worktree. An explicit wire field —
+	 * clients must never infer ownership from ids or paths.
 	 */
-	kind?: "default";
+	kind?: "default" | "external";
 	/**
 	 * Human-readable display label shown in the UI (Title Case, spaces) — decoupled from `branch`. May
 	 * repeat across workspaces; the branch is what's uniqued. Equals `branch` only for the auto
@@ -73,9 +75,10 @@ export interface Workspace {
 	/** Absolute path to the worktree (the cwd everything downstream uses). */
 	worktreePath: string;
 	/**
-	 * **Creation provenance** — the ref this worktree was cut from (`git worktree add … <baseBranch>`), or
-	 * for the Default workspace the repo's default branch. Shown in the UI as `branch · from baseBranch`.
-	 * It is *not* necessarily what the diff is measured against: see `diffBase`.
+	 * **Creation provenance** for a managed worktree — the ref it was cut from (`git worktree add …
+	 * <baseBranch>`). For user-owned Default/external workspaces, whose creation provenance is not ours to
+	 * claim, this is the repository-default initial review target and the UI shows only `on <branch>`.
+	 * It is *not* necessarily what the diff is measured against after re-pointing: see `diffBase`.
 	 */
 	baseBranch: string;
 	/**
@@ -101,6 +104,11 @@ export interface Workspace {
 	 */
 	skillOverrides?: Record<string, "on" | "off">;
 }
+
+/** One unattached checkout from `git worktree list`, shown in the existing-worktree chooser. */
+export type ExistingWorktreeCandidate =
+	| { path: string; branch: string; status: "available" }
+	| { path: string; status: "detached" };
 
 /**
  * A host-installed editor/IDE the "Open in" menu can offer, from `editor.list` — never a fixed client

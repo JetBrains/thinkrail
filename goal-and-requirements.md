@@ -27,7 +27,8 @@ The shell is built first, `pi` connected last:
 - **Projects → workspaces**: open a git repo as a project; a workspace is a `git worktree` (own branch +
   cwd) under `~/.thinkrail/worktrees` — plus one built-in, non-removable **Default workspace** per
   project (the project folder itself), offered as an explicit choice on the project's Welcome so
-  newcomers aren't lost in the worktree model.
+  newcomers aren't lost in the worktree model, and any **existing worktree** the user attaches in place
+  from the project menu (ThinkRail uses its cwd, never touches its checkout).
 - **Center**: a tabbed area — Monaco file tabs + (once `pi` lands) chat tabs.
 - **Right**: an All-files tree of the active worktree + a Changes (git diff) tab; terminals below,
   scoped to the worktree.

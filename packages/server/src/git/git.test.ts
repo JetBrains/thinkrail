@@ -11,6 +11,7 @@ import {
 	listCommits,
 	numstatPath,
 	prefetchBranch,
+	tryCurrentBranch,
 } from "./git";
 import { isSafeRef } from "./refs";
 
@@ -147,6 +148,16 @@ test("listBranches with no remote returns local branches and falls back to the r
 	expect(defaultBranch).toBe("main");
 });
 
+test("tryCurrentBranch distinguishes a detached checkout from an invalid workspace root", () => {
+	expect(tryCurrentBranch(repo)).toBe("main");
+	git(repo, "switch", "--detach");
+	expect(tryCurrentBranch(repo)).toBe("HEAD");
+	const nested = join(repo, "nested");
+	mkdirSync(nested);
+	expect(tryCurrentBranch(nested)).toBeNull();
+	expect(tryCurrentBranch(join(dataDir, "missing"))).toBeNull();
+});
+
 test("listBranches surfaces origin branches and the origin default", () => {
 	const remoteRepo = join(dataDir, "remote.git");
 	git(repo, "init", "--bare", remoteRepo); // `git -C repo init --bare <path>` inits at <path>
@@ -241,6 +252,26 @@ test("gitStatus reads the Default workspace's branch live, not the persisted sna
 	);
 	git(repo, "switch", "-c", "feature/live");
 	expect(gitStatus("w-default").branch).toBe("feature/live");
+});
+
+test("gitStatus reads an external workspace's branch live, not the persisted snapshot", () => {
+	writeFileSync(
+		join(dataDir, "workspaces.json"),
+		JSON.stringify([
+			{
+				id: "w-external",
+				projectId: "p1",
+				kind: "external",
+				name: "existing checkout",
+				branch: "main",
+				worktreePath: repo,
+				baseBranch: "main",
+				renamed: true,
+			},
+		]),
+	);
+	git(repo, "switch", "-c", "feature/external-live");
+	expect(gitStatus("w-external").branch).toBe("feature/external-live");
 });
 
 test("diffBaseRef resolves the re-pointed diff target over the creation base", () => {
