@@ -28,6 +28,7 @@ import {
 	statusLabel,
 } from "./reviewModel";
 import { sendReviewComment } from "./reviewSend";
+import { SendAllReviewsButton, SendReviewButton } from "./SendReviewButton";
 
 /**
  * The Review sidebar (RightPanel's Review tab) — PER-FILE, two levels (see panels/SPEC.md):
@@ -36,8 +37,10 @@ import { sendReviewComment } from "./reviewSend";
  * - **File level**: one file's comments. It shows AUTOMATICALLY while the active center tab is a
  *   reviewed file (RightPanel also flips to the Review tab on such an activation); the header's back
  *   arrow returns to the files level.
- * Batch send lives in the pane toolbars (`SendReviewButton`); hydration is owned by `RightPanel`
- * (`useWorkspaceReview`); every mutation converges on the store's `review.changed` fold.
+ * Batch send mirrors the pane toolbars: the file level carries the same per-file `Send review (N)`
+ * (drafts-only, `SendReviewButton`), the files level a `Send all (N)` across every file — both over
+ * the shared `reviewSend` batch path. Hydration is owned by `RightPanel` (`useWorkspaceReview`);
+ * every mutation converges on the store's `review.changed` fold.
  */
 export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; failed: boolean }) {
 	const snapshot = useAppStore((s) => s.reviewsByWorkspace[workspaceId]);
@@ -120,9 +123,15 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 	const showFile = viewedPath !== undefined && files.some((f) => f.path === viewedPath);
 
 	if (!showFile) {
-		// FILES level: what's still in review.
+		// FILES level: what's still in review. With anything sendable, a slim header carries Send all.
+		const hasDrafts = snapshot.comments.some((c) => c.status === "draft");
 		return (
 			<div className="flex h-full min-h-0 flex-col" data-testid="review-panel">
+				{hasDrafts && (
+					<div className="flex h-7 shrink-0 items-center justify-end border-border-default border-b px-sm">
+						<SendAllReviewsButton workspaceId={workspaceId} />
+					</div>
+				)}
 				<div className="min-h-0 flex-1 overflow-auto">
 					{files.length === 0 ? (
 						<p data-testid="review-empty" className="px-sm py-xs tr-text-metadata text-text-subtle">
@@ -187,6 +196,13 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 				<span className="min-w-0 flex-1 truncate tr-code-text text-text-subtle">
 					{viewedPath ?? "Whole change set"}
 				</span>
+				{/* The pane toolbar's per-file send, right here too — same drafts-only gate and batch path
+				    (a distinct testid so tests can tell the sidebar's copy from the pane's). */}
+				<SendReviewButton
+					workspaceId={workspaceId}
+					path={viewedPath ?? null}
+					testid="review-panel-send"
+				/>
 				{/* Everything resolved → finish from right here (the list view offers the same action). */}
 				{inProgress.length === 0 && drafts.length === 0 && resolved.length > 0 && (
 					<button

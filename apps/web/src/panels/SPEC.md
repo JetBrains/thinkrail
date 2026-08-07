@@ -387,7 +387,12 @@ a project picker, the prompt hero, and the reused
   sent, a comment is a record — no delete, no rollback, no reopen** and resolved is final
   (server-enforced): pushing back on a change is said in a comment, and a fresh remark is a fresh
   comment. **A plain list — no footer**: batch send lives in
-  the pane toolbars (`SendReviewButton`), and the review-level (overall-note) composer was removed for
+  the pane toolbars (`SendReviewButton`) and in the panel's own headers — the FILE level carries the
+  same per-file `Send review (N)` (`testid: review-panel-send`; `path: null` covers the anchorless
+  whole-change-set bucket), the FILES level a **`Send all (N)`** across every file
+  (`SendAllReviewsButton`, `testid: review-send-all`, over `allDraftIds`; no ids passed — the host's
+  "all drafts" is the batch, so the count can't race a concurrent edit). The review-level
+  (overall-note) composer was removed for
   now (the `review` comment kind stays in the model, UI-less). The `review.get` hydration read is **owned by `RightPanel`**
   (`useWorkspaceReview`, the `useWorkspaceSpecs` pattern — the read also re-anchors server-side): the
   tab strip's Review flags and the tab badge need the snapshot even while the panel body is unmounted.
@@ -466,7 +471,9 @@ a project picker, the prompt hero, and the reused
   exactly THIS file's drafts, batched into the file's own review chat (one chat per file — the host
   pins it in `Review.fileSessions` and later sends `followUp` there), which **opens immediately** (the
   host fires the package into the session detached — see the reviews SPEC's send-latency note). Other
-  files' drafts stay put; each pane carries its own button. Offering it with nothing left to send
+  files' drafts stay put; each pane carries its own button, and the Review panel's file level shows
+  the same button for the file it is viewing (the files level adds the cross-file `Send all (N)` —
+  see above). Offering it with nothing left to send
   would be a lie, so an in-progress file keeps its muted flag and grows no toolbar. A pane over an
   uncommented file shows neither. There is no manual review mode to enter. Every send affordance (composer Send now, thread cards, sidebar rows/footer, tab
   Send all) goes through the one `reviewSend.ts` pair (`sendReviewComment`/`sendReviewBatch`: request
