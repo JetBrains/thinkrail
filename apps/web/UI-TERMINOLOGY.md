@@ -82,7 +82,8 @@ The leftmost column. Lists projects and, expanded beneath each, its workspaces.
 - **Parent:** App Shell (present in both body states — the left column of both layouts).
 - **Position:** Left column, full height, resizable; `defaultSize=18%`, `minSize=12%`.
 - **Responsibility:** open a repo, select a project (a "project home" gesture that deselects any active
-  workspace), expand/collapse to reveal workspaces, create/select/remove workspaces.
+  workspace), close a project, expand/collapse to reveal workspaces, create/select/remove workspaces, and
+  open a workspace in an external editor / file manager.
 
 **⚠ Naming note (Projects Rail):** three names co-exist — the component is `ProjectTree`, the wrapper's
 `data-testid` is `left-nav`, and specs say "the projects rail". Canonical = **Projects Rail**;
@@ -484,9 +485,10 @@ App-level dialog/popover instances built on those primitives:
 
 - **Modal** = the **Dialog** primitive. There is no separate `Modal` component; "Modal" is the generic
   term, "Dialog" is the implementation.
-- **Context Menu** — ThinkRail has **no** shadcn `context-menu` primitive. Right-click menus (the
-  Change-Row Actions menu) are built on the **Dropdown Menu** primitive with a shared right-click handler.
-  Use "Row Actions Menu" for that specific surface.
+- **Context Menu** — two shapes co-exist. The **Context Menu** primitive (`components/ui/context-menu.tsx`,
+  Radix) backs the Project Row's right-click menu; older right-click surfaces (the Change-Row Actions menu)
+  are still the **Dropdown Menu** primitive plus a shared right-click handler — call that one the
+  "Row Actions Menu". Both wear the same look via `components/ui/menu-styles.ts`.
 - **Drawer** — there is **no drawer** primitive or component. The mobile single-view shell is designed
   but not built; do not use "Drawer" for any current region.
 - **Toolbar** — there is no `Toolbar` component; the slim per-panel control rows (Changes Header, the
@@ -574,15 +576,16 @@ its alternatives in parentheses.
 
 **Shared primitives**
 
-- **Modal** = the **Dialog** primitive. **Dropdown Menu**, **Popover**, **Command**, **Tooltip**,
-  **Toast**, **Resizable**, **Error Boundary**.
+- **Modal** = the **Dialog** primitive. **Dropdown Menu**, **Context Menu**, **Popover**, **Command**,
+  **Tooltip**, **Toast**, **Resizable**, **Error Boundary**.
 - App dialogs: **New Workspace Dialog**, **Confirm Dialog**, **Notice Dialog**, **Confirm Popover**,
   **Template Editor Dialog**, **Skills Dialog**, **Ext-UI Dialog**, **Login Dialog**.
 
 **Terms that do NOT map to a ThinkRail region (avoid or use only as noted)**
 
 - **Status Bar** — none exists; the closest are the Connection Status pill and the Session Stats Bar.
-- **Context Menu** — no primitive; right-click uses the Dropdown Menu (the **Row Actions Menu**).
+- **Context Menu** — a real primitive now (Project Row right-click); the Changes rows' right-click is still
+  the Dropdown Menu (the **Row Actions Menu**). Name the surface, not just "context menu".
 - **Drawer** — none exists (mobile shell not yet built).
 - **Toolbar** — no component; slim control rows are inline **Panel Headers**.
 - **Bottom Terminal** — the terminals are the right-lower **Terminal Panel**.
