@@ -114,6 +114,27 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 	 */
 	let stopping = false;
 
+	/**
+	 * Arm the grace window after which a client with no socket counts as gone, and its host resources are freed.
+	 *
+	 * Re-arms itself while `clearClient` declines — a request still in flight means the page can come back and
+	 * replay exactly that id, and forgetting the entry would run its handler a second time (see
+	 * `requestReplayCache`). The shells are gone either way on the first pass; `closeClientTerminals` is
+	 * idempotent, so a retry only retries the retirement. It ends when that last handler settles, on a
+	 * reconnect (`open` cancels the timer and the namespace stands), or at `stop()`, which clears them all.
+	 */
+	const armClientReap = (clientKey: string): void => {
+		reapTimers.set(
+			clientKey,
+			setTimeout(() => {
+				reapTimers.delete(clientKey);
+				if (sockets.has(clientKey)) return;
+				closeClientTerminals(clientKey);
+				if (!requestReplays.clearClient(clientKey)) armClientReap(clientKey);
+			}, ABANDONED_CLIENT_GRACE_MS),
+		);
+	};
+
 	const server = Bun.serve<SocketData, never>({
 		port,
 		hostname: host,
@@ -269,16 +290,7 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 				if (sockets.has(clientKey) || reapTimers.has(clientKey)) return;
 				// Don't kill this client's shells yet — it reconnects on its own, and a hiccup must not cost the
 				// user a running dev server. Only if nothing comes back within the grace window is it gone.
-				reapTimers.set(
-					clientKey,
-					setTimeout(() => {
-						reapTimers.delete(clientKey);
-						if (!sockets.has(clientKey)) {
-							closeClientTerminals(clientKey);
-							requestReplays.clearClient(clientKey);
-						}
-					}, ABANDONED_CLIENT_GRACE_MS),
-				);
+				armClientReap(clientKey);
 			},
 		},
 	});

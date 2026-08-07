@@ -98,7 +98,40 @@ describe("request replay cache", () => {
 		const execute = () => String(++executions);
 
 		expect(await cache.run("page", "req-1", "same", execute)).toBe("1");
-		cache.clearClient("page");
+		expect(cache.clearClient("page")).toBe(true);
 		expect(await cache.run("page", "req-1", "same", execute)).toBe("2");
+	});
+
+	// Retirement is driven by a *socket* grace window, but a request outlives it: the folder picker waits up
+	// to 30 minutes on a human, and the page replays that id whenever it reconnects. Retiring mid-handler
+	// would open a second picker beside the one still on screen.
+	test("client retirement is declined, and retains everything, while a request is in flight", async () => {
+		const cache = new RequestReplayCache<string>();
+		const run = deferred<string>();
+		let executions = 0;
+		const execute = () => {
+			executions += 1;
+			return run.promise;
+		};
+
+		const settled = cache.run("page", "settled", "one", () => "cached");
+		expect(await settled).toBe("cached");
+		const inFlight = cache.run("page", "picker", "same", execute);
+
+		expect(cache.clearClient("page")).toBe(false);
+		// Nothing was dropped: the replay joins the running handler rather than starting a second one, and the
+		// already-settled sibling still answers from cache.
+		expect(cache.run("page", "picker", "same", execute)).toBe(inFlight);
+		expect(await cache.run("page", "settled", "one", () => "reran")).toBe("cached");
+		expect(executions).toBe(1);
+
+		run.resolve("/picked/path");
+		expect(await inFlight).toBe("/picked/path");
+		expect(cache.clearClient("page")).toBe(true);
+		expect(await cache.run("page", "picker", "same", () => "fresh")).toBe("fresh");
+	});
+
+	test("retiring a client that was never seen is a no-op, not a retry", () => {
+		expect(new RequestReplayCache<string>().clearClient("ghost")).toBe(true);
 	});
 });

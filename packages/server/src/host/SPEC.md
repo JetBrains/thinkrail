@@ -25,7 +25,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   count-and-serialized-byte-bounded **request replay cache** keyed by `(clientKey, requestId)` (the first frame
   owns one handler promise + its
   serialized response, a reconnect replay awaits/returns that same result, a mismatched duplicate is rejected,
-  and reaping the client clears its cache),
+  and reaping the client clears its cache — but **only once nothing is in flight**: an unresolved request
+  outlives the socket grace window, since the page holds that frame until its *own* deadline (30 minutes for
+  the folder picker) and replays it on reconnect, so `clearClient` declines and the reap re-arms rather than
+  let the replay start a second execution of a handler that has not finished),
   the **`provider.login`** channel publish (the `auth` module's session-less login-frame bridge, wired like
   `pi.extensionUi`) and the `provider.*` login handlers, the **`watch` wiring** (inject the
   `workspace.fsChanged` publish callback into `watch`, plus its **repo-metadata** callback
