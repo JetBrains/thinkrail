@@ -19,6 +19,46 @@ function workspace(workspaceId: string): Workspace {
 	return ws;
 }
 
+/**
+ * Commit the worktree's current changes as one commit, **excluding** the host's own `.thinkrail/` state
+ * (the todos JSON etc. — never sweep the app's bookkeeping into the user's history), with `--no-verify`
+ * so the host's commit never runs (or is failed by) the user's hooks. Returns the new commit's sha, or
+ * `null` when there was nothing to commit (all dirt was foreign/excluded) or a git op failed.
+ * Author/committer stay the user's own git config — it's their branch. Best-effort bookkeeping for the
+ * TODO change-set feature; the caller (todos/artifacts) never lets it throw. The commit stores only the
+ * sha — its file list is derived on demand via {@link gitCommitFiles} (sha-immutable, cacheable).
+ */
+export function gitCommitAll(workspaceId: string, message: string): { sha: string } | null {
+	const cwd = workspace(workspaceId).worktreePath;
+	// Stage everything except `.thinkrail` (`:!` = exclude pathspec); `.` is the required inclusive spec.
+	if (!git(cwd, ["add", "-A", "--", ".", ":!.thinkrail"]).ok) return null;
+	// `git diff --cached --quiet` exits 0 (ok) when the index matches HEAD — i.e. nothing to commit.
+	if (git(cwd, ["diff", "--cached", "--quiet"]).ok) return null;
+	if (!git(cwd, ["commit", "--no-verify", "-m", message]).ok) return null;
+	const head = git(cwd, ["rev-parse", "HEAD"]);
+	if (!head.ok) return null;
+	return { sha: head.out };
+}
+
+/**
+ * A commit's recorded file list (`git show --name-only --pretty=format:`), or `null` when the sha does
+ * not resolve (a GC'd rewrite) or git failed. The unfolding half of {@link gitCommitAll}: the todos
+ * module's `listTodos` decoration derives the review map's files from it, memoized by sha (immutable).
+ */
+export function gitCommitFiles(workspaceId: string, sha: string): string[] | null {
+	const cwd = workspace(workspaceId).worktreePath;
+	const res = git(cwd, ["show", "--name-only", "--pretty=format:", "--end-of-options", sha, "--"]);
+	if (!res.ok) return null;
+	return lines(res.out);
+}
+
+/** The worktree's current `HEAD` sha (`null` on an unborn HEAD) — the todos baseline's window anchor. */
+export function gitHeadSha(workspaceId: string): string | null {
+	const cwd = workspace(workspaceId).worktreePath;
+	const head = git(cwd, ["rev-parse", "--verify", "--quiet", "HEAD"]);
+	return head.ok && head.out ? head.out : null;
+}
+
 function lines(out: string): string[] {
 	return out
 		.split("\n")

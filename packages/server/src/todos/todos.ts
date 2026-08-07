@@ -4,8 +4,15 @@
 // the source of truth and re-reads its per-session file on every op, so a UI edit and the agent's
 // in-session `todo_*` writes converge on the same `.thinkrail/context/todos/<sessionId>.json`.
 
-import type { TodoItem, TodoPlan, TodoStatus } from "@thinkrail/contracts";
-import { flatItems, groupStatus, type TodoPlan as StoredPlan, TodoStore } from "pi-todos/core";
+import type { TodoArtifact, TodoItem, TodoPlan, TodoStatus } from "@thinkrail/contracts";
+import {
+	flatItems,
+	groupStatus,
+	type Todo as StoredItem,
+	type TodoPlan as StoredPlan,
+	TodoStore,
+} from "pi-todos/core";
+import { gitCommitFiles } from "../git";
 import { getWorkspace } from "../workspaces";
 
 /** The store rooted at a workspace's worktree for one chat session. `TodoStore` is stateless (re-reads
@@ -14,15 +21,51 @@ function storeFor(workspaceId: string, sessionId: string): TodoStore {
 	return new TodoStore(getWorkspace(workspaceId).worktreePath, sessionId);
 }
 
+/**
+ * A commit's file list, memoized **by sha** — the sha names an immutable object, so a successful
+ * resolution can never go stale. Only successes are cached: a transient git failure (or a GC'd sha)
+ * resolves to `undefined` now and retries on the next list. Session-independent by construction, so one
+ * host-wide map is correct across workspaces too (a sha collision across repos names the same object).
+ */
+const commitFilesCache = new Map<string, string[]>();
+
+function resolveCommitFiles(workspaceId: string, sha: string): string[] | undefined {
+	const hit = commitFilesCache.get(sha);
+	if (hit) return hit;
+	const files = gitCommitFiles(workspaceId, sha);
+	if (!files) return undefined;
+	commitFilesCache.set(sha, files);
+	return files;
+}
+
+/**
+ * One stored item → the wire DTO: a `commit` artifact is **unfolded** — decorated with its derived
+ * `files` (the review map's "N files" + per-file links come from here, never from denormalized JSON).
+ * An unresolvable sha ships the artifact without `files` — the client's degrade signal.
+ */
+function toWireItem(workspaceId: string, item: StoredItem): TodoItem {
+	if (!item.artifacts) return item;
+	const artifacts = item.artifacts.map((a): TodoArtifact => {
+		if (a.kind !== "commit" || !a.sha) return a;
+		const files = resolveCommitFiles(workspaceId, a.sha);
+		return files ? { ...a, files } : a;
+	});
+	return { ...item, artifacts };
+}
+
 /** The chat's whole TODO plan (loose items + named groups). */
 export function listTodos(params: { workspaceId: string; sessionId: string }): TodoPlan {
 	const plan = storeFor(params.workspaceId, params.sessionId).read();
-	// Decorate each group with its derived task status: the rule lives in `pi-todos` (which owns plan
-	// semantics) and reaches the client on the DTO, so `apps/web` renders it instead of keeping a second
-	// copy of the truth table it can never import. Spread the plan so a future field can't be dropped here.
+	// Decorate on the way out: each group with its derived task status (the rule lives in `pi-todos`,
+	// which owns plan semantics, and reaches the client on the DTO so `apps/web` — which can't import the
+	// package — never re-derives it), and each `commit` artifact with its derived `files` (see above).
 	return {
-		...plan,
-		groups: plan.groups.map((group) => ({ ...group, status: groupStatus(group) })),
+		todos: plan.todos.map((t) => toWireItem(params.workspaceId, t)),
+		groups: plan.groups.map((group) => ({
+			...group,
+			todos: group.todos.map((t) => toWireItem(params.workspaceId, t)),
+			status: groupStatus(group),
+		})),
 	};
 }
 

@@ -517,15 +517,29 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   one collapse over all of Done). Finished *steps* stay inline in their (active/pending)
   group; only whole done tasks move to Done. Each group is a header row (derived status icon + title +
   done/total badge), the `active` group emphasized; the user's loose items carry a per-row `user` badge
-  (no separate "Your requests" header — they're placed by status). Plus the add-row + an "open as
+  (no separate "Your requests" header — they're placed by status). **A row whose item carries a host
+  change set grows a quiet "N files" chip** (`itemChangeSet` in `planView` — the one derivation shared
+  with the markdown snapshot below, so the two can never disagree): a **committed** item's chip opens the
+  Changes panel at its `commit:{sha}` scope via `useChatTodos.openChanges` (`setDiffScope` +
+  `requestRightTab` — the panel lists the commit's files itself; N = the DTO's host-derived
+  `commit.files`); the **path-list fallback** deep-links a single path's live diff directly (pinning the
+  scope back to `branch` first, so it can't inherit a commit scope a previous click left behind) or
+  expands an inline path list. A commit artifact whose sha no longer resolves ships **no `files`** → no
+  chip, never a broken diff tab (the degrade contract). Plus the add-row + an "open as
   markdown" button. **Status ordering is UI-only** — the agent's `formatPlan` stays plan-order so its
   "work in order" discipline is unaffected), `planMarkdown` (a pure `plan →
-  markdown` compiler, `## <group> — n/m` sections), and `ChatPlan` (`ChatPlanStripContent` +
+  markdown` compiler, `## <group> — n/m` sections; a **done item with a host change set** renders as a
+  **review map** — its short commit sha inline and each changed file a `diffHref` link), and `ChatPlan` (`ChatPlanStripContent` +
   `ChatPlanContent` — a header strip that opens the plan in a `Popover` over the chat; `ChatView` composes
   the `Popover` anchored to the header, so the popup hangs flush under it at the chat's left edge). There
   is no right-panel Todo tab — the plan lives in the conversation. The "open as markdown" action compiles
   the current plan and opens it as an ephemeral `doc` tab (`store.openDoc`), rendered by the panels'
-  `MarkdownPreview` — no file is written to disk.
+  `MarkdownPreview` — no file is written to disk. **The review-map links** use `diffHref` (a pure
+  `buildDiffHref`/`parseDiffHref` pair owning the `thinkrail-diff:<sha>:<path>` scheme — the one home of
+  the format so this producer and the doc-viewer consumer can't drift): `panels/markdownLinks`'
+  `DocumentLink` intercepts the scheme and opens the file's diff tab at the item's `commit:{sha}` scope
+  (durable done-time diff) or, when the item fell back to path-list `change` artifacts (empty sha), the
+  live branch scope.
   **The glance state** keeps the plan honest as the user's status window: `planGlance(isStreaming,
   askStates)` — derived from session state in `ChatView`, **never stored**, so the agent can't make it
   lie — renders the `in_progress` step as working (dot), **waiting for your answer**
