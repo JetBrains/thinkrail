@@ -2,8 +2,8 @@ import { randomUUID } from "node:crypto";
 import { rmSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 import type { Project, ProjectPathStatus } from "@thinkrail/contracts";
-import { git as runGit } from "../git";
-import { loadProjects, saveProjects } from "../persistence";
+import { canonicalPath, git as runGit } from "../git";
+import { loadProjects, loadWorkspaces, saveProjects } from "../persistence";
 
 type ProjectPublisher = (project: Project) => void;
 
@@ -83,6 +83,16 @@ export function openProject(path: string): Project {
 		emit(existing);
 		return existing;
 	}
+
+	// One cwd, one ThinkRail identity — checked *after* the reopen above, whose own Default workspace
+	// legitimately holds the project folder. pi keys chat transcripts by directory, so a second identity on
+	// a folder some workspace already owns would show that workspace's chats as its own and have them
+	// purged out from under it when either side is archived. `openExistingWorktree` closes the same door
+	// from the workspace side. Canonical: a managed worktree's stored path is composed, never resolved,
+	// while `gitToplevel` answers resolved — a raw compare would miss the collision under any symlink.
+	const wanted = canonicalPath(root);
+	if (loadWorkspaces().some((ws) => canonicalPath(ws.worktreePath) === wanted))
+		throw new Error(`This folder is already open in ThinkRail as a workspace: ${root}`);
 
 	const taken = new Set(projects.map((p) => p.slug));
 	const project: Project = {

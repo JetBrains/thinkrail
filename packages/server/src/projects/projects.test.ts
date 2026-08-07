@@ -60,6 +60,66 @@ afterEach(() => {
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
 });
 
+/**
+ * Seed a persisted workspace record whose cwd is `worktreePath`. Written straight to `workspaces.json`
+ * (never through the `workspaces` module — `projects` must not depend on its sibling, tests included).
+ */
+function seedWorkspace(worktreePath: string, kind?: "default" | "external"): void {
+	writeFileSync(
+		join(dataDir, "workspaces.json"),
+		JSON.stringify([
+			{
+				id: "ws-1",
+				projectId: "p-other",
+				name: "seeded",
+				branch: "feature/seeded",
+				worktreePath,
+				baseBranch: "main",
+				renamed: true,
+				...(kind ? { kind } : {}),
+			},
+		]),
+	);
+}
+
+test("openProject refuses a checkout already attached as an external workspace", () => {
+	// Chat transcripts are keyed by cwd, not by workspace, so two identities on one folder would share
+	// history — and archiving either would purge the other's. One cwd, one ThinkRail identity.
+	const attached = join(dataDir, "auth checkout");
+	makeRepo(attached);
+	seedWorkspace(attached, "external");
+
+	expect(() => openProject(attached)).toThrow("already open in ThinkRail");
+	expect(listProjects()).toHaveLength(0);
+});
+
+test("openProject refuses a ThinkRail-managed worktree dir, whatever symlinks the path carries", () => {
+	// The worktree lives under the data dir, so its record's path is built by `join` (unresolved) while git
+	// answers with the resolved one — the guard must compare canonically or miss the collision entirely.
+	const repo = join(dataDir, "repo");
+	makeRepo(repo);
+	const managed = join(dataDir, "worktrees", "repo", "workspace-1");
+	git(repo, "worktree", "add", "-b", "workspace-1", managed);
+	seedWorkspace(managed);
+
+	expect(() => openProject(managed)).toThrow("already open in ThinkRail");
+	// The project folder itself is still openable — only the worktree's own cwd is taken.
+	expect(openProject(repo).path).toBe(realpathSync(repo));
+});
+
+test("openProject still reopens a closed project whose own Default workspace holds its cwd", () => {
+	// The Default workspace's cwd *is* the project folder, so a naive uniqueness check would lock the
+	// user out of reopening their own project.
+	const repo = join(dataDir, "repo");
+	makeRepo(repo);
+	const project = openProject(repo);
+	seedWorkspace(project.path, "default");
+	closeProject(project.id);
+
+	expect(openProject(repo).id).toBe(project.id);
+	expect(listProjects().map((p) => p.id)).toEqual([project.id]);
+});
+
 test("inspectProjectPath: a path that doesn't exist is `missing`", () => {
 	expect(inspectProjectPath(join(dataDir, "nope"))).toEqual({ kind: "missing" });
 });
