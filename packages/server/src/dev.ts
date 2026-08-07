@@ -101,5 +101,8 @@ const { port } = await bootHost({
 	host,
 	portMode: envPort ? "exact" : "free",
 	...(staticDir ? { staticDir } : {}),
+	// Run-from-source: the `dev` channel, `source` build. Nothing to gate here — muting belongs to the
+	// analytics service (CI / NODE_ENV=test / THINKRAIL_NO_ANALYTICS, which the e2e configs set).
+	analytics: { channel: "dev", build: "source" },
 });
 console.log(`thinkrail host: http://${host}:${port}`);

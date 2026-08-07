@@ -33,7 +33,7 @@
 	--muted: #a8adb5;
 	--hint: #71757c;
 	--accent: #8c81ff;
-	--on-accent: #ffffff;
+	--on-accent: #000000;
 	--bubble: #6b57ff;
 	--green: #6ad859;
 	--gold: #ffd54b;
@@ -101,6 +101,11 @@
 	--sx-punct: #24292f;
 	--shadow: 0 24px 80px rgb(15 20 40 / 0.18);
 	color-scheme: light;
+}
+
+/* Hero uses the same brand violet in both themes */
+[data-theme="light"] .hero {
+	--accent: #8c81ff;
 }
 
 [data-theme="gruvbox"] {
@@ -178,9 +183,11 @@ svg.i.i-fill {
 a {
 	color: var(--accent);
 	text-decoration: none;
+	transition: color 150ms ease-out;
 }
 
 a:hover {
+	color: color-mix(in srgb, var(--accent) 85%, white);
 	text-decoration: underline;
 }
 
@@ -273,37 +280,40 @@ code {
 
 .wordmark {
 	font-family: var(--font-display);
-	font-weight: 800;
-	font-size: 18px;
-	letter-spacing: 0.5px;
+	font-weight: 700;
+	font-size: 13px;
 	color: var(--accent);
+	white-space: nowrap;
 }
 
 .scope {
+	display: flex;
+	align-items: center;
+	gap: 14px;
 	min-width: 0;
-	border-left: 1px solid var(--border2);
-	padding-left: 14px;
-	line-height: 1.3;
+	font-size: 13px;
+	white-space: nowrap;
 }
 
 .scope-crumbs {
 	display: flex;
 	align-items: center;
 	gap: 4px;
-	font-size: 12px;
+	border-left: 1px solid var(--border2);
+	padding-left: 14px;
 }
 
 .scope-project {
-	color: var(--muted);
+	display: none;
 }
 
 .scope-crumbs .i {
-	color: var(--hint);
-	font-size: 11px;
+	display: none;
 }
 
 .scope-name {
-	font-weight: 500;
+	font-family: var(--font-mono);
+	color: var(--text);
 }
 
 .scope-branch {
@@ -311,9 +321,10 @@ code {
 	align-items: center;
 	gap: 4px;
 	font-family: var(--font-mono);
-	font-size: 10px;
-	color: var(--hint);
-	white-space: nowrap;
+	font-size: 13px;
+	color: var(--muted);
+	border-left: 1px solid var(--border2);
+	padding-left: 14px;
 }
 
 .titlebar-right {
@@ -342,120 +353,40 @@ code {
 	color: var(--text);
 }
 
-/* Theme dropdown: a chip showing the current palette (same language as the composer's model chip),
-   opening a menu of all four. The two-tone swatches mirror each theme's chrome + accent so every
-   entry stays identifiable under any active theme. */
-.theme-menu-wrap {
-	position: relative;
-}
-
-.theme-trigger {
+/* Theme toggle: a simple icon button that switches between dark and light themes.
+   Shows Sun icon in dark mode (click to switch to light), Moon in light mode (click to switch to dark). */
+.theme-toggle {
 	display: inline-flex;
 	align-items: center;
-	gap: 7px;
-	padding: 6px 10px;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
 	border: 1px solid var(--border2);
 	border-radius: 7px;
 	background: transparent;
 	color: var(--muted);
-	font: inherit;
-	font-size: 12.5px;
 	cursor: pointer;
-	white-space: nowrap;
 }
 
-.theme-trigger:hover {
+.theme-toggle:hover {
 	background: var(--hover);
 	color: var(--text);
 }
 
-.theme-trigger[aria-expanded="true"] {
-	background: var(--hover);
-	color: var(--text);
+.theme-toggle .i {
+	width: 16px;
+	height: 16px;
 }
 
-.theme-trigger .i {
-	font-size: 11px;
-	color: var(--hint);
-}
-
-.theme-swatch {
-	width: 13px;
-	height: 13px;
-	flex: none;
-	border: 1px solid var(--border2);
-	border-radius: 50%;
-}
-
-[data-swatch="dark"] {
-	background: linear-gradient(135deg, #171719 50%, #8c81ff 50%);
-}
-
-[data-swatch="darcula"] {
-	background: linear-gradient(135deg, #3c3f41 50%, #8c81ff 50%);
-}
-
-[data-swatch="light"] {
-	background: linear-gradient(135deg, #f2f3f5 50%, #6b57ff 50%);
-}
-
-[data-swatch="gruvbox"] {
-	background: linear-gradient(135deg, #282828 50%, #fe8019 50%);
-}
-
-.theme-menu {
-	position: absolute;
-	top: calc(100% + 6px);
-	right: 0;
-	z-index: 70;
-	min-width: 170px;
-	padding: 5px;
-	display: flex;
-	flex-direction: column;
-	gap: 1px;
-	background: var(--elevated);
-	border: 1px solid var(--border2);
-	border-radius: 9px;
-	box-shadow: var(--shadow);
-}
-
-.theme-menu[hidden] {
+/* Show Sun in dark mode, Moon in light mode */
+[data-theme="dark"] .theme-icon-moon,
+[data-theme="light"] .theme-icon-sun {
 	display: none;
 }
 
-.theme-item {
-	display: flex;
-	align-items: center;
-	gap: 9px;
-	width: 100%;
-	padding: 7px 10px;
-	border: 0;
-	border-radius: 6px;
-	background: transparent;
-	color: var(--muted);
-	font: inherit;
-	font-size: 12.5px;
-	text-align: left;
-	cursor: pointer;
-}
-
-.theme-item:hover {
-	background: var(--hover);
-	color: var(--text);
-}
-
-.theme-item[aria-checked="true"] {
-	color: var(--text);
-}
-
-.theme-check {
-	margin-left: auto;
-	visibility: hidden;
-	color: var(--accent);
-}
-
-.theme-item[aria-checked="true"] .theme-check {
-	visibility: visible;
+[data-theme="dark"] .theme-icon-sun,
+[data-theme="light"] .theme-icon-moon {
+	display: block;
 }
 
 .gh-btn {
@@ -495,6 +426,12 @@ code {
 	gap: 10px;
 }
 
+.rail-left-nav {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
 .rail-heading {
 	display: flex;
 	align-items: center;
@@ -511,6 +448,7 @@ code {
 	display: flex;
 	flex-direction: column;
 	gap: 1px;
+	font-family: var(--font-mono);
 	font-size: 13px;
 }
 
@@ -539,12 +477,7 @@ code {
 }
 
 .tree-row.active {
-	background: var(--elevated);
 	color: var(--text);
-}
-
-.tree-row.active .i {
-	color: var(--accent);
 }
 
 .tree-row.dim {
@@ -552,12 +485,69 @@ code {
 }
 
 .rail-note {
-	margin-top: auto;
-	font-size: 11.5px;
+	margin: auto 8px 8px;
+	padding: 12px;
+	background: var(--elevated);
+	border: 1px solid var(--border2);
+	border-radius: 12px;
+	opacity: 1;
+	transform: translateY(0);
+	transition:
+		opacity 300ms ease-out,
+		transform 300ms ease-out;
+}
+
+.rail-note.pending {
+	opacity: 0;
+	transform: translateY(12px);
+	pointer-events: none;
+}
+
+.rail-note.hidden {
+	display: none;
+}
+
+.rail-note-icon {
+	width: 24px;
+	height: 24px;
 	color: var(--hint);
+	flex-shrink: 0;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 2;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.rail-note p {
+	margin: 8px 0 0;
+	font-size: 14px;
+	color: var(--text);
 	line-height: 1.5;
-	padding: 10px 8px;
-	border-top: 1px solid var(--border);
+}
+
+.rail-note code {
+	white-space: nowrap;
+}
+
+.rail-note-dismiss {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	margin-top: 12px;
+	padding: 10px 18px;
+	border: 1px solid var(--border2);
+	border-radius: 8px;
+	background: transparent;
+	color: var(--text);
+	font-size: 14px;
+	font-weight: 500;
+	cursor: pointer;
+}
+
+.rail-note-dismiss:hover {
+	background: var(--hover);
+	border-color: var(--muted);
 }
 
 /* Center: tab strip + editor */
@@ -567,14 +557,12 @@ code {
 	flex-direction: column;
 	min-width: 0;
 	min-height: 0; /* grid items default to min-height:auto — without this the row grows to content */
-	border-right: 1px solid var(--border);
 }
 
 .tabstrip {
 	display: flex;
 	align-items: stretch;
-	overflow-x: auto;
-	scrollbar-width: none;
+	overflow: hidden;
 	border-bottom: 1px solid var(--border);
 	background: var(--chrome);
 	flex: none;
@@ -585,8 +573,9 @@ code {
 }
 
 .tab {
-	display: inline-flex;
+	display: flex;
 	align-items: center;
+	justify-content: flex-start;
 	gap: 7px;
 	padding: 8px 12px;
 	font-size: 12.5px;
@@ -595,12 +584,20 @@ code {
 	border-right: 1px solid var(--border);
 	white-space: nowrap;
 	position: relative;
+	flex: none;
 }
 
 .tab:hover {
 	text-decoration: none;
 	color: var(--text);
 	background: var(--hover);
+}
+
+/* Tabs inside disabled mock chrome have no hover state */
+[data-mock-hint] .tab:hover {
+	text-decoration: none;
+	color: var(--muted);
+	background: transparent;
 }
 
 .tab .i {
@@ -634,6 +631,11 @@ code {
 
 .tab:hover .tab-x {
 	opacity: 0.6;
+}
+
+/* No close button on disabled tabs */
+[data-mock-hint] .tab:hover .tab-x {
+	opacity: 0;
 }
 
 .tab-x::before,
@@ -828,7 +830,7 @@ code {
 	font-size: clamp(52px, 9vw, 96px);
 	line-height: 0.98;
 	letter-spacing: 0.5px;
-	margin: 0 0 10px;
+	margin: 36px 0 32px;
 	color: var(--accent);
 }
 
@@ -849,18 +851,18 @@ p.hero-lede {
 
 .install-line {
 	display: flex;
-	align-items: center;
-	gap: 8px;
+	align-items: stretch;
 	margin: 26px 0 10px;
 	max-width: 100%;
+	background: var(--input);
+	border: 1px solid var(--border2);
+	border-radius: 8px;
+	overflow: hidden;
 }
 
 .install-line > code {
 	flex: 1;
 	min-width: 0;
-	background: var(--input);
-	border: 1px solid var(--border2);
-	border-radius: 8px;
 	padding: 12px 14px;
 	font-size: 12.5px;
 	white-space: nowrap;
@@ -873,12 +875,11 @@ p.hero-lede {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 40px;
-	height: 42px;
+	width: 44px;
 	flex: none;
-	border: 1px solid var(--border2);
-	border-radius: 8px;
-	background: var(--elevated);
+	border: none;
+	border-left: 1px solid var(--border2);
+	background: transparent;
 	color: var(--muted);
 	cursor: pointer;
 	font-size: 15px;
@@ -906,6 +907,7 @@ p.hero-platforms {
 	font-size: 12.5px;
 	color: var(--hint);
 	font-family: var(--font-mono);
+	max-width: 100%;
 }
 
 .hero-ctas {
@@ -968,9 +970,15 @@ p.hero-platforms {
 
 .feature-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+	grid-template-columns: repeat(2, 1fr);
 	gap: 14px;
 	margin: 22px 0;
+}
+
+@media (max-width: 600px) {
+	.feature-grid {
+		grid-template-columns: 1fr;
+	}
 }
 
 .feature-card {
@@ -999,6 +1007,7 @@ p.hero-platforms {
 /* ── Chat demo ──────────────────────────────────────────────────────────── */
 
 .chat-demo {
+	position: relative;
 	border: 1px solid var(--border2);
 	border-radius: 12px;
 	background: color-mix(in srgb, var(--elevated) 30%, var(--editor-bg));
@@ -1229,6 +1238,23 @@ html.anim .chat-demo [data-step].on {
 	font-size: 14px;
 }
 
+.footer-links a {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	color: var(--accent);
+}
+
+.footer-links a:hover {
+	color: color-mix(in srgb, var(--accent) 85%, white);
+}
+
+.footer-links .i {
+	width: 16px;
+	height: 16px;
+	flex-shrink: 0;
+}
+
 p.footer-fineprint {
 	font-size: 12px;
 	color: var(--hint);
@@ -1247,8 +1273,9 @@ p.footer-fineprint {
 
 .rail-tabs {
 	display: flex;
+	align-items: center;
 	gap: 18px;
-	padding: 10px 16px;
+	padding: 8px 16px;
 	border-bottom: 1px solid var(--border);
 	font-size: 11.5px;
 	font-weight: 500;
@@ -1314,6 +1341,10 @@ p.footer-fineprint {
 	padding-left: 28px;
 }
 
+.ft-row.depth-2 {
+	padding-left: 48px;
+}
+
 .ft-row.folder {
 	color: var(--muted);
 }
@@ -1348,6 +1379,7 @@ p.footer-fineprint {
 	align-items: center;
 	gap: 10px;
 	padding: 8px 12px;
+	border-bottom: 1px solid var(--border);
 }
 
 .terminal-label {
@@ -1437,6 +1469,7 @@ html.anim .terminal.armed [data-out] {
 .statusbar {
 	display: flex;
 	align-items: center;
+	justify-content: flex-end;
 	gap: 18px;
 	padding: 5px 16px;
 	border-top: 1px solid var(--border2);
@@ -1447,6 +1480,16 @@ html.anim .terminal.armed [data-out] {
 	flex: none;
 	overflow: hidden;
 	white-space: nowrap;
+}
+
+.statusbar a {
+	color: inherit;
+	text-decoration: none;
+}
+
+.statusbar a:hover {
+	color: var(--text);
+	text-decoration: underline;
 }
 
 .sb-item {
@@ -1485,6 +1528,141 @@ html.anim .terminal.armed [data-out] {
 	border-radius: 5px;
 	border: 2px solid transparent;
 	background-clip: content-box;
+}
+
+/* ── Mock-disabled state ────────────────────────────────────────────────── */
+/* Non-interactive elements: dimmed to --hint, no pointer events, tooltip on hover */
+
+/* Non-interactive mock elements: dimmed to --hint, pointer events blocked */
+[data-mock-hint],
+[data-mock-hint] * {
+	color: var(--hint);
+	transition: color 150ms ease-out;
+}
+
+[data-mock-hint] {
+	pointer-events: none;
+	cursor: help;
+	position: relative;
+}
+
+/* Subtle hover feedback: brighten text when hovering the region */
+[data-mock-hint]:hover,
+[data-mock-hint]:hover * {
+	color: var(--muted);
+}
+
+/* Active items stay bright on hover */
+[data-mock-hint]:hover .active,
+[data-mock-hint]:hover .active * {
+	color: var(--text);
+}
+
+[data-mock-hint] a,
+[data-mock-hint] button {
+	pointer-events: none;
+	cursor: default;
+}
+
+[data-mock-hint] .i {
+	color: var(--hint);
+	opacity: 0.7;
+	transition:
+		color 150ms ease-out,
+		opacity 150ms ease-out;
+}
+
+[data-mock-hint]:hover .i {
+	color: var(--muted);
+	opacity: 0.85;
+}
+
+/* Re-enable pointer events for the tooltip layer */
+.mock-tooltip-layer {
+	position: fixed;
+	inset: 0;
+	pointer-events: none;
+	z-index: 1000;
+}
+
+.mock-tooltip {
+	position: fixed;
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	text-align: left;
+	padding: 12px;
+	background: var(--elevated);
+	border: 1px solid var(--border2);
+	border-radius: 12px;
+	pointer-events: none;
+	opacity: 0;
+	transform: translateY(8px);
+	transition:
+		opacity 200ms ease-out,
+		transform 200ms ease-out;
+	z-index: 1001;
+	box-shadow: 0 8px 24px rgb(0 0 0 / 0.35);
+	max-width: calc(100vw - 32px);
+}
+
+.mock-tooltip-icon {
+	width: 24px;
+	height: 24px;
+	color: var(--text);
+	flex-shrink: 0;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 2;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.mock-tooltip-text {
+	margin-top: 12px;
+	font-size: 15px;
+	line-height: 1.5;
+	color: var(--text);
+	white-space: nowrap;
+}
+
+.mock-tooltip-cta {
+	margin-top: 16px;
+}
+
+/* Secondary outlined button for tooltip CTA */
+.mock-tooltip-cta a {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 9px;
+	padding: 10px 18px;
+	border-radius: 8px;
+	border: 1px solid var(--border2);
+	background: transparent;
+	color: var(--text);
+	font-size: 14px;
+	font-weight: 500;
+	text-decoration: none;
+	pointer-events: auto;
+}
+
+.mock-tooltip-cta a:hover {
+	background: var(--hover);
+	border-color: var(--muted);
+}
+
+.mock-tooltip-cta .i {
+	width: 16px;
+	height: 16px;
+	fill: currentColor;
+}
+
+.mock-tooltip.visible {
+	opacity: 1;
+	transform: translateY(0);
+	pointer-events: auto;
+	cursor: default;
 }
 
 /* ── Responsive ─────────────────────────────────────────────────────────── */
@@ -1550,11 +1728,6 @@ html.anim .terminal.armed [data-out] {
 		display: none;
 	}
 
-	/* keep the swatch + chevron; the name yields space to the wordmark */
-	.theme-current {
-		display: none;
-	}
-
 	.hero-ctas .btn {
 		flex: 1;
 		justify-content: center;
@@ -1574,5 +1747,23 @@ html.anim .terminal.armed [data-out] {
 
 	.term-caret {
 		animation: none;
+	}
+
+	.rail-note {
+		transition: none;
+	}
+
+	a {
+		transition: none;
+	}
+
+	[data-mock-hint],
+	[data-mock-hint] *,
+	[data-mock-hint] .i {
+		transition: none;
+	}
+
+	.mock-tooltip {
+		transition: none;
 	}
 }

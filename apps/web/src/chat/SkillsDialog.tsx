@@ -116,10 +116,7 @@ export function SkillsDialog({
 		setBusy(true);
 		try {
 			const result = await request();
-			if (!isWorkspace(result)) {
-				const store = useAppStore.getState();
-				store.setProjects(store.projects.map((p) => (p.id === result.id ? result : p)));
-			}
+			if (!isWorkspace(result)) useAppStore.getState().applyProjectUpdated(result);
 			await refresh();
 		} catch (err) {
 			toast.error(errorText(err), failure);

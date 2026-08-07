@@ -7,10 +7,11 @@
 // server's `registerBundledRuntime` seam — which also injects the extensions themselves as value-imported
 // factories, since a binary has no `node_modules` to path-load them from, and registers pi's statically-
 // bundled provider flows: OAuth sign-in + Bedrock reach Node-only code through dynamic imports a compiled
-// binary can't resolve), then hand off to the normal bootstrap (`index.ts`). An install-management
-// subcommand skips all of that and hands off straight away — see the branch at the bottom.
+// binary can't resolve), then hand off to the shared launch sequence (`bootstrap.ts`) declaring the
+// `binary` provenance. An install-management subcommand skips all of that and hands off straight away —
+// see the branch at the bottom.
 //
-// Run-from-source uses `index.ts` directly and never touches this file. (Image-read needs no photon wasm
+// Run-from-source enters through `index.ts` and never touches this file. (Image-read needs no photon wasm
 // here: the agent's read tool is configured to send images raw — see server `buildSessionSettings`.)
 
 import { existsSync, mkdirSync } from "node:fs";
@@ -65,4 +66,5 @@ if (parseSubcommand(Bun.argv.slice(2)) === undefined) {
 	const { registerBundledRuntime } = await import("@thinkrail/server");
 	await registerBundledRuntime({ factories: bundledExtensionFactories, skillsDir });
 }
-await import("./index");
+const { launch } = await import("./bootstrap");
+await launch("binary");

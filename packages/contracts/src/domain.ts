@@ -12,6 +12,9 @@ export interface Project {
 	slug: string;
 	/** Epoch ms of last open, for sort order. */
 	lastOpened: number;
+	/** Closed projects stay known (and keep their id/workspace associations) but leave the open-project rail.
+	 * Absent means open, so persisted records from before this field remain open without migration. */
+	closed?: true;
 	/**
 	 * Whether the user has engaged trust for this project — the gate on loading its **committed cross-agent
 	 * skill aliases** (`.claude/skills`, `.github/skills`, `.gemini/skills`), which are attacker-controlled
@@ -97,6 +100,22 @@ export interface Workspace {
 	 * project alias (admissibility is checked first).
 	 */
 	skillOverrides?: Record<string, "on" | "off">;
+}
+
+/**
+ * A host-installed editor/IDE the "Open in" menu can offer, from `editor.list` — never a fixed client
+ * list: the host probes its own PATH (+ a few well-known JetBrains launcher names) and only names what it
+ * actually found, so the menu never carries a dead entry for an app the host doesn't have. `kind` is
+ * routing info the client needs: `"gui"` spawns the app detached via `workspace.openIn`; `"terminal"` (Vim)
+ * has no window of its own — the client opens/focuses that workspace's embedded terminal and runs it there
+ * instead of asking the host to spawn a TTY-less child process.
+ */
+export interface EditorInfo {
+	/** Stable across a host's lifetime, but not a wire-versioned enum — new candidates can appear freely. */
+	id: string;
+	/** Display label, e.g. "VS Code", "WebStorm". */
+	label: string;
+	kind: "gui" | "terminal";
 }
 
 /**

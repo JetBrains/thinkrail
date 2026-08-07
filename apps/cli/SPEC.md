@@ -40,7 +40,8 @@ scans upward to the next free port on collision), `--host` (default `localhost`)
 durable switch is the app's Settings → Privacy toggle, see `submodule-server-analytics`),
 `-v`/`--version` (print the baked version and exit), `-h`/`--help`, and one positional `project-dir` (a
 git repo to open as a project on boot, best-effort). Env defaults: `THINKRAIL_PORT` / `THINKRAIL_HOST` /
-`THINKRAIL_STATIC_DIR` / `THINKRAIL_NO_ANALYTICS` (flag > env > default).
+`THINKRAIL_STATIC_DIR` (flag > env > default). `THINKRAIL_NO_ANALYTICS` is documented in `--help` but
+deliberately **not** parsed here — the host's analytics module is its single reader (see below).
 
 ## Self-update (`thinkrail update`)
 
@@ -123,15 +124,29 @@ worktrees and any uncommitted work in them. pi's own state (`~/.pi`) is never to
 `src/version.ts` exports `{ version, channel, commit }` with a from-source default (`0.0.0-dev`). Unlike
 the transient `*.generated.ts`, it's a **permanent committed module** so `--version` + `tsc` work from
 source. The release pipeline (`module-ci-release`) overwrites it in the throwaway CI checkout before
-`build:binary`, baking the real release identity into the binary. **`src/analytics-keys.ts` is the
-same seam for the PostHog project API key**: committed with an empty-string default (so
-source/dev/e2e builds have no key — the noop sink, see `submodule-server-analytics`), overwritten by
-the release pipeline from the CI secret. The baked key is the **only** key source — there is no
-runtime env-var key override, so only stable/nightly release builds can ever send (see
-`submodule-server-analytics`). `index.ts` threads
-`{ channel, key, mute }` into `bootHost` as the `analytics` option. `index.ts` reads it, prints it for
-`--version`, and passes `appVersion` into `bootHost` — so the host echoes it in `server.welcome`
-(`ServerWelcome.appVersion`), letting a client report host version alongside the protocol-drift check.
+`build:binary`, baking the real release identity into the binary. It is now the **only** stamped seam:
+there is no analytics-key seam here at all, because every channel reports to one committed project key
+owned by `submodule-server-analytics`. `bootstrap.ts` reads `version.ts`, prints it for `--version`,
+passes `appVersion` into `bootHost` — so the host echoes it in `server.welcome`
+(`ServerWelcome.appVersion`), letting a client report host version alongside the protocol-drift check —
+and threads `{ channel, build, mute }` into `bootHost` as the `analytics` option.
+
+## Launch entries + build provenance
+
+`src/bootstrap.ts` owns the launch sequence (argv → subcommand or host boot → open browser) and exports
+`launch(build: BuildKind)`, which carries the single error-exit path. The two entries differ *only* in the
+provenance they declare, and each knows its own by construction rather than by inspecting the runtime:
+
+- `src/index.ts` — the `bin`, i.e. run **from source**: `launch("source")`.
+- `src/compiled-entry.ts` — the **compiled binary**'s entry (staging + pi registrations first):
+  `launch("binary")`.
+
+`build` rides analytics as a plain property, so `channel = dev` runs are still separable into a locally
+compiled binary vs a source run (see `submodule-server-analytics`). Deliberately *not* sniffed from Bun's
+`/$bunfs/` module paths: that's an implementation detail a Bun bump can change, and it would mislabel
+silently. `src/args.ts` parses `--no-analytics` into `CliOptions.noAnalytics` but does **not** read
+`THINKRAIL_NO_ANALYTICS` — the host's analytics module is that variable's single reader, so every
+entrypoint honors it (including `packages/server/src/dev.ts`, which parses no argv).
 
 ## Single-file binary (`build:binary`)
 

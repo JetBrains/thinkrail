@@ -13,8 +13,9 @@ The project's public website — a single landing page whose creative conceit is
 IDE**: a faithful HTML/CSS recreation of the ThinkRail shell (title bar, project rail, tab strip,
 files rail, terminal, status bar) whose center "editor" is the normally-scrolling page content. Each
 section poses as a file of a `website` workspace (`README.md`, `why.md`, `features/*.md`,
-`install.sh`, `CONTRIBUTING.md`); the chrome reacts to scroll (active tab,
-tree selection, status-bar line counter) like the editor is switching files.
+`install.sh`, `CONTRIBUTING.md`); the file tree's selection reacts to scroll (scroll-spy) like the
+editor is switching files. The tab strip is decorative — it does not react to scroll — and the status
+bar is a plain copyright footer, not a live line counter.
 
 Not part of the product: nothing in the app depends on it, and it ships to GitHub Pages, not in the
 binary.
@@ -102,6 +103,14 @@ Vite `base: "./"` keeps the build servable at `/thinkrail/` and on any custom do
 settings: Pages → Source: GitHub Actions, and Pages → Custom domain: `thinkrail.ai` — the public
 identity. Canonical/OG URLs in `index.html` (and the README website link) point at
 `https://thinkrail.ai/`, never the `jetbrains.github.io/thinkrail` address (which redirects there).
+
+**The deploy fails fast rather than hanging.** `deploy-pages` only creates the Pages deployment and then
+polls it, so a stalled backend hangs the step until timeout — 10min on 2026-08-06 (`31107056870`),
+leaving `main` red and the site stale. Hence `timeout: 180000` (a healthy deploy reports `succeed` in
+~10s), `retention-days: 7` on the artifact so re-running the `deploy` job stays a valid remedy for a
+week, and `cancel-in-progress: false` so an in-flight publish finishes. Don't add an in-job retry: the
+deployment is keyed by `GITHUB_SHA` and the timeout cancels it, so a second attempt moments later only
+reads back `deployment_cancelled`. Re-deploying that SHA *later* is fine — hence the remedy above.
 
 ## Assets
 

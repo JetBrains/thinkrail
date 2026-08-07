@@ -43,8 +43,7 @@ export function ProjectSkillsNotice({ projectId }: { projectId: string }) {
 	const plural = (n: number) => (n === 1 ? "" : "s");
 
 	const applyProject = (updated: Project) => {
-		const store = useAppStore.getState();
-		store.setProjects(store.projects.map((p) => (p.id === updated.id ? updated : p)));
+		useAppStore.getState().applyProjectUpdated(updated);
 	};
 
 	const run = async (request: () => Promise<Project>, failure: string) => {

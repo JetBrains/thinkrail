@@ -53,8 +53,6 @@ jobs:
           version: ${{ inputs.version }}
           channel: ${{ inputs.channel }}
           target: ${{ matrix.target }}
-          # Absent on forks/PRs → the action skips the stamp and the committed empty key stays (noop sink).
-          posthog-api-key: ${{ secrets.THINKRAIL_POSTHOG_API_KEY }}
 
       - uses: actions/upload-artifact@v5
         with:

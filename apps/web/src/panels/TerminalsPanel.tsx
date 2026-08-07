@@ -72,6 +72,7 @@ export function TerminalsPanel() {
 							clientId={tab.clientId}
 							workspaceId={tab.workspaceId}
 							visible={tab.workspaceId === activeWorkspaceId && tab.clientId === activeTerminalId}
+							{...(tab.initialCommand ? { initialCommand: tab.initialCommand } : {})}
 						/>
 					</Suspense>
 				))}

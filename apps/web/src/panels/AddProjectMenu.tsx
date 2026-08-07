@@ -14,17 +14,18 @@ import {
 /**
  * The shared "add a project" dropdown — Open project / Open GitHub (soon) / Recents. The **trigger is
  * supplied by the caller** (`children`, via Radix `asChild`) so it can hang off the projects-rail "+"
- * button *or* the Welcome screen's "Open project" card. `onOpen` runs the native picker; `onOpenRecent`
- * re-opens a known project path.
+ * button *or* the Welcome screen's "Open project" card. `recentProjects` contains every known open +
+ * closed record in last-opened order; `onOpen` runs the native picker and `onOpenRecent` opens/reactivates
+ * one stable project by path.
  */
 export function AddProjectMenu({
-	projects,
+	recentProjects,
 	onOpen,
 	onOpenRecent,
 	align = "end",
 	children,
 }: {
-	projects: Project[];
+	recentProjects: Project[];
 	onOpen: () => void;
 	onOpenRecent: (path: string) => void;
 	align?: "start" | "center" | "end";
@@ -42,12 +43,12 @@ export function AddProjectMenu({
 					<Globe />
 					<span>Open GitHub project</span>
 				</DropdownMenuItem>
-				{projects.length > 0 && (
+				{recentProjects.length > 0 && (
 					<>
 						<DropdownMenuSeparator />
 						<DropdownMenuLabel>Recents</DropdownMenuLabel>
 						<DropdownMenuGroup>
-							{projects.map((project) => (
+							{recentProjects.map((project) => (
 								<DropdownMenuItem
 									key={project.id}
 									onSelect={() => onOpenRecent(project.path)}

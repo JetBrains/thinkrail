@@ -446,8 +446,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   - **Save** calls `template.save` then the store's `bumpTemplatesVersion()`; a rejected save renders its
     message inline via `data-testid="template-error"` (never a toast — the dialog stays open so the error
     is fixable in place). **Delete has no dialog involvement at all** — `panels/TemplatesSettings.tsx`'s
-    row calls `template.delete` + `bumpTemplatesVersion()` directly, behind a `ConfirmPopover` (the same
-    confirm-before-destructive-action pattern `ProjectTree.tsx`'s workspace-remove row uses). A **rejected
+    row calls `template.delete` + `bumpTemplatesVersion()` directly, behind a `ConfirmPopover` anchored to
+    the row's own Delete button. A **rejected
     delete** is the one deliberate asymmetry with Save: it surfaces as an error toast, not inline (there's
     no dialog to render inline into), leaving the row in place — the same pattern `panels/SPEC.md`
     documents for `ProjectTree`'s own workspace-remove row.

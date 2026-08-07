@@ -95,15 +95,20 @@ Children:
 | Add-Project Button / Menu | `panels/AddProjectMenu.tsx` → `AddProjectMenu` (the rail "+") | `add-project-menu` | Open project / Open GitHub (soon) / Recents dropdown |
 | Project Row | inline row in `ProjectTree` | `project-item` | A project (git repo); clicking selects it (project home) |
 | — Project Expander | chevron control | `project-expand` | Expands/collapses the project's workspace list |
+| — Project Name | inline `<button>` | `project-name` | Selects the project (project home) |
+| — Workspace Count | inline `<span>` | `project-workspace-count` | Collapsed-row count of the project's worktree workspaces |
+| — Add-Workspace Button | inline "+" | `add-workspace` | Opens the New Workspace Dialog |
+| — Project Actions Menu | Context Menu on the row | `project-actions` | Create workspace (`project-menu-create-workspace`) / Close project (`project-menu-close`) |
 | Workspace Row | inline row in `ProjectTree` | `workspace-item` | A workspace (git worktree); two-line: name + branch |
 | — Workspace Name | inline `<span>` | `workspace-name` | Display name |
-| — Workspace Branch | inline `<span>` | `workspace-branch` | Git branch (muted, monospace; hidden if it equals the name) |
+| — Workspace Branch | inline `<span>` | `workspace-branch` | Git branch (muted, proportional metadata; hidden if it equals the name) |
 | — Diff-Stat Badge | `panels/DiffStatBadge.tsx` → `DiffStatBadge` | — | `+N −M` per-worktree change counts |
-| — Add-Workspace Button | inline "+" | `add-workspace` | Opens the New Workspace Dialog |
-| — Remove-Workspace Button | `Trash2` glyph | `workspace-remove` | Opens a Confirm Popover; not shown on the Default workspace |
+| — Workspace Actions Menu | `MoreVertical` Dropdown Menu | `workspace-menu` / `workspace-actions` | Open in (`workspace-open-in`) / Copy path / Reveal / Remove workspace |
+| — Remove-Workspace Item | menu item in the actions menu | `workspace-remove` | Opens a Confirm Dialog; not shown on the Default workspace |
 
 The **Default Workspace** row (`kind === "default"` — the project folder itself) is pinned first, uses a
-`House` icon in place of the `GitBranch` glyph, and has no Remove button.
+`House` icon in place of the `GitBranch` glyph, and has no Remove item — but it gets the same Open in /
+Copy path / Reveal menu as any worktree.
 
 ---
 
@@ -452,7 +457,8 @@ ThinkRail tokens. Imported per-file (no barrel).
 |---|---|---|
 | Button | `components/ui/button.tsx` | `default` / `destructive` / `outline` / `ghost` |
 | Dialog (Modal) | `components/ui/dialog.tsx` | The **Modal** primitive; optional `hideClose` |
-| Dropdown Menu | `components/ui/dropdown-menu.tsx` | Height-bounded, scrollable menu |
+| Dropdown Menu | `components/ui/dropdown-menu.tsx` | Height-bounded, scrollable menu; submenu via `DropdownMenuSub*` |
+| Context Menu | `components/ui/context-menu.tsx` | Right-click menu; shares `menu-styles.ts` with Dropdown Menu |
 | Popover | `components/ui/popover.tsx` | Optional `container` portal target |
 | Command | `components/ui/command.tsx` | cmdk combobox body |
 | Textarea | `components/ui/textarea.tsx` | |
@@ -466,9 +472,9 @@ App-level dialog/popover instances built on those primitives:
 | Canonical name | Implementation | Built on | Responsibility |
 |---|---|---|---|
 | New Workspace Dialog | `panels/NewWorkspaceDialog.tsx` → `NewWorkspaceDialog` | Dialog | Start-working surface (mode fork: isolated worktree / project folder) |
-| Confirm Dialog | `panels/ConfirmDialog.tsx` → `ConfirmDialog` | Dialog | Modal yes/no (e.g. init a repo) |
+| Confirm Dialog | `panels/ConfirmDialog.tsx` → `ConfirmDialog` | Dialog | Modal yes/no with no stable anchor (init a repo, close project, remove workspace) |
 | Notice Dialog | `panels/NoticeDialog.tsx` → `NoticeDialog` | Dialog | Single-button info modal for failures |
-| Confirm Popover | `panels/ConfirmPopover.tsx` → `ConfirmPopover` | Popover | Anchored yes/no (workspace remove, template delete) |
+| Confirm Popover | `panels/ConfirmPopover.tsx` → `ConfirmPopover` | Popover | Anchored yes/no from a dedicated action control (template delete) |
 | Template Editor Dialog | `chat/TemplateEditorDialog.tsx` → `TemplateEditorDialog` | Dialog | Create/edit a prompt template |
 | Skills Dialog | `chat/SkillsDialog.tsx` → `SkillsDialog` | Dialog | Skills manager (chat + project modes) |
 | Ext-UI Dialog | `chat/ExtUiDialog.tsx` → `ExtUiDialog` | Dialog | `pi.extensionUi` bridge dialog |

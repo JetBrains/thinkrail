@@ -41,6 +41,15 @@ export interface PostHogSinkOptions {
 
 export const POSTHOG_EU_HOST = "https://eu.i.posthog.com";
 
+/**
+ * The PostHog project EVERY build reports to — the same project the marketing site uses
+ * (`apps/website/src/analytics.ts`), so app usage and landing-page traffic live in one place. Committed
+ * on purpose: a run-from-source host has no release pipeline to bake a key into, and a project API key is
+ * write-only and public by design (it appends events; it can never read them). Rotating it is a commit,
+ * not a secret edit. Overridable per-boot via `AnalyticsOptions.posthogApiKey` (tests, self-hosting).
+ */
+export const POSTHOG_PROJECT_KEY = "phc_AFJBcKraEUrfpTrSSMjBGXMHTusYudtFfxWqdevchy8X";
+
 /** How long a graceful stop waits for the SDK to drain its queue before giving up. */
 const SHUTDOWN_TIMEOUT_MS = 2_000;
 

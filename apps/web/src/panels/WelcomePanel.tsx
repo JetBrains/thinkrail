@@ -42,6 +42,7 @@ const SETUP_NOTE =
  */
 export function WelcomePanel() {
 	const projects = useAppStore((s) => s.projects);
+	const recentProjects = useAppStore((s) => s.recentProjects);
 	const selectedProjectId = useAppStore((s) => s.selectedProjectId);
 	// The New-Workspace dialog opener state (null = closed). `prompt` seeds the hero ("" for a plain
 	// create; the setup command for "Set up project", which also carries the explanatory `note`). The
@@ -119,7 +120,7 @@ export function WelcomePanel() {
 	// projects-rail "+" carries this same dropdown). Triggers the same menu as that "+".
 	const openProjectCard = () => (
 		<AddProjectMenu
-			projects={projects}
+			recentProjects={recentProjects}
 			onOpen={() => void pickAndOpen()}
 			onOpenRecent={(path) => void openProject(path)}
 			align="start"

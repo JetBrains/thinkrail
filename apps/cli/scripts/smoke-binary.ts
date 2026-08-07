@@ -46,7 +46,14 @@ mkdirSync(homeDir, { recursive: true });
 {
 	const subCache = join(tmp, "subcommand-cache");
 	const run = Bun.spawnSync([binary, "uninstall", "--help"], {
-		env: { ...process.env, XDG_CACHE_HOME: subCache, HOME: homeDir },
+		// A locally built binary sends analytics like any other build, and `CI` is unset on a developer
+		// machine — so the smoke mutes explicitly. Nothing here may reach PostHog.
+		env: {
+			...process.env,
+			XDG_CACHE_HOME: subCache,
+			HOME: homeDir,
+			THINKRAIL_NO_ANALYTICS: "1",
+		},
 		stdout: "pipe",
 		stderr: "inherit",
 	});
@@ -82,6 +89,7 @@ const proc = Bun.spawn([binary, "--no-open", "--port", "24262"], {
 		CLAUDE_CONFIG_DIR: join(homeDir, ".claude"),
 		CODEX_HOME: join(homeDir, ".codex"),
 		GEMINI_CLI_HOME: homeDir,
+		THINKRAIL_NO_ANALYTICS: "1",
 	},
 	stdout: "pipe",
 	stderr: "inherit",

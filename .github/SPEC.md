@@ -66,18 +66,16 @@ module whose from-source default is `0.0.0-dev`) in the throwaway CI checkout be
 the compiled binary reports the real `{version, channel, commit}`. It surfaces via `thinkrail --version`
 and, threaded `apps/cli` → `bootHost` → `createServer`, in the `server.welcome` push
 (`ServerWelcome.appVersion`, an optional field — non-breaking, no `PROTOCOL_VERSION` bump). See
-`module-cli`. **`apps/cli/src/analytics-keys.ts` rides the same seam**: stamped from the
-`THINKRAIL_POSTHOG_API_KEY` repo secret (passed by `_build.yml`, skipped when absent — forks/PR
-builds keep the committed empty key, so their binaries never send; see
-`submodule-server-analytics`).
+`module-cli`. `version.ts` is the **only** thing the build stamps: analytics carries no key seam here,
+because every channel reports to one committed project key (`submodule-server-analytics`) — and a CI run
+never sends anyway, since the analytics module mutes on `CI`.
 
 ## Parts
 
 - `CODEOWNERS` — every path is owned by @rsolmano, @danyaberezun, @OLavrik; the `main` ruleset's
   pull-request rule (`require_code_owner_review`) makes an approval from one of them required to merge.
 - `scripts/next-version.sh` — channel-aware semver from tags; carries a `--tags=` override for testing.
-- `actions/build-binary` — the release build step: `build:web` → stamp `version.ts` (+
-  `analytics-keys.ts` when the PostHog secret is provided) → `build-binary.ts
+- `actions/build-binary` — the release build step: `build:web` → stamp `version.ts` → `build-binary.ts
   --target` → resolve artifact path → native `smoke:binary`. (The Bun replacement for the old repo's
   PyInstaller action.)
 - `actions/make-checksums` — writes `SHA256SUMS` over the release artifacts.
