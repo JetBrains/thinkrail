@@ -1,4 +1,4 @@
-import { writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
@@ -41,6 +41,33 @@ async function composeComment(page: Page, line: string, body: string): Promise<v
 	await addIcon(page).click();
 	await expect(page.getByTestId("review-composer")).toBeVisible();
 	await page.getByTestId("review-composer-input").fill(body);
+}
+
+/**
+ * Mark a persisted comment SENT the way the send path (`markCommentsSent`) would — status, `sentAt`,
+ * the session link, and the file's `fileSessions` pin. The wire deliberately can't un-draft or
+ * "send" a comment (`review.commentUpdate` lands only resolved/dismissed), so the no-agent suite
+ * reaches sent-hood by editing the review file on disk; the host reads it fresh per mutation, so the
+ * next wire call's `review.changed` push carries this state to every client.
+ */
+function markSentOnDisk(commentId: string, sessionId = "sess-e2e"): void {
+	const dir = join(E2E_DATA_DIR, "reviews");
+	for (const name of readdirSync(dir).filter((f) => f.endsWith(".json"))) {
+		const file = join(dir, name);
+		const snapshot = JSON.parse(readFileSync(file, "utf8"));
+		const comment = snapshot.comments.find((c: { id: string }) => c.id === commentId);
+		if (!comment) continue;
+		comment.status = "sent";
+		comment.sentAt = Date.now();
+		comment.sessionId = sessionId;
+		snapshot.review.fileSessions = {
+			...snapshot.review.fileSessions,
+			[comment.anchor?.path ?? ""]: sessionId,
+		};
+		writeFileSync(file, `${JSON.stringify(snapshot, null, "\t")}\n`);
+		return;
+	}
+	throw new Error(`No persisted review comment ${commentId} under ${dir}`);
 }
 
 interface PersistedComment {
@@ -454,19 +481,17 @@ test("resolved comments sink into a muted Resolved section (TODO Done style)", a
 	await page.getByTestId("review-composer-save").click();
 	await expect(page.getByTestId("review-composer")).toHaveCount(0);
 
-	// Resolve the second over the wire (the UI resolve lives on sent comments, which need an agent);
-	// every client converges on the review.changed push.
+	// Mark the first SENT on disk (the wire can't — draft↔sent belongs to the send path), then resolve
+	// the second over the wire; that mutation's review.changed push carries BOTH states, and every
+	// client converges on the push.
 	await page.getByTestId("tab-review").click();
 	await expect(page.getByTestId("review-comment")).toHaveCount(2);
 	const comments = await persistedComments(page);
+	markSentOnDisk(comments.find((c) => c.body.includes("Open remark"))?.id ?? "");
 	await overWire(page, [
 		{
 			method: "review.commentUpdate",
 			params: { id: comments.find((c) => c.body.includes("resolved"))?.id, status: "resolved" },
-		},
-		{
-			method: "review.commentUpdate",
-			params: { id: comments.find((c) => c.body.includes("Open remark"))?.id, status: "sent" },
 		},
 	]);
 

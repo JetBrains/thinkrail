@@ -4,8 +4,7 @@
 // then opens its chat tab; a failure toasts and rethrows so callers can keep their UI open.
 
 import type { ReviewSendResult } from "@thinkrail/contracts";
-import { selectLastOpenChatSession, useAppStore } from "../store";
-import { toast } from "../store/appStore";
+import { selectLastOpenChatSession, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { openChatInTab } from "./openChat";
 
