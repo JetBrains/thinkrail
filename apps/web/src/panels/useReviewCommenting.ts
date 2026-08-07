@@ -1,7 +1,6 @@
 import type { GitDiffScope, ReviewAnchor } from "@thinkrail/contracts";
 import { useMemo } from "react";
-import { useAppStore } from "../store";
-import { toast } from "../store/appStore";
+import { toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import type { LineSelection } from "./reviewGutter";
 import { fileThreads } from "./reviewModel";

@@ -38,7 +38,11 @@ re-anchoring, and package rendering. Design + user-confirmed decisions: [[task-r
   can move. It degrades to the raw ref when that wouldn't resolve, so the review surface
   survives an unreadable base instead of vanishing with
   it. `reviewBaseRef` is how `host` reads it.
-- **`ReviewComment`**: `kind` inline/diff/file/review; `status` draft → sent → resolved (or dismissed);
+- **`ReviewComment`**: `kind` inline/diff/file/review; `status` draft → sent → resolved (or
+  dismissed). The wire (`review.commentUpdate`) may only land the terminal manual outcomes
+  (resolved/dismissed, from draft or sent); `draft`↔`sent` moves are owned exclusively by the send
+  path (`markCommentsSent`/`rollbackSend`) — a client that could un-send a comment could rewrite or
+  delete a remark whose id an agent chat already quotes;
   `sessionId` links the chat the comment was sent into — its file's review chat. **A comment is a
   record once SENT**: a draft — the user's own unsent scratch — can still be deleted
   (`review.commentDelete`, draft-only, rejected otherwise), but a sent comment is never deleted, and

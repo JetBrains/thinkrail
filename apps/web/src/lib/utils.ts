@@ -1,9 +1,21 @@
+import type { UserMessage } from "@thinkrail/contracts";
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 
 /** Merge conditional class names and de-dupe conflicting Tailwind utilities. */
 export function cn(...inputs: ClassValue[]): string {
 	return twMerge(clsx(inputs));
+}
+
+/** A user message's plain text (ignores image parts) — shared by transcript hydration, the store's
+ * live event fold, and the transcript renderer, so "same message" means the same thing everywhere. It
+ * lives here (not in `chat/`) because `store` needs it too and its edge to `chat/` is type-only. */
+export function userText(content: UserMessage["content"]): string {
+	if (typeof content === "string") return content;
+	return content
+		.filter((c) => c.type === "text")
+		.map((c) => c.text)
+		.join("");
 }
 
 /** True for a markdown file path (`.md` / `.markdown`, case-insensitive) — the rendered-preview gate. */

@@ -296,8 +296,13 @@ export function updateComment(input: {
 		comment.body = input.body.trim();
 	}
 	if (input.status !== undefined && input.status !== comment.status) {
-		if (comment.status === "resolved")
-			throw new Error("A resolved comment is final — add a new comment instead.");
+		// The wire may only land the terminal MANUAL outcomes. `draft`/`sent` are owned by the send path
+		// (`markCommentsSent`/`rollbackSend`): a client that could flip a sent comment back to draft could
+		// then rewrite or delete a remark whose id and text an agent chat already quotes.
+		if (input.status !== "resolved" && input.status !== "dismissed")
+			throw new Error(`A comment can only be resolved or dismissed — not set to ${input.status}.`);
+		if (comment.status !== "draft" && comment.status !== "sent")
+			throw new Error(`A ${comment.status} comment is final — add a new comment instead.`);
 		comment.status = input.status;
 		if (input.status === "resolved") {
 			comment.resolvedBy = "user";

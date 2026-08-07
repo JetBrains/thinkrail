@@ -153,12 +153,20 @@ test("reanchorWorkspace publishes only when something moved", () => {
 test("update edits drafts only; manual resolve stamps resolvedBy user; resolved is final", () => {
 	const comment = addInline();
 	updateComment({ workspaceId: WS_ID, id: comment.id, body: "better wording" });
+	// The wire may only land the terminal manual outcomes — draft/sent belong to the send path
+	// (markCommentsSent/rollbackSend), so a client can't un-send a comment and rewrite/delete it.
+	expect(() => updateComment({ workspaceId: WS_ID, id: comment.id, status: "sent" })).toThrow(
+		/resolved or dismissed/,
+	);
 	markCommentsSent(WS_ID, [comment.id], "sess1");
 	expect(() => updateComment({ workspaceId: WS_ID, id: comment.id, body: "nope" })).toThrow();
+	expect(() => updateComment({ workspaceId: WS_ID, id: comment.id, status: "draft" })).toThrow(
+		/resolved or dismissed/,
+	);
 	const resolved = updateComment({ workspaceId: WS_ID, id: comment.id, status: "resolved" });
 	expect(resolved.resolvedBy).toBe("user");
 	// Resolved is final — like delete and rollback, undoing a review outcome isn't offered.
-	expect(() => updateComment({ workspaceId: WS_ID, id: comment.id, status: "sent" })).toThrow(
+	expect(() => updateComment({ workspaceId: WS_ID, id: comment.id, status: "dismissed" })).toThrow(
 		/final/,
 	);
 });

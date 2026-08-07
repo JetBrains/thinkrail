@@ -24,9 +24,9 @@ import type {
 import { DEFAULT_CONFIG, isAskUserAnswersMessage, isControlMessage } from "@thinkrail/contracts";
 import { create } from "zustand";
 import type { LoginState } from "../auth";
-import { type HydratedRuntime, userText } from "../chat/hydrate";
+import type { HydratedRuntime } from "../chat/hydrate";
 import type { ChatTurn, ExtUiDialogRequest, ToolResultState } from "../chat/types";
-import { shallowEqualArrays } from "../lib";
+import { shallowEqualArrays, userText } from "../lib";
 import type { ConnectionStatus } from "../transport";
 import {
 	type HistoryTarget,

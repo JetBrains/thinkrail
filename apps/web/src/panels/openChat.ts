@@ -1,6 +1,5 @@
 import { messagesToRuntime } from "../chat/hydrate";
-import { selectWorkspaceTick, useAppStore } from "../store";
-import { toast } from "../store/appStore";
+import { selectWorkspaceTick, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 
 /**

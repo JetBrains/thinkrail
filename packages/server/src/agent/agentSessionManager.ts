@@ -334,7 +334,14 @@ export async function ensureSessionAttached(
 	workspaceId: string,
 	cwd: string,
 ): Promise<boolean> {
-	if (sessions.has(sessionId)) return true;
+	// Scope to the requested workspace (like `getSessionMessages`): a live session registered under a
+	// different workspace must not be promptable through this one — a caller could otherwise route a
+	// review package (and its source fragments) into an unrelated chat and pin comments to it.
+	const live = sessions.get(sessionId);
+	if (live) {
+		if (live.workspaceId !== workspaceId) throw new Error(`Unknown session: ${sessionId}`);
+		return true;
+	}
 	const known = (await SessionManager.list(cwd)).some((i) => i.id === sessionId && i.cwd === cwd);
 	if (!known) return false;
 	await attachDiskSession(sessionId, workspaceId, cwd);

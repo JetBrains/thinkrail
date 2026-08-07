@@ -22,7 +22,10 @@ Tiny UI helpers shared across components.
   host may use either separator and may be relative or absolute — every path predicate in the app starts
   from these, so `chat`'s display helpers and `store`'s worktree matcher share one definition) and
   **`shallowEqualArrays()`** (element-wise `Object.is` — the "did this really change?" test behind the
-  store's snapshot-identity guard and `ErrorBoundary`'s reset keys),
+  store's snapshot-identity guard and `ErrorBoundary`'s reset keys), **`userText()`** (a user
+  message's plain text — shared by `chat`'s transcript hydration/renderer and `store`'s live event
+  fold, so "same message" means the same thing everywhere; it lives here because `store`'s edge to
+  `chat/` is type-only),
   **`relativeTime()`** (`just now` / `5m ago` / `2d ago` — shared by chat history, the tab strip's closed
   chats, and the Changes scope menu's commit rows; it lives here because `chat/` may not import from
   `panels/`, which is what let three private twins of it accumulate) and **`copyText()`**
@@ -34,7 +37,9 @@ Tiny UI helpers shared across components.
   CSS-variable registration. It is imported per-file (`@/lib/highlighter`) from lazy chunks only; theme
   identity/palettes never live in `lib`.
 - **Public surface (barrel):** `cn`, `isMarkdownPath`, `stripFrontmatter`, `cssColorToHex`,
-  `normalizePath`, `isAbsolutePath`, `projectRelativePath`, `shallowEqualArrays`, `relativeTime`, `copyText`.
-- **Allowed deps:** `clsx`, `tailwind-merge`; `shiki`/`@shikijs/*` (the per-file shiki modules only —
-  never reachable through the barrel).
+  `normalizePath`, `isAbsolutePath`, `projectRelativePath`, `shallowEqualArrays`, `userText`,
+  `relativeTime`, `copyText`.
+- **Allowed deps:** `clsx`, `tailwind-merge`; `@thinkrail/contracts` (types only — `userText`'s
+  `UserMessage` parameter); `shiki`/`@shikijs/*` (the per-file shiki modules only — never reachable
+  through the barrel).
 - **Forbidden:** every app-internal module — this is a leaf.

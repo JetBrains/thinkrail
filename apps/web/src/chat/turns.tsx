@@ -10,10 +10,10 @@ import {
 	Wrench,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { cn, projectRelativePath } from "@/lib";
+import { cn, projectRelativePath, userText } from "@/lib";
 import { ActivityGroup } from "./ActivityGroup";
 import { useSelection } from "./foldState";
-import { userText } from "./hydrate";
+
 import { Markdown } from "./Markdown";
 import { parseReviewPackage, reviewPackageLabel } from "./reviewPackage";
 import type { ChatRow, TurnDividerData } from "./rows";
