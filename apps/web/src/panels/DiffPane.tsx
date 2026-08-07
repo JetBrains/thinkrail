@@ -126,17 +126,18 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 					className="mr-auto flex min-w-0 items-baseline tr-code-text"
 				>
 					{dir ? (
-						<span
-							data-testid="diff-path-dir"
-							className="min-w-0 shrink-[20] truncate text-text-muted"
-						>
+						<span data-testid="diff-path-dir" className="min-w-0 shrink truncate text-text-muted">
 							{dir}
 						</span>
 					) : null}
-					{/* Truncatable, not `shrink-0`: a long basename must never push the ¶/copy/layout controls
-					    out of the header on a narrow pane (the same rule as the Changes list's path rows) — but it
-					    out-lasts the dir prefix 20:1, so the name survives until the prefix is gone. */}
-					<span data-testid="diff-path-base" className="min-w-0 shrink truncate text-text-muted">
+					{/* `shrink-0` **plus** `max-w-full` (the same rule as the Changes list's path rows): the dir is
+					    the only shrinkable half, so it yields completely before the name loses a pixel, while
+					    max-width still clamps a long basename so it can never push the ¶/copy/layout controls out
+					    of the header on a narrow pane. */}
+					<span
+						data-testid="diff-path-base"
+						className="max-w-full shrink-0 truncate text-text-muted"
+					>
 						{base}
 					</span>
 				</span>

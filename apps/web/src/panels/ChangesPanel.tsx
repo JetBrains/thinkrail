@@ -276,25 +276,29 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 												className="flex min-w-0 flex-1 items-center gap-sm px-sm py-xs text-left tr-text-ui"
 											>
 												{/* The full relative path: a muted directory prefix, a bright basename — and the dir
-												    **actually yields first**, because it out-shrinks the basename 20:1
-												    (`shrink-[20]` vs `shrink`) — a ratio, not a tiny factor: a shrink sum BELOW 1 makes
-												    CSS absorb only that fraction of the deficit, i.e. the row would overflow. Equal shrink
-												    made both truncate at once, the opposite of the point: the name is what a user scans. */}
+												    yields **completely** before the basename gives up a pixel, because the name is what
+												    a user scans. That ordering is structural, not a ratio: the dir is the only shrinkable
+												    item, so it absorbs the entire deficit, down to zero width if the name needs the whole
+												    row. (A shrink *ratio* — this was `shrink-[20]` vs `shrink` — only approximates it:
+												    flex splits the deficit in proportion to factor × basis, so the basename always loses a
+												    slice. That slice was sub-pixel at the old type scale and ~2px at 14px, which is how a
+												    12-character `shortName.ts` started rendering with an ellipsis.) */}
 												<span className="flex min-w-0 flex-1 items-baseline">
 													{dir ? (
 														<span
 															data-testid="change-path-dir"
-															className="min-w-0 shrink-[20] truncate text-text-muted"
+															className="min-w-0 shrink truncate text-text-muted"
 														>
 															{dir}
 														</span>
 													) : null}
-													{/* Truncatable, not `shrink-0`: a long ROOT-level basename has no dir prefix to
-													    absorb the overflow, and a row that can't shrink pushes the +/− badge out of
-													    the panel — the same rule DiffPane's header chip follows. */}
+													{/* `shrink-0` **plus** `max-w-full`: flex never steals width from the name, but
+													    max-width still clamps it to the row, so a long ROOT-level basename (no dir prefix
+													    to absorb anything) truncates instead of pushing the +/− badge out of the panel —
+													    the same rule DiffPane's header chip follows. */}
 													<span
 														data-testid="change-path-base"
-														className={`min-w-0 shrink truncate ${statusNameClass(change.status) || "text-text-muted"}`}
+														className={`max-w-full shrink-0 truncate ${statusNameClass(change.status) || "text-text-muted"}`}
 													>
 														{base}
 													</span>

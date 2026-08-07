@@ -649,12 +649,16 @@ a project picker, the prompt hero, and the reused
   files; and **(3) a row shares its flex line with that slot, so it must be able to shrink below its label**
   — `TreeRow` carries `min-w-0`, and every path is rendered as *two truncatable halves* (dir + basename), so
   a long basename can never push the counts (or, in `DiffPane`'s twin chip, the ¶/copy/layout controls) out
-  of the box. The halves are **not** equally truncatable: the dir prefix out-shrinks the basename 20:1
-  (`shrink-[20]` vs `shrink` — a *ratio*, both ≥ 1, since a shrink sum below 1 makes CSS absorb only that
-  fraction of the deficit and the row overflows instead), so it yields *first* and the name a user scans survives — equal shrink made
-  both halves truncate at once, the opposite of the intent (and the e2e pin now measures the two spans
-  separately, so "the dir yields first" is a claim a test can falsify). A `shrink-0` basename overflows its own chip **invisibly to the layout** while spilling over
-  the buttons on screen — which is why the e2e pin measures the *chip's* `scrollWidth`, not the header's.
+  of the box. The halves are **not** equally truncatable: the dir prefix yields **completely** before the
+  basename gives up a pixel, because the name is what a user scans. That ordering is *structural* — the dir
+  is the only shrinkable item (`shrink`), the basename is `shrink-0` — not a shrink *ratio*. A ratio (this
+  was `shrink-[20]` vs `shrink`) only approximates it: flex splits the deficit in proportion to factor ×
+  basis, so the basename always loses a slice, sub-pixel at a small type scale and ~2px at 14px — which is
+  how a 12-character `shortName.ts` picked up an ellipsis when the UI scale rose. The e2e pin measures the
+  two spans separately, so "the dir yields first" stays a claim a test can falsify. `shrink-0` **alone**
+  would overflow the chip **invisibly to the layout** while spilling over the buttons on screen, so the
+  basename pairs it with `max-w-full`: flex never steals the name's width, but max-width still clamps it to
+  the row, which is also why the e2e pin measures the *chip's* `scrollWidth`, not the header's.
 - **Markdown file tabs render, don't read.** A `.md`/`.markdown` `FileTab` (from the file tree **or** the
   Specs panel — same `openTab` path) opens **rendered by default**: `FilePane` gates on `lib.isMarkdownPath`
   and shows a slim `Preview | Source` header (`markdown-view-toggle`), the rendered view being lazy

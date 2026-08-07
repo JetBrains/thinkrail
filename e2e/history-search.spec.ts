@@ -533,9 +533,14 @@ test("ArrowDown repeatedly scrolls the keyboard-selected row into view inside th
 	const rowBox = await selectedRow.boundingBox();
 	expect(resultsBox).not.toBeNull();
 	expect(rowBox).not.toBeNull();
+	// ±1px, like the Changes-row layout pins: the UI line-heights are truncated repeating ratios
+	// (`1.4285714` for 10/7), so at the 14px scale a row box is 30.0625px, not a whole number, and
+	// `scrollIntoView`'s fractional scrollTop lands up to ~1/16px shy of flush. That residue is invisible
+	// and is not what this test is about — "did the container scroll at all" is, and a row left below the
+	// visible range misses by tens of pixels, not by one.
 	if (resultsBox && rowBox) {
-		expect(rowBox.y).toBeGreaterThanOrEqual(resultsBox.y);
-		expect(rowBox.y + rowBox.height).toBeLessThanOrEqual(resultsBox.y + resultsBox.height);
+		expect(rowBox.y).toBeGreaterThanOrEqual(resultsBox.y - 1);
+		expect(rowBox.y + rowBox.height).toBeLessThanOrEqual(resultsBox.y + resultsBox.height + 1);
 	}
 });
 
