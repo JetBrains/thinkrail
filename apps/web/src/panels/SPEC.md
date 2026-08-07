@@ -427,8 +427,12 @@ a project picker, the prompt hero, and the reused
   passive read-only markers (plain text, no field). Status shows as the head dot (violet draft / blue
   sent).
   **Monaco**: `attachReviewThreads` view zones below the anchor lines — Monaco pushes the following
-  lines apart; zone heights are measured from the rendered card next frame, so long comments never
-  overflow. **Rendered preview**: `MarkdownPreview` splits the stripped document at each insert's
+  lines apart; zone heights track the rendered card via a **ResizeObserver**, not a one-shot measure:
+  Monaco keeps an off-viewport zone's node at `display:none`, so a card below the fold at `setThreads`
+  time (the markdown tab's rendered→source switch mounts exactly this way) measures 0 and a one-shot
+  measure would leave its zone at the placeholder height — the card then paints OVER the following
+  lines when scrolled in. The observer re-measures when a card gains real geometry or grows (in-card
+  editing), so long comments never overflow. **Rendered preview**: `MarkdownPreview` splits the stripped document at each insert's
   anchor and splices it between the markdown segments (`splicedSegments` — the inline-edit split
   pattern; a cut **never divides a multi-line construct**: an anchor inside a fenced code block or a
   GFM table snaps to that construct's last line (`sourceLines`' `indivisibleSpans` + `snapSplitLine`),
