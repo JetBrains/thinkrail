@@ -109,11 +109,18 @@ export function reviewFlags(comments: ReviewComment[] | undefined): Map<string, 
 }
 
 /** One file's pending draft ids — what its "Send review (N)" button counts and sends: the review chat
- * is per file, so the pane action covers exactly this file's drafts, never another pane's. */
-export function fileDraftIds(comments: ReviewComment[] | undefined, path: string): string[] {
+ * is per file, so the action covers exactly this file's drafts, never another's. `null` keys the
+ * anchorless whole-change-set bucket (the Review panel's file level shows it like any file). */
+export function fileDraftIds(comments: ReviewComment[] | undefined, path: string | null): string[] {
 	return (comments ?? [])
-		.filter((c) => c.status === "draft" && c.anchor?.path === path)
+		.filter((c) => c.status === "draft" && (c.anchor?.path ?? null) === path)
 		.map((c) => c.id);
+}
+
+/** Every pending draft id in the review — what the files-level "Send all (N)" counts; the send itself
+ * omits ids (`review.sendBatch` with none = all drafts), so count and action can't drift. */
+export function allDraftIds(comments: ReviewComment[] | undefined): string[] {
+	return (comments ?? []).filter((c) => c.status === "draft").map((c) => c.id);
 }
 
 /** One file's review marker (`null` = not in review) — the per-file read of {@link reviewFlags}. */

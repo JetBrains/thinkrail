@@ -1,7 +1,9 @@
 import { expect, test } from "bun:test";
 import type { ReviewComment } from "@thinkrail/contracts";
 import {
+	allDraftIds,
 	commentSurface,
+	fileDraftIds,
 	fileSummaries,
 	fileThreads,
 	groupComments,
@@ -31,6 +33,21 @@ function comment(over: Partial<ReviewComment>): ReviewComment {
 		...over,
 	};
 }
+
+test("draft ids: per-file counts only that file's drafts (null keys the anchorless bucket); allDraftIds spans every file", () => {
+	const comments = [
+		comment({ id: "a1" }), // draft on src/a.ts
+		comment({ id: "a2", status: "sent" }), // sent — never sendable
+		comment({ id: "b1", anchor: { path: "src/b.ts", side: "worktree", selectors: [] } }),
+		comment({ id: "r1", kind: "review", anchor: null }), // whole-change-set draft
+		comment({ id: "a3", status: "resolved" }),
+	];
+	expect(fileDraftIds(comments, "src/a.ts")).toEqual(["a1"]);
+	expect(fileDraftIds(comments, "src/b.ts")).toEqual(["b1"]);
+	expect(fileDraftIds(comments, null)).toEqual(["r1"]);
+	expect(allDraftIds(comments)).toEqual(["a1", "b1", "r1"]);
+	expect(allDraftIds(undefined)).toEqual([]);
+});
 
 test("groupComments: review-level first, then files alphabetically, creation order kept", () => {
 	const groups = groupComments([

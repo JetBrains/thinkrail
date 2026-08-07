@@ -254,6 +254,37 @@ test("sidebar: per-file — auto-opens on a reviewed file, back arrow lists all 
 	await expect(page.getByTestId("send-review-button")).toContainText("Send review (2)");
 });
 
+test("the Review panel carries its own send buttons: per-file at the file level, Send all at the files level", async ({
+	page,
+}) => {
+	await openDiff(page);
+	for (const body of ["one", "two"]) {
+		await composeComment(page, "two = 2", body);
+		await page.getByTestId("review-composer-save").click();
+		await expect(page.getByTestId("review-composer")).toHaveCount(0);
+	}
+	// A second reviewed file, so Send all spans files while Send review stays per-file.
+	writeFileSync(join(worktree(), "notes.txt"), "a fresh remark target\nsecond line\n");
+	await page.getByTestId("tab-changes").click();
+	await page.getByTestId("change-item").filter({ hasText: "notes.txt" }).click();
+	await composeComment(page, "fresh remark", "three");
+	await page.getByTestId("review-composer-save").click();
+	await expect(page.getByTestId("review-composer")).toHaveCount(0);
+
+	// FILE level (auto — the active tab is notes.txt): the pane toolbar's button, in the panel too,
+	// counting exactly THIS file's drafts.
+	await page.getByTestId("tab-review").click();
+	await expect(page.getByTestId("review-panel-send")).toContainText("Send review (1)");
+
+	// FILES level: Send all counts every draft across files.
+	await page.getByTestId("review-back").click();
+	await expect(page.getByTestId("review-send-all")).toContainText("Send all (3)");
+
+	// Another file's level counts its own two — never the neighbor's.
+	await page.getByTestId("review-file-row").filter({ hasText: "script.ts" }).click();
+	await expect(page.getByTestId("review-panel-send")).toContainText("Send review (2)");
+});
+
 test("line-anchored comment re-anchors when the file changes (moved → outdated)", async ({
 	page,
 }) => {
@@ -598,6 +629,9 @@ test("resolved comments sink into a muted Resolved section (TODO Done style)", a
 	// muted, not violet — while "Send review" is gone: nothing is left to send.
 	await expect(page.getByTestId("review-tab-flag")).toHaveAttribute("data-flag", "sent");
 	await expect(page.getByTestId("send-review-button")).toHaveCount(0);
+	// …and the panel's own send affordances share the drafts-only gate: nothing sendable, no buttons.
+	await expect(page.getByTestId("review-panel-send")).toHaveCount(0);
+	await expect(page.getByTestId("review-send-all")).toHaveCount(0);
 
 	// Resolved is final — no reopen affordance (like delete and rollback, undoing a review outcome
 	// isn't offered); the linked chat stays reachable.
