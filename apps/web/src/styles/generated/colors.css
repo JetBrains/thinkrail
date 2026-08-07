@@ -13,11 +13,11 @@
 	--text-disabled: color-mix(in srgb, var(--disabled) 60%, transparent);
 	--text-on-primary: var(--on-accent);
 	--text-link: var(--info); /* global.css `a {}` is the only consumer; no component styles a bare link */
-	--container-workspace-bg: var(--background);
+	--container-workspace-bg: var(--background); /* the app surface, and with it the opened-document canvas — a document reads as part of the workspace (Monaco's EDITOR_THEME, the markdown/spec preview, the chat column, the tab strip) */
 	--container-sidebar-bg: var(--sidebar);
 	--container-terminal-bg: var(--sidebar);
 	--container-header-bg: var(--header);
-	--container-content-bg: var(--content); /* the editor/document canvas: Monaco, Shiki, rendered diffs, markdown preview */
+	--container-content-bg: var(--content); /* the recessed read-a-diff/read-code canvas, NOT the document canvas (that is workspace): the Changes diff (Monaco THEME), rendered diffs, Shiki code blocks, and the center-column backdrop behind them */
 	--container-elevated-bg: var(--elevated); /* every raised surface: dialogs, popovers, menus, toasts, cards, code blocks */
 	--control-bg: var(--input);
 	--control-bg-hovered: var(--hover);

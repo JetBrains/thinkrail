@@ -25,14 +25,18 @@
 			"note": "global.css `a {}` is the only consumer; no component styles a bare link"
 		},
 
-		"container-workspace-bg": { "from": "background", "publish": true },
+		"container-workspace-bg": {
+			"from": "background",
+			"publish": true,
+			"note": "the app surface, and with it the opened-document canvas — a document reads as part of the workspace (Monaco's EDITOR_THEME, the markdown/spec preview, the chat column, the tab strip)"
+		},
 		"container-sidebar-bg": { "from": "sidebar", "publish": true },
 		"container-terminal-bg": { "from": "sidebar", "publish": true },
 		"container-header-bg": { "from": "header", "publish": true },
 		"container-content-bg": {
 			"from": "content",
 			"publish": true,
-			"note": "the editor/document canvas: Monaco, Shiki, rendered diffs, markdown preview"
+			"note": "the recessed read-a-diff/read-code canvas, NOT the document canvas (that is workspace): the Changes diff (Monaco THEME), rendered diffs, Shiki code blocks, and the center-column backdrop behind them"
 		},
 		"container-elevated-bg": {
 			"from": "elevated",

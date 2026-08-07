@@ -58,7 +58,7 @@ equals `border-default` is not a second weight, it is a second name).
 | family | tokens | notes |
 | --- | --- | --- |
 | Text | `text-default` · `text-muted` · `text-subtle` · `text-disabled` · `text-on-primary` | `text-subtle` (from the `hint` palette key) is the secondary-metadata tier (branch lines, spec role labels); `text-disabled` (its own `disabled` palette key @ 60%, decoupled from `muted` so future `muted` changes don't move it) is reserved for genuinely disabled UI text (e.g. the Settings "Soon" item) |
-| Container | `container-workspace-bg` · `container-sidebar-bg` · `container-terminal-bg` · `container-header-bg` · `container-content-bg` · `container-elevated-bg` | `content` is the editor/document canvas; `terminal` is the terminal panel + xterm canvas (currently sourced from the same palette key as `sidebar`); `elevated` is every raised surface |
+| Container | `container-workspace-bg` · `container-sidebar-bg` · `container-terminal-bg` · `container-header-bg` · `container-content-bg` · `container-elevated-bg` | **The opened-document canvas is `workspace`, not `content`**: the Monaco file editor and the markdown/spec preview sit on the same surface as the chat column and the tab strip, so a document reads as part of the workspace. `content` is the **recessed diff canvas** — the Changes diff, rendered diffs, Shiki code blocks, and the center-column backdrop behind them — which is why Monaco defines two themes (`EDITOR_THEME` = workspace, `THEME` = content). `terminal` is the terminal panel + xterm canvas (currently sourced from the same palette key as `sidebar`); `elevated` is every raised surface |
 | Control | `control-bg` · `control-bg-hovered` · `control-bg-selected` · `control-primary-bg` · `control-primary-text` · `control-border-default` · `control-border-active` · `control-disabled-bg` · `control-disabled-text` | `control-bg-hovered` is pointer hover only; `control-bg-selected` is the persistent selected/open/active/highlight fill (currently the same palette source). `control-border-default` is the resting form-control border; `control-border-active` (from `borderStrong`) is the **stronger neutral** border of an *active* control — pressed/`active:` buttons, an open selector (`data-[open=true]`), and a focused text input/textarea. It is the border only: the accent focus **ring** stays as the focus indicator (so accent = focus, neutral-strong = active). Never on inactive/default controls, nor on selected nav rows, tabs, or static surfaces. **Disabled is a first-class control state**, not an opacity utility: a disabled control wears `control-disabled-bg` + `control-disabled-text` (they reuse the neutral-control and `disabled`-tier palette values today, but are their own roles so a theme can re-point disabled independently). Text/icon-only controls take just `control-disabled-text`; non-control disabled text stays on `text-disabled`. Do **not** use `disabled:opacity-*` on controls |
 | Border | `border-default` · `border-muted` | |
 | Primary | `primary` + `primary-subtle` · `-soft` · `-muted`, `on-primary-soft` | |
@@ -89,10 +89,14 @@ the scale, never a new number in a class name.
 
 Monaco, xterm, mermaid and Shiki cannot wear a class; they read the tokens through `getComputedStyle`
 and rebuild after the `[data-theme]` swap. They name the same semantic tokens everything else does
-(`--container-content-bg`, `--text-muted`, `--editor-selection-bg`), so there is one name per value.
-Those four tokens are therefore **not** mapped in `@theme inline` — a utility nothing can use is dead
-weight. Values reach them canonicalised to hex via `cssColorToHex` (`lib/utils.ts`), because the built
-CSS is minified and Monaco/xterm accept hex only.
+(`--container-workspace-bg`, `--container-content-bg`, `--text-muted`, `--editor-selection-bg`), so there
+is one name per value. Monaco reads *both* container roles, because which canvas it is painting depends on
+the tab: `EDITOR_THEME` (workspace) for a file editor, `THEME` (content) for the Changes diff.
+The roles these consumers *share* with components (`--container-*-bg`, `--text-muted`) stay published and
+mapped in `@theme inline`; the ones **only** they read (`--editor-selection-bg` / `-text`) are
+`publish: false` and unmapped — a utility nothing can use is dead weight. Values reach them canonicalised
+to hex via `cssColorToHex` (`lib/utils.ts`), because the built CSS is minified and Monaco/xterm accept
+hex only.
 
 **What they do NOT cover, deliberately.** Each of these libraries paints far more than we hand it, and
 the remainder comes from its own built-in palette:
