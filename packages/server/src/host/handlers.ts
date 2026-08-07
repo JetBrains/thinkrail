@@ -81,6 +81,7 @@ import {
 	closeTerminal,
 	closeWorkspaceTerminals,
 	createTerminal,
+	isTerminalAlive,
 	resizeTerminal,
 	writeTerminal,
 } from "../terminal";
@@ -103,7 +104,20 @@ import { nudgeBaseRefWorkspaces } from "./fsNudge";
 import { buildHistoryScope } from "./historyScope";
 import { dropLogin, recordLoginStart } from "./loginAnalytics";
 
-type Handler = (params: unknown) => unknown | Promise<unknown>;
+/**
+ * Who a request came from. Threaded to every handler so one can scope a resource to its caller; most ignore
+ * it, since almost everything the host owns is shared domain state that every client sees identically
+ * (architecture #9). Terminals are the exception — a PTY belongs to one client.
+ */
+export interface RequestContext {
+	/**
+	 * The calling client's id (`?client=` on its socket URL). Stable across that client's reconnects and new
+	 * on every reload, which is what lets a PTY outlive a dropped connection without outliving the page.
+	 */
+	clientKey: string;
+}
+
+type Handler = (params: unknown, ctx: RequestContext) => unknown | Promise<unknown>;
 
 /**
  * The slow half of archiving a workspace, run in the background after `workspace.remove` acks: tear down
@@ -248,21 +262,32 @@ const handlers: Record<string, Handler> = {
 	},
 	// The workspace branch's own commits — the scope menu's lazily-fetched commit list.
 	"git.listCommits": (params) => listCommits((params as { workspaceId: string }).workspaceId),
-	"terminal.create": (params) => createTerminal((params as { workspaceId: string }).workspaceId),
-	"terminal.write": (params) => {
+	// Every terminal op is scoped to `ctx.clientKey`: a PTY belongs to the client that created it, so another
+	// connection can neither read its output nor write to or kill it. An id the caller doesn't own is treated
+	// exactly like one that doesn't exist.
+	"terminal.create": (params, ctx) => {
+		// Forwarded whole rather than rebuilt: under `exactOptionalPropertyTypes`, an absent `cols` and an
+		// explicit `cols: undefined` are different types, and only the former means "use the default".
+		const p = params as { workspaceId: string; cols?: number; rows?: number };
+		return createTerminal(p.workspaceId, ctx.clientKey, p);
+	},
+	"terminal.write": (params, ctx) => {
 		const p = params as { id: string; data: string };
-		writeTerminal(p.id, p.data);
+		writeTerminal(p.id, p.data, ctx.clientKey);
 		return { ok: true } as const;
 	},
-	"terminal.resize": (params) => {
+	"terminal.resize": (params, ctx) => {
 		const p = params as { id: string; cols: number; rows: number };
-		resizeTerminal(p.id, p.cols, p.rows);
+		resizeTerminal(p.id, p.cols, p.rows, ctx.clientKey);
 		return { ok: true } as const;
 	},
-	"terminal.close": (params) => {
-		closeTerminal((params as { id: string }).id);
+	"terminal.close": (params, ctx) => {
+		closeTerminal((params as { id: string }).id, ctx.clientKey);
 		return { ok: true } as const;
 	},
+	"terminal.alive": (params, ctx) => ({
+		alive: isTerminalAlive((params as { id: string }).id, ctx.clientKey),
+	}),
 	"skill.list": (params) => {
 		const { projectId } = params as { projectId: string };
 		const project = listProjects().find((candidate) => candidate.id === projectId);
@@ -554,8 +579,12 @@ const handlers: Record<string, Handler> = {
 };
 
 /** Route a WS request to its handler. Throws on unknown method (→ a `{ ok:false }` WS response). */
-export async function handleRequest(method: string, params: unknown): Promise<unknown> {
+export async function handleRequest(
+	method: string,
+	params: unknown,
+	ctx: RequestContext,
+): Promise<unknown> {
 	const handler = handlers[method];
 	if (!handler) throw new Error(`Unknown method: ${method}`);
-	return handler(params);
+	return handler(params, ctx);
 }

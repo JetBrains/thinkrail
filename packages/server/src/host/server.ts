@@ -1,3 +1,4 @@
+import { createHash, randomUUID } from "node:crypto";
 import { join, normalize } from "node:path";
 import type { ServerWelcome, WorkspaceFsChangedPayload } from "@thinkrail/contracts";
 import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
@@ -25,7 +26,12 @@ import {
 	setProjectPublisher,
 } from "../projects";
 import { getConfig, setSettingsPublisher } from "../settings";
-import { closeAllTerminals, setTerminalPublisher } from "../terminal";
+import {
+	closeAllTerminals,
+	closeClientTerminals,
+	resumeClientTerminals,
+	setTerminalPublisher,
+} from "../terminal";
 import { setRepoMetaPublisher, setWatchPublisher, stopAllWatches } from "../watch";
 import { getWorkspace, refreshDefaultWorkspace, setWorkspacePublisher } from "../workspaces";
 import {
@@ -37,6 +43,8 @@ import {
 import { setFsNudgePublisher } from "./fsNudge";
 import { handleRequest } from "./handlers";
 import { trackLoginOutcome } from "./loginAnalytics";
+import { RequestReplayCache } from "./requestReplayCache";
+import { terminalDeliveryForSendStatus } from "./terminalSend";
 
 export interface CreateServerOptions {
 	port?: number;
@@ -64,6 +72,22 @@ export interface RunningServer {
 	stop: () => void;
 }
 
+/** Per-socket state carried through the upgrade — see the `?client=` note in `fetch`. */
+interface SocketData {
+	clientKey: string;
+}
+
+/**
+ * How long a vanished client's PTYs are kept before being killed.
+ *
+ * The client reconnects on its own with backoff, so a dropped socket usually means a hiccup, not a departure —
+ * and a shell can be holding real work (a dev server, a watch build). Waiting is therefore the safe default and
+ * killing is the exception: this only has to be longer than a realistic reconnect, not short. A genuinely gone
+ * client (closed tab, closed laptop, reload — a reload arrives under a *new* client id) then loses its shells
+ * one window later instead of leaving them running until the host restarts.
+ */
+const ABANDONED_CLIENT_GRACE_MS = 60_000;
+
 /** Boot the engine host: Bun.serve HTTP+WS, /health, optional static SPA, and the server.welcome push. */
 export function createServer(options: CreateServerOptions = {}): RunningServer {
 	const {
@@ -75,13 +99,56 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		analytics,
 	} = options;
 
-	const server = Bun.serve({
+	/** The live socket per client id. One entry per connected page; a reconnect replaces its own entry. */
+	const sockets = new Map<string, Bun.ServerWebSocket<SocketData>>();
+	/** Pending "this client looks gone, reap its resources" timers, cancelled if it reconnects in time. */
+	const reapTimers = new Map<string, ReturnType<typeof setTimeout>>();
+	/** Exactly-once handler results for unresolved requests replayed by a reconnecting page. */
+	const requestReplays = new RequestReplayCache<string>();
+	/** Clients whose last accepted terminal frame filled Bun's socket buffer; cleared only by drain/reconnect. */
+	const terminalBackpressured = new Set<string>();
+	/**
+	 * Set by `stop()` before it closes the socket. `server.stop(true)` fires every `close(ws)` synchronously, so
+	 * without this the shutdown path armed a fresh 60s reap timer per connected client *after* clearing them —
+	 * leaving timers holding the event loop open and contradicting stop()'s own claim of symmetric teardown.
+	 */
+	let stopping = false;
+
+	/**
+	 * Arm the grace window after which a client with no socket counts as gone, and its host resources are freed.
+	 *
+	 * Re-arms itself while `clearClient` declines — a request still in flight means the page can come back and
+	 * replay exactly that id, and forgetting the entry would run its handler a second time (see
+	 * `requestReplayCache`). The shells are gone either way on the first pass; `closeClientTerminals` is
+	 * idempotent, so a retry only retries the retirement. It ends when that last handler settles, on a
+	 * reconnect (`open` cancels the timer and the namespace stands), or at `stop()`, which clears them all.
+	 */
+	const armClientReap = (clientKey: string): void => {
+		reapTimers.set(
+			clientKey,
+			setTimeout(() => {
+				reapTimers.delete(clientKey);
+				if (sockets.has(clientKey)) return;
+				closeClientTerminals(clientKey);
+				if (!requestReplays.clearClient(clientKey)) armClientReap(clientKey);
+			}, ABANDONED_CLIENT_GRACE_MS),
+		);
+	};
+
+	const server = Bun.serve<SocketData, never>({
 		port,
 		hostname: host,
 		async fetch(req, srv) {
 			const url = new URL(req.url);
 			if (url.pathname === "/ws") {
-				return srv.upgrade(req) ? undefined : new Response("ws upgrade failed", { status: 400 });
+				// `?client=` identifies the *page*, not the socket: it survives that client's reconnects and is
+				// new on every reload, which is what lets a PTY outlive a dropped connection (the client
+				// reconnects on its own) without outliving the document that owns it. A client that sends none
+				// gets a per-socket fallback — correct isolation, just no reconnect grace.
+				const clientKey = url.searchParams.get("client") ?? `anon-${randomUUID()}`;
+				return srv.upgrade(req, { data: { clientKey } })
+					? undefined
+					: new Response("ws upgrade failed", { status: 400 });
 			}
 			if (url.pathname === "/health") {
 				return new Response("ok");
@@ -96,7 +163,21 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		},
 		websocket: {
 			open(ws) {
-				ws.subscribe(WS_CHANNELS.terminalData);
+				const replaced = sockets.get(ws.data.clientKey);
+				sockets.set(ws.data.clientKey, ws);
+				// A page identity has one live wire. Closing the replaced socket after registering its successor
+				// prevents duplicate broadcast subscriptions; its close handler sees the successor and reaps nothing.
+				if (replaced && replaced !== ws) replaced.close();
+				terminalBackpressured.delete(ws.data.clientKey);
+				// Reconnected inside the grace window — this client never really left, so its PTYs stand.
+				const pendingReap = reapTimers.get(ws.data.clientKey);
+				if (pendingReap !== undefined) {
+					clearTimeout(pendingReap);
+					reapTimers.delete(ws.data.clientKey);
+				}
+				// Deliberately NO `terminal.data` subscription: terminal frames are addressed to the one client
+				// that owns the PTY (see `setTerminalPublisher` below), never published to a topic every socket
+				// listens on.
 				ws.subscribe(WS_CHANNELS.piEvent);
 				ws.subscribe(WS_CHANNELS.piExtensionUi);
 				ws.subscribe(WS_CHANNELS.providerLogin);
@@ -113,36 +194,123 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 					config: getConfig(),
 					...(appVersion ? { appVersion } : {}),
 				};
-				ws.send(JSON.stringify({ channel: WS_CHANNELS.serverWelcome, data: welcome }));
+				const welcomeStatus = ws.send(
+					JSON.stringify({ channel: WS_CHANNELS.serverWelcome, data: welcome }),
+				);
+				const welcomeDelivery = terminalDeliveryForSendStatus(welcomeStatus);
+				if (welcomeDelivery === "unavailable") {
+					// A page cannot safely operate without its protocol handshake; reconnect and resend it.
+					ws.close();
+					return;
+				}
+				if (welcomeDelivery === "backpressured") {
+					terminalBackpressured.add(ws.data.clientKey);
+				}
+				// The handshake is ahead of any retained terminal bytes. If it filled the socket buffer, resume
+				// sees the blocked client and leaves those bytes held until drain.
+				resumeClientTerminals(ws.data.clientKey);
 			},
 			async message(ws, message) {
 				const raw = typeof message === "string" ? message : message.toString();
-				let req: { id?: string; method?: string; params?: unknown };
+				let req: unknown;
 				try {
 					req = JSON.parse(raw);
 				} catch {
 					return;
 				}
-				if (!req.id || !req.method) return;
-				try {
-					const result = await handleRequest(req.method, req.params);
-					ws.send(JSON.stringify({ id: req.id, ok: true, result }));
-				} catch (err) {
-					const error = err instanceof Error ? err.message : String(err);
-					// A failure the host can *name* travels as a code too (`CodedError`), so a client can react to
-					// this error specifically instead of pattern-matching a message.
-					const code = errorCodeOf(err);
-					ws.send(
-						JSON.stringify({ id: req.id, ok: false, error, ...(code ? { errorCode: code } : {}) }),
-					);
+				if (
+					typeof req !== "object" ||
+					req === null ||
+					!("id" in req) ||
+					typeof req.id !== "string" ||
+					!("method" in req) ||
+					typeof req.method !== "string"
+				) {
+					return;
 				}
+				const requestId = req.id;
+				const method = req.method;
+				const params = "params" in req ? req.params : undefined;
+				const sessionId = "sessionId" in req ? req.sessionId : undefined;
+				// Keep the replay cache bounded by results, not by a second retained copy of potentially-large
+				// params (file/template writes). The same replayed frame hashes identically.
+				const fingerprint = createHash("sha256")
+					.update(JSON.stringify([method, params, sessionId ?? null]))
+					.digest("hex");
+				try {
+					const response = await requestReplays.run(
+						ws.data.clientKey,
+						requestId,
+						fingerprint,
+						async () => {
+							try {
+								const result = await handleRequest(method, params, {
+									clientKey: ws.data.clientKey,
+								});
+								return JSON.stringify({ id: requestId, ok: true, result });
+							} catch (err) {
+								const error = err instanceof Error ? err.message : String(err);
+								// A failure the host can *name* travels as a code too (`CodedError`), so a client can
+								// react to this error specifically instead of pattern-matching a message.
+								const code = errorCodeOf(err);
+								return JSON.stringify({
+									id: requestId,
+									ok: false,
+									error,
+									...(code ? { errorCode: code } : {}),
+								});
+							}
+						},
+					);
+					// A zero means Bun dropped the reply. Closing makes the unresolved client replay this id; the
+					// cache above returns `response` without executing the handler again.
+					if (ws.send(response) === 0) ws.close();
+				} catch (err) {
+					// The only cache-level failure is an id replayed with a different payload. It must not
+					// displace or rerun the original operation stored under that id.
+					const error = err instanceof Error ? err.message : String(err);
+					if (ws.send(JSON.stringify({ id: requestId, ok: false, error })) === 0) ws.close();
+				}
+			},
+			drain(ws) {
+				// An old replaced socket must not mark its successor writable.
+				if (sockets.get(ws.data.clientKey) !== ws) return;
+				terminalBackpressured.delete(ws.data.clientKey);
+				resumeClientTerminals(ws.data.clientKey);
+			},
+			close(ws) {
+				if (stopping) return; // shutting down: closeAllTerminals covers every PTY, no reaping needed
+				const { clientKey } = ws.data;
+				// Only forget the socket if it is still the current one: a fast reconnect can register the new
+				// socket before the old one's close fires, and clearing then would orphan a live connection.
+				if (sockets.get(clientKey) === ws) {
+					sockets.delete(clientKey);
+					terminalBackpressured.delete(clientKey);
+				}
+				if (sockets.has(clientKey) || reapTimers.has(clientKey)) return;
+				// Don't kill this client's shells yet — it reconnects on its own, and a hiccup must not cost the
+				// user a running dev server. Only if nothing comes back within the grace window is it gone.
+				armClientReap(clientKey);
 			},
 		},
 	});
 
-	// Stream PTY output to every subscribed client over the terminal.data channel.
-	setTerminalPublisher((channel, data) => {
-		server.publish(channel, JSON.stringify({ channel, data }));
+	// Terminal frames go to the ONE client that owns the PTY, addressed by client id rather than published to a
+	// topic — see the `terminalData` note in the wire. Once Bun reports backpressure, no terminal gets another
+	// send attempt for that client until drain/reconnect; each batcher retains its own bounded tail meanwhile.
+	setTerminalPublisher((clientKey, channel, data) => {
+		if (terminalBackpressured.has(clientKey)) return "unavailable";
+		const ws = sockets.get(clientKey);
+		if (!ws) return "unavailable";
+		try {
+			const delivery = terminalDeliveryForSendStatus(ws.send(JSON.stringify({ channel, data })));
+			if (delivery !== "delivered") terminalBackpressured.add(clientKey);
+			return delivery;
+		} catch {
+			terminalBackpressured.add(clientKey);
+			ws.close();
+			return "unavailable";
+		}
 	});
 
 	// Resolve a session's skill-admission context: map the workspace it belongs to back to its project's
@@ -308,6 +476,15 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 			cancelAllLogins();
 			stopAllWatches();
 			disposeAllSessions();
+			// Drop the pending abandoned-client reapers before killing the PTYs they would have killed, so no
+			// timer outlives the host and keeps the event loop alive after `stop()`. `stopping` stops
+			// `server.stop(true)`'s synchronous close handlers from arming replacements.
+			stopping = true;
+			for (const timer of reapTimers.values()) clearTimeout(timer);
+			reapTimers.clear();
+			sockets.clear();
+			terminalBackpressured.clear();
+			requestReplays.clear();
 			closeAllTerminals();
 			server.stop(true);
 		},

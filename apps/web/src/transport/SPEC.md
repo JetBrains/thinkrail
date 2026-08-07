@@ -16,8 +16,14 @@ The single WebSocket client to the host, and its app-wide singleton.
 
 - **Owns:** `transport.ts` (`WsTransport`: id-correlated `request` — replies time out after 60s unless the
   caller raises `timeoutMs`, which a request the host answers *only once a human has* must do (an open
-  folder dialog: a fired timeout also drops the reply that follows it) —, channel `subscribe` with last-value
-  replay, reconnect/backoff; `inferUrl` defaults to same-origin; **`httpBase()`** derives the host's HTTP origin
+  folder dialog: a fired timeout also drops the reply that follows it) —, the **`?client=` page identity** it
+  appends to the socket URL (minted lazily and *not* via the secure-context-only `crypto.randomUUID`, so a
+  plain-http remote origin still boots; it spans reconnects but not reloads, which is what lets the host own
+  per-client resources like PTYs without losing them to a hiccup), **reconnect-safe unresolved requests** — a
+  frame that was in flight when its socket died returns to the queue and is replayed under the same request id,
+  while the host deduplicates `(clientKey, requestId)`, so an accepted mutation cannot become a false failure or
+  execute twice —, channel `subscribe` with last-value replay, reconnect/backoff; `inferUrl` defaults to
+  same-origin; **`httpBase()`** derives the host's HTTP origin
   from the WS `url` — for building host HTTP URLs like the `/files/<workspaceId>/<path>` worktree-file
   endpoint the markdown viewer points relative `<img>`s at, targeting the same host the transport dials); `wireTransport.ts` (`initTransport`/
   `getTransport` singleton; routes `server.welcome`, **`project.updated`**, `pi.event`, `pi.extensionUi`,
@@ -32,8 +38,8 @@ The single WebSocket client to the host, and its app-wide singleton.
   `errorText.ts` (**`errorText(err, fallback?)`** — normalizes a rejected `request` (the host's error
   string / a timeout / a thrown non-Error) into a short, display-ready line for an error turn/notice);
   `requestError.ts` (**`RequestError`** + **`wsErrorCode(err)`** — a rejection that carries the host's named
-  `WsResponse.errorCode`. A coded response rejects with a `RequestError`, everything else (timeout, dropped
-  socket, unnamed host error) with a plain `Error`, so *having* a code is exactly how a caller tells "this
+  `WsResponse.errorCode`. A coded response rejects with a `RequestError`, everything else (timeout or an unnamed
+  host error) with a plain `Error`, so *having* a code is exactly how a caller tells "this
   specific failure" from "the read failed").
 - **Public surface (barrel):** `initTransport`, `getTransport`, `errorText`, `RequestError`, `wsErrorCode`,
   `ConnectionStatus`, `TransportOptions`.

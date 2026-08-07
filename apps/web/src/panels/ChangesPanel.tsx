@@ -67,8 +67,8 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	// One rejection has a *meaning*: `UNKNOWN_COMMIT` — the host naming a commit scope whose commit the repo no
 	// longer has (a rebase, a branch reset). That falls back to the branch scope with a toast, so the panel is
 	// neither wedged on a dead sha nor silently showing a different scope than the user picked. Every other
-	// failure (timeout, dropped socket, git error) must leave the chosen scope alone — hence the code, not just
-	// "the read failed".
+	// failure (timeout, prolonged network outage, git error) must leave the chosen scope alone — hence the code,
+	// not just "the read failed".
 	const { reload } = useWorkspaceRead(
 		workspaceId,
 		(id) => getTransport().request("git.status", { workspaceId: id, scope }),

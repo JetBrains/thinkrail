@@ -7,6 +7,7 @@ import htmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
 import jsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker";
 import tsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
 import { cssColorToHex } from "@/lib";
+import { onThemeSwap } from "../themes";
 
 // The Monaco setup shared by the file viewer (`MonacoEditor`) and the diff tab (`MonacoDiff`):
 // worker wiring, the local (non-CDN) loader, and the token-driven `thinkrail` theme. Import-time
@@ -172,15 +173,11 @@ export function defineThinkrailTheme(m: Monaco): void {
 }
 
 /** Re-theme Monaco on a `[data-theme]` swap: the theme's chrome + contrast-aware base are read once at
- * define time, so without this an editor keeps the theme it mounted with. Disconnect on unmount. */
-export function watchThemeSwap(m: Monaco, themeName: string = THEME): MutationObserver {
-	const observer = new MutationObserver(() => {
+ * define time, so without this an editor keeps the theme it mounted with. Call the returned
+ * unsubscribe on unmount. */
+export function watchThemeSwap(m: Monaco, themeName: string = THEME): () => void {
+	return onThemeSwap(() => {
 		defineThinkrailTheme(m);
 		m.editor.setTheme(themeName);
 	});
-	observer.observe(document.documentElement, {
-		attributes: true,
-		attributeFilter: ["data-theme"],
-	});
-	return observer;
 }

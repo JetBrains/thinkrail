@@ -33,15 +33,15 @@ export default function MonacoDiff({
 	view: "split" | "inline";
 	ignoreWhitespace: boolean;
 }) {
-	const observerRef = useRef<MutationObserver | null>(null);
+	const stopThemeWatchRef = useRef<(() => void) | null>(null);
 	// The diff widget + its two TextModels, captured at mount so our unmount cleanup can dispose them in the
 	// right order — see below.
 	const editorRef = useRef<MonacoDiffEditor | null>(null);
 	const modelsRef = useRef<{ dispose(): void }[]>([]);
 
-	// Mirrors MonacoEditor's observer: follow atomic `[data-theme]` swaps while mounted.
+	// Follows atomic `[data-theme]` swaps while mounted, via the themes module's shared watcher.
 	const onMount: DiffOnMount = (editor, m) => {
-		observerRef.current = watchThemeSwap(m, THEME);
+		stopThemeWatchRef.current = watchThemeSwap(m, THEME);
 		editorRef.current = editor;
 		const model = editor.getModel();
 		modelsRef.current = model ? [model.original, model.modified] : [];
@@ -49,7 +49,7 @@ export default function MonacoDiff({
 
 	useEffect(
 		() => () => {
-			observerRef.current?.disconnect();
+			stopThemeWatchRef.current?.();
 			// Dispose the diff *widget* before its TextModels. Disposing a model while a live widget still
 			// references it trips Monaco 0.52+'s "TextModel got disposed before DiffEditorWidget model got
 			// reset" assertion (@monaco-editor/react#647 / monaco-editor#4779, unfixed in 4.7.0), and

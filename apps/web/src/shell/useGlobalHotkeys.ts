@@ -23,6 +23,12 @@ function isInTerminal(target: EventTarget | null): boolean {
  * **capture** phase, and additionally `stopPropagation`s so the chord has exactly one handler app-wide
  * (the composer and the overlay no longer carry their own — see `chat/SPEC.md`).
  *
+ * **Matched by `e.code`, not `e.key`.** `e.key` is the character the key *produces*, which depends on the
+ * active layout: on a Cyrillic layout the R key yields `к`, so a `e.key !== "r"` guard bailed out before
+ * `preventDefault()` and the browser reloaded the app — the exact behaviour this hook exists to prevent.
+ * `e.code` names the physical key, so the chord works on every layout. This also matches the terminal one
+ * layer down: xterm resolves its own chords through `keyCode`, which browsers derive from the US layout.
+ *
  * Deliberate exclusions:
  * - **Terminals.** `Ctrl+R` in a shell is reverse-i-search; the chord belongs to the PTY, so a keydown
  *   from inside `.xterm` passes straight through untouched.
@@ -40,7 +46,7 @@ function isInTerminal(target: EventTarget | null): boolean {
 export function useGlobalHotkeys(): void {
 	useEffect(() => {
 		const onKeyDown = (e: KeyboardEvent) => {
-			if (e.key !== "r" || !e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+			if (e.code !== "KeyR" || !e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
 			if (isInTerminal(e.target)) return;
 			e.preventDefault();
 			e.stopPropagation();

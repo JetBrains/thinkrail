@@ -19,7 +19,16 @@ channel fan-out, and the process-boot wrapper both launchers share.
   **`GET /files/<workspaceId>/<relpath>`** route streaming a worktree file's raw bytes (via `fs`'s
   `resolveWorktreeFile` — path-contained; bad id/escape/miss → 404; Bun infers the content-type) so the
   markdown viewer's relative `<img>`s resolve, static serving with
-  `index.html` fallback, the `server.welcome` push, `terminal.data` topic subscribe + `server.publish`,
+  `index.html` fallback, the `server.welcome` push, the **`?client=` page identity** read off the socket URL at
+  upgrade (threaded to every handler as `RequestContext` and used to own that client's PTYs) plus the
+  `clientKey → socket` registry and the **abandoned-client reap timer** that outlives a reconnect; the
+  count-and-serialized-byte-bounded **request replay cache** keyed by `(clientKey, requestId)` (the first frame
+  owns one handler promise + its
+  serialized response, a reconnect replay awaits/returns that same result, a mismatched duplicate is rejected,
+  and reaping the client clears its cache — but **only once nothing is in flight**: an unresolved request
+  outlives the socket grace window, since the page holds that frame until its *own* deadline (30 minutes for
+  the folder picker) and replays it on reconnect, so `clearClient` declines and the reap re-arms rather than
+  let the replay start a second execution of a handler that has not finished),
   the **`provider.login`** channel publish (the `auth` module's session-less login-frame bridge, wired like
   `pi.extensionUi`) and the `provider.*` login handlers, the **`watch` wiring** (inject the
   `workspace.fsChanged` publish callback into `watch`, plus its **repo-metadata** callback
@@ -144,8 +153,11 @@ channel fan-out, and the process-boot wrapper both launchers share.
 - WS commands return values directly; only events + extension-UI + **`project.updated`** (published from
   the `projects` module's injected publisher) + the workspace lifecycle trio
   (`workspace.created`/`updated`/`removed`, published from the `workspaces` module's injected publisher)
-  use push channels. Every push channel a client should hear must be `ws.subscribe`d in the WS `open`
-  handler — a publish on an unsubscribed topic reaches nobody, silently.
+  use push channels. Every **broadcast** push channel a client should hear must be `ws.subscribe`d in the WS
+  `open` handler — a publish on an unsubscribed topic reaches nobody, silently. Two channels are deliberately
+  **not** subscribed and not broadcast: `terminal.data` and `terminal.exit` are sent to the single owning client
+  with `ws.send`, because a PTY's bytes belong to one client (see [[submodule-server-terminal]]). Adding a
+  terminal-style addressed channel means wiring a publisher, not a subscription.
 - The host is the single place features are wired together — features never reach back into it.
 - **A send (prompt/steer/followUp/answerQuestion) is acked when ACCEPTED, not when the turn ends**
   (`ackSend`): pi's send methods resolve only at turn end, and a turn can outlive the client's request

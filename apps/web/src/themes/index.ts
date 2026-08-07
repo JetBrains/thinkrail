@@ -2,6 +2,7 @@ export { initializeBundledThemes } from "./bundled";
 export {
 	applyTheme,
 	getThemes,
+	onThemeSwap,
 	readThemeHint,
 	resolveTheme,
 	type ThemeDescriptor,
