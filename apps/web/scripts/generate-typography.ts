@@ -7,8 +7,7 @@
  *
  * The generated CSS is committed so every typography change is reviewable as a diff.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, relative } from "node:path";
+import { writeOrCheck } from "./generatedFiles";
 import {
 	GENERATED_FONTS_PATH,
 	GENERATED_PATH,
@@ -18,7 +17,6 @@ import {
 	validate,
 } from "./typography";
 
-const check = process.argv.includes("--check");
 const typography = loadTypography();
 
 const errors = validate(typography);
@@ -28,27 +26,12 @@ if (errors.length > 0) {
 	process.exit(1);
 }
 
-const outputs = [
-	{ path: GENERATED_PATH, content: renderCss(typography) },
-	{ path: GENERATED_FONTS_PATH, content: renderFontsCss(typography) },
-];
-
-if (check) {
-	const stale = outputs.filter(
-		({ path, content }) => (existsSync(path) ? readFileSync(path, "utf8") : "") !== content,
-	);
-	if (stale.length > 0) {
-		for (const { path } of stale) {
-			console.error(`typography: ${relative(process.cwd(), path)} is STALE`);
-		}
-		console.error("Run `bun run typography:generate` and commit the result.");
-		process.exit(1);
-	}
-	console.log(`typography: generated output is up to date (v${typography.metadata.version})`);
-} else {
-	for (const { path, content } of outputs) {
-		mkdirSync(dirname(path), { recursive: true });
-		writeFileSync(path, content);
-		console.log(`typography: wrote ${relative(process.cwd(), path)}`);
-	}
-}
+writeOrCheck({
+	label: "typography",
+	version: typography.metadata.version,
+	check: process.argv.includes("--check"),
+	outputs: [
+		{ path: GENERATED_PATH, content: renderCss(typography) },
+		{ path: GENERATED_FONTS_PATH, content: renderFontsCss(typography) },
+	],
+});

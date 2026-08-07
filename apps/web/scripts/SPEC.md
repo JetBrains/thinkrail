@@ -24,8 +24,10 @@ it is a *generator*: it uses `node:fs` and `node:path`, which must never reach b
 | `validate-typography.ts` | CLI. Validates `src/styles/typography.json` and prints a summary. The enforced gate. |
 | `colors.ts` | the library: load → validate → render. The **only** place a colour derivation (a palette alias or an alpha step) is written. |
 | `generate-colors.ts` | CLI. Writes `src/styles/generated/colors.css` — the roles, the appearance-level effects, and the Tailwind map; `--check` fails when it is stale. |
+| `generatedFiles.ts` | what both CLIs do with a rendered file: `--check` reports drift, otherwise write. The **only** definition of "stale", so the two pipelines and the tests cannot disagree. |
+| `generatedFiles.test.ts` | pins that definition — content drift and a missing file are stale, a CRLF working tree is not. |
 
-Public surface: the `typography.ts` and `colors.ts` exports. There is no `index.ts` barrel — the two CLIs are entry points
+Public surface: the `typography.ts`, `colors.ts` and `generatedFiles.ts` exports. There is no `index.ts` barrel — the two CLIs are entry points
 invoked by name from `package.json`, and the one importer outside this directory
 (`src/styles/*.test.ts`) imports the library directly, which keeps the tests and the generator provably
 in agreement about the same functions.
@@ -54,7 +56,9 @@ in agreement about the same functions.
   the naming rule was wrong.
 - **Generation is deterministic and idempotent.** Same input → byte-identical output; no clock, no
   randomness, no environment reads. That is what makes `--check` a usable drift gate in pre-commit,
-  `apps/web build` and CI.
+  `apps/web build` and CI. Line endings are the one exception, because they belong to the checkout
+  rather than the content: `.gitattributes` pins the working tree to LF, and every comparison against
+  a committed file goes through `normalizeEol` so a CRLF clone cannot report drift that is not there.
 - **`validate()` is the gate, not the JSON Schema.** `typography.schema.json` is the editor-facing
   contract (`$schema` in the source gives completion + inline errors); the toolchain has no JSON Schema
   validator. Shape checks, referential integrity and the policies Schema cannot express — mono is

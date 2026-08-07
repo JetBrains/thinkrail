@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { normalizeEol } from "../../scripts/generatedFiles";
 import type { Style, StyleRef, Typography } from "../../scripts/typography";
 import {
 	allStyles,
@@ -27,7 +28,7 @@ import {
 
 const typography = loadTypography();
 const SRC = new URL("..", import.meta.url).pathname;
-const GENERATED = readFileSync(GENERATED_PATH, "utf8");
+const GENERATED = normalizeEol(readFileSync(GENERATED_PATH, "utf8"));
 
 const read = (p: string) => readFileSync(p, "utf8");
 const px = (id: string) => typography.fontSizes[resolveStyle(typography, id).fontSize];

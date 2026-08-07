@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { loadColors, paletteVar, renderCss, themeColorKeys, validate } from "../../scripts/colors";
+import { normalizeEol } from "../../scripts/generatedFiles";
 
 /**
  * The colour adoption guard, the sibling of `typographyUsage.test.ts`. Three failure modes shaped it,
@@ -19,7 +20,7 @@ import { loadColors, paletteVar, renderCss, themeColorKeys, validate } from "../
  */
 
 const SRC = new URL("..", import.meta.url).pathname;
-const read = (path: string) => readFileSync(path, "utf8");
+const read = (path: string) => normalizeEol(readFileSync(path, "utf8"));
 const rel = (path: string) => path.slice(SRC.length);
 /** Comments name classes and variables in order to explain them, which is not a usage. */
 const code = (path: string) =>

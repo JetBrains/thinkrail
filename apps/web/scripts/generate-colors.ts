@@ -8,11 +8,9 @@
  * The generated output is committed so every colour change is reviewable as a diff — the same
  * arrangement `generate-typography.ts` uses for type.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, relative } from "node:path";
 import { type Colors, GENERATED_CSS_PATH, loadColors, renderCss, validate } from "./colors";
+import { writeOrCheck } from "./generatedFiles";
 
-const check = process.argv.includes("--check");
 const colors: Colors = loadColors();
 
 const errors = validate(colors);
@@ -22,24 +20,9 @@ if (errors.length > 0) {
 	process.exit(1);
 }
 
-const outputs = [{ path: GENERATED_CSS_PATH, content: renderCss(colors) }];
-
-if (check) {
-	const stale = outputs.filter(
-		({ path, content }) => (existsSync(path) ? readFileSync(path, "utf8") : "") !== content,
-	);
-	if (stale.length > 0) {
-		for (const { path } of stale) {
-			console.error(`colors: ${relative(process.cwd(), path)} is STALE`);
-		}
-		console.error("Run `bun run colors:generate` and commit the result.");
-		process.exit(1);
-	}
-	console.log(`colors: generated output is up to date (v${colors.metadata.version})`);
-} else {
-	for (const { path, content } of outputs) {
-		mkdirSync(dirname(path), { recursive: true });
-		writeFileSync(path, content);
-		console.log(`colors: wrote ${relative(process.cwd(), path)}`);
-	}
-}
+writeOrCheck({
+	label: "colors",
+	version: colors.metadata.version,
+	check: process.argv.includes("--check"),
+	outputs: [{ path: GENERATED_CSS_PATH, content: renderCss(colors) }],
+});

@@ -1,0 +1,4 @@
+# LF working tree everywhere. Git for Windows defaults to core.autocrlf=true (as do GitHub's
+# windows-latest runners), and CRLF checkouts make every generated-file drift gate report false
+# staleness. `text=auto` leaves Git's binary detection alone.
+* text=auto eol=lf
