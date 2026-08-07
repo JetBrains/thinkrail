@@ -213,7 +213,10 @@ export interface TerminalTabsPush {
 // v37: `workspace.openReview` returns the active branch's optional GitHub PR / GitLab MR number.
 // v38: `session.getMessages` keeps pi's `compactionSummary` messages, so a hydrated transcript can say
 // where compaction replaced earlier messages instead of starting mid-conversation.
-export const PROTOCOL_VERSION = 38;
+// v39: the TODO review map — `TodoItem.artifacts` (mirrored `TodoArtifact`, incl. the host-owned `commit`
+// kind) rides `todo.list`, whose decoration also derives a commit artifact's `files` from git (absent =
+// unresolvable sha, degrade silently).
+export const PROTOCOL_VERSION = 39;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a

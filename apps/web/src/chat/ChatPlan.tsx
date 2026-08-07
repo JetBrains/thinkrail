@@ -88,7 +88,12 @@ export function ChatPlanContent({ plan, glance }: { plan: ChatTodos; glance: Pla
 						No TODOs yet — the agent adds its plan here, or add one above.
 					</p>
 				) : (
-					<TodoRows plan={plan.data} onRemove={plan.remove} glance={glance} />
+					<TodoRows
+						plan={plan.data}
+						onRemove={plan.remove}
+						glance={glance}
+						onOpenChanges={plan.openChanges}
+					/>
 				)}
 			</div>
 		</PopoverContent>

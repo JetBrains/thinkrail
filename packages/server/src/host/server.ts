@@ -43,6 +43,7 @@ import {
 	setTerminalPublisher,
 	setTerminalTabsPublisher,
 } from "../terminal";
+import { isTodoToolEnd, maybeAttachChangeArtifacts } from "../todos";
 import {
 	setRepoMetaPublisher,
 	setSkillPathClassifier,
@@ -494,6 +495,12 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		} else if (isSettledTurn(payload.event)) {
 			const workspaceId = getSessionWorkspaceId(payload.sessionId);
 			if (workspaceId) void maybeAutoRenameWorkspace(payload.sessionId, workspaceId);
+		}
+		// A `todo_*` tool just mutated the plan → reconcile the item's change set (commit a done item's work,
+		// attach the sha + files). Deferred off the publish path (it runs git writes), best-effort (`void`).
+		if (isTodoToolEnd(payload.event)) {
+			const workspaceId = getSessionWorkspaceId(payload.sessionId);
+			if (workspaceId) void maybeAttachChangeArtifacts(workspaceId, payload.sessionId);
 		}
 	});
 

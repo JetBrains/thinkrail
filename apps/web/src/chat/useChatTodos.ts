@@ -24,6 +24,9 @@ export interface ChatTodos {
 	remove: (id: string) => Promise<void>;
 	/** Compile the current plan to a temporary markdown snapshot and open it in a center `doc` tab. */
 	openMarkdown: () => void;
+	/** Open an item's change set (the plan's "N files" chip): `{sha}` → the Changes panel at that commit's
+	 * scope (durable done-time diff); `{path}` → that file's live diff tab at the branch scope. */
+	openChanges: (target: { sha: string } | { path: string }) => void;
 }
 
 /**
@@ -141,7 +144,22 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		});
 	};
 
-	return { data, failed, add, remove, openMarkdown };
+	const openChanges = (target: { sha: string } | { path: string }) => {
+		const store = useAppStore.getState();
+		if ("sha" in target) {
+			// The commit is the change set: point the panel's scope at it and reveal Changes — the panel
+			// lists the commit's files itself, each opening its diff at that scope.
+			store.setDiffScope(workspaceId, { kind: "commit", sha: target.sha });
+			store.requestRightTab(workspaceId, "changes");
+			return;
+		}
+		// Path-list fallback: a live diff — pin the scope back to branch so the deep link can't inherit a
+		// commit scope a previous chip click left behind, then route the one-path intent.
+		store.setDiffScope(workspaceId, { kind: "branch" });
+		store.requestChangesView(workspaceId, target.path);
+	};
+
+	return { data, failed, add, remove, openMarkdown, openChanges };
 }
 
 /**

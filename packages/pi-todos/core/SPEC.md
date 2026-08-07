@@ -17,12 +17,15 @@ are impossible (the agent's in-session writes and the UI's edits converge on the
 construction: a missing or corrupt file reads as an empty list, and unknown/invalid fields are dropped on
 read (`sanitize`), so a hand-edited file never crashes a session.
 
-**Artifacts.** An item may carry `artifacts` — links to what the work produced: `kind: "file" | "change"
-| "spec"`, a worktree-relative `path`, an optional `label`, and (spec only) a durable graph `specId`.
-The model just stores them; it does not resolve paths or compute diffs. `file`/`spec` are attached by the
-agent (a `spec` naturally from `spec_create`'s `{path,id}`); `change` artifacts are attached by the host
-when an item reaches `done` (see `server/src/todos` — the store stays git-free). The on-disk `version` is
-`3`; a `version: 2` file (no `artifacts`) reads cleanly and is upgraded on the next write.
+**Artifacts.** An item may carry `artifacts` — links to what the work produced: `kind: "file" | "change" |
+"spec" | "commit"`, an optional `label`, and per kind either a worktree-relative `path`
+(`file`/`change`/`spec`, plus a durable graph `specId` for `spec`) or a `sha` (`commit`). The model just
+stores them; it does not resolve paths, compute diffs, or touch git. `file`/`spec` are attached by the
+agent (a `spec` naturally from `spec_create`'s `{path,id}`); `change` **and** `commit` are attached by the
+host when an item reaches `done` — the host commits the item's work and records just the sha, or falls
+back to a `change` path-list when it couldn't commit (see `server/src/todos` — the store stays git-free). `sanitize` drops an entry lacking its key (a `commit` with
+no `sha`, any other kind with no `path`). The on-disk `version` is `4` (`3` added `artifacts`, `4` added
+the `commit` kind); an older file reads cleanly and is upgraded on the next write.
 
 **Group = task.** A group models one user ask; its items are the steps. A group's lifecycle is
 **derived, never stored**: `groupStatus(group)` — all done → `done`, any in_progress → `active`, else
