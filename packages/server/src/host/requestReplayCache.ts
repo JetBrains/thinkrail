@@ -59,8 +59,24 @@ export class RequestReplayCache<T> {
 		return result;
 	}
 
-	clearClient(clientKey: string): void {
+	/**
+	 * Retire a page's namespace once that page is gone for good, freeing its retained responses. Returns
+	 * whether it is gone: while a request is still **in flight** this clears nothing and answers `false`, so
+	 * the caller retires it later.
+	 *
+	 * An unresolved request is proof the page may still return — it is precisely the frame a reconnect
+	 * replays, and the client holds that frame until *its own* deadline, which for the folder picker is 30
+	 * minutes of a human deciding. Dropping the entry mid-handler would let the replay start a second
+	 * execution of an operation the first one has not even finished, which is the duplicate this cache
+	 * exists to prevent. Retiring is all-or-nothing for the same reason: that page's settled results are
+	 * still replay-addressable to it, and they are already bounded below.
+	 */
+	clearClient(clientKey: string): boolean {
+		const requests = this.clients.get(clientKey);
+		if (!requests) return true;
+		for (const entry of requests.values()) if (!entry.settled) return false;
 		this.clients.delete(clientKey);
+		return true;
 	}
 
 	clear(): void {
@@ -73,7 +89,8 @@ export class RequestReplayCache<T> {
 		entry: ReplayEntry<T>,
 		weight: number,
 	): void {
-		// `clearClient` may have retired this page while its handler was still completing. Never resurrect it.
+		// The host may have shut the cache down (`clear`) while this handler was still completing — `clearClient`
+		// cannot, it declines while anything is in flight. Either way: never resurrect a dropped namespace.
 		if (this.clients.get(clientKey) !== requests) return;
 		entry.settled = true;
 		entry.weight = weight;
