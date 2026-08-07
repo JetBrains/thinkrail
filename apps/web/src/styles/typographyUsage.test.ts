@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { normalizeEol } from "../../scripts/generatedFiles";
 import {
 	allStyles,
 	loadTypography,
@@ -40,7 +41,7 @@ function sourceFiles(dir = SRC): string[] {
 	return out;
 }
 const FILES = sourceFiles();
-const read = (p: string) => readFileSync(p, "utf8");
+const read = (p: string) => normalizeEol(readFileSync(p, "utf8"));
 /** Source with comments removed — explanations that name classes are not consumers. */
 const code = (p: string) =>
 	read(p)
