@@ -333,6 +333,93 @@ test("preview mode: selecting rendered text comments on the mapped source lines"
 	await expect(row).toContainText("Tighten this paragraph.");
 });
 
+/** In the SOURCE view a thread card lives in a Monaco view zone; the zone (the card's parent node,
+ * sized by Monaco to `heightInPx`) must reserve at least the card's real height — anything less and
+ * the card paints OVER the following lines. */
+const zonesReserveCards = (page: Page) =>
+	page.evaluate(() => {
+		// Only cards with real geometry count — Monaco keeps an off-viewport zone's node at display:none
+		// (0-high card), which is fine as long as at least one card is measurable and none overflows.
+		const cards = Array.from(
+			document.querySelectorAll<HTMLElement>('[data-testid="review-thread"]'),
+		).filter((card) => card.offsetHeight > 0);
+		return (
+			cards.length > 0 &&
+			cards.every((card) => (card.parentElement?.offsetHeight ?? 0) + 2 >= card.offsetHeight)
+		);
+	});
+
+test("cards drawn in the preview reserve their height in the source view — and back (no overlay)", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	// Long enough that the LAST paragraphs sit far below the source view's initial viewport — Monaco
+	// keeps an off-screen view zone's node at display:none, so a card down there measures 0 until it
+	// scrolls in. A one-shot measure at mount left such zones at their placeholder height forever, and
+	// the cards painted OVER the following lines once the user scrolled to them.
+	const filler = Array.from({ length: 40 }, (_, i) => `Filler paragraph number ${i + 1}.\n`);
+	writeFileSync(
+		join(worktree(), "GUIDE.md"),
+		[
+			"# Guide\n",
+			...filler,
+			"First paragraph to review carefully.\n",
+			"Second paragraph, right below the first.\n",
+			"Trailing prose line one.",
+			"Trailing prose line two.",
+			"Trailing prose line three.",
+		].join("\n"),
+	);
+	await page.getByTestId("tab-files").click();
+	await page.getByTestId("file-node").filter({ hasText: "GUIDE.md" }).click();
+	const preview = page.getByTestId("markdown-preview");
+	await expect(preview).toContainText("Filler paragraph number 1.");
+
+	// Two drafts made in the RENDERED view — close together, like a real review pass.
+	for (const [text, body] of [
+		["First paragraph", "123"],
+		["Second paragraph", "456"],
+	] as const) {
+		await preview.getByText(text, { exact: false }).scrollIntoViewIfNeeded();
+		await preview.getByText(text, { exact: false }).click({ clickCount: 3 });
+		await addIcon(page).click();
+		await page.getByTestId("review-composer-input").fill(body);
+		await page.getByTestId("review-composer-save").click();
+		await expect(page.getByTestId("review-composer")).toHaveCount(0);
+	}
+	await expect(preview.getByTestId("review-thread")).toHaveCount(2);
+
+	// Switch to SOURCE: the drafts render as view-zone cards under their anchor lines, below the fold.
+	// Scroll them in — each zone must have grown to its card's real height by the time it shows.
+	await page.getByTestId("md-toggle-source").click();
+	await scrollCardsIntoView(page);
+	await expect.poll(() => zonesReserveCards(page), { timeout: 5000 }).toBe(true);
+
+	// … and back, and again: the round trip must not degrade either surface.
+	await page.getByTestId("md-toggle-preview").click();
+	await expect(page.getByTestId("markdown-preview").getByTestId("review-thread")).toHaveCount(2);
+	await page.getByTestId("md-toggle-source").click();
+	await scrollCardsIntoView(page);
+	await expect.poll(() => zonesReserveCards(page), { timeout: 5000 }).toBe(true);
+});
+
+/** Wheel-scroll the source view's Monaco editor down until a review card is on screen (they live
+ * near the bottom of the fixture; zone growth can shift the bottom, so scroll → check, repeatedly). */
+async function scrollCardsIntoView(page: Page): Promise<void> {
+	const editor = page.locator(".monaco-editor").first();
+	await expect(editor).toBeVisible();
+	const box = await editor.boundingBox();
+	if (!box) throw new Error("Monaco editor has no bounding box");
+	await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+	for (let i = 0; i < 30; i++) {
+		await page.mouse.wheel(0, 800);
+		await page.waitForTimeout(50);
+		if (await page.getByTestId("review-thread").first().isVisible()) return;
+	}
+	throw new Error("No review card scrolled into view");
+}
+
 test("an in-flow card never halves a code fence — the rest of the document stays prose", async ({
 	page,
 }) => {

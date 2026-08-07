@@ -362,7 +362,10 @@ export function attachReviewThreads(
 		return card;
 	};
 
-	/** Re-measure every zone against its card's current height (in-card editing grows the card). */
+	/** Re-measure every zone against its card's current height (in-card editing grows the card). A
+	 * card that measures 0 — Monaco keeps an OFF-VIEWPORT zone's node at `display:none` — is skipped
+	 * (the `height > 12` guard), so a zone never collapses; the observer below re-runs this the moment
+	 * such a card scrolls in and gets real geometry. */
 	const relayoutCards = () => {
 		requestAnimationFrame(() => {
 			codeEditor.changeViewZones((accessor) => {
@@ -384,6 +387,14 @@ export function attachReviewThreads(
 		});
 	};
 
+	// The one-shot measure after `setThreads` is not enough: on a fresh mount (e.g. the markdown tab's
+	// rendered→source switch) every card below the fold sits in a `display:none` zone and measures 0,
+	// so its zone would stay at the placeholder height forever — and the card would paint OVER the
+	// following lines once scrolled in. The observer fires whenever a card gains real geometry (zone
+	// scrolled into the viewport, node attached late) or grows (in-card editing, font swap), keeping
+	// the zone's reserved height true to the card at all times.
+	const cardSizeObserver = new ResizeObserver(() => relayoutCards());
+
 	const setThreads = (threads: ReviewThreadData[]) => {
 		codeEditor.changeViewZones((accessor) => {
 			for (const { id } of zones) accessor.removeZone(id);
@@ -402,6 +413,8 @@ export function attachReviewThreads(
 				return { id: accessor.addZone(zone), zone, card };
 			});
 		});
+		cardSizeObserver.disconnect();
+		for (const { card } of zones) cardSizeObserver.observe(card);
 		// Size each zone to its rendered card (Monaco attaches the nodes on the next frame).
 		relayoutCards();
 	};
@@ -409,6 +422,7 @@ export function attachReviewThreads(
 	return {
 		setThreads,
 		dispose: () => {
+			cardSizeObserver.disconnect();
 			codeEditor.changeViewZones((accessor) => {
 				for (const { id } of zones) accessor.removeZone(id);
 			});
