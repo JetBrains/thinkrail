@@ -44,7 +44,7 @@ const ICONS = new Map<string, string>([
 // slot's rule travels with the decoration. No colors of its own: `currentColor` follows the row's own
 // foreground through Monaco's hover/disabled states, whatever the theme.
 const MENU_CSS =
-	".tr-menu-icon{display:inline-flex;align-items:center;justify-content:center;width:14px;margin:0 8px 0 2px;flex-shrink:0;color:inherit}";
+	".editor-menu-icon{display:inline-flex;align-items:center;justify-content:center;width:14px;margin:0 8px 0 2px;flex-shrink:0;color:inherit}";
 
 /** The document itself plus every open Monaco shadow root — everywhere a `.monaco-menu` can live. */
 function menuRoots(): (Document | ShadowRoot)[] {
@@ -57,9 +57,9 @@ function menuRoots(): (Document | ShadowRoot)[] {
 
 function ensureStyle(root: Document | ShadowRoot): void {
 	const parent = root instanceof Document ? root.head : root;
-	if (parent.querySelector("style[data-tr-menu-icons]")) return;
+	if (parent.querySelector("style[data-editor-menu-icons]")) return;
 	const style = document.createElement("style");
-	style.dataset.trMenuIcons = "true";
+	style.dataset.editorMenuIcons = "true";
 	style.textContent = MENU_CSS;
 	parent.appendChild(style);
 }
@@ -82,7 +82,7 @@ function decorateOpenMenus(): void {
 			const label = row.querySelector<HTMLElement>(":scope > .action-label");
 			if (!label?.textContent) continue;
 			const holder = document.createElement("span");
-			holder.className = "tr-menu-icon";
+			holder.className = "editor-menu-icon";
 			holder.ariaHidden = "true";
 			const icon = ICONS.get(label.textContent.trim().replace(/[.…]+$/u, ""));
 			if (icon) holder.innerHTML = icon;

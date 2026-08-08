@@ -1,7 +1,7 @@
 import type { ReviewComment } from "@thinkrail/contracts";
 import {
-	ArrowLeft,
 	CheckCircle2,
+	ChevronDown,
 	ChevronRight,
 	FileText,
 	MessageSquare,
@@ -23,6 +23,7 @@ import {
 	commentSurface,
 	fileSummaries,
 	lineRef,
+	type ReviewFileSummary,
 	type ReviewSurface,
 	reviewFileSurface,
 	statusLabel,
@@ -31,34 +32,35 @@ import { sendReviewComment } from "./reviewSend";
 import { SendAllReviewsButton, SendReviewButton } from "./SendReviewButton";
 
 /**
- * The Review sidebar (RightPanel's Review tab) — PER-FILE, two levels (see panels/SPEC.md):
- * - **Files level** (the default): the files still in review — each row a path + its comment counts;
- *   clicking one opens the file's tab (the file level then follows the activation).
- * - **File level**: one file's comments. It shows AUTOMATICALLY while the active center tab is a
- *   reviewed file (RightPanel also flips to the Review tab on such an activation); the header's back
- *   arrow returns to the files level.
- * Batch send mirrors the pane toolbars: the file level carries the same per-file `Send review (N)`
- * (drafts-only, `SendReviewButton`), the files level a `Send all (N)` across every file — both over
- * the shared `reviewSend` batch path. Hydration is owned by `RightPanel` (`useWorkspaceReview`);
- * every mutation converges on the store's `review.changed` fold.
+ * The Review sidebar (RightPanel's Review tab) — ONE screen, an ACCORDION of the files still in
+ * review (see panels/SPEC.md): each row a path + its comment counts; clicking a row unfolds its
+ * comments in place AND opens the file's tab (collapsing is just a second click — it navigates
+ * nowhere). The section whose file is the active center tab auto-expands (RightPanel also flips to
+ * the Review tab on such an activation); an expansion never auto-collapses — folding is the user's.
+ * Batch send mirrors the pane toolbars: an expanded section's strip carries the same per-file
+ * `Send review (N)` (drafts-only, `SendReviewButton`) + the Done finisher, the panel header a
+ * `Send all (N)` across every file — all over the shared `reviewSend` batch path. Hydration is owned
+ * by `RightPanel` (`useWorkspaceReview`); every mutation converges on the store's `review.changed` fold.
  */
 export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; failed: boolean }) {
 	const snapshot = useAppStore((s) => s.reviewsByWorkspace[workspaceId]);
 	const activeReviewedPath = useAppStore((s) => selectActiveReviewedPath(s, workspaceId));
 	const [sending, setSending] = useState(false);
-	// The panel's level: follow the active tab ("auto"), browse all files ("all"), or a row the user
-	// picked whose file tab isn't active (e.g. the whole-change-set bucket).
-	const [mode, setMode] = useState<"auto" | "all" | { path: string | null }>("auto");
+	// The unfolded sections, keyed like `fileSummaries` rows (`null` = the whole-change-set bucket).
+	// Seeded with the active reviewed file: the panel often MOUNTS on it (RightPanel auto-opens the
+	// Review tab on such an activation), and the adjust-on-change below only sees later changes.
+	const [expanded, setExpanded] = useState<ReadonlySet<string | null>>(
+		() => new Set(activeReviewedPath === null ? [] : [activeReviewedPath]),
+	);
 
-	// A newly activated reviewed file pulls the panel back to following it; when the active tab STOPS
-	// being a reviewed file (e.g. a send just opened its chat tab), the panel PINS to the file it was
-	// showing instead of falling back to the files list. Render-time state adjustment (react.dev
-	// "adjusting state when a prop changes"), no effect needed.
+	// A newly activated reviewed file unfolds its own section — the accordion's "follow the active
+	// tab". Render-time state adjustment (react.dev "adjusting state when a prop changes"), no effect
+	// needed; deactivation collapses nothing (folding is the user's gesture alone).
 	const [followedPath, setFollowedPath] = useState(activeReviewedPath);
 	if (followedPath !== activeReviewedPath) {
 		setFollowedPath(activeReviewedPath);
-		if (activeReviewedPath) setMode("auto");
-		else if (mode === "auto" && followedPath) setMode({ path: followedPath });
+		if (activeReviewedPath !== null && !expanded.has(activeReviewedPath))
+			setExpanded(new Set(expanded).add(activeReviewedPath));
 	}
 
 	/** Open the chat a sent comment/batch lives in — the shared tab→runtime→disk escalation. */
@@ -118,39 +120,52 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 			toast.error(errorText(err), "Couldn't finish the file's review");
 		}
 	};
-	const viewedPath =
-		mode === "all" ? undefined : mode === "auto" ? (activeReviewedPath ?? undefined) : mode.path;
-	const showFile = viewedPath !== undefined && files.some((f) => f.path === viewedPath);
+	const hasDrafts = snapshot.comments.some((c) => c.status === "draft");
+	const toggleFile = (file: ReviewFileSummary) => {
+		const isOpen = expanded.has(file.path);
+		const next = new Set(expanded);
+		if (isOpen) next.delete(file.path);
+		else next.add(file.path);
+		setExpanded(next);
+		// Unfolding also opens the file's own surface; folding is quiet — it navigates nowhere.
+		if (!isOpen && file.path)
+			openSurface(file.path, reviewFileSurface(snapshot.comments, file.path));
+	};
 
-	if (!showFile) {
-		// FILES level: what's still in review. With anything sendable, a slim header carries Send all.
-		const hasDrafts = snapshot.comments.some((c) => c.status === "draft");
-		return (
-			<div className="flex h-full min-h-0 flex-col" data-testid="review-panel">
-				{hasDrafts && (
-					<div className="flex h-7 shrink-0 items-center justify-end border-border-default border-b px-sm">
-						<SendAllReviewsButton workspaceId={workspaceId} />
-					</div>
-				)}
-				<div className="min-h-0 flex-1 overflow-auto">
-					{files.length === 0 ? (
-						<p data-testid="review-empty" className="px-sm py-xs tr-text-metadata text-text-subtle">
-							No review comments yet. Select lines in a file or diff and click the comment icon.
-						</p>
-					) : (
-						<ul>
-							{files.map((file) => (
-								<li key={file.path ?? "@review"}>
+	return (
+		<div className="flex h-full min-h-0 flex-col" data-testid="review-panel">
+			{hasDrafts && (
+				<div className="flex h-7 shrink-0 items-center justify-end border-border-default border-b px-sm">
+					<SendAllReviewsButton workspaceId={workspaceId} />
+				</div>
+			)}
+			<div className="min-h-0 flex-1 overflow-auto">
+				{files.length === 0 ? (
+					<p data-testid="review-empty" className="px-sm py-xs tr-text-metadata text-text-subtle">
+						No review comments yet. Select lines in a file or diff and click the comment icon.
+					</p>
+				) : (
+					<ul>
+						{files.map((file) => {
+							const isOpen = expanded.has(file.path);
+							return (
+								<li
+									key={file.path ?? "@review"}
+									data-testid="review-file-section"
+									data-path={file.path ?? ""}
+									data-expanded={isOpen}
+								>
 									<button
 										type="button"
 										data-testid="review-file-row"
 										className="flex w-full items-center gap-sm px-sm py-xs text-left tr-text-ui hover:bg-control-bg-hovered"
-										onClick={() => {
-											setMode({ path: file.path });
-											if (file.path)
-												openSurface(file.path, reviewFileSurface(snapshot.comments, file.path));
-										}}
+										onClick={() => toggleFile(file)}
 									>
+										{isOpen ? (
+											<ChevronDown className="size-3.5 shrink-0 text-text-subtle" />
+										) : (
+											<ChevronRight className="size-3.5 shrink-0 text-text-subtle" />
+										)}
 										<span className="min-w-0 flex-1 truncate text-text-muted">
 											{file.path ?? "Whole change set"}
 										</span>
@@ -163,110 +178,120 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 												.filter(Boolean)
 												.join(" · ")}
 										</span>
-										<ChevronRight className="size-3.5 shrink-0 text-text-subtle" />
 									</button>
+									{isOpen && (
+										<FileSection
+											workspaceId={workspaceId}
+											path={file.path}
+											comments={snapshot.comments}
+											sending={sending}
+											onSend={sendOne}
+											onOpenChat={openChat}
+											onNavigate={navigateTo}
+											onDone={() => void finishFile(file.path)}
+										/>
+									)}
 								</li>
-							))}
-						</ul>
-					)}
-				</div>
+							);
+						})}
+					</ul>
+				)}
 			</div>
-		);
-	}
+		</div>
+	);
+}
 
-	// FILE level: one file's comments in the TODO plan's section flow — what the chat is already
-	// working on first (In progress = sent), then Drafts (the to-do), then the muted Resolved (Done).
-	const fileComments = snapshot.comments.filter((c) => (c.anchor?.path ?? null) === viewedPath);
+/**
+ * One unfolded file's comments, in the TODO plan's section flow — what the chat is already working
+ * on first (In progress = sent), then Drafts (the to-do), then the muted Resolved (Done) — topped by
+ * the per-file action strip: the pane toolbar's `Send review (N)` (same drafts-only gate and batch
+ * path; its own testid so tests can tell the sidebar's copy from the pane's) and, once everything is
+ * resolved, the Done finisher.
+ */
+function FileSection({
+	workspaceId,
+	path,
+	comments,
+	sending,
+	onSend,
+	onOpenChat,
+	onNavigate,
+	onDone,
+}: {
+	workspaceId: string;
+	path: string | null;
+	comments: ReviewComment[];
+	sending: boolean;
+	onSend: (comment: ReviewComment) => Promise<void>;
+	onOpenChat: (sessionId: string) => void;
+	onNavigate: (comment: ReviewComment) => void;
+	onDone: () => void;
+}) {
+	const fileComments = comments.filter((c) => (c.anchor?.path ?? null) === path);
 	const inProgress = fileComments.filter((c) => c.status === "sent");
 	const drafts = fileComments.filter((c) => c.status === "draft");
 	const resolved = fileComments.filter((c) => c.status === "resolved");
+	const finishable = inProgress.length === 0 && drafts.length === 0 && resolved.length > 0;
 	return (
-		<div className="flex h-full min-h-0 flex-col" data-testid="review-panel">
-			<div className="flex h-7 shrink-0 items-center gap-sm border-border-default border-b px-sm">
-				<button
-					type="button"
-					data-testid="review-back"
-					aria-label="All reviewed files"
-					title="All reviewed files"
-					onClick={() => setMode("all")}
-					className="text-text-subtle hover:text-text-default"
-				>
-					<ArrowLeft className="size-3.5" />
-				</button>
-				<span className="min-w-0 flex-1 truncate tr-code-text text-text-subtle">
-					{viewedPath ?? "Whole change set"}
-				</span>
-				{/* The pane toolbar's per-file send, right here too — same drafts-only gate and batch path
-				    (a distinct testid so tests can tell the sidebar's copy from the pane's). */}
-				<SendReviewButton
-					workspaceId={workspaceId}
-					path={viewedPath ?? null}
-					testid="review-panel-send"
-				/>
-				{/* Everything resolved → finish from right here (the list view offers the same action). */}
-				{inProgress.length === 0 && drafts.length === 0 && resolved.length > 0 && (
-					<button
-						type="button"
-						data-testid="review-file-done"
-						title="Done — finish this file's review"
-						onClick={() => {
-							void finishFile(viewedPath ?? null);
-							setMode("all");
-						}}
-						aria-label="Done — finish this file's review"
-						className="flex shrink-0 items-center text-text-subtle hover:text-feedback-success"
-					>
-						<CheckCircle2 className="size-3.5" />
-					</button>
-				)}
-			</div>
-			<div className="min-h-0 flex-1 overflow-auto px-xs py-xs">
-				{inProgress.length > 0 && (
-					<>
-						<SectionLabel label="In progress" />
-						{inProgress.map((comment) => (
-							<CommentRow
-								key={comment.id}
-								workspaceId={workspaceId}
-								comment={comment}
-								sending={sending}
-								onSend={() => void sendOne(comment)}
-								onOpenChat={(sessionId) => void openChat(sessionId)}
-								onNavigate={() => navigateTo(comment)}
-							/>
-						))}
-					</>
-				)}
-				{drafts.length > 0 && (
-					<>
-						<SectionLabel label="Drafts" />
-						{drafts.map((comment, index) => (
-							<CommentRow
-								key={comment.id}
-								workspaceId={workspaceId}
-								comment={comment}
-								ordinal={index + 1}
-								sending={sending}
-								onSend={() => void sendOne(comment)}
-								onOpenChat={(sessionId) => void openChat(sessionId)}
-								onNavigate={() => navigateTo(comment)}
-							/>
-						))}
-					</>
-				)}
-				{resolved.length > 0 && (
-					<>
-						<SectionLabel label="Resolved" />
-						{resolved.map((comment) => (
-							<ResolvedRow
-								key={comment.id}
-								comment={comment}
-								onOpenChat={(sessionId) => void openChat(sessionId)}
-							/>
-						))}
-					</>
-				)}
-			</div>
+		<div className="px-xs pb-xs pl-md">
+			{(drafts.length > 0 || finishable) && (
+				<div className="flex items-center justify-end gap-xs px-xs py-xs">
+					<SendReviewButton workspaceId={workspaceId} path={path} testid="review-panel-send" />
+					{finishable && (
+						<button
+							type="button"
+							data-testid="review-file-done"
+							title="Done — finish this file's review"
+							aria-label="Done — finish this file's review"
+							onClick={onDone}
+							className="flex shrink-0 items-center text-text-subtle hover:text-feedback-success"
+						>
+							<CheckCircle2 className="size-3.5" />
+						</button>
+					)}
+				</div>
+			)}
+			{inProgress.length > 0 && (
+				<>
+					<SectionLabel label="In progress" />
+					{inProgress.map((comment) => (
+						<CommentRow
+							key={comment.id}
+							workspaceId={workspaceId}
+							comment={comment}
+							sending={sending}
+							onSend={() => void onSend(comment)}
+							onOpenChat={onOpenChat}
+							onNavigate={() => onNavigate(comment)}
+						/>
+					))}
+				</>
+			)}
+			{drafts.length > 0 && (
+				<>
+					<SectionLabel label="Drafts" />
+					{drafts.map((comment, index) => (
+						<CommentRow
+							key={comment.id}
+							workspaceId={workspaceId}
+							comment={comment}
+							ordinal={index + 1}
+							sending={sending}
+							onSend={() => void onSend(comment)}
+							onOpenChat={onOpenChat}
+							onNavigate={() => onNavigate(comment)}
+						/>
+					))}
+				</>
+			)}
+			{resolved.length > 0 && (
+				<>
+					<SectionLabel label="Resolved" />
+					{resolved.map((comment) => (
+						<ResolvedRow key={comment.id} comment={comment} onOpenChat={onOpenChat} />
+					))}
+				</>
+			)}
 		</div>
 	);
 }

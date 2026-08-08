@@ -201,7 +201,7 @@ test("selection → icon → inline composer → draft; the tab wears the violet
 	await expect(page.getByTestId("review-thread")).toHaveCount(0);
 });
 
-test("sidebar: per-file — auto-opens on a reviewed file, back arrow lists all files", async ({
+test("sidebar: an accordion — the active reviewed file's section auto-unfolds; a row click folds/unfolds", async ({
 	page,
 }) => {
 	await openDiff(page);
@@ -212,23 +212,26 @@ test("sidebar: per-file — auto-opens on a reviewed file, back arrow lists all 
 	await page.getByTestId("review-composer-save").click();
 	await expect(page.getByTestId("review-composer")).toHaveCount(0);
 
-	// Re-activating the reviewed file AUTO-opens the Review tab at the FILE level (its drafts).
+	// Re-activating the reviewed file AUTO-opens the Review tab with the file's section unfolded.
 	await page.getByTestId("tab-files").click();
 	await page.getByTestId("file-node").filter({ hasText: "notes.txt" }).click();
 	await page.getByTestId("tab-changes").click();
 	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).click();
 	await expect(page.getByTestId("tab-review")).toHaveAttribute("data-active", "true");
+	const section = page.locator('[data-testid="review-file-section"][data-path="script.ts"]');
+	await expect(section).toHaveAttribute("data-expanded", "true");
 	const rows = page.getByTestId("review-comment");
 	await expect(rows).toHaveCount(2);
+	await expect(section.getByTestId("review-file-row")).toContainText("2 drafts");
 
-	// Switching the CENTER tab to a non-reviewed one (same class as a send opening its chat tab) must
-	// not kick the mounted panel back to the files list — it PINS to the file it was showing.
+	// Switching the CENTER tab to a non-reviewed one (same class as a send opening its chat tab)
+	// collapses nothing — folding is the user's gesture alone.
 	await page
 		.locator('[data-testid="editor-tab"][data-kind="chat"]')
 		.locator("button")
 		.first()
 		.click();
-	await expect(page.getByTestId("review-back")).toBeVisible();
+	await expect(section).toHaveAttribute("data-expanded", "true");
 	await expect(rows).toHaveCount(2);
 	// Return to the reviewed diff for the rest of the flow.
 	await page.getByTestId("tab-changes").click();
@@ -241,13 +244,13 @@ test("sidebar: per-file — auto-opens on a reviewed file, back arrow lists all 
 		page.locator('[data-testid="editor-tab"][data-active="true"]').getByText("script.ts"),
 	).toBeVisible();
 
-	// The back arrow goes to the FILES level: one row for script.ts with its counts; clicking the row
-	// returns to the file's comments.
-	await page.getByTestId("review-back").click();
-	const fileRow = page.getByTestId("review-file-row").filter({ hasText: "script.ts" });
-	await expect(fileRow).toBeVisible();
-	await expect(fileRow).toContainText("2 drafts");
+	// A row click FOLDS the open section (no navigation); a second click unfolds it again.
+	const fileRow = section.getByTestId("review-file-row");
 	await fileRow.click();
+	await expect(section).toHaveAttribute("data-expanded", "false");
+	await expect(rows).toHaveCount(0);
+	await fileRow.click();
+	await expect(section).toHaveAttribute("data-expanded", "true");
 	await expect(rows).toHaveCount(2);
 
 	await expect(page.getByTestId("review-pending-badge")).toHaveText("2");
@@ -270,12 +273,12 @@ test("the editor context menu carries Comment on selection — the «+»'s twin,
 		});
 		await expect(item).toBeVisible({ timeout: 2000 });
 		// The rows wear our lucide icons (monacoMenuIcons decorates the menu right after it opens).
-		await expect(item.locator(".tr-menu-icon svg")).toBeVisible({ timeout: 2000 });
+		await expect(item.locator(".editor-menu-icon svg")).toBeVisible({ timeout: 2000 });
 		await expect(
 			page
 				.locator(".monaco-menu .action-menu-item", { hasText: "Copy" })
 				.first()
-				.locator(".tr-menu-icon svg"),
+				.locator(".editor-menu-icon svg"),
 		).toBeVisible({ timeout: 2000 });
 		await page.waitForTimeout(200);
 		await item.click({ timeout: 1000 });
@@ -307,18 +310,19 @@ test("the Review panel carries its own send buttons: per-file at the file level,
 	await page.getByTestId("review-composer-save").click();
 	await expect(page.getByTestId("review-composer")).toHaveCount(0);
 
-	// FILE level (auto — the active tab is notes.txt): the pane toolbar's button, in the panel too,
-	// counting exactly THIS file's drafts.
+	// The active tab is notes.txt — its section auto-unfolds with the pane toolbar's button in its
+	// strip, counting exactly THIS file's drafts; the panel header's Send all spans every file.
 	await page.getByTestId("tab-review").click();
-	await expect(page.getByTestId("review-panel-send")).toContainText("Send review (1)");
-
-	// FILES level: Send all counts every draft across files.
-	await page.getByTestId("review-back").click();
+	const notesSection = page.locator('[data-testid="review-file-section"][data-path="notes.txt"]');
+	const scriptSection = page.locator('[data-testid="review-file-section"][data-path="script.ts"]');
+	await expect(notesSection).toHaveAttribute("data-expanded", "true");
+	await expect(notesSection.getByTestId("review-panel-send")).toContainText("Send review (1)");
 	await expect(page.getByTestId("review-send-all")).toContainText("Send all (3)");
 
-	// Another file's level counts its own two — never the neighbor's.
-	await page.getByTestId("review-file-row").filter({ hasText: "script.ts" }).click();
-	await expect(page.getByTestId("review-panel-send")).toContainText("Send review (2)");
+	// Unfolding the other file's section shows ITS two — never the neighbor's.
+	await scriptSection.getByTestId("review-file-row").click();
+	await expect(scriptSection.getByTestId("review-panel-send")).toContainText("Send review (2)");
+	await expect(notesSection.getByTestId("review-panel-send")).toContainText("Send review (1)");
 });
 
 test("line-anchored comment re-anchors when the file changes (moved → outdated)", async ({
@@ -618,6 +622,8 @@ test("the diff's ORIGINAL (left) side is its own anchor space — base, never re
 	await page.getByTestId("tab-files").click();
 	await page.getByTestId("file-node").filter({ hasText: "notes.txt" }).click();
 	await page.getByTestId("tab-review").click();
+	// The rail tab switch remounted the panel folded — unfold the row again (which is itself the
+	// base-side navigation under test: it reopens the DIFF), then drill into the comment.
 	await page.getByTestId("review-file-row").filter({ hasText: "README.md" }).click();
 	await page.getByTestId("review-comment-open").first().click();
 	await expect(
@@ -682,13 +688,10 @@ test("resolved comments sink into a muted Resolved section (TODO Done style)", a
 			params: { id: comments.find((c) => c.body.includes("Open remark"))?.id, status: "resolved" },
 		},
 	]);
-	await page.getByTestId("review-back").click();
 	const fileRow = page.getByTestId("review-file-row").filter({ hasText: "script.ts" });
 	await expect(fileRow).toContainText("2 resolved");
-	// Done lives only in the opened file's header (a check glyph), not on the list row.
-	await fileRow.hover();
-	await expect(page.getByTestId("review-file-done")).toHaveCount(0);
-	await fileRow.click();
+	// The section is still unfolded (auto-followed earlier); everything resolved surfaces the Done
+	// finisher in its strip — finishing empties the review.
 	await page.getByTestId("review-file-done").click();
 	await expect(page.getByTestId("review-file-row")).toHaveCount(0);
 	await expect(page.getByTestId("review-empty")).toBeVisible();
@@ -742,7 +745,7 @@ test("Done is undone by a fresh remark: the file re-lists the moment a new comme
 		{ method: "review.commentUpdate", params: { id: comments[0]?.id, status: "resolved" } },
 	]);
 	await page.getByTestId("tab-review").click();
-	// All resolved → the panel sits at the files level; Done lives in the opened file's header.
+	// All resolved → nothing auto-unfolds; unfolding the row reveals the section's Done finisher.
 	await page.getByTestId("review-file-row").click();
 	await page.getByTestId("review-file-done").click();
 	await expect(page.getByTestId("review-empty")).toBeVisible();
@@ -755,7 +758,6 @@ test("Done is undone by a fresh remark: the file re-lists the moment a new comme
 	await page.getByTestId("review-composer-save").click();
 	await expect(page.getByTestId("review-pending-badge")).toHaveText("1");
 	await page.getByTestId("tab-review").click();
-	await page.getByTestId("review-back").click();
 	await expect(page.getByTestId("review-file-row")).toContainText("script.ts");
 	await expect(page.getByTestId("review-file-row")).toContainText("1 draft");
 });

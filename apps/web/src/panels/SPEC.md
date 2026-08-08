@@ -367,25 +367,25 @@ a project picker, the prompt hero, and the reused
   the project's ground truth, so the rail leads with them). The Review tab carries a **pending-draft
   count badge** (store-derived from `reviewsByWorkspace`).
 - **`ReviewPanel`** is the review sidebar (see [[submodule-server-reviews]] +
-  [[task-review-comments]] for the model) — **per-file, two levels**: the FILES level (default) lists
-  the files in review (path + draft/sent/resolved counts; clicking a row opens the file's tab) — a
-  file whose comments are ALL resolved **stays listed** until the user finishes it explicitly: the
-  opened FILE level's header grows a **Done check glyph** once everything is resolved, which calls
-  `review.fileDone`, and only that removes the file (`Review.doneFiles`; a new comment re-opens it) —
-  the list rows themselves carry no actions — and the
-  FILE level shows one file's comments under a back-arrow header in the TODO plan's exact section
-  flow, built from the SHARED plan atoms (`chat/planKit`: `SectionLabel` + `PlanStatusIcon` — the same
-  pieces `TodoList` renders with): **In progress** (sent — the chat took them; the glyph is GLANCE-AWARE exactly like a TODO's
+  [[task-review-comments]] for the model) — **ONE screen, a per-file ACCORDION**: each row a path +
+  draft/sent/resolved counts with a fold chevron; **clicking a row unfolds its comments in place AND
+  opens the file's tab** (folding is a second click and navigates nowhere — the row is the only
+  toggle, list rows carry no other actions). A file whose comments are ALL resolved **stays listed**
+  until the user finishes it explicitly: the unfolded section's strip grows a **Done check glyph**
+  once everything is resolved, which calls `review.fileDone`, and only that removes the file
+  (`Review.doneFiles`; a new comment re-opens it). An unfolded section shows the file's comments in
+  the TODO plan's exact section flow, built from the SHARED plan atoms (`chat/planKit`:
+  `SectionLabel` + `PlanStatusIcon` — the same pieces `TodoList` renders with): **In progress** (sent — the chat took them; the glyph is GLANCE-AWARE exactly like a TODO's
   in-progress item, via `sessionGlance` + `TodoList.glanceIcon`: working dot / **(?)** while the
   session waits on an `ask_user_question` / pause when it's idle on the user — no loaded runtime reads
   as waiting) →
   **Drafts** (open circle) → **Resolved** (muted Done styling: primary check + struck hint text;
   the chat action reveals on hover — resolved is final, no reopen). No per-row status words — the section names the status; rows carry
-  only the glyph, the clamped text, and the `L3` ref (+ an `outdated` eyebrow when the anchor died). The file level shows
-  **automatically** while the active center tab is a reviewed file (and PINS to the last shown file
-  when the active tab stops being one — a send opening its chat tab must not kick the mounted panel
-  back to the files list); **Drafts rows are numbered** (1., 2., …) instead of wearing the pending
-  glyph — and `RightPanel` **auto-opens the
+  only the glyph, the clamped text, and the `L3` ref (+ an `outdated` eyebrow when the anchor died).
+  The active center tab's section **auto-unfolds** when it is a reviewed file, and an expansion
+  never auto-collapses (folding is the user's gesture alone — a send opening its chat tab must not
+  fold the section the user was reading); **Drafts rows are numbered** (1., 2., …) instead of wearing
+  the pending glyph — and `RightPanel` **auto-opens the
   Review tab** when such a tab is ACTIVATED (keyed on the tab-id change, so a draft saved in an
   already-active tab never yanks the rail; `selectActiveReviewedPath` is the shared derivation). Each
   comment row is a **navigation gesture**, status-dependent: a DRAFT row (and a sent one without a
@@ -402,9 +402,9 @@ a project picker, the prompt hero, and the reused
   sent, a comment is a record — no delete, no rollback, no reopen** and resolved is final
   (server-enforced): pushing back on a change is said in a comment, and a fresh remark is a fresh
   comment. **A plain list — no footer**: batch send lives in
-  the pane toolbars (`SendReviewButton`) and in the panel's own headers — the FILE level carries the
-  same per-file `Send review (N)` (`testid: review-panel-send`; `path: null` covers the anchorless
-  whole-change-set bucket), the FILES level a **`Send all (N)`** across every file
+  the pane toolbars (`SendReviewButton`) and in the panel itself — each unfolded section's strip
+  carries the same per-file `Send review (N)` (`testid: review-panel-send`; `path: null` covers the
+  anchorless whole-change-set bucket), the panel header a **`Send all (N)`** across every file
   (`SendAllReviewsButton`, `testid: review-send-all`, over `allDraftIds`; no ids passed — the host's
   "all drafts" is the batch, so the count can't race a concurrent edit). The review-level
   (overall-note) composer was removed for
@@ -425,7 +425,7 @@ a project picker, the prompt hero, and the reused
   icons via `monacoMenuIcons.ts`: Monaco's standalone menu is label-only (`action.class` icons are a
   workbench feature `addAction` can't reach), so `decorateEditorContextMenus` — installed on EVERY
   Monaco surface, review or not (`MonacoEditor` + both of `MonacoDiff`'s inner editors) — decorates
-  the open menu's DOM: each row gets a fixed-width `.tr-menu-icon` slot (labels stay aligned), known
+  the open menu's DOM: each row gets a fixed-width `.editor-menu-icon` slot (labels stay aligned), known
   English labels get their glyph, unknown/restructured rows stay label-only (a Monaco bump can only
   lose icons, never break the menu); submenu popups (Peek ▸) stay undecorated. The rendered preview's
   context menu is the browser's own and stays unextended. Save →
@@ -497,8 +497,8 @@ a project picker, the prompt hero, and the reused
   exactly THIS file's drafts, batched into the file's own review chat (one chat per file — the host
   pins it in `Review.fileSessions` and later sends `followUp` there), which **opens immediately** (the
   host fires the package into the session detached — see the reviews SPEC's send-latency note). Other
-  files' drafts stay put; each pane carries its own button, and the Review panel's file level shows
-  the same button for the file it is viewing (the files level adds the cross-file `Send all (N)` —
+  files' drafts stay put; each pane carries its own button, and the Review panel shows the same
+  button in each unfolded section's strip (the panel header adds the cross-file `Send all (N)` —
   see above). Offering it with nothing left to send
   would be a lie, so an in-progress file keeps its muted flag and grows no toolbar. A pane over an
   uncommented file shows neither. There is no manual review mode to enter. Every send affordance (composer Send now, thread cards, sidebar rows/footer, tab
