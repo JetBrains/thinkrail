@@ -23,21 +23,27 @@ const CHAT_PROSE =
  * also **extend** the rendering with extra `remarkPlugins` + `components` (e.g. the file view's GitHub
  * alert callouts) — they're merged after the built-in GFM plugin / `code`+`a` renderers.
  */
+/** The `rehypePlugins` prop's exact shape — for callers building tuple-form plugin lists. */
+export type MarkdownRehypePlugins = ComponentProps<typeof ReactMarkdown>["rehypePlugins"];
+
 export function Markdown({
 	text,
 	className = CHAT_PROSE,
 	remarkPlugins,
+	rehypePlugins,
 	components,
 }: {
 	text: string;
 	className?: string;
 	remarkPlugins?: ComponentProps<typeof ReactMarkdown>["remarkPlugins"];
+	rehypePlugins?: ComponentProps<typeof ReactMarkdown>["rehypePlugins"];
 	components?: ComponentProps<typeof ReactMarkdown>["components"];
 }) {
 	return (
 		<div className={className}>
 			<ReactMarkdown
 				remarkPlugins={remarkPlugins ? [remarkGfm, ...remarkPlugins] : [remarkGfm]}
+				rehypePlugins={rehypePlugins}
 				components={{ code: CodeBlock, a: Anchor, ...components }}
 			>
 				{text}

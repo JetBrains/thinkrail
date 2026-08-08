@@ -348,8 +348,154 @@ a project picker, the prompt hero, and the reused
 
 ## Get right
 
-- `RightPanel` tabs are **Specs | All files | Changes** (Specs leftmost and the **default** — specs are
-  the project's ground truth, so the rail leads with them).
+- `RightPanel` tabs are **Specs | All files | Changes | Review** (Specs leftmost and the **default** — specs are
+  the project's ground truth, so the rail leads with them). The Review tab carries a **pending-draft
+  count badge** (store-derived from `reviewsByWorkspace`).
+- **`ReviewPanel`** is the review sidebar (see [[submodule-server-reviews]] +
+  [[task-review-comments]] for the model) — **per-file, two levels**: the FILES level (default) lists
+  the files in review (path + draft/sent/resolved counts; clicking a row opens the file's tab) — a
+  file whose comments are ALL resolved **stays listed** until the user finishes it explicitly: the
+  opened FILE level's header grows a **Done check glyph** once everything is resolved, which calls
+  `review.fileDone`, and only that removes the file (`Review.doneFiles`; a new comment re-opens it) —
+  the list rows themselves carry no actions — and the
+  FILE level shows one file's comments under a back-arrow header in the TODO plan's exact section
+  flow, built from the SHARED plan atoms (`chat/planKit`: `SectionLabel` + `PlanStatusIcon` — the same
+  pieces `TodoList` renders with): **In progress** (sent — the chat took them; the glyph is GLANCE-AWARE exactly like a TODO's
+  in-progress item, via `sessionGlance` + `TodoList.glanceIcon`: working dot / **(?)** while the
+  session waits on an `ask_user_question` / pause when it's idle on the user — no loaded runtime reads
+  as waiting) →
+  **Drafts** (open circle) → **Resolved** (muted Done styling: primary check + struck hint text;
+  the chat action reveals on hover — resolved is final, no reopen). No per-row status words — the section names the status; rows carry
+  only the glyph, the clamped text, and the `L3` ref (+ an `outdated` eyebrow when the anchor died). The file level shows
+  **automatically** while the active center tab is a reviewed file (and PINS to the last shown file
+  when the active tab stops being one — a send opening its chat tab must not kick the mounted panel
+  back to the files list); **Drafts rows are numbered** (1., 2., …) instead of wearing the pending
+  glyph — and `RightPanel` **auto-opens the
+  Review tab** when such a tab is ACTIVATED (keyed on the tab-id change, so a draft saved in an
+  already-active tab never yanks the rail; `selectActiveReviewedPath` is the shared derivation). Each
+  comment row is a **navigation gesture**, status-dependent: a DRAFT row (and a sent one without a
+  linked chat) opens the file **focused on the comment**; an IN-PROGRESS row with a chat opens **the
+  discussion** (its chat tab) — the file stays one hover-action away (the `FileText` glyph runs the
+  file+focus navigation; the chat glyph is gone from open rows). The file focus works through (the store's
+  `reviewFocusRequest`, consumed exactly once by the pane: Monaco reveals the anchor line — including
+  on a fresh mount, via `onMount` — the preview scrolls the in-flow card into view). **No editing
+  here** — the in-file card is the editor; the row's action icons (their own layer, never triggering
+  navigation) are per-row **Send** (→ `review.sendComment`, opens the created chat tab via the same
+  `openChatSession` tail as New Workspace), **Delete for DRAFT rows** (ConfirmPopover →
+  `review.commentDelete` — an unsent remark is the user's own scratch), **Open chat** for sent rows
+  (reuses the history-reopen flow), and the manual Resolve override (`review.commentUpdate`). **Once
+  sent, a comment is a record — no delete, no rollback, no reopen** and resolved is final
+  (server-enforced): pushing back on a change is said in a comment, and a fresh remark is a fresh
+  comment. **A plain list — no footer**: batch send lives in
+  the pane toolbars (`SendReviewButton`) and in the panel's own headers — the FILE level carries the
+  same per-file `Send review (N)` (`testid: review-panel-send`; `path: null` covers the anchorless
+  whole-change-set bucket), the FILES level a **`Send all (N)`** across every file
+  (`SendAllReviewsButton`, `testid: review-send-all`, over `allDraftIds`; no ids passed — the host's
+  "all drafts" is the batch, so the count can't race a concurrent edit). The review-level
+  (overall-note) composer was removed for
+  now (the `review` comment kind stays in the model, UI-less). The `review.get` hydration read is **owned by `RightPanel`**
+  (`useWorkspaceReview`, the `useWorkspaceSpecs` pattern — the read also re-anchors server-side): the
+  tab strip's Review flags and the tab badge need the snapshot even while the panel body is unmounted.
+  Every client converges on `review.changed` pushes folded into the store; nothing here
+  mutates optimistically. Comment *authoring* is **selection-triggered, no mode toggle** (`reviewWidgets.ts`,
+  shared by `FilePane`/`DiffPane` through the Monaco components): selecting text shows a floating
+  **comment icon right of the selection** (a Monaco content widget; the rendered preview's icon
+  follows the selection live but stays mouse-transparent until the drag ends — a clickable node under
+  the moving cursor is one the native selection extends into, repainting the document tail); clicking it opens an **inline
+  composer under the selection** (a view zone: textarea + Save draft / Send now / Esc cancels). Save →
+  `review.commentAdd` with only the `lineRange` + the anchor's **side** (the host reads that side's own
+  content to fill `contentHash` + the drift-tolerant `textQuote`); Send now additionally fires
+  `review.sendComment` and opens the created chat. Commented
+  lines render as decorations (`review-comment-line`). Review attaches only for scopes whose modified
+  side IS the worktree (branch / uncommitted — never a `commit` scope, whose content is historical).
+  **A diff's two editors are two anchor spaces, each carrying the full surface** (decorations,
+  in-flow cards, composer): the modified editor holds `side: "worktree"` comments, the original editor
+  holds `side: "base"` ones (`useFileReview`'s `base` slice; `MonacoDiff` wires both through one
+  `wireSide`, and the tab's `scope` rides along so the host resolves the very blob the original editor
+  shows). An original-side selection is **never remapped onto modified line numbers** — the two sides
+  say different things at the same numbers, so a remark on a deleted or rewritten line would silently
+  re-point at whatever now sits there, and that is what the send package would hand the agent. A focus
+  deep link likewise resolves **per side** (`SideReview.focus`), so a surface only ever reveals a line
+  it actually renders. The **rendered markdown view comments too**
+  (`PreviewCommenting` — the React sibling of `reviewWidgets`, same icon/composer skin, overlays
+  positioned in the scroller's content coordinates so they travel with the document): the rendered
+  selection is mapped back to SOURCE lines by the pure `previewAnchor` (head/tail phrase search over
+  marker-stripped source lines, shrinking phrases at line straddles, never a lone-word fallback for a
+  longer selection); an unmappable selection degrades to a **whole-file** comment — the composer says
+  so — never to wrong lines. **Saved comments sit IN the document flow, directly below their anchor**
+  (the inline-edit-v0 branch's presentation principle, worn in OUR chat-input-family skin —
+  `ReviewThreadCard` / its Monaco DOM twin: **the composer's component minus the buttons row** — the
+  same card chrome (`border2`/`radius-md`/`bg-dark`, same paddings), no accent bars of its own. A
+  DRAFT's body is **editable in place** until it's sent — the same input surface as the composer's
+  field (`--input-bg`, primary focus ring; blur / Cmd+Enter saves via `review.commentUpdate`, Esc
+  reverts, empty reverts — never deletes) — and carries Send + Delete (draft-only); sent/outdated cards are
+  passive read-only markers (plain text, no field). Status shows as the head dot (violet draft / blue
+  sent).
+  **Monaco**: `attachReviewThreads` view zones below the anchor lines — Monaco pushes the following
+  lines apart; zone heights track the rendered card via a **ResizeObserver**, not a one-shot measure:
+  Monaco keeps an off-viewport zone's node at `display:none`, so a card below the fold at `setThreads`
+  time (the markdown tab's rendered→source switch mounts exactly this way) measures 0 and a one-shot
+  measure would leave its zone at the placeholder height — the card then paints OVER the following
+  lines when scrolled in. The observer re-measures when a card gains real geometry or grows (in-card
+  editing), so long comments never overflow. **Rendered preview**: `MarkdownPreview` splits the stripped document at each insert's
+  anchor and splices it between the markdown segments (`splicedSegments` — the inline-edit split
+  pattern; a cut **never divides a multi-line construct**: an anchor inside a fenced code block or a
+  GFM table snaps to that construct's last line (`sourceLines`' `indivisibleSpans` + `snapSplitLine`),
+  so the card lands *after* the block it comments on and both halves stay whole documents — half a
+  fence is not a document, its unclosed opener rendered the whole remainder of the file as code for as
+  long as the comment lived; lists and blockquotes divide into two well-formed constructs, which is
+  what a card between two items should be; an unlocatable line appends after the document, never
+  lost) — the inserts being the saved
+  cards AND the open composer (in-flow under the selected block, via `PreviewCommenting`'s
+  children-as-function contract; only the transient icon stays floating). **Region parity with
+  Monaco**: the blocks under every unresolved comment — and under the composer's target while open —
+  wear `.review-region` (`markReviewRegions` — just a lighter shade of the page background, the app's
+  hover surface; no new hue, no bar; leaf-most BLOCK elements only). Preview anchoring is **exact**: `sourceLines.ts` (adopted from
+  inline-edit) stamps elements with remark source positions in RAW-file coordinates
+  (`sourceLineRehype` tuple-form takes each segment's offset — segments re-parse from line 1; via
+  `chat/Markdown`'s `rehypePlugins` prop) and the composer resolves selections through the stamps (a
+  boundary-only end block is replaced by its previous stamped sibling), falling back to
+  `previewAnchor`'s phrase search for unstamped content. The sidebar remains the full-detail surface. **Review presence is self-announcing and
+  PER-FILE**: a center tab (file or diff) whose path is still in review wears a `Review` flag with
+  **two states** (`ReviewTabFlag`, over the one `reviewFlags` derivation) — violet
+  (`tr-text-eyebrow text-primary`) while the file holds an **unsent draft**, muted (`text-text-subtle`)
+  once only **sent** comments remain; resolved/dismissed drop it entirely. Two states, not
+  present-or-absent, because *"in review"* and *"there is something to send"* are different facts, and
+  the rest of the review vocabulary already counts draft-**or**-sent as in review (`fileSummaries`,
+  `selectActiveReviewedPath`, `fileThreads`) — a drafts-only flag made a file the chat was actively
+  working through look identical in the tab strip to one never reviewed, while the rail insisted it
+  was in review. **`Send review (N)` stays strictly drafts-only and PER-FILE** — that file's PANE
+  TOOLBAR (DiffPane's header,
+  FilePane's markdown header — a non-markdown file grows a slim header just for it) carries the text
+  button (`SendReviewButton`, over the one `fileDraftIds` derivation): the count and the send are
+  exactly THIS file's drafts, batched into the file's own review chat (one chat per file — the host
+  pins it in `Review.fileSessions` and later sends `followUp` there), which **opens immediately** (the
+  host fires the package into the session detached — see the reviews SPEC's send-latency note). Other
+  files' drafts stay put; each pane carries its own button, and the Review panel's file level shows
+  the same button for the file it is viewing (the files level adds the cross-file `Send all (N)` —
+  see above). Offering it with nothing left to send
+  would be a lie, so an in-progress file keeps its muted flag and grows no toolbar. A pane over an
+  uncommented file shows neither. There is no manual review mode to enter. Every send affordance (composer Send now, thread cards, sidebar rows/footer, tab
+  Send all) goes through the one `reviewSend.ts` pair (`sendReviewComment`/`sendReviewBatch`: request
+  → show the chat tab → toast on failure), and the panes integrate via the one **`useFileReview`**
+  hook (threads + composer callbacks + card actions in a single `review` prop on
+  `MonacoEditor`/`MonacoDiff`).
+  A batch answers with EVERY session it touched (one per group), so a multi-file batch opens every chat
+  it started and focuses the first — a chat the user never saw would still be an agent working on their
+  comments. **Showing each chat forks on the result's `reused` flag:** a chat this send CREATED opens straight
+  from the result (`openChatSession` — no round-trip, and its runtime exists before the first streamed
+  event), while a **reused** one goes through `openChatInTab`'s tab→runtime→disk escalation, because it
+  may be a chat this client has never seen (a second client, or this one after a reload — review state
+  and pi transcripts both outlive the host); opening that as new would show a blank conversation for
+  comments already marked sent.
+  **Sidebar navigation goes to the surface the anchor is READABLE on** (one derivation,
+  `reviewModel`'s `ReviewSurface`: `commentSurface` for a row, `reviewFileSurface` for a file row —
+  which picks the diff only when *every* unresolved comment on that file is base-side): a `base`
+  anchor's lines index the pre-change blob, which only the diff's ORIGINAL editor renders and only it
+  mounts `base` threads, so it reopens THAT diff by the scope the anchor captured (falling back to the
+  workspace's current scope for comments saved before it was persisted). Routing every row to the file
+  tab put base remarks on worktree lines that say something else, with no card and a focus request
+  nothing consumes.
 - **Live refresh (the worktree panels follow the disk).** Every workspace-scoped read goes through one
   hook — **`useWorkspaceRead(workspaceId, read, handlers, readKey?) → { reload }`** — which owns *when* to read
   (workspace change, that workspace's `fsChangesByWorkspace` tick, a **`readKey`** change, or `reload()` for a manual Refresh) while

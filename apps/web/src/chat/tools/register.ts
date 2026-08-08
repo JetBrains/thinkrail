@@ -7,6 +7,7 @@ import { AskUserQuestionCard } from "./AskUserQuestionCard";
 import { BashCard } from "./BashCard";
 import { EditCard } from "./EditCard";
 import { ReadCard } from "./ReadCard";
+import { ResolveCommentCard } from "./ResolveCommentCard";
 import { strArg } from "./toolHelpers";
 import "./visualize/register";
 import "./web/register";
@@ -23,6 +24,12 @@ registerToolRenderer("edit", EditCard, {
 });
 registerToolRenderer("write", WriteCard, {
 	summary: ({ args, workspaceRoot }) => projectRelativePath(strArg(args, "path"), workspaceRoot),
+});
+
+// The review-loop closer (host-owned `resolve_comment` tool — capability: server `agent`/`reviews`).
+// Routine: the sidebar carries resolution state; the card is the in-transcript trace.
+registerToolRenderer("resolve_comment", ResolveCommentCard, {
+	summary: ({ args }) => strArg(args, "commentId"),
 });
 
 // The inline clarifying-questions questionnaire (host-owned `ask_user_question` tool). Registered with

@@ -49,6 +49,7 @@
 	--bubble-user-border: color-mix(in srgb, var(--bubble-accent) 40%, transparent);
 	--selection-text: var(--selection-foreground, inherit); /* nullable in the manifest (high contrast keeps the native foreground) */
 	--selection-bg: var(--selection); /* native ::selection in global.css; not a utility */
+	--selection-bg-muted: color-mix(in srgb, var(--selection) 40%, transparent); /* the content canvas's ::selection (markdown preview): translucent, so the unselected remainder of a line box reads as a soft edge, not a black hole punched in an opaque wash */
 	--editor-selection-bg: var(--editor-selection);
 	--editor-selection-text: var(--editor-selection-foreground); /* read by Monaco and xterm through getComputedStyle; a utility would be dead weight */
 }

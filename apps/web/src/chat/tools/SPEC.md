@@ -20,6 +20,10 @@ registration runs once when the chat module mounts. Unregistered tools fall back
 
 - **Core pi tools** — `BashCard` (terminal block), `ReadCard`/`WriteCard` (project-relative path +
   highlighted file), `EditCard` (path + removed/added line diff). All **routine**.
+- **`ResolveCommentCard`** — the compact receipt for the host-owned `resolve_comment` review tool
+  (capability: the server's `agent` module + `reviews` seam; see [[submodule-server-reviews]]): a ✓ +
+  the resolved comment id/note. **Routine** — the review sidebar is where resolution state lives; the
+  card is just the in-transcript trace.
 - **`AskUserQuestionCard`** — the inline questionnaire for the host-owned `ask_user_question` tool
   (capability + rationale: the server's `agent/askUserQuestion` SPEC). Registered `"bare"`: it owns its
   full-width frame, never folds, and answers through the `ChatActions` context (correlated by

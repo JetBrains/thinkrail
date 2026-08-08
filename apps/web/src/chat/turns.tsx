@@ -10,10 +10,12 @@ import {
 	Wrench,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { cn, projectRelativePath } from "@/lib";
+import { cn, projectRelativePath, userText } from "@/lib";
 import { ActivityGroup } from "./ActivityGroup";
 import { useSelection } from "./foldState";
+
 import { Markdown } from "./Markdown";
+import { parseReviewPackage, reviewPackageLabel } from "./reviewPackage";
 import type { ChatRow, TurnDividerData } from "./rows";
 import { ToolCard } from "./ToolCard";
 import { getToolChrome, getToolRenderer } from "./toolRegistry";
@@ -93,19 +95,22 @@ export function ChatTurnView({
 	}
 }
 
-function userText(content: UserMessage["content"]): string {
-	if (typeof content === "string") return content;
-	return content
-		.filter((c) => c.type === "text")
-		.map((c) => c.text)
-		.join("");
-}
-
+/** The user bubble. A review send's context package wears its one-sentence summary ("Sent 3 review
+ * comments on script.ts") instead of the structured XML the agent needs — the full text stays in pi's
+ * transcript on disk, the dialog reads like a conversation. */
 function UserTurn({ message }: { message: UserMessage }) {
+	const text = userText(message.content);
+	const review = parseReviewPackage(text);
 	return (
 		<div data-testid="chat-message" data-role="user" className="flex justify-end">
 			<div className="max-w-[85%] whitespace-pre-wrap rounded-[var(--radius-md)] border border-bubble-user-border bg-clip-padding bg-bubble-user-bg px-md py-sm tr-text-reading text-text-muted">
-				{userText(message.content)}
+				{review ? (
+					<span data-testid="review-package-summary" className="whitespace-normal">
+						{reviewPackageLabel(review)}
+					</span>
+				) : (
+					text
+				)}
 			</div>
 		</div>
 	);
