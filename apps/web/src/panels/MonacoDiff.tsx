@@ -6,6 +6,7 @@ import {
 } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
 import { useCallback, useEffect, useRef } from "react";
+import { decorateEditorContextMenus } from "./monacoMenuIcons";
 import {
 	defineThinkrailTheme,
 	languageForPath,
@@ -57,6 +58,7 @@ export default function MonacoDiff({
 	review?: EditorReview;
 }) {
 	const stopThemeWatchRef = useRef<(() => void) | null>(null);
+	const menuIconsRef = useRef<{ dispose(): void }[]>([]);
 	// The diff widget + its two TextModels, captured at mount so our unmount cleanup can dispose them in the
 	// right order — see below.
 	const editorRef = useRef<MonacoDiffEditor | null>(null);
@@ -113,6 +115,11 @@ export default function MonacoDiff({
 	const onMount: DiffOnMount = (diffEditor, m) => {
 		stopThemeWatchRef.current = watchThemeSwap(m, THEME);
 		editorRef.current = diffEditor;
+		// Review or not, both inner editors have context menus (Copy, Command Palette…) — icon them always.
+		menuIconsRef.current = [
+			decorateEditorContextMenus(diffEditor.getModifiedEditor()),
+			decorateEditorContextMenus(diffEditor.getOriginalEditor()),
+		];
 		const model = diffEditor.getModel();
 		modelsRef.current = model ? [model.original, model.modified] : [];
 		if (!review) return;
@@ -137,6 +144,8 @@ export default function MonacoDiff({
 	useEffect(
 		() => () => {
 			stopThemeWatchRef.current?.();
+			for (const d of menuIconsRef.current) d.dispose();
+			menuIconsRef.current = [];
 			for (const side of sidesRef.current) {
 				side.detach();
 				side.threads.dispose();

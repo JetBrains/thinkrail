@@ -1,6 +1,7 @@
 import MonacoReact, { type BeforeMount, type OnMount } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
 import { useCallback, useEffect, useRef } from "react";
+import { decorateEditorContextMenus } from "./monacoMenuIcons";
 import {
 	defineThinkrailTheme,
 	EDITOR_THEME,
@@ -29,6 +30,7 @@ export default function MonacoEditor({
 	review?: EditorReview;
 }) {
 	const stopThemeWatchRef = useRef<(() => void) | null>(null);
+	const menuIconsRef = useRef<{ dispose(): void } | null>(null);
 	const detachRef = useRef<(() => void) | null>(null);
 	const threadsRef = useRef<ReturnType<typeof attachReviewThreads> | null>(null);
 	const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
@@ -53,6 +55,8 @@ export default function MonacoEditor({
 	const onMount: OnMount = (codeEditor, m) => {
 		stopThemeWatchRef.current = watchThemeSwap(m, EDITOR_THEME);
 		editorRef.current = codeEditor;
+		// Review or not, the editor HAS a context menu (Copy, Command Palette…) — icon it always.
+		menuIconsRef.current = decorateEditorContextMenus(codeEditor);
 		if (review) {
 			detachRef.current = attachReviewCommenting(codeEditor, {
 				onSave: (s, t) => reviewRef.current?.commenting.onSave(s, t) ?? Promise.resolve(),
@@ -91,6 +95,7 @@ export default function MonacoEditor({
 	useEffect(
 		() => () => {
 			stopThemeWatchRef.current?.();
+			menuIconsRef.current?.dispose();
 			detachRef.current?.();
 			threadsRef.current?.dispose();
 		},

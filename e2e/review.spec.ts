@@ -269,6 +269,14 @@ test("the editor context menu carries Comment on selection — the «+»'s twin,
 			hasText: "Comment on selection",
 		});
 		await expect(item).toBeVisible({ timeout: 2000 });
+		// The rows wear our lucide icons (monacoMenuIcons decorates the menu right after it opens).
+		await expect(item.locator(".tr-menu-icon svg")).toBeVisible({ timeout: 2000 });
+		await expect(
+			page
+				.locator(".monaco-menu .action-menu-item", { hasText: "Copy" })
+				.first()
+				.locator(".tr-menu-icon svg"),
+		).toBeVisible({ timeout: 2000 });
 		await page.waitForTimeout(200);
 		await item.click({ timeout: 1000 });
 		await expect(page.getByTestId("review-composer")).toBeVisible({ timeout: 2000 });

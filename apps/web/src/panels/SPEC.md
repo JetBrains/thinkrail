@@ -421,8 +421,14 @@ a project picker, the prompt hero, and the reused
   Monaco surfaces the same action also sits in the editor's **right-click context menu** ("Comment on
   selection", right after Copy, `Cmd/Ctrl+Shift+M`; `editorHasSelection` precondition) — the «+» and
   the menu entry are one action pair into one composer (which is why `attachReviewCommenting` takes
-  an `IStandaloneCodeEditor` — `addAction` lives only there). The rendered preview's context menu is
-  the browser's own and stays unextended. Save →
+  an `IStandaloneCodeEditor` — `addAction` lives only there). The menu's rows wear the app's lucide
+  icons via `monacoMenuIcons.ts`: Monaco's standalone menu is label-only (`action.class` icons are a
+  workbench feature `addAction` can't reach), so `decorateEditorContextMenus` — installed on EVERY
+  Monaco surface, review or not (`MonacoEditor` + both of `MonacoDiff`'s inner editors) — decorates
+  the open menu's DOM: each row gets a fixed-width `.tr-menu-icon` slot (labels stay aligned), known
+  English labels get their glyph, unknown/restructured rows stay label-only (a Monaco bump can only
+  lose icons, never break the menu); submenu popups (Peek ▸) stay undecorated. The rendered preview's
+  context menu is the browser's own and stays unextended. Save →
   `review.commentAdd` with only the `lineRange` + the anchor's **side** (the host reads that side's own
   content to fill `contentHash` + the drift-tolerant `textQuote`); Send now additionally fires
   `review.sendComment` and opens the created chat. Commented
