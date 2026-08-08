@@ -254,6 +254,34 @@ test("sidebar: per-file — auto-opens on a reviewed file, back arrow lists all 
 	await expect(page.getByTestId("send-review-button")).toContainText("Send review (2)");
 });
 
+test("the editor context menu carries Comment on selection — the «+»'s twin, one composer", async ({
+	page,
+}) => {
+	await openDiff(page);
+	await selectLine(page, "two = 2");
+	// Right-click INSIDE the selection keeps it; Monaco's own menu opens with our action after Copy.
+	// The whole gesture retries as one block: Monaco arms the menu's mouseup listener only ~100ms
+	// after it opens ("avoid accidental clicks" — menu.js's RunOnceScheduler), and a live diff
+	// re-read can remount the editor under the open menu — either way the next attempt starts clean.
+	await expect(async () => {
+		await page.getByTestId("diff-pane").getByText("two = 2").last().click({ button: "right" });
+		const item = page.locator(".monaco-menu .action-menu-item", {
+			hasText: "Comment on selection",
+		});
+		await expect(item).toBeVisible({ timeout: 2000 });
+		await page.waitForTimeout(200);
+		await item.click({ timeout: 1000 });
+		await expect(page.getByTestId("review-composer")).toBeVisible({ timeout: 2000 });
+	}).toPass({ timeout: 20_000 });
+	const composer = page.getByTestId("review-composer");
+	await expect(composer).toContainText("Line 2");
+	// Same composer as the «+» path — saving lands the same draft.
+	await page.getByTestId("review-composer-input").fill("Via the context menu.");
+	await page.getByTestId("review-composer-save").click();
+	await expect(composer).toHaveCount(0);
+	await expect(page.getByTestId("review-pending-badge")).toHaveText("1");
+});
+
 test("the Review panel carries its own send buttons: per-file at the file level, Send all at the files level", async ({
 	page,
 }) => {

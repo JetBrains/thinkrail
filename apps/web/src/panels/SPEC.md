@@ -417,7 +417,12 @@ a project picker, the prompt hero, and the reused
   **comment icon right of the selection** (a Monaco content widget; the rendered preview's icon
   follows the selection live but stays mouse-transparent until the drag ends — a clickable node under
   the moving cursor is one the native selection extends into, repainting the document tail); clicking it opens an **inline
-  composer under the selection** (a view zone: textarea + Save draft / Send now / Esc cancels). Save →
+  composer under the selection** (a view zone: textarea + Save draft / Send now / Esc cancels). In
+  Monaco surfaces the same action also sits in the editor's **right-click context menu** ("Comment on
+  selection", right after Copy, `Cmd/Ctrl+Shift+M`; `editorHasSelection` precondition) — the «+» and
+  the menu entry are one action pair into one composer (which is why `attachReviewCommenting` takes
+  an `IStandaloneCodeEditor` — `addAction` lives only there). The rendered preview's context menu is
+  the browser's own and stays unextended. Save →
   `review.commentAdd` with only the `lineRange` + the anchor's **side** (the host reads that side's own
   content to fill `contentHash` + the drift-tolerant `textQuote`); Send now additionally fires
   `review.sendComment` and opens the created chat. Commented

@@ -60,7 +60,9 @@ function button(testid: string, className: string, label: string): HTMLButtonEle
  * captured selection, so churn while typing can't retarget the comment.
  */
 export function attachReviewCommenting(
-	codeEditor: monaco.editor.ICodeEditor,
+	// Standalone (not the base ICodeEditor): `addAction` — the context-menu entry — lives only there,
+	// and every caller holds one (a diff's inner editors are IStandaloneCodeEditor too).
+	codeEditor: monaco.editor.IStandaloneCodeEditor,
 	callbacks: ReviewCommentingCallbacks,
 ): () => void {
 	let iconPosition: monaco.IPosition | null = null;
@@ -216,7 +218,7 @@ export function attachReviewCommenting(
 		});
 	};
 
-	iconButton.addEventListener("click", () => {
+	const commentOnSelection = () => {
 		const s = codeEditor.getSelection();
 		if (!s || s.isEmpty()) return;
 		// A selection ending at column 1 of the next line visually covers only the previous one.
@@ -225,6 +227,23 @@ export function attachReviewCommenting(
 				? s.endLineNumber - 1
 				: s.endLineNumber;
 		openComposer({ startLine: s.startLineNumber, endLine });
+	};
+	iconButton.addEventListener("click", commentOnSelection);
+
+	// The same action in the editor's right-click CONTEXT MENU (right after Copy) + a chord — the «+»
+	// stays the discoverable floating affordance, the menu unifies it with where users also look. One
+	// entry point pair, one composer. (The rendered preview's menu is the browser's own — not extendable.)
+	const menuAction = codeEditor.addAction({
+		// Suffixed with the editor's own id: `addAction` registers a GLOBAL command under this id, and a
+		// diff attaches this flow to BOTH inner editors — one shared id would route the second editor's
+		// menu click to the first editor's (empty) selection.
+		id: `thinkrail.review.commentSelection.${codeEditor.getId()}`,
+		label: "Comment on selection",
+		precondition: "editorHasSelection",
+		contextMenuGroupId: "9_cutcopypaste",
+		contextMenuOrder: 2,
+		keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyM],
+		run: commentOnSelection,
 	});
 
 	const selectionListener = codeEditor.onDidChangeCursorSelection((e) => {
@@ -243,6 +262,7 @@ export function attachReviewCommenting(
 
 	return () => {
 		selectionListener.dispose();
+		menuAction.dispose();
 		closeComposer();
 		codeEditor.removeContentWidget(iconWidget);
 	};

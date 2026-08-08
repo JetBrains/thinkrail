@@ -90,7 +90,7 @@ export default function MonacoDiff({
 
 	/** Wire one editor for review: composer + thread cards, both reading through `reviewRef`. */
 	const wireSide = useCallback(
-		(codeEditor: editor.ICodeEditor, read: SideWiring["read"]): SideWiring => {
+		(codeEditor: editor.IStandaloneCodeEditor, read: SideWiring["read"]): SideWiring => {
 			const slice = () => (reviewRef.current ? read(reviewRef.current) : undefined);
 			const detach = attachReviewCommenting(codeEditor, {
 				onSave: (s, t) => slice()?.commenting.onSave(s, t) ?? Promise.resolve(),
