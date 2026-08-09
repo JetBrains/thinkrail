@@ -56,7 +56,7 @@ test("an empty plan renders a placeholder", () => {
 	);
 });
 
-test("a committed done item renders its short sha + per-file commit-scope diff links", () => {
+test("a committed done item renders sha + summary + status-lettered file rows with ± counts", () => {
 	const done: TodoItem = {
 		...item("Implement foo", "done"),
 		// The commit artifact's `files` is the host's `todo.list` decoration (derived from git, never stored).
@@ -65,7 +65,10 @@ test("a committed done item renders its short sha + per-file commit-scope diff l
 				kind: "commit",
 				sha: "abc1234def567",
 				label: "Implement foo",
-				files: ["src/foo.ts", "src/bar baz.ts"],
+				files: [
+					{ path: "src/foo.ts", status: "modified", added: 28, removed: 3 },
+					{ path: "src/bar baz.ts", status: "added", added: 12 },
+				],
 			},
 		],
 	};
@@ -76,29 +79,21 @@ test("a committed done item renders its short sha + per-file commit-scope diff l
 			"",
 			"Progress: 1/1",
 			"",
-			"- [x] Implement foo `abc1234`",
-			"    - [src/foo.ts](thinkrail-diff:abc1234def567:src%2Ffoo.ts)",
-			"    - [src/bar baz.ts](thinkrail-diff:abc1234def567:src%2Fbar%20baz.ts)",
+			"- [x] Implement foo — `abc1234` · 2 files · +40 −3",
+			"    - `M` src/foo.ts · +28 −3",
+			"    - `A` src/bar baz.ts · +12",
 			"",
 		].join("\n"),
 	);
 });
 
-test("a fallback done item (change artifacts, no commit) links at branch scope (empty sha)", () => {
+test("a fallback done item (change artifacts, no commit) lists bare paths — no drifting counts", () => {
 	const done: TodoItem = {
 		...item("Fix bar", "done"),
 		artifacts: [{ kind: "change", path: "src/bar.ts" }],
 	};
 	expect(planToMarkdown({ todos: [done], groups: [] }, "c")).toBe(
-		[
-			"# TODO — c",
-			"",
-			"Progress: 1/1",
-			"",
-			"- [x] Fix bar",
-			"    - [src/bar.ts](thinkrail-diff::src%2Fbar.ts)",
-			"",
-		].join("\n"),
+		["# TODO — c", "", "Progress: 1/1", "", "- [x] Fix bar", "    - src/bar.ts", ""].join("\n"),
 	);
 });
 

@@ -72,13 +72,14 @@ are host-only, while the agent attaches `file`/`spec` itself through the `todo_*
 delta at `done` → no artifacts.
 
 **`listTodos` decoration — unfolding the commit.** The wire DTO's `commit` artifact carries a derived
-**`files`** list (the commit's own recorded paths, `git show --name-only` via `git.gitCommitFiles`),
-memoized in-memory **by sha** — immutable, so the cache never staleness-checks; only successful
-resolutions are cached, a transient git failure retries on the next list. An **unresolvable sha** (GC'd
-after a history rewrite — reflog keeps rewritten commits alive ~90 days, far longer than a chat plan's
-ephemeral life; we deliberately pin nothing) yields **no `files`** — that absence is the client's signal
-to degrade the affordance silently (no chip, never a broken diff tab). The same decoration pass is where
-`groupStatus` already ships, so the pattern has one home.
+**`files`** list — full `GitFileChange[]` rows (path + status + `+/−` line counts), read through
+`git.gitStatus` at the **`commit:{sha}` scope** (the exact rows the Changes panel renders there, one
+derivation) — memoized in-memory **by sha** — immutable, so the cache never staleness-checks; only
+successful resolutions are cached, a transient git failure (or `UNKNOWN_COMMIT`) retries on the next
+list. An **unresolvable sha** (GC'd after a history rewrite — reflog keeps rewritten commits alive ~90
+days, far longer than a chat plan's ephemeral life; we deliberately pin nothing) yields **no `files`** —
+that absence is the client's signal to degrade the affordance silently (no chip, never a broken diff
+tab). The same decoration pass is where `groupStatus` already ships, so the pattern has one home.
 
 ## Boundary
 
@@ -91,8 +92,8 @@ to degrade the affordance silently (no chip, never a broken diff tab). The same 
   `updateTodo(...) → TodoItem` (throws on unknown id → a `{ ok:false }` WS response),
   `removeTodo(...) → { ok:true }` (idempotent). **Mapping only** — no plan logic; `TodoStore` owns disk.
 - **Allowed deps:** `workspaces` (worktree-path lookup via `getWorkspace`, which throws on unknown);
-  `git` (`gitStatus` — the uncommitted changed-path set; `gitCommitAll` — the per-done-item commit;
-  `gitHeadSha` — the baseline's head; `gitCommitFiles` — the DTO decoration);
+  `git` (`gitStatus` — the uncommitted changed-path set + the commit-scope DTO decoration;
+  `gitCommitAll` — the per-done-item commit; `gitHeadSha` — the baseline's head);
   `contracts` (DTOs + `PiEvent` for `isTodoToolEnd`); `@thinkrail/shared/paths` (`WORKSPACE_INTERNAL_DIR`
   — the app-state prefix filtered out of change sets); **`pi-todos/core`** (the pi-free read/write model — a sanctioned host-side
   value-import of the extension package, the same pattern as `spec` → `pi-spec-graph/core`).

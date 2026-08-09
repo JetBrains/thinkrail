@@ -47,6 +47,8 @@ import { workspaceTabStateClass } from "./tabState";
 const ChatView = lazy(() => import("../chat/ChatView"));
 // The rendered-markdown preview (markdown + shiki) — reused for ephemeral `doc` tabs; lazy like FilePane's.
 const MarkdownPreview = lazy(() => import("./MarkdownPreview"));
+// The chat plan's live review-map page (see `PlanTab`) — lazy, it pulls the chat data hook.
+const PlanPane = lazy(() => import("./PlanPane"));
 
 /** An ephemeral `doc` tab: rendered markdown from inline content, no fs/source toggle (see `DocTab`). */
 function DocPane({ tab }: { tab: DocTab }) {
@@ -524,6 +526,12 @@ export function CenterTabs() {
 								/>
 							) : active.kind === "doc" ? (
 								<DocPane key={active.id} tab={active} />
+							) : active.kind === "plan" ? (
+								<PlanPane
+									key={active.id}
+									workspaceId={active.workspaceId}
+									sessionId={active.sessionId}
+								/>
 							) : active.kind === "diff" ? (
 								<DiffPane key={active.id} tab={active} />
 							) : (

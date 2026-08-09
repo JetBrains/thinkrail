@@ -228,11 +228,12 @@ export interface TodoArtifact {
 	/** For `commit` only: the sha the item's changes were committed as. */
 	sha?: string;
 	/**
-	 * For `commit` only — **host-derived, never stored**: the commit's recorded file list, resolved from
-	 * git by `todo.list`'s decoration (memoized by sha). Absent when the sha no longer resolves (a GC'd
-	 * history rewrite) — the client's signal to degrade the affordance silently.
+	 * For `commit` only — **host-derived, never stored**: the commit's recorded changes (path + status +
+	 * `+/−` line counts), resolved from git by `todo.list`'s decoration (memoized by sha — immutable, so
+	 * the cache never staleness-checks). Absent when the sha no longer resolves (a GC'd history rewrite) —
+	 * the client's signal to degrade the affordance silently.
 	 */
-	files?: string[];
+	files?: GitFileChange[];
 }
 
 /**

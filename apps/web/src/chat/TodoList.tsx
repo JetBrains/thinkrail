@@ -67,7 +67,8 @@ function statusLabel(status: TodoStatus, glance: PlanGlance): string {
 	return status === "in_progress" ? glanceIcon(glance).label : STATUS_LABEL[status];
 }
 
-function StatusIcon({ status, glance }: { status: TodoStatus; glance: PlanGlance }) {
+/** An item's status glyph (glance-aware for the in_progress step) — shared with the plan page. */
+export function StatusIcon({ status, glance }: { status: TodoStatus; glance: PlanGlance }) {
 	if (status === "in_progress") {
 		const { Icon, className } = glanceIcon(glance);
 		return <Icon data-glance={glance} className={cn("size-4 shrink-0", className)} />;
@@ -75,13 +76,13 @@ function StatusIcon({ status, glance }: { status: TodoStatus; glance: PlanGlance
 	return <PlanStatusIcon kind={status === "done" ? "done" : "pending"} />;
 }
 
-/** The add-a-TODO input row, with an "open as markdown" action on the right. */
+/** The add-a-TODO input row, with an "open the plan page" action on the right. */
 export function TodoAddRow({
 	onAdd,
-	onOpenMarkdown,
+	onOpenPlan,
 }: {
 	onAdd: (title: string) => Promise<void>;
-	onOpenMarkdown?: () => void;
+	onOpenPlan?: () => void;
 }) {
 	const [draft, setDraft] = useState("");
 	const submit = async () => {
@@ -107,13 +108,13 @@ export function TodoAddRow({
 				placeholder="Add a TODO for the agent…"
 				className="min-w-0 flex-1 bg-transparent tr-text-ui text-text-default outline-none placeholder:text-text-muted"
 			/>
-			{onOpenMarkdown ? (
+			{onOpenPlan ? (
 				<button
 					type="button"
-					data-testid="todo-open-markdown"
-					onClick={onOpenMarkdown}
-					aria-label="Open as markdown"
-					title="Open the plan as a markdown tab"
+					data-testid="todo-open-plan"
+					onClick={onOpenPlan}
+					aria-label="Open the plan page"
+					title="Open the plan as a page — review each step's changes"
 					className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default focus-visible:opacity-100"
 				>
 					<FileText className="size-3.5" />

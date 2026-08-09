@@ -144,11 +144,25 @@ test("itemChangeSet: a commit artifact with decorated files wins over any change
 		...item("step", "done"),
 		artifacts: [
 			{ kind: "spec", path: "SPEC.md", specId: "s1" }, // agent's own artifacts are not a change set
-			{ kind: "commit", sha: "abc123", files: ["a.ts", "b.ts"] },
+			{
+				kind: "commit",
+				sha: "abc123",
+				files: [
+					{ path: "a.ts", status: "modified", added: 2, removed: 1 },
+					{ path: "b.ts", status: "added", added: 5 },
+				],
+			},
 			{ kind: "change", path: "stale.ts" }, // a leftover fallback row must not shadow the commit
 		],
 	};
-	expect(itemChangeSet(done)).toEqual({ kind: "commit", sha: "abc123", files: ["a.ts", "b.ts"] });
+	expect(itemChangeSet(done)).toEqual({
+		kind: "commit",
+		sha: "abc123",
+		files: [
+			{ path: "a.ts", status: "modified", added: 2, removed: 1 },
+			{ path: "b.ts", status: "added", added: 5 },
+		],
+	});
 });
 
 test("itemChangeSet: a commit without decorated files (unresolvable sha) degrades to null — no affordance", () => {
