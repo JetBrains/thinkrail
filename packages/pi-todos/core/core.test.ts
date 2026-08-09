@@ -472,3 +472,55 @@ test("replaceAll keeps only the first in_progress of a fresh plan (direct API: `
 		rmSync(root, { recursive: true, force: true });
 	}
 });
+
+test("artifact sanitize is per-kind: a commit needs a sha, every other kind a path", () => {
+	const root = tempRoot();
+	try {
+		const todo = store(root).add({
+			title: "step",
+			artifacts: [
+				{ kind: "commit", sha: "abc123", label: "step" }, // kept — sha-addressed, no path needed
+				{ kind: "commit" }, // dropped — a commit without its sha is unaddressable
+				{ kind: "change", path: "src/a.ts" }, // kept
+				{ kind: "change" }, // dropped — path-addressed kind without a path
+			],
+		});
+		expect(store(root).get(todo.id)?.artifacts).toEqual([
+			{ kind: "commit", sha: "abc123", label: "step" },
+			{ kind: "change", path: "src/a.ts" },
+		]);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("a version-3 file (pre-commit-kind) reads cleanly and upgrades to 4 on the next write", () => {
+	const root = tempRoot();
+	try {
+		const file = join(root, storeRel(SESSION));
+		mkdirSync(dirname(file), { recursive: true });
+		writeFileSync(
+			file,
+			JSON.stringify({
+				version: 3,
+				todos: [
+					{
+						id: "t_old",
+						title: "old step",
+						status: "done",
+						origin: "agent",
+						artifacts: [{ kind: "change", path: "a.ts" }],
+						createdAt: "2024-01-01T00:00:00Z",
+						updatedAt: "2024-01-01T00:00:00Z",
+					},
+				],
+				groups: [],
+			}),
+		);
+		expect(store(root).get("t_old")?.artifacts).toEqual([{ kind: "change", path: "a.ts" }]);
+		store(root).add({ title: "new" }); // any write upgrades the file version
+		expect(JSON.parse(readFileSync(file, "utf8")).version).toBe(4);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
