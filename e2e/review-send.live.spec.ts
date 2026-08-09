@@ -34,27 +34,19 @@ test("a review send reads back from the chat: summary → file → comment + fra
 	await page.getByTestId("review-composer-input").fill("Please rename `two` to `pair`.");
 	await page.getByTestId("review-composer-send").click();
 
-	// The chat opens on the package's user card — collapsed to the one-line summary.
+	// The chat opens on the package's card: the summary line with the FILE rows right under it — the
+	// comments themselves folded away.
 	const summary = page.getByTestId("review-package-summary");
 	await expect(summary).toContainText("Sent 1 review comment on script.ts", { timeout: 30_000 });
+	await expect(page.getByTestId("review-package-file-toggle")).toContainText("script.ts");
 	await expect(page.getByTestId("review-package-item")).toHaveCount(0);
 
-	// Unfold: file row → the comment's text and its quoted fragment, parsed from the message itself.
+	// Unfold file → comment row → full text + the quoted fragment, parsed from the message itself.
+	// Each toggle retries as one block: right after a reopen the row can remount mid-click (hydration
+	// mints fresh row ids), swallowing the first click.
 	const unfoldAndAssert = async () => {
-		// Retry the toggle as one block: right after a reopen the row can remount mid-click (hydration
-		// mints fresh row ids), swallowing the first click.
 		await expect(async () => {
-			await page.getByTestId("review-package-summary").click();
-			await expect(page.getByTestId("review-package-card")).toHaveAttribute(
-				"data-expanded",
-				"true",
-				{ timeout: 1000 },
-			);
-		}).toPass({ timeout: 10_000 });
-		const fileRow = page.getByTestId("review-package-file-toggle");
-		await expect(fileRow).toContainText("script.ts");
-		await expect(async () => {
-			await fileRow.click();
+			await page.getByTestId("review-package-file-toggle").click();
 			await expect(page.getByTestId("review-package-file")).toHaveAttribute(
 				"data-expanded",
 				"true",
@@ -64,6 +56,12 @@ test("a review send reads back from the chat: summary → file → comment + fra
 		const item = page.getByTestId("review-package-item");
 		await expect(item).toContainText("Please rename `two` to `pair`.");
 		await expect(item).toContainText("L2");
+		// The fragment shows only once the COMMENT row unfolds.
+		await expect(item.locator("pre")).toHaveCount(0);
+		await expect(async () => {
+			await page.getByTestId("review-package-item-toggle").click();
+			await expect(item).toHaveAttribute("data-expanded", "true", { timeout: 1000 });
+		}).toPass({ timeout: 10_000 });
 		await expect(item.locator("pre")).toContainText("const two = 2;");
 	};
 	await unfoldAndAssert();
@@ -73,14 +71,19 @@ test("a review send reads back from the chat: summary → file → comment + fra
 		page.locator('[data-testid="chat-message"][data-role="system"]').filter({ hasText: "Done" }),
 	).toBeVisible({ timeout: 90_000 });
 
-	// Close the chat and reopen it from history: the transcript hydrates from DISK, and the same card
-	// unfolds the same way — the message is the single durable source.
+	// Close the chat and reopen it from history: the card re-renders from the transcript message (the
+	// single durable source) and the folds SURVIVE — the shared fold cache is keyed by the row ids the
+	// still-live runtime kept, so what the user had unfolded stays unfolded.
 	const chatTabs = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
 	await chatTabs.first().getByTestId("editor-tab-close").click();
 	await expect(chatTabs).toHaveCount(0);
 	await page.getByTestId("chat-history").click();
 	await page.getByTestId("closed-chat-item").first().click();
 	await expect(chatTabs).toHaveCount(1);
-	await expect(page.getByTestId("review-package-summary")).toBeVisible();
-	await unfoldAndAssert();
+	await expect(page.getByTestId("review-package-summary")).toContainText(
+		"Sent 1 review comment on script.ts",
+	);
+	const item = page.getByTestId("review-package-item");
+	await expect(item).toContainText("Please rename `two` to `pair`.");
+	await expect(item.locator("pre")).toContainText("const two = 2;");
 });

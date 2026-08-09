@@ -30,10 +30,10 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
 - `user` / `system` / `retry` — 1:1 renderers. A user message that IS a review context package
   (`reviewPackage.ts` recognizes the `<review …>` header + `<comment …>` items the server's
   `packageRender` emits — the parser is the read half of that format, pinned in unit tests against the
-  renderer's verbatim output) renders as a **foldable card**, collapsed to its one-sentence summary
-  ("Sent 3 review comments on 2 files") and unfolding in two levels: per FILE
-  (`groupPackageItems`), then each file to its comments — the remark's text, its `L2–4` ref, and the
-  quoted `<fragment>` verbatim (monospace, height-capped). Everything is parsed from the MESSAGE
+  renderer's verbatim output) renders as a **compact card**: the one-sentence
+  summary ("Sent 3 review comments on 2 files") with the FILE rows right under it
+  (`groupPackageItems`); a file unfolds to its comment rows (`▸ L2 · the remark…`, one line), and each
+  comment unfolds to its full text plus the quoted `<fragment>` verbatim (monospace, height-capped). Everything is parsed from the MESSAGE
   itself — never the review snapshot, which the next review replaces — so any transcript answers
   "what was sent" forever, on any client; both fold levels ride the shared fold cache
   (row id / `rowId:path`), surviving virtualization. The retry countdown carries a `source` (`turn` =

@@ -19,6 +19,7 @@ import {
 	groupPackageItems,
 	parseReviewPackage,
 	type ReviewPackageFile,
+	type ReviewPackageItem,
 	reviewPackageLabel,
 } from "./reviewPackage";
 import type { ChatRow, TurnDividerData } from "./rows";
@@ -100,11 +101,11 @@ export function ChatTurnView({
 	}
 }
 
-/** The user bubble. A review send's context package renders as a FOLDABLE card — collapsed to its
- * one-sentence summary ("Sent 3 review comments on script.ts"), unfolding to the comments themselves
- * in readable form (file + lines, the remark, the quoted fragment) — instead of the structured XML
- * the agent needs. Everything is parsed from the message itself (the transcript IS the history), so
- * any old chat unfolds the same way; the fold survives virtualization via the shared cache. */
+/** The user bubble. A review send's context package renders as a compact card — the "Sent N review
+ * comments" line with the FILES right under it, each file unfolding to its comments, each comment
+ * unfolding to its full text + the quoted fragment — instead of the structured XML the agent needs.
+ * Everything is parsed from the message itself (the transcript IS the history), so any old chat
+ * unfolds the same way; every fold level survives virtualization via the shared cache. */
 function UserTurn({
 	id,
 	message,
@@ -116,39 +117,24 @@ function UserTurn({
 }) {
 	const text = userText(message.content);
 	const review = parseReviewPackage(text);
-	const [expanded, toggle] = useFold(id);
 	return (
 		<div data-testid="chat-message" data-role="user" className="flex justify-end">
 			<div className="max-w-[85%] whitespace-pre-wrap rounded-[var(--radius-md)] border border-bubble-user-border bg-clip-padding bg-bubble-user-bg px-md py-sm tr-text-reading text-text-muted">
 				{review ? (
-					<div data-testid="review-package-card" data-expanded={expanded}>
-						<button
-							type="button"
-							data-testid="review-package-summary"
-							aria-expanded={expanded}
-							onClick={toggle}
-							className="flex w-full cursor-pointer select-none items-center gap-xs whitespace-normal text-left outline-none focus-visible:ring-2 focus-visible:ring-primary"
-						>
-							<ChevronRight
-								className={cn(
-									"size-3 shrink-0 text-text-subtle transition-transform",
-									expanded && "rotate-90",
-								)}
-							/>
+					<div data-testid="review-package-card">
+						<span data-testid="review-package-summary" className="block whitespace-normal">
 							{reviewPackageLabel(review)}
-						</button>
-						{expanded && (
-							<ul className="mt-xs flex flex-col">
-								{groupPackageItems(review.items).map((file) => (
-									<PackageFileRow
-										key={file.path ?? "@review"}
-										foldId={`${id}:${file.path ?? "@review"}`}
-										file={file}
-										workspaceRoot={workspaceRoot}
-									/>
-								))}
-							</ul>
-						)}
+						</span>
+						<ul className="mt-xs flex flex-col">
+							{groupPackageItems(review.items).map((file) => (
+								<PackageFileRow
+									key={file.path ?? "@review"}
+									foldId={`${id}:${file.path ?? "@review"}`}
+									file={file}
+									workspaceRoot={workspaceRoot}
+								/>
+							))}
+						</ul>
 					</div>
 				) : (
 					text
@@ -158,9 +144,8 @@ function UserTurn({
 	);
 }
 
-/** One file inside the unfolded package card: `▸ script.ts · 2`, unfolding to its comments — each the
- * remark's text (with its line ref) plus the quoted fragment (verbatim from the package, monospace,
- * height-capped). Its fold survives virtualization too, keyed under the owning row's id. */
+/** One file in the package card: `▸ script.ts · 2`, unfolding to its comment rows. Its fold survives
+ * virtualization too, keyed under the owning row's id. */
 function PackageFileRow({
 	foldId,
 	file,
@@ -200,25 +185,51 @@ function PackageFileRow({
 				<span className="shrink-0 tr-text-metadata text-text-subtle">{file.items.length}</span>
 			</button>
 			{expanded && (
-				<ul className="mb-xs flex flex-col gap-sm pl-md">
+				<ul className="mb-xs flex flex-col pl-md">
 					{keyedItems.map(({ key, item }) => (
-						<li
-							key={key}
-							data-testid="review-package-item"
-							className="border-border-muted border-l-2 pl-sm"
-						>
-							{item.lineRef && (
-								<span className="block tr-code-text text-text-subtle">{item.lineRef}</span>
-							)}
-							<span className="block whitespace-pre-wrap text-text-default">{item.body}</span>
-							{item.fragment && (
-								<pre className="mt-xs max-h-32 overflow-auto whitespace-pre-wrap rounded-[var(--radius-sm)] bg-sunken px-sm py-xs tr-code-text text-text-muted">
-									{item.fragment}
-								</pre>
-							)}
-						</li>
+						<PackageCommentRow key={key} foldId={`${foldId}:${key}`} item={item} />
 					))}
 				</ul>
+			)}
+		</li>
+	);
+}
+
+/** One comment inside a file's unfold: collapsed — a one-line `▸ L2 · the remark…`; expanded — the
+ * full text plus the quoted fragment (verbatim from the package, monospace, height-capped). */
+function PackageCommentRow({ foldId, item }: { foldId: string; item: ReviewPackageItem }) {
+	const [expanded, toggle] = useFold(foldId);
+	return (
+		<li data-testid="review-package-item" data-expanded={expanded}>
+			<button
+				type="button"
+				data-testid="review-package-item-toggle"
+				aria-expanded={expanded}
+				onClick={toggle}
+				className="flex w-full cursor-pointer select-none items-start gap-xs py-xs text-left outline-none focus-visible:ring-2 focus-visible:ring-primary"
+			>
+				<ChevronRight
+					className={cn(
+						"mt-0.5 size-3 shrink-0 text-text-subtle transition-transform",
+						expanded && "rotate-90",
+					)}
+				/>
+				{item.lineRef && (
+					<span className="shrink-0 tr-code-text text-text-subtle">{item.lineRef}</span>
+				)}
+				<span
+					className={cn(
+						"min-w-0 flex-1 text-text-default",
+						expanded ? "whitespace-pre-wrap" : "truncate",
+					)}
+				>
+					{item.body}
+				</span>
+			</button>
+			{expanded && item.fragment && (
+				<pre className="mb-xs ml-md max-h-32 overflow-auto whitespace-pre-wrap rounded-[var(--radius-sm)] bg-sunken px-sm py-xs tr-code-text text-text-muted">
+					{item.fragment}
+				</pre>
 			)}
 		</li>
 	);
