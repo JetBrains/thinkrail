@@ -53,9 +53,12 @@ tabs**. A tab's shell outlives every client that looks at it.
   sweep on attach. Unmounting a view kills nothing.
 - **No idle culling.** Terminal "activity" can only mean last PTY I/O, so a quiet long-running command would be
   culled mid-flight (Jupyter's `cull_inactive_timeout` does exactly this). **No abandoned-client reap** either.
-- **Revive, not reconnect, across a host restart.** Shells cannot survive it; `persistTerminalSessions()`
-  writes tabs + recordings from `stop()` **before** `closeAllTerminals()`, and `reviveTerminalSessions()`
-  restores tabs whose first attach spawns a fresh shell showing the old picture. Unclean exit → empty shells.
+- **Revive, not reconnect, across a host restart.** Shells cannot survive it. **Membership is persisted on
+  every change** (open / close / archive), not only at `stop()` — the host has no crash isolation, so an
+  ungraceful exit is an ordinary path and a shutdown-only file would resurrect a closed tab and spawn a shell
+  for it. `stop()` additionally captures a full set of recordings before `closeAllTerminals()`;
+  `reviveTerminalSessions()` restores tabs whose first attach spawns a fresh shell showing the old picture.
+  Recordings are best-effort, so an unclean exit gives back the right tabs with blank screens.
 - **Not tmux.** Would buy restart survival at the cost of a dep we can't assume on Windows, a competing tab
   model, env-propagation breakage, and `capture-pane` polling. We already accept no crash isolation.
 

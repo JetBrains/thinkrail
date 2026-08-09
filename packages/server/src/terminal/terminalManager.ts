@@ -110,9 +110,19 @@ export function setTerminalTabsPublisher(
 	broadcastTabs = fn;
 }
 
-/** Announce this workspace's tab list. Called only where the list actually changed. */
-function publishTabs(workspaceId: string): void {
+/**
+ * React to a change in which tabs exist: tell every client, and write the new membership down.
+ *
+ * Persisting here rather than only at `stop()` is what makes the on-disk list authoritative *during* the run.
+ * The host has no crash isolation by design (a fatal agent or provider fault takes it down, see
+ * `architecture.md`), so an ungraceful exit is an ordinary path — and a file only written on graceful shutdown
+ * would resurrect a tab the user had closed, spawning a shell for it and breaking the no-tab/no-shell rule.
+ * Output snapshots stay best-effort: they ride along when they happen to exist, and `stop()` is still where a
+ * full set is captured.
+ */
+function membershipChanged(workspaceId: string): void {
 	broadcastTabs(workspaceId, listTerminals(workspaceId));
+	persistTerminalSessions();
 }
 
 /** Natural exits retain final output and their death notice as one ordered, reconnect-safe unit. */
@@ -298,7 +308,7 @@ export function attachTerminal(
 	const { id, entry } = spawnForTab(workspaceId, tabKey, clientKey, options, revived);
 	// Only a membership change is worth announcing — re-attaching to an existing tab leaves the list identical,
 	// and broadcasting on every mount would fan out a snapshot per Project Home round trip.
-	if (isNewTab) publishTabs(workspaceId);
+	if (isNewTab) membershipChanged(workspaceId);
 	const replay = entry.recorder.snapshot();
 	return { id, created: true, ...(replay ? { replay } : {}) };
 }
@@ -395,7 +405,7 @@ export function closeTerminalTab(
 	tabs.splice(position, 1);
 	pendingReplay.delete(index);
 	if (entry && id) disposeTerminalEntry(id, entry);
-	publishTabs(workspaceId);
+	membershipChanged(workspaceId);
 	return { closed: true, busy: false };
 }
 
@@ -424,7 +434,7 @@ export function closeWorkspaceTerminals(workspaceId: string): void {
 	for (const key of pendingReplay.keys()) {
 		if (key.startsWith(`${workspaceId}${TAB_INDEX_SEP}`)) pendingReplay.delete(key);
 	}
-	publishTabs(workspaceId);
+	membershipChanged(workspaceId);
 }
 
 /** Kill every live PTY — called on host shutdown so no shell processes orphan. */

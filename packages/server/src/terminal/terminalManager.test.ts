@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,6 +7,7 @@ import { saveWorkspaces } from "../persistence";
 import {
 	attachTerminal,
 	closeTerminalTab,
+	closeWorkspaceTerminals,
 	listTerminals,
 	persistTerminalSessions,
 	resetTerminalState,
@@ -284,4 +285,38 @@ test("a dead tab's last screen survives a host restart", async () => {
 	reviveTerminalSessions();
 
 	expect(attachTerminal(WS, "tab-a", "client-1").replay ?? "").toContain("TR_LAST_WORDS");
+});
+
+describe("membership survives an ungraceful exit", () => {
+	// The host has no crash isolation by design, so an exit without `stop()` is an ordinary path. Everything
+	// below therefore skips `persistTerminalSessions()` entirely — that is the whole point.
+	test("a tab closed before a crash does not come back", () => {
+		attachTerminal(WS, "tab-a", "client-1");
+		closeTerminalTab(WS, "tab-a", true);
+
+		resetTerminalState();
+		reviveTerminalSessions();
+
+		// Resurrecting it would spawn a shell for a tab the user closed — the no-tab/no-shell rule.
+		expect(listTerminals(WS)).toHaveLength(0);
+	});
+
+	test("a tab opened before a crash is still there", () => {
+		attachTerminal(WS, "tab-a", "client-1", { title: "Survivor" });
+
+		resetTerminalState();
+		reviveTerminalSessions();
+
+		expect(listTerminals(WS)).toEqual([{ tabKey: "tab-a", title: "Survivor" }]);
+	});
+
+	test("archiving a workspace before a crash takes its tabs with it", () => {
+		attachTerminal(WS, "tab-a", "client-1");
+		closeWorkspaceTerminals(WS);
+
+		resetTerminalState();
+		reviveTerminalSessions();
+
+		expect(listTerminals(WS)).toHaveLength(0);
+	});
 });
