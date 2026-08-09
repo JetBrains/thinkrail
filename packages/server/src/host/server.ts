@@ -28,8 +28,9 @@ import {
 import { getConfig, setSettingsPublisher } from "../settings";
 import {
 	closeAllTerminals,
-	closeClientTerminals,
+	persistTerminalSessions,
 	resumeClientTerminals,
+	reviveTerminalSessions,
 	setTerminalPublisher,
 } from "../terminal";
 import { setRepoMetaPublisher, setWatchPublisher, stopAllWatches } from "../watch";
@@ -78,15 +79,18 @@ interface SocketData {
 }
 
 /**
- * How long a vanished client's PTYs are kept before being killed.
+ * How long a vanished client's retained request results are kept before its namespace is retired.
  *
- * The client reconnects on its own with backoff, so a dropped socket usually means a hiccup, not a departure —
- * and a shell can be holding real work (a dev server, a watch build). Waiting is therefore the safe default and
- * killing is the exception: this only has to be longer than a realistic reconnect, not short. A genuinely gone
- * client (closed tab, closed laptop, reload — a reload arrives under a *new* client id) then loses its shells
- * one window later instead of leaving them running until the host restarts.
+ * This no longer touches terminals. Shells are owner-scoped and reference-counted by the host-owned tab list
+ * (see `submodule-server-terminal`): a shell dies when its tab is closed, its workspace is archived, it exits,
+ * or the host stops — never because a browser went away. Killing on client disappearance was what made a
+ * reload destroy your work, and reference-based GC makes it redundant besides.
+ *
+ * What still needs retiring is the exactly-once replay cache, which is per client and would otherwise retain a
+ * page's responses forever. The client reconnects on its own with backoff, so this only has to outlast a
+ * realistic reconnect.
  */
-const ABANDONED_CLIENT_GRACE_MS = 60_000;
+const CLIENT_REPLAY_RETENTION_MS = 60_000;
 
 /** Ids arrive from the wire, so an `ack`/`resume` list is filtered rather than trusted to hold strings. */
 const isRequestId = (id: unknown): id is string => typeof id === "string";
@@ -104,7 +108,7 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 
 	/** The live socket per client id. One entry per connected page; a reconnect replaces its own entry. */
 	const sockets = new Map<string, Bun.ServerWebSocket<SocketData>>();
-	/** Pending "this client looks gone, reap its resources" timers, cancelled if it reconnects in time. */
+	/** Pending "this client looks gone, retire its replay namespace" timers, cancelled if it reconnects. */
 	const reapTimers = new Map<string, ReturnType<typeof setTimeout>>();
 	/** Exactly-once handler results for unresolved requests replayed by a reconnecting page. */
 	const requestReplays = new RequestReplayCache<string>();
@@ -118,13 +122,12 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 	let stopping = false;
 
 	/**
-	 * Arm the grace window after which a client with no socket counts as gone, and its host resources are freed.
+	 * Arm the window after which a client with no socket counts as gone and its replay namespace is retired.
 	 *
 	 * Re-arms itself while `clearClient` declines — a request still in flight means the page can come back and
 	 * replay exactly that id, and forgetting the entry would run its handler a second time (see
-	 * `requestReplayCache`). The shells are gone either way on the first pass; `closeClientTerminals` is
-	 * idempotent, so a retry only retries the retirement. It ends when that last handler settles, on a
-	 * reconnect (`open` cancels the timer and the namespace stands), or at `stop()`, which clears them all.
+	 * `requestReplayCache`). It ends when that last handler settles, on a reconnect (`open` cancels the timer
+	 * and the namespace stands), or at `stop()`, which clears them all.
 	 */
 	const armClientReap = (clientKey: string): void => {
 		reapTimers.set(
@@ -132,9 +135,8 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 			setTimeout(() => {
 				reapTimers.delete(clientKey);
 				if (sockets.has(clientKey)) return;
-				closeClientTerminals(clientKey);
 				if (!requestReplays.clearClient(clientKey)) armClientReap(clientKey);
-			}, ABANDONED_CLIENT_GRACE_MS),
+			}, CLIENT_REPLAY_RETENTION_MS),
 		);
 	};
 
@@ -295,7 +297,7 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 				resumeClientTerminals(ws.data.clientKey);
 			},
 			close(ws) {
-				if (stopping) return; // shutting down: closeAllTerminals covers every PTY, no reaping needed
+				if (stopping) return; // shutting down: stop() clears every namespace, no retiring needed
 				const { clientKey } = ws.data;
 				// Only forget the socket if it is still the current one: a fast reconnect can register the new
 				// socket before the old one's close fires, and clearing then would orphan a live connection.
@@ -303,9 +305,9 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 					sockets.delete(clientKey);
 					terminalBackpressured.delete(clientKey);
 				}
+				// Terminals are deliberately untouched. A shell belongs to its tab, not to whoever was looking at
+				// it, so a closed browser leaves every shell running — that is what makes a reload non-destructive.
 				if (sockets.has(clientKey) || reapTimers.has(clientKey)) return;
-				// Don't kill this client's shells yet — it reconnects on its own, and a hiccup must not cost the
-				// user a running dev server. Only if nothing comes back within the grace window is it gone.
 				armClientReap(clientKey);
 			},
 		},
@@ -468,6 +470,10 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		enabled: getConfig().analyticsEnabled,
 	});
 
+	// Give back the terminal tabs the last run ended with. The shells themselves are gone — a host restart hangs
+	// up every PTY — so each tab gets a fresh one on first attach, showing its predecessor's recorded output.
+	reviveTerminalSessions();
+
 	// Open a project on boot if the launcher passed one (e.g. `thinkrail /path/to/repo`). Best-effort:
 	// a non-repo / missing dir is a warning, not a boot failure — the UI's Open-Project flow still works.
 	if (projectPath) {
@@ -501,6 +507,9 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 			sockets.clear();
 			terminalBackpressured.clear();
 			requestReplays.clear();
+			// Write the tabs and their recorded output down BEFORE killing the shells — this is the only moment
+			// the picture still exists, and a restart restores tabs from it (see `persistTerminalSessions`).
+			persistTerminalSessions();
 			closeAllTerminals();
 			server.stop(true);
 		},

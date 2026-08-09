@@ -39,6 +39,31 @@ export function saveWorkspaces(workspaces: Workspace[]): void {
 	writeJson("workspaces.json", workspaces);
 }
 
+/**
+ * One terminal tab as written to disk, so a host restart gives its tabs back.
+ *
+ * `recorded` is the shell's last output window, restored as the revived tab's replay — the process is gone
+ * either way (see `submodule-server-terminal`), so this is the picture, not the shell. A **PTY id is
+ * deliberately never persisted**: attaching to an id that outlived its process is exactly the `Couldn't attach
+ * - can't find terminal with id` failure Theia ships. Only `tabKey` is durable.
+ */
+export interface PersistedTerminalTab {
+	tabKey: string;
+	title: string;
+	recorded?: string;
+}
+
+/** Terminal tabs per workspace id. */
+export type PersistedTerminalSessions = Record<string, PersistedTerminalTab[]>;
+
+export function loadTerminalSessions(): PersistedTerminalSessions {
+	return readJson<PersistedTerminalSessions>("terminals.json", {});
+}
+
+export function saveTerminalSessions(sessions: PersistedTerminalSessions): void {
+	writeJson("terminals.json", sessions);
+}
+
 /** OUR server-synced app settings. Missing/corrupt file, or missing keys, fall back to `DEFAULT_CONFIG`. */
 export function loadConfig(): AppConfig {
 	return { ...DEFAULT_CONFIG, ...readJson<Partial<AppConfig>>("config.json", {}) };

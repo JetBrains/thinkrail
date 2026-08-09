@@ -12,6 +12,7 @@ import type {
 	SessionSummary,
 	SlashCommandInfo,
 	SpecGraphNode,
+	TerminalTabInfo,
 	ThemeId,
 	ThinkingLevel,
 	WireModel,
@@ -145,12 +146,19 @@ export interface Toast {
  * the newest visible. */
 const MAX_TOASTS = 5;
 
-/** A terminal tab. `clientId` is the stable UI key; the server PTY id is owned by its `TerminalInstance`. */
+/**
+ * A terminal tab — a local mirror of host state, not the authority.
+ *
+ * The host owns the tab list (`terminal.list`); `tabKey` is the durable identity it keys shells on, so this
+ * store never holds the only record of a running shell. That inversion is deliberate: when the browser was the
+ * sole keeper of the tab→shell mapping, losing it mid-round-trip spawned a duplicate shell and orphaned the
+ * original for the life of the host.
+ */
 export interface TerminalTab {
-	clientId: string;
+	tabKey: string;
 	workspaceId: string;
 	title: string;
-	/** A command to run once, right after this tab's PTY is ready (e.g. "Open in Vim") — never replayed. */
+	/** A command to run once, only if the attach actually created this shell (e.g. "Open in Vim"). */
 	initialCommand?: string;
 }
 
@@ -719,8 +727,10 @@ interface AppState {
 	) => void;
 	clearWorkspaceTabs: (workspaceId: string) => void;
 	addTerminal: (workspaceId: string, initialCommand?: string) => void;
-	closeTerminalTab: (workspaceId: string, clientId: string) => void;
-	setActiveTerminalTab: (workspaceId: string, clientId: string) => void;
+	setWorkspaceTerminals: (workspaceId: string, tabs: TerminalTabInfo[]) => void;
+	consumeTerminalInitialCommand: (workspaceId: string, tabKey: string) => void;
+	closeTerminalTab: (workspaceId: string, tabKey: string) => void;
+	setActiveTerminalTab: (workspaceId: string, tabKey: string) => void;
 	openChatSession: (
 		workspaceId: string,
 		sessionId: string,
@@ -1336,37 +1346,92 @@ export const useAppStore = create<AppState>((set, get) => ({
 	addTerminal: (workspaceId, initialCommand) =>
 		set((s) => {
 			const list = s.terminalsByWorkspace[workspaceId] ?? [];
-			const clientId = crypto.randomUUID();
+			const tabKey = crypto.randomUUID();
 			const tab: TerminalTab = {
-				clientId,
+				tabKey,
 				workspaceId,
 				title: nextTerminalTitle(list),
 				...(initialCommand ? { initialCommand } : {}),
 			};
+			// No create call: mounting the instance attaches, and attach is what registers the tab host-side.
 			return {
 				terminalsByWorkspace: { ...s.terminalsByWorkspace, [workspaceId]: [...list, tab] },
-				activeTerminalByWorkspace: { ...s.activeTerminalByWorkspace, [workspaceId]: clientId },
+				activeTerminalByWorkspace: { ...s.activeTerminalByWorkspace, [workspaceId]: tabKey },
 			};
 		}),
-	closeTerminalTab: (workspaceId, clientId) =>
+	/**
+	 * Adopt the host's tab list for a workspace.
+	 *
+	 * Host order and titles win, but a tab this client has just opened and not yet attached is kept: the
+	 * request that registers it may still be in flight, and dropping it here would unmount the very instance
+	 * about to make that call.
+	 */
+	setWorkspaceTerminals: (workspaceId, tabs) =>
 		set((s) => {
-			const list = (s.terminalsByWorkspace[workspaceId] ?? []).filter(
-				(t) => t.clientId !== clientId,
-			);
-			const wasActive = s.activeTerminalByWorkspace[workspaceId] === clientId;
+			const local = s.terminalsByWorkspace[workspaceId] ?? [];
+			const known = new Set(tabs.map((tab) => tab.tabKey));
+			const pending = local.filter((tab) => !known.has(tab.tabKey));
+			const merged: TerminalTab[] = [
+				...tabs.map((tab) => {
+					const existing = local.find((candidate) => candidate.tabKey === tab.tabKey);
+					return {
+						tabKey: tab.tabKey,
+						workspaceId,
+						title: tab.title,
+						...(existing?.initialCommand ? { initialCommand: existing.initialCommand } : {}),
+					};
+				}),
+				...pending,
+			];
+			const active = s.activeTerminalByWorkspace[workspaceId] ?? null;
+			const activeSurvives = merged.some((tab) => tab.tabKey === active);
+			return {
+				terminalsByWorkspace: { ...s.terminalsByWorkspace, [workspaceId]: merged },
+				activeTerminalByWorkspace: {
+					...s.activeTerminalByWorkspace,
+					[workspaceId]: activeSurvives ? active : (merged.at(-1)?.tabKey ?? null),
+				},
+			};
+		}),
+	/**
+	 * Spend a tab's one-shot `initialCommand`, so it can never run a second time.
+	 *
+	 * `created` alone is not enough to gate on: a tab whose shell exited gets a *fresh* one on the next attach,
+	 * which is also `created` — so an "Open in Vim" tab would reopen vim every time the workspace was revisited.
+	 * The intent belongs to the tab's creation, not to any shell behind it.
+	 */
+	consumeTerminalInitialCommand: (workspaceId, tabKey) =>
+		set((s) => {
+			const list = s.terminalsByWorkspace[workspaceId] ?? [];
+			if (!list.some((t) => t.tabKey === tabKey && t.initialCommand)) return s;
+			return {
+				terminalsByWorkspace: {
+					...s.terminalsByWorkspace,
+					[workspaceId]: list.map(({ initialCommand, ...rest }) =>
+						rest.tabKey === tabKey
+							? rest
+							: { ...rest, ...(initialCommand ? { initialCommand } : {}) },
+					),
+				},
+			};
+		}),
+	closeTerminalTab: (workspaceId, tabKey) =>
+		set((s) => {
+			const list = (s.terminalsByWorkspace[workspaceId] ?? []).filter((t) => t.tabKey !== tabKey);
+			const wasActive = s.activeTerminalByWorkspace[workspaceId] === tabKey;
 			return {
 				terminalsByWorkspace: { ...s.terminalsByWorkspace, [workspaceId]: list },
 				activeTerminalByWorkspace: {
 					...s.activeTerminalByWorkspace,
 					[workspaceId]: wasActive
-						? (list.at(-1)?.clientId ?? null)
+						? (list.at(-1)?.tabKey ?? null)
 						: (s.activeTerminalByWorkspace[workspaceId] ?? null),
 				},
 			};
 		}),
-	setActiveTerminalTab: (workspaceId, clientId) =>
+	setActiveTerminalTab: (workspaceId, tabKey) =>
 		set((s) => ({
-			activeTerminalByWorkspace: { ...s.activeTerminalByWorkspace, [workspaceId]: clientId },
+			activeTerminalByWorkspace: { ...s.activeTerminalByWorkspace, [workspaceId]: tabKey },
 		})),
 	openChatSession: (workspaceId, sessionId, model, thinkingLevel, syncedTick) =>
 		set((s) => {

@@ -87,10 +87,12 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   `DocTab`'s content exists only in the store (no file backs it), so a silent replace would destroy it
   with nothing to reopen. There is deliberately **no keyboard shortcut**: gestures only.
   `terminalsByWorkspace`
-  / `activeTerminalByWorkspace` (`addTerminal`/`closeTerminalTab`/`setActiveTerminalTab` — `addTerminal`
-  takes an optional `initialCommand`, carried on the new tab's `TerminalTab.initialCommand` and consumed
-  exactly once by `TerminalInstance` right after its own PTY comes up, e.g. the workspace row's "Open in
-  Vim"); the
+  / `activeTerminalByWorkspace` — a **mirror of host state, never the authority**: the host owns the tab list
+  and keys shells by `(workspaceId, tabKey)`, so this store can never hold the only record of a running shell.
+  `setWorkspaceTerminals` adopts a `terminal.list` result (keeping a locally-added tab whose attach is still in
+  flight); `addTerminal` only mints a `tabKey` — the instance's attach is what registers it host-side — and
+  takes an optional `initialCommand` consumed once, only when attach reports it `created` the shell (the
+  workspace row's "Open in Vim"); `closeTerminalTab` drops the row after `terminal.close` confirms. The
   **per-session chat state** — `sessions: Record<sessionId, SessionRuntime>`, where a `SessionRuntime` holds
   one chat's `turns` (pi-canonical) / `toolResults` / `askAnswers` (the `ask-user-answers` replies keyed
   by tool call id — indexed by the reducer and hydration, never turned into bubbles) /

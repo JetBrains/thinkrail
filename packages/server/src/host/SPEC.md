@@ -20,8 +20,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `resolveWorktreeFile` — path-contained; bad id/escape/miss → 404; Bun infers the content-type) so the
   markdown viewer's relative `<img>`s resolve, static serving with
   `index.html` fallback, the `server.welcome` push, the **`?client=` page identity** read off the socket URL at
-  upgrade (threaded to every handler as `RequestContext` and used to own that client's PTYs) plus the
-  `clientKey → socket` registry and the **abandoned-client reap timer** that outlives a reconnect; the
+  upgrade (threaded to every handler as `RequestContext`; it addresses terminal output but no longer *owns*
+  PTYs — see [[submodule-server-terminal]]) plus the `clientKey → socket` registry and the **replay-namespace
+  retention timer** that outlives a reconnect (terminals are deliberately untouched by it); the
   **request replay cache** keyed by `(clientKey, requestId)` (the first frame
   owns one handler promise + its
   serialized response, a reconnect replay awaits/returns that same result, a mismatched duplicate is rejected,
@@ -79,7 +80,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `provider.loginCancel` clears; an unknown loginId tracks nothing, fails closed) — +
   `provider.jbcentralConnect`→connected (central) — per `submodule-server-analytics`,
   feature modules never track), and
-  `stop()` → agent-session + terminal cleanup then socket close); `boot.ts` (`bootHost` → resolve the
+  `stop()` → agent-session cleanup, then `persistTerminalSessions()` **before** `closeAllTerminals()`, then
+  socket close); `boot.ts` (`bootHost` → resolve the
   login-shell PATH, pick the port per `portMode` (`"exact"` vs `"free"`), start `createServer`, and
   install SIGINT/SIGTERM handlers that **settle before exit**: `settleSessionsForShutdown()` — abort
   streaming sessions and wait bounded, so pi persists their "Operation aborted" tool results and
@@ -173,9 +175,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   (`workspace.created`/`updated`/`removed`, published from the `workspaces` module's injected publisher)
   use push channels. Every **broadcast** push channel a client should hear must be `ws.subscribe`d in the WS
   `open` handler — a publish on an unsubscribed topic reaches nobody, silently. Two channels are deliberately
-  **not** subscribed and not broadcast: `terminal.data` and `terminal.exit` are sent to the single owning client
-  with `ws.send`, because a PTY's bytes belong to one client (see [[submodule-server-terminal]]). Adding a
-  terminal-style addressed channel means wiring a publisher, not a subscription.
+  **not** subscribed and not broadcast: `terminal.data`, `terminal.exit` and `terminal.detached` are sent with
+  `ws.send` to the single *attached* client (see [[submodule-server-terminal]]). Adding a terminal-style
+  addressed channel means wiring a publisher, not a subscription.
 - The host is the single place features are wired together — features never reach back into it.
 - **A send (prompt/steer/followUp/answerQuestion) is acked when ACCEPTED, not when the turn ends**
   (`ackSend`): pi's send methods resolve only at turn end, and a turn can outlive the client's request

@@ -1,0 +1,139 @@
+/**
+ * A bounded rolling record of one PTY's output, replayed into a fresh xterm when a client attaches.
+ *
+ * A shell survives every remount, but the painted screen does not — a remount builds a new xterm with an empty
+ * buffer, so without this a surviving shell comes back behind a blank terminal and looks dead. Every comparable
+ * implementation replays: VS Code's pty host records raw bytes (`persistentSessionScrollback`), Zed's daemon
+ * snapshots the grid, the tmux-backed brokers keep a ring buffer for reconnecting clients.
+ *
+ * Raw bytes rather than a serialized grid, deliberately: xterm's own parser re-derives the screen, so we never
+ * have to model modes we don't yet support.
+ */
+
+/** Recording bounds — enough to repaint a screen plus useful scrollback, per terminal, held in memory. */
+export const DEFAULT_RECORDER_MAX_CHARS = 64 * 1024;
+
+/**
+ * DEC private modes worth restoring explicitly.
+ *
+ * The window is a *tail*: whatever set these may have scrolled out of it, and applying a replay without them
+ * leaves the fresh xterm disagreeing with the live shell — arrow keys emitting the wrong bytes, a cursor drawn
+ * that the program thinks it hid, paste arriving unbracketed. Only modes actually observed are re-emitted, so
+ * a terminal that never touched one keeps xterm's default for it.
+ */
+const TRACKED_MODES: ReadonlySet<number> = new Set([
+	1, // application cursor keys — arrows send SS3 instead of CSI
+	7, // autowrap
+	25, // cursor visibility
+	1000, // mouse: button events
+	1002, // mouse: drag tracking
+	1003, // mouse: any-motion tracking
+	1006, // mouse: SGR coordinate encoding
+	2004, // bracketed paste
+]);
+
+/** Alt-screen switches. Entering suspends recording; the replay is what the *normal* buffer last held. */
+const ALT_BUFFER_MODES: ReadonlySet<number> = new Set([47, 1047, 1049]);
+
+/** The escape byte, named rather than written into the patterns below — a bare control character in a regex
+ * literal is indistinguishable from a typo, which is exactly what the lint rule against them is for. */
+const ESC = "\u001b";
+
+/** `CSI ? <params> h|l` — the only form that carries the private modes above. */
+const PRIVATE_MODE_RE = new RegExp(`${ESC}\\[\\?([0-9;]+)([hl])`, "g");
+
+export interface OutputRecorder {
+	/** Feed one raw read from the PTY. */
+	push(chunk: string): void;
+	/** Bytes to write into a fresh xterm so it shows what this shell last painted; empty when nothing to show. */
+	snapshot(): string;
+	/** Seed a revived terminal with the output its predecessor left behind (see `reviveTerminalSessions`). */
+	restore(recorded: string): void;
+	dispose(): void;
+}
+
+export interface OutputRecorderOptions {
+	maxChars?: number;
+}
+
+/**
+ * Trim to a line boundary so a replay never opens mid-line — and, more importantly, never mid-escape-sequence.
+ * A sequence cut in half is parsed as literal garbage by the receiving terminal. Escape sequences never contain
+ * a newline, so the first byte after one is always a safe place to start.
+ */
+function trimToLineStart(text: string, overBy: number): string {
+	const boundary = text.indexOf("\n", overBy - 1);
+	// No newline left to cut at: drop the whole thing rather than emit a fragment of a sequence.
+	return boundary === -1 ? "" : text.slice(boundary + 1);
+}
+
+export function createOutputRecorder(options: OutputRecorderOptions = {}): OutputRecorder {
+	const maxChars = options.maxChars ?? DEFAULT_RECORDER_MAX_CHARS;
+	let recorded = "";
+	/** Explicitly observed private modes and their last value; unobserved modes keep xterm's default. */
+	const modes = new Map<number, boolean>();
+	let inAltBuffer = false;
+	let disposed = false;
+
+	/** Track mode + alt-screen transitions, and report where the alt-screen state flips within this chunk. */
+	const scan = (chunk: string): void => {
+		PRIVATE_MODE_RE.lastIndex = 0;
+		let match = PRIVATE_MODE_RE.exec(chunk);
+		while (match !== null) {
+			const enabled = match[2] === "h";
+			// `CSI ? 1000 ; 1006 h` sets several at once.
+			for (const raw of (match[1] ?? "").split(";")) {
+				const mode = Number.parseInt(raw, 10);
+				if (Number.isNaN(mode)) continue;
+				if (ALT_BUFFER_MODES.has(mode)) inAltBuffer = enabled;
+				else if (TRACKED_MODES.has(mode)) modes.set(mode, enabled);
+			}
+			match = PRIVATE_MODE_RE.exec(chunk);
+		}
+	};
+
+	const append = (text: string): void => {
+		if (text === "") return;
+		recorded += text;
+		if (recorded.length > maxChars) {
+			recorded = trimToLineStart(recorded, recorded.length - maxChars);
+		}
+	};
+
+	return {
+		push(chunk) {
+			if (disposed || chunk === "") return;
+			const wasInAltBuffer = inAltBuffer;
+			scan(chunk);
+			// A full-screen app (vim, htop, lazygit) owns the alt screen, and replaying a torn-off slice of one
+			// paints garbage that no live process will ever correct. So the alt screen is never recorded, and the
+			// window keeps what the normal buffer last showed — which is what the user sees again on `:q` anyway.
+			// A chunk that *enters* the alt screen still carries normal-buffer output before the switch; letting
+			// that through would need sub-chunk splitting for no visible gain, so entering discards the chunk and
+			// leaving resumes with the next one.
+			if (wasInAltBuffer || inAltBuffer) return;
+			append(chunk);
+		},
+		snapshot() {
+			if (recorded === "") return "";
+			const prefix: string[] = [];
+			// Normalize the pen first: the tail may begin inside a colour run whose SGR scrolled out, which would
+			// otherwise inherit whatever the fresh xterm happened to have.
+			prefix.push("\x1b[0m");
+			for (const [mode, enabled] of modes) prefix.push(`\x1b[?${mode}${enabled ? "h" : "l"}`);
+			return `${prefix.join("")}${recorded}`;
+		},
+		restore(previous) {
+			if (disposed) return;
+			recorded =
+				previous.length > maxChars
+					? trimToLineStart(previous, previous.length - maxChars)
+					: previous;
+		},
+		dispose() {
+			disposed = true;
+			recorded = "";
+			modes.clear();
+		},
+	};
+}

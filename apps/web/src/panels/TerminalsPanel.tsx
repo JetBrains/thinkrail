@@ -1,5 +1,5 @@
 import { Plus, X } from "lucide-react";
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import {
 	allTerminalTabs,
 	isTerminalVisible,
@@ -8,6 +8,8 @@ import {
 	type TerminalTab,
 	useAppStore,
 } from "../store";
+import { getTransport } from "../transport";
+import { ConfirmDialog } from "./ConfirmDialog";
 
 const TerminalInstance = lazy(() => import("./TerminalInstance"));
 
@@ -18,17 +20,58 @@ export function TerminalsPanel() {
 	const tabs = useAppStore(selectWorkspaceTerminals);
 	const activeTerminalId = useAppStore(selectActiveTerminalId);
 	const addTerminal = useAppStore((s) => s.addTerminal);
-	const closeTerminalTab = useAppStore((s) => s.closeTerminalTab);
 	const setActiveTerminalTab = useAppStore((s) => s.setActiveTerminalTab);
+	/** The tab whose shell is running something, held while we ask whether to kill it anyway. */
+	const [confirmBusy, setConfirmBusy] = useState<TerminalTab | null>(null);
 
-	// Landing on a workspace with no terminals opens one — every worktree gets a shell ready to go.
+	// Adopt the host's tab list for this workspace, then open one if it has none. The host owns the list, so a
+	// reload — or a different browser — finds the shells that are still running rather than starting new ones.
 	useEffect(() => {
 		if (!activeWorkspaceId) return;
-		const store = useAppStore.getState();
-		if ((store.terminalsByWorkspace[activeWorkspaceId]?.length ?? 0) === 0) {
-			store.addTerminal(activeWorkspaceId);
-		}
+		let current = true;
+		void getTransport()
+			.request("terminal.list", { workspaceId: activeWorkspaceId })
+			.then(({ tabs: hostTabs }) => {
+				if (!current) return;
+				useAppStore.getState().setWorkspaceTerminals(activeWorkspaceId, hostTabs);
+				// Re-read AFTER the write: `getState()` hands back a snapshot, so the pre-write one would still
+				// show no tabs and we would open a second terminal beside the shells already running here.
+				const after = useAppStore.getState();
+				// Every worktree gets a shell ready to go — but only once we know the host has none.
+				if ((after.terminalsByWorkspace[activeWorkspaceId]?.length ?? 0) === 0) {
+					after.addTerminal(activeWorkspaceId);
+				}
+			})
+			.catch(() => {
+				// The host is unreachable; the transport reconnects and this re-runs on the next workspace entry.
+			});
+		return () => {
+			current = false;
+		};
 	}, [activeWorkspaceId]);
+
+	/**
+	 * Close a tab and kill its shell — the only gesture that ever does.
+	 *
+	 * The host refuses while the shell has child processes and says so, and we ask before retrying with
+	 * `force`. Deliberately not a flag read from the tab list: something started after the rail loaded would
+	 * make a cached answer wrong in exactly the direction that loses work.
+	 */
+	const closeTab = useCallback((tab: TerminalTab, force: boolean) => {
+		void getTransport()
+			.request("terminal.close", { workspaceId: tab.workspaceId, tabKey: tab.tabKey, force })
+			.then(({ closed, busy }) => {
+				if (closed) {
+					useAppStore.getState().closeTerminalTab(tab.workspaceId, tab.tabKey);
+					setConfirmBusy(null);
+					return;
+				}
+				if (busy) setConfirmBusy(tab);
+			})
+			.catch(() => {
+				// Nothing was closed, so the tab stays exactly as it is.
+			});
+	}, []);
 
 	const allTerminals = allTerminalTabs(terminalsByWorkspace);
 
@@ -39,11 +82,11 @@ export function TerminalsPanel() {
 				<div className="flex min-w-0 flex-1 items-center gap-px overflow-x-auto">
 					{tabs.map((tab) => (
 						<TerminalTabButton
-							key={tab.clientId}
+							key={tab.tabKey}
 							tab={tab}
-							active={tab.clientId === activeTerminalId}
-							onSelect={() => setActiveTerminalTab(tab.workspaceId, tab.clientId)}
-							onClose={() => closeTerminalTab(tab.workspaceId, tab.clientId)}
+							active={tab.tabKey === activeTerminalId}
+							onSelect={() => setActiveTerminalTab(tab.workspaceId, tab.tabKey)}
+							onClose={() => closeTab(tab, false)}
 						/>
 					))}
 				</div>
@@ -67,9 +110,9 @@ export function TerminalsPanel() {
 					</p>
 				) : null}
 				{allTerminals.map((tab) => (
-					<Suspense key={tab.clientId} fallback={null}>
+					<Suspense key={tab.tabKey} fallback={null}>
 						<TerminalInstance
-							clientId={tab.clientId}
+							tabKey={tab.tabKey}
 							workspaceId={tab.workspaceId}
 							visible={isTerminalVisible(tab, activeWorkspaceId, activeTerminalId)}
 							{...(tab.initialCommand ? { initialCommand: tab.initialCommand } : {})}
@@ -77,6 +120,20 @@ export function TerminalsPanel() {
 					</Suspense>
 				))}
 			</div>
+			<ConfirmDialog
+				open={confirmBusy !== null}
+				onOpenChange={(open) => {
+					if (!open) setConfirmBusy(null);
+				}}
+				title="Something is running"
+				description={`“${confirmBusy?.title ?? "This terminal"}” has a running process. Closing the tab ends it.`}
+				confirmLabel="Close anyway"
+				confirmTestId="terminal-close-busy-confirm"
+				destructive
+				onConfirm={() => {
+					if (confirmBusy) closeTab(confirmBusy, true);
+				}}
+			/>
 		</div>
 	);
 }

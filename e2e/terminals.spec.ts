@@ -109,7 +109,7 @@ test("the terminal's shell counts characters, not bytes", async ({ page }) => {
 // project row — the deliberate "project home" gesture, which clears the active workspace — unmounted every
 // terminal of *every* workspace, and each unmount closed its PTY. Anything running in one (a dev server, a
 // watch build) was silently killed by a single click, with the tabs reappearing afterwards backed by new,
-// empty shells, so nothing looked wrong. Instances now detach their PTY and the next mount re-adopts it.
+// empty shells, so nothing looked wrong. A shell now belongs to its tab and the remount just re-attaches.
 test("a shell survives a trip to Project Home and back", async ({ page }) => {
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
@@ -125,14 +125,99 @@ test("a shell survives a trip to Project Home and back", async ({ page }) => {
 	await page.getByTestId("project-item").first().click();
 	await expect(page.getByTestId("terminal-panel")).toHaveCount(0);
 
-	// Back into the workspace. The remount is a fresh xterm buffer, so the old output is genuinely gone and
-	// the assertion below can only pass on newly painted output from the re-adopted shell.
 	await worktreeRows(page).nth(0).getByRole("button").first().click();
 	await waitTerminalReady(page);
-	await expect(visibleTerminalScreen(page)).not.toContainText("CHECK=alive");
+	// The screen comes back too: the remount is a fresh xterm buffer, and attach replays the host's recording
+	// into it. Without that a live shell would sit behind a blank pane and look dead.
+	await expect(visibleTerminalScreen(page)).toContainText("CHECK=alive");
 
+	// And it is genuinely the same process, not a repainted picture of a dead one.
+	await runInTerminal(page, 'echo "AGAIN=$TR_SURVIVOR"');
+	await expect(visibleTerminalScreen(page)).toContainText("AGAIN=alive");
+});
+
+// The race the attach redesign exists for. Leaving and re-entering faster than one round trip used to find an
+// empty client-side registry — the old code took the tab's pty id OUT of it before asking the host whether that
+// shell was still alive — so the remount spawned a SECOND shell and the first was left running with nothing
+// pointing at it, for the life of the host. Reproduced by holding the response and re-entering inside it.
+test("rapid re-entry never spawns a second shell", async ({ page }) => {
+	const ptyIds = new Set<string>();
+	let delayAttachMs = 0;
+
+	await page.routeWebSocket(/\/ws(\?|$)/, (ws) => {
+		const server = ws.connectToServer();
+		const attachIds = new Set<string>();
+		ws.onMessage((message) => {
+			try {
+				const frame = JSON.parse(message.toString()) as { id?: string; method?: string };
+				if (frame.method === "terminal.attach" && frame.id) attachIds.add(frame.id);
+			} catch {
+				// Not a JSON request frame.
+			}
+			server.send(message);
+		});
+		server.onMessage((message) => {
+			const text = message.toString();
+			let frame: { id?: string; channel?: string; data?: { id?: string } } = {};
+			try {
+				frame = JSON.parse(text) as typeof frame;
+			} catch {
+				// Relayed verbatim below.
+			}
+			if (frame.channel === "terminal.data" && frame.data?.id) ptyIds.add(frame.data.id);
+			if (frame.id && attachIds.has(frame.id) && delayAttachMs > 0) {
+				setTimeout(() => ws.send(text), delayAttachMs);
+				return;
+			}
+			ws.send(message);
+		});
+	});
+
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await waitTerminalReady(page);
+	await runInTerminal(page, "TR_SURVIVOR=alive");
 	await runInTerminal(page, 'echo "CHECK=$TR_SURVIVOR"');
 	await expect(visibleTerminalScreen(page)).toContainText("CHECK=alive");
+
+	// Hold every attach answer long enough to leave and come back twice inside one round trip.
+	delayAttachMs = 3000;
+	for (let round = 0; round < 2; round++) {
+		await page.getByTestId("project-item").first().click();
+		await expect(page.getByTestId("terminal-panel")).toHaveCount(0);
+		await worktreeRows(page).nth(0).getByRole("button").first().click();
+		await expect(visibleTerminal(page)).toHaveCount(1);
+	}
+	delayAttachMs = 0;
+	await waitTerminalReady(page);
+
+	// Same shell throughout: its state is intact, and only ever one PTY produced output for this tab.
+	await runInTerminal(page, 'echo "AFTER=$TR_SURVIVOR"');
+	await expect(visibleTerminalScreen(page)).toContainText("AFTER=alive");
+	expect(ptyIds.size, "exactly one shell should ever have existed for this tab").toBe(1);
+});
+
+// Shells are keyed to the tab and owned by the host, not by the page — so a reload finds the ones still
+// running instead of starting new ones (and leaving the old set alive with nothing pointing at them).
+test("a shell survives a page reload", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await waitTerminalReady(page);
+	await runInTerminal(page, "TR_RELOAD=survived");
+	await runInTerminal(page, 'echo "BEFORE=$TR_RELOAD"');
+	await expect(visibleTerminalScreen(page)).toContainText("BEFORE=survived");
+
+	await page.reload();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	// A reload keeps no client state, so the rail comes back collapsed with nothing selected.
+	await page.getByTestId("project-expand").first().click();
+	await worktreeRows(page).nth(0).click();
+	await waitTerminalReady(page);
+
+	// One tab, not a second one beside a now-invisible shell.
+	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
+	await runInTerminal(page, 'echo "AFTER=$TR_RELOAD"');
+	await expect(visibleTerminalScreen(page)).toContainText("AFTER=survived");
 });
 
 // Regression: the host used to publish every PTY's bytes to one `terminal.data` topic that *every* socket
@@ -142,10 +227,15 @@ test("a shell survives a trip to Project Home and back", async ({ page }) => {
 // to the one client that owns the PTY.
 test("a terminal's output never reaches another client", async ({ page, context }) => {
 	await openFixtureProject(page);
-	await createWorkspaceViaDialog(page);
+	await createWorkspaceViaDialog(page); // workspace 1 — A's
+	await createWorkspaceViaDialog(page); // workspace 2 — B's
+	await waitTerminalReady(page);
+	// Back to workspace 1, so A and B are looking at DIFFERENT terminals. Same-tab attach is a deliberate
+	// takeover now (shells are owner-scoped), so the addressing guarantee is about tabs nobody attached to.
+	await worktreeRows(page).nth(0).click();
 	await waitTerminalReady(page);
 
-	// A second tab on the same host, in the same workspace, with a terminal of its own.
+	// A second tab on the same host, in the other workspace, with a terminal of its own.
 	const page2 = await context.newPage();
 
 	// Record every frame B's socket RECEIVES. The assertion has to be about the wire, not the screen: the
@@ -160,7 +250,7 @@ test("a terminal's output never reaches another client", async ({ page, context 
 	await page2.goto("/");
 	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await page2.getByTestId("project-expand").first().click();
-	await worktreeRows(page2).first().click();
+	await worktreeRows(page2).nth(1).click();
 	await waitTerminalReady(page2);
 
 	// Each prints a marker only its own terminal should ever show.
@@ -231,11 +321,9 @@ test("Ctrl+C still interrupts while an input method is active", async ({ page })
 	await expect(term).toContainText("TR_INTERRUPTED_42");
 });
 
-// The gap the detach registry opens: an instance hands its PTY to `detachedPtyByClientId` on an incidental
-// unmount, but `terminal.exit` is only listened for by a *mounted* instance. At Project Home none are mounted,
-// so a shell that dies while detached leaves a dead id in the registry — and the next mount adopts it, giving
-// back a tab that looks perfectly alive but whose keystrokes go nowhere. That is exactly the symptom the
-// exit event exists to prevent, so re-attaching has to confirm the shell is still there.
+// `terminal.exit` is only heard by a *mounted* instance, and at Project Home none are — so a shell that dies
+// while nobody is looking is a state the client can never be told about. `terminal.attach` closes that gap by
+// construction (a tab whose shell is gone gets a fresh one), which is why no liveness probe exists to go stale.
 test("a shell that dies while detached is not re-attached as if alive", async ({ page }) => {
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
@@ -304,10 +392,10 @@ test("a shell survives losing the connection and reconnecting", async ({ page })
 });
 
 // A response can die after the host committed a mutation. The client must replay that unresolved frame under
-// the same request id, and the host must return the cached result rather than running the handler twice. A
-// terminal create makes both failures observable: rejecting would leave the tab failed, while rerunning would
-// return a second PTY id and orphan the first shell.
-test("a terminal create response lost with its socket is replayed exactly once", async ({
+// the same request id, and the host must return the cached result rather than running the handler twice. An
+// attach makes both failures observable: rejecting would leave the tab failed, while rerunning would return a
+// second PTY id and orphan the first shell.
+test("a terminal attach response lost with its socket is replayed exactly once", async ({
 	page,
 }) => {
 	let createRequestId: string | undefined;
@@ -321,7 +409,7 @@ test("a terminal create response lost with its socket is replayed exactly once",
 			const text = message.toString();
 			try {
 				const frame = JSON.parse(text) as { id?: string; method?: string };
-				if (frame.method === "terminal.create" && frame.id) {
+				if (frame.method === "terminal.attach" && frame.id) {
 					createRequestId ??= frame.id;
 					createRequestIds.push(frame.id);
 				}
@@ -411,79 +499,72 @@ test("final shell output is delivered before exit after reconnect", async ({ pag
 	expect(outputIndex).toBeGreaterThanOrEqual(0);
 	expect(exitIndex).toBeGreaterThan(outputIndex);
 });
-
-// The ownership half of the isolation fix: not just "output goes only to the owner" but "another client cannot
-// write to, resize or kill a terminal it does not own". Nothing pinned that, so every ownership guard in
-// `terminalManager` was freely deletable. An id the caller does not own must behave exactly like one that never
-// existed — same answer, so probing ids reveals nothing about which exist.
-test("another client cannot drive a terminal it does not own", async ({ page, context }) => {
-	// Sniff A's own PTY id off its socket, so the probe below uses a REAL id rather than a made-up one (a
-	// made-up id would pass against no ownership checks at all).
-	const ptyIds: string[] = [];
-	page.on("websocket", (ws) => {
-		ws.on("framereceived", (frame) => {
-			try {
-				const msg = JSON.parse(frame.payload.toString()) as {
-					channel?: string;
-					data?: { id?: string };
-				};
-				if (msg.channel === "terminal.data" && msg.data?.id) ptyIds.push(msg.data.id);
-			} catch {
-				// Not a JSON push frame — irrelevant here.
-			}
-		});
-	});
-
+// Shells are owner-scoped, not page-scoped: a second browser reaches the SAME shells rather than starting a
+// parallel set that leaves the first invisible and unreachable. Attach is exclusive though — a PTY has one
+// size — so taking a tab over tells the displaced client instead of silently reflowing it.
+test("a second client takes a terminal over and the first is told", async ({ page, context }) => {
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
 	await waitTerminalReady(page);
-	await runInTerminal(page, "echo TR_OWNER_READY");
-	await expect(visibleTerminalScreen(page)).toContainText("TR_OWNER_READY");
+	await runInTerminal(page, "TR_SHARED=yes");
+	await runInTerminal(page, 'echo "FIRST=$TR_SHARED"');
+	await expect(visibleTerminalScreen(page)).toContainText("FIRST=yes");
 
-	const victimId = ptyIds[0];
-	expect(victimId, "should have observed A's PTY id on its own socket").toBeTruthy();
-
-	// A second client, with its own identity, tries to use A's terminal.
+	// A second browser page: its own client identity, the same host and the same workspace.
 	const page2 = await context.newPage();
 	await page2.goto("/");
 	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await page2.getByTestId("project-expand").first().click();
+	await worktreeRows(page2).nth(0).click();
+	await waitTerminalReady(page2);
 
-	const probe = await page2.evaluate(async (id) => {
-		const socket = new WebSocket(`ws://${location.host}/ws?client=probe-client`);
-		await new Promise((resolve) => socket.addEventListener("open", resolve, { once: true }));
-		const ask = (method: string, params: unknown) =>
-			new Promise<{ ok?: boolean; result?: unknown }>((resolve) => {
-				const frameId = `probe_${method}`;
-				const onMessage = (event: MessageEvent) => {
-					const frame = JSON.parse(String(event.data)) as { id?: string };
-					if (frame.id !== frameId) return;
-					socket.removeEventListener("message", onMessage);
-					resolve(frame as { ok?: boolean; result?: unknown });
-				};
-				socket.addEventListener("message", onMessage);
-				socket.send(JSON.stringify({ id: frameId, method, params }));
-			});
+	// It finds the running shell, not a fresh one — same tab, same process state.
+	await expect(page2.getByTestId("terminal-tab")).toHaveCount(1);
+	await runInTerminal(page2, 'echo "SECOND=$TR_SHARED"');
+	await expect(visibleTerminalScreen(page2)).toContainText("SECOND=yes");
 
-		const alive = await ask("terminal.alive", { id });
-		// Try to inject a command into someone else's shell, and to resize and kill it.
-		const write = await ask("terminal.write", { id, data: "echo TR_INJECTED_BY_B\r" });
-		const resize = await ask("terminal.resize", { id, cols: 5, rows: 2 });
-		const close = await ask("terminal.close", { id });
-		socket.close();
-		return { alive, write, resize, close };
-	}, victimId);
+	// And the first page says so rather than sitting there looking live while its output goes elsewhere.
+	await expect(visibleTerminal(page)).toHaveAttribute("data-detached", "true");
 
-	// The host answers as if the id simply does not exist — no error that would confirm it does.
-	expect(probe.alive.ok).toBe(true);
-	expect((probe.alive.result as { alive: boolean }).alive).toBe(false);
-	expect(probe.write.ok).toBe(true);
-	expect(probe.resize.ok).toBe(true);
-	expect(probe.close.ok).toBe(true);
-
-	// And none of it touched A: no injected command ran, and the shell is alive and correctly sized.
-	await expect(visibleTerminalScreen(page)).not.toContainText("TR_INJECTED_BY_B");
-	await runInTerminal(page, "echo TR_STILL_MINE_$((3 * 3))");
-	await expect(visibleTerminalScreen(page)).toContainText("TR_STILL_MINE_9");
+	// Taking it back reverses the handover.
+	await page.getByTestId("terminal-take-back").click();
+	await waitTerminalReady(page);
+	await runInTerminal(page, 'echo "BACK=$TR_SHARED"');
+	await expect(visibleTerminalScreen(page)).toContainText("BACK=yes");
 
 	await page2.close();
+});
+
+// Closing a tab is now the only client-driven way to kill a shell, and shells outlive reloads — so the host
+// refuses while something is running and the UI confirms first. The check and the kill are one synchronous
+// host pass, so nothing started in between can die unannounced.
+test("closing a tab with a running process asks first", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await waitTerminalReady(page);
+
+	await runInTerminal(page, "sleep 45");
+	// Give the shell time to fork the job before we ask to close it.
+	await page.waitForTimeout(1500);
+
+	await page.getByTestId("terminal-tab-close").first().click();
+	// Refused, and still there.
+	await expect(page.getByTestId("confirm-dialog")).toBeVisible();
+	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
+
+	await page.getByTestId("terminal-close-busy-confirm").click();
+	await expect(page.getByTestId("terminal-tab")).toHaveCount(0);
+});
+
+// An idle prompt has nothing to lose, so it must not train people to click through the dialog above.
+test("closing an idle tab does not ask", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await waitTerminalReady(page);
+	await openTerminal(page);
+	await expect(page.getByTestId("terminal-tab")).toHaveCount(2);
+
+	await page.getByTestId("terminal-tab-close").nth(1).click();
+	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
+	await expect(page.getByTestId("confirm-dialog")).toHaveCount(0);
 });

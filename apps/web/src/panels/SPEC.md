@@ -78,12 +78,12 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   with no yes/no follow-up. The hook returns a `dialogs` node each consumer renders. **Selecting a
   project** (clicking its row — the chevron expands/collapses separately) **deselects any active
   workspace**, so the shell returns to that project's Welcome — a deliberate "project home" gesture; the
-  workspace's tabs survive in the store, so re-selecting it restores its view. **Terminals need more than the
-  store to survive that round trip**, since the whole workspace surface — `TerminalsPanel` included —
-  unmounts: each instance therefore **detaches** its PTY instead of closing it
-  (`detachedPtyByClientId` in `TerminalInstance`) and the next mount re-adopts the same shell, so a
-  long-running process is never silently killed by a project-home gesture. Only a *closed tab* kills its PTY.
-  The painted scrollback does not survive (a remount is a fresh xterm buffer); the process does. Also
+  workspace's tabs survive in the store, so re-selecting it restores its view. That round trip unmounts the
+  whole workspace surface, `TerminalsPanel` included — but **terminals keep no client-side state to lose**:
+  the host owns the tab list and keys shells by `(workspaceId, tabKey)`, so mounting is one idempotent
+  `terminal.attach` and unmounting does nothing at all. Attach returns the recorded output to repaint, so the
+  screen comes back too. **Only `terminal.close`, from the user closing a tab, kills a PTY** — and it refuses
+  a shell with child processes until a `ConfirmDialog` is accepted. Also
   `FileTree`, `SpecsPanel`, `RightPanel`,
   `ChangesPanel` (the changed files under a header that says **what** is being diffed — the
   **`ChangesScopeMenu`** scope pill + the shared **`BranchPicker`** target-branch pill — plus the

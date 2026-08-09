@@ -35,6 +35,14 @@ export interface OutputBatcher {
 	push(chunk: string): void;
 	/** Retry held output after the receiver becomes writable (drain/reconnect). */
 	resume(): void;
+	/**
+	 * Drop held output and unblock — for a client that has just been handed the recorded window on attach.
+	 *
+	 * That replay already shows everything held here, so flushing it afterwards would paint the same bytes a
+	 * second time. Discarding is also what keeps a reattach bounded: the recorder is the definition of "what the
+	 * screen should show", and it is a far smaller window than the flood a batcher may be holding.
+	 */
+	reset(): void;
 	/** Retire the batcher and transfer its final pending output to the exit-completion queue. */
 	finish(): OutputBatch | undefined;
 	/** Retire the batcher and drop pending output (an intentional PTY teardown). */
@@ -104,6 +112,13 @@ export function createOutputBatcher(options: OutputBatcherOptions): OutputBatche
 			if (disposed) return;
 			blocked = false;
 			flush();
+		},
+		reset() {
+			if (disposed) return;
+			clearTimer();
+			pending = "";
+			truncated = false;
+			blocked = false;
 		},
 		finish,
 		dispose() {

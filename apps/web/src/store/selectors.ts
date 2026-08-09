@@ -292,5 +292,5 @@ export function isTerminalVisible(
 	activeWorkspaceId: string | null,
 	activeTerminalId: string | null,
 ): boolean {
-	return tab.workspaceId === activeWorkspaceId && tab.clientId === activeTerminalId;
+	return tab.workspaceId === activeWorkspaceId && tab.tabKey === activeTerminalId;
 }

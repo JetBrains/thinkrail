@@ -174,7 +174,10 @@ of the host.
   never eagerly for every project) / `workspace.*` / `fs.*` / `git.*` / **`spec.graph`**
   (the Specs-viewer whole-graph read, per workspace) / **`todo.*`** — **`list`**/**`add`**/**`update`**/
   **`remove`**, the chat's per-session TODO plan (keyed by `workspaceId` + `sessionId`; `add` tags the
-  item `origin:"user"`) / `terminal.*` / `model.list` + **`model.refresh`** (awaits the host's
+  item `origin:"user"`) / **`terminal.*`** — **`attach`** (idempotent get-or-create keyed by
+  `(workspaceId, tabKey)`, returning `created` + the `replay` to repaint; the only way a PTY is born, and it
+  replaced `create`+`alive`) / **`list`** (the host owns the tab list) / `write` / `resize` /
+  **`close`** (by `tabKey`, refusing a busy shell unless `force`) / `model.list` + **`model.refresh`** (awaits the host's
   single-flighted catalog refresh and returns **`RefreshedModels`** — the post-refresh list plus
   **`complete`**, whether that pass settled inside the host's capped wait, since only a settled list is
   authoritative; `force` bypasses pi's 4h freshness throttle, so a user-initiated refresh actually fetches) / **`model.clampThinking`** (pi's
@@ -228,9 +231,10 @@ of the host.
   **`settings.changed`** (the full `AppConfig`, broadcast so every client
   converges) / **`provider.login`** — the session-less in-app login stream (a `LoginPush`
   per frame, keyed by `loginId`; the sibling of `pi.extensionUi`, since a login runs on the Welcome screen
-  before any session exists) / `terminal.data` + **`terminal.exit`** (the only **addressed** channels — sent to
-  the single client that owns the PTY rather than broadcast, so a shell's bytes never reach another browser;
-  `terminal.data` may carry `truncated` when the host had to drop held output) / the **workspace lifecycle
+  before any session exists) / `terminal.data` + **`terminal.exit`** + **`terminal.detached`** (the only
+  **addressed** channels — sent to the single *attached* client rather than broadcast, so a shell's bytes never
+  reach another browser; `terminal.data` may carry `truncated` when the host had to drop held output,
+  `terminal.detached` says another client took the tab over) / the **workspace lifecycle
   trio** — **`workspace.created`**
   / **`workspace.updated`** / **`workspace.removed`** — registry membership changes fanned out to every
   client so it stays shared domain state (architecture #9), all emitted by the server's `workspaces`

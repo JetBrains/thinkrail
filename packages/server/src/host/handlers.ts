@@ -78,10 +78,10 @@ import {
 	templateDirs,
 } from "../templates";
 import {
-	closeTerminal,
+	attachTerminal,
+	closeTerminalTab,
 	closeWorkspaceTerminals,
-	createTerminal,
-	isTerminalAlive,
+	listTerminals,
 	resizeTerminal,
 	writeTerminal,
 } from "../terminal";
@@ -273,29 +273,38 @@ const handlers: Record<string, Handler> = {
 	// Every terminal op is scoped to `ctx.clientKey`: a PTY belongs to the client that created it, so another
 	// connection can neither read its output nor write to or kill it. An id the caller doesn't own is treated
 	// exactly like one that doesn't exist.
-	"terminal.create": (params, ctx) => {
+	// SYNCHRONOUS ON PURPOSE — see `attachTerminal`. Lookup and insert in one tick is what makes attach atomic
+	// on Bun's single event loop, so two concurrent attaches for the same tab cannot both spawn a shell. An
+	// `await` anywhere in this path silently reintroduces double-spawn.
+	"terminal.attach": (params, ctx) => {
 		// Forwarded whole rather than rebuilt: under `exactOptionalPropertyTypes`, an absent `cols` and an
 		// explicit `cols: undefined` are different types, and only the former means "use the default".
-		const p = params as { workspaceId: string; cols?: number; rows?: number };
-		return createTerminal(p.workspaceId, ctx.clientKey, p);
+		const p = params as {
+			workspaceId: string;
+			tabKey: string;
+			title?: string;
+			cols?: number;
+			rows?: number;
+		};
+		return attachTerminal(p.workspaceId, p.tabKey, ctx.clientKey, p);
 	},
-	"terminal.write": (params, ctx) => {
-		const p = params as { id: string; data: string };
-		writeTerminal(p.id, p.data, ctx.clientKey);
-		return { ok: true } as const;
-	},
-	"terminal.resize": (params, ctx) => {
-		const p = params as { id: string; cols: number; rows: number };
-		resizeTerminal(p.id, p.cols, p.rows, ctx.clientKey);
-		return { ok: true } as const;
-	},
-	"terminal.close": (params, ctx) => {
-		closeTerminal((params as { id: string }).id, ctx.clientKey);
-		return { ok: true } as const;
-	},
-	"terminal.alive": (params, ctx) => ({
-		alive: isTerminalAlive((params as { id: string }).id, ctx.clientKey),
+	"terminal.list": (params) => ({
+		tabs: listTerminals((params as { workspaceId: string }).workspaceId),
 	}),
+	"terminal.write": (params) => {
+		const p = params as { id: string; data: string };
+		writeTerminal(p.id, p.data);
+		return { ok: true } as const;
+	},
+	"terminal.resize": (params) => {
+		const p = params as { id: string; cols: number; rows: number };
+		resizeTerminal(p.id, p.cols, p.rows);
+		return { ok: true } as const;
+	},
+	"terminal.close": (params) => {
+		const p = params as { workspaceId: string; tabKey: string; force?: boolean };
+		return closeTerminalTab(p.workspaceId, p.tabKey, p.force ?? false);
+	},
 	"skill.list": (params) => {
 		const { projectId } = params as { projectId: string };
 		const project = listProjects().find((candidate) => candidate.id === projectId);

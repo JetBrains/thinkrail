@@ -109,6 +109,17 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
     tags `libghostty-vt` with an official WASM/npm distribution, and (b) `ghostty-web` ships past 0.4.0 with
     mouse reporting and OSC 8 working.
 
+12. **A shell belongs to a tab, and the host owns the mapping.** Terminals are keyed by
+    `(workspaceId, tabKey)` and reached through one idempotent `terminal.attach`; the client keeps no
+    tab→shell pointer of its own. Shells are **owner-scoped**, matching `history`/`todos`/`templates`, so
+    they survive a reload, a closed browser and a different browser — attach is exclusive, and taking a tab
+    over notifies the displaced client. Lifetime is bounded by reference (no tab → no shell) plus the host
+    process, **not** by timers: no idle culling, no abandoned-client reap. A host restart cannot preserve
+    shells (in-process `pi`, PTY hangup), so tabs are revived with fresh shells showing recorded output.
+    **tmux was rejected** as the persistence layer: an unassumable dependency on Windows, a competing tab
+    model, env-propagation breakage, and polling-based capture — for restart survival we have already
+    decided not to hold. Detail: [[submodule-server-terminal]].
+
 ## Invariants
 
 - Never **value**-import `pi` in browser-bundled code; import types only, from the `pi-ai` /

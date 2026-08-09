@@ -1,11 +1,15 @@
-import type { TerminalDataPush, TerminalExitPush } from "@thinkrail/contracts";
+import type {
+	TerminalDataPush,
+	TerminalDetachedPush,
+	TerminalExitPush,
+} from "@thinkrail/contracts";
 import { WS_CHANNELS } from "@thinkrail/contracts";
 import { ClipboardAddon } from "@xterm/addon-clipboard";
 import { FitAddon } from "@xterm/addon-fit";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebFontsAddon } from "@xterm/addon-web-fonts";
 import { type ITheme, Terminal as XTerm } from "@xterm/xterm";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import "@xterm/xterm/css/xterm.css";
 import { cssColorToHex } from "@/lib";
 import { useAppStore } from "../store";
@@ -13,30 +17,6 @@ import { onThemeSwap } from "../themes";
 import { getTransport } from "../transport";
 import { createPtySizeSync } from "./ptySizeSync";
 import { createTerminalPrebindBuffer } from "./terminalPrebindBuffer";
-
-/**
- * PTY ids left behind by unmounted instances, keyed by tab `clientId`.
- *
- * An instance unmounts for two very different reasons. Its **tab was closed** — the PTY should die. Or **the
- * surface it lives on went away while the tab survived**: the shell only mounts `TerminalsPanel` while a
- * workspace is active (`shell/Shell.tsx`), so every visit to Project Home unmounts every terminal of every
- * workspace. Killing the PTY in that second case silently kills whatever was running in it — a dev server, a
- * watch build — with no warning and no visible cause.
- *
- * So unmount hands the id here instead, and the next mount re-adopts it — after one `terminal.alive` round trip
- * to confirm the shell is still there, because a shell that died while detached had no mounted instance to hear
- * its `terminal.exit`. Once bound, output resumes on its own: `terminal.data` is keyed by PTY id. Module scope
- * is the point — the registry has to outlive the component.
- *
- * The registry only ever holds *detached* PTYs: adopting removes the entry, and a genuinely closed tab is
- * reaped rather than registered. A PTY orphaned by a page reload is reaped host-side once that client has been
- * gone for the abandoned-client grace window (a reload arrives under a new client id, so the old one never
- * comes back).
- * One entry can go stale — a workspace removed *while* its terminals are detached has no mounted instance to
- * run the reap — but the host kills those PTYs itself on archive, and `clientId` is a fresh UUID per tab, so a
- * stale entry can never be adopted by a later tab. It costs a dangling string until reload, nothing more.
- */
-const detachedPtyByClientId = new Map<string, string>();
 
 /**
  * Trailing-edge delay before an observed resize reaches the PTY. Long enough that a divider drag collapses into
@@ -137,40 +117,45 @@ function tryLoad(fn: () => void): void {
 }
 
 interface Props {
-	clientId: string;
+	/** This tab's durable identity. Half of `(workspaceId, tabKey)`, which is what the host keys shells on. */
+	tabKey: string;
 	workspaceId: string;
 	visible: boolean;
-	/** Sent once, right after this terminal's PTY is *created* (e.g. "Open in Vim") — never replayed. The
-	 * mount effect can run more than once per tab (see `detachedPtyByClientId`), so this deliberately hangs
-	 * off the create branch only: re-attaching to an existing shell must not re-run the command. */
+	/**
+	 * Run once, on the shell this tab was opened for (e.g. "Open in Vim"), then spent.
+	 *
+	 * The mount effect runs many times per tab — every trip to Project Home unmounts it — so it is gated on the
+	 * host's `created` flag *and* cleared from the store once used. `created` alone is not enough: a tab whose
+	 * shell exited gets a fresh one on the next attach, which is also `created`.
+	 */
 	initialCommand?: string;
 }
 
 /**
- * One xterm terminal bound to a server PTY. Stays mounted while its tab exists (hidden when not the
- * active tab) so its buffer survives workspace/tab switches; re-fits when it becomes visible.
+ * One xterm terminal bound to a server PTY.
  *
- * The PTY outlives the component, not the other way round: an unmount that leaves the tab in place detaches
- * the shell into `detachedPtyByClientId` for the next mount to adopt, so nothing running in it dies. Only a
- * closed tab kills its PTY.
+ * The shell belongs to `(workspaceId, tabKey)`, not to this component — so unmounting does **nothing** to it.
+ * No detach registry, no liveness probe, no "was my tab closed or did the panel go away?" inference: mounting
+ * is a single idempotent `terminal.attach`, and the only thing that kills a shell is the user closing the tab.
+ * Attach returns the recorded output to repaint, so a remount shows the screen it left behind rather than an
+ * empty buffer over a live process.
  */
-export default function TerminalInstance({
-	clientId,
-	workspaceId,
-	visible,
-	initialCommand,
-}: Props) {
+export default function TerminalInstance({ tabKey, workspaceId, visible, initialCommand }: Props) {
 	const hostRef = useRef<HTMLDivElement>(null);
 	const termRef = useRef<XTerm | null>(null);
 	const serverIdRef = useRef<string | null>(null);
 	const fitFnRef = useRef<(() => void) | null>(null);
+	/** Re-run the attach — how the "take it back" action reclaims a tab another client took over. */
+	const reattachRef = useRef<(() => void) | null>(null);
 	/** Immutable tab creation intent; prop changes must not tear down a live shell. */
 	const initialCommandRef = useRef(initialCommand);
 	const [ready, setReady] = useState(false);
 	/** The shell behind this tab is gone — see the `terminal.exit` subscription below. */
 	const [exited, setExited] = useState(false);
-	/** No PTY was ever obtained, so this pane is inert — see the `terminal.create` rejection below. */
+	/** No PTY could be obtained, so this pane is inert — see the attach rejection below. */
 	const [failed, setFailed] = useState(false);
+	/** Another client attached to this tab, so its output goes there now — see `terminal.detached`. */
+	const [detached, setDetached] = useState(false);
 
 	useEffect(() => {
 		const host = hostRef.current;
@@ -252,8 +237,8 @@ export default function TerminalInstance({
 		applyFit();
 		requestAnimationFrame(applyFit);
 
-		// Pushes can beat `terminal.create`'s response, before this instance knows which page-owned PTY is its
-		// own. The bounded pre-bind buffer filters on adoption and becomes inert on bind/failure.
+		// Pushes can beat the attach response, before this instance knows which PTY is its own. The bounded
+		// pre-bind buffer filters on adoption and becomes inert on bind/failure.
 		const prebind = createTerminalPrebindBuffer();
 		const writeTruncation = (): void => term.write("\r\n[output truncated]\r\n");
 		/** Paint a batch, saying so when the host had to drop output to stay bounded. */
@@ -270,6 +255,8 @@ export default function TerminalInstance({
 			if (ev.id === serverIdRef.current) writeFrame(ev);
 		});
 		const onData = term.onData((data) => {
+			// A null id is also how a taken-over tab stops accepting input: typing into it would run commands
+			// whose output goes to whoever attached last.
 			const id = serverIdRef.current;
 			if (id) sendTerminalWrite(getTransport().request("terminal.write", { id, data }));
 		});
@@ -279,9 +266,9 @@ export default function TerminalInstance({
 		// and silently dropped, with no way to tell.
 		const handleExit = (ev: TerminalExitPush): void => {
 			if (ev.id !== serverIdRef.current) return;
-			// Forget the id: there is nothing left to write to, to detach for a later mount, or to close.
+			// Forget the id: there is nothing left to write to. The TAB stays — the user closes it themselves,
+			// and attaching again would simply give this tab a fresh shell.
 			serverIdRef.current = null;
-			detachedPtyByClientId.delete(clientId);
 			term.write(`\r\n[process exited${ev.exitCode === 0 ? "" : ` with code ${ev.exitCode}`}]\r\n`);
 			setExited(true);
 		};
@@ -290,6 +277,18 @@ export default function TerminalInstance({
 			if (prebind.acceptExit(ev)) return;
 			handleExit(ev);
 		});
+		const unsubscribeDetached = getTransport().subscribe(
+			WS_CHANNELS.terminalDetached,
+			(payload) => {
+				const ev = payload as TerminalDetachedPush;
+				if (ev.workspaceId !== workspaceId || ev.tabKey !== tabKey) return;
+				// A PTY has one size, so only one client can have its layout honoured. Say so rather than going
+				// quietly dead, and offer to take it back.
+				serverIdRef.current = null;
+				setReady(false);
+				setDetached(true);
+			},
+		);
 
 		let disposed = false;
 
@@ -310,115 +309,65 @@ export default function TerminalInstance({
 			});
 
 		/**
-		 * Let go of a PTY: hand it to the registry if this tab outlived the instance, otherwise kill it. The
-		 * store is the authority on "does the tab still exist" — closing a tab removes it *before* React
-		 * unmounts the instance, so a genuine close is already absent here, while an incidental unmount
-		 * (Project Home, a workspace switch) still finds it.
+		 * Ask the host for this tab's shell.
+		 *
+		 * Idempotent get-or-create, so there is exactly one call and no state to hold between steps. Unmounting
+		 * mid-flight needs no cleanup at all: the shell belongs to the tab, and the next mount asks the same
+		 * question and gets the same shell. That is the whole reason this replaced a client-held registry —
+		 * the old path removed its only pointer before a liveness round trip, and a remount inside that window
+		 * spawned a second shell and orphaned the first for the life of the host.
 		 */
-		const releasePty = (id: string): void => {
-			const tabSurvives = useAppStore
-				.getState()
-				.terminalsByWorkspace[workspaceId]?.some((t) => t.clientId === clientId);
-			if (tabSurvives) {
-				detachedPtyByClientId.set(clientId, id);
-				return;
-			}
-			detachedPtyByClientId.delete(clientId);
-			void getTransport()
-				.request("terminal.close", { id })
-				.catch(() => {});
-		};
-
-		/** Bind to a PTY id: route its output here, catch up on ordered pre-bind events, and go ready. */
-		const bindPty = (id: string): void => {
-			serverIdRef.current = id;
-			const buffered = prebind.bind(id);
-			if (buffered.truncated) writeTruncation();
-			for (const ev of buffered.frames) writeFrame(ev);
-			setReady(true);
-			// A very short-lived shell can send its addressed exit before the create response names its id.
-			// Paint buffered data first, then apply that matching exit exactly as a live subscription would.
-			if (buffered.exit) handleExit(buffered.exit);
-		};
-
-		/** Ask the host for a brand-new shell. */
-		const createPty = (): void => {
-			// The size the PTY is actually spawned at, captured NOW. Recording `term.cols` at resolve time instead
-			// would bake in whatever the grid had since become, so a resize that landed while this request was in
+		const attach = (): void => {
+			// The size the PTY is spawned at, captured NOW. Recording `term.cols` at resolve time instead would
+			// bake in whatever the grid had since become, so a resize that landed while this request was in
 			// flight would look already-applied and never be sent — leaving the shell permanently mis-sized.
 			const spawnedAt = { cols: term.cols, rows: term.rows };
 			void getTransport()
-				.request("terminal.create", { workspaceId, ...spawnedAt })
-				.then(({ id }) => {
-					if (disposed) {
-						// Close rather than detach: this shell was never bound, never produced output and holds no
-						// user work, and a concurrent mount (React StrictMode remounts every effect in dev) has
-						// already created its own. Detaching it would leak a second live shell per terminal open.
-						void getTransport()
-							.request("terminal.close", { id })
-							.catch(() => {});
-						return;
-					}
+				.request("terminal.attach", { workspaceId, tabKey, ...spawnedAt })
+				.then(({ id, created, replay }) => {
+					if (disposed) return;
 					sizeSync.acknowledge(spawnedAt);
-					bindPty(id);
+					// Repaint what this shell last showed before live frames resume: a remount is a fresh xterm
+					// buffer, so without this a surviving shell comes back behind a blank screen and looks dead.
+					// After a host restart this is the revived tab's picture, over a genuinely new shell.
+					if (replay) term.write(replay);
+					serverIdRef.current = id;
+					const buffered = prebind.bind(id);
+					if (buffered.truncated) writeTruncation();
+					for (const ev of buffered.frames) writeFrame(ev);
+					setDetached(false);
+					setExited(false);
+					setReady(true);
+					// A very short-lived shell can send its addressed exit before the response names its id.
+					// Paint buffered data first, then apply that matching exit exactly as a live subscription would.
+					if (buffered.exit) handleExit(buffered.exit);
 					// Catch up if the grid moved while we were waiting; a no-op when it didn't.
 					applyFit();
-					if (serverIdRef.current === id && initialCommandRef.current)
+					if (created && serverIdRef.current === id && initialCommandRef.current) {
 						sendTerminalWrite(
 							getTransport().request("terminal.write", {
 								id,
 								data: `${initialCommandRef.current}\r`,
 							}),
 						);
+						// Spend it: `created` is also true when a tab's previous shell exited and this attach spawned
+						// a replacement, so gating on that alone would reopen vim on every revisit.
+						initialCommandRef.current = undefined;
+						useAppStore.getState().consumeTerminalInitialCommand(workspaceId, tabKey);
+					}
 				})
 				.catch(() => {
 					if (disposed) return;
 					// Reconnects replay this request, so this is a real host refusal or deadline rather than an
 					// ambiguous dropped response. Stop pre-bind intake: this failed pane must not retain every other
-					// terminal's page-addressed output for the rest of its life.
+					// terminal's addressed output for the rest of its life.
 					prebind.stop();
 					term.write("\r\n[could not start a shell — close this tab and open a new one]\r\n");
 					setFailed(true);
 				});
 		};
-
-		const detached = detachedPtyByClientId.get(clientId);
-		if (detached === undefined) {
-			createPty();
-		} else {
-			detachedPtyByClientId.delete(clientId);
-			// Re-attaching to a shell this tab detached earlier — but confirm it is still there first.
-			// `terminal.exit` is only heard by a MOUNTED instance, and a detach happens precisely when none is
-			// (Project Home unmounts the whole panel), so a shell that died while detached leaves a dead id here.
-			// Adopting it blindly hands back a tab that looks alive and ready while every keystroke goes nowhere —
-			// exactly the failure the exit event exists to prevent.
-			void getTransport()
-				.request("terminal.alive", { id: detached })
-				.then(({ alive }) => {
-					if (disposed) {
-						// Unmounted mid-check: hand the shell back to the registry (or kill it) rather than leaking.
-						if (alive) releasePty(detached);
-						return;
-					}
-					if (!alive) {
-						createPty();
-						return;
-					}
-					// The shell kept the size it had while detached, which may no longer match this layout. The
-					// scrollback is a fresh xterm buffer — the *process* survived, its painted history did not.
-					bindPty(detached);
-					applyFit();
-				})
-				.catch(() => {
-					// The liveness check genuinely failed or timed out (socket loss itself is replayed). A fresh shell
-					// is safer than presenting one we cannot vouch for. Best-effort kill the id we gave up on so it
-					// is not left running with nothing pointing at it.
-					void getTransport()
-						.request("terminal.close", { id: detached })
-						.catch(() => {});
-					if (!disposed) createPty();
-				});
-		}
+		reattachRef.current = attach;
+		attach();
 
 		const resizeObserver = new ResizeObserver(scheduleFit);
 		resizeObserver.observe(host);
@@ -428,7 +377,10 @@ export default function TerminalInstance({
 		});
 
 		return () => {
+			// Nothing here touches the shell. It belongs to the tab and outlives every view of it — only
+			// `terminal.close`, driven by the user closing the tab, ever kills one.
 			disposed = true;
+			reattachRef.current = null;
 			prebind.stop();
 			sizeSync.dispose();
 			clearTimeout(fitTimer);
@@ -437,11 +389,11 @@ export default function TerminalInstance({
 			onData.dispose();
 			unsubscribe();
 			unsubscribeExit();
-			const id = serverIdRef.current;
-			if (id) releasePty(id);
+			unsubscribeDetached();
+			serverIdRef.current = null;
 			term.dispose();
 		};
-	}, [clientId, workspaceId]);
+	}, [tabKey, workspaceId]);
 
 	// Hidden containers report zero size, so fit + focus when this layer becomes visible. `applyFit`
 	// no-ops until the layer has a real size, so a not-yet-laid-out frame can't shrink the buffer; the
@@ -459,17 +411,33 @@ export default function TerminalInstance({
 		return () => cancelAnimationFrame(frame);
 	}, [visible]);
 
+	const takeBack = useCallback(() => reattachRef.current?.(), []);
+
 	return (
 		<div
 			data-testid="terminal-instance"
-			data-client-id={clientId}
+			data-tab-key={tabKey}
 			data-ready={ready}
 			data-exited={exited}
 			data-failed={failed}
+			data-detached={detached}
 			data-visible={visible}
 			className={`absolute inset-0 ${visible ? "" : "hidden"}`}
 		>
 			<div ref={hostRef} className="h-full w-full" />
+			{detached ? (
+				<div className="absolute inset-0 flex flex-col items-center justify-center gap-sm bg-overlay">
+					<p className="tr-text-metadata text-text-muted">This terminal is open somewhere else.</p>
+					<button
+						type="button"
+						data-testid="terminal-take-back"
+						onClick={takeBack}
+						className="rounded-[var(--radius-sm)] bg-control-bg px-sm py-xs tr-text-ui text-text-default hover:bg-control-bg-hovered"
+					>
+						Take it back
+					</button>
+				</div>
+			) : null}
 		</div>
 	);
 }

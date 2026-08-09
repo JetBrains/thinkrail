@@ -62,6 +62,31 @@ export interface TerminalExitPush {
 	exitCode: number;
 }
 
+/**
+ * Another client took this tab over, so we are no longer the one receiving its output.
+ *
+ * Addressed by `tabKey` rather than PTY id because the displaced client may never have learned the id — and
+ * `tabKey` is what its tab is keyed on regardless.
+ */
+export interface TerminalDetachedPush {
+	workspaceId: string;
+	tabKey: string;
+}
+
+/**
+ * One terminal tab, as the host reports it. The tab list is host state — the rail renders this rather than
+ * keeping a list of its own, so the two can never disagree about which shells exist.
+ *
+ * Deliberately carries no "is something running" flag. That question is only ever asked to decide whether
+ * closing needs confirmation, and any answer cached from list time is exactly wrong by then: start a dev server
+ * after the rail loaded and a stale `busy: false` would wave the close through silently. `terminal.close`
+ * answers it atomically instead.
+ */
+export interface TerminalTabInfo {
+	tabKey: string;
+	title: string;
+}
+
 /** Bumped on any breaking wire change; sent in `server.welcome` so a stale UI can detect host drift. */
 // v4: model.* / session.create / session.setModel / SessionSummary now carry `WireModel` (pi's `Model`
 // minus the secret-bearing `baseUrl`/`headers`); the host re-resolves the real model by `{provider,id}`.
@@ -138,7 +163,14 @@ export interface TerminalExitPush {
 // the host free the retained copy — an *un*acknowledged one may have died with its socket and stays replayable.
 // The version prevents a replaying UI from connecting to a pre-dedup host and executing a mutation twice after
 // a lost response.
-export const PROTOCOL_VERSION = 27;
+// v28: a terminal is identified by `(workspaceId, tabKey)` — a pair the client can always re-derive — and the
+// HOST owns the tab list. `terminal.attach` is idempotent get-or-create and replaces `terminal.create` +
+// `terminal.alive` (both gone): one call answers "give me this tab's shell", so there is no window in which a
+// client holds the only pointer to a running shell. Shells are owner-scoped rather than per-page, so they now
+// survive a reload, a closed browser and a different browser; attach is exclusive, and taking one over tells
+// the previous client via `terminal.detached`. Attach also returns the recorded output to repaint (`replay`),
+// which is what a revived tab shows after a host restart.
+export const PROTOCOL_VERSION = 28;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -229,11 +261,11 @@ export const WS_METHODS = {
 	// The workspace branch's own commits (`<diff base>..HEAD`, newest first) — the scope menu's commit list,
 	// fetched lazily when that menu first opens.
 	gitListCommits: "git.listCommits",
-	terminalCreate: "terminal.create",
+	terminalAttach: "terminal.attach",
+	terminalList: "terminal.list",
 	terminalWrite: "terminal.write",
 	terminalResize: "terminal.resize",
 	terminalClose: "terminal.close",
-	terminalAlive: "terminal.alive",
 	dialogSelectDirectory: "dialog.selectDirectory",
 	// Skill-only command preview for New Workspace, before a worktree/session exists.
 	skillList: "skill.list",
@@ -310,13 +342,20 @@ export const WS_CHANNELS = {
 	// In-app login flow updates (a `LoginPush` per frame), keyed by loginId. Session-less — a login runs on
 	// the Welcome screen before any session exists, so this is the sibling of pi.extensionUi, not scoped to one.
 	providerLogin: "provider.login",
-	// Both terminal channels are addressed to the ONE client that owns the PTY, not broadcast: a shell's bytes
-	// are that client's alone (tokens, keys, private paths), and a second browser filtering them out
-	// client-side is not isolation. Ownership is keyed to a client id that survives reconnects — see
-	// `terminalManager.closeClientTerminals`.
+	// Every terminal channel is addressed to the ONE client currently attached to that PTY, never broadcast: a
+	// shell's bytes are tokens, keys and private paths, and a second browser filtering them out client-side is
+	// not isolation. Which client that is can change (attach is exclusive with takeover) — what never happens
+	// is a frame going to a socket that did not attach.
 	terminalData: "terminal.data",
 	/** `{ id, exitCode }` — the shell behind a terminal exited, so its tab is now dead and must say so. */
 	terminalExit: "terminal.exit",
+	/**
+	 * `{ workspaceId, tabKey }` — another client attached to this tab, so this one is no longer the recipient.
+	 * A PTY has one size, so only one client can have its layout honoured; rather than silently reflowing
+	 * whoever else is looking (tmux's smallest-client rule, its most complained-about behaviour), the displaced
+	 * client is told and offers to take the tab back.
+	 */
+	terminalDetached: "terminal.detached",
 	// The workspace-registry lifecycle trio, broadcast to every client so registry membership is shared
 	// domain state (architecture #9), not per-client. All three are emitted by the `workspaces` module's
 	// injected publisher (host maps kind → channel); every client reacts identically (no per-client
@@ -492,20 +531,46 @@ export interface WsMethodMap {
 	// Commits on the workspace's branch that its diff base doesn't have (`git log <base>..HEAD`), newest
 	// first and capped host-side — the scope menu's commit rows.
 	"git.listCommits": { params: { workspaceId: string }; result: { commits: GitCommit[] } };
-	// `cols`/`rows` are the client's already-measured grid. Optional so an older client still works, but
-	// sending them matters: a PTY spawned at a default 80×24 renders its first prompt at the wrong size and
-	// then reflows when the real size arrives, which can visibly garble it.
-	"terminal.create": {
-		params: { workspaceId: string; cols?: number; rows?: number };
-		result: { id: string };
+	/**
+	 * Give me this tab's shell — idempotent get-or-create, and the only way a PTY is ever born.
+	 *
+	 * Calling it twice for the same `(workspaceId, tabKey)` returns the same shell, so a client never has to
+	 * remember an id, ask whether one is still alive, or decide whether to make another. That is the whole
+	 * point: the previous protocol made the client hold the only pointer to a running shell between a "does
+	 * this still exist?" question and its answer, and losing it there orphaned the shell for the life of the
+	 * host. `created` distinguishes a fresh shell from an adopted one — a one-shot `initialCommand` may only
+	 * run on the former.
+	 *
+	 * `cols`/`rows` are the client's already-measured grid; a PTY spawned at a default 80×24 renders its first
+	 * prompt at the wrong size and then reflows, which can visibly garble it. `replay` is the shell's recorded
+	 * recent output, to repaint before live frames resume — a remount is a fresh xterm buffer, so without it a
+	 * surviving shell comes back behind a blank screen. After a host restart it is what a revived tab shows.
+	 */
+	"terminal.attach": {
+		params: { workspaceId: string; tabKey: string; title?: string; cols?: number; rows?: number };
+		result: { id: string; created: boolean; replay?: string };
+	};
+	/** This workspace's tab list, host-owned: the rail renders it rather than remembering one of its own. */
+	"terminal.list": {
+		params: { workspaceId: string };
+		result: { tabs: TerminalTabInfo[] };
 	};
 	"terminal.write": { params: { id: string; data: string }; result: Ack };
 	"terminal.resize": { params: { id: string; cols: number; rows: number }; result: Ack };
-	"terminal.close": { params: { id: string }; result: Ack };
-	// Is this id still a live PTY the caller owns? A tab re-attaching to a shell it detached earlier has to
-	// ask, because `terminal.exit` is only heard by a MOUNTED terminal and a detach happens exactly when none
-	// is mounted — so the shell may have died unobserved.
-	"terminal.alive": { params: { id: string }; result: { alive: boolean } };
+	/**
+	 * Close a tab and kill its shell — the one client-driven kill, and an explicit user gesture by definition.
+	 * Keyed by `tabKey`, not by PTY id: the tab is what the user closed, and the shell behind it may since have
+	 * been replaced. Unmounting a view never routes here.
+	 *
+	 * Refuses and reports `busy` when the shell has child processes, unless `force` says the user confirmed.
+	 * The check and the kill happen in the same synchronous handler, so nothing can start between them — which
+	 * is why this is one call rather than a "is it busy?" question the client answers separately and stalely.
+	 * `closed: false, busy: false` means there was no such tab.
+	 */
+	"terminal.close": {
+		params: { workspaceId: string; tabKey: string; force?: boolean };
+		result: { closed: boolean; busy: boolean };
+	};
 	"dialog.selectDirectory": { params: Record<string, never>; result: { path: string | null } };
 	// Preview from the selected project's current checkout; the eventual worktree session is authoritative.
 	"skill.list": { params: { projectId: string }; result: SlashCommandInfo[] };

@@ -4,7 +4,7 @@ export interface TerminalPrebindResult {
 	frames: TerminalDataPush[];
 	/** This PTY lost oldest pre-bind bytes to the browser-side cap. */
 	truncated: boolean;
-	/** A very short-lived shell can exit before `terminal.create` returns its id. */
+	/** A very short-lived shell can exit before `terminal.attach` returns its id. */
 	exit?: TerminalExitPush;
 }
 
@@ -24,7 +24,7 @@ const DEFAULT_MAX_FRAMES = 256;
 const DEFAULT_MAX_EXITS = 128;
 
 /**
- * A bounded pre-correlation buffer for terminal pushes that race `terminal.create`'s response.
+ * A bounded pre-correlation buffer for terminal pushes that race `terminal.attach`'s response.
  *
  * Terminal pushes are addressed to the page, so before the response names this instance's PTY it sees frames
  * for every terminal. The buffer is deliberately global-capped, records which PTY lost bytes while evicting,

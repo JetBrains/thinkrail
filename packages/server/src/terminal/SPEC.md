@@ -10,63 +10,58 @@ tags: [v1]
 
 ## Responsibility
 
-Workspace-scoped `bun-pty` terminals, each rooted in the worktree cwd; their output streams to the one client
-that owns them.
+Workspace-scoped `bun-pty` terminals rooted in the worktree cwd, **and the per-workspace list of terminal
+tabs**. A tab's shell outlives every client that looks at it.
 
 ## Boundary
 
-- **Owns:** PTYs keyed by id, each tagged with its `workspaceId` **and its owning `clientKey`**; output batched
-  and pushed on the `terminal.data` channel plus a `terminal.exit` announcement, both via an injected
-  publisher; `createTerminal`/`writeTerminal`/`resizeTerminal`/`closeTerminal`,
-  `resumeClientTerminals(clientKey)`, `closeClientTerminals(clientKey)`,
-  `closeWorkspaceTerminals(workspaceId)` (kill the workspace's PTYs when it's **archived**, so no shell orphans
-  on a now-deleted worktree dir — the host calls it before removing the worktree), `closeAllTerminals()` on
-  shutdown, `setTerminalPublisher`.
-- **Public surface (barrel):** the four terminal operations + `isTerminalAlive` (serves `terminal.alive`, the
-  liveness check a re-attaching tab must pass — see below) + `resumeClientTerminals` + `closeClientTerminals` +
-  `closeWorkspaceTerminals` + `closeAllTerminals` + `setTerminalPublisher`; the `TerminalDeliveryResult` type
-  shared with the host publisher adapter (no WebSocket type crosses this boundary).
-- **Allowed deps:** `persistence` (worktree cwd lookup); `contracts` (`WS_CHANNELS`); `bun-pty`; `process.env`.
-- **Forbidden:** `host`; sibling features. The module never learns what a WebSocket is — it addresses a client
-  by opaque key through the injected publisher.
+- **Owns:** the ordered per-workspace tab list (persisted) and the PTY behind each tab, keyed by
+  `(workspaceId, tabKey)`; batched output on `terminal.data` plus `terminal.exit` / `terminal.detached`, via an
+  injected publisher; the bounded per-terminal output recorder replayed on attach.
+- **Public surface (barrel):** `attachTerminal`, `listTerminals`, `writeTerminal`, `resizeTerminal`,
+  `closeTerminalTab`, `resumeClientTerminals`, `closeWorkspaceTerminals`, `persistTerminalSessions`,
+  `reviveTerminalSessions`, `closeAllTerminals`, `resetTerminalState` (test seam), `setTerminalPublisher`;
+  the `TerminalDeliveryResult` type shared with the host publisher adapter.
+- **Allowed deps:** `persistence`, `contracts` (`WS_CHANNELS`), `bun-pty`, `process.env`.
+- **Forbidden:** `host`; sibling features. No WebSocket type crosses this boundary — clients are opaque keys.
 
-## A terminal belongs to one client
+## Decisions
 
-Every operation is checked against the caller's `clientKey`, and output is **addressed**, never broadcast.
-Previously each PTY's bytes went to a single topic every socket subscribed to, leaving each browser to discard
-the frames that weren't its own — so every connected client received everything typed or printed in every
-terminal of every workspace. An id the caller doesn't own is treated exactly like one that doesn't exist, so
-probing ids reveals nothing about which exist.
+- **A shell is keyed by `(workspaceId, tabKey)`**, never by a socket, a client, or a component. `tabKey` is
+  durable and client-supplied; PTY ids are per-run and **never persisted** (attaching to an id that outlived
+  its process is Theia's `Couldn't attach - can't find terminal with id`).
+- **`attachTerminal` is idempotent get-or-create** — the only way a PTY is born. No separate liveness call, so
+  there is no window in which a client holds the only pointer to a running shell.
+- **Ownership is the host's owner, not the browser page.** Any client may attach; consistent with `history`,
+  `todos` and `templates`, which already assume a single-owner host. Consequence: shells survive a reload, a
+  closed browser and a different browser.
+- **Attach is exclusive with takeover.** A PTY has one size, so a new attach becomes the recipient and the
+  previous client gets `terminal.detached`. Mirroring is additive if ever wanted.
+- **Output stays addressed**, never broadcast — a frame only ever reaches a client that attached.
+- **A shell dies from exactly five causes:** tab closed, workspace archived, natural exit, host stop, orphan
+  sweep on attach. Unmounting a view kills nothing.
+- **No idle culling.** Terminal "activity" can only mean last PTY I/O, so a quiet long-running command would be
+  culled mid-flight (Jupyter's `cull_inactive_timeout` does exactly this). **No abandoned-client reap** either.
+- **Revive, not reconnect, across a host restart.** Shells cannot survive it; `persistTerminalSessions()`
+  writes tabs + recordings from `stop()` **before** `closeAllTerminals()`, and `reviveTerminalSessions()`
+  restores tabs whose first attach spawns a fresh shell showing the old picture. Unclean exit → empty shells.
+- **Not tmux.** Would buy restart survival at the cost of a dep we can't assume on Windows, a competing tab
+  model, env-propagation breakage, and `capture-pane` polling. We already accept no crash isolation.
 
-Ownership is keyed to a **client id that survives reconnects** (`?client=` on the socket URL), not to the
-socket. This is load-bearing in both directions: the client reconnects on its own, so socket-keyed ownership
-would silently orphan a shell on any network hiccup, while an id that also survived a reload could never be
-reaped. `closeClientTerminals` therefore runs on a **grace timer** (`host/server.ts`), not on socket close.
+## Restrictions
 
-## Output is batched, and cannot be pushed back on
+- **`attachTerminal` and its handler must stay synchronous.** Lookup and insert in one tick is what makes
+  attach atomic on Bun's single event loop; an `await` between them reintroduces double-spawn.
+- **`closeTerminalTab` checks `busy` and kills in the same synchronous pass.** A separately-asked question
+  lets a process started in between die unannounced.
+- Recorder rules: raw bytes (not a serialized grid); never replay resize events; re-emit observed private
+  modes; **never record the alt screen**; applied in one write on bind.
+- Attach hands back the recording and then **discards** held batcher output — the replay already contains it.
 
-`bun-pty` exposes no `pause()`/`resume()` and starts its read loop at spawn, so the host **cannot slow a shell
-down** — `yes` or a huge `cat` will be read as fast as it is produced. Two consequences, both handled in
-`outputBatcher.ts` (timer-only and transport-free, so it is unit-tested directly):
+## Validation
 
-- Reads are grouped into whole frames instead of one frame per read.
-- Delivery has three explicit outcomes: **delivered**, **backpressured** (this frame was accepted, but no more
-  may be sent), and **unavailable** (this frame was not accepted). The host maps Bun's `send()` statuses
-  correctly (`>0`, `-1`, `0`) and latches per-client backpressure until `drain`/reconnect; a batcher likewise
-  stops retrying while blocked. A batch the owner cannot take is **kept and retried**
-  (`resumeClientTerminals`), so a brief disconnect no longer leaves a silent hole in the scrollback. Held
-  output is capped; past the cap the **oldest** is dropped and the next batch is flagged `truncated` so the
-  client can say so rather than appearing to have simply printed less.
-
-A natural PTY exit moves its final pending output plus `terminal.exit` into one per-client completion queue.
-The data must be accepted before the exit can be accepted, including across reconnect/backpressure, so a
-command cannot return with only its death notice and no final result. Intentional close/archive/shutdown instead
-discards pending output. A client reaped as abandoned drops its completions — there is nobody to tell.
-
-`terminal.alive` closes the matching gap on the client's side: `terminal.exit` is only heard by a *mounted*
-terminal, and a tab detaches its PTY precisely when none is mounted, so a shell that died while detached must be
-detected by asking rather than by having been told.
-
-Every intentional path that kills a PTY disposes its batcher, so held output is dropped rather than delivered
-against a terminal that no longer exists. Natural exit is the one exception: `finish()` transfers the pending
-batch into the ordered completion above before the batcher is retired.
+- `outputRecorder.test.ts` — bounds, line/escape-safe trimming, alt-screen exclusion, mode restoration.
+- `outputBatcher.test.ts` — batching, backpressure, truncation, `reset`.
+- `shellBusy.test.ts` — child detection, including that an unanswerable platform reports *not* busy.
+- `terminalManager.test.ts` — attach idempotency (incl. concurrent), takeover, close/busy, revive.
+- `e2e/terminals.spec.ts` — the rapid re-entry regression, reload survival, second-client takeover.
