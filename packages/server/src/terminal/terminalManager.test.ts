@@ -227,3 +227,61 @@ test("opening and closing a tab broadcasts the new list", () => {
 	closeTerminalTab(WS, "tab-a", true);
 	expect(seen.at(-1)).toEqual({ workspaceId: WS, tabs: [] });
 });
+
+test("a displaced client that tries to type is told it is displaced", async () => {
+	const attached = attachTerminal(WS, "tab-a", "client-1");
+	await Bun.sleep(400);
+	attachTerminal(WS, "tab-a", "client-2");
+	pushed = [];
+
+	// The original notice is fire-and-forget and can be lost — most plainly when the displaced client was
+	// mid-reconnect during the takeover, since its replayed attach then gets the cached success back. Learning
+	// on the first keystroke is what stops the tab looking live forever while nothing happens.
+	writeTerminal(attached.id, "echo TR_LOST_NOTICE\r", "client-1");
+
+	const told = pushed.filter((frame) => frame.channel === "terminal.detached");
+	expect(told).toHaveLength(1);
+	expect(told[0]?.clientKey).toBe("client-1");
+	expect(told[0]?.data).toEqual({ workspaceId: WS, tabKey: "tab-a" });
+});
+
+test("the attached client is not told it is displaced", async () => {
+	const attached = attachTerminal(WS, "tab-a", "client-1");
+	await Bun.sleep(400);
+	pushed = [];
+
+	writeTerminal(attached.id, "echo TR_FINE\r", "client-1");
+	resizeTerminal(attached.id, 100, 30, "client-1");
+
+	expect(pushed.filter((frame) => frame.channel === "terminal.detached")).toHaveLength(0);
+});
+
+test("a tab keeps its last screen when its shell exits on its own", async () => {
+	const first = attachTerminal(WS, "tab-a", "client-1");
+	await Bun.sleep(400);
+	writeTerminal(first.id, "echo TR_BEFORE_CRASH\r", "client-1");
+	await Bun.sleep(600);
+	writeTerminal(first.id, "exit\r", "client-1");
+	await Bun.sleep(800);
+
+	// The tab outlives its shell, so the output that would say what happened must outlive it too.
+	expect(listTerminals(WS)).toHaveLength(1);
+	const next = attachTerminal(WS, "tab-a", "client-1");
+	expect(next.created).toBe(true);
+	expect(next.replay ?? "").toContain("TR_BEFORE_CRASH");
+});
+
+test("a dead tab's last screen survives a host restart", async () => {
+	const first = attachTerminal(WS, "tab-a", "client-1");
+	await Bun.sleep(400);
+	writeTerminal(first.id, "echo TR_LAST_WORDS\r", "client-1");
+	await Bun.sleep(600);
+	writeTerminal(first.id, "exit\r", "client-1");
+	await Bun.sleep(800);
+
+	persistTerminalSessions();
+	resetTerminalState();
+	reviveTerminalSessions();
+
+	expect(attachTerminal(WS, "tab-a", "client-1").replay ?? "").toContain("TR_LAST_WORDS");
+});

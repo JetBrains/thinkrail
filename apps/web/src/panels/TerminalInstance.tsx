@@ -264,6 +264,14 @@ export default function TerminalInstance({ tabKey, workspaceId, visible, initial
 		// The shell exited (the user typed `exit`, or it crashed). Until the host said so, the tab went on
 		// looking alive — cursor blinking, keystrokes accepted — while every keystroke was written to a dead id
 		// and silently dropped, with no way to tell.
+		/**
+		 * Bumped whenever this tab is taken over. An attach response is only proof of attachment *as of when the
+		 * host handled it*: a takeover can land in between, and a reconnect even replays the original request and
+		 * gets the cached success back. Comparing generations lets a later detach always win, so the pane can
+		 * never go ready over a PTY that now rejects everything it sends.
+		 */
+		let attachGeneration = 0;
+
 		const handleExit = (ev: TerminalExitPush): void => {
 			if (ev.id !== serverIdRef.current) return;
 			// Forget the id: there is nothing left to write to. The TAB stays — the user closes it themselves,
@@ -285,6 +293,7 @@ export default function TerminalInstance({ tabKey, workspaceId, visible, initial
 				// A PTY has one size, so only one client can have its layout honoured. Say so rather than going
 				// quietly dead, and offer to take it back.
 				serverIdRef.current = null;
+				attachGeneration += 1;
 				setReady(false);
 				setDetached(true);
 			},
@@ -322,10 +331,13 @@ export default function TerminalInstance({ tabKey, workspaceId, visible, initial
 			// bake in whatever the grid had since become, so a resize that landed while this request was in
 			// flight would look already-applied and never be sent — leaving the shell permanently mis-sized.
 			const spawnedAt = { cols: term.cols, rows: term.rows };
+			const startedAt = attachGeneration;
 			void getTransport()
 				.request("terminal.attach", { workspaceId, tabKey, ...spawnedAt })
 				.then(({ id, created, replay }) => {
 					if (disposed) return;
+					// Someone took the tab over while this was in flight, so this answer is already stale.
+					if (attachGeneration !== startedAt) return;
 					sizeSync.acknowledge(spawnedAt);
 					// Repaint what this shell last showed before live frames resume: a remount is a fresh xterm
 					// buffer, so without this a surviving shell comes back behind a blank screen and looks dead.

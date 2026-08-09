@@ -65,10 +65,13 @@ const ptyByTab = new Map<string, string>();
 /** The ordered tab list per workspace — host-owned state, and the authority on which terminals exist. */
 const tabsByWorkspace = new Map<string, TabRecord[]>();
 /**
- * Recorded output restored from disk, waiting for the tab's first attach (see `reviveTerminalSessions`).
- * Served once and dropped, so a revived picture can never outlive the run it describes.
+ * The picture a tab is holding for its next shell, keyed like `ptyByTab`.
+ *
+ * Filled from disk at boot (`reviveTerminalSessions`) and when a shell exits naturally while its tab lives on —
+ * both are cases where the tab outlives the process that painted it. Served once and dropped, so it can never
+ * outlive the run it describes.
  */
-const revivedOutput = new Map<string, string>();
+const pendingReplay = new Map<string, string>();
 
 /** Separator for the composite tab key. A NUL cannot occur in a workspace id or a tabKey, so the pair can
  * never collide — written as an escape rather than a literal so this file stays text to git and to tooling. */
@@ -220,9 +223,15 @@ function spawnForTab(
 		// An intentional teardown deletes the entry before kill(), so its eventual exit callback is silent.
 		if (terminals.get(id) !== entry) return;
 		terminals.delete(id);
-		ptyByTab.delete(tabIndex(entry.workspaceId, entry.tabKey));
-		// The TAB survives its shell: the user still has to see it died and close it themselves. A later attach
-		// on the same tab gets a fresh shell, which is the same thing the old client-side path did.
+		const index = tabIndex(entry.workspaceId, entry.tabKey);
+		ptyByTab.delete(index);
+		// The TAB survives its shell: the user still has to see it died and close it themselves. Hand its last
+		// screen to the tab before the recorder goes with the entry — otherwise leaving the workspace (or a host
+		// restart) after a crash loses exactly the output that would say what happened, and the next attach
+		// opens a blank pane. A later attach on the same tab gets a fresh shell showing this.
+		const finalScreen = recorder.snapshot();
+		if (finalScreen) pendingReplay.set(index, finalScreen);
+		recorder.dispose();
 		const finalBatch = output.finish();
 		const data: TerminalDataPush | undefined = finalBatch
 			? { id, data: finalBatch.data, truncated: finalBatch.truncated }
@@ -284,8 +293,8 @@ export function attachTerminal(
 	}
 
 	// A revived tab paints what its predecessor left behind; the shell underneath is genuinely new.
-	const revived = revivedOutput.get(index);
-	revivedOutput.delete(index);
+	const revived = pendingReplay.get(index);
+	pendingReplay.delete(index);
 	const { id, entry } = spawnForTab(workspaceId, tabKey, clientKey, options, revived);
 	// Only a membership change is worth announcing — re-attaching to an existing tab leaves the list identical,
 	// and broadcasting on every mount would fan out a snapshot per Project Home round trip.
@@ -313,12 +322,37 @@ function attachedEntry(id: string, caller: string): TerminalEntry | undefined {
 	return entry?.attachedClient === caller ? entry : undefined;
 }
 
+/**
+ * Tell a caller that tried to drive a terminal it is not attached to.
+ *
+ * `terminal.detached` is fire-and-forget, so the original notice can simply be lost — most plainly when the
+ * displaced client was mid-reconnect during the takeover, since a reconnect then replays its attach and the
+ * host's replay cache hands back the *cached* success. Without this the tab looks live forever while every
+ * keystroke silently goes nowhere. Re-announcing on the first thing it tries makes that self-healing.
+ */
+function announceDisplaced(id: string, caller: string): void {
+	const entry = terminals.get(id);
+	if (!entry || entry.attachedClient === caller) return;
+	const push: TerminalDetachedPush = { workspaceId: entry.workspaceId, tabKey: entry.tabKey };
+	pushToClient(caller, WS_CHANNELS.terminalDetached, push);
+}
+
 export function writeTerminal(id: string, data: string, caller: string): void {
-	attachedEntry(id, caller)?.pty.write(data);
+	const entry = attachedEntry(id, caller);
+	if (!entry) {
+		announceDisplaced(id, caller);
+		return;
+	}
+	entry.pty.write(data);
 }
 
 export function resizeTerminal(id: string, cols: number, rows: number, caller: string): void {
-	attachedEntry(id, caller)?.pty.resize(cols, rows);
+	const entry = attachedEntry(id, caller);
+	if (!entry) {
+		announceDisplaced(id, caller);
+		return;
+	}
+	entry.pty.resize(cols, rows);
 }
 
 function disposeTerminalEntry(id: string, entry: TerminalEntry): void {
@@ -359,7 +393,7 @@ export function closeTerminalTab(
 	if (entry && !force && hasChildProcesses(entry.pty.pid)) return { closed: false, busy: true };
 
 	tabs.splice(position, 1);
-	revivedOutput.delete(index);
+	pendingReplay.delete(index);
 	if (entry && id) disposeTerminalEntry(id, entry);
 	publishTabs(workspaceId);
 	return { closed: true, busy: false };
@@ -387,8 +421,8 @@ export function closeWorkspaceTerminals(workspaceId: string): void {
 		if (entry.workspaceId === workspaceId) disposeTerminalEntry(id, entry);
 	}
 	tabsByWorkspace.delete(workspaceId);
-	for (const key of revivedOutput.keys()) {
-		if (key.startsWith(`${workspaceId}${TAB_INDEX_SEP}`)) revivedOutput.delete(key);
+	for (const key of pendingReplay.keys()) {
+		if (key.startsWith(`${workspaceId}${TAB_INDEX_SEP}`)) pendingReplay.delete(key);
 	}
 	publishTabs(workspaceId);
 }
@@ -417,7 +451,7 @@ export function persistTerminalSessions(): void {
 			const entry = id === undefined ? undefined : terminals.get(id);
 			// A tab whose shell already exited keeps whatever it was revived with, so a restart does not blank a
 			// terminal the user had not got round to closing.
-			const recorded = entry ? entry.recorder.snapshot() : revivedOutput.get(index);
+			const recorded = entry ? entry.recorder.snapshot() : pendingReplay.get(index);
 			return { tabKey, title, ...(recorded ? { recorded } : {}) };
 		});
 	}
@@ -439,7 +473,7 @@ export function reviveTerminalSessions(): void {
 			if (typeof tab?.tabKey !== "string" || tab.tabKey === "") continue;
 			restored.push({ tabKey: tab.tabKey, title: tab.title ?? "Terminal" });
 			if (typeof tab.recorded === "string" && tab.recorded !== "") {
-				revivedOutput.set(tabIndex(workspaceId, tab.tabKey), tab.recorded);
+				pendingReplay.set(tabIndex(workspaceId, tab.tabKey), tab.recorded);
 			}
 		}
 		if (restored.length > 0) tabsByWorkspace.set(workspaceId, restored);
@@ -452,5 +486,5 @@ export function resetTerminalState(): void {
 	terminals.clear();
 	ptyByTab.clear();
 	tabsByWorkspace.clear();
-	revivedOutput.clear();
+	pendingReplay.clear();
 }

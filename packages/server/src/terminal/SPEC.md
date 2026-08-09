@@ -41,7 +41,11 @@ tabs**. A tab's shell outlives every client that looks at it.
   previous client gets `terminal.detached`. Mirroring is additive if ever wanted.
 - **Only the attached client may drive a terminal.** `writeTerminal`/`resizeTerminal` take the caller and
   no-op otherwise: a displaced client keeps a valid PTY id and a reconnect replays its queued frames, which
-  would land in whoever holds the tab now. Reclaiming is an explicit gesture, as in `tmux attach -d`.
+  would land in whoever holds the tab now. Reclaiming is an explicit gesture, as in `tmux attach -d`. Such a
+  caller is **re-told it is detached** — the original notice is fire-and-forget and can be lost (a client
+  mid-reconnect during the takeover replays its attach and gets the cached success back), so learning on the
+  first keystroke is what stops a tab looking live while nothing happens. The client also guards the reverse
+  order with an attach generation, so a stale attach response can never clear a newer detach.
 - **Output stays addressed**, never broadcast — a frame only ever reaches a client that attached. The tab
   *list* is the exception: which terminals exist is shared domain state (architecture #9), so every change
   fans out on `terminal.tabs` as an idempotent per-workspace snapshot.
