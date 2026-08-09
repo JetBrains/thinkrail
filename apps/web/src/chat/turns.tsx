@@ -6,6 +6,7 @@ import {
 	FileDiff,
 	FileText,
 	RotateCw,
+	Send,
 	TriangleAlert,
 	Wrench,
 } from "lucide-react";
@@ -121,8 +122,14 @@ function UserTurn({
 		<div data-testid="chat-message" data-role="user" className="flex justify-end">
 			<div className="max-w-[85%] whitespace-pre-wrap rounded-[var(--radius-md)] border border-bubble-user-border bg-clip-padding bg-bubble-user-bg px-md py-sm tr-text-reading text-text-muted">
 				{review ? (
-					<div data-testid="review-package-card">
-						<span data-testid="review-package-summary" className="block whitespace-normal">
+					<div data-testid="review-package-card" className="whitespace-normal">
+						{/* The send affordances' own glyph (SendReviewButton, the thread cards) — the card reads
+						    as the action that fired it. */}
+						<span
+							data-testid="review-package-summary"
+							className="flex items-center gap-xs text-text-default"
+						>
+							<Send className="size-3 shrink-0 text-text-subtle" />
 							{reviewPackageLabel(review)}
 						</span>
 						<ul className="mt-xs flex flex-col">
@@ -171,7 +178,7 @@ function PackageFileRow({
 				data-testid="review-package-file-toggle"
 				aria-expanded={expanded}
 				onClick={toggle}
-				className="flex w-full cursor-pointer select-none items-center gap-xs py-xs text-left outline-none focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex w-full cursor-pointer select-none items-center gap-xs rounded-[var(--radius-sm)] px-xs py-xs text-left outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
 			>
 				<ChevronRight
 					className={cn(
@@ -179,13 +186,14 @@ function PackageFileRow({
 						expanded && "rotate-90",
 					)}
 				/>
+				<FileText className="size-3.5 shrink-0 text-text-subtle" />
 				<span className="min-w-0 truncate tr-code-text text-text-default">
 					{file.path ? projectRelativePath(file.path, workspaceRoot) : "Change set"}
 				</span>
 				<span className="shrink-0 tr-text-metadata text-text-subtle">{file.items.length}</span>
 			</button>
 			{expanded && (
-				<ul className="mb-xs flex flex-col pl-md">
+				<ul className="mb-xs flex flex-col pl-lg">
 					{keyedItems.map(({ key, item }) => (
 						<PackageCommentRow key={key} foldId={`${foldId}:${key}`} item={item} />
 					))}
@@ -206,7 +214,7 @@ function PackageCommentRow({ foldId, item }: { foldId: string; item: ReviewPacka
 				data-testid="review-package-item-toggle"
 				aria-expanded={expanded}
 				onClick={toggle}
-				className="flex w-full cursor-pointer select-none items-start gap-xs py-xs text-left outline-none focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex w-full cursor-pointer select-none items-start gap-xs rounded-[var(--radius-sm)] px-xs py-xs text-left outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
 			>
 				<ChevronRight
 					className={cn(
@@ -227,7 +235,7 @@ function PackageCommentRow({ foldId, item }: { foldId: string; item: ReviewPacka
 				</span>
 			</button>
 			{expanded && item.fragment && (
-				<pre className="mb-xs ml-md max-h-32 overflow-auto whitespace-pre-wrap rounded-[var(--radius-sm)] bg-sunken px-sm py-xs tr-code-text text-text-muted">
+				<pre className="mb-xs ml-lg max-h-32 overflow-auto whitespace-pre-wrap rounded-[var(--radius-sm)] border border-border-muted bg-sunken px-sm py-xs tr-code-text text-text-muted">
 					{item.fragment}
 				</pre>
 			)}
