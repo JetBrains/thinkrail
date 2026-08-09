@@ -178,3 +178,17 @@ describe("outputRecorder", () => {
 		expect(recorder.snapshot()).toBe("");
 	});
 });
+
+describe("replay disabled", () => {
+	test("a zero budget records nothing", () => {
+		const recorder = createOutputRecorder({ maxChars: 0 });
+		recorder.push("$ echo hi\r\nhi\r\n");
+		expect(recorder.snapshot()).toBe("");
+	});
+
+	test("a zero budget also refuses a restored recording", () => {
+		const recorder = createOutputRecorder({ maxChars: 0 });
+		recorder.restore("from the previous run\r\n");
+		expect(recorder.snapshot()).toBe("");
+	});
+});

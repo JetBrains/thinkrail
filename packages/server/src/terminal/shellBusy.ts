@@ -43,14 +43,49 @@ function childrenViaPgrep(pid: number): boolean | null {
 }
 
 /**
+ * Windows: count processes whose parent is `pid` via CIM.
+ *
+ * Printed as a count rather than signalled by exit code — PowerShell exits 0 whether or not the query
+ * matched, so "no children" and "the query failed" would otherwise be indistinguishable and we would guess
+ * *not busy* on a host where the check actually works. `$ErrorActionPreference = 'Stop'` turns a blocked
+ * cmdlet (ConstrainedLanguage mode) into a non-zero exit instead of silent empty output.
+ */
+export const WINDOWS_CHILD_COUNT = [
+	"$ErrorActionPreference = 'Stop'",
+	'$kids = @(Get-CimInstance Win32_Process -Filter "ParentProcessId=$env:TR_PARENT_PID")',
+	"Write-Output $kids.Count",
+].join("; ");
+
+function childrenViaCim(pid: number): boolean | null {
+	// The same two hosts (and order) the directory picker and `apps/cli/src/powershell.ts` use.
+	for (const shell of ["powershell.exe", "pwsh.exe"]) {
+		try {
+			// The pid rides an env var, never the command string: interpolating into PowerShell's own parser is
+			// the injection minefield `apps/cli/src/powershell.ts` exists to sidestep.
+			const run = Bun.spawnSync([shell, "-NoProfile", "-Command", WINDOWS_CHILD_COUNT], {
+				stdout: "pipe",
+				stderr: "ignore",
+				env: { ...process.env, TR_PARENT_PID: String(pid) },
+			});
+			if (run.exitCode !== 0) continue;
+			const count = Number.parseInt(run.stdout.toString().trim(), 10);
+			if (Number.isInteger(count)) return count > 0;
+		} catch {
+			// Host missing or not spawnable — try the next one.
+		}
+	}
+	return null;
+}
+
+/**
  * Whether `pid` has at least one child process.
  *
- * Returns **false when it cannot tell** — notably on Windows, where neither probe applies. That is the
- * deliberate direction to fail: an unanswerable check must not make every tab close a confirmation prompt, which
- * would train people to click through the one that mattered. The cost is that on such a platform the guard is
- * simply absent, exactly as it is today.
+ * Probes in cost order — a `/proc` read, then `pgrep`, then CIM on Windows — and returns **false when none of
+ * them can answer**. That is the deliberate direction to fail: an unanswerable check must not make every tab
+ * close a confirmation prompt, which would train people to click through the one that mattered.
  */
 export function hasChildProcesses(pid: number): boolean {
 	if (!Number.isInteger(pid) || pid <= 0) return false;
+	if (process.platform === "win32") return childrenViaCim(pid) ?? false;
 	return childrenViaProc(pid) ?? childrenViaPgrep(pid) ?? false;
 }

@@ -10,10 +10,14 @@ tags: [v1]
 
 ## Responsibility
 
-The server-synced app config — OUR settings (an opaque theme selection today), an extensible `AppConfig`
-bag. Reads/merges/persists it and fans changes out to every client, so a preference set on one client
-follows the user to the others (architecture #9: shared domain state). The web client owns the available
-theme manifests; settings stores only the selected string id.
+The server-synced app config — OUR settings (an opaque theme selection, the analytics switch, the terminal
+replay budget), an extensible `AppConfig` bag. Reads/merges/persists it and fans changes out to every client,
+so a preference set on one client follows the user to the others (architecture #9: shared domain state). The
+web client owns the available theme manifests; settings stores only the selected string id.
+
+**A numeric setting is clamped by its consumer, not here** — `terminalReplayKb` sizes a per-terminal buffer, so
+`terminal` bounds it against `TERMINAL_REPLAY_KB` on read. This bag persists what it is given; a hand-edited
+`config.json` must not be able to exhaust memory.
 
 ## Boundary
 

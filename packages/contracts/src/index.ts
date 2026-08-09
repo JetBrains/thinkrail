@@ -10,6 +10,7 @@ export {
 	isControlMessage,
 	MAX_HISTORY_LIMIT,
 	MAX_HISTORY_QUERY_LENGTH,
+	TERMINAL_REPLAY_KB,
 	TODO_NUDGE_PREFIX,
 } from "./domain";
 export type * from "./piProtocol";

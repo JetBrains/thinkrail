@@ -422,10 +422,25 @@ export interface AppConfig {
 	 * `installation.json`, deliberately not in this broadcast bag).
 	 */
 	analyticsEnabled: boolean;
+	/**
+	 * How much of each terminal's recent output the host keeps to repaint a reattaching client, in KiB.
+	 *
+	 * A remount builds a fresh xterm buffer, so this is what stands between a surviving shell and a blank pane.
+	 * Costs memory per live terminal and disk in `terminals.json`, so it is bounded and adjustable rather than
+	 * generous by fiat. `0` disables replay entirely.
+	 */
+	terminalReplayKb: number;
 }
 
+/** Bounds for `AppConfig.terminalReplayKb`, enforced host-side so a hand-edited config cannot exhaust memory. */
+export const TERMINAL_REPLAY_KB = { min: 0, max: 1024, default: 64 } as const;
+
 /** The config a fresh host (no `config.json` yet) falls back to. */
-export const DEFAULT_CONFIG: AppConfig = { theme: "dark", analyticsEnabled: true };
+export const DEFAULT_CONFIG: AppConfig = {
+	theme: "dark",
+	analyticsEnabled: true,
+	terminalReplayKb: TERMINAL_REPLAY_KB.default,
+};
 
 /**
  * Prefix on the internal "wake the agent" nudge the client sends when a TODO is added. It is control

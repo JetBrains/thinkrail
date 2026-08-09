@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { hasChildProcesses, parseProcChildren } from "./shellBusy";
+import { hasChildProcesses, parseProcChildren, WINDOWS_CHILD_COUNT } from "./shellBusy";
 
 describe("parseProcChildren", () => {
 	test("reads the pid list", () => {
@@ -48,5 +48,22 @@ describe("hasChildProcesses", () => {
 		const gone = Bun.spawn(["true"], { stdout: "ignore", stderr: "ignore" });
 		gone.kill();
 		expect(hasChildProcesses(gone.pid)).toBe(false);
+	});
+});
+
+describe("the Windows probe", () => {
+	// Cannot be executed from CI on Linux, so what is pinned here is the property that does not need Windows:
+	// the pid never reaches PowerShell's parser as text. Interpolating it would be the injection minefield
+	// `apps/cli/src/powershell.ts` exists to avoid.
+	test("passes the pid by environment, never by string interpolation", () => {
+		expect(WINDOWS_CHILD_COUNT).toContain("$env:TR_PARENT_PID");
+		expect(WINDOWS_CHILD_COUNT).not.toMatch(/ParentProcessId=\d/);
+	});
+
+	test("prints a count rather than relying on the exit code", () => {
+		// PowerShell exits 0 whether or not the query matched, so an exit-code answer could not tell "no
+		// children" from "the query failed" — and we would report not-busy on a host where it actually works.
+		expect(WINDOWS_CHILD_COUNT).toContain("Write-Output");
+		expect(WINDOWS_CHILD_COUNT).toContain("$ErrorActionPreference = 'Stop'");
 	});
 });

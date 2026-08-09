@@ -6,6 +6,7 @@ import {
 	Palette,
 	ShieldCheck,
 	SlidersHorizontal,
+	SquareTerminal,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib";
@@ -15,12 +16,14 @@ import { GithubSettings } from "./GithubSettings";
 import { PrivacySettings } from "./PrivacySettings";
 import { ProvidersSettings } from "./ProvidersSettings";
 import { TemplatesSettings } from "./TemplatesSettings";
+import { TerminalSettings } from "./TerminalSettings";
 
 /** The live settings sections, in nav order. */
 const SECTIONS: { id: SettingsSection; label: string; icon: LucideIcon }[] = [
 	{ id: SettingsSection.Providers, label: "Providers", icon: KeyRound },
 	{ id: SettingsSection.Github, label: "GitHub", icon: GitBranch },
 	{ id: SettingsSection.Appearance, label: "Appearance", icon: Palette },
+	{ id: SettingsSection.Terminal, label: "Terminal", icon: SquareTerminal },
 	{ id: SettingsSection.Templates, label: "Templates", icon: LayoutTemplate },
 	{ id: SettingsSection.Privacy, label: "Privacy", icon: ShieldCheck },
 ];
@@ -96,6 +99,8 @@ export function SettingsDialog() {
 							<ProvidersSettings />
 						) : section === SettingsSection.Github ? (
 							<GithubSettings />
+						) : section === SettingsSection.Terminal ? (
+							<TerminalSettings />
 						) : section === SettingsSection.Templates ? (
 							<TemplatesSettings />
 						) : section === SettingsSection.Privacy ? (

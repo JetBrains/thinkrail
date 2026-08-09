@@ -5,9 +5,10 @@ import type {
 	TerminalExitPush,
 	TerminalTabInfo,
 } from "@thinkrail/contracts";
-import { WS_CHANNELS } from "@thinkrail/contracts";
+import { TERMINAL_REPLAY_KB, WS_CHANNELS } from "@thinkrail/contracts";
 import { type IPty, spawn } from "bun-pty";
 import {
+	loadConfig,
 	loadTerminalSessions,
 	loadWorkspaces,
 	type PersistedTerminalSessions,
@@ -112,6 +113,21 @@ function ptyEnv(): Record<string, string> {
 /** The size a PTY starts at when the client didn't measure one — a plain terminal's conventional default. */
 const DEFAULT_PTY_SIZE = { cols: 80, rows: 24 } as const;
 
+/**
+ * How many characters of output to keep per terminal for replay, from `AppConfig.terminalReplayKb`.
+ *
+ * Clamped here rather than trusted: the value is persisted JSON a user can hand-edit, and it sizes a buffer
+ * held per live terminal *and* written to disk. Read per spawn, so changing the setting applies to new shells
+ * without disturbing running ones.
+ */
+function replayBudgetChars(): number {
+	const configured = loadConfig().terminalReplayKb;
+	const kb = Number.isFinite(configured)
+		? Math.min(Math.max(Math.trunc(configured), TERMINAL_REPLAY_KB.min), TERMINAL_REPLAY_KB.max)
+		: TERMINAL_REPLAY_KB.default;
+	return kb * 1024;
+}
+
 function tabsFor(workspaceId: string): TabRecord[] {
 	let tabs = tabsByWorkspace.get(workspaceId);
 	if (!tabs) {
@@ -148,7 +164,7 @@ function spawnForTab(
 	});
 
 	const id = randomUUID();
-	const recorder = createOutputRecorder();
+	const recorder = createOutputRecorder({ maxChars: replayBudgetChars() });
 	// Seed BEFORE the read loop is wired: the shell prints its prompt immediately, and restoring afterwards
 	// would overwrite whatever had already arrived.
 	if (revived !== undefined) recorder.restore(revived);

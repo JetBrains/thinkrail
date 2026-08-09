@@ -10,7 +10,7 @@
  * have to model modes we don't yet support.
  */
 
-/** Recording bounds — enough to repaint a screen plus useful scrollback, per terminal, held in memory. */
+/** Fallback window when no size is supplied — `AppConfig.terminalReplayKb` is the real source. */
 export const DEFAULT_RECORDER_MAX_CHARS = 64 * 1024;
 
 /**
@@ -102,7 +102,9 @@ export function createOutputRecorder(options: OutputRecorderOptions = {}): Outpu
 
 	return {
 		push(chunk) {
-			if (disposed || chunk === "") return;
+			// A zero budget is "replay off" (AppConfig.terminalReplayKb = 0): record nothing at all rather than
+			// keep a window that trimToLineStart would empty anyway.
+			if (disposed || maxChars <= 0 || chunk === "") return;
 			const wasInAltBuffer = inAltBuffer;
 			scan(chunk);
 			// A full-screen app (vim, htop, lazygit) owns the alt screen, and replaying a torn-off slice of one
@@ -124,7 +126,7 @@ export function createOutputRecorder(options: OutputRecorderOptions = {}): Outpu
 			return `${prefix.join("")}${recorded}`;
 		},
 		restore(previous) {
-			if (disposed) return;
+			if (disposed || maxChars <= 0) return;
 			recorded =
 				previous.length > maxChars
 					? trimToLineStart(previous, previous.length - maxChars)

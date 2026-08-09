@@ -122,6 +122,7 @@ export const SettingsSection = {
 	Providers: "providers",
 	Github: "github",
 	Appearance: "appearance",
+	Terminal: "terminal",
 	Templates: "templates",
 	Privacy: "privacy",
 } as const;
@@ -626,6 +627,8 @@ interface AppState {
 	/** Anonymous-usage-analytics switch (host-owned, same `applyConfig` fold as `theme`). Only this boolean
 	 * ever reaches a client — events are emitted host-side and the install id never crosses the wire. */
 	analyticsEnabled: boolean;
+	/** How much terminal output the host keeps for replay, in KiB (host-owned; same `applyConfig` fold). */
+	terminalReplayKb: number;
 	/** Transient notifications, oldest-first (the Toaster renders + times them out). At-most a handful live
 	 * at once; a failed wire call that has no better home (no chat tab to host an error turn) lands here. */
 	toasts: Toast[];
@@ -1059,6 +1062,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	settingsSection: SettingsSection.Providers,
 	theme: DEFAULT_CONFIG.theme,
 	analyticsEnabled: DEFAULT_CONFIG.analyticsEnabled,
+	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,
 	toasts: [],
 	setStatus: (status) => set({ status }),
 	setWelcome: (protocolVersion) => set({ protocolVersion }),
@@ -1705,7 +1709,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set({ settingsOpen: true, settingsSection: section }),
 	closeSettings: () => set({ settingsOpen: false }),
 	setSettingsSection: (section) => set({ settingsSection: section }),
-	applyConfig: (config) => set({ theme: config.theme, analyticsEnabled: config.analyticsEnabled }),
+	applyConfig: (config) =>
+		set({
+			theme: config.theme,
+			analyticsEnabled: config.analyticsEnabled,
+			terminalReplayKb: config.terminalReplayKb,
+		}),
 	requestRightTab: (workspaceId, tab) => set({ rightTabRequest: { workspaceId, tab } }),
 	// The path intent and the flip always travel together — one action, so no call site can send half of it.
 	// The nav count is stamped here, at the click, because that is when the user navigated — the panel only
