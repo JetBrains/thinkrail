@@ -690,8 +690,8 @@ test("resolved comments sink into a muted Resolved section (TODO Done style)", a
 	]);
 	const fileRow = page.getByTestId("review-file-row").filter({ hasText: "script.ts" });
 	await expect(fileRow).toContainText("2 resolved");
-	// The section is still unfolded (auto-followed earlier); everything resolved surfaces the Done
-	// finisher in its strip — finishing empties the review.
+	// Everything resolved surfaces the Done finisher INLINE in the row (after the counts) —
+	// finishing empties the review.
 	await page.getByTestId("review-file-done").click();
 	await expect(page.getByTestId("review-file-row")).toHaveCount(0);
 	await expect(page.getByTestId("review-empty")).toBeVisible();
@@ -745,13 +745,11 @@ test("Done is undone by a fresh remark: the file re-lists the moment a new comme
 		{ method: "review.commentUpdate", params: { id: comments[0]?.id, status: "resolved" } },
 	]);
 	await page.getByTestId("tab-review").click();
-	// All resolved → nothing auto-unfolds; unfolding the row reveals the section's Done finisher.
-	await page.getByTestId("review-file-row").click();
+	// All resolved → the row wears the Done finisher inline, no unfolding needed.
 	await page.getByTestId("review-file-done").click();
 	await expect(page.getByTestId("review-empty")).toBeVisible();
 
 	// A fresh remark on the SAME file re-opens its review — Done is a state, not a tombstone.
-	// (The row click above surfaced the plain file tab; comment from the diff again.)
 	await page.getByTestId("tab-changes").click();
 	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).click();
 	await composeComment(page, "three = 3", "One more thing.");

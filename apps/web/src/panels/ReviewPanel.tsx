@@ -148,6 +148,9 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 					<ul>
 						{files.map((file) => {
 							const isOpen = expanded.has(file.path);
+							// Everything resolved — the row itself offers the Done finisher, inline after the
+							// counts (a strip below just for one glyph read as stray space).
+							const finishable = file.total === 0 && file.resolved > 0;
 							return (
 								<li
 									key={file.path ?? "@review"}
@@ -155,30 +158,44 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 									data-path={file.path ?? ""}
 									data-expanded={isOpen}
 								>
-									<button
-										type="button"
-										data-testid="review-file-row"
-										className="flex w-full items-center gap-sm px-sm py-xs text-left tr-text-ui hover:bg-control-bg-hovered"
-										onClick={() => toggleFile(file)}
-									>
-										{isOpen ? (
-											<ChevronDown className="size-3.5 shrink-0 text-text-subtle" />
-										) : (
-											<ChevronRight className="size-3.5 shrink-0 text-text-subtle" />
+									<div className="flex items-center hover:bg-control-bg-hovered">
+										<button
+											type="button"
+											data-testid="review-file-row"
+											className="flex min-w-0 flex-1 items-center gap-sm px-sm py-xs text-left tr-text-ui"
+											onClick={() => toggleFile(file)}
+										>
+											{isOpen ? (
+												<ChevronDown className="size-3.5 shrink-0 text-text-subtle" />
+											) : (
+												<ChevronRight className="size-3.5 shrink-0 text-text-subtle" />
+											)}
+											<span className="min-w-0 flex-1 truncate text-text-muted">
+												{file.path ?? "Whole change set"}
+											</span>
+											<span className="shrink-0 tr-text-metadata text-text-subtle">
+												{[
+													file.drafts > 0 && `${file.drafts} draft${file.drafts > 1 ? "s" : ""}`,
+													file.total > file.drafts && `${file.total - file.drafts} sent`,
+													file.resolved > 0 && `${file.resolved} resolved`,
+												]
+													.filter(Boolean)
+													.join(" · ")}
+											</span>
+										</button>
+										{finishable && (
+											<button
+												type="button"
+												data-testid="review-file-done"
+												title="Done — finish this file's review"
+												aria-label="Done — finish this file's review"
+												onClick={() => void finishFile(file.path)}
+												className="flex shrink-0 items-center py-xs pr-sm pl-xs text-text-subtle hover:text-feedback-success"
+											>
+												<CheckCircle2 className="size-3.5" />
+											</button>
 										)}
-										<span className="min-w-0 flex-1 truncate text-text-muted">
-											{file.path ?? "Whole change set"}
-										</span>
-										<span className="shrink-0 tr-text-metadata text-text-subtle">
-											{[
-												file.drafts > 0 && `${file.drafts} draft${file.drafts > 1 ? "s" : ""}`,
-												file.total > file.drafts && `${file.total - file.drafts} sent`,
-												file.resolved > 0 && `${file.resolved} resolved`,
-											]
-												.filter(Boolean)
-												.join(" · ")}
-										</span>
-									</button>
+									</div>
 									{isOpen && (
 										<FileSection
 											workspaceId={workspaceId}
@@ -188,7 +205,6 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 											onSend={sendOne}
 											onOpenChat={openChat}
 											onNavigate={navigateTo}
-											onDone={() => void finishFile(file.path)}
 										/>
 									)}
 								</li>
@@ -203,10 +219,10 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 
 /**
  * One unfolded file's comments, in the TODO plan's section flow — what the chat is already working
- * on first (In progress = sent), then Drafts (the to-do), then the muted Resolved (Done) — topped by
- * the per-file action strip: the pane toolbar's `Send review (N)` (same drafts-only gate and batch
- * path; its own testid so tests can tell the sidebar's copy from the pane's) and, once everything is
- * resolved, the Done finisher.
+ * on first (In progress = sent), then Drafts (the to-do), then the muted Resolved (Done) — topped,
+ * while drafts exist, by the pane toolbar's `Send review (N)` (same drafts-only gate and batch path;
+ * its own testid so tests can tell the sidebar's copy from the pane's). The Done finisher lives in
+ * the FILE ROW, not here — a strip holding one glyph read as stray space.
  */
 function FileSection({
 	workspaceId,
@@ -216,7 +232,6 @@ function FileSection({
 	onSend,
 	onOpenChat,
 	onNavigate,
-	onDone,
 }: {
 	workspaceId: string;
 	path: string | null;
@@ -225,30 +240,16 @@ function FileSection({
 	onSend: (comment: ReviewComment) => Promise<void>;
 	onOpenChat: (sessionId: string) => void;
 	onNavigate: (comment: ReviewComment) => void;
-	onDone: () => void;
 }) {
 	const fileComments = comments.filter((c) => (c.anchor?.path ?? null) === path);
 	const inProgress = fileComments.filter((c) => c.status === "sent");
 	const drafts = fileComments.filter((c) => c.status === "draft");
 	const resolved = fileComments.filter((c) => c.status === "resolved");
-	const finishable = inProgress.length === 0 && drafts.length === 0 && resolved.length > 0;
 	return (
 		<div className="px-xs pb-xs pl-md">
-			{(drafts.length > 0 || finishable) && (
+			{drafts.length > 0 && (
 				<div className="flex items-center justify-end gap-xs px-xs py-xs">
 					<SendReviewButton workspaceId={workspaceId} path={path} testid="review-panel-send" />
-					{finishable && (
-						<button
-							type="button"
-							data-testid="review-file-done"
-							title="Done — finish this file's review"
-							aria-label="Done — finish this file's review"
-							onClick={onDone}
-							className="flex shrink-0 items-center text-text-subtle hover:text-feedback-success"
-						>
-							<CheckCircle2 className="size-3.5" />
-						</button>
-					)}
 				</div>
 			)}
 			{inProgress.length > 0 && (

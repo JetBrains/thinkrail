@@ -370,10 +370,11 @@ a project picker, the prompt hero, and the reused
   [[task-review-comments]] for the model) — **ONE screen, a per-file ACCORDION**: each row a path +
   draft/sent/resolved counts with a fold chevron; **clicking a row unfolds its comments in place AND
   opens the file's tab** (folding is a second click and navigates nowhere — the row is the only
-  toggle, list rows carry no other actions). A file whose comments are ALL resolved **stays listed**
-  until the user finishes it explicitly: the unfolded section's strip grows a **Done check glyph**
-  once everything is resolved, which calls `review.fileDone`, and only that removes the file
-  (`Review.doneFiles`; a new comment re-opens it). An unfolded section shows the file's comments in
+  toggle; the one other row action is below). A file whose comments are ALL resolved **stays listed**
+  until the user finishes it explicitly: the ROW itself grows a **Done check glyph** (inline after
+  the counts — visible folded or not; a strip below holding one glyph read as stray space), which
+  calls `review.fileDone`, and only that removes the file (`Review.doneFiles`; a new comment
+  re-opens it). An unfolded section shows the file's comments in
   the TODO plan's exact section flow, built from the SHARED plan atoms (`chat/planKit`:
   `SectionLabel` + `PlanStatusIcon` — the same pieces `TodoList` renders with): **In progress** (sent — the chat took them; the glyph is GLANCE-AWARE exactly like a TODO's
   in-progress item, via `sessionGlance` + `TodoList.glanceIcon`: working dot / **(?)** while the
