@@ -46,6 +46,21 @@ class TestWebSocket {
 const originalWebSocket = globalThis.WebSocket;
 const tick = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** The three client→host frame shapes, read by shape rather than by position. */
+interface ClientFrame {
+	id?: string;
+	method?: string;
+	ack?: string[];
+	resume?: string[];
+}
+const parse = (frame: string): ClientFrame => JSON.parse(frame) as ClientFrame;
+const requestsIn = (sent: readonly string[]): ClientFrame[] =>
+	sent.map(parse).filter((frame) => frame.method !== undefined);
+const acksIn = (sent: readonly string[]): string[] =>
+	sent.flatMap((frame) => parse(frame).ack ?? []);
+const resumesIn = (sent: readonly string[]): string[][] =>
+	sent.map(parse).flatMap((frame) => (frame.resume === undefined ? [] : [frame.resume]));
+
 beforeEach(() => {
 	TestWebSocket.instances = [];
 	globalThis.WebSocket = TestWebSocket as unknown as typeof WebSocket;
@@ -77,9 +92,9 @@ describe("WsTransport reconnect delivery", () => {
 		const first = TestWebSocket.instances[0];
 		expect(first).toBeDefined();
 		first?.open();
-		expect(first?.sent).toHaveLength(1);
-		const originalFrame = first?.sent[0];
+		const originalFrame = first?.sent.find((frame) => parse(frame).method !== undefined);
 		expect(originalFrame).toBeDefined();
+		const id = parse(originalFrame ?? "{}").id;
 
 		first?.close();
 		await tick(20);
@@ -89,10 +104,10 @@ describe("WsTransport reconnect delivery", () => {
 		const replacement = TestWebSocket.instances[1];
 		expect(replacement).toBeDefined();
 		replacement?.open();
-		expect(replacement?.sent).toEqual([originalFrame]);
+		// The reconciliation states the still-unresolved set, and precedes the replay of that very frame.
+		expect(replacement?.sent).toEqual([JSON.stringify({ resume: [id] }), originalFrame]);
 
-		const request = JSON.parse(originalFrame ?? "{}") as { id?: string };
-		replacement?.message(JSON.stringify({ id: request.id, ok: true, result: [] }));
+		replacement?.message(JSON.stringify({ id, ok: true, result: [] }));
 		expect(await result).toEqual([]);
 		expect(statuses).toEqual([
 			"connecting",
@@ -110,9 +125,6 @@ describe("WsTransport reconnect delivery", () => {
  * the host must either keep every response forever or reclaim one the page is still about to replay for.
  */
 describe("WsTransport response receipts", () => {
-	const acksIn = (sent: readonly string[]): string[] =>
-		sent.flatMap((frame) => (JSON.parse(frame) as { ack?: string[] }).ack ?? []);
-
 	test("acknowledges each response, batching a burst into one frame", async () => {
 		const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
 		transport.connect();
@@ -121,8 +133,9 @@ describe("WsTransport response receipts", () => {
 
 		const first = transport.request("project.list", {});
 		const second = transport.request("workspace.list", { projectId: "p1" });
-		const ids = socket?.sent.map((frame) => (JSON.parse(frame) as { id: string }).id) ?? [];
+		const ids = requestsIn(socket?.sent ?? []).map((frame) => frame.id ?? "");
 		expect(ids).toHaveLength(2);
+		const before = socket?.sent.length ?? 0;
 
 		socket?.message(JSON.stringify({ id: ids[0], ok: true, result: [] }));
 		socket?.message(JSON.stringify({ id: ids[1], ok: true, result: [] }));
@@ -130,18 +143,18 @@ describe("WsTransport response receipts", () => {
 		await tick(0);
 
 		expect(acksIn(socket?.sent ?? [])).toEqual(ids);
-		// Both receipts rode one frame: two requests plus a single batched ack.
-		expect(socket?.sent).toHaveLength(3);
+		// Both receipts rode a single frame rather than one each.
+		expect((socket?.sent.length ?? 0) - before).toBe(1);
 	});
 
-	test("a receipt the dead socket could not carry travels on the next one", async () => {
+	test("a receipt lost with its socket is repaired by the reconnect reconciliation", async () => {
 		const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
 		transport.connect();
 		const first = TestWebSocket.instances[0];
 		first?.open();
 
 		const result = transport.request("project.list", {});
-		const id = (JSON.parse(first?.sent[0] ?? "{}") as { id?: string }).id;
+		const id = requestsIn(first?.sent ?? [])[0]?.id;
 		// The reply lands and the socket dies before the batched receipt can flush.
 		first?.message(JSON.stringify({ id, ok: true, result: [] }));
 		first?.close();
@@ -153,8 +166,39 @@ describe("WsTransport response receipts", () => {
 		replacement?.open();
 		await tick(0);
 
-		// Nothing to replay — the request resolved — but the host is still holding that result for it.
-		expect(acksIn(replacement?.sent ?? [])).toEqual([id ?? ""]);
+		// The lost receipt is never retransmitted — it does not have to be. `resume` names the whole live set,
+		// which here is empty, so the host releases that result anyway.
+		expect(acksIn(replacement?.sent ?? [])).toEqual([]);
+		expect(resumesIn(replacement?.sent ?? [])).toEqual([[]]);
+	});
+
+	test("the reconciliation names every unresolved id, including ones queued while offline", async () => {
+		const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
+		transport.connect();
+		const first = TestWebSocket.instances[0];
+		first?.open();
+
+		const resolved = transport.request("project.list", {});
+		const stillOpen = transport.request("workspace.list", { projectId: "p1" });
+		const [resolvedId, stillOpenId] = requestsIn(first?.sent ?? []).map((frame) => frame.id ?? "");
+		first?.message(JSON.stringify({ id: resolvedId, ok: true, result: [] }));
+		expect(await resolved).toEqual([]);
+		first?.close();
+
+		// Issued with no socket at all: the pending map doubles as the reconnect queue.
+		const queued = transport.request("git.status", { workspaceId: "w1" });
+		await tick(520);
+		const replacement = TestWebSocket.instances[1];
+		replacement?.open();
+		const queuedId = requestsIn(replacement?.sent ?? [])[1]?.id;
+
+		// Both still-unresolved ids, and only those: the one already answered is not the host's to hold.
+		expect(resumesIn(replacement?.sent ?? [])).toEqual([[stillOpenId, queuedId ?? ""]]);
+		expect(resumesIn(replacement?.sent ?? [])[0]).not.toContain(resolvedId);
+
+		replacement?.message(JSON.stringify({ id: stillOpenId, ok: true, result: [] }));
+		replacement?.message(JSON.stringify({ id: queuedId, ok: true, result: { files: [] } }));
+		await Promise.all([stillOpen, queued]);
 	});
 
 	test("re-acknowledges a duplicate reply, whose first receipt may be what went missing", async () => {
@@ -164,7 +208,7 @@ describe("WsTransport response receipts", () => {
 		socket?.open();
 
 		const result = transport.request("project.list", {});
-		const id = (JSON.parse(socket?.sent[0] ?? "{}") as { id?: string }).id;
+		const id = requestsIn(socket?.sent ?? [])[0]?.id;
 		socket?.message(JSON.stringify({ id, ok: true, result: [] }));
 		expect(await result).toEqual([]);
 		await tick(0);

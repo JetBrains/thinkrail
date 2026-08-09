@@ -122,13 +122,17 @@ export class WsTransport {
 			}
 			this.backoff = 500;
 			this.onStatus?.("connected");
+			// Restate the whole truth before replaying anything: these ids, and only these, may still come back
+			// under their original id, so the host can release every other result it is holding for this page.
+			// It supersedes any receipt that died with the previous socket — which is why receipts below are
+			// best-effort and never retransmitted — and it precedes the replays so nothing it frees is a frame
+			// still owed an answer.
+			this.ackQueue = [];
+			this.sendFrame(JSON.stringify({ resume: [...this.pending.keys()] }));
 			// Every unresolved frame is safe to replay under the SAME id: the host's per-client replay cache
 			// returns the original handler result instead of executing it again. This includes requests issued
 			// while disconnected and requests whose response died with the previous socket.
 			for (const entry of this.pending.values()) this.sendFrame(entry.frame);
-			// Receipts the dead socket could not carry. They travel *after* the replays so a reconnect never
-			// frees a result before the frame that might still need it has been answered.
-			this.flushAcks();
 		};
 		ws.onmessage = (ev) => this.handleMessage(ev.data);
 		ws.onclose = () => {
@@ -186,9 +190,12 @@ export class WsTransport {
 	 *
 	 * Until this arrives the host must assume the reply died with the socket and keep it replayable — that is
 	 * what makes a reconnect replay return the first execution's result instead of running a mutation twice.
-	 * Batched on a microtask so a burst of replies costs one frame, and kept across a disconnect: an unsent
-	 * receipt simply travels on the next socket. Losing one is safe in the direction that matters — the host
-	 * retains a result it could have freed, never frees one it still owes.
+	 * Batched on a microtask so a burst of replies costs one frame.
+	 *
+	 * Deliberately best-effort: a receipt is only as reliable as the socket carrying it, and tracking which
+	 * ones were confirmed would just move the same problem one level up. Losing one is safe in the direction
+	 * that matters — the host keeps a result it could have freed, never frees one it still owes — and the
+	 * `resume` frame on the next connect states the live set outright, which releases it.
 	 */
 	private queueAck(id: string): void {
 		this.ackQueue.push(id);

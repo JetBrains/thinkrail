@@ -88,6 +88,9 @@ interface SocketData {
  */
 const ABANDONED_CLIENT_GRACE_MS = 60_000;
 
+/** Ids arrive from the wire, so an `ack`/`resume` list is filtered rather than trusted to hold strings. */
+const isRequestId = (id: unknown): id is string => typeof id === "string";
+
 /** Boot the engine host: Bun.serve HTTP+WS, /health, optional static SPA, and the server.welcome push. */
 export function createServer(options: CreateServerOptions = {}): RunningServer {
 	const {
@@ -222,10 +225,14 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 				// A receipt, not a request: the client naming responses it has read. That is the host's only
 				// proof they were not lost with a socket, so it frees those retained results — and runs nothing.
 				if ("ack" in req && Array.isArray(req.ack)) {
-					requestReplays.acknowledge(
-						ws.data.clientKey,
-						req.ack.filter((id): id is string => typeof id === "string"),
-					);
+					requestReplays.acknowledge(ws.data.clientKey, req.ack.filter(isRequestId));
+					return;
+				}
+				// The reconnect reconciliation, sent ahead of the replays: everything this page may still replay.
+				// It repairs receipts that died with the previous socket, so a lost one costs a retained result
+				// until the next connect rather than until the page retires.
+				if ("resume" in req && Array.isArray(req.resume)) {
+					requestReplays.retain(ws.data.clientKey, req.resume.filter(isRequestId));
 					return;
 				}
 				if (
@@ -274,9 +281,9 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 					// cache above returns `response` without executing the handler again.
 					if (ws.send(response) === 0) ws.close();
 				} catch (err) {
-					// Cache-level failures — an id replayed with a different payload, or one whose result the memory
-					// backstop reclaimed. Both answer with an error precisely so they do not displace or rerun the
-					// original operation stored under that id.
+					// Cache-level refusals — an id replayed with a different payload, or a new id arriving at a full
+					// namespace. Both answer with an error precisely so they do not displace, rerun, or crowd out the
+					// operations already stored for this client.
 					const error = err instanceof Error ? err.message : String(err);
 					if (ws.send(JSON.stringify({ id: requestId, ok: false, error })) === 0) ws.close();
 				}

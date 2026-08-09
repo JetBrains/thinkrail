@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
 	RequestReplayCache,
 	RequestReplayConflictError,
-	RequestReplayReclaimedError,
+	RequestReplayOverflowError,
 } from "./requestReplayCache";
 
 function deferred<T>() {
@@ -61,7 +61,31 @@ describe("request replay cache", () => {
 		);
 	});
 
-	test("bounds settled results without evicting in-flight work", async () => {
+	// The bound refuses NEW work; it never reaches back for an answer already owed. That direction is the whole
+	// invariant: a refused request provably did not run, whereas a discarded result can be replayed into a
+	// second execution.
+	test("a full namespace refuses new ids while still answering every id it holds", async () => {
+		const cache = new RequestReplayCache<string>(2);
+		let executions = 0;
+		const execute = () => String(++executions);
+
+		expect(await cache.run("page", "first", "one", execute)).toBe("1");
+		expect(await cache.run("page", "second", "two", execute)).toBe("2");
+
+		expect(() => cache.run("page", "third", "three", execute)).toThrow(RequestReplayOverflowError);
+		expect(executions).toBe(2); // the refused handler never ran
+
+		// Everything already admitted is still replayable — a full namespace stops taking work, it does not
+		// stop owing answers.
+		expect(await cache.run("page", "first", "one", execute)).toBe("1");
+		expect(await cache.run("page", "second", "two", execute)).toBe("2");
+
+		// Reading one response makes room for exactly one more.
+		cache.acknowledge("page", ["first"]);
+		expect(await cache.run("page", "third", "three", execute)).toBe("3");
+	});
+
+	test("in-flight work is never evicted to make room, and counts against admission", async () => {
 		const cache = new RequestReplayCache<string>(1);
 		const run = deferred<string>();
 		let longExecutions = 0;
@@ -71,36 +95,34 @@ describe("request replay cache", () => {
 		};
 		const inFlight = cache.run("page", "long", "same", longRun);
 
-		await cache.run("page", "short-1", "one", () => "one");
-		await cache.run("page", "short-2", "two", () => "two");
-		const replay = cache.run("page", "long", "same", longRun);
-		expect(replay).toBe(inFlight);
+		expect(() => cache.run("page", "other", "other", () => "no room")).toThrow(
+			RequestReplayOverflowError,
+		);
+		expect(cache.run("page", "long", "same", longRun)).toBe(inFlight);
 
 		run.resolve("long-result");
-		expect(await replay).toBe("long-result");
+		expect(await inFlight).toBe("long-result");
 		expect(longExecutions).toBe(1);
 	});
 
-	test("bounds settled serialized-result weight, not only entry count", async () => {
+	test("bounds serialized-result weight, not only entry count", async () => {
 		const cache = new RequestReplayCache<string>(100, 5);
-		let firstExecutions = 0;
-		const first = () => {
-			firstExecutions += 1;
-			return "1234";
-		};
 
-		await cache.run("page", "first", "same", first);
-		await cache.run("page", "second", "same", () => "5678");
-		// Two four-character results exceed the five-character target, so the oldest is reclaimed — under the
-		// count ceiling alone (100) it would still be held, which is what makes this a weight bound.
-		expect(() => cache.run("page", "first", "same", first)).toThrow(RequestReplayReclaimedError);
-		expect(firstExecutions).toBe(1);
-		expect(await cache.run("page", "second", "same", () => "reran")).toBe("5678");
+		await cache.run("page", "first", "one", () => "1234");
+		await cache.run("page", "second", "two", () => "5678");
+		// Eight characters against a five-character budget: full on weight alone, far under the count of 100.
+		expect(() => cache.run("page", "third", "three", () => "9")).toThrow(
+			RequestReplayOverflowError,
+		);
+
+		// Freeing bytes, not entries, is what reopens it.
+		cache.acknowledge("page", ["first", "second"]);
+		expect(await cache.run("page", "third", "three", () => "9")).toBe("9");
 	});
 
-	// A successful `send` only says the bytes were queued. Acknowledgement is what frees a result, so a
-	// client that reads its replies keeps the cache small without the ceiling ever reclaiming anything.
-	test("acknowledged results are freed, so an undelivered one never meets the ceiling", async () => {
+	// A successful `send` only says the bytes were queued. Acknowledgement is what frees a result, and it is
+	// the only thing that does — nothing here evicts.
+	test("acknowledged results are freed; an undelivered one is kept indefinitely", async () => {
 		const cache = new RequestReplayCache<string>(2);
 		let lostExecutions = 0;
 		const lost = () => {
@@ -115,47 +137,9 @@ describe("request replay cache", () => {
 			cache.acknowledge("page", [id]);
 		}
 
-		// Four later results passed through a ceiling of two without displacing the one still owed.
+		// Four later results passed through a namespace of two without displacing the one still owed.
 		expect(await cache.run("page", "lost", "same", lost)).toBe("first-execution");
 		expect(lostExecutions).toBe(1);
-		expect(await cache.run("page", "read-1", "read-1", () => "reran")).toBe("reran");
-	});
-
-	// The ceiling still has to bound a peer that never acknowledges. It may cost that peer an *answer* — it
-	// may never cost exactly-once, which is the difference between a lost reply and a second `terminal.create`.
-	test("a reclaimed result fails its replay instead of executing the work twice", async () => {
-		const cache = new RequestReplayCache<string>(1);
-		let executions = 0;
-		const mutation = () => {
-			executions += 1;
-			return "created";
-		};
-
-		await cache.run("page", "mutation", "same", mutation);
-		await cache.run("page", "later", "other", () => "pushes the mutation past the ceiling");
-
-		expect(() => cache.run("page", "mutation", "same", mutation)).toThrow(
-			RequestReplayReclaimedError,
-		);
-		expect(executions).toBe(1);
-		// The tombstone still knows the id, so a *conflicting* reuse is caught as the conflict it is.
-		expect(() => cache.run("page", "mutation", "different", mutation)).toThrow(
-			RequestReplayConflictError,
-		);
-		expect(executions).toBe(1);
-	});
-
-	test("acknowledging a reclaimed id drops its tombstone", async () => {
-		const cache = new RequestReplayCache<string>(1);
-		let executions = 0;
-		const execute = () => String(++executions);
-
-		await cache.run("page", "reclaimed", "same", execute);
-		await cache.run("page", "later", "other", () => "past the ceiling");
-		cache.acknowledge("page", ["reclaimed"]);
-
-		// Acknowledged means read, so the id is free again rather than a permanently failing tombstone.
-		expect(await cache.run("page", "reclaimed", "same", execute)).toBe("2");
 	});
 
 	test("a receipt for work still in flight is ignored, not obeyed", async () => {
@@ -184,6 +168,50 @@ describe("request replay cache", () => {
 
 		expect(() => cache.acknowledge("page", ["never-sent"])).not.toThrow();
 		expect(() => cache.acknowledge("ghost", ["req-1"])).not.toThrow();
+	});
+
+	// A receipt can die in a socket buffer exactly like a response can, and nothing would ever re-send it: the
+	// page dropped that request from `pending` the moment it resolved. Restating the live set on reconnect is
+	// what stops one lost receipt from pinning a result until the page retires.
+	test("reconnect reconciliation frees everything the page is no longer waiting on", async () => {
+		const cache = new RequestReplayCache<string>(3);
+		let executions = 0;
+		const execute = () => String(++executions);
+
+		await cache.run("page", "acked-but-lost", "one", () => "one");
+		await cache.run("page", "also-lost", "two", () => "two");
+		await cache.run("page", "still-pending", "three", () => "three");
+
+		// The page comes back waiting on exactly one of the three; the receipts for the others never arrived.
+		cache.retain("page", ["still-pending"]);
+
+		expect(await cache.run("page", "still-pending", "three", execute)).toBe("three");
+		// Room reclaimed without any receipt having landed.
+		expect(await cache.run("page", "fresh", "four", execute)).toBe("1");
+	});
+
+	test("reconnect reconciliation keeps in-flight work the page did not name", async () => {
+		const cache = new RequestReplayCache<string>();
+		const run = deferred<string>();
+		let executions = 0;
+		const execute = () => {
+			executions += 1;
+			return run.promise;
+		};
+
+		const inFlight = cache.run("page", "picker", "same", execute);
+		// A page that reconnects mid-handler may legitimately omit an id it has since timed out on. Dropping a
+		// *running* handler is still the one thing that could produce a duplicate, so it is kept regardless.
+		cache.retain("page", []);
+		expect(cache.run("page", "picker", "same", execute)).toBe(inFlight);
+
+		run.resolve("/picked/path");
+		expect(await inFlight).toBe("/picked/path");
+		expect(executions).toBe(1);
+	});
+
+	test("reconciling an unknown client is a no-op", () => {
+		expect(() => new RequestReplayCache<string>().retain("ghost", ["a"])).not.toThrow();
 	});
 
 	test("client retirement drops its replay namespace", async () => {

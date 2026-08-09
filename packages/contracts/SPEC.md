@@ -244,11 +244,15 @@ of the host.
   The `WsMethodMap` typed request/result map +
   `WsParams`/`WsResult` helpers, and `PROTOCOL_VERSION`. Request ids are also the reconnect idempotency key:
   an unresolved client replays the same frame/id, and the host returns the one cached result for
-  `(clientKey, requestId)` instead of executing the handler again. **`WsAck`** (`{ ack: string[] }`, the one
-  client→host frame that is not a request — hence **`WsClientMessage`**, discriminated on `ack`) closes that
-  loop: it names responses the client has *read*, which is the only thing that distinguishes a reply the page
-  received from one that died in a socket buffer, and so is what lets the host free a retained result. This
-  behavior is protocol-versioned — a replaying UI must never run against a pre-dedup host.
+  `(clientKey, requestId)` instead of executing the handler again. Two client→host frames that are *not* requests close
+  that loop (hence **`WsClientMessage`**, discriminated on the key): **`WsAck`** (`{ ack: string[] }`) names
+  responses the client has *read* — the only thing that distinguishes a reply the page received from one that
+  died in a socket buffer, and so the only thing that lets the host free a retained result — and **`WsResume`**
+  (`{ resume: string[] }`), sent on every (re)connect ahead of the replays, names the complete set the page
+  still considers unresolved, so the host can release everything else. `resume` exists because a receipt is only
+  as reliable as the socket carrying it and nothing would ever re-send a lost one: restating the live set beats
+  confirming the confirmations. This behavior is protocol-versioned — a replaying UI must never run against a
+  pre-dedup host.
 
 ## Get right
 

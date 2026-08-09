@@ -657,8 +657,21 @@ export interface WsAck {
 	ack: string[];
 }
 
-/** Anything the client sends: a correlated request or a receipt (discriminate on `ack`). */
-export type WsClientMessage = WsRequest | WsAck;
+/**
+ * Client→host reconciliation, sent on every (re)connect ahead of the replays: the complete set of ids this
+ * page still considers unresolved. Every *other* settled result the host holds for it is free to go.
+ *
+ * A receipt is only as reliable as the socket carrying it, and once one is lost nothing would ever re-send it —
+ * the request it named is already gone from the page's pending map, so it is neither replayed nor acknowledged
+ * again. Rather than confirm the confirmations, each reconnect simply restates the whole truth, which repairs
+ * every receipt the previous socket took down with it.
+ */
+export interface WsResume {
+	resume: string[];
+}
+
+/** Anything the client sends: a request, a receipt, or a reconnect reconciliation (discriminate on the key). */
+export type WsClientMessage = WsRequest | WsAck | WsResume;
 
 /**
  * A failure the **host names**, so a client can react to *this* error rather than to "something failed".
