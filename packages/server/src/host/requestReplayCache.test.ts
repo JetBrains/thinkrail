@@ -3,6 +3,7 @@ import {
 	RequestReplayCache,
 	RequestReplayConflictError,
 	RequestReplayOverflowError,
+	RequestReplayUnretainedError,
 } from "./requestReplayCache";
 
 function deferred<T>() {
@@ -83,6 +84,7 @@ describe("request replay cache", () => {
 		// Reading one response makes room for exactly one more.
 		cache.acknowledge("page", ["first"]);
 		expect(await cache.run("page", "third", "three", execute)).toBe("3");
+		expect(() => cache.run("page", "fourth", "four", execute)).toThrow(RequestReplayOverflowError);
 	});
 
 	test("in-flight work is never evicted to make room, and counts against admission", async () => {
@@ -105,19 +107,56 @@ describe("request replay cache", () => {
 		expect(longExecutions).toBe(1);
 	});
 
-	test("bounds serialized-result weight, not only entry count", async () => {
-		const cache = new RequestReplayCache<string>(100, 5);
+	// Admission cannot police bytes: a handler's output size is unknown until it finishes, and in-flight work
+	// weighs nothing. Checked only on the way in, a few concurrent large reads settle far past the budget and,
+	// since nothing is ever evicted, stay there. So the byte budget is enforced on the way out instead.
+	test("the byte budget holds even when every response is admitted before any settles", async () => {
+		const cache = new RequestReplayCache<string>(100, 8);
+		const gates = ["a", "b", "c"].map(() => deferred<string>());
 
-		await cache.run("page", "first", "one", () => "1234");
-		await cache.run("page", "second", "two", () => "5678");
-		// Eight characters against a five-character budget: full on weight alone, far under the count of 100.
-		expect(() => cache.run("page", "third", "three", () => "9")).toThrow(
-			RequestReplayOverflowError,
+		// All three admitted while empty — exactly the window an admission-time byte check cannot see.
+		const flights = gates.map((gate, i) =>
+			cache.run("page", `read-${i}`, `f${i}`, () => gate.promise),
 		);
+		for (const gate of gates) gate.resolve("12345"); // 5 chars each, 15 against a budget of 8
+		await Promise.all(flights);
 
-		// Freeing bytes, not entries, is what reopens it.
-		cache.acknowledge("page", ["first", "second"]);
-		expect(await cache.run("page", "third", "three", () => "9")).toBe("9");
+		// First fits; the rest would breach the budget, so their answers are dropped rather than retained.
+		expect(await cache.run("page", "read-0", "f0", () => "reran")).toBe("12345");
+		expect(() => cache.run("page", "read-1", "f1", () => "reran")).toThrow(
+			RequestReplayUnretainedError,
+		);
+		expect(() => cache.run("page", "read-2", "f2", () => "reran")).toThrow(
+			RequestReplayUnretainedError,
+		);
+	});
+
+	test("a single response larger than the whole budget is recorded but not retained", async () => {
+		const cache = new RequestReplayCache<string>(100, 4);
+		let executions = 0;
+		const huge = () => {
+			executions += 1;
+			return "123456789";
+		};
+
+		// The caller still gets its answer — only the retained copy is refused.
+		expect(await cache.run("page", "huge", "same", huge)).toBe("123456789");
+		expect(() => cache.run("page", "huge", "same", huge)).toThrow(RequestReplayUnretainedError);
+		expect(executions).toBe(1); // never a second execution, which is the whole point
+
+		// And it cost the budget nothing, so a later result of a workable size is still retained.
+		expect(await cache.run("page", "small", "other", () => "ok")).toBe("ok");
+		expect(await cache.run("page", "small", "other", () => "reran")).toBe("ok");
+	});
+
+	test("acknowledging frees budget for later responses", async () => {
+		const cache = new RequestReplayCache<string>(100, 8);
+
+		await cache.run("page", "first", "one", () => "12345");
+		cache.acknowledge("page", ["first"]);
+		// Without the release this would breach the 8-char budget and be dropped.
+		await cache.run("page", "second", "two", () => "12345");
+		expect(await cache.run("page", "second", "two", () => "reran")).toBe("12345");
 	});
 
 	// A successful `send` only says the bytes were queued. Acknowledgement is what frees a result, and it is

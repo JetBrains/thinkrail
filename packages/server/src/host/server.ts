@@ -281,9 +281,9 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 					// cache above returns `response` without executing the handler again.
 					if (ws.send(response) === 0) ws.close();
 				} catch (err) {
-					// Cache-level refusals — an id replayed with a different payload, or a new id arriving at a full
-					// namespace. Both answer with an error precisely so they do not displace, rerun, or crowd out the
-					// operations already stored for this client.
+					// Cache-level refusals — an id replayed with a different payload, a new id arriving at a full
+					// namespace, or a replay whose response was too large to retain. Each answers with an error precisely
+					// so it does not rerun, displace, or crowd out the operations already stored for this client.
 					const error = err instanceof Error ? err.message : String(err);
 					if (ws.send(JSON.stringify({ id: requestId, ok: false, error })) === 0) ws.close();
 				}

@@ -36,10 +36,15 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `{ resume: [id] }` on each reconnect names everything it still considers **unresolved**, freeing all other
   settled results. `resume` is what makes receipts safe to lose — an ack can die in a socket buffer exactly like
   a response can, and nothing would ever re-send it, so each reconnect restates the whole truth instead of
-  confirming the confirmations. Memory is bounded at the **other** end, by admission: a client's namespace has a
-  hard request-count and serialized-byte cap, and once full it **refuses new ids** (`RequestReplayOverflowError`
-  → a normal `ok: false`) while continuing to answer every id it already holds. Refusing work that provably has
-  not run is the one bound that cannot cost exactly-once,
+  confirming the confirmations. Cost is bounded instead by **two hard limits, each enforced where its size becomes
+  known**: the entry count on the way *in* — a full namespace refuses new ids (`RequestReplayOverflowError` → a
+  normal `ok: false`) while still answering every id it holds — and the retained bytes on the way *out* of the
+  handler, since a response's size is unknowable at admission (`fs.readFile` returns a whole file) and in-flight
+  work weighs nothing, so an admission-time byte check would bound the count and nothing else. A result that
+  would breach the byte budget is not retained: the entry stays as proof the work ran, so its replay fails
+  (`RequestReplayUnretainedError`) rather than re-executing, and the response the caller was already sent is
+  unaffected. Neither limit can cost exactly-once — one refuses work that has not started, the other keeps the
+  record of work that finished and drops only its answer,
   the **`provider.login`** channel publish (the `auth` module's session-less login-frame bridge, wired like
   `pi.extensionUi`) and the `provider.*` login handlers, the **`watch` wiring** (inject the
   `workspace.fsChanged` publish callback into `watch`, plus its **repo-metadata** callback

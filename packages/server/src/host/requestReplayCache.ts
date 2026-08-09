@@ -7,12 +7,12 @@ export class RequestReplayConflictError extends Error {
 }
 
 /**
- * A **new** request refused because the client's replay namespace is full.
+ * A **new** request refused because the client already holds the maximum number of unreleased ones.
  *
- * The alternatives are worse in both directions: evicting a retained result would let its replay execute the
- * work a second time, and admitting without limit would let one page grow the host's memory without bound.
+ * The alternatives are worse in both directions: forgetting a request that ran would let its replay execute the
+ * work a second time, and admitting without limit would let one page grow the host's entry count without bound.
  * Refusing an operation that has *not yet run* costs neither — the client gets a visible failure for something
- * that definitely did not happen, and every id already in the namespace stays replayable.
+ * that definitely did not happen, and every id already in the namespace stays answerable.
  */
 export class RequestReplayOverflowError extends Error {
 	constructor(clientKey: string) {
@@ -23,16 +23,29 @@ export class RequestReplayOverflowError extends Error {
 	}
 }
 
+/**
+ * A replay of a request whose response was too large to keep within the client's byte budget. The work ran
+ * exactly once and is recorded as having run; only the answer is gone, so the replay fails visibly instead of
+ * executing it again.
+ */
+export class RequestReplayUnretainedError extends Error {
+	constructor(id: string) {
+		super(`request id "${id}" already executed; its response exceeded the retention budget`);
+		this.name = "RequestReplayUnretainedError";
+	}
+}
+
 interface ReplayEntry<T> {
 	readonly fingerprint: string;
-	readonly result: Promise<T>;
+	/** `null` once settled over budget: proof the work ran, without the answer it produced. */
+	result: Promise<T> | null;
 	settled: boolean;
 	weight: number;
 }
 
 interface ClientNamespace<T> {
 	readonly requests: Map<string, ReplayEntry<T>>;
-	/** Running sum of the settled entries' weight, kept incrementally so admission stays O(1). */
+	/** Running sum of the retained entries' weight, kept incrementally so the budget check stays O(1). */
 	weight: number;
 }
 
@@ -54,6 +67,11 @@ interface ClientNamespace<T> {
  *
  * In-flight entries are exempt from all three: a client cannot have read a response that does not exist yet, and
  * dropping a running handler is precisely the duplicate this cache exists to prevent.
+ *
+ * Two hard, independent limits bound what one page can cost, each enforced where its cost becomes known — the
+ * entry count on the way **in** ({@link RequestReplayOverflowError}), the retained bytes on the way **out** of
+ * the handler ({@link RequestReplayUnretainedError}). Neither can produce a second execution: one refuses work
+ * that has not started, the other keeps the record of work that finished and drops only its answer.
  */
 export class RequestReplayCache<T> {
 	private readonly clients = new Map<string, ClientNamespace<T>>();
@@ -79,13 +97,14 @@ export class RequestReplayCache<T> {
 		const existing = requests.get(requestId);
 		if (existing) {
 			if (existing.fingerprint !== fingerprint) throw new RequestReplayConflictError(requestId);
+			if (existing.result === null) throw new RequestReplayUnretainedError(requestId);
 			return existing.result;
 		}
 
-		// Admission control, and the only bound there is. It gates **new** ids only: a replay of an id already
-		// here was answered above, so a full namespace can still finish everything it owes — it just stops
-		// taking on more until the client reads what is waiting for it.
-		if (requests.size >= this.maxRequestsPerClient || namespace.weight >= this.maxWeightPerClient) {
+		// Entry-count admission. It gates **new** ids only: a replay of an id already here was answered above,
+		// so a full namespace still finishes everything it owes — it just stops taking on more until the client
+		// reads what is waiting for it. The byte budget is deliberately *not* checked here; see `markSettled`.
+		if (requests.size >= this.maxRequestsPerClient) {
 			throw new RequestReplayOverflowError(clientKey);
 		}
 
@@ -170,6 +189,20 @@ export class RequestReplayCache<T> {
 		// cannot, it declines while anything is in flight. Either way: never resurrect a dropped namespace.
 		if (this.clients.get(clientKey) !== namespace) return;
 		entry.settled = true;
+
+		// The byte budget is enforced *here*, not at admission, because only here is the size actually known.
+		// A handler's output is unbounded — an `fs.readFile` response is as large as the file — so admission can
+		// only ever guess, and in-flight work weighs nothing. Checking on the way in would therefore bound the
+		// entry count and nothing else, letting a few concurrent large reads settle arbitrarily far past the cap.
+		//
+		// Over budget, the answer is dropped and the entry stays as proof the work ran. That keeps the two costs
+		// separate and both hard: bytes can never exceed the budget, entries can never exceed the count. It also
+		// leaves the *normal* path untouched — the response was already sent — and degrades only a replay of it,
+		// into a visible error rather than a second execution.
+		if (namespace.weight + weight > this.maxWeightPerClient) {
+			entry.result = null;
+			return;
+		}
 		entry.weight = weight;
 		namespace.weight += weight;
 	}
