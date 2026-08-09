@@ -103,3 +103,74 @@ describe("WsTransport reconnect delivery", () => {
 		]);
 	});
 });
+
+/**
+ * The host cannot tell a reply that was read from one that died in a socket buffer, so it holds every result
+ * until the page says it arrived. These receipts are the half of exactly-once the client owns: without them
+ * the host must either keep every response forever or reclaim one the page is still about to replay for.
+ */
+describe("WsTransport response receipts", () => {
+	const acksIn = (sent: readonly string[]): string[] =>
+		sent.flatMap((frame) => (JSON.parse(frame) as { ack?: string[] }).ack ?? []);
+
+	test("acknowledges each response, batching a burst into one frame", async () => {
+		const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
+		transport.connect();
+		const socket = TestWebSocket.instances[0];
+		socket?.open();
+
+		const first = transport.request("project.list", {});
+		const second = transport.request("workspace.list", { projectId: "p1" });
+		const ids = socket?.sent.map((frame) => (JSON.parse(frame) as { id: string }).id) ?? [];
+		expect(ids).toHaveLength(2);
+
+		socket?.message(JSON.stringify({ id: ids[0], ok: true, result: [] }));
+		socket?.message(JSON.stringify({ id: ids[1], ok: true, result: [] }));
+		await Promise.all([first, second]);
+		await tick(0);
+
+		expect(acksIn(socket?.sent ?? [])).toEqual(ids);
+		// Both receipts rode one frame: two requests plus a single batched ack.
+		expect(socket?.sent).toHaveLength(3);
+	});
+
+	test("a receipt the dead socket could not carry travels on the next one", async () => {
+		const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
+		transport.connect();
+		const first = TestWebSocket.instances[0];
+		first?.open();
+
+		const result = transport.request("project.list", {});
+		const id = (JSON.parse(first?.sent[0] ?? "{}") as { id?: string }).id;
+		// The reply lands and the socket dies before the batched receipt can flush.
+		first?.message(JSON.stringify({ id, ok: true, result: [] }));
+		first?.close();
+		expect(await result).toEqual([]);
+		expect(acksIn(first?.sent ?? [])).toEqual([]);
+
+		await tick(520); // initial reconnect backoff
+		const replacement = TestWebSocket.instances[1];
+		replacement?.open();
+		await tick(0);
+
+		// Nothing to replay — the request resolved — but the host is still holding that result for it.
+		expect(acksIn(replacement?.sent ?? [])).toEqual([id ?? ""]);
+	});
+
+	test("re-acknowledges a duplicate reply, whose first receipt may be what went missing", async () => {
+		const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
+		transport.connect();
+		const socket = TestWebSocket.instances[0];
+		socket?.open();
+
+		const result = transport.request("project.list", {});
+		const id = (JSON.parse(socket?.sent[0] ?? "{}") as { id?: string }).id;
+		socket?.message(JSON.stringify({ id, ok: true, result: [] }));
+		expect(await result).toEqual([]);
+		await tick(0);
+		socket?.message(JSON.stringify({ id, ok: true, result: [] }));
+		await tick(0);
+
+		expect(acksIn(socket?.sent ?? [])).toEqual([id ?? "", id ?? ""]);
+	});
+});

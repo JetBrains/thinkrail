@@ -218,9 +218,17 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 				} catch {
 					return;
 				}
+				if (typeof req !== "object" || req === null) return;
+				// A receipt, not a request: the client naming responses it has read. That is the host's only
+				// proof they were not lost with a socket, so it frees those retained results — and runs nothing.
+				if ("ack" in req && Array.isArray(req.ack)) {
+					requestReplays.acknowledge(
+						ws.data.clientKey,
+						req.ack.filter((id): id is string => typeof id === "string"),
+					);
+					return;
+				}
 				if (
-					typeof req !== "object" ||
-					req === null ||
 					!("id" in req) ||
 					typeof req.id !== "string" ||
 					!("method" in req) ||
@@ -266,8 +274,9 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 					// cache above returns `response` without executing the handler again.
 					if (ws.send(response) === 0) ws.close();
 				} catch (err) {
-					// The only cache-level failure is an id replayed with a different payload. It must not
-					// displace or rerun the original operation stored under that id.
+					// Cache-level failures — an id replayed with a different payload, or one whose result the memory
+					// backstop reclaimed. Both answer with an error precisely so they do not displace or rerun the
+					// original operation stored under that id.
 					const error = err instanceof Error ? err.message : String(err);
 					if (ws.send(JSON.stringify({ id: requestId, ok: false, error })) === 0) ws.close();
 				}

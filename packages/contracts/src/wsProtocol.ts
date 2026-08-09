@@ -134,8 +134,10 @@ export interface TerminalExitPush {
 // `terminal.exit` announces a dead shell; `terminal.alive` lets a tab re-attaching to a shell it detached
 // earlier confirm it is still there. `terminal.create` additionally takes the client's measured `cols`/`rows`.
 // v27: unresolved requests survive reconnect: the client replays the same request id and the host deduplicates
-// by `(clientKey, requestId)`. The version prevents a replaying UI from connecting to a pre-dedup host and
-// executing a mutation twice after a lost response.
+// by `(clientKey, requestId)`. The client acknowledges each response it processes (`WsAck`), which is what lets
+// the host free the retained copy — an *un*acknowledged one may have died with its socket and stays replayable.
+// The version prevents a replaying UI from connecting to a pre-dedup host and executing a mutation twice after
+// a lost response.
 export const PROTOCOL_VERSION = 27;
 
 /**
@@ -641,6 +643,22 @@ export interface WsRequest<M extends WsMethodName = WsMethodName> {
 	params: WsParams<M>;
 	sessionId?: string;
 }
+
+/**
+ * Client→host receipt for responses it has processed, batched (one frame may cover many ids).
+ *
+ * It is the *only* proof the host has that a reply landed. A `send` that succeeds says the bytes were
+ * queued, not that the page read them — a socket dying with a reply still in its buffer looks identical to
+ * a delivered one. So until the id is acknowledged the host keeps the result replayable, and the page's
+ * reconnect replay gets the original result instead of a second execution; once acknowledged the page can
+ * never replay that id, and the retained copy has no reader left.
+ */
+export interface WsAck {
+	ack: string[];
+}
+
+/** Anything the client sends: a correlated request or a receipt (discriminate on `ack`). */
+export type WsClientMessage = WsRequest | WsAck;
 
 /**
  * A failure the **host names**, so a client can react to *this* error rather than to "something failed".

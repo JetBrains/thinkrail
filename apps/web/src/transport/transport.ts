@@ -91,6 +91,8 @@ export class WsTransport {
 	>();
 	private readonly subscribers = new Map<string, Set<PushHandler>>();
 	private readonly latest = new Map<string, unknown>();
+	private ackQueue: string[] = [];
+	private ackScheduled = false;
 	private backoff = 500;
 
 	constructor(opts: TransportOptions = {}) {
@@ -124,6 +126,9 @@ export class WsTransport {
 			// returns the original handler result instead of executing it again. This includes requests issued
 			// while disconnected and requests whose response died with the previous socket.
 			for (const entry of this.pending.values()) this.sendFrame(entry.frame);
+			// Receipts the dead socket could not carry. They travel *after* the replays so a reconnect never
+			// frees a result before the frame that might still need it has been answered.
+			this.flushAcks();
 		};
 		ws.onmessage = (ev) => this.handleMessage(ev.data);
 		ws.onclose = () => {
@@ -176,6 +181,32 @@ export class WsTransport {
 		};
 	}
 
+	/**
+	 * Tell the host a response landed, so it can drop the copy it retains for a replay.
+	 *
+	 * Until this arrives the host must assume the reply died with the socket and keep it replayable — that is
+	 * what makes a reconnect replay return the first execution's result instead of running a mutation twice.
+	 * Batched on a microtask so a burst of replies costs one frame, and kept across a disconnect: an unsent
+	 * receipt simply travels on the next socket. Losing one is safe in the direction that matters — the host
+	 * retains a result it could have freed, never frees one it still owes.
+	 */
+	private queueAck(id: string): void {
+		this.ackQueue.push(id);
+		if (this.ackScheduled) return;
+		this.ackScheduled = true;
+		queueMicrotask(() => {
+			this.ackScheduled = false;
+			this.flushAcks();
+		});
+	}
+
+	private flushAcks(): void {
+		if (this.ackQueue.length === 0 || this.ws?.readyState !== WebSocket.OPEN) return;
+		const ack = this.ackQueue;
+		this.ackQueue = [];
+		this.sendFrame(JSON.stringify({ ack }));
+	}
+
 	/** Send now if the socket is open; otherwise the pending map is the reconnect queue. */
 	private sendFrame(frame: string): void {
 		if (this.ws?.readyState !== WebSocket.OPEN) return;
@@ -203,6 +234,9 @@ export class WsTransport {
 			if (set) for (const handler of set) handler(msg.data);
 			return;
 		}
+		// Acknowledge before correlating: an id already resolved — a duplicate reply to a replayed frame —
+		// still wants a receipt, because the one for the first copy may be exactly what died with its socket.
+		this.queueAck(msg.id);
 		const entry = this.pending.get(msg.id);
 		if (!entry) return;
 		clearTimeout(entry.timer);

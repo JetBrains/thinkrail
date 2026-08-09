@@ -6,9 +6,22 @@ export class RequestReplayConflictError extends Error {
 	}
 }
 
+/**
+ * A replay of a request whose result the host reclaimed under memory pressure. The work ran exactly once and
+ * must not run again, so the replay fails instead — a visible error the caller can retry deliberately, rather
+ * than a second silent execution of a mutation.
+ */
+export class RequestReplayReclaimedError extends Error {
+	constructor(id: string) {
+		super(`request id "${id}" already executed; its result is no longer retained`);
+		this.name = "RequestReplayReclaimedError";
+	}
+}
+
 interface ReplayEntry<T> {
 	readonly fingerprint: string;
-	readonly result: Promise<T>;
+	/** `null` once {@link RequestReplayCache.prune} reclaimed it: the handler ran, the answer is gone. */
+	result: Promise<T> | null;
 	settled: boolean;
 	weight: number;
 }
@@ -16,10 +29,20 @@ interface ReplayEntry<T> {
 /**
  * Per-client exactly-once execution for requests replayed after a socket loss.
  *
- * In-flight entries are never evicted: that is the interval in which executing a duplicate would be most
- * damaging. Settled entries are insertion-ordered and bounded by count and serialized-result weight; the
- * production client never replays a request after receiving its response, so the window only needs to cover
- * unresolved reconnects.
+ * A settled result is retained until the client **acknowledges** it ({@link acknowledge}), because a
+ * successful `send` is not delivery: a socket that dies with the reply still in its buffer is
+ * indistinguishable from one that flushed it, and the page will replay that id on reconnect. Acknowledgement
+ * is the only signal that separates the two, so it — not the ceiling below — is how settled entries normally
+ * leave the cache. In-flight entries are never touched at all: that is the interval in which executing a
+ * duplicate would be most damaging.
+ *
+ * The count and serialized-weight ceiling is a memory backstop, not the lifecycle, and it is deliberately
+ * unable to cause a duplicate: it reclaims a settled **result** but keeps its **id** as a tombstone, so a
+ * later replay fails ({@link RequestReplayReclaimedError}) instead of running the work again. Exactly-once
+ * therefore holds no matter how the peer behaves; only the answer can be lost, and only under pressure a
+ * client that acknowledges never creates — it frees each result as it reads it, so nothing accumulates to
+ * reclaim. A tombstone is an id and a fingerprint — on the order of a hundred bytes against the megabytes of
+ * response it replaces — and lives until the page is retired.
  */
 export class RequestReplayCache<T> {
 	private readonly clients = new Map<string, Map<string, ReplayEntry<T>>>();
@@ -44,6 +67,7 @@ export class RequestReplayCache<T> {
 		const existing = requests.get(requestId);
 		if (existing) {
 			if (existing.fingerprint !== fingerprint) throw new RequestReplayConflictError(requestId);
+			if (existing.result === null) throw new RequestReplayReclaimedError(requestId);
 			return existing.result;
 		}
 
@@ -57,6 +81,22 @@ export class RequestReplayCache<T> {
 			() => this.markSettled(clientKey, requests, entry, 1),
 		);
 		return result;
+	}
+
+	/**
+	 * Free the results a client confirms it has read. An acknowledged id can never be replayed, so the copy
+	 * retained for that replay has no reader left; anything still unacknowledged stays, because it may be a
+	 * response that died with the socket and is exactly what a reconnect replays.
+	 *
+	 * Receipts for work still **in flight** are ignored rather than obeyed. A client cannot have read a
+	 * response that does not exist yet, so such a receipt is a lie or a bug — and honouring it would drop a
+	 * running handler, letting the replay start the second execution this cache exists to prevent. Unknown
+	 * ids are likewise ignored.
+	 */
+	acknowledge(clientKey: string, requestIds: readonly string[]): void {
+		const requests = this.clients.get(clientKey);
+		if (!requests) return;
+		for (const id of requestIds) if (requests.get(id)?.settled) requests.delete(id);
 	}
 
 	/**
@@ -103,32 +143,43 @@ export class RequestReplayCache<T> {
 		return typeof value === "string" ? value.length : 1;
 	}
 
+	/**
+	 * The memory backstop. Every *retained* result it can see is by definition **un**acknowledged — an
+	 * acknowledged one was deleted on receipt — so it never reaches a result the client has read, and for a
+	 * client that acknowledges there is nothing here to reclaim in the first place.
+	 *
+	 * What it reclaims is the result, oldest first; the id stays behind as a tombstone so the operation can
+	 * still be recognised as already executed. That is the whole point: the bound costs an *answer* under
+	 * pressure, never a repeated *execution*. Tombstones are not results and so cost nothing against either
+	 * limit — they are freed when the page is retired.
+	 */
 	private prune(requests: Map<string, ReplayEntry<T>>): void {
-		let settledCount = 0;
-		let settledWeight = 0;
+		let retainedCount = 0;
+		let retainedWeight = 0;
 		for (const entry of requests.values()) {
-			if (!entry.settled) continue;
-			settledCount += 1;
-			settledWeight += entry.weight;
+			if (!entry.settled || entry.result === null) continue;
+			retainedCount += 1;
+			retainedWeight += entry.weight;
 		}
 		if (
-			settledCount <= this.maxSettledPerClient &&
-			settledWeight <= this.maxSettledWeightPerClient
+			retainedCount <= this.maxSettledPerClient &&
+			retainedWeight <= this.maxSettledWeightPerClient
 		) {
 			return;
 		}
 
-		for (const [id, entry] of requests) {
-			if (!entry.settled) continue;
+		for (const entry of requests.values()) {
+			if (!entry.settled || entry.result === null) continue;
 			// Keep at least the newest one, even if that single response exceeds the byte target: the handler
 			// already had to materialize it, and retaining one preserves reconnect replay without unbounded count.
-			if (settledCount === 1) return;
-			requests.delete(id);
-			settledCount -= 1;
-			settledWeight -= entry.weight;
+			if (retainedCount === 1) return;
+			entry.result = null;
+			retainedCount -= 1;
+			retainedWeight -= entry.weight;
+			entry.weight = 0;
 			if (
-				settledCount <= this.maxSettledPerClient &&
-				settledWeight <= this.maxSettledWeightPerClient
+				retainedCount <= this.maxSettledPerClient &&
+				retainedWeight <= this.maxSettledWeightPerClient
 			) {
 				return;
 			}

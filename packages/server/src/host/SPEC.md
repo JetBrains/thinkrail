@@ -22,13 +22,19 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `index.html` fallback, the `server.welcome` push, the **`?client=` page identity** read off the socket URL at
   upgrade (threaded to every handler as `RequestContext` and used to own that client's PTYs) plus the
   `clientKey → socket` registry and the **abandoned-client reap timer** that outlives a reconnect; the
-  count-and-serialized-byte-bounded **request replay cache** keyed by `(clientKey, requestId)` (the first frame
+  **request replay cache** keyed by `(clientKey, requestId)` (the first frame
   owns one handler promise + its
   serialized response, a reconnect replay awaits/returns that same result, a mismatched duplicate is rejected,
   and reaping the client clears its cache — but **only once nothing is in flight**: an unresolved request
   outlives the socket grace window, since the page holds that frame until its *own* deadline (30 minutes for
   the folder picker) and replays it on reconnect, so `clearClient` declines and the reap re-arms rather than
-  let the replay start a second execution of a handler that has not finished),
+  let the replay start a second execution of a handler that has not finished). A settled result is held until
+  the client **acknowledges** it — the `{ ack: [id] }` receipt frame, handled here and never routed to a
+  handler — because a successful `send` says the bytes were queued, not that the page read them, and a socket
+  that dies holding a reply is indistinguishable from one that flushed it. The count/serialized-byte ceiling is
+  a memory backstop a client that acknowledges never reaches, and it **cannot** cause a duplicate: it reclaims
+  the *result* and keeps the *id* as a tombstone, so a replay of a reclaimed request fails with a visible error
+  instead of executing the work a second time,
   the **`provider.login`** channel publish (the `auth` module's session-less login-frame bridge, wired like
   `pi.extensionUi`) and the `provider.*` login handlers, the **`watch` wiring** (inject the
   `workspace.fsChanged` publish callback into `watch`, plus its **repo-metadata** callback

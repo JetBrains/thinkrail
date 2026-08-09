@@ -22,7 +22,9 @@ The single WebSocket client to the host, and its app-wide singleton.
   per-client resources like PTYs without losing them to a hiccup), **reconnect-safe unresolved requests** — a
   frame that was in flight when its socket died returns to the queue and is replayed under the same request id,
   while the host deduplicates `(clientKey, requestId)`, so an accepted mutation cannot become a false failure or
-  execute twice —, channel `subscribe` with last-value replay, reconnect/backoff; `inferUrl` defaults to
+  execute twice —, the **`{ ack: [id] }` receipts** that are this side's half of that bargain (every response
+  read is acknowledged, batched on a microtask, held across a disconnect and sent on the next socket *after*
+  the replays; until one arrives the host must assume the reply died with the socket and keep it replayable), channel `subscribe` with last-value replay, reconnect/backoff; `inferUrl` defaults to
   same-origin; **`httpBase()`** derives the host's HTTP origin
   from the WS `url` — for building host HTTP URLs like the `/files/<workspaceId>/<path>` worktree-file
   endpoint the markdown viewer points relative `<img>`s at, targeting the same host the transport dials); `wireTransport.ts` (`initTransport`/
