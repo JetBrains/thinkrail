@@ -23,7 +23,14 @@ bootstrap it into one so it can be opened.
   records migrate as open. **`openProject`** finds a known root even when closed, clears `closed`, bumps
   `lastOpened`, preserves its id, persists, and publishes the full snapshot; **`closeProject`** marks that
   same record closed and publishes it without deleting the project, repository, workspace records, or
-  live runtimes. `setProjectPublisher` is the host-injected push seam; this module never imports `host`.
+  live runtimes. **One cwd, one ThinkRail identity:** `openProject` rejects a root already held as some
+  workspace's `worktreePath` — pi keys chat transcripts by *directory*, so a second identity on an owned
+  folder would serve that workspace's chats as its own and have them purged when either side is archived.
+  Compared **canonically** (a managed worktree's stored path is composed, `--show-toplevel` answers
+  symlink-resolved) and only **after** the reopen above, whose own Default workspace legitimately holds the
+  project folder. The workspace-side half of the same door is `openExistingWorktree`
+  ([[submodule-server-workspaces]]); reading the workspace records for it stays within the `persistence`
+  dep — this module still never imports its sibling. `setProjectPublisher` is the host-injected push seam; this module never imports `host`.
   It also owns **`inspectProjectPath`** (classify a path — `repo` / `initable` / `missing` /
   `notDirectory` — so the UI picks between opening, an init offer, or an error) and **`initProject`**
   (bootstrap a plain directory: `git init` + `git add -A` + an **allow-empty** initial commit — committing

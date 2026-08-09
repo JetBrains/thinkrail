@@ -23,8 +23,11 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   Right-click opens that PR-#167-styled menu at the pointer without selecting/navigating; a scroll-cancelled
   ~700ms long press is its touch equivalent. With a project-name button focused, the standard Context Menu
   key or Shift+F10 opens the same menu for keyboard-only use; arrow/activate/Escape keys work normally.
-  The menu is neutral
-  **Plus Create workspace**, separator, **X Close project**; Create is exactly the direct `+` flow. Close
+  The menu is neutral: **Plus Create workspace**, **FolderOpen Open existing worktree…**, separator,
+  **X Close project**. Create is exactly the direct `+` flow. Open existing worktree opens the
+  `ExistingWorktreeDialog` chooser fed by `workspace.listExisting` (branch + absolute path per row;
+  detached-HEAD rows stay visible but disabled); choosing one calls `workspace.openExisting`, then expands
+  the project and activates the attached row without starting a chat. Close
   opens a centered, neutral `ConfirmDialog` titled **“Close {name}?”**, description **“Removes this project
   from the open projects list. Its repository, workspaces, chats, and running activity are kept. Reopen it
   from Add project → Recents.”**, Cancel initially focused, and **Close project**; Cancel, backdrop, and
@@ -35,7 +38,9 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   project. `ProjectTree` also owns the `NewWorkspaceDialog` the per-project `+` opens **and** each
   workspace row's hover-revealed **kebab menu** (`MoreVertical`, `DropdownMenu`) — a `DropdownMenuSub`
   **"Open in"** (rendered only when at least one editor was detected), **Copy path**, **Reveal in file
-  manager**, and (worktrees only) **Remove workspace**. "Open in" comes from the host-wide `editor.list`;
+  manager**, and (worktrees only) **Remove workspace** — worded **Remove from ThinkRail** on an external
+  row, whose confirm promises the checkout and its branch stay untouched. "Open in" comes from the
+  host-wide `editor.list`;
   GUI entries call `workspace.openIn`, while terminal-kind Vim activates the workspace and runs through
   `addTerminal`'s one-shot `initialCommand`. Copy writes `worktreePath`; Reveal calls `workspace.reveal`.
   Remove is styled destructive and opens a centered `ConfirmDialog`; confirming fires
@@ -301,7 +306,9 @@ a project picker, the prompt hero, and the reused
   `branch · from baseBranch`, and **“Files, chats, changes, and terminals are scoped to this workspace,”**
   followed by the existing **New chat** action. For the **Default workspace** the receipt tells the truth
   instead of promising isolation: **“Default workspace”**, the project name, `on <branch>`, and “Chats,
-  changes, and terminals run directly in your project folder.” It is neither one-time nor dismissible, so it also helps
+  changes, and terminals run directly in your project folder.” An **external workspace** reads
+  **“Existing worktree”** with `on <branch>` for the same reason — ThinkRail did not cut it, so there is no
+  `from <base>` to claim. It is neither one-time nor dismissible, so it also helps
   after the last tab closes without introducing onboarding state. `CenterTabs` also renders ephemeral
   **`doc`** tabs (`DocTab` — inline rendered markdown, no file on disk) via its own
   `DocPane`→`MarkdownPreview`; used for the plan-as-markdown snapshot (see the `chat` module). `CenterTabs`

@@ -91,8 +91,10 @@ import {
 	ensureWorkspaceScratchDir,
 	forgetWorkspace,
 	getWorkspace,
+	listExistingWorktrees,
 	listWorkspaceRecords,
 	listWorkspaces,
+	openExistingWorktree,
 	reclaimWorktree,
 	setWorkspaceDiffBase,
 	setWorkspaceSkillOverride,
@@ -161,6 +163,12 @@ const handlers: Record<string, Handler> = {
 	"workspace.create": (params) => {
 		const p = params as { projectId: string; name?: string; baseRef?: string };
 		return createWorkspace(p.projectId, p.name, p.baseRef);
+	},
+	"workspace.listExisting": (params) =>
+		listExistingWorktrees((params as { projectId: string }).projectId),
+	"workspace.openExisting": (params) => {
+		const p = params as { projectId: string; path: string };
+		return openExistingWorktree(p.projectId, p.path);
 	},
 	"workspace.list": (params) => listWorkspaces((params as { projectId: string }).projectId),
 	"workspace.remove": (params) => {

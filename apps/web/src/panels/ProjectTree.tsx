@@ -33,11 +33,18 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { copyText } from "@/lib";
-import { isDefaultWorkspace, selectActiveWorkspaceProjectId, toast, useAppStore } from "../store";
+import {
+	isDefaultWorkspace,
+	isExternalWorkspace,
+	selectActiveWorkspaceProjectId,
+	toast,
+	useAppStore,
+} from "../store";
 import { errorText, getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { DiffStatBadge } from "./DiffStatBadge";
+import { ExistingWorktreeDialog } from "./ExistingWorktreeDialog";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { useOpenProject } from "./useOpenProject";
 
@@ -64,10 +71,12 @@ export function ProjectTree() {
 	// The project a New-Workspace dialog is open for (null = closed). The "+" opens it instead of
 	// creating a workspace directly.
 	const [dialogProjectId, setDialogProjectId] = useState<string | null>(null);
+	const [existingDialogProjectId, setExistingDialogProjectId] = useState<string | null>(null);
 	const addProjectButtonRef = useRef<HTMLButtonElement>(null);
 	const projectNameButtonsRef = useRef(new Map<string, HTMLButtonElement>());
 	const pendingCloseFocusProjectIdRef = useRef<string | null>(null);
 	const workspaceDialogReturnFocusIdRef = useRef<string | null>(null);
+	const existingDialogReturnFocusIdRef = useRef<string | null>(null);
 
 	const registerProjectNameButton = useCallback(
 		(projectId: string, element: HTMLButtonElement | null) => {
@@ -156,6 +165,20 @@ export function ProjectTree() {
 		await loadWorkspaces(workspace.projectId);
 	};
 
+	// The response is authoritative, but the project may never have been expanded: `addWorkspace` rightly
+	// refuses to seed a partial list. Re-list first, install the complete snapshot, then activate the row.
+	const onExistingWorktreeOpened = async (workspace: Workspace) => {
+		const rows = await getTransport().request("workspace.list", {
+			projectId: workspace.projectId,
+		});
+		const attached = rows.find((candidate) => candidate.id === workspace.id);
+		if (!attached) throw new Error("The attached worktree is missing from the workspace list");
+		setExpanded((prev) => new Set(prev).add(workspace.projectId));
+		const store = useAppStore.getState();
+		store.setWorkspaces(workspace.projectId, rows);
+		store.activateWorkspace(attached);
+	};
+
 	// Event-driven removal: just fire the request — no per-client optimism. The host tears the worktree
 	// down and broadcasts `workspace.removed`, which every client (including this one) reacts to via
 	// `applyWorkspaceRemoved`. A rejected request means no event will come, so surface it as an error toast
@@ -207,6 +230,11 @@ export function ProjectTree() {
 		setDialogProjectId(projectId);
 	};
 
+	const openExistingWorktreeDialog = (projectId: string) => {
+		existingDialogReturnFocusIdRef.current = projectId;
+		setExistingDialogProjectId(projectId);
+	};
+
 	return (
 		<nav className="flex flex-col gap-sm">
 			<header className="flex h-7 items-center justify-between pr-xs pl-sm">
@@ -248,6 +276,7 @@ export function ProjectTree() {
 								onClose={() => closeProject(project)}
 								onAddWorkspace={() => openWorkspaceDialog(project.id, false)}
 								onAddWorkspaceFromMenu={() => openWorkspaceDialog(project.id, true)}
+								onOpenExistingWorktree={() => openExistingWorktreeDialog(project.id)}
 								onRegisterNameButton={(element) => registerProjectNameButton(project.id, element)}
 								onRestoreFocus={() => focusProjectNameOrAdd(project.id)}
 							/>
@@ -288,6 +317,21 @@ export function ProjectTree() {
 				/>
 			) : null}
 
+			{existingDialogProjectId !== null ? (
+				<ExistingWorktreeDialog
+					open
+					projectId={existingDialogProjectId}
+					onOpenChange={(isOpen) => {
+						if (isOpen) return;
+						setExistingDialogProjectId(null);
+						const returnFocusId = existingDialogReturnFocusIdRef.current;
+						existingDialogReturnFocusIdRef.current = null;
+						if (returnFocusId) focusProjectNameOrAdd(returnFocusId);
+					}}
+					onOpened={onExistingWorktreeOpened}
+				/>
+			) : null}
+
 			{dialogs}
 		</nav>
 	);
@@ -303,6 +347,7 @@ function ProjectRow({
 	onClose,
 	onAddWorkspace,
 	onAddWorkspaceFromMenu,
+	onOpenExistingWorktree,
 	onRegisterNameButton,
 	onRestoreFocus,
 }: {
@@ -315,6 +360,7 @@ function ProjectRow({
 	onClose: () => void;
 	onAddWorkspace: () => void;
 	onAddWorkspaceFromMenu: () => void;
+	onOpenExistingWorktree: () => void;
 	onRegisterNameButton: (element: HTMLButtonElement | null) => void;
 	onRestoreFocus: () => void;
 }) {
@@ -419,6 +465,16 @@ function ProjectRow({
 						<Plus />
 						Create workspace
 					</ContextMenuItem>
+					<ContextMenuItem
+						data-testid="project-menu-open-existing-worktree"
+						onSelect={(event) => {
+							event.preventDefault();
+							openDialogAfterMenu(onOpenExistingWorktree);
+						}}
+					>
+						<FolderOpen />
+						Open existing worktree…
+					</ContextMenuItem>
 					<ContextMenuSeparator />
 					<ContextMenuItem
 						data-testid="project-menu-close"
@@ -472,11 +528,11 @@ function WorkspaceRow({
 	onRemove: () => void;
 }) {
 	const stats = workspace.diffStats;
-	// The built-in Default workspace (the project folder itself) is non-removable — the server enforces
-	// it; the UI simply offers nothing (no Remove item, no confirm dialog). It wears a House icon in place
-	// of the branch glyph, but otherwise gets the same "Open in" / Copy path / Reveal menu as any worktree.
+	// Default is non-removable; external is removable from ThinkRail but its user-owned checkout is not.
+	// Icons make the three ownership modes legible without adding another text badge to the compact row.
 	const isDefault = isDefaultWorkspace(workspace);
-	const Icon = isDefault ? House : GitBranch;
+	const isExternal = isExternalWorkspace(workspace);
+	const Icon = isDefault ? House : isExternal ? FolderOpen : GitBranch;
 	const [menuOpen, setMenuOpen] = useState(false);
 	// A centered dialog, not an anchored popover: the trigger is a generic overflow icon, not a dedicated
 	// delete affordance, so anchoring a confirm box to it the way the old dedicated Remove button did would
@@ -576,7 +632,7 @@ function WorkspaceRow({
 									}}
 								>
 									<Trash2 />
-									Remove workspace
+									{isExternal ? "Remove from ThinkRail" : "Remove workspace"}
 								</DropdownMenuItem>
 							</>
 						)}
@@ -587,15 +643,28 @@ function WorkspaceRow({
 				<ConfirmDialog
 					open={confirmOpen}
 					onOpenChange={setConfirmOpen}
-					title={`Remove ${workspace.name} workspace`}
-					description={
-						<>
-							Deletes this workspace's chats, terminals, and its worktree. The git branch{" "}
-							<span className="tr-text-emphasis text-text-default">{workspace.branch}</span> is
-							kept.
-						</>
+					title={
+						isExternal
+							? `Remove ${workspace.name} from ThinkRail?`
+							: `Remove ${workspace.name} workspace`
 					}
-					confirmLabel="Remove"
+					description={
+						isExternal ? (
+							<>
+								Removes this workspace's ThinkRail chats and terminals. The existing checkout,
+								files, and branch{" "}
+								<span className="tr-text-emphasis text-text-default">{workspace.branch}</span> stay
+								untouched.
+							</>
+						) : (
+							<>
+								Deletes this workspace's chats, terminals, and its worktree. The git branch{" "}
+								<span className="tr-text-emphasis text-text-default">{workspace.branch}</span> is
+								kept.
+							</>
+						)
+					}
+					confirmLabel={isExternal ? "Remove from ThinkRail" : "Remove"}
 					destructive
 					confirmTestId="confirm-remove"
 					onConfirm={onRemove}

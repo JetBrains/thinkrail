@@ -107,15 +107,20 @@ of the host.
   eligible for the agentic auto-rename; `true` = deliberately named (agentic or user), never auto-touched
   again; its optional **`kind: "default"`** marks the built-in per-project **Default workspace** — the
   project folder itself as a workspace, exactly one per project, pinned first in `workspace.list`,
-  non-removable and non-renamable server-side; absent = a normal worktree workspace — an explicit wire
-  field, never an id convention), `Session` (chat tab),
+  non-removable and non-renamable server-side; **`kind: "external"`** marks an explicitly attached,
+  user-owned worktree ThinkRail may forget but must never rename or reclaim; absent = a ThinkRail-managed
+  worktree workspace — an explicit wire field, never an id convention),
+  **`ExistingWorktreeCandidate`** (a `workspace.listExisting` row: absolute `path` + `branch`, or a
+  `detached` row the chooser disables), `Session` (chat tab),
   `FileNode` (file-tree node), `TabStatus`, `Git*`/diff types — incl. **`GitDiffScope`** (what the Changes
   panel is diffing: `branch` → the workspace's work since diverging from its diff base (the range starts at
   their merge-base, never the base's tip) / `uncommitted` → worktree vs `HEAD` /
   `commit` → one commit, `sha^` vs `sha`; omitted on the wire = `branch`, so an older client is unchanged)
   and **`GitCommit`** (a commit row of the scope menu's list). The two meanings of a workspace's base are
   **two fields**: `Workspace.baseBranch` is *creation provenance* (the ref the worktree was cut from — what
-  the receipt's `branch · from baseBranch` shows) and the optional **`Workspace.diffBase`** is the *review
+  the receipt's `branch · from baseBranch` shows; for a **user-owned** workspace, whose provenance isn't
+  ThinkRail's to claim, it is the repo default as the *initial* review target and the UI shows no `from`)
+  and the optional **`Workspace.diffBase`** is the *review
   target* (`workspace.setDiffBase`); every read resolves `diffBase ?? baseBranch` **server-side, in one
   place** — collapsing them into one field would make a re-pointed target lie about where the branch came
   from; **`ProviderStatus`/`ProviderStatusReport`**
@@ -182,6 +187,9 @@ of the host.
   correlated by `loginId` / **`loginCancel`** / **`logout`** /
   the **JetBrains AI** trio **`jbcentralConnect`** (wire Claude+GPT via the jbcentral proxy → a
   `JbcentralConnectResult`) / **`jbcentralDisconnect`** / **`jbcentralLogin`** (launch `central login`)) /
+  **`workspace.listExisting`** (the selected project's unattached Git worktrees, with detached rows
+  disabled by status) / **`workspace.openExisting`** (revalidate + register one branch-backed checkout as
+  `kind: "external"`, emitting the ordinary `workspace.created`, without mutating Git or disk) /
   **`project.setTrust`** (persist a project's trust grant → the updated `Project`; gates its committed
   cross-agent skill aliases) /
   **`skill.list`** (a pre-session, skill-only `SlashCommandInfo[]` preview for a `projectId`, resolved from

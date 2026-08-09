@@ -15,13 +15,21 @@ chats. Its **display `name` is decoupled from its git `branch`**: `name` is a hu
 (Title Case, spaces) and `branch` is a kebab slug derived from it — they were once held equal, and still
 coincide for the auto `workspace-N` placeholder, but a named workspace carries both distinctly.
 
-Every project also carries **exactly one built-in Default workspace** (`kind: "default"`) whose
-`worktreePath` is the project folder itself (git's *main working tree*) — the "just work in my project
-folder" anchor, ensured lazily, **non-removable and non-renamable**.
+Two kinds are **user-owned** — ThinkRail uses their cwd but never renames or reclaims them. Every project
+carries **exactly one built-in Default workspace** (`kind: "default"`) whose `worktreePath` is the project
+folder itself (git's *main working tree*) — the "just work in my project folder" anchor, ensured lazily,
+**non-removable and non-renamable**. Any **existing worktree** the user explicitly attaches is recorded in
+place as `kind: "external"` — outside the data dir, never created or mutated here.
 
 ## Boundary
 
-- **Owns:** `createWorkspace` (**async**; off `baseRef` when given — branched with `worktree add -b`, never a detached
+- **Owns:** `listExistingWorktrees(projectId)` (parse `git worktree list --porcelain -z`; drop the project
+  folder, prunable registrations, and every path already represented in ThinkRail; branch-backed rows are
+  `available`, detached-HEAD ones `detached`), `openExistingWorktree(projectId, path)` (revalidate against
+  the Git registry at the mutation door, comparing canonicalized paths; same-project retries are
+  idempotent, cross-project cwd reuse is rejected; persist + emit `created` with `kind: "external"`, a
+  directory-basename display name, `renamed: true`, and the repo default as its initial review target —
+  **no Git or checkout mutation**), `createWorkspace` (**async**; off `baseRef` when given — branched with `worktree add -b`, never a detached
   remote checkout; off the repo `HEAD` otherwise; **remote-ref freshness is prefetched off this critical
   path** — the New-Workspace dialog `git.prefetch`es the base in the background, so create only `git
   fetch`es as a cheap fallback when the local remote-tracking ref is missing entirely — that fallback runs
@@ -70,7 +78,9 @@ folder" anchor, ensured lazily, **non-removable and non-renamable**.
   client-supplied one: with no base picked it comes from `rev-parse --abbrev-ref HEAD`, i.e. from the
   repository, and an untrusted checkout can have an option-shaped branch checked out (`git branch` refuses such
   a name, `symbolic-ref` does not) — both halves of the same door, closed by one check. **The two base meanings are two
-  fields on purpose:** `baseBranch` = where the branch came from, `diffBase` = what its review is measured
+  fields on purpose:** `baseBranch` = where the branch came from (for a user-owned workspace, whose
+  provenance isn't ours to claim: the repo default as its *initial* review target, never labelled `from`),
+  `diffBase` = what its review is measured
   against; collapsing them would make a re-pointed target lie about provenance (the `branch · from
   baseBranch` receipt). Every read of "the base" resolves through the `git` module, never inline —
   `diffStats` composes the git module's **branch-scope range** (`resolveDiffRange` +
@@ -84,10 +94,11 @@ folder" anchor, ensured lazily, **non-removable and non-renamable**.
   and the slow git reclaim are separable (the host archives off the request's critical path):
   `forgetWorkspace(id)` (drop the persistence record, return the removed record or `null` — gone from
   `listWorkspaces` immediately), `reclaimWorktree(ws)` (the slow half — `git worktree remove --force`,
-  keeps the branch; hardened: rm + `prune` if git fails; **refuses the Default and, defense-in-depth,
-  any record whose `worktreePath` resolves to the project folder** — the rm-fallback must never see the
-  user's repo, however a corrupt/hand-edited record got there), and `removeWorkspace(id)` (the synchronous
-  composition of the two, kept for callers/tests that want the whole archive in one call).
+  keeps the branch; hardened: rm + `prune` if git fails; **refuses both user-owned kinds and,
+  defense-in-depth, any record whose `worktreePath` resolves to the project folder** — the rm-fallback must
+  never see the user's repo or an attached checkout, however a corrupt/hand-edited record got there), and
+  `removeWorkspace(id)` (the synchronous composition of the two, kept for callers/tests that want the whole
+  archive in one call).
 - **Default workspace (`kind: "default"`):** exactly one per project. `listWorkspaces` **ensures** it
   — find-or-create by `projectId`+`kind` (id a plain `randomUUID`; the `kind` field is the marker,
   never an id convention), **collapsing duplicates** defensively if out-of-band state churn ever
@@ -105,8 +116,9 @@ folder" anchor, ensured lazily, **non-removable and non-renamable**.
   = the repo's default branch via `git`'s `resolveDefaultBranch` (unborn-safe — its last fallback is
   `currentBranch`, so the literal `"HEAD"` never persists) — so Default's Changes measure like
   any workspace, degenerating to uncommitted work when the folder sits on the default branch itself.
-  Drift is **not** only a list-time discovery: `refreshDefaultWorkspace(workspaceId)` is the same
-  re-sync **without** the diff-stat listing (two cheap git reads; unknown id / a worktree workspace /
+  Drift is **not** only a list-time discovery: `refreshUserOwnedWorkspace(workspaceId)` is the same
+  re-sync **without** the diff-stat listing (an external workspace re-syncs only its `branch`, and an
+  unreadable checkout is never persisted as a fake detached `HEAD`; unknown id / a managed workspace /
   no drift → no save, no emit), which the host wires to `watch`'s **repo-metadata nudge** (host-mediated,
   `watch` has no `workspaces` edge — see [[submodule-server-watch]]). So a `git switch` in the Default
   workspace's terminal converges the rail, the top bar and the empty receipt live, instead of leaving
@@ -140,10 +152,10 @@ folder" anchor, ensured lazily, **non-removable and non-renamable**.
   `removed` carries `{ projectId, id }`) and the host maps `kind` → `workspace.*` channel. This makes the
   module the **single source of workspace lifecycle pushes** (the auto-rename tee no longer pushes — rename
   self-publishes), so registry membership stays shared domain state across every client (architecture #9).
-- **Public surface (barrel):** `createWorkspace`, `listWorkspaces`, `listWorkspaceRecords`, `forgetWorkspace`,
-  `reclaimWorktree`, `removeWorkspace`, `workspaceDiffStats`, `getWorkspace`, `renameWorkspace`,
-  `refreshDefaultWorkspace`, `ensureWorkspaceScratchDir`,
-  `setWorkspacePublisher`, `WorkspaceLifecycleEvent`.
+- **Public surface (barrel):** `createWorkspace`, `listExistingWorktrees`, `openExistingWorktree`,
+  `listWorkspaces`, `listWorkspaceRecords`, `forgetWorkspace`, `reclaimWorktree`, `removeWorkspace`,
+  `workspaceDiffStats`, `getWorkspace`, `renameWorkspace`, `refreshUserOwnedWorkspace`,
+  `ensureWorkspaceScratchDir`, `setWorkspacePublisher`, `WorkspaceLifecycleEvent`.
 - **Allowed deps:** `projects` (repo lookup), `git` (the runner), `persistence`; `contracts`;
   `@thinkrail/shared/paths` (the scratch-dir path convention); Node.
 - **Forbidden:** `host`; reaching into another feature's internals (use its barrel).
