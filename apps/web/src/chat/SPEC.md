@@ -29,9 +29,14 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
 
 - `user` / `system` / `retry` — 1:1 renderers. A user message that IS a review context package
   (`reviewPackage.ts` recognizes the `<review …>` header + `<comment …>` items the server's
-  `packageRender` emits) wears ONLY its one-sentence summary in the ordinary user bubble — "Sent 3
-  review comments on script.ts" — never the comment bodies/fragments: the chat opens with what the
-  user DID; the full package lives in pi's on-disk transcript. The retry countdown carries a `source` (`turn` =
+  `packageRender` emits — the parser is the read half of that format, pinned in unit tests against the
+  renderer's verbatim output) renders as a **foldable card**, collapsed to its one-sentence summary
+  ("Sent 3 review comments on 2 files") and unfolding in two levels: per FILE
+  (`groupPackageItems`), then each file to its comments — the remark's text, its `L2–4` ref, and the
+  quoted `<fragment>` verbatim (monospace, height-capped). Everything is parsed from the MESSAGE
+  itself — never the review snapshot, which the next review replaces — so any transcript answers
+  "what was sent" forever, on any client; both fold levels ride the shared fold cache
+  (row id / `rowId:path`), surviving virtualization. The retry countdown carries a `source` (`turn` =
   pi `auto_retry_*`; `summarization` = compaction/branch-summary `summarization_retry_*`, pi ≥0.81.1) —
   the flows can overlap mid-run, each keeps exactly one indicator (re-scheduling replaces, each source's
   end event clears only its own), and `RetryIndicator` labels them apart ("Retrying" vs "Retrying

@@ -12,10 +12,15 @@ import {
 import { useEffect, useState } from "react";
 import { cn, projectRelativePath, userText } from "@/lib";
 import { ActivityGroup } from "./ActivityGroup";
-import { useSelection } from "./foldState";
+import { useFold, useSelection } from "./foldState";
 
 import { Markdown } from "./Markdown";
-import { parseReviewPackage, reviewPackageLabel } from "./reviewPackage";
+import {
+	groupPackageItems,
+	parseReviewPackage,
+	type ReviewPackageFile,
+	reviewPackageLabel,
+} from "./reviewPackage";
 import type { ChatRow, TurnDividerData } from "./rows";
 import { ToolCard } from "./ToolCard";
 import { getToolChrome, getToolRenderer } from "./toolRegistry";
@@ -44,7 +49,7 @@ export function ChatTurnView({
 }) {
 	switch (row.kind) {
 		case "user":
-			return <UserTurn message={row.message} />;
+			return <UserTurn id={row.id} message={row.message} workspaceRoot={workspaceRoot} />;
 		case "system":
 			return <SystemTurn text={row.text} />;
 		case "error":
@@ -95,24 +100,127 @@ export function ChatTurnView({
 	}
 }
 
-/** The user bubble. A review send's context package wears its one-sentence summary ("Sent 3 review
- * comments on script.ts") instead of the structured XML the agent needs — the full text stays in pi's
- * transcript on disk, the dialog reads like a conversation. */
-function UserTurn({ message }: { message: UserMessage }) {
+/** The user bubble. A review send's context package renders as a FOLDABLE card — collapsed to its
+ * one-sentence summary ("Sent 3 review comments on script.ts"), unfolding to the comments themselves
+ * in readable form (file + lines, the remark, the quoted fragment) — instead of the structured XML
+ * the agent needs. Everything is parsed from the message itself (the transcript IS the history), so
+ * any old chat unfolds the same way; the fold survives virtualization via the shared cache. */
+function UserTurn({
+	id,
+	message,
+	workspaceRoot,
+}: {
+	id: string;
+	message: UserMessage;
+	workspaceRoot?: string | undefined;
+}) {
 	const text = userText(message.content);
 	const review = parseReviewPackage(text);
+	const [expanded, toggle] = useFold(id);
 	return (
 		<div data-testid="chat-message" data-role="user" className="flex justify-end">
 			<div className="max-w-[85%] whitespace-pre-wrap rounded-[var(--radius-md)] border border-bubble-user-border bg-clip-padding bg-bubble-user-bg px-md py-sm tr-text-reading text-text-muted">
 				{review ? (
-					<span data-testid="review-package-summary" className="whitespace-normal">
-						{reviewPackageLabel(review)}
-					</span>
+					<div data-testid="review-package-card" data-expanded={expanded}>
+						<button
+							type="button"
+							data-testid="review-package-summary"
+							aria-expanded={expanded}
+							onClick={toggle}
+							className="flex w-full cursor-pointer select-none items-center gap-xs whitespace-normal text-left outline-none focus-visible:ring-2 focus-visible:ring-primary"
+						>
+							<ChevronRight
+								className={cn(
+									"size-3 shrink-0 text-text-subtle transition-transform",
+									expanded && "rotate-90",
+								)}
+							/>
+							{reviewPackageLabel(review)}
+						</button>
+						{expanded && (
+							<ul className="mt-xs flex flex-col">
+								{groupPackageItems(review.items).map((file) => (
+									<PackageFileRow
+										key={file.path ?? "@review"}
+										foldId={`${id}:${file.path ?? "@review"}`}
+										file={file}
+										workspaceRoot={workspaceRoot}
+									/>
+								))}
+							</ul>
+						)}
+					</div>
 				) : (
 					text
 				)}
 			</div>
 		</div>
+	);
+}
+
+/** One file inside the unfolded package card: `▸ script.ts · 2`, unfolding to its comments — each the
+ * remark's text (with its line ref) plus the quoted fragment (verbatim from the package, monospace,
+ * height-capped). Its fold survives virtualization too, keyed under the owning row's id. */
+function PackageFileRow({
+	foldId,
+	file,
+	workspaceRoot,
+}: {
+	foldId: string;
+	file: ReviewPackageFile;
+	workspaceRoot?: string | undefined;
+}) {
+	const [expanded, toggle] = useFold(foldId);
+	// Content keys (+ a per-duplicate ordinal): parsed from an immutable message — exact, no index keys.
+	const seen = new Map<string, number>();
+	const keyedItems = file.items.map((item) => {
+		const base = `${item.lineRef}·${item.body}`;
+		const n = (seen.get(base) ?? 0) + 1;
+		seen.set(base, n);
+		return { key: `${base}·${n}`, item };
+	});
+	return (
+		<li data-testid="review-package-file" data-expanded={expanded}>
+			<button
+				type="button"
+				data-testid="review-package-file-toggle"
+				aria-expanded={expanded}
+				onClick={toggle}
+				className="flex w-full cursor-pointer select-none items-center gap-xs py-xs text-left outline-none focus-visible:ring-2 focus-visible:ring-primary"
+			>
+				<ChevronRight
+					className={cn(
+						"size-3 shrink-0 text-text-subtle transition-transform",
+						expanded && "rotate-90",
+					)}
+				/>
+				<span className="min-w-0 truncate tr-code-text text-text-default">
+					{file.path ? projectRelativePath(file.path, workspaceRoot) : "Change set"}
+				</span>
+				<span className="shrink-0 tr-text-metadata text-text-subtle">{file.items.length}</span>
+			</button>
+			{expanded && (
+				<ul className="mb-xs flex flex-col gap-sm pl-md">
+					{keyedItems.map(({ key, item }) => (
+						<li
+							key={key}
+							data-testid="review-package-item"
+							className="border-border-muted border-l-2 pl-sm"
+						>
+							{item.lineRef && (
+								<span className="block tr-code-text text-text-subtle">{item.lineRef}</span>
+							)}
+							<span className="block whitespace-pre-wrap text-text-default">{item.body}</span>
+							{item.fragment && (
+								<pre className="mt-xs max-h-32 overflow-auto whitespace-pre-wrap rounded-[var(--radius-sm)] bg-sunken px-sm py-xs tr-code-text text-text-muted">
+									{item.fragment}
+								</pre>
+							)}
+						</li>
+					))}
+				</ul>
+			)}
+		</li>
 	);
 }
 
