@@ -3,8 +3,6 @@ import { WS_CHANNELS } from "@thinkrail/contracts";
 import { Plus, X } from "lucide-react";
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import {
-	allTerminalTabs,
-	isTerminalVisible,
 	selectActiveTerminalId,
 	selectWorkspaceTerminals,
 	type TerminalTab,
@@ -15,10 +13,9 @@ import { ConfirmDialog } from "./ConfirmDialog";
 
 const TerminalInstance = lazy(() => import("./TerminalInstance"));
 
-/** Lower-right terminals for the active worktree. All instances stay mounted; only the active is shown. */
+/** Lower-right terminals for the active worktree. Only the shown tab is mounted — see `shown` below. */
 export function TerminalsPanel() {
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
-	const terminalsByWorkspace = useAppStore((s) => s.terminalsByWorkspace);
 	const tabs = useAppStore(selectWorkspaceTerminals);
 	const activeTerminalId = useAppStore(selectActiveTerminalId);
 	const addTerminal = useAppStore((s) => s.addTerminal);
@@ -87,7 +84,14 @@ export function TerminalsPanel() {
 			});
 	}, []);
 
-	const allTerminals = allTerminalTabs(terminalsByWorkspace);
+	// EXACTLY ONE instance is mounted, app-wide: the tab this client is actually looking at.
+	//
+	// Mounting is attaching, and attachment is exclusive — so rendering every tab would have this client claim
+	// terminals it is not showing. With a shared tab list that is actively harmful: the moment another browser
+	// opened a terminal, our hidden instance for it would attach and snatch it out from under the person who
+	// just opened it. Switching tabs re-attaches and repaints from the host's recording, which is exactly what
+	// that recording is for; a background shell keeps running and keeps being recorded regardless.
+	const shown = tabs.find((tab) => tab.tabKey === activeTerminalId) ?? null;
 
 	return (
 		<div data-testid="terminal-panel" className="flex h-full min-h-0 flex-col">
@@ -123,16 +127,15 @@ export function TerminalsPanel() {
 						No terminals yet — press + to open one.
 					</p>
 				) : null}
-				{allTerminals.map((tab) => (
-					<Suspense key={tab.tabKey} fallback={null}>
+				{shown ? (
+					<Suspense key={shown.tabKey} fallback={null}>
 						<TerminalInstance
-							tabKey={tab.tabKey}
-							workspaceId={tab.workspaceId}
-							visible={isTerminalVisible(tab, activeWorkspaceId, activeTerminalId)}
-							{...(tab.initialCommand ? { initialCommand: tab.initialCommand } : {})}
+							tabKey={shown.tabKey}
+							workspaceId={shown.workspaceId}
+							{...(shown.initialCommand ? { initialCommand: shown.initialCommand } : {})}
 						/>
 					</Suspense>
-				))}
+				) : null}
 			</div>
 			<ConfirmDialog
 				open={confirmBusy !== null}

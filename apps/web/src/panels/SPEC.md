@@ -81,7 +81,10 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   workspace's tabs survive in the store, so re-selecting it restores its view. That round trip unmounts the
   whole workspace surface, `TerminalsPanel` included — but **terminals keep no client-side state to lose**:
   the host owns the tab list and keys shells by `(workspaceId, tabKey)`, so mounting is one idempotent
-  `terminal.attach` and unmounting does nothing at all. Attach returns the recorded output to repaint, so the
+  `terminal.attach` and unmounting does nothing at all. **Exactly one `TerminalInstance` is mounted app-wide —
+  the tab on screen.** Mounting *is* attaching and attachment is exclusive, so an instance per tab would claim
+  terminals this client is not showing and take them from the client that opened them; switching tabs
+  re-attaches and repaints from the host's recording. Attach returns the recorded output to repaint, so the
   screen comes back too. **Only `terminal.close`, from the user closing a tab, kills a PTY** — and it refuses
   a shell with child processes until a `ConfirmDialog` is accepted. Also
   `FileTree`, `SpecsPanel`, `RightPanel`,

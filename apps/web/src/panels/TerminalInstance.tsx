@@ -120,7 +120,6 @@ interface Props {
 	/** This tab's durable identity. Half of `(workspaceId, tabKey)`, which is what the host keys shells on. */
 	tabKey: string;
 	workspaceId: string;
-	visible: boolean;
 	/**
 	 * Run once, on the shell this tab was opened for (e.g. "Open in Vim"), then spent.
 	 *
@@ -140,7 +139,7 @@ interface Props {
  * Attach returns the recorded output to repaint, so a remount shows the screen it left behind rather than an
  * empty buffer over a live process.
  */
-export default function TerminalInstance({ tabKey, workspaceId, visible, initialCommand }: Props) {
+export default function TerminalInstance({ tabKey, workspaceId, initialCommand }: Props) {
 	const hostRef = useRef<HTMLDivElement>(null);
 	const termRef = useRef<XTerm | null>(null);
 	const serverIdRef = useRef<string | null>(null);
@@ -424,21 +423,17 @@ export default function TerminalInstance({ tabKey, workspaceId, visible, initial
 		};
 	}, [tabKey, workspaceId]);
 
-	// Hidden containers report zero size, so fit + focus when this layer becomes visible. `applyFit`
-	// no-ops until the layer has a real size, so a not-yet-laid-out frame can't shrink the buffer; the
-	// ResizeObserver fires the effective fit once layout settles.
+	// This instance is mounted only while it is the tab on screen, so mounting IS becoming visible: fit against
+	// the real layout once it exists, put the viewport on the live prompt, and take focus. `applyFit` no-ops
+	// until the layer has a size, and the ResizeObserver fires the effective fit once layout settles.
 	useEffect(() => {
-		if (!visible) return;
 		const frame = requestAnimationFrame(() => {
 			fitFnRef.current?.();
-			// Snap the viewport back to the live prompt: a resize while hidden can leave it scrolled off the
-			// buffer, so on re-show the rendered rows would otherwise show blank/stale rows instead of the
-			// preserved output.
 			termRef.current?.scrollToBottom();
 			termRef.current?.focus();
 		});
 		return () => cancelAnimationFrame(frame);
-	}, [visible]);
+	}, []);
 
 	const takeBack = useCallback(() => reattachRef.current?.(), []);
 
@@ -450,8 +445,10 @@ export default function TerminalInstance({ tabKey, workspaceId, visible, initial
 			data-exited={exited}
 			data-failed={failed}
 			data-detached={detached}
-			data-visible={visible}
-			className={`absolute inset-0 ${visible ? "" : "hidden"}`}
+			// Always true now that only the shown tab is mounted — kept so tests and tooling can address "the
+			// terminal on screen" without knowing that.
+			data-visible="true"
+			className="absolute inset-0"
 		>
 			<div ref={hostRef} className="h-full w-full" />
 			{detached ? (

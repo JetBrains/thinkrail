@@ -591,6 +591,15 @@ test("a tab opened or closed in one browser reaches the other", async ({ page, c
 	await expect(page2.getByTestId("terminal-tab")).toHaveCount(2);
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(2);
 
+	// ...and seeing it must not mean CLAIMING it. Only the tab a client is actually looking at is attached, so
+	// A's row for B's new terminal is just a row. Rendering an instance per shared tab would have A's hidden
+	// one attach and snatch the terminal out from under the person who just opened it.
+	// (A being detached on the *first* terminal is separate and correct: B entered the workspace looking at it,
+	// which is what exclusive attach means.)
+	await expect(visibleTerminal(page2)).toHaveAttribute("data-detached", "false");
+	await runInTerminal(page2, "echo TR_STILL_B");
+	await expect(visibleTerminalScreen(page2)).toContainText("TR_STILL_B");
+
 	// B closes it again — A converges back rather than keeping a tab whose shell is gone.
 	await page2.getByTestId("terminal-tab-close").nth(1).click();
 	await expect(page2.getByTestId("terminal-tab")).toHaveCount(1);

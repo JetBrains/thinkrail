@@ -266,31 +266,3 @@ export function selectActiveTerminalId(state: TerminalState): string | null {
 	if (!state.activeWorkspaceId) return null;
 	return state.activeTerminalByWorkspace[state.activeWorkspaceId] ?? null;
 }
-
-/**
- * Every workspace's terminal tabs, flattened. All of them stay mounted — that is what keeps their buffers and
- * their shells alive across a workspace switch — so the panel renders this list, not just the active
- * workspace's. A pure helper over the already-subscribed record rather than a store selector, because it builds
- * a fresh array on every call and subscribing to that would re-render on every unrelated store change.
- */
-export function allTerminalTabs(
-	terminalsByWorkspace: Record<string, TerminalTab[]>,
-): TerminalTab[] {
-	return Object.values(terminalsByWorkspace).flat();
-}
-
-/**
- * Whether a terminal tab is the one on screen — exactly one is, app-wide.
- *
- * Two conditions, not one: every workspace's terminals stay mounted so their buffers and shells survive a
- * workspace switch, so "is my tab the active tab" is not enough — it must also belong to the workspace in view.
- * A pure helper over the two already-subscribed values rather than a store selector, so a component can't
- * accidentally subscribe to a freshly built closure on every render.
- */
-export function isTerminalVisible(
-	tab: TerminalTab,
-	activeWorkspaceId: string | null,
-	activeTerminalId: string | null,
-): boolean {
-	return tab.workspaceId === activeWorkspaceId && tab.tabKey === activeTerminalId;
-}
