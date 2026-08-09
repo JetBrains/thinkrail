@@ -1,6 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import { join, normalize } from "node:path";
-import type { ServerWelcome, WorkspaceFsChangedPayload } from "@thinkrail/contracts";
+import type {
+	ServerWelcome,
+	TerminalTabsPush,
+	WorkspaceFsChangedPayload,
+} from "@thinkrail/contracts";
 import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
 import { errorCodeOf } from "@thinkrail/shared/codedError";
 import {
@@ -32,6 +36,7 @@ import {
 	resumeClientTerminals,
 	reviveTerminalSessions,
 	setTerminalPublisher,
+	setTerminalTabsPublisher,
 } from "../terminal";
 import { setRepoMetaPublisher, setWatchPublisher, stopAllWatches } from "../watch";
 import { getWorkspace, refreshUserOwnedWorkspace, setWorkspacePublisher } from "../workspaces";
@@ -187,6 +192,7 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 				ws.subscribe(WS_CHANNELS.piExtensionUi);
 				ws.subscribe(WS_CHANNELS.providerLogin);
 				ws.subscribe(WS_CHANNELS.projectUpdated);
+				ws.subscribe(WS_CHANNELS.terminalTabs);
 				ws.subscribe(WS_CHANNELS.workspaceCreated);
 				ws.subscribe(WS_CHANNELS.workspaceUpdated);
 				ws.subscribe(WS_CHANNELS.workspaceRemoved);
@@ -364,6 +370,17 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 	// full record snapshot (idempotent under the store's fold-by-id, so the auto-rename's naive-then-agentic
 	// pair is two updates, last wins); `removed` sends the `{ projectId, id }` pair. Every client — including
 	// the initiator — converges by reacting to these, never a per-client optimistic mutation.
+	// Which terminals exist is shared domain state, so tab-list changes are BROADCAST (the workspace-trio
+	// pattern) even though a shell's contents are addressed to the one attached client. An idempotent snapshot
+	// per workspace: folding it twice is harmless, and a client that missed one converges on the next.
+	setTerminalTabsPublisher((workspaceId, tabs) => {
+		const data: TerminalTabsPush = { workspaceId, tabs };
+		server.publish(
+			WS_CHANNELS.terminalTabs,
+			JSON.stringify({ channel: WS_CHANNELS.terminalTabs, data }),
+		);
+	});
+
 	setWorkspacePublisher((event) => {
 		const channel =
 			event.kind === "created"

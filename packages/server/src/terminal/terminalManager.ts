@@ -94,6 +94,24 @@ export function setTerminalPublisher(fn: PushToClient): void {
 	pushToClient = fn;
 }
 
+/**
+ * Fan a tab-list snapshot out to every client. Set by `createServer`.
+ *
+ * Which terminals exist is shared domain state (architecture #9), unlike their contents: without this, a tab
+ * closed in one browser leaves another with a dead instance mounted and still accepting input.
+ */
+let broadcastTabs: (workspaceId: string, tabs: TerminalTabInfo[]) => void = () => {};
+export function setTerminalTabsPublisher(
+	fn: (workspaceId: string, tabs: TerminalTabInfo[]) => void,
+): void {
+	broadcastTabs = fn;
+}
+
+/** Announce this workspace's tab list. Called only where the list actually changed. */
+function publishTabs(workspaceId: string): void {
+	broadcastTabs(workspaceId, listTerminals(workspaceId));
+}
+
 /** Natural exits retain final output and their death notice as one ordered, reconnect-safe unit. */
 const completions = createTerminalCompletionQueue((clientKey, channel, data) =>
 	pushToClient(clientKey, channel, data),
@@ -238,7 +256,8 @@ export function attachTerminal(
 	options: { title?: string; cols?: number; rows?: number } = {},
 ): AttachResult {
 	const tabs = tabsFor(workspaceId);
-	if (!tabs.some((tab) => tab.tabKey === tabKey)) {
+	const isNewTab = !tabs.some((tab) => tab.tabKey === tabKey);
+	if (isNewTab) {
 		tabs.push({ tabKey, title: options.title ?? `Terminal ${tabs.length + 1}` });
 	}
 
@@ -268,6 +287,9 @@ export function attachTerminal(
 	const revived = revivedOutput.get(index);
 	revivedOutput.delete(index);
 	const { id, entry } = spawnForTab(workspaceId, tabKey, clientKey, options, revived);
+	// Only a membership change is worth announcing — re-attaching to an existing tab leaves the list identical,
+	// and broadcasting on every mount would fan out a snapshot per Project Home round trip.
+	if (isNewTab) publishTabs(workspaceId);
 	const replay = entry.recorder.snapshot();
 	return { id, created: true, ...(replay ? { replay } : {}) };
 }
@@ -277,12 +299,26 @@ export function listTerminals(workspaceId: string): TerminalTabInfo[] {
 	return tabsFor(workspaceId).map(({ tabKey, title }) => ({ tabKey, title }));
 }
 
-export function writeTerminal(id: string, data: string): void {
-	terminals.get(id)?.pty.write(data);
+/**
+ * The entry for `id`, but only if `caller` is the client currently attached to it.
+ *
+ * Attach is exclusive, so a client that has been taken over must not go on driving the shell — and it can try
+ * to: the transport replays unresolved requests across a reconnect, so a keystroke queued before the takeover
+ * can arrive after it and would otherwise execute in whoever holds the tab now. Reclaiming is an explicit
+ * gesture ("Take it back" → a fresh attach), exactly as `tmux attach -d` and VS Code's window handoff work;
+ * typing into a stale tab must never silently steal it back.
+ */
+function attachedEntry(id: string, caller: string): TerminalEntry | undefined {
+	const entry = terminals.get(id);
+	return entry?.attachedClient === caller ? entry : undefined;
 }
 
-export function resizeTerminal(id: string, cols: number, rows: number): void {
-	terminals.get(id)?.pty.resize(cols, rows);
+export function writeTerminal(id: string, data: string, caller: string): void {
+	attachedEntry(id, caller)?.pty.write(data);
+}
+
+export function resizeTerminal(id: string, cols: number, rows: number, caller: string): void {
+	attachedEntry(id, caller)?.pty.resize(cols, rows);
 }
 
 function disposeTerminalEntry(id: string, entry: TerminalEntry): void {
@@ -325,6 +361,7 @@ export function closeTerminalTab(
 	tabs.splice(position, 1);
 	revivedOutput.delete(index);
 	if (entry && id) disposeTerminalEntry(id, entry);
+	publishTabs(workspaceId);
 	return { closed: true, busy: false };
 }
 
@@ -353,6 +390,7 @@ export function closeWorkspaceTerminals(workspaceId: string): void {
 	for (const key of revivedOutput.keys()) {
 		if (key.startsWith(`${workspaceId}${TAB_INDEX_SEP}`)) revivedOutput.delete(key);
 	}
+	publishTabs(workspaceId);
 }
 
 /** Kill every live PTY — called on host shutdown so no shell processes orphan. */

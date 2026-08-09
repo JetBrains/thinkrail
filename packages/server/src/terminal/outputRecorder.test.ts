@@ -96,6 +96,51 @@ describe("outputRecorder", () => {
 			expect(body(recorder.snapshot())).not.toContain("htop-row-");
 		});
 
+		test("a switch split across two reads is still seen", () => {
+			// PTY reads are byte boundaries, not message boundaries. Matching per-read missed this entirely and
+			// recorded the full-screen bytes the recorder promises to exclude.
+			const recorder = createOutputRecorder();
+			recorder.push("before\r\n");
+			recorder.push(`${ESC}[?10`);
+			recorder.push("49h");
+			recorder.push("VIM SCREEN\r\n");
+			recorder.push(ALT_OFF);
+			recorder.push("after\r\n");
+
+			const text = body(recorder.snapshot());
+			expect(text).toContain("before");
+			expect(text).toContain("after");
+			expect(text).not.toContain("VIM SCREEN");
+		});
+
+		test("enter and exit inside one read keep both sides of it", () => {
+			const recorder = createOutputRecorder();
+			recorder.push(`head ${ALT_ON}HIDDEN${ALT_OFF} tail\r\n`);
+
+			const text = body(recorder.snapshot());
+			expect(text).toContain("head ");
+			expect(text).toContain(" tail");
+			expect(text).not.toContain("HIDDEN");
+		});
+
+		test("the switch sequence itself is never replayed", () => {
+			// Replaying `?1049h` would flip the fresh terminal to the alt screen and show nothing at all.
+			const recorder = createOutputRecorder();
+			recorder.push("visible\r\n");
+			recorder.push(ALT_ON);
+			recorder.push("hidden");
+			recorder.push(ALT_OFF);
+			expect(recorder.snapshot()).not.toContain("[?1049");
+		});
+
+		test("a lone escape byte in ordinary output does not stall recording", () => {
+			const recorder = createOutputRecorder();
+			recorder.push("start\r\n");
+			recorder.push(`${ESC}`);
+			recorder.push("(B plain text\r\n");
+			expect(body(recorder.snapshot())).toContain("plain text");
+		});
+
 		test("the legacy 47 / 1047 switches count too", () => {
 			const recorder = createOutputRecorder();
 			recorder.push("normal\r\n");

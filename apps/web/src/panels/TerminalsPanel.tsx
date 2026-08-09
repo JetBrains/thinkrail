@@ -1,3 +1,5 @@
+import type { TerminalTabsPush } from "@thinkrail/contracts";
+import { WS_CHANNELS } from "@thinkrail/contracts";
 import { Plus, X } from "lucide-react";
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import {
@@ -50,6 +52,15 @@ export function TerminalsPanel() {
 		};
 	}, [activeWorkspaceId]);
 
+	// Which terminals exist is shared state, so the host announces every change. Without folding it, a tab
+	// closed in another browser would leave a dead instance mounted here, still accepting input.
+	useEffect(() => {
+		return getTransport().subscribe(WS_CHANNELS.terminalTabs, (payload) => {
+			const ev = payload as TerminalTabsPush;
+			useAppStore.getState().setWorkspaceTerminals(ev.workspaceId, ev.tabs);
+		});
+	}, []);
+
 	/**
 	 * Close a tab and kill its shell — the only gesture that ever does.
 	 *
@@ -60,13 +71,16 @@ export function TerminalsPanel() {
 	const closeTab = useCallback((tab: TerminalTab, force: boolean) => {
 		void getTransport()
 			.request("terminal.close", { workspaceId: tab.workspaceId, tabKey: tab.tabKey, force })
-			.then(({ closed, busy }) => {
-				if (closed) {
-					useAppStore.getState().closeTerminalTab(tab.workspaceId, tab.tabKey);
-					setConfirmBusy(null);
+			.then(({ busy }) => {
+				if (busy) {
+					setConfirmBusy(tab);
 					return;
 				}
-				if (busy) setConfirmBusy(tab);
+				// Anything not busy means the tab is gone host-side — either this call killed it, or there was no
+				// such tab (an attach that never landed, or one another client already closed). Both leave the row
+				// stale, and only dropping it on `closed` would make those two undismissable.
+				useAppStore.getState().closeTerminalTab(tab.workspaceId, tab.tabKey);
+				setConfirmBusy(null);
 			})
 			.catch(() => {
 				// Nothing was closed, so the tab stays exactly as it is.

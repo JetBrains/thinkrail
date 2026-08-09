@@ -161,6 +161,13 @@ export interface TerminalTab {
 	title: string;
 	/** A command to run once, only if the attach actually created this shell (e.g. "Open in Vim"). */
 	initialCommand?: string;
+	/**
+	 * This client minted the tab and its `terminal.attach` has not landed yet, so the host does not know about
+	 * it. Only such a tab may survive an authoritative list that omits it — anything else missing from the
+	 * host's list is a tab that genuinely no longer exists (another client closed it), and keeping it would let
+	 * its instance re-attach and resurrect both the tab and a shell.
+	 */
+	attachPending?: true;
 }
 
 /** A chat tab the user closed — reopenable from history; its session + runtime stay alive in `sessions`. */
@@ -731,6 +738,7 @@ interface AppState {
 	clearWorkspaceTabs: (workspaceId: string) => void;
 	addTerminal: (workspaceId: string, initialCommand?: string) => void;
 	setWorkspaceTerminals: (workspaceId: string, tabs: TerminalTabInfo[]) => void;
+	settleTerminalAttach: (workspaceId: string, tabKey: string) => void;
 	consumeTerminalInitialCommand: (workspaceId: string, tabKey: string) => void;
 	closeTerminalTab: (workspaceId: string, tabKey: string) => void;
 	setActiveTerminalTab: (workspaceId: string, tabKey: string) => void;
@@ -1355,6 +1363,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				tabKey,
 				workspaceId,
 				title: nextTerminalTitle(list),
+				attachPending: true,
 				...(initialCommand ? { initialCommand } : {}),
 			};
 			// No create call: mounting the instance attaches, and attach is what registers the tab host-side.
@@ -1366,18 +1375,20 @@ export const useAppStore = create<AppState>((set, get) => ({
 	/**
 	 * Adopt the host's tab list for a workspace.
 	 *
-	 * Host order and titles win, but a tab this client has just opened and not yet attached is kept: the
-	 * request that registers it may still be in flight, and dropping it here would unmount the very instance
-	 * about to make that call.
+	 * Host order and titles win. A tab is kept despite being absent from that list ONLY while its own attach is
+	 * still in flight — that request is what registers it, so dropping it would unmount the very instance about
+	 * to make the call. Any other local tab the host does not list has genuinely gone (another client closed
+	 * it), and preserving it would let its instance re-attach and bring back both the tab and a shell.
 	 */
 	setWorkspaceTerminals: (workspaceId, tabs) =>
 		set((s) => {
 			const local = s.terminalsByWorkspace[workspaceId] ?? [];
 			const known = new Set(tabs.map((tab) => tab.tabKey));
-			const pending = local.filter((tab) => !known.has(tab.tabKey));
+			const pending = local.filter((tab) => !known.has(tab.tabKey) && tab.attachPending);
 			const merged: TerminalTab[] = [
 				...tabs.map((tab) => {
 					const existing = local.find((candidate) => candidate.tabKey === tab.tabKey);
+					// Confirmed by the host, so no longer pending whatever this client thought.
 					return {
 						tabKey: tab.tabKey,
 						workspaceId,
@@ -1394,6 +1405,22 @@ export const useAppStore = create<AppState>((set, get) => ({
 				activeTerminalByWorkspace: {
 					...s.activeTerminalByWorkspace,
 					[workspaceId]: activeSurvives ? active : (merged.at(-1)?.tabKey ?? null),
+				},
+			};
+		}),
+	/** The tab's attach landed: the host knows about it, so it is no longer exempt from an authoritative list. */
+	settleTerminalAttach: (workspaceId, tabKey) =>
+		set((s) => {
+			const list = s.terminalsByWorkspace[workspaceId] ?? [];
+			if (!list.some((t) => t.tabKey === tabKey && t.attachPending)) return s;
+			return {
+				terminalsByWorkspace: {
+					...s.terminalsByWorkspace,
+					[workspaceId]: list.map(({ attachPending, ...rest }) =>
+						rest.tabKey === tabKey
+							? rest
+							: { ...rest, ...(attachPending ? { attachPending } : {}) },
+					),
 				},
 			};
 		}),

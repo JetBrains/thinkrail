@@ -89,8 +89,10 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   `terminalsByWorkspace`
   / `activeTerminalByWorkspace` — a **mirror of host state, never the authority**: the host owns the tab list
   and keys shells by `(workspaceId, tabKey)`, so this store can never hold the only record of a running shell.
-  `setWorkspaceTerminals` adopts a `terminal.list` result (keeping a locally-added tab whose attach is still in
-  flight); `addTerminal` only mints a `tabKey` — the instance's attach is what registers it host-side — and
+  `setWorkspaceTerminals` adopts a `terminal.list` result or a `terminal.tabs` broadcast, keeping a local tab the
+  host omits **only while its own attach is genuinely in flight** (`TerminalTab.attachPending`, cleared by
+  `settleTerminalAttach`) — any other omitted tab has really gone, and preserving it would let its instance
+  re-attach and resurrect both the tab and a shell; `addTerminal` only mints a `tabKey` — the instance's attach is what registers it host-side — and
   takes an optional `initialCommand` consumed once, only when attach reports it `created` the shell (the
   workspace row's "Open in Vim"); `closeTerminalTab` drops the row after `terminal.close` confirms. The
   **per-session chat state** — `sessions: Record<sessionId, SessionRuntime>`, where a `SessionRuntime` holds

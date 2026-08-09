@@ -335,6 +335,8 @@ export default function TerminalInstance({ tabKey, workspaceId, visible, initial
 					const buffered = prebind.bind(id);
 					if (buffered.truncated) writeTruncation();
 					for (const ev of buffered.frames) writeFrame(ev);
+					// The host now knows this tab, so it is no longer exempt from an authoritative list.
+					useAppStore.getState().settleTerminalAttach(workspaceId, tabKey);
 					setDetached(false);
 					setExited(false);
 					setReady(true);

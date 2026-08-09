@@ -10,8 +10,10 @@ import {
 	listTerminals,
 	persistTerminalSessions,
 	resetTerminalState,
+	resizeTerminal,
 	reviveTerminalSessions,
 	setTerminalPublisher,
+	setTerminalTabsPublisher,
 	writeTerminal,
 } from "./terminalManager";
 
@@ -38,6 +40,7 @@ beforeEach(() => {
 afterEach(() => {
 	resetTerminalState();
 	setTerminalPublisher(() => "unavailable");
+	setTerminalTabsPublisher(() => {});
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
@@ -130,7 +133,7 @@ test("a shell with something running refuses to close until forced", async () =>
 	expect(attached.created).toBe(true);
 	// Give the shell its prompt, then start a job so it has a child process.
 	await Bun.sleep(600);
-	writeTerminal(attached.id, "sleep 30\r");
+	writeTerminal(attached.id, "sleep 30\r", "client-1");
 	await Bun.sleep(800);
 
 	const refused = closeTerminalTab(WS, "tab-a");
@@ -182,4 +185,45 @@ test("persisting writes nothing for a workspace whose tabs were all closed", () 
 	reviveTerminalSessions();
 
 	expect(listTerminals(WS)).toHaveLength(0);
+});
+
+test("only the attached client may drive a terminal", async () => {
+	const attached = attachTerminal(WS, "tab-a", "client-1");
+	await Bun.sleep(500);
+
+	// Client B takes the tab over; A keeps a perfectly valid pty id, and a reconnect would replay its queued
+	// frames. Accepting them would run A's keystrokes in B's shell.
+	attachTerminal(WS, "tab-a", "client-2");
+	writeTerminal(attached.id, "echo TR_FROM_DISPLACED\r", "client-1");
+	resizeTerminal(attached.id, 5, 2, "client-1");
+	await Bun.sleep(500);
+
+	const seen = pushed
+		.filter((frame) => frame.channel === "terminal.data")
+		.map((frame) => (frame.data as { data: string }).data)
+		.join("");
+	expect(seen).not.toContain("TR_FROM_DISPLACED");
+
+	// Reclaiming is an explicit gesture, and then input works again.
+	attachTerminal(WS, "tab-a", "client-1");
+	writeTerminal(attached.id, "echo TR_RECLAIMED\r", "client-1");
+	await Bun.sleep(800);
+	const afterReclaim = pushed
+		.filter((frame) => frame.channel === "terminal.data")
+		.map((frame) => (frame.data as { data: string }).data)
+		.join("");
+	expect(afterReclaim).toContain("TR_RECLAIMED");
+});
+
+test("opening and closing a tab broadcasts the new list", () => {
+	const seen: unknown[] = [];
+	setTerminalTabsPublisher((workspaceId, tabs) => seen.push({ workspaceId, tabs }));
+
+	attachTerminal(WS, "tab-a", "client-1", { title: "One" });
+	// Re-attaching changes no membership, so it must not fan out a snapshot per remount.
+	attachTerminal(WS, "tab-a", "client-1");
+	expect(seen).toEqual([{ workspaceId: WS, tabs: [{ tabKey: "tab-a", title: "One" }] }]);
+
+	closeTerminalTab(WS, "tab-a", true);
+	expect(seen.at(-1)).toEqual({ workspaceId: WS, tabs: [] });
 });

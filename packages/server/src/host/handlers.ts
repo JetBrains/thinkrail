@@ -109,13 +109,11 @@ import { dropLogin, recordLoginStart } from "./loginAnalytics";
 /**
  * Who a request came from. Threaded to every handler so one can scope a resource to its caller; most ignore
  * it, since almost everything the host owns is shared domain state that every client sees identically
- * (architecture #9). Terminals are the exception — a PTY belongs to one client.
+ * (architecture #9). Terminals use it for *attachment*, not ownership — a shell belongs to its tab, but only
+ * the client currently attached may receive its output or drive it.
  */
 export interface RequestContext {
-	/**
-	 * The calling client's id (`?client=` on its socket URL). Stable across that client's reconnects and new
-	 * on every reload, which is what lets a PTY outlive a dropped connection without outliving the page.
-	 */
+	/** The calling client's id (`?client=` on its socket URL), stable across that client's reconnects. */
 	clientKey: string;
 }
 
@@ -291,14 +289,17 @@ const handlers: Record<string, Handler> = {
 	"terminal.list": (params) => ({
 		tabs: listTerminals((params as { workspaceId: string }).workspaceId),
 	}),
-	"terminal.write": (params) => {
+	// Both carry the caller: only the client currently ATTACHED to a terminal may drive it. A displaced client
+	// can still hold a valid PTY id, and a reconnect replays its queued frames — without this its keystrokes
+	// would land in whoever took the tab over.
+	"terminal.write": (params, ctx) => {
 		const p = params as { id: string; data: string };
-		writeTerminal(p.id, p.data);
+		writeTerminal(p.id, p.data, ctx.clientKey);
 		return { ok: true } as const;
 	},
-	"terminal.resize": (params) => {
+	"terminal.resize": (params, ctx) => {
 		const p = params as { id: string; cols: number; rows: number };
-		resizeTerminal(p.id, p.cols, p.rows);
+		resizeTerminal(p.id, p.cols, p.rows, ctx.clientKey);
 		return { ok: true } as const;
 	},
 	"terminal.close": (params) => {

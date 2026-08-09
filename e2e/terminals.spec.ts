@@ -568,3 +568,33 @@ test("closing an idle tab does not ask", async ({ page }) => {
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
 	await expect(page.getByTestId("confirm-dialog")).toHaveCount(0);
 });
+
+// Which terminals exist is shared state: the host owns the tab list, so a change in one browser has to reach
+// the others. Without the broadcast, a tab closed in B left A with a dead instance mounted and still taking
+// keystrokes, and a tab B opened stayed invisible to A until some later remount happened to re-read the list.
+test("a tab opened or closed in one browser reaches the other", async ({ page, context }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await waitTerminalReady(page);
+	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
+
+	const page2 = await context.newPage();
+	await page2.goto("/");
+	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await page2.getByTestId("project-expand").first().click();
+	await worktreeRows(page2).nth(0).click();
+	await waitTerminalReady(page2);
+	await expect(page2.getByTestId("terminal-tab")).toHaveCount(1);
+
+	// B opens a second terminal — A must see it without touching anything.
+	await page2.getByTestId("terminal-add").click();
+	await expect(page2.getByTestId("terminal-tab")).toHaveCount(2);
+	await expect(page.getByTestId("terminal-tab")).toHaveCount(2);
+
+	// B closes it again — A converges back rather than keeping a tab whose shell is gone.
+	await page2.getByTestId("terminal-tab-close").nth(1).click();
+	await expect(page2.getByTestId("terminal-tab")).toHaveCount(1);
+	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
+
+	await page2.close();
+});

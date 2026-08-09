@@ -87,6 +87,15 @@ export interface TerminalTabInfo {
 	title: string;
 }
 
+/**
+ * The host's tab list for one workspace — an idempotent snapshot, never a delta, so folding it twice is
+ * harmless and a late subscriber can be caught up with the newest one.
+ */
+export interface TerminalTabsPush {
+	workspaceId: string;
+	tabs: TerminalTabInfo[];
+}
+
 /** Bumped on any breaking wire change; sent in `server.welcome` so a stale UI can detect host drift. */
 // v4: model.* / session.create / session.setModel / SessionSummary now carry `WireModel` (pi's `Model`
 // minus the secret-bearing `baseUrl`/`headers`); the host re-resolves the real model by `{provider,id}`.
@@ -356,6 +365,15 @@ export const WS_CHANNELS = {
 	 * client is told and offers to take the tab back.
 	 */
 	terminalDetached: "terminal.detached",
+	/**
+	 * `{ workspaceId, tabs }` — the host's tab list for a workspace changed (a tab was opened or closed).
+	 *
+	 * BROADCAST, unlike the three channels above: which terminals exist is shared domain state (architecture
+	 * #9), the same as the workspace lifecycle trio, so every client converges. Only the *contents* of a shell
+	 * are addressed to one client. Without this, a tab closed in one browser leaves another with a dead
+	 * instance mounted and accepting input.
+	 */
+	terminalTabs: "terminal.tabs",
 	// The workspace-registry lifecycle trio, broadcast to every client so registry membership is shared
 	// domain state (architecture #9), not per-client. All three are emitted by the `workspaces` module's
 	// injected publisher (host maps kind → channel); every client reacts identically (no per-client
