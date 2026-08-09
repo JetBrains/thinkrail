@@ -73,10 +73,18 @@ test("listTodos decorates a commit artifact with the commit's derived files; a d
 	const plan = listTodos({ workspaceId: "w1", sessionId: SESSION });
 	const wireGood = plan.todos.find((t) => t.id === good.id);
 	const wireDead = plan.todos.find((t) => t.id === dead.id);
-	// The derived unfolding rides the DTO — never the stored JSON…
-	expect(wireGood?.artifacts).toEqual([
-		{ kind: "commit", sha: committed.sha, label: "committed step", files: ["impl.ts"] },
+	// The derived unfolding rides the DTO — never the stored JSON. `files` is the full change shape
+	// (path + status + `+/−`), the same rows the Changes panel renders at the commit scope.
+	const files = wireGood?.artifacts?.[0]?.files;
+	expect(wireGood?.artifacts?.[0]).toMatchObject({
+		kind: "commit",
+		sha: committed.sha,
+		label: "committed step",
+	});
+	expect(files?.map((f) => ({ path: f.path, status: f.status }))).toEqual([
+		{ path: "impl.ts", status: "added" },
 	]);
+	expect(files?.[0]?.added).toBe(1);
 	expect(store.get(good.id)?.artifacts).toEqual([
 		{ kind: "commit", sha: committed.sha, label: "committed step" },
 	]);

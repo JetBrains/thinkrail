@@ -219,6 +219,21 @@ export function specPathMatcher(nodes: SpecGraphNode[]): (path: string) => boole
  * baseline once the load resolves — so a skill change whose `fsChanged` frame folds *while the load is in
  * flight* stays past the baseline and keeps the reload badge lit (the load saw the pre-change skills).
  */
+/**
+ * A chat's display title: its open chat tab's name, `"Chat"` when none (closed to history / not yet
+ * named). One home for the lookup — the plan page's heading and the plan-tab opener both read it, so the
+ * two can never disagree on what a session is called.
+ */
+export function selectChatTitle(
+	state: { tabsByWorkspace: Record<string, EditorTab[]> },
+	workspaceId: string,
+	sessionId: string,
+): string {
+	const tabs = state.tabsByWorkspace[workspaceId] ?? [];
+	const chatTab = tabs.find((t) => t.kind === "chat" && t.sessionId === sessionId);
+	return (chatTab?.name ?? "Chat").trim() || "Chat";
+}
+
 export function selectWorkspaceTick(
 	state: { fsChangesByWorkspace: Record<string, { tick: number }> },
 	workspaceId: string,

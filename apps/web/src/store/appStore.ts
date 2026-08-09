@@ -107,7 +107,21 @@ export interface DiffTab {
 	/** The workspace fs tick the contents were loaded at — same live-refresh contract as `FileTab`. */
 	loadedTick?: number;
 }
-export type EditorTab = FileTab | ChatTab | DocTab | DiffTab;
+/**
+ * The chat plan's **live review-map page** (a center tab): renders the session's TODO plan from the
+ * host (live — the pane refetches off `pi.event` like the plan popup) with per-item change sets and
+ * click-through navigation to diffs/Changes. Markdown is an *export* of this page (`planMarkdown`),
+ * never its source — the page replaced the old static `doc`-snapshot route.
+ */
+export interface PlanTab {
+	kind: "plan";
+	/** `${workspaceId}:plan:${sessionId}` — one plan page per chat; re-opening focuses it. */
+	id: string;
+	workspaceId: string;
+	name: string;
+	sessionId: string;
+}
+export type EditorTab = FileTab | ChatTab | DocTab | DiffTab | PlanTab;
 
 /**
  * How an open/reveal treats the workspace's single **preview slot**. `preview` is a light "I'm just
@@ -748,7 +762,7 @@ interface AppState {
 	openTab: (tab: EditorTab, intent: TabIntent) => void;
 	/** Open (or refresh + focus, if already open) an ephemeral rendered-markdown `doc` tab. Re-invoking
 	 * with the same id replaces its content so a "compile current state" action always shows the latest. */
-	openDoc: (tab: DocTab) => void;
+	openDoc: (tab: DocTab | PlanTab) => void;
 	closeTab: (id: string) => void;
 	/** Activate a tab. `intent: "keep"` also promotes it out of the preview slot — one-way: nothing ever
 	 * demotes a kept tab back to preview. */

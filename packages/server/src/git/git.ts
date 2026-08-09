@@ -26,7 +26,8 @@ function workspace(workspaceId: string): Workspace {
  * `null` when there was nothing to commit (all dirt was foreign/excluded) or a git op failed.
  * Author/committer stay the user's own git config — it's their branch. Best-effort bookkeeping for the
  * TODO change-set feature; the caller (todos/artifacts) never lets it throw. The commit stores only the
- * sha — its file list is derived on demand via {@link gitCommitFiles} (sha-immutable, cacheable).
+ * sha — its change list is derived on demand via `gitStatus` at the `commit:{sha}` scope (sha-immutable,
+ * cacheable; see the todos module's `listTodos` decoration).
  */
 export function gitCommitAll(workspaceId: string, message: string): { sha: string } | null {
 	const cwd = workspace(workspaceId).worktreePath;
@@ -38,18 +39,6 @@ export function gitCommitAll(workspaceId: string, message: string): { sha: strin
 	const head = git(cwd, ["rev-parse", "HEAD"]);
 	if (!head.ok) return null;
 	return { sha: head.out };
-}
-
-/**
- * A commit's recorded file list (`git show --name-only --pretty=format:`), or `null` when the sha does
- * not resolve (a GC'd rewrite) or git failed. The unfolding half of {@link gitCommitAll}: the todos
- * module's `listTodos` decoration derives the review map's files from it, memoized by sha (immutable).
- */
-export function gitCommitFiles(workspaceId: string, sha: string): string[] | null {
-	const cwd = workspace(workspaceId).worktreePath;
-	const res = git(cwd, ["show", "--name-only", "--pretty=format:", "--end-of-options", sha, "--"]);
-	if (!res.ok) return null;
-	return lines(res.out);
 }
 
 /** The worktree's current `HEAD` sha (`null` on an unborn HEAD) — the todos baseline's window anchor. */

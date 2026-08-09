@@ -1,9 +1,7 @@
-import type { GitDiffScope } from "@thinkrail/contracts";
 import type { ReactNode } from "react";
 import type { Components } from "react-markdown";
-import { parseDiffHref } from "../chat/diffHref";
 import { getTransport } from "../transport";
-import { openDiffInTab, openFileInTab } from "./openTabs";
+import { openFileInTab } from "./openTabs";
 
 /**
  * Link / image / heading-anchor handling for the rendered markdown view. All wired only into
@@ -97,24 +95,6 @@ function scrollToAnchor(id: string): void {
 /** Build the `a` + `img` renderers for a file at `path` in `workspaceId`. */
 export function documentComponents(ctx: { workspaceId: string; path: string }): Components {
 	function DocumentLink({ href, children }: { href?: string; children?: ReactNode }) {
-		// A TODO review-map link (`thinkrail-diff:<sha>:<path>`) opens the file's diff tab: the item's commit
-		// scope when it carries a sha, else the live branch scope. Checked before `classifyHref` (the custom
-		// scheme would otherwise read as an external link).
-		const diff = parseDiffHref(href);
-		if (diff) {
-			const scope: GitDiffScope = diff.sha ? { kind: "commit", sha: diff.sha } : { kind: "branch" };
-			return (
-				<a
-					href={href}
-					onClick={(e) => {
-						e.preventDefault();
-						void openDiffInTab(ctx.workspaceId, scope, diff.path, "preview");
-					}}
-				>
-					{children}
-				</a>
-			);
-		}
 		const kind = classifyHref(href);
 		if (kind === "anchor" && href) {
 			return (

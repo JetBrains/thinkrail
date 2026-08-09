@@ -6,7 +6,6 @@ import type { Workspace } from "@thinkrail/contracts";
 import { changedFileArgs, diffBaseRef, resolveDiffRange } from "./diffScope";
 import {
 	gitCommitAll,
-	gitCommitFiles,
 	gitDiffFile,
 	gitHeadSha,
 	gitStatus,
@@ -592,7 +591,7 @@ test("a failed diff throws — a broken read is never reported as a clean worktr
 
 // --- gitCommitAll / gitCommitFiles / gitHeadSha (the TODO change-set primitives) ---
 
-test("gitCommitAll commits worktree changes minus .thinkrail and returns the sha; gitCommitFiles unfolds it", () => {
+test("gitCommitAll commits worktree changes minus .thinkrail and returns the sha; commit scope unfolds it", () => {
 	seedWorkspace();
 	writeFileSync(join(repo, "impl.ts"), "export {};\n");
 	mkdirSync(join(repo, ".thinkrail", "context"), { recursive: true });
@@ -604,7 +603,8 @@ test("gitCommitAll commits worktree changes minus .thinkrail and returns the sha
 	expect(committed?.sha).not.toBe(before);
 	expect(gitHeadSha("w1")).toBe(committed?.sha ?? "");
 	// The commit records the real file, never the host's own .thinkrail state…
-	expect(gitCommitFiles("w1", committed?.sha ?? "")).toEqual(["impl.ts"]);
+	const unfolded = gitStatus("w1", { kind: "commit", sha: committed?.sha ?? "" });
+	expect(unfolded.changes.map((c) => c.path)).toEqual(["impl.ts"]);
 	// …which stays uncommitted in the worktree (untracked, not swept).
 	const status = gitStatus("w1", { kind: "uncommitted" });
 	expect(status.changes.map((c) => c.path)).toEqual([".thinkrail/context/todos.json"]);
@@ -616,9 +616,4 @@ test("gitCommitAll returns null when there is nothing to commit (clean, or only 
 	mkdirSync(join(repo, ".thinkrail"), { recursive: true });
 	writeFileSync(join(repo, ".thinkrail", "state.json"), "{}");
 	expect(gitCommitAll("w1", "todo: app-state only")).toBeNull();
-});
-
-test("gitCommitFiles returns null for a sha that does not resolve", () => {
-	seedWorkspace();
-	expect(gitCommitFiles("w1", "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef")).toBeNull();
 });

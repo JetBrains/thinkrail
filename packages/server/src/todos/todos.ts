@@ -4,7 +4,13 @@
 // the source of truth and re-reads its per-session file on every op, so a UI edit and the agent's
 // in-session `todo_*` writes converge on the same `.thinkrail/context/todos/<sessionId>.json`.
 
-import type { TodoArtifact, TodoItem, TodoPlan, TodoStatus } from "@thinkrail/contracts";
+import type {
+	GitFileChange,
+	TodoArtifact,
+	TodoItem,
+	TodoPlan,
+	TodoStatus,
+} from "@thinkrail/contracts";
 import {
 	flatItems,
 	groupStatus,
@@ -12,7 +18,7 @@ import {
 	type TodoPlan as StoredPlan,
 	TodoStore,
 } from "pi-todos/core";
-import { gitCommitFiles } from "../git";
+import { gitStatus } from "../git";
 import { getWorkspace } from "../workspaces";
 
 /** The store rooted at a workspace's worktree for one chat session. `TodoStore` is stateless (re-reads
@@ -22,20 +28,24 @@ function storeFor(workspaceId: string, sessionId: string): TodoStore {
 }
 
 /**
- * A commit's file list, memoized **by sha** — the sha names an immutable object, so a successful
- * resolution can never go stale. Only successes are cached: a transient git failure (or a GC'd sha)
- * resolves to `undefined` now and retries on the next list. Session-independent by construction, so one
- * host-wide map is correct across workspaces too (a sha collision across repos names the same object).
+ * A commit's recorded changes (path + status + `+/−`), memoized **by sha** — the sha names an immutable
+ * object, so a successful resolution can never go stale. Only successes are cached: a transient git
+ * failure (or a GC'd/unknown sha — `gitStatus` throws `UNKNOWN_COMMIT`) resolves to `undefined` now and
+ * retries on the next list. Session-independent by construction, so one host-wide map is correct across
+ * workspaces too (a sha collision across repos names the same object).
  */
-const commitFilesCache = new Map<string, string[]>();
+const commitFilesCache = new Map<string, GitFileChange[]>();
 
-function resolveCommitFiles(workspaceId: string, sha: string): string[] | undefined {
+function resolveCommitFiles(workspaceId: string, sha: string): GitFileChange[] | undefined {
 	const hit = commitFilesCache.get(sha);
 	if (hit) return hit;
-	const files = gitCommitFiles(workspaceId, sha);
-	if (!files) return undefined;
-	commitFilesCache.set(sha, files);
-	return files;
+	try {
+		const files = gitStatus(workspaceId, { kind: "commit", sha }).changes;
+		commitFilesCache.set(sha, files);
+		return files;
+	} catch {
+		return undefined; // unknown sha / git failure — ship the artifact bare (the client degrades)
+	}
 }
 
 /**

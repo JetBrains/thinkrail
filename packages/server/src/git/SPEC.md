@@ -118,13 +118,10 @@ ref off the workspace-create critical path.
   --quiet`) or any git op failed — the caller (`todos/artifacts`) treats that as "fall back to path-list
   artifacts" and never lets it throw. It is the one git primitive that **writes** the user's branch; the
   caller serializes it per workspace.
-  **`gitCommitFiles(workspaceId, sha)`** → `string[] | null` — a commit's recorded file list (`git show
-  --name-only --pretty=format:`), `null` when the sha doesn't resolve (GC'd) or git failed — the todos
-  module's `listTodos` decoration derives (and memoizes, sha-immutable) the review map's files from it.
   **`gitHeadSha(workspaceId)`** → `string | null` — `rev-parse HEAD` (`null` on an unborn HEAD), recorded
   into the todos baseline sidecar at `in_progress`.
 - **Public surface (barrel):** `git`, `gitAsync`, `gitStatus`, `gitDiffFile`, `readBlobAt`,
-  `gitCommitAll`, `gitCommitFiles`, `gitHeadSha`, `listCommits`,
+  `gitCommitAll`, `gitHeadSha`, `listCommits`,
   `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `resolveCommitOid`, `DiffRange`, `isSafeRef`,
   `assertSafeRef`, `listBranches`, `resolveDefaultBranch`, `tryCurrentBranch`, `currentBranch`,
   `canonicalPath`, `prefetchBranch`.

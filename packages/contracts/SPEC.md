@@ -170,9 +170,9 @@ of the host.
   `TodoGroupItem` additionally carries **`status: TodoGroupStatus`** — the group's *task* lifecycle
   (`pending`/`active`/`done`), **derived by the host** from the steps (`pi-todos`' `groupStatus`) rather than
   stored: shipping it means the truth table has one home and no client re-derives it. A `commit`
-  artifact additionally carries **`files?: string[]`** — host-derived from git by `todo.list`'s
-  decoration (same one-home rationale), never stored; absent = the sha no longer resolves, degrade
-  silently.
+  artifact additionally carries **`files?: GitFileChange[]`** (path + status + `+/−` — the same rows
+  the Changes panel renders at the commit scope) — host-derived from git by `todo.list`'s decoration
+  (same one-home rationale), never stored; absent = the sha no longer resolves, degrade silently.
   **history-search read DTOs** — **`HistoryScope`** (the overlay's cycle: this chat → workspace →
   project → everywhere); **`PromptHit`** (a recalled prompt; carries optional `messageIndex` +
   `anchorText` — the kept-newest occurrence's jump anchor) and **`MessageHit`** (a full-text
