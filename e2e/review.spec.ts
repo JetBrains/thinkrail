@@ -402,6 +402,19 @@ test("preview mode: selecting rendered text comments on the mapped source lines"
 	await expect(row).toHaveAttribute("data-status", "draft");
 	await expect(row).toContainText("L3");
 	await expect(row).toContainText("Tighten this paragraph.");
+
+	// Another client's body edit converges into the OPEN preview card's editor (the `review.changed`
+	// push reconciles a non-dirty field — the card must not pin its mount-time text forever).
+	const [saved] = await persistedComments(page);
+	await overWire(page, [
+		{
+			method: "review.commentUpdate",
+			params: { id: saved?.id, body: "Reworded from the other client." },
+		},
+	]);
+	await expect(page.getByTestId("review-thread-edit")).toHaveValue(
+		"Reworded from the other client.",
+	);
 });
 
 /** In the SOURCE view a thread card lives in a Monaco view zone; the zone (the card's parent node,
