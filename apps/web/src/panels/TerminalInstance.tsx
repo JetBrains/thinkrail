@@ -239,7 +239,13 @@ export default function TerminalInstance({ tabKey, workspaceId, visible, initial
 
 		// Pushes can beat the attach response, before this instance knows which PTY is its own. The bounded
 		// pre-bind buffer filters on adoption and becomes inert on bind/failure.
-		const prebind = createTerminalPrebindBuffer();
+		// One buffer PER ATTACH ATTEMPT, not per mount. A buffer is single-use — inert once bound — so reusing it
+		// for a reclaim ("Take it back") would leave the reclaimed attempt unable to correlate anything that
+		// arrives before its response, while `detached` has already cleared the id. A reconnect makes that
+		// concrete: the host resumes a held `terminal.exit` on `open`, before it re-serves the replayed attach
+		// from its cache, so the exit would be dropped by both the inert buffer and the null id — and the pane
+		// would then go ready over a shell that is already dead.
+		let prebind = createTerminalPrebindBuffer();
 		const writeTruncation = (): void => term.write("\r\n[output truncated]\r\n");
 		/** Paint a batch, saying so when the host had to drop output to stay bounded. */
 		const writeFrame = (ev: TerminalDataPush): void => {
@@ -332,19 +338,28 @@ export default function TerminalInstance({ tabKey, workspaceId, visible, initial
 			// flight would look already-applied and never be sent — leaving the shell permanently mis-sized.
 			const spawnedAt = { cols: term.cols, rows: term.rows };
 			const startedAt = attachGeneration;
+			// Retire the previous attempt's buffer and take a fresh one for this attempt, so pushes that beat this
+			// response are held for it. The subscriptions read `prebind` at call time, so they follow it.
+			prebind.stop();
+			const attemptPrebind = createTerminalPrebindBuffer();
+			prebind = attemptPrebind;
 			void getTransport()
 				.request("terminal.attach", { workspaceId, tabKey, ...spawnedAt })
 				.then(({ id, created, replay }) => {
 					if (disposed) return;
-					// Someone took the tab over while this was in flight, so this answer is already stale.
-					if (attachGeneration !== startedAt) return;
+					// Someone took the tab over while this was in flight, so this answer is already stale. A newer
+					// attempt owns `prebind` by now; only this attempt's own buffer is ours to retire.
+					if (attachGeneration !== startedAt) {
+						attemptPrebind.stop();
+						return;
+					}
 					sizeSync.acknowledge(spawnedAt);
 					// Repaint what this shell last showed before live frames resume: a remount is a fresh xterm
 					// buffer, so without this a surviving shell comes back behind a blank screen and looks dead.
 					// After a host restart this is the revived tab's picture, over a genuinely new shell.
 					if (replay) term.write(replay);
 					serverIdRef.current = id;
-					const buffered = prebind.bind(id);
+					const buffered = attemptPrebind.bind(id);
 					if (buffered.truncated) writeTruncation();
 					for (const ev of buffered.frames) writeFrame(ev);
 					// The host now knows this tab, so it is no longer exempt from an authoritative list.
@@ -375,7 +390,7 @@ export default function TerminalInstance({ tabKey, workspaceId, visible, initial
 					// Reconnects replay this request, so this is a real host refusal or deadline rather than an
 					// ambiguous dropped response. Stop pre-bind intake: this failed pane must not retain every other
 					// terminal's addressed output for the rest of its life.
-					prebind.stop();
+					attemptPrebind.stop();
 					term.write("\r\n[could not start a shell — close this tab and open a new one]\r\n");
 					setFailed(true);
 				});

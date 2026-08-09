@@ -598,3 +598,60 @@ test("a tab opened or closed in one browser reaches the other", async ({ page, c
 
 	await page2.close();
 });
+
+// The prebind buffer is single-use, so reclaiming a tab has to start a fresh one: otherwise anything that
+// arrives before the reclaim's response is dropped by both the inert buffer and the id that detaching cleared.
+// A shell dying in that window is the case that matters — the pane would go ready over a dead PTY and accept
+// keystrokes forever.
+test("a shell that dies during a reclaim is not presented as alive", async ({ page, context }) => {
+	let delayAttachMs = 0;
+	await page.routeWebSocket(/\/ws(\?|$)/, (ws) => {
+		const server = ws.connectToServer();
+		const attachIds = new Set<string>();
+		ws.onMessage((message) => {
+			try {
+				const frame = JSON.parse(message.toString()) as { id?: string; method?: string };
+				if (frame.method === "terminal.attach" && frame.id) attachIds.add(frame.id);
+			} catch {
+				// Not a JSON request frame.
+			}
+			server.send(message);
+		});
+		server.onMessage((message) => {
+			const text = message.toString();
+			let frame: { id?: string } = {};
+			try {
+				frame = JSON.parse(text) as typeof frame;
+			} catch {
+				// Relayed verbatim below.
+			}
+			if (frame.id && attachIds.has(frame.id) && delayAttachMs > 0) {
+				setTimeout(() => ws.send(text), delayAttachMs);
+				return;
+			}
+			ws.send(message);
+		});
+	});
+
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await waitTerminalReady(page);
+
+	// B takes the tab over, then arms the shell to die — only the attached client may drive it.
+	const page2 = await context.newPage();
+	await page2.goto("/");
+	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await page2.getByTestId("project-expand").first().click();
+	await worktreeRows(page2).nth(0).click();
+	await waitTerminalReady(page2);
+	await expect(visibleTerminal(page)).toHaveAttribute("data-detached", "true");
+	await runInTerminal(page2, "(sleep 5; kill -9 $$) &");
+
+	// A reclaims, but its answer is held long enough for the shell to die first — so the exit reaches A before
+	// the attach response it belongs to.
+	delayAttachMs = 9000;
+	await page.getByTestId("terminal-take-back").click();
+	await expect(visibleTerminal(page)).toHaveAttribute("data-exited", "true", { timeout: 20_000 });
+
+	await page2.close();
+});
