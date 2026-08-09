@@ -210,11 +210,18 @@ Self-hosted variable faces. The packages are declared per family as `selfHosted`
 **no font CDN**, so an offline host renders the real system. Both faces are variable, so 800 and
 italics are real, not synthetic. Pinned by `e2e/fonts.spec.ts`.
 
+**Swapping a family is a one-file change**: edit the family's `stack` + `selfHosted` here, `bun add` the
+new package, `typography:generate`. No face name is written anywhere else — the tests read it back from
+the generated output (`e2e/fixtures/typography.ts`), and `validate` rejects both a `selfHosted` package
+that is not a dependency and a font dependency no family claims. The one other copy of the stacks lives
+in `apps/website` (a standalone leaf that cannot import ours); `apps/website/src/fonts.test.ts` fails
+when it drifts from this file.
+
 `tokens.css` holds **no typography at all** — not a value and not an alias. It used to carry `--font`,
 `--font-mono`, `--font-accent`, `--font-mono-size` and `--line-height` as aliases onto the generated
 tokens; every one of them is gone, because a second name for a value is the thing that drifts. The
-consumers that cannot use a class read the `--tr-*` tokens directly. Cabinet Grotesk is retired and must
-not return (it was never loaded).
+consumers that cannot use a class read the `--tr-*` tokens directly. Cabinet Grotesk is retired
+repo-wide and must not return.
 
 ## Mono policy
 

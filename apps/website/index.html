@@ -28,14 +28,7 @@
 				document.documentElement.setAttribute("data-theme", theme);
 			} catch (_) {}
 		</script>
-		<!-- Geist + JetBrains Mono are self-hosted and bundled (src/styles.css), matching the app. Cabinet
-		     Grotesk (--font-display) is still fetched: it has no npm package, and self-hosting it is a
-		     licence call to make deliberately — the last external font request on the site. -->
-		<link rel="preconnect" href="https://api.fontshare.com" crossorigin />
-		<link
-			href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@700,800&display=swap"
-			rel="stylesheet"
-		/>
+		<!-- Every face is self-hosted and bundled (src/styles.css), matching the app. No font CDN. -->
 		<link rel="stylesheet" href="/src/styles.css" />
 	</head>
 	<body>

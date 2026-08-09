@@ -4,10 +4,9 @@
  * (see SPEC.md: values are lifted at authoring time, never imported).
  */
 
-/* Self-hosted variable faces, same packages and family names as the app
-   (apps/web/src/styles/generated/fonts.css, generated from its typography.json)
-   — no Google Fonts call from the site either. `--font-display` (Cabinet Grotesk) is still CDN-served;
-   see the note in index.html. */
+/* Self-hosted variable faces — no external font request from the site at all. The packages, the stacks
+   below and `--font-display` are copied from apps/web/src/styles/typography.json (the app's source of
+   truth); `src/fonts.test.ts` reads that JSON and fails on drift. */
 @import "@fontsource-variable/geist";
 @import "@fontsource-variable/geist/wght-italic.css";
 @import "@fontsource-variable/jetbrains-mono";
@@ -19,7 +18,9 @@
 	--font-sans: "Geist Variable", "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 	--font-mono:
 		"JetBrains Mono Variable", "JetBrains Mono", "Fira Code", "SF Mono", "Cascadia Code", monospace;
-	--font-display: "Cabinet Grotesk", var(--font-sans);
+	/* The display role, mirroring the app's `brand` family — an alias of the interface face, not a
+	   second typeface. */
+	--font-display: var(--font-sans);
 
 	/* dark (the app's default) */
 	--chrome: #171719;

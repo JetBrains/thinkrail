@@ -7,6 +7,7 @@ import {
 	visibleTerminalScreen,
 	waitTerminalReady,
 } from "./fixtures/app";
+import { CODE_FACE, INTERFACE_FACE } from "./fixtures/typography";
 
 /**
  * Computed-style verification: the generated typography actually renders on the real surfaces, and the
@@ -20,9 +21,6 @@ import {
  *
  * Values come from `apps/web/src/styles/typography.json` — update them there, never here.
  */
-const GEIST = /Geist Variable/;
-const MONO = /JetBrains Mono Variable/;
-
 type TypeInfo = {
 	family: string;
 	size: string;
@@ -51,7 +49,7 @@ test("brand, welcome hero and label pill render the generated brand styles", asy
 	await openAppFresh(page);
 	const wordmark = await typeOf(page.locator(".tr-brand-wordmark").first());
 	expect(wordmark).toMatchObject({ size: "18px", weight: "800", lineHeight: "22.5px" });
-	expect(wordmark.family).toMatch(GEIST);
+	expect(wordmark.family).toMatch(INTERFACE_FACE);
 
 	await openFixtureProject(page);
 	expect(await typeOf(page.getByTestId("welcome-title"))).toMatchObject({
@@ -86,8 +84,8 @@ test("entity rows, branch metadata and eyebrows are proportional", async ({ page
 	await createWorkspaceViaDialog(page);
 	for (const testid of ["project-item", "workspace-item", "workspace-name", "workspace-branch"]) {
 		const type = await typeOf(page.getByTestId(testid).first());
-		expect(type.family, `${testid} must be proportional`).toMatch(GEIST);
-		expect(type.family, `${testid} must not be mono`).not.toMatch(MONO);
+		expect(type.family, `${testid} must be proportional`).toMatch(INTERFACE_FACE);
+		expect(type.family, `${testid} must not be mono`).not.toMatch(CODE_FACE);
 	}
 	expect(await typeOf(page.locator(".tr-text-eyebrow").first())).toMatchObject({
 		size: "12px",
@@ -107,7 +105,7 @@ test("Monaco and xterm render the generated code family and size", async ({ page
 	const editor = page.locator(".monaco-editor .view-lines").first();
 	await expect(editor).toBeVisible({ timeout: 30_000 });
 	const editorType = await typeOf(editor);
-	expect(editorType.family).toMatch(MONO);
+	expect(editorType.family).toMatch(CODE_FACE);
 	expect(editorType.size).toBe("11px");
 
 	// A terminal opens with the workspace. Measure the VISIBLE instance: several stay mounted at once
@@ -115,7 +113,7 @@ test("Monaco and xterm render the generated code family and size", async ({ page
 	// with no box — which is what let the old `if (await count())` version skip xterm entirely.
 	await waitTerminalReady(page);
 	const termType = await typeOf(visibleTerminalScreen(page));
-	expect(termType.family).toMatch(MONO);
+	expect(termType.family).toMatch(CODE_FACE);
 	// xterm adopts `code.block`'s size (13px); Monaco stays on the 11px editor tier above.
 	expect(termType.size).toBe("13px");
 });

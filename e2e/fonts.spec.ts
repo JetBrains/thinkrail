@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { CODE_FACE, INTERFACE_FACE } from "./fixtures/typography";
 
 // The app's faces must ship *inside* the artifact: ThinkRail runs locally (often offline) and is
 // distributed as a single-file binary, so a font CDN would mean system-font fallback on an air-gapped
@@ -40,7 +41,7 @@ test("serves the self-hosted variable faces, including the brand weight and real
 	// Both families are declared, and as *variable* faces spanning the weights the type scale uses —
 	// 800 (`text-brand`, `font-extrabold`) included, so the brand style is a real face and not the
 	// browser's synthetic bold.
-	for (const family of ["Geist Variable", "JetBrains Mono Variable"]) {
+	for (const family of [INTERFACE_FACE, CODE_FACE]) {
 		const faces = fonts.faces.filter((f) => f.family === family);
 		expect(faces.length, `${family} is declared`).toBeGreaterThan(0);
 		expect(
@@ -57,7 +58,7 @@ test("serves the self-hosted variable faces, including the brand weight and real
 	}
 
 	// The token stack leads with the bundled face, so body copy actually renders in it.
-	expect(fonts.bodyFamily).toContain("Geist Variable");
+	expect(fonts.bodyFamily).toContain(INTERFACE_FACE);
 });
 
 /** `font-weight: 100 900` (a variable range) covers `target`. */

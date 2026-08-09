@@ -43,7 +43,7 @@ The shell is built first, `pi` connected last:
   spec-graph rendered as its `parent` tree, backed by the same `pi-spec-graph` core model host-side;
   opening a node opens the spec file as an editor tab. Viewer only — no editing, drift detection, or
   graph canvas.
-- ThinkRail branding (violet `#8C81FF`, Darcula background, Geist / JetBrains Mono / Cabinet Grotesk).
+- ThinkRail branding (violet `#8C81FF`, Darcula background, Geist / JetBrains Mono).
 - On-disk state under `~/.thinkrail`.
 
 V1 is explicitly **not**: the workflow **product layer** (a runtime/engine, configurable pipelines —

@@ -88,8 +88,15 @@ describe("typography source", () => {
 			semibold: 600,
 			brand: 800,
 		});
-		expect(resolveFamily(typography, "interface").stack[0]).toBe("Geist Variable");
-		expect(resolveFamily(typography, "code").stack[0]).toBe("JetBrains Mono Variable");
+		// Each self-hosted face LEADS its own stack — behind a system font it would never render. The
+		// face names stay in the JSON alone, so swapping a family is a one-file change.
+		for (const id of ["interface", "code"]) {
+			const family = resolveFamily(typography, id);
+			expect(family.selfHosted ?? [], `${id} self-hosted`).not.toEqual([]);
+			expect(family.stack[0], `${id} leads with its bundled face`).not.toMatch(
+				/^(?:-apple-system|sans-serif|serif|monospace)$/,
+			);
+		}
 		// The brand family is an ALIAS of interface — the stack is never copied.
 		expect(isRef(typography.fontFamilies.brand)).toBe(true);
 		expect(resolveFamily(typography, "brand")).toEqual(resolveFamily(typography, "interface"));
