@@ -13,7 +13,7 @@ import {
 	Trash2,
 	X,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type MouseEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
 	ContextMenu,
@@ -534,6 +534,10 @@ function WorkspaceRow({
 	const isExternal = isExternalWorkspace(workspace);
 	const Icon = isDefault ? House : isExternal ? FolderOpen : GitBranch;
 	const [menuOpen, setMenuOpen] = useState(false);
+	const openMenuFromContext = (event: MouseEvent) => {
+		event.preventDefault();
+		setMenuOpen(true);
+	};
 	// A centered dialog, not an anchored popover: the trigger is a generic overflow icon, not a dedicated
 	// delete affordance, so anchoring a confirm box to it the way the old dedicated Remove button did would
 	// read oddly. Opened from the menu item's `onSelect`, `preventDefault`ed so Radix's own close-then-
@@ -552,6 +556,7 @@ function WorkspaceRow({
 				<button
 					type="button"
 					onClick={onSelect}
+					onContextMenu={openMenuFromContext}
 					className="flex min-w-0 flex-1 items-center gap-sm text-left"
 				>
 					<Icon className={`size-4 shrink-0 ${isActive ? "text-primary" : "text-text-muted"}`} />
@@ -574,16 +579,17 @@ function WorkspaceRow({
 							</span>
 						)}
 					</span>
+					<DiffStatBadge
+						added={stats?.added ?? 0}
+						removed={stats?.removed ?? 0}
+						className="self-start group-hover:hidden"
+					/>
 				</button>
-				<DiffStatBadge
-					added={stats?.added ?? 0}
-					removed={stats?.removed ?? 0}
-					className="self-start group-hover:hidden"
-				/>
 				<DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
 					<DropdownMenuTrigger
 						data-testid="workspace-menu"
 						aria-label={`Actions for ${workspace.name}`}
+						onContextMenu={openMenuFromContext}
 						// This menu is the row's only surface for Open in / Copy path / Reveal / Remove, so it
 						// can't be hover-only-invisible: a touch device has no hover and would never discover
 						// it. `opacity-0` only applies under `(hover: hover)` (a device that actually has a

@@ -69,6 +69,32 @@ test("the Default workspace's kebab menu offers Open in / Copy path but no Remov
 	await expect(page.getByTestId("workspace-remove")).toHaveCount(0);
 });
 
+test("right-click opens the workspace's kebab menu without activating it", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await settleAfterCreate(page);
+
+	const activeRow = worktreeRows(page).first();
+	const defaultRow = page.locator('[data-testid="workspace-item"][data-kind="default"]');
+	await expect(activeRow).toHaveAttribute("data-active", "true");
+	await expect(defaultRow).toHaveAttribute("data-active", "false");
+
+	await defaultRow.click({ button: "right" });
+	const actions = page.getByTestId("workspace-actions");
+	await expect(actions).toBeVisible();
+	const [actionsBox, kebabBox] = await Promise.all([
+		actions.boundingBox(),
+		defaultRow.getByTestId("workspace-menu").boundingBox(),
+	]);
+	if (!actionsBox || !kebabBox) throw new Error("Workspace menu has no anchor geometry");
+	expect(Math.abs(actionsBox.x + actionsBox.width - (kebabBox.x + kebabBox.width))).toBeLessThan(8);
+	expect(Math.abs(actionsBox.y - (kebabBox.y + kebabBox.height))).toBeLessThan(12);
+	await expect(page.getByTestId("workspace-copy-path")).toBeVisible();
+	await expect(page.getByTestId("workspace-remove")).toHaveCount(0);
+	await expect(activeRow).toHaveAttribute("data-active", "true");
+	await expect(defaultRow).toHaveAttribute("data-active", "false");
+});
+
 test("the kebab is hover-only ONLY on devices that actually have hover — never invisible by default", async ({
 	page,
 }) => {

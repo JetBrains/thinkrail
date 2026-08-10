@@ -36,10 +36,12 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   row disappearing with no toast, while rejection keeps it and raises an error toast. Menu/dialog dismissal
   restores the source project-name focus; successful close focuses the fallback project name or rail Add
   project. `ProjectTree` also owns the `NewWorkspaceDialog` the per-project `+` opens **and** each
-  workspace row's hover-revealed **kebab menu** (`MoreVertical`, `DropdownMenu`) — a `DropdownMenuSub`
-  **"Open in"** (rendered only when at least one editor was detected), **Copy path**, **Reveal in file
-  manager**, and (worktrees only) **Remove workspace** — worded **Remove from ThinkRail** on an external
-  row, whose confirm promises the checkout and its branch stay untouched. "Open in" comes from the
+  workspace row's hover-revealed **kebab menu** (`MoreVertical`, controlled `DropdownMenu`) — right-clicking
+  anywhere on the row opens that exact menu at the kebab without selecting/activating the workspace, while
+  the kebab remains the touch and keyboard-focus path. Its actions are a `DropdownMenuSub` **"Open in"**
+  (rendered only when at least one editor was detected), **Copy path**, **Reveal in file manager**, and
+  (worktrees only) **Remove workspace** — worded **Remove from ThinkRail** on an external row, whose
+  confirm promises the checkout and its branch stay untouched. "Open in" comes from the
   host-wide `editor.list`;
   GUI entries call `workspace.openIn`, while terminal-kind Vim activates the workspace and runs through
   `addTerminal`'s one-shot `initialCommand`. Copy writes `worktreePath`; Reveal calls `workspace.reveal`.
