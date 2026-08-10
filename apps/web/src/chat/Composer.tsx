@@ -17,6 +17,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { type AttachedImage, fileToAttachedImage } from "./imageAttachment";
 import { ModelSelector } from "./ModelSelector";
 import {
 	SlashCommandMenu,
@@ -44,26 +45,8 @@ export interface MentionCandidate {
 	kind: "file" | "dir";
 }
 
-interface PendingImage {
+interface PendingImage extends AttachedImage {
 	id: string;
-	content: ImageContent;
-}
-
-function fileToImageContent(file: File): Promise<ImageContent> {
-	return new Promise((resolve, reject) => {
-		const reader = new FileReader();
-		reader.onerror = () => reject(reader.error ?? new Error("failed to read image"));
-		reader.onload = () => {
-			const result = String(reader.result);
-			const comma = result.indexOf(",");
-			resolve({
-				type: "image",
-				data: comma >= 0 ? result.slice(comma + 1) : result,
-				mimeType: file.type || "image/png",
-			});
-		};
-		reader.readAsDataURL(file);
-	});
 }
 
 /** The token (non-whitespace run) ending at the caret — drives `@`-mention completion. */
@@ -436,11 +419,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const addFiles = async (files: File[]) => {
 		const picked = files.filter((f) => f.type.startsWith("image/"));
 		if (picked.length === 0) return;
-		const contents = await Promise.all(picked.map(fileToImageContent));
-		setImages((prev) => [
-			...prev,
-			...contents.map((content) => ({ id: crypto.randomUUID(), content })),
-		]);
+		// Downscaled at attach time (≤1568px long edge) — an oversized image in history 400s every
+		// subsequent turn once the provider's many-image cap kicks in. See imageAttachment.ts.
+		const attached = await Promise.all(picked.map(fileToAttachedImage));
+		setImages((prev) => [...prev, ...attached.map((a) => ({ id: crypto.randomUUID(), ...a }))]);
 	};
 
 	const submit = (behavior: SubmitBehavior) => {
@@ -670,9 +652,13 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					{images.map((img) => (
 						<span
 							key={img.id}
+							data-testid="composer-image"
+							data-width={img.width}
+							data-height={img.height}
 							className="flex items-center gap-xs rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-sm py-xs text-text-default tr-text-metadata"
 						>
 							<FileIcon className="size-3" /> {img.content.mimeType}
+							{img.width && img.height ? ` · ${img.width}×${img.height}` : null}
 							<button
 								type="button"
 								aria-label="Remove image"

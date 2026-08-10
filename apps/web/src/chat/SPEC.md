@@ -196,7 +196,14 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   transcript's last message is in view without scrolling.
 - **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions, `/`
   commands + template **slot sessions** (Tab-through placeholders — see the Template slots bullet
-  below), image paste/drop, `openHistory` on its imperative handle → `onHistoryOpen`) plus its props-driven **slash-completion
+  below), image paste/drop — routed through **`imageAttachment.ts`**: `fileToAttachedImage` decodes in
+  the browser and downscales anything over a **1568px long edge** (`fitWithin`; Claude's standard-tier
+  edge — an oversized image in history 400s every later turn once the provider's >20-image 2000px cap
+  kicks in, and pi's own resizer is deliberately off server-side), within-bounds images pass through
+  byte-identical, undecodable files fall back to raw (the server's `imageGuard` extension is the second
+  line of defense), and the pending chip shows `mime · W×H` (`composer-image` testid +
+  `data-width`/`data-height` — the `e2e/composer-images.spec.ts` hooks) — and `openHistory` on its
+  imperative handle → `onHistoryOpen`) plus its props-driven **slash-completion
   primitive** (filter/menu/caret + Up/Down, Enter/Tab, Escape), reused by `panels/NewWorkspaceDialog` so
   the two inputs cannot drift; `HistoryOverlay` (the history-recall/search overlay `Composer` opens —
   presentational, driven entirely by `useHistorySearch.ts`'s state + callbacks, plus **Save as template**

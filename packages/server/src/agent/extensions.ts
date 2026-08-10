@@ -32,6 +32,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type { SkillCatalogEntry, SlashCommandInfo } from "@thinkrail/contracts";
 import { askUserQuestionExtension } from "./askUserQuestion";
+import { oversizedImageGuard } from "./imageGuard";
 import { reviewToolExtension } from "./reviewTool";
 import { decideSkill, type SkillAdmissionContext } from "./skillAdmission";
 import {
@@ -250,7 +251,12 @@ export async function buildResourceLoader(
 	getAdmission: () => SkillAdmissionContext,
 	excludedExtensionPaths: readonly string[] = [],
 ): Promise<ResourceLoader> {
-	const sharedFactories = [headlessSearchPolicy, askUserQuestionExtension, reviewToolExtension];
+	const sharedFactories = [
+		headlessSearchPolicy,
+		askUserQuestionExtension,
+		reviewToolExtension,
+		oversizedImageGuard,
+	];
 	const skillInputs = resolveSkillInputs(cwd, getAdmission);
 	const agentDir = getAgentDir();
 	const common = {
