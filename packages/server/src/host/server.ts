@@ -465,7 +465,7 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		// `git.prefetch`'s own `checkNow` call for the app-initiated case. `getWorkspace` throws for a
 		// workspace that vanished between the watcher's debounce firing and this callback running (e.g. a
 		// concurrent `workspace.remove`); that race must never crash the host from inside a `setTimeout`
-		// callback, so it's caught here exactly like `refreshDefaultWorkspace`'s own missing-workspace
+		// callback, so it's caught here exactly like `refreshUserOwnedWorkspace`'s own missing-workspace
 		// graceful-degradation elsewhere in this file. `checkNow` itself never rejects (see its own doc).
 		try {
 			void checkNow(getWorkspace(workspaceId).projectId);

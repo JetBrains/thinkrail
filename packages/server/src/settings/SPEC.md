@@ -19,9 +19,16 @@ only the selected string id. The `remotes` scheduler (a later module) owns *acti
 broadcasting them; `host`'s settings-publisher tee is what reaches the two together (`settings` must never
 import `remotes`, nor vice versa).
 
-**A numeric setting is clamped by its consumer, not here** — `terminalReplayKb` sizes a per-terminal buffer, so
-`terminal` bounds it against `TERMINAL_REPLAY_KB` on read. This bag persists what it is given; a hand-edited
-`config.json` must not be able to exhaust memory.
+**Where a numeric setting is bounded depends on whether its consumer can still say no.** The default is
+**clamped by the consumer, not here** — `terminalReplayKb` sizes a per-terminal buffer, so `terminal` bounds it
+against `TERMINAL_REPLAY_KB` on read; this bag persists what it is given and a hand-edited `config.json` still
+cannot exhaust memory. The **remote-check fields are the deliberate exception**, clamped *here* at the write
+door (`clampRemoteCheckFields`, see Get right): their consumer is a different module reached through `host`'s
+tee, and `remotes.configureRemoteChecks` takes the value as already-validated and arms a timer from it
+directly — there is no later read at which it could bound anything, so an unclamped
+`gitRemoteCheckIntervalMinutes` would already be a one-second poll. Read `remotes.ts`'s own note ("Apply the
+host's already-validated config") as the other half of this contract: neither side may start clamping without
+the other stopping.
 
 ## Boundary
 
