@@ -350,17 +350,17 @@ const handlers: Record<string, Handler> = {
 	// worktree", so the host lazily starts its watcher (idempotent; unknown ids no-op, the read throws).
 	"fs.readDir": (params) => {
 		const p = params as { workspaceId: string; path: string };
-		ensureWatch(p.workspaceId);
+		void ensureWatch(p.workspaceId);
 		return readDir(p.workspaceId, p.path);
 	},
 	"fs.readFile": (params) => {
 		const p = params as { workspaceId: string; path: string };
-		ensureWatch(p.workspaceId);
+		void ensureWatch(p.workspaceId);
 		return readFile(p.workspaceId, p.path);
 	},
 	"spec.graph": (params) => {
 		const p = params as { workspaceId: string };
-		ensureWatch(p.workspaceId);
+		void ensureWatch(p.workspaceId);
 		return specGraph(p.workspaceId);
 	},
 	"todo.list": (params) => listTodos(params as { workspaceId: string; sessionId: string }),
@@ -383,13 +383,13 @@ const handlers: Record<string, Handler> = {
 	// commit that no longer exists rejects — the panel resets its scope on that rejection.
 	"git.status": (params) => {
 		const p = params as { workspaceId: string; scope?: GitDiffScope };
-		ensureWatch(p.workspaceId);
+		void ensureWatch(p.workspaceId);
 		return gitStatus(p.workspaceId, p.scope);
 	},
 
 	"git.diffFile": (params) => {
 		const p = params as { workspaceId: string; path: string; scope?: GitDiffScope };
-		ensureWatch(p.workspaceId);
+		void ensureWatch(p.workspaceId);
 		return gitDiffFile(p.workspaceId, p.path, p.scope);
 	},
 	// The workspace branch's own commits — the scope menu's lazily-fetched commit list.
@@ -504,6 +504,9 @@ const handlers: Record<string, Handler> = {
 		const p = params as { id: string; ref: string | null };
 		return setWorkspaceDiffBase(p.id, p.ref);
 	},
+	// Session-skill startup barrier: the watcher's wildcard publishes before this resolves. The result
+	// tells a replaying client whether to fold its local fallback if that event frame died with the socket.
+	"workspace.watchReady": (params) => ensureWatch((params as { workspaceId: string }).workspaceId),
 	// Apply skill/settings changes to a running session (active-chat reload); rejects while streaming.
 	"session.reloadResources": async (params) => {
 		await reloadSessionResources((params as { sessionId: string }).sessionId);

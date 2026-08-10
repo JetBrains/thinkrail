@@ -221,7 +221,11 @@ of the host.
   (turn a plugin / source tier / `@plugins` on/off at the baseline) / **`workspace.setSkillOverride`**
   (per-workspace on/off/clear → the `Workspace`) / **`workspace.setDiffBase`** (re-point the diff target,
   `null` clears it back to the creation base — echoes the updated `Workspace` **and** broadcasts
-  `workspace.updated`, so every client converges on the push) / **`git.status`** + **`git.diffFile`**, both
+  `workspace.updated`, so every client converges on the push) / **`workspace.watchReady`** (await the
+  fresh watcher's conservative startup nudge before a skill-loading client captures its freshness baseline;
+  `{ startupNudge }` is true unless the watcher was already known ready, so a replayed response can supply
+  the client's conservative fallback when the event push was lost or startup failed) / **`git.status`** +
+  **`git.diffFile`**, both
   taking an optional **`scope: GitDiffScope`** (an unresolvable scope — a commit a rebase removed — is
   *rejected*, which the panel reads as "reset the scope" instead of staying wedged on a dead sha) /
   **`git.listCommits`** (the workspace branch's own commits, `<diff base>..HEAD`, newest first, capped
@@ -281,10 +285,10 @@ of the host.
   **`workspace.fsChanged`** — the worktree
   change-notifier push (**`WorkspaceFsChangedPayload`**: `{ workspaceId, paths, truncated }`,
   worktree-relative deduped paths, capped — `truncated` means path uncertainty remains (an observed batch
-  was incomplete, or startup's project-skill fingerprint changed/could not be read) and must be treated as
-  a wildcard; a pathless non-truncated frame is a whole-workspace invalidation such as a
-  **fingerprint-proven-clean** watcher startup or repo-metadata drift); an **invalidation nudge, not data**:
-  clients re-read via the existing read methods, so a duplicate/replayed frame is harmless.
+  was incomplete, or a fresh watcher's registration window may have hidden an event) and must be treated as
+  a wildcard; a pathless non-truncated frame is a whole-workspace invalidation such as repo-metadata drift);
+  an **invalidation nudge, not data**: clients re-read via the existing read methods, so a
+  duplicate/replayed frame is harmless.
   The `WsMethodMap` typed request/result map +
   `WsParams`/`WsResult` helpers, and `PROTOCOL_VERSION`. Request ids are also the reconnect idempotency key:
   an unresolved client replays the same frame/id, and the host returns the one cached result for

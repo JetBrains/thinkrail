@@ -1438,7 +1438,7 @@ test("skills badge: the skill-change tick is accumulated, so a later non-skill b
 	expect(isStale("ws1", "a")).toBe(true);
 });
 
-test("skills badge: a pathless non-truncated nudge advances live refresh but stays clean", () => {
+test("skills badge: a pathless non-truncated repo-metadata nudge refreshes without staling", () => {
 	const s = () => useAppStore.getState();
 	s().openChatSession("ws1", "a", null, "medium");
 	s().noteFsChanged(skillFs("ws1", []));

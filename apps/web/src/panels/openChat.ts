@@ -1,13 +1,13 @@
 import { messagesToRuntime } from "../chat/hydrate";
-import { selectWorkspaceTick, toast, useAppStore } from "../store";
-import { errorText, getTransport } from "../transport";
+import { toast, useAppStore } from "../store";
+import { errorText, getSessionMessagesWithSkillBaseline } from "../transport";
 
 /**
  * Open (or focus) a chat by session id — the ONE escalation every "take me to this chat" affordance
  * shares (`openFile.ts`'s pattern): an open tab is focused; a live-but-closed runtime is re-attached
  * (`reopenChat`); a disk-only session is fetched (`session.getMessages`) and hydrated focused. Used by
  * the chat-history dropdown (`CenterTabs`) and the review sidebar's linked-chat glyphs (`ReviewPanel`).
- * The sync baseline is snapshotted before the fetch (see `selectWorkspaceTick` / `hydrateSession`);
+ * The guarded request waits for watcher startup, then captures the sync baseline before the fetch;
  * a failed fetch raises a toast — the entry stays wherever it was for a retry.
  */
 export async function openChatInTab(workspaceId: string, sessionId: string): Promise<void> {
@@ -23,12 +23,11 @@ export async function openChatInTab(workspaceId: string, sessionId: string): Pro
 		store.reopenChat(sessionId);
 		return;
 	}
-	const syncedTick = selectWorkspaceTick(store, workspaceId);
 	try {
-		const { summary, messages } = await getTransport().request("session.getMessages", {
-			sessionId,
-			workspaceId,
-		});
+		const {
+			result: { summary, messages },
+			syncedTick,
+		} = await getSessionMessagesWithSkillBaseline({ sessionId, workspaceId });
 		useAppStore.getState().hydrateSession(summary, messagesToRuntime(messages), true, syncedTick);
 	} catch (err) {
 		toast.error(errorText(err), "Couldn't open the chat");

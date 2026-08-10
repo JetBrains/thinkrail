@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { discoverCompatibilitySkillSources, projectSkillFingerprint } from "./skillSources";
+import { discoverCompatibilitySkillSources } from "./skillSources";
 
 const temporaryRoots: string[] = [];
 
@@ -19,33 +19,6 @@ function directory(path: string): string {
 
 afterEach(() => {
 	for (const path of temporaryRoots.splice(0)) rmSync(path, { recursive: true, force: true });
-});
-
-describe("projectSkillFingerprint", () => {
-	it("tracks all supported project skill trees and ignores unrelated files", () => {
-		const project = directory(join(temporaryRoot(), "project"));
-		const baseline = projectSkillFingerprint(project);
-		expect(baseline).not.toBeNull();
-
-		writeFileSync(join(project, "README.md"), "unrelated\n");
-		expect(projectSkillFingerprint(project)).toBe(baseline);
-
-		let previous = baseline;
-		for (const ownerDir of [".pi", ".agents", ".claude", ".github", ".gemini"]) {
-			const skillDir = directory(join(project, ownerDir, "skills", "demo"));
-			writeFileSync(join(skillDir, "SKILL.md"), `---\nname: ${ownerDir}\n---\n\nfirst\n`);
-			const next = projectSkillFingerprint(project);
-			expect(next).not.toBeNull();
-			expect(next).not.toBe(previous);
-			previous = next;
-		}
-
-		writeFileSync(
-			join(project, ".claude", "skills", "demo", "SKILL.md"),
-			"---\nname: .claude\n---\n\nbody-only edit\n",
-		);
-		expect(projectSkillFingerprint(project)).not.toBe(previous);
-	});
 });
 
 describe("discoverCompatibilitySkillSources", () => {

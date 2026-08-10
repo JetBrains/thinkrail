@@ -195,7 +195,10 @@ export interface TerminalTabsPush {
 // v30: `GitDiffScope.kind: "pinned"` — worktree vs one immutable commit (`baseRef`). The review
 // sidebar reopens a base-side comment through it, so navigation shows the very blob the anchor pinned
 // at creation instead of re-resolving a mutable branch/uncommitted scope whose original side has moved.
-export const PROTOCOL_VERSION = 30;
+// v31: `workspace.watchReady` orders a fresh watcher's conservative startup wildcard before web clients
+// capture a session skill-load baseline; `startupNudge` lets a replayed response restore a push lost with
+// its socket before that baseline is captured.
+export const PROTOCOL_VERSION = 31;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -259,6 +262,8 @@ export const WS_METHODS = {
 	workspaceSetSkillOverride: "workspace.setSkillOverride",
 	// Re-point the ref the workspace's diff is measured against (`null` clears back to the creation base).
 	workspaceSetDiffBase: "workspace.setDiffBase",
+	// Await the fresh watcher's startup wildcard before capturing a session skill-load baseline.
+	workspaceWatchReady: "workspace.watchReady",
 	// The workspace row's "Open in" menu: launch a detected editor detached at the worktree, or reveal the
 	// worktree in the host's file manager.
 	workspaceOpenIn: "workspace.openIn",
@@ -487,6 +492,12 @@ export interface ReviewSendResult {
 	reused: boolean;
 }
 
+/** Result of the session-skill startup barrier. */
+export interface WorkspaceWatchReadyResult {
+	/** True unless the watcher was already known ready; fold the replay-safe conservative fallback. */
+	startupNudge: boolean;
+}
+
 /** Per-method params + result. Both ends (web request, server handler) are typed off this. */
 export interface WsMethodMap {
 	"project.open": { params: { path: string }; result: Project };
@@ -544,6 +555,11 @@ export interface WsMethodMap {
 	// Re-point the diff target (`Workspace.diffBase`); `null` clears back to the creation base. Echoes the
 	// updated `Workspace` **and** broadcasts `workspace.updated`, so every client converges on the push.
 	"workspace.setDiffBase": { params: { id: string; ref: string | null }; result: Workspace };
+	// Wait for a fresh watcher's startup wildcard before a client captures its session skill-load baseline.
+	"workspace.watchReady": {
+		params: { workspaceId: string };
+		result: WorkspaceWatchReadyResult;
+	};
 	// Launch an `EditorInfo.id` from `editor.list`, detached, at the workspace's `worktreePath`. GUI editors
 	// only — a `"terminal"`-kind entry (Vim) has no window of its own; the client runs it in that workspace's
 	// embedded terminal instead of calling this.

@@ -10,7 +10,6 @@ import { errorCodeOf } from "@thinkrail/shared/codedError";
 import {
 	disposeAllSessions,
 	getSessionWorkspaceId,
-	projectSkillFingerprint,
 	setExtUiPublisher,
 	setReviewCommentHandler,
 	setSessionPublisher,
@@ -41,12 +40,7 @@ import {
 	setTerminalPublisher,
 	setTerminalTabsPublisher,
 } from "../terminal";
-import {
-	setRepoMetaPublisher,
-	setWatchPublisher,
-	setWatchSkillSnapshotter,
-	stopAllWatches,
-} from "../watch";
+import { setRepoMetaPublisher, setWatchPublisher, stopAllWatches } from "../watch";
 import { getWorkspace, refreshUserOwnedWorkspace, setWorkspacePublisher } from "../workspaces";
 import {
 	isPromptCommitted,
@@ -415,16 +409,6 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		reanchorWorkspace(payload.workspaceId);
 	};
 	setWatchPublisher(publishFsChanged);
-	// Snapshot project skill trees around a fresh watcher's registration gap. `watch` owns only the opaque
-	// before/after comparison; this host composition resolves workspace → cwd and delegates skill truth to
-	// `agent`, so neither sibling imports the other. Missing/racy state stays `null` and therefore wildcard.
-	setWatchSkillSnapshotter((workspaceId) => {
-		try {
-			return projectSkillFingerprint(getWorkspace(workspaceId).worktreePath);
-		} catch {
-			return null;
-		}
-	});
 	// The same frame, publishable from the `git.prefetch` handler: the app's own background fetch moves
 	// `refs/remotes/…` in the project repo's shared `.git` — a location no worktree watcher can see — so the
 	// handler nudges the workspaces whose diff base that ref is (see `fsNudge.ts`).

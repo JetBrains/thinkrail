@@ -782,8 +782,8 @@ interface AppState {
 		sessionId: string,
 		model: WireModel | null,
 		thinkingLevel: ThinkingLevel,
-		/** Skills sync baseline — the workspace tick captured *before* `session.create` (see
-		 * `selectWorkspaceTick`); omit to anchor at call time (fine when there's no async load in between). */
+		/** Skills sync baseline — the workspace tick captured after `workspace.watchReady` and *before*
+		 * `session.create`; omit to anchor at call time (fine when there's no async load in between). */
 		syncedTick?: number,
 	) => void;
 	/** Drop a chat's runtime on tab close (the `AgentSession` is disposed over the wire by the caller). */
@@ -806,9 +806,9 @@ interface AppState {
 		summary: SessionSummary,
 		hydrated: HydratedRuntime,
 		activate?: boolean,
-		/** Skills sync baseline — the workspace tick captured *before* `session.getMessages`, passed **only**
-		 * for a disk-only attach (which reloads resources against current disk). Omit for a live restore
-		 * (transcript only, no reload): the baseline is left unset so the chat stays conservatively stale. */
+		/** Skills sync baseline — captured after `workspace.watchReady` and *before* `session.getMessages`,
+		 * passed **only** for a disk-only attach (which reloads resources against current disk). Omit for a
+		 * live restore (transcript only, no reload): the baseline is left unset so the chat stays stale. */
 		syncedTick?: number,
 	) => void;
 	appendUserMessage: (sessionId: string, text: string) => void;
@@ -1654,8 +1654,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 			return {
 				sessions: { ...s.sessions, [summary.sessionId]: runtime },
 				// Advance the sync baseline ONLY when this restore actually (re)loaded resources against current
-				// disk — a disk-only attach, where the caller passes its request-start tick. A LIVE restore
-				// reused the server session's already-loaded skills (`getMessages` returns only the transcript,
+				// disk — a disk-only attach, where the caller passes its post-readiness request-start tick. A LIVE
+				// restore reused the server session's already-loaded skills (`getMessages` returns only the transcript,
 				// no reload) and the client can't date them, so the caller passes no tick: leave the baseline
 				// unset → the chat stays conservatively stale if a skill change has been observed, never falsely
 				// clearing the badge for a live session that predates the change.

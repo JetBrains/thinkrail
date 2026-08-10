@@ -1,13 +1,4 @@
-import { createHash, type Hash } from "node:crypto";
-import {
-	existsSync,
-	lstatSync,
-	readdirSync,
-	readFileSync,
-	readlinkSync,
-	realpathSync,
-	statSync,
-} from "node:fs";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -25,25 +16,6 @@ export interface CompatibilitySkillSource {
 interface DiscoverCompatibilitySkillSourcesOptions {
 	homeDir?: string;
 	env?: Readonly<Record<string, string | undefined>>;
-}
-
-const PROJECT_COMPATIBILITY_SKILL_DIRS = [
-	{ ownerDir: ".claude", provider: "claude" },
-	{ ownerDir: ".github", provider: "github-copilot" },
-	{ ownerDir: ".gemini", provider: "gemini" },
-] as const satisfies readonly {
-	ownerDir: string;
-	provider: CompatibilitySkillProvider;
-}[];
-
-/** Pi-native project skill roots that sit ahead of the portable compatibility aliases. */
-const PI_PROJECT_SKILL_DIRS = [".pi", ".agents"] as const;
-
-function projectSkillRoots(cwd: string): { path: string; label: string }[] {
-	const projectRoot = resolve(cwd);
-	return [...PI_PROJECT_SKILL_DIRS, ...PROJECT_COMPATIBILITY_SKILL_DIRS.map((x) => x.ownerDir)].map(
-		(ownerDir) => ({ path: join(projectRoot, ownerDir, "skills"), label: `${ownerDir}/skills` }),
-	);
 }
 
 function resolveConfiguredPath(value: string, homeDir: string): string {
@@ -119,14 +91,14 @@ export function candidateCompatibilitySkillRoots(
 	// GEMINI_CLI_HOME is a replacement user-home root; Gemini creates `.gemini` beneath it.
 	const geminiHome = resolveConfiguredPath(env.GEMINI_CLI_HOME?.trim() || homeDir, homeDir);
 
-	const candidates: CompatibilitySkillSource[] = PROJECT_COMPATIBILITY_SKILL_DIRS.map(
-		({ ownerDir, provider }) => ({
-			path: join(projectRoot, ownerDir, "skills"),
-			scope: "project" as const,
-			provider,
-		}),
-	);
-	candidates.push(
+	const candidates: CompatibilitySkillSource[] = [
+		{ path: join(projectRoot, ".claude", "skills"), scope: "project", provider: "claude" },
+		{
+			path: join(projectRoot, ".github", "skills"),
+			scope: "project",
+			provider: "github-copilot",
+		},
+		{ path: join(projectRoot, ".gemini", "skills"), scope: "project", provider: "gemini" },
 		{ path: join(claudeConfigDir, "skills"), scope: "user", provider: "claude" },
 		{ path: join(codexHome, "skills"), scope: "user", provider: "codex" },
 		{
@@ -135,7 +107,7 @@ export function candidateCompatibilitySkillRoots(
 			provider: "github-copilot",
 		},
 		{ path: join(geminiHome, ".gemini", "skills"), scope: "user", provider: "gemini" },
-	);
+	];
 
 	// Installed Claude plugins (superpowers, etc.) — appended after the hand-written personal aliases so a
 	// loose `~/.claude/skills/<name>` wins a name collision over a plugin's.
@@ -144,52 +116,6 @@ export function candidateCompatibilitySkillRoots(
 	}
 
 	return candidates;
-}
-
-/** Hash one project-skill tree without following symlinks; any traversal race makes the snapshot unknown. */
-function hashSkillTree(hash: Hash, path: string, label: string): void {
-	const stat = lstatSync(path, { throwIfNoEntry: false });
-	if (!stat) {
-		hash.update(`missing\0${label}\0`);
-		return;
-	}
-	if (stat.isSymbolicLink()) {
-		const target = readlinkSync(path);
-		hash.update(`link\0${label}\0${Buffer.byteLength(target)}\0${target}`);
-		return;
-	}
-	if (stat.isFile()) {
-		hash.update(`file\0${label}\0${stat.size}\0`);
-		hash.update(readFileSync(path));
-		return;
-	}
-	if (!stat.isDirectory()) throw new Error(`Unsupported skill-tree entry: ${path}`);
-	hash.update(`dir\0${label}\0`);
-	const entries = readdirSync(path, { withFileTypes: true }).sort((a, b) =>
-		a.name.localeCompare(b.name),
-	);
-	for (const entry of entries) {
-		hashSkillTree(hash, join(path, entry.name), `${label}/${entry.name}`);
-	}
-}
-
-/**
- * A deterministic snapshot of the five conventional project skill trees the Skills badge tracks. Used
- * only around a fresh watcher's registration window: equal known fingerprints prove its synthetic startup
- * nudge can stay
- * pathless/non-truncated; a changed or `null` snapshot must conservatively become a wildcard. Relative
- * structure + file bytes are hashed, so a body-only `SKILL.md` edit is visible even when names stay fixed.
- * Missing roots are stable state. Symlinks contribute their target but are not followed; unreadable or
- * racing trees return `null` rather than claiming equality.
- */
-export function projectSkillFingerprint(cwd: string): string | null {
-	try {
-		const hash = createHash("sha256");
-		for (const root of projectSkillRoots(cwd)) hashSkillTree(hash, root.path, root.label);
-		return hash.digest("hex");
-	} catch {
-		return null;
-	}
 }
 
 /**

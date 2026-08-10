@@ -23,8 +23,9 @@ test("skills badge: flags a worktree skill change, clears on reload, and survive
 	const skillsBtn = page.getByTestId("open-skills");
 	await expect(skillsBtn).toBeVisible();
 
-	// Force the lazy watcher to start, then wait beyond its one-shot startup nudge. The nudge must still
-	// refresh live readers, but with no filesystem activity it must NOT claim this chat's skills are stale.
+	// Session creation waits for the lazy watcher's one-shot wildcard before loading skills. The startup
+	// uncertainty is therefore part of this chat's baseline and must NOT leave the new chat stale. Opening
+	// Files also proves ordinary live readers still work without another delayed startup.
 	await page.getByTestId("tab-files").click();
 	await expect(page.getByTestId("file-node").filter({ hasText: "README.md" })).toBeVisible();
 	await page.waitForTimeout(1200);

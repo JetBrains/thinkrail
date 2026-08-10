@@ -183,13 +183,13 @@ entry; the pending-draft count is a selector (`selectReviewDraftCount`), never d
 components. The **Skills-reload badge** rides the same tick without a separate signal:
   `noteFsChanged` also folds **`skillChangeTickByWorkspace: Record<workspaceId, tick>`** — the tick of the
   most recent *skill-relevant* batch (a `.claude|.github|.gemini|.pi|.agents/skills` path, via
-  `isSkillPath`, or a genuinely truncated watcher batch), *accumulated* so a later non-skill batch never
-  clears it. When the watcher's before/after project-skill fingerprints prove startup was clean, its
-  synthetic nudge is pathless + non-truncated: it advances the general workspace tick and makes live
-  readers re-read, but does **not** advance this skill tick or falsely badge a clean chat. A changed or
-  unavailable fingerprint instead arrives as a genuinely truncated batch and keeps the conservative stale
-  signal. Each chat records **`skillsSyncedTickBySession: Record<sessionId, tick>`** = the tick it loaded
-  skills at.
+  `isSkillPath`, or a truncated watcher batch), *accumulated* so a later non-skill batch never clears it.
+  A fresh watcher's synthetic startup nudge remains a conservative truncated wildcard. Transport's
+  centralized skill-load preparation awaits `workspace.watchReady`, folds a duplicate wildcard fallback
+  unless the watcher was already known ready (the event push may have died during reconnect), then
+  captures the load's baseline tick. The newly loaded session stays clean; a real skill frame after readiness
+  remains newer than the baseline. Each chat records
+  **`skillsSyncedTickBySession: Record<sessionId, tick>`** = the tick it loaded skills at.
   It advances **only when resources are actually (re)loaded against current disk**: a fresh
   `openChatSession`, a disk-only `hydrateSession` attach, and **`markSkillsSynced(sessionId, syncedTick)`** on
   a successful reload (`markSkillsSynced` is **monotonic** — `Math.max`, so an out-of-order reload completion
@@ -198,10 +198,11 @@ components. The **Skills-reload badge** rides the same tick without a separate s
   reuses the server session's already-loaded skills (`getMessages` returns only the transcript, no reload)
   which the client can't date, so it advances **nothing** — the chat stays *conservatively stale* if a skill
   change has been observed, never falsely clearing. That
-  `syncedTick` is the workspace tick captured at the **start** of the skill-loading round-trip
-  (`selectWorkspaceTick`, snapshot by the caller before `session.create`/`reloadResources`/`getMessages`),
-  **not** at completion — so a skill change whose `fsChanged` frame folds while the load is in flight (which
-  the load did not see) stays past the baseline and keeps the badge lit rather than being silently absorbed.
+  `syncedTick` is the workspace tick captured at the **start** of the skill-loading round-trip, immediately
+  after the shared `workspace.watchReady` preparation (`selectWorkspaceTick`, snapshot by the caller before
+  `session.create`/`reloadResources`/`getMessages`), **not** at completion — so a skill change whose
+  `fsChanged` frame folds while the load is in flight (which the load did not see) stays past the baseline
+  and keeps the badge lit rather than being silently absorbed.
   The selector
   **`selectSkillsStale(state, workspaceId, sessionId)`** = `skillChangeTick > syncedTick` — store-derived
   (survives `ChatView`'s tab-switch remount) and per-session (a sibling/newer chat that loaded the current

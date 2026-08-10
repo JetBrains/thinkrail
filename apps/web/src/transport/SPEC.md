@@ -46,9 +46,13 @@ The single WebSocket client to the host, and its app-wide singleton.
   `requestError.ts` (**`RequestError`** + **`wsErrorCode(err)`** — a rejection that carries the host's named
   `WsResponse.errorCode`. A coded response rejects with a `RequestError`, everything else (timeout or an unnamed
   host error) with a plain `Error`, so *having* a code is exactly how a caller tells "this
-  specific failure" from "the read failed").
-- **Public surface (barrel):** `initTransport`, `getTransport`, `errorText`, `RequestError`, `wsErrorCode`,
-  `ConnectionStatus`, `TransportOptions`.
+  specific failure" from "the read failed"); `skillLoad.ts` (the one app-integration coordinator for session
+  resource loads: single-flight `workspace.watchReady` per workspace; unless the watcher was already known
+  ready, fold the conservative wildcard locally as a replay-safe fallback; capture the store tick only
+  afterward; then wrappers issue `session.create` / `session.getMessages` / `session.reloadResources`, so no
+  call site can accidentally reverse readiness and baseline ordering).
+- **Public surface (barrel):** `initTransport`, `getTransport`, the three skill-load-safe session request
+  wrappers, `errorText`, `RequestError`, `wsErrorCode`, `ConnectionStatus`, `TransportOptions`.
 - **Allowed deps:** `contracts` (method maps, `WS_CHANNELS`, `Project` for welcome + `project.updated`, `SessionEventPayload`
   for `pi.event`, `ExtUiRequest` for `pi.extensionUi`, `Workspace` for `workspace.created`/`updated`,
   `WorkspaceRemoved` for `workspace.removed`, `WorkspaceFsChangedPayload` for `workspace.fsChanged`,

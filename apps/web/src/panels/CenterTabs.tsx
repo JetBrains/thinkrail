@@ -25,11 +25,15 @@ import {
 	isExternalWorkspace,
 	selectActiveWorkspace,
 	selectContextProject,
-	selectWorkspaceTick,
 	toast,
 	useAppStore,
 } from "../store";
-import { errorText, getTransport } from "../transport";
+import {
+	createSessionWithSkillBaseline,
+	errorText,
+	getSessionMessagesWithSkillBaseline,
+	getTransport,
+} from "../transport";
 import { DiffPane } from "./DiffPane";
 import { FilePane } from "./FilePane";
 import { openChatInTab } from "./openChat";
@@ -162,23 +166,20 @@ export function CenterTabs() {
 		if (!activeWorkspaceId) return;
 		const workspaceId = activeWorkspaceId;
 		let cancelled = false;
-		// Sync baseline for disk-only attaches, snapshotted before the fetches (see selectWorkspaceTick).
-		const syncedTick = selectWorkspaceTick(useAppStore.getState(), workspaceId);
 		// Split into request + apply so a batch can have its reads in flight together while the *writes*
-		// still land in a chosen order (focus follows the first write, not the first response).
+		// still land in a chosen order (focus follows the first write, not the first response). The guarded
+		// wrapper single-flights watcher readiness, then captures each load's conservative start tick.
 		const fetchMessages = (sessionId: string) =>
-			getTransport()
-				.request("session.getMessages", { sessionId, workspaceId })
+			getSessionMessagesWithSkillBaseline({ sessionId, workspaceId })
 				// A session that failed to load is skipped; the others still hydrate.
 				.catch(() => null);
-		const applyHydrate = (result: Awaited<ReturnType<typeof fetchMessages>>, live: boolean) => {
-			if (!result || cancelled) return;
+		const applyHydrate = (loaded: Awaited<ReturnType<typeof fetchMessages>>, live: boolean) => {
+			if (!loaded || cancelled) return;
 			// A live restore reused the server's already-loaded resources → no baseline (stays
-			// conservatively stale); a disk attach reloaded against current disk → the pre-fetch tick.
-			const tick = live ? undefined : syncedTick;
-			useAppStore
-				.getState()
-				.hydrateSession(result.summary, messagesToRuntime(result.messages), false, tick);
+			// conservatively stale); a disk attach reloaded against current disk → the guarded start tick.
+			const tick = live ? undefined : loaded.syncedTick;
+			const { summary, messages } = loaded.result;
+			useAppStore.getState().hydrateSession(summary, messagesToRuntime(messages), false, tick);
 		};
 		const hydrateFromHost = async (sessionId: string, live: boolean) =>
 			applyHydrate(await fetchMessages(sessionId), live);
@@ -259,10 +260,14 @@ export function CenterTabs() {
 		}
 		// (c) Neither — the same fetch + hydrate `onReopenChat` below does for a disk-only history entry.
 		let cancelled = false;
-		void getTransport()
-			.request("session.getMessages", { sessionId, workspaceId: chatLocationRequest.workspaceId })
-			.then(({ summary, messages }) => {
+		void getSessionMessagesWithSkillBaseline({
+			sessionId,
+			workspaceId: chatLocationRequest.workspaceId,
+		})
+			.then(({ result: { summary, messages } }) => {
 				if (cancelled) return;
+				// The target may already be live in another client; without proof of a disk attach, preserve
+				// the existing conservative no-baseline behavior.
 				useAppStore.getState().hydrateSession(summary, messagesToRuntime(messages), true);
 			})
 			.catch((err) => {
@@ -289,12 +294,11 @@ export function CenterTabs() {
 		// Starting a chat is a navigation, even though its tab only appears once the create returns — so a
 		// file read still in flight must not activate itself on top of the chat the user asked for.
 		useAppStore.getState().noteNavigation(activeWorkspaceId);
-		// Snapshot the sync baseline before the create round-trip (see selectWorkspaceTick / openChatSession).
-		const syncedTick = selectWorkspaceTick(useAppStore.getState(), activeWorkspaceId);
 		try {
-			const { sessionId, model, thinkingLevel } = await getTransport().request("session.create", {
-				workspaceId: activeWorkspaceId,
-			});
+			const {
+				result: { sessionId, model, thinkingLevel },
+				syncedTick,
+			} = await createSessionWithSkillBaseline({ workspaceId: activeWorkspaceId });
 			useAppStore
 				.getState()
 				.openChatSession(activeWorkspaceId, sessionId, model, thinkingLevel, syncedTick);
