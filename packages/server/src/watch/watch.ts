@@ -17,8 +17,9 @@ const MAX_PATHS = 100;
 /**
  * Platform watch streams (FSEvents/inotify/kqueue) have a brief post-registration window where events
  * can drop. A write landing in that window would be lost forever (one batch is the only signal), so a
- * fresh watcher publishes ONE synthetic wildcard nudge after the window — receivers just refetch, and
- * a nudge with nothing changed is a cheap no-op re-read.
+ * fresh watcher publishes ONE synthetic pathless nudge after the window — receivers just refetch, and
+ * a nudge with nothing changed is a cheap no-op re-read. It is non-truncated because it is not an
+ * observed path batch whose names were lost; that distinction keeps consumers from inferring a change.
  */
 const STARTUP_NUDGE_MS = 750;
 
@@ -222,7 +223,7 @@ export function ensureWatch(workspaceId: string): void {
 		});
 		const nudgeTimer = setTimeout(() => {
 			if (entries.get(workspaceId)?.watcher === watcher) {
-				publish?.({ workspaceId, paths: [], truncated: true });
+				publish?.({ workspaceId, paths: [], truncated: false });
 			}
 		}, STARTUP_NUDGE_MS);
 		const gitDir = resolveExternalGitDir(ws.worktreePath);

@@ -127,16 +127,18 @@ export interface EditorInfo {
 }
 
 /**
- * The `workspace.fsChanged` push frame: the host's worktree watcher noticed on-disk changes (agent
- * edits, terminal commands, Finder). An **invalidation nudge, not data** — clients re-read via the
- * existing read methods, so a duplicate/replayed frame is harmless. `paths` are worktree-relative and
- * deduped, capped host-side; `truncated: true` = treat as a wildcard (anything may have changed).
+ * The `workspace.fsChanged` push frame from the host's worktree change notifier: either an observed
+ * on-disk change (agent edit, terminal command, Finder) or a pathless synchronization nudge. An
+ * **invalidation nudge, not data** — clients re-read via the existing read methods, so a duplicate or
+ * replayed frame is harmless. `paths` are worktree-relative and deduped, capped host-side;
+ * `truncated: true` means an observed watcher batch's path list is incomplete, so clients treat it as a
+ * wildcard (anything may have changed).
  *
- * An **empty, non-truncated** frame (`paths: []`, `truncated: false`) is the pathless variant: something
- * the reads depend on moved *without* naming a file — the host emits it when a worktree's git metadata
- * moves (a `commit`/`reset`/`switch` in a terminal), which invalidates the git-derived reads (`git.status`,
- * an `uncommitted`-scope diff) while leaving the working tree untouched. Same contract: re-read, don't
- * patch. Path-driven consumers see no paths and correctly do nothing extra.
+ * An **empty, non-truncated** frame (`paths: []`, `truncated: false`) is the pathless variant: re-read the
+ * workspace without claiming a file changed. The host emits it as the fresh watcher's synchronization
+ * nudge and when worktree git metadata moves (a `commit`/`reset`/`switch` in a terminal), which invalidates
+ * git-derived reads (`git.status`, an `uncommitted`-scope diff) while leaving the working tree untouched.
+ * Same contract: re-read, don't patch.
  */
 export interface WorkspaceFsChangedPayload {
 	workspaceId: string;

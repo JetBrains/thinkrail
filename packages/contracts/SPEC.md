@@ -280,8 +280,10 @@ of the host.
   `resolve_comment` calls, re-anchoring — so all clients converge, same pattern as the trio) /
   **`workspace.fsChanged`** — the worktree
   change-notifier push (**`WorkspaceFsChangedPayload`**: `{ workspaceId, paths, truncated }`,
-  worktree-relative deduped paths, capped — `truncated` = treat as wildcard); an **invalidation nudge,
-  not data**: clients re-read via the existing read methods, so a duplicate/replayed frame is harmless.
+  worktree-relative deduped paths, capped — `truncated` means an observed watcher batch's path list is
+  incomplete and must be treated as a wildcard; a pathless non-truncated frame is a whole-workspace
+  invalidation such as watcher startup or repo-metadata drift); an **invalidation nudge, not data**:
+  clients re-read via the existing read methods, so a duplicate/replayed frame is harmless.
   The `WsMethodMap` typed request/result map +
   `WsParams`/`WsResult` helpers, and `PROTOCOL_VERSION`. Request ids are also the reconnect idempotency key:
   an unresolved client replays the same frame/id, and the host returns the one cached result for

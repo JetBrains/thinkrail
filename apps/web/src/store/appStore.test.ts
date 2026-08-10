@@ -1438,6 +1438,14 @@ test("skills badge: the skill-change tick is accumulated, so a later non-skill b
 	expect(isStale("ws1", "a")).toBe(true);
 });
 
+test("skills badge: a pathless non-truncated nudge advances live refresh but stays clean", () => {
+	const s = () => useAppStore.getState();
+	s().openChatSession("ws1", "a", null, "medium");
+	s().noteFsChanged(skillFs("ws1", []));
+	expect(selectWorkspaceTick(s(), "ws1")).toBe(1); // live readers still re-read
+	expect(isStale("ws1", "a")).toBe(false);
+});
+
 test("skills badge: a truncated wildcard batch flags stale even with no skill path", () => {
 	const s = () => useAppStore.getState();
 	s().openChatSession("ws1", "a", null, "medium");

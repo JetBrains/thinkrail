@@ -239,10 +239,10 @@ test("unknown workspace and stopWatch are safe no-ops; stopped watchers stay sil
 	expect(payloads).toHaveLength(0);
 });
 
-test("a fresh watcher publishes one wildcard startup nudge even with no fs activity", async () => {
+test("a fresh watcher publishes one pathless non-truncated startup nudge with no fs activity", async () => {
 	ensureWatch("ws1");
 	await waitFor(() => payloads.length > 0, 2000);
-	expect(payloads[0]).toEqual({ workspaceId: "ws1", paths: [], truncated: true });
+	expect(payloads[0]).toEqual({ workspaceId: "ws1", paths: [], truncated: false });
 	await sleep(300);
 	expect(payloads).toHaveLength(1); // one-shot, not periodic
 });

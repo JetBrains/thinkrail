@@ -29,9 +29,12 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   300ms quiet / 1s max-wait, capped at 100 paths → `truncated: true` = wildcard — the ≤ ~1 frame/sec
   bound is **pinned by the e2e churn canary** in `live-refresh.spec.ts`: ~200 writes over ~3s must
   reach the client as ≤ 8 frames while a mid-storm `/health` round-trip stays fast); the **startup
-  nudge** — a fresh watcher publishes one synthetic wildcard batch after the platform stream's
-  registration window (~750ms), because a write landing inside that window is otherwise lost forever
-  (an invalidation nudge is idempotent, so the cost is one cheap no-op refetch).
+  nudge** — a fresh watcher publishes one synthetic **pathless, non-truncated** batch after the platform
+  stream's registration window (~750ms), because a write landing inside that window is otherwise lost
+  forever. The pathless frame still advances the workspace invalidation tick and makes every live reader
+  re-read, but it does not claim an observed path batch was incomplete (and therefore cannot falsely mark
+  every running session's Skills as stale when nothing changed); an invalidation nudge is idempotent, so
+  the cost is one cheap no-op refetch.
 - **Repo-metadata nudge (second seam):** a git-metadata write is *metadata, not content*, so it never
   becomes an `fsChanged` path (the `.git` blackout stands — plumbing storms must not turn into frames). It
   instead arms a separately debounced (300ms), **pathless** `setRepoMetaPublisher(workspaceId)` nudge. This
