@@ -39,8 +39,15 @@ binary.
   own CSS custom properties under `[data-theme]`; the site never reaches into `apps/web` at build time
   (the app's tokens assume the theme engine's runtime swap).
 - All marketing copy is static DOM text; JS only *enhances* (scroll-spy, terminal typing, chat
-  streaming replay, theme switcher, copy buttons, star count). The page must read complete with JS
-  disabled, and animations are skipped under `prefers-reduced-motion`.
+  streaming replay, theme switcher, copy buttons, star count, install-platform selection). The page
+  must read complete with JS disabled, and animations are skipped under `prefers-reduced-motion`.
+- The hero's install command has **macOS / Linux / Windows** tabs. Browser hints choose only the
+  initial supported desktop OS; they never hide alternatives or claim to detect an ambiguous mobile
+  platform. Windows adds **PowerShell / Command Prompt / WSL** tabs: native shells use `install.ps1`
+  (the stable command is deliberately identical in both), while WSL uses `install.sh` and therefore
+  installs the Linux build inside that distro. Every hero panel remains in the static DOM; JS turns the
+  complete fallback into the tabbed view. The detailed Install section keeps its existing complete,
+  mixed-platform reference rather than duplicating the picker.
 
 ## Analytics
 

@@ -904,6 +904,193 @@ p.hero-lede {
 	display: none;
 }
 
+/* OS tabs attach to the command surface like editor tabs. Without JS the controls stay hidden and all
+   labelled instruction panels remain visible; main.ts adds install-tabs-ready only after wiring them. */
+.install-picker {
+	max-width: 100%;
+}
+
+.install-picker-hero {
+	margin: 26px 0 10px;
+}
+
+.install-tabs,
+.windows-shell-tabs {
+	display: none;
+}
+
+html.install-tabs-ready .install-tabs {
+	display: flex;
+	align-items: flex-end;
+	gap: 2px;
+	padding: 0 4px;
+	border-bottom: 1px solid var(--border2);
+}
+
+.install-tab {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	min-height: 34px;
+	padding: 7px 13px 8px;
+	margin-bottom: -1px;
+	border: 1px solid transparent;
+	border-bottom-color: var(--border2);
+	border-radius: 7px 7px 0 0;
+	background: transparent;
+	color: var(--hint);
+	font-family: var(--font-mono);
+	font-size: 11.5px;
+	cursor: pointer;
+}
+
+.install-tab:hover {
+	color: var(--text);
+	background: var(--hover);
+}
+
+.install-tab[aria-selected="true"] {
+	z-index: 1;
+	border-color: var(--border2);
+	border-bottom-color: var(--input);
+	background: var(--input);
+	color: var(--text);
+}
+
+.install-tab[aria-selected="true"]::before {
+	content: "";
+	position: absolute;
+	top: -1px;
+	left: 9px;
+	right: 9px;
+	height: 2px;
+	border-radius: 2px;
+	background: var(--accent);
+}
+
+.install-tab:focus-visible,
+.windows-shell-tab:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: -3px;
+}
+
+.detected-marker:not([hidden]) {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.detected-dot {
+	width: 5px;
+	height: 5px;
+	border-radius: 999px;
+	background: var(--accent);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.detected-label {
+	color: var(--accent);
+	font-size: 9px;
+	letter-spacing: 0.45px;
+	text-transform: uppercase;
+}
+
+.install-panel[hidden],
+.windows-shell-panel[hidden] {
+	display: none;
+}
+
+p.install-fallback-heading {
+	margin: 18px 2px 6px;
+	color: var(--text);
+	font-family: var(--font-mono);
+	font-size: 12px;
+	font-weight: 600;
+}
+
+html.install-tabs-ready p.install-fallback-heading {
+	display: none;
+}
+
+.install-picker-hero .install-line {
+	margin: 8px 0 16px;
+}
+
+html.install-tabs-ready .install-picker-hero > .install-panel > .install-line {
+	margin: 0;
+	border-top: 0;
+	border-radius: 0 0 8px 8px;
+}
+
+.windows-shell-picker {
+	overflow: hidden;
+	border: 1px solid var(--border2);
+	border-radius: 8px;
+	background: var(--input);
+}
+
+html.install-tabs-ready .install-picker-hero .windows-shell-picker {
+	border-top: 0;
+	border-radius: 0 0 8px 8px;
+}
+
+html.install-tabs-ready .windows-shell-tabs {
+	display: flex;
+	gap: 5px;
+	padding: 8px 10px;
+	border-bottom: 1px solid var(--border);
+}
+
+.windows-shell-tab {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 27px;
+	padding: 5px 10px;
+	border: 1px solid var(--border2);
+	border-radius: 5px;
+	background: transparent;
+	color: var(--hint);
+	font-family: var(--font-mono);
+	font-size: 10.5px;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.windows-shell-tab:hover {
+	color: var(--text);
+	background: var(--hover);
+}
+
+.windows-shell-tab[aria-selected="true"] {
+	border-color: color-mix(in srgb, var(--accent) 45%, var(--border2));
+	background: color-mix(in srgb, var(--accent) 9%, transparent);
+	color: var(--accent);
+}
+
+html.install-tabs-ready .windows-shell-picker .install-line {
+	margin: 0;
+	border: 0;
+	border-radius: 0;
+}
+
+p.install-detection-note {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	margin: 8px 2px 0;
+	color: var(--hint);
+	font-family: var(--font-mono);
+	font-size: 11px;
+	line-height: 1.4;
+}
+
+p.install-detection-note::before {
+	content: "↳";
+	color: var(--accent);
+}
+
 p.hero-platforms {
 	font-size: 12.5px;
 	color: var(--hint);
@@ -1727,6 +1914,34 @@ html.anim .terminal.armed [data-out] {
 @media (max-width: 560px) {
 	.scope {
 		display: none;
+	}
+
+	html.install-tabs-ready .install-tabs {
+		padding-inline: 0;
+	}
+
+	.install-tab {
+		flex: 1;
+		justify-content: center;
+		padding-inline: 7px;
+	}
+
+	.detected-label {
+		display: none;
+	}
+
+	html.install-tabs-ready .windows-shell-tabs {
+		padding-inline: 7px;
+	}
+
+	.windows-shell-tab {
+		flex: 1;
+		padding-inline: 5px;
+		font-size: 9.5px;
+	}
+
+	.install-picker-hero .install-line > code {
+		font-size: 11.5px;
 	}
 
 	.hero-ctas .btn {

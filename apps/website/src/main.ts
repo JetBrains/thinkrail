@@ -3,6 +3,7 @@
 
 import { initAnalytics } from "./analytics";
 import { initGtm } from "./gtm";
+import { detectInstallPlatform, type InstallPlatform } from "./installPlatform";
 
 // Production-only, cookieless PostHog (self-gates on hostname). See src/analytics.ts.
 initAnalytics();
@@ -162,6 +163,156 @@ if (themeToggle) {
 			apply(getSystemTheme(), false);
 		}
 	});
+}
+
+/* ── Install platform + Windows shell pickers ───────────────────────────── */
+
+type WindowsShell = "powershell" | "cmd" | "wsl";
+
+interface NavigatorUserAgentData {
+	readonly platform?: string;
+}
+
+interface NavigatorWithUserAgentData extends Navigator {
+	readonly userAgentData?: NavigatorUserAgentData;
+}
+
+function platformFrom(value: string | undefined): InstallPlatform | undefined {
+	switch (value) {
+		case "macos":
+		case "linux":
+		case "windows":
+			return value;
+		default:
+			return undefined;
+	}
+}
+
+function windowsShellFrom(value: string | undefined): WindowsShell | undefined {
+	switch (value) {
+		case "powershell":
+		case "cmd":
+		case "wsl":
+			return value;
+		default:
+			return undefined;
+	}
+}
+
+const installPicker = document.querySelector<HTMLElement>("[data-install-picker]");
+if (installPicker) {
+	const browserNavigator: NavigatorWithUserAgentData = navigator;
+	const detectedPlatform = detectInstallPlatform({
+		userAgentDataPlatform: browserNavigator.userAgentData?.platform,
+		platform: browserNavigator.platform,
+		userAgent: browserNavigator.userAgent,
+		maxTouchPoints: browserNavigator.maxTouchPoints,
+	});
+	const platformLabel: Record<InstallPlatform, string> = {
+		macos: "macOS",
+		linux: "Linux",
+		windows: "Windows",
+	};
+
+	const platformTabs = document.querySelectorAll<HTMLButtonElement>("[data-install-platform]");
+	const platformPanels = document.querySelectorAll<HTMLElement>("[data-install-panel]");
+	const shellTabs = document.querySelectorAll<HTMLButtonElement>("[data-windows-shell]");
+	const shellPanels = document.querySelectorAll<HTMLElement>("[data-windows-shell-panel]");
+	let selectedPlatform: InstallPlatform = detectedPlatform ?? "linux";
+	const initialShell: WindowsShell = "powershell";
+
+	const updateDetectionNote = () => {
+		for (const note of document.querySelectorAll<HTMLElement>("[data-install-detection-note]")) {
+			if (selectedPlatform === "windows") {
+				note.textContent =
+					detectedPlatform === "windows"
+						? "Windows detected — choose your shell."
+						: "Choose your Windows shell.";
+			} else if (detectedPlatform) {
+				note.textContent = `Detected ${platformLabel[detectedPlatform]}. You can switch at any time.`;
+			} else {
+				note.textContent = "Choose your OS. You can switch at any time.";
+			}
+		}
+	};
+
+	const selectPlatform = (platform: InstallPlatform) => {
+		selectedPlatform = platform;
+		for (const tab of platformTabs) {
+			const selected = platformFrom(tab.dataset.installPlatform) === platform;
+			tab.setAttribute("aria-selected", String(selected));
+			tab.tabIndex = selected ? 0 : -1;
+		}
+		for (const panel of platformPanels) {
+			panel.hidden = platformFrom(panel.dataset.installPanel) !== platform;
+		}
+		updateDetectionNote();
+	};
+
+	const selectShell = (shell: WindowsShell) => {
+		for (const tab of shellTabs) {
+			const selected = windowsShellFrom(tab.dataset.windowsShell) === shell;
+			tab.setAttribute("aria-selected", String(selected));
+			tab.tabIndex = selected ? 0 : -1;
+		}
+		for (const panel of shellPanels) {
+			panel.hidden = windowsShellFrom(panel.dataset.windowsShellPanel) !== shell;
+		}
+	};
+
+	const nextTab = (
+		event: KeyboardEvent,
+		button: HTMLButtonElement,
+		selector: string,
+		activate: (button: HTMLButtonElement) => void,
+	) => {
+		if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+		const tablist = button.closest<HTMLElement>("[role=tablist]");
+		if (!tablist) return;
+		const tabs = Array.from(tablist.querySelectorAll<HTMLButtonElement>(selector));
+		const index = tabs.indexOf(button);
+		if (index < 0) return;
+
+		let nextIndex = index;
+		if (event.key === "ArrowLeft") nextIndex = (index - 1 + tabs.length) % tabs.length;
+		if (event.key === "ArrowRight") nextIndex = (index + 1) % tabs.length;
+		if (event.key === "Home") nextIndex = 0;
+		if (event.key === "End") nextIndex = tabs.length - 1;
+		const target = tabs[nextIndex];
+		if (!target) return;
+		event.preventDefault();
+		activate(target);
+		target.focus();
+	};
+
+	for (const tab of platformTabs) {
+		const activate = (button: HTMLButtonElement) => {
+			const platform = platformFrom(button.dataset.installPlatform);
+			if (platform) selectPlatform(platform);
+		};
+		tab.addEventListener("click", () => activate(tab));
+		tab.addEventListener("keydown", (event) =>
+			nextTab(event, tab, "[data-install-platform]", activate),
+		);
+	}
+
+	for (const tab of shellTabs) {
+		const activate = (button: HTMLButtonElement) => {
+			const shell = windowsShellFrom(button.dataset.windowsShell);
+			if (shell) selectShell(shell);
+		};
+		tab.addEventListener("click", () => activate(tab));
+		tab.addEventListener("keydown", (event) =>
+			nextTab(event, tab, "[data-windows-shell]", activate),
+		);
+	}
+
+	for (const marker of document.querySelectorAll<HTMLElement>("[data-detected-platform]")) {
+		marker.hidden = platformFrom(marker.dataset.detectedPlatform) !== detectedPlatform;
+	}
+	selectShell(initialShell);
+	selectPlatform(selectedPlatform);
+	document.documentElement.classList.add("install-tabs-ready");
 }
 
 /* ── Copy affordances ───────────────────────────────────────────────────── */
