@@ -1,51 +1,68 @@
-import type { SessionStats } from "@thinkrail/contracts";
-import { cn } from "@/lib";
+import type { ContextUsage, SessionStats } from "@thinkrail/contracts";
 
-function formatTokens(n: number): string {
-	if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-	if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
-	return String(n);
+/** Match pi's compact footer formatting. */
+export function formatTokens(count: number): string {
+	if (count < 1_000) return count.toString();
+	if (count < 10_000) return `${(count / 1_000).toFixed(1)}k`;
+	if (count < 1_000_000) return `${Math.round(count / 1_000)}k`;
+	if (count < 10_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
+	return `${Math.round(count / 1_000_000)}M`;
 }
 
-function formatCost(n: number): string {
-	return n >= 0.01 ? `$${n.toFixed(2)}` : `$${n.toFixed(4)}`;
+/** Pi omits zero-valued cumulative fields from its footer. */
+export function usageParts(stats: SessionStats): string[] {
+	const parts: string[] = [];
+	if (stats.tokens.input) parts.push(`↑${formatTokens(stats.tokens.input)}`);
+	if (stats.tokens.output) parts.push(`↓${formatTokens(stats.tokens.output)}`);
+	if (stats.tokens.cacheRead) parts.push(`R${formatTokens(stats.tokens.cacheRead)}`);
+	if (stats.tokens.cacheWrite) parts.push(`W${formatTokens(stats.tokens.cacheWrite)}`);
+	if (stats.cost) parts.push(`$${stats.cost.toFixed(3)}`);
+	return parts;
 }
 
-// Context-bar fill in 10% steps — utility classes (no inline style) so the bar stays themeable.
-const FILL = [
-	"w-0",
-	"w-[10%]",
-	"w-[20%]",
-	"w-[30%]",
-	"w-[40%]",
-	"w-1/2",
-	"w-[60%]",
-	"w-[70%]",
-	"w-[80%]",
-	"w-[90%]",
-	"w-full",
-] as const;
+export function contextPart(usage: ContextUsage): { bar: string; text: string } {
+	const filled =
+		usage.percent === null ? 0 : Math.round(Math.min(100, Math.max(0, usage.percent)) / 20);
+	const contextWindow = formatTokens(usage.contextWindow);
+	return {
+		bar: `${"▰".repeat(filled)}${"▱".repeat(5 - filled)}`,
+		text:
+			usage.percent === null
+				? `?/${contextWindow}`
+				: `${usage.percent.toFixed(1)}%/${contextWindow}`,
+	};
+}
 
-/** Token/cost + context-window usage (cheap win #3). Display only — `pi` owns the numbers. Props-driven. */
+/** Pi-style cumulative usage + current context-window usage. Display only — `pi` owns the numbers. */
 export function SessionStatsBar({ stats }: { stats: SessionStats | null }) {
 	if (!stats) return null;
-	const percent = stats.contextUsage?.percent ?? null;
-	const bucket = percent === null ? null : Math.round(Math.min(100, Math.max(0, percent)) / 10);
+	const parts = usageParts(stats);
+	const context = stats.contextUsage ? contextPart(stats.contextUsage) : null;
+	if (parts.length === 0 && !context) return null;
 
 	return (
 		<div
 			data-testid="session-stats"
-			className="flex items-center gap-sm text-text-muted tr-text-metadata"
+			className="flex items-center gap-xs text-text-muted tr-text-metadata"
 		>
-			<span title="Total tokens">{formatTokens(stats.tokens.total)} tok</span>
-			<span title="Session cost">{formatCost(stats.cost)}</span>
-			{percent !== null && bucket !== null ? (
-				<span className="flex items-center gap-xs" title="Context window used">
-					<span className="block h-1.5 w-16 overflow-hidden rounded-full bg-sunken">
-						<span className={cn("block h-full rounded-full bg-primary", FILL[bucket])} />
-					</span>
-					{Math.round(percent)}%
+			{parts.length > 0 ? (
+				<span
+					className="whitespace-nowrap"
+					title="Cumulative usage: ↑ input · ↓ output · R cache read · W cache write"
+				>
+					{parts.join(" · ")}
 				</span>
+			) : null}
+			{context ? (
+				<>
+					{parts.length > 0 ? <span aria-hidden="true">·</span> : null}
+					<span className="flex items-center gap-xs" title="Context window used">
+						<span aria-hidden="true" className="text-primary">
+							{context.bar}
+						</span>
+						{context.text}
+					</span>
+				</>
 			) : null}
 		</div>
 	);
