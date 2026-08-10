@@ -34,6 +34,7 @@ export function setFsNudgePublisher(publisher: FsNudgePublisher | null): void {
 export function nudgeBaseRefWorkspaces(projectId: string, ref: string): void {
 	if (!publish) return;
 	for (const ws of listWorkspaceRecords(projectId)) {
-		if (diffBaseRef(ws) === ref) publish({ workspaceId: ws.id, paths: [], truncated: false });
+		if (diffBaseRef(ws) === ref)
+			publish({ workspaceId: ws.id, paths: [], truncated: false, skillChange: "none" });
 	}
 }

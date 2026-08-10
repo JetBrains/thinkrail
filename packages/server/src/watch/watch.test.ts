@@ -2,12 +2,13 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { WorkspaceFsChangedPayload } from "@thinkrail/contracts";
+import type { WorkspaceFsChangedPayload, WorkspaceSkillChange } from "@thinkrail/contracts";
 import { createCoalescer } from "./coalesce";
 import {
 	ensureWatch,
 	isIgnoredPath,
 	setRepoMetaPublisher,
+	setSkillPathClassifier,
 	setWatchPublisher,
 	stopAllWatches,
 	stopWatch,
@@ -23,28 +24,37 @@ async function waitFor(check: () => boolean, timeoutMs = 3000): Promise<void> {
 	}
 }
 
+type CoalescedBatch = {
+	paths: string[];
+	truncated: boolean;
+	skillChange: WorkspaceSkillChange;
+};
+
 // ---- coalesce.ts ----
 
 test("coalescer dedupes and flushes one batch after the quiet gap", async () => {
-	const flushes: { paths: string[]; truncated: boolean }[] = [];
+	const flushes: CoalescedBatch[] = [];
 	const c = createCoalescer({
 		quietMs: 30,
 		maxWaitMs: 500,
 		maxPaths: 10,
 		onFlush: (b) => flushes.push(b),
 	});
-	c.add("a.ts");
-	c.add("b.ts");
-	c.add("a.ts");
+	c.add("a.ts", "none");
+	c.add("b.ts", "none");
+	c.add("a.ts", "none");
 	await waitFor(() => flushes.length > 0);
 	expect(flushes).toHaveLength(1);
-	expect(flushes[0]?.paths.toSorted()).toEqual(["a.ts", "b.ts"]);
-	expect(flushes[0]?.truncated).toBe(false);
+	expect(flushes[0]).toEqual({
+		paths: ["a.ts", "b.ts"],
+		truncated: false,
+		skillChange: "none",
+	});
 	c.dispose();
 });
 
 test("coalescer max-wait flushes under continuous churn (quiet never reached)", async () => {
-	const flushes: { paths: string[]; truncated: boolean }[] = [];
+	const flushes: CoalescedBatch[] = [];
 	const c = createCoalescer({
 		quietMs: 60,
 		maxWaitMs: 120,
@@ -54,31 +64,64 @@ test("coalescer max-wait flushes under continuous churn (quiet never reached)", 
 	// Feed an event every 20ms for ~300ms: the 60ms quiet timer keeps resetting, so only the
 	// 120ms max-wait timer can flush mid-stream.
 	for (let i = 0; i < 15; i++) {
-		c.add(`f${i}.ts`);
+		c.add(`f${i}.ts`, "none");
 		await sleep(20);
 	}
 	expect(flushes.length).toBeGreaterThanOrEqual(1);
 	c.dispose();
 });
 
-test("coalescer caps the batch (truncated) and treats a null path as wildcard", async () => {
-	const flushes: { paths: string[]; truncated: boolean }[] = [];
+test("coalescer separates generic truncation from skill evidence and keeps evidence beyond the cap", async () => {
+	const flushes: CoalescedBatch[] = [];
 	const c = createCoalescer({
 		quietMs: 20,
 		maxWaitMs: 500,
 		maxPaths: 2,
 		onFlush: (b) => flushes.push(b),
 	});
-	c.add("a.ts");
-	c.add("b.ts");
-	c.add("c.ts"); // over the cap
+	c.add("a.ts", "none");
+	c.add("b.ts", "none");
+	c.add("c.ts", "none"); // over the cap, but concretely non-skill
 	await waitFor(() => flushes.length > 0);
-	expect(flushes[0]?.paths.toSorted()).toEqual(["a.ts", "b.ts"]);
-	expect(flushes[0]?.truncated).toBe(true);
+	expect(flushes[0]).toEqual({
+		paths: ["a.ts", "b.ts"],
+		truncated: true,
+		skillChange: "none",
+	});
 
-	c.add(null); // unknown path → wildcard batch even with no paths
+	c.add("d.ts", "none");
+	c.add("e.ts", "none");
+	c.add(".claude/skills/demo/SKILL.md", "detected"); // over-cap; evidence must survive
 	await waitFor(() => flushes.length > 1);
-	expect(flushes[1]).toEqual({ paths: [], truncated: true });
+	expect(flushes[1]).toEqual({
+		paths: ["d.ts", "e.ts"],
+		truncated: true,
+		skillChange: "detected",
+	});
+
+	c.add(null, "unknown"); // unknown path → wildcard + conservative skill impact
+	await waitFor(() => flushes.length > 2);
+	expect(flushes[2]).toEqual({ paths: [], truncated: true, skillChange: "unknown" });
+	c.dispose();
+});
+
+test("coalescer does not call a duplicate retained path truncated at the cap", async () => {
+	const flushes: CoalescedBatch[] = [];
+	const c = createCoalescer({
+		quietMs: 20,
+		maxWaitMs: 500,
+		maxPaths: 2,
+		onFlush: (batch) => flushes.push(batch),
+	});
+	c.add("a.ts", "none");
+	c.add("b.ts", "none");
+	c.add("a.ts", "none");
+	await waitFor(() => flushes.length > 0);
+	expect(flushes[0]).toEqual({
+		paths: ["a.ts", "b.ts"],
+		truncated: false,
+		skillChange: "none",
+	});
 	c.dispose();
 });
 
@@ -90,7 +133,7 @@ test("coalescer dispose drops pending state without flushing", async () => {
 		maxPaths: 10,
 		onFlush: (b) => flushes.push(b),
 	});
-	c.add("a.ts");
+	c.add("a.ts", "none");
 	c.dispose();
 	await sleep(150);
 	expect(flushes).toHaveLength(0);
@@ -141,12 +184,14 @@ beforeEach(() => {
 	);
 	payloads = [];
 	setWatchPublisher((p) => payloads.push(p));
+	setSkillPathClassifier((path) => path.startsWith(".claude/skills/"));
 });
 
 afterEach(() => {
 	stopAllWatches();
 	setWatchPublisher(null);
 	setRepoMetaPublisher(null);
+	setSkillPathClassifier(null);
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
@@ -161,6 +206,29 @@ test("a watched worktree publishes a debounced fsChanged batch for a new file", 
 	expect(payloads[0]?.workspaceId).toBe("ws1");
 	expect(payloads[0]?.truncated).toBe(false);
 	expect(payloads[0]?.paths).toContain("hello.ts");
+	expect(payloads[0]?.skillChange).toBe("none");
+});
+
+test("a watched project-skill path carries detected evidence", async () => {
+	mkdirSync(join(worktree, ".claude", "skills", "demo"), { recursive: true });
+	ensureWatch("ws1");
+	await sleep(100);
+	writeFileSync(join(worktree, ".claude", "skills", "demo", "SKILL.md"), "# Demo\n");
+	await waitFor(() => payloads.some((payload) => payload.skillChange === "detected"));
+	expect(
+		payloads.some((payload) => payload.paths.some((path) => path.includes(".claude/skills"))),
+	).toBe(true);
+});
+
+test("a missing classifier degrades a concrete event to unknown", async () => {
+	setSkillPathClassifier(null);
+	ensureWatch("ws1");
+	await sleep(100);
+	writeFileSync(join(worktree, "unclassified.ts"), "export {};\n");
+	await waitFor(() => payloads.some((payload) => payload.paths.includes("unclassified.ts")));
+	expect(payloads.find((payload) => payload.paths.includes("unclassified.ts"))?.skillChange).toBe(
+		"unknown",
+	);
 });
 
 test("a .git write nudges the repo-meta sink without ever becoming an fsChanged path", async () => {
@@ -256,7 +324,9 @@ test("a fresh watcher shares readiness, publishes its wildcard first, then repor
 	await sleep(100);
 	expect(order).toEqual([]);
 	expect(await settled).toEqual({ startupNudge: true });
-	expect(payloads).toEqual([{ workspaceId: "ws1", paths: [], truncated: true }]);
+	expect(payloads).toEqual([
+		{ workspaceId: "ws1", paths: [], truncated: true, skillChange: "unknown" },
+	]);
 	expect(order).toEqual(["publish", "ready"]);
 	expect(await ensureWatch("ws1")).toEqual({ startupNudge: false });
 	await sleep(300);

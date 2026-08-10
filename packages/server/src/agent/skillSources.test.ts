@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { discoverCompatibilitySkillSources } from "./skillSources";
+import { discoverCompatibilitySkillSources, isProjectSkillPath } from "./skillSources";
 
 const temporaryRoots: string[] = [];
 
@@ -19,6 +19,31 @@ function directory(path: string): string {
 
 afterEach(() => {
 	for (const path of temporaryRoots.splice(0)) rmSync(path, { recursive: true, force: true });
+});
+
+describe("isProjectSkillPath", () => {
+	it("matches exactly the five project-root skill directories", () => {
+		for (const path of [
+			".claude/skills/foo/SKILL.md",
+			".github/skills/x.md",
+			".gemini/skills",
+			".agents/skills/z",
+			".pi/skills/y.md",
+			".claude\\skills\\windows\\SKILL.md",
+		]) {
+			expect(isProjectSkillPath(path)).toBe(true);
+		}
+		for (const path of [
+			"README.md",
+			".claude/settings.json",
+			".claudeskills/x",
+			"src/claude/skills/x",
+			"nested/.pi/skills/y.md",
+			"skills/x",
+		]) {
+			expect(isProjectSkillPath(path)).toBe(false);
+		}
+	});
 });
 
 describe("discoverCompatibilitySkillSources", () => {

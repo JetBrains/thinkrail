@@ -70,9 +70,12 @@ test("a diff tab is stamped with the target and tick captured BEFORE its read, n
 	// Mid-read: the review target is re-pointed (a `workspace.setDiffBase` broadcast) and the worktree
 	// changes (an `fsChanged` push). Neither is reflected in the response now on its way back.
 	useAppStore.getState().updateWorkspace(workspace({ diffBase: "develop" }));
-	useAppStore
-		.getState()
-		.noteFsChanged({ workspaceId: "w1", paths: ["README.md"], truncated: false });
+	useAppStore.getState().noteFsChanged({
+		workspaceId: "w1",
+		paths: ["README.md"],
+		truncated: false,
+		skillChange: "none",
+	});
 
 	pending?.resolve({ original: "old", modified: "new" });
 	await open;
@@ -83,9 +86,12 @@ test("a diff tab is stamped with the target and tick captured BEFORE its read, n
 });
 
 test("an undisturbed open stamps the state it actually read against", async () => {
-	useAppStore
-		.getState()
-		.noteFsChanged({ workspaceId: "w1", paths: ["other.ts"], truncated: false });
+	useAppStore.getState().noteFsChanged({
+		workspaceId: "w1",
+		paths: ["other.ts"],
+		truncated: false,
+		skillChange: "none",
+	});
 	const open = openDiffInTab("w1", { kind: "branch" }, "README.md", "preview");
 	pending?.resolve({ original: "old", modified: "new" });
 	await open;

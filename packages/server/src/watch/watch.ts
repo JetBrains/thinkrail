@@ -7,7 +7,11 @@
 
 import { type FSWatcher, readFileSync, statSync, watch } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
-import type { WorkspaceFsChangedPayload, WorkspaceWatchReadyResult } from "@thinkrail/contracts";
+import type {
+	WorkspaceFsChangedPayload,
+	WorkspaceSkillChange,
+	WorkspaceWatchReadyResult,
+} from "@thinkrail/contracts";
 import { loadWorkspaces } from "../persistence";
 import { type Coalescer, createCoalescer } from "./coalesce";
 
@@ -35,6 +39,7 @@ const IGNORED_NAMES = new Set([".DS_Store"]);
 const REPO_META_DEBOUNCE_MS = 300;
 
 type WatchPublisher = (payload: WorkspaceFsChangedPayload) => void;
+type SkillPathClassifier = (relativePath: string) => boolean;
 /** The repo-metadata nudge: "this workspace's git metadata moved" — no paths, it isn't file data. */
 type RepoMetaPublisher = (workspaceId: string) => void;
 
@@ -45,10 +50,19 @@ const startupFallback = Promise.resolve(STARTUP_NUDGE);
 
 let publish: WatchPublisher | null = null;
 let publishRepoMeta: RepoMetaPublisher | null = null;
+let isSkillPath: SkillPathClassifier | null = null;
 
 /** Host injects the `workspace.fsChanged` publish callback at wiring time (the tee pattern). */
 export function setWatchPublisher(publisher: WatchPublisher | null): void {
 	publish = publisher;
+}
+
+/**
+ * Install (or clear) the project-skill path classifier. `host` injects `agent`'s source-of-truth predicate
+ * so this module never imports its sibling; absent classification stays conservative rather than false-clean.
+ */
+export function setSkillPathClassifier(classifier: SkillPathClassifier | null): void {
+	isSkillPath = classifier;
 }
 
 /**
@@ -214,8 +228,8 @@ export function ensureWatch(workspaceId: string): Promise<WorkspaceWatchReadyRes
 		quietMs: QUIET_MS,
 		maxWaitMs: MAX_WAIT_MS,
 		maxPaths: MAX_PATHS,
-		onFlush: ({ paths, truncated }) => {
-			publish?.({ workspaceId, paths, truncated });
+		onFlush: ({ paths, truncated, skillChange }) => {
+			publish?.({ workspaceId, paths, truncated, skillChange });
 		},
 	});
 
@@ -228,7 +242,15 @@ export function ensureWatch(workspaceId: string): Promise<WorkspaceWatchReadyRes
 			// A wildcard (unknown path) nudges both, since it may well *be* a metadata change.
 			if (rel === null || isRepoMetaPath(rel)) scheduleRepoMeta(workspaceId, watcher);
 			if (rel !== null && isIgnoredPath(rel)) return;
-			coalescer.add(rel);
+			const skillChange: WorkspaceSkillChange =
+				rel === null
+					? "unknown"
+					: isSkillPath === null
+						? "unknown"
+						: isSkillPath(rel)
+							? "detected"
+							: "none";
+			coalescer.add(rel, skillChange);
 		});
 		// A mid-flight error (worktree root deleted externally, ENOSPC): drop the watcher — the next
 		// workspace read re-creates it if the root is back, else panels degrade to read-on-demand.
@@ -256,7 +278,7 @@ export function ensureWatch(workspaceId: string): Promise<WorkspaceWatchReadyRes
 			if (entries.get(workspaceId) !== entry) return;
 			entry.nudgeTimer = null;
 			try {
-				publish?.({ workspaceId, paths: [], truncated: true });
+				publish?.({ workspaceId, paths: [], truncated: true, skillChange: "unknown" });
 			} finally {
 				settleReady(entry);
 			}

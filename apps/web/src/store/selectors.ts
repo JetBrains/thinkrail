@@ -162,11 +162,6 @@ export function selectDiffTabTargetRef(
 	return tab.scope.kind === "branch" ? selectDiffBaseRef(state, tab.workspaceId) : "";
 }
 
-/** Whether a worktree-relative path is inside a skill directory — the auto-detect trigger for a reload. */
-export function isSkillPath(path: string): boolean {
-	return /(^|\/)\.(claude|github|gemini|pi|agents)\/skills(\/|$)/.test(path);
-}
-
 /**
  * Whether a path **as pi reported it** (worktree-relative or absolute — a tool call's `path` argument is
  * whichever the agent passed) designates the worktree-relative `rel`. Shared by every consumer that has to

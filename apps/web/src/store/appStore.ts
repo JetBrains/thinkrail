@@ -32,7 +32,6 @@ import { shallowEqualArrays, userText } from "../lib";
 import type { ConnectionStatus } from "../transport";
 import {
 	type HistoryTarget,
-	isSkillPath,
 	selectActiveWorkspaceProjectId,
 	selectWorkspaceNavTick,
 	selectWorkspaceTick,
@@ -661,9 +660,10 @@ interface AppState {
 	 */
 	fsChangesByWorkspace: Record<string, { tick: number; paths: string[]; truncated: boolean }>;
 	/**
-	 * Per workspace, the `fsChangesByWorkspace` tick of the most recent *skill-relevant* batch — a change
-	 * under a `.claude|.github|.gemini|.pi|.agents/skills` dir, or a truncated wildcard we can't inspect.
-	 * Folded alongside the fs signal in `noteFsChanged`; compared against a session's
+	 * Per workspace, the `fsChangesByWorkspace` tick of the most recent *skill-relevant* batch — host
+	 * evidence is `detected` for a concrete project-skill path or `unknown` for a truly pathless event;
+	 * generic path-list truncation with `skillChange: "none"` is deliberately irrelevant. Folded alongside
+	 * the fs signal in `noteFsChanged`; compared against a session's
 	 * `skillsSyncedTickBySession` to derive the Skills-reload badge (`selectSkillsStale`). Accumulated (not
 	 * overwritten by a later non-skill batch), so a genuine pending skill change is never lost.
 	 */
@@ -1341,9 +1341,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) => {
 			const prev = s.fsChangesByWorkspace[payload.workspaceId];
 			const tick = (prev?.tick ?? 0) + 1;
-			// A skill-dir change (or a truncated wildcard we can't inspect) advances the workspace's
-			// skill-change tick, flagging every session that loaded skills before it (selectSkillsStale).
-			const skillChanged = payload.truncated || payload.paths.some(isSkillPath);
+			// The host classifies skill evidence before its generic path cap, so a large concrete non-skill
+			// batch cannot masquerade as a resource change and an over-cap skill path is not lost.
+			const skillChanged = payload.skillChange !== "none";
 			return {
 				fsChangesByWorkspace: {
 					...s.fsChangesByWorkspace,

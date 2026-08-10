@@ -7,10 +7,10 @@ import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
 // a real session. No prompt is ever sent — the session only has to exist — so this stays fast and never
 // spends provider tokens (session create + session.reloadResources are config/fs work, no model round-trip).
 //
-// The bugs this pins: watcher startup must not look like a skill change, and the badge must remain
-// store-derived per session across CenterTabs remounts. A reload clears it for good and a sibling chat that
-// loaded the current skills is never flagged.
-test("skills badge: flags a worktree skill change, clears on reload, and survives a tab switch", {
+// The bugs this pins: watcher startup and capped non-skill worktree churn must not look like a skill change,
+// and the badge must remain store-derived per session across CenterTabs remounts. A reload clears it for good
+// and a sibling chat that loaded the current skills is never flagged.
+test("skills badge: ignores capped build churn, flags a skill change, and clears per chat", {
 	tag: "@agent",
 }, async ({ page }) => {
 	test.setTimeout(120_000);
@@ -29,6 +29,19 @@ test("skills badge: flags a worktree skill change, clears on reload, and survive
 	await page.getByTestId("tab-files").click();
 	await expect(page.getByTestId("file-node").filter({ hasText: "README.md" })).toBeVisible();
 	await page.waitForTimeout(1200);
+	await expect(skillsBtn).not.toHaveAttribute("data-stale", "true");
+
+	// Reproduce the live report: a build writes more files than the watcher's retained-path cap inside this
+	// linked worktree. The generic frame is truncated, but every event is concretely non-skill — Files must
+	// refresh while the Skills badge stays clean.
+	const generated = join(worktree, "generated-build");
+	mkdirSync(generated, { recursive: true });
+	for (let i = 0; i < 150; i += 1) {
+		writeFileSync(join(generated, `chunk-${i}.js`), `export const chunk = ${i};\n`);
+	}
+	await expect(page.getByTestId("file-node").filter({ hasText: "generated-build" })).toBeVisible({
+		timeout: 15_000,
+	});
 	await expect(skillsBtn).not.toHaveAttribute("data-stale", "true");
 
 	// A skill file appears on disk (a pull/branch/edit) → the loaded session is flagged for a reload.

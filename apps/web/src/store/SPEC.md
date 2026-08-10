@@ -187,13 +187,15 @@ including a mutation's initiator, converges here — no optimism); `applyWorkspa
 entry; the pending-draft count is a selector (`selectReviewDraftCount`), never duplicated in
 components. The **Skills-reload badge** rides the same tick without a separate signal:
   `noteFsChanged` also folds **`skillChangeTickByWorkspace: Record<workspaceId, tick>`** — the tick of the
-  most recent *skill-relevant* batch (a `.claude|.github|.gemini|.pi|.agents/skills` path, via
-  `isSkillPath`, or a truncated watcher batch), *accumulated* so a later non-skill batch never clears it.
-  A fresh watcher's synthetic startup nudge remains a conservative truncated wildcard. Transport's
-  centralized skill-load preparation awaits `workspace.watchReady`, folds a duplicate wildcard fallback
-  unless the watcher was already known ready (the event push may have died during reconnect), then
-  captures the load's baseline tick. The newly loaded session stays clean; a real skill frame after readiness
-  remains newer than the baseline. Each chat records
+  most recent *skill-relevant* batch, from the host-authored `payload.skillChange` semantic (`detected` for
+  a concrete project-skill path, `unknown` for a genuinely pathless uncertainty, `none` for concrete
+  non-skill churn). It is independent of the capped generic `paths`/`truncated` pair, so a large build cannot
+  masquerade as a skill change and a skill event after the path cap is not lost; it stays *accumulated* so a
+  later non-skill batch never clears it. A fresh watcher's synthetic startup nudge remains conservative
+  `unknown`. Transport's centralized skill-load preparation awaits `workspace.watchReady`, folds a duplicate
+  unknown fallback unless the watcher was already known ready (the event push may have died during
+  reconnect), then captures the load's baseline tick. The newly loaded session stays clean; a real skill
+  frame after readiness remains newer than the baseline. Each chat records
   **`skillsSyncedTickBySession: Record<sessionId, tick>`** = the tick it loaded skills at.
   It advances **only when resources are actually (re)loaded against current disk**: a fresh
   `openChatSession`, a disk-only `hydrateSession` attach, and **`markSkillsSynced(sessionId, syncedTick)`** on
@@ -305,8 +307,8 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   Changes panel is diffing, defaulting to the shared branch-scope constant), **`selectDiffBaseRef`** (the ref
   it is measured against — the client-side mirror of the host's one resolution), **`selectDiffTabTargetRef`**
   (that ref *as an open diff tab's live dimension*: the target for a branch-scope tab, `""` for a
-  commit/uncommitted one whose sides can't move — derived here, never re-assembled in a panel), `selectWorkspaceTick` (the
-  sync-baseline snapshot; + the `isSkillPath` path predicate it shares with `noteFsChanged`);
+  commit/uncommitted one whose sides can't move — derived here, never re-assembled in a panel),
+  `selectWorkspaceTick` (the sync-baseline snapshot);
   `matchesWorktreePath` (line an agent-reported path — relative or absolute — up against a worktree-relative
   one; shared by the Changes deep link and the spec classifier. The suffix rule is for **absolute reports
   only** and is anchored at a separator: unanchored, `/wt/src/a-foo.ts` would match `src/foo.ts`; applied to
