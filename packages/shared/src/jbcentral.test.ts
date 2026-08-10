@@ -19,7 +19,7 @@ describe("isJbcentralProxyUrl", () => {
 		expect(isJbcentralProxyUrl("http://127.0.0.1:19516/wire/s3cr3t/claude-code/anthropic")).toBe(
 			true,
 		);
-		expect(isJbcentralProxyUrl("http://127.0.0.1:4242/wire/abc/codex/openai")).toBe(true);
+		expect(isJbcentralProxyUrl("http://127.0.0.1:4242/wire/abc/pi/openai/v1")).toBe(true);
 		expect(isJbcentralProxyUrl("http://localhost:19516/wire/s3cr3t/claude-code/anthropic")).toBe(
 			true,
 		);
@@ -61,10 +61,12 @@ describe("resolveProxyPort", () => {
 });
 
 describe("buildProxyUrls", () => {
-	test("composes the per-provider proxy URLs (no /v1)", () => {
+	// The `/v1` asymmetry is load-bearing, not cosmetic: the anthropic SDK appends `/v1/messages` to the
+	// baseUrl while the openai SDK appends a bare `/responses`, and the proxy injects neither.
+	test("composes the per-provider proxy URLs (/v1 on openai only)", () => {
 		expect(buildProxyUrls(19516, "sEcReT")).toEqual({
-			anthropicUrl: "http://127.0.0.1:19516/wire/sEcReT/claude-code/anthropic",
-			openaiUrl: "http://127.0.0.1:19516/wire/sEcReT/codex/openai",
+			anthropicUrl: "http://127.0.0.1:19516/wire/sEcReT/pi/anthropic",
+			openaiUrl: "http://127.0.0.1:19516/wire/sEcReT/pi/openai/v1",
 		});
 	});
 

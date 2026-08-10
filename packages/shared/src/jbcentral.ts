@@ -62,13 +62,17 @@ export function resolveProxyPort(env: ParseEnv, wireConfig: { proxy_port?: numbe
 }
 
 /**
- * Build the per-provider proxy base URLs. pi passes `model.baseUrl` straight to the official SDK, which
- * appends `/v1/messages` (anthropic) or `/responses` (openai); the proxy's per-provider PathSuffix injects
- * the backend `/v1/`. So no `/v1` here. The **shape here is what `isJbcentralProxyUrl` reads** — keep in sync.
+ * Build the per-provider proxy base URLs, under pi's **own** `/pi/` wire route (not Codex's or Claude
+ * Code's) — the shape `central add pi` writes.
+ *
+ * pi passes `model.baseUrl` straight to the official SDK, which appends `/v1/messages` (anthropic) but a
+ * bare `/responses` (openai). The proxy does **not** inject the backend `/v1/`, so openai's baseUrl must
+ * carry it and anthropic's must not: `/pi/openai/responses` 404s, `/pi/openai/v1/responses` does not.
+ * The **shape here is what `isJbcentralProxyUrl` reads** — keep in sync.
  */
 export function buildProxyUrls(port: number, secret: string): ProxyUrls {
 	const base = `http://127.0.0.1:${port}/wire/${secret}`;
-	return { anthropicUrl: `${base}/claude-code/anthropic`, openaiUrl: `${base}/codex/openai` };
+	return { anthropicUrl: `${base}/pi/anthropic`, openaiUrl: `${base}/pi/openai/v1` };
 }
 
 /** Wire the anthropic + openai providers' baseUrl/apiKey to the proxy, preserving their other fields. Mutates + returns `config`. */
