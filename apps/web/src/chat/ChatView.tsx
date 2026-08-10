@@ -1,6 +1,5 @@
 import type {
 	AskUserQuestionResult,
-	ImageContent,
 	PromptHit,
 	SlashCommandInfo,
 	TemplateInfo,
@@ -45,7 +44,7 @@ import { stripFrontmatter } from "./templateText";
 import { useModelCatalog } from "./useModelCatalog";
 import "./tools/register"; // side-effect: register the built-in pi tool renderers (bash/read/edit/write)
 import { ChatTurnView } from "./turns";
-import type { ChatTurn } from "./types";
+import type { ChatAttachment, ChatTurn } from "./types";
 import { useChatScroll } from "./useChatScroll";
 import { useChatTodos } from "./useChatTodos";
 import { useHistorySearch } from "./useHistorySearch";
@@ -362,9 +361,10 @@ export default function ChatView({
 			.catch(() => {});
 	};
 
-	const onSubmit = (text: string, images: ImageContent[], behavior: SubmitBehavior) => {
-		if (text || images.length > 0)
-			useAppStore.getState().appendUserMessage(sessionId, text, images);
+	const onSubmit = (text: string, attachments: ChatAttachment[], behavior: SubmitBehavior) => {
+		if (text || attachments.length > 0)
+			useAppStore.getState().appendUserMessage(sessionId, text, attachments);
+		const images = attachments.map((a) => a.content);
 		const params = { sessionId, text, ...(images.length > 0 ? { images } : {}) };
 		const method =
 			behavior === "steer"

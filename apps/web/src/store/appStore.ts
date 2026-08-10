@@ -3,7 +3,6 @@ import type {
 	AskUserQuestionResult,
 	ExtUiRequest,
 	GitDiffScope,
-	ImageContent,
 	LayoutChangedPayload,
 	LayoutSettings,
 	LayoutToolId,
@@ -33,7 +32,13 @@ import { create } from "zustand";
 import type { LoginState } from "../auth";
 import { assistantFailureText } from "../chat/assistantFailure";
 import type { HydratedRuntime } from "../chat/hydrate";
-import type { ChatTurn, CompactionState, ExtUiDialogRequest, ToolResultState } from "../chat/types";
+import type {
+	ChatAttachment,
+	ChatTurn,
+	CompactionState,
+	ExtUiDialogRequest,
+	ToolResultState,
+} from "../chat/types";
 import {
 	type LayoutAttention,
 	layoutResourceIdentity,
@@ -1125,7 +1130,7 @@ interface AppState {
 		syncedTick?: number,
 		options?: LayoutOpenOptions,
 	) => void;
-	appendUserMessage: (sessionId: string, text: string, images?: ImageContent[]) => void;
+	appendUserMessage: (sessionId: string, text: string, attachments?: ChatAttachment[]) => void;
 	/**
 	 * Surface a failed send as a visible error turn. The turn-driving wire calls (`session.prompt`/`steer`/
 	 * `followUp`/`create`) can reject before any pi event streams — e.g. `prompt()` throws "no API key" /
@@ -2909,7 +2914,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 					: s.closedChatsByWorkspace,
 			};
 		}),
-	appendUserMessage: (sessionId, text, images) =>
+	appendUserMessage: (sessionId, text, attachments) =>
 		set((s) =>
 			withRuntime(s, sessionId, (rt) => ({
 				...rt,
@@ -2923,11 +2928,19 @@ export const useAppStore = create<AppState>((set, get) => ({
 							// Mirror pi's own persisted shape: plain string when text-only, content blocks
 							// when images ride along — so the optimistic echo renders like a re-fetch would.
 							content:
-								images && images.length > 0
-									? [...(text ? [{ type: "text" as const, text }] : []), ...images]
+								attachments && attachments.length > 0
+									? [
+											...(text ? [{ type: "text" as const, text }] : []),
+											...attachments.map((a) => a.content),
+										]
 									: text,
 							timestamp: Date.now(),
 						},
+						// pi's ImageContent has no filename, so the picked names live on the echo turn only —
+						// a hydrated (re-fetched) turn falls back to mime-type chips.
+						...(attachments && attachments.length > 0
+							? { attachmentNames: attachments.map((a) => a.name) }
+							: {}),
 					},
 				],
 			})),

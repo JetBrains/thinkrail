@@ -19,6 +19,22 @@ function user(id: string, timestamp = 0): ChatTurn {
 	return { kind: "user", id, message: { role: "user", content: "hi", timestamp } } as ChatTurn;
 }
 
+function userWithAttachment(id: string, names: string[]): ChatTurn {
+	return {
+		kind: "user",
+		id,
+		message: {
+			role: "user",
+			content: [
+				{ type: "text", text: "hi" },
+				...names.map(() => ({ type: "image" as const, data: "AA==", mimeType: "image/png" })),
+			],
+			timestamp: 0,
+		},
+		attachmentNames: names,
+	} as ChatTurn;
+}
+
 function assistant(
 	id: string,
 	blocks: Block[],
@@ -114,6 +130,12 @@ describe("deriveRows grouping", () => {
 		if (primary?.kind !== "tool") throw new Error("expected tool row");
 		expect(primary.toolCallId).toBe("v1");
 		expect(rows[4]?.id).toBe("q1");
+	});
+
+	test("a user turn's attachmentNames pass through to its row (echo-only; hydrated turns carry none)", () => {
+		const rows = deriveRows([userWithAttachment("u1", ["shot.png"]), user("u2")], {}, false);
+		expect(rows[0]?.kind === "user" ? rows[0].attachmentNames : null).toEqual(["shot.png"]);
+		expect(rows[1]?.kind === "user" ? "attachmentNames" in rows[1] : null).toBe(false);
 	});
 
 	test("non-assistant turns (user/system/error/retry) break runs and map 1:1", () => {

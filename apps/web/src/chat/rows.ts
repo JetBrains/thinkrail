@@ -36,7 +36,7 @@ export type ActivityStep =
  * so they double as Virtuoso item keys and fold-state cache keys.
  */
 export type ChatRow =
-	| { kind: "user"; id: string; message: UserMessage }
+	| { kind: "user"; id: string; message: UserMessage; attachmentNames?: string[] }
 	| { kind: "system"; id: string; text: string }
 	| { kind: "error"; id: string; text: string }
 	| ({ kind: "compaction"; id: string } & CompactionState)
@@ -129,7 +129,12 @@ export function deriveRows(
 			flushRun();
 			switch (turn.kind) {
 				case "user":
-					rows.push({ kind: "user", id: turn.id, message: turn.message });
+					rows.push({
+						kind: "user",
+						id: turn.id,
+						message: turn.message,
+						...(turn.attachmentNames ? { attachmentNames: turn.attachmentNames } : {}),
+					});
 					break;
 				case "system":
 					rows.push({ kind: "system", id: turn.id, text: turn.text });

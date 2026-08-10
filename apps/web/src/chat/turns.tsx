@@ -1,10 +1,11 @@
-import type { UserMessage } from "@thinkrail/contracts";
+import type { ImageContent, UserMessage } from "@thinkrail/contracts";
 import {
 	BookOpen,
 	ChevronDown,
 	ChevronRight,
 	Clock,
 	FileDiff,
+	FileIcon,
 	FileText,
 	FoldVertical,
 	RotateCw,
@@ -12,6 +13,7 @@ import {
 	Wrench,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
 	cn,
 	parseSkillInvocation,
@@ -53,7 +55,7 @@ export function ChatTurnView({
 }) {
 	switch (row.kind) {
 		case "user":
-			return <UserTurn id={row.id} message={row.message} />;
+			return <UserTurn id={row.id} message={row.message} attachmentNames={row.attachmentNames} />;
 		case "system":
 			return <SystemTurn text={row.text} />;
 		case "error":
@@ -110,22 +112,61 @@ export function ChatTurnView({
 	}
 }
 
-/** Image blocks keyed for React — content tail + a duplicate counter (blocks carry no ids). */
-function userImages(content: UserMessage["content"]) {
+/** Image blocks keyed for React — content tail + a duplicate counter (blocks carry no ids). The chip
+ * label is the picked file's name when the echo turn carries it (`attachmentNames`, index-aligned with
+ * the image blocks); a hydrated turn has no names — pi's `ImageContent` carries none — so it falls
+ * back to the mime type. */
+function userAttachments(content: UserMessage["content"], names?: string[]) {
 	if (typeof content === "string") return [];
 	const seen = new Map<string, number>();
 	return content
 		.filter((c) => c.type === "image")
-		.map((img) => {
+		.map((img, i) => {
 			const tail = img.data.slice(-24);
 			const n = seen.get(tail) ?? 0;
 			seen.set(tail, n + 1);
-			return { key: `${tail}-${n}`, img };
+			return { key: `${tail}-${n}`, label: names?.[i] ?? img.mimeType, img };
 		});
 }
 
 const USER_BUBBLE =
 	"max-w-[85%] whitespace-pre-wrap break-words rounded-[var(--radius-lg)] border border-bubble-user-border bg-clip-padding bg-bubble-user-bg px-md py-sm tr-text-reading text-text-muted";
+
+/** An attachment chip: filename (or mime type) that opens the image full-size in a dialog on click —
+ * the same popup pattern as the diagram full-screen view (Esc / overlay / close button to dismiss). */
+function AttachmentChip({ label, img }: { label: string; img: ImageContent }) {
+	const [open, setOpen] = useState(false);
+	return (
+		<>
+			<button
+				type="button"
+				data-testid="chat-attachment-chip"
+				title="View image"
+				onClick={() => setOpen(true)}
+				className="flex items-center gap-xs whitespace-nowrap rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-sm py-xs text-text-default tr-text-metadata transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
+			>
+				<FileIcon className="size-3" /> {label}
+			</button>
+			<Dialog open={open} onOpenChange={setOpen}>
+				<DialogContent
+					data-testid="chat-attachment-dialog"
+					className="flex max-h-[90vh] w-auto max-w-[95vw] flex-col gap-sm"
+				>
+					<DialogHeader>
+						<DialogTitle>{label}</DialogTitle>
+					</DialogHeader>
+					<div className="min-h-0 flex-1 overflow-auto">
+						<img
+							src={`data:${img.mimeType};base64,${img.data}`}
+							alt={label}
+							className="max-h-[80vh] max-w-full rounded-[var(--radius-sm)]"
+						/>
+					</div>
+				</DialogContent>
+			</Dialog>
+		</>
+	);
+}
 
 /** The user bubble. Pi's canonical expanded skill block renders as a compact, collapsed invocation with
  * any user-supplied request kept visible beneath it. A review send's context package renders as a compact
@@ -134,9 +175,17 @@ const USER_BUBBLE =
  * file); each comment unfolds to its full text + the quoted fragment — instead of the structured XML the
  * agent needs. Everything is parsed from the message itself (the transcript IS the history), so any old
  * chat unfolds the same way; the folds survive virtualization via the shared cache. */
-function UserTurn({ id, message }: { id: string; message: UserMessage }) {
+function UserTurn({
+	id,
+	message,
+	attachmentNames,
+}: {
+	id: string;
+	message: UserMessage;
+	attachmentNames?: string[] | undefined;
+}) {
 	const text = userText(message.content);
-	const images = userImages(message.content);
+	const attachments = userAttachments(message.content, attachmentNames);
 	const skill = parseSkillInvocation(text);
 	if (skill) {
 		return (
@@ -157,15 +206,10 @@ function UserTurn({ id, message }: { id: string; message: UserMessage }) {
 	return (
 		<div data-testid="chat-message" data-role="user" className="flex justify-end">
 			<div className={USER_BUBBLE}>
-				{images.length > 0 ? (
+				{attachments.length > 0 ? (
 					<div className="flex flex-wrap gap-xs pb-xs" data-testid="chat-message-images">
-						{images.map(({ key, img }) => (
-							<img
-								key={key}
-								src={`data:${img.mimeType};base64,${img.data}`}
-								alt="attached"
-								className="max-h-40 max-w-full rounded-[var(--radius-sm)] border border-border-default"
-							/>
+						{attachments.map(({ key, label, img }) => (
+							<AttachmentChip key={key} label={label} img={img} />
 						))}
 					</div>
 				) : null}

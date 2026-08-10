@@ -1,4 +1,16 @@
-import type { AssistantMessage, ExtUiRequest, UserMessage } from "@thinkrail/contracts";
+import type {
+	AssistantMessage,
+	ExtUiRequest,
+	ImageContent,
+	UserMessage,
+} from "@thinkrail/contracts";
+
+/** An image attachment travelling with a send: pi's `ImageContent` (no filename on the wire — pi's
+ * model carries none) plus the picked file's name, which the optimistic echo shows on its chip. */
+export interface ChatAttachment {
+	name: string;
+	content: ImageContent;
+}
 
 /** The extension-UI frames that await a browser reply (the ones `ExtUiDialog` renders). */
 export type ExtUiDialogRequest = Extract<
@@ -15,7 +27,7 @@ export type ExtUiDialogRequest = Extract<
  * `toolCallId` and rendered inline with their call (see `ToolResultState`).
  */
 export type ChatTurn =
-	| { kind: "user"; id: string; message: UserMessage }
+	| { kind: "user"; id: string; message: UserMessage; attachmentNames?: string[] }
 	| { kind: "assistant"; id: string; message: AssistantMessage; streaming: boolean }
 	| { kind: "system"; id: string; text: string; endedAt?: number }
 	/** The live or hydrated compaction record (see SPEC §Rendering model). */

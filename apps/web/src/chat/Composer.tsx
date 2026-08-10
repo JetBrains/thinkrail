@@ -1,9 +1,4 @@
-import type {
-	ImageContent,
-	SlashCommandInfo,
-	ThinkingLevel,
-	WireModel,
-} from "@thinkrail/contracts";
+import type { SlashCommandInfo, ThinkingLevel, WireModel } from "@thinkrail/contracts";
 import { ArrowUp, FileIcon, FolderIcon, History, Sparkles, Square, X } from "lucide-react";
 import {
 	type ClipboardEvent,
@@ -34,6 +29,7 @@ import {
 	stripUntouchedSlots,
 } from "./slotSession";
 import { ThinkingSelector } from "./ThinkingSelector";
+import type { ChatAttachment } from "./types";
 
 /** How a submit is delivered: a fresh turn, an interrupt, or a queued message after the current turn. */
 export type SubmitBehavior = "send" | "steer" | "followUp";
@@ -47,6 +43,8 @@ export interface MentionCandidate {
 
 interface PendingImage extends AttachedImage {
 	id: string;
+	/** The picked file's name — the chip label (pi's `ImageContent` itself carries no filename). */
+	name: string;
 }
 
 /** The token (non-whitespace run) ending at the caret — drives `@`-mention completion. */
@@ -144,7 +142,7 @@ interface ComposerProps {
 	onSlashActive: (active: boolean) => void;
 	onSelectModel: (model: WireModel) => void;
 	onSelectThinking: (level: ThinkingLevel) => void;
-	onSubmit: (text: string, images: ImageContent[], behavior: SubmitBehavior) => void;
+	onSubmit: (text: string, attachments: ChatAttachment[], behavior: SubmitBehavior) => void;
 	onAbort: () => void;
 	/** Opens the history-recall overlay (`ChatView` seeds it with the current draft) — the history button
 	 * and the shell's global `Ctrl+R`, via the `openHistory` handle. Optional so a standalone/storybook-style
@@ -337,7 +335,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		if (!text && images.length === 0) return;
 		onSubmit(
 			text,
-			images.map((i) => i.content),
+			images.map(({ name, content }) => ({ name, content })),
 			behavior,
 		);
 		onChange("");
@@ -422,7 +420,15 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		// Downscaled at attach time (≤1568px long edge) — an oversized image in history 400s every
 		// subsequent turn once the provider's many-image cap kicks in. See imageAttachment.ts.
 		const attached = await Promise.all(picked.map(fileToAttachedImage));
-		setImages((prev) => [...prev, ...attached.map((a) => ({ id: crypto.randomUUID(), ...a }))]);
+		setImages((prev) => [
+			...prev,
+			...attached.map((a, i) => ({
+				id: crypto.randomUUID(),
+				// A clipboard paste often arrives as a generic "image.png" — still better than a mime type.
+				name: picked[i]?.name || "image",
+				...a,
+			})),
+		]);
 	};
 
 	const submit = (behavior: SubmitBehavior) => {
@@ -657,7 +663,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							data-height={img.height}
 							className="flex items-center gap-xs rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-sm py-xs text-text-default tr-text-metadata"
 						>
-							<FileIcon className="size-3" /> {img.content.mimeType}
+							<FileIcon className="size-3" /> {img.name}
 							{img.width && img.height ? ` · ${img.width}×${img.height}` : null}
 							<button
 								type="button"

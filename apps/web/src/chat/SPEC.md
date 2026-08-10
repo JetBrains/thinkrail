@@ -339,7 +339,10 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   text. The one nuance: the web client's own immediate bubble is an **optimistic echo**
   (`ChatView.onSubmit` → `appendUserMessage`, store-only, appended *before* the transport call resolves;
 attached images ride along as content blocks so the bubble shows them — `UserTurn` renders image blocks
-as inline thumbnails above the text, for the echo and hydrated messages alike) —
+as compact "attached file" chips above the text (no inline preview; click opens the image in a dialog,
+the diagram-fullscreen pattern). The chip label is the picked file's name, carried on the echo turn as
+`attachmentNames` (UI-side only — pi's `ImageContent` has no filename), index-aligned with the image
+blocks; a hydrated turn has no names and falls back to mime-type labels) —
   it shows exactly what was typed (the raw command) until a re-fetch replaces it with pi's real persisted
   record. **The `/` menu merge**
   (`ChatView`): pi's `commands` snapshot (`session.getCommands`, frozen at session-create time) minus its
