@@ -13,7 +13,7 @@ import { handleRequest } from "./handlers";
 // threshold, but lift the cap so a noisy run never trips MaxListenersExceededWarning.
 process.setMaxListeners(50);
 
-/** Requests carry their calling client (terminals scope PTYs to it); nothing here is client-scoped. */
+/** Every handler takes the calling client's identity; these tests drive them directly, outside a socket. */
 const CTX = { clientKey: "test-client" };
 
 const booted: BootedHost[] = [];
@@ -238,9 +238,7 @@ test("git.prefetch's moved branch calls checkNow — a follow-up git.remoteState
 
 		// Sanity: nothing has checked this project yet — the honest not-yet-known object, per
 		// `handlers.test.ts`'s own `git.remoteState` contract test.
-		expect(
-			await handleRequest("git.remoteState", { workspaceId: "ws-checknow" }, CTX),
-		).toEqual({
+		expect(await handleRequest("git.remoteState", { workspaceId: "ws-checknow" }, CTX)).toEqual({
 			projectId,
 			ref: "origin/main",
 			behind: null,
@@ -249,10 +247,7 @@ test("git.prefetch's moved branch calls checkNow — a follow-up git.remoteState
 
 		const prefetchResult = (await handleRequest(
 			"git.prefetch",
-			{
-				projectId,
-				ref: "origin/main",
-			},
+			{ projectId, ref: "origin/main" },
 			CTX,
 		)) as { ok: boolean };
 		expect(prefetchResult.ok).toBe(true); // `origin/main` had never been fetched locally — moved=true
@@ -269,9 +264,7 @@ test("git.prefetch's moved branch calls checkNow — a follow-up git.remoteState
 		do {
 			after = (await handleRequest(
 				"git.remoteState",
-				{
-					workspaceId: "ws-checknow",
-				},
+				{ workspaceId: "ws-checknow" },
 				CTX,
 			)) as RemoteState | null;
 			if (after?.lastCheckedAt !== null) break;

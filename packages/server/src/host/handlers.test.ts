@@ -153,9 +153,7 @@ test("git.fetchNow performs a real fetch, resolves a RemoteState the follow-up g
 
 	const result = (await handleRequest(
 		"git.fetchNow",
-		{
-			workspaceId: "ws-fetch-now",
-		},
+		{ workspaceId: "ws-fetch-now" },
 		CTX,
 	)) as RemoteState;
 
@@ -166,7 +164,9 @@ test("git.fetchNow performs a real fetch, resolves a RemoteState the follow-up g
 	expect(result.dormant).toBeUndefined();
 
 	// The scheduler's own cache read agrees immediately — no separate publish round-trip to wait on.
-	expect(await handleRequest("git.remoteState", { workspaceId: "ws-fetch-now" }, CTX)).toEqual(result);
+	expect(await handleRequest("git.remoteState", { workspaceId: "ws-fetch-now" }, CTX)).toEqual(
+		result,
+	);
 });
 
 test("git.fetchNow throws, without recording trust or nudging, when the underlying fetch genuinely fails", async () => {

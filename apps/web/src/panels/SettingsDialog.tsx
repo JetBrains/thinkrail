@@ -6,6 +6,7 @@ import {
 	type LucideIcon,
 	Palette,
 	ShieldCheck,
+	SlidersHorizontal,
 	SquareTerminal,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -29,6 +30,8 @@ const SECTIONS: { id: SettingsSection; label: string; icon: LucideIcon }[] = [
 	{ id: SettingsSection.Privacy, label: "Privacy", icon: ShieldCheck },
 	{ id: SettingsSection.Git, label: "Git", icon: GitCompare },
 ];
+/** Placeholder sections — shown dimmed so the shell reads as built-to-grow (not yet wired). */
+const SOON: { label: string; icon: LucideIcon }[] = [{ label: "General", icon: SlidersHorizontal }];
 
 /**
  * App settings — a two-pane shell (left section rail + scrollable content pane) so it grows past today's
@@ -80,6 +83,18 @@ export function SettingsDialog() {
 								</button>
 							);
 						})}
+						{SOON.map(({ label, icon: Icon }) => (
+							<span
+								key={label}
+								className="flex shrink-0 cursor-default items-center gap-sm rounded-[var(--radius-md)] px-md py-sm text-text-disabled tr-text-ui"
+							>
+								<Icon className="size-4 shrink-0" />
+								{label}
+								<span className="ml-auto rounded-full border border-border-default px-xs py-0.5 tr-text-label-pill text-text-disabled">
+									Soon
+								</span>
+							</span>
+						))}
 					</nav>
 
 					<div className="min-h-0 flex-1 overflow-y-auto p-lg">
