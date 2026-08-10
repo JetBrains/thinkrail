@@ -459,6 +459,85 @@ test("a lingering retry countdown is swept up only when the run settles", () => 
 	expect(rt("a").turns.some((t) => t.kind === "system" && t.text === "✓ Done")).toBe(true);
 });
 
+test("auto-retry drops the failed attempt's turn — the retried message must not render twice", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+
+	// Attempt 1: the provider stream dies mid-message (e.g. "fetch failed"). pi commits the partial
+	// assistant message with stopReason "error", ends the run with willRetry: true, then — in
+	// `_prepareRetry` — REMOVES that failed message from the transcript before re-running the turn.
+	// The reducer must mirror that removal, or the client renders the reply twice (the frozen failed
+	// partial + the retried message) while the transcript — and any reloaded client — holds one.
+	store.handlePiEvent(agentStart, "a");
+	store.handlePiEvent(assistantStart, "a");
+	store.handlePiEvent(assistantText("The answer is"), "a");
+	store.handlePiEvent(
+		{
+			type: "message_end",
+			message: {
+				role: "assistant",
+				content: [{ type: "text", text: "The answer is" }],
+				stopReason: "error",
+				errorMessage: "fetch failed",
+			},
+		} as unknown as PiEvent,
+		"a",
+	);
+	store.handlePiEvent(
+		{ type: "agent_end", willRetry: true, messages: [] } as unknown as PiEvent,
+		"a",
+	);
+	store.handlePiEvent(retryStart(1, 3, 2_000), "a");
+	expect(rt("a").turns.some((t) => t.kind === "retry")).toBe(true); // countdown shows
+
+	// Attempt 2: pi continues the run and streams the SAME reply from scratch as a new message.
+	store.handlePiEvent(agentStart, "a");
+	store.handlePiEvent(assistantStart, "a");
+	store.handlePiEvent(assistantText("The answer is 4"), "a");
+	store.handlePiEvent(
+		{
+			type: "message_end",
+			message: {
+				role: "assistant",
+				content: [{ type: "text", text: "The answer is 4" }],
+				stopReason: "stop",
+			},
+		} as unknown as PiEvent,
+		"a",
+	);
+	store.handlePiEvent(agentEnd, "a");
+	store.handlePiEvent(agentSettled(), "a"); // settlement, not agent_end, concludes the run on main's model
+
+	const after = rt("a");
+	// Exactly ONE assistant turn — the retried message; the failed attempt's copy is gone, matching
+	// what pi's transcript (and therefore a reloaded/hydrated client) shows.
+	const assistants = after.turns.filter((t) => t.kind === "assistant");
+	expect(assistants).toHaveLength(1);
+	expect(
+		assistants[0]?.kind === "assistant" &&
+			assistants[0].message.content.some((c) => c.type === "text" && c.text === "The answer is 4"),
+	).toBe(true);
+	expect(after.turns.some((t) => t.kind === "retry")).toBe(false);
+	expect(after.turns.some((t) => t.kind === "system" && t.text === "✓ Done")).toBe(true);
+});
+
+test("auto-retry with no assistant message yet (error before message_start) drops nothing", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+	store.appendUserMessage("a", "hi");
+
+	// The request failed before any assistant tokens arrived — pi's `_prepareRetry` only slices when
+	// the transcript's last message is an assistant message; the user turn must survive untouched.
+	store.handlePiEvent(agentStart, "a");
+	store.handlePiEvent(
+		{ type: "agent_end", willRetry: true, messages: [] } as unknown as PiEvent,
+		"a",
+	);
+	store.handlePiEvent(retryStart(1, 3, 2_000), "a");
+	expect(rt("a").turns.filter((t) => t.kind === "user")).toHaveLength(1);
+	expect(rt("a").turns.some((t) => t.kind === "retry")).toBe(true);
+});
+
 test("a turn that ends in a provider error surfaces the error (not a false ✓ Done)", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");

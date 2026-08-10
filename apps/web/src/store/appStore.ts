@@ -670,10 +670,23 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 				: { ...rt, turns: settled };
 		}
 		case "auto_retry_start":
+			// pi's `_prepareRetry` trims the failed attempt's assistant message from the LIVE context before
+			// re-running the turn (the retry re-streams it as a brand-new message) — while KEEPING it in the
+			// session file for history. Mirror the trim (same superseded-attempt rule as the overflow-
+			// compaction path above), or the client renders the reply twice: the frozen failed partial plus
+			// the retried copy.
 			// Show a live countdown over the back-off; cleared on auto_retry_end (or final settlement).
 			// Replace-or-append per source: the event fires once per attempt, and the two retry flows
 			// (turn vs summarization) may overlap — each keeps exactly one indicator.
-			return appendRetryTurn(rt, "turn", event);
+			return appendRetryTurn(
+				{
+					...rt,
+					turns: removeSupersededAssistant(rt.turns, rt.attemptAssistantId),
+					attemptAssistantId: null,
+				},
+				"turn",
+				event,
+			);
 		case "auto_retry_end":
 			// The retry resolved → normal streaming/answer rendering replaces the indicator.
 			return clearRetryTurns(rt, "turn");

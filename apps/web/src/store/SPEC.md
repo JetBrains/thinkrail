@@ -171,7 +171,12 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   settled transcript never claims ongoing work) and still removes the superseded assistant attempt. The
   reducer relies on pi's guarantee that every emitted `compaction_start` is paired with a
   `compaction_end` (both success and failure paths emit it), the same trust every other event pair gets.
-  Closed chats are reopenable: the workbench close command first publishes the shared placement removal and only
+  **`auto_retry_start` mirrors pi's live-context surgery**: pi's `_prepareRetry` trims the failed
+  attempt's assistant message from the live context before re-running the turn (the retry re-streams it
+  as a new message) while *keeping it in the session file*, so the reducer drops the superseded failed
+  assistant turn (`removeSupersededAssistant`, the same rule as the overflow-compaction path) —
+  otherwise the client renders the reply twice (frozen failed partial + retried copy). Closed
+  chats are reopenable: the workbench close command first publishes the shared placement removal and only
   after host acceptance invokes **`closeChatToHistory`**, which **keeps the runtime + session alive** and
   records it in **`closedChatsByWorkspace`** (`ClosedChat[]`, per workspace, most-recent-first) and clears
   any pending jump/history-open request for that session. File, diff, and registered-document render caches
