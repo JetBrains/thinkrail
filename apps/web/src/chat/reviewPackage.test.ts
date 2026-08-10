@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { groupPackageItems, parseReviewPackage, reviewPackageLabel } from "./reviewPackage";
+import { parseReviewPackage, reviewPackageLabel } from "./reviewPackage";
 
 // A VERBATIM `renderPackage` output (packages/server/src/reviews/packageRender.ts) — the parser is
 // pinned against the real renderer, not a hand-built lookalike: a hand fixture drifted once (rv_ vs
@@ -75,17 +75,6 @@ test("ordinary user text — even text QUOTING a review tag mid-line — is not 
 	expect(parseReviewPackage('see `<review id="rev_x" comments="1">` in the docs')).toBeNull();
 	// A header with no comment items is not a package either.
 	expect(parseReviewPackage(pkg([]))).toBeNull();
-});
-
-test("groupPackageItems: by file in package order; the anchorless bucket is its own group", () => {
-	const item = (path: string | null, body: string) => ({ path, lineRef: "", fragment: null, body });
-	expect(
-		groupPackageItems([item("b.ts", "1"), item(null, "2"), item("b.ts", "3"), item("a.ts", "4")]),
-	).toEqual([
-		{ path: "b.ts", items: [item("b.ts", "1"), item("b.ts", "3")] },
-		{ path: null, items: [item(null, "2")] },
-		{ path: "a.ts", items: [item("a.ts", "4")] },
-	]);
 });
 
 test("labels read naturally for one/many comments and one/many files", () => {

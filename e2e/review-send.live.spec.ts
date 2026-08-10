@@ -34,29 +34,19 @@ test("a review send reads back from the chat: summary → file → comment + fra
 	await page.getByTestId("review-composer-input").fill("Please rename `two` to `pair`.");
 	await page.getByTestId("review-composer-send").click();
 
-	// The chat opens on the package's card: the summary line with the FILE rows right under it — the
-	// comments themselves folded away.
+	// The chat opens on the package's card: the summary line with the COMMENT rows right under it (a
+	// send is one message per file — no file level), fragments folded away.
 	const summary = page.getByTestId("review-package-summary");
 	await expect(summary).toContainText("Sent 1 review comment on script.ts", { timeout: 30_000 });
-	await expect(page.getByTestId("review-package-file-toggle")).toContainText("script.ts");
-	await expect(page.getByTestId("review-package-item")).toHaveCount(0);
+	const item = page.getByTestId("review-package-item");
+	await expect(item).toContainText("Please rename `two` to `pair`.");
+	await expect(item).toContainText("L2");
 
-	// Unfold file → comment row → full text + the quoted fragment, parsed from the message itself.
-	// Each toggle retries as one block: right after a reopen the row can remount mid-click (hydration
-	// mints fresh row ids), swallowing the first click.
+	// Unfold the comment row → full text + the quoted fragment, parsed from the message itself. The
+	// toggle retries as one block: right after a reopen the row can remount mid-click (hydration mints
+	// fresh row ids), swallowing the first click.
 	const unfoldAndAssert = async () => {
-		await expect(async () => {
-			await page.getByTestId("review-package-file-toggle").click();
-			await expect(page.getByTestId("review-package-file")).toHaveAttribute(
-				"data-expanded",
-				"true",
-				{ timeout: 1000 },
-			);
-		}).toPass({ timeout: 10_000 });
-		const item = page.getByTestId("review-package-item");
-		await expect(item).toContainText("Please rename `two` to `pair`.");
-		await expect(item).toContainText("L2");
-		// The fragment shows only once the COMMENT row unfolds.
+		// The fragment shows only once the comment row unfolds.
 		await expect(item.locator("pre")).toHaveCount(0);
 		await expect(async () => {
 			await page.getByTestId("review-package-item-toggle").click();
@@ -83,7 +73,6 @@ test("a review send reads back from the chat: summary → file → comment + fra
 	await expect(page.getByTestId("review-package-summary")).toContainText(
 		"Sent 1 review comment on script.ts",
 	);
-	const item = page.getByTestId("review-package-item");
 	await expect(item).toContainText("Please rename `two` to `pair`.");
 	await expect(item.locator("pre")).toContainText("const two = 2;");
 });

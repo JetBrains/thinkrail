@@ -63,23 +63,6 @@ export function parseReviewPackage(text: string): ReviewPackageSummary | null {
 	return { count: comments.length, files, items };
 }
 
-/** One file's slice of a package — the unfold's middle level (`path: null` = review-level notes). */
-export interface ReviewPackageFile {
-	path: string | null;
-	items: ReviewPackageItem[];
-}
-
-/** Group a package's items by file, keeping package order (first occurrence orders the file). */
-export function groupPackageItems(items: ReviewPackageItem[]): ReviewPackageFile[] {
-	const files: ReviewPackageFile[] = [];
-	for (const item of items) {
-		const file = files.find((f) => f.path === item.path);
-		if (file) file.items.push(item);
-		else files.push({ path: item.path, items: [item] });
-	}
-	return files;
-}
-
 /** The summary line — "Sent 3 review comments on script.ts". */
 export function reviewPackageLabel(summary: Pick<ReviewPackageSummary, "count" | "files">): string {
 	const noun = summary.count === 1 ? "review comment" : "review comments";

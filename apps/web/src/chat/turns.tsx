@@ -15,13 +15,7 @@ import { ActivityGroup } from "./ActivityGroup";
 import { useFold, useSelection } from "./foldState";
 
 import { Markdown } from "./Markdown";
-import {
-	groupPackageItems,
-	parseReviewPackage,
-	type ReviewPackageFile,
-	type ReviewPackageItem,
-	reviewPackageLabel,
-} from "./reviewPackage";
+import { parseReviewPackage, type ReviewPackageItem, reviewPackageLabel } from "./reviewPackage";
 import type { ChatRow, TurnDividerData } from "./rows";
 import { ToolCard } from "./ToolCard";
 import { getToolChrome, getToolRenderer } from "./toolRegistry";
@@ -50,7 +44,7 @@ export function ChatTurnView({
 }) {
 	switch (row.kind) {
 		case "user":
-			return <UserTurn id={row.id} message={row.message} workspaceRoot={workspaceRoot} />;
+			return <UserTurn id={row.id} message={row.message} />;
 		case "system":
 			return <SystemTurn text={row.text} />;
 		case "error":
@@ -102,19 +96,12 @@ export function ChatTurnView({
 }
 
 /** The user bubble. A review send's context package renders as a compact card — the "Sent N review
- * comments" line with the FILES right under it, each file unfolding to its comments, each comment
- * unfolding to its full text + the quoted fragment — instead of the structured XML the agent needs.
+ * comments on <file>" line with the COMMENT rows right under it (a send is one message per file, so a
+ * file level would always hold exactly one entry — the summary already names the file); each comment
+ * unfolds to its full text + the quoted fragment — instead of the structured XML the agent needs.
  * Everything is parsed from the message itself (the transcript IS the history), so any old chat
- * unfolds the same way; every fold level survives virtualization via the shared cache. */
-function UserTurn({
-	id,
-	message,
-	workspaceRoot,
-}: {
-	id: string;
-	message: UserMessage;
-	workspaceRoot?: string | undefined;
-}) {
+ * unfolds the same way; the folds survive virtualization via the shared cache. */
+function UserTurn({ id, message }: { id: string; message: UserMessage }) {
 	const text = userText(message.content);
 	const review = parseReviewPackage(text);
 	return (
@@ -126,13 +113,8 @@ function UserTurn({
 							{reviewPackageLabel(review)}
 						</span>
 						<ul className="mt-xs flex flex-col">
-							{groupPackageItems(review.items).map((file) => (
-								<PackageFileRow
-									key={file.path ?? "@review"}
-									foldId={`${id}:${file.path ?? "@review"}`}
-									file={file}
-									workspaceRoot={workspaceRoot}
-								/>
+							{keyPackageItems(review.items).map(({ key, item }) => (
+								<PackageCommentRow key={key} foldId={`${id}:${key}`} item={item} />
 							))}
 						</ul>
 					</div>
@@ -144,59 +126,19 @@ function UserTurn({
 	);
 }
 
-/** One file in the package card: `▸ script.ts · 2`, unfolding to its comment rows. Its fold survives
- * virtualization too, keyed under the owning row's id. */
-function PackageFileRow({
-	foldId,
-	file,
-	workspaceRoot,
-}: {
-	foldId: string;
-	file: ReviewPackageFile;
-	workspaceRoot?: string | undefined;
-}) {
-	const [expanded, toggle] = useFold(foldId);
-	// Content keys (+ a per-duplicate ordinal): parsed from an immutable message — exact, no index keys.
+/** Content keys (+ a per-duplicate ordinal) for a package's comment rows: parsed from an immutable
+ * message — exact identity, no index keys. */
+function keyPackageItems(items: ReviewPackageItem[]): { key: string; item: ReviewPackageItem }[] {
 	const seen = new Map<string, number>();
-	const keyedItems = file.items.map((item) => {
+	return items.map((item) => {
 		const base = `${item.lineRef}·${item.body}`;
 		const n = (seen.get(base) ?? 0) + 1;
 		seen.set(base, n);
 		return { key: `${base}·${n}`, item };
 	});
-	return (
-		<li data-testid="review-package-file" data-expanded={expanded}>
-			<button
-				type="button"
-				data-testid="review-package-file-toggle"
-				aria-expanded={expanded}
-				onClick={toggle}
-				className="flex w-full cursor-pointer select-none items-center gap-xs rounded-[var(--radius-sm)] px-xs py-xs text-left outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
-			>
-				<ChevronRight
-					className={cn(
-						"size-3 shrink-0 text-text-subtle transition-transform",
-						expanded && "rotate-90",
-					)}
-				/>
-				<FileText className="size-3.5 shrink-0 text-text-subtle" />
-				<span className="min-w-0 truncate tr-code-text text-text-default">
-					{file.path ? projectRelativePath(file.path, workspaceRoot) : "Change set"}
-				</span>
-				<span className="shrink-0 tr-text-metadata text-text-subtle">{file.items.length}</span>
-			</button>
-			{expanded && (
-				<ul className="mb-xs flex flex-col pl-lg">
-					{keyedItems.map(({ key, item }) => (
-						<PackageCommentRow key={key} foldId={`${foldId}:${key}`} item={item} />
-					))}
-				</ul>
-			)}
-		</li>
-	);
 }
 
-/** One comment inside a file's unfold: collapsed — a one-line `▸ L2 · the remark…`; expanded — the
+/** One comment row in the package card: collapsed — a one-line `▸ L2 · the remark…`; expanded — the
  * full text plus the quoted fragment (verbatim from the package, monospace, height-capped). */
 function PackageCommentRow({ foldId, item }: { foldId: string; item: ReviewPackageItem }) {
 	const [expanded, toggle] = useFold(foldId);
