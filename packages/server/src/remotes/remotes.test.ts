@@ -218,6 +218,67 @@ test("configureRemoteChecks rearms the backstop immediately with the new interva
 	expect(fake.latest().ms).toBe(60_000); // 1 minute, applied at once — no waiting for the old tick
 });
 
+test("a changed MODE sweeps every project at once — even inside the anti-thrash floor", async () => {
+	// Rearming alone only changes WHEN the next check runs; every pair's already-published `RemoteState`
+	// would keep describing the old mode until then — up to a full day at the maximum interval. And the
+	// floor is the wrong guard here: a user toggling the setting seconds after a check ran is exactly when
+	// the stale state is most visible, so a floor-gated sweep would drop the update precisely then.
+	saveProjects([project("p1"), project("p2")]);
+	const fake = fakeScheduler();
+	const calls: string[] = [];
+	startRemoteChecks({
+		checkProject: async (id) => {
+			calls.push(id);
+		},
+		setTimer: fake.setTimer,
+		clearTimer: fake.clearTimer,
+	});
+
+	// Put both projects well inside the floor: a check just ran for each.
+	noteClientActivity();
+	await flushMicrotasks();
+	expect(calls.toSorted()).toEqual(["p1", "p2"]);
+	calls.length = 0;
+
+	configureRemoteChecks({ ...DEFAULT_CONFIG, gitRemoteCheck: "off" });
+	await flushMicrotasks();
+
+	expect(calls.toSorted()).toEqual(["p1", "p2"]);
+});
+
+test("an interval-only change rearms but does NOT sweep — a settings save is not a fleet-wide network round", async () => {
+	saveProjects([project("p1")]);
+	const fake = fakeScheduler();
+	const calls: string[] = [];
+	startRemoteChecks({
+		checkProject: async (id) => {
+			calls.push(id);
+		},
+		setTimer: fake.setTimer,
+		clearTimer: fake.clearTimer,
+	});
+
+	configureRemoteChecks({ ...DEFAULT_CONFIG, gitRemoteCheckIntervalMinutes: 42 });
+	await flushMicrotasks();
+
+	expect(calls).toEqual([]); // cadence changed; what each pair's state MEANS did not
+	expect(fake.scheduled).toHaveLength(2); // but the backstop was still rearmed
+});
+
+test("configuring before the scheduler is armed never checks anything", async () => {
+	// Boot order: `server.ts` calls `configureRemoteChecks(getConfig())` BEFORE `startRemoteChecks`, and the
+	// persisted mode often differs from `DEFAULT_CONFIG`'s. That must not fire a check round at boot — the
+	// no-client gate is the whole reason nothing runs until a client actually connects.
+	saveProjects([project("p1")]);
+	const calls: string[] = [];
+	stopRemoteChecks();
+
+	configureRemoteChecks({ ...DEFAULT_CONFIG, gitRemoteCheck: "fetch" });
+	await flushMicrotasks();
+
+	expect(calls).toEqual([]);
+});
+
 // ── lifecycle: stop leaves no live timer ────────────────────────────────
 
 test("stopRemoteChecks clears the pending timer, and a tick that fires anyway is a no-op", async () => {

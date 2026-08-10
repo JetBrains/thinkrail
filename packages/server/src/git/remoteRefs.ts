@@ -123,18 +123,43 @@ export async function fetchRemoteRefs(
 }
 
 /**
- * `git rev-list --count from..to`, purely local — no network, no remote call. Answers `null`, never `0`,
- * when the range fails to resolve (a ref that doesn't exist locally — exactly the state a probe alone
- * leaves the caller in, since it never makes the remote's objects local). An unknown count is not "up to
- * date": the UI renders the two differently (a bare `↓` vs `↓·N`), so collapsing this to `0` would falsify
- * that distinction two layers up. `--end-of-options` guards the range expression itself, since a caller
- * value starting with `-` would otherwise make the concatenated `from..to` string look like a flag.
+ * The **symmetric** distance between two commits, purely local — no network, no remote call:
+ * `git rev-list --left-right --count from...to` (three dots), read as `{ ahead, behind }` *relative to
+ * `from`* — `behind` is what `to` has and `from` lacks, `ahead` is what `from` has and `to` lacks.
+ *
+ * Both halves, not just `behind`, because **`from..to` alone cannot tell a fast-forward from a rewrite**.
+ * When an upstream is force-pushed backward, the two-dot count is `0` — indistinguishable from "up to
+ * date", which would let the indicator render `↓·0` ("changed by nothing", the exact lie
+ * {@link RemoteState} forbids). Only `ahead === 0` proves the move was a genuine fast-forward and so that
+ * `behind` is an honest count; a caller reading one number has no way to check that. One spawn either way.
+ *
+ * Answers `null`, never zeroes, when the range fails to resolve (a ref that doesn't exist locally —
+ * exactly the state a probe alone leaves the caller in, since it never makes the remote's objects local).
+ * An unknown distance is not "up to date": the UI renders the two differently (a bare `↓` vs `↓·N`), so
+ * collapsing this to `0` would falsify that distinction two layers up. `--end-of-options` guards the range
+ * expression itself, since a caller value starting with `-` would otherwise make the concatenated
+ * `from...to` string look like a flag.
  */
-export function behindCount(repoPath: string, from: string, to: string): number | null {
-	const result = git(repoPath, ["rev-list", "--count", "--end-of-options", `${from}..${to}`]);
+export function refDelta(
+	repoPath: string,
+	from: string,
+	to: string,
+): { ahead: number; behind: number } | null {
+	const result = git(repoPath, [
+		"rev-list",
+		"--left-right",
+		"--count",
+		"--end-of-options",
+		`${from}...${to}`,
+	]);
 	if (!result.ok) return null;
-	const count = Number(result.out);
-	return Number.isFinite(count) ? count : null;
+	// `--left-right --count` prints exactly two tab-separated numbers: left (only in `from`) then right
+	// (only in `to`). Anything else is a shape we did not ask for and must not guess at.
+	const parts = result.out.split(/\s+/).filter(Boolean);
+	if (parts.length !== 2) return null;
+	const ahead = Number(parts[0]);
+	const behind = Number(parts[1]);
+	return Number.isFinite(ahead) && Number.isFinite(behind) ? { ahead, behind } : null;
 }
 
 /**

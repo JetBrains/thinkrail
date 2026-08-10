@@ -66,9 +66,14 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
     line), never by shelling out — this module has no `git` sibling edge. Non-recursive because only the
     dir's top level holds the refs that move (`HEAD`, `index`, `ORIG_HEAD`) while `objects/`/`logs/` are
     pure storms; a missing/unreadable git dir (non-git folder) or a failed start degrades silently.
-  - a third seam, a **watcher pair** on the **project repo's own git dir** (`<project.path>/.git`, resolved
-    with plain fs `stat` — it is always a real directory, never a gitfile pointer, because every project
-    this app opens is a repo's main working tree, not a linked worktree). A project has **one** repo but
+  - a third seam, a **watcher pair** on the **project repo's COMMON git dir** — usually `<project.path>/.git`
+    as a real directory, but resolved rather than assumed: `openProject` accepts any git toplevel and a
+    *linked worktree is its own toplevel*, so a project can perfectly well sit on one, and then `.git` is a
+    gitfile pointing at `<repo>/.git/worktrees/<name>` whose own `refs/` holds almost nothing. Git records
+    the way back in that dir's **`commondir`** file, so `resolveProjectGitDir` follows gitfile → `commondir`
+    and lands on the shared dir either way (still plain fs — both are one-line formats, and this module has
+    no `git` sibling edge). Treating the gitfile shape as "not a git dir", as this once did, silently
+    skipped the watcher for exactly the refs it exists to see. A project has **one** repo but
     **many** workspaces, so this is **one watcher pair per project, never per workspace**: it fans out to
     every currently-watched workspace of that project, reusing the exact same per-workspace debounce
     (`scheduleRepoMeta`) — no second debounce mechanism. It is the only seam that can see a **shared** ref

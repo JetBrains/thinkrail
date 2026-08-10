@@ -109,15 +109,29 @@ function isRepoMetaPath(relPath: string): boolean {
  * Unreadable/absent metadata → `null` (a non-git folder; the caller just skips the second watcher).
  */
 function resolveExternalGitDir(worktreePath: string): string | null {
-	const dotGit = resolve(worktreePath, ".git");
+	const resolved = resolveGitDir(worktreePath);
+	return resolved?.linked ? resolved.dir : null;
+}
+
+/**
+ * The git metadata dir a checkout's `.git` names, for **both** shapes it can take, plus which shape it was:
+ * a repo root's in-tree `.git` *directory* (`linked: false`), or the dir a linked worktree's `.git`
+ * *gitfile* (`gitdir: <path>`, relative or absolute) points at (`linked: true`). `null` when `.git` is
+ * missing, unreadable, or neither shape — a non-git folder.
+ *
+ * One parser, two callers ({@link resolveExternalGitDir} wants only the linked case; {@link
+ * resolveProjectGitDir} needs both), so the gitfile contract is read in exactly one place.
+ */
+function resolveGitDir(checkoutPath: string): { dir: string; linked: boolean } | null {
+	const dotGit = resolve(checkoutPath, ".git");
 	try {
-		if (statSync(dotGit).isDirectory()) return null;
+		if (statSync(dotGit).isDirectory()) return { dir: dotGit, linked: false };
 		const pointer = readFileSync(dotGit, "utf8").trim();
 		const match = /^gitdir:\s*(.+)$/.exec(pointer);
 		if (!match?.[1]) return null;
 		const target = match[1].trim();
-		const abs = isAbsolute(target) ? target : resolve(worktreePath, target);
-		return statSync(abs).isDirectory() ? abs : null;
+		const abs = isAbsolute(target) ? target : resolve(checkoutPath, target);
+		return statSync(abs).isDirectory() ? { dir: abs, linked: true } : null;
 	} catch {
 		return null;
 	}
@@ -206,18 +220,32 @@ function settleReady(entry: WatchEntry): void {
 }
 
 /**
- * The project repo's OWN git dir (`<project.path>/.git`) — the directory every worktree of the repo shares,
- * where `refs/heads/*`, `packed-refs`, and the main worktree's own `HEAD`/`index` live. Every workspace this
- * app creates hangs off `project.path` via `git worktree add`, so `project.path` is always the repo's main
- * working tree: its `.git` is a real directory, never a gitfile pointer (that shape only ever appears for a
- * *linked* worktree, which this app never opens as a project). Resolved with plain fs, the same boundary as
- * `resolveExternalGitDir`: no `git` sibling edge. A missing/odd `.git` (not a directory) degrades silently —
- * the caller just skips the project watcher.
+ * The project repo's **common** git dir — the directory every worktree of the repo shares, where
+ * `refs/heads/*` and `packed-refs` live. This is the one whose `refs/` subtree a `git branch`/`fetch` in
+ * *any* worktree writes, so it is what {@link ensureProjectWatch} must watch.
+ *
+ * Usually that is simply `<project.path>/.git`, a real directory: a project opened at a repo's main working
+ * tree. But `openProject` accepts **any** git toplevel (`gitToplevel`), and a *linked worktree* is its own
+ * toplevel — so a user can perfectly well open one as a project, and then `.git` is a gitfile pointing at
+ * `<repo>/.git/worktrees/<name>`, whose OWN `refs/` holds almost nothing. Watching that would miss every
+ * shared ref write; treating it as "not a git dir" (which this used to do) misses them too, silently. Git
+ * records the way back in a **`commondir`** file inside the per-worktree dir — a relative (`../..`) or
+ * absolute path to the shared dir — so resolving it lands on the same directory either way.
+ *
+ * Resolved with plain fs, the same boundary as `resolveExternalGitDir`: no `git` sibling edge, and both
+ * the gitfile and `commondir` formats are one-line contracts. Anything missing/unreadable/odd degrades
+ * silently to `null` — the caller just skips the project watcher.
  */
 function resolveProjectGitDir(projectPath: string): string | null {
-	const dotGit = resolve(projectPath, ".git");
+	const resolved = resolveGitDir(projectPath);
+	if (!resolved) return null;
+	if (!resolved.linked) return resolved.dir;
 	try {
-		return statSync(dotGit).isDirectory() ? dotGit : null;
+		// No `commondir` at all would mean a per-worktree dir that isn't one — nothing safe to infer.
+		const common = readFileSync(resolve(resolved.dir, "commondir"), "utf8").trim();
+		if (!common) return null;
+		const commonDir = isAbsolute(common) ? common : resolve(resolved.dir, common);
+		return statSync(commonDir).isDirectory() ? commonDir : null;
 	} catch {
 		return null;
 	}

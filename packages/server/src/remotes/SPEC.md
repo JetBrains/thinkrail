@@ -29,10 +29,16 @@ in two halves that share this one `SPEC.md` (written in the first, extended by t
 - **Owns (mechanics half):**
   - **Per project, never per workspace** — worktrees inside one project share a single `.git`, so there is
     exactly one floor/backstop cadence per project id, however many workspaces (worktrees) it has open.
-  - The **60s minimum-interval floor** (`MIN_CHECK_INTERVAL_MS`): however many triggers ask for a given
-    project inside this window (an activity sweep, `checkNow`, the backstop tick), only the first actually
-    invokes `checkProject`; the rest resolve immediately. Fixed, not configurable — `AppConfig` carries no
-    floor knob, only the backstop interval does.
+  - The **60s minimum-interval floor** (`MIN_CHECK_INTERVAL_MS`): however many *recurring* triggers ask for
+    a given project inside this window (an activity sweep, `checkNow`, the backstop tick), only the first
+    actually invokes `checkProject`; the rest resolve immediately. Fixed, not configurable — `AppConfig`
+    carries no floor knob, only the backstop interval does. **One trigger skips the floor** (never the
+    in-flight de-dupe): a **`gitRemoteCheck` mode change**, which sweeps every known project at once. The
+    floor exists to collapse repeated automatic nudges; a mode change is a rare, deliberate edit after
+    which every published `RemoteState` describes the wrong mode (`"off"` must become `dormant: "disabled"`,
+    and leaving it must clear that), and floor-gating it would silently drop the update exactly when a user
+    toggles the setting seconds after a check ran. An **interval-only** edit does not sweep — it changes
+    cadence, not what any pair's state means, and a settings save must not become a fleet-wide network round.
   - The **jittered backstop**: a self-rescheduling `setTimeout` (never `setInterval` — this repo has none,
     and a self-rescheduling one-shot is what lets the jitter differ every round) whose delay is
     `intervalMs * (1 + JITTER_FRACTION * draw)`, `draw` ∈ `[0, 1)`, `intervalMs` from the host-injected
@@ -133,12 +139,23 @@ in two halves that share this one `SPEC.md` (written in the first, extended by t
     - **probe mode, the remote's head differs from the local tracking ref** → `"unknown"`: we know it
       moved, never by how much, because `ls-remote` makes no object local.
     - **probe or fetch mode, they match** → `null` (up to date).
-    - **fetch mode, the ref moved** (`fetchRemoteRefs`'s own `moved` list) → the exact count from
-      `behindCount(repoPath, <the tracking ref's oid from just before this fetch>, "refs/remotes/origin/<name>")`.
-      If that has no *before* value (this pair's very first fetch — nothing to count *from*) or
-      `behindCount` itself returns `null` (never `0` — a resolution failure) → `null` for the former (a
-      fresh baseline, nothing to report yet) / `"unknown"` for the latter (a real range that failed to
-      resolve). Never substituted with `0` or a guess in any of these cases.
+    - **fetch mode, the ref moved** (`fetchRemoteRefs`'s own `moved` list) → `behindFromDelta` reads the
+      two-sided `refDelta(repoPath, <the tracking ref's oid from just before this fetch>,
+      "refs/remotes/origin/<name>")`, because **"moved" does not mean "moved forward"** — an upstream can be
+      force-pushed, and only `ahead === 0` proves the move was a fast-forward whose `behind` is an honest
+      count:
+      - `ahead === 0, behind > 0` — fast-forward → the exact count.
+      - `ahead > 0, behind === 0` — a **rewind** (force-pushed backward onto a commit we already have) →
+        `null`, up to date. There is genuinely nothing upstream we lack. A one-sided `from..to` count would
+        have said `0` here, which the UI renders as "↓·0 … is 0 commits behind" — the "changed by nothing"
+        lie `RemoteState`'s own contract calls out.
+      - `ahead > 0, behind > 0` — **divergence** (an upstream rebase/amend) → `"unknown"`. Commits did land,
+        but a bare "N behind" describes a fast-forward that never happened; the bare `↓` plus a fetch
+        affordance is the honest rendering.
+      If there is no *before* value (this pair's very first fetch — nothing to measure *from*) or `refDelta`
+      itself returns `null` (a resolution failure) → `null` for the former (a fresh baseline, nothing to
+      report yet) / `"unknown"` for the latter (a real range that failed to resolve). Never substituted with
+      `0` or a guess in any of these cases.
     - A ref absent from a successful probe's result, or a name the classifying `ls-remote` below reports
       absent, means the upstream branch no longer exists: `{ behind: null, dormant: "upstream-gone" }` —
       **never** a bare `behind: null` with no reason, which a consumer rendering no dormant field at all
@@ -194,7 +211,7 @@ in two halves that share this one `SPEC.md` (written in the first, extended by t
     later reappears (e.g. a workspace re-pointed back) starts from a fresh record deliberately — nothing
     about its old backoff/dormancy state is still true once it was gone for a round.
   - **The git-function seam + the clock are injected**, mirroring `RemoteCheckDeps`: production defaults
-    (the real `probeRemoteRefs`/`fetchRemoteRefs`/`behindCount`/`remoteUrlKind`/`sshAgentPresent`, plus
+    (the real `probeRemoteRefs`/`fetchRemoteRefs`/`refDelta`/`remoteUrlKind`/`sshAgentPresent`, plus
     `git/remoteRefs.ts`'s exported `trackingRefOid` — the same "what does this repo currently believe this
     tracking ref points at" primitive `fetchRemoteRefs` itself uses internally, reused here rather than
     reimplemented a third time, and `Date.now`) are installed directly at module scope, overridable only
@@ -222,7 +239,7 @@ in two halves that share this one `SPEC.md` (written in the first, extended by t
   `configureRemoteCheckPolicyDeps` setter is deliberately **not** barrel-exported (`policy.test.ts`
   imports it directly from `./policy`, exactly as `remotes.test.ts` imports `startRemoteChecks` directly
   from `./remotes` rather than through `./index`).
-- **Allowed deps (policy half):** `git` (`probeRemoteRefs`, `fetchRemoteRefs`, `behindCount`,
+- **Allowed deps (policy half):** `git` (`probeRemoteRefs`, `fetchRemoteRefs`, `refDelta`,
   `remoteUrlKind`, `sshAgentPresent`, `diffBaseRef`, and `trackingRefOid` — for reading a local tracking
   ref's oid; see "Design notes"), `persistence` (`isRemoteTrusted`, `loadProjects`, `loadWorkspaces`,
   `noteRemoteTrusted`), `contracts` (`RemoteState`, `RemoteDormantReason`, `ProjectRemoteStatePayload`,
@@ -244,8 +261,8 @@ in two halves that share this one `SPEC.md` (written in the first, extended by t
   `refs/remotes/origin/<name>` instead anchors every comparison — including the very first one, and every
   one after a process restart, when the in-memory cache would otherwise have reset — to real git state, not
   to this process's own memory of what it last happened to see.
-- **Why fetch mode's exact count is `behindCount(repoPath, <tracking ref oid from just before the fetch>,
-  "refs/remotes/origin/<name>")`, not `behindCount(repoPath, "HEAD", …)`**: `RemoteState` is tracked per
+- **Why fetch mode's exact count is `refDelta(repoPath, <tracking ref oid from just before the fetch>,
+  "refs/remotes/origin/<name>")`, not `refDelta(repoPath, "HEAD", …)`**: `RemoteState` is tracked per
   `(project, ref)`, never per workspace, and a project can have several workspaces (worktrees) with
   different `HEAD`s. Counting from an arbitrary workspace's `HEAD` would make the reported count depend on
   which workspace happened to supply it — the exact per-workspace leakage this module exists to avoid.

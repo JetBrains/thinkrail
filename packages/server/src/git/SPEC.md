@@ -35,7 +35,7 @@ ref off the workspace-create critical path.
   |---|---|---|---|---|
   | `branch` | `diff <merge-base>` | yes | merge-base ref | worktree |
   | `working-tree` | `diff` (no revs) | yes | index | worktree |
-  | `staged` | `diff --cached HEAD` | no | `HEAD` | index |
+  | `staged` | `diff --cached HEAD` (no rev if `HEAD` is unborn) | no | `HEAD` / empty | index |
   | `pinned` | `diff <oid>` | yes | pinned commit | worktree |
   | `commit` | `diff <sha>^ <sha>` / `show` for a root | no | parent / empty | `sha` |
 
@@ -47,10 +47,15 @@ ref off the workspace-create critical path.
   `base..HEAD`. `working-tree` and `staged` split what a single conflated `uncommitted` scope used to lump
   together, now that the index is a real `DiffSide`: `working-tree` is what you have not staged yet (index vs
   worktree, plus untracked — nothing staged belongs here), `staged` is what a commit would record right now
-  (`HEAD` vs the index, no untracked — untracked is by definition not staged). `pinned` is the review
-  sidebar's base-side navigation — one IMMUTABLE commit (validated exactly like a `commit` scope's sha, same
-  `UNKNOWN_COMMIT` rejection) against the worktree, untracked included: the anchor's own pinned oid, never
-  whatever `branch` resolves to today. A **root** `commit` degrades to `git show
+  (`HEAD` vs the index, no untracked — untracked is by definition not staged); in a repo with **no commits
+  yet** — a real state, since the Welcome screen offers to `git init` a plain folder and `openProject` takes
+  any git toplevel — `staged` names no rev at all (a bare `git diff --cached` is git's own "index vs `HEAD`,
+  or vs the empty tree when `HEAD` is unborn", so the empty-tree oid is never hardcoded, which matters
+  because it differs between sha1 and sha256 repos) and its original side is `empty`, degrading to the same
+  add-style diff a root commit gets rather than failing the whole read with `fatal: bad revision 'HEAD'`.
+  `pinned` is the review sidebar's base-side navigation — one IMMUTABLE commit (validated exactly like a
+  `commit` scope's sha, same `UNKNOWN_COMMIT` rejection) against the worktree, untracked included: the
+  anchor's own pinned oid, never whatever `branch` resolves to today. A **root** `commit` degrades to `git show
   --format=` with an empty original, the same add-style degradation an absent path already gets. Both reads
   build their argv from it through `changedFileArgs(range, mode)`, so the file list and a file's two sides can never disagree on the
   range — and that argv brackets its revs on **both** sides: **`--end-of-options`** ahead of them (no ref can be
@@ -153,8 +158,8 @@ ref off the workspace-create critical path.
 - **`remoteRefs.ts`** — the two remote operations and the local counting that interprets them.
   `probeRemoteRefs` runs `git ls-remote --heads <remote> <refs…>`: it **writes nothing** — no objects, no
   refs, no `FETCH_HEAD`, no ref locks, no gc trigger — and answers only *whether* a ref differs, never by
-  how much. `fetchRemoteRefs` is the opt-in real fetch and reports which refs moved. `behindCount` is a
-  purely local `rev-list --count`. Both remote calls run under `REMOTE_ENV` with a deadline, pass
+  how much. `fetchRemoteRefs` is the opt-in real fetch and reports which refs moved. `refDelta` is a
+  purely local, two-sided `rev-list --left-right --count`. Both remote calls run under `REMOTE_ENV` with a deadline, pass
   `-c maintenance.auto=false -c gc.auto=0` so a fetch cannot trigger background repacking, and **never**
   pass `--prune`: pruning can delete a remote-tracking ref a workspace is pinned to. `probeRemoteRefs`
   passes the requested refs as `ls-remote` **patterns** so the filtering happens server-side (protocol v2),
@@ -167,10 +172,14 @@ ref off the workspace-create critical path.
   name — because a local branch literally named `origin/<b>` would otherwise shadow the remote-tracking ref
   via git's DWIM resolution order (`prefetchBranch`, above, hits the identical hazard and documents it the
   same way); the ref names whose oid changed (first appearance counts) come back as `moved`. Neither remote
-  call ever passes `--tags`, for the same pinned-ref reason as `--prune`. `behindCount(repoPath, from, to)`
-  is `rev-list --count --end-of-options <from>..<to>`, purely local — it returns **`null`, not `0`**, when
+  call ever passes `--tags`, for the same pinned-ref reason as `--prune`. `refDelta(repoPath, from, to)`
+  is `rev-list --left-right --count --end-of-options <from>...<to>` (three dots), purely local, answering
+  **both** sides as `{ ahead, behind }` relative to `from`. Two-sided on purpose: a one-sided `from..to`
+  **cannot tell a fast-forward from a force-push**, because a rewind counts `0` — identical to "up to
+  date" — and only `ahead === 0` proves the move was a fast-forward and the `behind` number honest (see
+  `remotes`' own `behindFromDelta`, the sole consumer). It returns **`null`, not zeroes**, when
   the range fails to resolve (e.g. one side doesn't exist locally, which is exactly the state a probe alone
-  leaves the caller in): an unknown count is not "up to date", and the UI renders the two differently, so
+  leaves the caller in): an unknown distance is not "up to date", and the UI renders the two differently, so
   collapsing the distinction here would falsify the indicator two layers up. `remoteUrlKind(repoPath,
   remote)` reads `git remote get-url` and classifies `ssh://…` and any scp-like form — `git@host:path`,
   `user@host:path`, or a bare `host:path` with no user at all, since the `user@` prefix is **optional** in
@@ -193,7 +202,7 @@ ref off the workspace-create critical path.
   `changedFileArgs`, `diffBaseRef`, `resolveCommitOid`, `DiffRange`, `DiffSide`, `isSafeRef`,
   `assertSafeRef`, `listBranches`,
   `resolveDefaultBranch`, `tryCurrentBranch`, `currentBranch`, `canonicalPath`, `prefetchBranch`,
-  `probeRemoteRefsArgv`, `probeRemoteRefs`, `fetchRemoteRefsArgv`, `fetchRemoteRefs`, `behindCount`,
+  `probeRemoteRefsArgv`, `probeRemoteRefs`, `fetchRemoteRefsArgv`, `fetchRemoteRefs`, `refDelta`,
   `remoteUrlKind`, `sshAgentPresent`, `trackingRefOid`.
 - **Allowed deps:** `persistence` (workspace + project lookup); `contracts` (`Git*`/`BranchList` types);
   `@thinkrail/shared/codedError` (naming a failure for the wire); Bun (spawn).
@@ -265,7 +274,7 @@ ref off the workspace-create critical path.
   hands the user real terminals inside these worktrees, so that is not a hypothetical. A real fetch
   (`fetchRemoteRefs`) is therefore opt-in, never triggered on a bare background timer. Consequence: a probe
   can tell the caller *that* a ref moved but never *by how much* (the objects aren't local), so
-  `behindCount` reads 0 right after a probe — this is why the UI's indicator has two modes (a bare `↓` for
+  `refDelta` reads all-zero right after a probe — this is why the UI's indicator has two modes (a bare `↓` for
   "moved, count unknown" vs `↓·N` only once a real fetch made the count answerable), not a bug in either
   layer. Neither remote call ever passes `--prune` or `--tags`: pruning can delete a remote-tracking ref a
   workspace is pinned to, and this module has no use for tags at all.

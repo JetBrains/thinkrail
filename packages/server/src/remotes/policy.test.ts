@@ -89,7 +89,7 @@ function makeFakes() {
 		fetchResult: { ok: true, moved: [] as string[], err: "" } as
 			| FetchResult
 			| ((refs: string[]) => FetchResult),
-		behindCountResult: null as number | null,
+		refDeltaResult: null as { ahead: number; behind: number } | null,
 		remoteUrlKindResult: "other" as "ssh" | "other" | "unknown",
 		sshAgentPresentResult: false,
 		/** Keyed `${remote}/${name}`, e.g. `"origin/main"` — `undefined` = no local tracking ref exists yet. */
@@ -98,7 +98,7 @@ function makeFakes() {
 	const calls = {
 		probe: [] as { repoPath: string; remote: string; refs: string[]; timeoutMs: number }[],
 		fetch: [] as { repoPath: string; remote: string; refs: string[]; timeoutMs: number }[],
-		behindCount: [] as { repoPath: string; from: string; to: string }[],
+		refDelta: [] as { repoPath: string; from: string; to: string }[],
 		remoteUrlKind: [] as { repoPath: string; remote: string }[],
 		sshAgentPresent: 0,
 		localTrackingOid: [] as { repoPath: string; remote: string; name: string }[],
@@ -112,9 +112,9 @@ function makeFakes() {
 			calls.fetch.push({ repoPath, remote, refs, timeoutMs });
 			return typeof state.fetchResult === "function" ? state.fetchResult(refs) : state.fetchResult;
 		},
-		behindCount: (repoPath, from, to) => {
-			calls.behindCount.push({ repoPath, from, to });
-			return state.behindCountResult;
+		refDelta: (repoPath, from, to) => {
+			calls.refDelta.push({ repoPath, from, to });
+			return state.refDeltaResult;
 		},
 		remoteUrlKind: (repoPath, remote) => {
 			calls.remoteUrlKind.push({ repoPath, remote });
@@ -462,18 +462,18 @@ test("fetch mode reports the exact behind count when the ref moved", async () =>
 	const { deps, state, calls } = makeFakes();
 	state.localTrackingOid["origin/main"] = "before-oid";
 	state.fetchResult = { ok: true, moved: ["main"], err: "" };
-	state.behindCountResult = 4;
+	state.refDeltaResult = { ahead: 0, behind: 4 };
 	configureRemoteCheckPolicyDeps(deps);
 
 	await checkProject("p1");
 
 	expect(remoteStateFor("p1")[0]?.behind).toBe(4);
-	expect(calls.behindCount).toEqual([
+	expect(calls.refDelta).toEqual([
 		{ repoPath: "/tmp/p1", from: "before-oid", to: "refs/remotes/origin/main" },
 	]);
 });
 
-test("fetch mode reports behind: null when the ref didn't move, without ever calling behindCount", async () => {
+test("fetch mode reports behind: null when the ref didn't move, without ever measuring the delta", async () => {
 	saveProjects([project("p1")]);
 	saveWorkspaces([workspace("w1", "p1", "origin/main")]);
 	noteRemoteTrusted("p1", "origin");
@@ -486,10 +486,10 @@ test("fetch mode reports behind: null when the ref didn't move, without ever cal
 	await checkProject("p1");
 
 	expect(remoteStateFor("p1")[0]?.behind).toBeNull();
-	expect(calls.behindCount).toEqual([]);
+	expect(calls.refDelta).toEqual([]);
 });
 
-test("fetch mode reports behind: 'unknown' when behindCount can't resolve the range (never 0)", async () => {
+test("fetch mode reports behind: 'unknown' when the delta can't resolve the range (never 0)", async () => {
 	saveProjects([project("p1")]);
 	saveWorkspaces([workspace("w1", "p1", "origin/main")]);
 	noteRemoteTrusted("p1", "origin");
@@ -497,11 +497,52 @@ test("fetch mode reports behind: 'unknown' when behindCount can't resolve the ra
 	const { deps, state } = makeFakes();
 	state.localTrackingOid["origin/main"] = "before-oid";
 	state.fetchResult = { ok: true, moved: ["main"], err: "" };
-	state.behindCountResult = null;
+	state.refDeltaResult = null;
 	configureRemoteCheckPolicyDeps(deps);
 
 	await checkProject("p1");
 
+	expect(remoteStateFor("p1")[0]?.behind).toBe("unknown");
+});
+
+// A moved ref is not automatically a ref that moved FORWARD. An upstream can be force-pushed, and the
+// two-dot count that used to back this reported `0` for a rewind — which the indicator renders as
+// "↓·0 … is 0 commits behind", the "changed by nothing" lie `RemoteState`'s own doc calls out. These two
+// pin that only a genuine fast-forward may carry a number.
+
+test("fetch mode reports behind: null for a REWIND — a backward force-push leaves nothing to catch up on", async () => {
+	saveProjects([project("p1")]);
+	saveWorkspaces([workspace("w1", "p1", "origin/main")]);
+	noteRemoteTrusted("p1", "origin");
+	configureRemoteChecks({ ...DEFAULT_CONFIG, gitRemoteCheck: "fetch" });
+	const { deps, state } = makeFakes();
+	state.localTrackingOid["origin/main"] = "before-oid";
+	state.fetchResult = { ok: true, moved: ["main"], err: "" };
+	// Upstream was force-pushed backward onto a commit we already had: two dropped, none gained.
+	state.refDeltaResult = { ahead: 2, behind: 0 };
+	configureRemoteCheckPolicyDeps(deps);
+
+	await checkProject("p1");
+
+	// NOT 0 — a numeric 0 is a real "fetch says you are zero behind" row the UI renders as `↓·0`.
+	expect(remoteStateFor("p1")[0]?.behind).toBeNull();
+});
+
+test("fetch mode reports behind: 'unknown' for DIVERGENCE — a rewritten upstream is not an N-behind fast-forward", async () => {
+	saveProjects([project("p1")]);
+	saveWorkspaces([workspace("w1", "p1", "origin/main")]);
+	noteRemoteTrusted("p1", "origin");
+	configureRemoteChecks({ ...DEFAULT_CONFIG, gitRemoteCheck: "fetch" });
+	const { deps, state } = makeFakes();
+	state.localTrackingOid["origin/main"] = "before-oid";
+	state.fetchResult = { ok: true, moved: ["main"], err: "" };
+	// An upstream rebase: commits really did land, but others vanished underneath them.
+	state.refDeltaResult = { ahead: 3, behind: 5 };
+	configureRemoteCheckPolicyDeps(deps);
+
+	await checkProject("p1");
+
+	// "5 commits behind" would describe a fast-forward that never happened; the bare arrow is honest.
 	expect(remoteStateFor("p1")[0]?.behind).toBe("unknown");
 });
 
@@ -518,7 +559,7 @@ test("fetch mode reports behind: null on a ref's very first fetch, with no prior
 	await checkProject("p1");
 
 	expect(remoteStateFor("p1")[0]?.behind).toBeNull();
-	expect(calls.behindCount).toEqual([]); // no baseline to count from
+	expect(calls.refDelta).toEqual([]); // no baseline to count from
 });
 
 // ── RemoteState honesty: fetch-batch isolation ────────────────────────────
@@ -545,7 +586,7 @@ test("fetch mode isolates a batch failure: one vanished ref doesn't poison its h
 			: { ok: true, moved: ["main"], err: "" };
 	// The classifying ls-remote never fails just because one name is absent: main present, feature-x gone.
 	state.probeResult = { ok: true, heads: { main: "after-oid" }, err: "" };
-	state.behindCountResult = 2;
+	state.refDeltaResult = { ahead: 0, behind: 2 };
 	configureRemoteCheckPolicyDeps(deps);
 
 	await checkProject("p1");
@@ -733,7 +774,7 @@ test("remoteStateFor never calls any injected git function", () => {
 
 	expect(calls.probe).toEqual([]);
 	expect(calls.fetch).toEqual([]);
-	expect(calls.behindCount).toEqual([]);
+	expect(calls.refDelta).toEqual([]);
 	expect(calls.remoteUrlKind).toEqual([]);
 	expect(calls.sshAgentPresent).toBe(0);
 	expect(calls.localTrackingOid).toEqual([]);
@@ -812,7 +853,7 @@ test("performs a real fetch for exactly the given ref, folds the result into the
 	const { deps, state, calls } = makeFakes();
 	state.localTrackingOid["origin/main"] = "before-oid";
 	state.fetchResult = { ok: true, moved: ["main"], err: "" };
-	state.behindCountResult = 3;
+	state.refDeltaResult = { ahead: 0, behind: 3 };
 	configureRemoteCheckPolicyDeps(deps);
 
 	const result = await fetchRefNow("p1", "origin/main");

@@ -370,6 +370,50 @@ test("the project repo's own shared git dir nudges every currently-watched works
 	expect(payloads.filter((p) => p.paths.some((x) => x.includes(".git")))).toHaveLength(0);
 });
 
+test("a project opened AT a linked worktree still watches the repo's shared refs, not its own thin git dir", async () => {
+	// `openProject` accepts any git toplevel, and a linked worktree IS its own toplevel — so a user can open
+	// one as a project. Its `.git` is then a gitfile, not a directory: the old resolver read that as "not a
+	// git dir" and skipped the project watcher entirely, so shared ref writes went unnoticed. Git records
+	// the way back to the shared dir in `commondir`, which is what must actually be watched.
+	const mainRepo = join(dataDir, "main-repo");
+	initRepo(mainRepo);
+	const linked = join(dataDir, "linked");
+	git(mainRepo, "worktree", "add", "-q", linked, "-b", "linked-branch");
+
+	// The PROJECT is the linked worktree — the case the old code could not see.
+	writeFileSync(
+		join(dataDir, "projects.json"),
+		JSON.stringify([
+			{ id: "p1", name: "linked", path: linked, slug: "linked", lastOpened: Date.now() },
+		]),
+	);
+	writeFileSync(
+		join(dataDir, "workspaces.json"),
+		JSON.stringify([
+			{
+				id: "ws1",
+				projectId: "p1",
+				name: "ws",
+				branch: "linked-branch",
+				worktreePath: linked,
+				baseBranch: "main",
+			},
+		]),
+	);
+
+	const nudges: string[] = [];
+	setRepoMetaPublisher((id) => nudges.push(id));
+	ensureWatch("ws1");
+	await sleep(150);
+
+	// A branch created from the MAIN repo writes `refs/heads/*` in the shared git dir — a location the
+	// linked worktree's own `.git/worktrees/<name>/refs` never sees.
+	git(mainRepo, "branch", "shared-ref-probe");
+
+	await waitFor(() => nudges.length >= 1);
+	expect(nudges).toContain("ws1");
+});
+
 test("a plain `git branch` in one worktree reliably nudges the project signal via the recursive refs/ watch", async () => {
 	// This is the scenario the whole watcher exists for, exercised with a REAL git repo and REAL `git branch`
 	// commands — not a synthetic stand-in. `refs/heads/<name>` is what a plain `git branch` writes, and it is

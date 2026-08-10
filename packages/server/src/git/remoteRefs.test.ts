@@ -4,11 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { git } from "./gitExec";
 import {
-	behindCount,
 	fetchRemoteRefs,
 	fetchRemoteRefsArgv,
 	probeRemoteRefs,
 	probeRemoteRefsArgv,
+	refDelta,
 	remoteUrlKind,
 	sshAgentPresent,
 } from "./remoteRefs";
@@ -50,7 +50,7 @@ function lockFilesUnder(gitDir: string): string[] {
 /**
  * A bare remote + a working repo whose `origin` already has `refs/remotes/origin/main` recorded (a push
  * opportunistically updates the local tracking ref for a branch matching `remote add`'s default fetch
- * refspec — verified empirically), so `behindCount` has something to compare against from the start. Plus
+ * refspec — verified empirically), so `refDelta` has something to compare against from the start. Plus
  * a `pushAnotherCommit()` closure that commits in a throwaway clone and pushes, returning the new sha.
  * Everything is a plain filesystem path (`file://`-equivalent, no scheme even) — no test here may need
  * internet access.
@@ -211,27 +211,52 @@ test("only a fetch makes a behind-count possible; a probe cannot count", async (
 	// are not local and cannot be counted — which is exactly why probe mode reports "unknown" to the UI
 	// instead of a number, and why the indicator degrades to a bare arrow.
 	const { repo, pushAnotherCommit } = seedRepoWithRemote();
-	expect(behindCount(repo, "HEAD", "refs/remotes/origin/main")).toBe(0);
+	expect(refDelta(repo, "HEAD", "refs/remotes/origin/main")).toEqual({ ahead: 0, behind: 0 });
 
 	pushAnotherCommit();
 
 	// After a probe: we KNOW the remote moved, but the count is still 0 because we do not have the object.
 	const probed = await probeRemoteRefs(repo, "origin", ["main"], 10_000);
 	expect(probed.ok).toBe(true);
-	expect(behindCount(repo, "HEAD", "refs/remotes/origin/main")).toBe(0);
+	expect(refDelta(repo, "HEAD", "refs/remotes/origin/main")).toEqual({ ahead: 0, behind: 0 });
 
 	// After a real fetch the object is local, and only now is the number available.
 	await fetchRemoteRefs(repo, "origin", ["main"], 20_000);
-	expect(behindCount(repo, "HEAD", "refs/remotes/origin/main")).toBe(1);
+	expect(refDelta(repo, "HEAD", "refs/remotes/origin/main")).toEqual({ ahead: 0, behind: 1 });
 
 	// A second push, fetched again, must be reflected too — pins that the count isn't hardcoded to 1.
 	pushAnotherCommit();
 	await fetchRemoteRefs(repo, "origin", ["main"], 20_000);
-	expect(behindCount(repo, "HEAD", "refs/remotes/origin/main")).toBe(2);
+	expect(refDelta(repo, "HEAD", "refs/remotes/origin/main")).toEqual({ ahead: 0, behind: 2 });
 
-	// An unresolvable ref answers `null`, never `0` — an unknown count is not "up to date", and the UI
-	// renders the two differently.
-	expect(behindCount(repo, "HEAD", "refs/does/not/exist")).toBe(null);
+	// An unresolvable ref answers `null`, never zeroes — an unknown distance is not "up to date", and the
+	// UI renders the two differently.
+	expect(refDelta(repo, "HEAD", "refs/does/not/exist")).toBe(null);
+});
+
+test("refDelta reports BOTH sides, so a rewind and a divergence are distinguishable from a fast-forward", () => {
+	// The whole reason this is `--left-right` and not a two-dot count: `from..to` collapses "the upstream
+	// was force-pushed backward" into the same `0` as "up to date", which is what let the indicator render
+	// a lying `↓·0`. Only `ahead` can tell those apart.
+	const { repo } = seedRepoWithRemote();
+	const base = git(repo, ["rev-parse", "HEAD"]).out;
+
+	// Two commits forward on a side branch, then back to base: `base` is now strictly behind `forward`.
+	run(repo, ["commit", "--allow-empty", "-m", "one"]);
+	run(repo, ["commit", "--allow-empty", "-m", "two"]);
+	const forward = git(repo, ["rev-parse", "HEAD"]).out;
+
+	// Fast-forward: nothing dropped, two gained.
+	expect(refDelta(repo, base, forward)).toEqual({ ahead: 0, behind: 2 });
+	// Rewind: the mirror image — two dropped, nothing gained. A two-dot count would have said `0` here,
+	// indistinguishable from up-to-date.
+	expect(refDelta(repo, forward, base)).toEqual({ ahead: 2, behind: 0 });
+
+	// Divergence: a second line of history off the same base — each side has commits the other lacks.
+	run(repo, ["checkout", "--quiet", "-b", "other", base]);
+	run(repo, ["commit", "--allow-empty", "-m", "three"]);
+	const diverged = git(repo, ["rev-parse", "HEAD"]).out;
+	expect(refDelta(repo, forward, diverged)).toEqual({ ahead: 2, behind: 1 });
 });
 
 test("an unreachable remote fails without hanging and without prompting", async () => {

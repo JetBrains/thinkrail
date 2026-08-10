@@ -12,10 +12,10 @@ import type {
 	RemoteState,
 } from "@thinkrail/contracts";
 import {
-	behindCount,
 	diffBaseRef,
 	fetchRemoteRefs,
 	probeRemoteRefs,
+	refDelta,
 	remoteUrlKind,
 	sshAgentPresent,
 	trackingRefOid,
@@ -154,7 +154,7 @@ export const REMOTE_CHECK_TIMEOUT_MS = 15_000;
 export interface RemoteCheckPolicyDeps {
 	probeRemoteRefs?: typeof probeRemoteRefs;
 	fetchRemoteRefs?: typeof fetchRemoteRefs;
-	behindCount?: typeof behindCount;
+	refDelta?: typeof refDelta;
 	remoteUrlKind?: typeof remoteUrlKind;
 	sshAgentPresent?: typeof sshAgentPresent;
 	localTrackingOid?: typeof trackingRefOid;
@@ -163,7 +163,7 @@ export interface RemoteCheckPolicyDeps {
 
 let probeRemoteRefsFn: typeof probeRemoteRefs = probeRemoteRefs;
 let fetchRemoteRefsFn: typeof fetchRemoteRefs = fetchRemoteRefs;
-let behindCountFn: typeof behindCount = behindCount;
+let refDeltaFn: typeof refDelta = refDelta;
 let remoteUrlKindFn: typeof remoteUrlKind = remoteUrlKind;
 let sshAgentPresentFn: typeof sshAgentPresent = sshAgentPresent;
 let localTrackingOidFn: typeof trackingRefOid = trackingRefOid;
@@ -179,7 +179,7 @@ let nowFn: () => number = Date.now;
 export function configureRemoteCheckPolicyDeps(deps: RemoteCheckPolicyDeps = {}): void {
 	probeRemoteRefsFn = deps.probeRemoteRefs ?? probeRemoteRefs;
 	fetchRemoteRefsFn = deps.fetchRemoteRefs ?? fetchRemoteRefs;
-	behindCountFn = deps.behindCount ?? behindCount;
+	refDeltaFn = deps.refDelta ?? refDelta;
 	remoteUrlKindFn = deps.remoteUrlKind ?? remoteUrlKind;
 	sshAgentPresentFn = deps.sshAgentPresent ?? sshAgentPresent;
 	localTrackingOidFn = deps.localTrackingOid ?? trackingRefOid;
@@ -277,6 +277,33 @@ async function applyProbe(
 }
 
 /**
+ * A moved tracking ref's `RemoteState.behind`, read off the symmetric {@link refDelta} between what this
+ * repo last saw for that ref and what the fetch just landed on it.
+ *
+ * **Only a fast-forward may carry a number.** An upstream can be force-pushed, and "the ref moved" alone
+ * says nothing about *which way*:
+ * - `ahead === 0` — nothing was dropped, so the move was a genuine fast-forward and `behind` is an honest
+ *   count of what landed upstream (`0` here means the ref resolved to the same place after all → `null`,
+ *   "up to date", never a numeric `0`).
+ * - `ahead > 0, behind === 0` — a pure **rewind**: upstream was force-pushed backward onto a commit we
+ *   already have. There is nothing upstream we lack, so this is genuinely "up to date" (`null`) — *not* the
+ *   `0` a two-dot count would have produced, which the UI renders as "↓·0 … is 0 commits behind", the
+ *   "changed by nothing" lie `RemoteState`'s own contract calls out.
+ * - `ahead > 0, behind > 0` — **divergence** (a rebase or amend upstream). Commits really did land, but
+ *   history was rewritten underneath them, so a bare "N behind" would describe a fast-forward that never
+ *   happened. `"unknown"` is the state that already means "it differs, and a count would misrepresent it";
+ *   the UI renders the bare `↓` and offers a fetch.
+ * - `null` (the range would not resolve) — differs, count unknowable. Unchanged from before.
+ */
+function behindFromDelta(
+	delta: { ahead: number; behind: number } | null,
+): number | "unknown" | null {
+	if (!delta) return "unknown";
+	if (delta.ahead === 0) return delta.behind === 0 ? null : delta.behind;
+	return delta.behind === 0 ? null : "unknown";
+}
+
+/**
  * Turns a successful `fetchRemoteRefs` result (`moved`, plus the tracking-ref oids read just before the
  * fetch) into `RemoteState.behind` for exactly the given `names` — shared between the batch-succeeded path
  * and the isolated-survivors retry path in {@link applyFetch}, since both end up with the same shape of
@@ -301,8 +328,8 @@ function applyFetchOutcome(
 			markSuccess(projectId, name, null, now);
 			continue;
 		}
-		const count = behindCountFn(repoPath, beforeOid, `refs/remotes/${REMOTE_NAME}/${name}`);
-		markSuccess(projectId, name, count === null ? "unknown" : count, now);
+		const delta = refDeltaFn(repoPath, beforeOid, `refs/remotes/${REMOTE_NAME}/${name}`);
+		markSuccess(projectId, name, behindFromDelta(delta), now);
 	}
 }
 

@@ -529,6 +529,38 @@ test("staged scope diffs HEAD against the index and excludes untracked", () => {
 	expect(range.modified).toEqual({ kind: "index" });
 });
 
+test("staged scope degrades to an add-style range in a repo with no commits yet", () => {
+	// `git init` with nothing committed is a real state: the Welcome screen offers to initialise a plain
+	// folder, and `openProject` takes any git toplevel. Naming `HEAD` here fails the whole read
+	// (`fatal: bad revision 'HEAD'`), and a failed read is an error, never "no changes" — so Staged would
+	// render as a broken panel on a brand-new repo instead of showing what the first commit would record.
+	const unborn = join(dataDir, "unborn");
+	mkdirSync(unborn);
+	git(unborn, "init", "-b", "main");
+	git(unborn, "config", "user.email", "t@thinkrail.test");
+	git(unborn, "config", "user.name", "test");
+	writeFileSync(join(unborn, "staged.txt"), "first\n");
+	git(unborn, "add", "-A");
+
+	const range = resolveDiffRange({ baseBranch: "main", worktreePath: unborn }, { kind: "staged" });
+	// No rev at all: a bare `git diff --cached` is git's own "index vs HEAD, or vs the empty tree when
+	// HEAD is unborn", so git resolves the empty tree and we never hardcode an oid that differs by hash.
+	expect(range.listRevs).toEqual([]);
+	expect(range.original).toEqual({ kind: "empty" });
+	expect(range.modified).toEqual({ kind: "index" });
+
+	// And the range actually runs, listing the whole index as added rather than throwing.
+	const args = changedFileArgs(range, "--name-status");
+	const listed = Bun.spawnSync(["git", "-C", unborn, ...args]);
+	expect(listed.success).toBe(true);
+	expect(listed.stdout.toString()).toContain("staged.txt");
+
+	// A repo WITH commits is untouched by this — it still names HEAD explicitly.
+	const born = resolveDiffRange({ baseBranch: "main", worktreePath: repo }, { kind: "staged" });
+	expect(born.listRevs).toEqual(["HEAD"]);
+	expect(born.original).toEqual({ kind: "ref", ref: "HEAD" });
+});
+
 test("DiffSide: a branch scope reads a ref against the worktree", () => {
 	const ws = { baseBranch: "main", worktreePath: repo };
 	const range = resolveDiffRange(ws, { kind: "branch" });

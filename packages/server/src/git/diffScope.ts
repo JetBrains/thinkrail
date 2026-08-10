@@ -111,6 +111,30 @@ export function resolveDiffRange(
 	}
 	if (scope.kind === "staged") {
 		// `--cached` against HEAD is what a commit would record. Untracked files are by definition not staged.
+		//
+		// An **unborn** `HEAD` — a repository with no commits yet — is a real state here, not a curiosity:
+		// the Welcome screen offers to `git init` a plain folder, and `openProject` takes any git toplevel.
+		// Naming `HEAD` there fails the whole read (`fatal: bad revision 'HEAD'`), and a failed read is an
+		// error, never "no changes" (see Get right), so Staged would show a broken panel on a brand-new repo
+		// instead of the first commit's contents. Both sides degrade the same add-style way a root `commit`
+		// scope already does:
+		//   - the list drops the rev entirely — a bare `git diff --cached` is git's own "index vs HEAD, or
+		//     vs the empty tree when HEAD is unborn", so git resolves the empty tree itself and we never
+		//     hardcode its oid (which differs between sha1 and sha256 repositories anyway);
+		//   - the original side becomes `empty` rather than `ref: HEAD`, because `git show HEAD:<path>` in an
+		//     unborn repo fails with a message `isExpectedAbsence` deliberately does NOT match — it would
+		//     render correctly but `console.warn` on every file, spending the "a broken read stays visible"
+		//     signal on a state we already understand.
+		const born = git(ws.worktreePath, ["rev-parse", "--verify", "--quiet", "HEAD"]);
+		if (!born.ok || !born.out) {
+			return {
+				listPrefix: ["diff", "--cached"],
+				listRevs: [],
+				untracked: false,
+				original: { kind: "empty" },
+				modified: { kind: "index" },
+			};
+		}
 		return {
 			listPrefix: ["diff", "--cached"],
 			listRevs: ["HEAD"],

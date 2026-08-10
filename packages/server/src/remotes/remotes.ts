@@ -41,8 +41,14 @@ export interface RemoteCheckDeps {
 
 /**
  * The anti-thrash floor: three focus/reconnect nudges landing inside this window collapse into ONE check
- * per project, regardless of which trigger (activity sweep, `checkNow`, the backstop) asked for it. Fixed,
+ * per project, whichever *recurring* trigger (activity sweep, `checkNow`, the backstop) asked for it. Fixed,
  * not configurable — `AppConfig` has no floor knob, only the backstop interval does.
+ *
+ * The one exception is a **mode change** (see {@link configureRemoteChecks}), which passes `ignoreFloor`.
+ * The floor exists to collapse *repeated, automatic* nudges; a mode change is a deliberate, rare edit whose
+ * whole point is that every pair's published state is now describing the wrong mode, and it would otherwise
+ * be silently dropped exactly when it matters most — a user toggling the setting seconds after a check ran.
+ * In-flight de-duplication still applies to it; only the time-based floor is skipped.
  */
 export const MIN_CHECK_INTERVAL_MS = 60_000;
 
@@ -96,11 +102,26 @@ let gitRemoteCheckMode: AppConfig["gitRemoteCheck"] = DEFAULT_CONFIG.gitRemoteCh
  *
  * Rearms the backstop immediately when already running, so a live interval change (e.g. a Settings edit)
  * takes effect at once rather than waiting out whatever was left of the old interval.
+ *
+ * A changed **mode** additionally sweeps every known project right away. Rearming alone would only change
+ * *when* the next check happens — every pair's already-published `RemoteState` would keep describing the
+ * OLD mode until then, which for the maximum 1440-minute interval is a full day of the UI contradicting
+ * the setting the user just changed: switching to `"off"` would leave a live `↓` (and no `dormant`
+ * explanation) instead of the `disabled` state, and switching back would leave `disabled` displayed on a
+ * pair that is being checked again. The sweep re-derives each pair through the normal `checkProject` path,
+ * so dormancy, the credential ladder and backoff all still apply — nothing is short-circuited.
  */
 export function configureRemoteChecks(config: AppConfig): void {
+	const modeChanged = config.gitRemoteCheck !== gitRemoteCheckMode;
 	intervalMs = config.gitRemoteCheckIntervalMinutes * 60_000;
 	gitRemoteCheckMode = config.gitRemoteCheck;
-	if (running) rearmBackstop();
+	if (!running) return; // boot order: host configures before `startRemoteChecks` arms anything
+	rearmBackstop();
+	// Deliberately NOT for an interval-only edit: that changes cadence, not what any pair's state means,
+	// and a settings save should not quietly become a fleet-wide network round.
+	if (modeChanged) {
+		for (const p of loadProjects()) void requestCheck(p.id, { ignoreFloor: true });
+	}
 }
 
 /**
@@ -219,8 +240,9 @@ export function checkNow(projectId: string): Promise<void> {
 }
 
 /**
- * The one path every trigger (an activity sweep, the backstop tick, `checkNow`) funnels through:
- * de-dupe a check already in flight for this project, floor-gate against `MIN_CHECK_INTERVAL_MS`, and —
+ * The one path every trigger (an activity sweep, the backstop tick, `checkNow`, a mode change) funnels
+ * through: de-dupe a check already in flight for this project, floor-gate against `MIN_CHECK_INTERVAL_MS`
+ * (unless `opts.ignoreFloor` — see that constant's doc for the single caller that does), and —
  * the Promise-hygiene rule this module is on the hook for — catch `checkProject`'s failure right here, so
  * it can never propagate into another project's check or the self-rescheduling backstop loop. Skipped
  * requests (in-flight dedupe or the floor) resolve immediately with nothing to await.
@@ -234,12 +256,18 @@ export function checkNow(projectId: string): Promise<void> {
  * the call through an already-resolved `.then` turns that synchronous throw into an ordinary rejection,
  * so it is caught exactly like an async failure.
  */
-function requestCheck(projectId: string): Promise<void> {
+function requestCheck(projectId: string, opts: { ignoreFloor?: boolean } = {}): Promise<void> {
 	const state = stateFor(projectId);
+	// Never bypassed, whatever the caller asked for: two concurrent checks of one project would duplicate
+	// the network round AND race each other's published snapshot.
 	if (state.inFlight) return state.inFlight;
 
 	const now = nowFn();
-	if (state.lastCheckedAt !== null && now - state.lastCheckedAt < MIN_CHECK_INTERVAL_MS) {
+	if (
+		!opts.ignoreFloor &&
+		state.lastCheckedAt !== null &&
+		now - state.lastCheckedAt < MIN_CHECK_INTERVAL_MS
+	) {
 		return Promise.resolve();
 	}
 
