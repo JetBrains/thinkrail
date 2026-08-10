@@ -14,9 +14,12 @@ import {
 
 // The remote-awareness feature end to end: the Settings surface (Task 9's own `GitSettings`) and the
 // background scheduler + `↓` indicator it drives (Tasks 3-8), against a real (local, bare) remote. No
-// wall-clock sleeps: the scheduler's background check is triggered exactly once per spec by the one
-// deterministic thing that opens a fresh WS connection deliberately — `page.reload()` — and every
-// precondition (trust, the upstream state under test) is put in place before that reload, never after.
+// wall-clock sleeps: the scheduler's background check is driven by deliberate, deterministic triggers —
+// `page.reload()` (a fresh WS connection → `noteClientActivity`) and a Settings **mode change**
+// (`configureRemoteChecks` sweeps every project when the mode itself changes). Each spec uses exactly ONE
+// of them, with every precondition (trust, the upstream state under test) in place beforehand. Never two:
+// they share a 60s per-project floor that would swallow the second, and a reload layered on top of an
+// in-flight check drops the `project.remoteState` push carrying its answer.
 
 /** The fixture project's persisted id (`resetState`, run by `openFixtureProject`, wipes `projects.json`
  * first, so this always reads the current test's fresh project, never a stale one from an earlier test). */
@@ -118,6 +121,15 @@ test("fetch mode: an upstream move by one commit surfaces an exact ↓·1", asyn
 		await createWorkspaceFromOriginMain(page);
 		await waitForOriginTrust(projectId);
 
+		// The upstream move goes in FIRST, and the mode switch is this spec's ONE trigger — no reload.
+		// A **mode change is itself a check trigger** now (`configureRemoteChecks` sweeps every project the
+		// moment the mode changes, so a pair's published state can't keep describing the old mode for a
+		// whole backstop interval). Reloading on top of it would be a second trigger the 60s floor
+		// suppresses, and — the actual flake — it would tear down the socket while the sweep's fetch was
+		// still in flight, dropping the `project.remoteState` push that carries the answer. Staying
+		// connected instead exercises that live push path, which is how a real client learns this.
+		pushUpstreamCommit(barePath);
+
 		// Switch to fetch mode via the Settings UI (this task's own `GitSettings`) — same
 		// `settings.update` → `applyConfig` path the round-trip spec below pins directly.
 		await page.getByTestId("open-settings").click();
@@ -127,9 +139,6 @@ test("fetch mode: an upstream move by one commit surfaces an exact ↓·1", asyn
 		await expect(fetchOption).toHaveAttribute("data-active", "true");
 		await page.keyboard.press("Escape");
 
-		pushUpstreamCommit(barePath);
-
-		await page.reload();
 		await goProjectHome(page);
 		const indicator = workspaceRemoteIndicator(page);
 		// Only a real fetch can count: an exact, singular ↓·1.
