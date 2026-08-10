@@ -79,7 +79,10 @@ test("right-click opens the workspace's kebab menu without activating it", async
 	await expect(activeRow).toHaveAttribute("data-active", "true");
 	await expect(defaultRow).toHaveAttribute("data-active", "false");
 
-	await defaultRow.click({ button: "right" });
+	const rowBox = await defaultRow.boundingBox();
+	if (!rowBox) throw new Error("Workspace row has no geometry");
+	// Exercise the row's left indentation, outside both child buttons: the outer row owns right-click.
+	await page.mouse.click(rowBox.x + 4, rowBox.y + rowBox.height / 2, { button: "right" });
 	const actions = page.getByTestId("workspace-actions");
 	await expect(actions).toBeVisible();
 	const [actionsBox, kebabBox] = await Promise.all([

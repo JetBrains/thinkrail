@@ -544,19 +544,20 @@ function WorkspaceRow({
 	// return-focus-to-trigger doesn't fight the dialog's focus trap opening right behind it.
 	const [confirmOpen, setConfirmOpen] = useState(false);
 	return (
-		<>
-			<div
+		<li>
+			<fieldset
+				aria-label={workspace.name}
 				data-testid="workspace-item"
 				data-active={isActive}
 				data-kind={workspace.kind ?? "worktree"}
-				className={`group flex min-h-7 items-center gap-sm rounded-[var(--radius-sm)] py-xs pr-xs pl-xl transition-colors ${
+				onContextMenu={openMenuFromContext}
+				className={`group flex min-h-7 min-w-0 items-center gap-sm rounded-[var(--radius-sm)] border-0 py-xs pr-xs pl-xl transition-colors ${
 					isActive || menuOpen ? "bg-control-bg-selected" : "hover:bg-control-bg-hovered"
 				}`}
 			>
 				<button
 					type="button"
 					onClick={onSelect}
-					onContextMenu={openMenuFromContext}
 					className="flex min-w-0 flex-1 items-center gap-sm text-left"
 				>
 					<Icon className={`size-4 shrink-0 ${isActive ? "text-primary" : "text-text-muted"}`} />
@@ -579,17 +580,16 @@ function WorkspaceRow({
 							</span>
 						)}
 					</span>
-					<DiffStatBadge
-						added={stats?.added ?? 0}
-						removed={stats?.removed ?? 0}
-						className="self-start group-hover:hidden"
-					/>
 				</button>
+				<DiffStatBadge
+					added={stats?.added ?? 0}
+					removed={stats?.removed ?? 0}
+					className="self-start group-hover:hidden"
+				/>
 				<DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
 					<DropdownMenuTrigger
 						data-testid="workspace-menu"
 						aria-label={`Actions for ${workspace.name}`}
-						onContextMenu={openMenuFromContext}
 						// This menu is the row's only surface for Open in / Copy path / Reveal / Remove, so it
 						// can't be hover-only-invisible: a touch device has no hover and would never discover
 						// it. `opacity-0` only applies under `(hover: hover)` (a device that actually has a
@@ -644,7 +644,7 @@ function WorkspaceRow({
 						)}
 					</DropdownMenuContent>
 				</DropdownMenu>
-			</div>
+			</fieldset>
 			{!isDefault && (
 				<ConfirmDialog
 					open={confirmOpen}
@@ -676,6 +676,6 @@ function WorkspaceRow({
 					onConfirm={onRemove}
 				/>
 			)}
-		</>
+		</li>
 	);
 }
