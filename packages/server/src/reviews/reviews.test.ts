@@ -289,6 +289,14 @@ test("purge removes the workspace's review state", () => {
 	expect(getReviewSnapshot(WS_ID).comments).toHaveLength(0);
 });
 
+test("a path-segment workspace id is refused by every file touch — no traversal out of the reviews dir", () => {
+	// The id becomes a filename: `../config` would resolve to the data dir's own config.json.
+	for (const evil of ["../config", "a/b", "a\\b", "..", ".", "x.y"]) {
+		expect(() => removeWorkspaceReviews(evil)).toThrow(/Invalid workspace id/);
+		expect(() => getReviewSnapshot(evil)).toThrow(/Invalid workspace id/);
+	}
+});
+
 test("a base-side anchor is captured from the BASE blob and never re-anchored", () => {
 	commitThenEdit("b.ts", "keep me\nDELETED LINE\ntail\n", "keep me\ntail\nmore\n");
 	const comment = addBase("b.ts", 2, "why was this removed?");

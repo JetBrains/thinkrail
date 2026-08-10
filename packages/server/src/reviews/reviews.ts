@@ -32,6 +32,11 @@ function reviewsDir(): string {
 }
 
 function reviewFile(workspaceId: string): string {
+	// The id becomes a FILENAME, so it must never carry path segments: real workspace ids are UUIDs,
+	// and a wire-supplied `../config`-style string would aim every read/write/unlink in this module
+	// outside the reviews dir (e.g. at the data dir's own config). Refusing here covers ALL file
+	// touches at once — defense in depth behind the handlers' own lookups.
+	if (!/^[\w-]+$/.test(workspaceId)) throw new Error(`Invalid workspace id: ${workspaceId}`);
 	return join(reviewsDir(), `${workspaceId}.json`);
 }
 

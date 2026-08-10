@@ -306,12 +306,18 @@ const handlers: Record<string, Handler> = {
 		// Non-blocking archive: drop the record now (gone from `workspace.list` immediately) + the fast
 		// teardown, ack, then reclaim sessions/worktree in the background so the user never waits for the
 		// slow git subprocess + session abort.
+		// Everything below keys off the CANONICAL id of a workspace that actually existed — never the
+		// raw wire string. `removeWorkspaceReviews` in particular deletes a file derived from the id, so
+		// an unchecked id would let a client aim the unlink outside the reviews dir (the persistence
+		// helper also refuses path-segment ids — two layers). An unknown id is an idempotent no-op ack.
 		const ws = forgetWorkspace(id);
-		evictSpecIndex(id); // the archived worktree's spec parse cache must not outlive it
-		removeWorkspaceReviews(id); // the review file must not outlive its workspace either
-		stopWatch(id); // fast: stop the change notifier before the worktree dir is reclaimed
-		closeWorkspaceTerminals(id); // fast: kill workspace-scoped PTYs before the dir is reclaimed
-		if (ws) void archiveTeardown(ws);
+		if (ws) {
+			evictSpecIndex(ws.id); // the archived worktree's spec parse cache must not outlive it
+			removeWorkspaceReviews(ws.id); // the review file must not outlive its workspace either
+			stopWatch(ws.id); // fast: stop the change notifier before the worktree dir is reclaimed
+			closeWorkspaceTerminals(ws.id); // fast: kill workspace-scoped PTYs before the dir is reclaimed
+			void archiveTeardown(ws);
+		}
 		return { ok: true } as const;
 	},
 	"workspace.diffStats": (params) => workspaceDiffStats((params as { id: string }).id),

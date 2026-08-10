@@ -115,7 +115,10 @@ delegated back here through a host-installed seam — the agent module stays dep
 
 ## Boundary
 
-- **Owns:** `reviews/<workspaceId>.json` under the data dir (via `persistence.dataDir`), comment CRUD +
+- **Owns:** `reviews/<workspaceId>.json` under the data dir (via `persistence.dataDir`; the id
+  becomes the FILENAME, so every file touch refuses ids with path segments — `/^[\w-]+$/` — or a
+  wire-supplied `../config`-style string would aim reads/writes/unlinks outside the reviews dir:
+  defense in depth behind the handlers' own lookups), comment CRUD +
   status/lifecycle transitions, anchor capture + re-anchoring (pure, unit-tested `anchoring.ts`),
   package rendering (pure `packageRender.ts`), and the `review.changed` publisher seam
   (`setReviewPublisher`, installed by `host` — full-snapshot pushes, idempotent under last-value replay).
